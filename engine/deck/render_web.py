@@ -63,6 +63,14 @@ class _Slide:
     def __init__(self, inp):
         self.inp, self.t, self.f = inp, 0, 0
         self.last = {0: 0}   # build step -> latest reveal delay in it (ms)
+        self.icons = None    # deck-graphics: the ids of the icons the pptx drew on this slide, in item order (None: none)
+
+    def icon(self, i: int, n: int, size_in: float) -> str:
+        """The inline SVG of item ``i`` of ``n`` when the pptx drew an icon group of exactly ``n`` here, else ''."""
+        if not self.icons or len(self.icons) != n:
+            return ""
+        from . import graphics   # noqa: PLC0415
+        return graphics.icon_svg(self.icons[i], size_in)
 
     def rv(self, cls, inner, tag="div", gap=140, attrs=""):
         """One revealing element: delay from the running clock, build step from the current block."""
@@ -109,7 +117,8 @@ class _Slide:
         if k == "table":
             rows = b["rows"]
             head = self.rv("", "".join(f"<th>{_e(c)}</th>" for c in rows[0]), "tr", 80)
-            body = "".join(self.rv("", "".join(f"<td>{_e(c)}</td>" for c in r), "tr", 55) for r in rows[1:])
+            body = "".join(self.rv("", "".join(f"<td>{self._row_icon(n, len(rows) - 1) if j == 0 else ''}{_e(c)}</td>" for j, c in enumerate(r)), "tr", 55)
+                           for n, r in enumerate(rows[1:]))
             return f'<table class="b-table{" small" if b.get("small") else ""}{hum}"><thead>{head}</thead><tbody>{body}</tbody></table>'
         if k == "kv":
             return '<dl class="b-kv">' + "".join(
@@ -148,6 +157,12 @@ class _Slide:
             return self.mock(b)
         return self.rv("b-text" + hum, _e(t), "p") if t else ""
 
+
+    def _row_icon(self, i: int, n: int) -> str:
+        if not self.icons:
+            return ""
+        from . import graphics   # noqa: PLC0415
+        return self.icon(i, n, graphics.ICON_ROW_IN)
 
     def mock(self, b):
         """The copy in the frame of its channel (b["frame"]: phone, search, audio, poster)."""
@@ -299,9 +314,9 @@ def _v3_body(s, b: "_Slide", bl: list, lid: str, deck: dict) -> str:
                     fig += _kick(b, lab) + b.rv("fig-d" + _caps(facts[key]), _e(facts[key]), "b", 120)
             fig = f'<div class="fig">{fig}</div>'
         rows = ""
-        for h, x, it, cap in pts:
+        for i, (h, x, it, cap) in enumerate(pts):
             b.f += 1
-            inner = (_kick(b, h) if h else "") + b.rv("pt-t" + (" it" if it else ""), _e(x), "p", 120) + (f'<p class="capn">{_e(cap)}</p>' if cap else "")
+            inner = (b.icon(i, len(pts), 0.5) if b.icons else "") + (_kick(b, h) if h else "") + b.rv("pt-t" + (" it" if it else ""), _e(x), "p", 120) + (f'<p class="capn">{_e(cap)}</p>' if cap else "")
             rows += f'<div class="pt">{inner}</div>'
         return (f'<div class="body v3 v3sp"><div class="sp-l">{title}{fig}</div>'
                 f'<div class="sp-r">{rows}</div></div>')
@@ -347,7 +362,21 @@ def _v3_body(s, b: "_Slide", bl: list, lid: str, deck: dict) -> str:
         for k, v in pts:
             b.f += 1
             out += f'<div class="pt">{_kick(b, k)}{b.rv("", _e(v), "p", 120)}</div>'
-        return f'<div class="body v3 v3pc{" nopts" if not pts else ""}">{out}</div>'
+        grid = ""
+        if spec.GRAPHICS:   # deck-graphics: a two-column table's rows at the column's foot, as the pptx draws them (and its icons)
+            from .graphics import ICON_ROW_IN
+            for x in bl:
+                rows = x.get("rows") or []
+                if x["kind"] != "table" or len(rows) < 2 or not all(len(r) == 2 for r in rows):
+                    continue
+                b.f += 1
+                cells = f'<div class="pc-gr pc-gh">{_kick(b, rows[0][0])}{_kick(b, rows[0][1])}</div>'
+                for n, r in enumerate(rows[1:]):
+                    ic = b.icon(n, len(rows) - 1, ICON_ROW_IN) if b.icons else ""
+                    cells += f'<div class="pc-gr">{b.rv("pc-k", ic + _e(r[0]), "div", 90)}{b.rv("", _e(r[1]), "p", 90)}</div>'
+                grid += f'<div class="pc-grid">{cells}</div>'
+        out += grid
+        return f'<div class="body v3 v3pc{" nopts" if not (pts or grid) else ""}">{out}</div>'
     if lid in ("cover_bleed", "full_bleed_statement"):   # the words on the picture's measured zone, in the recorded colour
         tz = _tz(s) or {"zone": "bottom_left", "text": "FAF7F1"}
         x, y, w, h = images.zone_box(tz["zone"])
@@ -444,7 +473,8 @@ def _cover_logo(deck, assets_dir) -> str | None:
     return (deck["meta"].get("brand") or {}).get("logo_dark_svg")
 
 
-def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictures: dict | None = None, src=None, placed: set | None = None) -> list:
+def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictures: dict | None = None, src=None, placed: set | None = None,
+                icons: dict | None = None) -> list:
     """Per slide, in order: id, number, type, dark, inner markup, notes, build-step count and, per
     step, the latest reveal delay (ms) up to and including it."""
     failed = {}
@@ -462,6 +492,8 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
         s = deck["slides"][sid]
         pic_html, pic_cls = picture_markup(sid, s, drawn, pictures or {}, src, plabel) if drawn else ("", "")
         b = _Slide(inp)
+        if icons and sid in icons:   # deck-graphics: exactly the icons the pptx drew (render_pptx's ``icons``)
+            b.icons = list(icons[sid]["ids"])
         v3 = bool(spec.LOOK_V3)
         dark = s["type"] in (dark_types(v3) if v3 else DARK_TYPES)
         logo = _cover_logo(deck, assets_dir) if s["type"] == "title" else None
@@ -516,6 +548,16 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
                     "last": [max(v for k, v in b.last.items() if k <= f) for f in range(b.f + 1)]})
     return out
 
+
+#: deck-graphics icon styles: added ONLY when an icon is drawn (a deck with none keeps its exact bytes). The stroke is currentColor: the text token.
+ICON_CSS = """
+svg.icon{display:block;color:inherit;flex:none}
+.b-table td svg.icon{display:inline-block;vertical-align:middle;margin:-6px 22px 0 0}
+.v3sp .pt svg.icon{margin-bottom:22px}
+.v3pc .pc-grid{margin-top:auto}.v3pc .pc-gr{display:grid;grid-template-columns:2fr 3fr;gap:28px;align-items:center;padding:22px 0}
+.v3pc .pc-gr+.pc-gr{border-top:1.5px solid var(--ink)}.v3pc .pc-gh{padding-top:0}
+.v3pc .pc-k{display:flex;align-items:center;gap:22px;font:700 44px/1.05 var(--head)}.v3pc .pc-gr p{font-size:38px;line-height:1.2}
+"""
 
 #: Picture styles: added to the stylesheet ONLY when a picture is drawn, so a deck with none keeps its exact bytes.
 PIC_CSS = """
@@ -840,9 +882,11 @@ def _brand_css(meta: dict) -> dict:
     return {k: v for k, v in (("head", b.get("head")), ("body", b.get("body")), ("colors", b.get("colors"))) if v}
 
 
-def render(deck, inp, out: Path, findings: list | None = None, pictures: dict | None = None, placed: set | None = None, look: bool = True) -> Path:
-    """Write the deck as one self-contained HTML file at ``out`` (pictures, when given, inline as data URIs)."""
-    views = slide_views(deck, inp, findings, Path(out).parent, pictures, placed=placed)
+def render(deck, inp, out: Path, findings: list | None = None, pictures: dict | None = None, placed: set | None = None, look: bool = True,
+           icons: dict | None = None) -> Path:
+    """Write the deck as one self-contained HTML file at ``out`` (pictures, when given, inline as data URIs). ``icons``: the icons the
+    pptx drew (deck-graphics), drawn here as inline SVG at the same items; None or empty draws none and changes nothing."""
+    views = slide_views(deck, inp, findings, Path(out).parent, pictures, placed=placed, icons=icons)
     m = deck["meta"]
     slides = "\n".join(
         f'<section class="slide t-{v["type"]}{" dark" if v["dark"] else ""}{" " + v["cls"] if v["cls"] else ""}{" l-" + v["layout"] if (spec.LOOK_V2 and v["layout"]) else ""}" id="{v["id"]}" data-steps="{v["steps"]}"{" data-layout=" + chr(34) + v["layout"] + chr(34) if (spec.LOOK_V2 and v["layout"]) else ""}{v["tpt"]} '
@@ -852,7 +896,7 @@ def render(deck, inp, out: Path, findings: list | None = None, pictures: dict | 
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{_e(m["client"])}: {_e(m["project"])}</title>
 <meta name="generator" content="Napkin Deck Maker (render_web)"><link rel="icon" href="data:,">
-<style>{theme_css(**_brand_css(m), look=look)}{PIC_CSS if any(v["cls"] for v in views) else ""}</style></head>
+<style>{theme_css(**_brand_css(m), look=look)}{PIC_CSS if any(v["cls"] for v in views) else ""}{ICON_CSS if ('data-icon="' in slides or 'class="pc-grid"' in slides) else ""}</style></head>
 <body><div id="app"><div id="view"><div id="bar"></div><div id="stage">
 {slides}
 </div><div id="ov"></div>

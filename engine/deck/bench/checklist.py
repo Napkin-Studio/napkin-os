@@ -27,7 +27,7 @@ from .packets import run_ids
 
 DECK = Path(__file__).resolve().parents[1]
 ITEMS_PATH = DECK / "checklist.json"
-PER_SLIDE_PREFIXES = ("q_", "l_", "w_", "t_", "p_", "k_")   # checks that judge presented slides
+PER_SLIDE_PREFIXES = ("q_", "l_", "w_", "t_", "p_", "k_", "i_")   # checks that judge presented slides
 CONTENT_EXCLUDED = ("title", "appendix", "close")   # content slides: presented slides other than these (Q7)
 CREATIVE_TYPES = ("territory", "idea", "execution", "audience")   # look.pictures.on creative (contract 6.3)
 COVER_TYPES = ("title", "appendix")                                # creative_cover adds these
@@ -841,6 +841,109 @@ def k_logo_cover(r: Run) -> dict:
     slides = list(r.prs.slides)
     bad = [i for i in covers if r.number(i) > len(slides) or not qa_render.has_picture(slides[r.number(i) - 1])]
     return _verdict(bad, r.ids, len(covers) - len(bad), len(covers))
+
+
+# ---------------------------------------------------------------- graphics (deck-graphics: icons, slice 1)
+
+ICON_PREFIX = "Icon: "
+_A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+
+
+def _icons(r: Run):
+    """``{slide id: [(icon id, shape element, slide)]}`` for presented slides carrying icon shapes; None when deck.pptx is unreadable."""
+    if "icons" in r._measures:
+        return r._measures["icons"]
+    out = None
+    if r.prs is not None:
+        out = {}
+        slides = list(r.prs.slides)
+        for i in r.presented:
+            if r.number(i) > len(slides):
+                continue
+            sl = slides[r.number(i) - 1]
+            got = [(sh.name[len(ICON_PREFIX):], sh._element, sl) for sh in sl.shapes if (sh.name or "").startswith(ICON_PREFIX)]
+            if got:
+                out[i] = got
+    r._measures["icons"] = out
+    return out
+
+
+def _icons_na(r: Run):
+    ic = _icons(r)
+    if ic is None:
+        return None, na(NA_PPTX)
+    if not ic:
+        return None, na("no presented slide carries an icon")
+    return ic, None
+
+
+@check
+def i_icon_allowlist(r: Run) -> dict:
+    ic, n = _icons_na(r)
+    if n:
+        return n
+    from .. import graphics
+    allowed = set(graphics.icons())
+    bad = []
+    for sid, rows in ic.items():
+        for iid, el, _ in rows:
+            denied = any(iid == d or iid.startswith(d + "-") for d in graphics.ICON_DENY)
+            geom = el.find(f".//{_A}custGeom")
+            pic = el.tag.endswith("}pic")
+            nofill = el.find(f".//{{http://schemas.openxmlformats.org/presentationml/2006/main}}spPr/{_A}noFill") is not None
+            if iid not in allowed or denied or geom is None or pic or not nofill:
+                bad.append(sid)
+    return _verdict(bad, r.ids, sorted({x[0] for v in ic.values() for x in v}), "vendor/icons/icons.json")
+
+
+@check
+def i_icon_contrast(r: Run) -> dict:
+    ic, n = _icons_na(r)
+    if n:
+        return n
+    from .. import graphics, theme
+    bad, worst = [], None
+    for sid, rows in ic.items():
+        sl = rows[0][2]
+        try:
+            ground = str(sl.background.fill.fore_color.rgb)
+        except Exception:
+            ground = "FFFFFF"
+        for _, el, _ in rows:
+            c = el.find(f".//{_A}ln/{_A}solidFill/{_A}srgbClr")
+            ratio = theme.contrast(c.get("val"), ground) if c is not None else 0.0
+            worst = ratio if worst is None else min(worst, ratio)
+            if ratio < graphics.ICON_CONTRAST:
+                bad.append(sid)
+    return _verdict(bad, r.ids, round(worst, 2), graphics.ICON_CONTRAST)
+
+
+@check
+def i_icon_groups(r: Run) -> dict:
+    ic, n = _icons_na(r)
+    if n:
+        return n
+    from .. import graphics
+    bad = [sid for sid, rows in ic.items() if len(rows) < graphics.ICON_GROUP_MIN or len({x[0] for x in rows}) != len(rows)]
+    return _verdict(bad, r.ids)
+
+
+@check
+def i_icon_share(r: Run) -> dict:
+    ic, n = _icons_na(r)
+    if n:
+        return n
+    thr = _thr(r, "i_icon_share")
+    cap, win = thr.get("max_slides", 3), thr.get("window", 10)
+    pres = list(r.presented)
+    bad, most = [], 0
+    for k in range(max(1, len(pres) - win + 1)):
+        w = pres[k:k + win]
+        on = [i for i in w if i in ic]
+        most = max(most, len(on))
+        if len(on) > cap:
+            bad += on
+    return _verdict(bad, r.ids, most, cap)
 
 
 # ---------------------------------------------------------------- run

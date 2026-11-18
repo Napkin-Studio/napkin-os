@@ -757,6 +757,64 @@
    "na_when": "deck.meta.theme.logo is absent, has no asset or placement none; or deck.pptx is missing or cannot be opened; or no presented slide of type title",
    "tier": "gate",
    "today": "n/a"
+  },
+  {
+   "id": "i_icon_allowlist",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is every icon shape one of the vendored ids (vendor/icons/icons.json), none a brand, drawn as a native stroke-only freeform?",
+   "source": "features/deck-graphics.clan design.checklist and design.icons (slice 1); graphics.ICON_DENY",
+   "inputs": [
+    "deck.pptx"
+   ],
+   "na_when": "no presented slide carries an icon (shape named 'Icon: <id>'), e.g. DECK_GRAPHICS is off; or deck.pptx is missing or cannot be opened",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "i_icon_contrast",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is every icon stroke 3:1 or better against its slide's ground (WCAG non-text contrast)?",
+   "source": "features/deck-graphics.clan design.checklist and design.icons (slice 1); graphics.ICON_CONTRAST",
+   "inputs": [
+    "deck.pptx"
+   ],
+   "na_when": "no presented slide carries an icon (shape named 'Icon: <id>'), e.g. DECK_GRAPHICS is off; or deck.pptx is missing or cannot be opened",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "i_icon_groups",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Does every icon group have an icon on every item, all different (at least graphics.ICON_GROUP_MIN items)?",
+   "source": "features/deck-graphics.clan design.checklist and design.icons (slice 1) (all-or-none per group)",
+   "inputs": [
+    "deck.pptx",
+    "layouts.json | deck.slides.<id>.layout"
+   ],
+   "na_when": "no presented slide carries an icon (shape named 'Icon: <id>'), e.g. DECK_GRAPHICS is off; or deck.pptx is missing or cannot be opened",
+   "tier": "advisory",
+   "today": "n/a"
+  },
+  {
+   "id": "i_icon_share",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Are icons on at most 3 of any 10 presented slides?",
+   "source": "features/deck-graphics.clan design.checklist and design.icons (slice 1) (design.icons.layouts: at most 3 icon slides in any 10 presented)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json"
+   ],
+   "na_when": "no presented slide carries an icon (shape named 'Icon: <id>'), e.g. DECK_GRAPHICS is off; or deck.pptx is missing or cannot be opened",
+   "threshold": {
+    "max_slides": 3,
+    "window": 10
+   },
+   "tier": "advisory",
+   "today": "n/a"
   }
  ]
 }

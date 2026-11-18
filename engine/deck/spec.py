@@ -470,6 +470,14 @@ LOOK_V3 = os.environ.get("DECK_LOOK_V3", "").strip() in ("1", "true", "yes")
 #: reader uses the constants above and a build is byte-identical; DECK_RECIPES=1 turns it on for one run (the gallery render). It
 #: gets its own golden re-record commit after the look commit (design.rework_risks).
 RECIPES = os.environ.get("DECK_RECIPES", "").strip() in ("1", "true", "yes")
+#: deck-graphics (features/deck-graphics.clan): icons (slice 1; charts, diagrams and execution mock-ups follow) drawn as native shapes.
+#: DECK_GRAPHICS=1 turns it on for one run, and only together with LOOK_V3 (off with a warning otherwise). OFF by default: nothing in
+#: graphics.py is read and the vendored icons are never loaded, so every build is byte-identical. Its own golden re-record after RECIPES.
+_GRAPHICS_ASKED = os.environ.get("DECK_GRAPHICS", "").strip() in ("1", "true", "yes")
+GRAPHICS = _GRAPHICS_ASKED and LOOK_V3
+if _GRAPHICS_ASKED and not LOOK_V3:
+    import sys as _sys   # noqa: PLC0415
+    print("deck: DECK_GRAPHICS=1 needs DECK_LOOK_V3=1; graphics stay off for this run", file=_sys.stderr)
 #: Whether the run set the pitch length by env: the per-run override ranks above a recipe (design.schema.readers: env > recipe > default).
 PITCH_LENGTH_FROM_ENV = {"target": _env_count("DECK_PITCH_TARGET", -1, warn=False) != -1, "cap": _env_count("DECK_PITCH_CAP", -1, warn=False) != -1}   # a bad value is not "from env"
 #: Layouts deck-look has named but not yet built (features/deck-look.clan step 3; cover_bleed landed in step 7). A recipe may name one: it is accepted by the

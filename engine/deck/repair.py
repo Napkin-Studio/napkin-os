@@ -417,7 +417,7 @@ def measure(deck: dict, plan_issues: list, folder: Path, ctx: dict, round_: int,
     diffs = read_ledger(ctx["base_deck"], deck, folder, ctx["audience"]) if pptx else [{"slide": I.DECK_KEY, "block": None, "kind": "unreadable", "expected": None, "got": "no .pptx"}]
     cl = checklist.run_checklist(folder, deck_id="deck") if (folder / "layouts.json").exists() else None
     return {"folder": folder, "deck": deck, "findings": findings, "qa": qa, "issues": iss, "ok": ok, "counts": counts(iss, deck), "pairs": pairs(iss, deck),
-            "content": content_set(findings), "ledger": diffs, "checklist": cl, "placed": res.get("placed"), "pptx": pptx, "pdf": pdf,
+            "content": content_set(findings), "ledger": diffs, "checklist": cl, "placed": res.get("placed"), "icons": res.get("icons"), "pptx": pptx, "pdf": pdf,
             "pixels": bool(qa.get("pixels"))}
 
 

@@ -557,6 +557,30 @@ automatically after an update: the notice says what changed and the person choos
 unmerged, so it is a stub that returns no tokens; a deck works without it. Shrey's open asks are in
 `features/deck-look-kits.clan` (`design.shrey_asks`).
 
+### 6.6 Graphics (`deck-graphics`, 18 November 2026)
+
+Behind `spec.GRAPHICS` (`DECK_GRAPHICS=1`, read only with `DECK_LOOK_V3=1`; off by default, and off is byte-identical). Graphics are
+native shapes that draw only what the deck already says. Slice 1 is **icons**:
+
+- **Library.** 72 Lucide icons (`lucide-static` 1.75.0, ISC; the Feather-derived ones MIT) vendored as path data in
+  `engine/deck/vendor/icons/` (`icons.json`, `LICENSE`, `icons.source.json` with the version and the tarball's integrity hash), made
+  once by `scripts/vendor_icons.py`. No SVG is parsed at run time. No brand, platform, award or trophy icon (`graphics.ICON_DENY`).
+- **Drawn as** one native freeform per icon (ADR in `features/deck-graphics.clan`: native shapes over SVG pictures): a `p:sp` with a
+  standard `a:custGeom` whose `a:pathLst` holds every sub-path (`moveTo`, `lnTo`, `cubicBezTo`, `close`; `w = h = 24000`,
+  `fill="none"`), `a:noFill`, a round-capped round-joined `a:ln` in the slide's text token (ink, or on-dark on a dark ground), named
+  `Icon: <id>`, marked decorative (`a16` decorative extension). The web draws the same path data as inline SVG (`currentColor`,
+  `aria-hidden`), only where the pptx drew one.
+- **Chosen by** the fixed keyword map `engine/deck/policy/icons.yaml` on the item's heading only (a kv key, a table row's first cell,
+  a card's title, a bullet's first four words), whole words, plurals folded, the longer keyword winning. Two different icons for
+  one heading: none. All-or-none per group of at least two: one miss or one repeat and the group has no icons. Never a fallback glyph.
+- **Placed** on channel-role table rows (`rows_aside`, `picture_column`) and statement points (`statement_points`), at the type size
+  the layout already chose: an icon never shrinks text or changes a layout; if the group does not fit with its icons at that size,
+  it is drawn without them. Not on the measuring pass or the hole probe. Stroke 3:1 or better on its ground, else none.
+- **Off** for a deck type whose recipe says `graphics: {icons: false}` (tender_response) and for a deck whose
+  `meta.preferences.look.graphics.icons` is false.
+- **Checked** by `i_icon_allowlist` and `i_icon_contrast` (gate) and `i_icon_groups` and `i_icon_share` (advisory, at most 3 icon
+  slides in any 10 presented) in `checklist.json`.
+
 ## 7. Issues
 
 One shape for every finding that code can act on, from any source.

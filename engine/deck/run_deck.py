@@ -353,10 +353,10 @@ def _repair(a, inp, profile: dict, deck: dict, findings: list, qa: dict, pics, p
         if render_seam:
             got = render_seam(d, folder, f)
         else:
-            pic_f, pl = [], set()
+            pic_f, pl, ic = [], set(), {}
             render_pptx.render(d, inp, folder / "deck.pptx", a.master, f, animate=a.animate or False, layouts_out=folder / "layouts.json", pictures=pics, picture_findings=pic_f,
-                               placed=pl, notes=not a.no_notes, no_plan=a.no_layout_plan)
-            got = {"pptx": folder / "deck.pptx", "pic_findings": pic_f, "placed": pl}
+                               placed=pl, notes=not a.no_notes, no_plan=a.no_layout_plan, icons=ic)
+            got = {"pptx": folder / "deck.pptx", "pic_findings": pic_f, "placed": pl, "icons": ic}
         return {**got, "pptx": got["pptx"] if got.get("pptx") and Path(got["pptx"]).exists() else None}
 
     def pdf_fn(p, folder):
@@ -421,7 +421,8 @@ def _repair(a, inp, profile: dict, deck: dict, findings: list, qa: dict, pics, p
                 (out / name).unlink(missing_ok=True)
         deck, findings, placed = final["deck"], final["findings"], (final.get("placed") or placed)
         rep["validation"] = validate.summary(findings)
-        render_web.render(deck, inp, out / "deck.html", findings, pictures=pics, placed=placed if pics else None, look=not a.no_layout_plan)
+        render_web.render(deck, inp, out / "deck.html", findings, pictures=pics, placed=placed if pics else None, look=not a.no_layout_plan,
+                          icons=final.get("icons"))
         if a.hyperframes:
             render_hyperframes.render(deck, inp, out / "hyperframes", findings, builds=a.builds, pictures=pics, placed=placed if pics else None, look=not a.no_layout_plan)
         if (out / "deck.pdf").exists():
@@ -1126,7 +1127,7 @@ def main(argv=None):
     if a.audience == "client" and WITHHOLD_FAILING_CLIENT and any(f["level"] == "error" for f in findings):   # a client file with a failing check is never written
         return _withheld(a, rep, deck, findings, t0)
 
-    pics, pic_findings, placed = None, [], set()
+    pics, pic_findings, placed, icons = None, [], set(), {}
     if a.pictures or supplied or a.audience == "client":   # never ship what an earlier build left in a reused --out (a client folder above all)
         lg = (deck["meta"].get("theme") or {}).get("logo") or {}   # the cleared client logo is a deck asset, not a picture: it outlives the wipe
         lrec = (deck.get("assets") or {}).get(lg.get("asset")) or {}
@@ -1143,7 +1144,7 @@ def main(argv=None):
             raise SystemExit(f"refused: {e}")
     t = time.time()
     pptx = render_pptx.render(deck, inp, a.out / "deck.pptx", a.master, findings, animate=a.animate or False, layouts_out=a.out / "layouts.json", pictures=pics, picture_findings=pic_findings, placed=placed,
-                              notes=not a.no_notes, no_plan=a.no_layout_plan)
+                              notes=not a.no_notes, no_plan=a.no_layout_plan, icons=icons)
     if pic_findings:   # a slide drawn without its picture because it would not fit beside it: say so in the findings
         for f in pic_findings:
             f["slide_no"] = deck["order"].index(f["slide"]) + 1
@@ -1153,7 +1154,7 @@ def main(argv=None):
     rep["stages"]["render_pptx"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
 
     t = time.time()
-    render_web.render(deck, inp, a.out / "deck.html", findings, pictures=pics, placed=placed if pics else None, look=not a.no_layout_plan)
+    render_web.render(deck, inp, a.out / "deck.html", findings, pictures=pics, placed=placed if pics else None, look=not a.no_layout_plan, icons=icons)
     if a.hyperframes:
         render_hyperframes.render(deck, inp, a.out / "hyperframes", findings, builds=a.builds, pictures=pics, placed=placed if pics else None, look=not a.no_layout_plan)
     rep["stages"]["render_web"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}

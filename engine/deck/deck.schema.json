@@ -1199,6 +1199,31 @@
          ]
         }
        }
+      },
+      "look": {
+       "type": "object",
+       "additionalProperties": false,
+       "description": "deck-graphics: the look parts a person turned on or off for this deck (read only under DECK_GRAPHICS=1). graphics.icons false: no icons.",
+       "properties": {
+        "graphics": {
+         "type": "object",
+         "additionalProperties": false,
+         "properties": {
+          "icons": {
+           "type": "boolean"
+          },
+          "charts": {
+           "type": "boolean"
+          },
+          "diagrams": {
+           "type": "boolean"
+          },
+          "mockups": {
+           "type": "boolean"
+          }
+         }
+        }
+       }
       }
      }
     },

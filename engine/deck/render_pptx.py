@@ -406,6 +406,12 @@ class Renderer:
         self._acc = None            # deck-look (rea-full A3): the title's one accent phrase on the slide in hand (layouts.accent_phrase)
         self._acc_drawn = False
         self._ink = None            # the hole estimate (layouts' swap menu): boxes drawn, in inches, while it measures
+        # deck-graphics slice 1: icons only under spec.GRAPHICS (graphics.icons_on); off, nothing below is read and nothing changes
+        self._icons_on = False
+        if spec.GRAPHICS:
+            from . import graphics   # noqa: PLC0415
+            self._icons_on = graphics.icons_on(deck)
+        self.icons_drawn = {}       # slide id -> {"layout", "ids"}: the icons really drawn, in item order (the web draws exactly these)
 
     def _layout(self, name):
         """A layout of the master by name, or None."""
@@ -1949,6 +1955,34 @@ class Renderer:
         a.set("val", str(int(alpha * 100000)))
         return r
 
+    # -- icons (deck-graphics slice 1) ---------------------------------------------------------------------------------------------
+    def _icon_ids(self, headings) -> list | None:
+        """The icons of one group (graphics.choose: every item a different icon, else None), or None when icons are off for this deck,
+        the slide's ink is under 3:1 on its ground, or there is no group."""
+        if not self._icons_on or not headings:
+            return None
+        from . import graphics   # noqa: PLC0415
+        if not graphics.stroke_ok(self.p.fg, self.p.bg):
+            return None
+        return graphics.choose(list(headings))
+
+    def _icon(self, sl, iid, x, y, size):
+        """Draw one icon: a native stroke-only freeform (graphics.icon_xml) in the text token, at (x, y) inches, ``size`` inches square.
+        Never on a measuring pass or the hole probe's scratch slide (so an icon cannot move a plan or a hole estimate)."""
+        if sl is None or self._sid is None or sl is not self._cur:
+            return
+        from . import graphics   # noqa: PLC0415
+        el = etree.fromstring(graphics.icon_xml(sl.shapes._next_shape_id, iid, int(Inches(x)), int(Inches(y)), int(Inches(size)), self.p.fg, size))
+        sl.shapes._spTree.append(el)
+
+    def _record_icons(self, sl, sid, name):
+        """After a slide is drawn: the icons it really carries (rolled-back attempts leave none), in drawing order."""
+        if not self._icons_on:
+            return
+        ids = [sh.name[len("Icon: "):] for sh in sl.shapes if sh.name.startswith("Icon: ")]
+        if ids:
+            self.icons_drawn[sid] = {"layout": name, "ids": ids}
+
     def _with_width(self, x0, x1, fn):
         """Run ``fn`` with the content area narrowed to ``x0..x1`` (the footer is drawn by the caller after, at the full width)."""
         saved = (self.x0, self.x1)
@@ -2521,6 +2555,20 @@ class Renderer:
                 break
         else:
             raise NoFit("points too long for the column")
+        icon, ih, anchor = None, 0.0, bool(fig) and not facts
+        if self._icons_on:   # deck-graphics: an icon above each point's words (the anchor's too), at the SAME sizes; else none
+            from . import graphics   # noqa: PLC0415
+            heads = graphics.point_headings(s["blocks"])
+            icon = self._icon_ids(heads) if len(heads) == len(pts) + (1 if anchor else 0) else None
+            if icon:
+                ih = graphics.ICON_POINT_IN + graphics.ICON_GAP_IN
+                n = len(hs)
+                right_ok = sum(hs) + n * ih + 2 * (n - 1) * 0.25 <= avail
+                left_ok = not anchor or th_ + 0.4 + fh + ih <= avail
+                if right_ok and left_ok:
+                    hs = [h + ih for h in hs]
+                else:
+                    icon, ih = None, 0.0
         gap = min(0.6, max(0.25, (avail - sum(hs)) / (2 * (len(hs) - 1)))) if len(hs) > 1 else 0.0
         total = sum(hs) + 2 * (len(hs) - 1) * gap
         if sl is None:
@@ -2532,6 +2580,8 @@ class Renderer:
         self._build(sl, m, title=True)
         if fig:
             m = self._mark(sl)
+            if icon and anchor:
+                self._icon(sl, icon[0], self.x0 + pad, bottom - 0.15 - fh - ih, graphics.ICON_POINT_IN)
             self._stack_paras(sl, self.x0 + pad, bottom - 0.15 - fh, ltw, fig, "slot:figure")
             self._build(sl, m)
             self._rec_slot(sl, "figure")
@@ -2541,7 +2591,9 @@ class Renderer:
             if i:
                 self.hairline(sl, rx + pad, y + gap, self.x1 - pad, y + gap)
                 y += 2 * gap
-            self.ptext(sl, rx + pad, y, rtw, h, ps, name="slot:points")
+            if icon:
+                self._icon(sl, icon[i + (1 if anchor else 0)], rx + pad, y, graphics.ICON_POINT_IN)
+            self.ptext(sl, rx + pad, y + ih, rtw, h - ih, ps, name="slot:points")
             self._build(sl, m)
             y += h
         self._rec_slot(sl, "points")
@@ -2775,12 +2827,29 @@ class Renderer:
                 gh = sum(h for _, h in groups) + 0.5 * (len(groups) - 1)
                 if th_ + 0.45 + rows_h <= avail and gh <= avail:
                     fit = (tp, th_, hk, hh, cells, rhs, rows_h, groups, gh)
+                    fit_b = bsize
                     break
             if fit:
                 break
         if not fit:
             raise NoFit("rows and aside too full")
         tp, th_, hk, hh, cells, rhs, rows_h, groups, gh = fit
+        icon, gut = None, 0.0
+        if self._icons_on:   # deck-graphics: a row icon in front of each first cell, at the SAME type size (text never shrinks for an icon)
+            from . import graphics   # noqa: PLC0415
+            icon = self._icon_ids(graphics.row_headings(s, body))
+            if icon:
+                gut = graphics.ICON_ROW_IN + graphics.ICON_GAP_IN
+                w0 = cws[0] - gut
+                if w0 > 0.6 and all(self._units_fit(r[0], w0 * 0.95, fit_b + 2) for r in body):
+                    rhs_i = [max([self.ph(cr[0], w0)] + [self.ph(x, w) for x, w in zip(cr[1:], cws[1:])]) for cr in cells]
+                    rows_i = hh + 0.15 + sum(h + 0.4 for h in rhs_i)
+                    if th_ + 0.45 + rows_i <= avail:
+                        rhs, rows_h = rhs_i, rows_i
+                    else:
+                        icon = None
+                else:
+                    icon = None
         if sl is None:
             return
         self.band(sl, s)
@@ -2797,9 +2866,14 @@ class Renderer:
         for x, w, ps in zip(xs, cws, hk):
             self.ptext(sl, x, y, w, hh, ps, name="slot:rows")
         y += hh + 0.15
-        for cr, h in zip(cells, rhs):
+        for ri, (cr, h) in enumerate(zip(cells, rhs)):
             self.hairline(sl, self.x0 + pad, y, self.x0 + pad + ltw, y)
-            for x, w, ps in zip(xs, cws, cr):
+            for j, (x, w, ps) in enumerate(zip(xs, cws, cr)):
+                if j == 0 and icon:   # the icon sits on the first line of the row's first cell; the cell moves right by the gutter
+                    size = graphics.ICON_ROW_IN
+                    lh = (fit_b + 2) * 1.05 / 72
+                    self._icon(sl, icon[ri], x, y + 0.2 + max(0.0, (lh - size) / 2), size)
+                    x, w = x + gut, w - gut
                 self.ptext(sl, x, y + 0.2, w, h, ps, name="slot:rows")
             y += h + 0.4
         self._build(sl, m)
@@ -3041,6 +3115,22 @@ class Renderer:
                 break
         else:
             raise NoFit("picture column too full")
+        icon, gut = None, 0.0
+        if self._icons_on and len(gc) > 1:   # deck-graphics: the table rows' icons, at the same type size, only when the column still fits
+            from . import graphics   # noqa: PLC0415
+            icon = self._icon_ids(graphics.row_headings(s, [[a] for a, _ in grid[1:]]))
+            if icon:
+                gut = graphics.ICON_ROW_IN + graphics.ICON_GAP_IN
+                w0 = gw0 - gut
+                if w0 > 0.6 and all(self._units_fit(a, w0 * 0.95, bsize) for a, _ in grid[1:]):
+                    gh_i = [gh[0]] + [max(self.ph(a, w0), self.ph(b, gw1)) for a, b in gc[1:]]
+                    grid_i = sum(h + (0.15 if n == 0 else 0.35) for n, h in enumerate(gh_i))
+                    if hh + 0.45 + body - grid_h + grid_i <= bottom - top:
+                        gh, grid_h = gh_i, grid_i
+                    else:
+                        icon = None
+                else:
+                    icon = None
         if sl is None:
             return
         self._own_picture(sl, "picture", px, 0, self.PIC_COL, H, corner="left" if side == "left" else "right")
@@ -3081,7 +3171,12 @@ class Renderer:
                 if n:
                     self.hairline(sl, tx0, y, tx1, y)
                     y += 0.1
-                self.ptext(sl, tx0, y, gw0, h, a, name="slot:points")
+                if n and icon:
+                    size = graphics.ICON_ROW_IN
+                    self._icon(sl, icon[n - 1], tx0, y + max(0.0, (bsize * 1.05 / 72 - size) / 2), size)
+                    self.ptext(sl, tx0 + gut, y, gw0 - gut, h, a, name="slot:points")
+                else:
+                    self.ptext(sl, tx0, y, gw0, h, a, name="slot:points")
                 self.ptext(sl, tx0 + gw0 + 0.2, y, gw1, h, b, name="slot:points")
                 y += h + (0.15 if n == 0 else 0.25)
             self._build(sl, m)
@@ -3549,6 +3644,7 @@ class Renderer:
             self.picture_findings.append({"check": "image_missing", "level": "warn", "slide": sid, "slot": slot,
                                           "message": f"{slot} is not drawn: {why}, so no output carries it"})
         self.layouts[sid] = name
+        self._record_icons(sl, sid, name)
         self.shapes_by_slide[sid] = self._shapes_now
         self.fit_by_slide[sid] = (planned or {}).get("fit")
         # footer: section label, footnote keys, slide number
@@ -3994,7 +4090,7 @@ class Renderer:
 
 def render(deck, inp, out: Path, master: Path | None = None, findings: list | None = None, animate=False, theme=themes.DEFAULT,
            layouts_out: Path | None = None, pictures: dict | None = None, picture_findings: list | None = None, placed: set | None = None,
-           notes: bool = True, no_plan: bool = False) -> Path:
+           notes: bool = True, no_plan: bool = False, icons: dict | None = None) -> Path:
     """Render a deck to ``out`` (.pptx); slides with a failed check carry a visible flag.
 
     ``animate``: False (static), True or ``"auto"`` (builds play in order), ``"click"`` (one block per click).
@@ -4003,6 +4099,7 @@ def render(deck, inp, out: Path, master: Path | None = None, findings: list | No
     ``layouts_out``: a path for the layout record (``layouts.json``); the .pptx is byte-identical with or without it.
     ``pictures``: asset id -> derived JPEG for the pictures to draw (images.copy_assets); None draws none and changes nothing.
     ``picture_findings``: a list the renderer appends to when a slide had to be drawn without its picture.
+    ``icons``: a dict the renderer fills with the icons it drew (deck-graphics; empty unless spec.GRAPHICS): ``{slide id: {layout, ids}}``.
     """
     r = Renderer(deck, inp, master, findings, animate, theme, pictures)
     r.notes, r.no_plan = notes, no_plan
@@ -4011,4 +4108,6 @@ def render(deck, inp, out: Path, master: Path | None = None, findings: list | No
         picture_findings.extend(r.picture_findings)
     if placed is not None:
         placed |= r.placed
+    if icons is not None:
+        icons.update(r.icons_drawn)
     return out
