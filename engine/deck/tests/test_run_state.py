@@ -130,3 +130,23 @@ def test_the_finished_run_is_every_row_done_and_review_next_with_the_deck_and_it
     assert pay["report"]["cost_usd"] == 0 and pay["report"]["mode"] == "replay"
     assert pay["deck"]["appendix_count"] == len(pay["deck"]["appendix_ids"]) and pay["evidence"]
     assert set(pay["validation"]) == {"errors", "warnings", "findings"}
+
+
+def test_the_payload_carries_qa_and_repair_only_when_the_loop_wrote_them_and_they_are_valid_in_the_app(tmp_path):
+    jsonschema = pytest.importorskip("jsonschema")
+    out = tmp_path / "out"
+    out.mkdir()
+    deck = {"order": ["s01", "s02"], "slides": {"s01": {"type": "title", "status": "drafted", "title": "T", "blocks": []}, "s02": {"type": "idea", "status": "drafted", "title": "U", "blocks": []}}, "meta": {}}
+    assert rs.repair_payload(out, deck, {}) == {}   # no issues.json: --no-repair or no QA
+    issue = {"id": "i_0000000a", "round": 0, "slide": "s02", "source": "qa_render", "check": "text_overflow", "level": "error", "severity": "blocker", "message": "m", "status": "fixed"}
+    (out / "issues.json").write_text(json.dumps([issue, {**issue, "id": "i_0000000b", "check": "margin", "severity": "major", "status": "left_for_person"}]))
+    (out / "qa.json").write_text(json.dumps({"slides": {}, "deck_sha": "abc123"}))
+    got = rs.repair_payload(out, deck, {})
+    assert set(got) == {"qa"} and got["qa"]["summary"]["major"] == 1 and got["qa"]["summary"]["blocker"] == 0 and got["qa"]["deck_sha"] == "abc123"
+    (out / "repair.json").write_text(json.dumps({"rounds": [{"n": 1, "kept": True, "why": "", "fixed": 1, "open": 1, "usd": 0.0, "before": {"blocker": 1, "major": 1, "minor": 0}, "after": {"blocker": 0, "major": 1, "minor": 0}}],
+                                                 "left_for_person": [{"slide": "s02", "check": "margin", "why": "x"}], "stopped": "clean", "skipped": [{"rung": "shorten"}]}))
+    got = rs.repair_payload(out, deck, {"repair": {"rounds": [{"n": 1, "seconds": 1.5}]}})
+    schema = {**json.loads(SCHEMA.read_text()), "required": []}
+    jsonschema.Draft7Validator(schema).validate(got)   # the template's closed objects accept exactly this
+    assert got["repair"]["rounds"][0]["seconds"] == 1.5 and got["repair"]["skipped"] == 1 and got["repair"]["left_for_person"] == 1
+    assert "1 fixed by repair, 1 left for you" in rs.done_line(deck, {"validation": {}, "repair": {"rounds": [{"kept": True, "fixed": 1}], "left_for_person": [1]}})["summary"]

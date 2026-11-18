@@ -159,6 +159,9 @@ image: { kind, status, aspect, asset?, from?, subject?, prompt?, style?, referen
 | `approval` | `{asset, decision, by, at, note?}` or null | the runner's stamp of `review.images.<slide id>.<slot>`. `decision`: `approve` · `replace` · `remove`. `by` is `human:<id>`, `at` is not empty. The schema requires an approved slot to hold an approval with `decision: approve`, a `by`, an `at` and an `asset`; that `approval.asset` equals the slot's own `asset` is a rule JSON Schema cannot state, so it is checked in code (`approval_matches_asset` in `test_visual_contract.py`, and the validator that reads it, `deck-repair-loop`) |
 | `basis` | `creative` | constant: every picture is creative, never sourced. There is no stored label field: a renderer draws the picture label (`inputs.pictures.approval.label`, Illustrative by default) whenever `status != approved` |
 
+**Amendment, 18 November 2026 (`deck-repair-loop`).** `image_slot.scrim` (`none` | `dark` | `light`, optional) is what the repair loop sets under text that sits on a
+picture (`fixes.images.<sid>.<slot>.scrim`); a renderer draws a layer of that tone over the picture. `fit` (`cover`) and `focal` are set the same way.
+
 ### 4.2 Assets
 
 `deck.assets.<asset id>`, keyed by `img_` + the first 12 hex of the file's SHA-256, so the same file is
@@ -576,6 +579,20 @@ One list for the engine, the app and the bench, in `spec.py`:
 
 `empty_slot` is an existing validator check (a block with no text) and keeps its meaning; the new names
 start `slot_`. `placeholder` is raised by both `validate` and `qa_render`; `source` tells them apart.
+
+### 7.2 The repair loop (`deck-repair-loop`, 18 November 2026)
+
+Adapters (`engine/deck/issues.py`: `from_validation`, `from_qa`, `derive`) turn `validation.json` and `qa.json` into issues; the run writes `issues.json`
+(every round-0 issue with its end status) and, when a round ran, `repair.json`, `repair_record.json` and `out/repair/` (the base deck, every round's folder).
+`qa.json` carries `deck_sha` (the hash of the `deck.json` those checks read), stamped the same way in `out/` and every round folder. The critic's question ids
+(`spec.CRITIC_CHECKS`) are check names with source `critic`; a critic issue never raises a blocker, never counts in the keep rule, and never gets `shorten` or
+`overflow_to_notes`.
+
+A round is kept only when it is not worse (K1 counts and no new blocker or major pair; K2 the checklist through `compare(tier=...)` with the loop's tier map; K3 the
+token ledger read from the round's `.pptx` and equal to the base deck's: numbers including letter-attached ones, units, percent and currency, order, capitalised names,
+months, years, negations and hedges; K4 the validator's content findings equal both ways; K5 progress). At most two rounds. `shorten` only deletes or reuses the slide's
+own words (guards `ledger_kept` and `own_words`, `spec.REPAIR_SHORTEN_GUARDS`); moving points to the notes and shortening need `--text-mode condense`; shortening a client
+deck needs a person's yes (`--approve-shorten ID`, bound to the exact words); the guard compares only with the same field's base text; a replay re-runs every guard. The words never change by themselves: `--no-repair` and a deck with nothing to repair are byte-identical to the engine without the loop.
 
 ## 8. Engine data: policy, goldens, rubric
 

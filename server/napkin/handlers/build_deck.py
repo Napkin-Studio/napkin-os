@@ -89,8 +89,12 @@ def start(req, caps, settings, jid):
                        "kind": inputs.get("kind") or "agency", "format": inputs.get("format") or "pitch"},
             "approvals": approvals, "render": bool(getattr(settings, "deck_render", True)),
             "marks": marks_of(data, ((req.clan or {}).get("decision_chain") or {}).get("decisions") or [])}
-    if isinstance(data.get("review"), dict) and data["review"]:
+    if inputs.get("text_mode") in ("condense", "preserve"):   # the person's choice: condense lets the repair loop move points to the notes and shorten
+        body["inputs"]["text_mode"] = inputs["text_mode"]
+    if isinstance(data.get("review"), dict) and data["review"]:   # the person's whole review (pictures and pins): the picture step reads it, the engine takes the pins from it
         body["review"] = data["review"]
+        if data["review"].get("pinned"):   # the slides the person pinned: the repair loop leaves them alone
+            body["inputs"]["review"] = {"pinned": data["review"]["pinned"]}
     approver = str((((inputs.get("pictures") or {}).get("approval") or {}).get("user")) or "")
     if approver:
         body["approver"] = approver

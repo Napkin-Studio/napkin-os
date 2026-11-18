@@ -439,3 +439,17 @@ human:<id>` (decisions per asset), `--images-reviewed --by human:<id>` (a sensit
 `--images-cache DIR`, `--cap-usd N` (a lower cap; 2.50 is the most). The ledger id comes from the deck's content (the document id, or the brief and title), so a copied folder shares one cap; `--ledger FILE` and `--deck-id ID` need `--dev` and print a warning. The key is `RUNWAYML_API_SECRET` in the
 environment only. Code: `deck/imagegen.py` (plan, cards, ledger use, records), `visuals/{runway,jobs,lint,guard,safety}.py`. Tests never call
 Runway or a model: `deck/tests/test_images_gen.py`, `visuals/tests/`.
+
+## The repair loop (`deck/repair.py`, `deck/ledger.py`, `deck/policy/repair.yaml`; feature deck-repair-loop)
+
+After the build and its QA, `run_deck` turns the findings into issues (`issues.py`) and runs at most two repair rounds (`repair.run`). Each round picks one action per
+unpinned slide from `repair.ACTION_MAP` (one row per check, rungs tried across rounds: shrink, switch layout, shorten, move to the notes, scrim, crop, drop the picture),
+hands the fixes to `layouts.plan`, renders, runs QA and the checklist, and keeps the round only when it is not worse (K1 to K5, `repair.gate`). The token ledger
+(`ledger.py`) is read back from the round's `.pptx` and compared with the base deck's, so a changed number, unit, name, month, year, negation or hedge rejects the round.
+Free geometry rungs run by default; `--text-mode condense` also lets the loop move whole points to the speaker notes and shorten wording with the slide's own words (one
+batched stage e call per round, only with `--live` or a recording, capped by `policy.max_usd` and `NAPKIN_DECK_MAX_USD`; on `--audience client` only with `--approve-shorten ID`, an approval id bound to the hash of the shortenable words, so any change voids it).
+`--no-repair` turns it off, `--no-qa` skips it (it reads the QA), `--until` never starts it, `--review FILE` pins slides, `--repair-policy FILE` overrides the policy.
+Outputs: `issues.json`, `repair.json`, `repair_record.json` (replayed without measuring when its base and policy hashes match), `out/repair/round-<n>/`, and a `repair`
+key in `report.json` only when a round ran or a rung was skipped. Tests: `deck/tests/test_repair.py` (no model, no LibreOffice: QA is a stand-in seam).
+
+Shortening is delete-only by default (`shorten.word_rule`): the new text is an ordered subsequence of the same field's words and only the allow-listed filler words (`assemble.DELETABLE`: the, an, very, really, ...) go; never a word after a negation or before few or little. `reuse` is a switch and is refused on client decks. `repair.json` rounds carry `shortened` with the deleted words marked for the approver.

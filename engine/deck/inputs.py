@@ -513,4 +513,5 @@ def from_deck_document(path: Path) -> tuple[Inputs, dict]:
                 brand = up[did]
     if lib is False and any(app in KIT_APPS for app in apps.values()):
         inp.coverage["kits_gated_off"] = True
-    return inp, {"apps": apps, "look": data.get("look") or {}, "library": lib, "pack": pack, "brand": brand}
+    return inp, {"apps": apps, "look": data.get("look") or {}, "library": lib, "pack": pack, "brand": brand,
+                 "text_mode": (data.get("inputs") or {}).get("text_mode"), "review": data.get("review") or {}}

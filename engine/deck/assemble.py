@@ -1281,6 +1281,118 @@ def _headline_problem(old: str, new, slide_type: str, judged: tuple) -> str:
     return ""
 
 
+# ---------------------------------------------------------------- the shorten guard (deck-repair-loop)
+
+#: Words that do not count as a slide's own words when the own-words guard compares a rewrite with the base text.
+STOP_WORDS = frozenset("a an and are as at be but by for from has have he her his i in is it its of on or our she so that the their them "
+                       "then there these they this those to us was we were what when which who will with you your".split())
+
+
+def content_words(text) -> set:
+    """The lower-cased words of a text without the fixed stop words: what the own-words guard compares."""
+    return {w for w in re.findall(r"[a-z0-9]+(?:['\u2019][a-z]+)?", str(text or "").lower()) if w not in STOP_WORDS}
+
+
+#: The words a shortened field may lose (decided by Fable 5.2 for Sai, 18 November 2026; Sai to confirm). Fail closed: every other word survives. Not on the list, on
+#: purpose: a, that, which, currently, overall, basically, essentially, quite, and any other punctuation. "in order" goes only when "to" follows; a trailing full stop may go.
+DELETABLE = frozenset("the an very really truly highly extremely incredibly actually simply clearly obviously certainly definitely also additionally furthermore moreover indeed".split())
+_TOK = re.compile(r"[a-z0-9]+(?:['\u2019][a-z]+)?|[^\sa-z0-9]")
+
+
+def _toks(text) -> list:
+    return _TOK.findall(str(text or "").lower())
+
+
+def deleted_words(old: str, new: str) -> list | None:
+    """The tokens of ``old`` (lower-case words and punctuation marks) that ``new`` lacks, as ``[(position in old, token)]``, when ``new`` is ``old`` with some tokens
+    deleted and nothing else (an ordered subsequence); None when ``new`` reorders, adds or changes anything."""
+    ot, nt = _toks(old), _toks(new)
+    out, j = [], 0
+    for i, t in enumerate(ot):
+        if j < len(nt) and nt[j] == t:
+            j += 1
+        else:
+            out.append((i, t))
+    return out if j == len(nt) else None
+
+
+def mark_deleted(old: str, new: str) -> str:
+    """``old`` with each deleted word in ``[-...-]``, for the approver: what a shortening takes away, highlighted. Empty when ``new`` is not a deletion of ``old``."""
+    gone = deleted_words(old, new)
+    if gone is None:
+        return ""
+    drop = {i for i, _ in gone}
+    out = ""
+    for i, m in enumerate(re.finditer(_TOK.pattern, str(old or ""), flags=re.I)):
+        piece = ("[-" + m.group(0) + "-]") if i in drop else m.group(0)
+        out += piece if (not out or not (m.group(0)[0].isalnum())) else " " + piece
+    return out
+
+
+def words_problem(old: str, new: str, rule: str = "delete_only", deletable=None) -> str:
+    """The word rule of the shorten guard, one place so either policy drops in. ``delete_only`` (the default): ``new`` is an ordered subsequence of the same field's
+    BASE words, and only words on the ``deletable`` allow-list (``DELETABLE``; fail closed, a policy may replace it) may go, plus a trailing full stop and "in order"
+    before "to"; every other word and every other mark survives. Never a word directly after not, no, never or n't, and never one directly before few or little
+    ("not very profitable" does not become "not profitable"; "a few" does not become "few"). ``reuse`` (a switch; never on a client deck): every content word of ``new``
+    is a content word of ``old``, in any order. Returns why it is refused, or ''."""
+    if rule != "delete_only":
+        extra = content_words(new) - content_words(old)
+        return ("uses words that are not in the field: " + ", ".join(sorted(extra)[:4])) if extra else ""
+    gone = deleted_words(old, new)
+    if gone is None:
+        return "reorders or adds words: only deleting is allowed"
+    allow = DELETABLE if deletable is None else frozenset(deletable)
+    ot = _toks(old)
+    drop = {i for i, _ in gone}
+    bad = []
+    for i, t in gone:
+        prev, nxt = (ot[i - 1] if i > 0 else ""), (ot[i + 1] if i + 1 < len(ot) else "")
+        if prev in ("not", "no", "never") or prev.endswith(("n't", "n\u2019t")):
+            bad.append(t)   # a word right after a negation
+        elif nxt in ("few", "little"):
+            bad.append(t)   # a word right before few or little ("a few")
+        elif t == "." and i == len(ot) - 1:
+            continue
+        elif t in ("in", "order") and ((t == "in" and nxt == "order" and i + 2 < len(ot) and ot[i + 2] == "to" and (i + 1) in drop)
+                                        or (t == "order" and prev == "in" and nxt == "to" and (i - 1) in drop)):
+            continue
+        elif t not in allow:
+            bad.append(t)
+    return ("deletes words that carry the claim: " + ", ".join(sorted(set(bad))[:4])) if bad else ""
+
+
+def shorten_problem(old_base: str, new, slide_base_text: str = "", known=frozenset(), guards: tuple = (), max_cut_ratio: float = 0.35,
+                    current: str | None = None, is_label: bool = False, word_rule: str = "delete_only", deletable=None) -> str:
+    """Why a shortened field is refused, or '' when it is acceptable. ``old_base`` is the field in the BASE deck (never the previous round's).
+    The guards (spec.REPAIR_SHORTEN_GUARDS), all on by default: ``label_titles_untouched`` (a title or label is never a field), ``not_longer``
+    than the base, at most ``max_cut_ratio`` of the base's characters cut, ``no_new_number``, ``ledger_kept`` (numbers incl. letter-attached ones,
+    the word after each number, percent, currency, order, capitalised names, months, years, negations and hedges: ``ledger.tokens``) and
+    ``own_words`` (``words_problem``: the words come from the SAME field's base text only, never the rest of the slide and never an internal note;
+    ``slide_base_text`` is kept for old callers and ignored). ``refs_kept`` holds by construction (only a field's text is replaced)."""
+    from . import ledger
+    from .refs import numbers_in
+    guards = guards or ("no_new_number", "refs_kept", "not_longer", "label_titles_untouched", "ledger_kept", "own_words")
+    new = str(new or "").strip()
+    if "label_titles_untouched" in guards and is_label:
+        return "a title or label is never edited"
+    if not new:
+        return "empty"
+    if new == str(current if current is not None else old_base).strip():
+        return "unchanged"
+    if "not_longer" in guards and len(new) > len(old_base.strip()):
+        return "longer than the base text"
+    if word_rule != "delete_only" and len(new) < (1 - max_cut_ratio) * len(old_base.strip()):   # the allow-list bounds a deletion; a number caps only reuse
+        return f"cuts more than {int(max_cut_ratio * 100)} percent of the base text"
+    if "no_new_number" in guards and (numbers_in(new) - numbers_in(old_base)):
+        return "adds a number the base text did not have"
+    known = ledger.known_names([old_base])   # this field's own names only
+    if "ledger_kept" in guards and ledger.tokens(new, known) != ledger.tokens(old_base, known):
+        return "changes the ledger (a number, the word after it, a name, month, year, negation or hedge, or their order)"
+    if "own_words" in guards:
+        return words_problem(old_base, new, word_rule, deletable)
+    return ""
+
+
 def apply_narrowing(deck: dict, narrowed: list) -> dict:
     """Apply stage e's headline rewrites (``[{slide, headline, reason}]``, keyed by the current title). A rewrite is applied only
     to a presented slide of a judged type whose fit verdict is ``not`` or ``partly``, and only if it passes _headline_problem

@@ -2543,6 +2543,8 @@ class Renderer:
         pic.crop_left, pic.crop_top, pic.crop_right, pic.crop_bottom = l, t, r, b
         pic.name = name
         pic._element.nvPicPr.cNvPr.set("descr", im.get("alt") or "An illustrative picture")
+        if im.get("scrim") in ("dark", "light"):   # the repair loop's scrim: a dark layer under light text, a light one under dark text
+            self._scrim(sl, x, y, w, h, "1B2430" if im["scrim"] == "dark" else "FFFFFF", 0.45)
         if label and im.get("status") != "approved":
             flagged = im.get("status") == "flagged"
             if flagged:

@@ -449,6 +449,18 @@ def copy(deck, inp, profile: dict | None = None) -> tuple[dict, dict]:
     return obj, u
 
 
+def repair_copy(deck, inp, profile: dict | None = None, requests: list | None = None) -> tuple[dict, dict]:
+    """The repair loop's one paid rung: condense the on-screen words of the slots that do not fit, on stage e's transport and model.
+    ``requests`` is ``[{slide (title), slot, role, max_chars, max_words, fields: [{id, text}]}]``, built and filtered by code
+    (repair.build_request: never a title, quote, statement, from/to, table, stats item, sourced item or placeholder). The reply may only
+    DELETE words or REUSE the slide's own (prompts/e_copy.md, the <slots> paragraph); code refuses anything else (assemble.shorten_problem).
+    Returns ``{"edits": [{slide, slot, field, text}]}`` and the usage."""
+    user = f"<slots>\n{json.dumps(requests or [], ensure_ascii=False)}\n</slots>"
+    obj, u = _call("e", user, _sysmsg("e_copy.md", "e", profile))
+    obj.update(stage="e_repair", produced_by=f"live {MODELS['e']}")
+    return obj, u
+
+
 def red_team(deck, inp, profile: dict | None = None) -> tuple[dict, dict]:
     """The red team: one Sonnet call that reads the finished deck (the presented slides' titles and on-screen text, the client's
     requirements and the stated ask) as a skeptical buyer or investor and returns at most spec.RED_TEAM_MAX objections, each tied

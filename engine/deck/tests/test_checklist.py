@@ -204,7 +204,7 @@ def test_slots_check_stays_na_while_reserved_and_the_picture_checks_are_live(tmp
 
 def test_not_yet_built_checks_are_na(tmp_path):
     r = cl.run_checklist(make(tmp_path))["results"]
-    for item in ("g_no_major", "g_checks_current", "l_alternatives", "w_density_met", "p_where_asked"):
+    for item in ("l_alternatives", "w_density_met", "p_where_asked"):
         assert r[item]["answer"] == "n/a" and r[item]["reason"], item
 
 

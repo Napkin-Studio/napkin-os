@@ -466,11 +466,18 @@ QA_RENDER_CHECKS = ("off_slide", "margin", "text_overlap", "text_overflow", "min
                     "one_corner", "qa_internal", "unreadable", "picture_stretch", "picture_lowres", "text_on_image_contrast")
 RESERVED_CHECKS = ("slot_limit", "slot_missing", "slot_unknown", "slot_stale", "block_unbound", "layout_unknown",
                    "golden_echo", "layout_repeat", "title_drift", "line_length", "image_style_mixed", "export_failed")
-ISSUE_CHECKS = tuple(dict.fromkeys(CHECKS + QA_RENDER_CHECKS + RESERVED_CHECKS))
+#: The vision critic's question ids (visual_rubric.json): issues with source ``critic`` carry these as their check name.
+CRITIC_CHECKS = ("v_one_focus", "v_balance", "v_not_crowded", "v_looks_finished", "v_image_fits", "v_image_clean", "v_text_on_image",
+                 "v_crop_ok", "v_one_style", "v_rhythm")
+ISSUE_CHECKS = tuple(dict.fromkeys(CHECKS + QA_RENDER_CHECKS + RESERVED_CHECKS + CRITIC_CHECKS))
 
 #: Repair policy (contract section 8).
 REPAIR_LADDER = ("shrink", "switch_layout", "shorten", "split", "overflow_to_notes", "needs_human")
-REPAIR_SHORTEN_GUARDS = ("no_new_number", "refs_kept", "not_longer", "label_titles_untouched")
+REPAIR_SHORTEN_GUARDS = ("no_new_number", "refs_kept", "not_longer", "label_titles_untouched", "ledger_kept", "own_words")
+#: Why a repair run stopped (repair.json ``stopped``; the template's repair.stopped enum).
+REPAIR_STOPS = ("max_rounds", "nothing_to_do", "clean", "no_progress", "rolled_back", "qa_unreadable", "time_cap")
+#: A scrim on a picture slot (fixes.images.<sid>.<slot>.scrim; deck.schema.json image_slot.scrim).
+IMAGE_SCRIMS = ("none", "dark", "light")
 REPAIR_IMAGE_ON_FLAG = ("wait_for_person", "regen_then_drop")
 REPAIR_CRITIC_FIXES = ("switch_layout", "regen_image", "crop_image", "add_scrim")
 REPAIR_MAX_ROUNDS = 2
