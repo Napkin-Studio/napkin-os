@@ -519,6 +519,15 @@ export function Character({ initial, active, onPictureEditor }: {
     lastAsk.current = assetsAsk
     if (fresh && canvas && selBrief) canvas.select([])
   }, [assetsAsk, canvas, selBrief])
+  // And the other way: a Brief selected while the library is open takes the Booth, and the library closes under
+  // it. Closing the Brief's Booth (✕) then leaves nothing behind (re-test N-H: the library came back, and stayed
+  // open in link mode over the Script target).
+  const lastBrief = useRef<string | null>(null)
+  useEffect(() => {
+    const fresh = !!selBrief && selBrief !== lastBrief.current
+    lastBrief.current = selBrief
+    if (fresh && panels.assets) panels.toggle('assets')
+  }, [selBrief, panels])
   // Selecting pans the node into the visible area (production-new-ui design guard; re-test 2b: a selected Brief
   // sat half under the tool rail, and the Booth's column opening took the right edge). One node (never a picture),
   // once per selection, after the Booth has slid in; never mid-drag, and not after the person moved it.
