@@ -117,6 +117,23 @@ export function sizesBriefOf(d: Doc, videoId: Id): { setId: Id; briefId: Id } | 
   return l ? { setId: newest.id, briefId: l.from.id } : undefined
 }
 
+/** The brief Make all sizes reads: the one linked to the film's newest Format set, else the film's own. */
+export function sizesBrief(d: Doc, videoId: Id): BriefNode | undefined {
+  const linked = sizesBriefOf(d, videoId)
+  return linked ? d.briefs?.[linked.briefId] : briefForJob(d, { kind: 'video', id: videoId })?.brief
+}
+
+/** The line a brief says the film ends on, from its mandatories ("End on the line: Lumo. Dein Licht.",
+ *  "End line – …", "Sign-off: …", "Tagline: …"), quotes taken off. Undefined: it names none. */
+export function endLineOf(spine: BriefSpine | undefined): string | undefined {
+  for (const m of spine?.mandatories ?? []) {
+    const hit = /\b(?:end(?:s|ing)?\s+(?:on|with)\s+(?:the\s+)?(?:line|words|super)|end[\s-]?line|sign[\s-]?off(?:\s+line)?|tag[\s-]?line|brand\s+line)\b\s*(?:[:\-\u2013\u2014]\s*)?(.+)$/i.exec(m.trim())
+    const line = hit?.[1].trim().replace(/^["'\u201c\u2018]+|["'\u201d\u2019]+$/g, '').trim()
+    if (line) return line.slice(0, 200)
+  }
+  return undefined
+}
+
 /** JobInput.brief: the title and the spine, nothing else of the brief. */
 export const jobBrief = (b: BriefNode): JobBrief => ({ title: b.title.slice(0, 200) || 'Brief', spine: { ...b.spine } })
 

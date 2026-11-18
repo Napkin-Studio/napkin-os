@@ -13,7 +13,7 @@ import { removeBrief } from '../doc/remove'
 import { BRIEF_SPINE, cutAtWord, isDont, projectSpine, spineLines, spineSummary } from './spine'
 import {
   BRIEF_OPS, briefFeeds, briefFlagsOn, briefForJob, briefNotice, briefOf, briefSendRow, freshness, ignoreBriefFlag, keepVersion, newBrief,
-  recordBriefFlags, sizesBriefOf, takeNewer, withBrief,
+  endLineOf, recordBriefFlags, sizesBrief, sizesBriefOf, takeNewer, withBrief,
 } from './model'
 import { osBriefSource, type OsBriefRead } from './os'
 import { newId } from '../lib/ulid'
@@ -167,6 +167,22 @@ describe('scope', () => {
     const newer = withBrief_(own, b1, link(b1.id, { kind: 'format_set', id: NEW }))
     expect(sizesBriefOf(newer, VIDEO)).toEqual({ setId: NEW, briefId: b1.id })
     expect(sizesBriefOf(newer, 'video_other')).toBeUndefined()
+  })
+
+  it('the sizes\u2019 line is the end line of the brief that drives them (re-test N2)', () => {
+    expect(endLineOf({ mandatories: ['Show the lamp in a small bedroom', 'Do not show alcohol', 'End on the line: Lumo. Dein Licht.'] })).toBe('Lumo. Dein Licht.')
+    expect(endLineOf({ mandatories: ['End line \u2013 \u201cLumo. Calm, on.\u201d'] })).toBe('Lumo. Calm, on.')
+    expect(endLineOf({ mandatories: ["Sign-off: 'Hearth. Every morning.'"] })).toBe('Hearth. Every morning.')
+    expect(endLineOf({ mandatories: ['Never show a phone screen'] })).toBeUndefined()
+    expect(endLineOf(undefined)).toBeUndefined()
+    const fs = (id: string) => ({ id, v: 1, field_v: {}, master: { kind: 'video', id: VIDEO }, pack: { pack_id: 'film', pack_version: '1' } }) as unknown as ProductionDocument['format_sets'][string]
+    const NEW = 'fset_01K7A0000000000000000000F2'
+    const d = withBrief_(ex, b1, link(b1.id, { kind: 'script', id: SCRIPT }))
+    // No set yet: the film's own brief.
+    expect(sizesBrief(d, VIDEO)?.id).toBe(b1.id)
+    d.format_sets = { [NEW]: fs(NEW) }
+    const linked = withBrief_(d, b2, link(b2.id, { kind: 'format_set', id: NEW }))
+    expect(sizesBrief(linked, VIDEO)?.id).toBe(b2.id)
   })
 
   it('no brief: nothing in scope, and a job is sent exactly as before', () => {

@@ -199,6 +199,16 @@ export function spokenOf(d: ProductionDocument, shotId: Id): { atS: number; text
   return lines.map((l, i) => ({ atS: (i * (shot?.duration_s ?? 3)) / Math.max(1, lines.length), text: l.text.trim() }))
 }
 
+/** The film's last spoken line: of its last shot that has one. */
+export function lastLineOf(d: ProductionDocument, shots: readonly MasterShot[]): string | undefined {
+  for (const s of [...shots].reverse()) {
+    if (s.endCard) continue
+    const line = spokenOf(d, s.shotId).at(-1)?.text
+    if (line) return line.slice(0, 200)
+  }
+  return undefined
+}
+
 // ── a size's edit ───────────────────────────────────────────────────────────
 
 /** A plan's beats for a length, as a size keeps them (by: dex). */

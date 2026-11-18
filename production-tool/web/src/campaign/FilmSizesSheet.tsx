@@ -10,7 +10,8 @@ import { useConfig, useDoc } from '../app/context'
 import { modelChoicesFor } from '../capabilities'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
-import { CARD_S, DEFAULT_FILM_LENGTHS, FILM_LENGTHS, FILM_SHAPES, REMAKE_MODELS, beatsFor, fitWindows, masterShots, sameShape } from './film'
+import { CARD_S, DEFAULT_FILM_LENGTHS, FILM_LENGTHS, FILM_SHAPES, REMAKE_MODELS, beatsFor, fitWindows, lastLineOf, masterShots, sameShape } from './film'
+import { endLineOf, sizesBrief } from '../brief/model'
 import { makeFilmSizes, planFilm, type FilmRow, type ShotMethod } from './filmJobs'
 import type { CampaignDeps } from './make'
 import { setsOf, type MasterInfo } from './master'
@@ -36,7 +37,13 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
   const [extra, setExtra] = useState('')
   const [shapes, setShapes] = useState<Set<string>>(new Set(['film-16x9', 'film-9x16']))
   const earlier = setsOf(doc, master).find((s) => s.copy)?.copy
-  const [line, setLine] = useState(earlier?.line ?? '')
+  // The line on every version: the end line of the brief that drives the sizes (the newest set's linked brief,
+  // else the film's own), else what the last set carried, else the film's last spoken line (re-test N2: the
+  // main brief's "Lumo. Calm, on." came back from the last set while the linked brief ends on "Lumo. Dein Licht.").
+  const [line, setLine] = useState(() => {
+    const videoId = master.kind === 'render' ? doc.renders?.[master.id]?.video_id : master.kind === 'video' ? master.id : undefined
+    return (videoId ? endLineOf(sizesBrief(doc, videoId)?.spine) : undefined) ?? earlier?.line ?? lastLineOf(doc, shots) ?? ''
+  })
   const [legal, setLegal] = useState(earlier?.legal ?? '')
   const [step, setStep] = useState<Step>('options')
   const [plan, setPlan] = useState<CutdownPlan | null>(null)
