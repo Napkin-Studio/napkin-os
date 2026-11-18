@@ -340,6 +340,32 @@ describe('a row whose job this document never recorded (Playwright live test 202
   })
 })
 
+describe('Escape on an empty new text (re-test N-B)', () => {
+  it('lets go of the keys: the text before it never takes them back, so V picks Select and its words stay', async () => {
+    const { el, services, ids } = await open(() => ({ edits: [{ id: 't1', kind: 'text', text: 'hash bv', x: 0.3, y: 0.7, size: 0.06 }], hidden: [] }))
+    act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 't' })) })
+    // A second text placed (what a click with the Text tool does): it takes the keys.
+    act(() => services.ui.update((u) => {
+      const s = u.imageEdits![ids.frame]
+      u.imageEdits = { [ids.frame]: { ...s, edits: [...s.edits, { id: 't2', kind: 'text', text: '', x: 0.7, y: 0.3, size: 0.06 }] } }
+    }))
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)) })
+    const texts = () => [...el.querySelectorAll<HTMLElement>('.ie-text')]
+    expect(document.activeElement).toBe(texts()[1])
+    // Escape on it, still empty: it goes, and no text has the keys.
+    await act(async () => {
+      texts()[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    expect(texts()).toHaveLength(1)
+    expect(document.activeElement?.closest('.ie-text')).toBeNull()
+    act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'v' })) })
+    expect(texts()[0].textContent).toBe('hash bv')
+    expect(byLabel(el, 'Select (V)')?.getAttribute('aria-pressed')).toBe('true')
+    expect(services.ui.get().imageEdits?.[ids.frame]?.edits).toEqual([{ id: 't1', kind: 'text', text: 'hash bv', x: 0.3, y: 0.7, size: 0.06 }])
+  })
+})
+
 describe('a row confirmed and never sent (re-test N1: a reload 0.3 s after Fill)', () => {
   it('comes back not sent with its words', async () => {
     const jobId = 'job_01M7Q0Q75M8TE7KCAG11N7GB4H'

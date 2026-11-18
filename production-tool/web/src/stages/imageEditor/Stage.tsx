@@ -342,12 +342,15 @@ export function Stage({ src, beforeSrc, plan, image, w, h, session, tool, brush,
   // test 2026-11-18: focus stayed on the page, so typing "Lumo." switched to the Lasso and on; re-test 6c: a
   // focus on the next task still let keys typed straight away reach the tools). It starts empty, showing
   // "Your words" only as a placeholder, so the placeholder can never be applied.
+  // Only a text never seen before takes the keys: when an empty text goes on Escape, the one before it becomes
+  // the last again and must stay as it is (re-test N-B: it took the focus back, and the next key, V, replaced
+  // "hash bv" with "v" while its row still said "hash bv").
   const textEls = useRef(new Map<string, HTMLDivElement>())
   const lastText = texts.at(-1)?.id
-  const seenText = useRef(lastText)
+  const seenTexts = useRef(new Set(texts.map((t) => t.id)))
   useLayoutEffect(() => {
-    if (!lastText || lastText === seenText.current) return
-    seenText.current = lastText
+    if (!lastText || seenTexts.current.has(lastText)) return
+    seenTexts.current.add(lastText)
     if (tool !== 'text') return
     const el = textEls.current.get(lastText)
     if (!el) return
