@@ -236,6 +236,14 @@ export function editLabel(e: Edit, s: EditSession, state?: 'running' | 'ready' |
 
 export interface Layer { id: string; kind: EditKind | 'frame'; label: string; hidden: boolean; locked?: boolean; active?: boolean }
 
+/** A text layer is called by its words, cut to fit the panel (re-test R3: every one was "Text", so hiding one could
+ *  not say which); "Text" while it has none. */
+export function textLayerName(text: string, max = 24): string {
+  const words = text.trim().replace(/\s+/g, ' ')
+  if (!words) return 'Text'
+  return `"${words.length > max ? `${words.slice(0, max - 1).trimEnd()}…` : words}"`
+}
+
 /** The Layers panel, front first: text, masks, results, then the locked Frame (3.12). */
 export function layersOf(s: EditSession, version: number): Layer[] {
   const rank: Record<EditKind, number> = { text: 0, mask: 1, fill: 3, whole: 3, upscale: 3, crop: 4 }
@@ -246,7 +254,7 @@ export function layersOf(s: EditSession, version: number): Layer[] {
     .sort((a, b) => rank[a.e.kind] - rank[b.e.kind] || b.i - a.i)
     .map(({ e }): Layer => ({
       id: e.id, kind: e.kind, hidden: s.hidden.includes(e.id), active: s.active === e.id,
-      label: e.kind === 'text' ? 'Text' : e.kind === 'mask' ? e.name
+      label: e.kind === 'text' ? textLayerName(e.text) : e.kind === 'mask' ? e.name
         : e.kind === 'fill' ? (e.remove ? 'Remove' : 'Fill') : e.kind === 'whole' ? 'Whole frame' : e.kind === 'upscale' ? `Upscale ${e.scale}×` : 'Crop',
     }))
   out.push({ id: 'frame', kind: 'frame', label: 'Frame', hidden: s.hidden.includes('frame'), locked: true })

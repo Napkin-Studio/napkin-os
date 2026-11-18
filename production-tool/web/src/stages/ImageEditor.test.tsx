@@ -139,10 +139,10 @@ describe('the edits and layers', () => {
   it('layers run text, masks, then the locked frame, each can be hidden', async () => {
     const { el } = await open(painted)
     const names = [...el.querySelectorAll('.ie-layer .ie-lname > span:first-child')].map((s) => s.textContent)
-    expect(names).toEqual(['Text', 'Mask 1', 'Frame'])
+    expect(names).toEqual(['"Drink the morning."', 'Mask 1', 'Frame'])
     expect(el.querySelector('.ie-layer [aria-label="Locked"]')).not.toBeNull()
-    act(() => byLabel(el, 'Hide Text')!.click())
-    expect(byLabel(el, 'Show Text')).toBeTruthy()
+    act(() => byLabel(el, 'Hide "Drink the morning."')!.click())
+    expect(byLabel(el, 'Show "Drink the morning."')).toBeTruthy()
   })
   it('Before labels the frame as saved; After brings the edits back', async () => {
     const { el } = await open(painted)

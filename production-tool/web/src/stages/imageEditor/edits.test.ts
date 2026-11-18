@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
-  EMPTY, addEdit, applyLine, clearMask, editCount, editLabel, editsForFrame, layersOf, leaveAsk, nextStep, notApplied,
+  EMPTY, addEdit, applyLine, textLayerName, clearMask, editCount, editLabel, editsForFrame, layersOf, leaveAsk, nextStep, notApplied,
   toggleHidden, undoEdit, undoMaskOp, upscaleSize, withMaskOp, nothingToTake, undoLast, redoUndone, hiddenCount, leftOutLine, NOTHING_TO_TAKE,
   afterSend, hasFill, newMask, pendingCount, rowFirst, sendRow,
   type EditSession, type MaskOp,
@@ -133,6 +133,13 @@ describe('each edit has its own undo', () => {
     const layers = layersOf(s, 3)
     expect(layers.map((l) => l.kind)).toEqual(['text', 'mask', 'upscale', 'fill', 'whole', 'frame'])
     expect(layers.at(-1)).toMatchObject({ label: 'Frame', locked: true, hidden: true })
+  })
+  it('names a text layer by its words, cut to fit (re-test R3)', () => {
+    expect(textLayerName('KEEP ME')).toBe('"KEEP ME"')
+    expect(textLayerName('  Drink   the morning, every single day of the week ')).toBe('"Drink the morning, ever…"')
+    expect(textLayerName('   ')).toBe('Text')
+    const s = addEdit(addEdit(EMPTY, { id: 'a', kind: 'text', text: 'KEEP ME', x: 0, y: 0, size: 0.06 }), { id: 'b', kind: 'text', text: 'HIDE ME', x: 0, y: 0, size: 0.06 })
+    expect(layersOf(s, 1).map((l) => l.label)).toEqual(['"HIDE ME"', '"KEEP ME"', 'Frame'])
   })
   it('keeps the edits on the frame it makes, at most 64', () => {
     const ops = editsForFrame(base())
