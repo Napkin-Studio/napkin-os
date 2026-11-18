@@ -87,10 +87,10 @@
 .band .band-sep, .ov-head .band-sep { width: 1px; height: 22px; background: var(--line); }
 .band .pt-seg { border-radius: 4px; }
 /* ← Canvas at the band's left: the Booth crumb's look (mock production-new-ui-v2 .sp-crumb), a clear link. */
-.band-back { font: 500 12px var(--font-mono); color: var(--muted); background: none; border: 0; padding: 4px 6px; margin-left: -6px; border-radius: 6px;
+.band .band-back, .ov-head .band-back { font: 500 12px var(--font-mono); color: var(--muted); background: none; border: 0; padding: 4px 6px; margin-left: -6px; border-radius: 6px;
   cursor: pointer; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent); }
-.band-back:hover { color: var(--ink); text-decoration-color: currentColor; background: color-mix(in srgb, var(--ink) 6%, transparent); }
-.band-back:focus-visible { outline: 2px solid var(--ag-act); outline-offset: 1px; }
+.band .band-back:hover, .ov-head .band-back:hover { color: var(--ink); text-decoration-color: currentColor; background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.band .band-back:focus-visible, .ov-head .band-back:focus-visible { outline: 2px solid var(--ag-act); outline-offset: 1px; }
 /* The page's primary (Plan shots, Make clips, Render ad, Apply as new version), at the band's right. */
 .band-primary { display: inline-flex; align-items: center; gap: 8px; }
 .band .btn.primary, .band .pt-primary { height: 32px; border-radius: 8px; padding: 0 14px; font: 600 13px var(--font-ui);

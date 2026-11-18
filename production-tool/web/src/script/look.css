@@ -157,8 +157,11 @@ html[data-theme='dark'] .se-sheet { box-shadow: 0 24px 60px -24px rgba(0, 0, 0, 
 body:has(> #root .se, .se) .stage { visibility: hidden; }
 .se-partmark { mix-blend-mode: multiply; }
 
-/* At a laptop's width the band keeps Import / Export and undo on screen (Playwright live test 2026-11-18, 1024 px):
-   the shots and shape (the sheet's head has them) and "the Script agent" give way. */
-@media (max-width: 1180px) {
+/* At a laptop's width the band keeps Plan shots, Ask and undo on screen (Playwright live test 2026-11-18, 1024 px;
+   Shrey 2026-11-19, 1116 and 1440): the shots and shape (the sheet's head has them) and "the Script agent" give way. */
+@media (max-width: 1480px) {
   .se-meta-more, .se-ask-more { display: none; }
+}
+@media (max-width: 1279px) {
+  .se-narrow-off { display: none; }
 }

@@ -47,7 +47,6 @@ import { partAt, scriptSuggestions, wholeScope, type SkyeScope } from './skyeBoo
 import { DraftCard } from './DraftCard'
 import { PageWaits } from './PageWaits'
 import { ScriptLength, ScriptRefs } from './ScriptFacts'
-import { Float } from '../ui/Float'
 import { SendDisclosure } from '../ui/SendDisclosure'
 import { sendRows } from '../ui/sendRows'
 import { useBooth } from '../ui/booth/useBooth'
@@ -571,8 +570,8 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
   // Format  10 s  [Plan shots ▾]  Ask the Script agent…); at tight, where the band drops Format and Ask, at its end.
   const planActs = !phone && (
     <>
-      {/* Why Plan shots is off, said beside it (a disabled button never says why). */}
-      {blocked && !planning && <span className="se-why" id="se-plan-why">{blocked}</span>}
+      {/* Why Plan shots is off: for the screen reader here, and in the button's tooltip (a disabled button never says why). */}
+      {blocked && !planning && <span className="se-why pt-sr" id="se-plan-why">{blocked}</span>}
       {/* Make film straight from the words (3.5): beside Plan shots, off while there are none. */}
       <button type="button" className="sp-btn se-makevideo" disabled={!!blocked || !!planning} onClick={() => void (nextVideoId ? goTo('video', nextVideoId) : makeVideo())}>
         {nextVideoId ? 'Open the film' : 'Make film'}
@@ -622,7 +621,6 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
             {/* The bar's saved line is the one save state (ui/useSave.ts); the band says only that this browser is offline. */}
             {saved.startsWith('Offline') && <span className="pt-mono se-saved busy" role="status">{saved}</span>}
             <ScriptRefs composed={composed} doc={doc} store={store} onError={setError} say={say} />
-            <ImportExport onImport={() => fileRef.current?.click()} onFountain={() => void exportFountain()} onPdf={() => void exportPdf()} />
           </>
         )}
         undo={!phone}
@@ -637,8 +635,10 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
         )}
         more={(close) => (
           <>
-            {phone && <MenuItem icon="⬇" onSelect={() => { close(); void exportFountain() }}>Export Fountain…</MenuItem>}
-            {phone && <MenuItem icon="🖨" onSelect={() => { close(); void exportPdf() }}>Export PDF…</MenuItem>}
+            {/* Import / Export left the band for the film's menu (Shrey 2026-11-19: the band is the page's own actions). */}
+            {!phone && <MenuItem icon="⇪" onSelect={() => { close(); fileRef.current?.click() }}>Import Fountain…</MenuItem>}
+            <MenuItem icon="⬇" onSelect={() => { close(); void exportFountain() }}>Export Fountain…</MenuItem>
+            <MenuItem icon="🖨" onSelect={() => { close(); void exportPdf() }}>Export PDF…</MenuItem>
             <MenuItem icon={<LinkIcon />} onSelect={() => {
               close()
               const url = new URL(formatRoute(route), location.origin).href
@@ -701,22 +701,6 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
 }
 
 /** The band's Import / Export menu (mock scriptBand): Import Fountain, Export Fountain, Export PDF. */
-function ImportExport({ onImport, onFountain, onPdf }: { onImport: () => void; onFountain: () => void; onPdf: () => void }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLButtonElement>(null)
-  const close = () => setOpen(false)
-  return (
-    <>
-      <button ref={ref} type="button" className="sp-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>Import / Export ▾</button>
-      <Float anchor={ref} open={open} onClose={close} label="Import or export" align="end" className="pt-menu">
-        <MenuItem icon="⇪" onSelect={() => { close(); onImport() }}>Import Fountain…</MenuItem>
-        <MenuItem icon="⬇" onSelect={() => { close(); onFountain() }}>Export Fountain…</MenuItem>
-        <MenuItem icon="🖨" onSelect={() => { close(); onPdf() }}>Export PDF…</MenuItem>
-      </Float>
-    </>
-  )
-}
-
 const NEXT_LABEL: Record<NextAction, string> = {
   plan: 'Plan shots', update: 'Update storyboard', 'make-video': 'Make film', 'open-storyboard': 'Open the storyboard', 'open-video': 'Open the film',
 }
