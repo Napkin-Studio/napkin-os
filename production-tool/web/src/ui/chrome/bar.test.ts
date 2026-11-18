@@ -55,10 +55,10 @@ describe('the document menu holds what More held; secondary actions live there',
     expect(src('../../stages/Storyboard.tsx')).not.toContain('<span className="pt-project">{projectName}</span>')
     expect(bars).toContain('<h1 className="pt-title sr-title" title={title}>{title}</h1>')
   })
-  it('the Image editor\'s zoom is on the stage, not in the bar', () => {
+  it('the Image editor\'s zoom is in the band, on its right (mock production-new-ui-v2 image)', () => {
     const image = src('../../stages/ImageEditor.tsx')
-    const bar = image.slice(image.indexOf('<EditorBar'), image.indexOf('<Float anchor={versionsBtn}'))
-    expect(bar).not.toContain('ie-zoom')
-    expect(image.slice(image.indexOf('<div className="ie-stagewrap">'))).toContain('<div className="ie-zoom" role="group" aria-label="Zoom">')
+    const right = image.slice(image.indexOf('        right={('), image.indexOf('<Float anchor={versionsBtn}'))
+    expect(right).toContain('<div className="ie-zoom" role="group" aria-label="Zoom">')
+    expect(image.slice(image.indexOf('<div className="ie-stagewrap">'))).not.toContain('className="ie-zoom"')
   })
 })

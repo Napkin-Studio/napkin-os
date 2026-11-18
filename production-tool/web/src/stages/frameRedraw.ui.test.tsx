@@ -205,6 +205,7 @@ describe('the switch on the Storyboard card', () => {
 describe("the Image editor's Change whole frame on a shot's frame", () => {
   it('when the words swap the people, the Director agent offers Redraw frame N under the field; it hands the words to the Storyboard as a redraw', async () => {
     const { el, services, onBack, land } = await mount('editor')
+    await act(async () => { byText('Whole frame')!.click() })
     const field = el.querySelector('[aria-label="Describe the change to the whole frame"]') as HTMLTextAreaElement
     type(field, SWAP)
     await act(async () => { byText('Change')!.click() })
@@ -230,6 +231,7 @@ describe("the Image editor's Change whole frame on a shot's frame", () => {
 
   it('an ordinary whole-frame change offers nothing, and its tray names the words-only model, never Ideogram', async () => {
     const { el, land } = await mount('editor')
+    await act(async () => { byText('Whole frame')!.click() })
     type(el.querySelector('[aria-label="Describe the change to the whole frame"]') as HTMLTextAreaElement, 'warmer light')
     await act(async () => { byText('Change')!.click() })
     await settle()
