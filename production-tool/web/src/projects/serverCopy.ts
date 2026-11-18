@@ -29,7 +29,16 @@ import { baseKeyFor, type ProjectStorage } from './storage'
 export interface LocalBase {
   mark: ServerMark | null
   unsaved: boolean
+  /** The saves this browser sent and had no answer to (newest last, at most UNANSWERED): each one's etag, and
+   *  whether this browser changed the project after it went. A page closed while one went (UAT 2026-11-18, U7: a
+   *  browser killed mid-save reopened to a conflict with its own save) finds the relay's newest among them: its
+   *  own save, so its base. */
+  unanswered?: Unanswered[]
 }
+
+export interface Unanswered { etag: string; edited: boolean }
+/** How many unanswered saves are remembered (a close-time save that failed after one that landed, and so on). */
+const UNANSWERED = 4
 
 /** The copy's base as kept, else (a copy kept before there was one) the index's mark, with changes assumed:
  *  never taken as clean without knowing. */
@@ -70,6 +79,8 @@ export class ServerCopy {
   private edits = 0
   private noting: Promise<void> | null = null
   private toNote: LocalBase | null = null
+  /** Saves on their way or never answered (LocalBase.unanswered), noted with the base until one is answered. */
+  private unanswered: Unanswered[] = []
 
   constructor(deps: ServerCopyDeps) {
     this.d = deps
@@ -84,6 +95,7 @@ export class ServerCopy {
    *  relay lacks, on top of this tab's base. Written at once, so a reload knows (one small local write, coalesced). */
   edited = () => {
     this.edits++
+    for (const u of this.unanswered) u.edited = true
     this.note(true)
   }
 
@@ -106,12 +118,13 @@ export class ServerCopy {
     const edits = this.edits
     await sendAssets(this.d.doc(), this.d.upload)
     const entry = index.get(id)
+    const etag = await sha256Hex(bytes)
     // No base: never a blind save over a copy the relay has (re-test N3: a lost mark sent a save with no
     // If-Match, and the relay took it). The same bytes: that is the base. Others: the person chooses.
     if (!this.base) {
       const there = (await server.list()).find((p) => p.id === id)
       if (there) {
-        if (there.etag === await sha256Hex(bytes)) {
+        if (there.etag === etag) {
           await this.based({ etag: there.etag, savedAt: there.savedAt }, this.edits !== edits)
           return
         }
@@ -120,13 +133,26 @@ export class ServerCopy {
         throw new SaveConflict(message)
       }
     }
+    // Noted before it goes (not awaited: the save never waits on it), so a page closed before the answer can
+    // tell its own save from someone else's when it opens again (shell.ts newerThere).
+    const went: Unanswered = { etag, edited: this.edits !== edits }
+    for (const u of this.unanswered) u.edited ||= u.etag !== etag
+    this.unanswered = [...this.unanswered.filter((u) => u.etag !== etag), went].slice(-UNANSWERED)
+    this.note(true)
     let saved
     try {
       saved = await server.save(id, bytes, { reason: relayReason(meta.reason), ifMatch: this.base?.etag, name: entry?.name })
     } catch (e) {
-      if (e instanceof SaveConflict) this.set({ message: e.message })
+      // Refused: it did not land. Any other failure (the network went with the answer) may have landed, so
+      // what went stays noted for the next open to recognise.
+      if (e instanceof SaveConflict) {
+        this.unanswered = this.unanswered.filter((u) => u !== went)
+        this.note(true)
+        this.set({ message: e.message })
+      }
       throw e
     }
+    this.unanswered = []
     await this.based({ etag: saved.etag, savedAt: saved.savedAt }, this.edits !== edits)
     this.d.onPosted?.(new Date(saved.savedAt))
     await this.sendCanvas().catch((e) => console.warn('could not save the canvas to the server', e))
@@ -167,7 +193,7 @@ export class ServerCopy {
 
   /** Write this tab's base (the newest wanted one; one write at a time). */
   private note(unsaved: boolean) {
-    this.toNote = { mark: this.base, unsaved }
+    this.toNote = { mark: this.base, unsaved, ...(this.unanswered.length ? { unanswered: this.unanswered.map((u) => ({ ...u })) } : {}) }
     this.noting ??= (async () => {
       while (this.toNote) {
         const v = this.toNote

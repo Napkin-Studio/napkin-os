@@ -307,6 +307,13 @@ export class Shell {
     const base = await readBase(storage, index, id)
     if (base.mark?.etag === there.etag) return null
     const mark: ServerMark = { etag: there.etag, savedAt: there.savedAt }
+    // The relay's newest is a save this browser sent whose answer never came back (the page closed as it went,
+    // UAT U7): this browser's own version, so its base, with whatever was changed here after it went unsaved.
+    const own = base.unanswered?.find((u) => u.etag === there.etag)
+    if (own) {
+      await this.based(id, { mark, unsaved: own.edited })
+      return null
+    }
     // This browser's copy is the relay's version byte for byte: that is its base.
     const local = await storage.clan(clanDbFor(id)).read().catch(() => null)
     if (local && (await sha256Hex(local.bytes)) === there.etag) {
