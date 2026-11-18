@@ -27,6 +27,7 @@ import { FRAME_PAD, FRAME_TOP, channelOfSize, placeBoard, sizesOf, type Campaign
 import type { MasterInfo } from './master'
 import { rowFracs } from './rules'
 import { liveGet } from '../model/live'
+import { briefLink, sizesBriefOf } from '../brief/model'
 
 /** What a film's jobs need: no canvas (they land after a reload too). */
 export type FilmDeps = Pick<CampaignDeps, 'doc' | 'runner' | 'relay'>
@@ -141,7 +142,10 @@ export async function planFilm(deps: FilmDeps, master: MasterInfo, shots: Master
     }
     setTimeout(watch, 400)
   })
-  await deps.runner.submit('cutdown', input, [], { for: 'film_plan', videoId: master.id }, jobId)
+  // The sizes' brief: one linked straight to a Format set of this film overrides the film's own (re-test N2).
+  const linked = sizesBriefOf(liveGet(deps.doc), master.id)
+  await deps.runner.submit('cutdown', input, [], { for: 'film_plan', videoId: master.id }, jobId, undefined,
+    linked ? { briefFrom: { kind: 'format_set', id: linked.setId } } : {})
   return plan
 }
 
@@ -228,10 +232,17 @@ export async function makeFilmSizes(deps: CampaignDeps, req: FilmRequest, by: Pe
   const frame = canvas.board({ x: box.x, y: box.y, width: box.w, height: box.h, title: board.title, boardId: board.id, purpose: 'formats' })
   const el = canvas.patch(canvas.node({ x: box.x + FRAME_PAD, y: box.y + FRAME_TOP, width: layout.w, height: layout.h, customData: { kind: 'format_set', id: setId } }), { frameId: frame.id })
   canvas.transact((all) => [...all, frame, el], { undoable: true })
+  // A brief linked straight to this film's sizes carries on to the new set, so its sizes and reframes read it
+  // as the plan did (re-test N2: the Booth said "the sizes read this brief", and the new set never did).
+  const linked = sizesBriefOf(d, req.master.id)
   await systemUpdate(doc, (x) => {
     x.boards[board.id] = board
     x.format_sets[setId] = set
     for (const s of sizes) x.sizes[s.id] = s
+    if (linked) {
+      const l = briefLink(linked.briefId, { kind: 'format_set', id: setId })
+      x.links[l.id] = l
+    }
   }, `make the film's sizes of ${req.master.label}: ${sizes.length} versions`)
   canvas.select([el.id])
   for (const [key, r] of Object.entries(reframes)) {

@@ -99,6 +99,24 @@ export function briefForJob(d: Doc, node: LinkEndpoint): BriefInScope | undefine
   return undefined
 }
 
+/**
+ * The brief linked straight to a Format set made from this film (its master the film, or an ad render of
+ * it), newest set first: what Make all sizes reads (re-test N2, 2026-11-18). The sizes are planned on the
+ * Film node and land in a new set, so neither read the set the person linked, while its Booth said "the sizes
+ * read this brief". The explicit link overrides the film's own brief, as on any node. Undefined: none linked.
+ */
+export function sizesBriefOf(d: Doc, videoId: Id): { setId: Id; briefId: Id } | undefined {
+  const sets = Object.values(d.format_sets ?? {}).filter((s) => {
+    const m = s.master
+    return (m.kind === 'video' && m.id === videoId) || (m.kind === 'render' && d.renders?.[m.id]?.video_id === videoId)
+  }).sort((a, b) => (a.id < b.id ? 1 : -1))
+  for (const s of sets) {
+    const l = Object.values(d.links ?? {}).find((x) => x.role === 'brief' && x.from.kind === 'brief' && x.to.kind === 'format_set' && x.to.id === s.id && d.briefs?.[x.from.id])
+    if (l) return { setId: s.id, briefId: l.from.id }
+  }
+  return undefined
+}
+
 /** JobInput.brief: the title and the spine, nothing else of the brief. */
 export const jobBrief = (b: BriefNode): JobBrief => ({ title: b.title.slice(0, 200) || 'Brief', spine: { ...b.spine } })
 

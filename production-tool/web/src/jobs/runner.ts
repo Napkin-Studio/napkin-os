@@ -74,6 +74,9 @@ export interface SubmitExtras {
   promoteFrom?: string
   /** Change this… (features/make-and-edit.clan): a new take of a parent with one thing changed. */
   remakeWith?: RemakeWith
+  /** The node whose scope the brief is read from, when not the job's own: Make all sizes plans on the Film
+   *  node for the sizes, which read the brief linked to their Format set (brief/model.ts sizesBriefOf). */
+  briefFrom?: LinkEndpoint
 }
 
 /** A person's answer to a job's question. */
@@ -219,7 +222,7 @@ export class JobRunner {
     const linked = withLinkedText(d, op, node, input)
     input = linked.input
     // The brief in the node's scope, its spine only (features/brief-node.clan; behind flags.briefNode).
-    const briefed = this.briefs() ? withBrief(d, op, node, input) : { input, rows: [] }
+    const briefed = this.briefs() ? withBrief(d, op, extras.briefFrom ?? node, input) : { input, rows: [] }
     input = briefed.input
     const words = purposeWords(purpose)
     // A fresh nonce for every job: another take is never deduped with the one running (ui-behaviour 4.3).
