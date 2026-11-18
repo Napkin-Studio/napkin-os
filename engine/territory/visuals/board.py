@@ -24,7 +24,7 @@ def frames_for(manifest: dict, vdir: Path, run_dir: Path, version: str, plan: di
         g = e.get("guard") or {}
         flagged = bool(e.get("status") == "REFUSED" or g.get("flagged")) and not e.get("approved_by_person")
         f = {"path": os.path.relpath(vdir / e["file"], run_dir) if e.get("file") else None, "shot": e["shot"], "model": e["model"],
-             "style_version": version, "flagged": flagged, "guard_checked": bool(g.get("checked")), "approved": bool(e.get("approved_by_person")),
+             "style_version": version, "flagged": flagged, "guard_checked": bool(g.get("checked")), "approved": bool(e.get("approved_by_person")), "approved_by": e.get("approved_by"),
              "reason": e.get("error") if e.get("status") == "REFUSED" else g.get("reason"), "prompt": e.get("prompt", ""), "key": key,
              "sha256": e.get("sha256"), "prompt_sha256": e.get("prompt_sha256")}
         cur = out.setdefault(e["territory"], {})
@@ -79,6 +79,8 @@ def render_html(run: dict, run_name: str, frames: dict, plan: dict | None, vdir:
                 badges += f"<span class='badge bad'>needs a person</span>"
             elif not f["guard_checked"]:
                 badges += "<span class='badge warn'>not checked</span>"
+            if f.get("approved") and f.get("approved_by"):
+                badges += f"<span class='badge warn'>approved by {e(str(f['approved_by']))}</span>"
             badges += f"<span class=badge>{e(f['model'])}</span>"
             src = os.path.relpath(Path(run_dir) / f["path"], vdir) if f["path"] else None
             img = f"<img src='{e(src)}' alt='{e(sid)}' loading=lazy>" if src else "<div class=empty>not generated</div>"

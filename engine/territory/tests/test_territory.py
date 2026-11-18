@@ -26,7 +26,7 @@ def outputs():
         "assumed_brief": {"fields": [{"key": "audience", "value": "under-35s", "tag": "given"}, {"key": "budget_scope", "value": "TBC", "tag": "wrong-tag"}],
                           "diagnosis": "d", "audiences": ["a"], "questions": [{"question": f"q{i}", "why": "w"} for i in range(5)]},
         "tensions": {"tensions": [{"id": "t1", "x_but_y": "invented one, but", "evidence": "invented"},
-                                  {"id": "t2", "x_but_y": "observed one, but", "evidence": "observed"},
+                                  {"id": "t2", "x_but_y": "observed one, but", "evidence": "observed", "from": ["audience"]},
                                   {"id": "t3", "x_but_y": "generic, but", "evidence": "observed", "swap_test": "fail"}]},
         "seeds": {"seeds": [
             {"id": "s1", "line": "the last decision at the table", "tension": "t2", "mechanism": "elevating an overlooked ritual"},

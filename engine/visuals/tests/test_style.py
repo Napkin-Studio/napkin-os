@@ -74,7 +74,7 @@ def test_a_folder_keeps_the_hash_the_territory_tool_gave(vec, tmp_path):
 
 def test_the_default_is_the_default_style():
     st = style.load(None)
-    assert st.source == "built-in default" and st.look == style.DEFAULT["look"] and st.references == [] and st.models == style.DEFAULT_MODELS
+    assert st.source == "default until the creative lead answers" and st.look == style.DEFAULT["look"] and st.references == [] and st.models == style.DEFAULT_MODELS
 
 
 def test_folder_and_document_with_the_same_content_give_the_same_style_and_hash(tmp_path):
@@ -219,7 +219,14 @@ def test_the_reference_images_a_model_gets_are_exactly_the_sendable_ones():
     sent = fake.calls[0]["referenceImages"]
     assert [r["tag"] for r in sent] == ["ref01", "ref02"]
     assert [base64.b64decode(r["uri"].split(",", 1)[1]) for r in sent] == [_img(1), _img(2)]
-    assert "Match the visual style of the reference images" in fake.calls[0]["promptText"]
+    assert "Match the look, light, colour and finish of the reference images" in fake.calls[0]["promptText"]
+
+
+def test_the_reference_line_passes_the_picture_prompt_lint():
+    from visuals import lint
+    refs = {"r1": ("a.png", _img(1), "own")}
+    st = style.load(*_pack(refs))
+    assert lint.lint_text(style.style_block(st, []), banned=[], allow=st.banned_imagery) is None
 
 
 def test_a_withheld_only_pack_sends_nothing_and_does_not_mention_references():
