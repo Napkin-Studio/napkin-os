@@ -41,11 +41,12 @@ export function ScriptLength({ composed, doc, onError }: { composed: ComposedScr
   }
   return (
     <span className="se-facts" aria-label="This script">
-      {/* Below 1180 px the shots and shape give way (the sheet's head says them): the band keeps Import / Export and undo on screen. */}
-      <span className="meta"><span className="se-meta-more">{n ? `${n} ${n === 1 ? 'shot' : 'shots'} · ` : ''}{sb?.ratio ?? '16:9'} · </span>target</span>
+      {/* On a laptop the shots and shape give way (the sheet's head says them), and under 1280 px "target" and the
+          estimate too: the band keeps Plan shots, Ask and undo on screen (Shrey 2026-11-19, 1116 px). */}
+      <span className="meta"><span className="se-meta-more">{n ? `${n} ${n === 1 ? 'shot' : 'shots'} · ` : ''}{sb?.ratio ?? '16:9'} · </span><span className="se-narrow-off">target</span></span>
       <LengthPicker value={target} onPick={setLength} />
       {est > 0
-        ? <span className={`fit ${over > 0 ? 'over' : ''}`}>{rough ? 'about ' : ''}{secs(est)} · {over > 0 ? `${secs(over)} over` : `${secs(-over)} to spare`}</span>
+        ? <span className={`fit ${over > 0 ? 'over' : ''}`}><span className="se-narrow-off">{rough ? 'about ' : ''}{secs(est)} · </span>{over > 0 ? `${secs(over)} over` : `${secs(-over)} to spare`}</span>
         : <span className="fit none">no words yet</span>}
     </span>
   )

@@ -723,4 +723,7 @@ html[data-theme='dark'] .jc-box.sel { box-shadow: 0 0 0 2px var(--ag-acc, var(--
   .rm-tltools .sp-btn kbd { display: none; }
   .rm-tltools .sp-btn { padding: 0 8px; }
 }
-@media (max-width: 1279px) { .rooms[data-room='edit'] .rm-soundword { display: none; } }
+@media (max-width: 1279px) { .rooms .rm-soundword { display: none; } }
+/* The Edit room's band keeps Render ad on screen on a laptop (Shrey 2026-11-19: page actions live in the band). */
+@media (max-width: 1439px) { .rooms .rm-wide { display: none; } }
+@media (max-width: 1279px) { .rooms .rm-tltools { gap: 4px; } }

@@ -61,7 +61,7 @@ export async function seedFrame(shell: Shell, opts: SeedFrameOpts = {}): Promise
   const [dw, dh] = SIZES[ratio] ?? [1024, 1024]
   const w = opts.w ?? dw
   const h = opts.h ?? dh
-  if (!shell.get().session) await shell.newProject()
+  await seedTarget(shell)
   const services: Services = shell.get().session!.services
   const projectId = services.project.id
   const blob = await seedPicture(w, h)
@@ -99,15 +99,22 @@ export async function seedFrame(shell: Shell, opts: SeedFrameOpts = {}): Promise
   return { projectId, shotIds, shotId: shotIds[on], frameId, sha, w, h }
 }
 
+/** The film a seed writes into: the open one, unless it is the blank canvas the tool opened on (a draft), whose
+ *  canvas has already read its scene and so would not draw the Script, Storyboard and Film a seed adds; then a
+ *  fresh film, as at boot before entry opened a blank canvas (owner 2026-11-18). */
+async function seedTarget(shell: Shell): Promise<void> {
+  const open = shell.get().session
+  if (!open || shell.index.get(open.id)?.draft) await shell.newProject()
+}
+
 /** The seed helpers on window, for the e2e specs and the dev console. */
 export function installSeed(shell: Shell) {
   ;(window as unknown as { __seed: unknown }).__seed = {
     frame: (opts?: SeedFrameOpts) => seedFrame(shell, opts),
     /** A project open on the canvas (a new one unless one is open), for specs that drop pictures there. */
     canvas: async () => {
-      if (!shell.get().session) await shell.newProject()
-      // A new project is blank (2026-11-04), so the first-run Start card would sit where specs drop pictures.
-      shell.get().session?.services.ui.update((u) => { u.stage = 'character'; u.hintDismissed = true }, 'e2e seed')
+      await seedTarget(shell)
+      shell.get().session?.services.ui.update((u) => { u.stage = 'character' }, 'e2e seed')
     },
     /** A Brief node from Brief Maker's data, placed on the canvas and linked into the main script (the
      *  paired screenshots of features/production-new-ui.clan). Needs the canvas open on our own engine. */
@@ -125,7 +132,7 @@ export function installSeed(shell: Shell) {
     /** The paired screenshots' project (features/production-new-ui.clan; the mock's "Market day"): a title, and
      *  one shot per picture with its words, length and a drawn frame. `pics` are data URLs. */
     market: async (o: { title?: string; shots: { pic: string; action: string; s: number }[] }) => {
-      if (!shell.get().session) await shell.newProject()
+      await seedTarget(shell)
       const services: Services = shell.get().session!.services
       const blobs = await Promise.all(o.shots.map(async (x) => (await fetch(x.pic)).blob()))
       const shas = await Promise.all(blobs.map((b) => putBlob(b)))
@@ -149,7 +156,7 @@ export function installSeed(shell: Shell) {
         })
       }, 'e2e seed')
       await (services.doc as { flush?: () => Promise<void> }).flush?.()
-      services.ui.update((u) => { u.stage = 'character'; u.hintDismissed = true }, 'e2e seed')
+      services.ui.update((u) => { u.stage = 'character' }, 'e2e seed')
     },
     /** The Film's rooms with footage (the paired screenshots' make/edit states): after market(), each shot its
      *  own box with one ready mock take (its frame as a still), each in the Edit room's cut. */
@@ -173,7 +180,7 @@ export function installSeed(shell: Shell) {
     },
     /** Opens the main script in the Script editor (the paired screenshots' script states). */
     script: async () => {
-      if (!shell.get().session) await shell.newProject()
+      await seedTarget(shell)
       const services: Services = shell.get().session!.services
       // A blank project has no stages: give it a script, storyboard and video as a non-blank one starts with.
       if (!mainScript(services.doc.get())) {

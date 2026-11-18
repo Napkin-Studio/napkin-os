@@ -18,7 +18,7 @@ import { fetchAssets } from './serverAssets'
 import { readBase, type LocalBase, type ServerCopy } from './serverCopy'
 import { openProjectSession, personOf, ProjectRefused, type ProjectSession, type SessionDeps } from './session'
 import { baseKeyFor, canvasKeyFor, clanDbFor, docKeyFor, uiKeyFor } from './storage'
-import { autoName, summarise, UNTITLED as UNTITLED_TITLE } from './summary'
+import { autoName, hasContent, summarise, UNTITLED as UNTITLED_TITLE } from './summary'
 import { updateDoc } from '../doc/store'
 import { sha256Hex } from '../lib/hash'
 import { clearLiveLog } from '../store/liveLog'
@@ -105,11 +105,13 @@ export class Shell {
     })
   }
 
-  /** A new, empty project, opened at the Canvas. The one in hand is saved first; nothing is overwritten. */
+  /** A new, blank film, opened at the Canvas (the entry when no film is named, owner 2026-11-18). It is a draft
+   *  until something is added: not on All projects, and gone if it is left blank. The one in hand is saved
+   *  first; nothing is overwritten. */
   async newProject(): Promise<ProjectEntry> {
     const entry = await this.serial('Starting a new project…', async () => {
       await this.closeSession()
-      return this.index.create()
+      return this.index.create({ draft: true })
     })
     await this.open(entry.id)
     return entry
@@ -439,8 +441,56 @@ export class Shell {
   private async closeSession() {
     const s = this.state.session
     if (!s) return
+    // Read before it closes: what the film holds now decides whether a draft is kept.
+    const held = hasContent(s.services.doc.get())
     this.set({ session: null, view: 'home' })
     await s.close()
+    await this.settleDraft(s.id, held)
+  }
+
+  /** Drafts left by an earlier visit (owner 2026-11-18): each kept if it holds anything, else removed. Never the
+   *  open one. */
+  async pruneDrafts(): Promise<void> {
+    for (const p of this.index.all().filter((x) => x.draft && x.id !== this.state.session?.id)) await this.settleDraft(p.id)
+  }
+
+  /**
+   * A draft that was left: removed with its storage only when it is certainly blank, so opening the tool leaves
+   * no empty "Untitled" behind. Anything else keeps it as a project: a document with any entity or asset (the open
+   * one's, or the stored one's), a mark on its canvas (a drawing changes no document), a name given by hand, a
+   * summary with anything in it, or a stored copy that cannot be read. A film that is not a draft is never touched.
+   */
+  private async settleDraft(id: string, held?: boolean): Promise<void> {
+    const entry = this.index.get(id)
+    if (!entry?.draft) return
+    const { storage, index } = this.deps
+    const s = entry.summary
+    if (held || entry.naming === 'person' || entry.server || s.pictures || s.shots || s.active || s.adSeconds !== null) return index.keep(id)
+    try {
+      const canvas = await storage.get<CanvasSnapshot>(canvasKeyFor(id))
+      if (canvas?.elements?.some((e) => !(e as { isDeleted?: boolean }).isDeleted)) return index.keep(id)
+      if (held === undefined && (await this.storedContent(id))) return index.keep(id)
+    } catch (e) {
+      console.warn('kept a blank film whose storage could not be read', e)
+      return index.keep(id)
+    }
+    await index.remove(id)
+    await storage.dropClan(clanDbFor(id)).catch(() => {})
+    await Promise.all([storage.del(canvasKeyFor(id)), storage.del(uiKeyFor(id)), storage.del(docKeyFor(id)), storage.del(baseKeyFor(id))]).catch(() => {})
+  }
+
+  /** Whether a closed film's stored document holds anything (its .clan, else the older JSON copy). Throws when the
+   *  .clan is there but cannot be read, so the caller keeps it. */
+  private async storedContent(id: string): Promise<boolean> {
+    const { storage, makeClan } = this.deps
+    const json = await storage.get<ProductionDocument>(docKeyFor(id))
+    if (json && hasContent(json)) return true
+    const store = makeClan(storage.clan(clanDbFor(id)), { person: personOf(this.deps.app.get().me) })
+    try {
+      return (await store.load()) ? hasContent(store.get()) : false
+    } finally {
+      await store.close().catch(() => {})
+    }
   }
 
   private async remember(v: { view: 'home' | 'project'; project?: string }) {

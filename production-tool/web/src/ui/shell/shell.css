@@ -9,6 +9,8 @@
 :root[data-theme='dark'] .topbar-outer { background: color-mix(in srgb, var(--desk) 92%, transparent); }
 .tb { height: 62px; padding: 0 24px; display: flex; align-items: center; gap: 14px; position: relative; white-space: nowrap; }
 .tb button { font: inherit; color: inherit; cursor: pointer; background: none; border: 0; padding: 0; }
+/* The brand, as Brief Maker and the OS shell wear it (app/src/shell/nui/shell.css): the Deep O medallion over the
+   agency pill (Shrey 2026-11-19: only the agents' sphere left the bar, never this). */
 .tb-lead { display: flex; align-items: center; flex: none; position: relative; height: 62px; }
 .tb .m1-medallion { position: relative; z-index: 2; top: 4px; width: 64px; height: 64px; border-radius: 50%; background: var(--card);
   border: 1px solid var(--line); display: grid; place-items: center; flex: none;
@@ -26,18 +28,14 @@
 .ag-pill small::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .85; }
 .ag-pill.solo small { display: none; }
 .tb .tb-sep { width: 1px; height: 26px; background: var(--line); flex: none; }
-.tb .tb-client { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px 0 4px; border-radius: 999px; border: 1px solid var(--line);
-  background: var(--paper); font: 600 13px var(--font-ui); color: var(--ink); white-space: nowrap; flex: none; }
-.tb .tb-client:hover, .tb .tba-btn:hover { background: color-mix(in srgb, var(--ag-act) 10%, transparent); }
-.cdisc { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font: 800 10.5px var(--font-ui); flex: none; }
-.cdisc.tool { background: var(--ink); color: var(--paper); }
-.cdisc.tool svg { width: 15px; height: 15px; }
-.tb-app { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 auto; overflow: hidden; }
-.tb .tba-name { display: inline-flex; align-items: center; gap: 8px; min-width: 132px; border-radius: 7px; padding: 2px 6px 2px 4px; flex-shrink: 1; }
-.tb .tba-name:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
-.tba-name .ticon { width: 18px; height: 18px; color: var(--ink); flex: none; }
+.tb .tba-btn:hover { background: color-mix(in srgb, var(--ag-act) 10%, transparent); }
+.tb-app { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1 1 auto; overflow: hidden; }
+.tb .tba-name { display: inline-flex; align-items: center; gap: 8px; min-width: 96px; border-radius: 7px; padding: 2px 6px 2px 4px; flex-shrink: 1; }
+.tb .tba-name:hover, .tb .tba-name[aria-expanded='true'] { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.tba-name .ticon, .tba-place .ticon { width: 18px; height: 18px; color: var(--ink); flex: none; }
+.tba-place { display: inline-flex; align-items: center; gap: 8px; padding: 0 4px; font: 700 15px var(--font-ui); letter-spacing: -.015em; color: var(--ink); }
 .tba-n2 { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; text-align: left; }
-.tba-n2 b { font: 700 15px var(--font-ui); letter-spacing: -.015em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: clamp(140px, 20vw, 340px); }
+.tba-n2 b { font: 700 14.5px var(--font-ui); letter-spacing: -.015em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: clamp(140px, 24vw, 360px); }
 /* The start of the name gives way; its number or copy mark always shows (nameParts). */
 .tba-n2 b.tba-title { display: flex; min-width: 0; }
 .tba-title .tba-head { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -45,52 +43,62 @@
 .tba-saved { font: 500 10px var(--font-mono); color: var(--muted); letter-spacing: .03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tba-saved.failed { color: var(--alert); }
 .tba-caret { color: var(--muted); font-size: 11px; }
-.tba-crumb { display: inline-flex; align-items: center; gap: 6px; font: 600 12.5px var(--font-ui); color: var(--muted); white-space: nowrap; min-width: 0; flex: 0 1 auto; overflow: hidden; }
-.tba-cstep { display: inline-flex; align-items: center; gap: 6px; }
-.tb .tba-crumb button { color: var(--muted); padding: 3px 6px; border-radius: 6px; }
-.tb .tba-crumb button:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 6%, transparent); }
-.tba-crumb .here { color: var(--ink); padding: 3px 0; }
-.tba-acts { display: flex; gap: 6px; flex: none; }
+/* The crumb: the steps before where you are are links (underline on hover, a pointer, a focus ring); where
+   you are is plain ink (Shrey 2026-11-19: the way back to the canvas must be obvious). */
+.tba-crumb { display: inline-flex; align-items: center; gap: 4px; font: 600 13px var(--font-ui); color: var(--muted); white-space: nowrap; flex: none; }
+.tba-cstep { display: inline-flex; align-items: center; gap: 4px; }
+.tba-csep { color: var(--faint, var(--muted)); }
+.tb .tba-crumb .tba-clink { color: var(--ink-soft, var(--ink)); padding: 3px 5px; border-radius: 6px; cursor: pointer;
+  text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--ink) 28%, transparent); text-underline-offset: 3px; }
+.tb .tba-crumb .tba-clink:hover { color: var(--ink); text-decoration-color: currentColor; background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.tb .tba-crumb .tba-clink:focus-visible { outline: 2px solid var(--ag-act); outline-offset: 1px; }
+.tba-crumb .here { color: var(--ink); padding: 3px 0 3px 2px; }
 .tb .tba-btn, .band .tba-btn { height: 30px; padding: 0 11px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); font: 600 12.5px var(--font-ui); color: var(--ink-soft); white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
-.tb .tba-btn.ghost { border-color: transparent; background: none; }
 .tba-btn svg { width: 14px; height: 14px; }
 .tba-btn[aria-pressed='true'] { background: color-mix(in srgb, var(--ag-act) 12%, var(--card)); color: var(--ink); border-color: color-mix(in srgb, var(--ag-act) 45%, var(--line)); }
-.tb-spacer { flex: 1 1 0; min-width: 0; }
-.tb-tools { display: flex; align-items: center; gap: 8px; flex: none; }
-/* The screen's one primary, in the bar (the shell's .tba-btn.primary). */
-.tb-tools .btn.primary, .tb-tools .pt-primary { height: 34px; border-radius: 8px; padding: 0 14px; font: 600 13px var(--font-ui);
-  background: var(--ag-act); color: var(--ag-act-ink); border: 1px solid var(--ag-act-line, var(--ag-act)); }
-.tb-theme { width: 36px; height: 36px; border-radius: 50% !important; border: 1px solid var(--line) !important; background: var(--paper) !important; display: grid !important; place-items: center; flex: none; }
-.tb-theme svg { width: 17px; height: 17px; }
-.tb-theme .i-sun { display: none; }
-:root[data-theme='dark'] .tb-theme .i-moon { display: none; }
-:root[data-theme='dark'] .tb-theme .i-sun { display: block; }
+.tb-spacer { flex: 1 1 0; min-width: 8px; }
+.tb-right { display: flex; align-items: center; gap: 10px; flex: none; }
 .tb-me { display: inline-flex; flex: none; }
 .tb-me .pt-account { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--ag-base); color: #fff;
   font: 700 10.5px var(--font-ui); box-shadow: 0 0 0 2px var(--desk); border: 0; }
 :root[data-theme='dark'] .tb-me .pt-account { color: var(--ag-act-ink); background: var(--ag-act); }
-.tb .tb-decisions-btn { height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--ink);
+.tb .tb-decisions-btn { height: 30px; padding: 0 11px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--ink);
   font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; flex: none; }
 .tb .tb-decisions-btn:hover, .tb .tb-decisions-btn[aria-pressed='true'] { border-color: var(--ink); }
 .tb-decisions-btn .cnt { padding: 1px 6px; border-radius: 999px; font: 700 10px/1.2 var(--font-mono); background: var(--ag-acc); color: var(--ag-acc-ink); }
 .tb .tb-decisions-btn.has-needs { border-color: color-mix(in srgb, var(--needs, var(--warn)) 55%, transparent); background: color-mix(in srgb, var(--needs, var(--warn)) 12%, var(--paper)); }
 .tb-decisions-btn.has-needs .cnt { background: var(--needs, var(--warn)); color: var(--needs-ink, #fff); }
 
-/* The job chip ("Working · frame 3 of 5", "Your call · 1"): the shell's .tb-status, with the Deep O. */
-.tb .pt-job { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 11px 0 5px; border: 1px solid var(--line); border-radius: 999px; background: var(--desk);
-  color: var(--muted); font: 600 10.5px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; max-width: 300px; }
-.tb .pt-job .jb-text { overflow: hidden; text-overflow: ellipsis; }
-.tb .pt-job[data-mark='ask'] { color: var(--needs, var(--warn)); border-color: color-mix(in srgb, var(--needs, var(--warn)) 40%, transparent); }
-.tb .pt-job[data-mark='failed'] { color: var(--alert); border-color: color-mix(in srgb, var(--alert) 40%, transparent); }
-.tb .pt-job .jb-mark { display: none; }
+/* The agent status dot: Brief Maker's bar sign (the shell's .tb-status .sdot, app/src/shell/nui/nui.css), in
+   place of the sphere. idle: quiet; working: the agency's accent, breathing; needs you: amber; error: red. */
+.tb .tb-status-dot { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; flex: none; }
+.tb .tb-status-dot:hover, .tb .tb-status-dot.open { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.tb .tb-status-dot:focus-visible { outline: 2px solid var(--ag-act); outline-offset: 1px; }
+.tb-status-dot .sdot { width: 7px; height: 7px; border-radius: 50%; background: var(--ag-acc); box-shadow: 0 0 0 2px var(--ag-base); }
+.tb-status-dot[data-st='idle'] .sdot { background: color-mix(in srgb, var(--ink) 28%, transparent); box-shadow: none; }
+.tb-status-dot[data-st='working'] .sdot { animation: tb-sdot 1.6s ease-in-out infinite alternate; }
+.tb-status-dot[data-st='needs'] .sdot { background: var(--needs, var(--warn)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--needs, var(--warn)) 28%, transparent); }
+.tb-status-dot[data-st='error'] .sdot { background: var(--alert); box-shadow: 0 0 0 2px color-mix(in srgb, var(--alert) 26%, transparent); }
+@keyframes tb-sdot { from { opacity: 1; } to { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .tb-status-dot[data-st='working'] .sdot { animation: none; } }
+:root[data-motion='still'] .tb-status-dot[data-st='working'] .sdot { animation: none; }
 
 /* ── the band row: an editor's own controls under the bar ───────────────── */
 .band { display: flex; align-items: center; gap: 10px; min-height: var(--band-h); padding: 6px 24px; border-bottom: 1px solid var(--line);
   background: color-mix(in srgb, var(--desk) 96%, transparent); flex-shrink: 0; white-space: nowrap; overflow-x: auto; scrollbar-width: none; position: relative; z-index: 19; }
 .band > * { flex-shrink: 0; }
 .band .band-grow { flex: 1; min-width: 0; }
-.band .band-sep { width: 1px; height: 22px; background: var(--line); }
+.band .band-sep, .ov-head .band-sep { width: 1px; height: 22px; background: var(--line); }
 .band .pt-seg { border-radius: 4px; }
+/* ← Canvas at the band's left: the Booth crumb's look (mock production-new-ui-v2 .sp-crumb), a clear link. */
+.band .band-back, .ov-head .band-back { font: 500 12px var(--font-mono); color: var(--muted); background: none; border: 0; padding: 4px 6px; margin-left: -6px; border-radius: 6px;
+  cursor: pointer; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent); }
+.band .band-back:hover, .ov-head .band-back:hover { color: var(--ink); text-decoration-color: currentColor; background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.band .band-back:focus-visible, .ov-head .band-back:focus-visible { outline: 2px solid var(--ag-act); outline-offset: 1px; }
+/* The page's primary (Plan shots, Make clips, Render ad, Apply as new version), at the band's right. */
+.band-primary { display: inline-flex; align-items: center; gap: 8px; }
+.band .btn.primary, .band .pt-primary { height: 32px; min-height: 32px; border-radius: 8px; padding: 0 14px; font: 600 13px var(--font-ui);
+  background: var(--ag-act); color: var(--ag-act-ink); border: 1px solid var(--ag-act-line, var(--ag-act)); }
 
 /* ── menus opened from the bar (the shell's .pop) ───────────────────────── */
 .nui-pop { min-width: 260px; max-width: min(340px, calc(100vw - 16px)); }
@@ -128,31 +136,26 @@
 .brow .t small { display: block; font-size: 12px; color: var(--muted); }
 .brow .go { color: var(--faint); }
 
-/* ── phone and narrow ───────────────────────────────────────────────────── */
-@media (max-width: 1180px) {
-  .tba-acts .pt-share + *, .tba-crumb .tba-cstep:not(:last-child) { display: none; }
-  /* Mock w1024: the crumb and Continue in / Share give way to the document's name. */
-  .tba-crumb { display: none; }
-  /* Continue in gives way too (its Link a brief… is also in + Node and Assets › From Napkin): live test
-     2026-11-18, the name shrank to "U…" with the saved line running under Continue in. */
-  .tba-acts .pt-continue { display: none; }
-  .tb { gap: 10px; padding: 0 16px; }
+/* ── phone and narrow ───────────────────────────────────────────────────────
+   Laptops (1024-1440) keep every word: only the film's name gives way (Shrey 2026-11-19, at 1116). */
+@media (max-width: 1279px) {
+  .band { gap: 8px; padding: 6px 16px; }
 }
-@media (max-width: 980px) {
-  .tba-acts, .tb .tb-client .cn { display: none; }
+@media (max-width: 1023px) {
+  .tb { gap: 8px; padding: 0 12px; }
+  .tba-crumb .tba-cstep:not(:last-child) { display: none; }
 }
 @media (max-width: 720px) {
   .tb { padding: 0 8px; gap: 6px; }
-  .ag-pill small, .tb .tb-sep, .tba-saved, .tba-crumb { display: none; }
+  .tba-saved, .tba-crumb { display: none; }
+  .ag-pill small, .tb .tb-sep { display: none; }
   .tb .m1-medallion { width: 52px; height: 52px; top: 2px; }
   .tb .m1-medallion svg { width: 44px; height: 44px; }
   .ag-pill { padding: 0 12px 0 32px; margin-left: -26px; height: 34px; }
   .ag-pill b { font-size: 12.5px; }
   .tb-decisions-btn .lbl-t { display: none; }
-  .tb-theme, .tb .tb-decisions-btn, .tb-me { min-width: 40px; min-height: 40px; }
-  .tb .pt-job { max-width: 120px; }
+  .tb .tb-decisions-btn, .tb-me { min-width: 40px; min-height: 40px; }
 }
-@media (max-width: 420px) { .ag-pill { display: none; } .tba-n2 b { max-width: 150px; } }
 
 /* The old .ptbar (ui/chrome/chrome.css) is now only the wrapper: the shell bar, then an editor's band. */
 :root .ptbar.nui-bars { height: auto; display: flex; flex-direction: column; align-items: stretch; gap: 0; padding: 0; background: none; border-bottom: 0; white-space: normal; z-index: 20; }
@@ -220,16 +223,15 @@
 .send-disc li.promise b { font-weight: 500; }
 /* A long document or node name never runs the crumb into Continue in. */
 .tba-crumb .here { max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
-/* The crumb keeps its words; the document's name gives way first, down to its own minimum (re-test N10: at
+/* The crumb keeps its words; the film's name gives way first, down to its own minimum (re-test N10: at
    1440 in the Script editor the crumb read "› Canvas › Sc" beside a name that could still shrink). */
 .tb-app .tba-crumb { flex-shrink: 0; }
-.tb-app .tba-name { flex: 0 1 auto; min-width: 132px; overflow: hidden; }
+.tb-app .tba-name { flex: 0 1 auto; min-width: 96px; overflow: hidden; }
 .tb-app .tba-n2 { min-width: 0; overflow: hidden; }
 
-/* The phone cut of the bar (mock phone): the medallion, the document's name, theme, you and Decisions.
-   The tool pill, Assets and the dev badge give way; nothing scrolls sideways. */
+/* The phone cut of the bar (mock phone): the mark, the film's name, the status dot, Decisions and you;
+   nothing scrolls sideways. */
 @media (max-width: 600px) {
-  .tb .tb-client, .tb .mockbadge, .tb .pt-assets { display: none; }
   .tb .tba-name { min-width: 0; }
   .tba-n2 b { max-width: 130px; }
   .tba-n2 small, .tba-n2 .tba-saved { display: none; }
@@ -239,3 +241,26 @@
 .pt-menuform { display: flex; gap: 6px; padding: 4px 8px; }
 .pt-menuform .input { flex: 1; min-width: 0; height: 30px; }
 .pt-menuacts { display: flex; gap: 6px; margin-top: 8px; }
+/* The film's ▾ menu (ui/chrome/DocMenu): a row that opens its part in place ends in ›; the part has ‹ on top. */
+.nui-pop .dm-subitem .fmi-text { display: flex; align-items: center; }
+.nui-pop .dm-chev { margin-left: auto; padding-left: 12px; color: var(--muted); font-weight: 500; }
+.nui-pop .dm-back .fmi-text { font-weight: 700; }
+.nui-pop .dm-theme { display: flex; align-items: center; gap: 10px; padding: 7px 10px; }
+.nui-pop .dm-theme .fmi-ico { width: 16px; display: grid; place-items: center; color: var(--ink2, var(--muted)); }
+.nui-pop .dm-theme-l { font-weight: 600; }
+/* Signed out: light or dark beside the place (PlaceBar), as no account menu is there to hold it. */
+.tb .tb-theme { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: var(--paper); display: grid; place-items: center; flex: none; }
+.tb-theme svg { width: 16px; height: 16px; }
+.tb-theme .i-sun { display: none; }
+:root[data-theme='dark'] .tb-theme .i-moon { display: none; }
+:root[data-theme='dark'] .tb-theme .i-sun { display: block; }
+
+/* Signed out, not confirmed, or not on for the agency (Root.tsx NoAccess): the desk under the shell bar, one
+   paper card with what to do (the mock's .cp-box paper; features/production-new-ui.clan). */
+.access-view { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--desk); color: var(--ink); }
+.access-main { flex: 1; display: grid; place-items: center; padding: 24px 16px; }
+.access-card { width: min(480px, 100%); box-sizing: border-box; background: var(--paper); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: var(--shadow-paper, 0 1px 2px rgba(0, 0, 0, .06)); padding: 24px 26px; display: flex; flex-direction: column; gap: 12px; }
+.access-card h1 { margin: 0; font: 800 22px/1.2 var(--font-ui); letter-spacing: -.02em; color: var(--ink); }
+.access-card p { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--ink-soft); }
+.access-card .btn-rect { align-self: flex-start; margin-top: 4px; text-decoration: none; }

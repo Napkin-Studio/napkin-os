@@ -1,15 +1,13 @@
 // The brief → Production spin-off on arrival (features/brief-node.clan): a page opened as
-// /production/…?brief=<doc id>, on our own engine, starts from that brief once:
-// the Brief node (how: spinoff), a new Script beside it, the link. The parameter leaves the URL so a
-// reload does not start again. No UI of its own: the Start card's "Start from a brief" is the card's.
+// /production/…?brief=<doc id>, on our own engine, brings that brief in once: its Brief node (how: spinoff)
+// alone, in view, nothing selected; no Script, nothing asked (owner 2026-11-18). The parameter leaves the URL
+// so a reload does not bring it again. No UI of its own.
 
 import { useEffect } from 'react'
 import type { NodeEnv } from '../canvas/nodes/nodes'
 import { pageBriefSource, type BriefSource } from './os'
-import { briefSpinoffOf, startFromBriefId, withoutBriefSpinoff } from './start'
+import { briefSpinoffOf, bringBriefId, withoutBriefSpinoff } from './start'
 import { fitClear } from '../canvas/boards/boards'
-import { cardOf } from '../canvas/nodes/nodes'
-import { briefOfElement } from './canvas'
 
 let taken = false
 /** The brief the page arrived with, held at boot (main.tsx) before the router rewrites the URL to a project's
@@ -27,13 +25,10 @@ export function useBriefSpinoff(env: NodeEnv | null, src: BriefSource = pageBrie
     taken = true
     held = null
     if (briefSpinoffOf(window.location.search)) window.history.replaceState(window.history.state, '', window.location.pathname + withoutBriefSpinoff(window.location.search) + window.location.hash)
-    startFromBriefId(env, src, id, 'spinoff').then((out) => {
-      // In view clear of the tool rail, nothing selected, as the start card lays a film out (re-test 2b: at
-      // 1116 px the Brief landed half under the rail).
-      const ids = new Set([out.briefId, out.scriptId])
-      const els = env.canvas.elements().filter((e) => !e.isDeleted && ids.has(cardOf(e)?.id ?? briefOfElement(e) ?? ''))
+    bringBriefId(env, src, id).then(({ el }) => {
+      // In view clear of the tool rail, at most 100% (re-test 2b: at 1116 px the Brief landed half under the rail).
       env.canvas.select([])
-      if (els.length) fitClear(env.canvas, els, { zoomFactor: 0.8 })
+      fitClear(env.canvas, [el], { zoomFactor: 0.8 })
     }).catch((e) => console.warn('the brief could not be brought in', e))
   }, [env, src])
 }

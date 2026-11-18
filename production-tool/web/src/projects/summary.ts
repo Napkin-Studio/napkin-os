@@ -3,7 +3,7 @@
 // browser keeps about each job) whenever the project changes, and kept in the
 // project index.
 
-import type { ProductionDocument, Sha256 } from '../contracts/types'
+import { MAP_NAMES, type ProductionDocument, type Sha256 } from '../contracts/types'
 import type { ProjectUi, StageName } from '../doc/ui'
 import { isActive } from '../jobs/runner'
 import { purposeOf } from '../model/purpose'
@@ -104,6 +104,12 @@ function clip(s: string, n: number): string {
 }
 
 /** Has the person put anything in it? (A new project's script, storyboard and video are not work.) */
+/** Whether a film holds anything at all: any entity in any map, or any asset. A blank film holds none (its Script,
+ *  Storyboard and Film are made only when someone adds them). What decides that a draft is kept (shell.ts). */
+export function hasContent(d: ProductionDocument): boolean {
+  return Object.keys(d.assets ?? {}).length > 0 || MAP_NAMES.some((m) => Object.keys((d as unknown as Record<string, object | undefined>)[m] ?? {}).length > 0)
+}
+
 export function isEmptyDocument(d: ProductionDocument): boolean {
   return !Object.keys(d.assets).length && !Object.keys(d.refs).length && !Object.keys(d.jobs).length && !Object.keys(d.shots).length
     && !scriptLines(d).some((l) => l.trim())

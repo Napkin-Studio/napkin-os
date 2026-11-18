@@ -242,7 +242,7 @@ export function nameOf(el: Element | null): string {
     const marked = e.closest('[data-dogfood-area]')
     if (marked) return marked.getAttribute('data-dogfood-area') || 'page'
     if (e.closest('.excalidraw')) return 'canvas'
-    if (e.closest('.topbar,.hm-bar')) return 'top bar'
+    if (e.closest('.topbar,.topbar-outer')) return 'top bar'
     return 'page'
   }
   if (!el || !el.closest) return 'page'

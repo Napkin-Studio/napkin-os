@@ -42,8 +42,8 @@ import { useBooth } from '../ui/booth/useBooth'
 import { croppedCaption } from '../canvas/core/sketch'
 import { PromptStart } from '../ui/prompt/PromptStart'
 import {
-  EMPTY, NOTHING_TO_TAKE, addEdit, afterSend, applyLine, clearMask, editCount, editId, hasFill, newMask, pendingCount, unfilledMasks, editLabel, editsForFrame, hiddenCount,
-  layersOf, leaveAsk, leftOutLine, nextStep,
+  EMPTY, NOTHING_TO_TAKE, addEdit, afterSend, applyLine, clearMask, editCount, editId, hasFill, newMask, unfilledMasks, editLabel, editsForFrame, hiddenCount,
+  layersOf, leftOutLine, nextStep,
   notApplied, nothingToTake, redoUndone, toggleHidden, undoEdit, undoLast, updateEdit, upscaleSize, withMaskOp,
   type Edit, type EditSession, type MaskOp, type Pt, type Undone,
 } from './imageEditor/edits'
@@ -133,7 +133,6 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   const [scale, setScale] = useState<2 | 4>(2)
   const [tray, setTray] = useState<Action | null>(null)
   const [versionsOpen, setVersionsOpen] = useState(false)
-  const [leaving, setLeaving] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   /** Why the picture could not be drawn (the stage keeps the last good one), for Rhea's line. */
@@ -484,9 +483,10 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
     if (target.kind === 'shot') void selectFrame(docStore, target.shotId, f.id)
     else void pickPictureVersionStep(docStore, f.id)
   }
-  const go = (id: string) => (pendingCount(session) > 0 ? setLeaving(id) : id === 'back' ? onBack() : onTarget?.({ kind: 'shot', shotId: id }))
+  // Ask nothing on the way out (owner, 2026-11-19): edits not applied are kept for later on this frame, and
+  // the pill says so when the person comes back; Discard stays in the edits list.
+  const go = (id: string) => leave(id, false)
   const leave = (to: string, discard: boolean) => {
-    setLeaving(null)
     if (discard) uiStore.update((u) => { if (u.imageEdits && frameId) delete u.imageEdits[frameId] }, 'image edits discarded')
     if (to === 'back') onBack()
     else onTarget?.({ kind: 'shot', shotId: to })
@@ -510,6 +510,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   return (
     <div className="editor image-editor" data-image-editor="">
       <EditorBar back={subject.back} onBack={() => go('back')} icon="frame" title={subject.title}
+        holdEscape={!!tray || versionsOpen}
         meta={<span className="pt-mono ie-meta">{ratio ? `${ratio} locked` : 'Picture'}</span>}
         afterView={(
           <>
@@ -739,15 +740,6 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
               {step && <li className="ie-next">{step}</li>}
               {!session.edits.length && <li className="ie-next">No edits yet. Paint the blue over what should change, then Fill.</li>}
             </ol>
-            {leaving && (
-              <div className="ie-ask" role="alertdialog" aria-label="Edits not applied">
-                <span>{leaveAsk(pendingCount(session))}</span>
-                <span className="pt-grow" />
-                <button type="button" className="btn sm" onClick={() => leave(leaving, false)}>Keep for later</button>
-                <button type="button" className="btn sm ghost" onClick={() => leave(leaving, true)}>Discard</button>
-                <button type="button" className="btn sm ghost" onClick={() => setLeaving(null)}>Cancel</button>
-              </div>
-            )}
           </section>
           <section className="bsec ie-layers" aria-label="Layers">
             <h4>Layers <span className="r faint">top is front</span></h4>

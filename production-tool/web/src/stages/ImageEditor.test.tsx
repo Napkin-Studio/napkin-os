@@ -182,21 +182,18 @@ describe('the edits and layers', () => {
     expect(picked()).toBe('Mask 2')
     expect(el.querySelector('.ie-layer [role="note"]')).toBeNull()
   })
-  it('asks before moving to another frame with edits not applied, and keeps them for later', async () => {
+  it('leaves for another frame without asking, and keeps the edits not applied for later (owner, 2026-11-19)', async () => {
     const { el, onShot, services, ids } = await open(painted)
     act(() => byText(el, 'Frame 3 · Insert →')!.click())
-    expect(el.querySelector('[role="alertdialog"]')?.textContent).toContain('Keep the 2 edits for later, or discard them?')
-    expect(onShot).not.toHaveBeenCalled()
-    act(() => byText(el, 'Keep for later')!.click())
+    expect(el.querySelector('[role="alertdialog"]')).toBeNull()
     expect(onShot).toHaveBeenCalledWith(ids.shots[2])
     expect(services.ui.get().imageEdits?.[ids.frame]?.edits).toHaveLength(2)
   })
-  it('discarding drops the edits', async () => {
+  it('going back keeps them too', async () => {
     const { el, onShot, services, ids } = await open(painted)
     act(() => byText(el, '← Frame 1 · Insert')!.click())
-    act(() => byText(el, 'Discard')!.click())
     expect(onShot).toHaveBeenCalledWith(ids.shots[0])
-    expect(services.ui.get().imageEdits?.[ids.frame]).toBeUndefined()
+    expect(services.ui.get().imageEdits?.[ids.frame]?.edits).toHaveLength(2)
   })
   it('the versions menu says what Apply makes', async () => {
     const { el } = await open(painted)

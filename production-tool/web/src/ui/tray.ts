@@ -86,6 +86,16 @@ export function jobLook(g: TrayGroups): { spin: 'run' | 'queued' | 'still'; mark
   return { spin: !first ? 'still' : first.state === 'queued' ? 'queued' : 'run', mark }
 }
 
+/** The bar's agent status dot (Shrey 2026-11-19: Brief Maker's .tb-status .sdot in place of the sphere): a
+ *  question waiting is "needs you", a failure "error", a job running or queued "working", else "idle". */
+export type DotState = 'idle' | 'working' | 'needs' | 'error'
+export function dotState(look: ReturnType<typeof jobLook>): DotState {
+  if (!look) return 'idle'
+  if (look.mark === 'ask') return 'needs'
+  if (look.mark === 'failed') return 'error'
+  return 'working'
+}
+
 /** The job chip's words (features/production-new-ui.clan, the shell's .tb-status): "Your call · 1" while a
  *  question waits, "Working · frame 3" while one runs (with how many when more do), else "1 failed". */
 export function chipText(waiting: number, working: number, failed: number, leadWhat: string | undefined): string {

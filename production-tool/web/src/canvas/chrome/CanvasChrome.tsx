@@ -144,7 +144,7 @@ const ICON: Record<string, ReactNode> = {
 
 export type NewNode = 'script' | 'storyboard' | 'video' | 'picture' | 'sketch'
 
-export function CanvasToolbar({ chrome, ratio, onNode, onBrief, vertical = false }: {
+export function CanvasToolbar({ chrome, ratio, onNode, onBrief, onAssets, vertical = false }: {
   chrome: CanvasChrome | null
   /** The storyboard's ratio: the sketch area's shape (ui-behaviour 3.7). */
   ratio: string
@@ -152,6 +152,8 @@ export function CanvasToolbar({ chrome, ratio, onNode, onBrief, vertical = false
   onNode: (kind: NewNode) => void
   /** Opens Assets › From Napkin, where the agency's briefs are (features/brief-node.clan). Absent, no brief row. */
   onBrief?: () => void
+  /** Opens Assets and characters in the Booth (it left the bar, owner 2026-11-19). Absent, no Assets row. */
+  onAssets?: () => void
   /** iPad (mock TabletCanvas): a column on the left, each tool with its name, 44px targets, undo and redo in it. */
   vertical?: boolean
 }) {
@@ -238,12 +240,14 @@ export function CanvasToolbar({ chrome, ratio, onNode, onBrief, vertical = false
       {row('picture', <>{ICON.image}A picture</>, null, has('image'), 'Pictures are not on this canvas yet', () => onNode('picture'))}
       {row('sketch', <>{sketchIcon}A sketch area</>, ratio, has('sketch'), 'Sketch areas are not on this canvas yet', () => onNode('sketch'))}
       {row('board', <>{ICON.board}A board</>, 'B', actions.canBoard, 'New boards need the new canvas (it has boards as frames)', () => canvasActions.board())}
+      {onAssets && <div className="pt-menusep" />}
+      {onAssets && row('assets', <><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="9" cy="10" r="1.6" /><path d="M21 16l-5-5-8 8" /></svg>Assets and characters…</>, null, true, '', onAssets)}
       {/* A brief comes from Brief Maker, never typed here: Assets › From Napkin lists the agency's (features/brief-node.clan). */}
       {onBrief && row('brief', <><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z" /><path d="M7 13h10M7 16h6" /></svg>A brief from Brief Maker…</>, null, actions.canNode, 'Briefs need the new canvas', onBrief)}
     </>
   )
   const nodeButton = (
-    <button ref={nodeRef} type="button" className="tb-node" aria-haspopup="menu" aria-expanded={menu} data-tip="Add a script, storyboard, video, picture or board"
+    <button ref={nodeRef} type="button" className="tb-node" aria-haspopup="menu" aria-expanded={menu} data-tip="Add a script, storyboard, video, picture or board; open Assets"
       onClick={() => setMenu(!menu)}>{vertical ? <><b>+</b>Node</> : '+ Node'}</button>
   )
   if (vertical) {
@@ -331,7 +335,7 @@ export function CanvasToolbar({ chrome, ratio, onNode, onBrief, vertical = false
       {t('image', 'Add a picture', 'I', ICON.image)}
       {mode('link', 'Link two nodes', 'L', actions.canNode, 'Link (L): click a node, then the node it feeds', 'Link (L) · needs the new canvas (it has nodes on it)')}
       <button ref={nodeRef} type="button" className="tb-tool tb-node" aria-label="+ Node" aria-haspopup="menu" aria-expanded={menu}
-        data-tip="+ Node: Script, Storyboard, Video, a picture, a sketch area or a board" onClick={() => setMenu(!menu)}>
+        data-tip="+ Node: Script, Storyboard, Video, a picture, a sketch area, a board, or Assets" onClick={() => setMenu(!menu)}>
         <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
       </button>
       <Float anchor={nodeRef} open={menu} onClose={() => setMenu(false)} side="right" align="start" label="Add" className="pt-menu">{menuItems}</Float>

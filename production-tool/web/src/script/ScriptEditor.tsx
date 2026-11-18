@@ -2,7 +2,7 @@
 //
 // Full screen at /production/p/:project/script/:scriptId?shot=<shotId>, over the stages: the
 // canvas stays mounted underneath, so jobs keep landing. '← Storyboard', browser Back and
-// ⌘[ return; Esc never leaves. One row model (compose.ts) under both views; the current shot
+// ⌘[ return, and Esc when nothing else takes it (twice from the text). One row model (compose.ts) under both views; the current shot
 // and any focused fragment mount an editor bound to its own fragment, the rest render static.
 // Typing is LocalUndo steps (typing.ts); every structural change is one step (edits.ts).
 // No chat anywhere (principle 10).
@@ -26,6 +26,7 @@ import { MenuItem } from '../ui/Float'
 import { DecisionsDrawer, type HistoryFocus } from '../ui/History'
 import { BackButton } from '../ui/chrome/Bar'
 import { EditorBar } from '../ui/chrome/TopBars'
+import { useFitLevel } from '../ui/chrome/fit'
 import { LinkIcon } from '../ui/chrome/MoreMenu'
 import { nodeTitle } from '../ui/chrome/panels'
 import { useProjectName } from '../ui/useDownload'
@@ -46,7 +47,6 @@ import { partAt, scriptSuggestions, wholeScope, type SkyeScope } from './skyeBoo
 import { DraftCard } from './DraftCard'
 import { PageWaits } from './PageWaits'
 import { ScriptLength, ScriptRefs } from './ScriptFacts'
-import { Float } from '../ui/Float'
 import { SendDisclosure } from '../ui/SendDisclosure'
 import { sendRows } from '../ui/sendRows'
 import { useBooth } from '../ui/booth/useBooth'
@@ -133,6 +133,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
   const route = useRoute()
   const router = useRouter()
   const phone = useMedia('(max-width: 599px)')
+  const tight = useFitLevel().level === 'tight'
   const saved = useSaved(store)
   const view = ui.script?.[scriptId]?.view ?? 'screenplay'
   const pickedBoard = ui.script?.[scriptId]?.storyboard
@@ -248,7 +249,8 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
     void ensurePage(store, scriptId).catch(() => {})
   }, [phone, noScenes, store, scriptId])
 
-  // ⌘[ / Ctrl+[ goes back; Esc never leaves (ui-behaviour 2.3).
+  // ⌘[ / Ctrl+[ goes back; so does Esc when nothing else takes it: the first Esc leaves the text, the second
+  // goes back (Shrey 2026-11-19, ui/chrome/escapeBack).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key === '[') {
@@ -564,11 +566,34 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
     </main>
   )
 
+  // The page's actions (Shrey 2026-11-19): in the band, after the length and before Ask (Page | Video · Audio
+  // Format  10 s  [Plan shots ▾]  Ask the Script agent…); at tight, where the band drops Format and Ask, at its end.
+  const planActs = !phone && (
+    <>
+      {/* Why Plan shots is off: for the screen reader here, and in the button's tooltip (a disabled button never says why). */}
+      {blocked && !planning && <span className="se-why pt-sr" id="se-plan-why">{blocked}</span>}
+      {/* Make film straight from the words (3.5): beside Plan shots, off while there are none. */}
+      <button type="button" className="sp-btn se-makevideo" disabled={!!blocked || !!planning} onClick={() => void (nextVideoId ? goTo('video', nextVideoId) : makeVideo())}>
+        {nextVideoId ? 'Open the film' : 'Make film'}
+      </button>
+      <SendDisclosure who="the Director agent" rows={sendRows(doc, sb?.id ?? scriptId, [
+        { key: 'script', label: 'The script’s words', detail: `${scriptText(doc, scriptId).trim().split(/\s+/).filter(Boolean).length} words` },
+        { key: 'fit', label: `${composed.storyboard?.target_s ?? composed.script.target_s} s at ${composed.storyboard?.ratio ?? '16:9'}`, detail: 'the length and shape to plan to' },
+      ], behind ? 'Update storyboard' : 'Plan shots')} primary={
+        <button className="btn primary" disabled={!!blocked || !!planning} aria-describedby={blocked && !planning ? 'se-plan-why' : undefined}
+          data-tip={blocked && !planning ? blocked : undefined} onClick={() => void plan()}>
+          {planning ? 'Planning…' : behind ? 'Update storyboard' : 'Plan shots'}
+        </button>} />
+    </>
+  )
+
   return (
     <div className={`se ${sheet ? `sheet-${sheet}` : ''}`} data-script-page="" data-view={view}>
       {/* The shared editor bar (features/topbar-declutter.clan): the view switch, Undo, History, More
           (Import Fountain, Copy link to this, Shots from) and Plan shots, fitted like every editor's. */}
       <EditorBar className="se-top" back={backTo} onBack={onBack} icon="script" title="Script"
+        // A side sheet, a confirm, the Ask booth, a part asked about or History closes first on Esc.
+        holdEscape={!!sheet || !!confirm || asked || !!part || history}
 
         view={phone ? undefined : {
           label: 'Script view', value: view,
@@ -587,6 +612,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
                 }} />
             )}
             <ScriptLength composed={composed} doc={doc} onError={setError} />
+            {!tight && planActs}
             <button type="button" className="sp-btn se-ask" aria-pressed={asked} onClick={askOnPurpose}><AgentFigure agent="skye" size={16} decorative />Ask<span className="se-ask-more"> the Script agent</span>…</button>
           </>
         )}
@@ -595,7 +621,6 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
             {/* The bar's saved line is the one save state (ui/useSave.ts); the band says only that this browser is offline. */}
             {saved.startsWith('Offline') && <span className="pt-mono se-saved busy" role="status">{saved}</span>}
             <ScriptRefs composed={composed} doc={doc} store={store} onError={setError} say={say} />
-            <ImportExport onImport={() => fileRef.current?.click()} onFountain={() => void exportFountain()} onPdf={() => void exportPdf()} />
           </>
         )}
         undo={!phone}
@@ -610,8 +635,10 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
         )}
         more={(close) => (
           <>
-            {phone && <MenuItem icon="⬇" onSelect={() => { close(); void exportFountain() }}>Export Fountain…</MenuItem>}
-            {phone && <MenuItem icon="🖨" onSelect={() => { close(); void exportPdf() }}>Export PDF…</MenuItem>}
+            {/* Import / Export left the band for the film's menu (Shrey 2026-11-19: the band is the page's own actions). */}
+            {!phone && <MenuItem icon="⇪" onSelect={() => { close(); fileRef.current?.click() }}>Import Fountain…</MenuItem>}
+            <MenuItem icon="⬇" onSelect={() => { close(); void exportFountain() }}>Export Fountain…</MenuItem>
+            <MenuItem icon="🖨" onSelect={() => { close(); void exportPdf() }}>Export PDF…</MenuItem>
             <MenuItem icon={<LinkIcon />} onSelect={() => {
               close()
               const url = new URL(formatRoute(route), location.origin).href
@@ -619,24 +646,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
             }}>Copy link to this</MenuItem>
           </>
         )}
-        primary={!phone && (
-          <>
-            {/* Why Plan shots is off, said beside it (a disabled button never says why). */}
-            {blocked && !planning && <span className="se-why" id="se-plan-why">{blocked}</span>}
-            {/* Make film straight from the words (3.5): beside Plan shots, off while there are none. */}
-            <button type="button" className="sp-btn se-makevideo" disabled={!!blocked || !!planning} onClick={() => void (nextVideoId ? goTo('video', nextVideoId) : makeVideo())}>
-              {nextVideoId ? 'Open the film' : 'Make film'}
-            </button>
-            <SendDisclosure who="the Director agent" rows={sendRows(doc, sb?.id ?? scriptId, [
-              { key: 'script', label: 'The script’s words', detail: `${scriptText(doc, scriptId).trim().split(/\s+/).filter(Boolean).length} words` },
-              { key: 'fit', label: `${composed.storyboard?.target_s ?? composed.script.target_s} s at ${composed.storyboard?.ratio ?? '16:9'}`, detail: 'the length and shape to plan to' },
-            ], behind ? 'Update storyboard' : 'Plan shots')} primary={
-              <button className="btn primary" disabled={!!blocked || !!planning} aria-describedby={blocked && !planning ? 'se-plan-why' : undefined}
-                data-tip={blocked && !planning ? blocked : undefined} onClick={() => void plan()}>
-                {planning ? 'Planning…' : behind ? 'Update storyboard' : 'Plan shots'}
-              </button>} />
-          </>
-        )} />
+        primary={tight ? planActs : undefined} />
       <input ref={fileRef} type="file" accept=".fountain,.spmd,.txt,text/plain" hidden onChange={(e) => {
         const f = e.target.files?.[0]
         e.target.value = ''
@@ -691,22 +701,6 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
 }
 
 /** The band's Import / Export menu (mock scriptBand): Import Fountain, Export Fountain, Export PDF. */
-function ImportExport({ onImport, onFountain, onPdf }: { onImport: () => void; onFountain: () => void; onPdf: () => void }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLButtonElement>(null)
-  const close = () => setOpen(false)
-  return (
-    <>
-      <button ref={ref} type="button" className="sp-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>Import / Export ▾</button>
-      <Float anchor={ref} open={open} onClose={close} label="Import or export" align="end" className="pt-menu">
-        <MenuItem icon="⇪" onSelect={() => { close(); onImport() }}>Import Fountain…</MenuItem>
-        <MenuItem icon="⬇" onSelect={() => { close(); onFountain() }}>Export Fountain…</MenuItem>
-        <MenuItem icon="🖨" onSelect={() => { close(); onPdf() }}>Export PDF…</MenuItem>
-      </Float>
-    </>
-  )
-}
-
 const NEXT_LABEL: Record<NextAction, string> = {
   plan: 'Plan shots', update: 'Update storyboard', 'make-video': 'Make film', 'open-storyboard': 'Open the storyboard', 'open-video': 'Open the film',
 }

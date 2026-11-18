@@ -4,6 +4,9 @@
 // Lock or a Change method here shows on the board and the other way round. A size's actions open next to
 // it; Adjust crop and Edit type work on the picture itself, so "Edit on board" takes you there.
 
+import { BandBack } from '../ui/shell/ShellBar'
+import { useCanvasPage } from '../ui/chrome/canvasPage'
+import { escapeStep, leaveText } from '../ui/chrome/escapeBack'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { FormatSet, PersonRef, Size, SizeMethod } from '../contracts/types'
@@ -35,6 +38,7 @@ export function SizesOverview({ set, sizes, staleIds, models, deps, by, title, o
   const [width, setWidth] = useState(104)
   const [closed, setClosed] = useState<Set<string>>(new Set())
   const [sel, setSel] = useState<string | null>(null)
+  const root = useRef<HTMLDivElement>(null)
   // The method menu belongs to the size it was opened for, so picking another size closes it.
   const [methodFor, setMethodFor] = useState<string | null>(null)
   const methodOpen = methodFor !== null && methodFor === sel
@@ -52,7 +56,8 @@ export function SizesOverview({ set, sizes, staleIds, models, deps, by, title, o
   const allClosed = groups.length > 0 && groups.every((g) => closed.has(g.key))
 
   useEffect(() => {
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { if (sel) setSel(null); else onClose() } }
+    // Esc puts the size down, leaves a text field, then goes back to the canvas; never while a menu is open.
+    const key = (e: KeyboardEvent) => { if (e.key !== 'Escape' || e.defaultPrevented) return; if (sel) { setSel(null); return } const step = escapeStep(e.target, document, root.current); if (step === 'text') leaveText(e.target); else if (step === 'back') onClose() }
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)
   }, [sel, onClose])
@@ -70,9 +75,14 @@ export function SizesOverview({ set, sizes, staleIds, models, deps, by, title, o
   }
   const toggle = (g: SizeGroup) => setClosed((c) => { const n = new Set(c); if (n.has(g.key)) n.delete(g.key); else n.add(g.key); return n })
 
+  // The canvas's bar reads "› Canvas › Sizes" while this is open; Canvas closes it.
+  useCanvasPage('Sizes', onClose)
+
   return createPortal(
-    <div className="ov" role="dialog" aria-label="Sizes" onPointerDown={(e) => e.stopPropagation()}>
+    <div ref={root} className="ov" role="dialog" aria-label="Sizes" onPointerDown={(e) => e.stopPropagation()}>
       <header className="ov-head">
+        <BandBack label="Canvas" onClick={onClose} />
+        <span className="band-sep" aria-hidden="true" />
         <h1>Sizes · {title}</h1>
         <div className="ov-seg" role="group" aria-label="Group by"><span>Group by</span>
           {(['channel', 'shape', 'status'] as const).map((g) => <button key={g} type="button" className={`btn xs ${by_ === g ? 'on' : ''}`} aria-pressed={by_ === g} onClick={() => { setBy(g); setClosed(new Set()) }}>{g[0]!.toUpperCase() + g.slice(1)}</button>)}
