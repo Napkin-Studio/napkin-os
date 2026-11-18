@@ -54,7 +54,7 @@ describe('contract 3 examples', () => {
   // linkRule does not allow, a map key with a dot).
   const SCHEMA_REFUSED = ['document.v2', 'document.action-601', 'document.role-feel', 'document.rank-space', 'document.ambiguity-recommended',
     'job-request.contract-2', 'job-request.frame_edit-anchor', 'job-request.quality-frame', 'job-answer.both', 'patch-batch.no-why', 'customdata.pin',
-    'question.ambiguity-recommended', 'director.frame_edit-movement-job']
+    'question.ambiguity-recommended', 'director.frame_edit-movement-job', 'document.rights-unknown-word', 'document.final-size-not-size']
   const target: Record<string, string> = {
     document: SCHEMA('document'),
     'job-request': `${SCHEMA('relay-api')}#/$defs/JobRequest`,

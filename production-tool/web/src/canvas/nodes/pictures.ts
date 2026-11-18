@@ -53,7 +53,7 @@ export async function placePictures(canvas: CanvasAdapter, doc: DocumentStore, f
   await systemUpdate(doc, (d) => {
     for (const g of got) {
       if (d.assets[g.sha]) continue
-      d.assets[g.sha] = { sha256: g.sha, kind: 'image', mime: (g.blob.type || 'image/png') as Mime, bytes: g.blob.size, w: g.w, h: g.h, origin: 'uploaded', locations: [idbLocation(g.sha)] }
+      d.assets[g.sha] = { sha256: g.sha, kind: 'image', mime: (g.blob.type || 'image/png') as Mime, bytes: g.blob.size, w: g.w, h: g.h, origin: 'uploaded', rights: 'unknown', locations: [idbLocation(g.sha)] }
     }
   }, 'add picture')
   const v = canvas.visibleBounds()

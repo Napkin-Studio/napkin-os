@@ -38,6 +38,8 @@ import { rowFirst, sendRow, type JobEdit, type UnsentEdit } from './imageEditor/
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { Float } from '../ui/Float'
 import { Booth } from '../ui/booth/Booth'
+import { FinalToggle } from '../ui/finals/FinalToggle'
+import type { FinalOf } from '../doc/finals'
 import { useBooth } from '../ui/booth/useBooth'
 import { croppedCaption } from '../canvas/core/sketch'
 import { PromptStart } from '../ui/prompt/PromptStart'
@@ -96,6 +98,8 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   const prevVersion = current ? frames.find((f) => f.id === current.parent_id) ?? frames.filter((f) => f.version < version).at(-1) : undefined
   const prevUrl = useBlobUrl(prevVersion?.asset)
   const asset = sha ? doc.assets[sha] : undefined
+  // Final (features/prod-assets-route.clan): the version open, else a canvas picture with no versions yet.
+  const finalOf: FinalOf | undefined = current ? { kind: 'frame', id: current.id } : target.kind === 'picture' ? { kind: 'picture', id: target.nodeId } : undefined
   const ratio = subject?.ratio
   const aspect = subject?.aspect ?? 16 / 9
   // The picture's own size: the asset's, else the picture's once it loads (an older asset without w, h).
@@ -596,6 +600,12 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
         <Booth state={booth} earned>
           <div className="sp-crumb"><button type="button" onClick={() => go('back')}>← {subject.back}</button><span>›</span><b>Picture</b>
             <button type="button" className="x" onClick={() => go('back')} title="Back (Esc)" aria-label="Close the image editor">×</button></div>
+          {finalOf && (
+            <div className="ie-finalrow">
+              <FinalToggle of={finalOf} asset={sha} extra={{ version }} />
+              <span className="faint">v{version} · the Deck Maker takes final pictures</span>
+            </div>
+          )}
           <div className="bsec ie-btools">
             <h4>Tools</h4>
             <div className="ie-toolgrid" role="toolbar" aria-label="Image tools">

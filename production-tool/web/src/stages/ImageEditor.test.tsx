@@ -446,3 +446,18 @@ describe('hidden layers (features/image-editor-masks-layers.clan)', () => {
     expect(el.querySelector('.ie-pill .ie-n-long')?.textContent).toBe('1 hidden layer is left out')
   })
 })
+
+describe('Final (features/prod-assets-route.clan)', () => {
+  it('the Booth marks the version open final, by its frame and hash, and unmarks it', async () => {
+    const { el, services, ids } = await open()
+    const toggle = () => buttons(el).find((b) => b.classList.contains('final-toggle'))!
+    expect(toggle().getAttribute('aria-pressed')).toBe('false')
+    await act(async () => { toggle().click(); await services.doc.flush() })
+    const finals = Object.values(services.doc.get().finals ?? {})
+    expect(finals).toHaveLength(1)
+    expect(finals[0]).toMatchObject({ of: { kind: 'frame', id: ids.frame }, asset: SHA('a'), version: 1, by: `human:${MAYA.id}` })
+    expect(toggle().getAttribute('aria-pressed')).toBe('true')
+    await act(async () => { toggle().click(); await services.doc.flush() })
+    expect(services.doc.get().finals).toEqual({})
+  })
+})

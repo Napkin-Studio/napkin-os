@@ -292,6 +292,7 @@ async function keepPlate(relay: CampaignDeps['relay'] | undefined, job: Job): Pr
     }
   }
   const a: DocAsset = { sha256: p.sha256, kind: 'image', mime: 'image/png', origin: job.kind === 'mock' ? 'mock' : 'generated', job_id: job.jobId, locations: outputLocations(p.sha256, p.url) }
+  if (job.kind !== 'mock') a.rights = 'generated'
   if (p.w) a.w = p.w
   if (p.h) a.h = p.h
   if (p.bytes) a.bytes = p.bytes

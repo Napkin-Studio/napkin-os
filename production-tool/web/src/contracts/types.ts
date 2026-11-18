@@ -546,6 +546,8 @@ export interface NoteWindow { from_s: number; to_s: number }
 
 export type AssetKind = 'image' | 'video' | 'audio' | 'document' | 'font' | 'vector'
 export type AssetOrigin = 'uploaded' | 'drawn' | 'generated' | 'mock' | 'edited' | 'extracted'
+/** Whether a client may be shown it (features/prod-assets-route.clan): unknown is an upload until a person says. */
+export type AssetRights = 'generated' | 'own' | 'licensed' | 'unknown'
 export interface DocAsset {
   sha256: Sha256
   kind: AssetKind
@@ -556,6 +558,8 @@ export interface DocAsset {
   duration_s?: number
   pages?: number
   origin: AssetOrigin
+  /** Absent: not stated (made before it, an edit, a mock); readers infer from origin. */
+  rights?: AssetRights
   job_id?: Id
   locations: string[]
   thumb?: string
@@ -788,6 +792,21 @@ export interface CanvasText extends EntityBase {
   node: string
   words: string
 }
+/** A picture a person marked final (finals[id]; features/prod-assets-route.clan): the exact picture by hash,
+ *  and what it is of. A size or a picture keeps one; a final stands until unmarked. */
+export interface Final extends EntityBase {
+  /** frame: a frame version (frames[id]); size: sizes[id]; picture: a canvas picture with no versions (its node id). */
+  of: { kind: 'frame' | 'size' | 'picture'; id: string }
+  asset: Sha256
+  /** The version shown when it was marked. */
+  version?: number
+  /** A size's format set, format and lane, copied when it was marked. */
+  set_id?: Id
+  format?: FormatRef
+  channel?: FormatChannel
+  at: string
+  by: PersonRef
+}
 export interface DocDocument extends EntityBase {
   title: string
   file_name: string
@@ -985,6 +1004,8 @@ export interface EntityMaps {
   texts?: Record<Id, CanvasText>
   /** Optional: a document made before the Brief node has none (features/brief-node.clan). */
   briefs?: Record<Id, BriefNode>
+  /** Optional: the pictures marked final (features/prod-assets-route.clan); a document made before it has none. */
+  finals?: Record<Id, Final>
   format_sets: Record<Id, FormatSet>
   sizes: Record<Id, Size>
   checks: Record<Id, Check>
@@ -997,7 +1018,7 @@ export interface EntityMaps {
 }
 export type MapName = keyof EntityMaps
 export const MAP_NAMES: readonly MapName[] = ['boards', 'sketches', 'scripts', 'scenes', 'storyboards', 'shots', 'beats', 'frames', 'videos', 'generations', 'renders', 'reviews',
-  'links', 'keys', 'refs', 'documents', 'texts', 'briefs', 'format_sets', 'sizes', 'checks', 'asks', 'suggestions', 'spin_ins', 'jobs', 'stale', 'exports']
+  'links', 'keys', 'refs', 'documents', 'texts', 'briefs', 'finals', 'format_sets', 'sizes', 'checks', 'asks', 'suggestions', 'spin_ins', 'jobs', 'stale', 'exports']
 
 export interface ProductionDocument extends EntityMaps {
   contract_version: ContractVersion

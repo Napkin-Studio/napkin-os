@@ -15,6 +15,8 @@ import { createPortal } from 'react-dom'
 import { placeBeside } from '../lib/place'
 import { keepsPick, onScreen, tilePick } from './pick'
 import { TileFloat } from './TileFloat'
+import { FinalToggle } from '../ui/finals/FinalToggle'
+import { sizeFinalAsset } from '../doc/finals'
 import { useConfig, useDoc, useServices, useUi } from '../app/context'
 import { modelChoicesFor } from '../capabilities'
 import type { CanvasAdapter, CanvasElement } from '../canvas/core/canvasAdapter'
@@ -525,6 +527,9 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, flagsOpen,
             onClick={() => paidTray(size.method, 'Redo', () => redoSize(deps, size.id, by))}>Redo</button>
           <button type="button" className="btn sm" disabled title="Fix in image editor comes with a later build">Fix in image editor</button>
           <button type="button" className="btn sm" onClick={() => onLock(!size.locked)}>{size.locked ? 'Unlock' : 'Lock'}</button>
+          {(status === 'ready' || status === 'look') && (
+            <FinalToggle of={{ kind: 'size', id: size.id }} asset={sizeFinalAsset(size)} extra={{ set_id: size.set_id, format: size.format, channel: channelOfSize(size) }} />
+          )}
         </div>
       )}
       {adjusting && (

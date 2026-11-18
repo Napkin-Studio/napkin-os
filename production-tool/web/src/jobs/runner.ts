@@ -727,6 +727,7 @@ export class JobRunner {
             job_id: job.jobId,
             locations: outputLocations(o.sha256, o.url),
           }
+          if (job.kind !== 'mock') a.rights = 'generated' // made for the agency (features/prod-assets-route.clan)
           if (o.bytes) a.bytes = o.bytes
           if (o.w) a.w = o.w
           if (o.h) a.h = o.h
