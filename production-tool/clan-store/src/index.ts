@@ -37,3 +37,4 @@ export {
   adTimeToSource, compileTimeline, TRANSITION_S,
   type SourceMoment, type TimelineItem, type TimelineVideo, type EndCard, type PlanClip, type PlanText, type PlanEndCard, type CompiledTimeline,
 } from './timeline'
+export { sha256Digest, sha256Sync, hexOfBytes } from './sha256'

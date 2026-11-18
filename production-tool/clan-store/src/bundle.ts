@@ -2,6 +2,7 @@
 // The document holds only hashes and locations; the caller resolves the bytes
 // (IndexedDB first, then S3/https), and each one is checked against its hash.
 import { zipSync, type Zippable } from 'fflate'
+import { hexOfBytes, sha256Digest } from './sha256'
 import type { Doc, DocAsset } from './types'
 
 const EXT: Record<string, string> = {
@@ -36,8 +37,7 @@ export function assetPath(a: Pick<DocAsset, 'sha256' | 'mime'>): string {
 export type AssetResolver = (asset: DocAsset) => Promise<Uint8Array | null>
 
 export async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', bytes as unknown as BufferSource)
-  return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('')
+  return hexOfBytes(await sha256Digest(bytes))
 }
 
 export interface ExportZip {
