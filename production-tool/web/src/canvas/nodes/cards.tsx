@@ -6,6 +6,7 @@
 // (cardChrome.ts), which the chrome provides (this file imports no chrome), with
 // plain defaults.
 
+import { compileFor, readCut } from '../../rooms/timeline'
 import { useContext, useState, type CSSProperties, type ReactNode } from 'react'
 import { useDoc, useJobsTick, useServices, useUi } from '../../app/context'
 import { discardDraft, keep as keepDraft } from '../../script/skye'
@@ -193,7 +194,10 @@ export function VideoCard({ id, onOpen, openButton }: { id?: string; onOpen: () 
   // One take of several shots (features/connected-video.clan): "shots 2-5".
   const take = Object.values(video?.runs ?? {}).find((r) => r.job_id && isRunning(doc, r.job_id))
   const takeRunning = take ? shotsWords(doc, take.shot_ids) : undefined
-  const total = shots.reduce((a, s) => a + s.duration_s, 0)
+  const planned = shots.reduce((a, s) => a + s.duration_s, 0)
+  // The cut's own length once there is one (live test 2026-11-18: the card said 0:15, the target, for a 9.8 s cut).
+  const cutS = video && (readCut(doc, video.id).v1.length || readCut(doc, video.id).endCard) ? compileFor(doc, video.id).lengthS : 0
+  const total = cutS || planned
   // The main video is named after its storyboard (mock Main); another after its own title.
   // A video's own shot list (implicit, made straight from the script) is not a storyboard with a name: it named
   // the card "Video · Video" while Dex planned (live test 2026-11-16).
