@@ -255,3 +255,23 @@ def test_the_guess_follows_the_stages_that_exist_up_to_the_stop(tmp_path):
     d.until = "b"
     d.state = "gate"
     assert s.guess_step(d) is None
+
+
+def test_call_engine_runs_the_qa_and_passes_the_text_mode_the_pins_and_the_persons_yes(tmp_path, monkeypatch):
+    """deck-repair-loop: the server no longer passes --no-qa (the repair loop reads the QA), and the request's text_mode, pinned slides and
+    approve_shorten reach the engine as flags. No engine runs: run_deck.main is a recorder."""
+    cfg = srv.Settings({"NAPKIN_DECK_DATA": str(tmp_path / "runs"), "NAPKIN_DECK_REPLAY": str(FERN / "stages"), "NAPKIN_DECK_PORT": "0"})
+    s = srv.Server(cfg)
+    d = srv.Doc(tmp_path / "doc", "doc")
+    d.folder = tmp_path / "doc" / "k"
+    seen = []
+    monkeypatch.setattr(srv.run_deck, "main", lambda argv: seen.append(list(argv)) or {})
+    inp = {**INPUTS, "text_mode": "condense", "review": {"pinned": {"s03": {"by": "human:sai", "at": "2026-11-17"}}}, "approve_shorten": True}
+    req = srv.validate_request({"doc": "doc", "inputs": inp, "mode": "replay", "render": True}, cfg)
+    s.call_engine(d, req, None)
+    argv = seen[0]
+    assert "--no-qa" not in argv and argv[argv.index("--text-mode") + 1] == "condense" and "--approve-shorten" in argv
+    assert json.loads(Path(argv[argv.index("--review") + 1]).read_text()) == {"pinned": inp["review"]["pinned"]}
+    plain = srv.validate_request({"doc": "doc", "inputs": INPUTS, "mode": "replay", "render": True}, cfg)
+    s.call_engine(d, plain, None)
+    assert not {"--text-mode", "--review", "--approve-shorten", "--no-qa"} & set(seen[1])

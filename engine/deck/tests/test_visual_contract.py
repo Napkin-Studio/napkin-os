@@ -647,3 +647,14 @@ def test_the_golden_slot_handoff_is_recorded():
     text = subprocess.run(["unzip", "-p", str(record), "shared/data.yaml"], capture_output=True, text=True, check=True).stdout
     assert "validate golden slots against their layout on load" in text
     assert "validate golden slots against their layout on load" in (ROOT / "docs" / "contracts" / "deck-visuals.md").read_text()
+
+
+# ------------------------------------------------------------------------------------------------ the repair loop's additions (deck-repair-loop)
+
+def test_the_repair_vocabulary_matches_the_schemas_and_the_template():
+    rep = TEMPLATE["properties"]["repair"]["properties"]
+    assert tuple(rep["stopped"]["enum"]) == spec.REPAIR_STOPS
+    assert set(rep["rounds"]["items"]["properties"]) >= {"n", "kept", "why", "fixed", "open", "usd", "seconds", "before", "after"}
+    img = next(n for _p, n in _walk(DECK_SCHEMA) if isinstance(n, dict) and isinstance(n.get("fit"), dict) and isinstance(n.get("focal"), dict) and "scrim" in n)
+    assert tuple(img["scrim"]["enum"]) == spec.IMAGE_SCRIMS
+    assert set(spec.CRITIC_CHECKS) <= set(spec.ISSUE_CHECKS) and "ledger_kept" in spec.REPAIR_SHORTEN_GUARDS and "own_words" in spec.REPAIR_SHORTEN_GUARDS

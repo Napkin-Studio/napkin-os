@@ -28,4 +28,8 @@ def start(req, caps, settings, jid):
             "inputs": {"prompt": {k: prompt.get(k) or "" for k in ("text", "client", "project", "agency")},
                        "kind": inputs.get("kind") or "agency", "format": inputs.get("format") or "pitch"},
             "approvals": approvals, "render": bool(getattr(settings, "deck_render", True))}
+    if inputs.get("text_mode") in ("condense", "preserve"):   # the person's choice: condense lets the repair loop move points to the notes and shorten
+        body["inputs"]["text_mode"] = inputs["text_mode"]
+    if isinstance(data.get("review"), dict) and data["review"].get("pinned"):   # the slides the person pinned: the repair loop leaves them alone
+        body["inputs"]["review"] = {"pinned": data["review"]["pinned"]}
     return DeckJob(jid, TASK, req.handler, req, caps, port=port, body=body)

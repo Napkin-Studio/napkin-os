@@ -511,18 +511,30 @@ def test_the_spike_does_nothing_without_the_cost_confirmation(capsys):
     assert "COST CARD" in capsys.readouterr().out
 
 
-# ---------------------------------------------------------------- band and repair-seam tests, held until slice 5
+# ---------------------------------------------------------------- band and repair-seam tests (slice 5 landed)
 
-@pytest.mark.xfail(strict=True, reason="slice 5 (deck-repair-loop) has not merged: no repair seam to test the confirm bands against")
 def test_a_critic_fix_runs_only_inside_its_code_confirm_band():
-    from deck import repair   # noqa: F401  (does not exist until slice 5)
+    from deck import repair
     assert repair.critic_fix_allowed("v_balance", {"corner": 0.5}) is False
     assert repair.critic_fix_allowed("v_balance", {"corner": 0.7}) is True
+    assert repair.critic_fix_allowed("v_one_focus", {"sizes": [30, 30]}) is False   # no fix: advisory only
+    assert repair.critic_fix_allowed("v_not_crowded", {"words": 10, "budget": 5}) is True   # its fix is switch_layout, never shorten
+    assert repair.critic_fix_allowed("v_balance", {"corner": 0.7}, {"critic": {"may_fix": ["crop_image"], "needs_code_confirm": True}}) is False   # a fix the policy does not allow
 
 
-@pytest.mark.xfail(strict=True, reason="slice 5 (deck-repair-loop) has not merged: critic issues need spec.ISSUE_CHECKS entries first")
 def test_critic_issues_carry_the_canned_message_and_never_count_in_the_keep_rule():
-    assert "v_balance" in spec.ISSUE_CHECKS
+    from deck import issues as I, repair
+    assert set(spec.CRITIC_CHECKS) <= set(spec.ISSUE_CHECKS) and "v_balance" in spec.ISSUE_CHECKS
+    deck = {"order": ["s01"], "slides": {"s01": {"type": "content"}}}
+    one = I.derive([], {"slides": {}}, deck, {})   # no findings: nothing
+    assert one == []
+    crit = {"id": "i_00000001", "round": 0, "slide": "s01", "source": "critic", "check": "v_balance", "level": "warn", "severity": "major", "message": "canned", "status": "open"}
+    assert repair.counts([crit], deck) == {"blocker": 0, "major": 0, "minor": 0} and repair.pairs([crit], deck) == set()
+    made = []
+    I._make(made, {}, "critic", {"check": "v_balance", "level": "error", "message": "x"}, "s01", None, 0, {})
+    assert made[0]["severity"] != "blocker"   # the critic never raises a blocker
+    sel = repair.select({"deck": {"order": ["s01"], "slides": {"s01": {"type": "content"}}}, "issues": [crit]}, {"repair_on": ["blocker", "major"], "critic": {"enabled": False}}, ["s01"], {"left": {}}, set())
+    assert sel == []   # off by default: the critic is advisory until its questions are graded
 
 
 # ---------------------------------------------------------------- the adversarial review's fixes

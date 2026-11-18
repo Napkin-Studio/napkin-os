@@ -48,7 +48,7 @@ from . import run_deck, run_state as rs
 
 #: The stage files each gate's stage writes, and what a replay copies in for each step. Order is the pipeline's.
 STAGE_FILES = {"a0": ("a0_intake.json",), "a": ("a_requirements.json",), "b": ("b_storyline.json", "insight_judge.json"),
-               "c": ("c_territories.json",), "d": ("d_idea.json",), "i": ("i_investor.json",), "final": ("fit.json", "e_copy.json", "red_team.json")}
+               "c": ("c_territories.json",), "d": ("d_idea.json",), "i": ("i_investor.json",), "final": ("fit.json", "e_copy.json", "red_team.json", "e_repair_1.json", "e_repair_2.json", "repair_record.json")}
 ORDER = {"agency": ["a0", "a", "b", "c", "d", "final"], "investor": ["a0", "i", "final"]}
 #: The gate after each stage, per deck kind.
 PLAN = {"agency": [("b", "storyline"), ("c", "territories"), ("d", "idea")], "investor": [("i", "storyline")]}
@@ -341,7 +341,17 @@ class Server:
     def call_engine(self, d: Doc, req: dict, until: str | None) -> dict:
         p = req["prompt"]
         argv = ["--prompt-text", str(p.get("text") or ""), "--stages", str(d.stages), "--client", str(p.get("client") or "[Client]"),
-                "--project", str(p.get("project") or "[Project]"), "--out", str(d.out), "--kind", req["kind"], "--format", req["format"], "--no-qa"]
+                "--project", str(p.get("project") or "[Project]"), "--out", str(d.out), "--kind", req["kind"], "--format", req["format"]]   # the QA runs: the repair loop reads it
+        inp = req["inputs"]
+        if inp.get("text_mode") in ("condense", "preserve"):
+            argv += ["--text-mode", inp["text_mode"]]
+        if isinstance(inp.get("review"), dict) and inp["review"].get("pinned"):
+            rv = d.out / "review.json"
+            rv.parent.mkdir(parents=True, exist_ok=True)
+            rv.write_text(json.dumps({"pinned": inp["review"]["pinned"]}))
+            argv += ["--review", str(rv)]
+        if inp.get("approve_shorten") is True:
+            argv.append("--approve-shorten")
         if p.get("agency"):
             argv += ["--agency", str(p["agency"])]
         if until:

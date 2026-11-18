@@ -164,3 +164,9 @@ have set up a look, with a per-deck opt-out (`look.agency_look.use`), and adds n
 appearance field and `meta.preferences.agency_look` its stamp; `meta.theme` gains `from`, `style_pack`, `agency`, `accent_line`
 and `held`, and `meta` gains `style_hold` (a Style Pack that could not be used: pictures are held). All additions are optional,
 so no golden changes. `docs/contracts/deck-visuals.md` section 6.5 has the precedence.
+
+## Later slices: deck-repair-loop (18 November 2026)
+
+The repair loop (slice 5) consumes `layouts.plan(base_deck, library, prefs, swaps, hooks, fixes)` and writes only `fixes`, never a slot or a word of its own. It adds
+`qa.json.deck_sha`, `issues.json`, `repair.json`, `image_slot.scrim` and the shorten guards `ledger_kept` and `own_words`; it is on by default for the free geometry rungs
+and needs `--text-mode condense` to move points to the notes or shorten. Sai's answers of 17 November 2026 are in `features/deck-repair-loop.clan`.

@@ -39,13 +39,13 @@ GATE_ROW = {"storyline": "storyline", "territories": "territories", "idea": "ide
 #: The row an engine step belongs to.
 STEP_ROW = {"load": "inputs", "a0": "inputs", "a": "inputs", "b": "storyline", "i": "storyline", "insight_judge": "storyline",
             "c": "territories", "d": "idea", "fit": "copy", "e": "copy", "red_team": "copy",
-            "validate": "check", "render_pptx": "check", "render_web": "check", "pdf": "check", "png": "check", "qa": "check"}
+            "validate": "check", "render_pptx": "check", "render_web": "check", "pdf": "check", "png": "check", "qa": "check", "repair": "check"}
 #: The agent and what it is doing at each step, and the order the agents are numbered in.
 STEP_AGENT = {"load": ("brief", "read"), "a0": ("brief", "read"), "a": ("brief", "read"), "b": ("strategy", "write"),
               "i": ("strategy", "write"), "insight_judge": ("strategy", "check"), "c": ("strategy", "write"), "d": ("idea", "write"),
               "fit": ("copy", "check"), "e": ("copy", "write"), "red_team": ("copy", "check"), "validate": ("review", "check"),
               "render_pptx": ("deck", "work"), "render_web": ("deck", "work"), "pdf": ("deck", "work"), "png": ("deck", "work"),
-              "qa": ("review", "check")}
+              "qa": ("review", "check"), "repair": ("review", "work")}
 STEP_OF = {"brief": 1, "strategy": 2, "idea": 3, "copy": 4, "deck": 5, "review": 6, "approval": 7}
 STEP_TOTAL = 7
 DONE_SUB = {"inputs": "Read", "scans": "Read", "storyline": "Approved", "territories": "Picked", "idea": "Approved", "copy": "Done", "check": "Done"}
@@ -411,7 +411,12 @@ def done_line(deck: dict, rep: dict) -> dict:
     e, w = v.get("errors", 0), v.get("warnings", 0)
     summary = (f"{len(shown)} pitch slides and {ad['appendix_count']} appendix slides. The checks found {e} error{'s' if e != 1 else ''} "
                f"and {w} warnings; {len(need)} pitch slide{'s' if len(need) != 1 else ''} still need{'s' if len(need) == 1 else ''} you.")
-    return {"summary": summary, "slides": len(shown), "appendix": ad["appendix_count"], "to_supply": len(need)}
+    line = {"summary": summary, "slides": len(shown), "appendix": ad["appendix_count"], "to_supply": len(need)}
+    rr = rep.get("repair")
+    if rr and rr.get("rounds"):   # the repair count, said in the done box
+        fixed = sum(x.get("fixed", 0) for x in rr["rounds"] if x.get("kept"))
+        line["summary"] += f" {fixed} fixed by repair, {len(rr.get('left_for_person') or [])} left for you."
+    return line
 
 
 def payload(out: Path, rep: dict, inp, live: bool) -> dict:
@@ -422,5 +427,31 @@ def payload(out: Path, rep: dict, inp, live: bool) -> dict:
                  for x in ("prompt_tokens", "completion_tokens", "cache_read_tokens", "cache_creation_tokens", "tokens_in", "tokens_out"))
     report = {"seconds": rep.get("wall_secs"), "tokens": tokens, "cost_usd": rep.get("usd_total") if live else 0,   # a replay spends nothing
               "engine_usd_total": rep.get("usd_total"), "usd_basis": rep.get("usd_basis"), "qa": rep.get("qa"), "mode": "live" if live else "replay"}
-    return {"deck": app_deck(deck), "validation": validation_summary(findings), "evidence": evidence_for(deck, inp) if inp is not None else {},
-            "report": report, "exports": exports_for(out), "done": done_line(deck, rep)}
+    out_p = {"deck": app_deck(deck), "validation": validation_summary(findings), "evidence": evidence_for(deck, inp) if inp is not None else {},
+             "report": report, "exports": exports_for(out), "done": done_line(deck, rep)}
+    out_p.update(repair_payload(out, deck, rep))
+    return out_p
+
+
+def repair_payload(out: Path, deck: dict, rep: dict) -> dict:
+    """``qa`` and ``repair`` for the document (template schema): the issues the checks raised, keyed by id, with the hash of the deck.json they read, and the
+    rounds the repair loop ran. Present only when the loop wrote issues.json (it did not run under --no-repair or --no-qa); ``repair`` only when a round ran."""
+    iss_p, qa_p = out / "issues.json", out / "qa.json"
+    if not iss_p.exists() or not qa_p.exists():
+        return {}
+    issues = json.loads(iss_p.read_text())
+    qa = json.loads(qa_p.read_text())
+    pres = set(app_deck(deck)["order"])
+    counts = {"blocker": 0, "major": 0, "minor": 0}
+    for i in issues:
+        if i["status"] != "fixed" and i["source"] != "critic" and (i["slide"] in pres or i["slide"] == "deck"):
+            counts[i["severity"]] += 1
+    res = {"qa": {"deck_sha": str(qa.get("deck_sha") or ""), "current": True, "summary": {**counts, "slides_checked": len(pres)}, "issues": {i["id"]: i for i in issues}}}
+    rp = out / "repair.json"
+    if rp.exists():
+        r = json.loads(rp.read_text())
+        secs = {x["n"]: x.get("seconds") for x in (rep.get("repair") or {}).get("rounds", [])}
+        res["repair"] = {"rounds": [{"n": x["n"], "kept": x["kept"], "why": x.get("why", "")[:160], "fixed": x["fixed"], "open": x["open"], "usd": x["usd"],
+                                     "seconds": secs.get(x["n"]) or 0, "before": x["before"], "after": x["after"]} for x in r["rounds"]],
+                         "left_for_person": len(r["left_for_person"]), "stopped": r["stopped"], "skipped": len(r["skipped"])}
+    return res

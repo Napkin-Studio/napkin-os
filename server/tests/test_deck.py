@@ -261,3 +261,22 @@ def test_a_document_whose_pipeline_names_the_task_with_no_handler_still_finds_it
 def test_the_existing_tasks_resolve_as_before():
     for task, handler in (("draft_brief", "draft_brief@1.0"), ("start_campaign", "start_campaign@1.0"), ("reconsider", "reconsider@2.0")):
         assert registry.resolve(task, {})[1] == handler
+
+
+QA = {"deck_sha": "abc123", "current": True, "summary": {"blocker": 0, "major": 1, "minor": 0, "slides_checked": 1},
+      "issues": {"i_0000000a": {"id": "i_0000000a", "round": 0, "slide": "s01", "source": "qa_render", "check": "margin", "level": "warn", "severity": "major", "message": "m", "status": "open"}}}
+REPAIR = {"rounds": [{"n": 1, "kept": True, "why": "", "fixed": 1, "open": 1, "usd": 0.0, "seconds": 1.2, "before": {"blocker": 1, "major": 1, "minor": 0}, "after": {"blocker": 0, "major": 1, "minor": 0}}],
+          "left_for_person": 1, "stopped": "clean", "skipped": 0}
+
+
+def test_the_document_gets_qa_and_repair_and_the_request_carries_the_text_mode_and_the_pins(deck, monkeypatch):
+    fake = FakeEngine(view("building", stage="check"), view("done", stage="review", payload={**PAYLOAD, "qa": QA, "repair": REPAIR}, cost=0))
+    use(monkeypatch, fake)
+    host = Host(data=deck_data(), schema=SCHEMA)
+    host.data["run"].update(state="gate", gate=GATE2)
+    host.data["inputs"]["text_mode"] = "condense"
+    host.data["review"] = {"pinned": {"s03": {"by": "human:sai", "at": "t"}}}
+    build(deck, host)
+    assert host.data["qa"]["summary"]["major"] == 1 and host.data["repair"]["rounds"][0]["kept"] is True and host.data["repair"]["stopped"] == "clean"
+    assert fake.posts[0]["inputs"]["text_mode"] == "condense" and fake.posts[0]["inputs"]["review"] == {"pinned": {"s03": {"by": "human:sai", "at": "t"}}}
+    assert {"qa", "repair"} <= set(deck_job.PAYLOAD)

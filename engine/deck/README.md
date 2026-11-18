@@ -426,3 +426,15 @@ a slide that does not fit switches layout before its type drops to the caption f
 
 Calibration (`deck/tests/test_layout_wrap_calibration.py`, local only): `Renderer.wrap` counts 2 to 3 lines more than LibreOffice on frames of 8 to 12 lines
 (a real line holds about 15 to 25 % more characters than the estimate), so a fit never overflows for want of room the estimate did not see.
+
+## The repair loop (`deck/repair.py`, `deck/ledger.py`, `deck/policy/repair.yaml`; feature deck-repair-loop)
+
+After the build and its QA, `run_deck` turns the findings into issues (`issues.py`) and runs at most two repair rounds (`repair.run`). Each round picks one action per
+unpinned slide from `repair.ACTION_MAP` (one row per check, rungs tried across rounds: shrink, switch layout, shorten, move to the notes, scrim, crop, drop the picture),
+hands the fixes to `layouts.plan`, renders, runs QA and the checklist, and keeps the round only when it is not worse (K1 to K5, `repair.gate`). The token ledger
+(`ledger.py`) is read back from the round's `.pptx` and compared with the base deck's, so a changed number, unit, name, month, year, negation or hedge rejects the round.
+Free geometry rungs run by default; `--text-mode condense` also lets the loop move whole points to the speaker notes and shorten wording with the slide's own words (one
+batched stage e call per round, only with `--live` or a recording, capped by `policy.max_usd` and `NAPKIN_DECK_MAX_USD`; on `--audience client` only with `--approve-shorten`).
+`--no-repair` turns it off, `--no-qa` skips it (it reads the QA), `--until` never starts it, `--review FILE` pins slides, `--repair-policy FILE` overrides the policy.
+Outputs: `issues.json`, `repair.json`, `repair_record.json` (replayed without measuring when its base and policy hashes match), `out/repair/round-<n>/`, and a `repair`
+key in `report.json` only when a round ran or a rung was skipped. Tests: `deck/tests/test_repair.py` (no model, no LibreOffice: QA is a stand-in seam).
