@@ -19,6 +19,8 @@ import { boxName, genTitle, repeatsTake, shotTitle, shotWindow, type Gen } from 
 import { TakePlayer } from './Players'
 import { tc } from './media'
 import type { RoomData } from './Rooms'
+import { TakeNotes } from './TakeNotes'
+import { useLeaveNote } from './takeNotesModel'
 
 /** What the drawer opens on. `mark`: a stretch of the parent (its own time) marked in Edit with I/O. */
 export interface ChangeOpen {
@@ -72,6 +74,7 @@ export function ChangeDrawer({ data, open, variant, onClose, onMade, onApart }: 
   const [t, setT] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [sending, send] = useSending()
+  const leave = useLeaveNote(parent, data.videoId)
   const shotNo = (id: string) => shotNumber(doc, id)
   // Another shot picked: its own words to start from.
   const [wordsOf, setWordsOf] = useState(shot?.id)
@@ -179,7 +182,15 @@ export function ChangeDrawer({ data, open, variant, onClose, onMade, onApart }: 
                       <label className="rm-fieldlabel">What should change here?
                         <textarea className="rm-textarea" rows={2} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} placeholder="his shirt is deep red" />
                       </label>
-                      <p className="rm-note">A change to part of a clip takes a few minutes. The rest of the take, its sound and its length stay.</p>
+                      <p className="rm-note">A change to part of a clip takes a few minutes. The rest of the take, its sound and its length stay. Or leave it as a note: notes wait on the take until you fix them together.</p>
+                      <button type="button" className="btn rm-wide" disabled={!note.trim() || sending}
+                        title="Keep it on the take as a note at this moment, with the box if one is drawn; nothing is sent"
+                        onClick={() => void send(async () => {
+                          const at = win ? win.window.from_s : mark.inS
+                          const seg = parent.segments.find((x) => x.inS <= at && x.outS > at)
+                          await leave(seg?.shotId ?? shotId, at, note, region)
+                          setNote(''); setRegion(null); setDrawing(false)
+                        })}>Leave as a note</button>
                     </>
                   )}
                   {v.id === 'feel' && (
@@ -209,6 +220,7 @@ export function ChangeDrawer({ data, open, variant, onClose, onMade, onApart }: 
           ))}
         </div>
       </div>
+      <TakeNotes parent={parent} videoId={data.videoId} shotId={shotId} />
       <footer className="rm-changefoot">
         <div className="rm-keeps rm-clamp2" title={keeps}><b>Keeps:</b> {keeps}</div>
         <div className={`rm-diff ${diff.length ? '' : 'empty'}`} aria-live="polite">{diff.length ? diff.map((l) => <div key={l} className="rm-clamp2" title={l}>{l}</div>) : 'Nothing changes yet.'}</div>

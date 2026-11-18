@@ -12,6 +12,7 @@ import { genTitle, sharesBox, shotTitle, type Gen } from './model'
 import { tc } from './media'
 import type { RoomData } from './Rooms'
 import type { Picked } from './Timeline'
+import { TakeNotes } from './TakeNotes'
 
 const STYLES: { id: TextStyle; label: string }[] = [{ id: 'super', label: 'Lower third' }, { id: 'title', label: 'Centre title' }, { id: 'caption', label: 'Caption' }]
 const r1 = (x: number) => Math.round(x * 10) / 10
@@ -96,6 +97,7 @@ export function Inspector({ data, cut, picked, onPick, onChange, onFeel, onSwap,
             {c.transition && short > 0 && <p className="rm-note">The clip before runs out of footage: its last frame holds for {short.toFixed(1)} s.</p>}
           </fieldset>
         )}
+        {g && <TakeNotes parent={g} videoId={v} shotId={c.follows?.shotId} />}
         <button type="button" className="btn ghost rm-wide" onClick={() => { void editCut.remove(docStore, v, c, true); onPick(null) }}>Remove from the cut</button>
       </div>
     )

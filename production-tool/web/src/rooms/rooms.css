@@ -708,3 +708,9 @@ html[data-theme='dark'] .jc-box.sel { box-shadow: 0 0 0 2px var(--ag-acc, var(--
 }
 .jc-bft .jc-take { flex: 1 1 100%; order: -1; min-width: 0; }
 .jc-bft .jc-take > span:not(.r) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The take's notes and its Final (the legacy Film editor's extras, folded into the Change panel). */
+.rm-takenotes { display: flex; flex-direction: column; gap: 8px; padding: 10px 0; border-top: 1px solid var(--line-soft); }
+.rm-notelist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.rm-notelist li { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: 6px; font-size: 12.5px; }
+.rm-notelist .pt-mono { font-size: 11px; color: var(--muted, var(--ink3)); }
+.rm-notebox { color: var(--ag-base, var(--tool)); }
