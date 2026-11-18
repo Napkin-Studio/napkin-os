@@ -78,7 +78,8 @@ describe('the tools (3.12)', () => {
     const { el } = await open()
     const tools = [...el.querySelectorAll('[role="toolbar"][aria-label="Image tools"] button')].map((b) => b.getAttribute('aria-label'))
     expect(tools).toEqual(['Select (V)', 'Brush mask (B)', 'Lasso (L)', 'Text (T)', 'Crop, kept at 16:9 (C)', 'Hand, pan the frame (H)'])
-    expect(el.querySelector('[role="tooltip"]')?.textContent).toBe('Brush mask B')
+    // The Booth's tool grid (mock image): each tool by name with its key; the one in hand is pressed.
+    expect(el.querySelector('.ie-tool.on')?.textContent).toBe('Brush maskB')
   })
   it('a key chooses its tool, Space holds the Hand, and [ ] change the brush size', async () => {
     const { el } = await open()
@@ -218,20 +219,25 @@ describe("arriving from the Review agent's brand flag", () => {
 })
 
 describe('the actions (3.12), none with a price', () => {
-  it('offers Fill area, Change whole frame and Upscale with its output size, and no Remove background (owner, 2026-10-16)', async () => {
+  it('offers Fill area, Remove, Whole frame and Upscale with its output size, one at a time, and no Remove background (owner, 2026-10-16)', async () => {
     const { el } = await open()
     const actions = el.querySelector('[aria-label="Actions"]')!
-    const titles = [...actions.querySelectorAll('.ie-action b')].map((b) => b.textContent)
-    expect(titles).toEqual(['Fill area', 'Change whole frame', 'Upscale'])
+    // What to do with the blue (mock image): a segment picks one action; Fill area first.
+    expect([...actions.querySelectorAll('.ie-actseg button')].map((b) => b.textContent)).toEqual(['Fill area', 'Remove', 'Whole frame', 'Upscale'])
+    expect([...actions.querySelectorAll('.ie-action b')].map((b) => b.textContent)).toEqual(['Fill area'])
     expect(el.textContent).not.toMatch(/background|cut-out/i)
+    expect(actions.textContent).toContain('Only the blue area changes')
+    act(() => byText(el, 'Whole frame')!.click())
+    expect([...actions.querySelectorAll('.ie-action b')].map((b) => b.textContent)).toEqual(['Change whole frame'])
+    act(() => byText(el, 'Upscale')!.click())
     expect(actions.textContent).toContain('→ 2688 × 1536')
     act(() => byText(el, '4×')!.click())
     expect(actions.textContent).toContain('→ 5376 × 3072')
-    expect(actions.textContent).toContain('Only the blue area changes')
     expect(actions.textContent).not.toMatch(/\$|credit|cost|price/i)
   })
   it('Change whole frame has room for its words: a two-line field, its whole placeholder (live test 2026-11-16)', async () => {
     const { el } = await open()
+    act(() => byText(el, 'Whole frame')!.click())
     const box = el.querySelector('[aria-label="Describe the change to the whole frame"]') as HTMLTextAreaElement
     expect(box.tagName).toBe('TEXTAREA')
     expect(box.getAttribute('rows')).toBe('2')
@@ -240,8 +246,10 @@ describe('the actions (3.12), none with a price', () => {
   it('an agency with Magnific and Ideogram off: Upscale says why and cannot run', async () => {
     const { el } = await open(undefined, ['runway', 'google'])
     const actions = el.querySelector('[aria-label="Actions"]')!
+    act(() => byText(el, 'Upscale')!.click())
     expect(actions.textContent).toContain('Magnific, the upscaler, is off for your agency')
-    expect(byText(el, 'Upscale')?.disabled).toBe(true)
+    expect((actions.querySelector('.ie-action .btn') as HTMLButtonElement).disabled).toBe(true)
+    act(() => byText(el, 'Fill area')!.click())
     // Fill area still runs, on Gemini 3 Pro (the box drawn), and the tray says so
     const box = el.querySelector('#ie-fill') as HTMLTextAreaElement
     expect(box.disabled).toBe(true)
@@ -257,13 +265,16 @@ describe('the actions (3.12), none with a price', () => {
   it('Fill waits for a painted mask and words; Remove for a painted mask only', async () => {
     const { el } = await open()
     expect(byText(el, 'Fill')?.disabled).toBe(true)
+    act(() => byText(el, 'Remove')!.click())
     expect(byLabel(el, 'Remove what the mask covers')?.disabled).toBe(true)
     const { el: el2 } = await open(() => ({ edits: [{ id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] }], hidden: [], active: 'm1' }))
     expect(byText(el2, 'Fill')?.disabled).toBe(true) // no words yet
+    act(() => byText(el2, 'Remove')!.click())
     expect(byLabel(el2, 'Remove what the mask covers')?.disabled).toBe(false)
   })
   it('Remove needs no words: its tray names the mask and the model, with no words and no price', async () => {
     const { el } = await open(() => ({ edits: [{ id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] }], hidden: [], active: 'm1' }))
+    act(() => byText(el, 'Remove')!.click())
     act(() => byLabel(el, 'Remove what the mask covers')!.click())
     const tray = document.querySelector('.ie-tray')!
     expect(tray.textContent).toContain('What the Retouch agent will send to remove what is in the area')

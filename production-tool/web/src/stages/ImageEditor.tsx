@@ -38,6 +38,8 @@ import { sendWithRow, type UnsentEdit } from './imageEditor/edits'
 import { CopyLinkLater } from '../ui/chrome/MoreMenu'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { Float } from '../ui/Float'
+import { Booth } from '../ui/booth/Booth'
+import { useBooth } from '../ui/booth/useBooth'
 import { croppedCaption } from '../canvas/core/sketch'
 import { PromptStart } from '../ui/prompt/PromptStart'
 import {
@@ -120,6 +122,9 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState<Pt>({ x: 0, y: 0 })
   const [view, setView] = useState<'after' | 'before'>('after')
+  // What to do with the blue (mock image): one action shown at a time in the Booth.
+  const [act, setAct] = useState<'fill' | 'remove' | 'whole' | 'upscale'>('fill')
+  const booth = useBooth('storyboard')
   /** A layer picked in Layers that is not a mask (Frame, a result, text): shown picked, with why
    *  it cannot be painted; the next stroke starts a new mask. A mask's pick is the session's active mask. */
   const [picked, setPicked] = useState<string | null>(null)
@@ -453,10 +458,8 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
     <div className="editor image-editor" data-image-editor="">
       <EditorBar back={subject.back} onBack={() => go('back')} icon="frame" title={subject.title}
         meta={<span className="pt-mono ie-meta">{ratio ? `${ratio} locked` : 'Picture'}</span>}
-        right={(
+        afterView={(
           <>
-            {/* Zoom sits on the stage and Presence in the bar itself (topbar-declutter); the pill keeps the
-                hidden layers Apply leaves out (masks-layers), with a short form at the tight fit. */}
             {n + applyLeftOut > 0 && (() => {
               const long = [n ? notApplied(n) : '', applyLeftOut ? leftOutLine(applyLeftOut) : ''].filter(Boolean).join(' · ')
               const short = [n ? `${n} ${n === 1 ? 'edit' : 'edits'}` : '', applyLeftOut ? `${applyLeftOut} left out` : ''].filter(Boolean).join(' · ')
@@ -467,6 +470,25 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
                 <span className="pt-mono">v{version}</span><span className="ie-vof"> of {frames.length}</span> <span aria-hidden="true" className="ie-caret">▼</span>
               </button>
             )}
+            {!(n + applyLeftOut) && <span className="pt-mono ie-pill">No edits yet</span>}
+            {/* Either half toggles, pressed or not, so a second press on Before goes back (owner, 2026-10-16). */}
+            <div className="pt-seg ie-compare" role="group" aria-label="Compare">
+              <button type="button" aria-pressed={showBefore} disabled={!before} title={before ? `v${before.version} as saved` : 'Nothing to compare yet'}
+                onClick={() => setView(showBefore ? 'after' : 'before')}>Before</button>
+              <button type="button" aria-pressed={!showBefore} disabled={!before} title={n ? 'With your edits' : `v${version} as saved`}
+                onClick={() => setView(showBefore ? 'after' : 'before')}>After</button>
+            </div>
+          </>
+        )}
+        right={(
+          <>
+            {/* Zoom, on the stage at the bottom right like the canvas's zoom pill (owner, 2026-10-15). */}
+            <div className="ie-zoom" role="group" aria-label="Zoom">
+              <button type="button" aria-label="Zoom out" onClick={() => setZoom((z) => zoomStep(z, -1))}>−</button>
+              <span className="pt-mono">{Math.round(zoom * 100)}%</span>
+              <button type="button" aria-label="Zoom in" onClick={() => setZoom((z) => zoomStep(z, 1))}>+</button>
+              <button type="button" className="ie-fit" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }) }}>Fit</button>
+            </div>
           </>
         )}
         more={() => <CopyLinkLater />}
@@ -484,20 +506,55 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
         </div>
       </Float>
 
-      <div className="ie-body">
-        <div className="ie-tools" role="toolbar" aria-label="Image tools" aria-orientation="vertical">
-          {TOOLS.map((t, i) => (
-            <span key={t.id} className="ie-toolslot">
-              {i === TOOLS.length - 1 && <span className="ie-tsep" aria-hidden="true" />}
-              <button type="button" className={activeTool === t.id ? 'on' : ''} aria-pressed={activeTool === t.id}
-                aria-label={`${t.id === 'crop' ? (ratio ? `Crop, kept at ${ratio}` : 'Crop, kept at its shape') : t.label} (${t.key})`} onClick={() => { setTool(t.id); setView('after') }}><ToolIcon id={t.id} /></button>
-              {activeTool === t.id && <span role="tooltip" className="ie-tip">{t.label.split(',')[0]} <span className="pt-mono">{t.key}</span></span>}
-            </span>
-          ))}
-        </div>
+      <div className="booth-row ie-row">
+        <div className="ie-surface">
+          <div className="ie-center">
+          {framePic && shownPlan ? (
+            <div className="ie-stagewrap">
+            <Stage src={url} beforeSrc={before?.url} plan={shownPlan} image={image} w={W} h={H} session={session} tool={activeTool} brush={brush} zoom={zoom} pan={pan} onPan={setPan}
+              before={showBefore} onAfter={() => setView('after')} motion={motion} onDrawn={setDrawError} onMaskOp={onMaskOp} onAddText={onAddText} onText={onText} onCrop={onCrop}
+              pending={runningEdit?.kind === 'fill' ? runningEdit.maskId : undefined} progress={!!runningEdit && runningEdit.kind !== 'fill'}>
+              {showBefore && <span className="pt-mono ie-before">Before · v{before.version} as saved</span>}
+            </Stage>
+            </div>
+          ) : (
+            <div className="ie-viewport" style={{ aspectRatio: String(aspect), '--ie-ratio': aspect } as React.CSSProperties}>
+              {shotId && <div className="pending idle" style={{ position: 'absolute', inset: 0 }}><PromptStart kind="image" nodeId={shotId} place="editor" /></div>}
+            </div>
+          )}
 
-        <div className="ie-center">
-          <div className="ie-strip" role="group" aria-label={maskTool ? 'Brush mask options' : `${tip.label.split(',')[0]} options`}>
+          <div className="ie-under">
+            {hint && <span className="ie-hint" role="status">{hint}</span>}
+            <RheaLine busy={busy} drawError={drawError} />
+            {current?.cropped_to && asset?.w && asset?.h && <span className="pt-mono faint">{croppedCaption({ w: asset.w, h: asset.h }, current.cropped_to.to)}</span>}
+            <span className="pt-grow" />
+            <span className="pt-mono ie-legend">Mask: blue paint marks what changes · X or Alt: Subtract · {UNDO_KEY} takes back your last stroke here</span>
+          </div>
+
+            <div className="ie-foot">
+              {prev ? <button type="button" className="btn link" onClick={() => go(prev.id)}>← {prev.title}</button> : <span />}
+              <span className="pt-grow" />
+              <span className="faint">Applying makes <span className="pt-mono">v{Math.max(version, frames.at(-1)?.version ?? 0) + 1}</span> and {subject.applyWhere}</span>
+              <span className="pt-grow" />
+              {next ? <button type="button" className="btn link" onClick={() => go(next.id)}>{next.title} →</button> : <span />}
+            </div>
+          </div>
+        </div>
+        {/* The Booth (mock image): the picture's tools, what to do with the blue, the edits and the layers. */}
+        <Booth state={booth} earned>
+          <div className="sp-crumb"><button type="button" onClick={() => go('back')}>← {subject.back}</button><span>›</span><b>Picture</b>
+            <button type="button" className="x" onClick={() => go('back')} title="Back (Esc)" aria-label="Close the image editor">×</button></div>
+          <div className="bsec ie-btools">
+            <h4>Tools</h4>
+            <div className="ie-toolgrid" role="toolbar" aria-label="Image tools">
+              {TOOLS.map((t) => (
+                <button key={t.id} type="button" className={`ie-tool ${activeTool === t.id ? 'on' : ''}`} aria-pressed={activeTool === t.id}
+                  aria-label={`${t.id === 'crop' ? (ratio ? `Crop, kept at ${ratio}` : 'Crop, kept at its shape') : t.label} (${t.key})`} onClick={() => { setTool(t.id); setView('after') }}>
+                  <ToolIcon id={t.id} /><span className="ie-tname">{t.label.split(',')[0]}</span><kbd>{t.key}</kbd>
+                </button>
+              ))}
+            </div>
+            <div className="ie-strip" role="group" aria-label={maskTool ? 'Brush mask options' : `${tip.label.split(',')[0]} options`}>
             {maskTool ? (
               <>
                 <b>{activeMask?.name ?? 'New mask'}</b>
@@ -531,49 +588,74 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
             )}
           </div>
 
-          {framePic && shownPlan ? (
-            <div className="ie-stagewrap">
-            <Stage src={url} beforeSrc={before?.url} plan={shownPlan} image={image} w={W} h={H} session={session} tool={activeTool} brush={brush} zoom={zoom} pan={pan} onPan={setPan}
-              before={showBefore} onAfter={() => setView('after')} motion={motion} onDrawn={setDrawError} onMaskOp={onMaskOp} onAddText={onAddText} onText={onText} onCrop={onCrop}
-              pending={runningEdit?.kind === 'fill' ? runningEdit.maskId : undefined} progress={!!runningEdit && runningEdit.kind !== 'fill'}>
-              {showBefore && <span className="pt-mono ie-before">Before · v{before.version} as saved</span>}
-            </Stage>
-            {/* Zoom, on the stage at the bottom right like the canvas's zoom pill (owner, 2026-10-15). */}
-            <div className="ie-zoom" role="group" aria-label="Zoom">
-              <button type="button" aria-label="Zoom out" onClick={() => setZoom((z) => zoomStep(z, -1))}>−</button>
-              <span className="pt-mono">{Math.round(zoom * 100)}%</span>
-              <button type="button" aria-label="Zoom in" onClick={() => setZoom((z) => zoomStep(z, 1))}>+</button>
-              <button type="button" className="ie-fit" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }) }}>Fit</button>
-            </div>
-            </div>
-          ) : (
-            <div className="ie-viewport" style={{ aspectRatio: String(aspect), '--ie-ratio': aspect } as React.CSSProperties}>
-              {shotId && <div className="pending idle" style={{ position: 'absolute', inset: 0 }}><PromptStart kind="image" nodeId={shotId} place="editor" /></div>}
-            </div>
-          )}
-
-          <div className="ie-under">
-            {/* Either half toggles, pressed or not, so a second press on Before goes back (owner, 2026-10-16). */}
-            <div className="pt-seg ie-compare" role="group" aria-label="Compare">
-              <button type="button" aria-pressed={showBefore} disabled={!before} title={before ? `v${before.version} as saved` : 'Nothing to compare yet'}
-                onClick={() => setView(showBefore ? 'after' : 'before')}>Before</button>
-              <button type="button" aria-pressed={!showBefore} disabled={!before} title={n ? 'With your edits' : `v${version} as saved`}
-                onClick={() => setView(showBefore ? 'after' : 'before')}>After</button>
-            </div>
-            {hint && <span className="ie-hint" role="status">{hint}</span>}
-            <RheaLine busy={busy} drawError={drawError} />
-            {current?.cropped_to && asset?.w && asset?.h && <span className="pt-mono faint">{croppedCaption({ w: asset.w, h: asset.h }, current.cropped_to.to)}</span>}
-            <span className="pt-grow" />
-            <span className="pt-mono ie-legend">Mask: blue paint marks what changes · X or Alt: Subtract · {UNDO_KEY} takes back your last stroke here</span>
           </div>
-
-          <section className="ie-edits" aria-label="Edits not applied yet">
-            {check && <div className="ie-rule" role="note"><AgentFigure agent="jude" size={16} decorative /> <b>Review agent:</b> {check.note}</div>}
-            <div className="ie-edithead">
-              <h2 className="pt-label">Edits · not applied yet</h2>
-              <span className="pt-grow" />
-              <span className="faint">Nothing is sent until you run an action. v{version} is never changed.</span>
+          <section className="bsec ie-actions" aria-label="Actions">
+            <h4>What to do with the blue</h4>
+            <div className="pt-seg ie-actseg" role="group" aria-label="What to do">
+              {controls.regionEditFrames && <button type="button" aria-pressed={act === 'fill'} onClick={() => setAct('fill')}>Fill area</button>}
+              {controls.regionEditFrames && <button type="button" aria-pressed={act === 'remove'} onClick={() => setAct('remove')}>Remove</button>}
+              {controls.regionEditFrames && <button type="button" aria-pressed={act === 'whole'} onClick={() => setAct('whole')}>Whole frame</button>}
+              {controls.storyboard && <button type="button" aria-pressed={act === 'upscale'} onClick={() => setAct('upscale')}>Upscale</button>}
             </div>
+
+            {controls.regionEditFrames && (act === 'fill' || act === 'remove') && (
+              <div className={`ie-action ${masked ? 'on' : ''}`}>
+                <div className="row"><b>{act === 'remove' ? 'Remove' : 'Fill area'}</b>{activeMask && <span className="ie-mtag">{activeMask.name}</span>}</div>
+                {act === 'fill' && <><label className="faint" htmlFor="ie-fill">Fill with...</label>
+                <textarea id="ie-fill" className="textarea" rows={2} placeholder={masked ? 'add condensation drops' : maskHidden && activeMask ? `${activeMask.name} is hidden. Show it to fill.` : 'Paint or lasso an area first'} value={fill} maxLength={1000}
+                  disabled={!masked || running} onChange={(e) => setFill(e.target.value)} /></>}
+                <label className="ie-check"><input type="checkbox" checked={keepOutside} onChange={(e) => setKeepOutside(e.target.checked)} /> Keep everything outside the blue exactly as it is</label>
+                <div className="row"><span className="faint">{maskHidden && activeMask ? `${activeMask.name} is hidden. Show it to fill.` : 'Only the blue area changes'}</span><span className="spacer" />
+                  {act === 'remove' && <button ref={removeBtn} type="button" className="btn sm dark" aria-label="Remove what the mask covers" disabled={!masked || running} onClick={() => setTray('remove')}
+                    title={masked ? 'Take out what the blue covers; the background continues over it. No words needed.' : 'Paint or lasso an area first'}>Remove</button>}
+                  {act === 'fill' && <button ref={fillBtn} type="button" className="btn sm dark" disabled={!masked || !fill.trim() || running} onClick={() => setTray('fill')}
+                    title={masked ? (fill.trim() ? 'Fill the blue area with your words' : 'Say what fills the area first') : 'Paint or lasso an area first'}>Fill</button>}</div>
+              </div>
+            )}
+
+            {controls.regionEditFrames && act === 'whole' && (
+              <div className={`ie-action ${offer ? 'on' : ''}`}>
+                <b>Change whole frame</b>
+                <div className="row">
+                  {/* Two lines, as Fill's: the one-line field cut its own placeholder off (live test 2026-11-16). */}
+                  <textarea className="input ie-whole" rows={2} aria-label="Describe the change to the whole frame" placeholder="e.g. warmer light, keep the bottle" value={whole} maxLength={1000}
+                    disabled={!current || running} onChange={(e) => setWhole(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); if (whole.trim() && !running) setTray('whole') } }} />
+                  <button ref={wholeBtn} type="button" className="btn sm" disabled={!current || !whole.trim() || running} onClick={() => setTray('whole')}>Change</button>
+                </div>
+                {offer && offerJob && offerEdit && shotId && (
+                  <RedrawOffer askId={offer.id} n={shotNo}
+                    onRedraw={() => void attempt('handing the redraw to the Storyboard', async () => {
+                      await runner.answer(offerJob, { optionId: 'redraw' })
+                      setSession((s) => undoEdit(s, offerEdit.id))
+                      await changeFrame({ relay, doc: docStore, ui: uiStore, runner }, shotId, 'words' in offerEdit ? offerEdit.words : whole, { mode: 'redraw' })
+                      onBack()
+                    })}
+                    onAnyway={() => void attempt('sending the change', () => runner.answer(offerJob, { optionId: 'edit' }))} />
+                )}
+              </div>
+            )}
+
+            {controls.storyboard && act === 'upscale' && (
+              <div className="ie-action">
+                <b>Upscale</b>
+                {!controls.upscale && <span className="faint">Magnific, the upscaler, is off for your agency, so Upscale cannot run here.</span>}
+                <div className="row">
+                  <div className="pt-seg" role="group" aria-label="Upscale amount">
+                    <button type="button" className="pt-mono" aria-pressed={scale === 2} onClick={() => setScale(2)}>2×</button>
+                    <button type="button" className="pt-mono" aria-pressed={scale === 4} onClick={() => setScale(4)}>4×</button>
+                  </div>
+                  <span className="pt-mono faint ie-out">{upscaleSize(W, H, scale)}</span>
+                  <button ref={upBtn} type="button" className="btn sm" disabled={!current || running || !controls.upscale} onClick={() => setTray('upscale')}>Upscale</button>
+                </div>
+              </div>
+            )}
+            {error && <div role="alert" className="ie-error">{error}</div>}
+          </section>
+          <section className="bsec ie-edits" aria-label="Edits not applied yet">
+            {check && <div className="ie-rule" role="note"><AgentFigure agent="jude" size={16} decorative /> <b>Review agent:</b> {check.note}</div>}
+            <h4>Edits · not applied yet</h4>
+            <span className="faint ie-editsub">Nothing is sent until you run an action. v{version} is never changed.</span>
             <ol className="ie-elist">
               {session.edits.filter((e) => !(e.kind === 'mask' && !e.ops.length && session.active !== e.id)).map((e, i) => {
                 const st = stateOf(e)
@@ -596,15 +678,8 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
                 )
               })}
               {step && <li className="ie-next">{step}</li>}
-              {!session.edits.length && <li className="ie-next">No edits yet. Pick a tool on the left.</li>}
+              {!session.edits.length && <li className="ie-next">No edits yet. Paint the blue over what should change, then Fill.</li>}
             </ol>
-            <div className="ie-foot">
-              {prev ? <button type="button" className="btn link" onClick={() => go(prev.id)}>← {prev.title}</button> : <span />}
-              <span className="pt-grow" />
-              <span className="faint">Applying makes <span className="pt-mono">v{Math.max(version, frames.at(-1)?.version ?? 0) + 1}</span> and {subject.applyWhere}</span>
-              <span className="pt-grow" />
-              {next ? <button type="button" className="btn link" onClick={() => go(next.id)}>{next.title} →</button> : <span />}
-            </div>
             {leaving && (
               <div className="ie-ask" role="alertdialog" aria-label="Edits not applied">
                 <span>{leaveAsk(pendingCount(session))}</span>
@@ -615,11 +690,8 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
               </div>
             )}
           </section>
-        </div>
-
-        <aside className="ie-side">
-          <section className="ie-panel" aria-label="Layers">
-            <div className="ie-panelhead"><h2 className="pt-label">Layers</h2><span className="faint">top is front</span></div>
+          <section className="bsec ie-layers" aria-label="Layers">
+            <h4>Layers <span className="r faint">top is front</span></h4>
             {layersOf(session, version).map((l) => {
               const e = session.edits.find((x) => x.id === l.id)
               const pic = e ? resultOf(e) : undefined
@@ -647,64 +719,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
             })}
           </section>
 
-          <section className="ie-panel ie-actions" aria-label="Actions">
-            <div className="ie-panelhead"><h2 className="pt-label">Actions</h2></div>
-
-            {controls.regionEditFrames && (
-              <div className={`ie-action ${masked ? 'on' : ''}`}>
-                <div className="row"><b>Fill area</b>{activeMask && <span className="ie-mtag">{activeMask.name}</span>}</div>
-                <label className="faint" htmlFor="ie-fill">Fill with...</label>
-                <textarea id="ie-fill" className="textarea" rows={2} placeholder={masked ? 'add condensation drops' : maskHidden && activeMask ? `${activeMask.name} is hidden. Show it to fill.` : 'Paint or lasso an area first'} value={fill} maxLength={1000}
-                  disabled={!masked || running} onChange={(e) => setFill(e.target.value)} />
-                <label className="ie-check"><input type="checkbox" checked={keepOutside} onChange={(e) => setKeepOutside(e.target.checked)} /> Keep everything outside the blue exactly as it is</label>
-                <div className="row"><span className="faint">{maskHidden && activeMask ? `${activeMask.name} is hidden. Show it to fill.` : 'Only the blue area changes'}</span><span className="spacer" />
-                  <button ref={removeBtn} type="button" className="btn sm" aria-label="Remove what the mask covers" disabled={!masked || running} onClick={() => setTray('remove')}
-                    title={masked ? 'Take out what the blue covers; the background continues over it. No words needed.' : 'Paint or lasso an area first'}>Remove</button>
-                  <button ref={fillBtn} type="button" className="btn sm dark" disabled={!masked || !fill.trim() || running} onClick={() => setTray('fill')}
-                    title={masked ? (fill.trim() ? 'Fill the blue area with your words' : 'Say what fills the area first') : 'Paint or lasso an area first'}>Fill</button></div>
-              </div>
-            )}
-
-            {controls.regionEditFrames && (
-              <div className={`ie-action ${offer ? 'on' : ''}`}>
-                <b>Change whole frame</b>
-                <div className="row">
-                  {/* Two lines, as Fill's: the one-line field cut its own placeholder off (live test 2026-11-16). */}
-                  <textarea className="input ie-whole" rows={2} aria-label="Describe the change to the whole frame" placeholder="e.g. warmer light, keep the bottle" value={whole} maxLength={1000}
-                    disabled={!current || running} onChange={(e) => setWhole(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); if (whole.trim() && !running) setTray('whole') } }} />
-                  <button ref={wholeBtn} type="button" className="btn sm" disabled={!current || !whole.trim() || running} onClick={() => setTray('whole')}>Change</button>
-                </div>
-                {offer && offerJob && offerEdit && shotId && (
-                  <RedrawOffer askId={offer.id} n={shotNo}
-                    onRedraw={() => void attempt('handing the redraw to the Storyboard', async () => {
-                      await runner.answer(offerJob, { optionId: 'redraw' })
-                      setSession((s) => undoEdit(s, offerEdit.id))
-                      await changeFrame({ relay, doc: docStore, ui: uiStore, runner }, shotId, 'words' in offerEdit ? offerEdit.words : whole, { mode: 'redraw' })
-                      onBack()
-                    })}
-                    onAnyway={() => void attempt('sending the change', () => runner.answer(offerJob, { optionId: 'edit' }))} />
-                )}
-              </div>
-            )}
-
-            {controls.storyboard && (
-              <div className="ie-action">
-                <b>Upscale</b>
-                {!controls.upscale && <span className="faint">Magnific, the upscaler, is off for your agency, so Upscale cannot run here.</span>}
-                <div className="row">
-                  <div className="pt-seg" role="group" aria-label="Upscale amount">
-                    <button type="button" className="pt-mono" aria-pressed={scale === 2} onClick={() => setScale(2)}>2×</button>
-                    <button type="button" className="pt-mono" aria-pressed={scale === 4} onClick={() => setScale(4)}>4×</button>
-                  </div>
-                  <span className="pt-mono faint ie-out">{upscaleSize(W, H, scale)}</span>
-                  <button ref={upBtn} type="button" className="btn sm" disabled={!current || running || !controls.upscale} onClick={() => setTray('upscale')}>Upscale</button>
-                </div>
-              </div>
-            )}
-            {error && <div role="alert" className="ie-error">{error}</div>}
-          </section>
-        </aside>
+        </Booth>
       </div>
       {tray && (
         <EditTray anchor={tray === 'fill' ? fillBtn : tray === 'remove' ? removeBtn : tray === 'whole' ? wholeBtn : upBtn} open onClose={() => setTray(null)}

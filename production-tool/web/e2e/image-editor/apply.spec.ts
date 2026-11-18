@@ -47,10 +47,12 @@ async function runOnMask(page: Page, kind: 'fill' | 'remove') {
   await page.keyboard.press('b')
   await stroke(page, [0.6, 0.45], [0.8, 0.45], 16)
   if (kind === 'fill') {
+    await page.locator('.ie-actseg').getByRole('button', { name: 'Fill area', exact: true }).click()
     await page.locator('#ie-fill').fill('a red balloon')
     await page.locator('.ie-action').getByRole('button', { name: 'Fill', exact: true }).click()
     await page.getByRole('dialog').getByRole('button', { name: 'Fill', exact: true }).click()
   } else {
+    await page.locator('.ie-actseg').getByRole('button', { name: 'Remove', exact: true }).click()
     await page.getByRole('button', { name: 'Remove what the mask covers' }).click()
     await page.getByRole('dialog').getByRole('button', { name: 'Remove', exact: true }).click()
   }

@@ -156,6 +156,7 @@ test('on a canvas picture the region tools work: Brush, Subtract, Lasso, Clear, 
   for (const q of [pt(0.6, 0.3), pt(0.6, 0.6), pt(0.3, 0.6)]) await page.mouse.move(...q, { steps: 4 })
   await page.mouse.up()
   await expect.poll(painted).toBeGreaterThan(0)
+  await page.locator('.ie-actseg').getByRole('button', { name: 'Remove', exact: true }).click()
   await page.locator('.ie-action').getByRole('button', { name: 'Remove what the mask covers' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Remove', exact: true }).click()
   await expect(page.locator('.ie-elist li', { hasText: 'Remove Mask' })).toContainText('ready', { timeout: 20_000 })

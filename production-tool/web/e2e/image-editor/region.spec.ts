@@ -104,11 +104,14 @@ test('Remove takes out what the mask covers with no words: one result layer, lik
     }
   })
   const remove = page.locator('.ie-action').getByRole('button', { name: 'Remove what the mask covers' })
+  await page.locator('.ie-actseg').getByRole('button', { name: 'Remove', exact: true }).click()
   await expect(remove).toBeDisabled()
   await page.keyboard.press('b')
   await stroke(page, [0.3, 0.4], [0.5, 0.4], 12)
   await expect(remove).toBeEnabled()
+  await page.locator('.ie-actseg').getByRole('button', { name: 'Fill area', exact: true }).click()
   await expect(page.locator('.ie-action').getByRole('button', { name: 'Fill', exact: true })).toBeDisabled() // Fill needs words
+  await page.locator('.ie-actseg').getByRole('button', { name: 'Remove', exact: true }).click()
   await remove.click()
   const tray = page.getByRole('dialog')
   await expect(tray).toContainText('What the Retouch agent will send to remove what is in the area')
