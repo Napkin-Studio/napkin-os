@@ -510,6 +510,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   return (
     <div className="editor image-editor" data-image-editor="">
       <EditorBar back={subject.back} onBack={() => go('back')} icon="frame" title={subject.title}
+        holdEscape={!!tray || !!leaving || versionsOpen}
         meta={<span className="pt-mono ie-meta">{ratio ? `${ratio} locked` : 'Picture'}</span>}
         afterView={(
           <>

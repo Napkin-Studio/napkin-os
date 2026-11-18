@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type Re
 import { Float } from '../../ui/Float'
 import { UndoButtons } from '../../ui/UndoButtons'
 import { NodeIcon } from '../../ui/chrome/Bar'
+import { usePanels } from '../../ui/chrome/panels'
 import { rowLabel, type BoardRow } from './boards'
 // ⌥1…⌥9 and ⌥0 (ui-behaviour 3.2): one reading of the keys for the rail and the own engine's boards.
 import { boardKey } from '../boards/boards'
@@ -162,6 +163,7 @@ export function CanvasToolbar({ chrome, ratio, onNode, onBrief, vertical = false
   const pen = usePenChoice(chrome)
   const actions = useActions()
   const nodeRef = useRef<HTMLButtonElement>(null)
+  const panels = usePanels()
   const [menu, setMenu] = useState(false)
   // The next sketch area's shape (ui-behaviour 3.7): the storyboard's ratio until the person picks one.
   // An existing area's ratio never changes; the picker is the only way the next one's does.
@@ -240,10 +242,16 @@ export function CanvasToolbar({ chrome, ratio, onNode, onBrief, vertical = false
       {row('board', <>{ICON.board}A board</>, 'B', actions.canBoard, 'New boards need the new canvas (it has boards as frames)', () => canvasActions.board())}
       {/* A brief comes from Brief Maker, never typed here: Assets › From Napkin lists the agency's (features/brief-node.clan). */}
       {onBrief && row('brief', <><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z" /><path d="M7 13h10M7 16h6" /></svg>A brief from Brief Maker…</>, null, actions.canNode, 'Briefs need the new canvas', onBrief)}
+      {/* Assets and characters left the bar for here (Shrey 2026-11-19): the library opens in the Booth. */}
+      <div className="pt-menusep" />
+      <button type="button" role="menuitem" className="pt-menurow cc-assets" aria-pressed={panels.assets} onClick={() => { setMenu(false); panels.toggle('assets') }}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="9" cy="10" r="1.6" /><path d="M21 16l-5-5-8 8" /></svg>
+        Assets and characters<span className="hint">{panels.assets ? 'open' : 'library'}</span>
+      </button>
     </>
   )
   const nodeButton = (
-    <button ref={nodeRef} type="button" className="tb-node" aria-haspopup="menu" aria-expanded={menu} data-tip="Add a script, storyboard, video, picture or board"
+    <button ref={nodeRef} type="button" className="tb-node" aria-haspopup="menu" aria-expanded={menu} data-tip="Add a script, storyboard, video, picture or board; open Assets"
       onClick={() => setMenu(!menu)}>{vertical ? <><b>+</b>Node</> : '+ Node'}</button>
   )
   if (vertical) {
@@ -331,7 +339,7 @@ export function CanvasToolbar({ chrome, ratio, onNode, onBrief, vertical = false
       {t('image', 'Add a picture', 'I', ICON.image)}
       {mode('link', 'Link two nodes', 'L', actions.canNode, 'Link (L): click a node, then the node it feeds', 'Link (L) · needs the new canvas (it has nodes on it)')}
       <button ref={nodeRef} type="button" className="tb-tool tb-node" aria-label="+ Node" aria-haspopup="menu" aria-expanded={menu}
-        data-tip="+ Node: Script, Storyboard, Video, a picture, a sketch area or a board" onClick={() => setMenu(!menu)}>
+        data-tip="+ Node: Script, Storyboard, Video, a picture, a sketch area, a board, or Assets" onClick={() => setMenu(!menu)}>
         <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
       </button>
       <Float anchor={nodeRef} open={menu} onClose={() => setMenu(false)} side="right" align="start" label="Add" className="pt-menu">{menuItems}</Float>

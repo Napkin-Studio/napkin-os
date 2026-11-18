@@ -85,8 +85,8 @@
   --dur-slow: 0.45s;
   /* The tool's. */
   --r-board: 16px;
-  /* The shell bar (62px and its rule) and the band row under an editor's bar. */
-  --topbar-h: 63px;
+  /* The slim shell bar (52px and its rule) and the band row under an editor's bar. */
+  --topbar-h: 53px;
   --band-h: 46px;
 }
 

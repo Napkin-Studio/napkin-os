@@ -1,5 +1,6 @@
-// The job tray (features/production-tool-look.clan; features/topbar-declutter.clan): the top bar's job
-// button, the Napkin logo alone (turning while something runs), with a needs-you mark. It opens a
+// The job tray (features/production-tool-look.clan; features/topbar-declutter.clan): the bar's agent status
+// dot (Shrey 2026-11-19: Brief Maker's .tb-status .sdot, idle / working / needs you / error; the sphere stays
+// only in the Booth). It opens a
 // floating list, Working now, Waiting for you (a job asking a question) and Needs you; Show on a row
 // goes to its stage and card, and on a waiting row to its question, with the focus on its first answer
 // (the Script editor for Skye's; the ask dock when no card shows it). The ask dock rides here, so every
@@ -16,11 +17,10 @@ import { jobsList, shotNumber } from '../model/selectors'
 import { AgentFigure } from './agents/AgentFigure'
 import { AskDock } from './AskDock'
 import { hereOf, homeOf, sameHome, showAsk } from './askPlaces'
-import { jobWhat, whoIsWorking, workOf, type Work } from './agents/cast'
-import { NapkinLoader } from './loader/NapkinLoader'
+import { jobWhat, whoIsWorking } from './agents/cast'
 import { Float } from './Float'
 import { fmtElapsed, useElapsed } from './hooks'
-import { chipText, jobLine, jobLook, trayGroups, WAITING, whereIs, type TrayRow } from './tray'
+import { chipText, dotState, jobLine, jobLook, trayGroups, WAITING, whereIs, type DotState, type TrayRow } from './tray'
 import { plainJobError } from '../jobs/errorWords'
 
 export function JobTray({ phone = false }: {
@@ -37,19 +37,16 @@ export function JobTray({ phone = false }: {
   const g = trayGroups(jobsList(doc), ctxReader(doc, ui), (id) => runner.liveInfo(id))
   const busy = g.working.length > 0
   const empty = !busy && !g.needsYou.length && !g.waiting.length
-  // The bar's job button: the Napkin logo alone (owner, 2026-10-15). With the busy pointer, the one
-  // place the logo turns (ui-behaviour 6.5). Its words live in the tooltip, the label, a separate
-  // live region and the popover's first row, never in the bar.
+  // The bar's status dot: its words live in the tooltip, the label, a separate live region and the
+  // popover's first row, never in the bar.
   const lead = g.working[0] ?? g.waiting[0] ?? g.needsYou[0]
   const line = jobLine(g, lead && lead.state !== 'failed' ? who(lead).line : undefined)
   const look = jobLook(g)
   return (
     <>
-      {look && (
-        <JobButton ref={ref} look={look} line={line} chip={chipText(g.waiting.length, g.working.length, g.needsYou.length, g.working[0] ? what(g.working[0]) : undefined)}
-          open={open} work={g.working[0] ? workOf(g.working[0].job.op, g.working[0].state) : undefined}
-          onClick={() => setOpen(!open)} />
-      )}
+      <StatusDot ref={ref} state={dotState(look)} line={empty ? IDLE : line}
+        chip={chipText(g.waiting.length, g.working.length, g.needsYou.length, g.working[0] ? what(g.working[0]) : undefined)}
+        open={open} onClick={() => setOpen(!open)} />
       <span className="pt-sr" role="status" aria-live="polite">{empty ? '' : line}</span>
       {!phone && <AskDock />}
       <Float anchor={ref} open={open} onClose={close} align="end" role="dialog" label="Jobs" className="traypop">
@@ -76,24 +73,24 @@ export function JobTray({ phone = false }: {
   }
 }
 
-/** The chip itself, pure for the tests: the Deep O (turning while a job runs) and its words. */
-export function JobButton({ ref, look, line, chip, open, work, onClick }: {
+const IDLE = 'The agents are idle'
+const SAID: Record<DotState, string> = { idle: 'Idle', working: 'Working', needs: 'Needs you', error: 'Error' }
+
+/** The dot itself, pure for the tests: the shell's .sdot in its state's colour; its words in the tooltip and label. */
+export function StatusDot({ ref, state, line, chip, open, onClick }: {
   ref?: Ref<HTMLButtonElement>
-  look: NonNullable<ReturnType<typeof jobLook>>
+  state: DotState
   line: string
+  /** "Working · frame 3", "Your call · 1": the tooltip's first words. */
   chip?: string
   open: boolean
-  work?: Work
   onClick: () => void
 }) {
+  const tip = [chip || SAID[state], line].filter((x, i, a) => x && a.indexOf(x) === i).join(' — ')
   return (
-    <button ref={ref} type="button" className={`pt-job ${open ? 'open' : ''}`} data-spin={look.spin} data-mark={look.mark}
-      aria-label={line} data-tip={line} aria-haspopup="dialog" aria-expanded={open} onClick={onClick}>
-      {look.spin === 'still'
-        ? <NapkinLoader state="queued" flat size={20} />
-        : <NapkinLoader work={work} state={look.spin} size={20} />}
-      {chip && <span className="jb-text" aria-hidden="true">{chip}</span>}
-      {look.mark && <span className="jb-mark" aria-hidden="true" />}
+    <button ref={ref} type="button" className={`tb-status-dot ${open ? 'open' : ''}`} data-st={state}
+      aria-label={`Agents: ${SAID[state].toLowerCase()}. ${line}`} title={tip} aria-haspopup="dialog" aria-expanded={open} onClick={onClick}>
+      <i className="sdot" aria-hidden="true" />
     </button>
   )
 }

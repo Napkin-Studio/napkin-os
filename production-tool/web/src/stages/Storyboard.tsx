@@ -246,6 +246,7 @@ export function Storyboard() {
       <EditorBar back="Canvas" onBack={() => uiStore.update((u) => { u.stage = 'character' }, 'stage')} icon="storyboard"
         undo
         title="Storyboard"
+        holdEscape={!!selected}
         // The band (mock production-new-ui-v2 sbBand): length, fit, shape and who is at work on the left; how to
         // reorder, undo and + Add shot on the right.
         meta={<>

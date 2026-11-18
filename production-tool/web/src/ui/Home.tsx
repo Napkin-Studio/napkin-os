@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useShell } from '../app/context'
 import { download } from '../export'
-import { BetaTag } from '../dogfood/Dogfood'
+import { PlaceBar } from './shell/ShellBar'
 import { errorShown, setScreen } from '../dogfood/recorder'
 import type { SavedProject } from '../contracts/types'
 import { homeItems, itemId } from '../projects/homeList'
@@ -20,7 +20,6 @@ import { sayer } from './agents/cast'
 import { CrewLine, CrewRow } from './HomeCrew'
 import { useBlobUrl } from './hooks'
 import { StudioMark } from './Mark'
-import { Account, MarkTile } from './chrome/Bar'
 import './home.css'
 
 export function Home() {
@@ -163,33 +162,23 @@ export function Home() {
 
 function HomeBar() {
   const shell = useShell()
-  const { relay, app } = shell.deps
+  const { app } = shell.deps
   const ui = useSyncExternalStore(app.subscribe, app.get)
   const [sharing, setSharing] = useState(false)
   const allow = ui.me?.allow
   return (
-    <header className="hm-bar">
-      <span className="hm-brand">
-        <MarkTile />
-        <span className="hm-studio">Napkin Studio</span>
-        <span className="hm-tool">Production</span>
-        <BetaTag screen={{ stage: 'home' }} />
-        {relay.kind === 'mock' && <span className="mockbadge" title="No relay set: every result is a mock">MOCK</span>}
-      </span>
-      <span />
-      <span className="hm-right">
-        {/* The account menu every bar has: who you are, the theme, Reduce motion, the projects. */}
-        <Account>
-          {/* Who receives the agency's material (features/tenant-limits.clan). */}
-          {allow && <button type="button" className="pt-menurow" onClick={() => setSharing(true)}>Data sharing</button>}
-          {/* Napkin OS's sign-out, only when napkin-web serves the tool (features/os-sign-in.clan). */}
-          {behindNapkinOs(import.meta.env.VITE_RELAY_URL as string | undefined) && (
-            <button type="button" className="pt-menurow" onClick={() => void signOut()}>Sign out</button>
-          )}
-        </Account>
-      </span>
+    <>
+      {/* The slim bar every Production screen wears (Shrey 2026-11-18/19): the brand pill, where you are, and you. */}
+      <PlaceBar place="All projects" account={<>
+        {/* Who receives the agency's material (features/tenant-limits.clan). */}
+        {allow && <button type="button" className="pt-menurow" onClick={() => setSharing(true)}>Data sharing</button>}
+        {/* Napkin OS's sign-out, only when napkin-web serves the tool (features/os-sign-in.clan). */}
+        {behindNapkinOs(import.meta.env.VITE_RELAY_URL as string | undefined) && (
+          <button type="button" className="pt-menurow" onClick={() => void signOut()}>Sign out</button>
+        )}
+      </>} />
       {sharing && allow && <DataSharing allow={allow} onClose={() => setSharing(false)} />}
-    </header>
+    </>
   )
 }
 
