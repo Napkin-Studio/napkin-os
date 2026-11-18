@@ -118,8 +118,8 @@ def test_no_icon_makes_a_claim_of_its_own():
     the words beside an icon carry the claim; the icon never adds one (review fix)."""
     ids = set(graphics.keyword_map())
     assert not ids & set(graphics.ICON_CLAIMS)
-    words = ("trend", "arrow", "check", "thumb", "star", "badge", "award", "trophy", "medal", "ban", "circle-x", "chart-line", "move-up", "move-down")
-    assert not [i for i in ids if any(w in i for w in words)]
+    parts = {"trending", "arrow", "check", "checks", "thumbs", "star", "badge", "award", "trophy", "medal", "ban", "x", "up", "down"}
+    assert not [i for i in ids if set(i.split("-")) & parts]   # whole parts of the id: 'bank' is not 'ban
 
 
 def test_licence_and_source_are_recorded():
