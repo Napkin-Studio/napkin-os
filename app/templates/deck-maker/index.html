@@ -1582,13 +1582,21 @@ var DeckLogic = (function () {
       '<button class="btn" id="strengthen"' + (asked ? ' aria-pressed="true"' : '') + '>' + (asked ? 'Asked' : 'Strengthen with research') + '</button></div>';
   }
 
+  /**
+   * The notice that a brief or research this deck was made from has changed since (GET /upstream, on Start and
+   * Review). A deck is a frozen snapshot: it keeps the version it has and never takes the newer one by itself.
+   */
+  function changedNote() {
+    if (!upChanged.length) return '';
+    return '<div class="upnote" role="status" data-up-changed><b>' + esc(upChanged.map(function (c) { return c.title; }).join(', ')) + ' changed since this deck.</b> This deck keeps it as it was; it does not take the newer one on its own.</div>';
+  }
+
   /** The Brief and Research cards: derived from data.upstream, never stored, Optional when absent. */
   function upstreamCards(s) {
     var u = L.upstreamSummary({ upstream: s.upstream });
     var attached = '<span class="pill ok">Brought in</span>', opt = '<span class="pill plain">Optional</span>';
     var r = u.research, b = u.brief;
-    var changed = upChanged.length ? '<div class="upnote" role="status" data-up-changed><b>' + esc(upChanged.map(function (c) { return c.title; }).join(', ')) + ' changed since this deck.</b> This deck keeps it as it was; it does not take the newer one on its own.</div>' : '';
-    return '<div class="eyebrow dark">Bring in a brief or research (optional)</div>' + changed + '<div class="two">' +
+    return '<div class="eyebrow dark">Bring in a brief or research (optional)</div>' + changedNote() + '<div class="two">' +
       '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">03</span><b>Research</b><div class="spacer"></div>' + (r ? attached : opt) + '</div>' +
         (r ? '<div class="doc"><span class="ico">.clan</span><div><div style="font-size:14px;font-weight:600">' + esc(r.name) + '</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + (r.findings == null ? 'report brought in' : esc(r.findings) + ' findings · ' + esc(r.rejected) + ' rejected') + '</div></div></div>' +
           '<p class="note" style="margin-top:10px">Rejected findings are never used on a slide.' + (r.findings == null ? ' Finding counts show once the Research Tool shares them.' : '') + '</p>' : '<p class="note">No research brought in. Start one from a Research Tool document with Spin off.</p>') + '</section>' +
@@ -1925,7 +1933,7 @@ var DeckLogic = (function () {
     return '<main class="review">' + (ds ? '<div class="lcol">' + nav + deckSide(s, ds) + '</div>' : nav) +
       '<section><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px"><span class="mono" style="font-size:12px;color:var(--ink3)">' + (inAx ? 'Appendix ' : 'Slide ') + String(n).padStart(2, '0') + '</span><span class="pill ' + st.tone + '">' + st.label + '</span><div class="spacer"></div>' +
         (inAx ? '' : '<button class="btn sm" data-act="appendix">Move to appendix</button>') + '<button class="btn sm" data-tab="evidence">Why this slide</button>' + approve + '</div>' +
-      (ds ? approveNote(ds) : '') +
+      (ds ? approveNote(ds) : '') + (upChanged.length ? '<div style="margin-bottom:12px">' + changedNote() + '</div>' : '') +
       '<div style="margin-bottom:12px">' + builtLine(builtOf(s)) + '</div>' +
       '<div class="slide"><div class="kick">' + esc(sl.section) + '</div><h2>' + esc(sl.title) + '</h2><ul>' + s1.items + '</ul>' +
         '<div class="foot"><span>' + esc(agency) + ' · ' + esc(s.deck.meta && s.deck.meta.client) + '</span><div class="spacer"></div><span>' + (inAx ? 'A' + n : String(n).padStart(2, '0')) + '</span></div></div>' +

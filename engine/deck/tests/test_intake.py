@@ -177,6 +177,44 @@ def test_rejected_finding_in_the_chain_reaches_no_slide():
     assert inp.brief["insight"]["value"] is None   # the field that cited it was dropped
 
 
+#: The Research Tool's own example (fabricated, committed): the same files crates/clan-sdk/tests/spinoff.rs
+#: spins off Research -> Brief -> Deck, which proves the members reach the deck byte for byte and the chain whole.
+RESEARCH_EXAMPLE = Path(__file__).resolve().parents[3] / "app/templates/campaign-research/example"
+RESEARCH_DOC = "7c1e9a42-5b3d-4f8e-9a6c-2d1f0e8b4a17"
+REJECTED_FINDING = "fi_01JA0F5E"   # rejected by a person in the example (d_01JA0D07REJ, reject_finding)
+
+
+def _research_example():
+    """The example's data and members as a spun-off Deck holds them (the SDK test proves the carry)."""
+    rd = lambda n: yaml.safe_load((RESEARCH_EXAMPLE / n).read_text())  # noqa: E731
+    data = rd("shared/data.yaml")
+    members = {"facts": rd("shared/facts.yaml"), "findings": rd("shared/findings.yaml"),
+               "decisions": rd("agent/decision-chain.yaml")}
+    return data, members
+
+
+@pytest.mark.parametrize("member_says", ["rejected", "proposed"])
+def test_the_research_tools_rejected_finding_reaches_no_slide_after_three_hops(member_says):
+    """Research -> Brief -> Deck on the Research Tool's real shapes: the brief and the research side by side
+    under data.upstream, the members and the carried chain as the spin-off leaves them. The finding a person
+    rejected is never offered to a stage, and a slide citing it fails validation. With ``proposed`` the
+    findings member has lost the status and the chain's verdict (``<doc>#findings[<id>]``) alone keeps it out."""
+    research, members = _research_example()
+    findings = members["findings"]["findings"]
+    assert any(f["id"] == REJECTED_FINDING and f["status"] == "rejected" for f in findings)
+    members["findings"] = {"findings": [{**f, "status": member_says} if f["id"] == REJECTED_FINDING else f for f in findings]}
+    data = {"upstream": {RESEARCH_DOC: research, "brief-doc": _brief_clan_data()}, "inputs": {"prompt": {"text": ""}}}
+
+    inp = inputs.from_upstream(data, members)
+    assert inp.has_brief() and inp.has_research() and inp.research_doc_id == RESEARCH_DOC
+    assert inp.findings[REJECTED_FINDING]["status"] == "rejected"
+    assert any(f["status"] == "verified" for f in inp.findings.values())
+    block = stages._facts_block(inp)
+    assert f"[{REJECTED_FINDING}]" not in block and "FINDING (verified)" in block
+    sl = _sl(claims=[{"text": "The occasion was taken", "refs": [REJECTED_FINDING], "basis": "sourced"}])
+    assert ("rejected_used", "error") in {(f["check"], f["level"]) for f in validate.run(_deck([sl]), inp)}
+
+
 def test_load_doc_reads_docx_md_txt_eml_and_keeps_pdf_page_locators(tmp_path, monkeypatch):
     """Every supported type reads; a PDF keeps its [pN] markers and a page count; nothing is clipped."""
     docx = pytest.importorskip("docx")
