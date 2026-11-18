@@ -145,7 +145,7 @@ describe('scope', () => {
     expect(scopeOf(own, 'fset_01K7A0000000000000000000F1').filter((i) => i.kind === 'brief')).toHaveLength(1)
   })
 
-  it('Make all sizes reads a brief linked straight to the film\u2019s Format set, not the film\u2019s (re-test N2)', () => {
+  it('Make all sizes reads a brief linked straight to the film\u2019s newest Format set, not the film\u2019s (re-test N2)', () => {
     const fs = (id: string, master: { kind: 'video' | 'render'; id: string }) => ({
       id, v: 1, field_v: {}, master, pack: { pack_id: 'film', pack_version: '1' },
     }) as unknown as ProductionDocument['format_sets'][string]
@@ -160,8 +160,10 @@ describe('scope', () => {
     // The plan, on the Film node, reads it from the set (runner extras.briefFrom).
     expect(withBrief(own, 'cutdown', { kind: 'format_set', id: OLD }, {}).input.brief?.title).toBe('First Light DE')
     expect(withBrief(own, 'cutdown', { kind: 'video', id: VIDEO }, {}).input.brief?.title).toBe('First Light brief')
-    // The newest set with a link decides; a set of another film never does.
+    // Only the newest set decides (owner 2026-11-18): a newer set with no link hands it back to the film's own
+    // brief, whatever the older set is linked to; its own link decides; a set of another film never does.
     own.format_sets[NEW] = fs(NEW, { kind: 'video', id: VIDEO })
+    expect(sizesBriefOf(own, VIDEO)).toBeUndefined()
     const newer = withBrief_(own, b1, link(b1.id, { kind: 'format_set', id: NEW }))
     expect(sizesBriefOf(newer, VIDEO)).toEqual({ setId: NEW, briefId: b1.id })
     expect(sizesBriefOf(newer, 'video_other')).toBeUndefined()

@@ -100,21 +100,21 @@ export function briefForJob(d: Doc, node: LinkEndpoint): BriefInScope | undefine
 }
 
 /**
- * The brief linked straight to a Format set made from this film (its master the film, or an ad render of
- * it), newest set first: what Make all sizes reads (re-test N2, 2026-11-18). The sizes are planned on the
- * Film node and land in a new set, so neither read the set the person linked, while its Booth said "the sizes
- * read this brief". The explicit link overrides the film's own brief, as on any node. Undefined: none linked.
+ * The brief linked straight to the NEWEST Format set made from this film (its master the film, or an ad
+ * render of it): what Make all sizes reads (re-test N2; owner 2026-11-18). The sizes are planned on the Film
+ * node and land in a new set, so neither read the set the person linked, while its Booth said "the sizes read
+ * this brief". The explicit link overrides the film's own brief, as on any node. Only the newest set decides:
+ * when it has no brief link the film's own brief does, whatever an older set is linked to. Undefined: the
+ * newest set has none (or the film has no set).
  */
 export function sizesBriefOf(d: Doc, videoId: Id): { setId: Id; briefId: Id } | undefined {
-  const sets = Object.values(d.format_sets ?? {}).filter((s) => {
+  const newest = Object.values(d.format_sets ?? {}).filter((s) => {
     const m = s.master
     return (m.kind === 'video' && m.id === videoId) || (m.kind === 'render' && d.renders?.[m.id]?.video_id === videoId)
-  }).sort((a, b) => (a.id < b.id ? 1 : -1))
-  for (const s of sets) {
-    const l = Object.values(d.links ?? {}).find((x) => x.role === 'brief' && x.from.kind === 'brief' && x.to.kind === 'format_set' && x.to.id === s.id && d.briefs?.[x.from.id])
-    if (l) return { setId: s.id, briefId: l.from.id }
-  }
-  return undefined
+  }).sort((a, b) => (a.id < b.id ? 1 : -1))[0]
+  if (!newest) return undefined
+  const l = Object.values(d.links ?? {}).find((x) => x.role === 'brief' && x.from.kind === 'brief' && x.to.kind === 'format_set' && x.to.id === newest.id && d.briefs?.[x.from.id])
+  return l ? { setId: newest.id, briefId: l.from.id } : undefined
 }
 
 /** JobInput.brief: the title and the spine, nothing else of the brief. */
