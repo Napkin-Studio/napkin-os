@@ -210,7 +210,7 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
                 const why = plan.lengths.find((x) => Math.abs(x.lengthS - l) < 0.5)?.why
                 return (
                   <div key={l} className="cf-lane" role="group" aria-label={`The ${l} s cut`}>
-                    <div className="cf-lanehead">{l} s · keeps {windows.length} of {body.length} shots{over > 0.05 ? ` · over by ${over.toFixed(1)} s: drop a beat` : over < -0.05 ? ` · ${(-over).toFixed(1)} s short: the end card holds longer, or keep a beat` : ''}</div>
+                    <div className="cf-lanehead">{l} s · keeps {windows.length} of {body.length} shots{over > 0.05 ? ` · over by ${over.toFixed(1)} s: drop a beat` : over < -0.05 ? ` · comes out ${(-over).toFixed(1)} s short: keep a beat to fill it` : ''}</div>
                     {why && <p className="cf-note">{why}</p>}
                     {body.map((s) => {
                       const w = windows.find((x) => x.shotId === s.shotId)

@@ -219,10 +219,9 @@ def _time_for(share: float) -> float:
     return (lo + hi) / 2
 
 
-def card_graph(first: int, version: str, layout: dict, fps: int = FPS, card_s: float = CARD_S) -> tuple[list[str], list[str]]:
+def card_graph(first: int, version: str, layout: dict, fps: int = FPS) -> tuple[list[str], list[str]]:
     """(extra ffmpeg inputs, filter chains ending in [card]). Input `first` is the
-    ground; the PNGs and the two moving covers follow it in input order. `card_s`: how long
-    the card runs; its moves finish within CARD_S, and a longer card holds still after them."""
+    ground; the PNGs and the two moving covers follow it in input order."""
     L = layout
     w, h, m = L["w"], L["h"], L["mark"]
     ground = _hex(GROUND[version])
@@ -234,16 +233,16 @@ def card_graph(first: int, version: str, layout: dict, fps: int = FPS, card_s: f
     lx, ly, lw, lt = L["line"]
 
     assets = ["mark", "word", "made", *(f"fig-{f['agent']}" for f in L["figs"])]
-    inputs = ["-f", "lavfi", "-t", _secs(card_s), "-i", f"color=c={ground}:s={w}x{h}:r={fps}"]
+    inputs = ["-f", "lavfi", "-t", f"{CARD_S:g}", "-i", f"color=c={ground}:s={w}x{h}:r={fps}"]
     for name in assets:
-        inputs += ["-loop", "1", "-framerate", str(fps), "-t", _secs(card_s), "-i", L["paths"][name]]
+        inputs += ["-loop", "1", "-framerate", str(fps), "-t", f"{CARD_S:g}", "-i", L["paths"][name]]
     cover_w = round(L["lock_w"] + m + 4)
     line_cover_w = round(lw + 4)
     # overlay snaps y to even rows on yuv420, so the cover is taller than the line and
     # starts 2 rows above it (the crew is drawn after it, so it hides nothing else).
     line_cover_h = lt + 4
-    inputs += ["-f", "lavfi", "-t", _secs(card_s), "-i", f"color=c={ground}:s={cover_w}x{wh}:r={fps}"]
-    inputs += ["-f", "lavfi", "-t", _secs(card_s), "-i", f"color=c={ground}:s={line_cover_w}x{line_cover_h}:r={fps}"]
+    inputs += ["-f", "lavfi", "-t", f"{CARD_S:g}", "-i", f"color=c={ground}:s={cover_w}x{wh}:r={fps}"]
+    inputs += ["-f", "lavfi", "-t", f"{CARD_S:g}", "-i", f"color=c={ground}:s={line_cover_w}x{line_cover_h}:r={fps}"]
     i_mark, i_word, i_made = first + 1, first + 2, first + 3
     i_figs = range(first + 4, first + 4 + len(L["figs"]))
     i_cover, i_line_cover = first + 4 + len(L["figs"]), first + 5 + len(L["figs"])
