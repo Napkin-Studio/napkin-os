@@ -43,9 +43,10 @@ test('each eye shows and hides its layer, Frame stays unless clicked, and hiding
   // A placed text starts empty ("Your words" is only its placeholder) and goes if left empty (re-test 6c).
   await page.keyboard.type('Hello')
   await page.keyboard.press('Escape')
-  await page.getByRole('button', { name: 'Hide Text' }).click()
+  // A text layer is named by its words (re-test R3).
+  await page.getByRole('button', { name: 'Hide "Hello"' }).click()
   await expect(page.locator('.ie-text')).toHaveCount(0)
-  await page.getByRole('button', { name: 'Show Text' }).click()
+  await page.getByRole('button', { name: 'Show "Hello"' }).click()
   await expect(page.locator('.ie-text')).toHaveCount(1)
 
   // Frame's eye: with Frame hidden, only the Fill is left.
@@ -70,7 +71,7 @@ test('Apply leaves hidden layers out, says so, and does not keep them on the new
   await page.mouse.click(tx, ty)
   await page.keyboard.type('Hidden')
   await page.keyboard.press('Escape')
-  await page.getByRole('button', { name: 'Hide Text' }).first().click() // the newest text is first (front)
+  await page.getByRole('button', { name: 'Hide "Hidden"' }).click() // a text layer is named by its words (re-test R3)
   await expect(page.locator('.ie-pill .ie-n-long')).toHaveText('1 edit not applied · 1 hidden layer is left out')
   await page.getByRole('button', { name: 'Version 1 of 1' }).click()
   await expect(page.locator('.ie-vfoot')).toContainText('Apply saves your 1 edit as v2. v1 stays. 1 hidden layer is left out and not kept.')
@@ -97,7 +98,7 @@ test('Apply leaves hidden layers out, says so, and does not keep them on the new
   // The hidden text does not ride on to v2 (owner 2026-11-18): v2 starts with no edits.
   expect(await session(page, saved.id)).toEqual({ edits: [], hidden: [] })
   expect(await session(page, seeded.frameId)).toEqual({ edits: [], hidden: [] })
-  await expect(page.getByRole('button', { name: 'Show Text' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Show "Hidden"' })).toHaveCount(0)
   await expect(page.locator('.ie-pill')).toHaveText('No edits yet')
 })
 
