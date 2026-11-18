@@ -218,6 +218,15 @@ def to_pdf(pptx, outdir, timeout: int = 180):
     return done
 
 
+def _recipe_prefs(profile: dict, fmt: str) -> dict:
+    """deck-types: what the layout plan takes from the type's recipe (profiles.recipe): ``{prefer, prefer_type}``, only with spec.RECIPES and
+    spec.LOOK_V3 on and a recipe that prefers a layout the catalogue can draw; ``{}`` otherwise, so the plan's prefs are today's byte for byte."""
+    if not profiles.recipes_on():
+        return {}
+    r = profiles.recipe(profile, fmt)
+    return {"prefer": r["layouts"], "prefer_type": r["type"]} if r["layouts"] else {}
+
+
 def _stamp_type(deck: dict, profile: dict, choice: dict) -> None:
     """Record the deck type in the deck: ``meta.built_from.type`` (the profile id) and ``.profile`` (id,
     label, how it was chosen and why), and ``meta.profile`` when the person was asked (answered or skipped)
@@ -379,7 +388,7 @@ def _repair(a, inp, profile: dict, deck: dict, findings: list, qa: dict, pics, p
         if p.parent == a.stages or got.get("stages") == str(a.stages.resolve()):   # out/'s record is used only when it was written for these --stages
             record = got
             break
-    ctx = {"inp": inp, "audience": a.audience, "policy": policy, "library": layouts.load(), "prefs": {"density": level, "text_mode": tm, "notes": not a.no_notes}, "swaps": swaps, "base_deck": base_deck,
+    ctx = {"inp": inp, "audience": a.audience, "policy": policy, "library": layouts.load(), "prefs": {"density": level, "text_mode": tm, "notes": not a.no_notes, **_recipe_prefs(profile, a.format)}, "swaps": swaps, "base_deck": base_deck,
            "pinned": pinned, "out": out, "stages": a.stages, "live": a.live, "approve_shorten": a.approve_shorten, "call_fn": call_fn, "spent": spent,
            "run_cap": repair.run_cap(), "shorten_ledger": _shorten_ledger(a, inp, deck), "record": record, "render_fn": render_fn, "pdf_fn": pdf_fn, "qa_fn": qa_fn}
     iss0 = repair.I.derive(findings, qa, deck, policy, 0)
@@ -851,6 +860,9 @@ def main(argv=None):
     profile = profiles.load(choice["type"])
     kind = profile["kind"]                     # which assembler: agency or investor
     rep["type"] = {"id": profile["id"], "source": choice["source"], "note": choice["note"]}
+    if profiles.recipes_on():   # deck-types: the recipe this run builds from, resolved once (flag off: no key, the report is today's)
+        rec = profiles.recipe(profile, a.format)
+        rep["recipe"] = {"type": rec["type"], "format": rec["format"], "length": rec["length"], "layouts": rec["layouts"], "not_built": rec["not_built"]}
     rep["type_question"] = intake.type_card_for(inp)   # computed in code: it exists even when no a0 stage ran
     supply = intake.supply_questions(inp, kind, profile if profile["arrange"] == "spine" else None)   # computed in code: what only the person knows
     rep["supply_questions"] = supply
@@ -1057,7 +1069,8 @@ def main(argv=None):
             if zones:
                 rep["text_zones"] = {sid: z for sid, z in zones}
         base_deck = deck   # pictures are already bound here: the repair loop re-plans from this deck and never asks for a picture
-        replan = lambda d: layouts.plan(d, prefs={"density": level, "text_mode": tm, "repair": bool(stop_for_shorten), "notes": not a.no_notes}, swaps=swaps)   # noqa: E731
+        rprefs = _recipe_prefs(profile, a.format)   # deck-types: the recipe's layout preferences ({} with the flag off)
+        replan = lambda d: layouts.plan(d, prefs={"density": level, "text_mode": tm, "repair": bool(stop_for_shorten), "notes": not a.no_notes, **rprefs}, swaps=swaps)   # noqa: E731
         deck, plan_issues, _pending = replan(base_deck)
         if layouts.unmade_planned(deck):   # slots planned for pictures nobody has paid for: back to empty (in the base deck too, so a repair round never plans them), then plan again without them (free, in code)
             imagegen.unplan(base_deck, rep.get("images") or {})

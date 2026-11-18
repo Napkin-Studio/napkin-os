@@ -19,6 +19,8 @@ length:
   max_slides: 18
   minutes: 20
   respect_stated_limit: true   # a limit the inputs state for the presentation replaces max_slides (assemble.stated_limit)
+  target: 12                  # deck-types: soft target (Q3: 12 / 15, judgement, not measured)
+  cap: 15                     # deck-types: ADVISORY only (validate pitch_cap, a warning)
 rubric_weights:
   basis: "default, not validated"
   source: "rubric.json 2026-10-16, adjusted per GUIDE.md 3.3 (our judgement, not a published split)"
@@ -56,4 +58,23 @@ questions:
     options: []
     allow_text: true
     address: brief.competitor_context
+# deck-types (features/deck-types.clan): the type's recipe, read only with spec.RECIPES and spec.LOOK_V3 on (DECK_RECIPES=1);
+# with the flag off nothing reads it. A preferred layout is tried before the general rules and kept only when it accepts the
+# slide's own blocks and fits as is or shrunk (layouts.plan); a preference never adds, repeats or stretches a word. A layout
+# not built yet, or one that does not take that slide type yet, is listed by profiles.recipe as not built and the general
+# rules take the slide. Numbers and choices are Napkin defaults, not validated (design.recipe_table).
+# kpi_row and big_number take traction and market only when stage i wrote a stats block (their own 'when'): prose is never recast
+# as figures. Not built yet: why_now reframe, financials chart_full, ask close (none takes that slide type yet).
+recipe:
+  layouts:
+    problem: [statement_points]
+    why_now: [reframe]
+    solution: [statement_points]
+    product: [picture_column]
+    market: [big_number, kpi_row]
+    traction: [kpi_row, big_number]
+    competition: [comparison_grid]
+    financials: [chart_full, native_table]
+    founders: [people_cards]
+    ask: [close]
 sources: [GUIDE.md 3.3, NAPKIN-EDGE.md gap 10, rubric.json]

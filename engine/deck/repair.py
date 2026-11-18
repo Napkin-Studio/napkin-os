@@ -845,6 +845,7 @@ def record_sig(rec: dict) -> str:
 
 def _replan(ctx: dict, work_base: dict, fixes: dict, stop: bool = False) -> tuple:
     prefs = {"density": ctx["prefs"].get("density"), "text_mode": ctx["prefs"].get("text_mode"), "repair": stop, "notes": ctx["prefs"].get("notes", True)}
+    prefs.update({k: ctx["prefs"][k] for k in ("prefer", "prefer_type") if ctx["prefs"].get(k)})   # deck-types: the recipe's layout preferences, when on
     return layouts.plan(work_base, ctx["library"], prefs, ctx["swaps"], {}, fixes)
 
 

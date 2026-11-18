@@ -28,7 +28,8 @@ copy_number       a number (10 or more) in creative copy that appears nowhere in
                   states a figure must take it from the brief or the research
 pitch_length      a pitch whose presented story (before the Appendix divider) runs past spec.PITCH_MAX
 pitch_cap         (spec.LOOK_V3) a pitch with no stated limit presenting more than spec.PITCH_CAP slides: ADVISORY, a warning
-                  that never withholds a deck (its target is spec.PITCH_TARGET)
+                  that never withholds a deck (its target is spec.PITCH_TARGET). With spec.RECIPES on, the deck type's own
+                  cap and target (profiles.recipe: none for a tender), on spine types too
 role_words        (spec.LOOK_V3) a presented slide's on-screen words outside its role's window (spec.ROLE_WINDOWS: statement
                   10-35, argument 35-70): ADVISORY, a warning; a shortfall is met by a brief field, never by a repeated line
 rule_broken       a brief rule's quoted phrase ("Avoid 'the Netflix of X' framing") appears in the deck
@@ -445,7 +446,14 @@ def run(deck: dict, inp, audience: str = "review", profile: dict | None = None) 
     if deck["meta"].get("format", "pitch") == "pitch" and len(story) > length.get("max_slides", spec.PITCH_MAX):
         what = f"a {profile['label'].lower() if profile else 'deck'} presents at most {length['max_slides']} ({length['source']})" if length else f"an agency pitch presents at most {spec.PITCH_MAX}"
         add("pitch_length", "warn", None, f"{len(story)} presented slides; {what} (move the rest behind the Appendix divider)")
-    if spec.LOOK_V3 and deck["meta"].get("format", "pitch") == "pitch" and not length and len(story) > spec.PITCH_CAP:   # deck-look: ADVISORY only
+    if profiles.recipes_on():   # deck-types: the type's own target and cap (a spine type records its profile length: only a stated one silences the cap)
+        rl = profiles.recipe(profile, deck["meta"].get("format", "pitch"))["length"]
+        stated = bool(length) and length.get("source") != "profile"
+        if deck["meta"].get("format", "pitch") == "pitch" and not stated and rl["cap"] is not None and len(story) > rl["cap"]:   # ADVISORY only
+            aim = f"aims at {rl['target']} and " if rl["target"] is not None else ""
+            add("pitch_cap", "warn", None, f"{len(story)} presented slides; a {profile['label'].lower() if profile else 'pitch'} {aim}is usually at most {rl['cap']} "
+                f"(advisory: asked-for routes and executions may rightly run longer; nothing is withheld for length)")
+    elif spec.LOOK_V3 and deck["meta"].get("format", "pitch") == "pitch" and not length and len(story) > spec.PITCH_CAP:   # deck-look: ADVISORY only
         add("pitch_cap", "warn", None, f"{len(story)} presented slides; a pitch aims at {spec.PITCH_TARGET} and is usually at most {spec.PITCH_CAP} "
             f"(advisory: asked-for routes and executions may rightly run longer; nothing is withheld for length)")
     if spec.LOOK_V3:   # deck-look step 6 (Q13): the word windows by role, ADVISORY; never met by repeating a sentence or by words a layout asks for

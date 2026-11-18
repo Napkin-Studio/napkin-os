@@ -10,7 +10,8 @@ this module reads those files; it never rewords a slide. A profile may
 * set the length (``length``: the most presented slides, minutes, an optional least);
 * name the validator checks that are errors rather than warnings (``strict``: validate.run);
 * append guidance lines to a stage's prompt (``prompt_guidance``: stages._sysmsg) and ask type-specific
-  intake questions (``questions``).
+  intake questions (``questions``);
+* hold a recipe (deck-types: ``recipe`` and ``length.target / cap``, resolved by ``recipe``, read only when ``recipes_on``).
 
 A profile may not add a fact, a name or a legal line to a slide (ADR 0023, 0028): guidance reaches a
 model's prompt, and the model's words are still traced, cited and checked like any other.
@@ -52,8 +53,10 @@ SCHEMA = {
     "id": (str, True), "label": (str, True), "one_line": (str, True), "kind": (str, True), "arrange": (str, True),
     "spine": (list, True), "appendix": (list, False), "buyer_order": (list, False), "stages": (list, True),
     "length": (dict, True), "rubric_weights": (dict, True), "strict": (dict, True), "prompt_guidance": (dict, True),
-    "questions": (list, True), "sources": (list, False),
+    "questions": (list, True), "sources": (list, False), "recipe": (dict, False),
 }
+#: deck-types: the keys of a profile's optional ``recipe`` block (design.schema.recipe). ``full`` repeats them for format full.
+RECIPE_KEYS = ("layouts", "density", "pictures", "brand", "titles", "size", "format", "full")
 
 
 class ProfileError(ValueError):
@@ -107,6 +110,9 @@ def validate_profile(p) -> list:
             errs.append(f"length.{k} must be a whole number of at least 1")
     if L.get("min_slides") is not None and not (_is_int(L["min_slides"]) and 1 <= L["min_slides"] <= L.get("max_slides", 0)):
         errs.append("length.min_slides must be a whole number from 1 to max_slides")
+    errs += _length_target_errors(L)
+    if "recipe" in p:
+        errs += recipe_errors(p["recipe"], p["spine"])
     w = p["rubric_weights"]
     ws = w.get("weights")
     if not isinstance(ws, dict) or set(ws) != set(RUBRIC_IDS):
@@ -139,6 +145,178 @@ def validate_profile(p) -> list:
                 and addr[6:].split(".")[0] in BRIEF_FIELDS and isinstance(q.get("allow_text"), bool)):
             errs.append(f"questions: {q!r} needs a 'q_' id, text, allow_text and a 'brief.<field>' address")
     return errs
+
+
+# ---------------------------------------------------------------- deck-types: the recipe (features/deck-types.clan)
+#
+# A deck type is a full recipe: besides its spine, a profile may hold ``length.target`` / ``length.cap`` and a ``recipe`` block
+# (layout preferences per slide type, density, pictures, brand, titles, size, format, and ``full`` overrides). ``recipe`` resolves it
+# once into one dict whose every key is present; a profile with neither gives today's constants exactly. Readers use it only when
+# ``recipes_on`` (spec.RECIPES and spec.LOOK_V3): with the flag off nothing reads it and a build is byte-identical.
+
+def _length_target_errors(L: dict) -> list:
+    """``length.target`` and ``length.cap``: whole numbers or null (null: no target, no advisory cap; tender), with
+    min_slides <= target <= cap <= max_slides wherever both sides are given."""
+    errs = []
+    for k in ("target", "cap"):
+        if k in L and L[k] is not None and not (_is_int(L[k]) and L[k] >= 1):
+            errs.append(f"length.{k} must be a whole number of at least 1, or null")
+    if errs:
+        return errs
+    chain = [("min_slides", L.get("min_slides")), ("target", L.get("target")), ("cap", L.get("cap")), ("max_slides", L.get("max_slides"))]
+    given = [(k, v) for k, v in chain if _is_int(v)]
+    for (k1, v1), (k2, v2) in zip(given, given[1:]):
+        if v1 > v2:
+            errs.append(f"length.{k1} ({v1}) must not be over length.{k2} ({v2})")
+    return errs
+
+
+def recipe_errors(r, spine: list, _nested: bool = False) -> list:
+    """Errors in a ``recipe`` block against the engine's closed sets (design.schema.recipe); an empty list means valid.
+
+    * ``layouts``: ``{slide type in the spine: [layout id, ...]}``, at most spec.RECIPE_MAX_PREFS each; an id must be a layout the engine
+      knows (spec.LAYOUT_IDS, LAYOUT_IDS_V3, or one deck-look has named and not built yet, spec.LAYOUT_IDS_PLANNED). An id that exists
+      but does not take that slide type yet is not an error: ``recipe`` lists it as not built and the general rules take the slide.
+    * ``density``: ``level`` in spec.DENSITY_LEVELS, ``roles`` {slide type: statement | argument}, ``windows`` {role: [lo, hi]}, 1 <= lo < hi
+      and hi at most the largest slide budget.
+    * ``pictures``: ``on`` in spec.PICTURES_ON except custom, ``generate`` in spec.RECIPE_GENERATE, ``types`` within spec.PICTURE_SLIDE_TYPES.
+    * ``brand`` {strict: bool}, ``titles`` {form: spec.RECIPE_TITLE_FORMS}, ``size`` in spec.RECIPE_SIZES, ``format`` in spec.FORMATS,
+      ``full``: the same keys again (no ``full`` or ``format`` inside)."""
+    if not isinstance(r, dict):
+        return ["recipe must be an object"]
+    errs = []
+    allowed = [k for k in RECIPE_KEYS if not (_nested and k in ("full", "format"))]
+    errs += [f"recipe: unknown key {k!r}" for k in r if k not in allowed]
+    known = set(spec.LAYOUT_IDS) | set(spec.LAYOUT_IDS_V3) | set(spec.LAYOUT_IDS_PLANNED)
+    lay = r.get("layouts")
+    if lay is not None:
+        if not isinstance(lay, dict):
+            errs.append("recipe.layouts must be an object of slide type -> layout ids")
+        else:
+            for t, ids_ in lay.items():
+                if t not in spec.SLIDE_TYPES:
+                    errs.append(f"recipe.layouts: unknown slide type {t!r}")
+                elif t not in spine:
+                    errs.append(f"recipe.layouts: {t} is not in the spine")
+                if not (isinstance(ids_, list) and ids_ and all(isinstance(x, str) for x in ids_)):
+                    errs.append(f"recipe.layouts.{t} must be a list of layout ids")
+                    continue
+                if len(ids_) > spec.RECIPE_MAX_PREFS:
+                    errs.append(f"recipe.layouts.{t}: at most {spec.RECIPE_MAX_PREFS} layouts")
+                if len(set(ids_)) != len(ids_):
+                    errs.append(f"recipe.layouts.{t}: a layout is listed twice")
+                errs += [f"recipe.layouts.{t}: unknown layout {x!r}" for x in ids_ if x not in known]
+    d = r.get("density")
+    if d is not None:
+        if not isinstance(d, dict) or set(d) - {"level", "roles", "windows"}:
+            errs.append("recipe.density must be an object of level, roles and windows")
+        else:
+            if "level" in d and d["level"] not in spec.DENSITY_LEVELS:
+                errs.append(f"recipe.density.level must be one of {', '.join(spec.DENSITY_LEVELS)}")
+            roles = d.get("roles") or {}
+            if not isinstance(roles, dict):
+                errs.append("recipe.density.roles must be an object of slide type -> role")
+            else:
+                for t, role in roles.items():
+                    if t not in spec.SLIDE_TYPES:
+                        errs.append(f"recipe.density.roles: unknown slide type {t!r}")
+                    if role not in spec.ROLE_WINDOWS:
+                        errs.append(f"recipe.density.roles.{t} must be one of {', '.join(spec.ROLE_WINDOWS)}")
+            wins = d.get("windows") or {}
+            top = max(v["words"] for v in spec.SLIDE_TYPES.values())
+            if not isinstance(wins, dict):
+                errs.append("recipe.density.windows must be an object of role -> [lo, hi]")
+            else:
+                for role, w in wins.items():
+                    if role not in spec.ROLE_WINDOWS:
+                        errs.append(f"recipe.density.windows: unknown role {role!r}")
+                    if not (isinstance(w, list) and len(w) == 2 and all(_is_int(x) for x in w) and 1 <= w[0] < w[1] <= top):
+                        errs.append(f"recipe.density.windows.{role} must be [lo, hi] whole numbers, 1 <= lo < hi <= {top}")
+    pc = r.get("pictures")
+    if pc is not None:
+        if not isinstance(pc, dict) or set(pc) - {"on", "generate", "types"}:
+            errs.append("recipe.pictures must be an object of on, generate and types")
+        else:
+            if "on" in pc and (pc["on"] not in spec.PICTURES_ON or pc["on"] == "custom"):
+                errs.append(f"recipe.pictures.on must be one of {', '.join(x for x in spec.PICTURES_ON if x != 'custom')}")
+            if "generate" in pc and pc["generate"] not in spec.RECIPE_GENERATE:
+                errs.append(f"recipe.pictures.generate must be one of {', '.join(spec.RECIPE_GENERATE)}")
+            if "types" in pc and not (isinstance(pc["types"], list) and set(pc["types"]) <= set(spec.PICTURE_SLIDE_TYPES)):
+                errs.append("recipe.pictures.types must be picture slide types (spec.PICTURE_SLIDE_TYPES): an evidence slide takes no picture")
+    b = r.get("brand")
+    if b is not None and not (isinstance(b, dict) and set(b) <= {"strict"} and isinstance(b.get("strict", False), bool)):
+        errs.append("recipe.brand must be {strict: true | false}")
+    ti = r.get("titles")
+    if ti is not None and not (isinstance(ti, dict) and set(ti) <= {"form"} and ti.get("form", "claim") in spec.RECIPE_TITLE_FORMS):
+        errs.append(f"recipe.titles must be {{form: {' | '.join(spec.RECIPE_TITLE_FORMS)}}}")
+    if "size" in r and r["size"] not in spec.RECIPE_SIZES:
+        errs.append(f"recipe.size must be one of {', '.join(spec.RECIPE_SIZES)}")
+    if "format" in r and r["format"] not in spec.FORMATS:
+        errs.append(f"recipe.format must be one of {', '.join(spec.FORMATS)}")
+    if "full" in r and not _nested:
+        errs += [e.replace("recipe", "recipe.full", 1) for e in recipe_errors(r["full"], spine, _nested=True)]
+    return errs
+
+
+def recipes_on() -> bool:
+    """True when the recipe readers run: spec.RECIPES (env DECK_RECIPES=1) and spec.LOOK_V3 both on (design.rules: LOOK_V3)."""
+    return bool(spec.RECIPES and spec.LOOK_V3)
+
+
+def recipe_defaults(fmt: str = "pitch") -> dict:
+    """The recipe of a type with no ``recipe`` block and no ``length.target / cap``: today's constants, every key present."""
+    return {
+        "type": None, "format": fmt, "default_format": "pitch",
+        "length": {"target": spec.PITCH_TARGET, "cap": spec.PITCH_CAP},
+        "layouts": {}, "not_built": {},
+        "density": {"level": spec.DENSITY_DEFAULTS.get(fmt, "detailed"), "roles": dict(spec.ROLE_OF_TYPE),
+                    "windows": {k: list(v) for k, v in spec.ROLE_WINDOWS.items()}},
+        "pictures": {"on": spec.PICTURES_ON[0], "generate": "all", "types": list(spec.PICTURE_SLIDE_TYPES)},
+        "brand": {"strict": False}, "titles": {"form": "claim"}, "size": spec.RECIPE_SIZES[0],
+    }
+
+
+def recipe(profile: dict | None, fmt: str = "pitch") -> dict:
+    """The resolved recipe of a deck type for a format (pitch | full): a fresh dict with every key present (``recipe_defaults`` for any
+    key the profile leaves out; ``full`` overrides apply for format full). ``length``: the profile's ``length.target / cap`` (null: none),
+    except that an env DECK_PITCH_TARGET / CAP set for the run wins (spec.PITCH_LENGTH_FROM_ENV). ``layouts``: the preferences the
+    catalogue can draw today (the layout exists and takes the slide type), in the profile's order; ``not_built``: the ones it cannot
+    yet (a layout deck-look has not built, or one that does not take that slide type), which the general rules stand in for.
+    Pure data: no reader branches on the type's id."""
+    out = recipe_defaults(fmt)
+    if not profile:
+        return out
+    out["type"] = profile.get("id")
+    L = profile.get("length") or {}
+    for k in ("target", "cap"):
+        if k in L and not spec.PITCH_LENGTH_FROM_ENV[k]:
+            out["length"][k] = L[k]
+    r = copy.deepcopy(profile.get("recipe") or {})
+    parts = [r] + ([r["full"]] if fmt == "full" and isinstance(r.get("full"), dict) else [])
+    for part in parts:
+        if "layouts" in part:
+            out["layouts"] = {t: list(v) for t, v in part["layouts"].items()}
+        d = part.get("density") or {}
+        if "level" in d:
+            out["density"]["level"] = d["level"]
+        out["density"]["roles"].update(d.get("roles") or {})
+        out["density"]["windows"].update({k: list(v) for k, v in (d.get("windows") or {}).items()})
+        out["pictures"].update(part.get("pictures") or {})
+        out["brand"].update(part.get("brand") or {})
+        out["titles"].update(part.get("titles") or {})
+        for k in ("size",):
+            if k in part:
+                out[k] = part[k]
+    if "format" in r:
+        out["default_format"] = r["format"]
+    from . import layouts   # late: layouts imports images (Pillow); a profile check without a recipe never needs it
+    cat = layouts.catalogue()
+    usable, missing = {}, {}
+    for t, ids_ in out["layouts"].items():
+        for x in ids_:
+            (usable if t in cat.get(x, ()) else missing).setdefault(t, []).append(x)
+    out["layouts"], out["not_built"] = usable, missing
+    return out
 
 
 _CACHE: dict = {}

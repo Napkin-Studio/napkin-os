@@ -92,6 +92,21 @@ def load(directory: Path | None = None, force: bool = False) -> dict:
     return lib
 
 
+def catalogue() -> dict:
+    """``{layout id: [slide types]}`` of every layout file, ``layouts/v3`` laid over the base whatever spec.LOOK_V3 says (deck-types: a
+    recipe is checked against the whole catalogue, and a layout absent from the ACTIVE library is skipped at plan time). Read only: no
+    schema pass and no cache shared with ``load``, so the active library is never touched."""
+    key = "catalogue"
+    if key not in _CACHE:
+        out = {}
+        for f in sorted(DIR.glob("*.yaml")) + sorted(V3_DIR.glob("*.yaml")):
+            lay = yaml.safe_load(f.read_text()) or {}
+            if isinstance(lay, dict) and lay.get("id"):
+                out[lay["id"]] = list(lay.get("for_types") or [])
+        _CACHE[key] = out
+    return {k: list(v) for k, v in _CACHE[key].items()}
+
+
 def family(layout_id: str, library: dict | None = None) -> str:
     """The family of a layout (``flow`` is its own)."""
     lay = (library or load()).get(layout_id)
@@ -357,21 +372,38 @@ def is_thin(bl: list) -> bool:
     return len(thin) == 1 and thin_blocks(thin[0]) is not None and all(b["kind"] in ("text", "small", "statement") for b in bl if b is not thin[0])
 
 
-def pick_planned(s: dict, audience: str = "review", library: dict | None = None, ready=frozenset()) -> str:
+def pick_planned(s: dict, audience: str = "review", library: dict | None = None, ready=frozenset(), prefer: dict | None = None) -> str:
     """What the plan picks: the rules' choice (``pick``), except that a thin table or timeline gives way to ``big_statement``. ``--no-layout-plan`` and the
-    renderer's own fallback use ``pick`` alone, as before the plan."""
+    renderer's own fallback use ``pick`` alone, as before the plan. ``prefer``: as ``pick``."""
     lib = library or load()
-    got = pick(s, audience, lib, ready)
+    got = pick(s, audience, lib, ready, prefer=prefer)
     if got in THIN_FROM and "big_statement" in lib and is_thin(spec.shown_blocks(s, audience)):
         return "big_statement"
     return got
 
 
-def pick(s: dict, audience: str = "review", library: dict | None = None, ready=frozenset(), offers: bool = False) -> str:
+def preferred(s: dict, bl: list, lib: dict, ready=frozenset(), prefer: dict | None = None) -> str | None:
+    """deck-types: the first layout a recipe prefers for this slide's type (``prefer``: ``{slide type: [layout id, ...]}``,
+    profiles.recipe) that is in the active library and whose ``for_types``, ``when`` and ``accepts`` all take the slide's own blocks;
+    None when there is none. An offered layout may be preferred (still gated by its own ``when``, image_ready included); an id the
+    active library lacks (not built yet, or LOOK_V3 off) is skipped. It never forces: the fit is the plan's to check."""
+    for lid in (prefer or {}).get(s.get("type")) or []:
+        lay = lib.get(lid)
+        if lay and _matches(lay, s, bl, ready) and accepts(lay, s, bl, ready):
+            return lid
+    return None
+
+
+def pick(s: dict, audience: str = "review", library: dict | None = None, ready=frozenset(), offers: bool = False, prefer: dict | None = None) -> str:
     """The layout id the rules choose for one slide dict: highest priority first, first match wins, ``flow`` when none.
-    Only layouts whose ``pick`` is ``rule`` take part (``offers=True`` lets the offered ones in too). Pure, no drawing."""
+    Only layouts whose ``pick`` is ``rule`` take part (``offers=True`` lets the offered ones in too). Pure, no drawing.
+    ``prefer`` (deck-types, a recipe's layout map): its layouts for the slide's type are tried first (``preferred``); None is today."""
     lib = library or load()
     bl = spec.shown_blocks(s, audience)
+    if prefer:
+        got = preferred(s, bl, lib, ready, prefer)
+        if got:
+            return got
     order = {k: i for i, k in enumerate(lib)}
     for lay in sorted(lib.values(), key=lambda l: (-l["priority"], order[l["id"]])):
         if lay["pick"] != "rule" and not offers:
@@ -839,7 +871,11 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
     a base deck: it is refused). The plan only overlays: ``slide.layout`` (id, version, chosen_by, alternatives, why, fit with
     ``moved``, blocks_sha), ``slide.slots`` and ``meta.layout_title_pt``. It never edits a block, a note, a claim or the order.
 
-    ``prefs``: ``density`` (lean, standard, detailed; None is detailed), ``text_mode`` (condense or preserve), ``repair`` (bool).
+    ``prefs``: ``density`` (lean, standard, detailed; None is detailed), ``text_mode`` (condense or preserve), ``repair`` (bool),
+    ``prefer`` (deck-types: a recipe's ``{slide type: [layout id, ...]}``, profiles.recipe; None is today) and ``prefer_type`` (the type's
+    id, for the why line). A preferred layout (``preferred``) replaces the rule pick only when it fits the slide, as density leaves it,
+    at rung as_is or shrunk; at the ladder, if it no longer does, the rule pick takes the slide back, so a preference never moves a
+    point the rule pick would keep and never draws past shrunk. chosen_by stays ``rule``; why names the recipe.
     ``swaps``: ``{slide id: layout id}`` a person chose. ``fixes``: ``{slides: {sid: {avoid, scale_max, layout, notes}}, images:
     {sid: {slot: {scrim, fit, focal}}}}`` from slice 5, cumulative. ``hooks``: ``{shorten: fn(sid, slot, limits, fields)}``
     returning ``{"deferred": True}``, ``{"text": {field id: text}}`` or None. ``pending``: the slots still over their limits when the
@@ -868,13 +904,46 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
     def probe(sl_, lid, relaxed=False, cap=None, stamped=None, cpl=48):
         return R.probe(sl_, lid, relaxed=relaxed, scale_cap=cap, title_pt=stamped, cpl=cpl)
 
+    def before_probe(sid_, s_, lid_):
+        """``(exempt, base, moved)`` before the probe: the cover's held lines, then density (step 0 of the ladder) for layout ``lid_``."""
+        exempt_ = sid_ not in story and deck["meta"].get("format", "pitch") == "pitch"
+        base_ = {**s_}
+        base_.pop("layout", None)
+        moved_: list = _cover_held(s_, aud, prefs) if s_["type"] == "title" else []   # unresolved cover lines go to the notes, labelled, never dropped
+        content_ = lid_ != "flow" and lib[lid_]["group"] == "content" and s_["type"] not in ("title", "close", "next_step")
+        # 0. density: movable points past the target go to the notes
+        if density in spec.DENSITY_WORDS and content_ and not exempt_ and s_["type"] not in ("appendix",) and prefs.get("text_mode") != "preserve":
+            target = spec.DENSITY_WORDS[density]
+            if spec.LOOK_V3 and density == "lean" and s_["type"] in spec.ROLE_OF_TYPE:   # deck-look (Q13): a pitch's lean density is the role
+                target = max(target, spec.ROLE_WINDOWS[spec.ROLE_OF_TYPE[s_["type"]]][1])   # window's top: 35 a statement, 70 an argument
+            cands = _movable(deck, sid_, base_, aud, exempt_)
+            words = lambda sl_: sum(len(str(t).split()) for b in spec.shown_blocks(sl_, aud) if b["kind"] != "copy" for t in _block_texts(b))
+            cur = _with_moved(base_, [])
+            for c in cands:
+                if words(cur) <= target:
+                    break
+                moved_.append(_moved_rec(c))
+                cur = _with_moved(base_, moved_)
+        return exempt_, base_, moved_
+
     # ---- the rule pass: a layout per slide
+    prefer = prefs.get("prefer") or None
+    pref_rule = {}   # deck-types: slide id -> (the rule's layout, its why) for a slide a recipe preference took
     ids, by, why = {}, {}, {}
     for sid in deck["order"]:
         s = deck["slides"][sid]
         f = {} if s.get("pinned") else (fx.get(sid) or {})
         rid = pick_planned(s, aud, lib, ready.get(sid, frozenset()))
         by[sid], why[sid] = "rule", "rule table"
+        if prefer:
+            pid = pick_planned(s, aud, lib, ready.get(sid, frozenset()), prefer=prefer)
+            if pid != rid:
+                _ex, b_, m_ = before_probe(sid, s, pid)
+                sl_p = _with_moved(b_, m_) if m_ else b_
+                rp = probe({**sl_p, "blocks": spec.shown_blocks(sl_p, aud)}, pid, cap=f.get("scale_max"))
+                if rp["ok"] and not rp["relaxed"]:   # fits as is or shrunk: kept; else the rule pick stands
+                    pref_rule[sid] = (rid, why[sid])
+                    rid, why[sid] = pid, f"recipe {prefs.get('prefer_type') or 'deck type'}: prefers {pid} for {s['type']}"
         sw = swaps.get(sid)
         if sw:
             if sw in lib and accepts(lib[sw], s, spec.shown_blocks(s, aud), ready.get(sid, frozenset())):
@@ -888,6 +957,8 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
             if alts:
                 rid, by[sid], why[sid] = alts[0], "repair", "repair: avoid"
         ids[sid] = rid
+        if sid in pref_rule and by[sid] != "rule":   # a person's swap or a repair fix beats a recipe preference
+            pref_rule.pop(sid)
     # ---- variety (look change 4, advisory): families, not ids; a run of one slide type is exempt; functional layouts, a person's swap and a
     # pinned slide are never moved; a run with no other-family alternative that fits stays (and is listed by ``variety``)
     var_swaps = 0
@@ -905,7 +976,8 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
         return None
 
     def movable(sid_):
-        return by[sid_] == "rule" and not deck["slides"][sid_].get("pinned") and ids[sid_] != "flow" and lib[ids[sid_]]["group"] == "content"
+        return by[sid_] == "rule" and not deck["slides"][sid_].get("pinned") and ids[sid_] != "flow" and lib[ids[sid_]]["group"] == "content" \
+            and sid_ not in pref_rule   # deck-types: variety never undoes a recipe's preference
 
     if look:
         seq = [sid for sid in validate.presented(deck) if ids[sid] != "flow" and lib[ids[sid]]["group"] == "content"
@@ -943,30 +1015,19 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
         s = deck["slides"][sid]
         f = {} if s.get("pinned") else (fx.get(sid) or {})
         lid, chosen_by = ids[sid], by[sid]
-        exempt = sid not in story and deck["meta"].get("format", "pitch") == "pitch"
-        base = {**s}
-        base.pop("layout", None)
-        bl = spec.shown_blocks(base, aud)
-        moved: list = _cover_held(s, aud, prefs) if s["type"] == "title" else []   # unresolved cover lines go to the notes, labelled, never dropped
-        content = lid != "flow" and lib[lid]["group"] == "content" and s["type"] not in ("title", "close", "next_step")
-        # 0. density: movable points past the target go to the notes
-        if density in spec.DENSITY_WORDS and content and not exempt and s["type"] not in ("appendix",) and prefs.get("text_mode") != "preserve":
-            target = spec.DENSITY_WORDS[density]
-            if spec.LOOK_V3 and density == "lean" and s["type"] in spec.ROLE_OF_TYPE:   # deck-look (Q13): a pitch's lean density is the role
-                target = max(target, spec.ROLE_WINDOWS[spec.ROLE_OF_TYPE[s["type"]]][1])   # window's top: 35 a statement, 70 an argument
-            cands = _movable(deck, sid, base, aud, exempt)
-            words = lambda sl_: sum(len(str(t).split()) for b in spec.shown_blocks(sl_, aud) if b["kind"] != "copy" for t in _block_texts(b))
-            cur = _with_moved(base, [])
-            for c in cands:
-                if words(cur) <= target:
-                    break
-                moved.append(_moved_rec(c))
-                cur = _with_moved(base, moved)
+        exempt, base, moved = before_probe(sid, s, lid)
         sl_ = _with_moved(base, moved) if moved else base
         shown = spec.shown_blocks(sl_, aud)
         sc_cap = f.get("scale_max")
         rung, scale, relaxed, why_, cpl_ = "as_is", 1.0, False, why[sid], 48
         res = probe({**sl_, "blocks": shown}, lid, cap=sc_cap, stamped=pt.get(lid)) if lid != "flow" else None
+        if sid in pref_rule and not (res is not None and res["ok"] and not res["relaxed"]):   # deck-types: a preference holds only at as_is or shrunk
+            lid, why_ = pref_rule[sid]
+            ids[sid] = lid
+            exempt, base, moved = before_probe(sid, s, lid)
+            sl_ = _with_moved(base, moved) if moved else base
+            shown = spec.shown_blocks(sl_, aud)
+            res = probe({**sl_, "blocks": shown}, lid, cap=sc_cap, stamped=pt.get(lid)) if lid != "flow" else None
         alts_fit: list = []
         if res is not None and res["ok"] and not res["relaxed"]:
             rung, scale = ("as_is" if res["scale"] >= 1.0 else "shrunk"), res["scale"]

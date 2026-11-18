@@ -759,7 +759,9 @@ def _complete(S, reqs, R, inp, meta, fmt, fit, scoring=None, messages=None, terr
         S = _arrange_spine(S, profile, {v["title"] for v in (fit or {}).get("verdicts", []) if v["verdict"] == "supported"},
                            routes_asked(reqs), messages or [], scoring or [], fmt, cap)
     elif fmt == "pitch":   # after mapping, so merged slides carry both slides' requirements
-        S = _arrange_pitch(S, {v["title"] for v in (fit or {}).get("verdicts", []) if v["verdict"] == "supported"}, routes_asked(reqs), messages or [], cap)
+        rec = profiles.recipe(profile, fmt) if profile and profiles.recipes_on() else None   # deck-types: the type's target (flag off: spec.PITCH_TARGET)
+        S = _arrange_pitch(S, {v["title"] for v in (fit or {}).get("verdicts", []) if v["verdict"] == "supported"}, routes_asked(reqs), messages or [], cap,
+                           **({"target": rec["length"]["target"]} if rec else {}))
     if spec.LOOK_V3:   # deck-look (fix 2): a sentence is said once on the presented slides
         _say_once(S)
     if sketch:   # the cover says so, with a fixed label (like the DRAFT mark: no input words)
@@ -938,12 +940,18 @@ def _shown_charts(S: list, supported: set | None) -> list:
     return shown_charts[:spec.PITCH_CHARTS]
 
 
-def _arrange_pitch(S: list, supported: set | None = None, routes: int = 1, messages: list | None = None, limit: int | None = None) -> list:
+#: _arrange_pitch's target when no recipe gives one: spec.PITCH_TARGET, read at call time (a test may set it).
+_SPEC_TARGET = object()
+
+
+def _arrange_pitch(S: list, supported: set | None = None, routes: int = 1, messages: list | None = None, limit: int | None = None,
+                   target=_SPEC_TARGET) -> list:
     """The agency pitch: the presented story (merges applied, team before the ask), an Appendix
     divider, then the backup in story order. Numbering, the trace and footnotes follow this order.
     One recommended idea by default; as many routes as the brief asks for when it asks (routes);
     the presented executions are the ones that carry the most mandated messages (messages). ``limit``
-    (a stated limit or a sketch's) moves the least needed slides behind the divider until the story fits (_trim)."""
+    (a stated limit or a sketch's) moves the least needed slides behind the divider until the story fits (_trim). ``target`` (deck-types:
+    the type's recipe, profiles.recipe; None for no target) replaces spec.PITCH_TARGET for the soft target's cheap moves."""
     by_type = lambda t: next((x for x in S if x["type"] == t), None)
     for keep, into, title in spec.PITCH_MERGES + (spec.PITCH_MERGES_V3 if spec.LOOK_V3 else ()):
         k = by_type(keep)
@@ -964,8 +972,9 @@ def _arrange_pitch(S: list, supported: set | None = None, routes: int = 1, messa
         story.insert(story.index(inv), team)
     story, backup = _trim(S, story, backup, limit)
     supply = []
-    if spec.LOOK_V3 and not limit:   # deck-look step 5: a soft target by cheap moves only (a stated limit keeps _trim, above)
-        story, backup, supply = _to_target(S, story, backup, spec.PITCH_TARGET, keep)
+    target = spec.PITCH_TARGET if target is _SPEC_TARGET else target
+    if spec.LOOK_V3 and not limit and target is not None:   # deck-look step 5: a soft target by cheap moves only (a stated limit keeps _trim, above)
+        story, backup, supply = _to_target(S, story, backup, target, keep)
     if not backup and not supply:
         return story
     divider = _slide("appendix", "Appendix", [{"kind": "text", "text": "Backup for questions: everything this presentation rests on."}], status="from_source")
