@@ -12,6 +12,7 @@ import type { RoomData, RoomName, Selection } from './Rooms'
 import { boxName, genTitle, type Gen } from './model'
 import { Poster } from './Poster'
 import { readCut, readyTakes } from './timeline'
+import { plural } from '../stages/imageEditor/edits'
 
 type Filter = 'film' | 'takes' | 'renders' | 'images' | 'unused' | 'uploads'
 const FILTERS: { id: Filter; label: string }[] = [
@@ -42,7 +43,7 @@ export function Bin({ data, sel, room, onPick }: { data: RoomData; sel: Selectio
   const empty = !(showTakes && shownTakes.length) && !shownImages.length && !shownRenders.length
   return (
     <aside className="rm-bin" aria-label="Bin">
-      <div className="rm-binhead"><b>Bin</b><span className="rm-faint">{data.gens.filter((g) => g.state !== 'making').length} takes</span></div>
+      <div className="rm-binhead"><b>Bin</b><span className="rm-faint">{plural(data.gens.filter((g) => g.state !== 'making').length, 'take')}</span></div>
       <label className="rm-search">
         <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="6" cy="6" r="4.3" fill="none" stroke="currentColor" strokeWidth="1.4" /><path d="M9.3 9.3 L12.5 12.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>
         <input aria-label="Search the Bin" placeholder="Search the Bin" value={q} onChange={(e) => setQ(e.target.value)} />

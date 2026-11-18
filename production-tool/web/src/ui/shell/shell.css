@@ -216,6 +216,11 @@
 .send-disc li.promise b { font-weight: 500; }
 /* A long document or node name never runs the crumb into Continue in. */
 .tba-crumb .here { max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+/* The crumb keeps its words; the document's name gives way first, down to its own minimum (re-test N10: at
+   1440 in the Script editor the crumb read "› Canvas › Sc" beside a name that could still shrink). */
+.tb-app .tba-crumb { flex-shrink: 0; }
+.tb-app .tba-name { flex: 0 1 auto; min-width: 132px; overflow: hidden; }
+.tb-app .tba-n2 { min-width: 0; overflow: hidden; }
 
 /* The phone cut of the bar (mock phone): the medallion, the document's name, theme, you and Decisions.
    The tool pill, Assets and the dev badge give way; nothing scrolls sideways. */
