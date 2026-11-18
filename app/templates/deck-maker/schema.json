@@ -2297,6 +2297,61 @@
                                 "dark",
                                 "light"
                               ]
+                            },
+                            "text_zone": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "description": "deck-look (LOOK_V3): where words may sit on this picture, from images.text_zone (the calm-zone finder and scrim solver) or pinned by a repair or a person. A zone: the words' colour, the scrim's colour and alpha (0.40 to 0.60), the 10th-percentile contrast it predicts and the zone's luminance s.d. none: no zone reads at AA, so the words sit beside the picture.",
+                              "properties": {
+                                "zone": {
+                                  "enum": [
+                                    "bottom_left",
+                                    "top_left",
+                                    "middle_left",
+                                    "bottom_right",
+                                    "top_right",
+                                    "middle_right"
+                                  ]
+                                },
+                                "text": {
+                                  "type": "string",
+                                  "pattern": "^[0-9A-Fa-f]{6}$"
+                                },
+                                "colour": {
+                                  "type": "string",
+                                  "pattern": "^[0-9A-Fa-f]{6}$"
+                                },
+                                "alpha": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                "p10": {
+                                  "type": "number",
+                                  "minimum": 0
+                                },
+                                "busy_sd": {
+                                  "type": "number",
+                                  "minimum": 0
+                                },
+                                "by": {
+                                  "enum": [
+                                    "finder",
+                                    "repair",
+                                    "person"
+                                  ]
+                                },
+                                "none": {
+                                  "const": true
+                                },
+                                "reason": {
+                                  "type": "string",
+                                  "maxLength": 300
+                                },
+                                "best": {
+                                  "type": "object"
+                                }
+                              }
                             }
                           },
                           "if": {
@@ -3333,6 +3388,7 @@
                   "slot_stale",
                   "block_unbound",
                   "layout_unknown",
+                  "text_on_image_fallback",
                   "image_missing",
                   "image_unapproved",
                   "image_flagged",

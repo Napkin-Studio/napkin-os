@@ -60,6 +60,7 @@ ACTION_MAP: dict = {
     "text_on_image_contrast": {"rungs": ("add_scrim", "switch_layout", "drop_image", "needs_human")},
     "picture_stretch": {"rungs": ("crop_image", "switch_layout", "needs_human")},
     "picture_lowres": {"rungs": ("switch_layout", "left_for_person")},
+    "text_on_image_fallback": {"rungs": ("left_for_person",)},   # deck-look: the words already sit beside the picture; a person may swap it
     "image_flagged": {"rungs": ("left_for_person",), "regen_then_drop": ("regen_image", "drop_image")},
     "image_unapproved": {"rungs": ("left_for_person",)},
     "image_rights": {"rungs": ("drop_image", "left_for_person")},
@@ -91,7 +92,7 @@ SENTENCES = {
     "text_overlap": "two pieces of text overlapped", "off_slide": "something ran off the slide", "margin": "text sat too close to the edge",
     "min_font": "the type was under the readable floor", "contrast": "the text was hard to read against its background",
     "text_on_image_contrast": "the text was hard to read over the picture", "picture_stretch": "a picture was stretched",
-    "picture_lowres": "a picture is low resolution", "image_flagged": "a picture was flagged", "image_unapproved": "a picture is not approved",
+    "picture_lowres": "a picture is low resolution", "text_on_image_fallback": "no part of the picture was calm enough to carry the words, so they sit beside it", "image_flagged": "a picture was flagged", "image_unapproved": "a picture is not approved",
     "image_rights": "a picture has no clear rights", "image_missing": "a picture is missing",
 }
 #: Content findings K4 watches: every validator finding except these (the word budget and the slot checks move with a layout).
