@@ -278,6 +278,15 @@ def fit_wf(font: str, bold: bool = False, caps: bool = False) -> float | None:
     return round(max(own, fb_w or 0.0) * WIDTH_MARGIN, 4)
 
 
+def is_figure(text) -> bool:
+    """A display figure ('20,000', '5%', 'EUR 1.2m'): at least two digits, and digits at least half of its characters. Digits are set
+    wider than a running text's average glyph (Archivo bold: 0.60 em against 0.48 mixed), so a figure is fitted on the capitals' widths
+    (the wider of the two), never the mixed-case average: the hero '20,000' that wrapped onto 'By when' (19 Nov 2026) was fitted on it."""
+    t = re.sub(r"\s", "", str(text or ""))
+    d = sum(c.isdigit() for c in t)
+    return d >= 2 and d * 2 >= len(t)
+
+
 @dataclass(frozen=True)
 class Theme:
     """The one token object the layouts read. See the module docstring."""

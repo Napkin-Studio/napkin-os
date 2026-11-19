@@ -887,6 +887,8 @@
          "off_slide",
          "margin",
          "text_overlap",
+         "text_collision",
+         "word_break",
          "text_overflow",
          "min_font",
          "contrast",

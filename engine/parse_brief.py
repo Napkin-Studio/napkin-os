@@ -163,6 +163,7 @@ import research_facts  # noqa: E402  (verified facts from the knowledge layer, C
 _facts_mod = research_facts   # the module, where a parameter of the same name shadows it
 import research_decisions  # noqa: E402  (what people decided on the research, ADR 0015)
 _decisions_mod = research_decisions
+import brief_issues  # noqa: E402  (what is wrong with or missing from the brief, flagged: brief_object.brief_issues)
 
 
 def _cap(value, status="fact", quote=None, conf=0.6):
@@ -262,11 +263,14 @@ Also detect single-mindedness of the WHOLE brief: one brief = one strategy.
 If it bundles mutually exclusive strategies or multiple separate jobs
 (e.g. several exercises/events/streams), say how to split it.
 
+""" + "\n\n" + brief_issues.PROMPT + """
+
 Return ONLY raw JSON (no fences, no commentary):
 {"dimensions": [ ...exactly the 7 above... ],
  "single_mindedness": {"verdict": "single"|"multiple",
                        "split_into": ["one line per separate brief", ...]},
- "summary": "one sentence on overall brief quality"}"""
+ "summary": "one sentence on overall brief quality",
+ "brief_issues": [ ... ]}"""
 
 
 # The zone-3 strategic fields are GENERATED, not extracted (the guided-generative
@@ -2247,7 +2251,9 @@ def score_betterbriefs(text, fields=None):
             "single_mindedness": {
                 "verdict": "multiple" if multiple else "single",
                 "split_into": [str(s) for s in split] if (multiple and isinstance(split, list)) else []},
-            "summary": str(obj.get("summary") or ""), "mode": "llm"}
+            "summary": str(obj.get("summary") or ""), "mode": "llm",
+            # the problems in the brief itself (brief_issues.PROMPT), raw: run() verifies, merges and lifts them out
+            **({"brief_issues": obj["brief_issues"]} if isinstance(obj.get("brief_issues"), list) else {})}
 
 
 # ---------------------------------------------------------------------------
@@ -3247,7 +3253,9 @@ def run(path: Path | None, client=None, project=None, loops37=False, golden=Fals
       loop2_brief             the shaped brief, its open_questions and review.
       betterbriefs_scorecard  the BetterBriefs judge (or its heuristic fallback).
       loops3_7                only when loops37 is set.
-      loop2_golden            only when the golden extraction returned a result."""
+      loop2_golden            only when the golden extraction returned a result.
+      brief_issues            what is wrong with or missing from the brief (brief_issues.py): kind, topic,
+                              what, why_it_matters, question, quote, source; foreign passages quarantined."""
     _stats_reset()
     _t_run0 = dt.datetime.now()
     schema = json.loads((HERE / "brief_object.schema.json").read_text())
@@ -3458,7 +3466,13 @@ def run(path: Path | None, client=None, project=None, loops37=False, golden=Fals
         sc = f_score.result()
         if isinstance(sc, dict) and sc.get("mode") == "heuristic":
             sc = scorecard_heuristic(fields)           # the t=0 call had no capture to read
+        # The problems in the brief itself (contradictions, pasted-in foreign content, missing basics): the scorecard's model list,
+        # verified against the text, plus the rule checks. A captured value that repeats a foreign passage is lifted out of the
+        # brief and into its issue, so it is never adopted as the client's objective (brief_issues.quarantine).
+        raw_issues = sc.pop("brief_issues", None) if isinstance(sc, dict) else None
         out["betterbriefs_scorecard"] = sc
+        out["brief_issues"] = brief_issues.detect(text, raw_issues)
+        brief_issues.quarantine(out, out["brief_issues"])
         # Snapshot the LLM call ledger (a deep copy: the critic call that follows run()
         # must not change a finished brief's numbers) so optimisation work is measured per run.
         stats = _stats_snapshot()

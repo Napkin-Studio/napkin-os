@@ -694,6 +694,7 @@ class Renderer:
         """The lines a text wraps to in ``w`` inches at ``size`` pt, as lists of words: greedy word wrap on the
         estimated glyph width. A no-break space (``NBSP``) glues two words, as it does in PowerPoint, so a glued
         pair is one unit here. This is the renderer's own wrap estimate (the tests use it to look for orphans)."""
+        caps = caps or (self.th.v3 and themes.is_figure(text))   # a figure is measured on the capitals' widths (digits run wide)
         per = max(1.0, self._kx(w) * 72 / (size * self._wf(bold, font, caps)))
         lines = []
         for para in str(text).split("\n"):
@@ -3178,6 +3179,7 @@ class Renderer:
     def _units_fit(self, text, w, size, caps=False, bold=True, font=None) -> bool:
         """Every unbreakable unit of ``text`` (a word, or the last two words ``glue`` joins) fits one line of ``w`` inches at ``size``: a
         display line must never break inside a word."""
+        caps = caps or (self.th.v3 and themes.is_figure(text))   # a figure is measured on the capitals' widths (digits run wide)
         per = self._kx(w) * 72 / (size * self._wf(bold, font or self.th.head, caps))
         return all(len(u) <= per for u in glue(str(text)).split(" "))
 

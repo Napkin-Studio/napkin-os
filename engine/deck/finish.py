@@ -41,13 +41,14 @@ def near(a, b, threshold: float = 0.6, least: int = 3) -> bool:
     return len(wa & wb) / min(len(wa), len(wb)) >= threshold
 
 
-def stated_text(inp) -> str:
-    """What the brief states, as one lower-case text: its fields, the person's prompt and the brief's own source sentences. A research
-    document is not the brief (it may echo a project label back), so it is not read here."""
+def stated_text(inp, lower: bool = True) -> str:
+    """What the brief states, as one lower-case text (``lower`` False: as written): its fields, the person's prompt and the brief's own
+    source sentences. A research document is not the brief (it may echo a project label back), so it is not read here."""
     parts = [str((f or {}).get("value") or "") for f in (inp.brief or {}).values()]
     parts.append(str(getattr(inp, "prompt_text", "") or ""))
     parts += [str(v) for v in (getattr(inp, "brief_source", None) or {}).values()]
-    return " \n ".join(parts).lower()
+    text = " \n ".join(parts)
+    return text.lower() if lower else text
 
 
 def scope_checked(project: str, inp) -> tuple:
@@ -440,3 +441,140 @@ def metric_text(text: str) -> str:
             return f"{'' if hedged else 'about '}{_round3(v)} {unit} ({mkt} figure: {m.group(0)})"
         out = pat.sub(one, out)
     return out
+
+
+# ------------------------------------------------------------------------------------------------------------ script annotations
+#: A sentence written for the agency about the work, not for the room: a script's stage note ("Dramatises the 'X' half: ..."), a word
+#: about where something came from ("the inputs", "the research summary"). It goes to the speaker notes, verbatim.
+ANNOTATION = re.compile(r"(?i)^\W*dramatis(?:es|ing|e|ed)\b|^\W*(?:this|it) dramatises\b|\b(?:the|our|your) inputs?\b|"
+                        r"\bthe research summary\b|\bnot in the brief or the inputs\b")
+#: Blocks whose words are the client's or the work's own and never split (a verbatim, the copy lines, a chart).
+_KEEP_KINDS = ("quote", "chart", "fromto", "stats", "steps")
+#: Slides that list the deck's own workings by design (they are about the inputs).
+_ANNOTATION_EXEMPT = ("requirement_trace", "appendix_sources", "questions", "conflicts", "appendix", "title")
+ANNOTATION_NOTE = "Moved to the notes (a note for the agency, not for the room):"
+
+
+def _strip_annotations(text: str) -> tuple:
+    """``(kept text, [moved sentences])``: the sentences of ``text`` that are agency annotations, out."""
+    sents = re.split(r"(?<=[.!?])\s+", str(text or "").strip())
+    moved = [s for s in sents if s and ANNOTATION.search(s)]
+    if not moved:
+        return text, []
+    return " ".join(s for s in sents if s and not ANNOTATION.search(s)), moved
+
+
+def annotations_to_notes(S: list) -> int:
+    """Script annotations and source talk leave every slide's words for its speaker notes, verbatim: a text block's or a list item's
+    sentence that matches ``ANNOTATION``, and an execution's whole 'answer' line when it is one. A block or item left with no words is
+    dropped (never a slide's last block). Titles, quotes and copy lines are never touched. Returns how many sentences moved."""
+    n = 0
+    for sl in S:
+        if sl["type"] in _ANNOTATION_EXEMPT:
+            continue
+        moved, blocks = [], []
+        for b in sl["blocks"]:
+            b = dict(b)
+            if b.get("kind") in _KEEP_KINDS:
+                blocks.append(b)
+                continue
+            if b.get("kind") == "copy":
+                ans = str(b.get("answer") or "").strip()
+                if ans and ANNOTATION.search(ans):
+                    moved.append(ans)
+                    b["answer"] = ""
+                blocks.append(b)
+                continue
+            if b.get("kind") == "table" and isinstance(b.get("rows"), list):   # a cell's annotation sentence leaves it (the header row stays)
+                rows = [list(r) for r in b["rows"]]
+                for r in rows[1:]:
+                    for c, cell in enumerate(r):
+                        if isinstance(cell, str):
+                            kept, gone = _strip_annotations(cell)
+                            if gone:
+                                moved += gone
+                                r[c] = kept
+                b["rows"] = rows
+                blocks.append(b)
+                continue
+            if isinstance(b.get("text"), str) and b["text"].strip():
+                kept, gone = _strip_annotations(b["text"])
+                if gone:
+                    moved += gone
+                    if not kept.strip():
+                        continue
+                    b["text"] = kept
+            if isinstance(b.get("items"), list):
+                items = []
+                for it in b["items"]:
+                    if b.get("kind") == "kv" and isinstance(it, (list, tuple)) and len(it) == 2:
+                        kept, gone = _strip_annotations(it[1])
+                        moved += gone
+                        if str(kept).strip():
+                            items.append([it[0], kept])
+                        continue
+                    t = it.get("text") if isinstance(it, dict) else it if isinstance(it, str) else None
+                    if t is None or (isinstance(it, dict) and it.get("human")):
+                        items.append(it)
+                        continue
+                    kept, gone = _strip_annotations(t)
+                    moved += gone
+                    if str(kept).strip():
+                        items.append({**it, "text": kept} if isinstance(it, dict) else kept)
+                if not items and b.get("kind") in ("bullets", "kv") and b["items"]:
+                    continue
+                b["items"] = items
+            blocks.append(b)
+        if moved:
+            sl["blocks"] = blocks or sl["blocks"][:1]
+            sl["notes"] = "\n\n".join([x for x in [sl.get("notes") or ""] if x.strip()] + [ANNOTATION_NOTE] + moved)
+            n += len(moved)
+    return n
+
+
+# ------------------------------------------------------------------------------------------------------------ the ask
+#: What the client can give for a 'To supply' slide (the agency's own gaps, the team, the case studies and the split, are never
+#: asked of the client: they stay in the To supply part).
+CLIENT_ASKS = {"competition": "Which alternatives are you weighing against this work?", "risks": "Which risks do you already see?",
+               "why_now": "Why now: what makes this the moment?", "what_we_know": "What do you already know that we should build on?"}
+DECISION_ASK = "When will you decide, and who decides?"
+_DATE = re.compile(r"(?i)\b(?:decision|decide|decides|award|appoint(?:ment)?|shortlist|presentation|pitch)\b[^.\n]{0,60}?"
+                   r"\b(\d{1,2}(?:st|nd|rd|th)?\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)"
+                   r"(?:\s+\d{4})?|(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}"
+                   r"(?:st|nd|rd|th)?(?:,?\s+\d{4})?|\d{1,2}[/.]\d{1,2}[/.]\d{2,4})")
+
+
+def decision_date(text: str) -> str | None:
+    """The decision (or presentation) date when the inputs state one, verbatim; else None (the ask never shows a blank for it)."""
+    m = _DATE.search(str(text or ""))
+    return m.group(1) if m else None
+
+
+def close_blocks(line: str | None, date: str | None, gaps: bool) -> list:
+    """The ask, clean: the platform to agree as the statement (the close's left column), and the next steps as rows: settle what the
+    brief leaves open (when it leaves anything open), and the decision by its date only when the inputs give one. No placeholder:
+    what only the client can give is in the appendix list (CLIENT_ASKS_TITLE)."""
+    stmt = f"Agree '{line.rstrip('.')}' as the campaign platform." if line else "Agree the campaign platform."
+    rows = []
+    if gaps:
+        rows.append({"text": "Answer the questions the brief leaves open, so the work can be finished.", "basis": "proposal"})
+    if date:
+        rows.append({"text": f"A decision by {date}.", "basis": "proposal"})
+    if not rows:   # nothing open and no date given: the one next step the ask can name without inventing one
+        rows.append({"text": "Agree the next working session and its date.", "basis": "proposal"})
+    return [{"kind": "statement", "text": stmt, "basis": "proposal"}, {"kind": "bullets", "items": rows}]
+
+
+def client_asks(questions: list, supply: list, date: str | None) -> list:
+    """The appendix list of what the client can give, as questions, said once: the brief's questions, then what a 'To supply' slide
+    waits for from the client (CLIENT_ASKS), then the decision date when the inputs give none."""
+    out = list(questions) + [CLIENT_ASKS[x["type"]] for x in supply if x.get("type") in CLIENT_ASKS]
+    if not date:
+        out.append(DECISION_ASK)
+    seen, uniq = set(), []
+    for q in out:
+        k = re.sub(r"\W+", " ", str(q).lower()).strip()
+        if k and k not in seen:
+            seen.add(k)
+            uniq.append(q)
+    return uniq
