@@ -1,6 +1,6 @@
 """Tests added by the 17 Nov review of the Territory tool (features/territory-tool.clan, decision of that date).
 Each one failed before its fix. A fake Runway, a fake Ollama and a FakeLLM stand in for paid and local services; every brand,
-territory and style pack here is invented. The pack in ``demo_pack`` is a DEMO for tests: it is not Laurence's pack.
+territory and style pack here is invented. The pack in ``demo_pack`` is a DEMO for tests: it is not the creative lead's pack.
 Run from ``engine/``: ``PYTHONPATH=. python3 -m pytest -q territory/tests``."""
 from __future__ import annotations
 
@@ -14,9 +14,9 @@ from territory import cards, compare, llm as llm_mod
 from territory.llm import FakeLLM, LiveLLM
 from territory.visuals import board, plan as plan_mod
 from visuals import guard, runway, safety, style as style_mod
-from test_visuals import KEY, LIVE, FakeRunway, PNG, clean_ollama, env, flag_task, go, make_run, ollama_down, plan_output, style_pack  # noqa: F401
+from test_visuals import KEY, LIVE, FakeRunway, PNG, card_id, clean_ollama, env, flag_task, go, make_run, ollama_down, plan_output, shot_framing, style_pack  # noqa: F401
 
-DEMO_NOTE = "DEMO PACK, invented for tests. It is not the real pack."
+DEMO_NOTE = "Invented for tests. It is not the real pack."     # every word of a pack goes into a prompt, so the note passes the lint too
 
 
 def demo_pack(tmp_path, name="demo", look="loose ink wash, cool", banned="crowds", n_images=1):
@@ -77,8 +77,8 @@ def test_swapping_the_style_pack_changes_only_image_prompts_and_hashes_never_tex
         assert shot(e1) == shot(e2)
     for c1, c2 in zip(f1["cards"], f2["cards"]):                              # the picture slot moves; the words around it do not
         assert c1["visual"]["prompt"] != c2["visual"]["prompt"] and c1["visual"]["image"] != c2["visual"]["image"]
-    assert "DEMO PACK" in v2.joinpath("manifest.json").read_text()
-    assert style_mod.load(None).source == "built-in default"
+    assert "Invented for tests" in v2.joinpath("manifest.json").read_text()
+    assert style_mod.load(None).source == "default until the creative lead answers"
 
 
 def test_a_saved_plan_for_a_changed_run_is_refused_not_reused(env):
@@ -148,7 +148,7 @@ def test_a_frame_nobody_has_checked_does_not_reach_the_deck_slot(env):
     c = json.loads((vdir / "frames.json").read_text())["cards"][0]
     assert len(c["frames"]) == 4 and c["visual"] is None                    # shown on the board as 'not checked', never in a deck
     f = c["frames"][0]
-    code, rw2, _ = go(env, "--approve", f["key"], *LIVE, ollama=ollama_down)
+    code, rw2, _ = go(env, "--approve", f["key"], "--approved-by", "Sai", *LIVE, ollama=ollama_down)
     c = json.loads((vdir / "frames.json").read_text())["cards"][0]
     assert c["visual"]["image"] == f["path"] and manifest_of(vdir)["frames"][f["key"]]["approved_at"]   # a person's yes opens the slot
 
@@ -296,7 +296,7 @@ def test_the_dry_run_prints_the_exact_request_it_would_send_and_sends_nothing(en
     code, rw, llm = go(env, "--style", str(demo_pack(tmp_path)))
     out = capsys.readouterr().out
     assert code == 0 and rw.posts == [] and rw.gets == [] and llm.calls == []
-    assert "REQUEST PREVIEW" in out and "gemini_image3.1_flash" in out and "1344:768" in out and "Frame 1 of s1" in out and "loose ink wash" in out
+    assert "REQUEST PREVIEW" in out and "gemini_image3.1_flash" in out and "1344:768" in out and shot_framing("s1", 1) in out and "loose ink wash" in out
     assert "referenceImages: 1" in out and "prompt sha256" in out and "style default" not in out
     assert "RUNWAYML_API_SECRET" not in out and KEY not in out
 

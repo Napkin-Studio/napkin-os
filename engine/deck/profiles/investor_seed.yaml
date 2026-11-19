@@ -88,6 +88,7 @@ recipe:
   titles: {form: claim}        # today's titles: no new stage e line (recorded runs replay)
   format: pitch
   full:
+    size: a4                   # deck-slide-size: a leave-behind prints on A4 landscape (the person can override)
     density: {level: detailed}
     pictures: {generate: cover, types: [title]}
 sources: [GUIDE.md 3.3, NAPKIN-EDGE.md gap 10, rubric.json]

@@ -365,6 +365,13 @@ class Renderer:
         self.theme_problems = themes.check_palette(self.th)
         self.x0 = self.th.grid.M if self.th.layouts else X0
         self.x1 = W - self.x0
+        # deck-slide-size: the deck's Canvas (meta.preferences.size, absent = 16:9). Layouts compose on the 16:9 grid; at 4:3 and A4 every
+        # primitive draws through the canvas map (theme.Canvas.x / y: margins and type physical, the content box reflowed) and every text
+        # measure runs at the reflowed width, so the plan's probe and the drawing agree. At 16:9 ``_cv`` is None and nothing below is read.
+        self.cv = themes.canvas_of(deck)
+        self._cv = None if self.cv.identity else self.cv
+        if self._cv is not None and not self.th.layouts:
+            raise ValueError(f"the classic theme draws 16:9 only, not {self.cv.name}: use the napkin theme or --size 16:9")
         self.animate = {True: "auto", False: None}.get(animate, animate)
         if self.animate not in (None, "auto", "click"):
             raise ValueError(f"animate must be False, True, 'auto' or 'click', not {animate!r}")
@@ -380,7 +387,10 @@ class Renderer:
         self.R = Resolver(inp, list(deck.get("requirements", {}).values()))
         self.prs = Presentation(str(master)) if master else Presentation()
         if not master:
-            self.prs.slide_width, self.prs.slide_height = Inches(W), Inches(H)
+            if self._cv is None:
+                self.prs.slide_width, self.prs.slide_height = Inches(W), Inches(H)
+            else:
+                self.prs.slide_width, self.prs.slide_height = Emu(self._cv.emu[0]), Emu(self._cv.emu[1])
         self.blank = self._layout("Blank") or self.prs.slide_layouts[6]
         self.n_human = sum(1 for s in deck["slides"].values() if s["status"] == "needs_human")
         self.sections = []
@@ -414,6 +424,7 @@ class Renderer:
         self.icons_drawn = {}       # slide id -> {"layout", "ids"}: the icons really drawn, in item order (the web draws exactly these)
         self._exec_title = None     # deck-graphics: the execution title whose picture this slide shows (frames), else None
         self._frame_blocked = None  # deck-graphics: a frame refused for contrast on the picture in hand (its shape is then checked plain)
+        self.protect = {}           # deck-slide-size: asset id -> a Production picture's protect boxes ({x0, y0, x1, y1} fractions), read at 4:3 and A4
 
     def _layout(self, name):
         """A layout of the master by name, or None."""
@@ -454,6 +465,46 @@ class Renderer:
         if not self.th.layouts:
             return max(S.min, v)
         return max(S.caption_floor if (cap or self._relaxed) else S.body_floor, _half(v))
+
+    # -- the canvas map (deck-slide-size) ------------------------------------------------------------------------------------------------
+    def _g(self, x, y, w, h) -> tuple:
+        """A box on the 16:9 grid as the four EMU lengths python-pptx takes, through the canvas map (identity at 16:9: today's Inches)."""
+        if self._cv is None:
+            return Inches(x), Inches(y), Inches(w), Inches(h)
+        X, Y, W_, H_ = self._cv.box(x, y, w, h)
+        return Inches(X), Inches(Y), Inches(W_), Inches(H_)
+
+    def _gk(self, x, y, w, h) -> tuple:
+        """A fixed-shape box (an icon, a node, a ring): its centre through the canvas map, its size physical (never squashed)."""
+        if self._cv is None:
+            return Inches(x), Inches(y), Inches(w), Inches(h)
+        cx, cy = self._cv.x(x + w / 2), self._cv.y(y + h / 2)
+        return Inches(cx - w / 2), Inches(cy - h / 2), Inches(w), Inches(h)
+
+    def _kx(self, w: float) -> float:
+        """A 16:9 width as drawn at this size, for measuring (content anchor: x ``k``)."""
+        return w if self._cv is None else w * self._cv.k
+
+    def _unk(self, w: float) -> float:
+        """A physical width (inches of type) on the 16:9 grid: what a layout must ask for so that ``w`` is drawn at this size."""
+        return w if self._cv is None else w / self._cv.k
+
+    def _aspect_v(self, r: float, x, y, w, h) -> float:
+        """The width/height a box must have on the 16:9 grid to be drawn at aspect ``r`` at this size (frames keep a format's aspect)."""
+        if self._cv is None or w <= 0 or h <= 0:
+            return r
+        _, _, W_, H_ = self._cv.box(x, y, w, h)
+        return r * (H_ / h) / (W_ / w)
+
+    def _eh(self, text, width_in, size_pt, line=1.22):
+        """``_est_h`` at the width drawn at this size."""
+        return _est_h(text, self._kx(width_in), size_pt, line)
+
+    def min_column(self, w: float, minimum: float, what: str = "text column") -> None:
+        """deck-slide-size (Fable fix 3): NoFit when a column of ``w`` grid inches is drawn under ``minimum`` physical inches at this size, so
+        the plan's switch rung takes the layout's alternatives. Never at 16:9 (every 16:9 column is what it was)."""
+        if self._cv is not None and self._kx(w) < minimum - 1e-9:
+            raise NoFit(f"{what} {self._kx(w):.2f} in at {self.cv.name}, under {minimum} in")
 
     # -- animate mode -------------------------------------------------------------------------
     @staticmethod
@@ -503,7 +554,7 @@ class Renderer:
     def text(self, sl, x, y, w, h, text, size=16, color=None, bold=False, font=None, italic=False,
              align=PP_ALIGN.LEFT, anchor=MSO_ANCHOR.TOP, name=None, cap=False):
         """A text box with one paragraph per line of ``text``. ``cap``: a caption-role label (floor 10 pt)."""
-        tb = sl.shapes.add_textbox(Inches(x), Inches(y), Inches(w), Inches(h))
+        tb = sl.shapes.add_textbox(*self._g(x, y, w, h))
         if name:
             tb.name = name
         tf = tb.text_frame
@@ -526,7 +577,7 @@ class Renderer:
 
     def box(self, sl, x, y, w, h, fill, line=None, shape=MSO_SHAPE.ROUNDED_RECTANGLE, name=None):
         """A filled rounded rectangle (cards, frames)."""
-        s = sl.shapes.add_shape(shape, Inches(x), Inches(y), Inches(w), Inches(h))
+        s = sl.shapes.add_shape(shape, *self._g(x, y, w, h))
         s.fill.solid()
         s.fill.fore_color.rgb = _rgb(fill)
         if line:
@@ -548,7 +599,7 @@ class Renderer:
         if (self.th.v3 and fill and shape == MSO_SHAPE.RECTANGLE and not line and min(w, h) <= 0.12
                 and (fill.upper() in self._accent_fills() or (abs(w - 0.5) < 1e-6 and h <= 0.06))):
             return self._stripe_to_rule(sl, x, y, w, h, name)
-        s = sl.shapes.add_shape(shape, Inches(x), Inches(y), Inches(w), Inches(h))
+        s = sl.shapes.add_shape(shape, *(self._gk(x, y, w, h) if shape == MSO_SHAPE.OVAL and abs(w - h) < 1e-6 else self._g(x, y, w, h)))
         st = s._element.find(qn("p:style"))
         if st is not None:
             s._element.remove(st)
@@ -578,6 +629,8 @@ class Renderer:
         if sl is None:
             return None
         from pptx.enum.shapes import MSO_CONNECTOR
+        if self._cv is not None:
+            x1, y1, x2, y2 = self._cv.x(x1), self._cv.y(y1), self._cv.x(x2), self._cv.y(y2)
         c = sl.shapes.add_connector(MSO_CONNECTOR.STRAIGHT, Inches(x1), Inches(y1), Inches(x2), Inches(y2))
         st = c._element.find(qn("p:style"))
         if st is not None:
@@ -635,7 +688,7 @@ class Renderer:
         """The lines a text wraps to in ``w`` inches at ``size`` pt, as lists of words: greedy word wrap on the
         estimated glyph width. A no-break space (``NBSP``) glues two words, as it does in PowerPoint, so a glued
         pair is one unit here. This is the renderer's own wrap estimate (the tests use it to look for orphans)."""
-        per = max(1.0, w * 72 / (size * self._wf(bold, font, caps)))
+        per = max(1.0, self._kx(w) * 72 / (size * self._wf(bold, font, caps)))
         lines = []
         for para in str(text).split("\n"):
             cur, row = 0, []
@@ -691,7 +744,7 @@ class Renderer:
         if sl is None:
             return None
         w = self._clamp(paras, w, all(p_.get("align", "l") == "l" for p_ in paras))
-        tb = sl.shapes.add_textbox(Inches(x), Inches(y), Inches(w), Inches(h))
+        tb = sl.shapes.add_textbox(*self._g(x, y, w, h))
         if name:
             tb.name = name
         elif paras and all(d.get("cap") for d in paras):
@@ -766,8 +819,8 @@ class Renderer:
 
     def bullets(self, sl, x, y, w, items, size=15, title=None):
         """A bulleted list as one text box (real bullets via XML, not literal characters)."""
-        h = sum(_est_h(i, w - 0.3, size) for i in items) + (0.45 if title else 0)
-        tb = sl.shapes.add_textbox(Inches(x), Inches(y), Inches(w), Inches(h))
+        h = sum(self._eh(i, w - 0.3, size) for i in items) + (0.45 if title else 0)
+        tb = sl.shapes.add_textbox(*self._g(x, y, w, h))
         tf = tb.text_frame
         tf.word_wrap = True
         first = True
@@ -795,12 +848,12 @@ class Renderer:
         """A native table: header row in ink, body rows on the surface with thin rules (the flow's table)."""
         t_ = self.th
         nr, nc = len(rows), len(rows[0])
-        rh = [max(_est_h(c, w / nc - 0.15, size) for c in r) for r in rows]
-        gs = sl.shapes.add_table(nr, nc, Inches(x), Inches(y), Inches(w), Inches(sum(rh)))
+        rh = [max(self._eh(c, w / nc - 0.15, size) for c in r) for r in rows]
+        gs = sl.shapes.add_table(nr, nc, *self._g(x, y, w, sum(rh)))
         t = gs.table
         widths = self._col_widths(rows, w)
         for j, cw in enumerate(widths):
-            t.columns[j].width = Inches(cw)
+            t.columns[j].width = Inches(self._kx(cw)) if self._cv is not None else Inches(cw)
         for i, r in enumerate(rows):
             t.rows[i].height = Inches(rh[i])
             for j, val in enumerate(r):
@@ -841,7 +894,7 @@ class Renderer:
             labels.append(s["label"]); vals.append(round(v, 1))
         cd.categories = labels
         cd.add_series("Share", vals)
-        gf = sl.shapes.add_chart(XL_CHART_TYPE.BAR_CLUSTERED, Inches(x), Inches(y), Inches(w), Inches(h), cd)
+        gf = sl.shapes.add_chart(XL_CHART_TYPE.BAR_CLUSTERED, *self._g(x, y, w, h), cd)
         ch = gf.chart
         ch.has_legend = False
         ch.has_title = bool(title)
@@ -1261,7 +1314,7 @@ class Renderer:
         for j in range(nc):
             wid = max(len(str(r[j])) * size * (0.53 if j == 0 else 0.5) / 72 for r in rows)
             tot += min(4.2, max(1.2, wid)) + 0.28
-        return tot
+        return self._unk(tot)
 
     def _table_geo(self, rows, w, size):
         """Column widths and row heights (inches) for a table of ``rows`` set ``w`` wide at ``size`` pt. The
@@ -1279,7 +1332,7 @@ class Renderer:
         """One native table at the given geometry: header in ink, first column bold, thin rules, banded rows."""
         p = self.p
         nr, nc = len(rows), len(rows[0])
-        gs = sl.shapes.add_table(nr, nc, Inches(x), Inches(y), Inches(w), Inches(sum(rh)))
+        gs = sl.shapes.add_table(nr, nc, *self._g(x, y, w, sum(rh)))
         tbl = gs.table
         tblPr = tbl._tbl.tblPr
         for a in ("firstRow", "bandRow"):
@@ -1288,7 +1341,7 @@ class Renderer:
         if sid is not None:
             sid.text = NO_STYLE
         for j, cw_ in enumerate(cws):
-            tbl.columns[j].width = Inches(cw_)
+            tbl.columns[j].width = Inches(self._kx(cw_)) if self._cv is not None else Inches(cw_)
         for i, r in enumerate(rows):
             tbl.rows[i].height = Inches(rh[i])
             for j, val in enumerate(r):
@@ -1555,7 +1608,11 @@ class Renderer:
         rest = sum(self.ph([pp], w) + 0.25 for pp, b in paras) - 0.25
         too_long = True
         for size in ((64, 60, 54, 48, 44) if (spec.LOOK_V2 or panel) else (S.display, 40, 36, 32, 28)):   # the largest size at which the title takes three lines and the whole cover fits
-            n = self.nlines(s["title"], w, size, True, self.th.head)
+            if self._cv is None:
+                n = self.nlines(s["title"], w, size, True, self.th.head)
+            else:   # deck-slide-size: measured as drawn (the last two words glued), and no glued pair wider than 90% of the line by the glyph
+                # estimate: at 64 pt 'awareness campaign' was 8.47 of 8.7 in by the estimate and broke inside the word in LibreOffice
+                n = self.nlines(glue(s["title"]), w, size, True, self.th.head) if self._units_fit(s["title"], w * 0.9, size) else 99
             if n > 3:
                 continue
             too_long = False
@@ -1799,6 +1856,8 @@ class Renderer:
         reasons are too long for the left column, the statement sits beside the panel and the reasons run
         full width underneath as cards."""
         S, p, g = self.th.scale, self.p, self.th.grid
+        if self._lid == "frames_strip" and self._cv is not None:   # deck-slide-size: four 16:9 frames in a row only while each is 2.4 in wide
+            self.min_column((self.x1 - self.x0 - 3 * 0.2) / 4, spec.MIN_STRIP_FRAME_IN, "frames strip cell")   # 4:3 (2.07 in): NoFit, the alternatives
         sk = next((b for b in s["blocks"] if b["kind"] == "sketch"), None)
         rest = [b for b in s["blocks"] if b["kind"] != "sketch"]
         pw = 4.4
@@ -1929,7 +1988,7 @@ class Renderer:
 
     def _cpl_w(self, size, bold=False, font=None, cpl=48) -> float:
         """The width in inches of ``cpl`` characters at ``size`` pt (the renderer's glyph estimate): the 48-character line."""
-        return cpl * size * self._wf(bold, font) / 72
+        return self._unk(cpl * size * self._wf(bold, font) / 72)
 
     def _text_of(self, b) -> str:
         return str(b.get("text", "")).strip()
@@ -1941,7 +2000,7 @@ class Renderer:
         if im is None:
             raise NoFit(f"no picture for {slot}")
         if sl is not None and self._ink is not None:
-            self._ink.append((x, y, w, h))
+            self._ink.append(self._cv.box(x, y, w, h) if self._cv is not None else (x, y, w, h))
         if sl is None or im.get("probe"):
             return
         m = self._mark(sl)
@@ -1983,7 +2042,8 @@ class Renderer:
         if sl is None or self._sid is None or sl is not self._cur:
             return
         from . import graphics   # noqa: PLC0415
-        el = etree.fromstring(graphics.icon_xml(sl.shapes._next_shape_id, iid, int(Inches(x)), int(Inches(y)), int(Inches(size)), self.p.fg, size))
+        ex, ey, es, _ = self._gk(x, y, size, size)
+        el = etree.fromstring(graphics.icon_xml(sl.shapes._next_shape_id, iid, int(ex), int(ey), int(es), self.p.fg, size))
         sl.shapes._spTree.append(el)
 
     def _record_icons(self, sl, sid, name):
@@ -2027,7 +2087,7 @@ class Renderer:
 
     def _mockup_pill(self, sl, x, y):
         """The fixed 'Mock-up' label (spec.MOCKUP_LABEL): white bold 10 pt on an ink pill, beside the picture's own label. Returns its width."""
-        pw = 0.24 + 0.085 * len(spec.MOCKUP_LABEL)
+        pw = self._unk(0.24 + 0.085 * len(spec.MOCKUP_LABEL))
         self.rect(sl, x, y, pw, self.PILL_H, fill=self.th.ink, name="MockupPill")
         self.text(sl, x, y, pw, self.PILL_H, spec.MOCKUP_LABEL, size=10, color="FFFFFF", bold=True, align=PP_ALIGN.CENTER,
                   anchor=MSO_ANCHOR.MIDDLE, name="MockupLabel")
@@ -2058,9 +2118,12 @@ class Renderer:
         from . import graphics   # noqa: PLC0415
         if ground:
             self.rect(sl, x, y, w, h, fill=ground, name="FrameGround")
-            x, y, w, h = x + 0.45, y + 0.75, w - 0.9, h - 1.5
+            if self._cv is not None and x <= 0.01:   # deck-slide-size: a column bleeding off the left keeps its labels 0.5 in in
+                x, y, w, h = x + 0.55, y + 0.75, w - 1.0, h - 1.5
+            else:
+                x, y, w, h = x + 0.45, y + 0.75, w - 0.9, h - 1.5
         row = self.PILL_H + 0.18
-        geo = graphics.frame_geometry(fr["kind"], fr["ratio"], x, y, w, h - row)
+        geo = graphics.frame_geometry(fr["kind"], self._aspect_v(fr["ratio"], x, y, w, h - row), x, y, w, h - row)   # the format's exact aspect at any size
         gutter = None
         for role, shape, px, py, pw, ph in geo["parts"]:
             name = f"Frame: {fr['kind']}"
@@ -2093,7 +2156,7 @@ class Renderer:
         im0 = boxes[0][5]
         lab = (self._label_w(im0, 3.0) + 0.1) if im0.get("status") != "approved" else 0.0
         py = boxes[0][2] - self.PILL_H - 0.12
-        self._pills(sl, x_end - lab - (0.24 + 0.085 * len(spec.MOCKUP_LABEL)), py, im0)
+        self._pills(sl, x_end - lab - self._unk(0.24 + 0.085 * len(spec.MOCKUP_LABEL)), py, im0)
         self._strip_note(sl, boxes[0][1] - 0.12, py, note)
         self._build(sl, m)
 
@@ -2119,7 +2182,7 @@ class Renderer:
         self.rect(sl, x, y, w, h, fill=self.th.panel, name="FrameGround")
         ix, iy, iw, ih = x + 0.5, y + 0.75, w - 1.0, h - 1.5 - self.PILL_H - 0.2
         n = len(shots)
-        rs = [self._asset_ratio(im) for _, im in shots]
+        rs = [self._aspect_v(self._asset_ratio(im), ix, iy, iw, ih) for _, im in shots]
         gap, num = 0.2, 0.42   # between cells; the number row under each frame
         fh = min((ih - num * n - gap * (n - 1)) / n, iw / max(rs))
         top = iy + (ih - ((fh + num) * n + gap * (n - 1))) / 2
@@ -2206,7 +2269,7 @@ class Renderer:
                 self._icon(sl, icon[i], x + 0.1, y, graphics.ICON_STEP_IN)
             cy = y + ih
             first = i == 0
-            shp = sl.shapes.add_shape(MSO_SHAPE.PENTAGON if first else MSO_SHAPE.CHEVRON, Inches(x), Inches(cy), Inches(cw + (0.18 if i < n - 1 else 0)), Inches(chev_h))
+            shp = sl.shapes.add_shape(MSO_SHAPE.PENTAGON if first else MSO_SHAPE.CHEVRON, *self._g(x, cy, cw + (0.18 if i < n - 1 else 0), chev_h))
             st = shp._element.find(qn("p:style"))
             if st is not None:
                 shp._element.remove(st)
@@ -2272,7 +2335,7 @@ class Renderer:
         for i in range(n):
             cx = self.x0 + cw * (i + 0.5)
             self.ptext(sl, cx - (cw - 0.15) / 2, y, cw - 0.15, ah, labs[i], anchor="bottom", name="slot:steps")
-            node = sl.shapes.add_shape(MSO_SHAPE.OVAL, Inches(cx - 0.11), Inches(ly - 0.11), Inches(0.22), Inches(0.22))
+            node = sl.shapes.add_shape(MSO_SHAPE.OVAL, *self._gk(cx - 0.11, ly - 0.11, 0.22, 0.22))
             stl = node._element.find(qn("p:style"))
             if stl is not None:
                 node._element.remove(stl)
@@ -2330,7 +2393,7 @@ class Renderer:
         self.hairline(sl, self.x0 + cw / 2, y + ph_ / 2, self.x1 - cw / 2, y + ph_ / 2, name="Diagram: journey")
         for i, it in enumerate(items):
             cx = self.x0 + cw * (i + 0.5)
-            pill = sl.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(cx - pw / 2), Inches(y), Inches(pw), Inches(ph_))
+            pill = sl.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, *self._g(cx - pw / 2, y, pw, ph_))
             stl = pill._element.find(qn("p:style"))
             if stl is not None:
                 pill._element.remove(stl)
@@ -2484,7 +2547,7 @@ class Renderer:
             cd.add_series(title or "", [graphics.plot_value(pt) for pt in order])
         kind = {"bar": XL_CHART_TYPE.BAR_CLUSTERED, "column": XL_CHART_TYPE.COLUMN_CLUSTERED, "line": XL_CHART_TYPE.LINE_MARKERS,
                 "segmented": XL_CHART_TYPE.BAR_STACKED_100}[form]
-        gf = sl.shapes.add_chart(kind, Inches(x), Inches(y), Inches(w), Inches(h), cd)
+        gf = sl.shapes.add_chart(kind, *self._g(x, y, w, h), cd)
         gf.name = "Chart"
         gf._element.nvGraphicFramePr.cNvPr.set("descr", (title + ": " if title else "") + "; ".join(f"{pt['label']} {pt['shown']}" for pt in points))
         ch = gf.chart
@@ -2740,6 +2803,10 @@ class Renderer:
         lw = (self.x1 - self.x0 - g.G) * frac
         xr = self.x0 + lw + g.G
         wr = self.x1 - xr
+        if self._cv is not None:   # deck-slide-size (Fable fix 3): the layout's own minimum text column, else the switch rung takes it
+            mn = spec.MIN_COLUMN_IN.get(self._lid or "", spec.MIN_COLUMN_DEFAULT)
+            self.min_column(lw, mn, f"{self._lid} left column")
+            self.min_column(wr, mn, f"{self._lid} right column")
         for dense in (False, True):
             try:
                 y = self.head(None, s, dense)
@@ -3102,7 +3169,7 @@ class Renderer:
     def _units_fit(self, text, w, size, caps=False, bold=True, font=None) -> bool:
         """Every unbreakable unit of ``text`` (a word, or the last two words ``glue`` joins) fits one line of ``w`` inches at ``size``: a
         display line must never break inside a word."""
-        per = w * 72 / (size * self._wf(bold, font or self.th.head, caps))
+        per = self._kx(w) * 72 / (size * self._wf(bold, font or self.th.head, caps))
         return all(len(u) <= per for u in glue(str(text)).split(" "))
 
     def _frame(self, sl, xs, top, bottom):
@@ -3991,7 +4058,7 @@ class Renderer:
         if any(b["kind"] not in ("text", "small", "statement") for b in blocks) or (not cover and len(blocks) > 2):
             raise NoFit("a bleed holds a title and a line")
         col = tz["text"]
-        bx, by, bw, bh = images.zone_box(tz["zone"])
+        bx, by, bw, bh = images.zone_box(tz["zone"], images.zone_block(self._cv))
         tw = bw
         kp = [self.para(_kicker(self.deck["meta"]), 16, col, bold=True)] if cover else []
         kh = self.ph(kp, tw) if kp else 0.0
@@ -4080,9 +4147,11 @@ class Renderer:
         """Measure layout ``name`` for the slide dict ``s`` (blocks already shown) without drawing: ``{ok, scale, relaxed}``. The plan calls
         this, so the plan and the drawing cannot disagree about what fits. ``scale`` is the smallest stack scale used (1.0 when none)."""
         fn = getattr(self, self.LAYOUT_FN.get(name, "_lay_stack"))
+        lib = layouts.load()
+        if self.not_here(name, lib) or not self.cells_fit(s, name):   # deck-slide-size: not_at this size, or its cells under their minimum
+            return {"ok": False, "scale": 1.0, "relaxed": relaxed}
         saved = (self._lid, self._min_sc, self._scale_cap, self._relaxed, self._tpt, self._pics, self.p, self._cpl)
         self._cpl = cpl
-        lib = layouts.load()
         self._lid, self._min_sc, self._scale_cap, self._relaxed = name, 1.0, scale_cap, relaxed
         self.p = self._palette(s["type"] in dark_types(self.th.v3) or name in ("close",))
         if title_pt:
@@ -4105,8 +4174,13 @@ class Renderer:
         from . import qa_render
         fn = getattr(self, self.LAYOUT_FN.get(name, "_lay_stack"))
         lib = layouts.load()
+        if self.not_here(name, lib) or not self.cells_fit(s, name):
+            return None
         scratch = Presentation()
-        scratch.slide_width, scratch.slide_height = Inches(W), Inches(H)
+        if self._cv is None:
+            scratch.slide_width, scratch.slide_height = Inches(W), Inches(H)
+        else:
+            scratch.slide_width, scratch.slide_height = Emu(self._cv.emu[0]), Emu(self._cv.emu[1])
         sl = scratch.slides.add_slide(scratch.slide_layouts[6])
         keep = ("_lid", "_min_sc", "_scale_cap", "_relaxed", "_tpt", "_pics", "p", "_cpl", "_cur", "steps", "_ink", "_band_drawn", "_foot",
                 "_shapes_now", "_slotmap", "_sid", "_bleed", "_own_pics", "_acc", "_acc_drawn", "placed")
@@ -4127,7 +4201,29 @@ class Renderer:
         finally:
             for k, v in saved.items():
                 setattr(self, k, v)
-        return qa_render.hole_of_boxes(boxes, W, H)
+        return qa_render.hole_of_boxes(boxes, W, H) if self._cv is None else qa_render.hole_of_boxes(boxes, self._cv.w_in, self._cv.h_in)
+
+    def not_here(self, name: str, lib: dict | None = None) -> bool:
+        """Whether layout ``name`` is listed ``not_at`` this deck's size (layout.schema.json; never at 16:9)."""
+        if self._cv is None:
+            return False
+        return self.cv.name in ((lib or layouts.load()).get(name) or {}).get("not_at", [])
+
+    def cells_fit(self, s: dict, name: str) -> bool:
+        """deck-slide-size (review 8): the design's row minimums at 4:3 and A4. A KPI card under spec.MIN_KPI_CARD_IN (1.8 in) or a comparison
+        cell under spec.MIN_COMPARE_CELL_IN (2.2 in) fails the layout, so the plan takes its alternatives (kpi_row: cards, cards_split;
+        comparison: cards; comparison_grid: native_table). Always True at 16:9."""
+        if self._cv is None:
+            return True
+        cw = self.x1 - self.x0
+        if name == "kpi_row":
+            n = max((len(b.get("items") or []) for b in s.get("blocks") or [] if b.get("kind") == "stats"), default=0)
+            return n < 2 or self._kx((cw - 0.3 * (n - 1)) / n) >= spec.MIN_KPI_CARD_IN - 1e-9
+        if name in ("comparison", "comparison_grid"):
+            cols = max([len((b.get("rows") or [[]])[0]) for b in s.get("blocks") or [] if b.get("kind") == "table"]
+                       + [2 for b in s.get("blocks") or [] if b.get("kind") == "fromto"] + [0])
+            return cols < 2 or self._kx((cw - 0.25 * (cols - 1)) / cols) >= spec.MIN_COMPARE_CELL_IN - 1e-9
+        return True
 
     def title_fits(self, title: str, pt: int, lines: int = 3) -> bool:
         """Whether a title takes at most ``lines`` lines at ``pt`` across the content width."""
@@ -4138,15 +4234,26 @@ class Renderer:
     _HALF = frozenset({"cards_split", "placeholder_split", "image_text", "image_left", "quote_cards", "execution", "territory",
                        "objective_panel", "chart", "execution_stack", "cover_image"})
 
+    #: deck-slide-size (Fable fix 4): the narrowest text column each half layout really draws on the 16:9 grid, in inches (the nominal 45% is
+    #: 5.41): cards_split's lead column is 42% of the content less the gutter, placeholder_split's narrow side 45%, image_text's text column
+    #: what the 5.4 in panel and its 0.55 in gap leave, execution's text half 5.28. At 4:3 and A4 capacity reads these, k-scaled, so a limit
+    #: never promises more than the drawn box holds; at 16:9 the nominal boxes stay (the layout files' max_chars are recorded from them).
+    _DRAWN_W = {"cards_split": 4.949, "placeholder_split": 5.302, "image_text": 6.083, "image_left": 6.083, "execution": 5.28,
+                "execution_stack": 5.28, ("close", "statement"): 3.69}   # a (layout, slot) key: one slot narrower than its layout (deck-look's close)
+
     @staticmethod
-    def slot_boxes(layout_id: str, lay: dict | None = None) -> dict:
+    def slot_boxes(layout_id: str, lay: dict | None = None, canvas=None) -> dict:
         """``{slot: (width in, height in)}`` of each text slot in the layout's nominal arrangement (the boxes ``layouts.capacity`` reads).
-        The content width is the grid's; a layout that sets text beside a panel gets 45% of it."""
+        The content width is the grid's; a layout that sets text beside a panel gets 45% of it. With a ``canvas`` (a theme.Canvas or a
+        size name) other than 16:9: the width the renderer draws at that size, in physical inches (the narrowest drawn column, x ``k``)."""
         lay = lay or layouts.load()[layout_id]
         g = themes.Grid()
         cw = g.W - 2 * g.M
         w = cw * 0.45 if layout_id in Renderer._HALF else cw
-        return {n: (w, Renderer._ROLE_H.get(sl.get("role", "body"), 1.0)) for n, sl in lay["slots"].items() if sl["kind"] == "text"}
+        cv = themes.canvas(canvas) if isinstance(canvas, str) or canvas is None else canvas
+        D = Renderer._DRAWN_W
+        return {n: ((w if cv.identity else min(w, D.get((layout_id, n), D.get(layout_id, w))) * cv.k), Renderer._ROLE_H.get(sl.get("role", "body"), 1.0))
+                for n, sl in lay["slots"].items() if sl["kind"] == "text"}
 
     @staticmethod
     def box_capacity(w: float, h: float, role: str, max_cpl: int | None = None) -> int:
@@ -4178,8 +4285,11 @@ class Renderer:
                 rec["fit"] = self.fit_by_slide.get(sid)
                 rec["shapes"] = self.shapes_by_slide.get(sid, [])
             return rec
-        return {"version": 1, "theme": "napkin" if self.th.layouts else "classic",
-                "slides": {sid: one(sid, name) for sid, name in self.layouts.items()}}
+        out = {"version": 1, "theme": "napkin" if self.th.layouts else "classic",
+               "slides": {sid: one(sid, name) for sid, name in self.layouts.items()}}
+        if self._cv is not None:   # deck-slide-size: named only when not 16:9 (a 16:9 layouts.json keeps its bytes)
+            out["canvas"] = self.cv.to_dict()
+        return out
 
     def render(self, out: Path, layouts_out: Path | None = None):
         """Render every slide in order and save the .pptx; with ``layouts_out``, also write the layout record there
@@ -4236,6 +4346,9 @@ class Renderer:
             pt_, ptitle = spec.picture_of(s)
             self._exec_title = ptitle if pt_ == "execution" else None
         self._cpl = ((planned or {}).get("fit") or {}).get("cpl", 48)
+        tpt_saved = self._tpt
+        if ((planned or {}).get("fit") or {}).get("title_pt"):   # deck-slide-size: this slide's own title size (the plan's last rung at 4:3 / A4)
+            self._tpt = {**self._tpt, name: planned["fit"]["title_pt"]}
         self._acc = layouts.accent_phrase(s, s["blocks"]) if self.th.v3 else None
         self._acc_drawn = False
         self._own_pics = set()
@@ -4279,6 +4392,7 @@ class Renderer:
                    else f"the {name} layout does not fit beside its picture")
             self.picture_findings.append({"check": "image_missing", "level": "warn", "slide": sid, "slot": slot,
                                           "message": f"{slot} is not drawn: {why}, so no output carries it"})
+        self._tpt = tpt_saved
         self.layouts[sid] = name
         self._record_icons(sl, sid, name)
         self.shapes_by_slide[sid] = self._shapes_now
@@ -4301,7 +4415,7 @@ class Renderer:
             tag = "DRAFT · needs a person" if s["status"] == "needs_human" else f"DRAFT · {self.n_human} slides need a person"
             wx = 8.7 if self._foot is None else max(fx0, fx1 - 4.03)
             if self._bleed:   # on a full-bleed picture the mark sits on a pill of the slide's ground, its box no wider than the pill
-                tw_ = 0.3 + len(tag) * self.th.scale.foot * 0.56 / 72
+                tw_ = self._unk(0.3 + len(tag) * self.th.scale.foot * 0.56 / 72)
                 self.rect(sl, fx1 - tw_ + 0.1, 0.08, tw_, 0.38, fill=p.bg, name="MarkGround")
                 wx = fx1 - tw_ + 0.15
             self.text(sl, wx, 0.12, fx1 - wx, 0.3, tag, size=foot, cap=True, color=p.acc_t, bold=True, align=PP_ALIGN.RIGHT, name="Watermark")
@@ -4327,6 +4441,8 @@ class Renderer:
         n_sh, n_st = len(sl.shapes), len(self.steps)
         fn = getattr(self, self.LAYOUT_FN.get(name, "_lay_stack"))
         self._lid = name
+        if self.not_here(name) or not self.cells_fit(s, name):
+            return False
         try:
             try:
                 fn(sl, s)
@@ -4434,9 +4550,14 @@ class Renderer:
         path = self.pictures[im["asset"]]
         with Image.open(path) as pil:
             sw, sh = pil.size
-        box = images.crop_box(sw, sh, w / h, im.get("focal"))
+        gx, gy, gw, gh = self._g(x, y, w, h)
+        box = images.crop_box(sw, sh, (w / h) if self._cv is None else (gw / gh), im.get("focal"))   # deck-slide-size: re-cropped to the box drawn at this size, about its focal point
+        keep = self.protect.get(im.get("asset")) if self._cv is not None else None   # a Production picture's protect boxes (run_deck reads them)
+        if keep and not images.keeps_protected({"keep": keep, "focal": im.get("focal"), "width": sw, "height": sh}, gw / gh):
+            self.picture_findings.append({"check": "image_crop", "level": "warn", "slide": self._sid, "slot": im.get("slot") or name,
+                                          "message": f"at {self.cv.name} the picture's crop cuts part of its protected area: make a size of it for this box in Production"})
         l, t, r, b = images.src_rect(box, sw, sh)
-        pic = sl.shapes.add_picture(str(path), Inches(x), Inches(y), Inches(w), Inches(h))
+        pic = sl.shapes.add_picture(str(path), gx, gy, gw, gh)
         pic.crop_left, pic.crop_top, pic.crop_right, pic.crop_bottom = l, t, r, b
         pic.name = name
         pic._element.nvPicPr.cNvPr.set("descr", im.get("alt") or "An illustrative picture")
@@ -4459,7 +4580,7 @@ class Renderer:
         return f"{lab} · Flagged" if im.get("status") == "flagged" else lab
 
     def _label_w(self, im, w) -> float:
-        return min(w - 0.2, 0.24 + 0.085 * len(self._label_text(im)))
+        return min(w - 0.2, self._unk(0.24 + 0.085 * len(self._label_text(im))))
 
     def _label_pill(self, sl, lx, ly, im, pw):
         """The picture label (Illustrative, or Flagged): white bold 10 pt on a solid ink pill (red when flagged), at ``lx, ly``."""
@@ -4484,7 +4605,7 @@ class Renderer:
     def _title_text(self, sl, s, size=30, y=0.5, w=None):
         """The slide's takeaway title (a full sentence)."""
         w = w or (self.x1 - self.x0)
-        h = _est_h(s["title"], w, size, 1.1)
+        h = self._eh(s["title"], w, size, 1.1)
         m = self._mark(sl)
         if self.th.v3 and self.th.decor.band and y == 0.5:   # the flow gets the band too: it is the same look, only the fit failed
             self.band(sl, s)
@@ -4503,23 +4624,23 @@ class Renderer:
                 continue
             m = self._mark(sl)
             if k == "statement":
-                sz = 24 * scale; h = _est_h(tx, w, sz, 1.15)
+                sz = 24 * scale; h = self._eh(tx, w, sz, 1.15)
                 self.text(sl, x, y, w, h, tx, size=sz, font=t.head); y += h + 0.2
             elif k == "quote":
-                sz = 26 * scale; h = _est_h(tx, w, sz, 1.15)
+                sz = 26 * scale; h = self._eh(tx, w, sz, 1.15)
                 self.text(sl, x, y, w, h, tx, size=sz, italic=True, font=t.head, color=p.acc_t); y += h + 0.2
             elif k == "text":
-                sz = 18 * scale; h = _est_h(tx, w, sz)
+                sz = 18 * scale; h = self._eh(tx, w, sz)
                 self.text(sl, x, y, w, h, tx, size=sz); y += h + 0.18
             elif k == "small":
-                sz = 13 * scale; h = _est_h(tx, w, sz)
+                sz = 13 * scale; h = self._eh(tx, w, sz)
                 self.text(sl, x, y, w, h, tx, size=sz, color=p.mute); y += h + 0.12
             elif k == "callout":
-                sz = 17 * scale; h = _est_h(tx, w - 0.4, sz) + 0.3
+                sz = 17 * scale; h = self._eh(tx, w - 0.4, sz) + 0.3
                 self.box(sl, x, y, w, h, t.panel)
                 self.text(sl, x + 0.2, y + 0.12, w - 0.4, h - 0.2, tx, size=sz, color=t.ink, anchor=MSO_ANCHOR.MIDDLE); y += h + 0.2
             elif k == "card":
-                sz = 16 * scale; h = _est_h(tx, w - 0.4, sz) + 0.6
+                sz = 16 * scale; h = self._eh(tx, w - 0.4, sz) + 0.6
                 self.box(sl, x, y, w, h, t.panel)
                 self.text(sl, x + 0.2, y + 0.12, w - 0.4, 0.35, bl.get("title", ""), size=12 * scale, bold=True, color=t.mute)
                 self.text(sl, x + 0.2, y + 0.45, w - 0.4, h - 0.5, tx, size=sz, color=t.ink); y += h + 0.2
@@ -4531,32 +4652,32 @@ class Renderer:
                 for key, val in bl["items"]:
                     self.text(sl, x, y, 1.5, 0.35, key, size=12 * scale, bold=True, color=t.mute)
                     val = "\n".join(_kv_parts(val))
-                    h = _est_h(val, w - 1.6, 15 * scale)
+                    h = self._eh(val, w - 1.6, 15 * scale)
                     self.text(sl, x + 1.6, y, w - 1.6, h, val, size=15 * scale); y += max(h, 0.35) + 0.12
             elif k == "fromto":
                 cw = (w - 0.8) / 2; sz = 16 * scale
-                h = max(_est_h(bl["from"], cw - 0.4, sz), _est_h(bl["to"], cw - 0.4, sz)) + 0.5
+                h = max(self._eh(bl["from"], cw - 0.4, sz), self._eh(bl["to"], cw - 0.4, sz)) + 0.5
                 for i, (lab, val) in enumerate((("From", bl["from"]), ("To", bl["to"]))):
                     bx = x + i * (cw + 0.8)
                     self.box(sl, bx, y, cw, h, t.panel if i == 0 else t.ink)
                     col = t.ink if i == 0 else t.on_dark
                     self.text(sl, bx + 0.2, y + 0.1, cw - 0.4, 0.3, lab.upper(), size=10, bold=True, color=t.mute if i == 0 else t.accent_on_dark)
                     self.text(sl, bx + 0.2, y + 0.4, cw - 0.4, h - 0.45, val, size=sz, color=col)
-                ar = sl.shapes.add_shape(MSO_SHAPE.RIGHT_ARROW, Inches(x + cw + 0.2), Inches(y + h / 2 - 0.15), Inches(0.4), Inches(0.3))
+                ar = sl.shapes.add_shape(MSO_SHAPE.RIGHT_ARROW, *self._gk(x + cw + 0.2, y + h / 2 - 0.15, 0.4, 0.3))
                 ar.fill.solid(); ar.fill.fore_color.rgb = _rgb(p.acc_f); ar.line.fill.background()
                 y += h + 0.25
             elif k == "stats":   # up to three big numbers, each with its label
                 n = max(1, len(bl["items"])); gap = 0.3; cw = (w - gap * (n - 1)) / n
                 for i, it in enumerate(bl["items"]):
                     bx = x + i * (cw + gap)
-                    bar = sl.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(bx), Inches(y), Inches(cw), Inches(0.06))
+                    bar = sl.shapes.add_shape(MSO_SHAPE.RECTANGLE, *self._g(bx, y, cw, 0.06))
                     bar.fill.solid(); bar.fill.fore_color.rgb = _rgb(p.acc_f); bar.line.fill.background()
                     self.text(sl, bx, y + 0.15, cw, 0.8, it["value"], size=40 * scale, bold=True, font=t.head)
                     self.text(sl, bx, y + 0.95, cw, 0.6, it["label"], size=13 * scale, color=p.mute)
                 y += 1.7
             elif k == "steps":
                 n = len(bl["items"]); gap = 0.2; cw = (w - gap * (n - 1)) / n; sz = 15 * scale
-                h = max(_est_h(v, cw - 0.3, sz) for _, v in bl["items"]) + 0.75
+                h = max(self._eh(v, cw - 0.3, sz) for _, v in bl["items"]) + 0.75
                 for i, (lab, val) in enumerate(bl["items"]):
                     bx = x + i * (cw + gap)
                     self.box(sl, bx, y, cw, h, t.panel)
@@ -4587,18 +4708,18 @@ class Renderer:
         if not (logo and _is_image(logo)):
             return self.x0
         try:
-            pic = sl.shapes.add_picture(str(logo), Inches(self.x0), Inches(y), height=Inches(0.9))
+            pic = sl.shapes.add_picture(str(logo), *self._g(self.x0, y, 0, 0)[:2], height=Inches(0.9))
         except Exception:   # a corrupt image degrades to no logo
             return self.x0
         pic.name = "Logo"
         pic._element.nvPicPr.cNvPr.set("descr", f"{self.deck['meta'].get('client', 'Brand')} logo")
-        return self.x0 + Emu(pic.width).inches + 0.3
+        return self.x0 + self._unk(Emu(pic.width).inches) + 0.3
 
     def _flow_human(self, sl, x, y, w, text, size) -> float:
         """One human-flagged bullet in the flow: a dashed card with the PROPOSED tag and the TO SUPPLY chip, so a
         placeholder is never styled as finished even when its layout fell back. Returns the height used."""
         p = self.p
-        h = 0.55 + _est_h(text, w - 0.5, size) + 0.1
+        h = 0.55 + self._eh(text, w - 0.5, size) + 0.1
         self.rect(sl, x, y, w, h, line=p.acc_t, lw=1.5, dash=True, name="Placeholder")
         self.text(sl, x + 0.25, y + 0.15, 1.6, 0.3, TAG, size=11, bold=True, color=p.acc_t, cap=True)
         self.rect(sl, x + w - 1.35, y + 0.14, 1.15, 0.3, fill=p.acc_f)
@@ -4668,7 +4789,7 @@ class Renderer:
         """Dark slide: one big line (the reframe, or the idea)."""
         m = self._mark(sl)
         self.text(sl, self.x0, 0.6, 6, 0.4, {"idea": "THE IDEA"}.get(s["type"], "THE REAL QUESTION"), size=11, bold=True, color=self.p.acc_t, cap=True)
-        h = _est_h(s["title"], 11.5, 40, 1.1)
+        h = self._eh(s["title"], 11.5, 40, 1.1)
         self.text(sl, self.x0, 1.6, 11.5, h, s["title"], size=40, bold=True, font=self.th.head)
         self._build(sl, m, title=True)
         self._flow(sl, s["blocks"], self.x0, 1.6 + h + 0.4, 10.5)
@@ -4765,7 +4886,7 @@ class Renderer:
 
 def render(deck, inp, out: Path, master: Path | None = None, findings: list | None = None, animate=False, theme=themes.DEFAULT,
            layouts_out: Path | None = None, pictures: dict | None = None, picture_findings: list | None = None, placed: set | None = None,
-           notes: bool = True, no_plan: bool = False, icons: dict | None = None) -> Path:
+           notes: bool = True, no_plan: bool = False, icons: dict | None = None, protect: dict | None = None) -> Path:
     """Render a deck to ``out`` (.pptx); slides with a failed check carry a visible flag.
 
     ``animate``: False (static), True or ``"auto"`` (builds play in order), ``"click"`` (one block per click).
@@ -4775,9 +4896,10 @@ def render(deck, inp, out: Path, master: Path | None = None, findings: list | No
     ``pictures``: asset id -> derived JPEG for the pictures to draw (images.copy_assets); None draws none and changes nothing.
     ``picture_findings``: a list the renderer appends to when a slide had to be drawn without its picture.
     ``icons``: a dict the renderer fills with the icons it drew (deck-graphics; empty unless spec.GRAPHICS): ``{slide id: {layout, ids}}``.
+    ``protect``: asset id -> a Production picture's protect boxes (deck-slide-size: a re-crop at 4:3 or A4 that cuts them is a finding).
     """
     r = Renderer(deck, inp, master, findings, animate, theme, pictures)
-    r.notes, r.no_plan = notes, no_plan
+    r.notes, r.no_plan, r.protect = notes, no_plan, dict(protect or {})
     r.render(out, layouts_out)
     if picture_findings is not None:
         picture_findings.extend(r.picture_findings)

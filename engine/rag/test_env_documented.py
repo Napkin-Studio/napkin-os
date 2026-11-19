@@ -17,7 +17,8 @@ def code_vars() -> dict:
     """{variable: [files]} for every variable read outside tests and outputs."""
     out: dict = {}
     for f in ENGINE.rglob("*.py"):
-        if {"outputs", "__pycache__"} & set(f.parts) or f.name.startswith("test_") or f.name == "conftest.py":
+        # a local virtualenv (engine/.venv) holds third-party packages, not the engine's code
+        if {"outputs", "__pycache__", ".venv", "venv", "site-packages"} & set(f.parts) or f.name.startswith("test_") or f.name == "conftest.py":
             continue
         for m in READ.finditer(f.read_text(errors="replace")):
             out.setdefault(m.group(1), []).append(str(f.relative_to(ENGINE)))

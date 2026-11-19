@@ -11,6 +11,9 @@ from ..llm import prompt
 
 SHOTS = ("f1", "f2", "f3", "f4")
 CALLS = 1
+#: 2 (18 Nov 2026): ``camera`` is the angle and the distance only; lens, light and colour come from the style pack, the only visual driver.
+#: A plan saved before it (no ``prompt_version``) keeps its words; its camera phrase is left out of the picture prompt (cli.shot_for_prompt).
+PROMPT_VERSION = 2
 
 
 class PlanError(ValueError):
@@ -80,6 +83,6 @@ def make(run: dict, run_path: Path, llm, banned: list[str] | None = None) -> dic
     ids = [t["id"] for t in run.get("territories", [])]
     obj, usage = llm("frames_plan", prompt("frames_plan"), json.dumps(_payload(run, banned or []), ensure_ascii=False))
     plan = {"run": run_path.name, "run_sha256_12": run_hash(run_path), "model": (usage or {}).get("model"), "usd": (usage or {}).get("usd"),
-            "territories": _clean(obj, ids)}
+            "prompt_version": PROMPT_VERSION, "territories": _clean(obj, ids)}
     plan_path(run_path).write_text(json.dumps(plan, indent=1, ensure_ascii=False))
     return plan

@@ -120,6 +120,119 @@ class Grid:
 
 
 @dataclass(frozen=True)
+class Canvas:
+    """One slide size (deck-slide-size, design.reflow_rule): its name, inches, EMU and the web stage in px (2 px per pt).
+
+    The layouts are composed on the 16:9 grid (``Grid``). At another size the renderers draw through ``x``/``y``, the reflow rule as a
+    piecewise-linear map, so margins and type stay physical: the left margin is unchanged (``x <= M``), the content box ``[M, W - M]`` reflows
+    by ``k`` (content anchor: columns and panels narrow, text re-wraps and the fit ladder takes what no longer fits), what hangs off the right
+    margin keeps its distance from the right edge (right anchor), the top band (title, kicker, body top) is unchanged, the body band
+    ``[body_top, body_end]`` takes the extra height of A4 and what sits below ``body_end`` (footer, picture feet) keeps its distance from the
+    bottom (bottom anchor). At 16:9 ``identity`` is True and no renderer calls the map: the 16:9 bytes are today's by construction."""
+    name: str
+    w_in: float
+    h_in: float
+    emu: tuple
+    px: tuple
+
+    @property
+    def identity(self) -> bool:
+        return self.name == SIZE_DEFAULT
+
+    @property
+    def k(self) -> float:
+        """Content width at this size over 16:9's (12.033 in): 1.0, 0.723 (4:3), 0.864 (A4)."""
+        g = Grid()
+        return (self.w_in - 2 * g.M) / (g.W - 2 * g.M)
+
+    @property
+    def ky(self) -> float:
+        """The body band's height at this size over 16:9's: 1.0 at 16:9 and 4:3, 1.162 on A4."""
+        g = Grid()
+        return (g.body_end - g.body_top + self.h_in - g.H) / (g.body_end - g.body_top)
+
+    def x(self, x: float) -> float:
+        """A 16:9 x (inches) at this size: left margin fixed, content reflowed by ``k``, right margin anchored to the right edge."""
+        g = Grid()
+        if self.identity or x <= g.M:
+            return x
+        x1 = g.W - g.M
+        if x >= x1:
+            return x + (self.w_in - g.W)
+        return g.M + (x - g.M) * self.k
+
+    def y(self, y: float) -> float:
+        """A 16:9 y (inches) at this size: the top band fixed, the body band stretched by ``ky``, the foot anchored to the bottom."""
+        g = Grid()
+        if self.identity or self.h_in == g.H or y <= g.body_top:
+            return y
+        if y >= g.body_end:
+            return y + (self.h_in - g.H)
+        return g.body_top + (y - g.body_top) * self.ky
+
+    def box(self, x: float, y: float, w: float, h: float) -> tuple:
+        """A 16:9 box ``(x, y, w, h)`` at this size: both corners through ``x`` and ``y``."""
+        X, Y = self.x(x), self.y(y)
+        return X, Y, self.x(x + w) - X, self.y(y + h) - Y
+
+    def unx(self, X: float) -> float:
+        """The inverse of ``x`` (a box at this size back in the 16:9 grid)."""
+        g = Grid()
+        if self.identity or X <= g.M:
+            return X
+        x1r = self.w_in - g.M
+        if X >= x1r:
+            return X - (self.w_in - g.W)
+        return g.M + (X - g.M) / self.k
+
+    def uny(self, Y: float) -> float:
+        g = Grid()
+        if self.identity or self.h_in == g.H or Y <= g.body_top:
+            return Y
+        if Y >= g.body_end + (self.h_in - g.H):
+            return Y - (self.h_in - g.H)
+        return g.body_top + (Y - g.body_top) / self.ky
+
+    def to_dict(self) -> dict:
+        return {"name": self.name, "w_in": round(self.w_in, 3), "h_in": round(self.h_in, 3)}
+
+
+#: The three sizes (design.reflow_rule.canvas): 16:9 is today's 13.333 x 7.5 in (Inches(13.333) = 12191695 EMU), 4:3 is 10 x 7.5 in,
+#: A4 landscape is true paper, 297 x 210 mm (10692000 x 7560000 EMU, 842 x 595 pt), so its PDF prints at 100%. No portrait (Fable, Q1).
+SIZE_DEFAULT = "16:9"
+CANVASES = {
+    "16:9": Canvas("16:9", 13.333, 7.5, (12191695, 6858000), (1920, 1080)),
+    "4:3": Canvas("4:3", 10.0, 7.5, (9144000, 6858000), (1440, 1080)),
+    "a4": Canvas("a4", 10692000 / 914400, 7560000 / 914400, (10692000, 7560000), (1684, 1191)),
+}
+
+
+def canvas(name: str | None) -> Canvas:
+    """The Canvas of a size name; None or an unknown name is 16:9 (absence means 16:9)."""
+    return CANVASES.get(name or SIZE_DEFAULT, CANVASES[SIZE_DEFAULT])
+
+
+def size_of(deck: dict | None) -> str:
+    """The deck's size name: ``meta.preferences.size.canvas`` (the one place every reader takes it from), else 16:9."""
+    pref = (((deck or {}).get("meta") or {}).get("preferences") or {}).get("size")
+    name = pref.get("canvas") if isinstance(pref, dict) else pref
+    return name if name in CANVASES else SIZE_DEFAULT
+
+
+def canvas_of(deck: dict | None) -> Canvas:
+    """The deck's Canvas (``size_of``)."""
+    return CANVASES[size_of(deck)]
+
+
+def size_by_emu(w: int, h: int, tol: int = 12700) -> str | None:
+    """The size name of a slide ``w`` x ``h`` EMU (a .potx master's), within ``tol`` EMU (1 pt) on each side, else None."""
+    for n, c in CANVASES.items():
+        if abs(c.emu[0] - w) <= tol and abs(c.emu[1] - h) <= tol:
+            return n
+    return None
+
+
+@dataclass(frozen=True)
 class Decor:
     """Decoration tokens of the look (deck-look, ``spec.LOOK_V3``): structure is hairlines, not filled stripes.
     ``rule_pt`` is the hairline weight; ``band`` turns the section band on; ``accent_marks_max`` is the most

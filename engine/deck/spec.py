@@ -496,6 +496,30 @@ LAYOUT_IDS_PLANNED = ("statement_split", "grid_points")
 RECIPE_SIZES = ("16:9", "4:3", "a4")
 RECIPE_TITLE_FORMS = ("claim", "label", "criterion")
 RECIPE_GENERATE = ("all", "cover", "none")
+#: deck-slide-size (features/deck-slide-size.clan): the slide sizes (theme.CANVASES), 16:9 the default. Absence means 16:9 everywhere: the
+#: size is stamped (deck.meta.preferences.size) only when a person, the document or a recipe gave one, and at 16:9 every renderer draws
+#: exactly as before (the canvas map is an identity branch), so no flag is needed for 16:9 to stay byte-identical.
+SLIDE_SIZES = ("16:9", "4:3", "a4")
+SIZE_DEFAULT = "16:9"
+#: The density a size implies when nobody chose one (Fable Q3): an A4 deck is a leave-behind and defaults to detailed. 4:3 keeps the format's.
+SIZE_DENSITY_DEFAULTS = {"a4": "detailed"}
+#: The density the bench builds each size at (Fable fix 1): 16:9 and A4 detailed (today's bench, and A4's default); 4:3 standard, the band a
+#: presented 4:3 deck is read at (detailed at 72% of the width moves points to the notes on most content slides, which would measure the size).
+BENCH_DENSITY = {"16:9": "detailed", "4:3": "standard", "a4": "detailed"}
+#: The narrowest text column a two-column layout may draw at 4:3 or A4 (Fable fix 3), in inches: under it the layout raises NoFit and the plan's
+#: switch rung takes its alternatives. cards_split's lead column is 42% of the content (3.58 in at 4:3), so its own minimum is 3.2 in (about 30
+#: characters at 16 pt); placeholder_split's 45% side is 3.84 in. Other layouts keep the design's 3.6 in.
+MIN_COLUMN_DEFAULT = 3.6
+MIN_COLUMN_IN = {"cards_split": 3.2, "placeholder_split": 3.2}
+#: The territory frames strip keeps four 16:9 frames in a row while each is this wide (16:9 2.86 in, A4 2.47); at 4:3 (2.07 in) frames_strip
+#: raises NoFit and the plan takes its alternatives (image_text, territory): no new layout code (Fable).
+MIN_STRIP_FRAME_IN = 2.4
+#: The design's row minimums (design.reflow_rule.minimums): a KPI card and a comparison cell under these widths at 4:3 or A4 fail their
+#: layout (render_pptx.Renderer.cells_fit) and the plan takes its alternatives (kpi_row: cards, cards_split; comparison: cards;
+#: comparison_grid: native_table).
+MIN_KPI_CARD_IN, MIN_COMPARE_CELL_IN = 1.8, 2.2
+#: Words in a prompt or brief that say the deck will be printed: the intake asks the size only then, or for a leave-behind (Fable Q4).
+PRINT_WORDS = ("print", "printed", "printing", "a4", "handout", "leave-behind", "leave behind", "4:3")
 #: The most preferred layouts a recipe lists for one slide type.
 RECIPE_MAX_PREFS = 3
 #: deck-types slice 4: the stage e guidance lines each title form selects (appended to the type's own, profiles.title_guidance). ``claim`` is

@@ -124,8 +124,8 @@ class Ledger:
 
 def job_usd(j: dict) -> float:
     """What a job counts as: the largest of Runway's estimate, its reported cost and the table price, at $0.01 a credit. A subject call
-    counts at its measured figure, else its card estimate."""
-    if j.get("kind") == "subjects":
+    counts at its measured figure, else its card estimate; so does a ``model_call`` (the Territory tool's frame plan)."""
+    if j.get("kind") in ("subjects", "model_call"):
         return round(float(j.get("usd") or j.get("estimate_usd") or SUBJECTS_ESTIMATE_USD), 4)
     nums = [x for x in (j.get("estimated_credits"), j.get("cost_credits"), j.get("table_credits")) if isinstance(x, (int, float))]
     if not nums:

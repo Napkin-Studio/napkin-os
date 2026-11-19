@@ -28,6 +28,7 @@ from pathlib import Path
 import yaml
 
 from . import images, spec
+from . import theme as themes
 
 DIR = Path(__file__).with_name("layouts")
 #: deck-look steps 3-4: the layouts laid over the library under ``spec.LOOK_V3`` (new ids and reworks).
@@ -635,23 +636,48 @@ def bind(lay: dict, s: dict, bl: list) -> tuple:
     return slots, unbound
 
 
-def slot_limit_issues(lay: dict, sid: str, slots: dict) -> list:
-    """``slot_limit`` findings for a bound deck slide: a text slot over its ``max_chars``, a list or group over its item limits."""
+def size_limit(lay: dict, slot: str, limit: int, size: str | None, item: bool = False) -> int:
+    """deck-slide-size (Fable fix 2): a slot's character limit at the deck's size. 16:9 (or None) is the layout file's own ``limit``; at 4:3
+    and A4 a text slot's is never more than what the box drawn at that size holds (``capacity(.., canvas)``); a list item's limit is the
+    file's (its rows grow and the plan's probe measures them)."""
+    if size in (None, themes.SIZE_DEFAULT) or not limit or item:   # an item limit stays: a list's rows grow and the probe measures their fit
+        return limit
+    if (lay["slots"].get(slot) or {}).get("kind") == "text":
+        cap = capacity(lay["id"], slot, {lay["id"]: lay}, size)
+        return min(limit, cap) if cap else limit
+    return limit
+
+
+#: The unit suffix of a slot_limit finding that only the size raised (the words are within the 16:9 limit): repair never shortens it (no paid
+#: call for a size change); the plan's ladder (switch, 60-character lines, the caption floor, the notes) takes it.
+BY_SIZE = " at {size}"
+
+
+def slot_limit_issues(lay: dict, sid: str, slots: dict, size: str | None = None) -> list:
+    """``slot_limit`` findings for a bound deck slide: a text slot over its ``max_chars``, a list or group over its item limits. ``size``
+    (deck-slide-size): the limits at that size (``size_limit``); a finding the 16:9 limit would not raise is marked by size (its unit ends
+    ``BY_SIZE``, its fix ``ladder``), so a size change never asks for a paid shorten."""
     out = []
     for n, v in slots.items():
         sd = lay["slots"].get(n) or {}
         checks = []
-        if sd.get("max_chars") and v["kind"] == "text" and len(v.get("text", "")) > sd["max_chars"]:
-            checks.append((len(v["text"]), sd["max_chars"], "chars"))
+        if sd.get("max_chars") and v["kind"] == "text" and len(v.get("text", "")) > size_limit(lay, n, sd["max_chars"], size):
+            checks.append((len(v["text"]), size_limit(lay, n, sd["max_chars"], size), "chars", sd["max_chars"]))
         if sd.get("max_items") and v["kind"] in ("list", "group", "stat") and len(v["items"]) > sd["max_items"]:
-            checks.append((len(v["items"]), sd["max_items"], "items"))
+            checks.append((len(v["items"]), sd["max_items"], "items", sd["max_items"]))
         item = sd.get("item") or {}
         if item.get("body_max_chars") and v["kind"] in ("list", "group"):
             worst = max((len(i.get("text", "")) for i in v["items"]), default=0)
-            if worst > item["body_max_chars"]:
-                checks.append((worst, item["body_max_chars"], "chars in an item"))
-        for measured, limit, unit in checks:
-            out.append(_issue(sid, n, "slot_limit", f"{n} holds {measured} {unit}, the layout's limit is {limit}", measured, limit, unit, {"kind": "shorten"}))
+            lim = size_limit(lay, n, item["body_max_chars"], size, item=True)
+            if worst > lim:
+                checks.append((worst, lim, "chars in an item", item["body_max_chars"]))
+        for measured, limit, unit, base in checks:
+            if measured <= base:   # only the size raised it
+                u = unit + BY_SIZE.format(size=size)
+                out.append(_issue(sid, n, "slot_limit", f"{n} holds {measured} {unit}, the layout's limit at {size} is {limit} (the words fit at 16:9: "
+                                  "the layout ladder takes it, never a paid shorten)", measured, limit, u, {"kind": "ladder"}))
+            else:
+                out.append(_issue(sid, n, "slot_limit", f"{n} holds {measured} {unit}, the layout's limit is {limit}", measured, limit, unit, {"kind": "shorten"}))
     return out
 
 
@@ -759,15 +785,17 @@ def plan_record(deck: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------------------------------------- capacity
-def capacity(layout_id: str, slot: str, library: dict | None = None) -> int | None:
+def capacity(layout_id: str, slot: str, library: dict | None = None, canvas: str | None = None) -> int | None:
     """The ``max_chars`` of a text slot, derived: floor(0.85 x characters per line x lines) from the slot's box
-    (``Renderer.slot_boxes``), the role's size at the shrink floor and ``max_cpl``. None for a slot with no text measure."""
+    (``Renderer.slot_boxes``), the role's size at the shrink floor and ``max_cpl``. None for a slot with no text measure.
+    ``canvas`` (deck-slide-size): a size name; None or 16:9 is the layout files' nominal box, any other the box drawn at that size."""
     from . import render_pptx
     lay = (library or load())[layout_id]
     sl = lay["slots"][slot]
     if sl["kind"] != "text":
         return None
-    box = render_pptx.Renderer.slot_boxes(layout_id, lay).get(slot)
+    box = (render_pptx.Renderer.slot_boxes(layout_id, lay) if canvas in (None, themes.SIZE_DEFAULT)
+           else render_pptx.Renderer.slot_boxes(layout_id, lay, canvas)).get(slot)
     if not box:
         return None
     return render_pptx.Renderer.box_capacity(box[0], box[1], sl.get("role", "body"), sl.get("max_cpl"))
@@ -955,6 +983,7 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
     prefs, swaps, hooks = prefs or {}, swaps or {}, hooks or {}
     fx = (fixes or {}).get("slides") or {}
     density = prefs.get("density") or "detailed"
+    size = themes.size_of(base_deck)   # deck-slide-size: the plan probes at the deck's size (the probe Renderer reads the same stamp)
     deck = strip_plan(base_deck, keep_density=True)   # a planned deck is stripped first: the plan always starts from the base, so planning again changes nothing
     aud = deck["meta"].get("audience", "review")
     stop = prefs.get("text_mode") == "condense" and bool(prefs.get("repair"))
@@ -971,6 +1000,20 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
 
     def probe(sl_, lid, relaxed=False, cap=None, stamped=None, cpl=48):
         return R.probe(sl_, lid, relaxed=relaxed, scale_cap=cap, title_pt=stamped, cpl=cpl)
+
+    r169 = []
+
+    def fits_169(sl_, lid, cap, stamped):
+        """deck-slide-size (Fable fix 2): whether the slide fits this layout at 16:9: if it does, its overflow at this size is the size's,
+        which the free ladder takes, never the paid shorten."""
+        if lid == "flow":
+            return False
+        if not r169:
+            d169 = copy.deepcopy(deck)
+            d169["meta"].get("preferences", {}).pop("size", None)
+            r169.append(render_pptx.Renderer(d169, None))
+        r = r169[0].probe(sl_, lid, scale_cap=cap, title_pt=stamped)
+        return r["ok"] and not r["relaxed"]
 
     def before_probe(sid_, s_, lid_):
         """``(exempt, base, moved)`` before the probe: the cover's held lines, then density (step 0 of the ladder) for layout ``lid_``."""
@@ -1098,7 +1141,7 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
         sl_ = _with_moved(base, moved) if moved else base
         shown = spec.shown_blocks(sl_, aud)
         sc_cap = f.get("scale_max")
-        rung, scale, relaxed, why_, cpl_ = "as_is", 1.0, False, why[sid], 48
+        rung, scale, relaxed, why_, cpl_, tpt_ = "as_is", 1.0, False, why[sid], 48, None
         res = probe({**sl_, "blocks": shown}, lid, cap=sc_cap, stamped=pt.get(lid)) if lid != "flow" else None
         if sid in pref_rule and not (res is not None and res["ok"] and not res["relaxed"]):   # deck-types: a preference holds only at as_is or shrunk
             lid, why_ = pref_rule[sid]
@@ -1108,6 +1151,9 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
             shown = spec.shown_blocks(sl_, aud)
             res = probe({**sl_, "blocks": shown}, lid, cap=sc_cap, stamped=pt.get(lid)) if lid != "flow" else None
         alts_fit: list = []
+        # deck-slide-size (review 4): a slide that holds its layout at 16:9 overflows here only because of the size: every finding on it is
+        # the free ladder's, never a paid shorten (no hook call, no pending entry), and repair reads fit.by_size
+        size_only = size != themes.SIZE_DEFAULT and fits_169({**sl_, "blocks": shown}, lid, sc_cap, pt.get(lid))
         if res is not None and res["ok"] and not res["relaxed"]:
             rung, scale = ("as_is" if res["scale"] >= 1.0 else "shrunk"), res["scale"]
         else:
@@ -1123,22 +1169,32 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
             if switched:
                 lid, res = switched[0], switched[1]
                 rung, scale, chosen_by, why_ = "switched", res["scale"], "fit_ladder", f"fit ladder: {ids[sid]} too full"
-            elif stop and not exempt:
-                rung = "no_fit"   # slice 5 shortens first; the rungs not yet run are listed in pending
+            elif stop and not exempt and not size_only:
+                rung = "no_fit"   # slice 5 shortens first; the rungs not yet run are listed in pending (never for an overflow only the size made)
             else:
-                # notes rung: movable points, last first, until it fits (density detailed, preserve, a pinned slide and notes deny skip it)
-                can = density != "detailed" and prefs.get("text_mode") != "preserve" and f.get("notes") != "deny" and lid != "flow"
+                # notes rung: movable points, last first, until it fits (density detailed, preserve, a pinned slide and notes deny skip it).
+                # deck-slide-size (Fable fix 1): at 4:3 and A4 detailed gets the notes rung too, as its LAST rung, after 60-character lines
+                # and the caption floor, so a detailed slide keeps every point it can and still never ends at no_fit while a point can move.
+                late = density == "detailed" and size != "16:9"
+                can = (density != "detailed" or (late and prefs.get("notes", True) is not False)) and prefs.get("text_mode") != "preserve" \
+                    and f.get("notes") != "deny" and lid != "flow"
                 done = False
-                if can:
+
+                def to_notes(relax=False):
+                    nonlocal sl_, shown
                     cands = [c for c in _movable(deck, sid, base, aud, exempt) if _moved_rec(c) not in moved]
                     for c in cands:
                         moved.append(_moved_rec(c))
                         sl_ = _with_moved(base, moved)
                         shown = spec.shown_blocks(sl_, aud)
-                        r2 = probe({**sl_, "blocks": shown}, lid, cap=sc_cap, stamped=pt.get(lid))
-                        if r2["ok"] and not r2["relaxed"]:
-                            rung, scale, res, done = "overflow_to_notes", r2["scale"], r2, True
-                            break
+                        r2 = probe({**sl_, "blocks": shown}, lid, relaxed=relax, cap=sc_cap, stamped=pt.get(lid))
+                        if r2["ok"] and (relax or not r2["relaxed"]):
+                            return r2
+                    return None
+                if can and not late:
+                    r2 = to_notes()
+                    if r2:
+                        rung, scale, res, done = "overflow_to_notes", r2["scale"], r2, True
                 if not done and lid != "flow":   # lines of up to 60 characters before any type goes down to the caption floor
                     rw = probe({**sl_, "blocks": shown}, lid, cap=sc_cap, stamped=pt.get(lid), cpl=60)
                     if rw["ok"] and not rw["relaxed"]:
@@ -1146,14 +1202,30 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
                 if not done:
                     r3 = probe({**sl_, "blocks": shown}, lid, relaxed=True, cap=sc_cap, stamped=pt.get(lid)) if lid != "flow" else None
                     if r3 and r3["ok"]:
-                        rung, scale, relaxed, res = "shrunk", r3["scale"], True, r3
+                        rung, scale, relaxed, res, done = "shrunk", r3["scale"], True, r3, True
+                if not done and can and late:   # 4:3 / A4 detailed: points go to the notes (labelled, verbatim) only now
+                    r2 = to_notes()
+                    if r2:
+                        rung, scale, res, done = "overflow_to_notes", r2["scale"], r2, True
                     else:
-                        rung = "no_fit"
+                        r4 = probe({**sl_, "blocks": shown}, lid, relaxed=True, cap=sc_cap, stamped=pt.get(lid))
+                        if r4["ok"] and moved:
+                            rung, scale, relaxed, res, done = "overflow_to_notes", r4["scale"], True, r4, True
+                if not done and size != "16:9" and lid != "flow":   # 4:3 / A4, nothing left to move (a placeholder never moves): this one slide's
+                    r5 = probe({**sl_, "blocks": shown}, lid, relaxed=True, cap=sc_cap, stamped=TITLE_SIZES[-1], cpl=60)   # title at the floor, 60-character lines
+                    if r5["ok"]:
+                        rung, scale, relaxed, res, done, cpl_, tpt_ = "shrunk", r5["scale"], True, r5, True, 60, TITLE_SIZES[-1]
+                if not done:
+                    rung = "no_fit"
         lay = lib.get(lid)
         slots, unbound = _bind(lib, lid, sl_, aud) if lay else ({}, [])
         fit = {"rung": rung, "scale": round(min(1.6, max(0.6, scale)), 3), "relaxed": relaxed, "moved": moved}
         if cpl_ != 48:
             fit["cpl"] = cpl_
+        if tpt_ is not None and tpt_ != pt.get(lid):
+            fit["title_pt"] = tpt_
+        if size_only and (rung != "as_is" or moved):
+            fit["by_size"] = True
         def fits(a, _s={**sl_, "blocks": shown}, _cap=sc_cap):
             r = probe(_s, a, cap=_cap, stamped=pt.get(a))
             if not (r["ok"] and not r["relaxed"]):
@@ -1166,6 +1238,9 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
         layout = {"id": lid, "version": lay["version"] if lay else 1, "chosen_by": chosen_by, "alternatives": alt_ids[:4], "why": why_[:160],
                   "fit": fit, "blocks_sha": blocks_sha(base, aud)}
         s["layout"] = layout
+        if size != themes.SIZE_DEFAULT and s["type"] == "title" and ready.get(sid) and not (lay and image_slots(lay)):   # Fable: never silent
+            issues.append(_issue(sid, "picture", "image_missing", f"at {size} the cover is drawn as {lid} without its picture: "
+                                 + _why_no_picture(lib, s, sl_, shown, lid, chosen_by, ready.get(sid, frozenset()), aud, probe, pt)))
         fb = text_zone_fallback(s) if spec.LOOK_V3 and s["type"] in images.TEXT_OVER_TYPES and "picture" in ready.get(sid, ()) else None
         if fb:   # deck-look step 7: no zone of the picture reads at AA under the capped scrim: the words sit beside it, and it is said
             best = fb.get("best") or {}
@@ -1189,9 +1264,25 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
             for slot, sd in lay["slots"].items():
                 if sd.get("required") and sd["kind"] != "image" and slot not in slots:
                     issues.append(_issue(sid, slot, "slot_missing", f"{lid} needs {slot} and the slide has nothing for it", level="error"))
-            lim = slot_limit_issues(lay, sid, slots)
+            lim = slot_limit_issues(lay, sid, slots, size if size != themes.SIZE_DEFAULT else None)
             issues.extend(lim)
-            if stop and rung == "no_fit" and not lim and slots:
+            if size != themes.SIZE_DEFAULT:   # deck-slide-size: the max-lines check, a title at the size it is drawn at, across the reflowed width
+                tsd = lay["slots"].get("title") or {}
+                tpt = fit.get("title_pt") or pt.get(lid) or TITLE_SIZES[0]
+                if tsd.get("max_lines") and tsd.get("role") == "title" and not R.title_fits(s["title"], tpt, tsd["max_lines"]):
+                    n_ = R.nlines(render_pptx.glue(s["title"]), R.x1 - R.x0, tpt, True, R.th.head)
+                    lim.append(_issue(sid, "title", "slot_limit", f"the title takes {n_} lines at {tpt} pt at {size}, the layout's limit is {tsd['max_lines']}",
+                                      n_, tsd["max_lines"], "lines" + BY_SIZE.format(size=size), {"kind": "ladder"}))
+                    issues.append(lim[-1])
+            if size_only:   # every finding on a slide only the size overflows is by size (the ladder's, never a paid shorten)
+                for x in lim:
+                    if (x.get("fix") or {}).get("kind") == "shorten":
+                        x["fix"] = {"kind": "ladder"}
+                        if x.get("evidence") and " at " not in str(x["evidence"].get("unit")):
+                            x["evidence"]["unit"] = f"{x['evidence']['unit']}{BY_SIZE.format(size=size)}"
+            by_size = [x for x in lim if (x.get("fix") or {}).get("kind") != "shorten"]
+            lim = [x for x in lim if (x.get("fix") or {}).get("kind") == "shorten"]   # deck-slide-size: a finding only the size raised is never shortened
+            if stop and rung == "no_fit" and not lim and not by_size and not size_only and slots:
                 big = max((n for n in slots if n != "title"), key=lambda n: slots[n]["chars"], default=None)
                 if big:
                     pending.append(_pend(sid, {"slot": big, "evidence": {"measured": slots[big]["chars"], "limit": (lay["slots"][big].get("max_chars") or slots[big]["chars"])}}))
@@ -1211,6 +1302,26 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
     deck["meta"]["_plan_secs"] = round(time.time() - t0, 3)
     deck["meta"].pop("_plan_secs", None)
     return deck, issues, pending
+
+
+def _why_no_picture(lib, s, sl_, shown, lid, chosen_by, ready, aud, probe, pt) -> str:
+    """deck-slide-size (review 9): the real reason a cover with a ready picture is drawn without it: a person's swap, a repair fix, no zone
+    of the picture that the words can sit on (the text-zone finder's own reason), or a title that does not fit beside the picture."""
+    if chosen_by == "person":
+        return f"a person chose {lid}, which has no picture"
+    if chosen_by == "repair":
+        return f"a repair fix chose {lid}, which has no picture"
+    why = []
+    im = (((s.get("slots") or {}).get("picture") or {}).get("image")) or {}
+    tz = im.get("text_zone") or {}
+    if tz.get("none"):
+        why.append(f"the words cannot sit on the picture ({tz.get('reason', 'no zone reads')})")
+    pics = [a for a in lib if a != lid and image_slots(lib[a]) and lib[a]["group"] == lib.get(lid, {}).get("group", "functional")
+            and accepts(lib[a], s, spec.shown_blocks(s, aud), ready)]
+    beside = [a for a in pics if not lib[a].get("when", {}).get("test") == "bleed_ready"]
+    if beside and not any(probe({**sl_, "blocks": shown}, a, stamped=pt.get(a))["ok"] for a in beside):
+        why.append("the title does not fit beside the picture")
+    return "; ".join(why) or "no layout with a picture holds this cover at this size"
 
 
 def _pend(sid, x) -> dict:

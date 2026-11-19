@@ -76,6 +76,7 @@ recipe:
   size: "16:9"
   format: pitch
   full:                        # 'Sent to be read': every slide in story order, detailed, pictures narrowed to the cover
+    size: a4                   # deck-slide-size: a leave-behind prints on A4 landscape (the person can override)
     density: {level: detailed}
     pictures: {generate: cover, types: [title]}
 sources: [GUIDE.md 3.1, GUIDE.md 1, NAPKIN-EDGE.md 3, rubric.json]

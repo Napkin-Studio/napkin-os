@@ -48,7 +48,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 from . import inputs as inputs_mod
-from . import profiles
+from . import profiles, spec
 from . import run_deck, run_state as rs
 
 #: The stage files each gate's stage writes, and what a replay copies in for each step. Order is the pipeline's.
@@ -137,6 +137,20 @@ def picked_type(inp: dict) -> str | None:
     return pid if isinstance(pid, str) and pid else None
 
 
+def picked_size(body: dict) -> str | None:
+    """deck-slide-size: the document's ``look.size.canvas`` (the body's ``look``, or ``inputs.look``), forwarded as --size; None when absent.
+    A value that is not a slide size is refused (400), never silently drawn at 16:9."""
+    inp = body.get("inputs") if isinstance(body.get("inputs"), dict) else {}
+    lk = body.get("look") if isinstance(body.get("look"), dict) else (inp.get("look") if isinstance(inp.get("look"), dict) else {})
+    v = lk.get("size")
+    if v is None:
+        return None
+    c = v.get("canvas") if isinstance(v, dict) else v
+    if c not in spec.SLIDE_SIZES:
+        raise Refused(400, "bad_request", f"look.size.canvas must be one of {', '.join(spec.SLIDE_SIZES)}")
+    return c
+
+
 def confirmed_stages(body: dict, inp: dict) -> set:
     """deck-types: the model stages the person said yes to on the Change sheet (``inputs.deck_type.confirmed_stages``, or the request's own
     ``confirm_stages``): a type change that needs them runs them; one that needs any other is refused (409 needs_stages)."""
@@ -199,8 +213,9 @@ def validate_request(body: dict, settings: Settings) -> dict:
         d = (a or {}).get("decision", "approve")
         if d != "approve":
             raise Refused(400, "not_supported", f"a '{d}' decision at the {gate} gate is recorded but the engine cannot act on it yet: only approve goes on")
+    size = picked_size(body)
     prof = profiles.load(picked_type(inp)) if picked_type(inp) else profiles.default_for_kind(kind)
-    return {"doc": doc, "inputs": inp, "prompt": prompt, "kind": kind, "format": inp.get("format", "pitch"), "mode": mode,
+    return {"size": size, "doc": doc, "inputs": inp, "prompt": prompt, "kind": kind, "format": inp.get("format", "pitch"), "mode": mode,
             "type": prof["id"], "picked": bool(picked_type(inp)), "type_stages": list(prof["stages"]), "confirmed": confirmed_stages(body, inp),
             "approvals": approvals, "render": body.get("render", True) is not False, "marks": marks,
             "review": body.get("review") if isinstance(body.get("review"), dict) else {}, "approver": str(body.get("approver") or "")}
@@ -518,6 +533,8 @@ class Server:
             argv += ["--text-mode", inp["text_mode"]]
         # deck-types: the picker's pick is passed as --type (a --kind would outrank it); with no pick the kind is passed as before
         argv += ["--type", picked_type(inp)] if picked_type(inp) else ["--kind", req["kind"]]
+        if req.get("size"):   # deck-slide-size: the person's slide size (look.size.canvas)
+            argv += ["--size", req["size"]]
         if req.get("confirm"):   # the person confirmed the new writing this type change needs (check_type_change)
             argv.append("--confirm-stages")
         swaps = (req.get("review") or {}).get("production") if isinstance(req.get("review"), dict) else None

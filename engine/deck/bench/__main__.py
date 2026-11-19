@@ -11,6 +11,7 @@ from . import compare as compare_mod
 from . import experiment
 from . import fixtures as fixtures_mod
 from . import visual as visual_mod
+from .. import spec
 from .gold import gold_report, judged_from_bench, load_human
 from .judges import BenchError, ClaudeJudge, RecordedJudge
 from .rubric import criterion_ids, load_rubric
@@ -84,8 +85,10 @@ def main(argv=None) -> int:
     f = sub.add_parser("fixtures", help="build the invented fixture decks offline into OUT_DIR")
     f.add_argument("out_dir", type=Path)
     f.add_argument("--geometry-only", action="store_true", help="skip LibreOffice (no pixel checks)")
-    f.add_argument("--density", choices=("lean", "standard", "detailed", "default"), default="detailed",
-                   help="detailed: the tests' and goldens' setting; default: let the engine resolve it by format (the look a person gets)")
+    f.add_argument("--density", choices=("lean", "standard", "detailed", "default"), default=None,
+                   help="detailed (16:9 and A4): the tests' and goldens' setting; 4:3 builds at standard (spec.BENCH_DENSITY); default: let the engine "
+                        "resolve it by format (the look a person gets)")
+    f.add_argument("--size", choices=spec.SLIDE_SIZES, default="16:9", help="build the fixtures at this slide size (deck-slide-size); the summary records it")
     k = sub.add_parser("compare", help="what changed between two checklist files")
     k.add_argument("before", type=Path)
     k.add_argument("after", type=Path)
@@ -135,11 +138,15 @@ def main(argv=None) -> int:
                 print(f"{d}: {s['yes']} yes, {s['no']} no, {s['na']} n/a")
             return 0
         if a.cmd == "fixtures":
-            for n, p in fixtures_mod.build_all(a.out_dir, a.geometry_only, density=None if a.density == "default" else a.density).items():
+            dens = spec.BENCH_DENSITY[a.size] if a.density is None else (None if a.density == "default" else a.density)
+            for n, p in fixtures_mod.build_all(a.out_dir, a.geometry_only, density=dens, size=a.size).items():
                 print(f"{n}: {p}")
             return 0
         if a.cmd == "compare":
-            diff = compare_mod.compare(json.loads(a.before.read_text()), json.loads(a.after.read_text()), a.tolerance)
+            try:
+                diff = compare_mod.compare(json.loads(a.before.read_text()), json.loads(a.after.read_text()), a.tolerance)
+            except ValueError as e:   # deck-slide-size: two sizes are never compared
+                raise BenchError(str(e)) from e
             print(compare_mod.render(diff, a.format))
             return 1 if a.fail_on_regress and compare_mod.failed(diff) else 0
         if a.cmd == "design":

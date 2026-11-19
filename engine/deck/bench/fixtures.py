@@ -62,10 +62,11 @@ def build_one(name: str, out: Path, geometry_only: bool = False, density: str | 
     return out
 
 
-def build_all(out_dir: Path, geometry_only: bool = False, names=None, density: str | None = "detailed") -> dict:
+def build_all(out_dir: Path, geometry_only: bool = False, names=None, density: str | None = "detailed", size: str = "16:9") -> dict:
     """Build every fixture into ``out_dir/<name>``; returns ``{name: run folder}``."""
     out_dir = Path(out_dir)
-    return {n: build_one(n, out_dir / n, geometry_only, density) for n in (names or FIXTURES)}
+    extra = ("--size", size) if size != "16:9" else ()   # deck-slide-size: 16:9 passes no flag, so its runs are today's
+    return {n: build_one(n, out_dir / n, geometry_only, density, extra) for n in (names or FIXTURES)}
 
 
 def _build_pictured(name: str, out: Path, args: list, geometry_only: bool, density: str | None, extra: tuple) -> Path:

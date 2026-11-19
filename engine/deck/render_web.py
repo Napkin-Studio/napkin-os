@@ -23,6 +23,7 @@ import json
 from pathlib import Path
 
 from . import images, numfmt, spec
+from . import theme as themes
 from .refs import fmt
 from .layouts import picture_sides as _pic_sides
 from .render_pptx import DARK_TYPES, THEME, _kicker, band_label, dark_types
@@ -416,14 +417,21 @@ def _tz(s) -> dict | None:
     return tz if tz.get("zone") else None
 
 
-def _scrim_css(tz: dict) -> str:
+def _bleed_geo(cv=None) -> tuple:
+    """deck-slide-size: the bleed's box and text block in inches at the deck's size (W, H, block); 16:9: BLEED_W, BLEED_H, ZONE_BLOCK."""
+    if cv is None or cv.identity:
+        return images.BLEED_W, images.BLEED_H, images.ZONE_BLOCK
+    return cv.w_in, cv.y(images.BLEED_H), images.zone_block(cv, physical=True)
+
+
+def _scrim_css(tz: dict, cv=None) -> str:
     """The pptx scrim as one CSS gradient (deck-look step 7): solid at the recorded alpha under the block plus its pad, fading to nothing."""
-    g = images.scrim_geometry(tz["zone"], images.zone_box(tz["zone"]))
+    BW, BH, blk = _bleed_geo(cv)
+    g = images.scrim_geometry(tz["zone"], images.zone_box(tz["zone"], blk, BW, BH), BW, BH)
     r, g_, b_ = (int(tz["colour"][i:i + 2], 16) for i in (0, 2, 4))
     a = max(images.SCRIM_FLOOR, min(images.SCRIM_CAP, float(tz.get("alpha", images.SCRIM_FLOOR))))
     sx, sy, sw, sh = g["solid"]
     fx, fy, fw, fh = g["fade"]
-    BW, BH = images.BLEED_W, images.BLEED_H
     solid, end = {"up": (BH - sy, BH - fy), "down": (sy + sh, fy + fh), "right": (sx + sw, fx + fw), "left": (BW - sx, BW - fx)}[g["toward"]]
     to = {"up": "top", "down": "bottom", "right": "right", "left": "left"}[g["toward"]]
     c = f"{r},{g_},{b_}"
@@ -533,9 +541,10 @@ def _v3_body(s, b: "_Slide", bl: list, lid: str, deck: dict) -> str:
         return _graphics_body(s, b, bl, lid, deck)
     if lid in ("cover_bleed", "full_bleed_statement"):   # the words on the picture's measured zone, in the recorded colour
         tz = _tz(s) or {"zone": "bottom_left", "text": "FAF7F1"}
-        x, y, w, h = images.zone_box(tz["zone"])
+        BW, BH, blk = _bleed_geo(themes.canvas_of(deck))
+        x, y, w, h = images.zone_box(tz["zone"], blk, BW, BH)
         v = tz["zone"].split("_")[0]
-        pos = f"left:{round(x * PX_IN)}px;width:{round(w * PX_IN)}px;" + (f"bottom:{round((images.BLEED_H - y - h) * PX_IN)}px" if v == "bottom" else f"top:{round(y * PX_IN)}px" if v == "top" else f"top:{round(y * PX_IN)}px;height:{round(h * PX_IN)}px;justify-content:center")
+        pos = f"left:{round(x * PX_IN)}px;width:{round(w * PX_IN)}px;" + (f"bottom:{round((BH - y - h) * PX_IN)}px" if v == "bottom" else f"top:{round(y * PX_IN)}px" if v == "top" else f"top:{round(y * PX_IN)}px;height:{round(h * PX_IN)}px;justify-content:center")
         lead = "".join(b.rv("lead", _e(text(x_)), "p", 160) for x_ in bl if text(x_))
         kick = _kick(b, _kicker(deck["meta"])) if lid == "cover_bleed" else ""
         return f'<div class="body v3 v3bl" style="{pos};color:#{tz["text"]};--fg:#{tz["text"]}">{kick}{hero}{lead}</div>'
@@ -674,7 +683,7 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
                 tz = _tz(s) or {"zone": "bottom_left", "colour": "1B2430", "alpha": images.SCRIM_FLOOR}
                 corner = images.label_corner(tz["zone"]).replace("_", "-")
                 pic_html = _re.sub(r' style="width:\d+px;aspect-ratio:[\d/]+"', "", pic_html.replace(
-                    '<div class="pics side">', f'<div class="pics bleed lab-{corner}"><i class="scrim" style="background:{_scrim_css(tz)}"></i>', 1), count=1)
+                    '<div class="pics side">', f'<div class="pics bleed lab-{corner}"><i class="scrim" style="background:{_scrim_css(tz, themes.canvas_of(deck))}"></i>', 1), count=1)
                 pic_cls = "pic-bleed"
                 kick = ""
             elif pic_html and v3lid in ("picture_column", "cover_image"):
@@ -1063,6 +1072,37 @@ def theme_css(css: str | None = None, head: str | None = None, body: str | None 
     return css
 
 
+def size_css(cv) -> str:
+    """deck-slide-size: the stage at 4:3 and A4 (2 px per pt: 1440 x 1080, 1684 x 1191), emitted only then, so a 16:9 deck.html keeps its bytes.
+    The slide's paddings are physical px and stay; the flex layout reflows the width. The picture column and the bleed take the canvas map
+    (theme.Canvas), and the print page is the canvas: px at 4:3, true A4 (297 x 210 mm, the stage zoomed to the page) on A4."""
+    if cv is None or cv.identity:
+        return ""
+    W, H = cv.px
+    px = lambda inch: round(inch * 144)   # noqa: E731
+    col = max(360, px(cv.w_in - cv.x(13.333 - 5.0)))   # render_pptx.PIC_COL (5 in) through the map
+    bleed = px(cv.y(6.85))
+    page = ("@page{size:297mm 210mm;margin:0}" if cv.name == "a4" else f"@page{{size:{W}px {H}px;margin:0}}")
+    zoom = f";zoom:{297 / 25.4 * 96 / W:.4f}" if cv.name == "a4" else ""
+    side = ""
+    for w in sorted({*PIC_SIDE.values(), 460, 560}, reverse=True):   # the side pictures and frames (pw<w> classes) narrow by k, never under 360 px
+        z = max(cv.k, 360 / w)
+        side += f".pw{w} .pics.side{{zoom:{z:.4f}}}.pw{w} header,.pw{w} .body{{margin-right:{round(w * z) + 70}px}}"
+    return (f"\n#stage{{width:{W}px;height:{H}px}}#nextbox .slide,.thumb .slide{{width:{W}px;height:{H}px}}{side}"
+            f"#nextbox,.thumb{{padding-bottom:{H / W * 100:.3f}%}}"
+            f".pics.col{{width:{col}px}}.pic-col-left{{padding-left:{col + 94}px}}.pic-col-right{{padding-right:{col + 94}px}}.pic-col-right .flags{{right:{col + 94}px}}"
+            f".pics.bleed{{width:{W}px;height:{bleed}px}}"
+            f"@media print{{{page}#stage{{width:{W}px}}.slide{{width:{W}px;height:{H}px{zoom}}}}}\n")
+
+
+def size_js(js: str, cv) -> str:
+    """The deck's JS with the stage size the scale() function divides by (unchanged at 16:9)."""
+    if cv is None or cv.identity:
+        return js
+    W, H = cv.px
+    return js.replace("r.width/1920,r.height/1080", f"r.width/{W},r.height/{H}").replace("scale(${r.width/1920})", f"scale(${{r.width/{W}}})")
+
+
 def _brand_css(meta: dict) -> dict:
     """theme_css arguments from a brand (meta.brand: colors, head and body font stacks)."""
     b = meta.get("brand") or {}
@@ -1075,6 +1115,7 @@ def render(deck, inp, out: Path, findings: list | None = None, pictures: dict | 
     pptx drew (deck-graphics), drawn here as inline SVG at the same items; None or empty draws none and changes nothing."""
     views = slide_views(deck, inp, findings, Path(out).parent, pictures, placed=placed, icons=icons)
     m = deck["meta"]
+    cv = themes.canvas_of(deck)   # deck-slide-size: the stage at the deck's size (16:9: nothing added)
     slides = "\n".join(
         f'<section class="slide t-{v["type"]}{" dark" if v["dark"] else ""}{" " + v["cls"] if v["cls"] else ""}{" l-" + v["layout"] if (spec.LOOK_V2 and v["layout"]) else ""}" id="{v["id"]}" data-steps="{v["steps"]}"{" data-layout=" + chr(34) + v["layout"] + chr(34) if (spec.LOOK_V2 and v["layout"]) else ""}{v["tpt"]} '
         f'aria-label="Slide {v["n"]}: {_e(v["title"])}">{v["html"]}</section>' for v in views)
@@ -1083,7 +1124,7 @@ def render(deck, inp, out: Path, findings: list | None = None, pictures: dict | 
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{_e(m["client"])}: {_e(m["project"])}</title>
 <meta name="generator" content="Napkin Deck Maker (render_web)"><link rel="icon" href="data:,">
-<style>{theme_css(**_brand_css(m), look=look)}{PIC_CSS if any(v["cls"] for v in views) else ""}{graphics_css(slides)}</style></head>
+<style>{theme_css(**_brand_css(m), look=look)}{PIC_CSS if any(v["cls"] for v in views) else ""}{graphics_css(slides)}{size_css(cv)}</style></head>
 <body><div id="app"><div id="view"><div id="bar"></div><div id="stage">
 {slides}
 </div><div id="ov"></div>
@@ -1094,7 +1135,7 @@ def render(deck, inp, out: Path, findings: list | None = None, pictures: dict | 
 <div style="display:flex;flex-direction:column;min-height:0"><div class="label">Notes and evidence</div><div id="notes"></div></div>
 <div id="clock"><span id="where"></span><span id="timer">00:00</span></div></aside></div>
 <script type="application/json" id="deck-meta">{meta.replace("</", "<\\/")}</script>
-<script>{JS}</script></body></html>
+<script>{size_js(JS, cv)}</script></body></html>
 """
     out.write_text(page, encoding="utf-8")
     if spec.LOOK_V3:   # the fonts folder beside the page (OFL, vendored): the page reads them when the machine has none

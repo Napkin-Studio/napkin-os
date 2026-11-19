@@ -13,6 +13,17 @@ def card(t: dict, result: dict, frames: list | None = None) -> dict:
         risks.append("tier unclear: placed at stretch by default")
     elif t["tier"] != "safe":
         risks.append(f"{t['tier']}: placed by a model from the definitions; check with a creative director")
+    kg = t.get("kill_gate") or {}
+    if kg.get("restored"):
+        risks.append("restored after the kill gate cut it: kept only so the run has three territories; a person decides if it stays")
+    elif kg and kg.get("judged") is False:
+        risks.append("not judged by the kill gate: it was kept by default, unchecked")
+    if t.get("tension_evidence_claimed"):
+        risks.append(f"the model called its tension {t['tension_evidence_claimed']}; the brief does not bear that out, so it is treated as {t.get('tension_evidence')}")
+    claimed = [f.get("key") for f in (result.get("assumed_brief") or {}).get("fields", []) if f.get("tag_claimed") == "given"]
+    if claimed:
+        risks.append(f"the model called {', '.join(str(k) for k in claimed)} given; the brief does not state {'it' if len(claimed) == 1 else 'them'}, "
+                     "so treated as not given")
     proof = t.get("proof")
     assumes = [f["key"] for f in (result.get("assumed_brief") or {}).get("fields", []) if f.get("tag") == "assumed"]
     return {"id": t["id"], "name": t.get("line"), "thought": t.get("proposition") or t.get("line"), "why": t.get("tension_text"),

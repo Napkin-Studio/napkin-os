@@ -331,3 +331,26 @@ def test_the_engines_type_offers_land_in_the_run(deck, monkeypatch):
     host = Host(data=deck_data(), schema=SCHEMA)
     build(deck, host)
     assert host.data["run"]["types"] == v["run"]["types"]
+
+
+def test_the_slide_size_goes_to_the_engine(deck, monkeypatch):
+    """deck-slide-size: look.size.canvas (Start, Review), else the intake card's answer, reaches the engine as body.look.size.canvas."""
+    from napkin.handlers import build_deck as bd
+    assert bd.size_of({"look": {"size": {"canvas": "a4", "by": "person"}}}) == "a4"
+    assert bd.size_of({"intake": {"answers": {"q_pref_size": {"option_id": "4:3"}}}}) == "4:3"
+    assert bd.size_of({"intake": {"answers": {"q_pref_size": {"option_id": "4:3", "skipped": True}}}}) is None
+    assert bd.size_of({"look": {"size": {"canvas": "a5"}}}) is None and bd.size_of({}) is None
+    assert bd.size_of({"look": {"size": {"canvas": "16:9"}}, "intake": {"answers": {"q_pref_size": {"option_id": "a4"}}}}) == "16:9"   # the later choice wins
+    fake = FakeEngine(view("building", stage="check"), view("done", stage="review", payload={**PAYLOAD, "qa": QA, "repair": REPAIR}, cost=0))
+    use(monkeypatch, fake)
+    host = Host(data=deck_data(), schema=SCHEMA)
+    host.data["run"].update(state="gate", gate=GATE2)
+    host.data["look"] = {"size": {"canvas": "4:3", "by": "person", "at": "t", "via": "start"}}
+    build(deck, host)
+    assert fake.posts[0]["look"] == {"size": {"canvas": "4:3"}}
+    fake2 = FakeEngine(view("building", stage="check"), view("done", stage="review", payload={**PAYLOAD, "qa": QA, "repair": REPAIR}, cost=0))
+    use(monkeypatch, fake2)
+    host2 = Host(data=deck_data(), schema=SCHEMA)
+    host2.data["run"].update(state="gate", gate=GATE2)
+    build(deck, host2)
+    assert "look" not in fake2.posts[0]   # no size chosen: the engine's own default (the recipe's, else 16:9)

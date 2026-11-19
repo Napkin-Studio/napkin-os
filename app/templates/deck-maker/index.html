@@ -586,11 +586,11 @@ var DeckLogic = (function () {
   /** deck-types: one card per deck type, generated from the engine's profiles (profiles.card_data): label, one line, kind, length, size,
    *  pictures and the presented spine with each slide's layout purpose. A test fails when this block and the profiles differ. */
   var DECK_TYPE_CARDS = /* @generated deck-type-cards (python3 -m deck.profiles cards, from engine/): do not edit by hand */ [
-{"id":"agency_pitch","label":"Agency pitch","one_line":"An agency answers a client's brief with strategy, one idea, a plan and a price; the default.","kind":"agency","flag":"agency","default_format":"pitch","target":10,"cap":12,"max":18,"size":"16:9","pictures":"many","stages":["a","b","c","d"],"recipe_only":false,"spine":[{"type":"title","section":"Opening","purpose":"title"},{"type":"objective","section":"Objective","purpose":"statement"},{"type":"real_question","section":"The real question","purpose":"statement"},{"type":"insight","section":"Insight","purpose":"statement"},{"type":"audience","section":"Insight","purpose":"image"},{"type":"proposition","section":"Proposition","purpose":"compare"},{"type":"idea","section":"The idea","purpose":"image"},{"type":"channel_roles","section":"How it runs","purpose":"image"},{"type":"measurement","section":"Measurement","purpose":"list"},{"type":"team","section":"Team and work","purpose":"list"},{"type":"investment","section":"Timeline and investment","purpose":"title"}],"more":0},
-{"id":"tender_response","label":"Tender response","one_line":"A public or large buyer scores your answer against published criteria; compliance first.","kind":"agency","flag":"tender","default_format":"pitch","target":null,"cap":null,"max":18,"size":"16:9","pictures":"none generated","stages":["a","b","c","d"],"recipe_only":false,"spine":[{"type":"title","section":"Opening","purpose":"title"},{"type":"scoring","section":"Your brief","purpose":"data"},{"type":"objective","section":"Objective","purpose":"statement"},{"type":"criterion_answer","section":"Our answers","purpose":"list"},{"type":"real_question","section":"The real question","purpose":"image"},{"type":"chart","section":"The real question","purpose":"data"},{"type":"insight","section":"Insight","purpose":"statement"},{"type":"audience","section":"Insight","purpose":"image"},{"type":"proposition","section":"Proposition","purpose":"statement"},{"type":"idea","section":"The idea","purpose":"image"},{"type":"execution","section":"The work","purpose":"image"},{"type":"channel_roles","section":"How it runs","purpose":"image"}],"more":9},
-{"id":"investor_seed","label":"Investor deck","one_line":"A company raises a seed round: problem, why now, traction, market and the ask.","kind":"investor","flag":"investor","default_format":"pitch","target":12,"cap":15,"max":18,"size":"16:9","pictures":"few","stages":["i"],"recipe_only":false,"spine":[{"type":"title","section":"Opening","purpose":"title"},{"type":"objective","section":"Objective","purpose":"statement"},{"type":"problem","section":"The problem","purpose":"statement"},{"type":"why_now","section":"Why now","purpose":"list"},{"type":"solution","section":"Solution","purpose":"statement"},{"type":"product","section":"Product","purpose":"image"},{"type":"market","section":"Market","purpose":"data"},{"type":"traction","section":"Traction","purpose":"data"},{"type":"competition","section":"Competition","purpose":"compare"},{"type":"financials","section":"Financials","purpose":"data"},{"type":"founders","section":"Team","purpose":"people"},{"type":"ask","section":"The ask","purpose":"list"}],"more":1},
-{"id":"credentials","label":"Credentials deck","one_line":"A short deck for a chemistry meeting: team and proof first, how we work, questions for you.","kind":"agency","flag":"credentials","default_format":"pitch","target":10,"cap":14,"max":14,"size":"16:9","pictures":"cover only","stages":["a","b"],"recipe_only":false,"spine":[{"type":"title","section":"Opening","purpose":"title"},{"type":"objective","section":"Objective","purpose":"statement"},{"type":"team","section":"Team and work","purpose":"people"},{"type":"credentials","section":"Team and work","purpose":"list"},{"type":"real_question","section":"The real question","purpose":"statement"},{"type":"insight","section":"Insight","purpose":"statement"},{"type":"audience","section":"Insight","purpose":"image"},{"type":"process","section":"How it runs","purpose":"timeline"},{"type":"guardrails","section":"How it runs","purpose":"list"},{"type":"questions","section":"Appendix","purpose":"list"},{"type":"next_step","section":"Next step","purpose":"title"}],"more":0},
-{"id":"creative_work","label":"Creative work session","one_line":"Routes shown for the client's reaction before a pitch: a tissue session, no price and no team.","kind":"agency","flag":"creative","default_format":"pitch","target":12,"cap":16,"max":18,"size":"16:9","pictures":"many","stages":["a","b","c","d"],"recipe_only":true,"spine":[{"type":"title","section":"Opening","purpose":"title"},{"type":"objective","section":"Objective","purpose":"statement"},{"type":"real_question","section":"The real question","purpose":"statement"},{"type":"insight","section":"Insight","purpose":"statement"},{"type":"proposition","section":"Proposition","purpose":"compare"},{"type":"territory","section":"Territories","purpose":"statement"},{"type":"territory_choice","section":"Territories","purpose":"list"},{"type":"idea","section":"The idea","purpose":"image"},{"type":"execution","section":"The work","purpose":"image"},{"type":"questions","section":"Appendix","purpose":"list"},{"type":"next_step","section":"Next step","purpose":"title"}],"more":0}
+{"id":"agency_pitch","label":"Agency pitch","one_line":"An agency answers a client's brief with strategy, one idea, a plan and a price; the default.","kind":"agency","flag":"agency","default_format":"pitch","target":10,"cap":12,"max":18,"size":"16:9","size_read":"a4","pictures":"many","stages":["a","b","c","d"],"recipe_only":false,"spine":[{"type":"title","section":"Opening","purpose":"title"},{"type":"objective","section":"Objective","purpose":"statement"},{"type":"real_question","section":"The real question","purpose":"statement"},{"type":"insight","section":"Insight","purpose":"statement"},{"type":"audience","section":"Insight","purpose":"image"},{"type":"proposition","section":"Proposition","purpose":"compare"},{"type":"idea","section":"The idea","purpose":"image"},{"type":"channel_roles","section":"How it runs","purpose":"image"},{"type":"measurement","section":"Measurement","purpose":"list"},{"type":"team","section":"Team and work","purpose":"list"},{"type":"investment","section":"Timeline and investment","purpose":"title"}],"more":0},
+{"id":"tender_response","label":"Tender response","one_line":"A public or large buyer scores your answer against published criteria; compliance first.","kind":"agency","flag":"tender","default_format":"pitch","target":null,"cap":null,"max":18,"size":"a4","size_read":"a4","pictures":"none generated","stages":["a","b","c","d"],"recipe_only":false,"spine":[{"type":"title","section":"Opening","purpose":"title"},{"type":"scoring","section":"Your brief","purpose":"data"},{"type":"objective","section":"Objective","purpose":"statement"},{"type":"criterion_answer","section":"Our answers","purpose":"list"},{"type":"real_question","section":"The real question","purpose":"image"},{"type":"chart","section":"The real question","purpose":"data"},{"type":"insight","section":"Insight","purpose":"statement"},{"type":"audience","section":"Insight","purpose":"image"},{"type":"proposition","section":"Proposition","purpose":"statement"},{"type":"idea","section":"The idea","purpose":"image"},{"type":"execution","section":"The work","purpose":"image"},{"type":"channel_roles","section":"How it runs","purpose":"image"}],"more":9},
+{"id":"investor_seed","label":"Investor deck","one_line":"A company raises a seed round: problem, why now, traction, market and the ask.","kind":"investor","flag":"investor","default_format":"pitch","target":12,"cap":15,"max":18,"size":"16:9","size_read":"a4","pictures":"few","stages":["i"],"recipe_only":false,"spine":[{"type":"title","section":"Opening","purpose":"title"},{"type":"objective","section":"Objective","purpose":"statement"},{"type":"problem","section":"The problem","purpose":"statement"},{"type":"why_now","section":"Why now","purpose":"list"},{"type":"solution","section":"Solution","purpose":"statement"},{"type":"product","section":"Product","purpose":"image"},{"type":"market","section":"Market","purpose":"data"},{"type":"traction","section":"Traction","purpose":"data"},{"type":"competition","section":"Competition","purpose":"compare"},{"type":"financials","section":"Financials","purpose":"data"},{"type":"founders","section":"Team","purpose":"people"},{"type":"ask","section":"The ask","purpose":"list"}],"more":1},
+{"id":"credentials","label":"Credentials deck","one_line":"A short deck for a chemistry meeting: team and proof first, how we work, questions for you.","kind":"agency","flag":"credentials","default_format":"pitch","target":10,"cap":14,"max":14,"size":"16:9","size_read":"a4","pictures":"cover only","stages":["a","b"],"recipe_only":false,"spine":[{"type":"title","section":"Opening","purpose":"title"},{"type":"objective","section":"Objective","purpose":"statement"},{"type":"team","section":"Team and work","purpose":"people"},{"type":"credentials","section":"Team and work","purpose":"list"},{"type":"real_question","section":"The real question","purpose":"statement"},{"type":"insight","section":"Insight","purpose":"statement"},{"type":"audience","section":"Insight","purpose":"image"},{"type":"process","section":"How it runs","purpose":"timeline"},{"type":"guardrails","section":"How it runs","purpose":"list"},{"type":"questions","section":"Appendix","purpose":"list"},{"type":"next_step","section":"Next step","purpose":"title"}],"more":0},
+{"id":"creative_work","label":"Creative work session","one_line":"Routes shown for the client's reaction before a pitch: a tissue session, no price and no team.","kind":"agency","flag":"creative","default_format":"pitch","target":12,"cap":16,"max":18,"size":"16:9","size_read":"a4","pictures":"many","stages":["a","b","c","d"],"recipe_only":true,"spine":[{"type":"title","section":"Opening","purpose":"title"},{"type":"objective","section":"Objective","purpose":"statement"},{"type":"real_question","section":"The real question","purpose":"statement"},{"type":"insight","section":"Insight","purpose":"statement"},{"type":"proposition","section":"Proposition","purpose":"compare"},{"type":"territory","section":"Territories","purpose":"statement"},{"type":"territory_choice","section":"Territories","purpose":"list"},{"type":"idea","section":"The idea","purpose":"image"},{"type":"execution","section":"The work","purpose":"image"},{"type":"questions","section":"Appendix","purpose":"list"},{"type":"next_step","section":"Next step","purpose":"title"}],"more":0}
 ] /* @end deck-type-cards */;
   /** The five deck types, from the generated cards (never a second hand-written copy): id, label, one line and kind, plus the words the
    *  view uses around the label (`looks`: 'a tender response', `article`: 'A tender response'), derived from the label. */
@@ -697,11 +697,40 @@ var DeckLogic = (function () {
     return null;
   }
 
-  /** A card's caption: 'about 10 slides · 16:9 · pictures: many'; a type with no target says 'up to <max> slides'. */
-  function typeCaption(card) {
+  /** The three slide sizes: canvas name, the short name shown in captions, and the Start screen's options (the default is marked by meaning). */
+  var SIZES = [
+    { id: '16:9', short: '16:9', label: 'Widescreen 16:9', note: 'For presenting on a screen' },
+    { id: '4:3', short: '4:3', label: 'Standard 4:3', note: 'Older projectors and some client templates' },
+    { id: 'a4', short: 'A4', label: 'A4 landscape', note: 'To print as a leave-behind' }
+  ];
+  function sizeShort(canvas) { for (var i = 0; i < SIZES.length; i++) if (SIZES[i].id === canvas) return SIZES[i].short; return String(canvas); }
+  /** Whether the engine said its deck recipes are on (run.types.recipes, written through the middleware). Unknown is off: the safe side. */
+  function recipesOn(data) { return !!(isObj(data) && isObj(data.run) && isObj(data.run.types) && data.run.types.recipes === true); }
+  /** The recipe's size for a card and format: size_read when the deck is sent to be read (format full), else size. No card: a4 for full, else
+   *  16:9. ``on`` false (the engine's recipes off): 16:9, since that engine applies no recipe size (an A4 'default' would be a promise it breaks). */
+  function defaultSize(card, format, on) {
+    if (on === false) return '16:9';
+    if (isObj(card)) { var c = format === 'full' ? card.size_read : card.size; if (c) return c; }
+    return format === 'full' ? 'a4' : '16:9';
+  }
+  /** The size in force: the person's look.size.canvas if it is one of the three, else the default (the recipe's only when the recipes are on). */
+  function sizeOf(data, card, format) {
+    var d = defaultSize(card, format, recipesOn(data));
+    var sz = isObj(data) && isObj(data.look) && isObj(data.look.size) ? data.look.size : null;
+    if (sz && SIZES.some(function (x) { return x.id === sz.canvas; })) return { canvas: sz.canvas, chosen: true, dflt: d };
+    return { canvas: d, chosen: false, dflt: d };
+  }
+  /** The patch for the person's size pick on Start: look.size {canvas, by, at, via}. Null for an unknown canvas. */
+  function sizePatch(canvas, at) {
+    if (!SIZES.some(function (x) { return x.id === canvas; })) return null;
+    return { look: { size: { canvas: canvas, by: 'person', at: at, via: 'start' } } };
+  }
+
+  /** A card's caption: 'about 10 slides · 16:9 · pictures: many'; a type with no target says 'up to <max> slides'. The size is the one for the format. */
+  function typeCaption(card, format, on) {
     if (!isObj(card)) return '';
     var len = card.target != null ? 'about ' + card.target + ' slides' : 'up to ' + card.max + ' slides';
-    return len + ' · ' + card.size + ' · pictures: ' + card.pictures;
+    return len + ' · ' + sizeShort(defaultSize(card, format, on)) + ' · pictures: ' + card.pictures;
   }
 
   /**
@@ -1594,7 +1623,7 @@ var DeckLogic = (function () {
     upstreamSummary: upstreamSummary, documentsOf: documentsOf, builtFrom: builtFrom, describeBuiltFrom: describeBuiltFrom,
     canBuild: canBuild, gapView: gapView, questionState: questionState, answerPatch: answerPatch,
     DECK_TYPES: DECK_TYPES, deckTypeOf: deckTypeOf, typeHints: typeHints, kindOfType: kindOfType, typePatch: typePatch,
-    DECK_TYPE_CARDS: DECK_TYPE_CARDS, cardOf: cardOf, typeCaption: typeCaption, pickPatch: pickPatch, builtTypeOf: builtTypeOf, offeredCards: offeredCards,
+    DECK_TYPE_CARDS: DECK_TYPE_CARDS, cardOf: cardOf, typeCaption: typeCaption, SIZES: SIZES, defaultSize: defaultSize, sizeOf: sizeOf, recipesOn: recipesOn, sizePatch: sizePatch, pickPatch: pickPatch, builtTypeOf: builtTypeOf, offeredCards: offeredCards,
     recordedStages: recordedStages, changeSheet: changeSheet,
     researchRequest: researchRequest, upstreamChanged: upstreamChanged, kitNotices: kitNotices, agencyLookNotice: agencyLookNotice, agencyUpdatePatch: agencyUpdatePatch, lookPanel: lookPanel, agencyPatch: agencyPatch, isKit: isKit,
     supplyCards: supplyCards, toSupply: toSupply, confirmList: confirmList, verifyPatch: verifyPatch, sourcedCounts: sourcedCounts,
@@ -1971,7 +2000,7 @@ var DeckProd = (function () {
       return '<button type="button" class="dtc' + (ask === c.id ? ' asking' : '') + '" role="radio" aria-checked="' + sel + '" tabindex="' + (sel ? 0 : -1) + '" data-dpick="' + esc(c.id) + '">' +
         '<span class="dtc-h"><b>' + esc(c.label) + '</b>' + (sel ? '<span class="tag">' + tagOf[t.source] + '</span>' : '') + '</span>' +
         '<span class="dtc-l">' + esc(c.one_line) + '</span>' + spineThumb(c) +
-        '<span class="dtc-c mono">' + esc(L.typeCaption(c)) + '</span></button>';
+        '<span class="dtc-c mono">' + esc(L.typeCaption(c, format, L.recipesOn(s.raw))) + '</span></button>';
     }).join('') +
       '<button type="button" class="dtc unsure" role="radio" aria-checked="' + !on + '" tabindex="' + (on ? -1 : 0) + '" data-dpick="none">' +
         '<span class="dtc-h"><b>Not sure</b></span><span class="dtc-l">Decide from my brief: your prompt and documents choose, and an agency pitch when nothing says otherwise.</span>' +
@@ -1992,6 +2021,7 @@ var DeckProd = (function () {
         '<button type="button" class="btn sm" data-dcancel="1">' + esc('Keep ' + (was ? was.label.toLowerCase() : 'this type')) + '</button></div></div>';
     }
     var hints = L.typeHints(t.id);
+    var sz = L.sizeOf(s.raw, L.cardOf(shownType(t)), format);
     var pillTone = t.source === 'picked' || t.source === 'answered' ? 'ok' : 'plain';
     var pillWord = t.source === 'picked' ? 'Picked' : t.source === 'answered' ? 'Chosen' : t.source === 'inferred' ? 'Suggested' : 'Not picked yet';
     return '<section class="card sec" id="deck-type" data-type-picker><div class="sec-h"><span class="mono eyebrow">01</span><b>What kind of deck?</b><div class="spacer"></div>' +
@@ -2005,7 +2035,11 @@ var DeckProd = (function () {
       '<div class="row" role="group" aria-labelledby="dfmt-h" data-format-switch>' +
         pick('format', 'pitch', format, 'Presented on a screen', 'Short slides you talk to, then a hidden appendix') +
         pick('format', 'full', format, 'Sent to be read', 'The leave-behind, read without you') + '</div>' +
-      (format === 'full' ? '<p class="note" style="margin-top:8px" data-format-note>Every slide in story order, more words per slide, pictures on the cover only. A4 pages come with the slide-size feature.</p>' : '') +
+      '<div class="eyebrow dark" style="margin:14px 0 8px" id="dsize-h">Slide size</div>' +
+      '<div class="row" role="group" aria-labelledby="dsize-h" data-size-switch>' + L.SIZES.map(function (z) {
+        return '<button class="pick" data-size="' + z.id + '" aria-pressed="' + (sz.canvas === z.id) + '"><b>' + esc(z.label) + '</b><span>' + esc(z.note) + (sz.dflt === z.id ? ' (default)' : '') + '</span></button>';
+      }).join('') + '</div>' +
+      (format === 'full' ? '<p class="note" style="margin-top:8px" data-format-note>Every slide in story order, more words per slide, pictures on the cover only. The pages default to A4 landscape; change it under Slide size above.</p>' : '') +
       '</section>';
   }
 
@@ -2612,6 +2646,8 @@ var DeckProd = (function () {
     if (dp != null) return '[data-dpick="' + cssEsc(dp) + '"]';
     var fm = ae.getAttribute('data-format');
     if (fm != null) return '[data-format="' + cssEsc(fm) + '"]';
+    var zs = ae.getAttribute('data-size');
+    if (zs != null) return '[data-size="' + cssEsc(zs) + '"]';
     return '';
   }
 
@@ -2788,6 +2824,11 @@ var DeckProd = (function () {
       stashDraft();
       var tp = L.typePatch(s.raw, a.dtype || null, now());
       if (tp) put(tp, (a.dtskip ? 'skip' : 'answer') + ' question q_deck_type', 'intake');
+      return render();
+    }
+    if (a.size) {
+      var zp = L.sizePatch(a.size, now());
+      if (zp) { stashDraft(); put(zp, 'slide size ' + a.size, 'look'); }
       return render();
     }
     if (a.kind || a.format) stashDraft();
