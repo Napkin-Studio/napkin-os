@@ -919,6 +919,30 @@ def _movable(deck: dict, sid: str, s: dict, audience: str, cat_exempt: bool) -> 
     return list(reversed(out))
 
 
+def _last_resort(deck: dict, sid: str, s: dict, audience: str) -> list:
+    """finish fixes: the points the last rung may move, in order: the usual movable points (``_movable``, an appendix slide's too), then
+    the richer ones, last first: a later list item or key-value row even with a figure, a later text, small or card block, a sketch.
+    Never the title, the slide's first block, a person's placeholder, an internal note, copy, a table, a chart or a statement."""
+    if s.get("pinned"):
+        return []
+    first = _movable(deck, sid, s, audience, False) if s["type"] not in NEVER_MOVE_TYPES else []
+    seen = {(c[0], c[1]) for c in first}
+    rich = []
+    lead = next((i for i, b in enumerate(s["blocks"]) if str(b.get("text") or "").strip() or b.get("items") or b.get("lines") or b.get("rows")), 0)
+    for bi, b in enumerate(s["blocks"]):
+        if b.get("internal") or b.get("human") or bi == lead:
+            continue
+        k = b["kind"]
+        if k in ("bullets", "kv"):
+            for ii, it in enumerate(b.get("items") or []):
+                if ii == 0 or (isinstance(it, dict) and it.get("human")):
+                    continue
+                rich.append((bi, ii, item_verbatim(b, ii), (it.get("refs") if isinstance(it, dict) else None) or b.get("refs") or []))
+        elif k in ("text", "small", "card", "sketch", "callout") and str(b.get("text") or "").strip() and not (k == "card" and (b.get("title") or b.get("heading"))):
+            rich.append((bi, None, str(b["text"]).strip(), b.get("refs") or []))
+    return first + [c for c in reversed(rich) if (c[0], c[1]) not in seen]
+
+
 def _cover_held(s: dict, audience: str, prefs: dict) -> list:
     """The cover's unresolved lines (``spec.unresolved_line``: the labelled placeholder, ``[Agency]``, ``[presenter and date]``) as whole-block moves to the
     speaker notes. A review only: a client render keeps them on the slide, where the leak check refuses the build, and no note of a client file may carry
@@ -1215,6 +1239,29 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
                     r5 = probe({**sl_, "blocks": shown}, lid, relaxed=True, cap=sc_cap, stamped=TITLE_SIZES[-1], cpl=60)   # title at the floor, 60-character lines
                     if r5["ok"]:
                         rung, scale, relaxed, res, done, cpl_, tpt_ = "shrunk", r5["scale"], True, r5, True, 60, TITLE_SIZES[-1]
+                if not done and spec.FINISH and lid != "flow" and prefs.get("text_mode") != "preserve" and f.get("notes") != "deny" \
+                        and not s.get("pinned") and not (sid in swaps and by[sid] == "person"):
+                    # finish fixes: the last rung before an overflow. Points move to the notes, last first, verbatim and labelled (an appendix
+                    # slide's too, then richer ones: a later card, a figure line, a sketch), each move tried on this layout and on the rule
+                    # pick's alternatives; the slide never runs off the page while a point can move
+                    trial = list(moved)
+                    for c in _last_resort(deck, sid, base, aud):
+                        rec = _moved_rec(c)
+                        if rec in trial:
+                            continue
+                        trial.append(rec)
+                        sl_t = _with_moved(base, trial)
+                        shown_t = spec.shown_blocks(sl_t, aud)
+                        for a in [lid] + _alternatives(lib, lid, base, aud, ready.get(sid, frozenset()), f.get("avoid", [])):
+                            ra = probe({**sl_t, "blocks": shown_t}, a, relaxed=True, cap=sc_cap, stamped=pt.get(a))
+                            if ra["ok"]:
+                                lid, sl_, shown, moved = a, sl_t, shown_t, trial
+                                rung, scale, relaxed, res, done = "overflow_to_notes", ra["scale"], bool(ra["relaxed"]), ra, True
+                                if a != ids[sid]:
+                                    chosen_by, why_ = "fit_ladder", f"fit ladder: {ids[sid]} too full; points to the notes"
+                                break
+                        if done:
+                            break
                 if not done:
                     rung = "no_fit"
         lay = lib.get(lid)

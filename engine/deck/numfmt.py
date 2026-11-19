@@ -18,6 +18,9 @@ _CODE_AFTER = re.compile(rf"(?<![\w.,])({_NUM})\s+(EUR|USD|GBP)\b")
 _CODE_BEFORE = re.compile(rf"\b(EUR|USD|GBP)\s+({_NUM})(?![\w,]|\.\d)")
 _SYMBOL_BEFORE = re.compile(rf"([€$£])({_NUM})(?![\w,]|\.\d)")
 MIN = Decimal(1000)   # below this a figure is left as written
+#: finish fixes: set by the renderers for a deck whose market reads in metric units (meta.finish.market): an imperial figure is written in
+#: metric first, labelled with its own market (finish.metric_text). Render time only, like the money form; False keeps every text as it was.
+UNITS_METRIC = False
 
 
 def _dec(n: str) -> Decimal | None:
@@ -72,4 +75,14 @@ def format_text(text: str) -> str:
     out = _WORD_AFTER.sub(word_after, text)
     out = _CODE_AFTER.sub(code_after, out)
     out = _CODE_BEFORE.sub(code_before, out)
-    return _SYMBOL_BEFORE.sub(symbol_before, out)
+    out = _SYMBOL_BEFORE.sub(symbol_before, out)
+    if UNITS_METRIC:
+        from .finish import metric_text   # noqa: PLC0415
+        out = metric_text(out)
+    return out
+
+
+def set_units(deck: dict) -> None:
+    """Set ``UNITS_METRIC`` for one render from the deck's finish record (``meta.finish.market``); a deck without one sets it off."""
+    global UNITS_METRIC
+    UNITS_METRIC = ((deck.get("meta") or {}).get("finish") or {}).get("market") == "metric"

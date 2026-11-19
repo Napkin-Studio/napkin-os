@@ -107,6 +107,24 @@ def value_numbers(row: dict) -> set:
     return out
 
 
+def prompt_sentence(inp, n: int) -> str | None:
+    """The text a ``prompt:<n>`` ref cites: the n-th sentence of the person's prompt; with no prompt in the run and the finish fixes on, the
+    n-th sentence of the brief's own source (Inputs.brief_source: the numbers a brief tool's source_refs give, which the stages cite as
+    prompt:<n>). None when neither holds it."""
+    ps = prompt_sentences(getattr(inp, "prompt_text", "") or "")
+    if ps:
+        return ps[n - 1] if 1 <= n <= len(ps) else None
+    from . import spec   # noqa: PLC0415 (spec imports nothing from here)
+    if spec.FINISH:
+        return (getattr(inp, "brief_source", None) or {}).get(n)
+    return None
+
+
+def prompt_from_brief(inp) -> bool:
+    """True when ``prompt:<n>`` refs resolve to the brief's own source sentences (no prompt in the run)."""
+    return not str(getattr(inp, "prompt_text", "") or "").strip() and bool(getattr(inp, "brief_source", None))
+
+
 class Resolver:
     """Look up any ref against one run's Inputs."""
 
@@ -132,7 +150,7 @@ class Resolver:
             return "calc"
         if ref.startswith("prompt:"):
             n = ref[7:]
-            return "prompt" if n.isdigit() and 1 <= int(n) <= len(prompt_sentences(self.inp.prompt_text)) else "unknown"
+            return "prompt" if n.isdigit() and prompt_sentence(self.inp, int(n)) is not None else "unknown"
         if ref.startswith("answer:"):
             return "answer" if answer_text(self.inp, ref[7:]) else "unknown"
         return "unknown"
@@ -161,7 +179,7 @@ class Resolver:
         if k == "finding":
             return numbers_in(self.inp.findings[ref].get("statement"))
         if k == "prompt":
-            return numbers_in(prompt_sentences(self.inp.prompt_text)[int(ref[7:]) - 1])
+            return numbers_in(prompt_sentence(self.inp, int(ref[7:])))
         if k == "answer":
             return numbers_in(answer_text(self.inp, ref[7:]))
         if k == "calc":
@@ -192,6 +210,8 @@ class Resolver:
         if k == "req":
             return ("req", "Requirement list read from the client's tender documents", None)
         if k == "prompt":
+            if prompt_from_brief(self.inp):
+                return ("prompt", "The client's brief, as the brief tool read it (its sentences, numbered)", None)
             return ("prompt", "The person's prompt", None)
         if k == "answer":
             return (ref, "The person's answer to a question", None)
@@ -219,7 +239,7 @@ class Resolver:
             return (f"[{ref}] brief field ({b.get('mark') or b.get('kind')})" + (f": {text[:140]}" if text.strip() else "")
                     + (f" (rests on {', '.join(under)})" if under else ""))
         if k == "prompt":
-            return f"[{ref}] prompt: {prompt_sentences(self.inp.prompt_text)[int(ref[7:]) - 1][:140]}"
+            return f"[{ref}] {'the brief' if prompt_from_brief(self.inp) else 'prompt'}: {prompt_sentence(self.inp, int(ref[7:]))[:140]}"
         if k == "answer":
             return f"[{ref}] the person's answer: {answer_text(self.inp, ref[7:])[:140]}"
         return f"[{ref}]"

@@ -292,7 +292,7 @@ def _body(s, b: _Slide, blocks: list, pictured: bool = False) -> str:
         left = b.blocks(rest("copy"))
         copy = {**pick("copy"), "frame": frame_for(s["title"])}
         vis = s.get("visual") or {}
-        if vis.get("kind") == "image_prompt" and not pictured:   # a drawn picture takes the place of the 'Image prompt' note
+        if vis.get("kind") == "image_prompt" and not pictured and not spec.FINISH:   # a drawn picture takes the place of the 'Image prompt' note
             b.f += 1
             left += b.rv("b-prompt", _e(f"Image prompt ({vis.get('status', 'illustrative')}): {vis.get('prompt', '')}"), "p")
         return f'<div class="body split exec{" framed" if copy["frame"] else ""}"><div class="col">{left}</div><div class="col">{b.blocks([copy])}</div></div>'
@@ -640,6 +640,7 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
                 icons: dict | None = None) -> list:
     """Per slide, in order: id, number, type, dark, inner markup, notes, build-step count and, per
     step, the latest reveal delay (ms) up to and including it."""
+    numfmt.set_units(deck)   # finish fixes: a metric market's imperial figures read in metric (render time only)
     failed = {}
     for f in findings or []:
         if f["level"] == "error" and f.get("slide"):
@@ -701,7 +702,7 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
         flags = ""
         if n_human:
             flags += f'<span class="draft">DRAFT · {"needs a person" if s["status"] == "needs_human" else f"{n_human} slides need a person"}</span>'
-        if sid in failed and audience != "client":
+        if sid in failed and audience != "client" and not spec.FINISH:   # finish fixes: the notes say it (spec.review_lines)
             flags += f'<span class="failed">CHECK FAILED: {_e(", ".join(sorted(failed[sid])))}</span>'
         head = f"<header>{kick}{title}</header>" if (kick or title) else ""
         inner = (f'<div class="flags">{flags}</div>{head}{body}{pic_html}'
@@ -710,6 +711,9 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
         if planned and spec.moved_map(s, audience):   # the points the plan moved off the slide: verbatim, with their refs, as in the pptx notes
             from . import layouts
             notes += "\n\nMoved from the slide:\n" + "\n".join(layouts.moved_line(t_, r_) for t_, r_ in layouts.moved_texts(s))
+        rv = spec.review_lines(s, audience, failed.get(sid))   # finish fixes: check ids, internal notes and the picture prompt, never on the slide
+        if rv:
+            notes += "\n\nFor the agency:\n" + "\n".join(rv)
         pt = (deck["meta"].get("layout_title_pt") or {}).get(lay.get("id")) if planned else None
         out.append({"layout": lay["id"] if planned else None, "tpt": f' style="--tpt:{pt * 2}px"' if (spec.LOOK_V2 and pt) else "", "id": sid, "n": n, "type": s["type"], "section": s["section"], "dark": dark, "cls": pic_cls,
                     "title": s["title"], "html": inner, "notes": notes, "steps": b.f, "status": s["status"],
@@ -1053,13 +1057,20 @@ LOOK_V3_CSS = """
 """
 
 
+#: finish fixes: evidence lines (small blocks) at 14 pt (28 px on the 2 px-per-point stage), as the pptx sets them.
+FINISH_CSS = """
+.b-small{font-size:calc(var(--s)*28px)}.lead.small{font-size:28px}
+"""
+
+
 def theme_css(css: str | None = None, head: str | None = None, body: str | None = None, colors: dict | None = None, look: bool = True) -> str:
     """A stylesheet with the deck theme filled in (default: the whole web deck's); ``colors``: a brand's
     overrides by THEME key (accent_ink too). Under ``spec.LOOK_V3`` the default fonts are the sans pair and the band CSS is added."""
     v3 = bool(spec.LOOK_V3) and css is None
     head = head or (LOOK_V3_FONTS if v3 else HEAD_FONT)
     body = body or (LOOK_V3_BODY if v3 else BODY_FONT)
-    css = (css or CSS_LAYOUT + (LOOK_CSS if (spec.LOOK_V2 and look) else "") + CSS_UI + (LOOK_V3_CSS + LOOK_V3_LAYOUT_CSS if v3 else "")).replace("HEAD", head).replace("BODY", body)
+    css = (css or CSS_LAYOUT + (LOOK_CSS if (spec.LOOK_V2 and look) else "") + CSS_UI + (LOOK_V3_CSS + LOOK_V3_LAYOUT_CSS if v3 else "")
+           + (FINISH_CSS if spec.FINISH else "")).replace("HEAD", head).replace("BODY", body)
     T = {**THEME, **{k: v.lstrip("#") for k, v in (colors or {}).items()}}
     if T.get("panel"):   # a brand may name the card fill by its Theme field as well as by the legacy key
         T["tint"] = T["panel"]

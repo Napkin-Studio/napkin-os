@@ -38,6 +38,16 @@ DOSSIER_HEADER = ("===== RESEARCH DOSSIER "
 _MAX_CORPUS_FINDINGS = 8
 _SNIPPET_CHARS = 420
 
+#: How the web track sources figures (the blind deck review of 19 Nov 2026: a regional Irish utility's case rested on US figures in
+#: gallons). Local first, metric for a metric market, and a figure from elsewhere says where it is from.
+SOURCING_RULES = (
+    "Sourcing rules: prefer sources from the brief's own market (its country or region, its regulator, statistics office and local "
+    "press) and metric figures. Use a figure from another market only when the brief's market has none, and say which market it is "
+    "from in the claim and in \"market\" (e.g. \"US figure\"). For a market that uses metric units (Ireland, the UK, the EU), write "
+    "every quantity in metric units (litres, kilometres, kilograms, degrees Celsius), converted from the source's units, and keep the "
+    "source's own figure in brackets.\n"
+)
+
 
 def _gist(text: str) -> dict | None:
     """Summarise a client brief into a terse JSON gist (client/market/problem/objective/
@@ -139,8 +149,9 @@ def _web_track(gist: dict) -> list[dict]:
         "Research the current market context for an advertising brief. "
         f"Client: {gist.get('client', '?')}. Market: {gist.get('market', '?')}. "
         f"Problem: {gist.get('problem', '?')}. Competitors: {gist.get('competitors', '?')}.\n"
+        + SOURCING_RULES +
         "Use web search. Return 3-6 findings as a JSON array ONLY: "
-        '[{"claim": "...", "url": "...", "date": "..."}]. '
+        '[{"claim": "...", "url": "...", "date": "...", "market": "..."}]. '
         "Only findings you can source; no speculation."
     )
     try:
@@ -200,8 +211,9 @@ def gather(text: str, clan_data: dict | None = None) -> tuple[str | None, str | 
         summary.append("Precedent: " + "; ".join(h["citation"] for h in top[:4]))
     if web:
         dossier.append("Live market context (web):")
-        for w in web:
-            dossier.append(f"- {w['claim']} ({w['url']})")
+        for w in web:   # a figure from another market keeps its market beside it
+            mk = str(w.get("market") or "").strip()
+            dossier.append(f"- {w['claim']}" + (f" [{mk}]" if mk else "") + f" ({w['url']})")
         summary.append("Web: " + "; ".join(f"{w['claim'][:80]} ({w['url']})" for w in web[:3]))
 
     print(f"[✓] research: {len(corpus)} corpus + {len(web)} web findings")
