@@ -443,7 +443,7 @@ def _drop_kit_pins(members: dict, kit_pins: set, kit_ids: set = frozenset()) -> 
 
 
 def from_upstream(data: dict, members: dict | None = None, docs: dict | None = None, doc_facts: dict | None = None,
-                  apps: dict | None = None, kit_pins: set | list | None = None) -> Inputs:
+                  apps: dict | None = None, kit_pins: set | list | None = None, self_id: str | None = None) -> Inputs:
     """Build the Inputs from a Deck document: ``data`` is its data (``upstream.<source document id>``
     frozen sources, ``inputs.prompt``, ``intake``); ``members`` its merged ``facts``, ``findings``,
     ``sources`` and ``decisions`` (the whole carried decision chain), each a list or wrapped in its
@@ -455,7 +455,10 @@ def from_upstream(data: dict, members: dict | None = None, docs: dict | None = N
     ``apps`` (``{source document id: app_id}``, from ``lineage.attached``) says what each entry is. A Brand Clan
     or Style Pack is a kit: never the brief or the research, and every pin that arrived with a kit is dropped from
     the facts (``kit_pins``: the ids the runner knows came with one; a pin marked with the brand layer's reference
-    is dropped too). Without ``apps`` a kit is recognised by its ``kit.version`` block."""
+    is dropped too). Without ``apps`` a kit is recognised by its ``kit.version`` block.
+
+    ``self_id`` is the Deck document's own id (its manifest's): a ``classify`` mark in the carried chain that names the Deck itself is
+    read in the Deck's own data, beside marks on the brief and the research, never refused for naming a document it does not hold."""
     data, members = data or {}, members or {}
     up = data.get("upstream") or {}
     kits = [k for k, v in up.items() if _is_kit(k, v, apps)]
@@ -472,7 +475,10 @@ def from_upstream(data: dict, members: dict | None = None, docs: dict | None = N
     chain_list = chain_list.get("decisions") if isinstance(chain_list, dict) else chain_list
     if brief_data is not None:
         # The chain's marks are looked up in the documents they name (the brief, or the research beside it), never all in the brief.
-        fields, htw, oq, cov = brief_from_data(brief_data, chain_list or [], brief_id, {k: v for k, v in up.items() if k != brief_id})
+        others = {k: v for k, v in up.items() if k != brief_id}
+        if self_id and self_id != brief_id:
+            others[self_id] = data   # a mark on the Deck document itself is read in the Deck's own data
+        fields, htw, oq, cov = brief_from_data(brief_data, chain_list or [], brief_id, others)
     else:
         fields, htw, oq, cov = empty_brief(), {}, [], {"brief_fields": len(BRIEF_FIELDS), "brief_fields_filled": 0,
                                                        "how_to_win_points": 0, "open_questions": 0, "brief_source": "none"}
@@ -524,7 +530,8 @@ def from_deck_document(path: Path) -> tuple[Inputs, dict]:
     apps = {(a.get("carried") or {}).get("document_id"): a.get("app_id") for a in attached if (a.get("carried") or {}).get("document_id")}
     members = {"facts": rd("shared/facts.yaml"), "findings": rd("shared/findings.yaml"), "sources": rd("shared/sources.yaml"),
                "decisions": rd("agent/decision-chain.yaml")}
-    inp = from_upstream(data, {k: v for k, v in members.items() if v is not None}, apps=apps)
+    inp = from_upstream(data, {k: v for k, v in members.items() if v is not None}, apps=apps,
+                        self_id=str(man.get("document_id") or man.get("id") or "") or None)
     up = data.get("upstream") or {}
     lib = bool(((data.get("inputs") or {}).get("library") or {}).get("enabled") is True)
     pack = brand = None

@@ -72,3 +72,13 @@ def test_a_research_mark_empty_in_its_own_document_still_refuses():
 def test_a_mark_on_a_document_the_deck_does_not_hold_refuses():
     with pytest.raises(inputs.MarksError, match="does not hold"):
         inputs.from_upstream(_brief_and_research("250k_1m"), _classify("other-doc#campaign.budget_band"))
+
+
+def test_a_mark_on_the_deck_document_itself_is_read_there_when_a_brief_is_upstream():
+    """A classify mark in the carried chain may name the Deck document itself (a part of its own prompt): it is read in the Deck's data,
+    never refused as a document the deck does not hold, and never looked up in the brief."""
+    data = {**_brief_and_research("250k_1m"), "inputs": {"prompt": {"text": "DECK-SIDE-SECRET plan"}}}
+    inp = inputs.from_upstream(data, _classify("deck-doc#inputs.prompt.text"), self_id="deck-doc")
+    assert inp.marks == [{"path": "deck-doc#inputs.prompt.text", "text": "DECK-SIDE-SECRET plan", "kind": "classify"}]
+    with pytest.raises(inputs.MarksError, match="does not hold"):   # without the deck's own id it cannot be told from a stranger
+        inputs.from_upstream(data, _classify("deck-doc#inputs.prompt.text"))
