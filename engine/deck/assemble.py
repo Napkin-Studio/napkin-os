@@ -1035,12 +1035,7 @@ def _arrange_pitch(S: list, supported: set | None = None, routes: int = 1, messa
     if supply and fin is not None:   # finish fixes: one short presented line keeps the gaps in view (never an agency note)
         ask = next((x for x in reversed(story) if x["type"] in ("next_step", "ask", "close", "investment")), None) or story[-1]
         bl = next((b for b in ask["blocks"] if b["kind"] == "bullets"), None)
-        held = [i for i in (bl or {}).get("items") or [] if isinstance(i, dict) and i.get("human")]
-        if bl is not None and held and len(held) < len(bl["items"]):   # the ask's own placeholders join the line (the decision date)
-            bl["items"] = [i for i in bl["items"] if not (isinstance(i, dict) and i.get("human"))]
-            ask["notes"] = "\n\n".join([x for x in [ask.get("notes") or ""] if x.strip()] + ["To supply (named in the line on this slide):"] + [i["text"] for i in held])
-        extra = [m.group(1) for i in held for m in [re.search(r"\[([^\]]{2,60})\]", str(i.get("text") or ""))] if m]
-        line = finish.supply_line(supply, ["the " + x if not x.lower().startswith(("the ", "a ", "an ")) else x for x in extra])
+        line = finish.supply_line(supply)   # the ask keeps its own labelled placeholders (the decision date): validate's placeholder rule
         if bl is not None:
             bl["items"] = list(bl["items"]) + [{"text": line, "basis": "meta"}]
         else:
