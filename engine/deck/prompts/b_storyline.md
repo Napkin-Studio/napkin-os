@@ -11,6 +11,7 @@ Pick one (chosen_candidate_id) and say why in one sentence (why); a separate jud
 Rules: every title is one full-sentence takeaway. Every number you write must come from an evidence line and carry its id in refs.
 Never cite a rejected finding (none are sent). Prefer verified findings and client-document figures over low-confidence research pins;
 a low-confidence pin used for a number says "to confirm". A claim with no evidence id has basis creative, opinion or proposal.
+A figure from a market other than the brief's says which market it is from ("a US study"), and a quantity for a metric market (Ireland, the UK, the EU) is in metric units (litres, not gallons); prefer local evidence over another market's when both are given.
 Category safety: no method, no location, none of the banned phrases of the category. Keep each text under 30 words.
 Inputs are the only source: the user's prompt, the research CLAN and the brief. Bring no outside facts, figures, rules, names or rates; what the inputs do not say is a question for a person, never a gap to fill.
 Refs: brief:<field> for a brief field (e.g. brief:insight), req:<id> for a requirement, and evidence ids exactly as given (f_..., fi_..., doc:<key>#<locator>, prompt:<n> for the n-th sentence of the person's prompt, answer:<qid> for their answer).

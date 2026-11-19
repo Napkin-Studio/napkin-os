@@ -51,6 +51,7 @@ class Inputs:
     intake: dict = field(default_factory=dict)       # the a0 gaps/questions as the runner wrote them
     verified: dict = field(default_factory=dict)     # confirm ref -> {by, at}: the person's verify decisions (intake.verified.<ref>)
     marks: list | None = None                        # parts a person marked Confidential: [{path, text, kind}]; None = never checked (picture generation is refused)
+    brief_source: dict = field(default_factory=dict)  # finish fixes: the brief's own source sentences {n: text}, what its source_refs number (load_brief)
 
     def has_brief(self) -> bool:
         """True when a brief supplied at least one field (a field an intake stage filled does not count)."""
@@ -98,7 +99,37 @@ def load_brief(path: Path) -> tuple[dict, dict, list, dict]:
     cov = {"brief_fields": len(fields), "brief_fields_filled": sum(1 for f in fields.values() if f["value"]),
            "how_to_win_points": sum(len(v) for v in htw.values() if isinstance(v, list)),
            "open_questions": len(oq), "capture_fields": len(capture.get("fields") or {})}
+    src = source_sentences(capture)
+    if src:
+        cov["source_sentences"] = src   # popped by load() into Inputs.brief_source: never part of the recorded coverage
     return fields, htw, oq, cov
+
+
+def source_sentences(capture: dict) -> dict:
+    """finish fixes: the brief tool's source sentences ``{n: text}``, rebuilt from what its capture quotes. Every captured field and every
+    how-to-win point carries ``source_refs`` (sentence numbers of the client's own text) beside the words it quotes (``source_quote`` or
+    ``evidence``). The stages see those numbers and cite them as ``prompt:<n>``; with no prompt in the run they resolved to nothing
+    (unknown_ref on every slide citing one). A quote that splits into as many sentences as it has refs gives each its sentence; a
+    number never seen whole stays unknown, so nothing is guessed."""
+    from .refs import prompt_sentences
+    out: dict = {}
+
+    def walk(x):
+        if isinstance(x, dict):
+            refs_ = x.get("source_refs")
+            quote = x.get("source_quote") or x.get("evidence")
+            if isinstance(refs_, list) and refs_ and isinstance(quote, str) and all(isinstance(r, int) for r in refs_):
+                parts = prompt_sentences(quote)
+                if len(parts) == len(refs_):
+                    for n, t in zip(refs_, parts):
+                        out.setdefault(int(n), t)
+            for v in x.values():
+                walk(v)
+        elif isinstance(x, list):
+            for v in x:
+                walk(v)
+    walk(capture or {})
+    return dict(sorted(out.items()))
 
 
 def parse_research(facts, findings, sources, chain, docs=None, doc_id=None, title=None, *, chain_rejects_findings=False) -> dict:
@@ -361,8 +392,9 @@ def load(brief: Path | None, research: Path | None = None, doc_facts: Path | Non
         clan = is_clan(Path(brief))
         fields, htw, oq, cov = load_brief_clan(brief) if clan else load_brief(brief)
     marks = cov.pop("marks", None)
+    src = cov.pop("source_sentences", None) or {}
     inp = Inputs(brief=fields, how_to_win=htw, open_questions=oq, prompt_text=prompt_text or "",
-                 answers=answers or {}, intake=intake or {}, verified=verified or {}, marks=marks)
+                 answers=answers or {}, intake=intake or {}, verified=verified or {}, marks=marks, brief_source=src)
     research = research or (brief if clan else None)
     if research:
         r = load_research(research)

@@ -259,6 +259,8 @@ def _lead_number(text: str):
 
 
 _FIG = re.compile(r"[<>~≈]?(?:[€$£]|(?:EUR|USD|GBP)\s)\s?\d[\d,.]*(?:\s?(?:[kKmMbB]n?\b|million\b|billion\b))?|\d[\d,.]*\s?(?:%|per ?cent\b|×)")
+#: finish fixes: a count with thousands separators or a scale word (20,000; 3,000; 2.5 million), never a year.
+_COUNT = re.compile(r"(?<![\w.,€$£])\d{1,3}(?:,\d{3})+(?![\d,]|\.\d)|(?<![\w.,€$£])\d+(?:\.\d+)?\s?(?:million|billion|bn)\b")
 _BY_DATE = re.compile(r"\b(?:by\s+(?:the end of\s+|end of\s+)?(?:\d{1,2}\s+)?(?:Q[1-4]\b(?:\s+\d{4})?|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*(?:\s+\d{4})?|\d{4})"
                       r"|(?:in|within)\s+\d+\s+(?:months?|weeks?|years?|days?))", re.I)
 
@@ -280,6 +282,9 @@ def _objective_facts(texts: list) -> dict | None:
     for t in texts:
         t = str(t)
         figs = [m for m in _FIG.finditer(t) if not _is_limit_figure(t, m)]   # a budget or ceiling is never labelled the target
+        if spec.FINISH:   # finish fixes: a count is a target too ('20,000 registered riders'), so the primary objective's number leads
+            figs = sorted(figs + [m for m in _COUNT.finditer(t) if not any(f.start() <= m.start() < f.end() for f in _FIG.finditer(t))
+                                  and not _is_limit_figure(t, m)], key=lambda m: m.start())
         if not figs:
             continue
         base = re.search(r"\bfrom\s+(" + _FIG.pattern + ")", t, re.I)
@@ -355,6 +360,7 @@ class Renderer:
                  pictures: dict | None = None):
         self.deck, self.inp = _clean_xml(deck), inp
         deck = self.deck
+        numfmt.set_units(deck)   # finish fixes: a metric market's imperial figures read in metric (render time only)
         # Pictures (deck-frames-in): ``pictures`` maps an asset id to its derived JPEG. None: nothing is drawn and nothing changes.
         self.pictures = pictures
         self.drawn = {k: v for k, v in images.drawn(deck, deck["meta"].get("audience", "review")).items() if v["asset"] in (pictures or {})} if pictures else {}
@@ -956,7 +962,8 @@ class Renderer:
 
     def _b_small(self, sl, bl, x, y, w, sc):
         """A caption line in the muted ink."""
-        paras = [self.para(str(bl["text"]).strip(), (self.th.scale.caption + 1) * sc, self.p.mute)]
+        size = max(float(self.th.scale.small), self.th.scale.small * sc) if spec.FINISH else (self.th.scale.caption + 1) * sc   # finish fixes: evidence lines are readable (14 pt and up)
+        paras = [self.para(str(bl["text"]).strip(), size, self.p.mute)]
         h = self.ph(paras, w)
         self.ptext(sl, x, y, w, h, paras)
         return h
@@ -1664,7 +1671,7 @@ class Renderer:
             wr = self.x1 - xr
             for sc in (1.25, 1.12, 1.0, 0.9, 0.8, 0.7):
                 bp = [self.para(str(b["text"]).strip(),
-                                {"statement": S.lead, "text": S.body, "small": S.caption + 1}[b["kind"]] * sc,
+                                {"statement": S.lead, "text": S.body, "small": S.small if spec.FINISH else S.caption + 1}[b["kind"]] * sc,
                                 p.mute if b["kind"] == "small" else p.fg,
                                 self.th.head if b["kind"] == "statement" else None, line=1.1, after=10) for b in blocks]
                 bh = self.ph(bp, wr - 0.32)
@@ -1798,7 +1805,7 @@ class Renderer:
                 fh = g.body_end - y
                 note = []
                 nh = 0.0
-                if vis.get("kind") == "image_prompt":
+                if vis.get("kind") == "image_prompt" and not spec.FINISH:   # finish fixes: the prompt goes to the notes (spec.review_lines)
                     note = [self.para("Image prompt (" + vis.get("status", "illustrative") + "): " + vis.get("prompt", ""), S.caption, p.mute, italic=True, cap=True)]
                     nh = self.ph(note, lw - 0.6) + 0.25
                 ch, cy, fy, ffh = fh, y, y, fh   # the card's height and top, the frame's top and height
@@ -1816,8 +1823,8 @@ class Renderer:
                     fy, ffh = y + ch + 0.2, fh - ch - 0.2
                 self.stack(None, rest, self.x0 + 0.3, cy + 0.3, lw - 0.6, cy + ch - 0.3 - nh, fill=True)
                 for asz in (S.body, 15, S.small, 13, 12):
-                    ans = [self.para(cp["answer"], asz, p.inv_acc, bold=True)]
-                    ah = self.ph(ans, fw - 0.8)
+                    ans = [self.para(cp["answer"], asz, p.inv_acc, bold=True)] if str(cp.get("answer") or "").strip() else []
+                    ah = self.ph(ans, fw - 0.8) if ans else -GAP   # finish fixes: a long script's answer is a line of its own, not in the frame
                     try:
                         size = self.fit(lambda sz_: [self.para(l, sz_, p.inv_fg, self.th.head, line=1.1, after=10) for l in cp["lines"]], fw - 0.8, ffh - 0.8 - ah - GAP, 26, 12)
                         break
@@ -1845,9 +1852,10 @@ class Renderer:
             top = fy + (ffh - (lh + GAP + ah)) / 2
             self.ptext(sl, fx + 0.4, top, fw - 0.8, lh, lines)
             self._build(sl, m)
-            m = self._mark(sl)
-            self.ptext(sl, fx + 0.4, top + lh + GAP, fw - 0.8, ah, ans)
-            self._build(sl, m)
+            if ans:
+                m = self._mark(sl)
+                self.ptext(sl, fx + 0.4, top + lh + GAP, fw - 0.8, ah, ans)
+                self._build(sl, m)
             return
         raise NoFit("execution slide too dense")
 
@@ -3005,11 +3013,11 @@ class Renderer:
         for dense in (False, True):
             try:
                 y = self.head(None, s, dense)
-                ans = [self.para(cp["answer"], S.body, p.inv_acc, bold=True)]
+                ans = [self.para(cp["answer"], S.body, p.inv_acc, bold=True)] if str(cp.get("answer") or "").strip() else []
                 fw = self.x1 - self.x0 - 0.8
                 size = self.fit(lambda sz_: [self.para(l_, sz_, p.inv_fg, self.th.head, line=1.1, after=6) for l_ in cp["lines"]], fw, 2.0, 24, 12)
                 lines = [self.para(l_, size, p.inv_fg, self.th.head, line=1.1, after=6) for l_ in cp["lines"]]
-                fh = self.ph(lines, fw) + self.ph(ans, fw) + GAP + 0.6
+                fh = self.ph(lines, fw) + (self.ph(ans, fw) + GAP if ans else 0) + 0.6
                 ty = y + fh + 0.25
                 for k, c in enumerate(cols):
                     if c:
@@ -3023,7 +3031,8 @@ class Renderer:
             self.rect(sl, self.x0, y, self.x1 - self.x0, fh, fill=p.inv)
             self.rect(sl, self.x0, y, 0.09, fh, fill=p.acc_l)
             self.ptext(sl, self.x0 + 0.4, y + 0.3, fw, self.ph(lines, fw), lines)
-            self.ptext(sl, self.x0 + 0.4, y + 0.3 + self.ph(lines, fw) + GAP, fw, self.ph(ans, fw), ans)
+            if ans:
+                self.ptext(sl, self.x0 + 0.4, y + 0.3 + self.ph(lines, fw) + GAP, fw, self.ph(ans, fw), ans)
             self._build(sl, m)
             for k, c in enumerate(cols):
                 if c:
@@ -4419,7 +4428,7 @@ class Renderer:
                 self.rect(sl, fx1 - tw_ + 0.1, 0.08, tw_, 0.38, fill=p.bg, name="MarkGround")
                 wx = fx1 - tw_ + 0.15
             self.text(sl, wx, 0.12, fx1 - wx, 0.3, tag, size=foot, cap=True, color=p.acc_t, bold=True, align=PP_ALIGN.RIGHT, name="Watermark")
-        if sid in self.failed and audience != "client":   # a client slide never prints a check id (a failing client build is withheld by run_deck)
+        if sid in self.failed and audience != "client" and not spec.FINISH:   # a client slide never prints a check id (a failing client build is withheld by run_deck); finish fixes: never on any slide, the notes say it (spec.review_lines)
             red = "FF9B8E" if dark else "B03225"
             self.text(sl, 4.5, 0.12, 4.1, 0.3, "CHECK FAILED: " + ", ".join(sorted(set(self.failed[sid]))), size=foot, cap=True, color=red, bold=True, align=PP_ALIGN.RIGHT, name="CheckFailed")
         if self.notes:
@@ -4428,6 +4437,9 @@ class Renderer:
                 sl.notes_slide.notes_text_frame.text += "\n\nClaims:\n" + "\n".join("- " + c["text"] for c in s["claims"])
             if planned and spec.moved_map(s_full, audience):   # points the plan moved off the slide: verbatim, each with its refs, labelled
                 sl.notes_slide.notes_text_frame.text += "\n\nMoved from the slide:\n" + "\n".join(layouts.moved_line(t_, r_) for t_, r_ in layouts.moved_texts(s_full))
+            rv = spec.review_lines(s_full, audience, self.failed.get(sid))   # finish fixes: check ids, internal notes and the picture prompt, never on the slide
+            if rv:
+                sl.notes_slide.notes_text_frame.text += "\n\nFor the agency:\n" + "\n".join(rv)
         if s["type"] == "appendix":
             self.hiding = True
         if getattr(self, "hiding", False):   # the appendix stays in the file, hidden from the slideshow
@@ -4850,7 +4862,7 @@ class Renderer:
         cp = next(b for b in s["blocks"] if b["kind"] == "copy")
         self._fit_flow(sl, [b for b in s["blocks"] if b["kind"] != "copy"], self.x0, y, 5.6)
         vis = s.get("visual") or {}
-        if vis.get("kind") == "image_prompt":
+        if vis.get("kind") == "image_prompt" and not spec.FINISH:
             m = self._mark(sl)
             self.text(sl, self.x0, y + 1.2, 5.6, 1.5, "Image prompt (" + vis.get("status", "illustrative") + "): " + vis.get("prompt", ""), size=11, italic=True, color=t.mute)
             self._build(sl, m)

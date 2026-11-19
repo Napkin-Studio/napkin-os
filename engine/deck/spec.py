@@ -97,6 +97,10 @@ LIMIT_BOUNDS = (3, 60)
 #: last three are a last resort; so are competition, measurement_plan and risks at the very end). Nothing is reworded.
 TRIM_ORDER = ("process", "guardrails", "timeline", "innovation", "chart", "execution", "channel_roles", "upside", "gtm", "product",
               "credentials", "audience", "competition", "measurement_plan", "measurement", "risks")
+#: finish fixes (FINISH): the same moves, but the audience, the alternatives and the work hold their places longest and the plan's
+#: measurement and risks go before them (the decks the blind review preferred showed a person and a scripted piece in their first ten).
+TRIM_ORDER_FINISH = ("process", "guardrails", "timeline", "innovation", "channel_roles", "upside", "gtm", "product", "credentials",
+                     "measurement_plan", "chart", "measurement", "risks", "competition", "execution", "audience")
 
 #: List prices in USD per million tokens, (input, output), read from the ONE price table every tool shares (engine/prices.json):
 #: Opus 5.5 4/20, Sonnet 5.5 2/10, Haiku 4.5 1/5 (it was priced as Opus before 19 Nov 2026), and the rest. An ESTIMATE from tokens
@@ -240,7 +244,7 @@ def _shown(s: dict, audience: str, moved: dict) -> list:
         if bi in moved and moved[bi] is None:
             continue
         if b.get("internal"):
-            if audience == "client":
+            if audience == "client" or FINISH:   # finish fixes: an agency note never sits on a slide; review_lines puts it in the notes
                 continue
             b = {**b, "text": "Internal note: " + str(b.get("text", ""))}
         if bi in moved and isinstance(b.get("items"), list):
@@ -256,6 +260,22 @@ def shown_blocks(s: dict, audience: str = "review") -> list:
     for a review; an unsourced (illustrative) quote followed by its label; the items the layout plan moved to the
     notes (``layout.fit.moved``) left out. Shared by renderers, validate and the plan itself."""
     return _shown(s, audience, moved_map(s, audience))
+
+
+def review_lines(s: dict, audience: str = "review", failed=None) -> list:
+    """finish fixes: what the agency needs to see about a slide that must never be printed ON it, as speaker-notes lines (pptx and html
+    alike): the checks that failed on it, its internal notes and its picture prompt. A client file carries none of them. Empty with
+    FINISH off (the old renders printed them on the slide) or with nothing to say."""
+    if not FINISH or audience == "client":
+        return []
+    out = []
+    if failed:
+        out.append("Check failed (review only, never on the slide): " + ", ".join(sorted(set(failed))))
+    out += ["Internal note: " + str(b.get("text", "")).strip() for b in s.get("blocks") or [] if b.get("internal") and str(b.get("text", "")).strip()]
+    vis = s.get("visual") or {}
+    if vis.get("kind") == "image_prompt" and str(vis.get("prompt") or "").strip():
+        out.append(f"Image prompt ({vis.get('status', 'illustrative')}): {vis['prompt']}")
+    return out
 
 
 def blocks_sha(s: dict, audience: str = "review") -> str:
@@ -503,6 +523,12 @@ GRAPHICS = flag_on("DECK_GRAPHICS") and LOOK_V3
 if _flag_asked("DECK_GRAPHICS") and not LOOK_V3:
     import sys as _sys   # noqa: PLC0415
     print("deck: DECK_GRAPHICS=1 needs DECK_LOOK_V3 on (it is 0 for this run); graphics stay off for this run", file=_sys.stderr)
+#: deck finish fixes (features/deck-repair-loop.clan, the blind review of 19 Nov 2026): nothing for the agency is printed on a slide (check
+#: ids, internal notes, picture prompts and the sketch label go to the speaker notes), placeholder-only slides leave the presented story
+#: for the 'To supply' part, a thought is said once, the title and objective state only what the brief states, evidence is in metric
+#: units for a metric market, the fit ladder moves points to the notes before it overflows, and the proposition is checked against the
+#: alternative the deck argues against. ON by default; DECK_FINISH=0 builds exactly as before (the test suite sets it to 0, like the three above).
+FINISH = flag_on("DECK_FINISH")
 #: Whether the run set the pitch length by env: the per-run override ranks above a recipe (design.schema.readers: env > recipe > default).
 PITCH_LENGTH_FROM_ENV = {"target": _env_count("DECK_PITCH_TARGET", -1, warn=False) != -1, "cap": _env_count("DECK_PITCH_CAP", -1, warn=False) != -1}   # a bad value is not "from env"
 #: Layouts deck-look has named but not yet built (features/deck-look.clan step 3; cover_bleed landed in step 7). A recipe may name one: it is accepted by the
