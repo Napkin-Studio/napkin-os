@@ -310,9 +310,12 @@ def test_trim_never_moves_a_type_it_does_not_name():
 # ---------------------------------------------------------------- 12: cost and transport hygiene
 
 def test_estimate_usd_uses_the_price_table():
-    """Opus 5.5 at 4/20 and Sonnet 5.5 at 2/10 dollars per million tokens in/out; cache reads 0.05x, writes 1.25x; an unknown
-    model is priced at the dearest listed price (never 0); a list names the dearest."""
-    assert spec.PRICE_PER_MTOK == {"claude-opus-5-5": (4.0, 20.0), "claude-sonnet-5-5": (2.0, 10.0)}
+    """Opus 5.5 at 4/20 and Sonnet 5.5 at 2/10 dollars per million tokens in/out; their cache reads at 0.05x, writes 1.25x; an unknown
+    model is priced as Opus 5.5 (never 0); a list names the dearest. One table for every tool (engine/prices.json): Haiku is
+    listed (it was priced as Opus before 19 Nov 2026) and the older models' cache reads are 0.1x."""
+    assert spec.PRICE_PER_MTOK["claude-opus-5-5"] == (4.0, 20.0) and spec.PRICE_PER_MTOK["claude-sonnet-5-5"] == (2.0, 10.0)
+    assert spec.estimate_usd("claude-haiku-4-5-20251001", 1_000_000, 1_000_000) == 6.0
+    assert spec.estimate_usd("claude-opus-4-6", 0, 0, cache_read=1_000_000) == 0.5   # 0.1x of 5 on the older Opus
     assert spec.estimate_usd("claude-opus-5-5", 1_000_000, 1_000_000) == 24.0
     assert spec.estimate_usd("claude-sonnet-5-5", 2_000, 500) == round(2_000 / 1e6 * 2 + 500 / 1e6 * 10, 4)
     assert spec.estimate_usd("nope", 1_000_000, 1_000_000) == 24.0 and spec.estimate_usd("nope", 5, 5) > 0

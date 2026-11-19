@@ -41,13 +41,23 @@ def _words(sl):
 
 
 # ---- the flag ------------------------------------------------------------------------------------
-def test_flag_default_is_off(monkeypatch):
-    monkeypatch.delenv("DECK_LOOK_V3", raising=False)
+def test_flag_default_is_on_and_0_turns_it_off(monkeypatch):
+    """Sai, 19 Nov 2026: every feature on. Unset or empty is on; =0 (or false, no, off) draws the old look. The suite itself runs with
+    DECK_LOOK_V3=0 set explicitly (tests/conftest.py), so the old-look tests below hold the old look on purpose."""
     import importlib
+    monkeypatch.delenv("DECK_LOOK_V3", raising=False)
     try:
-        assert importlib.reload(spec).LOOK_V3 is False
+        assert importlib.reload(spec).LOOK_V3 is True
+        for v in ("", "1", "yes"):
+            monkeypatch.setenv("DECK_LOOK_V3", v)
+            assert importlib.reload(spec).LOOK_V3 is True, v
+        for v in ("0", "false", "no", "off", " OFF "):
+            monkeypatch.setenv("DECK_LOOK_V3", v)
+            assert importlib.reload(spec).LOOK_V3 is False, v
     finally:
+        monkeypatch.undo()   # the suite's explicit DECK_LOOK_V3=0 back before the reload, so later tests keep the old look
         importlib.reload(spec)
+    assert spec.LOOK_V3 is False
 
 
 def test_flag_off_keeps_the_old_look(tmp_path):

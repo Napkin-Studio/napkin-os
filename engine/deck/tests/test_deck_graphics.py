@@ -61,20 +61,29 @@ def _icons_on(sl) -> list:
 
 
 # ================================================================================================ the flag
-def test_the_flag_needs_look_v3_and_is_off_by_default(monkeypatch, capsys):
+def test_the_flag_needs_look_v3_and_is_on_by_default(monkeypatch, capsys):
+    """Sai, 19 Nov 2026: on by default; DECK_GRAPHICS=0 turns it off, and so does DECK_LOOK_V3=0 (with a warning only when graphics were asked
+    for by hand). The suite runs with both set to 0 explicitly (tests/conftest.py)."""
     try:
         monkeypatch.delenv("DECK_GRAPHICS", raising=False)
         monkeypatch.delenv("DECK_LOOK_V3", raising=False)
+        assert importlib.reload(spec).GRAPHICS is True
+        monkeypatch.setenv("DECK_GRAPHICS", "0")
         assert importlib.reload(spec).GRAPHICS is False
+        monkeypatch.setenv("DECK_LOOK_V3", "0")
+        monkeypatch.delenv("DECK_GRAPHICS", raising=False)
+        capsys.readouterr()
+        assert importlib.reload(spec).GRAPHICS is False    # LOOK_V3 off: graphics off, quietly (nobody asked for them)
+        assert "needs DECK_LOOK_V3" not in capsys.readouterr().err
         monkeypatch.setenv("DECK_GRAPHICS", "1")
-        assert importlib.reload(spec).GRAPHICS is False   # without LOOK_V3: off, with a warning
-        assert "needs DECK_LOOK_V3=1" in capsys.readouterr().err
+        assert importlib.reload(spec).GRAPHICS is False    # asked for by hand without LOOK_V3: off, with a warning
+        assert "needs DECK_LOOK_V3" in capsys.readouterr().err
         monkeypatch.setenv("DECK_LOOK_V3", "1")
         assert importlib.reload(spec).GRAPHICS is True
     finally:
-        monkeypatch.delenv("DECK_GRAPHICS", raising=False)
-        monkeypatch.delenv("DECK_LOOK_V3", raising=False)
+        monkeypatch.undo()
         importlib.reload(spec)
+    assert spec.GRAPHICS is False
 
 
 def test_flag_off_draws_no_icon_and_reads_no_vendor_file(v3, tmp_path):

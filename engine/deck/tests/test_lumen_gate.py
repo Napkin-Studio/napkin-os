@@ -53,7 +53,9 @@ def render(work: Path, v3: bool) -> Path:
         shutil.rmtree(st)
     shutil.copytree(FIX / "stages", st)
     out = work / "out"
-    env = {**os.environ, "PYTHONPATH": str(ENGINE), "DECK_LOOK_V3": "1" if v3 else "", "NAPKIN_DECK_LEDGER": str(work / "ledger.jsonl"),
+    env = {**os.environ, "PYTHONPATH": str(ENGINE), "DECK_LOOK_V3": "1" if v3 else "0",
+           "DECK_RECIPES": "0", "DECK_GRAPHICS": "0",   # the two looks the baseline holds, set explicitly: every feature is on by default since 19 Nov
+           "NAPKIN_DECK_LEDGER": str(work / "ledger.jsonl"),
            "BRIEF_TESTS_OFFLINE": "1"}
     for k in ("ANTHROPIC_API_KEY", "RUNWAYML_API_SECRET", "RUNWAY_API_KEY", "GEMINI_API_KEY", "OPENAI_API_KEY"):
         env.pop(k, None)   # nothing can be sent: no key reaches the build

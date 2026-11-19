@@ -617,7 +617,7 @@ def chosen_type(inp, flag: str | None = None, pick: str | None = None) -> dict:
         if tid not in profiles.ids():
             raise profiles.ProfileError(f"no deck type {tid!r}: known types are {', '.join(profiles.ids())}")
         if tid not in profiles.offered():   # a type that joined with the recipes is refused while they are off (no half-built type)
-            raise profiles.ProfileError(f"the deck type {tid} needs the deck recipes (DECK_RECIPES=1 with DECK_LOOK_V3=1), which are off")
+            raise profiles.ProfileError(f"the deck type {tid} needs the deck recipes, which are turned off for this run (DECK_RECIPES=0 or DECK_LOOK_V3=0)")
     if flag:
         return {"type": profiles.for_kind(flag)["id"], "source": "flag", "note": f"--kind {flag}"}
     if pick:
