@@ -44,3 +44,31 @@ def test_from_upstream_reads_the_same_marks(tmp_path):
     inp = inputs.from_upstream({"upstream": {"doc1": data}}, {"decisions": [{"id": "d_1", "kind": "classify", "targets": ["doc1#audience"],
                                                                            "licence": {"model": False, "corpus": False}}]})
     assert {m["path"] for m in inp.marks} == {"budget_and_scope", "mandatories[0]", "audience"}
+
+
+def _classify(target):
+    return {"decisions": [{"id": "d_c", "kind": "classify", "targets": [target], "licence": {"model": True, "corpus": False}}]}
+
+
+def _brief_and_research(budget):
+    """A Deck's upstream (invented): a brief that also has a ``campaign.budget_band``, and research whose field carries provenance."""
+    brief = {"background": "Lumen Water serves a region.", "audience": "Households.", "campaign": {"budget_band": "BRIEF-SIDE-TEXT"}}
+    research = {"campaign": {"name": "Lumen", "budget_band": {"value": budget, "origin": "extracted", "gate": "brief"}}}
+    return {"upstream": {"brief-doc": brief, "res-doc": research}}
+
+
+def test_a_research_mark_is_read_in_the_research_not_the_brief():
+    """The carried chain marks the research document's part: it is looked up there (its value, not its provenance), never in the brief."""
+    inp = inputs.from_upstream(_brief_and_research("250k_1m"), _classify("res-doc#campaign.budget_band"))
+    assert inp.marks == [{"path": "res-doc#campaign.budget_band", "text": "250k_1m", "kind": "classify"}]
+
+
+def test_a_research_mark_empty_in_its_own_document_still_refuses():
+    """The brief holds text at the same path, but the mark is the research's: empty there, so it is refused, not read from the brief."""
+    with pytest.raises(inputs.MarksError, match="res-doc#campaign.budget_band"):
+        inputs.from_upstream(_brief_and_research(None), _classify("res-doc#campaign.budget_band"))
+
+
+def test_a_mark_on_a_document_the_deck_does_not_hold_refuses():
+    with pytest.raises(inputs.MarksError, match="does not hold"):
+        inputs.from_upstream(_brief_and_research("250k_1m"), _classify("other-doc#campaign.budget_band"))
