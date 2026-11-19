@@ -183,7 +183,7 @@ def test_script_annotations_and_source_talk_go_to_the_notes():
 
 def test_a_figure_is_fitted_on_its_digits_real_width(monkeypatch):
     monkeypatch.setattr(spec, "LOOK_V3", True)
-    assert T.is_figure("20,000") and T.is_figure("5%") and not T.is_figure("Within 6 months")
+    assert T.is_figure("20,000") and T.is_figure("15%") and not T.is_figure("Within 6 months") and not T.is_figure("EUR 120,000")
     r = R.Renderer(json.loads((FIX / "golden_deck.json").read_text()), Inputs(brief={}), theme="napkin")
     w = 6 * 98 * T.fit_wf("Archivo", True) / 72 + 0.05   # wide enough for six mean-width glyphs at 98 pt, not for six digits
     assert r.nlines("20,000", w, 98, True, r.th.head) == 2 and not r._units_fit("20,000", w, 98)

@@ -279,12 +279,12 @@ def fit_wf(font: str, bold: bool = False, caps: bool = False) -> float | None:
 
 
 def is_figure(text) -> bool:
-    """A display figure ('20,000', '5%', 'EUR 1.2m'): at least two digits, and digits at least half of its characters. Digits are set
+    """A display figure ('20,000', '15%', '€1.5'): at least two digits and nothing but digits, separators, signs and currency symbols (a
+    figure with words, 'EUR 120,000' or '12 months', keeps the running-text estimate its layouts were tuned on). Digits are set
     wider than a running text's average glyph (Archivo bold: 0.60 em against 0.48 mixed), so a figure is fitted on the capitals' widths
     (the wider of the two), never the mixed-case average: the hero '20,000' that wrapped onto 'By when' (19 Nov 2026) was fitted on it."""
     t = re.sub(r"\s", "", str(text or ""))
-    d = sum(c.isdigit() for c in t)
-    return d >= 2 and d * 2 >= len(t)
+    return sum(c.isdigit() for c in t) >= 2 and re.fullmatch(r"[\d.,%+\-\u2212\u2013€$£¥]+", t) is not None
 
 
 @dataclass(frozen=True)
