@@ -1572,6 +1572,26 @@ test('Start and every Build state render byte-identical markup', () => {
 
 // ── Review and Present (phase 4): Approve the deck, the appendix, the export rows and the report line ──────────
 const review = (n: string | Fx) => mount(typeof n === 'string' ? fixture(n) : n)
+
+// ── costs are for the Napkin team only, never in the product (Sai, 19 Nov 2026) ──────────────
+test('no cost is ever shown: a stale run.cost_usd or report.cost_usd in an older document reaches no screen and no bar chip', () => {
+  const states = ['reading', 'handoff', 'storyline', 'territories', 'slow', 'gate1', 'gate2', 'idea', 'gate3', 'copy', 'deck', 'check', 'failed',
+    'done', 'review-ready', 'export-ready', 'export-none']
+  for (const n of states) {
+    const d = fixture(n)
+    const old: Fx = { ...d, run: { ...d.run, cost_usd: 7.31 }, report: { ...(d.report ?? {}), cost_usd: 7.31, engine_usd_total: 7.31 } }
+    const m = mount(old)
+    const shown = [m.app.innerHTML]
+    if (d.run.state === 'done') {
+      m.click({ go: 'build' }) // a finished run opens on Review: Build too
+      shown.push(m.app.innerHTML)
+    }
+    for (const h of shown) {
+      assert.ok(!h.includes('7.31'), `${n}: a cost figure is on the screen`)
+      assert.ok(!h.includes('chip cost') && !h.includes(' so far</span>') && !h.includes('Cost to build'), `${n}: a cost readout`)
+    }
+  }
+})
 const leftCol = (h: string) => /<main class="review"><div class="lcol">([\s\S]*?)<\/div><section>/.exec(h)?.[1] ?? ''
 const head = (h: string) => /<section><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">([\s\S]*?)<\/div>(?:<p class="note" data-approve-note|<div style="margin-bottom:12px">)/.exec(h)?.[1] ?? ''
 const exportCard = (h: string) => /<div class="frost" style="padding:22px">([\s\S]*?)<\/div><\/aside><\/main>/.exec(h)?.[1] ?? ''

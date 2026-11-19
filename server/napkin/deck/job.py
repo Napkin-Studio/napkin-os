@@ -27,7 +27,22 @@ from . import engine as eng
 log = logging.getLogger("napkin.deck")
 
 #: The run keys the middleware writes. The app writes the others (approvals, decisions, gate_requests): never touched here.
-RUN_OWNED = ("state", "stage", "stages", "gate", "agent", "checks", "error", "done", "cost_usd", "images", "types")
+RUN_OWNED = ("state", "stage", "stages", "gate", "agent", "checks", "error", "done", "images", "types")
+#: Costs are for the Napkin team only and never reach the product (Sai, 19 Nov 2026). The
+#: engine's view still carries its own figures; they are dropped here, at the edge: never written into the document, and an older document's
+#: run.cost_usd is deleted. The picture cards in run.images keep their prices: a person's yes to a spend must show what it spends.
+COST_RUN_KEYS = ("cost_usd",)
+COST_REPORT_KEYS = ("cost_usd", "engine_usd_total", "usd_basis")
+
+
+def no_costs(payload: dict) -> dict:
+    """The engine's payload without its cost figures (report.cost_usd, engine_usd_total, usd_basis)."""
+    out = dict(payload or {})
+    if isinstance(out.get("report"), dict):
+        out["report"] = {k: v for k, v in out["report"].items() if k not in COST_REPORT_KEYS}
+    return out
+
+
 #: Written whole once the deck is built.
 PAYLOAD = ("deck", "validation", "evidence", "report", "exports", "qa", "repair", "production")   # production: the picker's view (deck-prod-picker P6)
 #: Seconds between polls of the engine, and the longest a segment may take (a high-effort stage can run for minutes).
@@ -70,7 +85,7 @@ class DeckJob:
         self.last_change = None
         self.hits: list = []
         self.seq = 0
-        self.engine_state, self.run_stage, self.mode, self.notices, self.cost = None, None, None, [], None
+        self.engine_state, self.run_stage, self.mode, self.notices = None, None, None, []
         self.held = None
         self.thread = threading.Thread(target=self._run, name=f"{task}-{jid}", daemon=True)
 
@@ -151,7 +166,7 @@ class DeckJob:
         run = view["run"]
         with self.lock:
             self.engine_state, self.run_stage, self.mode = view["state"], run.get("stage"), view.get("mode")
-            self.notices, self.cost = list(view.get("notices") or []), run.get("cost_usd")
+            self.notices = list(view.get("notices") or [])
             self.held = (run.get("gate") or {}).get("id") if view["state"] == "gate" else None
             old = self.W.get("run") if isinstance(self.W.get("run"), dict) else {}
             patch_run = {}
@@ -162,11 +177,18 @@ class DeckJob:
                         patch_run[k] = None   # a key the run no longer has (the agent at a gate, the gate once approved) is deleted
                 elif old.get(k) != nv:
                     patch_run[k] = diff(old.get(k), nv)
+            for k in COST_RUN_KEYS:   # an older document's cost readout is removed, never refreshed
+                if old.get(k) is not None:
+                    patch_run[k] = None
             payload = {}
+            pv = no_costs(view.get("payload") or {})
             for k in PAYLOAD:
-                v = (view.get("payload") or {}).get(k)
+                v = pv.get(k)
                 if v is not None and self.W.get(k) != v:
                     payload[k] = v
+            stale = [k for k in COST_REPORT_KEYS if isinstance(self.W.get("report"), dict) and k in self.W["report"]]
+            if stale:   # a merge patch keeps keys it does not name: an older document's report loses its cost by name
+                payload["report"] = {**(payload.get("report") or {}), **{k: None for k in stale}}
             if patch_run or payload:
                 where = {"building": "under way", "gate": f"held at the {self.held} gate", "done": "the deck is built", "failed": "stopped"}[view["state"]]
                 self._add(patch_run, payload, f"the engine reports {where}")
@@ -219,4 +241,4 @@ class DeckJob:
                 s = "Cancelled: what the engine had written stays in its cache."
             else:
                 s = "The deck engine is running." if self.state == "running" else "queued"
-            return {"summary": s, "engine": {"state": self.engine_state, "mode": self.mode, "notices": list(self.notices), "cost_usd": self.cost}}
+            return {"summary": s, "engine": {"state": self.engine_state, "mode": self.mode, "notices": list(self.notices)}}

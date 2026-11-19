@@ -1847,7 +1847,7 @@ deck engine (`engine/deck/server.py`) and writes what the engine reports into th
   An investor deck has the storyline gate only.
 - **The change.** Each poll that finds the engine's report changed carries one staged change. Its `data_patch` writes the run keys
   the engine owns (`run.state`, `run.stage`, `run.stages`, `run.gate`, `run.agent`, `run.checks`, `run.error`, `run.done`,
-  `run.cost_usd`; a key the run no longer has, such as the agent at a gate or the gate once approved, is set to `null`), and once the deck
+  `run.images`, never a cost; a key the run no longer has, such as the agent at a gate or the gate once approved, is set to `null`), and once the deck
   is built `deck`, `validation`, `evidence`, `report` and `exports` (file names and sizes: the files stay on the engine's disk). It never writes
   `run.approvals`, `run.decisions` or `run.gate_requests`: the person writes those beside it, so the **read-set** names `run.<key>`, never
   the whole `run`, and a decision the person made while the job ran does not make the host judge the job's base stale. Each change
@@ -1863,7 +1863,9 @@ deck engine (`engine/deck/server.py`) and writes what the engine reports into th
   engine itself runs one segment at a time too: its own 409 ends this job `failed`, with its message.
 - **Cancel.** `cancel_job` stops the job at once. The engine's segment cannot be stopped from here: it finishes, and its stage outputs
   stay in the engine's cache.
-- **Cost.** `run.cost_usd` is the engine's own figure (live runs only; replay and recorded stages show none). `trace.usage` reports
+- **Cost.** No cost reaches the document or the app: costs are for the Napkin team only, never in the product (Sai,
+  19 Nov 2026). The engine's `run.cost_usd` and its report's `cost_usd`, `engine_usd_total` and `usd_basis` are dropped here, and
+  an older document's `run.cost_usd` is set to `null`. The picture cards keep their prices: a yes to a spend names it. `trace.usage` reports
   zeros: the engine's model calls are its own, capped there (`NAPKIN_DECK_MAX_USD`), not metered by this middleware.
 - **Not yet.** `ask_change` (rewrite one slide's words; no handler, so a request for it is `400 unknown_task`), the document's brief and
   research as inputs, the person's intake answers, attached documents, acting on an `edit` or `retry` decision, and a poll that survives a
