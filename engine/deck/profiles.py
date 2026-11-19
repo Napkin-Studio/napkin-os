@@ -272,7 +272,7 @@ def recipe_errors(r, spine: list, _nested: bool = False) -> list:
 
 
 def recipes_on() -> bool:
-    """True when the recipe readers run: spec.RECIPES (env DECK_RECIPES=1) and spec.LOOK_V3 both on (design.rules: LOOK_V3)."""
+    """True when the recipe readers run: spec.RECIPES (env DECK_RECIPES, on by default) and spec.LOOK_V3 both on (design.rules: LOOK_V3)."""
     return bool(spec.RECIPES and spec.LOOK_V3)
 
 

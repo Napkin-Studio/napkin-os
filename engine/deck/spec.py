@@ -468,23 +468,38 @@ HOLE_GATE, HOLE_ADVISORY = 0.20, 0.12
 #: The eight look changes of deck-layout-library (cover 64 pt, a stamped title size and a fixed title box per layout, 48-character
 #: lines, switch before relaxed, picture and close layouts rule-picked). Off while the library lands without a look change; on at the look commit.
 LOOK_V2 = True
+#: The feature switches below are ON by default (Sai, 19 Nov 2026: "I want all features on"). Each turns off for a run with ``=0``
+#: (``0``, ``false``, ``no`` or ``off``); unset, empty or any other value is on. The "16:9 byte-identical with the flags off" guarantee of
+#: the earlier slices now holds with the flags set to 0 explicitly (DECK_LOOK_V3=0 DECK_RECIPES=0 DECK_GRAPHICS=0), the old look.
+_FLAG_OFF = ("0", "false", "no", "off")
+
+
+def flag_on(name: str) -> bool:
+    """A feature switch read from the environment: on unless set to 0 / false / no / off."""
+    return os.environ.get(name, "").strip().lower() not in _FLAG_OFF
+
+
+def _flag_asked(name: str) -> bool:
+    """True when the switch was set to an on value by hand (not merely left unset): only then is a needs-LOOK_V3 warning worth printing."""
+    v = os.environ.get(name)
+    return v is not None and v.strip() != "" and v.strip().lower() not in _FLAG_OFF
+
+
 #: deck-look (Gamma-grade look), steps 1-2: Archivo + Source Sans 3 (measured widths, fit under the fallback font's width too),
-#: a section band and 0.75 pt hairlines instead of the accent tick and edge stripes, ink figures. OFF by default: every golden
-#: is unchanged until the look commit after the phase-12 review. DECK_LOOK_V3=1 turns it on for one run (the gallery render).
-LOOK_V3 = os.environ.get("DECK_LOOK_V3", "").strip() in ("1", "true", "yes")
+#: a section band and 0.75 pt hairlines instead of the accent tick and edge stripes, ink figures. ON by default; DECK_LOOK_V3=0 draws the
+#: old look (Cambria + Calibri), byte-identical to the builds before the look.
+LOOK_V3 = flag_on("DECK_LOOK_V3")
 #: deck-types (features/deck-types.clan): a deck type is a full recipe (profiles/<id>.yaml ``recipe`` and ``length.target / cap``,
-#: resolved once by profiles.recipe). Read only when LOOK_V3 is on too (profiles.recipes_on). OFF by default: with it off every
-#: reader uses the constants above and a build is byte-identical; DECK_RECIPES=1 turns it on for one run (the gallery render). It
-#: gets its own golden re-record commit after the look commit (design.rework_risks).
-RECIPES = os.environ.get("DECK_RECIPES", "").strip() in ("1", "true", "yes")
-#: deck-graphics (features/deck-graphics.clan): icons (slice 1; charts, diagrams and execution mock-ups follow) drawn as native shapes.
-#: DECK_GRAPHICS=1 turns it on for one run, and only together with LOOK_V3 (off with a warning otherwise). OFF by default: nothing in
-#: graphics.py is read and the vendored icons are never loaded, so every build is byte-identical. Its own golden re-record after RECIPES.
-_GRAPHICS_ASKED = os.environ.get("DECK_GRAPHICS", "").strip() in ("1", "true", "yes")
-GRAPHICS = _GRAPHICS_ASKED and LOOK_V3
-if _GRAPHICS_ASKED and not LOOK_V3:
+#: resolved once by profiles.recipe). Read only when LOOK_V3 is on too (profiles.recipes_on). ON by default; DECK_RECIPES=0 turns it off
+#: and every reader then uses the constants above (a build is byte-identical to one before the recipes).
+RECIPES = flag_on("DECK_RECIPES")
+#: deck-graphics (features/deck-graphics.clan): icons, charts, diagrams and execution mock-ups drawn as native shapes, only together with
+#: LOOK_V3 (off with a warning when asked for by hand without it). ON by default; DECK_GRAPHICS=0 turns it off: nothing in graphics.py is
+#: read and the vendored icons are never loaded.
+GRAPHICS = flag_on("DECK_GRAPHICS") and LOOK_V3
+if _flag_asked("DECK_GRAPHICS") and not LOOK_V3:
     import sys as _sys   # noqa: PLC0415
-    print("deck: DECK_GRAPHICS=1 needs DECK_LOOK_V3=1; graphics stay off for this run", file=_sys.stderr)
+    print("deck: DECK_GRAPHICS=1 needs DECK_LOOK_V3 on (it is 0 for this run); graphics stay off for this run", file=_sys.stderr)
 #: Whether the run set the pitch length by env: the per-run override ranks above a recipe (design.schema.readers: env > recipe > default).
 PITCH_LENGTH_FROM_ENV = {"target": _env_count("DECK_PITCH_TARGET", -1, warn=False) != -1, "cap": _env_count("DECK_PITCH_CAP", -1, warn=False) != -1}   # a bad value is not "from env"
 #: Layouts deck-look has named but not yet built (features/deck-look.clan step 3; cover_bleed landed in step 7). A recipe may name one: it is accepted by the
