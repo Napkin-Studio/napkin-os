@@ -265,7 +265,7 @@ def test_a_larger_cap_runs_every_call_in_parallel_and_prices_unknown_models_at_t
     doc = live_run(key, images, fake, max_usd=5.0, workers=4)
     assert doc["calls"] == 12 and fake.max_in_flight >= 2 and doc["config"]["primary"] is True
     assert doc["usd"] == pytest.approx(12 * spec.estimate_usd(V.PRIMARY["model"], 1000, 200), abs=1e-3)
-    assert spec.estimate_usd("some-new-model", 1_000_000, 0) == 4.0
+    assert spec.estimate_usd("some-new-model", 1_000_000, 0) == 4.0   # an unlisted model is priced as Opus 5.5 (engine/prices.json unlisted_as)
     b = T.Budget(1.0)
     assert b.reserve("some-new-model", 100_000, 10_000) is not None and b.reserve("some-new-model", 400_000, 10_000) is None
 

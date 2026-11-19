@@ -54,12 +54,27 @@ import threading
 import time
 from pathlib import Path
 
-# USD per million tokens (input, output). Estimates: check them against the current price list.
-PRICES = {"claude-opus-4-1": (15.0, 75.0), "claude-opus-4-0": (15.0, 75.0), "claude-opus-4-2": (15.0, 75.0),
-          "claude-opus": (5.0, 25.0), "claude-sonnet-5": (2.0, 10.0), "claude-sonnet": (3.0, 15.0),
-          "claude-haiku": (1.0, 5.0)}
-# Prompt-cache input, as a multiple of the model's input price: a read, and a 5-minute write.
-CACHE_READ, CACHE_WRITE = 0.1, 1.25
+
+def _load_prices():
+    """The ONE price table every Napkin tool reads, engine/prices.json; the image copies it to
+    ../engine/prices.json beside the server (server/Dockerfile). Before 19 Nov 2026 this module kept its own table, which priced
+    Opus 5.5 at 5/25 (through a generic ``claude-opus`` key) and every cache read at 0.1x; the cache read is listed per model now.
+    A missing or broken file prices nothing (price() returns None) and says so once: a run is never stopped by it."""
+    path = Path(os.environ.get("NAPKIN_PRICE_TABLE") or Path(__file__).resolve().parents[2] / "engine" / "prices.json")
+    try:
+        t = json.loads(path.read_text())
+        models = t["models"]
+        return ({k: (float(v[0]), float(v[1])) for k, v in models.items()}, {k: float(v[2]) for k, v in models.items()},
+                float(t["cache_write_mult"]), str(t["version"]))
+    except (OSError, ValueError, KeyError, TypeError, IndexError) as e:
+        print(f"napkin.runlog: no price table at {path} ({type(e).__name__}): model calls are logged unpriced", file=sys.stderr)
+        return {}, {}, 1.25, None
+
+
+# USD per million tokens (input, output), and each model's cache-read price; a 5-minute cache write is CACHE_WRITE x the input price.
+PRICES, CACHE_READ_PRICE, CACHE_WRITE, PRICES_VERSION = _load_prices()
+# The cache-read share of the input price for a key with no listed cache-read price (a NAPKIN_PRICES override given as [in, out]).
+CACHE_READ = 0.1
 
 _cfg = {"dir": None, "bodies": False}
 RESULT_CHARS = 4000  # of each search result's text, with bodies on
@@ -102,21 +117,27 @@ def configure(directory: str | None, bodies: bool = False, prices: str | None = 
     _cfg["bodies"] = bool(bodies)
     if prices:
         try:
-            PRICES.update({k: tuple(v) for k, v in json.loads(prices).items()})
-        except (ValueError, TypeError):
-            print("napkin.runlog: NAPKIN_PRICES is not a JSON object of [in, out]; ignored", file=sys.stderr)
+            for k, v in json.loads(prices).items():
+                PRICES[k] = (float(v[0]), float(v[1]))
+                if len(v) > 2:
+                    CACHE_READ_PRICE[k] = float(v[2])
+                else:
+                    CACHE_READ_PRICE.pop(k, None)
+        except (ValueError, TypeError, IndexError, AttributeError):
+            print("napkin.runlog: NAPKIN_PRICES is not a JSON object of [in, out] or [in, out, cache read]; ignored", file=sys.stderr)
 
 
 def price(model: str | None, tin: int, tout: int, cache_read: int = 0, cache_write: int = 0) -> float | None:
     """`tin` counts every input token; `cache_read` and `cache_write` are the part of it the
-    prompt cache served or stored, priced at their own multiples of the input price."""
+    prompt cache served or stored: a read at the model's listed cache-read price, a write at CACHE_WRITE x its input price."""
     m = _model_name(model)
     best = max((k for k in PRICES if m.startswith(k)), key=len, default=None)
     if best is None:
         return None
     pi, po = PRICES[best]
+    pread = CACHE_READ_PRICE.get(best, pi * CACHE_READ)
     fresh = max(0, tin - cache_read - cache_write)
-    return round((fresh + cache_read * CACHE_READ + cache_write * CACHE_WRITE) / 1e6 * pi + tout / 1e6 * po, 6)
+    return round((fresh * pi + cache_read * pread + cache_write * pi * CACHE_WRITE + tout * po) / 1e6, 6)
 
 
 def _model_name(model: str | None) -> str:

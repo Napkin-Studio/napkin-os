@@ -98,28 +98,31 @@ LIMIT_BOUNDS = (3, 60)
 TRIM_ORDER = ("process", "guardrails", "timeline", "innovation", "chart", "execution", "channel_roles", "upside", "gtm", "product",
               "credentials", "audience", "competition", "measurement_plan", "measurement", "risks")
 
-#: List prices in USD per million tokens, (input, output), for the cost the CLI transport does not report. An ESTIMATE
-#: from tokens (stages._call). A real usd the transport provides wins.
-PRICE_PER_MTOK = {"claude-opus-5-5": (4.0, 20.0), "claude-sonnet-5-5": (2.0, 10.0)}
-USD_BASIS = "estimate: tokens x list price (spec.PRICE_PER_MTOK), cache reads at 0.05x and writes at 1.25x input; an unlisted model at the dearest price; not a billed amount"
+#: List prices in USD per million tokens, (input, output), read from the ONE price table every tool shares (engine/prices.json):
+#: Opus 5.5 4/20, Sonnet 5.5 2/10, Haiku 4.5 1/5 (it was priced as Opus before 19 Nov 2026), and the rest. An ESTIMATE from tokens
+#: (stages._call). A real usd the transport provides wins. This dict is a read-only view; change prices.json.
+def _price_table():
+    import sys as _s   # noqa: PLC0415
+    from pathlib import Path as _P   # noqa: PLC0415
+    eng = str(_P(__file__).resolve().parents[1])
+    if eng not in _s.path:
+        _s.path.append(eng)   # engine/ holds price_table.py beside deck/
+    import price_table as _pt   # noqa: PLC0415
+    return _pt
 
 
-#: Prompt-cache tokens are priced against the input price: a read at this share, a write at this multiple.
-CACHE_READ_SHARE, CACHE_WRITE_MULT = 0.05, 1.25
+_PRICES = _price_table()
+PRICE_PER_MTOK = {m: (float(r[0]), float(r[1])) for m, r in _PRICES.table()["models"].items()}
+USD_BASIS = ("estimate: tokens x list price (engine/prices.json, one table for every tool), cache reads at each model's listed price "
+             "and writes at 1.25x input; an unlisted model at Opus 5.5's price; not a billed amount")
 
 
 def estimate_usd(model: str, tokens_in: int, tokens_out: int, cache_read: int = 0, cache_creation: int = 0) -> float:
-    """Estimated dollars for one model's tokens at spec.PRICE_PER_MTOK. Cache reads and writes are priced at
-    CACHE_READ_SHARE and CACHE_WRITE_MULT of the input price. ``model`` may name several (a comma list from a summed
-    stage): the dearest one prices the lot, so an estimate is never low. A model not in the table (or no model named,
-    when there are tokens) is priced at the dearest listed price, never $0: a new model must not look free."""
-    names = [m.strip() for m in str(model or "").split(",") if m.strip()]
-    prices = [PRICE_PER_MTOK[m] for m in names if m in PRICE_PER_MTOK]
-    if len(prices) < len(names) or not names:
-        prices.append(max(PRICE_PER_MTOK.values(), key=lambda p: p[1]))
-    pin, pout = max(prices, key=lambda p: p[1])
-    billed_in = (tokens_in or 0) + (cache_read or 0) * CACHE_READ_SHARE + (cache_creation or 0) * CACHE_WRITE_MULT
-    return round(billed_in / 1e6 * pin + (tokens_out or 0) / 1e6 * pout, 4)
+    """Estimated dollars for one model's tokens at the shared price table (engine/price_table.py). ``tokens_in`` is the uncached input;
+    cache reads are priced at the model's listed cache-read price and writes at 1.25x its input price. ``model`` may name several (a comma
+    list from a summed stage): the dearest one prices the lot, so an estimate is never low. A model not in the table (or no model named,
+    when there are tokens) is priced as Opus 5.5 (prices.json ``unlisted_as``), never $0: a new model must not look free."""
+    return round(_PRICES.usd(model, tokens_in, tokens_out, cache_read, cache_creation), 4)
 
 
 #: Slide types that cannot be written well without a kind of evidence, and what to say when it is missing
