@@ -529,6 +529,18 @@ if _flag_asked("DECK_GRAPHICS") and not LOOK_V3:
 #: units for a metric market, the fit ladder moves points to the notes before it overflows, and the proposition is checked against the
 #: alternative the deck argues against. ON by default; DECK_FINISH=0 builds exactly as before (the test suite sets it to 0, like the three above).
 FINISH = flag_on("DECK_FINISH")
+#: deck brief gaps (the blind test on three weak real client briefs, 19 Nov 2026: decks built straight from the raw brief beat the
+#: brief-research-deck pipeline 3 of 3, and no deck said what was wrong with the brief): the deck shows "What the brief doesn't tell us",
+#: the top issues of the brief's ``brief_issues`` (brief_issues.py; on a prompt-only run the intake runs the same detection) as questions
+#: for the client, in the presented story; a passage the brief tool suspects is another client's never becomes an objective on a slide;
+#: the appendix lists "What we need from you". ON by default; DECK_BRIEF_GAPS=0 builds exactly as before (the suite sets it to 0).
+BRIEF_GAPS = flag_on("DECK_BRIEF_GAPS")
+#: The presented slide's title and the most issues it asks about (each a question for the client; the rest are in the appendix list).
+BRIEF_GAPS_TITLE = "What the brief doesn't tell us"
+BRIEF_GAPS_MAX = 5
+#: The appendix list of what the client can give (the brief's questions, the decision date, the alternatives they weigh). Engine words.
+CLIENT_ASKS_TITLE = "What we need from you"
+CLIENT_ASKS_MAX = 8   # the list's cards layout holds eight; the rest are in its notes
 #: Whether the run set the pitch length by env: the per-run override ranks above a recipe (design.schema.readers: env > recipe > default).
 PITCH_LENGTH_FROM_ENV = {"target": _env_count("DECK_PITCH_TARGET", -1, warn=False) != -1, "cap": _env_count("DECK_PITCH_CAP", -1, warn=False) != -1}   # a bad value is not "from env"
 #: Layouts deck-look has named but not yet built (features/deck-look.clan step 3; cover_bleed landed in step 7). A recipe may name one: it is accepted by the
@@ -682,7 +694,8 @@ ISSUE_STATUSES = ("open", "fixed", "unfixed", "rolled_back", "left_for_person")
 ISSUE_FIXES = ("shrink", "switch_layout", "shorten", "split", "overflow_to_notes", "add_scrim", "crop_image", "regen_image",
                "drop_image", "needs_human")
 QA_RENDER_CHECKS = ("off_slide", "margin", "text_overlap", "text_overflow", "min_font", "placeholder", "contrast", "mostly_empty",
-                    "one_corner", "qa_internal", "unreadable", "picture_stretch", "picture_lowres", "text_on_image_contrast")
+                    "one_corner", "qa_internal", "unreadable", "picture_stretch", "picture_lowres", "text_on_image_contrast",
+                    "text_collision", "word_break")   # finish fixes: text running out of its frame into another's; a display word broken
 #: Raised by the layout plan (layouts.py) and the repair loop; once reserved, now live, so the checklist's l_slots_clean can answer.
 LAYOUT_CHECKS = ("slot_limit", "slot_missing", "slot_unknown", "slot_stale", "block_unbound", "layout_unknown", "text_on_image_fallback")
 RESERVED_CHECKS = ("golden_echo", "layout_repeat", "title_drift", "line_length", "image_style_mixed", "export_failed")

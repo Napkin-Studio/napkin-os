@@ -52,6 +52,7 @@ class Inputs:
     verified: dict = field(default_factory=dict)     # confirm ref -> {by, at}: the person's verify decisions (intake.verified.<ref>)
     marks: list | None = None                        # parts a person marked Confidential: [{path, text, kind}]; None = never checked (picture generation is refused)
     brief_source: dict = field(default_factory=dict)  # finish fixes: the brief's own source sentences {n: text}, what its source_refs number (load_brief)
+    brief_issues: list = field(default_factory=list)  # brief gaps: what is wrong with or missing from the brief (brief_object.brief_issues)
 
     def has_brief(self) -> bool:
         """True when a brief supplied at least one field (a field an intake stage filled does not count)."""
@@ -102,6 +103,8 @@ def load_brief(path: Path) -> tuple[dict, dict, list, dict]:
     src = source_sentences(capture)
     if src:
         cov["source_sentences"] = src   # popped by load() into Inputs.brief_source: never part of the recorded coverage
+    if isinstance(b.get("brief_issues"), list) and b["brief_issues"]:
+        cov["brief_issues"] = [i for i in b["brief_issues"] if isinstance(i, dict)]   # popped by load() into Inputs.brief_issues
     return fields, htw, oq, cov
 
 
@@ -393,8 +396,9 @@ def load(brief: Path | None, research: Path | None = None, doc_facts: Path | Non
         fields, htw, oq, cov = load_brief_clan(brief) if clan else load_brief(brief)
     marks = cov.pop("marks", None)
     src = cov.pop("source_sentences", None) or {}
+    issues = cov.pop("brief_issues", None) or []
     inp = Inputs(brief=fields, how_to_win=htw, open_questions=oq, prompt_text=prompt_text or "",
-                 answers=answers or {}, intake=intake or {}, verified=verified or {}, marks=marks, brief_source=src)
+                 answers=answers or {}, intake=intake or {}, verified=verified or {}, marks=marks, brief_source=src, brief_issues=issues)
     research = research or (brief if clan else None)
     if research:
         r = load_research(research)

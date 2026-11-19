@@ -1174,6 +1174,11 @@ def main(argv=None):
         if ecopy.get("narrowed"):   # headline narrowing: a recorded e_copy.json without it changes nothing
             rep["stages"]["e"]["narrowing"] = assemble.apply_narrowing(deck, ecopy["narrowed"])
     _red_team(a, deck, inp, profile, rep)
+    if spec.FINISH:   # finish fixes: stage e's and the red team's words pass the same annotation rule as the build's (notes, never the slide)
+        from . import finish as _finish   # noqa: PLC0415
+        moved = _finish.annotations_to_notes([deck["slides"][x] for x in deck["order"]])
+        if moved:
+            deck["meta"].setdefault("finish", {})["annotations_after_copy"] = moved
     sources, held, plan_res, stale_gen = {}, [], None, []
     if a.pictures or supplied:   # pictures that already exist: records and assets only; nothing is made, sent or spent
         try:

@@ -388,7 +388,7 @@ def test_unusable_json_gets_one_repair_call_with_the_bad_text(monkeypatch):
     calls = _fake_llm(monkeypatch, ['{"sections": [1, 2', '{"sections": [1, 2]}'])
     obj, usage = stages._call("i", "write the deck", "system")
     assert obj == {"sections": [1, 2]} and len(calls) == 2
-    assert calls[0]["retries"] == 2 and calls[1]["retries"] == 0 and calls[1]["system"] == stages.REPAIR_SYSTEM
+    assert calls[0]["retries"] == stages.RETRIES == 1 and calls[1]["retries"] == 0 and calls[1]["system"] == stages.REPAIR_SYSTEM
     assert '{"sections": [1, 2' in calls[1]["user"] and "valid JSON object only" in calls[1]["user"]
     assert calls[1]["model"] == stages.MODELS["i"] and usage["repaired"] is True
 

@@ -1047,7 +1047,8 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
         moved_: list = _cover_held(s_, aud, prefs) if s_["type"] == "title" else []   # unresolved cover lines go to the notes, labelled, never dropped
         content_ = lid_ != "flow" and lib[lid_]["group"] == "content" and s_["type"] not in ("title", "close", "next_step")
         # 0. density: movable points past the target go to the notes
-        if density in spec.DENSITY_WORDS and content_ and not exempt_ and s_["type"] not in ("appendix",) and prefs.get("text_mode") != "preserve":
+        if density in spec.DENSITY_WORDS and content_ and not exempt_ and s_["type"] not in ("appendix",) and prefs.get("text_mode") != "preserve" \
+                and s_.get("role") != "brief_gaps":   # brief gaps: each question is the point; none moves to the notes for density
             target = spec.DENSITY_WORDS[density]
             roles_ = prefs.get("roles") or spec.ROLE_OF_TYPE   # deck-types slice 4: the type's roles and windows (profiles.recipe density); today's without
             wins_ = prefs.get("windows") or spec.ROLE_WINDOWS

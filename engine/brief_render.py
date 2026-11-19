@@ -315,6 +315,14 @@ def render_markdown(brief):
             L.append(f"- {pr}{text}" + (f"  \n  _why: {why}_" if why else ""))
     else:
         L.append("_None._")
+    issues = [i for i in brief.get("brief_issues") or [] if isinstance(i, dict)]
+    if issues:                                        # what is wrong with or missing from the brief (brief_issues.py)
+        L.append("\n### Problems in the brief (ask the client)\n")
+        for i in issues:
+            L.append(f"- **[{str(i.get('kind', '')).replace('_', ' ')}: {i.get('topic', '')}]** {i.get('question', '')}  \n"
+                     f"  _{i.get('what', '')} Why it matters: {i.get('why_it_matters', '')}_"
+                     + (f"  \n  The brief says: “{i['quote']}”" if i.get("quote") else "")
+                     + (f"  \n  Quarantined: {len(i['quarantined'])} captured value(s) taken out of the brief" if i.get("quarantined") else ""))
     r2 = l2["review"]
     L.append(f"\n### Loop 2 self-review — {'✅ pass' if r2['passed'] else '⚠️ gaps'}\n")
     L += [f"- {x}" for x in r2["flags"]] or ["- clean"]

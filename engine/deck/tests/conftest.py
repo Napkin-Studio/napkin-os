@@ -12,7 +12,7 @@ import os
 # suite sets the three switches to 0 EXPLICITLY, before any deck module is imported; a test that needs a feature turns it on itself
 # (the ``v3`` fixtures, monkeypatch of spec.LOOK_V3 / RECIPES / GRAPHICS, or DECK_*=1 in a subprocess's env). test_look_v3 and
 # test_deck_graphics check that the defaults are on. A value set outside the suite still wins (setdefault).
-for _flag in ("DECK_LOOK_V3", "DECK_RECIPES", "DECK_GRAPHICS", "DECK_FINISH"):
+for _flag in ("DECK_LOOK_V3", "DECK_RECIPES", "DECK_GRAPHICS", "DECK_FINISH", "DECK_BRIEF_GAPS"):
     os.environ.setdefault(_flag, "0")
 
 

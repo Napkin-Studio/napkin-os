@@ -377,7 +377,8 @@ def run(deck: dict, inp, audience: str = "review", profile: dict | None = None) 
             if bl["kind"] in ("text", "small", "statement", "quote", "callout", "card") and not str(bl.get("text", "")).strip():
                 add("empty_slot", "warn", sid, f"empty {bl['kind']} block (dropped at render)")
         # placeholders
-        if sl["type"] in spec.HUMAN_ONLY_TYPES:
+        clean_ask = spec.FINISH and sl["type"] == "next_step" and sl.get("status") != "needs_human"   # finish fixes: the clean ask holds no blank
+        if sl["type"] in spec.HUMAN_ONLY_TYPES and not clean_ask:
             hum = [it for bl in sl["blocks"] for it in (bl.get("items") or []) if isinstance(it, dict) and it.get("human")]
             hum += [bl for bl in sl["blocks"] if bl.get("human")]
             for h in hum:

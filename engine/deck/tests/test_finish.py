@@ -2,7 +2,7 @@
 Check ids, agency notes, picture prompts and the sketch label never sit on a slide; placeholder-only slides leave the presented story with
 one 'What we need from you' line in their place; a thought is said once; the title and objective state what the brief states; bracketed
 slots are filled; evidence reads in metric units; the last fit rung moves points to the notes; the proposition never argues against the
-alternative the deck rejects. Offline: no model, no LibreOffice. Every client and person here is invented. The suite runs with
+alternative the deck rejects. The ask is clean: what only the client can give is one appendix list. Offline: no model, no LibreOffice. Every client and person here is invented. The suite runs with
 DECK_FINISH=0 (conftest), so each test turns the flag on itself."""
 from __future__ import annotations
 
@@ -102,15 +102,19 @@ def test_prompt_refs_of_a_brief_only_run_resolve_to_the_brief_source(fin, tmp_pa
 
 # ---------------------------------------------------------------- 2. placeholder-only slides leave the presented story
 
-def test_placeholder_slides_go_to_to_supply_and_one_line_keeps_the_gaps_in_view(fin):
+def test_placeholder_slides_go_to_to_supply_and_the_client_asks_are_one_appendix_list(fin):
     d = _lumen()
     pres = [d["slides"][x] for x in validate.presented(d)]
     assert not [s for s in pres if finish.placeholder_only(s)] and {"team", "credentials", "investment"}.isdisjoint(s["type"] for s in pres)
     back = [d["slides"][x] for x in d["order"][len(pres):]]
     at = next(i for i, s in enumerate(back) if s["title"] == spec.TO_SUPPLY_TITLE)
     assert {"team", "credentials", "investment"} <= {s["type"] for s in back[at:]}
+    # the close is a clean ask (blind re-judge, 19 Nov 2026): no 'What we need from you' line asking the client for the agency's own team
     lines = [i["text"] for s in pres for b in s["blocks"] for i in b.get("items") or [] if isinstance(i, dict) and str(i.get("text", "")).startswith("What we need from you")]
-    assert len(lines) == 1 and "the team" in lines[0] and "the investment split" in lines[0]
+    assert lines == []
+    asks = next(s for s in back if s.get("role") == "client_asks")
+    items = [i["text"] for b in asks["blocks"] for i in b.get("items") or []]
+    assert asks["title"] == spec.CLIENT_ASKS_TITLE and finish.DECISION_ASK in items and not [t for t in items if "team" in t or "case stud" in t]
     assert not [b for s in pres for b in s["blocks"] if b.get("internal") and "To supply:" in str(b.get("text"))]
 
 
