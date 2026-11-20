@@ -2,6 +2,7 @@
 // the others cannot, and the one it is made on. Kept apart from MakeRoom.tsx so it is tested on its own.
 
 import { modelChoicesFor } from '../capabilities'
+import { SHEETS } from '../contracts/load'
 import type { Config, ModelChoice, ProductionDocument } from '../contracts/types'
 import { beatsOf } from '../model/selectors'
 import { lastWorkedModel } from '../jobs/follow'
@@ -118,7 +119,20 @@ export function boxSound(doc: ProductionDocument, box: Pick<Box, 'shotIds'>, m: 
     .filter(Boolean).join(', ')
   const e = entryOf(m)
   const label = e?.label ?? m.model
-  if (e?.video.audioControl) return { on: true, words: `With sound: ${what}.` }
-  // No switch (Omni Flash 1.1, Hailuo 3): the relay asks for no music and no dialogue (decided 2026-10-06).
+  if (e?.video.audioControl) return { on: true, words: `With sound: ${what}.${soundDearer(m)}` }
+  // No switch (Omni Flash 1.1, Hailuo 3): the relay asks for no music and no dialogue (decided 2026-10-06). Those
+  // that make sound on their own still put a background track on the clip (UAT 2026-11-21, F10: Omni's takes carried
+  // sound at -12 dB while the box said it made none).
+  if (e?.video.audioDefault) return { on: false, words: `${label} makes its own background sound and has no sound switch, so ${what} will not be voiced. Veo 3.1, Kling or WAN 3 can.` }
   return { on: false, words: `No sound made: ${label} has no sound switch, so ${what} will not be heard. Veo 3.1, Kling or WAN 3 can.` }
+}
+
+/** How much dearer sound makes a clip on this model, as a multiple (no money: owner 2026-10-13, no prices in the UI):
+ *  " Sound makes it 2× the cost on Veo 3.1." UAT 2026-11-21, F22: a sound beat turned Veo's doubled price on with
+ *  nothing said. Empty when sound costs the same. */
+export function soundDearer(m: ModelChoice): string {
+  const p = SHEETS[m.provider as keyof typeof SHEETS]?.models?.[m.model]?.pricing as { credits?: number; audioCredits?: number } | undefined
+  if (!p?.credits || !p.audioCredits || p.audioCredits <= p.credits) return ''
+  const k = Math.round((p.audioCredits / p.credits) * 10) / 10
+  return ` Sound makes it ${k}× the cost on ${entryOf(m)?.label ?? m.model}.`
 }

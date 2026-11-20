@@ -8,7 +8,7 @@ vi.mock('./clips', () => ({ makeClip: (...a: unknown[]) => (makeClip as (...x: u
 describe('the clip after a frame drawn first', () => {
   it('is made once, on the box model, when the frame lands', async () => {
     const { clipAfterFrame } = await import('./wire')
-    let ui = { jobs: { job_f: { clipAfter: { videoId: 'video_1', modelChoice: { provider: 'runway', model: 'veo3.1' } } } } } as Record<string, never>
+    let ui = { jobs: { job_f: { clipAfter: { videoId: 'video_1', modelChoice: { provider: 'runway', model: 'veo3.1' } } } } } as unknown as Record<string, never>
     const deps = {
       doc: { get: () => ({ shots: { shot_1: { id: 'shot_1' } } }) },
       ui: { get: () => ui, update: (fn: (u: never) => void) => { const n = structuredClone(ui); fn(n as never); ui = n } },

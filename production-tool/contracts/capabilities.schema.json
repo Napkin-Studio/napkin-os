@@ -753,6 +753,13 @@
         "pricing": {
           "$ref": "#/$defs/pricing"
         },
+        "refAspect": {
+          "type": "object",
+          "description": "The width / height range Runway accepts for a picture the model is sent (a reference or a frame), from docs.dev.runwayml.com/assets/inputs; WAN 3's from its 400 ('at least 0.55'), its top assumed 1.8 as HappyHorse's. The relay pads a picture outside it to the nearest bound before submit (UAT 2026-11-21, F5).",
+          "properties": { "min": { "type": "number", "exclusiveMinimum": 0 }, "max": { "type": "number", "exclusiveMinimum": 0 } },
+          "required": ["min", "max"],
+          "additionalProperties": false
+        },
         "audioParam": {
           "type": "boolean",
           "description": "The model's request has an `audio` switch (the adapter sends it, always false today). false: no such field; the model makes sound or not on its own. Added 2026-10-15 (additive, features/runway-video-models.clan)."

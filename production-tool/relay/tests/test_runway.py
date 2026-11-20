@@ -639,3 +639,32 @@ def test_the_make_all_sizes_bodies_match_runways_own_schemas(editor, runway, ser
     assert server.body["scaleFactor"] == 8
     for req in server.requests:
         assert not errors("runway", f"POST {req.url.path}", json.loads(req.content)), req.url.path
+
+
+# ── Pictures outside a model's shape range (UAT 2026-11-21, F5: WAN 3 refused a 0.534 character picture) ──
+
+def test_a_narrow_reference_is_padded_into_wan3s_range_and_one_in_range_goes_as_is(server):
+    import base64
+    import io
+    from PIL import Image
+    narrow, ok = "sha256:" + "1" * 64, "sha256:" + "2" * 64
+    urls = {narrow: _data(_png(Image.new("RGB", (534, 1000), (200, 40, 40)))), ok: _data(_png(Image.new("RGB", (800, 1000), (0, 0, 0))))}
+    rw = RunwayProvider("key_test", lambda sha: AssetRef(sha, urls.get(sha) or resolve(sha).url, "image/png"),
+                        client=httpx.Client(transport=httpx.MockTransport(server)))
+    rw.submit(job("clip", model="wan3", refs=[Ref(narrow, "maya_full", "character"), Ref(ok, "maya_front", "character")],
+                  first_frame=None, duration_s=5, ratio="1280:720", prompt="@maya_full walks"))
+    refs = server.body["references"]
+    padded = Image.open(io.BytesIO(base64.b64decode(refs[0]["uri"].split(",", 1)[1])))
+    assert refs[0]["uri"].startswith("data:image/jpeg") and padded.size[0] / padded.size[1] >= 0.55
+    assert padded.size[1] == 1000 and padded.getpixel((padded.size[0] // 2, 500))[0] > 150  # the person, whole, centred
+    assert refs[1]["uri"] == urls[ok]
+
+
+def test_pad_to_aspect_widens_or_heightens_only_past_the_bounds():
+    from PIL import Image
+    from providers.runway import pad_to_aspect
+    assert pad_to_aspect(_png(Image.new("RGB", (100, 100))), 0.55, 1.8) is None
+    wide = pad_to_aspect(_png(Image.new("RGB", (400, 100))), 0.5, 2)
+    import io
+    w, h = Image.open(io.BytesIO(wide)).size
+    assert w == 400 and 1.9 < w / h <= 2

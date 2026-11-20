@@ -119,7 +119,7 @@ describe('the box says its sound (B6)', () => {
     const { d, shots } = filmWithClips()
     d.beats = { ...(d.beats ?? {}), beat_1: { id: 'beat_1', v: 1, field_v: {}, shot_id: shots[1].id, kind: 'line', at_s: 1, text: 'Let them sleep.', speaker: 'HER', rank: 'a0' } as never }
     const box = { shotIds: [shots[0].id, shots[1].id] }
-    expect(boxSound(d, box, { provider: 'runway', model: 'veo3.1' })).toEqual({ on: true, words: 'With sound: the spoken line.' })
+    expect(boxSound(d, box, { provider: 'runway', model: 'veo3.1' })).toEqual({ on: true, words: 'With sound: the spoken line. Sound makes it 2× the cost on Veo 3.1.' })
     expect(boxSound(d, { shotIds: [shots[2].id] }, { provider: 'runway', model: 'veo3.1' })).toBeUndefined()
   })
 })

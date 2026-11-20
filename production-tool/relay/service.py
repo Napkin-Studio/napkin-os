@@ -58,6 +58,8 @@ import sized
 import time_rules
 import timeline_layers
 import sound
+import mp4
+import agent_cost
 from blobs import checksum_header
 from contracts import Contracts, api
 from contracts_dir import contracts_dir, pricing
@@ -253,6 +255,15 @@ def provider_op_for(op: str, spec: dict | None) -> str:
     return "clip" if (spec or {}).get("mode") == "first_last" else "clip_edit"
 
 
+
+def _with_agent(cost: dict) -> float | None:
+    """The job's cost as recorded: the provider's (confirmed, else reserved) plus its agents' Claude calls."""
+    base = cost.get("confirmed", cost.get("reserved"))
+    agent = float(cost.get("agentUsd") or 0)
+    if base is None and not agent:
+        return None
+    return round(float(base or 0) + agent, 6)
+
 class Raw:
     """A response that is not JSON (GET /clan/{project}: the .clan bytes), with its own headers."""
 
@@ -383,7 +394,7 @@ class Relay:
             ctx["provider"] = out.get("provider")
             ctx["model"] = out.get("model")
             cost = out.get("cost") or {}
-            ctx["costUsd"] = cost.get("confirmed", cost.get("reserved"))
+            ctx["costUsd"] = _with_agent(cost)
             if out.get("error"):
                 ctx["error"] = out["error"]["code"]
             if out["state"] in TERMINAL and out.get("updatedAt"):
@@ -675,8 +686,8 @@ class Relay:
             if job.get(k) is not None:
                 data[k] = job[k]
         cost = job.get("cost") or {}
-        if cost.get("confirmed") is not None or cost.get("reserved"):
-            data["costUsd"] = cost.get("confirmed", cost.get("reserved"))
+        if cost.get("confirmed") is not None or cost.get("reserved") or cost.get("agentUsd"):
+            data["costUsd"] = _with_agent(cost)
         block = job.get("director")
         if block:
             data["director"] = {"model": block.get("model"), "promptVersion": block.get("promptVersion"),
@@ -1403,7 +1414,7 @@ class Relay:
                     message=jobtrace.clip((error or {}).get("message"), 500),
                     outputs=len(changes.get("outputs") or []) or None,
                     sinceSubmittedMs=jobtrace.ms(now - job["_submittedAt"]) if job.get("_submittedAt") else None,
-                    costUsd=cost.get("confirmed"))
+                    costUsd=_with_agent(cost) if cost.get("agentUsd") else cost.get("confirmed"))
         self._release_take(job, job["jobId"])  # a clip_patch's take is free for the next fix, whatever the end
         if not job.get("_released"):
             if not job.get("_free"):
@@ -1934,6 +1945,7 @@ class Relay:
             log.exception("director failed")
             raise ApiError("internal", f"The director failed ({type(e).__name__}).") from e
         model = out.pop("_model", getattr(director, "model", "unknown"))
+        self._agent_spend(job, out.pop("_usage", None), model)
         version = out.pop("_promptVersion", getattr(director, "prompt_version", "director.v0"))
         given = out.pop("_input", None)  # what Dex received (director/record.py); the passthrough has none
         errors = self.contracts.errors("director.schema.json", out)
@@ -1973,8 +1985,28 @@ class Relay:
             return self._fail(saved, e.code, e.message, paid=False, refund=True)
         if out.get("question"):
             return self._ask(saved, out["question"], block)
-        return self._finish(saved, "completed", shots=out["shots"], director=block, outputs=[],
+        # Only the sound beats the script asks for (sound.py; UAT 2026-11-21, F22: each one turned sound on, at
+        # Veo's doubled price, for shots that need no sound).
+        shots, dropped = sound.keep_asked_sounds(out["shots"], ((saved.get("_req") or {}).get("input") or {}).get("script") or "")
+        if dropped:
+            log.info("job %s: left out sound beats the script does not ask for: %s", saved["jobId"], "; ".join(dropped)[:300])
+        return self._finish(saved, "completed", shots=shots, director=block, outputs=[],
                             kind="generated", paid=False)
+
+    def _agent_spend(self, job: dict, usage: dict | None, model: str | None) -> None:
+        """An agent's Claude calls for this job, at the model's price (agent_cost.py): added to the job's
+        cost.agentUsd (saved with the job's next save) and to the ledger at once (UAT 2026-11-21, F21)."""
+        try:
+            usd = agent_cost.usd(usage, model, (self.config().get("director") or {}).get("prices"))
+        except Exception:
+            log.exception("job %s: agent cost", job.get("jobId"))
+            return
+        if usd <= 0:
+            return
+        cost = dict(job.get("cost") or {"currency": "USD", "unknown": True})
+        cost["agentUsd"] = round(float(cost.get("agentUsd") or 0) + usd, 6)
+        job["cost"] = cost
+        self.ledger.adjust(job.get("_tenant"), job.get("_month") or self.ledger.month(), usd)
 
     def _use_director_config(self, director) -> None:
         """config.json's director block (the model ids and prompt version) on the director, before it or
@@ -1998,6 +2030,7 @@ class Relay:
             return self._fail(saved, "internal", f"Skye could not write this ({type(e).__name__}).", paid=False, refund=True)
         latency = out.pop("_latencyMs", int((self.clock() - start) * 1000))
         usage = out.pop("_usage", None)
+        self._agent_spend(saved, usage, getattr(self.writer, "model", None))
         # The same director line every other agent call writes (UAT 2026-11-21: Skye's showed only as "model writer").
         jobtrace.trace("director", saved["jobId"], op="write", model=getattr(self.writer, "model", "unknown"),
                        promptVersion=getattr(self.writer, "prompt_version", None), latencyMs=latency, usage=usage)
@@ -2080,6 +2113,7 @@ class Relay:
                                   retryable=True, paid=False, refund=True)
         latency = out.pop("_latencyMs", int((self.clock() - start) * 1000))
         usage = out.pop("_usage", None)
+        self._agent_spend(saved, usage, getattr(cutter, "model", None))
         jobtrace.trace("director", saved["jobId"], op="cutdown", step="plan", model=getattr(cutter, "model", "unknown"),
                        promptVersion=getattr(cutter, "prompt_version", None), latencyMs=latency, usage=usage)
         rationale = out.pop("rationale", "") or ""
@@ -2818,12 +2852,15 @@ class Relay:
         if result is None and now - job["_stageAt"] <= CUT_TIMEOUT_S:
             return self._with_poll(job)
         found = None
+        landed = job["_landed"]
         if result and result.get("ok"):
             found = [c.get("found_s") for c in result.get("cuts") or []]
+            if result.get("takeS") and landed:  # stitch read the take's own length: it is the take's (F4)
+                landed = [{**landed[0], "durationS": round(float(result["takeS"]), 3)}, *landed[1:]]
         else:  # the take stands: its cuts are the planned ones
             log.warning("job %s: take_cuts %s", job["jobId"], (result or {}).get("error") or f"no result in {CUT_TIMEOUT_S} s")
         kind = "mock" if job.get("provider") == "mock" else "generated"
-        return self._finish(job, "completed", outputs=job["_landed"], kind=kind, confirmed=job.get("_confirmed"),
+        return self._finish(job, "completed", outputs=landed, kind=kind, confirmed=job.get("_confirmed"),
                             cuts=connected.merge_cuts(job["_starts"], found))
 
     def _patch_question(self, job: dict, q: dict) -> dict:
@@ -3033,6 +3070,10 @@ class Relay:
                 for k in ("w", "h", "durationS"):
                     if o.get(k) is not None:
                         out[k] = o[k]
+                if mime.startswith("video/") and out.get("durationS") is None:
+                    seconds = mp4.duration_s(data)  # the file's own length, never the plan's (F4)
+                    if seconds:
+                        out["durationS"] = seconds
                 if mime.startswith("image/"):
                     out = self._true_shape(out, data, job.get("_aspect"))
                 outputs.append(out)

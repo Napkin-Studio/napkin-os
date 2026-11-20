@@ -485,6 +485,7 @@
       "properties": {
         "estimate": { "type": "number", "minimum": 0 },
         "reserved": { "type": "number", "minimum": 0 },
+        "agentUsd": { "type": "number", "minimum": 0, "description": "What the agents' Claude calls for this job cost: their tokens at the model's price (relay agent_cost.py; config director.prices). Recorded and in the ledger, never shown in the UI. Added 2026-11-21 (pt-film-r2, F21), additive." },
         "confirmed": { "type": "number", "minimum": 0 },
         "currency": { "const": "USD" },
         "unknown": { "type": "boolean" }
