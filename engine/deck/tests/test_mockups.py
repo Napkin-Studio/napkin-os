@@ -10,6 +10,8 @@ Offline: no model, no LibreOffice. Every brand, brief and copy line is invented.
 test turns it on."""
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from deck import assemble, graphics, mockup, render_pptx, scene, spec
@@ -123,7 +125,9 @@ def test_the_web_draws_the_same_scene_as_one_svg():
     cp = mockup.copy_of({"meta": {"client": "Tabbel"}}, {"lines": SHORT})
     sc = mockup.scene("Door drops", BOX, cp, {"picture": {}}, FONTS)
     svg = mockup.svg(sc, lambda slot: "data:image/jpeg;base64,AAAA")
-    assert svg.startswith('<svg class="mock-svg"') and "<image " in svg and "Look at what is gone" in svg and "var(--ink)" in svg
+    words = " ".join(re.findall(r"<tspan[^>]*>([^<]*)</tspan>", svg))   # the headline is wrapped over several lines
+    assert svg.startswith('<svg class="mock-svg"') and "<image " in svg and "var(--ink)" in svg
+    assert "Look at what is gone from the bowl." in words
 
 
 def test_the_pptx_paints_the_scene_and_the_web_follows_its_box(on):
