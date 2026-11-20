@@ -26,6 +26,7 @@ from providers.types import CONTRACTS, prompt_max, utf16_units
 from providers.tags import TAG as TAG_IN_TEXT, UnknownTag, rewrite_tags, unsent_in_words
 
 import brief as briefs
+import job_context
 from .base import fit_duration, require_prompt, view_angle
 from .model import ModelPort, Usage
 
@@ -588,6 +589,8 @@ class Director:
         payload = _without_dialogue(op, payload)
         # A linked brief (features/brief-node.clan), cut to this op's budget; no brief: the input as it came.
         payload = briefs.for_op(op, payload)
+        # The project's brand rules and linked documents (features/pt-dex-context.clan), cut to this op's kinds and budget.
+        payload = job_context.for_op(op, payload)
         ask = {"op": op, "input": payload}
         if sheet:
             ask["provider"] = provider_name

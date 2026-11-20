@@ -78,7 +78,7 @@ def test_with_no_brief_the_director_input_is_byte_for_byte_the_golden(name):
 def test_for_op_leaves_an_input_without_a_brief_untouched():
     inp = {"text": "wide", "refs": []}
     assert briefs.for_op("frame", inp) is inp
-    assert "brief" not in briefs.for_op("generate", {**inp, "brief": SHORT})  # an op that reads none: left out
+    assert "brief" not in briefs.for_op("view", {**inp, "brief": SHORT})  # an op that reads none: left out
 
 
 # ── the budget ───────────────────────────────────────────────────────────────

@@ -18,14 +18,20 @@ from __future__ import annotations
 import re
 
 # The ops whose model reads the brief (the web sends it on the same ops: web/src/brief/model.ts BRIEF_OPS).
-BRIEF_OPS = ("write", "shot_list", "frame", "frame_edit", "clip", "clip_edit", "clip_patch", "cutdown", "resize")
+# generate and region_edit since features/pt-dex-context.clan: a Generate reads the don'ts, the tone and the feeling
+# in a few words; an edit inside a picture only the don'ts (its look is the picture's). A view (the same character
+# turned) reads none.
+BRIEF_OPS = ("write", "shot_list", "generate", "frame", "frame_edit", "region_edit", "clip", "clip_edit", "clip_patch",
+             "cutdown", "resize")
 
 # Per op: the characters of spine it reads in all, and its parts in the order they are kept.
 BUDGET: dict[str, tuple[int, tuple[str, ...]]] = {
     "write": (900, ("proposition", "audience", "tone", "feel", "insight", "mandatories", "donts", "format")),
     "shot_list": (900, ("proposition", "audience", "tone", "feel", "mandatories", "donts", "insight", "format")),
+    "generate": (200, ("donts", "tone", "feel")),
     "frame": (360, ("tone", "feel", "audience", "donts", "mandatories")),
     "frame_edit": (240, ("tone", "donts", "feel")),
+    "region_edit": (160, ("donts",)),
     "clip": (300, ("tone", "feel", "donts", "audience")),
     "clip_edit": (200, ("tone", "donts")),
     "clip_patch": (160, ("donts", "tone")),

@@ -35,7 +35,7 @@ PROMPTS = Path(__file__).resolve().parent.parent / "prompts"
 PER_CLICK = "eu.anthropic.claude-sonnet-5-5"  # Sonnet per click (features/director-v5.clan)
 SHOT_LIST = "eu.anthropic.claude-sonnet-5-5"
 # The newest director prompt bundled (tests/test_config_defaults.py keeps it so); older ones stay for a pin.
-PROMPT_VERSION = "director.v14"
+PROMPT_VERSION = "director.v15"
 # Lambda runs 60 s and the HTTP API answers within 30 s: one model call (and its
 # one retry) must leave room for the provider submit.
 TIMEOUT_S = float(os.environ.get("DIRECTOR_TIMEOUT_S", "20"))

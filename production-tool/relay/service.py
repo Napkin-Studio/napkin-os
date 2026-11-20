@@ -645,9 +645,12 @@ class Relay:
                 data[k] = ctx[k]
         if route == "/jobs":
             kept, briefed = dogfood.without_brief(body or b"")
+            kept, contexted = dogfood.without_context(kept)
             data["body"] = dogfood.body_value(kept)
             if briefed:
                 data["brief"] = True  # a brief went with it; its words stay out of the record
+            if contexted:
+                data["context"] = True  # brand rules or documents went with it; their words stay out too
         elif route.startswith("/library/"):
             data["body"] = dogfood.body_value(body or b"")
         elif body:

@@ -181,9 +181,10 @@ def test_only_the_v6_and_later_prompts_are_bundled():
     frame; director.v8 (canvas-nodes) holds a shot's required refs; director.v9 (runway-video-models) says
     which pictures each clip model carries; director.v11 (join-or-cut-shots) ties each line of a take to its
     frame; v9.1 and v12 add redraw (frame-edit-or-redraw); v13 adds the brief (brief-node); v14 places a redraw's objects
-    when the shot has no people (owner 2026-11-18). The older ones stay, so a rollback is a config change."""
+    when the shot has no people (owner 2026-11-18); v15 numbers a take's images by their place in the refs and
+    sends an unnamed canvas picture as an object (pt-dex-context). The older ones stay, so a rollback is a config change."""
     assert sorted(p.name for p in PROMPTS.glob("director.v*.md")) == [
-        "director.v10.md", "director.v11.md", "director.v12.md", "director.v13.md", "director.v14.md", "director.v6.1.md", "director.v6.md", "director.v7.md", "director.v8.md", "director.v9.1.md", "director.v9.md"]
+        "director.v10.md", "director.v11.md", "director.v12.md", "director.v13.md", "director.v14.md", "director.v15.md", "director.v6.1.md", "director.v6.md", "director.v7.md", "director.v8.md", "director.v9.1.md", "director.v9.md"]
 
 
 def test_v7_is_v6_1_with_the_words_first_no_prices_and_a_frame_edit_section():

@@ -1053,7 +1053,7 @@
         },
         "brief": {
           "type": "object",
-          "description": "The brief in the node's scope (features/brief-node.clan): its own linked Brief node, else the one its Script (or the Storyboard that drives it) has linked. Its spine only, never the whole brief. Sent on the director-backed ops (write, shot_list, frame, frame_edit, region_edit, clip, clip_edit, clip_patch, cutdown, resize); the director writes it in a brief block cut to that op's budget, and reports a cut or size that breaks a mandatory or a don't in briefFlags (it never blocks or asks). Absent: no brief, and the director's input is exactly as before. The relay never records it in the run log.",
+          "description": "The brief in the node's scope (features/brief-node.clan): its own linked Brief node, else the one its Script (or the Storyboard that drives it) has linked. Its spine only, never the whole brief. Sent on the director-backed ops (write, shot_list, generate, frame, frame_edit, region_edit, clip, clip_edit, clip_patch, cutdown, resize; generate since features/pt-dex-context.clan, reading the project's only brief when its canvas node has none); the director writes it in a brief block cut to that op's budget (relay/brief.py: a Generate its don'ts, tone and feeling, a region_edit its don'ts only, a view none), and reports a cut or size that breaks a mandatory or a don't in briefFlags (it never blocks or asks). Absent: no brief, and the director's input is exactly as before. The relay never records it in the run log.",
           "properties": {
             "title": { "type": "string", "minLength": 1, "maxLength": 200 },
             "spine": { "$ref": "common.schema.json#/$defs/briefSpine" }
@@ -1064,7 +1064,7 @@
         "context": {
           "type": "array",
           "maxItems": 16,
-          "description": "What the node's links bring besides pictures: notes, documents and the Brand board's rules. Dex writes brand rules into the prompt and uses documents as background only.",
+          "description": "What the node's links bring besides pictures: notes, documents and the Brand board's rules. Dex writes brand rules into the prompt and uses documents as background only. Filled by the web since features/pt-dex-context.clan (web/src/jobs/context.ts): the project's brand refs (a palette's swatches, a typography ref's font, a brand rule's do, don't or tone) and the documents linked into the node, by their excerpt; linked notes go in text and the brief in brief, never here. The relay cuts it to each op's kinds and budget before Dex reads it (relay/job_context.py; a view reads none) and keeps it out of the dogfood record.",
           "items": {
             "type": "object",
             "properties": {
