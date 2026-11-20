@@ -687,6 +687,7 @@ def _cards_to_subjects(obj: dict, scene: dict) -> dict:
     for k, v in ((obj or {}).get("cards") or (obj or {}).get("subjects") or {}).items():
         if not isinstance(v, dict):
             continue
+        v = {k: (lint.plain(x) if isinstance(x, str) else [lint.plain(y) for y in x] if isinstance(x, list) else x) for k, x in v.items()}   # ASCII forms
         subj = scn.subject_of(v, scene) if v.get("key_visual") else str(v.get("subject") or "")
         nots = [str(x) for x in (v.get("not") or scene.get("must_not") or [])]
         out[k] = {"subject": subj, "kind": v.get("kind"), "key_visual": str(v.get("key_visual") or ""), "setting": str(v.get("setting") or scene.get("setting") or ""),
@@ -717,8 +718,8 @@ def _scene_subjects(ctx: Ctx, req: dict, obj: dict, usage: dict, call, banned: l
                 subjects[k] = v
                 del bad[k]
         usage = {**(usage or {}), "redo": u2 or {}, "usd": float((usage or {}).get("usd") or 0) + float((u2 or {}).get("usd") or 0)}
-    for k, why in bad.items():
-        subjects[k] = {"subject": "", "kind": (subjects.get(k) or {}).get("kind"), "refused": why}
+    for k, why in bad.items():   # the refused text is kept for a person to read; it is never sent
+        subjects[k] = {"subject": "", "kind": (subjects.get(k) or {}).get("kind"), "refused": why, "refused_subject": (subjects.get(k) or {}).get("subject", "")}
     return subjects, usage
 
 

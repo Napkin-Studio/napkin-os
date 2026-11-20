@@ -167,6 +167,28 @@ def name_words(names) -> dict:
     return {"words": words, "phrases": phrases}
 
 
+#: Typographic marks a model writes in plain prose, as their ASCII forms (a scene card is normalised before it is linted or sent).
+TYPOGRAPHIC = {"\u2019": "'", "\u2018": "'", "\u201c": "", "\u201d": "", "\u2014": ", ", "\u2013": "-", "\u2026": "...", "\u00a0": " ", "\u00ad": ""}
+
+
+def plain(text: str) -> str:
+    """``text`` with typographic apostrophes, dashes, ellipses and spaces as plain ASCII (curly double quotes dropped)."""
+    t = str(text or "")
+    for k, v in TYPOGRAPHIC.items():
+        t = t.replace(k, v)
+    return re.sub(r"\s+([,.;:])", r"\1", " ".join(t.split()))
+
+
+def unapostrophe(text: str) -> str:
+    """For the lint only: possessives and contractions without their apostrophe (household's -> household, doesn't -> does not,
+    o'clock -> clock), so an apostrophe left over is a real quotation mark."""
+    t = re.sub(r"\bo'clock\b", "clock", str(text or ""), flags=re.I)
+    t = re.sub(r"(?<=[A-Za-z])n't\b", " not", t)
+    t = re.sub(r"(?<=[A-Za-z])'(?:re|ll|ve|d|m)\b", "", t)
+    t = re.sub(r"(?<=[A-Za-z])'s\b", "", t)
+    return re.sub(r"(?<=[A-Za-z]s)'(?=[\s,.;:!?]|$)", "", t)
+
+
 def lint_scene(text: str, banned=(), deny: dict | None = None, names: dict | None = None) -> str | None:
     """Why a scene may not go to a picture model, or None when it may (the deny-list lint of the picture plan). Fails closed on: a part
     marked Confidential; the shape (printable ASCII, no quotation mark, no digit, no capital in mid-sentence, no 'style of'); a brand or a
@@ -181,6 +203,7 @@ def lint_scene(text: str, banned=(), deny: dict | None = None, names: dict | Non
         why = confidential_hit(t, deny)
         if why:
             return why
+    t = unapostrophe(t)   # a possessive or a contraction is not a quotation mark ('the household's meter', 'doesn't')
     if any(c in QUOTES for c in t):
         return "it holds a quotation mark"
     if re.search(r"\d", t):

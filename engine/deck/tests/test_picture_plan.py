@@ -214,3 +214,12 @@ def test_stage_g_and_the_plan_ask_about_the_same_slots(plan_on, monkeypatch):
     import inspect
     for fn in (imagegen.make_plan, imagegen.run_subjects):
         assert "plan_candidates(ctx)" in inspect.getsource(fn)
+
+
+def test_possessives_contractions_and_typographic_marks_are_not_quotation_marks():
+    """The six-deck re-render: stage g's cards were refused for an apostrophe ('the household's meter') or a typographic dash."""
+    for t in ["A household's meter turns while the family doesn't notice, at three o'clock.", "the neighbours' gate stands open."]:
+        assert lint.lint_scene(lint.plain(t)) is None, t
+    assert lint.plain("The kitchen’s window — grey light.") == "The kitchen's window, grey light."
+    assert lint.lint_scene(lint.plain("The kitchen’s window — grey light.")) is None
+    assert lint.lint_scene("a sign saying 'open' hangs.") == "it holds a quotation mark"   # a real quotation still fails
