@@ -123,3 +123,48 @@ describe('the box says its sound (B6)', () => {
     expect(boxSound(d, { shotIds: [shots[2].id] }, { provider: 'runway', model: 'veo3.1' })).toBeUndefined()
   })
 })
+
+describe('the joined take through the .clan store (B2)', () => {
+  it('is written as the document allows, one undo step, and the note puts the clips back', async () => {
+    const { modelStore, seedStages, job: mkJob, addShots: add, addTake: take, id } = await import('../test/model')
+    const { systemUpdate } = await import('../doc/store')
+    const { placeJoinedTake, undoJoinedTake } = await import('./editOps')
+    const store = modelStore()
+    await store.create(MAYA, 'Joined')
+    await seedStages(store)
+    let videoId = ''
+    let shotIds: string[] = []
+    const runId = id('run')
+    const jobId = id('job')
+    await systemUpdate(store, (d) => {
+      const shots = add(d, 3)
+      shots[0].duration_s = 3
+      shots[1].duration_s = 2.5
+      shotIds = shots.map((s) => s.id)
+      shots.forEach((s, i) => take(d, s, SHA(String(i + 1)), mkJob(d, 'clip', [], SHA(String(i + 1))), { pick: true }))
+      videoId = mainVideo(d)!.id
+      d.videos[videoId].runs = { [runId]: { shot_ids: [shotIds[0], shotIds[1]], mode: 'take_refs', model: 'mock', state: 'done', planned_by: 'human', job_id: jobId } }
+      const j = mkJob(d, 'clip', [], SHA('9'), { id: jobId } as never)
+      d.jobs[jobId] = { ...j, id: jobId }
+      const g = id('gen')
+      d.generations[g] = {
+        id: g, v: 1, field_v: {}, kind: 'together', inputs: { model: 'mock', length_s: 6 }, box_id: runId, shot_ids: [shotIds[0], shotIds[1]],
+        segments: [{ shot_id: shotIds[0], in_s: 0, out_s: 3, by: 'detected' }, { shot_id: shotIds[1], in_s: 3, out_s: 5.5, by: 'detected' }],
+        asset: SHA('9'), duration_s: 6, state: 'ready', job_id: jobId, provider: 'mock', crew: 'wren', mock: true, created_at: '2026-11-21T10:00:00Z', by: `human:${MAYA.id}`,
+      } as never
+      d.assets[SHA('9')] = { sha256: SHA('9'), kind: 'video', mime: 'video/mp4', origin: 'generated', locations: [], duration_s: 6 } as never
+    }, 'seed')
+    let ui: Record<string, unknown> = { jobs: {} }
+    const uiStore = { get: () => ui, update: (fn: (u: typeof ui) => void) => { const n = structuredClone(ui); fn(n); ui = n } } as never
+    const before = readCut(store.get(), videoId).v1.map((c) => c.genId)
+    expect(await placeJoinedTake(store, uiStore, videoId, jobId)).toBe(true)
+    const after = readCut(store.get(), videoId).v1
+    expect(after.map((c) => c.follows?.shotId)).toEqual(shotIds)
+    expect(after[0].genId).toBe(after[1].genId)
+    expect(after[0].genId).not.toBe(before[0])
+    expect((ui.joinedInCut as { text: string }).text).toBe('Joined take of shots 1–2 is in the cut.')
+    expect(await undoJoinedTake(store, uiStore)).toBe(true)
+    expect(readCut(store.get(), videoId).v1.map((c) => c.genId)).toEqual(before)
+    expect(ui.joinedInCut).toBeUndefined()
+  })
+})
