@@ -8,7 +8,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/context'
-import { choiceToSend, clipRefCapacity, controlsFor, modelChoicesFor } from '../capabilities'
+import { clipRefCapacity, controlsFor, modelChoicesFor } from '../capabilities'
 import { CAMERA_ANGLES, CAMERA_MOVEMENTS, type Camera, type CameraMovement, type ModelChoice, type Shot } from '../contracts/types'
 import { updateDoc } from '../doc/store'
 import { drawFrame, selectedFrame } from '../jobs/frames'
@@ -18,7 +18,7 @@ import { separateSelection, setGap, splitBoxAt, takeShotOut, videoJoin } from '.
 import { isRunning, jobAt, shotRefSet } from '../jobs/select'
 import { beatsOf, refName, refsList, shotNumber, shotsOf } from '../model/selectors'
 import { boxModel, boxModelCant, boxModelLimit, boxModelNote, boxModelSwitch, boxSound, entryOf, takeLimits } from './boxModel'
-import { boxHow, boxLimit, boxPictures, boxWords, flipWords, fromWords, guideLine, pickedFor, roomBoxModel, stripGaps, withPick, type BoxLimit, type Gap } from './joinCut'
+import { boxHow, boxLimit, boxPictures, boxWords, flipWords, fromWords, guideLine, pickedFor, roomBoxModel, savedPicks, savePicks, stripGaps, withPick, type BoxLimit, type Gap } from './joinCut'
 import { CutIcon, GapButton, GapTip, JoinIcon, LimitPanel, StripShot, TakeStills } from './Strip'
 import { StripPlayer } from './StripPlayer'
 import { Mentions } from './Mentions'
@@ -85,7 +85,9 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
   const [notice, setNotice] = useState<string | null>(null)
   const [making, send] = useSending()
   // The model picked for a box, kept by shot: a joined box keeps the earlier box's model (joinCut pickedFor).
-  const [models, setModels] = useState<Record<string, ModelChoice>>({})
+  // Kept for the film while the page is open (joinCut savedPicks; UAT 2026-11-21, F3).
+  const [models, setModelsState] = useState<Record<string, ModelChoice>>(() => savedPicks(data.videoId))
+  const setModels = (m: Record<string, ModelChoice>) => { savePicks(data.videoId, m); setModelsState(m) }
   // The gap whose tip shows, and the gap to focus again after a keyboard flip (its button is drawn anew).
   const [tip, setTip] = useState<{ gap: Gap; el: HTMLElement } | null>(null)
   const refocus = useRef<string | null>(null)
@@ -114,7 +116,7 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
   const facts = new Map(data.boxes.map((b) => {
     const pics = boxPictures(doc, b, declined)
     const model = roomBoxModel(doc, b, config, models)
-    return [b.key, { pics, model, limit: boxLimit(doc, b, model, config, pics), words: boxWords(doc, b, pics), switched: boxModelSwitch(doc, b, config, pickedFor(models, b)), sound: boxSound(doc, b, model) }] as const
+    return [b.key, { pics, model, limit: boxLimit(doc, b, model, config, pics), words: boxWords(doc, b, pics), switched: boxModelSwitch(doc, b, config, pickedFor(models, b)), sound: boxSound(doc, b, model), frameFirst: frameFirst(doc, b) }] as const
   }))
   const tipWords = tip ? flipWords(doc, ui, data.videoId, config, tip.gap, models) : undefined
   // The boxes a flip would touch, drawn dashed while its tip shows.
@@ -174,7 +176,10 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
     try {
       const f = facts.get(b.key)
       if (f?.limit?.hard) { setError(f.limit.why); return }
-      const choice = choiceToSend('clip', config, roomBoxModel(doc, b, config, models))
+      // The model the box shows is the one sent, always by name: the relay's own default once made a box that said
+      // Omni Flash on Veo 3.1 with sound (UAT 2026-11-21, F3).
+      const shownModel = roomBoxModel(doc, b, config, models)
+      const choice: ModelChoice | undefined = shownModel ? { provider: shownModel.provider, model: shownModel.model } : undefined
       const shotId = b.shotIds[0]
       const shot = doc.shots[shotId]
       const hasFrame = !!selectedFrame(doc, shotId) || !!startPicture(doc, shotId)
@@ -194,8 +199,9 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
         const hasCharacter = shotHasCharacter(doc, shot)
         const idx = shot ? shotsOf(doc, shot.storyboard_id).findIndex((s) => s.id === shotId) : -1
         if (shot && !hasFrame && hasCharacter && idx >= 0) {
-          await drawFrame(deps, idx, 'first', { storyboardId: shot.storyboard_id })
-          setNotice('Making the picture of your character first — animate it once it lands (a clip can only show @names through a frame).')
+          // One Make: the frame, then the clip from it when it lands (jobs/wire clipAfterFrame; UAT 2026-11-21, F7).
+          await drawFrame(deps, idx, 'first', { storyboardId: shot.storyboard_id, clipAfter: { videoId: data.videoId, ...(choice ? { modelChoice: choice } : {}) } })
+          setNotice('Drawing the frame of your character first, then the clip from it: a clip can only show @names through a frame.')
         } else {
           // No frame and no character: the clip is made from the shot's words (a new box, or straight from the script).
           const fromWords = !hasFrame && !!shot?.action?.trim()
@@ -282,7 +288,7 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
               <div key={b.key} className="jc-unit">
                 {before && <GapButton gap={before} onFlip={(g, k) => void flip(g, k)} onTip={(g, el) => setTip({ gap: g, el })} onTipEnd={tipEnd} />}
                 {b.endCard ? <EndCardTile b={b} shot={doc.shots[b.shotIds[0]]} onEdit={() => onRoom('edit')} /> : (
-                  <BoxCard b={b} switched={f.switched} sound={f.sound} sel={tab === 'shot' ? sel : { ...sel, shotId: undefined }} since={openedAt} selected={!!(sel.boxKey || sel.shotId) && b.key === box?.key} making={making || b.shotIds.some(busy)} words={f.words} limit={f.limit}
+                  <BoxCard b={b} switched={f.switched} sound={f.sound} frameFirst={f.frameFirst} sel={tab === 'shot' ? sel : { ...sel, shotId: undefined }} since={openedAt} selected={!!(sel.boxKey || sel.shotId) && b.key === box?.key} making={making || b.shotIds.some(busy)} words={f.words} limit={f.limit}
                     model={f.model} gaps={gapAt} preview={preview?.get(b.key)} takes={data.gens.filter((g) => inBox(g, b.key))}
                     inCut={(() => { const top = boxTop(data.gens, b); return !!top && cutGens.has(top.id) })()}
                     onShot={(id) => pickShot(b, id)} onBox={() => pickBox(b)} onMake={() => void make(b)} onTake={(g) => pickTake(g, b)}
@@ -331,17 +337,27 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
   )
 }
 
+/** Said before Make on a box whose clip needs its frame first (UAT 2026-11-21, F7): both come from one Make. */
+const FRAME_FIRST = 'Make draws the frame first, then the clip from it.'
+
+/** A box of one shot with no frame whose shot names a character: Make draws its frame, then its clip. */
+function frameFirst(doc: ReturnType<typeof useDoc>, b: Box): boolean {
+  if (b.endCard || b.shotIds.length !== 1) return false
+  const shot = doc.shots[b.shotIds[0]]
+  return !selectedFrame(doc, b.shotIds[0]) && !startPicture(doc, b.shotIds[0]) && shotHasCharacter(doc, shot)
+}
+
 /** The shot names a character (a clip from words drops every reference, so the frame is made first). */
 function shotHasCharacter(doc: ReturnType<typeof useDoc>, shot: Shot | undefined): boolean {
   try { return !!shot && shotRefSet(doc, shot).some((x) => x.ref.role === 'character') } catch { return false }
 }
 
-type BoxFacts = { pics: ReturnType<typeof boxPictures>; model: ModelChoice | undefined; limit: BoxLimit | undefined; words: { title: string; sub: string }; switched?: ReturnType<typeof boxModelSwitch>; sound?: ReturnType<typeof boxSound> }
+type BoxFacts = { pics: ReturnType<typeof boxPictures>; model: ModelChoice | undefined; limit: BoxLimit | undefined; words: { title: string; sub: string }; switched?: ReturnType<typeof boxModelSwitch>; sound?: ReturnType<typeof boxSound>; frameFirst?: boolean }
 
 /** A box of the strip (mock join-or-cut-v1): what Make will do (no prices), its shots with the joined gaps
  *  between them, its limits on its model, the stills of its newest take (one per shot window), and Make. */
-function BoxCard({ b, switched, sound, selected, sel, since, making, takes, words, limit, model, gaps, preview, inCut, onShot, onBox, onMake, onTake, onFlip, onTip, onTipEnd, onUse, onCut }: {
-  b: Box; switched?: BoxFacts['switched']; sound?: BoxFacts['sound']; selected: boolean; inCut?: boolean; sel: Selection; since: string; making: boolean; takes: Gen[]
+function BoxCard({ b, switched, sound, frameFirst: first, selected, sel, since, making, takes, words, limit, model, gaps, preview, inCut, onShot, onBox, onMake, onTake, onFlip, onTip, onTipEnd, onUse, onCut }: {
+  b: Box; switched?: BoxFacts['switched']; sound?: BoxFacts['sound']; frameFirst?: boolean; selected: boolean; inCut?: boolean; sel: Selection; since: string; making: boolean; takes: Gen[]
   words: { title: string; sub: string }; limit?: BoxLimit; model?: ModelChoice; gaps: Map<string, Gap>; preview?: 'join' | 'cut'
   onShot: (id: string) => void; onBox: () => void; onMake: () => void; onTake: (g: Gen) => void
   onFlip: (g: Gap, keyboard: boolean) => void; onTip: (g: Gap, el: HTMLElement) => void; onTipEnd: () => void
@@ -383,6 +399,7 @@ function BoxCard({ b, switched, sound, selected, sel, since, making, takes, word
       </div>
       {limit && <LimitPanel limit={limit} onUse={onUse} onCut={onCut} cutN={limit.cutBefore ? shotNumber(doc, limit.cutBefore) : undefined} />}
       {sound && <div className={`jc-sound ${sound.on ? '' : 'off'} rm-clamp2`} title={sound.words}>{sound.words}</div>}
+      {first && !has && <div className="rm-differs rm-clamp2" title={FRAME_FIRST}>{FRAME_FIRST}</div>}
       {switched && !limit?.hard && <div className="rm-differs rm-clamp2" title={`Made on ${switched.to}: ${switched.from} ${switched.why}.`}>Made on {switched.to}: {switched.from} {switched.why}.</div>}
       {differs && <div className="rm-differs rm-clamp2" title={`Next take differs: ${differs}`}>Next take differs: {differs}</div>}
       {failedLine && <div className="rm-error" role="alert">The last Make did not work: {failedLine}<FrontButtons text={failedLine} /></div>}
@@ -737,7 +754,7 @@ function BoxTab({ box, data, sel, facts, onModel, onMake, making, ticked, onTick
       <button type="button" className="btn primary rm-wide" disabled={making || over} onClick={onMake} title={over ? facts.limit!.why : undefined}>
         {making ? 'Making…' : takes.some((g) => g.state === 'ready') ? 'Make new take' : 'Make'}
       </button>
-      <p className="rm-note">A new take lands on this box and in the Bin. Your cut stays as it is.</p>
+      <p className="rm-note">{facts.frameFirst ? `${FRAME_FIRST} ` : ''}A new take lands on this box and in the Bin. Your cut stays as it is.</p>
       {takes.length > 0 && (
         <fieldset className="rm-field">
           <legend className="rm-label">Takes</legend>

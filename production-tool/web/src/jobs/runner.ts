@@ -381,6 +381,7 @@ export class JobRunner {
     })
     const keep: SubmitExtras['local'] = {
       ...(local.followRun ? { followRun: local.followRun } : {}),
+      ...(local.clipAfter ? { clipAfter: local.clipAfter } : {}),
       ...(local.fixModelChoice ? { fixModelChoice: local.fixModelChoice } : {}),
       ...(local.fixQuality ? { fixQuality: local.fixQuality } : {}),
     }

@@ -41,6 +41,9 @@ export interface JobLocal {
   cards?: DirectorCard[]
   /** Started by that run of "Update what follows" (jobs/follow.ts). */
   followRun?: string
+  /** A frame drawn first for a box's Make: its clip is made from it when it lands, on this model, in this film
+   *  (UAT 2026-11-21, F7: the frame landed and the box stopped until a second Make). */
+  clipAfter?: { videoId?: string; modelChoice?: ModelChoice }
   /** A "Fix it in the shot" edit: the clip model the person picked for the clip made after it lands. */
   fixModelChoice?: ModelChoice
   /** …and the quality picked for it (features/clip-quality.clan). */

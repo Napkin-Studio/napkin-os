@@ -68,6 +68,14 @@ export function pickedFor(models: Record<Id, ModelChoice>, box: Pick<Box, 'shotI
   return undefined
 }
 
+/** The picks of each film, kept while the page is open: the Make room's own state was lost each time the room
+ *  closed, and the box then showed the last model that worked anywhere (UAT 2026-11-21, F3). */
+const PICKS = new Map<Id, Record<Id, ModelChoice>>()
+export const savedPicks = (videoId: Id | undefined): Record<Id, ModelChoice> => (videoId ? PICKS.get(videoId) ?? {} : {})
+export function savePicks(videoId: Id | undefined, models: Record<Id, ModelChoice>) {
+  if (videoId) PICKS.set(videoId, models)
+}
+
 /** The picks with `m` set for this box (on its first shot; its other shots' picks go). */
 export function withPick(models: Record<Id, ModelChoice>, box: Pick<Box, 'shotIds'>, m: ModelChoice): Record<Id, ModelChoice> {
   const out = { ...models }
