@@ -10,9 +10,10 @@ of the master at the panel's own shape), the type layers on the field. Free, lik
 
 extend and regenerate are paid (phase 4; the paid tests in
 docs/production-tool/campaign-formats-tests-2026-10-16.md set them):
-  extend      the master at its own pixels on a canvas of the size's shape, a blurred stretch of it
-              round it, our mask white there (16 px over the master's edge); Ideogram 4.5 at high fills
-              the padding (pad_plan, padded). The prompt asks for continuation only, never the scene.
+  extend      the master at its own pixels on a canvas of the size's shape, its edges drawn outwards,
+              softened and grained round it, our mask white there (overlap_px over the master's edge);
+              Ideogram 4.5 at high fills the padding (pad_plan, padded). The prompt says the bands are empty
+              space to paint, continuing the picture; never the scene.
   regenerate  Gemini 3 Pro with the master as the tagged reference @master at the nearest of its ratios.
 Both results are cropped to the exact shape (finish).
 
@@ -36,8 +37,12 @@ PAID_METHODS = ("extend", "regenerate")
 
 # The words a paid method sends: what to do with the picture, never what is in it (the paid tests: the
 # picture dominates the words, so a scene description only risks a mismatch), and never a size's type.
-EXTEND_PROMPT = ("Continue the scene beyond its edges; keep everything inside exactly as it is. "
-                 "Match its light, colour, grain and perspective. No text, no letters, no logos.")
+# UAT round 1 (IMG-9, 2026-11-20): "keep everything inside exactly as it is" read as keeping the soft bands too,
+# and they came back as flat blurred bars with a hard seam. The words now say the bands are empty space to paint.
+EXTEND_PROMPT = ("The picture is surrounded by soft, smeared bands: they are empty space, not part of it. Paint new, "
+                 "sharp detail there that continues the picture seamlessly across its edges: the same horizon, ground, "
+                 "light, colour, grain and perspective, with no seam, blur, border or frame. Keep the picture itself "
+                 "as it is. No text, no letters, no logos.")
 REGENERATE_PROMPT = ("Recreate @master for a {shape} format: the same people, objects, place, light and colours. "
                      "Recompose for the shape so nothing important is cut off. No text, no letters, no logos.")
 # A scamp (a Drawing, a sketch area: features/resize-selection.clan) drawn as a finished picture at the shape.
@@ -91,8 +96,16 @@ REGENERATE_REFS_MAX = 4
 # The padded canvas Ideogram edits: at most this long and this many pixels (a data URI is at most 5 MB).
 EXTEND_MAX_SIDE = 3072
 EXTEND_MAX_PX = 4_200_000
-EXTEND_OVERLAP = 16   # the mask reaches this far over the master's edge, so the seam is redrawn
-EXTEND_BLUR = 40
+# The mask reaches this far over the master's edge, so the seam is redrawn: a share of the master's shorter side,
+# at least EXTEND_OVERLAP px (16 px left a hard seam on a 2048 px canvas, UAT round 1 IMG-9).
+EXTEND_OVERLAP = 24
+EXTEND_OVERLAP_SHARE = 0.035
+# The padding is seeded with the master's edge strip (EDGE_STRIP px) drawn outwards, softened (EXTEND_BLUR) and
+# grained (EXTEND_GRAIN): the model continues a picture that already lines up with the edge, instead of keeping
+# the flat whole-picture blur it was given before.
+EDGE_STRIP = 12
+EXTEND_BLUR = 10
+EXTEND_GRAIN = 18
 
 # Magnific's limits (Runway OpenAPI 2024-11-06, POST /v1/image_upscale): each input side 300-8000 px,
 # the output at most 25,300,000 pixels. Export at full size picks x4, or x8 for the largest print sizes.
@@ -244,9 +257,44 @@ def pad_plan(mw: int, mh: int, aw: int, ah: int, protect: list[dict] | None = No
     return {"canvas": {"w": cw, "h": ch}, "scale": s, "at": {"x": x, "y": y, "w": w, "h": h}}
 
 
+def _smeared(master, cw: int, ch: int, x: int, y: int):
+    """The canvas with the master at (x, y) and its outermost pixels drawn outwards over the rest: each side's
+    padding is the master's edge strip (EDGE_STRIP px) stretched across it, rows first, then columns over the
+    whole width, so the horizon, the ground and the light run on to the canvas edge without copying anything in
+    the picture (a mirror put a second person in the bands)."""
+    from PIL import Image
+    w, h = master.size
+    k = min(EDGE_STRIP, w, h)
+
+    def across(strip, size):  # the strip averaged to one line (a stray dark edge column never streaks), drawn out
+        line = strip.resize((1, strip.height) if size[1] == strip.height else (strip.width, 1), Image.BOX)
+        return line.resize(size, Image.BILINEAR)
+
+    row = Image.new("RGB", (cw, h))
+    row.paste(master, (x, 0))
+    if x > 0:
+        row.paste(across(master.crop((0, 0, k, h)), (x, h)), (0, 0))
+    if x + w < cw:
+        row.paste(across(master.crop((w - k, 0, w, h)), (cw - x - w, h)), (x + w, 0))
+    out = Image.new("RGB", (cw, ch))
+    out.paste(row, (0, y))
+    if y > 0:
+        out.paste(across(row.crop((0, 0, cw, k)), (cw, y)), (0, 0))
+    if y + h < ch:
+        out.paste(across(row.crop((0, h - k, cw, h)), (cw, ch - y - h)), (0, y + h))
+    return out
+
+
+def overlap_px(plan: dict) -> int:
+    """How far the mask reaches over the master's edge (EXTEND_OVERLAP, EXTEND_OVERLAP_SHARE)."""
+    at = plan["at"]
+    return max(EXTEND_OVERLAP, int(round(min(at["w"], at["h"]) * EXTEND_OVERLAP_SHARE)))
+
+
 def padded(data: bytes, plan: dict) -> tuple[bytes, bytes]:
-    """The canvas an extend sends (JPEG): the master at plan['at'] over a blurred stretch of itself;
-    and our mask (PNG, white = change): white everywhere but the master, less EXTEND_OVERLAP px."""
+    """The canvas an extend sends (JPEG): the master at plan['at'], its edges drawn outwards over the
+    padding, softened and grained (_smeared, EXTEND_BLUR, EXTEND_GRAIN); and our mask (PNG, white = change):
+    white everywhere but the master, less overlap_px over its edge."""
     from PIL import Image, ImageFilter
     img = Image.open(io.BytesIO(data))
     img.load()
@@ -254,10 +302,13 @@ def padded(data: bytes, plan: dict) -> tuple[bytes, bytes]:
     cw, ch = plan["canvas"]["w"], plan["canvas"]["h"]
     at = plan["at"]
     master = rgb.resize((at["w"], at["h"]), Image.LANCZOS) if rgb.size != (at["w"], at["h"]) else rgb
-    bg = rgb.resize((cw, ch), Image.BILINEAR).filter(ImageFilter.GaussianBlur(EXTEND_BLUR))
+    seed = _smeared(master, cw, ch, at["x"], at["y"]).filter(ImageFilter.GaussianBlur(EXTEND_BLUR))
+    grain = Image.effect_noise((cw, ch), EXTEND_GRAIN).convert("RGB")
+    seed = Image.blend(seed, grain, 0.12)
+    bg = seed.copy()
     bg.paste(master, (at["x"], at["y"]))
     mask = Image.new("L", (cw, ch), 255)
-    o = EXTEND_OVERLAP
+    o = overlap_px(plan)
     # Where the master meets the canvas edge there is nothing to blend: keep it to the edge.
     x0 = at["x"] + (o if at["x"] > 0 else 0)
     y0 = at["y"] + (o if at["y"] > 0 else 0)
