@@ -226,9 +226,11 @@ test('the app draws no brand of its own: the OS bar above it already carries the
   assert.ok(!html.includes('rotate(-45 16 16)'))
 })
 
-test('the only inputs are the three prompt fields, the open prompt and the file picker', () => {
-  assert.deepEqual([...html.matchAll(/field\('(\w+)'/g)].map(m => m[1]), ['client', 'project', 'agency'])
-  assert.equal(html.match(/<textarea/gi)?.length, 2) // the open prompt, and the free-text box of a supply card
+test('the only inputs are the three prompt fields, the open prompt, the file picker and the gate panels\' words', () => {
+  assert.deepEqual([...html.matchAll(/\bfield\('(\w+)'/g)].map(m => m[1]), ['client', 'project', 'agency'])
+  // deck-handoffs: the gate panels (edit, retry, your own idea) and the tissue reactions, each drawn only when the person opens it
+  assert.deepEqual([...html.matchAll(/\bgfield\('(\w+)'/g)].map(m => m[1]), ['ge_', 'gr_note', 'go_line', 'go_idea', 'go_name', 'go_thought', 'go_why', 'rc_', 'rjson'])
+  assert.equal(html.match(/<textarea/gi)?.length, 3) // the open prompt, the free-text box of a supply card, and gfield (the gate panels)
   assert.equal(html.match(/contenteditable/gi)?.length ?? 0, 0)
 })
 

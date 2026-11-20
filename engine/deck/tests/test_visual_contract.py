@@ -248,7 +248,8 @@ def test_the_six_preferences_have_defaults_and_their_question_in_the_description
     assert spec.DENSITY_WORDS == {"lean": 30, "standard": 60}
     assert "leave-behind" in look["density"]["description"]
     assert PREFS["inputs"]["properties"]["text_mode"]["default"] == "condense" and _enum(PREFS["inputs"]["properties"]["text_mode"]) == ("condense", "preserve")
-    assert _enum(PREFS["inputs"]["properties"]["format"]) == ("pitch", "full")
+    # deck-handoffs: tissue is a run format (the routes-only kit, run as a pitch up to the territories), not a density preference
+    assert _enum(PREFS["inputs"]["properties"]["format"]) == ("pitch", "full", "tissue")
 
 
 def test_a_document_with_no_preference_validates_and_one_with_each_set_by_a_person_validates():
