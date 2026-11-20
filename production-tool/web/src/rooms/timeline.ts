@@ -14,7 +14,7 @@ import {
   clipEnd, EMPTY_CUT, pack, r3, sortV1,
   type Cut, type CutClip, type CutEndCard, type CutText, type Transition,
 } from './cut'
-import { boxName, inBox, sharesBox, shotWindow, type Box, type Gen } from './model'
+import { boxName, coversShot, inBox, sharesBox, shotWindow, type Box, type Gen } from './model'
 
 // ── The document's cut ↔ the plain cut ────────────────────────────────────────────────────────────────
 
@@ -219,8 +219,7 @@ export function newerTake(c: CutClip, gens: Gen[]): Gen | undefined {
   // A newer take of a box the clip's take belongs to, that has footage for the clip's shot (a take made together
   // whose shots were made apart since is a take of each of their boxes).
   const shotId = c.follows?.shotId
-  const covers = (g: Gen) => !shotId || g.shotIds.includes(shotId) || g.segments.some((s) => s.shotId === shotId)
-  const newer = gens.filter((g) => sharesBox(own, g) && covers(g) && g.state === 'ready' && g.id !== own.id && (g.createdAt ?? '') > (own.createdAt ?? ''))
+  const newer = gens.filter((g) => sharesBox(own, g) && coversShot(g, shotId) && g.state === 'ready' && g.id !== own.id && (g.createdAt ?? '') > (own.createdAt ?? ''))
   return newer[0]
 }
 

@@ -49,3 +49,40 @@ describe('the canvas on the relay', () => {
     expect(relayCanvas.get('p1')).toEqual(EX.elements)
   })
 })
+
+describe('saves at the same moment (UAT 2026-11-21, F1)', () => {
+  it('go one after the other, each on the base the one before left; no conflict', async () => {
+    const { copy, server } = setup()
+    const marks = ['e1', 'e2']
+    const seen: (string | undefined)[] = []
+    let n = 0
+    server.save.mockImplementation((async (_id: string, _b: Uint8Array, o: { ifMatch?: string }) => {
+      seen.push(o.ifMatch)
+      await new Promise((r) => setTimeout(r, 5))
+      return { etag: marks[n++], savedAt: '2026-11-21T12:00:00Z' }
+    }) as never)
+    // A base is known (the project was on the relay when it opened).
+    ;(copy as unknown as { base: unknown }).base = { etag: 'e0', savedAt: '2026-11-21T11:00:00Z' }
+    await Promise.all([copy.post(new Uint8Array([1]), { reason: 'landing' }), copy.post(new Uint8Array([2]), { reason: 'interval' })])
+    expect(seen).toEqual(['e0', 'e1'])
+    expect(copy.get()).toBeNull()
+  })
+
+  it('a refusal whose newer copy is our own save is taken as the base and sent again', async () => {
+    const { copy, server } = setup()
+    const { SaveConflict } = await import('./server')
+    const { sha256Hex } = await import('../lib/hash')
+    const first = new Uint8Array([7])
+    const ours = await sha256Hex(first)
+    ;(copy as unknown as { base: unknown }).base = { etag: 'e0', savedAt: '2026-11-21T11:00:00Z' }
+    // The first save landed but its answer was lost: the relay now holds it.
+    server.save.mockImplementationOnce((async () => { throw new Error('network') }) as never)
+    await copy.post(first, { reason: 'landing' }).catch(() => {})
+    server.list.mockImplementation((async () => [{ id: 'p1', etag: ours, savedAt: '2026-11-21T12:00:00Z' }]) as never)
+    server.save.mockImplementationOnce((async () => { throw new SaveConflict('saved elsewhere') }) as never)
+    server.save.mockImplementationOnce((async (_i: string, _b: Uint8Array, o: { ifMatch?: string }) => ({ etag: `after-${o.ifMatch}`, savedAt: '2026-11-21T12:01:00Z' })) as never)
+    await copy.post(new Uint8Array([8]), { reason: 'interval' })
+    expect(copy.get()).toBeNull()
+    expect(copy.basedOn()?.etag).toBe(`after-${ours}`)
+  })
+})

@@ -202,7 +202,7 @@ export function joinBlock(prev: PlanShot, next: PlanShot, n: number, lineOf?: (s
     // Which shot speaks, and its line: the Shot tab showed none, so the refusal read as wrong (UAT 2026-11-21).
     const who = prev.spoken ? prev : next
     const line = lineOf?.(who.id)
-    return `Shot ${prev.spoken ? n : n + 1} has a spoken line${line ? ` (“${line.length > 60 ? `${line.slice(0, 59)}…` : line}”)` : ''}, so it is its own video, with sound`
+    return `Shot ${prev.spoken ? n : n + 1} has a spoken line${line ? ` (“${line.length > 60 ? `${line.slice(0, 59)}…` : line}”)` : ''}, so it is its own video, with sound: a joined video trims each shot to its storyboard length, which could cut the line off`
   }
   return 'These shots are made on their own'
 }

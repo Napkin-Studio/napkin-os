@@ -102,10 +102,17 @@ export function mediaItems(doc: ProductionDocument, project: string | undefined,
       out.push({ kind: 'frame', sha256: f.asset, mime: mimeOf(f.asset), name: file(`shot${i + 1}-frame-v${f.version}`, f.asset), folder: 'storyboard', which: f.id })
     }
   })
+  // A take of several shots (joined) is one file, named for its shots, once (UAT 2026-11-21, F15: the zip held each
+  // joined take twice, once under each shot).
+  const clipped = new Set<string>()
+  const numberOf = new Map(shots.map((s, i) => [s.id, i + 1]))
   shots.forEach((s, i) => {
     for (const [k, t] of takesOf(doc, s.id).entries()) {
-      if (!t.asset) continue
-      out.push({ kind: 'clip', sha256: t.asset, mime: mimeOf(t.asset), name: file(`shot${i + 1}-clip-v${k + 1}`, t.asset), folder: 'clips', which: t.id })
+      if (!t.asset || clipped.has(t.id)) continue
+      clipped.add(t.id)
+      const ns = (t.shot_ids ?? []).map((id) => numberOf.get(id)).filter((n): n is number => !!n)
+      const base = ns.length > 1 ? `shots${ns[0]}-${ns.at(-1)}-clip-v${k + 1}` : `shot${i + 1}-clip-v${k + 1}`
+      out.push({ kind: 'clip', sha256: t.asset, mime: mimeOf(t.asset), name: file(base, t.asset), folder: 'clips', which: t.id })
     }
   })
   for (const r of ads) {

@@ -41,7 +41,9 @@ export function stripGaps(doc: Doc, boxes: Box[], videoId: Id, config: Pick<Conf
     const a = plan.get(prev)
     const b = plan.get(id)
     const blocked = joined ? undefined : !config.flags.connectedVideo ? 'Making several shots as one video is off in this build'
-      : a && b ? joinBlock(a.s, b.s, a.i, (sid) => spokenLine(doc, sid)) : undefined
+      // joinBlock takes the number of the shot before the gap (1-based), as selectionBlock passes it (UAT 2026-11-21, F6:
+      // the 0-based index named shot 2 for shot 3's line).
+      : a && b ? joinBlock(a.s, b.s, a.i + 1, (sid) => spokenLine(doc, sid)) : undefined
     return { shotId: id, n: shotNumber(doc, id), joined, ...(blocked ? { blocked } : {}) }
   })
 }

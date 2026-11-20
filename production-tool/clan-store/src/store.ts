@@ -614,7 +614,18 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
     }
   }
 
-  private async postMirror(reason: MirrorReason) {
+  /** The mirror posts in order, one at a time (UAT 2026-11-21, F1: a landing's save and the minute's save went
+   *  0.24 s apart, both on the same base, and the second was refused as if another browser had saved). A post that
+   *  comes while one is on its way waits for it, and an interval post then finds nothing new to send. */
+  private mirrorChain: Promise<unknown> = Promise.resolve()
+
+  private postMirror(reason: MirrorReason): Promise<void> {
+    const run = this.mirrorChain.then(() => this.postMirrorNow(reason), () => this.postMirrorNow(reason))
+    this.mirrorChain = run.catch(() => {})
+    return run
+  }
+
+  private async postMirrorNow(reason: MirrorReason) {
     const m = this.mirror
     if (!m && reason !== 'manual') return
     if (!this.host || !this.doc) return

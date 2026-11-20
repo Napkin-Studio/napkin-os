@@ -8,7 +8,7 @@ import { useDoc, useServices } from '../app/context'
 import { shotNumber } from '../model/selectors'
 import { clipLen, MAX_SPEED, MIN_SPEED, type Cut, type CutClip, type TextStyle } from './cut'
 import { editCut } from './editOps'
-import { genTitle, sharesBox, shotTitle, type Gen } from './model'
+import { coversShot, genTitle, sharesBox, shotTitle, type Gen } from './model'
 import { tc } from './media'
 import type { RoomData } from './Rooms'
 import type { Picked } from './Timeline'
@@ -58,7 +58,8 @@ export function Inspector({ data, cut, picked, onPick, onChange, onFeel, onSwap,
     if (!c) return null
     const g = data.gens.find((x) => x.id === c.genId)
     const n = c.follows?.shotId ? shotNumber(doc, c.follows.shotId) : 0
-    const others = g ? data.gens.filter((x) => sharesBox(g, x) && x.state === 'ready' && x.id !== g.id) : []
+    // Takes of this clip's box that have footage for its shot (UAT 2026-11-21, F13: shot 1 listed shot 2's take).
+    const others = g ? data.gens.filter((x) => sharesBox(g, x) && coversShot(x, c.follows?.shotId) && x.state === 'ready' && x.id !== g.id) : []
     const src = g ? `${genTitle(g, data.boxes)}${n ? ` · shot ${n}` : ''}` : 'A take'
     const short = handleShort(c)
     return (
