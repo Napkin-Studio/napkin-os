@@ -174,7 +174,13 @@ export function SkyeBooth(p: SkyeBoothProps) {
           <div className="bc-text quiet">{scope.text}</div>
           <p className="bc-note">{scope.target.kind === 'shot'
             ? `Planned: ${scope.label.toLowerCase()} runs ${doc.shots[scope.target.id]?.duration_s ?? 0} s. What you tell the Script agent below applies to this shot only.`
-            : 'Not planned yet. What you tell the Script agent below applies to this part only.'}</p>
+            : (() => {
+              // A scene part is planned once shots come from its scene (UAT 2026-11-21: "Not planned yet" after Plan shots).
+              const id = scope.target.id
+              const n = Object.values(doc.shots ?? {}).filter((s) => s.scene_id === id && s.kind !== 'end_card').length
+              return n ? `Planned: ${n} ${n === 1 ? 'shot' : 'shots'} from this part. What you tell the Script agent below applies to this part only.`
+                : 'Not planned yet. What you tell the Script agent below applies to this part only.'
+            })()}</p>
         </article>
       )}
       <div className="bsec">

@@ -301,7 +301,8 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
   const sugs = composed ? scriptSuggestions(doc, composed) : []
   const mine = sugs.filter((s) => s.for === person)
   const [done, setDone] = useState<{ id: string; text: string; undo?: boolean }[]>([])
-  const decided = (id: string, text: string, undo = false) => setDone((d) => [{ id, text, undo }, ...d.filter((x) => x.id !== id)].slice(0, 3))
+  // Only the last decision is said, with its Undo (UAT 2026-11-21: "Kept · Undo" rows stacked up).
+  const decided = (id: string, text: string, undo = false) => setDone([{ id, text, undo }])
   const onPage = new Set(view === 'av' ? [] : (composed?.rows ?? []).map((r) => `${r.kind === 'end_card' ? 'shot' : r.kind}:${r.id}`))
   const draftCard = (s: (typeof mine)[number]) => composed && (
     <DraftCard key={s.id} sug={s} store={store} doc={doc} composed={composed} empty={!hasWords(doc, scriptId)}

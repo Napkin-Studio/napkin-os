@@ -3,7 +3,7 @@
 // / Why"). What she was asked, her words (a draft) or the change word by word (an edit), Keep, Discard, Why and
 // Ask again. Nothing changes on the page until Keep. Moved here from her Booth (features/script-freeform.clan).
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { proseHash, StaleSuggestion } from '../../../clan-store/src'
 import type { Id, ProductionDocument, Suggestion, WriteInput, WriteIntent, WriteMode, WriteTarget } from '../contracts/types'
 import type { ModelStore } from '../model/store'
@@ -30,6 +30,9 @@ export interface DraftCardProps {
 export function DraftCard({ sug, store, doc, composed, empty, requestOf, onWrite, onWhy, onDone }: DraftCardProps) {
   const [stale, setStale] = useState(sug.state === 'stale')
   const [busy, setBusy] = useState(false)
+  // A new draft or edit comes into view where it lands (UAT 2026-11-21: the rewrite card landed below the fold).
+  const cardRef = useRef<HTMLElement>(null)
+  useEffect(() => { cardRef.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }) }, [sug.id])
   const [showWhy, toggleWhy] = useWhy()
   const kind = sug.target.kind
   const current = () => store.text.prose(kind, sug.target.id)
@@ -70,7 +73,7 @@ export function DraftCard({ sug, store, doc, composed, empty, requestOf, onWrite
   const lines = isDraft ? draftLines(doc, sug) : null
   const diff = isDraft ? [] : trimDiff(wordDiff(before, sug.proposed.text))
   return (
-    <article className={`se-draft ${stale ? 'stale' : ''}`} role="group" aria-label={`The Script agent's ${isDraft ? 'draft' : 'edit'}`} data-suggestion={sug.id}
+    <article ref={cardRef} className={`se-draft ${stale ? 'stale' : ''}`} role="group" aria-label={`The Script agent's ${isDraft ? 'draft' : 'edit'}`} data-suggestion={sug.id}
       contentEditable={false} suppressContentEditableWarning>
       <div className="dh"><AgentFigure agent="skye" size={18} decorative /><span className="who">Script agent · {isDraft ? 'draft' : 'edit'}</span><span className="where">· {stale ? new StaleSuggestion().message : where}</span></div>
       <p className="note">{asked.lead}{asked.quote ? <>: <q>{asked.quote}</q></> : null}</p>

@@ -23,6 +23,8 @@ export function titleOf(s: Pick<Shot, 'action' | 'camera'>): string {
     .replace(/@\w+/g, '')
     .replace(/\s+/g, ' ')
     .trim()
-  const words = plain.split(/[.;,:—-]/)[0].trim()
+  // Cut at a stop or a dash between words, never inside "1:04", "3.5" or "close-up" (UAT 2026-11-21: "At 1:04,
+  // she tiptoes…" was titled "At 1").
+  const words = plain.split(/[.;,:](?=\s|$)|\s[—–-]\s|—/)[0].trim()
   return words ? cap(words.length > 26 ? `${words.slice(0, 25).replace(/\s+\S*$/, '')}…` : words) : cap(cameraLabel('size', s.camera.size))
 }
