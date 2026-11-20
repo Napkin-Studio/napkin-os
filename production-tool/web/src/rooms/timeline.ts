@@ -423,7 +423,8 @@ export function placeTakeInCut(d: ProductionDocument, videoId: Id, genId: Id, id
     && d.generations[old[0].genId]?.segments?.length === shots.length) return null
   const first = old[0]
   const last = old.at(-1)!
-  const box = shots.join(',')
+  // The box a clip stands for is the run its take was made for (a document id), as Assemble first cut writes it.
+  const box = g.box_id
   const added: CutClip[] = []
   let at = first.startS
   for (const [i, s] of g.segments.entries()) {
@@ -433,7 +434,7 @@ export function placeTakeInCut(d: ProductionDocument, videoId: Id, genId: Id, id
       id: ids(), genId, inS: s.in_s, outS: s.out_s, startS: r3(at), speed: 1, holdS: 0,
       fadeInS: i === 0 ? first.fadeInS : 0, fadeOutS: i === g.segments.length - 1 ? last.fadeOutS : 0,
       ...(i === 0 && first.transition ? { transition: first.transition } : {}),
-      follows: { boxId: box, shotId: s.shot_id },
+      follows: { ...(box ? { boxId: box } : {}), shotId: s.shot_id },
     })
     at += len
   }

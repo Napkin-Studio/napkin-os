@@ -733,13 +733,11 @@ html[data-theme='dark'] .jc-box.sel { box-shadow: 0 0 0 2px var(--ag-acc, var(--
 .jc-sound::before { content: '\266A\00a0'; color: var(--tool-ink); }
 .jc-sound.off { color: var(--warn); }
 .jc-box > .jc-sound { width: 0; min-width: 100%; box-sizing: border-box; }
-/* The Edit room with the Booth open at 1280-1680 px (UAT 2026-11-21: at 1440 px the band clipped Render ad and redo):
-   the band drops what it drops on a laptop, so its page actions stay on screen. */
+/* The Edit room's band at 1280-1680 px (UAT 2026-11-21: at 1440 px it clipped Render ad and redo, with the Booth
+   open or not): it drops what it drops on a laptop, so its page actions stay on screen. */
 @media (max-width: 1680px) {
-  .rooms[data-room="edit"]:has([data-booth-open="true"]) .rm-meta,
-  .rooms[data-room="edit"]:has([data-booth-open="true"]) .rm-soundword,
-  .rooms[data-room="edit"]:has([data-booth-open="true"]) .rm-wide,
-  .rooms[data-room="edit"]:has([data-booth-open="true"]) .rm-tltools .sp-btn kbd { display: none; }
-  .rooms[data-room="edit"]:has([data-booth-open="true"]) .rm-tltools { gap: 4px; }
-  .rooms[data-room="edit"]:has([data-booth-open="true"]) .rm-tltools .sp-btn { padding: 0 8px; }
+  .rooms[data-room="edit"] .rm-soundword, .rooms[data-room="edit"] .rm-wide,
+  .rooms[data-room="edit"] .rm-tltools .sp-btn kbd { display: none; }
+  .rooms[data-room="edit"] .rm-tltools { gap: 4px; }
+  .rooms[data-room="edit"] .rm-tltools .sp-btn { padding: 0 8px; }
 }
