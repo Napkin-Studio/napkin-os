@@ -542,14 +542,24 @@ ARTWORK_RULE = ("For a slot whose key starts with execution: describe the artwor
                 "with the advert in it. The deck draws the frame around it.")
 
 
+#: spec.MOCKUPS: the deck draws each presented execution in situ (deck/mockup.py), so its card is the picture inside the ad's visual area,
+#: literal and in the deck's locked setting. Only the system text changes, never the request.
+MOCKUP_RULE = ("For a slot whose key starts with execution: the deck draws the poster, phone, shelf, page or screen and sets the words, so the "
+               "card is only the picture inside the ad's visual area. key_visual: the one literal thing this execution shows, filling the "
+               "frame. setting: the scene brief's locked setting, word for word, as the place inside the picture. Never a frame, a panel, a "
+               "device, a shelf card, a billboard or any words in the picture.")
+
+
 def g_system() -> str:
-    """Stage g's system prompt: the file's own text, plus ARTWORK_RULE before the input rule when spec.GRAPHICS is on."""
+    """Stage g's system prompt: the file's own text, plus ARTWORK_RULE (and MOCKUP_RULE under spec.MOCKUPS) before the input rule when
+    spec.GRAPHICS is on."""
     text = _sysmsg("g_scene_cards.md" if spec.PICTURE_PLAN else "g_image_subjects.md", "g")   # the picture plan: scene cards as fields
     if not spec.GRAPHICS:
         return text
     body = text.rstrip("\n").split("\n")
     at = next((i for i, ln in enumerate(body) if ln.startswith("Inputs are the only source:")), len(body))
-    return "\n".join(body[:at] + [ARTWORK_RULE] + body[at:]) + "\n"
+    rules = [ARTWORK_RULE] + ([MOCKUP_RULE] if spec.MOCKUPS and spec.PICTURE_PLAN else [])
+    return "\n".join(body[:at] + rules + body[at:]) + "\n"
 
 
 def investor(inp, st, profile: dict | None = None) -> tuple[dict, dict]:

@@ -559,6 +559,13 @@ SHOW_WORK = flag_on("DECK_SHOW_WORK")
 #: never Gemini) asks whether the picture shows the idea in the setting, one retry, else drop; labels are Illustrative or Mock-up only,
 #: never Flagged, and a flagged picture is never drawn. ON by default; DECK_PICTURE_PLAN=0 builds exactly as before (the suite sets it to 0).
 PICTURE_PLAN = flag_on("DECK_PICTURE_PLAN")
+#: execution mock-ups in situ (round 4 blind judging: "the work is shown almost entirely as text"; deck/mockup.py): each presented
+#: execution is drawn as the work where it runs, picked by its channel (a poster in a street, a billboard, a phone with a social post, a
+#: shelf wobbler, a radio script card with a waveform, three or four storyboard frames), its headline and line typeset inside the ad, the
+#: client label as the brand (a neutral placeholder when the label is a job id), the picture (Production final, else the execution's
+#: generated scene card picture) filling the ad's visual area, else a typographic ad; labelled Mock-up; stage g gets a picture slot per
+#: presented execution (5 a deck at most). 16:9 only. ON by default; DECK_MOCKUPS=0 builds exactly as before (the suite sets it to 0).
+MOCKUPS = flag_on("DECK_MOCKUPS")
 #: The presented slide's title and the most issues it asks about (each a question for the client; the rest are in the appendix list).
 BRIEF_GAPS_TITLE = "What the brief doesn't tell us"
 BRIEF_GAPS_MAX = 5

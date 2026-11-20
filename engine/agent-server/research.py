@@ -139,7 +139,7 @@ def _corpus_track(gist: dict) -> list[dict]:
     return findings
 
 
-def _web_track(gist: dict) -> list[dict]:
+def _web_track(gist: dict, brief_object: dict | None = None) -> list[dict]:
     """Return live web findings for the brief's client/market/problem/competitors, by shelling
     out to headless `claude -p` with WebSearch, when RESEARCH_WEB=claude; otherwise returns [].
     Parses the model's JSON array of {claim, url, date} findings, dropping any without a claim
@@ -147,9 +147,9 @@ def _web_track(gist: dict) -> list[dict]:
     mode = os.environ.get("RESEARCH_WEB", "off").strip().lower()
     if mode != "claude":
         return []
-    nm = _names(gist)
-    sg = sanitise_gist(gist)   # the client's name, its rivals' names and every figure stay out of what goes to a search
-    mk = market_of(sg)
+    nm = _names(gist, (), brief_object)
+    sg = sanitise_gist(gist, (), brief_object)   # the client's name, its rivals' names and every figure stay out of what goes to a search
+    mk = market_of(sg, brief_object)
     for k in ("category", "problem"):   # the allowlist guard: no proper noun the blocklist did not know
         sg[k] = proper_guard(sg.get(k) or "", mk)
     try:
@@ -230,7 +230,40 @@ _EDGE = " .'\"‘’`*-–—_!?"
 
 #: A market's own adjectives, kept by the guard ('Irish households').
 DEMONYMS = {"ireland": ("irish",), "romania": ("romanian", "romanians"), "united kingdom": ("british", "uk"), "britain": ("british",),
-            "germany": ("german",), "france": ("french",), "spain": ("spanish",), "italy": ("italian",), "poland": ("polish",)}
+            "germany": ("german",), "france": ("french",), "spain": ("spanish",), "italy": ("italian",), "poland": ("polish",),
+            "netherlands": ("dutch",), "belgium": ("belgian",), "sweden": ("swedish",), "norway": ("norwegian",), "denmark": ("danish",),
+            "finland": ("finnish",), "portugal": ("portuguese",), "austria": ("austrian",), "switzerland": ("swiss",), "greece": ("greek",),
+            "bulgaria": ("bulgarian",), "hungary": ("hungarian",), "czech": ("czech",), "croatia": ("croatian",), "serbia": ("serbian",),
+            "slovakia": ("slovak",), "slovenia": ("slovenian",), "ukraine": ("ukrainian",), "turkey": ("turkish",),
+            "lithuania": ("lithuanian",), "latvia": ("latvian",), "estonia": ("estonian",), "united states": ("american",),
+            "england": ("english",), "scotland": ("scottish",), "wales": ("welsh",), "europe": ("european",)}
+_DEMONYM_WORDS = frozenset(d for ds in DEMONYMS.values() for d in ds) - {"uk"}
+#: Every sovereign country (English short names) and the common short forms: a market a query may name, never a client's name.
+_COUNTRIES = """afghanistan|albania|algeria|andorra|angola|antigua and barbuda|argentina|armenia|australia|austria|azerbaijan|bahamas|bahrain|
+bangladesh|barbados|belarus|belgium|belize|benin|bhutan|bolivia|bosnia and herzegovina|bosnia|botswana|brazil|brunei|bulgaria|burkina faso|
+burundi|cabo verde|cape verde|cambodia|cameroon|canada|central african republic|chad|chile|china|colombia|comoros|congo|costa rica|croatia|
+cuba|cyprus|czechia|czech republic|czech|denmark|djibouti|dominica|dominican republic|ecuador|egypt|el salvador|equatorial guinea|eritrea|
+estonia|eswatini|swaziland|ethiopia|fiji|finland|france|gabon|gambia|georgia|germany|ghana|greece|grenada|guatemala|guinea|guinea-bissau|
+guyana|haiti|honduras|hungary|iceland|india|indonesia|iran|iraq|ireland|israel|italy|ivory coast|cote d'ivoire|jamaica|japan|jordan|
+kazakhstan|kenya|kiribati|kosovo|kuwait|kyrgyzstan|laos|latvia|lebanon|lesotho|liberia|libya|liechtenstein|lithuania|luxembourg|madagascar|
+malawi|malaysia|maldives|mali|malta|marshall islands|mauritania|mauritius|mexico|micronesia|moldova|monaco|mongolia|montenegro|morocco|
+mozambique|myanmar|burma|namibia|nauru|nepal|netherlands|holland|new zealand|nicaragua|niger|nigeria|north korea|north macedonia|macedonia|
+norway|oman|pakistan|palau|palestine|panama|papua new guinea|paraguay|peru|philippines|poland|portugal|qatar|romania|russia|rwanda|
+saint kitts and nevis|saint lucia|saint vincent and the grenadines|samoa|san marino|sao tome and principe|saudi arabia|senegal|serbia|
+seychelles|sierra leone|singapore|slovakia|slovenia|solomon islands|somalia|south africa|south korea|south sudan|spain|sri lanka|sudan|
+suriname|sweden|switzerland|syria|taiwan|tajikistan|tanzania|thailand|timor-leste|togo|tonga|trinidad and tobago|tunisia|turkey|turkiye|
+turkmenistan|tuvalu|uganda|ukraine|united arab emirates|uae|united kingdom|uk|united states|united states of america|usa|us|america|uruguay|
+uzbekistan|vanuatu|vatican city|venezuela|vietnam|yemen|zambia|zimbabwe|republic of ireland|northern ireland|england|scotland|wales|
+great britain|britain|british isles|hong kong|puerto rico|ireland and uk|uk and ireland""".replace("\n", "")
+#: Regions a market may be: continents, trading blocs, sub-regions and the agency regions (EMEA, APAC).
+_REGIONS = """europe|european union|eu|western europe|eastern europe|central europe|northern europe|southern europe|southeast europe|
+central and eastern europe|cee|dach|nordics|nordic countries|scandinavia|benelux|balkans|baltics|baltic states|iberia|latin america|latam|
+north america|south america|central america|caribbean|middle east|mena|gcc|emea|apac|asia|southeast asia|south asia|east asia|asia pacific|
+africa|sub-saharan africa|north africa|oceania|australasia|worldwide|global""".replace("\n", "")
+_PLACE_PHRASES = frozenset(" ".join(x.split()) for x in (_COUNTRIES + "|" + _REGIONS).split("|") if x.strip()) - {"worldwide", "global"}
+_PLACE_MAXWORDS = max(len(x.split()) for x in _PLACE_PHRASES)
+_PLACE_FILLER = frozenset({"the", "of", "and", "republic"})
+_MARKET_KEYS = ("market", "markets", "country", "countries", "geography", "region", "territory")
 #: Capitalised terms a query may keep although they are not common words: generic statistics and market words, never a brand.
 GENERIC_TERMS = frozenset("""uk eu us usa un oecd gdp cpi vat sme smes diy gen z nhs hse ons cso eurostat ngo ngos covid tv dooh ooh pos
 fmcg b2b b2c ai esg co2 kpi kpis""".split())
@@ -290,24 +323,24 @@ def _names(gist: dict, extra=(), brief_object: dict | None = None) -> list[str]:
     ('Pet Foods (Tabbel)'), in quotes, possessive ('Tabbel's'), in any case or with diacritics is split out on its own, and so is each
     of its words that is not a common word ('Lumen' of 'Lumen Water', never 'Water'). A word of the brief's market is never a name."""
     g = gist or {}
-    market = set(_fold(g.get("market") or "").split())
+    market = set(_fold(g.get("market") or "").split())   # and any country or region, at every split level (_is_place)
     raws = [g.get(k) for k in ("client", "brand", "brands", "product", "competitors")] + list(extra or ()) + brief_names(brief_object)
     out = []
     for raw in raws:
         for item in (raw if isinstance(raw, (list, tuple, set)) else [raw]):
-            for part in _SPLIT.split(str(item or "")):
+            for part in _SPLIT.split(_drop_split_places(str(item or ""))):
                 p = _depossess(" ".join(part.split()))
                 fp = _fold(p)
-                if len(p) < 2 or fp in _SKIP_GIST or fp in _CORP or fp.startswith(("not ", "no ", "none")):
+                if len(p) < 2 or fp in _SKIP_GIST or fp in _CORP or fp.startswith(("not ", "no ", "none")) or _is_place(p):
                     continue
                 out.append(p)
                 bare = re.sub(r"(?:[\s,.]+(?:" + "|".join(sorted(_CORP)) + r")\.?)+$", "", p, flags=re.I).strip()
-                if bare and bare != p and len(bare) >= 2:
+                if bare and bare != p and len(bare) >= 2 and not _is_place(bare):
                     out.append(bare)   # 'Pet Foods' of 'Pet Foods Ltd': the suffix is dropped as often as it is written
                 for w in re.split(r"[\s-]+", p):
                     w = _depossess(w)
                     fw = _fold(w)
-                    if len(w) >= 3 and fw not in _CORP and fw not in market and fw not in _common() and not fw.isdigit():
+                    if len(w) >= 3 and fw not in _CORP and fw not in market and not _is_place(w) and fw not in _common() and not fw.isdigit():
                         out.append(w)   # 'Lumen' of 'Lumen Water' on its own, never 'Water'
     seen, uniq = set(), []
     for n in sorted(out, key=len, reverse=True):
@@ -315,6 +348,70 @@ def _names(gist: dict, extra=(), brief_object: dict | None = None) -> list[str]:
             seen.add(_fold(n))
             uniq.append(n)
     return uniq
+
+
+def _place_spans(text: str, demonyms: bool = False) -> list[tuple[int, int, bool]]:
+    """Where ``text`` names a country or region: ``(start, end, is_phrase)`` spans on its NFC form, the longest phrase first at each
+    position ('Northern Ireland' before 'Ireland'). With ``demonyms``, 'Irish' counts too."""
+    f = _fold(unicodedata.normalize("NFC", str(text or "")))
+    toks = [(m.group(0), m.start(), m.end()) for m in re.finditer(r"[\w'-]+", f)]
+    out, i = [], 0
+    while i < len(toks):
+        for n in range(min(_PLACE_MAXWORDS, len(toks) - i), 0, -1):
+            ph = " ".join(t[0] for t in toks[i:i + n])
+            if ph in _PLACE_PHRASES or (demonyms and n == 1 and ph in _DEMONYM_WORDS):
+                out.append((toks[i][1], toks[i + n - 1][2], True))
+                i += n
+                break
+        else:
+            out.append((toks[i][1], toks[i][2], False))
+            i += 1
+    return out
+
+
+def _drop_split_places(text: str) -> str:
+    """``text`` with every country or region phrase that holds a separator ('Central and Eastern Europe', 'Bosnia and Herzegovina')
+    replaced by a comma, so the split never cuts it into a part that reads as a name ('Central')."""
+    t = unicodedata.normalize("NFC", str(text or ""))
+    for a, b, ok in reversed(_place_spans(t)):
+        if ok and _SPLIT.search(t[a:b]):
+            t = t[:a] + "," + t[b:]
+    return t
+
+
+def _is_place(text: str) -> bool:
+    """True when ``text`` is nothing but country or region names (and 'the', 'of', 'and', 'Republic'): 'Ireland', 'the UK', 'Republic of
+    Ireland', 'Central and Eastern Europe', 'Irish'. Such a part of a client field is the market, never a name."""
+    f = _fold(unicodedata.normalize("NFC", str(text or "")))
+    spans = _place_spans(text, demonyms=True)
+    if not any(sp[2] for sp in spans):
+        return False
+    return all(sp[2] or f[sp[0]:sp[1]] in _PLACE_FILLER for sp in spans)
+
+
+def _places_in(text: str) -> list[str]:
+    """The country and region phrases ``text`` names, in order, as written, no repeats."""
+    t = unicodedata.normalize("NFC", str(text or ""))
+    seen, out = set(), []
+    for a, b, ok in _place_spans(t):
+        ph = " ".join(t[a:b].split())
+        if ok and _fold(ph) not in seen:
+            seen.add(_fold(ph))
+            out.append(ph)
+    return out
+
+
+def resolve_market(market_text: str = "", brief_object: dict | None = None) -> str:
+    """The market a query may name: the countries and regions in the gist's market field (inside brackets or not; a category there, as
+    in 'Pet food (Romania)', is dropped); when it names none, the brief object's own market, country, geography or region fields. Several
+    places are joined with ', '; '' when nothing validates (the track then goes international, labelled)."""
+    places = _places_in(market_text)
+    if not places:
+        for v in _name_values(brief_object or {}, _MARKET_KEYS):
+            places = _places_in(_as_text(v))
+            if places:
+                break
+    return ", ".join(places[:4])
 
 
 def _name_re(name: str):
@@ -387,19 +484,16 @@ def sanitise_gist(gist: dict, names=(), brief_object: dict | None = None) -> dic
     nm = _names(gist or {}, names, brief_object)
     out = {}
     for k in ("market", "category", "audience", "problem", "objective"):
-        v = scrub(str((gist or {}).get(k) or ""), nm)
+        raw = resolve_market(str((gist or {}).get("market") or ""), brief_object) if k == "market" else str((gist or {}).get(k) or "")
+        v = scrub(raw, nm)
         out[k] = "" if v.lower() in _SKIP_GIST else v
     return out
 
 
-def market_of(gist: dict) -> str:
-    """The brief's market (a country or region) as one short phrase; '' when the brief gives none."""
-    m = str((gist or {}).get("market") or "").strip()
-    m = re.split(r"[;(,]|\s[-—–]\s|—|–", m)[0].strip(" .,")
-    if m.lower() in _SKIP_GIST or m.lower().startswith(("unspecified", "unknown", "not ")):
-        return ""
-    named = [w for w in m.split() if w[:1].isupper() and w.lower() not in _GENERIC_PLACE]
-    return m if named else ""   # 'Regional utility service area' names no place: the track then goes international, labelled
+def market_of(gist: dict, brief_object: dict | None = None) -> str:
+    """The brief's market as one short phrase made of countries and regions only: the gist's market field validated against the country
+    and region list (a category there is dropped), else the brief object's market or country fields; '' when none validates."""
+    return resolve_market(str((gist or {}).get("market") or ""), brief_object)
 
 
 def _topic(text: str, names=(), n: int = 8) -> str:
@@ -564,7 +658,7 @@ def gather_evidence(gist: dict, brief_object: dict | None = None, storyline: dic
     out. The deck reads the result with ``--evidence`` (engine/deck/pitch_ready.load_evidence)."""
     nm = _names(gist or {}, names, brief_object)
     sg = sanitise_gist(gist or {}, names, brief_object)
-    sg["market"] = market_of(sg)
+    sg["market"] = market_of(sg, brief_object)
     for k in ("category", "audience", "problem", "objective"):   # the allowlist guard: no proper noun the blocklist did not know
         sg[k] = proper_guard(sg.get(k) or "", sg["market"])
     claims = [{**c, "claim": proper_guard(c["claim"], sg["market"])} for c in deck_claims(brief_object, storyline, nm)]

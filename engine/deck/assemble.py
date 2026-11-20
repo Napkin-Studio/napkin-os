@@ -533,6 +533,25 @@ def _quarantine_brief(inp, quotes: list) -> list:
     return lifted
 
 
+#: How the gaps slide states a brief's contamination, plainly, before its question (round 4 blind judging: no deck said that one brief carried
+#: another client's objectives). Engine words; the topic is the issue's own closed-set topic.
+FOREIGN_LINE = "Part of the brief{about} appears to come from another brand's brief; we've set it aside."
+CONTRADICTION_LINE = "The brief contradicts itself{about}."
+
+
+def gap_line(i: dict) -> str:
+    """One gap as the slide says it: a foreign passage or a contradiction is stated plainly first (FOREIGN_LINE, CONTRADICTION_LINE), then
+    its question (or 'Please confirm.'); a missing basic is its question."""
+    q = str(i.get("question") or "").strip()
+    topic = str(i.get("topic") or "").strip().replace("_", " ")
+    known = bool(topic) and topic != "other"
+    if i.get("kind") == "foreign_content":
+        return f"{FOREIGN_LINE.format(about=f' (the {topic})' if known else '')} {q or 'Please confirm.'}"
+    if i.get("kind") == "contradiction":
+        return f"{CONTRADICTION_LINE.format(about=f' on the {topic}' if known else '')} {q or 'Please confirm which holds.'}"
+    return q
+
+
 def _brief_gaps_slide(gaps: list):
     """The presented 'What the brief doesn't tell us': the top spec.BRIEF_GAPS_MAX issues as questions for the client, in the order the
     detection ranks them (another brief's text first, then contradictions, then the missing basics). What each is and why it matters,
@@ -547,7 +566,7 @@ def _brief_gaps_slide(gaps: list):
                      + (" Kept out of the objectives (it reads as another brief's)." if i.get("kind") == "foreign_content" else ""))
     if len(gaps) > len(top):
         notes.append(f"{len(gaps) - len(top)} more in the appendix list ({spec.CLIENT_ASKS_TITLE}).")
-    sl = _slide("questions", spec.BRIEF_GAPS_TITLE, [{"kind": "bullets", "items": [{"text": i["question"].strip(), "basis": "meta"} for i in top]}],
+    sl = _slide("questions", spec.BRIEF_GAPS_TITLE, [{"kind": "bullets", "items": [{"text": gap_line(i), "basis": "meta"} for i in top]}],
                 status="from_source", notes="\n".join(notes))
     sl["section"] = "The brief"
     sl["role"] = "brief_gaps"

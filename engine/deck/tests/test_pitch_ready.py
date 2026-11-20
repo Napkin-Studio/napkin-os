@@ -183,6 +183,20 @@ def test_with_no_names_the_cover_is_the_campaign_and_an_agency_is_named(tmp_path
     assert PR.is_placeholder_name("Brief 3") and PR.is_placeholder_name("[Agency]") and not PR.is_placeholder_name("Lumen Water")
 
 
+def test_a_job_id_client_label_still_reads_as_a_pitch_cover(tmp_path, on):
+    inp = _inp(tmp_path, evidence=False)
+    d = _deck(inp, client="Brief 1", project="Brief 1")
+    PR.cover(d, _st(), "Brief 1", "Brief 1", "[Agency]")
+    cov = d["slides"][d["order"][0]]
+    assert cov["title"] == "The Tap Tells"   # the campaign is the title; the job label is never doubled into it
+    assert d["meta"]["cover_kicker"] == f"Brief 1 · {PR.month_year(d)}"   # and the client label still reads on the cover
+    d2 = _deck(inp, client="Project X", project="Project X Pitch")
+    PR.cover(d2, _st(), "Project X", "Project X Pitch", "Fieldhouse")
+    assert d2["slides"][d2["order"][0]]["title"] == "The Tap Tells" and d2["meta"]["cover_kicker"].startswith("Fieldhouse · Project X · ")
+    assert PR.is_job_label("Brief 1") and PR.is_job_label("Project X") and PR.is_job_label("Job 4512") and not PR.is_job_label("Project Tidewater")
+    assert PR.undouble("Brief 1: Brief 1") == "Brief 1" and PR.undouble("Brief 1 Pitch: Brief 1 pitch") == "Brief 1 Pitch"
+
+
 def test_the_draft_is_a_quiet_footer_tag_and_the_list_is_in_the_notes_and_appendix(tmp_path, on):
     inp = _inp(tmp_path, evidence=False)
     d = _deck(inp)
