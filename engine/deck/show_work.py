@@ -172,3 +172,36 @@ def findings(deck: dict, presented: list) -> list:
                 out.append(("work_in_first_ten", "error", None, f"the first ten presented slides hold {'the idea' if 'idea' in ten else 'no idea'} and "
                             f"{ten.count('execution')} execution(s); the agency order shows the idea and at least {want}"))
     return out
+
+
+#: An execution's copy past this many words keeps its opening lines and its sign-off on the slide; the lines between go to the notes, verbatim
+#: (the re-rendered decks: a 121-word question-and-answer notice ran off its slide).
+COPY_ON_SLIDE = 75
+
+
+def fit_copy(S: list) -> int:
+    """Long copy on an execution slide: the opening lines while they fit COPY_ON_SLIDE words, and the last line (the sign-off), stay on the
+    slide; the lines between move to the notes word for word ('The full copy continues'). Nothing is reworded. Returns how many slides moved
+    lines."""
+    n = 0
+    for x in S:
+        if x["type"] != "execution":
+            continue
+        for b in x.get("blocks") or []:
+            lines = [str(ln) for ln in b.get("lines") or []] if b.get("kind") == "copy" else []
+            if sum(len(ln.split()) for ln in lines) <= COPY_ON_SLIDE or len(lines) < 3:
+                continue
+            last, keep, used = lines[-1], [], len(lines[-1].split())
+            for ln in lines[:-1]:
+                if used + len(ln.split()) > COPY_ON_SLIDE and keep:
+                    break
+                keep.append(ln)
+                used += len(ln.split())
+            moved = lines[len(keep):-1]
+            if not moved:
+                continue
+            b["lines"] = keep + [last]
+            x["notes"] = "\n\n".join([t for t in [x.get("notes") or ""] if t.strip()] + ["The full copy continues (between the lines on the slide):\n" + "\n".join(moved)])
+            n += 1
+    return n
+

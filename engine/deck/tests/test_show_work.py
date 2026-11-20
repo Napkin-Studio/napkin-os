@@ -210,3 +210,15 @@ def test_the_red_team_never_reorders_the_agency_order(on):
     routes = next(x for x in pres if d["slides"][x]["type"] == "territory_choice")
     ok, why, *_ = assemble._rt_order(d, gaps, {"after": "R"}, {"R": routes})
     assert not ok and "agency order" in why and validate.presented(d) == pres
+
+
+def test_long_copy_keeps_its_opening_and_sign_off_and_the_rest_goes_to_the_notes():
+    lines = [f"Q: question {i} with several more words in it? A: an answer of some length here." for i in range(9)] + ["Who is paying? Your council."]
+    x = {"type": "execution", "title": "Local press", "notes": "", "blocks": [{"kind": "copy", "lines": list(lines)}]}
+    assert show_work.fit_copy([x]) == 1
+    on = x["blocks"][0]["lines"]
+    assert on[0] == lines[0] and on[-1] == lines[-1] and sum(len(ln.split()) for ln in on) <= show_work.COPY_ON_SLIDE
+    for ln in lines[len(on) - 1:-1]:
+        assert ln in x["notes"]   # moved word for word, nothing dropped
+    short = {"type": "execution", "title": "Radio", "notes": "", "blocks": [{"kind": "copy", "lines": ["One line.", "Two line.", "Three."]}]}
+    assert show_work.fit_copy([short]) == 0 and short["blocks"][0]["lines"] == ["One line.", "Two line.", "Three."]

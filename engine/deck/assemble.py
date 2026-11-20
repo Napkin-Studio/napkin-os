@@ -908,6 +908,9 @@ def _complete(S, reqs, R, inp, meta, fmt, fit, scoring=None, messages=None, terr
     if spec.SHOW_WORK and fmt == "pitch" and meta.get("kind", "agency") == "agency":   # show the work: which order the story took (validate reads it)
         from . import show_work   # noqa: PLC0415
         deck["meta"]["show_work"] = {"mode": show_work.present_mode(profile) if spine else "pitch"}
+        moved = show_work.fit_copy(S)   # long copy: the opening lines and the sign-off on the slide, the rest in the notes
+        if moved:
+            deck["meta"]["show_work"]["copy_to_notes"] = moved
     if spec.LOOK_V3:   # deck-look (fix 2): a sentence is said once on the presented slides
         _say_once(S)
     if fin is not None:   # finish fixes: no two presented slides in a row under one section band
