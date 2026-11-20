@@ -222,3 +222,20 @@ def test_long_copy_keeps_its_opening_and_sign_off_and_the_rest_goes_to_the_notes
         assert ln in x["notes"]   # moved word for word, nothing dropped
     short = {"type": "execution", "title": "Radio", "notes": "", "blocks": [{"kind": "copy", "lines": ["One line.", "Two line.", "Three."]}]}
     assert show_work.fit_copy([short]) == 0 and short["blocks"][0]["lines"] == ["One line.", "Two line.", "Three."]
+
+
+def test_a_persons_gate_2_edit_of_the_proposition_is_the_headline():
+    """The handoffs branch (PR #264) writes a person's Gate 2 edit to proposition.line; it is read defensively (not merged here yet)."""
+    b = {"proposition": {"line": "  Your tap,   your story  ", "edited_by": "human:planner"}}
+    assert show_work.proposition_title(b, "The brief's message") == ("Your tap, your story", "person")
+    assert show_work.proposition_title({"proposition": {"line": {"text": "Every drop counts here", "by": "human:x"}}}, "") == ("Every drop counts here", "person")
+    assert show_work.proposition_title({"proposition": {"line": "Model line"}}, "") == ("Model line", "stage_b")
+    for odd in ({"proposition": "just a string"}, {"proposition": {"line": ["a", "list"]}}, {"proposition": {"line": None}}, None, {"proposition": {"line": True}}):
+        title, src = show_work.proposition_title(odd, "The brief's message")
+        assert src == "missing" and title == "The brief's message"
+
+
+def test_an_edited_line_reaches_the_slide(on):
+    d, _ = _brief_deck(line="A person's sharper thought")
+    ps = next(d["slides"][x] for x in d["order"] if d["slides"][x]["type"] == "proposition")
+    assert ps["title"] == "A person's sharper thought"

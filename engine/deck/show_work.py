@@ -136,12 +136,19 @@ def _norm(s: str) -> str:
 
 
 def proposition_title(b: dict, brief_smp: str) -> tuple:
-    """The proposition slide's title and where it came from: ``(title, source)``. Stage b's own single-minded proposition
-    (``proposition.line``) when it wrote one (``source`` 'stage_b'); otherwise the brief's key message or stage b's 'to' line, verbatim,
+    """The proposition slide's title and where it came from: ``(title, source)``. ``proposition.line`` when it holds one: a person's edit at
+    Gate 2 (written there by the handoffs branch; ``source`` 'person' when the edit names a human:<id>) or stage b's own (``source``
+    'stage_b'); otherwise the brief's key message or stage b's 'to' line, verbatim,
     with ``source`` 'missing' (validate's proposition_line then fails the deck). Never a fallback label."""
-    line = str(((b or {}).get("proposition") or {}).get("line") or "").strip()
+    pr = (b or {}).get("proposition") if isinstance(b, dict) else None
+    pr = pr if isinstance(pr, dict) else {}
+    raw = pr.get("line")   # read defensively: a person's Gate 2 edit (the handoffs branch) writes here too, maybe as {text, by}
+    if isinstance(raw, dict):
+        raw = raw.get("text") or raw.get("line")
+    line = " ".join(str(raw).split()) if isinstance(raw, (str, int, float)) and not isinstance(raw, bool) else ""
     if line:
-        return line, "stage_b"
+        by = pr.get("edited_by") or pr.get("line_by") or ((pr.get("line") or {}).get("by") if isinstance(pr.get("line"), dict) else None)
+        return line, ("person" if str(by or "").startswith("human:") else "stage_b")
     for alt in (brief_smp, ((b or {}).get("from_to") or {}).get("to")):
         if str(alt or "").strip() and str(alt).strip() != "To agree.":
             return str(alt).strip(), "missing"
