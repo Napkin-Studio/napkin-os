@@ -78,6 +78,40 @@ def dev_question(op: str) -> dict:
 VIEW_ANGLES = {"front": 0.0, "three-quarter": 45.0, "side": 90.0, "back": 180.0}
 
 
+def _units(text: str) -> int:
+    return len(text.encode("utf-16-le")) // 2  # as providers.types.utf16_units: Runway's promptMax unit
+
+
+def cut_units(text: str, limit: int) -> str:
+    """`text` cut to at most `limit` UTF-16 units, at a word where one is near the end."""
+    if _units(text) <= limit:
+        return text
+    out, used = [], 0
+    for ch in text:
+        n = 2 if ord(ch) > 0xFFFF else 1
+        if used + n > limit:
+            break
+        out.append(ch)
+        used += n
+    cut = "".join(out)
+    space = cut.rfind(" ")
+    return (cut[:space] if space > limit // 2 else cut).rstrip()
+
+
+def fit_words(action: str, text: str, limit: int | None) -> str:
+    """The passthrough's words, `action` then the person's `text`, within `limit` UTF-16 units (the model's
+    promptMax): the person's words are kept first, the shot's action is cut, or left out, to make room
+    (features/pt-relay-trace.clan: Veo takes 1000, and a 600-unit action and 1000-unit text failed the job)."""
+    action, text = (action or "").strip(), (text or "").strip()
+    whole = f"{action} {text}".strip()
+    if limit is None or _units(whole) <= limit:
+        return whole
+    if not action or _units(text) + 1 >= limit:
+        return cut_units(text, limit)
+    action = cut_units(action, limit - _units(text) - 1)
+    return f"{action} {text}".strip()
+
+
 def fit_duration(seconds: float, spec: dict) -> float:
     """The clip length the op's model can make for a shot of `seconds` (capabilities ops[op]):
     the next longer allowed value (4/6/8 s models), else the nearest whole second within
@@ -161,12 +195,17 @@ class PassthroughDirector:
                 add(inp.get("anchorFrame"), "anchor", "object")
         if op == "clip_edit":
             add(inp.get("video"), "current", "current")  # the clip being changed
-        prompt = inp.get("text") or ""
         shot = inp.get("shot")
-        if shot:
-            prompt = f"{shot.get('action', '')} {prompt}".strip()
-        if inp.get("view"):
-            prompt = f"{inp['view'].replace('-', ' ')} view of @current. {prompt}".strip()
+        # Within the model's promptMax, less what is said around the words (a view's lead, a landing's line).
+        from providers.types import prompt_max
+        limit = prompt_max(sheet, model) if sheet else None
+        lead = f"{inp['view'].replace('-', ' ')} view of @current. " if inp.get("view") else ""
+        if limit is not None:
+            import connected
+            landing = op == "clip" and inp.get("lastFrame") and connected.mode_of(inp) in ("frames", "redo_window")
+            limit = max(limit - _units(lead) - (_units(connected.LANDING) + 1 if landing else 0), 1)
+        prompt = fit_words((shot or {}).get("action", ""), inp.get("text") or "", limit)
+        prompt = f"{lead}{prompt}".strip()
         job = {"provider": provider, "model": model, "prompt": prompt or "the character", "refs": refs}
         angle = view_angle(op, inp, sheet)
         if angle:

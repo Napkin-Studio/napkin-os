@@ -208,3 +208,31 @@ def test_a_rejected_answer_is_logged_whole_up_to_8_kb(caplog):
     assert json.loads(rec["answer"])["rationale"] == "r" * 300
     assert len(jobtrace.clip("y" * 20000)) < 8300
 
+
+# The passthrough's words fit the model's promptMax (Veo: 1000)
+
+def test_the_passthrough_clip_prompt_fits_veo_keeping_the_persons_words_first():
+    from director.base import PassthroughDirector, _units
+    from providers.types import prompt_max
+    sheet = effective_sheet(load_sheet("runway"), "clip", None)
+    model = sheet["ops"]["clip"]["model"]
+    assert prompt_max(sheet, model) == 1000
+    text = "She turns to the window and smiles. " * 27  # ~970 units, under the schema's 1000
+    action = "Wide shot, slow push in across the market at dusk. " * 11  # ~560 units
+    inp = {"image": {"sha256": SHA, "url": "https://cdn.test/a.png", "mime": "image/png"}, "text": text.strip(),
+           "shot": {"action": action.strip(), "duration_s": 6}, "ratio": "16:9"}
+    out = PassthroughDirector().direct({"op": "clip", "input": inp}, sheet)
+    prompt = out["providerJob"]["prompt"]
+    assert _units(prompt) <= 1000 and prompt.endswith(text.strip())
+    # short words are left as they were: the action, then the words
+    inp = {**inp, "text": "She smiles.", "shot": {"action": "Wide shot.", "duration_s": 6}}
+    assert PassthroughDirector().direct({"op": "clip", "input": inp}, sheet)["providerJob"]["prompt"] == "Wide shot. She smiles."
+
+
+def test_fit_words_cuts_the_persons_words_only_when_they_alone_are_over():
+    from director.base import _units, fit_words
+    assert fit_words("action", "x" * 1200, 1000) == "x" * 1000
+    out = fit_words("one two three four five six", "y" * 990, 1000)
+    assert _units(out) <= 1000 and out.endswith("y" * 990) and out.startswith("one")
+    assert fit_words("a", "b", None) == "a b"
+    assert _units(fit_words("", "😀" * 600, 1000)) <= 1000  # an emoji is two units
