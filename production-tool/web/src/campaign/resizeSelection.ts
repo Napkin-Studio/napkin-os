@@ -5,7 +5,8 @@
 // labelled with its shape. All placements are one undo step; each job reserves, spends and fails alone.
 // The Campaign board (Make all sizes) stays the route for a full campaign.
 
-import type { AssetRef, DeliveryPx, JobInput, JobInputRef, NamedRef, ProductionDocument, SizeMethod } from '../contracts/types'
+import type { AssetRef, DeliveryPx, JobInput, JobInputRef, NamedRef, ProductionDocument, ProtectBox, PxBox, SizeMethod } from '../contracts/types'
+import { cropBox } from './crop'
 import type { CanvasAdapter, CanvasElement } from '../canvas/core/canvasAdapter'
 import { boardFrame, fitInto, withFields } from '../canvas/boards/fitting'
 import { alive, bounds, cd, isUserDrawing, makeArrow, makeGenPlaceholder } from '../canvas/scene'
@@ -121,6 +122,9 @@ export interface Source {
   named?: NamedRef
   /** Loose pen strokes, not yet a Drawing: wrapped as one when the results are sent (`elId` is the first). */
   strokes?: string[]
+  /** What must stay in every shape (Make all sizes' subject and product boxes), in its pixels: a crop keeps them
+   *  in, an extend centres on them, a redraw is told them (UAT round 1 IMG-4). */
+  protect?: ProtectBox[]
 }
 
 // ── how ──
@@ -132,7 +136,7 @@ export const HOW_WORD: Record<How, string> = { regenerate: 'Redraw', extend: 'Ex
 export const HOW_LINE: Record<How, string> = {
   regenerate: 'Draws each picture again at the new shape: the same people, things and light, recomposed to fit.',
   extend: 'Keeps the picture exactly and paints what is missing round its edges.',
-  crop: 'Cuts the middle of each picture to the shape. Free, and in seconds.',
+  crop: 'Cuts each picture to the shape round what must stay (else the middle); drag a frame to move it. Free, and in seconds.',
   auto: 'Crops when little is lost, extends when the shape is close, redraws when the picture would sit small.',
 }
 /** Said when a scamp is in the selection and the method draws (owner 2026-10-16). */
@@ -151,7 +155,8 @@ export function howOff(how: How, models: Models): string | undefined {
   return undefined
 }
 
-export interface Planned { source: Source; shape: Shape; method: SizeMethod }
+/** One picture at one shape. `crop`: where the person moved a crop's frame to, in the picture's pixels. */
+export interface Planned { source: Source; shape: Shape; method: SizeMethod; crop?: PxBox }
 
 /** Every picture × shape, in order: picture by picture, shape by shape. */
 export function planResize(sources: readonly Source[], shapes: readonly Shape[], how: How, models: Models): Planned[] {
@@ -192,12 +197,11 @@ export interface Box { x: number; y: number; w: number; h: number }
  * Where a shape sits over a picture of w × h, in its pixels: a crop inside it (the middle), an extend or
  * a redraw round it (the picture in the middle of the bigger shape).
  */
-export function frameOver(src: { w: number; h: number }, shape: Shape, method: SizeMethod): Box {
+export function frameOver(src: { w: number; h: number; protect?: readonly ProtectBox[] }, shape: Shape, method: SizeMethod, moved?: PxBox): Box {
   const r = shape.w / shape.h
   if (method === 'crop') {
-    const w = Math.min(src.w, src.h * r)
-    const h = w / r
-    return { x: (src.w - w) / 2, y: (src.h - h) / 2, w, h }
+    // The crop the relay makes (formats.crop_box: one case table with campaign/crop.ts): round what must stay.
+    return moved ?? cropBox({ w: src.w, h: src.h }, { w: shape.w, h: shape.h }, src.protect).crop
   }
   const w = Math.max(src.w, src.h * r)
   const h = w / r
@@ -218,18 +222,18 @@ export function previewLayout(src: { w: number; h: number }, frames: readonly { 
 
 // ── the last pick, in this browser ──
 
+// How only: the shapes start unpicked each time (UAT round 1 IMG-17: the 9:16 of the last run came back ticked, and was
+// made twice).
 const MEMORY = 'napkin.resize.last'
-export interface ResizePick { shapes: Shape[]; how: How }
-export const DEFAULT_PICK: ResizePick = { shapes: [], how: 'regenerate' }
+export interface ResizePick { how: How }
+export const DEFAULT_PICK: ResizePick = { how: 'regenerate' }
 
 export function loadPick(store: Pick<Storage, 'getItem'> | undefined = safeStorage()): ResizePick {
   try {
     const raw = store?.getItem(MEMORY)
     if (!raw) return DEFAULT_PICK
     const p = JSON.parse(raw) as Partial<ResizePick>
-    const shapes = (Array.isArray(p.shapes) ? p.shapes : []).filter((s): s is Shape => !!s && typeof s.id === 'string' && s.w > 0 && s.h > 0).slice(0, 12)
-    const how = HOWS.includes(p.how as How) ? (p.how as How) : DEFAULT_PICK.how
-    return { shapes, how }
+    return { how: HOWS.includes(p.how as How) ? (p.how as How) : DEFAULT_PICK.how }
   } catch {
     return DEFAULT_PICK
   }
@@ -237,7 +241,7 @@ export function loadPick(store: Pick<Storage, 'getItem'> | undefined = safeStora
 
 export function savePick(p: ResizePick, store: Pick<Storage, 'setItem'> | undefined = safeStorage()) {
   try {
-    store?.setItem(MEMORY, JSON.stringify({ shapes: p.shapes, how: p.how }))
+    store?.setItem(MEMORY, JSON.stringify({ how: p.how }))
   } catch {
     // Private windows and blocked storage: the panel simply starts empty next time.
   }
@@ -385,9 +389,25 @@ export function resizeInput(p: Planned, image: AssetRef, refs: readonly JobInput
       masterSize: { w: p.source.w, h: p.source.h },
       previewMaxPx: LONG_SIDE,
       ...(p.method === 'regenerate' && p.source.kind !== 'picture' ? { source: 'sketch' as const } : {}),
+      // What must stay, and a crop the person moved (relay-api resize.protect, resize.crop; both in masterSize pixels).
+      ...(p.source.protect?.length ? { protect: p.source.protect.slice(0, 8) } : {}),
+      ...(p.method === 'crop' && p.crop ? { crop: roundBox(p.crop) } : {}),
     },
     ...(p.method === 'regenerate' && refs.length ? { refs: [...refs] } : {}),
   }
+}
+
+const roundBox = (b: PxBox): PxBox => ({ x: Math.round(b.x), y: Math.round(b.y), w: Math.max(1, Math.round(b.w)), h: Math.max(1, Math.round(b.h)) })
+
+/** The boxes of what must stay for a picture, from a Make all sizes set made from it (the latest), scaled to its
+ *  pixels: the person marked them once, and Resize uses them again. */
+export function knownProtect(doc: Pick<ProductionDocument, 'format_sets'>, src: Pick<Source, 'nodeId' | 'asset' | 'w' | 'h'>): ProtectBox[] | undefined {
+  const sets = Object.values(doc.format_sets ?? {}).filter((f) => (f.master.id === src.nodeId || f.master.asset === src.asset) && f.protect?.boxes?.length)
+  const set = sets.at(-1)
+  if (!set?.protect?.boxes) return undefined
+  const kx = set.master.w ? src.w / set.master.w : 1
+  const ky = set.master.h ? src.h / set.master.h : 1
+  return set.protect.boxes.map((b) => ({ ...b, x: b.x * kx, y: b.y * ky, w: b.w * kx, h: b.h * ky }))
 }
 
 /** The key's other views of a named picture (at most 4, the relay's REGENERATE_REFS_MAX), for a Redraw. */

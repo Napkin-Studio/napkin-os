@@ -159,6 +159,13 @@
 .rs-prev img, .rs-ph { position: absolute; display: block; object-fit: fill; border-radius: 2px; background: var(--soft); }
 .rs-frame { position: absolute; border: 1.5px dashed var(--tool); border-radius: 2px; box-sizing: border-box; pointer-events: none; }
 .rs-tag { position: absolute; left: 2px; top: 2px; font-size: 10px; line-height: 1; padding: 2px 4px; border-radius: 3px; background: var(--card); color: var(--ink); font-family: var(--f-mono); opacity: 0.92; }
+/* A crop's frame moves with a drag; what must stay shows under the frames (UAT round 1 IMG-4). */
+.rs-frame.move { pointer-events: auto; cursor: grab; touch-action: none; background: rgba(255, 255, 255, 0.04); }
+.rs-frame.move:active { cursor: grabbing; }
+.rs-keepbox { position: absolute; border: 1.5px solid var(--warn, #c98a1b); border-radius: 2px; box-sizing: border-box; pointer-events: none; }
+.rs-keepbox.product { border-color: var(--create, #3f8f5b); }
+.rs-prevcol { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.rs-keep { align-self: flex-start; }
 .rs-trayrows { max-height: 220px; border: 1px solid var(--line-soft); border-radius: 10px; padding: 8px 10px; font-size: 12.5px; }
 
 /* Folded lanes on the board: a clickable lane title with a chevron, a stack in place of the tiles

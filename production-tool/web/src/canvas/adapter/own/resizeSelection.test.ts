@@ -15,7 +15,7 @@ import { choicesFor, FILMS_FROM_VIDEO, rowsFor } from '../../../campaign/formats
 import { autoMethod, methodModels } from '../../../campaign/rules'
 import {
   deliveryOf, frameOver, loadPick, makeWords, methodOf, mixedLine, otherViews, parseCustom, placeResults, planResize, planSlots,
-  resizableIn, resizeInput, resizePictures, savePick, SHAPES, trayRows, type Source,
+  resizableIn, resizeInput, resizePictures, savePick, SHAPES, trayRows, knownProtect, type Source,
 } from '../../../campaign/resizeSelection'
 
 const models = methodModels()
@@ -119,16 +119,50 @@ describe('how, and the count', () => {
   })
 })
 
-describe('the last pick, in this browser', () => {
-  it('is kept and read back; broken or missing storage starts afresh', () => {
+describe('the last How, in this browser (never the shapes: UAT round 1 IMG-17)', () => {
+  it('is kept and read back; old saved shapes are ignored; broken or missing storage starts afresh', () => {
     const mem = new Map<string, string>()
     const store = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v) }
-    savePick({ shapes: [shape('9:16'), parseCustom('1200x628')!], how: 'extend' }, store)
-    expect(loadPick(store)).toEqual({ shapes: [shape('9:16'), parseCustom('1200x628')!], how: 'extend' })
+    savePick({ how: 'extend' }, store)
+    expect(loadPick(store)).toEqual({ how: 'extend' })
+    expect(mem.get('napkin.resize.last')).toBe('{"how":"extend"}')
+    mem.set('napkin.resize.last', JSON.stringify({ shapes: [shape('9:16')], how: 'crop' }))
+    expect(loadPick(store)).toEqual({ how: 'crop' })
     mem.set('napkin.resize.last', '{nope')
-    expect(loadPick(store)).toEqual({ shapes: [], how: 'regenerate' })
-    expect(loadPick({ getItem: () => { throw new Error('blocked') } })).toEqual({ shapes: [], how: 'regenerate' })
-    expect(() => savePick({ shapes: [], how: 'crop' }, { setItem: () => { throw new Error('full') } })).not.toThrow()
+    expect(loadPick(store)).toEqual({ how: 'regenerate' })
+    expect(loadPick({ getItem: () => { throw new Error('blocked') } })).toEqual({ how: 'regenerate' })
+    expect(() => savePick({ how: 'crop' }, { setItem: () => { throw new Error('full') } })).not.toThrow()
+  })
+})
+
+describe('a crop keeps what must stay, and can be moved (UAT round 1 IMG-4)', () => {
+  const wide = { elId: 'p', nodeId: 'n', asset: SHA('w'), w: 1600, h: 900, kind: 'picture' as const }
+  const person = { role: 'subject' as const, x: 120, y: 200, w: 200, h: 600 }
+  const ref = (sha: string): AssetRef => ({ sha256: sha, url: `https://cdn.test/${sha.slice(7, 12)}`, mime: 'image/png' })
+
+  it('the preview frame is the relay\'s crop: round the subject when one is marked, the middle otherwise', () => {
+    const middle = frameOver(wide, shape('4:5'), 'crop')
+    expect(middle.x).toBe((1600 - middle.w) / 2)
+    const kept = frameOver({ ...wide, protect: [person] }, shape('4:5'), 'crop')
+    expect(kept.x).toBeLessThanOrEqual(person.x)
+    expect(kept.x + kept.w).toBeGreaterThanOrEqual(person.x + person.w)
+    expect(frameOver(wide, shape('4:5'), 'crop', { x: 10, y: 0, w: 720, h: 900 })).toEqual({ x: 10, y: 0, w: 720, h: 900 })
+  })
+
+  it('the job carries what must stay, and a moved crop on a crop only', () => {
+    const src = { ...wide, protect: [person] }
+    const crop = resizeInput({ source: src, shape: shape('4:5'), method: 'crop', crop: { x: 10.4, y: 0, w: 720, h: 900 } }, ref(SHA('w')))
+    expect(crop.resize).toMatchObject({ method: 'crop', protect: [person], crop: { x: 10, y: 0, w: 720, h: 900 }, masterSize: { w: 1600, h: 900 } })
+    const redraw = resizeInput({ source: src, shape: shape('4:5'), method: 'regenerate', crop: { x: 10, y: 0, w: 720, h: 900 } }, ref(SHA('w')))
+    expect(redraw.resize).toMatchObject({ protect: [person] })
+    expect(redraw.resize?.crop).toBeUndefined()
+    expect(resizeInput({ source: wide, shape: shape('4:5'), method: 'crop' }, ref(SHA('w'))).resize?.protect).toBeUndefined()
+  })
+
+  it('uses a Make all sizes set\'s boxes for the same picture, scaled to its pixels', () => {
+    const doc = { format_sets: { fs1: { master: { kind: 'picture', id: 'n', w: 3200, h: 1800 }, protect: { boxes: [{ ...person, x: 240, y: 400, w: 400, h: 1200 }] } } } } as never
+    expect(knownProtect(doc, wide)).toEqual([person])
+    expect(knownProtect({ format_sets: {} } as never, wide)).toBeUndefined()
   })
 })
 

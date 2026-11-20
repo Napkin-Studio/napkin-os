@@ -1,19 +1,25 @@
-// Resize… (features/resize-selection.clan): the panel over the picture bar. Shapes as chips (the last
-// pick remembered in this browser), How (Redraw by default, Extend, Crop, Auto) with one plain line, a
-// preview of every selected picture with the shapes over it as dashed frames, and a footer that says
-// exactly how many pictures it makes. Its button opens the send tray (each picture × shape with its
-// method and model, never a price); Send places every result and starts one job each.
+// Resize… (features/resize-selection.clan): the panel over the picture bar. Shapes as chips (none ticked when it
+// opens: UAT round 1 IMG-17), How (Redraw by default, Extend, Crop, Auto; the last How remembered in this browser)
+// with one plain line, a preview of every selected picture with the shapes over it as dashed frames, and a footer
+// that says exactly how many pictures it makes. A crop keeps what must stay (Make all sizes' subject and product
+// boxes, marked here with the same editor) and its frame can be dragged to move it (IMG-4). Its button opens the
+// send tray (each picture × shape with its method and model, never a price); Send places every result and starts
+// one job each.
 
-import { useEffect, useMemo, useState } from 'react'
-import { useConfig } from '../app/context'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { useConfig, useDoc } from '../app/context'
+import type { ProtectBox, PxBox } from '../contracts/types'
 import { useBlobUrl, useFloating } from '../ui/hooks'
 import type { Anchor } from '../lib/place'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { methodModels } from './rules'
 import {
-  frameOver, HOW_LINE, HOW_WORD, howOff, HOWS, loadPick, makeWords, methodLine, methodOf, mixedLine, parseCustom, planResize,
+  frameOver, HOW_LINE, HOW_WORD, howOff, HOWS, knownProtect, loadPick, makeWords, methodLine, methodOf, mixedLine, parseCustom, planResize,
   previewLayout, savePick, SHAPES, SKETCH_LINE, trayRows, type How, type Shape, type Source,
 } from './resizeSelection'
+import { panCrop } from './crop'
+import { ProtectEditor } from './ProtectEditor'
 import './campaign.css'
 
 const KIND_WORD = { picture: 'Picture', drawing: 'Drawing', sketch: 'Sketch' } as const
@@ -30,12 +36,19 @@ export function ResizePanel({ anchor, total, load, send, onClose }: {
 }) {
   const { ref, style } = useFloating<HTMLDivElement>(anchor)
   const { config } = useConfig()
+  const doc = useDoc()
   const models = useMemo(() => methodModels(config), [config])
   const first = useMemo(() => loadPick(), [])
-  const [shapes, setShapes] = useState<Shape[]>(first.shapes)
+  const [shapes, setShapes] = useState<Shape[]>([])
   const [how, setHow] = useState<How>(howOff(first.how, models) ? 'auto' : first.how)
   const [custom, setCustom] = useState<string | null>(null)
-  const [sources, setSources] = useState<Source[] | null>(null)
+  const [loaded, setLoaded] = useState<Source[] | null>(null)
+  /** What must stay, per picture (its elId), in its pixels: marked here, else from a Make all sizes set of it. */
+  const [kept, setKept] = useState<Record<string, ProtectBox[]>>({})
+  /** Crops the person moved, per picture and shape (`elId:shapeId`), in the picture's pixels. */
+  const [moved, setMoved] = useState<Record<string, PxBox>>({})
+  /** The picture whose "What must stay" is open. */
+  const [marking, setMarking] = useState<string | null>(null)
   const [step, setStep] = useState<'pick' | 'tray'>('pick')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -44,7 +57,7 @@ export function ResizePanel({ anchor, total, load, send, onClose }: {
   const [loading] = useState(() => load())
   useEffect(() => {
     let alive = true
-    loading.then((s) => { if (alive) setSources(s) }).catch((e) => { if (alive) setError(e instanceof Error ? e.message : 'Those pictures could not be read.') })
+    loading.then((s) => { if (alive) setLoaded(s) }).catch((e) => { if (alive) setError(e instanceof Error ? e.message : 'Those pictures could not be read.') })
     return () => { alive = false }
   }, [loading])
   useEffect(() => {
@@ -53,16 +66,16 @@ export function ResizePanel({ anchor, total, load, send, onClose }: {
     return () => window.removeEventListener('keydown', esc)
   }, [onClose])
 
-  const remember = (next: { shapes?: Shape[]; how?: How }) => savePick({ shapes: next.shapes ?? shapes, how: next.how ?? how })
-  const toggle = (s: Shape) => {
-    const next = shapes.some((x) => x.id === s.id) ? shapes.filter((x) => x.id !== s.id) : [...shapes, s]
-    setShapes(next)
-    remember({ shapes: next })
-  }
+  const toggle = (s: Shape) => setShapes(shapes.some((x) => x.id === s.id) ? shapes.filter((x) => x.id !== s.id) : [...shapes, s])
   const pickHow = (h: How) => {
     setHow(h)
-    remember({ how: h })
+    savePick({ how: h })
   }
+  // Each picture with what must stay: marked here, else a Make all sizes set's boxes for it.
+  const sources = useMemo(() => loaded?.map((src) => {
+    const protect = kept[src.elId] ?? knownProtect(doc, src)
+    return protect?.length ? { ...src, protect } : src
+  }) ?? null, [loaded, kept, doc])
   const customs = shapes.filter((s) => !SHAPES.some((x) => x.id === s.id))
   const parsed = custom !== null ? parseCustom(custom) : null
   const addCustom = () => {
@@ -71,7 +84,12 @@ export function ResizePanel({ anchor, total, load, send, onClose }: {
     setCustom(null)
   }
 
-  const planned = sources ? planResize(sources, shapes, how, models) : []
+  const planned = sources ? planResize(sources, shapes, how, models).map((p) => {
+    const m = moved[`${p.source.elId}:${p.shape.id}`]
+    return p.method === 'crop' && m ? { ...p, crop: m } : p
+  }) : []
+  const crops = planned.some((p) => p.method === 'crop')
+  const markingSrc = marking ? sources?.find((x) => x.elId === marking) : undefined
   const n = planned.length
   const scamp = !!sources?.some((s) => s.kind !== 'picture')
   const mixed = sources ? mixedLine(sources.length, total) : undefined
@@ -137,8 +155,41 @@ export function ResizePanel({ anchor, total, load, send, onClose }: {
 
           <div className="rs-previews" aria-label="Preview">
             {!sources && !error && <span className="rs-line faint">Getting the pictures ready…</span>}
-            {sources?.map((s) => <Preview key={s.elId} s={s} shapes={shapes} how={how} models={models} />)}
+            {sources?.map((s) => (
+              <div key={s.elId} className="rs-prevcol">
+                <Preview s={s} shapes={shapes} how={how} models={models} moved={moved}
+                  onMove={(shapeId, box) => setMoved((m) => ({ ...m, [`${s.elId}:${shapeId}`]: box }))} />
+                {crops && s.kind === 'picture' && (
+                  <button type="button" className="btn xs ghost rs-keep" aria-pressed={marking === s.elId} onClick={() => setMarking(marking === s.elId ? null : s.elId)}>
+                    {s.protect?.length ? `What must stay · ${s.protect.length}` : 'What must stay…'}
+                  </button>
+                )}
+              </div>
+            ))}
           </div>
+          {crops && sources && !sources.some((s) => s.protect?.length) && <p className="rs-line faint">Mark what must stay and every crop keeps it in; else the crop keeps the middle.</p>}
+          {markingSrc && createPortal(
+            // On the page, not over the canvas (as the Campaign board's ProtectSheet): the canvas never sees its drags.
+            <div className="cf-scrim" role="presentation" onPointerDown={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) setMarking(null) }}>
+              <section className="cf-sheet pt-panel" role="dialog" aria-modal="true" aria-label="What must stay">
+                <header className="cf-sheethead">
+                  <h2>What must stay in every shape</h2>
+                  <button type="button" className="btn xs ghost" onClick={() => setMarking(null)}>Close</button>
+                </header>
+                <div className="cf-body">
+                  <div className="faint cf-note">Every crop keeps these in; an extend centres on them and a redraw is told them. Make all sizes uses the same boxes.</div>
+                  <ProtectEditor master={{ asset: markingSrc.asset, w: markingSrc.w, h: markingSrc.h }} boxes={markingSrc.protect ?? []}
+                    setBoxes={(b) => {
+                      setKept((k) => ({ ...k, [markingSrc.elId]: b }))
+                      // Its crops follow the new boxes again.
+                      setMoved((m) => Object.fromEntries(Object.entries(m).filter(([key]) => !key.startsWith(`${markingSrc.elId}:`))))
+                    }} />
+                  <footer className="cf-foot"><span className="pt-grow" /><button type="button" className="btn primary" onClick={() => setMarking(null)}>Done</button></footer>
+                </div>
+              </section>
+            </div>,
+            document.body,
+          )}
 
           {error && <p className="cf-error" role="alert">{error}</p>}
           <footer className="cf-foot">
@@ -178,23 +229,50 @@ function ShapeIcon({ s }: { s: Shape }) {
   return <span aria-hidden="true" className="rs-icon" style={{ width: Math.max(3, s.w * k), height: Math.max(3, s.h * k) }} />
 }
 
-/** One picture with each chosen shape over it as a dashed frame: inside it for a crop, round it otherwise. */
-function Preview({ s, shapes, how, models }: { s: Source; shapes: Shape[]; how: How; models: ReturnType<typeof methodModels> }) {
+/** One picture with each chosen shape over it as a dashed frame: inside it for a crop (round what must stay, and
+ *  dragged to move it), round it otherwise. Each frame's tag sits on a line of its own, so two never overlap (IMG-17). */
+function Preview({ s, shapes, how, models, moved, onMove }: {
+  s: Source; shapes: Shape[]; how: How; models: ReturnType<typeof methodModels>
+  moved: Record<string, PxBox>
+  onMove(shapeId: string, box: PxBox): void
+}) {
   const url = useBlobUrl(s.asset)
+  const drag = useRef<{ id: string; x: number; y: number; from: PxBox; k: number } | null>(null)
   const frames = shapes.map((sh) => {
     const m = methodOf(how, s, sh, models)
-    return { id: sh.id, box: frameOver(s, sh, m ?? 'crop'), method: m }
+    return { id: sh.id, box: frameOver(s, sh, m ?? 'crop', moved[`${s.elId}:${sh.id}`]), method: m }
   })
-  const lay = previewLayout(s, frames)
+  const lay = previewLayout(s, frames, { w: 180, h: 132 })
+  const k = lay.picture.w / s.w
   return (
     <figure className="rs-prev" style={{ width: lay.w, height: lay.h }} title={frames.map((f) => `${f.id}: ${f.method ? methodLine(f.method, models) : 'off'}`).join('\n')}>
       {url ? <img src={url} alt="" style={{ left: lay.picture.x, top: lay.picture.y, width: lay.picture.w, height: lay.picture.h }} />
         : <span className="rs-ph" style={{ left: lay.picture.x, top: lay.picture.y, width: lay.picture.w, height: lay.picture.h }} />}
-      {lay.frames.map((f) => (
-        <span key={f.id} className="rs-frame" data-shape={f.id} style={{ left: f.box.x, top: f.box.y, width: f.box.w, height: f.box.h }}>
-          <span className="rs-tag">{f.id}</span>
-        </span>
+      {(s.protect ?? []).map((b, i) => (
+        <span key={`keep${i}`} className={`rs-keepbox ${b.role}`} aria-hidden="true"
+          style={{ left: lay.picture.x + b.x * k, top: lay.picture.y + b.y * k, width: b.w * k, height: b.h * k }} />
       ))}
+      {lay.frames.map((f, i) => {
+        const own = frames[i]
+        const movable = own.method === 'crop'
+        return (
+          <span key={f.id} className={`rs-frame${movable ? ' move' : ''}`} data-shape={f.id} style={{ left: f.box.x, top: f.box.y, width: f.box.w, height: f.box.h }}
+            title={movable ? `${f.id}: drag to move the crop` : undefined}
+            onPointerDown={movable ? (e) => {
+              e.preventDefault()
+              ;(e.currentTarget as Element).setPointerCapture?.(e.pointerId)
+              drag.current = { id: f.id, x: e.clientX, y: e.clientY, from: own.box, k }
+            } : undefined}
+            onPointerMove={movable ? (e) => {
+              const d = drag.current
+              if (!d || d.id !== f.id) return
+              onMove(f.id, panCrop(d.from, (e.clientX - d.x) / d.k, (e.clientY - d.y) / d.k, { w: s.w, h: s.h }))
+            } : undefined}
+            onPointerUp={movable ? () => { drag.current = null } : undefined}>
+            <span className="rs-tag" style={{ top: 2 + i * 15 }}>{f.id}</span>
+          </span>
+        )
+      })}
     </figure>
   )
 }
