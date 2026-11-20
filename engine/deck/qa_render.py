@@ -23,6 +23,8 @@ Checks (geometry, from the pptx):
                   blanket exemption
   placeholder     '[Agency]', 'lorem', 'TBD', 'XXX' on a presented slide (a slide the validator already
                   flags for the [Agency] placeholder is skipped)
+  code_leak       (spec.PITCH_READY) an internal reference code (pitch_ready.has_code: prompt:43, brief:insight, ic_feeling, T1) in a
+                  presented slide's text or table: an error
   contrast        WCAG ratio of a run's colour on its shape fill or the slide background, where both
                   are known: 4.5:1 text, 3:1 large text (18 pt, or 14 pt bold)
   picture_stretch a picture drawn at an aspect that differs from the crop it shows by more than spec.PICTURE_STRETCH_TOL
@@ -225,12 +227,22 @@ def _clip(text: str, n: int = 40) -> str:
 # ---------------------------------------------------------------- per-slide geometry
 
 #: The one fixed label that may carry the word DRAFT: the watermark render_pptx adds.
-DRAFT_MARK = re.compile(r"DRAFT · (?:needs a person|\d+ slides need a person)")
+DRAFT_MARK = re.compile(r"DRAFT · (?:needs a person|\d+ slides need a person)|DRAFT|Draft")   # the last two: the pitch-ready footer tag
 
 
 def _is_draft_mark(shape, txt: str) -> bool:
     """True only for the fixed DRAFT watermark: the shape named Watermark holding exactly its label."""
     return (shape.name or "") == "Watermark" and bool(DRAFT_MARK.fullmatch(txt.strip()))
+
+
+def _scan_codes(txt: str, out: list) -> None:
+    """pitch-ready: an internal reference code (prompt:43, brief:insight, ic_feeling, T1) on a presented slide's shown text is an error."""
+    if not spec.PITCH_READY:
+        return
+    from .pitch_ready import has_code   # noqa: PLC0415
+    c = has_code(txt)
+    if c:
+        _add(out, "code_leak", "error", f"an internal code on the slide: '{c}' in \"{_clip(txt, 40)}\"")
 
 
 def _scan_filler(txt: str, out: list, validated_leak: bool) -> None:
@@ -446,6 +458,7 @@ def _check_slide(slide, W: int, H: int, validated_leak: bool) -> list:
                 for row in sh.table.rows:
                     for c in row.cells:
                         _scan_filler(c.text_frame.text, out, validated_leak)
+                        _scan_codes(c.text_frame.text, out)
             continue
         if not has_text:
             continue
@@ -500,6 +513,7 @@ def _check_slide(slide, W: int, H: int, validated_leak: bool) -> list:
         # filler on a presented slide
         if presented and not _is_draft_mark(sh, txt):
             _scan_filler(txt, out, validated_leak)
+            _scan_codes(txt, out)
         # contrast
         under = own
         if under is None:

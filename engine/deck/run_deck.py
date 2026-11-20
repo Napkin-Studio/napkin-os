@@ -831,6 +831,8 @@ def main(argv=None):
     ap.add_argument("--prompt-file", type=Path, help="a text file holding the person's prompt")
     ap.add_argument("--answers", type=Path, help="JSON of the person's answers to the intake questions: {qid: {text|option_id, at, skipped?}}")
     ap.add_argument("--research", type=Path)
+    ap.add_argument("--evidence", type=Path, help="the research agent's evidence.json (engine/agent-server/research.py evidence): sourced figures "
+                    "with market, year and URL for the insight, audience and proposition slides")
     ap.add_argument("--stages", required=True, type=Path)
     ap.add_argument("--client", required=True)
     ap.add_argument("--project", required=True)
@@ -1007,6 +1009,12 @@ def main(argv=None):
         except inputs.MarksError as e:
             raise SystemExit(f"refused: {e}")
     _add_marks(a, inp)
+    if a.evidence:   # pitch-ready: the evidence track's sourced figures (research.py evidence), citable as f_ev<n> with their sources
+        from . import pitch_ready   # noqa: PLC0415
+        ev_facts, ev_sources = pitch_ready.load_evidence(a.evidence)
+        inp.facts.update(ev_facts)
+        inp.sources.update(ev_sources)
+        inp.coverage["evidence_findings"] = len(ev_facts)
     _master_size(a, _explicit_size(a, deck_ctx, answers))   # deck-slide-size: a master/size conflict is refused here, before any paid stage
     rep["stages"]["inputs"] = {"secs": round(time.time() - t, 2), "model": None, "tokens_in": 0, "tokens_out": 0, "usd": 0}
     pick = a.deck_type or (deck_ctx or {}).get("deck_type")   # deck-types: the person's explicit pick (--type, or the document's inputs.deck_type)
@@ -1179,6 +1187,16 @@ def main(argv=None):
         moved = _finish.annotations_to_notes([deck["slides"][x] for x in deck["order"]])
         if moved:
             deck["meta"].setdefault("finish", {})["annotations_after_copy"] = moved
+    if spec.PITCH_READY and kind != "investor":   # pitch-ready: evidence on the argument, a real cover, the needs-a-person list, no internal code
+        from . import pitch_ready   # noqa: PLC0415
+        bmeta = None
+        if a.brief and a.brief.suffix == ".json" and a.brief.exists():
+            try:
+                bmeta = json.loads(a.brief.read_text()).get("meta")
+            except ValueError:
+                bmeta = None
+        rep["pitch_ready"] = pitch_ready.apply(deck, inp, st, client=a.client, project=a.project, agency=a.agency,
+                                               brief_meta=bmeta if isinstance(bmeta, dict) else None)
     sources, held, plan_res, stale_gen = {}, [], None, []
     if a.pictures or supplied:   # pictures that already exist: records and assets only; nothing is made, sent or spent
         try:

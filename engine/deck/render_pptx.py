@@ -100,7 +100,7 @@ from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.oxml.ns import nsdecls, qn
 from pptx.util import Emu, Inches, Pt
 
-from . import images, layouts, numfmt, spec
+from . import images, layouts, numfmt, pitch_ready, spec
 from . import theme as themes
 from .refs import Resolver, fmt
 from .spec import HUMAN_ONLY_TYPES, shown_blocks
@@ -214,6 +214,8 @@ def _kicker(meta: dict) -> str:
     """The title slide's label: the responding agency when the prompt names one, never assumed."""
     if meta.get("kind") == "investor":
         return "Investor deck"
+    if spec.PITCH_READY and meta.get("cover_kicker"):   # pitch-ready: the agency when known and the month and year, never 'Response deck'
+        return str(meta["cover_kicker"])
     ag = (meta.get("agency") or "").strip()
     return f"{ag} · response deck" if ag and not ag.startswith("[") else "Response deck"
 
@@ -1797,7 +1799,8 @@ class Renderer:
             fw = lw = self.x1 - self.x0
             fx = self.x0
         else:
-            fw = 5.9
+            # pitch-ready: with no picture the role note is a narrow column (no card) and the work takes the room, so nothing waits empty
+            fw = max(5.9, self.x1 - self.x0 - 3.6 - g.G) if spec.PITCH_READY else 5.9
             fx = self.x1 - fw
             lw = fx - self.x0 - g.G
         for dense in (False, True):
@@ -1839,9 +1842,13 @@ class Renderer:
                 return
             y = self.head(sl, s, dense)
             m = self._mark(sl)
-            self.rect(sl, self.x0, cy, lw, ch, fill=p.card)
-            self.rect(sl, self.x0, cy, lw, 0.05, fill=p.acc_l)
-            self.stack(sl, rest, self.x0 + 0.3, cy + 0.3, lw - 0.6, cy + ch - 0.3 - nh, fill=True)
+            if spec.PITCH_READY and not self._pics:   # pitch-ready: no filled card that reads as an empty picture frame; the role note sits at the top, a rule over it
+                self.rect(sl, self.x0, cy, lw, 0.03, fill=p.acc_l)
+                self.stack(sl, rest, self.x0, cy + 0.3, lw - 0.3, cy + ch - 0.3 - nh, fill=False)
+            else:
+                self.rect(sl, self.x0, cy, lw, ch, fill=p.card)
+                self.rect(sl, self.x0, cy, lw, 0.05, fill=p.acc_l)
+                self.stack(sl, rest, self.x0 + 0.3, cy + 0.3, lw - 0.6, cy + ch - 0.3 - nh, fill=True)
             if note:
                 self.ptext(sl, self.x0 + 0.3, cy + ch - 0.25 - (nh - 0.25), lw - 0.6, nh - 0.25, note, anchor="bottom")
             self._build(sl, m)
@@ -4417,12 +4424,16 @@ class Renderer:
         side = self._foot is not None
         if not self._band_drawn:   # the band carries the section on a banded slide
             self.text(sl, fx0, 7.0, min(6, (fx1 - fx0) * 0.45) if side else 6, 0.3, s["section"].upper(), size=foot, cap=True, color=p.mute, name="Section")
+        quiet = bool(spec.PITCH_READY and self.n_human)   # pitch-ready: a small muted draft tag in the footer, beside the number
+        tagw = 0.95 if quiet else 0.0   # the tag's box; the source keys end a little before it
         if s.get("footnotes"):
             nx, nw = (fx0 + (fx1 - fx0) * 0.45, fx1 - 0.63 - (fx0 + (fx1 - fx0) * 0.45)) if side else (6.2, 5.6)
-            self.text(sl, nx, 7.0, nw, 0.3, "Sources " + " ".join(f"[{k}]" for k in s["footnotes"][:14]) + "  (appendix)", size=foot, cap=True, color=p.mute, align=PP_ALIGN.RIGHT, name="Footnotes")
+            self.text(sl, nx, 7.0, nw - (tagw + 0.1 if quiet else 0), 0.3, "Sources " + " ".join(f"[{k}]" for k in s["footnotes"][:14]) + "  (appendix)", size=foot, cap=True, color=p.mute, align=PP_ALIGN.RIGHT, name="Footnotes")
         nx = fx1 - 0.63 if side else 12.1
         self.text(sl, nx, 7.0, fx1 - nx, 0.3, str(n), size=foot, cap=True, color=p.mute, align=PP_ALIGN.RIGHT, name="SlideNumber")
-        if self.n_human:
+        if quiet:   # the full list of what needs a person is in the cover's notes and the appendix (pitch_ready.needs_person)
+            self.text(sl, nx - tagw - 0.05, 7.0, tagw, 0.3, pitch_ready.DRAFT_TAG, size=foot, cap=True, color=p.mute, align=PP_ALIGN.RIGHT, name="Watermark")
+        elif self.n_human:
             tag = "DRAFT · needs a person" if s["status"] == "needs_human" else f"DRAFT · {self.n_human} slides need a person"
             wx = 8.7 if self._foot is None else max(fx0, fx1 - 4.03)
             if self._bleed:   # on a full-bleed picture the mark sits on a pill of the slide's ground, its box no wider than the pill

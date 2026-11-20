@@ -468,3 +468,28 @@ Shortening is delete-only by default (`shorten.word_rule`): the new text is an o
 - **Sparse slides.** A slide whose content fills under about 40% of the body is centred vertically (type growth keeps the 1.2 cap for lean and standard). A one-row table and a one-step timeline are drawn as a `big_statement`, every word kept.
 - **Execution pictures.** The picture takes the right half of the slide at full content height (a tall picture keeps its shape, centred in the half); the copy frame and the notes card stack on the left. Still labelled Illustrative until approved.
 - **LibreOffice.** Every conversion runs in its own profile (`run_deck.to_pdf`), so two renders at once no longer lose a PDF.
+
+## Pitch-ready and evidence (2026-11-20, `DECK_PITCH_READY`, `deck/pitch_ready.py`)
+
+Blind judging of decks built from three real client briefs scored evidence 3-5/10 and take-to-pitch 3-6/10. On by default (`=0` builds as
+before; the suite sets it to 0). After stage e and the red team, before the pictures and the layout plan, `pitch_ready.apply`:
+
+- **Evidence**: `--evidence evidence.json` (the research agent's evidence track, `engine/agent-server/research.py evidence`) is read as
+  facts `f_ev<n>` (origin `evidence`, with market, year, units and a source URL in `src_ev<n>`); it does not make a prompt-only run a
+  research tier. The presented insight, audience and proposition slides each get one or two sourced figures, picked by what they support
+  and local first, as a line with a short source tag (`source, year, market`); the layout plan never moves them to the notes. "(to confirm)"
+  comes off a figure a cited source (or the evidence) verifies and stays on anything unverified; an uncited market claim on an argument
+  slide reads "Our read: ..." (basis opinion) and a claim that only says what the inputs lack joins "What the brief doesn't tell us", so
+  `bare_claim` and the slides agree.
+- **Cover**: the client and the project (or the chosen territory's name) from the run, else the brief tool's `meta`, else stage a0's
+  `names` (kept only when the inputs state them); the label is the agency (when known) and the month and year, never "Response deck"; no
+  placeholder line (the presenter-and-date to-do is in the notes). The cover keeps its picture slot.
+- **Draft tag**: a small muted "Draft" in the footer beside the slide number replaces the DRAFT banner; the full list of what needs a
+  person is in the cover's notes, in each such slide's notes and on the appendix slide "What still needs a person".
+- **Pictures**: with no stage g subject the image plan draws the subject from the chosen territory (the work: its own visual hint; the
+  idea: the thought; the cover: the mood), lint-checked like any subject, before the code templates. With no picture yet the work slide
+  draws no empty card: the role note is a narrow column and the script takes the room.
+- **Codes**: refs (`prompt:43`, `brief:insight`, `req:R4`), ids (`ic_feeling`, `gap_chart`), labels (`T1`, `IC1`, `candidate B`), slide
+  and stage ids come off every shown text (the notes keep them); validate's and stage h's `code_leak` is an error for any left.
+
+Tests: `tests/test_pitch_ready.py`, `engine/agent-server/test_research_evidence.py` (invented fixtures only).

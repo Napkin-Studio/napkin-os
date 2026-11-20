@@ -698,7 +698,9 @@ One list for the engine, the app and the bench, in `spec.py`:
 - **Today, unchanged**: the 33 names of `spec.CHECKS` (source `validate`), and stage h's `off_slide`,
   `margin`, `text_overlap`, `text_overflow`, `min_font`, `placeholder`, `contrast`, `mostly_empty`,
   `one_corner`, `qa_internal`, `unreadable` (source `qa_render`); since 19 Nov 2026 also `text_collision` (text running out of its
-  frame into other text) and `word_break` (a display word broken across lines), errors under `DECK_FINISH`.
+  frame into other text) and `word_break` (a display word broken across lines), errors under `DECK_FINISH`. Since 20 Nov 2026 `code_leak`
+  (an internal reference code such as `prompt:43`, `brief:insight` or `ic_feeling` on a shown text; source `validate` and `qa_render`), an
+  error under `DECK_PITCH_READY`.
 - **Reserved here, built later**: `slot_limit`, `slot_missing`, `slot_unknown`, `slot_stale`, `block_unbound`,
   `layout_unknown` (`schema` and `validate`); `image_missing`, `image_unapproved`, `image_flagged`,
   `image_rights`, `golden_echo` (`validate`, `image_guard`); `picture_stretch`, `picture_lowres`,
