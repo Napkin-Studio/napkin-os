@@ -1,7 +1,7 @@
 // Finding the job that belongs at a spot in the UI (pending or failed), and
 // what a job sends about a shot and its names (contract 3).
 
-import type { Id, JobInputRef, JobShot, NamedRef, ProductionDocument, Ratio, RefRole, Shot } from '../contracts/types'
+import type { AssetRef, Id, JobInputRef, JobShot, NamedRef, ProductionDocument, Ratio, RefRole, Shot } from '../contracts/types'
 import type { JobCtx, UiState } from '../doc/ui'
 import { KEY_EXTRAS, MENTION, NoFrontError } from '../lib/names'
 import { scopeOf, type ScopeItem } from '../model/scope'
@@ -74,6 +74,14 @@ export async function namedInput(relay: Relay, doc: ProductionDocument, r: Named
   const origin = doc.assets[r.asset]?.origin
   const kind = origin === 'drawn' ? 'drawing' : origin === 'generated' || origin === 'mock' ? 'generated' : 'picture'
   return { id: r.id, name: refName(r), role: r.role, ...(r.label ? { label: r.label } : {}), kind, asset: await assetRef(relay, r.asset) }
+}
+
+/** A picture on the canvas with no name (a drawing, a generated image, a dropped picture) as a job input
+ *  (features/pt-dex-context.clan): role `other`, so the relay sends it as an object (Runway subject "object"),
+ *  never a person, unless the words say it is one (Dex decides, director.v15). It went as `character` before,
+ *  and a drawn product reached Runway as subject "human" (UAT Dex audit, 2026-11-21). */
+export function unnamedInput(id: Id, kind: 'pic' | 'drawn' | 'gen', asset: AssetRef): JobInputRef {
+  return { id, role: 'other', kind: kind === 'drawn' ? 'drawing' : kind === 'gen' ? 'generated' : 'picture', asset }
 }
 
 /** An asset-bearing scope item (a linked frame, a rendered ad, a format set's master) as a job input:

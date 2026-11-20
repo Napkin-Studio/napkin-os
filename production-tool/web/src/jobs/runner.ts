@@ -24,6 +24,7 @@ import { newId, ulid } from '../lib/ulid'
 import { purposeInputs, purposeNode, purposeOf, purposeWords } from '../model/purpose'
 import { withLinkedText } from './linkedText'
 import { flagsOf, recordBriefFlags, withBrief } from '../brief/model'
+import { withContext } from './context'
 import { checkFronts } from '../lib/names'
 import { deadRefs, lifeOf, liveGet, liveInput } from '../model/live'
 import { plainJobError } from './errorWords'
@@ -224,6 +225,9 @@ export class JobRunner {
     // The brief in the node's scope, its spine only (features/brief-node.clan).
     const briefed = withBrief(d, op, extras.briefFrom ?? node, input)
     input = briefed.input
+    // The project's brand rules and the documents linked in (features/pt-dex-context.clan).
+    const contexted = withContext(d, op, node, input)
+    input = contexted.input
     const words = purposeWords(purpose)
     // A fresh nonce for every job: another take is never deduped with the one running (ui-behaviour 4.3).
     const nonce = ulid()
@@ -253,7 +257,7 @@ export class JobRunner {
       input_hashes: [...hashes],
       created_at: new Date().toISOString(),
     }
-    const rows = [...purposeInputs(purpose), ...inputRows(input), ...linked.rows, ...briefed.rows].slice(0, 32)
+    const rows = [...purposeInputs(purpose), ...inputRows(input), ...linked.rows, ...briefed.rows, ...contexted.rows].slice(0, 32)
     if (rows.length) entry.inputs = rows
     if (input.text) entry.text = input.text
     if (input.chips?.length) entry.chips = input.chips

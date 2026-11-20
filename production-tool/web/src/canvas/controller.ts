@@ -18,7 +18,7 @@ import { newId } from '../lib/ulid'
 import { systemUpdate } from '../doc/store'
 import { markStale } from '../doc/remove'
 import { assetRef } from '../jobs/assets'
-import { namedInput } from '../jobs/select'
+import { namedInput, unnamedInput } from '../jobs/select'
 import { landingWhy } from '../jobs/landing'
 import { boardFrame, fitInto, holdFields, tellFull, withFields } from './boards/fitting'
 import { bringIntoView } from './boards/boards'
@@ -459,8 +459,7 @@ export class CanvasController {
         refs.push(await namedInput(this.s.relay, this.doc(), named))
         continue
       }
-      const role: RefRole = i.kind === 'pic' ? 'other' : 'character'
-      refs.push({ id: i.nodeId, role, kind: i.kind === 'drawn' ? 'drawing' : i.kind === 'gen' ? 'generated' : 'picture', asset: await assetRef(this.s.relay, i.asset) })
+      refs.push(unnamedInput(i.nodeId, i.kind, await assetRef(this.s.relay, i.asset)))
     }
     const characters = refs.filter((r) => r.role === 'character').length
     if (characters > limits.characters) {
@@ -671,7 +670,7 @@ export class CanvasController {
     for (const i of plan.images) {
       const named = this.nameOn(i.nodeId)
       if (named) refs.push(await namedInput(this.s.relay, this.doc(), named))
-      else refs.push({ id: i.nodeId, role: i.kind === 'pic' ? 'other' : 'character', kind: i.kind === 'drawn' ? 'drawing' : i.kind === 'gen' ? 'generated' : 'picture', asset: await assetRef(this.s.relay, i.asset) })
+      else refs.push(unnamedInput(i.nodeId, i.kind, await assetRef(this.s.relay, i.asset)))
     }
     for (const r of said.found) if (!refs.some((x) => x.id === r.id)) refs.push(await namedInput(this.s.relay, this.doc(), r))
 

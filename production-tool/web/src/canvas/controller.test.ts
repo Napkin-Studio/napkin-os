@@ -524,6 +524,16 @@ describe('loose strokes become a Drawing', () => {
     expect(t.sent).toHaveLength(1)
   })
 
+  it('an unnamed drawing, generated image or picture goes as role other, never a character (pt-dex-context)', async () => {
+    t.canvas.els = [stroke('a', 100, 100), stroke('b', 140, 120)]
+    await t.ctrl.generate(['a', 'b'], 'a bottle of olive oil')
+    expect(t.sent[0].input.refs).toEqual([expect.objectContaining({ role: 'other', kind: 'drawing' })])
+    await systemUpdate(t.doc, (d) => { d.assets[SHA('g')] = asset(SHA('g'), 'image', { w: 600, h: 800, origin: 'generated' }) }, 'sync')
+    t.canvas.els = [{ id: 'G', type: 'image', x: 0, y: 0, width: 300, height: 400, isDeleted: false, frameId: null, customData: { kind: 'gen', id: 'node_g', op: 'generate', parentIds: [], state: 'completed', asset: SHA('g') } } as unknown as El]
+    await t.ctrl.generate(['G'], 'the same lamp, in brass')
+    expect(t.sent[1].input.refs).toEqual([expect.objectContaining({ role: 'other', kind: 'generated' })])
+  })
+
   it('a Drawing whose strokes changed gets a new picture; moving it whole does not', async () => {
     t.canvas.exportPng = async (els: readonly El[]) => new Blob([els.map((e) => `${e.id}@${e.x - Math.min(...els.map((x) => x.x))}`).join(' ')], { type: 'image/png' })
     t.canvas.els = [stroke('a', 100, 100), stroke('b', 140, 120)]

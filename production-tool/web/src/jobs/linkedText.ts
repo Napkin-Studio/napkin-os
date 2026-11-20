@@ -14,7 +14,7 @@ type Doc = ProductionDocument
 export const READS_WORDS: readonly Op[] = ['generate', 'shot_list', 'frame', 'clip', 'write']
 
 /** The nodes whose linked texts a job on `node` reads: the node, and for a shot its storyboard and the videos it renders to. */
-function readers(d: Doc, node: LinkEndpoint): Id[] {
+export function readers(d: Doc, node: LinkEndpoint): Id[] {
   if (node.kind !== 'shot') return [node.id]
   const sb = d.shots[node.id]?.storyboard_id
   if (!sb) return [node.id]

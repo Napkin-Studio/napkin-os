@@ -23,8 +23,11 @@ import type { OsBriefRead } from './os'
 
 type Doc = ProductionDocument
 
-/** The ops whose director reads the brief: draft, plan, frame, change a frame, take, change a clip, cut-down, sizes. */
-export const BRIEF_OPS: readonly Op[] = ['write', 'shot_list', 'frame', 'frame_edit', 'clip', 'clip_edit', 'clip_patch', 'cutdown', 'resize']
+/** The ops whose director reads the brief: draft, plan, Generate, frame, change a frame, edit a picture, take, change a
+ *  clip, cut-down, sizes. The relay keeps the same list (relay/brief.py BRIEF_OPS; a relay test compares them) and cuts
+ *  the spine to each op: a Generate reads its don'ts, tone and feeling, an edit inside a picture its don'ts only, and a
+ *  view (the same character turned) none (features/pt-dex-context.clan). */
+export const BRIEF_OPS: readonly Op[] = ['write', 'shot_list', 'generate', 'frame', 'frame_edit', 'region_edit', 'clip', 'clip_edit', 'clip_patch', 'cutdown', 'resize']
 
 /** The words a decision uses for a brief: “First Light brief” v2. */
 const named = (title: string, taken: number) => `“${title}” v${taken}`
@@ -150,12 +153,25 @@ export const jobBrief = (b: BriefNode): JobBrief => ({ title: b.title.slice(0, 2
 export function withBrief(d: Doc, op: Op, node: LinkEndpoint, input: JobInput): { input: JobInput; rows: JobInputRow[] } {
   if (!BRIEF_OPS.includes(op) || input.brief) return { input, rows: [] }
   const b = briefForJob(d, node)
+  // A Generate on the canvas runs for a group or a sketch area, which no brief links into: it reads the project's
+  // brief when the project has exactly one (features/pt-dex-context.clan). Two or more: none, rather than a guess.
+  const only = !b && op === 'generate' ? onlyBrief(d) : undefined
+  if (only) {
+    const row: JobInputRow = { kind: 'brief', ref: only.id, used_as: "brief (the project's)", included: true, text: `${only.title} v${only.source.taken}`.slice(0, 200) }
+    return { input: { ...input, brief: jobBrief(only) }, rows: [row] }
+  }
   if (!b) return { input, rows: [] }
   const row: JobInputRow = {
     kind: 'brief', ref: b.brief.id, ...(b.linkId ? { link_id: b.linkId } : {}), used_as: b.via === 'link' ? 'brief' : 'brief (from its script)', included: true,
     text: `${b.brief.title} v${b.brief.source.taken}`.slice(0, 200),
   }
   return { input: { ...input, brief: jobBrief(b.brief) }, rows: [row] }
+}
+
+/** The project's Brief node when it has exactly one; undefined with none or several. */
+export function onlyBrief(d: Doc): BriefNode | undefined {
+  const all = briefsList(d)
+  return all.length === 1 ? all[0] : undefined
 }
 
 /** "What Dex will send" lists the brief: one row, its words and where it comes from. */
