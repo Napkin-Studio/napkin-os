@@ -1930,11 +1930,14 @@ class Relay:
             raise ApiError("internal", f"The director failed ({type(e).__name__}).") from e
         model = out.pop("_model", getattr(director, "model", "unknown"))
         version = out.pop("_promptVersion", getattr(director, "prompt_version", "director.v0"))
+        given = out.pop("_input", None)  # what Dex received (director/record.py); the passthrough has none
         errors = self.contracts.errors("director.schema.json", out)
         if errors:
             raise ApiError("internal", f"The director's answer did not match its schema: {errors[0]}")
         block = {"model": model, "promptVersion": version, "output": out,
                  "rationale": out.get("rationale", ""), "latencyMs": int((self.clock() - start) * 1000)}
+        if given is not None:
+            block["input"] = given
         # What the director was told each picture shows (the History's "What the director saw").
         used = [{"tag": r["tag"], "sha256": r["asset"]["sha256"], "kind": kinds.get(r["asset"]["sha256"], "other"), "card": r["card"]}
                 for r in wired.get("refs") or [] if r.get("card") and r.get("tag")]

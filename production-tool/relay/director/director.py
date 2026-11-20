@@ -27,7 +27,8 @@ from providers.tags import TAG as TAG_IN_TEXT, UnknownTag, rewrite_tags, unsent_
 
 import brief as briefs
 import job_context
-from .base import fit_duration, require_prompt, view_angle
+from . import record
+from .base import fit_duration, require_prompt, view_angle, view_subject
 from .model import ModelPort, Usage
 
 BASE = "https://napkin.ie/production-tool/contracts/"
@@ -615,8 +616,9 @@ class Director:
         except DirectorError as e:
             e.answer = output  # what Dex wrote, for the relay's director_rejected line
             raise
+        # What Dex was given, after the relay's cuts, kept small on the job record (features/pt-canvas-r1.clan).
         agent_block = {"model": model, "promptVersion": self.prompt_version, "output": output,
-                       "rationale": output["rationale"], "latencyMs": latency_ms}
+                       "rationale": output["rationale"], "latencyMs": latency_ms, "input": record.for_record(payload)}
         errs = list(self._validate("director.schema.json", "#/$defs/agentBlock").iter_errors(agent_block))
         if errs:
             raise DirectorError(f"agent block: {errs[0].message}")
@@ -730,6 +732,7 @@ class Director:
             _donors_are_objects(job, payload)
             _within_budget(job, op, payload)
         _views_are_one(job, op, payload)  # the relay's own words: outside the director's budget
+        view_subject(job, op, payload)  # a view of a person goes as a person, and says who (pt-canvas-r1)
         self._check_provider_limits(op, sheet, job, payload)
         # A named input picture this job does not send (a model that takes no refs, Veo 3.1 Fast) is said
         # in words. A name in none of the input, or @current/@anchor/@previous without their picture (the

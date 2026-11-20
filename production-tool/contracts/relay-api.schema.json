@@ -893,6 +893,17 @@
           "$ref": "common.schema.json#/$defs/view",
           "description": "view: which view to make from image (the source)."
         },
+        "subject": {
+          "type": "object",
+          "description": "view: who or what the source picture shows, from its front's reference (features/pt-canvas-r1.clan): role character sends the picture as a person (Runway subject human) and the words name them; any other role, as a thing (subject object). name is the key (ruby), label the reference's own words (the woman in the red coat). Absent: the picture goes as it did (role current, subject object). Added 2026-11-21 (additive).",
+          "properties": {
+            "role": { "$ref": "common.schema.json#/$defs/refRole" },
+            "name": { "$ref": "common.schema.json#/$defs/key" },
+            "label": { "type": "string", "maxLength": 120 }
+          },
+          "required": ["role"],
+          "additionalProperties": false
+        },
         "script": {
           "type": "string",
           "maxLength": 20000,

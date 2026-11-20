@@ -499,6 +499,9 @@ export interface AgentBlock {
   output: Record<string, unknown>
   rationale: string
   latencyMs?: number
+  /** What the director received, after the relay's cuts, kept small (director.schema.json agentBlock.input;
+   *  features/pt-canvas-r1.clan). Absent on the passthrough and on older jobs. */
+  input?: Record<string, unknown>
   /** The character cards the director was given (features/character-cards.clan). The relay's
    *  Job carries them; the document's jobs[].director does not (jobs/runner.ts agentForDocument). */
   cards?: DirectorCard[]
@@ -1123,6 +1126,8 @@ export interface JobInput {
   chips?: string[]
   refs?: JobInputRef[]
   view?: View
+  /** view: who or what the source shows, from its front's reference (features/pt-canvas-r1.clan). */
+  subject?: { role: RefRole; name?: string; label?: string }
   script?: string
   targetS?: number
   shot?: JobShot

@@ -96,6 +96,7 @@ class ClaudeDirector:
         out = dict(result.output)
         out["_model"] = result.agent_block["model"]
         out["_promptVersion"] = result.agent_block["promptVersion"]
+        out["_input"] = result.agent_block["input"]
         jobtrace.trace("director", job_request.get("jobId"), op=op, provider=provider, model=out["_model"],
                        promptVersion=out["_promptVersion"], latencyMs=result.agent_block["latencyMs"], usage=result.usage,
                        asked=True if out.get("question") else None)

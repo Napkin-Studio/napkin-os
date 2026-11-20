@@ -133,6 +133,30 @@ def view_angle(op: str, inp: dict, sheet: dict | None) -> dict | None:
     if op != "view" or not (sheet or {}).get("angles") or inp.get("view") not in VIEW_ANGLES:
         return None
     return {"horizontal": VIEW_ANGLES[inp["view"]], "vertical": 0.0}
+
+
+def view_subject(job: dict, op: str, inp: dict) -> None:
+    """A view of a person goes as a person (UAT round 1 IMG-11, features/pt-canvas-r1.clan). The source picture
+    went as role `current`, which Runway sends as subject "object", and the words said only "@current, the same
+    character", though the front was a crowded cafe photo. With input.subject a character, the source picture's
+    ref is sent as `character` (Runway subject "human") and one line says who it is. Dex's job and the
+    passthrough's both pass here; a job already saying who @tag is is left alone. Changes `job` in place."""
+    subject = inp.get("subject") or {}
+    image = (inp.get("image") or {}).get("sha256")
+    if op != "view" or subject.get("role") != "character" or not image:
+        return
+    ref = next((r for r in job.get("refs") or [] if r.get("sha256") == image), None)
+    if ref is None:
+        return
+    ref["role"] = "character"
+    who = (subject.get("name") or "").strip()
+    label = " ".join((subject.get("label") or "").split())[:120]
+    if not (who or label) or f"@{ref['name']} is " in job.get("prompt", ""):
+        return
+    said = f"@{ref['name']} is {who or 'the person'}{f' ({label})' if label else ''}: this one person, exactly as in that picture."
+    job["prompt"] = f"{job.get('prompt', '').rstrip()} {said}".strip()
+
+
 def ref_roles(inp: dict, op: str, sheet: dict | None) -> list[tuple[dict, str]]:
     """The input refs in send order, each with its provider role: a character ref is `character`
     and every other role is `object`. Refs carry wire tags (names.py) by now. An `optional` ref (offered,
@@ -210,6 +234,7 @@ class PassthroughDirector:
         angle = view_angle(op, inp, sheet)
         if angle:
             job["angle"] = angle
+        view_subject(job, op, inp)
         if op == "clip" and inp.get("image"):
             job["firstFrame"] = inp["image"]["sha256"]
         if inp.get("mask") and (sheet or {}).get("mask", "none") != "none":

@@ -130,6 +130,7 @@ def test_director_wrapper_output_validates_against_the_contract():
     out = d.direct({"jobId": "job_01K6XA7Q3M9V2D4R8T0B5C1E6F", "op": "generate", "input": generate_input()}, sheet)
     assert out.pop("_model") == d.director.per_click_model
     assert out.pop("_promptVersion") == PROMPT_VERSION
+    assert isinstance(out.pop("_input"), dict)  # what Dex received, for the job record (pt-canvas-r1)
     assert Contracts().errors("director.schema.json", out) == []
 
 
