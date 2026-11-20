@@ -22,7 +22,7 @@ import html
 import json
 from pathlib import Path
 
-from . import images, numfmt, spec
+from . import images, numfmt, pitch_ready, spec
 from . import theme as themes
 from .refs import fmt
 from .layouts import picture_sides as _pic_sides
@@ -698,9 +698,11 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
         foot = "" if (v3 and s["type"] != "title") else f'<span>{_e(s["section"])}</span>'   # the band carries the section
         if s.get("footnotes"):
             foot += f'<span class="src">Sources {" ".join(f"[{k}]" for k in s["footnotes"][:14])} (appendix)</span>'
+        if spec.PITCH_READY and n_human:   # pitch-ready: a small muted tag in the footer, never a banner (the list: notes and appendix)
+            foot += f'<span class="src draft-tag">{_e(pitch_ready.DRAFT_TAG)}</span>'
         foot += f'<span class="num">{n}</span>'
         flags = ""
-        if n_human:
+        if n_human and not spec.PITCH_READY:
             flags += f'<span class="draft">DRAFT · {"needs a person" if s["status"] == "needs_human" else f"{n_human} slides need a person"}</span>'
         if sid in failed and audience != "client" and not spec.FINISH:   # finish fixes: the notes say it (spec.review_lines)
             flags += f'<span class="failed">CHECK FAILED: {_e(", ".join(sorted(failed[sid])))}</span>'

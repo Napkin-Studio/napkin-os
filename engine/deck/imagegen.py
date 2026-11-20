@@ -414,7 +414,15 @@ def make_plan(ctx: Ctx, mode: str = "plan", hero: list | None = None, remake_sty
             source = "template"
             if subj and subject:   # a subject was written and refused: never a silent fallback, the card and report.json say so
                 row.update(subject_refused=why)
-            subject = TEMPLATES.get(s["type"], TEMPLATES["territory"])
+            ts = ""
+            if spec.PITCH_READY:   # pitch-ready: before any code template, a subject drawn from the chosen territory (lint-checked the same way)
+                from . import pitch_ready   # noqa: PLC0415
+                own = next((t for t in ctx.territories if t.get("id") == c["anchor"]["ref"]), None) if s["type"] == "territory" else None
+                ts = pitch_ready.territory_subject(s, own or pitch_ready.chosen_territory(ctx.territories, deck), banned, deny)
+            if ts:
+                source, subject = "territory", ts
+            else:
+                subject = TEMPLATES.get(s["type"], TEMPLATES["territory"])
             if subj and why == "would draw on a Confidential part":
                 row.update(status="held", reason="would draw on a Confidential part")
                 continue

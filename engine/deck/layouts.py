@@ -879,7 +879,7 @@ def _movable(deck: dict, sid: str, s: dict, audience: str, cat_exempt: bool) -> 
     cands = []
     first_lead = next((i for i, b in enumerate(s["blocks"]) if b["kind"] in ("text", "statement", "quote", "callout")), None)
     for bi, b in enumerate(s["blocks"]):
-        if b.get("internal") or b.get("human"):
+        if b.get("internal") or b.get("human") or b.get("evidence"):   # pitch-ready: a sourced figure the slide carries stays on it
             continue
         k = b["kind"]
         if k in ("bullets", "kv"):
@@ -930,7 +930,7 @@ def _last_resort(deck: dict, sid: str, s: dict, audience: str) -> list:
     rich = []
     lead = next((i for i, b in enumerate(s["blocks"]) if str(b.get("text") or "").strip() or b.get("items") or b.get("lines") or b.get("rows")), 0)
     for bi, b in enumerate(s["blocks"]):
-        if b.get("internal") or b.get("human") or bi == lead:
+        if b.get("internal") or b.get("human") or b.get("evidence") or bi == lead:
             continue
         k = b["kind"]
         if k in ("bullets", "kv"):

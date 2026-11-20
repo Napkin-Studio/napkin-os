@@ -59,8 +59,9 @@ class Inputs:
         return any(f.get("value") and not f.get("from_intake") for f in self.brief.values())
 
     def has_research(self) -> bool:
-        """True when a research CLAN was given."""
-        return bool(self.facts or self.findings)
+        """True when a research CLAN was given. The evidence track's figures (``--evidence``, origin ``evidence``) are citable facts but not
+        a research CLAN: a prompt-only run that has them is still built from a prompt (its tier and its sketch rule stand)."""
+        return bool(self.findings) or any(f.get("origin") != "evidence" for f in self.facts.values())
 
 
 def _unwrap(doc, key):

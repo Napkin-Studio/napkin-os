@@ -38,6 +38,9 @@ notes_unread      (spec.RECIPES, format full: 'Sent to be read') a slide whose p
 rule_broken       a brief rule's quoted phrase ("Avoid 'the Netflix of X' framing") appears in the deck
 source_required   a block or item marked "sourced" that cites nothing: information from outside the
                   three inputs (the user's prompt, the research CLAN, the brief) never reaches a slide
+code_leak         (spec.PITCH_READY) an internal reference code on a shown text: a ref (prompt:43, brief:insight, req:R4), an id
+                  (ic_feeling, gap_chart, f_ev1), a label (T1, C2, candidate B), a slide or stage id. Scrubbed by pitch_ready.scrub_deck first;
+                  one left is an error for every audience
 internal_leak     agency-only text on screen: pipeline ids, stand-in or gate labels, "to confirm",
                   the [Agency] placeholder (error for a client render; a warning in review, where
                   labelled placeholders and blocks marked internal are expected and skipped)
@@ -564,6 +567,9 @@ def run(deck: dict, inp, audience: str = "review", profile: dict | None = None) 
     for c in criteria_coverage(deck):
         for concept in c["missing"]:
             add("criteria_map", "error", None, f"scored criterion '{c['criterion']}' ({c['weight']}): no slide answers '{concept}'")
+    if spec.PITCH_READY:   # pitch-ready: an internal reference code on a shown text (prompt:43, brief:insight, ic_feeling, T1) is an error
+        from .pitch_ready import code_findings   # noqa: PLC0415
+        F += code_findings(deck)
     for f in F:   # the deck type's strictness: a check it names is that level wherever it fires
         f["level"] = ((profile or {}).get("strict") or {}).get(f["check"], f["level"])
         f["slide_no"] = num.get(f["slide"])

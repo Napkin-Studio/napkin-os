@@ -415,7 +415,7 @@ CHECKS = ("numbers_trace", "numbers_uncited", "unverified_fig", "rejected_used",
           "action_title", "repeated_line", "copy_number", "pitch_length", "rule_broken", "source_required", "internal_leak",
           "quote_source", "criteria_map", "imagery", "copy_spec", "budget_spread", "thin_evidence", "claim_fit", "objective_quant",
           "insight_shape", "idea_single", "chain_links", "weight_share", "image_missing", "image_unapproved", "image_flagged",
-          "image_rights", "style_pack_held", "pitch_cap", "role_words", "notes_unread")
+          "image_rights", "style_pack_held", "pitch_cap", "role_words", "notes_unread", "code_leak")
 
 #: Deck types (profiles/<id>.yaml, deck.profiles): what a deck is for decides its spine, stages, strictness and guidance.
 #: ``DEFAULT_TYPE`` is what a skipped type question falls back to.
@@ -535,6 +535,13 @@ FINISH = flag_on("DECK_FINISH")
 #: for the client, in the presented story; a passage the brief tool suspects is another client's never becomes an objective on a slide;
 #: the appendix lists "What we need from you". ON by default; DECK_BRIEF_GAPS=0 builds exactly as before (the suite sets it to 0).
 BRIEF_GAPS = flag_on("DECK_BRIEF_GAPS")
+#: deck pitch-ready (blind judging of decks from three real client briefs, 20 Nov 2026: evidence 3-5/10, take-to-pitch 3-6/10;
+#: deck/pitch_ready.py): the evidence track's sourced figures on the insight, audience and proposition slides with a source tag, "to confirm"
+#: only on an unverified figure, uncited market claims softened; a real cover (client and project or campaign, agency when known, month and
+#: year, no placeholder); a small footer draft tag in place of the DRAFT banner (the list in the notes and an appendix slide); picture
+#: prompts from the chosen territory and no empty frame; internal codes scrubbed from every shown text (validate and QA: code_leak, an
+#: error). ON by default; DECK_PITCH_READY=0 builds exactly as before (the suite sets it to 0).
+PITCH_READY = flag_on("DECK_PITCH_READY")
 #: The presented slide's title and the most issues it asks about (each a question for the client; the rest are in the appendix list).
 BRIEF_GAPS_TITLE = "What the brief doesn't tell us"
 BRIEF_GAPS_MAX = 5

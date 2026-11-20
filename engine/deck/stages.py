@@ -244,6 +244,18 @@ def merge_a0(parts: list, supplied: set, kind: str = "agency", inp=None) -> dict
     return out
 
 
+def cover_names(parts: list, text: str) -> dict:
+    """``{client, project}`` from the a0 reads' ``names``: the first of each that the given text states word for word (case aside). A name the
+    inputs do not hold is never kept: the cover prints only what the person gave."""
+    out, low = {}, str(text or "").lower()
+    for part in parts:
+        for k in ("client", "project"):
+            v = " ".join(str(((part or {}).get("names") or {}).get(k) or "").split()) if isinstance((part or {}).get("names"), dict) else ""
+            if v and k not in out and len(v) <= 80 and v.lower() in low:
+                out[k] = v
+    return out
+
+
 def given_text(inp) -> str:
     """What the person gave as the brief when no brief tool ran: the prompt and every attached document's text."""
     return "\n\n".join([inp.prompt_text or ""] + [d.get("text") or "" for d in (inp.docs or {}).values()]).strip()
@@ -291,6 +303,9 @@ def intake(inp, kind: str = "agency", profile: dict | None = None) -> tuple[dict
             parts.append(obj); usage.append(u)
     out = merge_a0(parts, supplied, kind, inp)
     out["produced_by"] = f"live {MODELS['a0']}"
+    names = cover_names(parts, given_text(inp))
+    if names:   # pitch-ready: the client and project as the inputs state them, for the cover (pitch_ready.cover)
+        out["names"] = names
     _intake.add_type_question(out, _intake.type_card_for(inp), profile)   # the deck type comes first, computed in code
     errs = _intake.validate_a0(out)
     if errs:
