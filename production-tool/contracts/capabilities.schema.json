@@ -308,6 +308,11 @@
           "type": "integer",
           "minimum": 0,
           "description": "Slots for character references (Runway subject human: 5)."
+        },
+        "maxObject": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Slots for every other reference (Runway subject object: 9 on gemini_image3_pro, its OpenAPI). Absent: only max bounds them. Added 2026-11-21 (additive, features/pt-relay-trace.clan)."
         }
       },
       "required": [

@@ -16,13 +16,15 @@ changes the whole image keeping its composition (fact 3). On the Gemini 3 Pro al
 takes no mask, it sends the clean image and a copy with the box drawn on it.
 
 submit() never waits and status() makes one call. The key is a constructor argument;
-this module never reads the environment.
+this module never reads the environment. `on_submit`, when given, is told every request
+submit() sent (path, body, and the task id or the error) for the relay's trace line
+(features/pt-relay-trace.clan); it never sees the key or the headers.
 """
 
 from __future__ import annotations
 
 import dataclasses
-from typing import Optional
+from typing import Callable, Optional
 
 import httpx
 
@@ -36,8 +38,8 @@ from .tags import UnknownTag, rewrite_tags, unsent_in_words
 BASE_URL = "https://api.dev.runwayml.com"
 VERSION = "2024-11-06"
 MIN_POLL_S = 5  # sheet results.minPollS
-# A credit's price and each model's prompt limit come from the sheet (usdPerCredit, models[m].promptMax).
-MAX_HUMAN, MAX_OBJECT = 5, 9
+# A credit's price, each model's prompt limit and its ref limits come from the sheet (usdPerCredit,
+# models[m].promptMax, refs.max / maxCharacter / maxObject).
 MAX_SEED = 4294967295
 
 STATES = {"PENDING": "queued", "THROTTLED": "queued", "RUNNING": "running", "SUCCEEDED": "done",
@@ -114,10 +116,11 @@ class RunwayProvider:
     name = "runway"
 
     def __init__(self, api_key: str, assets: AssetResolver, client: Optional[httpx.Client] = None,
-                 sheet: Optional[dict] = None):
+                 sheet: Optional[dict] = None, on_submit: Optional[Callable[..., None]] = None):
         self._key, self._assets = api_key, assets
         self._client = client or httpx.Client(timeout=30)
         self._sheet = sheet or load_sheet("runway")
+        self._on_submit = on_submit
 
     def capabilities(self) -> dict:
         return self._sheet
@@ -305,8 +308,10 @@ class RunwayProvider:
                 refs = [current, marked] + [r for r in refs if r is not current and r is not marked]
                 prompt = REGION_PROMPT.format(current=current.name, marked=marked.name) + prompt
         self._check(job, prompt)
-        if sum(r.role != "character" for r in refs) > MAX_OBJECT:
-            raise CapabilityMissing(f"{self.name} takes at most {MAX_OBJECT} object refs")
+        # Counted again here: a region edit's marked copy is made above, after the sheet check.
+        max_object = effective_sheet(self._sheet, job.op, job.model)["refs"].get("maxObject")
+        if max_object is not None and sum(r.role != "character" for r in refs) > max_object:
+            raise CapabilityMissing(f"{self.name} takes at most {max_object} object refs")
         if job.outputs not in (None, 1, 4):
             raise CapabilityMissing("Runway returns exactly 1 or 4 images")
         if not job.ratio:
@@ -477,16 +482,34 @@ class RunwayProvider:
         if job.op in ("region_edit", "resize") and effective_sheet(self._sheet, job.op, job.model)["mask"] != "none":
             build = self._ideogram
         path, body = build(job)
-        resp = self._call("POST", path, json=body)
+        try:
+            resp = self._call("POST", path, json=body)
+        except ProviderError as exc:
+            self._told(job, path, body, error=exc.message)
+            raise
         if resp.status_code >= 300:
-            raise _http_error(resp)
+            exc = _http_error(resp)
+            self._told(job, path, body, status=resp.status_code, error=exc.message)
+            raise exc
         try:  # a 2xx: Runway has the task, so whatever we cannot read must never be sent elsewhere
             task = self._ok(resp)
         except ProviderError as exc:
+            self._told(job, path, body, status=resp.status_code, error=exc.message)
             raise ProviderError("provider_failed", exc.message, False, accepted=True) from exc
         if not task.get("id"):
+            self._told(job, path, body, status=resp.status_code, error="no task id")
             raise ProviderError("provider_failed", "Runway accepted the job but sent no task id", False, accepted=True)
+        self._told(job, path, body, status=resp.status_code, task_id=task["id"])
         return task["id"]
+
+    def _told(self, job: ProviderJob, path: str, body: dict, **outcome) -> None:
+        """The request as sent, for the relay's trace (never the key or headers). Never raises."""
+        if self._on_submit is None:
+            return
+        try:
+            self._on_submit(op=job.op, provider=self.name, endpoint=path, body=body, **outcome)
+        except Exception:  # a trace must never fail a submit
+            pass
 
     def status(self, request_id: str) -> Status:
         try:
@@ -540,5 +563,5 @@ def _mime(url: str) -> str:
 
 def make():
     """The relay's registry entry (providers/__init__.py): this adapter behind the relay's Protocol."""
-    from ._seam import Adapted, Resolver, key
-    return Adapted(RunwayProvider(key("RUNWAY_API_KEY"), Resolver()))
+    from ._seam import Adapted, Resolver, key, trace_submit
+    return Adapted(RunwayProvider(key("RUNWAY_API_KEY"), Resolver(), on_submit=trace_submit))

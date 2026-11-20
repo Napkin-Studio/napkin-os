@@ -112,6 +112,7 @@ class Provider(Protocol):
 _asset_urls: contextvars.ContextVar[dict[str, str]] = contextvars.ContextVar("asset_urls", default={})
 _asset_mimes: contextvars.ContextVar[dict[str, str]] = contextvars.ContextVar("asset_mimes", default={})
 _job_op: contextvars.ContextVar[str | None] = contextvars.ContextVar("job_op", default=None)
+_job_id: contextvars.ContextVar[str | None] = contextvars.ContextVar("job_id", default=None)
 
 
 def asset_url(sha256: str) -> str:
@@ -137,8 +138,14 @@ def job_op() -> str | None:
     return _job_op.get()
 
 
-def set_job_context(op: str, assets: list[dict]) -> None:
-    """Before `submit`: the job's op and its assetRefs ({sha256, url, mime})."""
+def job_id() -> str | None:
+    """The jobId of the job being submitted, for the adapter's trace line (features/pt-relay-trace.clan)."""
+    return _job_id.get()
+
+
+def set_job_context(op: str, assets: list[dict], job_id: str | None = None) -> None:
+    """Before `submit`: the job's op, its assetRefs ({sha256, url, mime}) and its jobId."""
     _job_op.set(op)
+    _job_id.set(job_id)
     _asset_urls.set({a["sha256"]: a["url"] for a in assets})
     _asset_mimes.set({a["sha256"]: a["mime"] for a in assets if a.get("mime")})

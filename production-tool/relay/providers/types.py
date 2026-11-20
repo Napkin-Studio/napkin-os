@@ -312,6 +312,9 @@ def check_capabilities(sheet: dict, job: ProviderJob) -> None:
         raise CapabilityMissing(f"{sheet['provider']} takes at most {sheet['refs']['max']} refs")
     if sum(r.role == "character" for r in job.refs) > sheet["refs"]["maxCharacter"]:
         raise CapabilityMissing(f"{sheet['provider']} takes at most {sheet['refs']['maxCharacter']} character refs")
+    max_object = sheet["refs"].get("maxObject")
+    if max_object is not None and sum(r.role != "character" for r in job.refs) > max_object:
+        raise CapabilityMissing(f"{sheet['provider']} takes at most {max_object} object refs")
     if job.outputs and job.outputs > sheet["outputsPerCall"]:
         raise CapabilityMissing(f"{sheet['provider']} returns at most {sheet['outputsPerCall']} outputs per call")
     if job.duration_s is not None:

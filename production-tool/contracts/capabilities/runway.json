@@ -536,7 +536,7 @@
       "outputs": [1, 4],
       "promptMax": 5500,
       "promptUnit": "utf16",
-      "refs": {"max": 14, "maxCharacter": 5},
+      "refs": {"max": 14, "maxCharacter": 5, "maxObject": 9},
       "mask": "none",
       "pricing": {
         "unit": "image",
@@ -609,7 +609,7 @@
       "outputs": [1, 4],
       "promptMax": 5500,
       "promptUnit": "utf16",
-      "refs": {"max": 14, "maxCharacter": 5},
+      "refs": {"max": 14, "maxCharacter": 5, "maxObject": 9},
       "mask": "none",
       "pricing": {
         "unit": "image",
@@ -1011,7 +1011,7 @@
     }
   },
   "tagSyntax": "at_tag",
-  "refs": {"max": 14, "maxCharacter": 5},
+  "refs": {"max": 14, "maxCharacter": 5, "maxObject": 9},
   "seed": false,
   "outputsPerCall": 4,
   "mask": "none",

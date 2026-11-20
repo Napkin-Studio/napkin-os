@@ -1645,7 +1645,7 @@ class Relay:
         if job["op"] == "clip" and job.get("_frames"):  # a take's stills the clip starts and lands on
             made += list(job["_frames"].values())
         sized = self._sized(job, provider, model, pjob)
-        set_job_context(run_as, asset_refs(job["_req"]["input"]) + made)
+        set_job_context(run_as, asset_refs(job["_req"]["input"]) + made, job["jobId"])
         softened_from = None  # the words the provider's text check refused, when the job was sent again plainer
         while True:
             try:
@@ -1734,7 +1734,7 @@ class Relay:
         pjob = {**pjob, "prompt": self._plainer(job, sheet, pjob)}
         log.info(json.dumps({"kind": "softened", "jobId": job["jobId"], "providerCode": st.provider_code, "at": "status"}))
         made = list((job.get("_frames") or {}).values()) if job.get("_frames") else []
-        set_job_context("clip", asset_refs(job["_req"]["input"]) + made)
+        set_job_context("clip", asset_refs(job["_req"]["input"]) + made, job["jobId"])
         try:
             request_id = adapter.submit(pjob)
         except Moderated as e:
