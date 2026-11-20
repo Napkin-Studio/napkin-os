@@ -652,7 +652,7 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
         br = b["barrier"]
         blocks = [{"kind": "bullets", "items": [{"text": p["text"], "refs": p["refs"]} for p in br["points"]]}]
         if br.get("chart") and br["chart"].get("series") and all(R.kind(s["ref"]) in ("docfig", "fact") for s in br["chart"]["series"]):
-            blocks.insert(0, {"kind": "chart", "chart": {"type": "bar", "title": br["chart"]["title"], "series": br["chart"]["series"]}})
+            blocks.insert(0, {"kind": "chart", "chart": {"type": "bar", "title": br["chart"].get("title") or br.get("title") or "", "series": br["chart"]["series"]}})
         S.append(_slide("chart", br["title"], blocks, claims=br["points"], status="drafted", visual={"kind": "chart"}))
     ins = b.get("insight") or {}
     built = _insight(b, st.get("insight_judge"), inp)
