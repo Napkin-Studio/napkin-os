@@ -17,6 +17,13 @@ Routes (JSON; failures are non-2xx with ``{"error": {"type", "message"}}``, neve
     POST /production             {doc, name, data_b64}: keep a Production .clan or export zip for this document (deck-prod-picker); every
                                  later build whose inputs.production names its sha256 is run with --production FILE
 
+deck-handoffs adds to POST /run: ``requests`` (the person's waiting gate requests: edit, retry, own; deck.gate_edits), ``reactions`` (the
+client's tissue-session reactions; deck.tissue), ``inputs.upstream`` + ``members`` (the frozen brief and research and their facts,
+findings, sources and decisions: the run reads them through a snapshot Deck document, ``--deck``), the whole ``look``, and
+``inputs.format: tissue`` (the run stops at the territories and writes the tissue kit). The view gains ``run.human`` (every human edit and
+each request's status), ``run.tissue`` (the kit's files and routes) and ``run.handoffs`` (the production brief, written once the deck is
+built from an approved idea).
+
 Env (all optional)::
 
     NAPKIN_DECK_PORT       listen port (default 8793; 8787 is the agent-server, 8788 the live relay, 8795 the middleware)
@@ -47,6 +54,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
+from . import gate_edits, production_brief, tissue
 from . import inputs as inputs_mod
 from . import profiles, spec
 from . import run_deck, run_state as rs
@@ -58,9 +66,14 @@ ORDER = {"agency": ["a0", "a", "b", "c", "d", "final"], "investor": ["a0", "i", 
 #: The gate after each stage, per deck kind.
 PLAN = {"agency": [("b", "storyline"), ("c", "territories"), ("d", "idea")], "investor": [("i", "storyline")]}
 KINDS = tuple(PLAN)
-SERVED = ("deck.html", "deck.pptx", "deck.pdf", "report.json")
+SERVED = ("deck.html", "deck.pptx", "deck.pdf", "report.json", "tissue.html", "tissue.json", "reactions.json", "production_brief.md",
+          "production_brief.json")
 CONTENT = {".html": "text/html; charset=utf-8", ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-           ".pdf": "application/pdf", ".json": "application/json"}
+           ".pdf": "application/pdf", ".json": "application/json", ".md": "text/markdown; charset=utf-8"}
+FORMATS = ("pitch", "full", "tissue")
+#: What a snapshot of the frozen upstream may hold (deck-handoffs): its members, each a list, at most this many entries.
+MEMBER_KEYS = ("facts", "findings", "sources", "decisions")
+MEMBER_MAX = 5000
 
 
 class Refused(Exception):
@@ -122,8 +135,12 @@ def safe_name(doc) -> str:
 def inputs_key(inp: dict) -> str:
     """What a run's cache is keyed by: the inputs that decide its stage outputs. Change one and the run starts again."""
     p = inp.get("prompt") or {}
+    fmt = inp.get("format", "pitch")
     key = {"p": [p.get("text", ""), p.get("client", ""), p.get("project", ""), p.get("agency", "")],
-           "k": inp.get("kind", "agency"), "f": inp.get("format", "pitch")}
+           "k": inp.get("kind", "agency"), "f": "pitch" if fmt == "tissue" else fmt}   # a tissue session shares its stages with the pitch it leads to
+    up = inp.get("upstream")
+    if isinstance(up, dict) and up:   # deck-handoffs: the frozen brief and research decide the stages too (a document with none keeps its old key)
+        key["u"] = hashlib.sha256(json.dumps(up, sort_keys=True, ensure_ascii=False, default=str).encode()).hexdigest()[:16]
     # deck-types: the picked type is NOT part of the key. Types of one assembler share their recorded stages, so a type change re-arranges
     # from them for free; one that needs a stage they lack is caught by Server.run (409 needs_stages) before anything runs.
     blob = json.dumps(key, sort_keys=True)
@@ -185,8 +202,8 @@ def validate_request(body: dict, settings: Settings) -> dict:
     kind = inp.get("kind") or "agency"
     if kind not in KINDS:
         raise Refused(400, "unsupported_kind", f"deck kind {kind!r} is not run by this server yet (it runs {', '.join(KINDS)})")
-    if inp.get("format", "pitch") not in ("pitch", "full"):
-        raise Refused(400, "bad_request", "format must be pitch or full")
+    if inp.get("format", "pitch") not in FORMATS:
+        raise Refused(400, "bad_request", "format must be pitch, full or tissue")
     if picked_type(inp):
         if picked_type(inp) not in profiles.ids():
             raise Refused(400, "bad_request", f"inputs.deck_type.id must be one of {', '.join(profiles.ids())}")
@@ -214,8 +231,30 @@ def validate_request(body: dict, settings: Settings) -> dict:
         if d != "approve":
             raise Refused(400, "not_supported", f"a '{d}' decision at the {gate} gate is recorded but the engine cannot act on it yet: only approve goes on")
     size = picked_size(body)
+    requests = body.get("requests") or []
+    if not isinstance(requests, list):
+        raise Refused(400, "bad_request", "requests must be a list of gate requests {id, gate, kind: edit|retry|own, by, at, edits?, note?, own?}")
+    for r in requests:
+        try:
+            gate_edits.check_request(r)
+        except gate_edits.EditError as e:
+            raise Refused(400, "bad_request", str(e)) from e
+    try:
+        reactions = tissue.check_reactions(body.get("reactions"))
+    except ValueError as e:
+        raise Refused(400, "bad_request", str(e)) from e
+    up = inp.get("upstream")
+    if up is not None and not (isinstance(up, dict) and all(isinstance(k, str) and isinstance(v, dict) for k, v in up.items())):
+        raise Refused(400, "bad_request", "inputs.upstream must be {<source document id>: <its frozen data>}")
+    members = body.get("members") or {}
+    if not isinstance(members, dict) or any(k not in MEMBER_KEYS or not isinstance(v, list) or len(v) > MEMBER_MAX for k, v in members.items()):
+        raise Refused(400, "bad_request", f"members must be {{{', '.join(MEMBER_KEYS)}}}, each a list of at most {MEMBER_MAX}")
+    look = {**(inp.get("look") if isinstance(inp.get("look"), dict) else {}), **(body.get("look") if isinstance(body.get("look"), dict) else {})} or None
+    if inp.get("format") == "tissue" and kind == "investor":
+        raise Refused(400, "bad_request", "a tissue session shows a pitch's territories; an investor deck has none")
     prof = profiles.load(picked_type(inp)) if picked_type(inp) else profiles.default_for_kind(kind)
     return {"size": size, "doc": doc, "inputs": inp, "prompt": prompt, "kind": kind, "format": inp.get("format", "pitch"), "mode": mode,
+            "requests": requests, "reactions": reactions, "upstream": up or {}, "members": members, "look": look, "apps": body.get("apps") if isinstance(body.get("apps"), dict) else {},
             "type": prof["id"], "picked": bool(picked_type(inp)), "type_stages": list(prof["stages"]), "confirmed": confirmed_stages(body, inp),
             "approvals": approvals, "render": body.get("render", True) is not False, "marks": marks,
             "review": body.get("review") if isinstance(body.get("review"), dict) else {}, "approver": str(body.get("approver") or "")}
@@ -227,15 +266,15 @@ def plan_for(kind: str, stages: list | None = None) -> list:
     return [(s, g) for s, g in PLAN[kind] if stages is None or s in stages]
 
 
-def plan_segment(kind: str, present: set[str], approvals: dict, stages: list | None = None) -> tuple[str | None, str | None]:
+def plan_segment(kind: str, present: set[str], approvals: dict, stages: list | None = None, reopened: dict | None = None) -> tuple[str | None, str | None]:
     """How far to run: (until, held). ``until`` is the stage to stop after (None: the last segment); ``held`` a gate already waiting.
-    A gate goes on only when the person approved it AND its stage output existed already, so an old approval never skips a new gate."""
+    A gate goes on only when the person approved it AND its stage output existed already, so an old approval never skips a new gate; a gate
+    a person's edit re-opened (deck-handoffs, ``reopened``) needs an approval given after that edit."""
     for stage, gate in plan_for(kind, stages):
         fn = STAGE_FILES[stage][0]
         if fn not in present:
             return stage, None
-        a = approvals.get(gate)
-        if not a or a.get("decision", "approve") != "approve":
+        if not gate_edits.approval_counts(gate, approvals.get(gate), reopened or {}):
             return None, gate
     return None, None
 
@@ -256,6 +295,8 @@ class Doc:
         self.pay: dict | None = None
         self.cost = 0.0
         self.images: dict | None = None   # run.images: the picture cards the person reads (engine-owned)
+        self.tissue: dict | None = None   # run.tissue: the tissue kit's files and routes (deck-handoffs)
+        self.handoffs: dict | None = None   # run.handoffs: the production brief (deck-handoffs)
 
     @property
     def stages(self) -> Path:
@@ -290,9 +331,16 @@ class Server:
             d.req, d.notices, d.error, d.pay = req, [], None, None
             present = {p.name for p in d.stages.glob("*.json")}
             self.check_type_change(d, req, present)   # deck-types: before anything runs or spends
-            until, held = plan_segment(req["kind"], present, req["approvals"], req.get("type_stages"))
+            self.apply_human(d, req)   # deck-handoffs: the person's edits, retries and own ideas, and the client's reactions
+            present = {p.name for p in d.stages.glob("*.json")}
+            reopened = gate_edits.read_ledger(d.stages)["reopened"]
+            until, held = plan_segment(req["kind"], present, req["approvals"], req.get("type_stages"), reopened)
+            if req["format"] == "tissue" and "c_territories.json" in present:   # a tissue session stops at the territories, always
+                until, held = None, "territories"
             self.apply_pick(d, req, present)
             if held:
+                if req["format"] == "tissue" and held == "territories":
+                    self.make_kit(d, req)
                 d.state, d.held, d.current = "gate", held, None
                 d.cost = rs.spent(d.stages)
                 self.write_status(d)
@@ -426,6 +474,15 @@ class Server:
                             written=[f"{k}" for k in (d.pay or {}).get("exports", {})], done=(d.pay or {}).get("done"))
         if d.images and d.state == "done":
             run = {**run, "images": d.images}
+        human = gate_edits.view(d.stages)
+        if human:
+            run = {**run, "human": human}
+        if d.tissue and d.req and d.req["format"] == "tissue":
+            run = {**run, "tissue": d.tissue}
+        if d.handoffs and d.state == "done":
+            run = {**run, "handoffs": d.handoffs}
+        if isinstance(run.get("gate"), dict):
+            run = {**run, "gate": self.gate_extra(d, run["gate"], human)}
         run = {**run, "types": type_offers()}   # deck-types: which types this engine offers (the picker hides one that needs the recipes while they are off)
         out = {"doc": d.name, "state": d.state, "run": run, "notices": list(d.notices), "mode": d.req["mode"] if d.req else None}
         if d.state == "done" and d.pay:
@@ -433,6 +490,29 @@ class Server:
         if d.error:
             out["error"] = d.error
         return out
+
+    def gate_extra(self, d: Doc, gate: dict, human: dict) -> dict:
+        """The open gate with what people did to it: the words a person wrote (``human``: the keys), a pick made by a person or by the
+        client's reactions (``picked``, with ``picked_by``), the idea's sentence, and ``tissue`` when the run is a tissue session."""
+        g = dict(gate)
+        keys = sorted({e["key"] for e in (human or {}).get("edits") or [] if e.get("gate") == g.get("id")})
+        if keys:
+            g["human"] = keys
+        if g.get("id") == "territories":
+            c = rs.stage_file(d.stages, "c_territories.json") or {}
+            by = str(c.get("chosen_by") or "")
+            if c.get("chosen") and (by.startswith("brought by") or by.startswith("the client at the tissue session")):
+                g["picked"], g["picked_by"] = c["chosen"], by
+            own = {t.get("id") for t in c.get("territories") or [] if t.get("origin") == "human"}
+            if own and isinstance(g.get("territories"), list):
+                g["territories"] = [{**t, "origin": "human"} if t.get("id") in own else t for t in g["territories"]]
+            if d.req and d.req["format"] == "tissue":
+                g["tissue"] = True
+        if g.get("id") == "idea" and isinstance(g.get("idea"), dict):
+            dd = rs.stage_file(d.stages, "d_idea.json") or {}
+            if dd.get("idea") and dd.get("idea") != g["idea"].get("line"):
+                g["idea"] = {**g["idea"], "sentence": dd["idea"]}
+        return g
 
     def guess_step(self, d: Doc) -> str | None:
         """The step under way, from which stage files exist, looking only as far as this segment goes: the first stage up to its stop
@@ -468,13 +548,19 @@ class Server:
         try:
             self.seed(d, req, until)
             inp = self.load_inputs(d, req)
-            d.summary = {**rs.inputs_summary(inp), "needs_intake": run_deck._needs_intake(inp)}
+            brief_up = any(inputs_mod._is_brief_data(v) for v in (req.get("upstream") or {}).values())   # deck-handoffs: a frozen brief counts
+            d.summary = {**rs.inputs_summary(inp, brief_given=brief_up), "needs_intake": run_deck._needs_intake(inp)}
             rep = self.call_engine(d, req, until)
+            gate_edits.reapply(d.stages)   # a stage written again never overwrites a person's words
             with self.lock:
                 if until:
                     d.state, d.held = "gate", next(g for s, g in plan_for(req["kind"], req.get("type_stages")) if s == until)
+                    if req["format"] == "tissue" and until == "c":
+                        self.make_kit(d, req)
                 else:
                     d.pay = rs.payload(d.out, rep, inp, live=req["mode"] == "live")
+                    self.human_meta(d)
+                    self.write_brief(d, req)
                     d.state, d.held = "done", None
                 d.error, d.cost = None, rs.spent(d.stages)
                 d.images = self.images_view(d)
@@ -489,10 +575,85 @@ class Server:
                 self.write_status(d)
 
     def load_inputs(self, d: Doc, req: dict):
-        """The engine's own reading of the inputs (no model): what the rows under 'Read the inputs' say, and what the evidence resolves against."""
+        """The engine's own reading of the inputs (no model): what the rows under 'Read the inputs' say, and what the evidence resolves against.
+        With a frozen brief or research upstream (deck-handoffs) it is read the way the run reads it (inputs.from_upstream)."""
         answers, verified = run_deck._read_answers(None)
-        return inputs_mod.load(None, None, d.stages / "doc_facts.json", [], prompt_text=str(req["prompt"].get("text") or "").strip(),
-                               answers=answers, verified=verified)
+        text = str(req["prompt"].get("text") or "").strip()
+        if req.get("upstream"):
+            inp = inputs_mod.from_upstream({"inputs": {"prompt": req["prompt"]}, "upstream": req["upstream"]}, dict(req.get("members") or {}),
+                                           apps=req.get("apps") or None, self_id=req["doc"])
+            inp.prompt_text = text
+            return inp
+        return inputs_mod.load(None, None, d.stages / "doc_facts.json", [], prompt_text=text, answers=answers, verified=verified)
+
+    # -- deck-handoffs: the person's hand at the gates, the tissue kit, the production brief --
+    def apply_human(self, d: Doc, req: dict) -> None:
+        """The waiting gate requests (deck.gate_edits) and the client's tissue reactions (deck.tissue), before the segment is planned."""
+        if req.get("requests"):
+            got = gate_edits.apply(d.stages, req["requests"], live=req["mode"] == "live")
+            d.notices += got["notices"]
+        if req.get("reactions"):
+            res = tissue.apply_reactions(d.stages, req["reactions"])
+            if res["changed"] and res["chosen"]:
+                c = rs.stage_file(d.stages, "c_territories.json") or {}
+                name = next((t.get("name") for t in c.get("territories") or [] if t.get("id") == res["chosen"]), res["chosen"])
+                d.notices.append(f"The client's reactions picked '{name}': it is the recommendation, and their comments go into the idea.")
+
+    def make_kit(self, d: Doc, req: dict) -> None:
+        try:
+            d.tissue = tissue.write_kit(d.stages, d.out, str(req["prompt"].get("client") or ""), str(req["prompt"].get("project") or ""))
+        except (ValueError, OSError) as e:
+            d.notices.append(f"The tissue kit was not written: {e}")
+
+    def write_brief(self, d: Doc, req: dict) -> None:
+        """The production brief, once the deck is built from an approved idea (a failure is a notice: the deck stands)."""
+        if not (d.stages / "d_idea.json").exists():
+            return
+        try:
+            led = gate_edits.read_ledger(d.stages)
+            d.handoffs = {"production_brief": production_brief.write(d.stages, d.out, str(req["prompt"].get("client") or ""),
+                                                                     str(req["prompt"].get("project") or ""), human_edits=led["edits"])}
+        except (ValueError, OSError) as e:
+            d.notices.append(f"The production brief was not written: {e}")
+
+    def human_meta(self, d: Doc) -> None:
+        """The deck says which words a person wrote: ``deck.meta.human_edits`` (who, when, what), from the ledger."""
+        led = gate_edits.read_ledger(d.stages)
+        deck = (d.pay or {}).get("deck")
+        if led["edits"] and isinstance(deck, dict):
+            deck.setdefault("meta", {})["human_edits"] = [{k: e.get(k) for k in ("gate", "key", "after", "by", "at", "kind")} for e in led["edits"]]
+
+    def stage_notes(self, d: Doc, req: dict) -> dict:
+        """What the next model calls read beside their prompt: a retry's note or the person's own idea (once each), and the tissue reactions
+        for stage d."""
+        notes = gate_edits.take_notes(d.stages)
+        if req.get("reactions") and not (d.stages / "d_idea.json").exists():
+            c = rs.stage_file(d.stages, "c_territories.json") or {}
+            extra = tissue.reaction_notes(req["reactions"], c)
+            if extra:
+                notes["d"] = (notes.get("d") or "") + extra
+        return notes
+
+    def snapshot(self, d: Doc, req: dict) -> Path:
+        """A Deck document holding only the frozen upstream, its members and the look, for run_deck --deck (inputs.from_deck_document)."""
+        import zipfile
+
+        import yaml
+        p = (d.folder or d.root) / "upstream.clan"
+        data = {"inputs": {"prompt": req["prompt"], "library": {"enabled": False}}, "upstream": req["upstream"]}
+        if req.get("look"):
+            data["look"] = req["look"]
+        attached = [{"app_id": a, "carried": {"document_id": k}} for k, a in (req.get("apps") or {}).items() if isinstance(a, str)]
+        man = {"document_id": req["doc"], "app_id": "ie.napkin.deck-maker", "lineage": {"attached": attached}}
+        with zipfile.ZipFile(p, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr("manifest.yaml", yaml.safe_dump(man, allow_unicode=True, sort_keys=False))
+            z.writestr("shared/data.yaml", yaml.safe_dump(data, allow_unicode=True, sort_keys=False))
+            mem = req.get("members") or {}
+            for k, name in (("facts", "shared/facts.yaml"), ("findings", "shared/findings.yaml"), ("sources", "shared/sources.yaml"),
+                            ("decisions", "agent/decision-chain.yaml")):
+                if mem.get(k):
+                    z.writestr(name, yaml.safe_dump({k: mem[k]}, allow_unicode=True, sort_keys=False))
+        return p
 
     def seed(self, d: Doc, req: dict, until: str | None) -> None:
         """Replay only: copy the recorded stage files for the stages up to the stop into the cache, as a live run would write them."""
@@ -527,7 +688,10 @@ class Server:
     def call_engine(self, d: Doc, req: dict, until: str | None) -> dict:
         p = req["prompt"]
         argv = ["--prompt-text", str(p.get("text") or ""), "--stages", str(d.stages), "--client", str(p.get("client") or "[Client]"),
-                "--project", str(p.get("project") or "[Project]"), "--out", str(d.out), "--format", req["format"]]   # the QA runs: the repair loop reads it
+                "--project", str(p.get("project") or "[Project]"), "--out", str(d.out),
+                "--format", "pitch" if req["format"] == "tissue" else req["format"]]   # the QA runs: the repair loop reads it
+        if req.get("upstream"):   # deck-handoffs: the frozen brief and research, read as the runner reads a Deck document
+            argv += ["--deck", str(self.snapshot(d, req))]
         inp = req["inputs"]
         if inp.get("text_mode") in ("condense", "preserve"):
             argv += ["--text-mode", inp["text_mode"]]
@@ -569,14 +733,32 @@ class Server:
         argv += self.image_args(d, req, until)
         err = io.StringIO()
         restore = self.guard_live(d, req) if req["mode"] == "live" else None
+        unnote = self.with_notes(self.stage_notes(d, req)) if req["mode"] == "live" else None
         try:
             with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
                 return run_deck.main(argv)
         except SystemExit as e:
             raise Refused(400, "engine_refused", (err.getvalue().strip().splitlines() or [str(e.code)])[-1]) from e
         finally:
+            if unnote:
+                unnote()
             if restore:
                 restore()
+
+    @staticmethod
+    def with_notes(notes: dict):
+        """Live only: each stage named in ``notes`` reads its note after its own prompt, on its first call in this segment. Its prompt and
+        schema are untouched; the note is the person's (or the client's) words, never a fact."""
+        if not notes:
+            return None
+        from . import stages
+        orig, left = stages._call, dict(notes)
+
+        def call(stage, user, system):
+            extra = left.pop(stage, "")
+            return orig(stage, user + extra if extra else user, system)
+        stages._call = call
+        return lambda: setattr(stages, "_call", orig)
 
     def image_args(self, d: Doc, req: dict, until: str | None) -> list[str]:
         """The picture step's flags, only on the last segment, only when NAPKIN_DECK_IMAGES=1 and the request carries mark data (marks absent means

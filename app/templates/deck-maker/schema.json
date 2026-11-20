@@ -35,9 +35,10 @@
         "format": {
           "enum": [
             "pitch",
-            "full"
+            "full",
+            "tissue"
           ],
-          "description": "How the deck will be used: pitch (presented on a screen) or full ('Sent to be read', the leave-behind: every slide in story order, detailed). Written by the format switch under the type picker."
+          "description": "How the deck will be used: pitch (presented on a screen) or full ('Sent to be read', the leave-behind: every slide in story order, detailed). Written by the format switch under the type picker. tissue (deck-handoffs): a tissue session, the routes-only kit; the run stops at the territories."
         },
         "deck_type": {
           "type": [
@@ -439,6 +440,13 @@
                   },
                   "why": {
                     "type": "string"
+                  },
+                  "origin": {
+                    "enum": [
+                      "human",
+                      "model"
+                    ],
+                    "description": "human: a person's own route."
                   }
                 }
               }
@@ -516,8 +524,27 @@
                       }
                     }
                   }
+                },
+                "sentence": {
+                  "type": "string",
+                  "description": "Gate 3: the idea in a sentence (stage d's idea), when it differs from the line."
                 }
               }
+            },
+            "human": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "The keys a person edited at this gate (deck-handoffs)."
+            },
+            "picked_by": {
+              "type": "string",
+              "description": "Gate 2: who made the pick when a person brought their own route or the client's reactions chose it."
+            },
+            "tissue": {
+              "type": "boolean",
+              "description": "Gate 2 of a tissue session: the kit is written and the run stops here."
             }
           }
         },
@@ -696,7 +723,8 @@
                 "enum": [
                   "approve",
                   "edit",
-                  "retry"
+                  "retry",
+                  "own"
                 ]
               },
               "by": {
@@ -710,7 +738,7 @@
         },
         "gate_requests": {
           "type": "array",
-          "description": "An edit or retry asked for at a gate, recorded like change_requests; launches nothing.",
+          "description": "An edit, retry or own idea asked for at a gate (deck-handoffs). With an engine connected, one with an id is sent on the next build; the engine's answer is in run.human.requests, never written here.",
           "items": {
             "type": "object",
             "required": [
@@ -724,7 +752,8 @@
               "kind": {
                 "enum": [
                   "edit",
-                  "retry"
+                  "retry",
+                  "own"
                 ]
               },
               "at": {
@@ -734,6 +763,31 @@
                 "enum": [
                   "waiting"
                 ]
+              },
+              "id": {
+                "type": "string",
+                "description": "The request's id: the engine acts on each id once."
+              },
+              "by": {
+                "type": "string"
+              },
+              "edits": {
+                "type": "object",
+                "description": "edit: key -> new words (proposition, insight, reframe at the storyline; territory.<id>.<name|thought|why|sketch|mood>; line, idea, how_it_answers at the idea).",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "note": {
+                "type": "string",
+                "description": "retry or own: the person's note to the stage."
+              },
+              "own": {
+                "type": "object",
+                "description": "own: the person's own route (name, thought, why?, sketch?, mood?) at the territories gate, or own idea (line, idea, how_it_answers?) at the idea gate.",
+                "additionalProperties": {
+                  "type": "string"
+                }
               }
             }
           }
@@ -749,6 +803,119 @@
               "type": "array",
               "items": {
                 "type": "string"
+              }
+            }
+          }
+        },
+        "human": {
+          "type": "object",
+          "description": "Written by the engine (deck-handoffs): every human edit (gate, key, before, after, by, at, request) and each handled request's status (done or refused, with its message).",
+          "properties": {
+            "edits": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "gate": {
+                    "type": "string"
+                  },
+                  "stage": {
+                    "type": "string"
+                  },
+                  "key": {
+                    "type": "string"
+                  },
+                  "by": {
+                    "type": "string"
+                  },
+                  "at": {
+                    "type": "string"
+                  },
+                  "request": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "enum": [
+                      "edit",
+                      "own"
+                    ]
+                  }
+                }
+              }
+            },
+            "requests": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "done",
+                      "refused"
+                    ]
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "gate": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tissue": {
+          "type": "object",
+          "description": "Written by the engine for a tissue session (deck-handoffs): the kit's files and its routes.",
+          "properties": {
+            "files": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "routes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "line": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "handoffs": {
+          "type": "object",
+          "description": "Written by the engine once the deck is built (deck-handoffs): the production brief's files and counts.",
+          "properties": {
+            "production_brief": {
+              "type": "object",
+              "properties": {
+                "files": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "deliverables": {
+                  "type": "integer"
+                },
+                "to_supply": {
+                  "type": "integer"
+                }
               }
             }
           }
@@ -4123,6 +4290,42 @@
           "properties": {
             "on": {
               "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "tissue": {
+      "type": "object",
+      "description": "The tissue session (deck-handoffs). Written by the app: the client's reactions, sent on the next build; the loved route becomes the recommendation and the comments go into the idea.",
+      "properties": {
+        "reactions": {
+          "type": "object",
+          "properties": {
+            "by": {
+              "type": "string"
+            },
+            "at": {
+              "type": "string"
+            },
+            "routes": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "verdict": {
+                    "enum": [
+                      "love",
+                      "like",
+                      "not_for_us",
+                      null
+                    ]
+                  },
+                  "comments": {
+                    "type": "string"
+                  }
+                }
+              }
             }
           }
         }

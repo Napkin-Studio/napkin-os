@@ -2,13 +2,18 @@
 
 The document's prompt (inputs.prompt), kind, format and picked deck type (inputs.deck_type) go to the engine with the person's approvals (run.approvals, which the app
 writes); the engine runs to the next gate, or on to the finished deck once the last gate is approved. With NAPKIN_DECK_ENGINE_URL
-unset there is no engine: the task says so, and writes nothing."""
+unset there is no engine: the task says so, and writes nothing.
+
+deck-handoffs: the body also carries the rest of the document's look (``inputs.look``), the frozen brief and research (``inputs.upstream``)
+with the document's facts, findings, sources and decisions (``members``), the person's waiting gate requests (``requests``: edit, retry,
+own) and the client's tissue-session reactions (``reactions``). Each only when the document has it, so an older document's body is as
+before."""
 
 import re
 
 from ..deck import engine as eng
 from ..deck.job import DeckJob
-from ..doc import ctx_data
+from ..doc import ctx_data, ctx_decisions, ctx_facts, ctx_findings, ctx_sources
 from ..util import TaskError, bad
 
 NAME, TASK, VERSION, KIND, CAPABILITY_MAJOR = "build_deck", "build_deck", "1.0", "deck", 1
@@ -107,6 +112,35 @@ def size_of(data: dict) -> str | None:
     return None
 
 
+#: The engine's cap on each member list it reads beside the upstream (engine/deck/server.py MEMBER_MAX); the newest are sent.
+MEMBER_MAX = 5000
+#: What a gate request may carry to the engine (deck.gate_edits.check_request reads the rest as words).
+REQUEST_KEYS = ("id", "gate", "kind", "by", "at", "edits", "note", "own")
+
+
+def requests_of(run: dict) -> list:
+    """The person's gate requests the engine can act on: waiting, with an id, of kind edit, retry or own. A request recorded before the
+    engine was connected (no id, no words) stays a record and is not sent."""
+    out = []
+    for q in run.get("gate_requests") or []:
+        if isinstance(q, dict) and q.get("status") == "waiting" and q.get("id") and q.get("kind") in ("edit", "retry", "own"):
+            if q["kind"] == "edit" and not q.get("edits"):
+                continue
+            out.append({k: q[k] for k in REQUEST_KEYS if q.get(k) is not None})
+    return out
+
+
+def upstream_of(data: dict, clan: dict) -> tuple[dict, dict]:
+    """``(upstream, members)``: the frozen source documents (the brief and the research, whole) and the document's merged facts, findings,
+    sources and decisions, for the engine to read them as the runner reads a Deck document. Empty when nothing is upstream."""
+    up = {k: v for k, v in (data.get("upstream") or {}).items() if isinstance(k, str) and isinstance(v, dict)}
+    if not up:
+        return {}, {}
+    members = {"facts": ctx_facts(clan)[-MEMBER_MAX:], "findings": ctx_findings(clan)[-MEMBER_MAX:],
+               "sources": list(ctx_sources(clan).values())[-MEMBER_MAX:], "decisions": ctx_decisions(clan)[-MEMBER_MAX:]}
+    return up, {k: v for k, v in members.items() if v}
+
+
 def start(req, caps, settings, jid):
     """Validate now (a 400 before any job, a 503 with no engine); build the job (the caller starts it)."""
     data = ctx_data(req.clan)
@@ -134,6 +168,21 @@ def start(req, caps, settings, jid):
     size = size_of(data)
     if size:   # deck-slide-size: the person's slide size (Start, Review, or the intake card's answer); the engine forwards it as --size
         body["look"] = {"size": {"canvas": size}}
+    look = data.get("look") if isinstance(data.get("look"), dict) else {}
+    rest = {k: v for k, v in look.items() if k != "size"}
+    if rest:   # deck-handoffs: the rest of the look (agency look, kits, preferences), read by the run through the snapshot
+        body["inputs"]["look"] = rest
+    up, members = upstream_of(data, req.clan or {})
+    if up:   # deck-handoffs: the frozen brief and research, and what was carried with them
+        body["inputs"]["upstream"] = up
+        if members:
+            body["members"] = members
+    asks = requests_of(run)
+    if asks:   # deck-handoffs: the person's edits, retries and own ideas at the gates
+        body["requests"] = asks
+    tissue = data.get("tissue") if isinstance(data.get("tissue"), dict) else {}
+    if isinstance(tissue.get("reactions"), dict) and tissue["reactions"].get("routes"):   # the client's reactions from the tissue session
+        body["reactions"] = tissue["reactions"]
     if inputs.get("text_mode") in ("condense", "preserve"):   # the person's choice: condense lets the repair loop move points to the notes and shorten
         body["inputs"]["text_mode"] = inputs["text_mode"]
     if isinstance(data.get("review"), dict) and data["review"]:   # the person's whole review (pictures and pins): the picture step reads it, the engine takes the pins from it

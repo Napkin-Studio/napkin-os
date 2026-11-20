@@ -20,6 +20,8 @@ tasks:
     reads:
       - inputs.prompt (client, project, agency, text), inputs.kind and inputs.format
       - run.approvals, which the person wrote: a gate goes on only when its approval is there and the stage output it covers already existed
+      - inputs.deck_type, look (size and the rest), upstream (the frozen brief and research) with the document's facts, findings, sources and decisions
+      - run.gate_requests the person wrote with an id (edit, retry, own) and tissue.reactions: the engine acts on each request once and reports in run.human
     never:
       - writes run.approvals, run.decisions or run.gate_requests (the person's)
       - runs a stage after a gate that is not approved

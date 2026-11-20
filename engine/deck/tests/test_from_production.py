@@ -161,18 +161,24 @@ def test_edits_with_no_chain_or_of_a_canvas_picture_are_reference_only():
     assert fp.rights_of(doc, sha["f3"])[0] == "mock"
 
 
-def test_a_rights_field_never_raises_mock_or_an_upload_and_is_reported_as_forged():
-    """Contract 3 defines no rights field on an asset: a forged one is ignored, mock is refused first, and the export is named forged."""
+def test_stated_rights_contract_3_with_finals_never_raise_mock_and_generated_on_an_upload_is_not_believed():
+    """develop #257: assets[].rights is contract 3 now. A person's own or licensed makes an upload placeable; unknown is rights to supply;
+    mock is refused first whatever it states; 'generated' on an upload and a value outside the enum are ignored and named."""
     doc = mb.document({k: mb.draw(*v) for k, v in mb.PICTURES.items()})
     sha = {k: "sha256:" + hashlib.sha256(mb.draw(*v)).hexdigest() for k, v in mb.PICTURES.items()}
     doc["assets"][sha["master"]].update(origin="mock", rights="generated")
     assert fp.rights_of(doc, sha["master"]) == ("mock", "mock output")
-    doc["assets"][sha["upload_master"]].update(origin="uploaded", rights="licensed")
-    assert fp.rights_of(doc, sha["upload_master"])[0] == "reference_only"
-    for forged in ("own", "client_supplied", "generated"):
-        doc["assets"][sha["upload_master"]]["rights"] = forged
-        assert fp.rights_of(doc, sha["upload_master"])[0] == "reference_only", forged
+    up = doc["assets"][sha["upload_master"]]
+    up.update(origin="uploaded", rights="licensed")
+    assert fp.rights_of(doc, sha["upload_master"])[0] == "licensed"
+    up["rights"] = "own"
+    assert fp.rights_of(doc, sha["upload_master"])[0] == "own"
+    for not_believed in ("unknown", "client_supplied", "generated"):
+        up["rights"] = not_believed
+        assert fp.rights_of(doc, sha["upload_master"])[0] == "reference_only", not_believed
     assert {w["entity"] for w in fp.forged_fields(doc)} == {sha["master"], sha["upload_master"]}
+    doc["assets"][sha["story"]]["rights"] = "unknown"   # a generated picture a person marked unknown: lowered, never raised
+    assert fp.rights_of(doc, sha["story"])[0] == "reference_only"
 
 
 def test_a_forged_rights_field_in_a_bundle_is_ignored_and_warned(tmp_path):
@@ -181,13 +187,13 @@ def test_a_forged_rights_field_in_a_bundle_is_ignored_and_warned(tmp_path):
     def forge(d):
         for a in d["assets"].values():
             if a.get("origin") == "uploaded":
-                a["rights"] = "licensed"
+                a["rights"] = "generated"   # not what Production writes on an upload: not believed
         d["assets"][master].update(origin="mock", rights="generated")
     p, _ = fp.build(make(tmp_path, mutate=forge))
     up = p["items"][f"{mb.FSET_OLD}#master"]
-    assert up["rights"] == "reference_only" and up["to_supply"] == "rights"
+    assert up["rights"] == "reference_only" and up["to_supply"] == "rights" and up["client_showable"] is False
     assert f"{mb.FSET_NEW}#master" not in p["items"] and "mock" in refused(p, mb.FSET_NEW)
-    assert p["warnings"] and all("forged" in w["warning"] for w in p["warnings"])
+    assert p["warnings"] and all("ignored" in w["warning"] or "not believed" in w["warning"] for w in p["warnings"])
     clean, _ = fp.build(make(tmp_path))
     assert "warnings" not in clean
 
