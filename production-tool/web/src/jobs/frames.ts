@@ -33,6 +33,9 @@ export interface FrameDeps {
    *  always says so (projects/session.ts); absent, a new take is picked in the cut, as the legacy Film editor
    *  did (owner 2026-11-18 retired it; the jobs tests still land that way, to be moved to the rooms). */
   rooms?: () => boolean
+  /** A generation landed (a frame, a clip, a take, a render, a size, a draft): a save moment, so the server's copy
+   *  has it (projects/session.ts; UAT 2026-11-21, B7: only the 5-minute tick, a lock and Save posted it). */
+  landed?: () => void
 }
 
 /** The frame in a shot now (its pick). */

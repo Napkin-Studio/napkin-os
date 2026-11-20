@@ -39,6 +39,11 @@ export const browserClan: MakeClan = (persistence, opts = {}) => {
 /** Who writes when nobody is signed in (the in-browser mock, or a relay that cannot say who). */
 export const LOCAL_PERSON: Person = { id: 'p_local', handle: 'guest', tenant_id: '00000000-0000-0000-0000-000000000000' }
 
+/** Save moments (features/pt-film-r1.clan, B7): a landed generation is posted this long after it lands (several in a
+ *  row make one post), a project the server has never had this long after its first change. */
+export const LANDING_SAVE_MS = 10_000
+export const CREATED_SAVE_MS = 1_500
+
 /** The person the app UI's `me` names, as the document records them. */
 export function personOf(me: Me | undefined): Person {
   return me ? { id: me.participantId, handle: me.handle, tenant_id: me.tenant.id } : LOCAL_PERSON
@@ -109,7 +114,9 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
   runner.inFlightLimit = () => (deps.remoteConfig ?? CONFIGS.live).inFlightPerParticipant
   // Landed jobs, and the chains they move on: Draw the rest, Fix it in the shot, Update what follows.
   // The Film editor is the rooms (owner 2026-11-18): a new take lands beside the others, never in the cut.
-  const frameDeps = { relay, doc, ui, runner, rooms: () => true }
+  // A landed generation is a save moment (B7, below): the server's copy is posted soon after.
+  let saveSoon: (ms: number) => void = () => {}
+  const frameDeps = { relay, doc, ui, runner, rooms: () => true, landed: () => saveSoon(LANDING_SAVE_MS) }
   wireJobs(frameDeps)
   runner.resume()
   void resumeChains(frameDeps)
@@ -128,7 +135,16 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
       base: await readBase(storage, index, id),
     })
     clan.clan.startMirror((bytes, meta) => serverCopy!.post(bytes, meta), { everyMs: 300_000 })
+    // Save moments besides the 5-minute tick, a lock and Save (UAT 2026-11-21, B7: a film started from "Continue in"
+    // was never on the server and closing the browser lost it): a project the server has never had, at its first
+    // change; and every landed generation. One post per moment, the last change in it included.
+    const mirror = clan.clan
+    saveSoon = (ms: number) => {
+      if (saveTimer) clearTimeout(saveTimer)
+      saveTimer = setTimeout(() => { saveTimer = null; void mirror.mirrorNow('landing').catch(() => {}) }, ms)
+    }
   }
+  let saveTimer: ReturnType<typeof setTimeout> | null = null
   const initialCanvas = (await storage.get<CanvasSnapshot>(canvasKey)) ?? null
 
   // Home's card follows the project: its stage, counts, picture and (until renamed) its name.
@@ -138,10 +154,13 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
   }
   let timer: ReturnType<typeof setTimeout> | null = null
   let changedSinceOpen = false
+  let savedOnce = false
   const offChange = doc.onChange(() => {
     changedSinceOpen = true
     // Something was added to a blank film: it is a project now (owner 2026-11-18).
     if (index.get(id)?.draft) void index.keep(id)
+    // A project the server has never had (a new film, one started from "Continue in") goes there at once.
+    if (!index.get(id)?.server && !savedOnce) { savedOnce = true; saveSoon(CREATED_SAVE_MS) }
     serverCopy?.edited()
     if (timer) clearTimeout(timer)
     timer = setTimeout(() => {
@@ -169,6 +188,7 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
     }
     runner.stop()
     offChange()
+    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; changedSinceOpen = true }
     const pending = !!timer
     if (timer) clearTimeout(timer)
     timer = null

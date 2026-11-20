@@ -57,7 +57,7 @@ export interface ChainEntry {
  * Why the bytes are posted: the 5-minute interval, a lock (accept), a person's Save (manual), and,
  * with the canvas checkpoint (features/engine-store.clan), a handoff and an export.
  */
-export type MirrorReason = 'interval' | 'accept' | 'manual' | 'handoff' | 'export'
+export type MirrorReason = 'interval' | 'accept' | 'manual' | 'handoff' | 'export' | 'landing'
 
 export type MirrorPost = (bytes: Uint8Array, meta: { handle: string; reason: MirrorReason }) => Promise<void>
 
