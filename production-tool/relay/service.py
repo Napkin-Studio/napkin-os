@@ -1994,7 +1994,10 @@ class Relay:
             log.exception("writer failed")
             return self._fail(saved, "internal", f"Skye could not write this ({type(e).__name__}).", paid=False, refund=True)
         latency = out.pop("_latencyMs", int((self.clock() - start) * 1000))
-        out.pop("_usage", None)
+        usage = out.pop("_usage", None)
+        # The same director line every other agent call writes (UAT 2026-11-21: Skye's showed only as "model writer").
+        jobtrace.trace("director", saved["jobId"], op="write", model=getattr(self.writer, "model", "unknown"),
+                       promptVersion=getattr(self.writer, "prompt_version", None), latencyMs=latency, usage=usage)
         errors = writers.check(self.contracts, out)
         if errors:
             return self._fail(saved, "internal", f"Skye's draft did not match its schema: {errors[0]}", paid=False, refund=True)
@@ -2073,6 +2076,9 @@ class Relay:
                 return self._fail(saved, "internal", f"Dex could not plan the cutdowns ({type(e).__name__}).",
                                   retryable=True, paid=False, refund=True)
         latency = out.pop("_latencyMs", int((self.clock() - start) * 1000))
+        usage = out.pop("_usage", None)
+        jobtrace.trace("director", saved["jobId"], op="cutdown", step="plan", model=getattr(cutter, "model", "unknown"),
+                       promptVersion=getattr(cutter, "prompt_version", None), latencyMs=latency, usage=usage)
         rationale = out.pop("rationale", "") or ""
         plan = {"lengths": out["lengths"], "crops": out["crops"]}
         errors = self.contracts.errors("relay-api.schema.json#/$defs/Job/properties/cutdownPlan", plan)

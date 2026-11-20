@@ -33,7 +33,7 @@ from .types import (
     ProviderOutput, Ref, Status, check_capabilities, effective_sheet, load_sheet, nearest_ratio, utf16_units,
     video_audio,
 )
-from .tags import UnknownTag, rewrite_tags, unsent_in_words
+from .tags import TIED_TAG, UnknownTag, rewrite_tags, unsent_in_words
 
 BASE_URL = "https://api.dev.runwayml.com"
 VERSION = "2024-11-06"
@@ -152,8 +152,11 @@ class RunwayProvider:
 
     def _tagged(self, names: list[str], prompt: str, syntax: Optional[str] = None) -> str:
         """The prompt in the model's own reference syntax (`syntax`: its effective sheet's tagSyntax)."""
+        syntax = syntax or self._sheet["tagSyntax"]
+        if syntax == "none":  # "follows image 2 (@in_2)": a tagless model reads the place, never the tag as words
+            prompt = TIED_TAG.sub(r"\1", prompt)
         try:
-            return rewrite_tags(unsent_in_words(prompt, names), names, syntax or self._sheet["tagSyntax"])
+            return rewrite_tags(unsent_in_words(prompt, names), names, syntax)
         except UnknownTag as exc:
             raise ProviderError("invalid_input", str(exc), False) from exc
 

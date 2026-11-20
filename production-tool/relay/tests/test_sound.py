@@ -72,3 +72,11 @@ def test_dex_never_reads_the_lines_of_a_clip_or_a_takes_shots():
     out = _without_dialogue("clip", {"shot": shot([LINE, MOMENT]), "shots": [shot([LINE]), shot([SNORE])]})
     assert [b["kind"] for b in out["shot"]["beats"]] == ["moment"]
     assert [[b["kind"] for b in s["beats"]] for s in out["shots"]] == [[], ["sound"]]
+
+
+def test_a_tagless_model_reads_follows_image_n_without_the_tag_said_as_words():
+    """UAT 2026-11-21: Omni's take prompt read "follows image 1 (in 1)"."""
+    from providers.tags import rewrite_tags
+    p = "Shot 1 [0-3 s] She tiptoes in, follows image 1 (@in_1)\\nShot 2 [3-6 s] She presses it, follows image 2 (@in_2)"
+    assert rewrite_tags(p, ["in_1", "in_2"], "none") == p.replace(" (@in_1)", "").replace(" (@in_2)", "")
+    assert "(@in_1)" in rewrite_tags(p, ["in_1", "in_2"], "at_tag")

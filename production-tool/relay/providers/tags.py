@@ -32,6 +32,9 @@ def unsent_in_words(prompt: str, names: Sequence[str]) -> str:
                    else "the image" if m.group(1) == "current" else m.group(1).replace("_", " "), prompt)
 
 
+TIED_TAG = re.compile(r"(follows image \d+)[ \t]*\(@[a-z][a-z0-9_]*\)", re.I)
+
+
 def _render(syntax: str, name: str) -> str:
     if syntax == "at_tag":
         return f"@{name}"
@@ -50,4 +53,8 @@ def rewrite_tags(prompt: str, names: Sequence[str], syntax: str) -> str:
             raise UnknownTag(f"@{name} is not one of the refs {list(names)}")
         return _render(syntax, name)
 
+    if syntax == "none":
+        # A take's "follows image 2 (@in_2)": a tagless model knows a picture by its place only, so the tag in
+        # brackets goes, not said as words ("follows image 1 (in 1)", UAT 2026-11-21).
+        prompt = TIED_TAG.sub(r"\1", prompt)
     return TAG.sub(sub, prompt)

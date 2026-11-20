@@ -353,7 +353,8 @@ class ModelCutter:
         if briefed.get("brief"):
             payload["brief"] = briefed["brief"]
         t0 = time.monotonic()
-        answer = self.port.call(PURPOSE, self.system, payload, self.schema, usage=Usage(),
+        usage = Usage()
+        answer = self.port.call(PURPOSE, self.system, payload, self.schema, usage=usage,
                                 attribution=req.get("jobId", PURPOSE), images=images or None, vision=bool(images),
                                 max_tokens=4000)
         out = _settle(cut, answer)
@@ -362,6 +363,7 @@ class ModelCutter:
         out.update(flags)
         out["rationale"] = (answer.get("rationale") or "")[:2000]
         out["_latencyMs"] = round((time.monotonic() - t0) * 1000)
+        out["_usage"] = {"input_tokens": getattr(usage, "input_tokens", 0), "output_tokens": getattr(usage, "output_tokens", 0)}
         return out
 
 

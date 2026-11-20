@@ -236,3 +236,13 @@ def test_fit_words_cuts_the_persons_words_only_when_they_alone_are_over():
     assert _units(out) <= 1000 and out.endswith("y" * 990) and out.startswith("one")
     assert fit_words("a", "b", None) == "a b"
     assert _units(fit_words("", "😀" * 600, 1000)) <= 1000  # an emoji is two units
+
+
+def test_skyes_draft_writes_the_director_line_like_every_agent_call(h, caplog):
+    """UAT 2026-11-21: write had no evt=director line (its usage was only in a plain "model writer" line)."""
+    from test_write import post_write
+    caplog.set_level(logging.INFO, logger="relay")
+    token = h.as_person()
+    _, job = post_write(h, token, intent="draft", text="A samurai cleans the house for you.")
+    [rec] = [r for r in lines(caplog, "director") if r["jobId"] == job["jobId"]]
+    assert rec["op"] == "write" and "latencyMs" in rec
