@@ -106,3 +106,45 @@ def test_no_brand_reaches_any_search_end_to_end(monkeypatch):
     for b in BRANDS:
         assert research._fold(b) not in sent, b
     assert "12%" not in sent
+
+
+# ------------------------------------------------------------------------------------------------ hardening (review of a322bfb5)
+
+def test_a_product_named_only_in_a_claim_never_reaches_the_web(monkeypatch):
+    """The blocklist knows the gist's and the brief's name fields; a sub-brand named only in the brief's prose, and from there in a stage b
+    claim, is taken out by the allowlist guard (a proper noun that is not the market, a common word or a generic term)."""
+    seen = []
+    monkeypatch.setenv("RESEARCH_WEB", "claude")
+    monkeypatch.setattr(research.subprocess, "run", _stub(seen))
+    story = {**STORY, "insight": {"title": "Owners trust Purrline Crunchlets more than the shelf price suggests",
+                                  "evidence": [{"text": "QuickNibs sales rose in winter"}]}}
+    ev = research.gather_evidence(GIST, BRIEF, story)
+    sent = "\n".join(seen + ev["queries"] + [c["claim"] for c in ev["claims"]])
+    for w in ("Purrline", "Crunchlets", "QuickNibs"):
+        assert w.lower() not in sent.lower(), w
+    assert "Ireland" in sent and "Owners trust" in sent   # the market and a capitalised common word stay
+
+
+def test_the_guard_keeps_the_market_common_words_and_generic_terms():
+    g = research.proper_guard("Irish Households in Ireland buy more DIY kits than ZestCo said, per the CSO", "Ireland")
+    assert "Ireland" in g and "Irish" in g and "Households" in g and "DIY" in g and "CSO" in g
+    assert "ZestCo" not in g
+    assert research.proper_guard("Sales of the Velvra range grew", "Ireland") == "Sales of the range grew"
+    assert "S.N.A.X" not in research.proper_guard("the S.N.A.X. range", "") and "SNAX" not in research.proper_guard("the S.N.A.X. range", "")
+
+
+def test_dotted_acronyms_match_either_way():
+    nm = research._names({"client": "DIY Depot Ltd"})
+    assert research.scrub("why D.I.Y. Depot shoppers return", nm) == "why shoppers return"
+    nm2 = research._names({"client": "D.I.Y. Depot"})
+    assert research.scrub("why DIY Depot shoppers return", nm2) == "why shoppers return"
+    assert research.leaks("D.I.Y. Depot", nm) and research.leaks("diy depot", nm2)
+
+
+def test_a_short_name_is_blocked_by_its_full_name():
+    nm = research._names({"client": "XO Pet Foods"})
+    assert "XO" not in nm and "XO Pet Foods" in nm   # under three letters: never a name on its own
+    assert research.scrub("XO Pet Foods cat food", nm) == "cat food"
+    assert research.scrub("x.o. pet foods cat food", nm) == "cat food"
+    with pytest.raises(research.NameLeak):
+        research.assert_clean(["why XO Pet Foods owners switch"], nm)

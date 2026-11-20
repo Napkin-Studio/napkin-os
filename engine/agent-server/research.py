@@ -149,6 +149,9 @@ def _web_track(gist: dict) -> list[dict]:
         return []
     nm = _names(gist)
     sg = sanitise_gist(gist)   # the client's name, its rivals' names and every figure stay out of what goes to a search
+    mk = market_of(sg)
+    for k in ("category", "problem"):   # the allowlist guard: no proper noun the blocklist did not know
+        sg[k] = proper_guard(sg.get(k) or "", mk)
     try:
         assert_clean([sg["market"], sg["category"], sg["problem"]], nm)
     except NameLeak as e:
@@ -223,6 +226,14 @@ _NAME_KEYS = ("client", "brand", "brands", "brand_name", "client_name", "project
 #: What separates two names in a field: commas, slashes, brackets, quotes, 'and', 'vs', a spaced dash, a colon.
 _SPLIT = re.compile(r"[,;/&|()\[\]{}\"“”«»„‹›:+]|\band\b|\bvs\.?\b|\bversus\b|\bincluding\b|\bsuch as\b|\s[-–—]\s", re.I)
 _EDGE = " .'\"‘’`*-–—_!?"
+
+
+#: A market's own adjectives, kept by the guard ('Irish households').
+DEMONYMS = {"ireland": ("irish",), "romania": ("romanian", "romanians"), "united kingdom": ("british", "uk"), "britain": ("british",),
+            "germany": ("german",), "france": ("french",), "spain": ("spanish",), "italy": ("italian",), "poland": ("polish",)}
+#: Capitalised terms a query may keep although they are not common words: generic statistics and market words, never a brand.
+GENERIC_TERMS = frozenset("""uk eu us usa un oecd gdp cpi vat sme smes diy gen z nhs hse ons cso eurostat ngo ngos covid tv dooh ooh pos
+fmcg b2b b2c ai esg co2 kpi kpis""".split())
 
 
 class NameLeak(ValueError):
@@ -312,7 +323,8 @@ def _name_re(name: str):
     toks = re.findall(r"\w+", _fold(name))
     if not toks:
         return None
-    body = r"[\s\-_.'’]*".join(re.escape(t) for t in toks)
+    tok = lambda t: r"\.?".join(map(re.escape, t)) if len(t) <= 6 else re.escape(t)   # noqa: E731  'D.I.Y.' against 'DIY'
+    body = r"[\s\-_.'’]*".join(tok(t) for t in toks)
     return re.compile(rf"(?<!\w){body}(?:['’]s|s['’]|['’])?(?!\w)")
 
 
@@ -327,6 +339,30 @@ def assert_clean(texts, names=()) -> None:
     for t in ([texts] if isinstance(texts, str) else texts):
         if leaks(t, names):
             raise NameLeak("a query bound for a web search carries a client, brand or rival name; it was not sent")
+
+
+def proper_guard(text: str, market: str = "") -> str:
+    """``text`` with every proper-noun-like word taken out unless it is a word of the market, a common word or a generic term: a capitalised
+    word (not a sentence's first word that is a common word), an all-capitals word, a word with a capital inside (CamelCase) or a dotted
+    acronym. The blocklist (``_names``) only knows the names the gist and the brief's name fields hold; a product or sub-brand named only
+    in the brief's prose, and from there in a stage b claim, is caught here (an allowlist on what reaches the web)."""
+    keep = set(_fold(market).split()) | GENERIC_TERMS | {d for k, ds in DEMONYMS.items() if k in _fold(market) for d in ds}
+    common = _common()
+    t = re.sub(r"\b(?:[A-Za-z]\.){2,}", lambda m: m.group(0).replace(".", ""), unicodedata.normalize("NFC", str(text or "")))   # D.I.Y. -> DIY
+
+    def judge(m):
+        w = m.group(0)
+        f = _fold(_depossess(w))
+        if not f or f in keep:
+            return w
+        if (w.isupper() and len(w) > 1) or re.search(r"[a-z][A-Z]", w):
+            return " "   # an acronym or a CamelCase word: a brand shape
+        if w[:1].isupper():
+            return w if f in common else " "   # 'Households', 'Water' pass; 'Purrline' does not
+        return w
+    out = re.sub(r"\b[\w’'-]*[A-Za-z][\w’'-]*\b", judge, t)
+    out = re.sub(r"[(\[{]\s*[)\]}]", " ", out)
+    return " ".join(out.split()).strip(" ,;:.")
 
 
 def scrub(text: str, names=()) -> str:
@@ -529,8 +565,13 @@ def gather_evidence(gist: dict, brief_object: dict | None = None, storyline: dic
     nm = _names(gist or {}, names, brief_object)
     sg = sanitise_gist(gist or {}, names, brief_object)
     sg["market"] = market_of(sg)
-    claims = deck_claims(brief_object, storyline, nm)
+    for k in ("category", "audience", "problem", "objective"):   # the allowlist guard: no proper noun the blocklist did not know
+        sg[k] = proper_guard(sg.get(k) or "", sg["market"])
+    claims = [{**c, "claim": proper_guard(c["claim"], sg["market"])} for c in deck_claims(brief_object, storyline, nm)]
+    claims = [c for c in claims if c["claim"]]
     queries = build_queries(sg, claims, nm)
+    for q in queries:
+        q["query"] = proper_guard(q["query"], sg["market"]) or sg["market"] or "the market"
     findings = _evidence_track(sg, claims, queries, nm)
     local = sum(1 for f in findings if f["local"])
     return {"version": 1, "market": sg["market"], "category": sg.get("category", ""), "claims": claims, "queries": [q["query"] for q in queries],
