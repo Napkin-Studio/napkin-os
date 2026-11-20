@@ -4602,7 +4602,7 @@ class Renderer:
 
     def _label_text(self, im) -> str:
         lab = images.picture_label(im, self.pic_label)   # 'Production' for a Production Tool picture, at the same place
-        return f"{lab} · Flagged" if im.get("status") == "flagged" else lab
+        return f"{lab} · Flagged" if im.get("status") == "flagged" and not spec.PICTURE_PLAN else lab   # the picture plan: Illustrative or Mock-up only
 
     def _label_w(self, im, w) -> float:
         return min(w - 0.2, self._unk(0.24 + 0.085 * len(self._label_text(im))))

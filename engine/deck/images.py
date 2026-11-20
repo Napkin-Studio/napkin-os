@@ -1009,7 +1009,7 @@ def drawn(deck: dict, audience: str) -> dict:
     """The slots a render draws, ``{(slide id, slot): image dict}``. A review render draws made, flagged and approved pictures; a client
     render draws only approved ones whose approval names the slot's own asset. A ``reference_only`` asset is drawn in neither."""
     assets = deck.get("assets") or {}
-    ok = ("approved",) if audience == "client" else ("made", "flagged", "approved")
+    ok = ("approved",) if audience == "client" else (("made", "approved") if spec.PICTURE_PLAN else ("made", "flagged", "approved"))   # the picture plan: a flagged picture is never drawn
     out = {}
     for sid, name, im in image_slots(deck):
         if im.get("status") not in ok or im.get("asset") not in assets or assets[im["asset"]].get("rights") == "reference_only":

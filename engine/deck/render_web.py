@@ -198,7 +198,7 @@ class _Slide:
 def _mockup(im: dict | None = None, label: str = "") -> str:
     """The labels under a frame or a strip: the picture's own (unless approved), then the fixed 'Mock-up'."""
     own = ""
-    if im is not None and im.get("status") != "approved":
+    if im is not None and im.get("status") != "approved" and not spec.PICTURE_PLAN:   # the picture plan: one label on a frame, Mock-up
         flagged = im.get("status") == "flagged"
         own = f'<span class="mockup own{" flagged" if flagged else ""}">{_e(images.picture_label(im, label) + (" · Flagged" if flagged else ""))}</span>'
     return own + f'<span class="mockup">{_e(spec.MOCKUP_LABEL)}</span>'
@@ -255,7 +255,7 @@ def picture_markup(sid: str, s: dict, drawn: dict, pictures: dict, src, label: s
         return "", ""
 
     def fig(slot, im, style=""):
-        flagged = im.get("status") == "flagged"
+        flagged = im.get("status") == "flagged" and not spec.PICTURE_PLAN   # the picture plan: never the word Flagged, never the red outline
         pos = f' style="object-position:{round(im["focal"]["x"] * 100)}% {round(im["focal"]["y"] * 100)}%"' if im.get("focal") else ""
         tag = ""
         if im.get("status") != "approved":

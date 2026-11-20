@@ -71,6 +71,8 @@ STAGE_G_FILE = "g_image_subjects.json"
 TERRITORY_PICTURE_DRAWN = False
 #: Test seams (all None in service): a Runway client factory, the stage g call, the guard's post and the poll sleep. Tests set them; nothing else does.
 CLIENT_FACTORY = SUBJECTS_CALL = GUARD_POST = SLEEP = None
+#: The picture plan's fit check (visuals.fit.check) seam: tests set a fake; None in service.
+FIT_CHECK = None
 
 
 class GenError(ValueError):
@@ -194,7 +196,29 @@ def subject_request(deck: dict, inp, territories, cands: list, banned: list, den
             row["sketch"] = "" if lint.confidential_hit(t.get("sketch") or "", deny) else str(t.get("sketch") or "")[:400]
             row["mood"] = "" if lint.confidential_hit(t.get("mood") or "", deny) else str(t.get("mood") or "")[:200]
         slots.append(row)
-    return {"slots": slots, "setting": tone, "banned_imagery": banned}
+    out = {"slots": slots, "setting": tone, "banned_imagery": banned}
+    if spec.PICTURE_PLAN:   # the picture plan: the deck's scene brief (market, setting, category, audience, key visual, the 'not' list)
+        out["scene"] = scene_for(deck, inp, deny)
+        for row, c in zip(slots, cands):
+            row["picture_role"] = {"title": "cover", "idea": "idea", "audience": "audience"}.get(deck["slides"][c["sid"]]["type"], "execution")
+            if row["picture_role"] == "execution":
+                row["format"] = str(deck["slides"][c["sid"]].get("title") or "")[:60]
+    return out
+
+
+def scene_for(deck: dict, inp, deny: dict) -> dict:
+    """The deck's scene brief (deck.scene.scene_brief, kept in deck.meta.scene by run_deck), with any field that would draw on a part
+    marked Confidential dropped."""
+    sc = dict((deck.get("meta") or {}).get("scene") or {})
+    for k, v in list(sc.items()):
+        if isinstance(v, str) and v and lint.confidential_hit(v, deny):
+            sc[k] = ""
+    return sc
+
+
+def _names_deny(ctx) -> dict:
+    """The per-brief names deny-list for the scene lint (deck.meta.scene_names, written by run_deck) and the run's own names."""
+    return lint.name_words(list((ctx.deck.get("meta") or {}).get("scene_names") or []) + list(ctx.names or []))
 
 
 def request_sha(req: dict) -> str:
@@ -349,6 +373,9 @@ def make_plan(ctx: Ctx, mode: str = "plan", hero: list | None = None, remake_sty
     banned = list(dict.fromkeys([*safe["banned"], *ctx.style.banned_imagery, *ctx.banned_extra]))
     deny = lint.deny_list(inp.marks)
     cands = candidate_slots(deck, ctx.territories, ctx.generate)
+    if spec.PICTURE_PLAN:   # the picture plan: 3 to 5 pictures (cover, idea, the hero execution, the audience when presented)
+        from . import scene as scn   # noqa: PLC0415
+        cands = scn.slots_for(deck, cands)
     req = subject_request(deck, inp, ctx.territories, askable(deck, cands), banned, deny)
     rec = ctx.subjects if ctx.subjects is not None else load_subjects(ctx.stages, req)
     style_text = style_text_for(ctx.style, banned)
@@ -409,7 +436,14 @@ def make_plan(ctx: Ctx, mode: str = "plan", hero: list | None = None, remake_sty
         kind = got.get("kind") if got.get("kind") in ("photo", "illustration") else c["kind"]
         subject = str(got.get("subject") or "")[:SUBJECT_MAX]
         source = "stage_g"
-        why = lint.lint_text(subject, banned, deny) if subject else "no subject yet"
+        if spec.PICTURE_PLAN:   # the scene lint (deny-lists); a refused card was re-asked once already: no picture, never a fallback
+            why = lint.lint_scene(subject, banned, deny, _names_deny(ctx)) if subject else (got.get("refused") or "no subject yet")
+            if why:
+                row.update(status="held", reason=("no picture: the scene was refused (" + why + ")") if subject or got.get("refused") else "no scene card yet: stage g writes it",
+                           **({"subject_refused": why} if subject or got.get("refused") else {}))
+                continue
+            row["card"] = {k: got.get(k) for k in ("key_visual", "setting", "must_not") if got.get(k)}
+        why = None if spec.PICTURE_PLAN else (lint.lint_text(subject, banned, deny) if subject else "no subject yet")
         if why:
             source = "template"
             if subj and subject:   # a subject was written and refused: never a silent fallback, the card and report.json say so
@@ -623,7 +657,10 @@ def run_subjects(ctx: Ctx, plan: dict, call=None, log=print) -> dict:
             raise GenError(f"cap reached: ${spent:.2f} is spent of ${ctx.cap:.2f}; the subject call would pass it")
         ctx.ledger.append({"key": key, "tier": "subjects", "kind": "subjects", "estimate_usd": jobs.SUBJECTS_ESTIMATE_USD, "state": "creating"})
     obj, usage = call(req)
-    subjects = {k: {"subject": str(v.get("subject") or ""), "kind": v.get("kind")} for k, v in (obj.get("subjects") or obj).items() if isinstance(v, dict)}
+    if spec.PICTURE_PLAN:   # scene cards, assembled and linted in code; a refused card is re-asked ONCE with its reason, then has no picture
+        subjects, usage = _scene_subjects(ctx, req, obj, usage, call, banned, key)
+    else:
+        subjects = {k: {"subject": str(v.get("subject") or ""), "kind": v.get("kind")} for k, v in (obj.get("subjects") or obj).items() if isinstance(v, dict)}
     usd = float((usage or {}).get("usd") or 0) or None
     rec = {"stage": "g", "produced_by": obj.get("produced_by") or "image_subjects", "request_sha": request_sha(req), "subjects": subjects, "usage": usage or {}}
     Path(ctx.stages).mkdir(parents=True, exist_ok=True)
@@ -634,6 +671,93 @@ def run_subjects(ctx: Ctx, plan: dict, call=None, log=print) -> dict:
     jobs.save_manifest(ctx.cache, ctx.manifest)
     log(f"stage g: {len(subjects)} subject(s) written")
     return rec
+
+
+def _cards_to_subjects(obj: dict, scene: dict) -> dict:
+    """Stage g's scene cards as subjects (deck.scene.subject_of), each kept with its card fields for the fit check."""
+    from . import scene as scn   # noqa: PLC0415
+    out = {}
+    for k, v in ((obj or {}).get("cards") or (obj or {}).get("subjects") or {}).items():
+        if not isinstance(v, dict):
+            continue
+        subj = scn.subject_of(v, scene) if v.get("key_visual") else str(v.get("subject") or "")
+        nots = [str(x) for x in (v.get("not") or scene.get("must_not") or [])]
+        out[k] = {"subject": subj, "kind": v.get("kind"), "key_visual": str(v.get("key_visual") or ""), "setting": str(v.get("setting") or scene.get("setting") or ""),
+                  "must_not": nots}
+    return out
+
+
+def _scene_subjects(ctx: Ctx, req: dict, obj: dict, usage: dict, call, banned: list, key: str) -> tuple:
+    """The subjects from stage g's scene cards: linted with the scene lint; the refused ones re-asked once (``redo``: key -> reason), and
+    any still refused recorded with an empty subject and the reason (no picture, never a template). ``(subjects, usage)``."""
+    deny, names = lint.deny_list(ctx.inp.marks), _names_deny(ctx)
+    scene = req.get("scene") or {}
+    subjects = _cards_to_subjects(obj, scene)
+    bad = {k: (lint.lint_scene(v["subject"], banned, deny, names) if v["subject"] else "no scene card was written") for k, v in subjects.items()}
+    bad.update({s["key"]: "no scene card was written" for s in req["slots"] if s["key"] not in subjects})
+    bad = {k: w for k, w in bad.items() if w}
+    if bad:
+        with ctx.ledger.locked():
+            ctx.ledger.append({"key": key + "_redo", "tier": "subjects", "kind": "subjects", "estimate_usd": jobs.SUBJECTS_ESTIMATE_USD, "state": "creating"})
+        again, u2 = call({**req, "slots": [s for s in req["slots"] if s["key"] in bad], "redo": bad})
+        with ctx.ledger.locked():
+            ctx.ledger.append({"key": key + "_redo", "tier": "subjects", "kind": "subjects", "usd": float((u2 or {}).get("usd") or 0) or jobs.SUBJECTS_ESTIMATE_USD, "state": "done"})
+        fixed = _cards_to_subjects(again, scene)
+        for k in list(bad):
+            v = fixed.get(k)
+            why = (lint.lint_scene(v["subject"], banned, deny, names) if v and v["subject"] else "no scene card was written")
+            if not why:
+                subjects[k] = v
+                del bad[k]
+        usage = {**(usage or {}), "redo": u2 or {}, "usd": float((usage or {}).get("usd") or 0) + float((u2 or {}).get("usd") or 0)}
+    for k, why in bad.items():
+        subjects[k] = {"subject": "", "kind": (subjects.get(k) or {}).get("kind"), "refused": why}
+    return subjects, usage
+
+
+def fit_pass(ctx: Ctx, plan: dict, keys: list, regenerate, check=None, log=print) -> dict:
+    """The fit check on the pictures just made (``keys``: job keys): one look each against its scene card (visuals.fit.check: local Ollama,
+    else Haiku; never Gemini). A fail gets ONE retry, a new job with the correction line (``regenerate(todo)`` makes it); a second fail
+    is dropped, so the slot goes picture-free. The verdict is kept on the job (``fit``). Returns ``{passed, retried, dropped}``."""
+    from visuals import fit as vfit   # noqa: PLC0415
+    check = check or FIT_CHECK or vfit.check
+    rows = {r.get("job"): r for r in plan["slots"].values() if r.get("job")}
+    out = {"passed": [], "retried": [], "dropped": []}
+    retry = []
+    for k in keys:
+        j, r = ctx.manifest.get("jobs", {}).get(k), rows.get(k)
+        if not j or not r or jobs.state(j, ctx.cache) != "saved":
+            continue
+        v = check((Path(ctx.cache) / j["file"]).read_bytes(), r.get("card") or {"key_visual": r.get("subject"), "setting": ""})
+        j["fit"] = v
+        if v.get("pass"):
+            out["passed"].append(k)
+        elif int(r.get("attempt") or 1) < jobs.DRAFT_MAX_ATTEMPTS:
+            prompt = assemble_prompt(f"{r['subject']} {vfit.correction(r.get('card') or {}, v)}", composition(ctx.deck["slides"][r["slide"]]["type"]),
+                                     style_text_for(ctx.style, plan["banned_imagery"]), r.get("kind") or "photo")
+            attempt = int(r.get("attempt") or 1) + 1
+            nk = runway.request_key(r["model"], r["ratio"], prompt, [x.sha256 for x in vstyle.sendable(ctx.style)], f"{RAILS_VERSION}:{r['key']}", attempt)
+            retry.append({"key": nk, "tier": "draft", "ratio": r["ratio"], "prompt": prompt, "slots": [r["key"]], "attempt": attempt,
+                          "ref_shas": [x.sha256 for x in vstyle.sendable(ctx.style)], "card": "fit-retry"})
+            r.update(job=nk, attempt=attempt, prompt=prompt, fit_retry=v.get("reason"))
+            out["retried"].append(k)
+        else:
+            out["dropped"].append(k)
+    if retry:
+        regenerate(retry)
+        for t in retry:
+            j = ctx.manifest.get("jobs", {}).get(t["key"])
+            r = rows.get(next((k for k in out["retried"] if rows[k].get("job") == t["key"]), None)) or {}
+            if not j or jobs.state(j, ctx.cache) != "saved":
+                out["dropped"].append(t["key"])
+                continue
+            v = check((Path(ctx.cache) / j["file"]).read_bytes(), r.get("card") or {})
+            j["fit"] = v
+            (out["passed"] if v.get("pass") else out["dropped"]).append(t["key"])
+    for k in out["dropped"]:
+        log(f"fit check: picture {k[:10]} dropped (it did not show the idea in its setting twice); the slot has no picture")
+    jobs.save_manifest(ctx.cache, ctx.manifest)
+    return out
 
 
 def make(ctx: Ctx, plan: dict, card: dict, client, retry_unknown=False, guard_post=None, sleep=None, log=print) -> dict:
@@ -658,6 +782,10 @@ def make(ctx: Ctx, plan: dict, card: dict, client, retry_unknown=False, guard_po
                      subject_refused=byjob[j["key"]].get("subject_refused"), kind_hint=byjob[j["key"]].get("kind"))
     ctx.manifest.setdefault("cards", {})[card["id"]] = {"kind": card["kind"], "at": jobs.now(), "usd": card["usd"]}
     jobs.save_manifest(ctx.cache, ctx.manifest)
+    if spec.PICTURE_PLAN and card["kind"] == "drafts":   # the fit check, one retry, then drop
+        regen = lambda todo2: jobs.generate(client, todo2, ctx.cache, ctx.manifest, ctx.ledger, ctx.cap, refs_for, sleep=sleep or _t.sleep,  # noqa: E731
+                                            guard=guard_fn(plan["banned_imagery"], safe, guard_post), log=log)
+        res = {**(res if isinstance(res, dict) else {}), "fit": fit_pass(ctx, plan, [j["key"] for j in todo], regen, log=log)}
     return res
 
 
@@ -682,6 +810,8 @@ def write_generated(ctx: Ctx, plan: dict) -> dict | None:
                 if r["status"] == "rejected":
                     saved = []
                 # a remade picture (a replace) is the newest draft; the older one is dropped
+            if spec.PICTURE_PLAN and tier == "draft":   # the picture plan: only a picture that passed the fit check is placed
+                saved = [(k, j) for k, j in saved if (j.get("fit") or {}).get("pass")]
             for k, j in saved[-1:]:
                 info = _inspect(Path(ctx.cache) / j["file"])
                 adir.mkdir(parents=True, exist_ok=True)

@@ -544,7 +544,7 @@ ARTWORK_RULE = ("For a slot whose key starts with execution: describe the artwor
 
 def g_system() -> str:
     """Stage g's system prompt: the file's own text, plus ARTWORK_RULE before the input rule when spec.GRAPHICS is on."""
-    text = _sysmsg("g_image_subjects.md", "g")
+    text = _sysmsg("g_scene_cards.md" if spec.PICTURE_PLAN else "g_image_subjects.md", "g")   # the picture plan: scene cards as fields
     if not spec.GRAPHICS:
         return text
     body = text.rstrip("\n").split("\n")

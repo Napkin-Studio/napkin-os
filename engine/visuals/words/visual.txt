@@ -412,3 +412,12 @@ worktop
 windowsill
 rooftop
 candlelit
+# picture plan (round 3 refusals, 20 Nov 2026): everyday visual words the allow-list lacked
+kraft
+kibble
+teal
+pallet
+mid
+wares
+homewares
+wobbler

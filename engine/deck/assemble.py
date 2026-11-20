@@ -740,6 +740,11 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
                          {"kind": "copy", "lines": x["copy"], "answer": x["answer"], "basis": "creative"}],
                         claims=[{"text": " / ".join(x["copy"]), "refs": [], "basis": "creative"}], status="drafted",
                         visual=x.get("visual"), label=f"Execution {x['channel'][:60]}"))
+    if spec.SHOW_WORK and d.get("campaign_line"):   # the concept on a page (deck/concept_pack.py): presented when it fits, else first in the appendix
+        from . import concept_pack   # noqa: PLC0415
+        cs = concept_pack.slide(concept_pack.build({"c": c, "d": d}), _slide)
+        if cs is not None:
+            S.append(cs)
     # 12. Channel roles
     if d.get("channel_roles"):
         rows = [["Channel", "Its one job"]] + [[r["channel"], r["role"]] for r in d["channel_roles"]]
@@ -1612,8 +1617,9 @@ def _arrange_spine(S: list, profile: dict, supported: set | None, routes: int, m
     (a ``criterion_answer`` slide), the slides whose types answer that criterion (_criteria_rank) go behind the divider in a pitch (the answer is the
     criterion's presented slide; spec.ANSWER_KEEPS never move)."""
     spine, appx = profile["spine"], set(profile.get("appendix") or [])
-    S = [x for x in S if x["type"] in spine or x["type"] in appx]
     pitch = fmt == "pitch"
+    concept_ok = bool(spec.SHOW_WORK and pitch and _present_mode(profile))   # the concept page: only a type that takes the agency order
+    S = [x for x in S if x["type"] in spine or x["type"] in appx or (concept_ok and x["type"] == "concept")]
     keep = {id(x) for x in _shown_charts(S, supported) + _shown_executions(S, messages)}
     if routes > 1:
         keep |= {id(x) for x in [x for x in S if x["type"] == "territory"][:routes]}
@@ -1653,6 +1659,11 @@ def _arrange_spine(S: list, profile: dict, supported: set | None, routes: int, m
         return story
     divider = _slide("appendix", "Appendix", [{"kind": "text", "text": "Backup for questions: everything this presentation rests on."}], status="from_source")
     return story + [divider] + backup
+
+
+def _present_mode(profile):
+    from . import show_work   # noqa: PLC0415
+    return show_work.present_mode(profile)
 
 
 def _add(deck, sl):  # sl may be None to reserve a number

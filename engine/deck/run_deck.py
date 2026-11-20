@@ -823,6 +823,28 @@ def _read_answers(path) -> tuple:
     return raw, {}
 
 
+def _territory_handoff(a, rep: dict) -> None:
+    """--territory-run: write stage c (and frames.json) from the territory tool's run before stage c would be written by a model. Recorded
+    in ``rep['territory_run']``; frames imported turn on --pictures creative when no --pictures was given. ``auto`` with no run found is a
+    note, not an error (stage c then runs as usual)."""
+    from . import from_territory as ft
+    where = [Path(a.territory_run)] if a.territory_run != "auto" else ft.auto_runs(a.stages)
+    run = next((r for r in (ft.find_run(w) for w in where) if r), None)
+    if run is None:
+        if a.territory_run != "auto":
+            raise SystemExit(f"refused: --territory-run {a.territory_run}: no territory run there (a JSON with status proceed and territories)")
+        rep["territory_run"] = {"found": False, "looked_in": [str(w) for w in where]}
+        return
+    try:
+        got = ft.import_run(run, a.stages, a.brief, a.territory_chosen)
+    except (ft.FromTerritoryError, images.ImageError) as e:
+        raise SystemExit(f"refused: --territory-run {run.name}: {e}")
+    rep["territory_run"] = {"found": True, **got}
+    if got["made"] and not a.pictures:
+        a.pictures = "creative"
+    print(f"territory run {run.name}: {got['territories']} territories as stage c, {got['made']} frame(s) as pictures")
+
+
 def main(argv=None):
     """Run the pipeline end to end and print the report."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
@@ -938,6 +960,11 @@ def main(argv=None):
     ap.add_argument("--cap-usd", type=float, default=None, help="a LOWER cap for this deck's pictures (default and most 2.50; the subject call and failures count)")
     ap.add_argument("--images-reviewed", action="store_true", help="record a person's review of a sensitive brief in --review (needs --by human:<id>)")
     ap.add_argument("--by", help="who reviewed (human:<id>) with --images-reviewed")
+    ap.add_argument("--territory-run", metavar="RUN.json|DIR|auto", default=None,
+                    help="a territory tool run (engine/territory: territory.run --out): its cards become stage c's candidate territories and its "
+                         "frames (<run>.frames/v<N>-<hash>/, the newest) the territories' pictures, instead of stage c writing its own. A folder: its "
+                         "newest run. auto: the newest run in <stages>/territory, ../territory or ../../territory, if any. Only when stage c is not recorded")
+    ap.add_argument("--territory-chosen", metavar="TID", help="with --territory-run: the chosen territory id (default: the run's top score, flagged for Gate 2)")
     ap.add_argument("--images-only", action="store_true", help="rebuild from the recorded stages only (never a text model); refuses if any text stage is missing")
     a = ap.parse_args(argv)
     a.pictures_asked = a.pictures is not None   # deck-types: a person's own --pictures beats the type's picture default
@@ -1060,6 +1087,8 @@ def main(argv=None):
             if a.until == k:
                 return _stopped(a, rep, t0, k)
             continue   # intake adds no stage, and no cost, when the brief supplies everything or there is nothing else to read
+        if k == "c" and a.territory_run and not p.exists():   # the territory tool's run is stage c: its cards, and its frames as pictures
+            _territory_handoff(a, rep)
         if p.exists():
             st[k] = json.loads(p.read_text())
             if k == "a0":
@@ -1230,6 +1259,16 @@ def main(argv=None):
             wrapped = isinstance(review, dict) and "review" in review
             review = review.get("review", review) if isinstance(review, dict) else {}
             terr = (st.get("c") or {}).get("territories") or []
+            if spec.PICTURE_PLAN and a.images != "off":   # the picture plan: one scene brief per deck and the per-brief names (deck/scene.py)
+                from . import scene as scn   # noqa: PLC0415
+                evm = ""
+                if a.evidence:
+                    try:
+                        evm = str(json.loads(a.evidence.read_text()).get("market") or "")
+                    except (ValueError, OSError):
+                        evm = ""
+                deck["meta"]["scene"] = scn.scene_brief(inp, st, evm)
+                deck["meta"]["scene_names"] = scn.names_for(inp, a.client, [a.project, a.agency])
             if a.images != "off":
                 plan_res = _image_step(a, deck, inp, terr, review, wrapped, deck_ctx, rep, generate=rec["pictures"]["generate"] if rec else "all")
             gen = images.load_generated(a.stages) if a.pictures else None
@@ -1326,6 +1365,11 @@ def main(argv=None):
     rep["stages"]["validate"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
     (a.out / "deck.json").write_text(json.dumps(deck, indent=1, ensure_ascii=False, default=str))
     (a.out / "validation.json").write_text(json.dumps(findings, indent=1, ensure_ascii=False))
+    if spec.SHOW_WORK and kind != "investor" and (st.get("d") or {}).get("campaign_line"):   # the concept pack beside the deck (deck/concept_pack.py)
+        from . import concept_pack   # noqa: PLC0415
+        pack = concept_pack.build(st, deck)
+        concept_pack.write(pack, a.out)
+        rep["concept_pack"] = {"files": ["concept_pack.json", "concept_pack.md"], "missing": pack["missing"], "checks": len(pack["checks"])}
     if a.until == "deck":
         rep["slides"] = len(deck["order"])
         rep["slides_by_status"] = {s: sum(1 for x in deck["slides"].values() if x["status"] == s) for s in ("from_source", "drafted", "needs_human")}
