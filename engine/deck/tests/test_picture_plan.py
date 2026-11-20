@@ -223,3 +223,15 @@ def test_possessives_contractions_and_typographic_marks_are_not_quotation_marks(
     assert lint.plain("The kitchen’s window — grey light.") == "The kitchen's window, grey light."
     assert lint.lint_scene(lint.plain("The kitchen’s window — grey light.")) is None
     assert lint.lint_scene("a sign saying 'open' hangs.") == "it holds a quotation mark"   # a real quotation still fails
+
+
+def test_a_long_card_is_held_to_the_limit_without_cutting_a_word():
+    """The re-render: subjects cut at the character limit left fragments ('peo', 'terra') the lint read as names."""
+    card = {"key_visual": "a woman in a rain jacket over work clothes pushes off from a new dock on a warm coloured bike " * 3,
+            "setting": "a wet city street at rush hour", "props": "a bag in the basket, puddles, a bus stop " * 4,
+            "person": "one rider seen from behind, people at the bus stop far off", "not": ["a park", "a race", "a gym", "a beach"]}
+    s = scene.subject_of(card, {}, max_len=240)
+    assert len(s) <= 240 and s.endswith(".")
+    assert all(lint.lint_scene(s) is None or "known word" not in lint.lint_scene(s) for _ in [0])
+    short = scene.subject_of({"key_visual": "an empty bowl on a shelf edge", "props": "plain bags", "not": ["a home"]}, {"setting": "inside a shop"}, max_len=60)
+    assert len(short) <= 60 and short.startswith("An empty bowl on a shelf edge, inside a shop.")

@@ -115,21 +115,32 @@ def slots_for(deck: dict, cands: list) -> list:
     return out[:MAX_PICTURES]
 
 
-def subject_of(card: dict, scene: dict) -> str:
+def subject_of(card: dict, scene: dict, max_len: int | None = None) -> str:
     """The subject code assembles from a scene card, literal first: the key visual and the setting in one sentence, then the props, the
-    person, the market cues and the 'not' list. '' when the card has no key visual."""
+    person and the 'not' list. '' when the card has no key visual. Held to ``max_len`` characters (images.SUBJECT_MAX by default) by
+    dropping the props, then the person, then the later 'not' items, and only then cutting at a word: a word is never cut in two (round 3's
+    re-render: a subject cut at the limit left a fragment the lint read as a name)."""
     kv = str((card or {}).get("key_visual") or "").strip().rstrip(".")
     if not kv:
         return ""
+    if max_len is None:
+        from . import images   # noqa: PLC0415
+        max_len = images.SUBJECT_MAX
     setting = str(card.get("setting") or scene.get("setting") or "").strip().rstrip(".")
-    parts = [f"{kv}, {setting}." if setting and setting.lower() not in kv.lower() else f"{kv}."]
-    for k in ("props", "person"):
-        v = str(card.get(k) or "").strip().rstrip(".")
-        if v:
-            parts.append(v + ".")
+    head = f"{kv}, {setting}." if setting and setting.lower() not in kv.lower() else f"{kv}."
+    extra = {k: str(card.get(k) or "").strip().rstrip(".") for k in ("props", "person")}
     nots = [str(x).strip().rstrip(".") for x in (card.get("not") or scene.get("must_not") or []) if str(x).strip()]
-    nots = [x if x.lower().startswith("not ") else f"not {x}" for x in nots]
-    if nots:
-        parts.append(", ".join(nots[:4]) + ".")
-    s = " ".join(parts)
-    return s[0].upper() + s[1:]
+    nots = [x if x.lower().startswith("not ") else f"not {x}" for x in nots][:4]
+
+    def build(props: bool, person: bool, n_not: int) -> str:
+        parts = [head] + [extra[k] + "." for k, on in (("props", props), ("person", person)) if on and extra[k]]
+        if nots[:n_not]:
+            parts.append(", ".join(nots[:n_not]) + ".")
+        out = " ".join(parts)
+        return out[0].upper() + out[1:]
+    for props, person, n in ((True, True, 4), (False, True, 4), (False, False, 4), (False, False, 2), (False, False, 1), (False, False, 0)):
+        out = build(props, person, n)
+        if len(out) <= max_len:
+            return out
+    cut = out[:max_len].rsplit(" ", 1)[0].rstrip(" ,;:")
+    return cut + "."
