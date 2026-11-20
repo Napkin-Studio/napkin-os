@@ -158,8 +158,8 @@ a pick that is not one of the territories is refused. Only the open gate can be 
 
 Edit and Ask the Deck agent to try again, at any gate, write `{gate, kind: edit|retry, by, at}` to `run.decisions`
 and `{gate, kind, at, status: "waiting"}` to `run.gate_requests`, with the decision `edit <gate>` or
-`retry <gate>`, and launch nothing: the engine acts on them once it is connected. The gate then says the
-request waits.
+`retry <gate>`. With no middleware they launch nothing and the gate says the request waits. With a middleware the
+request carries an id and the person's words and the engine acts on it (see Handoffs below).
 
 ## Review and Present: the deck approval, the appendix, the exports
 
@@ -339,16 +339,69 @@ together at most. A file chosen anew clears `review.production`, and the engine 
 candidate, or that was made against another file. The vision check says what it costs: local Ollama first, else Claude Haiku, which
 sends the pictures to Anthropic and is paid, on every build while it is on.
 
+## Handoffs: Build, editable gates, the tissue kit, the production brief (deck-handoffs, 2026-11-20)
+
+Feature `features/deck-handoffs.clan`. From reports/European agency workflow vs Napkin.md, recommendations 6, 7 and 9.
+
+**Build.** With a middleware (`clan://middleware` says configured) Build deck saves the inputs and starts `build_deck`; each Approve
+writes only the person's decision and starts the next segment. The page polls `job_status`; the run's rows, the agent, the gate and
+any failure (`run.error`, shown on Build with a retry) are the engine's, written by the middleware. `build_deck` sends the picked type,
+the size, the rest of the look, the frozen brief and research (`data.upstream`, with the document's facts, findings, sources and
+decisions) and, as below, the gate requests and the tissue reactions. With no middleware the app keeps its recorded behaviour.
+
+**Gate requests.** With a middleware, Edit and Ask the Deck agent open a panel (view state) and send one request with an id:
+
+```
+run.gate_requests[] { id, gate, kind: edit | retry | own, by, at, status: "waiting", edits?, note?, own? }
+```
+
+- `edit`: `edits {key: words}`, only the words the person changed. Keys: `proposition`, `insight` (`reframe` too) at the storyline;
+  `territory.<id>.<name|thought|why|sketch|mood>` at the territories; `line`, `idea`, `how_it_answers` at the idea.
+- `retry`: `note` (optional). The stage is written once more, live only; a replay refuses it in words.
+- `own`: your own route at the territories gate, `own {name, thought, why?}`: it joins the routes, origin `human`, and becomes the pick;
+  your own idea at the idea gate, `own {line, idea}`: stage d is written again around it, the line and sentence kept word for word
+  (in a replay the words go in and the executions stay the recording's, with a notice).
+
+The engine (`engine/deck/gate_edits.py`) acts on each id once, when its stage is written. It changes only the words named, removes the
+stage files after it (only those stages run again) and re-opens their gates: an approval given before the edit no longer counts for
+them. Every change goes in the ledger `<stages>/human_edits.json` (gate, key, before, after, by, at, request), and after any stage runs
+again the ledger is put back over it, so a model never overwrites a person's words. The engine reports `run.human {edits[], requests
+{<id>: {status: done|refused, message}}}`; the gate gains `human` (the keys a person wrote), `picked` and `picked_by` when a person or
+the client's reactions made the pick, territories' `origin: human`, and the idea's `sentence`. The built deck carries
+`deck.meta.human_edits`. The app shows what was done (`data-handled`) and never rewrites `run.gate_requests` itself to mark them.
+
+**The tissue session.** At the territories gate, Edit offers "Take these routes to a tissue session first": the app writes
+`inputs.format: tissue` and builds. A tissue run shares the pitch's stages (its cache key is the pitch's), stops at the territories
+gate however it is approved, and writes the kit into the out folder (`engine/deck/tissue.py`): `tissue.html` (a cover, one page per
+route with its line, key-visual description and picture when the territory tool made one, one example execution and its risk, then the
+reactions sheet), `tissue.json` and `reactions.json` (the sheet to fill). `run.tissue {files, routes}`; the gate says `tissue: true`
+and the app shows the reactions panel: per route love / like / not for us and comments, or the filled-in `reactions.json` pasted.
+Saving writes
+
+```
+tissue.reactions { by, at, routes: { <territory id>: { verdict: love | like | not_for_us | null, comments } } }
+```
+
+and "Build the pitch from these reactions" also writes `inputs.format: pitch` and builds. The engine makes the most loved route
+(love, then like; ties to the blind judge's order) stage c's `chosen` (`chosen_by` the tissue session), keeps the reactions in stage c,
+and gives stage d the comments as the client's direction (beside its prompt, never a fact). The person still approves gate 2.
+
+**The production brief.** Once the deck is built from an approved idea the engine writes `production_brief.md` and `.json`
+(`engine/deck/production_brief.py`; contract: `docs/contracts/production-brief.md`) beside the deck and reports
+`run.handoffs.production_brief {files, deliverables, to_supply}`; Present names it on the Export card.
+
+Engine files served by `GET /file/<doc>/<name>`: `tissue.html`, `tissue.json`, `reactions.json`, `production_brief.md`,
+`production_brief.json`, beside the deck's.
+
 ## Not built
 
-- Running the engine from the app: the middleware side exists (`build_deck@1`, middleware-api.md §12, over the
-  engine server `engine/deck/server.py`); the app's Build and Approve do not call it yet (features/deck-maker-server.clan).
-  `ask_change` has no handler.
+- `ask_change` has no handler.
 - Launching the Research Tool on a Strengthen yes (only the request is recorded).
 - Attaching documents from the app (the display list is written by the host).
-- Acting on a gate's edit or retry request (the app records it; the engine has no gates yet). The engine
-  writes none of gates 2 and 3: the territories, `first_pick`, the idea's one-line execution summaries,
-  tags and `rests_on`, `territory_name` and the Deck agent's notes come from the state fixtures only.
+- The engine writes gates 2 and 3's territories, `first_pick`, the idea's line and execution summaries, but not their tags,
+  `rests_on` or the Deck agent's notes: those come from the state fixtures only.
+- A pptx of the tissue kit (it is a web page and JSON), and fetching the kit or the production brief from the app (the files
+  stay on the engine; the app names them).
 - File delivery for `exports` (Open and Download name the file and say where to find it), the animated deck,
   and the engine writing `exports.*.file`, `appendix_ids`, `run.checks` at review or `run.approvals.deck`.
 - Live (paid) model stages from the app: `--live` is a command-line option, run on request only.

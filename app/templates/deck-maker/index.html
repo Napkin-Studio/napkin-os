@@ -448,17 +448,101 @@ var DeckLogic = (function () {
   function decisionsOf(run) { return (isObj(run) && Array.isArray(run.decisions) ? run.decisions : []).filter(isObj); }
 
   /**
-   * An edit or a retry asked at the open gate: recorded in run.decisions and run.gate_requests (status waiting), like
-   * change_requests. It launches nothing: the engine acts on it once it is connected. Null for any gate but the open one,
-   * or another kind. The patch goes under `run`.
+   * An edit, a retry or the person's own idea asked at the open gate: recorded in run.decisions and run.gate_requests (status
+   * waiting), like change_requests. Without `extra` it is a record only (no engine connected). With `extra` (deck-handoffs) it carries
+   * an `id` and the person's words, and the next build_deck sends it to the engine: `edits` {key: words} for an edit, `note` for a
+   * retry, `own` {name, thought, why?} at the territories gate or {line, idea} at the idea gate. Null for any gate but the open one,
+   * another kind, or words missing. The patch goes under `run`.
    */
-  function gateRequest(run, gateId, kind, by, at) {
-    if (!isObj(run) || !isObj(run.gate) || run.gate.id !== gateId || (kind !== 'edit' && kind !== 'retry')) return null;
+  var REQ_KINDS = { edit: 1, retry: 1, own: 1 };
+  var OWN_NEEDS = { territories: ['name', 'thought'], idea: ['line', 'idea'] };
+  var WORDS_MAX = 600;
+  function wordsOf(o, keys) {
+    if (!isObj(o)) return null;
+    var out = {}, n = 0;
+    Object.keys(o).forEach(function (k) {
+      if ((keys && keys.indexOf(k) < 0) || typeof o[k] !== 'string') return;
+      var v = o[k].trim();
+      if (v) { out[k] = v.slice(0, WORDS_MAX); n += 1; }
+    });
+    return n ? out : null;
+  }
+  function gateRequest(run, gateId, kind, by, at, extra) {
+    if (!isObj(run) || !isObj(run.gate) || run.gate.id !== gateId || !own(REQ_KINDS, kind)) return null;
     var asked = (Array.isArray(run.gate_requests) ? run.gate_requests : []).filter(isObj);
+    var q = { gate: gateId, kind: kind, at: at, status: 'waiting' };
+    if (isObj(extra)) {
+      if (!/^[A-Za-z0-9_.:-]{1,80}$/.test(str(extra.id))) return null;
+      q = { id: str(extra.id), gate: gateId, kind: kind, by: by, at: at, status: 'waiting' };
+      if (kind === 'edit') { var ed = wordsOf(extra.edits); if (!ed) return null; q.edits = ed; }
+      if (kind === 'own') {
+        var need = OWN_NEEDS[gateId], ow = need ? wordsOf(extra.own, need.concat(['why', 'sketch', 'mood', 'how_it_answers'])) : null;
+        if (!ow || need.some(function (k) { return !ow[k]; })) return null;
+        q.own = ow;
+      }
+      if (typeof extra.note === 'string' && extra.note.trim()) q.note = extra.note.trim().slice(0, 1000);
+    } else if (kind === 'own') return null;
     return {
       decisions: decisionsOf(run).concat([{ gate: gateId, kind: kind, by: by, at: at }]),
-      gate_requests: asked.concat([{ gate: gateId, kind: kind, at: at, status: 'waiting' }])
+      gate_requests: asked.concat([q])
     };
+  }
+
+  /** deck-handoffs: what the engine did with the person's requests at a gate (run.human.requests): [{id, kind, status, message}]. */
+  function handledAt(run, gateId) {
+    var h = isObj(run) && isObj(run.human) && isObj(run.human.requests) ? run.human.requests : {};
+    return Object.keys(h).filter(function (k) { return isObj(h[k]) && h[k].gate === gateId && (h[k].status === 'done' || h[k].status === 'refused'); })
+      .map(function (k) { return { id: k, kind: str(h[k].kind), status: h[k].status, message: str(h[k].message) }; });
+  }
+
+  /** deck-handoffs: the words a person may change at each gate, [key, label]. A territory's keys are territory.<id>.<field>. */
+  var EDIT_FIELDS = { storyline: [['proposition', 'The proposition'], ['insight', 'The insight, in one line']],
+    idea: [['line', 'The idea line'], ['idea', 'The idea in a sentence']] };
+  var TERRITORY_FIELDS = [['name', 'Name'], ['thought', 'The thought'], ['why', 'Why it fits']];
+  /** The edit keys at a gate, with the words they hold now (prefill): [{key, label, value}]. */
+  function editFields(gv) {
+    if (!isObj(gv)) return [];
+    if (gv.body === 'territories') {
+      var out = [];
+      gv.territories.forEach(function (t) {
+        TERRITORY_FIELDS.forEach(function (f) { out.push({ key: 'territory.' + t.id + '.' + f[0], label: t.name + ': ' + f[1].toLowerCase(), value: str(t[f[0]]) }); });
+      });
+      return out;
+    }
+    var cur = gv.body === 'idea' && gv.idea ? { line: gv.idea.line, idea: gv.idea.sentence || '' } : {};
+    return (EDIT_FIELDS[gv.id] || []).map(function (f) { return { key: f[0], label: f[1], value: str(cur[f[0]]) }; });
+  }
+  /** Only the words that changed: {key: words}, or null when nothing did. */
+  function changedEdits(fields, typed) {
+    var out = {}, n = 0;
+    (fields || []).forEach(function (f) {
+      var v = isObj(typed) && typeof typed[f.key] === 'string' ? typed[f.key].trim() : '';
+      if (v && v !== str(f.value).trim()) { out[f.key] = v; n += 1; }
+    });
+    return n ? out : null;
+  }
+
+  /** deck-handoffs: the client's reactions from a tissue session, as the patch the app writes: {tissue: {reactions: {by, at, routes}}}.
+   * `routes` is {id: {verdict: love|like|not_for_us, comments}}; ids not offered and empty rows are dropped. Null when nothing is left. */
+  var VERDICTS = { love: 'Love it', like: 'Like it', not_for_us: 'Not for us' };
+  function reactionsPatch(routes, offered, by, at) {
+    var ids = (offered || []).map(function (r) { return isObj(r) ? r.id : r; }), out = {}, n = 0;
+    Object.keys(isObj(routes) ? routes : {}).forEach(function (id) {
+      var r = routes[id];
+      if (ids.indexOf(id) < 0 || !isObj(r)) return;
+      var v = own(VERDICTS, r.verdict) ? r.verdict : null, c = typeof r.comments === 'string' ? r.comments.trim().slice(0, 2000) : '';
+      if (v || c) { out[id] = { verdict: v, comments: c }; n += 1; }
+    });
+    return n ? { tissue: { reactions: { by: by, at: at, routes: out } } } : null;
+  }
+  /** Reactions pasted as JSON (the kit's reactions.json, filled in): {routes} or null with the reason. */
+  function parseReactions(text) {
+    var v;
+    try { v = JSON.parse(String(text || '')); } catch (e) { return { routes: null, why: 'That is not JSON: paste the filled-in reactions.json.' }; }
+    if (!isObj(v) || !isObj(v.routes)) return { routes: null, why: 'The JSON needs a routes object: {"routes": {"<route id>": {"verdict": "love", "comments": "..."}}}.' };
+    var bad = Object.keys(v.routes).filter(function (k) { return isObj(v.routes[k]) && v.routes[k].verdict != null && !own(VERDICTS, v.routes[k].verdict); });
+    if (bad.length) return { routes: null, why: 'A verdict must be love, like or not_for_us (' + bad.join(', ') + ').' };
+    return { routes: v.routes, why: '' };
   }
 
   // ── the gate registry: what each gate asks for and what it shows (phase 3). Gate id = stage id. ──
@@ -496,7 +580,7 @@ var DeckLogic = (function () {
       return isObj(t) && validId(t.id) && str(t.name).trim() && !seen[t.id] && (seen[t.id] = true);
     }).map(function (t, i) {
       var n = /^\d{1,3}$/.test(str(t.n)) ? pad2(t.n) : pad2(i + 1);
-      return { id: t.id, n: n, name: str(t.name).trim(), thought: str(t.thought), why: str(t.why) };
+      return { id: t.id, n: n, name: str(t.name).trim(), thought: str(t.thought), why: str(t.why), own: t.origin === 'human' };
     });
   }
 
@@ -518,8 +602,11 @@ var DeckLogic = (function () {
       dex: typeof g.dex === 'string' ? g.dex : '', dex_proposed: !!spec.dexProposed,
       territories: terr, first_pick: ids.indexOf(g.first_pick) >= 0 ? g.first_pick : null, picked: null, idea: null,
       asked: (isObj(run) && Array.isArray(run.gate_requests) ? run.gate_requests : []).filter(function (q) {
-        return isObj(q) && q.gate === id && q.status === 'waiting' && (q.kind === 'edit' || q.kind === 'retry');
-      }).map(function (q) { return q.kind; })
+        var done = q && q.id && isObj(run.human) && isObj(run.human.requests) && isObj(run.human.requests[q.id]);
+        return isObj(q) && q.gate === id && q.status === 'waiting' && own(REQ_KINDS, q.kind) && !done;
+      }).map(function (q) { return q.kind; }),
+      handled: handledAt(run, id), human: Array.isArray(g.human) ? g.human.filter(function (k) { return typeof k === 'string'; }) : [],
+      tissue: g.tissue === true, picked_by: typeof g.picked_by === 'string' ? g.picked_by : ''
     };
     if (body === 'territories') {
       out.picked = ids.indexOf(pick) >= 0 ? pick : ids.indexOf(g.picked) >= 0 ? g.picked : out.first_pick;
@@ -532,7 +619,7 @@ var DeckLogic = (function () {
       var from = terr.filter(function (t) { return t.id === x.territory_id; })[0];
       var tname = str(x.territory_name).trim();
       out.idea = {
-        line: str(x.line), basis: basis ? basis[0] : '', basis_tone: basis ? basis[1] : 'plain',
+        line: str(x.line), sentence: str(x.sentence), basis: basis ? basis[0] : '', basis_tone: basis ? basis[1] : 'plain',
         territory: from ? 'territory ' + Number(from.n) + ', ' + from.name : tname ? 'the territory you picked: ' + tname : 'the territory you picked',
         executions: (Array.isArray(x.executions) ? x.executions : []).filter(function (e) { return isObj(e) && str(e.channel).trim(); }).map(function (e, i) {
           var tag = str(e.tag).trim();
@@ -1628,6 +1715,7 @@ var DeckLogic = (function () {
     supplyCards: supplyCards, toSupply: toSupply, confirmList: confirmList, verifyPatch: verifyPatch, sourcedCounts: sourcedCounts,
     isPlaceholder: isPlaceholder, presented: presented, refsOf: refsOf, evidenceFor: evidenceFor,
     statusOf: statusOf, STATUS: STATUS, checksFor: checksFor, approveGate: approveGate, humanApproval: humanApproval, gateRequest: gateRequest,
+    handledAt: handledAt, editFields: editFields, changedEdits: changedEdits, reactionsPatch: reactionsPatch, parseReactions: parseReactions, VERDICTS: VERDICTS,
     GATES: GATES, gateView: gateView, gateHolds: gateHolds, summaryOf: summaryOf, agencyShown: agencyShown,
     isObj: isObj, own: own
   };
@@ -1785,7 +1873,7 @@ var DeckProd = (function () {
   }
 
   // View state only. Anything the document should keep is written with put().
-  var view = { screen: null, slide: null, tab: 'evidence', present: 0, appendix: false, typeAsk: null };
+  var view = { screen: null, slide: null, tab: 'evidence', present: 0, appendix: false, typeAsk: null, gate: null, react: null };
   var qdraft = {}; // free-text answers typed but not saved, by question id
   var pending = {}; // inputs picked on the Start screen, written when Build is pressed
   var kitChanged = []; // Style Pack / Brand Clan notices (L.kitNotices); empty when the call fails or nothing moved
@@ -2252,7 +2340,8 @@ var DeckProd = (function () {
       return '<div role="group" aria-label="Territories">' + gv.territories.map(function (t) {
         var on = t.id === gv.picked;
         return '<button class="beat terr" data-territory="' + esc(t.id) + '" aria-pressed="' + on + '"><span class="n">' + esc(t.n) + '</span><span class="tb">' +
-          '<span class="tn"><span>' + esc(t.name) + '</span>' + (t.id === gv.first_pick ? '<span class="pill ok">Blind judge’s first pick</span>' : '') + '</span>' +
+          '<span class="tn"><span>' + esc(t.name) + '</span>' + (t.id === gv.first_pick ? '<span class="pill ok">Blind judge’s first pick</span>' : '') +
+          (t.own ? '<span class="pill plain">Your own route</span>' : '') + '</span>' +
           (t.thought ? '<span class="tt">' + esc(t.thought) + '</span>' : '') + (t.why ? '<span class="tw"><b>Why it fits:</b> ' + esc(t.why) + '</span>' : '') +
           '</span><span class="sel" aria-hidden="true"></span></button>';
       }).join('') + '</div>';
@@ -2276,10 +2365,116 @@ var DeckProd = (function () {
   function gateActions(gv) {
     var none = gv.body === 'territories' && !gv.picked;
     var asked = gv.asked.length ? '<p class="note asked" role="status" data-asked>You asked ' + (gv.asked.indexOf('edit') >= 0 && gv.asked.indexOf('retry') >= 0 ? 'for an edit and a new try'
-      : gv.asked.indexOf('edit') >= 0 ? 'for an edit' : 'the Deck agent to try again') + '. It waits for the engine, which is not connected yet; nothing has changed.</p>' : '';
+      : gv.asked.indexOf('edit') >= 0 ? 'for an edit' : gv.asked.indexOf('own') >= 0 ? 'for your own ' + (gv.id === 'idea' ? 'idea' : 'route') + ' to go in' : 'the Deck agent to try again') +
+      (mwOn() ? '. It goes to the engine with the next build.</p>' : '. It waits for the engine, which is not connected yet; nothing has changed.</p>') : '';
     return '<div class="gacts" style="margin-top:18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><button class="btn go big" id="approve"' + (none ? ' disabled' : '') + '>' + esc(gv.approve) + '</button>' +
       '<button class="btn big" style="padding:0 20px;font-size:14px" data-edit="' + esc(gv.edit_key) + '">' + esc(gv.edit_label) + '</button><button class="btn big" style="padding:0 20px;font-size:14px" data-retry="' + esc(gv.id) + '">Ask the Deck agent to try again</button></div>' +
-      (gv.body === 'beats' ? '' : '<p class="note" style="margin-top:12px;font-size:13px">' + (none ? 'Pick a territory first. ' : '') + 'Every approve, edit or retry is recorded with who did it.</p>') + asked;
+      (gv.body === 'beats' ? '' : '<p class="note" style="margin-top:12px;font-size:13px">' + (none ? 'Pick a territory first. ' : '') + 'Every approve, edit or retry is recorded with who did it.</p>') + asked +
+      handoffNotes(gv) + gatePanel(gv);
+  }
+
+  // ── deck-handoffs: edit, retry and your own idea at a gate; the tissue session's reactions ─────────────────────────────
+  // Each panel is view state (view.gate): it appears only when the person opens it, and sends one gate request with an id; the engine
+  // acts on it on the next build and reports back in run.human. Without a middleware the old behaviour stands (a record, nothing sent).
+  /** What the engine did with the person's requests here, and which words a person wrote. Empty when nothing was done. */
+  function handoffNotes(gv) {
+    var out = gv.handled.map(function (h) {
+      return '<p class="note" role="status" data-handled="' + esc(h.status) + '">' + (h.status === 'done' ? 'Done: ' : 'Not done: ') + esc(h.message) + '</p>';
+    }).join('');
+    if (gv.human.length) out += '<p class="note" data-human>Written by a person here: ' + esc(gv.human.join(', ')) + '. A rewrite never replaces it.</p>';
+    if (gv.picked_by) out += '<p class="note" data-picked-by>Picked: ' + esc(gv.picked_by) + '.</p>';
+    if (gv.tissue) out += reactionsPanel(gv);
+    return out;
+  }
+
+  function gfield(id, label, value, rows) {
+    return '<label class="note" style="display:block;margin-top:10px" for="' + esc(id) + '">' + esc(label) + '</label>' +
+      '<textarea id="' + esc(id) + '" rows="' + (rows || 2) + '" style="width:100%;margin-top:4px">' + esc(value) + '</textarea>';
+  }
+
+  function gatePanel(gv) {
+    var p = view.gate;
+    if (!p || p.gate !== gv.id) return '';
+    var head = '<div class="card" data-gpanel="' + esc(p.mode) + '" style="padding:18px;margin-top:14px">', body = '', send = 'Send to the engine';
+    if (p.mode === 'edit') {
+      body = '<div class="eyebrow">Change the words</div><p class="note">Only what you change is sent. Your words are marked as yours, and the steps after this one run again from them.</p>' +
+        L.editFields(gv).map(function (f, i) { return gfield('ge_' + i, f.label, f.value); }).join('') +
+        (gv.id === 'territories' || gv.id === 'idea' ? '<p style="margin-top:12px"><button class="btn sm" data-gmode="own">' + (gv.id === 'idea' ? 'Bring your own idea instead' : 'Bring your own route instead') + '</button>' +
+          (gv.id === 'territories' ? ' <button class="btn sm" data-gtissue="1">Take these routes to a tissue session first</button>' : '') + '</p>' : '');
+    } else if (p.mode === 'retry') {
+      body = '<div class="eyebrow">Ask the Deck agent to try again</div><p class="note">It writes this step once more. Anything a person wrote here stays.</p>' + gfield('gr_note', 'Your note (optional)', '', 3);
+      send = 'Try again';
+    } else {
+      body = '<div class="eyebrow">' + (gv.id === 'idea' ? 'Your own idea' : 'Your own route') + '</div><p class="note">' +
+        (gv.id === 'idea' ? 'The deck builds the executions on your line and sentence, word for word.' : 'It joins the routes and becomes your pick; the idea is written from it.') + '</p>' +
+        (gv.id === 'idea' ? gfield('go_line', 'The line', '') + gfield('go_idea', 'The idea in a sentence', '', 3)
+          : gfield('go_name', 'Its name', '') + gfield('go_thought', 'The thought', '', 3) + gfield('go_why', 'Why it fits (optional)', ''));
+      send = gv.id === 'idea' ? 'Build on my idea' : 'Add my route';
+    }
+    return head + body + '<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap"><button class="btn go" data-gsend="' + esc(p.mode) + '">' + esc(send) +
+      '</button><button class="btn" data-gcancel="1">Cancel</button></div></div>';
+  }
+
+  function reactionsPanel(gv) {
+    var r = view.react || {};
+    return '<div class="card" data-reactions style="padding:18px;margin-top:14px"><div class="eyebrow">The client\'s reactions</div>' +
+      '<p class="note">The routes-only kit is ready: open tissue.html from the document export and take it to the session. Record what the client said; the loved route becomes the recommendation and the comments go into the idea.</p>' +
+      gv.territories.map(function (t) {
+        var cur = (r[t.id] || {}).verdict;
+        return '<div style="margin-top:12px"><b>' + esc(t.name) + '</b><div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">' +
+          Object.keys(L.VERDICTS).map(function (v) { return '<button class="btn sm" data-react="' + esc(t.id) + '" data-verdict="' + v + '" aria-pressed="' + (cur === v) + '">' + esc(L.VERDICTS[v]) + '</button>'; }).join('') +
+          '</div>' + gfield('rc_' + t.id, 'Comments', (r[t.id] || {}).comments || '') + '</div>';
+      }).join('') + gfield('rjson', 'Or paste the filled-in reactions.json', '', 3) +
+      '<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap"><button class="btn go" data-rsave="build">Build the pitch from these reactions</button><button class="btn" data-rsave="save">Save the reactions</button></div></div>';
+  }
+
+  function typed(id) { var el = document.getElementById(id); return el && typeof el.value === 'string' ? el.value : ''; }
+  var reqSeq = 0;
+  function requestId() { reqSeq += 1; return 'gr_' + Date.now().toString(36) + '_' + reqSeq; }
+
+  /** Send one gate request (with words) and start the next build. */
+  function sendGate(s, mode) {
+    var gv = L.gateView(s.run, view.pick);
+    if (!gv) return;
+    if (JOB && BUSY_JOB[JOB.state]) { toast('The engine is still working on this step.'); return; }
+    var extra = { id: requestId() };
+    if (mode === 'edit') {
+      var fields = L.editFields(gv), got = {};
+      fields.forEach(function (f, i) { got[f.key] = typed('ge_' + i); });
+      extra.edits = L.changedEdits(fields, got);
+      if (!extra.edits) { toast('Change some words first.'); return; }
+    } else if (mode === 'retry') {
+      extra.note = typed('gr_note');
+    } else {
+      extra.own = gv.id === 'idea' ? { line: typed('go_line'), idea: typed('go_idea') } : { name: typed('go_name'), thought: typed('go_thought'), why: typed('go_why') };
+    }
+    var kind = mode === 'own' ? 'own' : mode, req = L.gateRequest(s.run, gv.id, kind, 'You', now(), extra);
+    if (!req) { toast(kind === 'own' ? (gv.id === 'idea' ? 'Write the line and the sentence.' : 'Give your route a name and a thought.') : 'That cannot be sent at this gate.'); return; }
+    view.gate = null;
+    var wrote = put({ run: req }, kind + ' ' + gv.id, 'gate ' + s.run.gate.n + ' of ' + s.run.gate.of + ': sent to the engine');
+    toast(kind === 'retry' ? 'Asked. The Deck agent writes this step again.' : 'Sent. The engine puts your words in and holds the gate for you.');
+    Promise.resolve(wrote).then(startBuild);
+  }
+
+  /** Save the client's reactions (and, for build, switch the format to pitch and start the build). */
+  function saveReactions(s, then) {
+    var gv = L.gateView(s.run, view.pick);
+    if (!gv) return;
+    var routes = {}, pasted = typed('rjson').trim();
+    if (pasted) {
+      var pr = L.parseReactions(pasted);
+      if (!pr.routes) { toast(pr.why); return; }
+      routes = pr.routes;
+    } else {
+      gv.territories.forEach(function (t) { routes[t.id] = { verdict: ((view.react || {})[t.id] || {}).verdict || null, comments: typed('rc_' + t.id) }; });
+    }
+    var patch = L.reactionsPatch(routes, gv.territories, 'You', now());
+    if (!patch) { toast('Mark at least one route, or add a comment.'); return; }
+    if (then === 'build') patch.inputs = { format: 'pitch' };
+    view.react = null;
+    var wrote = put(patch, 'record tissue reactions', 'the client at the tissue session');
+    if (then === 'build' && mwOn()) { toast('Saved. The pitch builds from the route the client loved.'); Promise.resolve(wrote).then(startBuild); }
+    else toast('Saved. They go to the engine with the next build.');
   }
 
   function build(s) {
@@ -2527,7 +2722,15 @@ var DeckProd = (function () {
       '<p class="note rep" data-report><span class="mono eyebrow">Report</span>' + esc(rep.line) + '</p>' +
       (supply ? '<div class="callout" data-to-supply>' + supply + (supply > 1 ? ' slides still hold' : ' slide still holds') + ' placeholders. They export as marked text.</div>' : '') +
       (counts.total || counts.supplied ? '<p class="note" style="margin-top:10px;font-size:12px" data-sourced>' + counts.verified + ' of ' + counts.total + ' to confirm verified · ' + counts.supplied + ' supplied by you · ' + counts.sourced + ' counted as sourced</p>' : '') +
-      '</div></aside></main>';
+      handoffCard(s.run) + '</div></aside></main>';
+  }
+
+  /** deck-handoffs: the production brief the engine wrote from the approved idea (run.handoffs), named, never fetched here. Empty without one. */
+  function handoffCard(run) {
+    var pb = run && run.handoffs && run.handoffs.production_brief;
+    if (!pb || !Array.isArray(pb.files) || !pb.files.length) return '';
+    return '<div class="callout" data-handoff style="margin-top:12px"><b>Production brief</b>: ' + esc(pb.files.join(' and ')) + ' in the document export. ' +
+      esc(String(pb.deliverables || 0)) + ' deliverables with formats and sizes; ' + esc(String(pb.to_supply || 0)) + ' things to supply (rights, timing). Take it into the Production Tool.</div>';
   }
 
   // ── render and events ─────────────────────────────────────────────────
@@ -2935,6 +3138,31 @@ var DeckProd = (function () {
       view.pick = null;
       put({ run: next }, 'approve ' + s.run.gate.id, why);
       return;
+    }
+    if (a.gcancel) { view.gate = null; return render(); }
+    if (a.gmode && s.run.gate) { view.gate = { gate: s.run.gate.id, mode: a.gmode }; return render(); }
+    if (a.gsend && s.run.gate) return sendGate(s, a.gsend);
+    if (a.gtissue && s.run.gate) {
+      // The routes go to a tissue session first: the format becomes tissue, and the engine writes the kit and holds the territories gate.
+      if (JOB && BUSY_JOB[JOB.state]) { toast('The engine is still working on this step.'); return; }
+      view.gate = null;
+      var tw = put({ inputs: { format: 'tissue' } }, 'hold a tissue session', 'the routes go to the client before the idea');
+      toast('The routes-only kit is being made.');
+      Promise.resolve(tw).then(startBuild);
+      return;
+    }
+    if (a.react && a.verdict) {
+      // A verdict is view state until Save; every comment typed so far is kept across the re-draw.
+      var rgv = L.gateView(s.run, view.pick), rv = view.react = view.react || {};
+      (rgv ? rgv.territories : []).forEach(function (x) { rv[x.id] = { verdict: (rv[x.id] || {}).verdict || null, comments: typed('rc_' + x.id) || ((rv[x.id] || {}).comments || '') }; });
+      rv[a.react] = { verdict: a.verdict, comments: (rv[a.react] || {}).comments || '' };
+      return render();
+    }
+    if (a.rsave) return saveReactions(s, a.rsave);
+    if ((a.edit || a.retry) && s.run.gate && mwOn()) {
+      // With an engine behind the document, Edit and Ask open a panel: the person's words go with the request.
+      view.gate = { gate: s.run.gate.id, mode: a.edit ? 'edit' : 'retry' };
+      return render();
     }
     if (a.retry && !s.run.gate) { toast('Retrying a step needs the engine server, which is not connected yet.'); return; }
     if (a.edit || a.retry) {
