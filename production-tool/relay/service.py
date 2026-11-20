@@ -1712,6 +1712,7 @@ class Relay:
                         back = self._save(job, state="queued", provider=None, model=None, _slot=None, _queue="q",
                                           _lastError=f"{provider}: {e.message}"[:300], _notBefore=self.clock() + wait)
                         self.store.incr(slot, "n", -1)
+                        self._stage(job, "requeued", error=e.code, message=jobtrace.clip(e.message, 500), retryAfterS=wait)
                         if back is None:
                             return self._reload(job)
                         return self._with_poll(back)
@@ -2989,7 +2990,7 @@ class Relay:
         return st if st.state == "succeeded" and st.outputs else None
 
     def _fetch(self, job: dict, st, now: float) -> dict:
-        claimed = self._save(job, state="fetching", _leaseUntil=now + FETCH_LEASE_S, _doneAt=job.get("_doneAt") or now)
+        claimed = self._save(job, state="fetching", _leaseUntil=now + FETCH_LEASE_S)
         if claimed is None:
             return self._reload(job)
         self._stage(job, "provider_done", since=job.get("_submittedAt"), taskId=job.get("requestId"),
