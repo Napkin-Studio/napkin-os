@@ -431,6 +431,7 @@ class Renderer:
             self._icons_on = graphics.icons_on(deck)
         self.icons_drawn = {}       # slide id -> {"layout", "ids"}: the icons really drawn, in item order (the web draws exactly these)
         self._exec_title = None     # deck-graphics: the execution title whose picture this slide shows (frames), else None
+        self.mockups = {}           # spec.MOCKUPS: slide id -> {kind, pictures, typographic}: the executions drawn as mock-ups
         self._frame_blocked = None  # deck-graphics: a frame refused for contrast on the picture in hand (its shape is then checked plain)
         self.protect = {}           # deck-slide-size: asset id -> a Production picture's protect boxes ({x0, y0, x1, y1} fractions), read at 4:3 and A4
 
@@ -1787,6 +1788,8 @@ class Renderer:
         end on one line (the foot of the content area). In the frame the lines and the closing answer sit as one
         group at the vertical middle, the answer a fixed 0.4 in under the last line, so there is no gap
         between the copy and its closing line."""
+        if self._mock_on(s):   # spec.MOCKUPS: the work drawn where it runs (deck/mockup.py)
+            return self._lay_mockup(sl, s)
         S, p, g = self.th.scale, self.p, self.th.grid
         cp = next((b for b in s["blocks"] if b["kind"] == "copy"), None)
         if cp is None:
@@ -1866,6 +1869,89 @@ class Renderer:
                 self._build(sl, m)
             return
         raise NoFit("execution slide too dense")
+
+    # -- execution mock-ups in situ (spec.MOCKUPS, deck/mockup.py) ------------------------------------------------------------------
+    MOCK_LEFT = 0.38   # the share of the content width the words column takes; the scene takes the rest
+
+    def _mock_on(self, s) -> bool:
+        """This slide is drawn as a mock-up (mockup.applies): an execution of the presented story, mock-ups on, 16:9."""
+        if not spec.MOCKUPS or self._sid is None or not self.th.layouts:
+            return False
+        from . import mockup   # noqa: PLC0415
+        return mockup.applies(self.deck, self._sid, s)
+
+    def _lay_mockup(self, sl, s):
+        """The execution as the work in situ: the title across the top, the role, the copy the ad does not carry and the answer in the
+        left column, the scene (mockup.scene: the ad in its setting, the copy typeset in it, the picture in its visual area or a typographic
+        ad) on the right with the 'Mock-up' label under it. NoFit when the left column does not hold its words."""
+        from . import mockup   # noqa: PLC0415
+        g = self.th.grid
+        cp = next((b for b in s["blocks"] if b["kind"] == "copy"), None)
+        if cp is None:
+            raise NoFit("no copy block")
+        rest = [b for b in s["blocks"] if b["kind"] != "copy"]
+        lw = (self.x1 - self.x0) * self.MOCK_LEFT
+        bx = self.x0 + lw + self.GAP_PIC
+        pics = dict(self._pics)
+        copy = mockup.copy_of(self.deck, cp)
+        fonts = {"head": self.th.head, "body": self.th.body}
+        for dense in (False, True):
+            try:
+                y = self.head(None, s, dense)
+            except NoFit:
+                continue
+            box = (bx, y + 0.05, self.x1 - bx, g.body_end - y - 0.05 - self.PILL_H - 0.18)
+            if box[3] < 2.6:
+                continue
+            sc = mockup.scene(s["title"], box, copy, pics, fonts)
+            left = rest + mockup.left_blocks(sc, copy)
+            try:
+                if left:
+                    self.stack(None, left, self.x0, y, lw, g.body_end, fill=False)
+            except NoFit:
+                continue
+            if sl is None:
+                if self._ink is not None:
+                    self._ink.append(box)
+                return
+            y = self.head(sl, s, dense)
+            m = self._mark(sl)
+            if left:
+                self.stack(sl, left, self.x0, y, lw, g.body_end, fill=False)
+            self._build(sl, m)
+            m = self._mark(sl)
+            self._paint_mockup(sl, sc)
+            self._mockup_pill(sl, box[0], box[1] + box[3] + 0.18)
+            self._build(sl, m)
+            self.mockups[self._sid] = {"kind": sc.kind, "pictures": list(sc.slots), "typographic": not sc.slots, "box": [round(v, 4) for v in box]}
+            return
+        raise NoFit("execution mock-up does not fit")
+
+    def _paint_mockup(self, sl, sc):
+        """Paint a mock-up scene's ops from native shapes in the theme's tokens; a picture op draws the slot's picture (cropped to cover,
+        no label of its own: the scene carries 'Mock-up')."""
+        th = self.th
+        col = {"ink": th.ink, "paper": th.paper, "panel": th.panel, "rule": th.rule, "mute": th.mute, "accent": th.accent,
+               "accent_ink": th.accent_ink, "on_dark": th.on_dark}
+        shapes = {"rect": MSO_SHAPE.RECTANGLE, "rrect": MSO_SHAPE.ROUNDED_RECTANGLE, "oval": MSO_SHAPE.OVAL}
+        for o in sc.ops:
+            if o["op"] in shapes:
+                s_ = self.rect(sl, o["x"], o["y"], o["w"], o["h"], fill=col.get(o.get("fill")) if o.get("fill") else None,
+                               line=col.get(o.get("line")) if o.get("line") else None, shape=shapes[o["op"]], name=o["name"])
+                if o["op"] == "rrect" and s_ is not None and len(s_.adjustments):
+                    s_.adjustments[0] = o.get("r", 0.1)
+            elif o["op"] == "pic":
+                im = self._pics.get(o["slot"])
+                if im is None or im.get("probe"):
+                    continue
+                self.picture(sl, o["x"], o["y"], o["w"], o["h"], im, name="Mock-up picture", label=False)
+                self._own_pics.add(o["slot"])
+                self.placed.add((self._sid, o["slot"]))
+            elif o["op"] == "text":
+                al = {"l": PP_ALIGN.LEFT, "c": PP_ALIGN.CENTER, "r": PP_ALIGN.RIGHT}[o["align"]]
+                an = {"t": MSO_ANCHOR.TOP, "m": MSO_ANCHOR.MIDDLE, "b": MSO_ANCHOR.BOTTOM}[o["anchor"]]
+                self.text(sl, o["x"], o["y"], o["w"], o["h"], "\n".join(o["lines"]), size=o["size"], color=col[o["color"]], bold=o["bold"],
+                          font=th.head if o["font"] == "head" else th.body, align=al, anchor=an, name=o["name"])
 
     def _lay_territory(self, sl, s, wide_only=False):
         """Territory: the thought and reasons on the left, an illustrative sketch panel on the right. When the
@@ -3009,6 +3095,8 @@ class Renderer:
 
     def _lay_execution_stack(self, sl, s):
         """Execution stack: the copy in its dark frame across the top, the role and notes beneath in two columns."""
+        if self._mock_on(s):   # spec.MOCKUPS: the work drawn where it runs (deck/mockup.py)
+            return self._lay_mockup(sl, s)
         S, p, g = self.th.scale, self.p, self.th.grid
         cp = next((b for b in s["blocks"] if b["kind"] == "copy"), None)
         if cp is None:
@@ -4520,6 +4608,8 @@ class Renderer:
             h = self.BOTTOM_H
             w = h * images.ratio(a)
             return {"x1": x1, "body_end": g.body_end - h - 0.2, "boxes": [(slot, x1 - w, g.body_end - h, w, h, im)]}
+        if s["type"] == "execution" and self._mock_on(s):   # spec.MOCKUPS: the scene draws the picture inside the ad (_lay_mockup)
+            return None
         if s["type"] == "execution" and spec.GRAPHICS:
             shots = sorted(k for k in got if k.startswith("shot_"))
             if len(shots) >= spec.STRIP_MIN:   # deck-graphics slice 3: the storyboard strip along the foot, the words above it
@@ -4932,4 +5022,6 @@ def render(deck, inp, out: Path, master: Path | None = None, findings: list | No
         placed |= r.placed
     if icons is not None:
         icons.update(r.icons_drawn)
+        for sid, m in r.mockups.items():   # spec.MOCKUPS: the web draws the same scene in the same box, only where the pptx drew one
+            icons.setdefault(sid, {"layout": r.layouts.get(sid), "ids": []})["mockup_box"] = m["box"]
     return out

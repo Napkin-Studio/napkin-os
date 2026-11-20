@@ -450,6 +450,8 @@ def make_plan(ctx: Ctx, mode: str = "plan", hero: list | None = None, remake_sty
                            **({"subject_refused": why} if subject or got.get("refused") else {}))
                 continue
             row["card"] = {k: got.get(k) for k in ("key_visual", "setting", "must_not") if got.get(k)}
+            if spec.MOCKUPS and s["type"] == "execution":   # an execution's picture fills its ad: the fit check also asks it is not an ad itself
+                row["card"].update(role="execution", format=str(s.get("title") or "")[:60])
         why = None if spec.PICTURE_PLAN else (lint.lint_text(subject, banned, deny) if subject else "no subject yet")
         if why:
             source = "template"

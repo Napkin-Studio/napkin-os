@@ -510,6 +510,20 @@ picture and its card are sent) asks whether the picture shows the idea in its se
 are Illustrative or Mock-up only, never Flagged, and a flagged picture is not drawn. Client-derived prompts still go to Runway only under
 `VISUALS_CLIENT_TO_RUNWAY=allow`. Tests: `tests/test_picture_plan.py` (fakes only).
 
+### Execution mock-ups in situ (`DECK_MOCKUPS`, `deck/mockup.py`)
+
+On by default (`=0` builds as before; the suite sets it to 0). Round 4's blind judging said the work was "shown almost entirely as text".
+Each presented execution (16:9, the deck's `mockups` graphics part on) is drawn as the work where it runs, picked by its channel words
+(`mockup.kind_of`): a poster in a shelter on a street (or on a plain wall), a roadside billboard, a phone with a social post, a shelf of
+blank packs with a wobbler and a shelf strip, a radio script card with a waveform, three or four storyboard frames ending on an end card,
+or a printed page. The headline (the first copy line) and the line (the last) are typeset inside the ad on their own band, never on the
+picture; the brand is the client label, or "Your brand" when the label is a job id. The picture is what the slot holds: a Production
+final first, then the generated picture from the execution's scene card (stage g now has a slot per presented execution, the first two,
+five pictures a deck at most; `stages.MOCKUP_RULE` tells it the card is the ad's picture), else a typographic ad. Copy that does not fit
+the ad moves to the left column, never cut. One scene (`mockup.scene`, inches) is painted from native shapes by `render_pptx`
+(`_lay_mockup`) and as one inline SVG by `render_web` in the pptx's own box; the pdf is the pptx's. The label is "Mock-up". The fit check
+asks an execution's picture whether it is the scene alone (`shows_an_ad`). `report.json` `graphics.mockups` lists what was drawn.
+
 ### The territory tool to Deck Maker (`--territory-run RUN.json|DIR|auto`)
 
 When stage c is not recorded, a territory tool run (`territory.run --out`) becomes stage c: its cards are the candidate territories (its top

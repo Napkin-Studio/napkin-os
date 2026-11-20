@@ -721,13 +721,18 @@ def report(deck: dict, layouts_json=None, pptx=None) -> dict:
         drawn = {k: (v or {}).get("id") for k, v in json.loads(Path(layouts_json).read_text())["slides"].items()} if layouts_json else {}
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         drawn = {}
-    icons = {}
+    icons, mocks = {}, []
     if pptx and Path(pptx).is_file():
         from pptx import Presentation   # noqa: PLC0415
+        from . import mockup   # noqa: PLC0415
         for sid, sl in zip(deck["order"], Presentation(str(pptx)).slides):
             ids = [sh.name[len("Icon: "):] for sh in sl.shapes if (sh.name or "").startswith("Icon: ")]
             if ids:
                 icons[sid] = ids
+            names = [sh.name or "" for sh in sl.shapes]
+            if _spec.MOCKUPS and any(n.startswith("Mock-up") for n in names):   # execution mock-ups: what the final render drew
+                mocks.append({"slide": sid, "scene": mockup.kind_of(deck["slides"][sid].get("title")),
+                              "picture": "Mock-up picture" in names, "typographic": "Mock-up face" in names})
     diagrams, misses = [], []
     fam = {"process_chevrons": "process", "timeline_strip": "timeline", "matrix_2x2": "matrix", "journey_row": "journey"}
     for sid in deck["order"]:
@@ -744,4 +749,5 @@ def report(deck: dict, layouts_json=None, pptx=None) -> dict:
     pres = set(presented(deck))
     return {"charts": charts or [{"chart": None, "why": "no chart: the stages wrote no chart block (no series of sourced figures)"}],
             "diagrams": diagrams, "diagram_misses": misses,
-            "presented_with_diagram": sum(1 for d in diagrams if d["slide"] in pres), "icons": icons}
+            "presented_with_diagram": sum(1 for d in diagrams if d["slide"] in pres), "icons": icons,
+            **({"mockups": mocks} if _spec.MOCKUPS else {})}

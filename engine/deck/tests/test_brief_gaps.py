@@ -101,7 +101,17 @@ def test_a_foreign_objective_never_reaches_a_slide_and_leads_the_questions(gaps)
     assert "Crumbly" not in shown   # not on the objective slide, the read-back or anywhere else
     assert inp.brief["background"]["value"] is None   # the brief field that repeated it is emptied
     gs = next(s for s in _pres(d) if s.get("role") == "brief_gaps")
-    assert _texts(gs)[0] == "Which objectives belong to this campaign?" and "another brief's text" in gs["notes"]
+    assert _texts(gs)[0] == ("Part of the brief (the objective) appears to come from another brand's brief; we've set it aside. "
+                             "Which objectives belong to this campaign?") and "another brief's text" in gs["notes"]
+    assert _texts(gs)[1] == "When should the campaign go live?"   # a missing basic stays its question
+
+
+def test_a_contradiction_is_stated_plainly_on_the_gaps_slide():
+    line = assemble.gap_line({"kind": "contradiction", "topic": "timing", "question": "Which dates hold?"})
+    assert line == "The brief contradicts itself on the timing. Which dates hold?"
+    assert assemble.gap_line({"kind": "foreign_content", "topic": "other", "question": ""}) == (
+        "Part of the brief appears to come from another brand's brief; we've set it aside. Please confirm.")
+    assert assemble.gap_line({"kind": "missing", "topic": "budget", "question": "What is the budget?"}) == "What is the budget?"
 
 
 def test_the_intake_runs_the_same_detection_and_verifies_its_quotes(monkeypatch):

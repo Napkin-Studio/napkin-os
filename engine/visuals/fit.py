@@ -15,11 +15,24 @@ QUESTION = ("Look at this picture. Does it show {key_visual} in {setting}? Thing
             "Answer JSON only: {{\"shows_idea\": true or false, \"setting_seen\": \"the place you see, under 8 words\", "
             "\"setting_fits\": true or false, \"wrong_cues\": [any of the things that must not be in it that you see]}}")
 KEYS = ("shows_idea", "setting_seen", "setting_fits", "wrong_cues")
+#: An execution's picture (deck mock-ups, spec.MOCKUPS) fills the visual area of an ad the deck draws around it: the same look, plus one
+#: question: is the picture itself a photograph of an advert (a poster, billboard, phone, screen, shelf card) or does it carry words?
+QUESTION_EXECUTION = ("Look at this picture. It will fill the picture area of an advert ({format}) that is drawn around it, so it must be "
+                      "the scene alone. Does it show {key_visual} in {setting}? Things that must not be in it: {must_not}.\n"
+                      "Answer JSON only: {{\"shows_idea\": true or false, \"setting_seen\": \"the place you see, under 8 words\", "
+                      "\"setting_fits\": true or false, \"wrong_cues\": [any of the things that must not be in it that you see], "
+                      "\"shows_an_ad\": true if the picture shows a poster, billboard, phone, screen, shelf card or advert, or readable words, "
+                      "else false}}")
 
 
 def question(card: dict) -> str:
-    """The one question for a picture, from its scene card (key_visual, setting, must_not)."""
+    """The one question for a picture, from its scene card (key_visual, setting, must_not; an execution's card: its format too)."""
     nots = [str(x) for x in card.get("must_not") or [] if str(x).strip()]
+    if card.get("role") == "execution":
+        return QUESTION_EXECUTION.format(format=str(card.get("format") or "the work").strip() or "the work",
+                                         key_visual=str(card.get("key_visual") or "the scene described").strip().rstrip("."),
+                                         setting=str(card.get("setting") or "the setting described").strip().rstrip("."),
+                                         must_not=", ".join(nots) or "nothing listed")
     return QUESTION.format(key_visual=str(card.get("key_visual") or "the scene described").strip().rstrip("."),
                            setting=str(card.get("setting") or "the setting described").strip().rstrip("."),
                            must_not=", ".join(nots) or "nothing listed")
@@ -47,8 +60,10 @@ def verdict(answer: dict | None) -> dict:
     """``{pass, reason, setting_seen}`` from a parsed answer (None: unreadable, a fail)."""
     if answer is None:
         return {"pass": False, "reason": "the fit check's answer was unreadable", "setting_seen": ""}
-    ok = answer.get("shows_idea") is True and answer.get("setting_fits") is True and not answer["wrong_cues"]
+    ok = answer.get("shows_idea") is True and answer.get("setting_fits") is True and not answer["wrong_cues"] and answer.get("shows_an_ad") is not True
     why = []
+    if answer.get("shows_an_ad") is True:
+        why.append("it shows an advert or words itself, not the scene for the ad's picture area")
     if answer.get("shows_idea") is not True:
         why.append("it does not show the idea")
     if answer.get("setting_fits") is not True:
@@ -61,6 +76,8 @@ def verdict(answer: dict | None) -> dict:
 def correction(card: dict, v: dict) -> str:
     """The line a retry adds to the prompt: what the last frame showed, and what it must be."""
     seen = v.get("setting_seen") or "another place"
+    if card.get("role") == "execution" and "advert or words" in str(v.get("reason") or ""):
+        return f"The last frame showed an advert or words; this must be the scene alone, in {str(card.get('setting') or 'the setting described').rstrip('.')}, with no frame, device or words."
     return f"The last frame showed {seen}; this must be {str(card.get('setting') or 'the setting described').rstrip('.')}."
 
 

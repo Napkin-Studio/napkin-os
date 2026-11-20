@@ -6,7 +6,8 @@ stage g never saw the brief's market, setting, category or audience, so pictures
 - ``scene_brief``: one per deck, built in code from the inputs and stages: the market (and its code-owned cue pack), the setting locked for
   the deck (from the channels and deliverables), the category as a generic noun, the audience, the key visual (the chosen territory and the
   idea), the near-miss settings it must not be. Stage g gets it with every slot.
-- ``slots_for``: 3 to 5 pictures a deck: the cover, the idea, the hero execution (the first presented one) and, when presented, the audience.
+- ``slots_for``: 3 to 5 pictures a deck: the cover, the idea, the hero execution (the first presented one) and, when presented, the audience;
+  under spec.MOCKUPS each of the first two presented executions (their mock-ups' visual areas), the audience last, five at most.
 - ``subject_of``: stage g answers per slot with a scene card (key_visual, setting, props, person, not); code assembles the subject,
   literal first: the key visual and the setting in one sentence, then props, the person and the "not" list.
 - ``names_for``: the per-brief names deny-list for the scene lint (client, brands, competitors, people and places named in the brief).
@@ -40,6 +41,8 @@ NEAR_MISS = {"shop": ["not a home", "not a field", "not a kitchen"], "office": [
 ROLES = ("title", "idea", "execution", "audience")
 MAX_PICTURES = 5
 MIN_PICTURES = 3
+#: spec.MOCKUPS: the presented executions that get a picture slot (the first two: the ones in the first ten slides).
+MOCKUP_EXECUTIONS = 2
 
 
 def _text(v) -> str:
@@ -109,6 +112,11 @@ def slots_for(deck: dict, cands: list) -> list:
         if t not in ROLES or c["sid"] not in shown or c["slot"] != "picture":
             continue
         by_role.setdefault(t, []).append(c)
+    from . import spec   # noqa: PLC0415
+    if spec.MOCKUPS:   # execution mock-ups: a slot per presented execution (the first MOCKUP_EXECUTIONS), each filling its ad's visual area
+        ex = (by_role.get("execution") or [])[:MOCKUP_EXECUTIONS]
+        out = [by_role[r][0] for r in ("title", "idea") if by_role.get(r)] + ex + ([by_role["audience"][0]] if by_role.get("audience") else [])
+        return out[:MAX_PICTURES]
     out = [by_role[r][0] for r in ("title", "idea", "execution", "audience") if by_role.get(r)]
     if len(out) < MIN_PICTURES and len(by_role.get("execution") or []) > 1:
         out.append(by_role["execution"][1])

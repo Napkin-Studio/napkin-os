@@ -237,6 +237,37 @@ def _framed_markup(s: dict, got: list, deck: dict, fig, label: str) -> tuple | N
             f'<i class="f-stand"></i><div class="f-pills">{_mockup(im, label)}</div></div></div>', f"pic-side pw{w + 100}")
 
 
+def _mock_markup(sid: str, s: dict, b: "_Slide", deck: dict, blocks: list, drawn: dict, pictures: dict, src, box=None,
+                 from_pptx: bool = False) -> tuple | None:
+    """spec.MOCKUPS on the web: ``(body, scene, class)`` for an execution drawn as a mock-up (mockup.applies), or None. The left column holds
+    the role, the copy the ad does not carry and the answer; the scene is mockup.scene at the pptx's own box, as one inline SVG placed
+    absolutely on the stage, with the 'Mock-up' label under it."""
+    from . import mockup   # noqa: PLC0415
+    from .theme import Grid, get_theme   # noqa: PLC0415
+    if not mockup.applies(deck, sid, s) or (from_pptx and not box):   # with the pptx's record: only where it drew one, in its box
+        return None
+    cp = next((x for x in blocks if x["kind"] == "copy"), None)
+    if cp is None:
+        return None
+    g = Grid()
+    x0, x1 = g.M, g.W - g.M
+    lw = (x1 - x0) * 0.38
+    bx = x0 + lw + 0.35
+    top = 1.9
+    box = tuple(box) if box else (bx, top, x1 - bx, g.body_end - top - 0.28 - 0.18)
+    pics = {slot: im for (i, slot), im in drawn.items() if i == sid and im.get("asset") in pictures}
+    th = get_theme()
+    copy = mockup.copy_of(deck, cp)
+    sc = mockup.scene(s["title"], box, copy, pics, {"head": th.head, "body": th.body})
+    rest = [x for x in blocks if x["kind"] != "copy"] + mockup.left_blocks(sc, copy)
+    href = lambda slot: src(pics[slot]["asset"], pictures[pics[slot]["asset"]]) if slot in pics else ""   # noqa: E731
+    px = mockup.PX
+    scene = (f'<div class="mock-scene" style="position:absolute;left:{box[0] * px:.0f}px;top:{box[1] * px:.0f}px;width:{box[2] * px:.0f}px">'
+             f'{mockup.svg(sc, href)}<div class="f-pills"><span class="mockup">{_e(spec.MOCKUP_LABEL)}</span></div></div>')
+    body = f'<div class="body col mock-left" style="max-width:{lw * px:.0f}px">{b.blocks(rest)}</div>'
+    return body, scene, "mock-ex"
+
+
 def data_uri(aid: str, path: Path) -> str:
     """A picture inline (deck.html stays one self-contained file): the derived JPEG as a data URI."""
     return "data:image/jpeg;base64," + base64.b64encode(Path(path).read_bytes()).decode()
@@ -674,7 +705,12 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
             probe.icons = b.icons
             if not _graphics_body(s, probe, shown_blocks(s, audience), v3lid, deck):
                 v3lid = None
-        if v3lid:   # deck-look: the layout places its own title; the band stays in the header (none on the cover and the close)
+        mock = (_mock_markup(sid, s, b, deck, shown_blocks(s, audience), drawn, pictures or {}, src, (icons or {}).get(sid, {}).get("mockup_box"),
+                             icons is not None) if spec.MOCKUPS else None)
+        if mock:   # spec.MOCKUPS: the execution as the work in situ, the same scene the pptx paints (deck/mockup.py)
+            title = b.rv("title", _e(s["title"]), "h1", 220)
+            body, pic_html, pic_cls = mock
+        elif v3lid:   # deck-look: the layout places its own title; the band stays in the header (none on the cover and the close)
             if v3lid in ("cover_image", "close"):
                 kick = ""
             title = ""
@@ -752,6 +788,7 @@ FRAME_CSS = """
 .frame-wrap.f-billboard .f-stand{width:70%;height:60px;background:linear-gradient(90deg,var(--ink) 0 6%,transparent 6% 94%,var(--ink) 94%)}
 .frame-wrap.f-screen .f-stand{width:12%;height:36px}
 .frame-wrap .f-pills{margin-top:22px;display:flex;gap:12px}
+.mock-scene{z-index:1}.mock-scene svg{display:block}.mock-scene .f-pills{margin-top:26px;display:flex;gap:12px}
 .frame-wrap .pic .plabel{display:none}
 .pics.col:has(.frame-wrap){display:flex;align-items:center;justify-content:center;background:var(--tint)}
 .pics.col .frame-wrap .pic{height:auto}

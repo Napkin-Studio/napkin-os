@@ -424,6 +424,31 @@ def is_placeholder_name(name) -> bool:
     return bool(_PLACEHOLDER_NAME.fullmatch(str(name or "")))
 
 
+_JOB_LABEL = re.compile(r"(?i)\s*(?:brief|project|job|client|campaign|deck|pitch|rfp|tender|account)\s*[#:no.-]*\s*(?:[a-z]{1,2}|[a-z]?\d[a-z0-9]{0,5})\s*"
+                        r"|\s*[A-Z]{1,5}[-_ ]?\d{2,}(?:[-_/]\d+)*\s*")
+
+
+def is_job_label(name) -> bool:
+    """True for a client or project label that names a job, not a brand: 'Brief 1', 'Project X', 'Job 4512', 'BR-2026-01'."""
+    return bool(_JOB_LABEL.fullmatch(str(name or "")))
+
+
+def _same(a, b) -> bool:
+    """Two names that say the same thing, ignoring case, spacing and the words pitch, response and deck."""
+    f = lambda s: " ".join(w for w in re.findall(r"[\w']+", str(s or "").lower()) if w not in ("pitch", "response", "deck"))   # noqa: E731
+    return bool(f(a)) and f(a) == f(b)
+
+
+def undouble(title: str) -> str:
+    """A cover title said once: 'Brief 1: Brief 1' -> 'Brief 1', 'Brief 1 Pitch: Brief 1 pitch' -> 'Brief 1 Pitch'."""
+    parts = [x.strip() for x in str(title or "").split(":")]
+    out = []
+    for x in parts:
+        if x and not any(_same(x, y) for y in out):
+            out.append(x)
+    return ": ".join(out) if out else str(title or "")
+
+
 def month_year(deck: dict) -> str:
     try:
         d = _dt.datetime.fromisoformat(str(deck["meta"].get("built_at") or ""))
@@ -450,25 +475,31 @@ def cover(deck: dict, st: dict, client: str = "", project: str = "", agency: str
     sl = next((deck["slides"][x] for x in deck["order"] if deck["slides"][x]["type"] == "title"), None)
     if sl is None:
         return {}
-    pick = lambda *xs: next((str(x).strip() for x in xs if not is_placeholder_name(x)), "")  # noqa: E731
+    stand_in = lambda x: is_placeholder_name(x) or is_job_label(re.sub(r"(?i)\b(?:pitch|response|deck)\b", " ", str(x or "")))   # noqa: E731  'Brief 1 Pitch': a job, not a name
+    pick = lambda *xs: next((str(x).strip() for x in xs if not stand_in(x)), "")  # noqa: E731
     bm, nm = brief_meta or {}, names or {}
     c = pick(client, bm.get("client"), nm.get("client"))
     p = pick(project, bm.get("project"), nm.get("project"))
-    if p and c and p.lower() == c.lower():
+    if p and c and _same(p, c):
         p = ""   # a project named as its client says nothing more
     camp = campaign_name(st)
-    if c and not is_placeholder_name(project) and not is_placeholder_name(client):
+    job = "" if c else next((" ".join(str(x).split()) for x in (client, bm.get("client"), nm.get("client"))
+                             if str(x or "").strip() and not str(x).strip().startswith("[")), "")   # the client label, kept as the label
+    if c and not stand_in(project) and not stand_in(client):
         title = sl["title"]   # the run named both: assemble's title stands (finish has held its scope words to the brief)
     elif c and p:
         title = f"{c}: {p}"
     elif c:
         title = f"{c}: {camp}" if camp else c
-    else:
-        title = f"{p}: {camp}" if p and camp else (p or camp or sl["title"])
-    if is_placeholder_name(title.split(":")[0]) or re.search(r"(?i)\bresponse deck\b", title):
+    else:   # no real client name: the campaign (or the project) is the title, and the job label goes in the kicker, never doubled
+        title = f"{p}: {camp}" if p and camp and not _same(p, camp) else (camp or p or sl["title"])
+    if stand_in(title.split(":")[0]) or re.search(r"(?i)\bresponse deck\b", title):
         title = camp or title
+    title = undouble(title)
     ag = "" if is_placeholder_name(agency) else str(agency).strip()
     when = month_year(deck)
+    if job and not _same(job, title):
+        when = f"{job} · {when}"
     todo = [b for b in sl["blocks"] if b.get("human") or spec.unresolved_line(b.get("text"))]
     sl["title"] = sl["label"] = title
     sl["blocks"] = [{"kind": "text", "text": f"A response from {ag}", "basis": "meta"}] if ag else []
