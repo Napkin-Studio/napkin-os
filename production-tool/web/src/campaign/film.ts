@@ -34,6 +34,14 @@ export const FILM_SHAPES = [
   { id: 'film-1x1', label: '1:1', aspect: { w: 1, h: 1 } },
 ] as const
 export type FilmShapeId = (typeof FILM_SHAPES)[number]['id']
+
+/** The shapes a brief asks for (its format and mandatories: "Deliver in 16:9, 9:16 and 1:1"), as Make all sizes
+ *  picks them first; 16:9 and 9:16 when it names none (UAT 2026-11-21: the brief mandated 1:1, not picked). */
+export function briefShapes(spine: { format?: string; mandatories?: string[] } | undefined): FilmShapeId[] {
+  const text = [spine?.format ?? '', ...(spine?.mandatories ?? [])].join(' ')
+  const named = FILM_SHAPES.filter((s) => new RegExp(`(^|[^0-9])${s.label.replace(':', '\\s*[:x×]\\s*')}(?![0-9])`).test(text)).map((s) => s.id)
+  return named.length ? named : ['film-16x9', 'film-9x16']
+}
 /** Lengths offered from a 30 s master (CF5: 15 s and 6 s by default; any length typed). */
 export const FILM_LENGTHS = [30, 20, 15, 10, 6]
 export const DEFAULT_FILM_LENGTHS = [15, 6]

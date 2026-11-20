@@ -15,7 +15,7 @@ import { currentRender, rendersOf, shotNumber, storyboardOfVideo } from '../mode
 import { Float } from '../ui/Float'
 import { useSending } from '../ui/hooks'
 import type { ChangeOpen } from './ChangeDrawer'
-import { clipEnd, clipLen, fitWords, handleShort, type CutClip } from './cut'
+import { clipEnd, clipLen, fitWords, handleShort, MIN_CLIP_S, type CutClip } from './cut'
 import { appendTake, assembleFirstCut, assembleLoses, editCut } from './editOps'
 import { createPortal } from 'react-dom'
 import { Inspector } from './Inspector'
@@ -153,7 +153,8 @@ export function EditRoom({ data, sel, onSel, onChange, onSound, register, ready:
   }
   const split = () => {
     const c = pickedClip && t > pickedClip.startS && t < clipEnd(pickedClip) ? pickedClip : clipAtPlayhead()
-    if (c) run(editCut.split(docStore, data.videoId, c, t))
+    // A split at a clip's edge cuts nothing (UAT 2026-11-21: S at 0 logged "split shot 1" and changed nothing).
+    if (c && t - c.startS >= MIN_CLIP_S && clipEnd(c) - t >= MIN_CLIP_S) run(editCut.split(docStore, data.videoId, c, t))
   }
 
   // Keys (not while typing, and not while a menu or a drawer has them).

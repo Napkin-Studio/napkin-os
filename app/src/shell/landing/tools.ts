@@ -49,7 +49,7 @@ export function isLive(tool: Tool, installed: readonly Pick<InstalledApp, 'app_i
 export const PRODUCTION_PATH = '/production/'
 
 /** Where Continue in › Production Tool opens a brief (features/brief-node.clan): the tool reads the brief
- *  itself, freezes its spine on a Brief node and links it into a new Script. Ids only, never words. */
+ *  itself and freezes its spine on a Brief node on a new canvas (no Script: owner 2026-11-18). Ids only, never words. */
 export const BRIEF_APP_ID = 'ie.napkin.brief-maker'
 export const filmFromBriefHref = (docPath: string): string => `${PRODUCTION_PATH}?brief=${encodeURIComponent(docPath)}`
 

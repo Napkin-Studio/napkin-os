@@ -115,7 +115,9 @@ export function DecisionsButton({ needs, own }: { needs: number; own?: { on: boo
   return (
     <button type="button" className={`tb-decisions-btn ${needs ? 'has-needs' : ''}`} aria-pressed={on} aria-label={`Decisions${needs ? `, ${needs} need you` : ''}`}
       title="Decisions: every decision, who made it and why, and what each job cost" onClick={toggle}>
-      <span className="lbl-t">Decisions</span><span className="cnt">{needs}</span>
+      {/* The count is what needs you, shown only when something does (UAT 2026-11-21: "0" read as "no decisions"
+          beside a drawer of 91). */}
+      <span className="lbl-t">Decisions</span>{needs > 0 && <span className="cnt" title={`${needs} need${needs === 1 ? 's' : ''} you`}>{needs}</span>}
     </button>
   )
 }

@@ -50,7 +50,8 @@ import { ScriptLength, ScriptRefs } from './ScriptFacts'
 import { SendDisclosure } from '../ui/SendDisclosure'
 import { sendRows } from '../ui/sendRows'
 import { useBooth } from '../ui/booth/useBooth'
-import { scriptFromLine } from '../jobs/prompt'
+import { scriptFromBrief, scriptFromLine } from '../jobs/prompt'
+import { briefOf } from '../brief/model'
 import { AVView } from './AVView'
 import { TimePill } from './TimePill'
 import { nextMomentTime, setBeatTime, UNPLANNED_MOMENT } from './moments'
@@ -693,6 +694,10 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
               const r = await scriptFromLine(skyeDeps, store, scriptId, words)
               if ('pasted' in r) say([`Pasted ${r.pasted} ${r.pasted === 1 ? 'scene' : 'scenes'}.`, r.dropped].filter(Boolean).join(' '))
             }}
+            {...(() => {
+              const b = briefOf(doc, scriptId)
+              return b ? { briefTitle: b.brief.title, onDraftFromBrief: () => scriptFromBrief(skyeDeps, store, scriptId, b.brief.title) } : {}
+            })()}
             onError={setError} />
         )}
         {history && <DecisionsDrawer key={historyFocus?.addresses.join() ?? 'all'} store={store} focus={historyFocus} onClose={() => { setHistory(false); setHistoryFocus(undefined) }} />}

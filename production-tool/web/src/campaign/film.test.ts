@@ -186,3 +186,13 @@ describe('the film\'s own length in Make all sizes (UAT 2026-11-18, U6: "Film ·
     expect(filmSeconds([])).toBe(0)
   })
 })
+
+describe('Make all sizes picks the shapes the brief asks for (UAT 2026-11-21)', () => {
+  it('reads its format and mandatories', async () => {
+    const { briefShapes } = await import('./film')
+    expect(briefShapes({ mandatories: ['Deliver in 16:9, 9:16 and 1:1.'] })).toEqual(['film-16x9', 'film-9x16', 'film-1x1'])
+    expect(briefShapes({ format: '4x5 feed and 1 : 1' })).toEqual(['film-4x5', 'film-1x1'])
+    expect(briefShapes({ format: '30 s TV spot' })).toEqual(['film-16x9', 'film-9x16'])
+    expect(briefShapes(undefined)).toEqual(['film-16x9', 'film-9x16'])
+  })
+})

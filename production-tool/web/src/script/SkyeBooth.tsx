@@ -44,6 +44,10 @@ export interface SkyeBoothProps {
   onWrite: (target: WriteTarget, intent: WriteIntent, opts: StartOpts) => Promise<unknown>
   /** A draft for an empty script from a line, or a pasted screenplay (jobs/prompt.ts scriptFromLine). */
   onDraftScript: (words: string) => Promise<unknown>
+  /** An empty script with a linked brief: "Draft from the brief" (jobs/prompt scriptFromBrief; UAT 2026-11-21: it had no button). */
+  onDraftFromBrief?: () => Promise<unknown>
+  /** The linked brief's title, when the script has one. */
+  briefTitle?: string
   onError: (m: string | null) => void
 }
 
@@ -188,6 +192,12 @@ export function SkyeBooth(p: SkyeBoothProps) {
         <BoothBox key={scope.kind === 'whole' ? 'whole' : scope.kind === 'part' ? `part:${scope.label}` : 'sel'} placeholder={placeholder} button="Ask the Script agent" scope={chip}
           onSend={send} busy={asking} disabled={skye.off || skye.quota || busy || handsOff} hint={hint} />
         {!p.empty && verbs(scope.kind === 'part' ? SKYE_OPTIONS.filter((o) => o.intent !== 'write_vo') : SKYE_OPTIONS)}
+        {p.empty && p.onDraftFromBrief && (
+          <button type="button" className="btn" disabled={skye.off || skye.quota || busy || handsOff || asking} onClick={() => void run(() => p.onDraftFromBrief!())}
+            title="The Script agent drafts the film from the linked brief alone, in place on the first scene">
+            Draft from the brief{p.briefTitle ? ` “${p.briefTitle}”` : ''}
+          </button>
+        )}
       </div>
       {p.planning && <WorkingCard agent="dex" text="The Director agent is planning the shots from the script." />}
       {skye.working && <WorkingCard agent="skye" text="The Script agent is writing…" />}
