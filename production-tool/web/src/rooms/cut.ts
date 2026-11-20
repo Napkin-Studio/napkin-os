@@ -386,3 +386,37 @@ export function applySwap(cut: Cut, genId: string, plan: SwapPlan, choice: SwapC
   }
   return next
 }
+
+// ── Captions from the spoken lines ────────────────────────────────────────────────────────────────────
+
+/** A spoken line to caption: its words, when it is said (ad time), and the clip it is said in. */
+export interface CaptionLine { words: string; startS: number; clipStartS: number; clipEndS: number }
+
+/**
+ * Where each caption goes: from its line, for up to 3 s, never past its clip's end or the next line in that clip, and
+ * never over a text already on the cut (or a caption placed before it): it starts after one and ends before the next.
+ * A caption left with under half a second is left out, as is one the cut already has. Pure.
+ */
+export function captionTimes(lines: CaptionLine[], texts: Pick<CutText, 'words' | 'startS' | 'durS'>[]): { words: string; startS: number; durS: number }[] {
+  const taken: { from: number; to: number; words: string }[] = texts.map((t) => ({ from: t.startS, to: r3(t.startS + t.durS), words: t.words }))
+  const out: { words: string; startS: number; durS: number }[] = []
+  const sorted = [...lines].sort((a, b) => a.startS - b.startS)
+  sorted.forEach((l, i) => {
+    if (taken.some((t) => t.words.trim() === l.words.trim() && t.from < l.clipEndS && t.to > l.clipStartS)) return
+    const next = sorted.slice(i + 1).find((n) => n.clipStartS === l.clipStartS)
+    let from = r3(Math.max(l.clipStartS, l.startS))
+    let to = r3(Math.min(from + 3, l.clipEndS, next ? next.startS : Infinity))
+    for (const t of [...taken].sort((a, b) => a.from - b.from)) {
+      if (t.to <= from || t.from >= to) continue
+      if (t.from <= from) from = t.to
+      else to = t.from
+    }
+    if (to - from < 0.5 - 1e-6) return
+    from = Math.round(from * 10) / 10
+    to = Math.floor(to * 10) / 10
+    if (to - from < 0.5 - 1e-6) return
+    out.push({ words: l.words, startS: from, durS: r3(to - from) })
+    taken.push({ from, to, words: l.words })
+  })
+  return out
+}

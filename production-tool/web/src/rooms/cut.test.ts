@@ -118,3 +118,16 @@ describe('the swap rule (Use this take)', () => {
     expect(after.v1[0]).toMatchObject({ inS: 0, outS: 1.5, holdS: 0, startS: 0 })
   })
 })
+
+describe('captions from the spoken lines (UAT 2026-11-21, F9)', () => {
+  it('stay inside their clip and never sit over a text already on the cut', async () => {
+    const { captionTimes } = await import('./cut')
+    // "Good boy." said 1 s into shot 3 (ad 5.4 s to 7.6 s); the super "1:04 a.m." sits 6.0 s to 9.0 s.
+    const line = { words: 'Good boy.', startS: 6.4, clipStartS: 5.4, clipEndS: 7.6 }
+    expect(captionTimes([line], [{ words: '1:04 a.m.', startS: 6.9, durS: 3 }])).toEqual([{ words: 'Good boy.', startS: 6.4, durS: 0.5 }])
+    expect(captionTimes([line], [])).toEqual([{ words: 'Good boy.', startS: 6.4, durS: 1.2 }])
+    // Over the whole of it: left out. Twice: once.
+    expect(captionTimes([line], [{ words: 'x', startS: 5, durS: 4 }])).toEqual([])
+    expect(captionTimes([line], [{ words: 'Good boy.', startS: 6.4, durS: 1.2 }])).toEqual([])
+  })
+})

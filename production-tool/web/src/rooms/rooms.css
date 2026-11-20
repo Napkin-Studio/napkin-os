@@ -741,3 +741,6 @@ html[data-theme='dark'] .jc-box.sel { box-shadow: 0 0 0 2px var(--ag-acc, var(--
   .rooms[data-room="edit"] .rm-tltools { gap: 4px; }
   .rooms[data-room="edit"] .rm-tltools .sp-btn { padding: 0 8px; }
 }
+
+/* The Rendered view's note with Download the ad beside it (pt-film-r2 F19). */
+.rm-renderbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
