@@ -83,6 +83,18 @@ export function mediaItems(doc: ProductionDocument, project: string | undefined,
     taken.add(a.sha256)
     out.push({ kind: v ? 'view' : 'picture', sha256: a.sha256, mime: a.mime, name: file(base, a.sha256), folder: 'pictures', which: v ? `${v.key}_${v.view}` : a.sha256 })
   }
+  // A canvas picture's versions from the Image editor (v1 as it was, v2, v3…), each a file of its own, named after
+  // the picture: they were left out, so the versions menu and a result's bar had no Download (UAT round 1 IMG-16).
+  const versions = Object.values(doc.frames).filter((f) => !f.shot_id && !!f.node && !taken.has(f.asset))
+    .sort((a, b) => (a.node! < b.node! ? -1 : a.node! > b.node! ? 1 : a.version - b.version))
+  const pictureNo = new Map<string, number>()
+  for (const f of versions) {
+    if (taken.has(f.asset)) continue
+    const r = refsList(doc).find((x) => x.node === f.node)
+    if (!r && !pictureNo.has(f.node!)) pictureNo.set(f.node!, ++n)
+    taken.add(f.asset)
+    out.push({ kind: 'picture', sha256: f.asset, mime: mimeOf(f.asset), name: file(`${r ? nameOf(r) : `picture-${pictureNo.get(f.node!)}`}-v${f.version}`, f.asset), folder: 'pictures', which: f.id })
+  }
 
   // Storyboard frames and clips, every version, by shot (numbered by rank).
   shots.forEach((s, i) => {

@@ -238,6 +238,12 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   // Hidden layers are left out of every send and of Apply, and the pill, the Apply line and the tray say so (IM1).
   const applyLeftOut = hiddenCount(session, ['mask'])
   const activeMask = session.edits.find((e): e is MaskEdit => e.id === session.active && e.kind === 'mask')
+  // Masks whose fill came back and that were not painted since: the stage shows only their edge (UAT round 1 IMG-20).
+  const settledMasks = session.edits.flatMap((e) => {
+    if (e.kind !== 'fill' || !resultOf(e)) return []
+    const m = session.edits.find((x): x is MaskEdit => x.id === e.maskId && x.kind === 'mask')
+    return m && JSON.stringify(m.ops) === JSON.stringify(e.ops) ? [m.id] : []
+  })
   const maskHidden = !!activeMask && session.hidden.includes(activeMask.id)
   // A hidden mask cannot be filled: it is left out like any hidden layer, so there would be nothing to fill.
   const masked = !!activeMask && activeMask.ops.length > 0 && !maskHidden
@@ -549,8 +555,8 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
             </div>
           </>
         )}
-        primary={<button type="button" className="btn primary" disabled={running || !work || !framePic} onClick={apply}
-          title={n ? applyWords : 'Make an edit first'}>Apply as new version</button>} />
+        primary={<button type="button" className="btn primary" disabled={running || !n || !framePic} onClick={apply}
+          title={n ? applyWords : unfilledMasks(session) ? 'A mask alone changes nothing: Fill or Remove it first' : 'Make an edit first'}>Apply as new version</button>} />
       <Float anchor={versionsBtn} open={versionsOpen} onClose={() => setVersionsOpen(false)} align="end" label={`Versions of ${subject.label}`} className="ie-versions">
         <div className="ie-vhead pt-mono">{ratio ? `${ratio} locked` : 'Picture'}{own ? ` · ${own.w} × ${own.h}` : ''}</div>
         {frames.map((f) => <VersionRow key={f.id} f={f} open={f.id === current?.id} onPick={() => pickVersion(f)} />)}
@@ -570,7 +576,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
             <div className="ie-stagewrap">
             <Stage src={url} beforeSrc={before?.url} plan={shownPlan} image={image} w={W} h={H} session={session} tool={activeTool} brush={brush} zoom={zoom} pan={pan} onPan={setPan}
               before={showBefore} onAfter={() => setView('after')} motion={motion} onDrawn={setDrawError} onMaskOp={onMaskOp} onAddText={onAddText} onText={onText} onCrop={onCrop}
-              pending={runningEdit?.kind === 'fill' ? runningEdit.maskId : undefined} progress={!!runningEdit && runningEdit.kind !== 'fill'}>
+              pending={runningEdit?.kind === 'fill' ? runningEdit.maskId : undefined} progress={!!runningEdit && runningEdit.kind !== 'fill'} settled={settledMasks}>
               {showBefore && <span className="pt-mono ie-before">Before · v{before.version} as saved</span>}
             </Stage>
             </div>
@@ -682,9 +688,9 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
                 <div className="row">
                   {/* Two lines, as Fill's: the one-line field cut its own placeholder off (live test 2026-11-16). */}
                   <textarea className="input ie-whole" rows={2} aria-label="Describe the change to the whole frame" placeholder="e.g. warmer light, keep the bottle" value={whole} maxLength={1000}
-                    disabled={!current || running} onChange={(e) => setWhole(e.target.value)}
+                    disabled={!framePic || running} onChange={(e) => setWhole(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); if (whole.trim() && !running) setTray('whole') } }} />
-                  <button ref={wholeBtn} type="button" className="btn sm" disabled={!current || !whole.trim() || running} onClick={() => setTray('whole')}>Change</button>
+                  <button ref={wholeBtn} type="button" className="btn sm" disabled={!framePic || !whole.trim() || running} onClick={() => setTray('whole')}>Change</button>
                 </div>
                 {offer && offerJob && offerEdit && shotId && (
                   <RedrawOffer askId={offer.id} n={shotNo}
@@ -709,7 +715,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
                     <button type="button" className="pt-mono" aria-pressed={scale === 4} onClick={() => setScale(4)}>4×</button>
                   </div>
                   <span className="pt-mono faint ie-out">{upscaleSize(W, H, scale)}</span>
-                  <button ref={upBtn} type="button" className="btn sm" disabled={!current || running || !controls.upscale} onClick={() => setTray('upscale')}>Upscale</button>
+                  <button ref={upBtn} type="button" className="btn sm" disabled={!framePic || running || !controls.upscale} onClick={() => setTray('upscale')}>Upscale</button>
                 </div>
               </div>
             )}

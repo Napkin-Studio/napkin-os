@@ -110,4 +110,16 @@ describe('media names (features/media-download.clan)', () => {
     expect(mediaItem(d, 'P', undefined)).toBeUndefined()
     expect(mediaItem(d, 'P', SHA('0'))).toBeUndefined()
   })
+
+  it('a canvas picture\'s versions are files of their own, named after it (UAT round 1 IMG-16: no Download for v3)', () => {
+    const d = project()
+    for (const c of '78') d.assets[SHA(c)] = asset(c, 'image/png', 'edited')
+    // @maya_front edited twice: v1 as it was, then v2 and v3 (the ref follows the newest).
+    put(d.frames, { id: 'pv_1', node: 'node_front', version: 1, kind: 'original', asset: SHA('a') })
+    put(d.frames, { id: 'pv_2', node: 'node_front', version: 2, kind: 'edited', asset: SHA('7') })
+    put(d.frames, { id: 'pv_3', node: 'node_x', version: 2, kind: 'edited', asset: SHA('8') })
+    expect(mediaItem(d, 'P', SHA('7'))).toMatchObject({ name: 'P-maya_front-v2.png', folder: 'pictures', which: 'pv_2' })
+    expect(mediaItem(d, 'P', SHA('8'))?.name).toMatch(/^P-picture-\d+-v2\.png$/)
+    expect(mediaItem(d, 'P', SHA('a'))?.name).toBe('P-maya_front.png') // v1 is the named picture already
+  })
 })

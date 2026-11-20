@@ -14,7 +14,7 @@ import { saveTime, useSave } from '../useSave'
 import { useProjectName } from '../useDownload'
 import { exportBundle, download } from '../../export'
 import { downloadAllMedia } from '../../media/download'
-import { viewsOnCanvas } from '../../media/names'
+import { mediaItems, viewsOnCanvas } from '../../media/names'
 import { idbGet } from '../../lib/idb'
 import type { CanvasSnapshot } from '../../canvas/controller'
 import { setThemeChoice } from '../../theme'
@@ -170,7 +170,8 @@ function ExportRows({ busy, run, onOpen }: { busy: string | null; run: (what: st
   const { doc: docStore, project } = useServices()
   const doc = useDoc()
   const name = useProjectName()
-  const files = Object.keys(doc.assets).length
+  // What the zip holds (media/names.ts), not every asset: masks and drawings are not media (UAT round 1: "34 files", 29 in the zip).
+  const files = mediaItems(doc, name).length
   return (
     <>
       <div className="fhead">Import</div>
