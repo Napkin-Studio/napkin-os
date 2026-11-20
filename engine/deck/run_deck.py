@@ -1226,6 +1226,15 @@ def main(argv=None):
                 bmeta = None
         rep["pitch_ready"] = pitch_ready.apply(deck, inp, st, client=a.client, project=a.project, agency=a.agency,
                                                brief_meta=bmeta if isinstance(bmeta, dict) else None)
+    from . import figures   # the figure guard: a number no input states never reaches a slide (stage b and d's figures rule, backstopped)
+    cut = figures.guard(deck, inp)   # after pitch-ready, so a figure its evidence pass licenses stays
+    if cut:
+        rep["figures_removed"] = cut
+        if spec.PITCH_READY and kind != "investor":   # and on the needs-a-person list (cover notes and appendix)
+            pitch_ready.list_removed_figures(deck)
+    paged = assemble.paginate_sources(deck)   # a Sources table too long for one slide goes on as many pages as it needs
+    if paged:
+        rep["sources_pages"] = 1 + paged
     sources, held, plan_res, stale_gen = {}, [], None, []
     if a.pictures or supplied:   # pictures that already exist: records and assets only; nothing is made, sent or spent
         try:

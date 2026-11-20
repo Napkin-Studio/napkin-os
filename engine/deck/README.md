@@ -541,3 +541,15 @@ before; the suite sets it to 0). After stage e and the red team, before the pict
   and stage ids come off every shown text (the notes keep them); validate's and stage h's `code_leak` is an error for any left.
 
 Tests: `tests/test_pitch_ready.py`, `engine/agent-server/test_research_evidence.py` (invented fixtures only).
+
+### The figure guard (`deck/figures.py`)
+
+Stage b and stage d may write a figure only when the brief, the research or an evidence line states it, with that line's id in refs;
+otherwise they say it in words (personas carry no age, income or family size the inputs do not give; no invented spot length, site
+count, phase months or target). The guard is the backstop: after pitch-ready and before the pictures and the layout plan it reads the
+texts `numbers_trace` reads and judges each number the same way (`validate.number_corpus`, `slide_allowed`, `untraced`). An untraced
+figure is taken out and its sentence reworded ("Mary, 68." to "Mary.", "Radio (30 seconds)" to "Radio", "a 30-second spot" to "a spot",
+"Months 2 to 8" to "Timing to agree", "Months 1-3" with only 1 stated to "From month 1"); a sentence, line, stat or block left with
+nothing is dropped. Each removal is in the slide's speaker notes ("Figure removed: ..."), `meta.figures_removed`, report.json
+`figures_removed`, and the needs-a-person list (which names the slide, never the figure). `numbers_trace` stays the final check.
+Tests: `tests/test_figures.py`.

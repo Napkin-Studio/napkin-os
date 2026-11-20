@@ -1746,6 +1746,47 @@ def _sources_slide(deck, R):
     return _slide("appendix_sources", "Sources", [{"kind": "table", "rows": [["#", "Source"]] + rows, "small": True, "basis": "meta"}], status="from_source")
 
 
+#: The Sources appendix in pages: a page holds about this many lines of SOURCES_LINE_CHARS characters (a 13-row table of long URLs
+#: ran off a 16:9 slide at about 33 such lines; 29 fitted).
+SOURCES_PAGE_LINES = 22
+SOURCES_LINE_CHARS = 90
+SOURCES_MORE = "Sources (continued)"
+
+
+def paginate_sources(deck: dict) -> int:
+    """Split a Sources table too long for one slide into pages: the first keeps "Sources", each next page is a "Sources (continued)"
+    slide right after it, with the same numbering ([n]) the slides' footnotes use. Run after the last change to the table
+    (pitch_ready.refresh_sources) and before the layout plan. Returns how many pages were added (0 when it fits, or was split before)."""
+    import math   # noqa: PLC0415
+    sids = [x for x in deck["order"] if deck["slides"][x]["type"] == "appendix_sources"]
+    if len(sids) != 1:
+        return 0
+    sl = deck["slides"][sids[0]]
+    tb = next((b for b in sl.get("blocks") or [] if b.get("kind") == "table"), None)
+    if not tb or len(tb.get("rows") or []) < 3:
+        return 0
+    head, rows = tb["rows"][0], tb["rows"][1:]
+    pages, cur, used = [], [], 0
+    for r in rows:
+        n = max(1, math.ceil(len(" ".join(str(x) for x in r[1:])) / SOURCES_LINE_CHARS))
+        if cur and used + n > SOURCES_PAGE_LINES:
+            pages.append(cur)
+            cur, used = [], 0
+        cur.append(r)
+        used += n
+    pages.append(cur)
+    if len(pages) == 1:
+        return 0
+    tb["rows"] = [head] + pages[0]
+    at = deck["order"].index(sids[0])
+    n = 1 + max((int(x[1:]) for x in deck["order"] if re.fullmatch(r"s\d+", x)), default=0)
+    for i, page in enumerate(pages[1:], 1):
+        sid = f"s{n + i - 1:02d}"
+        deck["slides"][sid] = _slide("appendix_sources", SOURCES_MORE, [{**tb, "rows": [head] + page}], status="from_source")
+        deck["order"].insert(at + i, sid)
+    return len(pages) - 1
+
+
 def slide_refs(sl) -> list:
     """Every ref on a slide: its claims and its blocks (items, series), in order, unique."""
     out = []

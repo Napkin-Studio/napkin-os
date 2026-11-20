@@ -506,9 +506,11 @@ def _what(texts) -> str:
 
 def needs_person(deck: dict) -> list:
     """What still needs a person, slide by slide (``[text]``): every slide marked needs_human and every human placeholder on a slide, plus
-    the cover's notes to-do. The list goes in the cover's speaker notes (whole) and an appendix slide (the first NEEDS_PERSON_MAX; the rest
+    the cover's notes to-do and every slide the figure guard took a figure off (meta.figures_removed). The list goes in the cover's speaker notes (whole) and an appendix slide (the first NEEDS_PERSON_MAX; the rest
     in its notes); each such slide's notes say what it needs."""
+    from . import figures   # noqa: PLC0415
     items = []
+    cut = {x.get("slide") for x in (deck.get("meta") or {}).get("figures_removed") or []}
     for sid in deck["order"]:
         s = deck["slides"][sid]
         if s.get("role") == "needs_person":
@@ -517,6 +519,9 @@ def needs_person(deck: dict) -> list:
         hum += [i.get("text") for b in s.get("blocks") or [] for i in b.get("items") or [] if isinstance(i, dict) and i.get("human")]
         if s["type"] == "title" and "To confirm before this is shown" in str(s.get("notes") or ""):
             items.append("Cover: who presents, and the date")
+            continue
+        if sid in cut and not (s.get("status") == "needs_human" or hum):   # the figure guard (deck/figures.py) took a figure off this slide
+            items.append(f"{s['title']}: {figures.NEEDS}")
             continue
         if s.get("status") == "needs_human" or hum:
             what = _what(hum) or "a person writes or supplies this slide"
@@ -541,6 +546,29 @@ def needs_person(deck: dict) -> list:
     deck["slides"][sid] = sl
     deck["order"].insert(at, sid)
     return items
+
+
+def list_removed_figures(deck: dict) -> list:
+    """Put the slides the figure guard took a figure off (meta.figures_removed, deck/figures.py) on the needs-a-person list, after
+    needs_person built it: onto its appendix slide (past NEEDS_PERSON_MAX, into that slide's notes) and the cover's notes. With no
+    list yet, needs_person builds one (it reads meta.figures_removed too). Returns the lines added."""
+    from . import figures   # noqa: PLC0415
+    cut = list(dict.fromkeys(x.get("slide") for x in (deck.get("meta") or {}).get("figures_removed") or []))
+    lines = [f"{deck['slides'][sid]['title']}: {figures.NEEDS}" for sid in cut if sid in deck["slides"]]
+    page = next((deck["slides"][x] for x in deck["order"] if deck["slides"][x].get("role") == "needs_person"), None)
+    if page is None:
+        return [x for x in needs_person(deck) if x in lines]
+    bl = page["blocks"][0]
+    have = {str(i.get("text")) for i in bl.get("items") or [] if isinstance(i, dict)} | set(str(page.get("notes") or "").split("\n- "))
+    new = [x for x in lines if x not in have and f"- {x}" not in str(page.get("notes") or "")]
+    room = max(0, NEEDS_PERSON_MAX - len(bl.get("items") or []))
+    bl.setdefault("items", []).extend({"text": x, "basis": "meta"} for x in new[:room])
+    if new[room:]:
+        page["notes"] = str(page.get("notes") or "") + ("\nAlso:" if "\nAlso:" not in str(page.get("notes") or "") else "") + "".join(f"\n- {x}" for x in new[room:])
+    cov = next((deck["slides"][x] for x in deck["order"] if deck["slides"][x]["type"] == "title"), None)
+    if cov is not None and new:
+        cov["notes"] = str(cov.get("notes") or "").rstrip() + "".join(f"\n- {x}" for x in new)
+    return new
 
 
 def draft_tag(deck: dict) -> str:
