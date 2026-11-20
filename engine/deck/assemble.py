@@ -1084,6 +1084,18 @@ def _shown_executions(S: list, messages: list | None) -> list:
     return shown
 
 
+def _work_first(S: list, shown: list) -> list:
+    """Show the work: the executions a pitch presents, the hero first (the first shown), then the others whose copy fits a slide before
+    any long one (over COPY_LONG words: a long script or a question-and-answer notice ran off its slide in the re-rendered decks); another
+    core execution with short copy may take a long one's place. At most spec.PITCH_EXECUTIONS."""
+    if not shown:
+        return []
+    core = [x for x in S if x["type"] == "execution" and not re.search(spec.OPTIONAL, str((x["blocks"] or [{}])[0].get("text", "")))]
+    rest = list(shown[1:]) + [x for x in core if all(x is not y for y in shown)]
+    rest.sort(key=lambda x: _copy_words(x) > COPY_LONG)   # stable: the greedy order among the short ones, then the long ones
+    return [shown[0]] + rest[:spec.PITCH_EXECUTIONS - 1]
+
+
 def _shown_charts(S: list, supported: set | None) -> list:
     """The charts a pitch presents: the first, plus any the fit judge found supported, up to spec.PITCH_CHARTS."""
     charts = [x for x in S if x["type"] == "chart"]
@@ -1135,7 +1147,7 @@ def _arrange_pitch(S: list, supported: set | None = None, routes: int = 1, messa
     target = spec.PITCH_TARGET if target is _SPEC_TARGET else target
     if spec.SHOW_WORK:   # show the work: the agency order, the idea and at least two executions in the first ten (deck/show_work.py)
         from . import show_work   # noqa: PLC0415
-        story, backup = show_work.agency_story(S, shown, limit or target or spec.PITCH_TARGET, routes)
+        story, backup = show_work.agency_story(S, _work_first(S, shown), limit or target or spec.PITCH_TARGET, routes)
         backup = [x for x in backup if x["type"] != "appendix"]
         return _close_pitch(story, backup, early, fin, asks, date)
     keep = {id(x) for x in shown_charts + shown}   # by identity: two slides can hold equal content
@@ -1650,7 +1662,7 @@ def _arrange_spine(S: list, profile: dict, supported: set | None, routes: int, m
         mode = show_work.present_mode(profile)   # read from the type's spine and appendix, never its id
         if mode:
             size = limit or (profile.get("length") or {}).get("target") or spec.PITCH_TARGET
-            story, backup = show_work.agency_story(S, _shown_executions(S, messages), size, routes, mode=mode)
+            story, backup = show_work.agency_story(S, _work_first(S, _shown_executions(S, messages)), size, routes, mode=mode)
         else:
             story, backup = _trim(S, story, backup, limit, order=show_work.TRIM_ORDER, keep=show_work.keep_set(S, _shown_executions(S, messages), routes))
     elif pitch:
@@ -2026,6 +2038,8 @@ def _rt_order(deck: dict, sid, ch: dict, ids: dict) -> tuple:
     tgt = ids.get(str(ch.get("after") or ""))
     if deck["slides"][sid]["type"] in spec.RED_TEAM_FIXED:
         return False, "the cover and the objective stay where they are: left for the person", None, None
+    if spec.SHOW_WORK and ((deck.get("meta") or {}).get("show_work") or {}).get("mode"):
+        return False, "the presented story keeps the agency order (show the work): left for the person", None, None
     if tgt is None or tgt not in pres or sid not in pres or tgt == sid:
         return False, "the slide to sit after is not a different presented slide: left for the person", None, None
     before = pres.index(sid) + 1

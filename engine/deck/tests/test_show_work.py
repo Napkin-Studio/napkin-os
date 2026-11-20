@@ -192,3 +192,21 @@ def test_the_flag_off_builds_as_before(monkeypatch):
     d, _ = _brief_deck()
     assert not any(d["slides"][x]["type"] == "territory_choice" and d["slides"][x]["title"].endswith("one recommendation") for x in d["order"])
     assert next(d["slides"][x] for x in d["order"] if d["slides"][x]["type"] == "proposition").get("proposition_source") is None
+
+
+def test_a_long_script_gives_its_place_to_a_piece_that_fits():
+    def ex(n_words):
+        return {"type": "execution", "title": "x", "blocks": [{"kind": "text", "text": "Role: a job"}, {"kind": "copy", "lines": ["word " * n_words]}]}
+    hero, long_, short1, short2 = ex(10), ex(assemble.COPY_LONG + 30), ex(12), ex(14)
+    S = [{"type": "idea", "title": "i", "blocks": []}, hero, long_, short1, short2]
+    got = assemble._work_first(S, [hero, long_, short1])
+    assert got[0] is hero and got[1] is short1 and got[2] is short2 and all(x is not long_ for x in got)
+
+
+def test_the_red_team_never_reorders_the_agency_order(on):
+    d, _ = _brief_deck()
+    pres = validate.presented(d)
+    gaps = next(x for x in pres if d["slides"][x].get("role") == "brief_gaps")
+    routes = next(x for x in pres if d["slides"][x]["type"] == "territory_choice")
+    ok, why, *_ = assemble._rt_order(d, gaps, {"after": "R"}, {"R": routes})
+    assert not ok and "agency order" in why and validate.presented(d) == pres
