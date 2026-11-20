@@ -2107,6 +2107,12 @@ class Relay:
                 key = f"ads/cuts/{job['jobId']}/layer{i}.png"
                 self.blobs.put(key, png, "image/png")
                 layers.append({"key": key, **({"fromS": a} if a is not None else {}), **({"toS": b} if b is not None else {})})
+            # The film's own end card (the client's), drawn at the size and held as the last picture, before the
+            # studio card stitch adds (features/pt-film-r1.clan, B4: the sizes ended on the studio card alone).
+            if cut.get("clientCard"):
+                key = f"ads/cuts/{job['jobId']}/client-card.png"
+                self.blobs.put(key, timeline_layers.end_card_png(cut["clientCard"], size, self.blobs.fetch), "image/png")
+                clips.append({"key": key, "inS": 0, "outS": float(cut["clientCard"]["s"])})
         except Exception as e:
             log.exception("cutdown layers of %s failed", job["jobId"])
             return self._fail(job, "internal", f"Edie could not draw this film's words ({type(e).__name__}).",

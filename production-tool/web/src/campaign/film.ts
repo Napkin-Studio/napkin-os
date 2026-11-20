@@ -10,8 +10,15 @@ import { formatById } from './formats'
 import { linesOf } from '../script/skye'
 import { METHOD_WORD } from './rules'
 
-/** The end card stitch adds after the clips (stitch.py CARD_S). */
+/** The studio card stitch adds after the clips (stitch.py CARD_S). */
 export const CARD_S = 2.5
+/** The film's own end card (the client's) in a cutdown: its length, at most this (UAT 2026-11-21, B4: the sizes
+ *  ended on the studio card in place of the client's). It comes before the studio card. */
+export const CLIENT_CARD_MAX_S = 2
+/** How long the film's own card holds in a size `lengthS` long (absent: as long as it may): its own length, at most
+ *  CLIENT_CARD_MAX_S and a third of what the studio card leaves, never under 1 s. relay/cutdowns.py client_card_s. */
+export const clientCardS = (cardS: number | undefined, lengthS?: number, studioS = CARD_S) =>
+  Math.round(Math.min(cardS ?? CLIENT_CARD_MAX_S, CLIENT_CARD_MAX_S, lengthS === undefined ? Infinity : Math.max(1, (lengthS - studioS) / 3)) * 1000) / 1000
 export const MIN_WINDOW_S = 1.0
 export const PAN_MOVE = 0.1
 const FRAME_S = 1 / 24
@@ -72,7 +79,9 @@ export interface Window { shotId: Id; inS: number; outS: number }
  *  Too long: every window is trimmed from its tail by the same share, none under MIN_WINDOW_S (or its own
  *  length); too short: they grow into their handles. relay/cutdowns.py fit_windows. */
 export function fitWindows(shots: readonly WindowShot[], keep: ReadonlySet<Id>, lengthS: number, cardS = CARD_S): { windows: Window[]; over: number } {
-  const target = Math.max(MIN_WINDOW_S, lengthS - cardS)
+  // The film's own end card (the client's) comes off the length too, before the studio card (UAT 2026-11-21, B4).
+  const client = shots.find((s) => s.endCard)
+  const target = Math.max(MIN_WINDOW_S, lengthS - cardS - (client ? clientCardS(client.outS - (client.inS || 0), lengthS, cardS) : 0))
   const kept = shots.filter((s) => keep.has(s.shotId) && !s.endCard)
   if (!kept.length) return { windows: [], over: r3(-target) }
   const slots = kept.map((s) => Math.max(FRAME_S, s.outS - (s.inS || 0)))
@@ -165,7 +174,7 @@ export function masterShots(d: ProductionDocument, videoId: Id): MasterShot[] {
   for (const [i, s] of (sb ? shotsOf(d, sb.id) : []).entries()) {
     const take = currentTake(d, s.id, videoId)
     if (s.kind === 'end_card') {
-      out.push({ shotId: s.id, number: i + 1, inS: 0, outS: CARD_S, endCard: true })
+      out.push({ shotId: s.id, number: i + 1, inS: 0, outS: Math.min(CLIENT_CARD_MAX_S, v?.end_card?.s ?? s.duration_s ?? CLIENT_CARD_MAX_S), endCard: true })
       continue
     }
     if (!take?.asset) continue

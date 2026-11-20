@@ -78,7 +78,8 @@ def test_the_plan_is_free_uncounted_and_names_every_shot_kept_or_dropped():
     assert [b["shotId"] for b in fifteen["beats"]] == [SHOT.format(i) for i in range(10)]  # never the end card
     kept = [b for b in fifteen["beats"] if b["keep"]]
     assert kept[0]["shotId"] == SHOT.format(0) and kept[-1]["shotId"] == SHOT.format(9)
-    assert sum(b["outS"] - b["inS"] for b in kept) == pytest.approx(15 - cutdowns.CARD_S, abs=0.01)
+    # 15 s less the studio card and the film's own card (features/pt-film-r1.clan): its 2.5 s held to 2 s.
+    assert sum(b["outS"] - b["inS"] for b in kept) == pytest.approx(15 - cutdowns.CARD_S - 2.0, abs=0.01)
     assert [b["shotId"] for b in six["beats"] if b["keep"]] == [SHOT.format(9)]
     assert all(b["why"] for b in fifteen["beats"])
     # A crop of every shot at every shape; the middle holds at 9:16 and 1:1, so nothing is outpainted.
@@ -191,6 +192,29 @@ def test_a_render_goes_to_stitch_free_with_its_crops_and_its_words_drawn_here():
     done = h.poll(token, job["jobId"])
     assert done["state"] == "completed" and done["outputs"][0]["url"].endswith(f"ads/cuts/{job['jobId']}.mp4")
     assert done["outputs"][0]["durationS"] == 15 and h.store.counters("spend").get("usd", 0) == 0
+
+
+def test_a_size_ends_on_the_films_own_end_card_then_the_studio_card():
+    """UAT 2026-11-21 (B4): every 6 s size ended on the studio card, the client's end card missing. The film's card
+    is drawn here at the size and held as the last clip; stitch adds the studio card after it (endCard)."""
+    h = Harness(base_config())
+    token = h.as_person()
+    inp = render_input(h)
+    inp["cutdown"]["clientCard"] = {"headline": "Quietboil", "line": "Let them sleep.", "bg": "#14161B", "s": 2}
+    _, job = h.post_job(token, op="cutdown", expect=200, **inp)
+    [event] = h.stitched
+    last = event["clips"][-1]
+    assert last["key"] == f"ads/cuts/{job['jobId']}/client-card.png" and (last["inS"], last["outS"]) == (0, 2.0)
+    assert h.blobs.get(last["key"])[:8] == b"\x89PNG\r\n\x1a\n" and event["endCard"] is True
+    assert "Let them sleep" not in json.dumps(event)  # drawn, never sent as words
+
+
+def test_the_film_card_comes_off_a_sizes_length_before_the_studio_card():
+    shots = [{"shotId": "a", "inS": 0, "outS": 3}, {"shotId": "b", "inS": 0, "outS": 3}, {"shotId": "e", "inS": 0, "outS": 2, "endCard": True}]
+    windows, over = cutdowns.fit_windows(shots, {"a", "b"}, 8.0)
+    # 8 s less the studio card (2.5) and the film's card (a third of the 5.5 s left, under its 2 s): 3.667 of picture.
+    assert sum(w["outS"] - w["inS"] for w in windows) == pytest.approx(3.667, abs=0.002) and abs(over) <= 0.001
+    assert cutdowns.client_card_s(2.5, 6.0) == 1.167 and cutdowns.client_card_s(2.5, 30.0) == 2.0 and cutdowns.client_card_s(1.5, 30.0) == 1.5
 
 
 def test_a_render_of_a_clip_that_is_not_ours_fails_plainly():

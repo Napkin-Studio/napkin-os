@@ -209,7 +209,7 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
             </div>
             <div className="cf-tray">
               {lengths.filter((l) => rows.some((r) => r.lengthS === l)).map((l) => {
-                const { windows, over } = fitWindows(body, kept(l), l)
+                const { windows, over } = fitWindows(shots, kept(l), l)
                 const reasons = new Map((plan.lengths.find((x) => Math.abs(x.lengthS - l) < 0.5)?.beats ?? []).map((b) => [b.shotId, b.why]))
                 const why = plan.lengths.find((x) => Math.abs(x.lengthS - l) < 0.5)?.why
                 return (

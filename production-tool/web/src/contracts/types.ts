@@ -1204,7 +1204,10 @@ export interface CutdownInput {
   aspects?: Aspect[]
   targetRatio?: AlephRatio
   clips?: CutdownClip[]
+  /** The studio card after the film (owner 2026-11-18). */
   endCard?: boolean
+  /** render: the film's own end card, drawn by the relay at the size, before the studio card (features/pt-film-r1.clan). */
+  clientCard?: { headline?: string; line: string; cta?: string; bg: string; logo?: AssetRef; s: number }
   fadeOutS?: number
   layers?: TypeLayer[]
 }

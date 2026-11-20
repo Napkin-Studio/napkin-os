@@ -9,7 +9,7 @@
 // lock are each one undo step (updateDoc); a landing is the crew's (landUpdate), never an undo step.
 
 import { newUlidId, rankBetween, ranksBetween } from '../../../clan-store/src'
-import type { AssetRef, Aspect, Board, CutdownClip, CutdownPlan, FormatSet, Id, InputMime, Job, JobInput, ModelChoice, PersonRef, PxBox, Size, SizeBeat, TypeLayer } from '../contracts/types'
+import type { AssetRef, Aspect, Board, CutdownClip, CutdownInput, CutdownPlan, FormatSet, Id, InputMime, Job, JobInput, ModelChoice, PersonRef, PxBox, Size, SizeBeat, TypeLayer } from '../contracts/types'
 import { boardsByRank } from '../canvas/boards/boards'
 import type { CanvasElement } from '../canvas/core/canvasAdapter'
 import { landUpdate, systemUpdate, updateDoc } from '../doc/store'
@@ -20,7 +20,8 @@ import { jobShot, refsFor } from '../jobs/select'
 import { getBlob } from '../lib/blobs'
 import { boardLayout } from './board'
 import { checksFor } from './checks'
-import { CARD_S, alephRatio, captionBox, captionLayers, cropKeys, edlFor, isSocialShape, masterShots, reframeKey, reframesOf, sameShape, shapeOf, type MasterShot } from './film'
+import { CARD_S, alephRatio, captionBox, captionLayers, clientCardS, cropKeys, edlFor, isSocialShape, masterShots, reframeKey, reframesOf, sameShape, shapeOf, type MasterShot } from './film'
+import { endCardFrom, readCut } from '../rooms/timeline'
 import { formatById, PACKS_VERSION } from './formats'
 import { brandKit, layersFor } from './layout'
 import { FRAME_PAD, FRAME_TOP, channelOfSize, placeBoard, sizesOf, type CampaignDeps } from './make'
@@ -304,10 +305,32 @@ export async function cutdownInput(deps: Pick<CampaignDeps, 'relay' | 'doc'>, se
   }
   if (!clips.length) throw new Error('This version keeps no shot: keep a beat first.')
   const layers = await filmLayers(deps, set, size)
+  const clientCard = await clientCardOf(deps, set, size.length_s)
   return {
     aspect: { w: size.delivery.width, h: size.delivery.height }, delivery: { ...size.delivery },
     ...(size.safe_area ? { safeArea: size.safe_area } : {}),
-    cutdown: { step: 'render', lengthS: size.length_s ?? clips.reduce((a, c) => a + (c.outS - c.inS), 0) + CARD_S, clips, endCard: true, fadeOutS: 0.5, ...(layers.length ? { layers } : {}) },
+    cutdown: {
+      step: 'render', lengthS: size.length_s ?? clips.reduce((a, c) => a + (c.outS - c.inS), 0) + (clientCard?.s ?? 0) + CARD_S, clips, endCard: true, fadeOutS: 0.5,
+      ...(layers.length ? { layers } : {}), ...(clientCard ? { clientCard } : {}),
+    },
+  }
+}
+
+/** The film's own end card (the client's) for a size: the Edit room's card, else the storyboard's end card shot's
+ *  (rooms/timeline endCardFrom), at its cutdown length (film.ts clientCardS). Every size ends on it, then on the
+ *  studio card (owner 2026-11-18; UAT 2026-11-21, B4: the sizes ended on the studio card alone). */
+export async function clientCardOf(deps: Pick<CampaignDeps, 'relay' | 'doc'>, set: FormatSet, lengthS?: number): Promise<CutdownInput['clientCard'] | undefined> {
+  const d = liveGet(deps.doc)
+  const videoId = set.master.kind === 'video' ? set.master.id : undefined
+  if (!videoId) return undefined
+  const card = readCut(d, videoId).endCard ?? endCardFrom(d, videoId)
+  const shot = masterShots(d, videoId).find((s) => s.endCard)
+  if (!card || !(card.line.trim() || card.headline.trim())) return undefined
+  const logo = card.logo ? await assetRef(deps.relay, card.logo, d).catch(() => undefined) : undefined
+  return {
+    ...(card.headline.trim() ? { headline: card.headline.trim().slice(0, 120) } : {}), line: (card.line.trim() || card.headline.trim()).slice(0, 200),
+    ...(card.cta?.trim() ? { cta: card.cta.trim().slice(0, 80) } : {}), bg: /^#[0-9a-f]{6}$/i.test(card.bg) ? card.bg : '#14161B',
+    ...(logo ? { logo } : {}), s: clientCardS(shot ? shot.outS - shot.inS : card.durS, lengthS),
   }
 }
 
