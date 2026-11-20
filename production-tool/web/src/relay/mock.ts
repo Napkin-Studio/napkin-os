@@ -17,7 +17,7 @@
 
 import { crewFor, newUlidId } from '../../../clan-store/src'
 import type {
-  Answer, AnswerConflict, AssetRef, CameraMovement, CameraSize, Config, ContractError, CrewId, InputMime, Job, JobAnswer, JobRequest,
+  Answer, AnswerConflict, AssetRef, CameraMovement, CameraSize, Config, ContractError, CrewId, Estimate, EstimateRequest, InputMime, Job, JobAnswer, JobRequest,
   JobShot, JobState, Key, LibraryEntry, LibraryIndex, LibraryPublish, LogEntry, Me, Output, PlannedShot, Question, Write,
 } from '../contracts/types'
 import { mockWrites } from './mockWrite'
@@ -229,6 +229,11 @@ function mockQuestion(): Question {
 /** The mock's agency: Napkin's own tenant, UUIDv5 of 'napkin:agency:napkin' (as napkin-web's TenantId::of_agency). */
 export const MOCK_TENANT = { id: 'f283da90-07cd-59ec-b370-b23704a2bc91', agency: 'napkin' } as const
 
+/** One job's list price per op on the mock (credits x $0.01): Gemini 3 Pro 20, Ideogram 4.5 high 25, Magnific 25. */
+const MOCK_PRICE: Partial<Record<EstimateRequest['op'], number>> = {
+  generate: 0.2, view: 0.2, frame: 0.2, frame_edit: 0.2, region_edit: 0.25, resize: 0.25, upscale: 0.25, clip: 1.2,
+}
+
 export class MockRelay implements Relay {
   readonly kind = 'mock' as const
   private readonly ledger = new Map<string, LedgerItem>()
@@ -352,6 +357,15 @@ export class MockRelay implements Relay {
 
   async log(entry: LogEntry): Promise<void> {
     console.info('[mock relay] POST /log', entry)
+  }
+
+  /** POST /estimate in the browser: Runway's list prices for the default models (contracts/capabilities/runway.json at
+   *  $0.01 a credit), so a paid confirm reads as it will on the relay. A crop or a layout is free. */
+  async estimate(req: EstimateRequest): Promise<Estimate> {
+    const method = req.input.resize?.method
+    if (req.op === 'resize' && (method === 'crop' || method === 'layout')) return { usd: 0, unknown: false }
+    const usd = MOCK_PRICE[req.op]
+    return usd === undefined ? { usd: 1, unknown: true } : { usd, unknown: false, provider: 'runway' }
   }
 
   async config(): Promise<Config | null> {

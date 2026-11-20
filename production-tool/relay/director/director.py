@@ -9,6 +9,7 @@ only @tags the adapter can rewrite.
 
 from __future__ import annotations
 
+import copy
 import json
 import math
 import re
@@ -29,7 +30,7 @@ import brief as briefs
 import job_context
 from . import record
 from .base import fit_duration, require_prompt, view_angle, view_subject
-from .model import ModelPort, Usage
+from .model import AnthropicWire, ModelPort, Usage
 
 BASE = "https://napkin.ie/production-tool/contracts/"
 PURPOSE = "director"
@@ -64,6 +65,28 @@ KEYFRAME_MAX_S = 30  # Runway aleph2 keyframe seconds run 0 to 30
 # per op. The prompt states these; the code refuses past 1.5 times (the relay then makes the job as written).
 TAKE_LINE_BUDGET = 120
 ADD_BUDGET = {"generate": 250, "view": 200, "frame": 500, "region_edit": 250, "clip": 300, "clip_edit": 250, "clip_patch": 250}
+# How long Dex may take (features/pt-canvas-r2.clan, UAT round 2 R2-3: a 14-picture Generate timed out at 20 s, twice):
+# the port's own seconds for up to CALL_REFS_FREE pictures, CALL_S_PER_REF more for each one after, at most CALL_MAX_S
+# (one try when longer than the port's, Director._port_for: the relay's Lambda runs 60 s and the provider submit follows).
+CALL_REFS_FREE = 4
+CALL_S_PER_REF = 2.0
+CALL_MAX_S = 40.0
+# The capability sheet Dex reads is cut to the op (R2-3: every job sent the whole 32 KB sheet, ~9k tokens): its own op
+# entry, the models that op can run on, and the sheet's small facts; never the sources, prices' notes or other ops.
+SHEET_DROP = ("sources", "concurrency", "checked", "usdPerCredit")
+# A Change this frame runs as one of these (frameEdit.runAs): Dex reads their entries too.
+RELATED_OPS = {"frame_edit": ("frame", "region_edit")}
+MODEL_DROP = ("pricing",)
+# Scenes painted real trademarks (R2-13: Fanta, Red Bull, Le Monde): a generate or a frame says none may appear but those asked
+# for. The relay's own words, outside Dex's budget; said once.
+NO_OTHER_BRANDS = "No other brands, logos or readable trademarks."
+BRAND_FREE_OPS = ("generate", "frame")
+_BRANDS_SAID = re.compile(r"\bno (?:other |real |visible )?(?:brands?|logos?|trademarks?)\b", re.I)
+# A storyboard frame copied the one before and doubled its people (R2-4): @previous is for continuity only.
+PREVIOUS_IS_NOT_A_COPY = ("@previous is the moment before, for continuity only: draw this shot's own new moment and "
+                          "framing, not a copy of it, and show each person once.")
+RELAY_LINES = (NO_OTHER_BRANDS, PREVIOUS_IS_NOT_A_COPY)
+_PREVIOUS_SAID = re.compile(r"not a copy of @previous|@previous is the moment before", re.I)
 # A prompt file split by "<!-- ops: a b -->" markers: the part before the first is for every op.
 SECTION = re.compile(r"^<!-- ops: ([a-z_ ]+) -->\s*$", re.M)
 # Where a prompt's role lines go: one line per ref role, written from common.schema.json's
@@ -217,6 +240,58 @@ def _hold_refs(op: str, job: dict, payload: dict, output: dict, sheet: dict) -> 
         output["added"] = added
     else:
         output.pop("added", None)
+
+
+def call_timeout(base: float, payload: dict) -> float:
+    """Dex's seconds for this job: more pictures, more to read (R2-3)."""
+    n = len(payload.get("refs") or [])
+    return min(CALL_MAX_S, max(base, base + CALL_S_PER_REF * max(0, n - CALL_REFS_FREE)))
+
+
+def sheet_for(op: str, sheet: dict, payload: dict) -> dict:
+    """The capability sheet as Dex reads it for one op (R2-3): the op's own entry and the models it can run on (its
+    model, region model, alternates and the one picked), without prices' notes; the checks still use the whole sheet."""
+    ops = {o: (sheet.get("ops") or {}).get(o) for o in (op, *RELATED_OPS.get(op, ()))}
+    ops = {o: spec for o, spec in ops.items() if spec}
+    want = {payload.get("model")}
+    for spec in ops.values():
+        want |= {spec.get("model"), spec.get("regionModel"), *(a.get("model") for a in spec.get("alternates") or [])}
+    models = {m: {k: v for k, v in body.items() if k not in MODEL_DROP}
+              for m, body in (sheet.get("models") or {}).items() if m in want}
+    out = {k: v for k, v in sheet.items() if k not in SHEET_DROP and k not in ("ops", "models")}
+    out["ops"] = ops
+    if models:
+        out["models"] = models
+    return out
+
+
+# A frame's closing sentence ("Full-bleed cinematic image; no text…", or the on-screen words' "no other text…") stays last.
+_CLOSING = re.compile(r"(?:^|(?<=[.!?]) )((?:Full-bleed cinematic image|[^.]*\bno other text\b)[^.]*\.)\s*$")
+
+
+def _add_line(job: dict, line: str, sheet: dict) -> None:
+    """One of the relay's own lines into the prompt, before a frame's closing sentence, when the prompt has room."""
+    prompt = (job.get("prompt") or "").rstrip()
+    m = _CLOSING.search(prompt)
+    said = f"{prompt[:m.start(1)].rstrip()} {line} {m.group(1)}" if m else f"{prompt} {line}"
+    said = said.strip()
+    limit = prompt_max(sheet, job.get("model") or "")
+    if limit is None or utf16_units(said) <= limit:
+        job["prompt"] = said
+
+
+def _no_other_brands(job: dict, op: str, sheet: dict) -> None:
+    """A generate or a frame paints no brand the job did not ask for (R2-13). Not an edit of a picture (a frame_edit,
+    a region_edit), which keeps what it has."""
+    if op in BRAND_FREE_OPS and not _BRANDS_SAID.search(job.get("prompt") or ""):
+        _add_line(job, NO_OTHER_BRANDS, sheet)
+
+
+def _previous_is_not_a_copy(job: dict, op: str, sheet: dict) -> None:
+    """A frame sent with the shot before (@previous) draws its own moment, never that picture again (R2-4)."""
+    if op == "frame" and any(r.get("name") == "previous" for r in job.get("refs") or []) \
+            and not _PREVIOUS_SAID.search(job.get("prompt") or ""):
+        _add_line(job, PREVIOUS_IS_NOT_A_COPY, sheet)
 
 
 def provider_sizes(provider: str, op: str, model: Optional[str] = None) -> Optional[frozenset]:
@@ -395,6 +470,8 @@ def _within_budget(job: dict, op: str, payload: dict) -> None:
         # (features/frame-edit-or-redraw.clan; a 3-shot take on Omni Flash fell back at 556 added, 2026-11-17).
         budget += TAKE_LINE_BUDGET * len(payload.get("shots") or [])
     prompt = job.get("prompt") or ""
+    for line in RELAY_LINES:  # the relay's own lines, said by Dex or added after: outside the budget (v16)
+        prompt = prompt.replace(line, "")
     added = len(prompt) - _given_words(prompt, payload)
     if added > budget * 1.5:
         raise DirectorError(f"the director added {added} characters to the words; {op} allows about {budget}")
@@ -555,6 +632,7 @@ class Director:
         wire refuses (UAT 2026-11-18: "claude-sonnet-5-5" is not a Bedrock id). The relay passes its own
         (director/claude.py PER_CLICK, SHOT_LIST)."""
         self.port = model_port
+        self._one_try = None  # (the port's wire, the same wire with no SDK retry) for long calls
         self.sheets = sheets
         port_model = getattr(model_port, "model", None) if model_port is not None else None
         self.per_click_model = per_click_model or port_model
@@ -568,6 +646,28 @@ class Director:
         registry = Registry().with_resources((BASE + n, Resource.from_contents(s)) for n, s in schemas.items())
         self._validate = lambda name, pointer="": Draft202012Validator(
             {"$ref": BASE + name + pointer}, registry=registry, format_checker=FormatChecker())
+
+    def _port_for(self, payload: dict):
+        """The model port for this job: the shared one, or for a job with many pictures (R2-3) a copy with more
+        seconds and no SDK retry, since two long tries would outrun the relay's Lambda (60 s). model.py is the
+        middleware's copy and stays as it is."""
+        base = getattr(self.port, "timeout", None)
+        if not isinstance(base, (int, float)):
+            return self.port
+        seconds = call_timeout(base, payload)
+        if seconds <= base:
+            return self.port
+        port = copy.copy(self.port)  # shares the routes and what the endpoint refused
+        port.timeout = seconds
+        wire = getattr(self.port, "wire", None)
+        client = getattr(wire, "client", None)
+        if isinstance(wire, AnthropicWire) and client is not None and hasattr(client, "with_options"):
+            if self._one_try is None or self._one_try[0] is not wire:
+                one = copy.copy(wire)
+                one.client = client.with_options(max_retries=0)
+                self._one_try = (wire, one)
+            port.wire = self._one_try[1]
+        return port
 
     @property
     def sectioned(self) -> bool:
@@ -611,17 +711,22 @@ class Director:
         ask = {"op": op, "input": payload}
         if sheet:
             ask["provider"] = provider_name
-            ask["sheet"] = sheet
+            ask["sheet"] = sheet_for(op, sheet, payload)
+        given = record.for_record(payload)  # kept on the job even when Dex fails (R2-3)
 
         usage = Usage()
         t0 = time.monotonic()
         # The job's id rides on the call (features/pt-relay-trace.clan): the model port's log and ledger lines
         # name it, so a job's Dex call is found by its jobId. Metadata only (peripherals.md §0.2).
         headers = {"X-Napkin-Handler": "relay.director", "X-Napkin-Job": job_id} if job_id else None
-        output = self.port.call(PURPOSE, self.system_for(op), ask, self.schema, usage=usage,
-                                attribution=job_id or op, model=model, headers=headers,
-                                max_tokens=6000 if op == "shot_list" else 3000,
-                                images=list(images or []) if op in ("frame_edit", "clip_patch") else None)
+        try:
+            output = self._port_for(payload).call(PURPOSE, self.system_for(op), ask, self.schema, usage=usage,
+                                                  attribution=job_id or op, model=model, headers=headers,
+                                                  max_tokens=6000 if op == "shot_list" else 3000,
+                                                  images=list(images or []) if op in ("frame_edit", "clip_patch") else None)
+        except Exception as e:
+            e.given = given
+            raise
         latency_ms = round((time.monotonic() - t0) * 1000)
 
         if op in VIDEO_OPS and "providerJob" in output:
@@ -631,12 +736,13 @@ class Director:
             self._check(op, payload, provider_name, sheet, output, set(extra_hashes))
         except DirectorError as e:
             e.answer = output  # what Dex wrote, for the relay's director_rejected line
+            e.given = given
             raise
         if op == "clip" and "providerJob" in output:
             _sound(output["providerJob"], raw, sheet, sheet["ops"][op])
         # What Dex was given, after the relay's cuts, kept small on the job record (features/pt-canvas-r1.clan).
         agent_block = {"model": model, "promptVersion": self.prompt_version, "output": output,
-                       "rationale": output["rationale"], "latencyMs": latency_ms, "input": record.for_record(payload)}
+                       "rationale": output["rationale"], "latencyMs": latency_ms, "input": given}
         errs = list(self._validate("director.schema.json", "#/$defs/agentBlock").iter_errors(agent_block))
         if errs:
             raise DirectorError(f"agent block: {errs[0].message}")
@@ -750,6 +856,8 @@ class Director:
             _donors_are_objects(job, payload)
             _within_budget(job, op, payload)
         _views_are_one(job, op, payload)  # the relay's own words: outside the director's budget
+        _previous_is_not_a_copy(job, asked, sheet)
+        _no_other_brands(job, asked, sheet)
         view_subject(job, op, payload)  # a view of a person goes as a person, and says who (pt-canvas-r1)
         self._check_provider_limits(op, sheet, job, payload)
         # A named input picture this job does not send (a model that takes no refs, Veo 3.1 Fast) is said

@@ -36,11 +36,39 @@ class UnknownName(ValueError):
     """The words name an image the job was not given."""
 
 
+def _squeeze(word: str) -> str:
+    return word[0] + re.sub(r"[aeiou]", "", word[1:])
+
+
+def fit_tag(name: str) -> str:
+    """A name as a tag of at most MAX characters (Runway's limit) that still reads (R2-14: @marco_three-quarter
+    went as marco_three_quar). Every word stays: the variant's longest words lose their inner vowels first
+    (marco_three-quarter is marco_three_qrtr), then the key's, then the longest words their last letters."""
+    words = [w for w in re.split(r"[_\-\s]+", name.lower()) if w]
+    size = lambda: len("_".join(words))  # noqa: E731
+    while size() > MAX:
+        rest = [i for i in range(1, len(words)) if len(words[i]) > 3 and _squeeze(words[i]) != words[i]]
+        if rest:
+            i = max(rest, key=lambda j: len(words[j]))
+        elif len(words[0]) > 3 and _squeeze(words[0]) != words[0]:
+            i = 0
+        else:
+            i = -1
+        if i >= 0:
+            words[i] = _squeeze(words[i])
+            continue
+        longest = max(range(len(words)), key=lambda j: (len(words[j]), j))
+        if len(words[longest]) > 2:
+            words[longest] = words[longest][:-1]
+        else:
+            words.pop()
+    return "_".join(words)
+
+
 def _short(name: str, taken: set[str]) -> str:
     base = name.replace("-", "_")
     if not TAG.match(base):
-        key, _, variant = base.partition("_")
-        base = f"{key[:6]}_{variant}"[:MAX].rstrip("_")
+        base = fit_tag(base).rstrip("_")
     if base not in taken and TAG.match(base):
         return base
     for n in range(2, 100):

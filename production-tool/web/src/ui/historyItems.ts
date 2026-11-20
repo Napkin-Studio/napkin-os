@@ -106,6 +106,15 @@ export function jobCost(cost: Cost | undefined): string | undefined {
   return cost.estimate ? `about ${fmt(cost.estimate)}` : undefined
 }
 
+/** A paid confirm's price (features/pt-canvas-r2.clan; UAT round 2 R2-6, R2-10, a decision taken for the owner): "about
+ *  $0.60" for `count` jobs at `usd` each, formatted here beside History's so money is formatted in one file. Nothing
+ *  when the price is unknown or free. */
+export function priceWords(usd: number | undefined, count = 1): string | undefined {
+  if (usd === undefined || !(usd > 0) || count < 1) return undefined
+  const total = usd * count
+  return `about $${total < 0.1 ? total.toFixed(3) : total.toFixed(2)}`
+}
+
 /** The job a decision is about: the first job it targets or cites. */
 export function jobOf(entry: ChainLike): string | undefined {
   for (const a of [...(entry.targets ?? []), ...(entry.cites ?? [])]) {

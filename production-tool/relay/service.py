@@ -421,6 +421,8 @@ class Relay:
             if req.get("modelChoice"):  # what the person picked, beside where it ran
                 ctx["pick"] = f'{req["modelChoice"]["provider"]}:{req["modelChoice"]["model"]}'
             return 200, public(self.create_job(who, req))
+        if method == "POST" and path == "/estimate":
+            return 200, self.estimate(who, self._json(body, "EstimateRequest"))
         if path.startswith("/jobs/"):
             job_id, _, sub = path[len("/jobs/"):].partition("/")
             ctx["jobId"] = job_id
@@ -1079,6 +1081,29 @@ class Relay:
         why = connected.problems(inp, sheet, sheet["ops"]["clip"])
         if why:
             raise ApiError("invalid_input", why)
+
+    def estimate(self, who: dict, req: dict) -> dict:
+        """POST /estimate (features/pt-canvas-r2.clan): one job's price before it is sent, for a paid confirm. The
+        provider it would run on first and the model it would run there, priced as a job is (_estimate). A free
+        resize (a crop, a layout) is 0; a step nothing routes is unknown. Nothing is reserved or made."""
+        op, inp = req["op"], req["input"]
+        if op in INTERNAL_OPS or free_resize(req):
+            return {"usd": 0.0, "unknown": False}
+        cfg = self.config()
+        allow = self._policy(who["tenant"]["id"])["allow"]
+        pick = req.get("modelChoice")
+        chain = self._chain(cfg, op, pick, allow, inp)
+        if not chain:
+            return {"usd": UNKNOWN_PRICE_USD, "unknown": True}
+        provider = chain[0]
+        model = self._run_model(provider, op, pick, inp, allow, req.get("quality"))
+        spec = ((self.registry.sheet(provider) or {}).get("ops") or {}).get(op) or {}
+        picked = None if model in (None, spec.get("model"), spec.get("regionModel")) else model
+        usd, unknown = self._estimate(op, provider, picked, inp, level=req.get("quality"))
+        out = {"usd": round(usd, 4), "unknown": unknown, "provider": provider}
+        if model or spec.get("model"):
+            out["model"] = model or spec["model"]
+        return out
 
     def create_job(self, who: dict, req: dict) -> dict:
         existing = self.store.get_job(req["jobId"])
@@ -2196,14 +2221,7 @@ class Relay:
         if rz["method"] == "extend":
             try:
                 data = self.blobs.fetch(inp["image"]["url"])
-                ms = rz["masterSize"]
-                from PIL import Image
-                with Image.open(io.BytesIO(data)) as im:
-                    pw, ph = im.size
-                k = pw / ms["w"]  # protect is in masterSize pixels; the plate may be another size
-                boxes = [{**b, "x": b["x"] * k, "y": b["y"] * ph / ms["h"], "w": b["w"] * k, "h": b["h"] * ph / ms["h"]}
-                         for b in rz.get("protect") or []]
-                plan = formats.pad_plan(pw, ph, aw, ah, boxes, formats.safe_fracs(inp.get("safeArea"), inp.get("delivery")))
+                plan = self._extend_plan(inp, data)
                 canvas, mask = formats.padded(data, plan)
             except Exception as e:
                 log.exception("job %s: could not pad the master", job["jobId"])
@@ -2247,6 +2265,21 @@ class Relay:
         self.blobs.put(key, data, mime)
         return {"sha256": "sha256:" + hashlib.sha256(data).hexdigest(), "url": self.blobs.public_url(key), "mime": mime}
 
+    @staticmethod
+    def _extend_plan(inp: dict, data: bytes) -> dict:
+        """Where an extend puts the master on its canvas (formats.pad_plan): the same at submit and at landing."""
+        import formats
+        from PIL import Image
+        rz = inp["resize"]
+        ms = rz["masterSize"]
+        with Image.open(io.BytesIO(data)) as im:
+            pw, ph = im.size
+        k = pw / ms["w"]  # protect is in masterSize pixels; the plate may be another size
+        boxes = [{**b, "x": b["x"] * k, "y": b["y"] * ph / ms["h"], "w": b["w"] * k, "h": b["h"] * ph / ms["h"]}
+                 for b in rz.get("protect") or []]
+        return formats.pad_plan(pw, ph, inp["aspect"]["w"], inp["aspect"]["h"], boxes,
+                                formats.safe_fracs(inp.get("safeArea"), inp.get("delivery")))
+
     def _land_resize(self, job: dict, raw: dict, cost_usd: float | None) -> dict:
         """A paid size's picture: cropped to the size's exact shape, scaled to the preview, kept clean as the
         plate, the type layers drawn on a copy. The provider's bill stands whatever happens here."""
@@ -2255,6 +2288,9 @@ class Relay:
         rz = inp["resize"]
         try:
             data = self.blobs.fetch(raw["url"])
+            if rz["method"] == "extend":  # the master laid back over its edge on a ramp: no hard seam (IMG-9)
+                master = self.blobs.fetch(inp["image"]["url"])
+                data = formats.feathered(data, master, self._extend_plan(inp, master))
             out_w, out_h = formats.preview_size(inp["delivery"], rz.get("previewMaxPx"))
             plate, png, (rw, rh), drawn = formats.finish(data, (inp["aspect"]["w"], inp["aspect"]["h"]), (out_w, out_h),
                                                          rz.get("layers"), self.blobs.fetch)

@@ -51,9 +51,9 @@ def direct(name, edit_reply=lambda r: None, edit_input=lambda i: None):
 
 def test_the_newest_prompt_is_the_default_and_the_configs_name_none():
     # Contract 3 runs director.v6 or later (features/contract-v3.clan), per click on Sonnet. Since
-    # features/config-defaults.clan the bundle's default is the newest prompt (director.v15) and the
+    # features/config-defaults.clan the bundle's default is the newest prompt (director.v16) and the
     # example configs name no director block: config.json pins a prompt only to roll back.
-    assert PROMPT_VERSION == "director.v15"
+    assert PROMPT_VERSION == "director.v16"
     for name in ("config.testing.json", "config.live.json", "config.pathway.runway.json"):
         assert "director" not in json.loads((EXAMPLES / name).read_text()), name
 

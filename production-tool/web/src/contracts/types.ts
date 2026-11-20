@@ -1384,6 +1384,11 @@ export interface JobPatch {
 
 export interface AnswerConflict { error: ContractError; answeredBy: PersonRef; answer: Answer }
 
+/** POST /estimate (relay-api EstimateRequest; features/pt-canvas-r2.clan): one job's price before it is sent. */
+export interface EstimateRequest { contractVersion: ContractVersion; op: Op; input: JobInput; modelChoice?: ModelChoice; quality?: JobRequest['quality'] }
+/** What POST /estimate answers (relay-api Estimate). unknown: the sheet has no price for it. */
+export interface Estimate { usd: number; unknown: boolean; provider?: Provider; model?: string }
+
 export interface LogEntry {
   level: 'error' | 'report' | 'info'
   message: string
