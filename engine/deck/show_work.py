@@ -21,11 +21,20 @@ RANK = {"title": 0, "brief_gaps": 1, "objective": 2, "real_question": 2.5, "char
         "close": 9}
 #: At least this many executions are presented after the idea, whatever the length (the keep set).
 MIN_EXECUTIONS = 2
-#: The deck types whose presented story is the agency order. Others (a tender's buyer order, a credentials deck with no idea) keep their
-#: spine, with a trim that honours the keep set (assemble._trim).
-AGENCY_ORDER_TYPES = ("agency_pitch", "creative_work")
 #: The words for a count of routes in the routes slide's title.
 _COUNT = {2: "Two", 3: "Three", 4: "Four", 5: "Five"}
+
+
+def present_mode(profile: dict | None) -> str | None:
+    """Which agency order a deck type's story takes, read from its recipe, never its id: ``pitch`` for a type whose spine holds the idea
+    and the work and keeps the routes in the appendix (an agency pitch), ``tissue`` for one that presents the routes (a work session), None
+    for a type that keeps its own spine (a buyer's order or written answers, as in a tender; no idea, as in a credentials deck)."""
+    if not profile:
+        return "pitch"
+    spine, appx = profile.get("spine") or [], set(profile.get("appendix") or [])
+    if "idea" not in spine or "execution" not in spine or "criterion_answer" in spine or profile.get("buyer_order"):
+        return None
+    return "pitch" if "territory" in appx else "tissue"
 
 
 def role(x: dict) -> str:
@@ -71,10 +80,15 @@ def agency_story(S: list, shown: list, size: int, routes: int = 1, mode: str = "
     pick: list = []
     add = lambda x: pick.append(x) if x is not None and all(x is not y for y in pick) else None   # noqa: E731
     terr = [x for x in S if x["type"] == "territory"]
-    asked = terr if mode == "tissue" else (terr[:routes] if routes > 1 else [])
+    asked = terr[:routes] if routes > 1 and mode != "tissue" else []
     ask = next((x for x in reversed(S) if x["type"] in ("next_step", "ask", "close")), None)
     for x in [first("title"), first("insight"), first("proposition"), first("idea"), *shown[:MIN_EXECUTIONS], ask, *asked]:
         add(x)
+    if mode == "tissue":   # a work session: the routes slide always; every route's own slide when all of them fit, else none (the routes slide holds them)
+        add(first("territory_choice"))
+        if len(pick) + len(terr) <= size:
+            for x in terr:
+                add(x)
     client_qs = next((x for x in S if x["type"] == "questions" and x.get("role") not in ("brief_gaps", "client_asks")), None) if mode == "tissue" else None
     optional = [first("objective"), first("territory_choice"), first("brief_gaps"), *shown[MIN_EXECUTIONS:], first("concept"), client_qs,
                 first("real_question"), first("audience"), first("chart")]
@@ -87,6 +101,7 @@ def agency_story(S: list, shown: list, size: int, routes: int = 1, mode: str = "
     at = {id(x): i for i, x in enumerate(S)}
     story = sorted(pick, key=lambda x: (RANK.get(role(x), 8), at.get(id(x), 0)))
     backup = [x for x in S if all(x is not y for y in story)]
+    backup.sort(key=lambda x: x["type"] != "concept")   # the concept on a page, when it did not fit: first in the appendix (stable otherwise)
     return story, backup
 
 
@@ -148,8 +163,7 @@ def findings(deck: dict, presented: list) -> list:
             out.append(("proposition_line", "error", sid, "stage b wrote no single-minded proposition (proposition.line): run stage b again"))
         elif x["type"] == "proposition" and x.get("brief_smp") and _norm(x["title"]) == _norm(x["brief_smp"]):
             out.append(("proposition_copied", "warn", sid, "the proposition is the brief's key message read back: write the sharper thought"))
-    prof = ((deck.get("meta") or {}).get("profile") or {}).get("id") or ((deck.get("meta") or {}).get("built_from") or {}).get("type") or "agency_pitch"
-    if prof in AGENCY_ORDER_TYPES and (deck.get("meta") or {}).get("format", "pitch") == "pitch" and (deck.get("meta") or {}).get("kind", "agency") == "agency":
+    if ((deck.get("meta") or {}).get("show_work") or {}).get("mode"):   # the deck took the agency order (assemble records it)
         ten = [sl[s]["type"] for s in presented[:10]]
         if any(sl[s]["type"] == "idea" for s in deck["order"]):
             n_exec = sum(1 for s in deck["order"] if sl[s]["type"] == "execution")

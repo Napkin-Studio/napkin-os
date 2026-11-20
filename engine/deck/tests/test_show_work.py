@@ -138,7 +138,7 @@ def test_a_work_session_presents_every_route_and_the_work_in_ten(on, monkeypatch
     inp = inputs.load(None, prompt_text=(TYPES / "creative_work" / "prompt.txt").read_text().strip())
     d = assemble.build(inp, _rich(_st(TYPES / "creative_work")), client="Lumen Water", project="Water saving", profile=profiles.load("creative_work"))
     roles = _roles(d)
-    assert roles.count("territory") == 3 and "territory_choice" in roles
+    assert "territory_choice" in roles and roles.count("territory") in (0, 3)   # every route's slide when all fit, else the routes slide alone
     assert "idea" in roles[:10] and roles[:10].count("execution") >= 2
 
 
@@ -164,12 +164,26 @@ def test_the_stage_b_prompt_asks_for_the_line():
 
 
 def test_work_in_first_ten_fails_a_deck_that_hides_the_work():
-    d = {"meta": {"format": "pitch", "kind": "agency"}, "order": [f"s{i:02d}" for i in range(1, 15)],
+    d = {"meta": {"format": "pitch", "kind": "agency", "show_work": {"mode": "pitch"}}, "order": [f"s{i:02d}" for i in range(1, 15)],
          "slides": {f"s{i:02d}": {"type": t, "title": t} for i, t in enumerate(
              ["title", "objective", "questions", "real_question", "chart", "insight", "audience", "proposition", "competition", "idea",
               "execution", "execution", "execution", "next_step"], 1)}}
     found = show_work.findings(d, d["order"])
     assert any(c == "work_in_first_ten" and lvl == "error" for c, lvl, _s, _m in found)
+
+
+def test_the_order_is_read_from_the_recipe_never_the_type_id():
+    assert show_work.present_mode(profiles.load("agency_pitch")) == "pitch"
+    assert show_work.present_mode(profiles.load("creative_work")) == "tissue"
+    assert show_work.present_mode(profiles.load("tender_response")) is None   # the buyer's order
+    assert show_work.present_mode(profiles.load("credentials")) is None       # no idea to show
+
+
+def test_the_trim_removes_by_identity_not_by_equal_content():
+    S = [{"type": "execution", "title": "same"} for _ in range(3)] + [{"type": "idea", "title": "i"}]
+    keep = {id(S[0]), id(S[1])}
+    story, backup = assemble._trim(S, list(S), [], 3, order=("execution",), keep=keep)
+    assert any(x is S[0] for x in story) and any(x is S[1] for x in story) and backup[0] is S[2]
 
 
 def test_the_flag_off_builds_as_before(monkeypatch):

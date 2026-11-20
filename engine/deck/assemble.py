@@ -900,6 +900,9 @@ def _complete(S, reqs, R, inp, meta, fmt, fit, scoring=None, messages=None, terr
         moved = finish.annotations_to_notes(S)
         if moved:
             fin["annotations"] = moved
+    if spec.SHOW_WORK and fmt == "pitch" and meta.get("kind", "agency") == "agency":   # show the work: which order the story took (validate reads it)
+        from . import show_work   # noqa: PLC0415
+        deck["meta"]["show_work"] = {"mode": show_work.present_mode(profile) if spine else "pitch"}
     if spec.LOOK_V3:   # deck-look (fix 2): a sentence is said once on the presented slides
         _say_once(S)
     if fin is not None:   # finish fixes: no two presented slides in a row under one section band
@@ -1482,7 +1485,7 @@ def _trim(S: list, story: list, backup: list, limit: int | None, order: tuple | 
         for t in order or spec.TRIM_ORDER:
             hit = [x for x in story if x["type"] == t and id(x) not in (keep or ())]
             if hit:
-                story.remove(hit[-1])
+                story = [y for y in story if y is not hit[-1]]   # by identity: two slides can hold equal content
                 backup.append(hit[-1])
                 break
         else:
@@ -1638,9 +1641,10 @@ def _arrange_spine(S: list, profile: dict, supported: set | None, routes: int, m
             story[i] = x
     if pitch and spec.SHOW_WORK:   # show the work (deck/show_work.py): a work session in agency order; other types keep their spine, and
         from . import show_work   # noqa: PLC0415   their trim never moves the idea or the first two executions and cuts setup slides first
-        if profile.get("id") in show_work.AGENCY_ORDER_TYPES:
+        mode = show_work.present_mode(profile)   # read from the type's spine and appendix, never its id
+        if mode:
             size = limit or (profile.get("length") or {}).get("target") or spec.PITCH_TARGET
-            story, backup = show_work.agency_story(S, _shown_executions(S, messages), size, routes, mode="tissue" if profile["id"] == "creative_work" else "pitch")
+            story, backup = show_work.agency_story(S, _shown_executions(S, messages), size, routes, mode=mode)
         else:
             story, backup = _trim(S, story, backup, limit, order=show_work.TRIM_ORDER, keep=show_work.keep_set(S, _shown_executions(S, messages), routes))
     elif pitch:
