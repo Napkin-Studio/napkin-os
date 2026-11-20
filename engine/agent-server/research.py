@@ -25,6 +25,7 @@ import re
 import subprocess
 import sys
 import traceback
+import unicodedata
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -146,7 +147,13 @@ def _web_track(gist: dict) -> list[dict]:
     mode = os.environ.get("RESEARCH_WEB", "off").strip().lower()
     if mode != "claude":
         return []
+    nm = _names(gist)
     sg = sanitise_gist(gist)   # the client's name, its rivals' names and every figure stay out of what goes to a search
+    try:
+        assert_clean([sg["market"], sg["category"], sg["problem"]], nm)
+    except NameLeak as e:
+        print(f"[!] web track refused: {e}", file=sys.stderr)
+        return []
     prompt = (
         "Research the current market context for an advertising brief. "
         f"Market: {sg['market'] or '?'}. Category: {sg['category'] or '?'}. "
@@ -208,31 +215,140 @@ def _common() -> frozenset:
         return frozenset()
 
 
-def _names(gist: dict, extra=()) -> list[str]:
-    """The client's name and its rivals' names (split on commas, slashes, 'and'), longest first: what a query may never carry."""
+#: Corporate suffixes: part of a name, never a name on their own.
+_CORP = {"ltd", "plc", "inc", "llc", "gmbh", "srl", "sa", "ag", "dac", "limited", "group", "holdings", "company", "co", "corp", "the"}
+#: brief_object keys whose values are names (a client, a brand, a product, a rival); paragraph fields give their capitalised non-common words.
+_NAME_KEYS = ("client", "brand", "brands", "brand_name", "client_name", "project", "competitors", "competitor",
+              "competitors_market", "competition")
+#: What separates two names in a field: commas, slashes, brackets, quotes, 'and', 'vs', a spaced dash, a colon.
+_SPLIT = re.compile(r"[,;/&|()\[\]{}\"“”«»„‹›:+]|\band\b|\bvs\.?\b|\bversus\b|\bincluding\b|\bsuch as\b|\s[-–—]\s", re.I)
+_EDGE = " .'\"‘’`*-–—_!?"
+
+
+class NameLeak(ValueError):
+    """A query or prompt bound for a web search still carries a scrubbed name: it is never sent."""
+
+
+def _fold(text: str) -> str:
+    """``text`` NFC-composed, lower case and without diacritics, one character for one character (so a match's span maps back)."""
     out = []
-    for raw in [gist.get("client"), gist.get("competitors"), *extra]:
-        for part in re.split(r"[,;/&]|\band\b|\bvs\.?\b", str(raw or ""), flags=re.I):
-            p = part.strip(" .'\"()")
-            if len(p) >= 2 and p.lower() not in _SKIP_GIST and not p.lower().startswith(("not ", "no ", "none")):
+    for c in unicodedata.normalize("NFC", str(text or "")):
+        d = "".join(x for x in unicodedata.normalize("NFKD", c) if not unicodedata.combining(x)).lower()
+        out.append(d[:1] or c.lower()[:1] or c)
+    return "".join(out)
+
+
+def _depossess(w: str) -> str:
+    return re.sub(r"(?:['’]s|s['’])$", "", w.strip(_EDGE)).strip(_EDGE)
+
+
+def _name_values(obj, keys=_NAME_KEYS, depth=0) -> list:
+    """Every value under a name key anywhere in a brief object (meta, upstream facets, loop1/loop2 fields with ``value``)."""
+    out = []
+    if depth > 6:
+        return out
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if str(k).lower() in keys:
+                out.append(v.get("value") if isinstance(v, dict) and "value" in v else v)
+            elif isinstance(v, (dict, list)):
+                out += _name_values(v, keys, depth + 1)
+    elif isinstance(obj, list):
+        for v in obj:
+            out += _name_values(v, keys, depth + 1)
+    return out
+
+
+def brief_names(brief_object: dict | None) -> list[str]:
+    """The names a brief object holds: its client, project, brand, products and competitors (meta, upstream facets, captured and golden
+    fields). A paragraph field (competitors_market) gives its capitalised words that are not common words."""
+    raw = []
+    for v in _name_values(brief_object or {}):
+        for x in (v if isinstance(v, list) else [v]):
+            x = x.get("value") or x.get("name") or "" if isinstance(x, dict) else x
+            s = str(x or "")
+            if len(s.split()) > 8:   # a paragraph: only its name-like words
+                raw += [w for w in re.findall(r"\b[A-Z][\w’'-]{2,}", s) if _fold(_depossess(w)) not in _common()]
+            else:
+                raw.append(s)
+    return raw
+
+
+def _names(gist: dict, extra=(), brief_object: dict | None = None) -> list[str]:
+    """The client's, brands' and rivals' names, longest first: what a query may never carry. Robust to wrappers: a name in brackets
+    ('Pet Foods (Tabbel)'), in quotes, possessive ('Tabbel's'), in any case or with diacritics is split out on its own, and so is each
+    of its words that is not a common word ('Lumen' of 'Lumen Water', never 'Water'). A word of the brief's market is never a name."""
+    g = gist or {}
+    market = set(_fold(g.get("market") or "").split())
+    raws = [g.get(k) for k in ("client", "brand", "brands", "product", "competitors")] + list(extra or ()) + brief_names(brief_object)
+    out = []
+    for raw in raws:
+        for item in (raw if isinstance(raw, (list, tuple, set)) else [raw]):
+            for part in _SPLIT.split(str(item or "")):
+                p = _depossess(" ".join(part.split()))
+                fp = _fold(p)
+                if len(p) < 2 or fp in _SKIP_GIST or fp in _CORP or fp.startswith(("not ", "no ", "none")):
+                    continue
                 out.append(p)
-                out += [w for w in p.split() if len(w) >= 4 and w[0].isupper() and w.lower() not in _common()]   # 'Lumen' of 'Lumen Water' on its own, never 'Water'
-    return sorted(set(out), key=len, reverse=True)
+                bare = re.sub(r"(?:[\s,.]+(?:" + "|".join(sorted(_CORP)) + r")\.?)+$", "", p, flags=re.I).strip()
+                if bare and bare != p and len(bare) >= 2:
+                    out.append(bare)   # 'Pet Foods' of 'Pet Foods Ltd': the suffix is dropped as often as it is written
+                for w in re.split(r"[\s-]+", p):
+                    w = _depossess(w)
+                    fw = _fold(w)
+                    if len(w) >= 3 and fw not in _CORP and fw not in market and fw not in _common() and not fw.isdigit():
+                        out.append(w)   # 'Lumen' of 'Lumen Water' on its own, never 'Water'
+    seen, uniq = set(), []
+    for n in sorted(out, key=len, reverse=True):
+        if _fold(n) not in seen:
+            seen.add(_fold(n))
+            uniq.append(n)
+    return uniq
+
+
+def _name_re(name: str):
+    """A pattern for one name on folded text: its words with any spacing, hyphen, dot or none between them, whole words only, possessive
+    too. None for a name with no letters."""
+    toks = re.findall(r"\w+", _fold(name))
+    if not toks:
+        return None
+    body = r"[\s\-_.'’]*".join(re.escape(t) for t in toks)
+    return re.compile(rf"(?<!\w){body}(?:['’]s|s['’]|['’])?(?!\w)")
+
+
+def leaks(text: str, names=()) -> list[str]:
+    """The names in ``names`` that ``text`` still carries (any case, any diacritics, bracketed, quoted or possessive)."""
+    f = _fold(text)
+    return [n for n in names if (r := _name_re(n)) and r.search(f)]
+
+
+def assert_clean(texts, names=()) -> None:
+    """The last gate before a web search: raise NameLeak when any of ``texts`` carries a scrubbed name. The message never repeats it."""
+    for t in ([texts] if isinstance(texts, str) else texts):
+        if leaks(t, names):
+            raise NameLeak("a query bound for a web search carries a client, brand or rival name; it was not sent")
 
 
 def scrub(text: str, names=()) -> str:
-    """``text`` with every name in ``names`` (whole words, any case, possessive too) and every figure removed: query material only."""
-    t = str(text or "")
+    """``text`` with every name in ``names`` (whole words, any case or diacritics, bracketed, quoted, possessive) and every figure
+    removed: query material only."""
+    t = unicodedata.normalize("NFC", str(text or ""))
+    f = _fold(t)
+    chars = list(t)
     for n in names:
-        t = re.sub(rf"(?i)\b{re.escape(n)}(?:'s|’s)?\b", " ", t)
+        r = _name_re(n)
+        for m in (r.finditer(f) if r else ()):
+            chars[m.start():m.end()] = " " * (m.end() - m.start())
+    t = "".join(chars)
     t = re.sub(r"[$€£]?\d[\d,.]*\s*%?", " ", t)   # a figure in the brief may be confidential (sales, budgets): never searched for
+    t = re.sub(r"[(\[{]\s*[)\]}]|[\"“”«»]\s*[\"“”«»]|(?<!\w)['‘’]\s*['‘’](?!\w)", " ", t)   # the empty wrapper a name leaves behind
     return " ".join(t.split()).strip(" ,;:.")
 
 
-def sanitise_gist(gist: dict, names=()) -> dict:
+def sanitise_gist(gist: dict, names=(), brief_object: dict | None = None) -> dict:
     """The gist a query may be built from: market, category, audience, problem and objective, with the client's and the rivals' names and
     every figure removed. The client name and the competitors themselves are dropped (they stay in the full gist for the planner's panel)."""
-    nm = _names(gist or {}, names)
+    nm = _names(gist or {}, names, brief_object)
     out = {}
     for k in ("market", "category", "audience", "problem", "objective"):
         v = scrub(str((gist or {}).get(k) or ""), nm)
@@ -320,7 +436,7 @@ def build_queries(sg: dict, claims: list[dict], names=()) -> list[dict]:
             qs.append({"query": " ".join(filter(None, [cat, t, "study"])), "kind": "fallback", "role": c["role"]})
     for q in qs:   # belt and braces: a name that slipped through any path is taken out here
         q["query"] = scrub(q["query"], names) or where
-    return qs
+    return [q for q in qs if not leaks(q["query"], names)]
 
 
 _YEAR = re.compile(r"\b(19|20)\d\d\b")
@@ -379,10 +495,15 @@ def evidence_prompt(sg: dict, claims: list[dict], queries: list[dict]) -> str:
             "Only findings you can source with a working URL; no speculation.")
 
 
-def _evidence_track(sg: dict, claims: list[dict], queries: list[dict]) -> list[dict]:
+def _evidence_track(sg: dict, claims: list[dict], queries: list[dict], names=()) -> list[dict]:
     """Live findings for the deck's claims, by one headless ``claude -p`` call with WebSearch when RESEARCH_WEB=claude; [] otherwise or on
     any failure. Normalised with normalise_finding, local ones first."""
     if os.environ.get("RESEARCH_WEB", "off").strip().lower() != "claude":
+        return []
+    try:   # the last gate: nothing from the brief that still carries a name is sent
+        assert_clean([sg.get("market") or "", sg.get("category") or "", *(c["claim"] for c in claims), *(q["query"] for q in queries)], names)
+    except NameLeak as e:
+        print(f"[!] evidence track refused: {e}", file=sys.stderr)
         return []
     try:
         proc = subprocess.run(["claude", "-p", evidence_prompt(sg, claims, queries), "--output-format", "json",
@@ -405,12 +526,12 @@ def gather_evidence(gist: dict, brief_object: dict | None = None, storyline: dic
     """Evidence for the deck's argument: ``{version, market, category, claims, queries, findings, local, short_of_local}``. ``gist`` is the
     researcher's gist (its client name and competitors are scrubbed before anything is built from it); ``names`` any further names to keep
     out. The deck reads the result with ``--evidence`` (engine/deck/pitch_ready.load_evidence)."""
-    nm = _names(gist or {}, names)
-    sg = sanitise_gist(gist or {}, names)
+    nm = _names(gist or {}, names, brief_object)
+    sg = sanitise_gist(gist or {}, names, brief_object)
     sg["market"] = market_of(sg)
     claims = deck_claims(brief_object, storyline, nm)
     queries = build_queries(sg, claims, nm)
-    findings = _evidence_track(sg, claims, queries)
+    findings = _evidence_track(sg, claims, queries, nm)
     local = sum(1 for f in findings if f["local"])
     return {"version": 1, "market": sg["market"], "category": sg.get("category", ""), "claims": claims, "queries": [q["query"] for q in queries],
             "findings": findings, "local": local, "short_of_local": local < MIN_LOCAL}

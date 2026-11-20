@@ -69,6 +69,12 @@ stage b). Each finding carries market, year, metric units and a source URL; the 
 it fell short). Queries come from a sanitised gist only: never the client's name, a rival's name or a figure from the brief. One headless
 `claude -p` call with WebSearch, only with `RESEARCH_WEB=claude`.
 
+The name scrub (`research._names`, `scrub`) takes names from the gist (client, brand, competitors) and from the brief object (meta client,
+project and brand, upstream facets, captured and golden fields: client, brand, project, competitors; a paragraph field gives its capitalised
+words that are not common words). A name inside brackets or quotes, possessive, in another case or with diacritics is matched (round 3:
+a brand in parentheses in the gist's client field reached 4 of 13 queries). A final gate (`assert_clean`, `NameLeak`) refuses to send any
+query, claim or gist field that still carries one: the track then returns nothing rather than leak. Tests: `test_research_scrub.py`.
+
 ## Tests
 
 ```bash
