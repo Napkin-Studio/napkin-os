@@ -21,6 +21,7 @@ import os
 from pathlib import Path
 from types import SimpleNamespace
 
+import jobtrace
 from director.base import PassthroughDirector, require_prompt
 from director.director import Director, load_prompt
 from director.model import ModelPort, build_wire
@@ -95,8 +96,9 @@ class ClaudeDirector:
         out = dict(result.output)
         out["_model"] = result.agent_block["model"]
         out["_promptVersion"] = result.agent_block["promptVersion"]
-        log.info("director %s %s: %s in %s ms, %s", job_request.get("jobId"), op, out["_model"],
-                 result.agent_block["latencyMs"], result.usage)
+        jobtrace.trace("director", job_request.get("jobId"), op=op, provider=provider, model=out["_model"],
+                       promptVersion=out["_promptVersion"], latencyMs=result.agent_block["latencyMs"], usage=result.usage,
+                       asked=True if out.get("question") else None)
         return out
 
 
@@ -105,8 +107,11 @@ class ClaudeDirector:
         """The director's answer failed a check, or the model did not answer: the job is made from
         the input as written (the passthrough), so a director fault never fails it. The rationale says
         so, for the History."""
-        log.warning("director %s %s failed (%s: %s); the passthrough makes the job",
-                    job_request.get("jobId"), job_request["op"], type(error).__name__, error)
+        # The whole reason and Dex's whole answer (up to 8 KB each), so a rejection can be read from the log alone.
+        jobtrace.trace("director_rejected", job_request.get("jobId"), op=job_request["op"],
+                       provider=(sheet or {}).get("provider"), error=type(error).__name__,
+                       kind=getattr(error, "kind", None), reason=jobtrace.clip(str(error)),
+                       answer=jobtrace.clip(getattr(error, "answer", None)), fallback="passthrough")
         out = dict(PassthroughDirector().direct(job_request, sheet))
         why = str(error).splitlines()[0][:160] if str(error) else type(error).__name__
         out["rationale"] = f"The director's answer could not be used ({why}), so your words went to the model as written."

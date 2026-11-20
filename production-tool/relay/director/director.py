@@ -595,8 +595,11 @@ class Director:
 
         usage = Usage()
         t0 = time.monotonic()
+        # The job's id rides on the call (features/pt-relay-trace.clan): the model port's log and ledger lines
+        # name it, so a job's Dex call is found by its jobId. Metadata only (peripherals.md §0.2).
+        headers = {"X-Napkin-Handler": "relay.director", "X-Napkin-Job": job_id} if job_id else None
         output = self.port.call(PURPOSE, self.system_for(op), ask, self.schema, usage=usage,
-                                attribution=job_id or op, model=model,
+                                attribution=job_id or op, model=model, headers=headers,
                                 max_tokens=6000 if op == "shot_list" else 3000,
                                 images=list(images or []) if op in ("frame_edit", "clip_patch") else None)
         latency_ms = round((time.monotonic() - t0) * 1000)
@@ -604,7 +607,11 @@ class Director:
         if op in VIDEO_OPS and "providerJob" in output:
             output["providerJob"].setdefault("audio", False)  # explicit on every video request
         briefs.settle_flags(output, payload)  # only lines of the brief this job was given
-        self._check(op, payload, provider_name, sheet, output, set(extra_hashes))
+        try:
+            self._check(op, payload, provider_name, sheet, output, set(extra_hashes))
+        except DirectorError as e:
+            e.answer = output  # what Dex wrote, for the relay's director_rejected line
+            raise
         agent_block = {"model": model, "promptVersion": self.prompt_version, "output": output,
                        "rationale": output["rationale"], "latencyMs": latency_ms}
         errs = list(self._validate("director.schema.json", "#/$defs/agentBlock").iter_errors(agent_block))

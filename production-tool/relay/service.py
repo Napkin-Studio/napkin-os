@@ -45,6 +45,7 @@ from urllib.parse import parse_qs, unquote
 from aspect import crop_png, measure, target_aspect
 import dogfood
 import identity
+import jobtrace
 import library
 import names
 import writer as writers
@@ -1176,6 +1177,7 @@ class Relay:
             self.ledger.adjust(tenant, month, -estimate)
             return self._existing(who, self.store.get_job(req["jobId"]))
         self._dog_job(job, None)
+        self._stage(job, "queued", quotaClass=qclass, pick=(pick or {}).get("model"))
         return self._dispatch(job, cfg)
 
     def _promotion(self, who: dict, req: dict) -> dict:
@@ -1339,6 +1341,18 @@ class Relay:
         return self._with_poll(job)
 
     # ── transitions ─────────────────────────────────────────────────────────
+    def _stage(self, job: dict, stage: str, since: float | None = None, **fields) -> None:
+        """One job_stage line (features/pt-relay-trace.clan): the stage, ms since `since` (the stage before)
+        and totalMs since the job was made. Never raises."""
+        try:
+            now = self.clock()
+            total = now - parse_iso(job["createdAt"]) if job.get("createdAt") else None
+            jobtrace.trace("job_stage", job.get("jobId"), stage=stage, op=job.get("op"),
+                           provider=fields.pop("provider", job.get("provider")), model=fields.pop("model", job.get("model")),
+                           ms=jobtrace.ms(None if since is None else now - since), totalMs=jobtrace.ms(total), **fields)
+        except Exception:  # a trace never fails a job
+            log.warning("job_stage %s for %s could not be written", stage, job.get("jobId"))
+
     def _save(self, job: dict, **changes) -> dict | None:
         """Apply changes and save; None when someone else saved first."""
         trial = dict(job)
@@ -1374,6 +1388,14 @@ class Relay:
                            queuePosition=None, **changes)
         if saved is None:
             return self._reload(job)
+        now = self.clock()
+        self._stage(saved, "landed" if state == "completed" else state,
+                    since=job.get("_fetchedAt") if state == "completed" else None,
+                    taskId=job.get("requestId"), error=(error or {}).get("code"),
+                    message=jobtrace.clip((error or {}).get("message"), 500),
+                    outputs=len(changes.get("outputs") or []) or None,
+                    sinceSubmittedMs=jobtrace.ms(now - job["_submittedAt"]) if job.get("_submittedAt") else None,
+                    costUsd=cost.get("confirmed"))
         self._release_take(job, job["jobId"])  # a clip_patch's take is free for the next fix, whatever the end
         if not job.get("_released"):
             if not job.get("_free"):
@@ -1566,6 +1588,8 @@ class Relay:
         front = [p for p in self._job_candidates(cfg, job) if p != floor]
         tried = job["_tried"] + [p for p in front if p not in job["_tried"]]
         log.info("job %s: %s failed (%s); making it on %s", job["jobId"], provider, code, floor)
+        self._stage(job, "requeued", error=code, message=jobtrace.clip(message, 500), to=floor,
+                    taskId=job.get("requestId"))
         saved = self._save(job, state="queued", provider=None, model=None, requestId=None, _slot=None, _queue="q",
                            queuePosition=None, cost=cost, _tried=tried,
                            _first=job.get("_first") or {"provider": provider, "model": job.get("model")},
@@ -1698,6 +1722,7 @@ class Relay:
                                       _tried=tried, _lastError=f"{provider}: {e.message}"[:300],
                                       _sheetOnly=sheet_only, _floorSheet=sheet, fallbackReason=reason)
                     self.store.incr(slot, "n", -1)
+                    self._stage(job, "requeued", error=e.code, message=jobtrace.clip(e.message, 500), refused=True)
                     if back is None:
                         log.error("job %s: could not requeue after %s refused", job["jobId"], provider)
                     return None
@@ -1714,6 +1739,9 @@ class Relay:
         saved = self._save(job, state="submitted", requestId=str(request_id),
                            director=self._softened_block(block, pjob) if softened_from else block,
                            _submittedAt=now, _nextCheckAt=now + min_poll, quality=sized, **plainer)
+        self._stage(job, "submitted", since=job.get("_queuedAt") or parse_iso(job["createdAt"]), taskId=str(request_id),
+                    provider=provider, model=pjob.get("model") or model, runAs=run_as if run_as != job["op"] else None,
+                    softened=True if softened_from else None, lostRace=True if saved is None else None)
         if saved is None:
             log.error("job %s: provider %s accepted request %s but the ledger write lost a race",
                       job["jobId"], provider, request_id)
@@ -1746,6 +1774,8 @@ class Relay:
             return None
         saved = self._save(job, state="submitted", requestId=str(request_id), director=self._softened_block(block, pjob),
                            _submittedAt=now, _nextCheckAt=now + min_poll, softened=True, _softenedFrom=refused)
+        self._stage(job, "submitted", since=job.get("_submittedAt"), taskId=str(request_id), softened=True,
+                    replaces=job.get("requestId"))
         return self._with_poll(saved or job)
 
     def _plainer(self, job: dict, sheet: dict, pjob: dict) -> str:
@@ -2959,9 +2989,11 @@ class Relay:
         return st if st.state == "succeeded" and st.outputs else None
 
     def _fetch(self, job: dict, st, now: float) -> dict:
-        claimed = self._save(job, state="fetching", _leaseUntil=now + FETCH_LEASE_S)
+        claimed = self._save(job, state="fetching", _leaseUntil=now + FETCH_LEASE_S, _doneAt=job.get("_doneAt") or now)
         if claimed is None:
             return self._reload(job)
+        self._stage(job, "provider_done", since=job.get("_submittedAt"), taskId=job.get("requestId"),
+                    attempt=(job.get("_fetchErrors") or 0) + 1, costUsd=st.cost_usd, outputs=len(st.outputs or []))
         try:
             outputs = []
             for o in st.outputs:
@@ -2984,12 +3016,17 @@ class Relay:
                 raise ValueError("the provider reported success with no outputs")
         except Exception as e:
             log.exception("copying outputs of %s failed", job["jobId"])
+            self._stage(job, "fetch_failed", since=now, taskId=job.get("requestId"), error=type(e).__name__,
+                        message=jobtrace.clip(str(e), 500))
             attempts = claimed.get("_fetchErrors", 0) + 1
             if attempts >= MAX_FETCH_ATTEMPTS:
                 return self._fail(claimed, "provider_failed", f"Could not copy the result ({type(e).__name__}).",
                                   retryable=True)
             back = self._save(claimed, state="submitted", _fetchErrors=attempts, _nextCheckAt=now + 2)
             return self._with_poll(back or claimed)
+        claimed["_fetchedAt"] = self.clock()  # kept by the next save, for landed's ms (a take's cuts land later)
+        self._stage(claimed, "fetched", since=now, taskId=job.get("requestId"), outputs=len(outputs),
+                    bytes=sum(o.get("bytes") or 0 for o in outputs))
         if job["op"] == "clip_patch":  # the model's window, spliced back into the take before it lands
             return self._run_splice(claimed, outputs[0], st.cost_usd)
         if job["op"] == "resize":  # cropped to the exact shape, scaled to the preview, the type drawn

@@ -128,3 +128,83 @@ def test_fit_refs_leaves_out_object_views_over_max_object():
     refs = [{"id": "c", "name": "maya_side", "role": "character"}] + refs
     out, dropped = names.fit_refs("generate", {"text": "a table", "refs": refs}, sheet)
     assert out["refs"][0]["name"] == "maya_side" and "maya_side" not in dropped
+
+
+# job_stage: queued, submitted, provider_done, fetched, landed
+
+def test_a_job_logs_each_stage_with_its_jobid_and_durations(h, caplog):
+    caplog.set_level(logging.INFO, logger="relay")
+    token = h.as_person()
+    _, job = h.post_job(token, "generate")
+    jid = job["jobId"]
+    prov = next(p for p in h.providers.values() if p.submits)
+    rid = f"{prov.name}-1"
+    h.clock.tick(4)
+    prov.succeed(rid, cost=0.2)
+    done = h.poll(token, jid)
+    assert done["state"] == "completed"
+    stages = [(r["stage"], r) for r in lines(caplog, "job_stage") if r["jobId"] == jid]
+    assert [s for s, _ in stages] == ["queued", "submitted", "provider_done", "fetched", "landed"]
+    by = dict(stages)
+    assert by["submitted"]["taskId"] == rid and by["submitted"]["provider"] == prov.name
+    assert by["provider_done"]["ms"] == 4000 and by["provider_done"]["costUsd"] == 0.2
+    assert by["fetched"]["outputs"] == 1 and by["landed"]["totalMs"] == 4000
+    assert by["landed"]["sinceSubmittedMs"] == 4000 and by["landed"]["taskId"] == rid
+    for _, r in stages:
+        assert r["op"] == "generate" and r["evt"] == "job_stage"
+
+
+def test_a_failed_job_logs_its_end_with_the_error(h, caplog):
+    caplog.set_level(logging.INFO, logger="relay")
+    token = h.as_person()
+    for p in h.providers.values():
+        p.submit_effect = base.ProviderError("invalid_input", "nope", retryable=False)
+    _, job = h.post_job(token, "generate")
+    ends = [r for r in lines(caplog, "job_stage") if r["jobId"] == job["jobId"] and r["stage"] == "failed"]
+    assert ends and ends[-1]["error"] and ends[-1]["message"]
+
+
+# Dex: the job's id on its model call, and a rejected answer kept whole in the log
+
+def _claude(reply):
+    import copy as _copy
+    from director import Director
+    from director.claude import ClaudeDirector
+    from director.model import ModelPort
+    from test_director import PROMPTS, FakeWire
+    wire = FakeWire(_copy.deepcopy(reply), _copy.deepcopy(reply))
+    d = ClaudeDirector(Director(ModelPort(wire, "claude-haiku-4-5", timeout=5), PROMPTS,
+                                {"runway": load_sheet("runway")}, prompt_version="director.v8"))
+    return d, wire
+
+
+def _frame_fixture():
+    from pathlib import Path
+    return json.loads((Path(__file__).parent / "fixtures" / "director" / "frame_runway_anchor.json").read_text())
+
+
+def test_dexs_model_call_carries_the_job_id_and_the_director_line_names_it(caplog):
+    caplog.set_level(logging.INFO)
+    f = _frame_fixture()
+    d, wire = _claude(f["reply"])
+    d.direct({"jobId": "job_DEX1", "op": "frame", "input": names.to_wire("frame", f["input"])}, load_sheet("runway"))
+    assert wire.calls[0]["headers"] == {"X-Napkin-Handler": "relay.director", "X-Napkin-Job": "job_DEX1"}
+    [rec] = lines(caplog, "director")
+    assert rec["jobId"] == "job_DEX1" and rec["op"] == "frame" and rec["latencyMs"] >= 0 and rec["model"]
+
+
+def test_a_rejected_answer_is_logged_whole_up_to_8_kb(caplog):
+    caplog.set_level(logging.INFO)
+    f = _frame_fixture()
+    reply = json.loads(json.dumps(f["reply"]))
+    reply["providerJob"]["refs"] = [x for x in reply["providerJob"]["refs"] if x["name"] != "hero_front"]
+    reply["rationale"] = "r" * 300  # a long answer: the log keeps all of it, the History only a line
+    d, _ = _claude(reply)
+    out = d.direct({"jobId": "job_DEX2", "op": "frame", "input": names.to_wire("frame", f["input"])}, load_sheet("runway"))
+    assert out["_model"] == "passthrough"
+    [rec] = lines(caplog, "director_rejected")
+    assert rec["jobId"] == "job_DEX2" and rec["error"] == "DirectorError" and rec["fallback"] == "passthrough"
+    assert "left out @hero_front" in rec["reason"]
+    assert json.loads(rec["answer"])["rationale"] == "r" * 300
+    assert len(jobtrace.clip("y" * 20000)) < 8300
+
