@@ -18,11 +18,11 @@ export function HistoryList({ entries, me, myName, item, kind, doc, tree = false
     <ol className={`history-list ${tree ? 'tree' : ''}`}>
       {shown.map((e, i) => {
         const ak = kindOf(e.agent)
-        const w = who(e.agent, me)
+        const job = jobOf(e)
+        const w = who(e.agent, me, doc && job ? doc.jobs[job]?.op : undefined)
         // A crew landing's rationale ends with the character cards the director was given (clan-store attribution.ts).
         const { rest: why, cards } = ak === 'crew' && e.rationale ? cardsFromRationale(e.rationale) : { rest: e.rationale, cards: [] as SeenCard[] }
         const fields = (e.targets ?? []).filter((t) => /\]\./.test(t)).map((t) => t.slice(t.indexOf('#') + 1))
-        const job = jobOf(e)
         const cost = doc && job ? jobCost(doc.jobs[job]?.cost) : undefined
         return (
           <li key={`${e.id ?? e.timestamp}-${i}`} className={`history-entry ${ak} ${entryKind(e) === 'ask' ? 'asked' : ''}`} data-kind={ak} data-decision-kind={entryKind(e)}>

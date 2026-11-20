@@ -77,6 +77,9 @@ describe('links from pictures and into sketch areas', () => {
     const { s, a, doc, node, maya, plain } = await setup()
     expect(linkCheck(a.elements(), doc(), plain, node('script'))).toMatchObject({ ok: false, reason: expect.stringMatching(/Name this picture first/) })
     expect(linkCheck(a.elements(), doc(), node('script'), maya)).toMatchObject({ ok: false })
+    // An unnamed result says so too, never "empty canvas" (UAT round 1 IMG-18).
+    const result = { ...plain, customData: { ...(plain.customData as object), kind: 'gen' } } as typeof plain
+    expect(endOf(result, doc())).toMatchObject({ refuse: expect.stringMatching(/Name this picture first/) })
     await s.close()
   })
 })

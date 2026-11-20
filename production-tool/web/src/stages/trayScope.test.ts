@@ -52,6 +52,23 @@ describe('the send tray reads the sketch area\'s links', () => {
     expect(rows[0].elIds).toEqual(['p0', 'p3', 'p1'])
   })
 
+  it('a linked text goes as words, a document with an excerpt as background (UAT round 1 IMG-5)', () => {
+    const d = structuredClone(ex)
+    for (const l of Object.values(d.links)) if (l.to.id === SKETCH) delete d.links[l.id]
+    d.texts = { tx1: { id: 'tx1', v: 1, field_v: {}, node: 'el_t', words: 'A golden retriever puppy sits on the sand beside her' } }
+    d.links.link_t = { id: 'link_t', v: 1, field_v: {}, from: { kind: 'text', id: 'tx1' }, to: { kind: 'sketch', id: SKETCH }, role: 'note' }
+    const docId = Object.keys(d.documents ?? {})[0]
+    if (docId) d.links.link_d = { id: 'link_d', v: 1, field_v: {}, from: { kind: 'document', id: docId }, to: { kind: 'sketch', id: SKETCH }, role: 'note' }
+    const rows = linkedRows(d, SKETCH, [el('e2', { kind: 'sketch', id: SKETCH })], ['e2'])
+    const text = rows.find((r) => r.item.kind === 'text')!
+    expect(text).toMatchObject({ elIds: [], goes: 'goes as words' })
+    expect(text.off).toBeUndefined()
+    if (docId) {
+      const row = rows.find((r) => r.item.kind === 'document')!
+      expect(d.documents![docId].excerpt?.trim() ? row.goes : row.off).toBe(d.documents![docId].excerpt?.trim() ? 'goes as background' : 'nothing in it to read yet')
+    }
+  })
+
   it('names typed in the words that match nothing', () => {
     expect(unknownTyped(ex, 'A @jogger runs past @maya_front and @maya, then @jogger again')).toEqual(['jogger'])
   })

@@ -43,6 +43,8 @@ type Local = { x: number; y: number }
 const WORD: Record<CardKind, string> = { script: 'script', storyboard: 'storyboard', video: 'video' }
 /** How long a new node keeps its "New" pill and halo (ui-behaviour 3.3). */
 const NEW_MS = 4000
+/** Screen pixels between a text's right edge and its link port. */
+const TEXT_PORT_GAP = 14
 
 /** A link being made: from a port drag or the Link tool's source; `b` follows the pointer (`at`, in the scene).
  *  `single`: ⌥ was held, so a key's view links as itself, not as its whole key. */
@@ -340,7 +342,7 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     const r = root.current?.parentElement?.getBoundingClientRect()
     return { x: cx - (r?.left ?? 0), y: cy - (r?.top ?? 0) }
   }
-  const portOf = (from: CanvasElement) => toLocal(from.x + from.width, from.y + from.height / 2)
+  const portOf = (from: CanvasElement) => toLocal(from.x + from.width + (from.type === 'text' ? TEXT_PORT_GAP / view.zoom : 0), from.y + from.height / 2)
 
   /** The key group the selection is, whole, if it is one. */
   function selectedKeyGroup(): KeyGroup | null {
@@ -608,7 +610,8 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
         return <span className="nl-endbox source" style={{ left: p.x, top: p.y, width: source.width * view.zoom, height: source.height * view.zoom }} />
       })()}
       {lonePort && (() => {
-        const p = toLocal(lonePort.x + lonePort.width, lonePort.y + lonePort.height / 2)
+        // A text's port sits clear of its last letters (UAT round 1 IMG-19: it covered the "r" of "her").
+        const p = toLocal(lonePort.x + lonePort.width + (lonePort.type === 'text' ? TEXT_PORT_GAP / view.zoom : 0), lonePort.y + lonePort.height / 2)
         return <span className="nl-port" role="button" aria-label={`Link from this ${word(lonePort)}`} title="Drag to link (L)"
           style={{ left: p.x, top: p.y }} onPointerDown={(ev) => startLink(lonePort, ev)} onPointerMove={follow} onPointerUp={endLink} />
       })()}
@@ -667,7 +670,8 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
         </div>
       )}
       {picker && (
-        <div className="nl-picker pt-panel" role="menu" aria-label="New node for this link" style={{ left: picker.at.x, top: picker.at.y }}>
+        <div className="nl-picker pt-panel pt-menu" role="menu" aria-label="New node for this link" style={{ left: picker.at.x, top: picker.at.y }}>
+          <div className="nl-pickhead">Nothing here to link to. Make a new one from this {word(picker.from)}:</div>
           {picker.kinds.map((k) => (
             <button key={k} type="button" role="menuitem" className="pt-menurow" onClick={() => pick(k)}>
               New {WORD[k]} from this {word(picker.from)}

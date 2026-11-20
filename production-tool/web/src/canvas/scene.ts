@@ -87,6 +87,21 @@ export function makeArrow(canvas: Canvas, from: El, to: El, fromId: string, toId
 }
 
 /** Where the next output beside `anchor` goes: right of anything already in that row. */
+/**
+ * A clear place for a row of new nodes beside `anchor`: right of it when nothing is there, else under it, else past
+ * everything on its row (nextSlot). Views of a front went past the whole row, so their key group's outline spanned
+ * the pictures between them and covered them (UAT round 1 IMG-22). Boards (frames) and arrows do not block.
+ */
+export function slotNear(els: readonly El[], anchor: { minX: number; minY: number; maxX: number; maxY: number }, size: { w: number; h: number }, gap = 80) {
+  const solid = alive(els).filter((e) => e.type !== 'arrow' && e.type !== 'frame')
+  const clear = (b: { x: number; y: number; w: number; h: number }) => !solid.some((e) => e.x < b.x + b.w && b.x < e.x + e.width && e.y < b.y + b.h && b.y < e.y + e.height)
+  const right = { x: anchor.maxX + gap, y: anchor.minY, ...size }
+  if (clear(right)) return right
+  const below = { x: anchor.minX, y: anchor.maxY + gap, ...size }
+  if (clear(below)) return below
+  return nextSlot(els, anchor, size, gap)
+}
+
 export function nextSlot(els: readonly El[], anchor: { maxX: number; minY: number }, size: { w: number; h: number }, gap = 80) {
   const y = anchor.minY
   const inRow = alive(els).filter((e) => e.type !== 'arrow' && e.y < y + size.h && e.y + e.height > y && e.x + e.width > anchor.maxX)

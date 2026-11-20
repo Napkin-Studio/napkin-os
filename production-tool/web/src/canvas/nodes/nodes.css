@@ -89,6 +89,8 @@
 .node-layer .nl-hint b { color: var(--ink); font-weight: 600; }
 .node-layer .nl-key { font-family: var(--f-mono); font-size: 11px; color: var(--ink3); }
 .node-layer .nl-picker { position: absolute; z-index: 4; pointer-events: auto; display: flex; flex-direction: column; min-width: 220px; padding: 4px; transform: translate(8px, 8px); }
+/* Why the picker shows (UAT round 1 IMG-18): the click found nothing to link to. */
+.node-layer .nl-pickhead { max-width: 260px; padding: 8px 12px 4px; font-size: 12px; line-height: 1.4; color: var(--ink2); }
 /* Pictures and sketch areas are drawn by the engine: while linking, a box over each says glow or dim. */
 .node-layer .nl-endbox { position: absolute; pointer-events: none; border-radius: 6px; box-sizing: border-box; }
 .node-layer .nl-endbox.target { outline: 2px solid var(--tool); outline-offset: 3px; }

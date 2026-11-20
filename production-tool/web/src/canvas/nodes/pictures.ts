@@ -2,7 +2,7 @@
 // the Picture tool's file picker, a dropped file and a pasted image all land here. Each picture is
 // downscaled to at most 1536 px, kept by its sha256, given to the engine and placed as a `pic` node
 // (as the controller's intake makes them on Excalidraw), all of them as one undoable step, and
-// selected, so the selection bar offers naming it (@name and its role). Dropped on a board (or placed
+// selected, so the selection bar offers naming it (@name and its role). Many at once land as a grid, not a row. Dropped on a board (or placed
 // with a board in the middle of the view), they go into it: its next free slots, the board growing to
 // hold them, or just outside when it cannot grow (boards/fitting; owner decision 2026-10-15).
 
@@ -15,6 +15,7 @@ import { newId } from '../../lib/ulid'
 import type { CanvasAdapter, CanvasElement, Pt } from '../core/canvasAdapter'
 import { assetData } from '../scene'
 import { boardAt, clearOffset, fitInto, tellFull, withFields } from '../boards/fitting'
+import { bringIntoView } from '../boards/boards'
 import { cardOf } from './nodes'
 
 /** A picture node's width on the canvas (the controller's NODE). */
@@ -25,16 +26,36 @@ const GAP = 40
 export const imageFiles = (files: Iterable<File | Blob> | null | undefined): Blob[] =>
   [...(files ?? [])].filter((f) => /^image\//.test(f.type))
 
-/** Where `n` pictures of these sizes go: a row centred on `at`. Pure. */
-export function pictureRow(at: Pt, sizes: readonly { w: number; h: number }[]): { x: number; y: number; w: number; h: number }[] {
+/** Room under each row of a grid for a picture's @name. */
+const NAME_ROOM = 24
+
+/** How many pictures go across: up to 4 in one row, more in a grid about half again as wide as it is tall (UAT round
+ *  1 IMG-14: 13 uploads landed in one 4400 px row, most of them out of view). */
+export function gridColumns(n: number): number {
+  return n <= 4 ? Math.max(1, n) : Math.min(6, Math.ceil(Math.sqrt(n * 1.5)))
+}
+
+/** Where `n` pictures of these sizes go: a grid (gridColumns across, in order) centred on `at`. Pure. */
+export function pictureGrid(at: Pt, sizes: readonly { w: number; h: number }[]): { x: number; y: number; w: number; h: number }[] {
   const boxes = sizes.map((s) => ({ w: PICTURE_W, h: Math.round((PICTURE_W * s.h) / Math.max(1, s.w)) }))
-  const total = boxes.reduce((a, b) => a + b.w, 0) + GAP * Math.max(0, boxes.length - 1)
-  let x = at.x - total / 2
-  return boxes.map((b) => {
-    const out = { x: Math.round(x), y: Math.round(at.y - b.h / 2), ...b }
-    x += b.w + GAP
-    return out
+  const cols = gridColumns(boxes.length)
+  const rows: (typeof boxes)[] = []
+  for (let i = 0; i < boxes.length; i += cols) rows.push(boxes.slice(i, i + cols))
+  const rowH = rows.map((r) => Math.max(...r.map((b) => b.h)))
+  const width = Math.min(cols, boxes.length) * PICTURE_W + GAP * (Math.min(cols, boxes.length) - 1)
+  const height = rowH.reduce((a, h) => a + h, 0) + (GAP + NAME_ROOM) * (rows.length - 1)
+  const out: { x: number; y: number; w: number; h: number }[] = []
+  let y = at.y - height / 2
+  rows.forEach((r, k) => {
+    let x = at.x - width / 2
+    for (const b of r) {
+      // One row alone keeps each picture centred on the line, as before; a grid's rows line up at the top.
+      out.push({ x: Math.round(x), y: Math.round(rows.length === 1 ? at.y - b.h / 2 : y), ...b })
+      x += b.w + GAP
+    }
+    y += rowH[k] + GAP + NAME_ROOM
   })
+  return out
 }
 
 /**
@@ -58,7 +79,7 @@ export async function placePictures(canvas: CanvasAdapter, doc: DocumentStore, f
   }, 'add picture')
   const v = canvas.visibleBounds()
   const centre = at ?? { x: (v.minX + v.maxX) / 2, y: (v.minY + v.maxY) / 2 }
-  let row = pictureRow(centre, got)
+  let row = pictureGrid(centre, got)
   // Pasted or picked (no point given) with no board under the middle of the view: clear of everything,
   // so pastes never pile on one spot or straddle a board's edge (board-autolayout).
   if (!at && !boardAt(canvas.elements(), centre)) {
@@ -92,6 +113,11 @@ export async function placePictures(canvas: CanvasAdapter, doc: DocumentStore, f
   const ids = new Set(els.map((e) => e.id))
   const placed = canvas.elements().filter((e) => ids.has(e.id))
   canvas.select(placed.map((e) => e.id))
+  // Many at once: all of them in view (a pan, or a zoom out only when they do not fit).
+  if (placed.length > 1 && canvas.engine === 'own') {
+    const b = { minX: Math.min(...placed.map((e) => e.x)), minY: Math.min(...placed.map((e) => e.y)), maxX: Math.max(...placed.map((e) => e.x + e.width)), maxY: Math.max(...placed.map((e) => e.y + e.height)) }
+    bringIntoView(canvas, b, 0, !(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches))
+  }
   return placed
 }
 

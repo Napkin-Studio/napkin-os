@@ -122,7 +122,9 @@ export function endOf(e: CanvasElement | undefined, doc: ProductionDocument, opt
   }
   if (e.type === 'image') {
     const ref = refsList(doc).find((r) => r.node && (r.node === e.id || r.node === t.id))
-    if (!ref) return t.kind === 'pic' || !t.kind ? { refuse: 'Name this picture first (Name… on its bar), then link it.' } : null
+    // Any unnamed picture, a result or a drawing too, says what to do: before, a result was "empty canvas" and offered
+    // a new Script from the text, with no word why (UAT round 1 IMG-18).
+    if (!ref) return t.kind === 'pic' || t.kind === 'gen' || t.kind === 'drawn' || !t.kind ? { refuse: 'Name this picture first (Name… on its bar), then link it.' } : null
     const key = keyNamed(doc, ref.key)
     const role = (key?.role ?? ref.role) as RefRole
     if (key && !opts.single && isKeyGroup(doc, ref.key)) return { el: e, doc: { kind: 'key', id: key.id }, core: { kind: 'picture', role }, refRole: role }

@@ -9,7 +9,7 @@
 
 import { CanvasMount } from '../canvas/CanvasMount'
 import type { ViewSnapshot } from '../canvas/core/canvasAdapter'
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useConfig, useDoc, useJobsTick, useRouter, useServices, useShowMock, useUi } from '../app/context'
 import { scriptRoute } from '../app/route'
 import { BoardRail, CanvasToolbar, LinksToggle, ZoomPill, type NewNode } from '../canvas/chrome/CanvasChrome'
@@ -38,10 +38,12 @@ import { AssetsLibrary } from '../ui/assets/AssetsDrawer'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
 import { CanvasController, viewLabel, type CanvasSnapshot, type GenerateResult } from '../canvas/controller'
+import { countLine, countRefs, kindOfRole, refLimits, type RefKind, type RefLimits } from '../canvas/refBudget'
 import { croppedCaption } from '../canvas/core/sketch'
 import { framesFromSketch, sketchDeleteText } from '../doc/remove'
 import { AskCard } from '../ui/AskCard'
-import { LAYOUT_ONLY } from '../ui/asks'
+import { ASK_REVEAL_EVENT } from '../ui/askPlaces'
+import { LAYOUT_ONLY, waitingAsk } from '../ui/asks'
 import type { AnswerChoice } from '../jobs/runner'
 import { alive, bounds, byOwnId, cd, imageOf, type Canvas, type El } from '../canvas/scene'
 import { scriptToWrite } from './scriptToWrite'
@@ -63,7 +65,7 @@ import { choiceToSend, modelChoicesFor, modelWhere } from '../capabilities'
 import { lastWorkedModel } from '../jobs/follow'
 import { ModelPick } from '../ui/ModelPick'
 import { isActive } from '../jobs/runner'
-import { cleanKey, cleanVariant, nameOf, nameProblem, refByName, wholeKeys } from '../lib/names'
+import { cleanKey, cleanVariant, mentions, nameOf, nameProblem, refByName, wholeKeys } from '../lib/names'
 import { TOUCH_OR_PHONE, useColorScheme, useFloating, useMedia } from '../ui/hooks'
 import type { Anchor } from '../lib/place'
 import { JobNode } from '../ui/JobNode'
@@ -90,6 +92,8 @@ import { namedInput } from '../jobs/select'
 import { FrontButtons, FrontChooser } from './FrontsNeeded'
 
 type Pt = { x: number; y: number }
+/** A Generate waiting for its spot (Place…): what it sends, its model's picture budget and who is marked a person. */
+type PlaceJob = { ids: string[]; text: string; more: boolean; modelChoice?: ModelChoice; limits?: RefLimits; people?: string[] }
 interface ViewState {
   /** The view as it was rendered (overlays convert coordinates with this snapshot). */
   view: ViewSnapshot
@@ -135,6 +139,19 @@ export function Character({ initial, active, onPictureEditor }: {
   const ctrl = useMemo(() => (canvas ? new CanvasController(canvas, services) : null), [canvas, services])
   // The e2e harness reads the canvas's elements and positions (web/e2e/README.md); never in a build.
   useEffect(() => { if (import.meta.env.DEV) (window as unknown as { __canvas?: Canvas | null }).__canvas = canvas }, [canvas])
+  useEffect(() => { if (import.meta.env.DEV) (window as unknown as { __ctrl?: CanvasController | null }).__ctrl = ctrl }, [ctrl])
+  // Show (the tray) or Open (Decisions) on a question that waits on a canvas result: the canvas comes to the result,
+  // at once, so its card mounts beside it and takes the focus (UAT round 1 IMG-1).
+  useEffect(() => {
+    if (!ctrl || !canvas) return
+    const onReveal = (e: Event) => {
+      const jobId = docStore.get().asks[(e as CustomEvent<string>).detail]?.job_id
+      const el = jobId ? byOwnId(canvas.elements(), jobId) : undefined
+      if (el && !el.isDeleted) ctrl.reveal([el.id], false)
+    }
+    window.addEventListener(ASK_REVEAL_EVENT, onReveal)
+    return () => window.removeEventListener(ASK_REVEAL_EVENT, onReveal)
+  }, [ctrl, canvas, docStore])
   // A canvas opened from the server comes without its pictures' files: put them back from the blobs.
   useEffect(() => {
     if (ctrl) void ctrl.restoreFiles().catch((e) => console.warn('could not put the canvas pictures back', e))
@@ -157,7 +174,7 @@ export function Character({ initial, active, onPictureEditor }: {
   const [undo, offerUndo, runUndo] = useUndo()
   const [confirming, setConfirming] = useState<{ ids: string[]; text: string; at: Pt; yes?: string } | null>(null)
   /** Waiting for a click that says where the next result goes. */
-  const [placing, setPlacing] = useState<{ ids: string[]; text: string; more: boolean; modelChoice?: ModelChoice } | null>(null)
+  const [placing, setPlacing] = useState<PlaceJob | null>(null)
   const [placeError, setPlaceError] = useState<string | null>(null)
   /** Resize… from the node bar (a selection with nodes and pictures): the pictures it resizes. */
   const [resizeOn, setResizeOn] = useState<{ els: El[]; key: string } | null>(null)
@@ -166,7 +183,7 @@ export function Character({ initial, active, onPictureEditor }: {
   const [genFor, setGenFor] = useState<string[] | null>(null)
   const [which, setWhich] = useState<{ scripts: string[]; storyboards: string[]; at: Pt } | null>(null)
   /** Fin's ask from a placed Generate on a sketch with no words: answered here, then it goes. */
-  const [asking, setAsking] = useState<{ ask: Ask; job: { ids: string[]; text: string; more: boolean; modelChoice?: ModelChoice }; at: { x: number; y: number } } | null>(null)
+  const [asking, setAsking] = useState<{ ask: Ask; job: PlaceJob; at: { x: number; y: number } } | null>(null)
 
   const refresh = useCallback(() => {
     if (!canvas) return
@@ -315,7 +332,6 @@ export function Character({ initial, active, onPictureEditor }: {
     return { info: { cards, links, group, units, locked: all.every((e) => (e as El & { locked?: boolean }).locked), off, ...(pictures ? { pictures } : {}) }, els: all }
   }, [ownEdit, vs, els, doc, controls.generate])
   const zoom = vs?.view.zoom ?? 1
-  const limits = useMemo(() => ({ max: controls.generateMax, characters: controls.generateCharacters }), [controls.generateMax, controls.generateCharacters])
 
   const doDelete = useCallback((ids: string[]) => {
     if (!ctrl) return
@@ -399,6 +415,20 @@ export function Character({ initial, active, onPictureEditor }: {
     return () => el.removeEventListener('keydown', onKey, true)
   }, [ctrl, canvas, requestDelete, placing])
 
+  // Esc clears the canvas selection wherever the focus is (UAT round 1 IMG-13: after a click on the bar the canvas had
+  // no focus, and its own Esc never came). Not while typing, and not when something else took the key first.
+  useEffect(() => {
+    if (!canvas || !active) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || placing) return
+      const t = e.target as HTMLElement | null
+      if (t?.closest?.('input, textarea, select, [contenteditable="true"], [role="dialog"], .ie-versions')) return
+      if (canvas.view().selectedIds.length) canvas.select([])
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [canvas, active, placing])
+
   /** The click that places a result: the new node's top-left goes there. */
   const onPlace = useCallback(async (e: React.PointerEvent) => {
     if (!placing || !ctrl || !canvas) return
@@ -409,12 +439,12 @@ export function Character({ initial, active, onPictureEditor }: {
     setPlacing(null)
     const at = { x: p.x - 150, y: p.y - 200 }
     try {
-      const r = await ctrl.generate(job.ids, job.text, { at, more: job.more, limits, modelChoice: job.modelChoice })
+      const r = await ctrl.generate(job.ids, job.text, { at, more: job.more, limits: job.limits, people: job.people, modelChoice: job.modelChoice })
       if ('ask' in r) setAsking({ ask: r.ask, job, at })
     } catch (err) {
       setPlaceError(errText(err))
     }
-  }, [placing, ctrl, canvas, limits])
+  }, [placing, ctrl, canvas])
 
   /** The answer to Fin's ask from a placed Generate: layout only goes as it is; described, its words go. */
   const onAskAnswered = useCallback(async (answer: AnswerChoice) => {
@@ -422,12 +452,13 @@ export function Character({ initial, active, onPictureEditor }: {
     const { job, at } = asking
     setAsking(null)
     try {
-      if ('optionId' in answer && answer.optionId === LAYOUT_ONLY) await ctrl.generate(job.ids, job.text, { at, more: job.more, limits, modelChoice: job.modelChoice, layoutOnly: true })
-      else if ('text' in answer) await ctrl.generate(job.ids, answer.text, { at, more: job.more, limits, modelChoice: job.modelChoice })
+      const opts = { at, more: job.more, limits: job.limits, people: job.people, modelChoice: job.modelChoice }
+      if ('optionId' in answer && answer.optionId === LAYOUT_ONLY) await ctrl.generate(job.ids, job.text, { ...opts, layoutOnly: true })
+      else if ('text' in answer) await ctrl.generate(job.ids, answer.text, opts)
     } catch (err) {
       setPlaceError(errText(err))
     }
-  }, [ctrl, asking, limits])
+  }, [ctrl, asking])
 
   // A node made from an editor (the Film editor's Make a storyboard from these shots): its Undo here.
   useEffect(() => canvasActions.onMade((m) => {
@@ -751,11 +782,13 @@ export function Character({ initial, active, onPictureEditor }: {
           })()}
           {ctrl && canvas && ownSel && !selBrief && !resizing && !confirming && !placing && !which && (() => {
             const b = bounds(ownSel.els)
+            // A selection scrolled out of view has no bar pinned to the edge (UAT round 1 IMG-13).
+            if (!genFor && !inView(canvas, b)) return null
             const top = toView({ x: b.minX + b.w / 2, y: b.minY })
             const ids = ownSel.els.map((e) => e.id)
             if (genFor && genFor.join() === ids.join()) {
-              return <GeneratePopover ctrl={ctrl} ids={ids} at={{ x: top.x, top: top.y, bottom: toView({ x: b.minX, y: b.maxY }).y }} limits={limits}
-                onClose={() => setGenFor(null)} onPlace={(ids, text, more, modelChoice) => { setGenFor(null); setPlaceError(null); setPlacing({ ids, text, more, modelChoice }) }} />
+              return <GeneratePopover ctrl={ctrl} ids={ids} at={{ x: top.x, top: top.y, bottom: toView({ x: b.minX, y: b.maxY }).y }}
+                onClose={() => setGenFor(null)} onPlace={(job) => { setGenFor(null); setPlaceError(null); setPlacing(job) }} />
             }
             return (
               <SelectionBar info={ownSel.info} anchor={{ x: top.x, top: top.y - (ownSel.info.group?.ink ? 30 : 0), bottom: toView({ x: b.minX, y: b.maxY }).y, ...(ownSel.info.cards.length ? { left: toView({ x: b.minX, y: b.minY }).x } : {}) }} actions={{
@@ -786,7 +819,7 @@ export function Character({ initial, active, onPictureEditor }: {
             )
           })()}
           {ctrl && selected.length > 0 && !ownSel && !selBrief && !confirming && !placing && (
-            <FloatingToolbar ctrl={ctrl} selected={selected} toView={toView} onDelete={requestDelete} limits={limits} onEdit={setEditing} gather={gather} onGather={onGather}
+            <FloatingToolbar ctrl={ctrl} selected={selected} toView={toView} onDelete={requestDelete} onEdit={setEditing} gather={gather} onGather={onGather}
               onSizes={own ? (el) => {
                 // A picture, or a scamp's picture (a Drawing's strokes, a sketch area's region) as the master.
                 void ctrl.resizeSources([el.id]).then(async ([src]) => {
@@ -797,7 +830,7 @@ export function Character({ initial, active, onPictureEditor }: {
               } : undefined}
               onResized={onResized}
               onGroup={ownEdit?.group && selected.length > 1 ? () => { ownEdit.group?.() } : undefined}
-              onPlace={(ids, text, more, modelChoice) => { setPlaceError(null); setPlacing({ ids, text, more, modelChoice }) }} />
+              onPlace={(job) => { setPlaceError(null); setPlacing(job) }} />
           )}
           {confirming && (() => {
             const p = toView(confirming.at)
@@ -954,7 +987,10 @@ function GenOverlay({ el, c, toView, zoom, ctrl, named }: { el: El; c: Extract<C
   // "1344×756 · cropped to 16:9": the relay cut the model's size to the sketch's shape (features/frame-aspect.clan).
   const frame = Object.values(doc.frames).find((f) => f.job_id === c.id)
   const own = frame ? doc.assets[frame.asset] : undefined
-  const caption = frame?.cropped_to && own?.w && own?.h ? croppedCaption({ w: own.w, h: own.h }, frame.cropped_to.to) : undefined
+  // Only while the canvas shows that picture: an edited version (v2, an upscale) is another size (UAT round 1 IMG-15).
+  const shownNow = currentPictureFrame(doc, c.id)
+  const edited = !!shownNow && !!frame && shownNow.asset !== frame.asset
+  const caption = !edited && frame?.cropped_to && own?.w && own?.h ? croppedCaption({ w: own.w, h: own.h }, frame.cropped_to.to) : undefined
   const showNode = (isActive(state) || state === 'failed' || state === 'cancelled') && !dismissed && state !== 'completed'
   // Nothing is making it (runner.adopt): say so, never a blank box (2026-10-15).
   if (!job && !live && runner.isUnstarted(c.id)) {
@@ -973,13 +1009,17 @@ function GenOverlay({ el, c, toView, zoom, ctrl, named }: { el: El; c: Extract<C
       </div>
     )
   }
+  // Dex's question waits on this result: a card of its own beside the node, at screen size (UAT round 1 IMG-1: inside
+  // the placeholder, overflow hidden, an 814 px card showed one or two words at any zoom).
+  const asked = state === 'needs_input' ? waitingAsk(doc, c.id) : undefined
   return (
     <>
       {showNode && (
         <div className="gennode" style={{ left: tl.x, top: tl.y, width: w, height: h }}>
-          <JobNode jobId={c.id} compact={w < 170} onRetried={(id) => ctrl?.retarget(c.id, id)} />
+          <JobNode jobId={c.id} compact={w < 170} askElsewhere={!!asked} onRetried={(id) => ctrl?.retarget(c.id, id)} />
         </div>
       )}
+      {asked && !dismissed && <CanvasAsk ask={asked} rect={{ x: tl.x, y: tl.y, w, h }} />}
       {c.shape && state !== 'completed' && <div className="genlabel" style={{ left: tl.x, top: tl.y }}><span className="pill">{c.shape}</span></div>}
       {state === 'completed' && !named && (
         <div className="genlabel" style={{ left: tl.x, top: tl.y }}>
@@ -991,6 +1031,35 @@ function GenOverlay({ el, c, toView, zoom, ctrl, named }: { el: El; c: Extract<C
       {/* Under the picture's @name when it has one, not on top of it (owner, 2026-10-16). */}
       {state === 'completed' && caption && <div className="gencaption" style={{ left: tl.x, top: tl.y + h + (named ? NAME_LINE : 0) }}>{caption}</div>}
     </>
+  )
+}
+
+/**
+ * A result's waiting question on the canvas: the ask card in a popover beside the node, never inside it, at screen
+ * size whatever the zoom. Only while the node is on screen: off it, the ask dock under the bar shows the question
+ * instead (askPlaces: the card places the ask while it is mounted), and Show or Decisions' Open pans here first.
+ */
+function CanvasAsk({ ask, rect }: { ask: Ask; rect: { x: number; y: number; w: number; h: number } }) {
+  const doc = useDoc()
+  const probe = useRef<HTMLSpanElement>(null)
+  const [box, setBox] = useState<{ w: number; h: number } | null>(null)
+  // Every render on purpose (the canvas resizes); the comparison inside stops the loop, as useFloating's does.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => {
+    const layer = probe.current?.closest<HTMLElement>('.overlay-layer')
+    if (!layer) return
+    const next = { w: layer.clientWidth, h: layer.clientHeight }
+    if (!box || box.w !== next.w || box.h !== next.h) setBox(next)
+  })
+  const onScreen = !!box && rect.x + rect.w > 0 && rect.y + rect.h > 0 && rect.x < box.w && rect.y < box.h
+  return (
+    <span ref={probe} className="canvas-ask-at">
+      {onScreen && (
+        <Floating className="popover canvas-ask" anchor={{ x: rect.x + rect.w / 2, left: rect.x, top: rect.y, bottom: rect.y + rect.h }}>
+          <AskCard ask={doc.asks[ask.id] ?? ask} />
+        </Floating>
+      )}
+    </span>
   )
 }
 
@@ -1037,7 +1106,7 @@ function FlowArrows({ els, selectedIds, toView }: { els: El[]; selectedIds: read
 
 type Popover = null | 'generate' | 'name' | 'resize'
 
-export function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits, onGroup, onEdit, gather, onGather, onSizes, onResized }: {
+export function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, onGroup, onEdit, gather, onGather, onSizes, onResized }: {
   ctrl: CanvasController
   /** Open the one selected picture in the Image editor (edit-canvas-pictures). */
   onEdit: (nodeId: string) => void
@@ -1049,8 +1118,7 @@ export function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, lim
   onDelete: (sel: El[]) => void
   /** Group the selection (our own engine; ui-behaviour 3.9's "Several mixed things"). */
   onGroup?: () => void
-  onPlace: (ids: string[], text: string, more: boolean, modelChoice?: ModelChoice) => void
-  limits: { max: number; characters: number }
+  onPlace: (job: PlaceJob) => void
   /** Make all sizes from this picture (features/campaign-formats.clan); our own engine only. */
   onSizes?: (el: El) => void
   /** Resize… placed its results (features/resize-selection.clan): offer Undo for all of them. */
@@ -1078,6 +1146,8 @@ export function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, lim
   const meaningful = selected.filter((e) => cd(e)?.kind !== 'provenance' && (e.customData as { kind?: string } | undefined)?.kind !== 'format_set')
   if (!meaningful.length) return null
   const b = bounds(meaningful)
+  // Scrolled out of view: no bar pinned to the canvas's edge (UAT round 1 IMG-13), unless a popover of it is open.
+  if (!open && !inView(ctrl.canvasAdapter, b)) return null
   const raw = toView({ x: b.minX + b.w / 2, y: b.minY })
   const chipRow = meaningful.some((e) => imageOf(e)) ? 30 : 0
   const at: Anchor = { x: raw.x, top: raw.y - chipRow, bottom: toView({ x: b.minX, y: b.maxY }).y }
@@ -1107,7 +1177,7 @@ export function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, lim
   const scampAlone = meaningful.length === 1 && resizable.items.length === 1 && !singleImage ? meaningful[0] : undefined
 
   if (open === 'generate') {
-    return <GeneratePopover ctrl={ctrl} ids={ids} at={at} limits={limits} onClose={() => setOpen(null)} onPlace={onPlace} />
+    return <GeneratePopover ctrl={ctrl} ids={ids} at={at} onClose={() => setOpen(null)} onPlace={onPlace} />
   }
   if (open === 'resize' && resizable.count) {
     return <ResizeFor ctrl={ctrl} items={resizable.items} strokes={resizable.strokes} total={resizable.total} at={at} onClose={() => setOpen(null)} onSent={onResized} />
@@ -1206,6 +1276,12 @@ function ResizeFor({ ctrl, items, strokes, total, at, onClose, onSent }: { ctrl:
   )
 }
 
+/** Whether any of a scene box is in the canvas's view. */
+function inView(canvas: Pick<Canvas, 'visibleBounds'>, b: { minX: number; minY: number; maxX: number; maxY: number }): boolean {
+  const v = canvas.visibleBounds()
+  return b.maxX >= v.minX && b.minX <= v.maxX && b.maxY >= v.minY && b.minY <= v.maxY
+}
+
 /** A toolbar or popover over the canvas, kept fully inside it (flips below the selection at the top). */
 function Floating({ className, anchor, children }: { className: string; anchor: Anchor; children: React.ReactNode }) {
   const { ref, style } = useFloating<HTMLDivElement>(anchor)
@@ -1218,13 +1294,12 @@ const roleWord = (r: RefRole) => (r === 'brand_rule' ? 'brand rule' : r)
 
 const KIND_WORD = { pic: 'picture', drawn: 'drawing', gen: 'result' } as const
 
-function GeneratePopover({ ctrl, ids, at, limits, onClose, onPlace }: {
+function GeneratePopover({ ctrl, ids, at, onClose, onPlace }: {
   ctrl: CanvasController
   ids: string[]
   at: Anchor
-  limits: { max: number; characters: number }
   onClose: () => void
-  onPlace: (ids: string[], text: string, more: boolean, modelChoice?: ModelChoice) => void
+  onPlace: (job: PlaceJob) => void
 }) {
   const doc = useDoc()
   const { controls, config } = useConfig()
@@ -1232,6 +1307,8 @@ function GeneratePopover({ ctrl, ids, at, limits, onClose, onPlace }: {
   const [pick, setPick] = useState<ModelChoice | undefined>()
   const choice = pick ?? lastWorkedModel(doc, 'generate', config)
   const modelChoice = choiceToSend('generate', config, choice)
+  // The picked model's picture budget (refBudget): counted here, before anything is uploaded.
+  const limits = refLimits('generate', choice, config)
   const preview = ctrl.preview(ids, choice?.model ?? modelChoicesFor('generate', config)[0]?.model)
   /** Fin's ask on a sketch with no words, shown here; nothing is sent until it is answered. */
   const [asked, setAsked] = useState<Ask | null>(null)
@@ -1239,6 +1316,8 @@ function GeneratePopover({ ctrl, ids, at, limits, onClose, onPlace }: {
   const [more, setMore] = useState(false)
   const [open, setOpen] = useState(false)
   const [off, setOff] = useState<Set<string>>(() => new Set())
+  /** Unnamed pictures the person marked as a person: they go as characters (Runway subject human). */
+  const [people, setPeople] = useState<Set<string>>(() => new Set())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const ref = useRef<HTMLTextAreaElement>(null)
@@ -1267,11 +1346,11 @@ function GeneratePopover({ ctrl, ids, at, limits, onClose, onPlace }: {
       setBusy(false)
     }
   }
-  const submit = () => go(() => ctrl.generate(sent(ids), text, { more, limits, modelChoice }))
+  const submit = () => go(() => ctrl.generate(sent(ids), text, { more, limits, modelChoice, people: [...people] }))
   const answered = async (answer: AnswerChoice) => {
     setAsked(null)
-    if ('optionId' in answer && answer.optionId === LAYOUT_ONLY) await go(() => ctrl.generate(ids, text, { more, limits, modelChoice, layoutOnly: true }))
-    else if ('text' in answer) await go(() => ctrl.generate(ids, answer.text, { more, limits, modelChoice }))
+    if ('optionId' in answer && answer.optionId === LAYOUT_ONLY) await go(() => ctrl.generate(ids, text, { more, limits, modelChoice, people: [...people], layoutOnly: true }))
+    else if ('text' in answer) await go(() => ctrl.generate(ids, answer.text, { more, limits, modelChoice, people: [...people] }))
   }
   if (asked) {
     return (
@@ -1298,14 +1377,39 @@ function GeneratePopover({ ctrl, ids, at, limits, onClose, onPlace }: {
     inputs ? `${inputs} ${inputs === 1 ? 'input' : 'inputs'}` : null,
     preview.notes.length ? `${preview.notes.length} ${preview.notes.length === 1 ? 'note' : 'notes'}` : null,
     text.trim() ? 'your words' : null].filter(Boolean).join(', ') || 'Your words only'
+  // Every picture that goes, as a person or a thing, against the model's limits (UAT round 1 IMG-6/7/8): the tray
+  // says it before Generate, and refuses with what to untick, so nothing is uploaded only to be refused.
+  const kindOfInput = (i: (typeof preview.inputs)[number]): RefKind => (i.name ? kindOfRole(i.role) : people.has(i.nodeId) ? 'person' : 'thing')
+  const going = new Set([...preview.inputs.filter((i) => i.name).map((i) => i.name!), ...linked.filter((r) => !off.has(r.key)).map((r) => r.label.split(' · ')[0].replace(/^@/, ''))])
+  const fromWords = mentions(doc, text).found.filter((r) => !going.has(nameOf(r)) && !going.has(r.key))
+  const kinds: RefKind[] = [
+    ...(preview.sketch ? ['thing' as const] : []), ...(preview.drawings ? ['thing' as const] : []),
+    ...preview.inputs.filter((i) => !off.has(i.nodeId)).map(kindOfInput),
+    ...linked.filter((r) => r.elIds.length && !off.has(r.key)).flatMap((r) => r.elIds.map(() => kindOfRole(r.item.role))),
+    ...fromWords.map((r) => kindOfRole(r.role)),
+  ]
+  const counted = countRefs(kinds, limits)
+  const kindTag = (i: (typeof preview.inputs)[number]) => {
+    const k = kindOfInput(i)
+    if (i.name) return <span className={`tray-kind ${k}`} title={k === 'person' ? 'Named as a character: sent as a person' : 'Sent as a thing (an object)'}>{k}</span>
+    return (
+      <button type="button" className={`tray-kind ${k} switch`} aria-pressed={k === 'person'}
+        title={k === 'person' ? 'Sent as a person (a character). Click to send it as a thing.' : 'Sent as a thing (an object). Click if it shows a person to keep.'}
+        onClick={() => setPeople((p) => { const n = new Set(p); if (n.has(i.nodeId)) n.delete(i.nodeId); else n.add(i.nodeId); return n })}>{k} ⇄</button>
+    )
+  }
+  const blocked = !!counted.problem
   // "<model> on Runway" (ui-behaviour 3.7), the pick or the first routed model.
   const shown = choice ?? modelChoicesFor('generate', config)[0]
   const model = shown ? modelWhere(shown.provider, shown.model) : undefined
-  const tick = (id: string, label: React.ReactNode, on: boolean, change?: () => void) => (
-    <label key={id} className="tray-row">
-      <input type="checkbox" checked={on} disabled={!change} onChange={change} />
-      <span>{label}</span>
-    </label>
+  const tick = (id: string, label: React.ReactNode, on: boolean, change?: () => void, extra?: React.ReactNode) => (
+    <div key={id} className="tray-rowline">
+      <label className="tray-row">
+        <input type="checkbox" checked={on} disabled={!change} onChange={change} />
+        <span>{label}</span>
+      </label>
+      {extra}
+    </div>
   )
   return (
     <Floating className="popover send-tray" anchor={at}>
@@ -1316,20 +1420,25 @@ function GeneratePopover({ ctrl, ids, at, limits, onClose, onPlace }: {
         <AgentFigure agent="dex" size={22} decorative />
         <div className="tray-title"><b>What the Director agent will send</b><span>{sayer('dex')}</span></div>
       </div>
-      {!open && <button type="button" className="tray-line" onClick={() => setOpen(true)}>{summary}</button>}
-      {open && (
+      {!open && !blocked && <button type="button" className="tray-line" onClick={() => setOpen(true)}>{summary}</button>}
+      {limits.max > 0 && kinds.length > 0 && <div className={`tray-count pt-mono ${blocked ? 'over' : ''}`} role="status">{countLine(counted, limits)}</div>}
+      {(open || blocked) && (
         <div className="tray-rows" role="group" aria-label="Inputs to send">
           {preview.sketch && tick('sketch', <><b>Sketch</b> <span className="faint">· {preview.sketch.label} layout</span></>, true)}
           {preview.drawings > 0 && tick('drawing', <><b>Drawing</b> <span className="faint">· as drawn</span></>, true)}
           {preview.inputs.map((i) => tick(i.nodeId, i.name
             ? <><span className="pt-ref">@{i.name}</span> <span className="faint">· {KIND_WORD[i.kind]}</span></>
             : <><b>{KIND_WORD[i.kind][0].toUpperCase() + KIND_WORD[i.kind].slice(1)}</b> <span className="faint">· not named</span></>,
-          !off.has(i.nodeId), () => setOff((o) => { const n = new Set(o); if (n.has(i.nodeId)) n.delete(i.nodeId); else n.add(i.nodeId); return n })))}
+          !off.has(i.nodeId), () => setOff((o) => { const n = new Set(o); if (n.has(i.nodeId)) n.delete(i.nodeId); else n.add(i.nodeId); return n }), kindTag(i)))}
           {preview.notes.map((n, k) => tick(`note${k}`, <><b>Note</b> <span className="faint">· instruction:</span> {n.length > 60 ? `${n.slice(0, 59)}…` : n}</>, true))}
-          {linked.map((r) => tick(r.key, <>{r.item.kind === 'ref' || r.item.kind === 'key' ? <span className="pt-ref">{r.label.split(' · ')[0]}</span> : <b>{r.label.split(' · ')[0]}</b>} <span className="faint">· {r.label.split(' · ').slice(1).join(' · ')}{r.off ? ` · ${r.off}` : ''}</span></>,
-            r.elIds.length > 0 && !off.has(r.key), r.elIds.length ? () => setOff((o) => { const n = new Set(o); if (n.has(r.key)) n.delete(r.key); else n.add(r.key); return n }) : undefined))}
+          {linked.map((r) => tick(r.key, <>{r.item.kind === 'ref' || r.item.kind === 'key' ? <span className="pt-ref">{r.label.split(' · ')[0]}</span> : <b>{r.label.split(' · ')[0]}</b>} <span className="faint">· {r.label.split(' · ').slice(1).join(' · ')}{r.off ? ` · ${r.off}` : r.goes ? ` · ${r.goes}` : ''}</span></>,
+            r.elIds.length > 0 ? !off.has(r.key) : !!r.goes, r.elIds.length ? () => setOff((o) => { const n = new Set(o); if (n.has(r.key)) n.delete(r.key); else n.add(r.key); return n }) : undefined,
+            r.elIds.length > 0 ? <span className={`tray-kind ${kindOfRole(r.item.role)}`}>{kindOfRole(r.item.role)}</span> : undefined))}
+          {fromWords.map((r) => tick(`said:${r.id}`, <><span className="pt-ref">@{nameOf(r)}</span> <span className="faint">· from your words</span></>, true, undefined,
+            <span className={`tray-kind ${kindOfRole(r.role)}`}>{kindOfRole(r.role)}</span>))}
         </div>
       )}
+      {counted.problem && <div role="alert" className="tray-error">{counted.problem}</div>}
       {unknown.length > 0 && (
         <div className="tray-unknown" role="note">{unknown.length === 1 ? '1 name isn\'t a reference' : `${unknown.length} names aren't references`}: {unknown.map((n) => `@${n}`).join(', ')} <span className="faint">· it goes as plain words</span></div>
       )}
@@ -1344,7 +1453,7 @@ function GeneratePopover({ ctrl, ids, at, limits, onClose, onPlace }: {
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             e.stopPropagation()
-            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void submit()
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !blocked) void submit()
             if (e.key === 'Escape') onClose()
           }}
         />
@@ -1362,12 +1471,12 @@ function GeneratePopover({ ctrl, ids, at, limits, onClose, onPlace }: {
         <ModelPick op="generate" value={choice} onChange={setPick} />
         {controls.moreOptions && <button className={`btn xs ${more ? 'on' : ''}`} title="Ask for 4 options instead of 1" onClick={() => setMore(!more)}>4 options</button>}
         <span className="spacer" />
-        <button className="btn xs ghost" disabled={busy || !oneArea} title="Click on the canvas where it should land" onClick={() => { onClose(); onPlace(sent(ids), text, more, modelChoice) }}>Place…</button>
+        <button className="btn xs ghost" disabled={busy || !oneArea || blocked} title="Click on the canvas where it should land" onClick={() => { onClose(); onPlace({ ids: sent(ids), text, more, modelChoice, limits, people: [...people] }) }}>Place…</button>
       </div>
       <div className="tray-foot nowrap" title="Nothing is sent until you press Generate.">
         <span className="pt-mono tray-model">{model ?? 'The default model'}{preview.sketch ? <><br />{preview.sketch.label}</> : null}</span>
         <button className="btn sm" onClick={onClose}>Cancel</button>
-        <button className="btn sm primary" disabled={busy || !oneArea} onClick={() => void submit()}>{busy ? 'Sending…' : 'Generate'}</button>
+        <button className="btn sm primary" disabled={busy || !oneArea || blocked} title={counted.problem} onClick={() => void submit()}>{busy ? 'Sending…' : 'Generate'}</button>
       </div>
     </Floating>
   )

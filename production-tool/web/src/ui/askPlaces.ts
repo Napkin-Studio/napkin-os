@@ -140,8 +140,14 @@ export function focusAsk(askId: string): boolean {
   return true
 }
 
-/** Show from the tray: look for the ask's card for a few frames; when no card shows it, the dock does. */
+/** Asks the screen that holds an ask's place to bring it into view first (the canvas pans to the result that
+ *  waits, so its card mounts beside it: UAT round 1 IMG-1). The event's detail is the ask's id. */
+export const ASK_REVEAL_EVENT = 'napkin:ask-reveal'
+
+/** Show from the tray or Decisions: bring the ask's place into view, look for its card for a few frames; when no
+ *  card shows it, the dock does. */
 export async function showAsk(askId: string, frames = 20): Promise<boolean> {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(ASK_REVEAL_EVENT, { detail: askId }))
   for (let i = 0; i < frames; i++) {
     if (focusAsk(askId)) return true
     await new Promise((r) => requestAnimationFrame(() => r(null)))

@@ -42,6 +42,10 @@ describe('History (contract 3)', () => {
     expect(entries.map((e) => kindOf(e.agent))).toEqual(['person', 'crew', 'crew', 'person', 'crew', 'person'])
     expect(who('human:p_maya001', 'p_maya001')).toEqual({ label: 'You' })
     expect(who('rhea', 'p_maya001')).toEqual({ label: 'Retouch agent', detail: 'retouches' })
+    // The Camera agent draws pictures and films clips (UAT round 1 IMG-21: picture jobs said "films").
+    expect(who('wren', 'p_maya001', 'generate').detail).toBe('draws')
+    expect(who('wren', 'p_maya001', 'clip').detail).toBe('films')
+    expect(who('wren', 'p_maya001').detail).toBe('draws and films')
   })
 
   it('gives each decision its Kind from its verb and targets', () => {

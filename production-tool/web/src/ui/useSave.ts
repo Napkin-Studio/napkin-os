@@ -1,9 +1,9 @@
 // Save state, one source (features/topbar-declutter.clan): the canvas bar's status, More's "Save now"
 // and Ctrl/Cmd+S (registered once, by SaveKeys in App) read and drive the same store, so the bar's
 // words and the menu item always agree. Saving sends the project to the server now (the relay keeps
-// it: S3 on AWS, .local-data/clan locally), on top of the save every 5 minutes and on a lock.
+// it: S3 on AWS, .local-data/clan locally), on top of the save every minute (when something changed) and on a lock.
 //
-// "saved HH:MM" is the server copy's time, whoever sent it (live test 2026-11-18: the 5-minute and lock
+// "saved HH:MM" is the server copy's time, whoever sent it (live test 2026-11-18: the timed and lock
 // saves never moved it, and a reload said "not saved yet"): the project index's server mark
 // (projects/serverCopy.ts writes it on every post, and it is kept across reloads), or a later Save now.
 

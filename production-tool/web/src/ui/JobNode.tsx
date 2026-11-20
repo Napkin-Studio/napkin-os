@@ -36,7 +36,9 @@ const STATE_LABEL: Record<string, string> = {
 
 /** `row`: one line in a list (the Image editor's Edits row): status, elapsed time and Cancel with its confirm,
  *  never a loader over the work. Its other states are the compact ones. */
-export function JobNode({ jobId, compact: small = false, row = false, onRetried }: { jobId: string; compact?: boolean; row?: boolean; onRetried?: (newId: string) => void }) {
+/** `askElsewhere`: the job's question is shown in a card of its own beside this node (the canvas: a placeholder
+ *  is too small to hold it, UAT round 1 IMG-1), so the node only says it waits for an answer. */
+export function JobNode({ jobId, compact: small = false, row = false, onRetried, askElsewhere = false }: { jobId: string; compact?: boolean; row?: boolean; onRetried?: (newId: string) => void; askElsewhere?: boolean }) {
   const compact = small || row
   const { runner } = useServices()
   const doc = useDoc()
@@ -65,12 +67,13 @@ export function JobNode({ jobId, compact: small = false, row = false, onRetried 
 
   if (waiting) {
     // The agent asked instead of guessing: the question, not a loader.
-    return ask
+    return ask && !askElsewhere
       ? <AskCard ask={ask} />
       : (
         <div className={`pending waiting ${compact ? 'compact' : ''}`} role="status">
           <AgentFigure agent={who.agent} state={who.state} size={compact ? 72 : 96} decorative />
-          <div className="state">{who.line}</div>
+          {/* The question is in its card beside the node: a short line here, never clipped words. */}
+          <div className="state">{ask && compact ? 'Waiting for your answer' : who.line}</div>
         </div>
       )
   }

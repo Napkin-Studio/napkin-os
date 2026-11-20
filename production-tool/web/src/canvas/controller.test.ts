@@ -318,6 +318,8 @@ describe('the shape of a Generate without an area, and of the views', () => {
     expect(t.sent[0].op).toBe('view')
     expect(t.sent[0].input.aspect).toEqual({ w: 896, h: 1120 })
     expect(t.sent[0].input.ratio).toBeUndefined()
+    // Who the views are of (UAT round 1 IMG-11): the relay sends a character's front as a person.
+    expect(t.sent[0].input.subject).toEqual({ role: 'character', name: 'maya' })
   })
 
   it('every view is written down before any is answered: a reload mid-way left the others never sent (2026-10-15)', async () => {
@@ -532,6 +534,27 @@ describe('loose strokes become a Drawing', () => {
     t.canvas.els = [{ id: 'G', type: 'image', x: 0, y: 0, width: 300, height: 400, isDeleted: false, frameId: null, customData: { kind: 'gen', id: 'node_g', op: 'generate', parentIds: [], state: 'completed', asset: SHA('g') } } as unknown as El]
     await t.ctrl.generate(['G'], 'the same lamp, in brass')
     expect(t.sent[1].input.refs).toEqual([expect.objectContaining({ role: 'other', kind: 'generated' })])
+  })
+
+  it('counts people and things against the model before anything is uploaded (pt-canvas-r1 IMG-6/7/8)', async () => {
+    await systemUpdate(t.doc, (d) => { for (const c of 'pqrstu') d.assets[SHA(c)] = asset(SHA(c), 'image', { w: 600, h: 800, origin: 'uploaded' }) }, 'sync')
+    t.canvas.els = [...'pqrstu'].map((c, i) => ({ id: c.toUpperCase(), type: 'image', x: i * 320, y: 0, width: 300, height: 400, isDeleted: false, frameId: null, customData: { kind: 'pic', id: `node_${c}`, asset: SHA(c) } } as unknown as El))
+    const upload = vi.fn()
+    ;(t.ctrl as unknown as { s: { relay: unknown } }).s.relay = { upload }
+    await expect(t.ctrl.generate(['P', 'Q', 'R', 'S', 'T', 'U'], 'a still life', { limits: { max: 14, characters: 5, objects: 4 } }))
+      .rejects.toThrow('This model takes at most 4 things (objects, drawings, layouts); 6 are ticked as things. Untick 2.')
+    await expect(t.ctrl.generate(['P', 'Q'], 'two friends', { limits: { max: 14, characters: 1, objects: 9 }, people: ['node_p', 'node_q'] }))
+      .rejects.toThrow(/at most 1 person \(characters\); 2 are ticked as people/)
+    await expect(t.ctrl.generate(['P', 'Q', 'R'], 'x', { limits: { max: 2, characters: 2 } })).rejects.toThrow('This model takes at most 2 pictures at once; 3 are ticked. Untick 1.')
+    expect(upload).not.toHaveBeenCalled()
+    expect(t.sent).toHaveLength(0)
+  })
+
+  it('an unnamed picture marked as a person goes as a character', async () => {
+    await systemUpdate(t.doc, (d) => { d.assets[SHA('g')] = asset(SHA('g'), 'image', { w: 600, h: 800, origin: 'generated' }) }, 'sync')
+    t.canvas.els = [{ id: 'G', type: 'image', x: 0, y: 0, width: 300, height: 400, isDeleted: false, frameId: null, customData: { kind: 'gen', id: 'node_g', op: 'generate', parentIds: [], state: 'completed', asset: SHA('g') } } as unknown as El]
+    await t.ctrl.generate(['G'], 'her, at the cafe', { people: ['node_g'] })
+    expect(t.sent[0].input.refs).toEqual([expect.objectContaining({ id: 'node_g', role: 'character', kind: 'generated' })])
   })
 
   it('a Drawing whose strokes changed gets a new picture; moving it whole does not', async () => {

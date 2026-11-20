@@ -15,7 +15,7 @@ import { canvasActions } from '../../chrome/actions'
 import { BOARD_GAP, BOARD_PAD } from '../../../../../canvas-engine/src'
 import { newId } from '../../../lib/ulid'
 import { boardNotices } from '../../boards/fitting'
-import { imageFiles, pictureRow, placePictures, PICTURE_W } from '../../nodes/pictures'
+import { gridColumns, imageFiles, pictureGrid, placePictures, PICTURE_W } from '../../nodes/pictures'
 import { cardOf, seedNodes } from '../../nodes/nodes'
 import type { ProductionDocument } from '../../../contracts/types'
 import { snapshotDoc } from '../../../test/jobFixtures'
@@ -136,9 +136,19 @@ describe('pictures on the own engine', () => {
 
   it('keeps only image files, and lays a row out centred', () => {
     expect(imageFiles([png('x'), new Blob(['t'], { type: 'text/plain' })])).toHaveLength(1)
-    const row = pictureRow({ x: 0, y: 0 }, [{ w: 100, h: 100 }, { w: 200, h: 100 }])
+    const row = pictureGrid({ x: 0, y: 0 }, [{ w: 100, h: 100 }, { w: 200, h: 100 }])
     expect(row[0].x).toBe(-(PICTURE_W * 2 + 40) / 2)
     expect(row[1].h).toBe(150)
+  })
+
+  it('many pictures land as a grid, not one long row (UAT round 1 IMG-14)', () => {
+    expect([1, 4, 5, 13, 40].map(gridColumns)).toEqual([1, 4, 3, 5, 6])
+    const g = pictureGrid({ x: 0, y: 0 }, Array.from({ length: 13 }, () => ({ w: 400, h: 500 })))
+    expect(new Set(g.map((b) => b.y)).size).toBe(3)
+    const xs = g.map((b) => b.x)
+    expect(Math.max(...xs) + PICTURE_W - Math.min(...xs)).toBe(5 * PICTURE_W + 4 * 40)
+    // No two overlap.
+    for (const [i, a] of g.entries()) for (const b of g.slice(i + 1)) expect(a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h).toBe(false)
   })
 
   it('the bar\'s Picture tool is on once the canvas registers it, and runs it', () => {

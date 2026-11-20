@@ -2,9 +2,9 @@
 // ("why does this look like this?"). It reads the addresses each decision
 // targets and cites (model/lineage.ts), never ids in the words.
 
-import type { Cost, ProductionDocument } from '../contracts/types'
+import type { Cost, DocJob, ProductionDocument } from '../contracts/types'
 import { entityOf, kindOf as kindOfDecision, type Kind } from '../model/lineage'
-import { CAST } from './agents/cast'
+import { CAST, jobWord, type CastKey } from './agents/cast'
 import { currentRender, framesOf, refName, refsList, rendersOf, shotNumber, shotsOf, takeNumber, takesOf } from '../model/selectors'
 
 export interface ChainLike {
@@ -86,11 +86,12 @@ export function kindOf(agent: string): AgentKind {
   return 'other'
 }
 
-/** Who an entry names, in the panel's words: You, another person, or the crew member and their sign-off. */
-export function who(agent: string, me: string | undefined): { label: string; detail?: string } {
+/** Who an entry names, in the panel's words: You, another person, or the crew member and what they did for the
+ *  entry's job (`op`): the Camera agent "draws" a picture and "films" a clip (UAT round 1 IMG-21). */
+export function who(agent: string, me: string | undefined, op?: DocJob['op']): { label: string; detail?: string } {
   const kind = kindOf(agent)
   if (kind === 'person') return { label: me && agent === `human:${me}` ? 'You' : agent.slice('human:'.length) }
-  if (kind === 'crew') { const c = CAST[agent as keyof typeof CAST]; return { label: c.given, detail: c.job } }
+  if (kind === 'crew') { const k = agent as CastKey; return { label: CAST[k].given, detail: jobWord(k, op) } }
   return { label: agent }
 }
 

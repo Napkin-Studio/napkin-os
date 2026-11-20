@@ -352,7 +352,7 @@ export interface ModelSheet {
   outputs?: number[]
   promptMax?: number
   promptUnit?: 'utf16'
-  refs?: { max: number; maxCharacter?: number }
+  refs?: { max: number; maxCharacter?: number; maxObject?: number }
   mask?: 'none' | 'png_black_edit' | 'png_white_edit'
   preciseEdit?: boolean
   keyframes?: { max: number; range?: 'whole_seconds_end_exclusive' }
@@ -395,7 +395,7 @@ export interface CapabilitySheet {
   ops: Partial<Record<Op, OpSheet>>
   models: Record<string, ModelSheet>
   tagSyntax: 'at_tag' | 'none'
-  refs: { max: number; maxCharacter?: number }
+  refs: { max: number; maxCharacter?: number; maxObject?: number }
   seed: boolean
   outputsPerCall?: number
   mask: 'none' | 'png_black_edit' | 'png_white_edit'

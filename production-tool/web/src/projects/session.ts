@@ -26,6 +26,9 @@ import { canvasKeyFor, clanDbFor, uiKeyFor, type ProjectStorage } from './storag
 import { autoName, summarise } from './summary'
 import { ProjectUiStore } from './uiStore'
 
+/** How often the project is sent to the server when it changed. */
+export const MIRROR_EVERY_MS = 60_000
+
 /** A .clan store over a project's own database (the browser's by default; tests pass the wasm and memory).
  *  `person` is who writes (absent: only to read it); `undo` where its undo steps are kept. */
 export type MakeClan = (persistence: Persistence, opts?: { person?: Person; undo?: ModelStoreOptions['undo'] }) => ModelStore
@@ -127,7 +130,9 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
       onPosted: (at) => app.update((a) => { a.savedAt = at.toISOString() }),
       base: await readBase(storage, index, id),
     })
-    clan.clan.startMirror((bytes, meta) => serverCopy!.post(bytes, meta), { everyMs: 300_000 })
+    // Every minute when something changed (clan-store startMirror posts nothing otherwise): every 5 minutes left
+    // "saved hh:mm" up to 5 minutes behind the work, and people pressed Ctrl+S to be sure (UAT round 1 IMG-22).
+    clan.clan.startMirror((bytes, meta) => serverCopy!.post(bytes, meta), { everyMs: MIRROR_EVERY_MS })
   }
   const initialCanvas = (await storage.get<CanvasSnapshot>(canvasKey)) ?? null
 
