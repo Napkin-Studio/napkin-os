@@ -359,6 +359,16 @@ def refuse_live() -> None:
                        "is 'refuse'). A deck is drawn from a client brief, so nothing is sent; Sai decides when that changes")
 
 
+def plan_candidates(ctx: Ctx) -> list:
+    """The empty slots generation plans for: every candidate, or under the picture plan the 3 to 5 that earn a picture (deck.scene.slots_for).
+    make_plan and run_subjects both read this, so stage g's recorded request is the one the plan looks for."""
+    cands = candidate_slots(ctx.deck, ctx.territories, ctx.generate)
+    if spec.PICTURE_PLAN:
+        from . import scene as scn   # noqa: PLC0415
+        cands = scn.slots_for(ctx.deck, cands)
+    return cands
+
+
 def make_plan(ctx: Ctx, mode: str = "plan", hero: list | None = None, remake_style: bool = False, remake: list | None = None) -> dict:
     """The whole decision, with no network: which slots are made already, which go on a card, which are held back and why, the prompts in full.
     ``remake``: ``SLIDE.SLOT`` names a person asked to make again (--remake): each goes on the card as a new attempt, from the recorded subject.
@@ -372,10 +382,7 @@ def make_plan(ctx: Ctx, mode: str = "plan", hero: list | None = None, remake_sty
     safe = safe_state(inp, deck, ctx.review)
     banned = list(dict.fromkeys([*safe["banned"], *ctx.style.banned_imagery, *ctx.banned_extra]))
     deny = lint.deny_list(inp.marks)
-    cands = candidate_slots(deck, ctx.territories, ctx.generate)
-    if spec.PICTURE_PLAN:   # the picture plan: 3 to 5 pictures (cover, idea, the hero execution, the audience when presented)
-        from . import scene as scn   # noqa: PLC0415
-        cands = scn.slots_for(deck, cands)
+    cands = plan_candidates(ctx)
     req = subject_request(deck, inp, ctx.territories, askable(deck, cands), banned, deny)
     rec = ctx.subjects if ctx.subjects is not None else load_subjects(ctx.stages, req)
     style_text = style_text_for(ctx.style, banned)
@@ -647,7 +654,7 @@ def run_subjects(ctx: Ctx, plan: dict, call=None, log=print) -> dict:
     (so the cap counts it even if the process dies). ``call(request) -> (obj, usage)`` is injected in tests; live it is ``stages.image_subjects``."""
     from . import stages as stg
     call = call or stg.image_subjects
-    cands = candidate_slots(ctx.deck, ctx.territories, ctx.generate)
+    cands = plan_candidates(ctx)   # the same slots make_plan asks about, so the recorded request matches
     banned = plan["banned_imagery"]
     req = subject_request(ctx.deck, ctx.inp, ctx.territories, askable(ctx.deck, cands), banned, lint.deny_list(ctx.inp.marks))
     key = "g_" + request_sha(req)

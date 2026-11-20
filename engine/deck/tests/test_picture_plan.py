@@ -201,3 +201,16 @@ def test_no_render_says_flagged_and_a_flagged_picture_is_not_drawn(plan_on):
     deck = {"assets": {"img_a": {"rights": "generated"}}, "order": ["s1"],
             "slides": {"s1": {"type": "idea", "slots": {"picture": {"kind": "image", "image": im}}}}}
     assert images.drawn(deck, "review") == {}
+
+
+def test_stage_g_and_the_plan_ask_about_the_same_slots(plan_on, monkeypatch):
+    """The re-render found stage g asked about every empty slot while the plan kept 3 to 5, so the recorded request never matched and
+    every slot waited for a card. Both now read plan_candidates."""
+    every = [{"sid": f"s{i}", "slot": "picture"} for i in range(9)]
+    monkeypatch.setattr(imagegen, "candidate_slots", lambda deck, terr, gen: list(every))
+    monkeypatch.setattr(scene, "slots_for", lambda deck, cands: cands[:3])
+    ctx = types.SimpleNamespace(deck={}, territories=[], generate="all")
+    assert imagegen.plan_candidates(ctx) == every[:3]
+    import inspect
+    for fn in (imagegen.make_plan, imagegen.run_subjects):
+        assert "plan_candidates(ctx)" in inspect.getsource(fn)
