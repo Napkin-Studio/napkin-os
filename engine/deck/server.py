@@ -329,6 +329,7 @@ class Server:
             d.out_tag = out_key(req["inputs"])
             d.stages.mkdir(parents=True, exist_ok=True)
             d.req, d.notices, d.error, d.pay = req, [], None, None
+            d.tissue = d.handoffs = None   # deck-handoffs: written again by this request's segment (an older one never shows)
             present = {p.name for p in d.stages.glob("*.json")}
             self.check_type_change(d, req, present)   # deck-types: before anything runs or spends
             self.apply_human(d, req)   # deck-handoffs: the person's edits, retries and own ideas, and the client's reactions
