@@ -3,6 +3,7 @@
 
 import { modelChoicesFor } from '../capabilities'
 import type { Config, ModelChoice, ProductionDocument } from '../contracts/types'
+import { beatsOf } from '../model/selectors'
 import { lastWorkedModel } from '../jobs/follow'
 import { selectedFrame } from '../jobs/frames'
 import { modelEntry, TAKE_MAX_S, TAKE_MAX_SHOTS } from '../jobs/runs'
@@ -88,4 +89,19 @@ export function boxModel(doc: ProductionDocument, box: Box, config: Config, pick
   const wanted = picked ?? lastWorkedModel(doc, 'clip', config) ?? options[0]
   if (wanted && !boxModelWhyNot(doc, box, wanted)) return wanted
   return options.find((o) => !boxModelWhyNot(doc, box, o)) ?? wanted
+}
+
+/** What a box's sound will be, when one of its shots has a spoken line, a VO or a sound beat (relay/sound.py, the
+ *  one rule; UAT 2026-11-21 B6: every clip came out silent). `on`: the model makes it; else the box says the model
+ *  cannot. Undefined when the box has nothing to hear. */
+export function boxSound(doc: ProductionDocument, box: Pick<Box, 'shotIds'>, m: ModelChoice | undefined): { on: boolean; words: string } | undefined {
+  const beats = box.shotIds.flatMap((id) => beatsOf(doc, id)).filter((b) => (b.kind === 'line' || b.kind === 'vo' || b.kind === 'sound') && b.text?.trim())
+  if (!beats.length || !m) return undefined
+  const what = [beats.some((b) => b.kind === 'line') && 'the spoken line', beats.some((b) => b.kind === 'vo') && 'the voice-over', beats.some((b) => b.kind === 'sound') && 'the sound']
+    .filter(Boolean).join(', ')
+  const e = entryOf(m)
+  const label = e?.label ?? m.model
+  if (e?.video.audioControl) return { on: true, words: `With sound: ${what}.` }
+  // No switch (Omni Flash 1.1, Hailuo 3): the relay asks for no music and no dialogue (decided 2026-10-06).
+  return { on: false, words: `No sound made: ${label} has no sound switch, so ${what} will not be heard. Veo 3.1, Kling or WAN 3 can.` }
 }

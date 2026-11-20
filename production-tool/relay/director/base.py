@@ -236,6 +236,9 @@ class PassthroughDirector:
                 # sets the frames, refs, length and the timed prompt; a clip with none is as it was.
                 import connected
                 connected.shape(job, inp, sheet, spec, passthrough=True)
+            if op == "clip" and sheet:
+                from .director import _sound
+                _sound(job, inp, sheet, spec)
         if op == "clip" and inp.get("refused"):
             # The provider's text check refused these words (soften.py): the same words, plainer, every beat kept.
             import soften

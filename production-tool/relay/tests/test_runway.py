@@ -123,10 +123,13 @@ def test_clip_builds_the_exact_body_with_audio_off(runway, server):
     }
 
 
-def test_audio_is_explicit_on_every_video_request_even_if_asked_for_sound(runway, server):
-    runway.submit(job("clip", refs=[], first_frame=SHA, duration_s=4, ratio="1280:720", audio=True, prompt="she waves"))
+def test_audio_is_explicit_on_every_video_request_and_follows_the_job(runway, server):
+    """Off unless the job turns it on (relay/sound.py, features/pt-film-r1.clan: a shot with a line, a VO or a
+    sound beat, on a model with the switch)."""
+    runway.submit(job("clip", refs=[], first_frame=SHA, duration_s=4, ratio="1280:720", prompt="she waves"))
     assert server.body["audio"] is False
-    assert "audio" in server.body
+    runway.submit(job("clip", refs=[], first_frame=SHA, duration_s=4, ratio="1280:720", audio=True, prompt="she waves"))
+    assert server.body["audio"] is True
 
 
 def test_a_clip_with_no_first_frame_is_made_from_words_on_text_to_video(runway, server):

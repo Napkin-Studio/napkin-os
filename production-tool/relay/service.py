@@ -57,6 +57,7 @@ import sameness
 import sized
 import time_rules
 import timeline_layers
+import sound
 from blobs import checksum_header
 from contracts import Contracts, api
 from contracts_dir import contracts_dir, pricing
@@ -957,7 +958,8 @@ class Relay:
         """What the request says about the settings its price depends on (contracts/pricing.py):
         four options, the clip's length, an edit's input length, a clip_patch's billed seconds (the
         range or the cut, whole seconds, at least the op's minS: features/clip-moment-edit.clan).
-        The rest are the op's defaults. Audio stays off (providers/types.py video_audio)."""
+        The rest are the op's defaults. Audio is on only where sound.py turns it on (a clip with a line, a VO or
+        a sound beat, on a model with the switch)."""
         settings: dict = {}
         if "more_options" in (inp.get("chips") or []):
             settings["outputs"] = max(spec.get("outputs") or [sheet.get("outputsPerCall", 1)])
@@ -1010,6 +1012,9 @@ class Relay:
                 settings["durationS"] = fit_duration(seconds, spec)
             elif op == "clip_edit":
                 settings["inputS"] = seconds
+        # A clip made with sound is priced with it (Veo 3.1: 40 credits a second, not 20; sound.py's one rule).
+        if op == "clip" and sound.audio_on(inp, sheet):
+            settings["audio"] = True
         return settings
 
     def _estimate(self, op: str, provider: str, model: str | None = None, inp: dict | None = None,

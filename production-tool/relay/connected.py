@@ -304,7 +304,7 @@ def shape(job: dict, inp: dict, sheet: dict, spec: dict, *, passthrough: bool) -
         return
     video = sheet.get("video") or {}
     if video.get("audioControl"):
-        job["audio"] = False  # Path 2: one bed covers the film, so the models with a switch make none
+        job["audio"] = False  # off here; sound.py turns it on for a take or clip with a line or a sound (pt-film-r1)
     else:
         job.pop("audio", None)  # no switch (Omni Flash, Hailuo 3): the take keeps its own continuous sound
     last = inp.get("lastFrame")

@@ -109,7 +109,9 @@ export async function makeClip(
   const end = extra.endShotId && image ? selectedFrame(d, extra.endShotId) : undefined
   const lastFrame = end ? await assetRef(deps.relay, end.asset) : undefined
   const input: JobInput = {
-    shot: jobShot(d, shot), ...(image ? { image } : {}), ...(refs.length ? { refs } : {}), ...(ratio ? { ratio } : {}), ...(text ? { text: clipText(text, 1000) } : {}),
+    // Every beat, spoken lines too: the relay says them in a clip made with sound and keeps them from Dex and from
+    // a silent clip (relay/sound.py, director _without_dialogue; features/pt-film-r1.clan).
+    shot: jobShot(d, shot, false), ...(image ? { image } : {}), ...(refs.length ? { refs } : {}), ...(ratio ? { ratio } : {}), ...(text ? { text: clipText(text, 1000) } : {}),
     ...(lastFrame ? { mode: 'frames' as const, lastFrame } : {}),
   }
   const purpose: JobPurpose = {
@@ -180,7 +182,7 @@ export async function makeTake(
   const chars = refs.filter((r) => r.role === 'character').sort((a, b) => sheet(a) - sheet(b))
   const ordered = [...chars, ...refs.filter((r) => r.role !== 'character')]
   const input: JobInput = {
-    shot: jobShot(d, shots[0]), shots: shots.map((s) => jobShot(d, s)), mode, cuts,
+    shot: jobShot(d, shots[0], false), shots: shots.map((s) => jobShot(d, s, false)), mode, cuts,
     ...(image ? { image } : {}), ...(ordered.length ? { refs: ordered.slice(0, max) } : {}), ...(ratio ? { ratio } : {}),
   }
   const parents = frames.map((f) => f?.job_id).filter(Boolean) as string[]

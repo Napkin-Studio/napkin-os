@@ -418,7 +418,9 @@ def test_v5_is_v4_plus_the_brief_and_reads_it_cut_to_the_write_budget():
     ModelWriter(port, contracts_dir()).write({"op": "write", "jobId": new_id("job"), "input": inp})
     [asked] = port.asked
     spine = asked["payload"]["input"]["brief"]["spine"]
-    assert list(spine)[:4] == ["proposition", "audience", "tone", "feel"]
+    # By priority (features/pt-film-r1.clan, UAT 2026-11-21: the end line, a mandatory, was dropped): the mandatories
+    # and the proposition whole first, the rest sharing what is left.
+    assert list(spine)[:2] == ["mandatories", "proposition"] and len(spine["mandatories"]) == 6
     assert sum(len(v) if isinstance(v, str) else sum(map(len, v)) for v in spine.values()) <= 900
     # No brief: the input goes to Skye as it came.
     port2 = FakePort({"writes": [{"lines": [{"kind": "action", "text": "x"}], "note": "n"}], "rationale": "r"})

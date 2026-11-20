@@ -17,7 +17,7 @@ import { makeRuns } from '../jobs/runs'
 import { separateSelection, setGap, splitBoxAt, takeShotOut, videoJoin } from '../jobs/runView'
 import { isRunning, jobAt, shotRefSet } from '../jobs/select'
 import { beatsOf, refName, refsList, shotNumber, shotsOf } from '../model/selectors'
-import { boxModel, boxModelCant, boxModelLimit, boxModelNote, boxModelSwitch, entryOf, takeLimits } from './boxModel'
+import { boxModel, boxModelCant, boxModelLimit, boxModelNote, boxModelSwitch, boxSound, entryOf, takeLimits } from './boxModel'
 import { boxHow, boxLimit, boxPictures, boxWords, flipWords, fromWords, guideLine, pickedFor, roomBoxModel, stripGaps, withPick, type BoxLimit, type Gap } from './joinCut'
 import { CutIcon, GapButton, GapTip, JoinIcon, LimitPanel, StripShot, TakeStills } from './Strip'
 import { StripPlayer } from './StripPlayer'
@@ -114,7 +114,7 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
   const facts = new Map(data.boxes.map((b) => {
     const pics = boxPictures(doc, b, declined)
     const model = roomBoxModel(doc, b, config, models)
-    return [b.key, { pics, model, limit: boxLimit(doc, b, model, config, pics), words: boxWords(doc, b, pics), switched: boxModelSwitch(doc, b, config, pickedFor(models, b)) }] as const
+    return [b.key, { pics, model, limit: boxLimit(doc, b, model, config, pics), words: boxWords(doc, b, pics), switched: boxModelSwitch(doc, b, config, pickedFor(models, b)), sound: boxSound(doc, b, model) }] as const
   }))
   const tipWords = tip ? flipWords(doc, ui, data.videoId, config, tip.gap, models) : undefined
   // The boxes a flip would touch, drawn dashed while its tip shows.
@@ -282,7 +282,7 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
               <div key={b.key} className="jc-unit">
                 {before && <GapButton gap={before} onFlip={(g, k) => void flip(g, k)} onTip={(g, el) => setTip({ gap: g, el })} onTipEnd={tipEnd} />}
                 {b.endCard ? <EndCardTile b={b} shot={doc.shots[b.shotIds[0]]} onEdit={() => onRoom('edit')} /> : (
-                  <BoxCard b={b} switched={f.switched} sel={tab === 'shot' ? sel : { ...sel, shotId: undefined }} since={openedAt} selected={!!(sel.boxKey || sel.shotId) && b.key === box?.key} making={making || b.shotIds.some(busy)} words={f.words} limit={f.limit}
+                  <BoxCard b={b} switched={f.switched} sound={f.sound} sel={tab === 'shot' ? sel : { ...sel, shotId: undefined }} since={openedAt} selected={!!(sel.boxKey || sel.shotId) && b.key === box?.key} making={making || b.shotIds.some(busy)} words={f.words} limit={f.limit}
                     model={f.model} gaps={gapAt} preview={preview?.get(b.key)} takes={data.gens.filter((g) => inBox(g, b.key))}
                     inCut={(() => { const top = boxTop(data.gens, b); return !!top && cutGens.has(top.id) })()}
                     onShot={(id) => pickShot(b, id)} onBox={() => pickBox(b)} onMake={() => void make(b)} onTake={(g) => pickTake(g, b)}
@@ -336,12 +336,12 @@ function shotHasCharacter(doc: ReturnType<typeof useDoc>, shot: Shot | undefined
   try { return !!shot && shotRefSet(doc, shot).some((x) => x.ref.role === 'character') } catch { return false }
 }
 
-type BoxFacts = { pics: ReturnType<typeof boxPictures>; model: ModelChoice | undefined; limit: BoxLimit | undefined; words: { title: string; sub: string }; switched?: ReturnType<typeof boxModelSwitch> }
+type BoxFacts = { pics: ReturnType<typeof boxPictures>; model: ModelChoice | undefined; limit: BoxLimit | undefined; words: { title: string; sub: string }; switched?: ReturnType<typeof boxModelSwitch>; sound?: ReturnType<typeof boxSound> }
 
 /** A box of the strip (mock join-or-cut-v1): what Make will do (no prices), its shots with the joined gaps
  *  between them, its limits on its model, the stills of its newest take (one per shot window), and Make. */
-function BoxCard({ b, switched, selected, sel, since, making, takes, words, limit, model, gaps, preview, inCut, onShot, onBox, onMake, onTake, onFlip, onTip, onTipEnd, onUse, onCut }: {
-  b: Box; switched?: BoxFacts['switched']; selected: boolean; inCut?: boolean; sel: Selection; since: string; making: boolean; takes: Gen[]
+function BoxCard({ b, switched, sound, selected, sel, since, making, takes, words, limit, model, gaps, preview, inCut, onShot, onBox, onMake, onTake, onFlip, onTip, onTipEnd, onUse, onCut }: {
+  b: Box; switched?: BoxFacts['switched']; sound?: BoxFacts['sound']; selected: boolean; inCut?: boolean; sel: Selection; since: string; making: boolean; takes: Gen[]
   words: { title: string; sub: string }; limit?: BoxLimit; model?: ModelChoice; gaps: Map<string, Gap>; preview?: 'join' | 'cut'
   onShot: (id: string) => void; onBox: () => void; onMake: () => void; onTake: (g: Gen) => void
   onFlip: (g: Gap, keyboard: boolean) => void; onTip: (g: Gap, el: HTMLElement) => void; onTipEnd: () => void
@@ -382,6 +382,7 @@ function BoxCard({ b, switched, selected, sel, since, making, takes, words, limi
         })}
       </div>
       {limit && <LimitPanel limit={limit} onUse={onUse} onCut={onCut} cutN={limit.cutBefore ? shotNumber(doc, limit.cutBefore) : undefined} />}
+      {sound && <div className={`jc-sound ${sound.on ? '' : 'off'} rm-clamp2`} title={sound.words}>{sound.words}</div>}
       {switched && !limit?.hard && <div className="rm-differs rm-clamp2" title={`Made on ${switched.to}: ${switched.from} ${switched.why}.`}>Made on {switched.to}: {switched.from} {switched.why}.</div>}
       {differs && <div className="rm-differs rm-clamp2" title={`Next take differs: ${differs}`}>Next take differs: {differs}</div>}
       {failedLine && <div className="rm-error" role="alert">The last Make did not work: {failedLine}<FrontButtons text={failedLine} /></div>}

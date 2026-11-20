@@ -89,7 +89,7 @@ The adapter owns the exact request:
 - rewriting `@tag` into the provider's syntax (`tagSyntax`), with one deterministic function; a prompt already in that syntax is left alone (decided 2026-10-06)
 - asset URLs, through the relay's `providers.base.asset_url(sha)`: HTTPS, the real mime type, answers HEAD, no redirects
 - mask polarity: ours is white = change, and the adapter converts it to the endpoint's convention
-- audio off wherever the model has a switch (`video.audioControl`); where it has none, the field is omitted and the director writes "no music, no dialogue" into the prompt (decided 2026-10-06)
+- audio off wherever the model has a switch (`video.audioControl`), except a clip or take whose shots have a spoken line, a VO or a sound beat: then on, its lines said as speech in the prompt, and reserved at the model's `audioCredits` (relay/sound.py, features/pt-film-r1.clan, 2026-11-21); where it has none, the field is omitted and the director writes "no music, no dialogue" into the prompt (decided 2026-10-06)
 - the provider's error codes mapped onto ours
 
 ## Rules that hold everywhere
