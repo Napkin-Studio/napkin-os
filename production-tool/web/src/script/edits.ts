@@ -93,6 +93,30 @@ export async function ensurePage(store: ModelStore, scriptId: string): Promise<s
   return id
 }
 
+/**
+ * A new script made from a note (the link picker's "New script from this text"; UAT round 2 R2-7): the note's words on
+ * its free page, one block per line, so Plan shots can read them. Quiet, like the page itself: the person made the
+ * script; the words are what they asked it to start from. Nothing when the script has scenes already.
+ */
+export async function wordsOnPage(store: DocumentStore, scriptId: string, words: string): Promise<void> {
+  const text = words.trim()
+  if (!text) return
+  if (!isModelStore(store)) {
+    await updateDoc(store, (d) => {
+      if (!d.scripts[scriptId] || scenesOf(d, scriptId).length) return
+      const id = pageSceneId(scriptId)
+      d.scenes[id] = { id, v: 1, field_v: {}, script_id: scriptId, rank: rankBetween(null, null), heading: '', text } as Scene
+    }, `words on scripts[${scriptId}]`)
+    return
+  }
+  const id = await ensurePage(store, scriptId)
+  if (!id) return
+  await store.text.replace('scene', id, linesAt(EMPTY_PROSE, { from: 1, to: 1 }, text), store.clan.personClaim(), { label: `words from a note on scenes[${id}]` })
+  await store.flush()
+}
+
+const isModelStore = (s: DocumentStore | ModelStore): s is ModelStore => typeof (s as ModelStore).text?.replace === 'function' && 'bus' in s
+
 /** Where a screenplay paste went, so 'Keep it as plain text' can put it back as words. */
 export interface ScreenplayPaste {
   /** The scene it was pasted into, and the place in its words (positions before the paste). */

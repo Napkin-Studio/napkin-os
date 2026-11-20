@@ -19,6 +19,8 @@ import { systemUpdate } from '../doc/store'
 import { markStale } from '../doc/remove'
 import { assetRef } from '../jobs/assets'
 import { namedInput, unnamedInput } from '../jobs/select'
+import { linkedTexts } from '../jobs/linkedText'
+import type { BrandPayload } from './swatches'
 import { countRefs, kindOfRole, type RefKind, type RefLimits } from './refBudget'
 import { landingWhy } from '../jobs/landing'
 import { boardFrame, fitInto, holdFields, tellFull, withFields } from './boards/fitting'
@@ -33,7 +35,7 @@ import { BIG_CROP, BIG_CROP_LINE, aspectLabel, boxOf, exactRatio, exportPlan, in
 import { SKETCH_ASK, sketchAsk } from '../ui/asks'
 import {
   alive, assetData, bounds, byOwnId, cd, childrenOf, dataURLToBlob, downscale, exportElements, idOf,
-  imageOf, isText, makeArrow, makeGenPlaceholder, nextSlot, slotNear, textOf, type El,
+  imageOf, isText, makeArrow, makeGenPlaceholder, nextSlot, slotFrom, slotNear, textOf, type El,
 } from './scene'
 import { instruction, planSelection, type CanvasPlan } from './selection'
 import { CanvasDocSync } from './sync'
@@ -507,7 +509,7 @@ export class CanvasController {
     const first = plan.images[0]
     const ratio: Ratio = first ? ratioFor(this.aspectOfImage(first.elId, first.asset)) : mainStoryboard(doc)?.ratio ?? '16:9'
     const size = nodeSize(ratio === '16:9' ? { w: 16, h: 9 } : ratio === '9:16' ? { w: 9, h: 16 } : ratio === '1:1' ? { w: 1, h: 1 } : { w: 4, h: 5 })
-    const slot = opts.at ? { ...opts.at, ...size } : nextSlot(this.els(), bounds(sources.map((s) => s.el)), size)
+    const slot = opts.at ? { ...opts.at, ...size } : slotFrom(this.els(), sources.map((s) => s.el), size)
     this.placeGen(jobId, 'generate', sources.map((s) => s.id), sources, slot)
     const input = { refs, ratio, ...(text ? { text } : {}), ...(opts.more ? { chips: ['more_options'] } : {}) }
     await this.s.runner.submit('generate', input, plan.images.filter((i) => i.kind === 'gen').map((i) => i.nodeId), { for: 'canvas' }, jobId, opts.modelChoice)
@@ -680,7 +682,9 @@ export class CanvasController {
     const said = mentions(doc, text)
     if (said.unknown.length) throw new Error(`@${said.unknown[0]} is not a name in this project. Name an image first, or check the spelling.`)
     // Nothing says what it is: Fin asks first, and nothing is sent (or spent) until someone answers.
-    if (!text && !plan.images.length && !said.found.length && !opts.layoutOnly) return { ask: await this.askAboutSketch(s.sketchId) }
+    // A note linked into the area says it too (UAT round 2 R2-2): its words join at submit (jobs/linkedText.ts).
+    const linked = linkedTexts(doc, { kind: 'sketch', id: s.sketchId }).length > 0
+    if (!text && !linked && !plan.images.length && !said.found.length && !opts.layoutOnly) return { ask: await this.askAboutSketch(s.sketchId) }
 
     this.checkRefs(plan.images, said.found, opts, 1)
     await this.refreshDrawn(plan.images.filter((i) => i.kind === 'drawn').map((i) => i.elId))
@@ -757,13 +761,15 @@ export class CanvasController {
    * frames and clips made from the old picture are marked out of date). A new key gets
    * `role` (character by default).
    */
-  name(nodeId: string, key: Key, variant: Variant, role: RefRole = 'character') {
+  name(nodeId: string, key: Key, variant: Variant, role: RefRole = 'character', payload?: BrandPayload) {
     const problem = nameProblem(key, variant)
     if (problem) throw new Error(problem)
     const img = imageOf(this.nodeEl(nodeId))
     if (!img?.asset) throw new Error('Name a picture once it is finished.')
     const asset = img.asset
     const name = `${key}_${variant}`
+    // A palette's swatches, a typography ref's font, a brand rule's words (UAT round 2 R2-1): only the ones given.
+    const held: BrandPayload = Object.fromEntries(Object.entries(payload ?? {}).filter(([, v]) => v !== undefined))
     const write = (d: ProductionDocument) => {
       const now = new Date().toISOString()
       const refs = Object.values(d.refs)
@@ -779,12 +785,12 @@ export class CanvasController {
         // The name moves here: one image per name.
         if (other.asset && other.asset !== asset) markStale(d, other.asset, { kind: 'ref', id: other.id }, `@${name} now shows another image.`, now)
         if (mine) delete d.refs[mine.id]
-        Object.assign(other, { asset, node: nodeId, named_at: now })
+        Object.assign(other, { asset, node: nodeId, named_at: now }, held)
       } else if (mine) {
-        Object.assign(mine, { key, variant, role: k.role, named_at: now })
+        Object.assign(mine, { key, variant, role: k.role, named_at: now }, held)
       } else {
         const id = newId('ref')
-        d.refs[id] = { id, v: 1, field_v: {}, key, variant, role: k.role, asset, node: nodeId, named_at: now }
+        d.refs[id] = { id, v: 1, field_v: {}, key, variant, role: k.role, asset, node: nodeId, named_at: now, ...held }
       }
       dropUnusedKeys(d)
     }

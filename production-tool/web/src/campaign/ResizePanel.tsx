@@ -3,7 +3,7 @@
 // with one plain line, a preview of every selected picture with the shapes over it as dashed frames, and a footer
 // that says exactly how many pictures it makes. A crop keeps what must stay (Make all sizes' subject and product
 // boxes, marked here with the same editor) and its frame can be dragged to move it (IMG-4). Its button opens the
-// send tray (each picture × shape with its method and model, never a price); Send places every result and starts
+// send tray (each picture × shape with its method and model, and the price of the paid ones: UAT round 2 R2-10); Send places every result and starts
 // one job each.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -15,11 +15,13 @@ import type { Anchor } from '../lib/place'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { methodModels } from './rules'
 import {
-  frameOver, HOW_LINE, HOW_WORD, howOff, HOWS, knownProtect, loadPick, makeWords, methodLine, methodOf, mixedLine, parseCustom, planResize,
+  cropKeeps, frameOver, HOW_LINE, HOW_WORD, howOff, HOWS, knownProtect, rememberedProtect, rememberProtect, loadPick, makeWords, methodLine, methodOf, mixedLine, parseCustom, planResize,
   previewLayout, savePick, SHAPES, SKETCH_LINE, trayRows, type How, type Shape, type Source,
 } from './resizeSelection'
 import { panCrop } from './crop'
 import { ProtectEditor } from './ProtectEditor'
+import { useEstimate } from '../ui/usePrice'
+import { priceWords } from '../ui/historyItems'
 import './campaign.css'
 
 const KIND_WORD = { picture: 'Picture', drawing: 'Drawing', sketch: 'Sketch' } as const
@@ -73,7 +75,7 @@ export function ResizePanel({ anchor, total, load, send, onClose }: {
   }
   // Each picture with what must stay: marked here, else a Make all sizes set's boxes for it.
   const sources = useMemo(() => loaded?.map((src) => {
-    const protect = kept[src.elId] ?? knownProtect(doc, src)
+    const protect = kept[src.elId] ?? rememberedProtect(src.asset, src) ?? knownProtect(doc, src)
     return protect?.length ? { ...src, protect } : src
   }) ?? null, [loaded, kept, doc])
   const customs = shapes.filter((s) => !SHAPES.some((x) => x.id === s.id))
@@ -89,6 +91,17 @@ export function ResizePanel({ anchor, total, load, send, onClose }: {
     return p.method === 'crop' && m ? { ...p, crop: m } : p
   }) : []
   const crops = planned.some((p) => p.method === 'crop')
+  // The price of the paid ones (UAT round 2 R2-10): one Extend and one Redraw priced, times how many of each.
+  const paid = (m: 'extend' | 'regenerate') => planned.filter((p) => p.method === m)
+  const priceOf = (m: 'extend' | 'regenerate') => {
+    const p = paid(m)[0]
+    return p ? { aspect: { w: p.shape.w, h: p.shape.h }, resize: { method: m, masterSize: { w: p.source.w, h: p.source.h } } } : {}
+  }
+  const extendUsd = useEstimate(paid('extend').length ? 'resize' : null, priceOf('extend'))
+  const redrawUsd = useEstimate(paid('regenerate').length ? 'resize' : null, priceOf('regenerate'))
+  const anyPaid = paid('extend').length + paid('regenerate').length
+  const known = (!paid('extend').length || extendUsd !== undefined) && (!paid('regenerate').length || redrawUsd !== undefined)
+  const price = anyPaid && known ? priceWords((extendUsd ?? 0) * paid('extend').length + (redrawUsd ?? 0) * paid('regenerate').length) : undefined
   const markingSrc = marking ? sources?.find((x) => x.elId === marking) : undefined
   const n = planned.length
   const scamp = !!sources?.some((s) => s.kind !== 'picture')
@@ -181,8 +194,9 @@ export function ResizePanel({ anchor, total, load, send, onClose }: {
                   <ProtectEditor master={{ asset: markingSrc.asset, w: markingSrc.w, h: markingSrc.h }} boxes={markingSrc.protect ?? []}
                     setBoxes={(b) => {
                       setKept((k) => ({ ...k, [markingSrc.elId]: b }))
-                      // Its crops follow the new boxes again.
-                      setMoved((m) => Object.fromEntries(Object.entries(m).filter(([key]) => !key.startsWith(`${markingSrc.elId}:`))))
+                      rememberProtect(markingSrc.asset, markingSrc, b)
+                      // A crop moved by hand stays where it was put while it keeps every box in; else it follows the boxes.
+                      setMoved((m) => Object.fromEntries(Object.entries(m).filter(([key, crop]) => !key.startsWith(`${markingSrc.elId}:`) || cropKeeps(crop, b))))
                     }} />
                   <footer className="cf-foot"><span className="pt-grow" /><button type="button" className="btn primary" onClick={() => setMarking(null)}>Done</button></footer>
                 </div>
@@ -211,7 +225,8 @@ export function ResizePanel({ anchor, total, load, send, onClose }: {
               <div key={r.id} className="cb-trayrow" role="listitem"><span className="cb-trayname">{r.name}</span><span className="cf-dots" /><span className="cb-traywords">{r.words}</span></div>
             ))}
           </div>
-          <p className="rs-line faint">Each is its own job: one that fails says so on its card, the others carry on. What each costs is in History.</p>
+          <p className="rs-line faint">Each is its own job: one that fails says so on its card, the others carry on.{' '}
+            {price ? <b className="rs-price">{anyPaid === n ? `All ${n}: ${price}.` : `The ${anyPaid} paid: ${price}; crops are free.`}</b> : !anyPaid ? 'Crops are free.' : 'What each costs is in History.'}</p>
           {error && <p className="cf-error" role="alert">{error}</p>}
           <footer className="cf-foot">
             <button type="button" className="btn ghost" onClick={() => setStep('pick')}>Back</button>

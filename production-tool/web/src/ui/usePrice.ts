@@ -22,8 +22,9 @@ export function estimateOnce(estimate: ((req: EstimateRequest) => Promise<Estima
   return p
 }
 
-/** "about $0.60" for `count` jobs of `op` with this input (only the fields the price turns on), or undefined. */
-export function usePrice(op: Op | null, input: JobInput, count = 1, modelChoice?: ModelChoice): string | undefined {
+/** One job's price in USD for `op` with this input (only the fields the price turns on); undefined until known, or
+ *  when `op` is null (nothing to price). */
+export function useEstimate(op: Op | null, input: JobInput, modelChoice?: ModelChoice): number | undefined {
   const { relay } = useServices()
   const [usd, setUsd] = useState<number | undefined>(undefined)
   const key = op ? JSON.stringify([op, input, modelChoice ?? null]) : ''
@@ -35,5 +36,10 @@ export function usePrice(op: Op | null, input: JobInput, count = 1, modelChoice?
     return () => { live = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, relay])
-  return op ? priceWords(usd, count) : undefined
+  return op ? usd : undefined
+}
+
+// The words ("about" and the total) for `count` jobs of `op` with this input, or undefined.
+export function usePrice(op: Op | null, input: JobInput, count = 1, modelChoice?: ModelChoice): string | undefined {
+  return priceWords(useEstimate(op, input, modelChoice), count)
 }

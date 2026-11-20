@@ -261,3 +261,22 @@ describe('hover', () => {
     expect(tool.hoverBox({ x: 200, y: 150 })).toBeNull()
   })
 })
+
+describe('a loose group: a press picks the member, the group is picked another way (UAT round 2 R2-12)', () => {
+  it('a click on one view of a key group selects that view; a plain group still selects whole', () => {
+    const scene = new SceneStore(new Y.Doc())
+    const a = element({ id: 'a', kind: 'image', z: 'a1', x: 0, y: 0, w: 100, h: 100, groupIds: ['key:marco'] })
+    const b = element({ id: 'b', kind: 'image', z: 'a2', x: 200, y: 0, w: 100, h: 100, groupIds: ['key:marco'] })
+    const c = element({ id: 'c', kind: 'image', z: 'a3', x: 400, y: 0, w: 100, h: 100, groupIds: ['g1'] })
+    const d = element({ id: 'd', kind: 'image', z: 'a4', x: 600, y: 0, w: 100, h: 100, groupIds: ['g1'] })
+    scene.seed([a, b, c, d], {})
+    const r = new Renderer(scene, { newPath: () => ({ moveTo() {}, lineTo() {}, closePath() {} }), bitmap: () => undefined })
+    const tool = new SelectTool(scene, (x, y) => r.hit(x, y), { now: () => 0, looseGroup: (g) => g.startsWith('key:') })
+    tool.press({ x: 250, y: 50 }, { by: 'mouse', zoom: 1 })
+    tool.release({ x: 250, y: 50 })
+    expect([...tool.selected]).toEqual(['b'])
+    tool.press({ x: 450, y: 50 }, { by: 'mouse', zoom: 1, t: 5000 } as never)
+    tool.release({ x: 450, y: 50 })
+    expect([...tool.selected].sort()).toEqual(['c', 'd'])
+  })
+})

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   EMPTY, addEdit, applyLine, textLayerName, clearMask, editCount, editLabel, editsForFrame, layersOf, nextStep, notApplied,
-  toggleHidden, undoEdit, undoMaskOp, upscaleSize, withMaskOp, nothingToTake, undoLast, redoUndone, hiddenCount, leftOutLine, NOTHING_TO_TAKE,
+  toggleHidden, undoEdit, undoMaskOp, upscaleSize, fillPlaceholder, withMaskOp, nothingToTake, undoLast, redoUndone, hiddenCount, leftOutLine, NOTHING_TO_TAKE,
   afterSend, hasFill, newMask, pendingCount, rowFirst, sendRow,
   type EditSession, type MaskOp,
 } from './edits'
@@ -30,6 +30,13 @@ describe('the words match 3.12', () => {
   it('gives the upscale output size from our 1344 x 768 frames (providers.md fact 7)', () => {
     expect(upscaleSize(1344, 768, 2)).toBe('→ 2688 × 1536')
     expect(upscaleSize(1344, 768, 4)).toBe('→ 5376 × 3072')
+    // What Runway returned in UAT round 2 (R2-8): a 1638 x 2048 picture read at 1536 a side, then 2x.
+    expect(upscaleSize(1638, 2048, 2)).toBe('→ 2458 × 3072')
+    expect(upscaleSize(1365, 768, 2)).toBe('→ 2730 × 1536')
+    expect(fillPlaceholder(true, false)).toMatch(/^What goes in the blue area/)
+    expect(fillPlaceholder(true, true)).toMatch(/^Filled\./)
+    expect(fillPlaceholder(false, false)).toBe('Paint or lasso an area first')
+    expect(fillPlaceholder(true, false, 'Mask 1')).toBe('Mask 1 is hidden. Show it to fill.')
     expect(SPEC).toContain(upscaleSize(1344, 768, 2))
   })
 })

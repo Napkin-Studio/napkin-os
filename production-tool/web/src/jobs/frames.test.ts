@@ -8,6 +8,7 @@ import { jobsList, shotsOf } from '../model/selectors'
 import { MockRelay, mockShotList, type MockRenderer } from '../relay/mock'
 import { addKey, addRef, addScene, addShots, snapshotDoc } from '../test/jobFixtures'
 import { makeAjv, SCHEMA } from '../test/schemas'
+import { keepCharacter, keptFromFirst, suggestKey } from './cast'
 import { continueDrawing, drawFrame, drawTheRest, selectedFrame, selectFrame, type FrameDeps } from './frames'
 import { JobRunner } from './runner'
 import { frameDrift, frameStale } from './stale'
@@ -258,5 +259,29 @@ describe('script length (2026-10-09)', () => {
     const d = snapshotDoc().get()
     addScene(d, 'x'.repeat(1400))
     expect(scriptText(d)).toHaveLength(600)
+  })
+})
+
+describe('who a later frame shows (UAT round 2 R2-4)', () => {
+  it('with no character in the shot, frame 1 goes as the person; once kept, it goes by name; the shot’s own character wins', async () => {
+    const s = await setup(3)
+    // Shots that name nobody: the planned shots lose their refs.
+    await updateDoc(s.doc, (d) => { for (const sh of Object.values(d.shots)) sh.refs = [] })
+    const j1 = await drawFrame(s.deps, 0, 'first')
+    await s.land()
+    expect(s.inputOf(j1).refs ?? []).toEqual([])
+    const j2 = await drawFrame(s.deps, 1, 'first')
+    const cast = (s.inputOf(j2).refs ?? []).find((r) => r.role === 'character')
+    expect(cast).toMatchObject({ id: s.frameOf(0).id, kind: 'generated', label: 'the person from shot 1' })
+    expect(cast!.asset.sha256).toBe(s.frameOf(0).asset)
+    await s.land()
+    // Keep her as @mia: later frames send @mia_front.
+    const name = await keepCharacter(s.doc, s.frameOf(0).asset, 'Mia')
+    expect(name).toBe('mia_front')
+    expect(keptFromFirst(s.doc.get(), shotsOf(s.doc.get())[0].storyboard_id)?.key).toBe('mia')
+    const j3 = await drawFrame(s.deps, 2, 'first')
+    expect((s.inputOf(j3).refs ?? []).filter((r) => r.role === 'character').map((r) => r.name)).toEqual(['mia_front'])
+    expect(suggestKey('Mia kneels by the puppy.')).toBe('mia')
+    expect(suggestKey('A wide street.')).toBe('')
   })
 })

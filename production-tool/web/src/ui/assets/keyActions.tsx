@@ -6,6 +6,8 @@ import { OTHER_VIEWS, type CanvasController } from '../../canvas/controller'
 import { REF_ROLES, type KeyEntry, type RefRole, type View } from '../../contracts/types'
 import { refsList } from '../../model/selectors'
 import { RelayError } from '../../relay'
+import { PaidButton } from '../PaidButton'
+import { viewsWhat } from '../viewsWhat'
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : 'That did not work. Try again.')
 const roleWord = (r: RefRole) => (r === 'brand_rule' ? 'brand rule' : r)
@@ -37,7 +39,9 @@ export function useKeyActions(k: KeyEntry, ctrl: CanvasController | null) {
       </select>
     ),
     views: controls.views && front && missingViews.length > 0
-      ? <button type="button" className="btn-rect primary wide" disabled={!!busy || !ctrl} onClick={() => run('views', () => ctrl!.makeViews(k.key, missingViews))}>{busy === 'views' ? 'Starting…' : 'Make the other views'}</button>
+      ? <PaidButton className="btn-rect primary wide" label="Make the other views" busy={busy === 'views'} disabled={!!busy || !ctrl}
+          what={viewsWhat(k.key, missingViews)} yes={`Make ${missingViews.length}`} op="view" input={{ view: missingViews[0] }} count={missingViews.length}
+          onYes={() => void run('views', () => ctrl!.makeViews(k.key, missingViews))} />
       : null,
     publish: (
       <button type="button" className="side-link" disabled={!!busy || !ctrl || !refs.length} title="Keep it in the team library, for your other projects" onClick={() => run('publish', () => ctrl!.publish(k.key))}>

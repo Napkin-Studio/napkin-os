@@ -14,6 +14,8 @@ import { addKey, addRef } from '../../../test/jobFixtures'
 import { modelStore, MAYA, SHA } from '../../../test/model'
 import { cardOf, endOf, linkCheck, linkIdOf, linkMemory, linkNodes, reconcileLinks, seedNodes, unlinkInput } from '../../nodes/nodes'
 import { OwnAdapter } from './adapter'
+import { titleForPurpose } from '../../boards/boards'
+import { rankBetween } from '../../../../../clan-store/src'
 
 async function setup() {
   const s = modelStore()
@@ -52,6 +54,31 @@ describe('a brief into a Format set (live test 2026-11-18: the Sizes board never
     expect(endOf(f, d)).toMatchObject({ doc: { kind: 'format_set', id: 'fset_01K7A0000000000000000000F1' }, core: { kind: 'format_set' } })
     expect(linkCheck(els, d, b, f)).toMatchObject({ ok: true })
     expect(linkCheck(els, d, f, b)).toMatchObject({ ok: false })
+    await s.close()
+  })
+})
+
+describe('a Brand board feeds a generating node (UAT round 2 R2-5)', () => {
+  it('a board with purpose brand is a link source in role brand; any other board is no end; its name follows the purpose', async () => {
+    const { s, a, doc, node, write } = await setup()
+    const boardId = newId('board')
+    const frame = a.board({ x: 0, y: 1200, width: 500, height: 400, title: 'New board', boardId, purpose: 'brand' })
+    a.transact((els) => [...els, frame], { undoable: false })
+    await updateDoc(s, (d) => { d.boards[boardId] = { id: boardId, v: 1, field_v: {}, title: 'New board', purpose: 'brand', rank: rankBetween(null, null) } }, 'board')
+    const els = a.elements()
+    const b = els.find((e) => e.id === frame.id)!
+    expect(endOf(b, doc())).toMatchObject({ doc: { kind: 'board', id: boardId }, core: { kind: 'board', purpose: 'brand' } })
+    const check = linkCheck(els, doc(), b, node('script'))
+    expect(check, JSON.stringify(check)).toMatchObject({ ok: true })
+    const made = await linkNodes(a, doc(), b, node('script'), write)
+    expect(made.ok).toBe(true)
+    expect(Object.values(doc().links).some((l) => l.from.kind === 'board' && l.from.id === boardId && l.role === 'brand')).toBe(true)
+    const other = structuredClone(doc())
+    other.boards[boardId].purpose = 'character'
+    expect(endOf({ ...b, purpose: 'character' } as typeof b, other)).toBeNull()
+    expect(titleForPurpose('New board', 'none', 'brand')).toBe('Brand')
+    expect(titleForPurpose('Brand', 'brand', 'character')).toBe('Characters')
+    expect(titleForPurpose('Spring look', 'none', 'brand')).toBeUndefined()
     await s.close()
   })
 })

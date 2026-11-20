@@ -247,6 +247,39 @@ export function savePick(p: ResizePick, store: Pick<Storage, 'setItem'> | undefi
   }
 }
 
+// What must stay, per picture (its asset), as last marked in Resize (UAT round 2, IMG-4: the boxes were gone the next
+// time). In this browser only, like the How; at most KEEP_MAX pictures, the newest kept.
+const KEEP = 'napkin.resize.keep'
+const KEEP_MAX = 50
+
+export function rememberedProtect(asset: string, src: { w: number; h: number }, store: Pick<Storage, 'getItem'> | undefined = safeStorage()): ProtectBox[] | undefined {
+  try {
+    const all = JSON.parse(store?.getItem(KEEP) ?? '{}') as Record<string, { w: number; h: number; boxes: ProtectBox[] }>
+    const got = all[asset]
+    if (!got?.boxes?.length) return undefined
+    const kx = got.w ? src.w / got.w : 1
+    const ky = got.h ? src.h / got.h : 1
+    return got.boxes.map((b) => ({ ...b, x: b.x * kx, y: b.y * ky, w: b.w * kx, h: b.h * ky }))
+  } catch {
+    return undefined
+  }
+}
+
+export function rememberProtect(asset: string, src: { w: number; h: number }, boxes: readonly ProtectBox[], store: Pick<Storage, 'getItem' | 'setItem'> | undefined = safeStorage()) {
+  try {
+    const all = JSON.parse(store?.getItem(KEEP) ?? '{}') as Record<string, { w: number; h: number; boxes: ProtectBox[] }>
+    const rest = Object.entries(all).filter(([k]) => k !== asset).slice(-(KEEP_MAX - 1))
+    store?.setItem(KEEP, JSON.stringify(Object.fromEntries([...rest, ...(boxes.length ? [[asset, { w: src.w, h: src.h, boxes: [...boxes] }]] : [])])))
+  } catch {
+    // Blocked storage: marked again next time.
+  }
+}
+
+/** A crop the person moved still holds after new boxes when it keeps every box in (UAT round 2, IMG-4: a drag made
+ *  before marking was thrown away). */
+export const cropKeeps = (crop: PxBox, boxes: readonly ProtectBox[]) =>
+  boxes.every((b) => b.x >= crop.x - 0.5 && b.y >= crop.y - 0.5 && b.x + b.w <= crop.x + crop.w + 0.5 && b.y + b.h <= crop.y + crop.h + 0.5)
+
 function safeStorage(): Storage | undefined {
   try {
     return typeof localStorage === 'undefined' ? undefined : localStorage
@@ -379,7 +412,7 @@ export function placeResults(canvas: CanvasAdapter, planned: readonly Planned[])
 /** The resize job for one picture × shape (relay-api resize): the picture, the shape, the method. A
  *  Redraw of a named picture also carries the key's other views (`refs`); a scamp is redrawn as a sketch. */
 export function resizeInput(p: Planned, image: AssetRef, refs: readonly JobInputRef[] = []): JobInput {
-  const delivery = deliveryOf(p.shape)
+  const delivery = p.method === 'crop' && !p.shape.px ? cropDelivery(p) : deliveryOf(p.shape)
   return {
     image,
     aspect: p.shape.px ? { w: p.shape.w, h: p.shape.h } : { w: delivery.width, h: delivery.height },
@@ -395,6 +428,15 @@ export function resizeInput(p: Planned, image: AssetRef, refs: readonly JobInput
     },
     ...(p.method === 'regenerate' && refs.length ? { refs: [...refs] } : {}),
   }
+}
+
+/** A crop to a ratio comes back at its own size, never enlarged (UAT round 2 R2-9: a 614 x 768 crop came back 1638 x
+ *  2048, soft). A custom pixel size is still made at that size: the person asked for it. */
+export function cropDelivery(p: Pick<Planned, 'source' | 'shape' | 'crop'>): DeliveryPx {
+  const box = frameOver(p.source, p.shape, 'crop', p.crop)
+  const byShape = deliveryOf(p.shape)
+  const k = Math.min(1, box.w / byShape.width, box.h / byShape.height)
+  return { width: Math.max(1, Math.round(byShape.width * k)), height: Math.max(1, Math.round(byShape.height * k)) }
 }
 
 const roundBox = (b: PxBox): PxBox => ({ x: Math.round(b.x), y: Math.round(b.y), w: Math.max(1, Math.round(b.w)), h: Math.max(1, Math.round(b.h)) })

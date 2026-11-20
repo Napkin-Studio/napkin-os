@@ -1,6 +1,6 @@
 // Views beside their front (UAT round 1 IMG-22): right of it when clear, else under it, never past the whole row.
 import { describe, expect, it } from 'vitest'
-import { slotNear, type El } from './scene'
+import { slotFrom, slotNear, type El } from './scene'
 
 const box = (id: string, x: number, y: number, w = 300, h = 400, type = 'image') => ({ id, type, x, y, width: w, height: h, isDeleted: false, frameId: null }) as unknown as El
 const front = { minX: 0, minY: 0, maxX: 300, maxY: 400 }
@@ -18,5 +18,19 @@ describe('slotNear', () => {
     expect(slotNear([board, box('f', 0, 0)], front, { w: 980, h: 400 }).x).toBe(380)
     const els = [box('f', 0, 0), box('a', 400, 0), box('b', 0, 500)]
     expect(slotNear(els, front, { w: 980, h: 400 })).toEqual({ x: 780, y: 0, w: 980, h: 400 })
+  })
+})
+
+describe('slotFrom (UAT round 2, IMG-22 leftover)', () => {
+  const view = (id: string, x: number) => ({ ...box(id, x, 0, 200, 250), groupIds: ['key:marco'] }) as unknown as El
+  it('a result made from views of a key group goes on a row of its own under the group', () => {
+    const els = [view('front', 0), view('side', 280), view('back', 560)]
+    const slot = slotFrom(els, [els[0], els[1]], { w: 300, h: 170 })
+    expect(slot.y).toBeGreaterThanOrEqual(250 + 80)
+    expect(slot.x).toBe(0)
+  })
+  it('loose pictures keep their row', () => {
+    const els = [box('a', 0, 0), box('b', 400, 0)]
+    expect(slotFrom(els, [els[0]], { w: 300, h: 170 })).toEqual({ x: 780, y: 0, w: 300, h: 170 })
   })
 })

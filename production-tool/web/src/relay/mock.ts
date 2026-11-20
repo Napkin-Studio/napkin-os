@@ -229,7 +229,7 @@ function mockQuestion(): Question {
 /** The mock's agency: Napkin's own tenant, UUIDv5 of 'napkin:agency:napkin' (as napkin-web's TenantId::of_agency). */
 export const MOCK_TENANT = { id: 'f283da90-07cd-59ec-b370-b23704a2bc91', agency: 'napkin' } as const
 
-/** One job's list price per op on the mock (credits x $0.01): Gemini 3 Pro 20, Ideogram 4.5 high 25, Magnific 25. */
+// One job's list price per op on the mock (credits at a cent each): Gemini 3 Pro 20, Ideogram 4.5 high 25, Magnific 25.
 const MOCK_PRICE: Partial<Record<EstimateRequest['op'], number>> = {
   generate: 0.2, view: 0.2, frame: 0.2, frame_edit: 0.2, region_edit: 0.25, resize: 0.25, upscale: 0.25, clip: 1.2,
 }

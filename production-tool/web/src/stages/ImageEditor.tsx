@@ -46,7 +46,7 @@ import { PromptStart } from '../ui/prompt/PromptStart'
 import {
   EMPTY, NOTHING_TO_TAKE, addEdit, afterSend, applyLine, clearMask, editCount, editId, hasFill, newMask, unfilledMasks, editLabel, editsForFrame, hiddenCount,
   layersOf, leftOutLine, nextStep,
-  notApplied, nothingToTake, redoUndone, toggleHidden, undoEdit, undoLast, updateEdit, upscaleSize, withMaskOp,
+  fillPlaceholder, notApplied, nothingToTake, redoUndone, toggleHidden, undoEdit, undoLast, updateEdit, upscaleSize, withMaskOp,
   type Edit, type EditSession, type MaskOp, type Pt, type Undone,
 } from './imageEditor/edits'
 import { bounds, rasterize } from './imageEditor/mask'
@@ -671,7 +671,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
               <div className={`ie-action ${masked ? 'on' : ''}`}>
                 <div className="row"><b>{act === 'remove' ? 'Remove' : 'Fill area'}</b>{activeMask && <span className="ie-mtag">{activeMask.name}</span>}</div>
                 {act === 'fill' && <><label className="faint" htmlFor="ie-fill">Fill with...</label>
-                <textarea id="ie-fill" className="textarea" rows={2} placeholder={masked ? 'add condensation drops' : maskHidden && activeMask ? `${activeMask.name} is hidden. Show it to fill.` : 'Paint or lasso an area first'} value={fill} maxLength={1000}
+                <textarea id="ie-fill" className="textarea" rows={2} placeholder={fillPlaceholder(masked, !!activeMask && settledMasks.includes(activeMask.id), maskHidden && activeMask ? activeMask.name : undefined)} value={fill} maxLength={1000}
                   disabled={!masked || running} onChange={(e) => setFill(e.target.value)} /></>}
                 <label className="ie-check"><input type="checkbox" checked={keepOutside} onChange={(e) => setKeepOutside(e.target.checked)} /> Keep everything outside the blue exactly as it is</label>
                 <div className="row"><span className="faint">{maskHidden && activeMask ? `${activeMask.name} is hidden. Show it to fill.` : 'Only the blue area changes'}</span><span className="spacer" />
@@ -792,7 +792,8 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
         <EditTray anchor={tray === 'fill' ? fillBtn : tray === 'remove' ? removeBtn : tray === 'whole' ? wholeBtn : upBtn} open onClose={() => setTray(null)}
           title={TRAY_TITLE[tray]}
           items={trayItems(tray)} model={tray === 'upscale' ? upModel : tray === 'whole' ? wholeModel : regionModel} send={TRAY_SEND[tray]}
-          onSend={() => send(tray)} />
+          onSend={() => send(tray)}
+          price={tray === 'upscale' ? { op: 'upscale', input: { scale, aspect: { w: W, h: H } } } : { op: 'region_edit', input: tray === 'whole' ? {} : { region: { x: 0, y: 0, w: 1, h: 1 } } }} />
       )}
     </div>
   )
