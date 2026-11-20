@@ -542,6 +542,13 @@ BRIEF_GAPS = flag_on("DECK_BRIEF_GAPS")
 #: prompts from the chosen territory and no empty frame; internal codes scrubbed from every shown text (validate and QA: code_leak, an
 #: error). ON by default; DECK_PITCH_READY=0 builds exactly as before (the suite sets it to 0).
 PITCH_READY = flag_on("DECK_PITCH_READY")
+#: show the work (the European agency workflow report and round 3's adversarial review, 20 Nov 2026; deck/show_work.py): the presented
+#: story follows agency order (cover, what the brief doesn't tell us, objective, insight, proposition, one routes slide with the
+#: recommendation marked, the idea, the hero execution and one or two more, the ask); the idea and at least two executions are always in
+#: the first ten (the trim honours that keep set and cuts setup slides first); stage b writes the single-minded proposition and the slide
+#: never shows a fallback label (validate: proposition_line, an error). ON by default; DECK_SHOW_WORK=0 builds exactly as before (the
+#: suite sets it to 0).
+SHOW_WORK = flag_on("DECK_SHOW_WORK")
 #: The presented slide's title and the most issues it asks about (each a question for the client; the rest are in the appendix list).
 BRIEF_GAPS_TITLE = "What the brief doesn't tell us"
 BRIEF_GAPS_MAX = 5

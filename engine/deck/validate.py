@@ -567,6 +567,10 @@ def run(deck: dict, inp, audience: str = "review", profile: dict | None = None) 
     for c in criteria_coverage(deck):
         for concept in c["missing"]:
             add("criteria_map", "error", None, f"scored criterion '{c['criterion']}' ({c['weight']}): no slide answers '{concept}'")
+    if spec.SHOW_WORK:   # show the work: stage b's own proposition, and the idea and two executions in the first ten (deck/show_work.py)
+        from .show_work import findings as _show_work_findings   # noqa: PLC0415
+        for chk, lvl, sid, msg in _show_work_findings(deck, story):
+            add(chk, lvl, sid, msg)
     if spec.PITCH_READY:   # pitch-ready: an internal reference code on a shown text (prompt:43, brief:insight, ic_feeling, T1) is an error
         from .pitch_ready import code_findings   # noqa: PLC0415
         F += code_findings(deck)

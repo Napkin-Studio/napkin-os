@@ -469,6 +469,25 @@ Shortening is delete-only by default (`shorten.word_rule`): the new text is an o
 - **Execution pictures.** The picture takes the right half of the slide at full content height (a tall picture keeps its shape, centred in the half); the copy frame and the notes card stack on the left. Still labelled Illustrative until approved.
 - **LibreOffice.** Every conversion runs in its own profile (`run_deck.to_pdf`), so two renders at once no longer lose a PDF.
 
+## Show the work (2026-11-20, `DECK_SHOW_WORK`, `deck/show_work.py`)
+
+Round 3's blind judging found the work at slides 11-13 of 19-20 presented slides (path B), and trimmed away inside a sketch's ten (path A).
+On by default (`=0` builds as before; the suite sets it to 0). The agency pitch and the creative work session present in agency order:
+cover, what the brief doesn't tell us (three questions; the rest in its notes and the appendix list), objective, insight, the
+proposition, one routes slide ("Three routes, one recommendation": each route's one-line sketch, the chosen one marked, the ranking's
+reasons in the notes), the idea, the hero execution straight after it and one or two more, the ask. A work session also presents every
+route and the client's questions. The idea and at least two executions are a keep set no length cut moves; a shorter story fills with the
+third execution, then the real question, the audience and the first chart. Competition, audience detail, measurement, risks, team and
+investment are backup. Other types (a tender's buyer order, a credentials deck) keep their spine, and their trim never moves the keep set
+and cuts setup slides first. The channel-table and investment merges are skipped so the hero and the ask keep their own slides.
+
+Stage b writes `proposition.line`, the single-minded proposition (written last, from the objective and the insight, never the brief's key
+message read back), and the proposition slide takes it as its title. With none, the slide shows the brief's or stage b's own words
+verbatim and validate's `proposition_line` is an error; no fallback label reaches a slide. `proposition_copied` warns when the line is the
+brief's key message, and `work_in_first_ten` is an error when the idea and two executions are not all in the first ten.
+
+Tests: `tests/test_show_work.py` (invented fixtures only).
+
 ## Pitch-ready and evidence (2026-11-20, `DECK_PITCH_READY`, `deck/pitch_ready.py`)
 
 Blind judging of decks built from three real client briefs scored evidence 3-5/10 and take-to-pitch 3-6/10. On by default (`=0` builds as
