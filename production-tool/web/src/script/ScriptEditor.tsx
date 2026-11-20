@@ -579,7 +579,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
       <SendDisclosure who="the Director agent" rows={sendRows(doc, sb?.id ?? scriptId, [
         { key: 'script', label: 'The script’s words', detail: `${scriptText(doc, scriptId).trim().split(/\s+/).filter(Boolean).length} words` },
         { key: 'fit', label: `${composed.storyboard?.target_s ?? composed.script.target_s} s at ${composed.storyboard?.ratio ?? '16:9'}`, detail: 'the length and shape to plan to' },
-      ], behind ? 'Update storyboard' : 'Plan shots')} primary={
+      ], behind ? 'Update storyboard' : 'Plan shots', 'shot_list')} primary={
         <button className="btn primary" disabled={!!blocked || !!planning} aria-describedby={blocked && !planning ? 'se-plan-why' : undefined}
           data-tip={blocked && !planning ? blocked : undefined} onClick={() => void plan()}>
           {planning ? 'Planning…' : behind ? 'Update storyboard' : 'Plan shots'}
