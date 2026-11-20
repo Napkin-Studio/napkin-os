@@ -25,6 +25,7 @@ import type { RoomData, RoomName, Selection } from './Rooms'
 import { dismissedTakes, newerTake, notNow, readCut } from './timeline'
 import type { CutClip } from './cut'
 import type { Picked } from './Timeline'
+import { undoJoinedTake } from './editOps'
 
 
 /** A take is one of a box's takes: its own box, or a box made apart from it. */
@@ -142,13 +143,22 @@ function useRoomWaits({ room, data, change, onApart, onReady }: RoomProps) {
 /** What waits in a room, as a line over its work (no Booth for it). */
 export function RoomWaits(p: RoomProps) {
   const { items, notes } = useRoomWaits(p)
+  const { doc: docStore, ui: uiStore } = useServices()
+  const ui = useUi()
+  const [stale, setStale] = useState(false)
+  // A joined take Edie put into the cut (rooms/editOps placeJoinedTake): said in both rooms, with Undo.
+  const joined = ui.joinedInCut?.videoId === p.data.videoId ? ui.joinedInCut : undefined
   const waits = items.filter((x) => !x.id.startsWith('apart:'))
-  if (!waits.length && !notes.length && !p.done) return null
+  if (!waits.length && !notes.length && !p.done && !joined) return null
   return (
     <div className="rm-waits" role="region" aria-label="Waiting for you" data-count={waits.length}>
       {waits.length > 0 && <div className="rm-waits-hd"><span className="tagcall">Needs your call · {waits.length}</span></div>}
       <div className="rm-waits-row">
         {waits.map((x) => x.node)}
+        {joined && <DoneCard key={`joined:${joined.genId}`} agent="edie"
+          text={stale ? `${joined.text} The cut has changed since: use Undo in the bar to step back.` : joined.text}
+          onUndo={stale ? undefined : () => void undoJoinedTake(docStore, uiStore).then((ok) => setStale(!ok))}
+          onDismiss={() => { setStale(false); uiStore.update((u) => { delete u.joinedInCut }, 'joined take note') }} />}
         {p.done && <DoneCard key={p.done.id} agent="wren" text={`${p.done.text} Nothing is sent until you press Make.`} onUndo={p.onUndo} />}
         {notes.map((n) => <NoteCard key={`${n.agent}:${n.id}`} agent={n.agent} label={n.label} body={n.body} time={ago(n.at)} />)}
       </div>

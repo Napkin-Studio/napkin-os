@@ -15,11 +15,15 @@ import type { Job } from '../contracts/types'
 import { landWrites } from '../script/skye'
 import { landSize } from '../campaign/make'
 import { landFilmPlan, landReframe } from '../campaign/filmJobs'
+import { placeJoinedTake } from '../rooms/editOps'
 
 const warn = (what: string) => (e: unknown) => console.warn(`${what} stopped`, e)
 
 export function wireJobs(deps: FrameDeps) {
-  const { doc, runner } = deps
+  const { doc } = deps
+  // Every landing is a save moment (deps.landed, debounced in projects/session.ts: the landing is written by then).
+  const runner = { onComplete: (...[purpose, handler]: Parameters<FrameDeps['runner']['onComplete']>) =>
+    deps.runner.onComplete(purpose, (job, ctx) => { handler(job, ctx); deps.landed?.() }) }
   runner.onComplete('shot_list', (job, ctx) => void landShotList(doc, job, ctx.for === 'shot_list' ? ctx : undefined).catch(warn('the plan')))
   runner.onComplete('frame', (job, ctx) => {
     if (ctx.for !== 'frame') return
@@ -41,9 +45,13 @@ export function wireJobs(deps: FrameDeps) {
     void landTake(doc, job, ctx, inCut()).then(() => continueFollow(deps)).catch(warn('update what follows'))
   })
   // One take of a run: one generation of the box, a window of it per shot (features/connected-video.clan).
+  // In the rooms, a take of shots the person joined goes into the cut in place of their separate clips, one undo
+  // step, said with Undo (rooms/editOps placeJoinedTake; UAT 2026-11-21, B2).
   runner.onComplete('run', (job, ctx) => {
     if (ctx.for !== 'run') return
-    void landRunTake(doc, job, ctx, inCut()).then(() => continueFollow(deps)).catch(warn('the take'))
+    void landRunTake(doc, job, ctx, inCut())
+      .then(() => (deps.rooms?.() ? placeJoinedTake(doc, deps.ui, ctx.videoId, job.jobId) : false))
+      .then(() => continueFollow(deps)).catch(warn('the take'))
   })
   // Change this…: a new take beside its parent, never in the cut (features/make-and-edit.clan).
   runner.onComplete('remake', (job, ctx) => {

@@ -50,7 +50,8 @@ import { ScriptLength, ScriptRefs } from './ScriptFacts'
 import { SendDisclosure } from '../ui/SendDisclosure'
 import { sendRows } from '../ui/sendRows'
 import { useBooth } from '../ui/booth/useBooth'
-import { scriptFromLine } from '../jobs/prompt'
+import { scriptFromBrief, scriptFromLine } from '../jobs/prompt'
+import { briefOf } from '../brief/model'
 import { AVView } from './AVView'
 import { TimePill } from './TimePill'
 import { nextMomentTime, setBeatTime, UNPLANNED_MOMENT } from './moments'
@@ -301,7 +302,8 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
   const sugs = composed ? scriptSuggestions(doc, composed) : []
   const mine = sugs.filter((s) => s.for === person)
   const [done, setDone] = useState<{ id: string; text: string; undo?: boolean }[]>([])
-  const decided = (id: string, text: string, undo = false) => setDone((d) => [{ id, text, undo }, ...d.filter((x) => x.id !== id)].slice(0, 3))
+  // Only the last decision is said, with its Undo (UAT 2026-11-21: "Kept · Undo" rows stacked up).
+  const decided = (id: string, text: string, undo = false) => setDone([{ id, text, undo }])
   const onPage = new Set(view === 'av' ? [] : (composed?.rows ?? []).map((r) => `${r.kind === 'end_card' ? 'shot' : r.kind}:${r.id}`))
   const draftCard = (s: (typeof mine)[number]) => composed && (
     <DraftCard key={s.id} sug={s} store={store} doc={doc} composed={composed} empty={!hasWords(doc, scriptId)}
@@ -579,7 +581,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
       <SendDisclosure who="the Director agent" rows={sendRows(doc, sb?.id ?? scriptId, [
         { key: 'script', label: 'The script’s words', detail: `${scriptText(doc, scriptId).trim().split(/\s+/).filter(Boolean).length} words` },
         { key: 'fit', label: `${composed.storyboard?.target_s ?? composed.script.target_s} s at ${composed.storyboard?.ratio ?? '16:9'}`, detail: 'the length and shape to plan to' },
-      ], behind ? 'Update storyboard' : 'Plan shots')} primary={
+      ], behind ? 'Update storyboard' : 'Plan shots', 'shot_list')} primary={
         <button className="btn primary" disabled={!!blocked || !!planning} aria-describedby={blocked && !planning ? 'se-plan-why' : undefined}
           data-tip={blocked && !planning ? blocked : undefined} onClick={() => void plan()}>
           {planning ? 'Planning…' : behind ? 'Update storyboard' : 'Plan shots'}
@@ -692,6 +694,10 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
               const r = await scriptFromLine(skyeDeps, store, scriptId, words)
               if ('pasted' in r) say([`Pasted ${r.pasted} ${r.pasted === 1 ? 'scene' : 'scenes'}.`, r.dropped].filter(Boolean).join(' '))
             }}
+            {...(() => {
+              const b = briefOf(doc, scriptId)
+              return b ? { briefTitle: b.brief.title, onDraftFromBrief: () => scriptFromBrief(skyeDeps, store, scriptId, b.brief.title) } : {}
+            })()}
             onError={setError} />
         )}
         {history && <DecisionsDrawer key={historyFocus?.addresses.join() ?? 'all'} store={store} focus={historyFocus} onClose={() => { setHistory(false); setHistoryFocus(undefined) }} />}

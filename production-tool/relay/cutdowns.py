@@ -34,7 +34,7 @@ from pathlib import Path
 
 import brief as briefs
 
-CARD_S = 2.5          # stitch.py CARD_S: the end card stitch adds after the clips
+CARD_S = 2.5          # stitch.py CARD_S: the studio card stitch adds after the clips (and the client's card)
 MIN_WINDOW_S = 1.0    # no shot shorter than this in a cutdown
 SHOT_S = 2.5          # the passthrough keeps about one shot for each 2.5 s
 PAN_MOVE = 0.10       # a subject that moves more than this share of the take's width gets a pan
@@ -70,15 +70,28 @@ def same_shape(a: dict, b: dict, tol: float = 0.01) -> bool:
 
 
 # ── windows ─────────────────────────────────────────────────────────────────
+CLIENT_CARD_MAX_S = 2.0  # the film's own end card in a size: at most this, at least 1 s, a third of the picture
+
+
+def client_card_s(card_len: float, length_s: float, card_s: float = CARD_S) -> float:
+    """How long the film's own end card (the client's) holds in a size of length_s: its own length, at most
+    CLIENT_CARD_MAX_S and a third of what the studio card leaves, never under 1 s (features/pt-film-r1.clan;
+    web/src/campaign/film.ts clientCardS, the same rule)."""
+    return _r(min(card_len, CLIENT_CARD_MAX_S, max(1.0, (length_s - card_s) / 3)))
+
+
 def fit_windows(shots: list[dict], keep: set[str], length_s: float, card_s: float = CARD_S) -> tuple[list[dict], float]:
     """The kept shots' windows, in cut order, fitted to length_s less the end card; and how far over
     (a positive number) or short (negative) the windows still are when they cannot fit.
 
-    shots: [{shotId, inS, outS, takeS?, endCard?}] (the master's windows). An end card shot is never a
-    window (stitch draws the card). Too long: every window is trimmed from its tail by the same share,
+    shots: [{shotId, inS, outS, takeS?, endCard?}] (the master's windows). The end card shot is the film's
+    own card (the client's), never a window: the render draws it (input clientCard) and its length (outS - inS)
+    comes off the length too, before the studio card stitch adds (features/pt-film-r1.clan). Too long: every window is trimmed from its tail by the same share,
     none under MIN_WINDOW_S (or its own length, when shorter). Too short: windows grow into their
     handles (the take after outS) by the same share."""
-    target = max(MIN_WINDOW_S, length_s - card_s)
+    client = next((s for s in shots if s.get("endCard")), None)
+    client_s = client_card_s(float(client["outS"]) - float(client.get("inS") or 0), length_s, card_s) if client else 0.0
+    target = max(MIN_WINDOW_S, length_s - card_s - client_s)
     kept = [s for s in shots if s["shotId"] in keep and not s.get("endCard")]
     if not kept:
         return [], -target
@@ -340,7 +353,8 @@ class ModelCutter:
         if briefed.get("brief"):
             payload["brief"] = briefed["brief"]
         t0 = time.monotonic()
-        answer = self.port.call(PURPOSE, self.system, payload, self.schema, usage=Usage(),
+        usage = Usage()
+        answer = self.port.call(PURPOSE, self.system, payload, self.schema, usage=usage,
                                 attribution=req.get("jobId", PURPOSE), images=images or None, vision=bool(images),
                                 max_tokens=4000)
         out = _settle(cut, answer)
@@ -349,6 +363,7 @@ class ModelCutter:
         out.update(flags)
         out["rationale"] = (answer.get("rationale") or "")[:2000]
         out["_latencyMs"] = round((time.monotonic() - t0) * 1000)
+        out["_usage"] = {"input_tokens": getattr(usage, "input_tokens", 0), "output_tokens": getattr(usage, "output_tokens", 0)}
         return out
 
 

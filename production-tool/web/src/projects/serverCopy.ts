@@ -52,9 +52,10 @@ export interface Conflict {
   message: string
 }
 
-// The mirror's reasons; the relay knows three (X-Clan-Reason), so a handoff or an export is saved as manual (features/engine-store.clan).
-type Reason = 'interval' | 'accept' | 'manual' | 'handoff' | 'export'
-const relayReason = (r: Reason): 'interval' | 'accept' | 'manual' => (r === 'handoff' || r === 'export' ? 'manual' : r)
+// The mirror's reasons; the relay knows three (X-Clan-Reason), so a handoff, an export or a save moment (a new
+// project, a landed generation: features/pt-film-r1.clan) is saved as manual (features/engine-store.clan).
+type Reason = 'interval' | 'accept' | 'manual' | 'handoff' | 'export' | 'landing'
+const relayReason = (r: Reason): 'interval' | 'accept' | 'manual' => (r === 'handoff' || r === 'export' || r === 'landing' ? 'manual' : r)
 
 export interface ServerCopyDeps {
   id: string

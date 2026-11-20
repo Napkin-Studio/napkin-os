@@ -10,11 +10,13 @@ import { useConfig, useDoc } from '../app/context'
 import { modelChoicesFor } from '../capabilities'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
-import { CARD_S, DEFAULT_FILM_LENGTHS, FILM_LENGTHS, FILM_SHAPES, REMAKE_MODELS, beatsFor, filmSeconds, fitWindows, lastLineOf, masterShots, sameShape } from './film'
+import { CARD_S, DEFAULT_FILM_LENGTHS, FILM_LENGTHS, FILM_SHAPES, REMAKE_MODELS, beatsFor, briefShapes, filmSeconds, fitWindows, lastLineOf, masterShots, sameShape } from './film'
 import { endLineOf, sizesBrief } from '../brief/model'
 import { makeFilmSizes, planFilm, type FilmRow, type ShotMethod } from './filmJobs'
 import type { CampaignDeps } from './make'
 import { setsOf, type MasterInfo } from './master'
+import { readCut } from '../rooms/timeline'
+import { cutLength } from '../rooms/cut'
 import './campaign.css'
 
 type Step = 'options' | 'planning' | 'plan' | 'tray'
@@ -34,12 +36,21 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
   const { config } = useConfig()
   const shots = useMemo(() => masterShots(doc, master.id), [doc, master.id])
   const body = shots.filter((s) => !s.endCard)
-  const filmS = filmSeconds(shots, master.length_s)
+  // The film's own length: its cut's (clips and its end card) when it has one (UAT 2026-11-21: "Film · 10.5 s" for a
+  // 12.5 s cut), else its shots as cut.
+  const filmS = useMemo(() => {
+    const videoId = master.kind === 'render' ? doc.renders?.[master.id]?.video_id : master.kind === 'video' ? master.id : undefined
+    const cut = videoId ? readCut(doc, videoId) : undefined
+    return cut?.v1.length ? cutLength(cut) : filmSeconds(shots, master.length_s)
+  }, [doc, master, shots])
   const masterS = Math.round(filmS + CARD_S)
   // Only lengths shorter than the film start picked (Playwright live test 2026-11-18: 15 s picked for an 8 s film).
   const [lengths, setLengths] = useState<number[]>(() => DEFAULT_FILM_LENGTHS.filter((l) => l < masterS))
   const [extra, setExtra] = useState('')
-  const [shapes, setShapes] = useState<Set<string>>(new Set(['film-16x9', 'film-9x16']))
+  const [shapes, setShapes] = useState<Set<string>>(() => {
+    const videoId = master.kind === 'render' ? doc.renders?.[master.id]?.video_id : master.kind === 'video' ? master.id : undefined
+    return new Set(briefShapes(videoId ? sizesBrief(doc, videoId)?.spine : undefined))
+  })
   const earlier = setsOf(doc, master).find((s) => s.copy)?.copy
   // The line on every version: the end line of the brief that drives the sizes (the newest set's linked brief,
   // else the film's own), else what the last set carried, else the film's last spoken line (re-test N2: the
@@ -209,7 +220,7 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
             </div>
             <div className="cf-tray">
               {lengths.filter((l) => rows.some((r) => r.lengthS === l)).map((l) => {
-                const { windows, over } = fitWindows(body, kept(l), l)
+                const { windows, over } = fitWindows(shots, kept(l), l)
                 const reasons = new Map((plan.lengths.find((x) => Math.abs(x.lengthS - l) < 0.5)?.beats ?? []).map((b) => [b.shotId, b.why]))
                 const why = plan.lengths.find((x) => Math.abs(x.lengthS - l) < 0.5)?.why
                 return (

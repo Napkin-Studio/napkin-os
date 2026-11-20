@@ -24,18 +24,21 @@ import re
 BRIEF_OPS = ("write", "shot_list", "generate", "frame", "frame_edit", "region_edit", "clip", "clip_edit", "clip_patch",
              "cutdown", "resize")
 
-# Per op: the characters of spine it reads in all, and its parts in the order they are kept.
+# Per op: the characters of spine it reads in all, and its parts in priority order (features/pt-film-r1.clan, UAT
+# 2026-11-21: the Script agent's 900 characters went on the proposition, audience, tone, feel and insight, and the
+# end line, a mandatory, and every don't were dropped). The parts before "|" are kept whole first (a list keeps
+# each line that fits); the rest share what is left, each cut at a word to its share.
 BUDGET: dict[str, tuple[int, tuple[str, ...]]] = {
-    "write": (900, ("proposition", "audience", "tone", "feel", "insight", "mandatories", "donts", "format")),
-    "shot_list": (900, ("proposition", "audience", "tone", "feel", "mandatories", "donts", "insight", "format")),
-    "generate": (200, ("donts", "tone", "feel")),
-    "frame": (360, ("tone", "feel", "audience", "donts", "mandatories")),
-    "frame_edit": (240, ("tone", "donts", "feel")),
+    "write": (900, ("mandatories", "donts", "proposition", "|", "tone", "feel", "audience", "insight", "format")),
+    "shot_list": (900, ("mandatories", "donts", "proposition", "|", "tone", "feel", "audience", "format", "insight")),
+    "generate": (200, ("donts", "|", "tone", "feel")),
+    "frame": (360, ("donts", "|", "tone", "feel", "audience", "mandatories")),
+    "frame_edit": (240, ("donts", "|", "tone", "feel")),
     "region_edit": (160, ("donts",)),
-    "clip": (300, ("tone", "feel", "donts", "audience")),
-    "clip_edit": (200, ("tone", "donts")),
-    "clip_patch": (160, ("donts", "tone")),
-    "cutdown": (600, ("mandatories", "donts", "proposition", "format", "tone")),
+    "clip": (300, ("donts", "|", "tone", "feel", "audience")),
+    "clip_edit": (200, ("donts", "|", "tone")),
+    "clip_patch": (160, ("donts", "|", "tone")),
+    "cutdown": (600, ("mandatories", "donts", "proposition", "|", "format", "tone")),
     "resize": (300, ("mandatories", "donts", "proposition")),
 }
 LISTS = ("mandatories", "donts")
@@ -51,22 +54,27 @@ def _cut(text: str, room: int) -> str:
     return (head[:at] if at > room * 0.6 else head).rstrip(" ,;:.") + "…"
 
 
+def parts_of(op: str) -> tuple[str, ...]:
+    """The spine parts an op reads, in priority order (the web's send preview lists these)."""
+    return tuple(p for p in BUDGET[op][1] if p != "|")
+
+
 def spine_for(op: str, spine: dict) -> dict:
-    """The parts of `spine` this op reads, within its budget: whole parts first, in the op's order; a list
-    keeps the lines that fit; a text that does not fit is cut at a word when MIN_CUT or more is left."""
+    """The parts of `spine` this op reads, within its budget, by priority, never first come first kept: the parts
+    before "|" whole first (a list keeps each line that fits, in order; a text that does not fit is cut at a
+    word when MIN_CUT or more is left); then the rest share what is left evenly, a part shorter than its share
+    giving the remainder to the next, each cut at a word to its share. Kept in the op's order."""
     budget, order = BUDGET[op]
+    first = order[:order.index("|")] if "|" in order else order
+    rest = [p for p in order[len(first) + 1:] if spine.get(p)] if "|" in order else []
     out: dict = {}
     room = budget
-    for part in order:
+    for part in first:
         v = spine.get(part)
         if not v or room <= 0:
             continue
         if part in LISTS:
-            kept = []
-            for line in v:
-                if len(line) <= room:
-                    kept.append(line)
-                    room -= len(line)
+            kept = [line for line in v if len(line) <= room and (room := room - len(line)) >= 0]
             if kept:
                 out[part] = kept
         elif len(v) <= room:
@@ -75,7 +83,21 @@ def spine_for(op: str, spine: dict) -> dict:
         elif room >= MIN_CUT:
             out[part] = _cut(v, room)
             room -= len(out[part])
-    return out
+    for k, part in enumerate(rest):
+        v = spine[part]
+        share = room // max(1, len(rest) - k)
+        if part in LISTS:
+            kept = [line for line in v if len(line) <= share and (share := share - len(line)) >= 0]
+            if kept:
+                out[part] = kept
+                room -= sum(len(x) for x in kept)
+        elif len(v) <= share:
+            out[part] = v
+            room -= len(v)
+        elif share >= MIN_CUT:
+            out[part] = _cut(v, share)
+            room -= len(out[part])
+    return {p: out[p] for p in order if p in out}
 
 
 def size(spine: dict) -> int:

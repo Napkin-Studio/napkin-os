@@ -275,6 +275,21 @@ def search_s(take: dict | None) -> float:
     return min(CUT_SEARCH_MAX_S, max(CUT_SEARCH_MIN_S, acc if acc is not None else CUT_SEARCH_MAX_S))
 
 
+CUT_SEARCH_WIDE_S = 1.5  # a take's cut is looked for up to this far, when its shots are long enough
+
+
+def take_search_s(take: dict | None, starts: list[float], duration: float) -> float:
+    """How far either side of each planned cut take_cuts looks for one take: the model's search_s; where its
+    accuracy was never measured, widened up to half the shortest shot (never past CUT_SEARCH_WIDE_S), so a cut the model made a second late is still
+    found and no cut can be taken for its neighbour's. UAT 2026-11-21: a words take cut at about 4 s for a
+    plan of 3 s and the 1 s search found nothing, so shot 1's window held part of shot 2."""
+    if (take or {}).get("cutAccuracyS") is not None:
+        return search_s(take)  # a model measured to cut where asked (WAN 3: 0.05 s) is searched that closely
+    ends = [*starts[1:], duration]
+    shortest = min((b - a for a, b in zip(starts, ends)), default=0.0)
+    return round(min(CUT_SEARCH_WIDE_S, max(search_s(take), shortest / 2)), 3)
+
+
 def in_words(text: str) -> str:
     """@tags said as plain words: a take sends no pictures beside its frame."""
     return TAG_IN_TEXT.sub(lambda m: unsent_in_words(m.group(0), []), text)
@@ -289,7 +304,7 @@ def shape(job: dict, inp: dict, sheet: dict, spec: dict, *, passthrough: bool) -
         return
     video = sheet.get("video") or {}
     if video.get("audioControl"):
-        job["audio"] = False  # Path 2: one bed covers the film, so the models with a switch make none
+        job["audio"] = False  # off here; sound.py turns it on for a take or clip with a line or a sound (pt-film-r1)
     else:
         job.pop("audio", None)  # no switch (Omni Flash, Hailuo 3): the take keeps its own continuous sound
     last = inp.get("lastFrame")

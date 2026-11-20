@@ -19,7 +19,7 @@ export function BriefCard({ doc, id, openUrl, needs = false }: { doc: Production
     <div className="bn-card" data-brief={id}>
       <span className="bn-tab" aria-hidden="true">BRIEF</span>
       {needs && <span className="bn-needs">Needs your call</span>}
-      <div className="bn-head"><b>{b.title || 'Brief'}</b><span>v{v} · locked</span></div>
+      <div className="bn-head"><b>{b.title || 'Brief'}</b><span title="A copy of the brief as it was at this version: it does not change when the brief does">v{v} · frozen copy</span></div>
       <div className="bn-body">
         {rows.map((l) => (
           <div key={l.part} className="bn-row"><span>{l.label}</span><span>{l.confidential ? 'Confidential' : l.text ?? l.items?.join(' · ')}</span></div>

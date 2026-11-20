@@ -265,7 +265,7 @@ export function continueItems(
         run: () => doc.onSpinoff(t.app_id),
       })),
       // The Production Tool is not an OS app: it reads the brief itself and freezes its spine on a Brief node.
-      ...(doc.onStartFilm ? [{ label: 'Production Tool', hint: 'A film from this brief: its Brief node and a new Script', run: doc.onStartFilm }] : []),
+      ...(doc.onStartFilm ? [{ label: 'Production Tool', hint: 'A film from this brief: a new canvas with its Brief node', run: doc.onStartFilm }] : []),
     ],
     link: linkItems(doc, openLinkList),
     // Start fresh (gaps.md §7 L2): the same app, the same client, new notes.

@@ -203,12 +203,13 @@ export function WorkingCard({ agent, text }: { agent: CastKey; text: string }) {
 }
 
 /** What happened to a card the person decided: Kept (with Undo), Discarded. */
-export function DoneCard({ agent, text, onUndo }: { agent: CastKey; text: string; onUndo?: () => void }) {
+export function DoneCard({ agent, text, onUndo, onDismiss }: { agent: CastKey; text: string; onUndo?: () => void; onDismiss?: () => void }) {
   return (
     <article className="bc done" role="status">
       <AgentAvatar agent={agent} size={18} decorative />
       <span>{text}</span>
       {onUndo && <button type="button" className="btn link" onClick={onUndo}>Undo</button>}
+      {onDismiss && <button type="button" className="btn link" onClick={onDismiss} aria-label="Dismiss this note">OK</button>}
     </article>
   )
 }

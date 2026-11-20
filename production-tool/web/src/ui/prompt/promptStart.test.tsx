@@ -251,7 +251,7 @@ describe('PromptStart, rendered', () => {
     expect(host.textContent).toContain('Plan a storyboard first?')
     expect(host.textContent).toContain('Clips come out better from frames you\'ve checked.')
     expect(host.textContent).toContain('You can always switch later.')
-    expect(host.querySelector('.askcard-opt.rec')?.textContent).toMatch(/^Plan the storyboard firstRecommendedAbout \d+ shots, with frames you check first$/)
+    expect(host.querySelector('.askcard-opt.rec')?.textContent).toMatch(/^Plan the storyboard firstRecommendedAbout \d+ shots?, with frames you check first$/)
     expect([...host.querySelectorAll('button')].some((b) => b.textContent === 'Later')).toBe(true)
     expect(sent).toHaveLength(0)
     const straight = [...host.querySelectorAll('button')].find((b) => b.textContent?.startsWith('Make clips straight from the script'))!

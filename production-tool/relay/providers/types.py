@@ -335,6 +335,7 @@ def prompt_max(sheet: dict, model: str) -> Optional[int]:
     return ((sheet.get("models") or {}).get(model) or {}).get("promptMax")
 
 
-def video_audio(_job: ProviderJob) -> bool:
-    """Audio is always sent explicitly; Wednesday has none (director.schema: const false)."""
-    return False
+def video_audio(job: ProviderJob) -> bool:
+    """Audio is always sent explicitly: the job's own switch (relay/sound.py sets it: on only for a clip whose
+    shots have a line, a VO or a sound beat, on a model with the switch), else off."""
+    return bool(getattr(job, "audio", False))

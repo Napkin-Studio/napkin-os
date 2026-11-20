@@ -257,7 +257,7 @@ describe('the Script editor\'s next step', () => {
     const plan = nextStep(doc(store), sc)!
     expect(plan.step).toBe('plan')
     // Free words are read as they are (features/script-freeform.clan).
-    expect(plan.line).toMatch(/^I'll read your words as they are and plan about \d+ shots\. Nothing needs a heading or an element first\.$/)
+    expect(plan.line).toMatch(/^I'll read your words as they are and plan about \d+ shots?\. Nothing needs a heading or an element first\.$/)
     expect(plan.actions).toEqual(['plan', 'open-video'])
     // While Dex plans there is nothing to do.
     await planFromScript(deps, sc)

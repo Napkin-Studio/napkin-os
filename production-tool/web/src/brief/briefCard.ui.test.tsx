@@ -46,7 +46,7 @@ describe('the Brief node card', () => {
     const { store, id } = await project()
     const html = renderToStaticMarkup(createElement(BriefCard, { doc: store.get() as ProductionDocument, id, openUrl: '/app/brief-maker?doc=doc-market' }))
     expect(html).toContain('Colour of the market')
-    expect(html).toContain('v1 · locked')
+    expect(html).toContain('v1 · frozen copy')
     expect(html).toContain('Every colour has a story.')
     expect(html).toContain('Warm, busy, generous')
     expect(html).not.toContain('Market cloth is bought slowly.') // the insight is the Booth's

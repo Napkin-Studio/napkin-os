@@ -522,14 +522,29 @@ def _hashes(node) -> set:
 SPOKEN = {"line", "vo"}
 
 
+def _sound(job: dict, inp: dict, sheet: dict, spec: dict) -> None:
+    """A clip's sound by the one rule (sound.py, features/pt-film-r1.clan): the audio switch, and with sound on the
+    spoken lines said in the prompt, timed in the take when it is one."""
+    import connected
+    import sound
+    from providers.types import prompt_max
+    starts = connected.take_plan(inp, spec)[1] if connected.mode_of(inp) in connected.TAKE_MODES and inp.get("shots") else None
+    sound.apply(job, inp, sheet, starts=starts, prompt_max=prompt_max(sheet, job.get("model") or spec.get("model", "")))
+
+
 def _without_dialogue(op: str, payload: dict) -> dict:
     """Spoken words (a shot's line and VO beats) are never sent to an image or video model: a model
     told the words draws them (a "Dialogue - ..." caption box in a frame, then in every clip made from
     it; decided 2026-10-07). Moments, music, sound and camera beats stay."""
-    shot = payload.get("shot")
-    if op == "shot_list" or not isinstance(shot, dict) or not shot.get("beats"):
+    if op == "shot_list":
         return payload
-    return {**payload, "shot": {**shot, "beats": [b for b in shot["beats"] if b.get("kind") not in SPOKEN]}}
+    quiet = lambda s: {**s, "beats": [b for b in s["beats"] if b.get("kind") not in SPOKEN]} if isinstance(s, dict) and s.get("beats") else s  # noqa: E731
+    out = dict(payload)
+    if isinstance(payload.get("shot"), dict) and payload["shot"].get("beats"):
+        out["shot"] = quiet(payload["shot"])
+    if payload.get("shots"):  # a take's shots too: the web sends a clip's lines for its sound (sound.py)
+        out["shots"] = [quiet(s) for s in payload["shots"]]
+    return out
 
 
 class Director:
@@ -587,6 +602,7 @@ class Director:
             if op not in sheet["ops"]:
                 raise DirectorError(f"{provider_name} does not support {op}")
         model = self.shot_list_model if op == "shot_list" else self.per_click_model
+        raw = payload  # the input as it came: its spoken lines go into a clip made with sound (sound.py), never to Dex
         payload = _without_dialogue(op, payload)
         # A linked brief (features/brief-node.clan), cut to this op's budget; no brief: the input as it came.
         payload = briefs.for_op(op, payload)
@@ -616,6 +632,8 @@ class Director:
         except DirectorError as e:
             e.answer = output  # what Dex wrote, for the relay's director_rejected line
             raise
+        if op == "clip" and "providerJob" in output:
+            _sound(output["providerJob"], raw, sheet, sheet["ops"][op])
         # What Dex was given, after the relay's cuts, kept small on the job record (features/pt-canvas-r1.clan).
         agent_block = {"model": model, "promptVersion": self.prompt_version, "output": output,
                        "rationale": output["rationale"], "latencyMs": latency_ms, "input": record.for_record(payload)}

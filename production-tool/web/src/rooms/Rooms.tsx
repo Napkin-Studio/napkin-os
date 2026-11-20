@@ -29,6 +29,8 @@ import { RoomBooth, RoomWaits } from './RoomBooth'
 import { EditorBar } from '../ui/chrome/TopBars'
 import { filmMeta, jobWord, roomBoxes, roomGens, type Box, type Gen } from './model'
 import type { Picked } from './Timeline'
+import { readCut } from './timeline'
+import { cutLength } from './cut'
 import './rooms.css'
 
 export type RoomName = 'make' | 'edit'
@@ -73,7 +75,9 @@ export function Rooms() {
     title: video.title && video.title !== 'Video' && video.title !== 'Film' ? video.title : isMain && sb && !sb.implicit && sb.title !== 'Storyboard' ? sb.title : nodeTitle(video.title, 'Film', projectName),
     ratio: sb?.ratio ?? video.ratio ?? '16:9',
     targetS: sb?.target_s ?? video.target_s ?? 15,
-    lengthS: shots.reduce((a, s) => a + (s.duration_s ?? 0), 0),
+    // The cut's length once there is one (its clips and the end card), else the shots' (UAT 2026-11-21: "19 s ·
+    // target 15 s" over a 12.5 s cut).
+    lengthS: (() => { const cut = readCut(doc, video.id); return cut.v1.length ? cutLength(cut) : shots.reduce((a, s) => a + (s.duration_s ?? 0), 0) })(),
     boxes, gens,
   } : null
 
@@ -126,6 +130,10 @@ export function Rooms() {
         if (sound) { e.preventDefault(); setSound(false); return }
         if (typing) { (typing as HTMLElement).blur(); return }
         e.preventDefault()
+        // A pick or a selection goes first; the Edit room is never left by Esc (UAT 2026-11-21: Esc in the Edit
+        // room went back to the canvas). ‹ Canvas in the bar leaves it.
+        if (picked || sel.genId || sel.boxKey || sel.shotId) { setPicked(null); setSel({}); return }
+        if (room === 'edit') return
         back()
         return
       }
@@ -135,7 +143,7 @@ export function Rooms() {
     }
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)
-  }, [change, sound, back, setRoom, setSound])
+  }, [change, sound, back, setRoom, setSound, picked, sel, room])
 
   if (!controls.video) return <div className="panel"><div className="empty-state"><b>Film is off right now.</b></div></div>
   if (!data) return (

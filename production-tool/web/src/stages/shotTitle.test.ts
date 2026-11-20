@@ -29,3 +29,11 @@ describe("a shot's name in the Make and Edit rooms", () => {
     expect(withoutAsides('She waves (smiling) , then goes.')).toBe('She waves, then goes.')
   })
 })
+
+describe("a shot's short title (UAT 2026-11-21)", () => {
+  it('never cuts inside a time, a number or a hyphenated word', () => {
+    expect(titleOf({ action: 'At 1:04, she tiptoes into the dark kitchen.', camera: { size: 'wide' } })).toBe('At 1:04')
+    expect(titleOf({ action: 'A close-up of the kettle. It glows.', camera: { size: 'close' } })).toBe('A close-up of the kettle')
+    expect(titleOf({ action: 'She waits — then pours.', camera: { size: 'medium' } })).toBe('She waits')
+  })
+})

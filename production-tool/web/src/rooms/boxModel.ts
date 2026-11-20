@@ -3,6 +3,7 @@
 
 import { modelChoicesFor } from '../capabilities'
 import type { Config, ModelChoice, ProductionDocument } from '../contracts/types'
+import { beatsOf } from '../model/selectors'
 import { lastWorkedModel } from '../jobs/follow'
 import { selectedFrame } from '../jobs/frames'
 import { modelEntry, TAKE_MAX_S, TAKE_MAX_SHOTS } from '../jobs/runs'
@@ -69,10 +70,38 @@ export function boxModelNote(doc: ProductionDocument, box: Box, m: ModelChoice):
 /** The model a box is made on: the one picked for it, kept even past its limits (the box then says so and
  *  Make waits: a joined box keeps the earlier box's model, features/join-or-cut-shots.clan); else the last
  *  that worked, unless that one cannot make this box (Veo for shots made together); then the first that can. */
+/** When the box is made on another model than the one the film makes clips with (the person's pick, else the
+ *  last that worked, else the first), which one and why, for the box to say (UAT 2026-11-21: a joined box went to
+ *  Gemini Omni Flash 1.1 with Veo greyed and nothing said why). */
+export function boxModelSwitch(doc: ProductionDocument, box: Box, config: Config, picked?: ModelChoice): { to: string; from: string; why: string } | undefined {
+  if (picked) return undefined
+  const wanted = lastWorkedModel(doc, 'clip', config) ?? modelChoicesFor('clip', config)[0]
+  const why = wanted ? boxModelWhyNot(doc, box, wanted) : undefined
+  const got = boxModel(doc, box, config)
+  if (!wanted || !why || !got || (got.model === wanted.model && got.provider === wanted.provider)) return undefined
+  const label = (m: ModelChoice) => entryOf(m)?.label ?? m.model
+  return { to: label(got), from: label(wanted), why: why.replace(/^Can't/, "can't").replace(/^Needs/, 'needs') }
+}
+
 export function boxModel(doc: ProductionDocument, box: Box, config: Config, picked?: ModelChoice): ModelChoice | undefined {
   if (picked && !boxModelCant(doc, box, picked)) return picked
   const options = modelChoicesFor('clip', config)
   const wanted = picked ?? lastWorkedModel(doc, 'clip', config) ?? options[0]
   if (wanted && !boxModelWhyNot(doc, box, wanted)) return wanted
   return options.find((o) => !boxModelWhyNot(doc, box, o)) ?? wanted
+}
+
+/** What a box's sound will be, when one of its shots has a spoken line, a VO or a sound beat (relay/sound.py, the
+ *  one rule; UAT 2026-11-21 B6: every clip came out silent). `on`: the model makes it; else the box says the model
+ *  cannot. Undefined when the box has nothing to hear. */
+export function boxSound(doc: ProductionDocument, box: Pick<Box, 'shotIds'>, m: ModelChoice | undefined): { on: boolean; words: string } | undefined {
+  const beats = box.shotIds.flatMap((id) => beatsOf(doc, id)).filter((b) => (b.kind === 'line' || b.kind === 'vo' || b.kind === 'sound') && b.text?.trim())
+  if (!beats.length || !m) return undefined
+  const what = [beats.some((b) => b.kind === 'line') && 'the spoken line', beats.some((b) => b.kind === 'vo') && 'the voice-over', beats.some((b) => b.kind === 'sound') && 'the sound']
+    .filter(Boolean).join(', ')
+  const e = entryOf(m)
+  const label = e?.label ?? m.model
+  if (e?.video.audioControl) return { on: true, words: `With sound: ${what}.` }
+  // No switch (Omni Flash 1.1, Hailuo 3): the relay asks for no music and no dialogue (decided 2026-10-06).
+  return { on: false, words: `No sound made: ${label} has no sound switch, so ${what} will not be heard. Veo 3.1, Kling or WAN 3 can.` }
 }

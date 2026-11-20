@@ -178,10 +178,14 @@ export function skyeAsks(d: Doc, scriptId: Id, targetOf: (jobId: string) => Writ
   return out
 }
 
+/** A parenthetical's words without its parens: the page and every flat copy add them (UAT 2026-11-21: Skye's
+ *  "(whispering)" was kept as it came and showed, and went to the Director, as "((whispering))"). */
+const bare = (type: string, text: string) => (type === 'parenthetical' ? text.trim().replace(/^\((.*)\)$/s, '$1').trim() : text)
+
 /** A draft as the suggestion's proposed words, or null when its blocks do not fit the item. */
 export function proposedOf(d: Doc, w: Write): Suggestion['proposed'] | null {
   const kind = KIND[w.target.kind]
-  const lines = w.lines.map((l) => ({ type: l.type, text: l.type === 'direction' || kind === 'beat' ? l.text.replace(/\n/g, ' ') : l.text }))
+  const lines = w.lines.map((l) => ({ type: l.type, text: l.type === 'direction' || kind === 'beat' ? l.text.replace(/\n/g, ' ') : bare(l.type, l.text) }))
   const prose = proseFromText(d, lines)
   if (kind === 'beat' && (prose.content?.length ?? 0) > 1) return null
   if (shapeProblem(kind, prose)) return null
@@ -241,7 +245,7 @@ async function landAsFirstScene(store: DocumentStore, job: Job, scriptId: Id, w:
   if (d.scenes[id] || !d.scripts[scriptId]) return undefined
   const rank = rankBetween(null, scenesOf(d, scriptId)[0]?.rank ?? null)
   const why = { ...landingWhy(store, job.jobId, 'a draft as a new first scene'), agent: 'skye', rationale: NEW_SCENE_LINE }
-  const lines = w.lines.map((l) => ({ type: l.type, text: l.type === 'direction' ? l.text.replace(/\n/g, ' ') : l.text }))
+  const lines = w.lines.map((l) => ({ type: l.type, text: l.type === 'direction' ? l.text.replace(/\n/g, ' ') : bare(l.type, l.text) }))
   if (!(store instanceof ModelStore)) {
     await landUpdate(store, (x) => {
       x.scenes[id] = { id, v: 1, field_v: {}, script_id: scriptId, rank, heading: '', text: lines.map((l) => l.text).join('\n') }

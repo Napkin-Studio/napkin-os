@@ -1429,7 +1429,22 @@
               }
             },
             "endCard": {
-              "type": "boolean"
+              "type": "boolean",
+              "description": "The studio card (Made with Napkin Studio) after the film, the dark one on every size (owner 2026-11-18)."
+            },
+            "clientCard": {
+              "type": "object",
+              "description": "render: the film's own end card (the client's: video.end_card, else the storyboard's end card shot), drawn by the relay at the size and held s seconds as the last picture before the studio card. Added 2026-11-21 (features/pt-film-r1.clan, additive): cutdowns ended on the studio card in place of the client's.",
+              "properties": {
+                "headline": { "type": "string", "maxLength": 120 },
+                "line": { "type": "string", "minLength": 1, "maxLength": 200 },
+                "cta": { "type": "string", "maxLength": 80 },
+                "bg": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+                "logo": { "$ref": "common.schema.json#/$defs/assetRef" },
+                "s": { "type": "number", "minimum": 0.5, "maximum": 10 }
+              },
+              "required": ["line", "bg", "s"],
+              "additionalProperties": false
             },
             "fadeOutS": {
               "type": "number",

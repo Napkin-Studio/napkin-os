@@ -106,7 +106,7 @@ type Setup = Awaited<ReturnType<typeof setup>>
 const marks = (d: ProductionDocument) => Object.values(d.stale)
 
 describe('no text in frames: the spoken lines are voice-over', () => {
-  it('a shot with a line keeps it in the document but never sends it to a frame or a clip', async () => {
+  it('a shot with a line keeps it in the document, never sends it to a frame, and sends it to a clip only as a line beat', async () => {
     const s = await setup(3)
     await s.makeAll(false)
     expect(beatsOf(s.doc.get(), s.shotId(1)).map((b) => b.text)).toContain(DIALOGUE)
@@ -115,13 +115,16 @@ describe('no text in frames: the spoken lines are voice-over', () => {
     for (const j of sent) {
       const input = s.inputOf(j.id)
       expect(input.shot, j.op).toBeDefined()
-      expect(JSON.stringify(input)).not.toContain(DIALOGUE)
+      // A frame never carries the line. A clip carries it as a line beat only, for its sound: the relay says it as
+      // speech in a clip made with sound and keeps it from Dex (relay/sound.py; features/pt-film-r1.clan, B6).
+      if (j.op === 'frame') expect(JSON.stringify(input)).not.toContain(DIALOGUE)
+      else expect(JSON.stringify({ ...input, shot: { ...input.shot, beats: input.shot?.beats?.filter((b) => b.kind !== 'line') } })).not.toContain(DIALOGUE)
     }
     expect(s.inputOf(sent.find((j) => j.op === 'frame' && j.ctx.for === 'frame' && j.ctx.shotId === s.shotId(1))!.id).shot?.beats)
       .toEqual([{ kind: 'moment', at_s: 1, text: 'The blade turns.' }]) // the moment goes; the line does not
   })
 
-  it('a frame drawn again by Update what follows and a fix clip carry no line either', async () => {
+  it('a frame drawn again by Update what follows carries no line either', async () => {
     const s = await setup(3)
     await s.makeAll(false)
     await drawFrame(s.deps, 0, 'again', { parent: s.frameOf(0) })
@@ -133,7 +136,7 @@ describe('no text in frames: the spoken lines are voice-over', () => {
     await fixInShot(s.deps, s.shotId(1), [n])
     await s.land()
     await vi.waitFor(() => expect(s.all().some((j) => j.op === 'clip' && j.ctx.for === 'clip' && j.ctx.reviewIds?.includes(n.id))).toBe(true), { timeout: 2000, interval: 5 })
-    for (const j of s.all().filter((x) => x.op === 'frame' || x.op === 'clip')) {
+    for (const j of s.all().filter((x) => x.op === 'frame')) {
       expect(JSON.stringify(s.inputOf(j.id))).not.toContain(DIALOGUE)
     }
   })

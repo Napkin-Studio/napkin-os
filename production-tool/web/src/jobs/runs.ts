@@ -193,12 +193,17 @@ export function canJoin(prev: PlanShot, next: PlanShot): boolean {
 }
 
 /** Why two shots cannot be one video, in words. */
-export function joinBlock(prev: PlanShot, next: PlanShot, n: number): string | undefined {
+export function joinBlock(prev: PlanShot, next: PlanShot, n: number, lineOf?: (shotId: Id) => string | undefined): string | undefined {
   if (canJoin(prev, next)) return undefined
   if (next.product) return `Shot ${n + 1} shows the product: it starts its own video`
   if (prev.kind === 'end_card' || next.kind === 'end_card') return 'An end card is always its own video'
   if (prev.text || next.text) return 'A shot with type on screen is always its own video'
-  if (prev.spoken || next.spoken) return 'A shot where someone speaks is its own video, with sound'
+  if (prev.spoken || next.spoken) {
+    // Which shot speaks, and its line: the Shot tab showed none, so the refusal read as wrong (UAT 2026-11-21).
+    const who = prev.spoken ? prev : next
+    const line = lineOf?.(who.id)
+    return `Shot ${prev.spoken ? n : n + 1} has a spoken line${line ? ` (“${line.length > 60 ? `${line.slice(0, 59)}…` : line}”)` : ''}, so it is its own video, with sound`
+  }
   return 'These shots are made on their own'
 }
 
@@ -430,7 +435,7 @@ export async function makeRuns(deps: FrameDeps, opts: MakeRunsOpts): Promise<str
         // A take (take_refs: no frame pinned) sends the character pictures, then every shot's frame in shot
         // order, as references: capped at what the run's model carries without a frame, characters first.
         const cap = clipRefCapacity({ provider: r.model.provider, model: r.model.model }, false, opts.config, sheets)
-        await makeTake(deps, opts.videoId, ids[i], { modelChoice: pick, quality, refsMax: cap.max, ...(opts.texts ? { texts: opts.texts } : {}) })
+        await makeTake(deps, opts.videoId, ids[i], { modelChoice: pick, quality, refsMax: cap.max, fit: (s) => billedS(s, r.model), ...(opts.texts ? { texts: opts.texts } : {}) })
       } catch (e) {
         failed.push(`${name(shotIds)}: ${e instanceof Error ? e.message : 'that did not work.'}`)
       }

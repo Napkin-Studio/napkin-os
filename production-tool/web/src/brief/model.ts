@@ -29,6 +29,30 @@ type Doc = ProductionDocument
  *  view (the same character turned) none (features/pt-dex-context.clan). */
 export const BRIEF_OPS: readonly Op[] = ['write', 'shot_list', 'generate', 'frame', 'frame_edit', 'region_edit', 'clip', 'clip_edit', 'clip_patch', 'cutdown', 'resize']
 
+/** The spine parts each op's director reads, in the relay's priority order (relay/brief.py BUDGET, parts_of; a relay
+ *  test compares them): what "What the X agent will send" lists (UAT 2026-11-21: Draw frame listed every part, and
+ *  a frame reads only the don'ts, tone, feel, audience and mandatories). */
+export const BRIEF_PARTS: Record<string, readonly BriefSpinePart[]> = {
+  write: ['mandatories', 'donts', 'proposition', 'tone', 'feel', 'audience', 'insight', 'format'],
+  shot_list: ['mandatories', 'donts', 'proposition', 'tone', 'feel', 'audience', 'format', 'insight'],
+  generate: ['donts', 'tone', 'feel'],
+  frame: ['donts', 'tone', 'feel', 'audience', 'mandatories'],
+  frame_edit: ['donts', 'tone', 'feel'],
+  region_edit: ['donts'],
+  clip: ['donts', 'tone', 'feel', 'audience'],
+  clip_edit: ['donts', 'tone'],
+  clip_patch: ['donts', 'tone'],
+  cutdown: ['mandatories', 'donts', 'proposition', 'format', 'tone'],
+  resize: ['mandatories', 'donts', 'proposition'],
+}
+
+/** The part of a spine an op's director reads (its parts only; the relay cuts them to its budget). */
+export function spineForOp(spine: BriefSpine, op: Op | undefined): BriefSpine {
+  const parts = op ? BRIEF_PARTS[op] : undefined
+  if (!parts) return spine
+  return Object.fromEntries(Object.entries(spine).filter(([k]) => (parts as readonly string[]).includes(k))) as BriefSpine
+}
+
 /** The words a decision uses for a brief: “First Light brief” v2. */
 const named = (title: string, taken: number) => `“${title}” v${taken}`
 
@@ -185,13 +209,13 @@ export interface BriefSendRow {
   via: 'link' | 'upstream'
 }
 
-export function briefSendRow(d: Doc, nodeId: Id): BriefSendRow | undefined {
+export function briefSendRow(d: Doc, nodeId: Id, op?: Op): BriefSendRow | undefined {
   const b = briefOf(d, nodeId)
   if (!b) return undefined
   const t = b.through
   const from = b.via === 'link' ? 'linked'
     : `from ${t && d.scripts?.[t] ? `Script · ${d.scripts[t].title}` : t && d.storyboards?.[t] ? `Storyboard · ${d.storyboards[t].title}` : t && d.videos?.[t] ? `Film · ${d.videos[t].title}` : 'upstream'}`
-  return { key: `brief:${b.brief.id}`, briefId: b.brief.id, label: b.item.label, detail: [spineSummary(b.brief.spine), from].filter(Boolean).join(' · '), via: b.via }
+  return { key: `brief:${b.brief.id}`, briefId: b.brief.id, label: b.item.label, detail: [spineSummary(spineForOp(b.brief.spine, op)), from].filter(Boolean).join(' · '), via: b.via }
 }
 
 /** The nodes a Brief node feeds, as its card says ("Feeds Script · Main, and what it drives"): its own links. */

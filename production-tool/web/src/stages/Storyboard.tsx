@@ -235,11 +235,11 @@ export function Storyboard() {
   // The next step's "What the X agent will send" (features/production-new-ui.clan): what goes, the brief, no price.
   const named = refsList(doc).length
   const sending = !shots.length
-    ? { who: 'the Director agent', action: 'Plan shots', what: [{ key: 'script', label: 'The script’s words', detail: `${words.trim().split(/\s+/).filter(Boolean).length} words` }, { key: 'fit', label: `${targetS} s at ${ratio}`, detail: 'the length and shape to plan to' }] }
+    ? { who: 'the Director agent', action: 'Plan shots', op: 'shot_list' as const, what: [{ key: 'script', label: 'The script’s words', detail: `${words.trim().split(/\s+/).filter(Boolean).length} words` }, { key: 'fit', label: `${targetS} s at ${ratio}`, detail: 'the length and shape to plan to' }] }
     : noFrames || !allFramed
-      ? { who: 'the Camera agent', action: noFrames ? 'Draw frame 1' : 'Draw the rest', what: [{ key: 'shots', label: noFrames ? 'Shot 1’s words and camera' : 'Each undrawn shot’s words and camera, one at a time' }, { key: 'refs', label: `${named} named ${named === 1 ? 'picture' : 'pictures'}`, detail: noFrames ? 'frame 1 sets the look for the rest' : 'and the frame before each one' }] }
-      : { who: 'the Camera agent', action: 'Make clips', what: [{ key: 'frames', label: `${shots.length} ${shots.length === 1 ? 'frame' : 'frames'}, their words and camera` }, { key: 'refs', label: `${named} named ${named === 1 ? 'picture' : 'pictures'}` }] }
-  const primary = <SendDisclosure primary={next} who={sending.who} rows={sendRows(doc, sb?.id, sending.what, sending.action)} />
+      ? { who: 'the Camera agent', action: noFrames ? 'Draw frame 1' : 'Draw the rest', op: 'frame' as const, what: [{ key: 'shots', label: noFrames ? 'Shot 1’s words and camera' : 'Each undrawn shot’s words and camera, one at a time' }, { key: 'refs', label: `${named} named ${named === 1 ? 'picture' : 'pictures'}`, detail: noFrames ? 'frame 1 sets the look for the rest' : 'and the frame before each one' }] }
+      : { who: 'the Camera agent', action: 'Make clips', op: 'clip' as const, what: [{ key: 'frames', label: `${shots.length} ${shots.length === 1 ? 'frame' : 'frames'}, their words and camera` }, { key: 'refs', label: `${named} named ${named === 1 ? 'picture' : 'pictures'}` }] }
+  const primary = <SendDisclosure primary={next} who={sending.who} rows={sendRows(doc, sb?.id, sending.what, sending.action, sending.op)} />
 
   return (
     <div className="editor">

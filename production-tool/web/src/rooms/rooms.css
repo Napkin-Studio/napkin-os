@@ -319,6 +319,7 @@
 .rm-keysfloat { width: 320px; padding: 12px; }
 /* The cut in a line under the timeline (mock edit): what it holds, then the next things to do. */
 .rm-cutsum { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; padding: 8px 24px 10px; border-top: 1px solid var(--line-soft); font-size: 12.5px; color: var(--ink2); flex-shrink: 0; }
+.rm-ask { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; padding: 2px 8px; border-radius: 6px; background: var(--warn-bg); color: var(--ink); }
 .rm-linkbtn { all: unset; cursor: pointer; font-weight: 600; color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
 .rm-linkbtn:hover, .rm-linkbtn:focus-visible { color: var(--ag-base, var(--ink)); }
 .rm-tlzoom { display: inline-flex; align-items: center; gap: 2px; }
@@ -727,3 +728,16 @@ html[data-theme='dark'] .jc-box.sel { box-shadow: 0 0 0 2px var(--ag-acc, var(--
 /* The Edit room's band keeps Render ad on screen on a laptop (Shrey 2026-11-19: page actions live in the band). */
 @media (max-width: 1439px) { .rooms .rm-wide { display: none; } }
 @media (max-width: 1279px) { .rooms .rm-tltools { gap: 4px; } }
+.rm-lines { list-style: none; margin: 0 0 6px; padding: 0; display: grid; gap: 4px; font-size: 13px; color: var(--ink); }
+.jc-sound { font-size: 12px; color: var(--ink2); padding: 0 2px; }
+.jc-sound::before { content: '\266A\00a0'; color: var(--tool-ink); }
+.jc-sound.off { color: var(--warn); }
+.jc-box > .jc-sound { width: 0; min-width: 100%; box-sizing: border-box; }
+/* The Edit room's band at 1280-1680 px (UAT 2026-11-21: at 1440 px it clipped Render ad and redo, with the Booth
+   open or not): it drops what it drops on a laptop, so its page actions stay on screen. */
+@media (max-width: 1680px) {
+  .rooms[data-room="edit"] .rm-soundword, .rooms[data-room="edit"] .rm-wide,
+  .rooms[data-room="edit"] .rm-tltools .sp-btn kbd { display: none; }
+  .rooms[data-room="edit"] .rm-tltools { gap: 4px; }
+  .rooms[data-room="edit"] .rm-tltools .sp-btn { padding: 0 8px; }
+}

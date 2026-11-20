@@ -15,8 +15,8 @@ import { currentRender, rendersOf, shotNumber, storyboardOfVideo } from '../mode
 import { Float } from '../ui/Float'
 import { useSending } from '../ui/hooks'
 import type { ChangeOpen } from './ChangeDrawer'
-import { clipEnd, clipLen, fitWords, handleShort, type CutClip } from './cut'
-import { appendTake, assembleFirstCut, editCut } from './editOps'
+import { clipEnd, clipLen, fitWords, handleShort, MIN_CLIP_S, type CutClip } from './cut'
+import { appendTake, assembleFirstCut, assembleLoses, editCut } from './editOps'
 import { createPortal } from 'react-dom'
 import { Inspector } from './Inspector'
 import { boxName, sharesBox, type Gen } from './model'
@@ -153,7 +153,8 @@ export function EditRoom({ data, sel, onSel, onChange, onSound, register, ready:
   }
   const split = () => {
     const c = pickedClip && t > pickedClip.startS && t < clipEnd(pickedClip) ? pickedClip : clipAtPlayhead()
-    if (c) run(editCut.split(docStore, data.videoId, c, t))
+    // A split at a clip's edge cuts nothing (UAT 2026-11-21: S at 0 logged "split shot 1" and changed nothing).
+    if (c && t - c.startS >= MIN_CLIP_S && clipEnd(c) - t >= MIN_CLIP_S) run(editCut.split(docStore, data.videoId, c, t))
   }
 
   // Keys (not while typing, and not while a menu or a drawer has them).
@@ -243,7 +244,7 @@ export function EditRoom({ data, sel, onSel, onChange, onSound, register, ready:
         </div>, booth)}
       <div className="rm-tlwrap">
         <Timeline data={data} cut={cut} t={t} marks={marks} picked={picked} ripple={ripple} onRipple={setRipple} snap={snap} onSnap={setSnap}
-          making={making} ready={ready} tools={toolSlot} fit={plan.lengthS > 0 ? fit : undefined}
+          making={making} ready={ready} tools={toolSlot} fit={plan.lengthS > 0 ? fit : undefined} loses={assembleLoses(cut, data.gens)}
           actions={{
             seek: (s) => { setPlaying(false); setT(Math.min(Math.max(0, s), Math.max(plan.lengthS, 0))) },
             pick,

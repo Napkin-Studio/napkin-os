@@ -399,3 +399,63 @@ export function cutBrackets(v1: CutClip[], gens: Gen[], boxes: Box[]): { from: n
   }
   return out
 }
+
+// ── A joined take into the cut ───────────────────────────────────────────────────────────────────────
+
+/**
+ * A take of shots the person joined (Make room: Join, then Make), put into the cut where those shots' clips are
+ * (UAT 2026-11-21, B2: the take landed beside the old separate clips, so the Edit room kept playing them and
+ * asked "Use this take" once per shot). The take's windows replace exactly those shots' V1 clips, in shot order,
+ * at the first one's place: its transition and fade in, the last one's fade out. Every other clip keeps its
+ * trims, fades and gaps, the clips after move by the change in length, and texts, V2 and the end card stay.
+ * Nothing happens when none of the shots is in the cut, or when the cut already plays one take of them all
+ * (a new take of a box already joined in the cut is offered as New take ready, as before). Pure: the new cut,
+ * or null.
+ */
+export function placeTakeInCut(d: ProductionDocument, videoId: Id, genId: Id, ids: () => string = newItemId): Cut | null {
+  const g = d.generations?.[genId]
+  if (!g?.segments?.length || g.segments.length < 2) return null
+  const cut = readCut(d, videoId)
+  const shots = g.segments.map((s) => s.shot_id)
+  const old = sortV1(cut.v1).filter((c) => !!c.follows?.shotId && shots.includes(c.follows.shotId))
+  if (!old.length) return null
+  if (old.every((c) => c.genId === old[0].genId) && shots.every((id) => old.some((c) => c.follows?.shotId === id))
+    && d.generations[old[0].genId]?.segments?.length === shots.length) return null
+  const first = old[0]
+  const last = old.at(-1)!
+  // The box a clip stands for is the run its take was made for (a document id), as Assemble first cut writes it.
+  const box = g.box_id
+  const added: CutClip[] = []
+  let at = first.startS
+  for (const [i, s] of g.segments.entries()) {
+    const len = r3(s.out_s - s.in_s)
+    if (len <= 0) continue
+    added.push({
+      id: ids(), genId, inS: s.in_s, outS: s.out_s, startS: r3(at), speed: 1, holdS: 0,
+      fadeInS: i === 0 ? first.fadeInS : 0, fadeOutS: i === g.segments.length - 1 ? last.fadeOutS : 0,
+      ...(i === 0 && first.transition ? { transition: first.transition } : {}),
+      follows: { ...(box ? { boxId: box } : {}), shotId: s.shot_id },
+    })
+    at += len
+  }
+  if (!added.length) return null
+  const gone = new Set(old.map((c) => c.id))
+  const v1: CutClip[] = []
+  let shift = 0
+  for (const c of sortV1(cut.v1)) {
+    if (c.id === first.id) {
+      v1.push(...added)
+      shift += r3(at - first.startS) - (clipEnd(first) - first.startS)
+      continue
+    }
+    if (gone.has(c.id)) { shift -= clipEnd(c) - c.startS; continue }
+    v1.push(c.startS > first.startS && shift ? { ...c, startS: r3(Math.max(0, c.startS + shift)) } : c)
+  }
+  return { ...cut, v1: sortV1(v1) }
+}
+
+/** The words a placed joined take is said with: "Joined take of shots 1–2 is in the cut." */
+export function joinedWords(d: ProductionDocument, genId: Id): string {
+  const ns = (d.generations?.[genId]?.segments ?? []).map((s) => shotsOf(d, d.shots[s.shot_id]?.storyboard_id).findIndex((x) => x.id === s.shot_id) + 1).filter((n) => n > 0)
+  return ns.length ? `Joined take of shots ${ns[0]}–${ns.at(-1)} is in the cut.` : 'Joined take is in the cut.'
+}
