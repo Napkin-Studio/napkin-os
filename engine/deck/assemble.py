@@ -652,7 +652,7 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
         br = b["barrier"]
         blocks = [{"kind": "bullets", "items": [{"text": p["text"], "refs": p["refs"]} for p in br["points"]]}]
         if br.get("chart") and br["chart"].get("series") and all(R.kind(s["ref"]) in ("docfig", "fact") for s in br["chart"]["series"]):
-            blocks.insert(0, {"kind": "chart", "chart": {"type": "bar", "title": br["chart"]["title"], "series": br["chart"]["series"]}})
+            blocks.insert(0, {"kind": "chart", "chart": {"type": "bar", "title": br["chart"].get("title") or br.get("title") or "", "series": br["chart"]["series"]}})
         S.append(_slide("chart", br["title"], blocks, claims=br["points"], status="drafted", visual={"kind": "chart"}))
     ins = b.get("insight") or {}
     built = _insight(b, st.get("insight_judge"), inp)
@@ -691,7 +691,16 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
     blocks.append({"kind": "bullets", "title": "Why they will believe it", "items": rtb_items})
     if b.get("objection") and not d.get("how_it_answers"):   # else the idea slide answers it (said once)
         blocks.append({"kind": "small", "text": f"The objection it must beat: {b['objection']['text']} {b['objection']['answer']}"})
-    S.append(_slide("proposition", smp if smp != "To agree." else "The single thought", blocks, claims=rtb_items, status="drafted"))
+    if spec.SHOW_WORK:   # show the work: stage b's own single-minded proposition; a missing one is validate's proposition_line error
+        from . import show_work   # noqa: PLC0415
+        ptitle, psrc = show_work.proposition_title(b, smp)
+        ps = _slide("proposition", ptitle, blocks, claims=rtb_items, status="drafted")
+        ps["proposition_source"] = psrc
+        if smp and smp != "To agree.":
+            ps["brief_smp"] = smp
+        S.append(ps)
+    else:
+        S.append(_slide("proposition", smp if smp != "To agree." else "The single thought", blocks, claims=rtb_items, status="drafted"))
     S.append(_competition_slide(d))   # the alternatives the client could pick, and the plan to win (a placeholder when the inputs name none)
 
     # 9. Territories
@@ -709,10 +718,15 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
         named = lambda txt: re.sub(r"\b(" + "|".join(map(re.escape, names)) + r")\b", lambda m: f"'{names[m.group(1)]}'", txt)
         rows = [["Territory", "Why (or why not)"]] + [[names[tid], named(rk.get("reasons", {}).get(tid, ""))] for tid in rk.get("order", [])]
         chosen = next((t for t in c["territories"] if t["id"] == c.get("chosen")), c["territories"][0])
-        S.append(_slide("territory_choice", f"We recommend '{chosen['name']}'",
-                        [{"kind": "table", "rows": rows},
-                         {"kind": "small", "text": f"Chosen by: {c.get('chosen_by', 'to confirm')}. Ranked by: {rk.get('by', 'to confirm')}.", "basis": "meta", "internal": True}],
-                        claims=[{"text": "Recommendation", "refs": [], "basis": "opinion"}], status="drafted"))
+        from . import show_work   # noqa: PLC0415
+        routes_sl = show_work.routes_slide(c, _slide) if spec.SHOW_WORK else None
+        if routes_sl is not None:   # show the work: one slide, every route in one line, the recommendation marked
+            S.append(routes_sl)
+        else:
+            S.append(_slide("territory_choice", f"We recommend '{chosen['name']}'",
+                            [{"kind": "table", "rows": rows},
+                             {"kind": "small", "text": f"Chosen by: {c.get('chosen_by', 'to confirm')}. Ranked by: {rk.get('by', 'to confirm')}.", "basis": "meta", "internal": True}],
+                            claims=[{"text": "Recommendation", "refs": [], "basis": "opinion"}], status="drafted"))
 
     # 10. Idea
     if d.get("campaign_line"):
@@ -726,6 +740,11 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
                          {"kind": "copy", "lines": x["copy"], "answer": x["answer"], "basis": "creative"}],
                         claims=[{"text": " / ".join(x["copy"]), "refs": [], "basis": "creative"}], status="drafted",
                         visual=x.get("visual"), label=f"Execution {x['channel'][:60]}"))
+    if spec.SHOW_WORK and d.get("campaign_line"):   # the concept on a page (deck/concept_pack.py): presented when it fits, else first in the appendix
+        from . import concept_pack   # noqa: PLC0415
+        cs = concept_pack.slide(concept_pack.build({"c": c, "d": d}), _slide)
+        if cs is not None:
+            S.append(cs)
     # 12. Channel roles
     if d.get("channel_roles"):
         rows = [["Channel", "Its one job"]] + [[r["channel"], r["role"]] for r in d["channel_roles"]]
@@ -886,6 +905,12 @@ def _complete(S, reqs, R, inp, meta, fmt, fit, scoring=None, messages=None, terr
         moved = finish.annotations_to_notes(S)
         if moved:
             fin["annotations"] = moved
+    if spec.SHOW_WORK and fmt == "pitch" and meta.get("kind", "agency") == "agency":   # show the work: which order the story took (validate reads it)
+        from . import show_work   # noqa: PLC0415
+        deck["meta"]["show_work"] = {"mode": show_work.present_mode(profile) if spine else "pitch"}
+        moved = show_work.fit_copy(S)   # long copy: the opening lines and the sign-off on the slide, the rest in the notes
+        if moved:
+            deck["meta"]["show_work"]["copy_to_notes"] = moved
     if spec.LOOK_V3:   # deck-look (fix 2): a sentence is said once on the presented slides
         _say_once(S)
     if fin is not None:   # finish fixes: no two presented slides in a row under one section band
@@ -1062,6 +1087,18 @@ def _shown_executions(S: list, messages: list | None) -> list:
     return shown
 
 
+def _work_first(S: list, shown: list) -> list:
+    """Show the work: the executions a pitch presents, the hero first (the first shown), then the others whose copy fits a slide before
+    any long one (over COPY_LONG words: a long script or a question-and-answer notice ran off its slide in the re-rendered decks); another
+    core execution with short copy may take a long one's place. At most spec.PITCH_EXECUTIONS."""
+    if not shown:
+        return []
+    core = [x for x in S if x["type"] == "execution" and not re.search(spec.OPTIONAL, str((x["blocks"] or [{}])[0].get("text", "")))]
+    rest = list(shown[1:]) + [x for x in core if all(x is not y for y in shown)]
+    rest.sort(key=lambda x: _copy_words(x) > COPY_LONG)   # stable: the greedy order among the short ones, then the long ones
+    return [shown[0]] + rest[:spec.PITCH_EXECUTIONS - 1]
+
+
 def _shown_charts(S: list, supported: set | None) -> list:
     """The charts a pitch presents: the first, plus any the fit judge found supported, up to spec.PITCH_CHARTS."""
     charts = [x for x in S if x["type"] == "chart"]
@@ -1099,6 +1136,8 @@ def _arrange_pitch(S: list, supported: set | None = None, routes: int = 1, messa
         early = [x for x in S if finish.placeholder_only(x) and x["type"] in ("team", "credentials", "investment", "competition", "risks")]
         S = [x for x in S if all(x is not y for y in early)]
     for keep, into, title in spec.PITCH_MERGES + (spec.PITCH_MERGES_V3 if spec.LOOK_V3 else ()):
+        if spec.SHOW_WORK and into in ("execution", "next_step"):
+            continue   # show the work: the hero execution and the ask keep their own slides (the channel table and the money are backup)
         k = by_type(keep)
         m = (_shown_executions(S, messages)[:1] or [None])[0] if into == "execution" else by_type(into)   # the first PRESENTED execution
         if fin is not None and into == "execution" and m is not None and _copy_words(m) > COPY_LONG:
@@ -1108,6 +1147,12 @@ def _arrange_pitch(S: list, supported: set | None = None, routes: int = 1, messa
             S = [x for x in S if x is not m]
     shown = _shown_executions(S, messages)
     shown_charts = _shown_charts(S, supported)
+    target = spec.PITCH_TARGET if target is _SPEC_TARGET else target
+    if spec.SHOW_WORK:   # show the work: the agency order, the idea and at least two executions in the first ten (deck/show_work.py)
+        from . import show_work   # noqa: PLC0415
+        story, backup = show_work.agency_story(S, _work_first(S, shown), limit or target or spec.PITCH_TARGET, routes)
+        backup = [x for x in backup if x["type"] != "appendix"]
+        return _close_pitch(story, backup, early, fin, asks, date)
     keep = {id(x) for x in shown_charts + shown}   # by identity: two slides can hold equal content
     keep |= {id(x) for x in S if x.get("role") == "brief_gaps"}   # brief gaps: presented, never moved behind the divider or trimmed
     if routes > 1:   # the client asked to see that many routes: present them, in the ranking's order
@@ -1126,15 +1171,22 @@ def _arrange_pitch(S: list, supported: set | None = None, routes: int = 1, messa
             fin.setdefault("repeats", []).append({"kept": kept["type"], "moved": gone["type"]})
     story, backup = _trim(S, story, backup, limit, order=spec.TRIM_ORDER_FINISH if fin is not None else None)
     supply = list(early)
-    target = spec.PITCH_TARGET if target is _SPEC_TARGET else target
     if spec.LOOK_V3 and not limit and target is not None:   # deck-look step 5: a soft target by cheap moves only (a stated limit keeps _trim, above)
         story, backup, more = _to_target(S, story, backup, target, keep)
         supply += more
     if fin is not None:   # finish fixes: the places the placeholders left go to the next-best content (the audience, the alternatives, the work)
         story, backup = _fill_story(S, story, backup, limit or target, keep)
+    return _close_pitch(story, backup, supply, fin, asks, date)
+
+
+def _close_pitch(story: list, backup: list, supply: list, fin: dict | None, asks: list | None, date: str | None) -> list:
+    """The end of a pitch's arrangement: the client's asks as one appendix list, the 'To supply' part, and the Appendix divider before
+    the backup. ``supply``: the placeholder slides that wait for a person."""
+    supply = list(supply)
     asks_slide = None
-    if fin is not None and spec.FINISH:   # the ask is clean: what only the client can give is one tidy appendix list, never a line on the close
+    if fin is not None:
         from . import finish   # noqa: PLC0415
+    if fin is not None and spec.FINISH:   # the ask is clean: what only the client can give is one tidy appendix list, never a line on the close
         qs = finish.client_asks(asks or [], supply, date)
         if qs:
             shown, rest = qs[:spec.CLIENT_ASKS_MAX], qs[spec.CLIENT_ASKS_MAX:]
@@ -1441,18 +1493,19 @@ def _fill_story(S: list, story: list, backup: list, size: int | None, keep: set)
     return story, backup
 
 
-def _trim(S: list, story: list, backup: list, limit: int | None, order: tuple | None = None) -> tuple:
+def _trim(S: list, story: list, backup: list, limit: int | None, order: tuple | None = None, keep: set | None = None) -> tuple:
     """Hold a presented story to ``limit`` slides: while it is longer, the last slide of the first type in
     spec.TRIM_ORDER that the story holds moves behind the divider (the backup keeps the built order). A story
-    with nothing left to move stays over the limit, and pitch_length says so. Nothing is reworded or dropped."""
+    with nothing left to move stays over the limit, and pitch_length says so. Nothing is reworded or dropped. A slide in ``keep`` (by
+    identity: show the work's idea and first executions) never moves."""
     if not limit:
         return story, backup
     story, backup = list(story), list(backup)
     while len(story) > limit:
         for t in order or spec.TRIM_ORDER:
-            hit = [x for x in story if x["type"] == t]
+            hit = [x for x in story if x["type"] == t and id(x) not in (keep or ())]
             if hit:
-                story.remove(hit[-1])
+                story = [y for y in story if y is not hit[-1]]   # by identity: two slides can hold equal content
                 backup.append(hit[-1])
                 break
         else:
@@ -1579,8 +1632,9 @@ def _arrange_spine(S: list, profile: dict, supported: set | None, routes: int, m
     (a ``criterion_answer`` slide), the slides whose types answer that criterion (_criteria_rank) go behind the divider in a pitch (the answer is the
     criterion's presented slide; spec.ANSWER_KEEPS never move)."""
     spine, appx = profile["spine"], set(profile.get("appendix") or [])
-    S = [x for x in S if x["type"] in spine or x["type"] in appx]
     pitch = fmt == "pitch"
+    concept_ok = bool(spec.SHOW_WORK and pitch and _present_mode(profile))   # the concept page: only a type that takes the agency order
+    S = [x for x in S if x["type"] in spine or x["type"] in appx or (concept_ok and x["type"] == "concept")]
     keep = {id(x) for x in _shown_charts(S, supported) + _shown_executions(S, messages)}
     if routes > 1:
         keep |= {id(x) for x in [x for x in S if x["type"] == "territory"][:routes]}
@@ -1606,12 +1660,25 @@ def _arrange_spine(S: list, profile: dict, supported: set | None, routes: int, m
         ranked = sorted((story[i] for i in slots), key=lambda x: _slide_rank(x, scoring))   # stable: ties keep spine order
         for i, x in zip(slots, ranked):   # only slides that answer a scored criterion move, and only among their own slots
             story[i] = x
-    if pitch:
+    if pitch and spec.SHOW_WORK:   # show the work (deck/show_work.py): a work session in agency order; other types keep their spine, and
+        from . import show_work   # noqa: PLC0415   their trim never moves the idea or the first two executions and cuts setup slides first
+        mode = show_work.present_mode(profile)   # read from the type's spine and appendix, never its id
+        if mode:
+            size = limit or (profile.get("length") or {}).get("target") or spec.PITCH_TARGET
+            story, backup = show_work.agency_story(S, _work_first(S, _shown_executions(S, messages)), size, routes, mode=mode)
+        else:
+            story, backup = _trim(S, story, backup, limit, order=show_work.TRIM_ORDER, keep=show_work.keep_set(S, _shown_executions(S, messages), routes))
+    elif pitch:
         story, backup = _trim(S, story, backup, limit)
     if not pitch or not backup:
         return story
     divider = _slide("appendix", "Appendix", [{"kind": "text", "text": "Backup for questions: everything this presentation rests on."}], status="from_source")
     return story + [divider] + backup
+
+
+def _present_mode(profile):
+    from . import show_work   # noqa: PLC0415
+    return show_work.present_mode(profile)
 
 
 def _add(deck, sl):  # sl may be None to reserve a number
@@ -1677,6 +1744,47 @@ def _sources_slide(deck, R):
         sl["notes"] = (sl.get("notes", "") + "\n\nEvidence:\n" + "\n".join(R.describe(r) for r in slide_refs(sl))).strip()
     rows = [[f"[{i}]", labels[k]] for i, k in enumerate(keys, 1)]
     return _slide("appendix_sources", "Sources", [{"kind": "table", "rows": [["#", "Source"]] + rows, "small": True, "basis": "meta"}], status="from_source")
+
+
+#: The Sources appendix in pages: a page holds about this many lines of SOURCES_LINE_CHARS characters (a 13-row table of long URLs
+#: ran off a 16:9 slide at about 33 such lines; 29 fitted).
+SOURCES_PAGE_LINES = 22
+SOURCES_LINE_CHARS = 90
+SOURCES_MORE = "Sources (continued)"
+
+
+def paginate_sources(deck: dict) -> int:
+    """Split a Sources table too long for one slide into pages: the first keeps "Sources", each next page is a "Sources (continued)"
+    slide right after it, with the same numbering ([n]) the slides' footnotes use. Run after the last change to the table
+    (pitch_ready.refresh_sources) and before the layout plan. Returns how many pages were added (0 when it fits, or was split before)."""
+    import math   # noqa: PLC0415
+    sids = [x for x in deck["order"] if deck["slides"][x]["type"] == "appendix_sources"]
+    if len(sids) != 1:
+        return 0
+    sl = deck["slides"][sids[0]]
+    tb = next((b for b in sl.get("blocks") or [] if b.get("kind") == "table"), None)
+    if not tb or len(tb.get("rows") or []) < 3:
+        return 0
+    head, rows = tb["rows"][0], tb["rows"][1:]
+    pages, cur, used = [], [], 0
+    for r in rows:
+        n = max(1, math.ceil(len(" ".join(str(x) for x in r[1:])) / SOURCES_LINE_CHARS))
+        if cur and used + n > SOURCES_PAGE_LINES:
+            pages.append(cur)
+            cur, used = [], 0
+        cur.append(r)
+        used += n
+    pages.append(cur)
+    if len(pages) == 1:
+        return 0
+    tb["rows"] = [head] + pages[0]
+    at = deck["order"].index(sids[0])
+    n = 1 + max((int(x[1:]) for x in deck["order"] if re.fullmatch(r"s\d+", x)), default=0)
+    for i, page in enumerate(pages[1:], 1):
+        sid = f"s{n + i - 1:02d}"
+        deck["slides"][sid] = _slide("appendix_sources", SOURCES_MORE, [{**tb, "rows": [head] + page}], status="from_source")
+        deck["order"].insert(at + i, sid)
+    return len(pages) - 1
 
 
 def slide_refs(sl) -> list:
@@ -1974,6 +2082,8 @@ def _rt_order(deck: dict, sid, ch: dict, ids: dict) -> tuple:
     tgt = ids.get(str(ch.get("after") or ""))
     if deck["slides"][sid]["type"] in spec.RED_TEAM_FIXED:
         return False, "the cover and the objective stay where they are: left for the person", None, None
+    if spec.SHOW_WORK and ((deck.get("meta") or {}).get("show_work") or {}).get("mode"):
+        return False, "the presented story keeps the agency order (show the work): left for the person", None, None
     if tgt is None or tgt not in pres or sid not in pres or tgt == sid:
         return False, "the slide to sit after is not a different presented slide: left for the person", None, None
     before = pres.index(sid) + 1

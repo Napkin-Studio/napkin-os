@@ -22,6 +22,7 @@ SLIDE_TYPES = {
     "territory_choice": {"words": 90,  "section": "Territories"},
     "idea":             {"words": 60,  "section": "The idea"},
     "execution":        {"words": 80,  "section": "The work"},
+    "concept":          {"words": 110, "section": "The idea"},
     "channel_roles":    {"words": 110, "section": "How it runs"},
     "innovation":       {"words": 100, "section": "How it runs"},
     "guardrails":       {"words": 120, "section": "How it runs"},
@@ -415,7 +416,8 @@ CHECKS = ("numbers_trace", "numbers_uncited", "unverified_fig", "rejected_used",
           "action_title", "repeated_line", "copy_number", "pitch_length", "rule_broken", "source_required", "internal_leak",
           "quote_source", "criteria_map", "imagery", "copy_spec", "budget_spread", "thin_evidence", "claim_fit", "objective_quant",
           "insight_shape", "idea_single", "chain_links", "weight_share", "image_missing", "image_unapproved", "image_flagged",
-          "image_rights", "style_pack_held", "pitch_cap", "role_words", "notes_unread", "code_leak")
+          "image_rights", "style_pack_held", "pitch_cap", "role_words", "notes_unread", "code_leak", "proposition_line",
+          "proposition_copied", "work_in_first_ten")
 
 #: Deck types (profiles/<id>.yaml, deck.profiles): what a deck is for decides its spine, stages, strictness and guidance.
 #: ``DEFAULT_TYPE`` is what a skipped type question falls back to.
@@ -542,6 +544,21 @@ BRIEF_GAPS = flag_on("DECK_BRIEF_GAPS")
 #: prompts from the chosen territory and no empty frame; internal codes scrubbed from every shown text (validate and QA: code_leak, an
 #: error). ON by default; DECK_PITCH_READY=0 builds exactly as before (the suite sets it to 0).
 PITCH_READY = flag_on("DECK_PITCH_READY")
+#: show the work (the European agency workflow report and round 3's adversarial review, 20 Nov 2026; deck/show_work.py): the presented
+#: story follows agency order (cover, what the brief doesn't tell us, objective, insight, proposition, one routes slide with the
+#: recommendation marked, the idea, the hero execution and one or two more, the ask); the idea and at least two executions are always in
+#: the first ten (the trim honours that keep set and cuts setup slides first); stage b writes the single-minded proposition and the slide
+#: never shows a fallback label (validate: proposition_line, an error). ON by default; DECK_SHOW_WORK=0 builds exactly as before (the
+#: suite sets it to 0).
+SHOW_WORK = flag_on("DECK_SHOW_WORK")
+#: the picture plan (Claude outputs/pipeline-test/picture-plan.md; deck/scene.py, visuals/fit.py): 3 to 5 pictures a deck (cover, idea, the
+#: hero execution, the audience when presented); one scene brief per deck (market and its cue pack, the setting locked from the channels,
+#: the category, the audience, the key visual, the nearest wrong places) and one scene card per slot from stage g, assembled literal first;
+#: the scene lint's deny-lists replace the allow-list (brands, per-brief names and Confidential parts stay fail-closed, counts pass); a
+#: refused card is re-asked once, then the slot has no picture (never a template); after generation a fit check (local Ollama, else Haiku;
+#: never Gemini) asks whether the picture shows the idea in the setting, one retry, else drop; labels are Illustrative or Mock-up only,
+#: never Flagged, and a flagged picture is never drawn. ON by default; DECK_PICTURE_PLAN=0 builds exactly as before (the suite sets it to 0).
+PICTURE_PLAN = flag_on("DECK_PICTURE_PLAN")
 #: The presented slide's title and the most issues it asks about (each a question for the client; the rest are in the appendix list).
 BRIEF_GAPS_TITLE = "What the brief doesn't tell us"
 BRIEF_GAPS_MAX = 5
