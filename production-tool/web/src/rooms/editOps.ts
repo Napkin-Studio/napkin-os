@@ -10,7 +10,9 @@ import {
 } from './cut'
 import { boxName, inBox, shotWindow, type Box, type Gen } from './model'
 import type { RoomData } from './Rooms'
-import { assemble, endCardFrom, newItemId, readCut, writeCut } from './timeline'
+import { assemble, endCardFrom, joinedWords, newItemId, placeTakeInCut, putCut, readCut, writeCut } from './timeline'
+import { updateDoc } from '../doc/store'
+import type { UiStore } from '../projects/uiStore'
 
 /** Clips for every shot of a take, at its cuts, in shot order: a box made together unpacks into one clip per shot.
  *  `only`: just those shots' windows (a box made apart from the take adds its own shots, not the whole take). */
@@ -102,3 +104,60 @@ export function swapPlanFor(cut: Cut, g: Gen, oldGen: Gen, clipIds: string[]) {
 export const cutLengthOf = (d: ProductionDocument, videoId: string) => cutLength(readCut(d, videoId))
 
 export { pack }
+
+/** The V1 items of a video as the document keeps them, by id. */
+const v1Items = (d: ProductionDocument, videoId: string) =>
+  Object.fromEntries(Object.entries(d.videos[videoId]?.timeline ?? {}).filter(([, it]) => it.track === 'V1'))
+
+/**
+ * A joined take has landed in the rooms (jobs/wire.ts): Edie puts it into the cut in place of its shots' clips
+ * (timeline.placeTakeInCut), one History entry and one undo step, and the rooms say so with Undo
+ * (ui.joinedInCut). Nothing when the cut has none of its shots, or already plays one take of them.
+ */
+export async function placeJoinedTake(store: DocumentStore, ui: UiStore, videoId: string, jobId: string): Promise<boolean> {
+  const d = store.get()
+  const g = Object.values(d.generations ?? {}).find((x) => x.job_id === jobId)
+  if (!g) return false
+  const next = placeTakeInCut(d, videoId, g.id)
+  if (!next) return false
+  const before = v1Items(d, videoId)
+  const text = joinedWords(d, g.id)
+  await store.change((x) => putCut(x, videoId, next), {
+    action: `put the ${text.replace(/ is in the cut\.$/, '').replace(/^J/, 'j')} into the cut`, agent: 'edie', undo: true,
+    rationale: 'The joined take replaces the separate clips of its shots, in the same place; the rest of the cut is as it was.',
+  })
+  const after = JSON.stringify(v1Items(store.get(), videoId))
+  ui.update((u) => { u.joinedInCut = { videoId, genId: g.id, text, before, after } }, 'joined take in the cut')
+  return true
+}
+
+/** Undo on the note: the V1 clips put back as they were, while the cut is still as Edie left it. False when the
+ *  cut changed since (the bar's Undo steps back through those changes first). */
+export async function undoJoinedTake(store: DocumentStore, ui: UiStore): Promise<boolean> {
+  const j = ui.get().joinedInCut
+  if (!j) return false
+  if (JSON.stringify(v1Items(store.get(), j.videoId)) !== j.after) return false
+  await updateDoc(store, (x) => {
+    const tl = x.videos[j.videoId]?.timeline
+    if (!tl) return
+    for (const [id, it] of Object.entries(tl)) if (it.track === 'V1') delete tl[id]
+    for (const [id, it] of Object.entries(j.before)) tl[id] = structuredClone(it)
+  }, 'take the joined take out of the cut again')
+  ui.update((u) => { delete u.joinedInCut }, 'joined take note')
+  return true
+}
+
+/** How many V1 clips carry an edit Assemble first cut again would lose: a trim (a window that is not its shot's
+ *  window of its take), a fade, a transition, a speed or a hold, or a clip that stands for no shot (added by
+ *  hand). UAT 2026-11-21: Assemble again dropped the person's trims without a word. */
+export function assembleLoses(cut: Cut, gens: Gen[]): number {
+  let n = 0
+  for (const c of cut.v1) {
+    const g = gens.find((x) => x.id === c.genId)
+    const shotId = c.follows?.shotId
+    const w = g && shotId ? shotWindow(g, shotId) : undefined
+    const trimmed = !w || Math.abs(w.inS - c.inS) > 0.01 || Math.abs(w.outS - c.outS) > 0.01
+    if (trimmed || c.fadeInS > 0 || c.fadeOutS > 0 || !!c.transition || c.speed !== 1 || c.holdS > 0) n++
+  }
+  return n
+}

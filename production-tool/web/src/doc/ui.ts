@@ -11,7 +11,7 @@
 // script's words into the document (features/contract-v3.clan).
 
 import type { SerializedUndo } from '../../../clan-store/src'
-import type { ClipQuality, DirectorCard, JobRequest, Me, ModelChoice, Region } from '../contracts/types'
+import type { ClipQuality, DirectorCard, JobRequest, Me, ModelChoice, Region, TimelineItem } from '../contracts/types'
 import type { ConfigChoice, ProviderChoice } from '../capabilities'
 import type { JobPurpose } from '../model/purpose'
 import type { EditSession } from '../stages/imageEditor/edits'
@@ -99,6 +99,20 @@ export interface ProjectUi {
   script?: Record<string, ScriptUi>
   /** "Choose Kapi's front" is open on the canvas for this key (stages/FrontsNeeded.tsx). */
   chooseFront?: string
+  /** A joined take Edie put into the cut (rooms/editOps placeJoinedTake), said in the rooms with Undo until
+   *  dismissed: the V1 items before and after, so Undo puts back exactly what was there. */
+  joinedInCut?: JoinedInCut
+}
+
+/** A joined take placed in the cut (UAT 2026-11-21, B2). */
+export interface JoinedInCut {
+  videoId: string
+  genId: string
+  text: string
+  /** The video's V1 items before the take went in, by id. */
+  before: Record<string, TimelineItem>
+  /** The V1 items right after, as JSON: Undo restores `before` only while the cut is still this. */
+  after: string
 }
 
 /** One person's choices in one script (features/script-editor.clan). */

@@ -248,3 +248,12 @@ export function boxBeats(g: Pick<Gen, 'segments'>, box: Pick<Box, 'shotIds'> | u
   const segs = box ? g.segments.filter((s) => box.shotIds.includes(s.shotId)) : g.segments
   return segs.length > 1 ? segs.slice(1).map((s) => ({ atS: s.inS, label: `Shot ${shotNo(s.shotId)}` })) : undefined
 }
+
+/** A box's current take: its newest ready take made of the whole box (a joined box's joined take), else its
+ *  newest ready take of any of its shots. UAT 2026-11-21: after a join and Make, the 2-shot box showed the old
+ *  shot-2 clip ("v2 · 2.5 s · In the cut") as its take. */
+export function boxTop<G extends Pick<Gen, 'boxKey' | 'boxKeys' | 'state' | 'shotIds'>>(takes: G[], box: Pick<Box, 'key' | 'shotIds'> | undefined): G | undefined {
+  const ready = takes.filter((g) => g.state === 'ready' && inBox(g, box?.key))
+  const whole = (g: G) => !!box && box.shotIds.every((id) => g.shotIds.includes(id))
+  return ready.find(whole) ?? ready[0]
+}

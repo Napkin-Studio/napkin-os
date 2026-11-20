@@ -519,3 +519,19 @@ describe('the live case (2026-10-19): one shot made alone, then every gap set to
     expect(a.submits.at(-1)!.input.shots).toHaveLength(5)
   })
 })
+
+describe('+ New box from words in a storyboard film (UAT 2026-11-21, B1)', () => {
+  it('a lone shot with no frame is made from its words when the Make room says so', async () => {
+    const a = film([3, 3, 4], () => ({}), (d, shots) => {
+      // The third shot is the new box: words, no frame, cut from the shots before it.
+      const s = shots[2]
+      s.pick = undefined
+      for (const f of Object.values(d.frames)) if (f.shot_id === s.id) delete d.frames[f.id]
+    })
+    await splitHere(a.store, a.videoId, a.shots[2].id)
+    const failed = await makeRuns(a.deps, { videoId: a.videoId, shotIds: [a.shots[2].id], config: on, modelChoice: veoFast, again: true, fromWords: true })
+    expect(failed).toEqual([])
+    expect(a.submits.at(-1)).toMatchObject({ op: 'clip', purpose: { for: 'clip', shotId: a.shots[2].id } })
+    expect(a.submits.at(-1)!.input.image).toBeUndefined()
+  })
+})

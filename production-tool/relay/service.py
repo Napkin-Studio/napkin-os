@@ -2706,7 +2706,7 @@ class Relay:
         stitch cannot read (the mock's still, no stitch here) lands with every found_s null."""
         inp = job["_req"]["input"]
         sheet = effective_sheet(self.registry.sheet(job["provider"]), "clip", job.get("model"))
-        _, starts, _ = connected.take_plan(inp, sheet["ops"]["clip"])
+        duration, starts, _ = connected.take_plan(inp, sheet["ops"]["clip"])
         kind = "mock" if job["provider"] == "mock" else "generated"
         key = self.blobs.key_for_url(outputs[0]["url"])
         if self.stitch is None or key is None or not str(outputs[0].get("mime", "")).startswith("video/"):
@@ -2715,7 +2715,7 @@ class Relay:
         if job.get("_slot"):
             self.store.incr(job["_slot"], "n", -1)
         event = {"jobId": job["jobId"], "mode": "take_cuts", "key": key, "cuts": starts[1:],
-                 "searchS": connected.search_s((sheet.get("video") or {}).get("take")),
+                 "searchS": connected.take_search_s((sheet.get("video") or {}).get("take"), starts, duration),
                  "threshold": connected.CUT_THRESHOLD, "resultKey": f"{self._scratch(job)}/cuts.json"}
         saved = self._save(job, state="submitted", _stage="take_cuts", _stageAt=self.clock(), _landed=outputs,
                            _starts=starts, _confirmed=cost_usd, _slot=None, _queue="r", _leaseUntil=None)

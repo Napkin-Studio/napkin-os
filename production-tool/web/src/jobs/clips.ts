@@ -136,7 +136,7 @@ export async function makeTake(
   deps: FrameDeps,
   videoId: Id,
   runId: Id,
-  opts: { modelChoice?: ModelChoice; quality?: ClipQuality; refsMax?: number; texts?: Record<Id, string> } = {},
+  opts: { modelChoice?: ModelChoice; quality?: ClipQuality; refsMax?: number; texts?: Record<Id, string>; fit?: (seconds: number) => number } = {},
 ): Promise<string> {
   const d = liveGet(deps.doc)
   const run = d.videos[videoId]?.runs?.[runId]
@@ -166,7 +166,7 @@ export async function makeTake(
       if (!refs.some((x) => x.id === r.id)) refs.push(r)
     }
   }
-  const { starts } = takeTiming(shots.map((s) => s.duration_s))
+  const { starts } = takeTiming(shots.map((s) => s.duration_s), opts.fit)
   // Each shot's line: its action, then any words given for it only (Make clip's box).
   const line = (s: Shot, i: number) => [s.action?.trim() || s.direction?.trim() || `Shot ${i + 1}`, opts.texts?.[s.id]?.trim()].filter(Boolean).join(' ')
   const cuts = shots.map((s, i) => ({ atS: starts[i], text: clipText(line(s, i), 600) }))

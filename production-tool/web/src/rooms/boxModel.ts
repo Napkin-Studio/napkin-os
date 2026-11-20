@@ -69,6 +69,19 @@ export function boxModelNote(doc: ProductionDocument, box: Box, m: ModelChoice):
 /** The model a box is made on: the one picked for it, kept even past its limits (the box then says so and
  *  Make waits: a joined box keeps the earlier box's model, features/join-or-cut-shots.clan); else the last
  *  that worked, unless that one cannot make this box (Veo for shots made together); then the first that can. */
+/** When the box is made on another model than the one the film makes clips with (the person's pick, else the
+ *  last that worked, else the first), which one and why, for the box to say (UAT 2026-11-21: a joined box went to
+ *  Gemini Omni Flash 1.1 with Veo greyed and nothing said why). */
+export function boxModelSwitch(doc: ProductionDocument, box: Box, config: Config, picked?: ModelChoice): { to: string; from: string; why: string } | undefined {
+  if (picked) return undefined
+  const wanted = lastWorkedModel(doc, 'clip', config) ?? modelChoicesFor('clip', config)[0]
+  const why = wanted ? boxModelWhyNot(doc, box, wanted) : undefined
+  const got = boxModel(doc, box, config)
+  if (!wanted || !why || !got || (got.model === wanted.model && got.provider === wanted.provider)) return undefined
+  const label = (m: ModelChoice) => entryOf(m)?.label ?? m.model
+  return { to: label(got), from: label(wanted), why: why.replace(/^Can't/, "can't").replace(/^Needs/, 'needs') }
+}
+
 export function boxModel(doc: ProductionDocument, box: Box, config: Config, picked?: ModelChoice): ModelChoice | undefined {
   if (picked && !boxModelCant(doc, box, picked)) return picked
   const options = modelChoicesFor('clip', config)

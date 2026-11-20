@@ -11,7 +11,7 @@ import { selectedFrame } from '../jobs/frames'
 import { joinBlock } from '../jobs/runs'
 import { gapJoins, videoShots, writeJoins } from '../jobs/runView'
 import { shotRefSet } from '../jobs/select'
-import { shotNumber } from '../model/selectors'
+import { beatsOf, shotNumber } from '../model/selectors'
 import { boxModel, boxModelCant, boxModelWhyNot, entryOf, takeLimits } from './boxModel'
 import { roomBoxes, type Box } from './model'
 import { startPicture } from './newBox'
@@ -41,9 +41,14 @@ export function stripGaps(doc: Doc, boxes: Box[], videoId: Id, config: Pick<Conf
     const a = plan.get(prev)
     const b = plan.get(id)
     const blocked = joined ? undefined : !config.flags.connectedVideo ? 'Making several shots as one video is off in this build'
-      : a && b ? joinBlock(a.s, b.s, a.i) : undefined
+      : a && b ? joinBlock(a.s, b.s, a.i, (sid) => spokenLine(doc, sid)) : undefined
     return { shotId: id, n: shotNumber(doc, id), joined, ...(blocked ? { blocked } : {}) }
   })
+}
+
+/** A shot's first spoken line (a line or VO beat), for the gap's words. */
+export function spokenLine(doc: Doc, shotId: Id): string | undefined {
+  return beatsOf(doc, shotId).find((b) => (b.kind === 'line' || b.kind === 'vo') && b.text?.trim())?.text?.trim()
 }
 
 /** The boxes as they would be once this gap is flipped (the same join model, on a copy of the document). */

@@ -16,7 +16,7 @@ import { Float } from '../ui/Float'
 import { useSending } from '../ui/hooks'
 import type { ChangeOpen } from './ChangeDrawer'
 import { clipEnd, clipLen, fitWords, handleShort, type CutClip } from './cut'
-import { appendTake, assembleFirstCut, editCut } from './editOps'
+import { appendTake, assembleFirstCut, assembleLoses, editCut } from './editOps'
 import { createPortal } from 'react-dom'
 import { Inspector } from './Inspector'
 import { boxName, sharesBox, type Gen } from './model'
@@ -243,7 +243,7 @@ export function EditRoom({ data, sel, onSel, onChange, onSound, register, ready:
         </div>, booth)}
       <div className="rm-tlwrap">
         <Timeline data={data} cut={cut} t={t} marks={marks} picked={picked} ripple={ripple} onRipple={setRipple} snap={snap} onSnap={setSnap}
-          making={making} ready={ready} tools={toolSlot} fit={plan.lengthS > 0 ? fit : undefined}
+          making={making} ready={ready} tools={toolSlot} fit={plan.lengthS > 0 ? fit : undefined} loses={assembleLoses(cut, data.gens)}
           actions={{
             seek: (s) => { setPlaying(false); setT(Math.min(Math.max(0, s), Math.max(plan.lengthS, 0))) },
             pick,
