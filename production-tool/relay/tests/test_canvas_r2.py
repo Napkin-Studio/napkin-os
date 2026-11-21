@@ -176,10 +176,13 @@ def test_the_extend_lands_with_the_master_laid_back_on_a_ramp():
     painted = Image.new("RGB", (plan["canvas"]["w"], plan["canvas"]["h"]), (0, 0, 0))
     out = Image.open(io.BytesIO(formats.feathered(png(painted), png(master), plan))).convert("RGB")
     y = at["y"] + at["h"] // 2
-    assert out.getpixel((at["x"] - 2, y)) == (0, 0, 0)  # the band is the model's
+    assert out.getpixel((2, y)) == (0, 0, 0)  # the band is the model's
     assert out.getpixel((at["x"] + at["w"] // 2, y)) == (200, 200, 200)  # inside is the master's own
+    # Round 5 (S2-C): beside the picture the band's tone is matched to its edge, fading out into the model's own.
+    beside = [out.getpixel((at["x"] - i, y))[0] for i in range(1, at["x"])]
+    assert beside[0] > 180 and beside == sorted(beside, reverse=True) and beside[-1] == 0
     ramp = [out.getpixel((at["x"] + i, y))[0] for i in range(o)]
-    assert ramp == sorted(ramp) and 0 < ramp[o // 2] < 200  # across the overlap one fades into the other
+    assert ramp == sorted(ramp) and all(abs(v - 200) <= 8 for v in ramp)  # no step across the overlap
     # A result of another size is fitted to the canvas first.
     small = painted.resize((painted.width // 2, painted.height // 2))
     assert Image.open(io.BytesIO(formats.feathered(png(small), png(master), plan))).size == painted.size

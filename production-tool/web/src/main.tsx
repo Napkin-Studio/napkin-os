@@ -56,14 +56,17 @@ async function boot() {
   }
   relay.onUnauthorised = refused
   // Unreachable: keep who this browser last knew, so the projects here still open.
+  // The config is asked beside who is signed in, not after (UAT round 5: a fresh load was blank for about 12 s, its
+  // round trips one after another); it is used only when the person is signed in.
+  const configAsked = relay.kind === 'http' ? relay.config().catch(() => null) : Promise.resolve(null)
   try {
     const me = await relay.me()
     app.update((u) => { u.me = me ?? undefined })
   } catch (e) {
     if (access.get() === 'ok') console.error('could not ask the relay who is signed in', e)
   }
-  // Signed out (or not confirmed): nothing to configure, so not asked (a 401 is a state, not an error).
-  const remoteConfig = relay.kind === 'http' && access.get() === 'ok' ? await relay.config() : null
+  // Signed out (or not confirmed): nothing to configure (a 401 is a state, not an error).
+  const remoteConfig = relay.kind === 'http' && access.get() === 'ok' ? await configAsked : null
 
   // The person's projects on the relay (features/personal-workspaces.clan): saved from here, listed
   // on Home and opened from any browser under the same name. Not on the in-browser mock relay.

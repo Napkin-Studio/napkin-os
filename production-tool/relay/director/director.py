@@ -81,6 +81,11 @@ MODEL_DROP = ("pricing",)
 # for. The relay's own words, outside Dex's budget; said once.
 NO_OTHER_BRANDS = "No other brands, logos or readable trademarks."
 BRAND_FREE_OPS = ("generate", "frame")
+# UAT round 5 (S3-6): a frame of "a bakery at dawn" said "No brands, logos or readable trademarks" and still painted a
+# real chain's name on the shop sign. A shop's sign is where a model reaches for a real name, so a generate or a frame
+# also says this, once, outside Dex's budget.
+NO_REAL_SIGNS = "Shop signs and storefronts show no real business's name."
+_SIGNS_SAID = re.compile(r"\bno real business", re.I)
 _BRANDS_SAID = re.compile(r"\bno (?:other |real |visible )?(?:brands?|logos?|trademarks?)\b", re.I)
 # A storyboard frame copied the one before and doubled its people (R2-4): @previous is for continuity only.
 PREVIOUS_IS_NOT_A_COPY = ("@previous is the moment before, for continuity only: draw this shot's own new moment and "
@@ -97,7 +102,7 @@ SHOT_FRAMING = "Frame it as a {size} shot{angle}, as the shot list says."
 # pentagon (Dex wrote the card's "pentagon"). A layout with no words is a photograph of real things.
 LAYOUT_ONLY_PHOTO = ("A finished photograph, not a drawing or clip art: each shape in the layout is the real thing "
                      "it stands for (a round shape in the sky is the sun), never a geometric shape.")
-RELAY_LINES = (NO_OTHER_BRANDS, PREVIOUS_IS_NOT_A_COPY)
+RELAY_LINES = (NO_OTHER_BRANDS, NO_REAL_SIGNS, PREVIOUS_IS_NOT_A_COPY)
 # A palette is accents (UAT round 3 R3-2: "Use only these colours" made every photo a flat 3-colour poster): unless the
 # palette says Strict, the relay rewrites an "only these colours" Dex still writes into accents, whatever prompt version.
 _ONLY_COLOURS = re.compile(r"\b(?:use |using |in |with )?only (?:these|the(?: brand(?:'s)?)?|its|our) (?:brand )?(?:colou?rs|palette)\b", re.I)
@@ -315,6 +320,8 @@ def _no_other_brands(job: dict, op: str, sheet: dict) -> None:
     a region_edit), which keeps what it has."""
     if op in BRAND_FREE_OPS and not _BRANDS_SAID.search(job.get("prompt") or ""):
         _add_line(job, NO_OTHER_BRANDS, sheet)
+    if op in BRAND_FREE_OPS and not _SIGNS_SAID.search(job.get("prompt") or ""):
+        _add_line(job, NO_REAL_SIGNS, sheet)
 
 
 def _previous_is_not_a_copy(job: dict, op: str, sheet: dict) -> None:
