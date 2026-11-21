@@ -11,7 +11,7 @@
 // opened, and a double-click picks one view out of its group; on the one picture selected, it opens the
 // picture in the Image editor (dblclick.ts).
 
-import { useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import { RouterContext, useDoc, useServices, useStoredDoc } from '../../app/context'
 import { scriptRoute } from '../../app/route'
 import { updateDoc } from '../../doc/store'
@@ -41,6 +41,7 @@ import { liveGet } from '../../model/live'
 import { BriefCard } from '../../brief/BriefCard'
 import { briefOpenUrl } from '../../brief/feedWords'
 import { briefOfElement } from '../../brief/canvas'
+import { chipLook } from '../../ui/finals/chipLook'
 
 type Local = { x: number; y: number }
 const WORD: Record<CardKind, string> = { script: 'script', storyboard: 'storyboard', video: 'video' }
@@ -650,9 +651,11 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
         const home = g.members[0].frameId ? canvas.elements().find((e) => e.id === g.members[0].frameId) : undefined
         const end = !!home && (home.customData as { kind?: string } | undefined)?.kind === 'board' && b.y - home.y < 60
         const p = toLocal((end ? b.x + b.w : b.x) + (off?.dx ?? 0), b.y + (off?.dy ?? 0))
+        const look = chipLook(view.zoom)
         return (
-          <button key={g.groupId} type="button" className={`nl-keychip ${g.stacked ? 'stacked' : ''} ${end ? 'end' : ''}`} data-key={g.key} style={{ left: p.x, top: p.y }}
-            title={g.stacked ? 'Click the stack to open it' : 'One character: its views move and link together'}
+          <button key={g.groupId} type="button" className={`nl-keychip ${g.stacked ? 'stacked' : ''} ${end ? 'end' : ''} ${look.dot ? 'dot' : ''}`} data-key={g.key}
+            style={{ left: p.x, top: p.y, '--chip-scale': look.dot ? 1 : look.scale } as CSSProperties} aria-label={groupLabel(g)}
+            title={look.dot ? groupLabel(g) : g.stacked ? 'Click the stack to open it' : 'One character: its views move and link together'}
             onPointerDown={(ev) => ev.stopPropagation()} onClick={() => canvas.select(g.members.map((m) => m.id))}>
             {groupLabel(g)}
           </button>

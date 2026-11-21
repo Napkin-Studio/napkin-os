@@ -85,6 +85,13 @@ _BRANDS_SAID = re.compile(r"\bno (?:other |real |visible )?(?:brands?|logos?|tra
 # A storyboard frame copied the one before and doubled its people (R2-4): @previous is for continuity only.
 PREVIOUS_IS_NOT_A_COPY = ("@previous is the moment before, for continuity only: draw this shot's own new moment and "
                           "framing, not a copy of it, and show each person once.")
+# UAT round 4: frame 2 nearly copied frame 1's framing. A frame says its shot's own size and angle from the shot list,
+# when Dex's prompt has not said them.
+SHOT_FRAMING = "Frame it as a {size} shot{angle}, as the shot list says."
+# UAT round 4 S3-8: a sketch sent as a layout only, with no words, came back flat clip art with the sun a yellow
+# pentagon (Dex wrote the card's "pentagon"). A layout with no words is a photograph of real things.
+LAYOUT_ONLY_PHOTO = ("A finished photograph, not a drawing or clip art: each shape in the layout is the real thing "
+                     "it stands for (a round shape in the sky is the sun), never a geometric shape.")
 RELAY_LINES = (NO_OTHER_BRANDS, PREVIOUS_IS_NOT_A_COPY)
 # A palette is accents (UAT round 3 R3-2: "Use only these colours" made every photo a flat 3-colour poster): unless the
 # palette says Strict, the relay rewrites an "only these colours" Dex still writes into accents, whatever prompt version.
@@ -310,6 +317,33 @@ def _previous_is_not_a_copy(job: dict, op: str, sheet: dict) -> None:
     if op == "frame" and any(r.get("name") == "previous" for r in job.get("refs") or []) \
             and not _PREVIOUS_SAID.search(job.get("prompt") or ""):
         _add_line(job, PREVIOUS_IS_NOT_A_COPY, sheet)
+
+
+def _shot_framing(job: dict, op: str, payload: dict, sheet: dict) -> None:
+    """A storyboard frame is drawn at its own shot's size and angle (round 4: frame 2 copied frame 1's framing)."""
+    cam = ((payload.get("shot") or {}).get("camera")) or {}
+    if op != "frame" or not cam.get("size"):
+        return
+    try:
+        words = camera_words()
+    except Exception:  # never fails a job: the frame goes as Dex wrote it
+        return
+    size = (words.get("size") or {}).get(cam["size"]) or {}
+    angle = (words.get("angle") or {}).get(cam.get("angle") or "") or {}
+    prompt = (job.get("prompt") or "").lower()
+    if not size.get("label") or any(w.lower() in prompt for w in size.get("words") or [size["label"]]):
+        return
+    at = f", at {angle['label']}" if angle.get("label") and not any(w.lower() in prompt for w in angle.get("words") or []) else ""
+    _add_line(job, SHOT_FRAMING.format(size=size["label"], angle=at), sheet)
+
+
+def _layout_is_a_photo(job: dict, op: str, payload: dict, sheet: dict) -> None:
+    """A generate from a layout drawing with no words is a photograph of real things, not clip art (round 4, S3-8)."""
+    if op != "generate" or (payload.get("text") or "").strip():
+        return
+    if not any(r.get("role") == "layout" and r.get("kind") == "drawing" for r in payload.get("refs") or []):
+        return
+    _add_line(job, LAYOUT_ONLY_PHOTO, sheet)
 
 
 def strict_palette(payload: dict) -> bool:
@@ -975,6 +1009,8 @@ class Director:
             _within_budget(job, op, payload)
         _views_are_one(job, op, payload)  # the relay's own words: outside the director's budget
         _previous_is_not_a_copy(job, asked, sheet)
+        _shot_framing(job, asked, payload, sheet)
+        _layout_is_a_photo(job, asked, payload, sheet)
         _no_other_brands(job, asked, sheet)
         _palette_as_accents(job, asked, payload)
         view_subject(job, op, payload)  # a view of a person goes as a person, and says who (pt-canvas-r1)

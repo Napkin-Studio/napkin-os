@@ -39,3 +39,8 @@
 .pen-more:hover { background: var(--soft); color: var(--ink); }
 .pen-picker { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; bottom: 0; left: 50%; }
 @media (pointer: coarse) { .pen-more { width: 44px; height: 44px; } }
+
+/* The canvas tool options in the top bar (UAT round 4 S3-2): one row, no float, off the canvas. */
+.tb-tooloptions { display: flex; align-items: center; min-width: 0; margin-left: 16px; }
+.tb-tooloptions:empty { display: none; }
+.tb-tooloptions .pen-options { position: static; transform: none; box-shadow: none; border: 1px solid var(--line-soft); padding: 4px 8px; }

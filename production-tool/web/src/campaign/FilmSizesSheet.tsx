@@ -323,7 +323,7 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
             </div>
             {error && <p className="cf-error" role="alert">{error}</p>}
             <footer className="cf-foot">
-              <span className="cf-note">{versionsWord(rows.filter((r) => r.on).length)}, cut from the same takes{paid.length ? `; ${paid.length} ${paid.length === 1 ? 'shot' : 'shots'} made again on a model` : ''}. They land on the Campaign board's Film lane.</span>
+              <span className="cf-note">{versionsWord(rows.filter((r) => r.on).length)}, cut from the same takes{paid.length ? `; ${paid.length} ${paid.length === 1 ? 'shot' : 'shots'} on a model` : ''}. They land on the Campaign board's Film lane.</span>
               <span className="pt-grow" />
               <button type="button" className="btn ghost" onClick={() => setStep('plan')}>Back</button>
               <button type="button" className="btn primary" disabled={busy || !rows.some((r) => r.on)} onClick={() => void send()}>

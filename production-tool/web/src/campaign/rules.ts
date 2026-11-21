@@ -37,6 +37,24 @@ export const REGENERATE_BELOW = 0.35
  * matches the master, so it is the last resort; an extend keeps the master's own pixels.
  */
 export const SET_REGENERATE_BELOW = 0.25
+/**
+ * An extend grows the picture in steps of at most EXTEND_STEP_GROWTH, at most EXTEND_STEPS_MAX of them (relay/formats.py
+ * steps_needed and extend_fits: the same numbers). Past that (16:9 to 9:16 is 3.2 times) the bands were seeded with
+ * mirrored shapes the model kept, four suns stacked (UAT round 4 S1-1): it is not an extend, it is a Redraw at that shape.
+ */
+export const EXTEND_STEP_GROWTH = 0.35
+export const EXTEND_STEPS_MAX = 3
+
+/** How many extend steps of at most 35 % reach `target` from `master` (uncapped; 1 for the same shape). */
+export function extendSteps(master: Aspect, target: Aspect): number {
+  const grow = 1 / filled(master, target)
+  if (grow <= 1.0001) return 1
+  return Math.max(1, Math.ceil(Math.log(grow) / Math.log(1 + EXTEND_STEP_GROWTH) - 1e-9))
+}
+
+/** Whether an extend reaches `target` in at most three steps of 35 % (16:9 to 21:9, 1:1 or 4:5 does; to 9:16 does not). */
+export const extendFits = (master: Aspect, target: Aspect): boolean => extendSteps(master, target) <= EXTEND_STEPS_MAX
+
 /** A display banner this long or this tall is laid out on a brand colour field. */
 export const STRIP = 3
 
@@ -90,8 +108,8 @@ export function availableMethods(models: Partial<Record<SizeMethod, MethodModel>
   return new Set<SizeMethod>(['crop', 'layout', 'reedit', 'reframe', ...(Object.keys(models) as SizeMethod[])])
 }
 
-/** A method in the tray's and the tile's words: "Extend · Ideogram 4.5", "Crop". No price and no cost word (owner rule;
- *  UAT round 4, R4-F8: "Crop · free"). */
+/** A method in the tray's and the tile's words: "Extend · Ideogram 4.5", "Crop". No price, and no "free" or "paid" (owner
+ *  rule 2026-10-13, UAT round 4 S2-4: costs only in Decisions). */
 export function methodWords(method: SizeMethod, models: Partial<Record<SizeMethod, MethodModel>>): string {
   if (PAID.has(method)) return models[method] ? `${METHOD_WORD[method]} · ${models[method]!.label}` : `${METHOD_WORD[method]} · off for your agency`
   return METHOD_WORD[method]
@@ -132,8 +150,8 @@ export function methodFor(row: PlanRow, master: Master, protect: readonly Protec
   let method: SizeMethod
   if (row.format.kind === 'display' && (r >= STRIP || r <= 1 / STRIP) && available.has('layout')) method = 'layout'
   else if (fits || (!available.has('extend') && !available.has('regenerate'))) method = 'crop'
-  else if (filled(master, target) < SET_REGENERATE_BELOW && available.has('regenerate')) method = 'regenerate'
-  else method = available.has('extend') ? 'extend' : 'regenerate'
+  else if ((filled(master, target) < SET_REGENERATE_BELOW || !extendFits(master, target)) && available.has('regenerate')) method = 'regenerate'
+  else method = available.has('extend') && extendFits(master, target) ? 'extend' : 'regenerate'
   if (RUNNABLE.has(method) && (!PAID.has(method) || available.has(method))) return { method, now: method, fits }
   return { method, now: 'crop', waits: wait(method), fits }
 }
@@ -149,7 +167,7 @@ export const AUTO_CROP_KEEPS = 0.8
 export function autoMethod(master: Aspect, target: Aspect, available: ReadonlySet<SizeMethod> = availableMethods()): SizeMethod {
   const f = filled(master, target)
   if (f >= AUTO_CROP_KEEPS) return 'crop'
-  if (f < REGENERATE_BELOW && available.has('regenerate')) return 'regenerate'
-  if (available.has('extend')) return 'extend'
+  if ((f < REGENERATE_BELOW || !extendFits(master, target)) && available.has('regenerate')) return 'regenerate'
+  if (available.has('extend') && extendFits(master, target)) return 'extend'
   return available.has('regenerate') ? 'regenerate' : 'crop'
 }

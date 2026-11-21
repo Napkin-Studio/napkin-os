@@ -32,18 +32,31 @@ describe('no prices in the UI', () => {
   })
 })
 
-// Nor a cost word (owner rule; UAT round 4, R4-F8: "Crop · free", "(free)", "(paid)", "cost in History"): what a person
-// sees never says a thing is free, paid or what it cost. Code names (a `paid` list, the `free` page class) are fine.
-const COST_WORDS = /['"`>][^'"`<>]*(?:·\s*free\b|\((?:free|paid)\)|\bcost in (?:History|Decisions)\b|\bNothing paid\b|\bFree, and\b|what each job cost)[^'"`<>]*['"`<]/
+// UAT round 4 S2-4: the Resize confirm still said "What each costs is in History", and trays said "Crop · free",
+// "(paid)", "(cost in Decisions)". Outside the Decisions panel no tray, confirm or sheet speaks of cost at all.
+const COST_WORDS = [
+  /\bcosts? (?:is |are )?(?:in|shown in) (?:History|Decisions)/i,
+  /\(cost in /i,
+  /· (?:free|paid)\b/,
+  /\((?:free|paid)\)(?! [\w{(])/,
+  /: 'free'\}/,
+  /\bFree, /,
+  /\bnothing (?:was |has been )?paid\b/i,
+  /' · paid'/,
+  // Round 4 film (R4-F8): the same rule from the film side.
+  /\bcost in (?:History|Decisions)\b/,
+  /what each job cost/,
+]
+const COST_ALLOWED = new Set(['ui/historyItems.ts', 'ui/History.tsx', 'ui/HistoryList.tsx', 'noPrices.test.ts'])
 
-describe('no cost words in the UI', () => {
-  it('never "· free", "(free)", "(paid)" or "cost in History"', () => {
+describe('no cost words outside Decisions', () => {
+  it('no tray, confirm or sheet mentions cost, free or paid', () => {
     const found = files(SRC)
       .map((p) => relative(SRC, p).split('\\').join('/'))
-      .filter((rel) => !ALLOWED.has(rel))
+      .filter((rel) => !COST_ALLOWED.has(rel))
       .flatMap((rel) => readFileSync(join(SRC, rel), 'utf8').split('\n')
         .map((line, i) => ({ rel, line, n: i + 1 }))
-        .filter(({ line }) => COST_WORDS.test(line) && !line.trim().startsWith('//') && !line.trim().startsWith('*')))
+        .filter(({ line }) => !/^(\/\/|\/\*|\*)/.test(line.trim()) && COST_WORDS.some((re) => re.test(line))))
       .map(({ rel, n, line }) => `${rel}:${n}: ${line.trim()}`)
     expect(found).toEqual([])
   })

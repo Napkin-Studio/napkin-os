@@ -53,8 +53,12 @@ def stored(h, n=7, data=None):
     return a
 
 
-def size_input(h, method="crop", **rz):
-    return {"image": stored(h), "aspect": {"w": 9, "h": 16}, "delivery": {"width": 1440, "height": 2560},
+def size_input(h, method="crop", aspect45=False, **rz):
+    """A size of the 320 x 180 master: 9:16 Reels, or 4:5 (`aspect45`; an extend reaches it in three steps, 9:16 it
+    does not: features/pt-canvas-r4.clan)."""
+    shape = ({"aspect": {"w": 4, "h": 5}, "delivery": {"width": 1080, "height": 1350}} if aspect45
+             else {"aspect": {"w": 9, "h": 16}, "delivery": {"width": 1440, "height": 2560}})
+    return {"image": stored(h), **shape,
             "safeArea": {"type": "insets", "top": 14, "right": 6, "bottom": 35, "left": 6, "unit": "%"},
             "resize": {"method": method, "masterSize": {"w": 320, "h": 180},
                        "protect": [{"role": "subject", "x": 40, "y": 30, "w": 40, "h": 120}], **rz}}
@@ -120,20 +124,24 @@ def finish_job(h, token, job, data):
 
 
 def test_extend_sends_the_padded_canvas_and_a_mask_to_ideogram_at_high_never_the_words():
-    """Stepped outpainting (features/pt-canvas-r3.clan, IMG-9): 16:9 to 9:16 grows the picture 3.2 times, so it runs
-    as EXTEND_STEPS_MAX Ideogram calls, each reserved and each its own canvas, the last one the size's shape."""
+    """Stepped outpainting (features/pt-canvas-r3.clan, IMG-9): 16:9 to 4:5 grows the picture 2.2 times, so it runs
+    as EXTEND_STEPS_MAX Ideogram calls, each reserved and each its own canvas, the last one the size's shape (9:16 is
+    past three steps of 35 % and is refused: features/pt-canvas-r4.clan, S1-1)."""
     h = paid_harness()
     token = h.as_person()
-    _, job = h.post_job(token, op="resize", expect=200, **size_input(h, "extend", layers=LAYERS))
+    inp = size_input(h, "extend", layers=LAYERS)
+    inp.update(aspect={"w": 4, "h": 5}, delivery={"width": 1080, "height": 1350})
+    _, job = h.post_job(token, op="resize", expect=200, **inp)
+    assert job["progress"] == {"step": 1, "steps": 3}
     runway = h.providers["runway"]
     (sent,) = runway.submits
     assert job["provider"] == "runway" and job["model"] == "ideogram_4_5" and job["crew"] == "wren"
     assert job["cost"]["reserved"] == pytest.approx(0.75)  # Ideogram 4.5 at high: 25 credits a step, 3 steps
     assert sent["prompt"] == formats.EXTEND_PROMPT and LINE not in json.dumps(sent)
     assert [r["role"] for r in sent["refs"]] == ["current"] and sent["mask"] and "ratio" not in sent
-    plan = formats.pad_plan(320, 180, 9, 16, [{"x": 40, "y": 30, "w": 40, "h": 120}], formats.safe_fracs(size_input(h)["safeArea"]))
+    plan = formats.pad_plan(320, 180, 4, 5, [{"x": 40, "y": 30, "w": 40, "h": 120}], formats.safe_fracs(inp["safeArea"], inp["delivery"]))
     steps = formats.step_plans(plan)
-    assert len(steps) == 3 and steps[-1]["canvas"] == {"w": 320, "h": 569}
+    assert len(steps) == 3 and steps[-1]["canvas"] == {"w": 320, "h": 400}
     for k, step in enumerate(steps, 1):
         canvas = Image.open(io.BytesIO(h.blobs.fetch(f"{CDN}/ads/scratch/{job['jobId']}/canvas-{k}.jpg")))
         mask = Image.open(io.BytesIO(h.blobs.fetch(f"{CDN}/ads/scratch/{job['jobId']}/mask-{k}.png")))
@@ -146,13 +154,15 @@ def test_extend_sends_the_padded_canvas_and_a_mask_to_ideogram_at_high_never_the
         done = finish_job(h, token, {k: v for k, v in job.items() if k != "requestId"}, png(c["w"], c["h"]))
         if k < len(steps):
             assert done["state"] in ("submitted", "queued") and len(runway.submits) == k + 1, (k, done)
+            assert done["progress"] == {"step": k + 1, "steps": 3}  # the card says "step 2 of 3"
     assert done["state"] == "completed" and done["cost"]["confirmed"] == pytest.approx(0.75)
     assert done["resize"]["method"] == "extend" and done["resize"]["layers"] == 1
-    assert done["resize"]["previewPx"] == {"width": 1152, "height": 2048}
+    w, hh = done["resize"]["previewPx"]["width"], done["resize"]["previewPx"]["height"]
+    assert abs(w / hh - 0.8) < 0.01
     assert done["resize"]["crop"] == {"x": 0, "y": 0, "w": 320, "h": 180}
-    assert done["outputs"][0]["w"] == 1152 and done["resize"]["plate"]["sha256"] != done["outputs"][0]["sha256"]
+    assert done["outputs"][0]["w"] == w and done["resize"]["plate"]["sha256"] != done["outputs"][0]["sha256"]
     plate = Image.open(io.BytesIO(h.blobs.fetch(done["resize"]["plate"]["url"])))
-    assert plate.size == (1152, 2048)
+    assert plate.size == (w, hh)
 
 
 def test_the_master_sits_so_the_subject_is_in_the_middle_of_the_safe_area():
@@ -239,7 +249,7 @@ def test_regenerate_of_a_named_picture_sends_its_other_views_as_tagged_reference
 def test_extend_and_a_picture_with_no_name_send_the_picture_only():
     h = paid_harness()
     token = h.as_person()
-    inp = size_input(h, "extend")
+    inp = size_input(h, "extend", aspect45=True)
     inp["refs"] = [view_ref(h, 11, "maya_side")]
     h.post_job(token, op="resize", expect=200, **inp)
     h.post_job(token, op="resize", expect=200, **size_input(h, "regenerate"))
@@ -271,10 +281,10 @@ def test_at_most_four_views_go_with_a_regenerate_and_an_object_key_stays_an_obje
 def test_each_paid_size_reserves_its_own_price_and_the_spend_stop_refuses_the_one_over():
     h = paid_harness(spend={"capUsd": 1.0, "warnUsd": 0.9})
     token = h.as_person()
-    _, a = h.post_job(token, op="resize", expect=200, **size_input(h, "extend"))  # 3 steps (pt-canvas-r3)
+    _, a = h.post_job(token, op="resize", expect=200, **size_input(h, "extend", aspect45=True))  # 3 steps (pt-canvas-r3)
     _, b = h.post_job(token, op="resize", expect=200, **size_input(h, "regenerate"))
     assert a["cost"]["reserved"] + b["cost"]["reserved"] == pytest.approx(0.95)
-    _, c = h.post_job(token, op="resize", expect=503, **size_input(h, "extend"))
+    _, c = h.post_job(token, op="resize", expect=503, **size_input(h, "extend", aspect45=True))
     assert c["error"]["code"] == "spend_stop"
     # A free crop still runs past the stop: it spends nothing.
     _, d = h.post_job(token, op="resize", expect=200, **size_input(h))

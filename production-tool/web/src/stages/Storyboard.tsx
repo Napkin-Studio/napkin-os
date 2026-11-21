@@ -448,6 +448,8 @@ function KeepPerson({ asset, storyboardId, action }: { asset: string; storyboard
       <span className="faint">as a character</span>
       <button type="button" className="btn xs primary" disabled={!name.trim()} onClick={save}>Keep</button>
       <button type="button" className="btn xs ghost" onClick={() => setOpen(false)}>Cancel</button>
+      {/* UAT round 4 S3-7: the whole frame is kept, the street and bench with the person. Said, before it is kept. */}
+      <span className="faint sb-keepnote" role="note">This keeps the whole frame as their picture, the place too. To keep only the person, crop the frame to them first (Edit).</span>
       {error && <span role="alert" className="tray-error">{error}</span>}
     </div>
   )

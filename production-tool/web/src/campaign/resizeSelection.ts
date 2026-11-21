@@ -12,7 +12,7 @@ import { boardFrame, fitInto, withFields } from '../canvas/boards/fitting'
 import { alive, bounds, cd, isUserDrawing, makeArrow, makeGenPlaceholder } from '../canvas/scene'
 import { newId } from '../lib/ulid'
 import type { JobRunner } from '../jobs/runner'
-import { autoMethod, availableMethods, methodWords, PAID, type MethodModel } from './rules'
+import { autoMethod, availableMethods, extendFits, methodWords, PAID, type MethodModel } from './rules'
 
 type El = CanvasElement
 type Models = Partial<Record<SizeMethod, MethodModel>>
@@ -135,8 +135,8 @@ export const HOW_WORD: Record<How, string> = { regenerate: 'Redraw', extend: 'Ex
 /** One plain line under each, in the panel. */
 export const HOW_LINE: Record<How, string> = {
   regenerate: 'Draws each picture again at the new shape: the same people, things and light, recomposed to fit.',
-  extend: 'Keeps the picture exactly and paints what is missing round its edges.',
-  crop: 'Cuts each picture to the shape round what must stay (else the middle); drag a frame to move it. Ready in seconds.',
+  extend: 'Keeps the picture exactly and paints what is missing round its edges, in up to three steps. A shape too far from the picture\'s is redrawn instead.',
+  crop: 'Cuts each picture to the shape round what must stay (else the middle); drag a frame to move it. Done in seconds.',
   auto: 'Crops when little is lost, extends when the shape is close, redraws when the picture would sit small.',
 }
 /** Said when a scamp is in the selection and the method draws (owner 2026-10-16). */
@@ -144,8 +144,27 @@ export const SKETCH_LINE = 'Redraw turns the sketch into a picture at each shape
 
 /** The method for one picture at one shape, or null when the agency cannot run it. */
 export function methodOf(how: How, src: Pick<Source, 'w' | 'h'>, shape: Shape, models: Models): SizeMethod | null {
-  const m: SizeMethod = how === 'auto' ? autoMethod({ w: src.w, h: src.h }, { w: shape.w, h: shape.h }, availableMethods(models)) : how
+  let m: SizeMethod = how === 'auto' ? autoMethod({ w: src.w, h: src.h }, { w: shape.w, h: shape.h }, availableMethods(models)) : how
+  // Too far to extend in three steps (UAT round 4 S1-1): a Redraw at that shape, from the picture, said in the panel.
+  if (m === 'extend' && !extendFits({ w: src.w, h: src.h }, { w: shape.w, h: shape.h })) m = 'regenerate'
   return PAID.has(m) && !models[m] ? null : m
+}
+
+/** The shapes Extend cannot reach for these pictures (more than three steps of 35 %), each said once: they are redrawn. */
+export function tooFarToExtend(how: How, sources: readonly Pick<Source, 'w' | 'h'>[], shapes: readonly Shape[]): Shape[] {
+  if (how !== 'extend') return []
+  return shapes.filter((sh) => sources.some((s) => !extendFits({ w: s.w, h: s.h }, { w: sh.w, h: sh.h })))
+}
+
+/** The panel's plain words for them: why, and what happens instead. */
+export function tooFarWords(shapes: readonly Shape[], models: Models): string | undefined {
+  if (!shapes.length) return undefined
+  const ids = shapes.map((s) => s.id)
+  const list = ids.length === 1 ? ids[0] : `${ids.slice(0, -1).join(', ')} and ${ids.at(-1)}`
+  const one = ids.length === 1
+  return models.regenerate
+    ? `${list} ${one ? 'is' : 'are'} too far from this picture's shape to extend without repeating it, so ${one ? 'it is' : 'they are'} redrawn at ${one ? 'that shape' : 'those shapes'} from the picture instead (Redraw).`
+    : `${list} ${one ? 'is' : 'are'} too far from this picture's shape to extend without repeating it, and Redraw is off for your agency.`
 }
 
 /** Why a way cannot run for this agency, or undefined when it can. */

@@ -5,6 +5,7 @@
 // where you are (the steps before the current one are links). Right: only the agent status dot (ui/JobTray),
 // Decisions and you. Every page's own actions sit in its band (Band) under the bar, never in it.
 
+import { TOOL_OPTIONS_SLOT } from './toolSlot'
 import { useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { useShell } from '../../app/context'
 import { Float } from '../Float'
@@ -148,6 +149,7 @@ export function ShellBar({ crumb, menu, job, className = '', bar, history }: {
           <DocSlot menu={menu} />
           {crumb && crumb.length > 0 && <Crumbs crumb={crumb} />}
         </div>
+        {bar === 'canvas' && <span className="tb-tooloptions" id={TOOL_OPTIONS_SLOT} />}
         <span className="tb-spacer" />
         <span className="tb-right">
           {job}

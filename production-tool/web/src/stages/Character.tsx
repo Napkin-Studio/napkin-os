@@ -60,6 +60,7 @@ import { pickPictureVersionStep } from './imageEditor/apply'
 import { Float } from '../ui/Float'
 import { RightsChip } from '../ui/finals/RightsChip'
 import { chipLook } from '../ui/finals/chipLook'
+import { noteCanvasWork, registerCanvasUndo } from '../ui/undoOrder'
 import { BrandFields } from './BrandFields'
 import { PaidButton } from '../ui/PaidButton'
 import { sendingLine, useSlow } from '../ui/sending'
@@ -549,13 +550,21 @@ export function Character({ initial, active, onPictureEditor }: {
   useEffect(() => { ctrl?.setInset(railInset) }, [ctrl, railInset])
   // Assets opened on purpose (+ › A brief from Brief Maker…, Continue in › Link a brief…) is the newest ask: a
   // selected Brief would keep the Booth on itself and the library never showed (re-test 4c).
-  const assetsAsk = panels.assets ? `assets:${panels.assetsTab ?? ''}` : ''
+  // The canvas's own undo answers Ctrl+Z pressed outside it when the canvas was touched last (UAT round 4 S3-3).
+  useEffect(() => {
+    const c = canvas as unknown as { undoScene?: (dir: 'undo' | 'redo') => boolean } | null
+    if (!c?.undoScene || !active) return
+    return registerCanvasUndo((dir) => c.undoScene!(dir))
+  }, [canvas, active])
+  const assetsAsk = panels.assets ? `assets:${panels.assetsTab ?? ''}:${panels.assetsAsk}` : ''
   const lastAsk = useRef('')
   useEffect(() => {
     const fresh = !!assetsAsk && assetsAsk !== lastAsk.current
     lastAsk.current = assetsAsk
     if (fresh && canvas && selBrief) canvas.select([])
-  }, [assetsAsk, canvas, selBrief])
+    // Asked for on purpose: the Booth comes in even when the person had it hidden (UAT round 4 S2-5).
+    if (fresh && panels.assetsTab) booth.bringIn()
+  }, [assetsAsk, canvas, selBrief, panels.assetsTab, booth])
   // And the other way: a Brief selected while the library is open takes the Booth, and the library closes under
   // it. Closing the Brief's Booth (✕) then leaves nothing behind (re-test N-H: the library came back, and stayed
   // open in link mode over the Script target).
@@ -776,7 +785,7 @@ export function Character({ initial, active, onPictureEditor }: {
     <div className="character">
       <CardChromeContext.Provider value={PRODUCTION_CARD_CHROME}>
       <div className="cv-row">
-      <div className="canvas-wrap pt-grid" ref={wrap} style={grid} onMouseDown={noShiftSelect}>
+      <div className="canvas-wrap pt-grid" ref={wrap} style={grid} onMouseDown={noShiftSelect} onPointerDownCapture={holdNoSelect}>
         {frames.length > 0 && <BoardsLayer part="frames" frames={frames} toView={toView} zoom={zoom} current={board} onOpen={open} />}
         <CanvasMount initial={initial} onReady={setCanvas} onChrome={setChrome} onChange={onChange} theme={theme} railInset={railInset} />
         {frames.length > 0 && <BoardsLayer part="cards" frames={frames} toView={toView} zoom={zoom} current={board} onOpen={open} />}
@@ -953,12 +962,14 @@ export function Character({ initial, active, onPictureEditor }: {
         <ZoomPill chrome={chrome} touch={narrow} />
         <LinksToggle chrome={chrome} />
       </div>
-      <Booth state={booth} earned={boothEarned({ selection: !!selBrief, library: panels.assets })}>
+      {/* The picture editor has its own Booth: the canvas's steps aside while it is open (UAT round 4 S3-4: two BOOTH
+          tabs stacked on the right edge). */}
+      {!editingPic && <Booth state={booth} earned={boothEarned({ selection: !!selBrief, library: panels.assets })}>
         {selBrief ? <BriefBooth briefId={selBrief} onClose={() => canvas?.select([])} />
-          : panels.assets ? <AssetsLibrary ctrl={ctrl} env={canvas?.engine === 'own' ? { canvas, doc: docStore } : null} tab={panels.assetsTab} onClose={() => panels.toggle('assets')} onPicture={() => chrome?.setTool('image')}
+          : panels.assets ? <AssetsLibrary ctrl={ctrl} env={canvas?.engine === 'own' ? { canvas, doc: docStore } : null} tab={panels.assetsTab} ask={panels.assetsAsk} onClose={() => panels.toggle('assets')} onPicture={() => chrome?.setTool('image')}
               onCanvas={els.map((e) => imageOf(e)?.asset).filter((x): x is string => !!x)} onScript={() => open('script', mainScript(docStore.get())?.id)} />
           : null}
-      </Booth>
+      </Booth>}
       </div>
       </CardChromeContext.Provider>
       {editingPic && <ImageEditor target={{ kind: 'picture', nodeId: editingPic.nodeId }} picture={editingPic.picture} onBack={() => setEditing(null)} />}
@@ -1325,11 +1336,29 @@ function ResizeFor({ ctrl, items, strokes, total, at, onClose, onSent }: { ctrl:
 /** A shift-click on the canvas adds to the selection, never selects the page's text (UAT round 3 R3-9: the tray and the
  *  chrome turned blue). Words in a field or an editable text still select as usual. */
 function noShiftSelect(e: { shiftKey: boolean; target: EventTarget | null; preventDefault: () => void }) {
-  if (!e.shiftKey) return
   const t = e.target as HTMLElement | null
   if (t?.closest?.('input, textarea, select, [contenteditable="true"]')) return
+  if (!e.shiftKey) return
   e.preventDefault()
   window.getSelection?.()?.removeAllRanges()
+}
+
+/** A press on the drawing surface (a pen stroke, a sketch area, a drag) selects no page text while it lasts, even when
+ *  it passes over the toolbar or a chip (UAT round 4 S3-1): body.pt-nosel (styles.css) until the button is up. */
+function holdNoSelect(e: { target: EventTarget | null }) {
+  if (typeof document === 'undefined') return
+  const t = e.target as HTMLElement | null
+  if (t?.closest?.('button, a, input, textarea, select, [contenteditable="true"], .popover, [role="dialog"], [role="menu"]')) return
+  noteCanvasWork() // Ctrl+Z outside the canvas now means this canvas work first (UAT round 4 S3-3)
+  document.body.classList.add('pt-nosel')
+  window.getSelection?.()?.removeAllRanges()
+  const done = () => {
+    document.body.classList.remove('pt-nosel')
+    window.removeEventListener('pointerup', done, true)
+    window.removeEventListener('pointercancel', done, true)
+  }
+  window.addEventListener('pointerup', done, true)
+  window.addEventListener('pointercancel', done, true)
 }
 
 /** Whether any of a scene box is in the canvas's view. */
@@ -1357,6 +1386,8 @@ const roleLine = (r: RefRole) => (r === 'palette'
   : REF_ROLE_TABLE[r].ui_line)
 
 const KIND_WORD = { pic: 'picture', drawn: 'drawing', gen: 'result' } as const
+/** The brand's own refs: sent (or not) by the tray's brand rows, never offered as names to type. */
+const BRAND_ONLY_ROLES: readonly string[] = ['palette', 'typography', 'brand_rule']
 /** A brand row's kind, as the Generate tray says it. */
 const BRAND_WORD: Record<BrandRow['kind'], string> = { brand_rule: 'brand rule', palette: 'palette', typography: 'typography' }
 
@@ -1454,9 +1485,11 @@ function GeneratePopover({ ctrl, ids, at, onClose, onPlace }: {
     return !(c && 'id' in c && off.has(c.id))
   }), ...linked.filter((r) => !off.has(r.key)).flatMap((r) => r.elIds)]
   const inputs = preview.inputs.filter((i) => !off.has(i.nodeId)).length + linked.filter((r) => r.elIds.length && !off.has(r.key)).length
+  // A note linked into the sketch area goes too (UAT round 4 S3-5: "Sketch, brand (brand rule)" left it out).
+  const notesGoing = preview.notes.length + linked.filter((r) => r.item.kind === 'text' && !!r.goes && !off.has(r.key)).length
   const summary = [preview.sketch ? 'Sketch' : preview.drawings ? 'Drawing' : null,
     inputs ? `${inputs} ${inputs === 1 ? 'input' : 'inputs'}` : null,
-    preview.notes.length ? `${preview.notes.length} ${preview.notes.length === 1 ? 'note' : 'notes'}` : null,
+    notesGoing ? `${notesGoing} ${notesGoing === 1 ? 'note' : 'notes'}` : null,
     brandOn ? `brand (${brand.filter((b) => b.on).map((b) => BRAND_WORD[b.kind]).join(', ')})` : null,
     text.trim() ? 'your words' : null].filter(Boolean).join(', ') || 'Your words only'
   // Every picture that goes, as a person or a thing, against the model's limits (UAT round 1 IMG-6/7/8): the tray
@@ -1481,6 +1514,7 @@ function GeneratePopover({ ctrl, ids, at, onClose, onPlace }: {
     )
   }
   const blocked = !!counted.problem
+  const hintRefs = refsList(doc).filter((r) => !BRAND_ONLY_ROLES.includes(r.role))
   // "<model> on Runway" (ui-behaviour 3.7), the pick or the first routed model.
   const shown = choice ?? modelChoicesFor('generate', config)[0]
   const model = shown ? modelWhere(shown.provider, shown.model) : undefined
@@ -1543,10 +1577,12 @@ function GeneratePopover({ ctrl, ids, at, onClose, onPlace }: {
           }}
         />
       </label>
-      {refsList(doc).length > 0 && (
+      {/* Names to type: pictures, never the brand's palette, type or rules, which the brand rows above send or not
+          (UAT round 4 S3-5: unticked @harbour_colours sat among these as if it went). */}
+      {hintRefs.length > 0 && (
         <div className="taghints" aria-label="Names you can use">
           {wholeKeys(doc).map((k) => <button key={k} className="taghint whole" title={`${k}: its front and other views`} onClick={() => insert(k)}>@{k}</button>)}
-          {refsList(doc).map((r) => <button key={r.id} className="taghint" onClick={() => insert(nameOf(r))}>@{nameOf(r)}</button>)}
+          {hintRefs.map((r) => <button key={r.id} className="taghint" onClick={() => insert(nameOf(r))}>@{nameOf(r)}</button>)}
         </div>
       )}
       {preview.cropLine && <div className="faint" role="note" style={{ fontSize: 12.5 }}>{preview.cropLine}</div>}

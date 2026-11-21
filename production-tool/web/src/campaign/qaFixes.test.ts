@@ -40,7 +40,7 @@ describe('type keeps off what must stay', () => {
 
 describe('smaller words', () => {
   it('the sizes sheet counts what is left out apart from what cannot be made', () => {
-    expect(sheetLine(11, 6, 0, 2)).toBe('11 sizes to make · 6 left out · 2 made on a model')
+    expect(sheetLine(11, 6, 0, 2)).toBe('11 sizes to make · 6 left out · 2 on a model')
     expect(sheetLine(1, 0, 3, 0)).toBe('1 size to make · 3 cannot be made now')
   })
   it('a format name with a bracket before a comma reads cleanly', () => {

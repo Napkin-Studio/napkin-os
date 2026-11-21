@@ -342,7 +342,7 @@ function SendTray({ tray, setId, onClose }: { tray: TrayOpen; setId: string; onC
           <div key={r.id} className={`cb-trayrow ${off.includes(r.id) ? 'off' : ''}`} role="listitem">
             {many && <input type="checkbox" checked={!off.includes(r.id)} aria-label={`Send ${r.name}`}
               onChange={(e) => setOff((o) => (e.target.checked ? o.filter((x) => x !== r.id) : [...o, r.id]))} />}
-            <span className="cb-trayname">{r.name}</span><span className="cf-dots" /><span className="cb-traywords">{r.words}{r.paid ? ' · paid' : ''}</span></div>
+            <span className="cb-trayname">{r.name}</span><span className="cf-dots" /><span className="cb-traywords">{r.words}</span></div>
         ))}
       </div>
       {tray.note && <p className="cb-hint">{tray.note}</p>}
@@ -515,7 +515,7 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, flagsOpen,
                     <button key={m} type="button" role="menuitemradio" aria-checked={size.method === m} className="pt-menurow" disabled={off || size.method === m}
                       title={PAID.has(m) && !models[m] ? 'Off for your agency' : undefined}
                       onClick={() => pickMethod(m)}>
-                      {METHOD_WORD[m]}{PAID.has(m) && <span className="hint">{models[m]?.label ?? 'off'}</span>}{size.method === m && ' ✓'}
+                      {METHOD_WORD[m]}<span className="hint">{PAID.has(m) ? models[m]?.label ?? 'off' : 'in seconds'}</span>{size.method === m && ' ✓'}
                     </button>
                   )
                 })}

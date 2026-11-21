@@ -105,13 +105,16 @@
 
 /* A key group's label (owner 2026-10-15): "Samurai · 3 views" above its views, or on its stack. */
 .node-layer .nl-keychip {
-  position: absolute; transform: translate(0, calc(-100% - 10px)); pointer-events: auto; cursor: pointer;
+  position: absolute; transform: translate(0, calc(-100% - 10px)) scale(var(--chip-scale, 1)); transform-origin: 0 100%; pointer-events: auto; cursor: pointer;
   padding: 3px 10px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--card);
   box-shadow: var(--shadow-pill); font: 600 12px var(--f-sans, Geist, sans-serif); color: var(--ink); white-space: nowrap;
 }
-.node-layer .nl-keychip.stacked { transform: translate(0, calc(-100% - 22px)); }
-.node-layer .nl-keychip.end { transform: translate(-100%, calc(-100% - 10px)); }
-.node-layer .nl-keychip.end.stacked { transform: translate(-100%, calc(-100% - 22px)); }
+.node-layer .nl-keychip.stacked { transform: translate(0, calc(-100% - 22px)) scale(var(--chip-scale, 1)); }
+.node-layer .nl-keychip.end { transform: translate(-100%, calc(-100% - 10px)) scale(var(--chip-scale, 1)); transform-origin: 100% 100%; }
+.node-layer .nl-keychip.end.stacked { transform: translate(-100%, calc(-100% - 22px)) scale(var(--chip-scale, 1)); }
+/* Zoomed out (UAT round 4, R2-11 leftover): the label scales with the canvas like the other chips, and under 40 % it is
+   a dot that still selects the group. */
+.node-layer .nl-keychip.dot { width: 10px; height: 10px; padding: 0; font-size: 0; overflow: hidden; background: var(--ink3); border-color: var(--card); }
 .node-layer .nl-keychip:focus-visible { outline: 2px solid var(--tool); outline-offset: 2px; }
 /* Linked as @samurai · 3 views: under the group, with Undo. */
 .node-layer .nl-said { position: absolute; pointer-events: auto; z-index: 4; }
@@ -172,3 +175,5 @@ html[data-theme='dark'] .bl-draft-hd { color: var(--ag-acc, #F6E36B); }
 .node-layer .bl-cardbox.ctxdim:not(.selected) { opacity: .45; transition: opacity .15s; }
 /* A plan's waiting question beside its storyboard, at screen size (pt-canvas-r3 R3-5). */
 .node-layer .nl-ask { position: absolute; pointer-events: auto; z-index: 5; width: 320px; max-width: 40vw; }
+/* A brief storyboard asks which brand (UAT round 4 S2-6). */
+:where(.node-layer) .bl-brandask { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; pointer-events: auto; }

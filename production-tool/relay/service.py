@@ -264,6 +264,20 @@ def _with_agent(cost: dict) -> float | None:
         return None
     return round(float(base or 0) + agent, 6)
 
+def _usage_block(usage) -> dict | None:
+    """A model call's usage as the job record keeps it (director.schema agentBlock.usage), or None."""
+    if not usage:
+        return None
+    get = usage.get if isinstance(usage, dict) else (lambda k, d=None: getattr(usage, k, d))
+    out = {}
+    for src, dst in (("input_tokens", "inputTokens"), ("output_tokens", "outputTokens"),
+                     ("cache_read_input_tokens", "cacheReadTokens"), ("cache_creation_input_tokens", "cacheWriteTokens")):
+        v = get(src, None)
+        if isinstance(v, (int, float)) and v >= 0:
+            out[dst] = int(v)
+    return out or None
+
+
 class Raw:
     """A response that is not JSON (GET /clan/{project}: the .clan bytes), with its own headers."""
 
@@ -1056,6 +1070,21 @@ class Relay:
         return formats.step_count(ms["w"], ms["h"], a["w"], a["h"])
 
     @staticmethod
+    def _check_extend(inp: dict) -> None:
+        """An extend reaches its shape in at most formats.EXTEND_STEPS_MAX steps of 35 % (round 4, S1-1: 16:9 to 9:16
+        in three bigger steps stacked mirrored suns and legs). Past that it is refused before any spend: the web
+        offers Redraw at that shape instead."""
+        import formats
+        rz = inp.get("resize") or {}
+        ms, a = rz.get("masterSize") or {}, inp.get("aspect") or {}
+        if rz.get("method") != "extend" or not ms.get("w") or not a.get("w"):
+            return
+        if not formats.extend_fits(ms["w"], ms["h"], a["w"], a["h"]):
+            shape = f"{a['w']}:{a['h']}"
+            raise ApiError("invalid_input", f"{shape} is too far from this picture's shape to extend without repeating it. "
+                                            f"Redraw it at {shape} instead.")
+
+    @staticmethod
     def _cut_seconds(job: dict) -> float | None:
         """The seconds a clip_patch is billed by: the range on a range send, the cut on a cut send."""
         return (job.get("_patch") or {}).get("seconds")
@@ -1070,6 +1099,7 @@ class Relay:
             image = inp.get("image")
             if not image or not str(image.get("mime", "")).startswith("image/"):
                 raise ApiError("invalid_input", "Rhea needs the picture itself (input.image) for this.")
+            Relay._check_extend(inp)
             return
         if req["op"] != "clip":
             return
@@ -1198,6 +1228,9 @@ class Relay:
                 job["_keepSeed"] = remade["seed"]
         if pick:  # where the job meant to run, for fallbackFrom
             job["_first"] = {"provider": pick["provider"], "model": pick["model"]}
+        steps = self._extend_calls(op, req["input"])
+        if steps > 1:  # a stepped extend says which step it is on (round 4, S1-1: "step 1 of 3")
+            job["progress"] = {"step": 1, "steps": steps}
         if patch:  # the model is chosen before the job runs, and shown on it from the start
             job.update(model=patch["model"], patch=patch["record"], _patch=patch["settings"], _lock=patch["lock"])
         if not self.store.create_job(job):  # the same jobId raced in: undo, return theirs
@@ -1964,7 +1997,8 @@ class Relay:
             log.exception("director failed")
             raise ApiError("internal", f"The director failed ({type(e).__name__}).") from e
         model = out.pop("_model", getattr(director, "model", "unknown"))
-        self._agent_spend(job, out.pop("_usage", None), model)
+        usage = out.pop("_usage", None)
+        self._agent_spend(job, usage, model)
         version = out.pop("_promptVersion", getattr(director, "prompt_version", "director.v0"))
         given = out.pop("_input", None)  # what Dex received (director/record.py); the passthrough has none
         errors = self.contracts.errors("director.schema.json", out)
@@ -1974,6 +2008,9 @@ class Relay:
                  "rationale": out.get("rationale", ""), "latencyMs": int((self.clock() - start) * 1000)}
         if given is not None:
             block["input"] = given
+        tokens = _usage_block(usage)
+        if tokens:  # the director call's token counts on the job record (round 4: only the relay log had them)
+            block["usage"] = tokens
         # What the director was told each picture shows (the History's "What the director saw").
         used = [{"tag": r["tag"], "sha256": r["asset"]["sha256"], "kind": kinds.get(r["asset"]["sha256"], "other"), "card": r["card"]}
                 for r in wired.get("refs") or [] if r.get("card") and r.get("tag")]
@@ -2335,7 +2372,7 @@ class Relay:
         saved = self._save(job, state="queued", provider=None, model=None, requestId=None, _slot=None, _queue="q",
                            queuePosition=None, _queuedAt=now, _submittedAt=None, _nextCheckAt=None, _leaseUntil=None,
                            _fetchErrors=None, _extendStep=step + 1, _extendFrom=self.blobs.public_url(key),
-                           _stepCost=spent)
+                           _stepCost=spent, progress={"step": step + 2, "steps": job.get("_extendSteps") or step + 2})
         if saved is None:
             return self._reload(job)
         if job.get("_slot"):

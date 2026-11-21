@@ -645,3 +645,6 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .player .player-dl { position: absolute; top: 10px; right: 10px; z-index: 3; opacity: 0; pointer-events: none; transition: opacity 0.15s var(--ease); }
 .player:hover .player-dl, .player:focus-within .player-dl, .player-dl:has(.missing) { opacity: 1; pointer-events: auto; }
 @media (hover: none) { .player .player-dl { opacity: 1; pointer-events: auto; } }
+
+/* A drag on the canvas selects no page text while the button is down (UAT round 4 S3-1). */
+body.pt-nosel, body.pt-nosel * { user-select: none !important; -webkit-user-select: none !important; }

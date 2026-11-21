@@ -36,6 +36,8 @@ import { asContractError, RelayError, type Relay } from '../relay'
 export interface LiveInfo {
   state: JobState
   queuePosition?: number
+  /** A job made in several provider calls (a stepped extend): which one it is on (pt-canvas-r4, "step 2 of 3"). */
+  progress?: { step: number; steps: number }
   /** A line for the card while it is still trying something (a result that would not download). */
   note?: string
 }
@@ -686,7 +688,7 @@ export class JobRunner {
     const done = job.state === 'completed'
     const prev = this.doc.get().jobs[job.jobId]
     if (prev && !isActive(prev.state) && prev.state === job.state) return
-    this.live.set(job.jobId, { state: done ? 'fetching' : job.state, queuePosition: job.queuePosition })
+    this.live.set(job.jobId, { state: done ? 'fetching' : job.state, queuePosition: job.queuePosition, ...(job.progress && !done ? { progress: job.progress } : {}) })
     jobState(job.jobId, done ? 'fetching' : job.state, {
       op: job.op, provider: job.provider, model: job.model, fallbackFrom: job.fallbackFrom?.provider,
       code: job.error?.code, message: job.error?.message, ms: this.ageMs(job.jobId),

@@ -75,16 +75,25 @@ const EDIT_OPS: readonly Op[] = ['region_edit', 'frame_edit']
 const BRAND_WORDS = /\b(brand(?:ed|ing)?|logos?|products?|pack(?:shot|aging|age)?s?|adverts?|advertising|ads?|posters?|billboards?|banners?|campaign|key ?visual|labels?|flyers?|hoardings?|mock-?ups?|social posts?)\b/i
 const BRAND_REF_ROLES: readonly string[] = ['product', 'logo', 'palette', 'typography', 'brand_rule']
 
-/** Is this job brand work, so the palette and the type go with it? */
-export function brandWork(d: Doc, node: LinkEndpoint, input: Pick<JobInput, 'text' | 'brief' | 'refs'>): boolean {
-  if (input.brief) return true
-  if (input.text && BRAND_WORDS.test(input.text)) return true
-  if ((input.refs ?? []).some((r) => BRAND_REF_ROLES.includes(r.role))) return true
+/** Is a Brand board linked into the node (or what it reads: its storyboard and films for a shot, a note it reads)? */
+export function brandLinked(d: Doc, node: LinkEndpoint): boolean {
   const links = Object.values(d.links ?? {})
   const nodes = new Set(readers(d, node))
   // The texts these nodes read: a brand board linked into one of them means "use this brand" too.
   for (const l of links) if (nodes.has(l.to.id) && (['text', 'note', 'ink'] as string[]).includes(l.from.kind)) nodes.add(l.from.id)
   return links.some((l) => l.role === 'brand' && nodes.has(l.to.id))
+}
+
+/**
+ * Is this job brand work, so the palette and the type go with it? A brief is another client's work unless a Brand board
+ * is linked to it (UAT round 4 S2-6: the Quietboil brief took the Harbour palette and type, the project's only brand):
+ * with a brief and no linked Brand board, nothing of the project's brand goes unless the person ticks it.
+ */
+export function brandWork(d: Doc, node: LinkEndpoint, input: Pick<JobInput, 'text' | 'brief' | 'refs'>): boolean {
+  if (input.brief) return brandLinked(d, node)
+  if (input.text && BRAND_WORDS.test(input.text)) return true
+  if ((input.refs ?? []).some((r) => BRAND_REF_ROLES.includes(r.role))) return true
+  return brandLinked(d, node)
 }
 
 export interface BrandRow {
@@ -105,12 +114,15 @@ export function brandRows(d: Doc, op: Op, node: LinkEndpoint, input: Pick<JobInp
   if (!CONTEXT_OPS.includes(op)) return []
   const order: BrandRow['kind'][] = ['brand_rule', 'palette', 'typography']
   const work = !!choice.work || brandWork(d, node, input)
+  // A brief with no Brand board linked: none of the project's brand by default, not even its rules (they are another
+  // client's); the tray's ticks still put one in (S2-6).
+  const foreign = !!input.brief && !work
   const rows: BrandRow[] = []
   for (const r of refsList(d)) {
     const w = brandWords(r)
     if (!w || w.kind === 'note' || w.kind === 'document') continue
     const kind = w.kind as BrandRow['kind']
-    const byDefault = EDIT_OPS.includes(op) ? work : kind === 'brand_rule' || work
+    const byDefault = foreign ? false : EDIT_OPS.includes(op) ? work : kind === 'brand_rule' || work
     const on = choice.add?.includes(r.id) ? true : choice.leave?.includes(r.id) ? false : byDefault
     rows.push({ ref: r.id, kind, label: r.label?.trim() || `@${refName(r)}`, text: w.text, on, byDefault })
   }

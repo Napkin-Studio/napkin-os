@@ -14,7 +14,7 @@ import { SHA } from '../../../test/model'
 import { choicesFor, FILMS_FROM_VIDEO, rowsFor } from '../../../campaign/formats'
 import { autoMethod, methodModels } from '../../../campaign/rules'
 import {
-  deliveryOf, frameOver, loadPick, makeWords, methodOf, mixedLine, otherViews, parseCustom, placeResults, planResize, planSlots,
+  deliveryOf, frameOver, loadPick, makeWords, methodOf, mixedLine, otherViews, parseCustom, placeResults, planResize, planSlots, tooFarToExtend, tooFarWords,
   resizableIn, resizeInput, resizePictures, savePick, SHAPES, trayRows, knownProtect, type Source,
 } from '../../../campaign/resizeSelection'
 
@@ -88,9 +88,21 @@ describe('how, and the count', () => {
   it('Redraw is regenerate, Extend extend, Crop crop; a way the agency has off is null', () => {
     const p = { w: 1920, h: 1080 }
     expect(methodOf('regenerate', p, shape('9:16'), models)).toBe('regenerate')
-    expect(methodOf('extend', p, shape('9:16'), models)).toBe('extend')
+    expect(methodOf('extend', p, shape('4:5'), models)).toBe('extend')
     expect(methodOf('crop', p, shape('9:16'), models)).toBe('crop')
-    expect(methodOf('extend', p, shape('9:16'), { regenerate: models.regenerate })).toBeNull()
+    expect(methodOf('extend', p, shape('4:5'), { regenerate: models.regenerate })).toBeNull()
+  })
+  it('Extend to a shape past three steps of 35 % is a Redraw at that shape, said in plain words (UAT round 4 S1-1)', () => {
+    // The live repro: a 1536 x 864 sunset to 9:16 (3.2x) stacked four suns in three bigger steps.
+    const p = { w: 1536, h: 864 }
+    expect(methodOf('extend', p, shape('9:16'), models)).toBe('regenerate')
+    expect(methodOf('extend', p, shape('21:9'), models)).toBe('extend')
+    expect(methodOf('extend', p, shape('9:16'), { extend: models.extend })).toBeNull() // Redraw off: nothing is made
+    const far = tooFarToExtend('extend', [p], [shape('9:16'), shape('21:9'), shape('4:5')])
+    expect(far.map((s) => s.id)).toEqual(['9:16'])
+    expect(tooFarToExtend('regenerate', [p], [shape('9:16')])).toEqual([])
+    expect(tooFarWords(far, models)).toBe("9:16 is too far from this picture's shape to extend without repeating it, so it is redrawn at that shape from the picture instead (Redraw).")
+    expect(trayRows(planResize([{ ...p, elId: 'a', asset: 'x', kind: 'picture' } as never], [shape('9:16')], 'extend', models), models, () => 'P')[0].words).toBe('Redraw · Gemini 3 Pro')
   })
   it('Auto: crop when little is lost, extend when close, redraw when the picture would sit small', () => {
     expect(autoMethod({ w: 1920, h: 1080 }, { w: 3, h: 2 })).toBe('crop')
@@ -265,7 +277,11 @@ describe('the jobs', () => {
     expect(r.sent[2].input.refs).toBeUndefined()
     const e = run('extend')
     await e.go()
-    expect(e.sent.every((s) => !s.input.refs)).toBe(true)
+    // 1:1 extends and sends the picture only; 9:16 is past three extend steps of a 16:9 picture, so it is a Redraw.
+    const extended = e.sent.filter((s) => s.input.resize?.method === 'extend')
+    expect(extended.length).toBeGreaterThan(0)
+    expect(extended.every((s) => !s.input.refs)).toBe(true)
+    expect(e.sent.some((s) => s.input.aspect?.h === 2048 && s.input.resize?.method === 'regenerate' && s.input.resize.masterSize.w === 1920)).toBe(true)
     expect(otherViews(doc, views[0]).map((x) => x.id)).toEqual(['ref_side', 'ref_back'])
     expect(otherViews(doc, undefined)).toEqual([])
   })

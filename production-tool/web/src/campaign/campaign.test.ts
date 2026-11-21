@@ -13,7 +13,7 @@ import { isFreeRequest } from '../jobs/runner'
 import { boardLayout, MIN_BOARD_W, tileSize } from './board'
 import { cropBox, previewSize, protectedInside, safeFracs, panCrop, zoomCrop } from './crop'
 import { channelOf, PACKS, planChoices, rowsOf } from './formats'
-import { availableMethods, methodFor, methodModels, methodWords, SET_REGENERATE_BELOW, filled } from './rules'
+import { availableMethods, extendFits, extendSteps, methodFor, methodModels, methodWords, SET_REGENERATE_BELOW, filled } from './rules'
 import { deliveryInput, deliveryScale, fullPlan } from './delivery'
 import { checksFor, flagged } from './checks'
 import { applySize, lookSibling, placeBoard, setProtect } from './make'
@@ -78,7 +78,7 @@ describe('the rule table', () => {
     // The tray and the tile name the method and the model, never a price.
     expect(methodWords('extend', all)).toBe('Extend · Ideogram 4.5')
     expect(methodWords('regenerate', all)).toBe('Regenerate · Gemini 3 Pro')
-    expect(methodWords('crop', all)).toBe('Crop') // no cost word (R4-F8)
+    expect(methodWords('crop', all)).toBe('Crop') // no "free" or "paid" either (UAT round 4 S2-4)
     expect(methodWords('extend', noIdeogram)).toBe('Extend · off for your agency')
   })
   it('crops when the subject fits, extends when it does not, regenerates when an extend leaves it small', () => {
@@ -87,9 +87,13 @@ describe('the rule table', () => {
     expect(methodFor(by('meta-feed-image-4x5'), MASTER, SUBJECT).method).toBe('crop')
     const wide: ProtectBox[] = [{ role: 'subject', x: 100, y: 100, w: 300, h: 600 }, { role: 'product', x: 1200, y: 400, w: 200, h: 300 }]
     expect(methodFor(by('meta-feed-image-1x1'), MASTER, wide).method).toBe('extend')
-    // 9:16 from a landscape master fills about a third: extend keeps the master's own pixels, so it wins (art-director).
+    // 9:16 from a landscape master fills about a third: more than three extend steps of 35 %, whose mirrored seed stacked
+    // four suns (UAT round 4 S1-1), so it is redrawn at 9:16; 4:5 (2.2x) is three steps and extends.
     expect(filled(MASTER, { w: 9, h: 16 })).toBeGreaterThan(SET_REGENERATE_BELOW)
-    expect(methodFor(by('meta-reels-9x16'), MASTER, wide).method).toBe('extend')
+    expect(extendFits(MASTER, { w: 9, h: 16 })).toBe(false)
+    expect(extendSteps(MASTER, { w: 4, h: 5 })).toBe(3)
+    expect(extendSteps(MASTER, { w: 21, h: 9 })).toBe(1)
+    expect(methodFor(by('meta-reels-9x16'), MASTER, wide).method).toBe('regenerate')
     // Regenerate is the last resort: a shape the master would fill under a quarter of.
     const sliver = { ...by('meta-reels-9x16'), format: { ...by('meta-reels-9x16').format, delivery_px: { width: 500, height: 2000 } } }
     expect(filled(MASTER, { w: 500, h: 2000 })).toBeLessThan(SET_REGENERATE_BELOW)

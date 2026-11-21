@@ -274,3 +274,4 @@ button.sb-handle:disabled { cursor: default; opacity: 0.5; }
 .sb-kept { font-size: 12px; margin: 4px 0 0; }
 .sb-keepform { gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 4px; font-size: 12px; }
 .sb-keepform .input { width: 110px; }
+.sb-keepnote { flex-basis: 100%; font-size: 11.5px; line-height: 1.35; }

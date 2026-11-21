@@ -109,14 +109,15 @@ describe('a text links to nodes (owner, 2026-10-16)', () => {
     void s
   })
 
-  it('a shot reads the texts linked into its storyboard', async () => {
+  it("a shot's clip reads the texts linked into its storyboard; its frame does not (UAT round 4 S2-1: notes are for planning)", async () => {
     const { a, doc, write, node, save } = await setup()
     const t = await write('Golden hour, always', 2000, 0)
     await linkNodes(a, doc(), t, node('storyboard'), save)
     const sb = cardOf(node('storyboard'))!.id
     const shot = 'shot_01K7A000000000000000000099'
     const d = { ...doc(), shots: { ...doc().shots, [shot]: { id: shot, storyboard_id: sb } } } as unknown as ProductionDocument
-    expect(withLinkedText(d, 'frame', { kind: 'shot', id: shot }, {}).input.text).toBe('Golden hour, always')
+    expect(withLinkedText(d, 'clip', { kind: 'shot', id: shot }, {}).input.text).toBe('Golden hour, always')
+    expect(withLinkedText(d, 'frame', { kind: 'shot', id: shot }, {}).input.text).toBeUndefined()
   })
 
   it('deleting the text takes its row and its links; the canvas\'s undo brings them back', async () => {
