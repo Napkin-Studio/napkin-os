@@ -97,7 +97,8 @@ function useRoomWaits({ room, data, change, onApart, onReady }: RoomProps) {
 
   // Make: the Change tab offers to make a shot filmed with others on its own; the offer waits here too.
   const parent = change ? genOf(change.parentId) : undefined
-  if (room === 'make' && parent && change?.shotId && parent.shotIds.length > 1 && !keptTogether.includes(`${parent.id}:${change.shotId}`)) {
+  if (room === 'make' && parent && change?.shotId && parent.shotIds.length > 1 && !keptTogether.includes(`${parent.id}:${change.shotId}`)
+    && offersApart(change.ask, shotNumber(doc, change.shotId), parent.shotIds.filter((x) => x !== change.shotId).map((x) => shotNumber(doc, x)))) {
     const shotId = change.shotId
     const n = shotNumber(doc, shotId)
     const others = parent.shotIds.filter((x) => x !== shotId).map((x) => `shot ${shotNumber(doc, x)}`).join(' and ')
@@ -167,6 +168,15 @@ export function RoomWaits(p: RoomProps) {
 }
 
 /** The Booth on a selected box, shot or take (Make) or clip (Edit). */
+/** Whether the Change tab offers to make a shot apart: not for an ask of the Camera agent about the take as a whole
+ *  (UAT round 4, R4-F9: "the empty room for shot 4, Maya in shot 5" offered "Make shot 4 apart?"); only when the ask names
+ *  this shot and no other of the take. A change of the shot's own words or feel offers it as before. */
+export function offersApart(ask: string | undefined, n: number, others: number[]): boolean {
+  if (!ask?.trim()) return true
+  const named = new Set([...ask.matchAll(/\bshots?\s+(\d+)(?:\s*(?:and|&|,|-|–|to)\s*(\d+))?/gi)].flatMap((m) => [m[1], m[2]]).filter(Boolean).map(Number))
+  return named.has(n) && !others.some((o) => named.has(o))
+}
+
 export function RoomBooth({ slot, ...p }: RoomProps) {
   const { room, data, sel, onClose, onChange } = p
   const doc = useDoc()

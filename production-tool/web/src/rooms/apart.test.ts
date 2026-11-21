@@ -143,3 +143,14 @@ describe('a lone take longer than its shot (UAT round 3, R3-F2)', () => {
     expect(cut.v1.map((c) => [c.inS, c.outS, c.startS])).toEqual([[0, 1.5, 0], [0, 1.2, 1.5]])
   })
 })
+
+describe('an ask about the take offers no "Make shot apart?" (UAT round 4, R4-F9)', () => {
+  it('round 4: an ask about shots 4 and 5 offers nothing; one about shot 4 alone does; a words change does', async () => {
+    const { offersApart } = await import('./RoomBooth')
+    expect(offersApart('Show the empty room for shot 4, Maya in shot 5.', 4, [5])).toBe(false)
+    expect(offersApart('Hold the wide a beat longer.', 4, [5])).toBe(false)
+    expect(offersApart('Shots 4 and 5: warmer light.', 4, [5])).toBe(false)
+    expect(offersApart('In shot 4, no one is seen.', 4, [5])).toBe(true)
+    expect(offersApart(undefined, 4, [5])).toBe(true)
+  })
+})
