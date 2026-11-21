@@ -67,6 +67,26 @@ describe('the write request', () => {
   })
 })
 
+describe('a whole-script ask after Plan shots (UAT round 3, R3-F3)', () => {
+  it('reads every shot as its neighbours, and goes to the shot it is about', async () => {
+    const { store, shots, scriptId } = await project()
+    const sceneId = store.get().shots[shots[0]].scene_id!
+    await store.change((d) => {
+      d.shots[shots[2]].action = 'Through the thin wall, the snoring carries on.'
+    }, { action: 'words' })
+    await store.flush()
+    // A free ask on the scene, whose own words are empty now: it goes to shot 3, which it is about.
+    const input = await writeInput(store, scriptId, { kind: 'scene', id: sceneId }, 'instruct', { instruction: 'Make the snoring line funnier.', mode: 'revise' })
+    expect(input.target).toEqual({ kind: 'shot', id: shots[2] })
+    expect(input.lines.map((l) => l.text).join(' ')).toContain('snoring')
+    // An ask about nothing in particular stays on the scene and reads the whole script.
+    const all = await writeInput(store, scriptId, { kind: 'scene', id: sceneId }, 'instruct', { instruction: 'Warmer, please.', mode: 'revise' })
+    expect(all.target).toEqual({ kind: 'scene', id: sceneId })
+    expect(all.context.neighbours).toContain('Shot 1:')
+    expect(all.context.neighbours).toContain('Shot 3: Through the thin wall')
+  })
+})
+
 describe('drafts land as suggestions, and Keep is one step', () => {
   it('Keep writes the words as the Script agent, decided by the person, with the length; Undo takes all of it back', async () => {
     const { store, shots, scriptId } = await project()
