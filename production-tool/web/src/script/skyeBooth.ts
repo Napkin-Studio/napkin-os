@@ -208,22 +208,24 @@ export function lineDiff(before: { kind: string; text: string }[], after: { kind
     else if (j < m && (i >= n || L[i][j + 1] >= L[i + 1][j])) raw.push({ op: 'new', j: j++ })
     else raw.push({ op: 'gone', i: i++ })
   }
-  // A line gone and a line new of the same element, side by side, is one line rewritten.
+  // Within each run of changes, a line gone and a line new of the same element are one line rewritten, shown word by
+  // word where the new line stands; what is left of the run is new or gone. The rows follow the new text's order.
   const out: DiffRow[] = []
-  for (let k = 0; k < raw.length; k++) {
+  let k = 0
+  while (k < raw.length) {
     const r = raw[k]
-    if (r.op === 'same') { out.push({ kind: b[r.j!].kind, parts: [{ kind: 'same', text: b[r.j!].text }], change: 'same' }); continue }
-    const pairAt = raw.findIndex((x, q) => q > k && x.op !== r.op && x.op !== 'same' && (r.op === 'gone' ? b[x.j!].kind === a[r.i!].kind : a[x.i!].kind === b[r.j!].kind))
-    const between = pairAt > k && raw.slice(k + 1, pairAt).every((x) => x.op === r.op)
-    if (between && pairAt === k + 1) {
-      const g = r.op === 'gone' ? a[r.i!] : a[raw[pairAt].i!]
-      const w = r.op === 'new' ? b[r.j!] : b[raw[pairAt].j!]
-      out.push({ kind: w.kind, parts: wordDiff(g.text, w.text), change: 'changed' })
-      k = pairAt
-      continue
+    if (r.op === 'same') { out.push({ kind: b[r.j!].kind, parts: [{ kind: 'same', text: b[r.j!].text }], change: 'same' }); k++; continue }
+    const run: typeof raw = []
+    while (k < raw.length && raw[k].op !== 'same') run.push(raw[k++])
+    const gones = run.filter((x) => x.op === 'gone').map((x) => a[x.i!])
+    const used = new Set<number>()
+    for (const x of run.filter((y) => y.op === 'new')) {
+      const w = b[x.j!]
+      const g = gones.findIndex((l, q) => !used.has(q) && l.kind === w.kind)
+      if (g >= 0) { used.add(g); out.push({ kind: w.kind, parts: wordDiff(gones[g].text, w.text), change: 'changed' }) }
+      else out.push({ kind: w.kind, parts: [{ kind: 'new', text: w.text }], change: 'new' })
     }
-    if (r.op === 'gone') out.push({ kind: a[r.i!].kind, parts: [{ kind: 'gone', text: a[r.i!].text }], change: 'gone' })
-    else out.push({ kind: b[r.j!].kind, parts: [{ kind: 'new', text: b[r.j!].text }], change: 'new' })
+    gones.forEach((l, q) => { if (!used.has(q)) out.push({ kind: l.kind, parts: [{ kind: 'gone', text: l.text }], change: 'gone' }) })
   }
   return out
 }

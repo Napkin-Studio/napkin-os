@@ -31,6 +31,8 @@ export interface Gen {
   madeN?: number
   /** The key of the shots it was made of (boxKeyOf), which numbers it. */
   made?: string
+  /** The number of the last shot it was made of, when it was made of several ("Box 1–2"). */
+  madeTo?: number
   parentId?: Id
   delta: DeltaRow[]
   /** "Camera: handheld (shot 3)", "First take". */
@@ -92,7 +94,7 @@ export const boxName = (b: Pick<Box, 'n' | 'endCard'>) => (b.endCard ? 'End card
 export function genTitle(g: Gen, boxes: Box[]): string {
   const b = boxes.find((x) => x.key === g.boxKey)
   const len = `${Math.round(g.durationS * 10) / 10} s`
-  const name = g.madeN ? `Box ${g.madeN}` : b ? boxName(b) : 'Not in a box'
+  const name = g.madeN ? `Box ${g.madeN}${g.madeTo && g.madeTo !== g.madeN ? `–${g.madeTo}` : ''}` : b ? boxName(b) : 'Not in a box'
   return [name, `v${g.version}`, len].join(' · ')
 }
 
@@ -150,6 +152,7 @@ export function roomGens(d: ProductionDocument, _ui: Pick<UiState, 'jobs'>, vide
     out.push({
       id: g.id, kind: g.kind, boxKey: boxKeys[0], ...(boxKeys.length > 1 ? { boxKeys } : {}), shotIds: g.shot_ids, version: 0,
       madeN: shotNumber(d, (run?.shot_ids ?? g.shot_ids)[0]) || 0, made: key,
+      ...((run?.shot_ids ?? g.shot_ids).length > 1 ? { madeTo: shotNumber(d, (run?.shot_ids ?? g.shot_ids).at(-1)) || undefined } : {}),
       ...(g.parent_id ? { parentId: g.parent_id } : {}),
       delta: (g.delta ?? []).map((x) => deltaRow(x, g.patched?.find((p) => p.job_id === g.job_id))), label: g.label ?? '', ...(g.asset ? { asset: g.asset } : {}),
       durationS, segments, state: g.state, ...(g.job_id ? { jobId: g.job_id } : {}), createdAt: g.created_at,
