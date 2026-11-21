@@ -22,6 +22,14 @@ export function BriefsFromNapkin({ env, src: given }: { env: NodeEnv | null; src
   const [briefs, setBriefs] = useState<{ items: OsBriefItem[]; empty?: string } | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [said, setSaid] = useState<string | null>(null)
+  // How long the brief has been on its way (UAT round 3 R3-6, UX 8: "Linking…" for over a minute with nothing else
+  // said). Napkin's document read is the slow part; the line says so while it waits.
+  const [waited, setWaited] = useState(0)
+  useEffect(() => {
+    if (!busy) return
+    const t = setInterval(() => setWaited((n) => n + 1), 1000)
+    return () => clearInterval(t)
+  }, [busy])
   useEffect(() => {
     let live = true
     void offersStartFromBrief(src).then(async (yes) => {
@@ -38,11 +46,14 @@ export function BriefsFromNapkin({ env, src: given }: { env: NodeEnv | null; src
   if (offers === null) return <p className="hint" role="status">Looking for your agency’s briefs…</p>
   if (!offers) return <p className="hint">Nothing from Brief Maker or Research here: this page cannot read Napkin’s briefs.</p>
   const link = async (b: OsBriefItem) => {
-    if (!env) return
+    if (!env || busy) return
     setBusy(b.documentId)
-    setSaid(null)
+    setSaid(`Reading “${b.title}” from Napkin…`)
+    setWaited(0)
     try {
-      const r = await linkBriefLater(env, await src.read(b.documentId))
+      const read = await src.read(b.documentId)
+      setSaid(`Putting “${b.title}” on the canvas…`)
+      const r = await linkBriefLater(env, read)
       // Into view with the Script it feeds (it lands left of the Script, maybe off screen).
       const els = [briefElement(env, r.briefId), r.scriptId ? env.canvas.elements().find((e) => !e.isDeleted && (e.customData as { id?: string } | undefined)?.id === r.scriptId) : undefined].filter((e): e is NonNullable<typeof e> => !!e)
       if (els.length) fitClear(env.canvas, els, { zoomFactor: 0.8 })
@@ -81,7 +92,7 @@ export function BriefsFromNapkin({ env, src: given }: { env: NodeEnv | null; src
           )
         })}
       </div>
-      {said && <p className="ad-meta" role="status">{said}</p>}
+      {said && <p className="ad-meta" role="status">{said}{busy && waited >= 3 ? ` Napkin is still sending it (${waited} s).` : ''}</p>}
       <p className="hint">A linked brief is a frozen copy: it stays as it is until you update it from its Booth. Research comes here in a later version.</p>
     </section>
   )

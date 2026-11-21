@@ -13,9 +13,10 @@ import { discardDraft, keep as keepDraft } from '../../script/skye'
 import { draftLines } from '../../script/skyeBooth'
 import { cameraLabel } from '../../jobs/frameEdit'
 import { askOf } from '../../jobs/runner'
+import { planAskOn } from './planAsk'
 import { isRunning, jobAt } from '../../jobs/select'
 import { beatsOf, currentFrame, currentRender, currentTake, mainScript, mainStoryboard, mainVideo, scenesOf, shotsOf, staleList, storyboardOfScript, storyboardOfVideo } from '../../model/selectors'
-import type { Ask, ProductionDocument, Shot, Suggestion } from '../../contracts/types'
+import type { ProductionDocument, Shot, Suggestion } from '../../contracts/types'
 import { InputsStrip } from '../../stages/InputsStrip'
 import { isEmptyNode } from './nodes'
 import { waitsOnScriptAsk } from '../../jobs/scriptVideo'
@@ -75,13 +76,6 @@ export function AtWork({ line, warm = false }: { line: string; warm?: boolean; a
 const runningOn = (doc: ProductionDocument, op: string, kind: string, id: string | undefined) =>
   !!id && Object.values(doc.jobs ?? {}).some((j) => j.op === op && j.node?.kind === kind && j.node.id === id && isRunning(doc, j.id) && j.state !== 'needs_input')
 
-/** The question a plan on this storyboard waits on, if one does (its ask card goes beside the node: NodeLayer). */
-export function planAskOn(doc: ProductionDocument, storyboardId: string | undefined): Ask | undefined {
-  if (!storyboardId) return undefined
-  const job = Object.values(doc.jobs ?? {}).find((j) => j.op === 'shot_list' && j.node?.kind === 'storyboard' && j.node.id === storyboardId && j.state === 'needs_input')
-  const ask = job ? askOf(doc, job.id) : undefined
-  return ask && ask.state !== 'answered' ? ask : undefined
-}
 
 /** The chrome's prompt start for an empty node, if it lends one; else `fallback`. */
 function Start({ kind, id, fallback }: { kind: CardKind; id: string | undefined; fallback: ReactNode }) {
