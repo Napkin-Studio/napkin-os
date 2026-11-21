@@ -46,7 +46,7 @@ import { PromptStart } from '../ui/prompt/PromptStart'
 import {
   EMPTY, NOTHING_TO_TAKE, addEdit, afterSend, applyLine, clearMask, editCount, editId, hasFill, newMask, unfilledMasks, editLabel, editsForFrame, hiddenCount,
   layersOf, leftOutLine, nextStep,
-  fillPlaceholder, notApplied, nothingToTake, redoUndone, toggleHidden, undoEdit, undoLast, updateEdit, upscaleSize, withMaskOp,
+  fillPlaceholder, notApplied, nothingToTake, redoUndone, sameLine, toggleHidden, undoEdit, undoLast, updateEdit, upscaleSize, upscaleWhyNot, withMaskOp,
   type Edit, type EditSession, type MaskOp, type Pt, type Undone,
 } from './imageEditor/edits'
 import { bounds, rasterize } from './imageEditor/mask'
@@ -453,6 +453,9 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
       row = { id: editId(), kind: 'upscale', scale }
     }
     const e = rowFirst(setSession, row, newId('job'), () => { void uiStore.flush() })
+    // A mask whose Fill or Remove is sent is spent: no longer the one the brush paints (UAT round 3 R3-3: it stayed
+    // "Mask 1 · painting" the next time the editor opened).
+    if (a === 'fill' || a === 'remove') setSession(afterSend)
     if (a === 'fill') setFill('')
     if (a === 'whole') setWhole('')
     void attempt(SENDING[a], async () => {
@@ -467,6 +470,16 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
       }
     })
   }
+  // A Fill, Remove or change that came back unchanged (UAT round 3 R3-3, UX 5): sent again as it was, as a new row, or
+  // discarded with its spent mask.
+  const tryAgain = (e: JobEdit) => {
+    if (e.kind === 'upscale') return
+    setSession((s) => ({ ...s, edits: s.edits.filter((x) => x.id !== e.id) }))
+    const { jobId: _j, unsent: _u, ...rest } = e
+    const next = rowFirst(setSession, { ...rest, id: editId() } as UnsentEdit, newId('job'), () => { void uiStore.flush() })
+    void attempt(SENDING[e.kind === 'fill' ? (e.remove ? 'remove' : 'fill') : 'whole'], () => sendOnce(next, { dropOnFail: true }))
+  }
+  const discardSame = (e: Edit) => setSession((s) => (e.kind === 'fill' ? undoEdit(s, e.maskId) : undoEdit(s, e.id)))
   const sendAgain = (e: JobEdit) => void attempt(SENDING[e.kind === 'fill' ? (e.remove ? 'remove' : 'fill') : e.kind], () => sendOnce(e, { dropOnFail: false }))
   const apply = () => void attempt('applying', async () => {
     if (!framePic || !frameId) return
@@ -714,9 +727,10 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
                     <button type="button" className="pt-mono" aria-pressed={scale === 2} onClick={() => setScale(2)}>2×</button>
                     <button type="button" className="pt-mono" aria-pressed={scale === 4} onClick={() => setScale(4)}>4×</button>
                   </div>
-                  <span className="pt-mono faint ie-out">{upscaleSize(W, H, scale)}</span>
-                  <button ref={upBtn} type="button" className="btn sm" disabled={!framePic || running || !controls.upscale} onClick={() => setTray('upscale')}>Upscale</button>
+                  <span className="pt-mono faint ie-out">{upscaleWhyNot(W, H, scale) ? 'no bigger' : upscaleSize(W, H, scale)}</span>
+                  <button ref={upBtn} type="button" className="btn sm" disabled={!framePic || running || !controls.upscale || !!upscaleWhyNot(W, H, scale)} onClick={() => setTray('upscale')}>Upscale</button>
                 </div>
+                {upscaleWhyNot(W, H, scale) && <span className="faint ie-upwhy" role="note">{upscaleWhyNot(W, H, scale)}</span>}
               </div>
             )}
             {error && <div role="alert" className="ie-error">{error}</div>}
@@ -739,8 +753,15 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
                       {st === 'ready' && <span className="ie-ok">ready</span>}
                       {st === 'running' && !live && <span className="ie-run">{jobId && jobId === offerJob ? 'waiting for your choice' : 'working'}</span>}
                       {st === 'failed' && <span className="ie-bad">did not work</span>}
-                      {st === 'same' && <span className="ie-bad" title="Nothing changed in the area, so there is nothing to apply. Try other words, or undo it.">came back the same</span>}
                     </button>
+                    {st === 'same' && 'jobId' in e && (
+                      <span className="ie-jobrow ie-same" role="status">
+                        <span className="ie-bad">{sameLine(e)}</span>
+                        <span className="faint ie-samehint">Nothing changed{e.kind === 'fill' ? ' in the area' : ''}, so there is nothing to apply. Try again, or paint a wider area and say what should be there.</span>
+                        <button type="button" className="btn sm" disabled={running} onClick={() => tryAgain(e)}>Try again</button>
+                        <button type="button" className="btn sm ghost" onClick={() => discardSame(e)}>Discard</button>
+                      </span>
+                    )}
                     {live && <span className="ie-jobrow"><JobSlot jobId={live} row onRetried={(id) => setSession((s) => updateEdit(s, e.id, { jobId: id }))} /></span>}
                     {st === 'unsent' && 'jobId' in e && (
                       <span className="ie-jobrow ie-unsent">

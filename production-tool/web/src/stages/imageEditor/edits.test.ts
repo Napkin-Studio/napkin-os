@@ -250,3 +250,16 @@ describe('a text just placed (re-test 6c)', () => {
     expect(editsForFrame(s)).toEqual([{ op: 'text', params: { text: 'Lumo.' } }])
   })
 })
+
+// UAT round 3 R3-4: 2x of an upscaled 3072 x 1318 picture promised 3072 x 1318 again, and was paid for.
+describe('Upscale only when it makes the picture bigger (pt-canvas-r3)', () => {
+  it('is off for 2x of a picture already past twice what the upscaler reads, and says why; 4x still grows it', async () => {
+    const { upscaleGrows, upscaleWhyNot, sameLine } = await import('./edits')
+    expect(upscaleGrows(3072, 1318, 2)).toBe(false)
+    expect(upscaleWhyNot(3072, 1318, 2)).toBe('Already full size: the upscaler reads at most 1536 px a side, so 2× gives 3072 px, as it is now. 4× makes it bigger.')
+    expect(upscaleGrows(3072, 1318, 4)).toBe(true)
+    expect(upscaleWhyNot(2048, 878, 2)).toBeUndefined()
+    expect(upscaleGrows(1536, 864, 2)).toBe(true)
+    expect(sameLine({ id: 'f', kind: 'fill', maskId: 'm', ops: [], words: 'x', keepOutside: true, jobId: 'j' })).toBe('The fill came back unchanged.')
+  })
+})
