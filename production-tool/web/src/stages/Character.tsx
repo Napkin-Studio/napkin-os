@@ -1332,6 +1332,9 @@ function Floating({ className, anchor, children }: { className: string; anchor: 
 /** The ten main role pills of the Name dialog (the rest under More…), as the contract's role table sorts them. */
 const MAIN_ROLES = REF_ROLES.filter((r) => REF_ROLE_TABLE[r].picker === 'main')
 const roleWord = (r: RefRole) => (r === 'brand_rule' ? 'brand rule' : r)
+/** Two roles other than the one the key holds, as examples (UAT round 4, R4-F8: "@maya is a character… For another role
+ *  (a font, a character…)"). */
+export const otherRoles = (r: RefRole) => ['a character', 'a location', 'a font', 'a product'].filter((w) => w !== `a ${roleWord(r)}`).slice(0, 2).join(', ') + '…'
 /** The role's one line in the Name dialog; a palette's says its colours can be changed (UAT round 2: one line, not two). */
 const roleLine = (r: RefRole) => (r === 'palette'
   // A palette is accents, not the only colours (UAT round 3 R3-2; the contract's line still says "keeps to").
@@ -1615,7 +1618,7 @@ function NamePopover({ ctrl, nodeId, current, presetVariant, at, onClose }: {
       )}
       {/* A key in use already: say which role it has, and that this picture takes it (UAT round 3 R3-8, UX 7: the second
           "harbour" silently became a palette). The Save button says it again; another role needs a new name. */}
-      {joinsKey && <div className="name-joins" role="note"><b>@{ck} is a {roleWord(holds)}.</b> This picture joins it as a {roleWord(holds)}. For another role (a font, a character…), type a new name.</div>}
+      {joinsKey && <div className="name-joins" role="note"><b>@{ck} is a {roleWord(holds)}.</b> This picture joins it as a {roleWord(holds)}. For another role ({otherRoles(holds)}), type a new name.</div>}
       {/* A brand key named before: its role's line once, above its fields (the pills above say it for a new key). */}
       {brandRole && !isNewKey && <div className="faint roleline">{roleLine(brandRole)}</div>}
       {brandRole && <BrandFields role={brandRole} asset={asset} value={brand} onChange={setBrand} />}

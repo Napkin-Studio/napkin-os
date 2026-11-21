@@ -78,7 +78,7 @@ describe('the rule table', () => {
     // The tray and the tile name the method and the model, never a price.
     expect(methodWords('extend', all)).toBe('Extend · Ideogram 4.5')
     expect(methodWords('regenerate', all)).toBe('Regenerate · Gemini 3 Pro')
-    expect(methodWords('crop', all)).toBe('Crop · free')
+    expect(methodWords('crop', all)).toBe('Crop') // no cost word (R4-F8)
     expect(methodWords('extend', noIdeogram)).toBe('Extend · off for your agency')
   })
   it('crops when the subject fits, extends when it does not, regenerates when an extend leaves it small', () => {

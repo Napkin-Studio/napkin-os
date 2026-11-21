@@ -35,7 +35,7 @@ import { panCrop, zoomCrop } from './crop'
 import { fullPlan } from './delivery'
 import { exportSizes } from './exportZip'
 import { formatById, LANES, shortName, sizeWords } from './formats'
-import { adjustCrop, changeMethod, channelOfSize, redoSize, sendSize, setLocked, setProtect, sizesOf, staleSizes, updateSizes, upscaleForDelivery, type CampaignDeps } from './make'
+import { adjustCrop, changeMethod, channelOfSize, redoSize, sendSize, setLocked, setProtect, sizesOf, staleSizes, updateSizes, upscaleForDelivery, sizeSeconds, type CampaignDeps } from './make'
 import { METHOD_WORD, methodModels, methodWords, PAID, rowFracs, STILL_METHODS, type MethodModel } from './rules'
 import { campaignSheet } from './sheet'
 import { TypeEditor, TypeOverlay } from './TypeEditor'
@@ -215,7 +215,7 @@ function CampaignBoard({ el, set, canvas, style, selected, els, zoom }: { el: Ca
           <span className="cb-note" role="note" title="Add the logo on the Brand board; then Draw all again adds it to every size">No logo on the Brand board: no size has one</span>
         )}
         {noLogoYet.length > 0 && !!brandKit(doc).logo && (
-          <button type="button" className="btn xs" title="The Brand board has a logo now: draw it on every size that has none (free)"
+          <button type="button" className="btn xs" title="The Brand board has a logo now: draw it on every size that has none"
             onClick={() => { for (const z of noLogoYet) void sendSize(deps, set.id, z.id, by, { retype: true }); say(`Drawing the logo on ${noLogoYet.length} ${noLogoYet.length === 1 ? 'size' : 'sizes'}`) }}>
             Draw all again · {noLogoYet.length}</button>
         )}
@@ -477,7 +477,7 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, flagsOpen,
         )}
       </div>
       <div className="cb-caption" style={{ height: CAPTION_H }}>
-        <span className="cb-name">{f ? shortName(f.format) : size.format.format_id}{size.length_s ? ` · ${size.length_s} s` : ''}</span>
+        <span className="cb-name">{f ? shortName(f.format) : size.format.format_id}{sizeSeconds(doc, size) ? ` · ${sizeSeconds(doc, size)} s` : ''}</span>
         <span className="cb-meta">{f ? sizeWords(f.format) : `${size.delivery.width}×${size.delivery.height}`} · {methodLine}</span>
       </div>
       {picked && !typing && <TileFloat anchor={pic}>
@@ -515,7 +515,7 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, flagsOpen,
                     <button key={m} type="button" role="menuitemradio" aria-checked={size.method === m} className="pt-menurow" disabled={off || size.method === m}
                       title={PAID.has(m) && !models[m] ? 'Off for your agency' : undefined}
                       onClick={() => pickMethod(m)}>
-                      {METHOD_WORD[m]}<span className="hint">{PAID.has(m) ? models[m]?.label ?? 'off' : 'free'}</span>{size.method === m && ' ✓'}
+                      {METHOD_WORD[m]}{PAID.has(m) && <span className="hint">{models[m]?.label ?? 'off'}</span>}{size.method === m && ' ✓'}
                     </button>
                   )
                 })}

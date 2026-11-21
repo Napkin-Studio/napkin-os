@@ -10,3 +10,12 @@ describe('who made a film plan', () => {
     expect(planBy(block('eu.anthropic.claude-sonnet-5-5', 'The reveal, then the sip.'))).toBeUndefined()
   })
 })
+
+describe("a film size's tile says the file's real length (R4-F8)", () => {
+  it('"Film 9:16 · 4.5 s" for the 4.52 s file of a 6 s size; the asked length until it is made', async () => {
+    const { sizeSeconds } = await import('./make')
+    const sha = `sha256:${'c'.repeat(64)}`
+    expect(sizeSeconds({ assets: {} }, { length_s: 6 })).toBe(6)
+    expect(sizeSeconds({ assets: { [sha]: { duration_s: 4.52 } } } as never, { asset: sha, length_s: 6 })).toBe(4.5)
+  })
+})

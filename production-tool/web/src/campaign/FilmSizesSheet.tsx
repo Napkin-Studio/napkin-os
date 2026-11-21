@@ -147,10 +147,10 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
 
   const toggleBeat = (l: number, id: Id) => setBeats((b) => ({ ...b, [l]: (b[l] ?? []).map((x) => (x.shot_id === id ? { ...x, keep: !x.keep, by: 'person' as const } : x)) }))
   const setMethod = (shapeId: string, id: Id, how: ShotMethod) => setMethods((m) => ({ ...m, [shapeId]: { ...m[shapeId], [id]: how } }))
-  const methodWords = (how: ShotMethod) => (how === 'outpaint' ? `New edges · ${aleph?.label ?? 'Aleph 2'}` : how === 'remake' ? `Remake · ${remakeLabel}` : 'Crop · free')
+  const methodWords = (how: ShotMethod) => (how === 'outpaint' ? `New edges · ${aleph?.label ?? 'Aleph 2'}` : how === 'remake' ? `Remake · ${remakeLabel}` : 'Crop')
   const rowWords = (r: FilmRow) => {
     const shape = FILM_SHAPES.find((s) => s.id === r.shapeId)!
-    if (isMaster(shape.aspect)) return 'Re-edit · free'
+    if (isMaster(shape.aspect)) return 'Re-edit'
     const ids = kept(r.lengthS)
     const made = paid.filter((p) => p.shapeId === r.shapeId && ids.has(p.shotId))
     const edges = made.filter((p) => p.how === 'outpaint').length
@@ -255,9 +255,9 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
                     return (
                       <div key={shot.shotId} className="cf-row" role="listitem" data-reframe={`${s.id}:${shot.shotId}`}>
                         <span className="cf-name">Shot {shot.number}</span>
-                        <span className="cf-note" style={{ flex: 1 }}>{c?.why ?? ''}{c?.cuts && how === 'crop' ? `${c?.why ? ' ' : ''}The crop cuts into this shot: New edges keeps it whole (paid).` : ''}</span>
+                        <span className="cf-note" style={{ flex: 1 }}>{c?.why ?? ''}{c?.cuts && how === 'crop' ? `${c?.why ? ' ' : ''}The crop cuts into this shot: New edges keeps it whole.` : ''}</span>
                         <select aria-label={`How shot ${shot.number} is made at ${s.label}`} value={how} onChange={(e) => setMethod(s.id, shot.shotId, e.target.value as ShotMethod)}>
-                          <option value="crop">Crop · free</option>
+                          <option value="crop">Crop</option>
                           <option value="outpaint" disabled={!aleph}>New edges · {aleph?.label ?? 'off for your agency'}</option>
                           <option value="remake" disabled={!remake}>Remake for {s.label} · {remakeLabel}</option>
                         </select>
@@ -323,7 +323,7 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
             </div>
             {error && <p className="cf-error" role="alert">{error}</p>}
             <footer className="cf-foot">
-              <span className="cf-note">{versionsWord(rows.filter((r) => r.on).length)}, cut from the same takes (free){paid.length ? `; ${paid.length} ${paid.length === 1 ? 'shot' : 'shots'} on a model (cost in History)` : ''}. They land on the Campaign board's Film lane.</span>
+              <span className="cf-note">{versionsWord(rows.filter((r) => r.on).length)}, cut from the same takes{paid.length ? `; ${paid.length} ${paid.length === 1 ? 'shot' : 'shots'} made again on a model` : ''}. They land on the Campaign board's Film lane.</span>
               <span className="pt-grow" />
               <button type="button" className="btn ghost" onClick={() => setStep('plan')}>Back</button>
               <button type="button" className="btn primary" disabled={busy || !rows.some((r) => r.on)} onClick={() => void send()}>

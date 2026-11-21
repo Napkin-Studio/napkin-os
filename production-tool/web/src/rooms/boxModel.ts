@@ -137,8 +137,11 @@ export const isSilence = (b: { kind: string; text?: string }) => b.kind === 'sou
 export function boxSound(doc: ProductionDocument, box: Pick<Box, 'shotIds'>, m: ModelChoice | undefined): { on: boolean; words: string } | undefined {
   const beats = box.shotIds.flatMap((id) => beatsOf(doc, id)).filter((b) => (b.kind === 'line' || b.kind === 'vo' || b.kind === 'sound') && b.text?.trim() && !isSilence(b))
   if (!beats.length || !m) return undefined
-  const what = [beats.some((b) => b.kind === 'line') && 'the spoken line', beats.some((b) => b.kind === 'vo') && 'the voice-over', beats.some((b) => b.kind === 'sound') && 'the sound']
-    .filter(Boolean).join(', ')
+  const parts = [beats.some((b) => b.kind === 'line') && 'the spoken line', beats.some((b) => b.kind === 'vo') && 'the voice-over', beats.some((b) => b.kind === 'sound') && 'the sounds asked for']
+    .filter((x): x is string => !!x)
+  // "the spoken line, the voice-over and the sounds asked for" (UAT round 4, R4-F8: "so the voice-over, the sound will not
+  // be voiced").
+  const what = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}` : parts[0]
   const e = entryOf(m)
   const label = e?.label ?? m.model
   // Said plainly that sound is on, never what it costs (owner 2026-10-13: no prices in the UI; UAT 2026-11-21, F22).
@@ -146,7 +149,7 @@ export function boxSound(doc: ProductionDocument, box: Pick<Box, 'shotIds'>, m: 
   // No switch (Omni Flash 1.1, Hailuo 3): the relay asks for no music and no dialogue (decided 2026-10-06). Those
   // that make sound on their own still put a background track on the clip (UAT 2026-11-21, F10: Omni's takes carried
   // sound at -12 dB while the box said it made none).
-  if (e?.video.audioDefault) return { on: false, words: `${label} makes its own background sound and has no sound switch, so ${what} will not be voiced. Veo 3.1, Kling or WAN 3 can.` }
+  if (e?.video.audioDefault) return { on: false, words: `${label} makes its own background sound and has no sound switch, so it will not make ${what}. Veo 3.1, Kling or WAN 3 can.` }
   return { on: false, words: `No sound made: ${label} has no sound switch, so ${what} will not be heard. Veo 3.1, Kling or WAN 3 can.` }
 }
 

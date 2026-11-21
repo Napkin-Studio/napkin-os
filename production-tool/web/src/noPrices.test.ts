@@ -31,3 +31,20 @@ describe('no prices in the UI', () => {
     expect(found).toEqual([])
   })
 })
+
+// Nor a cost word (owner rule; UAT round 4, R4-F8: "Crop · free", "(free)", "(paid)", "cost in History"): what a person
+// sees never says a thing is free, paid or what it cost. Code names (a `paid` list, the `free` page class) are fine.
+const COST_WORDS = /['"`>][^'"`<>]*(?:·\s*free\b|\((?:free|paid)\)|\bcost in (?:History|Decisions)\b|\bNothing paid\b|\bFree, and\b|what each job cost)[^'"`<>]*['"`<]/
+
+describe('no cost words in the UI', () => {
+  it('never "· free", "(free)", "(paid)" or "cost in History"', () => {
+    const found = files(SRC)
+      .map((p) => relative(SRC, p).split('\\').join('/'))
+      .filter((rel) => !ALLOWED.has(rel))
+      .flatMap((rel) => readFileSync(join(SRC, rel), 'utf8').split('\n')
+        .map((line, i) => ({ rel, line, n: i + 1 }))
+        .filter(({ line }) => COST_WORDS.test(line) && !line.trim().startsWith('//') && !line.trim().startsWith('*')))
+      .map(({ rel, n, line }) => `${rel}:${n}: ${line.trim()}`)
+    expect(found).toEqual([])
+  })
+})
