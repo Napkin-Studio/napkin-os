@@ -747,7 +747,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
                 // The job's status, elapsed time and Cancel (or its question) live in its row, never over the stage.
                 const live = jobId && isActive(jobState(jobId) ?? 'completed') && jobId !== offerJob ? jobId : undefined
                 return (
-                  <li key={e.id} className={`${session.active === e.id ? 'on' : ''} ${live || st === 'unsent' ? 'ie-hasjob' : ''}`}>
+                  <li key={e.id} className={`${session.active === e.id ? 'on' : ''} ${live || st === 'unsent' || st === 'same' ? 'ie-hasjob' : ''}`}>
                     <button type="button" className="ie-ebody" onClick={() => { if (e.kind === 'mask') { setPicked(null); setSession((s) => ({ ...s, active: e.id })) } }}>
                       <span className="pt-mono ie-n">{i + 1}</span> {label}
                       {st === 'ready' && <span className="ie-ok">ready</span>}
@@ -757,7 +757,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
                     {st === 'same' && 'jobId' in e && (
                       <span className="ie-jobrow ie-same" role="status">
                         <span className="ie-bad">{sameLine(e)}</span>
-                        <span className="faint ie-samehint">Nothing changed{e.kind === 'fill' ? ' in the area' : ''}, so there is nothing to apply. Try again, or paint a wider area and say what should be there.</span>
+                        <span className="faint ie-samehint">{e.kind === 'fill' ? 'Try again, or paint a wider area and say what should be there.' : 'Try again, or say the change another way.'}</span>
                         <button type="button" className="btn sm" disabled={running} onClick={() => tryAgain(e)}>Try again</button>
                         <button type="button" className="btn sm ghost" onClick={() => discardSame(e)}>Discard</button>
                       </span>

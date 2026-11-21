@@ -90,6 +90,8 @@ RELAY_LINES = (NO_OTHER_BRANDS, PREVIOUS_IS_NOT_A_COPY)
 # palette says Strict, the relay rewrites an "only these colours" Dex still writes into accents, whatever prompt version.
 _ONLY_COLOURS = re.compile(r"\b(?:use |using |in |with )?only (?:these|the(?: brand(?:'s)?)?|its|our) (?:brand )?(?:colou?rs|palette)\b", re.I)
 _KEEP_TO_PALETTE = re.compile(r"\b(?:keep(?:ing)? to|stick(?:ing)? to|stay(?:ing)? within|limit(?:ed)? to) the (?:brand(?:'s)? )?palette\b", re.I)
+PALETTE_ROLE_LINE = "brand palette: keep to these colours"
+PALETTE_ROLE_LINE_V17 = "brand palette: its colours as accents where the scene has room, never the only colours"
 PALETTE_OPS = ("generate", "frame", "region_edit", "frame_edit", "clip", "clip_edit", "clip_patch")
 # What Dex reads is its op's (round 3, R2-3: a words-only generate was 15.1k input tokens, the whole 18 KB director
 # schema among them): the schema without other ops' fields, and the prompt without the sections its input cannot use.
@@ -741,6 +743,8 @@ class Director:
         require_prompt(prompt_version)
         self.prompt_version = prompt_version
         self.system = load_prompt(self.prompt_dir / f"{prompt_version}.md", contracts)
+        if prompt_number(prompt_version) >= 17:  # a palette is accents (R3-2); the contract's role line says "keep to"
+            self.system = self.system.replace(PALETTE_ROLE_LINE, PALETTE_ROLE_LINE_V17)
         schemas = load_schemas(contracts)
         self.schema = bundle(schemas)
         registry = Registry().with_resources((BASE + n, Resource.from_contents(s)) for n, s in schemas.items())

@@ -1333,7 +1333,10 @@ function Floating({ className, anchor, children }: { className: string; anchor: 
 const MAIN_ROLES = REF_ROLES.filter((r) => REF_ROLE_TABLE[r].picker === 'main')
 const roleWord = (r: RefRole) => (r === 'brand_rule' ? 'brand rule' : r)
 /** The role's one line in the Name dialog; a palette's says its colours can be changed (UAT round 2: one line, not two). */
-const roleLine = (r: RefRole) => `${REF_ROLE_TABLE[r].ui_line}${r === 'palette' ? '. Click a colour to change it.' : ''}`
+const roleLine = (r: RefRole) => (r === 'palette'
+  // A palette is accents, not the only colours (UAT round 3 R3-2; the contract's line still says "keeps to").
+  ? 'The Director agent uses these colours as accents. Click a colour to change it.'
+  : REF_ROLE_TABLE[r].ui_line)
 
 const KIND_WORD = { pic: 'picture', drawn: 'drawing', gen: 'result' } as const
 /** A brand row's kind, as the Generate tray says it. */

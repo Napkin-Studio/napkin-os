@@ -133,6 +133,13 @@ def test_v17_says_accents_and_the_anchors_setting_only_in_its_place():
     assert len(v17.splitlines()) == len(v16.splitlines()) + 2 and len(changed) <= len(v16.splitlines())
 
 
+def test_v17s_role_line_for_a_palette_says_accents_and_v16s_is_as_it_was():
+    v17, _ = director()
+    v16, _ = director(version="director.v16")
+    assert "brand palette: its colours as accents" in v17.system and "keep to these colours" not in v17.system
+    assert "brand palette: keep to these colours" in v16.system
+
+
 def test_a_generate_with_a_palette_lands_with_accents():
     reply = {**GENERATE, "providerJob": {**GENERATE["providerJob"], "prompt": "A cottage at midday. Use only these colours: #0A1F44."}}
     d, _ = director(reply)
