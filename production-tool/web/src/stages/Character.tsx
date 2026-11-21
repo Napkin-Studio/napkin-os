@@ -565,6 +565,21 @@ export function Character({ initial, active, onPictureEditor }: {
     lastBrief.current = selBrief
     if (fresh && panels.assets) panels.toggle('assets')
   }, [selBrief, panels])
+  // The Booth follows the selection's room (UAT round 3, R3-F14; round 4 leftover): selecting a node card (a Script, a
+  // Storyboard, a Film, a Format set…) means the person moved on from the library, so it closes. Pictures, including
+  // the ones just placed from the library, keep it open, so several can be added in a row.
+  const selCard = useMemo(() => {
+    const ids = vs?.selected ?? []
+    const el = ids.length === 1 && !linkMode ? els.find((e) => e.id === ids[0]) : undefined
+    const c = el ? cardOf(el) : null
+    return c ? `${c.kind}:${c.id}` : null
+  }, [vs, els, linkMode])
+  const lastCard = useRef<string | null>(null)
+  useEffect(() => {
+    const fresh = !!selCard && selCard !== lastCard.current
+    lastCard.current = selCard
+    if (fresh && panels.assets) panels.toggle('assets')
+  }, [selCard, panels])
   // Selecting pans the node into the visible area (production-new-ui design guard; re-test 2b: a selected Brief
   // sat half under the tool rail, and the Booth's column opening took the right edge). One node (never a picture),
   // once per selection, after the Booth has slid in; never mid-drag, and not after the person moved it.
