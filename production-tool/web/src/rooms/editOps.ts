@@ -137,6 +137,15 @@ export async function undoJoinedTake(store: DocumentStore, ui: UiStore): Promise
   const j = ui.get().joinedInCut
   if (!j) return false
   if (JSON.stringify(v1Items(store.get(), j.videoId)) !== j.after) return false
+  // The placement is the person's last undo step: take it back through the store's undo, so the bar's Redo puts it
+  // in again (UAT 2026-11-21, F12: the note's Undo wrote a new change, and Redo said "Nothing to redo").
+  await store.flush()
+  const label = store.undoLabels?.().undo
+  if (store.undo && label && /^put the joined take/i.test(label)) {
+    await store.undo()
+    ui.update((u) => { delete u.joinedInCut }, 'joined take note')
+    return true
+  }
   await updateDoc(store, (x) => {
     const tl = x.videos[j.videoId]?.timeline
     if (!tl) return

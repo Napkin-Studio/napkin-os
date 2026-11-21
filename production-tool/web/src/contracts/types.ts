@@ -223,6 +223,8 @@ export interface Cost {
   estimate?: number
   reserved?: number
   confirmed?: number
+  /** The agents' Claude calls for the job (relay agent_cost.py; pt-film-r2 F21). */
+  agentUsd?: number
   currency: 'USD'
   unknown: boolean
 }
@@ -370,6 +372,8 @@ export interface ModelSheet {
   v2v?: { videoField: 'videoUri' | 'promptVideo'; mode?: 'edit'; durationAuto?: boolean; keepOriginalSound?: boolean; audioParam?: boolean; ratio?: boolean; refsMax: number; inputMaxS?: number }
   /** A draft can be made at 1080p later from its task id (Seedance 2.5; features/clip-quality.clan). */
   draftPromote?: boolean
+  /** The width / height range of a picture it is sent; the relay pads one outside it (pt-film-r2 F5). */
+  refAspect?: { min: number; max: number }
   pricing: { unit: 'image' | 'second' | 'frame'; source: string[]; [k: string]: unknown }
 }
 
@@ -467,7 +471,7 @@ export interface Config {
    *  Runway is the floor of every job routed to it (features/runway-fallback.clan). */
   routing: Partial<Record<Op, Provider[]>>
   /** Optional, every key too: the relay runs its newest prompt and its own models when absent. */
-  director?: { promptVersion?: string; perClickModel?: string; shotListModel?: string }
+  director?: { promptVersion?: string; perClickModel?: string; shotListModel?: string; prices?: Record<string, { inputPerMTok: number; outputPerMTok: number }> }
   quotas: { image: number; video: number; render: number }
   inFlightPerParticipant: number
   jobTimeoutS: { image: number; video: number }

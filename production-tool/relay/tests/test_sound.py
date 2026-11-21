@@ -80,3 +80,17 @@ def test_a_tagless_model_reads_follows_image_n_without_the_tag_said_as_words():
     p = "Shot 1 [0-3 s] She tiptoes in, follows image 1 (@in_1)\\nShot 2 [3-6 s] She presses it, follows image 2 (@in_2)"
     assert rewrite_tags(p, ["in_1", "in_2"], "none") == p.replace(" (@in_1)", "").replace(" (@in_2)", "")
     assert "(@in_1)" in rewrite_tags(p, ["in_1", "in_2"], "at_tag")
+
+
+def test_a_plans_sound_beats_stay_only_where_the_script_names_the_sound():
+    """UAT 2026-11-21, F22: Dex put "night hum" and "faint hush" on most shots, each turning sound on."""
+    script = "INT. KITCHEN - NIGHT\nThe dog lets out one soft snore. MAYA (whispering) Good boy."
+    shots = [
+        {"beats": [{"kind": "sound", "at_s": 0, "text": "night hum"}, {"kind": "moment", "at_s": 0, "text": "she enters"}]},
+        {"beats": [{"kind": "sound", "at_s": 1, "text": "one soft snore"}]},
+        {"beats": [{"kind": "sound", "at_s": 0, "text": "faint hush"}]},
+    ]
+    kept, gone = sound.keep_asked_sounds(shots, script)
+    assert [[b["text"] for b in s["beats"]] for s in kept] == [["she enters"], ["one soft snore"], []]
+    assert gone == ["night hum", "faint hush"]
+    assert sound.keep_asked_sounds(shots, "") == (shots, [])

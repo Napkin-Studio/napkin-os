@@ -211,6 +211,7 @@ def test_a_landed_take_goes_to_take_cuts_and_lands_with_the_cuts():
              "cuts": [{"planned_s": 3, "found_s": 3.042}, {"planned_s": 5.75, "found_s": None}]}
     job = stitch_result(h, job, "cuts.json", found)
     assert job["state"] == "completed" and job["cuts"] == [{"planned_s": 3, "found_s": 3.042}, {"planned_s": 5.75, "found_s": None}]
+    assert job["outputs"][0]["durationS"] == 9.0  # the take's own length, as stitch read it (UAT 2026-11-21, F4)
     assert job["outputs"][0]["mime"] == "video/mp4" and job["cost"]["confirmed"] == 0.9
 
 

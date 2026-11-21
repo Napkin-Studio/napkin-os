@@ -427,3 +427,24 @@ def test_v5_is_v4_plus_the_brief_and_reads_it_cut_to_the_write_budget():
     plain = write_input()
     ModelWriter(port2, contracts_dir()).write({"op": "write", "jobId": new_id("job"), "input": plain})
     assert port2.asked[0]["payload"]["input"] == plain
+
+
+def test_skyes_claude_calls_are_priced_on_the_job_and_in_the_ledger(h):
+    """UAT 2026-11-21, F21: every Dex and Skye job read $0 in the ledger."""
+    inner = h.relay.writer
+
+    class Priced:
+        model = "eu.anthropic.claude-sonnet-5-5"
+        prompt_version = getattr(inner, "prompt_version", "skye.v6")
+
+        def write(self, req):
+            out = dict(inner.write(req))
+            out["_usage"] = {"input_tokens": 20_000, "output_tokens": 1_000}
+            return out
+
+    h.relay.writer = Priced()
+    token = h.as_person()
+    _, job = post_write(h, token)
+    assert job["state"] == "completed"
+    assert job["cost"]["agentUsd"] == 0.05
+    assert round(h.store.counters("spend").get("usd", 0), 6) == 0.05

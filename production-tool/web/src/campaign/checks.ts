@@ -106,9 +106,15 @@ export function checksFor(size: Size, set: FormatSet, d: ProductionDocument): Ch
     if (SOCIAL_SHAPES.some(([a, b]) => Math.abs(r - a / b) < 0.02)) {
       const supers = (set.copy?.supers?.length ?? 0) > 0 && !size.layers?.supers?.hidden
       // Captions of the spoken lines are on by default on the social shapes (CF9), off when hidden on the tile.
-      const captions = !size.layers?.captions?.hidden && edl.some((w) => spokenOf(d, w.shot_id).length > 0)
+      const spoken = edl.some((w) => spokenOf(d, w.shot_id).length > 0)
+      const captions = !size.layers?.captions?.hidden && spoken
+      const lineOn = laid.some((l) => l.kind === 'line')
+      // A version with no spoken line has nothing to caption: the flag read "No supers or captions" on a cut whose
+      // words were all on screen already (UAT 2026-11-21, F16).
       out.sound_off = supers || captions ? pass(captions ? 'Its spoken lines are captioned for sound off.' : 'It carries supers for sound off.')
-        : flag('No supers or captions: most social video plays without sound.')
+        : spoken ? flag('Its spoken lines have no captions: most social video plays without sound. Turn Captions on.')
+          : lineOn ? pass('No spoken lines to caption; the line is on screen for sound off.')
+            : flag('No words on screen for sound off (it has no spoken lines to caption): most social video plays without sound. Add a super or the line.')
       if (edl.length) {
         // The brand is on screen from the start when the logo or the line is laid over the film.
         const branded = !!logo || laid.some((l) => l.kind === 'line') || !!edl[0]?.end_card

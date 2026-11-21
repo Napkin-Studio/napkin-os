@@ -119,7 +119,8 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
       for (const s of shapeList) {
         if (isMaster(s.aspect)) continue
         m[s.id] = {}
-        for (const c of p.crops) if (c.cuts && sameShape(c.aspect, s.aspect) && aleph) m[s.id][c.shotId] = 'outpaint'
+        // Every shot starts on the free crop; a crop that cuts into the shot says so on its row, and paid new edges
+        // are the person's pick (UAT 2026-11-21, F16: a 9:16 shot was set to Aleph 2 unasked).
       }
       setMethods(m)
       setStep('plan')
@@ -252,7 +253,7 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
                     return (
                       <div key={shot.shotId} className="cf-row" role="listitem" data-reframe={`${s.id}:${shot.shotId}`}>
                         <span className="cf-name">Shot {shot.number}</span>
-                        <span className="cf-note" style={{ flex: 1 }}>{c?.why ?? ''}</span>
+                        <span className="cf-note" style={{ flex: 1 }}>{c?.why ?? ''}{c?.cuts && how === 'crop' ? `${c?.why ? ' ' : ''}The crop cuts into this shot: New edges keeps it whole (paid).` : ''}</span>
                         <select aria-label={`How shot ${shot.number} is made at ${s.label}`} value={how} onChange={(e) => setMethod(s.id, shot.shotId, e.target.value as ShotMethod)}>
                           <option value="crop">Crop · free</option>
                           <option value="outpaint" disabled={!aleph}>New edges · {aleph?.label ?? 'off for your agency'}</option>

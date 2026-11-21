@@ -97,6 +97,7 @@ class ClaudeDirector:
         out["_model"] = result.agent_block["model"]
         out["_promptVersion"] = result.agent_block["promptVersion"]
         out["_input"] = result.agent_block["input"]
+        out["_usage"] = result.usage  # the relay prices it (agent_cost.py; UAT 2026-11-21, F21)
         jobtrace.trace("director", job_request.get("jobId"), op=op, provider=provider, model=out["_model"],
                        promptVersion=out["_promptVersion"], latencyMs=result.agent_block["latencyMs"], usage=result.usage,
                        asked=True if out.get("question") else None)

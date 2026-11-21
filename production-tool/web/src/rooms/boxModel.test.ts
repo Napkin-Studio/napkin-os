@@ -49,3 +49,17 @@ describe('a 15 s box of 4 shots made together', () => {
     expect(boxModelWhyNot(many.doc, many.box, wan3)).toBe('More shots than WAN 3 makes in one go (6)')
   })
 })
+
+describe('a box keeps its own model (UAT 2026-11-21, F3)', () => {
+  it('a box with a take shows the model its newest take was made on, not the last that worked elsewhere', () => {
+    const { doc, box } = together([2, 2])
+    const single: Box = { ...box, key: 'b2', shotIds: [box.shotIds[1]], together: false, lengthS: 2 }
+    const gen = (id: string, shots: string[], model: string, at: string) => {
+      doc.generations[id] = { id, v: 1, field_v: {}, kind: 'clip', shot_ids: shots, inputs: { model, length_s: 2 }, provider: 'runway', state: 'ready', crew: 'wren', created_at: at, by: 'human:x' } as never
+    }
+    gen('g_veo', [single.shotIds[0]], 'veo3.1', '2026-11-21T10:00:00Z')
+    // Another box was made on Omni since: the last that worked anywhere.
+    doc.jobs.j_omni = { id: 'j_omni', v: 1, field_v: {}, op: 'clip', state: 'completed', provider: 'runway', model: 'gemini_omni_flash_1.1', crew: 'wren', inputs: [], created_at: '2026-11-21T11:00:00Z' } as never
+    expect(boxModel(doc, single, on)).toEqual({ provider: 'runway', model: 'veo3.1' })
+  })
+})

@@ -24,8 +24,15 @@ export interface Gen {
    *  apart is one take of each of those boxes (each plays its own window); absent means [boxKey]. */
   boxKeys?: string[]
   shotIds: Id[]
-  /** v1, v2… within its box, oldest first. */
+  /** v1, v2… among the takes made of the same shots, oldest first (it keeps its number when boxes change). */
   version: number
+  /** The box number of the shots it was made of (its first shot's number): "Box 2 · v1" stays shot 2's take after
+   *  shots 1-2 are joined again (UAT 2026-11-21, F15: it was renamed "Box 1 v4"). 0: not known. */
+  madeN?: number
+  /** The key of the shots it was made of (boxKeyOf), which numbers it. */
+  made?: string
+  /** The number of the last shot it was made of, when it was made of several ("Box 1–2"). */
+  madeTo?: number
   parentId?: Id
   delta: DeltaRow[]
   /** "Camera: handheld (shot 3)", "First take". */
@@ -46,7 +53,8 @@ export interface Gen {
 /** A box of the film: shots made as one generation, or one shot alone, or the end card. */
 export interface Box {
   key: string
-  /** 1-based among the boxes that are not the end card. */
+  /** The number of its first shot (end card: 0), so a box keeps its number when shots before or beside it are
+   *  joined or cut apart (UAT 2026-11-21, F15: shot 3 went Box 2, Box 3, Box 2 as the gap 1|2 was cut and joined). */
   n: number
   shotIds: Id[]
   together: boolean
@@ -86,8 +94,14 @@ export const boxName = (b: Pick<Box, 'n' | 'endCard'>) => (b.endCard ? 'End card
 export function genTitle(g: Gen, boxes: Box[]): string {
   const b = boxes.find((x) => x.key === g.boxKey)
   const len = `${Math.round(g.durationS * 10) / 10} s`
-  return [b ? boxName(b) : 'Not in a box', `v${g.version}`, len].join(' · ')
+  const name = g.madeN ? `Box ${g.madeN}${g.madeTo && g.madeTo !== g.madeN ? `–${g.madeTo}` : ''}` : b ? boxName(b) : 'Not in a box'
+  return [name, `v${g.version}`, len].join(' · ')
 }
+
+/** Whether a take has footage for a shot: its own shots or its windows (a clip with no shot: any take). One rule for
+ *  New take ready, Use this take and Swap take (UAT 2026-11-21, F2/F13: a shot-1 take was put over shot 2's clip). */
+export const coversShot = (g: Pick<Gen, 'shotIds' | 'segments'>, shotId: Id | undefined) =>
+  !shotId || g.shotIds.includes(shotId) || g.segments.some((s) => s.shotId === shotId)
 
 /** The video's boxes, in storyboard order. As one film (connected video), the planner's rows; otherwise each
  *  shot is its own box. */
@@ -100,12 +114,10 @@ export function roomBoxes(d: ProductionDocument, ui: Pick<UiState, 'jobs'>, vide
     if (model) rows = videoRows(d, ui, videoId, videoPlan(d, videoId, model))
   }
   const groups: { shotIds: Id[]; row?: Row }[] = rows?.length ? rows.map((r) => ({ shotIds: r.shotIds, row: r })) : shots.map((s) => ({ shotIds: [s.id] }))
-  let n = 0
   return groups.map((g) => {
     const endCard = g.shotIds.length === 1 && d.shots[g.shotIds[0]]?.kind === 'end_card'
-    if (!endCard) n++
     return {
-      key: boxKeyOf(g.shotIds), n: endCard ? 0 : n, shotIds: g.shotIds, together: g.shotIds.length > 1, endCard,
+      key: boxKeyOf(g.shotIds), n: endCard ? 0 : Math.max(1, shotNumber(d, g.shotIds[0])), shotIds: g.shotIds, together: g.shotIds.length > 1, endCard,
       lengthS: Math.round(g.shotIds.reduce((a, id) => a + (d.shots[id]?.duration_s ?? 0), 0) * 1000) / 1000,
       ...(g.row ? { row: g.row } : {}),
     }
@@ -139,6 +151,8 @@ export function roomGens(d: ProductionDocument, _ui: Pick<UiState, 'jobs'>, vide
     const boxKeys = covering.length ? covering : [key]
     out.push({
       id: g.id, kind: g.kind, boxKey: boxKeys[0], ...(boxKeys.length > 1 ? { boxKeys } : {}), shotIds: g.shot_ids, version: 0,
+      madeN: shotNumber(d, (run?.shot_ids ?? g.shot_ids)[0]) || 0, made: key,
+      ...((run?.shot_ids ?? g.shot_ids).length > 1 ? { madeTo: shotNumber(d, (run?.shot_ids ?? g.shot_ids).at(-1)) || undefined } : {}),
       ...(g.parent_id ? { parentId: g.parent_id } : {}),
       delta: (g.delta ?? []).map((x) => deltaRow(x, g.patched?.find((p) => p.job_id === g.job_id))), label: g.label ?? '', ...(g.asset ? { asset: g.asset } : {}),
       durationS, segments, state: g.state, ...(g.job_id ? { jobId: g.job_id } : {}), createdAt: g.created_at,
@@ -178,10 +192,11 @@ export function makingLine(live: { state?: string; note?: string } | undefined, 
   return live?.note ? `${word} · ${live.note}` : word
 }
 
-/** v1…vn per box, oldest first; and each take's label from its delta. */
+/** v1…vn per the shots each take was made of (its box when it was made), oldest first; and each take's label
+ *  from its delta. */
 export function numberAndLabel(gens: Gen[], shotNo: (id: Id) => number) {
   const byBox = new Map<string, Gen[]>()
-  for (const g of gens) byBox.set(g.boxKey, [...(byBox.get(g.boxKey) ?? []), g])
+  for (const g of gens) { const k = g.made ?? g.boxKey; byBox.set(k, [...(byBox.get(k) ?? []), g]) }
   const before = new Map<string, Gen>()
   for (const list of byBox.values()) {
     list.sort((a, b) => -newestFirst(a, b)).forEach((g, i) => {

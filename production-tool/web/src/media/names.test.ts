@@ -123,3 +123,13 @@ describe('media names (features/media-download.clan)', () => {
     expect(mediaItem(d, 'P', SHA('a'))?.name).toBe('P-maya_front.png') // v1 is the named picture already
   })
 })
+
+describe('a joined take in the zip (UAT 2026-11-21, F15)', () => {
+  it('is one file, named for its shots', () => {
+    const d = project()
+    d.assets[SHA('7')] = asset('7', 'video/mp4')
+    put(d.generations, { id: 'take_j', kind: 'together', shot_ids: ['shot_9', 'shot_2'], asset: SHA('7'), duration_s: 6, state: 'ready', job_id: 'job_j', crew: 'wren', provider: 'runway', inputs: { model: 'm' }, created_at: '2026-10-13T11:00:00Z', by: 'human:p_maya01' } as never)
+    const clips = mediaItems(d, 'Ad').filter((m) => m.sha256 === SHA('7'))
+    expect(clips.map((m) => m.name)).toEqual(['Ad-shots1-2-clip-v2.mp4'])
+  })
+})

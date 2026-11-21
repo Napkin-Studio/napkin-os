@@ -9,7 +9,7 @@ import { useState } from 'react'
 import { useServices } from '../app/context'
 import { clipLen, HOLD_MAX_S, type Cut, type CutClip, type SwapChoice } from './cut'
 import { editCut, swapPlanFor } from './editOps'
-import { boxName, shotWindow, type Gen } from './model'
+import { boxName, coversShot, inBox, shotWindow, type Gen } from './model'
 import { tc } from './media'
 import { Poster } from './Poster'
 import type { RoomData } from './Rooms'
@@ -20,8 +20,13 @@ export function NewTakeSheet({ data, cut, clip, take, onClose, onError }: {
 }) {
   const { doc: docStore } = useServices()
   const old = data.gens.find((g) => g.id === clip.genId)
-  const box = old ? data.boxes.find((b) => b.key === old.boxKey) : undefined
-  const siblings = cut.v1.filter((c) => c.genId === clip.genId)
+  // The box is the new take's (the clip's shot's box): a joined take cut apart since is a take of each of its shots'
+  // boxes, and its first was named for shot 2's card (UAT 2026-11-21, F2: "Box 1 v1" on Box 2's take).
+  const box = data.boxes.find((b) => !!clip.follows?.shotId && b.shotIds.includes(clip.follows.shotId) && inBox(take, b.key))
+    ?? data.boxes.find((b) => b.key === take.boxKey)
+  // Only the clips of the old take whose shot the new take has footage for (F2: a shot-1 take was put over shot 2's
+  // clip as well, so shot 2 played shot 1's footage and its own card went).
+  const siblings = cut.v1.filter((c) => c.genId === clip.genId && (c.id === clip.id || (!!c.follows?.shotId && coversShot(take, c.follows.shotId))))
   const [all, setAll] = useState(siblings.length > 1)
   const ids = all ? siblings.map((c) => c.id) : [clip.id]
   const plan = old ? swapPlanFor(cut, take, old, ids) : undefined

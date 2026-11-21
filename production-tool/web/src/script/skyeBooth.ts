@@ -182,3 +182,57 @@ export function meterSegments(doc: ProductionDocument, composed: ComposedScript)
   if (composed.shots.length) return composed.shots.map((s) => ({ id: s.id, s: s.duration_s }))
   return roughLines(roughText(doc, composed.script.id)).map((s, i) => ({ id: `p${i}`, s: Math.round(s * 10) / 10 })).filter((x) => x.s > 0)
 }
+
+/** One row of an edit card in screenplay layout: its element (cue, parenthetical, dialogue, action…) and its
+ *  words, changed word by word where the line was rewritten, whole where it is new or gone. */
+export interface DiffRow { kind: string; parts: ReturnType<typeof wordDiff>; change: 'same' | 'changed' | 'new' | 'gone' }
+
+/**
+ * An edit as the page reads it (UAT 2026-11-21, script UX 1: the card flattened cues and parentheticals into one
+ * struck-through paragraph): the lines matched as lines first, each kept in its element's layout, and only a line
+ * that was rewritten shown word by word. Pure.
+ */
+export function lineDiff(before: { kind: string; text: string }[], after: { kind: string; text: string }[]): DiffRow[] {
+  const a = before.filter((l) => l.text.trim())
+  const b = after.filter((l) => l.text.trim())
+  const n = a.length
+  const m = b.length
+  const same = (i: number, j: number) => a[i].text.trim() === b[j].text.trim()
+  const L: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0))
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) L[i][j] = same(i, j) ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1])
+  const raw: { op: 'same' | 'gone' | 'new'; i?: number; j?: number }[] = []
+  let i = 0
+  let j = 0
+  while (i < n || j < m) {
+    if (i < n && j < m && same(i, j)) { raw.push({ op: 'same', i, j }); i++; j++ }
+    else if (j < m && (i >= n || L[i][j + 1] >= L[i + 1][j])) raw.push({ op: 'new', j: j++ })
+    else raw.push({ op: 'gone', i: i++ })
+  }
+  // Within each run of changes, a line gone and a line new of the same element are one line rewritten, shown word by
+  // word where the new line stands; what is left of the run is new or gone. The rows follow the new text's order.
+  const out: DiffRow[] = []
+  let k = 0
+  while (k < raw.length) {
+    const r = raw[k]
+    if (r.op === 'same') { out.push({ kind: b[r.j!].kind, parts: [{ kind: 'same', text: b[r.j!].text }], change: 'same' }); k++; continue }
+    const run: typeof raw = []
+    while (k < raw.length && raw[k].op !== 'same') run.push(raw[k++])
+    const gones = run.filter((x) => x.op === 'gone').map((x) => a[x.i!])
+    const used = new Set<number>()
+    for (const x of run.filter((y) => y.op === 'new')) {
+      const w = b[x.j!]
+      const g = gones.findIndex((l, q) => !used.has(q) && l.kind === w.kind)
+      if (g >= 0) { used.add(g); out.push({ kind: w.kind, parts: wordDiff(gones[g].text, w.text), change: 'changed' }) }
+      else out.push({ kind: w.kind, parts: [{ kind: 'new', text: w.text }], change: 'new' })
+    }
+    gones.forEach((l, q) => { if (!used.has(q)) out.push({ kind: l.kind, parts: [{ kind: 'gone', text: l.text }], change: 'gone' }) })
+  }
+  return out
+}
+
+/** The part's length now, by the band's rule (or the shot's length), for "about 12 s → 9 s" on an edit card. */
+export function secondsNow(d: Doc, sug: Suggestion, lines: { kind: string; text: string }[]): number {
+  if (sug.target.kind === 'shot') return d.shots[sug.target.id]?.duration_s ?? 0
+  const text = lines.map((l) => (l.kind === 'character' ? l.text.toUpperCase() : l.kind === 'parenthetical' && !/^\(.*\)$/.test(l.text.trim()) ? `(${l.text})` : l.text)).join('\n')
+  return roughSeconds(text)
+}

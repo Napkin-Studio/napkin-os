@@ -101,7 +101,9 @@ export function who(agent: string, me: string | undefined, op?: DocJob['op']): {
 export function jobCost(cost: Cost | undefined): string | undefined {
   if (!cost) return undefined
   const fmt = (v: number) => `$${v < 0.1 ? v.toFixed(3) : v.toFixed(2)}`
-  if (cost.confirmed != null) return cost.confirmed > 0 ? fmt(cost.confirmed) : undefined
+  // The agents' Claude calls count too (UAT 2026-11-21, F21: every Dex and Skye job read $0).
+  const agent = cost.agentUsd ?? 0
+  if (cost.confirmed != null || agent > 0) { const v = (cost.confirmed ?? 0) + agent; return v > 0 ? fmt(v) : undefined }
   if (cost.unknown) return undefined
   return cost.estimate ? `about ${fmt(cost.estimate)}` : undefined
 }

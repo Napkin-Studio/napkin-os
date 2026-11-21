@@ -110,8 +110,20 @@ export class ServerCopy {
     return () => this.listeners.delete(fn)
   }
 
+  /** Saves on their way, one at a time: each goes on the base the one before it left (UAT 2026-11-21, F1: two saves
+   *  0.24 s apart both sent the old base, and the relay refused the second as someone else's save). */
+  private queue: Promise<unknown> = Promise.resolve()
+  /** The versions this tab sent (newest last): a refusal whose newer copy is one of ours is not a conflict. */
+  private sent: string[] = []
+
   /** The .clan store's MirrorPost. Throws SaveConflict while a choice is waiting. */
-  post = async (bytes: Uint8Array, meta: { reason: Reason }): Promise<void> => {
+  post = (bytes: Uint8Array, meta: { reason: Reason }): Promise<void> => {
+    const run = this.queue.then(() => this.postNow(bytes, meta), () => this.postNow(bytes, meta))
+    this.queue = run.catch(() => {})
+    return run
+  }
+
+  private postNow = async (bytes: Uint8Array, meta: { reason: Reason }, again = false): Promise<void> => {
     const { server, index, id } = this.d
     if (!server.signedIn) return // not signed in: nothing to save to
     if (this.conflict) throw new SaveConflict(this.conflict.message)
@@ -120,6 +132,8 @@ export class ServerCopy {
     await sendAssets(this.d.doc(), this.d.upload)
     const entry = index.get(id)
     const etag = await sha256Hex(bytes)
+    // The same bytes as the version this tab is based on: nothing new to send (two save moments at once).
+    if (this.base?.etag === etag) return
     // No base: never a blind save over a copy the relay has (re-test N3: a lost mark sent a save with no
     // If-Match, and the relay took it). The same bytes: that is the base. Others: the person chooses.
     if (!this.base) {
@@ -140,6 +154,7 @@ export class ServerCopy {
     for (const u of this.unanswered) u.edited ||= u.etag !== etag
     this.unanswered = [...this.unanswered.filter((u) => u.etag !== etag), went].slice(-UNANSWERED)
     this.note(true)
+    this.sent = [...this.sent.filter((x) => x !== etag), etag].slice(-8)
     let saved
     try {
       saved = await server.save(id, bytes, { reason: relayReason(meta.reason), ifMatch: this.base?.etag, name: entry?.name })
@@ -149,6 +164,13 @@ export class ServerCopy {
       if (e instanceof SaveConflict) {
         this.unanswered = this.unanswered.filter((u) => u !== went)
         this.note(true)
+        // The newer copy on the relay is one this tab sent (its answer was lost, or two of ours crossed): that is our
+        // base, and this save goes again on it. Never the "another browser" banner for our own save (F1).
+        const there = again ? undefined : (await server.list().catch(() => [])).find((p) => p.id === id)
+        if (there && this.sent.includes(there.etag)) {
+          await this.based({ etag: there.etag, savedAt: there.savedAt }, true)
+          return this.postNow(bytes, meta, true)
+        }
         this.set({ message: e.message })
       }
       throw e

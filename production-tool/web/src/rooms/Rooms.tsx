@@ -179,7 +179,7 @@ export function Rooms() {
       {sound ? (
         <div className="rm-sound">
           <div className="rm-soundhead"><button type="button" className="btn" onClick={() => setSound(false)}>‹ Back to the picture</button></div>
-          <SoundView shots={shots} />
+          <SoundView shots={shots} videoId={data.videoId} />
         </div>
       ) : (
         <div className="booth-row">

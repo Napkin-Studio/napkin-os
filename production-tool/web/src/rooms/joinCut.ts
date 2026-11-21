@@ -41,7 +41,9 @@ export function stripGaps(doc: Doc, boxes: Box[], videoId: Id, config: Pick<Conf
     const a = plan.get(prev)
     const b = plan.get(id)
     const blocked = joined ? undefined : !config.flags.connectedVideo ? 'Making several shots as one video is off in this build'
-      : a && b ? joinBlock(a.s, b.s, a.i, (sid) => spokenLine(doc, sid)) : undefined
+      // joinBlock takes the number of the shot before the gap (1-based), as selectionBlock passes it (UAT 2026-11-21, F6:
+      // the 0-based index named shot 2 for shot 3's line).
+      : a && b ? joinBlock(a.s, b.s, a.i + 1, (sid) => spokenLine(doc, sid)) : undefined
     return { shotId: id, n: shotNumber(doc, id), joined, ...(blocked ? { blocked } : {}) }
   })
 }
@@ -64,6 +66,14 @@ export function boxesAfterFlip(doc: Doc, ui: Pick<UiState, 'jobs'>, videoId: Id,
 export function pickedFor(models: Record<Id, ModelChoice>, box: Pick<Box, 'shotIds'>): ModelChoice | undefined {
   for (const id of box.shotIds) if (models[id]) return models[id]
   return undefined
+}
+
+/** The picks of each film, kept while the page is open: the Make room's own state was lost each time the room
+ *  closed, and the box then showed the last model that worked anywhere (UAT 2026-11-21, F3). */
+const PICKS = new Map<Id, Record<Id, ModelChoice>>()
+export const savedPicks = (videoId: Id | undefined): Record<Id, ModelChoice> => (videoId ? PICKS.get(videoId) ?? {} : {})
+export function savePicks(videoId: Id | undefined, models: Record<Id, ModelChoice>) {
+  if (videoId) PICKS.set(videoId, models)
 }
 
 /** The picks with `m` set for this box (on its first shot; its other shots' picks go). */

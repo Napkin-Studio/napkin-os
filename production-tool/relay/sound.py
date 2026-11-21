@@ -75,3 +75,40 @@ def apply(job: dict, inp: dict, sheet: dict | None, *, starts: list[float] | Non
     joined = f"{prompt}\n{said}".strip()
     if prompt_max is None or len(joined.encode("utf-16-le")) // 2 <= prompt_max:
         job["prompt"] = joined
+
+
+# ── Sound beats only where the script asks (UAT 2026-11-21, F22) ───────────────────────────────────────
+# Dex added a sound beat to most shots ("night hum", "faint hush"), and each turned sound on, which doubles Veo's
+# price, for shots whose script asks for no sound. A planned sound beat stays only when the script names its sound.
+import re as _re
+
+_AIR = {"soft", "faint", "quiet", "gentle", "low", "distant", "ambient", "ambience", "room", "tone", "sound", "sounds",
+        "night", "day", "background", "subtle", "light", "slight", "hush", "silence", "silent", "still", "air", "the",
+        "and", "with", "from", "into", "over", "under", "one", "two", "some", "a", "an", "of", "in", "on", "at", "its"}
+
+
+def _words(text: str) -> list[str]:
+    return [w for w in _re.findall(r"[a-z]+", (text or "").lower()) if len(w) >= 3 and w not in _AIR]
+
+
+def asked_sound(beat_text: str, script: str) -> bool:
+    """The script names this sound: one of its words (not a word of mood or air) is in the script, by its stem."""
+    said = (script or "").lower()
+    return any(_re.search(r"\b" + _re.escape(w[:max(3, len(w) - 2)]), said) for w in _words(beat_text))
+
+
+def keep_asked_sounds(shots: list[dict], script: str) -> tuple[list[dict], list[str]]:
+    """The plan's shots with only the sound beats the script asks for; and the ones left out (for the log)."""
+    if not (script or "").strip():
+        return shots, []
+    gone: list[str] = []
+    out = []
+    for s in shots:
+        beats = s.get("beats")
+        if not beats:
+            out.append(s)
+            continue
+        kept = [b for b in beats if b.get("kind") != "sound" or asked_sound(b.get("text") or "", script)]
+        gone += [b.get("text") or "" for b in beats if b not in kept]
+        out.append({**s, "beats": kept} if len(kept) != len(beats) else s)
+    return out, gone

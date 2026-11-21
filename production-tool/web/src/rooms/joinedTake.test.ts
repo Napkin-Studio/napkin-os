@@ -109,7 +109,7 @@ describe('the rooms around a joined take', () => {
   it('a gap kept apart by a spoken line names the shot and its line', () => {
     const ps = (id: string, spoken = false): PlanShot => ({ id, kind: 'shot', durationS: 2.5, hasFrame: true, spoken, product: false, text: false, moderated: false } as unknown as PlanShot)
     expect(joinBlock(ps('s4'), ps('s5', true), 4, (id) => (id === 's5' ? 'Quietboil. Let them sleep.' : undefined)))
-      .toBe('Shot 5 has a spoken line (“Quietboil. Let them sleep.”), so it is its own video, with sound')
+      .toBe('Shot 5 has a spoken line (“Quietboil. Let them sleep.”), so it is its own video, with sound: a joined video trims each shot to its storyboard length, which could cut the line off')
   })
 })
 
@@ -119,7 +119,7 @@ describe('the box says its sound (B6)', () => {
     const { d, shots } = filmWithClips()
     d.beats = { ...(d.beats ?? {}), beat_1: { id: 'beat_1', v: 1, field_v: {}, shot_id: shots[1].id, kind: 'line', at_s: 1, text: 'Let them sleep.', speaker: 'HER', rank: 'a0' } as never }
     const box = { shotIds: [shots[0].id, shots[1].id] }
-    expect(boxSound(d, box, { provider: 'runway', model: 'veo3.1' })).toEqual({ on: true, words: 'With sound: the spoken line.' })
+    expect(boxSound(d, box, { provider: 'runway', model: 'veo3.1' })).toEqual({ on: true, words: 'Sound on: Veo 3.1 makes the spoken line in the clip.' })
     expect(boxSound(d, { shotIds: [shots[2].id] }, { provider: 'runway', model: 'veo3.1' })).toBeUndefined()
   })
 })
@@ -129,7 +129,7 @@ describe('the joined take through the .clan store (B2)', () => {
     const { modelStore, seedStages, job: mkJob, addShots: add, addTake: take, id } = await import('../test/model')
     const { systemUpdate } = await import('../doc/store')
     const { placeJoinedTake, undoJoinedTake } = await import('./editOps')
-    const store = modelStore()
+    const store = modelStore({ undo: { saved: null, save: () => {} } })
     await store.create(MAYA, 'Joined')
     await seedStages(store)
     let videoId = ''
@@ -166,5 +166,9 @@ describe('the joined take through the .clan store (B2)', () => {
     expect(await undoJoinedTake(store, uiStore)).toBe(true)
     expect(readCut(store.get(), videoId).v1.map((c) => c.genId)).toEqual(before)
     expect(ui.joinedInCut).toBeUndefined()
+    // F12: the bar's Redo puts it in again.
+    expect(store.redo).toBeDefined()
+    await store.redo!()
+    expect(readCut(store.get(), videoId).v1.map((c) => c.genId)).toEqual(after.map((c) => c.genId))
   })
 })

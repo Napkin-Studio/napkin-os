@@ -123,7 +123,10 @@ def post(h: Harness, token: str, inp: dict, expect=200, **req):
 
 
 def spent(h: Harness) -> float:
-    return round(h.store.counters("spend").get("usd", 0), 6)
+    """What the providers were paid: the ledger without the agents' Claude calls, which every directed job now
+    records too (cost.agentUsd, pt-film-r2 F21)."""
+    agents = sum(float((j.get("cost") or {}).get("agentUsd") or 0) for j in h.store._jobs.values())
+    return round(h.store.counters("spend").get("usd", 0) - agents, 6)
 
 
 # ── the op: who works it, what it needs, what it refuses ──────────────────────────────────────

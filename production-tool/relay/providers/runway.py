@@ -56,6 +56,40 @@ def min_poll_s() -> int:
     return MIN_POLL_S
 
 
+_SIZES: dict[str, tuple[int, int]] = {}  # a picture's size by hash (a hash is its bytes: never stale)
+PAD_LONG_SIDE = 2048  # a padded picture's longest side at most (a data: URL stays well under Runway's limit)
+
+
+def pad_to_aspect(data: bytes, lo: float, hi: float) -> Optional[bytes]:
+    """`data` padded (centred, with its own edge colour) so its width / height sits inside [lo, hi], as a JPEG;
+    None when it already does."""
+    import io
+    import math
+
+    from PIL import Image, ImageStat
+
+    im = Image.open(io.BytesIO(data))
+    w, h = im.size
+    ratio = w / h
+    if lo <= ratio <= hi:
+        return None
+    im = im.convert("RGB")
+    if ratio < lo:  # too narrow: wider, by side bands
+        nw, nh = math.ceil(h * lo * 1.01), h
+    else:  # too wide: taller, by bands above and below
+        nw, nh = w, math.ceil(w * 1.01 / hi)
+    edge = [im.crop((0, 0, 1, h)), im.crop((w - 1, 0, w, h))] if ratio < lo else [im.crop((0, 0, w, 1)), im.crop((0, h - 1, w, h))]
+    colour = tuple(int(sum(ImageStat.Stat(e).mean[c] for e in edge) / len(edge)) for c in range(3))
+    out = Image.new("RGB", (nw, nh), colour)
+    out.paste(im, ((nw - w) // 2, (nh - h) // 2))
+    k = PAD_LONG_SIDE / max(nw, nh)
+    if k < 1:
+        out = out.resize((max(1, round(nw * k)), max(1, round(nh * k))), Image.LANCZOS)
+    buf = io.BytesIO()
+    out.save(buf, "JPEG", quality=92)
+    return buf.getvalue()
+
+
 def failure(code: Optional[str], message: str) -> tuple[ProviderError, bool]:
     """Map a task failureCode onto our error. The flag says the task was moderated."""
     code = code or ""
@@ -267,6 +301,53 @@ class RunwayProvider:
             raise ProviderError("invalid_input", f"the image to edit is not one we can read: {exc}", False) from exc
         return "data:image/png;base64," + base64.b64encode(png).decode()
 
+    def _within(self, sha: str, fit: Optional[dict]) -> str:
+        """The picture's url, or, when its width / height is outside the model's range (capabilities refAspect), a copy
+        padded to the nearest bound, as a data: URL. Runway refused a 0.534 character picture on WAN 3 (at least
+        0.55) and the person read the raw 400 (UAT 2026-11-21, F5). Padding keeps the whole person; a crop could cut
+        them. A picture we cannot read goes as it is (Runway then says why)."""
+        url = self._assets(sha).url
+        if not fit:
+            return url
+        lo, hi = float(fit["min"]), float(fit["max"])
+        try:
+            size = self._size(sha)
+            if size and lo <= size[0] / size[1] <= hi:
+                return url  # in range (most pictures): only the header was read
+            padded = pad_to_aspect(self._bytes(sha), lo, hi)
+        except Exception:  # not ours to read, not a picture: sent as it is
+            return url
+        if padded is None:
+            return url
+        import base64
+        return "data:image/jpeg;base64," + base64.b64encode(padded).decode()
+
+    def _size(self, sha: str) -> Optional[tuple[int, int]]:
+        """A picture's width and height from its first bytes (a ranged read; PNG and JPEG say their size up front),
+        remembered by its hash. None when the header does not say."""
+        import base64
+        import io
+
+        from PIL import Image
+
+        if sha in _SIZES:
+            return _SIZES[sha]
+        url = self._assets(sha).url
+        if url.startswith("data:"):
+            head = base64.b64decode(url.split(",", 1)[1])
+        else:
+            resp = self._client.get(url, headers={"Range": "bytes=0-131071"})
+            resp.raise_for_status()
+            head = resp.content
+        try:
+            size = Image.open(io.BytesIO(head)).size
+        except Exception:
+            return None
+        if len(_SIZES) > 2000:
+            _SIZES.clear()
+        _SIZES[sha] = size
+        return size
+
     def _own_ratio(self, current: Ref) -> str:
         """The Gemini 3 Pro size nearest the edited picture's own shape (Runway needs a ratio)."""
         import base64
@@ -383,13 +464,14 @@ class RunwayProvider:
         if not job.ratio:
             raise ProviderError("invalid_input", "clip needs a ratio", False)
         body = {"model": model}
+        fit = m.get("refAspect")  # a reference outside the model's shape range is padded to it (UAT 2026-11-21, F5)
         if not text_only:
-            frames = [{"uri": self._assets(job.first_frame).url, "position": "first"}]
+            frames = [{"uri": self._assets(job.first_frame).url, "position": "first"}]  # drawn at the film's shape
             if job.last_frame:
                 frames.append({"uri": self._assets(job.last_frame).url, "position": "last"})
             body["promptImage"] = frames
         if job.refs:  # objects, never bare strings (a string array is a 400: paid test 2026-10-15)
-            body["references"] = [{"uri": self._assets(r.sha256).url} for r in job.refs]
+            body["references"] = [{"uri": self._within(r.sha256, fit)} for r in job.refs]
         body["promptText"] = self._tagged([r.name for r in job.refs], job.prompt, sheet["tagSyntax"])
         keyframed = not text_only and m.get("keyframeRatio") == "auto_tier"
         ratio = self._in_tier(job.ratio, m, q.get("tier"))  # the quality's size, in the shot's shape

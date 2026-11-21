@@ -75,7 +75,7 @@ export function boxModelNote(doc: ProductionDocument, box: Box, m: ModelChoice):
  *  Gemini Omni Flash 1.1 with Veo greyed and nothing said why). */
 export function boxModelSwitch(doc: ProductionDocument, box: Box, config: Config, picked?: ModelChoice): { to: string; from: string; why: string } | undefined {
   if (picked) return undefined
-  const wanted = lastWorkedModel(doc, 'clip', config) ?? modelChoicesFor('clip', config)[0]
+  const wanted = boxOwnModel(doc, box, config) ?? lastWorkedModel(doc, 'clip', config) ?? modelChoicesFor('clip', config)[0]
   const why = wanted ? boxModelWhyNot(doc, box, wanted) : undefined
   const got = boxModel(doc, box, config)
   if (!wanted || !why || !got || (got.model === wanted.model && got.provider === wanted.provider)) return undefined
@@ -83,9 +83,26 @@ export function boxModelSwitch(doc: ProductionDocument, box: Box, config: Config
   return { to: label(got), from: label(wanted), why: why.replace(/^Can't/, "can't").replace(/^Needs/, 'needs') }
 }
 
+/** The model this box's newest take was made on, when it is still offered: a box keeps its own model after a Make
+ *  of another box (UAT 2026-11-21, F3: every box flipped to the last model that worked anywhere). */
+export function boxOwnModel(doc: ProductionDocument, box: Pick<Box, 'shotIds'>, config: Config): ModelChoice | undefined {
+  const offered = modelChoicesFor('clip', config)
+  const mine = Object.values(doc.generations ?? {})
+    .filter((g) => g.kind !== 'render' && g.kind !== 'upload' && g.kind !== 'combine' && !!g.inputs?.model && g.shot_ids.length === box.shotIds.length
+      && box.shotIds.every((id) => g.shot_ids.includes(id)))
+    .sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
+  for (const g of mine) {
+    const o = offered.find((x) => x.model === g.inputs!.model && (!g.provider || x.provider === g.provider))
+    if (o) return { provider: o.provider, model: o.model }
+  }
+  return undefined
+}
+
 export function boxModel(doc: ProductionDocument, box: Box, config: Config, picked?: ModelChoice): ModelChoice | undefined {
   if (picked && !boxModelCant(doc, box, picked)) return picked
   const options = modelChoicesFor('clip', config)
+  const own = picked ? undefined : boxOwnModel(doc, box, config)
+  if (own && !boxModelWhyNot(doc, box, own)) return own
   const wanted = picked ?? lastWorkedModel(doc, 'clip', config) ?? options[0]
   if (wanted && !boxModelWhyNot(doc, box, wanted)) return wanted
   return options.find((o) => !boxModelWhyNot(doc, box, o)) ?? wanted
@@ -101,7 +118,12 @@ export function boxSound(doc: ProductionDocument, box: Pick<Box, 'shotIds'>, m: 
     .filter(Boolean).join(', ')
   const e = entryOf(m)
   const label = e?.label ?? m.model
-  if (e?.video.audioControl) return { on: true, words: `With sound: ${what}.` }
-  // No switch (Omni Flash 1.1, Hailuo 3): the relay asks for no music and no dialogue (decided 2026-10-06).
+  // Said plainly that sound is on, never what it costs (owner 2026-10-13: no prices in the UI; UAT 2026-11-21, F22).
+  if (e?.video.audioControl) return { on: true, words: `Sound on: ${label} makes ${what} in the clip.` }
+  // No switch (Omni Flash 1.1, Hailuo 3): the relay asks for no music and no dialogue (decided 2026-10-06). Those
+  // that make sound on their own still put a background track on the clip (UAT 2026-11-21, F10: Omni's takes carried
+  // sound at -12 dB while the box said it made none).
+  if (e?.video.audioDefault) return { on: false, words: `${label} makes its own background sound and has no sound switch, so ${what} will not be voiced. Veo 3.1, Kling or WAN 3 can.` }
   return { on: false, words: `No sound made: ${label} has no sound switch, so ${what} will not be heard. Veo 3.1, Kling or WAN 3 can.` }
 }
+

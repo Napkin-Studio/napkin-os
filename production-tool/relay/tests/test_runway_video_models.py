@@ -180,7 +180,8 @@ def test_kling_o3_takes_seven_pictures_in_all_frames_included(runway, server):
     runway.submit(clip("klingO3_pro", refs=six))  # 1 + 6
     with pytest.raises(CapabilityMissing, match="7 pictures"):
         runway.submit(clip("klingO3_pro", refs=six, last=LAST))  # 2 + 6
-    assert len(server.requests) == 1
+    # One submit; the pictures' headers may be read first to check their shape (pt-film-r2 F5).
+    assert [r.method for r in server.requests].count("POST") == 1
 
 
 def test_hailuo_from_refs_sends_its_resolution_and_aspect_and_no_audio(runway, server):

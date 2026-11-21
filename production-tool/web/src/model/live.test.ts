@@ -230,3 +230,12 @@ describe('the relay’s director error in plain words', () => {
     expect(plainJobError(other, 'clip')).toBe(other)
   })
 })
+
+describe('a Runway refusal in plain words (UAT 2026-11-21, F5)', () => {
+  it('a picture of the wrong shape says which way and what to do; any other 400 never shows the raw body', () => {
+    const e = { code: 'invalid_input' as const, message: 'Runway answered 400: Validation of body failed: references.1.uri Invalid asset aspect ratio. width / height ratio must be at least 0.55. Got 0.534.', retryable: false }
+    expect(plainJobError(e, 'clip').message).toBe('One of the pictures is too narrow for this model (0.534 wide for each 1 tall; it takes at least 0.55). Crop it wider, leave it out, or pick another model.')
+    const other = { code: 'invalid_input' as const, message: 'Runway answered 400: Validation of body failed: promptText too long', retryable: false }
+    expect(plainJobError(other, 'clip').message).not.toMatch(/Validation/)
+  })
+})

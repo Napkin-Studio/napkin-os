@@ -16,7 +16,7 @@
 // shot alone, and a take's segments meet on a cut until take.withLast is proven (paid test P1).
 
 import { newUlidId } from '../../../clan-store/src'
-import { choiceToSend, clipRefCapacity, modelChoicesFor, modelLabel, resolveQuality, type Sheets } from '../capabilities'
+import { clipRefCapacity, modelChoicesFor, modelLabel, resolveQuality, type Sheets } from '../capabilities'
 import { SHEETS } from '../contracts/load'
 import type { CapabilitySheet, ClipQuality, Config, Id, ModelChoice, ProductionDocument, Provider, RunMode, Seam, SeamKind, Shot, VideoJoin, VideoRun } from '../contracts/types'
 import { landUpdate, systemUpdate } from '../doc/store'
@@ -202,7 +202,7 @@ export function joinBlock(prev: PlanShot, next: PlanShot, n: number, lineOf?: (s
     // Which shot speaks, and its line: the Shot tab showed none, so the refusal read as wrong (UAT 2026-11-21).
     const who = prev.spoken ? prev : next
     const line = lineOf?.(who.id)
-    return `Shot ${prev.spoken ? n : n + 1} has a spoken line${line ? ` (“${line.length > 60 ? `${line.slice(0, 59)}…` : line}”)` : ''}, so it is its own video, with sound`
+    return `Shot ${prev.spoken ? n : n + 1} has a spoken line${line ? ` (“${line.length > 60 ? `${line.slice(0, 59)}…` : line}”)` : ''}, so it is its own video, with sound: a joined video trims each shot to its storyboard length, which could cut the line off`
   }
   return 'These shots are made on their own'
 }
@@ -428,8 +428,10 @@ export async function makeRuns(deps: FrameDeps, opts: MakeRunsOpts): Promise<str
     })
   }
   for (const [i, { run: r, shotIds }] of work.entries()) {
-    const pick = r.model.model === model.model && r.model.provider === model.provider ? opts.modelChoice
-      : choiceToSend('clip', opts.config, { provider: r.model.provider, model: r.model.model }, sheets)
+    // Always by name: with none sent, the relay routes its own default, which was not the model the box showed
+    // (UAT 2026-11-21, F3: Omni shown, Veo 3.1 with sound made).
+    const pick: ModelChoice = r.model.model === model.model && r.model.provider === model.provider && opts.modelChoice ? opts.modelChoice
+      : { provider: r.model.provider, model: r.model.model }
     if (isTakeRun(r)) {
       try {
         // A take (take_refs: no frame pinned) sends the character pictures, then every shot's frame in shot

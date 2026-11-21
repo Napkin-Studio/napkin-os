@@ -12,7 +12,9 @@ import { useWhy } from '../ui/booth/hooks'
 import type { HistoryFocus } from '../ui/History'
 import type { ComposedScript } from './compose'
 import { discardDraft, keep, linesOf, wordDiff } from './skye'
-import { askedWords, draftLines, draftSeconds, landsWhere, trimDiff } from './skyeBooth'
+import { askedWords, draftLines, draftSeconds, landsWhere, lineDiff, secondsNow, trimDiff } from './skyeBooth'
+
+const SCREENPLAY_KINDS = new Set(['character', 'dialogue', 'parenthetical', 'transition'])
 
 export interface DraftCardProps {
   sug: Suggestion
@@ -69,9 +71,15 @@ export function DraftCard({ sug, store, doc, composed, empty, requestOf, onWrite
     }
   }
   const askAgain = () => void onWrite(sug.target, write?.intent ?? 'tighten', { ...(write?.mode ? { mode: write.mode } : {}), ...(write?.instruction ? { instruction: write.instruction } : {}) })
-  const before = linesOf(doc, current()).map((l) => l.text).join('\n')
+  const beforeLines = linesOf(doc, current()).map((l) => ({ kind: l.type as string, text: l.text }))
   const lines = isDraft ? draftLines(doc, sug) : null
-  const diff = isDraft ? [] : trimDiff(wordDiff(before, sug.proposed.text))
+  // An edit in screenplay layout: cues, parentheticals and dialogue stay in their places, and only a rewritten line
+  // is shown word by word (UAT 2026-11-21, script UX 1).
+  const rows = isDraft ? [] : lineDiff(beforeLines, draftLines(doc, sug).lines)
+  const layout = !isDraft && rows.some((r) => SCREENPLAY_KINDS.has(r.kind))
+  const diff = isDraft || layout ? [] : trimDiff(wordDiff(beforeLines.map((l) => l.text).join('\n'), sug.proposed.text))
+  // Seconds before and after on every card (script UX 3).
+  const was = isDraft || sug.target.kind === 'beat' ? undefined : secondsNow(doc, sug, beforeLines)
   return (
     <article ref={cardRef} className={`se-draft ${stale ? 'stale' : ''}`} role="group" aria-label={`The Script agent's ${isDraft ? 'draft' : 'edit'}`} data-suggestion={sug.id}
       contentEditable={false} suppressContentEditableWarning>
@@ -81,6 +89,14 @@ export function DraftCard({ sug, store, doc, composed, empty, requestOf, onWrite
         <div className="text">
           {lines.lines.map((l, i) => <div key={i} className={`l ${lines.screenplay ? 'sp' : ''} k-${l.kind}`}>{l.text}</div>)}
         </div>
+      ) : layout ? (
+        <div className="text diff">
+          {rows.map((r, i) => (
+            <div key={i} className={`l sp k-${r.kind} ch-${r.change}`}>
+              {r.parts.map((x, k) => (x.kind === 'same' ? <span key={k}>{x.text}</span> : x.kind === 'gone' ? <del key={k}>{x.text}</del> : <ins key={k}>{x.text}</ins>))}
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="diff">
           {diff.map((x, i) => (x.kind === 'same' ? <span key={i}>{x.text}</span> : x.kind === 'gone' ? <del key={i}>{x.text}</del> : <ins key={i}>{x.text}</ins>))}
@@ -89,9 +105,9 @@ export function DraftCard({ sug, store, doc, composed, empty, requestOf, onWrite
       {kind === 'scene' ? (
         // A page draft says its length by the band's rule, not the agent's own count (live test 2026-11-18:
         // "15 s" on a draft the band then read as 53 s).
-        <p className="note">about {draftSeconds(doc, sug)} s</p>
-      ) : (sug.proposed.duration_s !== undefined || (sug.proposed.new_beats ?? []).length > 0) && (
-        <p className="note">{sug.proposed.duration_s !== undefined ? `${sug.proposed.duration_s} s` : ''}{(sug.proposed.new_beats ?? []).map((b) => ` + ${b.kind} at ${b.at_s} s`).join('')}</p>
+        <p className="note">{was !== undefined && was !== draftSeconds(doc, sug) ? `about ${was} s → ${draftSeconds(doc, sug)} s` : `about ${draftSeconds(doc, sug)} s`}</p>
+      ) : (
+        <p className="note">{sug.proposed.duration_s !== undefined ? (was !== undefined && was !== sug.proposed.duration_s ? `${was} s → ${sug.proposed.duration_s} s` : `${sug.proposed.duration_s} s`) : was !== undefined ? `${was} s` : ''}{(sug.proposed.new_beats ?? []).map((b) => ` + ${b.kind} at ${b.at_s} s`).join('')}</p>
       )}
       <div className="acts">
         {!stale && <button type="button" className="k" disabled={busy} onClick={() => void act(() => keep(store, sug.id), isDraft ? 'Kept. The Script agent’s draft is on the page.' : 'Kept. The change is on the page.', true)}>Keep</button>}

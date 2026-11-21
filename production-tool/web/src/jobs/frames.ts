@@ -95,7 +95,7 @@ export async function frameInput(relay: Relay, d: ProductionDocument, index: num
 
 /** Draw the frame for the shot at `index` (of `opts.storyboardId`, else the main storyboard): a first
  *  version, or a new one of `parent`. */
-export async function drawFrame(deps: FrameDeps, index: number, how: FrameHow, opts: { text?: string; parent?: Frame; followRun?: string; modelChoice?: ModelChoice; storyboardId?: string } = {}): Promise<string> {
+export async function drawFrame(deps: FrameDeps, index: number, how: FrameHow, opts: { text?: string; parent?: Frame; followRun?: string; modelChoice?: ModelChoice; storyboardId?: string; clipAfter?: { videoId?: string; modelChoice?: ModelChoice } } = {}): Promise<string> {
   const d = liveGet(deps.doc)
   const sb = boardOf(d, opts.storyboardId)
   const shot = shotsOf(d, sb?.id)[index]
@@ -103,7 +103,8 @@ export async function drawFrame(deps: FrameDeps, index: number, how: FrameHow, o
   const input = await frameInput(deps.relay, d, index, opts.text, !opts.parent, sb?.id, deps.ui.get().declinedAdds?.[shot.id])
   const purpose: JobPurpose = { for: 'frame', shotId: shot.id, how, ...(opts.parent ? { parentFrameId: opts.parent.id } : {}) }
   const parents = opts.parent?.job_id ? [opts.parent.job_id] : []
-  return deps.runner.submit('frame', input, parents, purpose, undefined, opts.modelChoice, opts.followRun ? { local: { followRun: opts.followRun } } : {})
+  const local = { ...(opts.followRun ? { followRun: opts.followRun } : {}), ...(opts.clipAfter ? { clipAfter: opts.clipAfter } : {}) }
+  return deps.runner.submit('frame', input, parents, purpose, undefined, opts.modelChoice, Object.keys(local).length ? { local } : {})
 }
 
 /** A picture's own shape (its measured size), for a region edit: the relay asks for the nearest size and

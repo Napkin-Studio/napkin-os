@@ -532,6 +532,25 @@ def _sound(job: dict, inp: dict, sheet: dict, spec: dict) -> None:
     sound.apply(job, inp, sheet, starts=starts, prompt_max=prompt_max(sheet, job.get("model") or spec.get("model", "")))
 
 
+# Sheet facts the relay acts on alone, never Dex's to weigh: left out of what Dex reads, so its input is unchanged.
+RELAY_ONLY = ("refAspect",)
+
+
+def _sheet_for_dex(sheet: dict) -> dict:
+    """The capability sheet as Dex reads it: without the relay-only facts (refAspect: the relay pads a picture into
+    a model's shape range itself, pt-film-r2 F5)."""
+    models = sheet.get("models")
+    if not isinstance(models, dict) or not any(k in m for m in models.values() if isinstance(m, dict) for k in RELAY_ONLY):
+        return sheet
+    return {**sheet, "models": {n: ({k: v for k, v in m.items() if k not in RELAY_ONLY} if isinstance(m, dict) else m) for n, m in models.items()}}
+
+
+def _onscreen(job: dict, inp: dict) -> None:
+    """No clock time in a clip's prompt unless a shot asks for words on screen (onscreen.py; UAT 2026-11-21, F11)."""
+    import onscreen
+    onscreen.apply(job, inp)
+
+
 def _without_dialogue(op: str, payload: dict) -> dict:
     """Spoken words (a shot's line and VO beats) are never sent to an image or video model: a model
     told the words draws them (a "Dialogue - ..." caption box in a frame, then in every clip made from
@@ -611,7 +630,7 @@ class Director:
         ask = {"op": op, "input": payload}
         if sheet:
             ask["provider"] = provider_name
-            ask["sheet"] = sheet
+            ask["sheet"] = _sheet_for_dex(sheet)
 
         usage = Usage()
         t0 = time.monotonic()
@@ -633,6 +652,7 @@ class Director:
             e.answer = output  # what Dex wrote, for the relay's director_rejected line
             raise
         if op == "clip" and "providerJob" in output:
+            _onscreen(output["providerJob"], raw)
             _sound(output["providerJob"], raw, sheet, sheet["ops"][op])
         # What Dex was given, after the relay's cuts, kept small on the job record (features/pt-canvas-r1.clan).
         agent_block = {"model": model, "promptVersion": self.prompt_version, "output": output,

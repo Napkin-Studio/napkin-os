@@ -131,6 +131,7 @@ def test_director_wrapper_output_validates_against_the_contract():
     assert out.pop("_model") == d.director.per_click_model
     assert out.pop("_promptVersion") == PROMPT_VERSION
     assert isinstance(out.pop("_input"), dict)  # what Dex received, for the job record (pt-canvas-r1)
+    assert isinstance(out.pop("_usage"), dict)  # its tokens, which the relay prices (pt-film-r2 F21)
     assert Contracts().errors("director.schema.json", out) == []
 
 
