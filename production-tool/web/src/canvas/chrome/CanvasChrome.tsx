@@ -348,7 +348,8 @@ export function CanvasToolbar({ chrome, ratio, onNode, onBrief, onAssets, vertic
 export function ZoomPill({ chrome, touch = false }: { chrome: CanvasChrome | null; touch?: boolean }) {
   const { zoom } = useChrome(chrome)
   return (
-    <div className={`zoom-pill ${touch ? 'touch' : ''}`} role="group" aria-label="Undo and zoom">
+    // Floating dialogs keep clear of it (FLOAT_AVOID): it sat over the Name dialog's inputs (UAT round 3, R3-F14).
+    <div className={`zoom-pill ${touch ? 'touch' : ''}`} role="group" aria-label="Undo and zoom" data-float-avoid="">
       {!touch && <><UndoButtons bare /><span aria-hidden="true" className="zp-sep" /></>}
       <button type="button" aria-label="Zoom out" data-tip="Zoom out (Ctrl −)" onClick={() => chrome?.zoomBy(-1)}>−</button>
       <button type="button" className="zp-value" aria-label={`Zoom ${Math.round(zoom * 100)}%: fit everything (${OPTION}0)`} data-tip={`Fit everything (${OPTION}0)`} onClick={() => chrome?.fitAll()}>{Math.round(zoom * 100)}%</button>
