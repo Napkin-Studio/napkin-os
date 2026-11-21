@@ -154,13 +154,14 @@ export function StoryboardCard({ id, onOpen, openButton }: { id?: string; onOpen
   const strip = stripOf(shots.length)
   const sbScript = sb ? scriptOfStoryboard(doc, sb.id) : undefined
   const from = planSource(sbScript ? scriptText(doc, sbScript.id) : '', !!(sb && briefOf(doc, sb.id)))
+  const brandAsk = !!sb && !!brandQuestion(doc, sb.id)
   // Its own name when it has one ("Cut-down · 9:16"); the main one is "Storyboard · 16:9" (mock).
   const own = sb?.title?.trim() && sb.title.trim() !== 'Storyboard' && !/^untitled/i.test(sb.title.trim()) ? sb.title.trim() : undefined
   return (
     <Card icon="storyboard" kind="Storyboard" name={own ? `${chrome.title(own, 'Storyboard', project)} · ${sb?.ratio ?? '16:9'}` : sb?.ratio ?? '16:9'}
       meta={drawingIdx >= 0 ? `drawing frame ${drawingIdx + 1} of ${shots.length}` : `${shots.length} shots · ${Math.round(total)} s`}
       extra={behind ? <span className="pt-pill warn">{behind} behind the script</span> : undefined} onOpen={onOpen} openButton={openButton}
-      className={planning || drawingIdx >= 0 ? 'writing' : ''} tag={asking ? 'Needs your call' : undefined} inputs={<InputsStrip nodeId={sb?.id} />} style={{ height: 194 }}>
+      className={planning || drawingIdx >= 0 ? 'writing' : ''} tag={asking ? 'Needs your call' : undefined} inputs={<InputsStrip nodeId={sb?.id} />} style={{ height: brandAsk ? 226 : 194 }}>
       {shots.length ? (
         <div className="bl-strip">
           {shots.slice(0, strip.shown).map((s, i) => <FrameTile key={s.id} shot={s} n={i + 1} drawing={i === drawingIdx} />)}

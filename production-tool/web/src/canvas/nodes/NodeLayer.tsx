@@ -654,7 +654,7 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
         const look = chipLook(view.zoom)
         return (
           <button key={g.groupId} type="button" className={`nl-keychip ${g.stacked ? 'stacked' : ''} ${end ? 'end' : ''} ${look.dot ? 'dot' : ''}`} data-key={g.key}
-            style={{ left: p.x, top: p.y, '--chip-scale': look.scale } as CSSProperties} aria-label={groupLabel(g)}
+            style={{ left: p.x, top: p.y, '--chip-scale': look.dot ? 1 : look.scale } as CSSProperties} aria-label={groupLabel(g)}
             title={look.dot ? groupLabel(g) : g.stacked ? 'Click the stack to open it' : 'One character: its views move and link together'}
             onPointerDown={(ev) => ev.stopPropagation()} onClick={() => canvas.select(g.members.map((m) => m.id))}>
             {groupLabel(g)}
