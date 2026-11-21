@@ -213,3 +213,28 @@ def test_a_frames_prompt_says_no_clock_time_unless_its_shot_asks_for_words_on_sc
     shown, _, _ = direct("frame_runway_first", edit_reply=lambda r: r["providerJob"].update(prompt="The oven clock reads 1:04 a.m., " + r["providerJob"]["prompt"]),
                          edit_input=lambda i: i["shot"].update(action="The oven clock reads 1:04 a.m."))
     assert "1:04 a.m." in shown.output["providerJob"]["prompt"]
+
+
+def test_r5_a_frame_of_a_shot_with_no_one_says_no_people_in_its_prompt():
+    """UAT round 5 (R5-F3): the kettle insert, which shows no one, was drawn with Maya beside it. The web's direction says
+    no one is seen (web jobs/cast.ts NO_ONE_LINE); the relay puts its own line in the frame's prompt."""
+    from director.director import NO_PEOPLE, _no_people
+
+    sheet = load_sheet("runway")
+    shot = {"action": "The kettle glows soft blue.", "direction": "Cast: no one is seen in this shot; draw no people."}
+    job = {"model": "gemini_image3_pro", "prompt": "An insert of a kettle glowing soft blue. Full-bleed cinematic image; no text, captions, borders or panels.",
+           "refs": [{"name": "anchor", "role": "object"}]}
+    _no_people(job, "frame", {"shot": shot}, sheet)
+    assert NO_PEOPLE in job["prompt"]
+    assert job["prompt"].endswith("Full-bleed cinematic image; no text, captions, borders or panels.")
+    # Said once; not on a frame with a character picture, not without the web's line, not on a clip.
+    again = dict(job)
+    _no_people(again, "frame", {"shot": shot}, sheet)
+    assert again["prompt"].count(NO_PEOPLE) == 1
+    for j, op, payload in ((
+        {"prompt": "A kettle.", "refs": [{"name": "maya_front", "role": "character"}]}, "frame", {"shot": shot}),
+        ({"prompt": "A kettle.", "refs": []}, "frame", {"shot": {"action": "Maya whispers."}}),
+        ({"prompt": "A kettle.", "refs": []}, "clip", {"shot": shot}),
+        ({"prompt": "A kettle, no person in sight.", "refs": []}, "frame", {"shot": shot})):
+        _no_people(j, op, payload, sheet)
+        assert NO_PEOPLE not in j["prompt"]

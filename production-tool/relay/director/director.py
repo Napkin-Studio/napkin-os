@@ -85,6 +85,11 @@ _BRANDS_SAID = re.compile(r"\bno (?:other |real |visible )?(?:brands?|logos?|tra
 # A storyboard frame copied the one before and doubled its people (R2-4): @previous is for continuity only.
 PREVIOUS_IS_NOT_A_COPY = ("@previous is the moment before, for continuity only: draw this shot's own new moment and "
                           "framing, not a copy of it, and show each person once.")
+# UAT round 5 (R5-F3): the kettle insert, a shot with no one in it, came back with Maya beside the kettle. The web says so
+# in the shot's direction (web jobs/cast.ts NO_ONE_LINE); the relay says it in the frame's prompt, in its own words.
+NO_ONE_SEEN = "Cast: no one is seen in this shot"
+NO_PEOPLE = "No people in this shot."
+_PEOPLE_SAID = re.compile(r"\bno (?:people|person|one|figures?|humans?)\b|\bnobody\b|\bempty of people\b", re.I)
 # UAT round 4: frame 2 nearly copied frame 1's framing. A frame says its shot's own size and angle from the shot list,
 # when Dex's prompt has not said them.
 SHOT_FRAMING = "Frame it as a {size} shot{angle}, as the shot list says."
@@ -317,6 +322,17 @@ def _previous_is_not_a_copy(job: dict, op: str, sheet: dict) -> None:
     if op == "frame" and any(r.get("name") == "previous" for r in job.get("refs") or []) \
             and not _PREVIOUS_SAID.search(job.get("prompt") or ""):
         _add_line(job, PREVIOUS_IS_NOT_A_COPY, sheet)
+
+
+def _no_people(job: dict, op: str, payload: dict, sheet: dict) -> None:
+    """A frame whose shot shows no one (its direction says so, R5-F3) says it in the prompt, unless Dex did; never when
+    a character picture goes with it."""
+    shot = payload.get("shot") if isinstance(payload.get("shot"), dict) else {}
+    if op != "frame" or NO_ONE_SEEN not in (shot.get("direction") or ""):
+        return
+    if any(r.get("role") == "character" for r in job.get("refs") or []) or _PEOPLE_SAID.search(job.get("prompt") or ""):
+        return
+    _add_line(job, NO_PEOPLE, sheet)
 
 
 def _shot_framing(job: dict, op: str, payload: dict, sheet: dict) -> None:
@@ -1009,6 +1025,7 @@ class Director:
             _within_budget(job, op, payload)
         _views_are_one(job, op, payload)  # the relay's own words: outside the director's budget
         _previous_is_not_a_copy(job, asked, sheet)
+        _no_people(job, asked, payload, sheet)
         _shot_framing(job, asked, payload, sheet)
         _layout_is_a_photo(job, asked, payload, sheet)
         _no_other_brands(job, asked, sheet)
