@@ -2046,6 +2046,10 @@ class Relay:
         shots, dropped = sound.keep_asked_sounds(out["shots"], ((saved.get("_req") or {}).get("input") or {}).get("script") or "")
         if dropped:
             log.info("job %s: left out sound beats the script does not ask for: %s", saved["jobId"], "; ".join(dropped)[:300])
+        # A shot that speaks gets at least its line's spoken length (sound.py spoken_floor; UAT round 5, R5-F2).
+        shots, timed = sound.spoken_floor(shots, ((saved.get("_req") or {}).get("input") or {}).get("targetS"))
+        if timed:
+            log.info("job %s: timed the spoken lines: %s", saved["jobId"], "; ".join(timed)[:300])
         return self._finish(saved, "completed", shots=shots, director=block, outputs=[],
                             kind="generated", paid=False)
 
