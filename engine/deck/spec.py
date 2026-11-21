@@ -98,28 +98,31 @@ LIMIT_BOUNDS = (3, 60)
 TRIM_ORDER = ("process", "guardrails", "timeline", "innovation", "chart", "execution", "channel_roles", "upside", "gtm", "product",
               "credentials", "audience", "competition", "measurement_plan", "measurement", "risks")
 
-#: List prices in USD per million tokens, (input, output), for the cost the CLI transport does not report. An ESTIMATE
-#: from tokens (stages._call). A real usd the transport provides wins.
-PRICE_PER_MTOK = {"claude-opus-5-5": (4.0, 20.0), "claude-sonnet-5-5": (2.0, 10.0)}
-USD_BASIS = "estimate: tokens x list price (spec.PRICE_PER_MTOK), cache reads at 0.05x and writes at 1.25x input; an unlisted model at the dearest price; not a billed amount"
+#: List prices in USD per million tokens, (input, output), read from the ONE price table every tool shares (engine/prices.json):
+#: Opus 5.5 4/20, Sonnet 5.5 2/10, Haiku 4.5 1/5 (it was priced as Opus before 19 Nov 2026), and the rest. An ESTIMATE from tokens
+#: (stages._call). A real usd the transport provides wins. This dict is a read-only view; change prices.json.
+def _price_table():
+    import sys as _s   # noqa: PLC0415
+    from pathlib import Path as _P   # noqa: PLC0415
+    eng = str(_P(__file__).resolve().parents[1])
+    if eng not in _s.path:
+        _s.path.append(eng)   # engine/ holds price_table.py beside deck/
+    import price_table as _pt   # noqa: PLC0415
+    return _pt
 
 
-#: Prompt-cache tokens are priced against the input price: a read at this share, a write at this multiple.
-CACHE_READ_SHARE, CACHE_WRITE_MULT = 0.05, 1.25
+_PRICES = _price_table()
+PRICE_PER_MTOK = {m: (float(r[0]), float(r[1])) for m, r in _PRICES.table()["models"].items()}
+USD_BASIS = ("estimate: tokens x list price (engine/prices.json, one table for every tool), cache reads at each model's listed price "
+             "and writes at 1.25x input; an unlisted model at Opus 5.5's price; not a billed amount")
 
 
 def estimate_usd(model: str, tokens_in: int, tokens_out: int, cache_read: int = 0, cache_creation: int = 0) -> float:
-    """Estimated dollars for one model's tokens at spec.PRICE_PER_MTOK. Cache reads and writes are priced at
-    CACHE_READ_SHARE and CACHE_WRITE_MULT of the input price. ``model`` may name several (a comma list from a summed
-    stage): the dearest one prices the lot, so an estimate is never low. A model not in the table (or no model named,
-    when there are tokens) is priced at the dearest listed price, never $0: a new model must not look free."""
-    names = [m.strip() for m in str(model or "").split(",") if m.strip()]
-    prices = [PRICE_PER_MTOK[m] for m in names if m in PRICE_PER_MTOK]
-    if len(prices) < len(names) or not names:
-        prices.append(max(PRICE_PER_MTOK.values(), key=lambda p: p[1]))
-    pin, pout = max(prices, key=lambda p: p[1])
-    billed_in = (tokens_in or 0) + (cache_read or 0) * CACHE_READ_SHARE + (cache_creation or 0) * CACHE_WRITE_MULT
-    return round(billed_in / 1e6 * pin + (tokens_out or 0) / 1e6 * pout, 4)
+    """Estimated dollars for one model's tokens at the shared price table (engine/price_table.py). ``tokens_in`` is the uncached input;
+    cache reads are priced at the model's listed cache-read price and writes at 1.25x its input price. ``model`` may name several (a comma
+    list from a summed stage): the dearest one prices the lot, so an estimate is never low. A model not in the table (or no model named,
+    when there are tokens) is priced as Opus 5.5 (prices.json ``unlisted_as``), never $0: a new model must not look free."""
+    return round(_PRICES.usd(model, tokens_in, tokens_out, cache_read, cache_creation), 4)
 
 
 #: Slide types that cannot be written well without a kind of evidence, and what to say when it is missing
@@ -468,23 +471,38 @@ HOLE_GATE, HOLE_ADVISORY = 0.20, 0.12
 #: The eight look changes of deck-layout-library (cover 64 pt, a stamped title size and a fixed title box per layout, 48-character
 #: lines, switch before relaxed, picture and close layouts rule-picked). Off while the library lands without a look change; on at the look commit.
 LOOK_V2 = True
+#: The feature switches below are ON by default (Sai, 19 Nov 2026: "I want all features on"). Each turns off for a run with ``=0``
+#: (``0``, ``false``, ``no`` or ``off``); unset, empty or any other value is on. The "16:9 byte-identical with the flags off" guarantee of
+#: the earlier slices now holds with the flags set to 0 explicitly (DECK_LOOK_V3=0 DECK_RECIPES=0 DECK_GRAPHICS=0), the old look.
+_FLAG_OFF = ("0", "false", "no", "off")
+
+
+def flag_on(name: str) -> bool:
+    """A feature switch read from the environment: on unless set to 0 / false / no / off."""
+    return os.environ.get(name, "").strip().lower() not in _FLAG_OFF
+
+
+def _flag_asked(name: str) -> bool:
+    """True when the switch was set to an on value by hand (not merely left unset): only then is a needs-LOOK_V3 warning worth printing."""
+    v = os.environ.get(name)
+    return v is not None and v.strip() != "" and v.strip().lower() not in _FLAG_OFF
+
+
 #: deck-look (Gamma-grade look), steps 1-2: Archivo + Source Sans 3 (measured widths, fit under the fallback font's width too),
-#: a section band and 0.75 pt hairlines instead of the accent tick and edge stripes, ink figures. OFF by default: every golden
-#: is unchanged until the look commit after the phase-12 review. DECK_LOOK_V3=1 turns it on for one run (the gallery render).
-LOOK_V3 = os.environ.get("DECK_LOOK_V3", "").strip() in ("1", "true", "yes")
+#: a section band and 0.75 pt hairlines instead of the accent tick and edge stripes, ink figures. ON by default; DECK_LOOK_V3=0 draws the
+#: old look (Cambria + Calibri), byte-identical to the builds before the look.
+LOOK_V3 = flag_on("DECK_LOOK_V3")
 #: deck-types (features/deck-types.clan): a deck type is a full recipe (profiles/<id>.yaml ``recipe`` and ``length.target / cap``,
-#: resolved once by profiles.recipe). Read only when LOOK_V3 is on too (profiles.recipes_on). OFF by default: with it off every
-#: reader uses the constants above and a build is byte-identical; DECK_RECIPES=1 turns it on for one run (the gallery render). It
-#: gets its own golden re-record commit after the look commit (design.rework_risks).
-RECIPES = os.environ.get("DECK_RECIPES", "").strip() in ("1", "true", "yes")
-#: deck-graphics (features/deck-graphics.clan): icons (slice 1; charts, diagrams and execution mock-ups follow) drawn as native shapes.
-#: DECK_GRAPHICS=1 turns it on for one run, and only together with LOOK_V3 (off with a warning otherwise). OFF by default: nothing in
-#: graphics.py is read and the vendored icons are never loaded, so every build is byte-identical. Its own golden re-record after RECIPES.
-_GRAPHICS_ASKED = os.environ.get("DECK_GRAPHICS", "").strip() in ("1", "true", "yes")
-GRAPHICS = _GRAPHICS_ASKED and LOOK_V3
-if _GRAPHICS_ASKED and not LOOK_V3:
+#: resolved once by profiles.recipe). Read only when LOOK_V3 is on too (profiles.recipes_on). ON by default; DECK_RECIPES=0 turns it off
+#: and every reader then uses the constants above (a build is byte-identical to one before the recipes).
+RECIPES = flag_on("DECK_RECIPES")
+#: deck-graphics (features/deck-graphics.clan): icons, charts, diagrams and execution mock-ups drawn as native shapes, only together with
+#: LOOK_V3 (off with a warning when asked for by hand without it). ON by default; DECK_GRAPHICS=0 turns it off: nothing in graphics.py is
+#: read and the vendored icons are never loaded.
+GRAPHICS = flag_on("DECK_GRAPHICS") and LOOK_V3
+if _flag_asked("DECK_GRAPHICS") and not LOOK_V3:
     import sys as _sys   # noqa: PLC0415
-    print("deck: DECK_GRAPHICS=1 needs DECK_LOOK_V3=1; graphics stay off for this run", file=_sys.stderr)
+    print("deck: DECK_GRAPHICS=1 needs DECK_LOOK_V3 on (it is 0 for this run); graphics stay off for this run", file=_sys.stderr)
 #: Whether the run set the pitch length by env: the per-run override ranks above a recipe (design.schema.readers: env > recipe > default).
 PITCH_LENGTH_FROM_ENV = {"target": _env_count("DECK_PITCH_TARGET", -1, warn=False) != -1, "cap": _env_count("DECK_PITCH_CAP", -1, warn=False) != -1}   # a bad value is not "from env"
 #: Layouts deck-look has named but not yet built (features/deck-look.clan step 3; cover_bleed landed in step 7). A recipe may name one: it is accepted by the

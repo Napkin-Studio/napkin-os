@@ -327,7 +327,7 @@ text layouts: `close` (the dark close: title, one statement, up to three next st
 Picture layouts are rule-picked only when a picture can be drawn for the audience (`image_ready`); the eleven text layouts
 are offers until a gallery review promotes them.
 
-**deck-look, steps 3-4 (`spec.LOOK_V3`, off by default).** Under the flag `layouts.load()` lays `engine/deck/layouts/v3/*.yaml`
+**deck-look, steps 3-4 (`spec.LOOK_V3`, on by default since 19 Nov 2026; `DECK_LOOK_V3=0` turns it off).** Under the flag `layouts.load()` lays `engine/deck/layouts/v3/*.yaml`
 over the 36: four new ids (`spec.LAYOUT_IDS_V3`) and one rework, 40 in all (`LAYOUT_MAX` unchanged). `statement_points` (objective,
 insight, audience, proposition: the title in a 5/12 column with the target figure in ink, two or three points in the 7/12 column
 between hairlines), `reframe` (real question: a hero line, the supporting line, a footnote row of one or two labelled notes),
@@ -473,7 +473,7 @@ Rules:
   sent to a provider (os-layer §4), and a `reference_only` asset never fills a slot.
 - `theme`: `napkin` · `brand` · `classic`. `strict_brand`: only the kit's layouts and given tokens, nothing
   derived. `inputs.text_mode`: `preserve` turns the repair loop's shorten rung and the plan's density moves to the notes off (the cover's unresolved lines still go to the notes: they are a to-do, not words for the room); `condense` is the app's default, passed by the runner (the engine given none behaves as in section 6.3).
-- **Deck types (features/deck-types.clan), with `DECK_RECIPES=1` and `DECK_LOOK_V3=1` only.** A deck type's recipe
+- **Deck types (features/deck-types.clan), with `DECK_RECIPES` and `DECK_LOOK_V3` on (both on by default; `=0` turns one off).** A deck type's recipe
   (`engine/deck/profiles/<id>.yaml`, resolved by `profiles.recipe`) supplies defaults for these preferences. The order of
   authority for every knob is: **the person's own preference** (`look.*`, a CLI flag, a layout swap) **> a limit the inputs
   state > an env override for the run > the recipe > the spec default.** The recipe sets the density level and its role
@@ -581,7 +581,7 @@ unmerged, so it is a stub that returns no tokens; a deck works without it. Shrey
 
 ### 6.6 Graphics (`deck-graphics`, 18 November 2026)
 
-Behind `spec.GRAPHICS` (`DECK_GRAPHICS=1`, read only with `DECK_LOOK_V3=1`; off by default, and off is byte-identical). Graphics are
+Behind `spec.GRAPHICS` (`DECK_GRAPHICS`, read only with `DECK_LOOK_V3` on; on by default since 19 Nov 2026, and `DECK_GRAPHICS=0` is byte-identical to the build before it). Graphics are
 native shapes that draw only what the deck already says. Slice 1 is **icons**:
 
 - **Library.** 72 Lucide icons (`lucide-static` 1.75.0, ISC; the Feather-derived ones MIT) vendored as path data in
@@ -656,7 +656,8 @@ Slices 4-9 are **charts**, **diagrams**, the **grid of points**, web parity and 
 - **Checked** by `c_chart_sourced`, `c_chart_numbers`, `c_chart_form`, `c_chart_contrast`, `d_own_words`, `d_matrix_axes` (gate) and
   `c_chart_emphasis`, `d_min_items` (advisory).
 - **Recorded.** `tests/fixtures/graphics/golden_lumen_graphics.json` holds Lumen's layouts and icons under LOOK_V3 + GRAPHICS. The
-  default stays off: GRAPHICS needs LOOK_V3, which is not on by default yet, and the design turns graphics on only after RECIPES.
+  default is on since 19 Nov 2026 (Sai: every feature on), with LOOK_V3 and RECIPES; the deck test suite sets all three to 0 explicitly
+  (engine/deck/tests/conftest.py) because its goldens hold the old look, and the tests of the new look turn them on themselves.
 
 ## 7. Issues
 
