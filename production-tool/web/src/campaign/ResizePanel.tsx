@@ -15,7 +15,7 @@ import type { Anchor } from '../lib/place'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { methodModels } from './rules'
 import {
-  frameOver, HOW_LINE, HOW_WORD, howOff, HOWS, knownProtect, loadPick, makeWords, methodLine, methodOf, mixedLine, parseCustom, planResize,
+  cropKeeps, frameOver, HOW_LINE, HOW_WORD, howOff, HOWS, knownProtect, rememberedProtect, rememberProtect, loadPick, makeWords, methodLine, methodOf, mixedLine, parseCustom, planResize,
   previewLayout, savePick, SHAPES, SKETCH_LINE, trayRows, type How, type Shape, type Source,
 } from './resizeSelection'
 import { panCrop } from './crop'
@@ -73,7 +73,7 @@ export function ResizePanel({ anchor, total, load, send, onClose }: {
   }
   // Each picture with what must stay: marked here, else a Make all sizes set's boxes for it.
   const sources = useMemo(() => loaded?.map((src) => {
-    const protect = kept[src.elId] ?? knownProtect(doc, src)
+    const protect = kept[src.elId] ?? rememberedProtect(src.asset, src) ?? knownProtect(doc, src)
     return protect?.length ? { ...src, protect } : src
   }) ?? null, [loaded, kept, doc])
   const customs = shapes.filter((s) => !SHAPES.some((x) => x.id === s.id))
@@ -181,8 +181,9 @@ export function ResizePanel({ anchor, total, load, send, onClose }: {
                   <ProtectEditor master={{ asset: markingSrc.asset, w: markingSrc.w, h: markingSrc.h }} boxes={markingSrc.protect ?? []}
                     setBoxes={(b) => {
                       setKept((k) => ({ ...k, [markingSrc.elId]: b }))
-                      // Its crops follow the new boxes again.
-                      setMoved((m) => Object.fromEntries(Object.entries(m).filter(([key]) => !key.startsWith(`${markingSrc.elId}:`))))
+                      rememberProtect(markingSrc.asset, markingSrc, b)
+                      // A crop moved by hand stays where it was put while it keeps every box in; else it follows the boxes.
+                      setMoved((m) => Object.fromEntries(Object.entries(m).filter(([key, crop]) => !key.startsWith(`${markingSrc.elId}:`) || cropKeeps(crop, b))))
                     }} />
                   <footer className="cf-foot"><span className="pt-grow" /><button type="button" className="btn primary" onClick={() => setMarking(null)}>Done</button></footer>
                 </div>

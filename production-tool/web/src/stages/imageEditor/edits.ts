@@ -258,8 +258,27 @@ export function layersOf(s: EditSession, version: number): Layer[] {
 }
 
 /** The output size an upscale makes from our w x h frame ("→ 2688 × 1536"). */
+/** The Fill box's hint (UAT round 2 R2-15: an example from before the fill stayed after it): what to do now, never
+ *  words that read as already typed. A mask whose fill came back asks for a new area or new words. */
+export function fillPlaceholder(masked: boolean, filled: boolean, hidden?: string): string {
+  if (hidden) return `${hidden} is hidden. Show it to fill.`
+  if (!masked) return 'Paint or lasso an area first'
+  return filled ? 'Filled. Paint a new area, or say what else goes here' : 'What goes in the blue area, like: a red door'
+}
+
+/** The longest side Runway's Magnific reads a picture at (UAT round 2 R2-8): 1638 x 2048 at 2x came back 2458 x 3072,
+ *  1365 x 768 came back 2730 x 1536. Both runs fit "read at most 1536 px a side, then scaled". One paid check confirms. */
+export const UPSCALE_READS_PX = 1536
+
+/** What an upscale gives, as Runway returns it: the picture read at most UPSCALE_READS_PX a side, times the scale. */
+export function upscaledTo(w: number, h: number, scale: 2 | 4): { w: number; h: number } {
+  const k = Math.min(1, UPSCALE_READS_PX / Math.max(w, h))
+  return { w: Math.round(w * k) * scale, h: Math.round(h * k) * scale }
+}
+
 export function upscaleSize(w: number, h: number, scale: 2 | 4): string {
-  return `→ ${w * scale} × ${h * scale}`
+  const out = upscaledTo(w, h, scale)
+  return `→ ${out.w} × ${out.h}`
 }
 
 /** The edits as a frame keeps them (document frame.edits, at most 64): the op and its small params. */

@@ -96,6 +96,16 @@ export function mediaItems(doc: ProductionDocument, project: string | undefined,
     out.push({ kind: 'picture', sha256: f.asset, mime: mimeOf(f.asset), name: file(`${r ? nameOf(r) : `picture-${pictureNo.get(f.node!)}`}-v${f.version}`, f.asset), folder: 'pictures', which: f.id })
   }
 
+  // A result made from a sketch area (a frame with sketch_id, no shot, no node yet) is a picture too: before an Apply
+  // gave it a node it had no file, so its bar had no Download (UAT round 2, IMG-16 leftover).
+  const sketchNo = new Map<string, number>()
+  for (const f of Object.values(doc.frames).filter((x) => !x.shot_id && !x.node && !taken.has(x.asset)).sort((a, b) => a.id < b.id ? -1 : 1)) {
+    const key = f.sketch_id ?? f.id
+    if (!sketchNo.has(key)) sketchNo.set(key, sketchNo.size + 1)
+    taken.add(f.asset)
+    out.push({ kind: 'picture', sha256: f.asset, mime: mimeOf(f.asset), name: file(`sketch-${sketchNo.get(key)}-v${f.version}`, f.asset), folder: 'pictures', which: f.id })
+  }
+
   // Storyboard frames and clips, every version, by shot (numbered by rank).
   shots.forEach((s, i) => {
     for (const f of framesOf(doc, s.id)) {

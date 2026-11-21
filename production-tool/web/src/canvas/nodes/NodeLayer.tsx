@@ -21,7 +21,8 @@ import { canLink, type LinkKind } from '../core/links'
 import { canvasActions, toolLetter } from '../chrome/actions'
 import type { CardKind } from './cardChrome'
 import { NodeCard } from './cards'
-import { cardOf, CARD_KINDS, createNode, elementOfEnd, endOf, groupOf, linkCheck, linkMemory, linkNodes, reconcileLinks, seedNodes } from './nodes'
+import { cardOf, CARD_KINDS, createNode, elementOfEnd, endOf, groupOf, linkCheck, linkMemory, linkNodes, reconcileLinks, seedNodes, textRowOf } from './nodes'
+import { wordsOnPage } from '../../script/edits'
 import { applyKeyMerges, keyLinkMerges, mergeWords } from './mergeLinks'
 import { provenanceFixes } from './provenance'
 import { elementBounds } from '../core/geometry'
@@ -290,7 +291,8 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
   /** What an end is called in the hint and the picker. */
   const word = (e: CanvasElement) => {
     const c = cardOf(e)
-    return c ? WORD[c.kind] : briefOfElement(e) ? 'brief' : (e.customData as { kind?: string } | undefined)?.kind === 'format_set' ? 'sizes' : e.type === 'image' ? 'picture' : e.type === 'text' ? 'text' : 'sketch area'
+    const kind = (e.customData as { kind?: string } | undefined)?.kind
+    return c ? WORD[c.kind] : briefOfElement(e) ? 'brief' : kind === 'format_set' ? 'sizes' : kind === 'board' ? 'board' : e.type === 'image' ? 'picture' : e.type === 'text' ? 'text' : 'sketch area'
   }
 
   const selectedAtPress = useRef<readonly string[]>([])
@@ -527,9 +529,13 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     if (!picker) return
     const { from, scene, at } = picker
     setPicker(null)
+    // A script made from a note starts with the note's words on its page (UAT round 2 R2-7: it was empty).
+    const words = kind === 'script' && from.type === 'text' ? textRowOf(services.doc.get(), from.id)?.words ?? '' : ''
     void createNode({ canvas, doc: services.doc }, kind, scene)
-      .then((el) => {
+      .then(async (el) => {
         markNew(el.id)
+        const made = cardOf(el)
+        if (words && made?.kind === 'script') await wordsOnPage(services.doc, made.id, words)
         return writeLink(from, el, at)
       })
       .then(() => cancel())

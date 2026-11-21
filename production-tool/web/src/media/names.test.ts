@@ -122,6 +122,13 @@ describe('media names (features/media-download.clan)', () => {
     expect(mediaItem(d, 'P', SHA('8'))?.name).toMatch(/^P-picture-\d+-v2\.png$/)
     expect(mediaItem(d, 'P', SHA('a'))?.name).toBe('P-maya_front.png') // v1 is the named picture already
   })
+
+  it('a result made from a sketch area has a file before any Apply (UAT round 2, IMG-16)', () => {
+    const d = project()
+    d.assets[SHA('9')] = asset('9', 'image/png', 'generated')
+    put(d.frames, { id: 'fr_s1', sketch_id: 'sketch_1', version: 1, kind: 'generated', asset: SHA('9') })
+    expect(mediaItem(d, 'P', SHA('9'))).toMatchObject({ name: 'P-sketch-1-v1.png', folder: 'pictures', which: 'fr_s1' })
+  })
 })
 
 describe('a joined take in the zip (UAT 2026-11-21, F15)', () => {

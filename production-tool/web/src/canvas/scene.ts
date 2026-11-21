@@ -102,6 +102,22 @@ export function slotNear(els: readonly El[], anchor: { minX: number; minY: numbe
   return nextSlot(els, anchor, size, gap)
 }
 
+/** Room under a key group's views for its label ("Marco · 4 views") and their name chips. */
+const KEY_ROW_LABEL = 48
+
+/**
+ * Where a result made from `sources` goes: beside them (nextSlot), unless one of them is a key's view in its group
+ * (`key:<key>`, canvas/nodes/keyGroups.ts); then on a row of its own under the whole group, so the group's outline
+ * never runs under results made from it (UAT round 2, IMG-22 leftover).
+ */
+export function slotFrom(els: readonly El[], sources: readonly El[], size: { w: number; h: number }, gap = 80) {
+  const keys = new Set(sources.flatMap((e) => ((e as El & { groupIds?: readonly string[] }).groupIds ?? []).filter((g) => g.startsWith('key:'))))
+  if (!keys.size) return nextSlot(els, bounds(sources), size, gap)
+  const group = alive(els).filter((e) => ((e as El & { groupIds?: readonly string[] }).groupIds ?? []).some((g) => keys.has(g)))
+  const box = bounds([...group, ...sources])
+  return nextSlot(els, { maxX: box.minX - gap, minY: box.maxY + gap + KEY_ROW_LABEL }, size, gap)
+}
+
 export function nextSlot(els: readonly El[], anchor: { maxX: number; minY: number }, size: { w: number; h: number }, gap = 80) {
   const y = anchor.minY
   const inRow = alive(els).filter((e) => e.type !== 'arrow' && e.y < y + size.h && e.y + e.height > y && e.x + e.width > anchor.maxX)

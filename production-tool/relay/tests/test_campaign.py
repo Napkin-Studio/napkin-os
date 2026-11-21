@@ -223,10 +223,10 @@ def test_regenerate_of_a_named_picture_sends_its_other_views_as_tagged_reference
     inp["refs"] = [view_ref(h, 11, "maya_side"), view_ref(h, 12, "maya_three-quarter"), view_ref(h, 13, "maya_back")]
     _, job = h.post_job(token, op="resize", expect=200, **inp)
     (sent,) = h.providers["runway"].submits
-    assert [r["name"] for r in sent["refs"]] == ["master", "maya_side", "maya_three_quart", "maya_back"]
+    assert [r["name"] for r in sent["refs"]] == ["master", "maya_side", "maya_three_qrtr", "maya_back"]
     assert [r["role"] for r in sent["refs"]] == ["object", "character", "character", "character"]
     assert sent["refs"][1]["sha256"] == inp["refs"][0]["asset"]["sha256"]
-    assert "@master" in sent["prompt"] and "@maya_side, @maya_three_quart, @maya_back show the same character" in sent["prompt"]
+    assert "@master" in sent["prompt"] and "@maya_side, @maya_three_qrtr, @maya_back show the same character" in sent["prompt"]
 
 
 def test_extend_and_a_picture_with_no_name_send_the_picture_only():

@@ -2230,14 +2230,7 @@ class Relay:
         if rz["method"] == "extend":
             try:
                 data = self.blobs.fetch(inp["image"]["url"])
-                ms = rz["masterSize"]
-                from PIL import Image
-                with Image.open(io.BytesIO(data)) as im:
-                    pw, ph = im.size
-                k = pw / ms["w"]  # protect is in masterSize pixels; the plate may be another size
-                boxes = [{**b, "x": b["x"] * k, "y": b["y"] * ph / ms["h"], "w": b["w"] * k, "h": b["h"] * ph / ms["h"]}
-                         for b in rz.get("protect") or []]
-                plan = formats.pad_plan(pw, ph, aw, ah, boxes, formats.safe_fracs(inp.get("safeArea"), inp.get("delivery")))
+                plan = self._extend_plan(inp, data)
                 canvas, mask = formats.padded(data, plan)
             except Exception as e:
                 log.exception("job %s: could not pad the master", job["jobId"])
@@ -2281,6 +2274,21 @@ class Relay:
         self.blobs.put(key, data, mime)
         return {"sha256": "sha256:" + hashlib.sha256(data).hexdigest(), "url": self.blobs.public_url(key), "mime": mime}
 
+    @staticmethod
+    def _extend_plan(inp: dict, data: bytes) -> dict:
+        """Where an extend puts the master on its canvas (formats.pad_plan): the same at submit and at landing."""
+        import formats
+        from PIL import Image
+        rz = inp["resize"]
+        ms = rz["masterSize"]
+        with Image.open(io.BytesIO(data)) as im:
+            pw, ph = im.size
+        k = pw / ms["w"]  # protect is in masterSize pixels; the plate may be another size
+        boxes = [{**b, "x": b["x"] * k, "y": b["y"] * ph / ms["h"], "w": b["w"] * k, "h": b["h"] * ph / ms["h"]}
+                 for b in rz.get("protect") or []]
+        return formats.pad_plan(pw, ph, inp["aspect"]["w"], inp["aspect"]["h"], boxes,
+                                formats.safe_fracs(inp.get("safeArea"), inp.get("delivery")))
+
     def _land_resize(self, job: dict, raw: dict, cost_usd: float | None) -> dict:
         """A paid size's picture: cropped to the size's exact shape, scaled to the preview, kept clean as the
         plate, the type layers drawn on a copy. The provider's bill stands whatever happens here."""
@@ -2289,6 +2297,9 @@ class Relay:
         rz = inp["resize"]
         try:
             data = self.blobs.fetch(raw["url"])
+            if rz["method"] == "extend":  # the master laid back over its edge on a ramp: no hard seam (IMG-9)
+                master = self.blobs.fetch(inp["image"]["url"])
+                data = formats.feathered(data, master, self._extend_plan(inp, master))
             out_w, out_h = formats.preview_size(inp["delivery"], rz.get("previewMaxPx"))
             plate, png, (rw, rh), drawn = formats.finish(data, (inp["aspect"]["w"], inp["aspect"]["h"]), (out_w, out_h),
                                                          rz.get("layers"), self.blobs.fetch)

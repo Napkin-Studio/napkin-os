@@ -87,7 +87,7 @@ export function DocMenu({ close, page }: { close: () => void; page?: { title: st
     <>
       <MenuItem icon="+" hint="A blank canvas" onSelect={() => { close(); void shell.newProject() }}>New</MenuItem>
       <MenuItem icon="↥" disabled={!!busy} hint="A .clan or an Export zip from your computer" onSelect={openPicker}>{busy === 'open' ? 'Opening…' : 'Open…'}</MenuItem>
-      <MenuItem icon="▤" hint="Every film you can open" onSelect={() => { close(); void shell.goHome() }}>All projects</MenuItem>
+      <MenuItem icon="▤" hint="Every project you can open" onSelect={() => { close(); void shell.goHome() }}>All projects</MenuItem>
       <SubItem icon="⇅" hint="Media, the project as .clan, the script" onSelect={() => setView('export')}>Import/Export</SubItem>
       <div className="pt-menusep" />
       <SubItem icon="→" hint="A deck from this film, or link a brief" onSelect={() => setView('continue')}>Continue in</SubItem>

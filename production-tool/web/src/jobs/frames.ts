@@ -20,6 +20,7 @@ import type { Relay } from '../relay'
 import { assetRef } from './assets'
 import { isActive, type JobRunner } from './runner'
 import { jobShot, refsFor } from './select'
+import { castRef } from './cast'
 import { liveGet } from '../model/live'
 
 export type { FrameHow } from '../model/purpose'
@@ -80,7 +81,10 @@ export async function frameInput(relay: Relay, d: ProductionDocument, index: num
   const shot = shotsOf(d, sb?.id)[index]
   if (!shot) throw new Error('That shot is gone.')
   // The shot's named and linked refs, required; the storyboard's others, offered (features/canvas-nodes.clan).
-  const refs = await refsFor(relay, d, shot, text, { offer: true, declined })
+  const own = await refsFor(relay, d, shot, text, { offer: true, declined })
+  // Who is seen, for a later shot whose refs name nobody (UAT round 2 R2-4): frame 1's person (jobs/cast.ts).
+  const cast = await castRef(relay, d, sb?.id, index, own)
+  const refs = cast ? [cast, ...own] : own
   const script = scriptText(d, sb?.id)
   const ratio = sb?.ratio
   return {

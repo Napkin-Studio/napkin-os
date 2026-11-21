@@ -99,13 +99,19 @@ EXTEND_MAX_PX = 4_200_000
 # The mask reaches this far over the master's edge, so the seam is redrawn: a share of the master's shorter side,
 # at least EXTEND_OVERLAP px (16 px left a hard seam on a 2048 px canvas, UAT round 1 IMG-9).
 EXTEND_OVERLAP = 24
-EXTEND_OVERLAP_SHARE = 0.035
+# UAT round 2 (IMG-9 partly): at 3.5% a 21:9 sky kept a hard vertical seam. 6% lets the model redraw more of the edge,
+# and the landing blends the master back over that overlap on a ramp (feathered), never a hard paste.
+EXTEND_OVERLAP_SHARE = 0.06
 # The padding is seeded with the master's edge strip (EDGE_STRIP px) drawn outwards, softened (EXTEND_BLUR) and
 # grained (EXTEND_GRAIN): the model continues a picture that already lines up with the edge, instead of keeping
 # the flat whole-picture blur it was given before.
 EDGE_STRIP = 12
 EXTEND_BLUR = 10
 EXTEND_GRAIN = 18
+# The seed's grain follows the master's own texture near its edge (round 2: a starry sky came back as flat haze, the
+# model keeping the soft seed): the edge's fine detail, measured, sets how much noise the bands carry, within these.
+TEXTURE_STRIP = 48
+GRAIN_MIN, GRAIN_MAX = 4.0, 36.0
 
 # Magnific's limits (Runway OpenAPI 2024-11-06, POST /v1/image_upscale): each input side 300-8000 px,
 # the output at most 25,300,000 pixels. Export at full size picks x4, or x8 for the largest print sizes.
@@ -285,6 +291,77 @@ def _smeared(master, cw: int, ch: int, x: int, y: int):
     return out
 
 
+def edge_texture(master, plan: dict) -> float:
+    """How much fine detail the master has along the sides the extend pads (its high-pass spread, 0-255 scale)."""
+    from PIL import ImageChops, ImageFilter, ImageStat
+    w, h = master.size
+    cw, ch = plan["canvas"]["w"], plan["canvas"]["h"]
+    at = plan["at"]
+    k = max(1, min(TEXTURE_STRIP, w // 4, h // 4))
+    strips = []
+    if at["x"] > 0 or at["x"] + at["w"] < cw:
+        strips += [master.crop((0, 0, k, h)), master.crop((w - k, 0, w, h))]
+    if at["y"] > 0 or at["y"] + at["h"] < ch:
+        strips += [master.crop((0, 0, w, k)), master.crop((0, h - k, w, h))]
+    if not strips:
+        return GRAIN_MIN
+    spread = []
+    for strip in strips:
+        grey = strip.convert("L")
+        detail = ImageChops.difference(grey, grey.filter(ImageFilter.GaussianBlur(2)))
+        spread.append(ImageStat.Stat(detail).rms[0])
+    return max(spread)
+
+
+def _grained(seed, texture: float):
+    """The seed with grain as strong as the master's edge detail (GRAIN_MIN..GRAIN_MAX), centred so the tone holds."""
+    from PIL import Image, ImageChops
+    sigma = max(GRAIN_MIN, min(GRAIN_MAX, texture * 2))
+    noise = Image.effect_noise(seed.size, sigma).convert("RGB")
+    lifted = ImageChops.add(seed, noise, scale=1.0, offset=-128)
+    return lifted
+
+
+def feathered(result: bytes, master_data: bytes, plan: dict) -> bytes:
+    """An extend's result with the master laid back over it on a ramp (IMG-9): its own pixels inside, the model's
+    in the bands, and across the overlap the one fading into the other, so no hard seam is left where the mask
+    ended. The result is scaled to the canvas it was made on (a model may return another size), as PNG."""
+    from PIL import Image, ImageChops
+    out = Image.open(io.BytesIO(result))
+    out.load()
+    out = out.convert("RGB")
+    cw, ch = plan["canvas"]["w"], plan["canvas"]["h"]
+    if out.size != (cw, ch):
+        out = out.resize((cw, ch), Image.LANCZOS)
+    src = Image.open(io.BytesIO(master_data))
+    src.load()
+    at = plan["at"]
+    master = src.convert("RGB").resize((at["w"], at["h"]), Image.LANCZOS)
+    o = overlap_px(plan)
+    w, h = at["w"], at["h"]
+    alpha = Image.new("L", (w, h), 255)
+    o = max(1, min(o, w // 2, h // 2))
+    up = [int(255 * i / o) for i in range(o)]  # 0 at the master's edge, rising to whole o px inside
+    across = Image.new("L", (o, 1))
+    across.putdata(up)
+    down = Image.new("L", (1, o))
+    down.putdata(up)
+    sides = {  # side: (its ramp, where it goes), only where the canvas was padded
+        "left": (at["x"] > 0, across.resize((o, h)), (0, 0)),
+        "right": (at["x"] + w < cw, across.transpose(Image.FLIP_LEFT_RIGHT).resize((o, h)), (w - o, 0)),
+        "top": (at["y"] > 0, down.resize((w, o)), (0, 0)),
+        "bottom": (at["y"] + h < ch, down.transpose(Image.FLIP_TOP_BOTTOM).resize((w, o)), (0, h - o)),
+    }
+    for padded_side, ramp, (x, y) in sides.values():
+        if padded_side:
+            box = (x, y, x + ramp.width, y + ramp.height)
+            alpha.paste(ImageChops.darker(alpha.crop(box), ramp), box)
+    out.paste(master, (at["x"], at["y"]), alpha)
+    b = io.BytesIO()
+    out.save(b, format="PNG")
+    return b.getvalue()
+
+
 def overlap_px(plan: dict) -> int:
     """How far the mask reaches over the master's edge (EXTEND_OVERLAP, EXTEND_OVERLAP_SHARE)."""
     at = plan["at"]
@@ -303,8 +380,7 @@ def padded(data: bytes, plan: dict) -> tuple[bytes, bytes]:
     at = plan["at"]
     master = rgb.resize((at["w"], at["h"]), Image.LANCZOS) if rgb.size != (at["w"], at["h"]) else rgb
     seed = _smeared(master, cw, ch, at["x"], at["y"]).filter(ImageFilter.GaussianBlur(EXTEND_BLUR))
-    grain = Image.effect_noise((cw, ch), EXTEND_GRAIN).convert("RGB")
-    seed = Image.blend(seed, grain, 0.12)
+    seed = _grained(seed, edge_texture(master, plan))
     bg = seed.copy()
     bg.paste(master, (at["x"], at["y"]))
     mask = Image.new("L", (cw, ch), 255)

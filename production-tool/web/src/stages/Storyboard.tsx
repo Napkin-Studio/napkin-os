@@ -65,6 +65,7 @@ import { joinHere, missedGuide, splitHere, videoJoin, videoModel, videoPlan, vid
 import { canJoin } from '../jobs/runs'
 import { videoOfStoryboard } from '../model/selectors'
 import { FrontButtons } from './FrontsNeeded'
+import { keepCharacter, keptFromFirst, suggestKey } from '../jobs/cast'
 
 const RATIOS: Ratio[] = ['9:16', '1:1', '16:9']
 
@@ -426,6 +427,32 @@ function LiftedCard({ shot, index }: { shot: Shot; index: number }) {
   )
 }
 
+/** After frame 1 lands (UAT round 2 UX 4): keep its person as a named character, so every later frame sends them by
+ *  name and they stay themselves. Once kept, the card says who. */
+function KeepPerson({ asset, storyboardId, action }: { asset: string; storyboardId?: string; action?: string }) {
+  const doc = useDoc()
+  const { doc: store } = useServices()
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState(() => suggestKey(action))
+  const [error, setError] = useState<string | null>(null)
+  const kept = keptFromFirst(doc, storyboardId)
+  if (kept) return <p className="sb-kept faint">Later frames keep <b>@{kept.key}</b> from this frame.</p>
+  if (!open) return <button type="button" className="linkbtn sb-keep" onClick={() => setOpen(true)}>Keep a person from this frame…</button>
+  const save = () => void keepCharacter(store, asset, name).then(() => setOpen(false), (e) => setError(e instanceof Error ? e.message : 'That name did not take.'))
+  return (
+    <div className="sb-keepform row" role="group" aria-label="Keep a person from this frame">
+      <span className="faint">Keep</span>
+      <input className="input" aria-label="Their name" placeholder="mia" value={name} autoFocus
+        onChange={(e) => { setName(e.target.value); setError(null) }}
+        onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') save(); if (e.key === 'Escape') setOpen(false) }} />
+      <span className="faint">as a character</span>
+      <button type="button" className="btn xs primary" disabled={!name.trim()} onClick={save}>Keep</button>
+      <button type="button" className="btn xs ghost" onClick={() => setOpen(false)}>Cancel</button>
+      {error && <span role="alert" className="tray-error">{error}</span>}
+    </div>
+  )
+}
+
 function ShotCard({ shot, index, prev, selected, onSelect, onOpen, onDraw, onDelete, confirming, onConfirm, ask, onAsk, mark, film }: {
   shot: Shot; index: number; prev?: Shot
   /** The shot open in the Booth (mock "frame": the cell tinted, a rule on its left). */
@@ -573,6 +600,7 @@ function ShotCard({ shot, index, prev, selected, onSelect, onOpen, onDraw, onDel
         {current && !drawing && <button type="button" className="sb-openie" onClick={onOpen}><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M1 4V1h3M8 1h3v3M11 8v3H8M4 11H1V8" fill="none" stroke="currentColor" strokeWidth="1.4" /></svg>Open in image editor</button>}
         {current?.cropped_to && asset?.w && asset?.h && <span className="sb-crop">{croppedCaption({ w: asset.w, h: asset.h }, current.cropped_to.to)}</span>}
       </div>
+      {index === 0 && current && !drawing && <KeepPerson asset={current.asset} storyboardId={shot.storyboard_id} action={shot.action} />}
       <div className="sb-chips">{chips.map((c) => <span key={c.field} className={`sb-chip ${changedFields.has(c.field) ? 'changing' : ''}`}>{c.label}</span>)}</div>
       {/* The words are edited in the shot's Booth (its words and direction); the cell shows them. */}
       <div className="sb-words"><p className="sb-action">{shot.action?.trim() || <span className="faint">What happens in this shot…</span>}</p></div>

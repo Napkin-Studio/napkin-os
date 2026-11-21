@@ -587,6 +587,13 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 /* The Name dialog's role pills (the contract's ten main roles, More… for the rest) and the chosen role's line. */
 .rolepills { gap: 4px; flex-wrap: wrap; max-width: 360px; }
 .roleline { font-size: 12px; margin-top: 4px; }
+/* A brand ref's colours, font or rule in the Name popover (features/pt-canvas-r2.clan, R2-1). */
+.brandfields { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; max-width: 360px; }
+.brandfields .textarea { width: 100%; font-size: 12.5px; }
+.bf-line, .bf-missing { font-size: 12px; }
+.bf-swatches { gap: 6px; flex-wrap: wrap; align-items: center; }
+.bf-swatch { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px; border: 1px solid var(--line, #ddd); border-radius: 6px; font-size: 11px; }
+.bf-swatch input[type=color] { width: 22px; height: 22px; padding: 0; border: 0; background: none; cursor: pointer; }
 /* Waiting for an answer (needs_input): no loader, no busy pointer (ui-behaviour 5.2). */
 .pending.waiting { animation: none; background: var(--soft); cursor: default; }
 .hoverbar .hb-label { display: none; }

@@ -37,7 +37,7 @@ import { usePanels } from '../ui/chrome/panels'
 import { AssetsLibrary } from '../ui/assets/AssetsDrawer'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
-import { CanvasController, viewLabel, type CanvasSnapshot, type GenerateResult } from '../canvas/controller'
+import { CanvasController, OTHER_VIEWS, viewLabel, type CanvasSnapshot, type GenerateResult } from '../canvas/controller'
 import { countLine, countRefs, kindOfRole, refLimits, type RefKind, type RefLimits } from '../canvas/refBudget'
 import { croppedCaption } from '../canvas/core/sketch'
 import { framesFromSketch, sketchDeleteText } from '../doc/remove'
@@ -58,6 +58,12 @@ import { editablePicture } from '../canvas/nodes/dblclick'
 import { pickPictureVersionStep } from './imageEditor/apply'
 import { Float } from '../ui/Float'
 import { RightsChip } from '../ui/finals/RightsChip'
+import { chipLook } from '../ui/finals/chipLook'
+import { BrandFields } from './BrandFields'
+import { PaidButton } from '../ui/PaidButton'
+import { sendingLine, useSlow } from '../ui/sending'
+import { viewsWhat } from '../ui/viewsWhat'
+import { isBrandRole, payloadFor, payloadMissing, type BrandPayload } from '../canvas/swatches'
 import { REF_ROLES, type Ask, type CustomData, type ModelChoice, type NamedRef, type RefRole } from '../contracts/types'
 import { REF_ROLE_TABLE } from '../contracts/load'
 import { currentPictureFrame, keyNamed, keysList, mainScript, mainStoryboard, pictureVersions, refsList, videoOfStoryboard } from '../model/selectors'
@@ -770,7 +776,7 @@ export function Character({ initial, active, onPictureEditor }: {
                 {named && !stacked && <NameChip r={named} at={toView({ x: e.x, y: e.y + e.height })} width={e.width * zoom} />}
                 {c?.kind === 'gen' && <GenOverlay el={e} c={c} toView={toView} zoom={zoom} ctrl={ctrl} named={!!named} />}
                 {img && img.kind !== 'drawn' && !stacked && <VersionChip nodeId={img.id} at={toView({ x: e.x + e.width, y: e.y })} />}
-                {img?.kind === 'pic' && img.asset && !stacked && <RightsChip sha={img.asset} at={toView({ x: e.x, y: e.y })} />}
+                {img?.kind === 'pic' && img.asset && !stacked && <RightsChip sha={img.asset} at={toView({ x: e.x, y: e.y })} zoom={zoom} />}
               </span>
             )
           })}
@@ -1036,7 +1042,8 @@ function GenOverlay({ el, c, toView, zoom, ctrl, named }: { el: El; c: Extract<C
         </div>
       )}
       {/* Under the picture's @name when it has one, not on top of it (owner, 2026-10-16). */}
-      {state === 'completed' && caption && <div className="gencaption" style={{ left: tl.x, top: tl.y + h + (named ? NAME_LINE : 0) }}>{caption}</div>}
+      {/* Scaled with the canvas and left out when zoomed far out, like the Rights? chip (UAT round 2 R2-11). */}
+      {state === 'completed' && caption && !chipLook(zoom).dot && <div className="gencaption" style={{ left: tl.x, top: tl.y + h + (named ? NAME_LINE : 0), transform: `scale(${chipLook(zoom).scale})`, transformOrigin: 'top left' }}>{caption}</div>}
     </>
   )
 }
@@ -1213,7 +1220,9 @@ export function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, onG
         {named?.variant === 'front' && controls.views && (
           <>
             <ModelPick op="view" value={viewChoice} onChange={setViewPick} />
-            <button className="btn sm dark" disabled={!!busy} onClick={() => run('views', () => ctrl.makeViews(named.key, undefined, choiceToSend('view', config, viewChoice)))}>{busy === 'views' ? 'Starting…' : 'Make the other views'}</button>
+            <PaidButton className="btn sm dark" label="Make the other views" busy={busy === 'views'} disabled={!!busy}
+              what={viewsWhat(named.key, OTHER_VIEWS)} yes={`Make ${OTHER_VIEWS.length}`}
+              onYes={() => run('views', () => ctrl.makeViews(named.key, undefined, choiceToSend('view', config, viewChoice)))} />
           </>
         )}
         {named && <button className="btn xs ghost" onClick={() => ctrl.unname(singleImage.id)}>Remove name</button>}
@@ -1298,6 +1307,8 @@ function Floating({ className, anchor, children }: { className: string; anchor: 
 /** The ten main role pills of the Name dialog (the rest under More…), as the contract's role table sorts them. */
 const MAIN_ROLES = REF_ROLES.filter((r) => REF_ROLE_TABLE[r].picker === 'main')
 const roleWord = (r: RefRole) => (r === 'brand_rule' ? 'brand rule' : r)
+/** The role's one line in the Name dialog; a palette's says its colours can be changed (UAT round 2: one line, not two). */
+const roleLine = (r: RefRole) => `${REF_ROLE_TABLE[r].ui_line}${r === 'palette' ? '. Click a colour to change it.' : ''}`
 
 const KIND_WORD = { pic: 'picture', drawn: 'drawing', gen: 'result' } as const
 
@@ -1327,6 +1338,8 @@ function GeneratePopover({ ctrl, ids, at, onClose, onPlace }: {
   const [people, setPeople] = useState<Set<string>>(() => new Set())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // When sending takes a while, what is happening (UAT round 2 R2-3, UX 3).
+  const slow = useSlow(busy, 3000)
   const ref = useRef<HTMLTextAreaElement>(null)
   useEffect(() => ref.current?.focus(), [])
   const insert = (name: string) => {
@@ -1474,6 +1487,7 @@ function GeneratePopover({ ctrl, ids, at, onClose, onPlace }: {
       {preview.cropLine && <div className="faint" role="note" style={{ fontSize: 12.5 }}>{preview.cropLine}</div>}
       {!oneArea && <div role="alert" className="tray-error">Pick one sketch area for one Generate.</div>}
       {error && <div role="alert" className="tray-error">{error}</div>}
+      {slow && <div role="status" className="faint tray-slow">{sendingLine(counted.total)}</div>}
       <div className="tray-foot">
         <ModelPick op="generate" value={choice} onChange={setPick} />
         {controls.moreOptions && <button className={`btn xs ${more ? 'on' : ''}`} title="Ask for 4 options instead of 1" onClick={() => setMore(!more)}>4 options</button>}
@@ -1503,15 +1517,21 @@ function NamePopover({ ctrl, nodeId, current, presetVariant, at, onClose }: {
   const [role, setRole] = useState<RefRole>('character')
   const [moreRoles, setMoreRoles] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [brand, setBrand] = useState<BrandPayload>({ swatches: current?.swatches, font: current?.font, rule: current?.rule })
   const ck = cleanKey(key)
   const cv = cleanVariant(variant)
   const isNewKey = !!ck && !keyNamed(doc, ck)
+  // The role the ref will hold: the one picked for a new key, else its key's (UAT round 2 R2-1: a brand role needs its payload).
+  const holds = (isNewKey ? role : (keyNamed(doc, ck)?.role as RefRole | undefined)) ?? role
+  const brandRole = isBrandRole(holds) ? holds : undefined
+  const needs = brandRole ? payloadMissing(brandRole, brand) : undefined
+  const asset = imageOf(ctrl.nodeEl(nodeId))?.asset ?? undefined
   const taken = ck && cv ? refByName(doc, `${ck}_${cv}`) : undefined
   const movesName = taken && taken.node !== nodeId
   const problem = ck || cv ? nameProblem(ck, cv) : null
   const save = () => {
     try {
-      ctrl.name(nodeId, ck, cv, role)
+      ctrl.name(nodeId, ck, cv, role, brandRole ? payloadFor(brandRole, brand) : undefined)
       onClose()
     } catch (e) {
       setError(errText(e))
@@ -1541,16 +1561,19 @@ function NamePopover({ ctrl, nodeId, current, presetVariant, at, onClose }: {
             ))}
             {!moreRoles && <button className="btn xs ghost" onClick={() => setMoreRoles(true)}>More…</button>}
           </div>
-          <div className="faint roleline">{REF_ROLE_TABLE[role].ui_line}</div>
+          <div className="faint roleline">{roleLine(role)}</div>
         </div>
       )}
+      {/* A brand key named before: its role's line once, above its fields (the pills above say it for a new key). */}
+      {brandRole && !isNewKey && <div className="faint roleline">{roleLine(brandRole)}</div>}
+      {brandRole && <BrandFields role={brandRole} asset={asset} value={brand} onChange={setBrand} />}
       {ck && cv && <div className="mono" style={{ marginTop: 8 }}>@{ck}_{cv}</div>}
       {movesName && <div className="faint" style={{ fontSize: 12, marginTop: 4 }}>Another image is @{ck}_{cv}. Saving moves the name here, and what was made from the other one is marked out of date.</div>}
       {(problem || error) && <div role="alert" style={{ color: 'var(--danger)', fontSize: 12.5, fontWeight: 600, marginTop: 6 }}>{problem ?? error}</div>}
       <div className="row" style={{ marginTop: 10 }}>
         <span className="spacer" />
         <button className="btn sm ghost" onClick={onClose}>Cancel</button>
-        <button className="btn sm primary" disabled={!ck || !cv || !!problem} onClick={save}>{movesName ? 'Move the name here' : 'Save'}</button>
+        <button className="btn sm primary" disabled={!ck || !cv || !!problem || !!needs} title={needs} onClick={save}>{movesName ? 'Move the name here' : 'Save'}</button>
       </div>
     </Floating>
   )

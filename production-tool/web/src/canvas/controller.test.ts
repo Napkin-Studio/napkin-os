@@ -247,6 +247,21 @@ describe('The Camera agent’s ask on a sketch with no words and nothing linked'
     expect(Object.keys(t.doc.get().asks)).toHaveLength(1)
   })
 
+  it('a note linked into the area says what it is: no ask, its words go (UAT round 2 R2-2)', async () => {
+    withFrame(t)
+    await t.ctrl.generate(['F'], 'first')
+    const area = t.canvas.els.find((e) => (e.customData as Rec | undefined)?.kind === 'sketch')!
+    const sketchId = (t.sent[0].purpose as { sketchId: string }).sketchId
+    await t.doc.update((d) => {
+      d.texts = { tx1: { id: 'tx1', v: 1, field_v: {}, node: 'el_t', words: 'a puppy on the sand' } }
+      d.links.link_t = { id: 'link_t', v: 1, field_v: {}, from: { kind: 'text', id: 'tx1' }, to: { kind: 'sketch', id: sketchId }, role: 'note' }
+    })
+    const r = await t.ctrl.generate([area.id], '')
+    expect('ask' in r).toBe(false)
+    expect(t.sent).toHaveLength(2)
+    expect(Object.keys(t.doc.get().asks)).toHaveLength(0)
+  })
+
   it('"Use it as a layout only" goes ahead with no words; "Describe it" sends its words', async () => {
     withFrame(t)
     await t.ctrl.generate(['F'], '')

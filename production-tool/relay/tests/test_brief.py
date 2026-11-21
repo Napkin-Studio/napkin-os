@@ -60,6 +60,18 @@ def test_a_brief_is_validated_with_the_job():
 
 # ── no brief: the director's input as before ─────────────────────────────────
 
+def cut_sheet(user: str) -> str:
+    """The golden input with its sheet cut to the op, as Dex has read it since features/pt-canvas-r2.clan (R2-3):
+    everything else byte for byte as it was."""
+    from director.director import sheet_for
+    head, rest = user.split("<input>\n", 1)
+    body, tail = rest.rsplit("\n</input>", 1)
+    ask = json.loads(body)
+    if "sheet" in ask:
+        ask["sheet"] = sheet_for(ask["op"], ask["sheet"], ask.get("input") or {})
+    return f"{head}<input>\n{json.dumps(ask, ensure_ascii=False, separators=(',', ':'))}\n</input>{tail}"
+
+
 @pytest.mark.parametrize("name", sorted(GOLDEN))
 def test_with_no_brief_the_director_input_is_byte_for_byte_the_golden(name):
     f = fixture(name)
@@ -70,7 +82,7 @@ def test_with_no_brief_the_director_input_is_byte_for_byte_the_golden(name):
         except DirectorError:
             pass  # a check after the call; the input was sent
         sent = wire.calls[0]
-        assert sent["turns"][0]["text"] == GOLDEN[name]["user"], (version, name)
+        assert sent["turns"][0]["text"] == cut_sheet(GOLDEN[name]["user"]), (version, name)
         if version == "director.v12":
             assert hashlib.sha256(sent["system"].encode()).hexdigest() == GOLDEN[name]["system_sha256"], name
 

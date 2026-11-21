@@ -8,6 +8,7 @@ import type { AssetRights } from '../../contracts/types'
 import { asksRights } from '../../doc/finals'
 import { updateDoc } from '../../doc/store'
 import type { Pt } from '../../canvas/core/canvasAdapter'
+import { chipLook } from './chipLook'
 import { Float } from '../Float'
 import './finals.css'
 
@@ -34,21 +35,23 @@ function keepNotSure(sha: string) {
   }
 }
 
-export function RightsChip({ sha, at }: { sha: string; at: Pt }) {
+export function RightsChip({ sha, at, zoom = 1 }: { sha: string; at: Pt; zoom?: number }) {
   const doc = useDoc()
   const { doc: store } = useServices()
   const [open, setOpen] = useState(false)
   const [hidden, setHidden] = useState(() => notSure().has(sha))
   const btn = useRef<HTMLButtonElement>(null)
   if (hidden || !asksRights(doc.assets[sha])) return null
+  const look = chipLook(zoom)
   const choose = (rights: AssetRights) => {
     setOpen(false)
     void updateDoc(store, (d) => { const a = d.assets[sha]; if (a) a.rights = rights }, `rights ${rights} ${sha}`)
   }
   return (
     <>
-      <button ref={btn} type="button" className="rights-chip" style={{ left: at.x, top: at.y }} aria-haspopup="menu" aria-expanded={open}
-        title="May a client see this picture? Say once: the Deck Maker reads it." onClick={() => setOpen((o) => !o)}>Rights?</button>
+      <button ref={btn} type="button" className={`rights-chip${look.dot ? ' dot' : ''}`} aria-label="Rights?"
+        style={{ left: at.x, top: at.y, ...(look.dot ? {} : { transform: `translate(6px, 6px) scale(${look.scale})` }) }} aria-haspopup="menu" aria-expanded={open}
+        title="May a client see this picture? Say once: the Deck Maker reads it." onClick={() => setOpen((o) => !o)}>{look.dot ? '' : 'Rights?'}</button>
       <Float anchor={btn} open={open} onClose={() => setOpen(false)} label="Rights of this picture" className="rights-menu">
         {CHOICES.map((c) => (
           <button key={c.rights} type="button" role="menuitem" className="pt-menurow" onClick={() => choose(c.rights)}>
