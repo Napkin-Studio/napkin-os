@@ -19,6 +19,29 @@ export const CLIENT_CARD_MAX_S = 2
  *  CLIENT_CARD_MAX_S and a third of what the studio card leaves, never under 1 s. relay/cutdowns.py client_card_s. */
 export const clientCardS = (cardS: number | undefined, lengthS?: number, studioS = CARD_S) =>
   Math.round(Math.min(cardS ?? CLIENT_CARD_MAX_S, CLIENT_CARD_MAX_S, lengthS === undefined ? Infinity : Math.max(1, (lengthS - studioS) / 3)) * 1000) / 1000
+/** The picture a size keeps at least when its cards would leave less: the cards shorten for it (UAT round 3,
+ *  R3-F12: the 6 s 9:16 had 2.25 s of picture, then 1.2 s of the film's card and 2.5 s of the studio card). */
+export const MIN_PICTURE_S = 3.5
+/** The shortest studio card on a short size: its roll sped up to fit (stitch card_graph, cutdown cardS). */
+export const STUDIO_MIN_S = 1.2
+/** The film's own card at its shortest. */
+export const CLIENT_MIN_S = 1
+/** How long a size's two cards hold: the film's own (`clientS`, 0 when it has none; `cardLen` its own length) and
+ *  the studio card (`studioS`). When they would leave under MIN_PICTURE_S of picture, the studio card shortens
+ *  first (to STUDIO_MIN_S), then the film's card (to CLIENT_MIN_S); both stay. relay/cutdowns.py card_lengths. */
+export function cardLengths(lengthS: number | undefined, cardLen?: number, hasClient = cardLen !== undefined): { clientS: number; studioS: number } {
+  let studioS = CARD_S
+  let clientS = hasClient ? clientCardS(cardLen, lengthS) : 0
+  if (lengthS === undefined) return { clientS, studioS }
+  let short = MIN_PICTURE_S - (lengthS - studioS - clientS)
+  if (short > 1e-6) {
+    const cut = Math.min(short, studioS - STUDIO_MIN_S)
+    studioS -= cut
+    short -= cut
+  }
+  if (short > 1e-6 && hasClient) clientS -= Math.min(short, Math.max(0, clientS - CLIENT_MIN_S))
+  return { clientS: r3(clientS), studioS: r3(studioS) }
+}
 export const MIN_WINDOW_S = 1.0
 export const PAN_MOVE = 0.1
 const FRAME_S = 1 / 24
@@ -42,6 +65,8 @@ export function briefShapes(spine: { format?: string; mandatories?: string[] } |
   const named = FILM_SHAPES.filter((s) => new RegExp(`(^|[^0-9])${s.label.replace(':', '\\s*[:x×]\\s*')}(?![0-9])`).test(text)).map((s) => s.id)
   return named.length ? named : ['film-16x9', 'film-9x16']
 }
+/** "1 version", "3 versions" (UAT round 3, R3-F12: the sheet said "Make 1 versions"). */
+export const versionsWord = (n: number) => `${n} ${n === 1 ? 'version' : 'versions'}`
 /** Lengths offered from a 30 s master (CF5: 15 s and 6 s by default; any length typed). */
 export const FILM_LENGTHS = [30, 20, 15, 10, 6]
 export const DEFAULT_FILM_LENGTHS = [15, 6]
@@ -86,10 +111,12 @@ export interface Window { shotId: Id; inS: number; outS: number }
 /** The kept shots' windows fitted to `lengthS` less the end card, and how far over (or short) they are.
  *  Too long: every window is trimmed from its tail by the same share, none under MIN_WINDOW_S (or its own
  *  length); too short: they grow into their handles. relay/cutdowns.py fit_windows. */
-export function fitWindows(shots: readonly WindowShot[], keep: ReadonlySet<Id>, lengthS: number, cardS = CARD_S): { windows: Window[]; over: number } {
-  // The film's own end card (the client's) comes off the length too, before the studio card (UAT 2026-11-21, B4).
+export function fitWindows(shots: readonly WindowShot[], keep: ReadonlySet<Id>, lengthS: number): { windows: Window[]; over: number } {
+  // The film's own end card (the client's) comes off the length too, before the studio card (UAT 2026-11-21, B4);
+  // on a short size both cards shorten so the picture keeps MIN_PICTURE_S (R3-F12).
   const client = shots.find((s) => s.endCard)
-  const target = Math.max(MIN_WINDOW_S, lengthS - cardS - (client ? clientCardS(client.outS - (client.inS || 0), lengthS, cardS) : 0))
+  const { clientS, studioS } = cardLengths(lengthS, client ? client.outS - (client.inS || 0) : undefined)
+  const target = Math.max(MIN_WINDOW_S, lengthS - studioS - clientS)
   const kept = shots.filter((s) => keep.has(s.shotId) && !s.endCard)
   if (!kept.length) return { windows: [], over: r3(-target) }
   const slots = kept.map((s) => Math.max(FRAME_S, s.outS - (s.inS || 0)))

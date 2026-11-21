@@ -196,3 +196,55 @@ describe('Make all sizes picks the shapes the brief asks for (UAT 2026-11-21)', 
     expect(briefShapes(undefined)).toEqual(['film-16x9', 'film-9x16'])
   })
 })
+
+describe('a short size keeps its picture and says its line once (UAT round 3, R3-F12)', () => {
+  it('the cards shorten so a 6 s keeps 3.5 s of picture: the studio card first, then the film\'s card; both stay', async () => {
+    const { cardLengths, MIN_PICTURE_S } = await import('./film')
+    expect(cardLengths(6, 2.5)).toEqual({ clientS: 1.167, studioS: 1.333 })
+    expect(6 - 1.167 - 1.333).toBeCloseTo(MIN_PICTURE_S, 3)
+    expect(cardLengths(15, 2.5)).toEqual({ clientS: 2, studioS: CARD_S })
+    expect(cardLengths(6, undefined)).toEqual({ clientS: 0, studioS: CARD_S })
+    expect(cardLengths(5, 2.5)).toEqual({ clientS: 1, studioS: 1.2 })
+    const { windows } = fitWindows([{ shotId: 'a', inS: 0, outS: 4, takeS: 4 }, { shotId: 'e', inS: 0, outS: 2.5, endCard: true }], new Set(['a']), 6)
+    expect(windows[0].outS - windows[0].inS).toBeCloseTo(3.5, 3)
+  })
+  it('a 6 s size with the film\'s card: the render names the shorter studio card, and the line is not burnt in as well', async () => {
+    const ctx = master()
+    const { d, shots, video, deps } = ctx
+    shots[9].kind = 'end_card'
+    shots[9].action = 'End card with the super: "Quietboil. Let them sleep."'
+    shots[9].duration_s = 2.5
+    const ms = masterShots(d, video.id)
+    const beats = ms.filter((s) => !s.endCard).map((s, i) => ({ shot_id: s.shotId, keep: i === 0 || i === 8, why: 'Kept.', by: 'dex' as const }))
+    const shape = { w: 1080, h: 1920 }
+    const { edl } = edlFor(ms, beats, 6, shape, [])
+    expect(edl.reduce((a, w) => a + (w.out_s - w.in_s), 0)).toBeCloseTo(3.5, 2)
+    const set: FormatSet = { id: 'fset_01K7C00000000000000000FS01', v: 1, field_v: {}, master: { kind: 'video', id: video.id, w: 1920, h: 1080 }, pack: { pack_id: 'film', pack_version: '1' }, copy: { line: 'Quietboil. Let them sleep.' } }
+    const size: Size = { id: 'size_01K7C00000000000000000SZ01', v: 1, field_v: {}, set_id: set.id, rank: 'm', format: { pack_id: 'film', pack_version: '1', format_id: 'film-9x16' },
+      aspect: shape, delivery: { width: 1080, height: 1920 }, method: 'reframe', media: 'video', length_s: 6, edl, beats }
+    d.format_sets = { [set.id]: set }
+    d.sizes = { [size.id]: size }
+    const cut = (await cutdownInput(deps, set, size)).cutdown!
+    expect(cut.clientCard).toMatchObject({ headline: 'Quietboil', line: 'Let them sleep.', s: 1.167 })
+    expect(cut.studioS).toBe(1.333)
+    expect((await filmLayers(deps, set, size)).some((l) => l.kind === 'line')).toBe(true) // the size's own line…
+    expect((cut.layers ?? []).some((l) => l.kind === 'line')).toBe(false) // …left to the card
+    expect(cut.lengthS).toBe(6)
+  })
+  it('only the words the card says leave the picture; a logo and the spoken captions stay', async () => {
+    const { withoutCardWords } = await import('./filmJobs')
+    const box = { x: 0, y: 0, w: 1, h: 0.1 }
+    const laid = [
+      { kind: 'line' as const, box, text: 'Quietboil. Let them sleep.' },
+      { kind: 'legal' as const, box, text: 'Terms apply.' },
+      { kind: 'logo' as const, box },
+      { kind: 'captions' as const, box, text: 'Let them sleep.' },
+    ]
+    expect(withoutCardWords(laid as never, { headline: 'Quietboil', line: 'Let them sleep.' }).map((l) => l.kind)).toEqual(['legal', 'logo', 'captions'])
+    expect(withoutCardWords(laid as never, undefined)).toHaveLength(4)
+  })
+  it('one version is "1 version"', async () => {
+    const { versionsWord } = await import('./film')
+    expect([versionsWord(1), versionsWord(2), versionsWord(0)]).toEqual(['1 version', '2 versions', '0 versions'])
+  })
+})

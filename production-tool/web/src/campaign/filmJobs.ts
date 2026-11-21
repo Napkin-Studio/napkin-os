@@ -9,7 +9,7 @@
 // lock are each one undo step (updateDoc); a landing is the crew's (landUpdate), never an undo step.
 
 import { newUlidId, rankBetween, ranksBetween } from '../../../clan-store/src'
-import type { AssetRef, Aspect, Board, CutdownClip, CutdownInput, CutdownPlan, FormatSet, Id, InputMime, Job, JobInput, ModelChoice, PersonRef, PxBox, Size, SizeBeat, TypeLayer } from '../contracts/types'
+import type { AssetRef, Aspect, Board, CutdownClip, CutdownInput, CutdownPlan, FormatSet, Id, InputMime, Job, JobInput, ModelChoice, PersonRef, ProductionDocument, PxBox, Size, SizeBeat, TypeLayer } from '../contracts/types'
 import { boardsByRank } from '../canvas/boards/boards'
 import type { CanvasElement } from '../canvas/core/canvasAdapter'
 import { landUpdate, systemUpdate, updateDoc } from '../doc/store'
@@ -20,7 +20,7 @@ import { jobShot, refsFor } from '../jobs/select'
 import { getBlob } from '../lib/blobs'
 import { boardLayout } from './board'
 import { checksFor } from './checks'
-import { CARD_S, alephRatio, captionBox, captionLayers, clientCardS, cropKeys, edlFor, isSocialShape, masterShots, reframeKey, reframesOf, sameShape, shapeOf, type MasterShot } from './film'
+import { CARD_S, alephRatio, captionBox, captionLayers, cardLengths, cropKeys, edlFor, isSocialShape, masterShots, reframeKey, reframesOf, sameShape, shapeOf, type MasterShot } from './film'
 import { endCardFrom, readCut } from '../rooms/timeline'
 import { formatById, PACKS_VERSION } from './formats'
 import { brandKit, layersFor } from './layout'
@@ -304,16 +304,38 @@ export async function cutdownInput(deps: Pick<CampaignDeps, 'relay' | 'doc'>, se
     })
   }
   if (!clips.length) throw new Error('This version keeps no shot: keep a beat first.')
-  const layers = await filmLayers(deps, set, size)
   const clientCard = await clientCardOf(deps, set, size.length_s)
+  // The film's card says its line: the size's own line goes from the picture, so it is not said twice (R3-F12).
+  const layers = withoutCardWords(await filmLayers(deps, set, size), clientCard)
+  const { studioS } = cardLengths(size.length_s, clientCard ? clientCardLen(d, set) : undefined, !!clientCard)
   return {
     aspect: { w: size.delivery.width, h: size.delivery.height }, delivery: { ...size.delivery },
     ...(size.safe_area ? { safeArea: size.safe_area } : {}),
     cutdown: {
-      step: 'render', lengthS: size.length_s ?? clips.reduce((a, c) => a + (c.outS - c.inS), 0) + (clientCard?.s ?? 0) + CARD_S, clips, endCard: true, fadeOutS: 0.5,
+      step: 'render', lengthS: size.length_s ?? clips.reduce((a, c) => a + (c.outS - c.inS), 0) + (clientCard?.s ?? 0) + studioS, clips, endCard: true, fadeOutS: 0.5,
+      ...(studioS < CARD_S ? { studioS } : {}),
       ...(layers.length ? { layers } : {}), ...(clientCard ? { clientCard } : {}),
     },
   }
+}
+
+const words = (x?: string) => (x ?? '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+
+/** A size's type without the words its end card says (its line, its headline and line together, or its call to
+ *  action): the card says them last, so the picture does not say them too (UAT round 3, R3-F12: the 6 s 9:16 had
+ *  "Quietboil. Let them sleep." burnt in as a super, then on the card). Logos and captions of what is spoken stay. */
+export function withoutCardWords(layers: TypeLayer[], card?: { headline?: string; line: string; cta?: string }): TypeLayer[] {
+  if (!card) return layers
+  const said = [card.line, card.headline, card.cta, `${card.headline ?? ''} ${card.line}`, `${card.headline ?? ''} ${card.line} ${card.cta ?? ''}`].map(words).filter(Boolean)
+  return layers.filter((l) => l.kind === 'logo' || l.kind === 'captions' || !said.includes(words(l.text)))
+}
+
+/** The film's own card's own length: its storyboard shot's, else the Edit room card's. */
+function clientCardLen(d: ProductionDocument, set: FormatSet): number | undefined {
+  const videoId = set.master.kind === 'video' ? set.master.id : undefined
+  if (!videoId) return undefined
+  const shot = masterShots(d, videoId).find((s) => s.endCard)
+  return shot ? shot.outS - shot.inS : (readCut(d, videoId).endCard ?? endCardFrom(d, videoId))?.durS
 }
 
 /** The film's own end card (the client's) for a size: the Edit room's card, else the storyboard's end card shot's
@@ -324,13 +346,12 @@ export async function clientCardOf(deps: Pick<CampaignDeps, 'relay' | 'doc'>, se
   const videoId = set.master.kind === 'video' ? set.master.id : undefined
   if (!videoId) return undefined
   const card = readCut(d, videoId).endCard ?? endCardFrom(d, videoId)
-  const shot = masterShots(d, videoId).find((s) => s.endCard)
   if (!card || !(card.line.trim() || card.headline.trim())) return undefined
   const logo = card.logo ? await assetRef(deps.relay, card.logo, d).catch(() => undefined) : undefined
   return {
     ...(card.headline.trim() ? { headline: card.headline.trim().slice(0, 120) } : {}), line: (card.line.trim() || card.headline.trim()).slice(0, 200),
     ...(card.cta?.trim() ? { cta: card.cta.trim().slice(0, 80) } : {}), bg: /^#[0-9a-f]{6}$/i.test(card.bg) ? card.bg : '#14161B',
-    ...(logo ? { logo } : {}), s: clientCardS(shot ? shot.outS - shot.inS : card.durS, lengthS),
+    ...(logo ? { logo } : {}), s: cardLengths(lengthS, clientCardLen(d, set), true).clientS,
   }
 }
 
