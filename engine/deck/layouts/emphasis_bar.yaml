@@ -1,0 +1,52 @@
+id: emphasis_bar
+version: 1
+group: content
+purpose: statement
+description: 'Dark slide: the title large on the left, the statement and text in an accent bar on the right.'
+slot_summary: title, statement, text, note
+for_types:
+- real_question
+- idea
+- appendix
+when:
+  blocks_only:
+  - statement
+  - text
+  - small
+priority: 95
+alternatives:
+- big_statement
+- full_bleed_statement
+- section
+roomier: big_statement
+density: lean
+pick: rule
+family: statement
+renderer: emphasis_bar
+slots:
+  title:
+    kind: text
+    role: title
+    required: true
+    min_chars: 3
+    max_lines: 3
+  statement:
+    kind: text
+    role: lead
+    from_blocks:
+    - statement
+    dominant: true
+    max_cpl: 48
+    max_chars: 163
+  text:
+    kind: text
+    role: body
+    from_blocks:
+    - text
+    max_chars: 367
+  note:
+    kind: text
+    role: caption
+    from_blocks:
+    - small
+    max_chars: 122

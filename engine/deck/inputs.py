@@ -50,6 +50,7 @@ class Inputs:
     built_from: dict = field(default_factory=dict)   # intake.tier(): {tier, documents, brief, research}
     intake: dict = field(default_factory=dict)       # the a0 gaps/questions as the runner wrote them
     verified: dict = field(default_factory=dict)     # confirm ref -> {by, at}: the person's verify decisions (intake.verified.<ref>)
+    marks: list | None = None                        # parts a person marked Confidential: [{path, text, kind}]; None = never checked (picture generation is refused)
 
     def has_brief(self) -> bool:
         """True when a brief supplied at least one field (a field an intake stage filled does not count)."""
@@ -176,7 +177,67 @@ def empty_brief() -> dict:
                   "rejected_attempt": None, "review": None, "rival": None} for fid in BRIEF_FIELDS}
 
 
-def brief_from_data(data: dict) -> tuple[dict, dict, list, dict]:
+def _at_path(data, path: str):
+    """The value at a data path such as ``objectives.commercial`` or ``mandatories[0]`` (None when absent)."""
+    cur = data
+    for part in re.findall(r"[^.\[\]]+", str(path)):
+        if isinstance(cur, dict):
+            cur = cur.get(part)
+        elif isinstance(cur, list) and part.isdigit() and int(part) < len(cur):
+            cur = cur[int(part)]
+        else:
+            return None
+    return cur
+
+
+def _flat(v) -> str:
+    if isinstance(v, str):
+        return v
+    if isinstance(v, dict):
+        return " ".join(_flat(x) for x in v.values())
+    if isinstance(v, (list, tuple)):
+        return " ".join(_flat(x) for x in v)
+    return "" if v is None else str(v)
+
+
+class MarksError(ValueError):
+    """A mark names a part that is not there or is empty: refused, never skipped (a skipped mark would let its text reach a prompt)."""
+
+
+def marks_from_data(data: dict, chain: list | None = None) -> list:
+    """The parts a person marked Confidential, with their text: brief parts in ``confidential_fields``, parts a ``classify`` decision marked
+    ``model: false`` or ``corpus: false`` (the chain; the target is ``<document>#<path>``), and materials whose licence is
+    ``client-confidential``. ``[{path, text, kind}]``; an empty list means the checks ran and found none."""
+    data = data or {}
+    out, seen = [], set()
+
+    def add(path, text, kind):
+        text = _flat(text).strip()
+        if not text:
+            raise MarksError(f"the part marked Confidential at {path!r} ({kind}) resolves to nothing or is empty: fix the path or clear the mark; nothing was skipped")
+        if (path, kind) not in seen:
+            seen.add((path, kind))
+            out.append({"path": path, "text": text, "kind": kind})
+    for path in data.get("confidential_fields") or []:
+        add(str(path), _at_path(data, path), "confidential_field")
+    for d in chain or []:
+        if not isinstance(d, dict) or d.get("kind") != "classify" or d.get("superseded_by"):
+            continue
+        lic = d.get("licence") if isinstance(d.get("licence"), dict) else {}
+        if lic.get("model", False) and lic.get("corpus", False):
+            continue
+        for tg in d.get("targets") or []:
+            if isinstance(tg, str) and "#" in tg:
+                path = tg.split("#", 1)[1]
+                add(path, _at_path(data, path), "classify")
+    mats = data.get("materials")
+    for mid, m in (mats.items() if isinstance(mats, dict) else [(x.get("id"), x) for x in mats or [] if isinstance(x, dict)]):
+        if isinstance(m, dict) and str(m.get("licence") or "").lower() == "client-confidential":
+            add(f"materials[{mid}]", f"{m.get('name') or ''} {m.get('text') or ''}", "licence")
+    return out
+
+
+def brief_from_data(data: dict, chain: list | None = None) -> tuple[dict, dict, list, dict]:
     """The one field mapping for a Brief Maker's data (``shared/data.yaml``, or ``data.upstream.<id>``
     in a Deck document): (fields, how_to_win, open_questions, coverage) via CLAN_FIELDS."""
     data = data or {}
@@ -188,7 +249,8 @@ def brief_from_data(data: dict) -> tuple[dict, dict, list, dict]:
         htw.setdefault(h.get("kind") or "points", []).append({"point": h.get("point"), "evidence": h.get("evidence", "")})
     oq = [{"question": q if isinstance(q, str) else q.get("question"), "why": "", "priority": "normal"} for q in data.get("open_questions") or []]
     cov = {"brief_fields": len(fields), "brief_fields_filled": sum(1 for f in fields.values() if f["value"]),
-           "how_to_win_points": sum(len(v) for v in htw.values()), "open_questions": len(oq), "brief_source": "brief-maker clan"}
+           "how_to_win_points": sum(len(v) for v in htw.values()), "open_questions": len(oq), "brief_source": "brief-maker clan",
+           "marks": marks_from_data(data, chain)}   # popped into Inputs.marks by the loaders: marked texts never stay in the coverage that reaches a report
     return fields, htw, oq, cov
 
 
@@ -196,7 +258,9 @@ def load_brief_clan(clan: Path) -> tuple[dict, dict, list, dict]:
     """Read a Brief Maker .clan (the brief tool's output) into (fields, how_to_win, open_questions,
     coverage), the same shape load_brief returns for a brief_object.json."""
     z = zipfile.ZipFile(clan)
-    return brief_from_data(yaml.safe_load(z.read("shared/data.yaml")) or {})
+    chain = yaml.safe_load(z.read("agent/decision-chain.yaml")) if "agent/decision-chain.yaml" in z.namelist() else []
+    chain = chain.get("decisions") if isinstance(chain, dict) else chain
+    return brief_from_data(yaml.safe_load(z.read("shared/data.yaml")) or {}, chain or [])
 
 
 def _pdf_pages(path: Path) -> tuple[str, int] | None:
@@ -275,8 +339,9 @@ def load(brief: Path | None, research: Path | None = None, doc_facts: Path | Non
     else:
         clan = is_clan(Path(brief))
         fields, htw, oq, cov = load_brief_clan(brief) if clan else load_brief(brief)
+    marks = cov.pop("marks", None)
     inp = Inputs(brief=fields, how_to_win=htw, open_questions=oq, prompt_text=prompt_text or "",
-                 answers=answers or {}, intake=intake or {}, verified=verified or {})
+                 answers=answers or {}, intake=intake or {}, verified=verified or {}, marks=marks)
     research = research or (brief if clan else None)
     if research:
         r = load_research(research)
@@ -301,27 +366,105 @@ def _is_brief_data(d: dict) -> bool:
     return isinstance(d, dict) and (any(k in d for k in CLAN_FIELDS.values()) or "capture" in d)
 
 
-def from_upstream(data: dict, members: dict | None = None, docs: dict | None = None, doc_facts: dict | None = None) -> Inputs:
+#: Presentation kits a Deck may hold (deck-look-kits). A kit tells the deck how to look: it is never the brief,
+#: never the research, and none of its words or figures is evidence (ADR 0023 as amended by ADR 0027).
+BRAND_APP, STYLE_PACK_APP = "ie.napkin.brand", "ie.napkin.style-pack"
+KIT_APPS = (BRAND_APP, STYLE_PACK_APP)
+#: The brand layer's reference on a pin (Contract 6, section 2): ``fact://brand/<slug>/<key>@v``.
+_BRAND_REF = "fact://brand/"
+
+
+def _is_kit(key: str, entry, apps: dict | None) -> bool:
+    """True when an upstream entry is a kit. The runner's app map (``lineage.attached[].app_id``) decides when it
+    names the entry; with no map (or an entry it does not name) the shape does: a kit holds ``kit.version``."""
+    if apps and key in apps:
+        return apps[key] in KIT_APPS
+    return isinstance(entry, dict) and isinstance(entry.get("kit"), dict) and "version" in entry["kit"]
+
+
+def _is_brand_pin(pin: dict, kit_ids: set = frozenset()) -> bool:
+    """A pin the brand layer owns: its reference (compared without regard to case), its layer (any layer starting with ``brand``), or a
+    source that is an attached kit's document."""
+    refs = [pin.get(k) for k in ("ref", "uri", "id")]
+    if any(isinstance(r, str) and r.strip().casefold().startswith(_BRAND_REF) for r in refs):
+        return True
+    if str(pin.get("layer") or "").strip().casefold().startswith("brand"):
+        return True
+    named = {pin.get("source"), pin.get("source_id"), *(pin.get("sources") or [])}
+    return bool(named & set(kit_ids))
+
+
+def _drop_kit_pins(members: dict, kit_pins: set, kit_ids: set = frozenset()) -> tuple[dict, list]:
+    """``members`` without the pins that arrived with a kit, and without the sources only those pins cite.
+    Returns (members, dropped pin ids). A Brand Clan attach merges its pins into the deck's facts; the deck's
+    facts are research, so they leave here, before anything reads them."""
+    rows = _unwrap(members.get("facts"), "facts")
+    gone = [p for p in rows if isinstance(p, dict) and (p.get("id") in kit_pins or _is_brand_pin(p, kit_ids))]
+    if not gone:
+        return members, []
+    gone_ids = {p.get("id") for p in gone}
+    kept = [p for p in rows if p.get("id") not in gone_ids]
+
+    def cited(pins):
+        out = set()
+        for p in pins:
+            for k in ("source", "source_id"):
+                if p.get(k):
+                    out.add(p[k])
+            out.update(p.get("sources") or [])
+        return out
+
+    only_brand = cited(gone) - cited(kept)
+    out = {**members, "facts": kept}
+    if members.get("sources") is not None:
+        out["sources"] = [s for s in _unwrap(members.get("sources"), "sources") if s.get("id") not in only_brand]
+    return out, sorted(i for i in gone_ids if i)
+
+
+def from_upstream(data: dict, members: dict | None = None, docs: dict | None = None, doc_facts: dict | None = None,
+                  apps: dict | None = None, kit_pins: set | list | None = None) -> Inputs:
     """Build the Inputs from a Deck document: ``data`` is its data (``upstream.<source document id>``
     frozen sources, ``inputs.prompt``, ``intake``); ``members`` its merged ``facts``, ``findings``,
     ``sources`` and ``decisions`` (the whole carried decision chain), each a list or wrapped in its
     top-level key. ``docs`` (doc key -> {name, text, chars}) and ``doc_facts`` are what the server
     extracted from the attached documents. The brief goes through ``brief_from_data`` (CLAN_FIELDS)
     and the research through ``parse_research``, so there is one mapping. A finding rejected in
-    the chain stays rejected. With no brief upstream the brief fields are empty."""
+    the chain stays rejected. With no brief upstream the brief fields are empty.
+
+    ``apps`` (``{source document id: app_id}``, from ``lineage.attached``) says what each entry is. A Brand Clan
+    or Style Pack is a kit: never the brief or the research, and every pin that arrived with a kit is dropped from
+    the facts (``kit_pins``: the ids the runner knows came with one; a pin marked with the brand layer's reference
+    is dropped too). Without ``apps`` a kit is recognised by its ``kit.version`` block."""
     data, members = data or {}, members or {}
     up = data.get("upstream") or {}
+    kits = [k for k, v in up.items() if _is_kit(k, v, apps)]
+    up = {k: v for k, v in up.items() if k not in kits}
     brief_id, brief_data = next(((k, v) for k, v in up.items() if _is_brief_data(v)), (None, None))
     research_id = next((k for k, v in up.items() if k != brief_id and isinstance(v, dict) and v), None)
+    dropped: list = []
+    kit_ids = set(kits) | {k for k, app in (apps or {}).items() if app in KIT_APPS}
+    if kits or kit_ids:
+        members, dropped = _drop_kit_pins(members, set(kit_pins or ()), kit_ids)
+    elif kit_pins:
+        members, dropped = _drop_kit_pins(members, set(kit_pins))
+    chain_list = members.get("decisions") if "decisions" in members else members.get("chain")
+    chain_list = chain_list.get("decisions") if isinstance(chain_list, dict) else chain_list
     if brief_data is not None:
-        fields, htw, oq, cov = brief_from_data(brief_data)
+        fields, htw, oq, cov = brief_from_data(brief_data, chain_list or [])
     else:
         fields, htw, oq, cov = empty_brief(), {}, [], {"brief_fields": len(BRIEF_FIELDS), "brief_fields_filled": 0,
                                                        "how_to_win_points": 0, "open_questions": 0, "brief_source": "none"}
+    if kits:
+        cov["kits_ignored"] = sorted(kits)
+    if dropped:
+        cov["kit_pins_dropped"] = dropped
     prompt = ((data.get("inputs") or {}).get("prompt") or {})
     intake = data.get("intake") or {}
+    marks = cov.pop("marks", None)
+    if "confidential_fields" in data:   # a Deck that carries its own marks, beside any the brief carried
+        marks = (marks or []) + marks_from_data(data, chain_list or [])
     inp = Inputs(brief=fields, how_to_win=htw, open_questions=oq, prompt_text=str(prompt.get("text") or ""),
-                 answers=dict(intake.get("answers") or {}), intake={k: v for k, v in intake.items() if k != "answers"})
+                 answers=dict(intake.get("answers") or {}), intake={k: v for k, v in intake.items() if k != "answers"}, marks=marks)
     chain = members.get("decisions") if "decisions" in members else members.get("chain")
     if members.get("facts") or members.get("findings") or research_id:
         title = ((up.get(research_id) or {}).get("campaign") or {}).get("name") if research_id else None
@@ -342,3 +485,33 @@ def from_upstream(data: dict, members: dict | None = None, docs: dict | None = N
         cov["doc_figures"] = len(inp.doc_facts)
     inp.coverage = cov
     return inp
+
+
+def from_deck_document(path: Path) -> tuple[Inputs, dict]:
+    """The runner's one way into a Deck document (a ``.clan``): its Inputs through ``from_upstream`` with the app map read from
+    ``lineage.attached`` (so an attached kit is never the brief or research and a Brand Clan's pins never reach the facts), and what
+    the look needs: ``{apps, look (the document's look preferences), library (inputs.library.enabled), pack (Style Pack data and an
+    asset reader, or None), brand (the frozen Brand Clan, or None)}``. Kits count only while ``inputs.library.enabled`` is true
+    (ADR 0027); the facts filter acts always. Read on every run, so an Update (a newer frozen kit) is re-applied by construction."""
+    z = zipfile.ZipFile(path)
+    names = set(z.namelist())
+    rd = lambda n: yaml.safe_load(z.read(n)) if n in names else None  # noqa: E731
+    man, data = rd("manifest.yaml") or {}, rd("shared/data.yaml") or {}
+    attached = (man.get("lineage") or {}).get("attached") or []
+    apps = {(a.get("carried") or {}).get("document_id"): a.get("app_id") for a in attached if (a.get("carried") or {}).get("document_id")}
+    members = {"facts": rd("shared/facts.yaml"), "findings": rd("shared/findings.yaml"), "sources": rd("shared/sources.yaml"),
+               "decisions": rd("agent/decision-chain.yaml")}
+    inp = from_upstream(data, {k: v for k, v in members.items() if v is not None}, apps=apps)
+    up = data.get("upstream") or {}
+    lib = bool(((data.get("inputs") or {}).get("library") or {}).get("enabled") is True)
+    pack = brand = None
+    for did, app in apps.items():
+        if did in up and lib:
+            if app == STYLE_PACK_APP and pack is None:
+                pack = (up[did], lambda p: z.read(p) if p in names else None)
+            elif app == BRAND_APP and brand is None:
+                brand = up[did]
+    if lib is False and any(app in KIT_APPS for app in apps.values()):
+        inp.coverage["kits_gated_off"] = True
+    return inp, {"apps": apps, "look": data.get("look") or {}, "library": lib, "pack": pack, "brand": brand,
+                 "text_mode": (data.get("inputs") or {}).get("text_mode"), "review": data.get("review") or {}}

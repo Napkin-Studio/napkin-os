@@ -75,6 +75,10 @@ callers (`parse_brief._json_call`, `parse_brief.docx_text`, ...) keep working.
 | `NVIDIA_API_KEY` | NIM embeddings (RAG) + chat backstop |
 | `GROQ_API_KEY` / `CEREBRAS_API_KEY` | fast free-tier chat links (recommended) |
 | `QDRANT_CLUSTER_ENDPOINT` + `QDRANT_API_KEY` (+`QDRANT_COLLECTION`) | remote RAG (`RAG_STORE=qdrant`) |
+| `NAPKIN_DECK_IMAGES_MAX_USD` | the ceiling on one deck's picture spend over its whole life (default 2.50; the deck's own cap is lower or equal): the subject call, drafts, heroes, failures and unknowns all count (deck-image-gen) |
+| `NAPKIN_DECK_LEDGER` | the cross-cache spend ledger the Deck's picture step appends to, default `~/.napkin/deck-images/ledger.jsonl`, so the cap survives a deleted cache |
+| `RUNWAYML_API_SECRET` | the Runway key for pictures (Territory frames and the Deck); read from the environment only, at the first create, never from a file and never printed |
+| `VISUALS_CLIENT_TO_RUNWAY` | `allow` or `refuse`, for one run: may a prompt derived from client material go to Runway's image models (Territory frames and the Deck's pictures)? Unset, the setting in `visuals/policy.py` applies: `refuse` (Sai, 18 Nov 2026); `allow` is the testers' override. Any other value refuses. The prompt lint and the Confidential deny-list run either way |
 | `BRIEF_MODEL_CHAIN` / `BRIEF_MODEL` | override the model fallback chain |
 | `BRIEF_ROUTES` | `1` (default): each call runs on its job's model (ADR 0011): extraction and insight/SMP drafts on Opus 4.6, RTB and desired response on Opus 5.5, insight/SMP judges and the territory map on Opus 5.5 (low effort), other judges, scorecard and how-to-win on Sonnet 5 (low effort), loop syntheses on Sonnet 5; a judge never runs on its writer's model. `0`, or setting `BRIEF_MODEL` / `BRIEF_MODEL_CHAIN`, restores one model for every call. The routes a run used are in `meta.model_routes` |
 | `BRIEF_ROUTE_<JOB>` | override one job's models, `model[,fallback]`; jobs: `EXTRACT`, `HERO`, `GROUNDED_WRITER`, `HERO_JUDGE`, `JUDGE`, `MECHANICAL`, `SYNTH` |
@@ -99,6 +103,7 @@ callers (`parse_brief._json_call`, `parse_brief.docx_text`, ...) keep working.
 | `CRITIC_MODEL` / `CRITIC_SAMPLES` | the independent critic: model (default `claude-sonnet-5`) and samples per brief (default `1`); with more than one, each check keeps the majority verdict and an even split is REVIEW (`golden_critic.run_critic_sampled`). On mamaliga, three Fable 5.1 samples spread 2 health points against Sonnet's 5. `checkpoint_run.py --critic claude-fable-5-1x3` sets both for a run |
 | `BRIEF_CORPUS` / `BRIEF_PACKS_LOCK` | pack sync: corpus root (default `engine/reference/rag` or `../reference/rag`) / path of `packs.lock` (default `engine/packs.lock`) |
 | `BRIEF_RESEARCH` / `RESEARCH_WEB` | agent server: `0` turns the research dossier off (default on; skipped when Loops 3–7 are on and the web track is off) / `claude` adds the web track through `claude -p` with WebSearch (default `off`) |
+| `NAPKIN_DECK_MAX_USD` | Deck Maker: the most one run may spend (default `2.00`). The server wraps every paid call in it, and the engine's repair loop reads it too, so a CLI run is capped as well (`deck/repair.py`) |
 | `NAPKIN_AGENT_PORT` | agent server port (8787, the same slot as the mock agent: run one) |
 | `LABELSET_BRIEF_MODEL` / `LABELSET_JUDGE_MODEL` | label tool (`rag/labelset.py`): brief-pair extraction model (`claude-haiku-4-5-20251001`) / pre-label judge (`claude-sonnet-5`) |
 | `RAG_EMBED_LOCAL_MODEL` / `RAG_EMBED_LOCAL_DEVICE` | the local copy of the query embedder used when the hosted one fails (`nvidia/Nemotron-3-Embed-1B-BF16`) / `mps` or `cpu` (default: mps when available) |

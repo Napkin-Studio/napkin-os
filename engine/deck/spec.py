@@ -99,21 +99,23 @@ TRIM_ORDER = ("process", "guardrails", "timeline", "innovation", "chart", "execu
 
 #: List prices in USD per million tokens, (input, output), for the cost the CLI transport does not report. An ESTIMATE
 #: from tokens (stages._call). A real usd the transport provides wins.
-PRICE_PER_MTOK = {"claude-opus-5-5": (5.0, 25.0), "claude-sonnet-5-5": (3.0, 15.0)}
-USD_BASIS = "estimate: tokens x list price (spec.PRICE_PER_MTOK), cache tokens at 0.1x and 1.25x input; not a billed amount"
+PRICE_PER_MTOK = {"claude-opus-5-5": (4.0, 20.0), "claude-sonnet-5-5": (2.0, 10.0)}
+USD_BASIS = "estimate: tokens x list price (spec.PRICE_PER_MTOK), cache reads at 0.05x and writes at 1.25x input; an unlisted model at the dearest price; not a billed amount"
 
 
 #: Prompt-cache tokens are priced against the input price: a read at this share, a write at this multiple.
-CACHE_READ_SHARE, CACHE_WRITE_MULT = 0.1, 1.25
+CACHE_READ_SHARE, CACHE_WRITE_MULT = 0.05, 1.25
 
 
 def estimate_usd(model: str, tokens_in: int, tokens_out: int, cache_read: int = 0, cache_creation: int = 0) -> float:
-    """Estimated dollars for one model's tokens at spec.PRICE_PER_MTOK; 0.0 for a model not in the table. Cache reads and
-    writes are priced at CACHE_READ_SHARE and CACHE_WRITE_MULT of the input price. ``model`` may name several (a comma
-    list from a summed stage): the dearest listed one prices the lot, so an estimate is never low."""
-    prices = [PRICE_PER_MTOK[m.strip()] for m in str(model or "").split(",") if m.strip() in PRICE_PER_MTOK]
-    if not prices:
-        return 0.0
+    """Estimated dollars for one model's tokens at spec.PRICE_PER_MTOK. Cache reads and writes are priced at
+    CACHE_READ_SHARE and CACHE_WRITE_MULT of the input price. ``model`` may name several (a comma list from a summed
+    stage): the dearest one prices the lot, so an estimate is never low. A model not in the table (or no model named,
+    when there are tokens) is priced at the dearest listed price, never $0: a new model must not look free."""
+    names = [m.strip() for m in str(model or "").split(",") if m.strip()]
+    prices = [PRICE_PER_MTOK[m] for m in names if m in PRICE_PER_MTOK]
+    if len(prices) < len(names) or not names:
+        prices.append(max(PRICE_PER_MTOK.values(), key=lambda p: p[1]))
     pin, pout = max(prices, key=lambda p: p[1])
     billed_in = (tokens_in or 0) + (cache_read or 0) * CACHE_READ_SHARE + (cache_creation or 0) * CACHE_WRITE_MULT
     return round(billed_in / 1e6 * pin + (tokens_out or 0) / 1e6 * pout, 4)
@@ -145,6 +147,14 @@ SLIDE_EVIDENCE = {
 HUMAN_ONLY_TYPES = ("team", "credentials", "investment", "next_step")
 
 PLACEHOLDER_PREFIX = "Proposed (not given by the client):"
+
+def unresolved_line(text) -> bool:
+    """A cover line that is still a stand-in: the labelled placeholder (``PLACEHOLDER_PREFIX``) or any text holding a bracketed blank such as
+    ``[Agency]`` or ``[presenter and date]``. Such a line is a to-do for the agency, not a word for the room."""
+    import re
+    t = str(text or "").strip()
+    return bool(t) and (t.startswith(PLACEHOLDER_PREFIX) or bool(re.search(r"\[[^\]\n]{2,60}\]", t)))
+
 
 #: Who a render is for. ``review`` shows agency notes, marked as such; ``client`` drops blocks
 #: marked ``internal`` and fails the gate on any text below (validate: internal_leak).
@@ -200,19 +210,56 @@ CRITERIA_HOME = (
     (r"accessib", ("guardrails", "execution", "channel_roles"), "accessib", False),
 )
 
-def shown_blocks(s: dict, audience: str = "review") -> list:
-    """The blocks a slide shows to an audience: internal notes dropped for a client and labelled
-    for a review; an unsourced (illustrative) quote followed by its label. Shared by renderers."""
+def moved_map(s: dict, audience: str = "review") -> dict:
+    """``{block index: None (the whole block) | set of item indexes}`` moved to the notes by the layout plan (``layout.fit.moved``).
+    The blocks themselves are never edited: the plan only overlays what it moved, so the deck's words, claims and order are unchanged.
+    An overlay whose ``blocks_sha`` no longer matches the slide's words is stale and ignored (contract 3.3 rule 4)."""
+    lay = s.get("layout") or {}
+    moved = ((lay.get("fit") or {}).get("moved")) or []
+    if not moved:
+        return {}
+    if lay.get("blocks_sha") and lay["blocks_sha"] != blocks_sha(s, audience):
+        return {}
+    out: dict = {}
+    for m in moved:
+        bi, it = m.get("block"), m.get("item")
+        if it is None:
+            out[bi] = None
+        elif out.get(bi, set()) is not None:
+            out.setdefault(bi, set()).add(it)
+    return out
+
+
+def _shown(s: dict, audience: str, moved: dict) -> list:
     out = []
-    for b in s["blocks"]:
+    for bi, b in enumerate(s["blocks"]):
+        if bi in moved and moved[bi] is None:
+            continue
         if b.get("internal"):
             if audience == "client":
                 continue
             b = {**b, "text": "Internal note: " + str(b.get("text", ""))}
+        if bi in moved and isinstance(b.get("items"), list):
+            b = {**b, "items": [i for k, i in enumerate(b["items"]) if k not in moved[bi]]}
         out.append(b)
         if b["kind"] == "quote" and not b.get("refs") and str(b.get("text", "")).strip():
             out.append({"kind": "small", "text": ILLUSTRATIVE_QUOTE, "basis": "meta"})
     return out
+
+
+def shown_blocks(s: dict, audience: str = "review") -> list:
+    """The blocks a slide shows to an audience: internal notes dropped for a client and labelled
+    for a review; an unsourced (illustrative) quote followed by its label; the items the layout plan moved to the
+    notes (``layout.fit.moved``) left out. Shared by renderers, validate and the plan itself."""
+    return _shown(s, audience, moved_map(s, audience))
+
+
+def blocks_sha(s: dict, audience: str = "review") -> str:
+    """First 12 hex of the SHA-256 of the canonical JSON of ``[title, shown blocks]`` with nothing moved (contract 3.3 rule 4)."""
+    import hashlib
+    import json
+    blocks = _shown(s, audience, {})
+    return hashlib.sha256(json.dumps([s["title"], blocks], sort_keys=True, ensure_ascii=False, default=str).encode()).hexdigest()[:12]
 
 
 #: Channel words in an execution's title -> the frame its copy is shown in (render_web) and the
@@ -295,7 +342,8 @@ CHECKS = ("numbers_trace", "numbers_uncited", "unverified_fig", "rejected_used",
           "word_budget", "empty_slot", "placeholder", "requirement_map", "banned_phrase", "watch_word", "message_carried",
           "action_title", "repeated_line", "copy_number", "pitch_length", "rule_broken", "source_required", "internal_leak",
           "quote_source", "criteria_map", "imagery", "copy_spec", "budget_spread", "thin_evidence", "claim_fit", "objective_quant",
-          "insight_shape", "idea_single", "chain_links", "weight_share")
+          "insight_shape", "idea_single", "chain_links", "weight_share", "image_missing", "image_unapproved", "image_flagged",
+          "image_rights", "style_pack_held")
 
 #: Deck types (profiles/<id>.yaml, deck.profiles): what a deck is for decides its spine, stages, strictness and guidance.
 #: ``DEFAULT_TYPE`` is what a skipped type question falls back to.
@@ -324,3 +372,127 @@ WEIGHT_SHARE_FLOOR = 0.5
 #: In a pitch, a slide of a type that answers a scored criterion which has a written answer (a ``criterion_answer`` slide) goes behind the
 #: Appendix divider, because the answer is that criterion's presented slide (the derived deck). These types always stay presented.
 ANSWER_KEEPS = ("title", "scoring", "objective", "criterion_answer", "appendix", "next_step")
+
+
+# --------------------------------------------------------------------------------------------------------------------
+# The visual contract (docs/contracts/deck-visuals.md, ADR 0036): the closed sets that layouts, slots, pictures, themes and
+# issues share. Each is repeated as an enum in engine/deck/deck.schema.json, app/templates/deck-maker/schema.json or one of
+# engine/deck/schemas/*.schema.json, and tests/test_visual_contract.py fails when a tuple and its enum differ. Nothing in the
+# engine reads them yet: they are the vocabulary the later features (layout library, frames, repair loop, image step) build on.
+# --------------------------------------------------------------------------------------------------------------------
+
+#: Every block kind a slide may carry. ``stats`` is written by ``assemble.build_investor`` and was missing from the schema's enum.
+BLOCK_KINDS = ("text", "small", "statement", "quote", "callout", "card", "bullets", "table", "kv", "fromto", "steps", "chart",
+               "sketch", "copy", "stats")
+
+#: The 17 layouts ``render_pptx.choose_layout`` returns today, then the eight that arrive with pictures. ``flow`` is reserved:
+#: no library layout, the earlier single-column flow. A layout id is a pattern in the schema, not an enum: the library's load
+#: check closes the list, so a new layout needs no schema edit.
+LAYOUT_IDS = ("cover", "emphasis_bar", "objective_panel", "risk_cards", "comparison_grid", "chart", "execution", "territory",
+              "placeholder_card", "quote_cards", "comparison", "big_number", "kpi_row", "role_grid", "timeline_strip",
+              "native_table", "cards",
+              "cover_image", "section", "image_text", "image_left", "full_bleed_statement", "frames_strip", "image_grid",
+              "execution_visual",
+              # the 11 text layouts and the close that arrive with the library (deck-layout-library)
+              "close", "big_statement", "quote_full", "cards_split", "text_columns", "placeholder_split", "chart_full",
+              "timeline_rows", "execution_stack", "territory_wide", "people_cards")
+#: The tests a layout file's ``when.test`` may name; each is a function of the same name in layouts.py (and has a unit test).
+LAYOUT_TESTS = ("has_target_figure", "has_human_item", "compare_table", "role_rows", "image_ready")
+#: The eight look changes of deck-layout-library (cover 64 pt, a stamped title size and a fixed title box per layout, 48-character
+#: lines, switch before relaxed, picture and close layouts rule-picked). Off while the library lands without a look change; on at the look commit.
+LOOK_V2 = True
+LAYOUT_FLOW = "flow"
+LAYOUT_ID_PATTERN = r"^[a-z][a-z0-9_]{2,31}$"
+LAYOUT_MAX = 40
+LAYOUT_GROUPS = ("functional", "content")
+LAYOUT_PURPOSES = ("title", "statement", "list", "compare", "data", "timeline", "image", "people")
+LAYOUT_CHOSEN_BY = ("rule", "fit_ladder", "repair", "person")
+FIT_RUNGS = ("as_is", "shrunk", "switched", "shortened", "split", "overflow_to_notes", "no_fit")
+
+#: Slots: what a box holds, and the type role its text is set in (the names of ``theme.Scale`` sizes, see TYPE_ROLE_SCALE).
+SLOT_KINDS = ("text", "list", "group", "stat", "table", "chart", "image", "copy")
+TYPE_ROLES = ("display", "title", "lead", "body", "small", "caption")
+TYPE_ROLE_SCALE = {"display": "display", "title": "title", "lead": "lead", "body": "body", "small": "small", "caption": "caption"}
+CHART_TYPES = ("bar", "line", "stack", "big_number", "kpi_row")
+
+#: Pictures (contract section 4).
+IMAGE_KINDS = ("photo", "illustration", "frame", "screenshot", "logo")
+IMAGE_STATUSES = ("empty", "planned", "made", "flagged", "approved", "rejected", "failed")
+IMAGE_ASPECTS = ("16:9", "3:2", "4:3", "1:1", "4:5", "9:16")
+IMAGE_FITS = ("cover", "contain")
+IMAGE_SOURCES = ("territory_frame", "upload", "brand", "generated")
+IMAGE_RIGHTS = ("generated", "own", "licensed", "client_supplied", "reference_only")
+IMAGE_MIMES = ("image/png", "image/jpeg", "image/webp", "image/svg+xml")
+IMAGE_DECISIONS = ("approve", "replace", "remove")
+#: Picture QA (qa_render). A picture below this many pixels per inch of the box it fills is soft; one whose drawn aspect differs
+#: from its crop's by more than this fraction is stretched. 96 ppi is the screen floor for a slide shown full size.
+PICTURE_MIN_PPI = 96
+PICTURE_STRETCH_TOL = 0.01
+#: The default label of a picture a person has not approved (ADR 0027): a fixed label, never a fact, no digit.
+PICTURE_LABEL = "Illustrative"
+#: Slide types that may carry a picture. Every other type is an evidence slide and takes none.
+PICTURE_SLIDE_TYPES = ("title", "appendix", "territory", "idea", "execution", "audience", "real_question", "close",
+                       "solution", "product")
+
+#: Theme (contract section 6.1 and 6.2). COLOR_ROLES equals ``theme.COLOR_FIELDS``.
+COLOR_ROLES = ("ink", "paper", "panel", "rule", "mute", "accent", "accent_ink", "on_dark", "on_dark_mute", "accent_on_dark")
+THEME_SOURCES = ("default", "brand_clan", "style_pack", "agency_look", "brand_file", "master")
+#: The tiers that can give a token (meta.theme.from), highest first; "derived" is a token no tier gave (look.py).
+THEME_TIERS = ("master", "brand_clan", "brand_file", "style_pack", "agency_look", "default")
+LOGO_PLACEMENTS = ("cover_only", "cover_and_footer", "none")
+ACCENT_USES = ("fill", "outline")
+HEADER_POSITIONS = ("left", "center")
+THEME_NAMES = ("napkin", "brand", "classic")
+
+#: Deck preferences (contract section 6.3): the user's choices, each with a default (the first value) and who made it.
+PICTURES_ON = ("creative_cover", "creative", "none", "custom")
+DENSITY_LEVELS = ("lean", "standard", "detailed")
+#: Words on a content slide per density level; ``detailed`` is the slide type's own budget in SLIDE_TYPES. Napkin defaults,
+#: to be tuned on the visual checklist. The fit ladder in layouts.py applies them (a point over the target moves to the notes).
+DENSITY_WORDS = {"lean": 30, "standard": 60}
+#: The default density by ``inputs.format``: a presented pitch is lean, a leave-behind keeps today's budgets.
+DENSITY_DEFAULTS = {"pitch": "lean", "full": "detailed"}
+PICTURE_SOURCES = ("existing", "generated")
+PICTURE_CAP_USD_DEFAULT = 2.5
+PICTURE_CAP_USD_MAX = 10
+BRAND_WEARS = ("agency", "client", "co_branded")
+STYLE_PACK_USES = ("territory", "other")
+PICTURE_APPROVERS = ("owner", "named")
+PREFERENCE_VIA = ("question", "start", "review")
+TEXT_MODES = ("condense", "preserve")
+PREFERENCE_SOURCES = ("person", "default")
+
+#: Issues (contract section 7). ISSUE_CHECKS is every name an issue may carry: today's validator and render checks, then the
+#: names reserved for the features that will raise them.
+ISSUE_SOURCES = ("schema", "validate", "qa_render", "image_guard", "critic")
+ISSUE_LEVELS = ("error", "warn")
+ISSUE_SEVERITIES = ("blocker", "major", "minor")
+ISSUE_STATUSES = ("open", "fixed", "unfixed", "rolled_back", "left_for_person")
+ISSUE_FIXES = ("shrink", "switch_layout", "shorten", "split", "overflow_to_notes", "add_scrim", "crop_image", "regen_image",
+               "drop_image", "needs_human")
+QA_RENDER_CHECKS = ("off_slide", "margin", "text_overlap", "text_overflow", "min_font", "placeholder", "contrast", "mostly_empty",
+                    "one_corner", "qa_internal", "unreadable", "picture_stretch", "picture_lowres", "text_on_image_contrast")
+#: Raised by the layout plan (layouts.py) and the repair loop; once reserved, now live, so the checklist's l_slots_clean can answer.
+LAYOUT_CHECKS = ("slot_limit", "slot_missing", "slot_unknown", "slot_stale", "block_unbound", "layout_unknown")
+RESERVED_CHECKS = ("golden_echo", "layout_repeat", "title_drift", "line_length", "image_style_mixed", "export_failed")
+#: The vision critic's question ids (visual_rubric.json): issues with source ``critic`` carry these as their check name.
+CRITIC_CHECKS = ("v_one_focus", "v_balance", "v_not_crowded", "v_looks_finished", "v_image_fits", "v_image_clean", "v_text_on_image",
+                 "v_crop_ok", "v_one_style", "v_rhythm")
+ISSUE_CHECKS = tuple(dict.fromkeys(CHECKS + QA_RENDER_CHECKS + LAYOUT_CHECKS + RESERVED_CHECKS + CRITIC_CHECKS))
+
+#: Repair policy (contract section 8).
+REPAIR_LADDER = ("shrink", "switch_layout", "shorten", "split", "overflow_to_notes", "needs_human")
+REPAIR_SHORTEN_GUARDS = ("no_new_number", "refs_kept", "not_longer", "label_titles_untouched", "ledger_kept", "own_words")
+#: Why a repair run stopped (repair.json ``stopped``; the template's repair.stopped enum).
+REPAIR_STOPS = ("max_rounds", "nothing_to_do", "clean", "no_progress", "rolled_back", "qa_unreadable", "time_cap")
+#: A scrim on a picture slot (fixes.images.<sid>.<slot>.scrim; deck.schema.json image_slot.scrim).
+IMAGE_SCRIMS = ("none", "dark", "light")
+REPAIR_IMAGE_ON_FLAG = ("wait_for_person", "regen_then_drop")
+REPAIR_CRITIC_FIXES = ("switch_layout", "regen_image", "crop_image", "add_scrim")
+REPAIR_MAX_ROUNDS = 2
+REPAIR_KEEP_ROUND_IF = "blockers_and_majors_not_up_and_no_new_validator_error"
+
+#: Visual critic rubric (contract section 8).
+RUBRIC_FIXES = ("switch_layout", "regen_image", "crop_image", "add_scrim", "none")
+RUBRIC_PASS_IS = ("yes", "no")
+RUBRIC_SEVERITIES = ("major", "minor")

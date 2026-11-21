@@ -1,0 +1,95 @@
+{
+ "run_sha256_12": "9fae3abc3951",
+ "territories": {
+  "t1": [
+   {
+    "shot": "f1",
+    "framing": "A kitchen tap at first light",
+    "camera": "wide, soft",
+    "action": "water starts to run into a glass",
+    "on_screen_line": ""
+   },
+   {
+    "shot": "f2",
+    "framing": "A hand under a running tap",
+    "camera": "close, warm",
+    "action": "the hand turns the tap off a little early",
+    "on_screen_line": ""
+   },
+   {
+    "shot": "f3",
+    "framing": "A window over a sink",
+    "camera": "medium, still",
+    "action": "light falls across the empty sink",
+    "on_screen_line": ""
+   },
+   {
+    "shot": "f4",
+    "framing": "A glass of water on a table",
+    "camera": "wide, calm",
+    "action": "the glass catches the evening sun",
+    "on_screen_line": ""
+   }
+  ],
+  "t2": [
+   {
+    "shot": "f1",
+    "framing": "A meter on a wall",
+    "camera": "close, flat",
+    "action": "a dial moves by one small step",
+    "on_screen_line": ""
+   },
+   {
+    "shot": "f2",
+    "framing": "A bath filling slowly",
+    "camera": "high angle",
+    "action": "the level rises towards the line",
+    "on_screen_line": ""
+   },
+   {
+    "shot": "f3",
+    "framing": "A garden hose coiled up",
+    "camera": "medium, bright",
+    "action": "a single drop falls from the nozzle",
+    "on_screen_line": ""
+   },
+   {
+    "shot": "f4",
+    "framing": "A row of full glasses",
+    "camera": "wide, level",
+    "action": "the glasses stand in a line of light",
+    "on_screen_line": ""
+   }
+  ],
+  "t3": [
+   {
+    "shot": "f1",
+    "framing": "A street at night",
+    "camera": "wide, dark",
+    "action": "a manhole cover glows faintly",
+    "on_screen_line": ""
+   },
+   {
+    "shot": "f2",
+    "framing": "A long pipe underground",
+    "camera": "low, cool",
+    "action": "ripples travel along the pipe",
+    "on_screen_line": ""
+   },
+   {
+    "shot": "f3",
+    "framing": "An empty reservoir",
+    "camera": "wide, hushed",
+    "action": "light enters through a high window",
+    "on_screen_line": ""
+   },
+   {
+    "shot": "f4",
+    "framing": "A calm surface at dawn",
+    "camera": "wide, quiet",
+    "action": "the surface holds the first light",
+    "on_screen_line": ""
+   }
+  ]
+ }
+}

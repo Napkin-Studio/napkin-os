@@ -46,7 +46,8 @@ python3 -m deck.run_deck --kind investor --brief outputs/deck_inputs/seed/brief.
 
 | Option | What it does |
 |---|---|
-| `--live` | Runs missing model stages and saves them to `--stages`. **Paid** (about $0.65-1.25 a deck in the 2026-10-05 eval): ask first |
+| `--live` | Runs missing model stages and saves them to `--stages`. **Paid** (about $0.50-0.95 a deck: the 2026-10-05 eval, rescaled to the 17 Nov 2026 price table): ask first |
+| `--until STAGE` | Stop after a stage (`a0`, `a`, `b`, `c`, `d`, or `i` for an investor deck) and write `report.json` with `until` set; `deck` stops once the deck is assembled and validated, before any file is rendered (so no LibreOffice is needed). The stage outputs stay in `--stages`: a later run carries on from them. A live run makes a missing `--stages` folder first. How the Deck Maker server runs a deck one gate at a time (`features/deck-maker-server.clan`) |
 | `--format pitch\|full` | `pitch` (default): at most 18 presented slides, an Appendix divider, backup slides hidden. `full`: every slide in story order (ADR 0024) |
 | `--audience review\|client` | `review` (default) shows agency notes and flags; `client` drops them and fails on any agency-only text left on screen |
 | `--kind agency\|investor` | Agency response to a brief (default) or a seed investor deck (ADR 0025) |
@@ -56,11 +57,21 @@ python3 -m deck.run_deck --kind investor --brief outputs/deck_inputs/seed/brief.
 | `--research FILE.clan` | The research tool's CLAN. May be given alone |
 | `--doc KEY=PATH` | A document the person attached: `.docx`, `.pdf` (page by page, `[pN]` markers kept), `.txt`, `.md`, `.eml` or an image (read by `brief_ingest.ingest`; nothing dropped). Cited as `doc:KEY#pN`. Repeatable |
 | `--brand FILE` | Brand JSON: `name`, `colors` (THEME keys + `accent_ink`), `head`/`body` fonts, logo SVG/PNG paths |
+| `--style PATH` | A Style Pack: a folder (`style.yaml` + images) or a Style Pack `.clan`, read by `engine/visuals/style.py`. Its `deck` colours and type (empty by default) outrank the agency look; a pack that breaks its rules is not used and the report says why |
+| `--agency-look FILE` | The signed-in person's agency look, JSON (`id`, `rev`, `accent`, `accent_ink`; only the accent is read). It dresses a new deck automatically; pass none for an agency with no look |
+| `--update-look` | Take the agency's current look in place of the one this deck recorded when it was built (a person's "update to current look"). A deck keeps the look it was built with: the first build copies the look into the run folder (`look.json`) and later builds replay it |
+| `--deck FILE` | The runner's path: a Deck document (`.clan`). Brief, research and look preferences come from it; an attached Style Pack or Brand Clan is never read as research and a Brand Clan's pins never reach the facts |
+| `--no-agency-look` | This deck opts out of the agency look (`look.agency_look.use: false`) |
+| `--wears agency\|client\|co_branded`, `--strict-brand` | Whose brand the deck wears (default `agency`: a client kit gives only its logo and imagery bans); `strict_brand` ignores Style Pack literals and the agency look |
 | `--agency NAME` | Agency name for the cover; without it the cover shows an `[Agency]` placeholder |
 | `--master FILE.potx` | Render the `.pptx` onto an agency master |
 | `--animate auto\|click` | Native PowerPoint transitions and builds (not yet checked in real PowerPoint or Keynote) |
 | `--hyperframes` | Also write a HyperFrames slideshow project to `hyperframes/` (`npx hyperframes present`) |
 | `--builds` | HyperFrames: one click per block instead of one per slide |
+| `--pictures creative_cover\|creative\|none` | Place pictures that already exist (`--stages/frames.json` from `deck.from_territory`, and `--image`). `creative_cover`: the creative slides, the cover and the divider. Absent: `frames.json` is ignored and the deck, pptx and html are byte-for-byte what they were |
+| `--image SLIDE.SLOT=FILE`, `--image-rights SLIDE.SLOT=own\|licensed\|client_supplied` | A picture you supply, on a slide of a picture type. Evidence slides, unknown ids and slots, and the slot `logo` are refused before anything is written. No stated right: recorded `reference_only`, not placed |
+| `--review FILE`, `--approver human:<id>` | The person's `review.images` decisions as the app keeps them; only an `approve` by the approver, naming the slot's own asset, is stamped `approved` |
+| `--picture-label TEXT`, `--picture-source existing` | The label of a picture until approved (default Illustrative; no digit, no name). Only existing pictures: `generated` is refused until deck-image-gen |
 
 Every run writes `deck.json`, `validation.json`, `report.json` (time, tokens, cost, coverage),
 `deck.html` (the animated web deck: B builds, O overview, P presenter view, A appendix),
@@ -107,7 +118,7 @@ support it) and `e_copy.json` (tightened copy). Models and effort: `stages.py` d
 ## Check and compare
 
 ```bash
-PYTHONPATH=. python3 -m pytest -q deck/tests        # 70 offline tests; fails to import without PYTHONPATH
+PYTHONPATH=. python3 -m pytest -q deck/tests        # offline tests; fails to import without PYTHONPATH
 python3 -m deck.evaluate outputs/deck_runs/eval/* --html outputs/deck_runs/eval/report.html
 ```
 
@@ -130,6 +141,8 @@ copy and placeholders, and writes a comparison page plus the rows as JSON.
 | `render_web.py` | Single-file animated web deck |
 | `render_pptx.py` | python-pptx renderer: theme, brand or `.potx`, native charts, notes, optional animations |
 | `render_hyperframes.py` | HyperFrames slideshow (appendix as a branch sequence) |
+| `from_territory.py` | `python3 -m deck.from_territory RUN.json --frames <run>.frames/v<N>-<hash>/manifest.json --stages DIR [--brief F] [--chosen TID] [--style-pack DIR] [--replace]`: a Territory run into `c_territories.json`, `frames.json` and `assets/`. No model, no network |
+| `images.py` | Image slots, `deck.assets`, the crop, the approvals and the one click (`python3 -m deck.images approve ...`); Pillow, imported at module level |
 | `evaluate.py` | Scores runs and writes the comparison page |
 | `run_deck.py` | CLI: the whole pipeline and the report |
 | `tests/` | Offline tests: validators, intake, the hand-off loader, the CLI; invented fixtures and a golden brief-only deck |
@@ -140,6 +153,8 @@ copy and placeholders, and writes a comparison page plus the rows as JSON.
 `theme.py` holds one `Theme` (palette with a dark ink, light surface, panel, an accessible `accent_ink` of at least 4.5:1 on the surface, type scale, spacing grid, 0.65 in margins), `contrast()` (WCAG) and `check_palette()` (returns problems). The default theme `napkin` is cream, navy and rust in Cambria and Calibri; `classic` is the earlier white and amber look, drawn with the old flow only: `render(deck, inp, out, theme="classic")`. A brand JSON and `--master` apply as before; a brand with no `accent_ink` gets one derived from its accent.
 
 `render_pptx.choose_layout(slide)` picks a native-shape layout from the slide type and block kinds (table in the module docstring): cover, emphasis_bar, chart, execution, territory, placeholder_card, quote_cards, comparison, big_number, kpi_row, timeline_strip, role_grid, native_table, cards. A layout that cannot hold the words at 10 pt or more, or meets a block kind it has no look for, raises `NoFit` and the slide is drawn by the earlier flow. `Renderer.layouts` records the layout each slide got. Words are fixed: layouts split, size and place text, never reword it. Claims are also written into the speaker notes. Tests: `tests/test_render_layouts.py`.
+
+**The visual contract (ADR 0036, `docs/contracts/deck-visuals.md`).** Layouts, slots, pictures, themes and issues have one additive shape, optional everywhere, so a deck without them is today's deck. The vocabulary is the visual-contract tuples at the end of `spec.py` (layout ids, slot kinds, type roles, image kinds and statuses, issue checks, deck preferences); the engine data has schemas in `schemas/` (`layout`, `issue`, `golden`, `repair_policy`, `visual_rubric`, each with a valid and an invalid example under `schemas/examples/`); the optional slide, asset and `meta` fields are in `deck.schema.json` and mirrored in `app/templates/deck-maker/schema.json`. Nothing in the engine reads or writes them yet. Who writes each field: the contract's section 2. Tests: `tests/test_visual_contract.py`.
 
 > Before any deck maker task read `features/deck-maker-intake.clan` (`clan read agent`); update it after any change to behaviour, interface, decisions, plan or handoffs.
 
@@ -156,6 +171,8 @@ copy and placeholders, and writes a comparison page plus the rows as JSON.
 | `min_font` | a run under its floor: title 28 pt, body 12 pt, caption 10 pt |
 | `placeholder` | `[Agency]`, `lorem`, `TBD`, `XXX` on a presented slide (a slide the validator flags for `[Agency]` is skipped) |
 | `contrast` | WCAG ratio of a run's colour on its fill or the slide background: 4.5:1, or 3:1 for large text |
+| `picture_stretch`, `picture_lowres` | a picture drawn off its crop's aspect by more than 1% (read from the pptx crop); fewer than 96 pixels per inch on the crop that is shown |
+| `text_on_image_contrast` | text over a picture, measured on the rendered page (the `contrast` check skips text over a picture: the picture is not a fill) |
 | `mostly_empty`, `one_corner` | from the render: almost no non-background area; or 80% of it in one third both ways |
 
 The pixel pass renders a separate 30 dpi PPM (about 0.1 s for 29 slides) and reads it with a small pure-Python P6 parser. The slide PNGs stay at 60 dpi: 150 dpi measured about four times slower (4.9 s against 1.2 s for 29 slides) for nothing the checks use. Hidden (appendix) slides are checked for geometry only. A pptx that cannot be opened gives one error under `"deck"`.
@@ -189,6 +206,57 @@ A tender response, a credentials deck, an investor deck and an agency pitch need
 
 Tests: `tests/test_profiles.py` (inference, the card, the profile files and their failures, the spine arrangement, strictness, prompts, the CLI).
 
+## The visual checklist (`deck/bench/checklist.py`, `deck/checklist.json`)
+
+The measuring stick for every deck slice: 51 items (43 yes/no, 8 metrics), each defined once in `checklist.json` (question,
+threshold, source, inputs, `na_when`) with one function of the same name in `bench/checklist.py`. Read-only over a run
+folder; no model, no network. `render_pptx.render(..., layouts_out=PATH)` writes the layout record `layouts.json`
+(`{id, chosen, fallback, relaxed}` per slide id) after the save, so the .pptx is byte-identical with or without it;
+`run_deck` passes `RUN_DIR/layouts.json`.
+
+```bash
+python3 -m deck.bench fixtures OUT_DIR [--geometry-only]          # the 6 invented fixture decks, offline
+python3 -m deck.bench checklist RUN_DIR [RUN_DIR ...] --out checklist.json
+python3 -m deck.bench compare BEFORE.json AFTER.json [--format text|md|json] [--fail-on-regress]
+```
+
+- **The n/a rule.** A check that cannot be judged (missing input, a slice not built yet, no picture to judge, a finding name
+  still in `spec.RESERVED_CHECKS`) answers `n/a` with its reason, never `yes`. `summary.yes` excludes n/a; `compare` shows
+  yes to n/a and n/a to yes as changes of their own.
+- **Refreshing the baseline in a slice PR.** Build on a Mac with LibreOffice so the pixel checks are judged:
+  `python3 -m deck.bench fixtures /tmp/fx && python3 -m deck.bench checklist /tmp/fx/* --out /tmp/new.json`, then
+  `python3 -m deck.bench compare deck/bench/baseline/checklist.json /tmp/new.json --format md` for the PR body, and copy
+  `/tmp/new.json` over `deck/bench/baseline/checklist.json`. CI rebuilds geometry-only and compares every answer except
+  the pixel items and `m_seconds`. `compare` is not a CI gate.
+- **Tiers.** Each item is a `gate` or `advisory`; `compare --fail-on-regress` ignores advisory items (`l_variety`, `l_repeat_max2`, `w_line_length`, `t_cover_title`, `m_seconds`). A metric has a direction (`higher`, `lower`, or `same`: `w_words_sha` must not change, since no word comes from a look or a picture).
+- `deck/issues.py` holds `severity()` (contract section 7 default) and `slide_id_of()`; `qa_render` gained the pure measures
+  `title_box`, `body_columns` and `font_families` (they add nothing to qa.json).
+- Tests: `tests/test_checklist.py` (76 tests). The full deck suite is 559 offline tests.
+
+## The vision critic bench, phase 1 (`deck/bench/visual*.py`, `deck/visual_rubric.json`; feature deck-vision-critic)
+
+An eye that looks at the rendered slide, measured against a person before any of its questions is trusted. Phase 1 is the
+measurement only: nothing in `run_deck`, a prompt, a deck or an export reads it, and every question is `off` until graded.
+
+```
+python3 -m deck.bench visual renders OUT_DIR                       # two renders of each invented fixture (needs LibreOffice)
+python3 -m deck.bench visual pack OUT_DIR/* --session A --out PAGE_DIR --seed N    # blind grading page + key.json (no model)
+python3 -m deck.bench visual run --key KEY --images PAGE_DIR --max-usd 2.5 --out visual.json [--recordings DIR | --live --yes-cost CARD_ID]
+python3 -m deck.bench visual agree grades.json visual.json --key KEY               # writes bench/baseline/critic_trust.json
+python3 -m deck.bench.spike_image --print-command                  # the transport spike (one tiny invented picture)
+```
+
+`visual_rubric.json` holds ten yes-is-good questions (version 1); canned messages and confirm bands live in
+`bench/visual_data.json` until phase 2. `pack` seeds frozen faults (listed only in the key), adds repeats for the person's
+self-agreement, and writes a page with no critic answer, fixture name, phase or seeded mark. `run` reserves each call's worst
+case against `--max-usd` and a $0.40 per-deck cap before it starts, and books every paid call (a stopped or unreadable reply
+at its real usage, unknown usage at the worst case); a live run uses the Napkin API key (never the Claude Code login) and
+needs `--live --yes-cost CARD_ID`, the id printed on its cost card (built from the real token estimate). `agree` reports natural and seeded slides apart, the critic and a code-only baseline
+on the same answers, and sets a state by pre-registered gates; the trust file carries a key (rubric version,
+prompt sha, model, image size, LibreOffice, fonts) and an HMAC over the whole document, signed with `NAPKIN_TRUST_SECRET`
+(kept outside the repo; `agree` refuses to write without it), so a hand edit, a recomputed hash, a changed setup or a
+missing secret reads as off.
+
 ## The evaluation bench (`deck/bench`)
 
 Offline scoring of finished decks, so "the pipeline makes it better" is measured rather than felt (DECK-CRAFT-PLAN 4.3, roadmap item 7). It makes no model call unless `--live --claude-judge` are both given; judges are Claude-only by default (ADR 0006).
@@ -219,7 +287,7 @@ Offline and model-free; tests in `tests/test_core.py` and `tests/test_intake.py`
 - **Objective slide** (`objective`, 50 words, section Objective): slide 2 of an agency pitch and a credentials deck, after the response map in a tender. Built only from the requirements of kind objective, `brief.objectives` and the person's answer to the question addressed to `brief.objectives`; whole items until the budget; no slide when the inputs hold no objective. `brief_restated` stays in the appendix (also for tender and credentials). `objective_quant` (warn, agency decks) wants a number and a from/to, versus or by-date in the first three presented slides. The slide has no layout of its own yet: it falls back to the flow.
 - **Stated limits, every profile** (`length.respect_stated_limit`): `assemble.stated_limit` reads the buyer's rules and criteria, the brief's mandatories, the prompt, the answers and the documents ('no more than 14 slides', '20 slides', 'slide limit', a page limit beside a limit word, '10 minutes' to present = 5 slides at `spec.MINUTES_PER_SLIDE`). The tightest wins, and an explicit count may be looser than the profile's; minutes only ever tighten. In the pitch format the presented story is cut to the limit by moving the least needed slides behind the Appendix divider in `spec.TRIM_ORDER` (process, guardrails, timeline, innovation, extra charts and executions, channel roles, ..., then credentials, audience, measurement). Nothing is reworded; the response map, the team, the money, the insight, the idea, the real question and routes the client asked for are never moved, and a story still over its limit is reported by `pitch_length`. A deck with no stated limit and no sketch is built exactly as before (no `meta.length` for the legacy types).
 - **Sketch tier.** A deck built from a prompt alone, or a prompt and documents holding under `spec.SKETCH_DOC_CHARS` characters, presents at most `spec.SKETCH_MAX_SLIDES` (10), carries the fixed label `spec.SKETCH_LABEL` as a small block on the cover and records `meta.sketch`. `meta.length.source` says why.
-- **Cost.** Each live stage records `usd`: a real figure when the transport gives one, else an estimate from tokens at `spec.PRICE_PER_MTOK` (Opus 5.5 5/25, Sonnet 5.5 3/15 dollars per million in/out; cache reads at 0.1x and writes at 1.25x the input price), marked `usd_estimated`. `run_deck` prices recorded stages that hold tokens but no dollars the same way, so `report.json` `usd_total` is not 0 and `usd_basis` says it is an estimate.
+- **Cost.** Each live stage records `usd`: a real figure when the transport gives one, else an estimate from tokens at `spec.PRICE_PER_MTOK` (Opus 5.5 4/20, Sonnet 5.5 2/10 dollars per million in/out; cache reads at 0.05x and writes at 1.25x the input price; a model not in the table is priced at the dearest listed price, never 0), marked `usd_estimated`. `run_deck` prices recorded stages that hold tokens but no dollars the same way, so `report.json` `usd_total` is not 0 and `usd_basis` says it is an estimate.
 - **Repair call.** A reply that is not usable JSON gets one extra call (`stages.REPAIR_SYSTEM`) shown the bad text and asked for valid JSON only; its tokens are in the stage's usage and `repaired: true` is recorded. A failed repair raises as before. Reading the reply through `parse` turns provider JSON mode off for stage calls (it only matters to the non-Anthropic links, which stage calls do not use).
 - **Dangling `brief:` refs** are warnings, not errors, when the run has no brief.
 - **Smoke fixes.** A sentence is not shown twice on a slide (a text, statement, quote, callout or small block equal to the title or an earlier block is dropped; its refs stay as a claim). The credentials 'questions for the client' slide is in the presented spine in both formats (guarded by a test). The stage h line in `report.json` now counts the slides checked, not only the flagged ones.
@@ -283,3 +351,115 @@ does read what the person supplies. `spec.HUMAN_ONLY_TYPES` means never invented
   `intake.verified.<ref> = {by, at}` (read from the `verified` key of `--answers`); `intake.confirm_summary(deck)` counts
   `verified`, `supplied` and `sourced` (verified plus supplied: nothing else counts). The renderers' "DRAFT · N slides need a
   person" wording is unchanged; they can call `confirm_summary` for the verified count.
+
+## The server (`deck/server.py`)
+
+`run_deck` behind a small HTTP port, for the Deck Maker app's `build_deck` task (`features/deck-maker-server.clan`). It runs one
+segment at a time and stops at each gate: **storyline** (after stage b), **territories** (after c), **idea** (after d); an investor
+deck has the storyline only (after i). Review is the screen after the last gate, not a gate. `deck/run_state.py` turns the stage files
+into the `run` object the screens read (rows, items, agent, gate payloads, checks, cost) and, once built, the deck, validation,
+evidence, report and exports (names and sizes).
+
+```bash
+cd engine
+NAPKIN_DECK_REPLAY=deck/tests/fixtures/fernley/stages python3 -m deck.server     # free: replays a recording, no model call
+```
+
+| Route | |
+|---|---|
+| `GET /status` | what is on and what is busy |
+| `POST /run` | `{doc, inputs: {prompt: {text, client, project, agency}, kind, format}, approvals: {storyline, territories: {picked}, idea}, mode, render}`: the next segment of this document's run |
+| `GET /run/<doc>` | the run so far: `state` (building, gate, done, failed), `run`, notices, and once built the `payload` |
+| `GET /file/<doc>/<name>` | `deck.html`, `deck.pptx`, `deck.pdf` or `report.json`, once written |
+
+| Env | |
+|---|---|
+| `NAPKIN_DECK_PORT` | default 8793 (8787 is the agent-server, 8788 the live relay, 8795 the middleware) |
+| `NAPKIN_DECK_DATA` | where the per-document, per-inputs folders go (default `./deck-runs`); they are a cache: a changed prompt starts again |
+| `NAPKIN_DECK_REPLAY` | a folder of recorded stage files: mode `replay` copies them in stage by stage, free |
+| `NAPKIN_DECK_LIVE` | `1` allows mode `live`: paid model calls (about 0.50 to 0.95 USD a deck, at the 17 Nov 2026 price table). Off by default |
+| `NAPKIN_DECK_MAX_USD` | the most one live run may spend (default 2.00); the run stops at the cap with its message and what it wrote stays |
+
+A gate goes on only when the request carries the person's approval of it **and** its stage output already existed when the request
+arrived, so an approval of an earlier run never skips a gate of a new one. Only `approve` goes on; `edit` and `retry` are refused
+with `not_supported` until the engine can act on them. One run at a time: a second `POST /run` is a 409 `job_state`. A failing engine
+is a `failed` state with its message, never a success; a missing cache with no recording and no live is a 409, never invented output.
+The last segment builds the PowerPoint, the web deck and the PDF and needs LibreOffice (`soffice`) and poppler (`pdftoppm`):
+without them it is refused before it starts, and `render: false` stops at the deck instead (`--until deck`).
+
+Not yet: the document's brief and research as inputs (the server takes the prompt), the person's intake answers (`--answers`), attached
+documents (`--doc`), `edit` and `retry`, `ask_change`, and a run that survives a restart of the server (a restarted server answers
+404 for a run it did not start; posting the same request again resumes from the cache).
+
+
+## Pictures that already exist (deck-frames-in)
+
+`from_territory` carries a Territory run into a stages folder; `run_deck --pictures` draws the frames on the creative slides:
+each territory's four frames in a strip, the cover with the chosen territory's first frame, the idea with its last (the payoff), all
+labelled Illustrative until the deck's approver approves them. A flagged frame is drawn in a review with a red outline and the word
+Flagged, and never in a client render; a client render draws only pictures approved for their own asset, and only those are copied or
+derived into its folder. One carve in `Renderer.slide` narrows the layout's area to leave the picture's box (no `_lay_*` function
+changed); if the narrowed layout does not fit, the slide is drawn without the picture and an `image_missing` finding says so.
+Contract: `docs/contracts/deck-visuals.md` section 4.5. Pillow (HPND licence) is a python-pptx dependency already; `images.py`
+imports it directly. Offline test count: 806 (`deck/tests` and `territory/tests`).
+
+
+## The layout library and the plan (deck-layout-library)
+
+`engine/deck/layouts/*.yaml` holds 36 layouts as data; `layouts.py` loads them (`load`), picks by priority and `when` (`pick`: `render_pptx.choose_layout`
+is a call into it), binds blocks to named slots (`bind`), derives each text slot's `max_chars` (`capacity`, `python3 -m deck.layouts --write-capacity`)
+and plans a whole deck (`plan`, see `docs/contracts/deck-visuals.md` 5.1). `run_deck` runs the plan after stage e, the red team and the pictures, before
+validate, so `--until deck` already carries `slide.layout` and `slide.slots`.
+
+    --density lean|standard|detailed   default: the engine resolves it by format (a presented pitch lean, a leave-behind detailed) and stamps
+                                       meta.preferences.density with its source; fixtures and goldens pass --density detailed
+    --layout SLIDE=ID                  a person's swap (repeatable); look.layouts in a Deck document does the same
+    --no-layout-plan                   the renderers choose as before the library (rollback)
+    --no-notes                         a pptx without speaker notes (the moved points go with them)
+
+The look: the cover title steps 64, 60, 54 pt across the content width; a title has one stamped size and one fixed box per layout; body, small and
+lead lines run to about 48 characters (`spec.LOOK_V2` holds the switch for the cover, the lines, the titles and the picture and close layouts; the
+library, the plan and the overlay need none); fill upscaling stops at 1.2 and cards do not stretch under lean and standard (the role rows still fill);
+a slide that does not fit switches layout before its type drops to the caption floor; the idea and cover pictures are a large panel
+(`cover_image`, `image_text`: 5.0 and 5.4 in wide, inside the margins). Goldens: `golden_deck.json` stays at assemble level (`layouts.strip_plan`),
+`golden_plan.json` holds the plan; `tests/fixtures/render_parity.json` was re-recorded once, at the look commit.
+
+Calibration (`deck/tests/test_layout_wrap_calibration.py`, local only): `Renderer.wrap` counts 2 to 3 lines more than LibreOffice on frames of 8 to 12 lines
+(a real line holds about 15 to 25 % more characters than the estimate), so a fit never overflows for want of room the estimate did not see.
+
+## Pictures for empty slots (deck-image-gen)
+
+    python3 -m deck.run_deck ... --images plan                       # the subject card (stage g), then the picture card; no network
+    python3 -m deck.run_deck ... --images subjects --yes-cost c_xxxxxxxx   # yes to the subject card: one Claude call, ~$0.05
+    python3 -m deck.run_deck ... --images live --yes-cost c_yyyyyyyy       # yes to the picture card: exactly its jobs, flash drafts
+    python3 -m deck.run_deck ... --images live --hero s01.picture --yes-cost c_zzzzzzzz   # a final (pro) picture of an approved draft
+
+`--marks FILE` (the parts marked Confidential, `[]` when none; without it a deck built from files is refused), `--review FILE --approver
+human:<id>` (decisions per asset), `--images-reviewed --by human:<id>` (a sensitive brief), `--retry-unknown`, `--remake-style`, `--images-only`,
+`--images-cache DIR`, `--cap-usd N` (a lower cap; 2.50 is the most). The ledger id comes from the deck's content (the document id, or the brief and title), so a copied folder shares one cap; `--ledger FILE` and `--deck-id ID` need `--dev` and print a warning. The key is `RUNWAYML_API_SECRET` in the
+environment only. Code: `deck/imagegen.py` (plan, cards, ledger use, records), `visuals/{runway,jobs,lint,guard,safety}.py`. Tests never call
+Runway or a model: `deck/tests/test_images_gen.py`, `visuals/tests/`.
+
+## The repair loop (`deck/repair.py`, `deck/ledger.py`, `deck/policy/repair.yaml`; feature deck-repair-loop)
+
+After the build and its QA, `run_deck` turns the findings into issues (`issues.py`) and runs at most two repair rounds (`repair.run`). Each round picks one action per
+unpinned slide from `repair.ACTION_MAP` (one row per check, rungs tried across rounds: shrink, switch layout, shorten, move to the notes, scrim, crop, drop the picture),
+hands the fixes to `layouts.plan`, renders, runs QA and the checklist, and keeps the round only when it is not worse (K1 to K5, `repair.gate`). The token ledger
+(`ledger.py`) is read back from the round's `.pptx` and compared with the base deck's, so a changed number, unit, name, month, year, negation or hedge rejects the round.
+Free geometry rungs run by default; `--text-mode condense` also lets the loop move whole points to the speaker notes and shorten wording with the slide's own words (one
+batched stage e call per round, only with `--live` or a recording, capped by `policy.max_usd` and `NAPKIN_DECK_MAX_USD`; on `--audience client` only with `--approve-shorten ID`, an approval id bound to the hash of the shortenable words, so any change voids it).
+`--no-repair` turns it off, `--no-qa` skips it (it reads the QA), `--until` never starts it, `--review FILE` pins slides, `--repair-policy FILE` overrides the policy.
+Outputs: `issues.json`, `repair.json`, `repair_record.json` (replayed without measuring when its base and policy hashes match), `out/repair/round-<n>/`, and a `repair`
+key in `report.json` only when a round ran or a rung was skipped. Tests: `deck/tests/test_repair.py` (no model, no LibreOffice: QA is a stand-in seam).
+
+Shortening is delete-only by default (`shorten.word_rule`): the new text is an ordered subsequence of the same field's words and only the allow-listed filler words (`assemble.DELETABLE`: the, an, very, really, ...) go; never a word after a negation or before few or little. `reuse` is a switch and is refused on client decks. `repair.json` rounds carry `shortened` with the deleted words marked for the approver.
+
+
+## Final review fixes (2026-11-18)
+
+- **Cover.** On a review render the cover's unresolved lines (the `Proposed (not given by the client)` placeholder, `[presenter and date]`, `A response from [Agency]`) move to the speaker notes under `Moved from the slide`, verbatim. `A response from <agency>` stays while the agency is known. A client render keeps them on the slide, where `internal_leak` refuses the build.
+- **Client builds.** A client render never prints a check id. A client build with a failing check is withheld: no `deck.pptx`, `deck.html`, PDF or PNG is written (an older one in `--out` is removed) and `report.json` carries `withheld {reason, errors, checks, slides}`. A review render keeps its marks.
+- **Numbers.** `numfmt.py` writes money as people write it at render time: `1500000 euro` as `\u20ac1.5m`, `EUR 1500000` as `EUR 1,500,000`. The stored words and `words_sha` do not change; the form is lossless.
+- **Sparse slides.** A slide whose content fills under about 40% of the body is centred vertically (type growth keeps the 1.2 cap for lean and standard). A one-row table and a one-step timeline are drawn as a `big_statement`, every word kept.
+- **Execution pictures.** The picture takes the right half of the slide at full content height (a tall picture keeps its shape, centred in the half); the copy frame and the notes card stack on the left. Still labelled Illustrative until approved.
+- **LibreOffice.** Every conversion runs in its own profile (`run_deck.to_pdf`), so two renders at once no longer lose a PDF.

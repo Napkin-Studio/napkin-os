@@ -23,7 +23,15 @@ Checks (geometry, from the pptx):
                   flags for the [Agency] placeholder is skipped)
   contrast        WCAG ratio of a run's colour on its shape fill or the slide background, where both
                   are known: 4.5:1 text, 3:1 large text (18 pt, or 14 pt bold)
+  picture_stretch a picture drawn at an aspect that differs from the crop it shows by more than spec.PICTURE_STRETCH_TOL
+                  (read from the pptx: the picture's srcRect and its box, never from pixels)
+  picture_lowres  a picture with fewer than spec.PICTURE_MIN_PPI pixels per inch, measured on the crop that is shown
+                  (the source pixels kept after the crop, over the box's inches)
+  The existing contrast check skips text set over a picture: the picture is not a fill, so the slide's background
+  would be compared and the check would pass without looking (text_on_image_contrast measures it instead).
 Pixels (from the render):
+  text_on_image_contrast  text over a picture, measured on the rendered page: the text colour against the average of the
+                  pixels around it, 4.5:1 (3:1 for large text)
   mostly_empty    almost nothing but background
   one_corner      the content sits in one corner (share of non-background area per third of the slide)
 
@@ -43,6 +51,7 @@ import tempfile
 from collections import Counter
 from pathlib import Path
 
+from . import spec
 from .theme import Scale
 
 EMU_IN = 914400
@@ -233,7 +242,103 @@ def _scan_hidden_text(slide, out: list, validated_leak: bool) -> None:
         elif sh.has_text_frame and not _is_draft_mark(sh, sh.text_frame.text):
             _scan_filler(sh.text_frame.text, out, validated_leak)
     if slide.has_notes_slide:
-        _scan_filler(slide.notes_slide.notes_text_frame.text, out, validated_leak)
+        _scan_filler(_notes_to_scan(slide.notes_slide.notes_text_frame.text), out, validated_leak)
+
+
+def _notes_to_scan(text: str) -> str:
+    """The notes without the cover's held lines: an unresolved placeholder line the plan moved off the slide sits in the notes on purpose, labelled
+    ``Moved from the slide:`` (spec.unresolved_line), and is a to-do, not a left-over."""
+    from . import spec
+    lines, moved = [], False
+    for ln in str(text).split("\n"):
+        if ln.strip() == "Moved from the slide:":
+            moved = True
+        elif moved and ln.startswith("- ") and spec.unresolved_line(ln[2:]):
+            continue
+        elif not ln.startswith("- "):
+            moved = False
+        lines.append(ln)
+    return "\n".join(lines)
+
+
+def _is_picture(sh) -> bool:
+    return getattr(sh, "shape_type", None) == 13 and (sh.name or "") != "Logo"
+
+
+def _picture_findings(sh, out: list) -> None:
+    """picture_stretch and picture_lowres for one picture shape, from the pptx geometry and its crop."""
+    try:
+        px_w, px_h = sh.image.size
+    except Exception:
+        return
+    cw, ch = px_w * (1 - sh.crop_left - sh.crop_right), px_h * (1 - sh.crop_top - sh.crop_bottom)
+    wi, hi = sh.width / EMU_IN, sh.height / EMU_IN
+    if cw <= 0 or ch <= 0 or wi <= 0 or hi <= 0:
+        return
+    drawn, shown = wi / hi, cw / ch
+    if abs(drawn / shown - 1) > spec.PICTURE_STRETCH_TOL:
+        _add(out, "picture_stretch", "error", f"'{sh.name}' is drawn at {drawn:.3f}:1 but its crop is {shown:.3f}:1 (more than {spec.PICTURE_STRETCH_TOL:.0%} off): it is stretched")
+    ppi = cw / wi
+    if ppi < spec.PICTURE_MIN_PPI:
+        _add(out, "picture_lowres", "warn", f"'{sh.name}' shows {cw:.0f} by {ch:.0f} pixels in {wi:.1f} by {hi:.1f} in: {ppi:.0f} ppi (under {spec.PICTURE_MIN_PPI})")
+
+
+def _over_pictures(slide) -> list:
+    """Text frames that sit on a picture: ``[(name, x, y, w, h in inches, text rgb, size pt, bold)]`` (the first run with an explicit colour)."""
+    pics = [(sh.left, sh.top, sh.width, sh.height) for sh in _walk(slide.shapes) if _is_picture(sh) and sh.left is not None]
+    out = []
+    if not pics:
+        return out
+    for sh in _walk(slide.shapes):
+        if not (sh.has_text_frame and sh.text_frame.text.strip()) or sh.left is None:
+            continue
+        for px, py, pw, ph in pics:
+            ox = min(sh.left + sh.width, px + pw) - max(sh.left, px)
+            oy = min(sh.top + sh.height, py + ph) - max(sh.top, py)
+            if ox > 0.1 * EMU_IN and oy > 0.1 * EMU_IN:
+                for p in sh.text_frame.paragraphs:
+                    for r in p.runs:
+                        fg = _run_rgb(r)
+                        if fg and r.text.strip():
+                            sz = r.font.size.pt if r.font.size else 18.0
+                            out.append((sh.name, sh.left / EMU_IN, sh.top / EMU_IN, sh.width / EMU_IN, sh.height / EMU_IN, fg, sz, bool(r.font.bold)))
+                            break
+                    else:
+                        continue
+                    break
+                break
+    return out
+
+
+def _check_text_on_image(frames: list, W_in: float, H_in: float, w: int, h: int, px: bytes) -> list:
+    """text_on_image_contrast on one rendered page (``w`` by ``h`` pixels of a slide ``W_in`` by ``H_in`` inches): per text frame over a
+    picture, the text colour against the mean colour of the pixels in its frame that are not text-coloured. Finds light text over a
+    light picture that the geometry pass cannot see."""
+    out, seen = [], set()
+    for name, x, y, fw, fh, fg, sz, bold in frames:
+        x0, x1 = max(0, int(x / W_in * w)), min(w, int((x + fw) / W_in * w) + 1)
+        y0, y1 = max(0, int(y / H_in * h)), min(h, int((y + fh) / H_in * h) + 1)
+        r = g = b = n = ra = ga = ba = na = 0
+        for yy in range(y0, y1):
+            for xx in range(x0, x1):
+                i = (yy * w + xx) * 3
+                pr, pg, pb = px[i], px[i + 1], px[i + 2]
+                ra, ga, ba, na = ra + pr, ga + pg, ba + pb, na + 1
+                if abs(pr - fg[0]) + abs(pg - fg[1]) + abs(pb - fg[2]) <= 6:
+                    continue   # the glyphs themselves (a pixel of exactly the text colour)
+                r, g, b, n = r + pr, g + pg, b + pb, n + 1
+        if na < 4:
+            continue
+        under = (r // n, g // n, b // n) if n >= 4 else (ra // na, ga // na, ba // na)   # all of it text-coloured: the picture is the text's colour
+        large = sz >= 18 or (sz >= 14 and bold)
+        need = 3.0 if large else 4.5
+        cr = contrast_ratio(fg, under)
+        if cr < need and (name, round(cr, 1)) not in seen:
+            seen.add((name, round(cr, 1)))
+            _add(out, "text_on_image_contrast", "error" if cr < 2.0 else "warn",
+                 f"'{name}' text is {cr:.1f}:1 (needs {need:g}:1) against the picture under it in the render")
+    return out
+
 
 def _check_slide(slide, W: int, H: int, validated_leak: bool) -> list:
     """Geometry, font, placeholder and contrast findings for one slide."""
@@ -241,6 +346,7 @@ def _check_slide(slide, W: int, H: int, validated_leak: bool) -> list:
     bg = _bg_rgb(slide)
     presented = not _hidden(slide)
     fills = []   # (x, y, w, h, rgb) of earlier filled shapes: what later text sits on
+    pics = []    # (x, y, w, h) of pictures drawn so far: text over one is measured on the render (text_on_image_contrast), not here
     ext = []     # estimated text extents for the overlap check
     tol = 9144   # 0.01 in
     for sh in slide.shapes:
@@ -249,6 +355,9 @@ def _check_slide(slide, W: int, H: int, validated_leak: bool) -> list:
         x, y, w, h = sh.left, sh.top, sh.width, sh.height
         if x < -tol or y < -tol or x + w > W + tol or y + h > H + tol:
             _add(out, "off_slide", "error", f"'{sh.name}' reaches outside the slide")
+        if _is_picture(sh):
+            pics.append((x, y, w, h))
+            _picture_findings(sh, out)
         own = _solid_fill(sh)
         has_text = sh.has_text_frame and sh.text_frame.text.strip()
         if own and not has_text:
@@ -314,6 +423,9 @@ def _check_slide(slide, W: int, H: int, validated_leak: bool) -> list:
                 if fx <= cx <= fx + fw and fy <= cy <= fy + fh:
                     under = fc
         if under is None:
+            cx, cy = x + w // 2, y + h // 2
+            if any(px <= cx <= px + pw and py <= cy <= py + ph for px, py, pw, ph in pics):
+                continue   # over a picture: the render decides (text_on_image_contrast); the slide background would pass vacuously
             under = bg
         if under is not None:
             _check_contrast(tf, under, out)
@@ -374,6 +486,102 @@ def _check_table(sh, slide, out: list, H: int, bg) -> None:
         rows_h += need
     if sh.top / EMU_IN + rows_h > H / EMU_IN + 0.02:
         _add(out, "text_overflow", "error", f"table runs off the slide bottom (about {sh.top / EMU_IN + rows_h:.1f} in)")
+
+
+# ---------------------------------------------------------------- pure measures (no finding; the visual checklist reads them)
+
+def title_box(slide):
+    """The slide's shape named ``Title`` as ``{left_in, top_in, size_pt}`` (the largest run size), or None."""
+    for sh in slide.shapes:
+        if (sh.name or "") == "Title" and sh.left is not None and sh.top is not None and sh.has_text_frame:
+            sizes = [r.font.size.pt for p in sh.text_frame.paragraphs for r in p.runs if r.font.size and r.text.strip()]
+            return {"left_in": sh.left / EMU_IN, "top_in": sh.top / EMU_IN, "size_pt": max(sizes) if sizes else None}
+    return None
+
+
+def _line_count(tf, width_in: float) -> int:
+    """Estimated lines a text frame wraps to at ``width_in`` (the estimate ``_est_size`` uses)."""
+    avail_pt = max((width_in - (tf.margin_left + tf.margin_right) / EMU_IN) * 72, 10.0)
+    total = 0
+    for p in tf.paragraphs:
+        text = "".join(r.text for r in p.runs)
+        if not text.strip():
+            continue
+        sz = _para_size(p)
+        bold = any(r.font.bold for r in p.runs)
+        name = next((r.font.name for r in p.runs if r.font.name), "") or ""
+        per_line = max(int(avail_pt / (sz * ((0.56 if bold else 0.5) + (0.02 if name.lower().startswith(SERIF) else 0)))), 1)
+        lines, cur = 1, 0
+        for w in text.split():
+            n = len(w)
+            if cur and cur + 1 + n > per_line:
+                lines, cur = lines + 1, n
+            else:
+                cur = cur + 1 + n if cur else n
+            while cur > per_line:
+                lines, cur = lines + 1, cur - per_line
+        total += lines
+    return total
+
+
+def chars_per_line(tf, width_in: float) -> float:
+    """Characters that fit on one line of a frame: its text width over the mean glyph width at the run's font size
+    (0.5 of the size, 0.56 bold, +0.02 serif: the estimate ``_est_size`` uses). The widest case over its paragraphs."""
+    avail_pt = max((width_in - (tf.margin_left + tf.margin_right) / EMU_IN) * 72, 10.0)
+    best = 0.0
+    for p in tf.paragraphs:
+        if not "".join(r.text for r in p.runs).strip():
+            continue
+        sz = _para_size(p)
+        bold = any(r.font.bold for r in p.runs)
+        name = next((r.font.name for r in p.runs if r.font.name), "") or ""
+        best = max(best, avail_pt / (sz * ((0.56 if bold else 0.5) + (0.02 if name.lower().startswith(SERIF) else 0))))
+    return best
+
+
+def body_columns(slide) -> list:
+    """Body text frames as ``[{name, role, width_in, text_in, size_pt, chars, lines}]``: the frame's width, the width of
+    its text (margins off), the font size, the characters that fit a line (``chars_per_line``) and the lines its text wraps
+    to (titles, captions and footer furniture are left out). A column that runs to more than one line is a text column."""
+    out = []
+    for sh in slide.shapes:
+        if sh.width is None or not sh.has_text_frame or not sh.text_frame.text.strip() or _role(sh) != "body":
+            continue
+        w = sh.width / EMU_IN
+        tf = sh.text_frame
+        out.append({"name": sh.name, "role": _role(sh), "width_in": w, "text_in": w - (tf.margin_left + tf.margin_right) / EMU_IN,
+                    "size_pt": max(_para_size(p) for p in tf.paragraphs if p.runs) if any(p.runs for p in tf.paragraphs) else None,
+                    "chars": chars_per_line(tf, w), "lines": _line_count(tf, w)})
+    return out
+
+
+def slide_colors(slide) -> set:
+    """Every explicit sRGB colour on a slide (fills, text, lines, background) as upper-case hex, with no ``#``."""
+    ns = "{http://schemas.openxmlformats.org/drawingml/2006/main}srgbClr"
+    return {el.get("val").upper() for el in slide._element.iter(ns) if el.get("val")}
+
+
+def has_picture(slide) -> bool:
+    """True when the slide holds a picture shape (the brand logo is one, named Logo)."""
+    return any(getattr(sh, "shape_type", None) == 13 or (sh.name or "") == "Logo" for sh in _walk(slide.shapes))
+
+
+def font_families(prs) -> dict:
+    """The explicit font names set on each slide's text (shapes, groups and tables): ``{slide number: [names]}``.
+    A run with no name inherits the theme font and is not counted."""
+    out = {}
+    for n, sl in enumerate(prs.slides, 1):
+        names = set()
+        for sh in _walk(sl.shapes):
+            frames = []
+            if getattr(sh, "has_table", False) and sh.has_table:
+                frames = [c.text_frame for row in sh.table.rows for c in row.cells]
+            elif sh.has_text_frame:
+                frames = [sh.text_frame]
+            for tf in frames:
+                names |= {r.font.name for p in tf.paragraphs for r in p.runs if r.font.name and r.text.strip()}
+        out[n] = sorted(names)
+    return out
 
 
 # ---------------------------------------------------------------- pixels
@@ -479,6 +687,7 @@ def check_pptx(pptx: Path, pdf: Path | None = None, validation: list | None = No
         W, H = prs.slide_width, prs.slide_height
         leaks = {f.get("slide_no") for f in (validation or []) if f.get("check") == "internal_leak"}
         presented = []
+        over = {}   # slide number -> text frames over a picture, measured on the render
         for n, sl in enumerate(prs.slides, 1):
             try:
                 found = _check_slide(sl, W, H, n in leaks)
@@ -488,6 +697,12 @@ def check_pptx(pptx: Path, pdf: Path | None = None, validation: list | None = No
                 slides[str(n)] = found
             if not _hidden(sl):
                 presented.append(n)
+                try:
+                    fr = _over_pictures(sl)
+                except Exception:
+                    fr = []
+                if fr:
+                    over[n] = fr
         if pdf and Path(pdf).exists():
             tmp = Path(tempfile.mkdtemp(prefix="qa_ppm_"))
             try:
@@ -498,6 +713,8 @@ def check_pptx(pptx: Path, pdf: Path | None = None, validation: list | None = No
                     for n, pg in zip(presented, pages):
                         m = ink_shares(*read_ppm(pg))
                         found = _check_pixels(m)
+                        if n in over:
+                            found += _check_text_on_image(over[n], W / EMU_IN, H / EMU_IN, *read_ppm(pg))
                         m.pop("_counts")
                         pixels[str(n)] = m
                         if found:

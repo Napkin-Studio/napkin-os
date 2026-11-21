@@ -33,6 +33,7 @@ const L = vm.runInNewContext(`${logicRun}; DeckLogic`) as {
   statusOf(slide: unknown): string
   checksFor(id: string, slide: unknown, validation: unknown): Check[]
   approveGate(run: unknown, gate: string | null | undefined, by: string, at: string, choice?: unknown): (Run & { gate: null }) | null
+  humanApproval(run: unknown, gate: string | null | undefined, by: string, at: string, choice?: unknown): { approvals: unknown; decisions: unknown } | null
   gateRequest(run: unknown, gate: string, kind: string, by: string, at: string): { decisions: unknown[]; gate_requests: unknown[] } | null
   GATES: Record<string, { body: string; title: string }>
   gateView(run: unknown, pick?: unknown): GateView | null
@@ -48,6 +49,11 @@ const L = vm.runInNewContext(`${logicRun}; DeckLogic`) as {
   answerPatch(qid: string, answer: unknown, at: string): unknown
   researchRequest(at: string): unknown
   upstreamChanged(res: unknown): { title: string }[]
+  kitNotices(res: unknown, data: unknown): { kind: string; document_id: string; published: boolean; canUpdate: boolean; text: string }[]
+  lookPanel(data: unknown): { agency: { use: boolean; shown: boolean }; kits: { shown: boolean; pack: { name: string; version: number } | null; brand: { name: string; version: number } | null } }
+  agencyPatch(use: boolean, by: string | null, at: string): unknown
+  agencyLookNotice(data: unknown): { text: string; canUpdate: boolean; requested: boolean } | null
+  agencyUpdatePatch(at: string): unknown
   DECK_TYPES: { id: string; label: string; one_line: string }[]
   deckTypeOf(data: unknown): { id: string; source: string; quote: string; skipped: boolean; hasQuestion: boolean }
   typeHints(type: string): { type: string; items: string[]; line: string }
@@ -280,6 +286,86 @@ test('upstreamChanged lists only changed sources and survives junk', () => {
   assert.deepEqual(plain(L.upstreamChanged({ upstream: 5 })), [])
 })
 
+const PACK_FROZEN = { pack: { name: 'Demo pack' }, kit: { version: 3, stewards: ['human:demo'] }, look: ['natural light'] }
+const BRAND_FROZEN = { brand: { name: 'Demo brand' }, kit: { version: 5 }, visual: { colours: [] } }
+
+test('an attached Style Pack or Brand Clan is never read as the brief or the research', () => {
+  const u = L.upstreamSummary({ upstream: { 'pack-1': PACK_FROZEN, 'brand-1': BRAND_FROZEN, 'res-1': { findings: [{ id: 'fi_1', status: 'verified' }] } } })
+  assert.equal(u.research?.name, 'Research')
+  assert.equal(L.upstreamSummary({ upstream: { 'pack-1': PACK_FROZEN, 'brand-1': BRAND_FROZEN } }).any, false)
+})
+
+test('a changed Style Pack: a published version offers Update, unpublished changes only say so', () => {
+  const data = { upstream: { 'pack-1': PACK_FROZEN } }
+  const [pub] = L.kitNotices({ upstream: [{ status: 'changed', app_id: 'ie.napkin.style-pack', title: 'Demo pack', document_id: 'pack-1', version: 4, published: true, changelog: [{ version: 4, summary: 'Warmer light.' }] }] }, data)
+  assert.equal(pub.text, 'The Style Pack "Demo pack" has v4 (this deck uses v3). What changed: Warmer light. Update to use it: the words stay the same; pictures made with the old one stay until you choose to remake them.')
+  assert.equal(pub.canUpdate, true)
+  const [draft] = L.kitNotices({ upstream: [{ status: 'changed', app_id: 'ie.napkin.style-pack', title: 'Demo pack', document_id: 'pack-1', version: 4, published: false }] }, data)
+  assert.equal(draft.text, 'The Style Pack "Demo pack" has changes since v3 that are not published yet.')
+  assert.equal(draft.canUpdate, false)
+})
+
+test('Update is offered only when the published version is above the frozen one, so unpublished edits are never pulled', () => {
+  const data = { upstream: { 'pack-1': PACK_FROZEN } }
+  const entry = (over: object) => ({ status: 'changed', app_id: 'ie.napkin.style-pack', title: 'Demo pack', document_id: 'pack-1', ...over })
+  assert.equal(L.kitNotices({ upstream: [entry({ version: 3, published: true })] }, data)[0].canUpdate, false) // same version as the deck uses
+  assert.equal(L.kitNotices({ upstream: [entry({ version: 2, published: true })] }, data)[0].canUpdate, false) // never back
+  assert.equal(L.kitNotices({ upstream: [entry({ version: 4, published: false })] }, data)[0].canUpdate, false) // unpublished edits
+  assert.equal(L.kitNotices({ upstream: [entry({ published: true })] }, data)[0].canUpdate, false) // version unknown: cannot tell
+  assert.equal(L.kitNotices({ upstream: [entry({ version: 4, published: true })] }, data)[0].canUpdate, true)
+})
+
+test('the agency look notice offers update to current look and never re-dresses on its own', () => {
+  const built = { deck: { meta: { theme: { agency: { id: 'a', rev: 1 } } } } }
+  assert.equal(L.agencyLookNotice(built), null) // the runner has reported no current look
+  assert.equal(L.agencyLookNotice({ ...built, run: { agency_look: { id: 'a', rev: 1 } } }), null) // nothing moved
+  const moved = L.agencyLookNotice({ ...built, run: { agency_look: { id: 'a', rev: 2 } } })
+  assert.match(moved?.text ?? '', /keeps the look it has/)
+  assert.equal(moved?.canUpdate, true)
+  assert.equal(moved?.requested, false)
+  assert.equal(L.agencyLookNotice({ ...built, run: { agency_look: { id: 'a', rev: 2 } }, look: { agency_look: { use: false } } })?.canUpdate, false)
+  assert.equal(L.agencyLookNotice({ ...built, run: { agency_look: { id: 'a', rev: 2 } }, look: { agency_look: { update_requested: 't' } } })?.requested, true)
+  assert.equal(L.agencyLookNotice({ run: { agency_look: { id: 'a', rev: 2 } } }), null) // a deck with no stamped look has nothing to update
+  assert.deepEqual(plain(L.agencyUpdatePatch('t')), { look: { agency_look: { update_requested: 't', via: 'review' } } })
+  assert.match(html, /data-agency-update/)
+})
+
+test('a changed Brand Clan says it changes colours, type and logos only', () => {
+  const [n] = L.kitNotices({ upstream: [{ status: 'changed', app_id: 'ie.napkin.brand', title: 'Demo brand', document_id: 'brand-1', version: 6, version: 6, published: { revision: 'sha256:x' } }] }, { upstream: { 'brand-1': BRAND_FROZEN } })
+  assert.equal(n.text, 'The brand kit "Demo brand" has v6 (this deck uses v5). Update changes colours, type and logos only.')
+  assert.equal(n.kind, 'brand')
+  assert.equal(n.canUpdate, true)
+})
+
+test('kit notices ignore current kits and other sources, and survive junk; upstreamChanged leaves kits to them', () => {
+  assert.deepEqual(plain(L.kitNotices({ upstream: [{ status: 'current', app_id: 'ie.napkin.style-pack' }, { status: 'changed', app_id: 'ie.napkin.campaign-research', title: 'R' }] }, {})), [])
+  assert.deepEqual(plain(L.kitNotices(null, null)), [])
+  assert.deepEqual(plain(L.upstreamChanged({ upstream: [{ status: 'changed', app_id: 'ie.napkin.style-pack', title: 'P' }, { status: 'changed', app_id: 'ie.napkin.campaign-research', title: 'R' }] })), [{ title: 'R' }])
+})
+
+test('the Start look panel: the agency opt-out shows once the deck has met an agency look, the kits only with the library on', () => {
+  const base = { upstream: { 'pack-1': PACK_FROZEN, 'brand-1': BRAND_FROZEN } }
+  const off = L.lookPanel(base)
+  assert.equal(off.agency.use, true)
+  assert.equal(off.agency.shown, false)
+  assert.equal(L.lookPanel({ deck: { meta: { theme: { agency: { id: 'a', rev: 1 } } } } }).agency.shown, true)
+  assert.equal(L.lookPanel({ run: { agency_look: { id: 'a' } } }).agency.shown, true)
+  assert.equal(off.kits.shown, false)
+  assert.equal(off.kits.pack, null)
+  const on = L.lookPanel({ ...base, inputs: { library: { enabled: true } }, look: { agency_look: { use: false } } })
+  assert.equal(on.agency.use, false)
+  assert.equal(on.agency.shown, true)
+  assert.deepEqual(plain(on.kits), { shown: true, pack: { name: 'Demo pack', version: 3 }, brand: { name: 'Demo brand', version: 5 } })
+  assert.equal(L.lookPanel(null).agency.use, true)
+})
+
+test('the agency opt-out writes only look.agency_look, as appearance', () => {
+  assert.deepEqual(plain(L.agencyPatch(false, null, 't')), { look: { agency_look: { use: false, via: 'start' } } })
+  assert.deepEqual(plain(L.agencyPatch(true, 'human:demo', 't')), { look: { agency_look: { use: true, via: 'start', by: 'human:demo', at: 't' } } })
+  assert.match(html, /id="agencyLook"/)
+  assert.match(html, /data-kit-update/)
+})
+
 test('the researchRequest patch is only { status: asked, at }', () => {
   assert.deepEqual(plain(L.researchRequest('t')), { research_request: { status: 'asked', at: 't' } })
 })
@@ -292,7 +378,8 @@ test('nothing in the app writes inputs.brief or inputs.research', () => {
 
 // A stub DOM: enough to run the page script, render, and click.
 type Writes = { obj: Record<string, unknown>; action: string }[]
-function mount(data: Record<string, unknown>, fetchImpl?: unknown, extraEls: Record<string, unknown> = {}) {
+type MountOpts = { apiProxy?: (kind: string, payload: { task: string; input: Record<string, unknown> }) => Promise<unknown>; timers?: boolean }
+function mount(data: Record<string, unknown>, fetchImpl?: unknown, extraEls: Record<string, unknown> = {}, opts: MountOpts = {}) {
   const writes: Writes = []
   const handlers: Record<string, ((e: unknown) => void)[]> = {}
   const app = { innerHTML: '' }
@@ -305,16 +392,19 @@ function mount(data: Record<string, unknown>, fetchImpl?: unknown, extraEls: Rec
   }
   const win: Record<string, unknown> = {
     __CLAN__: { data },
-    clan: { patchData: (obj: Record<string, unknown>, o: { action: string }) => { writes.push({ obj, action: o.action }); return Promise.resolve() } },
+    clan: { patchData: (obj: Record<string, unknown>, o: { action: string }) => { writes.push({ obj, action: o.action }); return Promise.resolve() },
+            ...(opts.apiProxy ? { apiProxy: opts.apiProxy } : {}) },
     addEventListener() {},
   }
+  const timers: { fn: () => void; ms: number }[] = []   // with opts.timers the page's timeouts wait here until a test runs them
+  const fakeTimeout = (fn: () => void, ms: number) => { if (ms >= 3000) return 0; timers.push({ fn, ms }); return timers.length }   // the toast's own timer is not a poll
   const src = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).pop()!
-  const ctx = vm.createContext({ window: win, document: doc, navigator: { userAgent: 'Mac' }, fetch: fetchImpl, Promise, setTimeout, clearTimeout, Date })
+  const ctx = vm.createContext({ window: win, document: doc, navigator: { userAgent: 'Mac' }, fetch: fetchImpl, Promise, setTimeout: opts.timers ? fakeTimeout : setTimeout, clearTimeout: opts.timers ? () => {} : clearTimeout, Date })
   vm.runInContext(logicRun, ctx)
   vm.runInContext(src, ctx)
   const click = (attrs: Record<string, string>, id = '') =>
     handlers.click.forEach(h => h({ target: { closest: () => ({ dataset: attrs, id }) } }))
-  return { app, writes, click, toastEl, doc }
+  return { app, writes, click, toastEl, doc, timers }
 }
 
 const hostile = '<img src=x onerror=alert(1)>'
@@ -1934,4 +2024,118 @@ test('the centred circle fills the window but stays between 184 and 720, and is 
   assert.equal(L.circleCentreSize(800, 2000), 496) // narrow: 62% of the width
   assert.equal(L.circleCentreSize(4000, 4000), 720)
   assert.equal(L.circleCentreSize(300, 300), 184)
+})
+
+// ── the engine, through the middleware (features/deck-maker-server.clan, middleware-api.md section 12) ──
+const settle = async () => { for (let i = 0; i < 6; i++) await new Promise(r => setImmediate(r)) }
+/** A host that says whether this workspace has a middleware (clan://middleware), and nothing else. */
+const middleware = (configured: boolean) => (url: string) =>
+  Promise.resolve(String(url).endsWith('/middleware') ? { ok: true, json: () => Promise.resolve({ configured }) } : { ok: false, json: () => Promise.resolve(null) })
+type Call = { kind: string; task: string; input: Record<string, unknown> }
+/** A fake host api-proxy: records each call and answers with the replies given in turn (the last repeats). */
+function proxy(...replies: unknown[]) {
+  const calls: Call[] = []
+  const apiProxy = (kind: string, p: { task: string; input: Record<string, unknown> }) => {
+    calls.push(JSON.parse(JSON.stringify({ kind, task: p.task, input: p.input })))   // a plain copy: the page's objects come from another realm
+    return Promise.resolve(replies[Math.min(calls.length - 1, replies.length - 1)])
+  }
+  return { calls, apiProxy }
+}
+const reply = (state: string, extra: Record<string, unknown> = {}) =>
+  ({ ok: true, status: 200, data: { api: 'napkin.middleware/1', task: 'build_deck', job: { id: 'job_1', state, ...extra }, change: null } })
+const sentToEngine = (m: ReturnType<typeof mount>) => Object.keys(m.writes.reduce((a, w) => ({ ...a, ...w.obj }), {}))
+
+test('with a middleware, Build deck saves the inputs and then asks for build_deck, and writes no run', async () => {
+  const p = proxy(reply('queued'))
+  const form = { client: { value: 'C' }, project: { value: 'P' }, agency: { value: '' }, ptext: { value: 'A deck for Fernley.' } }   // what the person typed on Start
+  const m = mount({ inputs: { prompt: { client: 'C', project: 'P', text: 'A deck for Fernley.' }, kind: 'agency', format: 'pitch' } }, middleware(true), form, { apiProxy: p.apiProxy, timers: true })
+  await settle()
+  m.click({}, 'build')
+  await settle()
+  assert.deepEqual(m.writes.map(w => w.action), ['start deck'])
+  assert.deepEqual(sentToEngine(m), ['inputs'], 'only the inputs: the engine writes the run')
+  assert.deepEqual(p.calls, [{ kind: 'middleware', task: 'build_deck', input: {} }])
+  assert.match(m.toastEl.textContent, /engine is starting/)
+})
+
+test('with a middleware, Approve writes only the person\'s decision, then asks for the next segment', async () => {
+  const p = proxy(reply('queued'))
+  const m = mount(buildData(gateRun()), middleware(true), {}, { apiProxy: p.apiProxy, timers: true })
+  await settle()
+  m.click({}, 'approve')
+  await settle()
+  assert.equal(m.writes.length, 1)
+  const run = m.writes[0].obj.run as Record<string, unknown>
+  assert.deepEqual(Object.keys(run).sort(), ['approvals', 'decisions'], 'no state, stages, gate or agent: those are the engine\'s')
+  const a = (run.approvals as Record<string, { by: string; decision: string }>).storyline
+  assert.equal(a.by, 'You'); assert.equal(a.decision, 'approve')
+  assert.equal((run.decisions as { gate: string; kind: string }[]).at(-1)?.kind, 'approve')
+  assert.deepEqual(p.calls.map(c => c.task), ['build_deck'], 'asked after the decision was written')
+})
+
+test('without a middleware, Approve keeps its old behaviour and asks for nothing', async () => {
+  const p = proxy(reply('queued'))
+  const m = mount(buildData(gateRun()), middleware(false), {}, { apiProxy: p.apiProxy, timers: true })
+  await settle()
+  m.click({}, 'approve')
+  await settle()
+  assert.equal((m.writes[0].obj.run as { state: string }).state, 'building', 'the app still moves the sample along itself')
+  assert.equal(p.calls.length, 0)
+})
+
+test('a job that is running is polled by its id until it is done, and a second start while it runs does nothing', async () => {
+  const p = proxy(reply('queued'), reply('running'), reply('done'))
+  const m = mount(buildData(gateRun()), middleware(true), {}, { apiProxy: p.apiProxy, timers: true })
+  await settle()
+  m.click({}, 'approve')
+  await settle()
+  assert.equal(m.timers.length, 1, 'a poll is waiting')
+  m.click({}, 'approve')   // the same gate again while the job runs
+  await settle()
+  assert.equal(p.calls.filter(c => c.task === 'build_deck').length, 1)
+  m.timers.shift()!.fn(); await settle()
+  assert.deepEqual(p.calls.at(-1), { kind: 'middleware', task: 'job_status', input: { job_id: 'job_1' } })
+  assert.equal(m.timers.length, 1, 'running: polled again, a little later')
+  assert.ok(m.timers[0].ms > 900)
+  m.timers.shift()!.fn(); await settle()
+  assert.equal(m.timers.length, 0, 'done: no more polling')
+})
+
+test('a host that refuses (no engine, a run already going) is said plainly and nothing keeps polling', async () => {
+  const refusal = { ok: false, status: 503, error: { type: 'engine_unavailable', message: 'no deck engine is configured for this middleware (NAPKIN_DECK_ENGINE_URL)' } }
+  const p = proxy(refusal)
+  const m = mount(buildData(gateRun()), middleware(true), {}, { apiProxy: p.apiProxy, timers: true })
+  await settle()
+  m.click({}, 'approve')
+  await settle()
+  assert.match(m.toastEl.textContent, /no deck engine is configured/)
+  assert.equal(m.timers.length, 0)
+})
+
+test('a job that fails says the engine\'s message', async () => {
+  const p = proxy(reply('queued'), reply('failed', { error: { type: 'engine', message: 'the model said no' } }))
+  const m = mount(buildData(gateRun()), middleware(true), {}, { apiProxy: p.apiProxy, timers: true })
+  await settle()
+  m.click({}, 'approve'); await settle()
+  m.timers.shift()!.fn(); await settle()
+  assert.match(m.toastEl.textContent, /The engine stopped: the model said no/)
+  assert.equal(m.timers.length, 0)
+})
+
+test('the Start screen says it builds with the engine and stops at the first gate, once there is one', async () => {
+  const data = { inputs: { prompt: { client: 'C', project: 'P', text: 'A deck.' }, kind: 'agency', format: 'pitch' } }
+  const on = mount(data, middleware(true), {}, { apiProxy: proxy().apiProxy })
+  await settle()
+  assert.match(on.app.innerHTML, /Builds with the engine and stops at the first gate/)
+  const off = mount(data, middleware(false), {}, { apiProxy: proxy().apiProxy })
+  await settle()
+  assert.match(off.app.innerHTML, /Live building needs the engine server/)
+})
+
+test('humanApproval is the person\'s half of approveGate and is refused where approveGate is', () => {
+  const run = gateRun()
+  const full = L.approveGate(run, 'storyline', 'You', 't') as { approvals: unknown; decisions: unknown }
+  assert.equal(JSON.stringify(L.humanApproval(run, 'storyline', 'You', 't')), JSON.stringify({ approvals: full.approvals, decisions: full.decisions }))
+  assert.equal(L.humanApproval(run, 'territories', 'You', 't'), null, 'not the open gate')
+  assert.equal(L.humanApproval({ state: 'draft', stages: [], gate: null }, 'storyline', 'You', 't'), null)
 })

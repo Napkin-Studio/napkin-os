@@ -1,0 +1,39 @@
+id: people_cards
+version: 1
+group: content
+purpose: people
+description: 'People as cards: a name or role and a short line; a photo only when one is supplied.'
+slot_summary: title, people
+for_types:
+- team
+- founders
+- credentials
+priority: 0
+alternatives:
+- role_grid
+- cards
+roomier: role_grid
+density: standard
+pick: offer
+family: people_cards
+renderer: people_cards
+slots:
+  title:
+    kind: text
+    role: title
+    required: true
+    min_chars: 3
+    max_lines: 3
+  people:
+    kind: group
+    role: body
+    from_blocks:
+    - card
+    - kv
+    - bullets
+    - steps
+    min_items: 2
+    max_items: 6
+    item:
+      heading_max_chars: 40
+      body_max_chars: 140

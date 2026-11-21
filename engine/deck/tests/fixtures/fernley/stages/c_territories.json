@@ -1,0 +1,89 @@
+{
+ "territories": [
+  {
+   "id": "T1",
+   "name": "Tea's Day Out",
+   "thought": "Fernley takes the tea people grew up with at home off the kitchen table and out into the summer, cold and sparkling.",
+   "why": "Answers the chosen insight directly (IC5, brief:insight): if young adults know tea well but never think of it for a summer day, the work keeps the familiarity and changes the occasion. Only a tea brand can do this, which suits Fernley as a sparkling iced tea brand (brief:background). It builds awareness through a new moment rather than a new drink (req:R1), and it lowers the risk of a first sip by starting from something already liked (req:R2, brief:desired_response). Built for the spring to summer 2027 window (req:R4) and for 18 to 34 year olds in Ireland (brief:audience, req:R3).",
+   "mood": "Warm and wry. Familiar home tea rituals are moved outdoors: the kettle swapped for a chilled can, the mug swapped for a cold glass, the kitchen-table chat carried on outdoors in the sun. Light, sunny, a little playful about how ordinary tea is. Sound: the hiss of a can opening where you would expect a kettle.",
+   "references": [
+    "Transposition humour, where a familiar ritual is placed in an unfamiliar setting",
+    "Lo-fi social video shot as everyday moments, not staged ads",
+    "Outdoor posters set in summer contexts, placed near where cold drinks are bought"
+   ],
+   "risks": [
+    "It rests entirely on IC5, which is an untested hypothesis with no supporting research. If young adults do not see tea as a home-only drink, the idea loses its tension. Confirm with the proposed qualitative interviews before development.",
+    "The two halves are not defined: people who do not drink tea at home may not connect with a kitchen-table starting point.",
+    "Category safety: scenes of a summer day out must not read as an alcohol occasion or suggest Fernley is a mixer. Which advertising codes apply to this category, and to an audience that starts at 18, is a question for the client and their legal advisers.",
+    "Ownability is fairly strong because it depends on being tea, but the kitchen-to-outdoors device is a known pattern, so the execution must make it distinctly Fernley's."
+   ],
+   "sketch": "You've had tea a thousand times. Never on a day like this."
+  },
+  {
+   "id": "T2",
+   "name": "Picture the Sip",
+   "thought": "Fernley shows exactly what the drink is, tea made cold and fizzy, so clearly that people can almost taste it before they buy it.",
+   "why": "Answers the possible barrier set out in the storyline: uncertainty about what the drink is, not dislike of it (IC4, IC6). If a drink you cannot place is one you cannot picture tasting, the work removes the guesswork, which speaks to trial (req:R2, brief:desired_response). It leads with the sparkle and the tea together instead of relying on the words iced tea (IC6, brief:background), and plain clarity also builds awareness (req:R1).",
+   "mood": "Close, sensory and plain. Extreme close-ups of cold condensation, rising bubbles and tea colour in a clear glass. Very little copy, all of it literal. Sound-led: the crack of the can, the fizz, then quiet. Confident and uncluttered, close to an explainer in a single frame.",
+   "references": [
+    "Macro product photography and slow-motion pour films",
+    "ASMR-style sound-first short video",
+    "Sampling and point-of-sale work placed at the chiller, where the barrier is assumed to sit"
+   ],
+   "risks": [
+    "Rests on IC4 and IC6, both untested hypotheses. If shoppers already understand sparkling iced tea, clarity alone gives little reason to care. Shopper and category research are needed.",
+    "No flavour, ingredient or taste details were supplied, so the work cannot describe the taste beyond 'tea, cold, sparkling' until the client confirms what can be said. Any claims about sugar or health are a question for the client.",
+    "Ownability is weak to moderate. Sensory drink close-ups are common, and another hybrid drink could use the same approach (IC4 swap test passes only narrowly). It needs a distinctive Fernley device to hold.",
+    "Category safety: pour and fizz imagery must not look like an alcoholic serve."
+   ],
+   "sketch": "Tea. Cold. Sparkling. Now you know what it tastes like."
+  },
+  {
+   "id": "T3",
+   "name": "Out of Cork",
+   "thought": "Fernley uses its Cork roots as the invitation: a drink from here, made by people from here, that Ireland should try first.",
+   "why": "Takes a different route to the same tasks. Awareness comes through a clear, ownable origin rather than through the category (brief:background, req:R1). Origin gives a hard-to-place drink a sense of where it belongs, which may lower the risk of a first sip (req:R2). A Cork brand is the one thing no rival from outside Cork can claim, so it passes the swap test on origin, not on product.",
+   "mood": "Proud but not twee, with local humour and plain speech. Real-feeling streets, shopfronts and summer gatherings rather than postcard scenery. Bold type and a confident home-grown voice. Sound: local voices and everyday ambient noise, no polished voiceover.",
+   "references": [
+    "Regional-pride campaigns built on local language and in-jokes",
+    "Documentary-style street photography",
+    "Community launches and local-first rollouts that grow outwards"
+   ],
+   "risks": [
+    "Nothing in the inputs says whether Cork origin matters to 18 to 34 year olds in Ireland, or whether it lands outside Cork. It could feel parochial to the national audience (brief:audience, req:R3). This is a research question.",
+    "The inputs say only that Fernley is Cork-based. They do not say where the drink is made or brewed, so any 'made in Cork' claim needs client confirmation.",
+    "It does not directly address the storyline's chosen insight (IC5) or the possible barrier of what the drink is. Origin may build awareness without explaining the product, so it may need T2-style clarity alongside it.",
+    "Category safety: local and regional humour must not drift into drinking-culture tropes."
+   ],
+   "sketch": "Cork made tea fizzy. The rest of Ireland gets to try it this summer."
+  }
+ ],
+ "stage": "c_tissue_session",
+ "produced_by": "live claude-opus-5-5",
+ "ranking": {
+  "order": [
+   "T1",
+   "T2",
+   "T3"
+  ],
+  "reasons": {
+   "T1": "It answers the chosen insight directly by keeping tea's familiarity and changing the occasion to a cold, sparkling summer one, which only a tea brand can do, though it depends on an unproven hypothesis and the kitchen-to-outdoors device needs a distinctly Fernley execution.",
+   "T2": "It tackles the possible barrier of not knowing what the drink is and supports trial, but sensory close-ups of fizz and pour are common and easy for another hybrid drink to copy, so distinctiveness is weak to moderate.",
+   "T3": "Cork origin is ownable and hard for rivals to claim, but nothing shows it matters to a national 18 to 34 audience, it sidesteps the chosen insight and does not explain the product, and 'made in Cork' claims are unconfirmed."
+  },
+  "by": "claude-sonnet-5-5"
+ },
+ "chosen": "T1",
+ "chosen_by": "default: the judge's first choice, flagged for Gate 2",
+ "usage": {
+  "calls": 2,
+  "secs": 41.7,
+  "model": "claude-opus-5-5,claude-sonnet-5-5",
+  "prompt_tokens": 4,
+  "completion_tokens": 3364,
+  "cache_read_tokens": 0,
+  "cache_creation_tokens": 6434,
+  "usd": 0.1155,
+  "usd_estimated": true
+ }
+}

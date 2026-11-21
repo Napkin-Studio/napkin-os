@@ -1,0 +1,46 @@
+"""Confidential marks reach the engine (deck-image-gen fix: marks plumbed through brief_from_data and load_brief_clan)."""
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).parent / "fixtures" / "images"))
+from make_brief_marked import build  # noqa: E402
+
+from deck import inputs  # noqa: E402
+
+
+def test_load_brief_clan_keeps_confidential_fields_and_classify_marks(tmp_path):
+    clan = build(tmp_path / "b.clan")
+    inp = inputs.load(clan)
+    assert isinstance(inp.marks, list)
+    by = {m["path"]: m for m in inp.marks}
+    assert set(by) == {"budget_and_scope", "mandatories[0]", "audience"}
+    assert "Nightjar" in by["budget_and_scope"]["text"] and by["audience"]["kind"] == "classify" and by["mandatories[0]"]["kind"] == "confidential_field"
+
+
+def test_marked_texts_never_stay_in_the_coverage_that_reaches_a_report(tmp_path):
+    inp = inputs.load(build(tmp_path / "b.clan"))
+    assert "marks" not in inp.coverage and "Nightjar" not in str(inp.coverage)
+
+
+def test_a_brief_with_no_mark_data_is_not_an_empty_list(tmp_path):
+    inp = inputs.load(None, prompt_text="x")
+    assert inp.marks is None
+
+
+def test_a_checked_brief_with_no_marks_is_an_empty_list(tmp_path):
+    import zipfile, yaml
+    p = tmp_path / "b.clan"
+    with zipfile.ZipFile(p, "w") as z:
+        z.writestr("manifest.yaml", yaml.safe_dump({"document_id": "d", "app": {"app_id": "x"}}))
+        z.writestr("shared/data.yaml", yaml.safe_dump({"background": "A water brand."}))
+    assert inputs.load(p).marks == []
+
+
+def test_from_upstream_reads_the_same_marks(tmp_path):
+    import yaml, zipfile
+    data = yaml.safe_load(zipfile.ZipFile(build(tmp_path / "b.clan")).read("shared/data.yaml"))
+    inp = inputs.from_upstream({"upstream": {"doc1": data}}, {"decisions": [{"id": "d_1", "kind": "classify", "targets": ["doc1#audience"],
+                                                                           "licence": {"model": False, "corpus": False}}]})
+    assert {m["path"] for m in inp.marks} == {"budget_and_scope", "mandatories[0]", "audience"}

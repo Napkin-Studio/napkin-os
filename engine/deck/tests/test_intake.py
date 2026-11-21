@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from deck import assemble, inputs, intake, refs, run_deck, spec, stages, validate
+from deck import assemble, inputs, intake, layouts, refs, run_deck, spec, stages, validate
 from deck.inputs import Inputs
 
 FIX = Path(__file__).parent / "fixtures"
@@ -73,14 +73,16 @@ def test_run_deck_with_a_brief_writes_the_golden_deck(monkeypatch, tmp_path):
     """The CLI path, not only assemble: --brief and no prompt text writes the golden deck.json."""
     out = tmp_path / "out"
     _run_main(monkeypatch, tmp_path, ["--brief", str(BRIEF / "brief_object.json"), "--stages", str(BRIEF), "--client", "Lumen Water",
-                                      "--project", "National awareness campaign", "--out", str(out)])
-    deck = json.loads((out / "deck.json").read_text())
+                                      "--project", "National awareness campaign", "--out", str(out), "--density", "detailed"])
+    deck = layouts.strip_plan(json.loads((out / "deck.json").read_text()))   # the plan's keys are stripped for good: golden_plan.json holds them
     deck["meta"].pop("built_at")
     deck["meta"].pop("built_from")
     assert deck["meta"].pop("audience") == "review"   # run_deck stamps who the render is for
     assert deck["meta"].pop("confirm") and deck["meta"].pop("confirm_summary")["verified"] == 0   # run_deck stamps the confirm list; the build itself is untouched
     assert deck == json.loads((BRIEF / "golden_deck.json").read_text())
-    assert json.loads((out / "validation.json").read_text()) == json.loads((BRIEF / "golden_validation.json").read_text())
+    gold = [f for f in json.loads((BRIEF / "golden_validation.json").read_text())
+            if not (f["check"] == "internal_leak" and f.get("slide") == "s01" and "[Agency]" in f["message"])]   # the cover's "A response from [Agency]" now sits in the notes, not on the slide
+    assert layouts.without_plan_findings(json.loads((out / "validation.json").read_text())) == gold
     assert "intake" not in json.loads((out / "report.json").read_text())   # a complete brief runs no intake
 
 
@@ -133,6 +135,7 @@ def test_from_upstream_matches_the_brief_clan_loader(tmp_path):
     fields, htw, oq, cov = inputs.load_brief_clan(clan)
     inp = inputs.from_upstream({"upstream": {"brief-1": _brief_clan_data()}}, {})
     assert inp.brief == fields and inp.how_to_win == htw and inp.open_questions == oq
+    cov.pop("marks", None)   # the loaders pop the marks into Inputs.marks
     assert inp.coverage == cov
     assert inputs.CLAN_FIELDS and inp.has_brief() and not inp.has_research()
 

@@ -25,18 +25,70 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
+import sys
+import tempfile
 import time
 from pathlib import Path
 
-from . import assemble, inputs, intake, profiles, qa_render, render_hyperframes, render_pptx, render_web, spec, validate
+from . import assemble, imagegen, images, inputs, intake, look, profiles, qa_render, render_hyperframes, render_pptx, render_web, repair, spec, validate
 
 #: Stage a0 (intake) comes first: it fills the brief fields the brief does not supply.
 STAGE_FILES = {"a0": "a0_intake.json", "a": "a_requirements.json", "b": "b_storyline.json", "c": "c_territories.json", "d": "d_idea.json"}
 #: An investor deck's story is one stage.
 INVESTOR_STAGE_FILES = {"a0": "a0_intake.json", "i": "i_investor.json"}
+#: Where ``--until`` may stop: after a stage, or after ``deck`` (the deck assembled and validated, before any file is rendered).
+UNTIL_CHOICES = ("a0", "a", "b", "c", "d", "i", "deck")
+
+
+#: Test seams for the repair loop's rounds (None: the real renderer, converter and QA). ``render_seam(deck, folder, findings)`` returns
+#: ``{pptx, pic_findings, placed}``, ``pdf_seam(pptx, folder)`` a PDF path or None, ``qa_seam(pptx, pdf, folder, findings)`` a qa dict.
+render_seam = pdf_seam = qa_seam = None
+
+
+def _close(a, rep: dict, t0: float) -> dict:
+    """Price the stages, total the cost and write report.json: the end of a run, whole or stopped at ``--until``."""
+    rep["wall_secs"] = round(time.time() - t0, 1)
+    rep["stages"] = {k: _price_stage(v or {}) for k, v in rep["stages"].items()}   # the CLI transport reports tokens, not dollars
+    rep["usd_total"] = round(sum((v or {}).get("usd", 0) or 0 for v in rep["stages"].values()), 4)
+    if any(v.get("usd_estimated") for v in rep["stages"].values()):
+        rep["usd_basis"] = spec.USD_BASIS
+    (a.out / "report.json").write_text(json.dumps(rep, indent=1, ensure_ascii=False))
+    return rep
+
+
+#: A client build whose checks fail writes nothing (``_withheld``). The suite sets this False (tests/conftest.py): many tests read the files of a client
+#: render of the invented fixtures, which carry unresolved placeholders and so always fail the gate. tests/test_design_fixes.py sets it back to True.
+WITHHOLD_FAILING_CLIENT = True
+
+
+def _withheld(a, rep: dict, deck: dict, findings: list, t0: float) -> dict:
+    """A client build whose checks fail: no deck.pptx, deck.html, PDF or PNG is written (and none an earlier build left stays), and report.json says why.
+    A client slide never carries a check id; the person reads the reason here and in validation.json. A review render keeps its marks."""
+    bad = [f for f in findings if f["level"] == "error"]
+    for name in ("deck.pptx", "deck.html", "deck.pdf", "layouts.json"):
+        (a.out / name).unlink(missing_ok=True)
+    images.wipe_outputs(a.out)
+    checks = sorted({f["check"] for f in bad})
+    rep["withheld"] = {"reason": f"withheld: the client file was not written because {len(bad)} check{'s' if len(bad) != 1 else ''} failed ({', '.join(checks)}); "
+                                 "fix them, or build the review file to see them", "errors": len(bad), "checks": checks,
+                       "slides": sorted({f["slide"] for f in bad if f.get("slide")})}
+    rep["slides"] = len(deck["order"])
+    rep["slides_by_status"] = {s: sum(1 for x in deck["slides"].values() if x["status"] == s) for s in ("from_source", "drafted", "needs_human")}
+    _close(a, rep, t0)
+    print(json.dumps({"withheld": rep["withheld"], "slides": rep["slides"], "wall_secs": rep["wall_secs"]}, indent=1))
+    return rep
+
+
+def _stopped(a, rep: dict, t0: float, at: str) -> dict:
+    """A run stopped by ``--until``: nothing past ``at`` ran or was written. The stage outputs are in --stages, so a later run carries on from them."""
+    rep["until"] = at
+    _close(a, rep, t0)
+    print(json.dumps({"until": at, "usd_total": rep["usd_total"], "wall_secs": rep["wall_secs"]}, indent=1))
+    return rep
 
 
 def _soffice() -> str:
@@ -47,6 +99,17 @@ def _soffice() -> str:
     raise RuntimeError("LibreOffice not found: the PDF cannot be made")
 
 
+def to_pdf(pptx, outdir, timeout: int = 180):
+    """Convert a pptx to PDF with LibreOffice, in a private profile (``-env:UserInstallation``) that is removed afterwards.
+    Two soffice processes that share a profile hand the second job to the first and exit 0 with no PDF, so every call gets its own."""
+    profile = tempfile.mkdtemp(prefix="deck_lo_")
+    try:
+        return subprocess.run([_soffice(), f"-env:UserInstallation=file://{profile}", "--headless", "--convert-to", "pdf", "--outdir", str(outdir), str(pptx)],
+                              check=True, capture_output=True, timeout=timeout)
+    finally:
+        shutil.rmtree(profile, ignore_errors=True)
+
+
 def _stamp_type(deck: dict, profile: dict, choice: dict) -> None:
     """Record the deck type in the deck: ``meta.built_from.type`` (the profile id) and ``.profile`` (id,
     label, how it was chosen and why), and ``meta.profile`` when the person was asked (answered or skipped)
@@ -55,6 +118,219 @@ def _stamp_type(deck: dict, profile: dict, choice: dict) -> None:
     deck["meta"]["built_from"] = {**deck["meta"]["built_from"], "type": profile["id"], "profile": rec}
     if profile["arrange"] == "spine" or choice["source"] in ("answer", "skipped"):
         deck["meta"]["profile"] = rec
+
+
+def _replay_agency(a, ctx: dict, rep_look: dict) -> tuple[dict | None, bool]:
+    """The agency look this build uses, and whether the deck opted out. A deck keeps the look it was built with: the first build with an
+    agency look copies the --agency-look JSON into the run folder (``look.json``) and every later build replays that copy, so a recorded run
+    replays byte for byte and the agency's changes never re-dress a deck on their own. A deck built before there was an agency look (a
+    ``deck.json`` already in the run folder and no ``look.json``) keeps its look too. ``--update-look`` (the person's "update to current
+    look") takes the current look and records it. Returns (agency JSON or None, use)."""
+    lp = (ctx.get("look") or {}).get("agency_look") or {} if ctx else {}
+    use = not (a.no_agency_look or lp.get("use") is False)
+    current = json.loads(a.agency_look.expanduser().read_text()) if a.agency_look else None
+    rec_path = a.out / "look.json"
+    raw = json.loads(rec_path.read_text()) if rec_path.exists() else None
+    recorded = ({"agency": raw["agency"], "applied_at": raw.get("applied_at") or ""} if raw and "agency" in raw
+                else {"agency": raw, "applied_at": ""} if raw else None)   # a copy made before applied_at existed is the bare look
+    # An update is a person's request, kept in the document: it counts only while it is newer than the look last applied, so it never re-reads
+    # the agency's look on every later build. --update-look is the request made now.
+    asked = str(lp.get("update_requested") or "")
+    update = bool(a.update_look or (asked and (recorded is None or asked > recorded["applied_at"])))
+    if recorded and not update:
+        if current and current.get("rev") != recorded["agency"].get("rev"):
+            rep_look["notice"] = (f"Your agency's look changed since this deck was built (rev {recorded['agency'].get('rev')} to {current.get('rev')}). This deck keeps the look it "
+                                  "has; choose 'update to current look' to take the new one.")
+        return recorded["agency"], use
+    if not recorded and (a.out / "deck.json").exists() and not update:
+        if current:
+            rep_look["notice"] = "This deck was built before your agency's look was set up and keeps its look. Choose 'update to current look' to dress it."
+        return None, use
+    if current:
+        import datetime   # noqa: PLC0415
+        rec_path.write_text(json.dumps({"agency": current, "applied_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")},
+                                       indent=1, ensure_ascii=False))
+    return current, use
+
+
+def _stamp_look(a, deck: dict, brand: dict | None, rep: dict, ctx: dict | None = None) -> None:
+    """Resolve the deck's look (look.py) and stamp it: ``meta.brand`` (what the renderers read), ``meta.theme`` (what a reader sees) and the
+    client's logo as a deck asset. With no --style, no agency look and no --brand nothing is written, so today's decks and every golden are
+    unchanged. A Style Pack that cannot be used is never skipped silently: ``meta.style_hold`` and the report say so."""
+    ctx = ctx or {}
+    client = deck["meta"].get("client") or a.client
+    style, pack_src = None, a.style or ctx.get("pack")
+    if pack_src:
+        from visuals import style as vstyle   # noqa: PLC0415 (a sibling package of engine/deck, imported only when a pack is given)
+        try:
+            if isinstance(pack_src, tuple) and not ((pack_src[0].get("kit") or {}).get("published")):
+                raise vstyle.StyleError("the attached Style Pack's version is not published (kit.published is empty): a steward publishes it before a deck uses it")
+            style = vstyle.load(*pack_src, forbid=[client]) if isinstance(pack_src, tuple) else vstyle.load(pack_src, forbid=[client])
+        except (vstyle.StyleError, OSError) as e:   # a pack that breaks its rules is not used, and pictures are held until it is fixed
+            rep["style_pack"] = {"used": False, "hold": True, "error": str(e)}
+            deck["meta"]["style_hold"] = {"reason": str(e), "pack": Path(str(a.style)).name if a.style else "attached Style Pack"}
+        else:
+            rep["style_pack"] = {"used": True, "hash": style.hash, "warnings": style.warnings, "sent_references": [r.name for r in style.references],
+                                 "withheld_references": style.withheld}
+    look_rep: dict = {}
+    agency, use = _replay_agency(a, ctx, look_rep)
+    lp = ctx.get("look") or {}
+    wears = (lp.get("brand") or {}).get("wears") or a.wears if ctx else a.wears
+    wears_problem = None
+    if wears not in look.WEARS:   # an unknown value never crashes a build: the default stands and the problem is said
+        wears_problem = f"look.brand.wears {wears!r} is not one of {', '.join(look.WEARS)}: the deck wears the agency"
+        wears = "agency"
+    strict = bool(lp.get("strict_brand")) or a.strict_brand
+    got = look.resolve(wears=wears, strict_brand=strict, brand_file=brand, brand=look.brand_tokens(ctx.get("brand")), style=style,
+                       agency=agency, use_agency=use, client=client)
+    if got.brand:
+        deck["meta"]["brand"] = got.brand
+    if wears_problem:
+        look_rep.setdefault("problems", []).append(wears_problem)
+        if got.theme:
+            got.theme["problems"].append(wears_problem)
+    if got.theme:
+        if got.logo:
+            try:
+                aid, rec = look.make_logo_asset(got.logo, a.out / "assets")
+                deck.setdefault("assets", {})[aid] = rec
+                got.theme["logo"] = {"asset": aid, "placement": got.logo["placement"]}
+            except look.LogoError as e:
+                note = f"The client's logo could not be placed: {e}"
+                got.theme.setdefault("held", []).append(note)
+                got.theme["problems"].append(note)
+        deck["meta"]["theme"] = got.theme
+        look_rep.update(source=got.theme["source"], problems=got.theme["problems"], derived=got.theme["derived"], held=got.theme.get("held", []))
+    if agency or look_rep.get("notice"):
+        deck["meta"].setdefault("preferences", {})["agency_look"] = {"use": use, "source": "person" if (a.no_agency_look or ((ctx.get("look") or {}).get("agency_look") or {}).get("by")) else "default"}
+    if look_rep:
+        rep["look"] = look_rep
+
+
+def _stamp_pinned(a, deck: dict, deck_ctx: dict | None) -> set:
+    """Stamp ``deck.slides.<id>.pinned`` from the person's review (``--review FILE``, or the document's ``review``): a pinned slide is left alone by the
+    plan's fixes and by the repair loop. Models never write it. Returns the pinned slide ids (none when there is no review)."""
+    review = {}
+    if a.review and a.review.exists():
+        raw = json.loads(a.review.read_text())
+        review = raw.get("review", raw) if isinstance(raw, dict) else {}
+    elif (deck_ctx or {}).get("review"):
+        review = deck_ctx["review"]
+    out = {sid for sid in (review.get("pinned") or {}) if sid in deck["slides"]}
+    for sid in sorted(out):
+        deck["slides"][sid]["pinned"] = True
+    return out
+
+
+def _repair(a, inp, profile: dict, deck: dict, findings: list, qa: dict, pics, placed: set, rep: dict, base_deck: dict, pinned: set, swaps: dict, level, tm, policy: dict, pptx):
+    """The repair loop (repair.py) on the finished build: round 0 is what was just written into ``a.out``. Writes issues.json always (the loop is on), and
+    when a round ran: repair.json, repair_record.json, out/repair/ (the base deck, every round's folder, round 0's files) and the report's repair section;
+    when a round was kept, the kept round's files become the deck's (deck.json, validation.json, qa.json, layouts.json, deck.pptx, deck.pdf) and the web deck, the
+    PNGs and the HyperFrames project are made again from it. Returns the deck, findings and placed set the run ends with."""
+    from . import layouts, stages
+    out = a.out
+    if not (out / "deck.pptx").exists():   # nothing was rendered (a renderer stubbed out): the loop never starts
+        return deck, findings, placed
+
+    def render_fn(d, folder, f):
+        if render_seam:
+            got = render_seam(d, folder, f)
+        else:
+            pic_f, pl = [], set()
+            render_pptx.render(d, inp, folder / "deck.pptx", a.master, f, animate=a.animate or False, layouts_out=folder / "layouts.json", pictures=pics, picture_findings=pic_f,
+                               placed=pl, notes=not a.no_notes, no_plan=a.no_layout_plan)
+            got = {"pptx": folder / "deck.pptx", "pic_findings": pic_f, "placed": pl}
+        return {**got, "pptx": got["pptx"] if got.get("pptx") and Path(got["pptx"]).exists() else None}
+
+    def pdf_fn(p, folder):
+        if pdf_seam:
+            return pdf_seam(p, folder)
+        try:
+            to_pdf(p, folder)
+        except (subprocess.SubprocessError, RuntimeError, OSError):   # no PDF for this round: it loses its pixels, so the gate cannot keep it
+            return None
+        return folder / "deck.pdf" if (folder / "deck.pdf").exists() else None
+
+    def qa_fn(p, pdf, folder, f):
+        return (qa_seam or qa_render.run)(p, pdf, folder, f)
+
+    def call_fn(request):
+        return stages.repair_copy(deck, inp, profile, request)
+
+    def spent() -> float:
+        return sum((_price_stage(v or {}).get("usd") or 0) for v in rep["stages"].values())
+
+    record = None
+    for p in (a.stages / "repair_record.json", out / "repair_record.json"):
+        if not p.exists():
+            continue
+        try:
+            got = json.loads(p.read_text())
+        except ValueError:
+            continue
+        if p.parent == a.stages or got.get("stages") == str(a.stages.resolve()):   # out/'s record is used only when it was written for these --stages
+            record = got
+            break
+    ctx = {"inp": inp, "audience": a.audience, "policy": policy, "library": layouts.load(), "prefs": {"density": level, "text_mode": tm, "notes": not a.no_notes}, "swaps": swaps, "base_deck": base_deck,
+           "pinned": pinned, "out": out, "stages": a.stages, "live": a.live, "approve_shorten": a.approve_shorten, "call_fn": call_fn, "spent": spent,
+           "run_cap": repair.run_cap(), "shorten_ledger": _shorten_ledger(a, inp, deck), "record": record, "render_fn": render_fn, "pdf_fn": pdf_fn, "qa_fn": qa_fn}
+    iss0 = repair.I.derive(findings, qa, deck, policy, 0)
+    (out / "issues.json").write_text(json.dumps(iss0, indent=1, ensure_ascii=False))
+    if not policy["max_rounds"] or not [i for i in iss0 if i["severity"] in policy["repair_on"] and i["source"] != "critic"]:
+        return deck, findings, placed   # max_rounds 0 still writes issues.json, and a clean deck runs no round
+    shutil.rmtree(out / "repair", ignore_errors=True)
+    t = time.time()
+    m0 = repair.existing(deck, findings, qa, out, ctx)
+    if not m0["ok"]:   # the QA could not be read: lost coverage, so no round (S6)
+        return deck, findings, placed
+    res = repair.run(ctx, m0)
+    if not res["ran"] and not res["skipped"]:
+        return deck, findings, placed
+    (out / "repair").mkdir(exist_ok=True)
+    (out / "repair" / "base_deck.json").write_text(json.dumps(base_deck, indent=1, ensure_ascii=False, default=str))
+    final = res["final"]
+    n = res["final_round"]
+    if res["ran"] and n:   # a kept round: its files become the deck's; round 0's go to out/repair/round-0
+        r0 = out / "repair" / "round-0"
+        r0.mkdir(parents=True, exist_ok=True)
+        for name in ("deck.json", "validation.json", "qa.json", "layouts.json", "deck.pptx", "deck.pdf", "issues.json"):
+            if (out / name).exists():
+                shutil.copyfile(out / name, r0 / name)
+        folder = final["folder"]
+        for name in ("deck.json", "validation.json", "qa.json", "layouts.json", "deck.pptx", "deck.pdf"):
+            if (folder / name).exists():
+                shutil.copyfile(folder / name, out / name)
+            elif name == "deck.pdf":
+                (out / name).unlink(missing_ok=True)
+        deck, findings, placed = final["deck"], final["findings"], (final.get("placed") or placed)
+        rep["validation"] = validate.summary(findings)
+        render_web.render(deck, inp, out / "deck.html", findings, pictures=pics, placed=placed if pics else None, look=not a.no_layout_plan)
+        if a.hyperframes:
+            render_hyperframes.render(deck, inp, out / "hyperframes", findings, builds=a.builds, pictures=pics, placed=placed if pics else None, look=not a.no_layout_plan)
+        if (out / "deck.pdf").exists():
+            (out / "png").mkdir(exist_ok=True)
+            subprocess.run(["pdftoppm", "-png", "-r", "60", str(out / "deck.pdf"), str(out / "png" / "slide")], check=False)
+        rep["qa"] = _qa_line(final["qa"]["summary"], len(deck["order"])) if (final.get("qa") or {}).get("summary") else rep.get("qa")
+    elif res["ran"]:   # nothing kept: the deck stays as built, with the policy stamped (a round ran) and its checks re-stamped
+        deck["meta"]["repair_policy"] = policy
+        (out / "deck.json").write_text(json.dumps(deck, indent=1, ensure_ascii=False, default=str))
+        repair.stamp_qa(out, qa)
+    (out / "issues.json").write_text(json.dumps(res["issues"], indent=1, ensure_ascii=False))
+    (out / "repair.json").write_text(json.dumps(res["repair"], indent=1, ensure_ascii=False))
+    rec_dir = a.stages if a.live else out
+    rec_dir.mkdir(parents=True, exist_ok=True)
+    (rec_dir / "repair_record.json").write_text(json.dumps({**res["record"], "stages": str(a.stages.resolve())}, indent=1, ensure_ascii=False))
+    for k, row in res["stage_rows"].items():
+        rep["stages"][k] = row
+    rep["repair"] = {"policy_sha": res["repair"]["policy_sha"], "rounds": [{**x, "seconds": round(s, 1)} for x, s in zip(res["rounds"], res.get("secs") or [0] * len(res["rounds"]))],
+                     "stopped": res["stopped"], "skipped": res["skipped"], "left_for_person": res["left"], "usd": round(res["usd"], 4)}
+    if res["replayed"]:
+        rep["repair"]["replayed"] = True
+    rep["stages"]["repair"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
+    kept = sum(1 for x in res["rounds"] if x["kept"])
+    fixed = sum(1 for i in res["issues"] if i["status"] == "fixed")
+    print(f"Repair: {len(res['rounds'])} round(s), {kept} kept, {fixed} fixed, {len(res['left'])} left for you, {res['usd']:.2f} USD" + (" (replayed)" if res["replayed"] else ""))
+    return deck, findings, placed
 
 
 def _qa_line(summary: dict, n_slides: int) -> str:
@@ -218,6 +494,91 @@ def _red_team(a, deck: dict, inp, profile: dict, rep: dict) -> None:
     rep["decisions"] = [*rep.get("decisions", []), *decisions]
 
 
+def _picture_style(a, deck_ctx, client: str):
+    """The Style Pack the picture step prompts with: the --style folder or the document's pack, else the built-in default. A pack that cannot be read
+    is not used (the deck's ``style_hold`` holds every slot and says why)."""
+    from visuals import style as vstyle   # noqa: PLC0415
+    src = a.style or (deck_ctx or {}).get("pack")
+    try:
+        if src:
+            return vstyle.load(*src, forbid=[client]) if isinstance(src, tuple) else vstyle.load(src, forbid=[client])
+    except (vstyle.StyleError, OSError):
+        pass
+    return vstyle.load(None)
+
+
+def _add_marks(a, inp) -> None:
+    """``--marks FILE`` adds to the marks the document carried (an empty list is a real answer: the marks are known). Applied once, at load, so the picture step and
+    the paid shorten request both see them."""
+    if a.marks:   # marks given by hand only ADD to the ones the document carried, and must be well formed
+        raw = json.loads(a.marks.read_text())
+        raw = raw.get("marks", raw) if isinstance(raw, dict) and "marks" in raw else raw
+        if not (isinstance(raw, list) and all(isinstance(m, dict) and isinstance(m.get("text"), str) and m["text"].strip() and isinstance(m.get("path", ""), str) for m in raw)):
+            raise SystemExit("refused: --marks must be a list of {path, text, kind} objects, each with non-empty text (an empty list adds nothing)")
+        inp.marks = (inp.marks or []) + raw
+
+
+def _image_step(a, deck: dict, inp, terr: list, review: dict, wrapped: bool, deck_ctx, rep: dict):
+    """The picture step (deck-image-gen), between the placed pictures and the layout plan. Prints the open card(s); makes pictures only for a
+    ``--yes-cost`` that names a card's id. Returns what imagegen.step returns."""
+    try:
+        if a.images_reviewed:
+            imagegen.record_safe_review(review, inp, deck, a.by)
+            a.review.write_text(json.dumps({"review": review} if wrapped else review, indent=1, ensure_ascii=False))
+        deck_id = a.deck_id or _deck_id(a, inp, deck)
+        led = a.ledger or Path(os.environ.get("NAPKIN_DECK_LEDGER") or Path.home() / ".napkin" / "deck-images" / "ledger.jsonl")
+        from visuals import jobs as vjobs   # noqa: PLC0415
+        ctx = imagegen.Ctx(deck, inp, terr, _picture_style(a, deck_ctx, a.client), a.stages, a.images_cache or (a.stages / "images"), vjobs.Ledger(led, deck_id), deck_id,
+                           review=review, approver=a.approver, cap_usd=a.cap_usd, banned_extra=look.brand_tokens((deck_ctx or {}).get("brand")).get("imagery_bans") or [],
+                           territory_usd=_territory_usd(a.stages))
+        res = imagegen.step(ctx, a.images, a.yes_cost, a.hero, a.retry_unknown, a.remake_style, remake=[x.strip() for v in a.remake for x in v.split(',') if x.strip()])
+    except (imagegen.GenError, images.ImageError) as e:
+        raise SystemExit(f"refused: {e}")
+    rep["images"] = {"mode": a.images, "cards": {k: {"id": c["id"], "usd": c["usd"]} for k, c in res["cards"].items()},
+                     "spent_usd": vjobs.spent_usd(ctx.manifest, ctx.ledger), "cap_usd": ctx.cap,
+                     "client_to_runway": res["plan"].get("client_to_runway"),   # the policy that applied, said in the report too
+                     "made": (res["made"] or {}).get("created", 0), "stopped": (res["made"] or {}).get("stopped"),
+                     "held": [f"{r['slide']}.{r['slot']}: {r.get('reason')}" for r in res["plan"]["slots"].values() if r["status"] in ("held", "rejected")],
+                     "refusals": [{"slot": f"{r['slide']}.{r['slot']}", "reason": r["subject_refused"], "used": "generic template"}
+                                  for r in res["plan"]["slots"].values() if r.get("subject_refused")]}
+    return res
+
+
+def _shorten_ledger(a, inp, deck: dict):
+    """The deck's lifetime ledger of shorten spend: a file beside the picture ledger, counted under the same deck id, outside any stages folder, so deleting a cache
+    cannot lower what the deck has spent. Only a live build uses it."""
+    if not a.live:
+        return None
+    from visuals import jobs as vjobs   # noqa: PLC0415
+    led = a.ledger or Path(os.environ.get("NAPKIN_DECK_LEDGER") or Path.home() / ".napkin" / "deck-images" / "ledger.jsonl")
+    return vjobs.Ledger(led.with_name(led.stem + ".shorten.jsonl"), a.deck_id or _deck_id(a, inp, deck))
+
+
+def _deck_id(a, inp, deck: dict) -> str:
+    """The id the spend ledger counts a deck under, from what the deck IS: a Deck document's own id, else a hash of the brief's words and the deck's
+    title (client and project). A copied or renamed stages folder is the same deck and shares its cap."""
+    if a.deck:
+        import zipfile   # noqa: PLC0415
+        try:
+            man = __import__("yaml").safe_load(zipfile.ZipFile(a.deck).read("manifest.yaml")) or {}
+            did = man.get("document_id") or man.get("id")
+            if did:
+                return "doc-" + str(did)
+        except (OSError, KeyError, zipfile.BadZipFile):
+            pass
+    blob = json.dumps([{k: (f or {}).get("value") for k, f in sorted(inp.brief.items())}, deck["meta"].get("client"), deck["meta"].get("project")], sort_keys=True, ensure_ascii=False, default=str)
+    return "brief-" + hashlib.sha256(blob.encode()).hexdigest()[:16]
+
+
+def _territory_usd(stages: Path) -> float:
+    """What the Territory tool already spent on this pitch's frames, for information on the card (never counted in the deck's cap)."""
+    try:
+        f = images.load_frames(stages)
+    except images.ImageError:
+        return 0.0
+    return round(float(((f or {}).get("run") or {}).get("usd") or 0), 2)
+
+
 def _read_answers(path) -> tuple:
     """The person's answers and verify decisions from ``--answers FILE``: ``(answers, verified)``. The file is the
     flat ``{qid: {text|option_id, at, skipped?}}`` it always was, or an ``intake`` object as the app keeps it
@@ -259,14 +620,98 @@ def main(argv=None):
     ap.add_argument("--doc", action="append", default=[], metavar="KEY=PATH",
                     help="a client document (PDF page by page, or text), cited as doc:KEY#pN; repeatable")
     ap.add_argument("--brand", type=Path, help="brand JSON: name, colors (THEME keys, accent_ink), head/body fonts, logo files")
-    ap.add_argument("--no-qa", action="store_true", help="skip stage h, the rendered-slide QA (qa.json)")
+    ap.add_argument("--style", type=Path, help="a Style Pack: a folder (style.yaml and images) or a Style Pack .clan; its deck colours and type "
+                                               "(empty by default) rank above the agency look (deck-look-kits)")
+    ap.add_argument("--agency-look", type=Path, help="the signed-in person's agency look, JSON (id, rev, accent, base, accent_ink, accent_use, surface): "
+                                                     "it dresses the deck automatically unless --no-agency-look; an agency with no look passes none")
+    ap.add_argument("--update-look", action="store_true", help="take the agency's current look (--agency-look) in place of the one this deck recorded when it was built")
+    ap.add_argument("--deck", type=Path, help="a Deck document (.clan): the brief, research and look come from it (the runner's path); an attached Style Pack or Brand Clan "
+                                              "is never read as research and a Brand Clan's pins never reach the facts")
+    ap.add_argument("--no-agency-look", action="store_true", help="this deck opts out of the agency look (look.agency_look.use false)")
+    ap.add_argument("--wears", choices=look.WEARS, default="agency",
+                    help="whose brand the deck wears: agency (default; a client kit gives only its logo and imagery bans), client or co_branded")
+    ap.add_argument("--strict-brand", action="store_true", help="only the kit's given tokens: ignore Style Pack literals and the agency look")
+    ap.add_argument("--density", choices=spec.DENSITY_LEVELS, default=None,
+                    help="how much a content slide holds: lean (about 30 words), standard (60), detailed (the type's budget). Without it the engine resolves it by format "
+                         "(a presented pitch is lean, a leave-behind detailed) and stamps meta.preferences.density with its source")
+    ap.add_argument("--layout", action="append", default=[], metavar="SLIDE=ID",
+                    help="a person's layout swap for one slide (repeatable); honoured when the layout holds the slide, else layout_unknown")
+    ap.add_argument("--no-layout-plan", action="store_true", help="skip the layout plan: the renderers choose as before the library (rollback)")
+    ap.add_argument("--no-notes", action="store_true", help="a notes-free export: no speaker notes in the pptx (the moved points go with them)")
+    ap.add_argument("--no-qa", action="store_true", help="skip stage h, the rendered-slide QA (qa.json): the repair loop reads the QA, so it does not run either")
+    ap.add_argument("--no-repair", action="store_true", help="turn the repair loop off: no round, no issues.json, the output is exactly the engine without it")
+    ap.add_argument("--text-mode", choices=spec.TEXT_MODES, default=None,
+                    help="condense: the repair loop may move whole points to the speaker notes and shorten wording with the slide's own words; preserve: it never does. Absent: no shorten and no loop move (the app's default is condense and the runner passes it)")
+    ap.add_argument("--repair-policy", type=Path, help="a repair policy file over policy/repair.yaml (tests and experiments)")
+    ap.add_argument("--approve-shorten", metavar="ID", default=None,
+                    help="a person's yes to shortening a deck built for --audience client: the approval id for these exact words (apv_..., printed in the repair report's skipped list); "
+                         "any change to the shortenable words voids it. A bare flag is not a yes")
+    ap.add_argument("--until", choices=UNTIL_CHOICES, default=None,
+                    help="stop after this stage and write report.json (stages a0 a b c d, or i for an investor deck); 'deck' stops once the deck "
+                         "is assembled and validated, before any file is rendered. Stage outputs stay in --stages: a later run carries on from them")
+    ap.add_argument("--pictures", choices=("creative_cover", "creative", "none"), default=None,
+                    help="place pictures that already exist (stages/frames.json from deck.from_territory, and --image): creative_cover (the "
+                         "creative slides, the cover and the divider), creative, or none. Absent: frames.json is ignored and no slot is written")
+    ap.add_argument("--image", action="append", default=[], metavar="SLIDE.SLOT=FILE",
+                    help="place a picture you supply on a slide of a picture type (never an evidence slide; the slot 'logo' is refused); repeatable")
+    ap.add_argument("--image-rights", action="append", default=[], metavar="SLIDE.SLOT=RIGHTS",
+                    help="own, licensed or client_supplied for a supplied picture; with none it is recorded as reference_only and not placed")
+    ap.add_argument("--review", type=Path, help="the person's review JSON ({pinned, images}) as the app keeps it: stamps approvals on the pictures")
+    ap.add_argument("--approver", help="the deck's picture approver, human:<id>: only a decision by this person is stamped as approved")
+    ap.add_argument("--picture-label", default=spec.PICTURE_LABEL, help="what a picture is labelled until approved (up to 30 characters, no digit, no name)")
+    ap.add_argument("--picture-source", choices=spec.PICTURE_SOURCES, default="existing",
+                    help="existing: only pictures we already have. generated: also pictures made for empty slots (same as --images plan unless --images says more)")
+    ap.add_argument("--images", choices=imagegen.MODES, default="off",
+                    help="make pictures for the empty slots (deck-image-gen): subjects (the subject card; with --yes-cost the one model call), plan (the "
+                         "picture card, no network) or live (make exactly the jobs on the card --yes-cost names). off: nothing is planned")
+    ap.add_argument("--yes-cost", metavar="CARD_ID", help="a person's yes to ONE card: its id (c_ and 8 hex). A missing, different or stale id is refused before any call")
+    ap.add_argument("--hero", action="append", default=[], metavar="SLIDE.SLOT", help="ask for a final (pro) picture of an approved, guard-checked draft (a card of its own)")
+    ap.add_argument("--retry-unknown", action="store_true", help="put jobs whose create got no answer (they may be charged) on the card again")
+    ap.add_argument("--remake", action="append", default=[], metavar="SLIDE.SLOT",
+                    help="a person asks to make this made picture again, from its recorded subject: it goes on the next card as a new attempt (never automatic; two pictures per slot at most)")
+    ap.add_argument("--remake-style", action="store_true", help="put pictures made with another Style Pack on the card (a changed pack never remakes by itself)")
+    ap.add_argument("--marks", type=Path, help="the parts marked Confidential, JSON [{path, text, kind}] (an empty list is a real answer); needed with --images for a deck built from files")
+    ap.add_argument("--images-cache", type=Path, help="where the picture jobs, plan and manifest live (default: <stages>/images)")
+    ap.add_argument("--deck-id", help="DEV ONLY (needs --dev): the id the spend ledger counts this deck under. Normally it comes from the deck's content (the document id, "
+                                      "or a hash of the brief and the deck title), so a copied folder shares one cap")
+    ap.add_argument("--ledger", type=Path, help="DEV ONLY (needs --dev): the spend ledger file (normally $NAPKIN_DECK_LEDGER or ~/.napkin/deck-images/ledger.jsonl)")
+    ap.add_argument("--dev", action="store_true", help="allow --deck-id and --ledger: they can split one deck's spend across ledgers, so they are for tests and tools that own both")
+    ap.add_argument("--cap-usd", type=float, default=None, help="a LOWER cap for this deck's pictures (default and most 2.50; the subject call and failures count)")
+    ap.add_argument("--images-reviewed", action="store_true", help="record a person's review of a sensitive brief in --review (needs --by human:<id>)")
+    ap.add_argument("--by", help="who reviewed (human:<id>) with --images-reviewed")
+    ap.add_argument("--images-only", action="store_true", help="rebuild from the recorded stages only (never a text model); refuses if any text stage is missing")
     a = ap.parse_args(argv)
+    if a.picture_source == "generated" and a.images == "off":
+        a.images = "plan"
+    if a.images != "off" and a.pictures is None:
+        a.pictures = "creative_cover"
+    if a.images_only and a.live:
+        ap.error("--images-only never calls a text model: drop --live")
+    if a.cap_usd is not None and not (0 < a.cap_usd <= 2.5):
+        ap.error("--cap-usd must be above 0 and at most 2.50: the per-deck cap is Sai's and nothing raises it")
+    if (a.deck_id or a.ledger) and not a.dev:
+        ap.error("--deck-id and --ledger split a deck's spend across ledgers and need --dev")
+    if a.dev and (a.deck_id or a.ledger):
+        print("WARNING: --dev: the spend ledger or deck id was set by hand, so this deck's cap is not shared with its other builds. Never use this for a real run.", file=sys.stderr)
+    if a.yes_cost and a.images == "off":
+        ap.error("--yes-cost is the yes to a picture card: give --images subjects or live with it")
+    if a.images_reviewed and not (a.review and a.by):
+        ap.error("--images-reviewed needs --review FILE and --by human:<id>")
+    if a.pictures == "none" and a.image:
+        ap.error("--image asks for a picture and --pictures none asks for none: drop one")
+    try:
+        supplied = images.parse_image_args(a.image, a.image_rights)
+    except images.ImageError as e:
+        ap.error(str(e))
     if a.prompt_text and a.prompt_file:
         ap.error("give --prompt-text or --prompt-file, not both")
     prompt_text = (a.prompt_file.expanduser().read_text(encoding="utf-8", errors="replace") if a.prompt_file else a.prompt_text or "").strip()
-    if not (prompt_text or a.doc or a.brief or a.research):
+    if not (prompt_text or a.doc or a.brief or a.research or a.deck):
         ap.error("nothing to build a deck from: give a prompt (--prompt-text or --prompt-file), a document (--doc), a brief (--brief) or research (--research)")
     a.out.mkdir(parents=True, exist_ok=True)
+    images.wipe_stale(a.out)   # every build, --until deck included: no repair round, repair.json, issues.json or qa.json from an earlier build
+    if a.live:
+        a.stages.mkdir(parents=True, exist_ok=True)   # a live run writes each stage here as it goes; a missing folder used to fail after the first paid call
     rep = {"stages": {}, "started": time.strftime("%Y-%m-%dT%H:%M:%S")}
     t0 = time.time()
 
@@ -280,7 +725,20 @@ def main(argv=None):
             ap.error(f"--doc key {key!r} is given twice: each document needs its own key")
         docs.append((key, Path(path).expanduser()))
     answers, verified = _read_answers(a.answers)
-    inp = inputs.load(a.brief, a.research, a.stages / "doc_facts.json", docs, prompt_text=prompt_text, answers=answers, verified=verified)
+    deck_ctx = None
+    if a.deck:
+        try:
+            inp, deck_ctx = inputs.from_deck_document(a.deck)
+        except inputs.MarksError as e:
+            raise SystemExit(f"refused: {e}")
+        if prompt_text:
+            inp.prompt_text = prompt_text
+    else:
+        try:
+            inp = inputs.load(a.brief, a.research, a.stages / "doc_facts.json", docs, prompt_text=prompt_text, answers=answers, verified=verified)
+        except inputs.MarksError as e:
+            raise SystemExit(f"refused: {e}")
+    _add_marks(a, inp)
     rep["stages"]["inputs"] = {"secs": round(time.time() - t, 2), "model": None, "tokens_in": 0, "tokens_out": 0, "usd": 0}
     choice = intake.chosen_type(inp, a.kind)   # an explicit --kind wins, then the person's answer, then the stated default
     profile = profiles.load(choice["type"])
@@ -294,10 +752,20 @@ def main(argv=None):
     if pages:
         rep["doc_pages"] = pages   # every page of every document read (never dropped)
 
+    names = profiles.stage_names(profile, INVESTOR_STAGE_FILES if kind == "investor" else STAGE_FILES)
+    if a.until not in (None, "deck") and a.until not in names:
+        ap.error(f"--until {a.until}: this deck type has no such stage (it runs {', '.join(names)})")
+    if a.images_only:
+        need = [fn for k, fn in names.items() if k != "a0"] + ["fit.json", "e_copy.json", "red_team.json"] + ([imagegen.STAGE_G_FILE] if a.images == "live" else [])
+        gone = [fn for fn in need if not (a.stages / fn).exists()]
+        if gone:
+            raise SystemExit("refused: --images-only rebuilds from recorded stages and the following are missing: " + ", ".join(gone))
     st = {}
-    for k, fn in profiles.stage_names(profile, INVESTOR_STAGE_FILES if kind == "investor" else STAGE_FILES).items():
+    for k, fn in names.items():
         p = a.stages / fn
         if k == "a0" and not p.exists() and not (a.live and _needs_intake(inp)):
+            if a.until == k:
+                return _stopped(a, rep, t0, k)
             continue   # intake adds no stage, and no cost, when the brief supplies everything or there is nothing else to read
         if p.exists():
             st[k] = json.loads(p.read_text())
@@ -326,6 +794,8 @@ def main(argv=None):
             inp.intake = st[k]
             rep["intake"] = {"applied": intake.apply_a0(inp, st[k]), "gaps": st[k]["gaps"], "questions": asked,
                              "questions_total": len(st[k]["questions"])}
+        if a.until == k:
+            return _stopped(a, rep, t0, k)
 
     _criterion_answers(a, inp, st, profile, rep)
 
@@ -333,7 +803,29 @@ def main(argv=None):
     fp = a.stages / "fit.json"   # the fit judge reads an assembled deck; its verdicts decide what a pitch presents
     fit = json.loads(fp.read_text()) if fp.exists() else None
     builder = assemble.build_investor if kind == "investor" else assemble.build
-    build = lambda f: builder(inp, st, client=a.client, project=a.project, agency=a.agency, fmt=a.format, fit=f, profile=profile)
+    frames, bound = None, None
+    names = [x for x in (a.client, a.agency) if x]
+    if a.brand and a.brand.exists():   # the brand's own name may not label or describe a picture either: read before any frame is bound
+        try:
+            bn = json.loads(a.brand.read_text()).get("name")
+        except ValueError:
+            bn = None
+        names += [bn] if bn else []
+    try:
+        label = images.clean_label(a.picture_label, names)
+        if a.approver and not images.APPROVER.match(a.approver):
+            raise images.ImageError("--approver must be human:<id>: only a person approves a picture")
+        if a.pictures and kind != "investor":   # frames.json is read ONLY with --pictures: a stray one in a stages folder changes nothing
+            frames = images.load_frames(a.stages)
+            if frames and frames.get("territories_sha256_12") and frames["territories_sha256_12"] != images.territories_sha((st.get("c") or {}).get("territories")):
+                raise images.ImageError("frames.json was made for other territories than c_territories.json now holds (its territories hash differs): "
+                                        "frames bind by territory id, so they would sit on the wrong slides. Run deck.from_territory again, with --replace")
+            if frames:
+                bound = images.bind_frames(None, frames, st.get("c") or {}, a.pictures, names)
+    except images.ImageError as e:
+        raise SystemExit(f"refused: {e}")
+    extra = {"pictures": bound} if bound else {}
+    build = lambda f: builder(inp, st, client=a.client, project=a.project, agency=a.agency, fmt=a.format, fit=f, profile=profile, **extra)
     deck = build(fit)
     if fit:
         rep["stages"]["fit"] = {"source": "recorded", "produced_by": fit.get("produced_by"), **(fit.get("usage") or {})}
@@ -352,6 +844,7 @@ def main(argv=None):
         rep["supply_questions"] = supply + [c for c in intake.gap_questions(assemble.investor_gaps(deck)) if c["id"] not in have]
     rep["confirm"] = intake.confirm_summary(deck, intake.stamp_confirm(deck, inp))   # what to confirm, and how much a person has verified or supplied
     _stamp_type(deck, profile, choice)
+    brand = None
     if a.brand:   # colours, fonts and logos: the logo files are read here so the deck carries them
         brand = json.loads(a.brand.read_text())
         for k in ("logo_dark_svg", "logo_light_svg"):
@@ -360,7 +853,7 @@ def main(argv=None):
         for k in ("logo_dark_png", "logo_light_png"):
             if brand.get(k):
                 brand[k] = str(Path(brand[k]).expanduser())
-        deck["meta"]["brand"] = brand
+    _stamp_look(a, deck, brand, rep, deck_ctx)
     ep = a.stages / "e_copy.json"   # stage e: tighten over-budget presented slides; recorded edits are re-applied by title
     if ep.exists():
         ecopy = json.loads(ep.read_text())
@@ -379,10 +872,95 @@ def main(argv=None):
         if ecopy.get("narrowed"):   # headline narrowing: a recorded e_copy.json without it changes nothing
             rep["stages"]["e"]["narrowing"] = assemble.apply_narrowing(deck, ecopy["narrowed"])
     _red_team(a, deck, inp, profile, rep)
+    sources, held, plan_res, stale_gen = {}, [], None, []
+    if a.pictures or supplied:   # pictures that already exist: records and assets only; nothing is made, sent or spent
+        try:
+            if bound and bound["assets"]:
+                images.register_assets(deck, bound["assets"])
+            held = images.place_supplied(deck, supplied, images.deck_names(deck), sources)
+            if a.pictures:
+                images.add_empty_slots(deck, a.pictures)
+            review = json.loads(a.review.read_text()) if a.review else {}
+            wrapped = isinstance(review, dict) and "review" in review
+            review = review.get("review", review) if isinstance(review, dict) else {}
+            terr = (st.get("c") or {}).get("territories") or []
+            if a.images != "off":
+                plan_res = _image_step(a, deck, inp, terr, review, wrapped, deck_ctx, rep)
+            gen = images.load_generated(a.stages) if a.pictures else None
+            if gen:
+                bound_gen = images.bind_generated(deck, gen, terr, images.deck_names(deck), imagegen.words_sha(deck))
+                if bound_gen.get("stale"):
+                    stale_gen.append({"check": "image_missing", "level": "warn", "slide": deck["order"][0],
+                                      "message": f"{bound_gen['stale']} generated picture(s) were made for other words than this deck now has, so none was used: make them again from a card"})
+            images.prune_assets(deck)
+            stamped = images.stamp_review(deck, review, a.approver)
+            hold = deck["meta"].get("style_hold") or (frames or {}).get("style_hold")   # one hold: a failed pack load (look stamping) or the frames plan's
+            if hold:
+                deck["meta"]["style_hold"] = hold
+            images.stamp_preferences(deck, a.pictures or "creative_cover", label, a.approver, hold,
+                                     ((frames or {}).get("style") or {}).get("hash") if hold else None,
+                                     generated=a.images != "off" or a.picture_source == "generated", cap_usd=a.cap_usd)
+        except images.ImageError as e:
+            raise SystemExit(f"refused: {e}")
+        if hold:
+            print("style pack held: " + hold.get("reason", "the Style Pack could not be read") + " The build went on; the pictures keep the style they were made in.")
+        if frames:
+            deck["meta"]["built_from"] = {**deck["meta"]["built_from"], "territory_run": {
+                "file": frames["run"]["file"], "sha256_12": frames["run"]["sha256_12"], "frames_version": frames.get("version"),
+                "same_brief": frames["run"]["same_brief"]}}
+        rep["pictures"] = {"slots": sum(1 for _ in images.image_slots(deck)), "drawn": len(images.drawn(deck, a.audience)), "held": held, "review": stamped}
+    if a.images != "off" and plan_res:
+        imagegen.mark_planned(deck, plan_res["plan"])
     rep["stages"]["assemble"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
 
+    plan_issues = []
+    loop_on, policy, base_deck, pinned_ids, swaps, level, tm = False, None, None, set(), {}, None, None
+    if not a.no_layout_plan:   # the layout plan (deck-layout-library): after stage e, the red team and the pictures, before validate
+        from . import layouts
+        t = time.time()
+        lk = (deck_ctx.get("look") if isinstance(deck_ctx, dict) else None) or {}   # the document's look: density (a person's choice) and layouts (their swaps)
+        dl = lk.get("density")
+        dl = dl.get("level") if isinstance(dl, dict) else dl
+        dl = dl if dl in spec.DENSITY_LEVELS else None
+        level = a.density or dl or (spec.DENSITY_DEFAULTS.get(a.format) if spec.LOOK_V2 else None)
+        if a.no_notes:   # no notes means nowhere for a moved point to go: nothing leaves the slide
+            level = "detailed"
+        if level:
+            deck["meta"].setdefault("preferences", {})["density"] = {"level": level, "source": "person" if (a.density or dl or a.no_notes) else "default"}
+        swaps = {k: v for k, v in (lk.get("layouts") or {}).items() if k in deck["slides"] and isinstance(v, str)}
+        for item in a.layout:
+            sid_, _, lid_ = item.partition("=")
+            if sid_ not in deck["slides"] or not lid_:
+                raise SystemExit(f"--layout {item}: expected SLIDE=ID with a slide id of this deck")
+            swaps[sid_] = lid_
+        tm = (deck["meta"].get("preferences") or {}).get("text_mode")
+        tm = tm.get("mode") if isinstance(tm, dict) else tm
+        asked_tm = a.text_mode or (deck_ctx or {}).get("text_mode")
+        if asked_tm in spec.TEXT_MODES:   # the person's choice (or the document's): condense lets the loop move points to the notes and shorten; absent: the loop does neither (a paid shorten needs the explicit choice) while the plan's density still moves points to the notes unless preserve
+            tm = asked_tm
+            deck["meta"].setdefault("preferences", {})["text_mode"] = {"mode": tm, "source": "person" if a.text_mode else "default"}
+        pinned_ids = _stamp_pinned(a, deck, deck_ctx)
+        loop_on = not a.no_repair and not a.no_qa and a.until is None
+        policy = repair.load_policy(profile, a.repair_policy) if loop_on else None
+        stop_for_shorten = loop_on and bool(policy["max_rounds"]) and repair.shorten_available(tm, a.audience, a.live, a.approve_shorten, a.stages, repair.approval_id(deck), (policy["shorten"] or {}).get("word_rule", "delete_only"))[0]
+        base_deck = deck   # pictures are already bound here: the repair loop re-plans from this deck and never asks for a picture
+        replan = lambda d: layouts.plan(d, prefs={"density": level, "text_mode": tm, "repair": bool(stop_for_shorten), "notes": not a.no_notes}, swaps=swaps)   # noqa: E731
+        deck, plan_issues, _pending = replan(base_deck)
+        if layouts.unmade_planned(deck):   # slots planned for pictures nobody has paid for: back to empty (in the base deck too, so a repair round never plans them), then plan again without them (free, in code)
+            imagegen.unplan(base_deck, rep.get("images") or {})
+            deck, plan_issues, _pending = replan(base_deck)
+        rungs = (deck["meta"].get("layout_plan") or {}).get("rungs", {})
+        rep["layout_plan"] = {"secs": round(time.time() - t, 3), "rungs": rungs, "variety_swaps": (deck["meta"].get("layout_plan") or {}).get("variety_swaps", 0), "skipped": ["condense"]}
+        rep["stages"]["layout_plan"] = {"secs": round(time.time() - t, 3), "model": None, "usd": 0}
+    else:   # no plan: a slot still planned for a picture nobody paid for goes back to empty here too, so deck.json holds no prompt or subject for it
+        from . import layouts
+        if layouts.unmade_planned(deck):
+            imagegen.unplan(deck, rep.get("images") or {})
     t = time.time()
-    findings = validate.run(deck, inp, a.audience)
+    findings = validate.run(deck, inp, a.audience) + stale_gen
+    for x in plan_issues:   # the six slot and layout names, warn (slot_missing on a required slot: error)
+        findings.append({k: v for k, v in (("check", x["check"]), ("level", x["level"]), ("slide", x["slide"]), ("slot", x.get("slot")),
+                                           ("message", x["message"]), ("evidence", x.get("evidence"))) if v is not None})
     rep["validation"] = validate.summary(findings)
     ws = validate.weight_share_report(deck)   # the buyer's weights against the words spent on each criterion: record only
     if ws["rows"]:
@@ -395,20 +973,48 @@ def main(argv=None):
     rep["stages"]["validate"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
     (a.out / "deck.json").write_text(json.dumps(deck, indent=1, ensure_ascii=False, default=str))
     (a.out / "validation.json").write_text(json.dumps(findings, indent=1, ensure_ascii=False))
+    if a.until == "deck":
+        rep["slides"] = len(deck["order"])
+        rep["slides_by_status"] = {s: sum(1 for x in deck["slides"].values() if x["status"] == s) for s in ("from_source", "drafted", "needs_human")}
+        return _stopped(a, rep, t0, "deck")
 
+    if a.audience == "client" and WITHHOLD_FAILING_CLIENT and any(f["level"] == "error" for f in findings):   # a client file with a failing check is never written
+        return _withheld(a, rep, deck, findings, t0)
+
+    pics, pic_findings, placed = None, [], set()
+    if a.pictures or supplied or a.audience == "client":   # never ship what an earlier build left in a reused --out (a client folder above all)
+        lg = (deck["meta"].get("theme") or {}).get("logo") or {}   # the cleared client logo is a deck asset, not a picture: it outlives the wipe
+        lrec = (deck.get("assets") or {}).get(lg.get("asset")) or {}
+        lfile = a.out / lrec["file"] if lrec.get("file") else None
+        lbytes = lfile.read_bytes() if lfile and lfile.is_file() else None
+        images.wipe_outputs(a.out)
+        if lbytes is not None:
+            lfile.parent.mkdir(parents=True, exist_ok=True)
+            lfile.write_bytes(lbytes)
+    if a.pictures or supplied:   # only what this audience draws is copied or derived: a client folder holds no byte of an unapproved picture
+        try:
+            pics = images.copy_assets(deck, a.out, a.audience, [a.stages], sources)
+        except images.ImageError as e:
+            raise SystemExit(f"refused: {e}")
     t = time.time()
-    pptx = render_pptx.render(deck, inp, a.out / "deck.pptx", a.master, findings, animate=a.animate or False)
+    pptx = render_pptx.render(deck, inp, a.out / "deck.pptx", a.master, findings, animate=a.animate or False, layouts_out=a.out / "layouts.json", pictures=pics, picture_findings=pic_findings, placed=placed,
+                              notes=not a.no_notes, no_plan=a.no_layout_plan)
+    if pic_findings:   # a slide drawn without its picture because it would not fit beside it: say so in the findings
+        for f in pic_findings:
+            f["slide_no"] = deck["order"].index(f["slide"]) + 1
+        findings.extend(pic_findings)
+        rep["validation"] = validate.summary(findings)
+        (a.out / "validation.json").write_text(json.dumps(findings, indent=1, ensure_ascii=False))
     rep["stages"]["render_pptx"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
 
     t = time.time()
-    render_web.render(deck, inp, a.out / "deck.html", findings)
+    render_web.render(deck, inp, a.out / "deck.html", findings, pictures=pics, placed=placed if pics else None, look=not a.no_layout_plan)
     if a.hyperframes:
-        render_hyperframes.render(deck, inp, a.out / "hyperframes", findings, builds=a.builds)
+        render_hyperframes.render(deck, inp, a.out / "hyperframes", findings, builds=a.builds, pictures=pics, placed=placed if pics else None, look=not a.no_layout_plan)
     rep["stages"]["render_web"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
 
     t = time.time()
-    subprocess.run([_soffice(), "--headless", "--convert-to", "pdf", "--outdir", str(a.out), str(pptx)],
-                   check=True, capture_output=True, timeout=180)
+    to_pdf(pptx, a.out)   # a private profile per call: a shared one made a second LibreOffice exit 0 with no PDF
     (a.out / "png").mkdir(exist_ok=True)   # pdftoppm overwrites by name; nothing is deleted
     subprocess.run(["pdftoppm", "-png", "-r", "60", str(a.out / "deck.pdf"), str(a.out / "png" / "slide")], check=True)
     rep["stages"]["render_pdf_png"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
@@ -416,20 +1022,18 @@ def main(argv=None):
     # ---- stage h: rendered-slide QA (qa_render.py). It never blocks the build: a finding is only reported. ----
     if not a.no_qa:
         t = time.time()
-        qa = qa_render.run(pptx, a.out / "deck.pdf", a.out, findings)
+        qa = (qa_seam or qa_render.run)(pptx, a.out / "deck.pdf", a.out, findings)
+        qa = repair.stamp_qa(a.out, qa)   # deck_sha: the hash of the deck.json these checks read (the same stamp in every round folder)
         rep["qa"] = _qa_line(qa["summary"], len(deck["order"]))
         rep["stages"]["qa_render"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
         print(rep["qa"])
+        if loop_on:
+            deck, findings, placed = _repair(a, inp, profile, deck, findings, qa, pics, placed, rep, base_deck, pinned_ids, swaps, level, tm, policy, pptx)
     # ---- end stage h ----
 
     rep["slides"] = len(deck["order"])
     rep["slides_by_status"] = {s: sum(1 for x in deck["slides"].values() if x["status"] == s) for s in ("from_source", "drafted", "needs_human")}
-    rep["wall_secs"] = round(time.time() - t0, 1)
-    rep["stages"] = {k: _price_stage(v or {}) for k, v in rep["stages"].items()}   # the CLI transport reports tokens, not dollars
-    rep["usd_total"] = round(sum((v or {}).get("usd", 0) or 0 for v in rep["stages"].values()), 4)
-    if any(v.get("usd_estimated") for v in rep["stages"].values()):
-        rep["usd_basis"] = spec.USD_BASIS
-    (a.out / "report.json").write_text(json.dumps(rep, indent=1, ensure_ascii=False))
+    _close(a, rep, t0)
     print(json.dumps({k: rep[k] for k in ("slides", "slides_by_status", "validation", "wall_secs", "usd_total")}, indent=1))
     return rep
 

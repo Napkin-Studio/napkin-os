@@ -1,0 +1,197 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Deck issue (docs/contracts/deck-visuals.md section 7)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "round",
+    "slide",
+    "source",
+    "check",
+    "severity",
+    "message",
+    "status"
+  ],
+  "description": "One finding code can act on, from any source. Derived by adapters from validation.json, qa.json, slot checks and guard results; written by the runner.",
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^i_[0-9a-f]{8}$",
+      "description": "First 8 hex of the SHA-256 of source|check|slide|slot|n, n counting repeats on one slide."
+    },
+    "round": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2
+    },
+    "slide": {
+      "type": "string",
+      "pattern": "^(s[0-9]{2,3}|deck)$"
+    },
+    "slot": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{1,23}$"
+    },
+    "source": {
+      "enum": [
+        "schema",
+        "validate",
+        "qa_render",
+        "image_guard",
+        "critic"
+      ]
+    },
+    "check": {
+      "enum": [
+        "numbers_trace",
+        "numbers_uncited",
+        "unverified_fig",
+        "rejected_used",
+        "proposed_used",
+        "unknown_ref",
+        "bare_claim",
+        "word_budget",
+        "empty_slot",
+        "placeholder",
+        "requirement_map",
+        "banned_phrase",
+        "watch_word",
+        "message_carried",
+        "action_title",
+        "repeated_line",
+        "copy_number",
+        "pitch_length",
+        "rule_broken",
+        "source_required",
+        "internal_leak",
+        "quote_source",
+        "criteria_map",
+        "imagery",
+        "copy_spec",
+        "budget_spread",
+        "thin_evidence",
+        "claim_fit",
+        "objective_quant",
+        "insight_shape",
+        "idea_single",
+        "chain_links",
+        "weight_share",
+        "off_slide",
+        "margin",
+        "text_overlap",
+        "text_overflow",
+        "min_font",
+        "contrast",
+        "mostly_empty",
+        "one_corner",
+        "qa_internal",
+        "unreadable",
+        "slot_limit",
+        "slot_missing",
+        "slot_unknown",
+        "slot_stale",
+        "block_unbound",
+        "layout_unknown",
+        "image_missing",
+        "image_unapproved",
+        "image_flagged",
+        "image_rights",
+        "style_pack_held",
+        "golden_echo",
+        "picture_stretch",
+        "picture_lowres",
+        "text_on_image_contrast",
+        "layout_repeat",
+        "title_drift",
+        "line_length",
+        "image_style_mixed",
+        "export_failed",
+        "v_one_focus",
+        "v_balance",
+        "v_not_crowded",
+        "v_looks_finished",
+        "v_image_fits",
+        "v_image_clean",
+        "v_text_on_image",
+        "v_crop_ok",
+        "v_one_style",
+        "v_rhythm"
+      ]
+    },
+    "level": {
+      "enum": [
+        "error",
+        "warn"
+      ],
+      "description": "The source's own level, kept as written."
+    },
+    "severity": {
+      "enum": [
+        "blocker",
+        "major",
+        "minor"
+      ]
+    },
+    "message": {
+      "type": "string",
+      "maxLength": 300
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "measured": {
+          "type": [
+            "number",
+            "string"
+          ]
+        },
+        "limit": {
+          "type": [
+            "number",
+            "string"
+          ]
+        },
+        "unit": {
+          "type": "string"
+        }
+      }
+    },
+    "fix": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "shrink",
+            "switch_layout",
+            "shorten",
+            "split",
+            "overflow_to_notes",
+            "add_scrim",
+            "crop_image",
+            "regen_image",
+            "drop_image",
+            "needs_human"
+          ]
+        },
+        "params": {
+          "type": "object"
+        }
+      }
+    },
+    "status": {
+      "enum": [
+        "open",
+        "fixed",
+        "unfixed",
+        "rolled_back",
+        "left_for_person"
+      ]
+    }
+  }
+}

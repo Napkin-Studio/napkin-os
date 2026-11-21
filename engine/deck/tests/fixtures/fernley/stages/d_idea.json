@@ -1,0 +1,303 @@
+{
+ "campaign_line": "Tea's day out.",
+ "idea": "Fernley takes the tea young adults grew up with at home off the kitchen table and out into the Irish summer, cold and sparkling.",
+ "answers_objection": "The objection is that the insight rests on no research. The idea is built to be tested before anything is made: short interviews with 18 to 34 year olds in Ireland check whether tea feels like a home-only drink. If the interviews do not confirm this, we replace the insight and the idea before creative development, not after launch.",
+ "executions": [
+  {
+   "id": "E1",
+   "channel": "Social video (proposed channel; to agree with the client)",
+   "role": "Awareness: show a familiar home tea ritual carried outdoors so Fernley is recognised as tea, not a mystery can.",
+   "copy": [
+    "Kettle's off.",
+    "Same chat. Different table.",
+    "Fernley. Sparkling iced tea from Cork.",
+    "Tea's day out."
+   ],
+   "answer": "Dramatises the first half of the insight, that they feel at home with tea. The kitchen-table chat carries on unchanged, but the tea comes off the kitchen table and out into the sun, cold and sparkling.",
+   "visual": {
+    "kind": "image_prompt",
+    "prompt": "Lo-fi, phone-shot vertical frame of two fictional young adults sitting on a sunny park bench in Ireland, mid-conversation, one handing the other a chilled unbranded can the way you would pass a mug of tea; a knitted tea cosy lies on the bench beside them as a wry nod to home; warm natural daylight, everyday not staged, no logos, no alcohol, no real people.",
+    "status": "illustrative, not final"
+   }
+  },
+  {
+   "id": "E2",
+   "channel": "Outdoor posters near where cold drinks are bought (proposed channel; to agree with the client)",
+   "role": "Bridge: meet people in summer settings close to the point of purchase, so awareness can become a first purchase.",
+   "copy": [
+    "You've had tea a thousand times.",
+    "Never on a day like this.",
+    "Fernley. Sparkling iced tea from Cork."
+   ],
+   "answer": "Dramatises the second half of the insight, that they never think of tea when they want something cold and fizzy. It names the familiarity, then puts tea into the summer moment they had not linked it to.",
+   "visual": {
+    "kind": "layout_hint",
+    "hint": "Large summer-sky photograph with one chilled can held up against it, condensation visible. Headline in two lines, top left; the brand line and 'sparkling iced tea from Cork' bottom right. No alcohol cues, no glassware that reads as a cocktail or mixer.",
+    "status": "illustrative, not final"
+   }
+  },
+  {
+   "id": "E3",
+   "channel": "Point of sale at the chiller (proposed channel; depends on retailer agreement)",
+   "role": "Trial: lower the risk of a first sip by telling the shopper at the chiller exactly what the drink is.",
+   "copy": [
+    "It's tea. Just cold and sparkling.",
+    "Your usual, out for the day.",
+    "Fernley. Tea's day out."
+   ],
+   "answer": "Dramatises the first half of the insight, that they feel at home with tea. 'Your usual' starts from something already known, which also answers the storyline's barrier that people may not be able to place the drink.",
+   "visual": {
+    "kind": "layout_hint",
+    "hint": "Shelf strip or chiller-door sticker at eye level. 'It's tea.' is the largest line, so the drink is placed in one glance; a small illustrated teacup turning into a cold can sits beside the product. Plain, readable from a step away.",
+    "status": "illustrative, not final"
+   }
+  }
+ ],
+ "channel_roles": [
+  {
+   "channel": "Social video",
+   "role": "Builds awareness (R1) among 18 to 34 year olds (R3) by showing tea's home ritual moved outdoors."
+  },
+  {
+   "channel": "Outdoor posters near where cold drinks are bought",
+   "role": "Links the idea to the summer moment and to the place of purchase, turning awareness toward trial."
+  },
+  {
+   "channel": "Point of sale at the chiller",
+   "role": "Drives trial (R2) at the moment of choice by saying plainly that Fernley is tea, cold and sparkling."
+  }
+ ],
+ "measurement_title": "No baseline was supplied, so a survey before launch sets one and the campaign is judged against it.",
+ "measurement": [
+  {
+   "kpi": "Awareness of Fernley among 18 to 34 year olds in Ireland",
+   "baseline": null,
+   "refs": [
+    "req:R1",
+    "req:R3"
+   ],
+   "basis": "proposal",
+   "how": "Survey of 18 to 34 year olds in Ireland before launch and again after the spring to summer 2027 flight. No figure was supplied, so the pre-launch wave sets the baseline."
+  },
+  {
+   "kpi": "Trial of Fernley among 18 to 34 year olds in Ireland",
+   "baseline": null,
+   "refs": [
+    "req:R2",
+    "req:R3",
+    "brief:desired_response"
+   ],
+   "basis": "proposal",
+   "how": "The same survey asks whether people have tried Fernley. Whether sales or stockist data can also be used is a question for the client."
+  },
+  {
+   "kpi": "Tea seen as a cold summer choice, not only a home drink",
+   "baseline": null,
+   "refs": [
+    "brief:insight"
+   ],
+   "basis": "proposal",
+   "how": "Interviews before creative development test whether the audience would take tea off the kitchen table on a summer day. The survey then tracks the same question before and after the campaign."
+  }
+ ],
+ "measurement_plan_title": "Every target is still to agree, because the brief gives objectives but no figures.",
+ "measurement_plan": [
+  {
+   "kpi": "Awareness of Fernley among 18 to 34 year olds in Ireland",
+   "baseline": null,
+   "target": "to agree",
+   "lag": "Can begin to move once the social video and posters are running. The exact timing is to agree.",
+   "confounders": "Other Fernley activity, any move by another drinks brand, and summer seasonality. We would allow for these by comparing people who saw the campaign with people who did not, and by logging other activity during the flight.",
+   "refs": [
+    "req:R1",
+    "req:R3"
+   ],
+   "basis": "proposal"
+  },
+  {
+   "kpi": "Trial of Fernley among 18 to 34 year olds in Ireland",
+   "baseline": null,
+   "target": "to agree",
+   "lag": "Comes after awareness and depends on Fernley being stocked where people see the work. Timing is to agree.",
+   "confounders": "Weather, because sunny spells lift cold-drink buying generally, plus distribution changes, price promotions and other activity. We would allow for these by reading trial against stockist coverage and against periods of weather.",
+   "refs": [
+    "req:R2",
+    "brief:desired_response"
+   ],
+   "basis": "proposal"
+  },
+  {
+   "kpi": "Tea seen as a cold summer choice, not only a home drink",
+   "baseline": null,
+   "target": "to agree",
+   "lag": "Attitudes may move more slowly than awareness, so the after-campaign survey wave is the first read.",
+   "confounders": "Other iced tea or tea brand activity and general summer seasonality. We would allow for these by asking the same question of people who did and did not see the campaign.",
+   "refs": [
+    "brief:insight"
+   ],
+   "basis": "proposal"
+  }
+ ],
+ "timeline": [
+  {
+   "phase": "Confirm or replace the insight through interviews with 18 to 34 year olds",
+   "when": "Before creative development; dates to agree",
+   "refs": [
+    "brief:insight"
+   ],
+   "basis": "proposal"
+  },
+  {
+   "phase": "Develop the work and check it for category safety",
+   "when": "After the insight is confirmed; dates to agree",
+   "refs": [
+    "req:R3"
+   ],
+   "basis": "proposal"
+  },
+  {
+   "phase": "Run the baseline survey wave",
+   "when": "Before launch; dates to agree",
+   "refs": [
+    "req:R1",
+    "req:R2"
+   ],
+   "basis": "proposal"
+  },
+  {
+   "phase": "Campaign live in Ireland",
+   "when": "Spring to summer 2027",
+   "refs": [
+    "req:R4",
+    "prompt:1"
+   ],
+   "basis": "evidence"
+  },
+  {
+   "phase": "Run the after-campaign survey wave and read results",
+   "when": "After the summer 2027 flight; date to agree",
+   "refs": [
+    "req:R1",
+    "req:R2"
+   ],
+   "basis": "proposal"
+  }
+ ],
+ "process": [
+  {
+   "step": "1",
+   "text": "Interview 18 to 34 year olds in Ireland to test whether tea feels like a home-only drink, and define the two halves of the audience: people who drink tea at home and people who do not."
+  },
+  {
+   "step": "2",
+   "text": "Ask the client which advertising codes apply to the category and to an audience that starts at 18, and agree channels, stockists and retailer access."
+  },
+  {
+   "step": "3",
+   "text": "Develop the executions from the confirmed insight and check every line and image for alcohol or mixer cues."
+  },
+  {
+   "step": "4",
+   "text": "Run the baseline survey wave, launch for spring to summer 2027, then run the after-campaign wave and report against agreed targets."
+  }
+ ],
+ "innovation": {
+  "title": "The plan works harder than its media list in four ways.",
+  "points": [
+   {
+    "text": "It is research-first. The insight is tested before a frame is shot, so the money backs a confirmed truth rather than a guess.",
+    "refs": [
+     "brief:insight"
+    ],
+    "basis": "proposal"
+   },
+   {
+    "text": "One device runs through every channel: the home tea ritual moved outdoors. Each channel then has a single job, from awareness through to trial.",
+    "refs": [
+     "req:R1",
+     "req:R2"
+    ],
+    "basis": "proposal"
+   },
+   {
+    "text": "The work is placed where cold drinks are bought and at the chiller itself, so recognition turns into a first sip at the moment of choice.",
+    "refs": [
+     "req:R2",
+     "brief:desired_response"
+    ],
+    "basis": "proposal"
+   },
+   {
+    "text": "Measurement is built in from day one. Because no baseline exists, a pre-launch wave creates one, so the pitch can show what moved.",
+    "refs": [
+     "req:R1",
+     "req:R2"
+    ],
+    "basis": "proposal"
+   }
+  ]
+ },
+ "chain": {
+  "insight_phrase": "never think of it when they want something cold and fizzy",
+  "strategy_phrase": "Fernley makes tea something to try cold and sparkling this summer.",
+  "idea_phrase": "off the kitchen table and out into the Irish summer, cold and sparkling",
+  "proof_phrase": "off the kitchen table",
+  "because": {
+   "insight_to_idea": "If they never reach for tea when they want something cold, the idea moves the tea they already know into exactly that moment.",
+   "idea_to_proof": "Taking tea off the kitchen table is tested first in interviews, then tracked in the survey and shown in the social video."
+  }
+ },
+ "risks": [
+  {
+   "risk": "The whole plan rests on an untested hypothesis that tea feels like a home-only drink.",
+   "mitigation": "Run audience interviews before creative development; replace the insight if they do not confirm it.",
+   "refs": [
+    "brief:insight"
+   ],
+   "basis": "evidence"
+  },
+  {
+   "risk": "Summer day-out scenes could read as an alcohol occasion or a mixer, with an audience starting at 18.",
+   "mitigation": "Ban alcohol cues in every execution; the client and their legal advisers confirm which codes apply.",
+   "refs": [
+    "req:R3"
+   ],
+   "basis": "evidence"
+  },
+  {
+   "risk": "Without supplied awareness or trial figures, success cannot be shown.",
+   "mitigation": "Run a pre-launch survey wave to set the baseline, and agree targets with the client.",
+   "refs": [
+    "req:R1",
+    "req:R2"
+   ],
+   "basis": "proposal"
+  },
+  {
+   "risk": "The work creates demand for trial that unknown stock levels may not meet.",
+   "mitigation": "Confirm stockists with the client and place posters and chiller material only where Fernley is sold.",
+   "refs": [
+    "req:R2"
+   ],
+   "basis": "proposal"
+  }
+ ],
+ "competition": {
+  "title": "The inputs name no alternative the client could choose instead of this plan.",
+  "alternatives": []
+ },
+ "messages": [],
+ "stage": "d_idea_and_executions",
+ "produced_by": "live claude-opus-5-5",
+ "usage": {
+  "prompt_tokens": 2,
+  "completion_tokens": 8915,
+  "cache_read_tokens": 0,
+  "cache_creation_tokens": 6204,
+  "model": "claude-opus-5-5",
+  "secs": 85.5,
+  "calls": 1,
+  "usd": 0.2617,
+  "usd_estimated": true
+ }
+}

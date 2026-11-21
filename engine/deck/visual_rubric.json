@@ -1,0 +1,100 @@
+{
+ "version": 1,
+ "per_slide": [
+  {
+   "id": "v_one_focus",
+   "question": "Is there one clear first thing to look at?",
+   "pass_is": "yes",
+   "severity_if_fail": "minor",
+   "fix": "none"
+  },
+  {
+   "id": "v_balance",
+   "question": "Is the slide free of a large empty area, such as an empty half?",
+   "pass_is": "yes",
+   "severity_if_fail": "major",
+   "fix": "switch_layout",
+   "confirm_with": "one_corner"
+  },
+  {
+   "id": "v_not_crowded",
+   "question": "Does the slide have room around its words and blocks (not crowded)?",
+   "pass_is": "yes",
+   "severity_if_fail": "major",
+   "fix": "switch_layout",
+   "applies_to": {
+    "groups": [
+     "content"
+    ]
+   },
+   "confirm_with": "slot_limit"
+  },
+  {
+   "id": "v_looks_finished",
+   "question": "Would this slide pass as made by a designer?",
+   "pass_is": "yes",
+   "severity_if_fail": "minor",
+   "fix": "none"
+  },
+  {
+   "id": "v_image_fits",
+   "question": "Does the picture show what the slide's title is about?",
+   "pass_is": "yes",
+   "severity_if_fail": "minor",
+   "fix": "none",
+   "applies_to": {
+    "has_image": true
+   }
+  },
+  {
+   "id": "v_image_clean",
+   "question": "Is the picture free of readable text, logos and brand marks?",
+   "pass_is": "yes",
+   "severity_if_fail": "major",
+   "fix": "none",
+   "applies_to": {
+    "has_image": true
+   },
+   "confirm_with": "image_flagged"
+  },
+  {
+   "id": "v_text_on_image",
+   "question": "Is every word set over the picture easy to read?",
+   "pass_is": "yes",
+   "severity_if_fail": "major",
+   "fix": "add_scrim",
+   "applies_to": {
+    "has_image": true
+   },
+   "confirm_with": "text_on_image_contrast"
+  },
+  {
+   "id": "v_crop_ok",
+   "question": "Are faces and the picture's main subject fully inside the frame?",
+   "pass_is": "yes",
+   "severity_if_fail": "minor",
+   "fix": "crop_image",
+   "applies_to": {
+    "has_image": true
+   }
+  }
+ ],
+ "per_deck": [
+  {
+   "id": "v_one_style",
+   "question": "Do all the pictures look like one set?",
+   "pass_is": "yes",
+   "severity_if_fail": "major",
+   "fix": "none",
+   "confirm_with": "image_style_mixed"
+  },
+  {
+   "id": "v_rhythm",
+   "question": "Does the deck vary its layouts without looking random?",
+   "pass_is": "yes",
+   "severity_if_fail": "minor",
+   "fix": "none",
+   "confirm_with": "layout_repeat"
+  }
+ ]
+}

@@ -1,0 +1,56 @@
+id: image_left
+version: 1
+group: content
+purpose: image
+description: 'As image text, mirrored: the picture panel on the left.'
+slot_summary: title, body, points, picture 4:3
+for_types:
+- idea
+- audience
+- solution
+- product
+when:
+  test: image_ready
+priority: 57
+alternatives:
+- image_text
+- cards
+without_image: cards_split
+density: standard
+pick: offer
+family: image_text
+renderer: image_left
+slots:
+  title:
+    kind: text
+    role: title
+    required: true
+    min_chars: 3
+    max_lines: 3
+  body:
+    kind: text
+    role: body
+    from_blocks:
+    - statement
+    - text
+    max_cpl: 48
+    max_chars: 367
+  points:
+    kind: list
+    role: body
+    from_blocks:
+    - bullets
+    min_items: 2
+    max_items: 3
+    max_cpl: 48
+  picture:
+    kind: image
+    required: true
+    dominant: true
+    image:
+      aspect: '4:3'
+      kinds:
+      - photo
+      - illustration
+      - frame
+      fit: cover

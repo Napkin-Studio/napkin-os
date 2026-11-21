@@ -1,0 +1,435 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Style Pack",
+  "description": "The look of the pictures, and optionally of the deck, that Napkin tools share (deck-look-kits). Laurence's: one editable thing with versions, attribution and an update notice. It holds no word that reaches a slide. Who may change it: kit.stewards. Only a steward may mark a reference own or licensed (it then goes to an image model), and must give a reason. Not appearance: a change is an attributed decision, because rights and models decide what leaves and what is spent.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "pack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "for": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "The pitch it serves; no client name needed."
+        },
+        "territory_run": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{12}$",
+          "description": "The 12-hex territory run it was made for."
+        }
+      }
+    },
+    "kit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "stewards"
+      ],
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "published": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Set when a steward publishes; the same shape as the Brand Clan's kit.published. style_hash is a stamp for display: the engine always recomputes it.",
+          "properties": {
+            "by": {
+              "type": "string",
+              "pattern": "^human:.+$"
+            },
+            "at": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "style_hash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}$"
+            }
+          }
+        },
+        "changelog": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "version",
+              "summary"
+            ],
+            "properties": {
+              "version": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "at": {
+                "type": "string"
+              },
+              "by": {
+                "type": "string",
+                "pattern": "^human:.+$"
+              },
+              "summary": {
+                "type": "string",
+                "maxLength": 200
+              }
+            }
+          }
+        },
+        "stewards": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Who may change and publish the pack, and mark a reference own or licensed. The OS has no per-document access list yet: the pack names them, every change is attributed.",
+          "items": {
+            "type": "string",
+            "pattern": "^human:.+$"
+          }
+        }
+      }
+    },
+    "look": {
+      "type": "array",
+      "maxItems": 8,
+      "description": "Words for the look of the pictures.",
+      "items": {
+        "type": "string",
+        "maxLength": 60
+      }
+    },
+    "palette": {
+      "type": "array",
+      "maxItems": 6,
+      "description": "Words for the colours in the picture (not deck colours).",
+      "items": {
+        "type": "string",
+        "maxLength": 40
+      }
+    },
+    "this_not_that": {
+      "type": "object",
+      "description": "Up to eight pairs, tn01 to tn08, read in key order.",
+      "propertyNames": {
+        "pattern": "^tn0[1-8]$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "this": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "not": {
+            "type": "string",
+            "maxLength": 80
+          }
+        }
+      }
+    },
+    "finish": {
+      "enum": [
+        "photo-real",
+        "rough"
+      ],
+      "default": "photo-real"
+    },
+    "banned_imagery": {
+      "type": "array",
+      "maxItems": 20,
+      "description": "Things never to show.",
+      "items": {
+        "type": "string",
+        "maxLength": 40
+      }
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 400
+    },
+    "references": {
+      "type": "object",
+      "description": "Up to 24 held, at most 14 sent (own or licensed, first 14 by name). client_supplied and reference_only never leave.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "asset",
+          "name",
+          "sha256",
+          "rights",
+          "by",
+          "at"
+        ],
+        "properties": {
+          "asset": {
+            "type": "string",
+            "pattern": "^human/assets/style/[0-9a-f]{64}\\.(png|jpg|jpeg|webp)$"
+          },
+          "name": {
+            "type": "string",
+            "description": "The file name; the sort key."
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "mime": {
+            "type": "string"
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "rights": {
+            "enum": [
+              "own",
+              "licensed",
+              "client_supplied",
+              "reference_only"
+            ],
+            "default": "reference_only"
+          },
+          "licence": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Required when rights is licensed.",
+            "properties": {
+              "holder": {
+                "type": "string"
+              },
+              "terms": {
+                "type": "string"
+              },
+              "until": {
+                "type": "string"
+              }
+            }
+          },
+          "why": {
+            "type": "string",
+            "maxLength": 120,
+            "description": "Required with own and licensed: why this image may leave the building."
+          },
+          "by": {
+            "type": "string",
+            "pattern": "^human:.+$",
+            "description": "The person who decided the rights; for own and licensed, a steward."
+          },
+          "at": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "models": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Model tiers, from the existing catalogue only. The per-deck cap still gates every spend.",
+      "properties": {
+        "draft": {
+          "enum": [
+            "gemini_image3.1_flash",
+            "gemini_image3_pro"
+          ],
+          "default": "gemini_image3.1_flash"
+        },
+        "hero": {
+          "enum": [
+            "gemini_image3.1_flash",
+            "gemini_image3_pro"
+          ],
+          "default": "gemini_image3_pro"
+        }
+      }
+    },
+    "deck": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional deck colour and type. Empty by default: no deck changes until a steward fills it. Pointers first; a literal is the fallback for a pitch with no brand kit.",
+      "properties": {
+        "colours": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "accent": {
+              "type": "object",
+              "description": "One pointer: {brand: <colour id>}, {agency: base|accent} or {hex: RRGGBB}.",
+              "properties": {
+                "brand": {
+                  "type": "string"
+                },
+                "agency": {
+                  "enum": [
+                    "base",
+                    "accent"
+                  ]
+                },
+                "hex": {
+                  "type": "string",
+                  "pattern": "^[0-9A-Fa-f]{6}$"
+                }
+              },
+              "additionalProperties": false
+            },
+            "paper": {
+              "type": "object",
+              "description": "One pointer: {brand: <colour id>}, {agency: base|accent} or {hex: RRGGBB}.",
+              "properties": {
+                "brand": {
+                  "type": "string"
+                },
+                "agency": {
+                  "enum": [
+                    "base",
+                    "accent"
+                  ]
+                },
+                "hex": {
+                  "type": "string",
+                  "pattern": "^[0-9A-Fa-f]{6}$"
+                }
+              },
+              "additionalProperties": false
+            },
+            "ink": {
+              "type": "object",
+              "description": "One pointer: {brand: <colour id>}, {agency: base|accent} or {hex: RRGGBB}.",
+              "properties": {
+                "brand": {
+                  "type": "string"
+                },
+                "agency": {
+                  "enum": [
+                    "base",
+                    "accent"
+                  ]
+                },
+                "hex": {
+                  "type": "string",
+                  "pattern": "^[0-9A-Fa-f]{6}$"
+                }
+              },
+              "additionalProperties": false
+            },
+            "panel": {
+              "type": "object",
+              "description": "One pointer: {brand: <colour id>}, {agency: base|accent} or {hex: RRGGBB}.",
+              "properties": {
+                "brand": {
+                  "type": "string"
+                },
+                "agency": {
+                  "enum": [
+                    "base",
+                    "accent"
+                  ]
+                },
+                "hex": {
+                  "type": "string",
+                  "pattern": "^[0-9A-Fa-f]{6}$"
+                }
+              },
+              "additionalProperties": false
+            },
+            "chart": {
+              "type": "array",
+              "maxItems": 8,
+              "items": {
+                "type": "object",
+                "description": "One pointer: {brand: <colour id>}, {agency: base|accent} or {hex: RRGGBB}.",
+                "properties": {
+                  "brand": {
+                    "type": "string"
+                  },
+                  "agency": {
+                    "enum": [
+                      "base",
+                      "accent"
+                    ]
+                  },
+                  "hex": {
+                    "type": "string",
+                    "pattern": "^[0-9A-Fa-f]{6}$"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "type": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "head": {
+              "type": "object",
+              "description": "{brand: <typography id>} or {family, fallback?}.",
+              "properties": {
+                "brand": {
+                  "type": "string"
+                },
+                "family": {
+                  "type": "string",
+                  "maxLength": 60
+                },
+                "fallback": {
+                  "type": "array",
+                  "maxItems": 2,
+                  "items": {
+                    "type": "string",
+                    "maxLength": 60
+                  }
+                }
+              },
+              "additionalProperties": false
+            },
+            "body": {
+              "type": "object",
+              "description": "{brand: <typography id>} or {family, fallback?}.",
+              "properties": {
+                "brand": {
+                  "type": "string"
+                },
+                "family": {
+                  "type": "string",
+                  "maxLength": 60
+                },
+                "fallback": {
+                  "type": "array",
+                  "maxItems": 2,
+                  "items": {
+                    "type": "string",
+                    "maxLength": 60
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "pack",
+    "kit"
+  ]
+}

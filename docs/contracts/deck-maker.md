@@ -303,11 +303,27 @@ Each live stage records `usd`: the transport's figure, else tokens at `spec.PRIC
 `report.json` `usd_total` includes recorded stages priced the same way and `usd_basis` says it is an estimate. A reply that
 is not JSON gets one repair call. Bench cost ranges are assumptions, plus or minus 30% (ADR 0032, proposed).
 
+## The gates
+
+The run stops at three gates and nowhere else. Review is the screen after the last gate, not a gate. The engine has no gates of its
+own: `run_deck --until <stage>` stops after the stage, and the server (`deck/server.py`) holds the run there until the person's approval
+is in `run.approvals` and the gate's stage output already existed. The table is tested against `run_deck.STAGE_FILES`
+(`engine/deck/tests/test_gates_contract.py`).
+
+| Gate | n | After stage | Stage file | The gate shows |
+|---|---|---|---|---|
+| storyline | 1 | b | b_storyline.json | `gate.beats` |
+| territories | 2 | c | c_territories.json | `gate.territories`, `gate.first_pick` |
+| idea | 3 | d | d_idea.json | `gate.idea` |
+
+After the idea gate the run goes on by itself: copy (e, with the fit judge and the red team), assemble, validate, the files. An investor deck
+(stage i, no b, c or d) has the storyline gate only, after stage i.
+
 ## Not built
 
-- Running the engine from the app: the Build button saves the inputs and opens the recorded run. The
-  runner (middleware tasks `build_deck`, `approve_gate`, `ask_change` in the template's
-  `app/pipeline.yaml`) needs the server feature.
+- Running the engine from the app: the middleware side exists (`build_deck@1`, middleware-api.md §12, over the
+  engine server `engine/deck/server.py`); the app's Build and Approve do not call it yet (features/deck-maker-server.clan).
+  `ask_change` has no handler.
 - Launching the Research Tool on a Strengthen yes (only the request is recorded).
 - Attaching documents from the app (the display list is written by the host).
 - Acting on a gate's edit or retry request (the app records it; the engine has no gates yet). The engine

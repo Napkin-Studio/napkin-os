@@ -1,0 +1,92 @@
+id: placeholder_card
+version: 1
+group: content
+purpose: list
+description: Dashed cards for what a person must supply, solid cards for what is given.
+slot_summary: title, to_supply, given
+for_types:
+- title
+- objective
+- brief_restated
+- scoring
+- criterion_answer
+- real_question
+- chart
+- insight
+- audience
+- proposition
+- territory
+- territory_choice
+- idea
+- execution
+- channel_roles
+- innovation
+- guardrails
+- process
+- measurement
+- measurement_plan
+- timeline
+- investment
+- team
+- credentials
+- next_step
+- appendix
+- problem
+- why_now
+- solution
+- product
+- market
+- business_model
+- traction
+- what_we_know
+- competition
+- gtm
+- financials
+- upside
+- founders
+- ask
+- risks
+- close
+- conflicts
+- questions
+- requirement_trace
+- appendix_sources
+when:
+  test: has_human_item
+priority: 60
+alternatives:
+- placeholder_split
+roomier: placeholder_split
+density: detailed
+pick: rule
+family: placeholder
+renderer: placeholder_card
+slots:
+  title:
+    kind: text
+    role: title
+    required: true
+    min_chars: 3
+    max_lines: 3
+  to_supply:
+    kind: list
+    role: body
+    from_blocks:
+    - bullets
+    min_items: 1
+    max_items: 6
+    item:
+      body_max_chars: 220
+  given:
+    kind: list
+    role: body
+    from_blocks:
+    - bullets
+    - text
+    - small
+    - statement
+    - callout
+    - card
+    - kv
+    min_items: 1
+    max_items: 4

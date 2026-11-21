@@ -1,0 +1,85 @@
+id: text_columns
+version: 1
+group: content
+purpose: list
+description: Two or three open columns of text with a heading each and no card fill.
+slot_summary: title, columns
+for_types:
+- title
+- objective
+- brief_restated
+- scoring
+- criterion_answer
+- real_question
+- chart
+- insight
+- audience
+- proposition
+- territory
+- territory_choice
+- idea
+- execution
+- channel_roles
+- innovation
+- guardrails
+- process
+- measurement
+- measurement_plan
+- timeline
+- investment
+- team
+- credentials
+- next_step
+- appendix
+- problem
+- why_now
+- solution
+- product
+- market
+- business_model
+- traction
+- what_we_know
+- competition
+- gtm
+- financials
+- upside
+- founders
+- ask
+- risks
+- close
+- conflicts
+- questions
+- requirement_trace
+- appendix_sources
+priority: 0
+alternatives:
+- cards
+- cards_split
+roomier: cards
+density: standard
+pick: offer
+family: cards
+renderer: text_columns
+slots:
+  title:
+    kind: text
+    role: title
+    required: true
+    min_chars: 3
+    max_lines: 3
+  columns:
+    kind: group
+    role: body
+    from_blocks:
+    - text
+    - small
+    - statement
+    - callout
+    - card
+    - bullets
+    - kv
+    min_items: 1
+    max_items: 4
+    item:
+      heading_max_chars: 40
+      body_max_chars: 280

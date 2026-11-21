@@ -151,7 +151,12 @@ echo "suites: ${run_list[*]}"
 # --- the suites, as ci.yml runs them -----------------------------------------
 CRATES=(-p clan-sdk -p clan-cli -p napkin-host -p napkin-web)
 PY_ENGINE_DEPS=(--with numpy --with requests --with httpx --with pypdf --with pdfplumber
-                --with python-docx --with PyYAML --with python-dotenv --with pytest)
+                --with python-docx --with PyYAML --with python-dotenv --with pytest
+                --with python-pptx --with lxml --with jsonschema)
+# Keep identical to the pip line in the ci.yml engine job (two copies on purpose, for now).
+# The deck tests importorskip these, so a missing one would skip tests silently; the
+# pre-step in suite_engine imports them and fails loudly instead.
+PY_DECK_IMPORTS='import pptx, lxml, jsonschema, docx'
 
 suite_rust() {
   cargo fmt "${CRATES[@]}" -- --check &&
@@ -177,8 +182,12 @@ suite_desktop() {
 }
 suite_engine() {
   ( cd engine/rag && BRIEF_TESTS_OFFLINE=1 uv run -q --no-project --python 3.12 "${PY_ENGINE_DEPS[@]}" python -m pytest -q -p no:cacheprovider ) &&
+  ( cd engine && uv run -q --no-project --python 3.12 "${PY_ENGINE_DEPS[@]}" --with jsonschema python -m pytest -q -p no:cacheprovider visuals/tests ) &&
   ( cd engine/agent-server && BRIEF_TESTS_OFFLINE=1 uv run -q --no-project --python 3.12 "${PY_ENGINE_DEPS[@]}" python -m pytest -q -p no:cacheprovider ) &&
-  ( cd mock-agent && uv run -q --no-project --python 3.12 "${PY_ENGINE_DEPS[@]}" python -m pytest -q -p no:cacheprovider )
+  ( cd mock-agent && uv run -q --no-project --python 3.12 "${PY_ENGINE_DEPS[@]}" python -m pytest -q -p no:cacheprovider ) &&
+  ( cd engine && BRIEF_TESTS_OFFLINE=1 PYTHONPATH=. uv run -q --no-project --python 3.12 "${PY_ENGINE_DEPS[@]}" python -m pytest -q -p no:cacheprovider territory/tests ) &&
+  ( cd engine && uv run -q --no-project --python 3.12 "${PY_ENGINE_DEPS[@]}" python -c "$PY_DECK_IMPORTS" ) &&
+  ( cd engine && PYTHONPATH=. BRIEF_TESTS_OFFLINE=1 uv run -q --no-project --python 3.12 "${PY_ENGINE_DEPS[@]}" python -m pytest -q -p no:cacheprovider deck/tests )
 }
 suite_middleware() {
   ( cd server && uv run -q --python 3.12 pytest -q )

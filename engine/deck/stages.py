@@ -47,8 +47,9 @@ MODELS["a0"] = "claude-sonnet-5-5"
 MODELS["i"] = "claude-opus-5-5"
 MODELS["red_team"] = "claude-sonnet-5-5"   # a Claude model, never the writer's (ADR 0006); a non-Claude red team is not wired here
 MODELS["d_criterion"] = "claude-opus-5-5"   # one tender criterion's written answer: the writer's model, as stage d
+MODELS["g"] = "claude-sonnet-5-5"   # the picture subjects (deck-image-gen): one call per deck, on its own card
 MODELS["insight_judge"] = "claude-sonnet-5-5"   # never the writer's model (ADR 0006: Claude only; a non-Claude judge is not wired here)
-EFFORT = {"a0": "medium", "a": "medium", "b": "high", "c": "high", "c_judge": "low", "d": "high", "fit": "medium", "e": "low", "i": "high", "insight_judge": "low", "red_team": "medium", "d_criterion": "medium"}   # copy tightening is mechanical: low effort (medium cost up to $1.27 a deck)
+EFFORT = {"g": "low", "a0": "medium", "a": "medium", "b": "high", "c": "high", "c_judge": "low", "d": "high", "fit": "medium", "e": "low", "i": "high", "insight_judge": "low", "red_team": "medium", "d_criterion": "medium"}   # copy tightening is mechanical: low effort (medium cost up to $1.27 a deck)
 #: Slide types whose headlines make claims the fit judge reads.
 JUDGED = ("real_question", "chart", "insight", "audience", "proposition", "measurement", "innovation",
           "problem", "why_now", "solution", "product", "market", "business_model", "traction", "competition", "gtm",
@@ -445,6 +446,18 @@ def copy(deck, inp, profile: dict | None = None) -> tuple[dict, dict]:
     return obj, u
 
 
+def repair_copy(deck, inp, profile: dict | None = None, requests: list | None = None) -> tuple[dict, dict]:
+    """The repair loop's one paid rung: condense the on-screen words of the slots that do not fit, on stage e's transport and model.
+    ``requests`` is ``[{slide (title), slot, role, max_chars, max_words, fields: [{id, text}]}]``, built and filtered by code
+    (repair.build_request: never a title, quote, statement, from/to, table, stats item, sourced item or placeholder). The reply may only
+    DELETE words or REUSE the slide's own (prompts/e_copy.md, the <slots> paragraph); code refuses anything else (assemble.shorten_problem).
+    Returns ``{"edits": [{slide, slot, field, text}]}`` and the usage."""
+    user = f"<slots>\n{json.dumps(requests or [], ensure_ascii=False)}\n</slots>"
+    obj, u = _call("e", user, _sysmsg("e_copy.md", "e", profile))
+    obj.update(stage="e_repair", produced_by=f"live {MODELS['e']}")
+    return obj, u
+
+
 def red_team(deck, inp, profile: dict | None = None) -> tuple[dict, dict]:
     """The red team: one Sonnet call that reads the finished deck (the presented slides' titles and on-screen text, the client's
     requirements and the stated ask) as a skeptical buyer or investor and returns at most spec.RED_TEAM_MAX objections, each tied
@@ -460,6 +473,12 @@ def red_team(deck, inp, profile: dict | None = None) -> tuple[dict, dict]:
     obj["objections"] = [o for o in obj.get("objections") or [] if isinstance(o, dict)][:spec.RED_TEAM_MAX]
     obj.update(stage="red_team", produced_by=f"live {MODELS['red_team']}")
     return obj, u
+
+
+def image_subjects(req: dict) -> tuple[dict, dict]:
+    """Stage g (deck-image-gen): the subject of every empty picture slot, from the request ``imagegen.subject_request`` built (marked parts are
+    already out of it). One call; the caller records it and the ledger counts it inside the deck's cap."""
+    return _call("g", json.dumps(req, ensure_ascii=False, indent=1), _sysmsg("g_image_subjects.md", "g"))
 
 
 def investor(inp, st, profile: dict | None = None) -> tuple[dict, dict]:

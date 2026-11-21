@@ -1,0 +1,91 @@
+{
+ "verdicts": [
+  {
+   "id": "IC4",
+   "tests": {
+    "generic": {
+     "answer": "yes",
+     "reason": "Swap in \"[client]\" and \"[category]\": \"young adults may not be able to tell whether a [category] drink is a tea or a soft drink\" reads true for any new drink in a hard-to-place category. Nothing ties it to Fernley or Cork."
+    },
+    "human_tension": {
+     "answer": "yes",
+     "reason": "It holds a want against a limit: \"open to something new, yet a drink they cannot place is one they cannot picture tasting.\""
+    },
+    "specific": {
+     "answer": "no",
+     "reason": "A rival in another new-drink category could say \"a drink they cannot place is one they cannot picture tasting\"; it says nothing about Fernley's situation."
+    },
+    "follows": {
+     "answer": "no",
+     "reason": "The cited text only says Fernley is a Cork sparkling iced tea brand seeking a campaign (brief:background, prompt:1). Nothing there says people cannot tell tea from soft drink at the chiller; the candidate itself says \"No finding or verbatim was supplied.\""
+    }
+   },
+   "paraphrase": "People will not try a drink they cannot imagine the taste of, so Fernley has to let them taste it in their head before asking them to buy.",
+   "order_note": ""
+  },
+  {
+   "id": "IC5",
+   "tests": {
+    "generic": {
+     "answer": "no",
+     "reason": "It names the Irish summer, the Cork tea brand and tea moving \"from the kitchen table\" to something cold and fizzy. Swapping in \"[client]\" and \"[category]\" breaks it."
+    },
+    "human_tension": {
+     "answer": "yes",
+     "reason": "It sets feeling at home with tea against never thinking of it when wanting something cold and fizzy: \"feel at home with tea, yet never think of it when they want something cold and fizzy.\""
+    },
+    "specific": {
+     "answer": "yes",
+     "reason": "It rests on Fernley being a tea brand and on an Irish spring-to-summer campaign; a rival in another category could not say tea belongs at the kitchen table."
+    },
+    "follows": {
+     "answer": "no",
+     "reason": "The cited text gives only the brand, Cork, sparkling iced tea, and the 18 to 34 audience. Nothing says young adults grew up with tea at home or do not think of it for summer; the candidate admits \"No verbatim or finding was supplied.\""
+    }
+   },
+   "paraphrase": "Young adults know tea as a homely, indoor drink, so Fernley has to move it outdoors into summer as something cold and sparkling.",
+   "order_note": ""
+  },
+  {
+   "id": "IC6",
+   "tests": {
+    "generic": {
+     "answer": "yes",
+     "reason": "\"Assume [category] is a sugary drink with a [category] label\" and \"lead with the sparkle and the tea\" could be said of any flavoured or iced drink. Nothing is tied to Fernley or Ireland."
+    },
+    "human_tension": {
+     "answer": "yes",
+     "reason": "It holds a want against an assumption: \"want a cold drink with character, yet assume iced tea is a sugary drink with a tea label.\""
+    },
+    "specific": {
+     "answer": "no",
+     "reason": "Any iced tea or soft drink rival could claim that people assume the category is sweet and still; it does not rest on Fernley's situation."
+    },
+    "follows": {
+     "answer": "no",
+     "reason": "The only cited ref says Fernley is a Cork sparkling iced tea brand. It says nothing about expecting iced tea to be sweet and still; the candidate says \"No category research was supplied.\""
+    }
+   },
+   "paraphrase": "People may think iced tea is just a sweet, flat drink, so Fernley has to show that its tea is fizzy and still tastes of tea.",
+   "order_note": ""
+  }
+ ],
+ "order": [
+  "IC5",
+  "IC4",
+  "IC6"
+ ],
+ "stage": "insight_judge",
+ "produced_by": "live claude-sonnet-5-5",
+ "usage": {
+  "prompt_tokens": 2,
+  "completion_tokens": 1220,
+  "cache_read_tokens": 687,
+  "cache_creation_tokens": 2248,
+  "model": "claude-sonnet-5-5",
+  "secs": 12.4,
+  "calls": 1,
+  "usd": 0.0269,
+  "usd_estimated": true
+ }
+}
