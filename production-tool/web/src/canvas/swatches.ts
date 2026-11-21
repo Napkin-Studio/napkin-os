@@ -13,6 +13,7 @@ export const isBrandRole = (r: RefRole | undefined): r is BrandRole => !!r && (B
 export const SWATCH_MAX = 6
 
 const HEX = /^#[0-9A-F]{6}$/
+const MIN_SHARE = 0.015
 
 /** #RRGGBB, upper case. */
 export const hexOf = (r: number, g: number, b: number) => `#${[r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('')}`.toUpperCase()
@@ -31,7 +32,9 @@ export function topColours(data: Uint8ClampedArray | number[], n = SWATCH_MAX, m
     bin.r += data[i]; bin.g += data[i + 1]; bin.b += data[i + 2]; bin.count++
     bins.set(key, bin)
   }
-  const ranked = [...bins.values()].sort((a, b) => b.count - a.count).map((x) => [x.r / x.count, x.g / x.count, x.b / x.count])
+  // A colour on fewer than MIN_SHARE of the pixels is an edge's blend, not one of the picture's colours.
+  const counted = [...bins.values()].reduce((n, x) => n + x.count, 0)
+  const ranked = [...bins.values()].filter((x) => x.count >= counted * MIN_SHARE).sort((a, b) => b.count - a.count).map((x) => [x.r / x.count, x.g / x.count, x.b / x.count])
   const kept: number[][] = []
   for (const c of ranked) {
     if (kept.length >= n) break

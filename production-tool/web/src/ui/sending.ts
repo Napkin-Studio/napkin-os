@@ -23,5 +23,5 @@ export function sendingLine(pictures: number): string {
   if (pictures <= 0) return 'The Director agent is reading your words and writing the prompt…'
   const what = pictures === 1 ? 'the picture' : `${pictures} pictures`
   const long = pictures >= 8 ? ' With this many it can take up to a minute.' : ''
-  return `Uploading ${what}, then the Director agent reads them and writes the prompt…${long}`
+  return `Uploading ${what}, then the Director agent reads ${pictures === 1 ? 'it' : 'them'} and writes the prompt…${long}`
 }

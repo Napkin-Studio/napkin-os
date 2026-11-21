@@ -442,7 +442,12 @@ function TitleEditor({ at, width, room, title, purpose, fresh, onTitle, onPurpos
           <div className="bd-chips">
             {PURPOSES.map((p) => (
               <button key={p.purpose} type="button" role="radio" aria-checked={purpose === p.purpose} className={`bd-chip ${purpose === p.purpose ? 'on' : ''}`}
-                onMouseDown={(e) => e.preventDefault()} onClick={() => onPurpose(p.purpose)}>{p.label}</button>
+                onMouseDown={(e) => e.preventDefault()} onClick={() => {
+                  // The title box follows the purpose while it still holds the default (UAT round 2 R2-5).
+                  const t = titleForPurpose(value, purpose, p.purpose)
+                  if (t) setValue(t)
+                  onPurpose(p.purpose)
+                }}>{p.label}</button>
             ))}
           </div>
           <button type="button" className="btn sm primary" onMouseDown={(e) => e.preventDefault()} onClick={() => { commit(); onDone() }}>Done</button>
