@@ -128,6 +128,10 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   // What to do with the blue (mock image): one action shown at a time in the Booth.
   const [act, setAct] = useState<'fill' | 'remove' | 'whole' | 'upscale'>('fill')
   const booth = useBooth('storyboard')
+  // The editor's tools are in its Booth: it opens shown, whatever the canvas's Booth was left at (UAT round 4 S3-4: the
+  // editor opened with its tools hidden in a collapsed Booth). Not remembered: hiding it again is the person's.
+  const bringIn = booth.bringIn
+  useEffect(() => { bringIn() }, [bringIn])
   /** A layer picked in Layers that is not a mask (Frame, a result, text): shown picked, with why
    *  it cannot be painted; the next stroke starts a new mask. A mask's pick is the session's active mask. */
   const [picked, setPicked] = useState<string | null>(null)
