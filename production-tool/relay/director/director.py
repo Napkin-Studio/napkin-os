@@ -706,7 +706,8 @@ def _sheet_for_dex(sheet: dict) -> dict:
 
 
 def _onscreen(job: dict, inp: dict) -> None:
-    """No clock time in a clip's prompt unless a shot asks for words on screen (onscreen.py; UAT 2026-11-21, F11)."""
+    """No clock time in a clip's or a frame's prompt unless a shot asks for words on screen (onscreen.py; UAT 2026-11-21,
+    F11; round 4, R4-F10)."""
     import onscreen
     onscreen.apply(job, inp)
 
@@ -852,8 +853,10 @@ class Director:
             e.answer = output  # what Dex wrote, for the relay's director_rejected line
             e.given = given
             raise
-        if op == "clip" and "providerJob" in output:
+        if op in ("clip", "frame") and "providerJob" in output:
+            # No clock time in a frame's prompt either (UAT round 4, R4-F10: "1 a.m." reached frame 1's prompt).
             _onscreen(output["providerJob"], raw)
+        if op == "clip" and "providerJob" in output:
             _sound(output["providerJob"], raw, sheet, sheet["ops"][op])
         # What Dex was given, after the relay's cuts, kept small on the job record (features/pt-canvas-r1.clan).
         agent_block = {"model": model, "promptVersion": self.prompt_version, "output": output,

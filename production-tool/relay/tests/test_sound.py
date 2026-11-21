@@ -113,3 +113,23 @@ def test_a_silence_beat_is_not_a_sound():
     assert not sound.is_silence({"kind": "sound", "text": "A soft click as the switch flips"})
     nothing, dropped = sound.keep_asked_sounds(shots, "")
     assert nothing[0]["beats"] == [] and dropped == ["Silence: the kettle boils with no noise at all."]
+
+
+def test_a_clip_with_sound_hears_its_sound_beats_said_as_sound():
+    # UAT round 4, R4-F10: Box 1 was made with sound, and "A soft click, then quiet" never reached the prompt.
+    click = {"kind": "sound", "at_s": 1.5, "text": "A soft click, then quiet."}
+    job = {"prompt": "A kettle on a counter.", "audio": False}
+    sound.apply(job, {"shots": [shot([MOMENT]), shot([click], 2)]}, sheet_for("wan3"), starts=[0, 3], prompt_max=1000)
+    assert job["audio"] is True
+    assert job["prompt"] == "A kettle on a counter.\n[4.5 s] Sound: A soft click, then quiet."
+    # With a line too: the line as speech first, then the sound.
+    both = {"prompt": "A kitchen.", "audio": False}
+    sound.apply(both, {"shot": shot([LINE, click])}, sheet_for("veo3.1"), prompt_max=1000)
+    assert both["prompt"].split("\n")[1:] == ['[1 s] HER, whispering: “Quietboil. Let them sleep.” ' + sound.NO_SUBTITLES, "[1.5 s] Sound: A soft click, then quiet."]
+    # A silence beat is never said; a model with no switch hears nothing more.
+    hush = {"prompt": "A kettle.", "audio": False}
+    sound.apply(hush, {"shot": shot([{"kind": "sound", "at_s": 0, "text": "Silence: no roar at all."}])}, sheet_for("wan3"))
+    assert hush["prompt"] == "A kettle."
+    quiet = {"prompt": "A kettle."}
+    sound.apply(quiet, {"shot": shot([click])}, sheet_for("gemini_omni_flash_1.1"))
+    assert quiet["prompt"] == "A kettle."
