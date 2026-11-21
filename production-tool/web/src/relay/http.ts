@@ -3,7 +3,7 @@
 // bodies per relay-api.schema.json. No token: who is asking comes from the relay's identity seam.
 
 import type {
-  AnswerConflict, AssetRef, Config, ConfigFile, ContractError, Estimate, EstimateRequest, InputMime, Job, JobAnswer, JobRequest, Key, LibraryEntry, LibraryIndex, LibraryPublish, LogEntry, Me, Output,
+  AnswerConflict, AssetRef, Config, ConfigFile, ContractError, InputMime, Job, JobAnswer, JobRequest, Key, LibraryEntry, LibraryIndex, LibraryPublish, LogEntry, Me, Output,
   UploadResponse,
 } from '../contracts/types'
 import { AGENCY_SHELF } from '../contracts/types'
@@ -86,10 +86,6 @@ export class HttpRelay implements Relay {
 
   cancelJob(jobId: string) {
     return this.call<Job>('DELETE', `/jobs/${encodeURIComponent(jobId)}`)
-  }
-
-  estimate(req: EstimateRequest) {
-    return this.call<Estimate>('POST', '/estimate', req)
   }
 
   async answerJob(jobId: string, answer: JobAnswer): Promise<AnswerResult> {

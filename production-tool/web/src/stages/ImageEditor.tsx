@@ -792,8 +792,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
         <EditTray anchor={tray === 'fill' ? fillBtn : tray === 'remove' ? removeBtn : tray === 'whole' ? wholeBtn : upBtn} open onClose={() => setTray(null)}
           title={TRAY_TITLE[tray]}
           items={trayItems(tray)} model={tray === 'upscale' ? upModel : tray === 'whole' ? wholeModel : regionModel} send={TRAY_SEND[tray]}
-          onSend={() => send(tray)}
-          price={tray === 'upscale' ? { op: 'upscale', input: { scale, aspect: { w: W, h: H } } } : { op: 'region_edit', input: tray === 'whole' ? {} : { region: { x: 0, y: 0, w: 1, h: 1 } } }} />
+          onSend={() => send(tray)} />
       )}
     </div>
   )

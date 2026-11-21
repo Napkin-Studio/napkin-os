@@ -61,7 +61,6 @@ import { RightsChip } from '../ui/finals/RightsChip'
 import { chipLook } from '../ui/finals/chipLook'
 import { BrandFields } from './BrandFields'
 import { PaidButton } from '../ui/PaidButton'
-import { usePrice } from '../ui/usePrice'
 import { sendingLine, useSlow } from '../ui/sending'
 import { viewsWhat } from '../ui/viewsWhat'
 import { isBrandRole, payloadFor, payloadMissing, type BrandPayload } from '../canvas/swatches'
@@ -1215,8 +1214,7 @@ export function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, onG
           <>
             <ModelPick op="view" value={viewChoice} onChange={setViewPick} />
             <PaidButton className="btn sm dark" label="Make the other views" busy={busy === 'views'} disabled={!!busy}
-              what={viewsWhat(named.key, OTHER_VIEWS)} yes={`Make ${OTHER_VIEWS.length}`} op="view" input={{ view: OTHER_VIEWS[0] }} count={OTHER_VIEWS.length}
-              modelChoice={choiceToSend('view', config, viewChoice)}
+              what={viewsWhat(named.key, OTHER_VIEWS)} yes={`Make ${OTHER_VIEWS.length}`}
               onYes={() => run('views', () => ctrl.makeViews(named.key, undefined, choiceToSend('view', config, viewChoice)))} />
           </>
         )}
@@ -1302,6 +1300,8 @@ function Floating({ className, anchor, children }: { className: string; anchor: 
 /** The ten main role pills of the Name dialog (the rest under More…), as the contract's role table sorts them. */
 const MAIN_ROLES = REF_ROLES.filter((r) => REF_ROLE_TABLE[r].picker === 'main')
 const roleWord = (r: RefRole) => (r === 'brand_rule' ? 'brand rule' : r)
+/** The role's one line in the Name dialog; a palette's says its colours can be changed (UAT round 2: one line, not two). */
+const roleLine = (r: RefRole) => `${REF_ROLE_TABLE[r].ui_line}${r === 'palette' ? '. Click a colour to change it.' : ''}`
 
 const KIND_WORD = { pic: 'picture', drawn: 'drawing', gen: 'result' } as const
 
@@ -1331,8 +1331,7 @@ function GeneratePopover({ ctrl, ids, at, onClose, onPlace }: {
   const [people, setPeople] = useState<Set<string>>(() => new Set())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // What it costs (UAT round 2 UX 2) and, when sending takes a while, what is happening (R2-3, UX 3).
-  const price = usePrice('generate', more ? { chips: ['more_options'] } : {}, 1, modelChoice)
+  // When sending takes a while, what is happening (UAT round 2 R2-3, UX 3).
   const slow = useSlow(busy, 3000)
   const ref = useRef<HTMLTextAreaElement>(null)
   useEffect(() => ref.current?.focus(), [])
@@ -1489,7 +1488,7 @@ function GeneratePopover({ ctrl, ids, at, onClose, onPlace }: {
         <button className="btn xs ghost" disabled={busy || !oneArea || blocked} title="Click on the canvas where it should land" onClick={() => { onClose(); onPlace({ ids: sent(ids), text, more, modelChoice, limits, people: [...people] }) }}>Place…</button>
       </div>
       <div className="tray-foot nowrap" title="Nothing is sent until you press Generate.">
-        <span className="pt-mono tray-model">{model ?? 'The default model'}{price ? <> · <span className="tray-price">{price}</span></> : null}{preview.sketch ? <><br />{preview.sketch.label}</> : null}</span>
+        <span className="pt-mono tray-model">{model ?? 'The default model'}{preview.sketch ? <><br />{preview.sketch.label}</> : null}</span>
         <button className="btn sm" onClick={onClose}>Cancel</button>
         <button className="btn sm primary" disabled={busy || !oneArea || blocked} title={counted.problem} onClick={() => void submit()}>{busy ? 'Sending…' : 'Generate'}</button>
       </div>
@@ -1555,9 +1554,11 @@ function NamePopover({ ctrl, nodeId, current, presetVariant, at, onClose }: {
             ))}
             {!moreRoles && <button className="btn xs ghost" onClick={() => setMoreRoles(true)}>More…</button>}
           </div>
-          <div className="faint roleline">{REF_ROLE_TABLE[role].ui_line}</div>
+          <div className="faint roleline">{roleLine(role)}</div>
         </div>
       )}
+      {/* A brand key named before: its role's line once, above its fields (the pills above say it for a new key). */}
+      {brandRole && !isNewKey && <div className="faint roleline">{roleLine(brandRole)}</div>}
       {brandRole && <BrandFields role={brandRole} asset={asset} value={brand} onChange={setBrand} />}
       {ck && cv && <div className="mono" style={{ marginTop: 8 }}>@{ck}_{cv}</div>}
       {movesName && <div className="faint" style={{ fontSize: 12, marginTop: 4 }}>Another image is @{ck}_{cv}. Saving moves the name here, and what was made from the other one is marked out of date.</div>}

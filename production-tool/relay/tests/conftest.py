@@ -219,7 +219,7 @@ class Harness:
             assert out is None
         else:
             name = {"/me": "Me", "/uploads": "UploadResponse", "/library": "LibraryIndex",
-                    "/projects": "ProjectList", "/estimate": "Estimate"}.get(path, "Job")
+                    "/projects": "ProjectList"}.get(path, "Job")
             if path.startswith("/library/"):
                 name = "LibraryIndex" if path.count("/") == 2 else "LibraryEntry"
             if path.startswith("/clan/"):

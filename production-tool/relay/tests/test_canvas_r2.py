@@ -193,19 +193,3 @@ def test_the_seed_is_grained_like_the_masters_edge():
     plan = formats.pad_plan(320, 180, 21, 9)
     assert formats.edge_texture(stars, plan) > formats.edge_texture(flat, plan) + 5
 
-
-# ── R2-6, R2-10: a price before a paid confirm ───────────────────────────────
-
-def test_estimate_prices_a_job_before_it_is_sent_and_makes_nothing():
-    from conftest import Harness, base_config
-    h = Harness(base_config())
-    token = h.as_person()
-    body = {"contractVersion": "3", "op": "view", "input": {"view": "side", "image": {"sha256": A, "url": "https://x/a.png", "mime": "image/png"}}}
-    _, out = h.call("POST", "/estimate", body, token, expect=200)
-    # (the harness checks the answer against Estimate)
-    assert out["provider"] == "runway" and out["usd"] > 0 and out["unknown"] is False
-    crop = {"contractVersion": "3", "op": "resize", "input": {"image": {"sha256": A, "url": "https://x/a.png", "mime": "image/png"},
-                                                               "aspect": {"w": 4, "h": 5},
-                                                               "resize": {"method": "crop", "masterSize": {"w": 1365, "h": 768}}}}
-    assert h.call("POST", "/estimate", crop, token, expect=200)[1] == {"usd": 0.0, "unknown": False}
-    h.call("POST", "/estimate", {"op": "view"}, token, expect=400)

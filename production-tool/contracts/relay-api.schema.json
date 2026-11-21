@@ -3152,31 +3152,6 @@
       ],
       "additionalProperties": false
     },
-    "EstimateRequest": {
-      "type": "object",
-      "description": "POST /estimate (features/pt-canvas-r2.clan): what one job like this would cost, before anything is sent, for the price on a paid confirm (UAT round 2 R2-6, R2-10). Free; reserves nothing; no job is made. The price is the relay's own (contracts/pricing.py over the sheet at the request's settings), on the provider the job would run on first.",
-      "properties": {
-        "contractVersion": { "$ref": "common.schema.json#/$defs/contractVersion" },
-        "op": { "$ref": "common.schema.json#/$defs/op" },
-        "input": { "$ref": "#/$defs/JobInput" },
-        "modelChoice": { "$ref": "#/$defs/ModelChoice" },
-        "quality": { "$ref": "common.schema.json#/$defs/clipQuality" }
-      },
-      "required": ["contractVersion", "op", "input"],
-      "additionalProperties": false
-    },
-    "Estimate": {
-      "type": "object",
-      "description": "What POST /estimate answers: one job's price in USD and where it would run. unknown: the sheet has no price for it (usd is then the relay's stand-in).",
-      "properties": {
-        "usd": { "type": "number", "minimum": 0 },
-        "unknown": { "type": "boolean" },
-        "provider": { "$ref": "common.schema.json#/$defs/provider" },
-        "model": { "type": "string", "minLength": 1, "maxLength": 120 }
-      },
-      "required": ["usd", "unknown"],
-      "additionalProperties": false
-    },
     "AnswerConflict": {
       "type": "object",
       "description": "409 from POST /jobs/{jobId}/answer: someone answered first. The card shows their answer; the person's own is not applied.",

@@ -48,7 +48,7 @@ export function BrandFields({ role, asset, value, onChange }: { role: BrandRole;
     }
     return (
       <div className="brandfields" aria-label="The palette's colours">
-        <div className="faint bf-line">{reading ? 'Reading the picture’s colours…' : 'The colours Dex keeps to. Click one to change it.'}</div>
+        {reading && <div className="faint bf-line">Reading the picture’s colours…</div>}
         <div className="row bf-swatches">
           {swatches.map((s, i) => (
             <span key={i} className="bf-swatch">

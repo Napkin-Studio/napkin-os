@@ -1,8 +1,6 @@
 // No price or cost anywhere in the UI (Shrey, 2026-10-13; features/runway-sheet-sync.clan): not on
 // the model menu, job buttons, the update and send trays, cards, asks or toasts. Each job's cost is
 // recorded and shown in one place only, the Decisions drawer (ui/historyItems.ts jobCost; features/production-new-ui.clan).
-// Since UAT round 2 (features/pt-canvas-r2.clan, R2-6/R2-10, taken for the owner and open for his say) a paid confirm
-// shows its price too; the words are still formatted only in ui/historyItems.ts (priceWords), so this test holds.
 
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'

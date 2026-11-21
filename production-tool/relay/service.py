@@ -421,8 +421,6 @@ class Relay:
             if req.get("modelChoice"):  # what the person picked, beside where it ran
                 ctx["pick"] = f'{req["modelChoice"]["provider"]}:{req["modelChoice"]["model"]}'
             return 200, public(self.create_job(who, req))
-        if method == "POST" and path == "/estimate":
-            return 200, self.estimate(who, self._json(body, "EstimateRequest"))
         if path.startswith("/jobs/"):
             job_id, _, sub = path[len("/jobs/"):].partition("/")
             ctx["jobId"] = job_id
@@ -1081,29 +1079,6 @@ class Relay:
         why = connected.problems(inp, sheet, sheet["ops"]["clip"])
         if why:
             raise ApiError("invalid_input", why)
-
-    def estimate(self, who: dict, req: dict) -> dict:
-        """POST /estimate (features/pt-canvas-r2.clan): one job's price before it is sent, for a paid confirm. The
-        provider it would run on first and the model it would run there, priced as a job is (_estimate). A free
-        resize (a crop, a layout) is 0; a step nothing routes is unknown. Nothing is reserved or made."""
-        op, inp = req["op"], req["input"]
-        if op in INTERNAL_OPS or free_resize(req):
-            return {"usd": 0.0, "unknown": False}
-        cfg = self.config()
-        allow = self._policy(who["tenant"]["id"])["allow"]
-        pick = req.get("modelChoice")
-        chain = self._chain(cfg, op, pick, allow, inp)
-        if not chain:
-            return {"usd": UNKNOWN_PRICE_USD, "unknown": True}
-        provider = chain[0]
-        model = self._run_model(provider, op, pick, inp, allow, req.get("quality"))
-        spec = ((self.registry.sheet(provider) or {}).get("ops") or {}).get(op) or {}
-        picked = None if model in (None, spec.get("model"), spec.get("regionModel")) else model
-        usd, unknown = self._estimate(op, provider, picked, inp, level=req.get("quality"))
-        out = {"usd": round(usd, 4), "unknown": unknown, "provider": provider}
-        if model or spec.get("model"):
-            out["model"] = model or spec["model"]
-        return out
 
     def create_job(self, who: dict, req: dict) -> dict:
         existing = self.store.get_job(req["jobId"])

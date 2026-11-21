@@ -3,7 +3,7 @@
 
 import type { ShellEvent } from '../dogfood/recorder'
 import type {
-  AnswerConflict, AssetRef, Config, ContractError, Estimate, EstimateRequest, InputMime, Job, JobAnswer, JobRequest, Key, LibraryEntry, LibraryIndex, LibraryPublish,
+  AnswerConflict, AssetRef, Config, ContractError, InputMime, Job, JobAnswer, JobRequest, Key, LibraryEntry, LibraryIndex, LibraryPublish,
   LogEntry, Output, Me,
 } from '../contracts/types'
 import type { Access } from './access'
@@ -32,9 +32,6 @@ export interface Relay {
   /** POST /jobs/{jobId}/answer: the job resumes on the same jobId. Someone answered first: their answer
    *  (409 AnswerConflict), never an error. */
   answerJob(jobId: string, answer: JobAnswer): Promise<AnswerResult>
-  /** POST /estimate: what one job like this would cost (a paid confirm's price; features/pt-canvas-r2.clan).
-   *  Optional: an older relay has none, and the confirm then shows no price. */
-  estimate?(req: EstimateRequest): Promise<Estimate>
   /** POST /log */
   log(entry: LogEntry): Promise<void>
   /** GET /config, or null when the relay doesn't serve one. */

@@ -40,7 +40,7 @@ export function useKeyActions(k: KeyEntry, ctrl: CanvasController | null) {
     ),
     views: controls.views && front && missingViews.length > 0
       ? <PaidButton className="btn-rect primary wide" label="Make the other views" busy={busy === 'views'} disabled={!!busy || !ctrl}
-          what={viewsWhat(k.key, missingViews)} yes={`Make ${missingViews.length}`} op="view" input={{ view: missingViews[0] }} count={missingViews.length}
+          what={viewsWhat(k.key, missingViews)} yes={`Make ${missingViews.length}`}
           onYes={() => void run('views', () => ctrl!.makeViews(k.key, missingViews))} />
       : null,
     publish: (
