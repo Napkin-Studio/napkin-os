@@ -68,11 +68,13 @@ export function promptState(d: Doc, kind: PromptKind, nodeId: Id): PromptState {
       return scriptEmpty(d, nodeId) && !running(d, 'write', { kind: 'script', id: nodeId }) ? { show: 'script' } : null
     case 'storyboard': {
       if (!d.storyboards[nodeId] || shotsOf(d, nodeId).length || running(d, 'shot_list', { kind: 'storyboard', id: nodeId })) return null
+      const fromScript = scriptHasWords(d, nodeId)
       // A brief's storyboard with no words of its own plans from the brief (UAT round 5, S3-6b: it said "from the
       // script", the project's main script, which its plan never reads: jobs/plan.ts reads scriptOfStoryboard).
+      // With no script words anywhere it offers the line box, as before.
       const own = scriptOfStoryboard(d, nodeId)
-      if (briefOf(d, nodeId) && !(own && scriptText(d, own.id).trim())) return { show: 'storyboard', fromScript: true, from: 'brief' }
-      return { show: 'storyboard', fromScript: scriptHasWords(d, nodeId) }
+      if (fromScript && briefOf(d, nodeId) && !(own && scriptText(d, own.id).trim())) return { show: 'storyboard', fromScript: true, from: 'brief' }
+      return { show: 'storyboard', fromScript }
     }
     case 'video': {
       if (!d.videos[nodeId]) return null
