@@ -26,7 +26,8 @@ import { tc } from './media'
 import { isStill, loadPreviewMuted, savePreviewMuted, useAssetUrl } from './media'
 import type { RoomData, Selection } from './Rooms'
 import { Timeline, type Picked } from './Timeline'
-import { compileFor, dismissedTakes, newerTake, readCut, renderPlan, whereWords } from './timeline'
+import { dismissedTakes, newerTake, readCut, renderPlan, whereWords } from './timeline'
+import { compileWithEndLine } from './endLine'
 import { Viewer } from './Viewer'
 import { DownloadButton } from '../ui/Download'
 import { mediaItem } from '../media/names'
@@ -57,7 +58,7 @@ export function EditRoom({ data, sel, onSel, onChange, onSound, register, ready:
   const ui = useUi()
   useJobsTick()
   const cut = useMemo(() => readCut(doc, data.videoId), [doc, data.videoId])
-  const plan = useMemo(() => compileFor(doc, data.videoId), [doc, data.videoId])
+  const plan = useMemo(() => compileWithEndLine(doc, data.videoId), [doc, data.videoId])
   const [t, setT] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [marks, setMarks] = useState<{ in?: number; out?: number }>({})
@@ -333,7 +334,7 @@ export function RenderAd({ data }: { data: RoomData }) {
   const close = useCallback(() => setOpen(false), [])
   const [sending, send] = useSending()
   const [error, setError] = useState<string | null>(null)
-  const plan = useMemo(() => compileFor(doc, data.videoId), [doc, data.videoId])
+  const plan = useMemo(() => compileWithEndLine(doc, data.videoId), [doc, data.videoId])
   const cut = useMemo(() => readCut(doc, data.videoId), [doc, data.videoId])
   const job = jobAt(doc, ui, (c) => c.for === 'stitch' && c.videoId === data.videoId)
   const rendering = isMoving(doc, job)
@@ -356,6 +357,8 @@ export function RenderAd({ data }: { data: RoomData }) {
   // A line or voice-over no clip voices is said before the render, not found after it (UAT 2026-11-21, F8: the
   // NARRATOR's end-card voice-over was never voiced and nothing said so).
   const sb = storyboardOfVideo(doc, data.videoId)
+  // The brief's end line no clip voices and nothing says: a super over the last shot, said here (R4-F6, UX 5).
+  if (plan.endLine?.how === 'super') checks.push({ text: `The brief\u2019s end line \u201c${plan.endLine.line}\u201d is not voiced, so it shows as a super over the last shot`, ok: true })
   for (const x of lineFacts(doc, data.videoId, sb ? shotsOf(doc, sb.id).map((s) => s.id) : []).filter((l) => !l.voiced)) {
     checks.push({ text: `Not heard: ${x.who ? `${x.who}\u2019s ` : ''}\u201c${x.text.length > 40 ? `${x.text.slice(0, 39)}\u2026` : x.text}\u201d (shot ${x.n}). ${x.why.split(':')[0]}.`, ok: false })
   }

@@ -75,25 +75,101 @@ const ASK_STOP = new Set(['make', 'more', 'less', 'line', 'lines', 'shot', 'shot
   'funnier', 'better', 'shorter', 'longer', 'again', 'there', 'their', 'where', 'when', 'what', 'which', 'would', 'could', 'should'])
 const stems = (t: string) => new Set((t.toLowerCase().match(/[a-z]{4,}/g) ?? []).filter((w) => !ASK_STOP.has(w)).map((w) => w.slice(0, 5)))
 
+/** A scene's shot rows (its shots, their beats; the end card too), in order: on a script of one scene, every shot. */
+function sceneRows(d: Doc, scriptId: Id, sceneId: Id) {
+  const c = composeScript(d, scriptId)
+  if (!c) return []
+  const lone = c.rows.filter((r) => r.kind === 'scene').length <= 1
+  const inScene = (shotId: Id) => lone || d.shots[shotId]?.scene_id === sceneId
+  return c.rows.filter((r) => (r.kind === 'shot' || r.kind === 'end_card') ? inScene(r.id) : r.kind === 'beat' ? inScene(r.shotId) : false)
+}
+
+/** A scene's words as the Script agent reads them. Its own prose when it has words; once Plan shots made them into
+ *  shots (its prose is empty), its shots' words, each spoken line and voice-over as a cue and its dialogue, and the
+ *  other beats as action lines (UAT round 4, R4-F3: the request went with lines [{action: ""}], so a length ask dropped
+ *  "Good boy." and the brief's end line, which skye.v7 keeps only when they are in the lines). */
+export function sceneLines(d: Doc, scriptId: Id, sceneId: Id, prose: Prose): WriteLine[] {
+  const own = linesOf(d, prose)
+  if (own.some((l) => l.text.trim())) return own
+  const out: WriteLine[] = []
+  for (const r of sceneRows(d, scriptId, sceneId)) {
+    if (r.kind === 'shot' || r.kind === 'end_card') {
+      if (r.shot.action?.trim()) out.push({ type: 'action', text: r.shot.action.trim().slice(0, 4000) })
+      continue
+    }
+    if (r.kind !== 'beat') continue
+    const b = r.beat
+    const text = (b.text ?? '').trim()
+    if (!text) continue
+    if (b.kind === 'line' || b.kind === 'vo') {
+      const who = (b.speaker?.trim() || (b.kind === 'vo' ? 'NARRATOR' : 'SOMEONE')).toUpperCase()
+      out.push({ type: 'character', text: b.kind === 'vo' && !/\(V\.?O\.?\)/i.test(who) ? `${who} (V.O.)` : who })
+      if (b.parenthetical?.trim()) out.push({ type: 'parenthetical', text: b.parenthetical.trim().replace(/^\((.*)\)$/s, '$1') })
+      out.push({ type: 'dialogue', text: text.slice(0, 4000) })
+    } else {
+      out.push({ type: 'action', text: `${b.kind.charAt(0).toUpperCase()}${b.kind.slice(1)}: ${text}`.slice(0, 4000) })
+    }
+  }
+  return out.length ? out : own
+}
+
+/** A scene's length now: its own words by the band's rule while it has words; its shots' seconds once Plan shots made
+ *  them (R4-F3: "about 0 s -> 8 s" for a scene of 10 s of shots). Undefined: it has neither. */
+export function sceneShotSeconds(d: Doc, scriptId: Id, sceneId: Id): number | undefined {
+  const shots = sceneRows(d, scriptId, sceneId).filter((r) => r.kind === 'shot' || r.kind === 'end_card') as { shot: { duration_s: number } }[]
+  if (!shots.length) return undefined
+  return Math.round(shots.reduce((a, r) => a + (r.shot.duration_s ?? 0), 0) * 10) / 10
+}
+
+/** A free ask whose words fit two shots or more equally (UAT round 4, R4-F3, UX 3): the Booth asks which one, rather
+ *  than writing for the whole scene blind. */
+export class WhichItem extends Error {
+  readonly choices: { target: WriteTarget; label: string }[]
+  constructor(choices: { target: WriteTarget; label: string }[]) {
+    super(`Which one is it about: ${choices.map((c) => c.label).join(' or ')}?`)
+    this.name = 'WhichItem'
+    this.choices = choices
+  }
+}
+
 /**
  * The one item a whole-script ask is about, once Plan shots made the scene's words into shots and lines and its own
  * text is empty (UAT round 3, R3-F3: "Make the snoring line funnier" went with lines [] and Skye said the scene had
- * no snoring line). The shot or line whose words share the most with the ask, when one does more than any other;
- * else undefined (the ask stays on the scene, which then reads the whole script as its neighbours).
+ * no snoring line). Each shot is scored by the ask's words its action and its beats share; the shot that shares the
+ * most wins, and inside it the line the most is about (its action when a beat does not share more). Two shots that
+ * share as much: `tie`, the shots to ask about (R4-F3: "snoring" was in shot 4's action and sound and shot 5's action,
+ * and the ask fell back to the scene). Nothing shared: neither.
  */
-export function askedItem(d: Doc, scriptId: Id, sceneId: Id, instruction: string): WriteTarget | undefined {
-  const c = composeScript(d, scriptId)
+export function askedItems(d: Doc, scriptId: Id, sceneId: Id, instruction: string): { pick?: WriteTarget; tie?: { target: WriteTarget; label: string }[] } {
   const asked = stems(instruction)
-  if (!c || !asked.size) return undefined
-  const scored: { t: WriteTarget; n: number }[] = []
-  const lone = c.rows.filter((r) => r.kind === 'scene').length <= 1
-  const inScene = (sid: Id | undefined) => lone || sid === sceneId
-  for (const r of c.rows) {
-    if (r.kind === 'shot' && inScene(r.sceneId ?? r.shot.scene_id)) scored.push({ t: { kind: 'shot', id: r.id }, n: [...stems(r.shot.action ?? '')].filter((w) => asked.has(w)).length })
-    else if (r.kind === 'beat' && inScene(d.shots[r.shotId]?.scene_id)) scored.push({ t: { kind: 'beat', id: r.id }, n: [...stems(r.beat.text ?? '')].filter((w) => asked.has(w)).length })
+  if (!asked.size) return {}
+  const score = (t: string) => [...stems(t)].filter((w) => asked.has(w)).length
+  const shots: { id: Id; number: number; action: string; n: number; best: { t: WriteTarget; n: number } }[] = []
+  for (const r of sceneRows(d, scriptId, sceneId)) {
+    if (r.kind === 'shot') {
+      const n = score(r.shot.action ?? '')
+      shots.push({ id: r.id, number: r.number, action: r.shot.action ?? '', n, best: { t: { kind: 'shot', id: r.id }, n } })
+    } else if (r.kind === 'beat') {
+      const sh = shots.find((x) => x.id === r.shotId)
+      if (!sh) continue
+      const n = score(r.beat.text ?? '')
+      sh.n += n
+      if (n > sh.best.n) sh.best = { t: { kind: 'beat', id: r.id }, n }
+    }
   }
-  scored.sort((a, b) => b.n - a.n)
-  return scored[0]?.n && scored[0].n > (scored[1]?.n ?? 0) ? scored[0].t : undefined
+  const ranked = shots.filter((x) => x.n > 0).sort((a, b) => b.n - a.n)
+  if (!ranked.length) return {}
+  if (ranked.length > 1 && ranked[0].n === ranked[1].n) {
+    const tied = ranked.filter((x) => x.n === ranked[0].n).sort((a, b) => a.number - b.number)
+    const words = (t: string) => { const w = t.trim(); return w.length > 40 ? `${w.slice(0, 39)}…` : w }
+    return { tie: tied.map((x) => ({ target: { kind: 'shot' as const, id: x.id }, label: `Shot ${x.number}${x.action.trim() ? ` (${words(x.action)})` : ''}` })) }
+  }
+  return { pick: ranked[0].best.t }
+}
+
+/** The one item an ask is about, or undefined (no single one: none shares words, or two shots share as many). */
+export function askedItem(d: Doc, scriptId: Id, sceneId: Id, instruction: string): WriteTarget | undefined {
+  return askedItems(d, scriptId, sceneId, instruction).pick
 }
 
 /** The seconds 'Make it N s' asks for: the shot's fair share of the target, in half seconds. */
@@ -130,7 +206,10 @@ export async function writeInput(store: ModelStore, scriptId: Id, asked: WriteTa
   // A free ask on a scene whose words Plan shots made into shots goes to the shot or line it is about (R3-F3).
   const planned = asked.kind === 'scene' && intent === 'instruct' && !opts.selection && !!opts.instruction?.trim()
     && !linesOf(d, store.text.prose('scene', asked.id)).some((l) => l.text.trim())
-  const target = (planned && askedItem(d, scriptId, asked.id, opts.instruction!)) || asked
+  const found = planned ? askedItems(d, scriptId, asked.id, opts.instruction!) : {}
+  // Two shots fit the ask as well: ask which (R4-F3, UX 3), never write for the whole scene blind.
+  if (found.tie) throw new WhichItem(found.tie)
+  const target = found.pick ?? asked
   const prose = store.text.prose(KIND[target.kind], target.id)
   const script = d.scripts[scriptId]
   const sceneId = target.kind === 'scene' ? target.id : target.kind === 'shot' ? d.shots[target.id]?.scene_id : d.shots[d.beats[target.id]?.shot_id ?? '']?.scene_id
@@ -142,7 +221,8 @@ export async function writeInput(store: ModelStore, scriptId: Id, asked: WriteTa
     target,
     base_hash: await proseHash(prose),
     ...(opts.instruction?.trim() ? { instruction: opts.instruction.trim().slice(0, 4000) } : {}),
-    lines: linesOf(d, prose),
+    // A scene Plan shots made into shots reads as its shots and their lines (R4-F3).
+    lines: target.kind === 'scene' ? sceneLines(d, scriptId, target.id, prose) : linesOf(d, prose),
     ...(opts.selection ? { selection: { ...opts.selection, text: opts.selection.text.slice(0, 4000) } } : {}),
     ...(opts.seconds ? { seconds: Math.min(60, Math.max(0.5, opts.seconds)) } : {}),
     ...(opts.name ? { name: opts.name.slice(0, 60) } : {}),

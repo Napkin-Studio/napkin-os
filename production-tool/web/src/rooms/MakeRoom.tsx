@@ -11,12 +11,10 @@ import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/conte
 import { clipRefCapacity, controlsFor, modelChoicesFor } from '../capabilities'
 import { CAMERA_ANGLES, CAMERA_MOVEMENTS, type Camera, type CameraMovement, type ModelChoice, type Shot } from '../contracts/types'
 import { updateDoc } from '../doc/store'
-import { drawFrame, selectedFrame } from '../jobs/frames'
-import { makeClip, videoQuality } from '../jobs/clips'
-import { makeRuns } from '../jobs/runs'
-import { separateSelection, setGap, splitBoxAt, takeShotOut, videoJoin } from '../jobs/runView'
+import { selectedFrame } from '../jobs/frames'
+import { separateSelection, setGap, splitBoxAt, takeShotOut } from '../jobs/runView'
 import { isRunning, jobAt, shotRefSet } from '../jobs/select'
-import { beatsOf, refName, refsList, shotNumber, shotsOf } from '../model/selectors'
+import { beatsOf, refName, refsList, shotNumber } from '../model/selectors'
 import { boxModel, boxModelCant, boxModelLimit, boxModelNote, boxModelSwitch, boxSound, entryOf, takeLimits } from './boxModel'
 import { boxHow, boxLimit, boxPictures, boxWords, flipWords, fromWords, guideLine, pickedFor, roomBoxModel, savedPicks, savePicks, stripGaps, withPick, type BoxLimit, type Gap } from './joinCut'
 import { CutIcon, GapButton, GapTip, JoinIcon, LimitPanel, StripShot, TakeStills } from './Strip'
@@ -41,6 +39,7 @@ import { planOrJoin } from '../jobs/plan'
 import { addBox, addShotRef, addShotToBox, removeShotRef, setStartFrame, shotRefLinks, startPicture } from './newBox'
 import { IMG_DRAG } from './Bin'
 import { readCut } from './timeline'
+import { makeBox, shotHasCharacter } from './makeBox'
 
 type Tab = 'shot' | 'box' | 'change'
 const SIZES = ['close', 'medium', 'wide'] as const
@@ -176,38 +175,9 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
     try {
       const f = facts.get(b.key)
       if (f?.limit?.hard) { setError(f.limit.why); return }
-      // The model the box shows is the one sent, always by name: the relay's own default once made a box that said
-      // Omni Flash on Veo 3.1 with sound (UAT 2026-11-21, F3).
-      const shownModel = roomBoxModel(doc, b, config, models)
-      const choice: ModelChoice | undefined = shownModel ? { provider: shownModel.provider, model: shownModel.model } : undefined
-      const shotId = b.shotIds[0]
-      const shot = doc.shots[shotId]
-      const hasFrame = !!selectedFrame(doc, shotId) || !!startPicture(doc, shotId)
-      // A box of one shot with no frame is made from its words (+ New box, a shot planned straight from the script),
-      // in a film too: makeRuns fell back to the video's clip mode, which a storyboard film says is frames, and
-      // the box failed with 'This shot has no frame yet' (UAT 2026-11-21, B1).
-      const lone = b.shotIds.length === 1
-      const fromWordsHere = lone && !hasFrame && !!shot?.action?.trim()
-      if (videoJoin(doc, data.videoId, config) === 'film' && !(lone && !hasFrame && shotHasCharacter(doc, shot))) {
-        const failed = await makeRuns(deps, { videoId: data.videoId, shotIds: [b.shotIds[0]], config, again: true, busy, ...(choice ? { modelChoice: choice } : {}), quality: videoQuality(doc, data.videoId), ...(fromWordsHere ? { fromWords: true } : {}) })
-        if (failed.length) setError(failed.join(' '))
-      } else {
-        // A character can only reach a clip through a frame (a clip from words is text-to-video, which
-        // drops every reference). So a character shot with no frame makes the FRAME first — image
-        // generation DOES use the @on views, so the character appears — and the person animates that
-        // frame next. Without this, Make quietly produced a character-less video (owner 2026-11-04).
-        const hasCharacter = shotHasCharacter(doc, shot)
-        const idx = shot ? shotsOf(doc, shot.storyboard_id).findIndex((s) => s.id === shotId) : -1
-        if (shot && !hasFrame && hasCharacter && idx >= 0) {
-          // One Make: the frame, then the clip from it when it lands (jobs/wire clipAfterFrame; UAT 2026-11-21, F7).
-          await drawFrame(deps, idx, 'first', { storyboardId: shot.storyboard_id, clipAfter: { videoId: data.videoId, ...(choice ? { modelChoice: choice } : {}) } })
-          setNotice('Drawing the frame of your character first, then the clip from it: a clip can only show @names through a frame.')
-        } else {
-          // No frame and no character: the clip is made from the shot's words (a new box, or straight from the script).
-          const fromWords = !hasFrame && !!shot?.action?.trim()
-          await makeClip(deps, shotId, { videoId: data.videoId, ...(choice ? { modelChoice: choice } : {}), ...(fromWords ? { fromWords } : {}) })
-        }
-      }
+      const made = await makeBox(deps, { videoId: data.videoId, box: b, config, models, busy })
+      if (made.failed.length) setError(made.failed.join(' '))
+      if (made.notice) setNotice(made.notice)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That did not work.')
     }
@@ -345,11 +315,6 @@ function frameFirst(doc: ReturnType<typeof useDoc>, b: Box): boolean {
   if (b.endCard || b.shotIds.length !== 1) return false
   const shot = doc.shots[b.shotIds[0]]
   return !selectedFrame(doc, b.shotIds[0]) && !startPicture(doc, b.shotIds[0]) && shotHasCharacter(doc, shot)
-}
-
-/** The shot names a character (a clip from words drops every reference, so the frame is made first). */
-function shotHasCharacter(doc: ReturnType<typeof useDoc>, shot: Shot | undefined): boolean {
-  try { return !!shot && shotRefSet(doc, shot).some((x) => x.ref.role === 'character') } catch { return false }
 }
 
 type BoxFacts = { pics: ReturnType<typeof boxPictures>; model: ModelChoice | undefined; limit: BoxLimit | undefined; words: { title: string; sub: string }; switched?: ReturnType<typeof boxModelSwitch>; sound?: ReturnType<typeof boxSound>; frameFirst?: boolean }

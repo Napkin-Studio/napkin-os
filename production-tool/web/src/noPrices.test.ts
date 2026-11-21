@@ -43,6 +43,9 @@ const COST_WORDS = [
   /\bFree, /,
   /\bnothing (?:was |has been )?paid\b/i,
   /' · paid'/,
+  // Round 4 film (R4-F8): the same rule from the film side.
+  /\bcost in (?:History|Decisions)\b/,
+  /what each job cost/,
 ]
 const COST_ALLOWED = new Set(['ui/historyItems.ts', 'ui/History.tsx', 'ui/HistoryList.tsx', 'noPrices.test.ts'])
 

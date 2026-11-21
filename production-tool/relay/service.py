@@ -2160,9 +2160,12 @@ class Relay:
         except Exception as e:
             log.exception("cutdown plan of %s failed", saved["jobId"])
             if cutter is self.cutter and not isinstance(cutter, cutdowns.PassthroughCutter):
+                # What Dex spent before failing is still on the job (F21; UAT round 4, R4-F4 had no agentUsd).
+                self._agent_spend(saved, getattr(e, "usage", None), getattr(cutter, "model", None))
                 # Dex could not answer: the passthrough's plan, said so, rather than no plan at all.
                 out = dict(cutdowns.PassthroughCutter().plan(saved["_req"]))
-                out["rationale"] = f"Dex could not plan this ({type(e).__name__}), so the plan keeps the opening and the payoff."
+                out["rationale"] = (f"Dex could not plan this ({type(e).__name__}), so this is a simple cut: the opening "
+                                    "and the payoff, fitted to each length.")
                 cutter = cutdowns.PassthroughCutter()
             else:
                 return self._fail(saved, "internal", f"Dex could not plan the cutdowns ({type(e).__name__}).",

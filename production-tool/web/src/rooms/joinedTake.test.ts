@@ -77,7 +77,8 @@ describe("a take's windows (B5)", () => {
   it("read the job's cuts in order, whatever the web planned, and fall back to the plan", () => {
     // The relay planned the cut at 2 s (a 4 s minimum); the web, at 1.5.
     const w = takeWindows([1.5, 1.5], [0, 1.5], [{ planned_s: 2, found_s: null }], 4)
-    expect(w.map((x) => [x.in_s, x.out_s])).toEqual([[0, 2], [2.5, 4]])
+    // Shot 2 starts at the relay's cut, its slack trimmed from the tail (round 4, R4-F7: one source of truth).
+    expect(w.map((x) => [x.in_s, x.out_s])).toEqual([[0, 2], [2, 3.5]])
   })
 
   it("the take's length is the model's (its minimum), not the shots' sum rounded up", () => {

@@ -213,8 +213,10 @@ export function briefSendRow(d: Doc, nodeId: Id, op?: Op): BriefSendRow | undefi
   const b = briefOf(d, nodeId)
   if (!b) return undefined
   const t = b.through
+  // "from Script · First Light"; a node with only its default name is "from the Script" (UAT round 4, R4-F8: "from Script · Script").
+  const named = (kind: string, title: string | undefined) => (title?.trim() && title.trim().toLowerCase() !== kind.toLowerCase() ? `${kind} · ${title.trim()}` : `the ${kind}`)
   const from = b.via === 'link' ? 'linked'
-    : `from ${t && d.scripts?.[t] ? `Script · ${d.scripts[t].title}` : t && d.storyboards?.[t] ? `Storyboard · ${d.storyboards[t].title}` : t && d.videos?.[t] ? `Film · ${d.videos[t].title}` : 'upstream'}`
+    : `from ${t && d.scripts?.[t] ? named('Script', d.scripts[t].title) : t && d.storyboards?.[t] ? named('Storyboard', d.storyboards[t].title) : t && d.videos?.[t] ? named('Film', d.videos[t].title) : 'upstream'}`
   return { key: `brief:${b.brief.id}`, briefId: b.brief.id, label: b.item.label, detail: [spineSummary(spineForOp(b.brief.spine, op)), from].filter(Boolean).join(' · '), via: b.via }
 }
 

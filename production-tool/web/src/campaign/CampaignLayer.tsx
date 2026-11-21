@@ -35,7 +35,7 @@ import { panCrop, zoomCrop } from './crop'
 import { fullPlan } from './delivery'
 import { exportSizes } from './exportZip'
 import { formatById, LANES, shortName, sizeWords } from './formats'
-import { adjustCrop, changeMethod, channelOfSize, redoSize, sendSize, setLocked, setProtect, sizesOf, staleSizes, updateSizes, upscaleForDelivery, type CampaignDeps } from './make'
+import { adjustCrop, changeMethod, channelOfSize, redoSize, sendSize, setLocked, setProtect, sizesOf, staleSizes, updateSizes, upscaleForDelivery, sizeSeconds, type CampaignDeps } from './make'
 import { METHOD_WORD, methodModels, methodWords, PAID, rowFracs, STILL_METHODS, type MethodModel } from './rules'
 import { campaignSheet } from './sheet'
 import { TypeEditor, TypeOverlay } from './TypeEditor'
@@ -477,7 +477,7 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, flagsOpen,
         )}
       </div>
       <div className="cb-caption" style={{ height: CAPTION_H }}>
-        <span className="cb-name">{f ? shortName(f.format) : size.format.format_id}{size.length_s ? ` · ${size.length_s} s` : ''}</span>
+        <span className="cb-name">{f ? shortName(f.format) : size.format.format_id}{sizeSeconds(doc, size) ? ` · ${sizeSeconds(doc, size)} s` : ''}</span>
         <span className="cb-meta">{f ? sizeWords(f.format) : `${size.delivery.width}×${size.delivery.height}`} · {methodLine}</span>
       </div>
       {picked && !typing && <TileFloat anchor={pic}>

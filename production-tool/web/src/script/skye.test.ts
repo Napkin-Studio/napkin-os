@@ -10,7 +10,9 @@ import { MockRelay } from '../relay/mock'
 import { mockWrites } from '../relay/mockWrite'
 import { addShots, asset, id, MAYA, modelStore, seedStages, SHA } from '../test/model'
 import { makeAjv, SCHEMA } from '../test/schemas'
-import { discardDraft, DISCARDED_LINE, draftFromBrief, fitSeconds, handsOff, keep, keepMineDraft, landWrites, NEW_SCENE_LINE, neighbours, pickedIdea, proposedOf, sceneForJob, skyeAsks, skyeState, waitingLine, wordDiff, writeInput } from './skye'
+import { discardDraft, DISCARDED_LINE, draftFromBrief, fitSeconds, handsOff, keep, keepMineDraft, landWrites, NEW_SCENE_LINE, neighbours, pickedIdea, proposedOf, sceneForJob, skyeAsks, skyeState, waitingLine, WhichItem, wordDiff, writeInput } from './skye'
+import { secondsNow, wholeScope } from './skyeBooth'
+import { composeScript } from './compose'
 
 async function project() {
   const store = modelStore()
@@ -84,6 +86,67 @@ describe('a whole-script ask after Plan shots (UAT round 3, R3-F3)', () => {
     expect(all.target).toEqual({ kind: 'scene', id: sceneId })
     expect(all.context.neighbours).toContain('Shot 1:')
     expect(all.context.neighbours).toContain('Shot 3: Through the thin wall')
+  })
+})
+
+describe('script asks after Plan shots carry the real lines (UAT round 4, R4-F3)', () => {
+  /** Round 4's film: the scene's words made into shots, a spoken line, a sound beat and the brief's end line as a VO. */
+  async function round4() {
+    const p = await project()
+    const sceneId = id('scene')
+    await p.store.change((d) => {
+      d.scenes[sceneId] = { id: sceneId, v: 1, field_v: {}, script_id: p.scriptId, rank: 'a0', heading: '' } as never
+      for (const sh of p.shots) d.shots[sh].scene_id = sceneId
+      d.shots[p.shots[0]].action = 'Insert on the kettle on the counter: the switch goes down.'
+      d.shots[p.shots[1]].action = '@maya_front whispers to the kettle.'
+      d.shots[p.shots[2]].action = 'Behind the thin wall, a flatmate keeps snoring, undisturbed.'
+      const beat = (bid: string, shot: string, kind: string, text: string, speaker?: string) => {
+        d.beats[bid] = { id: bid, v: 1, field_v: {}, shot_id: shot, kind, at_s: 0.5, text, rank: 'a0', ...(speaker ? { speaker } : {}) } as never
+      }
+      beat(id('beat'), p.shots[1], 'line', 'Good boy.', 'MAYA')
+      beat(id('beat'), p.shots[2], 'sound', 'Steady snoring through the wall.')
+      beat(id('beat'), p.shots[2], 'vo', 'Quietboil. Let them sleep.', 'NARRATOR')
+    }, { action: 'plan shots' })
+    await p.store.flush()
+    return { ...p, sceneId }
+  }
+
+  it('"Make it 8 seconds" sends the shots, "Good boy." and the end line, not an empty action', async () => {
+    const { store, scriptId, sceneId } = await round4()
+    const input = await writeInput(store, scriptId, { kind: 'scene', id: sceneId }, 'fit_seconds', { seconds: 8 })
+    expect(input.target).toEqual({ kind: 'scene', id: sceneId })
+    expect(input.lines).not.toEqual([{ type: 'action', text: '' }])
+    expect(input.lines).toContainEqual({ type: 'dialogue', text: 'Good boy.' })
+    expect(input.lines).toContainEqual({ type: 'character', text: 'MAYA' })
+    expect(input.lines).toContainEqual({ type: 'character', text: 'NARRATOR (V.O.)' })
+    expect(input.lines).toContainEqual({ type: 'dialogue', text: 'Quietboil. Let them sleep.' })
+    expect(input.lines[0]).toEqual({ type: 'action', text: 'Insert on the kettle on the counter: the switch goes down.' })
+  })
+
+  it('a free ask goes to the shot that shares the most; a tie asks which shot', async () => {
+    const { store, scriptId, sceneId, shots } = await round4()
+    // "snoring" is in shot 3's words and its sound: shot 3 (round 4's repro fell back to the scene).
+    const snore = await writeInput(store, scriptId, { kind: 'scene', id: sceneId }, 'instruct', { instruction: 'Make the snoring line funnier', mode: 'revise' })
+    expect(snore.target).toEqual({ kind: 'shot', id: shots[2] })
+    // "kettle" is in shots 1 and 2 alike: the Booth asks which one, nothing is sent blind for the scene.
+    const tie = writeInput(store, scriptId, { kind: 'scene', id: sceneId }, 'instruct', { instruction: 'Make the kettle bit funnier', mode: 'revise' })
+    await expect(tie).rejects.toBeInstanceOf(WhichItem)
+    const err = (await tie.catch((e: unknown) => e)) as WhichItem
+    expect(err.choices.map((c) => c.target)).toEqual([{ kind: 'shot', id: shots[0] }, { kind: 'shot', id: shots[1] }])
+    expect(err.choices[0].label).toMatch(/^Shot 1 \(Insert on the kettle/)
+  })
+
+  it('a whole-script ask after Plan shots goes to the planned scene, never as a new draft (no heading, no words)', async () => {
+    const { store, scriptId, sceneId } = await round4()
+    const scope = wholeScope(store.get(), composeScript(store.get(), scriptId)!, (k, id) => store.text.prose(k, id))
+    expect(scope.target).toEqual({ kind: 'scene', id: sceneId })
+  })
+
+  it("the card's seconds before are the scene's shots, not its empty words", async () => {
+    const { store, sceneId } = await round4()
+    const sug = { target: { kind: 'scene', id: sceneId } } as never
+    expect(secondsNow(store.get(), sug, [{ kind: 'action', text: '' }])).toBe(9)
+    expect(secondsNow(store.get(), sug, [{ kind: 'dialogue', text: 'Good boy.' }], true)).toBe(9)
   })
 })
 

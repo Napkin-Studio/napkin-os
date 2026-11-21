@@ -24,6 +24,7 @@ import { newId, ulid } from '../lib/ulid'
 import { purposeInputs, purposeNode, purposeOf, purposeWords } from '../model/purpose'
 import { withLinkedText } from './linkedText'
 import { flagsOf, recordBriefFlags, withBrief } from '../brief/model'
+import { onePictureOnce } from './onePicture'
 import { withContext, type BrandChoice } from './context'
 import { checkFronts } from '../lib/names'
 import { deadRefs, lifeOf, liveGet, liveInput } from '../model/live'
@@ -221,6 +222,8 @@ export class JobRunner {
     const d = liveGet(this.doc)
     if (op === 'shot_list') checkFronts(d, stored, `${input.script ?? ''}\n${input.text ?? ''}`)
     input = liveInput(input, deadRefs(stored, lifeOf(this.doc).get()))
+    // One picture is sent once, whatever assembled the input (jobs/onePicture.ts; UAT round 4, R4-F5).
+    input = onePictureOnce(input)
     if (this.unstarted.delete(jobId)) this.emit()
     const node = extras.node ?? purposeNode(d, purpose, jobId)
     // The texts linked into the node are its input words (features/canvas-text.clan).

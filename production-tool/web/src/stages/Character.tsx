@@ -574,6 +574,21 @@ export function Character({ initial, active, onPictureEditor }: {
     lastBrief.current = selBrief
     if (fresh && panels.assets) panels.toggle('assets')
   }, [selBrief, panels])
+  // The Booth follows the selection's room (UAT round 3, R3-F14; round 4 leftover): selecting a node card (a Script, a
+  // Storyboard, a Film, a Format set…) means the person moved on from the library, so it closes. Pictures, including
+  // the ones just placed from the library, keep it open, so several can be added in a row.
+  const selCard = useMemo(() => {
+    const ids = vs?.selected ?? []
+    const el = ids.length === 1 && !linkMode ? els.find((e) => e.id === ids[0]) : undefined
+    const c = el ? cardOf(el) : null
+    return c ? `${c.kind}:${c.id}` : null
+  }, [vs, els, linkMode])
+  const lastCard = useRef<string | null>(null)
+  useEffect(() => {
+    const fresh = !!selCard && selCard !== lastCard.current
+    lastCard.current = selCard
+    if (fresh && panels.assets) panels.toggle('assets')
+  }, [selCard, panels])
   // Selecting pans the node into the visible area (production-new-ui design guard; re-test 2b: a selected Brief
   // sat half under the tool rail, and the Booth's column opening took the right edge). One node (never a picture),
   // once per selection, after the Booth has slid in; never mid-drag, and not after the person moved it.
@@ -1361,6 +1376,9 @@ function Floating({ className, anchor, children }: { className: string; anchor: 
 /** The ten main role pills of the Name dialog (the rest under More…), as the contract's role table sorts them. */
 const MAIN_ROLES = REF_ROLES.filter((r) => REF_ROLE_TABLE[r].picker === 'main')
 const roleWord = (r: RefRole) => (r === 'brand_rule' ? 'brand rule' : r)
+/** Two roles other than the one the key holds, as examples (UAT round 4, R4-F8: "@maya is a character… For another role
+ *  (a font, a character…)"). */
+const otherRoles = (r: RefRole) => ['a character', 'a location', 'a font', 'a product'].filter((w) => w !== `a ${roleWord(r)}`).slice(0, 2).join(', ') + '…'
 /** The role's one line in the Name dialog; a palette's says its colours can be changed (UAT round 2: one line, not two). */
 const roleLine = (r: RefRole) => (r === 'palette'
   // A palette is accents, not the only colours (UAT round 3 R3-2; the contract's line still says "keeps to").
@@ -1651,7 +1669,7 @@ function NamePopover({ ctrl, nodeId, current, presetVariant, at, onClose }: {
       )}
       {/* A key in use already: say which role it has, and that this picture takes it (UAT round 3 R3-8, UX 7: the second
           "harbour" silently became a palette). The Save button says it again; another role needs a new name. */}
-      {joinsKey && <div className="name-joins" role="note"><b>@{ck} is a {roleWord(holds)}.</b> This picture joins it as a {roleWord(holds)}. For another role (a font, a character…), type a new name.</div>}
+      {joinsKey && <div className="name-joins" role="note"><b>@{ck} is a {roleWord(holds)}.</b> This picture joins it as a {roleWord(holds)}. For another role ({otherRoles(holds)}), type a new name.</div>}
       {/* A brand key named before: its role's line once, above its fields (the pills above say it for a new key). */}
       {brandRole && !isNewKey && <div className="faint roleline">{roleLine(brandRole)}</div>}
       {brandRole && <BrandFields role={brandRole} asset={asset} value={brand} onChange={setBrand} />}

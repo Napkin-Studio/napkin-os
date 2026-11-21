@@ -9,7 +9,7 @@ import type { Shot, Generation } from '../contracts/types'
 import { updateDoc } from '../doc/store'
 import { personOf } from '../projects/session'
 import { currentFrame, currentRender, currentTake, mainVideo, openAsks, reviewsList, shotsOf } from '../model/selectors'
-import { compileFor } from '../rooms/timeline'
+import { compileWithEndLine } from '../rooms/endLine'
 import { useBlobUrl } from '../ui/hooks'
 import { CanvasBar } from '../ui/chrome/TopBars'
 import { initials } from '../ui/chrome/panels'
@@ -36,7 +36,7 @@ export function PhoneReview() {
   // counted once per shot, so the strip read 0:24 for an 8.5 s ad and shots started at 0, 6, 12, 18 s). Each
   // item is where its clip plays in the ad and which stretch of its take (inS); with no cut, shot after shot.
   const videoId = mainVideo(doc)?.id
-  const plan = useMemo(() => (videoId ? compileFor(doc, videoId) : null), [doc, videoId])
+  const plan = useMemo(() => (videoId ? compileWithEndLine(doc, videoId) : null), [doc, videoId])
   const items = useMemo((): Item[] => {
     const v = videoId ? doc.videos[videoId] : undefined
     const cut = (plan?.clips ?? []).flatMap((c): Item[] => {

@@ -71,6 +71,21 @@ def spoken_lines(inp: dict, starts: list[float] | None = None) -> list[str]:
     return out
 
 
+def sound_lines(inp: dict, starts: list[float] | None = None) -> list[str]:
+    """Each sound beat (not one asking for silence) as the provider reads it: '[0 s] Sound: Steady snoring through the
+    wall.' (UAT round 4, R4-F10: a clip made with sound never heard of "A soft click... no roar"). In a take the time is
+    the take's."""
+    out = []
+    for k, s in enumerate(_shots(inp)):
+        at0 = starts[k] if starts and k < len(starts) else 0.0
+        for b in s.get("beats") or []:
+            text = (b.get("text") or "").strip()
+            if b.get("kind") != "sound" or not text or is_silence(b):
+                continue
+            out.append(f"[{_secs(at0 + float(b.get('at_s') or 0))} s] Sound: {text}")
+    return out
+
+
 def apply(job: dict, inp: dict, sheet: dict | None, *, starts: list[float] | None = None, prompt_max: int | None = None) -> None:
     """Set the clip's audio switch by the rule, and with sound on, say its spoken lines in the prompt (only while
     the prompt stays within the model's limit). In place."""
@@ -82,15 +97,18 @@ def apply(job: dict, inp: dict, sheet: dict | None, *, starts: list[float] | Non
     if not job.get("audio"):
         return  # a silent clip, or a model with no switch: the director wrote "no music, no dialogue" (2026-10-06)
     lines = spoken_lines(inp, starts)
-    if not lines:
-        return
+    sounds = sound_lines(inp, starts)
     prompt = (job.get("prompt") or "").rstrip()
-    said = " ".join(lines) + " " + NO_SUBTITLES
-    if said in prompt:
-        return
-    joined = f"{prompt}\n{said}".strip()
-    if prompt_max is None or len(joined.encode("utf-16-le")) // 2 <= prompt_max:
-        job["prompt"] = joined
+    # The sounds the shots ask for, said as sound (R4-F10), then the spoken lines as speech; each only while the prompt
+    # stays within the model's limit, the lines first.
+    for said in ([" ".join(lines) + " " + NO_SUBTITLES] if lines else []) + ([" ".join(sounds)] if sounds else []):
+        if said in prompt:
+            continue
+        joined = f"{prompt}\n{said}".strip()
+        if prompt_max is None or len(joined.encode("utf-16-le")) // 2 <= prompt_max:
+            prompt = joined
+    if prompt != (job.get("prompt") or "").rstrip():
+        job["prompt"] = prompt
 
 
 # ── Sound beats only where the script asks (UAT 2026-11-21, F22) ───────────────────────────────────────

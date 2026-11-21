@@ -8,7 +8,7 @@ import { roughLines, roughSeconds, roughText, type ComposedScript } from './comp
 import { refNames } from './extensions'
 
 type RefNames = ReturnType<typeof refNames>
-import { SKYE_OPTIONS, wordDiff } from './skye'
+import { SKYE_OPTIONS, sceneShotSeconds, wordDiff } from './skye'
 
 type Doc = ProductionDocument
 
@@ -88,7 +88,10 @@ export function partAt(d: Doc, composed: ComposedScript, target: WriteTarget, bl
  *  the scene the caret is in or the first with words. Its chip says which when the script has several. */
 export function wholeScope(d: Doc, composed: ComposedScript, proseOf: (kind: 'scene', id: Id) => Prose | undefined, caretScene?: Id): Extract<SkyeScope, { kind: 'whole' }> {
   const scenes = composed.rows.filter((r) => r.kind === 'scene').map((r) => r.id)
-  const worded = scenes.filter((id) => (proseOf('scene', id)?.content ?? []).some((b) => blockText(b, refNames(d)).trim()) || !!d.scenes[id]?.heading.trim())
+  // A scene Plan shots made into shots has words still, in its shots (UAT round 4, R4-F3: with no heading, an ask after
+  // Plan shots had no target and went as a new draft of the script).
+  const planned = new Set(composed.rows.flatMap((r) => (r.kind === 'shot' && r.sceneId ? [r.sceneId] : [])))
+  const worded = scenes.filter((id) => (proseOf('scene', id)?.content ?? []).some((b) => blockText(b, refNames(d)).trim()) || !!d.scenes[id]?.heading.trim() || planned.has(id))
   if (worded.length <= 1) return { kind: 'whole', target: worded[0] ? { kind: 'scene', id: worded[0] } : null, label: 'Whole script' }
   const id = caretScene && worded.includes(caretScene) ? caretScene : worded[0]
   return { kind: 'whole', target: { kind: 'scene', id }, label: `Scene ${scenes.indexOf(id) + 1}` }
@@ -233,8 +236,12 @@ export function cardLines(rows: DiffRow[]): CardLine[] {
 }
 
 /** The part's length now, by the band's rule (or the shot's length), for "about 12 s → 9 s" on an edit card. */
-export function secondsNow(d: Doc, sug: Suggestion, lines: { kind: string; text: string }[]): number {
+export function secondsNow(d: Doc, sug: Suggestion, lines: { kind: string; text: string }[], fromShots = false): number {
   if (sug.target.kind === 'shot') return d.shots[sug.target.id]?.duration_s ?? 0
+  // A scene Plan shots made into shots: its shots' seconds, not its empty words (R4-F3: "about 0 s -> 8 s").
+  const scene = sug.target.kind === 'scene' ? d.scenes[sug.target.id] : undefined
+  const planned = scene ? sceneShotSeconds(d, scene.script_id, scene.id) : undefined
+  if (planned !== undefined && (fromShots || !lines.some((l) => l.text.trim()))) return planned
   const text = lines.map((l) => (l.kind === 'character' ? l.text.toUpperCase() : l.kind === 'parenthetical' && !/^\(.*\)$/.test(l.text.trim()) ? `(${l.text})` : l.text)).join('\n')
   return roughSeconds(text)
 }

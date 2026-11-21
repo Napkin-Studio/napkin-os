@@ -12,7 +12,7 @@ import { createPortal } from 'react-dom'
 import type { FormatSet, PersonRef, Size, SizeMethod } from '../contracts/types'
 import { useBlobUrl } from '../ui/hooks'
 import { formatById, shortName, sizeWords } from './formats'
-import { changeMethod, redoSize, type CampaignDeps } from './make'
+import { changeMethod, redoSize, sizeSeconds, type CampaignDeps } from './make'
 import { groupSizes, statusWord, type GroupBy, type SizeGroup } from './overview'
 import { METHOD_WORD, methodWords, PAID, STILL_METHODS, type MethodModel } from './rules'
 import { TileFloat } from './TileFloat'
@@ -140,7 +140,7 @@ export function SizesOverview({ set, sizes, staleIds, models, deps, by, title, o
                             <span className={`ov-chip ${word === 'Ready' ? 'ready' : word === 'Making' ? 'run' : 'look'}`}>{word}</span>
                             {s.locked && <span className="ov-lock" title="Locked: Update sizes never changes it">🔒</span>}
                           </div>
-                          <div className="ov-cap"><b>{f ? shortName(f.format) : s.format.format_id}{s.length_s ? ` · ${s.length_s} s` : ''}</b>
+                          <div className="ov-cap"><b>{f ? shortName(f.format) : s.format.format_id}{sizeSeconds(deps.doc.get(), s) ? ` · ${sizeSeconds(deps.doc.get(), s)} s` : ''}</b>
                             <span>{f ? sizeWords(f.format) : `${s.delivery.width}×${s.delivery.height}`} · {s.media === 'video' ? 'Film' : methodWords(s.method, models)}</span></div>
                         </div>
                       )

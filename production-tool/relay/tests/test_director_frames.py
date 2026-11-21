@@ -201,3 +201,15 @@ def test_a_frame_that_leaves_out_a_view_its_shot_names_is_refused():
         r["providerJob"]["refs"] = [x for x in r["providerJob"]["refs"] if x["name"] != "hero_side"]
     with pytest.raises(DirectorError, match="left out @hero_side"):
         direct("frame_runway_first", drop_side)
+
+
+def test_a_frames_prompt_says_no_clock_time_unless_its_shot_asks_for_words_on_screen():
+    # UAT round 4, R4-F10: frame 1's prompt carried "1 a.m." (the clip rule did not reach frames).
+    def reply(r):
+        r["providerJob"]["prompt"] = "1 a.m. A dark shared kitchen. " + r["providerJob"]["prompt"]
+    res, _, _ = direct("frame_runway_first", edit_reply=reply)
+    assert "a.m" not in res.output["providerJob"]["prompt"]
+    assert res.output["providerJob"]["prompt"].startswith("in the small hours. A dark shared kitchen.")
+    shown, _, _ = direct("frame_runway_first", edit_reply=lambda r: r["providerJob"].update(prompt="The oven clock reads 1:04 a.m., " + r["providerJob"]["prompt"]),
+                         edit_input=lambda i: i["shot"].update(action="The oven clock reads 1:04 a.m."))
+    assert "1:04 a.m." in shown.output["providerJob"]["prompt"]

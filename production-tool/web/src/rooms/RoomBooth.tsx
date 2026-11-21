@@ -21,6 +21,7 @@ import type { ChangeOpen } from './ChangeDrawer'
 import { boxName, makingLine, shotTitle, type Gen } from './model'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { Poster } from './Poster'
+import { offersApart } from './apartOffer'
 import type { RoomData, RoomName, Selection } from './Rooms'
 import { dismissedTakes, newerTake, notNow, readCut } from './timeline'
 import type { CutClip } from './cut'
@@ -97,7 +98,8 @@ function useRoomWaits({ room, data, change, onApart, onReady }: RoomProps) {
 
   // Make: the Change tab offers to make a shot filmed with others on its own; the offer waits here too.
   const parent = change ? genOf(change.parentId) : undefined
-  if (room === 'make' && parent && change?.shotId && parent.shotIds.length > 1 && !keptTogether.includes(`${parent.id}:${change.shotId}`)) {
+  if (room === 'make' && parent && change?.shotId && parent.shotIds.length > 1 && !keptTogether.includes(`${parent.id}:${change.shotId}`)
+    && offersApart(change.ask, shotNumber(doc, change.shotId), parent.shotIds.filter((x) => x !== change.shotId).map((x) => shotNumber(doc, x)))) {
     const shotId = change.shotId
     const n = shotNumber(doc, shotId)
     const others = parent.shotIds.filter((x) => x !== shotId).map((x) => `shot ${shotNumber(doc, x)}`).join(' and ')

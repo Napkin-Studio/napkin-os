@@ -263,7 +263,9 @@ describe('Fix it in the shot', () => {
     expect(input.image?.sha256).toBe(oldFrame.asset) // the storyboard frame, not the clip
     expect(input.region).toEqual(region) // the box maps across as it is (same framing)
     expect(input.text).toBe(n.text)
-    expect(input.previousFrame?.sha256).toBe(s.frameOf(0).asset)
+    // Frame 1 is shot 2's anchor and its frame before: sent once (R4-F5).
+    expect(input.anchorFrame?.sha256 ?? input.previousFrame?.sha256).toBe(s.frameOf(0).asset)
+    expect(input.anchorFrame && input.previousFrame).toBeFalsy()
     expect(fixProgress(s.doc.get(), ctxOf, [n.id])).toEqual({ step: 'frame', jobId: editId, running: true })
     expect(s.all().filter((j) => j.op === 'clip' && j.state !== 'completed')).toHaveLength(0) // no clip before the frame
 

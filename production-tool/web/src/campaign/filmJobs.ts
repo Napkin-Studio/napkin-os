@@ -53,14 +53,26 @@ export interface FilmRequest {
 
 // ── Dex's plan ──────────────────────────────────────────────────────────────
 
-const waiting = new Map<string, { resolve(p: CutdownPlan): void; reject(e: Error): void }>()
+/** A film's plan as the sheet shows it: `simple` when the Director agent did not plan it (the relay's simple cut: the
+ *  opening and the payoff), 'failed' when it tried and could not (UAT round 4, R4-F4: the sheet said "how I would cut
+ *  it" over a plan Dex never made). */
+export type FilmPlan = CutdownPlan & { simple?: 'failed' | 'off' }
+
+const waiting = new Map<string, { resolve(p: FilmPlan): void; reject(e: Error): void }>()
+
+/** Who made a plan job's plan: the Director agent, or the relay's simple cut (failed: Dex tried and could not). */
+export function planBy(job: Pick<Job, 'director'>): FilmPlan['simple'] {
+  if (job.director?.model !== 'passthrough') return undefined
+  return /^Dex could not plan/.test(job.director.rationale ?? '') ? 'failed' : 'off'
+}
 
 /** The plan job's landing (wire.ts): it lands nowhere; the sheet waiting for it gets it. */
 export function landFilmPlan(job: Job) {
   const w = waiting.get(job.jobId)
   if (!w) return
   waiting.delete(job.jobId)
-  if (job.cutdownPlan) w.resolve(job.cutdownPlan)
+  const simple = planBy(job)
+  if (job.cutdownPlan) w.resolve(simple ? { ...job.cutdownPlan, simple } : job.cutdownPlan)
   else w.reject(new Error('The Director agent sent no plan. Try again.'))
 }
 
@@ -96,7 +108,7 @@ export async function takeStills(blob: Blob, times: number[], side = 512): Promi
 }
 
 /** Dex's plan of these lengths and shapes: a free job; resolves with the plan, or fails with its words. */
-export async function planFilm(deps: FilmDeps, master: MasterInfo, shots: MasterShot[], lengths: number[], shapes: Aspect[], timeoutMs = 180_000): Promise<CutdownPlan> {
+export async function planFilm(deps: FilmDeps, master: MasterInfo, shots: MasterShot[], lengths: number[], shapes: Aspect[], timeoutMs = 180_000): Promise<FilmPlan> {
   const wire = []
   let stills = 0
   for (const s of shots) {
@@ -123,7 +135,7 @@ export async function planFilm(deps: FilmDeps, master: MasterInfo, shots: Master
     cutdown: { step: 'plan', shots: wire, lengths, aspects: others },
   }
   const jobId = newUlidId('job')
-  const plan = new Promise<CutdownPlan>((resolve, reject) => {
+  const plan = new Promise<FilmPlan>((resolve, reject) => {
     waiting.set(jobId, { resolve, reject })
     const started = Date.now()
     const watch = () => {
