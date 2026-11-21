@@ -161,7 +161,7 @@ export function askedItems(d: Doc, scriptId: Id, sceneId: Id, instruction: strin
   if (!ranked.length) return {}
   if (ranked.length > 1 && ranked[0].n === ranked[1].n) {
     const tied = ranked.filter((x) => x.n === ranked[0].n).sort((a, b) => a.number - b.number)
-    const words = (t: string) => { const w = t.replace(/@([a-z0-9_]+)/gi, '$1').trim(); return w.length > 40 ? `${w.slice(0, 39)}…` : w }
+    const words = (t: string) => { const w = t.trim(); return w.length > 40 ? `${w.slice(0, 39)}…` : w }
     return { tie: tied.map((x) => ({ target: { kind: 'shot' as const, id: x.id }, label: `Shot ${x.number}${x.action.trim() ? ` (${words(x.action)})` : ''}` })) }
   }
   return { pick: ranked[0].best.t }

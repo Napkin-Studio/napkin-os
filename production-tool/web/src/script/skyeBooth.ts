@@ -88,7 +88,10 @@ export function partAt(d: Doc, composed: ComposedScript, target: WriteTarget, bl
  *  the scene the caret is in or the first with words. Its chip says which when the script has several. */
 export function wholeScope(d: Doc, composed: ComposedScript, proseOf: (kind: 'scene', id: Id) => Prose | undefined, caretScene?: Id): Extract<SkyeScope, { kind: 'whole' }> {
   const scenes = composed.rows.filter((r) => r.kind === 'scene').map((r) => r.id)
-  const worded = scenes.filter((id) => (proseOf('scene', id)?.content ?? []).some((b) => blockText(b, refNames(d)).trim()) || !!d.scenes[id]?.heading.trim())
+  // A scene Plan shots made into shots has words still, in its shots (UAT round 4, R4-F3: with no heading, an ask after
+  // Plan shots had no target and went as a new draft of the script).
+  const planned = new Set(composed.rows.flatMap((r) => (r.kind === 'shot' && r.sceneId ? [r.sceneId] : [])))
+  const worded = scenes.filter((id) => (proseOf('scene', id)?.content ?? []).some((b) => blockText(b, refNames(d)).trim()) || !!d.scenes[id]?.heading.trim() || planned.has(id))
   if (worded.length <= 1) return { kind: 'whole', target: worded[0] ? { kind: 'scene', id: worded[0] } : null, label: 'Whole script' }
   const id = caretScene && worded.includes(caretScene) ? caretScene : worded[0]
   return { kind: 'whole', target: { kind: 'scene', id }, label: `Scene ${scenes.indexOf(id) + 1}` }

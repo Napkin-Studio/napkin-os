@@ -11,7 +11,8 @@ import { mockWrites } from '../relay/mockWrite'
 import { addShots, asset, id, MAYA, modelStore, seedStages, SHA } from '../test/model'
 import { makeAjv, SCHEMA } from '../test/schemas'
 import { discardDraft, DISCARDED_LINE, draftFromBrief, fitSeconds, handsOff, keep, keepMineDraft, landWrites, NEW_SCENE_LINE, neighbours, pickedIdea, proposedOf, sceneForJob, skyeAsks, skyeState, waitingLine, WhichItem, wordDiff, writeInput } from './skye'
-import { secondsNow } from './skyeBooth'
+import { secondsNow, wholeScope } from './skyeBooth'
+import { composeScript } from './compose'
 
 async function project() {
   const store = modelStore()
@@ -133,6 +134,12 @@ describe('script asks after Plan shots carry the real lines (UAT round 4, R4-F3)
     const err = (await tie.catch((e: unknown) => e)) as WhichItem
     expect(err.choices.map((c) => c.target)).toEqual([{ kind: 'shot', id: shots[0] }, { kind: 'shot', id: shots[1] }])
     expect(err.choices[0].label).toMatch(/^Shot 1 \(Insert on the kettle/)
+  })
+
+  it('a whole-script ask after Plan shots goes to the planned scene, never as a new draft (no heading, no words)', async () => {
+    const { store, scriptId, sceneId } = await round4()
+    const scope = wholeScope(store.get(), composeScript(store.get(), scriptId)!, (k, id) => store.text.prose(k, id))
+    expect(scope.target).toEqual({ kind: 'scene', id: sceneId })
   })
 
   it("the card's seconds before are the scene's shots, not its empty words", async () => {
