@@ -206,7 +206,9 @@ export function SkyeBooth(p: SkyeBoothProps) {
           onSend={send} busy={asking} disabled={skye.off || skye.quota || busy || handsOff} hint={hint} />
         {which && (
           <div className="bt-which" role="group" aria-label="Which shot is it about?">
-            <p className="bt-quiet">{which.choices.length === 2 ? 'Both of these fit what you asked. Which one is it about?' : 'These fit what you asked. Which one is it about?'}</p>
+            {/* What was asked stays in view while the person picks (UAT round 5, R5-F4: the box cleared and the panel did not say). */}
+            <p className="bt-quiet">You asked: <q>{which.words}</q></p>
+            <p className="bt-quiet">{which.choices.length === 2 ? 'Both of these fit it. Which one is it about?' : 'These fit it. Which one is it about?'}</p>
             <div className="bt-verbs">
               {which.choices.map((c) => <button key={c.target.id} type="button" onClick={() => pickWhich(c.target)}>{c.label}</button>)}
             </div>

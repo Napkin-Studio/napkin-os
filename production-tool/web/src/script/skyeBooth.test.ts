@@ -38,3 +38,15 @@ describe('an edit card reads line by line (UAT round 3, R3-F7)', () => {
     expect(lines[1].parts.filter((p) => p.kind === 'gone').map((p) => p.text)).toContain('socks and')
   })
 })
+
+describe('a draft card names the item it was asked about (UAT round 5, R5-F5)', () => {
+  const sug = (kind: 'scene' | 'shot' | 'beat', mode: 'revise' | 'draft' = 'revise') => ({ target: { kind, id: `${kind}_X` }, mode, note: 'I did what you asked.' }) as never
+  const write = { intent: 'instruct', instruction: 'Make the snoring line funnier' } as never
+  it('a shot ask: "Shot 6, from"; a line: "This line, from"; the scene: the whole script', async () => {
+    const { askedWords } = await import('./skyeBooth')
+    expect(askedWords(write, sug('shot'), undefined, 'Shot 6')).toEqual({ lead: 'Shot 6, from', quote: 'Make the snoring line funnier' })
+    expect(askedWords(write, sug('beat'))).toEqual({ lead: 'This line, from', quote: 'Make the snoring line funnier' })
+    expect(askedWords(write, sug('scene'))).toEqual({ lead: 'The whole script, from', quote: 'Make the snoring line funnier' })
+    expect(askedWords(write, sug('shot', 'draft'), undefined, 'Shot 6').lead).toBe('From your words')
+  })
+})

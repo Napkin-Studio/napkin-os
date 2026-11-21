@@ -127,10 +127,14 @@ export function draftSeconds(d: Doc, sug: Suggestion): number {
   return roughSeconds(text)
 }
 
-/** How a card names what Skye was asked: 'From your words: “…”', 'On your selection: “…”', 'On ¶3: Tighten'. */
-export function askedWords(write: WriteInput | undefined, sug: Suggestion, part?: string): { lead: string; quote?: string } {
+/** How a card names what Skye was asked: 'From your words: “…”', 'On your selection: “…”', 'On ¶3: Tighten', and for a
+ *  shot or a line its own name ('Shot 6, from: “…”'; UAT round 5, R5-F5: a shot's card said "The whole script, from").
+ *  `item`: the shot's or line's name ("Shot 6", "This line"); a scene's card reads as the whole script. */
+export function askedWords(write: WriteInput | undefined, sug: Suggestion, part?: string, item?: string): { lead: string; quote?: string } {
   const verb = write ? SKYE_OPTIONS.find((o) => o.intent === write.intent)?.label(write.seconds ?? 0) : undefined
-  const where = write?.selection ? (part ? `On ${part}` : 'On your selection') : sug.mode === 'draft' ? 'From your words' : 'The whole script, from'
+  const named = sug.target.kind !== 'scene' ? (item ?? (sug.target.kind === 'beat' ? 'This line' : 'This shot')) : undefined
+  const where = write?.selection ? (part ? `On ${part}` : 'On your selection') : sug.mode === 'draft' ? 'From your words'
+    : named ? `${named}, from` : 'The whole script, from'
   if (write?.instruction) return { lead: where, quote: write.instruction }
   if (verb && write?.intent !== 'draft' && write?.intent !== 'instruct') return { lead: `${where}: ${verb}` }
   return { lead: sug.note }
