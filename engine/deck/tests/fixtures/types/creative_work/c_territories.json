@@ -1,0 +1,37 @@
+{
+ "stage": "c",
+ "produced_by": "recorded stand-in (invented)",
+ "territories": [
+  {
+   "id": "t1",
+   "name": "The Tap Tells",
+   "thought": "Let the tap speak",
+   "why": "It makes use personal",
+   "mood": "Warm",
+   "risks": "Twee",
+   "sketch": "A tap whispers a household memory"
+  },
+  {
+   "id": "t2",
+   "name": "Meter Moments",
+   "thought": "Make the meter a mirror",
+   "why": "People act on what they can see",
+   "mood": "Bright",
+   "risks": "Preachy",
+   "sketch": "A kitchen meter that smiles back"
+  }
+ ],
+ "ranking": {
+  "order": [
+   "t1",
+   "t2"
+  ],
+  "reasons": {
+   "t1": "Closest to the insight",
+   "t2": "Makes use visible"
+  },
+  "by": "recorded"
+ },
+ "chosen": "t1",
+ "chosen_by": "recorded"
+}

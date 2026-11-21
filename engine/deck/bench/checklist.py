@@ -21,13 +21,14 @@ from collections import Counter
 from pathlib import Path
 
 from .. import images, issues, spec
+from .. import theme as themes
 from ..validate import presented as _presented, words as _words
 from .judges import BenchError
 from .packets import run_ids
 
 DECK = Path(__file__).resolve().parents[1]
 ITEMS_PATH = DECK / "checklist.json"
-PER_SLIDE_PREFIXES = ("q_", "l_", "w_", "t_", "p_", "k_")   # checks that judge presented slides
+PER_SLIDE_PREFIXES = ("q_", "l_", "w_", "t_", "p_", "k_", "i_")   # checks that judge presented slides
 CONTENT_EXCLUDED = ("title", "appendix", "close")   # content slides: presented slides other than these (Q7)
 CREATIVE_TYPES = ("territory", "idea", "execution", "audience")   # look.pictures.on creative (contract 6.3)
 COVER_TYPES = ("title", "appendix")                                # creative_cover adds these
@@ -676,7 +677,7 @@ def p_where_asked(r: Run) -> dict:
         wanted = [i for i in r.presented if (pic.get("slides") or {}).get(i)]
     else:
         types = CREATIVE_TYPES + (COVER_TYPES if on == "creative_cover" else ())
-        wanted = [i for i in r.presented if r.deck["slides"][i]["type"] in types]
+        wanted = [i for i in r.presented if spec.picture_of(r.deck["slides"][i])[0] in types]
     if not wanted:
         return na("the picture preference asks for no picture on any presented slide")
     have = {s for s, _, _ in r.image_slots()}
@@ -686,7 +687,7 @@ def p_where_asked(r: Run) -> dict:
 
 @check
 def m_creative_pictured(r: Run) -> dict:
-    ids = [i for i in r.presented if r.deck["slides"][i]["type"] in spec.PICTURE_SLIDE_TYPES]
+    ids = [i for i in r.presented if spec.picture_of(r.deck["slides"][i])[0] in spec.PICTURE_SLIDE_TYPES]
     if not ids:
         return na("no presented slide of a picture type")
     have = {s for s, _, _ in r.image_slots()}
@@ -695,7 +696,7 @@ def m_creative_pictured(r: Run) -> dict:
 
 @check
 def p_only_creative(r: Run) -> dict:
-    return _no_picture(r) or _verdict([s for s, _, _ in r.image_slots() if r.deck["slides"][s]["type"] not in spec.PICTURE_SLIDE_TYPES],
+    return _no_picture(r) or _verdict([s for s, _, _ in r.image_slots() if spec.picture_of(r.deck["slides"][s])[0] not in spec.PICTURE_SLIDE_TYPES],
                                       r.ids, None, 0)
 
 
@@ -843,6 +844,452 @@ def k_logo_cover(r: Run) -> dict:
     return _verdict(bad, r.ids, len(covers) - len(bad), len(covers))
 
 
+# ---------------------------------------------------------------- graphics (deck-graphics: icons, slice 1)
+
+ICON_PREFIX = "Icon: "
+_A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+
+
+def _icons(r: Run):
+    """``{slide id: [(icon id, shape element, slide)]}`` for presented slides carrying icon shapes; None when deck.pptx is unreadable."""
+    if "icons" in r._measures:
+        return r._measures["icons"]
+    out = None
+    if r.prs is not None:
+        out = {}
+        slides = list(r.prs.slides)
+        for i in r.presented:
+            if r.number(i) > len(slides):
+                continue
+            sl = slides[r.number(i) - 1]
+            got = [(sh.name[len(ICON_PREFIX):], sh._element, sl) for sh in sl.shapes if (sh.name or "").startswith(ICON_PREFIX)]
+            if got:
+                out[i] = got
+    r._measures["icons"] = out
+    return out
+
+
+def _icons_na(r: Run):
+    ic = _icons(r)
+    if ic is None:
+        return None, na(NA_PPTX)
+    if not ic:
+        return None, na("no presented slide carries an icon")
+    return ic, None
+
+
+@check
+def i_icon_allowlist(r: Run) -> dict:
+    ic, n = _icons_na(r)
+    if n:
+        return n
+    from .. import graphics
+    allowed = set(graphics.icons())
+    bad = []
+    for sid, rows in ic.items():
+        for iid, el, _ in rows:
+            denied = any(iid == d or iid.startswith(d + "-") for d in graphics.ICON_DENY)
+            geom = el.find(f".//{_A}custGeom")
+            pic = el.tag.endswith("}pic")
+            nofill = el.find(f".//{{http://schemas.openxmlformats.org/presentationml/2006/main}}spPr/{_A}noFill") is not None
+            if iid not in allowed or denied or geom is None or pic or not nofill:
+                bad.append(sid)
+    return _verdict(bad, r.ids, sorted({x[0] for v in ic.values() for x in v}), "vendor/icons/icons.json")
+
+
+@check
+def i_icon_contrast(r: Run) -> dict:
+    ic, n = _icons_na(r)
+    if n:
+        return n
+    from .. import graphics, theme
+    bad, worst = [], None
+    for sid, rows in ic.items():
+        sl = rows[0][2]
+        try:
+            ground = str(sl.background.fill.fore_color.rgb)
+        except Exception:
+            ground = "FFFFFF"
+        for _, el, _ in rows:
+            c = el.find(f".//{_A}ln/{_A}solidFill/{_A}srgbClr")
+            ratio = theme.contrast(c.get("val"), ground) if c is not None else 0.0
+            worst = ratio if worst is None else min(worst, ratio)
+            if ratio < graphics.ICON_CONTRAST:
+                bad.append(sid)
+    return _verdict(bad, r.ids, round(worst, 2), graphics.ICON_CONTRAST)
+
+
+@check
+def i_icon_groups(r: Run) -> dict:
+    ic, n = _icons_na(r)
+    if n:
+        return n
+    from .. import graphics
+    bad = [sid for sid, rows in ic.items() if len(rows) < graphics.ICON_GROUP_MIN or len({x[0] for x in rows}) != len(rows)]
+    return _verdict(bad, r.ids)
+
+
+@check
+def i_icon_share(r: Run) -> dict:
+    ic, n = _icons_na(r)
+    if n:
+        return n
+    thr = _thr(r, "i_icon_share")
+    cap, win = thr.get("max_slides", 3), thr.get("window", 10)
+    pres = list(r.presented)
+    bad, most = [], 0
+    for k in range(max(1, len(pres) - win + 1)):
+        w = pres[k:k + win]
+        on = [i for i in w if i in ic]
+        most = max(most, len(on))
+        if len(on) > cap:
+            bad += on
+    return _verdict(bad, r.ids, most, cap)
+
+
+FRAME_PREFIX = "Frame: "
+
+
+def _frames(r: Run):
+    """``{slide id: {frames, strip, pictures: [shape], labels: [text]}}`` for presented slides carrying a drawn frame or strip; None when
+    deck.pptx is unreadable."""
+    if "frames" in r._measures:
+        return r._measures["frames"]
+    out = None
+    if r.prs is not None:
+        out = {}
+        slides = list(r.prs.slides)
+        for i in r.presented:
+            if r.number(i) > len(slides):
+                continue
+            shs = list(slides[r.number(i) - 1].shapes)
+            fr = [sh for sh in shs if (sh.name or "").startswith(FRAME_PREFIX)]
+            if not fr:
+                continue
+            out[i] = {"strip": any(sh.name == "Frame: storyboard" for sh in fr) and any(sh.name == "Strip picture" for sh in shs),
+                      "pictures": [sh for sh in shs if sh.name in ("Framed picture", "Strip picture")],
+                      "labels": [sh.text_frame.text.strip() for sh in shs if sh.name == "MockupLabel" and sh.has_text_frame]}
+    r._measures["frames"] = out
+    return out
+
+
+def _frames_na(r: Run):
+    fr = _frames(r)
+    if fr is None:
+        return None, na(NA_PPTX)
+    if not fr:
+        return None, na("no presented slide carries a frame")
+    return fr, None
+
+
+def _exec_images(r: Run, sid: str) -> list:
+    """The drawn picture slots of an execution's frame on this slide: ``picture`` and ``shot_n``, filled ones only."""
+    slots = r.deck["slides"][sid].get("slots") or {}
+    return [(k, v["image"]) for k, v in sorted(slots.items()) if isinstance(v, dict) and v.get("kind") == "image" and (k == "picture" or k.startswith("shot_"))
+            and isinstance(v.get("image"), dict) and v["image"].get("status") in FILLED]
+
+
+def _from_production(im: dict) -> bool:
+    return (im.get("from") or {}).get("kind") == "production"
+
+
+@check
+def m_mockup_labelled(r: Run) -> dict:
+    fr, n = _frames_na(r)
+    if n:
+        return n
+    bad = [sid for sid, v in fr.items() if spec.MOCKUP_LABEL not in v["labels"]]
+    return _verdict(bad, r.ids)
+
+
+@check
+def m_frame_aspect(r: Run) -> dict:
+    fr, n = _frames_na(r)
+    if n:
+        return n
+    tol = spec.PICTURE_STRETCH_TOL
+    seen, bad, worst = 0, [], 0.0
+    for sid, v in fr.items():
+        ims = _exec_images(r, sid)
+        if not ims or not all(_from_production(im) for _, im in ims):
+            continue
+        for sh in v["pictures"]:
+            seen += 1
+            cut = max(sh.crop_left, sh.crop_right, sh.crop_top, sh.crop_bottom)
+            worst = max(worst, cut)
+            if cut > tol:
+                bad.append(sid)
+    if not seen:
+        return na("no framed picture is a Production picture")
+    return _verdict(bad, r.ids, round(worst, 4), tol)
+
+
+@check
+def m_frame_rights(r: Run) -> dict:
+    fr, n = _frames_na(r)
+    if n:
+        return n
+    assets = r.deck.get("assets") or {}
+    bad = [sid for sid in fr for _, im in _exec_images(r, sid)
+           if (assets.get(im.get("asset")) or {}).get("rights") == "reference_only" or (im.get("from") or {}).get("kind") == "mock"]
+    return _verdict(bad, r.ids)
+
+
+@check
+def m_production_first(r: Run) -> dict:
+    fr, n = _frames_na(r)
+    if n:
+        return n
+    prod = sum(1 for sid in fr if (ims := _exec_images(r, sid)) and all(_from_production(im) for _, im in ims))
+    return value(round(prod / len(fr), 3))
+
+
+@check
+def s_strip_order(r: Run) -> dict:
+    fr = _frames(r)
+    if fr is None:
+        return na(NA_PPTX)
+    strips = {sid: v for sid, v in fr.items() if v["strip"]}
+    if not strips:
+        return na("no presented slide carries a storyboard strip")
+    bad = []
+    for sid, v in strips.items():
+        shots = [(k, im) for k, im in _exec_images(r, sid) if k.startswith("shot_")]
+        names = [k for k, _ in shots]
+        ok = (spec.STRIP_MIN <= len(shots) <= spec.STRIP_MAX and names == [f"shot_{i}" for i in range(1, len(shots) + 1)]
+              and all(_from_production(im) for _, im in shots) and len(v["pictures"]) == len(shots))
+        if not ok:
+            bad.append(sid)
+    return _verdict(bad, r.ids)
+
+
+def _charts(r: Run):
+    """``{slide id: [(chart graphic frame, slide)]}`` for presented slides with a native chart; None when deck.pptx is unreadable."""
+    if "charts" in r._measures:
+        return r._measures["charts"]
+    out = None
+    if r.prs is not None:
+        out = {}
+        slides = list(r.prs.slides)
+        for i in r.presented:
+            if r.number(i) <= len(slides):
+                sl = slides[r.number(i) - 1]
+                got = [(sh, sl) for sh in sl.shapes if getattr(sh, "has_chart", False) and sh.has_chart]
+                if got:
+                    out[i] = got
+    r._measures["charts"] = out
+    return out
+
+
+def _charts_na(r: Run):
+    c = _charts(r)
+    if c is None:
+        return None, na(NA_PPTX)
+    if not c:
+        return None, na("no presented slide carries a chart")
+    return c, None
+
+
+def _chart_record(r: Run, sid: str):
+    title = r.deck["slides"][sid].get("title")
+    recs = ((r.deck.get("meta") or {}).get("graphics") or {}).get("charts") or []
+    return next((x for x in recs if x.get("slide") == title and x.get("points")), None)
+
+
+def _chart_values(gf) -> list:
+    return [float(v) for pl in gf.chart.plots for s in pl.series for v in s.values if v is not None]
+
+
+@check
+def c_chart_sourced(r: Run) -> dict:
+    c, n = _charts_na(r)
+    if n:
+        return n
+    bad = []
+    for sid, rows in c.items():
+        sl = rows[0][1]
+        src = [sh.text_frame.text for sh in sl.shapes if sh.name == "ChartSource" and sh.has_text_frame]
+        rec = _chart_record(r, sid)
+        if not src or not src[0].startswith("Source:") or rec is None or not all(str(p.get("ref", "")).startswith(("f_", "doc:")) for p in rec["points"]):
+            bad.append(sid)
+    return _verdict(bad, r.ids)
+
+
+@check
+def c_chart_numbers(r: Run) -> dict:
+    c, n = _charts_na(r)
+    if n:
+        return n
+    bad = []
+    for sid, rows in c.items():
+        rec = _chart_record(r, sid)
+        if rec is None:
+            bad.append(sid)
+            continue
+        ledger = {str(p["label"]): float(p["value"]) for p in rec["points"]}   # meta.graphics.charts: each label with its ledger value
+        from pptx.enum.chart import XL_CHART_TYPE as X
+        for gf, _ in rows:
+            pairs = []
+            for pl in gf.chart.plots:
+                cats = [str(x) for x in pl.categories]
+                for ser in pl.series:
+                    vals = [v for v in ser.values]
+                    if gf.chart.chart_type == X.BAR_STACKED_100:   # one series per part: the part is the series' name, its one value
+                        pairs += [(str(ser.name), v) for v in vals]
+                    else:
+                        pairs += list(zip(cats, vals))
+            if not pairs or any(lab not in ledger or v is None or abs(float(v) - ledger[lab]) > 1e-6 for lab, v in pairs):
+                bad.append(sid)
+    return _verdict(bad, r.ids)
+
+
+@check
+def c_chart_form(r: Run) -> dict:
+    c, n = _charts_na(r)
+    if n:
+        return n
+    from pptx.enum.chart import XL_CHART_TYPE as X
+    ok_types = {X.BAR_CLUSTERED, X.COLUMN_CLUSTERED, X.LINE_MARKERS, X.LINE, X.BAR_STACKED_100}
+    bad = []
+    for sid, rows in c.items():
+        for gf, _ in rows:
+            ch = gf.chart
+            pl = ch.plots[0]
+            ncat = len(list(pl.categories))
+            nser = sum(len(list(p.series)) for p in ch.plots)
+            zero = ch.chart_type not in (X.BAR_CLUSTERED, X.COLUMN_CLUSTERED) or (ch.value_axis.minimum_scale in (0, 0.0))
+            if ch.chart_type not in ok_types or len(ch.plots) != 1 or ncat > 8 or (nser > 3 and ch.chart_type != X.BAR_STACKED_100) or not zero:
+                bad.append(sid)
+    return _verdict(bad, r.ids)
+
+
+def _mark_fills(gf) -> list:
+    A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+    C = "{http://schemas.openxmlformats.org/drawingml/2006/chart}"
+    out = []
+    for el in gf.chart._chartSpace.iter(f"{C}spPr"):
+        par = el.getparent()
+        if par.tag in (f"{C}ser", f"{C}dPt"):
+            f = el.find(f"{A}solidFill/{A}srgbClr")
+            if f is not None:
+                out.append(f.get("val").upper())
+            ln = el.find(f"{A}ln/{A}solidFill/{A}srgbClr")
+            if ln is not None and par.tag == f"{C}ser" and f is None:
+                out.append(ln.get("val").upper())
+    return out
+
+
+@check
+def c_chart_contrast(r: Run) -> dict:
+    c, n = _charts_na(r)
+    if n:
+        return n
+    from .. import theme
+    bad, worst = [], None
+    for sid, rows in c.items():
+        sl = rows[0][1]
+        try:
+            ground = str(sl.background.fill.fore_color.rgb)
+        except Exception:
+            ground = "FFFFFF"
+        for gf, _ in rows:
+            for col in _mark_fills(gf):
+                ratio = theme.contrast(col, ground)
+                worst = ratio if worst is None else min(worst, ratio)
+                if ratio < 3.0:
+                    bad.append(sid)
+    return _verdict(bad, r.ids, None if worst is None else round(worst, 2), 3.0)
+
+
+@check
+def c_chart_emphasis(r: Run) -> dict:
+    c, n = _charts_na(r)
+    if n:
+        return n
+    th = _theme(r)
+    acc = str(((th or {}).get("colors") or {}).get("accent") or "").upper().lstrip("#")
+    if not acc:
+        return na("deck.meta.theme has no accent")
+    bad = [sid for sid, rows in c.items() for gf, _ in rows if len(list(gf.chart.plots[0].series)) == 1 and _mark_fills(gf).count(acc) > 2]
+    return _verdict(bad, r.ids)
+
+
+DIAGRAM_PREFIX = "Diagram: "
+
+
+def _diagrams(r: Run):
+    if "diagrams" in r._measures:
+        return r._measures["diagrams"]
+    out = None
+    if r.prs is not None:
+        out = {}
+        slides = list(r.prs.slides)
+        for i in r.presented:
+            if r.number(i) <= len(slides):
+                shs = list(slides[r.number(i) - 1].shapes)
+                kinds = sorted({sh.name[len(DIAGRAM_PREFIX):] for sh in shs if (sh.name or "").startswith(DIAGRAM_PREFIX)})
+                if kinds:
+                    out[i] = {"kinds": kinds, "texts": [sh.text_frame.text for sh in shs if (sh.name or "").startswith("slot:") and sh.has_text_frame]}
+    r._measures["diagrams"] = out
+    return out
+
+
+def _diagrams_na(r: Run):
+    d = _diagrams(r)
+    if d is None:
+        return None, na(NA_PPTX)
+    if not d:
+        return None, na("no presented slide carries a diagram")
+    return d, None
+
+
+def _slide_words(s: dict) -> set:
+    import re as _re
+    return {w.lower() for w in _re.findall(r"[A-Za-z0-9]+", json.dumps([s.get("title"), s.get("blocks")], ensure_ascii=False))}
+
+
+@check
+def d_own_words(r: Run) -> dict:
+    d, n = _diagrams_na(r)
+    if n:
+        return n
+    import re as _re
+    bad = []
+    for sid, v in d.items():
+        own = _slide_words(r.deck["slides"][sid])
+        drawn = {w.lower() for t in v["texts"] for w in _re.findall(r"[A-Za-z0-9]+", t)}
+        if drawn - own:
+            bad.append(sid)
+    return _verdict(bad, r.ids)
+
+
+@check
+def d_matrix_axes(r: Run) -> dict:
+    lay = {i: ((r.deck["slides"][i].get("layout") or {}).get("id")) for i in r.presented}
+    m = [i for i, x in lay.items() if x == "matrix_2x2"]
+    if not m:
+        return na("no presented slide is laid out as matrix_2x2")
+    bad = []
+    for sid in m:
+        tb = next((b for b in r.deck["slides"][sid].get("blocks") or [] if b.get("kind") == "table" and isinstance(b.get("matrix"), dict)), None)
+        if tb is None or not all((tb["matrix"].get(a) or {}).get("refs") for a in ("x", "y")):
+            bad.append(sid)
+    return _verdict(bad, r.ids)
+
+
+@check
+def d_min_items(r: Run) -> dict:
+    d, n = _diagrams_na(r)
+    if n:
+        return n
+    bad = []
+    for sid in d:
+        st = [b for b in r.deck["slides"][sid].get("blocks") or [] if b.get("kind") == "steps"]
+        if st and len(st[0].get("items") or []) < 3:
+            bad.append(sid)
+    return _verdict(bad, r.ids)
+
+
 # ---------------------------------------------------------------- run
 
 @check
@@ -891,17 +1338,27 @@ def run_checklist(run_dir: Path, items: dict | None = None, deck_id: str | None 
             raise AssertionError(f"{it['id']}: a metric never answers yes")
         results[it["id"]] = res
     count = Counter(v["answer"] for v in results.values())
+    summary = {"yes": count["yes"], "no": count["no"], "na": count["n/a"],
+               "metrics": {k: v["value"] for k, v in results.items() if v["answer"] == "value"}}
+    size = themes.size_of(r.deck)
+    if size != themes.SIZE_DEFAULT:   # deck-slide-size: the size the run was built at, named only when it is not 16:9
+        summary["size"] = size
     return {"run_dir": Path(run_dir).name,
             "inputs": {"deck": True, "validation": r.validation_ok, "qa": r.qa_ok, "qa_pixels": r.qa_pixels,
                        "layouts": r.layouts() is not None, "report": isinstance(r.report, dict), "pptx": r.prs is not None},
             "presented": len(r.presented), "content": len(r.content),
             "results": results,
-            "summary": {"yes": count["yes"], "no": count["no"], "na": count["n/a"],
-                        "metrics": {k: v["value"] for k, v in results.items() if v["answer"] == "value"}}}
+            "summary": summary}
 
 
 def run_all(runs: list, items: dict | None = None) -> dict:
     """The checklist file: ``{version, items_version, decks: {deck id: result}}``; deck ids as the bench names runs."""
     items = items or load_items()
-    return {"version": 1, "items_version": items["version"],
-            "decks": {i: run_checklist(Path(p), items) for i, p in zip(run_ids(runs), runs)}}
+    decks = {i: run_checklist(Path(p), items) for i, p in zip(run_ids(runs), runs)}
+    sizes = {d["summary"].get("size", themes.SIZE_DEFAULT) for d in decks.values()}
+    if len(sizes) > 1:   # deck-slide-size: one checklist file holds one size (more moved points and smaller titles at 4:3 are expected)
+        raise BenchError(f"the runs were built at different slide sizes ({', '.join(sorted(sizes))}): check each size on its own")
+    out = {"version": 1, "items_version": items["version"], "decks": decks}
+    if sizes and sizes != {themes.SIZE_DEFAULT}:
+        out["size"] = sizes.pop()
+    return out

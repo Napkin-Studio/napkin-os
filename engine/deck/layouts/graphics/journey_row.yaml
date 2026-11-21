@@ -1,0 +1,46 @@
+id: journey_row
+version: 1
+group: content
+purpose: timeline
+description: The stages in a row of pills joined by a line, each stage's channel icon and its line under it.
+slot_summary: title, stages (3-5), note
+for_types:
+- audience
+- solution
+- idea
+- gtm
+- process
+when:
+  blocks_any:
+  - steps
+  test: journey_3_5
+priority: 66
+alternatives:
+- timeline_rows
+roomier: timeline_rows
+density: standard
+pick: rule
+family: diagram
+renderer: journey_row
+slots:
+  title:
+    kind: text
+    role: title
+    required: true
+    min_chars: 3
+    max_lines: 3
+  stages:
+    kind: list
+    role: body
+    from_blocks:
+    - steps
+    min_items: 3
+    max_items: 5
+    dominant: true
+  note:
+    kind: text
+    role: small
+    from_blocks:
+    - text
+    - small
+    - statement

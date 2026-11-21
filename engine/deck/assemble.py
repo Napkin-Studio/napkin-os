@@ -132,6 +132,49 @@ def _objective_slide(inp, items: list):
     return _slide("objective", "What has to change, by how much and by when" if quantified else "What has to change", blocks, status="from_source")
 
 
+#: deck-look (spec.LOOK_V3): brief fields the deck held but never showed, and the one slide each belongs on (design.density
+#: where_words_come_from; one field, one home). (slide type, brief field, label as engine words, block kind)
+SURFACED_FIELDS = (("objective", "objectives.attitudinal", None, "bullets"),
+                   ("real_question", "background", "Background", "kv"),
+                   ("audience", "desired_response", "What we want them to do", "kv"))
+
+
+def _deck_texts(S: list) -> str:
+    """Every word the slides show, normalised (``spec.norm_text``): what 'already said' is checked against."""
+    out = []
+    for sl in S:
+        out.append(sl.get("title", ""))
+        for b in sl["blocks"]:
+            out += [str(b.get(k, "")) for k in ("text", "from", "to", "title")]
+            for i in b.get("items") or []:
+                out += [str(x) for x in (i if isinstance(i, (list, tuple)) else [i.get("text", "") if isinstance(i, dict) else i])]
+            out += [" ".join(map(str, r)) for r in b.get("rows") or []]
+    return " | ".join(spec.norm_text(x) for x in out if str(x).strip())
+
+
+def _surface_brief_fields(S: list, inp) -> None:
+    """Add each field of ``SURFACED_FIELDS`` to its home slide, in the brief's own words with its ref, when the brief holds it, the home
+    slide is in the deck and no slide already says it (a sentence is said once). Density comes from distinct brief fields only, never
+    from a layout asking for more words."""
+    for typ, field, label, kind in SURFACED_FIELDS:
+        home = next((sl for sl in S if sl["type"] == typ), None)
+        top, _, sub = field.partition(".")
+        v = (inp.brief.get(top) or {}).get("value")
+        v = v.get(sub) if (sub and isinstance(v, dict)) else (None if sub else v)
+        text = str(v).strip() if isinstance(v, str) else ""
+        if not (home and text) or spec.norm_text(text) in _deck_texts(S):
+            continue
+        ref = f"brief:{field}"
+        if kind == "bullets":
+            bl = next((b for b in home["blocks"] if b["kind"] == "bullets"), None)
+            if bl is None:
+                continue
+            bl["items"] = list(bl["items"]) + [{"text": text, "refs": [ref]}]
+        else:
+            home["blocks"] = [b for b in home["blocks"] if not (b["kind"] in ("text", "small") and not str(b.get("text", "")).strip())] + \
+                [{"kind": kind, "items": [[label, text]], "refs": [ref]}]
+
+
 def _dedupe_blocks(title: str, blocks: list, claims: list) -> list:
     """Say a sentence once on a slide: a text-bearing block (text, statement, quote, callout, small, card) whose
     words equal the slide's title, or an earlier such block's, is dropped. Refs it carried are kept as a claim,
@@ -702,6 +745,12 @@ def _complete(S, reqs, R, inp, meta, fmt, fit, scoring=None, messages=None, terr
             "territories": territories or {}, "slides": {}, "order": []}
     if fit:
         deck["fit"] = fit
+    if spec.GRAPHICS:   # deck-graphics slices 4-5: each chart block is drawn only from ledger values of one measure and unit, else a hero,
+        from . import graphics   # noqa: PLC0415   a stat row or a table (nothing computed, no word added); the record goes in meta.graphics
+        deck["meta"]["graphics"] = {"charts": graphics.charts_pass(S, inp, R)}
+
+    if spec.LOOK_V3:   # deck-look: three brief fields the deck never showed, each on its one home slide (said once)
+        _surface_brief_fields(S, inp)
 
     # Requirement mapping, trace and sources slides go last (they read the slides above).
     for r in reqs:
@@ -713,7 +762,11 @@ def _complete(S, reqs, R, inp, meta, fmt, fit, scoring=None, messages=None, terr
         S = _arrange_spine(S, profile, {v["title"] for v in (fit or {}).get("verdicts", []) if v["verdict"] == "supported"},
                            routes_asked(reqs), messages or [], scoring or [], fmt, cap)
     elif fmt == "pitch":   # after mapping, so merged slides carry both slides' requirements
-        S = _arrange_pitch(S, {v["title"] for v in (fit or {}).get("verdicts", []) if v["verdict"] == "supported"}, routes_asked(reqs), messages or [], cap)
+        rec = profiles.recipe(profile, fmt) if profile and profiles.recipes_on() else None   # deck-types: the type's target (flag off: spec.PITCH_TARGET)
+        S = _arrange_pitch(S, {v["title"] for v in (fit or {}).get("verdicts", []) if v["verdict"] == "supported"}, routes_asked(reqs), messages or [], cap,
+                           **({"target": rec["length"]["target"]} if rec else {}))
+    if spec.LOOK_V3:   # deck-look (fix 2): a sentence is said once on the presented slides
+        _say_once(S)
     if sketch:   # the cover says so, with a fixed label (like the DRAFT mark: no input words)
         cover = next((x for x in S if x["type"] == "title"), None)
         if cover:
@@ -890,25 +943,24 @@ def _shown_charts(S: list, supported: set | None) -> list:
     return shown_charts[:spec.PITCH_CHARTS]
 
 
-def _arrange_pitch(S: list, supported: set | None = None, routes: int = 1, messages: list | None = None, limit: int | None = None) -> list:
+#: _arrange_pitch's target when no recipe gives one: spec.PITCH_TARGET, read at call time (a test may set it).
+_SPEC_TARGET = object()
+
+
+def _arrange_pitch(S: list, supported: set | None = None, routes: int = 1, messages: list | None = None, limit: int | None = None,
+                   target=_SPEC_TARGET) -> list:
     """The agency pitch: the presented story (merges applied, team before the ask), an Appendix
     divider, then the backup in story order. Numbering, the trace and footnotes follow this order.
     One recommended idea by default; as many routes as the brief asks for when it asks (routes);
     the presented executions are the ones that carry the most mandated messages (messages). ``limit``
-    (a stated limit or a sketch's) moves the least needed slides behind the divider until the story fits (_trim)."""
+    (a stated limit or a sketch's) moves the least needed slides behind the divider until the story fits (_trim). ``target`` (deck-types:
+    the type's recipe, profiles.recipe; None for no target) replaces spec.PITCH_TARGET for the soft target's cheap moves."""
     by_type = lambda t: next((x for x in S if x["type"] == t), None)
-    for keep, into, title in spec.PITCH_MERGES:
-        k, m = by_type(keep), by_type(into)
+    for keep, into, title in spec.PITCH_MERGES + (spec.PITCH_MERGES_V3 if spec.LOOK_V3 else ()):
+        k = by_type(keep)
+        m = (_shown_executions(S, messages)[:1] or [None])[0] if into == "execution" else by_type(into)   # the first PRESENTED execution
         if k and m:
-            k["title"], k["label"] = title, title[:80]
-            k["blocks"] = k["blocks"] + [{**b, "title": b.get("title") or m["title"]} if b["kind"] == "bullets" else b for b in m["blocks"]]
-            k["claims"] += m["claims"]
-            k["requirements"] += [r for r in m["requirements"] if r not in k["requirements"]]
-            if m["status"] == "needs_human":
-                k["status"] = "needs_human"
-            if m.get("supplied"):   # what the person supplied to the absorbed slide still counts as supplied on the merged one
-                ks = k.get("supplied")
-                k["supplied"] = ({**ks, "refs": sorted(set(ks.get("refs") or []) | set(m["supplied"].get("refs") or []))} if ks else dict(m["supplied"]))
+            _merge(k, m, title)
             S = [x for x in S if x is not m]
     shown = _shown_executions(S, messages)
     shown_charts = _shown_charts(S, supported)
@@ -922,10 +974,176 @@ def _arrange_pitch(S: list, supported: set | None = None, routes: int = 1, messa
         story.remove(team)
         story.insert(story.index(inv), team)
     story, backup = _trim(S, story, backup, limit)
-    if not backup:
+    supply = []
+    target = spec.PITCH_TARGET if target is _SPEC_TARGET else target
+    if spec.LOOK_V3 and not limit and target is not None:   # deck-look step 5: a soft target by cheap moves only (a stated limit keeps _trim, above)
+        story, backup, supply = _to_target(S, story, backup, target, keep)
+    if not backup and not supply:
         return story
     divider = _slide("appendix", "Appendix", [{"kind": "text", "text": "Backup for questions: everything this presentation rests on."}], status="from_source")
-    return story + [divider] + backup
+    if supply:   # the 'To supply' part: last in the appendix, and counted on the close of a review build (Q6) so no gap is buried
+        ask = next((x for x in reversed(story) if x["type"] in ("investment", "ask", "close", "next_step")), None)
+        if ask is not None:
+            ask["blocks"] = ask["blocks"] + [{"kind": "small", "text": f"To supply: {len(supply)} slide{'s' if len(supply) != 1 else ''} in the appendix",
+                                              "basis": "meta", "internal": True}]
+        supply = [_slide("appendix", spec.TO_SUPPLY_TITLE, [{"kind": "text", "text": spec.TO_SUPPLY_TEXT}], status="from_source")] + supply
+    return story + [divider] + backup + supply
+
+
+#: deck-look step 5: the absorbed blocks that can carry the absorbed slide's title as their heading (a bullets list's title, a card's,
+#: a kv or text block's title as its kicker). The first headless one takes it.
+_HEADED = ("bullets", "text", "statement", "kv", "card")
+
+
+def _merge(k: dict, m: dict, title) -> None:
+    """Merge slide ``m`` into ``k`` in place (spec.PITCH_MERGES rows). ``title`` a string: the merged slide takes it and every absorbed
+    bullets block is headed by ``m``'s title (as before). ``title`` None (deck-look, spec.PITCH_MERGES_V3): ``k`` keeps its own title
+    verbatim; ``m``'s title heads the first headless absorbed block that can carry a heading, else it goes to ``k``'s notes, so it is
+    never said twice and never lost; ``m``'s notes join ``k``'s and ``k.merged`` records what was absorbed (its picture follows it:
+    spec.picture_of). Claims, requirements, the needs-a-person status and what a person supplied carry over in both modes."""
+    if title is not None:
+        k["title"], k["label"] = title, title[:80]
+        k["blocks"] = k["blocks"] + [{**b, "title": b.get("title") or m["title"]} if b["kind"] == "bullets" else b for b in m["blocks"]]
+    else:
+        put, add = False, []
+        for b in m["blocks"]:
+            if not put and b["kind"] in _HEADED and not b.get("title") and str(m.get("title") or "").strip():
+                b, put = {**b, "title": m["title"]}, True
+            add.append(b)
+        k["blocks"] = k["blocks"] + add
+        vis = m.get("visual") or {}
+        shown = [f"Image prompt ({vis.get('status', 'illustrative')}): {vis.get('prompt', '')}"] if vis.get("kind") == "image_prompt" else []   # drawn on the absorbed slide
+        extra = [x for x in ([] if put else [f"Merged here from the slide '{m['title']}'."]) + shown + [m.get("notes") or ""] if str(x).strip()]
+        if extra:
+            k["notes"] = "\n\n".join([x for x in [k.get("notes") or ""] if x.strip()] + extra)
+        k["merged"] = list(k.get("merged") or []) + [{"type": m["type"], "title": m["title"]}]
+        if m.get("slots") and not k.get("slots"):
+            k["slots"] = m["slots"]
+    k["claims"] += m["claims"]
+    k["requirements"] += [r for r in m["requirements"] if r not in k["requirements"]]
+    if m["status"] == "needs_human":
+        k["status"] = "needs_human"
+    if m.get("supplied"):   # what the person supplied to the absorbed slide still counts as supplied on the merged one
+        ks = k.get("supplied")
+        k["supplied"] = ({**ks, "refs": sorted(set(ks.get("refs") or []) | set(m["supplied"].get("refs") or []))} if ks else dict(m["supplied"]))
+
+
+def _sentence_keys(text) -> list:
+    """The sentences of a text as comparison keys (lower case, punctuation gone), those of four words or more (validate's repeated_line)."""
+    out = []
+    for sent in re.split(r"(?<=[.!?])\s+", str(text or "")):
+        key = re.sub(r"\W+", " ", sent.lower()).strip()
+        if len(key.split()) >= 4:
+            out.append(key)
+    return out
+
+
+def _split_said(text, said: dict) -> tuple:
+    """``(kept, moved, first)``: the sentences of ``text`` an earlier slide already said (by ``_sentence_keys``) apart from the rest, each
+    verbatim and in order. ``first`` is the earliest slide that said one of them (None when none was said). A sentence under four words is
+    never 'said' (no key), so it always stays."""
+    kept, moved, first = [], [], None
+    for sent in re.split(r"(?<=[.!?])\s+", str(text or "").strip()):
+        if not sent:
+            continue
+        hit = [said[k] for k in _sentence_keys(sent) if k in said]
+        if hit:
+            moved.append(sent)
+            first = min([first, *hit]) if first is not None else min(hit)
+        else:
+            kept.append(sent)
+    return " ".join(kept), moved, first
+
+
+def _say_once(S: list) -> None:
+    """deck-look (fix 2, Q13): no sentence is said twice on the presented slides (the story, before the Appendix divider). In story order,
+    only the REPEATED SENTENCES move, never the line or block around them: an idea title keeps its sentences no earlier slide said, and only
+    when none is left does it lead with its own stage text (its first statement becomes its title, so the idea says what it is); a copy
+    line keeps its new sentences ("Every drop has a story. Book your free leak check at lumen.ie today." keeps the call to action), a line
+    left empty leaves, and a block left with no line leaves the slide. What leaves goes to the slide's notes verbatim, after
+    spec.SAID_ONCE_NOTE, so no word is lost and none is written. A slide left with nothing else keeps its own layout rules (a statement
+    layout needs no second sentence)."""
+    end = next((i for i, x in enumerate(S) if x["type"] == "appendix"), len(S))
+    said: dict = {}
+    keep = lambda sl, lines: sl.__setitem__("notes", "\n\n".join([x for x in [sl.get("notes") or ""] if x.strip()] + lines))
+    for n, sl in enumerate(S[:end], 1):
+        moved = []
+        if sl["type"] == "idea":
+            rest, gone, first = _split_said(sl["title"], said)
+            if gone:
+                st = next((b for b in sl["blocks"] if b["kind"] == "statement" and str(b.get("text") or "").strip()), None)
+                if rest.strip():
+                    moved.append(f"{spec.SAID_ONCE_NOTE.format(n=first)} {' '.join(gone)}")
+                    sl["title"] = rest
+                elif st is not None:
+                    moved.append(f"{spec.SAID_ONCE_NOTE.format(n=first)} {sl['title']}")
+                    sl["title"] = str(st["text"]).strip()
+                    sl["blocks"] = [b for b in sl["blocks"] if b is not st]
+        out = []
+        for b in sl["blocks"]:
+            if b["kind"] == "copy" and b.get("lines"):
+                lines, gone, first = [], [], None
+                for ln in b["lines"]:
+                    rest, g, f = _split_said(ln, said)
+                    if g:
+                        gone += g
+                        first = f if first is None else min(first, f)
+                        if rest.strip():
+                            lines.append(rest)
+                    else:
+                        lines.append(ln)
+                if gone:
+                    whole = not lines
+                    moved.append(f"{spec.SAID_ONCE_NOTE.format(n=first)} " + " / ".join(gone) + (f" ({b['answer']})" if whole and b.get("answer") else ""))
+                    if whole:
+                        continue
+                    b = {**b, "lines": lines}
+            out.append(b)
+        sl["blocks"] = out
+        if moved:
+            keep(sl, moved)
+        for t in [sl["title"]] + [str(b.get(k) or "") for b in sl["blocks"] for k in ("text", "from", "to")] + \
+                 [str(x) for b in sl["blocks"] for x in b.get("lines") or []] + \
+                 [str(i.get("text", "")) if isinstance(i, dict) else " ".join(map(str, i)) if isinstance(i, (list, tuple)) else str(i) for b in sl["blocks"] for i in b.get("items") or []]:
+            for k in _sentence_keys(t):
+                said.setdefault(k, n)
+
+
+def _unfilled(x: dict) -> bool:
+    """A placeholder slide still waiting for a person: needs_human, and every item and text it shows is a labelled placeholder (a
+    competition, risks, team or credentials slide nobody has filled). One sourced line on it and it is not unfilled."""
+    if x["status"] != "needs_human":
+        return False
+    seen = False
+    for b in x["blocks"]:
+        for i in b.get("items") or []:
+            seen = True
+            if not (isinstance(i, dict) and i.get("human")):
+                return False
+        if str(b.get("text") or "").strip():
+            seen = True
+            if not (b.get("human") or str(b["text"]).strip().startswith(spec.PLACEHOLDER_PREFIX)):
+                return False
+    return seen
+
+
+def _to_target(S: list, story: list, backup: list, target: int, keep: set) -> tuple:
+    """Bring a pitch's presented story toward ``target`` slides by the cheap moves only, in order, one slide at a time and only while it
+    is longer (design.length.order): an unfilled placeholder slide (``_unfilled``) to the 'To supply' part, then a thin slide
+    (``layouts.is_thin``: a one-row table, a one-step timeline) to the backup. Types in spec.TARGET_KEEPS, routes the client asked
+    to see and the presented executions and charts (``keep``) never move. Nothing is trimmed past that, reworded or dropped: a story
+    still over the target stays so (the target is soft, PITCH_CAP only advisory). Returns ``(story, backup, supply)``."""
+    from . import layouts   # late: layouts imports spec, not this module
+    story, backup, supply = list(story), list(backup), []
+    movable = lambda x: x["type"] not in spec.TARGET_KEEPS and id(x) not in keep
+    for test, dest in ((_unfilled, supply), (lambda x: layouts.is_thin(x["blocks"]), backup)):
+        for x in [y for y in story if movable(y) and test(y)]:
+            if len(story) <= target:
+                break
+            story.remove(x)
+            dest.append(x)
+    at = {id(x): i for i, x in enumerate(S)}
+    return story, sorted(backup, key=lambda x: at.get(id(x), len(S))), supply
 
 
 def _trim(S: list, story: list, backup: list, limit: int | None) -> tuple:

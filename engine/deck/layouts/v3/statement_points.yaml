@@ -1,0 +1,52 @@
+id: statement_points
+version: 2
+group: content
+purpose: statement
+description: The title in a 5/12 column with the target figure under it when there is one; two or three points stacked on the right between hairlines.
+slot_summary: title, figure, points (2-3)
+for_types:
+- objective
+- insight
+- audience
+- proposition
+- solution
+- problem
+when:
+  test: points_2_3
+priority: 92
+alternatives:
+- objective_panel
+- cards_split
+- cards
+roomier: cards
+density: standard
+pick: rule
+family: statement_points
+renderer: statement_points
+slots:
+  title:
+    kind: text
+    role: title
+    required: true
+    min_chars: 3
+    max_lines: 4
+  figure:
+    kind: stat
+    role: display
+    min_items: 1
+    max_items: 1
+  points:
+    kind: group
+    role: body
+    from_blocks:
+    - bullets
+    - kv
+    - quote
+    - text
+    - statement
+    - small
+    - callout
+    - card
+    dominant: true
+    min_items: 2
+    max_items: 4

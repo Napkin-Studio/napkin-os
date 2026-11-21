@@ -247,17 +247,16 @@ def test_the_critic_deck_cap_cannot_be_raised_by_a_flag(tmp_path):
     assert "$0.40 a deck" in card["text"]
 
 
-def test_the_territory_card_falls_back_to_the_current_prices_and_hides_no_bug(monkeypatch):
-    import sys
+def test_the_territory_card_prices_from_the_one_shared_table_and_hides_no_bug(monkeypatch):
+    """The Territory card's stand-in table (_FALLBACK) is gone; the card, the Deck and the run log read engine/prices.json."""
     from territory import cost
-    assert cost._FALLBACK == {"claude-sonnet-5-5": (2.0, 10.0), "claude-opus-5-5": (4.0, 20.0)}
+    import price_table as prices
     from deck import spec
-    assert cost._FALLBACK == {m: spec.PRICE_PER_MTOK[m] for m in cost._FALLBACK}
-    monkeypatch.setitem(sys.modules, "deck", None)   # the deck package cannot be imported: the card's own table
-    assert cost._price("claude-opus-5-5", 1_000_000, 1_000_000) == 24.0
-    monkeypatch.undo()
-    monkeypatch.setattr(spec, "estimate_usd", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("a real bug")))
-    with pytest.raises(RuntimeError):   # a bare except used to swallow this
+    assert not hasattr(cost, "_FALLBACK")
+    assert cost._price("claude-opus-5-5", 1_000_000, 1_000_000) == 24.0 == spec.estimate_usd("claude-opus-5-5", 1_000_000, 1_000_000)
+    assert cost._price("claude-sonnet-5-5", 3000, 1200) == spec.estimate_usd("claude-sonnet-5-5", 3000, 1200)
+    monkeypatch.setattr(prices, "usd", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("a real bug")))
+    with pytest.raises(RuntimeError):   # never swallowed
         cost._price("claude-opus-5-5", 1, 1)
 
 

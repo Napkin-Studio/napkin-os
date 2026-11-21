@@ -1,0 +1,74 @@
+{
+ "type": "investor_seed",
+ "order": [
+  "title",
+  "problem",
+  "traction",
+  "ask",
+  "appendix",
+  "questions",
+  "appendix_sources"
+ ],
+ "presented": 4,
+ "plan": {
+  "slides": {
+   "s01": {
+    "layout": "cover",
+    "chosen_by": "rule",
+    "alternatives": [],
+    "rung": "as_is",
+    "moved": []
+   },
+   "s02": {
+    "layout": "statement_points",
+    "chosen_by": "rule",
+    "alternatives": [],
+    "rung": "as_is",
+    "moved": []
+   },
+   "s03": {
+    "layout": "big_number",
+    "chosen_by": "rule",
+    "alternatives": [],
+    "rung": "as_is",
+    "moved": []
+   },
+   "s04": {
+    "layout": "cards",
+    "chosen_by": "rule",
+    "alternatives": [],
+    "rung": "as_is",
+    "moved": []
+   },
+   "s05": {
+    "layout": "emphasis_bar",
+    "chosen_by": "rule",
+    "alternatives": [],
+    "rung": "as_is",
+    "moved": []
+   },
+   "s06": {
+    "layout": "cards",
+    "chosen_by": "rule",
+    "alternatives": [],
+    "rung": "as_is",
+    "moved": []
+   },
+   "s07": {
+    "layout": "big_statement",
+    "chosen_by": "rule",
+    "alternatives": [
+     "cards",
+     "native_table"
+    ],
+    "rung": "as_is",
+    "moved": []
+   }
+  },
+  "layout_title_pt": {
+   "statement_points": 36,
+   "big_number": 36,
+   "cards": 36
+  }
+ }
+}

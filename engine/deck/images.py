@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import re
 import sys
 from datetime import datetime, timezone
@@ -66,13 +67,13 @@ SLOT_NAME = re.compile(r"^[a-z][a-z0-9_]{1,23}$")
 
 def slot_specs(slide: dict) -> list:
     """The slots this slide takes: ``[(name, aspect)]``, a counted slot expanded (frame_1 ... frame_4). Empty for an evidence slide."""
-    t = slide.get("type")
+    t, title = spec.picture_of(slide)   # a merged slide takes the slots of the picture slide it absorbed (deck-look)
     if t not in SLOT_TABLE or t not in spec.PICTURE_SLIDE_TYPES:
         return []
     out = []
     for name, aspect, n in SLOT_TABLE[t]:
         if t == "execution":
-            aspect = EXECUTION_ASPECT[spec.frame_for(slide.get("title") or "")]
+            aspect = EXECUTION_ASPECT[spec.frame_for(title)]
             if aspect is None:
                 continue
         out += [(f"{name}_{i}" if n > 1 else name, aspect) for i in range(1, n + 1)]
@@ -83,6 +84,22 @@ def ratio(aspect: str) -> float:
     """Width over height of an aspect name like ``16:9``."""
     w, h = aspect.split(":")
     return int(w) / int(h)
+
+
+#: deck-slide-size: the slot whose picture is drawn at the full slide width (the bleed: full_bleed_statement, cover_bleed), by slide type.
+#: Its words sit on the picture, so at 4:3 and A4 its slot takes the IMAGE_ASPECTS entry nearest the box it fills.
+CANVAS_WIDE_TYPES = ("title", "idea", "real_question")
+
+
+def slot_aspect(declared: str, slide_type: str | None = None, slot: str = "picture", canvas=None) -> str:
+    """deck-slide-size: the aspect a picture slot is made at for the deck's size. At 16:9 (or no canvas) always ``declared``, so every
+    request key stays as it was. At 4:3 and A4 a canvas-wide slot (``CANVAS_WIDE_TYPES``' picture: the bleed) takes the spec.IMAGE_ASPECTS
+    entry nearest its box by log ratio (the slide width over the bleed height: 10 x 6.85 = 1.46 and 11.69 x 7.63 = 1.53, both 3:2);
+    panel and side slots keep theirs (the panel crops to cover). A picture already made is never re-made for this: it is re-cropped."""
+    if canvas is None or canvas.identity or slot != "picture" or slide_type not in CANVAS_WIDE_TYPES:
+        return declared
+    r = canvas.w_in / canvas.y(BLEED_H)
+    return min(spec.IMAGE_ASPECTS, key=lambda a: (abs(math.log(ratio(a) / r)), spec.IMAGE_ASPECTS.index(a)))
 
 
 def crop_box(src_w: int, src_h: int, aspect, focal: dict | None = None) -> tuple:
@@ -350,11 +367,11 @@ def anchors(deck: dict, territories=None) -> dict:
     out, n_div = {}, 0
     for sid in deck["order"]:
         s = deck["slides"][sid]
-        t = s["type"]
+        t, title = spec.picture_of(s)   # a merged slide keeps the anchor of the picture slide it absorbed (deck-look)
         if t == "territory":
             ref = by_name.get(s.get("title")) or _slug(s.get("title", ""))
         elif t == "execution":
-            ref = _slug(s.get("title", ""))
+            ref = _slug(title)
         elif t == "appendix":
             n_div += 1
             ref = f"divider-{n_div}"
@@ -419,7 +436,7 @@ def bind_generated(deck: dict, generated: dict, territories=None, names=(), word
             cur["candidate"] = {"asset": aid, "job": pic["job"]}
             got["candidates"] += 1
             continue
-        if cur is not None and (cur.get("status") != "empty" or (cur.get("from") or {}).get("kind") in ("upload", "territory_frame", "brand")):
+        if cur is not None and (cur.get("status") != "empty" or (cur.get("from") or {}).get("kind") in ("upload", "territory_frame", "brand", "production")):
             continue
         subject = str(pic.get("subject") or "")[:SUBJECT_MAX]
         try:
@@ -443,6 +460,295 @@ def bind_generated(deck: dict, generated: dict, territories=None, names=(), word
         register_assets(deck, {aid: rec})
         slots[slot] = {"kind": "image", "image": image}
         got["bound"] += 1
+    return got
+
+
+# -------------------------------------------------------------------------------------------------- production.json (deck-prod-assets)
+
+PRODUCTION_APP = "ie.napkin.production-tool"
+#: What an execution's channel accepts from Production's format channels (format-packs.json): a poster takes OOH or print.
+PRODUCTION_ACCEPTS = {"social": ("social",), "ooh": ("ooh", "print"), "print": ("print", "ooh"), "display": ("display",)}
+#: Every size, of the slot's channel or of a format the pinned packs do not know (fix 7), must sit within this ratio of the slot's aspect:
+#: a 7.8:1 OOH banner never lands in a 4:5 poster slot, nor a 2:7 skyscraper in a 16:9 one. Nothing fits: the slot stays empty, with why.
+ASPECT_TOL = 1.25
+NEAREST_ASPECT_TOL = ASPECT_TOL
+PRODUCTION_ALT = {"master": "The campaign's key visual", "size": "The campaign picture made for this channel", "frame": "A storyboard frame from the film"}
+_FILM_WORDS = ("film", "tv", "television", "cinema", "broadcast", "bvod", "video", "youtube")
+_PRINT_WORDS = ("print", "press", "magazine", "newspaper")
+_DISPLAY_WORDS = ("display", "banner", "programmatic")
+
+
+def load_production(stages: Path) -> dict | None:
+    """``<stages>/production.json`` (written by deck.from_production), or None. Read only when run_deck is given --production."""
+    p = Path(stages) / "production.json"
+    if not p.is_file():
+        return None
+    f = json.loads(p.read_text())
+    if f.get("stage") != "production" or not isinstance(f.get("items"), dict) or f.get("contract_version") != "3":
+        raise ImageError(f"{p} is not a production stage file (contract 3)")
+    return f
+
+
+def execution_channel(title: str) -> str | None:
+    """The Production channel an execution's title names: social (a phone frame), ooh (a poster frame), film, print or display; None for
+    a channel Production has no picture for (search, audio) or a title that names none."""
+    fr = spec.frame_for(title or "")
+    if fr == "phone":
+        return "social"
+    if fr == "poster":
+        return "ooh"
+    if fr in ("search", "audio"):
+        return None
+    t = (title or "").lower()
+    for ch, words in (("film", _FILM_WORDS), ("print", _PRINT_WORDS), ("display", _DISPLAY_WORDS)):
+        if any(re.search(rf"(?<!\w){w}(?!\w)", t) for w in words):
+            return ch
+    return None
+
+
+def _newest(keys):
+    return max(keys) if keys else None   # ULIDs sort by the time they were made
+
+
+def keeps_protected(it: dict, aspect) -> bool:
+    """Whether cropping this item to ``aspect`` around its focal point (crop_box, as the renderer does) keeps the whole of its protect
+    boxes (``keep``: their union, as fractions of the picture) in view. The boxes, not only their centre: a wide subject in a tall slot
+    is cut even when its centre is kept. An item with no boxes keeps nothing in particular, so any crop is fine."""
+    k, w, h = it.get("keep"), it.get("width"), it.get("height")
+    if not isinstance(k, dict) or not w or not h:
+        return True
+    x0, y0, x1, y1 = crop_box(int(w), int(h), aspect, it.get("focal"))
+    return k["x0"] * w >= x0 - 1 and k["y0"] * h >= y0 - 1 and k["x1"] * w <= x1 + 1 and k["y1"] * h <= y1 + 1
+
+
+def master_pool(prod: dict, brief_document_id: str | None = None) -> tuple:
+    """``(set ids, why)``: the Format sets the key-visual rule ranks equal, of which choose_master takes the newest (the Production picker
+    reports the others as a tie). Linked to the deck's brief first; when none links to it, a placeable key visual before one waiting for its
+    rights. ``([], why)`` when no set has a master."""
+    items = prod.get("items") or {}
+    sets = {fid: r for fid, r in (prod.get("format_sets") or {}).items() if r.get("master") in items}
+    if not sets:
+        return [], "no Format set in the export has a key visual"
+    linked = [fid for fid, r in sets.items() if brief_document_id and (r.get("brief") or {}).get("document_id") == brief_document_id]
+    if linked:
+        return linked, "the newest Format set linked to this deck's brief"
+    placeable = [fid for fid in sets if items[sets[fid]["master"]].get("rights") != "reference_only"]
+    if placeable:
+        why = "no Format set links to this deck's brief: the newest set whose key visual can be placed"
+        if _newest(list(sets)) != _newest(placeable):
+            why += " (a newer set's key visual waits for its rights)"
+        return placeable, why
+    return list(sets), "no Format set links to this deck's brief and every key visual waits for its rights: the newest set"
+
+
+def choose_master(prod: dict, brief_document_id: str | None = None) -> tuple:
+    """``(key, set, why)`` of the key visual (Q9): the newest Format set of master_pool. ``(None, None, why)`` when no set has a master."""
+    pool, why = master_pool(prod, brief_document_id)
+    if not pool:
+        return None, None, why
+    fid = _newest(pool)
+    return prod["format_sets"][fid]["master"], fid, why
+
+
+def production_master(prod: dict, brief_document_id: str | None = None) -> str | None:
+    """The key visual's item key (see choose_master), or None."""
+    return choose_master(prod, brief_document_id)[0]
+
+
+def production_size(prod: dict, channel: str, aspect: str, prefer_set: str | None = None, any_shape: bool = False) -> tuple:
+    """``(key, why)``: the newest of size_pool's best sizes, else size_pool's ``(None, why)``."""
+    keys, why = size_pool(prod, channel, aspect, prefer_set, any_shape=any_shape)
+    return (_newest(keys), None) if keys else (None, why)
+
+
+def size_fits(prod: dict, channel: str, aspect: str, prefer_set: str | None = None, any_shape: bool = False) -> list:
+    """Every size that may fill an execution slot (size_pool's tests: channel, aspect tolerance, protect boxes, not stale), best first: what a
+    person may swap among in the Production picker. The rank still puts a placeable, ready size first."""
+    return size_pool(prod, channel, aspect, prefer_set, fits=True, any_shape=any_shape)[0]
+
+
+def size_pool(prod: dict, channel: str, aspect: str, prefer_set: str | None = None, fits: bool = False, any_shape: bool = False) -> tuple:
+    """``(keys, why)``: the sizes ranked best and equal for an execution slot (production_size takes the newest; the Production picker reports
+    the others as a tie). Sizes whose channel the execution accepts (a size of a format the pinned packs do
+    not know only when the channel has none), within ASPECT_TOL of the slot's aspect and whose protect boxes the slot's crop keeps whole;
+    a placeable one before one waiting for its rights, ready before flagged ('look'), the key visual's own set first, nearest the slot's
+    aspect. Stale sizes never. ``([], why)`` when sizes of the channel exist and none fits (the slot is left empty with that reason, never
+    filled with a wrong shape); ``([], None)`` when Production made nothing for the channel.
+
+    ``any_shape`` (deck-graphics, spec.GRAPHICS): the size is shown WHOLE in a frame whose window takes its own format's aspect, so no
+    shape is too far and no crop can cut a protect box: every size of the channel is a candidate, nearest the slot's aspect first; a
+    channel whose only sizes are out of date ('stale') is held with that reason, never passed to a generated picture."""
+    want = ratio(aspect)
+    tol = math.log(ASPECT_TOL) if not any_shape else float("inf")
+    acc = PRODUCTION_ACCEPTS.get(channel) or ()
+    matched, nearest, off_shape, cut, stale = [], [], set(), 0, 0
+    for k, it in (prod.get("items") or {}).items():
+        if any_shape and it.get("role") == "size" and it.get("status") == "stale" and it.get("channel") in acc:
+            stale += 1
+        if it.get("role") != "size" or it.get("status") not in ("ready", "look") or not it.get("aspect"):
+            continue
+        ours, unknown = it.get("channel") in acc, it.get("channel") is None
+        if not (ours or unknown):
+            continue
+        r = it["aspect"]["w"] / it["aspect"]["h"]
+        dist = abs(math.log(r / want))
+        if dist > tol:
+            if ours:
+                off_shape.add(f"{it['aspect']['w']}:{it['aspect']['h']}")
+            continue
+        if not any_shape and not keeps_protected(it, aspect):
+            cut += 1 if ours else 0
+            continue
+        row = (it.get("rights") == "reference_only", it.get("status") != "ready", it.get("set") != prefer_set, round(dist, 4), k)   # a placeable picture first
+        (matched if ours else nearest).append(row)
+    if any_shape and stale and not matched:   # the channel's own sizes are all out of date: held, never a size of another format
+        pool = []
+    else:
+        pool = matched or nearest
+    if fits:   # size_fits: every size that fits, best first (newest first among equals)
+        return [p[4] for p in sorted(pool, key=lambda p: (p[:4], tuple(-ord(c) for c in p[4])))], None
+    if not pool:
+        if any_shape and stale:
+            return [], (f"Out of date in Production: its {channel} size(s) changed since they were made. Make them again in Production, "
+                          f"or supply a picture")
+        if not off_shape and not cut:
+            return [], None
+        parts = []
+        if off_shape:
+            parts.append(f"its {channel} size(s) are {', '.join(sorted(off_shape))}, too far from this {aspect} slot")
+        if cut:
+            parts.append(f"{cut} {channel} size(s) would lose part of their protected area in a {aspect} crop")
+        return [], "No Production size fits: " + "; ".join(parts) + ". Make one in this shape in Production, or supply a picture"
+    best = min(p[:4] for p in pool)
+    return sorted(p[4] for p in pool if p[:4] == best), None
+
+
+def production_frame(prod: dict) -> str | None:
+    """The one picked storyboard frame a film execution shows in v1 (fix 3): the newest storyboard's first shot (by rank) with a picked frame."""
+    frames = {k: it for k, it in (prod.get("items") or {}).items() if it.get("role") == "frame" and it.get("shot_kind", "shot") == "shot"}
+    sb = _newest([it.get("storyboard") or "" for it in frames.values()])
+    first = sorted((str(it.get("shot_rank") or ""), k) for k, it in frames.items() if (it.get("storyboard") or "") == sb)
+    return first[0][1] if first else None
+
+
+def production_shots(prod: dict) -> list:
+    """The newest storyboard's picked shot frames in shot order (Production's ``shot.rank``, a fractional index that sorts as a string; end
+    cards left out; mock frames never reach production.json): ``[(shot number from 1, item key, placeable)]``. A rights-pending frame keeps
+    its number and is not placeable."""
+    frames = {k: it for k, it in (prod.get("items") or {}).items() if it.get("role") == "frame" and it.get("shot_kind", "shot") == "shot"}
+    sb = _newest([it.get("storyboard") or "" for it in frames.values()])
+    ordered = sorted((str(it.get("shot_rank") or ""), k) for k, it in frames.items() if (it.get("storyboard") or "") == sb)
+    return [(n, k, frames[k].get("rights") != "reference_only" and frames[k].get("status", "ready") == "ready") for n, (_, k) in enumerate(ordered, 1)]
+
+
+def production_storyboard(prod: dict) -> list:
+    """The placeable frames of production_shots, in shot order: ``[item key]``."""
+    return [k for _, k, ok in production_shots(prod) if ok]
+
+
+def production_slot(prod: dict, key: str, aspect: str, names=()) -> tuple:
+    """The slot value for one Production item and its asset record (None when the picture waits for its rights: an empty slot with the
+    reason 'Rights to supply', never placed silently). The slot keeps a focal point, not pixels."""
+    it = prod["items"][key]
+    run = str((prod.get("bundle") or {}).get("clan_sha256") or "")[:12]
+    base = {"kind": "frame" if it["role"] == "frame" else "illustration", "aspect": aspect, "basis": "creative",
+            "from": {"kind": "production", "key": key, **({"run": run} if run else {})}}
+    if it.get("rights") == "reference_only":
+        why = it.get("rights_why") or f"{it.get('origin')} picture with no stated licence"
+        return {"kind": "image", "image": {**base, "status": "empty", "reason": f"{spec.RIGHTS_TO_SUPPLY}: {why} in Production. Set own, licensed or "
+                                                                               f"client_supplied to place it"[:REASON_MAX]}}, None
+    aid = "img_" + it["sha256"][:12]
+    image = {**base, "status": "flagged" if it.get("status") == "look" else "made", "asset": aid, "alt": make_alt(PRODUCTION_ALT[it["role"]], names)}
+    if it.get("focal"):
+        image["focal"] = {"x": float(it["focal"]["x"]), "y": float(it["focal"]["y"])}
+    if it.get("status") == "look":
+        image["reason"] = str(it.get("reason") or "Flagged by review in Production")[:REASON_MAX]
+    src = {"app": PRODUCTION_APP, "project_id": (prod.get("project") or {}).get("id"), "entity": it["entity"], "role": it["role"],
+           "version": it.get("version"), "origin": it.get("origin"), "bundle_sha256": it.get("bundle_sha256")}
+    if it.get("job_id"):
+        src["job_id"] = it["job_id"]
+    if it.get("format", {}).get("format_id"):
+        src["format_id"] = it["format"]["format_id"]
+    if it.get("channel"):
+        src["channel"] = it["channel"]
+    asset = {"sha256": it["sha256"], "file": it["file"], "mime": it["mime"], "width": it["width"], "height": it["height"], "bytes": it.get("bytes", 0),
+             "rights": it["rights"], "guard": {"checked": False, "by": "not checked", "flagged": False},
+             "source": {k: v for k, v in src.items() if v not in (None, "")}}
+    return {"kind": "image", "image": image}, asset
+
+
+def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", names=(), brief_document_id: str | None = None) -> dict:
+    """Fill picture slots from production.json (deck-prod-assets slice 2), by slide type and channel, after the supplied pictures and before
+    the empty slots and the image step, so a filled slot (or one waiting for its rights) never reaches the generation plan. Cover (only with
+    ``creative_cover``) and idea take the key visual; each execution the size its channel and aspect match, a film one storyboard frame.
+    Territory slides never; no slide is added. A person's own picture (upload, brand) is kept; a territory frame's proposal gives way.
+    A slot Production has pictures for but none of the right shape (aspect, or a crop that would cut its protect boxes) is left empty
+    with the reason. Stamps ``meta.production``. Returns ``{placed, held: [{slide, slot, message}], kept, master: {key, set, why}}``."""
+    got = {"placed": 0, "held": [], "kept": 0, "master": None}
+    if pictures == "none":
+        return got
+    master, mset, mwhy = choose_master(prod, brief_document_id)
+    got["master"] = {"key": master, "set": mset, "why": mwhy}
+    run = str((prod.get("bundle") or {}).get("clan_sha256") or "")[:12]
+
+    def unfit(aspect, why):
+        return {"kind": "image", "image": {"kind": "illustration", "status": "empty", "aspect": aspect, "basis": "creative", "reason": why[:REASON_MAX],
+                                           "from": {"kind": "production", **({"run": run} if run else {})}}}
+    for sid in deck["order"]:
+        s = deck["slides"][sid]
+        t, title = spec.picture_of(s)
+        for slot, aspect in slot_specs(s):
+            key, why = None, None
+            if (t == "title" and pictures == "creative_cover") or t == "idea":
+                key = master if slot == "picture" else None
+                if key and not keeps_protected(prod["items"][key], aspect):
+                    key, why = None, (f"The key visual would lose part of its protected area in a {aspect} crop. Make a {aspect} size of it in "
+                                      f"Production, or supply a picture")
+            elif t == "execution" and slot == "picture":
+                ch = execution_channel(title)
+                if ch == "film":
+                    key = production_frame(prod)
+                    own = ((((s.get("slots") or {}).get(slot) or {}).get("image") or {}).get("from") or {}).get("kind") in ("upload", "brand")
+                    if spec.GRAPHICS and not own:   # deck-graphics slice 3: 3 or 4 Production frames in shot order make a strip, all Production or none
+                        from .graphics import strip_picks   # noqa: PLC0415
+                        shots = production_shots(prod)
+                        number = {k: n for n, k, _ in shots}
+                        picks, note = strip_picks([k for _, k, ok in shots if ok])
+                        if picks:
+                            key = picks[0]
+                            for i, fk in enumerate(picks, 1):
+                                val, asset = production_slot(prod, fk, aspect, names)
+                                if asset:
+                                    register_assets(deck, {val["image"]["asset"]: asset})
+                                    got["placed"] += 1
+                                _slots(s)[f"shot_{i}"] = val
+                            if len(picks) < len(shots):   # fewer drawn than the storyboard has: say so on the slide ('4 of 9 shots')
+                                note = f"{len(picks)} of {len(shots)} shots"
+                            s["strip"] = {"shots": [number[k] for k in picks], "of": len(shots), **({"note": note} if note else {})}
+                            got.setdefault("strips", []).append({"slide": sid, "shots": len(picks), "note": note})
+                elif ch:
+                    key, why = production_size(prod, ch, aspect, mset, any_shape=bool(spec.GRAPHICS))
+            if not key and not why:
+                continue
+            cur = (s.get("slots") or {}).get(slot)
+            cur_im = cur.get("image") if isinstance(cur, dict) else None
+            if isinstance(cur_im, dict) and (cur_im.get("from") or {}).get("kind") in ("upload", "brand") and cur_im.get("status") != "empty":
+                got["kept"] += 1   # a person's own picture stays
+                continue
+            if not key:   # Production has pictures for this slot, none of the right shape: empty, with why, never a wrong crop
+                _slots(s)[slot] = unfit(aspect, why)
+                got["held"].append({"slide": sid, "slot": slot, "message": why[:REASON_MAX]})
+                continue
+            val, asset = production_slot(prod, key, aspect, names)
+            if asset:
+                register_assets(deck, {val["image"]["asset"]: asset})
+                got["placed"] += 1
+            else:
+                got["held"].append({"slide": sid, "slot": slot, "message": val["image"]["reason"]})
+            _slots(s)[slot] = val
+    deck["meta"]["production"] = {"project_id": (prod.get("project") or {}).get("id"), "title": (prod.get("project") or {}).get("title"),
+                                  "data_sha256": (prod.get("bundle") or {}).get("clan_sha256"), "offer_sha256": prod.get("offer_sha256"),
+                                  "taken": 1, "at": prod.get("taken_at"), "how": "bundle", "placed": got["placed"], "held": len(got["held"])}
     return got
 
 
@@ -518,7 +824,7 @@ def place_supplied(deck: dict, supplied: dict, names=(), sources: dict | None = 
         s = (deck.get("slides") or {}).get(sid)
         if s is None:
             raise ImageError(f"--image {sid}.{slot}: the deck has no slide {sid}")
-        if s["type"] not in spec.PICTURE_SLIDE_TYPES or s["type"] not in SLOT_TABLE:
+        if spec.picture_of(s)[0] not in spec.PICTURE_SLIDE_TYPES or spec.picture_of(s)[0] not in SLOT_TABLE:
             raise ImageError(f"--image {sid}.{slot}: a {s['type']} slide is an evidence slide and takes no picture")
         want = dict(slot_specs(s))
         if slot not in want and not (s["type"] == "execution" and EXECUTION_ASPECT[spec.frame_for(s.get("title") or "")] is None):
@@ -554,17 +860,20 @@ SUPPLIED_ALT = {"title": "A picture for the cover", "appendix": "A picture for t
                 "solution": "A picture for the solution", "product": "A picture for the product"}
 
 
-def add_empty_slots(deck: dict, pictures: str) -> int:
+def add_empty_slots(deck: dict, pictures: str, only=None) -> int:
     """With ``--pictures``, give every slide of the asked types the slots it takes, empty with a reason, where nothing was placed.
     Territory, idea and audience and execution slides always (the creative slides); the cover and the divider with ``creative_cover``.
+    ``only`` (deck-types: the type's recipe ``pictures.types``, when the person set no picture preference) narrows those types; None is today.
     Returns the number added. An empty slot is never drawn."""
     if pictures == "none":
         return 0
     types = CREATIVE_TYPES + (COVER_TYPES if pictures == "creative_cover" else ())
+    if only is not None:
+        types = tuple(x for x in types if x in only)
     n = 0
     for sid in deck["order"]:
         s = deck["slides"][sid]
-        if s["type"] not in types:
+        if spec.picture_of(s)[0] not in types:
             continue
         for name, aspect in slot_specs(s):
             if name not in (s.get("slots") or {}):
@@ -711,6 +1020,12 @@ def drawn(deck: dict, audience: str) -> dict:
     return out
 
 
+def picture_label(im: dict, default: str) -> str:
+    """The label a review render draws on a picture not yet approved: the fixed ``Production`` for a Production Tool picture (deck-prod-assets Q2),
+    else the deck's own label (``Illustrative`` unless the person set another). The renderers place it by deck-look's rule, whatever the word."""
+    return spec.PRODUCTION_LABEL if (im.get("from") or {}).get("kind") == "production" else default
+
+
 def approval_names_asset(im: dict) -> bool:
     a = im.get("approval")
     return isinstance(a, dict) and a.get("decision") == "approve" and bool(a.get("by")) and bool(a.get("at")) and a.get("asset") == im.get("asset")
@@ -767,6 +1082,243 @@ def copy_assets(deck: dict, out_dir: Path, audience: str, src_dirs=(), sources: 
 def derived_path(asset: dict) -> str:
     """Where an asset's derived JPEG lives in a run folder (relative)."""
     return f"assets/derived/{asset['sha256']}-{DERIVED_PX}.jpg"
+
+
+# -------------------------------------------------------------------------------------------------- text on a picture (deck-look)
+#: deck-look step 7 (spec.LOOK_V3, Fable's Q7): words are set over a picture only on a zone the finder measured calm enough, under a
+#: scrim whose alpha is solved, never guessed. Every text-over slot gets at least SCRIM_FLOOR and at most SCRIM_CAP (a heavier wash makes
+#: the picture murky). The floor is a visual default, NOT a readability guarantee: computed, light text on a 40% dark scrim over a white
+#: picture is 2.26:1, dark text on a 40% light scrim over black 2.61:1, and even a 60% scrim gives 3.94:1, all under AA. So the only
+#: guarantee is the check at RENDER time (qa_render's p10 on a text-free render, an error under LOOK_V3); a picture a person swaps in later
+#: (in PowerPoint) is never re-measured and cannot be guaranteed readable. The target is AA for body text plus a
+#: margin (4.5 + 0.3), held even for the display sizes, so the render (re-measured by qa_render at its 10th percentile) clears AA.
+#: A zone whose luminance s.d. is over BUSY_SD takes the cap (texture under words harms reading even when contrast passes); one whose
+#: texture is still over BUSY_SD under the cap's wash ((1 - SCRIM_CAP) x s.d.) is refused. No zone passes: the slide keeps its words
+#: beside the picture (picture_column) and the plan says so.
+TEXT_OVER_TYPES = ("title", "idea", "real_question")
+SCRIM_FLOOR, SCRIM_CAP, SCRIM_STEP = 0.40, 0.60, 0.01
+TEXT_ON_PICTURE_TARGET = 4.8
+BUSY_SD = 0.12
+#: deck-slide-size (review 5): a solid shape or a hard edge under the words, checked at 4:3 and A4 (``text_zone(shapes=True)``; 16:9 keeps
+#: the zones it records today, byte for byte). The zone is cut into SHAPE_GRID cells (columns, rows) on the
+#: thumbnail; when their mean luminances differ by more than SHAPE_DELTA, part of the block sits on a shape (a dark mark, a horizon), which no
+#: scrim hides, so the zone is refused. Fine texture (stripes, grain) averages out inside a cell and is still the scrim's to calm.
+SHAPE_GRID, SHAPE_DELTA = (6, 3), 0.15
+#: The picture box of a bleed layout (inches): the full slide width, from the top edge to the footer rule's strip (the footer, the
+#: section and the page number stay on the slide's ground, never on the picture). The margin and the block the finder measures.
+BLEED_W, BLEED_H, BLEED_M = 13.333, 6.85, 0.65
+ZONE_BLOCK = (6.6, 3.2)
+#: Candidate zones in the order a tie is broken (design.pictures.zone_finder): text sits bottom-left first, as Gamma's cover does.
+ZONES = ("bottom_left", "top_left", "middle_left", "bottom_right", "top_right", "middle_right")
+#: How far the scrim stays solid past the text block, and how far it fades to nothing toward the picture's centre (inches).
+SCRIM_PAD, SCRIM_FADE = 0.5, 3.0
+_THUMB_W = 160
+
+
+def zone_block(canvas=None, physical: bool = False) -> tuple:
+    """deck-slide-size: the text block of a bleed at the deck's size. It keeps its physical width (6.6 in: type does not shrink with the
+    slide) and its height through the body band; on the 16:9 grid that is ``ZONE_BLOCK[0] / k`` wide (``physical`` False, what the renderer
+    lays out), at the size itself ``ZONE_BLOCK[0]`` (``physical`` True, what the finder measures). 16:9 or None: ZONE_BLOCK."""
+    if canvas is None or canvas.identity:
+        return ZONE_BLOCK
+    w = min(ZONE_BLOCK[0], canvas.w_in - 2 * BLEED_M - 0.5)
+    h = canvas.y(BLEED_H - 0.45) - canvas.y(BLEED_H - 0.45 - ZONE_BLOCK[1])
+    return (w, h) if physical else (w / canvas.k, ZONE_BLOCK[1])
+
+
+def zone_box(zone: str, block: tuple = ZONE_BLOCK, W: float = BLEED_W, H: float = BLEED_H, M: float = BLEED_M) -> tuple:
+    """``(x, y, w, h)`` in inches of the text block for ``zone`` on a bleed picture of ``W`` by ``H`` (the top zones sit under the DRAFT mark)."""
+    bw, bh = block
+    x = M if zone.endswith("_left") else W - M - bw
+    y = {"bottom": H - 0.45 - bh, "top": 0.75, "middle": (H - bh) / 2}[zone.split("_")[0]]
+    return (x, y, bw, bh)
+
+
+def scrim_geometry(zone: str, box: tuple, W: float = BLEED_W, H: float = BLEED_H) -> dict:
+    """The scrim for a text block at ``box``: ``{solid: (x, y, w, h), fade: (x, y, w, h), toward}``. Solid under the block plus SCRIM_PAD,
+    fading to nothing over SCRIM_FADE toward the picture's centre: a bottom zone fades upward across the full width, a top zone downward,
+    a middle zone sideways over the full height (no hard band edge on the picture)."""
+    x, y, w, h = box
+    v = zone.split("_")[0]
+    if v == "bottom":
+        top = max(0.0, y - SCRIM_PAD)
+        return {"solid": (0.0, top, W, H - top), "fade": (0.0, max(0.0, top - SCRIM_FADE), W, top - max(0.0, top - SCRIM_FADE)), "toward": "up"}
+    if v == "top":
+        bot = min(H, y + h + SCRIM_PAD)
+        return {"solid": (0.0, 0.0, W, bot), "fade": (0.0, bot, W, min(H, bot + SCRIM_FADE) - bot), "toward": "down"}
+    if zone.endswith("_left"):
+        r = min(W, x + w + SCRIM_PAD)
+        return {"solid": (0.0, 0.0, r, H), "fade": (r, 0.0, min(W, r + SCRIM_FADE) - r, H), "toward": "right"}
+    l = max(0.0, x - SCRIM_PAD)
+    return {"solid": (l, 0.0, W - l, H), "fade": (max(0.0, l - SCRIM_FADE), 0.0, l - max(0.0, l - SCRIM_FADE), H), "toward": "left"}
+
+
+def label_corner(zone: str) -> str:
+    """The picture label's corner: diagonal to the text block (Q8)."""
+    v, side = zone.split("_")
+    return ("top" if v in ("bottom", "middle") else "bottom") + "_" + ("right" if side == "left" else "left")
+
+
+def _lin(c: float) -> float:
+    c /= 255.0
+    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+
+_LIN = [_lin(i) for i in range(256)]
+
+
+def _rel_lum(rgb) -> float:
+    r, g, b = (_LIN[max(0, min(255, int(round(v))))] for v in rgb)
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def _hex_rgb(h: str) -> tuple:
+    h = h.lstrip("#")
+    return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+
+
+def p10_contrast(pixels: list, text_rgb: tuple, scrim_rgb: tuple | None = None, alpha: float = 0.0) -> float:
+    """The 10th-percentile WCAG contrast of ``text_rgb`` against ``pixels`` ((r, g, b) 0-255) under a scrim of ``scrim_rgb`` at ``alpha``,
+    composited per channel in sRGB (as the PDF renderers composite a transparent fill), so the finder predicts what the render shows."""
+    lt = _rel_lum(text_rgb)
+    cs = []
+    for px in pixels:
+        c = px if not scrim_rgb or alpha <= 0 else tuple((1 - alpha) * p + alpha * s for p, s in zip(px, scrim_rgb))
+        lb = _rel_lum(c)
+        hi, lo = (lt, lb) if lt >= lb else (lb, lt)
+        cs.append((hi + 0.05) / (lo + 0.05))
+    if not cs:
+        return 0.0
+    cs.sort()
+    return cs[int(0.10 * (len(cs) - 1))]
+
+
+def _thumb(src, box_w: float, box_h: float, focal: dict | None):
+    """The picture as it is cropped to a ``box_w`` by ``box_h`` box (cover, the recorded focal point), ``_THUMB_W`` pixels wide, RGB."""
+    with Image.open(src) as im:
+        im = ImageOps.exif_transpose(im).convert("RGB")
+        c = im.crop(crop_box(im.width, im.height, box_w / box_h, focal))
+        th = max(1, round(_THUMB_W * box_h / box_w))
+        return c.resize((_THUMB_W, th), Image.BILINEAR)
+
+
+def _zone_pixels(thumb, box: tuple, W: float, H: float) -> list:
+    x, y, w, h = box
+    tw, th = thumb.size
+    x0, x1 = max(0, int(x / W * tw)), min(tw, int(round((x + w) / W * tw)))
+    y0, y1 = max(0, int(y / H * th)), min(th, int(round((y + h) / H * th)))
+    px = thumb.load()
+    return [px[i, j] for j in range(y0, y1) for i in range(x0, x1)]
+
+
+def _zone_cells(thumb, box: tuple, W: float, H: float, grid: tuple = SHAPE_GRID) -> list:
+    """The mean relative luminance of each of ``grid`` cells of the zone ``box`` on the thumbnail (cells with no pixel left out)."""
+    x, y, w, h = box
+    tw, th = thumb.size
+    x0, x1 = max(0, int(x / W * tw)), min(tw, int(round((x + w) / W * tw)))
+    y0, y1 = max(0, int(y / H * th)), min(th, int(round((y + h) / H * th)))
+    px = thumb.load()
+    out = []
+    for gi in range(grid[0]):
+        for gj in range(grid[1]):
+            a0, a1 = x0 + (x1 - x0) * gi // grid[0], x0 + (x1 - x0) * (gi + 1) // grid[0]
+            b0, b1 = y0 + (y1 - y0) * gj // grid[1], y0 + (y1 - y0) * (gj + 1) // grid[1]
+            cell = [_rel_lum(px[i, j]) for j in range(b0, b1) for i in range(a0, a1)]
+            if cell:
+                out.append(sum(cell) / len(cell))
+    return out
+
+
+def text_zone(src, box: tuple = (BLEED_W, BLEED_H), focal: dict | None = None, block: tuple = ZONE_BLOCK, zones=ZONES,
+              ink: str = "1B2430", paper: str = "FAF7F1", target: float = TEXT_ON_PICTURE_TARGET, shapes: bool = False) -> dict:
+    """The calm-zone finder and scrim solver (design.pictures.zone_finder), pure Pillow on a 160 px thumbnail, deterministic.
+
+    For each candidate zone of the picture as cropped to ``box`` (inches): the words take the colour the zone already favours (ink on a
+    light zone under a paper scrim, paper on a dark one under an ink scrim: the wash deepens the picture, never flips it), then the least
+    scrim alpha from SCRIM_FLOOR to SCRIM_CAP at which the 10th-percentile per-pixel contrast under the block reaches ``target``. A zone
+    whose luminance s.d. is over BUSY_SD starts at the cap; one still over BUSY_SD under the cap's wash is refused. Score = alpha + 2 x s.d., lowest wins, ties in
+    ``zones`` order. Returns ``{zone, text, colour, alpha, p10, busy_sd, by}`` or, when no zone passes, ``{none: True, reason, best, by}``."""
+    W, H = box
+    thumb = _thumb(src, W, H, focal)
+    ink_rgb, paper_rgb = _hex_rgb(ink), _hex_rgb(paper)
+    best, tried = None, []
+    for z in zones:
+        pix = _zone_pixels(thumb, zone_box(z, block, W, H), W, H)
+        if not pix:
+            continue
+        lums = [_rel_lum(p) for p in pix]
+        mean = sum(lums) / len(lums)
+        sd = (sum((v - mean) ** 2 for v in lums) / len(lums)) ** 0.5
+        lp, li = _rel_lum(paper_rgb), _rel_lum(ink_rgb)   # the words take the colour with more contrast against the zone's mean luminance
+        on_paper = (lp + 0.05) / (mean + 0.05) >= (mean + 0.05) / (li + 0.05)
+        text, scrim = (paper, ink) if on_paper else (ink, paper)
+        t_rgb, s_rgb = (paper_rgb, ink_rgb) if on_paper else (ink_rgb, paper_rgb)
+        rec = {"zone": z, "text": text, "colour": scrim, "busy_sd": round(sd, 3)}
+        cells = _zone_cells(thumb, zone_box(z, block, W, H), W, H) if shapes else []
+        if cells and max(cells) - min(cells) > SHAPE_DELTA:   # a shape or an edge under the words: no scrim makes that read
+            tried.append({**rec, "alpha": SCRIM_CAP, "p10": round(p10_contrast(pix, t_rgb, s_rgb, SCRIM_CAP), 2), "why": "shapes"})
+            continue
+        if (1 - SCRIM_CAP) * sd > BUSY_SD:
+            tried.append({**rec, "alpha": SCRIM_CAP, "p10": round(p10_contrast(pix, t_rgb, s_rgb, SCRIM_CAP), 2), "why": "too busy"})
+            continue
+        a = SCRIM_CAP if sd > BUSY_SD else SCRIM_FLOOR
+        got = None
+        while a <= SCRIM_CAP + 1e-9:
+            c = p10_contrast(pix, t_rgb, s_rgb, a)
+            if c >= target:
+                got = (round(a, 2), round(c, 2))
+                break
+            a += SCRIM_STEP
+        if got is None:
+            tried.append({**rec, "alpha": SCRIM_CAP, "p10": round(p10_contrast(pix, t_rgb, s_rgb, SCRIM_CAP), 2), "why": "contrast"})
+            continue
+        cand = {**rec, "alpha": got[0], "p10": got[1], "by": "finder"}
+        score = got[0] + 2 * sd
+        if best is None or score < best[0] - 1e-9:
+            best = (score, cand)
+    if best:
+        return best[1]
+    top = max(tried, key=lambda r: r["p10"]) if tried else {}
+    why = ("every zone is too busy under the words" if tried and all(t["why"] == "too busy" for t in tried)
+           else "every zone has a shape or an edge under the words" if tried and all(t["why"] in ("shapes", "too busy") for t in tried)
+           else f"no zone reaches {target:g}:1 at the {SCRIM_CAP:.0%} cap")
+    return {"none": True, "reason": why, "best": {k: top[k] for k in ("zone", "text", "p10", "busy_sd") if k in top}, "by": "finder"}
+
+
+def source_paths(deck: dict, audience: str, src_dirs=(), sources: dict | None = None) -> dict:
+    """``{asset id: path}`` of the source file of every picture a render of this audience draws (found as ``copy_assets`` finds it; nothing
+    is copied). A picture not on disk is left out (``copy_assets`` refuses it later, loudly)."""
+    assets, out = deck.get("assets") or {}, {}
+    for (_sid, _name), im in sorted(drawn(deck, audience).items()):
+        aid = im["asset"]
+        rec = assets.get(aid) or {}
+        cands = ([Path((sources or {})[aid])] if aid in (sources or {}) else []) + [Path(d) / rec.get("file", "") for d in src_dirs if rec.get("file")]
+        src = next((c for c in cands if c.is_file()), None)
+        if src is not None:
+            out[aid] = src
+    return out
+
+
+def solve_text_zones(deck: dict, paths: dict, ink: str = "1B2430", paper: str = "FAF7F1", canvas=None) -> list:
+    """Run the finder on the picture slot of every slide of TEXT_OVER_TYPES whose picture is drawable (``paths`` holds its file) and record
+    the answer on the slot as ``image.text_zone``; a slot already holding one keeps it (a repair or a person may pin it). Returns
+    ``[(slide id, record)]``. The layout picker reads the record: a zone puts the words on the picture (cover_bleed, full_bleed_statement),
+    none keeps them beside it and the plan reports the fallback. ``canvas`` (deck-slide-size, a theme.Canvas): at 4:3 and A4 the finder
+    measures the picture as it is cropped at that size and the block as it is drawn there (the bleed box through the canvas map)."""
+    out = []
+    kw = {}
+    if canvas is not None and not canvas.identity:
+        kw = {"box": (canvas.w_in, canvas.y(BLEED_H)), "block": zone_block(canvas, physical=True), "shapes": True}
+    for sid in deck["order"]:
+        s = deck["slides"][sid]
+        sl = (s.get("slots") or {}).get("picture")
+        im = (sl or {}).get("image") if isinstance(sl, dict) else None
+        if s["type"] not in TEXT_OVER_TYPES or not isinstance(im, dict) or im.get("asset") not in paths:
+            continue
+        if not im.get("text_zone") or (kw and (im["text_zone"].get("by") in (None, "finder"))):   # at 4:3 / A4 a zone measured at 16:9 is never kept
+            im["text_zone"] = text_zone(paths[im["asset"]], focal=im.get("focal"), ink=ink, paper=paper, **kw)
+        out.append((sid, im["text_zone"]))
+    return out
 
 
 # -------------------------------------------------------------------------------------------------- CLI

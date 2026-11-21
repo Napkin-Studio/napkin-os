@@ -35,6 +35,7 @@ import time
 from pathlib import Path
 
 from . import assemble, imagegen, images, inputs, intake, look, profiles, qa_render, render_hyperframes, render_pptx, render_web, repair, spec, validate
+from . import theme as themes
 
 #: Stage a0 (intake) comes first: it fills the brief fields the brief does not supply.
 STAGE_FILES = {"a0": "a0_intake.json", "a": "a_requirements.json", "b": "b_storyline.json", "c": "c_territories.json", "d": "d_idea.json"}
@@ -99,24 +100,240 @@ def _soffice() -> str:
     raise RuntimeError("LibreOffice not found: the PDF cannot be made")
 
 
+FONTS_DIR = Path(__file__).resolve().parent / "fonts"
+#: The vendored STATIC faces' PostScript names, by the family the pptx names (deck/fonts/*/static). A LOOK_V3 PDF must embed these and only
+#: these for its Archivo and Source Sans 3 text: a substitute (Arial, Carlito, Liberation) means the fonts were not found, and any other
+#: Archivo / SourceSans3 name (ArchivoRoman-*, SourceSans3-Roman, SourceSans3-ExtraLight, Archivo-SemiBold) is a variable font's instance,
+#: the hairline-weight bug of phase 12.
+STATIC_FACES = {"Archivo": frozenset({"Archivo-Regular", "Archivo-Bold", "Archivo-Italic", "Archivo-BoldItalic"}),
+                "Source Sans 3": frozenset({"SourceSans3-Regular", "SourceSans3-Bold", "SourceSans3-It", "SourceSans3-BoldIt"})}
+_PS_PREFIX = {"Archivo": "Archivo", "Source Sans 3": "SourceSans3"}
+FONT_FIX = ("install the deck's static fonts once with scripts/install-deck-fonts.sh (it copies engine/deck/fonts/*/static/*.ttf into your "
+            "user font folder), and remove any variable Archivo or Source Sans 3 (a file named with [wght]) from your font folders")
+
+
+class FontsNotEmbedded(Exception):
+    """A LOOK_V3 PDF set in a substitute or a variable instance instead of the vendored static faces. Not a RuntimeError on purpose: a caller
+    that treats a failed conversion as "no PDF this round" must not swallow it; the build stops and says how to fix the machine."""
+
+
+def _load_vendored_fonts(profile: str) -> dict:
+    """Point LibreOffice at the vendored OFL fonts' STATIC faces (deck/fonts/*/static), never the variable files: LibreOffice and PowerPoint
+    draw a variable font at its default instance, and Source Sans 3's default is ExtraLight (wght 200), a faint hairline.
+
+    LibreOffice does not reliably read a private profile's ``user/fonts`` (7.4 on macOS ignores it), so that copy alone is not trusted. On Linux
+    LibreOffice finds fonts through fontconfig, and fontconfig's documented ``FONTCONFIG_FILE`` points it at a config that includes the
+    system one plus the vendored static folders: no system install is needed there. macOS LibreOffice uses CoreText, which reads only the
+    installed fonts, so on a Mac the static faces must be installed (scripts/install-deck-fonts.sh). Either way ``check_pdf_fonts`` is the
+    proof: it fails the render unless the static faces were embedded. Returns the environment for the soffice call."""
+    env = dict(os.environ)
+    static = sorted({str(f.parent) for f in FONTS_DIR.glob("*/static/*.ttf")})
+    dest = Path(profile) / "user" / "fonts"
+    dest.mkdir(parents=True, exist_ok=True)
+    for f in FONTS_DIR.glob("*/static/*.ttf"):
+        shutil.copy2(f, dest / f.name)
+    if sys.platform != "darwin":
+        conf = Path(profile) / "fonts.conf"
+        dirs = "".join(f"<dir>{d}</dir>" for d in static)
+        conf.write_text('<?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "fonts.dtd"><fontconfig>'
+                        f'<include ignore_missing="yes">/etc/fonts/fonts.conf</include>{dirs}<cachedir>{Path(profile) / "fc-cache"}</cachedir>'
+                        '</fontconfig>')
+        env["FONTCONFIG_FILE"] = str(conf)
+    return env
+
+
+_RUN = re.compile(r"<a:r>(.*?)</a:r>", re.S)
+
+
+def named_families(pptx) -> set:
+    """The look's families (Archivo, Source Sans 3) that a run with words names in the pptx's slides."""
+    import zipfile   # noqa: PLC0415
+    out = set()
+    with zipfile.ZipFile(pptx) as z:
+        for n in z.namelist():
+            if not re.match(r"ppt/slides/slide\d+\.xml$", n):
+                continue
+            for run in _RUN.findall(z.read(n).decode("utf-8", "replace")):
+                if not re.search(r"<a:t>[^<]*\S[^<]*</a:t>", run):
+                    continue
+                out.update(fam for fam in STATIC_FACES if f'typeface="{fam}"' in run)
+    return out
+
+
+def pdf_fonts(pdf) -> list:
+    """``[(PostScript name without the subset tag, embedded)]`` from poppler's ``pdffonts``."""
+    exe = shutil.which("pdffonts") or ("/opt/homebrew/bin/pdffonts" if Path("/opt/homebrew/bin/pdffonts").exists() else None)
+    if not exe:
+        raise FontsNotEmbedded("pdffonts (poppler) is not installed, so the LOOK_V3 PDF's fonts cannot be checked; install poppler "
+                               "(brew install poppler, apt install poppler-utils)")
+    out = subprocess.run([exe, str(pdf)], check=True, capture_output=True, text=True, timeout=60).stdout.splitlines()
+    rows = []
+    for line in out[2:]:
+        parts = line.split()
+        if len(parts) < 5:
+            continue
+        # name type [type word] encoding emb sub uni id gen: emb is the fifth column from the end
+        rows.append((re.sub(r"^[A-Z]{6}\+", "", parts[0]), parts[-5] == "yes"))
+    return rows
+
+
+def check_pdf_fonts(pptx, pdf) -> dict:
+    """Under LOOK_V3: every family the pptx names (Archivo, Source Sans 3) must reach the PDF as its vendored static faces, embedded, and no
+    Archivo / SourceSans3 face outside the static set (a variable instance) may appear. Raises FontsNotEmbedded naming the one-command fix.
+    Returns ``{"named": [...], "embedded": [...]}``."""
+    named = named_families(pptx)
+    rows = pdf_fonts(pdf)
+    problems = []
+    for fam in sorted(named):
+        prefix, ok = _PS_PREFIX[fam], STATIC_FACES[fam]
+        faces = [(n, e) for n, e in rows if n.startswith(prefix)]
+        if not any(n in ok and e for n, e in faces):
+            problems.append(f"{fam} is named in the deck but no static {fam} face is embedded in the PDF (LibreOffice substituted it)")
+    for n, e in rows:
+        fam = next((f for f, p in _PS_PREFIX.items() if n.startswith(p)), None)
+        if fam and n not in STATIC_FACES[fam]:
+            problems.append(f"{n} is a variable font's instance, not a static face (the hairline-weight bug)")
+        elif fam and not e:
+            problems.append(f"{n} is used but not embedded")
+    if problems:
+        raise FontsNotEmbedded(f"{Path(pdf).name}: " + "; ".join(problems) + f". Fix: {FONT_FIX}.")
+    return {"named": sorted(named), "embedded": sorted({n for n, e in rows if e})}
+
+
 def to_pdf(pptx, outdir, timeout: int = 180):
     """Convert a pptx to PDF with LibreOffice, in a private profile (``-env:UserInstallation``) that is removed afterwards.
-    Two soffice processes that share a profile hand the second job to the first and exit 0 with no PDF, so every call gets its own."""
+    Two soffice processes that share a profile hand the second job to the first and exit 0 with no PDF, so every call gets its own.
+    Under LOOK_V3 the vendored static fonts are offered to LibreOffice and the PDF is then checked with ``pdffonts``: a substitute or a
+    variable instance raises FontsNotEmbedded (the gate and every LOOK_V3 render fail rather than ship the wrong type)."""
     profile = tempfile.mkdtemp(prefix="deck_lo_")
     try:
-        return subprocess.run([_soffice(), f"-env:UserInstallation=file://{profile}", "--headless", "--convert-to", "pdf", "--outdir", str(outdir), str(pptx)],
-                              check=True, capture_output=True, timeout=timeout)
+        env = _load_vendored_fonts(profile) if spec.LOOK_V3 else None
+        done = subprocess.run([_soffice(), f"-env:UserInstallation=file://{profile}", "--headless", "--convert-to", "pdf", "--outdir", str(outdir), str(pptx)],
+                              check=True, capture_output=True, timeout=timeout, env=env)
     finally:
         shutil.rmtree(profile, ignore_errors=True)
+    if spec.LOOK_V3 and pptx and outdir:   # a test seam may pass no pptx: nothing was rendered, so nothing to check
+        pdf = Path(outdir) / (Path(pptx).stem + ".pdf")
+        if pdf.exists():
+            check_pdf_fonts(pptx, pdf)
+    return done
 
 
-def _stamp_type(deck: dict, profile: dict, choice: dict) -> None:
+def _recipe_prefs(profile: dict, fmt: str) -> dict:
+    """deck-types: what the layout plan takes from the type's recipe (profiles.recipe): ``{prefer, prefer_type}`` (when the recipe prefers a layout
+    the catalogue can draw) and ``{roles, windows}`` (its density), only with spec.RECIPES and spec.LOOK_V3 on; ``{}`` otherwise, so the plan's
+    prefs are today's byte for byte."""
+    if not profiles.recipes_on():
+        return {}
+    r = profiles.recipe(profile, fmt)
+    out = {"prefer": r["layouts"], "prefer_type": r["type"]} if r["layouts"] else {}
+    return {**out, "roles": r["density"]["roles"], "windows": r["density"]["windows"]}   # slice 4: the type's density roles and word windows
+
+
+def _recorded_stages(stages: Path) -> set:
+    """The model stages already recorded in a stages folder (their files exist): what a type change can reuse for free."""
+    files = {**STAGE_FILES, **INVESTOR_STAGE_FILES}
+    return {k for k, fn in files.items() if (stages / fn).exists()}
+
+
+def _type_change(a, profile: dict) -> dict:
+    """deck-types slice 6 (design.precedence.changing_later): what building as ``profile`` costs from what --stages holds. Free (every stage the
+    type runs is recorded): code only, seconds. Otherwise a deck built before (some model stage recorded) changing type needs new writing: with
+    --live it is refused before any call unless the person confirmed (--confirm-stages), naming the stages; without --live the missing stages
+    are reported as today. A first build (nothing recorded) is not a change. Pictures are never part of it: a type change plans no picture job
+    of its own, and a made or approved picture keeps its record."""
+    recorded = _recorded_stages(a.stages)
+    tc = profiles.type_change(profile, recorded)
+    out = {"free": tc["free"], "needs": tc["needs"], "recorded": sorted(recorded)}
+    model = recorded - set(profiles.CHANGE_OPTIONAL)
+    if tc["needs"] and model:
+        out["line"] = profiles.change_sheet(None, profile, recorded)["line"]
+        if a.live and not a.confirm_stages:
+            raise SystemExit(f"refused: {profiles.NeedsStages(profile['id'], tc['needs'])}")
+    return out
+
+
+def _protect_boxes(a, deck: dict) -> dict:
+    """deck-slide-size: asset id -> the protect boxes (``keep``) of each Production picture the deck binds (stages/production.json), so a re-crop
+    at 4:3 or A4 that cuts them is a finding. Empty without a Production file."""
+    pf = a.stages / "production.json"
+    if not pf.is_file():
+        return {}
+    try:
+        items = (json.loads(pf.read_text()) or {}).get("items") or {}
+    except (OSError, ValueError):
+        return {}
+    used = {(sl.get("image") or {}).get("asset") for s in deck["slides"].values() for sl in (s.get("slots") or {}).values() if isinstance(sl, dict)}
+    out = {}
+    for it in items.values():
+        aid = "img_" + str(it.get("sha256") or "")[:12]
+        if it.get("keep") and aid in used:
+            out[aid] = it["keep"]
+    return out
+
+
+def _explicit_size(a, deck_ctx, answers: dict | None = None) -> str | None:
+    """The size a person asked for: --size > the Deck document's look.size.canvas > their answer to the intake's size card (not a skip)."""
+    lk = (deck_ctx.get("look") if isinstance(deck_ctx, dict) else None) or {}
+    dsz = lk.get("size")
+    dsz = dsz.get("canvas") if isinstance(dsz, dict) else dsz
+    dsz = dsz if dsz in spec.SLIDE_SIZES else None
+    ans = (answers or {}).get(intake.SIZE_QUESTION_ID) or {}
+    asz = ans.get("option_id") if isinstance(ans, dict) and not ans.get("skipped") else None
+    return a.size or dsz or (asz if asz in spec.SLIDE_SIZES else None)
+
+
+def _master_size(a, explicit: str | None) -> str | None:
+    """deck-slide-size: a --master's own size (one of spec.SLIDE_SIZES), None without a master. Refused (SystemExit) when the master is none of
+    the three (the renderer never draws a geometry other than the slide's) or when a size was asked that differs from it (a master fixes its
+    own size and is never converted). run_deck calls it right after reading the inputs, before any paid stage."""
+    if not a.master:
+        return None
+    from pptx import Presentation   # noqa: PLC0415
+    m = Presentation(str(a.master))
+    msz = themes.size_by_emu(int(m.slide_width), int(m.slide_height))
+    w_, h_ = int(m.slide_width) / 914400, int(m.slide_height) / 914400
+    if msz is None:
+        raise SystemExit(f"refused: the master {Path(a.master).name} is {w_:.2f} x {h_:.2f} in, none of the slide sizes the deck draws "
+                         f"({', '.join(spec.SLIDE_SIZES)}): use a master of one of those sizes")
+    if explicit and msz != explicit:
+        raise SystemExit(f"refused: the master {Path(a.master).name} is {msz} and the size asked is {explicit}: a master fixes its own slide size "
+                         "and is never converted. Drop the size (the master's is used) or use a master of that size")
+    return msz
+
+
+def _resolve_size(a, deck: dict, deck_ctx, rec: dict | None, answers: dict | None = None) -> str:
+    """deck-slide-size: the deck's slide size, stamped once (``deck.meta.preferences.size``, the one place every reader takes it from) before the
+    pictures and the plan. Precedence: the person's (``_explicit_size``) > a .potx master's own size (always over the recipe, 16:9 too) > the
+    recipe's (deck-types slice 8: a tender and the read format default to A4; only with the recipes on) > 16:9. Nothing is stamped when
+    nobody gave a size and the result is 16:9, so a 16:9 deck is today's. Returns the size name."""
+    explicit = _explicit_size(a, deck_ctx, answers)
+    msz = _master_size(a, explicit)
+    if explicit:
+        name, source = explicit, "person"
+    elif msz:   # a master's own size wins over a recipe's, whatever it is
+        if msz == spec.SIZE_DEFAULT:
+            return spec.SIZE_DEFAULT
+        name, source = msz, "master"
+    elif rec and rec.get("size") and rec["size"] != spec.SIZE_DEFAULT:
+        name, source = rec["size"], "recipe"
+    else:
+        return spec.SIZE_DEFAULT
+    deck["meta"].setdefault("preferences", {})["size"] = {"canvas": name, "source": source}
+    return name
+
+
+def _stamp_type(deck: dict, profile: dict, choice: dict, fmt: str | None = None) -> None:
     """Record the deck type in the deck: ``meta.built_from.type`` (the profile id) and ``.profile`` (id,
     label, how it was chosen and why), and ``meta.profile`` when the person was asked (answered or skipped)
     or the type is not a legacy one. A plain default agency or investor deck stays as it always was."""
     rec = {"id": profile["id"], "label": profile["label"], "source": choice["source"], "note": choice["note"]}
+    if choice.get("evidence"):   # deck-types: an inferred type carries the words it was read from (Review quotes them, with Change)
+        rec["evidence"] = list(choice["evidence"])
+    if fmt and profiles.recipes_on():   # deck-types: the format the recipe was resolved for
+        rec["format"] = fmt
     deck["meta"]["built_from"] = {**deck["meta"]["built_from"], "type": profile["id"], "profile": rec}
-    if profile["arrange"] == "spine" or choice["source"] in ("answer", "skipped"):
+    if profile["arrange"] == "spine" or choice["source"] in ("answer", "skipped", "pick", "inferred"):
         deck["meta"]["profile"] = rec
 
 
@@ -153,7 +370,15 @@ def _replay_agency(a, ctx: dict, rep_look: dict) -> tuple[dict | None, bool]:
     return current, use
 
 
-def _stamp_look(a, deck: dict, brand: dict | None, rep: dict, ctx: dict | None = None) -> None:
+def _strict_default(profile: dict, fmt: str, style, kit) -> bool:
+    """deck-types slice 4: the recipe's brand strictness, the default of the strict_brand preference. It applies only when an agency Style Pack
+    or a Brand Clan is attached (design: 'on when an agency pack is present'): with neither there is no kit to be strict to, and strict mode would
+    only take the agency look away. A person's own strict_brand choice (look.strict_brand, --strict-brand) always wins."""
+    has_pack = style is not None and getattr(style, "source", "") != "built-in default"
+    return bool(profiles.recipe(profile, fmt)["brand"]["strict"]) and (has_pack or look._present(look.brand_tokens(kit)))
+
+
+def _stamp_look(a, deck: dict, brand: dict | None, rep: dict, ctx: dict | None = None, profile: dict | None = None) -> None:
     """Resolve the deck's look (look.py) and stamp it: ``meta.brand`` (what the renderers read), ``meta.theme`` (what a reader sees) and the
     client's logo as a deck asset. With no --style, no agency look and no --brand nothing is written, so today's decks and every golden are
     unchanged. A Style Pack that cannot be used is never skipped silently: ``meta.style_hold`` and the report say so."""
@@ -181,6 +406,8 @@ def _stamp_look(a, deck: dict, brand: dict | None, rep: dict, ctx: dict | None =
         wears_problem = f"look.brand.wears {wears!r} is not one of {', '.join(look.WEARS)}: the deck wears the agency"
         wears = "agency"
     strict = bool(lp.get("strict_brand")) or a.strict_brand
+    if profile and profiles.recipes_on() and "strict_brand" not in lp and not a.strict_brand:
+        strict = _strict_default(profile, a.format, style, ctx.get("brand"))   # deck-types slice 4: the type's default (person > recipe)
     got = look.resolve(wears=wears, strict_brand=strict, brand_file=brand, brand=look.brand_tokens(ctx.get("brand")), style=style,
                        agency=agency, use_agency=use, client=client)
     if got.brand:
@@ -236,10 +463,11 @@ def _repair(a, inp, profile: dict, deck: dict, findings: list, qa: dict, pics, p
         if render_seam:
             got = render_seam(d, folder, f)
         else:
-            pic_f, pl = [], set()
+            pic_f, pl, ic = [], set(), {}
             render_pptx.render(d, inp, folder / "deck.pptx", a.master, f, animate=a.animate or False, layouts_out=folder / "layouts.json", pictures=pics, picture_findings=pic_f,
-                               placed=pl, notes=not a.no_notes, no_plan=a.no_layout_plan)
-            got = {"pptx": folder / "deck.pptx", "pic_findings": pic_f, "placed": pl}
+                               placed=pl, notes=not a.no_notes, no_plan=a.no_layout_plan, icons=ic,
+                               protect=_protect_boxes(a, d) if themes.size_of(d) != spec.SIZE_DEFAULT else None)   # deck-slide-size: as the first render
+            got = {"pptx": folder / "deck.pptx", "pic_findings": pic_f, "placed": pl, "icons": ic}
         return {**got, "pptx": got["pptx"] if got.get("pptx") and Path(got["pptx"]).exists() else None}
 
     def pdf_fn(p, folder):
@@ -271,7 +499,7 @@ def _repair(a, inp, profile: dict, deck: dict, findings: list, qa: dict, pics, p
         if p.parent == a.stages or got.get("stages") == str(a.stages.resolve()):   # out/'s record is used only when it was written for these --stages
             record = got
             break
-    ctx = {"inp": inp, "audience": a.audience, "policy": policy, "library": layouts.load(), "prefs": {"density": level, "text_mode": tm, "notes": not a.no_notes}, "swaps": swaps, "base_deck": base_deck,
+    ctx = {"inp": inp, "audience": a.audience, "policy": policy, "library": layouts.load(), "prefs": {"density": level, "text_mode": tm, "notes": not a.no_notes, **_recipe_prefs(profile, a.format)}, "swaps": swaps, "base_deck": base_deck,
            "pinned": pinned, "out": out, "stages": a.stages, "live": a.live, "approve_shorten": a.approve_shorten, "call_fn": call_fn, "spent": spent,
            "run_cap": repair.run_cap(), "shorten_ledger": _shorten_ledger(a, inp, deck), "record": record, "render_fn": render_fn, "pdf_fn": pdf_fn, "qa_fn": qa_fn}
     iss0 = repair.I.derive(findings, qa, deck, policy, 0)
@@ -304,7 +532,8 @@ def _repair(a, inp, profile: dict, deck: dict, findings: list, qa: dict, pics, p
                 (out / name).unlink(missing_ok=True)
         deck, findings, placed = final["deck"], final["findings"], (final.get("placed") or placed)
         rep["validation"] = validate.summary(findings)
-        render_web.render(deck, inp, out / "deck.html", findings, pictures=pics, placed=placed if pics else None, look=not a.no_layout_plan)
+        render_web.render(deck, inp, out / "deck.html", findings, pictures=pics, placed=placed if pics else None, look=not a.no_layout_plan,
+                          icons=final.get("icons"))
         if a.hyperframes:
             render_hyperframes.render(deck, inp, out / "hyperframes", findings, builds=a.builds, pictures=pics, placed=placed if pics else None, look=not a.no_layout_plan)
         if (out / "deck.pdf").exists():
@@ -518,9 +747,10 @@ def _add_marks(a, inp) -> None:
         inp.marks = (inp.marks or []) + raw
 
 
-def _image_step(a, deck: dict, inp, terr: list, review: dict, wrapped: bool, deck_ctx, rep: dict):
+def _image_step(a, deck: dict, inp, terr: list, review: dict, wrapped: bool, deck_ctx, rep: dict, generate: str = "all"):
     """The picture step (deck-image-gen), between the placed pictures and the layout plan. Prints the open card(s); makes pictures only for a
-    ``--yes-cost`` that names a card's id. Returns what imagegen.step returns."""
+    ``--yes-cost`` that names a card's id. ``generate`` (deck-types: the type's recipe) narrows which empty slots generation may plan.
+    Returns what imagegen.step returns."""
     try:
         if a.images_reviewed:
             imagegen.record_safe_review(review, inp, deck, a.by)
@@ -530,7 +760,8 @@ def _image_step(a, deck: dict, inp, terr: list, review: dict, wrapped: bool, dec
         from visuals import jobs as vjobs   # noqa: PLC0415
         ctx = imagegen.Ctx(deck, inp, terr, _picture_style(a, deck_ctx, a.client), a.stages, a.images_cache or (a.stages / "images"), vjobs.Ledger(led, deck_id), deck_id,
                            review=review, approver=a.approver, cap_usd=a.cap_usd, banned_extra=look.brand_tokens((deck_ctx or {}).get("brand")).get("imagery_bans") or [],
-                           territory_usd=_territory_usd(a.stages))
+                           territory_usd=_territory_usd(a.stages), generate=generate)
+        ctx.production_note = (rep.get("production") or {}).get("card")   # 'Production: N picked, M not reachable' on the card (no cost)
         res = imagegen.step(ctx, a.images, a.yes_cost, a.hero, a.retry_unknown, a.remake_style, remake=[x.strip() for v in a.remake for x in v.split(',') if x.strip()])
     except (imagegen.GenError, images.ImageError) as e:
         raise SystemExit(f"refused: {e}")
@@ -616,7 +847,14 @@ def main(argv=None):
     ap.add_argument("--builds", action="store_true", help="HyperFrames: one click per block instead of one per slide")
     ap.add_argument("--kind", choices=tuple(profiles.KIND_TO_PROFILE), default=None,
                     help="the deck type: agency (default, unless the person's answer to q_deck_type chooses), investor (seed) pitch, "
-                         "tender (a tender response, profile tender_response) or credentials (a chemistry-meeting deck)")
+                         "tender (a tender response, profile tender_response), credentials (a chemistry-meeting deck) or creative (a creative work "
+                         "session, profile creative_work)")
+    ap.add_argument("--type", dest="deck_type", choices=profiles.ids(), default=None,
+                    help="the person's explicit pick on the type picker (deck-types): ranks with --kind above an answer to q_deck_type, an inference "
+                         "and the default. A Deck document's inputs.deck_type is the same pick; --kind wins for the run when both are given")
+    ap.add_argument("--confirm-stages", action="store_true",
+                    help="a person's yes to the model stages a type change needs (deck-types, with --live): without it a change that needs new writing is "
+                         "refused before any call, naming the stages. Pictures are never re-made by a type change either way")
     ap.add_argument("--doc", action="append", default=[], metavar="KEY=PATH",
                     help="a client document (PDF page by page, or text), cited as doc:KEY#pN; repeatable")
     ap.add_argument("--brand", type=Path, help="brand JSON: name, colors (THEME keys, accent_ink), head/body fonts, logo files")
@@ -634,6 +872,10 @@ def main(argv=None):
     ap.add_argument("--density", choices=spec.DENSITY_LEVELS, default=None,
                     help="how much a content slide holds: lean (about 30 words), standard (60), detailed (the type's budget). Without it the engine resolves it by format "
                          "(a presented pitch is lean, a leave-behind detailed) and stamps meta.preferences.density with its source")
+    ap.add_argument("--size", choices=spec.SLIDE_SIZES, default=None,
+                    help="the slide size (deck-slide-size): 16:9 (default), 4:3 or a4 (A4 landscape, 297 x 210 mm). Without it: the Deck document's look.size, "
+                         "a --master's own size, the deck type's (with the recipes on: a tender and a deck sent to be read are A4), else 16:9. Margins and type "
+                         "stay the same size; the layouts reflow and the fit ladder takes what no longer fits. A4 defaults to density detailed")
     ap.add_argument("--layout", action="append", default=[], metavar="SLIDE=ID",
                     help="a person's layout swap for one slide (repeatable); honoured when the layout holds the slide, else layout_unknown")
     ap.add_argument("--no-layout-plan", action="store_true", help="skip the layout plan: the renderers choose as before the library (rollback)")
@@ -652,6 +894,21 @@ def main(argv=None):
     ap.add_argument("--pictures", choices=("creative_cover", "creative", "none"), default=None,
                     help="place pictures that already exist (stages/frames.json from deck.from_territory, and --image): creative_cover (the "
                          "creative slides, the cover and the divider), creative, or none. Absent: frames.json is ignored and no slot is written")
+    ap.add_argument("--production", nargs="?", const=True, default=False, metavar="FILE",
+                    help="place the Production Tool's pictures: the key visual on the cover and the idea, each execution the size its channel matches. "
+                         "Bare: stages/production.json from deck.from_production. With FILE (a Production .clan, or its export zip): the picker "
+                         "(deck.prod_picker) lists every asset from metadata, picks by rule and pulls only the picked pictures (the .clan's own, then "
+                         "https with --production-fetch, then the zip). Nothing is made or spent; implies --pictures creative_cover unless --pictures says otherwise")
+    ap.add_argument("--production-fetch", action="store_true",
+                    help="with --production FILE: download picked pictures from their https:// locations (hosts on policy/production_fetch.yaml only; "
+                         "empty by default, so it refuses until the hosts are named). Off: nothing is downloaded")
+    ap.add_argument("--production-agent", action="store_true",
+                    help="with --production FILE: a Claude (Sonnet) call breaks ties the rules leave, on metadata rows only (about $0.01 a tie). Off: the newest wins")
+    ap.add_argument("--production-pick", action="append", default=[], metavar="SLIDE.SLOT=KEY",
+                    help="with --production FILE: a person's swap of a slot's Production picture to another of its candidates (repeatable; recorded in "
+                         "stages/production_choices.json and kept for later builds). The app's review.production, given with --review, says the same")
+    ap.add_argument("--production-look", action="store_true",
+                    help="with --production FILE: a vision check of the pulled pictures (local Ollama, else Claude Haiku; 8 at most) that only flags them")
     ap.add_argument("--image", action="append", default=[], metavar="SLIDE.SLOT=FILE",
                     help="place a picture you supply on a slide of a picture type (never an evidence slide; the slot 'logo' is refused); repeatable")
     ap.add_argument("--image-rights", action="append", default=[], metavar="SLIDE.SLOT=RIGHTS",
@@ -681,10 +938,21 @@ def main(argv=None):
     ap.add_argument("--by", help="who reviewed (human:<id>) with --images-reviewed")
     ap.add_argument("--images-only", action="store_true", help="rebuild from the recorded stages only (never a text model); refuses if any text stage is missing")
     a = ap.parse_args(argv)
+    a.pictures_asked = a.pictures is not None   # deck-types: a person's own --pictures beats the type's picture default
     if a.picture_source == "generated" and a.images == "off":
         a.images = "plan"
-    if a.images != "off" and a.pictures is None:
+    if (a.images != "off" or a.production) and a.pictures is None:
         a.pictures = "creative_cover"
+    if a.production and a.pictures == "none":
+        ap.error("--production places pictures and --pictures none asks for none: drop one")
+    if (a.production_fetch or a.production_agent or a.production_look or a.production_pick) and not isinstance(a.production, str):
+        ap.error("--production-fetch, --production-agent, --production-look and --production-pick work on a Production file: give --production FILE (.clan or zip)")
+    prod_picks = {}
+    for x in a.production_pick:
+        sk, eq, key = x.partition("=")
+        if not (eq and key and re.fullmatch(r"s[0-9]{2,3}\.[a-z][a-z0-9_]{1,23}", sk)):
+            ap.error(f"--production-pick needs SLIDE.SLOT=KEY (e.g. s11.picture=size_...), got {x!r}")
+        prod_picks[sk] = {"key": key, "by": "a person (--production-pick)", "at": time.strftime("%Y-%m-%dT%H:%M:%S")}
     if a.images_only and a.live:
         ap.error("--images-only never calls a text model: drop --live")
     if a.cap_usd is not None and not (0 < a.cap_usd <= 2.5):
@@ -739,11 +1007,26 @@ def main(argv=None):
         except inputs.MarksError as e:
             raise SystemExit(f"refused: {e}")
     _add_marks(a, inp)
+    _master_size(a, _explicit_size(a, deck_ctx, answers))   # deck-slide-size: a master/size conflict is refused here, before any paid stage
     rep["stages"]["inputs"] = {"secs": round(time.time() - t, 2), "model": None, "tokens_in": 0, "tokens_out": 0, "usd": 0}
-    choice = intake.chosen_type(inp, a.kind)   # an explicit --kind wins, then the person's answer, then the stated default
+    pick = a.deck_type or (deck_ctx or {}).get("deck_type")   # deck-types: the person's explicit pick (--type, or the document's inputs.deck_type)
+    try:
+        choice = intake.chosen_type(inp, a.kind, pick)   # --kind, then the pick, then the person's answer, then (recipes on) a high-confidence inference, then the default
+    except profiles.ProfileError as e:
+        raise SystemExit(f"refused: {e}")
     profile = profiles.load(choice["type"])
     kind = profile["kind"]                     # which assembler: agency or investor
-    rep["type"] = {"id": profile["id"], "source": choice["source"], "note": choice["note"]}
+    rec = profiles.recipe(profile, a.format) if profiles.recipes_on() else None   # deck-types: resolved once (None with the flag off)
+    if rec and not a.pictures_asked and a.pictures is not None:
+        a.pictures = rec["pictures"]["on"]   # the person set no picture preference: the type's default (only where pictures were asked for at all)
+    if a.production and kind == "investor":   # never silently ignored, and refused before any stage runs or spends
+        raise SystemExit("refused: --production places the Production Tool's campaign pictures on a pitch deck's cover, idea and executions; "
+                         "an investor deck has none of those slides. Drop --production")
+    rep["type"] = {"id": profile["id"], "source": choice["source"], "note": choice["note"], **({"evidence": choice["evidence"]} if choice.get("evidence") else {})}
+    if rec:   # deck-types: the recipe this run builds from, resolved once (flag off: no key, the report is today's)
+        rep["recipe"] = {"type": rec["type"], "format": rec["format"], "length": rec["length"], "layouts": rec["layouts"], "not_built": rec["not_built"],
+                         "density": rec["density"]["level"], "pictures": rec["pictures"], "brand": rec["brand"], "titles": rec["titles"],
+                         "size": {"value": rec["size"], "applied": False, "waits_on": "deck-slide-size"}}
     rep["type_question"] = intake.type_card_for(inp)   # computed in code: it exists even when no a0 stage ran
     supply = intake.supply_questions(inp, kind, profile if profile["arrange"] == "spine" else None)   # computed in code: what only the person knows
     rep["supply_questions"] = supply
@@ -753,6 +1036,8 @@ def main(argv=None):
         rep["doc_pages"] = pages   # every page of every document read (never dropped)
 
     names = profiles.stage_names(profile, INVESTOR_STAGE_FILES if kind == "investor" else STAGE_FILES)
+    if rec:   # deck-types slice 6: a type change re-plans for free from recorded stages, and asks first when it needs a model stage
+        rep["type_change"] = _type_change(a, profile)
     if a.until not in (None, "deck") and a.until not in names:
         ap.error(f"--until {a.until}: this deck type has no such stage (it runs {', '.join(names)})")
     if a.images_only:
@@ -789,8 +1074,11 @@ def main(argv=None):
         if k == "a0" and k in st:   # later stages and the build read the brief with the intake's fields in it
             st[k]["gaps"] = intake.gap_report(inp, st[k], kind)
             asked = len(st[k]["questions"])   # the stage's own questions, before the deck type question joins them
-            intake.add_type_question(st[k], intake.type_card_for(inp), profile if profile["arrange"] == "spine" else None)   # the deck type is always the first question; a legacy type adds none of its own, so its deck is unchanged
+            card = None if choice["source"] == "pick" else intake.type_card_for(inp)   # deck-types: a picked type is not asked again (its place goes to another question)
+            intake.add_type_question(st[k], card, profile if profile["arrange"] == "spine" else None)   # the deck type is the first question; a legacy type adds none of its own, so its deck is unchanged
             intake.add_supply_questions(st[k], supply)   # after the type question and the stage's own, within the five-question cap
+            if profiles.recipes_on() and not a.master and not _explicit_size(a, deck_ctx, answers):   # deck-slide-size: asked only when nobody chose a size and no master fixes it
+                intake.add_size_question(st[k], intake.size_card_for(inp, a.format))
             inp.intake = st[k]
             rep["intake"] = {"applied": intake.apply_a0(inp, st[k]), "gaps": st[k]["gaps"], "questions": asked,
                              "questions_total": len(st[k]["questions"])}
@@ -803,7 +1091,7 @@ def main(argv=None):
     fp = a.stages / "fit.json"   # the fit judge reads an assembled deck; its verdicts decide what a pitch presents
     fit = json.loads(fp.read_text()) if fp.exists() else None
     builder = assemble.build_investor if kind == "investor" else assemble.build
-    frames, bound = None, None
+    frames, bound, prod, picker_src = None, None, None, None
     names = [x for x in (a.client, a.agency) if x]
     if a.brand and a.brand.exists():   # the brand's own name may not label or describe a picture either: read before any frame is bound
         try:
@@ -822,8 +1110,17 @@ def main(argv=None):
                                         "frames bind by territory id, so they would sit on the wrong slides. Run deck.from_territory again, with --replace")
             if frames:
                 bound = images.bind_frames(None, frames, st.get("c") or {}, a.pictures, names)
+            if isinstance(a.production, str):   # a .clan or the export zip: opened and checked now, picked once the deck exists (deck-prod-picker)
+                from . import prod_picker
+                picker_src = prod_picker.Source(Path(a.production).expanduser())
+            elif a.production:   # production.json is read ONLY with --production: a stray one changes nothing (deck-prod-assets)
+                prod = images.load_production(a.stages)
+                if prod is None:
+                    raise images.ImageError(f"--production: {a.stages}/production.json is missing. Run deck.from_production BUNDLE.zip --stages {a.stages} first")
     except images.ImageError as e:
         raise SystemExit(f"refused: {e}")
+    except ValueError as e:   # from_production.FromProductionError (and a YAML error) from the picker's file: refused before any build
+        raise SystemExit(f"refused: --production {Path(str(a.production)).name}: {e}")
     extra = {"pictures": bound} if bound else {}
     build = lambda f: builder(inp, st, client=a.client, project=a.project, agency=a.agency, fmt=a.format, fit=f, profile=profile, **extra)
     deck = build(fit)
@@ -843,7 +1140,12 @@ def main(argv=None):
         have = {c["id"] for c in supply}
         rep["supply_questions"] = supply + [c for c in intake.gap_questions(assemble.investor_gaps(deck)) if c["id"] not in have]
     rep["confirm"] = intake.confirm_summary(deck, intake.stamp_confirm(deck, inp))   # what to confirm, and how much a person has verified or supplied
-    _stamp_type(deck, profile, choice)
+    _stamp_type(deck, profile, choice, a.format)
+    size = _resolve_size(a, deck, deck_ctx, rec, answers)
+    if size != spec.SIZE_DEFAULT:   # the report names the size only when it is not 16:9
+        rep["size"] = dict(deck["meta"]["preferences"]["size"])
+    if rec and "recipe" in rep:
+        rep["recipe"]["size"] = {"value": rec["size"], "applied": (deck["meta"].get("preferences") or {}).get("size", {}).get("source") == "recipe"}
     brand = None
     if a.brand:   # colours, fonts and logos: the logo files are read here so the deck carries them
         brand = json.loads(a.brand.read_text())
@@ -853,7 +1155,7 @@ def main(argv=None):
         for k in ("logo_dark_png", "logo_light_png"):
             if brand.get(k):
                 brand[k] = str(Path(brand[k]).expanduser())
-    _stamp_look(a, deck, brand, rep, deck_ctx)
+    _stamp_look(a, deck, brand, rep, deck_ctx, profile)
     ep = a.stages / "e_copy.json"   # stage e: tighten over-budget presented slides; recorded edits are re-applied by title
     if ep.exists():
         ecopy = json.loads(ep.read_text())
@@ -878,14 +1180,35 @@ def main(argv=None):
             if bound and bound["assets"]:
                 images.register_assets(deck, bound["assets"])
             held = images.place_supplied(deck, supplied, images.deck_names(deck), sources)
-            if a.pictures:
-                images.add_empty_slots(deck, a.pictures)
+            if prod or picker_src:   # after a person's own pictures (kept), before the empty slots and the image step (a filled or rights-pending slot is never planned)
+                brief_doc = next((d for d, app in ((deck_ctx or {}).get("apps") or {}).items() if app == "ie.napkin.brief-maker"), None)
+                if picker_src:
+                    rvw = json.loads(a.review.read_text()) if a.review else {}
+                    rvw = rvw.get("review", rvw) if isinstance(rvw, dict) else {}   # the app's {review: ...} wrapper, or the bare object
+                    swaps = {**prod_picker.choices_from_review(rvw), **prod_picks}
+                    pres = prod_picker.run(deck, picker_src, a.stages, a.pictures, images.deck_names(deck), brief_doc, fetch=a.production_fetch,
+                                           agent=a.production_agent, look=a.production_look, choices=swaps)
+                    prod = images.load_production(a.stages)
+                    for name, u in (("production_agent", pres["usage"]["agent"]), ("production_look", pres["usage"]["look"])):
+                        if u:   # only on its flag: pulling itself never spends
+                            rep["stages"][name] = {"source": "live", **u}
+                    print(pres["card"] + (f"  ({pres['picker']['fetch']['refused']})" if pres["picker"]["fetch"]["refused"] else ""))
+                else:
+                    pres = images.bind_production(deck, prod, a.pictures, images.deck_names(deck), brief_doc)
+                held = held + pres["held"]
+                rep["production"] = {"project": (prod.get("project") or {}).get("id"), "offer_sha256": prod.get("offer_sha256"),
+                                     "placed": pres["placed"], "held": len(pres["held"]), "kept": pres["kept"], "usd": 0,
+                                     "key_visual": pres["master"]}
+                if picker_src:
+                    rep["production"].update(picker=pres["picker"], card=pres["card"])
+            if a.pictures:   # deck-types: the type's picture types narrow the empty slots when the person set no picture preference
+                images.add_empty_slots(deck, a.pictures, rec["pictures"]["types"] if rec and not a.pictures_asked else None)
             review = json.loads(a.review.read_text()) if a.review else {}
             wrapped = isinstance(review, dict) and "review" in review
             review = review.get("review", review) if isinstance(review, dict) else {}
             terr = (st.get("c") or {}).get("territories") or []
             if a.images != "off":
-                plan_res = _image_step(a, deck, inp, terr, review, wrapped, deck_ctx, rep)
+                plan_res = _image_step(a, deck, inp, terr, review, wrapped, deck_ctx, rep, generate=rec["pictures"]["generate"] if rec else "all")
             gen = images.load_generated(a.stages) if a.pictures else None
             if gen:
                 bound_gen = images.bind_generated(deck, gen, terr, images.deck_names(deck), imagegen.words_sha(deck))
@@ -922,7 +1245,7 @@ def main(argv=None):
         dl = lk.get("density")
         dl = dl.get("level") if isinstance(dl, dict) else dl
         dl = dl if dl in spec.DENSITY_LEVELS else None
-        level = a.density or dl or (spec.DENSITY_DEFAULTS.get(a.format) if spec.LOOK_V2 else None)
+        level = a.density or dl or ((spec.SIZE_DENSITY_DEFAULTS.get(size) or (rec["density"]["level"] if rec else spec.DENSITY_DEFAULTS.get(a.format))) if spec.LOOK_V2 else None)   # deck-types: the type's level (person > size (A4: detailed) > recipe > default)
         if a.no_notes:   # no notes means nowhere for a moved point to go: nothing leaves the slide
             level = "detailed"
         if level:
@@ -943,8 +1266,15 @@ def main(argv=None):
         loop_on = not a.no_repair and not a.no_qa and a.until is None
         policy = repair.load_policy(profile, a.repair_policy) if loop_on else None
         stop_for_shorten = loop_on and bool(policy["max_rounds"]) and repair.shorten_available(tm, a.audience, a.live, a.approve_shorten, a.stages, repair.approval_id(deck), (policy["shorten"] or {}).get("word_rule", "delete_only"))[0]
+        if spec.LOOK_V3 and (a.pictures or supplied):   # deck-look step 7: measure where words may sit on the cover's and the idea's pictures (Pillow, free)
+            from . import theme as _themes
+            _th = _themes.get_theme(_themes.DEFAULT, deck["meta"].get("brand") or {})
+            zones = images.solve_text_zones(deck, images.source_paths(deck, a.audience, [a.stages], sources), ink=_th.ink, paper=_th.on_dark, canvas=themes.canvas(size))
+            if zones:
+                rep["text_zones"] = {sid: z for sid, z in zones}
         base_deck = deck   # pictures are already bound here: the repair loop re-plans from this deck and never asks for a picture
-        replan = lambda d: layouts.plan(d, prefs={"density": level, "text_mode": tm, "repair": bool(stop_for_shorten), "notes": not a.no_notes}, swaps=swaps)   # noqa: E731
+        rprefs = _recipe_prefs(profile, a.format)   # deck-types: the recipe's layout preferences ({} with the flag off)
+        replan = lambda d: layouts.plan(d, prefs={"density": level, "text_mode": tm, "repair": bool(stop_for_shorten), "notes": not a.no_notes, **rprefs}, swaps=swaps)   # noqa: E731
         deck, plan_issues, _pending = replan(base_deck)
         if layouts.unmade_planned(deck):   # slots planned for pictures nobody has paid for: back to empty (in the base deck too, so a repair round never plans them), then plan again without them (free, in code)
             imagegen.unplan(base_deck, rep.get("images") or {})
@@ -981,7 +1311,7 @@ def main(argv=None):
     if a.audience == "client" and WITHHOLD_FAILING_CLIENT and any(f["level"] == "error" for f in findings):   # a client file with a failing check is never written
         return _withheld(a, rep, deck, findings, t0)
 
-    pics, pic_findings, placed = None, [], set()
+    pics, pic_findings, placed, icons = None, [], set(), {}
     if a.pictures or supplied or a.audience == "client":   # never ship what an earlier build left in a reused --out (a client folder above all)
         lg = (deck["meta"].get("theme") or {}).get("logo") or {}   # the cleared client logo is a deck asset, not a picture: it outlives the wipe
         lrec = (deck.get("assets") or {}).get(lg.get("asset")) or {}
@@ -998,7 +1328,7 @@ def main(argv=None):
             raise SystemExit(f"refused: {e}")
     t = time.time()
     pptx = render_pptx.render(deck, inp, a.out / "deck.pptx", a.master, findings, animate=a.animate or False, layouts_out=a.out / "layouts.json", pictures=pics, picture_findings=pic_findings, placed=placed,
-                              notes=not a.no_notes, no_plan=a.no_layout_plan)
+                              notes=not a.no_notes, no_plan=a.no_layout_plan, icons=icons, protect=_protect_boxes(a, deck) if size != spec.SIZE_DEFAULT else None)
     if pic_findings:   # a slide drawn without its picture because it would not fit beside it: say so in the findings
         for f in pic_findings:
             f["slide_no"] = deck["order"].index(f["slide"]) + 1
@@ -1008,7 +1338,7 @@ def main(argv=None):
     rep["stages"]["render_pptx"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
 
     t = time.time()
-    render_web.render(deck, inp, a.out / "deck.html", findings, pictures=pics, placed=placed if pics else None, look=not a.no_layout_plan)
+    render_web.render(deck, inp, a.out / "deck.html", findings, pictures=pics, placed=placed if pics else None, look=not a.no_layout_plan, icons=icons)
     if a.hyperframes:
         render_hyperframes.render(deck, inp, a.out / "hyperframes", findings, builds=a.builds, pictures=pics, placed=placed if pics else None, look=not a.no_layout_plan)
     rep["stages"]["render_web"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
@@ -1031,6 +1361,9 @@ def main(argv=None):
             deck, findings, placed = _repair(a, inp, profile, deck, findings, qa, pics, placed, rep, base_deck, pinned_ids, swaps, level, tm, policy, pptx)
     # ---- end stage h ----
 
+    if spec.GRAPHICS:   # deck-graphics: what the FINAL render drew (after any repair round) and, for a deck with no chart or diagram, why
+        from . import graphics   # noqa: PLC0415
+        rep["graphics"] = graphics.report(deck, a.out / "layouts.json", a.out / "deck.pptx")
     rep["slides"] = len(deck["order"])
     rep["slides_by_status"] = {s: sum(1 for x in deck["slides"].values() if x["status"] == s) for s in ("from_source", "drafted", "needs_human")}
     _close(a, rep, t0)

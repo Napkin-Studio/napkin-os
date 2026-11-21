@@ -61,7 +61,7 @@ The tier is the richest source present: `brief+research`, `brief`, `research`, `
 | `deck` | the runner | `deck.json` (+ `appendix_count`), with `meta.built_from` |
 | `validation` | the runner | `validation.json`: `errors`, `to_supply`, findings by slide |
 | `evidence.<ref>` `{kind,text}` | the runner | what each cited ref says, resolved from the inputs |
-| `report` | the runner | `report.json`: `seconds`, `tokens`, `cost_usd`. The app shows these, never an estimate |
+| `report` | the runner | `report.json`: `seconds`, `tokens`. No cost: costs are for the Napkin team only, never in the product (Sai, 19 Nov 2026); the middleware drops `cost_usd`, `engine_usd_total` and `usd_basis` |
 | `exports.web\|pptx\|anim\|pdf` | the runner | `{file, url?, bytes?}`, once written; the older shapes, `true` and the file name as a string, still read as written. Absent means "Not built yet". The app shows the file name (its last path part), never `url` or `bytes`. The animated deck reads the same way; the engine does not build it yet, so it shows Not built yet until a runner writes it |
 | `change_requests[]` | the app | an Ask-for-a-change click: `{slide, change, at, status}`. Words only; sources stay |
 
@@ -315,6 +315,29 @@ is in `run.approvals` and the gate's stage output already existed. The table is 
 
 After the idea gate the run goes on by itself: copy (e, with the fit judge and the red team), assemble, validate, the files. An investor deck
 (stage i, no b, c or d) has the storyline gate only, after stage i.
+
+## The Production picker panel (deck-prod-picker P6)
+
+When a build used a Production file (`run_deck --production FILE`, a .clan or its export zip), the engine writes `production`
+(`engine/deck/run_state.production_payload`): the card line (`Production: N picked, M not reachable`), each picked slot with
+its candidates (label, role, reach, rights, status; never a location), and the opt-in switches as the build had them (fetch,
+with `allow_list_empty`; the tie-break; the vision check). The Review aside shows a slide's Production tiles with a reach badge
+(Embedded, https link or Fetched link, Export zip, Not reachable) and a rights badge (Rights to supply when the picture waits
+for its rights). A person swaps a slot to another of its candidates: the app writes `review.production.<slide>.<slot>`
+`{key, by, at}`; the engine honours it while the key is still a candidate for that slot (never over a rights or reach check)
+and records it in its stages (`production_choices.json`), as `--production-pick SLIDE.SLOT=KEY` does. Fetch and the vision check
+stay opt-in, and the panel says so; with an empty host allow-list it says nothing can be fetched yet.
+
+**The Production file.** The person attaches a Production .clan or export zip with Attach files (or picks one already attached);
+Start then shows a Production pictures card, and Use for pictures reads the file from the host (`/assets/<name>`) and sends it once
+through the middleware task `attach_production@1` to the engine (`POST /production`, 64 MB at most, checked as the picker reads it,
+kept locally by its sha256). The app records `inputs.production {name, sha256, fetch, look}` with both opt-ins off; every
+`build_deck` passes `{sha256, fetch, look}` and the person's `review` on, and the engine runs with `--production FILE` (plus
+`--production-fetch` / `--production-look` only when turned on, and never for an investor deck). A file the engine no longer holds
+fails the build with `production_missing`: choose it again. The engine keeps a document's newest five Production files, 200 MB
+together at most. A file chosen anew clears `review.production`, and the engine drops a recorded swap whose key is no longer a
+candidate, or that was made against another file. The vision check says what it costs: local Ollama first, else Claude Haiku, which
+sends the pictures to Anthropic and is paid, on every build while it is on.
 
 ## Not built
 

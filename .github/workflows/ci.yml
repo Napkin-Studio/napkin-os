@@ -180,12 +180,12 @@ jobs:
       # optional links (torch / sentence-transformers / the vendor SDK) are imported
       # lazily by the modules that need them.
       - name: Install dependencies
-        run: pip install numpy requests httpx pypdf pdfplumber python-docx PyYAML python-dotenv pytest python-pptx lxml jsonschema
+        run: pip install numpy requests httpx pypdf pdfplumber python-docx PyYAML python-dotenv pytest python-pptx lxml jsonschema fonttools
 
       # The deck tests importorskip these, so a missing one would skip tests silently.
       # Fail loudly here instead. Keep the pip line above identical to PY_ENGINE_DEPS in scripts/check.sh.
       - name: Check deck dependencies import
-        run: python -c "import pptx, lxml, jsonschema, docx"
+        run: python -c "import pptx, lxml, jsonschema, docx, fontTools"
 
       # BRIEF_TESTS_OFFLINE=1 makes every outbound socket connection raise (rag/conftest.py),
       # so a test that quietly reaches a hosted endpoint fails here instead of passing on
@@ -199,7 +199,7 @@ jobs:
       # The shared Style Pack reader (engine/visuals): the hash both the Territory tool and the Deck use.
       - name: Style Pack reader tests
         working-directory: engine
-        run: PYTHONPATH=. python -m pytest -q -p no:cacheprovider visuals/tests
+        run: PYTHONPATH=. python -m pytest -q -p no:cacheprovider -p pytest_skipguard visuals/tests
 
       - name: Agent-server tests
         working-directory: engine/agent-server
@@ -218,13 +218,15 @@ jobs:
         working-directory: mock-agent
         run: python -m pytest -q -p no:cacheprovider
 
-      # PYTHONPATH=. because deck/ imports its siblings and brief_llm from engine/.
+      # PYTHONPATH=. because deck/ imports its siblings and brief_llm from engine/. pytest_skipguard prints the skips per suite;
+      # this runner has no LibreOffice, so DECK_SKIP_GUARD and DECK_REQUIRE_SOFFICE stay unset here (scripts/check.sh sets both).
+      # The end-to-end deck gate (deck/tests/test_lumen_gate.py) therefore skips here: the local pre-push hook is the gate.
       - name: Deck Maker tests
         working-directory: engine
         env:
           BRIEF_TESTS_OFFLINE: "1"
           PYTHONPATH: .
-        run: python -m pytest -q -p no:cacheprovider deck/tests
+        run: python -m pytest -q -p no:cacheprovider -p pytest_skipguard deck/tests
 
   conformance:
     name: CLI conformance harness

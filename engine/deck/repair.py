@@ -60,6 +60,7 @@ ACTION_MAP: dict = {
     "text_on_image_contrast": {"rungs": ("add_scrim", "switch_layout", "drop_image", "needs_human")},
     "picture_stretch": {"rungs": ("crop_image", "switch_layout", "needs_human")},
     "picture_lowres": {"rungs": ("switch_layout", "left_for_person")},
+    "text_on_image_fallback": {"rungs": ("left_for_person",)},   # deck-look: the words already sit beside the picture; a person may swap it
     "image_flagged": {"rungs": ("left_for_person",), "regen_then_drop": ("regen_image", "drop_image")},
     "image_unapproved": {"rungs": ("left_for_person",)},
     "image_rights": {"rungs": ("drop_image", "left_for_person")},
@@ -91,7 +92,7 @@ SENTENCES = {
     "text_overlap": "two pieces of text overlapped", "off_slide": "something ran off the slide", "margin": "text sat too close to the edge",
     "min_font": "the type was under the readable floor", "contrast": "the text was hard to read against its background",
     "text_on_image_contrast": "the text was hard to read over the picture", "picture_stretch": "a picture was stretched",
-    "picture_lowres": "a picture is low resolution", "image_flagged": "a picture was flagged", "image_unapproved": "a picture is not approved",
+    "picture_lowres": "a picture is low resolution", "text_on_image_fallback": "no part of the picture was calm enough to carry the words, so they sit beside it", "image_flagged": "a picture was flagged", "image_unapproved": "a picture is not approved",
     "image_rights": "a picture has no clear rights", "image_missing": "a picture is missing",
 }
 #: Content findings K4 watches: every validator finding except these (the word budget and the slot checks move with a layout).
@@ -416,7 +417,7 @@ def measure(deck: dict, plan_issues: list, folder: Path, ctx: dict, round_: int,
     diffs = read_ledger(ctx["base_deck"], deck, folder, ctx["audience"]) if pptx else [{"slide": I.DECK_KEY, "block": None, "kind": "unreadable", "expected": None, "got": "no .pptx"}]
     cl = checklist.run_checklist(folder, deck_id="deck") if (folder / "layouts.json").exists() else None
     return {"folder": folder, "deck": deck, "findings": findings, "qa": qa, "issues": iss, "ok": ok, "counts": counts(iss, deck), "pairs": pairs(iss, deck),
-            "content": content_set(findings), "ledger": diffs, "checklist": cl, "placed": res.get("placed"), "pptx": pptx, "pdf": pdf,
+            "content": content_set(findings), "ledger": diffs, "checklist": cl, "placed": res.get("placed"), "icons": res.get("icons"), "pptx": pptx, "pdf": pdf,
             "pixels": bool(qa.get("pixels"))}
 
 
@@ -524,6 +525,28 @@ def _image_slot(s: dict, issue: dict) -> str | None:
     return next((n for n, v in slots.items() if v.get("kind") == "image"), None)
 
 
+_HEX = re.compile(r"\(([0-9A-Fa-f]{6})\)")
+
+
+def scrim_tone(im: dict, issue: dict) -> str:
+    """The scrim tone OPPOSITE the text colour: ``light`` under dark words, ``dark`` under light ones (a dark wash under dark text only
+    makes it worse). The text colour is the slot's recorded scrim text (images.text_zone: ``image.scrim.text``), else the one the QA
+    finding names (``'Title' text (1B2430) is ...``); with neither, the renderers' default light-on-picture text, so ``dark``."""
+    rec = im.get("scrim") if isinstance(im.get("scrim"), dict) else {}
+    fg = rec.get("text")
+    if not fg:
+        m = _HEX.search(issue.get("message") or "")
+        fg = m.group(1) if m else None
+    if not fg or not re.fullmatch(r"#?[0-9A-Fa-f]{6}", str(fg)):
+        return "dark"
+    h = str(fg).lstrip("#")
+    r, g, b = (int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
+    lin = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in (r, g, b)]
+    lum = 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+    # the tone that gives the text more contrast: against black (dark scrim) or white (light scrim)
+    return "dark" if (lum + 0.05) / 0.05 >= 1.05 / (lum + 0.05) else "light"
+
+
 def _evidence_slide(s: dict) -> bool:
     """A slide of a judged (claiming) type that carries refs: its evidence stays on screen, never to the notes."""
     from . import stages
@@ -563,6 +586,10 @@ def available(rung: str, issue: dict, env: dict) -> tuple:
             return False, env["shorten_why"]
         if not slot:
             return False, "the finding names no slot"
+        if " at " in str((issue.get("evidence") or {}).get("unit") or "") or (lay.get("fit") or {}).get("by_size"):
+            # deck-slide-size: only the slide size raised it (layouts.BY_SIZE), or the slide holds its layout at 16:9 (fit.by_size): any finding
+            # on it (slot_limit, text_overflow, min_font) is the free ladder's
+            return False, "the words fit at 16:9: a size change is taken by the layout ladder, never by a paid shorten"
         return True, ""
     if rung == "overflow_to_notes":
         if env["text_mode"] != "condense":
@@ -616,8 +643,10 @@ def apply_effect(fixes: dict, rung: str, issue: dict, env: dict) -> dict:
         im = ((s.get("slots") or {}).get(slot) or {}).get("image") or {}
         patch = fixes.setdefault("images", {}).setdefault(sid, {}).setdefault(slot, {})
         if rung == "add_scrim":
-            patch["scrim"] = "dark"
-            return {"from": im.get("scrim") or "none", "to": "dark"}
+            tone = scrim_tone(im, issue)
+            patch["scrim"] = tone
+            was = im.get("scrim")
+            return {"from": (was.get("colour") if isinstance(was, dict) else was) or "none", "to": tone}
         patch.update(fit="cover", focal=im.get("focal") or {"x": 0.5, "y": 0.5})
         return {"from": im.get("fit") or "cover", "to": "cover"}
     return {"from": None, "to": None}
@@ -820,6 +849,7 @@ def record_sig(rec: dict) -> str:
 
 def _replan(ctx: dict, work_base: dict, fixes: dict, stop: bool = False) -> tuple:
     prefs = {"density": ctx["prefs"].get("density"), "text_mode": ctx["prefs"].get("text_mode"), "repair": stop, "notes": ctx["prefs"].get("notes", True)}
+    prefs.update({k: ctx["prefs"][k] for k in ("prefer", "prefer_type", "roles", "windows") if ctx["prefs"].get(k)})   # deck-types: the recipe's layout preferences and density roles, when on
     return layouts.plan(work_base, ctx["library"], prefs, ctx["swaps"], {}, fixes)
 
 

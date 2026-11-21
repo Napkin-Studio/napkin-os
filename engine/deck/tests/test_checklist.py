@@ -98,10 +98,12 @@ def with_image(slide="s4", assets=None, **kw):
 # ---------------------------------------------------------------- the list and the functions agree
 
 def test_items_and_functions_agree():
-    assert len(set(IDS)) == len(IDS) == 53 and set(cl.CHECKS) == set(IDS)
+    assert len(set(IDS)) == len(IDS) == 70 and set(cl.CHECKS) == set(IDS)   # 53 + deck-graphics' 4 icon, 5 frame and 8 chart / diagram items
     assert all(fn.__name__ == i for i, fn in cl.CHECKS.items())
-    assert sum(i["kind"] == "metric" for i in ITEMS["items"]) == 8
-    assert {i["id"] for i in ITEMS["items"] if i["tier"] == "advisory"} == {"l_variety", "l_repeat_max2", "w_line_length", "t_cover_title", "m_seconds"}
+    assert sum(i["kind"] == "metric" for i in ITEMS["items"]) == 9
+    assert {i["id"] for i in ITEMS["items"] if i["tier"] == "advisory"} == {"l_variety", "l_repeat_max2", "w_line_length", "t_cover_title", "m_seconds",
+                                                                          "i_icon_groups", "i_icon_share", "m_production_first", "s_strip_order",
+                                                                          "c_chart_emphasis", "d_min_items"}
     assert all(i["tier"] in ("gate", "advisory") for i in ITEMS["items"])
     for it in ITEMS["items"]:
         assert it["question"] and it["source"] and it["inputs"] and it["na_when"] and it["kind"] in ("yes_no", "metric"), it["id"]
@@ -539,7 +541,8 @@ def test_compare_flags_lost_coverage_and_n_a_to_no():
 def test_every_metric_has_a_direction_and_compare_flags_the_worse_way(tmp_path):
     dirs = {i["id"]: i.get("direction") for i in ITEMS["items"] if i["kind"] == "metric"}
     assert dirs == {"m_usd": "lower", "m_seconds": "lower", "m_share_le_30": "higher", "m_share_le_60": "higher",
-                    "m_median_words": "lower", "m_creative_pictured": "higher", "w_words_sha": "same", "p_all_approved": "higher"}
+                    "m_median_words": "lower", "m_creative_pictured": "higher", "w_words_sha": "same", "p_all_approved": "higher",
+                    "m_production_first": "higher"}
     base = _file({"m_usd": 1.0, "m_share_le_30": 0.5})
     worse = cmp.compare(base, _file({"m_usd": 1.5, "m_share_le_30": 0.4}), direction=dirs)
     assert worse["metric_regressions"] == 2 and cmp.failed(worse)

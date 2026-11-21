@@ -139,7 +139,15 @@
             "has_human_item",
             "compare_table",
             "role_rows",
-            "image_ready"
+            "image_ready",
+            "points_2_3",
+            "rows_aside",
+            "bleed_ready",
+            "steps_3_6",
+            "timed_3_8",
+            "matrix_sourced",
+            "journey_3_5",
+            "points_3_6"
           ],
           "$comment": "a named test from spec.LAYOUT_TESTS, implemented in layouts.py"
         },
@@ -232,6 +240,21 @@
       "type": "string",
       "pattern": "^[a-z][a-z0-9_]{2,31}$",
       "$comment": "the variety rule counts families, not ids"
+    },
+    "human_rows": {
+      "type": "boolean",
+      "$comment": "deck-look: the layout draws a human item (a placeholder a person must supply) as a dashed 'To supply' row, so it accepts a slide that holds one"
+    },
+    "not_at": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "4:3",
+          "a4"
+        ]
+      },
+      "uniqueItems": true,
+      "$comment": "deck-slide-size: sizes this layout is never drawn at (the plan's switch rung takes its alternatives); 16:9 is never listed"
     }
   },
   "definitions": {
@@ -458,7 +481,8 @@
               "enum": [
                 "none",
                 "dark",
-                "light"
+                "light",
+                "auto"
               ],
               "default": "none"
             },

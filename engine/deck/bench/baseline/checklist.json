@@ -239,12 +239,80 @@
     "k_logo_cover": {
      "answer": "n/a",
      "reason": "deck.meta.theme.logo is absent, has no asset or placement none"
+    },
+    "i_icon_allowlist": {
+     "answer": "n/a",
+     "reason": "no presented slide carries an icon"
+    },
+    "i_icon_contrast": {
+     "answer": "n/a",
+     "reason": "no presented slide carries an icon"
+    },
+    "i_icon_groups": {
+     "answer": "n/a",
+     "reason": "no presented slide carries an icon"
+    },
+    "i_icon_share": {
+     "answer": "n/a",
+     "reason": "no presented slide carries an icon"
+    },
+    "m_mockup_labelled": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_frame_aspect": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_frame_rights": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_production_first": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "s_strip_order": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a storyboard strip"
+    },
+    "c_chart_sourced": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "c_chart_numbers": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "c_chart_form": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "c_chart_contrast": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "c_chart_emphasis": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "d_own_words": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "d_matrix_axes": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "d_min_items": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
     }
    },
    "summary": {
     "yes": 30,
     "no": 3,
-    "na": 13,
+    "na": 30,
     "metrics": {
      "m_share_le_30": 1.0,
      "m_share_le_60": 1.0,
@@ -493,12 +561,80 @@
     "k_logo_cover": {
      "answer": "n/a",
      "reason": "deck.meta.theme.logo is absent, has no asset or placement none"
+    },
+    "i_icon_allowlist": {
+     "answer": "n/a",
+     "reason": "no presented slide carries an icon"
+    },
+    "i_icon_contrast": {
+     "answer": "n/a",
+     "reason": "no presented slide carries an icon"
+    },
+    "i_icon_groups": {
+     "answer": "n/a",
+     "reason": "no presented slide carries an icon"
+    },
+    "i_icon_share": {
+     "answer": "n/a",
+     "reason": "no presented slide carries an icon"
+    },
+    "m_mockup_labelled": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_frame_aspect": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_frame_rights": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_production_first": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "s_strip_order": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a storyboard strip"
+    },
+    "c_chart_sourced": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "c_chart_numbers": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "c_chart_form": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "c_chart_contrast": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "c_chart_emphasis": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "d_own_words": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "d_matrix_axes": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "d_min_items": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
     }
    },
    "summary": {
     "yes": 31,
     "no": 2,
-    "na": 13,
+    "na": 30,
     "metrics": {
      "m_share_le_30": 0.889,
      "m_share_le_60": 1.0,
@@ -728,12 +864,80 @@
     "k_logo_cover": {
      "answer": "n/a",
      "reason": "deck.meta.theme.logo is absent, has no asset or placement none"
+    },
+    "i_icon_allowlist": {
+     "answer": "n/a",
+     "reason": "no presented slide carries an icon"
+    },
+    "i_icon_contrast": {
+     "answer": "n/a",
+     "reason": "no presented slide carries an icon"
+    },
+    "i_icon_groups": {
+     "answer": "n/a",
+     "reason": "no presented slide carries an icon"
+    },
+    "i_icon_share": {
+     "answer": "n/a",
+     "reason": "no presented slide carries an icon"
+    },
+    "m_mockup_labelled": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_frame_aspect": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_frame_rights": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_production_first": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "s_strip_order": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a storyboard strip"
+    },
+    "c_chart_sourced": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "c_chart_numbers": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "c_chart_form": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "c_chart_contrast": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "c_chart_emphasis": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "d_own_words": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "d_matrix_axes": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "d_min_items": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
     }
    },
    "summary": {
     "yes": 31,
     "no": 0,
-    "na": 15,
+    "na": 32,
     "metrics": {
      "m_share_le_30": 1.0,
      "m_share_le_60": 1.0,
@@ -985,12 +1189,80 @@
     "k_logo_cover": {
      "answer": "n/a",
      "reason": "deck.meta.theme.logo is absent, has no asset or placement none"
+    },
+    "i_icon_allowlist": {
+     "answer": "n/a",
+     "reason": "no presented slide carries an icon"
+    },
+    "i_icon_contrast": {
+     "answer": "n/a",
+     "reason": "no presented slide carries an icon"
+    },
+    "i_icon_groups": {
+     "answer": "n/a",
+     "reason": "no presented slide carries an icon"
+    },
+    "i_icon_share": {
+     "answer": "n/a",
+     "reason": "no presented slide carries an icon"
+    },
+    "m_mockup_labelled": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_frame_aspect": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_frame_rights": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_production_first": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "s_strip_order": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a storyboard strip"
+    },
+    "c_chart_sourced": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "c_chart_numbers": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "c_chart_form": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "c_chart_contrast": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "c_chart_emphasis": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "d_own_words": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "d_matrix_axes": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "d_min_items": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
     }
    },
    "summary": {
     "yes": 30,
     "no": 3,
-    "na": 13,
+    "na": 30,
     "metrics": {
      "m_share_le_30": 0.933,
      "m_share_le_60": 1.0,
@@ -1293,12 +1565,80 @@
     "k_logo_cover": {
      "answer": "n/a",
      "reason": "deck.meta.theme.logo is absent, has no asset or placement none"
+    },
+    "i_icon_allowlist": {
+     "answer": "n/a",
+     "reason": "no presented slide carries an icon"
+    },
+    "i_icon_contrast": {
+     "answer": "n/a",
+     "reason": "no presented slide carries an icon"
+    },
+    "i_icon_groups": {
+     "answer": "n/a",
+     "reason": "no presented slide carries an icon"
+    },
+    "i_icon_share": {
+     "answer": "n/a",
+     "reason": "no presented slide carries an icon"
+    },
+    "m_mockup_labelled": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_frame_aspect": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_frame_rights": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_production_first": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "s_strip_order": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a storyboard strip"
+    },
+    "c_chart_sourced": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "c_chart_numbers": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "c_chart_form": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "c_chart_contrast": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "c_chart_emphasis": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "d_own_words": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "d_matrix_axes": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "d_min_items": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
     }
    },
    "summary": {
     "yes": 32,
     "no": 11,
-    "na": 2,
+    "na": 19,
     "metrics": {
      "m_share_le_30": 0.947,
      "m_share_le_60": 1.0,
@@ -1549,12 +1889,80 @@
     "k_logo_cover": {
      "answer": "n/a",
      "reason": "deck.meta.theme.logo is absent, has no asset or placement none"
+    },
+    "i_icon_allowlist": {
+     "answer": "n/a",
+     "reason": "no presented slide carries an icon"
+    },
+    "i_icon_contrast": {
+     "answer": "n/a",
+     "reason": "no presented slide carries an icon"
+    },
+    "i_icon_groups": {
+     "answer": "n/a",
+     "reason": "no presented slide carries an icon"
+    },
+    "i_icon_share": {
+     "answer": "n/a",
+     "reason": "no presented slide carries an icon"
+    },
+    "m_mockup_labelled": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_frame_aspect": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_frame_rights": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_production_first": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "s_strip_order": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a storyboard strip"
+    },
+    "c_chart_sourced": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "c_chart_numbers": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "c_chart_form": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "c_chart_contrast": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "c_chart_emphasis": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "d_own_words": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "d_matrix_axes": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "d_min_items": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
     }
    },
    "summary": {
     "yes": 30,
     "no": 3,
-    "na": 13,
+    "na": 30,
     "metrics": {
      "m_share_le_30": 1.0,
      "m_share_le_60": 1.0,
@@ -1797,12 +2205,80 @@
     "k_logo_cover": {
      "answer": "n/a",
      "reason": "deck.meta.theme.logo is absent, has no asset or placement none"
+    },
+    "i_icon_allowlist": {
+     "answer": "n/a",
+     "reason": "no presented slide carries an icon"
+    },
+    "i_icon_contrast": {
+     "answer": "n/a",
+     "reason": "no presented slide carries an icon"
+    },
+    "i_icon_groups": {
+     "answer": "n/a",
+     "reason": "no presented slide carries an icon"
+    },
+    "i_icon_share": {
+     "answer": "n/a",
+     "reason": "no presented slide carries an icon"
+    },
+    "m_mockup_labelled": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_frame_aspect": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_frame_rights": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "m_production_first": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a frame"
+    },
+    "s_strip_order": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a storyboard strip"
+    },
+    "c_chart_sourced": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "c_chart_numbers": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "c_chart_form": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "c_chart_contrast": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "c_chart_emphasis": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "d_own_words": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "d_matrix_axes": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
+    },
+    "d_min_items": {
+     "answer": "n/a",
+     "reason": "no presented slide carries a chart or a diagram drawn by deck-graphics"
     }
    },
    "summary": {
     "yes": 31,
     "no": 2,
-    "na": 13,
+    "na": 30,
     "metrics": {
      "m_share_le_30": 0.889,
      "m_share_le_60": 1.0,

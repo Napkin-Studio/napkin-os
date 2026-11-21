@@ -36,7 +36,51 @@
           "enum": [
             "pitch",
             "full"
-          ]
+          ],
+          "description": "How the deck will be used: pitch (presented on a screen) or full ('Sent to be read', the leave-behind: every slide in story order, detailed). Written by the format switch under the type picker."
+        },
+        "deck_type": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "id"
+          ],
+          "description": "deck-types: the person's explicit pick on the type picker, the first step of Start. It ranks above an answer to q_deck_type, an inference from the brief and the default (run_deck --type). Absent or null ('Not sure: decide from my brief'): no pick, so the answer, then a high-confidence inference, then agency_pitch decide. Kept in inputs, not in deck (deck is the engine's own output and is replaced on every build).",
+          "properties": {
+            "id": {
+              "enum": [
+                "agency_pitch",
+                "tender_response",
+                "investor_seed",
+                "credentials",
+                "creative_work"
+              ]
+            },
+            "by": {
+              "type": "string",
+              "description": "Who picked: the person (the app writes 'person'), or human:<id> when known."
+            },
+            "at": {
+              "type": "string",
+              "description": "When the pick was made (ISO 8601)."
+            },
+            "confirmed_stages": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "a",
+                  "b",
+                  "c",
+                  "d",
+                  "i"
+                ]
+              },
+              "description": "The person's yes on the Change sheet to the new writing a type change needs (the model stages it runs). Without it a change that needs a stage not yet recorded is refused (409 needs_stages) before anything runs or spends."
+            }
+          }
         },
         "library": {
           "type": "object",
@@ -182,6 +226,43 @@
           ],
           "default": "condense",
           "description": "condense: the repair loop may shorten a slide's text to fit; preserve: it never does. Written by the app."
+        },
+        "production": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "sha256"
+          ],
+          "description": "The Production file this deck's pictures come from (deck-prod-picker): a .clan or export zip the person attached, which the engine holds by its sha256 (attach_production) and reads on every build (--production). fetch and look are the person's opt-ins: fetching picked https pictures (still limited to the engine's host allow-list) and the vision check that only flags. Written by the app.",
+          "properties": {
+            "name": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "\\.([Cc][Ll][Aa][Nn]|[Zz][Ii][Pp])$"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "fetch": {
+              "type": "boolean"
+            },
+            "look": {
+              "type": "boolean"
+            },
+            "at": {
+              "type": "string"
+            },
+            "rows": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "eligible": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
         }
       }
     },
@@ -656,6 +737,21 @@
               }
             }
           }
+        },
+        "types": {
+          "type": "object",
+          "description": "deck-types, written by the engine: which deck types it offers. recipes: whether DECK_RECIPES (with DECK_LOOK_V3) is on; offered: the type ids the picker may show (a type that joined with the recipes is hidden while they are off).",
+          "properties": {
+            "recipes": {
+              "type": "boolean"
+            },
+            "offered": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
         }
       }
     },
@@ -674,7 +770,8 @@
                     "agency_pitch",
                     "tender_response",
                     "investor_seed",
-                    "credentials"
+                    "credentials",
+                    "creative_work"
                   ],
                   "description": "The deck type the deck was built for."
                 }
@@ -1160,11 +1257,15 @@
                       "slot_stale",
                       "block_unbound",
                       "layout_unknown",
+                      "text_on_image_fallback",
                       "image_missing",
                       "image_unapproved",
                       "image_flagged",
                       "image_rights",
                       "style_pack_held",
+                      "pitch_cap",
+                      "role_words",
+                      "notes_unread",
                       "golden_echo",
                       "picture_stretch",
                       "picture_lowres",
@@ -1474,6 +1575,51 @@
                       ]
                     }
                   }
+                },
+                "look": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "description": "deck-graphics: the switchable parts a person turned on or off for this deck (read only under DECK_GRAPHICS=1): icons, mockups.",
+                  "properties": {
+                    "graphics": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "icons": {
+                          "type": "boolean"
+                        },
+                        "mockups": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                },
+                "size": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "canvas",
+                    "source"
+                  ],
+                  "description": "deck-slide-size: the slide size the deck is drawn at (theme.CANVASES), written only when a person, the document or a recipe gave one; absent means 16:9.",
+                  "properties": {
+                    "canvas": {
+                      "enum": [
+                        "16:9",
+                        "4:3",
+                        "a4"
+                      ]
+                    },
+                    "source": {
+                      "enum": [
+                        "person",
+                        "master",
+                        "recipe",
+                        "default"
+                      ]
+                    }
+                  }
                 }
               }
             },
@@ -1489,6 +1635,62 @@
                 },
                 "pack": {
                   "type": "string"
+                }
+              }
+            },
+            "production": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "project_id",
+                "data_sha256",
+                "offer_sha256",
+                "how"
+              ],
+              "description": "The Production Tool export this deck's pulled pictures were taken from (deck-prod-assets), the shape of Production's own briefs[].source. offer_sha256 (the offered entity ids and asset hashes) is the update key, never the relay ETag. Optional: a deck with no pulled picture has none.",
+              "properties": {
+                "project_id": {
+                  "type": "string",
+                  "pattern": "^proj_[0-9A-HJKMNP-TV-Z]{26}$"
+                },
+                "title": {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                "data_sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "offer_sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "taken": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "at": {
+                  "type": "string"
+                },
+                "how": {
+                  "enum": [
+                    "bundle",
+                    "clan",
+                    "os"
+                  ],
+                  "description": "bundle: the export zip through deck.from_production; clan: a Production .clan (or the zip) read by deck.prod_picker, which picks from metadata and pulls only the picked pictures; os: from the OS (later)."
+                },
+                "kept": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "placed": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "held": {
+                  "type": "integer",
+                  "minimum": 0
                 }
               }
             }
@@ -1634,6 +1836,16 @@
                         "minimum": 48,
                         "maximum": 75,
                         "description": "Characters per line the slide was fitted at when 48 would not fit (60): the last step before type goes to the caption floor."
+                      },
+                      "title_pt": {
+                        "type": "integer",
+                        "minimum": 28,
+                        "maximum": 36,
+                        "description": "deck-slide-size: the title size this one slide was fitted at at 4:3 or A4 when the layout's stamped size would not fit (the last rung before no_fit)."
+                      },
+                      "by_size": {
+                        "type": "boolean",
+                        "description": "deck-slide-size: the slide holds its layout at 16:9 and needed the ladder only at this size: its findings are never shortened (no paid call for a size change)."
                       }
                     }
                   },
@@ -2086,16 +2298,17 @@
                                     "territory_frame",
                                     "upload",
                                     "brand",
-                                    "generated"
+                                    "generated",
+                                    "production"
                                   ]
                                 },
                                 "key": {
                                   "type": "string",
-                                  "description": "The frame key <territory id>-<shot>-<flash|pro>, a material id, or a Brand Clan logo id."
+                                  "description": "The frame key <territory id>-<shot>-<flash|pro>, a material id, or a Brand Clan logo id, or a Production Tool item key (an entity id; a key visual is <format set id>#master)."
                                 },
                                 "run": {
                                   "type": "string",
-                                  "description": "The territory run's 12-character hash."
+                                  "description": "The territory run's 12-character hash, or for a Production picture the first 12 hex of the exported .clan's sha256."
                                 }
                               }
                             },
@@ -2295,6 +2508,61 @@
                                 "dark",
                                 "light"
                               ]
+                            },
+                            "text_zone": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "description": "deck-look (LOOK_V3): where words may sit on this picture, from images.text_zone (the calm-zone finder and scrim solver) or pinned by a repair or a person. A zone: the words' colour, the scrim's colour and alpha (0.40 to 0.60), the 10th-percentile contrast it predicts and the zone's luminance s.d. none: no zone reads at AA, so the words sit beside the picture.",
+                              "properties": {
+                                "zone": {
+                                  "enum": [
+                                    "bottom_left",
+                                    "top_left",
+                                    "middle_left",
+                                    "bottom_right",
+                                    "top_right",
+                                    "middle_right"
+                                  ]
+                                },
+                                "text": {
+                                  "type": "string",
+                                  "pattern": "^[0-9A-Fa-f]{6}$"
+                                },
+                                "colour": {
+                                  "type": "string",
+                                  "pattern": "^[0-9A-Fa-f]{6}$"
+                                },
+                                "alpha": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                "p10": {
+                                  "type": "number",
+                                  "minimum": 0
+                                },
+                                "busy_sd": {
+                                  "type": "number",
+                                  "minimum": 0
+                                },
+                                "by": {
+                                  "enum": [
+                                    "finder",
+                                    "repair",
+                                    "person"
+                                  ]
+                                },
+                                "none": {
+                                  "const": true
+                                },
+                                "reason": {
+                                  "type": "string",
+                                  "maxLength": 300
+                                },
+                                "best": {
+                                  "type": "object"
+                                }
+                              }
                             }
                           },
                           "if": {
@@ -2529,6 +2797,65 @@
                   "reason": {
                     "type": "string",
                     "maxLength": 300
+                  }
+                }
+              },
+              "source": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "app",
+                  "project_id",
+                  "entity"
+                ],
+                "description": "Where a pulled picture came from (deck-prod-assets): the Production Tool project, the entity and its version, the asset's origin, the job that made it and the hash of the exported .clan. Never a file path or a URL.",
+                "properties": {
+                  "app": {
+                    "const": "ie.napkin.production-tool"
+                  },
+                  "project_id": {
+                    "type": "string",
+                    "pattern": "^proj_[0-9A-HJKMNP-TV-Z]{26}$"
+                  },
+                  "entity": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "role": {
+                    "enum": [
+                      "master",
+                      "size",
+                      "frame"
+                    ]
+                  },
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "origin": {
+                    "enum": [
+                      "uploaded",
+                      "drawn",
+                      "generated",
+                      "edited",
+                      "extracted"
+                    ]
+                  },
+                  "job_id": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "format_id": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "channel": {
+                    "type": "string",
+                    "maxLength": 32
+                  },
+                  "bundle_sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
                   }
                 }
               }
@@ -2989,6 +3316,37 @@
             }
           }
         },
+        "size": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Which slide size? 16:9 (widescreen), 4:3 (standard) or a4 (A4 landscape, 297 x 210 mm). Absent: the recipe's default (presented: 16:9; sent to be read: a4; a tender response: a4). The engine's server forwards canvas as --size.",
+          "properties": {
+            "canvas": {
+              "enum": [
+                "16:9",
+                "4:3",
+                "a4"
+              ]
+            },
+            "by": {
+              "type": "string",
+              "pattern": "^(human:.+|person)$",
+              "description": "Who chose it: person (the Start screen) or human:<id>. Absent: nobody chose, the default is in force."
+            },
+            "at": {
+              "type": "string",
+              "description": "When the choice was made (ISO 8601)."
+            },
+            "via": {
+              "enum": [
+                "question",
+                "start",
+                "review"
+              ],
+              "description": "Where the choice was made: an intake question, the Start screen or Review."
+            }
+          }
+        },
         "brand": {
           "type": "object",
           "additionalProperties": false,
@@ -3197,6 +3555,42 @@
               }
             }
           }
+        },
+        "production": {
+          "type": "object",
+          "description": "A person's swaps in the Production picker (deck-prod-picker P6): for a slide's slot, the candidate key they chose instead of the rule's pick. The engine honours one only while the key is still a candidate for that slot, and records it in its stages (production_choices.json). Written by the app.",
+          "propertyNames": {
+            "pattern": "^s[0-9]{2,3}$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "propertyNames": {
+              "pattern": "^[a-z][a-z0-9_]{1,23}$"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "key",
+                "by",
+                "at"
+              ],
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_#]{6,80}$"
+                },
+                "by": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "at": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -3331,11 +3725,15 @@
                   "slot_stale",
                   "block_unbound",
                   "layout_unknown",
+                  "text_on_image_fallback",
                   "image_missing",
                   "image_unapproved",
                   "image_flagged",
                   "image_rights",
                   "style_pack_held",
+                  "pitch_cap",
+                  "role_words",
+                  "notes_unread",
                   "golden_echo",
                   "picture_stretch",
                   "picture_lowres",
@@ -3532,6 +3930,195 @@
         "skipped": {
           "type": "integer",
           "minimum": 0
+        }
+      }
+    },
+    "production": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "What the Production picker did on the last build (deck-prod-picker; engine-owned, run_state.production_payload): the card line, each picked slot with its candidates (label, reach, rights, status; never a location), and the opt-in switches. Absent when the build used no Production file.",
+      "properties": {
+        "card": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "enum": [
+                "clan",
+                "zip"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "maxLength": 120
+            }
+          }
+        },
+        "picks": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "slot",
+              "key",
+              "from",
+              "by"
+            ],
+            "properties": {
+              "slot": {
+                "type": "string",
+                "pattern": "^s[0-9]{2,3}\\.[a-z][a-z0-9_]{1,23}$"
+              },
+              "key": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_#]{6,80}$"
+              },
+              "label": {
+                "type": "string",
+                "maxLength": 120
+              },
+              "role": {
+                "enum": [
+                  "key_visual",
+                  "size",
+                  "storyboard_frame"
+                ]
+              },
+              "from": {
+                "enum": [
+                  "embedded",
+                  "https",
+                  "zip",
+                  "rights",
+                  "not reachable"
+                ]
+              },
+              "by": {
+                "enum": [
+                  "rule",
+                  "claude",
+                  "person"
+                ]
+              },
+              "rights": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "note": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "eligible": {
+                "type": "array",
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "key"
+                  ],
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9_#]{6,80}$"
+                    },
+                    "label": {
+                      "type": "string",
+                      "maxLength": 120
+                    },
+                    "role": {
+                      "enum": [
+                        "key_visual",
+                        "size",
+                        "storyboard_frame"
+                      ]
+                    },
+                    "reach": {
+                      "enum": [
+                        "embedded",
+                        "https",
+                        "zip",
+                        "s3_only",
+                        "idb_only",
+                        "none"
+                      ]
+                    },
+                    "rights": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "aspect": {
+                      "type": "string",
+                      "maxLength": 20
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "not_reachable": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "slot": {
+                "type": "string"
+              },
+              "key": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string",
+                "maxLength": 300
+              }
+            }
+          }
+        },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "on": {
+              "type": "boolean"
+            },
+            "allow_list_empty": {
+              "type": "boolean"
+            },
+            "refused": {
+              "type": "string"
+            }
+          }
+        },
+        "tie_break": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "on": {
+              "type": "boolean"
+            }
+          }
+        },
+        "look": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "on": {
+              "type": "boolean"
+            }
+          }
         }
       }
     }

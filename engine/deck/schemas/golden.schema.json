@@ -29,7 +29,8 @@
           "agency_pitch",
           "tender_response",
           "investor_seed",
-          "credentials"
+          "credentials",
+          "creative_work"
         ]
       }
     },

@@ -54,8 +54,18 @@ const L = vm.runInNewContext(`${logicRun}; DeckLogic`) as {
   agencyPatch(use: boolean, by: string | null, at: string): unknown
   agencyLookNotice(data: unknown): { text: string; canUpdate: boolean; requested: boolean } | null
   agencyUpdatePatch(at: string): unknown
-  DECK_TYPES: { id: string; label: string; one_line: string }[]
-  deckTypeOf(data: unknown): { id: string; source: string; quote: string; skipped: boolean; hasQuestion: boolean }
+  DECK_TYPES: { id: string; label: string; one_line: string; kind: string; looks: string; article: string }[]
+  DECK_TYPE_CARDS: TypeCard[]
+  cardOf(id: string): TypeCard | null
+  typeCaption(card: unknown, format?: string, on?: boolean): string
+  defaultSize(card: unknown, format?: string, on?: boolean): string
+  recipesOn(data: unknown): boolean
+  pickPatch(type: string | null, at: string, confirmed?: string[] | null): unknown
+  offeredCards(data: unknown): { id: string; recipe_only: boolean }[]
+  builtTypeOf(data: unknown): string | null
+  recordedStages(data: unknown): string[]
+  changeSheet(data: unknown, type: string): { free: boolean; needs: string[]; line: string; from: string | null; to: string } | null
+  deckTypeOf(data: unknown): { id: string; kind: string; source: string; quote: string; skipped: boolean; hasQuestion: boolean }
   typeHints(type: string): { type: string; items: string[]; line: string }
   kindOfType(type: string): string
   typePatch(data: unknown, type: string | null, at: string): unknown
@@ -79,6 +89,10 @@ const L = vm.runInNewContext(`${logicRun}; DeckLogic`) as {
   approveDeck(run: unknown, by: string, at: string): Record<string, unknown> | null
   exportRows(exports: unknown): { key: string; x: string; name: string; action: string; ready: boolean; file: string; note: string }[]
   reportLine(data: unknown): { known: boolean; errors: number | null; line: string }
+}
+type TypeCard = {
+  id: string; label: string; one_line: string; kind: string; flag: string; default_format: string; target: number | null; cap: number | null; max: number
+  size: string; pictures: string; stages: string[]; spine: { type: string; section: string; purpose: string }[]; more: number
 }
 type DeckApproval = {
   state: string; agent: string; name: string; role: string; activity: string; word: string; by: string; at: string
@@ -166,6 +180,14 @@ test('the summary comes from the inputs, never fixed numbers', () => {
   const full = L.summaryOf({ prompt: { client: 'Lumen' }, kind: 'investor', format: 'full' }, { order: [], slides: {} })
   assert.match(full.title, /investor deck/i)
   assert.match(full.note, /story order/)
+  // the length is the type's own (its recipe, through the generated card), never a fixed 18
+  assert.match(pitch.note, /^About 10 slides, usually at most 12, then a hidden appendix\./)
+  const inv = L.summaryOf({ prompt: {}, kind: 'investor', format: 'pitch' }, { order: [], slides: {} })
+  assert.match(inv.note, /^About 12 slides, usually at most 15/)
+  const tender = L.summaryOf({ prompt: {}, kind: 'agency', format: 'pitch', type: 'tender_response' }, { order: [], slides: {} })
+  assert.match(tender.note, /^At most 18 slides, then a hidden appendix/)
+  const cred = L.summaryOf({ prompt: {}, kind: 'agency', format: 'pitch', type: 'credentials' }, { order: [], slides: {} })
+  assert.match(cred.note, /^About 10 slides, usually at most 14/)
 })
 
 // ── the page ──────────────────────────────────────────────────────────────
@@ -573,9 +595,14 @@ const typeQ = (extra: Record<string, unknown> = {}) => ({
   ...extra,
 })
 
-test('DECK_TYPES holds the four ids exactly, each with a label and a one-line use', () => {
-  assert.deepEqual(plain(L.DECK_TYPES.map(t => t.id)), ['agency_pitch', 'tender_response', 'investor_seed', 'credentials'])
-  for (const t of L.DECK_TYPES) assert.ok(t.label && t.one_line)
+test('DECK_TYPES is derived from the generated cards: the five ids, their labels and one lines, and the words around them', () => {
+  assert.deepEqual(plain(L.DECK_TYPES.map(t => t.id)), ['agency_pitch', 'tender_response', 'investor_seed', 'credentials', 'creative_work'])
+  for (const t of L.DECK_TYPES) {
+    const c = L.cardOf(t.id)!
+    assert.equal(t.label, c.label); assert.equal(t.one_line, c.one_line); assert.equal(t.kind, c.kind)
+  }
+  assert.equal(L.DECK_TYPES[1].looks, 'a tender response'); assert.equal(L.DECK_TYPES[0].article, 'An agency pitch')
+  assert.equal(L.DECK_TYPES[4].looks, 'a creative work session'); assert.equal(L.DECK_TYPES[4].article, 'A creative work session')
 })
 
 test('deckTypeOf: answered wins, else the inferred option, else the default and says which', () => {
@@ -591,7 +618,8 @@ test('deckTypeOf: answered wins, else the inferred option, else the default and 
   assert.equal(L.deckTypeOf({ intake: { answers: { q_deck_type: { option_id: 'nonsense' } } } }).source, 'default')
 })
 
-test('typeHints names what to bring for each of the four types', () => {
+test('typeHints names what to bring for each of the five types', () => {
+  assert.match(L.typeHints('creative_work').line, /routes you want to show.*what the client should react to/)
   assert.match(L.typeHints('tender_response').line, /scoring criteria.*page limit/)
   assert.match(L.typeHints('investor_seed').line, /traction figures.*the ask/)
   assert.match(L.typeHints('credentials').line, /team.*two examples/)
@@ -602,7 +630,8 @@ test('typeHints names what to bring for each of the four types', () => {
 
 test('kind is derived from the type: investor_seed is investor, the others agency', () => {
   assert.equal(L.kindOfType('investor_seed'), 'investor')
-  for (const t of ['agency_pitch', 'tender_response', 'credentials']) assert.equal(L.kindOfType(t), 'agency')
+  for (const t of ['agency_pitch', 'tender_response', 'credentials', 'creative_work']) assert.equal(L.kindOfType(t), 'agency')
+  assert.equal(L.kindOfType('bogus'), 'agency')
 })
 
 test('builtFrom shows the type when given one, and describeBuiltFrom names it', () => {
@@ -612,12 +641,14 @@ test('builtFrom shows the type when given one, and describeBuiltFrom names it', 
   assert.equal('type' in L.builtFrom({}, {}, []), false)
 })
 
-test('Start shows the selector with the inferred type highlighted and its quote, escaped', () => {
+test('Start shows the picker with the inferred type preselected and its quote, escaped', () => {
   const m = mount({ inputs: { prompt: {} }, intake: { questions: [typeQ()] } })
   assert.ok(m.app.innerHTML.includes('What kind of deck?'))
-  assert.ok(m.app.innerHTML.includes('Looks like a tender: you wrote &quot;Response to ITT 4417 with scoring criteria&quot;'))
+  assert.ok(m.app.innerHTML.includes('Looks like a tender response: you wrote &quot;Response to ITT 4417 with scoring criteria&quot;.'))
+  assert.ok(m.app.innerHTML.includes('data-dfocus="1">Change</button>'))
   assert.ok(m.app.innerHTML.includes('To make this one stronger, bring: the buyer'))
-  assert.ok(/data-dtype="tender_response" aria-pressed="true"/.test(m.app.innerHTML))
+  assert.ok(/aria-checked="true" tabindex="0" data-dpick="tender_response"><span class="dtc-h"><b>Tender response<\/b><span class="tag">Suggested/.test(m.app.innerHTML))
+  assert.ok(m.app.innerHTML.includes('aria-checked="false" tabindex="-1" data-dpick="none"'))
   const bad = mount({ inputs: { prompt: {} }, intake: { questions: [typeQ({ options: [{ id: 'tender_response', label: 'T', value: 'tender_response', origin: 'proposed', source: hostile }] })] } })
   assert.equal(bad.app.innerHTML.includes('<img'), false)
   assert.ok(bad.app.innerHTML.includes('&lt;img'))
@@ -1541,6 +1572,26 @@ test('Start and every Build state render byte-identical markup', () => {
 
 // ── Review and Present (phase 4): Approve the deck, the appendix, the export rows and the report line ──────────
 const review = (n: string | Fx) => mount(typeof n === 'string' ? fixture(n) : n)
+
+// ── costs are for the Napkin team only, never in the product (Sai, 19 Nov 2026) ──────────────
+test('no cost is ever shown: a stale run.cost_usd or report.cost_usd in an older document reaches no screen and no bar chip', () => {
+  const states = ['reading', 'handoff', 'storyline', 'territories', 'slow', 'gate1', 'gate2', 'idea', 'gate3', 'copy', 'deck', 'check', 'failed',
+    'done', 'review-ready', 'export-ready', 'export-none']
+  for (const n of states) {
+    const d = fixture(n)
+    const old: Fx = { ...d, run: { ...d.run, cost_usd: 7.31 }, report: { ...(d.report ?? {}), cost_usd: 7.31, engine_usd_total: 7.31 } }
+    const m = mount(old)
+    const shown = [m.app.innerHTML]
+    if (d.run.state === 'done') {
+      m.click({ go: 'build' }) // a finished run opens on Review: Build too
+      shown.push(m.app.innerHTML)
+    }
+    for (const h of shown) {
+      assert.ok(!h.includes('7.31'), `${n}: a cost figure is on the screen`)
+      assert.ok(!h.includes('chip cost') && !h.includes(' so far</span>') && !h.includes('Cost to build'), `${n}: a cost readout`)
+    }
+  }
+})
 const leftCol = (h: string) => /<main class="review"><div class="lcol">([\s\S]*?)<\/div><section>/.exec(h)?.[1] ?? ''
 const head = (h: string) => /<section><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">([\s\S]*?)<\/div>(?:<p class="note" data-approve-note|<div style="margin-bottom:12px">)/.exec(h)?.[1] ?? ''
 const exportCard = (h: string) => /<div class="frost" style="padding:22px">([\s\S]*?)<\/div><\/aside><\/main>/.exec(h)?.[1] ?? ''
@@ -2124,4 +2175,276 @@ test('humanApproval is the person\'s half of approveGate and is refused where ap
   assert.equal(JSON.stringify(L.humanApproval(run, 'storyline', 'You', 't')), JSON.stringify({ approvals: full.approvals, decisions: full.decisions }))
   assert.equal(L.humanApproval(run, 'territories', 'You', 't'), null, 'not the open gate')
   assert.equal(L.humanApproval({ state: 'draft', stages: [], gate: null }, 'storyline', 'You', 't'), null)
+})
+
+// ── the type picker (deck-types slice 7): the generated cards, the pick, its precedence and the Change sheet ──────────
+const schema = JSON.parse(readFileSync(new URL('templates/deck-maker/schema.json', root), 'utf8'))
+const PURPOSES = ['title', 'statement', 'list', 'compare', 'data', 'timeline', 'image', 'people']
+const pickerOf = (h: string) => /<section class="card sec" id="deck-type" data-type-picker>([\s\S]*?)<\/section>/.exec(h)?.[1] ?? ''
+
+test('DECK_TYPE_CARDS: five cards, agency_pitch first, ids equal the schema enums, every spine purpose one of the eight', () => {
+  const ids = L.DECK_TYPE_CARDS.map(c => c.id)
+  assert.equal(ids.length, 5)
+  assert.equal(ids[0], 'agency_pitch')
+  assert.deepEqual(plain(ids), schema.properties.inputs.properties.deck_type.properties.id.enum)
+  assert.deepEqual([...plain(ids)].sort(), [...schema.properties.deck.properties.meta.properties.built_from.properties.type.enum].sort())
+  for (const c of L.DECK_TYPE_CARDS) {
+    assert.ok(c.label && c.one_line, c.id)
+    assert.ok(['agency', 'investor'].includes(c.kind), c.id)
+    assert.ok(c.spine.length > 0 && c.spine.length <= 12, c.id)
+    for (const x of c.spine) assert.ok(PURPOSES.includes(x.purpose), `${c.id}: ${x.type} ${x.purpose}`)
+  }
+})
+
+test('typeCaption: about N slides, size and pictures; a type with no target says up to its max', () => {
+  assert.equal(L.typeCaption(L.cardOf('agency_pitch')), 'about 10 slides · 16:9 · pictures: many')
+  assert.equal(L.typeCaption(L.cardOf('tender_response')), 'up to 18 slides · A4 · pictures: none generated')
+  assert.equal(L.typeCaption(L.cardOf('agency_pitch'), 'full'), 'about 10 slides · A4 · pictures: many')
+  assert.equal(L.typeCaption(null), '')
+})
+
+test('deckTypeOf precedence: a pick beats an answer beats an inference beats the default; Not sure falls back to inference', () => {
+  const answered = { q_deck_type: { option_id: 'credentials', at: 't' } }
+  const pick = { id: 'creative_work', by: 'person', at: 't' }
+  const all = L.deckTypeOf({ inputs: { deck_type: pick }, intake: { questions: [typeQ()], answers: answered } })
+  assert.deepEqual([all.id, all.source, all.kind], ['creative_work', 'picked', 'agency'])
+  assert.equal(L.deckTypeOf({ inputs: { deck_type: { id: 'investor_seed' } } }).kind, 'investor')
+  const ans = L.deckTypeOf({ inputs: { deck_type: null }, intake: { questions: [typeQ()], answers: answered } })
+  assert.deepEqual([ans.id, ans.source], ['credentials', 'answered'])
+  const unsure = L.deckTypeOf({ inputs: { deck_type: null }, intake: { questions: [typeQ()] } })
+  assert.deepEqual([unsure.id, unsure.source, unsure.quote], ['tender_response', 'inferred', 'Response to ITT 4417 with scoring criteria'])
+  const none = L.deckTypeOf({ inputs: { deck_type: null } })
+  assert.deepEqual([none.id, none.source], ['agency_pitch', 'default'])
+  // an unknown or malformed pick is no pick
+  for (const bad of [{ id: 'nonsense' }, 'investor_seed', { id: 5 }, []]) assert.equal(L.deckTypeOf({ inputs: { deck_type: bad }, intake: { questions: [typeQ()] } }).source, 'inferred')
+})
+
+test('pickPatch writes inputs.deck_type {id, by, at} for a type, null for Not sure, nothing for an unknown id', () => {
+  assert.deepEqual(plain(L.pickPatch('tender_response', '2026-11-18T10:00:00Z')), { inputs: { deck_type: { id: 'tender_response', by: 'person', at: '2026-11-18T10:00:00Z' } } })
+  assert.deepEqual(plain(L.pickPatch(null, 't')), { inputs: { deck_type: null } })
+  assert.equal(L.pickPatch('bogus', 't'), null)
+  // the person's yes on the Change sheet to new writing travels with the pick (only model stage ids)
+  assert.deepEqual(plain(L.pickPatch('agency_pitch', 't', ['c', 'd', 'zz'])), { inputs: { deck_type: { id: 'agency_pitch', by: 'person', at: 't', confirmed_stages: ['c', 'd'] } } })
+  assert.deepEqual(plain(L.pickPatch('agency_pitch', 't', [])), { inputs: { deck_type: { id: 'agency_pitch', by: 'person', at: 't' } } })
+  // merged as the store merges it, the pick is what deckTypeOf reads, and Not sure takes it away again
+  const doc = merge({ intake: { questions: [typeQ()] } }, plain(L.pickPatch('investor_seed', 't')))
+  assert.equal(L.deckTypeOf(doc).source, 'picked')
+  assert.equal(L.deckTypeOf(merge(doc, plain(L.pickPatch(null, 't')))).source, 'inferred')
+})
+
+/** The engine's word that it offers every type (run.types, written through the middleware): the recipes are on. */
+const ALL_TYPES = { recipes: true, offered: ['agency_pitch', 'tender_response', 'investor_seed', 'credentials', 'creative_work'] }
+
+test('a type that needs the deck recipes is shown only when the engine offers it', () => {
+  assert.deepEqual(plain(L.offeredCards({}).map(c => c.id)), ['agency_pitch', 'tender_response', 'investor_seed', 'credentials'])
+  assert.deepEqual(plain(L.offeredCards({ run: { types: { recipes: false, offered: ['agency_pitch', 'tender_response', 'investor_seed', 'credentials'] } } }).map(c => c.id)),
+    ['agency_pitch', 'tender_response', 'investor_seed', 'credentials'])
+  assert.deepEqual(plain(L.offeredCards({ run: { types: ALL_TYPES } }).map(c => c.id)), ALL_TYPES.offered)
+  assert.deepEqual(plain(L.DECK_TYPE_CARDS.filter((c: { recipe_only: boolean }) => c.recipe_only).map((c: { id: string }) => c.id)), ['creative_work'])
+  const h = pickerOf(mount({ inputs: { prompt: {} } }).app.innerHTML)
+  assert.equal(h.includes('data-dpick="creative_work"'), false)
+  assert.equal((h.match(/role="radio"/g) || []).length, 5)
+})
+
+test('Start draws six cards in a radio group, the pick checked, one mini slide per spine entry and +N for more', () => {
+  const m = mount({ inputs: { prompt: {}, deck_type: { id: 'investor_seed', by: 'person', at: 't' } }, run: { state: 'draft', stages: [], gate: null, types: ALL_TYPES } })
+  const h = pickerOf(m.app.innerHTML)
+  assert.ok(h.includes('<div class="dtypes" role="radiogroup" aria-label="What kind of deck?">'))
+  assert.equal((h.match(/role="radio"/g) || []).length, 6)
+  assert.equal((h.match(/aria-checked="true"/g) || []).length, 1)
+  assert.equal((h.match(/tabindex="0"/g) || []).length, 1)
+  assert.ok(h.includes('aria-checked="true" tabindex="0" data-dpick="investor_seed"'))
+  assert.ok(h.includes('<span class="tag">Your pick</span>'))
+  assert.ok(h.includes('<b>Not sure</b>'))
+  // the cards come in the generated order, each with its own spine and caption
+  assert.deepEqual([...h.matchAll(/data-dpick="([^"]+)"/g)].map(x => x[1]), ['agency_pitch', 'tender_response', 'investor_seed', 'credentials', 'creative_work', 'none'])
+  const cards = h.split('<button type="button" class="dtc').slice(1)
+  L.DECK_TYPE_CARDS.forEach((c, i) => {
+    const minis = [...cards[i].matchAll(/<g class="mini-s" data-purpose="([^"]+)"[^>]*><title>([^<]*)<\/title>/g)]
+    assert.equal(minis.length, Math.min(c.spine.length, 12), c.id)
+    assert.deepEqual(minis.map(x => x[1]), plain(c.spine.slice(0, 12).map(x => x.purpose)), c.id)
+    assert.equal(minis[0][2], `${c.spine[0].section} (${c.spine[0].purpose})`)
+    assert.equal(cards[i].includes('data-more>+' + c.more + '<'), c.more > 0, c.id)
+    assert.ok(cards[i].includes(L.typeCaption(c)), c.id)
+  })
+  assert.ok(cards[1].includes('data-more>+9<'))
+  assert.equal(m.app.innerHTML.includes('Building an investor deck. You can change this.'), true)
+})
+
+test('with nothing picked and nothing inferred, Not sure is the checked card', () => {
+  const h = pickerOf(mount({ inputs: { prompt: {} } }).app.innerHTML)
+  assert.equal((h.match(/aria-checked="true"/g) || []).length, 1)
+  assert.ok(h.includes('aria-checked="true" tabindex="0" data-dpick="none"'))
+})
+
+test('the format switch sits under the grid with both options, writes through Build, and explains Sent to be read', () => {
+  const m = mount({ inputs: { prompt: { text: 'a line' }, format: 'pitch' }, upstream: { d1: briefDoc } })
+  const h = pickerOf(m.app.innerHTML)
+  assert.ok(h.includes('How will it be used?'))
+  assert.ok(h.includes('data-format="pitch" aria-pressed="true"><b>Presented on a screen</b>'))
+  assert.ok(h.includes('data-format="full" aria-pressed="false"><b>Sent to be read</b>'))
+  assert.equal(h.includes('data-format-note'), false)
+  assert.equal((m.app.innerHTML.match(/data-format=/g) || []).length, 2, 'no second format picker on Start')
+  assert.equal(m.app.innerHTML.includes('data-kind='), false, 'the kind comes from the type')
+  m.click({ format: 'full' })
+  assert.ok(m.app.innerHTML.includes('Every slide in story order, more words per slide, pictures on the cover only. The pages default to A4 landscape; change it under Slide size above.'))
+  m.click({}, 'build')
+  assert.equal((m.writes[0].obj as { inputs: { format: string } }).inputs.format, 'full')
+})
+
+const sizeOn = (h: string) => [...h.matchAll(/data-size="([^"]+)" aria-pressed="true"/g)].map(x => x[1])
+const sizeStart = (inputs: Record<string, unknown>, look?: unknown, types: unknown = ALL_TYPES) => mount({ inputs: { prompt: { text: 'a line' }, ...inputs }, ...(look ? { look } : {}), run: { state: 'draft', stages: [], gate: null, types }, upstream: { d1: briefDoc } })
+
+test('the slide size group renders three options after the format switch, the default marked', () => {
+  const m = sizeStart({ format: 'pitch' })
+  const h = pickerOf(m.app.innerHTML)
+  assert.ok(h.includes('Slide size'))
+  assert.equal((h.match(/data-size="/g) || []).length, 3)
+  for (const x of ['Widescreen 16:9', 'Standard 4:3', 'A4 landscape']) assert.ok(h.includes('<b>' + x + '</b>'), x)
+  assert.ok(h.indexOf('data-format-switch') < h.indexOf('data-size-switch'))
+  assert.equal((h.match(/\(default\)/g) || []).length, 1)
+})
+
+test('the size default follows type and format: tender A4, agency pitch presented 16:9, any type sent to be read A4', () => {
+  const tender = { deck_type: { id: 'tender_response', by: 'person', at: 't' } }
+  assert.deepEqual(sizeOn(sizeStart({ format: 'pitch', ...tender }).app.innerHTML), ['a4'])
+  assert.deepEqual(sizeOn(sizeStart({ format: 'pitch', deck_type: { id: 'agency_pitch', by: 'person', at: 't' } }).app.innerHTML), ['16:9'])
+  for (const id of L.DECK_TYPE_CARDS.map(c => c.id)) assert.deepEqual(sizeOn(sizeStart({ format: 'full', deck_type: { id, by: 'person', at: 't' } }).app.innerHTML), ['a4'], id)
+  assert.deepEqual(sizeOn(sizeStart({ format: 'pitch' }).app.innerHTML), ['16:9'])
+  assert.deepEqual(sizeOn(sizeStart({ format: 'full' }).app.innerHTML), ['a4'])
+})
+
+test('picking a size writes look.size with by person, via start, even when it equals the default', () => {
+  const m = sizeStart({ format: 'pitch' })
+  m.click({ size: '4:3' })
+  const w = m.writes[0].obj as { look: { size: { canvas: string; by: string; at: string; via: string } } }
+  assert.deepEqual(Object.keys(w), ['look'])
+  assert.deepEqual([w.look.size.canvas, w.look.size.by, w.look.size.via], ['4:3', 'person', 'start'])
+  assert.ok(!Number.isNaN(Date.parse(w.look.size.at)))
+  m.click({ size: '16:9' })
+  assert.equal(m.writes.length, 2)
+  assert.equal((m.writes[1].obj as { look: { size: { canvas: string } } }).look.size.canvas, '16:9')
+  m.click({ size: 'a5' })
+  assert.equal(m.writes.length, 2, 'an unknown canvas writes nothing')
+})
+
+test('an explicit look.size wins over the default; an invalid stored canvas is ignored', () => {
+  const set = sizeStart({ format: 'full' }, { size: { canvas: '4:3', by: 'person', at: 't', via: 'start' } })
+  assert.deepEqual(sizeOn(set.app.innerHTML), ['4:3'])
+  assert.ok(pickerOf(set.app.innerHTML).includes('A4 landscape</b><span>To print as a leave-behind (default)'))
+  assert.deepEqual(sizeOn(sizeStart({ format: 'pitch' }, { size: { canvas: 'a5' } }).app.innerHTML), ['16:9'])
+})
+
+test('the type card caption shows A4 for a tender, and follows the format', () => {
+  const m = sizeStart({ format: 'pitch' })
+  assert.ok(pickerOf(m.app.innerHTML).includes('up to 18 slides · A4 · pictures: none generated'))
+  assert.ok(pickerOf(m.app.innerHTML).includes('about 10 slides · 16:9 · pictures: many'))
+  const f = sizeStart({ format: 'full' })
+  assert.ok(pickerOf(f.app.innerHTML).includes('about 10 slides · A4 · pictures: many'))
+})
+
+test('with the recipes off (or not yet known) no A4 is offered as the default: the engine would build 16:9', () => {
+  const off = { recipes: false, offered: ['agency_pitch', 'tender_response', 'investor_seed', 'credentials'] }
+  for (const types of [off, null]) {   // null: the engine has not said yet
+    const t = sizeStart({ format: 'full', deck_type: { id: 'tender_response', by: 'person', at: 't' } }, undefined, types)
+    assert.deepEqual(sizeOn(t.app.innerHTML), ['16:9'])
+    const h = pickerOf(t.app.innerHTML)
+    assert.ok(h.includes('Widescreen 16:9</b><span>For presenting on a screen (default)'))
+    assert.equal(h.includes('To print as a leave-behind (default)'), false)
+    assert.equal(h.includes('· A4 ·'), false)
+  }
+  assert.equal(L.defaultSize(L.cardOf('tender_response'), 'pitch', false), '16:9')
+  assert.equal(L.typeCaption(L.cardOf('tender_response'), 'pitch', false), 'up to 18 slides · 16:9 · pictures: none generated')
+})
+
+test('schema: look.size refuses a canvas other than 16:9, 4:3 or a4', () => {
+  const sz = schema.properties.look.properties.size
+  assert.deepEqual(plain(sz.properties.canvas.enum), ['16:9', '4:3', 'a4'])
+  assert.equal(sz.additionalProperties, false)
+  assert.ok(!sz.properties.canvas.enum.includes('a5') && !sz.properties.canvas.enum.includes('16x9'))
+  assert.ok(new RegExp(sz.properties.by.pattern).test('person'))
+})
+
+test('picking a type writes inputs.deck_type only; Not sure writes null and clears an answer to q_deck_type', () => {
+  const m = mount({ inputs: { prompt: { text: 'x' } }, intake: { questions: [typeQ()] } })
+  m.click({ dpick: 'creative_work' })
+  assert.equal(m.writes.length, 1)
+  const w = m.writes[0].obj as { inputs: { deck_type: { id: string; by: string; at: string } } }
+  assert.deepEqual(Object.keys(w), ['inputs']); assert.deepEqual(Object.keys(w.inputs), ['deck_type'])
+  assert.deepEqual([w.inputs.deck_type.id, w.inputs.deck_type.by], ['creative_work', 'person'])
+  assert.ok(!Number.isNaN(Date.parse(w.inputs.deck_type.at)))
+  m.click({ dpick: 'none' })
+  assert.deepEqual(plain(m.writes[1].obj), { inputs: { deck_type: null } })
+  const a = mount({ inputs: { prompt: {} }, intake: { questions: [typeQ()], answers: { q_deck_type: { option_id: 'credentials', at: 't' } } } })
+  a.click({ dpick: 'none' })
+  assert.deepEqual(plain(a.writes[0].obj), { inputs: { deck_type: null }, intake: { answers: { q_deck_type: null } } })
+})
+
+test('Build sets inputs.kind from the picked card', () => {
+  const m = mount({ inputs: { prompt: { text: 'a line' }, kind: 'agency', deck_type: { id: 'investor_seed', by: 'person', at: 't' } }, upstream: { d1: briefDoc } })
+  m.click({}, 'build')
+  assert.equal((m.writes[0].obj as { inputs: { kind: string } }).inputs.kind, 'investor')
+  const c = mount({ inputs: { prompt: { text: 'a line' }, kind: 'investor', deck_type: { id: 'creative_work', by: 'person', at: 't' } }, upstream: { d1: briefDoc } })
+  c.click({}, 'build')
+  assert.equal((c.writes[0].obj as { inputs: { kind: string } }).inputs.kind, 'agency')
+})
+
+test('changeSheet: free when every stage the new type needs is recorded, else names the new writing; pictures always kept', () => {
+  const done = fixture('done')   // built as agency_pitch: inputs, storyline, territories and idea are done
+  assert.deepEqual(plain(L.recordedStages(done)), ['a', 'b', 'c', 'd'])
+  assert.equal(L.builtTypeOf(done), 'agency_pitch')
+  const cred = L.changeSheet(done, 'credentials')!
+  assert.equal(cred.free, true)
+  assert.match(cred.line, /^Re-arranges \d+ slides as a credentials deck\. No new writing\. Pictures kept\.$/)
+  const inv = L.changeSheet(done, 'investor_seed')!
+  assert.deepEqual([inv.free, plain(inv.needs), inv.line], [false, ['i'], 'Needs new writing: the investor story. Pictures kept.'])
+  // a run stopped after the storyline: the routes and the idea still need writing
+  const early = { ...done, run: { ...done.run, stages: done.run.stages.map((x: { id: string; status: string }) => ({ ...x, status: ['inputs', 'storyline'].includes(x.id) ? 'done' : 'next' })) } }
+  assert.equal(L.changeSheet(early, 'creative_work')!.line, 'Needs new writing: the routes, the idea and executions. Pictures kept.')
+  assert.equal(L.changeSheet(early, 'credentials')!.free, true)
+  // an investor run's storyline row is stage i
+  const invRun = { ...early, deck: { ...done.deck, meta: { ...done.deck.meta, built_from: { ...done.deck.meta.built_from, type: 'investor_seed' } } } }
+  assert.deepEqual(plain(L.recordedStages(invRun)), ['a', 'i'])
+  assert.equal(L.changeSheet(invRun, 'agency_pitch')!.line, 'Needs new writing: the storyline, the routes, the idea and executions. Pictures kept.')
+  assert.equal(L.changeSheet({}, 'credentials')!.line, 'Needs new writing: the requirements, the storyline. Pictures kept.')
+  assert.equal(L.changeSheet(done, 'bogus'), null)
+})
+
+test('with a deck built, a different type shows the Change sheet first and writes only when confirmed', () => {
+  const m = mount(fixture('done'))
+  m.click({ go: 'start' })
+  m.click({ dpick: 'investor_seed' })
+  assert.equal(m.writes.length, 0)
+  const sheet = /<div class="sheet" data-change-sheet[\s\S]*?<\/div><\/div>/.exec(m.app.innerHTML)?.[0] ?? ''
+  assert.ok(sheet.includes('Change to Investor deck?'))
+  assert.ok(sheet.includes('Needs new writing: the investor story. Pictures kept.'))
+  assert.ok(sheet.includes('data-dconfirm="investor_seed"'))
+  assert.ok(sheet.includes('Keep agency pitch'))
+  m.click({ dcancel: '1' })
+  assert.equal(m.app.innerHTML.includes('data-change-sheet'), false)
+  m.click({ dpick: 'investor_seed' })
+  assert.ok(m.app.innerHTML.includes('data-dconfirm="investor_seed">Yes, write it: change to investor deck</button>'))
+  m.click({ dconfirm: 'investor_seed' })
+  assert.equal(m.writes.length, 1)
+  const dt = (m.writes[0].obj as { inputs: { deck_type: { id: string; confirmed_stages?: string[] } } }).inputs.deck_type
+  assert.equal(dt.id, 'investor_seed')
+  assert.deepEqual(plain(dt.confirmed_stages), ['i'], 'the yes to the new writing goes with the pick: the engine refuses the change without it')
+  // the type it was built as is picked straight away: nothing changes
+  const same = mount(fixture('done')); same.click({ go: 'start' }); same.click({ dpick: 'agency_pitch' })
+  assert.equal(same.writes.length, 1)
+})
+
+test('Review shows the deck type as a chip with Change, which goes back to Start\'s picker', () => {
+  const m = mount(fixture('done'))
+  const chip = /<span class="tchip" data-type-chip>[\s\S]*?<\/button><\/span>/.exec(m.app.innerHTML)?.[0] ?? ''
+  assert.ok(chip.includes('<span class="chip">Agency pitch</span>'))
+  assert.ok(chip.includes('data-dchange="1">Change</button>'))
+  m.click({ dchange: '1' })
+  assert.ok(m.app.innerHTML.includes('<main class="start">'))
+  assert.ok(m.app.innerHTML.includes('data-type-picker'))
+  // a type read from the brief says so, with the words it was read from
+  const inf = fixture('done')
+  inf.deck.meta.built_from.type = 'tender_response'
+  inf.intake = { ...(inf.intake || {}), questions: [typeQ({ options: [{ id: 'tender_response', label: 'T', value: 'tender_response', origin: 'proposed', source: 'invitation to tender' }] })], answers: {} }
+  assert.ok(mount(inf).app.innerHTML.includes('Read as a tender response because: &quot;invitation to tender&quot;.'))
 })
