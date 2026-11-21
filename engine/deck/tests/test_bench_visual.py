@@ -265,7 +265,7 @@ def test_a_larger_cap_runs_every_call_in_parallel_and_prices_unknown_models_at_t
     doc = live_run(key, images, fake, max_usd=5.0, workers=4)
     assert doc["calls"] == 12 and fake.max_in_flight >= 2 and doc["config"]["primary"] is True
     assert doc["usd"] == pytest.approx(12 * spec.estimate_usd(V.PRIMARY["model"], 1000, 200), abs=1e-3)
-    assert spec.estimate_usd("some-new-model", 1_000_000, 0) == 4.0
+    assert spec.estimate_usd("some-new-model", 1_000_000, 0) == 4.0   # an unlisted model is priced as Opus 5.5 (engine/prices.json unlisted_as)
     b = T.Budget(1.0)
     assert b.reserve("some-new-model", 100_000, 10_000) is not None and b.reserve("some-new-model", 400_000, 10_000) is None
 
@@ -275,7 +275,9 @@ def test_answers_in_two_orders_and_unmatched_replies_are_unjudgeable_not_pass(tm
     seen = []
     fake = T.FakeTransport(lambda s, u, p, m: seen.append(u) or "not json at all")
     doc = live_run(key, images, fake, max_usd=5.0)
-    assert [u.index("v_one_focus") < u.index("v_balance") for u in seen[:2]].count(True) >= 1 and any(u.index("v_balance") < u.index("v_one_focus") for u in seen)
+    # The calls run on a thread pool, so `seen` is in finishing order: count the two orders, don't index them.
+    forward = [u.index("v_one_focus") < u.index("v_balance") for u in seen]
+    assert len(seen) == 4 and forward.count(True) == 2 and forward.count(False) == 2
     assert all(a["verdict"] == "unjudgeable" for per in doc["results"].values() for r in per.values() for a in r["answers"].values())
     assert V.parse_reply('{"answers":{"v_one_focus":{"verdict":"maybe"}}}', ["v_one_focus"])["v_one_focus"]["verdict"] == "unjudgeable"
 

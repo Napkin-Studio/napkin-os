@@ -327,7 +327,7 @@ text layouts: `close` (the dark close: title, one statement, up to three next st
 Picture layouts are rule-picked only when a picture can be drawn for the audience (`image_ready`); the eleven text layouts
 are offers until a gallery review promotes them.
 
-**deck-look, steps 3-4 (`spec.LOOK_V3`, off by default).** Under the flag `layouts.load()` lays `engine/deck/layouts/v3/*.yaml`
+**deck-look, steps 3-4 (`spec.LOOK_V3`, on by default since 19 Nov 2026; `DECK_LOOK_V3=0` turns it off).** Under the flag `layouts.load()` lays `engine/deck/layouts/v3/*.yaml`
 over the 36: four new ids (`spec.LAYOUT_IDS_V3`) and one rework, 40 in all (`LAYOUT_MAX` unchanged). `statement_points` (objective,
 insight, audience, proposition: the title in a 5/12 column with the target figure in ink, two or three points in the 7/12 column
 between hairlines), `reframe` (real question: a hero line, the supporting line, a footnote row of one or two labelled notes),
@@ -386,12 +386,19 @@ The ten roles are `theme.COLOR_FIELDS`, each a 6-digit hex. `derived[]` names th
 
 ### 6.2 Type roles, grid and the rest
 
-- `scale`: points on the fixed 13.333 by 7.5 in canvas, the fields of `theme.Scale`. The six slot roles are
+- `scale`: points (physical at every slide size), the fields of `theme.Scale`. The six slot roles are
   `display` (44 to 80), `title` (36 to 44), `lead` (20 to 24), `body` (14 to 16), `small`, `caption`
   (10 to 12); the floors are `title_min` 28, `body_floor` 12, `caption_floor` 10, `foot_floor` 9.
 - `fonts`: `{head, body, fallback[≤2]}`, two families at most. `line_height`: `{head 0.9 to 1.15, body 1.3 to 1.5}`.
 - `grid`: `{margin_in 0.5 to 1.0, gutter_in 0.25 to 0.5, unit_in}` (`Grid.M`, `.G`, `.unit`).
-  `canvas`: `{w_in: 13.333, h_in: 7.5}`, fixed. A render scales it and never reflows.
+  `canvas` (deck-slide-size): `{name: 16:9 | 4:3 | a4, w_in, h_in}` from `theme.CANVASES` (16:9 13.333 x 7.5 in, 4:3 10 x 7.5 in,
+  A4 landscape 297 x 210 mm; web stage 2 px per pt: 1920 x 1080, 1440 x 1080, 1684 x 1191), read from `deck.meta.preferences.size`
+  (absent: 16:9). A render **reflows and never scales type**: layouts compose on the 16:9 grid and draw through the canvas map
+  (`theme.Canvas.x / y`): the left margin and the top band stay, the content box narrows by `k` (0.723 at 4:3, 0.864 on A4), what
+  hangs off the right margin and the foot keep their distance from the edges, the A4 body band is 1.16 x taller. Text is measured at
+  the drawn width, so the plan's fit ladder (switch, 60-character lines, caption floor, notes) takes what no longer fits; a layout may
+  list `not_at` sizes (`emphasis_bar`: 4:3). Icons, nodes and mock-up frames keep their shape; pictures are re-cropped about their
+  focal point. At 16:9 nothing moves: the map is an identity branch. `layouts.json` carries `canvas` only when it is not 16:9.
 - `logo`: `{asset, placement, min_height_in}`, `placement` `cover_only` · `cover_and_footer` · `none`.
 - `accent_use`: `fill` · `outline` (the agency look's switch). `header_position`: `left` · `center`.
 - `name`, `source`, `kit`, `from`, `style_pack`, `agency`: `source` is `default` · `brand_clan` · `style_pack` ·
@@ -414,6 +421,7 @@ force and nobody was asked.
 look:                                   # x-clan-appearance: how the deck looks
   pictures:   { on, slides?, by?, at?, via? }
   density:    { level, by?, at?, via? }
+  size:       { canvas, by?, at?, via? }   # deck-slide-size: 16:9 · 4:3 · a4
   brand:      { wears, by?, at?, via? }
   style_pack: { use, document_id?, by?, at?, via? }
   theme, strict_brand, layouts: {<slide id>: <layout id>}
@@ -431,6 +439,7 @@ review: { pinned: {<slide id>: {by, at}},
 |---|---|---|---|
 | `look.pictures.on` | `creative_cover` · `creative` · `none` · `custom` | "Which slides should carry pictures?" The cover, section breaks and the creative slides (each territory, the idea, each execution, the audience) · Creative slides only · None · I'll choose slide by slide | which slides get an image layout (§4.4). `creative_cover` adds `title` and the divider to `creative`. `custom` starts from the default; `slides: {<slide id>: true \| false}` is set at Review, once slides exist, and only for a slide type of §4.4 |
 | `look.density.level` | `lean` for a presented pitch, `detailed` for a leave-behind (`inputs.format: full`) · `standard` | "How much text should each slide carry?" Lean: about 30 words, the rest in the speaker notes · Standard: up to about 60 words · Detailed: the full text on the slide | the picker prefers layouts of that `density`, and the fit ladder moves whole points to the notes above the target: 30 words on a content slide, 60, or the slide type's budget (`spec.SLIDE_TYPES`). Nothing is reworded by it |
+| `look.size.canvas` | `16:9` · `4:3` · `a4` (the recipe's, with the recipes on: A4 for a tender and for a deck sent to be read) | "What size should the slides be?" 16:9 widescreen, for presenting on a screen · 4:3 standard, for older projectors and some client templates · A4 landscape, to print as a leave-behind | `run_deck --size` (the server forwards it). Precedence: `--size` > `look.size` > the intake answer > a `--master`'s own size > the recipe > 16:9; an explicit size that differs from a master's is refused. A4 with no person's density defaults to `detailed`. A size change re-plans layouts only: words byte-identical, pictures re-cropped never re-made, no paid shorten for an overflow only the size made |
 | `inputs.pictures.source.allow`, `.cap_usd` | `existing` · `generated`; `2.5` (0 to 10) | "Where may the pictures come from?" Only pictures we already have (territory frames and uploads) · Also make new ones, up to $2.50 for this deck (the amount can be changed) | `existing` never calls a provider. `generated` allows it, after the cost card, which shows the cap; the image step stops before the cap is passed |
 | `look.style_pack.use`, `.document_id` | `territory` · `other` | "Which Style Pack should the pictures follow?" The one the territory board uses · Another one (pick from the attached Style Packs) | the image prompt's style block and references. With no Style Pack attached the built-in default style is used |
 | `look.agency_look.use` | `true` · `false` | "Use my agency's look?" Yes, if my agency has set one up · No, the standard look for this deck | whether the agency tier (§6.5) dresses this deck. A per-deck opt-out; not asked as an intake card, set on Start and Review |
@@ -450,7 +459,7 @@ Rules:
   points to the notes unless `preserve`. The runner always passes the resolved preferences.
 - `deck.meta.preferences` is the runner's stamp of what a build used:
   `{pictures, density, picture_source, style_pack, brand, picture_approval}`, each the field's values plus
-  `source: person | default`.
+  `source: person | default`; `size: {canvas, source: person | master | recipe | default}` only when a size was given.
 - The label is a fixed label like DRAFT and Illustrative today: it holds no fact, and a digit is refused
   so that it can never read as a figure.
 - `inputs.library.enabled` is still the one gate for the picture, Style Pack and Brand Clan inputs (ADR 0027, accepted
@@ -464,7 +473,7 @@ Rules:
   sent to a provider (os-layer §4), and a `reference_only` asset never fills a slot.
 - `theme`: `napkin` · `brand` · `classic`. `strict_brand`: only the kit's layouts and given tokens, nothing
   derived. `inputs.text_mode`: `preserve` turns the repair loop's shorten rung and the plan's density moves to the notes off (the cover's unresolved lines still go to the notes: they are a to-do, not words for the room); `condense` is the app's default, passed by the runner (the engine given none behaves as in section 6.3).
-- **Deck types (features/deck-types.clan), with `DECK_RECIPES=1` and `DECK_LOOK_V3=1` only.** A deck type's recipe
+- **Deck types (features/deck-types.clan), with `DECK_RECIPES` and `DECK_LOOK_V3` on (both on by default; `=0` turns one off).** A deck type's recipe
   (`engine/deck/profiles/<id>.yaml`, resolved by `profiles.recipe`) supplies defaults for these preferences. The order of
   authority for every knob is: **the person's own preference** (`look.*`, a CLI flag, a layout swap) **> a limit the inputs
   state > an env override for the run > the recipe > the spec default.** The recipe sets the density level and its role
@@ -474,8 +483,8 @@ Rules:
   agency Style Pack or a Brand Clan is attached), and the title form (which stage e lines are asked for and whether the claim-title
   check applies; a title is never rewritten). `inputs.deck_type: {id, by, at}` is the person's explicit pick on the type picker
   (ranks above an answer to `q_deck_type`, a high-confidence inference and the default); `inputs.format: full` is
-  "Sent to be read" on every type (detailed, pictures on the cover only, `notes_unread` warns). The recipe's `size` stays inert
-  until deck-slide-size merges.
+  "Sent to be read" on every type (detailed, pictures on the cover only, `notes_unread` warns). The recipe's `size` is the default of
+  `look.size` (A4 for a tender, and for format `full` on every type).
 
 ### 6.4 Asking: intake, the Start screen and Review
 
@@ -493,6 +502,7 @@ with the default option first and marked `origin: default`. `address` is the fie
 | `q_pref_density` | the format is `pitch` and the deck is not a sketch (`meta.sketch`: at most 10 short slides already) |
 | `q_pref_brand` | two brands are available: an agency look or kit, and a client Brand Clan |
 | `q_pref_style_pack` | generation is allowed and more than one Style Pack is attached |
+| `q_pref_size` | the format is `full`, or the prompt, brief or documents name printing (`spec.PRINT_WORDS`), and nobody chose a size; with the recipes on (`intake.size_question`) |
 | picture approval | never. Nothing in a build depends on it; it is set at Review, beside the first picture |
 
 - **The cap is still five** (`intake.MAX_QUESTIONS`). The type question is first, then the stage's own
@@ -571,7 +581,7 @@ unmerged, so it is a stub that returns no tokens; a deck works without it. Shrey
 
 ### 6.6 Graphics (`deck-graphics`, 18 November 2026)
 
-Behind `spec.GRAPHICS` (`DECK_GRAPHICS=1`, read only with `DECK_LOOK_V3=1`; off by default, and off is byte-identical). Graphics are
+Behind `spec.GRAPHICS` (`DECK_GRAPHICS`, read only with `DECK_LOOK_V3` on; on by default since 19 Nov 2026, and `DECK_GRAPHICS=0` is byte-identical to the build before it). Graphics are
 native shapes that draw only what the deck already says. Slice 1 is **icons**:
 
 - **Library.** 72 Lucide icons (`lucide-static` 1.75.0, ISC; the Feather-derived ones MIT) vendored as path data in
@@ -646,7 +656,8 @@ Slices 4-9 are **charts**, **diagrams**, the **grid of points**, web parity and 
 - **Checked** by `c_chart_sourced`, `c_chart_numbers`, `c_chart_form`, `c_chart_contrast`, `d_own_words`, `d_matrix_axes` (gate) and
   `c_chart_emphasis`, `d_min_items` (advisory).
 - **Recorded.** `tests/fixtures/graphics/golden_lumen_graphics.json` holds Lumen's layouts and icons under LOOK_V3 + GRAPHICS. The
-  default stays off: GRAPHICS needs LOOK_V3, which is not on by default yet, and the design turns graphics on only after RECIPES.
+  default is on since 19 Nov 2026 (Sai: every feature on), with LOOK_V3 and RECIPES; the deck test suite sets all three to 0 explicitly
+  (engine/deck/tests/conftest.py) because its goldens hold the old look, and the tests of the new look turn them on themselves.
 
 ## 7. Issues
 

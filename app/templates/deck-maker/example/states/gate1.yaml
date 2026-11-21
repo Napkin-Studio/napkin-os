@@ -199,7 +199,6 @@ intake:
 run:
   state: gate
   stage: storyline
-  cost_usd: 0.38
   stages:
   - id: inputs
     name: Read the inputs
@@ -639,13 +638,11 @@ validation:
 report:
   seconds: 0
   tokens: 0
-  cost_usd: 0.38
 fixture:
   name: gate1
   label: sample, not engine output
   engine_cannot_supply_yet:
   - run.agent
-  - run.cost_usd
   - run.stages[].items
   - exports.*.bytes
   - exports.*.url

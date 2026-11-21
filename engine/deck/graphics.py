@@ -8,7 +8,7 @@ sub-path (moveTo, lnTo, cubicBezTo, close on a 24000 grid), no fill, a round-cap
 The icon is chosen by a FIXED keyword map (policy/icons.yaml), never by a model: whole words of an item's heading only, plurals
 folded, a longer keyword winning over a shorter one inside it; a heading that matches two different icons gets none; and a group
 gets icons only when every item matched and no two items share an icon (all-or-none, no fallback glyph). Icons are off unless
-spec.GRAPHICS (DECK_GRAPHICS=1 with DECK_LOOK_V3=1); a deck type's recipe may turn them off (tender_response: ``graphics.icons:
+spec.GRAPHICS (DECK_GRAPHICS, on by default, read only with DECK_LOOK_V3 on); a deck type's recipe may turn them off (tender_response: ``graphics.icons:
 false``), and so may the deck's own ``meta.preferences.look.graphics.icons``. Nothing in this module runs with the flag off.
 
 Stdlib + PyYAML.

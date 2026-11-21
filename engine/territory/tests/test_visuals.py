@@ -4,7 +4,10 @@ Run from ``engine/``: ``PYTHONPATH=. python3 -m pytest -q territory/tests``."""
 from __future__ import annotations
 
 import base64
+import contextlib
+import io
 import json
+import re
 import urllib.error
 
 import pytest
@@ -12,7 +15,7 @@ import pytest
 from territory import cards, pipeline
 from territory.llm import FakeLLM
 from territory.visuals import board, plan as plan_mod
-from visuals import guard, runway, safety, style as style_mod
+from visuals import guard, policy, runway, safety, style as style_mod
 from territory.visuals.cli import main
 
 KEY = "rwy-test-secret-0123456789"
@@ -25,12 +28,23 @@ def make_run(suicide: bool = False) -> dict:
              "mechanism": "a series of fridges", "score": {"total": 28, "of": 35}, "ready": True},
             {"id": "s2", "line": "Honest from the jar", "tier": "safe", "proposition": "Honest from the jar.", "tension_text": "Heritage, but unproven.",
              "mechanism": "plain honesty", "score": {"total": 20, "of": 35}, "ready": False}]
-    return {"status": "proceed", "gate": {"category": "helplines" if suicide else "condiments", "market": "IE", "why": "ok"}, "assumed_brief": ab, "territories": terr}
+    return {"status": "proceed", "gate": {"category": "helplines" if suicide else "condiments", "market": "IE", "why": "ok"}, "assumed_brief": ab, "territories": terr,
+            "material": {"origin": "invented", "brief": False, "brief_kind": None, "marks": [], "brand": None}}      # every run here is invented
+
+
+PLACES = {1: "kitchen", 2: "garden", 3: "street", 4: "market"}
+THINGS = {"s1": "jar", "s2": "bottle"}
+
+
+def shot_framing(tid: str, i: int) -> str:
+    return f"A wide view of a {PLACES[i]} with a {THINGS[tid]}"
 
 
 def plan_output(extra_action: str = "") -> dict:
-    return {"territories": [{"id": tid, "shots": [{"shot": f"f{i}", "framing": f"Frame {i} of {tid}", "camera": "handheld, warm light",
-                                                  "action": f"A person does thing {i}{extra_action if i == 1 else ''}", "on_screen_line": f"line {i}"} for i in range(1, 5)]}
+    """Shots in plain common words (no digits, names or quotes): what the picture-prompt lint lets through."""
+    return {"territories": [{"id": tid, "shots": [{"shot": f"f{i}", "framing": shot_framing(tid, i), "camera": "eye level, warm light",
+                                                  "action": f"A person opens a cupboard in the {PLACES[i]}{extra_action if i == 1 else ''}", "on_screen_line": f"line {i}"}
+                                                 for i in range(1, 5)]}
                             for tid in ("s1", "s2")]}
 
 
@@ -84,15 +98,34 @@ def ollama_down(url, body):
 def env(tmp_path, monkeypatch):
     monkeypatch.setenv(runway.KEY_ENV, KEY)
     monkeypatch.delenv("BRIEF_CLAUDE_TRANSPORT", raising=False)
+    monkeypatch.setenv(policy.ENV, "allow")                  # most tests send client-derived shots: the testers' override, not whatever this shell has set (the default is refuse)
     run_path = tmp_path / "runs" / "jam.json"
     run_path.parent.mkdir()
     run_path.write_text(json.dumps(make_run(), indent=1))
     return run_path
 
 
+def card_id(run_path, argv, **kw) -> str:
+    """The id the card shows for these flags: a dry run (no call), read the way a person reads the card."""
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        main(["--from-run", str(run_path), *argv], llm_factory=lambda: FakeLLM({}), transport=FakeRunway(), guard_post=clean_ollama, sleep=lambda s: None,
+             poll_every=0, **kw)
+    m = re.search(r"card (c_[0-9a-f]{16})", buf.getvalue())
+    return m.group(1) if m else "c_0000000000000000"
+
+
 def go(run_path, *argv, rw=None, llm=None, ollama=clean_ollama, **kw):
+    """Run the CLI with fakes. A bare ``--yes-cost`` beside ``--live`` is the yes of a person who has just read the card: it is filled in
+    with the id a dry run of the same flags shows. The spend ledger lives beside the run in a test (outside the frames folder)."""
     rw = rw or FakeRunway()
     llm = llm or FakeLLM({"frames_plan": plan_output()})
+    kw.setdefault("ledger_path", run_path.parent / "spend-ledger.jsonl")
+    argv = list(argv)
+    if "--live" in argv and "--yes-cost" in argv:
+        i = argv.index("--yes-cost")
+        if i == len(argv) - 1 or argv[i + 1].startswith("--"):
+            argv.insert(i + 1, card_id(run_path, [x for x in argv if x not in ("--live", "--yes-cost")], **kw))
     code = main(["--from-run", str(run_path), *argv], llm_factory=lambda: llm, transport=rw, guard_post=ollama, sleep=lambda s: None, poll_every=0, **kw)
     return code, rw, llm
 
@@ -186,7 +219,7 @@ def test_same_style_goes_to_the_same_version_and_a_new_reference_image_changes_t
 def test_style_prompt_has_shot_style_and_guard_rails_but_not_the_on_screen_line(env, tmp_path):
     code, rw, _ = go(env, "--style", str(style_pack(tmp_path)), *LIVE)
     p = rw.posts[0]["promptText"]
-    for want in ("Frame 1 of s1", "rough pencil", "ochre", "quiet kitchens, not stock smiles", "rough", "crowds", style_mod.GUARD_RAILS):
+    for want in (shot_framing("s1", 1), "rough pencil", "ochre", "quiet kitchens, not stock smiles", "rough", "crowds", style_mod.GUARD_RAILS):
         assert want in p
     assert "line 1" not in p                                            # words in a prompt become words in the picture
     assert rw.posts[0]["ratio"] == "1344:768" and rw.posts[0]["model"] == "gemini_image3.1_flash"
@@ -348,7 +381,7 @@ def test_flagged_frame_is_marked_and_kept_out_of_the_deck_slot(env):
 
 def test_person_can_approve_a_flagged_frame_and_retry_regenerates_only_flagged(env):
     go(env, *LIVE, ollama=flag_task("task-1"))
-    code, rw, _ = go(env, "--approve", "s1-f1-flash", *LIVE)
+    code, rw, _ = go(env, "--approve", "s1-f1-flash", "--approved-by", "Sai", *LIVE)
     vdir = next((env.parent / "jam.frames").glob("v1-*"))
     assert rw.posts == [] and json.loads((vdir / "frames.json").read_text())["cards"][0]["frames"][0]["flagged"] is False
 

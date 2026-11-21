@@ -750,6 +750,8 @@ def _chat_claude_cli(user, system=None, max_tokens=None, schema=None, model=None
     # The CLI must not inherit an API key: with one set it bills the key (which may have no
     # credit) instead of the logged-in account this transport exists to use.
     env.pop("ANTHROPIC_API_KEY", None)
+    # Nor the Runway key: the frames tool reads it before its plan call, and a model child has no use for it (review 18 Nov 2026).
+    env.pop("RUNWAYML_API_SECRET", None)
     try:
         proc = subprocess.run(cmd, input=user, capture_output=True, text=True,
                               timeout=CLI_TIMEOUT_S, env=env, cwd=_cli_workdir())

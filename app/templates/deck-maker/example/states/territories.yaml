@@ -199,7 +199,6 @@ intake:
 run:
   state: building
   stage: territories
-  cost_usd: 0.45
   stages:
   - id: inputs
     name: Read the inputs
@@ -624,14 +623,12 @@ validation:
 report:
   seconds: 0
   tokens: 0
-  cost_usd: 0.45
 fixture:
   name: territories
   label: sample, not engine output
   engine_cannot_supply_yet:
   - run.agent
   - run.checks
-  - run.cost_usd
   - run.stages[].items
   - exports.*.bytes
   - exports.*.url

@@ -17,7 +17,10 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-PRICES = json.loads((HERE / "prices.json").read_text())["models"]
+# The one price table every Napkin tool reads (engine/prices.json): [in, out, cache read] USD per
+# million tokens and the 5-minute cache-write multiple. This tool kept its own copy (server/tools/prices.json) until 19 Nov 2026.
+_TABLE = json.loads((HERE.parents[1] / "engine" / "prices.json").read_text())
+PRICES = {m: {"in": r[0], "out": r[1], "cache_write_5m": r[0] * _TABLE["cache_write_mult"], "cache_read": r[2]} for m, r in _TABLE["models"].items()}
 
 STAGE_OF = {"extract": "extract", "identify": "identify", "classify_category": "identify", "select": "select",
             "extract_facts": "research", "synthesise": "synthesise", "report": "report", "layout": "report"}

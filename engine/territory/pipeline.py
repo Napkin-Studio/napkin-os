@@ -26,23 +26,50 @@ def coverage(cases: list[dict]) -> dict:
     return {"n": n, "label": label}
 
 
+def given_keys(task: dict, gate: dict) -> set:
+    """What the intake can show the person gave: the brief fields it tagged given, the category and market, and the brand when named."""
+    keys = {k for k, t in gate["thinness"]["tags"].items() if t == "given"} | {"category", "market"}
+    return keys | ({"brand"} if task.get("brand") else set())
+
+
 def _assumed(llm, task, gate) -> dict:
+    """The model's own word is not enough for ``given``: a field it calls given that the intake did not find given in the brief is
+    re-tagged (inferred when the person wrote a prompt it could come from, else assumed) and keeps ``tag_claimed`` so the card can say so."""
     out = _ask(llm, "assumed_brief", prompt("assumed_brief"),
                {"brief": task.get("fields") or {}, "prompt": task.get("prompt", ""), "category": task["category"], "market": task["market"],
                 "thinness": gate["thinness"]})
+    ok_given = given_keys(task, gate)
+    fallback = "inferred" if (task.get("prompt") or "").strip() else "assumed"
     fields = []
     for f in out.get("fields") or []:
         tag = f.get("tag") if f.get("tag") in ("given", "inferred", "assumed") else "assumed"
+        if tag == "given" and str(f.get("key") or "") not in ok_given:
+            fields.append({**f, "tag": fallback, "tag_claimed": "given"})
+            continue
         fields.append({**f, "tag": tag})
     out["fields"] = fields
     out["questions"] = (out.get("questions") or [])[:3]
     return out
 
 
+def check_evidence(t: dict, fields: list[dict]) -> dict:
+    """``observed`` must point (``from``) at a field the intake checked as given; ``triangulated`` at two given or inferred fields. A claim
+    the inputs do not bear out is lowered (observed to triangulated when two fields carry it, else invented) and keeps ``evidence_claimed``."""
+    tags = {str(f.get("key")): f.get("tag") for f in fields}
+    refs = {str(r).split(":", 1)[1] if str(r).startswith("brief:") else str(r) for r in (t.get("from") or [])}
+    given = [r for r in refs if tags.get(r) == "given"]
+    usable = [r for r in refs if tags.get(r) in ("given", "inferred")]
+    ev = t["evidence"]
+    if ev == "invented" or (ev == "observed" and given) or (ev == "triangulated" and len(usable) >= 2):
+        return t
+    return {**t, "evidence": "triangulated" if len(usable) >= 2 else "invented", "evidence_claimed": ev}
+
+
 def _tensions(llm, task, assumed) -> list[dict]:
     out = _ask(llm, "tensions", prompt("tensions"), {"assumed_brief": assumed})
     ts = [t for t in (out.get("tensions") or []) if t.get("swap_test", "pass") == "pass"]
     ts = [{**t, "evidence": t.get("evidence") if t.get("evidence") in EVIDENCE_RANK else "invented"} for t in ts]
+    ts = [check_evidence(t, assumed.get("fields") or []) for t in ts]
     ts.sort(key=lambda t: EVIDENCE_RANK[t["evidence"]])      # invented tensions sort last
     return ts[:10]
 
@@ -195,6 +222,7 @@ def run(task: dict, llm, precedent=None, n_seeds: int = 30, max_keep: int = 5, t
         t = by_tension.get(s.get("tension"), {})
         dep = gate["assumption_dependent"] or t.get("evidence") == "invented"
         out.append({**s, "tension_text": t.get("x_but_y"), "tension_evidence": t.get("evidence", "invented"),
+                    "tension_evidence_claimed": t.get("evidence_claimed"),
                     "proposition": good, "proposition_ok": good is not None,
                     "proposition_problems": [r for _, (ok, rs) in valid if not ok for r in rs],
                     "would_have_to_be_true": p.get("would_have_to_be_true") or [], "cheapest_test": p.get("cheapest_test"),

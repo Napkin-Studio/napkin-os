@@ -61,7 +61,7 @@ The tier is the richest source present: `brief+research`, `brief`, `research`, `
 | `deck` | the runner | `deck.json` (+ `appendix_count`), with `meta.built_from` |
 | `validation` | the runner | `validation.json`: `errors`, `to_supply`, findings by slide |
 | `evidence.<ref>` `{kind,text}` | the runner | what each cited ref says, resolved from the inputs |
-| `report` | the runner | `report.json`: `seconds`, `tokens`, `cost_usd`. The app shows these, never an estimate |
+| `report` | the runner | `report.json`: `seconds`, `tokens`. No cost: costs are for the Napkin team only, never in the product (Sai, 19 Nov 2026); the middleware drops `cost_usd`, `engine_usd_total` and `usd_basis` |
 | `exports.web\|pptx\|anim\|pdf` | the runner | `{file, url?, bytes?}`, once written; the older shapes, `true` and the file name as a string, still read as written. Absent means "Not built yet". The app shows the file name (its last path part), never `url` or `bytes`. The animated deck reads the same way; the engine does not build it yet, so it shows Not built yet until a runner writes it |
 | `change_requests[]` | the app | an Ask-for-a-change click: `{slide, change, at, status}`. Words only; sources stay |
 

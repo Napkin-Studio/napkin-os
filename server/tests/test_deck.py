@@ -114,7 +114,8 @@ def test_a_segment_runs_to_the_storyline_gate_and_the_document_holds_it(deck, mo
     replies = build(deck, host)
     assert replies[-1]["job"]["state"] == "done" and "storyline gate" in replies[-1]["result"]["summary"]
     assert host.data["run"]["state"] == "gate" and host.data["run"]["gate"]["id"] == "storyline" and host.data["run"]["gate"]["beats"]
-    assert host.data["run"]["cost_usd"] == 0.3 and "agent" not in host.data["run"], "the agent circle is gone while a gate waits"
+    assert "cost_usd" not in host.data["run"], "costs are for the team only: the engine's figure never reaches the document"
+    assert "agent" not in host.data["run"], "the agent circle is gone while a gate waits"
     assert fake.posts == [{"doc": "doc-1" if False else fake.posts[0]["doc"], "inputs": {"prompt": {"text": PROMPT, "client": "Fernley", "project": "Tea 2027", "agency": ""},
                                                                                    "kind": "agency", "format": "pitch"}, "approvals": {}, "render": True, "marks": []}]
 
@@ -149,6 +150,22 @@ def test_after_the_last_gate_the_document_gets_the_deck_validation_evidence_repo
     assert d["run"]["state"] == "done" and "gate" not in d["run"] and d["deck"]["order"] == ["s1"]
     assert d["validation"]["warnings"] == 1 and d["evidence"]["prompt:1"] and d["report"]["mode"] == "replay"
     assert d["exports"] == {"web": {"file": "deck.html", "bytes": 10}}, "names and sizes only"
+    assert not {"cost_usd", "engine_usd_total", "usd_basis"} & set(d["report"]), "the report reaches the document without its cost"
+
+
+def test_no_cost_reaches_the_document_and_an_older_documents_cost_is_removed(deck, monkeypatch):
+    """Costs are for the Napkin team only, never in the product (Sai, 19 Nov 2026). The engine's run.cost_usd and its report's
+    cost figures are dropped at this edge, and a document that still carries run.cost_usd from before loses it."""
+    import json
+    use(monkeypatch, FakeEngine(view("building", cost=0.4), view("done", stage="review", payload=PAYLOAD, cost=0.9)))
+    host = Host(data=deck_data(), schema=SCHEMA)
+    host.data["run"]["cost_usd"] = 1.14
+    host.data["report"] = {"seconds": 0, "tokens": 0, "cost_usd": 1.14}
+    replies = build(deck, host)
+    assert "cost_usd" not in host.data["run"]
+    assert not {"cost_usd", "engine_usd_total", "usd_basis"} & set(host.data["report"])
+    assert "cost_usd" not in json.dumps(host.data) and "usd_basis" not in json.dumps(host.data)
+    assert "cost_usd" not in json.dumps(replies[-1].get("result") or {})
 
 
 def test_every_change_names_what_it_writes_and_carries_its_reasoning(deck, monkeypatch):
@@ -331,3 +348,26 @@ def test_the_engines_type_offers_land_in_the_run(deck, monkeypatch):
     host = Host(data=deck_data(), schema=SCHEMA)
     build(deck, host)
     assert host.data["run"]["types"] == v["run"]["types"]
+
+
+def test_the_slide_size_goes_to_the_engine(deck, monkeypatch):
+    """deck-slide-size: look.size.canvas (Start, Review), else the intake card's answer, reaches the engine as body.look.size.canvas."""
+    from napkin.handlers import build_deck as bd
+    assert bd.size_of({"look": {"size": {"canvas": "a4", "by": "person"}}}) == "a4"
+    assert bd.size_of({"intake": {"answers": {"q_pref_size": {"option_id": "4:3"}}}}) == "4:3"
+    assert bd.size_of({"intake": {"answers": {"q_pref_size": {"option_id": "4:3", "skipped": True}}}}) is None
+    assert bd.size_of({"look": {"size": {"canvas": "a5"}}}) is None and bd.size_of({}) is None
+    assert bd.size_of({"look": {"size": {"canvas": "16:9"}}, "intake": {"answers": {"q_pref_size": {"option_id": "a4"}}}}) == "16:9"   # the later choice wins
+    fake = FakeEngine(view("building", stage="check"), view("done", stage="review", payload={**PAYLOAD, "qa": QA, "repair": REPAIR}, cost=0))
+    use(monkeypatch, fake)
+    host = Host(data=deck_data(), schema=SCHEMA)
+    host.data["run"].update(state="gate", gate=GATE2)
+    host.data["look"] = {"size": {"canvas": "4:3", "by": "person", "at": "t", "via": "start"}}
+    build(deck, host)
+    assert fake.posts[0]["look"] == {"size": {"canvas": "4:3"}}
+    fake2 = FakeEngine(view("building", stage="check"), view("done", stage="review", payload={**PAYLOAD, "qa": QA, "repair": REPAIR}, cost=0))
+    use(monkeypatch, fake2)
+    host2 = Host(data=deck_data(), schema=SCHEMA)
+    host2.data["run"].update(state="gate", gate=GATE2)
+    build(deck, host2)
+    assert "look" not in fake2.posts[0]   # no size chosen: the engine's own default (the recipe's, else 16:9)

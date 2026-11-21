@@ -1594,6 +1594,32 @@
                       }
                     }
                   }
+                },
+                "size": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "canvas",
+                    "source"
+                  ],
+                  "description": "deck-slide-size: the slide size the deck is drawn at (theme.CANVASES), written only when a person, the document or a recipe gave one; absent means 16:9.",
+                  "properties": {
+                    "canvas": {
+                      "enum": [
+                        "16:9",
+                        "4:3",
+                        "a4"
+                      ]
+                    },
+                    "source": {
+                      "enum": [
+                        "person",
+                        "master",
+                        "recipe",
+                        "default"
+                      ]
+                    }
+                  }
                 }
               }
             },
@@ -1810,6 +1836,16 @@
                         "minimum": 48,
                         "maximum": 75,
                         "description": "Characters per line the slide was fitted at when 48 would not fit (60): the last step before type goes to the caption floor."
+                      },
+                      "title_pt": {
+                        "type": "integer",
+                        "minimum": 28,
+                        "maximum": 36,
+                        "description": "deck-slide-size: the title size this one slide was fitted at at 4:3 or A4 when the layout's stamped size would not fit (the last rung before no_fit)."
+                      },
+                      "by_size": {
+                        "type": "boolean",
+                        "description": "deck-slide-size: the slide holds its layout at 16:9 and needed the ladder only at this size: its findings are never shortened (no paid call for a size change)."
                       }
                     }
                   },
@@ -3265,6 +3301,37 @@
               "type": "string",
               "pattern": "^human:.+$",
               "description": "Who chose it, as human:<id>. Absent: nobody chose, the default is in force."
+            },
+            "at": {
+              "type": "string",
+              "description": "When the choice was made (ISO 8601)."
+            },
+            "via": {
+              "enum": [
+                "question",
+                "start",
+                "review"
+              ],
+              "description": "Where the choice was made: an intake question, the Start screen or Review."
+            }
+          }
+        },
+        "size": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Which slide size? 16:9 (widescreen), 4:3 (standard) or a4 (A4 landscape, 297 x 210 mm). Absent: the recipe's default (presented: 16:9; sent to be read: a4; a tender response: a4). The engine's server forwards canvas as --size.",
+          "properties": {
+            "canvas": {
+              "enum": [
+                "16:9",
+                "4:3",
+                "a4"
+              ]
+            },
+            "by": {
+              "type": "string",
+              "pattern": "^(human:.+|person)$",
+              "description": "Who chose it: person (the Start screen) or human:<id>. Absent: nobody chose, the default is in force."
             },
             "at": {
               "type": "string",

@@ -425,14 +425,16 @@ def test_the_template_schema_names_every_type():
     assert set(pick) == set(built) == set(profiles.ids())
 
 
-# ---------------------------------------------------------------- slice 8: the read format ('Sent to be read'), without slide size
+# ---------------------------------------------------------------- slice 8: the read format ('Sent to be read'), A4 by default
 
 def test_the_read_format_is_detailed_with_pictures_on_the_cover():
     for pid in profiles.ids():
         full = profiles.recipe(profiles.load(pid), "full")
         assert full["density"]["level"] == "detailed", pid
         assert full["pictures"]["generate"] in ("cover", "none") and full["pictures"]["types"] == ["title"], pid
-        assert full["size"] == "16:9"   # A4 waits on deck-slide-size: recipe.size stays inert until it merges
+        assert full["size"] == "a4", pid   # deck-slide-size: a leave-behind prints on A4 landscape (the person can override)
+    assert profiles.recipe(profiles.load("tender_response"), "pitch")["size"] == "a4"   # evaluators read and print a tender
+    assert all(profiles.recipe(profiles.load(p_), "pitch")["size"] == "16:9" for p_ in profiles.ids() if p_ != "tender_response")
 
 
 def _moved_deck(fmt: str) -> dict:

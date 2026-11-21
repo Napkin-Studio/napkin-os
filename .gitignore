@@ -63,6 +63,7 @@ engine/rag/golden/labels/client/
 *.frames/
 *.frames-plan.json
 *.safe-review.json
+*.material.json
 # the one exception: the INVENTED Lumen Water demo set of deck-frames-in (abstract Pillow drawings, fixture: true in its manifest)
 !engine/deck/tests/fixtures/frames_demo/lumen_run.frames/
 !engine/deck/tests/fixtures/frames_demo/lumen_run.frames-plan.json

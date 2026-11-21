@@ -21,6 +21,7 @@ from collections import Counter
 from pathlib import Path
 
 from .. import images, issues, spec
+from .. import theme as themes
 from ..validate import presented as _presented, words as _words
 from .judges import BenchError
 from .packets import run_ids
@@ -1337,17 +1338,27 @@ def run_checklist(run_dir: Path, items: dict | None = None, deck_id: str | None 
             raise AssertionError(f"{it['id']}: a metric never answers yes")
         results[it["id"]] = res
     count = Counter(v["answer"] for v in results.values())
+    summary = {"yes": count["yes"], "no": count["no"], "na": count["n/a"],
+               "metrics": {k: v["value"] for k, v in results.items() if v["answer"] == "value"}}
+    size = themes.size_of(r.deck)
+    if size != themes.SIZE_DEFAULT:   # deck-slide-size: the size the run was built at, named only when it is not 16:9
+        summary["size"] = size
     return {"run_dir": Path(run_dir).name,
             "inputs": {"deck": True, "validation": r.validation_ok, "qa": r.qa_ok, "qa_pixels": r.qa_pixels,
                        "layouts": r.layouts() is not None, "report": isinstance(r.report, dict), "pptx": r.prs is not None},
             "presented": len(r.presented), "content": len(r.content),
             "results": results,
-            "summary": {"yes": count["yes"], "no": count["no"], "na": count["n/a"],
-                        "metrics": {k: v["value"] for k, v in results.items() if v["answer"] == "value"}}}
+            "summary": summary}
 
 
 def run_all(runs: list, items: dict | None = None) -> dict:
     """The checklist file: ``{version, items_version, decks: {deck id: result}}``; deck ids as the bench names runs."""
     items = items or load_items()
-    return {"version": 1, "items_version": items["version"],
-            "decks": {i: run_checklist(Path(p), items) for i, p in zip(run_ids(runs), runs)}}
+    decks = {i: run_checklist(Path(p), items) for i, p in zip(run_ids(runs), runs)}
+    sizes = {d["summary"].get("size", themes.SIZE_DEFAULT) for d in decks.values()}
+    if len(sizes) > 1:   # deck-slide-size: one checklist file holds one size (more moved points and smaller titles at 4:3 are expected)
+        raise BenchError(f"the runs were built at different slide sizes ({', '.join(sorted(sizes))}): check each size on its own")
+    out = {"version": 1, "items_version": items["version"], "decks": decks}
+    if sizes and sizes != {themes.SIZE_DEFAULT}:
+        out["size"] = sizes.pop()
+    return out
