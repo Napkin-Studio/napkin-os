@@ -206,13 +206,26 @@ export async function continueDrawing(deps: FrameDeps, how: FrameHow = 'chain'):
 /** At most this many frames at once: the relay's in-flight limit per person (config inFlightPerParticipant, 2 live). */
 export const PARALLEL_FRAMES = 2
 
+/** The shots Draw the rest has picked and not yet submitted, per runner (UAT round 5 S2-D: frames 2 and 3 landed 1 s
+ *  apart, both completions saw shot 4 open with no job yet, and shot 4 was started, and paid for, twice in the same
+ *  ms). A shot is claimed synchronously, before the first await, and let go once its job is in the document. */
+const claimed = new WeakMap<object, Set<string>>()
+const claimsOf = (runner: object): Set<string> => {
+  let set = claimed.get(runner)
+  if (!set) claimed.set(runner, (set = new Set()))
+  return set
+}
+
 /** Draw the rest side by side: up to PARALLEL_FRAMES frame jobs at once, each a shot with no frame and none on its way;
  *  a shot whose last try failed is left for a retry. Each landing starts the next (the runner's completion hook). */
 async function drawSideBySide(deps: FrameDeps, d: ProductionDocument, sbId: string | undefined, how: FrameHow, stop: () => void): Promise<void> {
   const shots = shotsOf(d, sbId)
+  const mine = claimsOf(deps.runner)
   const tries = (shotId: string) => jobsList(d).filter((j) => { const p = purposeOf(j); return p?.for === 'frame' && p.shotId === shotId })
+  // A claimed shot whose job is already in the document is counted once, as that job.
   const running = jobsList(d).filter((j) => isActive(j.state) && purposeOf(j)?.for === 'frame').length
-  const open = shots.map((s, i) => ({ s, i })).filter(({ s }) => needsFrame(s) && !currentFrame(d, s)
+    + [...mine].filter((id) => !tries(id).some((j) => isActive(j.state))).length
+  const open = shots.map((s, i) => ({ s, i })).filter(({ s }) => needsFrame(s) && !currentFrame(d, s) && !mine.has(s.id)
     && !tries(s.id).some((j) => isActive(j.state))
     && !(how === 'chain' && ['failed', 'cancelled'].includes(tries(s.id).at(-1)?.state ?? '')))
   if (!open.length) {
@@ -220,9 +233,18 @@ async function drawSideBySide(deps: FrameDeps, d: ProductionDocument, sbId: stri
     return
   }
   const room = Math.max(0, PARALLEL_FRAMES - running)
+  const picked = open.slice(0, room)
+  for (const { s } of picked) mine.add(s.id) // synchronously: a second completion landing now sees them taken
   try {
-    for (const { i } of open.slice(0, room)) await drawFrame(deps, i, how === 'rest' ? 'next' : how, { storyboardId: sbId, loose: true })
+    for (const { s, i } of picked) {
+      try {
+        await drawFrame(deps, i, how === 'rest' ? 'next' : how, { storyboardId: sbId, loose: true })
+      } finally {
+        mine.delete(s.id)
+      }
+    }
   } catch (e) {
+    for (const { s } of picked) mine.delete(s.id)
     stop()
     throw e
   }

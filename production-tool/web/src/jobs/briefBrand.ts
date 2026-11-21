@@ -56,11 +56,28 @@ export function brandQuestion(d: Doc, storyboardId: Id | undefined): { boards: {
   const node: LinkEndpoint = { kind: 'storyboard', id: storyboardId }
   if (brandLinked(d, node)) return undefined
   if (Object.values(d.asks ?? {}).some((a) => a.node.kind === 'storyboard' && a.node.id === storyboardId && a.question.id.startsWith('q_') && a.question.text === BRAND_QUESTION && a.state === 'answered')) return undefined
-  const boards = Object.values(d.boards ?? {}).filter((b) => b.purpose === 'brand').map((b) => ({ id: b.id, title: b.title?.trim() || 'Brand board' }))
+  const boards = Object.values(d.boards ?? {}).filter((b) => b.purpose === 'brand').map((b) => ({ id: b.id, title: b.title?.trim() || 'Brand board' })).slice(0, BRAND_OPTIONS_MAX)
   return boards.length ? { boards } : undefined
 }
 
 export const BRAND_QUESTION = 'This brief has no Brand board. Which brand goes on its pictures?'
+
+/** At most this many Brand boards are offered (a question has at most 6 options; No brand is one). */
+export const BRAND_OPTIONS_MAX = 5
+
+/** The option id of the n-th Brand board offered (an option id is ^[a-z][a-z0-9_]{0,31}$, so never the board's id;
+ *  UAT round 5 S2-B: board_01M… ids were refused by the store and the answer was undone). */
+export const brandOption = (n: number) => `brand_${n + 1}`
+
+/** The question as the store keeps it (common.schema.json question): each Brand board an option whose value is the
+ *  board's id, and No brand; every option has a value, so no text box. */
+export function brandQuestionOf(boards: { id: Id; title: string }[], id: Id): Ask['question'] {
+  const options = [
+    ...boards.slice(0, BRAND_OPTIONS_MAX).map((b, i) => ({ id: brandOption(i), label: b.title.slice(0, 80) || 'Brand board', value: b.id })),
+    { id: NO_BRAND, label: 'No brand', value: 'none' },
+  ]
+  return { id, kind: 'nudge', text: BRAND_QUESTION, options, allow_text: false }
+}
 
 /** The person's answer, as theirs: a board is linked into the storyboard (role brand); "No brand" is kept as the
  *  answered question, so it is not asked again. One undo step. */
@@ -69,15 +86,17 @@ export async function answerBrand(store: DocumentStore, storyboardId: Id, boardI
   const q = brandQuestion(d, storyboardId)
   if (!q) return
   const qid = newId('q')
-  const options = [...q.boards.map((b) => ({ id: b.id, label: b.title })), { id: NO_BRAND, label: 'No brand' }]
+  const question = brandQuestionOf(q.boards, qid)
+  const picked = boardId ? question.options.find((o) => o.value === boardId) : undefined
+  if (boardId && !picked) throw new Error('That Brand board is not one of the choices.')
   const ask: Ask = {
     id: qid, v: 1, field_v: {},
-    question: { id: qid, kind: 'nudge', text: BRAND_QUESTION, options, allow_text: false },
+    question,
     node: { kind: 'storyboard', id: storyboardId },
     crew: 'dex',
     state: 'answered',
-    answers: [{ option_id: boardId ?? NO_BRAND, by, at: now }],
-  } as Ask
+    answers: [{ option_id: picked?.id ?? NO_BRAND, by, at: now }],
+  }
   await updateDoc(store, (draft) => {
     draft.asks[ask.id] = ask
     if (boardId) {
