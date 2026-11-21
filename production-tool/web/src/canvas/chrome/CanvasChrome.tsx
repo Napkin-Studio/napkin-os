@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { TOOL_OPTIONS_SLOT } from '../../ui/shell/toolSlot'
+import { useToolSlot } from '../../ui/shell/toolSlot'
 import { Float } from '../../ui/Float'
 import { UndoButtons } from '../../ui/UndoButtons'
 import { NodeIcon } from '../../ui/chrome/Bar'
@@ -181,13 +181,7 @@ export function CanvasToolbar({ chrome, ratio, onNode, onBrief, onAssets, vertic
   // The pen's and the text's options sit in the top bar, off the canvas (UAT round 4 S3-2: the flyout beside the rail
   // covered the canvas's left and swallowed strokes that started under it). Without the bar (the picture editor's
   // page), beside the rail as before.
-  const [slot, setSlot] = useState<HTMLElement | null>(null)
-  useEffect(() => {
-    const find = () => setSlot(document.getElementById(TOOL_OPTIONS_SLOT))
-    find()
-    const t = setTimeout(find, 0)
-    return () => clearTimeout(t)
-  }, [])
+  const slot = useToolSlot()
   const inBar = !!slot && slot.isConnected
   // The Text tool's options (canvas-text): while it is in hand, or a text is being typed or is selected.
   const textChoice = useTextChoice(chrome)
