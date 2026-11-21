@@ -86,3 +86,60 @@ describe('saves at the same moment (UAT 2026-11-21, F1)', () => {
     expect(copy.basedOn()?.etag).toBe(`after-${ours}`)
   })
 })
+
+describe('a reload in one tab while a save went (UAT round 5, R5-F7)', () => {
+  function reloaded(unanswered: { etag: string; edited: boolean }[]) {
+    const storage = memoryStorage()
+    const server = {
+      signedIn: true,
+      save: vi.fn(async () => ({ etag: 'e9', savedAt: '2026-11-21T05:30:00Z' })),
+      list: vi.fn(async () => [] as { id: string; etag: string; savedAt: string }[]),
+      putCanvas: vi.fn(async () => {}),
+    }
+    const index = { get: () => ({ id: 'p1', name: 'Ad' }), setServer: vi.fn(async () => {}) }
+    // The page that sent the save reloaded before its answer: the new page opens on the old base, the save noted.
+    const copy = new ServerCopy({
+      id: 'p1', server: server as never, index: index as never, storage, canvasKey: 'canvas:p1',
+      doc: () => ({ assets: {} }) as unknown as ProductionDocument, upload: async () => undefined,
+      base: { mark: { etag: 'e0', savedAt: '2026-11-21T05:28:23Z' }, unsaved: true, unanswered },
+    })
+    return { copy, server, index }
+  }
+
+  it('the same bytes again: the relay has them (05:28:52), so they are the base; nothing is sent, nothing refused', async () => {
+    const { sha256Hex } = await import('../lib/hash')
+    const bytes = new Uint8Array([5, 5])
+    const x = await sha256Hex(bytes)
+    const { copy, server, index } = reloaded([{ etag: x, edited: false }])
+    server.list.mockImplementation(async () => [{ id: 'p1', etag: x, savedAt: '2026-11-21T05:28:52Z' }])
+    await copy.post(bytes, { reason: 'interval' })
+    expect(server.save).not.toHaveBeenCalled()
+    expect(copy.get()).toBeNull()
+    expect(copy.basedOn()).toEqual({ etag: x, savedAt: '2026-11-21T05:28:52Z' })
+    expect(index.setServer).toHaveBeenCalledWith('p1', { etag: x, savedAt: '2026-11-21T05:28:52Z' })
+  })
+
+  it('new work on top of the earlier page\'s save: refused on the old base, taken as ours, sent again on it', async () => {
+    const { SaveConflict } = await import('./server')
+    const { copy, server } = reloaded([{ etag: 'x-earlier', edited: true }])
+    server.list.mockImplementation(async () => [{ id: 'p1', etag: 'x-earlier', savedAt: '2026-11-21T05:28:52Z' }])
+    const seen: (string | undefined)[] = []
+    server.save.mockImplementationOnce((async () => { throw new SaveConflict('This project was saved from somewhere else at 05:28:52Z') }) as never)
+    server.save.mockImplementationOnce((async (_i: string, _b: Uint8Array, o: { ifMatch?: string }) => { seen.push(o.ifMatch); return { etag: 'e2', savedAt: '2026-11-21T05:29:53Z' } }) as never)
+    await copy.post(new Uint8Array([6]), { reason: 'interval' })
+    expect(seen).toEqual(['x-earlier'])
+    expect(copy.get()).toBeNull()
+    expect(copy.basedOn()?.etag).toBe('e2')
+  })
+
+  it('a save from somewhere else really is a conflict: the box shows and the bar says not saved', async () => {
+    const { SaveConflict } = await import('./server')
+    const { merged } = await import('../ui/useSave')
+    const { copy, server } = reloaded([{ etag: 'x-earlier', edited: false }])
+    server.list.mockImplementation(async () => [{ id: 'p1', etag: 'someone-else', savedAt: '2026-11-21T05:28:52Z' }])
+    server.save.mockImplementationOnce((async () => { throw new SaveConflict('This project was saved from somewhere else at 05:28:52Z') }) as never)
+    await expect(copy.post(new Uint8Array([6]), { reason: 'interval' })).rejects.toBeInstanceOf(SaveConflict)
+    expect(copy.get()?.message).toContain('somewhere else')
+    expect(merged({ kind: 'idle' }, '2026-11-21T05:28:23Z', copy.get()!.message).kind).toBe('failed')
+  })
+})

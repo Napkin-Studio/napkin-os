@@ -255,7 +255,7 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
                     return (
                       <div key={shot.shotId} className="cf-row" role="listitem" data-reframe={`${s.id}:${shot.shotId}`}>
                         <span className="cf-name">Shot {shot.number}</span>
-                        <span className="cf-note" style={{ flex: 1 }}>{c?.why ?? ''}{c?.cuts && how === 'crop' ? `${c?.why ? ' ' : ''}The crop cuts into this shot: New edges keeps it whole.` : ''}</span>
+                        <span className="cf-note" style={{ flex: 1 }}>{c?.why ?? ''}{c?.cuts && how === 'crop' ? `${c?.why ? ' ' : ''}So the whole shot is fitted on a soft fill of itself; New edges makes real edges.` : ''}</span>
                         <select aria-label={`How shot ${shot.number} is made at ${s.label}`} value={how} onChange={(e) => setMethod(s.id, shot.shotId, e.target.value as ShotMethod)}>
                           <option value="crop">Crop</option>
                           <option value="outpaint" disabled={!aleph}>New edges · {aleph?.label ?? 'off for your agency'}</option>

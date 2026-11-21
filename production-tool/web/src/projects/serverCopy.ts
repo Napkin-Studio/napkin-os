@@ -86,7 +86,15 @@ export class ServerCopy {
   constructor(deps: ServerCopyDeps) {
     this.d = deps
     this.base = deps.base.mark
+    // Saves an earlier page of this browser sent and never heard back about (it reloaded as they went) are this tab's
+    // own still (UAT round 5, R5-F7: a reload's save went with the old base and was refused as "somewhere else").
+    this.unanswered = (deps.base.unanswered ?? []).map((u) => ({ ...u }))
+    this.sent = this.unanswered.map((u) => u.etag)
+    this.inherited = new Set(this.sent)
   }
+
+  /** The etags of saves an earlier page sent with no answer: before sending one of them again, ask the relay first. */
+  private readonly inherited: Set<string>
 
   get = (): Conflict | null => this.conflict
   /** The relay's version this tab's document is based on (null: none known). */
@@ -113,7 +121,8 @@ export class ServerCopy {
   /** Saves on their way, one at a time: each goes on the base the one before it left (UAT 2026-11-21, F1: two saves
    *  0.24 s apart both sent the old base, and the relay refused the second as someone else's save). */
   private queue: Promise<unknown> = Promise.resolve()
-  /** The versions this tab sent (newest last): a refusal whose newer copy is one of ours is not a conflict. */
+  /** The versions this tab sent (newest last), and an earlier page's unanswered ones: a refusal whose newer copy is
+   *  one of ours is not a conflict. */
   private sent: string[] = []
 
   /** The .clan store's MirrorPost. Throws SaveConflict while a choice is waiting. */
@@ -148,6 +157,17 @@ export class ServerCopy {
         throw new SaveConflict(message)
       }
     }
+    // These very bytes went from an earlier page whose answer never came (R5-F7): when the relay has them, they are the
+    // base, and nothing goes (no refused save, no banner).
+    if (this.inherited.has(etag)) {
+      this.inherited.delete(etag)
+      const there = (await server.list().catch(() => [])).find((p) => p.id === id)
+      if (there?.etag === etag) {
+        this.unanswered = this.unanswered.filter((u) => u.etag !== etag)
+        await this.based({ etag: there.etag, savedAt: there.savedAt }, this.edits !== edits)
+        return
+      }
+    }
     // Noted before it goes (not awaited: the save never waits on it), so a page closed before the answer can
     // tell its own save from someone else's when it opens again (shell.ts newerThere).
     const went: Unanswered = { etag, edited: this.edits !== edits }
@@ -167,6 +187,12 @@ export class ServerCopy {
         // The newer copy on the relay is one this tab sent (its answer was lost, or two of ours crossed): that is our
         // base, and this save goes again on it. Never the "another browser" banner for our own save (F1).
         const there = again ? undefined : (await server.list().catch(() => [])).find((p) => p.id === id)
+        // The relay holds these very bytes (an earlier page's save, or a twin of this one): that is the base, and this
+        // save has nothing to add (R5-F7).
+        if (there && there.etag === etag) {
+          await this.based({ etag: there.etag, savedAt: there.savedAt }, this.edits !== edits)
+          return
+        }
         if (there && this.sent.includes(there.etag)) {
           await this.based({ etag: there.etag, savedAt: there.savedAt }, true)
           return this.postNow(bytes, meta, true)

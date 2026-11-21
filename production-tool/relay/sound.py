@@ -15,6 +15,8 @@ never sees them, so his prompt is unchanged.
 
 from __future__ import annotations
 
+import math
+
 SOUND_KINDS = ("line", "vo", "sound")
 SPOKEN = ("line", "vo")
 NO_SUBTITLES = "Spoken aloud, no subtitles or captions."
@@ -147,3 +149,70 @@ def keep_asked_sounds(shots: list[dict], script: str) -> tuple[list[dict], list[
         gone += [b.get("text") or "" for b in beats if b not in kept]
         out.append({**s, "beats": kept} if len(kept) != len(beats) else s)
     return out, gone
+
+
+# ── A spoken line's length (UAT round 5, R5-F2) ──────────────────────────────────────────────────────────────────
+# Plan shots gave the whispered "Good boy." 1.0 s; WAN 3 voiced it from 0.4 s to 1.7 s of its 2 s take, and the ad
+# played 0-1.0 s. A shot that speaks gets at least its line's spoken length: the twin of web script/spoken.ts.
+SPOKEN_RATE = 2.5   # words a second: skye rule 10, web compose roughSeconds
+WHISPER_RATE = 2.0
+LEAD_IN_S = 0.5
+TAIL_S = 0.5
+MIN_SHOT_S = 1.0    # a shot that gives time back never goes below this
+_SOFT = _re0.compile(r"\b(?:whisper\w*|murmur\w*|mutter\w*|hush\w*|softly|under (?:her|his|their) breath)\b", _re0.I)
+
+
+def _half_up(s: float) -> float:
+    return math.ceil(s * 2 - 1e-6) / 2
+
+
+def spoken_seconds(text: str, parenthetical: str = "") -> float:
+    """The seconds a line's words take to say: whispered (its parenthetical says so) slower."""
+    words = len(_re0.findall(r"[\w']+", text or ""))
+    return words / (WHISPER_RATE if _SOFT.search(parenthetical or "") else SPOKEN_RATE)
+
+
+def spoken_need(shot: dict) -> float:
+    """Where a shot's spoken lines end, from its start (the latest line's start, at least the lead-in, its words, the
+    tail), in half seconds; 0 when it says nothing."""
+    end = 0.0
+    for b in shot.get("beats") or []:
+        if b.get("kind") in SPOKEN and (b.get("text") or "").strip():
+            end = max(end, max(float(b.get("at_s") or 0), LEAD_IN_S) + spoken_seconds(b["text"], b.get("parenthetical") or "") + TAIL_S)
+    return _half_up(end) if end else 0.0
+
+
+def _floor(shot: dict) -> float:
+    """The least a shot that says nothing keeps: MIN_SHOT_S, and half a second past its last beat."""
+    last = max([float(b.get("at_s") or 0) for b in shot.get("beats") or []] or [0.0])
+    return max(MIN_SHOT_S, _half_up(last + 0.5) if shot.get("beats") else 0.0)
+
+
+def spoken_floor(shots: list[dict], target_s: float | None = None) -> tuple[list[dict], list[str]]:
+    """Every shot that speaks gets at least its line's spoken length (spoken_need); the time comes back from shots that
+    say nothing, half a second at a time from the one with most room, so the film keeps its target length where it
+    can. When they have no room left the film runs long rather than cut a line. The shots, and what changed (for the
+    log). The end card is left as it is."""
+    out = [dict(s) for s in shots]
+    notes: list[str] = []
+    grew = 0.0
+    for i, s in enumerate(out):
+        need = spoken_need(s)
+        if s.get("kind") != "end_card" and need > float(s.get("duration_s") or 0) + 1e-6:
+            notes.append(f"shot {i + 1} {s.get('duration_s')} s -> {need:g} s for its line")
+            grew += need - float(s.get("duration_s") or 0)
+            s["duration_s"] = need
+    if not grew or target_s is None:
+        return out, notes
+    over = sum(float(s.get("duration_s") or 0) for s in out) - float(target_s)
+    while over > 0.25:
+        donors = [(float(s["duration_s"]) - _floor(s), i) for i, s in enumerate(out)
+                  if s.get("kind") != "end_card" and not spoken_need(s) and float(s["duration_s"]) - _floor(s) >= 0.5 - 1e-6]
+        if not donors:
+            notes.append(f"the film runs {over:g} s long: no shot without a line had time to give")
+            break
+        _, i = max(donors, key=lambda x: (x[0], -x[1]))
+        out[i]["duration_s"] = round(float(out[i]["duration_s"]) - 0.5, 3)
+        notes.append(f"shot {i + 1} gave 0.5 s")
+        over -= 0.5
+    return out, notes

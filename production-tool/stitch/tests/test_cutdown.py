@@ -171,3 +171,25 @@ def test_a_shorter_card_plays_its_roll_faster_and_a_whole_one_is_unchanged():
     short_in, short = stitch.card_graph(3, "roll-up-ink", layout, card_s=1.25)
     assert "-t" in short_in and short_in[short_in.index("-t") + 1] == "1.25"
     assert f"fade=t=in:st={stitch.MADE_AT * 0.5:g}:d={stitch.MADE_S * 0.5:g}" in ";".join(short)
+
+
+def test_r5_a_box_round_the_whole_subject_is_fitted_on_a_blurred_fill_not_stretched(takes):
+    """UAT round 5 (R5-F6): the plan said the 9:16 crop cuts shot 5's subject (the kettle and Maya, 1190 px wide), and
+    the cutdown cropped it anyway. The web sends a box round the whole subject; stitch fits it whole over a blurred fill
+    of itself. A box of the size's own shape is cropped exactly as before."""
+    size = (180, 320)
+    whole = {"x": 652.8, "y": 0, "w": 1190.4, "h": 1080}
+    assert cutdown.fits_whole({"crop": whole}, size)
+    assert not cutdown.fits_whole({"crop": {"x": 0, "y": 0, "w": 607.5, "h": 1080}}, size)
+    assert not cutdown.fits_whole({}, size)
+    clip = {"key": "a.mp4", "inS": 0, "outS": 2, "takeSize": [1920, 1080], "crop": whole}
+    render(takes, {"mode": "cutdown", "size": list(size), "clips": [clip], "endCard": True, "fadeOutS": 0})
+    s = streams(takes / "out.mp4")
+    assert (s["w"], s["h"]) == size
+    # The picture sits in the middle band; the top and the foot are the dark blurred fill, not the test pattern's colours.
+    f = frame_at(takes / "out.mp4", 1.0)
+    top, mid = f.getpixel((size[0] // 2, 6)), f.getpixel((size[0] // 2, size[1] // 2))
+    assert max(top) < max(mid) or top != mid
+    # The fitted picture is not stretched: the middle band is the take's 16:9-ish box scaled to the width (~174 px tall).
+    rows = [f.getpixel((size[0] // 2, y)) for y in range(size[1])]
+    assert rows[size[1] // 2] != rows[4]

@@ -53,7 +53,7 @@ export function historyItems(doc: ProductionDocument, docId: string): HistoryIte
   for (const [i, set] of sets.entries()) {
     const sizes = Object.values(doc.sizes ?? {}).filter((s) => s.set_id === set.id)
     if (!sizes.length) continue
-    items.push({ key: `fset:${set.id}`, label: `Campaign${sets.length > 1 ? ` ${i + 1}` : ''} · ${sizes.length} formats`, addresses: [...at('format_sets', set.id),
+    items.push({ key: `fset:${set.id}`, label: `Campaign${sets.length > 1 ? ` ${i + 1}` : ''} · ${sizes.length} ${sizes.length === 1 ? 'format' : 'formats'}`, addresses: [...at('format_sets', set.id),
       ...sizes.flatMap((s) => [...at('sizes', s.id), ...at('jobs', s.job_id), ...at('jobs', s.full?.job_id)])] })
   }
   const renders = rendersOf(doc)

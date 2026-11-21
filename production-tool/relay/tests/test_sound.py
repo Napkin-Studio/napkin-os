@@ -133,3 +133,46 @@ def test_a_clip_with_sound_hears_its_sound_beats_said_as_sound():
     quiet = {"prompt": "A kettle."}
     sound.apply(quiet, {"shot": shot([click])}, sheet_for("gemini_omni_flash_1.1"))
     assert quiet["prompt"] == "A kettle."
+
+
+# ── UAT round 5, R5-F2: a shot that speaks gets its line's spoken length ──────────────────────────────────────────
+
+def r5_shot_list() -> list[dict]:
+    """Round 5's plan (job_01M7Y84Y6B5T1VTZTV30BYZ07Z): 10 s, "Good boy." whispered in 1.0 s, the end line as a VO."""
+    def s(d, beats=()):
+        return {"kind": "shot", "duration_s": d, "camera": {"size": "medium"}, "action": "x", "refs": [], "beats": list(beats)}
+    return [s(1.5), s(1.5, [{"kind": "sound", "at_s": 0.5, "text": "Tap gurgles"}]), s(1.5),
+            s(1.5, [{"kind": "sound", "at_s": 0, "text": "Soft murmur"}, {"kind": "sound", "at_s": 1, "text": "Click"}]),
+            s(1, [{"kind": "line", "at_s": 0, "text": "Good boy.", "speaker": "MAYA", "parenthetical": "whispering, to the kettle"}]),
+            s(1, [{"kind": "sound", "at_s": 0, "text": "Flatmate snoring"}]),
+            s(2, [{"kind": "vo", "at_s": 0.5, "text": "Quietboil. Let them sleep.", "speaker": "NARRATOR"}])]
+
+
+def test_r5_spoken_length_whispered_slower_with_lead_in_and_tail():
+    assert sound.spoken_need({"beats": [{"kind": "line", "at_s": 0, "text": "Good boy.", "parenthetical": "whispering"}]}) == 2.0
+    assert sound.spoken_need({"beats": [{"kind": "line", "at_s": 0, "text": "Good boy."}]}) == 2.0  # 0.5 + 0.8 + 0.5 -> 2.0
+    assert sound.spoken_need({"beats": [{"kind": "vo", "at_s": 0.5, "text": "Quietboil. Let them sleep."}]}) == 3.0
+    assert sound.spoken_need({"beats": [{"kind": "sound", "at_s": 0, "text": "Snoring"}]}) == 0
+
+
+def test_r5_the_line_shots_grow_and_the_silent_ones_give_the_time_back():
+    shots, notes = sound.spoken_floor(r5_shot_list(), 10)
+    lengths = [s["duration_s"] for s in shots]
+    assert lengths[4] == 2.0 and lengths[6] == 3.0          # "Good boy." whispered; the end line VO
+    assert lengths[3] == 1.5 and lengths[5] == 1.0          # no shot goes below its last beat (+0.5) or 1 s
+    assert all(lengths[i] >= 1.0 for i in (0, 1, 2))
+    # Shots 1-3 had 1.5 s of room for 2 s more: the film runs 0.5 s long rather than cut a line, and says so.
+    assert sum(lengths) == 10.5
+    assert any("runs 0.5 s long" in n for n in notes)
+    # Every beat stays inside its shot.
+    assert all(b["at_s"] <= s["duration_s"] for s in shots for b in s["beats"])
+
+
+def test_r5_with_room_the_total_stays_the_target_and_a_plan_that_fits_is_unchanged():
+    base = r5_shot_list()
+    base[0]["duration_s"] = 3.0
+    base[2]["duration_s"] = 3.0
+    shots, _ = sound.spoken_floor(base, 13)
+    assert sum(s["duration_s"] for s in shots) == 13
+    fine = [{**s, "beats": [b for b in s["beats"] if b["kind"] == "sound"]} for s in r5_shot_list()]
+    assert sound.spoken_floor(fine, 10) == (fine, [])

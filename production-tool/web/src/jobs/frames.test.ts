@@ -444,3 +444,49 @@ describe('castRefs: a character only when the shot names it (UAT round 4, R4-F2)
     expect((await castRefs({} as never, d, undefined, 2, shot('Insert on the kettle: the switch goes down.'), refs)).map((r) => !!r.optional)).toEqual([true, true])
   })
 })
+
+describe('a shot that shows no one (UAT round 5, R5-F3)', () => {
+  it('the kettle insert after "She flicks the switch": no @previous with her in it, @anchor stays, Dex is told no one is seen', async () => {
+    const s = await setup(3)
+    await updateDoc(s.doc, (d) => {
+      const [a, b, c] = shotsOf(d)
+      d.shots[a.id].action = 'Our hero tiptoes into the dark kitchen.'
+      d.shots[b.id].action = 'She flicks the switch and braces, shoulders up.'
+      d.shots[c.id].action = 'The kettle glows soft blue, murmurs, then clicks off. No roar at all.'
+      Object.assign(d.shots[c.id], { refs: [], direction: '' })
+    })
+    await drawFrame(s.deps, 0, 'first')
+    await s.land()
+    await drawFrame(s.deps, 1, 'next')
+    await s.land()
+    const j3 = await drawFrame(s.deps, 2, 'next')
+    const in3 = s.inputOf(j3)
+    expect(in3.anchorFrame?.sha256).toBe(s.frameOf(0).asset)
+    expect(in3.previousFrame).toBeUndefined()
+    expect(in3.shot?.direction).toContain('Cast: no one is seen in this shot; draw no people.')
+    // Drawn without the frame before on purpose: not "drawn from an older frame".
+    await s.land()
+    expect(frameDrift(s.doc.get(), s.shotId(2))).toBeUndefined()
+    // A shot with a person keeps its frame before and says nothing of the kind.
+    const j2 = s.requests().find((r) => (r.ctx as { shotId?: string } | undefined)?.shotId === s.shotId(1))!.id
+    expect(s.inputOf(j2).shot?.direction ?? '').not.toContain('no one is seen')
+  })
+
+  it('two shots in a row with no one keep the frame before (the place, the kettle), and both say no one is seen', async () => {
+    const s = await setup(3)
+    await updateDoc(s.doc, (d) => {
+      const [a, b, c] = shotsOf(d)
+      d.shots[a.id].action = 'Our hero tiptoes into the dark kitchen.'
+      d.shots[b.id].action = 'Insert on the kettle on the counter.'
+      d.shots[c.id].action = 'The kettle glows soft blue, then clicks off.'
+      for (const x of [b, c]) Object.assign(d.shots[x.id], { refs: [], direction: '' })
+    })
+    for (const i of [0, 1]) {
+      await drawFrame(s.deps, i, i ? 'next' : 'first')
+      await s.land()
+    }
+    const in3 = s.inputOf(await drawFrame(s.deps, 2, 'next'))
+    expect(in3.previousFrame?.sha256).toBe(s.frameOf(1).asset)
+    expect(in3.shot?.direction).toContain('no one is seen')
+  })
+})

@@ -14,7 +14,7 @@ import {
   clipEnd, EMPTY_CUT, pack, r3, sortV1,
   type Cut, type CutClip, type CutEndCard, type CutText, type Transition,
 } from './cut'
-import { boxName, coversShot, inBox, loneOut, sharesBox, shotWindow, type Box, type Gen } from './model'
+import { boxName, coversShot, inBox, loneOut, lonePlanned, sharesBox, shotWindow, type Box, type Gen } from './model'
 
 // ── The document's cut ↔ the plain cut ────────────────────────────────────────────────────────────────
 
@@ -457,12 +457,12 @@ export function placeTakeInCut(d: ProductionDocument, videoId: Id, genId: Id, id
 }
 
 /** A take's windows as the cut places them: its segments, or a lone shot's planned length from its start
- *  (rooms/model loneOut, R3-F2). */
+ *  (rooms/model loneOut, R3-F2), at least its voiced line (lonePlanned, R5-F2). */
 function takeSegments(d: ProductionDocument, g: ProductionDocument['generations'][string]): { shot_id: Id; in_s: number; out_s: number }[] {
   if (g.segments?.length) return g.segments
   if (g.shot_ids.length !== 1) return []
   const take = g.duration_s ?? (g.asset ? d.assets[g.asset]?.duration_s : undefined) ?? 0
-  return [{ shot_id: g.shot_ids[0], in_s: 0, out_s: loneOut(take, d.shots[g.shot_ids[0]]?.duration_s) }]
+  return [{ shot_id: g.shot_ids[0], in_s: 0, out_s: loneOut(take, lonePlanned(d, g)) }]
 }
 
 /**

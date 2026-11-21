@@ -47,9 +47,9 @@ export function DraftCard({ sug, store, doc, composed, empty, requestOf, onWrite
   })
   const write = requestOf(sug.job_id)
   const isDraft = sug.mode === 'draft'
-  const asked = askedWords(write, sug)
   const sceneNo = (id: Id) => composed.rows.filter((r) => r.kind === 'scene').findIndex((r) => r.id === id) + 1
   const shotNo = (id: Id) => composed.shots.findIndex((s) => s.id === id) + 1
+  const asked = askedWords(write, sug, undefined, sug.target.kind === 'shot' && shotNo(sug.target.id) > 0 ? `Shot ${shotNo(sug.target.id)}` : undefined)
   const where = landsWhere(sug, write, empty, sceneNo, shotNo)
   const docId = (() => {
     try {

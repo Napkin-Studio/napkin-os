@@ -24,7 +24,7 @@ submit() sent (path, body, and the task id or the error) for the relay's trace l
 from __future__ import annotations
 
 import dataclasses
-from typing import Callable, Optional
+from typing import Callable, Optional, Sequence
 
 import httpx
 
@@ -184,13 +184,15 @@ class RunwayProvider:
         """The model the job names when the sheet lists it for the op, else the op's own."""
         return effective_sheet(self._sheet, job.op, job.model)["ops"][job.op]["model"]
 
-    def _tagged(self, names: list[str], prompt: str, syntax: Optional[str] = None) -> str:
-        """The prompt in the model's own reference syntax (`syntax`: its effective sheet's tagSyntax)."""
+    def _tagged(self, names: list[str], prompt: str, syntax: Optional[str] = None, refs: Sequence[Ref] = ()) -> str:
+        """The prompt in the model's own reference syntax (`syntax`: its effective sheet's tagSyntax). `refs`: the job's
+        refs, whose characters a tagless model reads by name ("Maya", never "maya front"; R5-F8)."""
         syntax = syntax or self._sheet["tagSyntax"]
         if syntax == "none":  # "follows image 2 (@in_2)": a tagless model reads the place, never the tag as words
             prompt = TIED_TAG.sub(r"\1", prompt)
+        cast = {r.name.split("_", 1)[0] for r in refs if r.role == "character"}
         try:
-            return rewrite_tags(unsent_in_words(prompt, names), names, syntax)
+            return rewrite_tags(unsent_in_words(prompt, names, cast), names, syntax, cast)
         except UnknownTag as exc:
             raise ProviderError("invalid_input", str(exc), False) from exc
 
@@ -402,7 +404,7 @@ class RunwayProvider:
             raise ProviderError("invalid_input", f"{job.op} needs a ratio", False)
         body = {
             "model": self._model(job),
-            "promptText": self._tagged([r.name for r in refs], prompt),
+            "promptText": self._tagged([r.name for r in refs], prompt, refs=job.refs),
             "ratio": job.ratio,
             "outputCount": job.outputs or 1,
         }
@@ -472,7 +474,7 @@ class RunwayProvider:
             body["promptImage"] = frames
         if job.refs:  # objects, never bare strings (a string array is a 400: paid test 2026-10-15)
             body["references"] = [{"uri": self._within(r.sha256, fit)} for r in job.refs]
-        body["promptText"] = self._tagged([r.name for r in job.refs], job.prompt, sheet["tagSyntax"])
+        body["promptText"] = self._tagged([r.name for r in job.refs], job.prompt, sheet["tagSyntax"], job.refs)
         keyframed = not text_only and m.get("keyframeRatio") == "auto_tier"
         ratio = self._in_tier(job.ratio, m, q.get("tier"))  # the quality's size, in the shot's shape
         body["ratio"] = self._auto_ratio(ratio, m) if keyframed else ratio
@@ -510,7 +512,7 @@ class RunwayProvider:
         body = {
             "model": model,
             v2v["videoField"]: videos[0].url,
-            "promptText": self._tagged([r.name for r, _ in pictures], job.prompt, sheet["tagSyntax"]),
+            "promptText": self._tagged([r.name for r, _ in pictures], job.prompt, sheet["tagSyntax"], job.refs),
         }  # aleph2 has no audio parameter, so unlike clip this body cannot set it
         if pictures:
             body["references"] = [{"uri": a.url} for _, a in pictures]

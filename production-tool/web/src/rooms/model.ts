@@ -6,8 +6,10 @@ import { SHEETS } from '../contracts/load'
 import type { Config, GenerationDelta, GenerationKind, Id, ProductionDocument, Shot } from '../contracts/types'
 import type { UiState } from '../doc/ui'
 import { lastWorkedModel } from '../jobs/follow'
+import { modelEntry } from '../jobs/runs'
 import { videoJoin, videoModel, videoPlan, videoRows, type Row } from '../jobs/runView'
-import { shotNumber, shotsOf, storyboardOfVideo } from '../model/selectors'
+import { beatsOf, shotNumber, shotsOf, storyboardOfVideo } from '../model/selectors'
+import { spokenEndS } from '../script/spoken'
 import { withoutAsides } from '../stages/shotTitle'
 import { changeLabel, type DeltaRow } from './delta'
 import type { ShotWindow } from './cut'
@@ -147,7 +149,7 @@ export function roomGens(d: ProductionDocument, _ui: Pick<UiState, 'jobs'>, vide
     const durationS = g.duration_s ?? (g.asset ? d.assets[g.asset]?.duration_s : undefined) ?? 0
     const segments = g.segments?.length
       ? g.segments.map((x) => ({ shotId: x.shot_id, inS: x.in_s, outS: x.out_s }))
-      : g.shot_ids.length === 1 ? [{ shotId: g.shot_ids[0], inS: 0, outS: loneOut(durationS, d.shots[g.shot_ids[0]]?.duration_s) }] : []
+      : g.shot_ids.length === 1 ? [{ shotId: g.shot_ids[0], inS: 0, outS: loneOut(durationS, lonePlanned(d, g)) }] : []
     // Its box: the one with exactly its shots; else (its shots were made apart, or regrouped since) every box
     // whose shots have footage in it, in film order, so each of them lists it and plays its own window.
     const exact = boxes.find((b) => b.key === key)
@@ -175,6 +177,18 @@ export function roomGens(d: ProductionDocument, _ui: Pick<UiState, 'jobs'>, vide
  *  length). A shot with no length plays the whole take. */
 export const loneOut = (takeS: number, plannedS: number | undefined) =>
   plannedS && plannedS > 0 && takeS > 0 ? Math.min(takeS, plannedS) : takeS
+
+/** The length a lone take plays from its start: its shot's planned length, and, when the take voices the shot's line
+ *  (a model with a sound switch, and a line or VO beat), at least until that line ends by the spoken rule (UAT round 5,
+ *  R5-F2: "Good boy." was planned 1.0 s, WAN 3 voiced it to 1.7 s, and the ad cut it at 1.0 s). loneOut keeps it
+ *  inside the take. The voice's real span is not measured (features/pt-film-r5.clan). */
+export function lonePlanned(d: ProductionDocument, g: { shot_ids: Id[]; provider?: string; inputs?: { model?: string } }): number | undefined {
+  const shotId = g.shot_ids[0]
+  const planned = shotId ? d.shots[shotId]?.duration_s : undefined
+  const e = g.provider && g.inputs?.model ? modelEntry(g.provider as never, g.inputs.model) : null
+  if (!shotId || !planned || !e?.video.audioControl) return planned
+  return Math.max(planned, spokenEndS(beatsOf(d, shotId)))
+}
 
 /** A document delta as the drawer's row: a moment's window is the stretch its own job made again (as the
  *  relay snapped it), else the one its `to` says. */

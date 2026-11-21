@@ -18,7 +18,7 @@ import { askOf, isActive } from '../jobs/runner'
 import { proseFromText } from '../model/diff'
 import { ModelStore } from '../model/store'
 import { keyViews } from '../lib/names'
-import { keysList, scenesOf } from '../model/selectors'
+import { beatsOf, keysList, scenesOf } from '../model/selectors'
 import { composeScript } from './compose'
 import { refNames } from './extensions'
 
@@ -51,23 +51,40 @@ export function linesOf(d: Doc, prose: Prose): WriteLine[] {
   return (prose.content ?? []).map((b) => ({ type: b.type as WriteLine['type'], text: flatText(b.content, refs).slice(0, 4000) }))
 }
 
-/** The rows around a target, as words, at most 4,000 characters: what Skye reads, never rewrites. A shot or a beat
- *  reads the three rows before and after it; a scene (a whole-script ask) reads every other row of the script, its
- *  shots and their lines, so an ask after Plan shots sees the script (UAT round 3, R3-F3: it saw shots 1-3 only). */
+/** The words around a target, at most 4,000 characters: what Skye reads, never rewrites. Whole units, never rows: a
+ *  scene's own words, or a shot with ALL its beats under its header (UAT round 5, R5-F1: a slice of ±3 rows cut beats
+ *  from their shot, and shot 5's own "line MAYA: Good boy." read as shot 4's). A shot or a beat reads the three units
+ *  before and after its shot, and its own shot labelled as its own: a shot target's beats (which stay as they are,
+ *  skye.v8 rule 12; its words are the lines it writes), a beat target's shot words and the shot's other beats. A scene
+ *  (a whole-script ask) reads every other unit of the script, so an ask after Plan shots sees the script (R3-F3). */
 export function neighbours(d: Doc, scriptId: Id, target: WriteTarget): string {
   const c = composeScript(d, scriptId)
   if (!c) return ''
-  const id = target.kind === 'beat' ? d.beats[target.id]?.shot_id : target.id
-  const words = c.rows.map((r) => {
-    if (r.kind === 'scene') return { id: r.id, text: [r.scene.heading, r.scene.text].filter(Boolean).join('\n') }
-    if (r.kind === 'shot' || r.kind === 'end_card') return { id: r.id, text: `Shot ${r.number}: ${r.shot.action ?? ''}` }
-    return { id: r.id, text: `  ${r.beat.kind}${r.beat.speaker ? ` ${r.beat.speaker}` : ''}: ${r.beat.text ?? ''}` }
-  })
-  const at = Math.max(0, words.findIndex((w) => w.id === id))
-  const around = target.kind === 'scene'
-    ? words.filter((w) => w.id !== id)
-    : [...words.slice(Math.max(0, at - 3), at), ...words.slice(at + 1, at + 4)]
-  return around.map((w) => w.text).filter((t) => t.trim()).join('\n').slice(0, 4000)
+  const beatLine = (b: Doc['beats'][string]) => {
+    const paren = b.parenthetical?.trim().replace(/^\((.*)\)$/s, '$1').trim()
+    return `  ${b.kind}${b.speaker ? ` ${b.speaker}` : ''}${paren ? ` (${paren})` : ''}: ${b.text ?? ''}`
+  }
+  const units: { id: Id; text: string }[] = []
+  for (const r of c.rows) {
+    if (r.kind === 'scene') units.push({ id: r.id, text: [r.scene.heading, r.scene.text].filter(Boolean).join('\n') })
+    else if (r.kind === 'shot' || r.kind === 'end_card') units.push({ id: r.id, text: `Shot ${r.number}: ${r.shot.action ?? ''}` })
+    else {
+      const u = units.findLast((x) => x.id === r.shotId)
+      if (u) u.text += `\n${beatLine(r.beat)}`
+    }
+  }
+  if (target.kind === 'scene') return units.filter((u) => u.id !== target.id).map((u) => u.text).filter((t) => t.trim()).join('\n').slice(0, 4000)
+  const shotId = target.kind === 'beat' ? d.beats[target.id]?.shot_id : target.id
+  const at = units.findIndex((u) => u.id === shotId)
+  if (!shotId || at < 0) return ''
+  const row = c.rows.find((r) => r.id === shotId && (r.kind === 'shot' || r.kind === 'end_card')) as { number: number; shot: { action?: string } } | undefined
+  const own = beatsOf(d, shotId).filter((b) => !(target.kind === 'beat' && b.id === target.id)).map(beatLine)
+  const head = target.kind === 'shot'
+    ? `Shot ${row?.number ?? at + 1} (this shot: its words are the lines you write${own.length ? '; its beats below are its own and stay as they are' : ''})`
+    : `Shot ${row?.number ?? at + 1} (this line's shot): ${row?.shot.action ?? ''}`
+  const before = units.slice(Math.max(0, at - 3), at).map((u) => u.text)
+  const after = units.slice(at + 1, at + 4).map((u) => u.text)
+  return [...before, [head, ...own].join('\n'), ...after].filter((t) => t.trim()).join('\n').slice(0, 4000)
 }
 
 const ASK_STOP = new Set(['make', 'more', 'less', 'line', 'lines', 'shot', 'shots', 'scene', 'script', 'words', 'word', 'with', 'that', 'this',

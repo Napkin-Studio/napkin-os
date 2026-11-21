@@ -288,7 +288,7 @@ def settle_crops(shots: list[dict], aspects: list[dict], subjects: dict[str, lis
                 for b in subjects.get(s["shotId"]) or [] if b.get("w", 0) > 0 and b.get("h", 0) > 0]
         for a in aspects:
             keys, union, cuts = crop_keys(take, a, seen)
-            why = ("Aleph 2 makes its new edges: the crop would cut the subject." if cuts
+            why = ("A crop would cut the subject." if cuts
                    else "A slow pan follows the subject." if len(keys) > 1
                    else "Cropped round the subject." if seen else "Cropped round the middle.")
             out.append({"shotId": s["shotId"], "aspect": {"w": a["w"], "h": a["h"]}, "keys": keys, "subject": union,

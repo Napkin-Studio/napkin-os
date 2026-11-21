@@ -68,6 +68,18 @@ def crop_filter(c: dict, src: tuple[int, int], dur: float) -> str:
     return f"crop={w}:{h}:{pos('x', kx, sw - w)}:{pos('y', ky, sh - h)},"
 
 
+def fits_whole(c: dict, size: tuple[int, int]) -> bool:
+    """A crop box of another shape than the size (the web's fit box, UAT round 5 R5-F6: a crop that would cut the subject
+    is a box round all of it): the box is fitted whole on a blurred fill of itself, never stretched to the size."""
+    keys = c.get("cropKeys") or ([{"at": 0, "box": c["crop"]}] if c.get("crop") else [])
+    if not keys:
+        return False
+    b = keys[0]["box"]
+    if not b.get("w") or not b.get("h"):
+        return False
+    return abs((b["w"] / b["h"]) / (size[0] / size[1]) - 1) > 0.02
+
+
 def build_command(ffmpeg: str, clips: list[dict], size: tuple[int, int], version: str, assets: dict,
                   layers: list[dict], fade_s: float, out: str, fps: int = st.FPS, card_s: float = st.CARD_S) -> list[str]:
     """clips: [{"path", "inS", "outS", "still"?, "src": (w, h), "audio": bool, "crop"?, "cropKeys"?,
@@ -96,10 +108,19 @@ def build_command(ffmpeg: str, clips: list[dict], size: tuple[int, int], version
     parts = []
     for i, (c, dur) in enumerate(zip(clips, durs)):
         crop = crop_filter(c, c["src"], dur)
-        fit = (f"{crop}scale={w}:{h}:flags=lanczos" if crop
-               else f"scale={w}:{h}:force_original_aspect_ratio=increase:flags=lanczos,crop={w}:{h}")
-        parts.append(f"[{i}:v]{fit},setsar=1,fps={fps},format=yuv420p,"
-                     f"tpad=stop_mode=clone:stop_duration={st._secs(dur)},trim=duration={st._secs(dur)},setpts=PTS-STARTPTS[v{i}]")
+        tail = (f"setsar=1,fps={fps},format=yuv420p,"
+                f"tpad=stop_mode=clone:stop_duration={st._secs(dur)},trim=duration={st._secs(dur)},setpts=PTS-STARTPTS[v{i}]")
+        if crop and fits_whole(c, (w, h)):
+            # The whole box, fitted, over a dark blurred fill of the same box (R5-F6): the subject is never cut.
+            parts.append(f"[{i}:v]{crop}split=2[fg{i}][bg{i}]")
+            parts.append(f"[bg{i}]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},boxblur=24:2,"
+                         f"eq=brightness=-0.12[bgb{i}]")
+            parts.append(f"[fg{i}]scale={w}:{h}:force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos[fgs{i}]")
+            parts.append(f"[bgb{i}][fgs{i}]overlay=(W-w)/2:(H-h)/2,{tail}")
+        else:
+            fit = (f"{crop}scale={w}:{h}:flags=lanczos" if crop
+                   else f"scale={w}:{h}:force_original_aspect_ratio=increase:flags=lanczos,crop={w}:{h}")
+            parts.append(f"[{i}:v]{fit},{tail}")
         if c.get("audio"):
             parts.append(f"[{i}:a]aresample={AUDIO_RATE},aformat=sample_fmts=fltp:channel_layouts=stereo,"
                          f"apad,atrim=duration={st._secs(dur)},asetpts=PTS-STARTPTS[a{i}]")
