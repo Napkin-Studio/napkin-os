@@ -1,0 +1,40 @@
+{
+ "sample": "Every drop has a story. The real question is how to make the tap feel personal. Households who never think about the tap are loved and ignored in the same breath. We will measure what changes, by how much and by when. Five per cent more households choose to save water within twelve months of the campaign launching nationally.",
+ "fonts": {
+  "Archivo": {
+   "file": "Archivo/Archivo[wdth,wght].ttf",
+   "fallback": "Arial",
+   "regular": {
+    "mixed": 0.4482,
+    "caps": 0.5937
+   },
+   "bold": {
+    "mixed": 0.4801,
+    "caps": 0.609
+   }
+  },
+  "Source Sans 3": {
+   "file": "SourceSans3/SourceSans3[wght].ttf",
+   "fallback": "Arial",
+   "regular": {
+    "mixed": 0.4277,
+    "caps": 0.5004
+   },
+   "bold": {
+    "mixed": 0.452,
+    "caps": 0.522
+   }
+  },
+  "Arial": {
+   "file": "(system)",
+   "regular": {
+    "mixed": 0.4566,
+    "caps": 0.602
+   },
+   "bold": {
+    "mixed": 0.4904,
+    "caps": 0.6089
+   }
+  }
+ }
+}

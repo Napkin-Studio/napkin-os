@@ -238,6 +238,13 @@ class Middleware:
             job.start()
             first = {**job.view(), "state": "queued", "progress": {"done": 0, "total": 1}, "stage": "build", "finished_at": None, "error": None}
             return self.envelope(job.task, job.handler, first, {**job.result(), "summary": "queued"}, None, job.caps)
+        if mod.KIND == "deck_file":   # attach_production: hand the deck engine the person's Production file; no change to the document
+            caps = self.caps(handler)
+            jid = self.jobs.new_id()
+            t0 = iso()
+            result = mod.run(req, self.settings)
+            job = {"id": jid, "state": "done", "progress": {"done": 1, "total": 1}, "started_at": t0, "finished_at": iso(), "error": None}
+            return self.envelope(task, handler, job, result, None, caps)
         if mod.KIND == "short":
             if task == "compose_report" and self.jobs.unfinished_campaign(scope, doc):
                 raise TaskError(409, "job_state", "a start_campaign job on this document is unfinished; one "

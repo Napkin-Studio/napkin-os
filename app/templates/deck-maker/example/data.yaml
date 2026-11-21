@@ -79,7 +79,6 @@ intake:
 run:
   state: gate
   stage: storyline
-  cost_usd: 1.14
   stages:
     - { id: inputs, name: Read the inputs, sub: "Brief, research, requirements", status: done }
     - { id: scans, name: Read image-only pages, sub: Figures pulled from scans, status: done }
@@ -166,4 +165,4 @@ validation:
   findings:
     s04: [{ level: warn, message: "The idea itself is an opinion, so it has no source" }]
     s06: [{ level: warn, message: "Presenter missing: add it" }, { level: warn, message: "Budget split missing: add it" }]
-report: { seconds: 0, tokens: 0, cost_usd: 1.14 }
+report: { seconds: 0, tokens: 0 }

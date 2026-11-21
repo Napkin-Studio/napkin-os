@@ -8,6 +8,13 @@ keep the two in step.
 from __future__ import annotations
 import os
 
+# Every deck feature is ON by default since 19 Nov 2026 (spec.flag_on). This suite's goldens and old-look tests hold the old look, so the
+# suite sets the three switches to 0 EXPLICITLY, before any deck module is imported; a test that needs a feature turns it on itself
+# (the ``v3`` fixtures, monkeypatch of spec.LOOK_V3 / RECIPES / GRAPHICS, or DECK_*=1 in a subprocess's env). test_look_v3 and
+# test_deck_graphics check that the defaults are on. A value set outside the suite still wins (setdefault).
+for _flag in ("DECK_LOOK_V3", "DECK_RECIPES", "DECK_GRAPHICS"):
+    os.environ.setdefault(_flag, "0")
+
 
 def pytest_configure(config):
     from deck import run_deck   # the suite renders client files of fixtures that fail the client gate (placeholders); test_design_fixes sets it back
