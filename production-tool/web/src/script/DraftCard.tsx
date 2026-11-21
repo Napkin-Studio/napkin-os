@@ -11,8 +11,8 @@ import { AgentFigure } from '../ui/agents/AgentFigure'
 import { useWhy } from '../ui/booth/hooks'
 import type { HistoryFocus } from '../ui/History'
 import type { ComposedScript } from './compose'
-import { discardDraft, keep, linesOf, wordDiff } from './skye'
-import { askedWords, draftLines, draftSeconds, landsWhere, lineDiff, secondsNow, trimDiff } from './skyeBooth'
+import { discardDraft, keep, linesOf } from './skye'
+import { askedWords, cardLines, draftLines, draftSeconds, landsWhere, lineDiff, secondsNow } from './skyeBooth'
 
 const SCREENPLAY_KINDS = new Set(['character', 'dialogue', 'parenthetical', 'transition'])
 
@@ -77,7 +77,8 @@ export function DraftCard({ sug, store, doc, composed, empty, requestOf, onWrite
   // is shown word by word (UAT 2026-11-21, script UX 1).
   const rows = isDraft ? [] : lineDiff(beforeLines, draftLines(doc, sug).lines)
   const layout = !isDraft && rows.some((r) => SCREENPLAY_KINDS.has(r.kind))
-  const diff = isDraft || layout ? [] : trimDiff(wordDiff(beforeLines.map((l) => l.text).join('\n'), sug.proposed.text))
+  // Line by line, a rewritten line as its old and new lines one under the other (UAT round 3, R3-F7).
+  const shown = cardLines(rows)
   // Seconds before and after on every card (script UX 3).
   const was = isDraft || sug.target.kind === 'beat' ? undefined : secondsNow(doc, sug, beforeLines)
   return (
@@ -89,17 +90,14 @@ export function DraftCard({ sug, store, doc, composed, empty, requestOf, onWrite
         <div className="text">
           {lines.lines.map((l, i) => <div key={i} className={`l ${lines.screenplay ? 'sp' : ''} k-${l.kind}`}>{l.text}</div>)}
         </div>
-      ) : layout ? (
+      ) : (
         <div className="text diff">
-          {rows.map((r, i) => (
-            <div key={i} className={`l sp k-${r.kind} ch-${r.change}`}>
+          {shown.map((r, i) => (
+            <div key={i} className={`l ${layout ? 'sp' : ''} k-${r.kind} ch-${r.change} ${r.side ?? ''}`}
+              aria-label={r.side === 'was' ? 'Was' : r.side === 'now' ? 'Now' : r.change === 'new' ? 'New line' : r.change === 'gone' ? 'Cut line' : undefined}>
               {r.parts.map((x, k) => (x.kind === 'same' ? <span key={k}>{x.text}</span> : x.kind === 'gone' ? <del key={k}>{x.text}</del> : <ins key={k}>{x.text}</ins>))}
             </div>
           ))}
-        </div>
-      ) : (
-        <div className="diff">
-          {diff.map((x, i) => (x.kind === 'same' ? <span key={i}>{x.text}</span> : x.kind === 'gone' ? <del key={i}>{x.text}</del> : <ins key={i}>{x.text}</ins>))}
         </div>
       )}
       {kind === 'scene' ? (
