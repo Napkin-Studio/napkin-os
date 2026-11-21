@@ -15,7 +15,7 @@ import { ownShotsOf, storyboardOfScript } from '../../model/selectors'
 import { CARD_SIZE } from '../boards/layout'
 import type { CanvasElement } from '../core/canvasAdapter'
 import type { CardKind } from './cardChrome'
-import { cardOf, elementOfEnd, newEntity, placeNode, type NodeEnv } from './nodes'
+import { cardOf, createNode, elementOfEnd, newEntity, placeNode, type NodeEnv } from './nodes'
 
 type Doc = ProductionDocument
 type Box = { x: number; y: number; w: number; h: number }
@@ -94,13 +94,36 @@ export async function storyboardFor(env: NodeEnv, scriptId: string): Promise<{ s
   if (!d.scripts[scriptId]) throw new Error('This script is gone.')
   const there = drivenStoryboard(d, scriptId)
   if (there) return { storyboardId: there.id, made: false }
+  return { ...(await newStoryboardFor(env, scriptId)), made: true }
+}
+
+/** A new Storyboard beside a script, driven by it, always a new one (never the project's main storyboard). */
+export async function newStoryboardFor(env: NodeEnv, scriptId: string): Promise<{ storyboardId: string; el: CanvasElement }> {
+  const d = env.doc.get()
   const made = newEntity(d, 'storyboard')
   const sb = { ...(made.entity as Storyboard), target_s: d.scripts[scriptId].target_s || (made.entity as Storyboard).target_s }
   const src = elementOfEnd(env.canvas.elements(), d, { kind: 'script', id: scriptId })
   const box = src ? besideBox(env.canvas.elements(), src, 'storyboard') : placeNode(env.canvas, d, 'storyboard').box
   const link = newLink({ kind: 'script', id: scriptId }, { kind: 'storyboard', id: sb.id }, 'drives')
   const el = await place(env, 'storyboard', sb, box, [{ link, from: scriptId, to: sb.id }], `add a storyboard for scripts[${scriptId}]`)
-  return { storyboardId: sb.id, made: true, el }
+  return { storyboardId: sb.id, el }
+}
+
+/**
+ * A Storyboard or Film made from a note (the link picker's "New storyboard / film from this text"; UAT round 3 R3-1:
+ * Plan shots read the project's first script and the plan wrote Mia's shots over the harbour picnic). It gets a Script
+ * of its own holding the note's words (`words(scriptId)` puts them on its page; `link` ties the note into it), which
+ * drives it, so its plan reads those words and never another script. Three steps on the canvas, each its own undo.
+ */
+export async function madeFromNote(env: NodeEnv, kind: 'storyboard' | 'video', at: { x: number; y: number },
+  words: (scriptId: string) => Promise<void>, link: (script: CanvasElement) => Promise<unknown>): Promise<{ script: CanvasElement; made: CanvasElement }> {
+  const script = await createNode(env, 'script', at)
+  const sc = cardOf(script)
+  if (!sc) throw new Error('The script was not made.')
+  await words(sc.id)
+  await link(script)
+  const made = kind === 'storyboard' ? (await newStoryboardFor(env, sc.id)).el : (await makeVideo(env, { scriptId: sc.id })).el
+  return { script, made }
 }
 
 /**

@@ -45,6 +45,7 @@ import { AskCard } from '../ui/AskCard'
 import { ASK_REVEAL_EVENT } from '../ui/askPlaces'
 import { LAYOUT_ONLY, waitingAsk } from '../ui/asks'
 import type { AnswerChoice } from '../jobs/runner'
+import type { BrandChoice, BrandRow } from '../jobs/context'
 import { alive, bounds, byOwnId, cd, imageOf, type Canvas, type El } from '../canvas/scene'
 import { scriptToWrite } from './scriptToWrite'
 import { useBriefSpinoff } from '../brief/useBriefSpinoff'
@@ -1311,6 +1312,8 @@ const roleWord = (r: RefRole) => (r === 'brand_rule' ? 'brand rule' : r)
 const roleLine = (r: RefRole) => `${REF_ROLE_TABLE[r].ui_line}${r === 'palette' ? '. Click a colour to change it.' : ''}`
 
 const KIND_WORD = { pic: 'picture', drawn: 'drawing', gen: 'result' } as const
+/** A brand row's kind, as the Generate tray says it. */
+const BRAND_WORD: Record<BrandRow['kind'], string> = { brand_rule: 'brand rule', palette: 'palette', typography: 'typography' }
 
 function GeneratePopover({ ctrl, ids, at, onClose, onPlace }: {
   ctrl: CanvasController
@@ -1338,6 +1341,11 @@ function GeneratePopover({ ctrl, ids, at, onClose, onPlace }: {
   const [people, setPeople] = useState<Set<string>>(() => new Set())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** The person's ticks on the brand (UAT round 3 R3-2, UX 1): refs left out or put in, and a strict palette. */
+  const [brandLeave, setBrandLeave] = useState<Set<string>>(() => new Set())
+  const [brandAdd, setBrandAdd] = useState<Set<string>>(() => new Set())
+  const [strict, setStrict] = useState(false)
+  const brandChoice: BrandChoice = { leave: [...brandLeave], add: [...brandAdd], strict }
   // When sending takes a while, what is happening (UAT round 2 R2-3, UX 3).
   const slow = useSlow(busy, 3000)
   const ref = useRef<HTMLTextAreaElement>(null)
@@ -1366,11 +1374,11 @@ function GeneratePopover({ ctrl, ids, at, onClose, onPlace }: {
       setBusy(false)
     }
   }
-  const submit = () => go(() => ctrl.generate(sent(ids), text, { more, limits, modelChoice, people: [...people] }))
+  const submit = () => go(() => ctrl.generate(sent(ids), text, { more, limits, modelChoice, people: [...people], brand: brandChoice }))
   const answered = async (answer: AnswerChoice) => {
     setAsked(null)
-    if ('optionId' in answer && answer.optionId === LAYOUT_ONLY) await go(() => ctrl.generate(ids, text, { more, limits, modelChoice, people: [...people], layoutOnly: true }))
-    else if ('text' in answer) await go(() => ctrl.generate(ids, answer.text, { more, limits, modelChoice, people: [...people] }))
+    if ('optionId' in answer && answer.optionId === LAYOUT_ONLY) await go(() => ctrl.generate(ids, text, { more, limits, modelChoice, people: [...people], layoutOnly: true, brand: brandChoice }))
+    else if ('text' in answer) await go(() => ctrl.generate(ids, answer.text, { more, limits, modelChoice, people: [...people], brand: brandChoice }))
   }
   if (asked) {
     return (
@@ -1384,6 +1392,14 @@ function GeneratePopover({ ctrl, ids, at, onClose, onPlace }: {
   // What is linked into the sketch area (model/scope.ts): its references go with it, ticked; the rest is listed.
   const linked = linkedRows(doc, sketchOf(ctrl.liveElements(), ids), ctrl.liveElements(), ids)
   const unknown = unknownTyped(doc, text)
+  // The brand this Generate reads, each with its tick (UAT round 3 R3-2, UX 1): rules by default, the palette (as
+  // accents) and the type only for brand work; the person can leave one out or put one in.
+  const brand = ctrl.brandFor(ids, text, brandChoice)
+  const brandTick = (b: BrandRow) => {
+    const flip = (set: Set<string>, on: boolean) => { const n = new Set(set); if (on) n.add(b.ref); else n.delete(b.ref); return n }
+    if (b.on) { setBrandAdd((a) => flip(a, false)); setBrandLeave((l) => flip(l, b.byDefault)) } else { setBrandLeave((l) => flip(l, false)); setBrandAdd((a) => flip(a, !b.byDefault)) }
+  }
+  const brandOn = brand.filter((b) => b.on).length
   // What goes: every input of the selection, each with its tick (ui-behaviour 3.16). Unticked
   // pictures stay out of the send; the sketch, the drawing and the notes are the selection itself.
   // Ticked linked references join it; unticking one leaves it out of this send only (the link stays).
@@ -1396,6 +1412,7 @@ function GeneratePopover({ ctrl, ids, at, onClose, onPlace }: {
   const summary = [preview.sketch ? 'Sketch' : preview.drawings ? 'Drawing' : null,
     inputs ? `${inputs} ${inputs === 1 ? 'input' : 'inputs'}` : null,
     preview.notes.length ? `${preview.notes.length} ${preview.notes.length === 1 ? 'note' : 'notes'}` : null,
+    brandOn ? `brand (${brand.filter((b) => b.on).map((b) => BRAND_WORD[b.kind]).join(', ')})` : null,
     text.trim() ? 'your words' : null].filter(Boolean).join(', ') || 'Your words only'
   // Every picture that goes, as a person or a thing, against the model's limits (UAT round 1 IMG-6/7/8): the tray
   // says it before Generate, and refuses with what to untick, so nothing is uploaded only to be refused.
@@ -1454,6 +1471,9 @@ function GeneratePopover({ ctrl, ids, at, onClose, onPlace }: {
           {linked.map((r) => tick(r.key, <>{r.item.kind === 'ref' || r.item.kind === 'key' ? <span className="pt-ref">{r.label.split(' · ')[0]}</span> : <b>{r.label.split(' · ')[0]}</b>} <span className="faint">· {r.label.split(' · ').slice(1).join(' · ')}{r.off ? ` · ${r.off}` : r.goes ? ` · ${r.goes}` : ''}</span></>,
             r.elIds.length > 0 ? !off.has(r.key) : !!r.goes, r.elIds.length ? () => setOff((o) => { const n = new Set(o); if (n.has(r.key)) n.delete(r.key); else n.add(r.key); return n }) : undefined,
             r.elIds.length > 0 ? <span className={`tray-kind ${kindOfRole(r.item.role)}`}>{kindOfRole(r.item.role)}</span> : undefined))}
+          {brand.map((b) => tick(`brand:${b.ref}`, <><b>{BRAND_WORD[b.kind][0].toUpperCase() + BRAND_WORD[b.kind].slice(1)}</b> <span className="faint">· {b.label}{b.kind === 'palette' && b.on ? ` · ${strict ? 'only these colours' : 'as accents'}` : ''}{!b.on && !b.byDefault ? ' · only for brand work: tick to send' : ''}</span></>,
+            b.on, () => brandTick(b),
+            b.kind === 'palette' && b.on ? <button type="button" className={`btn xs ${strict ? 'on' : ''}`} aria-pressed={strict} title={strict ? 'Only these colours: click to use them as accents' : 'Used as accents: click to make them the only colours'} onClick={() => setStrict((x) => !x)}>{strict ? 'Strict' : 'Accents'}</button> : undefined))}
           {fromWords.map((r) => tick(`said:${r.id}`, <><span className="pt-ref">@{nameOf(r)}</span> <span className="faint">· from your words</span></>, true, undefined,
             <span className={`tray-kind ${kindOfRole(r.role)}`}>{kindOfRole(r.role)}</span>))}
         </div>

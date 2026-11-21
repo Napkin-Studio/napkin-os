@@ -90,6 +90,13 @@ export const LINK_TABLE: readonly LinkRow[] = [
     effect: 'The Director agent writes the brand rules into every prompt; the Review agent judges results against them (3.18).',
     sources: [{ kind: 'board', purpose: 'brand' }], targets: [GENERATING], roles: ['brand'], limit: 'one-per-target',
   },
+  // UAT round 3 R2-5: "Not a target for a brand board" on a note. A Brand board linked into a note means "use this
+  // brand" for whatever the note feeds (jobs/context.ts brandWork): the palette as accents, the type, the rules.
+  {
+    fromTo: 'Brand board → Note', roleLabel: '`brand`', allowed: 'One',
+    effect: 'Use this brand: whatever the note feeds reads the brand rules, the palette (as accents) and the type.',
+    sources: [{ kind: 'board', purpose: 'brand' }], targets: [{ kind: 'note' }], roles: ['brand'], limit: 'one-per-target',
+  },
   {
     fromTo: 'Frame, key visual or Video → Format set', roleLabel: '`master`', allowed: 'One master per set',
     effect: 'Make all sizes adapts the master (3.19). Created by Make all sizes.',

@@ -20,6 +20,7 @@ import { markStale } from '../doc/remove'
 import { assetRef } from '../jobs/assets'
 import { namedInput, unnamedInput } from '../jobs/select'
 import { linkedTexts } from '../jobs/linkedText'
+import { brandRows, type BrandChoice, type BrandRow } from '../jobs/context'
 import type { BrandPayload } from './swatches'
 import { countRefs, kindOfRole, type RefKind, type RefLimits } from './refBudget'
 import { landingWhy } from '../jobs/landing'
@@ -75,6 +76,8 @@ export interface GenerateOpts {
   people?: readonly string[]
   modelChoice?: ModelChoice
   layoutOnly?: boolean
+  /** The person's ticks on the brand (the Generate tray; jobs/context.ts BrandChoice, UAT round 3 R3-2). */
+  brand?: BrandChoice
 }
 
 /** What a Generate did: sent a job, or (a sketch with no words and nothing linked) asked first. */
@@ -486,18 +489,7 @@ export class CanvasController {
     if (said.unknown.length) throw new Error(`@${said.unknown[0]} is not a name in this project. Name an image first, or check the spelling.`)
     // Counted against the model's limits BEFORE anything is uploaded (UAT round 1 IMG-6/7/8: 24 s of uploads, then a refusal).
     this.checkRefs(plan.images, said.found, opts)
-    const refs: JobInputRef[] = []
-    for (const i of plan.images) {
-      const named = this.nameOn(i.nodeId)
-      if (named) {
-        refs.push(await namedInput(this.s.relay, this.doc(), named))
-        continue
-      }
-      refs.push(unnamedInput(i.nodeId, i.kind, await assetRef(this.s.relay, i.asset), opts.people?.includes(i.nodeId) ? 'character' : 'other'))
-    }
-    for (const r of said.found) {
-      if (!refs.some((x) => x.id === r.id)) refs.push(await namedInput(this.s.relay, this.doc(), r))
-    }
+    const refs = await this.inputRefs(plan.images, said.found, opts)
 
     const noteIds = plan.notes.map((n) => n.nodeId ?? this.noteId(n.elId))
     const sources: { el: El; id: string }[] = [
@@ -512,8 +504,49 @@ export class CanvasController {
     const slot = opts.at ? { ...opts.at, ...size } : slotFrom(this.els(), sources.map((s) => s.el), size)
     this.placeGen(jobId, 'generate', sources.map((s) => s.id), sources, slot)
     const input = { refs, ratio, ...(text ? { text } : {}), ...(opts.more ? { chips: ['more_options'] } : {}) }
-    await this.s.runner.submit('generate', input, plan.images.filter((i) => i.kind === 'gen').map((i) => i.nodeId), { for: 'canvas' }, jobId, opts.modelChoice)
+    await this.s.runner.submit('generate', input, plan.images.filter((i) => i.kind === 'gen').map((i) => i.nodeId), { for: 'canvas' }, jobId, opts.modelChoice,
+      { brand: this.brandChoice(plan, opts.brand) })
     return { jobId }
+  }
+
+  /** A Generate's pictures as job refs, in the order chosen, uploaded side by side (UAT round 3, R2-3: 14 pictures
+   *  went one after another and "Sending…" lasted 34 s). A picture already on its way is not sent twice (assetRef). */
+  private async inputRefs(images: CanvasPlan['images'], said: readonly NamedRef[], opts: GenerateOpts): Promise<JobInputRef[]> {
+    const doc = this.doc()
+    const fromImages = images.map((i) => {
+      const named = this.nameOn(i.nodeId)
+      if (named) return namedInput(this.s.relay, doc, named)
+      return assetRef(this.s.relay, i.asset).then((a) => unnamedInput(i.nodeId, i.kind, a, opts.people?.includes(i.nodeId) ? 'character' : 'other'))
+    })
+    const named = new Set(images.map((i) => this.nameOn(i.nodeId)?.id).filter(Boolean))
+    const fromWords = said.filter((r) => !named.has(r.id)).map((r) => namedInput(this.s.relay, doc, r))
+    const refs: JobInputRef[] = []
+    for (const r of await Promise.all([...fromImages, ...fromWords])) if (!refs.some((x) => x.id === r.id)) refs.push(r)
+    return refs
+  }
+
+  /** The selection's notes a Brand board links into: they make the job brand work ("use this brand", R2-5). */
+  private brandChoice(plan: CanvasPlan, choice: BrandChoice = {}): BrandChoice {
+    const els = this.els()
+    const notes = new Set(plan.notes.map((n) => cd(els.find((e) => e.id === n.elId))).flatMap((c) => (c?.kind === 'note' ? [c.id] : [])))
+    const branded = notes.size > 0 && Object.values(this.doc().links ?? {}).some((l) => l.role === 'brand' && notes.has(l.to.id))
+    return branded ? { ...choice, work: true } : choice
+  }
+
+  /**
+   * The brand a Generate of these elements reads, one row per brand ref with whether it goes (the tray's ticks;
+   * jobs/context.ts brandRows, UAT round 3 R3-2). The same rule the job runs by, from the selection as it is.
+   */
+  brandFor(elIds: string[], typed: string, choice: BrandChoice = {}): BrandRow[] {
+    const els = this.els()
+    const plan = planSelection(els, elIds)
+    const sketch = plan.sketches[0]
+    const node = sketch ? { kind: 'sketch' as const, id: sketch.sketchId } : { kind: 'group' as const, id: 'canvas' }
+    const text = instruction(typed, plan.notes)
+    const doc = this.doc()
+    const refs = [...plan.images.map((i) => this.nameOn(i.nodeId)), ...mentions(doc, text).found]
+      .filter((r): r is NamedRef => !!r).map((r) => ({ role: (keyNamed(doc, r.key)?.role ?? r.role) as JobInputRef['role'] }))
+    return brandRows(doc, 'generate', node, { text, refs: refs as JobInputRef[] }, this.brandChoice(plan, choice))
   }
 
   // ── Resize selected pictures (features/resize-selection.clan) ──
@@ -693,13 +726,8 @@ export class CanvasController {
     const blob = await this.canvas.exportRegion({ rect, elementIds: members.map((e) => e.id), outW: ex.outW, outH: ex.outH, background: '#ffffff' })
     const sha = await putBlob(blob)
     this.addAsset(sha, blob, 'drawn', { w: ex.outW, h: ex.outH })
-    const refs: JobInputRef[] = [{ id: s.sketchId, role: 'layout', kind: 'drawing', asset: await assetRef(this.s.relay, sha) }]
-    for (const i of plan.images) {
-      const named = this.nameOn(i.nodeId)
-      if (named) refs.push(await namedInput(this.s.relay, this.doc(), named))
-      else refs.push(unnamedInput(i.nodeId, i.kind, await assetRef(this.s.relay, i.asset), opts.people?.includes(i.nodeId) ? 'character' : 'other'))
-    }
-    for (const r of said.found) if (!refs.some((x) => x.id === r.id)) refs.push(await namedInput(this.s.relay, this.doc(), r))
+    const [layout, rest] = await Promise.all([assetRef(this.s.relay, sha), this.inputRefs(plan.images, said.found, opts)])
+    const refs: JobInputRef[] = [{ id: s.sketchId, role: 'layout', kind: 'drawing', asset: layout }, ...rest]
 
     const noteIds = notes.map((n) => n.nodeId ?? this.noteId(n.elId))
     const live = this.els()
@@ -715,7 +743,8 @@ export class CanvasController {
     this.placeGen(jobId, 'generate', sources.map((x) => x.id), sources, slot)
     const ratio = exactRatio(aspect)
     const input: JobInput = { refs, ...(ratio ? { ratio } : { aspect }), ...(text ? { text } : {}), ...(opts.more ? { chips: ['more_options'] } : {}) }
-    await this.s.runner.submit('generate', input, plan.images.filter((i) => i.kind === 'gen').map((i) => i.nodeId), { for: 'sketch', sketchId: s.sketchId }, jobId, opts.modelChoice)
+    await this.s.runner.submit('generate', input, plan.images.filter((i) => i.kind === 'gen').map((i) => i.nodeId), { for: 'sketch', sketchId: s.sketchId }, jobId, opts.modelChoice,
+      { brand: this.brandChoice(plan, opts.brand) })
     return { jobId }
   }
 

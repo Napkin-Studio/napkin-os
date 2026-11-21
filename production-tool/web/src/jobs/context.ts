@@ -47,18 +47,83 @@ export function brandWords(r: NamedRef): { kind: JobContext['kind']; text: strin
 
 const USED_AS: Record<JobContext['kind'], string> = { brand_rule: 'brand rule', palette: 'brand palette', typography: 'brand typography', document: 'background document', note: 'note' }
 
-/** The project's brand rules, palette and type, rules first. */
-function brandItems(d: Doc): Item[] {
-  const order: JobContext['kind'][] = ['brand_rule', 'palette', 'typography']
-  const out: Item[] = []
+// ── Which brand a job reads (UAT round 3 R3-2: every brand ref went on every op, and "use only these colours" turned
+// a midday photo into a navy night with a flat coral sun) ──────────────────────────────────────────────────────────
+//
+// - A brand rule (do, don't, tone) goes with every op that reads the look: it is the client's rule wherever it is.
+// - The palette and the type go only with brand work: a Brand board linked into the node (or into a note it reads), a
+//   brief in its scope, a product, logo or brand picture in the job, or the person's words naming brand work (an ad, a
+//   poster, a product, a logo). The palette goes as accents unless the person says strict.
+// - An edit of a picture (a Fill, a Change this frame) reads no brand unless it is brand work.
+// The Generate tray lists each item with its tick (BrandChoice), so a person can leave one out or put one in.
+
+/** The person's call on the brand for one job (the Generate tray's ticks). */
+export interface BrandChoice {
+  /** Brand refs the person left out of this job. */
+  leave?: readonly Id[]
+  /** Brand refs the person put in although the op would leave them out. */
+  add?: readonly Id[]
+  /** The palette is the only colours ("Strict:"), not accents. */
+  strict?: boolean
+  /** The job is brand work for a reason the document alone cannot see (a selected note a Brand board links into). */
+  work?: boolean
+}
+
+/** The ops that are edits of a picture: no brand unless the job is brand work. */
+const EDIT_OPS: readonly Op[] = ['region_edit', 'frame_edit']
+/** Words that make a job brand work. */
+const BRAND_WORDS = /\b(brand(?:ed|ing)?|logos?|products?|pack(?:shot|aging|age)?s?|adverts?|advertising|ads?|posters?|billboards?|banners?|campaign|key ?visual|labels?|flyers?|hoardings?|mock-?ups?|social posts?)\b/i
+const BRAND_REF_ROLES: readonly string[] = ['product', 'logo', 'palette', 'typography', 'brand_rule']
+
+/** Is this job brand work, so the palette and the type go with it? */
+export function brandWork(d: Doc, node: LinkEndpoint, input: Pick<JobInput, 'text' | 'brief' | 'refs'>): boolean {
+  if (input.brief) return true
+  if (input.text && BRAND_WORDS.test(input.text)) return true
+  if ((input.refs ?? []).some((r) => BRAND_REF_ROLES.includes(r.role))) return true
+  const links = Object.values(d.links ?? {})
+  const nodes = new Set(readers(d, node))
+  // The texts these nodes read: a brand board linked into one of them means "use this brand" too.
+  for (const l of links) if (nodes.has(l.to.id) && (['text', 'note', 'ink'] as string[]).includes(l.from.kind)) nodes.add(l.from.id)
+  return links.some((l) => l.role === 'brand' && nodes.has(l.to.id))
+}
+
+export interface BrandRow {
+  ref: Id
+  kind: 'brand_rule' | 'palette' | 'typography'
+  /** "@harbour_palette", or the ref's own label. */
+  label: string
+  /** "Navy #0A1F44, Sand #E8DCC4". */
+  text: string
+  /** Whether it goes with this job, after the person's ticks. */
+  on: boolean
+  /** Whether it would go without a tick. */
+  byDefault: boolean
+}
+
+/** The project's brand refs as one job reads them: rules first, each with whether it goes (the tray's rows). */
+export function brandRows(d: Doc, op: Op, node: LinkEndpoint, input: Pick<JobInput, 'text' | 'brief' | 'refs'>, choice: BrandChoice = {}): BrandRow[] {
+  if (!CONTEXT_OPS.includes(op)) return []
+  const order: BrandRow['kind'][] = ['brand_rule', 'palette', 'typography']
+  const work = !!choice.work || brandWork(d, node, input)
+  const rows: BrandRow[] = []
   for (const r of refsList(d)) {
     const w = brandWords(r)
-    if (!w) continue
-    const title = cut(r.label?.trim() || `@${refName(r)}`, 200)
-    const text = cut(w.text, TEXT_MAX)
-    out.push({ ctx: { kind: w.kind, title, text }, row: { kind: 'brand', ref: r.id, used_as: USED_AS[w.kind], included: true, text: cut(text, 200) } })
+    if (!w || w.kind === 'note' || w.kind === 'document') continue
+    const kind = w.kind as BrandRow['kind']
+    const byDefault = EDIT_OPS.includes(op) ? work : kind === 'brand_rule' || work
+    const on = choice.add?.includes(r.id) ? true : choice.leave?.includes(r.id) ? false : byDefault
+    rows.push({ ref: r.id, kind, label: r.label?.trim() || `@${refName(r)}`, text: w.text, on, byDefault })
   }
-  return out.sort((a, b) => order.indexOf(a.ctx.kind) - order.indexOf(b.ctx.kind))
+  return rows.sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind))
+}
+
+/** The brand items a job sends: rules first; a palette says whether it is accents or strict. */
+function brandItems(d: Doc, op: Op, node: LinkEndpoint, input: JobInput, choice: BrandChoice = {}): Item[] {
+  return brandRows(d, op, node, input, choice).filter((b) => b.on).map((b) => {
+    const title = cut(b.label, 200)
+    const text = cut(b.kind === 'palette' ? `${choice.strict ? 'Strict' : 'Accents'}: ${b.text}` : b.text, TEXT_MAX)
+    return { ctx: { kind: b.kind, title, text }, row: { kind: 'brand', ref: b.ref, used_as: USED_AS[b.kind], included: true, text: cut(text, 200) } }
+  })
 }
 
 /** The documents linked into the node (and up a shot's chain), once each, that have an excerpt to read. */
@@ -83,11 +148,11 @@ function documentItems(d: Doc, node: LinkEndpoint): Item[] {
 
 /** The input with the project's context added (on the director ops), and a row for each item. Nothing to add, or
  *  another op: the input as it was. */
-export function withContext(d: Doc, op: Op, node: LinkEndpoint, input: JobInput): { input: JobInput; rows: JobInputRow[] } {
+export function withContext(d: Doc, op: Op, node: LinkEndpoint, input: JobInput, choice?: BrandChoice): { input: JobInput; rows: JobInputRow[] } {
   if (!CONTEXT_OPS.includes(op) || input.context?.length) return { input, rows: [] }
   const kept: Item[] = []
   let total = 0
-  for (const it of [...brandItems(d), ...documentItems(d, node)]) {
+  for (const it of [...brandItems(d, op, node, input, choice), ...documentItems(d, node)]) {
     const size = (it.ctx.title?.length ?? 0) + it.ctx.text.length
     if (kept.length >= ITEMS_MAX || total + size > TOTAL_MAX) continue
     kept.push(it)

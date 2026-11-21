@@ -29,7 +29,7 @@ import { elementBounds } from '../core/geometry'
 import { isInkTool } from '../core/tools'
 import { UndoChip } from '../../ui/Undo'
 import { imageFiles, pickPictureFiles, placePictures } from './pictures'
-import { makeVideo, storyboardFor, storyboardFromShots } from './make'
+import { madeFromNote, makeVideo, storyboardFor, storyboardFromShots } from './make'
 import { groupLabel, keyGroupFields, keyGroupsOn, type KeyGroup } from './keyGroups'
 import { setStacked } from './stack'
 import { pictureToOpen } from './dblclick'
@@ -529,8 +529,18 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     if (!picker) return
     const { from, scene, at } = picker
     setPicker(null)
+    const noteWords = from.type === 'text' ? textRowOf(services.doc.get(), from.id)?.words?.trim() ?? '' : ''
+    // A storyboard or film made from a note gets a script of its own with the note's words, which drives it: its plan
+    // never reads (or writes over) another script (UAT round 3 R3-1, UX 3).
+    if (noteWords && (kind === 'storyboard' || kind === 'video')) {
+      void madeFromNote({ canvas, doc: services.doc }, kind, scene, (id) => wordsOnPage(services.doc, id, noteWords), (script) => writeLink(from, script, at))
+        .then(({ script, made }) => { markNew(script.id); markNew(made.id) })
+        .then(() => cancel())
+        .catch((e) => console.warn('the node was not made', e))
+      return
+    }
     // A script made from a note starts with the note's words on its page (UAT round 2 R2-7: it was empty).
-    const words = kind === 'script' && from.type === 'text' ? textRowOf(services.doc.get(), from.id)?.words ?? '' : ''
+    const words = kind === 'script' ? noteWords : ''
     void createNode({ canvas, doc: services.doc }, kind, scene)
       .then(async (el) => {
         markNew(el.id)
