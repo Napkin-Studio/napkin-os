@@ -291,26 +291,85 @@ describe('script length (2026-10-09)', () => {
   })
 })
 
-describe('who a later frame shows (UAT round 2 R2-4)', () => {
-  it('with no character in the shot, frame 1 goes as the person; once kept, it goes by name; the shot’s own character wins', async () => {
+describe('who a later frame shows (UAT round 2 R2-4, reversed in round 3 R3-F1)', () => {
+  it('frame 1 never goes as an unnamed person; a person shot sends the kept character by name; no picture twice', async () => {
     const s = await setup(3)
-    // Shots that name nobody: the planned shots lose their refs.
-    await updateDoc(s.doc, (d) => { for (const sh of Object.values(d.shots)) sh.refs = [] })
+    // Shots that name nobody: the planned shots lose their refs; shot 2 implies a person, shot 3 is an insert.
+    await updateDoc(s.doc, (d) => {
+      const shots = shotsOf(d)
+      for (const sh of shots) sh.refs = []
+      shots[1].action = 'She opens a yellow umbrella.'
+      shots[2].action = 'The kettle glows blue and boils without a sound.'
+    })
     const j1 = await drawFrame(s.deps, 0, 'first')
     await s.land()
     expect(s.inputOf(j1).refs ?? []).toEqual([])
     const j2 = await drawFrame(s.deps, 1, 'first')
-    const cast = (s.inputOf(j2).refs ?? []).find((r) => r.role === 'character')
-    expect(cast).toMatchObject({ id: s.frameOf(0).id, kind: 'generated', label: 'the person from shot 1' })
-    expect(cast!.asset.sha256).toBe(s.frameOf(0).asset)
+    expect((s.inputOf(j2).refs ?? []).filter((r) => r.role === 'character')).toEqual([])
+    expect(s.inputOf(j2).anchorFrame?.sha256).toBe(s.frameOf(0).asset)
     await s.land()
-    // Keep her as @mia: later frames send @mia_front.
+    // Keep her as @mia: a person shot sends @mia_front, and frame 1 (the same picture) is not sent again as anchor.
     const name = await keepCharacter(s.doc, s.frameOf(0).asset, 'Mia')
     expect(name).toBe('mia_front')
     expect(keptFromFirst(s.doc.get(), shotsOf(s.doc.get())[0].storyboard_id)?.key).toBe('mia')
+    await updateDoc(s.doc, (d) => { shotsOf(d)[2].action = 'She grins at the kettle.' })
     const j3 = await drawFrame(s.deps, 2, 'first')
-    expect((s.inputOf(j3).refs ?? []).filter((r) => r.role === 'character').map((r) => r.name)).toEqual(['mia_front'])
+    const in3 = s.inputOf(j3)
+    expect((in3.refs ?? []).filter((r) => r.role === 'character').map((r) => r.name)).toEqual(['mia_front'])
+    expect(in3.anchorFrame).toBeUndefined()
+    const shas = [...(in3.refs ?? []).map((r) => r.asset.sha256), in3.anchorFrame?.sha256, in3.previousFrame?.sha256].filter(Boolean)
+    expect(new Set(shas).size).toBe(shas.length)
     expect(suggestKey('Mia kneels by the puppy.')).toBe('mia')
     expect(suggestKey('A wide street.')).toBe('')
+  })
+
+  it('an insert that names no one sends no character, even the kept one', async () => {
+    const s = await setup(3)
+    await updateDoc(s.doc, (d) => {
+      const shots = shotsOf(d)
+      for (const sh of shots) sh.refs = []
+      shots[1].action = 'The kettle glows blue and boils without a sound.'
+      delete shots[1].direction
+      for (const b of Object.values(d.beats)) if (b.shot_id === shots[1].id) delete d.beats[b.id]
+    })
+    await drawFrame(s.deps, 0, 'first')
+    await s.land()
+    await keepCharacter(s.doc, s.frameOf(0).asset, 'Mia')
+    const j2 = await drawFrame(s.deps, 1, 'first')
+    expect((s.inputOf(j2).refs ?? []).filter((r) => r.role === 'character')).toEqual([])
+  })
+})
+
+describe('namesPerson (R3-F1)', () => {
+  it('reads people from names, mentions, speakers and person words; not from things', async () => {
+    const { namesPerson } = await import('./cast')
+    const d = snapshotDoc().get()
+    addKey(d, 'maya')
+    const shot = (action: string) => ({ id: 'shot_X', action, refs: [], kind: 'shot', duration_s: 2, camera: { size: 'insert' } }) as never
+    expect(namesPerson(d, shot('The kettle glows blue and boils without a sound.'))).toBe(false)
+    expect(namesPerson(d, shot('Through the thin wall, the snoring carries on, undisturbed.'))).toBe(false)
+    expect(namesPerson(d, shot('1 a.m. A dark kitchen, lit only by the open fridge.'))).toBe(false)
+    expect(namesPerson(d, shot('@maya flips the switch, wincing.'))).toBe(true)
+    expect(namesPerson(d, shot('Maya whispers to the kettle.'))).toBe(true)
+    expect(namesPerson(d, shot('A woman in a dressing gown.'))).toBe(true)
+    expect(namesPerson(d, shot('Her finger presses the switch.'))).toBe(true)
+  })
+})
+
+describe('castRefs (R3-F1)', () => {
+  it('a person shot promotes the one offered character; an insert leaves it optional', async () => {
+    const { castRefs } = await import('./cast')
+    const d = snapshotDoc().get()
+    addKey(d, 'maya')
+    const asset = (n: string) => ({ sha256: `sha256:${n.repeat(64)}`, url: 'x', mime: 'image/png' })
+    const refs = [
+      { id: 'ref_a', name: 'maya_front', role: 'character', kind: 'picture', asset: asset('a'), optional: true },
+      { id: 'ref_b', name: 'maya_full', role: 'character', kind: 'picture', asset: asset('b'), optional: true },
+    ] as never[]
+    const shot = (action: string) => ({ id: 'shot_X', action, refs: [], kind: 'shot', duration_s: 2, camera: { size: 'medium' } }) as never
+    const person = await castRefs({} as never, d, undefined, 2, shot('She whispers to the kettle.'), refs)
+    expect(person.map((r) => [r.name, !!r.optional])).toEqual([['maya_front', false], ['maya_full', false]])
+    const insert = await castRefs({} as never, d, undefined, 2, shot('The kettle glows blue.'), refs)
+    expect(insert.map((r) => !!r.optional)).toEqual([true, true])
   })
 })

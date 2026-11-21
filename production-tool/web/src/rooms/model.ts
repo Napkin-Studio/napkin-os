@@ -90,12 +90,17 @@ export function repeatsTake(provider: string | undefined, model: string | undefi
 /** "Box 2", or "End card". */
 export const boxName = (b: Pick<Box, 'n' | 'endCard'>) => (b.endCard ? 'End card' : `Box ${b.n}`)
 
+/** "Box 1–2 · v1": a take's name, the box it was made as with its one version number, so two takes that are both v1
+ *  of different boxes say so (UAT round 3, F15: the Use this take sheet said "Now: v1 / New: v1"). */
+export function takeName(g: Gen, boxes: Box[]): string {
+  const b = boxes.find((x) => x.key === g.boxKey)
+  const name = g.madeN ? `Box ${g.madeN}${g.madeTo && g.madeTo !== g.madeN ? `–${g.madeTo}` : ''}` : b ? boxName(b) : 'Not in a box'
+  return `${name} · v${g.version}`
+}
+
 /** "Box 2 · v3 · 3.5 s". */
 export function genTitle(g: Gen, boxes: Box[]): string {
-  const b = boxes.find((x) => x.key === g.boxKey)
-  const len = `${Math.round(g.durationS * 10) / 10} s`
-  const name = g.madeN ? `Box ${g.madeN}${g.madeTo && g.madeTo !== g.madeN ? `–${g.madeTo}` : ''}` : b ? boxName(b) : 'Not in a box'
-  return [name, `v${g.version}`, len].join(' · ')
+  return `${takeName(g, boxes)} · ${Math.round(g.durationS * 10) / 10} s`
 }
 
 /** Whether a take has footage for a shot: its own shots or its windows (a clip with no shot: any take). One rule for
@@ -142,7 +147,7 @@ export function roomGens(d: ProductionDocument, _ui: Pick<UiState, 'jobs'>, vide
     const durationS = g.duration_s ?? (g.asset ? d.assets[g.asset]?.duration_s : undefined) ?? 0
     const segments = g.segments?.length
       ? g.segments.map((x) => ({ shotId: x.shot_id, inS: x.in_s, outS: x.out_s }))
-      : g.shot_ids.length === 1 ? [{ shotId: g.shot_ids[0], inS: 0, outS: durationS }] : []
+      : g.shot_ids.length === 1 ? [{ shotId: g.shot_ids[0], inS: 0, outS: loneOut(durationS, d.shots[g.shot_ids[0]]?.duration_s) }] : []
     // Its box: the one with exactly its shots; else (its shots were made apart, or regrouped since) every box
     // whose shots have footage in it, in film order, so each of them lists it and plays its own window.
     const exact = boxes.find((b) => b.key === key)
@@ -163,6 +168,13 @@ export function roomGens(d: ProductionDocument, _ui: Pick<UiState, 'jobs'>, vide
   numberAndLabel(out, (id) => shotNumber(d, id))
   return out.sort(newestFirst)
 }
+
+/** A lone shot's window of its take: the shot's planned length from the take's start, inside the real take. A model
+ *  makes whole seconds (Veo's 1.5 s shot is a 4 s take), so Assemble put the whole padded take in (UAT round 3, R3-F2:
+ *  a 10 s film came out 15.6 s). The Out point still stretches to the real take (the Inspector's Out goes to its
+ *  length). A shot with no length plays the whole take. */
+export const loneOut = (takeS: number, plannedS: number | undefined) =>
+  plannedS && plannedS > 0 && takeS > 0 ? Math.min(takeS, plannedS) : takeS
 
 /** A document delta as the drawer's row: a moment's window is the stretch its own job made again (as the
  *  relay snapped it), else the one its `to` says. */

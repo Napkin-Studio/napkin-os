@@ -152,7 +152,7 @@ NO_DIRECTOR_OPS = {"upscale", "resize", "cutdown"}
 # Ops with Draft, Standard and Final (features/clip-quality.clan); Remake as Final promotes a draft within this.
 QUALITY_OPS = ("clip", "clip_edit")
 # Change this… (features/make-and-edit.clan): the op each change runs as, and the jobs a take can be changed from.
-REMAKE_OP = {"camera.movement": "clip", "words": "clip", "moment": "clip_patch", "feel": "clip_edit"}
+REMAKE_OP = {"camera.movement": "clip", "words": "clip", "ask": "clip", "moment": "clip_patch", "feel": "clip_edit"}
 REMAKE_PARENTS = ("clip", "clip_edit", "clip_patch")
 DRAFT_KEEP_S = 7 * 24 * 3600  # Runway keeps a Seedance 2.5 draft promotable for 7 days (openapi: draftTaskId)
 UNBUILT_OPS = set(QUOTA_CLASS) - BUILT_OPS
@@ -1270,7 +1270,7 @@ class Relay:
             raise ApiError("invalid_input", "Each change is named once.")
         ops = {REMAKE_OP[f] for f in fields}
         if len(ops) > 1 or (ops & {"clip_patch", "clip_edit"} and len(delta) > 1):
-            raise ApiError("invalid_input", "A moment or the whole feel changes on its own; the camera and the words can go together.")
+            raise ApiError("invalid_input", "A moment or the whole feel changes on its own; the camera, the words and an ask can go together.")
         op = ops.pop()
         if req["op"] != op:
             raise ApiError("invalid_input", f"This change is made as {op}; send op {op}.")
@@ -1285,6 +1285,13 @@ class Relay:
             inp = json.loads(json.dumps(held["req"].get("input") or {}))
             filled = []
             for d in delta:
+                if d["field"] == "ask":
+                    # Tell the Camera agent (UAT round 3, R3-F5): the person's words go to the director as the job's
+                    # words, read first; the shots' own words stay as they are (it pasted the ask over shot 1's words).
+                    was = inp.get("text")
+                    inp["text"] = str(d["to"]).strip()[:1000]
+                    filled.append({**d, **({"from": was} if was else {})})
+                    continue
                 shot, i = self._remake_shot(inp, d.get("shotId"))
                 if d["field"] == "camera.movement":
                     camera = shot.setdefault("camera", {"size": "medium"})
@@ -2184,6 +2191,8 @@ class Relay:
             return self._reload(job)
         event = {"jobId": job["jobId"], "mode": "cutdown", "size": list(size), "clips": clips, "layers": layers,
                  "endCard": cut.get("endCard", True), "fadeOutS": cut.get("fadeOutS", 0.5),
+                 # a short size's shorter studio card (cutdowns.card_lengths; UAT round 3, R3-F12)
+                 **({"cardS": float(cut["studioS"])} if cut.get("studioS") else {}),
                  "outKey": f"ads/cuts/{job['jobId']}.mp4", "resultKey": f"ads/cuts/{job['jobId']}.json"}
         try:
             self.stitch(event)

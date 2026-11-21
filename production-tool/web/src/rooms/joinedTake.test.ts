@@ -171,4 +171,59 @@ describe('the joined take through the .clan store (B2)', () => {
     await store.redo!()
     expect(readCut(store.get(), videoId).v1.map((c) => c.genId)).toEqual(after.map((c) => c.genId))
   })
+
+  it('a box\'s first take goes in at its place when a cut exists, said with Undo (R3-F4); the note\'s Undo works after the bar\'s Undo and Redo (F12 leftover)', async () => {
+    const { modelStore, seedStages, job: mkJob, addShots: add, addTake: take, id } = await import('../test/model')
+    const { systemUpdate } = await import('../doc/store')
+    const { placeJoinedTake, undoJoinedTake } = await import('./editOps')
+    const { assemble } = await import('./timeline')
+    const store = modelStore({ undo: { saved: null, save: () => {} } })
+    await store.create(MAYA, 'First')
+    await seedStages(store)
+    let videoId = ''
+    let shotIds: string[] = []
+    await systemUpdate(store, (d) => {
+      const shots = add(d, 3)
+      shots.forEach((s) => { s.duration_s = 2 })
+      shotIds = shots.map((s) => s.id)
+      // Shots 1 and 3 have takes and are in the cut; shot 2 has none yet.
+      for (const i of [0, 2]) take(d, shots[i], SHA(String(i + 1)), mkJob(d, 'clip', [], SHA(String(i + 1))), { pick: true })
+      videoId = mainVideo(d)!.id
+    }, 'seed')
+    await store.flush()
+    await systemUpdate(store, (d) => {
+      const boxes = shotIds.map((sid, i) => ({ key: sid, n: i + 1, shotIds: [sid], together: false, endCard: false, lengthS: 2 }))
+      const gens = Object.values(d.generations).map((g) => ({ id: g.id, kind: g.kind, boxKey: g.shot_ids[0], shotIds: g.shot_ids, version: 1, delta: [], label: '', asset: g.asset, durationS: 2, segments: [{ shotId: g.shot_ids[0], inS: 0, outS: 2 }], state: 'ready' as const }))
+      const cut = assemble(d, videoId, boxes, gens as never)
+      d.videos[videoId].timeline = Object.fromEntries(cut.v1.map((c) => [c.id, { track: 'V1', start_s: c.startS, source: { generation_id: c.genId, in_s: c.inS, out_s: c.outS }, follows: { shot_id: c.follows!.shotId! } }])) as never
+    }, 'cut')
+    await store.flush()
+    const jobId = id('job')
+    await systemUpdate(store, (d) => {
+      const j = mkJob(d, 'clip', [], SHA('7'), { id: jobId } as never)
+      d.jobs[jobId] = { ...j, id: jobId }
+      const g = id('gen')
+      d.generations[g] = {
+        id: g, v: 1, field_v: {}, kind: 'clip', inputs: { model: 'veo3.1', length_s: 4 }, shot_ids: [shotIds[1]], asset: SHA('7'), duration_s: 4, state: 'ready',
+        job_id: jobId, provider: 'runway', crew: 'wren', created_at: '2099-01-01T00:00:00Z', by: `human:${MAYA.id}`,
+      } as never
+      d.assets[SHA('7')] = { sha256: SHA('7'), kind: 'video', mime: 'video/mp4', origin: 'generated', locations: [], duration_s: 4 } as never
+    }, 'land')
+    await store.flush()
+    let ui: Record<string, unknown> = { jobs: {} }
+    const uiStore = { get: () => ui, update: (fn: (u: typeof ui) => void) => { const n = structuredClone(ui); fn(n); ui = n } } as never
+    expect(await placeJoinedTake(store, uiStore, videoId, jobId)).toBe(true)
+    const placed = readCut(store.get(), videoId).v1
+    expect(placed.map((c) => [c.follows?.shotId, c.startS, c.inS, c.outS])).toEqual([[shotIds[0], 0, 0, 2], [shotIds[1], 2, 0, 2], [shotIds[2], 4, 0, 2]])
+    expect((ui.joinedInCut as { text: string }).text).toBe("Shot 2's first take is in the cut.")
+    // The bar's Undo and Redo, then the note's own Undo: nothing changed, so it is not stale.
+    await store.undo!()
+    await store.redo!()
+    await store.flush()
+    expect(await undoJoinedTake(store, uiStore)).toBe(true)
+    expect(readCut(store.get(), videoId).v1.map((c) => c.follows?.shotId)).toEqual([shotIds[0], shotIds[2]])
+    // Still the box's first take: placing it again puts it back.
+    expect(await placeJoinedTake(store, uiStore, videoId, jobId)).toBe(true)
+  })
 })
+

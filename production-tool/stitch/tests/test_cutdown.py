@@ -145,3 +145,29 @@ def test_the_ads_own_render_builds_the_same_command_as_before(takes):
     assets = stitch.load_assets("roll-up")
     cmd = stitch.build_command("ffmpeg", [{"path": "a.mp4", "trimS": 4}], (320, 180), "roll-up", assets, "o.mp4")
     assert "cutdown" not in " ".join(cmd) and "-an" in cmd
+
+
+def test_a_short_size_ends_on_a_shorter_studio_card_its_roll_sped_up(takes):
+    """UAT round 3 (R3-F12): the 6 s 9:16 had 2.25 s of picture. A short size's event names a shorter studio card
+    (cardS); the card holds that long, silent, its whole roll played faster. Out of range clamps to 1..CARD_S."""
+    clips = [{"key": "a.mp4", "inS": 0, "outS": 3.5}]
+    out = render(takes, {"mode": "cutdown", "size": [180, 320], "clips": clips, "endCard": True, "fadeOutS": 0.5, "cardS": 1.333})
+    s = streams(takes / "out.mp4")
+    assert abs(s["duration"] - (3.5 + 1.333)) <= 2 / stitch.FPS + 0.03, s
+    assert out["endCard"] == "roll-up-ink"
+    px = frame_at(takes / "out.mp4", 3.5 + 0.05).getpixel((4, 4))
+    assert all(abs(a - b) < 40 for a, b in zip(px, stitch.GROUND["roll-up-ink"])), px
+    assert cutdown.card_seconds({}) == stitch.CARD_S and cutdown.card_seconds({"cardS": 0.2}) == 1.0
+    assert cutdown.card_seconds({"cardS": 9}) == stitch.CARD_S and cutdown.card_seconds({"cardS": "x"}) == stitch.CARD_S
+
+
+def test_a_shorter_card_plays_its_roll_faster_and_a_whole_one_is_unchanged():
+    assets = stitch.load_assets("roll-up-ink")
+    layout = stitch.card_layout(1080, 1920, assets)
+    layout["paths"] = {name: a["path"] for name, a in assets.items()}
+    whole_in, whole = stitch.card_graph(3, "roll-up-ink", layout)
+    same_in, same = stitch.card_graph(3, "roll-up-ink", layout, card_s=stitch.CARD_S)
+    assert (whole_in, whole) == (same_in, same)
+    short_in, short = stitch.card_graph(3, "roll-up-ink", layout, card_s=1.25)
+    assert "-t" in short_in and short_in[short_in.index("-t") + 1] == "1.25"
+    assert f"fade=t=in:st={stitch.MADE_AT * 0.5:g}:d={stitch.MADE_S * 0.5:g}" in ";".join(short)

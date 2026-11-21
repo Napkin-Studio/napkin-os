@@ -20,7 +20,7 @@ import type { Relay } from '../relay'
 import { assetRef } from './assets'
 import { isActive, type JobRunner } from './runner'
 import { jobShot, refsFor } from './select'
-import { castRef, keptFromFirst } from './cast'
+import { castRefs, keptFromFirst } from './cast'
 import { liveGet } from '../model/live'
 
 export type { FrameHow } from '../model/purpose'
@@ -104,18 +104,23 @@ export async function frameInput(relay: Relay, d: ProductionDocument, index: num
   if (!shot) throw new Error('That shot is gone.')
   // The shot's named and linked refs, required; the storyboard's others, offered (features/canvas-nodes.clan).
   const own = await refsFor(relay, d, shot, text, { offer: true, declined })
-  // Who is seen, for a later shot whose refs name nobody (UAT round 2 R2-4): frame 1's person (jobs/cast.ts).
-  const cast = await castRef(relay, d, sb?.id, index, own)
-  const refs = cast ? [cast, ...own] : own
+  // Who is seen: a character only when the shot's words name or imply a person (jobs/cast.ts; UAT round 3 R3-F1).
+  const refs = await castRefs(relay, d, sb?.id, index, shot, own)
   const script = frameScript(d, sb?.id, index)
   const ratio = sb?.ratio
+  // No picture goes twice in one job (R3-F1: frame 5 sent frame 1 as in_1 and as anchor): a ref that is the anchor
+  // or the previous frame (a person kept from frame 1 is frame 1's picture) drops that continuity frame.
+  const sent = new Set(refs.map((r) => r.asset.sha256))
+  const cont = await continuity(relay, d, index, strict, sb?.id)
+  if (cont.anchorFrame && sent.has(cont.anchorFrame.sha256)) delete cont.anchorFrame
+  if (cont.previousFrame && sent.has(cont.previousFrame.sha256)) delete cont.previousFrame
   return {
     shot: jobShot(d, shot),
     ...(refs.length ? { refs } : {}),
     ...(ratio ? { ratio } : {}),
     ...(script ? { script } : {}),
     ...(text?.trim() ? { text: text.trim() } : {}),
-    ...(await continuity(relay, d, index, strict, sb?.id)),
+    ...cont,
   }
 }
 

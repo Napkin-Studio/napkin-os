@@ -8,13 +8,14 @@ import type { Id, ProductionDocument } from '../contracts/types'
 import { modelEntry } from '../jobs/runs'
 import { beatsOf, shotNumber } from '../model/selectors'
 import { readCut } from '../rooms/timeline'
+import { isSilence } from '../rooms/boxModel'
 
 export type ShotSound = 'made' | 'background' | 'silent' | 'none'
 export interface ShotSoundFact { shotId: Id; n: number; sound: ShotSound; words: string }
 export interface LineFact { shotId: Id; n: number; who?: string; text: string; voiced: boolean; why: string }
 
 const wants = (d: ProductionDocument, shotIds: Id[]) =>
-  shotIds.some((id) => beatsOf(d, id).some((b) => (b.kind === 'line' || b.kind === 'vo' || b.kind === 'sound') && !!b.text?.trim()))
+  shotIds.some((id) => beatsOf(d, id).some((b) => (b.kind === 'line' || b.kind === 'vo' || b.kind === 'sound') && !!b.text?.trim() && !isSilence(b)))
 
 /** Each shot's sound as its clip in the cut has it. */
 export function shotSounds(d: ProductionDocument, videoId: Id | undefined, shotIds: Id[]): ShotSoundFact[] {

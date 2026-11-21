@@ -11,12 +11,13 @@ import { makeTake } from './clips'
 
 vi.mock('./assets', () => ({ assetRef: async (_relay: unknown, sha: string) => ({ sha256: sha, url: `https://cdn.test/${sha}`, mime: 'image/png' }) }))
 
-function box(opts: { frames: boolean; declined?: (shotIds: string[], ids: { side: string }) => Record<string, string[]> }) {
+function box(opts: { frames: boolean; declined?: (shotIds: string[], ids: { side: string }) => Record<string, string[]>; actions?: [string, string]; named?: boolean }) {
   const d = structuredClone(snapshotDoc(MAYA).get()) as ProductionDocument
   const shots = addShots(d, 2)
-  shots.forEach((s, i) => Object.assign(s, { duration_s: 3, action: i === 0 ? '@mira walks into the workshop.' : '@mira waves.' }))
+  shots.forEach((s, i) => Object.assign(s, { duration_s: 3, action: opts.actions?.[i] ?? (i === 0 ? '@mira walks into the workshop.' : '@mira waves.') }))
   const front = addRef(d, 'mira', 'front', SHA('a'))
   const side = addRef(d, 'mira', 'side', SHA('b'))
+  if (opts.named) shots[1].refs = [side.id]
   const script = mainScript(d)!.id
   for (const r of [front, side]) {
     d.links[`link_${r.id}`] = { id: `link_${r.id}`, v: 1, field_v: {}, from: { kind: 'ref', id: r.id }, to: { kind: 'script', id: script }, role: 'character' } as ProductionDocument['links'][string]
@@ -58,5 +59,13 @@ describe('a take sends the characters the Script brings in', () => {
     const b = box({ frames: false })
     await makeTake(b.deps, b.videoId, 'run_1', { refsMax: 1 })
     expect(b.sent[0].refs!.map((r) => r.id)).toEqual([b.front.id])
+  })
+
+  it('a picture shot 1 only offers and shot 2 names goes required (UAT round 3, F5: Dex dropped @maya_full)', async () => {
+    const a = box({ frames: false, actions: ['A dark kitchen, lit only by the fridge.', '@mira_side waves.'], named: true })
+    await makeTake(a.deps, a.videoId, 'run_1', { refsMax: 10 })
+    const refs = a.sent[0].refs!
+    expect(refs.find((r) => r.id === a.side.id)?.optional).toBeUndefined()
+    expect(refs.find((r) => r.id === a.front.id)?.optional).toBe(true)
   })
 })

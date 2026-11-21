@@ -192,7 +192,7 @@
         "over": 0.0
       },
       {
-        "name": "the end card shot is never a window, and the film's own card comes off the length: a third of what the studio card leaves, 1-2 s",
+        "name": "the end card shot is never a window, and the film's own card comes off the length (a third of what the studio card leaves, 1-2 s); a 6 s size keeps 3.5 s of picture, the studio card shortened to 1.333 s (R3-F12)",
         "shots": [
           {
             "shotId": "shot_0",
@@ -224,15 +224,15 @@
           {
             "shotId": "shot_0",
             "inS": 0.0,
-            "outS": 1.167
+            "outS": 1.75
           },
           {
             "shotId": "shot_1",
             "inS": 0.0,
-            "outS": 1.167
+            "outS": 1.75
           }
         ],
-        "over": 0.001
+        "over": 0.0
       },
       {
         "name": "too many kept shots stay at one second each and say how far over",

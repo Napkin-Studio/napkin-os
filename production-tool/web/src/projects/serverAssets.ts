@@ -7,7 +7,7 @@
 
 import type { DocAsset, InputMime, ProductionDocument } from '../contracts/types'
 import { getBlob, putBlobAs } from '../lib/blobs'
-import { framesOf, refsList, shotName, takesOf } from '../model/selectors'
+import { framesOf, refsList, shotName, takesOf, takeVersion } from '../model/selectors'
 import { hexOf, sha256Hex } from '../lib/hash'
 import { idbGet, idbPut } from '../lib/idb'
 import { NotAProject } from './openFile'
@@ -55,8 +55,8 @@ export function describeAsset(doc: ProductionDocument, a: Pick<DocAsset, 'sha256
   for (const s of Object.values(doc.shots)) {
     const frame = framesOf(doc, s.id).find((f) => f.asset === a.sha256)
     if (frame) return `frame v${frame.version} of ${shotName(doc, s.id)}`
-    const k = takesOf(doc, s.id).findIndex((t) => t.asset === a.sha256)
-    if (k >= 0) return `clip v${k + 1} of ${shotName(doc, s.id)}`
+    const t = takesOf(doc, s.id).find((x) => x.asset === a.sha256)
+    if (t) return `clip v${takeVersion(doc, t.id)} of ${shotName(doc, s.id)}`
   }
   const render = Object.values(doc.renders).find((r) => r.asset === a.sha256)
   if (render) return `the rendered ad (v${render.version})`

@@ -12,6 +12,7 @@ import { landShotList } from './plan'
 import { makeClip } from './clips'
 import type { JobLocal } from '../doc/ui'
 import { purposeOf } from '../model/purpose'
+import { videoOfShot } from '../model/selectors'
 import type { DocumentStore } from '../doc/types'
 import type { Job } from '../contracts/types'
 import { landWrites } from '../script/skye'
@@ -43,9 +44,14 @@ export function wireJobs(deps: FrameDeps) {
   })
   // A new take: in the Film editor it is picked in the cut; in the rooms it lands beside the others only.
   const inCut = () => ({ inCut: !deps.rooms?.() })
+  // In the rooms, a box's first take that lands while a cut exists goes into the cut at its place, said with Undo
+  // (rooms/editOps placeJoinedTake; UAT round 3, R3-F4: it went only to the Bin, with no card).
   runner.onComplete('clip', (job, ctx) => {
     if (ctx.for !== 'clip') return
-    void landTake(doc, job, ctx, inCut()).then(() => continueFollow(deps)).catch(warn('update what follows'))
+    const video = () => videoOfShot(doc.get(), ctx.shotId)?.id
+    void landTake(doc, job, ctx, inCut())
+      .then(() => { const v = video(); return deps.rooms?.() && v ? placeJoinedTake(doc, deps.ui, v, job.jobId) : false })
+      .then(() => continueFollow(deps)).catch(warn('update what follows'))
   })
   // One take of a run: one generation of the box, a window of it per shot (features/connected-video.clan).
   // In the rooms, a take of shots the person joined goes into the cut in place of their separate clips, one undo

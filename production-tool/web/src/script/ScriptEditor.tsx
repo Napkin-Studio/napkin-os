@@ -149,7 +149,8 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
   const [sheet, setSheet] = useState<'outline' | 'facts' | null>(null)
   const [notice, setNotice] = useState<{ text: string; undo?: boolean } | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [confirm, setConfirm] = useState<{ text: string; yes: string; go: () => void } | null>(null)
+  // A delete asks in red; an offer (the target to an asked length) asks in the page's own tone, its "no" named.
+  const [confirm, setConfirm] = useState<{ text: string; yes: string; no?: string; offer?: boolean; go: () => void } | null>(null)
   // A screenplay just pasted: the note over the page, with 'Keep it as plain text' (mock state 'screenplay').
   const [pasted, setPasted] = useState<(ScreenplayPaste & { scenes: number; dropped: string; words: string }) | null>(null)
   // The line the Format menu works on, while it is open: marked in the outline too.
@@ -318,6 +319,9 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
     setConfirm({
       text: `You asked for ${n} s. Set the film's target to ${n} s too? It is ${now} s now, and Plan shots plans to it.`,
       yes: `Set target to ${n} s`,
+      // Not "Keep" beside the card's own Keep (UAT round 3, R3-F8): the button names the length it keeps.
+      no: `Keep ${now} s`,
+      offer: true,
       go: () => { setConfirm(null); void updateDoc(docStore, (d) => setScriptTarget(d, scriptId, sbId, n), `set the script length to ${n} s`) },
     })
   }
@@ -686,8 +690,9 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
       }} />
       {phone && <div className="banner" role="status">You can watch and leave notes here. Open on a laptop or iPad to edit.</div>}
       {confirm && (
-        <div className="se-line se-confirm">
-          <InlineConfirm text={confirm.text} yes={confirm.yes} onNo={() => setConfirm(null)} onYes={confirm.go} />
+        <div className={`se-line se-confirm ${confirm.offer ? 'offer' : ''}`}>
+          <InlineConfirm text={confirm.text} yes={confirm.yes} {...(confirm.no ? { no: confirm.no } : {})} tone={confirm.offer ? 'primary' : 'danger'}
+            onNo={() => setConfirm(null)} onYes={confirm.go} />
         </div>
       )}
       {/* Said before Plan shots is pressed, not after (UAT 2026-11-21, F17): a bare @name needs its front. */}

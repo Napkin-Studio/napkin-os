@@ -5,6 +5,7 @@
 
 import { useContext, useEffect, useState } from 'react'
 import { RouterContext, useDoc, useServices, useUi } from '../app/context'
+import { projectRoute } from '../app/route'
 import { canvasActions } from '../canvas/chrome/actions'
 import { frontButton, frontKeysIn } from '../lib/names'
 import { frontChoices, setFront } from '../jobs/fronts'
@@ -22,7 +23,9 @@ export function FrontButtons({ text }: { text: string | null | undefined }) {
   const choose = (key: string) => {
     const from = router?.get()
     ui.update((u) => { u.chooseFront = key; u.stage = 'character'; if (from?.kind === 'script') u.chooseFrontFrom = from; else delete u.chooseFrontFrom }, 'choose a front')
-    if (from?.kind === 'script') router!.leave()
+    // The canvas as a new entry, so the browser's Back returns to the script (UAT round 3, R3-F15: leaving the
+    // script's entry made Back skip it).
+    if (from?.kind === 'script') router!.push(projectRoute(from.projectId))
   }
   return (
     <span className="fronts-btns">
@@ -59,6 +62,10 @@ function ChooseFront({ chosen: key }: { chosen: string }) {
     uiStore.update((u) => { delete u.chooseFront; delete u.chooseFrontFrom }, 'choose a front')
     if (from && front && router) router.push(from)
   }
+  // Back to the script (the browser's Back): the chooser is done with, and does not wait under the script.
+  useEffect(() => router?.subscribe(() => {
+    if (router.get().kind === 'script') uiStore.update((u) => { delete u.chooseFront; delete u.chooseFrontFrom }, 'choose a front')
+  }), [router, uiStore])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) { e.preventDefault(); close() } }
     window.addEventListener('keydown', onKey)

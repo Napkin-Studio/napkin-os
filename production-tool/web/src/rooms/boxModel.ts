@@ -4,7 +4,6 @@
 import { modelChoicesFor } from '../capabilities'
 import type { Config, ModelChoice, ProductionDocument } from '../contracts/types'
 import { beatsOf } from '../model/selectors'
-import { lastWorkedModel } from '../jobs/follow'
 import { selectedFrame } from '../jobs/frames'
 import { modelEntry, TAKE_MAX_S, TAKE_MAX_SHOTS } from '../jobs/runs'
 import type { Box } from './model'
@@ -75,7 +74,7 @@ export function boxModelNote(doc: ProductionDocument, box: Box, m: ModelChoice):
  *  Gemini Omni Flash 1.1 with Veo greyed and nothing said why). */
 export function boxModelSwitch(doc: ProductionDocument, box: Box, config: Config, picked?: ModelChoice): { to: string; from: string; why: string } | undefined {
   if (picked) return undefined
-  const wanted = boxOwnModel(doc, box, config) ?? lastWorkedModel(doc, 'clip', config) ?? modelChoicesFor('clip', config)[0]
+  const wanted = boxOwnModel(doc, box, config) ?? boxDefault(doc, box, config, false) ?? modelChoicesFor('clip', config)[0]
   const why = wanted ? boxModelWhyNot(doc, box, wanted) : undefined
   const got = boxModel(doc, box, config)
   if (!wanted || !why || !got || (got.model === wanted.model && got.provider === wanted.provider)) return undefined
@@ -103,16 +102,40 @@ export function boxModel(doc: ProductionDocument, box: Box, config: Config, pick
   const options = modelChoicesFor('clip', config)
   const own = picked ? undefined : boxOwnModel(doc, box, config)
   if (own && !boxModelWhyNot(doc, box, own)) return own
-  const wanted = picked ?? lastWorkedModel(doc, 'clip', config) ?? options[0]
+  const wanted = picked ?? boxDefault(doc, box, config)
   if (wanted && !boxModelWhyNot(doc, box, wanted)) return wanted
   return options.find((o) => !boxModelWhyNot(doc, box, o)) ?? wanted
+}
+
+/** Whether a box's shots have a spoken line (a line beat with words): it wants a model that makes sound. */
+const spoken = (doc: ProductionDocument, box: Pick<Box, 'shotIds'>) => box.shotIds.some((id) => beatsOf(doc, id).some((b) => b.kind === 'line' && !!b.text?.trim()))
+
+/**
+ * A box's own default model, by what its shots need, never the last model used on another box (UAT round 3, F3
+ * leftover: the spoken-line box went Veo 3.1 -> WAN 3 after a WAN 3 join elsewhere). A spoken line: the first offered
+ * model with a sound switch that can make the box; else the first offered that can (a real provider before the mock
+ * when one is offered, as lastWorkedModel did).
+ */
+export function boxDefault(doc: ProductionDocument, box: Box, config: Config, canMake = true): ModelChoice | undefined {
+  const options = modelChoicesFor('clip', config)
+  const real = options.some((o) => o.provider !== 'mock')
+  const offered = options.filter((o) => !real || o.provider !== 'mock')
+  // canMake false: the one it would be by need alone (Make room's switch note says why the box is on another).
+  const can = canMake ? offered.filter((o) => !boxModelWhyNot(doc, box, o)) : offered
+  const pick = (spoken(doc, box) ? can.find((o) => entryOf(o)?.video.audioControl) : undefined) ?? can[0] ?? offered[0]
+  return pick && { provider: pick.provider, model: pick.model }
 }
 
 /** What a box's sound will be, when one of its shots has a spoken line, a VO or a sound beat (relay/sound.py, the
  *  one rule; UAT 2026-11-21 B6: every clip came out silent). `on`: the model makes it; else the box says the model
  *  cannot. Undefined when the box has nothing to hear. */
+/** A sound beat that asks for no sound ("Silence: the kettle boils with no noise at all"): no sound at all, never a
+ *  reason for sound on (UAT round 3, F22/R3-F6). The relay reads the same words (relay/sound.py SILENCE). */
+export const SILENCE = /\b(?:silence|silent|silently|soundless|noiseless|muted?|no (?:sound|noise)s?|without (?:a |any )?(?:sound|noise)s?|nothing (?:is )?heard|not a sound|hushed? quiet)\b/i
+export const isSilence = (b: { kind: string; text?: string }) => b.kind === 'sound' && SILENCE.test(b.text ?? '')
+
 export function boxSound(doc: ProductionDocument, box: Pick<Box, 'shotIds'>, m: ModelChoice | undefined): { on: boolean; words: string } | undefined {
-  const beats = box.shotIds.flatMap((id) => beatsOf(doc, id)).filter((b) => (b.kind === 'line' || b.kind === 'vo' || b.kind === 'sound') && b.text?.trim())
+  const beats = box.shotIds.flatMap((id) => beatsOf(doc, id)).filter((b) => (b.kind === 'line' || b.kind === 'vo' || b.kind === 'sound') && b.text?.trim() && !isSilence(b))
   if (!beats.length || !m) return undefined
   const what = [beats.some((b) => b.kind === 'line') && 'the spoken line', beats.some((b) => b.kind === 'vo') && 'the voice-over', beats.some((b) => b.kind === 'sound') && 'the sound']
     .filter(Boolean).join(', ')

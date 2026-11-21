@@ -10,7 +10,7 @@ import { useConfig, useDoc } from '../app/context'
 import { modelChoicesFor } from '../capabilities'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
-import { CARD_S, DEFAULT_FILM_LENGTHS, FILM_LENGTHS, FILM_SHAPES, REMAKE_MODELS, beatsFor, briefShapes, filmSeconds, fitWindows, lastLineOf, masterShots, sameShape } from './film'
+import { CARD_S, DEFAULT_FILM_LENGTHS, FILM_LENGTHS, FILM_SHAPES, REMAKE_MODELS, beatsFor, briefShapes, filmSeconds, fitWindows, lastLineOf, masterShots, sameShape, versionsWord } from './film'
 import { endLineOf, sizesBrief } from '../brief/model'
 import { makeFilmSizes, planFilm, type FilmRow, type ShotMethod } from './filmJobs'
 import type { CampaignDeps } from './make'
@@ -198,7 +198,7 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
               <input className="cf-input" value={line} maxLength={200} placeholder="The brand line (optional)" aria-label="The brand line" onChange={(e) => setLine(e.target.value)} />
               <input className="cf-input" value={legal} maxLength={600} placeholder="Legal (optional)" aria-label="Legal" onChange={(e) => setLegal(e.target.value)} />
             </div>
-            <p className="cf-note">{rows.length} versions from the ad's own {body.length} shots. The Director agent plans which shots each length keeps and how each shot fits each shape, before anything is made. On 9:16, 4:5 and 1:1 the spoken lines are captioned for sound off; turn them off on any tile.</p>
+            <p className="cf-note">{versionsWord(rows.length)} from the ad's own {body.length} {body.length === 1 ? 'shot' : 'shots'}. The Director agent plans which shots each length keeps and how each shot fits each shape, before anything is made. On 9:16, 4:5 and 1:1 the spoken lines are captioned for sound off; turn them off on any tile.</p>
             {error && <p className="cf-error" role="alert">{error}</p>}
             <footer className="cf-foot"><span className="pt-grow" /><button type="button" className="btn primary" disabled={!rows.length || !body.length} onClick={() => void startPlan()}>Plan the cuts</button></footer>
           </div>
@@ -321,11 +321,11 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
             </div>
             {error && <p className="cf-error" role="alert">{error}</p>}
             <footer className="cf-foot">
-              <span className="cf-note">{rows.filter((r) => r.on).length} versions, cut from the same takes (free){paid.length ? `; ${paid.length} ${paid.length === 1 ? 'shot' : 'shots'} on a model (cost in History)` : ''}. They land on the Campaign board's Film lane.</span>
+              <span className="cf-note">{versionsWord(rows.filter((r) => r.on).length)}, cut from the same takes (free){paid.length ? `; ${paid.length} ${paid.length === 1 ? 'shot' : 'shots'} on a model (cost in History)` : ''}. They land on the Campaign board's Film lane.</span>
               <span className="pt-grow" />
               <button type="button" className="btn ghost" onClick={() => setStep('plan')}>Back</button>
               <button type="button" className="btn primary" disabled={busy || !rows.some((r) => r.on)} onClick={() => void send()}>
-                {busy ? 'Starting…' : `Make ${rows.filter((r) => r.on).length} versions`}
+                {busy ? 'Starting…' : `Make ${versionsWord(rows.filter((r) => r.on).length)}`}
               </button>
             </footer>
           </div>
