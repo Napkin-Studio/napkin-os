@@ -21,6 +21,7 @@ import { wireJobs } from './wire'
 const flush = async () => {
   for (let i = 0; i < 30; i++) await new Promise<void>((r) => setImmediate(r))
 }
+const flushMore = async () => { for (let i = 0; i < 5; i++) await flush() }
 
 async function setup(shotCount = 3) {
   let t = 1_000_000
@@ -171,10 +172,36 @@ describe('sequential storyboard frames', () => {
     // Shot 3 has no frame before it yet: it goes with its anchor only, never waiting on shot 2.
     expect(s.inputOf(first[1].id).previousFrame).toBeUndefined()
     await s.land()
-    await vi.waitFor(() => expect(s.running().length).toBe(2), { timeout: 2000, interval: 5 })
+    // Shot 5 is the end card (no frame): only shot 4 is left, and it starts once. This test waited for 2 running here,
+    // which was shot 4 started twice by the two completions (UAT round 5, S2-D).
+    await vi.waitFor(() => expect(s.running().length).toBe(1), { timeout: 2000, interval: 5 })
+    await flushMore()
+    expect(s.running()).toHaveLength(1)
+    expect(s.requests().filter((r) => r.ctx.for === 'frame' && r.ctx.shotId === s.shotId(3))).toHaveLength(1)
     await s.land()
     await vi.waitFor(() => expect(s.ui.get().drawingRest).toBe(false), { timeout: 2000, interval: 5 })
     expect(shotsOf(s.doc.get()).every((x) => selectedFrame(s.doc.get(), x.id))).toBe(true)
+  })
+
+  it('two frames landing together start the last shot once (UAT round 5, S2-D: shot 4 was started and paid twice)', async () => {
+    const s = await setup(4)
+    await drawFrame(s.deps, 0, 'first')
+    await s.land()
+    await keepCharacter(s.doc, s.frameOf(0).asset, 'mia')
+    await drawTheRest(s.deps)
+    await vi.waitFor(() => expect(s.running().length).toBe(PARALLEL_FRAMES), { timeout: 2000, interval: 5 })
+    // Frames 2 and 3 land in the same poll: two completion hooks each call continueDrawing.
+    await s.land()
+    await vi.waitFor(() => expect(s.running().length).toBe(1), { timeout: 2000, interval: 5 })
+    await flushMore()
+    const forShot4 = () => s.requests().filter((r) => r.ctx.for === 'frame' && r.ctx.shotId === s.shotId(3))
+    expect(forShot4()).toHaveLength(1)
+    // And two calls in the same tick, as the two hooks make them, still start it once.
+    await s.land()
+    await updateDoc(s.doc, (d) => { const sh = d.shots[s.shotId(3)]; delete sh.pick })
+    s.ui.update((u) => { u.drawingRest = true })
+    await Promise.all([continueDrawing(s.deps), continueDrawing(s.deps), continueDrawing(s.deps)])
+    expect(forShot4().filter((r) => !['completed', 'failed', 'cancelled'].includes(r.state))).toHaveLength(1)
   })
 
   it('Draw the rest picks up after a reload from what is drawn', async () => {

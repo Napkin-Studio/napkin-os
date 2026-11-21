@@ -31,8 +31,8 @@ import { elementBounds } from '../core/geometry'
 import { isInkTool } from '../core/tools'
 import { UndoChip } from '../../ui/Undo'
 import { imageFiles, pickPictureFiles, placePictures } from './pictures'
-import { madeFromNote, makeVideo, storyboardFor, storyboardFromShots } from './make'
-import { groupLabel, keyGroupFields, keyGroupsOn, type KeyGroup } from './keyGroups'
+import { madeFromNote, makeVideo, newScriptFor, storyboardFor, storyboardFromShots } from './make'
+import { groupLabel, keyGroupFields, keyGroupsOn, labelAnchor, type KeyGroup } from './keyGroups'
 import { setStacked } from './stack'
 import { pictureToOpen } from './dblclick'
 import './nodes.css'
@@ -127,6 +127,12 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
         markNew(r.el.id)
         show(r.el, from.storyboardId ? { kind: 'storyboard', id: from.storyboardId } : { kind: 'script', id: from.scriptId! })
         return r
+      },
+      scriptFor: async (storyboardId) => {
+        const r = await newScriptFor({ canvas, doc: services.doc }, storyboardId)
+        markNew(r.el.id)
+        show(r.el, { kind: 'storyboard', id: storyboardId })
+        return { scriptId: r.scriptId }
       },
       storyboardFromShots: async (videoId) => {
         const r = await storyboardFromShots({ canvas, doc: services.doc }, videoId)
@@ -650,7 +656,8 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
         // title chip (the board's handle) at the top left (board-autolayout).
         const home = g.members[0].frameId ? canvas.elements().find((e) => e.id === g.members[0].frameId) : undefined
         const end = !!home && (home.customData as { kind?: string } | undefined)?.kind === 'board' && b.y - home.y < 60
-        const p = toLocal((end ? b.x + b.w : b.x) + (off?.dx ?? 0), b.y + (off?.dy ?? 0))
+        const at = end ? { x: b.x + b.w, y: b.y } : labelAnchor(g.members)
+        const p = toLocal(at.x + (off?.dx ?? 0), at.y + (off?.dy ?? 0))
         const look = chipLook(view.zoom)
         return (
           <button key={g.groupId} type="button" className={`nl-keychip ${g.stacked ? 'stacked' : ''} ${end ? 'end' : ''} ${look.dot ? 'dot' : ''}`} data-key={g.key}

@@ -47,6 +47,24 @@ describe('which start an empty node shows', () => {
     expect(promptState(s.get(), 'script', id)).toBeNull()
   })
 
+  it('a brief storyboard with no script of its own plans from the brief, not from the main script (UAT round 5, S3-6b)', async () => {
+    const s = await project()
+    const scene = await addScene(s, mainScript(s.get())!.id)
+    await updateDoc(s, (d) => { d.scenes[scene].text = 'Leo cycles to work.' }, 'edit')
+    const sb = id('storyboard')
+    const brief = id('brief')
+    await systemUpdate(s, (d) => {
+      d.storyboards[sb] = { id: sb, v: 1, field_v: {}, title: 'Storyboard 2', ratio: '16:9', target_s: 15 }
+      d.briefs ??= {}
+      d.briefs[brief] = { id: brief, v: 1, field_v: {}, title: 'Let Them Sleep', source: { how: 'link', document_id: 'doc-q', app_id: 'ie.napkin.brief-maker', taken: 1, data_sha256: SHA('b'), at: '2026-11-21T05:00:00Z' }, spine: { proposition: 'The kettle that lets the house sleep.' } } as never
+      const l = id('link')
+      d.links[l] = { id: l, v: 1, field_v: {}, from: { kind: 'brief', id: brief }, to: { kind: 'storyboard', id: sb }, role: 'brief' }
+    }, 'seed')
+    await s.flush()
+    expect(promptState(s.get(), 'storyboard', sb)).toEqual({ show: 'storyboard', fromScript: true, from: 'brief' })
+    expect(PROMPT_COPY.storyboard.fromBrief).toBe('The Director agent plans the shots from the brief.')
+  })
+
   it('a storyboard with no shots asks for the ad in a line, or offers the plan when the script has words', async () => {
     const s = await project()
     const sb = mainStoryboard(s.get())!.id

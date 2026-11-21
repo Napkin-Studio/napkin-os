@@ -8,7 +8,7 @@
 // the entity out with its links; reconcileLinks takes out a link whose element went), and redo brings
 // them back the same way. Nothing is hidden: what a make adds is on the canvas, beside what it came from.
 
-import type { Link, LinkEndpoint, ProductionDocument, Storyboard, Video } from '../../contracts/types'
+import type { Link, LinkEndpoint, ProductionDocument, Script, Storyboard, Video } from '../../contracts/types'
 import { systemUpdate } from '../../doc/store'
 import { newId } from '../../lib/ulid'
 import { ownShotsOf, storyboardOfScript } from '../../model/selectors'
@@ -57,7 +57,7 @@ export function drivenStoryboard(d: Doc, scriptId: string): Storyboard | undefin
 const newLink = (from: LinkEndpoint, to: LinkEndpoint, role: 'drives' | 'renders'): Link => ({ id: newId('link'), v: 1, field_v: {}, from, to, role })
 
 /** Write a new node and its links: the canvas first (one undoable step), then the document (a system write). */
-async function place(env: NodeEnv, kind: CardKind, entity: Storyboard | Video | { id: string }, box: Box, links: { link: Link; from: string; to: string }[], action: string): Promise<CanvasElement> {
+async function place(env: NodeEnv, kind: CardKind, entity: Storyboard | Video | Script | { id: string }, box: Box, links: { link: Link; from: string; to: string }[], action: string): Promise<CanvasElement> {
   const { canvas } = env
   const el = canvas.node({ x: box.x, y: box.y, width: box.w, height: box.h, customData: { kind, id: entity.id } })
   const ends = new Map<string, string>([[entity.id, el.id]])
@@ -79,6 +79,7 @@ async function place(env: NodeEnv, kind: CardKind, entity: Storyboard | Video | 
   await systemUpdate(env.doc, (d) => {
     if (kind === 'storyboard') d.storyboards[entity.id] = entity as Storyboard
     else if (kind === 'video') d.videos[entity.id] = entity as Video
+    else if (kind === 'script') d.scripts[entity.id] = entity as Script
     for (const l of links) d.links[l.link.id] = l.link
   }, action)
   canvas.select([el.id])
@@ -107,6 +108,20 @@ export async function newStoryboardFor(env: NodeEnv, scriptId: string): Promise<
   const link = newLink({ kind: 'script', id: scriptId }, { kind: 'storyboard', id: sb.id }, 'drives')
   const el = await place(env, 'storyboard', sb, box, [{ link, from: scriptId, to: sb.id }], `add a storyboard for scripts[${scriptId}]`)
   return { storyboardId: sb.id, el }
+}
+
+/** A new, empty Script beside a storyboard, driving it, one undo step (UAT round 5, S3-4: a brief storyboard's
+ *  script, drafted from the brief before its shots are planned). A driver it had is replaced: one script drives it. */
+export async function newScriptFor(env: NodeEnv, storyboardId: string): Promise<{ scriptId: string; el: CanvasElement }> {
+  const d = env.doc.get()
+  const made = newEntity(d, 'script')
+  const src = elementOfEnd(env.canvas.elements(), d, { kind: 'storyboard', id: storyboardId })
+  const box = src ? besideBox(env.canvas.elements(), src, 'script') : placeNode(env.canvas, d, 'script').box
+  const old = Object.values(d.links ?? {}).filter((l) => l.role === 'drives' && l.to.kind === 'storyboard' && l.to.id === storyboardId).map((l) => l.id)
+  if (old.length) await systemUpdate(env.doc, (x) => { for (const id of old) delete x.links[id] }, `unlink the script driving storyboards[${storyboardId}]`)
+  const link = newLink({ kind: 'script', id: made.entity.id }, { kind: 'storyboard', id: storyboardId }, 'drives')
+  const el = await place(env, 'script', made.entity, box, [{ link, from: made.entity.id, to: storyboardId }], `add a script for storyboards[${storyboardId}]`)
+  return { scriptId: made.entity.id, el }
 }
 
 /**

@@ -282,7 +282,9 @@ export function Storyboard() {
             <button className="btn xs ghost" onClick={() => setDeleted(null)}>OK</button>
           </div>
         )}
-        {planJob && !shots.length && <div className="sb-planning"><JobSlot jobId={planJob} /></div>}
+        {/* A plan that asks shows its question once, in the sheet's note above (UAT round 5 S3-3: it showed there and
+            again here, clipped by this box's height). */}
+        {planJob && !shots.length && !(doc.jobs[planJob]?.state === 'needs_input' && askOf(doc, planJob)?.state === 'open') && <div className="sb-planning"><JobSlot jobId={planJob} /></div>}
         {!shots.length && !planJob && (
           <div className="sb-empty pt-card">
             <div className="row" style={{ gap: 10 }}><AgentFigure agent="dex" size={28} decorative /><b>No shots yet</b><span className="pt-mono">{sayer('dex')}</span></div>

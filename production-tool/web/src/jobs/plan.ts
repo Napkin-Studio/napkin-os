@@ -135,7 +135,7 @@ export function askedShot(a: Ask): string | undefined {
 }
 
 /** Dex's question about a shot the new plan leaves out that something was made from. */
-function leftOutAsk(d: ProductionDocument, storyboardId: string, shot: Shot, why = 'The new plan leaves it out, but it has frames or clips.'): Ask {
+export function leftOutAsk(d: ProductionDocument, storyboardId: string, shot: Shot, why = 'The new plan leaves it out, but it has frames or clips.'): Ask {
   const id = newUlidId('q')
   const n = shotNumber(d, shot.id)
   const node = { kind: 'shot' as const, id: shot.id }
