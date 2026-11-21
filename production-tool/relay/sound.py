@@ -25,9 +25,25 @@ def _shots(inp: dict) -> list[dict]:
     return shots or ([inp["shot"]] if isinstance(inp.get("shot"), dict) else [])
 
 
+# A beat that asks for no sound ("Silence: the kettle boils with no noise at all") is not a sound: it turned sound on,
+# and Veo with sound, for a silent shot (UAT round 3, F22/R3-F6). The web's box sound line reads the same words
+# (web/src/rooms/boxModel.ts SILENCE).
+import re as _re0
+
+SILENCE = _re0.compile(
+    r"\b(?:silence|silent|silently|soundless|noiseless|muted?|no (?:sound|noise)s?|without (?:a |any )?(?:sound|noise)s?"
+    r"|nothing (?:is )?heard|not a sound|hushed? quiet)\b", _re0.I)
+
+
+def is_silence(beat: dict) -> bool:
+    """A sound beat that asks for no sound."""
+    return beat.get("kind") == "sound" and bool(SILENCE.search(beat.get("text") or ""))
+
+
 def wants_sound(inp: dict) -> bool:
-    """A shot of the clip has a line, a VO or a sound beat with words."""
-    return any(b.get("kind") in SOUND_KINDS and (b.get("text") or "").strip() for s in _shots(inp) for b in s.get("beats") or [])
+    """A shot of the clip has a line, a VO or a sound beat with words (a beat asking for silence is none)."""
+    return any(b.get("kind") in SOUND_KINDS and (b.get("text") or "").strip() and not is_silence(b)
+               for s in _shots(inp) for b in s.get("beats") or [])
 
 
 def audio_on(inp: dict, sheet: dict | None) -> bool:
@@ -100,7 +116,8 @@ def asked_sound(beat_text: str, script: str) -> bool:
 def keep_asked_sounds(shots: list[dict], script: str) -> tuple[list[dict], list[str]]:
     """The plan's shots with only the sound beats the script asks for; and the ones left out (for the log)."""
     if not (script or "").strip():
-        return shots, []
+        out = [{**s, "beats": [b for b in s["beats"] if not is_silence(b)]} if any(is_silence(b) for b in s.get("beats") or []) else s for s in shots]
+        return out, [b.get("text") or "" for s in shots for b in s.get("beats") or [] if is_silence(b)]
     gone: list[str] = []
     out = []
     for s in shots:
@@ -108,7 +125,7 @@ def keep_asked_sounds(shots: list[dict], script: str) -> tuple[list[dict], list[
         if not beats:
             out.append(s)
             continue
-        kept = [b for b in beats if b.get("kind") != "sound" or asked_sound(b.get("text") or "", script)]
+        kept = [b for b in beats if b.get("kind") != "sound" or (not is_silence(b) and asked_sound(b.get("text") or "", script))]
         gone += [b.get("text") or "" for b in beats if b not in kept]
         out.append({**s, "beats": kept} if len(kept) != len(beats) else s)
     return out, gone
