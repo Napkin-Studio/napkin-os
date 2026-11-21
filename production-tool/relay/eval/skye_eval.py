@@ -14,6 +14,7 @@ offers a real choice or asks for a missing fact, never one option that restates 
 The `proceed` cases are drafts that must come back as drafts (the owner's empty script, 2026-10-15).
 The `length` cases (since skye.v6, live test 2026-11-18) are page drafts and fits that must land on their
 length by the band's rule (writer.rough_seconds): within max(3 s, a fifth) of the target, never far over.
+A shorter version (Tighten, Make it N s) keeps every spoken line word for word (since skye.v7, UAT round 3).
 """
 
 from __future__ import annotations
@@ -87,6 +88,12 @@ def score(case: dict, intent: str, out: dict) -> dict[str, bool]:
         goal = req.get("seconds") if intent == "fit_seconds" else req["context"]["target_s"]
         about = rough_seconds(d["lines"])
         checks["fits the length"] = about <= goal + max(3.0, goal * 0.2) and (intent != "draft" or about >= goal * 0.5)
+    if intent in ("tighten", "fit_seconds"):
+        # A shorter version keeps every spoken line word for word (skye.v7 rule 11; UAT round 3 R3-F7: "Make it
+        # 10 seconds" cut the line the person had just asked for).
+        spoken = [x["text"].strip() for x in req["lines"] if x["type"] == "dialogue"]
+        kept = {x["text"].strip() for x in d["lines"] if x["type"] == "dialogue"}
+        checks["keeps the spoken lines"] = all(t in kept for t in spoken)
     if intent in ("add_beat", "write_vo"):
         beats = d.get("new_beats") or []
         checks["a beat"] = len(beats) >= 1 and all(b["at_s"] <= 30 for b in beats)
