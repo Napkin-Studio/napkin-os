@@ -108,6 +108,13 @@ export function applyFrame(d: ProductionDocument, job: Job, ctx: FrameCtx): Fram
   return frame
 }
 
+/** "Asked: send both of Maya's pictures": the label of a take made from an ask to the Camera agent (R3-F5). */
+export function askLabel(job: Pick<Job, 'remake'>): string | undefined {
+  const ask = job.remake?.delta.find((x) => x.field === 'ask')
+  const words = typeof ask?.to === 'string' ? ask.to.trim().replace(/\s+/g, ' ') : ''
+  return words ? `Asked: ${words.length > 110 ? `${words.slice(0, 109)}…` : words}` : undefined
+}
+
 /** Who asked for a job: its starter in the document, else the project's maker (a generation's `by`). */
 function askedBy(d: ProductionDocument, jobId: string): PersonRef {
   const by = d.jobs[jobId]?.started_by
@@ -117,7 +124,8 @@ const madeAt = (d: ProductionDocument, jobId: string) => d.jobs[jobId]?.created_
 
 /** What a remake changed, as the relay answered it (Job.remake: `from` filled from the parent's request). */
 export function remakeDelta(job: Pick<Job, 'remake'>): GenerationDelta[] {
-  return (job.remake?.delta ?? []).map((x) => ({
+  // An ask to the Camera agent changes nothing of the request but its words; it is the take's label (askLabel).
+  return (job.remake?.delta ?? []).filter((x): x is typeof x & { field: Exclude<typeof x.field, 'ask'> } => x.field !== 'ask').map((x) => ({
     field: x.field, ...(x.shotId ? { shot_id: x.shotId } : {}), ...(x.from !== undefined ? { from: x.from } : {}), to: x.to,
   }))
 }
@@ -257,6 +265,7 @@ export function applyRemake(d: ProductionDocument, job: Job, ctx: RemakeCtx): Ge
     kind: job.op === 'clip_edit' ? 'feel' : 'change',
     parent_id: parent.id,
     ...(delta.length ? { delta } : {}),
+    ...(askLabel(job) ? { label: askLabel(job) } : {}),
     inputs: inputsOf(d, job, parent.shot_ids, durationS, parent),
     ...(parent.box_id ? { box_id: parent.box_id } : {}),
     shot_ids: [...parent.shot_ids],

@@ -1291,6 +1291,8 @@ export type RemakeDelta =
   | { field: 'words'; shotId?: Id; to: string }
   | { field: 'moment'; to: { inS: number; outS: number; note: string; region?: Region; still?: AssetRef } }
   | { field: 'feel'; to: { words?: string; strength?: Strength } }
+  /** Tell the Camera agent (UAT round 3, R3-F5): the person's words, sent as the held request's input.text. */
+  | { field: 'ask'; to: string }
 export interface RemakeWith { parentJobId: Id; parentId?: Id; delta: RemakeDelta[] }
 /** relay-api TimelinePlan: stitch in timeline mode (Render ad). */
 export interface TimelinePlan {
