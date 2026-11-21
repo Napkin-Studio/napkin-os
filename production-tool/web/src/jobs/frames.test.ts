@@ -83,7 +83,11 @@ describe('sequential storyboard frames', () => {
     const j2 = await drawFrame(s.deps, 1, 'next')
     const in2 = s.inputOf(j2)
     expect(in2.anchorFrame?.sha256).toBe(f1.asset)
-    expect(in2.previousFrame?.sha256).toBe(f1.asset)
+    // Frame 1 is the frame before too: the request carries it once, as @anchor (UAT round 4, R4-F5: it went as @anchor
+    // and @previous, the same sha twice, to the provider).
+    expect(in2.previousFrame).toBeUndefined()
+    const shas = [in2.anchorFrame, in2.previousFrame, ...(in2.refs ?? []).map((r) => r.asset)].filter(Boolean).map((a) => a!.sha256)
+    expect(new Set(shas).size).toBe(shas.length)
     expect(in2.refs?.[0].asset.sha256).toBe(s.front)
     expect(in2.shot?.id).toBe(s.shotId(1))
     // A later frame reads shot 1's beat as @anchor's place, and not the rest of the script.
@@ -137,7 +141,9 @@ describe('sequential storyboard frames', () => {
       expect(now[0].ctx.for === 'frame' && now[0].ctx.how).toBe(k === 1 ? 'rest' : 'chain')
       const input = s.inputOf(now[0].id)
       expect(input.anchorFrame?.sha256).toBe(s.frameOf(0).asset)
-      expect(input.previousFrame?.sha256).toBe(s.frameOf(k - 1).asset)
+      // Shot 2's frame before is frame 1, the anchor: sent once (R4-F5).
+      if (k === 1) expect(input.previousFrame).toBeUndefined()
+      else expect(input.previousFrame?.sha256).toBe(s.frameOf(k - 1).asset)
       expect(selectedFrame(s.doc.get(), s.shotId(k))).toBeUndefined()
       await s.land()
       expect(selectedFrame(s.doc.get(), s.shotId(k))).toBeDefined()
@@ -201,7 +207,7 @@ describe('sequential storyboard frames', () => {
     const again = await drawFrame(s.deps, 1, 'again', { text: 'closer', parent: oldF2 })
     const input = s.inputOf(again)
     expect(input.anchorFrame?.sha256).toBe(s.frameOf(0).asset)
-    expect(input.previousFrame?.sha256).toBe(s.frameOf(0).asset)
+    expect(input.previousFrame).toBeUndefined() // the same picture as the anchor: sent once (R4-F5)
     expect(input.text).toBe('closer')
     await s.land()
     const newF2 = s.frameOf(1)
@@ -352,6 +358,7 @@ describe('namesPerson (R3-F1)', () => {
     expect(namesPerson(d, shot('@maya flips the switch, wincing.'))).toBe(true)
     expect(namesPerson(d, shot('Maya whispers to the kettle.'))).toBe(true)
     expect(namesPerson(d, shot('A woman in a dressing gown.'))).toBe(true)
+    expect(namesPerson(d, shot('Behind the thin wall, a flatmate keeps snoring, undisturbed.'))).toBe(true)
     expect(namesPerson(d, shot('Her finger presses the switch.'))).toBe(true)
   })
 })
@@ -371,5 +378,42 @@ describe('castRefs (R3-F1)', () => {
     expect(person.map((r) => [r.name, !!r.optional])).toEqual([['maya_front', false], ['maya_full', false]])
     const insert = await castRefs({} as never, d, undefined, 2, shot('The kettle glows blue.'), refs)
     expect(insert.map((r) => !!r.optional)).toEqual([true, true])
+  })
+})
+
+describe('castRefs: a character only when the shot names it (UAT round 4, R4-F2)', () => {
+  const asset = (n: string) => ({ sha256: `sha256:${n.repeat(64)}`, url: 'x', mime: 'image/png' })
+  const refs = [
+    { id: 'ref_a', name: 'maya_front', role: 'character', kind: 'picture', asset: asset('a'), optional: true },
+    { id: 'ref_b', name: 'maya_full', role: 'character', kind: 'picture', asset: asset('b'), optional: true },
+  ] as never[]
+  const shot = (action: string) => ({ id: 'shot_X', action, refs: [], kind: 'shot', duration_s: 1.5, camera: { size: 'medium' } }) as never
+
+  it('round 4 repro: "a flatmate keeps snoring" sends no Maya and tells Dex the flatmate is someone else', async () => {
+    const { castRefs, castShot } = await import('./cast')
+    const d = snapshotDoc().get()
+    addKey(d, 'maya')
+    const flatmate = shot('Behind the thin wall, a flatmate keeps snoring, undisturbed.')
+    const out = await castRefs({} as never, d, undefined, 3, flatmate, refs)
+    expect(out.filter((r) => r.role === 'character')).toEqual([])
+    const js = castShot(d, flatmate, { id: 'shot_X', kind: 'shot', duration_s: 1.5, camera: { size: 'medium' } as never, action: 'x', refs: [] }, refs)
+    expect(js.direction).toBe('Cast: the flatmate here is someone else, not Maya; draw a different person.')
+    expect(js.direction).not.toContain('@')
+  })
+  it('a shot that names the character gets all its pictures, required, a person noun beside it or not', async () => {
+    const { castRefs } = await import('./cast')
+    const d = snapshotDoc().get()
+    addKey(d, 'maya')
+    for (const words of ['@maya_front raises her mug to the snoring wall, grinning.', 'Maya whispers to the kettle.', '@maya tiptoes past her flatmate.']) {
+      const out = await castRefs({} as never, d, undefined, 4, shot(words), refs)
+      expect(out.map((r) => [r.name, !!r.optional]), words).toEqual([['maya_front', false], ['maya_full', false]])
+    }
+  })
+  it('a pronoun or a hand carries on with the one offered character; an insert keeps it Dex\'s to leave out', async () => {
+    const { castRefs } = await import('./cast')
+    const d = snapshotDoc().get()
+    addKey(d, 'maya')
+    expect((await castRefs({} as never, d, undefined, 2, shot('Her finger presses the switch.'), refs)).map((r) => !!r.optional)).toEqual([false, false])
+    expect((await castRefs({} as never, d, undefined, 2, shot('Insert on the kettle: the switch goes down.'), refs)).map((r) => !!r.optional)).toEqual([true, true])
   })
 })

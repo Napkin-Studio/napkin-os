@@ -20,7 +20,7 @@ import type { Relay } from '../relay'
 import { assetRef } from './assets'
 import { isActive, type JobRunner } from './runner'
 import { jobShot, refsFor } from './select'
-import { castRefs, keptFromFirst } from './cast'
+import { castRefs, castShot, keptFromFirst } from './cast'
 import { liveGet } from '../model/live'
 
 export type { FrameHow } from '../model/purpose'
@@ -115,7 +115,8 @@ export async function frameInput(relay: Relay, d: ProductionDocument, index: num
   if (cont.anchorFrame && sent.has(cont.anchorFrame.sha256)) delete cont.anchorFrame
   if (cont.previousFrame && sent.has(cont.previousFrame.sha256)) delete cont.previousFrame
   return {
-    shot: jobShot(d, shot),
+    // An unnamed person ("a flatmate") is someone else: the offered character's name in a Cast line (R4-F2).
+    shot: castShot(d, shot, jobShot(d, shot), own),
     ...(refs.length ? { refs } : {}),
     ...(ratio ? { ratio } : {}),
     ...(script ? { script } : {}),

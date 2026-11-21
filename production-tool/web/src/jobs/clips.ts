@@ -19,6 +19,7 @@ import { takeTiming } from './takeTiming'
 import { liveGet } from '../model/live'
 import { checkFronts } from '../lib/names'
 import { startPicture } from './startFrame'
+import { castShot, withoutOfferedCast } from './cast'
 
 export { jobShot }
 
@@ -93,7 +94,9 @@ export async function makeClip(
   if (!source) throw new Error(fromWords ? 'This shot has no frame and no words yet.' : 'This shot has no frame yet.')
   const image = frame ? await assetRef(deps.relay, frame.asset) : start ? await assetRef(deps.relay, start.sha) : undefined
   const text = extra.text?.trim()
-  const refs = await refsFor(deps.relay, d, shot, text, { offer: true, declined: deps.ui.get().declinedAdds?.[shot.id] })
+  const offered = await refsFor(deps.relay, d, shot, text, { offer: true, declined: deps.ui.get().declinedAdds?.[shot.id] })
+  // A shot of an unnamed person ("a flatmate") sends no character picture, and says the person is someone else (R4-F2).
+  const refs = withoutOfferedCast(d, shot, offered).refs
   // Belt and braces (the owner's @on ad came out a generic person, 2026-11): a clip made from words alone
   // (no frame) that names a required character cannot carry it on a model without refsWithoutFrame, so refuse
   // here with a clear message rather than submit a character-less job. The Make room makes a frame first; this
@@ -111,7 +114,7 @@ export async function makeClip(
   const input: JobInput = {
     // Every beat, spoken lines too: the relay says them in a clip made with sound and keeps them from Dex and from
     // a silent clip (relay/sound.py, director _without_dialogue; features/pt-film-r1.clan).
-    shot: jobShot(d, shot, false), ...(image ? { image } : {}), ...(refs.length ? { refs } : {}), ...(ratio ? { ratio } : {}), ...(text ? { text: clipText(text, 1000) } : {}),
+    shot: castShot(d, shot, jobShot(d, shot, false), offered), ...(image ? { image } : {}), ...(refs.length ? { refs } : {}), ...(ratio ? { ratio } : {}), ...(text ? { text: clipText(text, 1000) } : {}),
     ...(lastFrame ? { mode: 'frames' as const, lastFrame } : {}),
   }
   const purpose: JobPurpose = {
