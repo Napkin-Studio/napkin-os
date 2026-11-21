@@ -9,7 +9,7 @@ import { useState } from 'react'
 import { useServices } from '../app/context'
 import { clipLen, HOLD_MAX_S, type Cut, type CutClip, type SwapChoice } from './cut'
 import { editCut, swapPlanFor } from './editOps'
-import { boxName, coversShot, inBox, shotWindow, type Gen } from './model'
+import { boxName, coversShot, inBox, type Gen } from './model'
 import { tc } from './media'
 import { Poster } from './Poster'
 import type { RoomData } from './Rooms'
@@ -37,7 +37,6 @@ export function NewTakeSheet({ data, cut, clip, take, onClose, onError }: {
   if (!old || !plan || !mine) return null
   const oldLen = clipLen(clip) - clip.holdS
   const newLen = mine.outS - mine.inS
-  const newSeg = shotWindow(take, clip.follows?.shotId)
   const needsChoice = plan.shortBy > 0
   const use = async () => {
     setBusy(true)
@@ -70,7 +69,8 @@ export function NewTakeSheet({ data, cut, clip, take, onClose, onError }: {
         <label className="rm-fieldlabel">Scrub both over the clip
           <input type="range" min={0} max={1} step={0.01} value={k} onChange={(e) => setK(Number(e.target.value))} />
         </label>
-        <p className="rm-note">The clip's window {oldLen.toFixed(1)} s · the new take has {newLen.toFixed(1)} s for this shot ({tc(newSeg.inS)}-{tc(newSeg.outS)} of it).</p>
+        {/* One window in one sentence (UAT round 3, R3-F11: "has 1.5 s for this shot (0:00.0-0:03.0 of it)"). */}
+        <p className="rm-note">The clip plays {oldLen.toFixed(1)} s now · the new take would play {newLen.toFixed(1)} s of it, {tc(mine.inS)}-{tc(mine.outS)} of its {take.durationS.toFixed(1)} s.</p>
         {needsChoice && (
           <fieldset className="rm-field">
             <legend className="rm-label">The new take is {plan.shortBy.toFixed(1)} s shorter</legend>

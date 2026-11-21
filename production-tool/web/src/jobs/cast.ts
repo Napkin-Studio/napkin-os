@@ -1,20 +1,24 @@
 // Who a storyboard's frames show (features/pt-canvas-r2.clan; UAT round 2 R2-4: frames 2-4 copied frame 3, doubled Mia
 // and the puppy and changed her hair, because a frame got only @anchor and @previous, as objects).
 //
-// - A frame after the first sends a character picture: the shot's own named character when it has one, else a
-//   character the person kept from frame 1 ("Keep a person from this frame"), else frame 1 itself as the person.
+// - A frame sends a character picture only when its shot's words name or imply a person (namesPerson): a named
+//   character, an @mention, a spoken line's speaker, or a person word ("a woman", "her hand"). UAT round 3 R3-F1:
+//   frame 1 went as "the person from shot 1" into every later frame, so a kettle insert and a wall close were
+//   drawn with Maya. That round-2 decision is reversed (features/pt-film-r3.clan).
+// - Then: the shot's own named character when it has one; else the project's character the storyboard offers,
+//   when it is the only one (promoted from optional to required); else a character the person kept from frame 1
+//   ("Keep a person from this frame"). Frame 1 itself never goes as an unnamed person: it is the anchor already.
 // - "Keep a person from this frame" names frame 1's picture as <name>_front, a character, so every later frame (and
 //   the canvas) has it by name.
 
-import type { Id, JobInputRef, NamedRef, ProductionDocument, Sha256 } from '../contracts/types'
+import type { Id, JobInputRef, NamedRef, ProductionDocument, Sha256, Shot } from '../contracts/types'
 import type { DocumentStore } from '../doc/types'
 import { updateDoc } from '../doc/store'
 import { cleanKey, nameOf, nameProblem } from '../lib/names'
 import { newId } from '../lib/ulid'
-import { currentFrame, keyNamed, refsList, shotsOf } from '../model/selectors'
+import { beatsOf, currentFrame, keyNamed, keysList, refsList, shotSubjects, shotsOf } from '../model/selectors'
 import type { Relay } from '../relay'
-import { assetRef } from './assets'
-import { namedInput, unnamedInput } from './select'
+import { namedInput } from './select'
 
 /** The character kept from a storyboard's first frame (a character ref on that picture), if any. */
 export function keptFromFirst(d: ProductionDocument, storyboardId: Id | undefined): NamedRef | undefined {
@@ -24,16 +28,45 @@ export function keptFromFirst(d: ProductionDocument, storyboardId: Id | undefine
   return refsList(d).find((r) => r.asset === frame.asset && (keyNamed(d, r.key)?.role ?? r.role) === 'character')
 }
 
-/** The character picture a later frame sends when its own refs have none (undefined for the first shot, or when the
- *  refs carry a character already, or there is no first frame yet). */
-export async function castRef(relay: Relay, d: ProductionDocument, storyboardId: Id | undefined, index: number, refs: readonly JobInputRef[]): Promise<JobInputRef | undefined> {
-  if (index <= 0 || refs.some((r) => r.role === 'character' && !r.optional)) return undefined
+/** Words that mean a person is seen (or heard in the shot): a person word, a body part of one, or a pronoun. */
+const PERSON_WORDS = /\b(?:wom[ae]n|m[ae]n|girls?|boys?|guys?|lad(?:y|ies)|gentlem[ae]n|persons?|people|someone|somebody|anyone|everyone|child(?:ren)?|kids?|bab(?:y|ies)|toddlers?|teens?|teenagers?|adults?|friends?|flatmates?|roommates?|housemates?|neighbou?rs?|couple|family|mum|mom|dad|mother|father|sisters?|brothers?|wife|husband|partner|customers?|shoppers?|workers?|chef|cook|driver|crowd|audience|hero(?:ine)?|she|he|her|his|him|hers|they|them|their|hands?|fingers?|faces?|eyes|lips|mouth|arms?|feet|legs)\b/i
+
+/** Whether a shot's words name or imply a person: a character it names (its refs or an @mention of a character key),
+ *  a spoken line or its speaker, a character key's name in plain words, or a person word. A kettle insert or a wall
+ *  close names no one (UAT round 3 R3-F1). */
+export function namesPerson(d: ProductionDocument, shot: Shot): boolean {
+  const role = (name: string) => keyNamed(d, name.split('_')[0])?.role ?? refsList(d).find((r) => nameOf(r) === name)?.role
+  if (shotSubjects(d, shot).some((n) => role(n) === 'character')) return true
+  const words = [shot.action ?? '', shot.direction ?? ''].join(' ')
+  for (const m of words.matchAll(/@([a-z0-9][a-z0-9_-]*)/gi)) {
+    const r = role(m[1].toLowerCase())
+    if (r === 'character') return true
+  }
+  if (beatsOf(d, shot.id).some((b) => b.kind === 'line' || !!b.speaker)) return true
+  const plain = words.replace(/@[a-z0-9_-]+/gi, ' ')
+  if (PERSON_WORDS.test(plain)) return true
+  return keysList(d).some((k) => k.role === 'character' && new RegExp(`\\b${k.key.replace(/[^a-z0-9]/gi, '')}\\b`, 'i').test(plain))
+}
+
+/**
+ * The character pictures a frame sends (R3-F1): `refs` as they are when the shot names no person, or already
+ * carries a required character. Else the one character the storyboard offers (all its pictures) becomes required;
+ * else, for a later frame, the person kept from frame 1, by name. Never frame 1 as an unnamed person.
+ */
+export async function castRefs(relay: Relay, d: ProductionDocument, storyboardId: Id | undefined, index: number, shot: Shot, refs: readonly JobInputRef[]): Promise<JobInputRef[]> {
+  if (!namesPerson(d, shot) || refs.some((r) => r.role === 'character' && !r.optional)) return [...refs]
+  const offered = refs.filter((r) => r.role === 'character' && r.optional)
+  const keys = new Set(offered.map((r) => (r.name ?? '').split('_')[0]))
+  if (offered.length && keys.size === 1) return refs.map((r) => (offered.includes(r) ? withoutOptional(r) : r))
+  if (index <= 0) return [...refs]
   const kept = keptFromFirst(d, storyboardId)
-  if (kept) return namedInput(relay, d, kept)
-  const first = shotsOf(d, storyboardId)[0]
-  const frame = first ? currentFrame(d, first.id) : undefined
-  if (!frame) return undefined
-  return { ...unnamedInput(frame.id, 'gen', await assetRef(relay, frame.asset), 'character'), label: 'the person from shot 1' }
+  if (!kept || refs.some((r) => r.id === kept.id)) return [...refs]
+  return [await namedInput(relay, d, kept), ...refs]
+}
+
+function withoutOptional(r: JobInputRef): JobInputRef {
+  const { optional: _o, ...rest } = r
+  return rest
 }
 
 /** A name to offer for the person in frame 1: the first capitalised word of the shot's action that is not a stop word. */
