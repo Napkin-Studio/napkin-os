@@ -1349,7 +1349,7 @@ const MAIN_ROLES = REF_ROLES.filter((r) => REF_ROLE_TABLE[r].picker === 'main')
 const roleWord = (r: RefRole) => (r === 'brand_rule' ? 'brand rule' : r)
 /** Two roles other than the one the key holds, as examples (UAT round 4, R4-F8: "@maya is a character… For another role
  *  (a font, a character…)"). */
-export const otherRoles = (r: RefRole) => ['a character', 'a location', 'a font', 'a product'].filter((w) => w !== `a ${roleWord(r)}`).slice(0, 2).join(', ') + '…'
+const otherRoles = (r: RefRole) => ['a character', 'a location', 'a font', 'a product'].filter((w) => w !== `a ${roleWord(r)}`).slice(0, 2).join(', ') + '…'
 /** The role's one line in the Name dialog; a palette's says its colours can be changed (UAT round 2: one line, not two). */
 const roleLine = (r: RefRole) => (r === 'palette'
   // A palette is accents, not the only colours (UAT round 3 R3-2; the contract's line still says "keeps to").

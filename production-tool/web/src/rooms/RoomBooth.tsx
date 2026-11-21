@@ -21,6 +21,7 @@ import type { ChangeOpen } from './ChangeDrawer'
 import { boxName, makingLine, shotTitle, type Gen } from './model'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { Poster } from './Poster'
+import { offersApart } from './apartOffer'
 import type { RoomData, RoomName, Selection } from './Rooms'
 import { dismissedTakes, newerTake, notNow, readCut } from './timeline'
 import type { CutClip } from './cut'
@@ -168,15 +169,6 @@ export function RoomWaits(p: RoomProps) {
 }
 
 /** The Booth on a selected box, shot or take (Make) or clip (Edit). */
-/** Whether the Change tab offers to make a shot apart: not for an ask of the Camera agent about the take as a whole
- *  (UAT round 4, R4-F9: "the empty room for shot 4, Maya in shot 5" offered "Make shot 4 apart?"); only when the ask names
- *  this shot and no other of the take. A change of the shot's own words or feel offers it as before. */
-export function offersApart(ask: string | undefined, n: number, others: number[]): boolean {
-  if (!ask?.trim()) return true
-  const named = new Set([...ask.matchAll(/\bshots?\s+(\d+)(?:\s*(?:and|&|,|-|–|to)\s*(\d+))?/gi)].flatMap((m) => [m[1], m[2]]).filter(Boolean).map(Number))
-  return named.has(n) && !others.some((o) => named.has(o))
-}
-
 export function RoomBooth({ slot, ...p }: RoomProps) {
   const { room, data, sel, onClose, onChange } = p
   const doc = useDoc()
