@@ -26,8 +26,8 @@ export interface Window { in_s: number; out_s: number; by: 'prompt' | 'detected'
 /** Each shot's window of a take `totalS` long, the shot's own length (owner 2026-11-18: joined shots keep their
  *  storyboard windows). A cut the take really made (the job's cuts, in cut order: cut k starts shot k+1; the
  *  relay's own plan, whatever the web planned) starts its shot there and the tail is trimmed; a cut not found
- *  falls back to the plan, where the slack at the shot's head is trimmed (never the first shot's, which
- *  starts on the pinned frame). UAT 2026-11-21: the take cut at 3.0 s and the window started at 3.5 s. */
+ *  falls back to the plan: the shot starts where the prompt timed it and its slack is trimmed from its tail (round 4,
+ *  R4-F7). UAT 2026-11-21: the take cut at 3.0 s and the window started at 3.5 s. */
 export function takeWindows(durations: number[], starts: number[], cuts: { planned_s: number; found_s: number | null }[] | undefined, totalS: number): Window[] {
   const found = starts.map((s, i) => {
     if (i === 0) return { at: 0, detected: false }
@@ -39,8 +39,10 @@ export function takeWindows(durations: number[], starts: number[], cuts: { plann
     const next = i + 1 < found.length ? found[i + 1].at : totalS
     const from = found[i].at
     if (i > 0 && found[i].detected) return { in_s: round(from), out_s: round(Math.max(from + 0.04, Math.min(next, from + d))), by: 'detected' }
-    const inS = i === 0 ? 0 : Math.max(from, next - d)
-    const by = (i === 0 ? found[1]?.detected : found[i].detected) ? 'detected' : 'prompt'
-    return { in_s: round(inS), out_s: round(next), by }
+    // A later shot starts where the take's prompt timed it (the cut Dex wrote, "[1.5-4 s]"), its slack trimmed from the
+    // tail: one source of truth for the window (UAT round 4, R4-F7: Dex timed shot 5 from 1.5 s, the window took 2.0 s).
+    if (i > 0) return { in_s: round(from), out_s: round(Math.max(from + 0.04, Math.min(next, from + d))), by: 'prompt' }
+    const by = found[1]?.detected ? 'detected' : 'prompt'
+    return { in_s: 0, out_s: round(next), by }
   })
 }

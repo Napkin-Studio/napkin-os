@@ -390,7 +390,13 @@ export async function makeRuns(deps: FrameDeps, opts: MakeRunsOpts): Promise<str
   const busy = opts.busy ?? (() => false)
   const shots = shotsOf(d, sb.id)
   const facts = shots.map((s) => planShot(d, s, { hasFrame: !!selectedFrame(d, s.id), videoId: opts.videoId }))
-  const plan = planRuns(facts, model, { join: 'film', speaker: speakerModel(model, sheets), takeModel: takeModelFor(model, sheets) })
+  // A person's pick (the model the box shows) is the model sent, on every run of it: a spoken line stays on the pick
+  // (the box says before Make when the pick cannot voice it) and a take never switches to another model. Only with no
+  // pick does a spoken line go to Veo with sound and an over-long run to WAN 3 (UAT round 4, R4-F1: WAN 3 shown and
+  // picked, Veo 3.1 with sound made, the third time this class came back).
+  const plan = planRuns(facts, model, opts.modelChoice
+    ? { join: 'film', speaker: model }
+    : { join: 'film', speaker: speakerModel(model, sheets), takeModel: takeModelFor(model, sheets) })
   const asked = new Set(opts.shotIds)
   // What is made: each take run an asked shot is in, unless it is one take already (or being made); each asked
   // lone shot with no clip yet (any, with again).
