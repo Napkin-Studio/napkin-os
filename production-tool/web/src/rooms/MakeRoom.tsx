@@ -707,7 +707,7 @@ function BoxTab({ box, data, sel, facts, onModel, onMake, making, ticked, onTick
           <button type="button" role="radio" aria-checked={!box.together} className={!box.together ? 'on' : ''} disabled={!box.together || making}
             onClick={box.together ? onSeparate : undefined}>Separate videos</button>
         </div>
-        <p className="rm-note">{boxHow(doc, box, facts.pics)}</p>
+        <p className="rm-note">{boxHow(doc, box, facts.pics, facts.frameFirst)}</p>
       </fieldset>
       {box.together && facts.pics.length > 0 && (
         <fieldset className="rm-field">

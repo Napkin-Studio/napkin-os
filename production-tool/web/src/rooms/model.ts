@@ -90,12 +90,17 @@ export function repeatsTake(provider: string | undefined, model: string | undefi
 /** "Box 2", or "End card". */
 export const boxName = (b: Pick<Box, 'n' | 'endCard'>) => (b.endCard ? 'End card' : `Box ${b.n}`)
 
+/** "Box 1–2 · v1": a take's name, the box it was made as with its one version number, so two takes that are both v1
+ *  of different boxes say so (UAT round 3, F15: the Use this take sheet said "Now: v1 / New: v1"). */
+export function takeName(g: Gen, boxes: Box[]): string {
+  const b = boxes.find((x) => x.key === g.boxKey)
+  const name = g.madeN ? `Box ${g.madeN}${g.madeTo && g.madeTo !== g.madeN ? `–${g.madeTo}` : ''}` : b ? boxName(b) : 'Not in a box'
+  return `${name} · v${g.version}`
+}
+
 /** "Box 2 · v3 · 3.5 s". */
 export function genTitle(g: Gen, boxes: Box[]): string {
-  const b = boxes.find((x) => x.key === g.boxKey)
-  const len = `${Math.round(g.durationS * 10) / 10} s`
-  const name = g.madeN ? `Box ${g.madeN}${g.madeTo && g.madeTo !== g.madeN ? `–${g.madeTo}` : ''}` : b ? boxName(b) : 'Not in a box'
-  return [name, `v${g.version}`, len].join(' · ')
+  return `${takeName(g, boxes)} · ${Math.round(g.durationS * 10) / 10} s`
 }
 
 /** Whether a take has footage for a shot: its own shots or its windows (a clip with no shot: any take). One rule for

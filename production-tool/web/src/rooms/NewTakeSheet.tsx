@@ -12,6 +12,7 @@ import { editCut, swapPlanFor } from './editOps'
 import { boxName, coversShot, inBox, shotWindow, type Gen } from './model'
 import { tc } from './media'
 import { Poster } from './Poster'
+import { takeName } from './model'
 import type { RoomData } from './Rooms'
 import { notNow } from './timeline'
 
@@ -60,11 +61,11 @@ export function NewTakeSheet({ data, cut, clip, take, onClose, onError }: {
         <div className="rm-sheetpair">
           <figure>
             <Poster sha={old.asset} atS={clip.inS + k * oldLen} />
-            <figcaption className="rm-clamp2" title={`v${old.version} · ${old.label}`}>Now: v{old.version} · {old.label}</figcaption>
+            <figcaption className="rm-clamp2" title={`${takeName(old, data.boxes)} · ${old.label}`}>Now: {takeName(old, data.boxes)} · {old.label}</figcaption>
           </figure>
           <figure>
             <Poster sha={take.asset} atS={mine.inS + k * newLen} />
-            <figcaption className="rm-clamp2" title={`v${take.version} · ${take.label}`}>New: v{take.version} · {take.label}</figcaption>
+            <figcaption className="rm-clamp2" title={`${takeName(take, data.boxes)} · ${take.label}`}>New: {takeName(take, data.boxes)} · {take.label}</figcaption>
           </figure>
         </div>
         <label className="rm-fieldlabel">Scrub both over the clip
