@@ -503,6 +503,8 @@ export interface AgentBlock {
   output: Record<string, unknown>
   rationale: string
   latencyMs?: number
+  /** The director call's token counts (pt-canvas-r4). */
+  usage?: { inputTokens?: number; outputTokens?: number; cacheReadTokens?: number; cacheWriteTokens?: number }
   /** What the director received, after the relay's cuts, kept small (director.schema.json agentBlock.input;
    *  features/pt-canvas-r1.clan). Absent on the passthrough and on older jobs. */
   input?: Record<string, unknown>
@@ -1331,6 +1333,8 @@ export interface Job {
   quotaClass: QuotaClass
   state: JobState
   queuePosition?: number
+  /** A job that runs in several provider calls (a stepped extend): the call it is on, of how many (pt-canvas-r4). */
+  progress?: { step: number; steps: number }
   nextPollS?: number
   provider?: Provider
   model?: string

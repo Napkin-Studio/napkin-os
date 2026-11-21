@@ -57,7 +57,7 @@ export const frameEditCopy = {
     redrawN: (n: number) => `Redraw frame ${n}`,
     edit: 'Edit anyway',
     changeAnyway: 'Change anyway',
-    unpaid: 'Nothing paid yet',
+    unpaid: 'Nothing has been made yet.',
   },
   redrawing: (n: number) => `The Director agent is redrawing frame ${n}`,
   redrew: (n: number) => `The Director agent redrew frame ${n} from the shot.`,

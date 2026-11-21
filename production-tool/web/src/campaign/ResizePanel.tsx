@@ -15,7 +15,7 @@ import type { Anchor } from '../lib/place'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { methodModels } from './rules'
 import {
-  cropKeeps, frameOver, HOW_LINE, HOW_WORD, howOff, HOWS, knownProtect, rememberedProtect, rememberProtect, loadPick, makeWords, methodLine, methodOf, mixedLine, parseCustom, planResize,
+  cropKeeps, frameOver, HOW_LINE, HOW_WORD, howOff, HOWS, knownProtect, rememberedProtect, rememberProtect, loadPick, makeWords, methodLine, methodOf, mixedLine, parseCustom, planResize, tooFarToExtend, tooFarWords,
   previewLayout, savePick, SHAPES, SKETCH_LINE, trayRows, type How, type Shape, type Source,
 } from './resizeSelection'
 import { panCrop } from './crop'
@@ -94,6 +94,8 @@ export function ResizePanel({ anchor, total, load, send, onClose }: {
   const scamp = !!sources?.some((s) => s.kind !== 'picture')
   const mixed = sources ? mixedLine(sources.length, total) : undefined
   const pictures = sources?.length ?? 0
+  // Extend picked, and a shape it cannot reach in three steps (UAT round 4 S1-1): redrawn instead, said plainly.
+  const tooFar = tooFarWords(tooFarToExtend(how, sources ?? [], shapes), models)
 
   const go = async () => {
     setBusy(true)
@@ -168,6 +170,7 @@ export function ResizePanel({ anchor, total, load, send, onClose }: {
             ))}
           </div>
           {crops && sources && !sources.some((s) => s.protect?.length) && <p className="rs-line faint">Mark what must stay and every crop keeps it in; else the crop keeps the middle.</p>}
+          {tooFar && <p className="rs-line rs-toofar" role="note">{tooFar}</p>}
           {markingSrc && createPortal(
             // On the page, not over the canvas (as the Campaign board's ProtectSheet): the canvas never sees its drags.
             <div className="cf-scrim" role="presentation" onPointerDown={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) setMarking(null) }}>
@@ -212,7 +215,8 @@ export function ResizePanel({ anchor, total, load, send, onClose }: {
               <div key={r.id} className="cb-trayrow" role="listitem"><span className="cb-trayname">{r.name}</span><span className="cf-dots" /><span className="cb-traywords">{r.words}</span></div>
             ))}
           </div>
-          <p className="rs-line faint">Each is its own job: one that fails says so on its card, the others carry on. What each costs is in History.</p>
+          {tooFar && <p className="rs-line rs-toofar" role="note">{tooFar}</p>}
+          <p className="rs-line faint">Each is its own job: one that fails says so on its card, the others carry on.</p>
           {error && <p className="cf-error" role="alert">{error}</p>}
           <footer className="cf-foot">
             <button type="button" className="btn ghost" onClick={() => setStep('pick')}>Back</button>

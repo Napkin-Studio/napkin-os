@@ -762,7 +762,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
                     {live && <span className="ie-jobrow"><JobSlot jobId={live} row onRetried={(id) => setSession((s) => updateEdit(s, e.id, { jobId: id }))} /></span>}
                     {st === 'unsent' && 'jobId' in e && (
                       <span className="ie-jobrow ie-unsent">
-                        <span className="ie-bad" title="You confirmed it, and the page closed before it reached the Retouch agent. Nothing was paid.">not sent</span>
+                        <span className="ie-bad" title="You confirmed it, and the page closed before it reached the Retouch agent. Nothing was made.">not sent</span>
                         <button type="button" className="btn sm" disabled={running} onClick={() => sendAgain(e)}>Send again</button>
                         <button type="button" className="btn sm ghost" onClick={() => setSession((s) => undoEdit(s, e.id))}>Discard</button>
                       </span>

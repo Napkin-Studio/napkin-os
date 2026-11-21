@@ -166,7 +166,7 @@ export function SizesOverview({ set, sizes, staleIds, models, deps, by, title, o
                       return (
                         <button key={m} type="button" role="menuitemradio" aria-checked={picked.method === m} className="pt-menurow" disabled={off || picked.method === m}
                           title={off ? 'Off for your agency' : undefined} onClick={() => pickMethod(picked, m)}>
-                          {METHOD_WORD[m]}<span className="hint">{PAID.has(m) ? models[m]?.label ?? 'off' : 'free'}</span>{picked.method === m && ' ✓'}
+                          {METHOD_WORD[m]}<span className="hint">{PAID.has(m) ? models[m]?.label ?? 'off' : 'in seconds'}</span>{picked.method === m && ' ✓'}
                         </button>
                       )
                     })}
