@@ -13,7 +13,7 @@ import { scriptText } from '../model/selectors'
 import { Booth, type BoothState } from '../ui/booth/Booth'
 import { BoothBox, ScopeChip, WorkingCard } from '../ui/booth/BoothParts'
 import type { ComposedScript } from './compose'
-import { fitSeconds, handsOff as isHandsOff, HANDS_OFF_LINE, NOT_HERE, QUOTA_OUT, SKYE_OPTIONS } from './skye'
+import { fitSeconds, handsOff as isHandsOff, HANDS_OFF_LINE, NOT_HERE, QUOTA_OUT, SKYE_OPTIONS, WhichItem } from './skye'
 import { shareSeconds, type SkyeScope, type Span } from './skyeBooth'
 
 type Doc = ProductionDocument
@@ -110,6 +110,8 @@ export function SkyeBooth(p: SkyeBoothProps) {
   const [sel, clearSel] = useSelection(p.editor, p.focusTarget)
   const [asking, setAsking] = useState(false)
   const [anyway, setAnyway] = useState(false)
+  // An ask two shots fit as well: which one (R4-F3, UX 3), with the words kept to send on the pick.
+  const [which, setWhich] = useState<{ words: string; choices: WhichItem['choices'] } | null>(null)
   // The selection wins over a part; a part over the whole script.
   const scope: SkyeScope = sel ?? part ?? whole
   const scoped = scope.kind !== 'whole'
@@ -140,10 +142,21 @@ export function SkyeBooth(p: SkyeBoothProps) {
   const explicit = anyway ? { explicit: true } : {}
   // What is typed in the box: a draft on an empty script, else Skye's free instruct on the scope.
   const send = (words: string) => run(async () => {
+    setWhich(null)
     if (p.empty || !target) return p.onDraftScript(words)
     const selection = spanOf()
-    return p.onWrite(target, 'instruct', { instruction: words, mode: 'revise', ...(selection ? { selection } : {}), ...explicit })
+    try {
+      return await p.onWrite(target, 'instruct', { instruction: words, mode: 'revise', ...(selection ? { selection } : {}), ...explicit })
+    } catch (e) {
+      if (!(e instanceof WhichItem)) throw e
+      setWhich({ words, choices: e.choices })
+    }
   })
+  const pickWhich = (t: WriteTarget) => {
+    const words = which?.words
+    setWhich(null)
+    if (words) void run(() => p.onWrite(t, 'instruct', { instruction: words, mode: 'revise', ...explicit }))
+  }
   const verb = (intent: WriteIntent) => target && run(() => {
     const selection = spanOf()
     return p.onWrite(target, intent, { ...(selection ? { selection } : {}), ...(intent === 'fit_seconds' ? { seconds } : {}), ...explicit })
@@ -191,6 +204,14 @@ export function SkyeBooth(p: SkyeBoothProps) {
         <h4>{scope.kind === 'whole' ? 'Ask the Script agent' : scope.kind === 'part' ? 'Change this line' : 'Change your selection'}</h4>
         <BoothBox key={scope.kind === 'whole' ? 'whole' : scope.kind === 'part' ? `part:${scope.label}` : 'sel'} placeholder={placeholder} button="Ask the Script agent" scope={chip}
           onSend={send} busy={asking} disabled={skye.off || skye.quota || busy || handsOff} hint={hint} />
+        {which && (
+          <div className="bt-which" role="group" aria-label="Which shot is it about?">
+            <p className="bt-quiet">{which.choices.length === 2 ? 'Both of these fit what you asked. Which one is it about?' : 'These fit what you asked. Which one is it about?'}</p>
+            <div className="bt-verbs">
+              {which.choices.map((c) => <button key={c.target.id} type="button" onClick={() => pickWhich(c.target)}>{c.label}</button>)}
+            </div>
+          </div>
+        )}
         {!p.empty && verbs(scope.kind === 'part' ? SKYE_OPTIONS.filter((o) => o.intent !== 'write_vo') : SKYE_OPTIONS)}
         {p.empty && p.onDraftFromBrief && (
           <button type="button" className="btn" disabled={skye.off || skye.quota || busy || handsOff || asking} onClick={() => void run(() => p.onDraftFromBrief!())}

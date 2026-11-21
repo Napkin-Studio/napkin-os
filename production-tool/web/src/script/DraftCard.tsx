@@ -11,7 +11,7 @@ import { AgentFigure } from '../ui/agents/AgentFigure'
 import { useWhy } from '../ui/booth/hooks'
 import type { HistoryFocus } from '../ui/History'
 import type { ComposedScript } from './compose'
-import { discardDraft, keep, linesOf } from './skye'
+import { discardDraft, keep, linesOf, sceneLines } from './skye'
 import { askedWords, cardLines, draftLines, draftSeconds, landsWhere, lineDiff, secondsNow } from './skyeBooth'
 
 const SCREENPLAY_KINDS = new Set(['character', 'dialogue', 'parenthetical', 'transition'])
@@ -71,7 +71,10 @@ export function DraftCard({ sug, store, doc, composed, empty, requestOf, onWrite
     }
   }
   const askAgain = () => void onWrite(sug.target, write?.intent ?? 'tighten', { ...(write?.mode ? { mode: write.mode } : {}), ...(write?.instruction ? { instruction: write.instruction } : {}) })
-  const beforeLines = linesOf(doc, current()).map((l) => ({ kind: l.type as string, text: l.text }))
+  // A scene Plan shots made into shots is shown, and timed, as its shots and their lines (R4-F3).
+  const own = linesOf(doc, current())
+  const fromShots = sug.target.kind === 'scene' && !own.some((l) => l.text.trim()) && !!doc.scenes[sug.target.id]
+  const beforeLines = (fromShots ? sceneLines(doc, doc.scenes[sug.target.id].script_id, sug.target.id, current()) : own).map((l) => ({ kind: l.type as string, text: l.text }))
   const lines = isDraft ? draftLines(doc, sug) : null
   // An edit in screenplay layout: cues, parentheticals and dialogue stay in their places, and only a rewritten line
   // is shown word by word (UAT 2026-11-21, script UX 1).
@@ -80,7 +83,7 @@ export function DraftCard({ sug, store, doc, composed, empty, requestOf, onWrite
   // Line by line, a rewritten line as its old and new lines one under the other (UAT round 3, R3-F7).
   const shown = cardLines(rows)
   // Seconds before and after on every card (script UX 3).
-  const was = isDraft || sug.target.kind === 'beat' ? undefined : secondsNow(doc, sug, beforeLines)
+  const was = isDraft || sug.target.kind === 'beat' ? undefined : secondsNow(doc, sug, beforeLines, fromShots)
   return (
     <article ref={cardRef} className={`se-draft ${stale ? 'stale' : ''}`} role="group" aria-label={`The Script agent's ${isDraft ? 'draft' : 'edit'}`} data-suggestion={sug.id}
       contentEditable={false} suppressContentEditableWarning>
