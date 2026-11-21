@@ -39,7 +39,9 @@ PAID_METHODS = ("extend", "regenerate")
 # picture dominates the words, so a scene description only risks a mismatch), and never a size's type.
 # UAT round 1 (IMG-9, 2026-11-20): "keep everything inside exactly as it is" read as keeping the soft bands too,
 # and they came back as flat blurred bars with a hard seam. The words now say the bands are empty space to paint.
-EXTEND_PROMPT = ("The picture is surrounded by soft, smeared bands: they are empty space, not part of it. Paint new, "
+# Round 3 (stepped outpainting): the bands hold a soft mirror of the picture's edge, only a guide to its colours.
+EXTEND_PROMPT = ("The picture is surrounded by soft bands that only mirror its edge: they are empty space, not part of "
+                 "it, and nothing in them is to be kept or repeated. Paint new, "
                  "sharp detail there that continues the picture seamlessly across its edges: the same horizon, ground, "
                  "light, colour, grain and perspective, with no seam, blur, border or frame. Keep the picture itself "
                  "as it is. No text, no letters, no logos.")
@@ -112,6 +114,126 @@ EXTEND_GRAIN = 18
 # model keeping the soft seed): the edge's fine detail, measured, sets how much noise the bands carry, within these.
 TEXTURE_STRIP = 48
 GRAIN_MIN, GRAIN_MAX = 4.0, 36.0
+
+# Stepped outpainting (UAT round 3, IMG-9 third round: one Ideogram fill of a 21:9 band left a hard vertical seam with
+# the seed's speckle unpainted along it). An extend grows the picture in steps, each at most STEP_GROWTH of the side it
+# pads, at most EXTEND_STEPS_MAX steps; each step's bands are seeded with the real pixels beside them (mirrored, then
+# softened: STEP_SEED_BLUR of the band, at least STEP_SEED_BLUR_MIN px), never with grain, and its result is laid back
+# on a ramp over the picture it grew from before the next step reads it.
+STEP_GROWTH = 0.35
+EXTEND_STEPS_MAX = 3
+STEP_SEED_BLUR = 0.04
+STEP_SEED_BLUR_MIN = 3
+
+
+def step_count(mw: int, mh: int, aw: int, ah: int) -> int:
+    """How many Ideogram calls an extend of a mw x mh master to aw:ah takes (1 to EXTEND_STEPS_MAX): the growth along
+    the padded side, in steps of at most STEP_GROWTH. The same from any plate size (only the shapes count)."""
+    if mw <= 0 or mh <= 0 or aw <= 0 or ah <= 0:
+        return 1
+    grow = max((mh * aw) / (mw * ah), (mw * ah) / (mh * aw))
+    if grow <= 1.0001:
+        return 1
+    return max(1, min(EXTEND_STEPS_MAX, math.ceil(math.log(grow) / math.log(1 + STEP_GROWTH) - 1e-9)))
+
+
+def step_plans(plan: dict, steps: int | None = None) -> list[dict]:
+    """The canvases of a stepped extend that ends on `plan` (pad_plan's): one per step, each {canvas, at, step,
+    steps}, `at` being where the step's input (the master, scaled, for the first; the step before's canvas after)
+    sits on its canvas. Each side grows in the same proportion at every step, geometrically, so every band is
+    about the same share of the picture it continues."""
+    cw, ch = plan["canvas"]["w"], plan["canvas"]["h"]
+    at = plan["at"]
+    w0, h0 = at["w"], at["h"]
+    left, top = at["x"], at["y"]
+    right, bottom = cw - at["x"] - w0, ch - at["y"] - h0
+    if steps is None:
+        grow = max(cw / w0, ch / h0)
+        steps = 1 if grow <= 1.0001 else max(1, min(EXTEND_STEPS_MAX, math.ceil(math.log(grow) / math.log(1 + STEP_GROWTH) - 1e-9)))
+    steps = max(1, steps)
+
+    def share(k: int, total_w: int, base: int, pad: int) -> int:
+        if k >= steps:
+            return pad
+        if total_w <= base:
+            return 0
+        target = base * (total_w / base) ** (k / steps)
+        return _half_up(pad * (target - base) / (total_w - base))
+
+    out, prev = [], (0, 0, w0, h0)  # (left, top, w, h) of the step before, in its own canvas
+    for k in range(1, steps + 1):
+        lk, rk = share(k, cw, w0, left), share(k, cw, w0, right)
+        tk, bk = share(k, ch, h0, top), share(k, ch, h0, bottom)
+        cwk, chk = w0 + lk + rk, h0 + tk + bk
+        pl, pt, pw, ph = prev
+        out.append({"canvas": {"w": cwk, "h": chk}, "scale": plan.get("scale", 1.0), "step": k, "steps": steps,
+                    "at": {"x": lk - pl, "y": tk - pt, "w": pw, "h": ph}})
+        prev = (lk, tk, cwk, chk)
+    return out
+
+
+def _mirrored(base, cw: int, ch: int, x: int, y: int):
+    """The canvas with `base` at (x, y) and each band filled with the real pixels beside it, mirrored outwards (rows
+    first, then columns over the whole width), each band softened alone so it reads as a continuation, never a copy."""
+    from PIL import Image, ImageFilter, ImageOps
+    w, h = base.size
+
+    def soft(band):
+        r = max(STEP_SEED_BLUR_MIN, int(round(min(band.size) * STEP_SEED_BLUR)))
+        return band.filter(ImageFilter.GaussianBlur(r))
+
+    def strip(img, box, size, flip):
+        piece = flip(img.crop(box))
+        if piece.size != size:
+            piece = piece.resize(size, Image.BILINEAR)
+        return soft(piece)
+
+    row = Image.new("RGB", (cw, h))
+    row.paste(base, (x, 0))
+    if x > 0:
+        k = min(x, w)
+        row.paste(strip(base, (0, 0, k, h), (x, h), ImageOps.mirror), (0, 0))
+    if x + w < cw:
+        r = cw - x - w
+        k = min(r, w)
+        row.paste(strip(base, (w - k, 0, w, h), (r, h), ImageOps.mirror), (x + w, 0))
+    out = Image.new("RGB", (cw, ch))
+    out.paste(row, (0, y))
+    if y > 0:
+        k = min(y, h)
+        out.paste(strip(row, (0, 0, cw, k), (cw, y), ImageOps.flip), (0, 0))
+    if y + h < ch:
+        b = ch - y - h
+        k = min(b, h)
+        out.paste(strip(row, (0, h - k, cw, h), (cw, b), ImageOps.flip), (0, y + h))
+    return out
+
+
+def padded_step(data: bytes, plan: dict) -> tuple[bytes, bytes]:
+    """One step's canvas (JPEG) and mask (PNG, white = change): the step's input at plan['at'] (resized to it when it
+    is the master), its bands seeded with the real pixels beside them (_mirrored), and the mask white over the bands
+    and overlap_px over the input's padded edges. No grain (round 3: its speckle stayed in the sky)."""
+    from PIL import Image
+    img = Image.open(io.BytesIO(data))
+    img.load()
+    rgb = img.convert("RGB")
+    cw, ch = plan["canvas"]["w"], plan["canvas"]["h"]
+    at = plan["at"]
+    base = rgb.resize((at["w"], at["h"]), Image.LANCZOS) if rgb.size != (at["w"], at["h"]) else rgb
+    seed = _mirrored(base, cw, ch, at["x"], at["y"])
+    mask = Image.new("L", (cw, ch), 255)
+    o = overlap_px(plan)
+    x0 = at["x"] + (o if at["x"] > 0 else 0)
+    y0 = at["y"] + (o if at["y"] > 0 else 0)
+    x1 = at["x"] + at["w"] - (o if at["x"] + at["w"] < cw else 0)
+    y1 = at["y"] + at["h"] - (o if at["y"] + at["h"] < ch else 0)
+    if x1 > x0 and y1 > y0:
+        mask.paste(0, (x0, y0, x1, y1))
+    b1, b2 = io.BytesIO(), io.BytesIO()
+    seed.save(b1, format="JPEG", quality=92)
+    mask.save(b2, format="PNG")
+    return b1.getvalue(), b2.getvalue()
+
 
 # Magnific's limits (Runway OpenAPI 2024-11-06, POST /v1/image_upscale): each input side 300-8000 px,
 # the output at most 25,300,000 pixels. Export at full size picks x4, or x8 for the largest print sizes.

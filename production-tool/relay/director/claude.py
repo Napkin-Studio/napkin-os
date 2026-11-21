@@ -36,7 +36,7 @@ PROMPTS = Path(__file__).resolve().parent.parent / "prompts"
 PER_CLICK = "eu.anthropic.claude-sonnet-5-5"  # Sonnet per click (features/director-v5.clan)
 SHOT_LIST = "eu.anthropic.claude-sonnet-5-5"
 # The newest director prompt bundled (tests/test_config_defaults.py keeps it so); older ones stay for a pin.
-PROMPT_VERSION = "director.v16"
+PROMPT_VERSION = "director.v17"
 # Lambda runs 60 s: one model call (and its one retry) must leave room for the provider submit. A job with
 # many pictures gets longer, in one try (director.call_timeout, Director._port_for; features/pt-canvas-r2.clan).
 TIMEOUT_S = float(os.environ.get("DIRECTOR_TIMEOUT_S", "20"))

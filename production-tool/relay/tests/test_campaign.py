@@ -120,26 +120,33 @@ def finish_job(h, token, job, data):
 
 
 def test_extend_sends_the_padded_canvas_and_a_mask_to_ideogram_at_high_never_the_words():
+    """Stepped outpainting (features/pt-canvas-r3.clan, IMG-9): 16:9 to 9:16 grows the picture 3.2 times, so it runs
+    as EXTEND_STEPS_MAX Ideogram calls, each reserved and each its own canvas, the last one the size's shape."""
     h = paid_harness()
     token = h.as_person()
     _, job = h.post_job(token, op="resize", expect=200, **size_input(h, "extend", layers=LAYERS))
     runway = h.providers["runway"]
     (sent,) = runway.submits
     assert job["provider"] == "runway" and job["model"] == "ideogram_4_5" and job["crew"] == "wren"
-    assert job["cost"]["reserved"] == 0.25  # Ideogram 4.5 at high: 25 credits (the paid tests: medium failed)
+    assert job["cost"]["reserved"] == pytest.approx(0.75)  # Ideogram 4.5 at high: 25 credits a step, 3 steps
     assert sent["prompt"] == formats.EXTEND_PROMPT and LINE not in json.dumps(sent)
     assert [r["role"] for r in sent["refs"]] == ["current"] and sent["mask"] and "ratio" not in sent
-    # The canvas is the size's shape (9:16 round a 320 x 180 master: 320 x 569), the master at its own pixels.
-    canvas = Image.open(io.BytesIO(h.blobs.fetch(f"{CDN}/ads/scratch/{job['jobId']}/canvas.jpg")))
-    mask = Image.open(io.BytesIO(h.blobs.fetch(f"{CDN}/ads/scratch/{job['jobId']}/mask.png")))
-    assert canvas.size == mask.size == (320, 569)
-    # Ours is white where Ideogram fills (the padding) and black on the master, less 16 px at its seams.
-    at = formats.pad_plan(320, 180, 9, 16, [{"x": 40, "y": 30, "w": 40, "h": 120}], formats.safe_fracs(size_input(h)["safeArea"]))["at"]
-    assert mask.getpixel((160, 5)) == 255 and mask.getpixel((160, at["y"] + 90)) == 0
-    assert mask.getpixel((160, at["y"] + 8)) == 255  # the overlap is redrawn
-    # It lands cropped to 9:16, at the preview, the plate clean and the words drawn on the size.
-    done = finish_job(h, token, job, png(320, 569))
-    assert done["state"] == "completed" and done["cost"]["confirmed"] == 0.25
+    plan = formats.pad_plan(320, 180, 9, 16, [{"x": 40, "y": 30, "w": 40, "h": 120}], formats.safe_fracs(size_input(h)["safeArea"]))
+    steps = formats.step_plans(plan)
+    assert len(steps) == 3 and steps[-1]["canvas"] == {"w": 320, "h": 569}
+    for k, step in enumerate(steps, 1):
+        canvas = Image.open(io.BytesIO(h.blobs.fetch(f"{CDN}/ads/scratch/{job['jobId']}/canvas-{k}.jpg")))
+        mask = Image.open(io.BytesIO(h.blobs.fetch(f"{CDN}/ads/scratch/{job['jobId']}/mask-{k}.png")))
+        c, at = step["canvas"], step["at"]
+        assert canvas.size == mask.size == (c["w"], c["h"])
+        # Ours is white where Ideogram fills (the bands) and black on the picture it grows from, less the overlap.
+        assert mask.getpixel((160, 1)) == 255 and mask.getpixel((160, at["y"] + at["h"] // 2)) == 0
+        assert mask.getpixel((160, at["y"] + 2)) == 255  # the overlap is redrawn
+        assert len(runway.submits) == k
+        done = finish_job(h, token, {k: v for k, v in job.items() if k != "requestId"}, png(c["w"], c["h"]))
+        if k < len(steps):
+            assert done["state"] in ("submitted", "queued") and len(runway.submits) == k + 1, (k, done)
+    assert done["state"] == "completed" and done["cost"]["confirmed"] == pytest.approx(0.75)
     assert done["resize"]["method"] == "extend" and done["resize"]["layers"] == 1
     assert done["resize"]["previewPx"] == {"width": 1152, "height": 2048}
     assert done["resize"]["crop"] == {"x": 0, "y": 0, "w": 320, "h": 180}
@@ -223,10 +230,10 @@ def test_regenerate_of_a_named_picture_sends_its_other_views_as_tagged_reference
     inp["refs"] = [view_ref(h, 11, "maya_side"), view_ref(h, 12, "maya_three-quarter"), view_ref(h, 13, "maya_back")]
     _, job = h.post_job(token, op="resize", expect=200, **inp)
     (sent,) = h.providers["runway"].submits
-    assert [r["name"] for r in sent["refs"]] == ["master", "maya_side", "maya_three_qrtr", "maya_back"]
+    assert [r["name"] for r in sent["refs"]] == ["master", "maya_side", "maya_3q", "maya_back"]
     assert [r["role"] for r in sent["refs"]] == ["object", "character", "character", "character"]
     assert sent["refs"][1]["sha256"] == inp["refs"][0]["asset"]["sha256"]
-    assert "@master" in sent["prompt"] and "@maya_side, @maya_three_qrtr, @maya_back show the same character" in sent["prompt"]
+    assert "@master" in sent["prompt"] and "@maya_side, @maya_3q, @maya_back show the same character" in sent["prompt"]
 
 
 def test_extend_and_a_picture_with_no_name_send_the_picture_only():
@@ -262,11 +269,11 @@ def test_at_most_four_views_go_with_a_regenerate_and_an_object_key_stays_an_obje
 
 
 def test_each_paid_size_reserves_its_own_price_and_the_spend_stop_refuses_the_one_over():
-    h = paid_harness(spend={"capUsd": 0.6, "warnUsd": 0.5})
+    h = paid_harness(spend={"capUsd": 1.0, "warnUsd": 0.9})
     token = h.as_person()
-    _, a = h.post_job(token, op="resize", expect=200, **size_input(h, "extend"))
+    _, a = h.post_job(token, op="resize", expect=200, **size_input(h, "extend"))  # 3 steps (pt-canvas-r3)
     _, b = h.post_job(token, op="resize", expect=200, **size_input(h, "regenerate"))
-    assert a["cost"]["reserved"] + b["cost"]["reserved"] == pytest.approx(0.45)
+    assert a["cost"]["reserved"] + b["cost"]["reserved"] == pytest.approx(0.95)
     _, c = h.post_job(token, op="resize", expect=503, **size_input(h, "extend"))
     assert c["error"]["code"] == "spend_stop"
     # A free crop still runs past the stop: it spends nothing.

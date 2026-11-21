@@ -368,7 +368,7 @@ for f in sorted(HERE.glob("examples/config.*.json")):
     # of a take to the frame it follows ("Shot k [a-b s] ..., follows image k"); v15 (features/pt-dex-context.clan)
     # numbers that image by its place in the refs and sends an unnamed canvas picture as an object. Absent, the relay runs its newest
     # bundled prompt (relay/director/claude.py PROMPT_VERSION); rolling back is naming one.
-    if "promptVersion" in cfg.get("director", {}) and cfg["director"]["promptVersion"] not in ("director.v6", "director.v6.1", "director.v7", "director.v8", "director.v9", "director.v10", "director.v11", "director.v9.1", "director.v12", "director.v13", "director.v14", "director.v15", "director.v16"):
+    if "promptVersion" in cfg.get("director", {}) and cfg["director"]["promptVersion"] not in ("director.v6", "director.v6.1", "director.v7", "director.v8", "director.v9", "director.v10", "director.v11", "director.v9.1", "director.v12", "director.v13", "director.v14", "director.v15", "director.v16", "director.v17"):
         fail(f"✗ {f.relative_to(HERE)}: promptVersion is {cfg['director']['promptVersion']}; contract 3 runs director.v6, v6.1, v7, v8, v9, v10 or v11")
 
 # Runway is the only paid provider (features/drop-hackathon-extras.clan): the live config routes
