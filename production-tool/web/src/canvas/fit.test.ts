@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fitSize, MAX_ASPECT, MAX_SIDE, MIN_SIDE } from './fit'
+import { fitSize, keptCaption, MAX_ASPECT, MAX_SIDE, MIN_SIDE } from './fit'
 
 describe('fitSize: every picture leaves in a size providers take', () => {
   it('a small sketch grows so its short side is at least the minimum', () => {
@@ -30,5 +30,14 @@ describe('fitSize: every picture leaves in a size providers take', () => {
 
   it('a picture already in range is left as it is', () => {
     expect(fitSize(768, 1024).same).toBe(true)
+  })
+})
+
+// UAT round 3 R3-7: uploads are kept at 1536 px, and now the size caption says so.
+describe('an upload kept at 1536 px says so (pt-canvas-r3)', () => {
+  it('names the size and why, only for an upload at the cap', () => {
+    expect(keptCaption({ w: 1536, h: 864, origin: 'uploaded' })).toBe('1536 × 864 · kept at 1536 px for the models')
+    expect(keptCaption({ w: 1200, h: 800, origin: 'uploaded' })).toBeUndefined()
+    expect(keptCaption({ w: 1536, h: 864, origin: 'generated' })).toBeUndefined()
   })
 })

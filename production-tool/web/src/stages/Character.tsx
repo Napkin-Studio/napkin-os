@@ -63,7 +63,8 @@ import { chipLook } from '../ui/finals/chipLook'
 import { BrandFields } from './BrandFields'
 import { PaidButton } from '../ui/PaidButton'
 import { sendingLine, useSlow } from '../ui/sending'
-import { viewsWhat } from '../ui/viewsWhat'
+import { missingViews, viewsWhat } from '../ui/viewsWhat'
+import { keptCaption } from '../canvas/fit'
 import { isBrandRole, payloadFor, payloadMissing, type BrandPayload } from '../canvas/swatches'
 import { REF_ROLES, type Ask, type CustomData, type ModelChoice, type NamedRef, type RefRole } from '../contracts/types'
 import { REF_ROLE_TABLE } from '../contracts/load'
@@ -760,7 +761,7 @@ export function Character({ initial, active, onPictureEditor }: {
     <div className="character">
       <CardChromeContext.Provider value={PRODUCTION_CARD_CHROME}>
       <div className="cv-row">
-      <div className="canvas-wrap pt-grid" ref={wrap} style={grid}>
+      <div className="canvas-wrap pt-grid" ref={wrap} style={grid} onMouseDown={noShiftSelect}>
         {frames.length > 0 && <BoardsLayer part="frames" frames={frames} toView={toView} zoom={zoom} current={board} onOpen={open} />}
         <CanvasMount initial={initial} onReady={setCanvas} onChrome={setChrome} onChange={onChange} theme={theme} railInset={railInset} />
         {frames.length > 0 && <BoardsLayer part="cards" frames={frames} toView={toView} zoom={zoom} current={board} onOpen={open} />}
@@ -778,6 +779,10 @@ export function Character({ initial, active, onPictureEditor }: {
                 {c?.kind === 'gen' && <GenOverlay el={e} c={c} toView={toView} zoom={zoom} ctrl={ctrl} named={!!named} />}
                 {img && img.kind !== 'drawn' && !stacked && <VersionChip nodeId={img.id} at={toView({ x: e.x + e.width, y: e.y })} />}
                 {img?.kind === 'pic' && img.asset && !stacked && <RightsChip sha={img.asset} at={toView({ x: e.x, y: e.y })} zoom={zoom} />}
+                {/* An upload kept at 1536 px says so under it while it is the one picked (UAT round 3 R3-7, UX 9). */}
+                {img?.kind === 'pic' && img.asset && !stacked && (vs?.selected ?? []).length === 1 && vs?.selected[0] === e.id && keptCaption(doc.assets[img.asset]) && !chipLook(zoom).dot && (
+                  <div className="gencaption" style={{ left: toView({ x: e.x, y: e.y }).x, top: toView({ x: e.x, y: e.y + e.height }).y + (named ? NAME_LINE * chipLook(zoom).scale : 0), transform: `scale(${chipLook(zoom).scale})`, transformOrigin: 'top left' }}>{keptCaption(doc.assets[img.asset])}</div>
+                )}
               </span>
             )
           })}
@@ -1194,6 +1199,8 @@ export function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, onG
   const single = meaningful.length === 1 ? imageOf(meaningful[0]) : undefined
   const singleImage = single?.asset ? single : undefined
   const named = singleImage ? ctrl.nameOn(singleImage.id, doc) : undefined
+  // The views its key has no picture for yet, near angles counted as made (UAT round 3 R3-10).
+  const toMake = named ? missingViews(refsList(doc).filter((r) => r.key === named.key), OTHER_VIEWS) : []
   // Resize… (features/resize-selection.clan): pictures, results and scamps (a Drawing, a sketch area).
   const resizable = resizableIn(meaningful)
   const scampAlone = meaningful.length === 1 && resizable.items.length === 1 && !singleImage ? meaningful[0] : undefined
@@ -1225,12 +1232,12 @@ export function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, onG
             }
           }}>Set as front</button>
         )}
-        {named?.variant === 'front' && controls.views && (
+        {named?.variant === 'front' && controls.views && toMake.length > 0 && (
           <>
             <ModelPick op="view" value={viewChoice} onChange={setViewPick} />
             <PaidButton className="btn sm dark" label="Make the other views" busy={busy === 'views'} disabled={!!busy}
-              what={viewsWhat(named.key, OTHER_VIEWS)} yes={`Make ${OTHER_VIEWS.length}`}
-              onYes={() => run('views', () => ctrl.makeViews(named.key, undefined, choiceToSend('view', config, viewChoice)))} />
+              what={viewsWhat(named.key, toMake)} yes={`Make ${toMake.length}`}
+              onYes={() => run('views', () => ctrl.makeViews(named.key, toMake, choiceToSend('view', config, viewChoice)))} />
           </>
         )}
         {named && <button className="btn xs ghost" onClick={() => ctrl.unname(singleImage.id)}>Remove name</button>}
@@ -1298,6 +1305,16 @@ function ResizeFor({ ctrl, items, strokes, total, at, onClose, onSent }: { ctrl:
         onSent?.(jobs)
       }} />
   )
+}
+
+/** A shift-click on the canvas adds to the selection, never selects the page's text (UAT round 3 R3-9: the tray and the
+ *  chrome turned blue). Words in a field or an editable text still select as usual. */
+function noShiftSelect(e: { shiftKey: boolean; target: EventTarget | null; preventDefault: () => void }) {
+  if (!e.shiftKey) return
+  const t = e.target as HTMLElement | null
+  if (t?.closest?.('input, textarea, select, [contenteditable="true"]')) return
+  e.preventDefault()
+  window.getSelection?.()?.removeAllRanges()
 }
 
 /** Whether any of a scene box is in the canvas's view. */
@@ -1555,6 +1572,8 @@ function NamePopover({ ctrl, nodeId, current, presetVariant, at, onClose }: {
   const asset = imageOf(ctrl.nodeEl(nodeId))?.asset ?? undefined
   const taken = ck && cv ? refByName(doc, `${ck}_${cv}`) : undefined
   const movesName = taken && taken.node !== nodeId
+  // Naming into a key that is already there, other than this picture's own (R3-8).
+  const joinsKey = !!ck && !isNewKey && current?.key !== ck
   const problem = ck || cv ? nameProblem(ck, cv) : null
   const save = () => {
     try {
@@ -1591,6 +1610,9 @@ function NamePopover({ ctrl, nodeId, current, presetVariant, at, onClose }: {
           <div className="faint roleline">{roleLine(role)}</div>
         </div>
       )}
+      {/* A key in use already: say which role it has, and that this picture takes it (UAT round 3 R3-8, UX 7: the second
+          "harbour" silently became a palette). The Save button says it again; another role needs a new name. */}
+      {joinsKey && <div className="name-joins" role="note"><b>@{ck} is a {roleWord(holds)}.</b> This picture joins it as a {roleWord(holds)}. For another role (a font, a character…), type a new name.</div>}
       {/* A brand key named before: its role's line once, above its fields (the pills above say it for a new key). */}
       {brandRole && !isNewKey && <div className="faint roleline">{roleLine(brandRole)}</div>}
       {brandRole && <BrandFields role={brandRole} asset={asset} value={brand} onChange={setBrand} />}
@@ -1600,7 +1622,7 @@ function NamePopover({ ctrl, nodeId, current, presetVariant, at, onClose }: {
       <div className="row" style={{ marginTop: 10 }}>
         <span className="spacer" />
         <button className="btn sm ghost" onClick={onClose}>Cancel</button>
-        <button className="btn sm primary" disabled={!ck || !cv || !!problem || !!needs} title={needs} onClick={save}>{movesName ? 'Move the name here' : 'Save'}</button>
+        <button className="btn sm primary" disabled={!ck || !cv || !!problem || !!needs} title={needs} onClick={save}>{movesName ? 'Move the name here' : joinsKey ? `Add to @${ck} as ${roleWord(holds)}` : 'Save'}</button>
       </div>
     </Floating>
   )
