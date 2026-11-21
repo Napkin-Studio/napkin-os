@@ -9,6 +9,7 @@ import { beatsOf, currentTake, cutItemFor, shotsOf, storyboardOfVideo } from '..
 import { formatById } from './formats'
 import { linesOf } from '../script/skye'
 import { METHOD_WORD } from './rules'
+import { modelEntry } from '../jobs/runs'
 
 /** The studio card stitch adds after the clips (stitch.py CARD_S). */
 export const CARD_S = 2.5
@@ -234,7 +235,7 @@ export function masterShots(d: ProductionDocument, videoId: Id): MasterShot[] {
     const takeS = a?.duration_s ?? take.duration_s ?? s.duration_s
     const end = item?.source?.out_s
     const outS = end !== undefined && end > ins ? Math.min(end, ins + s.duration_s) : ins + s.duration_s
-    const spoken = spokenOf(d, s.id).map((x) => x.text).join(' ').slice(0, 600)
+    const spoken = spokenWords(d, s.id, take).slice(0, 600)
     out.push({
       shotId: s.id, number: i + 1, takeId: take.id, inS: r3(ins), outS: r3(outS), takeS: r3(Math.max(takeS, outS)),
       takeSize: a?.w && a?.h ? { w: a.w, h: a.h } : { w: rw * 120, h: rh * 120 },
@@ -254,6 +255,22 @@ export function filmSeconds(shots: readonly MasterShot[], wholeS?: number): numb
   const body = shots.filter((s) => !s.endCard)
   if (body.length) return r3(body.reduce((a, s) => a + (s.outS - s.inS), 0))
   return Math.max(0, (wholeS ?? CARD_S) - CARD_S)
+}
+
+/** A shot's spoken lines as the cut plan reads them: who says each, a V.O. said so, and whether its take voices it
+ *  (UAT round 5, R5-F8: Dex wrote that Maya "says the end line", an unvoiced NARRATOR voice-over shown as words).
+ *  'MAYA (whispering, to the kettle): Good boy.' / 'NARRATOR (V.O.; not voiced in its take): Quietboil. Let them sleep.' */
+export function spokenWords(d: ProductionDocument, shotId: Id, take?: { provider?: string; inputs?: { model?: string } }): string {
+  const beats = (d.beats ? beatsOf(d, shotId) : []).filter((b) => (b.kind === 'line' || b.kind === 'vo') && (b.text ?? '').trim())
+  if (!beats.length) return spokenOf(d, shotId).map((x) => x.text).join(' ')
+  const e = take?.provider && take.inputs?.model ? modelEntry(take.provider as never, take.inputs.model) : null
+  const voiced = !!e?.video.audioControl
+  return beats.map((b) => {
+    const who = (b.speaker?.trim() || (b.kind === 'vo' ? 'NARRATOR' : 'SOMEONE')).toUpperCase()
+    const paren = b.parenthetical?.trim().replace(/^\((.*)\)$/s, '$1').trim()
+    const notes = [b.kind === 'vo' ? 'V.O.' : '', paren ?? '', voiced ? '' : 'not voiced in its take'].filter(Boolean)
+    return `${who}${notes.length ? ` (${notes.join('; ')})` : ''}: ${b.text!.trim()}`
+  }).join(' ')
 }
 
 /** A shot's spoken lines, each at its moment in the shot: its line and VO beats, else its script's dialogue

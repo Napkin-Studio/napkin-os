@@ -78,7 +78,7 @@ describe('the master as the Director agent reads it', () => {
     const m = masterShots(d, video.id)
     expect(m.map((s) => s.shotId)).toEqual(shots.map((s) => s.id))
     expect(m[0]).toMatchObject({ inS: 0, outS: 3, takeS: 4, takeSize: { w: 1920, h: 1080 } })
-    expect(m[2].spoken).toBe('I never miss the first light.')
+    expect(m[2].spoken).toBe('MAYA: I never miss the first light.')
   })
 })
 
@@ -292,5 +292,20 @@ describe('a crop the plan says cuts the subject is fitted whole (UAT round 5, R5
     const { edl } = edlFor(shots as never, beats, 6, { w: 1080, h: 1920 }, crops)
     expect(edl[0].crop).toEqual(box)
     expect(edl[1].crop).toEqual({ x: 627.45, y: 0, w: 607.5, h: 1080 })
+  })
+})
+
+describe('the cut plan reads who speaks and what is voiced (UAT round 5, R5-F8)', () => {
+  it('"Good boy." on WAN 3 is Maya\'s, voiced; the end line on Omni is the NARRATOR\'s V.O., not voiced', async () => {
+    const { spokenWords } = await import('./film')
+    const { d, shots } = master()
+    d.beats = {
+      ...d.beats,
+      beat_01K7C00000000000000000BT05: { id: 'beat_01K7C00000000000000000BT05', v: 1, field_v: {}, shot_id: shots[4].id, rank: 'm', at_s: 0, kind: 'line', speaker: 'MAYA', parenthetical: '(whispering, to the kettle)', text: 'Good boy.' },
+      beat_01K7C00000000000000000BT07: { id: 'beat_01K7C00000000000000000BT07', v: 1, field_v: {}, shot_id: shots[6].id, rank: 'm', at_s: 0.5, kind: 'vo', speaker: 'NARRATOR', text: 'Quietboil. Let them sleep.' },
+    } as never
+    expect(spokenWords(d, shots[4].id, { provider: 'runway', inputs: { model: 'wan3' } })).toBe('MAYA (whispering, to the kettle): Good boy.')
+    expect(spokenWords(d, shots[6].id, { provider: 'runway', inputs: { model: 'gemini_omni_flash_1.1' } }))
+      .toBe('NARRATOR (V.O.; not voiced in its take): Quietboil. Let them sleep.')
   })
 })
