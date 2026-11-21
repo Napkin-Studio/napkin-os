@@ -274,6 +274,57 @@ describe('the line and the captions apart (UAT round 5, R5-F6)', () => {
   })
 })
 
+describe('a size keeps its spoken-line caption and says the end line once (UAT walkthrough 2026-11-21, R6-F1)', () => {
+  const setup = async (withCard: boolean) => {
+    const ctx = master()
+    const { d, shots, video, deps } = ctx
+    if (withCard) {
+      shots[9].kind = 'end_card'
+      shots[9].action = 'End card with the super: "Quietboil. Let them sleep."'
+      shots[9].duration_s = 2.5
+    }
+    const ms = masterShots(d, video.id)
+    const beats = ms.filter((s) => !s.endCard).map((s, i) => ({ shot_id: s.shotId, keep: i === 2 || i === 8, why: 'Kept.', by: 'dex' as const }))
+    const shape = { w: 1080, h: 1920 }
+    const { edl } = edlFor(ms, beats, 6, shape, [])
+    const set: FormatSet = { id: 'fset_01K7C00000000000000000FS01', v: 1, field_v: {}, master: { kind: 'video', id: video.id, w: 1920, h: 1080 }, pack: { pack_id: 'film', pack_version: '1' }, copy: { line: 'Quietboil. Let them sleep.' } }
+    const size: Size = { id: 'size_01K7C00000000000000000SZ01', v: 1, field_v: {}, set_id: set.id, rank: 'm', format: { pack_id: 'film', pack_version: '1', format_id: 'film-9x16' },
+      aspect: shape, delivery: { width: 1080, height: 1920 }, method: 'reframe', media: 'video', length_s: 6, edl, beats }
+    d.format_sets = { [set.id]: set }
+    d.sizes = { [size.id]: size }
+    return { deps, set, size }
+  }
+  it('the card says the line: the 9:16 keeps the caption of the spoken line whole, and the line is not also a super', async () => {
+    const { deps, set, size } = await setup(true)
+    const cut = (await cutdownInput(deps, set, size)).cutdown!
+    const caps = (cut.layers ?? []).filter((l) => l.kind === 'captions')
+    expect(caps.length).toBeGreaterThan(0)
+    expect(caps[0].text).toContain('I never miss the first light')
+    expect((caps[0].toS ?? 0) - (caps[0].fromS ?? 0)).toBeGreaterThan(1)
+    expect((cut.layers ?? []).some((l) => l.kind === 'line')).toBe(false)
+    expect(cut.clientCard).toMatchObject({ line: 'Let them sleep.' })
+  })
+  it('no card says the line: the caption stays and the line is never on screen with it', async () => {
+    const { deps, set, size } = await setup(false)
+    const cut = (await cutdownInput(deps, set, size)).cutdown!
+    const layers = cut.layers ?? []
+    const caps = layers.filter((l) => l.kind === 'captions')
+    expect(caps.length).toBeGreaterThan(0)
+    for (const l of layers.filter((x) => x.kind === 'line' || x.kind === 'legal')) {
+      for (const c of caps) expect((l.toS ?? 99) <= (c.fromS ?? 0) + 1e-6 || (c.toS ?? 99) <= (l.fromS ?? 0) + 1e-6).toBe(true)
+    }
+  })
+  it('R6-F1\'s numbers: a caption starting 0.48 s into the line is kept and the line gives way', async () => {
+    const { linesApart } = await import('./filmJobs')
+    const box = { x: 0, y: 0.85, w: 1, h: 0.1 }
+    const line = { kind: 'line' as const, box, text: 'Quietboil. Let them sleep.', fromS: 0.52, toS: 3.02 }
+    const cap = { kind: 'captions' as const, box, text: 'Good boy.', fromS: 1, toS: 3.02 }
+    const out = linesApart([line], [cap], 3.02)
+    expect(out.caps).toEqual([cap])
+    expect(out.laid).toEqual([])
+  })
+})
+
 describe('a crop the plan says cuts the subject is fitted whole (UAT round 5, R5-F6)', () => {
   it('round 5\'s shot 5 at 9:16: the box holds the whole 1190 px subject, not the 607 px crop', async () => {
     const { edlFor, fitBox } = await import('./film')
