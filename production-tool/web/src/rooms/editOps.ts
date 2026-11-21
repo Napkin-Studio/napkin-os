@@ -132,7 +132,7 @@ export async function placeJoinedTake(store: DocumentStore, ui: UiStore, videoId
   const text = placedWords(d, g.id)
   const joined = (g.segments?.length ?? 0) > 1
   await store.change((x) => putCut(x, videoId, next), {
-    action: `put the ${text.replace(/ is in the cut\.$/, '').replace(/^J/, 'j').replace(/^Shot/, 'shot')} into the cut`, agent: 'edie', undo: true,
+    action: `put ${text.replace(/ is in the cut\.$/, '').replace(/^Joined/, 'the joined').replace(/^Shot/, 'shot').replace(/^The/, 'the')} into the cut`, agent: 'edie', undo: true,
     rationale: joined ? 'The joined take replaces the separate clips of its shots, in the same place; the rest of the cut is as it was.'
       : 'The box had no clip in the cut: its first take goes in at its place in the storyboard, and the clips after it move later.',
   })
@@ -151,7 +151,7 @@ export async function undoJoinedTake(store: DocumentStore, ui: UiStore): Promise
   // The placement is the person's last undo step: take it back through the store's undo, so the bar's Redo puts it
   // in again (UAT 2026-11-21, F12: the note's Undo wrote a new change, and Redo said "Nothing to redo").
   const label = store.undoLabels?.().undo
-  if (store.undo && label && /^put the .+ into the cut$/i.test(label)) {
+  if (store.undo && label && /^put .+ into the cut$/i.test(label)) {
     await store.undo()
     ui.update((u) => { delete u.joinedInCut }, 'joined take note')
     return true

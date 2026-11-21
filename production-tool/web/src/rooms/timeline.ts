@@ -493,8 +493,11 @@ function insertFirstTake(d: ProductionDocument, cut: Cut, g: ProductionDocument[
     t += len
   }
   if (!added.length) return null
-  const shift = r3(t - at)
-  const moved = v1.map((c) => (before.includes(c) || c.startS < at - 1e-6 ? c : { ...c, startS: r3(c.startS + shift) }))
+  // A gap left where it goes (a clip taken out with its gap kept) takes it first; the clips after move by the rest.
+  const after = v1.filter((c) => !before.includes(c) && c.startS >= at - 1e-6)
+  const gap = after.length ? Math.max(0, Math.min(...after.map((c) => c.startS)) - at) : 0
+  const shift = r3(Math.max(0, t - at - gap))
+  const moved = v1.map((c) => (!after.includes(c) || !shift ? c : { ...c, startS: r3(c.startS + shift) }))
   return { ...cut, v1: sortV1([...moved, ...added]) }
 }
 
