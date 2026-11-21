@@ -30,12 +30,14 @@ const GROUPS: { title: string; roles: RefRole[] | 'other' }[] = [
   { title: 'Characters', roles: ['character'] }, { title: 'Locations', roles: ['location'] }, { title: 'Products', roles: ['product'] }, { title: 'References', roles: 'other' },
 ]
 
-export function AssetsLibrary({ ctrl, env, tab: firstTab, onClose, onPicture, onCanvas, onScript }: {
+export function AssetsLibrary({ ctrl, env, tab: firstTab, ask = 0, onClose, onPicture, onCanvas, onScript }: {
   ctrl: CanvasController | null
   /** Our own engine's canvas and store, to place a linked brief; null on the Excalidraw fallback. */
   env?: NodeEnv | null
   /** The tab to open on (Link a brief… opens From Napkin). */
   tab?: AssetsTab | null
+  /** Each ask to open on `tab` (panels.assetsAsk): a new one opens that tab, closing a character card. */
+  ask?: number
   /** "← Canvas" and ×: the library closes, the Booth with it. */
   onClose: () => void
   /** Upload: the canvas's picture tool. */
@@ -48,14 +50,18 @@ export function AssetsLibrary({ ctrl, env, tab: firstTab, onClose, onPicture, on
   const doc = useDoc()
   const ui = useUi()
   const [tab, setTab] = useState<Tab>(firstTab ?? 'project')
-  // Opened again for a tab (Link a brief… while the library is open): that tab.
-  const [asked, setAsked] = useState(firstTab)
-  if (firstTab !== asked) {
-    setAsked(firstTab)
-    if (firstTab) setTab(firstTab)
-  }
   const [query, setQuery] = useState('')
   const [card, setCard] = useState<string | null>(null)
+  // Opened again for a tab (Link a brief… while the library is open, even on the same tab or over a character's
+  // card: UAT round 4 S2-5): that tab, the card closed.
+  const [asked, setAsked] = useState(`${firstTab ?? ''}:${ask}`)
+  if (`${firstTab ?? ''}:${ask}` !== asked) {
+    setAsked(`${firstTab ?? ''}:${ask}`)
+    if (firstTab) {
+      setTab(firstTab)
+      setCard(null)
+    }
+  }
   const keys = keysList(doc)
   const q = query.trim().toLowerCase()
   const shown = keys.filter((k) => !q || k.key.includes(q))

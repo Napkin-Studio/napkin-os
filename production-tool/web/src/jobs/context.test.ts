@@ -105,14 +105,25 @@ describe('the brand per job (pt-canvas-r3)', () => {
     expect(kinds(input)).toEqual(['brand_rule'])
   })
 
-  it('brand work gets the palette as accents and the type: an ad, a product, a brief, a Brand board linked', () => {
+  it('brand work gets the palette as accents and the type: an ad, a product, a Brand board linked', () => {
     for (const input of [{ text: 'a poster for the harbour picnic' }, { text: 'x', refs: [{ id: 'r', role: 'product', asset: { sha256: 'sha256:' + 'a'.repeat(64), url: 'https://x/a', mime: 'image/png' } }] }] as JobInput[]) {
       const out = withContext(bare(), 'generate', NODE, input).input
       expect(kinds(out)).toEqual(['brand_rule', 'palette', 'typography'])
       expect(out.context!.find((c) => c.kind === 'palette')!.text.startsWith('Accents: ')).toBe(true)
     }
     expect(kinds(withContext(ex, 'frame', S15, { text: 'wide' }).input)).toContain('palette') // its storyboard has a Brand board
-    expect(brandWork(bare(), NODE, { brief: { title: 'b', spine: {} } as JobInput['brief'] })).toBe(true)
+  })
+
+  it('a brief with no Brand board linked is another client\'s work: none of the project\'s brand goes, unless ticked (UAT round 4 S2-6)', () => {
+    const brief = { title: 'Let Them Sleep (Quietboil)', spine: {} } as JobInput['brief']
+    // The live repro: the project's only brand (Harbour) went on the Quietboil frames, an "ad" in the words too.
+    expect(brandWork(bare(), NODE, { brief })).toBe(false)
+    expect(brandWork(bare(), NODE, { brief, text: 'the end card of the ad' })).toBe(false)
+    expect(withContext(bare(), 'frame', NODE, { brief, text: 'the end card of the ad' }).input.context).toBeUndefined()
+    // Ticked in the tray, it goes.
+    expect(kinds(withContext(bare(), 'frame', NODE, { brief, text: 'x' }, { add: [PALETTE] }).input)).toEqual(['palette'])
+    // A Brand board linked into what the shot reads: the brief is that brand's work.
+    expect(kinds(withContext(ex, 'frame', S15, { brief, text: 'wide' }).input)).toContain('palette')
   })
 
   it('a Fill of the sky reads no brand at all, unless it is brand work', () => {

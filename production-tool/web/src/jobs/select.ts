@@ -151,10 +151,10 @@ export async function refsFor(relay: Relay, doc: ProductionDocument, shot: Shot,
 }
 
 /** Every named picture, for the shot list: the director picks the names each shot shows. */
-export async function allNamed(relay: Relay, doc: ProductionDocument): Promise<JobInputRef[]> {
+export async function allNamed(relay: Relay, doc: ProductionDocument, keep: (r: NamedRef) => boolean = () => true): Promise<JobInputRef[]> {
   const out: JobInputRef[] = []
   // Fronts first: a bare @key in the plan needs its front among the 14 (the relay's director checks).
-  const named = refsList(doc).filter((x) => x.asset)
+  const named = refsList(doc).filter((x) => x.asset && keep(x))
   const ordered = [...named.filter((x) => x.variant === 'front'), ...named.filter((x) => x.variant !== 'front')]
   for (const r of ordered.slice(0, 14)) out.push(await namedInput(relay, doc, r))
   return out

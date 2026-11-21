@@ -15,7 +15,7 @@ import { cameraLabel } from '../../jobs/frameEdit'
 import { askOf } from '../../jobs/runner'
 import { planAskOn } from './planAsk'
 import { isRunning, jobAt } from '../../jobs/select'
-import { beatsOf, currentFrame, currentRender, currentTake, mainScript, mainStoryboard, mainVideo, scenesOf, shotsOf, staleList, storyboardOfScript, storyboardOfVideo } from '../../model/selectors'
+import { beatsOf, currentFrame, currentRender, currentTake, mainScript, mainStoryboard, mainVideo, scenesOf, scriptOfStoryboard, scriptText, shotsOf, staleList, storyboardOfScript, storyboardOfVideo } from '../../model/selectors'
 import type { ProductionDocument, Shot, Suggestion } from '../../contracts/types'
 import { InputsStrip } from '../../stages/InputsStrip'
 import { isEmptyNode } from './nodes'
@@ -24,7 +24,10 @@ import { CardChromeContext, type Agent, type CardKind } from './cardChrome'
 import { useBlobUrl } from '../../ui/hooks'
 import { useProjectName } from '../../ui/useDownload'
 import { shotsWords } from '../../jobs/runs'
-import { plannedLine, stripOf } from './strip'
+import { plannedLine, planSource, stripOf } from './strip'
+import { answerBrand, brandQuestion, NO_BRAND } from '../../jobs/briefBrand'
+import { briefOf } from '../../brief/model'
+import { LOCAL_PERSON } from '../../jobs/runner'
 
 /** @names in blue (mock Main). */
 const withRefs = (t: string): ReactNode[] => t.split(/(@[a-z][a-z0-9_]*)/g).map((p, i) => (p.startsWith('@') ? <span key={i} className="pt-mention">{p}</span> : p))
@@ -149,6 +152,8 @@ export function StoryboardCard({ id, onOpen, openButton }: { id?: string; onOpen
   const asking = planAskOn(doc, sb?.id)
   const drawingIdx = shots.findIndex((s) => isRunning(doc, jobAt(doc, ui, (c) => c.for === 'frame' && c.shotId === s.id)))
   const strip = stripOf(shots.length)
+  const sbScript = sb ? scriptOfStoryboard(doc, sb.id) : undefined
+  const from = planSource(sbScript ? scriptText(doc, sbScript.id) : '', !!(sb && briefOf(doc, sb.id)))
   // Its own name when it has one ("Cut-down · 9:16"); the main one is "Storyboard · 16:9" (mock).
   const own = sb?.title?.trim() && sb.title.trim() !== 'Storyboard' && !/^untitled/i.test(sb.title.trim()) ? sb.title.trim() : undefined
   return (
@@ -163,9 +168,33 @@ export function StoryboardCard({ id, onOpen, openButton }: { id?: string; onOpen
         </div>
       ) : <Start kind="storyboard" id={sb?.id} fallback={<p className="bl-excerpt faint">No shots yet · write the script, then plan shots.</p>} />}
       {asking ? <AtWork agent="dex" warm line="The Director agent has a question: see beside this storyboard" />
-        : planning ? <AtWork agent="dex" line="The Director agent is planning the shots from the script" />
-        : shots.length ? <span className="bl-meta">{plannedLine(shots)}</span> : null}
+        : planning ? <AtWork agent="dex" line={`The Director agent is planning the shots from the ${from}`} />
+        : shots.length ? <span className="bl-meta">{plannedLine(shots, from)}</span> : null}
+      {sb && <BrandAsk storyboardId={sb.id} />}
     </Card>
+  )
+}
+
+/** A brief's storyboard with no Brand board asks which brand, or none (UAT round 4 S2-6, UX 4). Nothing of the
+ *  project's brand goes on its pictures until the person picks one; "No brand" is kept, so it is not asked again. */
+function BrandAsk({ storyboardId }: { storyboardId: string }) {
+  const doc = useDoc()
+  const ui = useUi()
+  const { doc: store } = useServices()
+  const [busy, setBusy] = useState(false)
+  const q = brandQuestion(doc, storyboardId)
+  if (!q) return null
+  const me = ui.me?.participantId ? `human:${ui.me.participantId}` : LOCAL_PERSON
+  const pick = (boardId: string | null) => {
+    setBusy(true)
+    void answerBrand(store, storyboardId, boardId, me).finally(() => setBusy(false))
+  }
+  return (
+    <div className="bl-brandask" role="group" aria-label="Which brand goes on this brief's pictures" onPointerDown={(e) => e.stopPropagation()}>
+      <span className="bl-meta">No Brand board on this brief. Use a brand?</span>
+      {q.boards.map((b) => <button key={b.id} type="button" className="btn xs" disabled={busy} onClick={() => pick(b.id)}>{b.title}</button>)}
+      <button type="button" className="btn xs ghost" disabled={busy} data-option={NO_BRAND} onClick={() => pick(null)}>No brand</button>
+    </div>
   )
 }
 

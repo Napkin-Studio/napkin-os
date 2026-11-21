@@ -549,13 +549,15 @@ export function Character({ initial, active, onPictureEditor }: {
   useEffect(() => { ctrl?.setInset(railInset) }, [ctrl, railInset])
   // Assets opened on purpose (+ › A brief from Brief Maker…, Continue in › Link a brief…) is the newest ask: a
   // selected Brief would keep the Booth on itself and the library never showed (re-test 4c).
-  const assetsAsk = panels.assets ? `assets:${panels.assetsTab ?? ''}` : ''
+  const assetsAsk = panels.assets ? `assets:${panels.assetsTab ?? ''}:${panels.assetsAsk}` : ''
   const lastAsk = useRef('')
   useEffect(() => {
     const fresh = !!assetsAsk && assetsAsk !== lastAsk.current
     lastAsk.current = assetsAsk
     if (fresh && canvas && selBrief) canvas.select([])
-  }, [assetsAsk, canvas, selBrief])
+    // Asked for on purpose: the Booth comes in even when the person had it hidden (UAT round 4 S2-5).
+    if (fresh && panels.assetsTab) booth.bringIn()
+  }, [assetsAsk, canvas, selBrief, panels.assetsTab, booth])
   // And the other way: a Brief selected while the library is open takes the Booth, and the library closes under
   // it. Closing the Brief's Booth (✕) then leaves nothing behind (re-test N-H: the library came back, and stayed
   // open in link mode over the Script target).
@@ -940,7 +942,7 @@ export function Character({ initial, active, onPictureEditor }: {
       </div>
       <Booth state={booth} earned={boothEarned({ selection: !!selBrief, library: panels.assets })}>
         {selBrief ? <BriefBooth briefId={selBrief} onClose={() => canvas?.select([])} />
-          : panels.assets ? <AssetsLibrary ctrl={ctrl} env={canvas?.engine === 'own' ? { canvas, doc: docStore } : null} tab={panels.assetsTab} onClose={() => panels.toggle('assets')} onPicture={() => chrome?.setTool('image')}
+          : panels.assets ? <AssetsLibrary ctrl={ctrl} env={canvas?.engine === 'own' ? { canvas, doc: docStore } : null} tab={panels.assetsTab} ask={panels.assetsAsk} onClose={() => panels.toggle('assets')} onPicture={() => chrome?.setTool('image')}
               onCanvas={els.map((e) => imageOf(e)?.asset).filter((x): x is string => !!x)} onScript={() => open('script', mainScript(docStore.get())?.id)} />
           : null}
       </Booth>

@@ -172,3 +172,5 @@ html[data-theme='dark'] .bl-draft-hd { color: var(--ag-acc, #F6E36B); }
 .node-layer .bl-cardbox.ctxdim:not(.selected) { opacity: .45; transition: opacity .15s; }
 /* A plan's waiting question beside its storyboard, at screen size (pt-canvas-r3 R3-5). */
 .node-layer .nl-ask { position: absolute; pointer-events: auto; z-index: 5; width: 320px; max-width: 40vw; }
+/* A brief storyboard asks which brand (UAT round 4 S2-6). */
+:where(.node-layer) .bl-brandask { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; pointer-events: auto; }
