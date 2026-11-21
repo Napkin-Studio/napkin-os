@@ -14,7 +14,7 @@ import { splitHere } from '../jobs/runView'
 import { selectedFrame } from '../jobs/frames'
 import { idbLocation, putBlob } from '../lib/blobs'
 import { mainScript, mainStoryboard, mainVideo, shotsOf } from '../model/selectors'
-import type { NodeEnv } from '../canvas/nodes/nodes'
+import { seedNodes, type NodeEnv } from '../canvas/nodes/nodes'
 import { addBrief, newBrief } from '../brief/model'
 import { linkBrief, placeBrief } from '../brief/canvas'
 import type { Shell } from '../projects/shell'
@@ -195,6 +195,22 @@ export function installSeed(shell: Shell) {
       history.pushState(history.state, '', formatRoute(scriptRoute(services.project.id, sc.id)))
       dispatchEvent(new PopStateEvent('popstate'))
       return sc.id
+    },
+    /** The document's Script, Storyboard and Film (when it has one) drawn on the canvas, as a project opened on a
+     *  canvas that has none yet shows them. */
+    nodes: async () => {
+      const env = (window as unknown as { __canvasEnv?: NodeEnv }).__canvasEnv
+      if (!env) throw new Error('open a project on the canvas first')
+      env.canvas.transact((els) => [...els, ...seedNodes(env.canvas, env.doc.get() as ProductionDocument)], { undoable: false })
+    },
+    /** The blank-canvas start: a storyboard and no Film node (owner 2026-11-03), as the UAT walkthrough had it. */
+    noFilm: async () => {
+      const services: Services = shell.get().session!.services
+      await systemUpdate(services.doc, (d: ProductionDocument) => {
+        for (const id of Object.keys(d.videos)) delete d.videos[id]
+        for (const [id, l] of Object.entries(d.links)) if (l.to?.kind === 'video' || l.from?.kind === 'video') delete d.links[id]
+      }, 'e2e seed')
+      await (services.doc as { flush?: () => Promise<void> }).flush?.()
     },
     /** Opens the storyboard stage (the Image editor opens from a shot there). */
     storyboard: () => shell.get().session?.services.ui.update((u) => { u.stage = 'storyboard' }, 'e2e seed'),

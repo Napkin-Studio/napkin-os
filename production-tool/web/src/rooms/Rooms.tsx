@@ -14,9 +14,10 @@ import { projectRoute, routeRoom, type RoomRoute } from '../app/route'
 import { isActive } from '../jobs/runner'
 import { takeShotOut } from '../jobs/runView'
 import { undo } from '../doc/undo'
+import { canvasActions } from '../canvas/chrome/actions'
 import { purposeOf } from '../model/purpose'
 import { whoIsWorking } from '../ui/agents/cast'
-import { jobsList, mainVideo, openVideo, shotNumber, shotsOf, storyboardOfVideo } from '../model/selectors'
+import { jobsList, mainStoryboard, mainVideo, openStoryboard, openVideo, videoOfStoryboard, shotNumber, shotsOf, storyboardOfVideo } from '../model/selectors'
 import { nodeTitle } from '../ui/chrome/panels'
 import { useProjectName } from '../ui/useDownload'
 import { Float } from '../ui/Float'
@@ -145,11 +146,23 @@ export function Rooms() {
     return () => window.removeEventListener('keydown', key)
   }, [change, sound, back, setRoom, setSound, picked, sel, room])
 
+  // A Film node opened whose film is not in the document (UAT walkthrough 2026-11-21: the node Make clips made opened
+  // "No film here yet", a dead end): the storyboard's own film when it has one, else make it from the storyboard.
+  const recoverSb = !video ? (openStoryboard(doc, ui.openNode) ?? mainStoryboard(doc)) : undefined
+  const recover = recoverSb && !recoverSb.implicit ? (() => {
+    const own = videoOfStoryboard(doc, recoverSb.id)
+    const go = async () => {
+      const id = own?.id ?? (await canvasActions.makeVideo({ storyboardId: recoverSb.id })?.then((m) => m.videoId))
+      if (id) uiStore.update((u) => { u.openNode = { ...u.openNode, video: id } })
+    }
+    return { label: own ? 'Open the storyboard’s film' : 'Make the film from the storyboard', go }
+  })() : undefined
   if (!controls.video) return <div className="panel"><div className="empty-state"><b>Film is off right now.</b></div></div>
   if (!data) return (
     <div className="panel"><div className="empty-state">
       <b>No film here yet.</b>
-      <p>Select a storyboard or script on the canvas and choose Make film.</p>
+      <p>{recover ? 'The film this node opened is not in the project any more.' : 'Select a storyboard or script on the canvas and choose Make film.'}</p>
+      {recover && <button type="button" className="btn primary" onClick={() => void recover.go()}>{recover.label}</button>}
       <button type="button" className="btn" onClick={back}>‹ Back to the canvas</button>
     </div></div>
   )
