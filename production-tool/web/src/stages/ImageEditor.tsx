@@ -453,9 +453,6 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
       row = { id: editId(), kind: 'upscale', scale }
     }
     const e = rowFirst(setSession, row, newId('job'), () => { void uiStore.flush() })
-    // A mask whose Fill or Remove is sent is spent: no longer the one the brush paints (UAT round 3 R3-3: it stayed
-    // "Mask 1 · painting" the next time the editor opened).
-    if (a === 'fill' || a === 'remove') setSession(afterSend)
     if (a === 'fill') setFill('')
     if (a === 'whole') setWhole('')
     void attempt(SENDING[a], async () => {

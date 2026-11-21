@@ -260,6 +260,11 @@ describe('Upscale only when it makes the picture bigger (pt-canvas-r3)', () => {
     expect(upscaleGrows(3072, 1318, 4)).toBe(true)
     expect(upscaleWhyNot(2048, 878, 2)).toBeUndefined()
     expect(upscaleGrows(1536, 864, 2)).toBe(true)
+    const { editLabel } = await import('./edits')
+    const mask = { id: 'm', kind: 'mask' as const, name: 'Mask 1', ops: [{ t: 'lasso' as const, mode: 'add' as const, pts: [] }] }
+    const fill = { id: 'f', kind: 'fill' as const, maskId: 'm', ops: [], words: 'x', keepOutside: true, jobId: 'j' }
+    expect(editLabel(mask, { edits: [mask], hidden: [], active: 'm' })).toBe('Mask 1 · painting')
+    expect(editLabel(mask, { edits: [mask, fill], hidden: [], active: 'm' })).toBe('Mask 1') // spent (R3-3)
     expect(sameLine({ id: 'f', kind: 'fill', maskId: 'm', ops: [], words: 'x', keepOutside: true, jobId: 'j' })).toBe('The fill came back unchanged.')
   })
 })

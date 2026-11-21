@@ -216,7 +216,8 @@ export function nextStep(s: EditSession): string | undefined {
 /** An edit as the list says it. `state` is its job's, when it has one. */
 export function editLabel(e: Edit, s: EditSession, state?: 'running' | 'ready' | 'failed' | 'same' | 'unsent'): string {
   switch (e.kind) {
-    case 'mask': return `${e.name}${s.active === e.id ? ' · painting' : ''}`
+    // A mask whose Fill or Remove was sent is spent: never "painting" (UAT round 3 R3-3); the next stroke starts a new one.
+    case 'mask': return `${e.name}${s.active === e.id && !hasFill(s, e.id) ? ' · painting' : ''}`
     case 'text': return e.text.trim() ? `Text "${e.text}"` : 'Text · typing'
     case 'crop': return 'Crop'
     case 'fill': {
