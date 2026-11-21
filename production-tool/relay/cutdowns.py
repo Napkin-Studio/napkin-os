@@ -53,6 +53,7 @@ MAX_STILLS = 36       # pictures Claude sees for one plan
 # what the stills took to fetch, never under the port's own seconds.
 CUT_PLAN_S = 45.0
 ROOM_S = 52.0
+STILL_PX = 384        # each still's longer side for the plan: enough to place a subject, fewer tokens to read (R4-F4)
 CENTRE = {"x": 0.35, "y": 0.15, "w": 0.30, "h": 0.70}  # the passthrough's subject, in 0-1 of the frame
 
 
@@ -391,7 +392,7 @@ class ModelCutter:
                 if fetch is None or len(images) >= MAX_STILLS:
                     break
                 try:
-                    media_type, data = downscale(fetch(still["url"]))
+                    media_type, data = downscale(fetch(still["url"]), STILL_PX)
                 except Exception:
                     continue
                 images.append({"media_type": media_type, "data": data})
@@ -407,9 +408,11 @@ class ModelCutter:
         usage = Usage()
         port = plan_port(self.port, ROOM_S - (t0 - started))
         try:
+            # Effort low, as a frame's: the plan is a choice of beats and boxes, not writing (live R4-F4: the call
+            # timed out on the client at 20 s twice; CloudWatch APITimeoutError at ~41 s).
             answer = port.call(PURPOSE, self.system, payload, self.schema, usage=usage,
                                attribution=req.get("jobId", PURPOSE), images=images or None, vision=bool(images),
-                               max_tokens=4000)
+                               max_tokens=4000, effort="low")
         except Exception as e:
             # What Dex spent before it failed is still Claude's cost on this job (F21; R4-F4 had none).
             e.usage = {"input_tokens": getattr(usage, "input_tokens", 0), "output_tokens": getattr(usage, "output_tokens", 0)}

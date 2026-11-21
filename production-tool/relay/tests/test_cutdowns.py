@@ -156,7 +156,7 @@ class SlowPort:
         self.seen = []
 
     def call(self, purpose, system, payload, schema, *, usage, **kw):
-        self.seen.append(self.timeout)
+        self.seen.append((self.timeout, kw.get("effort")))
         usage.input_tokens, usage.output_tokens = 12000, 300
         if self.fail:
             raise TimeoutError("Dex took too long")
@@ -174,7 +174,7 @@ def test_the_cut_plan_gets_one_long_try_and_its_cost_is_kept_when_dex_fails():
     # Live (R4-F4): the plan timed out at 20 s twice (41 s); the passthrough then kept shot 5 alone, 2 s of picture.
     port = SlowPort(fail=False)
     cutdowns.ModelCutter(port).plan({"input": {"cutdown": {"shots": round4_master(), "lengths": [6], "aspects": []}}})
-    assert port.seen == [cutdowns.CUT_PLAN_S]
+    assert port.seen == [(cutdowns.CUT_PLAN_S, "low")]  # one try of 45 s, effort low
     assert port.timeout == 20.0  # the shared port is untouched
     # Little room left in the Lambda: never past it, never under the port's own seconds.
     assert cutdowns.plan_port(SlowPort(), 30).timeout == 30
