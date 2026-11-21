@@ -20,7 +20,8 @@ import type { LinkEndpoint } from '../../contracts/types'
 import { canLink, type LinkKind } from '../core/links'
 import { canvasActions, toolLetter } from '../chrome/actions'
 import type { CardKind } from './cardChrome'
-import { NodeCard } from './cards'
+import { NodeCard, planAskOn } from './cards'
+import { AskCard } from '../../ui/AskCard'
 import { cardOf, CARD_KINDS, createNode, elementOfEnd, endOf, groupOf, linkCheck, linkMemory, linkNodes, reconcileLinks, seedNodes, textRowOf } from './nodes'
 import { wordsOnPage } from '../../script/edits'
 import { applyKeyMerges, keyLinkMerges, mergeWords } from './mergeLinks'
@@ -603,6 +604,15 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
               onPointerDown={(ev) => startLink(e, ev)} onPointerMove={follow} onPointerUp={endLink} />}
           </div>
         )
+      })}
+      {/* A plan waiting on the Director agent's question: its ask card beside the storyboard, at screen size (UAT round 3
+          R3-5, UX 2: the only sign was the Decisions badge). Off screen, the ask dock shows it instead. */}
+      {!source && nodes.map((e) => {
+        const c = cardOf(e)!
+        const ask = c.kind === 'storyboard' ? planAskOn(live, c.id) : undefined
+        if (!ask) return null
+        const p = toLocal(e.x + e.width, e.y)
+        return <div key={`ask-${e.id}`} className="nl-ask" style={{ left: p.x + 12, top: p.y }} onPointerDown={(ev) => ev.stopPropagation()}><AskCard ask={ask} /></div>
       })}
       {/* The Brief node's compact card (features/brief-node.clan; production-new-ui mock v2.1). */}
       {els.filter((e) => briefOfElement(e)).map((e) => {

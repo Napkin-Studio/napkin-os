@@ -925,7 +925,8 @@ export class CanvasController {
     const anchor = frontEl ? bounds([frontEl]) : { minX: 0, minY: 0, maxX: 0, maxY: 0 }
     const size = nodeSize(aspect)
     // A row right of the front, else under it, clear of anything already there (slotNear).
-    const slot = slotNear(els, anchor, { w: size.w * views.length + 40 * (views.length - 1), h: size.h })
+    // With room under the row for the views' names and the group's label (UAT round 3, IMG-22 leftover).
+    const slot = slotNear(els, anchor, { w: size.w * views.length + 40 * (views.length - 1), h: size.h + 64 })
     const placed: { jobId: string; view: View }[] = []
     let prev: El | undefined
     let x = slot.x

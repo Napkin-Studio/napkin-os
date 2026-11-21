@@ -774,7 +774,7 @@ export function Character({ initial, active, onPictureEditor }: {
             const stacked = !!(e as El & { stack?: unknown }).stack
             return (
               <span key={e.id}>
-                {named && !stacked && <NameChip r={named} at={toView({ x: e.x, y: e.y + e.height })} width={e.width * zoom} />}
+                {named && !stacked && <NameChip r={named} at={toView({ x: e.x, y: e.y + e.height })} width={e.width * zoom} zoom={zoom} />}
                 {c?.kind === 'gen' && <GenOverlay el={e} c={c} toView={toView} zoom={zoom} ctrl={ctrl} named={!!named} />}
                 {img && img.kind !== 'drawn' && !stacked && <VersionChip nodeId={img.id} at={toView({ x: e.x + e.width, y: e.y })} />}
                 {img?.kind === 'pic' && img.asset && !stacked && <RightsChip sha={img.asset} at={toView({ x: e.x, y: e.y })} zoom={zoom} />}
@@ -975,10 +975,14 @@ const NAME_LINE = 16
 /** A picture's name under it, never wider than the picture: views placed side by side ran their names into
  *  each other ("@mira_three-quarter@mira_side", live test 2026-11-16), so a long one ends in an ellipsis
  *  and says itself in full in its title. */
-export function NameChip({ r, at, width }: { r: NamedRef; at: Pt; width: number }) {
+export function NameChip({ r, at, width, zoom = 1 }: { r: NamedRef; at: Pt; width: number; zoom?: number }) {
   const name = `@${nameOf(r)}`
+  // Scaled with the canvas, and gone when zoomed far out, like the Rights? chip (UAT round 3, R2-11 leftover: the names
+  // stayed screen size at 25 % and lay over the next row's pictures).
+  const look = chipLook(zoom)
+  if (look.dot) return null
   return (
-    <div className="refchips" style={{ left: at.x, top: at.y, maxWidth: Math.max(32, Math.round(width)) }}>
+    <div className="refchips" style={{ left: at.x, top: at.y, maxWidth: Math.max(32, Math.round(width / look.scale)), transform: `translateY(${6 * look.scale}px) scale(${look.scale})`, transformOrigin: 'top left' }}>
       <span className="tagchip" title={`${name}: its name; write it with @ in instructions and shots`}>{name}</span>
     </div>
   )
@@ -1026,6 +1030,9 @@ function GenOverlay({ el, c, toView, zoom, ctrl, named }: { el: El; c: Extract<C
   // Dex's question waits on this result: a card of its own beside the node, at screen size (UAT round 1 IMG-1: inside
   // the placeholder, overflow hidden, an 814 px card showed one or two words at any zoom).
   const asked = state === 'needs_input' ? waitingAsk(doc, c.id) : undefined
+  // The size and view pills scale with the canvas and go when zoomed far out (UAT round 3, R2-11 leftover).
+  const look = chipLook(zoom)
+  const labelStyle: React.CSSProperties = { left: tl.x, top: tl.y, transform: `translateY(calc(-100% - ${6 * look.scale}px)) scale(${look.scale})`, transformOrigin: 'left bottom' }
   return (
     <>
       {showNode && (
@@ -1034,9 +1041,9 @@ function GenOverlay({ el, c, toView, zoom, ctrl, named }: { el: El; c: Extract<C
         </div>
       )}
       {asked && !dismissed && <CanvasAsk ask={asked} rect={{ x: tl.x, y: tl.y, w, h }} />}
-      {c.shape && state !== 'completed' && <div className="genlabel" style={{ left: tl.x, top: tl.y }}><span className="pill">{c.shape}</span></div>}
-      {state === 'completed' && !named && (
-        <div className="genlabel" style={{ left: tl.x, top: tl.y }}>
+      {c.shape && state !== 'completed' && !look.dot && <div className="genlabel" style={labelStyle}><span className="pill">{c.shape}</span></div>}
+      {state === 'completed' && !named && !look.dot && (
+        <div className="genlabel" style={labelStyle}>
           {c.view && <span className="pill">{viewLabel(c.view)}</span>}
           {c.shape && <span className="pill" title="Resized to this shape">{c.shape}</span>}
           {showMock && c.mock && <span className="mockbadge">MOCK</span>}
@@ -1044,7 +1051,7 @@ function GenOverlay({ el, c, toView, zoom, ctrl, named }: { el: El; c: Extract<C
       )}
       {/* Under the picture's @name when it has one, not on top of it (owner, 2026-10-16). */}
       {/* Scaled with the canvas and left out when zoomed far out, like the Rights? chip (UAT round 2 R2-11). */}
-      {state === 'completed' && caption && !chipLook(zoom).dot && <div className="gencaption" style={{ left: tl.x, top: tl.y + h + (named ? NAME_LINE : 0), transform: `scale(${chipLook(zoom).scale})`, transformOrigin: 'top left' }}>{caption}</div>}
+      {state === 'completed' && caption && !look.dot && <div className="gencaption" style={{ left: tl.x, top: tl.y + h + (named ? NAME_LINE * look.scale : 0), transform: `scale(${look.scale})`, transformOrigin: 'top left' }}>{caption}</div>}
     </>
   )
 }
