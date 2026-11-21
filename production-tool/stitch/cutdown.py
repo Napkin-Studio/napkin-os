@@ -4,7 +4,7 @@ Lambda's "cutdown" mode, beside stitch.py, which hands it the event.
   {"jobId", "mode": "cutdown", "size": [w, h],
    "clips": [{"key", "inS", "outS", "takeSize"?: [w, h], "crop"?: {x, y, w, h},
               "cropKeys"?: [{"at", "box"}]}, …],
-   "layers"?: [{"key", "fromS"?, "toS"?}], "endCard": true, "fadeOutS"?: 0.5,
+   "layers"?: [{"key", "fromS"?, "toS"?}], "endCard": true, "fadeOutS"?: 0.5, "cardS"?: 2.5,
    "outKey", "resultKey"}
 
 Each clip is the window inS..outS of its take (a still is held that long), cropped (a box in the
@@ -69,9 +69,9 @@ def crop_filter(c: dict, src: tuple[int, int], dur: float) -> str:
 
 
 def build_command(ffmpeg: str, clips: list[dict], size: tuple[int, int], version: str, assets: dict,
-                  layers: list[dict], fade_s: float, out: str, fps: int = st.FPS) -> list[str]:
+                  layers: list[dict], fade_s: float, out: str, fps: int = st.FPS, card_s: float = st.CARD_S) -> list[str]:
     """clips: [{"path", "inS", "outS", "still"?, "src": (w, h), "audio": bool, "crop"?, "cropKeys"?,
-    "takeSize"?}]; layers: [{"path", "fromS"?, "toS"?}]."""
+    "takeSize"?}]; layers: [{"path", "fromS"?, "toS"?}]; card_s: how long the studio card holds."""
     w, h = size
     cmd = [ffmpeg, "-hide_banner", "-loglevel", "error", "-y"]
     durs = []
@@ -91,7 +91,7 @@ def build_command(ffmpeg: str, clips: list[dict], size: tuple[int, int], version
     card_at = n + len(layers)
     layout = st.card_layout(w, h, assets)
     layout["paths"] = {name: a["path"] for name, a in assets.items()}
-    card_inputs, card_parts = st.card_graph(card_at, version, layout, fps)
+    card_inputs, card_parts = st.card_graph(card_at, version, layout, fps, card_s)
     cmd += card_inputs
     parts = []
     for i, (c, dur) in enumerate(zip(clips, durs)):
@@ -120,7 +120,7 @@ def build_command(ffmpeg: str, clips: list[dict], size: tuple[int, int], version
     parts.append(f"{''.join(f'[a{i}]' for i in range(n))}concat=n={n}:v=0:a=1[ab]")
     afade = f",afade=t=out:st={st._secs(body - fade)}:d={st._secs(fade)}" if fade > 0 else ""
     parts.append(f"[ab]atrim=duration={st._secs(body)}{afade}[abf]")
-    parts.append(f"anullsrc=r={AUDIO_RATE}:cl=stereo,atrim=duration={st._secs(st.CARD_S)},aformat=sample_fmts=fltp[acard]")
+    parts.append(f"anullsrc=r={AUDIO_RATE}:cl=stereo,atrim=duration={st._secs(card_s)},aformat=sample_fmts=fltp[acard]")
     parts.append("[abf][acard]concat=n=2:v=0:a=1[aout]")
     cmd += ["-filter_complex", ";".join(parts), "-map", "[out]", "-map", "[aout]",
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
@@ -131,6 +131,18 @@ def build_command(ffmpeg: str, clips: list[dict], size: tuple[int, int], version
 # Every size of a film ends on the same, dark studio card (owner 2026-11-18: the 1:1 came out white while the
 # other sizes were dark, as each job's id picked its own; card_version is for the ad's own render).
 SIZE_CARD = "roll-up-ink"
+
+
+CARD_MIN_S = 1.0  # relay cutdowns.STUDIO_MIN_S is 1.2; never shorter than this whatever the event says
+
+
+def card_seconds(event: dict) -> float:
+    """How long the studio card holds: the event's cardS (a short size's, its roll sped up; UAT round 3, R3-F12),
+    within CARD_MIN_S..CARD_S, else CARD_S."""
+    try:
+        return min(st.CARD_S, max(CARD_MIN_S, float(event.get("cardS") or st.CARD_S)))
+    except (TypeError, ValueError):
+        return st.CARD_S
 
 
 def run(event: dict, *, get, put, put_json, ffmpeg: str, ffprobe: str) -> dict:
@@ -165,7 +177,7 @@ def run(event: dict, *, get, put, put_json, ffmpeg: str, ffprobe: str) -> dict:
             size = (st.even(w), st.even(h))
             out = os.path.join(tmp, "cut.mp4")
             cmd = build_command(ffmpeg, clips, size, version, st.load_assets(version), layers,
-                                float(event.get("fadeOutS") or 0), out)
+                                float(event.get("fadeOutS") or 0), out, card_s=card_seconds(event))
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
             if r.returncode != 0:
                 print(json.dumps({"kind": "cutdown_ffmpeg", "jobId": event.get("jobId"), "stderr": r.stderr.strip()[-2000:]}))
