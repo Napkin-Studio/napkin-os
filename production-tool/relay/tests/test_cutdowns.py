@@ -217,6 +217,33 @@ def test_the_film_card_comes_off_a_sizes_length_before_the_studio_card():
     assert cutdowns.client_card_s(2.5, 6.0) == 1.167 and cutdowns.client_card_s(2.5, 30.0) == 2.0 and cutdowns.client_card_s(1.5, 30.0) == 1.5
 
 
+def test_a_short_size_keeps_3_5_s_of_picture_by_shortening_its_cards():
+    """UAT round 3 (R3-F12): the 6 s 9:16 had 2.25 s of picture, then 1.2 s of the film's card and 2.5 s of the
+    studio card. Both cards stay; the studio card shortens first (to 1.2 s), then the film's card (to 1 s)."""
+    assert cutdowns.card_lengths(6.0, 2.5) == (1.167, 1.333)
+    assert cutdowns.card_lengths(15.0, 2.5) == (2.0, 2.5)  # long enough: nothing shortens
+    assert cutdowns.card_lengths(6.0, None) == (0.0, 2.5)  # no film card: 3.5 s of picture already
+    assert cutdowns.card_lengths(5.0, 2.5) == (1.0, 1.2)  # as short as they go; the picture gets what is left
+    assert cutdowns.card_lengths(None, 2.5) == (2.0, 2.5)
+    shots = [{"shotId": "a", "inS": 0, "outS": 4, "takeS": 4}, {"shotId": "e", "inS": 0, "outS": 2.5, "endCard": True}]
+    windows, over = cutdowns.fit_windows(shots, {"a"}, 6.0)
+    assert sum(w["outS"] - w["inS"] for w in windows) == pytest.approx(3.5, abs=0.002) and abs(over) <= 0.001
+
+
+def test_a_render_passes_a_short_sizes_studio_card_length_to_stitch():
+    h = Harness(base_config())
+    token = h.as_person()
+    inp = render_input(h)
+    inp["cutdown"]["studioS"] = 1.333
+    _, job = h.post_job(token, op="cutdown", expect=200, **inp)
+    [event] = h.stitched
+    assert event["cardS"] == 1.333
+    h2 = Harness(base_config())
+    _, job = h2.post_job(h2.as_person(), op="cutdown", expect=200, **render_input(h2))
+    [event] = h2.stitched
+    assert "cardS" not in event
+
+
 def test_a_render_of_a_clip_that_is_not_ours_fails_plainly():
     h = Harness(base_config())
     token = h.as_person()

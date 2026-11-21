@@ -1446,6 +1446,12 @@
               "required": ["line", "bg", "s"],
               "additionalProperties": false
             },
+            "studioS": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 2.5,
+              "description": "render: how long the studio card holds, its roll sped up to fit; absent: 2.5 s. A short size shortens it so the picture keeps 3.5 s (web film.ts cardLengths, relay cutdowns.py card_lengths). Added 2026-11-21 (UAT round 3, R3-F12, additive)."
+            },
             "fadeOutS": {
               "type": "number",
               "minimum": 0,
