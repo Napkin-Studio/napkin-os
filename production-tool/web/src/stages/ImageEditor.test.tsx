@@ -435,7 +435,7 @@ describe('an edit that came back the same (QA 2026-11-17)', () => {
     await act(async () => { byText(row as HTMLElement, 'Discard')!.click() })
     expect(el.querySelector('.ie-elist')!.textContent).not.toContain('Mask 1')
   })
-  it('Try again sends the same change as a new job, the old row gone (a fill goes the same way; jsdom draws no mask)', async () => {
+  it('Try again sends the change again, said more strongly, as a new job, the old row gone (UAT round 4 S2-3: never the identical request)', async () => {
     const { el, services, ids } = await open(() => ({ edits: [], hidden: [] }))
     await putBlobAs(SHA('a'), new Blob(['a'], { type: 'image/png' }))
     let jobId = ''
@@ -460,7 +460,7 @@ describe('an edit that came back the same (QA 2026-11-17)', () => {
     for (let i = 0; i < 100 && !submit.mock.calls.length && !el.querySelector('.ie-error'); i++) await act(async () => { await new Promise((r) => setTimeout(r, 30)) })
     expect(el.querySelector('.ie-error')?.textContent ?? '').toBe('')
     expect(submit).toHaveBeenCalledTimes(1)
-    expect(submit.mock.calls[0][1]).toMatchObject({ text: 'a red door' })
+    expect(submit.mock.calls[0][1]).toMatchObject({ text: 'Make this change clearly visible: a red door.' })
     expect(submit.mock.calls[0][4]).not.toBe(jobId)
     expect(services.ui.get().imageEdits![ids.frame].edits.some((e) => e.id === 'f1')).toBe(false)
   })
