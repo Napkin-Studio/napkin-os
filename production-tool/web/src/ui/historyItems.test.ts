@@ -113,3 +113,14 @@ describe('History (contract 3)', () => {
     expect(html).not.toMatch(/charged|refund/i)
   })
 })
+
+describe('a Campaign of one size (UAT round 5, R5-F9)', () => {
+  it('reads "1 format", not "1 formats"', () => {
+    const d = doc()
+    const set = 'fset_01K6XA7Q3M9V2D4R8T0B000001'
+    d.format_sets = { [set]: { id: set, v: 1, field_v: {} } } as never
+    d.sizes = { size_01K6XA7Q3M9V2D4R8T0B000001: { id: 'size_01K6XA7Q3M9V2D4R8T0B000001', v: 1, field_v: {}, set_id: set } } as never
+    const labels = historyItems(d, DOC).map((i) => i.label)
+    expect(labels).toContain('Campaign · 1 format')
+  })
+})

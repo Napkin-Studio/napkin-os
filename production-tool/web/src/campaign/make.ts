@@ -149,7 +149,7 @@ export async function makeAllSizes(deps: CampaignDeps, req: MakeRequest, by: Per
     x.boards[board.id] = board
     x.format_sets[setId] = set
     for (const s of sizes) x.sizes[s.id] = s
-  }, `make all sizes of ${req.master.label}: ${sizes.length} formats`)
+  }, `make all sizes of ${req.master.label}: ${sizes.length} ${sizes.length === 1 ? 'format' : 'formats'}`)
   canvas.select([el.id])
   // The master goes up once before the sizes fan out (QA 2026-11-17).
   if (set.master.asset) await assetRef(deps.relay, set.master.asset, doc.get()).catch(() => undefined)
