@@ -44,3 +44,12 @@ describe('a title that starts with a name\u2019s possessive (UAT 2026-11-21, S3)
     expect(titleOf({ action: '@maya_front\u2019s hand. Then more.', camera: { size: 'insert' } } as never)).toBe('Maya\u2019s hand')
   })
 })
+
+describe('a title with an abbreviation (UAT round 3)', () => {
+  it('keeps the dots of "a.m." and cuts at the next stop', () => {
+    expect(titleOf({ action: '1 a.m. A dark kitchen, lit only by the open fridge.', camera: { size: 'wide' } })).toBe('1 a.m. A dark kitchen')
+    expect(titleOf({ action: 'At 6 p.m. she leaves.', camera: { size: 'wide' } })).toBe('At 6 p.m. she leaves')
+    expect(titleOf({ action: 'Dr. Okafor waits. Then goes.', camera: { size: 'wide' } })).toBe('Dr. Okafor waits')
+    expect(titleOf({ action: 'Plan B. Then more.', camera: { size: 'wide' } })).toBe('Plan B')
+  })
+})

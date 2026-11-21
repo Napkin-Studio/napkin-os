@@ -10,3 +10,31 @@ describe('an edit card in screenplay layout (UAT 2026-11-21, script UX 1)', () =
     expect(rows[2].parts.filter((p) => p.kind !== 'same').map((p) => p.text)).toEqual(['(softly)', '(whispering)'])
   })
 })
+
+describe('an edit card reads line by line (UAT round 3, R3-F7)', () => {
+  it('shows a rewritten line as its old line then its new line, words marked only inside them', async () => {
+    const { cardLines, lineDiff } = await import('./skyeBooth')
+    const before = [
+      { kind: 'action', text: '1 a.m. A dark kitchen.' },
+      { kind: 'action', text: 'A flatmate in socks and dressing gown creeps in, bracing for noise.' },
+      { kind: 'character', text: 'WOMAN' },
+      { kind: 'dialogue', text: 'Good boy.' },
+    ]
+    const after = [
+      { kind: 'action', text: '1 a.m. A dark kitchen.' },
+      { kind: 'action', text: 'A flatmate in a dressing gown flips the switch, wincing.' },
+    ]
+    const lines = cardLines(lineDiff(before, after))
+    const text = (l: (typeof lines)[number]) => l.parts.map((p) => p.text).join('')
+    expect(lines.map((l) => [l.kind, l.change, l.side ?? ''])).toEqual([
+      ['action', 'same', ''], ['action', 'changed', 'was'], ['action', 'changed', 'now'], ['character', 'gone', ''], ['dialogue', 'gone', ''],
+    ])
+    // Each side reads whole: the old line as it was, the new as it will be.
+    expect(text(lines[1])).toBe(before[1].text)
+    expect(text(lines[2])).toBe(after[1].text)
+    expect(lines[1].parts.some((p) => p.kind === 'new')).toBe(false)
+    expect(lines[2].parts.some((p) => p.kind === 'gone')).toBe(false)
+    // A phrase cut is one struck run, its space included.
+    expect(lines[1].parts.filter((p) => p.kind === 'gone').map((p) => p.text)).toContain('socks and')
+  })
+})

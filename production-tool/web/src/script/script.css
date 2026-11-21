@@ -199,6 +199,8 @@ button.sp-pill { border: 0; cursor: pointer; font: inherit; font-size: 11px; }
 .sp-delshot { color: var(--ink3); }
 .sp-delshot:hover { color: var(--danger); }
 .se-confirm { background: var(--paper, transparent); }
+/* An offer is no warning: the line's own border, not the delete's red (UAT round 3, R3-F8). */
+.se-confirm.offer .confirm { border-color: var(--line); }
 @media (hover: none) { .sp-del { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .sp-del { transition: none; } }
 

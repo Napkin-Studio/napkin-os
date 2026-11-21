@@ -29,7 +29,7 @@ from typing import Callable
 
 from contracts import Contracts
 
-PROMPT_VERSION = "skye.v6"  # skye.v1–v5 stay bundled: ModelWriter(prompt_version="skye.v5") rolls back (v5: the brief, features/brief-node.clan; v6: one length rule with the band, rough_seconds)
+PROMPT_VERSION = "skye.v7"  # skye.v1–v6 stay bundled: ModelWriter(prompt_version="skye.v6") rolls back (v5: the brief, features/brief-node.clan; v6: one length rule with the band, rough_seconds; v7: a shorter version keeps the spoken lines, UAT round 3 R3-F7)
 PURPOSE = "writer"
 PROMPTS = Path(__file__).parent / "prompts"
 ASK_HOOK = "[ask]"
