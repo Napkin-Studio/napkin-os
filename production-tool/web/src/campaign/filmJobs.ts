@@ -167,22 +167,52 @@ export async function planFilm(deps: FilmDeps, master: MasterInfo, shots: Master
 const FILM_FORMATS: Record<string, string> = { '16:9': 'film-16x9', '9:16': 'film-9x16', '4:5': 'film-4x5', '1:1': 'film-1x1' }
 export const formatOfShape = (label: string) => FILM_FORMATS[label]
 
-/** The film layers of a size: the line and legal over the last 3 s of the clips, the logo over the first
+/** How long the line and legal hold at the end of a size's clips (UAT round 5, R5-F6: over the last 3 s of a 3.5 s
+ *  cutdown they ran over the whole picture), the same as the ad's end-line super (rooms/endLine END_LINE_S). */
+export const LINE_S = 2.5
+/** The least the line holds when it waits for a caption to end. */
+export const LINE_MIN_S = 1.5
+
+/** The film layers of a size: the line and legal over the last 2.5 s of the clips, the logo over the first
  *  3 (the brand early), and the captions of the spoken lines on the social shapes (CF9) unless hidden;
- *  on the TV shapes only when a person turned them on. */
+ *  on the TV shapes only when a person turned them on. The line is never on screen with a caption (linesApart). */
 export async function filmLayers(deps: Pick<CampaignDeps, 'relay' | 'doc'>, set: FormatSet, size: Size): Promise<TypeLayer[]> {
   const d = liveGet(deps.doc)
   const body = (size.edl ?? []).reduce((a, w) => a + (w.out_s - w.in_s), 0)
   const laid = (await layersFor(deps, set, size)).map((l): TypeLayer => l.kind === 'logo'
     ? { ...l, fromS: 0, toS: Math.min(3, body) }
-    : { ...l, fromS: Math.max(0, body - 3), toS: body })
+    : { ...l, fromS: Math.max(0, body - LINE_S), toS: body })
   const want = size.layers?.captions
   const show = want ? !want.hidden : isSocialShape(shapeOf(size))
   if (!show) return laid
   const f = formatById(size.format.format_id)
   const fr = f ? rowFracs({ format: f.format }) : ([0, 0, 0, 0] as const)
   const caps = withoutRepeats(captionLayers(d, size.edl ?? [], want?.box ?? captionBox(fr), brandKit(d).colour, size.delivery.height), laid)
-  return [...laid, ...caps.map((c) => (want?.scale && c.sizeFrac ? { ...c, sizeFrac: Math.min(0.5, c.sizeFrac * want.scale) } : c))].slice(0, 40)
+  const apart = linesApart(laid, caps, body)
+  return [...apart.laid, ...apart.caps.map((c) => (want?.scale && c.sizeFrac ? { ...c, sizeFrac: Math.min(0.5, c.sizeFrac * want.scale) } : c))].slice(0, 40)
+}
+
+/** The line and legal never on screen with a caption (UAT round 5, R5-F6: "Quietboil. Let them sleep." sat under the
+ *  "Good boy." caption). A caption that ends with LINE_MIN_S or more of the clips left: the line waits for it. Else the
+ *  caption ends where the line starts (a caption that starts later than the line, with LINE_MIN_S of line before it:
+ *  the line ends where it starts). The logo is left as it is. */
+export function linesApart(laid: readonly TypeLayer[], caps: readonly TypeLayer[], body: number): { laid: TypeLayer[]; caps: TypeLayer[] } {
+  const words = laid.map((l) => ({ ...l }))
+  const out = caps.map((c) => ({ ...c }))
+  for (const l of words) {
+    if (l.kind === 'logo') continue
+    for (const c of out) {
+      const lf = l.fromS ?? 0
+      const lt = l.toS ?? body
+      const cf = c.fromS ?? 0
+      const ct = c.toS ?? body
+      if (ct <= lf || cf >= lt) continue
+      if (body - ct >= LINE_MIN_S - 1e-6) l.fromS = Math.round(ct * 1000) / 1000
+      else if (cf > lf && cf - lf >= LINE_MIN_S - 1e-6) l.toS = cf // a late caption: the line shows before it
+      else c.toS = lf
+    }
+  }
+  return { laid: words, caps: out.filter((c) => (c.toS ?? body) - (c.fromS ?? 0) > 0.05) }
 }
 
 const sameWords = (a?: string, b?: string) => {

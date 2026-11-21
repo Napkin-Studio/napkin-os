@@ -176,6 +176,21 @@ function union(boxes: readonly PxBox[]): PxBox {
   return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }
 }
 
+/** A box of the take round the whole subject (UAT round 5, R5-F6: the plan said the 9:16 crop cuts shot 5, and it was
+ *  cropped anyway, the kettle cut off). The size's own crop, widened (or heightened) to the subject with a little room,
+ *  centred on it, inside the take. Its shape is not the size's: stitch fits it whole over a blurred fill of itself
+ *  (stitch/cutdown.py fits_whole). No spend: New edges stays the person's pick. */
+export function fitBox(take: Aspect, shape: Aspect, subject: PxBox): PxBox {
+  const cx = subject.x + subject.w / 2
+  const cy = subject.y + subject.h / 2
+  const crop = cropAround(take, shape, cx, cy)
+  const w = Math.min(take.w, Math.max(crop.w, subject.w * 1.06))
+  const h = Math.min(take.h, Math.max(crop.h, subject.h * 1.06))
+  const x = Math.min(Math.max(cx - w / 2, 0), take.w - w)
+  const y = Math.min(Math.max(cy - h / 2, 0), take.h - h)
+  return { x: r3(x), y: r3(y), w: r3(w), h: r3(h) }
+}
+
 /** The crop keys for one shot at one shape, and whether the crop cuts the subject (Aleph 2 should make
  *  its new edges). relay/cutdowns.py crop_keys. */
 export function cropKeys(take: Aspect, aspect: Aspect, subjects: readonly PxBox[]): { keys: CropKey[]; cuts: boolean } {
@@ -284,6 +299,8 @@ export function edlFor(shots: readonly MasterShot[], beats: readonly SizeBeat[],
     if (mine?.crop) return { ...item, crop: { ...mine.crop }, crop_by: 'person' }
     if (sameShape(take, shape)) return item
     const c = crops.find((x) => x.shotId === w.shotId && sameShape(x.aspect, shape))
+    // The plan says the crop cuts the subject: the whole subject, fitted (R5-F6); a reframe, when picked, replaces it.
+    if (c?.cuts && c.subject && (c.keys?.length ?? 1) <= 1) return { ...item, crop: fitBox(take, shape, c.subject), crop_by: 'rule' }
     const keys = c?.keys ?? cropKeys(take, shape, []).keys
     return keys.length > 1 ? { ...item, crop_keys: keys.map((k) => ({ at: k.at, box: { ...k.box } })), crop_by: 'rule' }
       : { ...item, crop: { ...keys[0].box }, crop_by: 'rule' }

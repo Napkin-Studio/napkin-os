@@ -131,7 +131,8 @@ describe('a 15 s at 9:16', () => {
     expect(cut.clips![2]).toEqual({ asset: { sha256: out, url: `${CDN}/${out}`, mime: 'video/mp4' }, inS: 0, outS: 2.5, takeSize: { w: 612, h: 1088 } })
     expect(cut).toMatchObject({ endCard: true, fadeOutS: 0.5, lengthS: 15 })
     const line = cut.layers!.find((l) => l.kind === 'line')!
-    expect(line).toMatchObject({ text: 'First light. First sip.', fromS: 9.5, toS: 12.5 }) // the last 3 s of the clips
+    expect(line).toMatchObject({ text: 'First light. First sip.', toS: 12.5 }) // the last 2.5 s of the clips, after any caption (R5-F6)
+    expect(line.fromS).toBeGreaterThanOrEqual(10)
     expect(cut.layers!.some((l) => l.kind === 'captions')).toBe(true)
   })
   it('the TV shape carries no captions unless a person turns them on', async () => {
@@ -246,5 +247,50 @@ describe('a short size keeps its picture and says its line once (UAT round 3, R3
   it('one version is "1 version"', async () => {
     const { versionsWord } = await import('./film')
     expect([versionsWord(1), versionsWord(2), versionsWord(0)]).toEqual(['1 version', '2 versions', '0 versions'])
+  })
+})
+
+describe('the line and the captions apart (UAT round 5, R5-F6)', () => {
+  const box = { x: 0.035, y: 0.85, w: 0.93, h: 0.11 }
+  it('round 5\'s 6 s 9:16: 3.5 s of picture, "Good boy." captioned 0-1.48 s: the line holds 1.48-3.5 s, not 0.5-3.5 s', async () => {
+    const { linesApart, LINE_S } = await import('./filmJobs')
+    expect(LINE_S).toBe(2.5)
+    const line = { kind: 'line' as const, box, text: 'Quietboil. Let them sleep.', fromS: 3.5 - LINE_S, toS: 3.5 }
+    const cap = { kind: 'captions' as const, box: { x: 0.06, y: 0.6, w: 0.88, h: 0.12 }, text: 'Good boy.', fromS: 0, toS: 1.48 }
+    const out = linesApart([line], [cap], 3.5)
+    expect(out.laid[0]).toMatchObject({ fromS: 1.48, toS: 3.5 })
+    expect(out.caps[0]).toMatchObject({ fromS: 0, toS: 1.48 })
+  })
+  it('a caption too near the end ends where the line starts; a late one ends the line; the logo is left alone', async () => {
+    const { linesApart } = await import('./filmJobs')
+    const line = { kind: 'line' as const, box, text: 'End.', fromS: 3.5, toS: 6 }
+    const near = { kind: 'captions' as const, box, text: 'Hi.', fromS: 2.5, toS: 5 }
+    expect(linesApart([line], [near], 6).caps[0]).toMatchObject({ fromS: 2.5, toS: 3.5 })
+    const late = { kind: 'captions' as const, box, text: 'Hi.', fromS: 5.5, toS: 6 }
+    const ended = linesApart([{ ...line, fromS: 2 }], [late], 6)
+    expect(ended.laid[0]).toMatchObject({ fromS: 2, toS: 5.5 })
+    const logo = { kind: 'logo' as const, box, fromS: 0, toS: 3 }
+    expect(linesApart([logo as never], [near], 6).laid[0]).toMatchObject({ fromS: 0, toS: 3 })
+  })
+})
+
+describe('a crop the plan says cuts the subject is fitted whole (UAT round 5, R5-F6)', () => {
+  it('round 5\'s shot 5 at 9:16: the box holds the whole 1190 px subject, not the 607 px crop', async () => {
+    const { edlFor, fitBox } = await import('./film')
+    const take = { w: 1920, h: 1080 }
+    const subject = { x: 652.8, y: 54, w: 1190.4, h: 1004.4 }
+    const box = fitBox(take, { w: 9, h: 16 }, subject)
+    expect(box.x).toBeLessThanOrEqual(subject.x)
+    expect(box.x + box.w).toBeGreaterThanOrEqual(subject.x + subject.w)
+    expect(box.h).toBe(1080)
+    const shots = [{ shotId: 'shot_5', number: 5, inS: 0, outS: 1.48, takeS: 2.02, takeId: 'gen_5', takeSize: take }, { shotId: 'shot_7', number: 7, inS: 0.958, outS: 2.978, takeS: 3, takeId: 'gen_7', takeSize: take }]
+    const crops = [
+      { shotId: 'shot_5', aspect: { w: 9, h: 16 }, keys: [{ at: 0, box: { x: 944.25, y: 0, w: 607.5, h: 1080 } }], subject, cuts: true },
+      { shotId: 'shot_7', aspect: { w: 9, h: 16 }, keys: [{ at: 0, box: { x: 627.45, y: 0, w: 607.5, h: 1080 } }], subject: { x: 691.2, y: 140.4, w: 480, h: 777.6 }, cuts: false },
+    ]
+    const beats = [{ shot_id: 'shot_5', keep: true }, { shot_id: 'shot_7', keep: true }] as never
+    const { edl } = edlFor(shots as never, beats, 6, { w: 1080, h: 1920 }, crops)
+    expect(edl[0].crop).toEqual(box)
+    expect(edl[1].crop).toEqual({ x: 627.45, y: 0, w: 607.5, h: 1080 })
   })
 })
