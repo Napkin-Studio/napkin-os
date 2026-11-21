@@ -135,6 +135,42 @@ def test_dex_looks_at_the_stills_and_the_relay_settles_his_answer():
     assert job["director"]["rationale"] == "The reveal, then the sip." and job["cost"]["reserved"] == 0
 
 
+@pytest.mark.parametrize("n_shots", [8, 12, 25, 40])
+def test_a_long_film_sends_no_more_stills_than_the_model_takes(n_shots):
+    """UAT walkthrough 2026-11-21: 8 shots + the end card, three stills each: 24 images, 'more than 20 images in one
+    call', and Dex fell back to the opening and payoff. Any film length stays inside the limit, every shot seen."""
+    from director.model import MAX_IMAGES
+
+    class StrictPort(FakePort):
+        def call(self, purpose, system, payload, schema, **kw):
+            assert len(kw.get("images") or []) <= MAX_IMAGES, "more than 20 images in one call"
+            return super().call(purpose, system, payload, schema, **kw)
+
+    h = Harness(base_config())
+    port = StrictPort()
+    h.relay.cutter = cutdowns.ModelCutter(port)
+    token = h.as_person()
+    shots = master(n_shots)
+    for i, s in enumerate(shots[:n_shots]):
+        still = asset(200 + i)
+        h.blobs.put(f"in/{still['sha256']}", _png(), "image/png")
+        s["stills"] = [still, still, still]
+    _, job = h.post_job(token, op="cutdown", expect=200, **plan_input(shots, lengths=(15,), aspects=({"w": 9, "h": 16},)))
+    assert job["state"] == "completed", job.get("error")
+    assert job["director"]["model"] != "passthrough"
+    sent = port.calls[0]["payload"]["shots"]
+    assert len(port.calls[0]["images"]) <= MAX_IMAGES
+    if n_shots <= 12:
+        assert all(s["pictures"] for s in sent if not s.get("endCard"))  # every shot seen
+
+
+def test_pick_stills_keeps_the_first_and_last_shot_when_sampling():
+    got = cutdowns.pick_stills([3] * 40, 20)
+    assert sum(len(x) for x in got) == 20 and got[0] and got[-1]
+    assert cutdowns.pick_stills([3] * 5, 20) == [[0, 1, 2]] * 5
+    assert cutdowns.pick_stills([3] * 9, 20) == [[0, 2]] * 9  # two a shot: in and out
+
+
 def test_an_agency_with_claude_off_gets_the_passthrough_plan():
     h = Harness(base_config())
     port = FakePort()

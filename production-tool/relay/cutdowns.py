@@ -47,7 +47,7 @@ OUTPAINT_PROMPT = ("Continue the scene beyond its edges; keep everything inside 
 PROMPT_VERSION = "cutter.v2"  # cutter.v1 stays bundled: ModelCutter(port, prompt_version="cutter.v1") rolls back (v2: the brief)
 PURPOSE = "cutdown"
 PROMPTS = Path(__file__).parent / "prompts"
-MAX_STILLS = 36       # pictures Claude sees for one plan
+MAX_STILLS = 36       # pictures Claude sees for one plan, at most (the model port's own MAX_IMAGES, 20, caps it again)
 # The plan is one long look at up to 36 stills: the director's per-click 20 s (two tries, 41 s in all) timed it out every
 # time live (UAT round 4, R4-F4). One try of up to CUT_PLAN_S, inside the relay Lambda's 60 s: never past ROOM_S less
 # what the stills took to fetch, never under the port's own seconds.
@@ -383,13 +383,20 @@ class ModelCutter:
         from cards import downscale
         from director.model import Usage
 
+        from director.model import MAX_IMAGES
+
         started = time.monotonic()
         cut = req["input"]["cutdown"]
         images, payload_shots = [], []
-        for s in cut["shots"]:
+        # What a call may carry: one length's worth for any film (a long cut is sampled, never refused).
+        limit = min(MAX_STILLS, MAX_IMAGES)
+        chosen = pick_stills([len(s.get("stills") or []) for s in cut["shots"]], limit)
+        for s, take in zip(cut["shots"], chosen):
             seen = []
             for i, still in enumerate(s.get("stills") or []):
-                if fetch is None or len(images) >= MAX_STILLS:
+                if i not in take:
+                    continue
+                if fetch is None or len(images) >= limit:
                     break
                 try:
                     media_type, data = downscale(fetch(still["url"]), STILL_PX)
@@ -425,6 +432,36 @@ class ModelCutter:
         out["_latencyMs"] = round((time.monotonic() - t0) * 1000)
         out["_usage"] = {"input_tokens": getattr(usage, "input_tokens", 0), "output_tokens": getattr(usage, "output_tokens", 0)}
         return out
+
+
+def pick_stills(counts: list[int], limit: int) -> list[list[int]]:
+    """Which of each shot's stills (counts[i] of them: in, middle, out) the plan looks at, `limit` pictures at most:
+    every one when they fit (UAT walkthrough 2026-11-21: a 9-shot film sent 27 stills, over the model's 20-image limit,
+    and Dex fell back to an opening and payoff cut). Else the same number of each shot, as many as fit (the in and
+    out, then the middle alone), and past one a shot the shots are sampled evenly, the first and the last kept."""
+    n = len(counts)
+    if sum(counts) <= limit:
+        return [list(range(c)) for c in counts]
+    per = limit // n if n else 0
+    out: list[list[int]] = [[] for _ in counts]
+    if per >= 1:
+        for i, c in enumerate(counts):
+            if c <= 0:
+                continue
+            if per >= 3:
+                out[i] = list(range(c))[:per]
+            elif per == 2 and c >= 2:
+                out[i] = [0, c - 1]
+            else:
+                out[i] = [min(1, c - 1)]
+        return out
+    have = [i for i, c in enumerate(counts) if c > 0]
+    if len(have) > limit and limit > 0:
+        step = (len(have) - 1) / max(1, limit - 1)
+        have = sorted({have[round(k * step)] for k in range(limit)})
+    for i in have[:limit]:
+        out[i] = [min(1, counts[i] - 1)]
+    return out
 
 
 def plan_port(port, room_s: float):
