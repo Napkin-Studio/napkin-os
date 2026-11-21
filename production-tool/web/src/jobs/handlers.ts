@@ -15,7 +15,7 @@ import { aspectOfRatio, exactRatio, reducedAspect } from '../canvas/core/sketch'
 import { landUpdate } from '../doc/store'
 import type { DocumentStore, WriteWhy } from '../doc/types'
 import type { JobCtx } from '../doc/ui'
-import { currentFrame, framesOf, mainVideo, rendersOf, shotName, takesOf, videoOfShot } from '../model/selectors'
+import { currentFrame, framesOf, mainVideo, nextTakeVersion, rendersOf, shotName, takesOf, videoOfShot } from '../model/selectors'
 import { pickInCut } from '../doc/cutWrites'
 import { modelLabel } from '../capabilities'
 import { landingWhy } from './landing'
@@ -330,7 +330,8 @@ export function landFrame(store: DocumentStore, job: Job, ctx: Extract<JobCtx, {
 /** Fin's clip (in the Film editor, picked in the cut): "render take v2 for shot 3". */
 export function landTake(store: DocumentStore, job: Job, ctx: Extract<JobCtx, { for: 'clip' }>, opts: LandOpts = IN_CUT) {
   const d = store.get()
-  const what = `take v${takesOf(d, ctx.shotId).length + 1} for ${shotName(d, ctx.shotId)}`
+  // Its one version number, the Bin's (UAT round 3, F15: the note said v2 for the Bin's "Box 1 · v1").
+  const what = `take v${nextTakeVersion(d, { shot_ids: [ctx.shotId] })} for ${shotName(d, ctx.shotId)}`
   return landUpdate(store, (x) => { applyTake(x, job, ctx, opts) }, softenedWhy(job, landingWhy(store, job.jobId, what, cardsOf(job, ctx))))
 }
 

@@ -136,11 +136,14 @@ export function boxWords(doc: Doc, box: Box, pics: BoxPicture[] = boxPictures(do
   return box.together ? { title: `One video · ${box.shotIds.length} shots · ${len}`, sub: 'Every frame used as a guide' } : { title: 'Separate video', sub: len }
 }
 
-/** The Box tab's line under One video / Separate videos. */
-export function boxHow(doc: Doc, box: Box, pics: BoxPicture[] = boxPictures(doc, box)): string {
+/** The Box tab's line under One video / Separate videos. `frameFirst`: Make draws the shot's frame first (a lone shot
+ *  with no frame that names a character), so the clip is made from that frame, not from its words alone (UAT round 3,
+ *  R3-F13: "Made on its own from its words" sat beside "Make draws the frame first"). */
+export function boxHow(doc: Doc, box: Box, pics: BoxPicture[] = boxPictures(doc, box), frameFirst = false): string {
   const cast = castWords(pics)
   const withCast = cast ? `, with ${cast}’s pictures` : ''
   if (fromWords(doc, box)) {
+    if (!box.together && frameFirst) return `Made on its own: its frame is drawn from its words${cast ? ` and ${cast}’s pictures` : ''}, then the clip starts on that frame.`
     return box.together ? `One generation from the shots’ words, in order${withCast}. Cut where the lines are.` : `Made on its own from its words${cast ? ` and ${cast}’s pictures` : ''}.`
   }
   return box.together ? `One generation. Every shot’s frame goes in as a guide, in shot order${withCast}. No frame is pinned.` : 'Made on its own, starting on its frame.'

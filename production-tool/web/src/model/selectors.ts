@@ -141,8 +141,10 @@ export function shotNumber(d: Doc, shotId: Id | undefined): number {
   return s ? shotsOf(d, s.storyboard_id).findIndex((x) => x.id === s.id) + 1 : 0
 }
 
-/** The words for a shot in a sentence: "shot 2", or "a shot". */
+/** The words for a shot in a sentence: "shot 2", "the end card", or "a shot". The end card is never "shot 7": a box
+ *  added before it took the number it had been called by (UAT round 3, R3-F13). */
 export function shotName(d: Doc, shotId: Id | undefined): string {
+  if (shotId && d.shots[shotId]?.kind === 'end_card') return 'the end card'
   const n = shotNumber(d, shotId)
   return n ? `shot ${n}` : 'a shot'
 }
@@ -212,9 +214,44 @@ export function takesOf(d: Doc, shotId: Id): Generation[] {
   return values(d.generations).filter((g) => g.state === 'ready' && g.shot_ids.includes(shotId)).sort(byMade)
 }
 
-/** A take's number among a shot's takes ("v2"), 1-based; 0 when it does not show the shot. */
+/** A take's number ("v2"), 1-based: its one version number (takeVersion), the Bin's; 0 when it does not show the shot. */
 export function takeNumber(d: Doc, genId: Id | undefined, shotId: Id): number {
-  return genId ? takesOf(d, shotId).findIndex((g) => g.id === genId) + 1 : 0
+  return genId && takesOf(d, shotId).some((g) => g.id === genId) ? takeVersion(d, genId) : 0
+}
+
+/** The generations the Bin numbers as takes (rooms/model roomGens): not renders, uploads or combines. */
+const NOT_TAKES = new Set<string>(['render', 'upload', 'combine'])
+/** Oldest first, a take still being made last: the Bin's order (rooms/model newestFirst, reversed). */
+const oldestTake = (a: Generation, b: Generation) =>
+  (a.state === 'making') !== (b.state === 'making') ? (a.state === 'making' ? 1 : -1)
+    : (a.created_at ?? '').localeCompare(b.created_at ?? '') || a.id.localeCompare(b.id)
+
+/** The shots a take was made of, as one key: its box's run's shots (box_id), else its own (rooms/model boxKeyOf). */
+export function madeKeyOf(d: Doc, g: Pick<Generation, 'shot_ids' | 'box_id'>): string {
+  if (g.box_id) {
+    for (const v of values(d.videos)) {
+      const run = v.runs?.[g.box_id]
+      if (run) return run.shot_ids.join(',')
+    }
+  }
+  return g.shot_ids.join(',')
+}
+
+/** A take's one version number, everywhere (UAT round 3, F15 leftover: the Bin said "Box 1 · v1", the agent's note
+ *  "take v2" and the zip "shot1-clip-v2" for the same take): v1…vn among the takes made of the same shots, oldest
+ *  first. It is the Bin's (rooms/model numberAndLabel); the Bin, the notes, the sheet, History and the zip read it.
+ *  0: not a take. */
+export function takeVersion(d: Doc, genId: Id | undefined): number {
+  const g = genId ? d.generations[genId] : undefined
+  if (!g || NOT_TAKES.has(g.kind)) return 0
+  const key = madeKeyOf(d, g)
+  return values(d.generations).filter((x) => !NOT_TAKES.has(x.kind) && madeKeyOf(d, x) === key).sort(oldestTake).findIndex((x) => x.id === g.id) + 1
+}
+
+/** The version the next take made of these shots gets (a landing's note, before it lands). */
+export function nextTakeVersion(d: Doc, like: Pick<Generation, 'shot_ids' | 'box_id'>): number {
+  const key = madeKeyOf(d, like)
+  return values(d.generations).filter((x) => !NOT_TAKES.has(x.kind) && madeKeyOf(d, x) === key).length + 1
 }
 
 /** Where a shot is in a generation made with other shots (a box made together); undefined for a lone shot. */

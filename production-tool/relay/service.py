@@ -2179,6 +2179,8 @@ class Relay:
             return self._reload(job)
         event = {"jobId": job["jobId"], "mode": "cutdown", "size": list(size), "clips": clips, "layers": layers,
                  "endCard": cut.get("endCard", True), "fadeOutS": cut.get("fadeOutS", 0.5),
+                 # a short size's shorter studio card (cutdowns.card_lengths; UAT round 3, R3-F12)
+                 **({"cardS": float(cut["studioS"])} if cut.get("studioS") else {}),
                  "outKey": f"ads/cuts/{job['jobId']}.mp4", "resultKey": f"ads/cuts/{job['jobId']}.json"}
         try:
             self.stitch(event)
