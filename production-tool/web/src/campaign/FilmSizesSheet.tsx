@@ -5,14 +5,14 @@
 // model that spends, with no prices), then Send: the versions land on the Campaign board's Film lane.
 
 import { useMemo, useState } from 'react'
-import type { CutdownPlan, Id, ModelChoice, PersonRef, SizeBeat } from '../contracts/types'
+import type { Id, ModelChoice, PersonRef, SizeBeat } from '../contracts/types'
 import { useConfig, useDoc } from '../app/context'
 import { modelChoicesFor } from '../capabilities'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
 import { CARD_S, DEFAULT_FILM_LENGTHS, FILM_LENGTHS, FILM_SHAPES, REMAKE_MODELS, beatsFor, briefShapes, filmSeconds, fitWindows, lastLineOf, masterShots, sameShape, versionsWord } from './film'
 import { endLineOf, sizesBrief } from '../brief/model'
-import { makeFilmSizes, planFilm, type FilmRow, type ShotMethod } from './filmJobs'
+import { makeFilmSizes, planFilm, type FilmPlan, type FilmRow, type ShotMethod } from './filmJobs'
 import type { CampaignDeps } from './make'
 import { setsOf, type MasterInfo } from './master'
 import { readCut } from '../rooms/timeline'
@@ -61,7 +61,7 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
   })
   const [legal, setLegal] = useState(earlier?.legal ?? '')
   const [step, setStep] = useState<Step>('options')
-  const [plan, setPlan] = useState<CutdownPlan | null>(null)
+  const [plan, setPlan] = useState<FilmPlan | null>(null)
   const [beats, setBeats] = useState<Record<number, SizeBeat[]>>({})
   const [methods, setMethods] = useState<Record<string, Record<Id, ShotMethod>>>({})
   const [off, setOff] = useState<Set<string>>(new Set())
@@ -217,7 +217,9 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
           <div className="cf-body" data-film-plan>
             <div className="cf-trayhead">
               <AgentFigure agent="dex" size={24} decorative />
-              <span><b>{sayer('dex')}</b>: how I would cut it. Keep or drop any beat; nothing is made yet.</span>
+              {/* Said plainly when the Director agent did not plan it (UAT round 4, R4-F4, UX 4). */}
+              <span><b>{sayer('dex')}</b>: {plan.simple === 'failed' ? "I couldn't plan this one, so here is a simple cut: the opening and the payoff, fitted to each length."
+                : plan.simple === 'off' ? 'a simple cut: the opening and the payoff, fitted to each length.' : 'how I would cut it.'} Keep or drop any beat; nothing is made yet.</span>
             </div>
             <div className="cf-tray">
               {lengths.filter((l) => rows.some((r) => r.lengthS === l)).map((l) => {

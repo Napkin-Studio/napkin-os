@@ -48,6 +48,11 @@ PROMPT_VERSION = "cutter.v2"  # cutter.v1 stays bundled: ModelCutter(port, promp
 PURPOSE = "cutdown"
 PROMPTS = Path(__file__).parent / "prompts"
 MAX_STILLS = 36       # pictures Claude sees for one plan
+# The plan is one long look at up to 36 stills: the director's per-click 20 s (two tries, 41 s in all) timed it out every
+# time live (UAT round 4, R4-F4). One try of up to CUT_PLAN_S, inside the relay Lambda's 60 s: never past ROOM_S less
+# what the stills took to fetch, never under the port's own seconds.
+CUT_PLAN_S = 45.0
+ROOM_S = 52.0
 CENTRE = {"x": 0.35, "y": 0.15, "w": 0.30, "h": 0.70}  # the passthrough's subject, in 0-1 of the frame
 
 
@@ -161,7 +166,9 @@ def passthrough_keep(shots: list[dict], length_s: float, card_s: float = CARD_S)
     body = [s for s in shots if not s.get("endCard")]
     if not body:
         return {}
-    n = max(1, min(len(body), round((length_s - card_s) / SHOT_S)))
+    # The opening and the payoff always, when there are two shots or more (UAT round 4, R4-F4: a 6 s kept the payoff
+    # alone, 2.0 s of picture, while saying it kept the opening and the payoff); fit_windows trims them to the length.
+    n = max(1 if len(body) == 1 else 2, min(len(body), round((length_s - card_s) / SHOT_S)))
     if n >= len(body):
         return {s["shotId"]: "Kept: the whole film fits this length." for s in body}
     if n == 1:
@@ -174,20 +181,34 @@ def passthrough_keep(shots: list[dict], length_s: float, card_s: float = CARD_S)
     return {body[i]["shotId"]: why for i, why in picks.items()}
 
 
-def settle_lengths(shots: list[dict], answers: list[dict], lengths: list[float]) -> list[dict]:
+def settle_lengths(shots: list[dict], answers: list[dict], lengths: list[float], fill: bool = False) -> list[dict]:
     """Each length's beats: every shot of the master, kept or dropped with a reason, the kept ones with
     their fitted windows. `answers`: [{lengthS, why?, beats: [{shotId, keep, why}]}] from the model or the
-    passthrough; a shot the answer leaves out is dropped; a length it leaves out keeps the passthrough's."""
+    passthrough; a shot the answer leaves out is dropped; a length it leaves out keeps the passthrough's. `fill` (the
+    passthrough's own plan, and any length it fills in): a plan short of its length keeps more shots. Dex's own short
+    plan is left as he chose it; the sheet says it comes out short."""
     out = []
     ids = {s["shotId"] for s in shots}
     for length in lengths:
         ans = next((a for a in answers if abs(float(a.get("lengthS", -1)) - length) < 0.5), None)
+        simple = fill
         if ans is None:
             reasons = passthrough_keep(shots, length)
             ans = {"lengthS": length, "beats": [{"shotId": k, "keep": True, "why": v} for k, v in reasons.items()]}
+            simple = True
         said = {b["shotId"]: b for b in ans.get("beats") or [] if b.get("shotId") in ids}
         keep = {k for k, b in said.items() if b.get("keep")}
         windows, over = fit_windows(shots, keep, length)
+        # A plan whose kept shots, grown into their handles, still leave the picture short of the length keeps more
+        # shots, longest first, so the file is the size's length (UAT round 4, R4-F4: a 6 s came out 4.5 s).
+        added: set[str] = set()
+        spare = sorted((s for s in shots if not s.get("endCard") and s["shotId"] not in keep),
+                       key=lambda s: -(float(s["outS"]) - float(s.get("inS") or 0)))
+        while simple and over < -FRAME_S and spare:
+            pick = spare.pop(0)
+            keep.add(pick["shotId"])
+            added.add(pick["shotId"])
+            windows, over = fit_windows(shots, keep, length)
         win = {w["shotId"]: w for w in windows}
         beats = []
         for s in shots:
@@ -195,13 +216,16 @@ def settle_lengths(shots: list[dict], answers: list[dict], lengths: list[float])
                 continue
             b = said.get(s["shotId"])
             w = win.get(s["shotId"])
-            why = (b or {}).get("why") or ("Dropped to fit the length." if not w else "Kept.")
+            why = ("Kept to fill the length." if s["shotId"] in added and w
+                   else (b or {}).get("why") or ("Dropped to fit the length." if not w else "Kept."))
             beats.append({"shotId": s["shotId"], "keep": bool(w), "why": why[:300],
                           "inS": w["inS"] if w else _r(float(s.get("inS") or 0)),
                           "outS": w["outS"] if w else _r(float(s["outS"]))})
         why = (ans.get("why") or "")[:300]
         if over > FRAME_S:
             why = f"{why} Over by {over:.1f} s: drop a beat.".strip()
+        elif over < -FRAME_S:
+            why = f"{why} The shots run {-over:.1f} s short of this length: the film comes out shorter.".strip()
         entry = {"lengthS": length, "beats": beats}
         if why:
             entry["why"] = why[:400]
@@ -308,12 +332,12 @@ def _shots_of(cut: dict) -> list[dict]:
     return [{k: v for k, v in s.items() if k != "stills"} for s in cut["shots"]]
 
 
-def _settle(cut: dict, answer: dict) -> dict:
+def _settle(cut: dict, answer: dict, fill: bool = False) -> dict:
     shots = _shots_of(cut)
     lengths = [float(x) for x in cut["lengths"]]
     aspects = [a for a in cut.get("aspects") or []]
     subjects = {s["shotId"]: s.get("boxes") or [] for s in answer.get("subjects") or []}
-    return {"lengths": settle_lengths(shots, answer.get("lengths") or [], lengths),
+    return {"lengths": settle_lengths(shots, answer.get("lengths") or [], lengths, fill),
             "crops": settle_crops(shots, aspects, subjects)}
 
 
@@ -333,7 +357,7 @@ class PassthroughCutter:
             answers.append({"lengthS": float(length), "beats": [
                 {"shotId": s["shotId"], "keep": s["shotId"] in reasons,
                  "why": reasons.get(s["shotId"], f"Dropped to fit {float(length):g} s.")} for s in shots if not s.get("endCard")]})
-        out = _settle(cut, {"lengths": answers, "subjects": []})
+        out = _settle(cut, {"lengths": answers, "subjects": []}, fill=True)
         out["rationale"] = "passthrough: no model; the opening and the payoff first, the middle of each frame kept."
         return out
 
@@ -358,6 +382,7 @@ class ModelCutter:
         from cards import downscale
         from director.model import Usage
 
+        started = time.monotonic()
         cut = req["input"]["cutdown"]
         images, payload_shots = [], []
         for s in cut["shots"]:
@@ -380,9 +405,15 @@ class ModelCutter:
             payload["brief"] = briefed["brief"]
         t0 = time.monotonic()
         usage = Usage()
-        answer = self.port.call(PURPOSE, self.system, payload, self.schema, usage=usage,
-                                attribution=req.get("jobId", PURPOSE), images=images or None, vision=bool(images),
-                                max_tokens=4000)
+        port = plan_port(self.port, ROOM_S - (t0 - started))
+        try:
+            answer = port.call(PURPOSE, self.system, payload, self.schema, usage=usage,
+                               attribution=req.get("jobId", PURPOSE), images=images or None, vision=bool(images),
+                               max_tokens=4000)
+        except Exception as e:
+            # What Dex spent before it failed is still Claude's cost on this job (F21; R4-F4 had none).
+            e.usage = {"input_tokens": getattr(usage, "input_tokens", 0), "output_tokens": getattr(usage, "output_tokens", 0)}
+            raise
         out = _settle(cut, answer)
         flags = {"briefFlags": answer["briefFlags"]} if answer.get("briefFlags") else {}
         briefs.settle_flags(flags, payload)
@@ -391,6 +422,29 @@ class ModelCutter:
         out["_latencyMs"] = round((time.monotonic() - t0) * 1000)
         out["_usage"] = {"input_tokens": getattr(usage, "input_tokens", 0), "output_tokens": getattr(usage, "output_tokens", 0)}
         return out
+
+
+def plan_port(port, room_s: float):
+    """The model port for one cut plan: one try of up to CUT_PLAN_S, inside the room left (R4-F4). A port with no
+    timeout of its own (a test double) is used as it is."""
+    import copy
+
+    from director.model import AnthropicWire
+    base = getattr(port, "timeout", None)
+    if not isinstance(base, (int, float)):
+        return port
+    seconds = max(float(base), min(CUT_PLAN_S, room_s))
+    if seconds <= base:
+        return port
+    out = copy.copy(port)
+    out.timeout = seconds
+    wire = getattr(port, "wire", None)
+    client = getattr(wire, "client", None)
+    if isinstance(wire, AnthropicWire) and client is not None and hasattr(client, "with_options"):
+        one = copy.copy(wire)
+        one.client = client.with_options(max_retries=0)
+        out.wire = one
+    return out
 
 
 def make(director) -> PassthroughCutter | ModelCutter:

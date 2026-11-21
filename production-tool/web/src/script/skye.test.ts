@@ -130,7 +130,7 @@ describe('script asks after Plan shots carry the real lines (UAT round 4, R4-F3)
     // "kettle" is in shots 1 and 2 alike: the Booth asks which one, nothing is sent blind for the scene.
     const tie = writeInput(store, scriptId, { kind: 'scene', id: sceneId }, 'instruct', { instruction: 'Make the kettle bit funnier', mode: 'revise' })
     await expect(tie).rejects.toBeInstanceOf(WhichItem)
-    const err = await tie.catch((e: WhichItem) => e)
+    const err = (await tie.catch((e: unknown) => e)) as WhichItem
     expect(err.choices.map((c) => c.target)).toEqual([{ kind: 'shot', id: shots[0] }, { kind: 'shot', id: shots[1] }])
     expect(err.choices[0].label).toMatch(/^Shot 1 \(Insert on the kettle/)
   })

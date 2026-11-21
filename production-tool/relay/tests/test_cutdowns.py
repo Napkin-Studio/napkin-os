@@ -80,7 +80,8 @@ def test_the_plan_is_free_uncounted_and_names_every_shot_kept_or_dropped():
     assert kept[0]["shotId"] == SHOT.format(0) and kept[-1]["shotId"] == SHOT.format(9)
     # 15 s less the studio card and the film's own card (features/pt-film-r1.clan): its 2.5 s held to 2 s.
     assert sum(b["outS"] - b["inS"] for b in kept) == pytest.approx(15 - cutdowns.CARD_S - 2.0, abs=0.01)
-    assert [b["shotId"] for b in six["beats"] if b["keep"]] == [SHOT.format(9)]
+    # The opening and the payoff, truly (UAT round 4, R4-F4: the 6 s kept the payoff alone).
+    assert [b["shotId"] for b in six["beats"] if b["keep"]] == [SHOT.format(0), SHOT.format(9)]
     assert all(b["why"] for b in fifteen["beats"])
     # A crop of every shot at every shape; the middle holds at 9:16 and 1:1, so nothing is outpainted.
     assert len(plan["crops"]) == 20 and not any(c["cuts"] for c in plan["crops"])
@@ -142,6 +143,72 @@ def test_an_agency_with_claude_off_gets_the_passthrough_plan():
     h.limits("blue", allow={"claude": False, "makers": ["runway", "google"]})
     _, job = h.post_job(token, op="cutdown", expect=200, **plan_input(master()))
     assert job["state"] == "completed" and not port.calls and job["director"]["model"] == "passthrough"
+
+
+class SlowPort:
+    """The director's port as it ran live: 20 s, and a timeout raises (ModelError)."""
+
+    model = vision_model = "eu.anthropic.claude-sonnet-5-5"
+
+    def __init__(self, fail=True):
+        self.timeout = 20.0
+        self.fail = fail
+        self.seen = []
+
+    def call(self, purpose, system, payload, schema, *, usage, **kw):
+        self.seen.append(self.timeout)
+        usage.input_tokens, usage.output_tokens = 12000, 300
+        if self.fail:
+            raise TimeoutError("Dex took too long")
+        return {"lengths": [], "subjects": [], "rationale": "ok"}
+
+
+def round4_master():
+    """Round 4's film: 5 shots in their takes (the opening 2.967 s, the payoff 2.0 s at 2-4 s of a 4 s take), no card."""
+    w = [(0, 2.967, 5), (2.967, 4.967, 5), (0, 1.5, 4), (0, 1.5, 4), (2, 4, 4)]
+    return [{"shotId": SHOT.format(i), "takeId": TAKE.format(i), "words": f"Shot {i + 1}.", "inS": a, "outS": b, "takeS": t,
+             "takeSize": {"w": 1920, "h": 1080}} for i, (a, b, t) in enumerate(w)]
+
+
+def test_the_cut_plan_gets_one_long_try_and_its_cost_is_kept_when_dex_fails():
+    # Live (R4-F4): the plan timed out at 20 s twice (41 s); the passthrough then kept shot 5 alone, 2 s of picture.
+    port = SlowPort(fail=False)
+    cutdowns.ModelCutter(port).plan({"input": {"cutdown": {"shots": round4_master(), "lengths": [6], "aspects": []}}})
+    assert port.seen == [cutdowns.CUT_PLAN_S]
+    assert port.timeout == 20.0  # the shared port is untouched
+    # Little room left in the Lambda: never past it, never under the port's own seconds.
+    assert cutdowns.plan_port(SlowPort(), 30).timeout == 30
+    assert cutdowns.plan_port(SlowPort(), 5).timeout == 20
+
+
+def test_a_failed_cut_plan_is_a_simple_cut_said_so_that_fills_the_length_and_costs_what_dex_spent():
+    h = Harness(base_config())
+    h.relay.cutter = cutdowns.ModelCutter(SlowPort())
+    token = h.as_person()
+    _, job = h.post_job(token, op="cutdown", expect=200, **plan_input(round4_master(), lengths=(6,), aspects=({"w": 9, "h": 16},)))
+    assert job["state"] == "completed" and job["director"]["model"] == "passthrough"
+    assert job["director"]["rationale"].startswith("Dex could not plan this (TimeoutError), so this is a simple cut")
+    six = job["cutdownPlan"]["lengths"][0]
+    kept = [b for b in six["beats"] if b["keep"]]
+    assert [b["shotId"] for b in kept] == [SHOT.format(0), SHOT.format(4)]  # the opening and the payoff, truly
+    # 6 s less the studio card (2.5 s): 3.5 s of picture, so the file is 6 s.
+    assert sum(b["outS"] - b["inS"] for b in kept) == pytest.approx(3.5, abs=0.01)
+    assert job["cost"].get("agentUsd", 0) > 0  # what Dex spent before failing (F21)
+
+
+def test_a_simple_plan_short_of_its_length_keeps_more_shots_and_dexs_own_says_it_is_short():
+    # The payoff alone for 6 s: 2 s of picture with no handle. A simple cut keeps the longest dropped shot too.
+    shots = round4_master()
+    payoff = [{"lengthS": 6, "beats": [{"shotId": SHOT.format(4), "keep": True, "why": "The payoff."}]}]
+    out = cutdowns.settle_lengths(shots, payoff, [6], fill=True)
+    kept = [b for b in out[0]["beats"] if b["keep"]]
+    assert [b["shotId"] for b in kept] == [SHOT.format(0), SHOT.format(4)]
+    assert kept[0]["why"] == "Kept to fill the length."
+    assert sum(b["outS"] - b["inS"] for b in kept) == pytest.approx(3.5, abs=0.01)
+    # Dex's own plan stays as he chose it, and says it comes out short.
+    dex = cutdowns.settle_lengths(shots, payoff, [6])
+    assert [b["shotId"] for b in dex[0]["beats"] if b["keep"]] == [SHOT.format(4)]
+    assert "1.5 s short" in dex[0]["why"]
 
 
 def _png() -> bytes:
