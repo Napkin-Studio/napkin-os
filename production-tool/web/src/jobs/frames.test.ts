@@ -437,8 +437,11 @@ describe('a shot that shows no one (UAT round 5, R5-F3)', () => {
     expect(in3.anchorFrame?.sha256).toBe(s.frameOf(0).asset)
     expect(in3.previousFrame).toBeUndefined()
     expect(in3.shot?.direction).toContain('Cast: no one is seen in this shot; draw no people.')
+    // Drawn without the frame before on purpose: not "drawn from an older frame".
+    await s.land()
+    expect(frameDrift(s.doc.get(), s.shotId(2))).toBeUndefined()
     // A shot with a person keeps its frame before and says nothing of the kind.
-    const j2 = s.requests().find((r) => r.ctx?.shotId === s.shotId(1))!.id
+    const j2 = s.requests().find((r) => (r.ctx as { shotId?: string } | undefined)?.shotId === s.shotId(1))!.id
     expect(s.inputOf(j2).shot?.direction ?? '').not.toContain('no one is seen')
   })
 

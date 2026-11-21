@@ -103,6 +103,18 @@ export function castShot(d: ProductionDocument, shot: Shot, js: JobShot, offered
  *  came in through @previous). The relay says it in the frame's prompt too (director.py NO_PEOPLE). */
 export const NO_ONE_LINE = 'Cast: no one is seen in this shot; draw no people.'
 
+/** Whether a frame of `shot` goes without the frame before (R5-F3): it shows no one, and the shot before shows someone,
+ *  who would come in through @previous. frames.ts sends no @previous then, and stale.ts frameDrift does not miss it. */
+export function skipsPrevious(d: ProductionDocument, shot: Shot, before: Shot | undefined): boolean {
+  return !!before && !namesPerson(d, shot) && showsPerson(d, before)
+}
+
+/** Whether a shot's picture shows someone: a character it names, or a person in its words. A line alone does not (a
+ *  voice may be off screen). */
+export function showsPerson(d: ProductionDocument, shot: Shot): boolean {
+  return namedCharacters(d, shot).size > 0 || PERSON_WORDS.test(plainWords(shot).replace(/@[a-z0-9_-]+/gi, ' '))
+}
+
 /** A frame's shot as it goes when it shows no one: the no-one line in its direction (R5-F3). As it is otherwise. */
 export function noOneShot(d: ProductionDocument, shot: Shot, js: JobShot): JobShot {
   if (namesPerson(d, shot)) return js

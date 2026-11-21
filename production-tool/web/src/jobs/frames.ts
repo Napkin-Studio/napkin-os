@@ -20,7 +20,7 @@ import type { Relay } from '../relay'
 import { assetRef } from './assets'
 import { isActive, type JobRunner } from './runner'
 import { jobShot, refsFor } from './select'
-import { castRefs, castShot, keptFromFirst, namesPerson, noOneShot } from './cast'
+import { castRefs, castShot, keptFromFirst, noOneShot, skipsPrevious } from './cast'
 import { liveGet } from '../model/live'
 
 export type { FrameHow } from '../model/purpose'
@@ -117,7 +117,7 @@ export async function frameInput(relay: Relay, d: ProductionDocument, index: num
   // A shot that shows no one never gets the frame before when that shot shows someone: the person came in through it
   // (UAT round 5, R5-F3: the kettle insert drew Maya from frame 3). @anchor still goes, for the light and the place.
   const before = index > 0 ? shotsOf(d, sb?.id)[index - 1] : undefined
-  if (cont.previousFrame && !namesPerson(d, shot) && before && namesPerson(d, before)) delete cont.previousFrame
+  if (cont.previousFrame && skipsPrevious(d, shot, before)) delete cont.previousFrame
   return {
     // An unnamed person ("a flatmate") is someone else: the offered character's name in a Cast line (R4-F2). A shot that
     // shows no one says so (R5-F3).

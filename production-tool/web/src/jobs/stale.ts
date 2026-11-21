@@ -16,6 +16,7 @@
 import { newUlidId } from '../../../clan-store/src'
 import type { Camera, ProductionDocument, Render, Shot, StaleMark, Target } from '../contracts/types'
 import { currentFrame, currentRender, currentTake, framesOf, shotNumber, shotSegment, shotsOf, staleList } from '../model/selectors'
+import { skipsPrevious } from './cast'
 
 /** A new mark, with its id. */
 function addMark(d: ProductionDocument, target: Target, causedBy: Target, reason: string, now: string): StaleMark {
@@ -102,7 +103,8 @@ export function frameDrift(d: ProductionDocument, shotId: string): number | unde
   const job = frame?.job_id ? d.jobs[frame.job_id] : undefined
   if (!job?.input_hashes) return undefined
   const prev = currentFrame(d, shots[i - 1])
-  if (prev && !job.input_hashes.includes(prev.asset)) return i
+  // A shot that shows no one after one that shows someone is drawn without the frame before (R5-F3): not a drift.
+  if (prev && !job.input_hashes.includes(prev.asset) && !skipsPrevious(d, shot, shots[i - 1])) return i
   const first = currentFrame(d, shots[0])
   if (first && !job.input_hashes.includes(first.asset)) return 1
   return undefined
