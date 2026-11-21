@@ -102,6 +102,9 @@ export interface ProjectUi {
   script?: Record<string, ScriptUi>
   /** "Choose Kapi's front" is open on the canvas for this key (stages/FrontsNeeded.tsx). */
   chooseFront?: string
+  /** Where Choose a front was opened from (the Script editor's route), to go back to when it is done (UAT
+   *  2026-11-21, F17: after choosing, the person was left on the canvas). */
+  chooseFrontFrom?: import('../app/route').Route
   /** A joined take Edie put into the cut (rooms/editOps placeJoinedTake), said in the rooms with Undo until
    *  dismissed: the V1 items before and after, so Undo puts back exactly what was there. */
   joinedInCut?: JoinedInCut

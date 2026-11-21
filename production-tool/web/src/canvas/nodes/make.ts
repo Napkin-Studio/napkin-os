@@ -28,7 +28,10 @@ const overlaps = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y <
 /** Where a new node of `kind` goes beside `src`: to its right, top-aligned, moved down clear of other nodes. */
 export function besideBox(els: readonly CanvasElement[], src: Pick<CanvasElement, 'x' | 'y' | 'width' | 'height'>, kind: CardKind): Box {
   const size = CARD_SIZE[kind]
-  const nodes = els.filter((e) => !e.isDeleted && cardOf(e)).map((e) => ({ x: e.x, y: e.y, w: e.width, h: e.height }))
+  // Every card in the way: the stage nodes, and the Brief card and pictures too (UAT 2026-11-21, F18: after Plan
+  // shots the Brief card sat on top of the new Storyboard node).
+  const inWay = (e: CanvasElement) => !!cardOf(e) || (e.customData as { kind?: string } | undefined)?.kind === 'brief' || e.type === 'image'
+  const nodes = els.filter((e) => !e.isDeleted && inWay(e)).map((e) => ({ x: e.x, y: e.y, w: e.width, h: e.height }))
   let box: Box = { x: Math.round(src.x + src.width + BESIDE_GAP), y: Math.round(src.y), ...size }
   for (let i = 0; i < 40; i++) {
     const hit = nodes.find((n) => overlaps(n, box))

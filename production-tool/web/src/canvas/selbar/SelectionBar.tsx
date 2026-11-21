@@ -29,6 +29,8 @@ export interface SelectionBarActions {
   stack?(on: boolean): void
   /** An ink group: open Generate on its strokes (they become a Drawing). */
   generate?(): void
+  /** A storyboard: its film's Make room, where its clips are made (UAT 2026-11-21, S3: it was greyed). */
+  makeClips?(): void
 }
 
 const TRASH = (
@@ -47,6 +49,7 @@ export function SelectionBar({ info, anchor, actions }: { info: SelInfo; anchor:
   const run = (id: ActionId) => {
     if (id === 'open') actions.open()
     else if (id === 'make-video') actions.makeVideo()
+    else if (id === 'make-clips') actions.makeClips?.()
     else if (id === 'plan-shots') actions.planShots()
     else if (id === 'group') actions.group()
     else if (id === 'ungroup') actions.ungroup()

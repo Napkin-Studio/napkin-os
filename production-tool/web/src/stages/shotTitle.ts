@@ -20,6 +20,8 @@ export function withoutAsides(text: string): string {
  *  silver hair…) steps off a green tram" is "Steps off a green tram", not "(30s" (live test 2026-11-16). */
 export function titleOf(s: Pick<Shot, 'action' | 'camera'>): string {
   const plain = withoutAsides(s.action ?? '')
+    // "@maya's trembling finger" keeps its name: "Maya's trembling finger", not "'s trembling finger" (UAT 2026-11-21).
+    .replace(/@([a-z][a-z0-9]*)(?:_\w+)?(?=['\u2019]s\b)/gi, (_, k: string) => cap(k))
     .replace(/@\w+/g, '')
     .replace(/\s+/g, ' ')
     .trim()

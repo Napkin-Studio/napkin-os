@@ -37,3 +37,10 @@ describe("a shot's short title (UAT 2026-11-21)", () => {
     expect(titleOf({ action: 'She waits — then pours.', camera: { size: 'medium' } })).toBe('She waits')
   })
 })
+
+describe('a title that starts with a name\u2019s possessive (UAT 2026-11-21, S3)', () => {
+  it('keeps the name', () => {
+    expect(titleOf({ action: "@maya's trembling finger presses the kettle's switch.", camera: { size: 'insert' } } as never)).toBe("Maya's trembling finger…")
+    expect(titleOf({ action: '@maya_front\u2019s hand. Then more.', camera: { size: 'insert' } } as never)).toBe('Maya\u2019s hand')
+  })
+})

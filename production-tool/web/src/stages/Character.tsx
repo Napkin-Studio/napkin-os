@@ -60,7 +60,7 @@ import { Float } from '../ui/Float'
 import { RightsChip } from '../ui/finals/RightsChip'
 import { REF_ROLES, type Ask, type CustomData, type ModelChoice, type NamedRef, type RefRole } from '../contracts/types'
 import { REF_ROLE_TABLE } from '../contracts/load'
-import { currentPictureFrame, keyNamed, keysList, mainScript, mainStoryboard, pictureVersions, refsList } from '../model/selectors'
+import { currentPictureFrame, keyNamed, keysList, mainScript, mainStoryboard, pictureVersions, refsList, videoOfStoryboard } from '../model/selectors'
 import { choiceToSend, modelChoicesFor, modelWhere } from '../capabilities'
 import { lastWorkedModel } from '../jobs/follow'
 import { ModelPick } from '../ui/ModelPick'
@@ -794,6 +794,13 @@ export function Character({ initial, active, onPictureEditor }: {
               <SelectionBar info={ownSel.info} anchor={{ x: top.x, top: top.y - (ownSel.info.group?.ink ? 30 : 0), bottom: toView({ x: b.minX, y: b.maxY }).y, ...(ownSel.info.cards.length ? { left: toView({ x: b.minX, y: b.minY }).x } : {}) }} actions={{
                 open: () => { const c = ownSel.els.map(cardOf).find(Boolean); if (c) open(c.kind, c.id) },
                 makeVideo: () => onMakeVideo(ownSel.els),
+                // The storyboard's film opens on its Make room; with no film yet, Make film makes one and opens it.
+                makeClips: () => {
+                  const c = ownSel.els.map(cardOf).find((x) => x?.kind === 'storyboard')
+                  const v = c ? videoOfStoryboard(doc, c.id) : undefined
+                  if (v) open('video', v.id)
+                  else onMakeVideo(ownSel.els)
+                },
                 planShots: () => void onPlanShots(ownSel.els),
                 group: () => { ownEdit?.group?.() },
                 ungroup: () => { ownEdit?.ungroup?.() },

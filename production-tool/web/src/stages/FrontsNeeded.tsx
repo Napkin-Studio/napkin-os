@@ -20,8 +20,9 @@ export function FrontButtons({ text }: { text: string | null | undefined }) {
   const router = useContext(RouterContext)
   if (!keys.length) return null
   const choose = (key: string) => {
-    ui.update((u) => { u.chooseFront = key; u.stage = 'character' }, 'choose a front')
-    if (router?.get().kind === 'script') router.leave()
+    const from = router?.get()
+    ui.update((u) => { u.chooseFront = key; u.stage = 'character'; if (from?.kind === 'script') u.chooseFrontFrom = from; else delete u.chooseFrontFrom }, 'choose a front')
+    if (from?.kind === 'script') router!.leave()
   }
   return (
     <span className="fronts-btns">
@@ -49,14 +50,25 @@ function ChooseFront({ chosen: key }: { chosen: string }) {
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key])
-  const close = () => uiStore.update((u) => { delete u.chooseFront }, 'choose a front')
+  const router = useContext(RouterContext)
   const pictures = frontChoices(doc, key)
   const front = pictures.find((r) => r.variant === 'front')
+  // Done goes back where it was opened from (the script) once a front is set; Escape closes it (UAT 2026-11-21, F17).
+  const close = () => {
+    const from = uiStore.get().chooseFrontFrom
+    uiStore.update((u) => { delete u.chooseFront; delete u.chooseFrontFrom }, 'choose a front')
+    if (from && front && router) router.push(from)
+  }
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) { e.preventDefault(); close() } }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
   const pick = async (r: NamedRef) => {
     setBusy(true)
     try {
       const name = await setFront(store, r.id)
-      setSaid(`@${name} is the front now. Plan shots again when you are ready.`)
+      setSaid(`@${name} is the front now. ${uiStore.get().chooseFrontFrom ? 'Done takes you back to the script to Plan shots.' : 'Plan shots again when you are ready.'}`)
     } catch (e) {
       setSaid(e instanceof Error ? e.message : 'That did not work.')
     } finally {
@@ -67,7 +79,7 @@ function ChooseFront({ chosen: key }: { chosen: string }) {
     <section className="fronts-chooser" role="dialog" aria-label={frontButton(key)}>
       <header>
         <b>{frontButton(key)}</b>
-        <button type="button" className="btn xs ghost" onClick={close} aria-label="Close">Done</button>
+        <button type="button" className={`btn xs ${front ? 'primary' : 'ghost'}`} onClick={close}>{front ? (uiStore.get().chooseFrontFrom ? 'Done · back to the script' : 'Done') : 'Close'}</button>
       </header>
       <p className="faint">@{key} stands for the whole character, led by its front. Pick the picture that shows it best, face on.</p>
       {pictures.length ? (
