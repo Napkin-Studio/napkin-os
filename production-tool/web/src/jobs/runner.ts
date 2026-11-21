@@ -24,7 +24,7 @@ import { newId, ulid } from '../lib/ulid'
 import { purposeInputs, purposeNode, purposeOf, purposeWords } from '../model/purpose'
 import { withLinkedText } from './linkedText'
 import { flagsOf, recordBriefFlags, withBrief } from '../brief/model'
-import { withContext } from './context'
+import { withContext, type BrandChoice } from './context'
 import { checkFronts } from '../lib/names'
 import { deadRefs, lifeOf, liveGet, liveInput } from '../model/live'
 import { plainJobError } from './errorWords'
@@ -78,6 +78,8 @@ export interface SubmitExtras {
   /** The node whose scope the brief is read from, when not the job's own: Make all sizes plans on the Film
    *  node for the sizes, which read the brief linked to their Format set (brief/model.ts sizesBriefOf). */
   briefFrom?: LinkEndpoint
+  /** The person's ticks on the brand in the Generate tray (jobs/context.ts BrandChoice; UAT round 3 R3-2). */
+  brand?: BrandChoice
 }
 
 /** A person's answer to a job's question. */
@@ -226,7 +228,7 @@ export class JobRunner {
     const briefed = withBrief(d, op, extras.briefFrom ?? node, input)
     input = briefed.input
     // The project's brand rules and the documents linked in (features/pt-dex-context.clan).
-    const contexted = withContext(d, op, node, input)
+    const contexted = withContext(d, op, node, input, extras.brand)
     input = contexted.input
     const words = purposeWords(purpose)
     // A fresh nonce for every job: another take is never deduped with the one running (ui-behaviour 4.3).

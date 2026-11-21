@@ -45,6 +45,7 @@ import { AskCard } from '../ui/AskCard'
 import { ASK_REVEAL_EVENT } from '../ui/askPlaces'
 import { LAYOUT_ONLY, waitingAsk } from '../ui/asks'
 import type { AnswerChoice } from '../jobs/runner'
+import type { BrandChoice, BrandRow } from '../jobs/context'
 import { alive, bounds, byOwnId, cd, imageOf, type Canvas, type El } from '../canvas/scene'
 import { scriptToWrite } from './scriptToWrite'
 import { useBriefSpinoff } from '../brief/useBriefSpinoff'
@@ -62,7 +63,8 @@ import { chipLook } from '../ui/finals/chipLook'
 import { BrandFields } from './BrandFields'
 import { PaidButton } from '../ui/PaidButton'
 import { sendingLine, useSlow } from '../ui/sending'
-import { viewsWhat } from '../ui/viewsWhat'
+import { missingViews, viewsWhat } from '../ui/viewsWhat'
+import { keptCaption } from '../canvas/fit'
 import { isBrandRole, payloadFor, payloadMissing, type BrandPayload } from '../canvas/swatches'
 import { REF_ROLES, type Ask, type CustomData, type ModelChoice, type NamedRef, type RefRole } from '../contracts/types'
 import { REF_ROLE_TABLE } from '../contracts/load'
@@ -759,7 +761,7 @@ export function Character({ initial, active, onPictureEditor }: {
     <div className="character">
       <CardChromeContext.Provider value={PRODUCTION_CARD_CHROME}>
       <div className="cv-row">
-      <div className="canvas-wrap pt-grid" ref={wrap} style={grid}>
+      <div className="canvas-wrap pt-grid" ref={wrap} style={grid} onMouseDown={noShiftSelect}>
         {frames.length > 0 && <BoardsLayer part="frames" frames={frames} toView={toView} zoom={zoom} current={board} onOpen={open} />}
         <CanvasMount initial={initial} onReady={setCanvas} onChrome={setChrome} onChange={onChange} theme={theme} railInset={railInset} />
         {frames.length > 0 && <BoardsLayer part="cards" frames={frames} toView={toView} zoom={zoom} current={board} onOpen={open} />}
@@ -773,10 +775,14 @@ export function Character({ initial, active, onPictureEditor }: {
             const stacked = !!(e as El & { stack?: unknown }).stack
             return (
               <span key={e.id}>
-                {named && !stacked && <NameChip r={named} at={toView({ x: e.x, y: e.y + e.height })} width={e.width * zoom} />}
+                {named && !stacked && <NameChip r={named} at={toView({ x: e.x, y: e.y + e.height })} width={e.width * zoom} zoom={zoom} />}
                 {c?.kind === 'gen' && <GenOverlay el={e} c={c} toView={toView} zoom={zoom} ctrl={ctrl} named={!!named} />}
                 {img && img.kind !== 'drawn' && !stacked && <VersionChip nodeId={img.id} at={toView({ x: e.x + e.width, y: e.y })} />}
                 {img?.kind === 'pic' && img.asset && !stacked && <RightsChip sha={img.asset} at={toView({ x: e.x, y: e.y })} zoom={zoom} />}
+                {/* An upload kept at 1536 px says so under it while it is the one picked (UAT round 3 R3-7, UX 9). */}
+                {img?.kind === 'pic' && img.asset && !stacked && (vs?.selected ?? []).length === 1 && vs?.selected[0] === e.id && keptCaption(doc.assets[img.asset]) && !chipLook(zoom).dot && (
+                  <div className="gencaption" style={{ left: toView({ x: e.x, y: e.y }).x, top: toView({ x: e.x, y: e.y + e.height }).y + (named ? NAME_LINE * chipLook(zoom).scale : 0), transform: `scale(${chipLook(zoom).scale})`, transformOrigin: 'top left' }}>{keptCaption(doc.assets[img.asset])}</div>
+                )}
               </span>
             )
           })}
@@ -974,10 +980,14 @@ const NAME_LINE = 16
 /** A picture's name under it, never wider than the picture: views placed side by side ran their names into
  *  each other ("@mira_three-quarter@mira_side", live test 2026-11-16), so a long one ends in an ellipsis
  *  and says itself in full in its title. */
-export function NameChip({ r, at, width }: { r: NamedRef; at: Pt; width: number }) {
+export function NameChip({ r, at, width, zoom = 1 }: { r: NamedRef; at: Pt; width: number; zoom?: number }) {
   const name = `@${nameOf(r)}`
+  // Scaled with the canvas, and gone when zoomed far out, like the Rights? chip (UAT round 3, R2-11 leftover: the names
+  // stayed screen size at 25 % and lay over the next row's pictures).
+  const look = chipLook(zoom)
+  if (look.dot) return null
   return (
-    <div className="refchips" style={{ left: at.x, top: at.y, maxWidth: Math.max(32, Math.round(width)) }}>
+    <div className="refchips" style={{ left: at.x, top: at.y, maxWidth: Math.max(32, Math.round(width / look.scale)), transform: `translateY(${6 * look.scale}px) scale(${look.scale})`, transformOrigin: 'top left' }}>
       <span className="tagchip" title={`${name}: its name; write it with @ in instructions and shots`}>{name}</span>
     </div>
   )
@@ -1025,6 +1035,9 @@ function GenOverlay({ el, c, toView, zoom, ctrl, named }: { el: El; c: Extract<C
   // Dex's question waits on this result: a card of its own beside the node, at screen size (UAT round 1 IMG-1: inside
   // the placeholder, overflow hidden, an 814 px card showed one or two words at any zoom).
   const asked = state === 'needs_input' ? waitingAsk(doc, c.id) : undefined
+  // The size and view pills scale with the canvas and go when zoomed far out (UAT round 3, R2-11 leftover).
+  const look = chipLook(zoom)
+  const labelStyle: React.CSSProperties = { left: tl.x, top: tl.y, transform: `translateY(calc(-100% - ${6 * look.scale}px)) scale(${look.scale})`, transformOrigin: 'left bottom' }
   return (
     <>
       {showNode && (
@@ -1033,9 +1046,9 @@ function GenOverlay({ el, c, toView, zoom, ctrl, named }: { el: El; c: Extract<C
         </div>
       )}
       {asked && !dismissed && <CanvasAsk ask={asked} rect={{ x: tl.x, y: tl.y, w, h }} />}
-      {c.shape && state !== 'completed' && <div className="genlabel" style={{ left: tl.x, top: tl.y }}><span className="pill">{c.shape}</span></div>}
-      {state === 'completed' && !named && (
-        <div className="genlabel" style={{ left: tl.x, top: tl.y }}>
+      {c.shape && state !== 'completed' && !look.dot && <div className="genlabel" style={labelStyle}><span className="pill">{c.shape}</span></div>}
+      {state === 'completed' && !named && !look.dot && (
+        <div className="genlabel" style={labelStyle}>
           {c.view && <span className="pill">{viewLabel(c.view)}</span>}
           {c.shape && <span className="pill" title="Resized to this shape">{c.shape}</span>}
           {showMock && c.mock && <span className="mockbadge">MOCK</span>}
@@ -1043,7 +1056,7 @@ function GenOverlay({ el, c, toView, zoom, ctrl, named }: { el: El; c: Extract<C
       )}
       {/* Under the picture's @name when it has one, not on top of it (owner, 2026-10-16). */}
       {/* Scaled with the canvas and left out when zoomed far out, like the Rights? chip (UAT round 2 R2-11). */}
-      {state === 'completed' && caption && !chipLook(zoom).dot && <div className="gencaption" style={{ left: tl.x, top: tl.y + h + (named ? NAME_LINE : 0), transform: `scale(${chipLook(zoom).scale})`, transformOrigin: 'top left' }}>{caption}</div>}
+      {state === 'completed' && caption && !look.dot && <div className="gencaption" style={{ left: tl.x, top: tl.y + h + (named ? NAME_LINE * look.scale : 0), transform: `scale(${look.scale})`, transformOrigin: 'top left' }}>{caption}</div>}
     </>
   )
 }
@@ -1186,6 +1199,8 @@ export function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, onG
   const single = meaningful.length === 1 ? imageOf(meaningful[0]) : undefined
   const singleImage = single?.asset ? single : undefined
   const named = singleImage ? ctrl.nameOn(singleImage.id, doc) : undefined
+  // The views its key has no picture for yet, near angles counted as made (UAT round 3 R3-10).
+  const toMake = named ? missingViews(refsList(doc).filter((r) => r.key === named.key), OTHER_VIEWS) : []
   // Resize… (features/resize-selection.clan): pictures, results and scamps (a Drawing, a sketch area).
   const resizable = resizableIn(meaningful)
   const scampAlone = meaningful.length === 1 && resizable.items.length === 1 && !singleImage ? meaningful[0] : undefined
@@ -1217,12 +1232,12 @@ export function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, onG
             }
           }}>Set as front</button>
         )}
-        {named?.variant === 'front' && controls.views && (
+        {named?.variant === 'front' && controls.views && toMake.length > 0 && (
           <>
             <ModelPick op="view" value={viewChoice} onChange={setViewPick} />
             <PaidButton className="btn sm dark" label="Make the other views" busy={busy === 'views'} disabled={!!busy}
-              what={viewsWhat(named.key, OTHER_VIEWS)} yes={`Make ${OTHER_VIEWS.length}`}
-              onYes={() => run('views', () => ctrl.makeViews(named.key, undefined, choiceToSend('view', config, viewChoice)))} />
+              what={viewsWhat(named.key, toMake)} yes={`Make ${toMake.length}`}
+              onYes={() => run('views', () => ctrl.makeViews(named.key, toMake, choiceToSend('view', config, viewChoice)))} />
           </>
         )}
         {named && <button className="btn xs ghost" onClick={() => ctrl.unname(singleImage.id)}>Remove name</button>}
@@ -1292,6 +1307,16 @@ function ResizeFor({ ctrl, items, strokes, total, at, onClose, onSent }: { ctrl:
   )
 }
 
+/** A shift-click on the canvas adds to the selection, never selects the page's text (UAT round 3 R3-9: the tray and the
+ *  chrome turned blue). Words in a field or an editable text still select as usual. */
+function noShiftSelect(e: { shiftKey: boolean; target: EventTarget | null; preventDefault: () => void }) {
+  if (!e.shiftKey) return
+  const t = e.target as HTMLElement | null
+  if (t?.closest?.('input, textarea, select, [contenteditable="true"]')) return
+  e.preventDefault()
+  window.getSelection?.()?.removeAllRanges()
+}
+
 /** Whether any of a scene box is in the canvas's view. */
 function inView(canvas: Pick<Canvas, 'visibleBounds'>, b: { minX: number; minY: number; maxX: number; maxY: number }): boolean {
   const v = canvas.visibleBounds()
@@ -1308,9 +1333,14 @@ function Floating({ className, anchor, children }: { className: string; anchor: 
 const MAIN_ROLES = REF_ROLES.filter((r) => REF_ROLE_TABLE[r].picker === 'main')
 const roleWord = (r: RefRole) => (r === 'brand_rule' ? 'brand rule' : r)
 /** The role's one line in the Name dialog; a palette's says its colours can be changed (UAT round 2: one line, not two). */
-const roleLine = (r: RefRole) => `${REF_ROLE_TABLE[r].ui_line}${r === 'palette' ? '. Click a colour to change it.' : ''}`
+const roleLine = (r: RefRole) => (r === 'palette'
+  // A palette is accents, not the only colours (UAT round 3 R3-2; the contract's line still says "keeps to").
+  ? 'The Director agent uses these colours as accents. Click a colour to change it.'
+  : REF_ROLE_TABLE[r].ui_line)
 
 const KIND_WORD = { pic: 'picture', drawn: 'drawing', gen: 'result' } as const
+/** A brand row's kind, as the Generate tray says it. */
+const BRAND_WORD: Record<BrandRow['kind'], string> = { brand_rule: 'brand rule', palette: 'palette', typography: 'typography' }
 
 function GeneratePopover({ ctrl, ids, at, onClose, onPlace }: {
   ctrl: CanvasController
@@ -1338,6 +1368,11 @@ function GeneratePopover({ ctrl, ids, at, onClose, onPlace }: {
   const [people, setPeople] = useState<Set<string>>(() => new Set())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** The person's ticks on the brand (UAT round 3 R3-2, UX 1): refs left out or put in, and a strict palette. */
+  const [brandLeave, setBrandLeave] = useState<Set<string>>(() => new Set())
+  const [brandAdd, setBrandAdd] = useState<Set<string>>(() => new Set())
+  const [strict, setStrict] = useState(false)
+  const brandChoice: BrandChoice = { leave: [...brandLeave], add: [...brandAdd], strict }
   // When sending takes a while, what is happening (UAT round 2 R2-3, UX 3).
   const slow = useSlow(busy, 3000)
   const ref = useRef<HTMLTextAreaElement>(null)
@@ -1366,11 +1401,11 @@ function GeneratePopover({ ctrl, ids, at, onClose, onPlace }: {
       setBusy(false)
     }
   }
-  const submit = () => go(() => ctrl.generate(sent(ids), text, { more, limits, modelChoice, people: [...people] }))
+  const submit = () => go(() => ctrl.generate(sent(ids), text, { more, limits, modelChoice, people: [...people], brand: brandChoice }))
   const answered = async (answer: AnswerChoice) => {
     setAsked(null)
-    if ('optionId' in answer && answer.optionId === LAYOUT_ONLY) await go(() => ctrl.generate(ids, text, { more, limits, modelChoice, people: [...people], layoutOnly: true }))
-    else if ('text' in answer) await go(() => ctrl.generate(ids, answer.text, { more, limits, modelChoice, people: [...people] }))
+    if ('optionId' in answer && answer.optionId === LAYOUT_ONLY) await go(() => ctrl.generate(ids, text, { more, limits, modelChoice, people: [...people], layoutOnly: true, brand: brandChoice }))
+    else if ('text' in answer) await go(() => ctrl.generate(ids, answer.text, { more, limits, modelChoice, people: [...people], brand: brandChoice }))
   }
   if (asked) {
     return (
@@ -1384,6 +1419,14 @@ function GeneratePopover({ ctrl, ids, at, onClose, onPlace }: {
   // What is linked into the sketch area (model/scope.ts): its references go with it, ticked; the rest is listed.
   const linked = linkedRows(doc, sketchOf(ctrl.liveElements(), ids), ctrl.liveElements(), ids)
   const unknown = unknownTyped(doc, text)
+  // The brand this Generate reads, each with its tick (UAT round 3 R3-2, UX 1): rules by default, the palette (as
+  // accents) and the type only for brand work; the person can leave one out or put one in.
+  const brand = ctrl.brandFor(ids, text, brandChoice)
+  const brandTick = (b: BrandRow) => {
+    const flip = (set: Set<string>, on: boolean) => { const n = new Set(set); if (on) n.add(b.ref); else n.delete(b.ref); return n }
+    if (b.on) { setBrandAdd((a) => flip(a, false)); setBrandLeave((l) => flip(l, b.byDefault)) } else { setBrandLeave((l) => flip(l, false)); setBrandAdd((a) => flip(a, !b.byDefault)) }
+  }
+  const brandOn = brand.filter((b) => b.on).length
   // What goes: every input of the selection, each with its tick (ui-behaviour 3.16). Unticked
   // pictures stay out of the send; the sketch, the drawing and the notes are the selection itself.
   // Ticked linked references join it; unticking one leaves it out of this send only (the link stays).
@@ -1396,6 +1439,7 @@ function GeneratePopover({ ctrl, ids, at, onClose, onPlace }: {
   const summary = [preview.sketch ? 'Sketch' : preview.drawings ? 'Drawing' : null,
     inputs ? `${inputs} ${inputs === 1 ? 'input' : 'inputs'}` : null,
     preview.notes.length ? `${preview.notes.length} ${preview.notes.length === 1 ? 'note' : 'notes'}` : null,
+    brandOn ? `brand (${brand.filter((b) => b.on).map((b) => BRAND_WORD[b.kind]).join(', ')})` : null,
     text.trim() ? 'your words' : null].filter(Boolean).join(', ') || 'Your words only'
   // Every picture that goes, as a person or a thing, against the model's limits (UAT round 1 IMG-6/7/8): the tray
   // says it before Generate, and refuses with what to untick, so nothing is uploaded only to be refused.
@@ -1454,6 +1498,9 @@ function GeneratePopover({ ctrl, ids, at, onClose, onPlace }: {
           {linked.map((r) => tick(r.key, <>{r.item.kind === 'ref' || r.item.kind === 'key' ? <span className="pt-ref">{r.label.split(' · ')[0]}</span> : <b>{r.label.split(' · ')[0]}</b>} <span className="faint">· {r.label.split(' · ').slice(1).join(' · ')}{r.off ? ` · ${r.off}` : r.goes ? ` · ${r.goes}` : ''}</span></>,
             r.elIds.length > 0 ? !off.has(r.key) : !!r.goes, r.elIds.length ? () => setOff((o) => { const n = new Set(o); if (n.has(r.key)) n.delete(r.key); else n.add(r.key); return n }) : undefined,
             r.elIds.length > 0 ? <span className={`tray-kind ${kindOfRole(r.item.role)}`}>{kindOfRole(r.item.role)}</span> : undefined))}
+          {brand.map((b) => tick(`brand:${b.ref}`, <><b>{BRAND_WORD[b.kind][0].toUpperCase() + BRAND_WORD[b.kind].slice(1)}</b> <span className="faint">· {b.label}{b.kind === 'palette' && b.on ? ` · ${strict ? 'only these colours' : 'as accents'}` : ''}{!b.on && !b.byDefault ? ' · only for brand work: tick to send' : ''}</span></>,
+            b.on, () => brandTick(b),
+            b.kind === 'palette' && b.on ? <button type="button" className={`btn xs ${strict ? 'on' : ''}`} aria-pressed={strict} title={strict ? 'Only these colours: click to use them as accents' : 'Used as accents: click to make them the only colours'} onClick={() => setStrict((x) => !x)}>{strict ? 'Strict' : 'Accents'}</button> : undefined))}
           {fromWords.map((r) => tick(`said:${r.id}`, <><span className="pt-ref">@{nameOf(r)}</span> <span className="faint">· from your words</span></>, true, undefined,
             <span className={`tray-kind ${kindOfRole(r.role)}`}>{kindOfRole(r.role)}</span>))}
         </div>
@@ -1528,6 +1575,8 @@ function NamePopover({ ctrl, nodeId, current, presetVariant, at, onClose }: {
   const asset = imageOf(ctrl.nodeEl(nodeId))?.asset ?? undefined
   const taken = ck && cv ? refByName(doc, `${ck}_${cv}`) : undefined
   const movesName = taken && taken.node !== nodeId
+  // Naming into a key that is already there, other than this picture's own (R3-8).
+  const joinsKey = !!ck && !isNewKey && current?.key !== ck
   const problem = ck || cv ? nameProblem(ck, cv) : null
   const save = () => {
     try {
@@ -1564,6 +1613,9 @@ function NamePopover({ ctrl, nodeId, current, presetVariant, at, onClose }: {
           <div className="faint roleline">{roleLine(role)}</div>
         </div>
       )}
+      {/* A key in use already: say which role it has, and that this picture takes it (UAT round 3 R3-8, UX 7: the second
+          "harbour" silently became a palette). The Save button says it again; another role needs a new name. */}
+      {joinsKey && <div className="name-joins" role="note"><b>@{ck} is a {roleWord(holds)}.</b> This picture joins it as a {roleWord(holds)}. For another role (a font, a character…), type a new name.</div>}
       {/* A brand key named before: its role's line once, above its fields (the pills above say it for a new key). */}
       {brandRole && !isNewKey && <div className="faint roleline">{roleLine(brandRole)}</div>}
       {brandRole && <BrandFields role={brandRole} asset={asset} value={brand} onChange={setBrand} />}
@@ -1573,7 +1625,7 @@ function NamePopover({ ctrl, nodeId, current, presetVariant, at, onClose }: {
       <div className="row" style={{ marginTop: 10 }}>
         <span className="spacer" />
         <button className="btn sm ghost" onClick={onClose}>Cancel</button>
-        <button className="btn sm primary" disabled={!ck || !cv || !!problem || !!needs} title={needs} onClick={save}>{movesName ? 'Move the name here' : 'Save'}</button>
+        <button className="btn sm primary" disabled={!ck || !cv || !!problem || !!needs} title={needs} onClick={save}>{movesName ? 'Move the name here' : joinsKey ? `Add to @${ck} as ${roleWord(holds)}` : 'Save'}</button>
       </div>
     </Floating>
   )

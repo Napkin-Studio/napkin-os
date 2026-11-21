@@ -20,7 +20,7 @@ import type { Relay } from '../relay'
 import { assetRef } from './assets'
 import { isActive, type JobRunner } from './runner'
 import { jobShot, refsFor } from './select'
-import { castRefs } from './cast'
+import { castRefs, keptFromFirst } from './cast'
 import { liveGet } from '../model/live'
 
 export type { FrameHow } from '../model/purpose'
@@ -75,6 +75,28 @@ export function scriptText(d: ProductionDocument, storyboardId?: string): string
   return text ? text.slice(0, FRAME_SCRIPT_MAX) : undefined
 }
 
+/** How much of shot 1 a later frame carries as @anchor's place (FRAME_ANCHOR_MAX characters). */
+export const FRAME_ANCHOR_MAX = 300
+
+/**
+ * What a frame reads besides its own shot (UAT round 3 R3-12: every frame carried the whole 4-beat note, and frame 4
+ * kept the rainy street of @anchor for a café). A shot with words of its own is its own beat: the first frame reads
+ * nothing more; a later one reads shot 1's beat, labelled, so the Director agent keeps @anchor's setting only when this
+ * shot is in that place (director.v17). A shot with no words of its own reads the script's opening, as before.
+ */
+export function frameScript(d: ProductionDocument, storyboardId: string | undefined, index: number): string | undefined {
+  const shots = shotsOf(d, boardOf(d, storyboardId)?.id)
+  const shot = shots[index]
+  if (!shot?.action?.trim()) return scriptText(d, storyboardId)
+  if (index <= 0) return undefined
+  const first = shots[0]
+  const heading = first?.scene_id ? d.scenes?.[first.scene_id]?.heading?.trim() : undefined
+  const beat = [heading, first?.action?.trim()].filter(Boolean).join('. ')
+  if (!beat) return undefined
+  const line = `Shot 1 (@anchor): ${beat}`
+  return line.length <= FRAME_ANCHOR_MAX ? line : `${line.slice(0, FRAME_ANCHOR_MAX - 1).replace(/\s+\S*$/, '')}…`
+}
+
 /** The whole frame request for the shot at `index` of a storyboard (absent: the main one). */
 export async function frameInput(relay: Relay, d: ProductionDocument, index: number, text?: string, strict = true, storyboardId?: string, declined: readonly string[] = []): Promise<JobInput> {
   const sb = boardOf(d, storyboardId)
@@ -84,7 +106,7 @@ export async function frameInput(relay: Relay, d: ProductionDocument, index: num
   const own = await refsFor(relay, d, shot, text, { offer: true, declined })
   // Who is seen: a character only when the shot's words name or imply a person (jobs/cast.ts; UAT round 3 R3-F1).
   const refs = await castRefs(relay, d, sb?.id, index, shot, own)
-  const script = scriptText(d, sb?.id)
+  const script = frameScript(d, sb?.id, index)
   const ratio = sb?.ratio
   // No picture goes twice in one job (R3-F1: frame 5 sent frame 1 as in_1 and as anchor): a ref that is the anchor
   // or the previous frame (a person kept from frame 1 is frame 1's picture) drops that continuity frame.
@@ -104,12 +126,13 @@ export async function frameInput(relay: Relay, d: ProductionDocument, index: num
 
 /** Draw the frame for the shot at `index` (of `opts.storyboardId`, else the main storyboard): a first
  *  version, or a new one of `parent`. */
-export async function drawFrame(deps: FrameDeps, index: number, how: FrameHow, opts: { text?: string; parent?: Frame; followRun?: string; modelChoice?: ModelChoice; storyboardId?: string; clipAfter?: { videoId?: string; modelChoice?: ModelChoice } } = {}): Promise<string> {
+export async function drawFrame(deps: FrameDeps, index: number, how: FrameHow, opts: { text?: string; parent?: Frame; followRun?: string; modelChoice?: ModelChoice; storyboardId?: string; clipAfter?: { videoId?: string; modelChoice?: ModelChoice }; loose?: boolean } = {}): Promise<string> {
   const d = liveGet(deps.doc)
   const sb = boardOf(d, opts.storyboardId)
   const shot = shotsOf(d, sb?.id)[index]
   if (!shot) throw new Error('That shot is gone.')
-  const input = await frameInput(deps.relay, d, index, opts.text, !opts.parent, sb?.id, deps.ui.get().declinedAdds?.[shot.id])
+  // `loose`: drawn beside others (Draw the rest in parallel), with the frame before only when it is there already.
+  const input = await frameInput(deps.relay, d, index, opts.text, !opts.parent && !opts.loose, sb?.id, deps.ui.get().declinedAdds?.[shot.id])
   const purpose: JobPurpose = { for: 'frame', shotId: shot.id, how, ...(opts.parent ? { parentFrameId: opts.parent.id } : {}) }
   const parents = opts.parent?.job_id ? [opts.parent.job_id] : []
   const local = { ...(opts.followRun ? { followRun: opts.followRun } : {}), ...(opts.clipAfter ? { clipAfter: opts.clipAfter } : {}) }
@@ -156,10 +179,13 @@ export async function continueDrawing(deps: FrameDeps, how: FrameHow = 'chain'):
   const ui: UiState = deps.ui.get()
   if (!ui.drawingRest) return
   const d = liveGet(deps.doc)
-  if (frameJobRunning(d)) return
   const stop = () => deps.ui.update((u) => { u.drawingRest = false })
   // The storyboard open in the Storyboard panel (the node opened on the canvas), else the main one.
   const sbId = openStoryboard(d, ui.openNode)?.id
+  // Once frame 1 is drawn and its person kept, every later frame carries that person, so the rest are drawn side by
+  // side (UAT round 3, UX 10: two frames one after another took 108 s).
+  if (keptFromFirst(d, sbId)) return drawSideBySide(deps, d, sbId, how, stop)
+  if (frameJobRunning(d)) return
   const i = firstUndrawn(d, sbId)
   if (i < 0) return stop()
   const shotId = shotsOf(d, sbId)[i].id
@@ -170,6 +196,31 @@ export async function continueDrawing(deps: FrameDeps, how: FrameHow = 'chain'):
   if (lastTry && (lastTry.state === 'failed' || lastTry.state === 'cancelled') && how === 'chain') return stop()
   try {
     await drawFrame(deps, i, i === 0 && how === 'rest' ? 'first' : how, { storyboardId: sbId })
+  } catch (e) {
+    stop()
+    throw e
+  }
+}
+
+/** At most this many frames at once: the relay's in-flight limit per person (config inFlightPerParticipant, 2 live). */
+export const PARALLEL_FRAMES = 2
+
+/** Draw the rest side by side: up to PARALLEL_FRAMES frame jobs at once, each a shot with no frame and none on its way;
+ *  a shot whose last try failed is left for a retry. Each landing starts the next (the runner's completion hook). */
+async function drawSideBySide(deps: FrameDeps, d: ProductionDocument, sbId: string | undefined, how: FrameHow, stop: () => void): Promise<void> {
+  const shots = shotsOf(d, sbId)
+  const tries = (shotId: string) => jobsList(d).filter((j) => { const p = purposeOf(j); return p?.for === 'frame' && p.shotId === shotId })
+  const running = jobsList(d).filter((j) => isActive(j.state) && purposeOf(j)?.for === 'frame').length
+  const open = shots.map((s, i) => ({ s, i })).filter(({ s }) => needsFrame(s) && !currentFrame(d, s)
+    && !tries(s.id).some((j) => isActive(j.state))
+    && !(how === 'chain' && ['failed', 'cancelled'].includes(tries(s.id).at(-1)?.state ?? '')))
+  if (!open.length) {
+    if (!running) stop()
+    return
+  }
+  const room = Math.max(0, PARALLEL_FRAMES - running)
+  try {
+    for (const { i } of open.slice(0, room)) await drawFrame(deps, i, how === 'rest' ? 'next' : how, { storyboardId: sbId, loose: true })
   } catch (e) {
     stop()
     throw e

@@ -29,7 +29,7 @@ from providers.tags import TAG as TAG_IN_TEXT, UnknownTag, rewrite_tags, unsent_
 import brief as briefs
 import job_context
 from . import record
-from .base import fit_duration, require_prompt, view_angle, view_subject
+from .base import fit_duration, prompt_number, require_prompt, view_angle, view_subject
 from .model import AnthropicWire, ModelPort, Usage
 
 BASE = "https://napkin.ie/production-tool/contracts/"
@@ -86,6 +86,24 @@ _BRANDS_SAID = re.compile(r"\bno (?:other |real |visible )?(?:brands?|logos?|tra
 PREVIOUS_IS_NOT_A_COPY = ("@previous is the moment before, for continuity only: draw this shot's own new moment and "
                           "framing, not a copy of it, and show each person once.")
 RELAY_LINES = (NO_OTHER_BRANDS, PREVIOUS_IS_NOT_A_COPY)
+# A palette is accents (UAT round 3 R3-2: "Use only these colours" made every photo a flat 3-colour poster): unless the
+# palette says Strict, the relay rewrites an "only these colours" Dex still writes into accents, whatever prompt version.
+_ONLY_COLOURS = re.compile(r"\b(?:use |using |in |with )?only (?:these|the(?: brand(?:'s)?)?|its|our) (?:brand )?(?:colou?rs|palette)\b", re.I)
+_KEEP_TO_PALETTE = re.compile(r"\b(?:keep(?:ing)? to|stick(?:ing)? to|stay(?:ing)? within|limit(?:ed)? to) the (?:brand(?:'s)? )?palette\b", re.I)
+PALETTE_ROLE_LINE = "brand palette: keep to these colours"
+PALETTE_ROLE_LINE_V17 = "brand palette: its colours as accents where the scene has room, never the only colours"
+PALETTE_OPS = ("generate", "frame", "region_edit", "frame_edit", "clip", "clip_edit", "clip_patch")
+# What Dex reads is its op's (round 3, R2-3: a words-only generate was 15.1k input tokens, the whole 18 KB director
+# schema among them): the schema without other ops' fields, and the prompt without the sections its input cannot use.
+IMAGE_OPS = ("generate", "frame", "view", "region_edit")
+VIDEO_ONLY_FIELDS = ("firstFrame", "lastFrame", "keyframe", "keyframes", "video", "durationS", "audio", "strength")
+# The shared sections a job without that input never needs.
+SECTION_NEEDS = {"## Context: brand rules and documents": "context", "## The brief": "brief"}
+# How hard Dex thinks, and how much it may write, per op (round 3 R3-11: a 1-ref frame took 34.8 s and 2,091 output
+# tokens at the model's default effort, its thinking counted as output). A plan keeps the model's default.
+EFFORT = {"generate": "low", "frame": "low", "view": "low", "region_edit": "low"}
+MAX_TOKENS = {"shot_list": 6000, "frame": 2000, "view": 1500}
+MAX_TOKENS_DEFAULT = 3000
 _PREVIOUS_SAID = re.compile(r"not a copy of @previous|@previous is the moment before", re.I)
 # A prompt file split by "<!-- ops: a b -->" markers: the part before the first is for every op.
 SECTION = re.compile(r"^<!-- ops: ([a-z_ ]+) -->\s*$", re.M)
@@ -292,6 +310,71 @@ def _previous_is_not_a_copy(job: dict, op: str, sheet: dict) -> None:
     if op == "frame" and any(r.get("name") == "previous" for r in job.get("refs") or []) \
             and not _PREVIOUS_SAID.search(job.get("prompt") or ""):
         _add_line(job, PREVIOUS_IS_NOT_A_COPY, sheet)
+
+
+def strict_palette(payload: dict) -> bool:
+    """The job's palette is the only colours (its text says Strict:); otherwise it is accents."""
+    return any(i.get("kind") == "palette" and str(i.get("text") or "").lstrip().lower().startswith("strict")
+               for i in payload.get("context") or [])
+
+
+def _palette_as_accents(job: dict, op: str, payload: dict) -> None:
+    """A palette is the brand's accents, never the only colours, unless it says Strict (R3-2)."""
+    if op not in PALETTE_OPS or strict_palette(payload) or not job.get("prompt"):
+        return
+    prompt = _ONLY_COLOURS.sub("with the brand colours as accents", job["prompt"])
+    job["prompt"] = _KEEP_TO_PALETTE.sub("with touches of the brand palette as accents", prompt)
+
+
+def schema_for(op: str, schema: dict, payload: Optional[dict] = None) -> dict:
+    """The director schema as Dex reads it for one op (round 3, R2-3): only the fields its answer
+    may hold (a plan's shots, a Change this frame's reading, a clip's video fields, the brief's flags when there is a
+    brief). Every answer is still checked against the whole schema (_check)."""
+    payload = payload or {}
+    props = dict(schema.get("properties") or {})
+    if op == "shot_list":
+        for k in ("providerJob", "frameEdit", "added"):
+            props.pop(k, None)
+    else:
+        props.pop("shots", None)
+        if op != "frame_edit":
+            props.pop("frameEdit", None)
+    if not payload.get("brief"):
+        props.pop("briefFlags", None)
+    if op in IMAGE_OPS and isinstance(props.get("providerJob"), dict):
+        pj = dict(props["providerJob"])
+        pj["properties"] = {k: v for k, v in (pj.get("properties") or {}).items() if k not in VIDEO_ONLY_FIELDS}
+        if pj.get("required"):
+            pj["required"] = [k for k in pj["required"] if k in pj["properties"]]
+        props["providerJob"] = pj
+    out = {k: v for k, v in schema.items() if k not in ("properties", "allOf", "required")}
+    out["properties"] = props
+    out["required"] = [k for k in schema.get("required") or [] if k in props]
+    if op == "frame_edit":
+        out["allOf"] = schema.get("allOf") or []
+    else:
+        work = "shots" if op == "shot_list" else "providerJob"
+        out["allOf"] = [{"if": {"properties": {"question": {"type": "null"}}}, "then": {"required": [work]}}]
+    return out
+
+
+def without_descriptions(node):
+    """A schema without its descriptions: from director.v17 the prompt says what each field is (R2-3: they were
+    4.4 KB of every ask). Validation keeps the whole schema."""
+    if isinstance(node, list):
+        return [without_descriptions(x) for x in node]
+    if not isinstance(node, dict):
+        return node
+    return {k: without_descriptions(v) for k, v in node.items() if not (k == "description" and isinstance(v, str))}
+
+
+def drop_sections(common: str, payload: Optional[dict]) -> str:
+    """The shared part of a prompt without the sections this job's input has nothing for (no context, no brief)."""
+    if payload is None:
+        return common
+    parts = re.split(r"(?m)^(?=## )", common)
+    keep = [p for p in parts if not any(p.startswith(h) and not payload.get(need) for h, need in SECTION_NEEDS.items())]
+    return "".join(keep)
 
 
 def provider_sizes(provider: str, op: str, model: Optional[str] = None) -> Optional[frozenset]:
@@ -660,6 +743,8 @@ class Director:
         require_prompt(prompt_version)
         self.prompt_version = prompt_version
         self.system = load_prompt(self.prompt_dir / f"{prompt_version}.md", contracts)
+        if prompt_number(prompt_version) >= 17:  # a palette is accents (R3-2); the contract's role line says "keep to"
+            self.system = self.system.replace(PALETTE_ROLE_LINE, PALETTE_ROLE_LINE_V17)
         schemas = load_schemas(contracts)
         self.schema = bundle(schemas)
         registry = Registry().with_resources((BASE + n, Resource.from_contents(s)) for n, s in schemas.items())
@@ -692,13 +777,22 @@ class Director:
     def sectioned(self) -> bool:
         return bool(SECTION.search(self.system))
 
-    def system_for(self, op: str) -> str:
+    def schema_sent(self, op: str, payload: Optional[dict] = None) -> dict:
+        """The schema Dex answers in: the whole one for a prompt before director.v17 (sent as it was, for a rollback);
+        from v17 its op's cut (schema_for), without descriptions."""
+        if prompt_number(self.prompt_version) < 17:
+            return self.schema
+        return without_descriptions(schema_for(op, self.schema, payload))
+
+    def system_for(self, op: str, payload: Optional[dict] = None) -> str:
         """The prompt for one op: all of an unsectioned file; else the shared part and this op's section,
-        or the fallback prompt for an op the file has no section for."""
+        or the fallback prompt for an op the file has no section for. With the job's `payload`, the shared
+        sections it has nothing for are left out (drop_sections)."""
         parts = SECTION.split(self.system)
         if len(parts) == 1:
             return self.system
-        common, sections = parts[0], {}
+        # From director.v17 on (older prompts are sent byte for byte, for a rollback).
+        common, sections = (drop_sections(parts[0], payload) if prompt_number(self.prompt_version) >= 17 else parts[0]), {}
         for ops, body in zip(parts[1::2], parts[2::2]):
             for o in ops.split():
                 sections[o] = body
@@ -739,9 +833,10 @@ class Director:
         # name it, so a job's Dex call is found by its jobId. Metadata only (peripherals.md §0.2).
         headers = {"X-Napkin-Handler": "relay.director", "X-Napkin-Job": job_id} if job_id else None
         try:
-            output = self._port_for(payload).call(PURPOSE, self.system_for(op), ask, self.schema, usage=usage,
+            output = self._port_for(payload).call(PURPOSE, self.system_for(op, payload), ask,
+                                                  self.schema_sent(op, payload), usage=usage,
                                                   attribution=job_id or op, model=model, headers=headers,
-                                                  max_tokens=6000 if op == "shot_list" else 3000,
+                                                  max_tokens=MAX_TOKENS.get(op, MAX_TOKENS_DEFAULT), effort=EFFORT.get(op),
                                                   images=list(images or []) if op in ("frame_edit", "clip_patch") else None)
         except Exception as e:
             e.given = given
@@ -878,6 +973,7 @@ class Director:
         _views_are_one(job, op, payload)  # the relay's own words: outside the director's budget
         _previous_is_not_a_copy(job, asked, sheet)
         _no_other_brands(job, asked, sheet)
+        _palette_as_accents(job, asked, payload)
         view_subject(job, op, payload)  # a view of a person goes as a person, and says who (pt-canvas-r1)
         self._check_provider_limits(op, sheet, job, payload)
         # A named input picture this job does not send (a model that takes no refs, Veo 3.1 Fast) is said

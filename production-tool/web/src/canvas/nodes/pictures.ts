@@ -28,6 +28,16 @@ export const imageFiles = (files: Iterable<File | Blob> | null | undefined): Blo
 
 /** Room under each row of a grid for a picture's @name. */
 const NAME_ROOM = 24
+/** Room above pictures for a key group's label ("Ruby · 3 views") once they are named. */
+const LABEL_ROOM = 40
+
+/** The boxes as they need room once named: the @name under each, a key group's label over them (UAT round 3, IMG-22
+ *  leftover: three uploads landed flush on the row below; named, their group's names lay over that row's captions). */
+export function withLabelRoom<T extends { x: number; y: number; w: number; h: number }>(boxes: readonly T[]): T[] {
+  // A name and a label sit between any two rows, whichever is above: the same room on both sides.
+  const room = LABEL_ROOM
+  return boxes.map((b) => ({ ...b, y: b.y - room, h: b.h + 2 * room }))
+}
 
 /** How many pictures go across: up to 4 in one row, more in a grid about half again as wide as it is tall (UAT round
  *  1 IMG-14: 13 uploads landed in one 4400 px row, most of them out of view). */
@@ -83,7 +93,7 @@ export async function placePictures(canvas: CanvasAdapter, doc: DocumentStore, f
   // Pasted or picked (no point given) with no board under the middle of the view: clear of everything,
   // so pastes never pile on one spot or straddle a board's edge (board-autolayout).
   if (!at && !boardAt(canvas.elements(), centre)) {
-    const { dx, dy } = clearOffset(canvas.elements(), row)
+    const { dx, dy } = clearOffset(canvas.elements(), withLabelRoom(row))
     row = row.map((r) => ({ ...r, x: Math.round(r.x + dx), y: Math.round(r.y + dy) }))
   }
   // Dropped over a node (Script, Storyboard, Video): the card would hide the picture and take its clicks,

@@ -184,7 +184,7 @@ def test_a_camera_reading_runs_as_frame_with_the_current_frame_and_no_continuity
     (images,) = [t["images"] for t in wire.calls[0]["turns"][:1]]
     assert len(images) == 1 and images[0]["media_type"] == "image/jpeg"
     assert Image.open(io.BytesIO(__import__("base64").b64decode(images[0]["data"]))).size[0] <= 768
-    assert job["director"]["promptVersion"] == "director.v16"  # v16 adds no other brands (pt-canvas-r2), v15 numbers a take's images (pt-dex-context), v14 adds only a redraw's object placement, v13 the brief; the configs name v11 (features/join-or-cut-shots.clan); frame_edit is unchanged from v7
+    assert job["director"]["promptVersion"] == "director.v17"  # v17 makes a palette accents (pt-canvas-r3), v16 adds no other brands (pt-canvas-r2), v15 numbers a take's images (pt-dex-context), v14 adds only a redraw's object placement, v13 the brief; the configs name v11 (features/join-or-cut-shots.clan); frame_edit is unchanged from v7
 
 
 def test_other_ops_send_the_model_no_image():

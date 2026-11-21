@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import type { JobInput, NamedRef, ProductionDocument } from '../contracts/types'
 import { loadJson, makeAjv, SCHEMA } from '../test/schemas'
-import { brandWords, CONTEXT_OPS, ITEMS_MAX, TOTAL_MAX, withContext } from './context'
+import { brandRows, brandWork, brandWords, CONTEXT_OPS, ITEMS_MAX, TOTAL_MAX, withContext } from './context'
 
 const ex = loadJson<ProductionDocument>('examples/document.ad.json')
 const S15 = { kind: 'shot', id: 'shot_01K7A000000000000000000015' } as const
@@ -25,7 +25,7 @@ describe('input.context', () => {
     const brand = input.context!.filter((c) => c.kind !== 'document')
     expect(brand).toEqual([
       { kind: 'brand_rule', title: '@' + refName(ex.refs[RULE]), text: 'Do: Leave one cap height of clear space around the logo.' },
-      { kind: 'palette', title: expect.any(String), text: 'Lumen blue #0B5FFF, #F4F1EA' },
+      { kind: 'palette', title: expect.any(String), text: 'Accents: Lumen blue #0B5FFF, #F4F1EA' },
       { kind: 'typography', title: expect.any(String), text: 'Lumen Sans (headlines)' },
     ])
     expect(rows.filter((r) => r.kind === 'brand').map((r) => [r.ref, r.used_as])).toEqual([[RULE, 'brand rule'], [PALETTE, 'brand palette'], [TYPE, 'brand typography']])
@@ -88,3 +88,55 @@ describe('input.context', () => {
 function refName(r: NamedRef) {
   return `${r.key}_${r.variant}`
 }
+
+
+// UAT round 3 R3-2: the palette turned every picture into a 3-colour poster. The brand goes per op and per job.
+describe('the brand per job (pt-canvas-r3)', () => {
+  const bare = () => {
+    const d = structuredClone(ex)
+    d.links = Object.fromEntries(Object.entries(d.links).filter(([, l]) => l.role !== 'brand'))
+    return d
+  }
+  const NODE = { kind: 'group', id: 'node_x' } as const
+  const kinds = (input: JobInput) => (input.context ?? []).map((c) => c.kind)
+
+  it('a plain photo gets the brand rule only: no palette, no type', () => {
+    const { input } = withContext(bare(), 'generate', NODE, { text: 'a cottage at midday, photo' })
+    expect(kinds(input)).toEqual(['brand_rule'])
+  })
+
+  it('brand work gets the palette as accents and the type: an ad, a product, a brief, a Brand board linked', () => {
+    for (const input of [{ text: 'a poster for the harbour picnic' }, { text: 'x', refs: [{ id: 'r', role: 'product', asset: { sha256: 'sha256:' + 'a'.repeat(64), url: 'https://x/a', mime: 'image/png' } }] }] as JobInput[]) {
+      const out = withContext(bare(), 'generate', NODE, input).input
+      expect(kinds(out)).toEqual(['brand_rule', 'palette', 'typography'])
+      expect(out.context!.find((c) => c.kind === 'palette')!.text.startsWith('Accents: ')).toBe(true)
+    }
+    expect(kinds(withContext(ex, 'frame', S15, { text: 'wide' }).input)).toContain('palette') // its storyboard has a Brand board
+    expect(brandWork(bare(), NODE, { brief: { title: 'b', spine: {} } as JobInput['brief'] })).toBe(true)
+  })
+
+  it('a Fill of the sky reads no brand at all, unless it is brand work', () => {
+    expect(withContext(bare(), 'region_edit', NODE, { text: 'more sky' }).input.context).toBeUndefined()
+    expect(kinds(withContext(bare(), 'region_edit', NODE, { text: 'put our logo on the sign' }).input)).toEqual(['brand_rule', 'palette', 'typography'])
+  })
+
+  it('the tray’s ticks leave one out, put one in, and make the palette strict', () => {
+    const d = bare()
+    const rows = brandRows(d, 'generate', NODE, { text: 'a cottage' })
+    expect(rows.map((r) => [r.ref, r.on, r.byDefault])).toEqual([[RULE, true, true], [PALETTE, false, false], [TYPE, false, false]])
+    const out = withContext(d, 'generate', NODE, { text: 'a cottage' }, { leave: [RULE], add: [PALETTE], strict: true }).input
+    expect(out.context).toEqual([{ kind: 'palette', title: expect.any(String), text: 'Strict: Lumen blue #0B5FFF, #F4F1EA' }])
+    // A selected note a Brand board links into makes it brand work (R2-5).
+    expect(brandRows(d, 'generate', NODE, { text: 'a cottage' }, { work: true }).every((r) => r.on)).toBe(true)
+  })
+
+  it('a note a Brand board links into turns the brand on for the node it feeds', () => {
+    const d = bare()
+    const noteLink = Object.values(ex.links).find((l) => l.from.kind === 'text' || (l.from as { kind: string }).kind === 'note')
+    expect(noteLink).toBeTruthy()
+    const board = Object.values(ex.links).find((l) => l.role === 'brand')!.from
+    d.links.lnk_brand_note = { id: 'lnk_brand_note', v: 1, field_v: {}, from: board, to: noteLink!.from, role: 'brand' } as never
+    const fed = noteLink!.to
+    expect(brandWork(d, fed, {})).toBe(true)
+  })
+})

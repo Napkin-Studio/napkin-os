@@ -587,6 +587,7 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 /* The Name dialog's role pills (the contract's ten main roles, More… for the rest) and the chosen role's line. */
 .rolepills { gap: 4px; flex-wrap: wrap; max-width: 360px; }
 .roleline { font-size: 12px; margin-top: 4px; }
+.name-joins { font-size: 12.5px; margin-top: 8px; padding: 6px 8px; border-radius: 6px; background: var(--card); border: 1px solid var(--line); color: var(--ink2); max-width: 340px; }
 /* A brand ref's colours, font or rule in the Name popover (features/pt-canvas-r2.clan, R2-1). */
 .brandfields { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; max-width: 360px; }
 .brandfields .textarea { width: 100%; font-size: 12.5px; }

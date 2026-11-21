@@ -87,7 +87,7 @@ def test_generate_on_runway():
     assert [r["name"] for r in job["refs"]] == ["in_1", "maya_eyes", "maya_palette"]
     assert res.usage == {"input_tokens": 120, "output_tokens": 60}
     sent = wire.calls[0]
-    assert sent["model"] == "claude-haiku-4-5" and sent["system"] == d.system_for("generate")
+    assert sent["model"] == "claude-haiku-4-5" and sent["system"] == d.system_for("generate", fixture("generate_runway")["input"])
     asked = json.loads(sent["turns"][0]["text"].split("<input>\n")[1].split("\n</input>")[0])
     assert asked["provider"] == "runway" and asked["sheet"]["tagSyntax"] == "at_tag" and asked["op"] == "generate"
 
@@ -183,9 +183,10 @@ def test_only_the_v6_and_later_prompts_are_bundled():
     frame; v9.1 and v12 add redraw (frame-edit-or-redraw); v13 adds the brief (brief-node); v14 places a redraw's objects
     when the shot has no people (owner 2026-11-18); v15 numbers a take's images by their place in the refs and
     sends an unnamed canvas picture as an object (pt-dex-context); v16 paints no other brands and keeps @previous for
-    continuity only (pt-canvas-r2). The older ones stay, so a rollback is a config change."""
+    continuity only (pt-canvas-r2); v17 makes a palette accents and keeps @anchor's setting only in its place
+    (pt-canvas-r3). The older ones stay, so a rollback is a config change."""
     assert sorted(p.name for p in PROMPTS.glob("director.v*.md")) == [
-        "director.v10.md", "director.v11.md", "director.v12.md", "director.v13.md", "director.v14.md", "director.v15.md", "director.v16.md", "director.v6.1.md", "director.v6.md", "director.v7.md", "director.v8.md", "director.v9.1.md", "director.v9.md"]
+        "director.v10.md", "director.v11.md", "director.v12.md", "director.v13.md", "director.v14.md", "director.v15.md", "director.v16.md", "director.v17.md", "director.v6.1.md", "director.v6.md", "director.v7.md", "director.v8.md", "director.v9.1.md", "director.v9.md"]
 
 
 def test_v7_is_v6_1_with_the_words_first_no_prices_and_a_frame_edit_section():
@@ -461,6 +462,14 @@ def test_one_answer_never_carries_a_job_and_a_question_or_stray_shots():
                 "options": [{"id": "eyes", "label": "Eyes", "value": "eyes"}, {"id": "palette", "label": "Palette", "value": "palette"}]}
     refuses("a question and a job", "generate_runway", lambda r: r.update(question=question))
     refuses("belong to shot_list", "generate_runway", lambda r: r.update(shots=fixture("shot_list")["reply"]["shots"]))
+    # From director.v17 the schema a generate is answered in has no shots (round 3, R2-3: the schema is cut per op), so
+    # the port refuses them and asks once more; twice wrong fails the call.
+    f = fixture("generate_runway")
+    reply = {**copy.deepcopy(f["reply"]), "shots": fixture("shot_list")["reply"]["shots"]}
+    d, wire = make(reply, reply, prompt_version="director.v17")
+    with pytest.raises(ModelError):
+        d.run(f["op"], to_wire(f["op"], copy.deepcopy(f["input"])), f["provider"])
+    assert len(wire.calls) == 2
 
 
 @pytest.mark.parametrize("edit, why", [

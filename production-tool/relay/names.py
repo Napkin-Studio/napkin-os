@@ -40,12 +40,48 @@ def _squeeze(word: str) -> str:
     return word[0] + re.sub(r"[aeiou]", "", word[1:])
 
 
+# Short forms a reader knows, tried before any word loses its vowels (round 3, R2-14 leftover: ruby_back-three-quarter
+# went as rby_bck_thr_qrtr): word runs first, then single words.
+SHORT_RUNS = ((("three", "quarter"), "3q"), (("three", "quarters"), "3q"), (("over", "the", "shoulder"), "ots"),
+              (("over", "shoulder"), "ots"), (("close", "up"), "cu"), (("extreme", "close", "up"), "ecu"),
+              (("full", "body"), "full"), (("half", "body"), "half"))
+SHORT_WORDS = {"quarter": "qtr", "quarters": "qtr", "background": "bg", "foreground": "fg", "closeup": "cu",
+               "profile": "prof", "medium": "med", "portrait": "port", "standing": "stand", "sitting": "sit",
+               "smiling": "smile", "laughing": "laugh", "walking": "walk", "running": "run", "looking": "look"}
+FILLER = frozenset(("the", "a", "an", "of", "and", "with", "in", "on", "at", "view", "shot", "pose"))
+
+
+def _shorter(words: list[str]) -> list[str]:
+    """The key, then the variant's words with known runs and words in their short forms."""
+    out, i = words[:1], 1
+    while i < len(words):
+        for run, short in SHORT_RUNS:
+            if tuple(words[i:i + len(run)]) == run:
+                out.append(short)
+                i += len(run)
+                break
+        else:
+            out.append(words[i])
+            i += 1
+    return out
+
+
 def fit_tag(name: str) -> str:
-    """A name as a tag of at most MAX characters (Runway's limit) that still reads (R2-14: @marco_three-quarter
-    went as marco_three_quar). Every word stays: the variant's longest words lose their inner vowels first
-    (marco_three-quarter is marco_three_qrtr), then the key's, then the longest words their last letters."""
+    """A name as a tag of at most MAX characters (Runway's limit) that still reads (R2-14). In order, only while it is
+    too long: the variant's filler words go (the, of, view), known runs and words take their short forms
+    (back-three-quarter is back_3q, over-the-shoulder ots), then the variant's longest words lose their inner vowels,
+    then the key's, then the longest words their last letters. The key is never dropped."""
     words = [w for w in re.split(r"[_\-\s]+", name.lower()) if w]
     size = lambda: len("_".join(words))  # noqa: E731
+    if size() > MAX:
+        kept = words[:1] + [w for w in words[1:] if w not in FILLER]
+        words = kept if len(kept) > 1 or len(words) == 1 else words[:2]
+    if size() > MAX:
+        words = _shorter(words)
+    for i in range(1, len(words)):
+        if size() <= MAX:
+            break
+        words[i] = SHORT_WORDS.get(words[i], words[i])
     while size() > MAX:
         rest = [i for i in range(1, len(words)) if len(words[i]) > 3 and _squeeze(words[i]) != words[i]]
         if rest:

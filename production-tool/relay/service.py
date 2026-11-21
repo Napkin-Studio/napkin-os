@@ -1041,7 +1041,19 @@ class Relay:
         sheet = effective_sheet(sheet, op, model)
         spec = sheet["ops"][op]
         price = pricing().op_usd(sheet, op, None, self._settings(op, spec, sheet, inp or {}, seconds, sized))
-        return (UNKNOWN_PRICE_USD, True) if price is None else (float(price), False)
+        if price is None:
+            return UNKNOWN_PRICE_USD, True
+        return float(price) * self._extend_calls(op, inp or {}), False
+
+    @staticmethod
+    def _extend_calls(op: str, inp: dict) -> int:
+        """The provider calls a job makes: an extend runs in steps (round 3, IMG-9), each one paid; anything else one."""
+        import formats
+        rz = inp.get("resize") or {}
+        ms, a = rz.get("masterSize") or {}, inp.get("aspect") or {}
+        if op != "resize" or rz.get("method") != "extend" or not ms.get("w") or not a.get("w"):
+            return 1
+        return formats.step_count(ms["w"], ms["h"], a["w"], a["h"])
 
     @staticmethod
     def _cut_seconds(job: dict) -> float | None:
@@ -2237,16 +2249,19 @@ class Relay:
         pjob = {"provider": provider, "model": model, "outputs": 1}
         made: list = []
         if rz["method"] == "extend":
+            # Stepped outpainting (round 3, IMG-9): this job's step, grown from the step before (the master first).
             try:
-                data = self.blobs.fetch(inp["image"]["url"])
-                plan = self._extend_plan(inp, data)
-                canvas, mask = formats.padded(data, plan)
+                master = self.blobs.fetch(inp["image"]["url"])
+                step = job.get("_extendStep", 0)
+                plan = self._extend_steps(inp, master)[step]
+                base = self.blobs.fetch(job["_extendFrom"]) if step and job.get("_extendFrom") else master
+                canvas, mask = formats.padded_step(base, plan)
             except Exception as e:
                 log.exception("job %s: could not pad the master", job["jobId"])
                 raise ApiError("invalid_input", f"Wren could not read the master to extend it ({type(e).__name__}).") from e
             scratch = self._scratch(job)
-            plate = self._put_made(f"{scratch}/canvas.jpg", canvas, "image/jpeg")
-            ours = self._put_made(f"{scratch}/mask.png", mask, "image/png")
+            plate = self._put_made(f"{scratch}/canvas-{step + 1}.jpg", canvas, "image/jpeg")
+            ours = self._put_made(f"{scratch}/mask-{step + 1}.png", mask, "image/png")
             pjob.update(prompt=formats.EXTEND_PROMPT, refs=[{"sha256": plate["sha256"], "name": "current", "role": "current"}],
                         mask=ours["sha256"])
             made = [plate, ours]
@@ -2298,17 +2313,52 @@ class Relay:
         return formats.pad_plan(pw, ph, inp["aspect"]["w"], inp["aspect"]["h"], boxes,
                                 formats.safe_fracs(inp.get("safeArea"), inp.get("delivery")))
 
+    @classmethod
+    def _extend_steps(cls, inp: dict, data: bytes) -> list[dict]:
+        """An extend's steps (formats.step_plans of its pad plan): the same at every submit and landing."""
+        import formats
+        return formats.step_plans(cls._extend_plan(inp, data))
+
+    def _next_extend_step(self, job: dict, grown: bytes, step: int, cost_usd: float | None) -> dict:
+        """A step of a stepped extend landed and more are to come (round 3, IMG-9): its picture, laid back on its
+        input, is kept as the next step's input, and the job queues again for the provider. The reservation already
+        covers every step (_estimate); what each step cost adds up for the landing."""
+        key = f"{self._scratch(job)}/step-{step + 1}.png"
+        self.blobs.put(key, grown, "image/png")
+        spent = job.get("_stepCost")
+        spent = None if (cost_usd is None or (step and spent is None)) else (spent or 0.0) + cost_usd
+        self._stage(job, "extend_step", step=step + 1, steps=job.get("_extendSteps"), costUsd=cost_usd)
+        now = self.clock()
+        saved = self._save(job, state="queued", provider=None, model=None, requestId=None, _slot=None, _queue="q",
+                           queuePosition=None, _queuedAt=now, _submittedAt=None, _nextCheckAt=None, _leaseUntil=None,
+                           _fetchErrors=None, _extendStep=step + 1, _extendFrom=self.blobs.public_url(key),
+                           _stepCost=spent)
+        if saved is None:
+            return self._reload(job)
+        if job.get("_slot"):
+            self.store.incr(job["_slot"], "n", -1)
+        return self._dispatch(saved, self.config())
+
     def _land_resize(self, job: dict, raw: dict, cost_usd: float | None) -> dict:
         """A paid size's picture: cropped to the size's exact shape, scaled to the preview, kept clean as the
-        plate, the type layers drawn on a copy. The provider's bill stands whatever happens here."""
+        plate, the type layers drawn on a copy. The provider's bill stands whatever happens here. An extend lands
+        step by step: every step but the last goes back to the provider (_next_extend_step)."""
         import formats
         inp = job["_req"]["input"]
         rz = inp["resize"]
         try:
             data = self.blobs.fetch(raw["url"])
-            if rz["method"] == "extend":  # the master laid back over its edge on a ramp: no hard seam (IMG-9)
+            if rz["method"] == "extend":  # each step laid back over the picture it grew from, on a ramp (IMG-9)
                 master = self.blobs.fetch(inp["image"]["url"])
-                data = formats.feathered(data, master, self._extend_plan(inp, master))
+                steps = self._extend_steps(inp, master)
+                step = job.get("_extendStep", 0)
+                base = self.blobs.fetch(job["_extendFrom"]) if step and job.get("_extendFrom") else master
+                data = formats.feathered(data, base, steps[step])
+                if step + 1 < len(steps):
+                    return self._next_extend_step({**job, "_extendSteps": len(steps)}, data, step, cost_usd)
+                if step:
+                    spent = job.get("_stepCost")
+                    cost_usd = None if spent is None or cost_usd is None else round(spent + cost_usd, 6)
             out_w, out_h = formats.preview_size(inp["delivery"], rz.get("previewMaxPx"))
             plate, png, (rw, rh), drawn = formats.finish(data, (inp["aspect"]["w"], inp["aspect"]["h"]), (out_w, out_h),
                                                          rz.get("layers"), self.blobs.fetch)

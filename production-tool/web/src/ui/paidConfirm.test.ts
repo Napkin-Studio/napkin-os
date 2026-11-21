@@ -19,3 +19,16 @@ describe('confirms, slow sends and chips', () => {
     expect(chipLook(0.28).dot).toBe(true)
   })
 })
+
+// UAT round 3 R3-10: Make the other views offered "back" although @ruby_back-three-quarter was there.
+describe('views already made count near angles (pt-canvas-r3)', () => {
+  it('a back three-quarter covers the back; a profile covers the side', async () => {
+    const { missingViews, viewsCovered } = await import('./viewsWhat')
+    expect(viewsCovered('back-three-quarter')).toEqual(['back'])
+    expect(viewsCovered('front-three-quarter')).toEqual(['three-quarter'])
+    expect(viewsCovered('profile-left')).toEqual(['side'])
+    expect(viewsCovered('laughing')).toEqual([])
+    expect(missingViews([{ variant: 'front' }, { variant: 'side' }, { variant: 'back-three-quarter' }], ['three-quarter', 'side', 'back'])).toEqual(['three-quarter'])
+    expect(missingViews([{ variant: 'front' }, { variant: '3q' }], ['three-quarter', 'side', 'back'])).toEqual(['side', 'back'])
+  })
+})

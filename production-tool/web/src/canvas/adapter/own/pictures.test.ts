@@ -120,6 +120,19 @@ describe('pictures on the own engine', () => {
     }
   })
 
+  it('pasted pictures leave room for their names and a group label from the row below (UAT round 3, IMG-22)', async () => {
+    const a = new OwnAdapter()
+    a.resize(1200, 800, 0, 0)
+    const doc = snapshotDoc()
+    const first = await placePictures(a, doc, [png('p1'), png('p2'), png('p3')])
+    const second = await placePictures(a, doc, [png('q1'), png('q2'), png('q3')])
+    const gapBetween = (p: { x: number; y: number; width: number; height: number }, q: typeof p) => {
+      if (p.x >= q.x + q.width || q.x >= p.x + p.width) return Infinity // side by side: not one above the other
+      return p.y >= q.y ? p.y - (q.y + q.height) : q.y - (p.y + p.height)
+    }
+    for (const p of first) for (const q of second) expect(gapBetween(p, q)).toBeGreaterThanOrEqual(64)
+  })
+
   it('a drop over a node moves clear of it; a drop on empty canvas stays where it was let go (2026-10-16)', async () => {
     const a = new OwnAdapter()
     a.resize(1200, 800, 0, 0)

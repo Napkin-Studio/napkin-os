@@ -153,10 +153,10 @@ def test_v16_says_the_new_lines():
 # ── R2-14: tags that read ────────────────────────────────────────────────────
 
 def test_long_names_keep_every_word_readable_within_sixteen():
-    assert fit_tag("marco_three-quarter") == "marco_three_qrtr"
+    assert fit_tag("marco_three-quarter") == "marco_3q"  # round 3: short forms before vowels (pt-canvas-r3)
     for name in ("maya_over-the-shoulder", "supercalifragilistic_front", "elizabeth_three-quarter-left"):
         tag = fit_tag(name)
-        assert TAG.match(tag) and len(tag) <= 16 and tag.count("_") == name.replace("-", "_").count("_"), (name, tag)
+        assert TAG.match(tag) and len(tag) <= 16, (name, tag)
     tags = wire_tags([{"id": "a", "name": "marco_three-quarter"}, {"id": "b", "name": "marco_three-quarters"}])
     assert len(set(tags.values())) == 2 and all(TAG.match(t) for t in tags.values())
 

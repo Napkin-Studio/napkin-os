@@ -216,7 +216,8 @@ export function nextStep(s: EditSession): string | undefined {
 /** An edit as the list says it. `state` is its job's, when it has one. */
 export function editLabel(e: Edit, s: EditSession, state?: 'running' | 'ready' | 'failed' | 'same' | 'unsent'): string {
   switch (e.kind) {
-    case 'mask': return `${e.name}${s.active === e.id ? ' · painting' : ''}`
+    // A mask whose Fill or Remove was sent is spent: never "painting" (UAT round 3 R3-3); the next stroke starts a new one.
+    case 'mask': return `${e.name}${s.active === e.id && !hasFill(s, e.id) ? ' · painting' : ''}`
     case 'text': return e.text.trim() ? `Text "${e.text}"` : 'Text · typing'
     case 'crop': return 'Crop'
     case 'fill': {
@@ -274,6 +275,27 @@ export const UPSCALE_READS_PX = 1536
 export function upscaledTo(w: number, h: number, scale: 2 | 4): { w: number; h: number } {
   const k = Math.min(1, UPSCALE_READS_PX / Math.max(w, h))
   return { w: Math.round(w * k) * scale, h: Math.round(h * k) * scale }
+}
+
+/** Whether an upscale makes the picture bigger at all (UAT round 3 R3-4: 2x of a 3072 px picture reads 1536 px and
+ *  promises 3072 again, and was paid for nothing). */
+export function upscaleGrows(w: number, h: number, scale: 2 | 4): boolean {
+  const out = upscaledTo(w, h, scale)
+  return out.w > w || out.h > h
+}
+
+/** Why Upscale is off at this scale: "Already full size: 2x gives 3072 px, as it is now. 4x makes it bigger." */
+export function upscaleWhyNot(w: number, h: number, scale: 2 | 4): string | undefined {
+  if (upscaleGrows(w, h, scale)) return undefined
+  const long = Math.max(w, h)
+  const other = scale === 2 && upscaleGrows(w, h, 4) ? ' 4× makes it bigger.' : ''
+  return `Already full size: the upscaler reads at most ${UPSCALE_READS_PX} px a side, so ${scale}× gives ${long} px, as it is now.${other}`
+}
+
+/** A result that came back the same as the picture sent, said plainly (UAT round 3 R3-3). */
+export function sameLine(e: Edit): string {
+  if (e.kind === 'fill') return e.remove ? 'The removal came back unchanged.' : 'The fill came back unchanged.'
+  return 'The change came back unchanged.'
 }
 
 export function upscaleSize(w: number, h: number, scale: 2 | 4): string {

@@ -21,6 +21,8 @@ import { canLink, type LinkKind } from '../core/links'
 import { canvasActions, toolLetter } from '../chrome/actions'
 import type { CardKind } from './cardChrome'
 import { NodeCard } from './cards'
+import { planAskOn } from './planAsk'
+import { AskCard } from '../../ui/AskCard'
 import { cardOf, CARD_KINDS, createNode, elementOfEnd, endOf, groupOf, linkCheck, linkMemory, linkNodes, reconcileLinks, seedNodes, textRowOf } from './nodes'
 import { wordsOnPage } from '../../script/edits'
 import { applyKeyMerges, keyLinkMerges, mergeWords } from './mergeLinks'
@@ -29,7 +31,7 @@ import { elementBounds } from '../core/geometry'
 import { isInkTool } from '../core/tools'
 import { UndoChip } from '../../ui/Undo'
 import { imageFiles, pickPictureFiles, placePictures } from './pictures'
-import { makeVideo, storyboardFor, storyboardFromShots } from './make'
+import { madeFromNote, makeVideo, storyboardFor, storyboardFromShots } from './make'
 import { groupLabel, keyGroupFields, keyGroupsOn, type KeyGroup } from './keyGroups'
 import { setStacked } from './stack'
 import { pictureToOpen } from './dblclick'
@@ -529,8 +531,18 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     if (!picker) return
     const { from, scene, at } = picker
     setPicker(null)
+    const noteWords = from.type === 'text' ? textRowOf(services.doc.get(), from.id)?.words?.trim() ?? '' : ''
+    // A storyboard or film made from a note gets a script of its own with the note's words, which drives it: its plan
+    // never reads (or writes over) another script (UAT round 3 R3-1, UX 3).
+    if (noteWords && (kind === 'storyboard' || kind === 'video')) {
+      void madeFromNote({ canvas, doc: services.doc }, kind, scene, (id) => wordsOnPage(services.doc, id, noteWords), (script) => writeLink(from, script, at))
+        .then(({ script, made }) => { markNew(script.id); markNew(made.id) })
+        .then(() => cancel())
+        .catch((e) => console.warn('the node was not made', e))
+      return
+    }
     // A script made from a note starts with the note's words on its page (UAT round 2 R2-7: it was empty).
-    const words = kind === 'script' && from.type === 'text' ? textRowOf(services.doc.get(), from.id)?.words ?? '' : ''
+    const words = kind === 'script' ? noteWords : ''
     void createNode({ canvas, doc: services.doc }, kind, scene)
       .then(async (el) => {
         markNew(el.id)
@@ -593,6 +605,15 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
               onPointerDown={(ev) => startLink(e, ev)} onPointerMove={follow} onPointerUp={endLink} />}
           </div>
         )
+      })}
+      {/* A plan waiting on the Director agent's question: its ask card beside the storyboard, at screen size (UAT round 3
+          R3-5, UX 2: the only sign was the Decisions badge). Off screen, the ask dock shows it instead. */}
+      {!source && nodes.map((e) => {
+        const c = cardOf(e)!
+        const ask = c.kind === 'storyboard' ? planAskOn(live, c.id) : undefined
+        if (!ask) return null
+        const p = toLocal(e.x + e.width, e.y)
+        return <div key={`ask-${e.id}`} className="nl-ask" style={{ left: p.x + 12, top: p.y }} onPointerDown={(ev) => ev.stopPropagation()}><AskCard ask={ask} /></div>
       })}
       {/* The Brief node's compact card (features/brief-node.clan; production-new-ui mock v2.1). */}
       {els.filter((e) => briefOfElement(e)).map((e) => {

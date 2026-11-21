@@ -5,10 +5,11 @@
 import { describe, expect, it } from 'vitest'
 import type { ProductionDocument } from '../../../contracts/types'
 import { addShots, modelStore, MAYA } from '../../../test/model'
-import { mainScript, mainStoryboard, storyboardOfScript, storyboardOfVideo } from '../../../model/selectors'
+import { mainScript, mainStoryboard, scriptText, storyboardOfScript, storyboardOfVideo } from '../../../model/selectors'
 import { cardOf, createNode, linkIdOf, seedNodes } from '../../nodes/nodes'
-import { makeVideo, storyboardFor, storyboardFromShots } from '../../nodes/make'
-import { ownShotList } from '../../../jobs/prompt'
+import { madeFromNote, makeVideo, storyboardFor, storyboardFromShots } from '../../nodes/make'
+import { wordsOnPage } from '../../../script/edits'
+import { ownShotList, scriptOf } from '../../../jobs/prompt'
 import { updateDoc } from '../../../doc/store'
 import { deleteFrom, removeNode } from '../../../doc/remove'
 import { CanvasDocSync } from '../../sync'
@@ -158,6 +159,33 @@ describe('Make a storyboard from these shots (3.13, decided 2026-10-15)', () => 
     await deleteFrom(s, (d) => removeNode(d, 'video', videoId))
     expect(doc().storyboards[own]).toBeUndefined()
     expect(doc().shots[shotId]).toBeUndefined()
+    await s.close()
+  })
+})
+
+// UAT round 3 R3-1: "New storyboard from this text" bound the new storyboard to the project's first script, and its
+// plan wrote Mia's shots over the harbour picnic. A storyboard or film made from a note gets a script of its own.
+describe('a storyboard or film made from a note (pt-canvas-r3)', () => {
+  it('gets its own script with the note’s words, driving it; the project’s script is untouched', async () => {
+    const { a, s, doc } = await seeded()
+    const old = mainScript(doc())!.id
+    const before = JSON.stringify(Object.values(doc().scenes).filter((x) => x.script_id === old))
+    const linked: string[] = []
+    for (const kind of ['storyboard', 'video'] as const) {
+      const { script, made } = await madeFromNote({ canvas: a, doc: s }, kind, { x: 900, y: 600 },
+        (id) => wordsOnPage(s, id, 'Mia finds a puppy in the rain.'), async (el) => { linked.push(cardOf(el)!.id) })
+      const sc = cardOf(script)!.id
+      const end = cardOf(made)!
+      expect(sc).not.toBe(old)
+      expect(scriptText(doc(), sc)).toContain('Mia finds a puppy')
+      expect(Object.values(doc().links).some((l) => l.role === 'drives' && l.from.id === sc && l.to.id === end.id)).toBe(true)
+      if (kind === 'storyboard') {
+        expect(storyboardOfScript(doc(), sc)?.id).toBe(end.id)
+        expect(scriptOf(doc(), end.id)).toBe(sc)
+      }
+    }
+    expect(linked).toHaveLength(2)
+    expect(JSON.stringify(Object.values(doc().scenes).filter((x) => x.script_id === old))).toBe(before)
     await s.close()
   })
 })
