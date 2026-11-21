@@ -176,12 +176,15 @@ export const LINE_MIN_S = 1.5
 /** The film layers of a size: the line and legal over the last 2.5 s of the clips, the logo over the first
  *  3 (the brand early), and the captions of the spoken lines on the social shapes (CF9) unless hidden;
  *  on the TV shapes only when a person turned them on. The line is never on screen with a caption (linesApart). */
-export async function filmLayers(deps: Pick<CampaignDeps, 'relay' | 'doc'>, set: FormatSet, size: Size): Promise<TypeLayer[]> {
+export async function filmLayers(deps: Pick<CampaignDeps, 'relay' | 'doc'>, set: FormatSet, size: Size, card?: { headline?: string; line: string; cta?: string }): Promise<TypeLayer[]> {
   const d = liveGet(deps.doc)
   const body = (size.edl ?? []).reduce((a, w) => a + (w.out_s - w.in_s), 0)
-  const laid = (await layersFor(deps, set, size)).map((l): TypeLayer => l.kind === 'logo'
+  // The end card says its own words last, so they are not also laid over the picture. Taken out here, before the
+  // captions are fitted around the line: the line once sat under a spoken caption's start, pushed the caption's end
+  // before its start, and the caption went with it (UAT walkthrough 2026-11-21, R6-F1).
+  const laid = withoutCardWords((await layersFor(deps, set, size)).map((l): TypeLayer => l.kind === 'logo'
     ? { ...l, fromS: 0, toS: Math.min(3, body) }
-    : { ...l, fromS: Math.max(0, body - LINE_S), toS: body })
+    : { ...l, fromS: Math.max(0, body - LINE_S), toS: body }), card)
   const want = size.layers?.captions
   const show = want ? !want.hidden : isSocialShape(shapeOf(size))
   if (!show) return laid
@@ -209,10 +212,12 @@ export function linesApart(laid: readonly TypeLayer[], caps: readonly TypeLayer[
       if (ct <= lf || cf >= lt) continue
       if (body - ct >= LINE_MIN_S - 1e-6) l.fromS = Math.round(ct * 1000) / 1000
       else if (cf > lf && cf - lf >= LINE_MIN_S - 1e-6) l.toS = cf // a late caption: the line shows before it
-      else c.toS = lf
+      else if (cf <= lf) c.toS = lf // an early caption: it ends where the line starts
+      else l.toS = l.fromS = lf // no room either side: the caption (the sound-off words) stays, the line is left out
     }
   }
-  return { laid: words, caps: out.filter((c) => (c.toS ?? body) - (c.fromS ?? 0) > 0.05) }
+  const room = (l: TypeLayer) => (l.toS ?? body) - (l.fromS ?? 0) > 0.05
+  return { laid: words.filter((l) => l.kind === 'logo' || room(l)), caps: out.filter(room) }
 }
 
 const sameWords = (a?: string, b?: string) => {
@@ -348,7 +353,7 @@ export async function cutdownInput(deps: Pick<CampaignDeps, 'relay' | 'doc'>, se
   if (!clips.length) throw new Error('This version keeps no shot: keep a beat first.')
   const clientCard = await clientCardOf(deps, set, size.length_s)
   // The film's card says its line: the size's own line goes from the picture, so it is not said twice (R3-F12).
-  const layers = withoutCardWords(await filmLayers(deps, set, size), clientCard)
+  const layers = await filmLayers(deps, set, size, clientCard)
   const { studioS } = cardLengths(size.length_s, clientCard ? clientCardLen(d, set) : undefined, !!clientCard)
   return {
     aspect: { w: size.delivery.width, h: size.delivery.height }, delivery: { ...size.delivery },

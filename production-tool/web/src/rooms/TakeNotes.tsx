@@ -7,6 +7,7 @@
 import { useConfig, useDoc, useServices, useUi } from '../app/context'
 import type { Generation } from '../contracts/types'
 import { deleteFrom, removeNote } from '../doc/remove'
+import { MakeTray } from '../ui/MakeTray'
 import { makeClip, remakeAsFinal, shotQuality } from '../jobs/clips'
 import { fixesInFrame, fixFrameLanded, fixInShot, fixProgress, remakeFixClip } from '../jobs/fix'
 import { ctxReader } from '../jobs/runner'
@@ -67,14 +68,18 @@ export function TakeNotes({ parent, videoId, shotId }: { parent: Gen; videoId: s
           <p className="rm-note">{fixedFrame ? 'The frame is fixed; the clip is made from it next.'
             : inShot ? 'A boxed note is fixed in the shot: its storyboard frame first, then the clip from it. This take is kept.'
               : 'The notes are read back as the words for a new version; this take is kept.'}</p>
-          <button type="button" className="btn rm-wide" disabled={sending || fixing} onClick={() => void fix()}>
-            {fixing ? (progress?.step === 'frame' ? 'Fixing the frame…' : 'Making a new version…')
-              : `${fixedFrame ? 'Make the clip from the fixed frame' : inShot ? 'Fix it in the shot' : 'Make a new version'} (${notes.length} note${notes.length > 1 ? 's' : ''})`}
-          </button>
+          <MakeTray className="btn rm-wide" busy={sending || fixing} busyLabel={fixing ? (progress?.step === 'frame' ? 'Fixing the frame…' : 'Making a new version…') : 'Sending…'}
+            onYes={() => void fix()} yes={fixedFrame ? 'Make the clip' : inShot ? 'Fix it' : 'Make a new version'}
+            rows={[
+              { key: 'what', label: fixedFrame ? 'A new clip from the fixed frame' : inShot ? 'The frame fixed in the shot, then a new clip from it' : 'A new version of this take, from your notes', detail: `${notes.length} note${notes.length > 1 ? 's' : ''}` },
+              { key: 'count', label: '1 new take', detail: 'this take is kept' },
+            ]}
+            label={`${fixedFrame ? 'Make the clip from the fixed frame' : inShot ? 'Fix it in the shot' : 'Make a new version'} (${notes.length} note${notes.length > 1 ? 's' : ''})`} />
         </>
       )}
       {draft && (
-        <button type="button" className="btn ghost rm-wide" disabled={sending} onClick={() => void toFinal()} title={finalHint(doc, take)}>Remake as Final</button>
+        <MakeTray className="btn ghost rm-wide" busy={sending} busyLabel="Sending…" onYes={() => void toFinal()} title={finalHint(doc, take)} label="Remake as Final" yes="Remake as Final"
+          rows={[{ key: 'what', label: 'This take again at Final quality', detail: 'the same shots and words' }, { key: 'count', label: '1 new take', detail: 'the draft is kept' }]} />
       )}
     </div>
   )

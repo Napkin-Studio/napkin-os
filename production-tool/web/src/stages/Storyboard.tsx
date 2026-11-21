@@ -15,7 +15,7 @@ import { croppedCaption } from '../canvas/core/sketch'
 import { drawFrame, drawTheRest, firstUndrawn, needsFrame } from '../jobs/frames'
 import { endCardOf } from '../rooms/timeline'
 import { planOrJoin, askedShot } from '../jobs/plan'
-import { checkDurations, MAX_SHOTS } from '../lib/shots'
+import { checkDurations, drawnCount, MAX_SHOTS } from '../lib/shots'
 import { lengthChoices } from '../script/length'
 import { useBlobUrl } from '../ui/hooks'
 import { JobSlot } from '../ui/JobSlot'
@@ -207,6 +207,9 @@ export function Storyboard() {
       const made = canvasActions.makeVideo({ storyboardId: sb.id, ...(script ? { scriptId: script.id } : {}) })
       if (!made) throw new Error('Make the video from the canvas: select this storyboard there and choose Make film.')
       videoId = (await made).videoId
+      // The film is in the document before the room opens on it: a Film node whose film is not there reopens empty.
+      await (docStore as { flush?: () => Promise<void> }).flush?.()
+      if (!docStore.get().videos[videoId]) throw new Error('The film could not be saved. Try Make clips again.')
     }
     uiStore.update((u) => {
       if (videoId) u.openNode = { ...u.openNode, video: videoId }
@@ -229,10 +232,10 @@ export function Storyboard() {
   const next = !shots.length
     ? <button className="btn primary" disabled={planning || !words.trim()} onClick={() => void attempt(plan)} title={words.trim() ? undefined : 'Write the script first'}>{planning ? 'Planning…' : 'Plan shots'}</button>
     : noFrames
-      ? <button className="btn primary" disabled={!check.ok || anyFrameRunning} onClick={drawFirst} title={hasRefs ? 'Frame 1 sets the place, the light and the style for every frame after it' : NO_PICTURES}>{anyFrameRunning ? 'Drawing…' : 'Draw frame 1'}</button>
+      ? <button className="btn primary" disabled={!check.ok || anyFrameRunning} onClick={drawFirst} title={!check.ok ? check.reason : anyFrameRunning ? 'A frame is being drawn' : hasRefs ? 'Frame 1 sets the place, the light and the style for every frame after it' : NO_PICTURES}>{anyFrameRunning ? 'Drawing…' : 'Draw frame 1'}</button>
       : !allFramed
-        ? <button className="btn primary" disabled={!check.ok || anyFrameRunning || firstUndrawn(doc, sb?.id) < 0} onClick={drawRest} title="Draw each remaining shot in turn, each one following the one before">{ui.drawingRest && anyFrameRunning ? 'Drawing the rest…' : anyFrameRunning ? 'Drawing…' : 'Draw the rest'}</button>
-        : <button className="btn primary" disabled={anyFrameRunning} onClick={() => void attempt(lock)} title="Lock the frames and make a clip of each in the Film editor">Make clips</button>
+        ? <button className="btn primary" disabled={!check.ok || anyFrameRunning || firstUndrawn(doc, sb?.id) < 0} onClick={drawRest} title={!check.ok ? check.reason : anyFrameRunning ? 'A frame is being drawn' : 'Draw each remaining shot in turn, each one following the one before'}>{ui.drawingRest && anyFrameRunning ? 'Drawing the rest…' : anyFrameRunning ? 'Drawing…' : 'Draw the rest'}</button>
+        : <button className="btn primary" disabled={anyFrameRunning} onClick={() => void attempt(lock)} title={anyFrameRunning ? 'A frame is being drawn' : 'Lock the frames and make a clip of each in the Film editor'}>Make clips</button>
   // The next step's "What the X agent will send" (features/production-new-ui.clan): what goes, the brief, no price.
   const named = refsList(doc).length
   const sending = !shots.length
@@ -261,7 +264,7 @@ export function Storyboard() {
         </>}
         right={<>
           {shots.length > 1 && <span className="hint sb-reorder">Drag ⋮⋮ to reorder, or Space and the arrows</span>}
-          {shots.length > 0 && <button className="sp-btn" disabled={shots.length >= MAX_SHOTS} onClick={() => void attempt(() => updateDoc(docStore, (d) => { addShot(d) }, 'add shot'))}>+ Add shot</button>}
+          {shots.length > 0 && <button className="sp-btn" disabled={drawnCount(shots) >= MAX_SHOTS} title={drawnCount(shots) >= MAX_SHOTS ? `A film has at most ${MAX_SHOTS} drawn shots` : undefined} onClick={() => void attempt(() => updateDoc(docStore, (d) => { addShot(d) }, 'add shot'))}>+ Add shot</button>}
         </>}
         primary={primary} />
       <div className="booth-row">
@@ -315,7 +318,7 @@ export function Storyboard() {
               mark={marks[s.id]} film={film && linked ? { videoId: linked.id, strip: stripPlace(i), handle: handleAt(i) } : undefined} />
           ))}
           {shots.length > 0 && (
-            <button className="sb-addtile" disabled={shots.length >= MAX_SHOTS} onClick={() => void attempt(() => updateDoc(docStore, (d) => { addShot(d) }, 'add shot'))}>+ Add a shot at the end</button>
+            <button className="sb-addtile" disabled={drawnCount(shots) >= MAX_SHOTS} title={drawnCount(shots) >= MAX_SHOTS ? `A film has at most ${MAX_SHOTS} drawn shots` : undefined} onClick={() => void attempt(() => updateDoc(docStore, (d) => { addShot(d) }, 'add shot'))}>+ Add a shot at the end</button>
           )}
         </div>
         </ShotSort>

@@ -264,3 +264,4 @@
 .access-card h1 { margin: 0; font: 800 22px/1.2 var(--font-ui); letter-spacing: -.02em; color: var(--ink); }
 .access-card p { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--ink-soft); }
 .access-card .btn-rect { align-self: flex-start; margin-top: 4px; text-decoration: none; }
+.make-tray-row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }

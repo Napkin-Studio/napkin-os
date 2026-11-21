@@ -11,6 +11,7 @@ import { CAMERA_MOVEMENTS, type CameraMovement, type Region, type Strength } fro
 import { updateDoc } from '../doc/store'
 import { rectToRegion } from '../lib/region'
 import { modelLabel } from '../capabilities'
+import { MakeTray } from '../ui/MakeTray'
 import { remakeWith, type RemakeDelta } from '../jobs/remake'
 import { shotNumber } from '../model/selectors'
 import { useSending } from '../ui/hooks'
@@ -243,7 +244,13 @@ export function ChangeDrawer({ data, open, variant, onClose, onMade, onApart }: 
           <label className="rm-check"><input type="checkbox" checked={future} onChange={(e) => setFuture(e.target.checked)} /> Also use this for future takes of this shot</label>
         )}
         {error && <div role="alert" className="rm-error">{error}</div>}
-        <button type="button" className="btn primary rm-wide" disabled={!ready || sending} title={why} onClick={() => void make()}>{sending ? 'Sending…' : 'Make new take'}</button>
+        <MakeTray className="btn primary rm-wide" busy={sending} busyLabel="Sending…" disabled={!ready} title={why} onYes={() => void make()} label="Make new take" yes="Make new take"
+          rows={[
+            { key: 'what', label: `A new take of ${parent.shotIds.length > 1 ? `shots ${shotNo(parent.shotIds[0])}–${shotNo(parent.shotIds.at(-1)!)}` : `shot ${shotNo(parent.shotIds[0])}`}`, detail: parent.shotIds.length > 1 ? 'made together, as the take before' : undefined },
+            ...diff.map((l, i) => ({ key: `d${i}`, label: l })),
+            { key: 'model', label: `Model: ${modelLabel(parent.provider, parent.model) ?? 'the same one'}` },
+            { key: 'count', label: '1 new take', detail: 'the take it came from stays' },
+          ]} />
       </footer>
     </section>
   )
