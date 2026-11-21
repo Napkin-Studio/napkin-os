@@ -46,7 +46,7 @@ def test_write_is_skyes_internal_job_on_the_text_quota_with_no_spend(h):
     assert draft["base_hash"] == BASE  # echoed: a draft lands after a reload, and goes stale on Keep if the text moved
     assert draft["lines"][0]["text"] == "@maya_front walks the waterline."
     assert draft["note"] == "I tightened it."
-    assert job["director"]["promptVersion"] == "skye.v6"
+    assert job["director"]["promptVersion"] == "skye.v7"
 
 
 def test_a_draft_writes_from_the_instruction_not_the_items_words(h):
@@ -145,7 +145,7 @@ def test_the_model_writer_asks_sonnet_with_skye_v3_and_the_relay_owns_target_and
     [asked] = port.asked
     # No model of her own: the port's route (writer.make hands her the director's, below).
     assert asked["purpose"] == "writer" and asked["model"] is None
-    assert asked["system"].startswith("# Skye · scripts (skye.v6)")
+    assert asked["system"].startswith("# Skye · scripts (skye.v7)")
     assert asked["payload"]["input"]["write"]["context"]["refs"] == [{"name": "maya_front", "role": "character"}]
     assert [d["target"] for d in out["writes"]] == [target]
     assert out["writes"][0]["base_hash"] == BASE
@@ -196,6 +196,22 @@ def test_v6_is_v5_plus_one_length_rule_with_the_band_and_v5_still_loads():
     assert old.system.startswith("# Skye · scripts (skye.v5)")
 
 
+def test_v7_is_v6_plus_a_shorter_version_keeps_the_spoken_lines_and_v6_still_loads():
+    """UAT round 3 (R3-F7): "Make it 10 seconds" cut the whispered line the person had just asked for. skye.v7
+    adds rule 11 (a shorter version keeps every spoken line); skye.v6 stays loadable for a rollback."""
+    root = Path(__file__).parent.parent / "prompts"
+    v6 = (root / "skye.v6.md").read_text()
+    v7 = (root / "skye.v7.md").read_text()
+    assert v7.startswith("# Skye · scripts (skye.v7)")
+    assert "11. What a shorter version keeps." in v7 and "word for word" in v7 and "11. " not in v6
+    # Nothing else of v6 changed: v7 is v6 with its title, the fit line's pointer and rule 11.
+    rule11 = v7[v7.index("\n\n11. "):v7.index("\n\nAnswer with the JSON only")]
+    assert v7.replace(rule11, "").replace("(skye.v7)", "(skye.v6)").replace(" Rule 11\n    says what stays.", "") == v6
+    old = ModelWriter(FakePort({"writes": []}), contracts_dir(), prompt_version="skye.v6")
+    assert old.system.startswith("# Skye · scripts (skye.v6)")
+    assert ModelWriter(FakePort({"writes": []}), contracts_dir()).system.startswith("# Skye · scripts (skye.v7)")
+
+
 def test_rough_seconds_is_the_bands_rule():
     # The same lines as web compose.test.ts ('a slugline is no speaker…'): 14/6 + 14/6 + 6/2.5 + 2 = 9.1.
     lines = [{"type": "action", "text": "INT. FARMHOUSE KITCHEN - DAWN"},
@@ -233,7 +249,7 @@ def test_settle_keeps_new_beats_inside_the_length():
 
 
 def test_the_prompt_file_is_versioned_and_says_no_chat():
-    for v in ("skye.v1", "skye.v2", "skye.v3", "skye.v4", "skye.v5", "skye.v6"):
+    for v in ("skye.v1", "skye.v2", "skye.v3", "skye.v4", "skye.v5", "skye.v6", "skye.v7"):
         text = (Path(__file__).parent.parent / "prompts" / f"{v}.md").read_text()
         assert "You never chat" in text and "No prices, no costs" in text
 
@@ -435,7 +451,7 @@ def test_skyes_claude_calls_are_priced_on_the_job_and_in_the_ledger(h):
 
     class Priced:
         model = "eu.anthropic.claude-sonnet-5-5"
-        prompt_version = getattr(inner, "prompt_version", "skye.v6")
+        prompt_version = getattr(inner, "prompt_version", "skye.v7")
 
         def write(self, req):
             out = dict(inner.write(req))

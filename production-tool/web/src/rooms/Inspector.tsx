@@ -18,24 +18,35 @@ const STYLES: { id: TextStyle; label: string }[] = [{ id: 'super', label: 'Lower
 const r1 = (x: number) => Math.round(x * 10) / 10
 
 /** A number field with − and + (44px each): its value in seconds, committed on blur or Enter. */
-function Seconds({ label, value, step = 0.1, min = 0, max = 600, onSet, suffix = 's' }: { label: string; value: number; step?: number; min?: number; max?: number; onSet: (v: number) => void; suffix?: string }) {
-  const shown = value.toFixed(suffix === '×' ? 2 : 1)
+function Seconds({ label, value, step = 0.1, min = 0, max = 600, onSet, suffix = 's', maxWhy }: { label: string; value: number; step?: number; min?: number; max?: number; onSet: (v: number) => void; suffix?: string; maxWhy?: (max: number) => string }) {
+  const digits = suffix === '×' ? 2 : 1
+  const shown = value.toFixed(digits)
   const [text, setText] = useState(shown)
   const [was, setWas] = useState(shown)
+  const [clamped, setClamped] = useState<string | null>(null)
   if (was !== shown) {
     setWas(shown)
     setText(shown)
   }
-  const commit = (v: number) => { const c = Math.min(max, Math.max(min, Math.round(v * 100) / 100)); if (Math.abs(c - value) > 1e-6) onSet(c) }
+  // A number past the limit is set to the limit and shown so, with why (UAT round 3, F4: Out 4.5 on a 4.0 s take
+  // stayed "4.5" in the field and played to 4.0).
+  const commit = (v: number) => {
+    const r = Math.round(v * 100) / 100
+    const c = Math.min(max, Math.max(min, r))
+    setText(c.toFixed(digits))
+    setClamped(r > max + 1e-6 && maxWhy ? maxWhy(max) : null)
+    if (Math.abs(c - value) > 1e-6) onSet(c)
+  }
   return (
     <div className="rm-num">
       <span className="rm-rowname">{label}</span>
       <button type="button" className="rm-iconbtn" aria-label={`${label}: less`} onClick={() => commit(value - step)}>−</button>
-      <input className="pt-mono" inputMode="decimal" aria-label={label} value={text} onChange={(e) => setText(e.target.value)}
-        onBlur={() => { const v = Number(text); if (Number.isFinite(v)) commit(v); else setText(value.toFixed(1)) }}
+      <input className="pt-mono" inputMode="decimal" aria-label={label} value={text} onChange={(e) => { setText(e.target.value); setClamped(null) }}
+        onBlur={() => { const v = Number(text); if (Number.isFinite(v)) commit(v); else setText(value.toFixed(digits)) }}
         onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} />
       <span className="rm-faint">{suffix}</span>
       <button type="button" className="rm-iconbtn" aria-label={`${label}: more`} onClick={() => commit(value + step)}>+</button>
+      {clamped && <span className="rm-numnote" role="status">{clamped}</span>}
     </div>
   )
 }
@@ -77,7 +88,7 @@ export function Inspector({ data, cut, picked, onPick, onChange, onFeel, onSwap,
         <fieldset className="rm-field">
           <legend className="rm-label">Window</legend>
           <Seconds label="In" value={c.inS} max={c.outS - 0.2} onSet={(x) => void editCut.trimHead(docStore, v, c, x, true)} />
-          <Seconds label="Out" value={c.outS} min={c.inS + 0.2} max={g?.durationS ?? 600} onSet={(x) => void editCut.trimTail(docStore, v, c, x, g?.durationS ?? x, true)} />
+          <Seconds label="Out" value={c.outS} min={c.inS + 0.2} max={g?.durationS ?? 600} maxWhy={(m) => `Set to ${m.toFixed(1)} s: the take ends there.`} onSet={(x) => void editCut.trimTail(docStore, v, c, x, g?.durationS ?? x, true)} />
           <p className="rm-faint">Plays {tc(c.inS)}-{tc(c.outS)} of the take · {clipLen(c).toFixed(1)} s in the cut{c.holdS ? ` · holds its last frame ${c.holdS.toFixed(1)} s` : ''}</p>
           <Seconds label="Speed" value={c.speed} step={0.05} min={MIN_SPEED} max={MAX_SPEED} suffix="×" onSet={(x) => void editCut.speed(docStore, v, c, x)} />
         </fieldset>

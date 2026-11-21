@@ -8,7 +8,7 @@
 // decision's targets come from the buses; ids in the words are for people.
 
 import type { DocJob, NamedRef, ProductionDocument, View } from '../contracts/types'
-import { framesOf, jobsList, keysList, refsList, reviewsList, shotName, shotsOf, takesOf } from '../model/selectors'
+import { framesOf, jobsList, keysList, refsList, reviewsList, shotName, shotsOf, takeVersion } from '../model/selectors'
 import type { Removal } from './remove'
 
 export interface Described {
@@ -178,7 +178,7 @@ export function describeWrite(action: string, before: ProductionDocument, after:
           const was = before.videos[v.id]?.timeline?.[itemId]?.source?.generation_id
           const shotId = item.follows?.shot_id
           if (now && now !== was && shotId) {
-            const n = takesOf(after, shotId).findIndex((t) => t.id === now) + 1
+            const n = takeVersion(after, now)
             return { action: `pick take v${n} for ${shotName(after, shotId)}`, rationale: tail(shotId, now) }
           }
         }

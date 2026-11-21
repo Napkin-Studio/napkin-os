@@ -212,7 +212,7 @@ export function RoomBooth({ slot, ...p }: RoomProps) {
             scope={<ScopeChip label={`${shotId ? `Shot ${shotNumber(doc, shotId)} · ` : ''}${boxName(box)}`} />}
             disabled={!take}
             hint={!take ? 'Make a take of this box first. Then tell the Camera agent what changes in the next one.' : undefined}
-            onSend={(words) => { if (take) onChange({ parentId: take.id, ...(shotId && take.shotIds.includes(shotId) ? { shotId } : {}), verb: 'words', words }) }} />
+            onSend={(words) => { if (take) onChange({ parentId: take.id, ...(shotId && take.shotIds.includes(shotId) ? { shotId } : {}), verb: 'ask', ask: words }) }} />
         </div>
       )}
     </Booth>

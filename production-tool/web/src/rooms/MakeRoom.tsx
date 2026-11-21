@@ -688,6 +688,8 @@ function BoxTab({ box, data, sel, facts, onModel, onMake, making, ticked, onTick
   // The model the box is made on when none is picked for it: the one marked default.
   const fallback = boxModel(doc, box, config)
   const takes = data.gens.filter((g) => inBox(g, box.key))
+  // A box's first take goes into a cut that exists (rooms/editOps placeJoinedTake; UAT round 3, R3-F4).
+  const hasCut = readCut(doc, data.videoId).v1.length > 0
   const shownTakes = all ? takes : takes.slice(0, 3)
   const over = !!facts.limit?.hard
   const guides = facts.pics.filter((p) => p.kind === 'frame')
@@ -707,7 +709,7 @@ function BoxTab({ box, data, sel, facts, onModel, onMake, making, ticked, onTick
           <button type="button" role="radio" aria-checked={!box.together} className={!box.together ? 'on' : ''} disabled={!box.together || making}
             onClick={box.together ? onSeparate : undefined}>Separate videos</button>
         </div>
-        <p className="rm-note">{boxHow(doc, box, facts.pics)}</p>
+        <p className="rm-note">{boxHow(doc, box, facts.pics, facts.frameFirst)}</p>
       </fieldset>
       {box.together && facts.pics.length > 0 && (
         <fieldset className="rm-field">
@@ -754,7 +756,9 @@ function BoxTab({ box, data, sel, facts, onModel, onMake, making, ticked, onTick
       <button type="button" className="btn primary rm-wide" disabled={making || over} onClick={onMake} title={over ? facts.limit!.why : undefined}>
         {making ? 'Making…' : takes.some((g) => g.state === 'ready') ? 'Make new take' : 'Make'}
       </button>
-      <p className="rm-note">{facts.frameFirst ? `${FRAME_FIRST} ` : ''}A new take lands on this box and in the Bin. Your cut stays as it is.</p>
+      <p className="rm-note">{facts.frameFirst ? `${FRAME_FIRST} ` : ''}{!takes.length && hasCut
+        ? 'Its first take goes into the cut at its place, said with Undo; the rest of the cut stays as it is.'
+        : 'A new take lands on this box and in the Bin. Your cut stays as it is.'}</p>
       {takes.length > 0 && (
         <fieldset className="rm-field">
           <legend className="rm-label">Takes</legend>

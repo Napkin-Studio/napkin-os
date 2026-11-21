@@ -165,7 +165,11 @@ export async function makeTake(
   const declined = deps.ui.get().declinedAdds
   for (const s of shots) {
     for (const r of await refsFor(deps.relay, d, s, opts.texts?.[s.id], { offer: true, declined: declined?.[s.id] })) {
-      if (!refs.some((x) => x.id === r.id)) refs.push(r)
+      const at = refs.findIndex((x) => x.id === r.id)
+      if (at < 0) refs.push(r)
+      // A picture one shot only offers and a later shot names is required: it went optional because shot 1 offered it
+      // first, so Dex left @maya_full out of every WAN 3 take and its padding never ran (UAT round 3, F5).
+      else if (refs[at].optional && !r.optional) refs[at] = r
     }
   }
   const { starts } = takeTiming(shots.map((s) => s.duration_s), opts.fit)

@@ -33,6 +33,10 @@ export interface MentionHooks {
 
 const MENTION = /(?<![\w@])@([a-z][a-z0-9]{1,23}(?:_[a-z0-9][a-z0-9-]{0,31})?)/g
 export const refreshMentions = new PluginKey('napkinMentionRefresh')
+/** What may follow a name with no space between: a stop, a closing bracket or quote, or a space already there. */
+const NO_SPACE_BEFORE = /^(?:\s|[.,;:!?)\]'’"”…—-])/
+/** Typed straight after a picked name's space, it takes that space's place. */
+const STOP_OR_SPACE = /^(?:\s|[.,;:!?)\]…])/
 
 /** Plain text cut at its typed @names, each marked known (in `names`: linked here) or not. */
 export function typedSpans(text: string, names: readonly string[]): { text: string; name?: string; known?: boolean }[] {
@@ -185,7 +189,11 @@ export function mentionExtensions(hooks: () => MentionHooks | undefined): AnyExt
         pluginKey: new PluginKey('napkinMentionSuggest'),
         items: ({ query }) => (hooks() ? matchMentions(hooks()!.source(), query).slice(0, 40) : []),
         command: ({ editor, range, props }: { editor: Editor; range: Range; props: MentionItem }) => {
-          editor.chain().focus().insertContentAt(range, [{ type: 'mention', attrs: { id: props.id, label: props.name } }, { type: 'text', text: ' ' }]).run()
+          // A space after the name, unless a space or a stop already follows (UAT round 3: "@maya  pours").
+          const after = editor.state.doc.resolve(range.to).nodeAfter
+          const next = after?.isText ? (after.text ?? '').slice(0, 1) : ''
+          const space = NO_SPACE_BEFORE.test(next) ? [] : [{ type: 'text', text: ' ' }]
+          editor.chain().focus().insertContentAt(range, [{ type: 'mention', attrs: { id: props.id, label: props.name } }, ...space]).run()
           hooks()?.picked?.(props)
         },
         render: () => {
@@ -230,5 +238,21 @@ export function mentionExtensions(hooks: () => MentionHooks | undefined): AnyExt
       })]
     },
   })
-  return [MentionView, Extension.create({ name: 'napkinMentionMarks', addProseMirrorPlugins: () => [underline] }), suggest]
+  // The space a picked name leaves gives way to a stop or a space typed straight after it: "@maya, in a dressing
+  // gown", never "@maya , in" (UAT round 3, R3-F9).
+  const tidy = new Plugin({
+    key: new PluginKey('napkinMentionSpace'),
+    props: {
+      handleTextInput: (view, from, to, text) => {
+        if (from !== to || !STOP_OR_SPACE.test(text) || from < 2) return false
+        const { doc } = view.state
+        if (doc.textBetween(from - 1, from) !== ' ') return false
+        const before = doc.resolve(from - 1).nodeBefore
+        if (before?.type.name !== 'mention') return false
+        view.dispatch(view.state.tr.insertText(text, from - 1, from))
+        return true
+      },
+    },
+  })
+  return [MentionView, Extension.create({ name: 'napkinMentionMarks', addProseMirrorPlugins: () => [underline, tidy] }), suggest]
 }

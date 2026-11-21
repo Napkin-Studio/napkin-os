@@ -32,6 +32,8 @@ export interface ChangeOpen {
   mark?: { inS: number; outS: number }
   /** Words for the next take (Fin's box in the Booth): the Words row opens with them. */
   words?: string
+  /** An ask for the Camera agent (Tell the Camera agent, R3-F5): the Ask row opens with it. */
+  ask?: string
 }
 
 const STRENGTHS: { id: Strength; label: string }[] = [
@@ -59,12 +61,13 @@ export function ChangeDrawer({ data, open, variant, onClose, onMade, onApart }: 
   const { controls } = useConfig()
   const parent = data.gens.find((g) => g.id === open.parentId)
   const record = doc.generations?.[open.parentId]
-  const [verb, setVerb] = useState<ChangeVerb>(open.verb ?? (open.mark ? 'moment' : 'camera'))
+  const [verb, setVerb] = useState<ChangeVerb>(open.verb ?? (open.ask ? 'ask' : open.mark ? 'moment' : 'camera'))
   const [shotId, setShotId] = useState<string | undefined>(open.shotId ?? parent?.shotIds[0])
   const shot = shotId ? doc.shots[shotId] : undefined
   const [move, setMove] = useState<CameraMovement | null>(null)
   const [words, setWords] = useState(open.words ?? shot?.action ?? '')
   const [feel, setFeel] = useState('')
+  const [ask, setAsk] = useState(open.ask ?? '')
   const [strength, setStrength] = useState<Strength>('flex')
   const [note, setNote] = useState('')
   const [mark, setMark] = useState(open.mark ?? (parent ? { inS: shotWindow(parent, shotId).inS, outS: Math.min(parent.durationS, shotWindow(parent, shotId).inS + 1) } : { inS: 0, outS: 1 }))
@@ -93,7 +96,9 @@ export function ChangeDrawer({ data, open, variant, onClose, onMade, onApart }: 
       ? (words.trim() && words.trim() !== (shot?.action ?? '').trim() ? [{ field: 'words', from: shot?.action ?? null, to: words.trim(), ...(shotId ? { shot_id: shotId } : {}) }] : [])
       : verb === 'moment'
         ? (note.trim() && win ? [{ field: 'moment', to: note.trim(), window: win.window }] : [])
-        : (feel.trim() ? [{ field: 'feel', to: feel.trim() }] : [])
+        : verb === 'ask'
+          ? (ask.trim() ? [{ field: 'ask', to: ask.trim() }] : [])
+          : (feel.trim() ? [{ field: 'feel', to: feel.trim() }] : [])
   const refs = (record?.inputs?.refs ?? []).map((r) => r.name?.split('_')[0]).filter((x): x is string => !!x)
   const seed = repeatsTake(parent.provider, parent.model)
   const keeps = keepsWords(verb, { refs, lengthS: parent.durationS, seed, ...(win ? { window: win.window } : {}) })
@@ -109,6 +114,7 @@ export function ChangeDrawer({ data, open, variant, onClose, onMade, onApart }: 
         if (r.field === 'moment') return { field: 'moment', to: { inS: win!.window.from_s, outS: win!.window.to_s, note: String(r.to), ...(region ? { region } : {}) } }
         if (r.field === 'feel') return { field: 'feel', to: { words: String(r.to), strength } }
         if (r.field === 'camera.movement') return { field: 'camera.movement', to: r.to as CameraMovement, ...(r.shot_id ? { shotId: r.shot_id } : {}) }
+        if (r.field === 'ask') return { field: 'ask', to: String(r.to) }
         return { field: 'words', to: String(r.to), ...(r.shot_id ? { shotId: r.shot_id } : {}) }
       })
       const jobId = await remakeWith(services, { videoId: data.videoId, parentId: parent.id, delta: rd, label: diffLabel(delta, shotNo) })
@@ -162,6 +168,14 @@ export function ChangeDrawer({ data, open, variant, onClose, onMade, onApart }: 
                         ))}
                       </div>
                       <p className="rm-note">Made as a new take from the same start frame and references. The camera can't be changed on a finished clip.{seed ? '' : ' Other details may change too.'}</p>
+                    </>
+                  )}
+                  {v.id === 'ask' && (
+                    <>
+                      <label className="rm-fieldlabel">What should the Camera agent do for the next take?
+                        <textarea className="rm-textarea" rows={3} maxLength={1000} value={ask} onChange={(e) => setAsk(e.target.value)} placeholder="Send both of Maya's pictures; hold the wide a beat longer" />
+                      </label>
+                      <p className="rm-note">The Camera agent reads this first and makes a new take of {together ? `shots ${parent.shotIds.map(shotNo).join(' and ')}` : 'this shot'}. The shots' own words stay as they are.</p>
                     </>
                   )}
                   {v.id === 'words' && (

@@ -219,39 +219,42 @@ def _time_for(share: float) -> float:
     return (lo + hi) / 2
 
 
-def card_graph(first: int, version: str, layout: dict, fps: int = FPS) -> tuple[list[str], list[str]]:
+def card_graph(first: int, version: str, layout: dict, fps: int = FPS, card_s: float = CARD_S) -> tuple[list[str], list[str]]:
     """(extra ffmpeg inputs, filter chains ending in [card]). Input `first` is the
-    ground; the PNGs and the two moving covers follow it in input order."""
+    ground; the PNGs and the two moving covers follow it in input order. card_s: how long the card holds; a
+    shorter card (a short cutdown, UAT round 3 R3-F12) plays its whole roll sped up by card_s / CARD_S."""
     L = layout
     w, h, m = L["w"], L["h"], L["mark"]
+    k = min(1.0, card_s / CARD_S)
+    roll_at, roll_s, fade_s, pop_s, made_at, made_s = (x * k for x in (ROLL_AT, ROLL_S, FADE_S, POP_S, MADE_AT, MADE_S))
     ground = _hex(GROUND[version])
     line_rgb = tuple(g * (1 - LINE_ALPHA) + i * LINE_ALPHA for g, i in zip(GROUND[version], INK[version]))
-    roll = ease_expr(ROLL_EASE, ROLL_AT, ROLL_S)
+    roll = ease_expr(ROLL_EASE, roll_at, roll_s)
     disc_x = f"{L['xl']:.2f}+{L['lock_w']:.2f}*(1-{roll})"
     wx, wy, ww, wh = L["word"]
     _, my, mw, mh = L["made"]
     lx, ly, lw, lt = L["line"]
 
     assets = ["mark", "word", "made", *(f"fig-{f['agent']}" for f in L["figs"])]
-    inputs = ["-f", "lavfi", "-t", f"{CARD_S:g}", "-i", f"color=c={ground}:s={w}x{h}:r={fps}"]
+    inputs = ["-f", "lavfi", "-t", f"{card_s:g}", "-i", f"color=c={ground}:s={w}x{h}:r={fps}"]
     for name in assets:
-        inputs += ["-loop", "1", "-framerate", str(fps), "-t", f"{CARD_S:g}", "-i", L["paths"][name]]
+        inputs += ["-loop", "1", "-framerate", str(fps), "-t", f"{card_s:g}", "-i", L["paths"][name]]
     cover_w = round(L["lock_w"] + m + 4)
     line_cover_w = round(lw + 4)
     # overlay snaps y to even rows on yuv420, so the cover is taller than the line and
     # starts 2 rows above it (the crew is drawn after it, so it hides nothing else).
     line_cover_h = lt + 4
-    inputs += ["-f", "lavfi", "-t", f"{CARD_S:g}", "-i", f"color=c={ground}:s={cover_w}x{wh}:r={fps}"]
-    inputs += ["-f", "lavfi", "-t", f"{CARD_S:g}", "-i", f"color=c={ground}:s={line_cover_w}x{line_cover_h}:r={fps}"]
+    inputs += ["-f", "lavfi", "-t", f"{card_s:g}", "-i", f"color=c={ground}:s={cover_w}x{wh}:r={fps}"]
+    inputs += ["-f", "lavfi", "-t", f"{card_s:g}", "-i", f"color=c={ground}:s={line_cover_w}x{line_cover_h}:r={fps}"]
     i_mark, i_word, i_made = first + 1, first + 2, first + 3
     i_figs = range(first + 4, first + 4 + len(L["figs"]))
     i_cover, i_line_cover = first + 4 + len(L["figs"]), first + 5 + len(L["figs"])
 
     angle = f"-{2 * TURNS}*PI*(1-{roll})"
     p = [f"[{i_mark}:v]scale={m}:{m}:flags=lanczos,format=rgba,rotate=a='{angle}':c=none:ow={m}:oh={m},"
-         f"fade=t=in:st={ROLL_AT:g}:d={FADE_S:g}:alpha=1[mk]",
+         f"fade=t=in:st={roll_at:g}:d={fade_s:g}:alpha=1[mk]",
          f"[{i_word}:v]scale={ww}:{wh}:flags=lanczos,format=rgba[wd]",
-         f"[{i_made}:v]scale={mw}:{mh}:flags=lanczos,format=rgba,fade=t=in:st={MADE_AT:g}:d={MADE_S:g}:alpha=1[md]"]
+         f"[{i_made}:v]scale={mw}:{mh}:flags=lanczos,format=rgba,fade=t=in:st={made_at:g}:d={made_s:g}:alpha=1[md]"]
     for j, (i, f) in enumerate(zip(i_figs, L["figs"])):
         p.append(f"[{i}:v]scale={f['w']}:{f['h']}:flags=lanczos,format=rgba[f{j}]")
     # The hairline, hidden left of the disc's wake.
@@ -261,7 +264,7 @@ def card_graph(first: int, version: str, layout: dict, fps: int = FPS) -> tuple[
     # The crew pops up out of the row; anything below the hairline is covered.
     c = 1
     for j, f in enumerate(L["figs"]):
-        pop = ease_expr(POP_EASE, f["at"], POP_S)
+        pop = ease_expr(POP_EASE, f["at"] * k, pop_s)
         y = f"{L['line_y'] - f['h']:.2f}+{1.05 * f['h']:.2f}*(1-{pop})"
         p.append(f"[c{c}][f{j}]overlay=x={round(f['x'])}:y='{y}'[c{c + 1}]")
         c += 1
@@ -274,7 +277,7 @@ def card_graph(first: int, version: str, layout: dict, fps: int = FPS) -> tuple[
     c += 1
     p.append(f"[c{c}][{i_cover}:v]overlay=x='{disc_x}+{m}-{cover_w}':y={round(wy)}[c{c + 1}]")
     c += 1
-    made_y = f"{my:.2f}+{MADE_RISE * L['s']:.2f}*(1-{ease_expr(STUDIO_EASE, MADE_AT, MADE_S)})"
+    made_y = f"{my:.2f}+{MADE_RISE * L['s']:.2f}*(1-{ease_expr(STUDIO_EASE, made_at, made_s)})"
     p.append(f"[c{c}][md]overlay=x={round(wx)}:y='{made_y}'[c{c + 1}]")
     c += 1
     p.append(f"[c{c}][mk]overlay=x='{disc_x}':y={round(L['mark_y'])},setsar=1,format=yuv420p[card]")

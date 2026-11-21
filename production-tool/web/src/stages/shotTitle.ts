@@ -16,6 +16,20 @@ export function withoutAsides(text: string): string {
     .trim()
 }
 
+// A stop that closes an abbreviation is no cut: "1 a.m. A dark kitchen" keeps "a.m." (UAT round 3: "1 a.m").
+const ABBREVIATION = /(?:\b(?:[a-z]\.)+[a-z]|\b(?:mr|mrs|ms|dr|st))$/i
+
+/** The words up to the first stop or dash between words, never inside "1:04", "3.5", "close-up" or "a.m."
+ *  (UAT 2026-11-21: "At 1:04, she tiptoes…" was titled "At 1"). */
+export function firstClause(text: string): string {
+  const cut = /[.;,:](?=\s|$)|\s[—–-]\s|—/g
+  for (let m = cut.exec(text); m; m = cut.exec(text)) {
+    if (m[0] === '.' && ABBREVIATION.test(text.slice(0, m.index))) continue
+    return text.slice(0, m.index)
+  }
+  return text
+}
+
 /** The first words of the action, with its @names and any aside in brackets left out: "@mira (30s, short
  *  silver hair…) steps off a green tram" is "Steps off a green tram", not "(30s" (live test 2026-11-16). */
 export function titleOf(s: Pick<Shot, 'action' | 'camera'>): string {
@@ -25,8 +39,6 @@ export function titleOf(s: Pick<Shot, 'action' | 'camera'>): string {
     .replace(/@\w+/g, '')
     .replace(/\s+/g, ' ')
     .trim()
-  // Cut at a stop or a dash between words, never inside "1:04", "3.5" or "close-up" (UAT 2026-11-21: "At 1:04,
-  // she tiptoes…" was titled "At 1").
-  const words = plain.split(/[.;,:](?=\s|$)|\s[—–-]\s|—/)[0].trim()
+  const words = firstClause(plain).trim()
   return words ? cap(words.length > 26 ? `${words.slice(0, 25).replace(/\s+\S*$/, '')}…` : words) : cap(cameraLabel('size', s.camera.size))
 }

@@ -1446,6 +1446,12 @@
               "required": ["line", "bg", "s"],
               "additionalProperties": false
             },
+            "studioS": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 2.5,
+              "description": "render: how long the studio card holds, its roll sped up to fit; absent: 2.5 s. A short size shortens it so the picture keeps 3.5 s (web film.ts cardLengths, relay cutdowns.py card_lengths). Added 2026-11-21 (UAT round 3, R3-F12, additive)."
+            },
             "fadeOutS": {
               "type": "number",
               "minimum": 0,
@@ -2028,7 +2034,8 @@
                       "camera.movement",
                       "words",
                       "moment",
-                      "feel"
+                      "feel",
+                      "ask"
                     ]
                   },
                   "shotId": {
@@ -2690,14 +2697,15 @@
     },
     "RemakeDelta": {
       "type": "object",
-      "description": "One change a remake makes to its parent's held request (features/make-and-edit.clan). camera.movement: to is a cameraMovement, for shotId (the shot of a box made together; a single clip's own shot when absent). words: to is the shot's new words (its action, and its line in a timed take prompt). moment: to is {inS, outS, note, region?, still?} in the parent's own time; the relay snaps inS..outS to whole seconds of at least 2 s inside the parent (time_rules.moment_window) and makes that stretch again. feel: to is {words?, strength?}, the whole clip restyled. A moment or a feel is the only change in its request; camera.movement and words may go together.",
+      "description": "One change a remake makes to its parent's held request (features/make-and-edit.clan). camera.movement: to is a cameraMovement, for shotId (the shot of a box made together; a single clip's own shot when absent). words: to is the shot's new words (its action, and its line in a timed take prompt). moment: to is {inS, outS, note, region?, still?} in the parent's own time; the relay snaps inS..outS to whole seconds of at least 2 s inside the parent (time_rules.moment_window) and makes that stretch again. feel: to is {words?, strength?}, the whole clip restyled. ask: to is the person's words to the Camera agent (Tell the Camera agent, UAT round 3 R3-F5), sent as the held request's input.text, which the director reads first; the shots' words, refs, frames, length and model stay (op clip; added 2026-11-21, additive). A moment or a feel is the only change in its request; camera.movement, words and ask may go together.",
       "properties": {
         "field": {
           "enum": [
             "camera.movement",
             "words",
             "moment",
-            "feel"
+            "feel",
+            "ask"
           ]
         },
         "shotId": {
@@ -2711,6 +2719,24 @@
       ],
       "additionalProperties": false,
       "allOf": [
+        {
+          "if": {
+            "properties": {
+              "field": {
+                "const": "ask"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "to": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              }
+            }
+          }
+        },
         {
           "if": {
             "properties": {

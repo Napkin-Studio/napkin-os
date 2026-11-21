@@ -1217,6 +1217,8 @@ export interface CutdownInput {
   endCard?: boolean
   /** render: the film's own end card, drawn by the relay at the size, before the studio card (features/pt-film-r1.clan). */
   clientCard?: { headline?: string; line: string; cta?: string; bg: string; logo?: AssetRef; s: number }
+  /** render: how long the studio card holds when a short size shortens it (its roll sped up); absent: 2.5 s. */
+  studioS?: number
   fadeOutS?: number
   layers?: TypeLayer[]
 }
@@ -1291,6 +1293,8 @@ export type RemakeDelta =
   | { field: 'words'; shotId?: Id; to: string }
   | { field: 'moment'; to: { inS: number; outS: number; note: string; region?: Region; still?: AssetRef } }
   | { field: 'feel'; to: { words?: string; strength?: Strength } }
+  /** Tell the Camera agent (UAT round 3, R3-F5): the person's words, sent as the held request's input.text. */
+  | { field: 'ask'; to: string }
 export interface RemakeWith { parentJobId: Id; parentId?: Id; delta: RemakeDelta[] }
 /** relay-api TimelinePlan: stitch in timeline mode (Render ad). */
 export interface TimelinePlan {

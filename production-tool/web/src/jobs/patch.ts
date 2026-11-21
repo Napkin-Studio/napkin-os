@@ -17,7 +17,7 @@ import type { Controls } from '../capabilities'
 import type { Generation, Job, NoteWindow, ProductionDocument, Review } from '../contracts/types'
 import { landUpdate } from '../doc/store'
 import type { DocumentStore } from '../doc/types'
-import { currentTake, cutItemFor, shotName, takesOf } from '../model/selectors'
+import { currentTake, cutItemFor, nextTakeVersion, shotName } from '../model/selectors'
 import { landingWhy } from './landing'
 
 export type FixRoute =
@@ -60,7 +60,8 @@ export function fixRoute(d: ProductionDocument, note: Review, controls: Pick<Con
 export function landPatch(store: DocumentStore, job: Job, ctx: { shotId: string; parentTakeId: string; note?: string }): Promise<ProductionDocument> {
   const d = store.get()
   if (!job.outputs?.length || !job.patch || Object.values(d.generations).some((g) => g.job_id === job.jobId)) return Promise.resolve(d)
-  const what = `take v${takesOf(d, ctx.shotId).length + 1} for ${shotName(d, ctx.shotId)}`
+  const parent = d.generations[ctx.parentTakeId]
+  const what = `take v${nextTakeVersion(d, parent ?? { shot_ids: [ctx.shotId] })} for ${shotName(d, ctx.shotId)}`
   const by = d.jobs[job.jobId]?.started_by ?? d.project.created_by
   const now = d.jobs[job.jobId]?.created_at ?? new Date().toISOString()
   return landUpdate(store, (x) => {

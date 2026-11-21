@@ -63,3 +63,30 @@ describe('a box keeps its own model (UAT 2026-11-21, F3)', () => {
     expect(boxModel(doc, single, on)).toEqual({ provider: 'runway', model: 'veo3.1' })
   })
 })
+
+describe('a box with no takes is made on its own default (UAT round 3, F3 leftover)', () => {
+  it('never the last model used on another box; a spoken line goes to a model with sound', async () => {
+    const { boxDefault } = await import('./boxModel')
+    const { doc, box } = together([2, 2])
+    const lone: Box = { ...box, key: 'b3', shotIds: [box.shotIds[0]], together: false, lengthS: 2 }
+    const first = boxModel(doc, lone, on)
+    // A WAN 3 take elsewhere is the last that worked: the box without takes does not follow it.
+    doc.jobs.j_wan = { id: 'j_wan', v: 1, field_v: {}, op: 'clip', state: 'completed', provider: 'runway', model: 'wan3', crew: 'wren', inputs: [], created_at: '2026-11-21T11:00:00Z' } as never
+    expect(boxModel(doc, lone, on)).toEqual(first)
+    // A spoken line: the first model with a sound switch that can make it.
+    doc.beats.b_line = { id: 'b_line', v: 1, field_v: {}, shot_id: lone.shotIds[0], kind: 'line', at_s: 0.5, text: 'Good boy.', speaker: 'MAYA', rank: 'a0' } as never
+    const voiced = boxModel(doc, lone, on)!
+    expect(modelEntry(voiced.provider as never, voiced.model)?.video.audioControl).toBe(true)
+    expect(boxDefault(doc, lone, on)).toEqual(voiced)
+  })
+})
+
+describe('a silence beat is no sound (UAT round 3, F22/R3-F6)', () => {
+  it('turns no sound on, and says nothing about sound', async () => {
+    const { boxSound, isSilence } = await import('./boxModel')
+    const { doc, box } = together([2])
+    doc.beats.b_s = { id: 'b_s', v: 1, field_v: {}, shot_id: box.shotIds[0], kind: 'sound', at_s: 0, text: 'Silence: the kettle boils with no noise at all.', rank: 'a0' } as never
+    expect(boxSound(doc, { shotIds: box.shotIds }, { provider: 'runway', model: 'veo3.1' })).toBeUndefined()
+    expect(isSilence({ kind: 'sound', text: 'Steady snoring through the wall.' })).toBe(false)
+  })
+})

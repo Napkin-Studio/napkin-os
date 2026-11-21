@@ -94,3 +94,22 @@ def test_a_plans_sound_beats_stay_only_where_the_script_names_the_sound():
     assert [[b["text"] for b in s["beats"]] for s in kept] == [["she enters"], ["one soft snore"], []]
     assert gone == ["night hum", "faint hush"]
     assert sound.keep_asked_sounds(shots, "") == (shots, [])
+
+
+def test_a_silence_beat_is_not_a_sound():
+    """UAT round 3, F22/R3-F6: "Silence: the kettle boils with no noise at all" turned sound on (Veo with sound)."""
+    script = "The kettle glows blue and boils without a sound. Through the thin wall, the snoring carries on."
+    shots = [
+        {"id": "s3", "beats": [{"kind": "sound", "at_s": 0, "text": "Silence: the kettle boils with no noise at all."}]},
+        {"id": "s5", "beats": [{"kind": "sound", "at_s": 0, "text": "Steady snoring through the wall."}]},
+    ]
+    kept, gone = sound.keep_asked_sounds(shots, script)
+    assert kept[0]["beats"] == [] and kept[1]["beats"] == shots[1]["beats"]
+    assert gone == ["Silence: the kettle boils with no noise at all."]
+    assert not sound.wants_sound({"shot": shots[0]})
+    assert sound.wants_sound({"shot": shots[1]})
+    for words in ("No sound at all", "The room is silent", "a soundless boil", "without any noise"):
+        assert sound.is_silence({"kind": "sound", "text": words}), words
+    assert not sound.is_silence({"kind": "sound", "text": "A soft click as the switch flips"})
+    nothing, dropped = sound.keep_asked_sounds(shots, "")
+    assert nothing[0]["beats"] == [] and dropped == ["Silence: the kettle boils with no noise at all."]

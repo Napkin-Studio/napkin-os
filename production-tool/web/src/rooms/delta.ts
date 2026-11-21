@@ -6,8 +6,10 @@ import { CAMERA_WORDS } from '../contracts/load'
 import type { CameraWordField } from '../contracts/types'
 
 /** The Change drawer's verbs, in the order the drawer lists them (P1 builds the first four). */
-export type ChangeVerb = 'camera' | 'words' | 'moment' | 'feel'
+export type ChangeVerb = 'ask' | 'camera' | 'words' | 'moment' | 'feel'
 export const VERBS: { id: ChangeVerb; label: string; hint: string }[] = [
+  // Tell the Camera agent (the Booth's box, UAT round 3 R3-F5): words to the agent, never over the shot's own words.
+  { id: 'ask', label: 'Ask the Camera agent', hint: 'Pictures, framing, pace: in your words' },
   { id: 'camera', label: 'Camera', hint: 'Size, angle and movement of one shot' },
   { id: 'words', label: 'Words', hint: 'What happens in one shot' },
   { id: 'moment', label: 'A moment', hint: 'Change part of the picture for a second or two' },
@@ -69,6 +71,7 @@ export function changeLabel(delta: DeltaRow[] | undefined, shotNo: (id: string) 
     if (row.field === 'words') return `Words: ${shortWords(String(row.to ?? ''), 24)}${where}`
     if (row.field === 'moment') return `${sentence(shortWords(String(row.to ?? ''), 22))}${row.window ? ` ${clock(row.window.from_s)}-${clock(row.window.to_s)}` : ''}`
     if (row.field === 'feel') return `Feel: ${shortWords(String(row.to ?? ''), 24)}`
+    if (row.field === 'ask') return `Asked: ${shortWords(String(row.to ?? ''), 24)}`
     return sentence(shortWords(String(row.to ?? '')))
   }
   return delta.length === 1 ? one(delta[0]) : `${one(delta[0])} and ${delta.length - 1} more`
@@ -83,6 +86,7 @@ export function diffLines(delta: DeltaRow[], shotNo: (id: string) => number): st
     if (row.field === 'words') return `${who}words: ${row.from ? `“${shortWords(String(row.from), 40)}” → ` : ''}“${shortWords(String(row.to ?? ''), 60)}”`
     if (row.field === 'moment') return `${sentence(shortWords(String(row.to ?? ''), 40))}${row.window ? ` ${clock(row.window.from_s)}-${clock(row.window.to_s)}` : ''}`
     if (row.field === 'feel') return `The whole feel: ${shortWords(String(row.to ?? ''), 60)}`
+    if (row.field === 'ask') return `Asked of the Camera agent: “${shortWords(String(row.to ?? ''), 60)}”. Every shot's words stay.`
     return sentence(String(row.to ?? ''))
   })
 }
@@ -93,7 +97,7 @@ export function keepsWords(verb: ChangeVerb, o: { refs: string[]; lengthS: numbe
   const len = `Length ${Math.round(o.lengthS * 10) / 10} s`
   if (verb === 'moment') return ['Everything outside', o.window ? `${clock(o.window.from_s)}-${clock(o.window.to_s)}` : 'the window', '·', 'Sound', '·', len].join(' ')
   if (verb === 'feel') return `The motion and timing · ${len}`
-  const parts = ['Start frame', refs, ...(verb === 'words' ? [] : ['Words']), len, ...(o.seed ? ['Seed'] : [])]
+  const parts = ['Start frame', refs, ...(verb === 'words' ? [] : ['Words']), len, ...(o.seed && verb !== 'ask' ? ['Seed'] : [])]
   return parts.join(' · ')
 }
 
