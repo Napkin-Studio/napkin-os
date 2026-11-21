@@ -31,3 +31,30 @@ describe('no prices in the UI', () => {
     expect(found).toEqual([])
   })
 })
+
+// UAT round 4 S2-4: the Resize confirm still said "What each costs is in History", and trays said "Crop · free",
+// "(paid)", "(cost in Decisions)". Outside the Decisions panel no tray, confirm or sheet speaks of cost at all.
+const COST_WORDS = [
+  /\bcosts? (?:is |are )?(?:in|shown in) (?:History|Decisions)/i,
+  /\(cost in /i,
+  /· (?:free|paid)\b/,
+  /\((?:free|paid)\)(?! [\w{(])/,
+  /: 'free'\}/,
+  /\bFree, /,
+  /\bnothing (?:was |has been )?paid\b/i,
+  /' · paid'/,
+]
+const COST_ALLOWED = new Set(['ui/historyItems.ts', 'ui/History.tsx', 'ui/HistoryList.tsx', 'noPrices.test.ts'])
+
+describe('no cost words outside Decisions', () => {
+  it('no tray, confirm or sheet mentions cost, free or paid', () => {
+    const found = files(SRC)
+      .map((p) => relative(SRC, p).split('\\').join('/'))
+      .filter((rel) => !COST_ALLOWED.has(rel))
+      .flatMap((rel) => readFileSync(join(SRC, rel), 'utf8').split('\n')
+        .map((line, i) => ({ rel, line, n: i + 1 }))
+        .filter(({ line }) => !/^(\/\/|\/\*|\*)/.test(line.trim()) && COST_WORDS.some((re) => re.test(line))))
+      .map(({ rel, n, line }) => `${rel}:${n}: ${line.trim()}`)
+    expect(found).toEqual([])
+  })
+})

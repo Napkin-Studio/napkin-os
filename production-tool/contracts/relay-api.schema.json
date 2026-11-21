@@ -1547,6 +1547,16 @@
           "minimum": 0,
           "description": "Our fair-share queue position, or the provider's when it reports one."
         },
+        "progress": {
+          "type": "object",
+          "description": "A job that runs in several provider calls (a stepped extend, features/pt-canvas-r4.clan): the call it is on, of how many. Added 2026-11-21 (additive).",
+          "properties": {
+            "step": { "type": "integer", "minimum": 1 },
+            "steps": { "type": "integer", "minimum": 1 }
+          },
+          "required": ["step", "steps"],
+          "additionalProperties": false
+        },
         "nextPollS": {
           "type": "integer",
           "minimum": 1

@@ -27,3 +27,8 @@ export function failedActions(err: Pick<ContractError, 'code'> | undefined): Fai
   }
   return { otherModel: true, report: true }
 }
+
+/** A job made in several provider calls (a stepped extend, pt-canvas-r4): " · step 2 of 3"; nothing for one call. */
+export function stepWords(p: { step: number; steps: number } | undefined): string {
+  return p && p.steps > 1 ? ` · step ${Math.min(p.step, p.steps)} of ${p.steps}` : ''
+}

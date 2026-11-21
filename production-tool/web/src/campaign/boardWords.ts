@@ -29,5 +29,5 @@ export function countLine(total: number, c: BoardCounts): string {
 /** The Make all sizes sheet's foot (QA 2026-11-17: "11 of 17 can be made now" after unticking 6 that could). */
 export function sheetLine(on: number, unticked: number, unavailable: number, paid: number): string {
   return [`${n(on, 'size')} to make`, unticked ? `${unticked} left out` : '', unavailable ? `${unavailable} cannot be made now` : '',
-    paid ? `${paid} on a model (cost in Decisions)` : ''].filter(Boolean).join(' · ')
+    paid ? `${paid} on a model` : ''].filter(Boolean).join(' · ')
 }

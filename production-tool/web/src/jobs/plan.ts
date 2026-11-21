@@ -30,6 +30,7 @@ import type { FrameDeps } from './frames'
 import { SCRIPT_MAX } from './frames'
 import { landingWhy } from './landing'
 import { allNamed, jobShot } from './select'
+import { castFor } from './briefBrand'
 import { checkFronts } from '../lib/names'
 export { checkFronts }
 import { isActive } from './runner'
@@ -49,7 +50,8 @@ export async function planInput(relay: Relay, d: ProductionDocument, text?: stri
   const words = (script ? scriptText(d, script.id) : '').slice(0, SCRIPT_MAX)
   // A bare @key with no front stops here, before anything is uploaded or sent.
   checkFronts(d, stored, `${words}\n${text ?? ''}`)
-  const refs = await allNamed(relay, d)
+  // A brief's storyboard casts only what is linked into it or named (UAT round 4 S2-6: @ruby and @mia from other tests).
+  const refs = await allNamed(relay, d, castFor(d, sb.id, `${words}\n${text ?? ''}`))
   const shots = shotsOf(d, sb.id)
   return {
     script: words,

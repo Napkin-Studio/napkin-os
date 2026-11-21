@@ -186,7 +186,7 @@ def sunset(w=1536, h=864):
 @pytest.mark.parametrize("master, aspect, steps", [
     ((1536, 864), (21, 9), 1),   # 16:9 to 21:9 grows 1.31x: one step
     ((1536, 864), (32, 9), 3),   # 3.56:1 grows 2x: steps of at most 35 %
-    ((1536, 864), (9, 16), 3),   # 3.16x: capped at EXTEND_STEPS_MAX
+    ((1536, 864), (9, 16), 3),   # 3.16x: capped at EXTEND_STEPS_MAX (and refused: test_canvas_r4)
     ((1024, 1024), (4, 5), 1),
     ((1024, 1024), (1, 1), 1),
 ])

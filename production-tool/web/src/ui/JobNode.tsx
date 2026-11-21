@@ -22,7 +22,7 @@ import { InlineConfirm } from './Undo'
 import { fmtElapsed, useElapsed } from './hooks'
 import { Thumbs } from '../dogfood/Dogfood'
 import { errorShown, feedback } from '../dogfood/recorder'
-import { failedActions } from './jobActions'
+import { failedActions, stepWords } from './jobActions'
 import { plainJobError } from '../jobs/errorWords'
 
 const STATE_LABEL: Record<string, string> = {
@@ -144,6 +144,7 @@ export function JobNode({ jobId, compact: small = false, row = false, onRetried,
   }
 
   const q = live?.queuePosition
+  const step = stepWords(live?.progress)
   const model = job.model ? modelLabel(job.provider, job.model) : undefined
   const cancel = state !== 'fetching' && (confirming
     ? <InlineConfirm text={cancelText(job, config)} yes="Stop it" onYes={() => { setConfirming(false); void runner.cancel(jobId) }} onNo={() => setConfirming(false)} />
@@ -151,7 +152,7 @@ export function JobNode({ jobId, compact: small = false, row = false, onRetried,
   if (row) {
     return (
       <span className="jobrow" aria-live="polite" title={who.line}>
-        <span className="meta">{STATE_LABEL[state] ?? 'Working…'}{q ? ` · #${q} in queue` : ''} · {fmtElapsed(elapsed)}</span>
+        <span className="meta">{STATE_LABEL[state] ?? 'Working…'}{step}{q ? ` · #${q} in queue` : ''} · {fmtElapsed(elapsed)}</span>
         {cancel}
       </span>
     )
@@ -164,7 +165,7 @@ export function JobNode({ jobId, compact: small = false, row = false, onRetried,
       <AgentFigure agent={who.agent} state={who.state} size={compact ? 72 : 96} decorative />
       {!compact && <div className="state" title={ctx?.fallbackReason}>{who.line}</div>}
       <div className="meta" title={compact ? who.line : undefined}>
-        {STATE_LABEL[state] ?? 'Working…'}{model && !compact ? ` · ${model}` : ''}{q ? ` · #${q} in queue` : ''} · {fmtElapsed(elapsed)}
+        {STATE_LABEL[state] ?? 'Working…'}{step}{model && !compact ? ` · ${model}` : ''}{q ? ` · #${q} in queue` : ''} · {fmtElapsed(elapsed)}
       </div>
       {!compact && live?.note && <div className="meta" role="status">{live.note}</div>}
       {/* Downloading the result: it lands as it is, so there is nothing to cancel. */}

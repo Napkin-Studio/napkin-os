@@ -117,24 +117,43 @@ GRAIN_MIN, GRAIN_MAX = 4.0, 36.0
 
 # Stepped outpainting (UAT round 3, IMG-9 third round: one Ideogram fill of a 21:9 band left a hard vertical seam with
 # the seed's speckle unpainted along it). An extend grows the picture in steps, each at most STEP_GROWTH of the side it
-# pads, at most EXTEND_STEPS_MAX steps; each step's bands are seeded with the real pixels beside them (mirrored, then
-# softened: STEP_SEED_BLUR of the band, at least STEP_SEED_BLUR_MIN px), never with grain, and its result is laid back
-# on a ramp over the picture it grew from before the next step reads it.
+# pads, at most EXTEND_STEPS_MAX steps; its result is laid back on a ramp over the picture it grew from before the next
+# step reads it. Round 4 (S1-1: 9:16 in three steps stacked four suns and ghost legs): the bands were seeded with a
+# lightly blurred mirror of the picture, the model kept the mirrored shapes, and every later step mirrored the band
+# it had just painted again. The bands are now seeded with a flat colour field taken from the edge strip alone
+# (_field: no shape from the picture can reach the band), and an extend that needs more than EXTEND_STEPS_MAX steps
+# is not an extend at all: the web offers Redraw at that shape, and the relay refuses it (extend_fits).
 STEP_GROWTH = 0.35
 EXTEND_STEPS_MAX = 3
-STEP_SEED_BLUR = 0.04
-STEP_SEED_BLUR_MIN = 3
+# The field: the edge strip (FIELD_STRIP px deep) averaged to one line, blurred along the edge by FIELD_BLUR of its
+# length beside the edge and by FIELD_FAR of it away from the edge, the one fading into the other over FIELD_FADE
+# of the band.
+FIELD_STRIP = 16
+FIELD_BLUR = 0.08
+FIELD_FAR = 0.3
+FIELD_FADE = 0.6
 
 
-def step_count(mw: int, mh: int, aw: int, ah: int) -> int:
-    """How many Ideogram calls an extend of a mw x mh master to aw:ah takes (1 to EXTEND_STEPS_MAX): the growth along
-    the padded side, in steps of at most STEP_GROWTH. The same from any plate size (only the shapes count)."""
+def steps_needed(mw: int, mh: int, aw: int, ah: int) -> int:
+    """How many steps of at most STEP_GROWTH an extend of a mw x mh master to aw:ah needs, uncapped (1 for none)."""
     if mw <= 0 or mh <= 0 or aw <= 0 or ah <= 0:
         return 1
     grow = max((mh * aw) / (mw * ah), (mw * ah) / (mh * aw))
     if grow <= 1.0001:
         return 1
-    return max(1, min(EXTEND_STEPS_MAX, math.ceil(math.log(grow) / math.log(1 + STEP_GROWTH) - 1e-9)))
+    return max(1, math.ceil(math.log(grow) / math.log(1 + STEP_GROWTH) - 1e-9))
+
+
+def extend_fits(mw: int, mh: int, aw: int, ah: int) -> bool:
+    """Whether an extend reaches aw:ah in at most EXTEND_STEPS_MAX steps of STEP_GROWTH (16:9 to 21:9, 1:1 or 4:5 do;
+    16:9 to 9:16 does not: redraw it instead)."""
+    return steps_needed(mw, mh, aw, ah) <= EXTEND_STEPS_MAX
+
+
+def step_count(mw: int, mh: int, aw: int, ah: int) -> int:
+    """How many Ideogram calls an extend of a mw x mh master to aw:ah takes (1 to EXTEND_STEPS_MAX): the growth along
+    the padded side, in steps of at most STEP_GROWTH. The same from any plate size (only the shapes count)."""
+    return min(EXTEND_STEPS_MAX, steps_needed(mw, mh, aw, ah))
 
 
 def step_plans(plan: dict, steps: int | None = None) -> list[dict]:
@@ -172,47 +191,74 @@ def step_plans(plan: dict, steps: int | None = None) -> list[dict]:
     return out
 
 
-def _mirrored(base, cw: int, ch: int, x: int, y: int):
-    """The canvas with `base` at (x, y) and each band filled with the real pixels beside it, mirrored outwards (rows
-    first, then columns over the whole width), each band softened alone so it reads as a continuation, never a copy."""
-    from PIL import Image, ImageFilter, ImageOps
+def _line(img, box, along_x: bool):
+    """The strip at `box` averaged across its depth to one line (1 px high when it runs along x, else 1 px wide)."""
+    from PIL import Image
+    strip = img.crop(box)
+    return strip.resize((strip.width, 1) if along_x else (1, strip.height), Image.BOX)
+
+
+def _soft(line, along_x: bool, r: float):
+    """One edge line blurred along its length by radius r, its ends held (the line's end colours padded on first)."""
+    from PIL import ImageFilter, ImageOps
+    n = line.width if along_x else line.height
+    pad = int(r * 3) + 1
+    if along_x:
+        big = ImageOps.expand(line, border=(pad, 0, pad, 0))
+        big.paste(line.crop((0, 0, 1, 1)).resize((pad, 1)), (0, 0))
+        big.paste(line.crop((n - 1, 0, n, 1)).resize((pad, 1)), (pad + n, 0))
+        return big.resize((big.width, 9)).filter(ImageFilter.GaussianBlur(r)).crop((pad, 4, pad + n, 5))
+    big = ImageOps.expand(line, border=(0, pad, 0, pad))
+    big.paste(line.crop((0, 0, 1, 1)).resize((1, pad)), (0, 0))
+    big.paste(line.crop((0, n - 1, 1, n)).resize((1, pad)), (0, pad + n))
+    return big.resize((9, big.height)).filter(ImageFilter.GaussianBlur(r)).crop((4, pad, 5, pad + n))
+
+
+def _band(line, size: tuple[int, int], along_x: bool, edge_first: bool):
+    """A band of `size` from one edge line: beside the edge, the line blurred along it (FIELD_BLUR of its length: the
+    light and the horizon's colours, no shape); away from it, the line blurred far more (FIELD_FAR: only the broad
+    gradient, sky to ground), over FIELD_FADE of the band. Drawn straight across the band, so nothing repeats."""
+    from PIL import Image
+    n = line.width if along_x else line.height
+    near = _soft(line, along_x, max(2.0, n * FIELD_BLUR))
+    far = _soft(line, along_x, max(4.0, n * FIELD_FAR))
+    depth = size[1] if along_x else size[0]
+    fade = max(1, int(round(depth * FIELD_FADE)))
+    ramp = [min(255, int(255 * i / fade)) for i in range(depth)]  # 0 at the edge (near), 255 from FIELD_FADE on (far)
+    if not edge_first:
+        ramp = ramp[::-1]
+    mask = Image.new("L", (1, depth) if along_x else (depth, 1))
+    mask.putdata(ramp)
+    return Image.composite(far.resize(size, Image.BILINEAR), near.resize(size, Image.BILINEAR), mask.resize(size))
+
+
+def _field(base, cw: int, ch: int, x: int, y: int):
+    """The canvas with `base` at (x, y) and each band a flat colour field from the edge beside it (_band): the left and
+    right bands first, from the base's side strips; then the top and bottom over the whole width, from that row's
+    strips. Nothing of the picture but its edge colours reaches a band, so the model has no shape to keep, and a
+    later step never copies the band an earlier one painted (round 4, S1-1)."""
+    from PIL import Image
     w, h = base.size
-
-    def soft(band):
-        r = max(STEP_SEED_BLUR_MIN, int(round(min(band.size) * STEP_SEED_BLUR)))
-        return band.filter(ImageFilter.GaussianBlur(r))
-
-    def strip(img, box, size, flip):
-        piece = flip(img.crop(box))
-        if piece.size != size:
-            piece = piece.resize(size, Image.BILINEAR)
-        return soft(piece)
-
+    kx, ky = max(1, min(FIELD_STRIP, w)), max(1, min(FIELD_STRIP, h))
     row = Image.new("RGB", (cw, h))
     row.paste(base, (x, 0))
     if x > 0:
-        k = min(x, w)
-        row.paste(strip(base, (0, 0, k, h), (x, h), ImageOps.mirror), (0, 0))
+        row.paste(_band(_line(base, (0, 0, kx, h), False), (x, h), False, edge_first=False), (0, 0))
     if x + w < cw:
-        r = cw - x - w
-        k = min(r, w)
-        row.paste(strip(base, (w - k, 0, w, h), (r, h), ImageOps.mirror), (x + w, 0))
+        row.paste(_band(_line(base, (w - kx, 0, w, h), False), (cw - x - w, h), False, edge_first=True), (x + w, 0))
     out = Image.new("RGB", (cw, ch))
     out.paste(row, (0, y))
     if y > 0:
-        k = min(y, h)
-        out.paste(strip(row, (0, 0, cw, k), (cw, y), ImageOps.flip), (0, 0))
+        out.paste(_band(_line(row, (0, 0, cw, ky), True), (cw, y), True, edge_first=False), (0, 0))
     if y + h < ch:
-        b = ch - y - h
-        k = min(b, h)
-        out.paste(strip(row, (0, h - k, cw, h), (cw, b), ImageOps.flip), (0, y + h))
+        out.paste(_band(_line(row, (0, h - ky, cw, h), True), (cw, ch - y - h), True, edge_first=True), (0, y + h))
     return out
 
 
 def padded_step(data: bytes, plan: dict) -> tuple[bytes, bytes]:
     """One step's canvas (JPEG) and mask (PNG, white = change): the step's input at plan['at'] (resized to it when it
-    is the master), its bands seeded with the real pixels beside them (_mirrored), and the mask white over the bands
-    and overlap_px over the input's padded edges. No grain (round 3: its speckle stayed in the sky)."""
+    is the master), its bands seeded with a flat colour field from its edges (_field), and the mask white over the
+    bands and overlap_px over the input's padded edges. No grain (round 3: its speckle stayed in the sky)."""
     from PIL import Image
     img = Image.open(io.BytesIO(data))
     img.load()
@@ -220,7 +266,7 @@ def padded_step(data: bytes, plan: dict) -> tuple[bytes, bytes]:
     cw, ch = plan["canvas"]["w"], plan["canvas"]["h"]
     at = plan["at"]
     base = rgb.resize((at["w"], at["h"]), Image.LANCZOS) if rgb.size != (at["w"], at["h"]) else rgb
-    seed = _mirrored(base, cw, ch, at["x"], at["y"])
+    seed = _field(base, cw, ch, at["x"], at["y"])
     mask = Image.new("L", (cw, ch), 255)
     o = overlap_px(plan)
     x0 = at["x"] + (o if at["x"] > 0 else 0)

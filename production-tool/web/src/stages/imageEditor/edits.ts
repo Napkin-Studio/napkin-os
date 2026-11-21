@@ -292,6 +292,13 @@ export function upscaleWhyNot(w: number, h: number, scale: 2 | 4): string | unde
   return `Already full size: the upscaler reads at most ${UPSCALE_READS_PX} px a side, so ${scale}× gives ${long} px, as it is now.${other}`
 }
 
+/** Why Upscale is not offered while an upscale is already in the edits, not applied yet (UAT round 4, R3-4: the editor
+ *  offered 2x again on top of a pending upscale), or undefined. A hidden or failed one does not count. */
+export function pendingUpscale(s: EditSession, failed: (e: Edit) => boolean = () => false): string | undefined {
+  const up = s.edits.find((e) => e.kind === 'upscale' && !s.hidden.includes(e.id) && !failed(e))
+  return up ? 'An upscale is already in your edits: Apply it first (or undo it), then upscale the new version.' : undefined
+}
+
 /** A result that came back the same as the picture sent, said plainly (UAT round 3 R3-3). */
 export function sameLine(e: Edit): string {
   if (e.kind === 'fill') return e.remove ? 'The removal came back unchanged.' : 'The fill came back unchanged.'

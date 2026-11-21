@@ -69,7 +69,7 @@
 .zoom-pill button:disabled { color: var(--ink3); cursor: default; }
 .zoom-pill .zp-value { width: auto; font: 600 12px var(--font-ui); }
 .zoom-pill .zp-sep { width: 1px; height: 18px; background: var(--line-soft); }
-.zoom-pill .undonote { bottom: calc(100% + 8px); top: auto; }
+.zoom-pill .undonote { bottom: calc(100% + 8px); top: auto; left: 0; right: auto; } /* the pill sits at the left edge: the note opens rightwards, never off-screen (UAT round 4 S3-3) */
 
 /* ── The selection bar (ui-behaviour 3.9; mock CanvasLinking) ────────────── */
 .canvas-wrap .toolbar { padding: 6px; border-radius: var(--r-pill); background: rgba(255, 255, 255, 0.96); border: 1px solid var(--line-soft); box-shadow: var(--shadow-pop); }

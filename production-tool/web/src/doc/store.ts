@@ -7,6 +7,7 @@ import type { ProductionDocument } from '../contracts/types'
 import { idbGet, idbPut } from '../lib/idb'
 import { newId } from '../lib/ulid'
 import { describeWrite } from './describe'
+import { noteDocStep } from '../ui/undoOrder'
 import type { Doc, DocumentStore, WriteWhy } from './types'
 
 export type { DocumentStore } from './types'
@@ -162,6 +163,7 @@ function write(store: DocumentStore, fn: (draft: Doc) => void, action: string, r
   const draft = structuredClone(before)
   fn(draft)
   if (JSON.stringify(draft) === JSON.stringify(before)) return Promise.resolve(before)
+  if (!system) noteDocStep() // a person's step: Ctrl+Z outside the canvas takes it before an older stroke
   const said = describeWrite(action, before, draft)
   // A job asked for cites the named refs it sends, so "why does @maya look like this" finds it.
   const docId = action.startsWith('submit ') ? store.documentId?.() : undefined

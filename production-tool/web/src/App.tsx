@@ -37,15 +37,17 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
   const script = route.kind === 'script' && route.projectId === project.id ? route.scriptId : null
   const [panel, setPanel] = useState<'history' | 'assets' | null>(null)
   const [assetsTab, setAssetsTab] = useState<AssetsTab | null>(null)
+  const [assetsAsk, setAssetsAsk] = useState(0)
   // A canvas picture open in the Image editor: the editor's bar is the page's only bar, as for the other editors.
   const [pictureEditor, setPictureEditor] = useState(false)
   const panels = useMemo(() => ({
     history: panel === 'history',
     assets: panel === 'assets',
     assetsTab,
+    assetsAsk,
     toggle: (p: 'history' | 'assets') => { setAssetsTab(null); setPanel((now) => (now === p ? null : p)) },
-    openAssets: (tab: AssetsTab) => { setAssetsTab(tab); setPanel('assets') },
-  }), [panel, assetsTab])
+    openAssets: (tab: AssetsTab) => { setAssetsTab(tab); setAssetsAsk((n) => n + 1); setPanel('assets') },
+  }), [panel, assetsTab, assetsAsk])
   const phone = useMedia(PHONE)
   const [trouble, setTrouble] = useState<string | null>(null)
   useEffect(() => clan?.onTrouble((m) => setTrouble(m)), [clan])
