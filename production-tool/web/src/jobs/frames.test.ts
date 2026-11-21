@@ -9,7 +9,7 @@ import { MockRelay, mockShotList, type MockRenderer } from '../relay/mock'
 import { addKey, addRef, addScene, addShots, snapshotDoc } from '../test/jobFixtures'
 import { makeAjv, SCHEMA } from '../test/schemas'
 import { keepCharacter, keptFromFirst, suggestKey } from './cast'
-import { continueDrawing, drawFrame, drawTheRest, selectedFrame, selectFrame, type FrameDeps } from './frames'
+import { continueDrawing, drawFrame, drawTheRest, PARALLEL_FRAMES, selectedFrame, selectFrame, type FrameDeps } from './frames'
 import { JobRunner } from './runner'
 import { frameDrift, frameStale } from './stale'
 import { wireJobs } from './wire'
@@ -72,7 +72,9 @@ describe('sequential storyboard frames', () => {
     expect(in1.previousFrame).toBeUndefined()
     expect(in1.refs?.map((r) => [r.name, r.asset.sha256])).toEqual([['hero_front', s.front]])
     expect(in1.shot?.refs).toEqual(['hero'])
-    expect(in1.script).toContain('yellow umbrella')
+    // Its own beat only (UAT round 3 R3-12): no whole script on a frame whose shot has words.
+    expect(in1.script).toBeUndefined()
+    expect(in1.shot?.action).toBeTruthy()
     expect(in1.ratio).toBe('16:9')
     await s.land()
     const f1 = s.frameOf(0)
@@ -84,6 +86,9 @@ describe('sequential storyboard frames', () => {
     expect(in2.previousFrame?.sha256).toBe(f1.asset)
     expect(in2.refs?.[0].asset.sha256).toBe(s.front)
     expect(in2.shot?.id).toBe(s.shotId(1))
+    // A later frame reads shot 1's beat as @anchor's place, and not the rest of the script.
+    expect(in2.script?.startsWith('Shot 1 (@anchor): ')).toBe(true)
+    expect(in2.script).not.toContain(shotsOf(s.doc.get())[2].action!)
     await s.land()
     const f2 = s.frameOf(1)
 
@@ -140,6 +145,30 @@ describe('sequential storyboard frames', () => {
     expect(s.running()).toHaveLength(0)
     expect(s.ui.get().drawingRest).toBe(false)
     expect(s.requests().filter((r) => r.ctx.for === 'frame')).toHaveLength(4)
+  })
+
+  it('once frame 1’s person is kept, Draw the rest draws two at a time, each with its character (UAT round 3, UX 10)', async () => {
+    const s = await setup(5)
+    await drawFrame(s.deps, 0, 'first')
+    await s.land()
+    await keepCharacter(s.doc, s.frameOf(0).asset, 'mia')
+    expect(keptFromFirst(s.doc.get(), undefined)).toBeTruthy()
+    await drawTheRest(s.deps)
+    await vi.waitFor(() => expect(s.running().length).toBe(PARALLEL_FRAMES), { timeout: 2000, interval: 5 })
+    const first = s.running()
+    expect(first.map((r) => r.ctx.for === 'frame' && r.ctx.shotId)).toEqual([s.shotId(1), s.shotId(2)])
+    for (const r of first) {
+      const input = s.inputOf(r.id)
+      expect(input.anchorFrame?.sha256).toBe(s.frameOf(0).asset)
+      expect(input.refs?.some((x) => x.role === 'character')).toBe(true) // the shot's own @hero, else the kept person (cast.ts)
+    }
+    // Shot 3 has no frame before it yet: it goes with its anchor only, never waiting on shot 2.
+    expect(s.inputOf(first[1].id).previousFrame).toBeUndefined()
+    await s.land()
+    await vi.waitFor(() => expect(s.running().length).toBe(2), { timeout: 2000, interval: 5 })
+    await s.land()
+    await vi.waitFor(() => expect(s.ui.get().drawingRest).toBe(false), { timeout: 2000, interval: 5 })
+    expect(shotsOf(s.doc.get()).every((x) => selectedFrame(s.doc.get(), x.id))).toBe(true)
   })
 
   it('Draw the rest picks up after a reload from what is drawn', async () => {
