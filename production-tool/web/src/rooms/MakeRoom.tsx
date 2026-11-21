@@ -7,6 +7,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { MakeTray, type TrayRow } from '../ui/MakeTray'
 import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/context'
 import { clipRefCapacity, controlsFor, modelChoicesFor } from '../capabilities'
 import { CAMERA_ANGLES, CAMERA_MOVEMENTS, type Camera, type CameraMovement, type ModelChoice, type Shot } from '../contracts/types'
@@ -317,6 +318,21 @@ function frameFirst(doc: ReturnType<typeof useDoc>, b: Box): boolean {
   return !selectedFrame(doc, b.shotIds[0]) && !startPicture(doc, b.shotIds[0]) && shotHasCharacter(doc, shot)
 }
 
+/** What the tray says before Make on a box: what, which model, how many, and the frame-first chain (no prices). */
+function makeTrayRows(doc: ReturnType<typeof useDoc>, b: Box, model: ModelChoice | undefined, first: boolean, has: boolean): TrayRow[] {
+  const n = b.shotIds.length
+  const len = Math.round(b.lengthS * 10) / 10
+  const label = model ? entryOf(model)?.label : undefined
+  const rows: TrayRow[] = [
+    { key: 'what', label: `${boxName(b)}: ${n} ${n === 1 ? 'shot' : 'shots'}`, detail: n > 1 ? `made as one video, ${len} s` : `${len} s` },
+    { key: 'model', label: `Model: ${label ?? 'the one the box shows'}` },
+    { key: 'count', label: has ? '1 new take' : '1 take', ...(has ? { detail: 'your other takes stay' } : {}) },
+  ]
+  if (first) rows.push({ key: 'chain', label: 'The frame first, then the clip from it', detail: 'a clip can only show @names through a frame' })
+  else if (fromWords(doc, b)) rows.push({ key: 'words', label: 'Made from the shot’s words' })
+  return rows
+}
+
 type BoxFacts = { pics: ReturnType<typeof boxPictures>; model: ModelChoice | undefined; limit: BoxLimit | undefined; words: { title: string; sub: string }; switched?: ReturnType<typeof boxModelSwitch>; sound?: ReturnType<typeof boxSound>; frameFirst?: boolean }
 
 /** A box of the strip (mock join-or-cut-v1): what Make will do (no prices), its shots with the joined gaps
@@ -370,10 +386,9 @@ function BoxCard({ b, switched, sound, frameFirst: first, selected, sel, since, 
       {failedLine && <div className="rm-error" role="alert">The last Make did not work: {failedLine}<FrontButtons text={failedLine} /></div>}
       {top && b.together && fresh && <TakeStills take={top} box={b} fresh={fresh} />}
       <footer className="jc-bft">
-        <button type="button" className="btn primary sm" disabled={making || over} onClick={onMake}
-          title={over ? limit!.why : differs ? `The next take differs: ${differs}` : has ? 'Make another take of this box' : 'Make this box'}>
-          {making ? 'Making…' : differs || has ? 'Make new take' : 'Make'}
-        </button>
+        <MakeTray className="btn primary sm" busy={making} disabled={over} onYes={onMake} rows={makeTrayRows(doc, b, model, !!first, has)}
+          label={differs || has ? 'Make new take' : 'Make'} yes={differs || has ? 'Make new take' : 'Make'}
+          title={over ? limit!.why : differs ? `The next take differs: ${differs}` : has ? 'Make another take of this box' : 'Make this box'} />
         {makingNow && <span className="jc-tk making" title={makingNow.label}>v{makingNow.version}</span>}
         {top && !(b.together && fresh) && (
           // The box's newest take as a row (mock make .take): its picture, version and length, and In the cut.
@@ -718,9 +733,9 @@ function BoxTab({ box, data, sel, facts, onModel, onMake, making, ticked, onTick
           })}
         </div>
       </fieldset>
-      <button type="button" className="btn primary rm-wide" disabled={making || over} onClick={onMake} title={over ? facts.limit!.why : undefined}>
-        {making ? 'Making…' : takes.some((g) => g.state === 'ready') ? 'Make new take' : 'Make'}
-      </button>
+      <MakeTray className="btn primary rm-wide" busy={making} disabled={over} onYes={onMake} title={over ? facts.limit!.why : undefined}
+        rows={makeTrayRows(doc, box, current, !!facts.frameFirst, takes.some((g) => g.state === 'ready'))}
+        label={takes.some((g) => g.state === 'ready') ? 'Make new take' : 'Make'} yes={takes.some((g) => g.state === 'ready') ? 'Make new take' : 'Make'} />
       <p className="rm-note">{facts.frameFirst ? `${FRAME_FIRST} ` : ''}{!takes.length && hasCut
         ? 'Its first take goes into the cut at its place, said with Undo; the rest of the cut stays as it is.'
         : 'A new take lands on this box and in the Bin. Your cut stays as it is.'}</p>
