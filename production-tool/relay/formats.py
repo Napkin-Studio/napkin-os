@@ -39,9 +39,10 @@ PAID_METHODS = ("extend", "regenerate")
 # picture dominates the words, so a scene description only risks a mismatch), and never a size's type.
 # UAT round 1 (IMG-9, 2026-11-20): "keep everything inside exactly as it is" read as keeping the soft bands too,
 # and they came back as flat blurred bars with a hard seam. The words now say the bands are empty space to paint.
-# Round 3 (stepped outpainting): the bands hold a soft mirror of the picture's edge, only a guide to its colours.
-EXTEND_PROMPT = ("The picture is surrounded by soft bands that only mirror its edge: they are empty space, not part of "
-                 "it, and nothing in them is to be kept or repeated. Paint new, "
+# Round 3 (stepped outpainting): the bands held a soft mirror of the picture's edge. Round 5 (S3-2): since round 4 they
+# hold flat colour taken from the picture's edge, and the words say so.
+EXTEND_PROMPT = ("The picture is surrounded by flat colour bands taken from its edge: they are empty space, not part of "
+                 "it, only a guide to its colours, and nothing in them is to be kept. Paint new, "
                  "sharp detail there that continues the picture seamlessly across its edges: the same horizon, ground, "
                  "light, colour, grain and perspective, with no seam, blur, border or frame. Keep the picture itself "
                  "as it is. No text, no letters, no logos.")
@@ -132,6 +133,19 @@ FIELD_STRIP = 16
 FIELD_BLUR = 0.08
 FIELD_FAR = 0.3
 FIELD_FADE = 0.6
+# Round 5 (S2-C: a 21:9 sky kept a hard vertical seam at both edges of the picture): the near field, blurred by 8 % of
+# the edge, was a few levels off the edge row by row (a streak of cloud is finer than that blur), and Ideogram kept the
+# step. At the boundary the band is now the edge's own outermost EDGE_MATCH_DEPTH px, blurred only EDGE_MATCH_BLUR of
+# its length (the tone of each row, no fine shape), fading into the near field over EDGE_MATCH_FADE of the band.
+EDGE_MATCH_DEPTH = 2
+EDGE_MATCH_BLUR = 0.004
+EDGE_MATCH_FADE = 0.12
+# On landing (feathered), the result's tone just outside the picture is matched to the picture's edge, row by row
+# (blurred TONE_BLUR of the edge's length), the correction fading out over TONE_RAMP of the band (at least TONE_RAMP_MIN
+# px): whatever step the model kept at the boundary is gone, and nothing of the picture's shapes is copied.
+TONE_BLUR = 0.004
+TONE_RAMP = 0.35
+TONE_RAMP_MIN = 32
 
 
 def steps_needed(mw: int, mh: int, aw: int, ah: int) -> int:
@@ -214,22 +228,35 @@ def _soft(line, along_x: bool, r: float):
     return big.resize((9, big.height)).filter(ImageFilter.GaussianBlur(r)).crop((4, pad, 5, pad + n))
 
 
-def _band(line, size: tuple[int, int], along_x: bool, edge_first: bool):
-    """A band of `size` from one edge line: beside the edge, the line blurred along it (FIELD_BLUR of its length: the
-    light and the horizon's colours, no shape); away from it, the line blurred far more (FIELD_FAR: only the broad
-    gradient, sky to ground), over FIELD_FADE of the band. Drawn straight across the band, so nothing repeats."""
+def _ramp_mask(size: tuple[int, int], along_x: bool, depth: int, fade: int, edge_first: bool):
+    """A mask across a band: 0 at the edge, 255 from `fade` px away (the band's far side when not edge_first)."""
+    from PIL import Image
+    fade = max(1, fade)
+    ramp = [min(255, int(255 * i / fade)) for i in range(depth)]
+    if not edge_first:
+        ramp = ramp[::-1]
+    mask = Image.new("L", (1, depth) if along_x else (depth, 1))
+    mask.putdata(ramp)
+    return mask.resize(size)
+
+
+def _band(line, size: tuple[int, int], along_x: bool, edge_first: bool, edge=None):
+    """A band of `size` from one edge line: at the boundary, the edge's own outermost line (`edge`), barely blurred, so
+    each row meets the picture in its own tone (round 5, S2-C), fading over EDGE_MATCH_FADE into the line blurred along
+    the edge (FIELD_BLUR of its length: the light and the horizon's colours, no shape); away from it, the line blurred
+    far more (FIELD_FAR: only the broad gradient, sky to ground), over FIELD_FADE of the band. Drawn straight across
+    the band, so nothing repeats."""
     from PIL import Image
     n = line.width if along_x else line.height
     near = _soft(line, along_x, max(2.0, n * FIELD_BLUR))
     far = _soft(line, along_x, max(4.0, n * FIELD_FAR))
     depth = size[1] if along_x else size[0]
-    fade = max(1, int(round(depth * FIELD_FADE)))
-    ramp = [min(255, int(255 * i / fade)) for i in range(depth)]  # 0 at the edge (near), 255 from FIELD_FADE on (far)
-    if not edge_first:
-        ramp = ramp[::-1]
-    mask = Image.new("L", (1, depth) if along_x else (depth, 1))
-    mask.putdata(ramp)
-    return Image.composite(far.resize(size, Image.BILINEAR), near.resize(size, Image.BILINEAR), mask.resize(size))
+    near_band = near.resize(size, Image.BILINEAR)
+    if edge is not None:
+        exact = _soft(edge, along_x, max(1.0, n * EDGE_MATCH_BLUR)).resize(size, Image.BILINEAR)
+        near_band = Image.composite(near_band, exact, _ramp_mask(size, along_x, depth, int(round(depth * EDGE_MATCH_FADE)), edge_first))
+    mask = _ramp_mask(size, along_x, depth, int(round(depth * FIELD_FADE)), edge_first)
+    return Image.composite(far.resize(size, Image.BILINEAR), near_band, mask)
 
 
 def _field(base, cw: int, ch: int, x: int, y: int):
@@ -240,18 +267,23 @@ def _field(base, cw: int, ch: int, x: int, y: int):
     from PIL import Image
     w, h = base.size
     kx, ky = max(1, min(FIELD_STRIP, w)), max(1, min(FIELD_STRIP, h))
+    ex, ey = max(1, min(EDGE_MATCH_DEPTH, w)), max(1, min(EDGE_MATCH_DEPTH, h))
     row = Image.new("RGB", (cw, h))
     row.paste(base, (x, 0))
     if x > 0:
-        row.paste(_band(_line(base, (0, 0, kx, h), False), (x, h), False, edge_first=False), (0, 0))
+        row.paste(_band(_line(base, (0, 0, kx, h), False), (x, h), False, edge_first=False,
+                        edge=_line(base, (0, 0, ex, h), False)), (0, 0))
     if x + w < cw:
-        row.paste(_band(_line(base, (w - kx, 0, w, h), False), (cw - x - w, h), False, edge_first=True), (x + w, 0))
+        row.paste(_band(_line(base, (w - kx, 0, w, h), False), (cw - x - w, h), False, edge_first=True,
+                        edge=_line(base, (w - ex, 0, w, h), False)), (x + w, 0))
     out = Image.new("RGB", (cw, ch))
     out.paste(row, (0, y))
     if y > 0:
-        out.paste(_band(_line(row, (0, 0, cw, ky), True), (cw, y), True, edge_first=False), (0, 0))
+        out.paste(_band(_line(row, (0, 0, cw, ky), True), (cw, y), True, edge_first=False,
+                        edge=_line(row, (0, 0, cw, ey), True)), (0, 0))
     if y + h < ch:
-        out.paste(_band(_line(row, (0, h - ky, cw, h), True), (cw, ch - y - h), True, edge_first=True), (0, y + h))
+        out.paste(_band(_line(row, (0, h - ky, cw, h), True), (cw, ch - y - h), True, edge_first=True,
+                        edge=_line(row, (0, h - ey, cw, h), True)), (0, y + h))
     return out
 
 
@@ -524,10 +556,69 @@ def feathered(result: bytes, master_data: bytes, plan: dict) -> bytes:
         if padded_side:
             box = (x, y, x + ramp.width, y + ramp.height)
             alpha.paste(ImageChops.darker(alpha.crop(box), ramp), box)
+    out = _tone_matched(out, master, plan, o)
     out.paste(master, (at["x"], at["y"]), alpha)
     b = io.BytesIO()
     out.save(b, format="PNG")
     return b.getvalue()
+
+
+def _tone_matched(out, master, plan: dict, o: int):
+    """The result with its tone matched to the picture's edge at each padded side (round 5, S2-C: Ideogram kept the
+    seed's step at the boundary). Per row (or column), the picture's outermost line minus the result's line just
+    outside it, both blurred TONE_BLUR of the edge, is added to the band, whole at the boundary and fading to nothing
+    TONE_RAMP of the band out; and the same from the result's line just inside, over the whole overlap, where the
+    picture is ramped back in. Only the tone moves; the model's shapes stay, and no shape of the picture is copied out."""
+    from PIL import Image, ImageChops
+    cw, ch = out.size
+    at = plan["at"]
+    x, y, w, h = at["x"], at["y"], at["w"], at["h"]
+    k = EDGE_MATCH_DEPTH
+
+    def line(img, box, along_x: bool):
+        return _line(img, box, along_x)
+
+    def fix(box, pic_line, res_line, along_x: bool, from_start: bool | None):
+        """Add (picture - result) to out over box, whole at its boundary side (start when from_start), fading out;
+        whole over all of it when from_start is None (the overlap, where the picture is ramped back in)."""
+        size = (box[2] - box[0], box[3] - box[1])
+        if size[0] <= 0 or size[1] <= 0:
+            return
+        n = pic_line.width if along_x else pic_line.height
+        r = max(1.0, n * TONE_BLUR)
+        pic, res = _soft(pic_line, along_x, r), _soft(res_line, along_x, r)
+        up = ImageChops.subtract(pic, res).resize(size, Image.BILINEAR)  # where the picture is lighter (clipped at 0)
+        down = ImageChops.subtract(res, pic).resize(size, Image.BILINEAR)  # where it is darker
+        moved = ImageChops.subtract(ImageChops.add(out.crop(box), up), down)
+        if from_start is None:
+            out.paste(moved, box)
+            return
+        depth = size[1] if along_x else size[0]
+        out.paste(moved, box, _ramp_mask(size, along_x, depth, depth, edge_first=from_start).point(lambda v: 255 - v))
+
+    def side(band_box, in_box, pic, outside, inside, along_x: bool, band_first: bool):
+        fix(band_box, pic, outside, along_x, from_start=not band_first)
+        fix(in_box, pic, inside, along_x, from_start=None)
+
+    if x > 0:
+        d = min(x, max(TONE_RAMP_MIN, int(round(x * TONE_RAMP))))
+        side((x - d, y, x, y + h), (x, y, x + o, y + h), line(master, (0, 0, k, h), False),
+             line(out, (x - k, y, x, y + h), False), line(out, (x, y, x + k, y + h), False), False, band_first=True)
+    if x + w < cw:
+        d = min(cw - x - w, max(TONE_RAMP_MIN, int(round((cw - x - w) * TONE_RAMP))))
+        side((x + w, y, x + w + d, y + h), (x + w - o, y, x + w, y + h), line(master, (w - k, 0, w, h), False),
+             line(out, (x + w, y, x + w + k, y + h), False), line(out, (x + w - k, y, x + w, y + h), False), False,
+             band_first=False)
+    if y > 0:
+        d = min(y, max(TONE_RAMP_MIN, int(round(y * TONE_RAMP))))
+        side((x, y - d, x + w, y), (x, y, x + w, y + o), line(master, (0, 0, w, k), True),
+             line(out, (x, y - k, x + w, y), True), line(out, (x, y, x + w, y + k), True), True, band_first=True)
+    if y + h < ch:
+        d = min(ch - y - h, max(TONE_RAMP_MIN, int(round((ch - y - h) * TONE_RAMP))))
+        side((x, y + h, x + w, y + h + d), (x, y + h - o, x + w, y + h), line(master, (0, h - k, w, h), True),
+             line(out, (x, y + h, x + w, y + h + k), True), line(out, (x, y + h - k, x + w, y + h), True), True,
+             band_first=False)
+    return out
 
 
 def overlap_px(plan: dict) -> int:
