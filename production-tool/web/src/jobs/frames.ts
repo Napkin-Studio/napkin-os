@@ -21,6 +21,7 @@ import { assetRef } from './assets'
 import { isActive, type JobRunner } from './runner'
 import { jobShot, refsFor } from './select'
 import { castRefs, castShot, keptFromFirst } from './cast'
+import { lookShot } from './looks'
 import { liveGet } from '../model/live'
 
 export type { FrameHow } from '../model/purpose'
@@ -116,7 +117,8 @@ export async function frameInput(relay: Relay, d: ProductionDocument, index: num
   if (cont.previousFrame && sent.has(cont.previousFrame.sha256)) delete cont.previousFrame
   return {
     // An unnamed person ("a flatmate") is someone else: the offered character's name in a Cast line (R4-F2).
-    shot: castShot(d, shot, jobShot(d, shot), own),
+    // The look of each person seen, from the script (UAT round 5, S2-A: frames read only their shot since round 4).
+    shot: lookShot(d, sb?.id, shot, castShot(d, shot, jobShot(d, shot), own)),
     ...(refs.length ? { refs } : {}),
     ...(ratio ? { ratio } : {}),
     ...(script ? { script } : {}),
