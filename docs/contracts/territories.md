@@ -119,6 +119,23 @@ while a required sensitive review is not `done`. Every blocked state is a fixtur
 `derived_resolution`: `verified` when the route rests on no derived finding or the person verified it, `sent_flagged` when they chose to send
 it flagged, `pending` until they answer. `rests_on_derived` must list every `proposed` finding the route cites.
 
+### 5.1 The gate machine (`engine/territory/gates.py`, feature `territories-gates`)
+
+One pure module serves the middleware handler, replay and the tests; its state is the document (`data.run`, `greenlit`, `asks`, `review`) and nothing
+in a server's memory. `approvals.<gate>`, `decisions[]` and `review.sensitive` carry an optional `inputs` (12 hex chars, `gates.inputs_hash`): what the
+person was looking at. An approval or review counts only while it equals the current hash, so one given for other inputs passes nothing, and a new
+Approve always replaces an old one (an edit never disables it).
+
+| Call | For |
+|---|---|
+| `evaluate(doc, findings=)` | The screen: `gate`, `blocked_by`, `can_approve`, `can_approve_with_reason` (greenlighting nothing), `approval {valid, stale, words}`, open `asks`, `sensitive`, `inputs`, `checks`, `words`, `next` |
+| `next_step(doc)` | `{do: open_gate/hold/run/finish/failed/idle, stage, gate, words}` |
+| `approve`, `greenlight_route`, `answer_ask`, `record_review`, `request`, `settle_requests` | The person's moves: `(doc, refusals in words)`; a request is answered with what was done or why not |
+| `open_gate`, `sync_asks`, `drive(doc, stages)` | The engine: write the gate and its asks; run stages only when `next_step` says run, stopping in words (`run.error`) on a missing stage, the cap or an error |
+
+Defaults taken: the sensitive review is a named person's (never `engine`), done after greenlighting, void when the greenlight inputs change; greenlighting
+nothing is allowed with a reason and sends nothing; pressing Explore is the pick approval, recorded as a decision with the ticked insights' hash.
+
 ## 6. Additive only
 
 - A new member is **optional**. A member is never removed or retyped, an enum value is never dropped, nothing newly becomes required.
