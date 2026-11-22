@@ -12,7 +12,8 @@ Routes (JSON; failures are non-2xx with ``{"error": {"type", "message"}}``, neve
 
     GET  /status                 what is on and what is busy
     POST /run                    {doc, inputs, approvals, mode, render?, production_upstream?}: start the next segment of this document's run
-                                 (production_upstream {id, data}: the Production project the deck was spun off from, carried whole)
+                                 (production_upstream {id, data}: the Production project the deck was spun off from, carried whole;
+                                 production_assets {base, pass}: the relay's address and napkin-web's read-only assets pass for it, a secret)
     GET  /run/<doc>              the run so far: state, the run object the screens read, and once built the payload
     GET  /file/<doc>/<name>      a finished file (deck.html, deck.pptx, deck.pdf, report.json)
     POST /production             {doc, name, data_b64}: keep a Production .clan or export zip for this document (deck-prod-picker); every
@@ -49,7 +50,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 from . import inputs as inputs_mod
-from . import profiles, spec
+from . import profiles, prod_picker, spec
 from . import run_deck, run_state as rs
 
 #: The stage files each gate's stage writes, and what a replay copies in for each step. Order is the pipeline's.
@@ -220,7 +221,20 @@ def validate_request(body: dict, settings: Settings) -> dict:
             "type": prof["id"], "picked": bool(picked_type(inp)), "type_stages": list(prof["stages"]), "confirmed": confirmed_stages(body, inp),
             "approvals": approvals, "render": body.get("render", True) is not False, "marks": marks,
             "review": body.get("review") if isinstance(body.get("review"), dict) else {}, "approver": str(body.get("approver") or ""),
-            "production_upstream": production_upstream(body)}
+            "production_upstream": production_upstream(body), "production_assets": production_assets(body)}
+
+
+def production_assets(body: dict) -> dict | None:
+    """``{base, pass}``: the relay's address and the assets pass napkin-web signed for the person (docs/contracts/production-tool-identity.md),
+    handed in by the middleware for a deck carrying a Production project. A bearer token: held in memory for the segment, used by the picture
+    step's transport (prod_picker.use_relay) and never written, logged or echoed (a bad one is refused without showing it)."""
+    pa = body.get("production_assets")
+    if pa is None:
+        return None
+    if not (isinstance(pa, dict) and isinstance(pa.get("base"), str) and pa["base"].startswith("https://") and isinstance(pa.get("pass"), str)
+            and pa["pass"].startswith("v1.") and len(pa["pass"]) <= 4096):
+        raise Refused(400, "bad_request", "production_assets must be {base, pass}: the relay's https address and the signed assets pass")
+    return {"base": pa["base"], "pass": pa["pass"]}
 
 
 def production_upstream(body: dict) -> dict | None:
@@ -590,7 +604,7 @@ class Server:
         err = io.StringIO()
         restore = self.guard_live(d, req) if req["mode"] == "live" else None
         try:
-            with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()), prod_picker.use_relay(req.get("production_assets")):
                 return run_deck.main(argv)
         except SystemExit as e:
             raise Refused(400, "engine_refused", (err.getvalue().strip().splitlines() or [str(e.code)])[-1]) from e

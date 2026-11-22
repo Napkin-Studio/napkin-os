@@ -32,6 +32,8 @@ from __future__ import annotations
 
 import argparse
 import base64
+import contextlib
+import contextvars
 import hashlib
 import http.client
 import io
@@ -533,11 +535,13 @@ class _Pinned(http.client.HTTPSConnection):
         self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
 
 
-def _open(host: str, ip: str, path: str, timeout: float):
-    """GET over the pinned connection: no redirect is followed here (http.client never does), no cookie, no auth header, no proxy. The
-    response carries ``settimeout`` (its socket's), so the stream can shrink the socket timeout to the time the fetch has left."""
+def _open(host: str, ip: str, path: str, timeout: float, headers: dict | None = None):
+    """GET over the pinned connection: no redirect is followed here (http.client never does), no cookie, no proxy, and no auth header unless
+    the caller names one (only the relay transport does, for the relay's own host). The response carries ``settimeout`` (its socket's), so the
+    stream can shrink the socket timeout to the time the fetch has left."""
     conn = _Pinned(host, ip, timeout)
-    conn.request("GET", path, headers={"User-Agent": "napkin-deck-picker", "Accept": "image/*", "Accept-Encoding": "identity", "Connection": "close"})
+    conn.request("GET", path, headers={"User-Agent": "napkin-deck-picker", "Accept": "image/*", "Accept-Encoding": "identity", "Connection": "close",
+                                       **(headers or {})})
     sock = conn.sock
     resp = conn.getresponse()
     resp.settimeout = sock.settimeout
@@ -732,14 +736,139 @@ class RelayAssets:
         return Path(dest), None
 
 
-#: The transport to the relay's asset route: ``fetch(sha256 hex, w) -> bytes``, raising RelayError. It belongs to the host that holds the
-#: person's signed identity (docs/contracts/production-tool-identity.md); nothing in this repo sets it yet, so a build says so per picture.
+#: The transport to the relay's asset route: ``fetch(sha256 hex, w) -> bytes``, raising RelayError. Tests set it directly; in service the
+#: build's own transport is made from the server-set ``production_assets`` (``use_relay``, ``relay_fetcher``).
 RELAY_FETCH = None
+
+RELAY_TIMEOUT_S = 30.0   # one picture, the relay's sizing included (a rendition is made on its first ask)
+_RELAY: contextvars.ContextVar = contextvars.ContextVar("production_relay", default=None)
+
+
+def _public_host(host: str, resolver) -> tuple:
+    """``(ip, None)`` for a host that resolves only to public addresses, else ``(None, reason)``."""
+    try:
+        ips = list(resolver(host))
+    except OSError:
+        return None, f"{host} does not resolve"
+    if not ips or not all(is_public(ip) for ip in ips):
+        return None, f"{host} resolves to a private or reserved address: refused"
+    return ips[0], None
+
+
+def relay_fetcher(base: str, token: str, opener=None, resolver=None, timeout: float = RELAY_TIMEOUT_S, file_max: int = FILE_MAX, clock=None):
+    """The transport for one build: ``fetch(sha256 hex, w)`` is ``GET {base}/assets/{sha}?w=W`` with ``X-Napkin-Identity: <token>`` (the
+    assets pass napkin-web signed for the person who started the build), then the 302 the relay answers with, to the picture itself.
+
+    Trust: ``base`` is the one host the pass is sent to, and it comes from napkin-web through the middleware, never from the document or the
+    person's browser, so it is not on policy/production_fetch.yaml (that list is for the https locations a document names). It still has to
+    be https, with no credentials or port, resolving to public addresses only (the connection is pinned to the address checked). The redirect
+    target is the picture CDN: https, no credentials or port, public addresses only, up to REDIRECTS_MAX hops, and the pass is NOT sent to it
+    (nor to any hop). The answer must be 200 image/* within the byte cap and the one deadline. Every reason names a host or a status, never a
+    URL or the token."""
+    clock, opener, resolver = clock or time.monotonic, opener or _open, resolver or _resolve
+    root = urlsplit(base)
+    host = (root.hostname or "").lower()
+    bad = None
+    if root.scheme != "https" or not host:
+        bad = "the relay's address is not https"
+    elif root.username or root.password or root.port not in (None, 443) or root.query or root.fragment:
+        bad = "the relay's address carries credentials, a port or a query: refused"
+    prefix = (root.path or "").rstrip("/")
+
+    def fetch(hx: str, w) -> bytes:
+        if bad:
+            raise RelayError(bad)
+        if not re.fullmatch(r"[0-9a-f]{64}", hx or ""):
+            raise RelayError("its key is not a sha256")
+        t0 = clock()
+        url = f"{prefix}/assets/sha256:{hx}" + (f"?w={int(w)}" if w else "")
+        h, first, hops = host, True, 0
+        while True:
+            ip, why = _public_host(h, resolver)
+            if why:
+                raise RelayError(why)
+            left = timeout - (clock() - t0)
+            if left <= 0:
+                raise RelayError(f"{h}: timed out")
+            try:
+                resp = opener(h, ip, url, left, {"X-Napkin-Identity": token} if first else None) if first else opener(h, ip, url, left)
+            except (socket.timeout, TimeoutError):
+                raise RelayError(f"{h}: timed out") from None
+            except (OSError, ssl.SSLError, http.client.HTTPException) as e:
+                raise RelayError(f"{h}: connection failed ({type(e).__name__})") from None
+            try:
+                st = int(getattr(resp, "status", 0) or 0)
+                if st in (301, 302, 303, 307, 308):
+                    nxt = urlsplit(urljoin(f"https://{h}{url}", resp.getheader("Location") or ""))
+                    hops += 1
+                    if hops > REDIRECTS_MAX:
+                        raise RelayError(f"{h}: more than {REDIRECTS_MAX} redirects")
+                    nh = (nxt.hostname or "").lower()
+                    if nxt.scheme != "https" or not nh or nxt.username or nxt.password or nxt.port not in (None, 443):
+                        raise RelayError(f"{h}: redirected to a location that is not plain https: refused")
+                    h, url, first = nh, (nxt.path or "/") + (f"?{nxt.query}" if nxt.query else ""), False
+                    continue
+                if st in (401, 403):
+                    raise RelayError(f"{h}: refused the pass (HTTP {st}); it may have expired" if first else f"{h}: refused (HTTP {st})")
+                if st == 404:
+                    raise RelayError(f"{h}: does not hold this picture (HTTP 404)")
+                if st != 200:
+                    raise RelayError(f"{h}: HTTP {st}")
+                ctype = (resp.getheader("Content-Type") or "").split(";")[0].strip().lower()
+                if not ctype.startswith("image/"):
+                    raise RelayError(f"{h}: not a picture (content-type {clean(ctype, 40) or 'none'})")
+                clen = str(resp.getheader("Content-Length") or "")
+                if clen.isdigit() and int(clen) > file_max:
+                    raise RelayError(f"{h}: {int(clen) // 1_000_000} MB, over the {file_max // 1_000_000} MB cap")
+                return _read_capped(resp, h, file_max, timeout, t0, clock)
+            except (socket.timeout, TimeoutError):
+                raise RelayError(f"{h}: timed out") from None
+            except (OSError, http.client.HTTPException) as e:
+                raise RelayError(f"{h}: connection failed ({type(e).__name__})") from None
+            finally:
+                try:
+                    resp.close()
+                except Exception:   # noqa: BLE001
+                    pass
+
+    return fetch
+
+
+def _read_capped(resp, h: str, file_max: int, timeout: float, t0: float, clock) -> bytes:
+    out, n = [], 0
+    read = getattr(resp, "read1", None) or resp.read
+    settimeout = getattr(resp, "settimeout", None)
+    while True:
+        left = timeout - (clock() - t0)
+        if left <= 0:
+            raise RelayError(f"{h}: timed out")
+        if settimeout:
+            settimeout(left)
+        chunk = read(65536)
+        if not chunk:
+            return b"".join(out)
+        n += len(chunk)
+        if n > file_max:
+            raise RelayError(f"{h}: over the {file_max // 1_000_000} MB cap")
+        out.append(chunk)
+
+
+@contextlib.contextmanager
+def use_relay(assets: dict | None, **kw):
+    """For the build running in this thread: pictures by link go through the person's assets pass (``{base, pass}`` from napkin-web). The
+    pass lives only in this context: never in a stage file, the report or a log."""
+    ok = isinstance(assets, dict) and isinstance(assets.get("base"), str) and isinstance(assets.get("pass"), str) and assets["pass"]
+    tok = _RELAY.set(relay_fetcher(assets["base"], assets["pass"], **kw) if ok else None)
+    try:
+        yield
+    finally:
+        _RELAY.reset(tok)
 
 
 def relay_for(stages: Path) -> RelayAssets | None:
-    """The RelayAssets of a build (pictures cached under ``<stages>/relay_cache``), or None while no transport is wired."""
-    return RelayAssets(RELAY_FETCH, Path(stages) / "relay_cache") if RELAY_FETCH else None
+    """The RelayAssets of a build (pictures cached under ``<stages>/relay_cache``), or None while no transport is wired for this build."""
+    fetch = RELAY_FETCH or _RELAY.get()
+    return RelayAssets(fetch, Path(stages) / "relay_cache") if fetch else None
 
 
 # ------------------------------------------------------------------------------------------------ source order

@@ -274,7 +274,7 @@ def test_a_picture_the_relay_does_not_hold_is_not_reachable_never_generated(tmp_
 def test_with_no_way_to_the_relay_every_picture_says_so(tmp_path, pics):
     d, res, st, _ = build(tmp_path, pics, relay=False)
     assert im(d, "s01")["status"] == "empty" and "no way to the relay" in im(d, "s01")["reason"] and res["picker"]["relay"]["on"] is False
-    assert pp.relay_for(tmp_path) is None   # nothing in this repo wires the signed transport yet
+    assert pp.relay_for(tmp_path) is None   # outside a build that holds a pass (pp.use_relay) there is no transport
 
 
 def test_only_the_relay_is_a_source_for_a_carried_project_not_its_https_locations(tmp_path, pics):
@@ -369,3 +369,164 @@ def test_the_engine_server_runs_a_build_with_the_carried_project_unless_a_file_o
         with pytest.raises(srv.Refused) as e:
             srv.validate_request({"doc": "doc", "inputs": base, "mode": "replay", "render": True, "production_upstream": bad}, cfg)
         assert e.value.status == 400
+
+
+# ---------------------------------------------------------------- the signed transport (the assets pass)
+
+PASS = "v1.eyJhdWQiOiJhc3NldHMifQ.c2VjcmV0LXNpZw"
+RELAY_HOST, CDN_HOST = "relay.napkin.test", "cdn.napkin.test"
+
+
+class FakeNet:
+    """A relay at https://relay.napkin.test/api and its picture CDN, as an opener (host, ip, path, timeout[, headers]) and a resolver.
+    Records every request with the headers it carried; serves ``pics`` by hash (the rendition is the same bytes)."""
+
+    def __init__(self, pics, relay_status=302, location=None, token=PASS, ctype="image/png", cdn_status=200, body=None):
+        self.by_hex = {hashlib.sha256(b).hexdigest(): b for b in pics.values()}
+        self.requests, self.token, self.relay_status, self.location = [], token, relay_status, location
+        self.ctype, self.cdn_status, self.body = ctype, cdn_status, body
+        self.ips = {RELAY_HOST: ["93.184.216.34"], CDN_HOST: ["93.184.216.35"], "internal.napkin.test": ["10.0.0.7"]}
+
+    def resolve(self, host):
+        if host not in self.ips:
+            raise OSError("no such host")
+        return self.ips[host]
+
+    def open(self, host, ip, path, timeout, headers=None):
+        self.requests.append({"host": host, "ip": ip, "path": path, "headers": dict(headers or {})})
+        if host == RELAY_HOST:
+            hx = path.split("/assets/sha256:")[1].split("?")[0]
+            if (headers or {}).get("X-Napkin-Identity") != self.token:
+                return self.Resp(401)
+            if hx not in self.by_hex:
+                return self.Resp(404)
+            loc = self.location or f"https://{CDN_HOST}/in/sha256:{hx}"
+            return self.Resp(self.relay_status, {"Location": loc})
+        hx = path.split("sha256:")[1].split("?")[0]
+        return self.Resp(self.cdn_status, {"Content-Type": self.ctype}, self.body if self.body is not None else self.by_hex[hx])
+
+    class Resp:
+        def __init__(self, status, headers=None, body=b""):
+            self.status, self._h, self._b = status, headers or {}, body
+
+        def getheader(self, k):
+            return self._h.get(k)
+
+        def read(self, n=-1):
+            out, self._b = self._b[:n], self._b[n:]
+            return out
+
+        def close(self):
+            pass
+
+
+def transport(net, base=f"https://{RELAY_HOST}/api", **kw):
+    return pp.relay_fetcher(base, PASS, opener=net.open, resolver=net.resolve, **kw)
+
+
+def test_the_transport_sends_the_pass_to_the_relay_only_and_follows_the_302_to_the_picture(pics):
+    net = FakeNet(pics)
+    hx = hashlib.sha256(pics["master"]).hexdigest()
+    assert transport(net)(hx, 2400) == pics["master"]
+    first, second = net.requests
+    assert first["host"] == RELAY_HOST and first["path"] == f"/api/assets/sha256:{hx}?w=2400"
+    assert first["headers"] == {"X-Napkin-Identity": PASS}
+    assert second["host"] == CDN_HOST and second["headers"] == {}, "the pass never goes to the picture's host"
+    assert first["ip"] == "93.184.216.34", "the connection is pinned to the address that was checked"
+
+
+@pytest.mark.parametrize("net_kw,base,why", [
+    ({}, "http://relay.napkin.test/api", "not https"),
+    ({}, "https://user:pw@relay.napkin.test/api", "credentials"),
+    ({}, "https://relay.napkin.test:8443/api", "credentials, a port"),
+    ({}, "https://internal.napkin.test/api", "private or reserved"),
+    ({}, "https://nowhere.napkin.test/api", "does not resolve"),
+    ({"location": "http://cdn.napkin.test/x"}, None, "not plain https"),
+    ({"location": "https://internal.napkin.test/x"}, None, "private or reserved"),
+    ({"location": "https://cdn.napkin.test:9000/x"}, None, "not plain https"),
+    ({"token": "other"}, None, "refused the pass"),
+    ({"ctype": "text/html"}, None, "not a picture"),
+    ({"cdn_status": 404}, None, "HTTP 404"),
+    ({"body": b"x" * 2_000}, "CAP", "over the"),
+])
+def test_the_transport_refuses_unsafe_or_wrong_answers_and_never_shows_the_token_or_a_url(pics, net_kw, base, why):
+    net = FakeNet(pics, **net_kw)
+    kw = {"file_max": 1_000} if base == "CAP" else {}
+    f = transport(net, base if base and base != "CAP" else f"https://{RELAY_HOST}/api", **kw)
+    with pytest.raises(pp.RelayError) as e:
+        f(hashlib.sha256(pics["master"]).hexdigest(), 2400)
+    assert why in str(e.value) and PASS not in str(e.value) and "://" not in str(e.value) and "/in/" not in str(e.value)
+
+
+def test_a_picture_the_relay_does_not_hold_and_a_bad_key_are_reported(pics):
+    f = transport(FakeNet(pics))
+    with pytest.raises(pp.RelayError, match="does not hold"):
+        f("c" * 64, 2400)
+    with pytest.raises(pp.RelayError, match="not a sha256"):
+        f("nope", 2400)
+
+
+def test_the_relay_may_redirect_through_a_few_hops_but_not_forever(pics):
+    net = FakeNet(pics, location=f"https://{RELAY_HOST}/api/loop")
+    net.open_real = net.open
+    # a relay that keeps answering 302 to itself: the pass is sent once, and the hops are capped
+    def looping(host, ip, path, timeout, headers=None):
+        net.requests.append({"host": host, "headers": dict(headers or {})})
+        return net.Resp(302, {"Location": f"https://{host}/again"})
+    with pytest.raises(pp.RelayError, match="redirects"):
+        pp.relay_fetcher(f"https://{RELAY_HOST}/api", PASS, opener=looping, resolver=net.resolve)("a" * 64, None)
+    assert [r["headers"] for r in net.requests][0] == {"X-Napkin-Identity": PASS} and all(r["headers"] == {} for r in net.requests[1:])
+
+
+def test_a_build_through_the_transport_fetches_with_the_pass_caches_by_hash_and_leaves_no_trace_of_it(tmp_path, pics, caplog):
+    caplog.set_level("DEBUG")
+    net = FakeNet(pics)
+    d, res, st, _ = build(tmp_path, pics, relay=transport(net))
+    assert im(d, "s01")["status"] == "made" and not res["picker"]["not_reachable"]
+    asked = [r for r in net.requests if r["host"] == RELAY_HOST]
+    assert asked and all(r["headers"] == {"X-Napkin-Identity": PASS} and r["path"].endswith("?w=2400") for r in asked)
+    assert any(p.name.endswith(".w2400") for p in (st / "relay_cache").iterdir())
+    # a second build of the same document in the same stages folder is served from the cache: nothing more is asked
+    before = len(net.requests)
+    pp.run(d, pp.CarriedSource(SOURCE_ID, carried_doc(pics)), st, relay=pp.RelayAssets(transport(net), st / "relay_cache"))
+    assert len(net.requests) == before
+    # the pass is in no file the build wrote, nor in its result, nor in a log line
+    for p in st.rglob("*"):
+        if p.is_file():
+            assert PASS.encode() not in p.read_bytes(), p
+    assert PASS not in json.dumps(res) and PASS not in caplog.text and "napkin.test" not in json.dumps(res)
+
+
+def test_use_relay_holds_the_transport_for_one_build_only(tmp_path):
+    assert pp.relay_for(tmp_path) is None
+    with pp.use_relay({"base": f"https://{RELAY_HOST}/api", "pass": PASS}):
+        assert pp.relay_for(tmp_path) is not None
+    assert pp.relay_for(tmp_path) is None
+    for none in (None, {}, {"base": "https://x", "pass": ""}):
+        with pp.use_relay(none):
+            assert pp.relay_for(tmp_path) is None   # no pass: every picture is "not reachable" as before
+
+
+def test_the_engine_server_gives_the_build_its_pass_and_keeps_it_out_of_everything_it_writes(tmp_path, monkeypatch, pics, caplog):
+    srv, cfg, s = _srv(tmp_path)
+    d = srv.Doc(cfg.data / "doc", "doc")
+    d.folder = cfg.data / "doc" / "k"
+    held = []
+    monkeypatch.setattr(srv.run_deck, "main", lambda argv: held.append(pp.relay_for(tmp_path)) or {})
+    base = {"prompt": {"text": "A pitch for Lumen Water", "client": "Lumen Water", "project": "P", "agency": ""}, "kind": "agency", "format": "pitch"}
+    body = {"doc": "doc", "inputs": base, "mode": "replay", "render": True, "production_upstream": {"id": SOURCE_ID, "data": carried_doc(pics)},
+            "production_assets": {"base": f"https://{RELAY_HOST}/api", "pass": PASS}}
+    req = srv.validate_request(body, cfg)
+    s.call_engine(d, req, None)
+    assert held[0] is not None and pp.relay_for(tmp_path) is None
+    s.call_engine(d, srv.validate_request({k: v for k, v in body.items() if k != "production_assets"}, cfg), None)
+    assert held[1] is None
+    s.write_status(d)
+    for p in (cfg.data).rglob("*"):
+        if p.is_file():
+            assert PASS.encode() not in p.read_bytes(), p
+    assert PASS not in json.dumps(s.view(d)) and PASS not in caplog.text
+    for bad in ({"base": "http://r/api", "pass": PASS}, {"base": f"https://{RELAY_HOST}/api", "pass": "no"}, {"base": 1, "pass": PASS}, "x"):
+        with pytest.raises(srv.Refused) as e:
+            srv.validate_request({**body, "production_assets": bad}, cfg)
+        assert e.value.status == 400 and PASS not in e.value.message
