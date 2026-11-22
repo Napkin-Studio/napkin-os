@@ -7,7 +7,9 @@ import { useState } from 'react'
 import { useDoc } from '../../app/context'
 import type { CanvasController } from '../../canvas/controller'
 import type { KeyEntry } from '../../contracts/types'
-import { refsList, shotsOf } from '../../model/selectors'
+import { canvasActions } from '../../canvas/chrome/actions'
+import { refsList } from '../../model/selectors'
+import { showTarget, usedIn } from './usedIn'
 import { nameOf } from '../../lib/names'
 import { useBlobUrl } from '../hooks'
 import { useKeyActions } from './keyActions'
@@ -29,8 +31,8 @@ export function CharacterCard({ k, ctrl, onBack, onClose, onScript }: {
   const act = useKeyActions(k, ctrl)
   const refs = refsList(doc).filter((r) => r.key === k.key)
   const front = refs.find((r) => r.variant === 'front') ?? refs[0]
-  const ids = new Set([k.id, ...refs.map((r) => r.id)])
-  const used = shotsOf(doc).map((s, i) => ({ s, n: i + 1 })).filter(({ s }) => (s.refs ?? []).some((r) => ids.has(r)))
+  const used = usedIn(doc, k, refs)
+  const show = showTarget(doc, front)
   const tabs: { id: Tab; label: string }[] = [{ id: 'views', label: 'Views' }, { id: 'voice', label: 'Voice' }, { id: 'wardrobe', label: 'Wardrobe' }, { id: 'used', label: `Used in · ${used.length}` }]
   const name = k.key[0].toUpperCase() + k.key.slice(1)
   return (
@@ -69,7 +71,7 @@ export function CharacterCard({ k, ctrl, onBack, onClose, onScript }: {
       {tab === 'wardrobe' && <p className="hint" style={{ margin: 0 }}>No wardrobe yet. Name a picture with the wardrobe role to keep it here.</p>}
       {tab === 'used' && (
         <ul className="cc-used">
-          {used.map(({ s, n }) => <li key={s.id}><span className="pt-mono">Shot {n}</span><span>{(s.action ?? '').split('\n')[0]}</span></li>)}
+          {used.map(({ shot: s, n, storyboard }) => <li key={s.id}><span className="pt-mono">{storyboard ? `${storyboard} · ` : ''}Shot {n}</span><span>{(s.action ?? '').split('\n')[0]}</span></li>)}
           {!used.length && <li className="hint">No shot names @{k.key} yet.</li>}
         </ul>
       )}
@@ -77,8 +79,11 @@ export function CharacterCard({ k, ctrl, onBack, onClose, onScript }: {
         <h4>Use it</h4>
         <div className="cc-acts">
           <button type="button" className="sp-btn" onClick={onScript}>Type @{k.key} in the script</button>
-          <button type="button" className="sp-btn" disabled={!front?.node} onClick={() => front?.node && ctrl?.scrollTo(front.node)}>Show it on the canvas</button>
+          <button type="button" className="sp-btn" disabled={'why' in show} title={'why' in show ? show.why : undefined}
+            onClick={() => { if ('node' in show) ctrl?.scrollTo(show.node); else if ('storyboard' in show) canvasActions.fitTo({ kind: 'storyboard', id: show.storyboard }) }}>
+            {'storyboard' in show ? 'Show its storyboard on the canvas' : 'Show it on the canvas'}</button>
         </div>
+        {'why' in show && <p className="hint" style={{ margin: 0 }}>{show.why}</p>}
         <p className="hint" style={{ margin: 0 }}>{k.library ? `In the team library, v${k.library.ver}.` : 'This project only.'} {act.publish}</p>
         {act.error}
       </div>

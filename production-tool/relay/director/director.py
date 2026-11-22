@@ -9,6 +9,7 @@ only @tags the adapter can rewrite.
 
 from __future__ import annotations
 
+import copy
 import json
 import math
 import re
@@ -26,8 +27,10 @@ from providers.types import CONTRACTS, prompt_max, utf16_units
 from providers.tags import TAG as TAG_IN_TEXT, UnknownTag, rewrite_tags, unsent_in_words
 
 import brief as briefs
-from .base import fit_duration, require_prompt, view_angle
-from .model import ModelPort, Usage
+import job_context
+from . import record
+from .base import fit_duration, prompt_number, require_prompt, view_angle, view_subject
+from .model import AnthropicWire, ModelPort, Usage
 
 BASE = "https://napkin.ie/production-tool/contracts/"
 PURPOSE = "director"
@@ -62,6 +65,63 @@ KEYFRAME_MAX_S = 30  # Runway aleph2 keyframe seconds run 0 to 30
 # per op. The prompt states these; the code refuses past 1.5 times (the relay then makes the job as written).
 TAKE_LINE_BUDGET = 120
 ADD_BUDGET = {"generate": 250, "view": 200, "frame": 500, "region_edit": 250, "clip": 300, "clip_edit": 250, "clip_patch": 250}
+# How long Dex may take (features/pt-canvas-r2.clan, UAT round 2 R2-3: a 14-picture Generate timed out at 20 s, twice):
+# the port's own seconds for up to CALL_REFS_FREE pictures, CALL_S_PER_REF more for each one after, at most CALL_MAX_S
+# (one try when longer than the port's, Director._port_for: the relay's Lambda runs 60 s and the provider submit follows).
+CALL_REFS_FREE = 4
+CALL_S_PER_REF = 2.0
+CALL_MAX_S = 40.0
+# The capability sheet Dex reads is cut to the op (R2-3: every job sent the whole 32 KB sheet, ~9k tokens): its own op
+# entry, the models that op can run on, and the sheet's small facts; never the sources, prices' notes or other ops.
+SHEET_DROP = ("sources", "concurrency", "checked", "usdPerCredit")
+# A Change this frame runs as one of these (frameEdit.runAs): Dex reads their entries too.
+RELATED_OPS = {"frame_edit": ("frame", "region_edit")}
+MODEL_DROP = ("pricing",)
+# Scenes painted real trademarks (R2-13: Fanta, Red Bull, Le Monde): a generate or a frame says none may appear but those asked
+# for. The relay's own words, outside Dex's budget; said once.
+NO_OTHER_BRANDS = "No other brands, logos or readable trademarks."
+BRAND_FREE_OPS = ("generate", "frame")
+# UAT round 5 (S3-6): a frame of "a bakery at dawn" said "No brands, logos or readable trademarks" and still painted a
+# real chain's name on the shop sign. A shop's sign is where a model reaches for a real name, so a generate or a frame
+# also says this, once, outside Dex's budget.
+NO_REAL_SIGNS = "Shop signs and storefronts show no real business's name."
+_SIGNS_SAID = re.compile(r"\bno real business", re.I)
+_BRANDS_SAID = re.compile(r"\bno (?:other |real |visible )?(?:brands?|logos?|trademarks?)\b", re.I)
+# A storyboard frame copied the one before and doubled its people (R2-4): @previous is for continuity only.
+PREVIOUS_IS_NOT_A_COPY = ("@previous is the moment before, for continuity only: draw this shot's own new moment and "
+                          "framing, not a copy of it, and show each person once.")
+# UAT round 5 (R5-F3): the kettle insert, a shot with no one in it, came back with Maya beside the kettle. The web says so
+# in the shot's direction (web jobs/cast.ts NO_ONE_LINE); the relay says it in the frame's prompt, in its own words.
+NO_ONE_SEEN = "Cast: no one is seen in this shot"
+NO_PEOPLE = "No people in this shot."
+_PEOPLE_SAID = re.compile(r"\bno (?:people|person|one|figures?|humans?)\b|\bnobody\b|\bempty of people\b", re.I)
+# UAT round 4: frame 2 nearly copied frame 1's framing. A frame says its shot's own size and angle from the shot list,
+# when Dex's prompt has not said them.
+SHOT_FRAMING = "Frame it as a {size} shot{angle}, as the shot list says."
+# UAT round 4 S3-8: a sketch sent as a layout only, with no words, came back flat clip art with the sun a yellow
+# pentagon (Dex wrote the card's "pentagon"). A layout with no words is a photograph of real things.
+LAYOUT_ONLY_PHOTO = ("A finished photograph, not a drawing or clip art: each shape in the layout is the real thing "
+                     "it stands for (a round shape in the sky is the sun), never a geometric shape.")
+RELAY_LINES = (NO_OTHER_BRANDS, NO_REAL_SIGNS, PREVIOUS_IS_NOT_A_COPY)
+# A palette is accents (UAT round 3 R3-2: "Use only these colours" made every photo a flat 3-colour poster): unless the
+# palette says Strict, the relay rewrites an "only these colours" Dex still writes into accents, whatever prompt version.
+_ONLY_COLOURS = re.compile(r"\b(?:use |using |in |with )?only (?:these|the(?: brand(?:'s)?)?|its|our) (?:brand )?(?:colou?rs|palette)\b", re.I)
+_KEEP_TO_PALETTE = re.compile(r"\b(?:keep(?:ing)? to|stick(?:ing)? to|stay(?:ing)? within|limit(?:ed)? to) the (?:brand(?:'s)? )?palette\b", re.I)
+PALETTE_ROLE_LINE = "brand palette: keep to these colours"
+PALETTE_ROLE_LINE_V17 = "brand palette: its colours as accents where the scene has room, never the only colours"
+PALETTE_OPS = ("generate", "frame", "region_edit", "frame_edit", "clip", "clip_edit", "clip_patch")
+# What Dex reads is its op's (round 3, R2-3: a words-only generate was 15.1k input tokens, the whole 18 KB director
+# schema among them): the schema without other ops' fields, and the prompt without the sections its input cannot use.
+IMAGE_OPS = ("generate", "frame", "view", "region_edit")
+VIDEO_ONLY_FIELDS = ("firstFrame", "lastFrame", "keyframe", "keyframes", "video", "durationS", "audio", "strength")
+# The shared sections a job without that input never needs.
+SECTION_NEEDS = {"## Context: brand rules and documents": "context", "## The brief": "brief"}
+# How hard Dex thinks, and how much it may write, per op (round 3 R3-11: a 1-ref frame took 34.8 s and 2,091 output
+# tokens at the model's default effort, its thinking counted as output). A plan keeps the model's default.
+EFFORT = {"generate": "low", "frame": "low", "view": "low", "region_edit": "low"}
+MAX_TOKENS = {"shot_list": 6000, "frame": 2000, "view": 1500}
+MAX_TOKENS_DEFAULT = 3000
+_PREVIOUS_SAID = re.compile(r"not a copy of @previous|@previous is the moment before", re.I)
 # A prompt file split by "<!-- ops: a b -->" markers: the part before the first is for every op.
 SECTION = re.compile(r"^<!-- ops: ([a-z_ ]+) -->\s*$", re.M)
 # Where a prompt's role lines go: one line per ref role, written from common.schema.json's
@@ -215,6 +275,163 @@ def _hold_refs(op: str, job: dict, payload: dict, output: dict, sheet: dict) -> 
         output["added"] = added
     else:
         output.pop("added", None)
+
+
+def call_timeout(base: float, payload: dict) -> float:
+    """Dex's seconds for this job: more pictures, more to read (R2-3)."""
+    n = len(payload.get("refs") or [])
+    return min(CALL_MAX_S, max(base, base + CALL_S_PER_REF * max(0, n - CALL_REFS_FREE)))
+
+
+def sheet_for(op: str, sheet: dict, payload: dict) -> dict:
+    """The capability sheet as Dex reads it for one op (R2-3): the op's own entry and the models it can run on (its
+    model, region model, alternates and the one picked), without prices' notes; the checks still use the whole sheet."""
+    ops = {o: (sheet.get("ops") or {}).get(o) for o in (op, *RELATED_OPS.get(op, ()))}
+    ops = {o: spec for o, spec in ops.items() if spec}
+    want = {payload.get("model")}
+    for spec in ops.values():
+        want |= {spec.get("model"), spec.get("regionModel"), *(a.get("model") for a in spec.get("alternates") or [])}
+    models = {m: {k: v for k, v in body.items() if k not in MODEL_DROP}
+              for m, body in (sheet.get("models") or {}).items() if m in want}
+    out = {k: v for k, v in sheet.items() if k not in SHEET_DROP and k not in ("ops", "models")}
+    out["ops"] = ops
+    if models:
+        out["models"] = models
+    return out
+
+
+# A frame's closing sentence ("Full-bleed cinematic image; no text…", or the on-screen words' "no other text…") stays last.
+_CLOSING = re.compile(r"(?:^|(?<=[.!?]) )((?:Full-bleed cinematic image|[^.]*\bno other text\b)[^.]*\.)\s*$")
+
+
+def _add_line(job: dict, line: str, sheet: dict) -> None:
+    """One of the relay's own lines into the prompt, before a frame's closing sentence, when the prompt has room."""
+    prompt = (job.get("prompt") or "").rstrip()
+    m = _CLOSING.search(prompt)
+    said = f"{prompt[:m.start(1)].rstrip()} {line} {m.group(1)}" if m else f"{prompt} {line}"
+    said = said.strip()
+    limit = prompt_max(sheet, job.get("model") or "")
+    if limit is None or utf16_units(said) <= limit:
+        job["prompt"] = said
+
+
+def _no_other_brands(job: dict, op: str, sheet: dict) -> None:
+    """A generate or a frame paints no brand the job did not ask for (R2-13). Not an edit of a picture (a frame_edit,
+    a region_edit), which keeps what it has."""
+    if op in BRAND_FREE_OPS and not _BRANDS_SAID.search(job.get("prompt") or ""):
+        _add_line(job, NO_OTHER_BRANDS, sheet)
+    if op in BRAND_FREE_OPS and not _SIGNS_SAID.search(job.get("prompt") or ""):
+        _add_line(job, NO_REAL_SIGNS, sheet)
+
+
+def _previous_is_not_a_copy(job: dict, op: str, sheet: dict) -> None:
+    """A frame sent with the shot before (@previous) draws its own moment, never that picture again (R2-4)."""
+    if op == "frame" and any(r.get("name") == "previous" for r in job.get("refs") or []) \
+            and not _PREVIOUS_SAID.search(job.get("prompt") or ""):
+        _add_line(job, PREVIOUS_IS_NOT_A_COPY, sheet)
+
+
+def _no_people(job: dict, op: str, payload: dict, sheet: dict) -> None:
+    """A frame whose shot shows no one (its direction says so, R5-F3) says it in the prompt, unless Dex did; never when
+    a character picture goes with it."""
+    shot = payload.get("shot") if isinstance(payload.get("shot"), dict) else {}
+    if op != "frame" or NO_ONE_SEEN not in (shot.get("direction") or ""):
+        return
+    if any(r.get("role") == "character" for r in job.get("refs") or []) or _PEOPLE_SAID.search(job.get("prompt") or ""):
+        return
+    _add_line(job, NO_PEOPLE, sheet)
+
+
+def _shot_framing(job: dict, op: str, payload: dict, sheet: dict) -> None:
+    """A storyboard frame is drawn at its own shot's size and angle (round 4: frame 2 copied frame 1's framing)."""
+    cam = ((payload.get("shot") or {}).get("camera")) or {}
+    if op != "frame" or not cam.get("size"):
+        return
+    try:
+        words = camera_words()
+    except Exception:  # never fails a job: the frame goes as Dex wrote it
+        return
+    size = (words.get("size") or {}).get(cam["size"]) or {}
+    angle = (words.get("angle") or {}).get(cam.get("angle") or "") or {}
+    prompt = (job.get("prompt") or "").lower()
+    if not size.get("label") or any(w.lower() in prompt for w in size.get("words") or [size["label"]]):
+        return
+    at = f", at {angle['label']}" if angle.get("label") and not any(w.lower() in prompt for w in angle.get("words") or []) else ""
+    _add_line(job, SHOT_FRAMING.format(size=size["label"], angle=at), sheet)
+
+
+def _layout_is_a_photo(job: dict, op: str, payload: dict, sheet: dict) -> None:
+    """A generate from a layout drawing with no words is a photograph of real things, not clip art (round 4, S3-8)."""
+    if op != "generate" or (payload.get("text") or "").strip():
+        return
+    if not any(r.get("role") == "layout" and r.get("kind") == "drawing" for r in payload.get("refs") or []):
+        return
+    _add_line(job, LAYOUT_ONLY_PHOTO, sheet)
+
+
+def strict_palette(payload: dict) -> bool:
+    """The job's palette is the only colours (its text says Strict:); otherwise it is accents."""
+    return any(i.get("kind") == "palette" and str(i.get("text") or "").lstrip().lower().startswith("strict")
+               for i in payload.get("context") or [])
+
+
+def _palette_as_accents(job: dict, op: str, payload: dict) -> None:
+    """A palette is the brand's accents, never the only colours, unless it says Strict (R3-2)."""
+    if op not in PALETTE_OPS or strict_palette(payload) or not job.get("prompt"):
+        return
+    prompt = _ONLY_COLOURS.sub("with the brand colours as accents", job["prompt"])
+    job["prompt"] = _KEEP_TO_PALETTE.sub("with touches of the brand palette as accents", prompt)
+
+
+def schema_for(op: str, schema: dict, payload: Optional[dict] = None) -> dict:
+    """The director schema as Dex reads it for one op (round 3, R2-3): only the fields its answer
+    may hold (a plan's shots, a Change this frame's reading, a clip's video fields, the brief's flags when there is a
+    brief). Every answer is still checked against the whole schema (_check)."""
+    payload = payload or {}
+    props = dict(schema.get("properties") or {})
+    if op == "shot_list":
+        for k in ("providerJob", "frameEdit", "added"):
+            props.pop(k, None)
+    else:
+        props.pop("shots", None)
+        if op != "frame_edit":
+            props.pop("frameEdit", None)
+    if not payload.get("brief"):
+        props.pop("briefFlags", None)
+    if op in IMAGE_OPS and isinstance(props.get("providerJob"), dict):
+        pj = dict(props["providerJob"])
+        pj["properties"] = {k: v for k, v in (pj.get("properties") or {}).items() if k not in VIDEO_ONLY_FIELDS}
+        if pj.get("required"):
+            pj["required"] = [k for k in pj["required"] if k in pj["properties"]]
+        props["providerJob"] = pj
+    out = {k: v for k, v in schema.items() if k not in ("properties", "allOf", "required")}
+    out["properties"] = props
+    out["required"] = [k for k in schema.get("required") or [] if k in props]
+    if op == "frame_edit":
+        out["allOf"] = schema.get("allOf") or []
+    else:
+        work = "shots" if op == "shot_list" else "providerJob"
+        out["allOf"] = [{"if": {"properties": {"question": {"type": "null"}}}, "then": {"required": [work]}}]
+    return out
+
+
+def without_descriptions(node):
+    """A schema without its descriptions: from director.v17 the prompt says what each field is (R2-3: they were
+    4.4 KB of every ask). Validation keeps the whole schema."""
+    if isinstance(node, list):
+        return [without_descriptions(x) for x in node]
+    if not isinstance(node, dict):
+        return node
+    return {k: without_descriptions(v) for k, v in node.items() if not (k == "description" and isinstance(v, str))}
+
+
+def drop_sections(common: str, payload: Optional[dict]) -> str:
+    """The shared part of a prompt without the sections this job's input has nothing for (no context, no brief)."""
+    if payload is None:
+        return common
+    parts = re.split(r"(?m)^(?=## )", common)
+    keep = [p for p in parts if not any(p.startswith(h) and not payload.get(need) for h, need in SECTION_NEEDS.items())]
+    return "".join(keep)
 
 
 def provider_sizes(provider: str, op: str, model: Optional[str] = None) -> Optional[frozenset]:
@@ -393,6 +610,8 @@ def _within_budget(job: dict, op: str, payload: dict) -> None:
         # (features/frame-edit-or-redraw.clan; a 3-shot take on Omni Flash fell back at 556 added, 2026-11-17).
         budget += TAKE_LINE_BUDGET * len(payload.get("shots") or [])
     prompt = job.get("prompt") or ""
+    for line in RELAY_LINES:  # the relay's own lines, said by Dex or added after: outside the budget (v16)
+        prompt = prompt.replace(line, "")
     added = len(prompt) - _given_words(prompt, payload)
     if added > budget * 1.5:
         raise DirectorError(f"the director added {added} characters to the words; {op} allows about {budget}")
@@ -520,14 +739,49 @@ def _hashes(node) -> set:
 SPOKEN = {"line", "vo"}
 
 
+def _sound(job: dict, inp: dict, sheet: dict, spec: dict) -> None:
+    """A clip's sound by the one rule (sound.py, features/pt-film-r1.clan): the audio switch, and with sound on the
+    spoken lines said in the prompt, timed in the take when it is one."""
+    import connected
+    import sound
+    from providers.types import prompt_max
+    starts = connected.take_plan(inp, spec)[1] if connected.mode_of(inp) in connected.TAKE_MODES and inp.get("shots") else None
+    sound.apply(job, inp, sheet, starts=starts, prompt_max=prompt_max(sheet, job.get("model") or spec.get("model", "")))
+
+
+# Sheet facts the relay acts on alone, never Dex's to weigh: left out of what Dex reads, so its input is unchanged.
+RELAY_ONLY = ("refAspect",)
+
+
+def _sheet_for_dex(sheet: dict) -> dict:
+    """The capability sheet as Dex reads it: without the relay-only facts (refAspect: the relay pads a picture into
+    a model's shape range itself, pt-film-r2 F5)."""
+    models = sheet.get("models")
+    if not isinstance(models, dict) or not any(k in m for m in models.values() if isinstance(m, dict) for k in RELAY_ONLY):
+        return sheet
+    return {**sheet, "models": {n: ({k: v for k, v in m.items() if k not in RELAY_ONLY} if isinstance(m, dict) else m) for n, m in models.items()}}
+
+
+def _onscreen(job: dict, inp: dict) -> None:
+    """No clock time in a clip's or a frame's prompt unless a shot asks for words on screen (onscreen.py; UAT 2026-11-21,
+    F11; round 4, R4-F10)."""
+    import onscreen
+    onscreen.apply(job, inp)
+
+
 def _without_dialogue(op: str, payload: dict) -> dict:
     """Spoken words (a shot's line and VO beats) are never sent to an image or video model: a model
     told the words draws them (a "Dialogue - ..." caption box in a frame, then in every clip made from
     it; decided 2026-10-07). Moments, music, sound and camera beats stay."""
-    shot = payload.get("shot")
-    if op == "shot_list" or not isinstance(shot, dict) or not shot.get("beats"):
+    if op == "shot_list":
         return payload
-    return {**payload, "shot": {**shot, "beats": [b for b in shot["beats"] if b.get("kind") not in SPOKEN]}}
+    quiet = lambda s: {**s, "beats": [b for b in s["beats"] if b.get("kind") not in SPOKEN]} if isinstance(s, dict) and s.get("beats") else s  # noqa: E731
+    out = dict(payload)
+    if isinstance(payload.get("shot"), dict) and payload["shot"].get("beats"):
+        out["shot"] = quiet(payload["shot"])
+    if payload.get("shots"):  # a take's shots too: the web sends a clip's lines for its sound (sound.py)
+        out["shots"] = [quiet(s) for s in payload["shots"]]
+    return out
 
 
 class Director:
@@ -538,6 +792,7 @@ class Director:
         wire refuses (UAT 2026-11-18: "claude-sonnet-5-5" is not a Bedrock id). The relay passes its own
         (director/claude.py PER_CLICK, SHOT_LIST)."""
         self.port = model_port
+        self._one_try = None  # (the port's wire, the same wire with no SDK retry) for long calls
         self.sheets = sheets
         port_model = getattr(model_port, "model", None) if model_port is not None else None
         self.per_click_model = per_click_model or port_model
@@ -546,23 +801,56 @@ class Director:
         require_prompt(prompt_version)
         self.prompt_version = prompt_version
         self.system = load_prompt(self.prompt_dir / f"{prompt_version}.md", contracts)
+        if prompt_number(prompt_version) >= 17:  # a palette is accents (R3-2); the contract's role line says "keep to"
+            self.system = self.system.replace(PALETTE_ROLE_LINE, PALETTE_ROLE_LINE_V17)
         schemas = load_schemas(contracts)
         self.schema = bundle(schemas)
         registry = Registry().with_resources((BASE + n, Resource.from_contents(s)) for n, s in schemas.items())
         self._validate = lambda name, pointer="": Draft202012Validator(
             {"$ref": BASE + name + pointer}, registry=registry, format_checker=FormatChecker())
 
+    def _port_for(self, payload: dict):
+        """The model port for this job: the shared one, or for a job with many pictures (R2-3) a copy with more
+        seconds and no SDK retry, since two long tries would outrun the relay's Lambda (60 s). model.py is the
+        middleware's copy and stays as it is."""
+        base = getattr(self.port, "timeout", None)
+        if not isinstance(base, (int, float)):
+            return self.port
+        seconds = call_timeout(base, payload)
+        if seconds <= base:
+            return self.port
+        port = copy.copy(self.port)  # shares the routes and what the endpoint refused
+        port.timeout = seconds
+        wire = getattr(self.port, "wire", None)
+        client = getattr(wire, "client", None)
+        if isinstance(wire, AnthropicWire) and client is not None and hasattr(client, "with_options"):
+            if self._one_try is None or self._one_try[0] is not wire:
+                one = copy.copy(wire)
+                one.client = client.with_options(max_retries=0)
+                self._one_try = (wire, one)
+            port.wire = self._one_try[1]
+        return port
+
     @property
     def sectioned(self) -> bool:
         return bool(SECTION.search(self.system))
 
-    def system_for(self, op: str) -> str:
+    def schema_sent(self, op: str, payload: Optional[dict] = None) -> dict:
+        """The schema Dex answers in: the whole one for a prompt before director.v17 (sent as it was, for a rollback);
+        from v17 its op's cut (schema_for), without descriptions."""
+        if prompt_number(self.prompt_version) < 17:
+            return self.schema
+        return without_descriptions(schema_for(op, self.schema, payload))
+
+    def system_for(self, op: str, payload: Optional[dict] = None) -> str:
         """The prompt for one op: all of an unsectioned file; else the shared part and this op's section,
-        or the fallback prompt for an op the file has no section for."""
+        or the fallback prompt for an op the file has no section for. With the job's `payload`, the shared
+        sections it has nothing for are left out (drop_sections)."""
         parts = SECTION.split(self.system)
         if len(parts) == 1:
             return self.system
-        common, sections = parts[0], {}
+        # From director.v17 on (older prompts are sent byte for byte, for a rollback).
+        common, sections = (drop_sections(parts[0], payload) if prompt_number(self.prompt_version) >= 17 else parts[0]), {}
         for ops, body in zip(parts[1::2], parts[2::2]):
             for o in ops.split():
                 sections[o] = body
@@ -585,28 +873,51 @@ class Director:
             if op not in sheet["ops"]:
                 raise DirectorError(f"{provider_name} does not support {op}")
         model = self.shot_list_model if op == "shot_list" else self.per_click_model
+        raw = payload  # the input as it came: its spoken lines go into a clip made with sound (sound.py), never to Dex
         payload = _without_dialogue(op, payload)
         # A linked brief (features/brief-node.clan), cut to this op's budget; no brief: the input as it came.
         payload = briefs.for_op(op, payload)
+        # The project's brand rules and linked documents (features/pt-dex-context.clan), cut to this op's kinds and budget.
+        payload = job_context.for_op(op, payload)
         ask = {"op": op, "input": payload}
         if sheet:
             ask["provider"] = provider_name
-            ask["sheet"] = sheet
+            ask["sheet"] = sheet_for(op, _sheet_for_dex(sheet), payload)  # relay-only fields out, then cut to the op
+        given = record.for_record(payload)  # kept on the job even when Dex fails (R2-3)
 
         usage = Usage()
         t0 = time.monotonic()
-        output = self.port.call(PURPOSE, self.system_for(op), ask, self.schema, usage=usage,
-                                attribution=job_id or op, model=model,
-                                max_tokens=6000 if op == "shot_list" else 3000,
-                                images=list(images or []) if op in ("frame_edit", "clip_patch") else None)
+        # The job's id rides on the call (features/pt-relay-trace.clan): the model port's log and ledger lines
+        # name it, so a job's Dex call is found by its jobId. Metadata only (peripherals.md §0.2).
+        headers = {"X-Napkin-Handler": "relay.director", "X-Napkin-Job": job_id} if job_id else None
+        try:
+            output = self._port_for(payload).call(PURPOSE, self.system_for(op, payload), ask,
+                                                  self.schema_sent(op, payload), usage=usage,
+                                                  attribution=job_id or op, model=model, headers=headers,
+                                                  max_tokens=MAX_TOKENS.get(op, MAX_TOKENS_DEFAULT), effort=EFFORT.get(op),
+                                                  images=list(images or []) if op in ("frame_edit", "clip_patch") else None)
+        except Exception as e:
+            e.given = given
+            raise
         latency_ms = round((time.monotonic() - t0) * 1000)
 
         if op in VIDEO_OPS and "providerJob" in output:
             output["providerJob"].setdefault("audio", False)  # explicit on every video request
         briefs.settle_flags(output, payload)  # only lines of the brief this job was given
-        self._check(op, payload, provider_name, sheet, output, set(extra_hashes))
+        try:
+            self._check(op, payload, provider_name, sheet, output, set(extra_hashes))
+        except DirectorError as e:
+            e.answer = output  # what Dex wrote, for the relay's director_rejected line
+            e.given = given
+            raise
+        if op in ("clip", "frame") and "providerJob" in output:
+            # No clock time in a frame's prompt either (UAT round 4, R4-F10: "1 a.m." reached frame 1's prompt).
+            _onscreen(output["providerJob"], raw)
+        if op == "clip" and "providerJob" in output:
+            _sound(output["providerJob"], raw, sheet, sheet["ops"][op])
+        # What Dex was given, after the relay's cuts, kept small on the job record (features/pt-canvas-r1.clan).
         agent_block = {"model": model, "promptVersion": self.prompt_version, "output": output,
-                       "rationale": output["rationale"], "latencyMs": latency_ms}
+                       "rationale": output["rationale"], "latencyMs": latency_ms, "input": given}
         errs = list(self._validate("director.schema.json", "#/$defs/agentBlock").iter_errors(agent_block))
         if errs:
             raise DirectorError(f"agent block: {errs[0].message}")
@@ -720,6 +1031,13 @@ class Director:
             _donors_are_objects(job, payload)
             _within_budget(job, op, payload)
         _views_are_one(job, op, payload)  # the relay's own words: outside the director's budget
+        _previous_is_not_a_copy(job, asked, sheet)
+        _no_people(job, asked, payload, sheet)
+        _shot_framing(job, asked, payload, sheet)
+        _layout_is_a_photo(job, asked, payload, sheet)
+        _no_other_brands(job, asked, sheet)
+        _palette_as_accents(job, asked, payload)
+        view_subject(job, op, payload)  # a view of a person goes as a person, and says who (pt-canvas-r1)
         self._check_provider_limits(op, sheet, job, payload)
         # A named input picture this job does not send (a model that takes no refs, Veo 3.1 Fast) is said
         # in words. A name in none of the input, or @current/@anchor/@previous without their picture (the

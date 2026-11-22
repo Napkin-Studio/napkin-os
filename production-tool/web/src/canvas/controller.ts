@@ -18,7 +18,11 @@ import { newId } from '../lib/ulid'
 import { systemUpdate } from '../doc/store'
 import { markStale } from '../doc/remove'
 import { assetRef } from '../jobs/assets'
-import { namedInput } from '../jobs/select'
+import { namedInput, unnamedInput } from '../jobs/select'
+import { linkedTexts } from '../jobs/linkedText'
+import { brandRows, type BrandChoice, type BrandRow } from '../jobs/context'
+import type { BrandPayload } from './swatches'
+import { countRefs, kindOfRole, type RefKind, type RefLimits } from './refBudget'
 import { landingWhy } from '../jobs/landing'
 import { boardFrame, fitInto, holdFields, tellFull, withFields } from './boards/fitting'
 import { bringIntoView } from './boards/boards'
@@ -32,7 +36,7 @@ import { BIG_CROP, BIG_CROP_LINE, aspectLabel, boxOf, exactRatio, exportPlan, in
 import { SKETCH_ASK, sketchAsk } from '../ui/asks'
 import {
   alive, assetData, bounds, byOwnId, cd, childrenOf, dataURLToBlob, downscale, exportElements, idOf,
-  imageOf, isText, makeArrow, makeGenPlaceholder, nextSlot, textOf, type El,
+  imageOf, isText, makeArrow, makeGenPlaceholder, nextSlot, slotFrom, slotNear, textOf, type El,
 } from './scene'
 import { instruction, planSelection, type CanvasPlan } from './selection'
 import { CanvasDocSync } from './sync'
@@ -49,7 +53,8 @@ const NODE = { w: 300, h: 400 }
 
 /** What a Generate on this selection would send, for the popover to show before it goes. */
 export interface GeneratePreview {
-  inputs: { nodeId: string; name?: string; kind: 'pic' | 'drawn' | 'gen' }[]
+  /** Each picture, its name and role when it has one (a named one's role decides person or thing: refBudget). */
+  inputs: { nodeId: string; name?: string; role?: RefRole; kind: 'pic' | 'drawn' | 'gen' }[]
   drawings: number
   notes: string[]
   pending: number
@@ -59,6 +64,20 @@ export interface GeneratePreview {
   areas: number
   /** The crop warning when the relay's crop would take most of the picture (frame-aspect, open question 7). */
   cropLine?: string
+}
+
+/** A Generate's options. `at`: the spot clicked (Place…); `limits`: the picked model's picture budget (refBudget);
+ *  `people`: unnamed pictures the person marked as a person, sent as characters (Runway subject human); `modelChoice`:
+ *  the model picked; `layoutOnly`: the answer to Fin's ask on a sketch with no words. */
+export interface GenerateOpts {
+  at?: { x: number; y: number }
+  more?: boolean
+  limits?: RefLimits
+  people?: readonly string[]
+  modelChoice?: ModelChoice
+  layoutOnly?: boolean
+  /** The person's ticks on the brand (the Generate tray; jobs/context.ts BrandChoice, UAT round 3 R3-2). */
+  brand?: BrandChoice
 }
 
 /** What a Generate did: sent a job, or (a sketch with no words and nothing linked) asked first. */
@@ -392,7 +411,7 @@ export class CanvasController {
     return {
       inputs: plan.images.map((i) => {
         const r = this.nameOn(i.nodeId, doc)
-        return { nodeId: i.nodeId, kind: i.kind, ...(r ? { name: nameOf(r) } : {}) }
+        return { nodeId: i.nodeId, kind: i.kind, ...(r ? { name: nameOf(r), role: r.role } : {}) }
       }),
       drawings: plan.strokes.length && !area ? 1 : 0,
       notes: plan.notes.map((n) => n.text),
@@ -401,6 +420,22 @@ export class CanvasController {
       ...(area ? { sketch: { label: aspectLabel(area.aspect), aspect: area.aspect, frame: area.frame } } : {}),
       ...(loss > BIG_CROP ? { cropLine: BIG_CROP_LINE } : {}),
     }
+  }
+
+  /**
+   * The pictures a Generate sends, counted as people and things against the model's limits (canvas/refBudget.ts),
+   * from the document alone: nothing is uploaded until they fit. `layouts`: a sketch area's picture (a thing).
+   */
+  private checkRefs(images: readonly { nodeId: string }[], said: readonly NamedRef[], opts: GenerateOpts, layouts = 0) {
+    const limits = opts.limits ?? { max: 14, characters: 14 }
+    const named = images.map((i) => this.nameOn(i.nodeId))
+    const kinds: RefKind[] = [
+      ...Array<RefKind>(layouts).fill('thing'),
+      ...images.map((i, k) => kindOfRole(named[k]?.role ?? (opts.people?.includes(i.nodeId) ? 'character' : 'other'))),
+      ...said.filter((r) => !named.some((n) => n?.id === r.id)).map((r) => kindOfRole(r.role)),
+    ]
+    const { problem } = countRefs(kinds, limits)
+    if (problem) throw new Error(problem)
   }
 
   /** Where a new node goes by default: to the right of the selection, clear of what is there. */
@@ -417,7 +452,7 @@ export class CanvasController {
    */
   /** `modelChoice`: the model picked on the Generate popover (absent: the routed default). `layoutOnly`: the
    *  answer to Fin's ask on a sketch with no words ("Use it as a layout only"). */
-  async generate(elIds: string[], typed: string, opts: { at?: { x: number; y: number }; more?: boolean; limits?: { max: number; characters: number }; modelChoice?: ModelChoice; layoutOnly?: boolean } = {}): Promise<GenerateResult> {
+  async generate(elIds: string[], typed: string, opts: GenerateOpts = {}): Promise<GenerateResult> {
     let plan = planSelection(this.els(), elIds)
     if (plan.pending.length) throw new Error('One of these is still being made. Wait for it, or leave it out.')
     // A person's own frame used in Generate becomes a sketch area (one undo step), its strokes where they are.
@@ -448,31 +483,13 @@ export class CanvasController {
     const text = instruction(typed, [...plan.notes, ...written.map((w) => ({ text: w }))])
     if (!plan.images.length && !text) throw new Error('Select a drawing, a picture or some words first.')
 
-    const limits = opts.limits ?? { max: 14, characters: 14 }
-    if (plan.images.length > limits.max) {
-      throw new Error(`Pick at most ${limits.max} pictures and drawings for one Generate.`)
-    }
-    const refs: JobInputRef[] = []
-    for (const i of plan.images) {
-      const named = this.nameOn(i.nodeId)
-      if (named) {
-        refs.push(await namedInput(this.s.relay, this.doc(), named))
-        continue
-      }
-      const role: RefRole = i.kind === 'pic' ? 'other' : 'character'
-      refs.push({ id: i.nodeId, role, kind: i.kind === 'drawn' ? 'drawing' : i.kind === 'gen' ? 'generated' : 'picture', asset: await assetRef(this.s.relay, i.asset) })
-    }
-    const characters = refs.filter((r) => r.role === 'character').length
-    if (characters > limits.characters) {
-      throw new Error(`This provider takes at most ${limits.characters} character pictures at once. Leave some out.`)
-    }
     // A name typed in the words must be one of the inputs, so the relay can find it; a bare
     // @key brings the whole character (its front and up to 3 more), or says to set a front.
     const said = mentions(doc, text)
     if (said.unknown.length) throw new Error(`@${said.unknown[0]} is not a name in this project. Name an image first, or check the spelling.`)
-    for (const r of said.found) {
-      if (!refs.some((x) => x.id === r.id)) refs.push(await namedInput(this.s.relay, this.doc(), r))
-    }
+    // Counted against the model's limits BEFORE anything is uploaded (UAT round 1 IMG-6/7/8: 24 s of uploads, then a refusal).
+    this.checkRefs(plan.images, said.found, opts)
+    const refs = await this.inputRefs(plan.images, said.found, opts)
 
     const noteIds = plan.notes.map((n) => n.nodeId ?? this.noteId(n.elId))
     const sources: { el: El; id: string }[] = [
@@ -484,11 +501,52 @@ export class CanvasController {
     const first = plan.images[0]
     const ratio: Ratio = first ? ratioFor(this.aspectOfImage(first.elId, first.asset)) : mainStoryboard(doc)?.ratio ?? '16:9'
     const size = nodeSize(ratio === '16:9' ? { w: 16, h: 9 } : ratio === '9:16' ? { w: 9, h: 16 } : ratio === '1:1' ? { w: 1, h: 1 } : { w: 4, h: 5 })
-    const slot = opts.at ? { ...opts.at, ...size } : nextSlot(this.els(), bounds(sources.map((s) => s.el)), size)
+    const slot = opts.at ? { ...opts.at, ...size } : slotFrom(this.els(), sources.map((s) => s.el), size)
     this.placeGen(jobId, 'generate', sources.map((s) => s.id), sources, slot)
     const input = { refs, ratio, ...(text ? { text } : {}), ...(opts.more ? { chips: ['more_options'] } : {}) }
-    await this.s.runner.submit('generate', input, plan.images.filter((i) => i.kind === 'gen').map((i) => i.nodeId), { for: 'canvas' }, jobId, opts.modelChoice)
+    await this.s.runner.submit('generate', input, plan.images.filter((i) => i.kind === 'gen').map((i) => i.nodeId), { for: 'canvas' }, jobId, opts.modelChoice,
+      { brand: this.brandChoice(plan, opts.brand) })
     return { jobId }
+  }
+
+  /** A Generate's pictures as job refs, in the order chosen, uploaded side by side (UAT round 3, R2-3: 14 pictures
+   *  went one after another and "Sending…" lasted 34 s). A picture already on its way is not sent twice (assetRef). */
+  private async inputRefs(images: CanvasPlan['images'], said: readonly NamedRef[], opts: GenerateOpts): Promise<JobInputRef[]> {
+    const doc = this.doc()
+    const fromImages = images.map((i) => {
+      const named = this.nameOn(i.nodeId)
+      if (named) return namedInput(this.s.relay, doc, named)
+      return assetRef(this.s.relay, i.asset).then((a) => unnamedInput(i.nodeId, i.kind, a, opts.people?.includes(i.nodeId) ? 'character' : 'other'))
+    })
+    const named = new Set(images.map((i) => this.nameOn(i.nodeId)?.id).filter(Boolean))
+    const fromWords = said.filter((r) => !named.has(r.id)).map((r) => namedInput(this.s.relay, doc, r))
+    const refs: JobInputRef[] = []
+    for (const r of await Promise.all([...fromImages, ...fromWords])) if (!refs.some((x) => x.id === r.id)) refs.push(r)
+    return refs
+  }
+
+  /** The selection's notes a Brand board links into: they make the job brand work ("use this brand", R2-5). */
+  private brandChoice(plan: CanvasPlan, choice: BrandChoice = {}): BrandChoice {
+    const els = this.els()
+    const notes = new Set(plan.notes.map((n) => cd(els.find((e) => e.id === n.elId))).flatMap((c) => (c?.kind === 'note' ? [c.id] : [])))
+    const branded = notes.size > 0 && Object.values(this.doc().links ?? {}).some((l) => l.role === 'brand' && notes.has(l.to.id))
+    return branded ? { ...choice, work: true } : choice
+  }
+
+  /**
+   * The brand a Generate of these elements reads, one row per brand ref with whether it goes (the tray's ticks;
+   * jobs/context.ts brandRows, UAT round 3 R3-2). The same rule the job runs by, from the selection as it is.
+   */
+  brandFor(elIds: string[], typed: string, choice: BrandChoice = {}): BrandRow[] {
+    const els = this.els()
+    const plan = planSelection(els, elIds)
+    const sketch = plan.sketches[0]
+    const node = sketch ? { kind: 'sketch' as const, id: sketch.sketchId } : { kind: 'group' as const, id: 'canvas' }
+    const text = instruction(typed, plan.notes)
+    const doc = this.doc()
+    const refs = [...plan.images.map((i) => this.nameOn(i.nodeId)), ...mentions(doc, text).found]
+      .filter((r): r is NamedRef => !!r).map((r) => ({ role: (keyNamed(doc, r.key)?.role ?? r.role) as JobInputRef['role'] }))
+    return brandRows(doc, 'generate', node, { text, refs: refs as JobInputRef[] }, this.brandChoice(plan, choice))
   }
 
   // ── Resize selected pictures (features/resize-selection.clan) ──
@@ -641,7 +699,7 @@ export class CanvasController {
   }
 
   /** What an area's Generate sends: exactly the area, its strokes clipped to it, at its shape, as a layout. */
-  private async generateSketch(plan: CanvasPlan, typed: string, opts: { at?: { x: number; y: number }; more?: boolean; limits?: { max: number; characters: number }; modelChoice?: ModelChoice; layoutOnly?: boolean }): Promise<GenerateResult> {
+  private async generateSketch(plan: CanvasPlan, typed: string, opts: GenerateOpts): Promise<GenerateResult> {
     const doc = this.doc()
     const els = alive(this.els())
     const s = plan.sketches[0]
@@ -657,23 +715,19 @@ export class CanvasController {
     const said = mentions(doc, text)
     if (said.unknown.length) throw new Error(`@${said.unknown[0]} is not a name in this project. Name an image first, or check the spelling.`)
     // Nothing says what it is: Fin asks first, and nothing is sent (or spent) until someone answers.
-    if (!text && !plan.images.length && !said.found.length && !opts.layoutOnly) return { ask: await this.askAboutSketch(s.sketchId) }
+    // A note linked into the area says it too (UAT round 2 R2-2): its words join at submit (jobs/linkedText.ts).
+    const linked = linkedTexts(doc, { kind: 'sketch', id: s.sketchId }).length > 0
+    if (!text && !linked && !plan.images.length && !said.found.length && !opts.layoutOnly) return { ask: await this.askAboutSketch(s.sketchId) }
 
-    const limits = opts.limits ?? { max: 14, characters: 14 }
-    if (plan.images.length + 1 > limits.max) throw new Error(`Pick at most ${limits.max} pictures and drawings for one Generate.`)
+    this.checkRefs(plan.images, said.found, opts, 1)
     await this.refreshDrawn(plan.images.filter((i) => i.kind === 'drawn').map((i) => i.elId))
     const members = membersOf(els as unknown as Boxed[], rect).filter((e) => e.id !== areaEl.id)
     const ex = exportPlan(rect, aspect)
     const blob = await this.canvas.exportRegion({ rect, elementIds: members.map((e) => e.id), outW: ex.outW, outH: ex.outH, background: '#ffffff' })
     const sha = await putBlob(blob)
     this.addAsset(sha, blob, 'drawn', { w: ex.outW, h: ex.outH })
-    const refs: JobInputRef[] = [{ id: s.sketchId, role: 'layout', kind: 'drawing', asset: await assetRef(this.s.relay, sha) }]
-    for (const i of plan.images) {
-      const named = this.nameOn(i.nodeId)
-      if (named) refs.push(await namedInput(this.s.relay, this.doc(), named))
-      else refs.push({ id: i.nodeId, role: i.kind === 'pic' ? 'other' : 'character', kind: i.kind === 'drawn' ? 'drawing' : i.kind === 'gen' ? 'generated' : 'picture', asset: await assetRef(this.s.relay, i.asset) })
-    }
-    for (const r of said.found) if (!refs.some((x) => x.id === r.id)) refs.push(await namedInput(this.s.relay, this.doc(), r))
+    const [layout, rest] = await Promise.all([assetRef(this.s.relay, sha), this.inputRefs(plan.images, said.found, opts)])
+    const refs: JobInputRef[] = [{ id: s.sketchId, role: 'layout', kind: 'drawing', asset: layout }, ...rest]
 
     const noteIds = notes.map((n) => n.nodeId ?? this.noteId(n.elId))
     const live = this.els()
@@ -689,7 +743,8 @@ export class CanvasController {
     this.placeGen(jobId, 'generate', sources.map((x) => x.id), sources, slot)
     const ratio = exactRatio(aspect)
     const input: JobInput = { refs, ...(ratio ? { ratio } : { aspect }), ...(text ? { text } : {}), ...(opts.more ? { chips: ['more_options'] } : {}) }
-    await this.s.runner.submit('generate', input, plan.images.filter((i) => i.kind === 'gen').map((i) => i.nodeId), { for: 'sketch', sketchId: s.sketchId }, jobId, opts.modelChoice)
+    await this.s.runner.submit('generate', input, plan.images.filter((i) => i.kind === 'gen').map((i) => i.nodeId), { for: 'sketch', sketchId: s.sketchId }, jobId, opts.modelChoice,
+      { brand: this.brandChoice(plan, opts.brand) })
     return { jobId }
   }
 
@@ -735,13 +790,15 @@ export class CanvasController {
    * frames and clips made from the old picture are marked out of date). A new key gets
    * `role` (character by default).
    */
-  name(nodeId: string, key: Key, variant: Variant, role: RefRole = 'character') {
+  name(nodeId: string, key: Key, variant: Variant, role: RefRole = 'character', payload?: BrandPayload) {
     const problem = nameProblem(key, variant)
     if (problem) throw new Error(problem)
     const img = imageOf(this.nodeEl(nodeId))
     if (!img?.asset) throw new Error('Name a picture once it is finished.')
     const asset = img.asset
     const name = `${key}_${variant}`
+    // A palette's swatches, a typography ref's font, a brand rule's words (UAT round 2 R2-1): only the ones given.
+    const held: BrandPayload = Object.fromEntries(Object.entries(payload ?? {}).filter(([, v]) => v !== undefined))
     const write = (d: ProductionDocument) => {
       const now = new Date().toISOString()
       const refs = Object.values(d.refs)
@@ -757,12 +814,12 @@ export class CanvasController {
         // The name moves here: one image per name.
         if (other.asset && other.asset !== asset) markStale(d, other.asset, { kind: 'ref', id: other.id }, `@${name} now shows another image.`, now)
         if (mine) delete d.refs[mine.id]
-        Object.assign(other, { asset, node: nodeId, named_at: now })
+        Object.assign(other, { asset, node: nodeId, named_at: now }, held)
       } else if (mine) {
-        Object.assign(mine, { key, variant, role: k.role, named_at: now })
+        Object.assign(mine, { key, variant, role: k.role, named_at: now }, held)
       } else {
         const id = newId('ref')
-        d.refs[id] = { id, v: 1, field_v: {}, key, variant, role: k.role, asset, node: nodeId, named_at: now }
+        d.refs[id] = { id, v: 1, field_v: {}, key, variant, role: k.role, asset, node: nodeId, named_at: now, ...held }
       }
       dropUnusedKeys(d)
     }
@@ -856,17 +913,20 @@ export class CanvasController {
     // The views keep the front's exact shape, so they line up with it (frame-aspect).
     const known = doc.assets[front.asset]
     const aspect: Aspect = known?.w && known?.h ? { w: known.w, h: known.h } : frontEl ? this.aspectOfEl(frontEl) : { w: 4, h: 5 }
-    return { front, frontEl, image, refs, aspect, parents: front.node ? [front.node] : [] }
+    // Who or what the views are of (UAT round 1 IMG-11): a character's front goes as a person, and the words say who.
+    const subject: JobInput['subject'] = { role: keyNamed(doc, key)?.role ?? front.role, name: key, ...(front.label?.trim() ? { label: front.label.trim().slice(0, 120) } : {}) }
+    return { front, frontEl, image, refs, aspect, subject, parents: front.node ? [front.node] : [] }
   }
 
   /** Generate the other views of a key from its front (any image named key_front). */
   async makeViews(key: Key, views: View[] = OTHER_VIEWS, modelChoice?: ModelChoice) {
-    const { front, frontEl, image, refs, aspect, parents } = await this.viewInputs(key)
+    const { front, frontEl, image, refs, aspect, subject, parents } = await this.viewInputs(key)
     const els = this.els()
-    const anchor = frontEl ? bounds([frontEl]) : { maxX: 0, minY: 0 }
+    const anchor = frontEl ? bounds([frontEl]) : { minX: 0, minY: 0, maxX: 0, maxY: 0 }
     const size = nodeSize(aspect)
-    // A row to the right of the front, clear of anything already there.
-    const slot = nextSlot(els, anchor, { w: size.w * views.length + 40 * (views.length - 1), h: size.h })
+    // A row right of the front, else under it, clear of anything already there (slotNear).
+    // With room under the row for the views' names and the group's label (UAT round 3, IMG-22 leftover).
+    const slot = slotNear(els, anchor, { w: size.w * views.length + 40 * (views.length - 1), h: size.h + 64 })
     const placed: { jobId: string; view: View }[] = []
     let prev: El | undefined
     let x = slot.x
@@ -888,7 +948,7 @@ export class CanvasController {
     // Every view is written down at once, before any of them is answered: one at a time, a reload
     // while the first was being directed left the others placed and never sent (2026-10-15).
     // The front's own shape: the relay asks for the nearest size and crops back to it.
-    await Promise.all(placed.map((p) => this.s.runner.submit('view', { view: p.view, image, ...(refs.length ? { refs } : {}), aspect }, parents, { for: 'canvas' }, p.jobId, modelChoice)))
+    await Promise.all(placed.map((p) => this.s.runner.submit('view', { view: p.view, image, subject, ...(refs.length ? { refs } : {}), aspect }, parents, { for: 'canvas' }, p.jobId, modelChoice)))
   }
 
   /** Make a view whose placeholder never started (runner.adopt), into that same placeholder. */
@@ -897,8 +957,8 @@ export class CanvasController {
     if (c?.kind !== 'gen' || c.op !== 'view' || !c.view) throw new Error('This is not a view.')
     const key = c.parentIds[0] ? this.nameOn(c.parentIds[0])?.key : undefined
     if (!key) throw new Error('Its front has no name now: name the front, then make the views again.')
-    const { image, refs, aspect, parents } = await this.viewInputs(key)
-    await this.s.runner.submit('view', { view: c.view, image, ...(refs.length ? { refs } : {}), aspect }, parents, { for: 'canvas' }, jobId, modelChoice)
+    const { image, refs, aspect, subject, parents } = await this.viewInputs(key)
+    await this.s.runner.submit('view', { view: c.view, image, subject, ...(refs.length ? { refs } : {}), aspect }, parents, { for: 'canvas' }, jobId, modelChoice)
   }
 
   /**
@@ -1004,7 +1064,9 @@ export class CanvasController {
       els = this.canvas.bindArrow([...els, arrow], arrow)
     })
     this.setEls(els)
-    this.reveal([gen.id, ...sources.map((s) => s.el.id)])
+    // The new node only: its inputs are where the person was looking, and fitting them too zoomed the view out under
+    // the next click (UAT round 1 IMG-12: 62% to 52% on a Generate from a big sketch area).
+    this.reveal([gen.id])
   }
 
   /**
@@ -1034,17 +1096,19 @@ export class CanvasController {
    * Make sure new results land in view with their inputs. On our own engine: the smallest pan (a zoom out
    * only when they don't fit), right of the rail. Elsewhere: zoom out to them when any part is off-screen.
    */
-  reveal(ids: string[]) {
+  /** `animate` false: at once (Show on a question: its card must be there to take the focus). */
+  reveal(ids: string[], animate = true) {
     const els = alive(this.els()).filter((e) => ids.includes(e.id))
     if (!els.length) return
     const b = bounds(els)
+    const motion = animate && !(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches)
     if (this.canvas.engine === 'own') {
-      bringIntoView(this.canvas, b, this.inset, !(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches))
+      bringIntoView(this.canvas, b, this.inset, motion)
       return
     }
     const { minX: vx0, minY: vy0, maxX: vx1, maxY: vy1 } = this.canvas.visibleBounds()
     if (b.minX >= vx0 && b.minY >= vy0 && b.maxX <= vx1 && b.maxY <= vy1) return
-    this.canvas.fit(els, { zoomFactor: 0.85, animate: true })
+    this.canvas.fit(els, { zoomFactor: 0.85, animate: motion })
   }
 
   /** A failed canvas job was retried as a new job: move the node and its arrows to the new id. */

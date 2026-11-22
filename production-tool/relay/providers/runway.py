@@ -16,13 +16,15 @@ changes the whole image keeping its composition (fact 3). On the Gemini 3 Pro al
 takes no mask, it sends the clean image and a copy with the box drawn on it.
 
 submit() never waits and status() makes one call. The key is a constructor argument;
-this module never reads the environment.
+this module never reads the environment. `on_submit`, when given, is told every request
+submit() sent (path, body, and the task id or the error) for the relay's trace line
+(features/pt-relay-trace.clan); it never sees the key or the headers.
 """
 
 from __future__ import annotations
 
 import dataclasses
-from typing import Optional
+from typing import Callable, Optional, Sequence
 
 import httpx
 
@@ -31,13 +33,13 @@ from .types import (
     ProviderOutput, Ref, Status, check_capabilities, effective_sheet, load_sheet, nearest_ratio, utf16_units,
     video_audio,
 )
-from .tags import UnknownTag, rewrite_tags, unsent_in_words
+from .tags import TIED_TAG, UnknownTag, rewrite_tags, unsent_in_words
 
 BASE_URL = "https://api.dev.runwayml.com"
 VERSION = "2024-11-06"
 MIN_POLL_S = 5  # sheet results.minPollS
-# A credit's price and each model's prompt limit come from the sheet (usdPerCredit, models[m].promptMax).
-MAX_HUMAN, MAX_OBJECT = 5, 9
+# A credit's price, each model's prompt limit and its ref limits come from the sheet (usdPerCredit,
+# models[m].promptMax, refs.max / maxCharacter / maxObject).
 MAX_SEED = 4294967295
 
 STATES = {"PENDING": "queued", "THROTTLED": "queued", "RUNNING": "running", "SUCCEEDED": "done",
@@ -52,6 +54,40 @@ REGION_PROMPT = ("@{current} is the clean image. @{marked} is the same image wit
 
 def min_poll_s() -> int:
     return MIN_POLL_S
+
+
+_SIZES: dict[str, tuple[int, int]] = {}  # a picture's size by hash (a hash is its bytes: never stale)
+PAD_LONG_SIDE = 2048  # a padded picture's longest side at most (a data: URL stays well under Runway's limit)
+
+
+def pad_to_aspect(data: bytes, lo: float, hi: float) -> Optional[bytes]:
+    """`data` padded (centred, with its own edge colour) so its width / height sits inside [lo, hi], as a JPEG;
+    None when it already does."""
+    import io
+    import math
+
+    from PIL import Image, ImageStat
+
+    im = Image.open(io.BytesIO(data))
+    w, h = im.size
+    ratio = w / h
+    if lo <= ratio <= hi:
+        return None
+    im = im.convert("RGB")
+    if ratio < lo:  # too narrow: wider, by side bands
+        nw, nh = math.ceil(h * lo * 1.01), h
+    else:  # too wide: taller, by bands above and below
+        nw, nh = w, math.ceil(w * 1.01 / hi)
+    edge = [im.crop((0, 0, 1, h)), im.crop((w - 1, 0, w, h))] if ratio < lo else [im.crop((0, 0, w, 1)), im.crop((0, h - 1, w, h))]
+    colour = tuple(int(sum(ImageStat.Stat(e).mean[c] for e in edge) / len(edge)) for c in range(3))
+    out = Image.new("RGB", (nw, nh), colour)
+    out.paste(im, ((nw - w) // 2, (nh - h) // 2))
+    k = PAD_LONG_SIDE / max(nw, nh)
+    if k < 1:
+        out = out.resize((max(1, round(nw * k)), max(1, round(nh * k))), Image.LANCZOS)
+    buf = io.BytesIO()
+    out.save(buf, "JPEG", quality=92)
+    return buf.getvalue()
 
 
 def failure(code: Optional[str], message: str) -> tuple[ProviderError, bool]:
@@ -114,10 +150,11 @@ class RunwayProvider:
     name = "runway"
 
     def __init__(self, api_key: str, assets: AssetResolver, client: Optional[httpx.Client] = None,
-                 sheet: Optional[dict] = None):
+                 sheet: Optional[dict] = None, on_submit: Optional[Callable[..., None]] = None):
         self._key, self._assets = api_key, assets
         self._client = client or httpx.Client(timeout=30)
         self._sheet = sheet or load_sheet("runway")
+        self._on_submit = on_submit
 
     def capabilities(self) -> dict:
         return self._sheet
@@ -147,10 +184,15 @@ class RunwayProvider:
         """The model the job names when the sheet lists it for the op, else the op's own."""
         return effective_sheet(self._sheet, job.op, job.model)["ops"][job.op]["model"]
 
-    def _tagged(self, names: list[str], prompt: str, syntax: Optional[str] = None) -> str:
-        """The prompt in the model's own reference syntax (`syntax`: its effective sheet's tagSyntax)."""
+    def _tagged(self, names: list[str], prompt: str, syntax: Optional[str] = None, refs: Sequence[Ref] = ()) -> str:
+        """The prompt in the model's own reference syntax (`syntax`: its effective sheet's tagSyntax). `refs`: the job's
+        refs, whose characters a tagless model reads by name ("Maya", never "maya front"; R5-F8)."""
+        syntax = syntax or self._sheet["tagSyntax"]
+        if syntax == "none":  # "follows image 2 (@in_2)": a tagless model reads the place, never the tag as words
+            prompt = TIED_TAG.sub(r"\1", prompt)
+        cast = {r.name.split("_", 1)[0] for r in refs if r.role == "character"}
         try:
-            return rewrite_tags(unsent_in_words(prompt, names), names, syntax or self._sheet["tagSyntax"])
+            return rewrite_tags(unsent_in_words(prompt, names, cast), names, syntax, cast)
         except UnknownTag as exc:
             raise ProviderError("invalid_input", str(exc), False) from exc
 
@@ -261,6 +303,53 @@ class RunwayProvider:
             raise ProviderError("invalid_input", f"the image to edit is not one we can read: {exc}", False) from exc
         return "data:image/png;base64," + base64.b64encode(png).decode()
 
+    def _within(self, sha: str, fit: Optional[dict]) -> str:
+        """The picture's url, or, when its width / height is outside the model's range (capabilities refAspect), a copy
+        padded to the nearest bound, as a data: URL. Runway refused a 0.534 character picture on WAN 3 (at least
+        0.55) and the person read the raw 400 (UAT 2026-11-21, F5). Padding keeps the whole person; a crop could cut
+        them. A picture we cannot read goes as it is (Runway then says why)."""
+        url = self._assets(sha).url
+        if not fit:
+            return url
+        lo, hi = float(fit["min"]), float(fit["max"])
+        try:
+            size = self._size(sha)
+            if size and lo <= size[0] / size[1] <= hi:
+                return url  # in range (most pictures): only the header was read
+            padded = pad_to_aspect(self._bytes(sha), lo, hi)
+        except Exception:  # not ours to read, not a picture: sent as it is
+            return url
+        if padded is None:
+            return url
+        import base64
+        return "data:image/jpeg;base64," + base64.b64encode(padded).decode()
+
+    def _size(self, sha: str) -> Optional[tuple[int, int]]:
+        """A picture's width and height from its first bytes (a ranged read; PNG and JPEG say their size up front),
+        remembered by its hash. None when the header does not say."""
+        import base64
+        import io
+
+        from PIL import Image
+
+        if sha in _SIZES:
+            return _SIZES[sha]
+        url = self._assets(sha).url
+        if url.startswith("data:"):
+            head = base64.b64decode(url.split(",", 1)[1])
+        else:
+            resp = self._client.get(url, headers={"Range": "bytes=0-131071"})
+            resp.raise_for_status()
+            head = resp.content
+        try:
+            size = Image.open(io.BytesIO(head)).size
+        except Exception:
+            return None
+        if len(_SIZES) > 2000:
+            _SIZES.clear()
+        _SIZES[sha] = size
+        return size
+
     def _own_ratio(self, current: Ref) -> str:
         """The Gemini 3 Pro size nearest the edited picture's own shape (Runway needs a ratio)."""
         import base64
@@ -305,15 +394,17 @@ class RunwayProvider:
                 refs = [current, marked] + [r for r in refs if r is not current and r is not marked]
                 prompt = REGION_PROMPT.format(current=current.name, marked=marked.name) + prompt
         self._check(job, prompt)
-        if sum(r.role != "character" for r in refs) > MAX_OBJECT:
-            raise CapabilityMissing(f"{self.name} takes at most {MAX_OBJECT} object refs")
+        # Counted again here: a region edit's marked copy is made above, after the sheet check.
+        max_object = effective_sheet(self._sheet, job.op, job.model)["refs"].get("maxObject")
+        if max_object is not None and sum(r.role != "character" for r in refs) > max_object:
+            raise CapabilityMissing(f"{self.name} takes at most {max_object} object refs")
         if job.outputs not in (None, 1, 4):
             raise CapabilityMissing("Runway returns exactly 1 or 4 images")
         if not job.ratio:
             raise ProviderError("invalid_input", f"{job.op} needs a ratio", False)
         body = {
             "model": self._model(job),
-            "promptText": self._tagged([r.name for r in refs], prompt),
+            "promptText": self._tagged([r.name for r in refs], prompt, refs=job.refs),
             "ratio": job.ratio,
             "outputCount": job.outputs or 1,
         }
@@ -375,14 +466,15 @@ class RunwayProvider:
         if not job.ratio:
             raise ProviderError("invalid_input", "clip needs a ratio", False)
         body = {"model": model}
+        fit = m.get("refAspect")  # a reference outside the model's shape range is padded to it (UAT 2026-11-21, F5)
         if not text_only:
-            frames = [{"uri": self._assets(job.first_frame).url, "position": "first"}]
+            frames = [{"uri": self._assets(job.first_frame).url, "position": "first"}]  # drawn at the film's shape
             if job.last_frame:
                 frames.append({"uri": self._assets(job.last_frame).url, "position": "last"})
             body["promptImage"] = frames
         if job.refs:  # objects, never bare strings (a string array is a 400: paid test 2026-10-15)
-            body["references"] = [{"uri": self._assets(r.sha256).url} for r in job.refs]
-        body["promptText"] = self._tagged([r.name for r in job.refs], job.prompt, sheet["tagSyntax"])
+            body["references"] = [{"uri": self._within(r.sha256, fit)} for r in job.refs]
+        body["promptText"] = self._tagged([r.name for r in job.refs], job.prompt, sheet["tagSyntax"], job.refs)
         keyframed = not text_only and m.get("keyframeRatio") == "auto_tier"
         ratio = self._in_tier(job.ratio, m, q.get("tier"))  # the quality's size, in the shot's shape
         body["ratio"] = self._auto_ratio(ratio, m) if keyframed else ratio
@@ -420,7 +512,7 @@ class RunwayProvider:
         body = {
             "model": model,
             v2v["videoField"]: videos[0].url,
-            "promptText": self._tagged([r.name for r, _ in pictures], job.prompt, sheet["tagSyntax"]),
+            "promptText": self._tagged([r.name for r, _ in pictures], job.prompt, sheet["tagSyntax"], job.refs),
         }  # aleph2 has no audio parameter, so unlike clip this body cannot set it
         if pictures:
             body["references"] = [{"uri": a.url} for _, a in pictures]
@@ -477,16 +569,34 @@ class RunwayProvider:
         if job.op in ("region_edit", "resize") and effective_sheet(self._sheet, job.op, job.model)["mask"] != "none":
             build = self._ideogram
         path, body = build(job)
-        resp = self._call("POST", path, json=body)
+        try:
+            resp = self._call("POST", path, json=body)
+        except ProviderError as exc:
+            self._told(job, path, body, error=exc.message)
+            raise
         if resp.status_code >= 300:
-            raise _http_error(resp)
+            exc = _http_error(resp)
+            self._told(job, path, body, status=resp.status_code, error=exc.message)
+            raise exc
         try:  # a 2xx: Runway has the task, so whatever we cannot read must never be sent elsewhere
             task = self._ok(resp)
         except ProviderError as exc:
+            self._told(job, path, body, status=resp.status_code, error=exc.message)
             raise ProviderError("provider_failed", exc.message, False, accepted=True) from exc
         if not task.get("id"):
+            self._told(job, path, body, status=resp.status_code, error="no task id")
             raise ProviderError("provider_failed", "Runway accepted the job but sent no task id", False, accepted=True)
+        self._told(job, path, body, status=resp.status_code, task_id=task["id"])
         return task["id"]
+
+    def _told(self, job: ProviderJob, path: str, body: dict, **outcome) -> None:
+        """The request as sent, for the relay's trace (never the key or headers). Never raises."""
+        if self._on_submit is None:
+            return
+        try:
+            self._on_submit(op=job.op, provider=self.name, endpoint=path, body=body, **outcome)
+        except Exception:  # a trace must never fail a submit
+            pass
 
     def status(self, request_id: str) -> Status:
         try:
@@ -540,5 +650,5 @@ def _mime(url: str) -> str:
 
 def make():
     """The relay's registry entry (providers/__init__.py): this adapter behind the relay's Protocol."""
-    from ._seam import Adapted, Resolver, key
-    return Adapted(RunwayProvider(key("RUNWAY_API_KEY"), Resolver()))
+    from ._seam import Adapted, Resolver, key, trace_submit
+    return Adapted(RunwayProvider(key("RUNWAY_API_KEY"), Resolver(), on_submit=trace_submit))

@@ -9,9 +9,40 @@ import { beatsOf, currentTake, cutItemFor, shotsOf, storyboardOfVideo } from '..
 import { formatById } from './formats'
 import { linesOf } from '../script/skye'
 import { METHOD_WORD } from './rules'
+import { modelEntry } from '../jobs/runs'
 
-/** The end card stitch adds after the clips (stitch.py CARD_S). */
+/** The studio card stitch adds after the clips (stitch.py CARD_S). */
 export const CARD_S = 2.5
+/** The film's own end card (the client's) in a cutdown: its length, at most this (UAT 2026-11-21, B4: the sizes
+ *  ended on the studio card in place of the client's). It comes before the studio card. */
+export const CLIENT_CARD_MAX_S = 2
+/** How long the film's own card holds in a size `lengthS` long (absent: as long as it may): its own length, at most
+ *  CLIENT_CARD_MAX_S and a third of what the studio card leaves, never under 1 s. relay/cutdowns.py client_card_s. */
+export const clientCardS = (cardS: number | undefined, lengthS?: number, studioS = CARD_S) =>
+  Math.round(Math.min(cardS ?? CLIENT_CARD_MAX_S, CLIENT_CARD_MAX_S, lengthS === undefined ? Infinity : Math.max(1, (lengthS - studioS) / 3)) * 1000) / 1000
+/** The picture a size keeps at least when its cards would leave less: the cards shorten for it (UAT round 3,
+ *  R3-F12: the 6 s 9:16 had 2.25 s of picture, then 1.2 s of the film's card and 2.5 s of the studio card). */
+export const MIN_PICTURE_S = 3.5
+/** The shortest studio card on a short size: its roll sped up to fit (stitch card_graph, cutdown cardS). */
+export const STUDIO_MIN_S = 1.2
+/** The film's own card at its shortest. */
+export const CLIENT_MIN_S = 1
+/** How long a size's two cards hold: the film's own (`clientS`, 0 when it has none; `cardLen` its own length) and
+ *  the studio card (`studioS`). When they would leave under MIN_PICTURE_S of picture, the studio card shortens
+ *  first (to STUDIO_MIN_S), then the film's card (to CLIENT_MIN_S); both stay. relay/cutdowns.py card_lengths. */
+export function cardLengths(lengthS: number | undefined, cardLen?: number, hasClient = cardLen !== undefined): { clientS: number; studioS: number } {
+  let studioS = CARD_S
+  let clientS = hasClient ? clientCardS(cardLen, lengthS) : 0
+  if (lengthS === undefined) return { clientS, studioS }
+  let short = MIN_PICTURE_S - (lengthS - studioS - clientS)
+  if (short > 1e-6) {
+    const cut = Math.min(short, studioS - STUDIO_MIN_S)
+    studioS -= cut
+    short -= cut
+  }
+  if (short > 1e-6 && hasClient) clientS -= Math.min(short, Math.max(0, clientS - CLIENT_MIN_S))
+  return { clientS: r3(clientS), studioS: r3(studioS) }
+}
 export const MIN_WINDOW_S = 1.0
 export const PAN_MOVE = 0.1
 const FRAME_S = 1 / 24
@@ -27,6 +58,16 @@ export const FILM_SHAPES = [
   { id: 'film-1x1', label: '1:1', aspect: { w: 1, h: 1 } },
 ] as const
 export type FilmShapeId = (typeof FILM_SHAPES)[number]['id']
+
+/** The shapes a brief asks for (its format and mandatories: "Deliver in 16:9, 9:16 and 1:1"), as Make all sizes
+ *  picks them first; 16:9 and 9:16 when it names none (UAT 2026-11-21: the brief mandated 1:1, not picked). */
+export function briefShapes(spine: { format?: string; mandatories?: string[] } | undefined): FilmShapeId[] {
+  const text = [spine?.format ?? '', ...(spine?.mandatories ?? [])].join(' ')
+  const named = FILM_SHAPES.filter((s) => new RegExp(`(^|[^0-9])${s.label.replace(':', '\\s*[:x×]\\s*')}(?![0-9])`).test(text)).map((s) => s.id)
+  return named.length ? named : ['film-16x9', 'film-9x16']
+}
+/** "1 version", "3 versions" (UAT round 3, R3-F12: the sheet said "Make 1 versions"). */
+export const versionsWord = (n: number) => `${n} ${n === 1 ? 'version' : 'versions'}`
 /** Lengths offered from a 30 s master (CF5: 15 s and 6 s by default; any length typed). */
 export const FILM_LENGTHS = [30, 20, 15, 10, 6]
 export const DEFAULT_FILM_LENGTHS = [15, 6]
@@ -71,8 +112,12 @@ export interface Window { shotId: Id; inS: number; outS: number }
 /** The kept shots' windows fitted to `lengthS` less the end card, and how far over (or short) they are.
  *  Too long: every window is trimmed from its tail by the same share, none under MIN_WINDOW_S (or its own
  *  length); too short: they grow into their handles. relay/cutdowns.py fit_windows. */
-export function fitWindows(shots: readonly WindowShot[], keep: ReadonlySet<Id>, lengthS: number, cardS = CARD_S): { windows: Window[]; over: number } {
-  const target = Math.max(MIN_WINDOW_S, lengthS - cardS)
+export function fitWindows(shots: readonly WindowShot[], keep: ReadonlySet<Id>, lengthS: number): { windows: Window[]; over: number } {
+  // The film's own end card (the client's) comes off the length too, before the studio card (UAT 2026-11-21, B4);
+  // on a short size both cards shorten so the picture keeps MIN_PICTURE_S (R3-F12).
+  const client = shots.find((s) => s.endCard)
+  const { clientS, studioS } = cardLengths(lengthS, client ? client.outS - (client.inS || 0) : undefined)
+  const target = Math.max(MIN_WINDOW_S, lengthS - studioS - clientS)
   const kept = shots.filter((s) => keep.has(s.shotId) && !s.endCard)
   if (!kept.length) return { windows: [], over: r3(-target) }
   const slots = kept.map((s) => Math.max(FRAME_S, s.outS - (s.inS || 0)))
@@ -132,6 +177,21 @@ function union(boxes: readonly PxBox[]): PxBox {
   return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }
 }
 
+/** A box of the take round the whole subject (UAT round 5, R5-F6: the plan said the 9:16 crop cuts shot 5, and it was
+ *  cropped anyway, the kettle cut off). The size's own crop, widened (or heightened) to the subject with a little room,
+ *  centred on it, inside the take. Its shape is not the size's: stitch fits it whole over a blurred fill of itself
+ *  (stitch/cutdown.py fits_whole). No spend: New edges stays the person's pick. */
+export function fitBox(take: Aspect, shape: Aspect, subject: PxBox): PxBox {
+  const cx = subject.x + subject.w / 2
+  const cy = subject.y + subject.h / 2
+  const crop = cropAround(take, shape, cx, cy)
+  const w = Math.min(take.w, Math.max(crop.w, subject.w * 1.06))
+  const h = Math.min(take.h, Math.max(crop.h, subject.h * 1.06))
+  const x = Math.min(Math.max(cx - w / 2, 0), take.w - w)
+  const y = Math.min(Math.max(cy - h / 2, 0), take.h - h)
+  return { x: r3(x), y: r3(y), w: r3(w), h: r3(h) }
+}
+
 /** The crop keys for one shot at one shape, and whether the crop cuts the subject (Aleph 2 should make
  *  its new edges). relay/cutdowns.py crop_keys. */
 export function cropKeys(take: Aspect, aspect: Aspect, subjects: readonly PxBox[]): { keys: CropKey[]; cuts: boolean } {
@@ -165,7 +225,7 @@ export function masterShots(d: ProductionDocument, videoId: Id): MasterShot[] {
   for (const [i, s] of (sb ? shotsOf(d, sb.id) : []).entries()) {
     const take = currentTake(d, s.id, videoId)
     if (s.kind === 'end_card') {
-      out.push({ shotId: s.id, number: i + 1, inS: 0, outS: CARD_S, endCard: true })
+      out.push({ shotId: s.id, number: i + 1, inS: 0, outS: Math.min(CLIENT_CARD_MAX_S, v?.end_card?.s ?? s.duration_s ?? CLIENT_CARD_MAX_S), endCard: true })
       continue
     }
     if (!take?.asset) continue
@@ -175,7 +235,7 @@ export function masterShots(d: ProductionDocument, videoId: Id): MasterShot[] {
     const takeS = a?.duration_s ?? take.duration_s ?? s.duration_s
     const end = item?.source?.out_s
     const outS = end !== undefined && end > ins ? Math.min(end, ins + s.duration_s) : ins + s.duration_s
-    const spoken = spokenOf(d, s.id).map((x) => x.text).join(' ').slice(0, 600)
+    const spoken = spokenWords(d, s.id, take).slice(0, 600)
     out.push({
       shotId: s.id, number: i + 1, takeId: take.id, inS: r3(ins), outS: r3(outS), takeS: r3(Math.max(takeS, outS)),
       takeSize: a?.w && a?.h ? { w: a.w, h: a.h } : { w: rw * 120, h: rh * 120 },
@@ -195,6 +255,22 @@ export function filmSeconds(shots: readonly MasterShot[], wholeS?: number): numb
   const body = shots.filter((s) => !s.endCard)
   if (body.length) return r3(body.reduce((a, s) => a + (s.outS - s.inS), 0))
   return Math.max(0, (wholeS ?? CARD_S) - CARD_S)
+}
+
+/** A shot's spoken lines as the cut plan reads them: who says each, a V.O. said so, and whether its take voices it
+ *  (UAT round 5, R5-F8: Dex wrote that Maya "says the end line", an unvoiced NARRATOR voice-over shown as words).
+ *  'MAYA (whispering, to the kettle): Good boy.' / 'NARRATOR (V.O.; not voiced in its take): Quietboil. Let them sleep.' */
+export function spokenWords(d: ProductionDocument, shotId: Id, take?: { provider?: string; inputs?: { model?: string } }): string {
+  const beats = (d.beats ? beatsOf(d, shotId) : []).filter((b) => (b.kind === 'line' || b.kind === 'vo') && (b.text ?? '').trim())
+  if (!beats.length) return spokenOf(d, shotId).map((x) => x.text).join(' ')
+  const e = take?.provider && take.inputs?.model ? modelEntry(take.provider as never, take.inputs.model) : null
+  const voiced = !!e?.video.audioControl
+  return beats.map((b) => {
+    const who = (b.speaker?.trim() || (b.kind === 'vo' ? 'NARRATOR' : 'SOMEONE')).toUpperCase()
+    const paren = b.parenthetical?.trim().replace(/^\((.*)\)$/s, '$1').trim()
+    const notes = [b.kind === 'vo' ? 'V.O.' : '', paren ?? '', voiced ? '' : 'not voiced in its take'].filter(Boolean)
+    return `${who}${notes.length ? ` (${notes.join('; ')})` : ''}: ${b.text!.trim()}`
+  }).join(' ')
 }
 
 /** A shot's spoken lines, each at its moment in the shot: its line and VO beats, else its script's dialogue
@@ -240,6 +316,8 @@ export function edlFor(shots: readonly MasterShot[], beats: readonly SizeBeat[],
     if (mine?.crop) return { ...item, crop: { ...mine.crop }, crop_by: 'person' }
     if (sameShape(take, shape)) return item
     const c = crops.find((x) => x.shotId === w.shotId && sameShape(x.aspect, shape))
+    // The plan says the crop cuts the subject: the whole subject, fitted (R5-F6); a reframe, when picked, replaces it.
+    if (c?.cuts && c.subject && (c.keys?.length ?? 1) <= 1) return { ...item, crop: fitBox(take, shape, c.subject), crop_by: 'rule' }
     const keys = c?.keys ?? cropKeys(take, shape, []).keys
     return keys.length > 1 ? { ...item, crop_keys: keys.map((k) => ({ at: k.at, box: { ...k.box } })), crop_by: 'rule' }
       : { ...item, crop: { ...keys[0].box }, crop_by: 'rule' }

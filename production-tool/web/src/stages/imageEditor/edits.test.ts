@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   EMPTY, addEdit, applyLine, textLayerName, clearMask, editCount, editLabel, editsForFrame, layersOf, nextStep, notApplied,
-  toggleHidden, undoEdit, undoMaskOp, upscaleSize, withMaskOp, nothingToTake, undoLast, redoUndone, hiddenCount, leftOutLine, NOTHING_TO_TAKE,
+  toggleHidden, undoEdit, undoMaskOp, upscaleSize, fillPlaceholder, withMaskOp, nothingToTake, undoLast, redoUndone, hiddenCount, leftOutLine, NOTHING_TO_TAKE,
   afterSend, hasFill, newMask, pendingCount, rowFirst, sendRow,
   type EditSession, type MaskOp,
 } from './edits'
@@ -30,6 +30,13 @@ describe('the words match 3.12', () => {
   it('gives the upscale output size from our 1344 x 768 frames (providers.md fact 7)', () => {
     expect(upscaleSize(1344, 768, 2)).toBe('→ 2688 × 1536')
     expect(upscaleSize(1344, 768, 4)).toBe('→ 5376 × 3072')
+    // What Runway returned in UAT round 2 (R2-8): a 1638 x 2048 picture read at 1536 a side, then 2x.
+    expect(upscaleSize(1638, 2048, 2)).toBe('→ 2458 × 3072')
+    expect(upscaleSize(1365, 768, 2)).toBe('→ 2730 × 1536')
+    expect(fillPlaceholder(true, false)).toMatch(/^What goes in the blue area/)
+    expect(fillPlaceholder(true, true)).toMatch(/^Filled\./)
+    expect(fillPlaceholder(false, false)).toBe('Paint or lasso an area first')
+    expect(fillPlaceholder(true, false, 'Mask 1')).toBe('Mask 1 is hidden. Show it to fill.')
     expect(SPEC).toContain(upscaleSize(1344, 768, 2))
   })
 })
@@ -241,5 +248,23 @@ describe('a text just placed (re-test 6c)', () => {
     s = { ...s, edits: s.edits.map((e) => (e.kind === 'text' ? { ...e, text: 'Lumo.' } : e)) }
     expect(editCount(s)).toBe(1)
     expect(editsForFrame(s)).toEqual([{ op: 'text', params: { text: 'Lumo.' } }])
+  })
+})
+
+// UAT round 3 R3-4: 2x of an upscaled 3072 x 1318 picture promised 3072 x 1318 again, and was paid for.
+describe('Upscale only when it makes the picture bigger (pt-canvas-r3)', () => {
+  it('is off for 2x of a picture already past twice what the upscaler reads, and says why; 4x still grows it', async () => {
+    const { upscaleGrows, upscaleWhyNot, sameLine } = await import('./edits')
+    expect(upscaleGrows(3072, 1318, 2)).toBe(false)
+    expect(upscaleWhyNot(3072, 1318, 2)).toBe('Already full size: the upscaler reads at most 1536 px a side, so 2× gives 3072 px, as it is now. 4× makes it bigger.')
+    expect(upscaleGrows(3072, 1318, 4)).toBe(true)
+    expect(upscaleWhyNot(2048, 878, 2)).toBeUndefined()
+    expect(upscaleGrows(1536, 864, 2)).toBe(true)
+    const { editLabel } = await import('./edits')
+    const mask = { id: 'm', kind: 'mask' as const, name: 'Mask 1', ops: [{ t: 'lasso' as const, mode: 'add' as const, pts: [] }] }
+    const fill = { id: 'f', kind: 'fill' as const, maskId: 'm', ops: [], words: 'x', keepOutside: true, jobId: 'j' }
+    expect(editLabel(mask, { edits: [mask], hidden: [], active: 'm' })).toBe('Mask 1 · painting')
+    expect(editLabel(mask, { edits: [mask, fill], hidden: [], active: 'm' })).toBe('Mask 1') // spent (R3-3)
+    expect(sameLine({ id: 'f', kind: 'fill', maskId: 'm', ops: [], words: 'x', keepOutside: true, jobId: 'j' })).toBe('The fill came back unchanged.')
   })
 })

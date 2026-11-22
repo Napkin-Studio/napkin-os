@@ -9,7 +9,7 @@
 // lock are each one undo step (updateDoc); a landing is the crew's (landUpdate), never an undo step.
 
 import { newUlidId, rankBetween, ranksBetween } from '../../../clan-store/src'
-import type { AssetRef, Aspect, Board, CutdownClip, CutdownPlan, FormatSet, Id, InputMime, Job, JobInput, ModelChoice, PersonRef, PxBox, Size, SizeBeat, TypeLayer } from '../contracts/types'
+import type { AssetRef, Aspect, Board, CutdownClip, CutdownInput, CutdownPlan, FormatSet, Id, InputMime, Job, JobInput, ModelChoice, PersonRef, ProductionDocument, PxBox, Size, SizeBeat, TypeLayer } from '../contracts/types'
 import { boardsByRank } from '../canvas/boards/boards'
 import type { CanvasElement } from '../canvas/core/canvasAdapter'
 import { landUpdate, systemUpdate, updateDoc } from '../doc/store'
@@ -20,7 +20,8 @@ import { jobShot, refsFor } from '../jobs/select'
 import { getBlob } from '../lib/blobs'
 import { boardLayout } from './board'
 import { checksFor } from './checks'
-import { CARD_S, alephRatio, captionBox, captionLayers, cropKeys, edlFor, isSocialShape, masterShots, reframeKey, reframesOf, sameShape, shapeOf, type MasterShot } from './film'
+import { CARD_S, alephRatio, captionBox, captionLayers, cardLengths, cropKeys, edlFor, isSocialShape, masterShots, reframeKey, reframesOf, sameShape, shapeOf, type MasterShot } from './film'
+import { endCardFrom, readCut } from '../rooms/timeline'
 import { formatById, PACKS_VERSION } from './formats'
 import { brandKit, layersFor } from './layout'
 import { FRAME_PAD, FRAME_TOP, channelOfSize, placeBoard, sizesOf, type CampaignDeps } from './make'
@@ -52,14 +53,26 @@ export interface FilmRequest {
 
 // ── Dex's plan ──────────────────────────────────────────────────────────────
 
-const waiting = new Map<string, { resolve(p: CutdownPlan): void; reject(e: Error): void }>()
+/** A film's plan as the sheet shows it: `simple` when the Director agent did not plan it (the relay's simple cut: the
+ *  opening and the payoff), 'failed' when it tried and could not (UAT round 4, R4-F4: the sheet said "how I would cut
+ *  it" over a plan Dex never made). */
+export type FilmPlan = CutdownPlan & { simple?: 'failed' | 'off' }
+
+const waiting = new Map<string, { resolve(p: FilmPlan): void; reject(e: Error): void }>()
+
+/** Who made a plan job's plan: the Director agent, or the relay's simple cut (failed: Dex tried and could not). */
+export function planBy(job: Pick<Job, 'director'>): FilmPlan['simple'] {
+  if (job.director?.model !== 'passthrough') return undefined
+  return /^Dex could not plan/.test(job.director.rationale ?? '') ? 'failed' : 'off'
+}
 
 /** The plan job's landing (wire.ts): it lands nowhere; the sheet waiting for it gets it. */
 export function landFilmPlan(job: Job) {
   const w = waiting.get(job.jobId)
   if (!w) return
   waiting.delete(job.jobId)
-  if (job.cutdownPlan) w.resolve(job.cutdownPlan)
+  const simple = planBy(job)
+  if (job.cutdownPlan) w.resolve(simple ? { ...job.cutdownPlan, simple } : job.cutdownPlan)
   else w.reject(new Error('The Director agent sent no plan. Try again.'))
 }
 
@@ -95,7 +108,7 @@ export async function takeStills(blob: Blob, times: number[], side = 512): Promi
 }
 
 /** Dex's plan of these lengths and shapes: a free job; resolves with the plan, or fails with its words. */
-export async function planFilm(deps: FilmDeps, master: MasterInfo, shots: MasterShot[], lengths: number[], shapes: Aspect[], timeoutMs = 180_000): Promise<CutdownPlan> {
+export async function planFilm(deps: FilmDeps, master: MasterInfo, shots: MasterShot[], lengths: number[], shapes: Aspect[], timeoutMs = 180_000): Promise<FilmPlan> {
   const wire = []
   let stills = 0
   for (const s of shots) {
@@ -122,7 +135,7 @@ export async function planFilm(deps: FilmDeps, master: MasterInfo, shots: Master
     cutdown: { step: 'plan', shots: wire, lengths, aspects: others },
   }
   const jobId = newUlidId('job')
-  const plan = new Promise<CutdownPlan>((resolve, reject) => {
+  const plan = new Promise<FilmPlan>((resolve, reject) => {
     waiting.set(jobId, { resolve, reject })
     const started = Date.now()
     const watch = () => {
@@ -154,22 +167,57 @@ export async function planFilm(deps: FilmDeps, master: MasterInfo, shots: Master
 const FILM_FORMATS: Record<string, string> = { '16:9': 'film-16x9', '9:16': 'film-9x16', '4:5': 'film-4x5', '1:1': 'film-1x1' }
 export const formatOfShape = (label: string) => FILM_FORMATS[label]
 
-/** The film layers of a size: the line and legal over the last 3 s of the clips, the logo over the first
+/** How long the line and legal hold at the end of a size's clips (UAT round 5, R5-F6: over the last 3 s of a 3.5 s
+ *  cutdown they ran over the whole picture), the same as the ad's end-line super (rooms/endLine END_LINE_S). */
+export const LINE_S = 2.5
+/** The least the line holds when it waits for a caption to end. */
+export const LINE_MIN_S = 1.5
+
+/** The film layers of a size: the line and legal over the last 2.5 s of the clips, the logo over the first
  *  3 (the brand early), and the captions of the spoken lines on the social shapes (CF9) unless hidden;
- *  on the TV shapes only when a person turned them on. */
-export async function filmLayers(deps: Pick<CampaignDeps, 'relay' | 'doc'>, set: FormatSet, size: Size): Promise<TypeLayer[]> {
+ *  on the TV shapes only when a person turned them on. The line is never on screen with a caption (linesApart). */
+export async function filmLayers(deps: Pick<CampaignDeps, 'relay' | 'doc'>, set: FormatSet, size: Size, card?: { headline?: string; line: string; cta?: string }): Promise<TypeLayer[]> {
   const d = liveGet(deps.doc)
   const body = (size.edl ?? []).reduce((a, w) => a + (w.out_s - w.in_s), 0)
-  const laid = (await layersFor(deps, set, size)).map((l): TypeLayer => l.kind === 'logo'
+  // The end card says its own words last, so they are not also laid over the picture. Taken out here, before the
+  // captions are fitted around the line: the line once sat under a spoken caption's start, pushed the caption's end
+  // before its start, and the caption went with it (UAT walkthrough 2026-11-21, R6-F1).
+  const laid = withoutCardWords((await layersFor(deps, set, size)).map((l): TypeLayer => l.kind === 'logo'
     ? { ...l, fromS: 0, toS: Math.min(3, body) }
-    : { ...l, fromS: Math.max(0, body - 3), toS: body })
+    : { ...l, fromS: Math.max(0, body - LINE_S), toS: body }), card)
   const want = size.layers?.captions
   const show = want ? !want.hidden : isSocialShape(shapeOf(size))
   if (!show) return laid
   const f = formatById(size.format.format_id)
   const fr = f ? rowFracs({ format: f.format }) : ([0, 0, 0, 0] as const)
   const caps = withoutRepeats(captionLayers(d, size.edl ?? [], want?.box ?? captionBox(fr), brandKit(d).colour, size.delivery.height), laid)
-  return [...laid, ...caps.map((c) => (want?.scale && c.sizeFrac ? { ...c, sizeFrac: Math.min(0.5, c.sizeFrac * want.scale) } : c))].slice(0, 40)
+  const apart = linesApart(laid, caps, body)
+  return [...apart.laid, ...apart.caps.map((c) => (want?.scale && c.sizeFrac ? { ...c, sizeFrac: Math.min(0.5, c.sizeFrac * want.scale) } : c))].slice(0, 40)
+}
+
+/** The line and legal never on screen with a caption (UAT round 5, R5-F6: "Quietboil. Let them sleep." sat under the
+ *  "Good boy." caption). A caption that ends with LINE_MIN_S or more of the clips left: the line waits for it. Else the
+ *  caption ends where the line starts (a caption that starts later than the line, with LINE_MIN_S of line before it:
+ *  the line ends where it starts). The logo is left as it is. */
+export function linesApart(laid: readonly TypeLayer[], caps: readonly TypeLayer[], body: number): { laid: TypeLayer[]; caps: TypeLayer[] } {
+  const words = laid.map((l) => ({ ...l }))
+  const out = caps.map((c) => ({ ...c }))
+  for (const l of words) {
+    if (l.kind === 'logo') continue
+    for (const c of out) {
+      const lf = l.fromS ?? 0
+      const lt = l.toS ?? body
+      const cf = c.fromS ?? 0
+      const ct = c.toS ?? body
+      if (ct <= lf || cf >= lt) continue
+      if (body - ct >= LINE_MIN_S - 1e-6) l.fromS = Math.round(ct * 1000) / 1000
+      else if (cf > lf && cf - lf >= LINE_MIN_S - 1e-6) l.toS = cf // a late caption: the line shows before it
+      else if (cf <= lf) c.toS = lf // an early caption: it ends where the line starts
+      else l.toS = l.fromS = lf // no room either side: the caption (the sound-off words) stays, the line is left out
+    }
+  }
+  const room = (l: TypeLayer) => (l.toS ?? body) - (l.fromS ?? 0) > 0.05
+  return { laid: words.filter((l) => l.kind === 'logo' || room(l)), caps: out.filter(room) }
 }
 
 const sameWords = (a?: string, b?: string) => {
@@ -303,11 +351,54 @@ export async function cutdownInput(deps: Pick<CampaignDeps, 'relay' | 'doc'>, se
     })
   }
   if (!clips.length) throw new Error('This version keeps no shot: keep a beat first.')
-  const layers = await filmLayers(deps, set, size)
+  const clientCard = await clientCardOf(deps, set, size.length_s)
+  // The film's card says its line: the size's own line goes from the picture, so it is not said twice (R3-F12).
+  const layers = await filmLayers(deps, set, size, clientCard)
+  const { studioS } = cardLengths(size.length_s, clientCard ? clientCardLen(d, set) : undefined, !!clientCard)
   return {
     aspect: { w: size.delivery.width, h: size.delivery.height }, delivery: { ...size.delivery },
     ...(size.safe_area ? { safeArea: size.safe_area } : {}),
-    cutdown: { step: 'render', lengthS: size.length_s ?? clips.reduce((a, c) => a + (c.outS - c.inS), 0) + CARD_S, clips, endCard: true, fadeOutS: 0.5, ...(layers.length ? { layers } : {}) },
+    cutdown: {
+      step: 'render', lengthS: size.length_s ?? clips.reduce((a, c) => a + (c.outS - c.inS), 0) + (clientCard?.s ?? 0) + studioS, clips, endCard: true, fadeOutS: 0.5,
+      ...(studioS < CARD_S ? { studioS } : {}),
+      ...(layers.length ? { layers } : {}), ...(clientCard ? { clientCard } : {}),
+    },
+  }
+}
+
+const words = (x?: string) => (x ?? '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+
+/** A size's type without the words its end card says (its line, its headline and line together, or its call to
+ *  action): the card says them last, so the picture does not say them too (UAT round 3, R3-F12: the 6 s 9:16 had
+ *  "Quietboil. Let them sleep." burnt in as a super, then on the card). Logos and captions of what is spoken stay. */
+export function withoutCardWords(layers: TypeLayer[], card?: { headline?: string; line: string; cta?: string }): TypeLayer[] {
+  if (!card) return layers
+  const said = [card.line, card.headline, card.cta, `${card.headline ?? ''} ${card.line}`, `${card.headline ?? ''} ${card.line} ${card.cta ?? ''}`].map(words).filter(Boolean)
+  return layers.filter((l) => l.kind === 'logo' || l.kind === 'captions' || !said.includes(words(l.text)))
+}
+
+/** The film's own card's own length: its storyboard shot's, else the Edit room card's. */
+function clientCardLen(d: ProductionDocument, set: FormatSet): number | undefined {
+  const videoId = set.master.kind === 'video' ? set.master.id : undefined
+  if (!videoId) return undefined
+  const shot = masterShots(d, videoId).find((s) => s.endCard)
+  return shot ? shot.outS - shot.inS : (readCut(d, videoId).endCard ?? endCardFrom(d, videoId))?.durS
+}
+
+/** The film's own end card (the client's) for a size: the Edit room's card, else the storyboard's end card shot's
+ *  (rooms/timeline endCardFrom), at its cutdown length (film.ts clientCardS). Every size ends on it, then on the
+ *  studio card (owner 2026-11-18; UAT 2026-11-21, B4: the sizes ended on the studio card alone). */
+export async function clientCardOf(deps: Pick<CampaignDeps, 'relay' | 'doc'>, set: FormatSet, lengthS?: number): Promise<CutdownInput['clientCard'] | undefined> {
+  const d = liveGet(deps.doc)
+  const videoId = set.master.kind === 'video' ? set.master.id : undefined
+  if (!videoId) return undefined
+  const card = readCut(d, videoId).endCard ?? endCardFrom(d, videoId)
+  if (!card || !(card.line.trim() || card.headline.trim())) return undefined
+  const logo = card.logo ? await assetRef(deps.relay, card.logo, d).catch(() => undefined) : undefined
+  return {
+    ...(card.headline.trim() ? { headline: card.headline.trim().slice(0, 120) } : {}), line: (card.line.trim() || card.headline.trim()).slice(0, 200),
+    ...(card.cta?.trim() ? { cta: card.cta.trim().slice(0, 80) } : {}), bg: /^#[0-9a-f]{6}$/i.test(card.bg) ? card.bg : '#14161B',
+    ...(logo ? { logo } : {}), s: cardLengths(lengthS, clientCardLen(d, set), true).clientS,
   }
 }
 

@@ -31,7 +31,7 @@ def test_the_checks_pass_over_the_passthrough_writer():
     failed = {k: [n for n, ok in row.items() if not ok] for k, row in table.items() if not all(row.values())}
     # The passthrough cuts to the first sentence: it may drop an @name, not shorten, or draft short of the
     # length; everything else holds.
-    assert all(set(v) <= {"shorter", "keeps @names", "fits the length"} for v in failed.values()), failed
+    assert all(set(v) <= {"shorter", "keeps @names", "fits the length", "keeps the spoken lines"} for v in failed.values()), failed
 
 
 def test_the_live_test_drafts_fail_the_length_check_and_a_fitted_one_passes():
@@ -100,3 +100,24 @@ def test_a_one_option_nudge_on_a_draft_fails_and_the_relay_drafts_through_it():
     out = skye_eval.ModelWriter(Seq(case["skye_v2_reply"], draft), contracts_dir()).write(req)
     row = skye_eval.score(case, "draft", out)
     assert row["drafts"] and row["answers"] and "no empty ask" not in row
+
+
+def test_a_shorter_version_that_cuts_the_asked_line_fails_and_one_that_keeps_it_passes():
+    """UAT round 3 (R3-F7): "Make it 10 seconds" cut "Good boy.", the line the person had just asked for."""
+    case = next(c for c in skye_eval.load()["length"] if c["id"] == "quietboil-fit-10-keeps-the-line")
+    req = skye_eval.request(case, "fit_seconds")["input"]["write"]
+    reply = lambda lines: {"writes": [{"target": req["target"], "base_hash": req["base_hash"], "note": "I cut it to 10 s.", "duration_s": 10, "lines": lines}]}
+    as_was = [{"type": "action", "text": "1 a.m. A dark kitchen, lit only by the open fridge."},
+              {"type": "action", "text": "A flatmate in a dressing gown flips the Quietboil's switch, wincing."},
+              {"type": "action", "text": "The kettle glows blue and boils without a sound."},
+              {"type": "action", "text": "Through the thin wall, the snoring carries on, undisturbed."},
+              {"type": "character", "text": "NARRATOR (V.O.)"}, {"type": "dialogue", "text": "Quietboil. Let them sleep."}]
+    assert skye_eval.score(case, "fit_seconds", reply(as_was))["keeps the spoken lines"] is False
+    kept = [{"type": "action", "text": "1 a.m. A flatmate in a dressing gown flips the Quietboil on, wincing."},
+            {"type": "action", "text": "It boils blue, without a sound."},
+            {"type": "character", "text": "WOMAN"}, {"type": "parenthetical", "text": "whispering, to the kettle"},
+            {"type": "dialogue", "text": "Good boy."},
+            {"type": "action", "text": "Through the wall, the snoring carries on. She toasts it with her tea."},
+            {"type": "character", "text": "NARRATOR (V.O.)"}, {"type": "dialogue", "text": "Quietboil. Let them sleep."}]
+    row = skye_eval.score(case, "fit_seconds", reply(kept))
+    assert row["keeps the spoken lines"] is True and row["fits the length"] is True

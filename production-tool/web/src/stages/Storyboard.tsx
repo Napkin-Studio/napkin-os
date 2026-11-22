@@ -15,7 +15,7 @@ import { croppedCaption } from '../canvas/core/sketch'
 import { drawFrame, drawTheRest, firstUndrawn, needsFrame } from '../jobs/frames'
 import { endCardOf } from '../rooms/timeline'
 import { planOrJoin, askedShot } from '../jobs/plan'
-import { checkDurations, MAX_SHOTS } from '../lib/shots'
+import { checkDurations, drawnCount, MAX_SHOTS } from '../lib/shots'
 import { lengthChoices } from '../script/length'
 import { useBlobUrl } from '../ui/hooks'
 import { JobSlot } from '../ui/JobSlot'
@@ -60,11 +60,12 @@ import { moveOnStoryboard, useShotSort } from './shotDrag'
 import { ShotSort } from './ShotSort'
 import { lastWorkedModel, startFollow } from '../jobs/follow'
 import { SendDisclosure } from '../ui/SendDisclosure'
-import { sendRows } from '../ui/sendRows'
+import { makeClipsRows, sendRows } from '../ui/sendRows'
 import { joinHere, missedGuide, splitHere, videoJoin, videoModel, videoPlan, videoShots, videoUnits, type FrameMark } from '../jobs/runView'
 import { canJoin } from '../jobs/runs'
 import { videoOfStoryboard } from '../model/selectors'
 import { FrontButtons } from './FrontsNeeded'
+import { keepCharacter, keptFromFirst, suggestKey } from '../jobs/cast'
 
 const RATIOS: Ratio[] = ['9:16', '1:1', '16:9']
 
@@ -206,6 +207,9 @@ export function Storyboard() {
       const made = canvasActions.makeVideo({ storyboardId: sb.id, ...(script ? { scriptId: script.id } : {}) })
       if (!made) throw new Error('Make the video from the canvas: select this storyboard there and choose Make film.')
       videoId = (await made).videoId
+      // The film is in the document before the room opens on it: a Film node whose film is not there reopens empty.
+      await (docStore as { flush?: () => Promise<void> }).flush?.()
+      if (!docStore.get().videos[videoId]) throw new Error('The film could not be saved. Try Make clips again.')
     }
     uiStore.update((u) => {
       if (videoId) u.openNode = { ...u.openNode, video: videoId }
@@ -228,18 +232,18 @@ export function Storyboard() {
   const next = !shots.length
     ? <button className="btn primary" disabled={planning || !words.trim()} onClick={() => void attempt(plan)} title={words.trim() ? undefined : 'Write the script first'}>{planning ? 'Planning…' : 'Plan shots'}</button>
     : noFrames
-      ? <button className="btn primary" disabled={!check.ok || anyFrameRunning} onClick={drawFirst} title={hasRefs ? 'Frame 1 sets the place, the light and the style for every frame after it' : NO_PICTURES}>{anyFrameRunning ? 'Drawing…' : 'Draw frame 1'}</button>
+      ? <button className="btn primary" disabled={!check.ok || anyFrameRunning} onClick={drawFirst} title={!check.ok ? check.reason : anyFrameRunning ? 'A frame is being drawn' : hasRefs ? 'Frame 1 sets the place, the light and the style for every frame after it' : NO_PICTURES}>{anyFrameRunning ? 'Drawing…' : 'Draw frame 1'}</button>
       : !allFramed
-        ? <button className="btn primary" disabled={!check.ok || anyFrameRunning || firstUndrawn(doc, sb?.id) < 0} onClick={drawRest} title="Draw each remaining shot in turn, each one following the one before">{ui.drawingRest && anyFrameRunning ? 'Drawing the rest…' : anyFrameRunning ? 'Drawing…' : 'Draw the rest'}</button>
-        : <button className="btn primary" disabled={anyFrameRunning} onClick={() => void attempt(lock)} title="Lock the frames and make a clip of each in the Film editor">Make clips</button>
+        ? <button className="btn primary" disabled={!check.ok || anyFrameRunning || firstUndrawn(doc, sb?.id) < 0} onClick={drawRest} title={!check.ok ? check.reason : anyFrameRunning ? 'A frame is being drawn' : 'Draw each remaining shot in turn, each one following the one before'}>{ui.drawingRest && anyFrameRunning ? 'Drawing the rest…' : anyFrameRunning ? 'Drawing…' : 'Draw the rest'}</button>
+        : <button className="btn primary" disabled={anyFrameRunning} onClick={() => void attempt(lock)} title={anyFrameRunning ? 'A frame is being drawn' : 'Lock the frames and make a clip of each in the Film editor'}>Make clips</button>
   // The next step's "What the X agent will send" (features/production-new-ui.clan): what goes, the brief, no price.
   const named = refsList(doc).length
   const sending = !shots.length
-    ? { who: 'the Director agent', action: 'Plan shots', what: [{ key: 'script', label: 'The script’s words', detail: `${words.trim().split(/\s+/).filter(Boolean).length} words` }, { key: 'fit', label: `${targetS} s at ${ratio}`, detail: 'the length and shape to plan to' }] }
+    ? { who: 'the Director agent', action: 'Plan shots', op: 'shot_list' as const, what: [{ key: 'script', label: 'The script’s words', detail: `${words.trim().split(/\s+/).filter(Boolean).length} words` }, { key: 'fit', label: `${targetS} s at ${ratio}`, detail: 'the length and shape to plan to' }] }
     : noFrames || !allFramed
-      ? { who: 'the Camera agent', action: noFrames ? 'Draw frame 1' : 'Draw the rest', what: [{ key: 'shots', label: noFrames ? 'Shot 1’s words and camera' : 'Each undrawn shot’s words and camera, one at a time' }, { key: 'refs', label: `${named} named ${named === 1 ? 'picture' : 'pictures'}`, detail: noFrames ? 'frame 1 sets the look for the rest' : 'and the frame before each one' }] }
-      : { who: 'the Camera agent', action: 'Make clips', what: [{ key: 'frames', label: `${shots.length} ${shots.length === 1 ? 'frame' : 'frames'}, their words and camera` }, { key: 'refs', label: `${named} named ${named === 1 ? 'picture' : 'pictures'}` }] }
-  const primary = <SendDisclosure primary={next} who={sending.who} rows={sendRows(doc, sb?.id, sending.what, sending.action)} />
+      ? { who: 'the Camera agent', action: noFrames ? 'Draw frame 1' : 'Draw the rest', op: 'frame' as const, what: [{ key: 'shots', label: noFrames ? 'Shot 1’s words and camera' : 'Each undrawn shot’s words and camera, one at a time' }, { key: 'refs', label: `${named} named ${named === 1 ? 'picture' : 'pictures'}`, detail: noFrames ? 'frame 1 sets the look for the rest' : 'and the frame before each one' }] }
+      : { who: 'the Camera agent', action: 'Make clips', op: 'clip' as const, ...makeClipsRows(shots.filter(needsFrame).length, shots.filter((s) => !needsFrame(s)).length, named) }
+  const primary = <SendDisclosure primary={next} who={sending.who} rows={sendRows(doc, sb?.id, sending.what, sending.action, sending.op, 'promise' in sending ? sending.promise : undefined)} />
 
   return (
     <div className="editor">
@@ -260,7 +264,7 @@ export function Storyboard() {
         </>}
         right={<>
           {shots.length > 1 && <span className="hint sb-reorder">Drag ⋮⋮ to reorder, or Space and the arrows</span>}
-          {shots.length > 0 && <button className="sp-btn" disabled={shots.length >= MAX_SHOTS} onClick={() => void attempt(() => updateDoc(docStore, (d) => { addShot(d) }, 'add shot'))}>+ Add shot</button>}
+          {shots.length > 0 && <button className="sp-btn" disabled={drawnCount(shots) >= MAX_SHOTS} title={drawnCount(shots) >= MAX_SHOTS ? `A film has at most ${MAX_SHOTS} drawn shots` : undefined} onClick={() => void attempt(() => updateDoc(docStore, (d) => { addShot(d) }, 'add shot'))}>+ Add shot</button>}
         </>}
         primary={primary} />
       <div className="booth-row">
@@ -281,7 +285,9 @@ export function Storyboard() {
             <button className="btn xs ghost" onClick={() => setDeleted(null)}>OK</button>
           </div>
         )}
-        {planJob && !shots.length && <div className="sb-planning"><JobSlot jobId={planJob} /></div>}
+        {/* A plan that asks shows its question once, in the sheet's note above (UAT round 5 S3-3: it showed there and
+            again here, clipped by this box's height). */}
+        {planJob && !shots.length && !(doc.jobs[planJob]?.state === 'needs_input' && askOf(doc, planJob)?.state === 'open') && <div className="sb-planning"><JobSlot jobId={planJob} /></div>}
         {!shots.length && !planJob && (
           <div className="sb-empty pt-card">
             <div className="row" style={{ gap: 10 }}><AgentFigure agent="dex" size={28} decorative /><b>No shots yet</b><span className="pt-mono">{sayer('dex')}</span></div>
@@ -312,7 +318,7 @@ export function Storyboard() {
               mark={marks[s.id]} film={film && linked ? { videoId: linked.id, strip: stripPlace(i), handle: handleAt(i) } : undefined} />
           ))}
           {shots.length > 0 && (
-            <button className="sb-addtile" disabled={shots.length >= MAX_SHOTS} onClick={() => void attempt(() => updateDoc(docStore, (d) => { addShot(d) }, 'add shot'))}>+ Add a shot at the end</button>
+            <button className="sb-addtile" disabled={drawnCount(shots) >= MAX_SHOTS} title={drawnCount(shots) >= MAX_SHOTS ? `A film has at most ${MAX_SHOTS} drawn shots` : undefined} onClick={() => void attempt(() => updateDoc(docStore, (d) => { addShot(d) }, 'add shot'))}>+ Add a shot at the end</button>
           )}
         </div>
         </ShotSort>
@@ -422,6 +428,34 @@ function LiftedCard({ shot, index }: { shot: Shot; index: number }) {
         {url ? <img src={url} alt="" /> : <div className="sb-noframe"><span>No frame yet</span></div>}
       </div>
       {shot.action && <div className="sb-liftwords">{shot.action}</div>}
+    </div>
+  )
+}
+
+/** After frame 1 lands (UAT round 2 UX 4): keep its person as a named character, so every later frame sends them by
+ *  name and they stay themselves. Once kept, the card says who. */
+function KeepPerson({ asset, storyboardId, action }: { asset: string; storyboardId?: string; action?: string }) {
+  const doc = useDoc()
+  const { doc: store } = useServices()
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState(() => suggestKey(action))
+  const [error, setError] = useState<string | null>(null)
+  const kept = keptFromFirst(doc, storyboardId)
+  if (kept) return <p className="sb-kept faint">Later frames keep <b>@{kept.key}</b> from this frame.</p>
+  if (!open) return <button type="button" className="linkbtn sb-keep" onClick={() => setOpen(true)}>Keep a person from this frame…</button>
+  const save = () => void keepCharacter(store, asset, name).then(() => setOpen(false), (e) => setError(e instanceof Error ? e.message : 'That name did not take.'))
+  return (
+    <div className="sb-keepform row" role="group" aria-label="Keep a person from this frame">
+      <span className="faint">Keep</span>
+      <input className="input" aria-label="Their name" placeholder="mia" value={name} autoFocus
+        onChange={(e) => { setName(e.target.value); setError(null) }}
+        onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') save(); if (e.key === 'Escape') setOpen(false) }} />
+      <span className="faint">as a character</span>
+      <button type="button" className="btn xs primary" disabled={!name.trim()} onClick={save}>Keep</button>
+      <button type="button" className="btn xs ghost" onClick={() => setOpen(false)}>Cancel</button>
+      {/* UAT round 4 S3-7: the whole frame is kept, the street and bench with the person. Said, before it is kept. */}
+      <span className="faint sb-keepnote" role="note">This keeps the whole frame as their picture, the place too. To keep only the person, crop the frame to them first (Edit).</span>
+      {error && <span role="alert" className="tray-error">{error}</span>}
     </div>
   )
 }
@@ -573,6 +607,7 @@ function ShotCard({ shot, index, prev, selected, onSelect, onOpen, onDraw, onDel
         {current && !drawing && <button type="button" className="sb-openie" onClick={onOpen}><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M1 4V1h3M8 1h3v3M11 8v3H8M4 11H1V8" fill="none" stroke="currentColor" strokeWidth="1.4" /></svg>Open in image editor</button>}
         {current?.cropped_to && asset?.w && asset?.h && <span className="sb-crop">{croppedCaption({ w: asset.w, h: asset.h }, current.cropped_to.to)}</span>}
       </div>
+      {index === 0 && current && !drawing && <KeepPerson asset={current.asset} storyboardId={shot.storyboard_id} action={shot.action} />}
       <div className="sb-chips">{chips.map((c) => <span key={c.field} className={`sb-chip ${changedFields.has(c.field) ? 'changing' : ''}`}>{c.label}</span>)}</div>
       {/* The words are edited in the shot's Booth (its words and direction); the cell shows them. */}
       <div className="sb-words"><p className="sb-action">{shot.action?.trim() || <span className="faint">What happens in this shot…</span>}</p></div>

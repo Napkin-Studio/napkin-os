@@ -135,9 +135,17 @@ describe("a take's timing and windows", () => {
     expect(totalS).toBe(10)
     expect(starts).toEqual([0, 2.5, 5.65])
     const w = takeWindows([2.5, 3, 4.2], starts, undefined, totalS)
-    // Each window is the shot's own length, its head trimmed; the first starts on the pinned frame.
-    expect(w.map((x) => [x.in_s, x.out_s])).toEqual([[0, 2.5], [2.65, 5.65], [5.8, 10]])
+    // Each window is the shot's own length from where the prompt timed it, its slack trimmed from the tail (R4-F7).
+    expect(w.map((x) => [x.in_s, x.out_s])).toEqual([[0, 2.5], [2.5, 5.5], [5.65, 9.85]])
     expect(w.every((x) => x.by === 'prompt')).toBe(true)
+  })
+
+  it('round 4 Box 4: Omni 4 s for 1.5 + 2.0 s, Dex timed shot 5 from 1.5 s, so its window starts at 1.5 s (R4-F7)', () => {
+    const { totalS, starts } = takeTiming([1.5, 2.0], (s) => Math.ceil(s))
+    expect([totalS, starts]).toEqual([4, [0, 1.5]])
+    // The job's cuts as the relay returned them live: [{ planned_s: 1.5, found_s: null }].
+    const w = takeWindows([1.5, 2.0], starts, [{ planned_s: 1.5, found_s: null }], 4)
+    expect(w.map((x) => [x.in_s, x.out_s])).toEqual([[0, 1.5], [1.5, 3.5]])
   })
 
   it('cuts where the take cut, found else planned', () => {
@@ -209,20 +217,34 @@ describe('Make clips', () => {
     expect(t.purpose).toEqual({ for: 'run', videoId: a.videoId, runId: runs[0][0] })
   })
 
-  it('on Veo, a separate shot ends on the next frame where the action carries on; the strip switches to WAN 3', async () => {
+  it('on Veo, a separate shot ends on the next frame where the action carries on; picked, every run stays on Veo', async () => {
     const a = film([4, 4, 4], (i) => (i === 2 ? { camera: { size: 'close' } } : {}), (d, shots) => { shots[1].refs = [addRef(d, 'bottle', 'front', SHA('f'), 'product').id] })
     await makeClips(a.deps, { videoId: a.videoId, shots: a.shots, ids: a.shots.map((s) => s.id), config: on, join: 'film', modelChoice: veoFast, busy: skipNone })
     // Shot 1 is on its own (the product shot starts a video), lands on shot 2's frame, and keeps the pick.
     expect(a.submits[0].input).toMatchObject({ mode: 'frames', lastFrame: { sha256: SHA('1') } })
     expect(a.submits[0].modelChoice).toEqual(veoFast)
     expect(a.submits[0].purpose).toMatchObject({ for: 'clip', endFrameId: a.store.get().shots[a.shots[1].id].pick!.current })
-    // Shots 2-3 are one video: Veo makes none, so WAN 3 makes it.
-    expect(a.submits[1].input).toMatchObject({ mode: 'take_refs' })
-    expect(a.submits[1].modelChoice).toEqual(wan3)
-    expect(a.submits).toHaveLength(2)
+    // Shots 2-3 carry on, but a person's pick is the model sent on every run (UAT round 4, R4-F1): Veo makes them one
+    // after another, never switched to WAN 3 behind the box that showed Veo.
+    expect(a.submits.slice(1).map((s) => s.modelChoice)).toEqual([veoFast, veoFast])
+    expect(a.submits.slice(1).every((s) => s.input.mode !== 'take_refs')).toBe(true)
     // The crew's joins are worked out from the shots, never stored (only a person's boxes are).
     const seams = shotsOf(a.store.get()).map((s) => joinBefore(a.store.get(), a.videoId, s.id)?.kind)
     expect(seams).toEqual([undefined, 'continue', 'cut'])
+  })
+
+  it('with no pick, a spoken line goes to Veo 3.1 with sound and a long run to WAN 3 (the routed defaults)', async () => {
+    const a = film([3, 3], () => ({}), (d, shots) => {
+      d.beats = { ...(d.beats ?? {}), b_l: { id: 'b_l', v: 1, field_v: {}, shot_id: shots[1].id, kind: 'line', at_s: 0.5, text: 'Good boy.', speaker: 'MAYA', rank: 'a0' } as never }
+    })
+    await makeRuns(a.deps, { videoId: a.videoId, shotIds: [a.shots[1].id], config: on })
+    expect(a.submits.map((s) => (s.modelChoice as { model: string }).model)).toEqual(['veo3.1'])
+    // Picked WAN 3 (the box shows WAN 3): the line is made on WAN 3 (R4-F1).
+    const b = film([3, 3], () => ({}), (d, shots) => {
+      d.beats = { ...(d.beats ?? {}), b_l: { id: 'b_l', v: 1, field_v: {}, shot_id: shots[1].id, kind: 'line', at_s: 0.5, text: 'Good boy.', speaker: 'MAYA', rank: 'a0' } as never }
+    })
+    await makeRuns(b.deps, { videoId: b.videoId, shotIds: [b.shots[1].id], config: on, modelChoice: wan3 })
+    expect(b.submits.map((s) => s.modelChoice)).toEqual([wan3])
   })
 
   it('names the run and how it is made in History, never the mode', async () => {
@@ -517,5 +539,21 @@ describe('the live case (2026-10-19): one shot made alone, then every gap set to
     expect(a.submits.length).toBe(before)
     await makeRuns(deps, { videoId: a.videoId, shotIds: [a.shots[1].id], config: on, modelChoice: omni, again: true })
     expect(a.submits.at(-1)!.input.shots).toHaveLength(5)
+  })
+})
+
+describe('+ New box from words in a storyboard film (UAT 2026-11-21, B1)', () => {
+  it('a lone shot with no frame is made from its words when the Make room says so', async () => {
+    const a = film([3, 3, 4], () => ({}), (d, shots) => {
+      // The third shot is the new box: words, no frame, cut from the shots before it.
+      const s = shots[2]
+      s.pick = undefined
+      for (const f of Object.values(d.frames)) if (f.shot_id === s.id) delete d.frames[f.id]
+    })
+    await splitHere(a.store, a.videoId, a.shots[2].id)
+    const failed = await makeRuns(a.deps, { videoId: a.videoId, shotIds: [a.shots[2].id], config: on, modelChoice: veoFast, again: true, fromWords: true })
+    expect(failed).toEqual([])
+    expect(a.submits.at(-1)).toMatchObject({ op: 'clip', purpose: { for: 'clip', shotId: a.shots[2].id } })
+    expect(a.submits.at(-1)!.input.image).toBeUndefined()
   })
 })

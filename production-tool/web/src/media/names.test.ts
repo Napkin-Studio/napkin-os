@@ -110,4 +110,65 @@ describe('media names (features/media-download.clan)', () => {
     expect(mediaItem(d, 'P', undefined)).toBeUndefined()
     expect(mediaItem(d, 'P', SHA('0'))).toBeUndefined()
   })
+
+  it('a canvas picture\'s versions are files of their own, named after it (UAT round 1 IMG-16: no Download for v3)', () => {
+    const d = project()
+    for (const c of '78') d.assets[SHA(c)] = asset(c, 'image/png', 'edited')
+    // @maya_front edited twice: v1 as it was, then v2 and v3 (the ref follows the newest).
+    put(d.frames, { id: 'pv_1', node: 'node_front', version: 1, kind: 'original', asset: SHA('a') })
+    put(d.frames, { id: 'pv_2', node: 'node_front', version: 2, kind: 'edited', asset: SHA('7') })
+    put(d.frames, { id: 'pv_3', node: 'node_x', version: 2, kind: 'edited', asset: SHA('8') })
+    expect(mediaItem(d, 'P', SHA('7'))).toMatchObject({ name: 'P-maya_front-v2.png', folder: 'pictures', which: 'pv_2' })
+    expect(mediaItem(d, 'P', SHA('8'))?.name).toMatch(/^P-picture-\d+-v2\.png$/)
+    expect(mediaItem(d, 'P', SHA('a'))?.name).toBe('P-maya_front.png') // v1 is the named picture already
+  })
+
+  it('a result made from a sketch area has a file before any Apply (UAT round 2, IMG-16)', () => {
+    const d = project()
+    d.assets[SHA('9')] = asset('9', 'image/png', 'generated')
+    put(d.frames, { id: 'fr_s1', sketch_id: 'sketch_1', version: 1, kind: 'generated', asset: SHA('9') })
+    expect(mediaItem(d, 'P', SHA('9'))).toMatchObject({ name: 'P-sketch-1-v1.png', folder: 'pictures', which: 'fr_s1' })
+  })
+})
+
+describe('a joined take in the zip (UAT 2026-11-21, F15)', () => {
+  it('is one file, named for its shots', () => {
+    const d = project()
+    d.assets[SHA('7')] = asset('7', 'video/mp4')
+    put(d.generations, { id: 'take_j', kind: 'together', shot_ids: ['shot_9', 'shot_2'], asset: SHA('7'), duration_s: 6, state: 'ready', job_id: 'job_j', crew: 'wren', provider: 'runway', inputs: { model: 'm' }, created_at: '2026-10-13T11:00:00Z', by: 'human:p_maya01' } as never)
+    const clips = mediaItems(d, 'Ad').filter((m) => m.sha256 === SHA('7'))
+    // The Bin's number: v1 of the shots it was made of (UAT round 3, F15: the zip said v2 for the Bin's v1).
+    expect(clips.map((m) => m.name)).toEqual(['Ad-shots1-2-clip-v1.mp4'])
+  })
+
+  it('a take of one shot made after a joined one is v1 of that shot, as the Bin and the note say (UAT round 3, F15)', () => {
+    const d = project()
+    for (const g of Object.keys(d.generations)) delete d.generations[g]
+    d.assets[SHA('7')] = asset('7', 'video/mp4')
+    d.assets[SHA('8')] = asset('8', 'video/mp4')
+    const gen = (id: string, shots: string[], c: string, at: string) => put(d.generations, { id, kind: shots.length > 1 ? 'together' : 'clip', shot_ids: shots, asset: SHA(c), duration_s: 3, state: 'ready', job_id: `job_${id}`, crew: 'wren', provider: 'runway', inputs: { model: 'm' }, created_at: at, by: 'human:p_maya01' } as never)
+    gen('take_j', ['shot_9', 'shot_2'], '7', '2026-10-13T11:00:00Z')
+    gen('take_1', ['shot_9'], '8', '2026-10-13T12:00:00Z')
+    expect(mediaItems(d, 'Ad').filter((m) => m.kind === 'clip').map((m) => m.name)).toEqual(['Ad-shots1-2-clip-v1.mp4', 'Ad-shot1-clip-v1.mp4'])
+  })
+})
+
+describe('the film\'s sizes in Download all media (UAT round 3, R3-F12)', () => {
+  it('each made size is in the ad folder, named by its length and shape; two alike are numbered; one not made is not', () => {
+    const d = project()
+    delete d.renders.render_2
+    d.assets[SHA('7')] = asset('7', 'video/mp4')
+    d.assets[SHA('8')] = asset('8', 'video/mp4')
+    const size = (id: string, set: string, format: string, w: number, h: number, length: number, sha?: string) => put(d.sizes, {
+      id, set_id: set, rank: 'm', format: { pack_id: 'film', pack_version: '1', format_id: format }, aspect: { w, h }, delivery: { width: w, height: h },
+      method: 'reframe', media: 'video', length_s: length, ...(sha ? { asset: SHA(sha), status: 'ready' as const } : { status: 'making' as const }),
+    } as never)
+    size('size_1', 'fset_1', 'film-9x16', 1080, 1920, 6, '7')
+    size('size_2', 'fset_2', 'film-9x16', 1080, 1920, 6, '8')
+    size('size_3', 'fset_1', 'film-16x9', 1920, 1080, 15)
+    const ad = mediaItems(d, 'P').filter((m) => m.folder === 'ad')
+    expect(ad.map((m) => `${m.folder}/${m.name}`)).toEqual(['ad/P-ad.mp4', 'ad/P-ad-6s-9x16.mp4', 'ad/P-ad-6s-9x16-v2.mp4'])
+    expect(ad.map((m) => m.kind)).toEqual(['ad', 'cutdown', 'cutdown'])
+    expect(mediaItem(d, 'P', SHA('8'))?.which).toBe('size_2')
+  })
 })

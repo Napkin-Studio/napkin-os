@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { rectToRegion, regionAround, regionToRect } from './region'
-import { checkDurations, splitTarget, totalSeconds } from './shots'
+import { checkDurations, drawnCount, splitTarget, totalSeconds } from './shots'
 import { ID_PATTERN, newId } from './ulid'
 
 describe('region math', () => {
@@ -38,10 +38,16 @@ describe('shot durations', () => {
     expect(checkDurations(shots(5, 4), 10)).toMatchObject({ ok: false, total: 9, reason: 'Add 1 s to reach 10 s.' })
     expect(checkDurations(shots(8, 8, 8), 20)).toMatchObject({ ok: false, reason: 'Cut 4 s to reach 20 s.' })
   })
-  it('needs 2-8 shots of 1-10 s', () => {
+  it('needs 2 or more drawn shots of 1-10 s', () => {
     expect(checkDurations(shots(10), 10).ok).toBe(false)
     expect(checkDurations(shots(12, 3), 15).ok).toBe(false)
-    expect(checkDurations(shots(...Array(9).fill(2)), 18).ok).toBe(false)
+  })
+  it('does not refuse a long plan, and the end card is not a drawn shot (UAT walkthrough: 8 shots + card)', () => {
+    // nine drawn shots of 2 s and a 2 s end card
+    const plan = [...shots(...Array(9).fill(2)), { duration_s: 2, kind: 'end_card' as const }]
+    expect(checkDurations(plan, 20)).toEqual({ ok: true, total: 20 })
+    expect(drawnCount(plan)).toBe(9)
+    expect(checkDurations([{ duration_s: 5 }, { duration_s: 5, kind: 'end_card' as const }], 10)).toMatchObject({ ok: false, reason: 'Add at least 2 shots.' })
   })
   it('handles half seconds without float noise', () => {
     expect(totalSeconds(shots(2.5, 2.5, 5.1, 4.9))).toBe(15)

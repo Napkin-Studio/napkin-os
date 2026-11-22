@@ -168,7 +168,7 @@ def test_kling_o3_frame_and_refs_is_the_body_the_paid_test_proved(runway, server
         "model": "klingO3_standard",
         "promptImage": [{"uri": URL[FRAME], "position": "first"}],
         "references": [{"uri": URL[BABY]}, {"uri": URL[BABY_SIDE]}],
-        "promptText": "baby front claps. Keep baby front exactly.",
+        "promptText": "Baby claps. Keep Baby exactly.",  # a view said as its character (R5-F8)
         "ratio": "1280:720",
         "audio": False,
         "duration": 3,
@@ -180,19 +180,20 @@ def test_kling_o3_takes_seven_pictures_in_all_frames_included(runway, server):
     runway.submit(clip("klingO3_pro", refs=six))  # 1 + 6
     with pytest.raises(CapabilityMissing, match="7 pictures"):
         runway.submit(clip("klingO3_pro", refs=six, last=LAST))  # 2 + 6
-    assert len(server.requests) == 1
+    # One submit; the pictures' headers may be read first to check their shape (pt-film-r2 F5).
+    assert [r.method for r in server.requests].count("POST") == 1
 
 
 def test_hailuo_from_refs_sends_its_resolution_and_aspect_and_no_audio(runway, server):
     runway.submit(clip("hailuo3", refs=REFS, first=None, seconds=5, prompt="@baby_front in a kitchen"))
     assert server.body == {"model": "hailuo3", "references": [{"uri": URL[BABY]}, {"uri": URL[BABY_SIDE]}],
-                           "promptText": "baby front in a kitchen", "ratio": "16:9", "resolution": "768p", "duration": 5}
+                           "promptText": "Baby in a kitchen", "ratio": "16:9", "resolution": "768p", "duration": 5}
 
 
 def test_omni_flash_from_refs_takes_a_pixel_size_and_no_audio(runway, server):
     runway.submit(clip("gemini_omni_flash_1.1", refs=REFS[:1], first=None, seconds=3, prompt="@baby_front smiles"))
     assert server.body == {"model": "gemini_omni_flash_1.1", "references": [{"uri": URL[BABY]}],
-                           "promptText": "baby front smiles", "ratio": "1280:720", "duration": 3}
+                           "promptText": "Baby smiles", "ratio": "1280:720", "duration": 3}
 
 
 def test_wan3_with_a_frame_sends_an_auto_ratio_of_the_asked_tier(runway, server):

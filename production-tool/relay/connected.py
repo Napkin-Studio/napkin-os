@@ -6,7 +6,8 @@ Modes (JobInput.mode, chosen by the web's run planner):
   take        one generation over a run's shots (input.shots), pinned on the first shot's frame, no refs
               (Runway keyframes and references cannot mix), a timed prompt "Shot k [a-b s] ...".
   take_refs   the same with no frame: the storyboard frames and named pictures go as references; each shot's
-              line follows its own frame ("Shot k [a-b s] ..., follows image k (@tag)", director.v11).
+              line follows its own frame ("Shot k [a-b s] ..., follows image n (@tag)", director.v11; n is the
+              frame's place in the refs sent, which the relay writes: features/pt-dex-context.clan).
   frames      one shot from its own frame, landing on input.lastFrame (a continue join) when given.
   alone       today's clip.
   redo_window one shot's window of a take made again from the take's own stills at its ends.
@@ -160,8 +161,7 @@ FRAME_LABEL = re.compile(r"^Shot (\d+) frame$")
 
 def frame_tags(inp: dict) -> dict[int, str]:
     """A take_refs take's storyboard frames (features/join-or-cut-shots.clan): shot k (from 1) -> the wire tag of
-    its frame, from the refs with role composition labelled "Shot k frame" (the web's makeTake). Image k is the
-    frame of shot k; a shot whose frame was left out (past the model's pictures) has none."""
+    its frame, from the refs with role composition labelled "Shot k frame" (the web's makeTake)."""
     out: dict[int, str] = {}
     for r in inp.get("refs") or []:
         m = FRAME_LABEL.match(str(r.get("label") or ""))
@@ -170,22 +170,68 @@ def frame_tags(inp: dict) -> dict[int, str]:
     return out
 
 
-def tie_lines(texts: list[str], tags: dict[int, str]) -> list[str]:
-    """Each shot's words with the image it follows: "..., follows image k (@tag)" (director.v11's form)."""
-    return [f"{t.rstrip().rstrip('.')}, follows image {k + 1} (@{tags[k + 1]})" if k + 1 in tags else t for k, t in enumerate(texts)]
+def frame_images(inp: dict, refs: list[dict] | None) -> dict[int, tuple[int, str]]:
+    """Shot k -> (n, tag): its frame is image n, the frame's 1-based place among the refs the provider job sends
+    (features/pt-dex-context.clan). Runway's references carry no tags (tagSyntax none), so the model knows a
+    picture only by its place: the characters go first (the web's makeTake), so after two character pictures
+    shot 1's frame is image 3. Read from the job's own refs once they are final (after fit_refs, Dex's choice
+    and the refs.max cap); a shot whose frame is not sent has none."""
+    sent = [r.get("name") for r in refs or []]
+    return {k: (sent.index(t) + 1, t) for k, t in frame_tags(inp).items() if t in sent}
 
 
-def ties_problem(prompt: str, inp: dict) -> str | None:
+def _tie(n: int, tag: str) -> str:
+    return f", follows image {n} (@{tag})"
+
+
+def tie_lines(texts: list[str], images: dict[int, tuple[int, str]]) -> list[str]:
+    """Each shot's words with the image it follows: "..., follows image n (@tag)" (director.v11's form, n its
+    place in the refs: frame_images)."""
+    return [f"{t.rstrip().rstrip('.')}{_tie(*images[k + 1])}" if k + 1 in images else t for k, t in enumerate(texts)]
+
+
+TIE = re.compile(r",?[ \t]*follows image \d+(?:[ \t]*\(@?[a-z][a-z0-9_]*\))?", re.I)
+SHOT_LINE = re.compile(r"^(Shot (\d+) \[[^\]]*\])(.*)$", re.M)
+
+
+def renumber_ties(prompt: str, inp: dict, refs: list[dict] | None) -> str:
+    """Dex's take prompt with each shot's "follows image N (@tag)" made true (features/pt-dex-context.clan): the
+    line of shot k follows shot k's own frame, as image n, its place in the refs sent (frame_images); the clause
+    goes when that frame is not sent. Only lines that already say it change (the relay adds no words to Dex's
+    answer); a right prompt comes back as it was."""
+    images = frame_images(inp, refs)
+
+    def line(m: re.Match) -> str:
+        head, k, words = m.group(1), int(m.group(2)), m.group(3)
+        if not TIE.search(words):
+            return m.group(0)
+        first = TIE.search(words)
+        keep = _tie(*images[k]) if k in images else ""
+        rest = TIE.sub("", words[first.end():])
+        return f"{head}{words[:first.start()]}{keep}{rest}"
+
+    return SHOT_LINE.sub(line, prompt)
+
+
+def ties_problem(prompt: str, inp: dict, refs: list[dict] | None) -> str | None:
     """Why a take_refs prompt does not tie each shot to its frame, or None: shot k's timed line names
-    "follows image k" exactly when the take carries that shot's frame (the eval's check, since director.v11)."""
-    tags = frame_tags(inp)
+    "follows image n" with n its frame's place in `refs` (the job's) exactly when the job sends that frame
+    (the eval's check, since director.v11; places since features/pt-dex-context.clan)."""
+    images = frame_images(inp, refs)
     lines = {int(n): line for n, line in re.findall(r"^Shot (\d+) \[[^\]]*\](.*)$", prompt, re.M)}
     for k, line in lines.items():
-        says = re.search(rf"follows image {k}\b", line) is not None
-        if says != (k in tags):
-            return f"Shot {k} {'does not follow' if k in tags else 'names an image it does not have:'} image {k}"
-        if k in tags and f"@{tags[k]}" not in line:
-            return f"Shot {k} does not name its frame @{tags[k]}"
+        said = re.search(r"follows image (\d+)\b", line)
+        if k not in images:
+            if said:
+                return f"Shot {k} names an image it does not send: image {said.group(1)}"
+            continue
+        n, tag = images[k]
+        if not said:
+            return f"Shot {k} does not follow image {n}"
+        if int(said.group(1)) != n:
+            return f"Shot {k} follows image {said.group(1)}, but its frame is image {n}"
+        if f"@{tag}" not in line:
+            return f"Shot {k} does not name its frame @{tag}"
     return None
 
 
@@ -229,6 +275,21 @@ def search_s(take: dict | None) -> float:
     return min(CUT_SEARCH_MAX_S, max(CUT_SEARCH_MIN_S, acc if acc is not None else CUT_SEARCH_MAX_S))
 
 
+CUT_SEARCH_WIDE_S = 1.5  # a take's cut is looked for up to this far, when its shots are long enough
+
+
+def take_search_s(take: dict | None, starts: list[float], duration: float) -> float:
+    """How far either side of each planned cut take_cuts looks for one take: the model's search_s; where its
+    accuracy was never measured, widened up to half the shortest shot (never past CUT_SEARCH_WIDE_S), so a cut the model made a second late is still
+    found and no cut can be taken for its neighbour's. UAT 2026-11-21: a words take cut at about 4 s for a
+    plan of 3 s and the 1 s search found nothing, so shot 1's window held part of shot 2."""
+    if (take or {}).get("cutAccuracyS") is not None:
+        return search_s(take)  # a model measured to cut where asked (WAN 3: 0.05 s) is searched that closely
+    ends = [*starts[1:], duration]
+    shortest = min((b - a for a, b in zip(starts, ends)), default=0.0)
+    return round(min(CUT_SEARCH_WIDE_S, max(search_s(take), shortest / 2)), 3)
+
+
 def in_words(text: str) -> str:
     """@tags said as plain words: a take sends no pictures beside its frame."""
     return TAG_IN_TEXT.sub(lambda m: unsent_in_words(m.group(0), []), text)
@@ -243,7 +304,7 @@ def shape(job: dict, inp: dict, sheet: dict, spec: dict, *, passthrough: bool) -
         return
     video = sheet.get("video") or {}
     if video.get("audioControl"):
-        job["audio"] = False  # Path 2: one bed covers the film, so the models with a switch make none
+        job["audio"] = False  # off here; sound.py turns it on for a take or clip with a line or a sound (pt-film-r1)
     else:
         job.pop("audio", None)  # no switch (Omni Flash, Hailuo 3): the take keeps its own continuous sound
     last = inp.get("lastFrame")
@@ -261,11 +322,13 @@ def shape(job: dict, inp: dict, sheet: dict, spec: dict, *, passthrough: bool) -
         if passthrough:
             from providers.types import prompt_max
             anchor = anchor_of(inp)
-            if mode == "take_refs":
-                texts = tie_lines(texts, frame_tags(inp))  # each shot follows its own frame (director.v11's form)
+            if mode == "take_refs":  # each shot follows its own frame, by its place in the refs sent
+                texts = tie_lines(texts, frame_images(inp, job.get("refs")))
             job["prompt"] = take_prompt(in_words(anchor) if mode == "take" else anchor, starts, texts, duration,
                                         bool(last), prompt_max(sheet, job.get("model") or spec["model"]))
             return
+        if mode == "take_refs":  # Dex's image numbers are made the refs' places (features/pt-dex-context.clan)
+            job["prompt"] = renumber_ties(job.get("prompt") or "", inp, job.get("refs"))
         why = timing_problem(job.get("prompt") or "", starts, duration)
         if why:
             raise ValueError(why)

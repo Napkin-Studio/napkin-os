@@ -698,6 +698,64 @@
    "refs": [],
    "target_s": 30,
    "title": "Script"
+  },
+  {
+   "id": "quietboil-fit-10-keeps-the-line",
+   "sector": "Home appliances",
+   "since": "skye.v7",
+   "intent": "fit_seconds",
+   "target": "scene",
+   "seconds": 10,
+   "why": "UAT round 3 (R3-F7): 'Make it 10 seconds' just after the person asked for her whispered 'Good boy.' cut that line. A shorter version keeps every spoken line word for word and finds the time in the action (skye.v7 rule 11).",
+   "lines": [
+    {
+     "type": "action",
+     "text": "1 a.m. A dark kitchen, lit only by the open fridge."
+    },
+    {
+     "type": "action",
+     "text": "A flatmate in socks and dressing gown creeps in, bracing for noise."
+    },
+    {
+     "type": "action",
+     "text": "She sets the Quietboil on its base and flips the switch, wincing."
+    },
+    {
+     "type": "action",
+     "text": "The kettle glows blue and boils without a sound."
+    },
+    {
+     "type": "character",
+     "text": "WOMAN"
+    },
+    {
+     "type": "parenthetical",
+     "text": "whispering, to the kettle"
+    },
+    {
+     "type": "dialogue",
+     "text": "Good boy."
+    },
+    {
+     "type": "action",
+     "text": "Through the thin wall, a flatmate's snoring carries on, undisturbed."
+    },
+    {
+     "type": "action",
+     "text": "She pours her tea and raises the mug to the wall in a silent toast."
+    },
+    {
+     "type": "character",
+     "text": "NARRATOR (V.O.)"
+    },
+    {
+     "type": "dialogue",
+     "text": "Quietboil. Let them sleep."
+    }
+   ],
+   "refs": [],
+   "target_s": 15,
+   "title": "Script"
   }
  ]
 }

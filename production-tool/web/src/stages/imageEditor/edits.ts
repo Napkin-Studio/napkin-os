@@ -216,7 +216,8 @@ export function nextStep(s: EditSession): string | undefined {
 /** An edit as the list says it. `state` is its job's, when it has one. */
 export function editLabel(e: Edit, s: EditSession, state?: 'running' | 'ready' | 'failed' | 'same' | 'unsent'): string {
   switch (e.kind) {
-    case 'mask': return `${e.name}${s.active === e.id ? ' · painting' : ''}`
+    // A mask whose Fill or Remove was sent is spent: never "painting" (UAT round 3 R3-3); the next stroke starts a new one.
+    case 'mask': return `${e.name}${s.active === e.id && !hasFill(s, e.id) ? ' · painting' : ''}`
     case 'text': return e.text.trim() ? `Text "${e.text}"` : 'Text · typing'
     case 'crop': return 'Crop'
     case 'fill': {
@@ -258,8 +259,55 @@ export function layersOf(s: EditSession, version: number): Layer[] {
 }
 
 /** The output size an upscale makes from our w x h frame ("→ 2688 × 1536"). */
+/** The Fill box's hint (UAT round 2 R2-15: an example from before the fill stayed after it): what to do now, never
+ *  words that read as already typed. A mask whose fill came back asks for a new area or new words. */
+export function fillPlaceholder(masked: boolean, filled: boolean, hidden?: string): string {
+  if (hidden) return `${hidden} is hidden. Show it to fill.`
+  if (!masked) return 'Paint or lasso an area first'
+  return filled ? 'Filled. Paint a new area, or say what else goes here' : 'What goes in the blue area, like: a red door'
+}
+
+/** The longest side Runway's Magnific reads a picture at (UAT round 2 R2-8): 1638 x 2048 at 2x came back 2458 x 3072,
+ *  1365 x 768 came back 2730 x 1536. Both runs fit "read at most 1536 px a side, then scaled". One paid check confirms. */
+export const UPSCALE_READS_PX = 1536
+
+/** What an upscale gives, as Runway returns it: the picture read at most UPSCALE_READS_PX a side, times the scale. */
+export function upscaledTo(w: number, h: number, scale: 2 | 4): { w: number; h: number } {
+  const k = Math.min(1, UPSCALE_READS_PX / Math.max(w, h))
+  return { w: Math.round(w * k) * scale, h: Math.round(h * k) * scale }
+}
+
+/** Whether an upscale makes the picture bigger at all (UAT round 3 R3-4: 2x of a 3072 px picture reads 1536 px and
+ *  promises 3072 again, and was paid for nothing). */
+export function upscaleGrows(w: number, h: number, scale: 2 | 4): boolean {
+  const out = upscaledTo(w, h, scale)
+  return out.w > w || out.h > h
+}
+
+/** Why Upscale is off at this scale: "Already full size: 2x gives 3072 px, as it is now. 4x makes it bigger." */
+export function upscaleWhyNot(w: number, h: number, scale: 2 | 4): string | undefined {
+  if (upscaleGrows(w, h, scale)) return undefined
+  const long = Math.max(w, h)
+  const other = scale === 2 && upscaleGrows(w, h, 4) ? ' 4× makes it bigger.' : ''
+  return `Already full size: the upscaler reads at most ${UPSCALE_READS_PX} px a side, so ${scale}× gives ${long} px, as it is now.${other}`
+}
+
+/** Why Upscale is not offered while an upscale is already in the edits, not applied yet (UAT round 4, R3-4: the editor
+ *  offered 2x again on top of a pending upscale), or undefined. A hidden or failed one does not count. */
+export function pendingUpscale(s: EditSession, failed: (e: Edit) => boolean = () => false): string | undefined {
+  const up = s.edits.find((e) => e.kind === 'upscale' && !s.hidden.includes(e.id) && !failed(e))
+  return up ? 'An upscale is already in your edits: Apply it first (or undo it), then upscale the new version.' : undefined
+}
+
+/** A result that came back the same as the picture sent, said plainly (UAT round 3 R3-3). */
+export function sameLine(e: Edit): string {
+  if (e.kind === 'fill') return e.remove ? 'The removal came back unchanged.' : 'The fill came back unchanged.'
+  return 'The change came back unchanged.'
+}
+
 export function upscaleSize(w: number, h: number, scale: 2 | 4): string {
-  return `→ ${w * scale} × ${h * scale}`
+  const out = upscaledTo(w, h, scale)
+  return `→ ${out.w} × ${out.h}`
 }
 
 /** The edits as a frame keeps them (document frame.edits, at most 64): the op and its small params. */

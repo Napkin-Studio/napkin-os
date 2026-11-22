@@ -14,7 +14,7 @@ import { saveTime, useSave } from '../useSave'
 import { useProjectName } from '../useDownload'
 import { exportBundle, download } from '../../export'
 import { downloadAllMedia } from '../../media/download'
-import { viewsOnCanvas } from '../../media/names'
+import { mediaItems, viewsOnCanvas } from '../../media/names'
 import { idbGet } from '../../lib/idb'
 import type { CanvasSnapshot } from '../../canvas/controller'
 import { setThemeChoice } from '../../theme'
@@ -87,7 +87,7 @@ export function DocMenu({ close, page }: { close: () => void; page?: { title: st
     <>
       <MenuItem icon="+" hint="A blank canvas" onSelect={() => { close(); void shell.newProject() }}>New</MenuItem>
       <MenuItem icon="↥" disabled={!!busy} hint="A .clan or an Export zip from your computer" onSelect={openPicker}>{busy === 'open' ? 'Opening…' : 'Open…'}</MenuItem>
-      <MenuItem icon="▤" hint="Every film you can open" onSelect={() => { close(); void shell.goHome() }}>All projects</MenuItem>
+      <MenuItem icon="▤" hint="Every project you can open" onSelect={() => { close(); void shell.goHome() }}>All projects</MenuItem>
       <SubItem icon="⇅" hint="Media, the project as .clan, the script" onSelect={() => setView('export')}>Import/Export</SubItem>
       <div className="pt-menusep" />
       <SubItem icon="→" hint="A deck from this film, or link a brief" onSelect={() => setView('continue')}>Continue in</SubItem>
@@ -170,7 +170,8 @@ function ExportRows({ busy, run, onOpen }: { busy: string | null; run: (what: st
   const { doc: docStore, project } = useServices()
   const doc = useDoc()
   const name = useProjectName()
-  const files = Object.keys(doc.assets).length
+  // What the zip holds (media/names.ts), not every asset: masks and drawings are not media (UAT round 1: "34 files", 29 in the zip).
+  const files = mediaItems(doc, name).length
   return (
     <>
       <div className="fhead">Import</div>

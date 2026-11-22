@@ -47,6 +47,14 @@ export function elementOfRef(els: readonly CanvasElement[], r: Pick<NamedRef, 'n
 /** "Samurai · 3 views". */
 export const groupLabel = (g: Pick<KeyGroup, 'title' | 'count'>) => `${g.title} · ${g.count} ${g.count === 1 ? 'view' : 'views'}`
 
+/** Where a group's label sits: on its topmost view's top-left corner (the leftmost of those level with it), never the
+ *  corner of the box around all its views, which may be empty canvas or another picture (UAT round 5: "Ruby · 2 views"
+ *  sat on an unrelated sunset because the side view was up and to the right of the front). */
+export function labelAnchor(members: readonly Pick<CanvasElement, 'x' | 'y'>[]): { x: number; y: number } {
+  const top = [...members].sort((a, b) => (Math.abs(a.y - b.y) < 8 ? a.x - b.x : a.y - b.y))[0]
+  return { x: top.x, y: top.y }
+}
+
 /** The key groups on the canvas: each key with two or more of its views here. */
 export function keyGroupsOn(els: readonly CanvasElement[], doc: ProductionDocument): KeyGroup[] {
   const live = els.filter((e) => !e.isDeleted)

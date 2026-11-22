@@ -83,7 +83,7 @@ describe('the Booth in the Film rooms', () => {
   })
   const take = (shotId: string): Gen => ({ id: id('gen'), kind: 'take' as Gen['kind'], boxKey: shotId, shotIds: [shotId], version: 1, delta: [], label: 'First take', durationS: 3, segments: [{ shotId, inS: 0, outS: 3 }], state: 'ready' })
 
-  it("Make: The Camera agent waits with a take that did not work, and his box sends words to Change's Words row for the shot's next take", async () => {
+  it("Make: The Camera agent waits with a take that did not work, and his box sends an ask to the Camera agent (Change's Ask row), never over the shot's words (R3-F5)", async () => {
     const { services, shots, el, render } = await project()
     await failed(services, shots[0], 'clip')
     const opened: ChangeOpen[] = []
@@ -101,7 +101,7 @@ describe('the Booth in the Film rooms', () => {
     expect(booth.querySelector('.bt-scope')?.textContent).toBe('Shot 2 · Box 2')
     await act(async () => { typeInto(booth.querySelector('textarea') as HTMLTextAreaElement, 'she looks up at the rain') })
     await act(async () => { buttonIn(booth, 'Ask the Camera agent').click() })
-    expect(opened).toEqual([{ parentId: t.id, shotId: shots[1], verb: 'words', words: 'she looks up at the rain' }])
+    expect(opened).toEqual([{ parentId: t.id, shotId: shots[1], verb: 'ask', ask: 'she looks up at the rain' }])
   })
 
   it('Make: the same take stopping the same way twice is one card, and Clear clears both', async () => {

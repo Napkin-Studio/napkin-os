@@ -184,14 +184,16 @@ describe('Apply refuses loudly rather than saving an unchanged copy', () => {
     expect(el.querySelector('[role="alert"]')?.textContent).toMatch(/^Fill Mask 1: "a red balloon" has no result/)
     expect(saved()?.version).toBe(1)
   })
-  it('a painted mask with nothing filled: an error, and no v2', async () => {
+  it('a painted mask with nothing filled: Apply is off and says why, and no v2 (UAT round 1 IMG-10)', async () => {
     const { el, saved, services } = await open('shot')
     // Only the mask: the fill undone.
     act(() => [...el.querySelectorAll('button')].find((b) => b.getAttribute('aria-label')?.startsWith('Undo edit 2'))!.click())
     await settle()
     expect(Object.values(services.ui.get().imageEdits ?? {})[0]?.edits.map((e) => e.kind)).toEqual(['mask'])
+    const button = byText(el, 'Apply as new version')!
+    expect(button.disabled).toBe(true)
+    expect(button.title).toBe('A mask alone changes nothing: Fill or Remove it first')
     await apply(el)
-    expect(el.querySelector('[role="alert"]')?.textContent).toMatch(/Mask 1/)
     expect(saved()?.version).toBe(1)
   })
 })

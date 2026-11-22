@@ -286,6 +286,10 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .toolbar .lbl { font-size: 11.5px; color: var(--ink3); padding: 0 4px 0 6px; }
 .popover { position: absolute; width: 360px; padding: 14px; border-radius: 16px; background: var(--card); border: 1px solid var(--line-soft); box-shadow: var(--shadow-pop); transform: translate(-50%, calc(-100% - 14px)); z-index: 7; }
 .popover h3 { margin: 0 0 8px; font-size: 14px; }
+/* A result's waiting question on the canvas (Character.tsx CanvasAsk; UAT round 1 IMG-1): the ask card itself is the
+   panel, at screen size beside its node, scrolling inside the canvas when it is taller than the room. */
+.popover.canvas-ask { width: 400px; max-width: calc(100% - 16px); max-height: calc(100% - 16px); overflow: auto; padding: 0; border: 0; background: transparent; box-shadow: none; z-index: 8; }
+.popover.canvas-ask .askcard { max-width: none; }
 .taghints { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0 10px; }
 .taghint { font-family: var(--f-mono); font-size: 11.5px; padding: 2px 7px; border-radius: 6px; border: 1px dashed var(--line); background: var(--soft); cursor: pointer; color: var(--ink2); }
 .taghint:hover { border-color: var(--create); color: var(--create); }
@@ -583,6 +587,14 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 /* The Name dialog's role pills (the contract's ten main roles, More… for the rest) and the chosen role's line. */
 .rolepills { gap: 4px; flex-wrap: wrap; max-width: 360px; }
 .roleline { font-size: 12px; margin-top: 4px; }
+.name-joins { font-size: 12.5px; margin-top: 8px; padding: 6px 8px; border-radius: 6px; background: var(--card); border: 1px solid var(--line); color: var(--ink2); max-width: 340px; }
+/* A brand ref's colours, font or rule in the Name popover (features/pt-canvas-r2.clan, R2-1). */
+.brandfields { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; max-width: 360px; }
+.brandfields .textarea { width: 100%; font-size: 12.5px; }
+.bf-line, .bf-missing { font-size: 12px; }
+.bf-swatches { gap: 6px; flex-wrap: wrap; align-items: center; }
+.bf-swatch { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px; border: 1px solid var(--line, #ddd); border-radius: 6px; font-size: 11px; }
+.bf-swatch input[type=color] { width: 22px; height: 22px; padding: 0; border: 0; background: none; cursor: pointer; }
 /* Waiting for an answer (needs_input): no loader, no busy pointer (ui-behaviour 5.2). */
 .pending.waiting { animation: none; background: var(--soft); cursor: default; }
 .hoverbar .hb-label { display: none; }
@@ -633,3 +645,6 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .player .player-dl { position: absolute; top: 10px; right: 10px; z-index: 3; opacity: 0; pointer-events: none; transition: opacity 0.15s var(--ease); }
 .player:hover .player-dl, .player:focus-within .player-dl, .player-dl:has(.missing) { opacity: 1; pointer-events: auto; }
 @media (hover: none) { .player .player-dl { opacity: 1; pointer-events: auto; } }
+
+/* A drag on the canvas selects no page text while the button is down (UAT round 4 S3-1). */
+body.pt-nosel, body.pt-nosel * { user-select: none !important; -webkit-user-select: none !important; }

@@ -48,6 +48,17 @@ function film(lengths: number[], opts: { words?: boolean; views?: number } = {})
 }
 const shape = (boxes: Box[]) => boxes.map((b) => b.shotIds.length)
 
+describe('a gap kept apart by a spoken line (UAT 2026-11-21, F6)', () => {
+  it('names the shot that speaks, by its own number', () => {
+    const a = film([2.5, 2.5, 3, 2.5])
+    const d = a.store.get() as ProductionDocument
+    d.beats = { ...(d.beats ?? {}), beat_x: { id: 'beat_x', v: 1, field_v: {}, shot_id: a.shots[2].id, kind: 'line', at_s: 1, text: 'Good boy.', speaker: 'MAYA', rank: 'a0' } as never }
+    const gaps = stripGaps(d, a.boxes(), a.videoId, on)
+    expect(gaps[1].blocked).toMatch(/^Shot 3 has a spoken line \(“Good boy\.”\)/)
+    expect(gaps[2].blocked).toMatch(/^Shot 3 has a spoken line/)
+  })
+})
+
 describe('the gap toggles', () => {
   it('every gap starts cut when nothing is joined; a flip writes a join, the next a cut, through the one join model', async () => {
     const a = film([3.5, 3.5, 4, 4])

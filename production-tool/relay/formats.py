@@ -10,9 +10,10 @@ of the master at the panel's own shape), the type layers on the field. Free, lik
 
 extend and regenerate are paid (phase 4; the paid tests in
 docs/production-tool/campaign-formats-tests-2026-10-16.md set them):
-  extend      the master at its own pixels on a canvas of the size's shape, a blurred stretch of it
-              round it, our mask white there (16 px over the master's edge); Ideogram 4.5 at high fills
-              the padding (pad_plan, padded). The prompt asks for continuation only, never the scene.
+  extend      the master at its own pixels on a canvas of the size's shape, its edges drawn outwards,
+              softened and grained round it, our mask white there (overlap_px over the master's edge);
+              Ideogram 4.5 at high fills the padding (pad_plan, padded). The prompt says the bands are empty
+              space to paint, continuing the picture; never the scene.
   regenerate  Gemini 3 Pro with the master as the tagged reference @master at the nearest of its ratios.
 Both results are cropped to the exact shape (finish).
 
@@ -36,8 +37,15 @@ PAID_METHODS = ("extend", "regenerate")
 
 # The words a paid method sends: what to do with the picture, never what is in it (the paid tests: the
 # picture dominates the words, so a scene description only risks a mismatch), and never a size's type.
-EXTEND_PROMPT = ("Continue the scene beyond its edges; keep everything inside exactly as it is. "
-                 "Match its light, colour, grain and perspective. No text, no letters, no logos.")
+# UAT round 1 (IMG-9, 2026-11-20): "keep everything inside exactly as it is" read as keeping the soft bands too,
+# and they came back as flat blurred bars with a hard seam. The words now say the bands are empty space to paint.
+# Round 3 (stepped outpainting): the bands held a soft mirror of the picture's edge. Round 5 (S3-2): since round 4 they
+# hold flat colour taken from the picture's edge, and the words say so.
+EXTEND_PROMPT = ("The picture is surrounded by flat colour bands taken from its edge: they are empty space, not part of "
+                 "it, only a guide to its colours, and nothing in them is to be kept. Paint new, "
+                 "sharp detail there that continues the picture seamlessly across its edges: the same horizon, ground, "
+                 "light, colour, grain and perspective, with no seam, blur, border or frame. Keep the picture itself "
+                 "as it is. No text, no letters, no logos.")
 REGENERATE_PROMPT = ("Recreate @master for a {shape} format: the same people, objects, place, light and colours. "
                      "Recompose for the shape so nothing important is cut off. No text, no letters, no logos.")
 # A scamp (a Drawing, a sketch area: features/resize-selection.clan) drawn as a finished picture at the shape.
@@ -91,8 +99,219 @@ REGENERATE_REFS_MAX = 4
 # The padded canvas Ideogram edits: at most this long and this many pixels (a data URI is at most 5 MB).
 EXTEND_MAX_SIDE = 3072
 EXTEND_MAX_PX = 4_200_000
-EXTEND_OVERLAP = 16   # the mask reaches this far over the master's edge, so the seam is redrawn
-EXTEND_BLUR = 40
+# The mask reaches this far over the master's edge, so the seam is redrawn: a share of the master's shorter side,
+# at least EXTEND_OVERLAP px (16 px left a hard seam on a 2048 px canvas, UAT round 1 IMG-9).
+EXTEND_OVERLAP = 24
+# UAT round 2 (IMG-9 partly): at 3.5% a 21:9 sky kept a hard vertical seam. 6% lets the model redraw more of the edge,
+# and the landing blends the master back over that overlap on a ramp (feathered), never a hard paste.
+EXTEND_OVERLAP_SHARE = 0.06
+# The padding is seeded with the master's edge strip (EDGE_STRIP px) drawn outwards, softened (EXTEND_BLUR) and
+# grained (EXTEND_GRAIN): the model continues a picture that already lines up with the edge, instead of keeping
+# the flat whole-picture blur it was given before.
+EDGE_STRIP = 12
+EXTEND_BLUR = 10
+EXTEND_GRAIN = 18
+# The seed's grain follows the master's own texture near its edge (round 2: a starry sky came back as flat haze, the
+# model keeping the soft seed): the edge's fine detail, measured, sets how much noise the bands carry, within these.
+TEXTURE_STRIP = 48
+GRAIN_MIN, GRAIN_MAX = 4.0, 36.0
+
+# Stepped outpainting (UAT round 3, IMG-9 third round: one Ideogram fill of a 21:9 band left a hard vertical seam with
+# the seed's speckle unpainted along it). An extend grows the picture in steps, each at most STEP_GROWTH of the side it
+# pads, at most EXTEND_STEPS_MAX steps; its result is laid back on a ramp over the picture it grew from before the next
+# step reads it. Round 4 (S1-1: 9:16 in three steps stacked four suns and ghost legs): the bands were seeded with a
+# lightly blurred mirror of the picture, the model kept the mirrored shapes, and every later step mirrored the band
+# it had just painted again. The bands are now seeded with a flat colour field taken from the edge strip alone
+# (_field: no shape from the picture can reach the band), and an extend that needs more than EXTEND_STEPS_MAX steps
+# is not an extend at all: the web offers Redraw at that shape, and the relay refuses it (extend_fits).
+STEP_GROWTH = 0.35
+EXTEND_STEPS_MAX = 3
+# The field: the edge strip (FIELD_STRIP px deep) averaged to one line, blurred along the edge by FIELD_BLUR of its
+# length beside the edge and by FIELD_FAR of it away from the edge, the one fading into the other over FIELD_FADE
+# of the band.
+FIELD_STRIP = 16
+FIELD_BLUR = 0.08
+FIELD_FAR = 0.3
+FIELD_FADE = 0.6
+# Round 5 (S2-C: a 21:9 sky kept a hard vertical seam at both edges of the picture): the near field, blurred by 8 % of
+# the edge, was a few levels off the edge row by row (a streak of cloud is finer than that blur), and Ideogram kept the
+# step. At the boundary the band is now the edge's own outermost EDGE_MATCH_DEPTH px, blurred only EDGE_MATCH_BLUR of
+# its length (the tone of each row, no fine shape), fading into the near field over EDGE_MATCH_FADE of the band.
+EDGE_MATCH_DEPTH = 2
+EDGE_MATCH_BLUR = 0.004
+EDGE_MATCH_FADE = 0.12
+# On landing (feathered), the result's tone just outside the picture is matched to the picture's edge, row by row
+# (blurred TONE_BLUR of the edge's length), the correction fading out over TONE_RAMP of the band (at least TONE_RAMP_MIN
+# px): whatever step the model kept at the boundary is gone, and nothing of the picture's shapes is copied.
+TONE_BLUR = 0.004
+TONE_RAMP = 0.35
+TONE_RAMP_MIN = 32
+
+
+def steps_needed(mw: int, mh: int, aw: int, ah: int) -> int:
+    """How many steps of at most STEP_GROWTH an extend of a mw x mh master to aw:ah needs, uncapped (1 for none)."""
+    if mw <= 0 or mh <= 0 or aw <= 0 or ah <= 0:
+        return 1
+    grow = max((mh * aw) / (mw * ah), (mw * ah) / (mh * aw))
+    if grow <= 1.0001:
+        return 1
+    return max(1, math.ceil(math.log(grow) / math.log(1 + STEP_GROWTH) - 1e-9))
+
+
+def extend_fits(mw: int, mh: int, aw: int, ah: int) -> bool:
+    """Whether an extend reaches aw:ah in at most EXTEND_STEPS_MAX steps of STEP_GROWTH (16:9 to 21:9, 1:1 or 4:5 do;
+    16:9 to 9:16 does not: redraw it instead)."""
+    return steps_needed(mw, mh, aw, ah) <= EXTEND_STEPS_MAX
+
+
+def step_count(mw: int, mh: int, aw: int, ah: int) -> int:
+    """How many Ideogram calls an extend of a mw x mh master to aw:ah takes (1 to EXTEND_STEPS_MAX): the growth along
+    the padded side, in steps of at most STEP_GROWTH. The same from any plate size (only the shapes count)."""
+    return min(EXTEND_STEPS_MAX, steps_needed(mw, mh, aw, ah))
+
+
+def step_plans(plan: dict, steps: int | None = None) -> list[dict]:
+    """The canvases of a stepped extend that ends on `plan` (pad_plan's): one per step, each {canvas, at, step,
+    steps}, `at` being where the step's input (the master, scaled, for the first; the step before's canvas after)
+    sits on its canvas. Each side grows in the same proportion at every step, geometrically, so every band is
+    about the same share of the picture it continues."""
+    cw, ch = plan["canvas"]["w"], plan["canvas"]["h"]
+    at = plan["at"]
+    w0, h0 = at["w"], at["h"]
+    left, top = at["x"], at["y"]
+    right, bottom = cw - at["x"] - w0, ch - at["y"] - h0
+    if steps is None:
+        grow = max(cw / w0, ch / h0)
+        steps = 1 if grow <= 1.0001 else max(1, min(EXTEND_STEPS_MAX, math.ceil(math.log(grow) / math.log(1 + STEP_GROWTH) - 1e-9)))
+    steps = max(1, steps)
+
+    def share(k: int, total_w: int, base: int, pad: int) -> int:
+        if k >= steps:
+            return pad
+        if total_w <= base:
+            return 0
+        target = base * (total_w / base) ** (k / steps)
+        return _half_up(pad * (target - base) / (total_w - base))
+
+    out, prev = [], (0, 0, w0, h0)  # (left, top, w, h) of the step before, in its own canvas
+    for k in range(1, steps + 1):
+        lk, rk = share(k, cw, w0, left), share(k, cw, w0, right)
+        tk, bk = share(k, ch, h0, top), share(k, ch, h0, bottom)
+        cwk, chk = w0 + lk + rk, h0 + tk + bk
+        pl, pt, pw, ph = prev
+        out.append({"canvas": {"w": cwk, "h": chk}, "scale": plan.get("scale", 1.0), "step": k, "steps": steps,
+                    "at": {"x": lk - pl, "y": tk - pt, "w": pw, "h": ph}})
+        prev = (lk, tk, cwk, chk)
+    return out
+
+
+def _line(img, box, along_x: bool):
+    """The strip at `box` averaged across its depth to one line (1 px high when it runs along x, else 1 px wide)."""
+    from PIL import Image
+    strip = img.crop(box)
+    return strip.resize((strip.width, 1) if along_x else (1, strip.height), Image.BOX)
+
+
+def _soft(line, along_x: bool, r: float):
+    """One edge line blurred along its length by radius r, its ends held (the line's end colours padded on first)."""
+    from PIL import ImageFilter, ImageOps
+    n = line.width if along_x else line.height
+    pad = int(r * 3) + 1
+    if along_x:
+        big = ImageOps.expand(line, border=(pad, 0, pad, 0))
+        big.paste(line.crop((0, 0, 1, 1)).resize((pad, 1)), (0, 0))
+        big.paste(line.crop((n - 1, 0, n, 1)).resize((pad, 1)), (pad + n, 0))
+        return big.resize((big.width, 9)).filter(ImageFilter.GaussianBlur(r)).crop((pad, 4, pad + n, 5))
+    big = ImageOps.expand(line, border=(0, pad, 0, pad))
+    big.paste(line.crop((0, 0, 1, 1)).resize((1, pad)), (0, 0))
+    big.paste(line.crop((0, n - 1, 1, n)).resize((1, pad)), (0, pad + n))
+    return big.resize((9, big.height)).filter(ImageFilter.GaussianBlur(r)).crop((4, pad, 5, pad + n))
+
+
+def _ramp_mask(size: tuple[int, int], along_x: bool, depth: int, fade: int, edge_first: bool):
+    """A mask across a band: 0 at the edge, 255 from `fade` px away (the band's far side when not edge_first)."""
+    from PIL import Image
+    fade = max(1, fade)
+    ramp = [min(255, int(255 * i / fade)) for i in range(depth)]
+    if not edge_first:
+        ramp = ramp[::-1]
+    mask = Image.new("L", (1, depth) if along_x else (depth, 1))
+    mask.putdata(ramp)
+    return mask.resize(size)
+
+
+def _band(line, size: tuple[int, int], along_x: bool, edge_first: bool, edge=None):
+    """A band of `size` from one edge line: at the boundary, the edge's own outermost line (`edge`), barely blurred, so
+    each row meets the picture in its own tone (round 5, S2-C), fading over EDGE_MATCH_FADE into the line blurred along
+    the edge (FIELD_BLUR of its length: the light and the horizon's colours, no shape); away from it, the line blurred
+    far more (FIELD_FAR: only the broad gradient, sky to ground), over FIELD_FADE of the band. Drawn straight across
+    the band, so nothing repeats."""
+    from PIL import Image
+    n = line.width if along_x else line.height
+    near = _soft(line, along_x, max(2.0, n * FIELD_BLUR))
+    far = _soft(line, along_x, max(4.0, n * FIELD_FAR))
+    depth = size[1] if along_x else size[0]
+    near_band = near.resize(size, Image.BILINEAR)
+    if edge is not None:
+        exact = _soft(edge, along_x, max(1.0, n * EDGE_MATCH_BLUR)).resize(size, Image.BILINEAR)
+        near_band = Image.composite(near_band, exact, _ramp_mask(size, along_x, depth, int(round(depth * EDGE_MATCH_FADE)), edge_first))
+    mask = _ramp_mask(size, along_x, depth, int(round(depth * FIELD_FADE)), edge_first)
+    return Image.composite(far.resize(size, Image.BILINEAR), near_band, mask)
+
+
+def _field(base, cw: int, ch: int, x: int, y: int):
+    """The canvas with `base` at (x, y) and each band a flat colour field from the edge beside it (_band): the left and
+    right bands first, from the base's side strips; then the top and bottom over the whole width, from that row's
+    strips. Nothing of the picture but its edge colours reaches a band, so the model has no shape to keep, and a
+    later step never copies the band an earlier one painted (round 4, S1-1)."""
+    from PIL import Image
+    w, h = base.size
+    kx, ky = max(1, min(FIELD_STRIP, w)), max(1, min(FIELD_STRIP, h))
+    ex, ey = max(1, min(EDGE_MATCH_DEPTH, w)), max(1, min(EDGE_MATCH_DEPTH, h))
+    row = Image.new("RGB", (cw, h))
+    row.paste(base, (x, 0))
+    if x > 0:
+        row.paste(_band(_line(base, (0, 0, kx, h), False), (x, h), False, edge_first=False,
+                        edge=_line(base, (0, 0, ex, h), False)), (0, 0))
+    if x + w < cw:
+        row.paste(_band(_line(base, (w - kx, 0, w, h), False), (cw - x - w, h), False, edge_first=True,
+                        edge=_line(base, (w - ex, 0, w, h), False)), (x + w, 0))
+    out = Image.new("RGB", (cw, ch))
+    out.paste(row, (0, y))
+    if y > 0:
+        out.paste(_band(_line(row, (0, 0, cw, ky), True), (cw, y), True, edge_first=False,
+                        edge=_line(row, (0, 0, cw, ey), True)), (0, 0))
+    if y + h < ch:
+        out.paste(_band(_line(row, (0, h - ky, cw, h), True), (cw, ch - y - h), True, edge_first=True,
+                        edge=_line(row, (0, h - ey, cw, h), True)), (0, y + h))
+    return out
+
+
+def padded_step(data: bytes, plan: dict) -> tuple[bytes, bytes]:
+    """One step's canvas (JPEG) and mask (PNG, white = change): the step's input at plan['at'] (resized to it when it
+    is the master), its bands seeded with a flat colour field from its edges (_field), and the mask white over the
+    bands and overlap_px over the input's padded edges. No grain (round 3: its speckle stayed in the sky)."""
+    from PIL import Image
+    img = Image.open(io.BytesIO(data))
+    img.load()
+    rgb = img.convert("RGB")
+    cw, ch = plan["canvas"]["w"], plan["canvas"]["h"]
+    at = plan["at"]
+    base = rgb.resize((at["w"], at["h"]), Image.LANCZOS) if rgb.size != (at["w"], at["h"]) else rgb
+    seed = _field(base, cw, ch, at["x"], at["y"])
+    mask = Image.new("L", (cw, ch), 255)
+    o = overlap_px(plan)
+    x0 = at["x"] + (o if at["x"] > 0 else 0)
+    y0 = at["y"] + (o if at["y"] > 0 else 0)
+    x1 = at["x"] + at["w"] - (o if at["x"] + at["w"] < cw else 0)
+    y1 = at["y"] + at["h"] - (o if at["y"] + at["h"] < ch else 0)
+    if x1 > x0 and y1 > y0:
+        mask.paste(0, (x0, y0, x1, y1))
+    b1, b2 = io.BytesIO(), io.BytesIO()
+    seed.save(b1, format="JPEG", quality=92)
+    mask.save(b2, format="PNG")
+    return b1.getvalue(), b2.getvalue()
+
 
 # Magnific's limits (Runway OpenAPI 2024-11-06, POST /v1/image_upscale): each input side 300-8000 px,
 # the output at most 25,300,000 pixels. Export at full size picks x4, or x8 for the largest print sizes.
@@ -244,9 +463,174 @@ def pad_plan(mw: int, mh: int, aw: int, ah: int, protect: list[dict] | None = No
     return {"canvas": {"w": cw, "h": ch}, "scale": s, "at": {"x": x, "y": y, "w": w, "h": h}}
 
 
+def _smeared(master, cw: int, ch: int, x: int, y: int):
+    """The canvas with the master at (x, y) and its outermost pixels drawn outwards over the rest: each side's
+    padding is the master's edge strip (EDGE_STRIP px) stretched across it, rows first, then columns over the
+    whole width, so the horizon, the ground and the light run on to the canvas edge without copying anything in
+    the picture (a mirror put a second person in the bands)."""
+    from PIL import Image
+    w, h = master.size
+    k = min(EDGE_STRIP, w, h)
+
+    def across(strip, size):  # the strip averaged to one line (a stray dark edge column never streaks), drawn out
+        line = strip.resize((1, strip.height) if size[1] == strip.height else (strip.width, 1), Image.BOX)
+        return line.resize(size, Image.BILINEAR)
+
+    row = Image.new("RGB", (cw, h))
+    row.paste(master, (x, 0))
+    if x > 0:
+        row.paste(across(master.crop((0, 0, k, h)), (x, h)), (0, 0))
+    if x + w < cw:
+        row.paste(across(master.crop((w - k, 0, w, h)), (cw - x - w, h)), (x + w, 0))
+    out = Image.new("RGB", (cw, ch))
+    out.paste(row, (0, y))
+    if y > 0:
+        out.paste(across(row.crop((0, 0, cw, k)), (cw, y)), (0, 0))
+    if y + h < ch:
+        out.paste(across(row.crop((0, h - k, cw, h)), (cw, ch - y - h)), (0, y + h))
+    return out
+
+
+def edge_texture(master, plan: dict) -> float:
+    """How much fine detail the master has along the sides the extend pads (its high-pass spread, 0-255 scale)."""
+    from PIL import ImageChops, ImageFilter, ImageStat
+    w, h = master.size
+    cw, ch = plan["canvas"]["w"], plan["canvas"]["h"]
+    at = plan["at"]
+    k = max(1, min(TEXTURE_STRIP, w // 4, h // 4))
+    strips = []
+    if at["x"] > 0 or at["x"] + at["w"] < cw:
+        strips += [master.crop((0, 0, k, h)), master.crop((w - k, 0, w, h))]
+    if at["y"] > 0 or at["y"] + at["h"] < ch:
+        strips += [master.crop((0, 0, w, k)), master.crop((0, h - k, w, h))]
+    if not strips:
+        return GRAIN_MIN
+    spread = []
+    for strip in strips:
+        grey = strip.convert("L")
+        detail = ImageChops.difference(grey, grey.filter(ImageFilter.GaussianBlur(2)))
+        spread.append(ImageStat.Stat(detail).rms[0])
+    return max(spread)
+
+
+def _grained(seed, texture: float):
+    """The seed with grain as strong as the master's edge detail (GRAIN_MIN..GRAIN_MAX), centred so the tone holds."""
+    from PIL import Image, ImageChops
+    sigma = max(GRAIN_MIN, min(GRAIN_MAX, texture * 2))
+    noise = Image.effect_noise(seed.size, sigma).convert("RGB")
+    lifted = ImageChops.add(seed, noise, scale=1.0, offset=-128)
+    return lifted
+
+
+def feathered(result: bytes, master_data: bytes, plan: dict) -> bytes:
+    """An extend's result with the master laid back over it on a ramp (IMG-9): its own pixels inside, the model's
+    in the bands, and across the overlap the one fading into the other, so no hard seam is left where the mask
+    ended. The result is scaled to the canvas it was made on (a model may return another size), as PNG."""
+    from PIL import Image, ImageChops
+    out = Image.open(io.BytesIO(result))
+    out.load()
+    out = out.convert("RGB")
+    cw, ch = plan["canvas"]["w"], plan["canvas"]["h"]
+    if out.size != (cw, ch):
+        out = out.resize((cw, ch), Image.LANCZOS)
+    src = Image.open(io.BytesIO(master_data))
+    src.load()
+    at = plan["at"]
+    master = src.convert("RGB").resize((at["w"], at["h"]), Image.LANCZOS)
+    o = overlap_px(plan)
+    w, h = at["w"], at["h"]
+    alpha = Image.new("L", (w, h), 255)
+    o = max(1, min(o, w // 2, h // 2))
+    up = [int(255 * i / o) for i in range(o)]  # 0 at the master's edge, rising to whole o px inside
+    across = Image.new("L", (o, 1))
+    across.putdata(up)
+    down = Image.new("L", (1, o))
+    down.putdata(up)
+    sides = {  # side: (its ramp, where it goes), only where the canvas was padded
+        "left": (at["x"] > 0, across.resize((o, h)), (0, 0)),
+        "right": (at["x"] + w < cw, across.transpose(Image.FLIP_LEFT_RIGHT).resize((o, h)), (w - o, 0)),
+        "top": (at["y"] > 0, down.resize((w, o)), (0, 0)),
+        "bottom": (at["y"] + h < ch, down.transpose(Image.FLIP_TOP_BOTTOM).resize((w, o)), (0, h - o)),
+    }
+    for padded_side, ramp, (x, y) in sides.values():
+        if padded_side:
+            box = (x, y, x + ramp.width, y + ramp.height)
+            alpha.paste(ImageChops.darker(alpha.crop(box), ramp), box)
+    out = _tone_matched(out, master, plan, o)
+    out.paste(master, (at["x"], at["y"]), alpha)
+    b = io.BytesIO()
+    out.save(b, format="PNG")
+    return b.getvalue()
+
+
+def _tone_matched(out, master, plan: dict, o: int):
+    """The result with its tone matched to the picture's edge at each padded side (round 5, S2-C: Ideogram kept the
+    seed's step at the boundary). Per row (or column), the picture's outermost line minus the result's line just
+    outside it, both blurred TONE_BLUR of the edge, is added to the band, whole at the boundary and fading to nothing
+    TONE_RAMP of the band out; and the same from the result's line just inside, over the whole overlap, where the
+    picture is ramped back in. Only the tone moves; the model's shapes stay, and no shape of the picture is copied out."""
+    from PIL import Image, ImageChops
+    cw, ch = out.size
+    at = plan["at"]
+    x, y, w, h = at["x"], at["y"], at["w"], at["h"]
+    k = EDGE_MATCH_DEPTH
+
+    def line(img, box, along_x: bool):
+        return _line(img, box, along_x)
+
+    def fix(box, pic_line, res_line, along_x: bool, from_start: bool | None):
+        """Add (picture - result) to out over box, whole at its boundary side (start when from_start), fading out;
+        whole over all of it when from_start is None (the overlap, where the picture is ramped back in)."""
+        size = (box[2] - box[0], box[3] - box[1])
+        if size[0] <= 0 or size[1] <= 0:
+            return
+        n = pic_line.width if along_x else pic_line.height
+        r = max(1.0, n * TONE_BLUR)
+        pic, res = _soft(pic_line, along_x, r), _soft(res_line, along_x, r)
+        up = ImageChops.subtract(pic, res).resize(size, Image.BILINEAR)  # where the picture is lighter (clipped at 0)
+        down = ImageChops.subtract(res, pic).resize(size, Image.BILINEAR)  # where it is darker
+        moved = ImageChops.subtract(ImageChops.add(out.crop(box), up), down)
+        if from_start is None:
+            out.paste(moved, box)
+            return
+        depth = size[1] if along_x else size[0]
+        out.paste(moved, box, _ramp_mask(size, along_x, depth, depth, edge_first=from_start).point(lambda v: 255 - v))
+
+    def side(band_box, in_box, pic, outside, inside, along_x: bool, band_first: bool):
+        fix(band_box, pic, outside, along_x, from_start=not band_first)
+        fix(in_box, pic, inside, along_x, from_start=None)
+
+    if x > 0:
+        d = min(x, max(TONE_RAMP_MIN, int(round(x * TONE_RAMP))))
+        side((x - d, y, x, y + h), (x, y, x + o, y + h), line(master, (0, 0, k, h), False),
+             line(out, (x - k, y, x, y + h), False), line(out, (x, y, x + k, y + h), False), False, band_first=True)
+    if x + w < cw:
+        d = min(cw - x - w, max(TONE_RAMP_MIN, int(round((cw - x - w) * TONE_RAMP))))
+        side((x + w, y, x + w + d, y + h), (x + w - o, y, x + w, y + h), line(master, (w - k, 0, w, h), False),
+             line(out, (x + w, y, x + w + k, y + h), False), line(out, (x + w - k, y, x + w, y + h), False), False,
+             band_first=False)
+    if y > 0:
+        d = min(y, max(TONE_RAMP_MIN, int(round(y * TONE_RAMP))))
+        side((x, y - d, x + w, y), (x, y, x + w, y + o), line(master, (0, 0, w, k), True),
+             line(out, (x, y - k, x + w, y), True), line(out, (x, y, x + w, y + k), True), True, band_first=True)
+    if y + h < ch:
+        d = min(ch - y - h, max(TONE_RAMP_MIN, int(round((ch - y - h) * TONE_RAMP))))
+        side((x, y + h, x + w, y + h + d), (x, y + h - o, x + w, y + h), line(master, (0, h - k, w, h), True),
+             line(out, (x, y + h, x + w, y + h + k), True), line(out, (x, y + h - k, x + w, y + h), True), True,
+             band_first=False)
+    return out
+
+
+def overlap_px(plan: dict) -> int:
+    """How far the mask reaches over the master's edge (EXTEND_OVERLAP, EXTEND_OVERLAP_SHARE)."""
+    at = plan["at"]
+    return max(EXTEND_OVERLAP, int(round(min(at["w"], at["h"]) * EXTEND_OVERLAP_SHARE)))
+
+
 def padded(data: bytes, plan: dict) -> tuple[bytes, bytes]:
-    """The canvas an extend sends (JPEG): the master at plan['at'] over a blurred stretch of itself;
-    and our mask (PNG, white = change): white everywhere but the master, less EXTEND_OVERLAP px."""
+    """The canvas an extend sends (JPEG): the master at plan['at'], its edges drawn outwards over the
+    padding, softened and grained (_smeared, EXTEND_BLUR, EXTEND_GRAIN); and our mask (PNG, white = change):
+    white everywhere but the master, less overlap_px over its edge."""
     from PIL import Image, ImageFilter
     img = Image.open(io.BytesIO(data))
     img.load()
@@ -254,10 +638,12 @@ def padded(data: bytes, plan: dict) -> tuple[bytes, bytes]:
     cw, ch = plan["canvas"]["w"], plan["canvas"]["h"]
     at = plan["at"]
     master = rgb.resize((at["w"], at["h"]), Image.LANCZOS) if rgb.size != (at["w"], at["h"]) else rgb
-    bg = rgb.resize((cw, ch), Image.BILINEAR).filter(ImageFilter.GaussianBlur(EXTEND_BLUR))
+    seed = _smeared(master, cw, ch, at["x"], at["y"]).filter(ImageFilter.GaussianBlur(EXTEND_BLUR))
+    seed = _grained(seed, edge_texture(master, plan))
+    bg = seed.copy()
     bg.paste(master, (at["x"], at["y"]))
     mask = Image.new("L", (cw, ch), 255)
-    o = EXTEND_OVERLAP
+    o = overlap_px(plan)
     # Where the master meets the canvas edge there is nothing to blend: keep it to the edge.
     x0 = at["x"] + (o if at["x"] > 0 else 0)
     y0 = at["y"] + (o if at["y"] > 0 else 0)

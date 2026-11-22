@@ -167,7 +167,11 @@ export class OwnAdapter implements CanvasAdapter {
     this.ink = new Ink(this.scene)
     this.undo = new SceneUndo(this.scene)
     // Node cards and links sit above the canvas: they come before boards and elements (grabOrder).
-    this.selector = new SelectTool(this.scene, (x, y) => this.hitAt(x, y), { above: (x, y) => hitNodeOrLink(this.scene, { x, y }, this.vp.zoom) })
+    // A key's views (group `key:<key>`, canvas/nodes/keyGroups.ts): a click picks the view; the label picks them all
+    // (UAT round 2 R2-12: a click took the whole group and Generate went).
+    this.selector = new SelectTool(this.scene, (x, y) => this.hitAt(x, y), {
+      above: (x, y) => hitNodeOrLink(this.scene, { x, y }, this.vp.zoom), looseGroup: (g) => g.startsWith('key:'),
+    })
     this.selector.onChange(() => this.changed())
     // A finger's long press grabs what a press would pick up (board-move; ui-behaviour 8).
     this.router.canGrab = (x, y) => this.canGrab(x, y)

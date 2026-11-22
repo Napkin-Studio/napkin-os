@@ -29,7 +29,7 @@ from typing import Callable
 
 from contracts import Contracts
 
-PROMPT_VERSION = "skye.v6"  # skye.v1–v5 stay bundled: ModelWriter(prompt_version="skye.v5") rolls back (v5: the brief, features/brief-node.clan; v6: one length rule with the band, rough_seconds)
+PROMPT_VERSION = "skye.v8"  # skye.v1–v7 stay bundled: ModelWriter(prompt_version="skye.v7") rolls back (v5: the brief, features/brief-node.clan; v6: one length rule with the band, rough_seconds; v7: a shorter version keeps the spoken lines, UAT round 3 R3-F7; v8: a shot's own beats stay, no speech in its action, its length kept, and input.write.redo, UAT round 5 R5-F1)
 PURPOSE = "writer"
 PROMPTS = Path(__file__).parent / "prompts"
 ASK_HOOK = "[ask]"
@@ -74,10 +74,24 @@ def mode_of(w: dict) -> str:
     return w.get("mode") or ("draft" if w.get("intent") == "draft" else "revise")
 
 
+# An ask about a shot's length (UAT round 5, R5-F1: "Make Maya funnier" on a 1 s shot came back at 4 s).
+LENGTH_ASK = re.compile(r"\b(?:\d+(?:\.\d+)?\s*(?:s|secs?|seconds?)\b|shorter|longer|length|quicker|faster|slower|"
+                        r"tighter|tighten|trim|time|seconds?|linger|hold)", re.IGNORECASE)
+# The intents whose draft keeps the shot's length unless the ask is about it.
+KEEPS_LENGTH = ("instruct", "rephrase")
+
+
+def keeps_length(w: dict) -> bool:
+    """A shot draft that keeps the shot's planned length: a free ask or a rephrase not about length."""
+    return (w["target"].get("kind") == "shot" and w.get("intent") in KEEPS_LENGTH
+            and not LENGTH_ASK.search(w.get("instruction") or ""))
+
+
 def settle(inp: dict, out: dict) -> dict:
     """The relay's part of the answer: target, base_hash and mode from the input (echoed, so a draft
     lands the right way after a reload), other targets dropped, the person's @names kept (keep_names),
-    new beats inside the shot, notes cut to 200 characters."""
+    new beats inside the shot, notes cut to 200 characters, and a shot's length kept unless the ask is
+    about it (keeps_length; R5-F1)."""
     w = inp["write"]
     before = " ".join(x["text"] for x in w["lines"])
     target = w["target"]
@@ -87,6 +101,8 @@ def settle(inp: dict, out: dict) -> dict:
         if d.get("target", target) != target:
             continue
         d = {**d, "target": target, "base_hash": w["base_hash"], "mode": mode, "note": (d.get("note") or "")[:200]}
+        if keeps_length(w):
+            d.pop("duration_s", None)
         if d.get("lines"):
             d["lines"] = keep_names(before, d["lines"])
         if d.get("new_beats"):
@@ -129,6 +145,46 @@ def too_long(w: dict, res: dict) -> dict | None:
         return None
     about = rough_seconds(res["writes"][0].get("lines") or [])
     return {"about_s": about, "target_s": goal} if about > goal + max(3.0, goal * 0.2) else None
+
+
+# Words in quotes for someone to say ("Easy now. Nobody wakes up."), in straight or curly quotes.
+QUOTED = re.compile(r"[\"\u201c\u201d]([^\"\u201c\u201d]{2,}?)[\"\u201c\u201d]")
+# An ask that asks for words to be said: then a quoted line in the action is what was asked.
+ASKS_FOR_WORDS = re.compile(r"\b(?:line|lines|say|says|said|saying|speak|speaks|speech|dialogue|talk|talks|words?|quote|"
+                            r"shout|shouts|yell|yells|tell|tells|voice|vo|v\.o\.)\b", re.IGNORECASE)
+SPEECH_REDO = ("You wrote words in quotes for someone to say into this shot's action. A spoken line is a beat, not "
+               "action (rule 12): write the shot's action again with no quoted speech, and keep its length.")
+
+
+def added_speech(w: dict, res: dict) -> str | None:
+    """A shot draft that puts a spoken line into the action the ask never asked for (UAT round 5, R5-F1: "Make Maya
+    funnier" on shot 5, whose "Good boy." is a beat, came back with '...whispers like a hostage negotiator: "Easy now.
+    Nobody wakes up."', so the shot would say two lines). The first new quote, or None."""
+    if w["target"].get("kind") != "shot" or not res.get("writes") or ASKS_FOR_WORDS.search(w.get("instruction") or ""):
+        return None
+    if w.get("intent") in ("draft", "write_vo", "cut_name"):
+        return None
+    said = {q.strip().lower() for x in w["lines"] for q in QUOTED.findall(x.get("text") or "")}
+    for x in res["writes"][0].get("lines") or []:
+        if x.get("type") not in ("action", "direction"):
+            continue
+        for q in QUOTED.findall(x.get("text") or ""):
+            if q.strip().lower() not in said:
+                return q.strip()[:200]
+    return None
+
+
+def without_speech(lines: list[dict], before: list[dict]) -> list[dict]:
+    """A shot's action with the quoted speech it was not asked for taken out, the sentence closed again: the last
+    resort when asking again still wrote some (the shot's line stays its beat)."""
+    said = {q.strip().lower() for x in before for q in QUOTED.findall(x.get("text") or "")}
+
+    def strip(text: str) -> str:
+        out = re.sub(r"\s*[:,\u2014-]?\s*[\"\u201c\u201d]([^\"\u201c\u201d]{2,}?)[\"\u201c\u201d]",
+                     lambda m: m.group(0) if m.group(1).strip().lower() in said else "", text)
+        out = re.sub(r"\s+([.,!?])", r"\1", out).strip()
+        return out if not out or out[-1] in ".!?" else out + "."
+    return [{**x, "text": strip(x["text"])} if x.get("type") in ("action", "direction") else x for x in lines]
 
 
 def empty_nudge(question: dict | None) -> bool:
@@ -200,6 +256,16 @@ class ModelWriter:
             again = settle(inp, ask({**inp, "write": {**inp["write"], "too_long": over}}))
             if again.get("writes"):
                 res = {**again, "rationale": f"relay: the first draft ran about {over['about_s']:g} s for {over['target_s']:g} s; asked once to fit. {again.get('rationale', '')}".strip()}
+        spoken = added_speech(inp["write"], res)
+        if spoken:
+            # A spoken line written into a shot's action (R5-F1): asked once again without it (skye.v8 rule 12). If the
+            # second answer still has one, the quote goes from the action; the shot's line stays its beat.
+            again = settle(inp, ask({**inp, "write": {**inp["write"], "redo": SPEECH_REDO}}))
+            if again.get("writes"):
+                res = {**again, "rationale": f"relay: the first draft wrote \"{spoken[:60]}\" into the shot's action; asked once without it. {again.get('rationale', '')}".strip()}
+            if added_speech(inp["write"], res):
+                res["writes"][0]["lines"] = without_speech(res["writes"][0]["lines"], inp["write"]["lines"])
+                res["rationale"] = f"relay: took the quoted speech out of the shot's action. {res.get('rationale', '')}".strip()
         res["_latencyMs"] = round((time.monotonic() - t0) * 1000)
         res["_usage"] = {"input_tokens": getattr(usage, "input_tokens", 0), "output_tokens": getattr(usage, "output_tokens", 0)}
         return res

@@ -114,7 +114,7 @@ function ShotBoothBody({ shot, index, storyboardId, store, onClose, onOpen, onSc
     // All of them, as they go (re-test N-I: cut at 80 characters, mid-phrase, with no ellipsis).
     { key: 'words', label: 'Your words', detail: words.trim() ? `“${words.trim()}”` : 'what you type above' },
     ...(named ? [{ key: 'refs', label: `${named} named ${named === 1 ? 'picture' : 'pictures'}` }] : []),
-  ], mode === 'edit' ? frameEditCopy.send.edit : frameEditCopy.send.redraw)
+  ], mode === 'edit' ? frameEditCopy.send.edit : frameEditCopy.send.redraw, mode === 'edit' ? 'frame_edit' : 'frame')
 
   return (
     <div className="shotbooth" data-shot-booth={shot.id} aria-label={`Shot ${n}`}>

@@ -3,8 +3,10 @@
 // its real empty state. Sound comes with the audio features (audio-*); nothing here pretends to play,
 // mix or measure.
 
-import type { Shot } from '../contracts/types'
+import { useDoc } from '../app/context'
+import type { Id, Shot } from '../contracts/types'
 import { cameraLabel } from '../jobs/frameEdit'
+import { lineFacts, shotSounds } from './soundFacts'
 
 const LANES: { name: string; sub: string; empty: string }[] = [
   { name: 'Picture', sub: 'shots and motion', empty: '' },
@@ -15,9 +17,17 @@ const LANES: { name: string; sub: string; empty: string }[] = [
   { name: 'Music', sub: 'sections', empty: 'No music yet.' },
 ]
 
-/** `shots`: the open video's shots in order (the main storyboard's showed on every video, 2026-10-15). */
-export function SoundView({ shots }: { shots: Shot[] }) {
+/** `shots`: the open video's shots in order (the main storyboard's showed on every video, 2026-10-15). With the
+ *  video, the shots' sound and lines as its cut has them (soundFacts; UAT 2026-11-21, F8). */
+export function SoundView({ shots, videoId }: { shots: Shot[]; videoId?: Id }) {
+  const doc = useDoc()
+  return <SoundViewOf shots={shots} sounds={videoId ? shotSounds(doc, videoId, shots.map((s) => s.id)) : []} lines={videoId ? lineFacts(doc, videoId, shots.map((s) => s.id)) : []} />
+}
+
+export function SoundViewOf({ shots, sounds, lines }: { shots: Shot[]; sounds: ReturnType<typeof shotSounds>; lines: ReturnType<typeof lineFacts> }) {
   const total = shots.reduce((a, s) => a + s.duration_s, 0) || 1
+  const soundOf = new Map(sounds.map((x) => [x.shotId, x]))
+  const heard = sounds.filter((x) => x.sound === 'made' || x.sound === 'background')
   return (
     <div className="snd">
       <div className="snd-top">
@@ -28,7 +38,7 @@ export function SoundView({ shots }: { shots: Shot[] }) {
               <span className="pt-mono">{i + 1}</span>
               <span className="snd-shotname">{cameraLabel('size', s.camera.size).replace(/^./, (c) => c.toUpperCase())}</span>
               <span className="pt-mono">{s.duration_s.toFixed(1)} s</span>
-              <span className="pt-pill">Not planned yet</span>
+              <span className={`pt-pill ${soundOf.get(s.id)?.sound === 'made' || soundOf.get(s.id)?.sound === 'background' ? 'on' : ''}`}>{soundOf.get(s.id)?.words ?? 'Not planned yet'}</span>
             </div>
           ))}
           {!shots.length && <p className="snd-empty">No shots yet. Plan shots from the script first.</p>}
@@ -52,14 +62,21 @@ export function SoundView({ shots }: { shots: Shot[] }) {
               <div className="snd-track">
                 {l.name === 'Picture'
                   ? shots.map((s, i) => <span key={s.id} className="snd-seg" style={{ flexGrow: s.duration_s / total }}>{i + 1}</span>)
-                  : <span className="snd-empty">{l.empty}</span>}
+                  : l.name === 'Native' && heard.length
+                    ? shots.map((s, i) => { const x = soundOf.get(s.id); const on = x?.sound === 'made' || x?.sound === 'background'
+                      return <span key={s.id} className={`snd-seg ${on ? 'on' : 'off'}`} style={{ flexGrow: s.duration_s / total }} title={x?.words}>{on ? `${i + 1} · ${x!.sound === 'made' ? 'clip sound' : 'background'}` : ''}</span> })
+                    : l.name === 'Voice' && lines.length
+                      ? <span className="snd-lines">{lines.map((x, k) => <span key={k} className={`snd-line ${x.voiced ? 'on' : 'off'}`} title={x.why}>Shot {x.n}{x.who ? ` · ${x.who}` : ''}: “{x.text}” · {x.voiced ? 'spoken in the clip' : 'not voiced'}</span>)}</span>
+                      : <span className="snd-empty">{l.empty}</span>}
               </div>
             </div>
           ))}
         </section>
         <aside className="pt-card snd-side">
-          <b>Pick a line or a cue</b>
-          <p className="snd-empty">Its takes, Redo this line and the Review agent's sound checks show here once sound is made.</p>
+          <b>Lines and voice-over</b>
+          {lines.length ? lines.map((x, k) => (
+            <p key={k} className={`snd-why ${x.voiced ? '' : 'snd-warn'}`}><b>Shot {x.n}{x.who ? ` · ${x.who}` : ''}</b> “{x.text}”: {x.why}</p>
+          )) : <p className="snd-empty">Its takes, Redo this line and the Review agent's sound checks show here once sound is made.</p>}
         </aside>
       </div>
     </div>

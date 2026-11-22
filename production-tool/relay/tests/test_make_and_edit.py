@@ -105,6 +105,21 @@ def test_a_words_change_in_a_box_made_together_changes_that_shots_words_and_its_
     assert "He grips the axe and roars." in h.providers["runway"].submits[-1]["prompt"]
 
 
+def test_an_ask_to_the_camera_agent_goes_as_its_words_and_leaves_every_shots_words():
+    """Tell the Camera agent (UAT round 3, R3-F5): the ask was pasted over shot 1's words. Now it is the job's words."""
+    h = harness()
+    parent = together(h)
+    before = copy.deepcopy(held(h, parent)["input"])
+    ask = "Send both of Maya's pictures, the front and the full-length one."
+    job = remake(h, parent, [{"field": "ask", "to": ask}])
+    assert job["remake"]["delta"][0]["field"] == "ask" and job["remake"]["delta"][0]["to"] == ask
+    after = held(h, job)["input"]
+    assert after["text"] == ask
+    after.pop("text")
+    before.pop("text", None)
+    assert after == before  # every shot's words, the cuts, the frames and the refs are the parent's
+
+
 def test_a_change_in_a_box_must_name_its_shot():
     h = harness()
     parent = together(h)

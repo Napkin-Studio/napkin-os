@@ -99,6 +99,21 @@ def without_brief(raw: bytes) -> tuple[bytes, bool]:
     return json.dumps(job, separators=(",", ":")).encode(), True
 
 
+def without_context(raw: bytes) -> tuple[bytes, bool]:
+    """A /jobs body without input.context (features/pt-dex-context.clan): it carries the client's brand rules
+    and excerpts of their documents, which Napkin's own record never takes in, as the brief. Whether context
+    went is kept; its words are not. A body that is not a job's JSON is returned as it came."""
+    try:
+        job = json.loads(raw)
+    except (ValueError, UnicodeDecodeError):
+        return raw, False
+    inp = job.get("input") if isinstance(job, dict) else None
+    if not isinstance(inp, dict) or "context" not in inp:
+        return raw, False
+    inp.pop("context")
+    return json.dumps(job, separators=(",", ":")).encode(), True
+
+
 def capped(data):
     """An event's data, capped like a body: a shell event can carry what was typed."""
     raw = json.dumps(data, separators=(",", ":"), default=str).encode()

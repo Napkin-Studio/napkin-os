@@ -38,3 +38,9 @@ export function setScriptTarget(d: Doc, scriptId: Id, storyboardId: Id | undefin
   const v = videoOfStoryboard(d, sb.id)
   if (v) d.videos[v.id].target_s = s
 }
+
+/** The length an ask names, in whole seconds ("Cut it to 10 seconds", "make it 6s"), or null (F22). */
+export function askedSeconds(words: string | undefined): number | null {
+  const m = /\b(\d{1,3}(?:\.\d+)?)\s*(?:s|secs?|seconds?)\b/i.exec(words ?? '')
+  return m ? cleanTarget(Number(m[1])) : null
+}

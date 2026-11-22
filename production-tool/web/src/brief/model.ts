@@ -23,8 +23,35 @@ import type { OsBriefRead } from './os'
 
 type Doc = ProductionDocument
 
-/** The ops whose director reads the brief: draft, plan, frame, change a frame, take, change a clip, cut-down, sizes. */
-export const BRIEF_OPS: readonly Op[] = ['write', 'shot_list', 'frame', 'frame_edit', 'clip', 'clip_edit', 'clip_patch', 'cutdown', 'resize']
+/** The ops whose director reads the brief: draft, plan, Generate, frame, change a frame, edit a picture, take, change a
+ *  clip, cut-down, sizes. The relay keeps the same list (relay/brief.py BRIEF_OPS; a relay test compares them) and cuts
+ *  the spine to each op: a Generate reads its don'ts, tone and feeling, an edit inside a picture its don'ts only, and a
+ *  view (the same character turned) none (features/pt-dex-context.clan). */
+export const BRIEF_OPS: readonly Op[] = ['write', 'shot_list', 'generate', 'frame', 'frame_edit', 'region_edit', 'clip', 'clip_edit', 'clip_patch', 'cutdown', 'resize']
+
+/** The spine parts each op's director reads, in the relay's priority order (relay/brief.py BUDGET, parts_of; a relay
+ *  test compares them): what "What the X agent will send" lists (UAT 2026-11-21: Draw frame listed every part, and
+ *  a frame reads only the don'ts, tone, feel, audience and mandatories). */
+export const BRIEF_PARTS: Record<string, readonly BriefSpinePart[]> = {
+  write: ['mandatories', 'donts', 'proposition', 'tone', 'feel', 'audience', 'insight', 'format'],
+  shot_list: ['mandatories', 'donts', 'proposition', 'tone', 'feel', 'audience', 'format', 'insight'],
+  generate: ['donts', 'tone', 'feel'],
+  frame: ['donts', 'tone', 'feel', 'audience', 'mandatories'],
+  frame_edit: ['donts', 'tone', 'feel'],
+  region_edit: ['donts'],
+  clip: ['donts', 'tone', 'feel', 'audience'],
+  clip_edit: ['donts', 'tone'],
+  clip_patch: ['donts', 'tone'],
+  cutdown: ['mandatories', 'donts', 'proposition', 'format', 'tone'],
+  resize: ['mandatories', 'donts', 'proposition'],
+}
+
+/** The part of a spine an op's director reads (its parts only; the relay cuts them to its budget). */
+export function spineForOp(spine: BriefSpine, op: Op | undefined): BriefSpine {
+  const parts = op ? BRIEF_PARTS[op] : undefined
+  if (!parts) return spine
+  return Object.fromEntries(Object.entries(spine).filter(([k]) => (parts as readonly string[]).includes(k))) as BriefSpine
+}
 
 /** The words a decision uses for a brief: “First Light brief” v2. */
 const named = (title: string, taken: number) => `“${title}” v${taken}`
@@ -150,12 +177,25 @@ export const jobBrief = (b: BriefNode): JobBrief => ({ title: b.title.slice(0, 2
 export function withBrief(d: Doc, op: Op, node: LinkEndpoint, input: JobInput): { input: JobInput; rows: JobInputRow[] } {
   if (!BRIEF_OPS.includes(op) || input.brief) return { input, rows: [] }
   const b = briefForJob(d, node)
+  // A Generate on the canvas runs for a group or a sketch area, which no brief links into: it reads the project's
+  // brief when the project has exactly one (features/pt-dex-context.clan). Two or more: none, rather than a guess.
+  const only = !b && op === 'generate' ? onlyBrief(d) : undefined
+  if (only) {
+    const row: JobInputRow = { kind: 'brief', ref: only.id, used_as: "brief (the project's)", included: true, text: `${only.title} v${only.source.taken}`.slice(0, 200) }
+    return { input: { ...input, brief: jobBrief(only) }, rows: [row] }
+  }
   if (!b) return { input, rows: [] }
   const row: JobInputRow = {
     kind: 'brief', ref: b.brief.id, ...(b.linkId ? { link_id: b.linkId } : {}), used_as: b.via === 'link' ? 'brief' : 'brief (from its script)', included: true,
     text: `${b.brief.title} v${b.brief.source.taken}`.slice(0, 200),
   }
   return { input: { ...input, brief: jobBrief(b.brief) }, rows: [row] }
+}
+
+/** The project's Brief node when it has exactly one; undefined with none or several. */
+export function onlyBrief(d: Doc): BriefNode | undefined {
+  const all = briefsList(d)
+  return all.length === 1 ? all[0] : undefined
 }
 
 /** "What Dex will send" lists the brief: one row, its words and where it comes from. */
@@ -169,13 +209,15 @@ export interface BriefSendRow {
   via: 'link' | 'upstream'
 }
 
-export function briefSendRow(d: Doc, nodeId: Id): BriefSendRow | undefined {
+export function briefSendRow(d: Doc, nodeId: Id, op?: Op): BriefSendRow | undefined {
   const b = briefOf(d, nodeId)
   if (!b) return undefined
   const t = b.through
+  // "from Script · First Light"; a node with only its default name is "from the Script" (UAT round 4, R4-F8: "from Script · Script").
+  const named = (kind: string, title: string | undefined) => (title?.trim() && title.trim().toLowerCase() !== kind.toLowerCase() ? `${kind} · ${title.trim()}` : `the ${kind}`)
   const from = b.via === 'link' ? 'linked'
-    : `from ${t && d.scripts?.[t] ? `Script · ${d.scripts[t].title}` : t && d.storyboards?.[t] ? `Storyboard · ${d.storyboards[t].title}` : t && d.videos?.[t] ? `Film · ${d.videos[t].title}` : 'upstream'}`
-  return { key: `brief:${b.brief.id}`, briefId: b.brief.id, label: b.item.label, detail: [spineSummary(b.brief.spine), from].filter(Boolean).join(' · '), via: b.via }
+    : `from ${t && d.scripts?.[t] ? named('Script', d.scripts[t].title) : t && d.storyboards?.[t] ? named('Storyboard', d.storyboards[t].title) : t && d.videos?.[t] ? named('Film', d.videos[t].title) : 'upstream'}`
+  return { key: `brief:${b.brief.id}`, briefId: b.brief.id, label: b.item.label, detail: [spineSummary(spineForOp(b.brief.spine, op)), from].filter(Boolean).join(' · '), via: b.via }
 }
 
 /** The nodes a Brief node feeds, as its card says ("Feeds Script · Main, and what it drives"): its own links. */

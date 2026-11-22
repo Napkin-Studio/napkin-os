@@ -223,6 +223,8 @@ export interface Cost {
   estimate?: number
   reserved?: number
   confirmed?: number
+  /** The agents' Claude calls for the job (relay agent_cost.py; pt-film-r2 F21). */
+  agentUsd?: number
   currency: 'USD'
   unknown: boolean
 }
@@ -352,7 +354,7 @@ export interface ModelSheet {
   outputs?: number[]
   promptMax?: number
   promptUnit?: 'utf16'
-  refs?: { max: number; maxCharacter?: number }
+  refs?: { max: number; maxCharacter?: number; maxObject?: number }
   mask?: 'none' | 'png_black_edit' | 'png_white_edit'
   preciseEdit?: boolean
   keyframes?: { max: number; range?: 'whole_seconds_end_exclusive' }
@@ -370,6 +372,8 @@ export interface ModelSheet {
   v2v?: { videoField: 'videoUri' | 'promptVideo'; mode?: 'edit'; durationAuto?: boolean; keepOriginalSound?: boolean; audioParam?: boolean; ratio?: boolean; refsMax: number; inputMaxS?: number }
   /** A draft can be made at 1080p later from its task id (Seedance 2.5; features/clip-quality.clan). */
   draftPromote?: boolean
+  /** The width / height range of a picture it is sent; the relay pads one outside it (pt-film-r2 F5). */
+  refAspect?: { min: number; max: number }
   pricing: { unit: 'image' | 'second' | 'frame'; source: string[]; [k: string]: unknown }
 }
 
@@ -395,7 +399,7 @@ export interface CapabilitySheet {
   ops: Partial<Record<Op, OpSheet>>
   models: Record<string, ModelSheet>
   tagSyntax: 'at_tag' | 'none'
-  refs: { max: number; maxCharacter?: number }
+  refs: { max: number; maxCharacter?: number; maxObject?: number }
   seed: boolean
   outputsPerCall?: number
   mask: 'none' | 'png_black_edit' | 'png_white_edit'
@@ -467,7 +471,7 @@ export interface Config {
    *  Runway is the floor of every job routed to it (features/runway-fallback.clan). */
   routing: Partial<Record<Op, Provider[]>>
   /** Optional, every key too: the relay runs its newest prompt and its own models when absent. */
-  director?: { promptVersion?: string; perClickModel?: string; shotListModel?: string }
+  director?: { promptVersion?: string; perClickModel?: string; shotListModel?: string; prices?: Record<string, { inputPerMTok: number; outputPerMTok: number }> }
   quotas: { image: number; video: number; render: number }
   inFlightPerParticipant: number
   jobTimeoutS: { image: number; video: number }
@@ -499,6 +503,11 @@ export interface AgentBlock {
   output: Record<string, unknown>
   rationale: string
   latencyMs?: number
+  /** The director call's token counts (pt-canvas-r4). */
+  usage?: { inputTokens?: number; outputTokens?: number; cacheReadTokens?: number; cacheWriteTokens?: number }
+  /** What the director received, after the relay's cuts, kept small (director.schema.json agentBlock.input;
+   *  features/pt-canvas-r1.clan). Absent on the passthrough and on older jobs. */
+  input?: Record<string, unknown>
   /** The character cards the director was given (features/character-cards.clan). The relay's
    *  Job carries them; the document's jobs[].director does not (jobs/runner.ts agentForDocument). */
   cards?: DirectorCard[]
@@ -1123,6 +1132,8 @@ export interface JobInput {
   chips?: string[]
   refs?: JobInputRef[]
   view?: View
+  /** view: who or what the source shows, from its front's reference (features/pt-canvas-r1.clan). */
+  subject?: { role: RefRole; name?: string; label?: string }
   script?: string
   targetS?: number
   shot?: JobShot
@@ -1204,7 +1215,12 @@ export interface CutdownInput {
   aspects?: Aspect[]
   targetRatio?: AlephRatio
   clips?: CutdownClip[]
+  /** The studio card after the film (owner 2026-11-18). */
   endCard?: boolean
+  /** render: the film's own end card, drawn by the relay at the size, before the studio card (features/pt-film-r1.clan). */
+  clientCard?: { headline?: string; line: string; cta?: string; bg: string; logo?: AssetRef; s: number }
+  /** render: how long the studio card holds when a short size shortens it (its roll sped up); absent: 2.5 s. */
+  studioS?: number
   fadeOutS?: number
   layers?: TypeLayer[]
 }
@@ -1279,6 +1295,8 @@ export type RemakeDelta =
   | { field: 'words'; shotId?: Id; to: string }
   | { field: 'moment'; to: { inS: number; outS: number; note: string; region?: Region; still?: AssetRef } }
   | { field: 'feel'; to: { words?: string; strength?: Strength } }
+  /** Tell the Camera agent (UAT round 3, R3-F5): the person's words, sent as the held request's input.text. */
+  | { field: 'ask'; to: string }
 export interface RemakeWith { parentJobId: Id; parentId?: Id; delta: RemakeDelta[] }
 /** relay-api TimelinePlan: stitch in timeline mode (Render ad). */
 export interface TimelinePlan {
@@ -1315,6 +1333,8 @@ export interface Job {
   quotaClass: QuotaClass
   state: JobState
   queuePosition?: number
+  /** A job that runs in several provider calls (a stepped extend): the call it is on, of how many (pt-canvas-r4). */
+  progress?: { step: number; steps: number }
   nextPollS?: number
   provider?: Provider
   model?: string

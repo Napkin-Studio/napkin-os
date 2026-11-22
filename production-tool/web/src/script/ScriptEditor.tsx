@@ -14,6 +14,7 @@ import { formatRoute, scriptRoute } from '../app/route'
 import { type PMNode as PMNodeLike } from '../../../clan-store/src'
 import type { CameraSize, ProductionDocument, Scene, Shot, WriteTarget } from '../contracts/types'
 import { updateDoc } from '../doc/store'
+import { askedSeconds, setScriptTarget } from './length'
 import { deleteFrom, removeBeat, removeScene, removeShot, sceneContents, sceneDeleteText, shotDeleteText, shotNeedsConfirm, type Removal } from '../doc/remove'
 import { InlineConfirm } from '../ui/Undo'
 import { planOrJoin, runningPlan } from '../jobs/plan'
@@ -50,7 +51,8 @@ import { ScriptLength, ScriptRefs } from './ScriptFacts'
 import { SendDisclosure } from '../ui/SendDisclosure'
 import { sendRows } from '../ui/sendRows'
 import { useBooth } from '../ui/booth/useBooth'
-import { scriptFromLine } from '../jobs/prompt'
+import { scriptFromBrief, scriptFromLine } from '../jobs/prompt'
+import { briefOf } from '../brief/model'
 import { AVView } from './AVView'
 import { TimePill } from './TimePill'
 import { nextMomentTime, setBeatTime, UNPLANNED_MOMENT } from './moments'
@@ -66,6 +68,7 @@ import { canvasActions } from '../canvas/chrome/actions'
 import { planFromScript, planShotsBlocked } from '../jobs/scriptVideo'
 import { nextStep, videoOfScript as nextVideo, type NextAction } from './nextStep'
 import { FrontButtons } from '../stages/FrontsNeeded'
+import { FrontsMissingError, keysWithoutFront } from '../lib/names'
 
 type Doc = ProductionDocument
 type Focus = { key: string; editor: Editor | null } | null
@@ -146,7 +149,8 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
   const [sheet, setSheet] = useState<'outline' | 'facts' | null>(null)
   const [notice, setNotice] = useState<{ text: string; undo?: boolean } | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [confirm, setConfirm] = useState<{ text: string; yes: string; go: () => void } | null>(null)
+  // A delete asks in red; an offer (the target to an asked length) asks in the page's own tone, its "no" named.
+  const [confirm, setConfirm] = useState<{ text: string; yes: string; no?: string; offer?: boolean; go: () => void } | null>(null)
   // A screenplay just pasted: the note over the page, with 'Keep it as plain text' (mock state 'screenplay').
   const [pasted, setPasted] = useState<(ScreenplayPaste & { scenes: number; dropped: string; words: string }) | null>(null)
   // The line the Format menu works on, while it is open: marked in the outline too.
@@ -301,8 +305,26 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
   const sugs = composed ? scriptSuggestions(doc, composed) : []
   const mine = sugs.filter((s) => s.for === person)
   const [done, setDone] = useState<{ id: string; text: string; undo?: boolean }[]>([])
-  const decided = (id: string, text: string, undo = false) => setDone((d) => [{ id, text, undo }, ...d.filter((x) => x.id !== id)].slice(0, 3))
+  // Only the last decision is said, with its Undo (UAT 2026-11-21: "Kept · Undo" rows stacked up).
+  const decided = (id: string, text: string, undo = false) => setDone([{ id, text, undo }])
   const onPage = new Set(view === 'av' ? [] : (composed?.rows ?? []).map((r) => `${r.kind === 'end_card' ? 'shot' : r.kind}:${r.id}`))
+  // An ask that names a length ("Cut it to 10 seconds") offers to set the film's target too: the target stayed 15 s
+  // and Plan shots planned 15 s for a 12 s script (UAT 2026-11-21, F22 / script UX 2). Only for the scene or the
+  // whole script; a shot's length is its own.
+  const offerTarget = (target: WriteTarget, words: string | undefined) => {
+    const n = askedSeconds(words)
+    const sbId = composed?.storyboard?.id
+    const now = composed?.storyboard?.target_s ?? composed?.script.target_s
+    if (n === null || target.kind !== 'scene' || !now || n === now) return
+    setConfirm({
+      text: `You asked for ${n} s. Set the film's target to ${n} s too? It is ${now} s now, and Plan shots plans to it.`,
+      yes: `Set target to ${n} s`,
+      // Not "Keep" beside the card's own Keep (UAT round 3, R3-F8): the button names the length it keeps.
+      no: `Keep ${now} s`,
+      offer: true,
+      go: () => { setConfirm(null); void updateDoc(docStore, (d) => setScriptTarget(d, scriptId, sbId, n), `set the script length to ${n} s`) },
+    })
+  }
   const draftCard = (s: (typeof mine)[number]) => composed && (
     <DraftCard key={s.id} sug={s} store={store} doc={doc} composed={composed} empty={!hasWords(doc, scriptId)}
       requestOf={(jobId) => ui.jobs[jobId]?.request?.input.write}
@@ -335,6 +357,13 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
     setPart(partAt(store.get(), c, target, k === 'heading' ? 0 : want.block, proseOf))
   }, [store, scriptId, pickedBoard, proseOf])
   useEffect(() => { resolvePart() }, [focus?.key, resolvePart])
+  // The part the Booth shows follows the words as they change: a Keep or an edit rewrote the paragraph and the Booth
+  // still showed the old "¶1 A renter sock-skates in…" (UAT 2026-11-21, S3 / script UX 5).
+  const livePart = useMemo(() => {
+    if (!part) return part
+    const c = composeScript(doc, scriptId, pickedBoard && doc.storyboards[pickedBoard] ? pickedBoard : undefined)
+    return (c ? partAt(doc, c, part.target, part.block, proseOf) : null) ?? part
+  }, [doc, part, scriptId, pickedBoard, proseOf])
   // A click on a line of the page puts the Booth on that line (the Booth rule: a selected line earns it).
   const onPagePoint = (e: React.MouseEvent) => {
     if (phone || (e.target as Element).closest?.('.se-draft, .se-waits, .sp-note, .sheet-note, button, a, input, select, textarea')) return
@@ -362,6 +391,13 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
     || (composed!.shots.length > 0 && Object.values(doc.scenes).some((s) => s.script_id === scriptId && !!s.text?.trim())))
   // Plan shots needs words; with none it is off and says so (ui-behaviour 3.10).
   const blocked = planShotsBlocked(doc, scriptId)
+  // The fronts Plan shots would stop for, said before the click (F17).
+  const needFronts = useMemo(() => {
+    try {
+      const keys = keysWithoutFront(doc, docStore.get(), scriptText(doc, scriptId))
+      return keys.length ? new FrontsMissingError(keys).message : null
+    } catch { return null }
+  }, [doc, docStore, scriptId])
   const plan = () => attempt(async () => {
     if (blocked) throw new Error('Write something first: Plan shots reads the words.')
     // The storyboard this script drives (more than one per project; features/canvas-nodes.clan); with
@@ -562,7 +598,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
         ))}
       </div>}
       </article>
-      {part && <PartMark part={part} focus={focus} />}
+      {livePart && <PartMark part={livePart} focus={focus} />}
     </main>
   )
 
@@ -579,7 +615,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
       <SendDisclosure who="the Director agent" rows={sendRows(doc, sb?.id ?? scriptId, [
         { key: 'script', label: 'The script’s words', detail: `${scriptText(doc, scriptId).trim().split(/\s+/).filter(Boolean).length} words` },
         { key: 'fit', label: `${composed.storyboard?.target_s ?? composed.script.target_s} s at ${composed.storyboard?.ratio ?? '16:9'}`, detail: 'the length and shape to plan to' },
-      ], behind ? 'Update storyboard' : 'Plan shots')} primary={
+      ], behind ? 'Update storyboard' : 'Plan shots', 'shot_list')} primary={
         <button className="btn primary" disabled={!!blocked || !!planning} aria-describedby={blocked && !planning ? 'se-plan-why' : undefined}
           data-tip={blocked && !planning ? blocked : undefined} onClick={() => void plan()}>
           {planning ? 'Planning…' : behind ? 'Update storyboard' : 'Plan shots'}
@@ -654,8 +690,16 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
       }} />
       {phone && <div className="banner" role="status">You can watch and leave notes here. Open on a laptop or iPad to edit.</div>}
       {confirm && (
-        <div className="se-line se-confirm">
-          <InlineConfirm text={confirm.text} yes={confirm.yes} onNo={() => setConfirm(null)} onYes={confirm.go} />
+        <div className={`se-line se-confirm ${confirm.offer ? 'offer' : ''}`}>
+          <InlineConfirm text={confirm.text} yes={confirm.yes} {...(confirm.no ? { no: confirm.no } : {})} tone={confirm.offer ? 'primary' : 'danger'}
+            onNo={() => setConfirm(null)} onYes={confirm.go} />
+        </div>
+      )}
+      {/* Said before Plan shots is pressed, not after (UAT 2026-11-21, F17): a bare @name needs its front. */}
+      {!phone && !error && !planning && needFronts && (
+        <div className="se-line se-fronts" role="status">
+          Before Plan shots: {needFronts}
+          <FrontButtons text={needFronts} />
         </div>
       )}
       {(notice || error) && (
@@ -684,14 +728,18 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
         {page}
         {!phone && (
           <SkyeBooth booth={booth} doc={doc} composed={composed}
-            editor={focus?.editor ?? null} focusTarget={focusTarget} part={part} onClearPart={() => { setPart(null); setAsked(true) }}
+            editor={focus?.editor ?? null} focusTarget={focusTarget} part={livePart} onClearPart={() => { setPart(null); setAsked(true) }}
             whole={wholeScope(doc, composed, (k, id) => store.text.prose(k, id), focusTarget?.kind === 'scene' ? focusTarget.id : undefined)}
             asked={asked} onClose={closeBooth} skye={skye} planning={planning} empty={empty}
-            onWrite={(target, intent, opts) => startWrite(skyeDeps, store, scriptId, target, intent, opts)}
+            onWrite={(target, intent, opts) => { offerTarget(target, opts.instruction); return startWrite(skyeDeps, store, scriptId, target, intent, opts) }}
             onDraftScript={async (words) => {
               const r = await scriptFromLine(skyeDeps, store, scriptId, words)
               if ('pasted' in r) say([`Pasted ${r.pasted} ${r.pasted === 1 ? 'scene' : 'scenes'}.`, r.dropped].filter(Boolean).join(' '))
             }}
+            {...(() => {
+              const b = briefOf(doc, scriptId)
+              return b ? { briefTitle: b.brief.title, onDraftFromBrief: () => scriptFromBrief(skyeDeps, store, scriptId, b.brief.title) } : {}
+            })()}
             onError={setError} />
         )}
         {history && <DecisionsDrawer key={historyFocus?.addresses.join() ?? 'all'} store={store} focus={historyFocus} onClose={() => { setHistory(false); setHistoryFocus(undefined) }} />}

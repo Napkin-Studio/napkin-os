@@ -69,7 +69,7 @@
 .zoom-pill button:disabled { color: var(--ink3); cursor: default; }
 .zoom-pill .zp-value { width: auto; font: 600 12px var(--font-ui); }
 .zoom-pill .zp-sep { width: 1px; height: 18px; background: var(--line-soft); }
-.zoom-pill .undonote { bottom: calc(100% + 8px); top: auto; }
+.zoom-pill .undonote { bottom: calc(100% + 8px); top: auto; left: 0; right: auto; } /* the pill sits at the left edge: the note opens rightwards, never off-screen (UAT round 4 S3-3) */
 
 /* ── The selection bar (ui-behaviour 3.9; mock CanvasLinking) ────────────── */
 .canvas-wrap .toolbar { padding: 6px; border-radius: var(--r-pill); background: rgba(255, 255, 255, 0.96); border: 1px solid var(--line-soft); box-shadow: var(--shadow-pop); }
@@ -89,6 +89,16 @@
 .tray-row { display: flex; align-items: flex-start; gap: 10px; padding: 5px 2px; font-size: 12px; line-height: 1.4; cursor: pointer; }
 .tray-row input { margin: 2px 0 0; width: 14px; height: 14px; accent-color: var(--tool); flex: none; }
 .tray-row b { font-weight: 600; }
+/* A row with what it goes as (UAT round 1 IMG-6/7/8): person or thing, switchable on an unnamed picture. */
+.tray-rows { max-height: 38vh; overflow: auto; }
+.tray-rowline { display: flex; align-items: flex-start; gap: 6px; }
+.tray-rowline .tray-row { flex: 1; min-width: 0; }
+.tray-kind { flex: none; margin-top: 4px; padding: 1px 7px; border-radius: var(--r-pill); border: 1px solid var(--line-soft); background: var(--soft); font-family: var(--f-mono); font-size: 10.5px; line-height: 1.5; color: var(--ink2); white-space: nowrap; }
+.tray-kind.person { border-color: color-mix(in srgb, var(--tool) 40%, transparent); color: var(--tool-ink, var(--tool)); background: var(--tool-soft, var(--soft)); }
+button.tray-kind { cursor: pointer; }
+button.tray-kind:hover { border-color: var(--tool); }
+.tray-count { font-size: 11px; color: var(--ink3); }
+.tray-count.over { color: var(--danger); }
 /* A shot's references under its row (features/canvas-nodes.clan): asked-for ones, then Dex's additions. */
 .tray-refs { display: flex; flex-direction: column; gap: 1px; margin: -2px 0 4px 26px; }
 .tray-ref { font-size: 11.5px; line-height: 1.4; padding: 1px 0; overflow-wrap: break-word; }
@@ -101,6 +111,8 @@
 .tray-foot { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .tray-model { line-height: 1.4; margin-right: auto; }
 .tray-error { color: var(--danger); font-size: 12.5px; font-weight: 600; }
+/* What a slow send is doing (features/pt-canvas-r2.clan, R2-3). */
+.tray-slow { font-size: 12.5px; }
 
 /* ── Today's engine under the chrome: its own bars give way to ours ──────── */
 .canvas-wrap .excalidraw .App-toolbar-container,

@@ -11,7 +11,7 @@ import { selectedFrame } from '../jobs/frames'
 import { joinBlock } from '../jobs/runs'
 import { gapJoins, videoShots, writeJoins } from '../jobs/runView'
 import { shotRefSet } from '../jobs/select'
-import { shotNumber } from '../model/selectors'
+import { beatsOf, shotNumber } from '../model/selectors'
 import { boxModel, boxModelCant, boxModelWhyNot, entryOf, takeLimits } from './boxModel'
 import { roomBoxes, type Box } from './model'
 import { startPicture } from './newBox'
@@ -41,9 +41,16 @@ export function stripGaps(doc: Doc, boxes: Box[], videoId: Id, config: Pick<Conf
     const a = plan.get(prev)
     const b = plan.get(id)
     const blocked = joined ? undefined : !config.flags.connectedVideo ? 'Making several shots as one video is off in this build'
-      : a && b ? joinBlock(a.s, b.s, a.i) : undefined
+      // joinBlock takes the number of the shot before the gap (1-based), as selectionBlock passes it (UAT 2026-11-21, F6:
+      // the 0-based index named shot 2 for shot 3's line).
+      : a && b ? joinBlock(a.s, b.s, a.i + 1, (sid) => spokenLine(doc, sid)) : undefined
     return { shotId: id, n: shotNumber(doc, id), joined, ...(blocked ? { blocked } : {}) }
   })
+}
+
+/** A shot's first spoken line (a line or VO beat), for the gap's words. */
+export function spokenLine(doc: Doc, shotId: Id): string | undefined {
+  return beatsOf(doc, shotId).find((b) => (b.kind === 'line' || b.kind === 'vo') && b.text?.trim())?.text?.trim()
 }
 
 /** The boxes as they would be once this gap is flipped (the same join model, on a copy of the document). */
@@ -59,6 +66,14 @@ export function boxesAfterFlip(doc: Doc, ui: Pick<UiState, 'jobs'>, videoId: Id,
 export function pickedFor(models: Record<Id, ModelChoice>, box: Pick<Box, 'shotIds'>): ModelChoice | undefined {
   for (const id of box.shotIds) if (models[id]) return models[id]
   return undefined
+}
+
+/** The picks of each film, kept while the page is open: the Make room's own state was lost each time the room
+ *  closed, and the box then showed the last model that worked anywhere (UAT 2026-11-21, F3). */
+const PICKS = new Map<Id, Record<Id, ModelChoice>>()
+export const savedPicks = (videoId: Id | undefined): Record<Id, ModelChoice> => (videoId ? PICKS.get(videoId) ?? {} : {})
+export function savePicks(videoId: Id | undefined, models: Record<Id, ModelChoice>) {
+  if (videoId) PICKS.set(videoId, models)
 }
 
 /** The picks with `m` set for this box (on its first shot; its other shots' picks go). */
@@ -121,11 +136,14 @@ export function boxWords(doc: Doc, box: Box, pics: BoxPicture[] = boxPictures(do
   return box.together ? { title: `One video · ${box.shotIds.length} shots · ${len}`, sub: 'Every frame used as a guide' } : { title: 'Separate video', sub: len }
 }
 
-/** The Box tab's line under One video / Separate videos. */
-export function boxHow(doc: Doc, box: Box, pics: BoxPicture[] = boxPictures(doc, box)): string {
+/** The Box tab's line under One video / Separate videos. `frameFirst`: Make draws the shot's frame first (a lone shot
+ *  with no frame that names a character), so the clip is made from that frame, not from its words alone (UAT round 3,
+ *  R3-F13: "Made on its own from its words" sat beside "Make draws the frame first"). */
+export function boxHow(doc: Doc, box: Box, pics: BoxPicture[] = boxPictures(doc, box), frameFirst = false): string {
   const cast = castWords(pics)
   const withCast = cast ? `, with ${cast}’s pictures` : ''
   if (fromWords(doc, box)) {
+    if (!box.together && frameFirst) return `Made on its own: its frame is drawn from its words${cast ? ` and ${cast}’s pictures` : ''}, then the clip starts on that frame.`
     return box.together ? `One generation from the shots’ words, in order${withCast}. Cut where the lines are.` : `Made on its own from its words${cast ? ` and ${cast}’s pictures` : ''}.`
   }
   return box.together ? `One generation. Every shot’s frame goes in as a guide, in shot order${withCast}. No frame is pinned.` : 'Made on its own, starting on its frame.'

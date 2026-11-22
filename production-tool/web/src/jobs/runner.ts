@@ -24,6 +24,8 @@ import { newId, ulid } from '../lib/ulid'
 import { purposeInputs, purposeNode, purposeOf, purposeWords } from '../model/purpose'
 import { withLinkedText } from './linkedText'
 import { flagsOf, recordBriefFlags, withBrief } from '../brief/model'
+import { onePictureOnce } from './onePicture'
+import { withContext, type BrandChoice } from './context'
 import { checkFronts } from '../lib/names'
 import { deadRefs, lifeOf, liveGet, liveInput } from '../model/live'
 import { plainJobError } from './errorWords'
@@ -34,6 +36,8 @@ import { asContractError, RelayError, type Relay } from '../relay'
 export interface LiveInfo {
   state: JobState
   queuePosition?: number
+  /** A job made in several provider calls (a stepped extend): which one it is on (pt-canvas-r4, "step 2 of 3"). */
+  progress?: { step: number; steps: number }
   /** A line for the card while it is still trying something (a result that would not download). */
   note?: string
 }
@@ -77,6 +81,8 @@ export interface SubmitExtras {
   /** The node whose scope the brief is read from, when not the job's own: Make all sizes plans on the Film
    *  node for the sizes, which read the brief linked to their Format set (brief/model.ts sizesBriefOf). */
   briefFrom?: LinkEndpoint
+  /** The person's ticks on the brand in the Generate tray (jobs/context.ts BrandChoice; UAT round 3 R3-2). */
+  brand?: BrandChoice
 }
 
 /** A person's answer to a job's question. */
@@ -216,6 +222,8 @@ export class JobRunner {
     const d = liveGet(this.doc)
     if (op === 'shot_list') checkFronts(d, stored, `${input.script ?? ''}\n${input.text ?? ''}`)
     input = liveInput(input, deadRefs(stored, lifeOf(this.doc).get()))
+    // One picture is sent once, whatever assembled the input (jobs/onePicture.ts; UAT round 4, R4-F5).
+    input = onePictureOnce(input)
     if (this.unstarted.delete(jobId)) this.emit()
     const node = extras.node ?? purposeNode(d, purpose, jobId)
     // The texts linked into the node are its input words (features/canvas-text.clan).
@@ -224,6 +232,9 @@ export class JobRunner {
     // The brief in the node's scope, its spine only (features/brief-node.clan).
     const briefed = withBrief(d, op, extras.briefFrom ?? node, input)
     input = briefed.input
+    // The project's brand rules and the documents linked in (features/pt-dex-context.clan).
+    const contexted = withContext(d, op, node, input, extras.brand)
+    input = contexted.input
     const words = purposeWords(purpose)
     // A fresh nonce for every job: another take is never deduped with the one running (ui-behaviour 4.3).
     const nonce = ulid()
@@ -253,7 +264,7 @@ export class JobRunner {
       input_hashes: [...hashes],
       created_at: new Date().toISOString(),
     }
-    const rows = [...purposeInputs(purpose), ...inputRows(input), ...linked.rows, ...briefed.rows].slice(0, 32)
+    const rows = [...purposeInputs(purpose), ...inputRows(input), ...linked.rows, ...briefed.rows, ...contexted.rows].slice(0, 32)
     if (rows.length) entry.inputs = rows
     if (input.text) entry.text = input.text
     if (input.chips?.length) entry.chips = input.chips
@@ -377,6 +388,7 @@ export class JobRunner {
     })
     const keep: SubmitExtras['local'] = {
       ...(local.followRun ? { followRun: local.followRun } : {}),
+      ...(local.clipAfter ? { clipAfter: local.clipAfter } : {}),
       ...(local.fixModelChoice ? { fixModelChoice: local.fixModelChoice } : {}),
       ...(local.fixQuality ? { fixQuality: local.fixQuality } : {}),
     }
@@ -676,7 +688,7 @@ export class JobRunner {
     const done = job.state === 'completed'
     const prev = this.doc.get().jobs[job.jobId]
     if (prev && !isActive(prev.state) && prev.state === job.state) return
-    this.live.set(job.jobId, { state: done ? 'fetching' : job.state, queuePosition: job.queuePosition })
+    this.live.set(job.jobId, { state: done ? 'fetching' : job.state, queuePosition: job.queuePosition, ...(job.progress && !done ? { progress: job.progress } : {}) })
     jobState(job.jobId, done ? 'fetching' : job.state, {
       op: job.op, provider: job.provider, model: job.model, fallbackFrom: job.fallbackFrom?.provider,
       code: job.error?.code, message: job.error?.message, ms: this.ageMs(job.jobId),

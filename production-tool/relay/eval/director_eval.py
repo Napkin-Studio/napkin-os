@@ -31,8 +31,9 @@ Clips that carry characters (features/runway-video-models.clan): a case with `ex
 go) and frame (a firstFrame exactly when expected). No v9 reply is recorded yet: record with a model login.
 
 Each shot follows its own frame (features/join-or-cut-shots.clan): a take_refs case with `ties` (`since`
-director.v11) scores ties: shot k's timed line ends "follows image k (@tag)" exactly when the take carries
-shot k's frame (a ref with role composition labelled "Shot k frame"). Not recorded yet: no live or paid eval.
+director.v11) scores ties: shot k's timed line ends "follows image n (@tag)" exactly when the take carries
+shot k's frame (a ref with role composition labelled "Shot k frame"), n the frame's place in the job's refs
+(features/pt-dex-context.clan; the relay renumbers what Dex wrote). Not recorded yet: no live or paid eval.
 
 Free prose to shots (features/script-freeform.clan, owner 2026-11-16): a shot_list case (`since` director.v9)
 plans a script written as prose and bullets, with no scene heading or screenplay element. It scores plans (shots,
@@ -212,11 +213,13 @@ def score(case: dict, out: dict) -> dict:
         res["frame"] = bool(job.get("firstFrame")) == case["frame"]
     if "ties" in case:
         # Each shot follows its own frame (since director.v11, features/join-or-cut-shots.clan): shot k's line
-        # says "follows image k" and the frame's tag exactly when the take carries that shot's frame.
+        # says "follows image n" (n: the frame's place in the job's refs, features/pt-dex-context.clan) and the
+        # frame's tag exactly when the take carries that shot's frame.
         import connected
         refs = case["input"].get("refs") or []
         tags = names.wire_tags(refs)
-        res["ties"] = connected.ties_problem(job.get("prompt") or "", {"refs": [{**r, "tag": tags[r["id"]]} for r in refs]}) is None
+        res["ties"] = connected.ties_problem(job.get("prompt") or "", {"refs": [{**r, "tag": tags[r["id"]]} for r in refs]},
+                                             job.get("refs")) is None
     return res
 
 

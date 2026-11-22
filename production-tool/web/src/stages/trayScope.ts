@@ -1,7 +1,8 @@
 // What a sketch area's links add to "What Dex will send" (ui-behaviour 3.16, item 1): the send tray
 // lists the selection, and, from scopeOf, everything linked into the sketch area. A linked reference
-// whose picture is on the canvas is sent with the sketch (its element joins the Generate); notes, ink
-// and documents linked to it are listed, but a sketch Generate does not read them yet, so they say so.
+// whose picture is on the canvas is sent with the sketch (its element joins the Generate); a linked text
+// goes as words (jobs/linkedText.ts) and a document with an excerpt as background (jobs/context.ts), and
+// they say so (UAT round 1 IMG-5: the tray said a note was "not sent" while it was); the rest says why not.
 // Names typed in the words that match no reference are a row too ("1 name isn't a reference").
 // A linked key is one row naming the views that go ("@samurai · 3 views · character (linked) · sends
 // front, side, back").
@@ -23,6 +24,8 @@ export interface LinkedRow {
   elIds: string[]
   /** Why it is not sent, when it is not. */
   off?: string
+  /** How it goes when it goes without a canvas element: "goes as words", "goes as background". */
+  goes?: string
 }
 
 /** The sketch area a selection generates from, if one. */
@@ -61,6 +64,15 @@ export function linkedRows(doc: ProductionDocument, sketchId: string | undefined
       if (r?.node && chosen.has(r.node)) continue // selected: it is a row already
       const how = it.via === 'board' ? `on ${doc.boards[it.through ?? '']?.title ?? 'a linked board'}` : 'linked'
       rows.push({ key, item: it, label: `@${r ? refName(r) : it.name} · ${it.role} (${how})`, elIds: el ? [el.id] : [], ...(el ? {} : { off: 'its picture is not on the canvas' }) })
+      continue
+    }
+    if (it.kind === 'text' && it.words?.trim()) {
+      rows.push({ key, item: it, label: `${it.label} · ${it.role} (linked)`, elIds: [], goes: 'goes as words' })
+      continue
+    }
+    if (it.kind === 'document') {
+      const read = !!doc.documents?.[it.id]?.excerpt?.trim()
+      rows.push({ key, item: it, label: `${it.label} · ${it.role} (linked)`, elIds: [], ...(read ? { goes: 'goes as background' } : { off: 'nothing in it to read yet' }) })
       continue
     }
     rows.push({ key, item: it, label: `${it.label} · ${it.role} (linked)`, elIds: [], off: 'not sent with a sketch yet' })

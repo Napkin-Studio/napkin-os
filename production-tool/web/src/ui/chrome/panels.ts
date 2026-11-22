@@ -11,12 +11,15 @@ export interface Panels {
   assets: boolean
   /** The tab the Assets library opens on, when it was opened for one (Link a brief… opens From Napkin). */
   assetsTab: AssetsTab | null
+  /** Counts each openAssets: an ask for the same tab again is a new ask (UAT round 4 S2-5: "+ › A brief from Brief
+   *  Maker…" did nothing while the Booth showed a character card, and the tab had not changed). */
+  assetsAsk: number
   toggle: (p: 'history' | 'assets') => void
   /** Open the Assets library on a tab (it stays open if it is). */
   openAssets: (tab: AssetsTab) => void
 }
 
-export const PanelsContext = createContext<Panels>({ history: false, assets: false, assetsTab: null, toggle: () => {}, openAssets: () => {} })
+export const PanelsContext = createContext<Panels>({ history: false, assets: false, assetsTab: null, assetsAsk: 0, toggle: () => {}, openAssets: () => {} })
 export const usePanels = () => useContext(PanelsContext)
 
 /** Initials for a person: "Shrey Batra" → "SB", "engineer" → "EN". */

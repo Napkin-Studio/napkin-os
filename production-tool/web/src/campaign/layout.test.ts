@@ -84,7 +84,10 @@ describe('The Review agent on the fixtures', () => {
     const film = size('film-9x16', 1080, 1920, { media: 'video', method: 'reedit', length_s: 15, edl: [{ shot_id: 'shot_01K7C00000000000000000CH01', in_s: 0, out_s: 6 }] })
     const c = checksFor(film, SET, DOC)
     expect(c.end_card?.result).toBe('flag')
-    expect(c.sound_off?.result).toBe('flag')
+    // No spoken line, and the brand line on screen: words for sound off (UAT 2026-11-21, F16: the flag said "No supers
+    // or captions" on a version whose words were on screen). With the line hidden too, it is flagged.
+    expect(c.sound_off?.result).toBe('pass')
+    expect(checksFor({ ...film, layers: { ...film.layers, line: { hidden: true } } } as never, SET, DOC).sound_off?.result).toBe('flag')
     expect(c.brand_first_3s?.result).toBe('pass')
     const withCard = checksFor({ ...film, edl: [...film.edl!, { shot_id: 'shot_01K7C00000000000000000CH09', in_s: 0, out_s: 2, end_card: true }] }, { ...SET, copy: { ...copy, supers: ['Every morning starts somewhere.'] } }, DOC)
     expect(withCard.end_card?.result).toBe('pass')

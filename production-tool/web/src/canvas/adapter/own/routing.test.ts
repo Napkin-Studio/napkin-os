@@ -70,3 +70,14 @@ describe('naming routes a loose picture to its board', () => {
     expect([at(loose).x, at(loose).frameId ?? null]).toEqual([2000, null])
   })
 })
+
+describe('naming a brand picture (UAT round 2 R2-1)', () => {
+  it('a palette keeps its swatches on the ref, so the .clan takes it and Dex reads it', async () => {
+    const { doc, ctrl, loose, id } = setup(false)
+    ctrl.name(id(loose), 'brand', 'colours', 'palette', { swatches: [{ hex: '#0A1F44' }, { hex: '#E8DCC4' }] })
+    await settle()
+    const ref = Object.values((doc.get() as unknown as ProductionDocument).refs).find((r) => r.key === 'brand')!
+    expect(ref).toMatchObject({ role: 'palette', swatches: [{ hex: '#0A1F44' }, { hex: '#E8DCC4' }] })
+    expect(ref.font).toBeUndefined()
+  })
+})

@@ -43,7 +43,7 @@ function antsOn(ctx: CanvasRenderingContext2D, s: { img: ImageData; rim: Int32Ar
 type Live = { id: number; op: Extract<MaskOp, { t: 'brush' | 'lasso' }>; drawn: number }
 
 export function Stage({ src, beforeSrc, plan, image, w, h, session, tool, brush, zoom, pan, onPan, before, onAfter, motion, onDrawn,
-  onMaskOp, onAddText, onText, onCrop, pending, progress, children }: {
+  onMaskOp, onAddText, onText, onCrop, pending, progress, settled, children }: {
   /** The frame as saved, shown while the preview draws. */
   src?: string
   /** What Before shows: the version as saved while there are edits, else the version before it. */
@@ -70,6 +70,9 @@ export function Stage({ src, beforeSrc, plan, image, w, h, session, tool, brush,
   onCrop: (r: { x: number; y: number; w: number; h: number }) => void
   /** A fill is running on this mask: its area shows the pending stripes. */
   pending?: string
+  /** Masks whose fill came back (and not painted since): only their edge shows, never blue over the result (UAT
+   *  round 1 IMG-20). */
+  settled?: readonly string[]
   /** A whole-frame job is running: a progress edge along the top. */
   progress?: boolean
   children?: ReactNode
@@ -128,14 +131,21 @@ export function Stage({ src, beforeSrc, plan, image, w, h, session, tool, brush,
   const ow = Math.min(w, OVERLAY_MAX)
   const oh = Math.max(1, Math.round((ow * h) / w))
   const masks = useMemo(() => session.edits.filter((e) => e.kind === 'mask' && !session.hidden.includes(e.id)), [session])
-  const raster = useMemo(() => {
+  const settledKey = (settled ?? []).join(' ')
+  const { raster, paint } = useMemo(() => {
     cache.retain(new Set(session.edits.filter((e) => e.kind === 'mask' || e.kind === 'fill').map((e) => e.id)))
-    const drawn = masks.flatMap((m) => (m.kind === 'mask' ? [cache.get(m.id, m.ops, ow, oh)] : []))
-    if (drawn.length === 1) return drawn[0]
-    const out = new Uint8Array(ow * oh)
-    for (const r of drawn) for (let i = 0; i < out.length; i++) if (r[i] > out[i]) out[i] = r[i]
-    return out
-  }, [cache, session.edits, masks, ow, oh])
+    const done = new Set(settledKey.split(' ').filter(Boolean))
+    const union = (ms: typeof masks) => {
+      const drawn = ms.flatMap((m) => (m.kind === 'mask' ? [cache.get(m.id, m.ops, ow, oh)] : []))
+      if (drawn.length === 1) return drawn[0]
+      const out = new Uint8Array(ow * oh)
+      for (const r of drawn) for (let i = 0; i < out.length; i++) if (r[i] > out[i]) out[i] = r[i]
+      return out
+    }
+    const all = union(masks)
+    // The blue only where a mask still waits for its fill; a settled one keeps its edge (the rim of `all`).
+    return { raster: all, paint: done.size ? union(masks.filter((m) => !done.has(m.id))) : all }
+  }, [cache, session.edits, masks, ow, oh, settledKey])
   const rim = useMemo(() => edges(raster, ow, oh), [raster, ow, oh])
 
   // Marching ants: the edge's dashes move, unless motion is reduced (and they wait while a stroke is drawn).
@@ -171,8 +181,8 @@ export function Stage({ src, beforeSrc, plan, image, w, h, session, tool, brush,
         if (y < y0) y0 = y
         if (y > y1) y1 = y
         d[i * 4 + 3] = 255
-      } else if (raster[i]) {
-        d[i * 4] = BLUE[0]; d[i * 4 + 1] = BLUE[1]; d[i * 4 + 2] = BLUE[2]; d[i * 4 + 3] = Math.round(raster[i] * 0.38)
+      } else if (paint[i]) {
+        d[i * 4] = BLUE[0]; d[i * 4 + 1] = BLUE[1]; d[i * 4 + 2] = BLUE[2]; d[i * 4 + 3] = Math.round(paint[i] * 0.38)
       }
     }
     shown.current = { img, rim: rims, box: [x0, y0, x1, y1] }
@@ -180,7 +190,7 @@ export function Stage({ src, beforeSrc, plan, image, w, h, session, tool, brush,
     c.dataset.drawn = String(Number(c.dataset.drawn ?? 0) + 1) // a count the e2e timing reads
     // ants: drawn by the effect below from here on
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [raster, rim, ow, oh, before, redraw])
+  }, [raster, paint, rim, ow, oh, before, redraw])
   useEffect(() => {
     const ctx = overlay.current?.getContext('2d')
     if (ctx && shown.current && !before) antsOn(ctx, shown.current, ants, false)

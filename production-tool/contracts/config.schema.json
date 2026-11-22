@@ -23,7 +23,17 @@
       "properties": {
         "promptVersion": { "type": "string", "pattern": "^director\\.v[0-9]+(\\.[0-9]+)?$" },
         "perClickModel": { "type": "string" },
-        "shotListModel": { "type": "string" }
+        "shotListModel": { "type": "string" },
+        "prices": {
+          "type": "object",
+          "description": "USD per million tokens by Claude model id (matched by the id's tail), for the agents' cost on each job (relay agent_cost.py, pt-film-r2 F21). Absent: the relay's list prices.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": { "inputPerMTok": { "type": "number", "minimum": 0 }, "outputPerMTok": { "type": "number", "minimum": 0 } },
+            "required": ["inputPerMTok", "outputPerMTok"],
+            "additionalProperties": false
+          }
+        }
       },
       "additionalProperties": false
     },

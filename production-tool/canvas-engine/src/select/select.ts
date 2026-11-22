@@ -334,6 +334,8 @@ export class SelectTool {
   private lastPress: { t: number; ev: boolean; p: Pt; zoom: number; by?: PointerKind } | null = null
 
   private readonly above: ((x: number, y: number) => ElementRecord | undefined) | undefined
+  /** Groups a press never picks whole: a press picks the member, and the group is picked from its own label. */
+  private readonly looseGroup: (groupId: string) => boolean
 
   /**
    * `hit`: the topmost element at a scene point (the renderer's index). `above`: what sits above the
@@ -343,11 +345,12 @@ export class SelectTool {
   constructor(
     scene: SceneStore,
     hit: (x: number, y: number) => ElementRecord | undefined,
-    opts: { newId?: () => string; now?: () => number; above?: (x: number, y: number) => ElementRecord | undefined } = {},
+    opts: { newId?: () => string; now?: () => number; above?: (x: number, y: number) => ElementRecord | undefined; looseGroup?: (groupId: string) => boolean } = {},
   ) {
     this.scene = scene
     this.hit = hit
     this.above = opts.above
+    this.looseGroup = opts.looseGroup ?? (() => false)
     this.newId = opts.newId ?? (() => `group_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`)
     this.now = opts.now ?? (() => Date.now())
   }
@@ -379,7 +382,7 @@ export class SelectTool {
     const top = c ?? r
     if (c) out.push({ key: c.id, ids: [c.id] })
     const all = this.scene.all()
-    for (const g of top.groupIds) out.push({ key: g, ids: all.filter((x) => x.groupIds.includes(g)).map((x) => x.id) })
+    for (const g of top.groupIds) if (!this.looseGroup(g)) out.push({ key: g, ids: all.filter((x) => x.groupIds.includes(g)).map((x) => x.id) })
     return out
   }
 

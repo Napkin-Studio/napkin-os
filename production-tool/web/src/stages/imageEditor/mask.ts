@@ -183,3 +183,63 @@ export function edges(m: ArrayLike<number>, w: number, h: number): Uint8Array {
   }
   return out
 }
+
+// ── thin masks (UAT round 4 S2-3, UX 2) ──
+// A 2 %-wide stroke over a sky came back unchanged twice, and Try again sent the identical request and was charged
+// again. A mask thinner than THIN_MASK of the picture's shorter side is widened before it is first sent; Try again
+// widens it to RETRY_MASK and says the change more strongly, so it is never the same request twice.
+
+/** The thinnest a mask is sent: its typical width, as a share of the picture's shorter side. */
+export const THIN_MASK = 0.05
+/** What Try again widens an unchanged fill's mask to. */
+export const RETRY_MASK = 0.08
+
+/** A mask's typical width in pixels: twice its area over its edge (a strip of width t has area L·t and edge about 2L). */
+export function maskWidthPx(m: ArrayLike<number>, w: number, h: number): number {
+  let area = 0
+  for (let i = 0; i < m.length; i++) if (m[i] >= 128) area++
+  if (!area) return 0
+  let edge = 0
+  const e = edges(m, w, h)
+  for (let i = 0; i < e.length; i++) edge += e[i]
+  return edge ? (2 * area) / edge : Math.min(w, h)
+}
+
+/** The mask's width as a share of the picture's shorter side, read at a working size (256 px wide). */
+export function maskWidthShare(ops: readonly MaskOp[], aspect: number): number {
+  const w = 256, h = Math.max(1, Math.round(256 / aspect))
+  return maskWidthPx(rasterize(ops, w, h), w, h) / Math.min(w, h)
+}
+
+/**
+ * The mask's steps with every painted brush stroke at least `share` of the shorter side wide (its radius half that),
+ * or null when nothing can be widened (only lasso shapes, or no painted stroke). Subtract strokes stay as they are.
+ */
+export function widenedOps(ops: readonly MaskOp[], aspect: number, share: number): MaskOp[] | null {
+  // r is a share of the width; the shorter side is min(1, 1/aspect) widths.
+  const minR = (share * Math.min(1, 1 / aspect)) / 2
+  let changed = false
+  const out = ops.map((op) => {
+    if (op.t !== 'brush' || op.mode !== 'add' || op.r >= minR) return op
+    changed = true
+    return { ...op, r: minR }
+  })
+  return changed ? out : null
+}
+
+/** What a fill sends: its steps widened to `share` when they are thinner (said with `widened`), or why it cannot go. */
+export function sendableMask(ops: readonly MaskOp[], aspect: number, share = THIN_MASK): { ops: MaskOp[]; widened: boolean } | { problem: string } {
+  if (maskWidthShare(ops, aspect) >= share) return { ops: [...ops], widened: false }
+  // A round-ended stroke measures a little under its brush (its ends): widen with room to spare.
+  const wide = widenedOps(ops, aspect, share * 1.25)
+  if (wide) return { ops: wide, widened: true }
+  return { problem: 'This area is very thin: a thin area comes back unchanged. Paint it wider first.' }
+}
+
+/** Try again's words: the same change, said so it cannot come back the same (a removal has no words: the relay's). */
+export function strongerWords(kind: 'fill' | 'whole', words: string): string {
+  const w = words.trim().replace(/[.\s]+$/, '')
+  if (/^(Repaint this whole area|Make this change clearly visible)/.test(w)) return `${w}.`
+  if (kind === 'fill') return w ? `Repaint this whole area so it clearly changes: ${w}.` : 'Repaint this whole area so it clearly changes.'
+  return w ? `Make this change clearly visible: ${w}.` : w
+}

@@ -4,7 +4,7 @@
 
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Ask, DocJob } from '../contracts/types'
-import { dockAsks, focusAsk, hereOf, homeOf, placeAsk, showAsk, summonAsk, summonedAsk, waitingAsks, type WaitingAsk } from './askPlaces'
+import { ASK_REVEAL_EVENT, dockAsks, focusAsk, hereOf, homeOf, placeAsk, showAsk, summonAsk, summonedAsk, waitingAsks, type WaitingAsk } from './askPlaces'
 import { id, MAYA, modelStore } from '../test/model'
 import { mainScript } from '../model/selectors'
 
@@ -91,6 +91,22 @@ describe('Show', () => {
     document.body.appendChild(later)
     expect(focusAsk('q_2')).toBe(false)
     expect(opened).toBe(true)
+  })
+
+  it('first asks its screen to bring it into view: the canvas pans to the result, and its card mounts (UAT round 1 IMG-1)', async () => {
+    const seen: string[] = []
+    const on = (e: Event) => {
+      seen.push((e as CustomEvent<string>).detail)
+      card('q_4') // the canvas came to the result: its card is there now
+    }
+    window.addEventListener(ASK_REVEAL_EVENT, on)
+    try {
+      expect(await showAsk('q_4', 2)).toBe(true)
+    } finally {
+      window.removeEventListener(ASK_REVEAL_EVENT, on)
+    }
+    expect(seen).toEqual(['q_4'])
+    expect(summonedAsk()).toBeNull()
   })
 
   it('a question no card shows is summoned to the dock', async () => {

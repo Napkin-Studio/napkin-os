@@ -36,11 +36,75 @@ class UnknownName(ValueError):
     """The words name an image the job was not given."""
 
 
+def _squeeze(word: str) -> str:
+    return word[0] + re.sub(r"[aeiou]", "", word[1:])
+
+
+# Short forms a reader knows, tried before any word loses its vowels (round 3, R2-14 leftover: ruby_back-three-quarter
+# went as rby_bck_thr_qrtr): word runs first, then single words.
+SHORT_RUNS = ((("three", "quarter"), "3q"), (("three", "quarters"), "3q"), (("over", "the", "shoulder"), "ots"),
+              (("over", "shoulder"), "ots"), (("close", "up"), "cu"), (("extreme", "close", "up"), "ecu"),
+              (("full", "body"), "full"), (("half", "body"), "half"))
+SHORT_WORDS = {"quarter": "qtr", "quarters": "qtr", "background": "bg", "foreground": "fg", "closeup": "cu",
+               "profile": "prof", "medium": "med", "portrait": "port", "standing": "stand", "sitting": "sit",
+               "smiling": "smile", "laughing": "laugh", "walking": "walk", "running": "run", "looking": "look"}
+FILLER = frozenset(("the", "a", "an", "of", "and", "with", "in", "on", "at", "view", "shot", "pose"))
+
+
+def _shorter(words: list[str]) -> list[str]:
+    """The key, then the variant's words with known runs and words in their short forms."""
+    out, i = words[:1], 1
+    while i < len(words):
+        for run, short in SHORT_RUNS:
+            if tuple(words[i:i + len(run)]) == run:
+                out.append(short)
+                i += len(run)
+                break
+        else:
+            out.append(words[i])
+            i += 1
+    return out
+
+
+def fit_tag(name: str) -> str:
+    """A name as a tag of at most MAX characters (Runway's limit) that still reads (R2-14). In order, only while it is
+    too long: the variant's filler words go (the, of, view), known runs and words take their short forms
+    (back-three-quarter is back_3q, over-the-shoulder ots), then the variant's longest words lose their inner vowels,
+    then the key's, then the longest words their last letters. The key is never dropped."""
+    words = [w for w in re.split(r"[_\-\s]+", name.lower()) if w]
+    size = lambda: len("_".join(words))  # noqa: E731
+    if size() > MAX:
+        kept = words[:1] + [w for w in words[1:] if w not in FILLER]
+        words = kept if len(kept) > 1 or len(words) == 1 else words[:2]
+    if size() > MAX:
+        words = _shorter(words)
+    for i in range(1, len(words)):
+        if size() <= MAX:
+            break
+        words[i] = SHORT_WORDS.get(words[i], words[i])
+    while size() > MAX:
+        rest = [i for i in range(1, len(words)) if len(words[i]) > 3 and _squeeze(words[i]) != words[i]]
+        if rest:
+            i = max(rest, key=lambda j: len(words[j]))
+        elif len(words[0]) > 3 and _squeeze(words[0]) != words[0]:
+            i = 0
+        else:
+            i = -1
+        if i >= 0:
+            words[i] = _squeeze(words[i])
+            continue
+        longest = max(range(len(words)), key=lambda j: (len(words[j]), j))
+        if len(words[longest]) > 2:
+            words[longest] = words[longest][:-1]
+        else:
+            words.pop()
+    return "_".join(words)
+
+
 def _short(name: str, taken: set[str]) -> str:
     base = name.replace("-", "_")
     if not TAG.match(base):
-        key, _, variant = base.partition("_")
-        base = f"{key[:6]}_{variant}"[:MAX].rstrip("_")
+        base = fit_tag(base).rstrip("_")
     if base not in taken and TAG.match(base):
         return base
     for n in range(2, 100):
@@ -106,7 +170,7 @@ def _named(payload: dict) -> set[str]:
 
 
 def fit_refs(op: str, payload: dict, sheet: dict | None) -> tuple[dict, list[str]]:
-    """The job input with its character refs cut to what `sheet` takes (refs.maxCharacter, refs.max),
+    """The job input with its character refs cut to what `sheet` takes (refs.maxCharacter, refs.maxObject, refs.max),
     and the names it dropped (features/harness-refusals.clan).
 
     A bare key (`@uberto`) brings its front and up to 3 more views, so two whole characters can be 8
@@ -122,12 +186,17 @@ def fit_refs(op: str, payload: dict, sheet: dict | None) -> tuple[dict, list[str
     reserved = sum(1 for k in ("anchorFrame", "previousFrame") if payload.get(k)) + (op in ("region_edit", "frame_edit"))
     max_char = limits.get("maxCharacter", len(refs))
     max_all = max(limits.get("max", len(refs) + reserved) - reserved, 0)
+    # The reserved pictures (anchor, previous, the edited image) all go as objects (features/pt-relay-trace.clan).
+    max_obj = max(limits["maxObject"] - reserved, 0) if limits.get("maxObject") is not None else len(refs)
     named = _named(payload)
     kept = list(refs)
     dropped: list[str] = []
 
+    def characters() -> int:
+        return sum(r.get("role") == "character" for r in kept)
+
     def over() -> bool:
-        return sum(r.get("role") == "character" for r in kept) > max_char or len(kept) > max_all
+        return characters() > max_char or len(kept) > max_all or len(kept) - characters() > max_obj
 
     # An optional ref (offered, not asked for: owner 2026-10-15) goes before any the job asks for.
     for r in reversed(refs):
@@ -144,7 +213,9 @@ def fit_refs(op: str, payload: dict, sheet: dict | None) -> tuple[dict, list[str
         name = r.get("name") or ""
         if "_" not in name or name.endswith("_front") or name in named:
             continue
-        if r.get("role") != "character" and len(kept) <= max_all:
+        # A view goes only when its own kind (character or object) or the total is over.
+        own_over = characters() > max_char if r.get("role") == "character" else len(kept) - characters() > max_obj
+        if not own_over and len(kept) <= max_all:
             continue
         kept.remove(r)
         dropped.append(name)

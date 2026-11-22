@@ -78,8 +78,10 @@ def test_the_plan_is_free_uncounted_and_names_every_shot_kept_or_dropped():
     assert [b["shotId"] for b in fifteen["beats"]] == [SHOT.format(i) for i in range(10)]  # never the end card
     kept = [b for b in fifteen["beats"] if b["keep"]]
     assert kept[0]["shotId"] == SHOT.format(0) and kept[-1]["shotId"] == SHOT.format(9)
-    assert sum(b["outS"] - b["inS"] for b in kept) == pytest.approx(15 - cutdowns.CARD_S, abs=0.01)
-    assert [b["shotId"] for b in six["beats"] if b["keep"]] == [SHOT.format(9)]
+    # 15 s less the studio card and the film's own card (features/pt-film-r1.clan): its 2.5 s held to 2 s.
+    assert sum(b["outS"] - b["inS"] for b in kept) == pytest.approx(15 - cutdowns.CARD_S - 2.0, abs=0.01)
+    # The opening and the payoff, truly (UAT round 4, R4-F4: the 6 s kept the payoff alone).
+    assert [b["shotId"] for b in six["beats"] if b["keep"]] == [SHOT.format(0), SHOT.format(9)]
     assert all(b["why"] for b in fifteen["beats"])
     # A crop of every shot at every shape; the middle holds at 9:16 and 1:1, so nothing is outpainted.
     assert len(plan["crops"]) == 20 and not any(c["cuts"] for c in plan["crops"])
@@ -133,6 +135,42 @@ def test_dex_looks_at_the_stills_and_the_relay_settles_his_answer():
     assert job["director"]["rationale"] == "The reveal, then the sip." and job["cost"]["reserved"] == 0
 
 
+@pytest.mark.parametrize("n_shots", [8, 12, 25, 40])
+def test_a_long_film_sends_no_more_stills_than_the_model_takes(n_shots):
+    """UAT walkthrough 2026-11-21: 8 shots + the end card, three stills each: 24 images, 'more than 20 images in one
+    call', and Dex fell back to the opening and payoff. Any film length stays inside the limit, every shot seen."""
+    from director.model import MAX_IMAGES
+
+    class StrictPort(FakePort):
+        def call(self, purpose, system, payload, schema, **kw):
+            assert len(kw.get("images") or []) <= MAX_IMAGES, "more than 20 images in one call"
+            return super().call(purpose, system, payload, schema, **kw)
+
+    h = Harness(base_config())
+    port = StrictPort()
+    h.relay.cutter = cutdowns.ModelCutter(port)
+    token = h.as_person()
+    shots = master(n_shots)
+    for i, s in enumerate(shots[:n_shots]):
+        still = asset(200 + i)
+        h.blobs.put(f"in/{still['sha256']}", _png(), "image/png")
+        s["stills"] = [still, still, still]
+    _, job = h.post_job(token, op="cutdown", expect=200, **plan_input(shots, lengths=(15,), aspects=({"w": 9, "h": 16},)))
+    assert job["state"] == "completed", job.get("error")
+    assert job["director"]["model"] != "passthrough"
+    sent = port.calls[0]["payload"]["shots"]
+    assert len(port.calls[0]["images"]) <= MAX_IMAGES
+    if n_shots <= 12:
+        assert all(s["pictures"] for s in sent if not s.get("endCard"))  # every shot seen
+
+
+def test_pick_stills_keeps_the_first_and_last_shot_when_sampling():
+    got = cutdowns.pick_stills([3] * 40, 20)
+    assert sum(len(x) for x in got) == 20 and got[0] and got[-1]
+    assert cutdowns.pick_stills([3] * 5, 20) == [[0, 1, 2]] * 5
+    assert cutdowns.pick_stills([3] * 9, 20) == [[0, 2]] * 9  # two a shot: in and out
+
+
 def test_an_agency_with_claude_off_gets_the_passthrough_plan():
     h = Harness(base_config())
     port = FakePort()
@@ -141,6 +179,72 @@ def test_an_agency_with_claude_off_gets_the_passthrough_plan():
     h.limits("blue", allow={"claude": False, "makers": ["runway", "google"]})
     _, job = h.post_job(token, op="cutdown", expect=200, **plan_input(master()))
     assert job["state"] == "completed" and not port.calls and job["director"]["model"] == "passthrough"
+
+
+class SlowPort:
+    """The director's port as it ran live: 20 s, and a timeout raises (ModelError)."""
+
+    model = vision_model = "eu.anthropic.claude-sonnet-5-5"
+
+    def __init__(self, fail=True):
+        self.timeout = 20.0
+        self.fail = fail
+        self.seen = []
+
+    def call(self, purpose, system, payload, schema, *, usage, **kw):
+        self.seen.append((self.timeout, kw.get("effort")))
+        usage.input_tokens, usage.output_tokens = 12000, 300
+        if self.fail:
+            raise TimeoutError("Dex took too long")
+        return {"lengths": [], "subjects": [], "rationale": "ok"}
+
+
+def round4_master():
+    """Round 4's film: 5 shots in their takes (the opening 2.967 s, the payoff 2.0 s at 2-4 s of a 4 s take), no card."""
+    w = [(0, 2.967, 5), (2.967, 4.967, 5), (0, 1.5, 4), (0, 1.5, 4), (2, 4, 4)]
+    return [{"shotId": SHOT.format(i), "takeId": TAKE.format(i), "words": f"Shot {i + 1}.", "inS": a, "outS": b, "takeS": t,
+             "takeSize": {"w": 1920, "h": 1080}} for i, (a, b, t) in enumerate(w)]
+
+
+def test_the_cut_plan_gets_one_long_try_and_its_cost_is_kept_when_dex_fails():
+    # Live (R4-F4): the plan timed out at 20 s twice (41 s); the passthrough then kept shot 5 alone, 2 s of picture.
+    port = SlowPort(fail=False)
+    cutdowns.ModelCutter(port).plan({"input": {"cutdown": {"shots": round4_master(), "lengths": [6], "aspects": []}}})
+    assert port.seen == [(cutdowns.CUT_PLAN_S, "low")]  # one try of 45 s, effort low
+    assert port.timeout == 20.0  # the shared port is untouched
+    # Little room left in the Lambda: never past it, never under the port's own seconds.
+    assert cutdowns.plan_port(SlowPort(), 30).timeout == 30
+    assert cutdowns.plan_port(SlowPort(), 5).timeout == 20
+
+
+def test_a_failed_cut_plan_is_a_simple_cut_said_so_that_fills_the_length_and_costs_what_dex_spent():
+    h = Harness(base_config())
+    h.relay.cutter = cutdowns.ModelCutter(SlowPort())
+    token = h.as_person()
+    _, job = h.post_job(token, op="cutdown", expect=200, **plan_input(round4_master(), lengths=(6,), aspects=({"w": 9, "h": 16},)))
+    assert job["state"] == "completed" and job["director"]["model"] == "passthrough"
+    assert job["director"]["rationale"].startswith("Dex could not plan this (TimeoutError), so this is a simple cut")
+    six = job["cutdownPlan"]["lengths"][0]
+    kept = [b for b in six["beats"] if b["keep"]]
+    assert [b["shotId"] for b in kept] == [SHOT.format(0), SHOT.format(4)]  # the opening and the payoff, truly
+    # 6 s less the studio card (2.5 s): 3.5 s of picture, so the file is 6 s.
+    assert sum(b["outS"] - b["inS"] for b in kept) == pytest.approx(3.5, abs=0.01)
+    assert job["cost"].get("agentUsd", 0) > 0  # what Dex spent before failing (F21)
+
+
+def test_a_simple_plan_short_of_its_length_keeps_more_shots_and_dexs_own_says_it_is_short():
+    # The payoff alone for 6 s: 2 s of picture with no handle. A simple cut keeps the longest dropped shot too.
+    shots = round4_master()
+    payoff = [{"lengthS": 6, "beats": [{"shotId": SHOT.format(4), "keep": True, "why": "The payoff."}]}]
+    out = cutdowns.settle_lengths(shots, payoff, [6], fill=True)
+    kept = [b for b in out[0]["beats"] if b["keep"]]
+    assert [b["shotId"] for b in kept] == [SHOT.format(0), SHOT.format(4)]
+    assert kept[0]["why"] == "Kept to fill the length."
+    assert sum(b["outS"] - b["inS"] for b in kept) == pytest.approx(3.5, abs=0.01)
+    # Dex's own plan stays as he chose it, and says it comes out short.
+    dex = cutdowns.settle_lengths(shots, payoff, [6])
+    assert [b["shotId"] for b in dex[0]["beats"] if b["keep"]] == [SHOT.format(4)]
+    assert "1.5 s short" in dex[0]["why"]
 
 
 def _png() -> bytes:
@@ -191,6 +295,56 @@ def test_a_render_goes_to_stitch_free_with_its_crops_and_its_words_drawn_here():
     done = h.poll(token, job["jobId"])
     assert done["state"] == "completed" and done["outputs"][0]["url"].endswith(f"ads/cuts/{job['jobId']}.mp4")
     assert done["outputs"][0]["durationS"] == 15 and h.store.counters("spend").get("usd", 0) == 0
+
+
+def test_a_size_ends_on_the_films_own_end_card_then_the_studio_card():
+    """UAT 2026-11-21 (B4): every 6 s size ended on the studio card, the client's end card missing. The film's card
+    is drawn here at the size and held as the last clip; stitch adds the studio card after it (endCard)."""
+    h = Harness(base_config())
+    token = h.as_person()
+    inp = render_input(h)
+    inp["cutdown"]["clientCard"] = {"headline": "Quietboil", "line": "Let them sleep.", "bg": "#14161B", "s": 2}
+    _, job = h.post_job(token, op="cutdown", expect=200, **inp)
+    [event] = h.stitched
+    last = event["clips"][-1]
+    assert last["key"] == f"ads/cuts/{job['jobId']}/client-card.png" and (last["inS"], last["outS"]) == (0, 2.0)
+    assert h.blobs.get(last["key"])[:8] == b"\x89PNG\r\n\x1a\n" and event["endCard"] is True
+    assert "Let them sleep" not in json.dumps(event)  # drawn, never sent as words
+
+
+def test_the_film_card_comes_off_a_sizes_length_before_the_studio_card():
+    shots = [{"shotId": "a", "inS": 0, "outS": 3}, {"shotId": "b", "inS": 0, "outS": 3}, {"shotId": "e", "inS": 0, "outS": 2, "endCard": True}]
+    windows, over = cutdowns.fit_windows(shots, {"a", "b"}, 8.0)
+    # 8 s less the studio card (2.5) and the film's card (a third of the 5.5 s left, under its 2 s): 3.667 of picture.
+    assert sum(w["outS"] - w["inS"] for w in windows) == pytest.approx(3.667, abs=0.002) and abs(over) <= 0.001
+    assert cutdowns.client_card_s(2.5, 6.0) == 1.167 and cutdowns.client_card_s(2.5, 30.0) == 2.0 and cutdowns.client_card_s(1.5, 30.0) == 1.5
+
+
+def test_a_short_size_keeps_3_5_s_of_picture_by_shortening_its_cards():
+    """UAT round 3 (R3-F12): the 6 s 9:16 had 2.25 s of picture, then 1.2 s of the film's card and 2.5 s of the
+    studio card. Both cards stay; the studio card shortens first (to 1.2 s), then the film's card (to 1 s)."""
+    assert cutdowns.card_lengths(6.0, 2.5) == (1.167, 1.333)
+    assert cutdowns.card_lengths(15.0, 2.5) == (2.0, 2.5)  # long enough: nothing shortens
+    assert cutdowns.card_lengths(6.0, None) == (0.0, 2.5)  # no film card: 3.5 s of picture already
+    assert cutdowns.card_lengths(5.0, 2.5) == (1.0, 1.2)  # as short as they go; the picture gets what is left
+    assert cutdowns.card_lengths(None, 2.5) == (2.0, 2.5)
+    shots = [{"shotId": "a", "inS": 0, "outS": 4, "takeS": 4}, {"shotId": "e", "inS": 0, "outS": 2.5, "endCard": True}]
+    windows, over = cutdowns.fit_windows(shots, {"a"}, 6.0)
+    assert sum(w["outS"] - w["inS"] for w in windows) == pytest.approx(3.5, abs=0.002) and abs(over) <= 0.001
+
+
+def test_a_render_passes_a_short_sizes_studio_card_length_to_stitch():
+    h = Harness(base_config())
+    token = h.as_person()
+    inp = render_input(h)
+    inp["cutdown"]["studioS"] = 1.333
+    _, job = h.post_job(token, op="cutdown", expect=200, **inp)
+    [event] = h.stitched
+    assert event["cardS"] == 1.333
+    h2 = Harness(base_config())
+    _, job = h2.post_job(h2.as_person(), op="cutdown", expect=200, **render_input(h2))
+    [event] = h2.stitched
+    assert "cardS" not in event
 
 
 def test_a_render_of_a_clip_that_is_not_ours_fails_plainly():

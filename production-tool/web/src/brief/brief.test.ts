@@ -204,7 +204,22 @@ describe('scope', () => {
     expect(Object.keys(out.input.brief!)).toEqual(['title', 'spine'])
     expect(out.rows).toEqual([{ kind: 'brief', ref: b1.id, link_id: expect.any(String), used_as: 'brief (from its script)', included: true, text: 'First Light brief v1' }])
     for (const op of BRIEF_OPS) expect(withBrief(d, op, { kind: 'shot', id: S15 }, {}).input.brief).toBeTruthy()
-    for (const op of ['generate', 'view', 'stitch', 'upscale', 'cutout', 'transcribe'] as const) expect(withBrief(d, op, { kind: 'shot', id: S15 }, {}).input.brief).toBeUndefined()
+    for (const op of ['view', 'stitch', 'upscale', 'cutout', 'transcribe'] as const) expect(withBrief(d, op, { kind: 'shot', id: S15 }, {}).input.brief).toBeUndefined()
+  })
+
+  it('a canvas Generate reads the project\'s only brief; with two it reads none; a frame edit inside a picture reads its shot\'s (pt-dex-context)', () => {
+    const GROUP = { kind: 'group', id: 'node_01K7A0000000000000000000G1' } as const
+    const one = withBrief_(ex, b1)
+    const out = withBrief(one, 'generate', GROUP, { text: 'a lamp' })
+    expect(out.input.brief).toEqual({ title: 'First Light brief', spine: b1.spine })
+    expect(out.rows).toEqual([{ kind: 'brief', ref: b1.id, used_as: "brief (the project's)", included: true, text: 'First Light brief v1' }])
+    // Only Generate falls back to it: a view on the same canvas reads none.
+    expect(withBrief(one, 'view', GROUP, {}).input.brief).toBeUndefined()
+    expect(withBrief(withBrief_(one, b2), 'generate', GROUP, {}).input.brief).toBeUndefined()
+    expect(withBrief(ex, 'generate', GROUP, {}).input.brief).toBeUndefined()
+    // A region_edit on a storyboard frame reads the brief its shot reads (the relay keeps its don'ts only).
+    const linked = withBrief_(ex, b1, link(b1.id, { kind: 'script', id: SCRIPT }))
+    expect(withBrief(linked, 'region_edit', { kind: 'shot', id: S15 }, {}).input.brief?.title).toBe('First Light brief')
   })
 
   it('"What Dex will send" lists it, with where it comes from', () => {

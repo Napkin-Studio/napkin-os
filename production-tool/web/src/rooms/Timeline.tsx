@@ -41,7 +41,7 @@ export interface TimelineActions {
 
 const RULER = 32
 
-export function Timeline({ data, cut, t, marks, picked, ripple, onRipple, snap, onSnap, making, ready, actions, tools, fit }: {
+export function Timeline({ data, cut, t, marks, picked, ripple, onRipple, snap, onSnap, making, ready, actions, tools, fit, loses = 0 }: {
   data: RoomData
   cut: Cut
   t: number
@@ -60,8 +60,11 @@ export function Timeline({ data, cut, t, marks, picked, ripple, onRipple, snap, 
   tools?: HTMLElement | null
   /** The film's length against its target, for the cut line. */
   fit?: { ok: boolean; words: string }
+  /** Clips with edits that Assemble first cut again would lose (editOps assembleLoses): it asks first. */
+  loses?: number
 }) {
   const doc = useDoc()
+  const [asking, setAsking] = useState(false)
   const scroller = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(900)
   const [zoom, setZoom] = useState(1)
@@ -175,7 +178,14 @@ export function Timeline({ data, cut, t, marks, picked, ripple, onRipple, snap, 
       {/* The cut in a line (mock edit): what it holds, that editing never sends, and what to do next. */}
       <div className="rm-cutsum">
         <span>The cut · {v1.length} {v1.length === 1 ? 'clip' : 'clips'}{cut.text.length ? ` · ${cut.text.length} text` : ''}{cut.endCard ? ' · end card' : ''}. Editing never sends anything.</span>
-        {v1.length > 0 && <button type="button" className="rm-linkbtn" onClick={actions.assemble} title="Fill V1 again from the boxes in storyboard order (one undo step)">Assemble first cut again</button>}
+        {v1.length > 0 && !asking && <button type="button" className="rm-linkbtn" onClick={() => (loses > 0 ? setAsking(true) : actions.assemble())} title="Fill V1 again from the boxes in storyboard order (one undo step)">Assemble first cut again</button>}
+        {asking && (
+          <span className="rm-ask" role="alertdialog" aria-label="Assemble the first cut again?">
+            <span>Rebuilds V1 from the boxes: your trims, fades or transitions on {loses} {loses === 1 ? 'clip' : 'clips'} go (Undo brings them back).</span>
+            <button type="button" className="rm-linkbtn" onClick={() => { setAsking(false); actions.assemble() }}>Assemble again</button>
+            <button type="button" className="rm-linkbtn" onClick={() => setAsking(false)} autoFocus>Keep my cut</button>
+          </span>
+        )}
         {v1.length > 0 && !cut.endCard && <><span aria-hidden="true">·</span><button type="button" className="rm-linkbtn" onClick={actions.endCard}>Add an end card</button></>}
         {fit && <span className={`rm-pill ${fit.ok ? 'ok' : 'warn'}`} title={`The film against its target of ${data.targetS} s`}>{fit.words}</span>}
         <span className="pt-grow" />

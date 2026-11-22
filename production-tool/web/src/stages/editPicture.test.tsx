@@ -77,13 +77,14 @@ const ctrl = (doc: Services['doc']) => ({
   nameOn: (nodeId: string) => Object.values(doc.get().refs).find((r) => r.node === nodeId),
   deletable: (els: El[]) => els,
   liveElements: () => [],
+  canvasAdapter: { visibleBounds: () => ({ minX: -1e4, minY: -1e4, maxX: 1e4, maxY: 1e4 }) },
 }) as unknown as CanvasController
 
 describe('Edit in a canvas picture’s bar', () => {
   it('opens the picture: a dropped picture and a result have it, a drawing does not', async () => {
     const w = await world()
     const onEdit = vi.fn()
-    const bar = (el: El) => createElement(FloatingToolbar, { ctrl: ctrl(w.services.doc), selected: [el], toView: (p) => p, onDelete: () => {}, onPlace: () => {}, limits: { max: 4, characters: 3 }, onEdit })
+    const bar = (el: El) => createElement(FloatingToolbar, { ctrl: ctrl(w.services.doc), selected: [el], toView: (p) => p, onDelete: () => {}, onPlace: () => {}, onEdit })
     let el = render(w, bar(picEl({ kind: 'pic', id: NODE, asset: SHA('a') })))
     expect(byText(el, '@baby_front')).toBeTruthy()
     act(() => byText(el, 'Edit')!.click())
@@ -111,6 +112,19 @@ describe('the Image editor on a canvas picture', () => {
     expect(el.textContent).not.toContain('Delete v1')
     act(() => byText(el, 'Canvas')?.click() ?? (el.querySelector('.ptbar button') as HTMLButtonElement).click())
     expect(onBack).toHaveBeenCalled()
+  })
+
+  it('Whole frame and Upscale work before the first edit (UAT round 1 IMG-3)', async () => {
+    const w = await world()
+    const el = render(w, createElement(ImageEditor, { target: { kind: 'picture', nodeId: NODE }, picture: { sha: SHA('a'), w: 800, h: 1000 }, onBack: () => {} }))
+    await settle()
+    act(() => byText(el, 'Whole frame')!.click())
+    const box = el.querySelector('[aria-label="Describe the change to the whole frame"]') as HTMLTextAreaElement
+    expect(box.disabled).toBe(false)
+    act(() => byText(el, 'Upscale')!.click())
+    const up = [...el.querySelectorAll('.ie-action button')].find((b) => b.textContent === 'Upscale') as HTMLButtonElement
+    // Off only where the agency has no upscaler, never for want of a first edit.
+    expect(up.disabled).toBe(!!el.textContent?.includes('Magnific, the upscaler, is off'))
   })
 
   it('after Apply: v2 open, with v1 as it was in its versions', async () => {
