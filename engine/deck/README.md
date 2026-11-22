@@ -107,7 +107,7 @@ support it) and `e_copy.json` (tightened copy). Models and effort: `stages.py` d
 ## Check and compare
 
 ```bash
-PYTHONPATH=. python3 -m pytest -q deck/tests        # 70 offline tests; fails to import without PYTHONPATH
+PYTHONPATH=. python3 -m pytest -q deck/tests        # 397 offline tests; fails to import without PYTHONPATH
 python3 -m deck.evaluate outputs/deck_runs/eval/* --html outputs/deck_runs/eval/report.html
 ```
 
