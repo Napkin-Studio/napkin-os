@@ -27,7 +27,8 @@ from . import engine as eng
 log = logging.getLogger("napkin.deck")
 
 #: The run keys the middleware writes. The app writes the others (approvals, decisions, gate_requests): never touched here.
-RUN_OWNED = ("state", "stage", "stages", "gate", "agent", "checks", "error", "done", "images", "types")
+RUN_OWNED = ("state", "stage", "stages", "gate", "agent", "checks", "error", "done", "images", "types",
+             "human", "tissue", "handoffs")   # deck-handoffs: the engine's record of human edits, the tissue kit, the production brief
 #: Costs are for the Napkin team only and never reach the product (Sai, 19 Nov 2026). The
 #: engine's view still carries its own figures; they are dropped here, at the edge: never written into the document, and an older document's
 #: run.cost_usd is deleted. The picture cards in run.images keep their prices: a person's yes to a spend must show what it spends.

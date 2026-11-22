@@ -172,7 +172,7 @@ def test_issue_vocabulary_equals_the_issue_schema_and_policy():
     assert set(_enum(i["check"])) == set(spec.ISSUE_CHECKS) and len(_enum(i["check"])) == len(spec.ISSUE_CHECKS)   # as sets: the order moved when seven names left RESERVED_CHECKS
     assert i["round"]["maximum"] == spec.REPAIR_MAX_ROUNDS
     assert set(spec.CHECKS) <= set(spec.ISSUE_CHECKS) and set(spec.QA_RENDER_CHECKS) <= set(spec.ISSUE_CHECKS)
-    assert len(spec.CHECKS) == 41 and len(set(spec.ISSUE_CHECKS)) == len(spec.ISSUE_CHECKS)
+    assert len(spec.CHECKS) == 45 and len(set(spec.ISSUE_CHECKS)) == len(spec.ISSUE_CHECKS)   # 45: proposition_line, proposition_copied, work_in_first_ten (show the work)
     # a reserved name must not shadow an existing one except placeholder, which validate and qa_render both raise
     assert (set(spec.CHECKS) & set(spec.QA_RENDER_CHECKS)) == {"placeholder"}
     assert not set(spec.RESERVED_CHECKS) & (set(spec.CHECKS) | set(spec.QA_RENDER_CHECKS))
@@ -248,7 +248,8 @@ def test_the_six_preferences_have_defaults_and_their_question_in_the_description
     assert spec.DENSITY_WORDS == {"lean": 30, "standard": 60}
     assert "leave-behind" in look["density"]["description"]
     assert PREFS["inputs"]["properties"]["text_mode"]["default"] == "condense" and _enum(PREFS["inputs"]["properties"]["text_mode"]) == ("condense", "preserve")
-    assert _enum(PREFS["inputs"]["properties"]["format"]) == ("pitch", "full")
+    # deck-handoffs: tissue is a run format (the routes-only kit, run as a pitch up to the territories), not a density preference
+    assert _enum(PREFS["inputs"]["properties"]["format"]) == ("pitch", "full", "tissue")
 
 
 def test_a_document_with_no_preference_validates_and_one_with_each_set_by_a_person_validates():

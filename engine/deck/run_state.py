@@ -379,7 +379,7 @@ def evidence_for(deck: dict, inp) -> dict:
                 elif k == "calc":
                     text = "Calculated: " + r[5:]
                 elif k == "prompt":
-                    text = refs.prompt_sentences(inp.prompt_text)[int(r[7:]) - 1]
+                    text = refs.prompt_sentence(inp, int(r[7:])) or ""
                 elif k == "answer":
                     text = refs.answer_text(inp, r[7:])
                 elif k == "brief":

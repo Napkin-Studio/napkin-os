@@ -59,6 +59,22 @@ app default) the dossier is skipped: the panel already lists the precedent the
 writers read, and the dossier's second retrieval plus Opus gist call (~20 s,
 ~$0.03 a draft) only added a line of citation ids.
 
+## Evidence for a deck's argument
+
+`python3 research.py evidence --gist GIST.json [--brief brief_object.json] [--storyline b_storyline.json] --out DIR` writes
+`DIR/evidence.json` (what the deck engine's `--evidence` reads) and `DIR/evidence.md`. It is market-aware (the brief's country or region
+first: its statistics office, regulator, trade bodies and local press; an international source only as a fallback, labelled with its
+market) and argument-led (it searches for support of the deck's insight, audience, proposition and reasons to believe, from the brief and
+stage b). Each finding carries market, year, metric units and a source URL; the aim is 3 local findings a run (`short_of_local` says when
+it fell short). Queries come from a sanitised gist only: never the client's name, a rival's name or a figure from the brief. One headless
+`claude -p` call with WebSearch, only with `RESEARCH_WEB=claude`.
+
+The name scrub (`research._names`, `scrub`) takes names from the gist (client, brand, competitors) and from the brief object (meta client,
+project and brand, upstream facets, captured and golden fields: client, brand, project, competitors; a paragraph field gives its capitalised
+words that are not common words). A name inside brackets or quotes, possessive, in another case or with diacritics is matched (round 3:
+a brand in parentheses in the gist's client field reached 4 of 13 queries). A final gate (`assert_clean`, `NameLeak`) refuses to send any
+query, claim or gist field that still carries one: the track then returns nothing rather than leak. Tests: `test_research_scrub.py`.
+
 ## Tests
 
 ```bash

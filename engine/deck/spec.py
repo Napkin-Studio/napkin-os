@@ -22,6 +22,7 @@ SLIDE_TYPES = {
     "territory_choice": {"words": 90,  "section": "Territories"},
     "idea":             {"words": 60,  "section": "The idea"},
     "execution":        {"words": 80,  "section": "The work"},
+    "concept":          {"words": 110, "section": "The idea"},
     "channel_roles":    {"words": 110, "section": "How it runs"},
     "innovation":       {"words": 100, "section": "How it runs"},
     "guardrails":       {"words": 120, "section": "How it runs"},
@@ -97,6 +98,10 @@ LIMIT_BOUNDS = (3, 60)
 #: last three are a last resort; so are competition, measurement_plan and risks at the very end). Nothing is reworded.
 TRIM_ORDER = ("process", "guardrails", "timeline", "innovation", "chart", "execution", "channel_roles", "upside", "gtm", "product",
               "credentials", "audience", "competition", "measurement_plan", "measurement", "risks")
+#: finish fixes (FINISH): the same moves, but the audience, the alternatives and the work hold their places longest and the plan's
+#: measurement and risks go before them (the decks the blind review preferred showed a person and a scripted piece in their first ten).
+TRIM_ORDER_FINISH = ("process", "guardrails", "timeline", "innovation", "channel_roles", "upside", "gtm", "product", "credentials",
+                     "measurement_plan", "chart", "measurement", "risks", "competition", "execution", "audience")
 
 #: List prices in USD per million tokens, (input, output), read from the ONE price table every tool shares (engine/prices.json):
 #: Opus 5.5 4/20, Sonnet 5.5 2/10, Haiku 4.5 1/5 (it was priced as Opus before 19 Nov 2026), and the rest. An ESTIMATE from tokens
@@ -240,7 +245,7 @@ def _shown(s: dict, audience: str, moved: dict) -> list:
         if bi in moved and moved[bi] is None:
             continue
         if b.get("internal"):
-            if audience == "client":
+            if audience == "client" or FINISH:   # finish fixes: an agency note never sits on a slide; review_lines puts it in the notes
                 continue
             b = {**b, "text": "Internal note: " + str(b.get("text", ""))}
         if bi in moved and isinstance(b.get("items"), list):
@@ -256,6 +261,22 @@ def shown_blocks(s: dict, audience: str = "review") -> list:
     for a review; an unsourced (illustrative) quote followed by its label; the items the layout plan moved to the
     notes (``layout.fit.moved``) left out. Shared by renderers, validate and the plan itself."""
     return _shown(s, audience, moved_map(s, audience))
+
+
+def review_lines(s: dict, audience: str = "review", failed=None) -> list:
+    """finish fixes: what the agency needs to see about a slide that must never be printed ON it, as speaker-notes lines (pptx and html
+    alike): the checks that failed on it, its internal notes and its picture prompt. A client file carries none of them. Empty with
+    FINISH off (the old renders printed them on the slide) or with nothing to say."""
+    if not FINISH or audience == "client":
+        return []
+    out = []
+    if failed:
+        out.append("Check failed (review only, never on the slide): " + ", ".join(sorted(set(failed))))
+    out += ["Internal note: " + str(b.get("text", "")).strip() for b in s.get("blocks") or [] if b.get("internal") and str(b.get("text", "")).strip()]
+    vis = s.get("visual") or {}
+    if vis.get("kind") == "image_prompt" and str(vis.get("prompt") or "").strip():
+        out.append(f"Image prompt ({vis.get('status', 'illustrative')}): {vis['prompt']}")
+    return out
 
 
 def blocks_sha(s: dict, audience: str = "review") -> str:
@@ -395,7 +416,8 @@ CHECKS = ("numbers_trace", "numbers_uncited", "unverified_fig", "rejected_used",
           "action_title", "repeated_line", "copy_number", "pitch_length", "rule_broken", "source_required", "internal_leak",
           "quote_source", "criteria_map", "imagery", "copy_spec", "budget_spread", "thin_evidence", "claim_fit", "objective_quant",
           "insight_shape", "idea_single", "chain_links", "weight_share", "image_missing", "image_unapproved", "image_flagged",
-          "image_rights", "style_pack_held", "pitch_cap", "role_words", "notes_unread")
+          "image_rights", "style_pack_held", "pitch_cap", "role_words", "notes_unread", "code_leak", "proposition_line",
+          "proposition_copied", "work_in_first_ten")
 
 #: Deck types (profiles/<id>.yaml, deck.profiles): what a deck is for decides its spine, stages, strictness and guidance.
 #: ``DEFAULT_TYPE`` is what a skipped type question falls back to.
@@ -503,6 +525,53 @@ GRAPHICS = flag_on("DECK_GRAPHICS") and LOOK_V3
 if _flag_asked("DECK_GRAPHICS") and not LOOK_V3:
     import sys as _sys   # noqa: PLC0415
     print("deck: DECK_GRAPHICS=1 needs DECK_LOOK_V3 on (it is 0 for this run); graphics stay off for this run", file=_sys.stderr)
+#: deck finish fixes (features/deck-repair-loop.clan, the blind review of 19 Nov 2026): nothing for the agency is printed on a slide (check
+#: ids, internal notes, picture prompts and the sketch label go to the speaker notes), placeholder-only slides leave the presented story
+#: for the 'To supply' part, a thought is said once, the title and objective state only what the brief states, evidence is in metric
+#: units for a metric market, the fit ladder moves points to the notes before it overflows, and the proposition is checked against the
+#: alternative the deck argues against. ON by default; DECK_FINISH=0 builds exactly as before (the test suite sets it to 0, like the three above).
+FINISH = flag_on("DECK_FINISH")
+#: deck brief gaps (the blind test on three weak real client briefs, 19 Nov 2026: decks built straight from the raw brief beat the
+#: brief-research-deck pipeline 3 of 3, and no deck said what was wrong with the brief): the deck shows "What the brief doesn't tell us",
+#: the top issues of the brief's ``brief_issues`` (brief_issues.py; on a prompt-only run the intake runs the same detection) as questions
+#: for the client, in the presented story; a passage the brief tool suspects is another client's never becomes an objective on a slide;
+#: the appendix lists "What we need from you". ON by default; DECK_BRIEF_GAPS=0 builds exactly as before (the suite sets it to 0).
+BRIEF_GAPS = flag_on("DECK_BRIEF_GAPS")
+#: deck pitch-ready (blind judging of decks from three real client briefs, 20 Nov 2026: evidence 3-5/10, take-to-pitch 3-6/10;
+#: deck/pitch_ready.py): the evidence track's sourced figures on the insight, audience and proposition slides with a source tag, "to confirm"
+#: only on an unverified figure, uncited market claims softened; a real cover (client and project or campaign, agency when known, month and
+#: year, no placeholder); a small footer draft tag in place of the DRAFT banner (the list in the notes and an appendix slide); picture
+#: prompts from the chosen territory and no empty frame; internal codes scrubbed from every shown text (validate and QA: code_leak, an
+#: error). ON by default; DECK_PITCH_READY=0 builds exactly as before (the suite sets it to 0).
+PITCH_READY = flag_on("DECK_PITCH_READY")
+#: show the work (the European agency workflow report and round 3's adversarial review, 20 Nov 2026; deck/show_work.py): the presented
+#: story follows agency order (cover, what the brief doesn't tell us, objective, insight, proposition, one routes slide with the
+#: recommendation marked, the idea, the hero execution and one or two more, the ask); the idea and at least two executions are always in
+#: the first ten (the trim honours that keep set and cuts setup slides first); stage b writes the single-minded proposition and the slide
+#: never shows a fallback label (validate: proposition_line, an error). ON by default; DECK_SHOW_WORK=0 builds exactly as before (the
+#: suite sets it to 0).
+SHOW_WORK = flag_on("DECK_SHOW_WORK")
+#: the picture plan (Claude outputs/pipeline-test/picture-plan.md; deck/scene.py, visuals/fit.py): 3 to 5 pictures a deck (cover, idea, the
+#: hero execution, the audience when presented); one scene brief per deck (market and its cue pack, the setting locked from the channels,
+#: the category, the audience, the key visual, the nearest wrong places) and one scene card per slot from stage g, assembled literal first;
+#: the scene lint's deny-lists replace the allow-list (brands, per-brief names and Confidential parts stay fail-closed, counts pass); a
+#: refused card is re-asked once, then the slot has no picture (never a template); after generation a fit check (local Ollama, else Haiku;
+#: never Gemini) asks whether the picture shows the idea in the setting, one retry, else drop; labels are Illustrative or Mock-up only,
+#: never Flagged, and a flagged picture is never drawn. ON by default; DECK_PICTURE_PLAN=0 builds exactly as before (the suite sets it to 0).
+PICTURE_PLAN = flag_on("DECK_PICTURE_PLAN")
+#: execution mock-ups in situ (round 4 blind judging: "the work is shown almost entirely as text"; deck/mockup.py): each presented
+#: execution is drawn as the work where it runs, picked by its channel (a poster in a street, a billboard, a phone with a social post, a
+#: shelf wobbler, a radio script card with a waveform, three or four storyboard frames), its headline and line typeset inside the ad, the
+#: client label as the brand (a neutral placeholder when the label is a job id), the picture (Production final, else the execution's
+#: generated scene card picture) filling the ad's visual area, else a typographic ad; labelled Mock-up; stage g gets a picture slot per
+#: presented execution (5 a deck at most). 16:9 only. ON by default; DECK_MOCKUPS=0 builds exactly as before (the suite sets it to 0).
+MOCKUPS = flag_on("DECK_MOCKUPS")
+#: The presented slide's title and the most issues it asks about (each a question for the client; the rest are in the appendix list).
+BRIEF_GAPS_TITLE = "What the brief doesn't tell us"
+BRIEF_GAPS_MAX = 5
+#: The appendix list of what the client can give (the brief's questions, the decision date, the alternatives they weigh). Engine words.
+CLIENT_ASKS_TITLE = "What we need from you"
+CLIENT_ASKS_MAX = 8   # the list's cards layout holds eight; the rest are in its notes
 #: Whether the run set the pitch length by env: the per-run override ranks above a recipe (design.schema.readers: env > recipe > default).
 PITCH_LENGTH_FROM_ENV = {"target": _env_count("DECK_PITCH_TARGET", -1, warn=False) != -1, "cap": _env_count("DECK_PITCH_CAP", -1, warn=False) != -1}   # a bad value is not "from env"
 #: Layouts deck-look has named but not yet built (features/deck-look.clan step 3; cover_bleed landed in step 7). A recipe may name one: it is accepted by the
@@ -656,7 +725,8 @@ ISSUE_STATUSES = ("open", "fixed", "unfixed", "rolled_back", "left_for_person")
 ISSUE_FIXES = ("shrink", "switch_layout", "shorten", "split", "overflow_to_notes", "add_scrim", "crop_image", "regen_image",
                "drop_image", "needs_human")
 QA_RENDER_CHECKS = ("off_slide", "margin", "text_overlap", "text_overflow", "min_font", "placeholder", "contrast", "mostly_empty",
-                    "one_corner", "qa_internal", "unreadable", "picture_stretch", "picture_lowres", "text_on_image_contrast")
+                    "one_corner", "qa_internal", "unreadable", "picture_stretch", "picture_lowres", "text_on_image_contrast",
+                    "text_collision", "word_break")   # finish fixes: text running out of its frame into another's; a display word broken
 #: Raised by the layout plan (layouts.py) and the repair loop; once reserved, now live, so the checklist's l_slots_clean can answer.
 LAYOUT_CHECKS = ("slot_limit", "slot_missing", "slot_unknown", "slot_stale", "block_unbound", "layout_unknown", "text_on_image_fallback")
 RESERVED_CHECKS = ("golden_echo", "layout_repeat", "title_drift", "line_length", "image_style_mixed", "export_failed")
