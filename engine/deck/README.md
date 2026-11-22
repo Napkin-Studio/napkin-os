@@ -134,6 +134,7 @@ copy and placeholders, and writes a comparison page plus the rows as JSON.
 | `inputs.py` | Loads the brief (JSON or CLAN, or none), research CLAN, the prompt, documents; `from_upstream` for a Deck document; records coverage |
 | `intake.py` | `tier`, `gap_report`, `validate_a0`, `apply_a0`: the check rung and the a0 contract |
 | `refs.py` | Resolves any ref to its value, licensed numbers, source and a notes line |
+| `finish.py` | The finish fixes (`DECK_FINISH`): the brief's own title and objective, said once, bracketed slots, the contradiction check, metric evidence, script annotations to the notes, the clean ask and the client asks list |
 | `assemble.py` | Builds `deck.json`: requirements to slides, pitch arrangement and appendix, trace and sources slides, the investor build, copy edits |
 | `validate.py` | 28 code checks, listed in its docstring (no model) |
 | `stages.py`, `prompts/` | The model stages a0, a, b, c (+ judge), d, i, fit, e |
@@ -197,7 +198,7 @@ A tender response, a credentials deck, an investor deck and an agency pitch need
 
 **The flags.** `--kind agency|investor|tender|credentials` picks the type and wins over an answer. Without it the answer to `q_deck_type` decides, then the stated default. The deck records `meta.built_from.type` (the profile id) and `meta.built_from.profile` ({id, label, source: flag|answer|skipped|default, note}); `meta.profile` is added when the person was asked (answered or skipped) or the type is a spine one, together with `meta.length` and `meta.weights` for a spine type. A plain default agency or investor deck keeps its meta as it was. `report.json` gains `type` and `type_question`. A stage a type does not run needs no recorded file, and `--live` never calls it.
 
-**Every feature is on by default (19 Nov 2026).** The look (`DECK_LOOK_V3`), the recipes (`DECK_RECIPES`) and the graphics (`DECK_GRAPHICS`) are on unless set to `0` (`spec.flag_on`); all three `=0` is the old build, byte-identical at 16:9 to the builds before them. The safety switches do not move: a prompt from client material never goes to Runway (`VISUALS_CLIENT_TO_RUNWAY` stays refuse), live pictures still need `--yes-cost`, the Production fetch is opt-in with an empty host allow-list, and the spend caps stand.
+**Every feature is on by default (19 Nov 2026).** The look (`DECK_LOOK_V3`), the recipes (`DECK_RECIPES`) and the graphics (`DECK_GRAPHICS`) are on unless set to `0` (`spec.flag_on`); all three `=0` is the old build, byte-identical at 16:9 to the builds before them. The finish fixes (`DECK_FINISH`, on by default; `=0` builds as before) keep everything for the agency off the slides (failed checks, internal notes, picture prompts and the sketch label go to the speaker notes), move placeholder-only slides to the To supply part with one "What we need from you" line, say a thought once, hold the title and objective to the brief, fill bracketed slots, write imperial evidence in metric with its market, move points to the notes before a slide overflows, and check the proposition against the alternative the deck rejects. Since the blind test on three weak real client briefs, the finish fixes also send script annotations ('Dramatises the ... half', 'the inputs') to the speaker notes, make the close a clean ask (the platform as its statement, a decision date only when the inputs give one, no blank) with "What we need from you" as one appendix list of what only the client can give, fit a hero figure on its digits' real width, and make QA's `text_collision` (text running out of its frame into other text) and `word_break` (a display word broken across lines) errors. Brief gaps (`DECK_BRIEF_GAPS`, on by default; `=0` builds as before) present "What the brief doesn't tell us" right after the objective: the top five of the brief's `brief_issues` (`engine/brief_issues.py`: contradictions, another brief's pasted text, missing basics) as questions for the client; a prompt-only run's intake (a0) runs the same detection, and a passage flagged as another brief's never becomes an objective, a requirement or a brief field on a slide. The safety switches do not move: a prompt from client material never goes to Runway (`VISUALS_CLIENT_TO_RUNWAY` stays refuse), live pictures still need `--yes-cost`, the Production fetch is opt-in with an empty host allow-list, and the spend caps stand.
 
 **Recipes (deck-types, `DECK_RECIPES`, on by default, with `DECK_LOOK_V3` on).** A profile's optional `recipe` block and `length.target / cap` make a type a full recipe: layout preferences per slide type, density (level, roles, word windows), picture policy (`on`, the `types` that get empty slots, what generation may plan: `all` · `cover` · `none`), brand strictness (applied only when an agency Style Pack or a Brand Clan is attached), title form (`claim` · `label` · `criterion`: stage e lines and the claim-title check, never a rewrite), size (inert until deck-slide-size) and `full` overrides for "Sent to be read". `profiles.recipe(profile, fmt)` resolves it once; with the flag off nothing reads it and a build is byte-identical. Types: `agency_pitch`, `tender_response`, `investor_seed`, `credentials` and `creative_work` (a tissue session: every route presented, the lean, the idea, at most three executions, questions; no price or team; `--kind creative`). Precedence: `--kind` / `--type` (the picker's pick, a document's `inputs.deck_type`) > the answer to `q_deck_type` > (recipes on) a high-confidence inference stamped with the quoted words > `agency_pitch`. A type change is free when its stages are recorded; one that needs a model stage is refused with `--live` until `--confirm-stages`, naming the stages; pictures are never re-made. The engine server keys its stages folder without the type, so types of one assembler share their recorded stages; a change that needs a stage they lack answers 409 `needs_stages` (`{stages, to}`) unless `inputs.deck_type.confirmed_stages` carries the person's yes from the Change sheet. A type that joined with the recipes (`spec.RECIPE_ONLY_TYPES`) is refused (400 `type_off`, and by `run_deck`) while they are off, and the server's `run.types` tells the picker which types it offers. The picker's cards are generated into the Deck Maker template by `python3 -m deck.profiles cards` (a test compares them).
 
@@ -467,3 +468,102 @@ Shortening is delete-only by default (`shorten.word_rule`): the new text is an o
 - **Sparse slides.** A slide whose content fills under about 40% of the body is centred vertically (type growth keeps the 1.2 cap for lean and standard). A one-row table and a one-step timeline are drawn as a `big_statement`, every word kept.
 - **Execution pictures.** The picture takes the right half of the slide at full content height (a tall picture keeps its shape, centred in the half); the copy frame and the notes card stack on the left. Still labelled Illustrative until approved.
 - **LibreOffice.** Every conversion runs in its own profile (`run_deck.to_pdf`), so two renders at once no longer lose a PDF.
+
+## Show the work (2026-11-20, `DECK_SHOW_WORK`, `deck/show_work.py`)
+
+Round 3's blind judging found the work at slides 11-13 of 19-20 presented slides (path B), and trimmed away inside a sketch's ten (path A).
+On by default (`=0` builds as before; the suite sets it to 0). The agency pitch and the creative work session present in agency order:
+cover, what the brief doesn't tell us (three questions; the rest in its notes and the appendix list), objective, insight, the
+proposition, one routes slide ("Three routes, one recommendation": each route's one-line sketch, the chosen one marked, the ranking's
+reasons in the notes), the idea, the hero execution straight after it and one or two more, the ask. A work session also presents every
+route and the client's questions. The idea and at least two executions are a keep set no length cut moves; a shorter story fills with the
+third execution, then the real question, the audience and the first chart. Competition, audience detail, measurement, risks, team and
+investment are backup. Other types (a tender's buyer order, a credentials deck) keep their spine, and their trim never moves the keep set
+and cuts setup slides first. The channel-table and investment merges are skipped so the hero and the ask keep their own slides.
+
+Stage b writes `proposition.line`, the single-minded proposition (written last, from the objective and the insight, never the brief's key
+message read back), and the proposition slide takes it as its title. With none, the slide shows the brief's or stage b's own words
+verbatim and validate's `proposition_line` is an error; no fallback label reaches a slide. `proposition_copied` warns when the line is the
+brief's key message, and `work_in_first_ten` is an error when the idea and two executions are not all in the first ten.
+
+Tests: `tests/test_show_work.py` (invented fixtures only).
+
+### The concept pack (`deck/concept_pack.py`, with `DECK_SHOW_WORK`)
+
+Stage d also writes `concept`: the platform (name, how it lasts), the key visual (the one picture that is the idea), a manifesto of 120 to
+180 words, a timed 30-second script (scenes with time, picture, voice-over, super, sound) and the stretch test (years 1-3, channels, where it
+breaks). `run_deck` writes `concept_pack.json` and `concept_pack.md` beside the deck: platform, line, idea, key visual (and its picture when
+one is drawn), manifesto, script, the 3-6 executions, the stretch test and the territories considered. A part stage d did not write is listed
+under `missing` ("To finish"), never filled. "The concept on a page" (slide type `concept`) is presented when it fits the length, else it is
+the first slide of the appendix. Tests: `tests/test_concept_pack.py`.
+
+### The picture plan (`DECK_PICTURE_PLAN`, `deck/scene.py`, `visuals/fit.py`)
+
+On by default (`=0` builds as before; the suite sets it to 0). 3 to 5 pictures a deck: the cover, the idea, the hero execution and the
+audience when presented. `run_deck` writes one scene brief per deck (`deck.meta.scene`: the market and its code-owned cue pack, the setting
+locked from the channels and deliverables, the category, the audience, the key visual, the nearest wrong places) and the per-brief names
+(`deck.meta.scene_names`). Stage g gets the brief with each slot's role and returns scene cards as fields (`prompts/g_scene_cards.md`); code
+assembles the subject literal first. The scene lint (`visuals/lint.lint_scene`) is deny-lists: Confidential parts, the shape rules, brands
+and the brief's names stay fail-closed; joined and affixed words and counts of visible things pass. A refused card is re-asked once with its
+reason, then the slot has no picture (never a template). After generation the fit check (local Ollama, else Haiku; never Gemini; only the
+picture and its card are sent) asks whether the picture shows the idea in its setting: one retry with a correction line, else dropped. Labels
+are Illustrative or Mock-up only, never Flagged, and a flagged picture is not drawn. Client-derived prompts still go to Runway only under
+`VISUALS_CLIENT_TO_RUNWAY=allow`. Tests: `tests/test_picture_plan.py` (fakes only).
+
+### Execution mock-ups in situ (`DECK_MOCKUPS`, `deck/mockup.py`)
+
+On by default (`=0` builds as before; the suite sets it to 0). Round 4's blind judging said the work was "shown almost entirely as text".
+Each presented execution (16:9, the deck's `mockups` graphics part on) is drawn as the work where it runs, picked by its channel words
+(`mockup.kind_of`): a poster in a shelter on a street (or on a plain wall), a roadside billboard, a phone with a social post, a shelf of
+blank packs with a wobbler and a shelf strip, a radio script card with a waveform, three or four storyboard frames ending on an end card,
+or a printed page. The headline (the first copy line) and the line (the last) are typeset inside the ad on their own band, never on the
+picture; the brand is the client label, or "Your brand" when the label is a job id. The picture is what the slot holds: a Production
+final first, then the generated picture from the execution's scene card (stage g now has a slot per presented execution, the first two,
+five pictures a deck at most; `stages.MOCKUP_RULE` tells it the card is the ad's picture), else a typographic ad. Copy that does not fit
+the ad moves to the left column, never cut. One scene (`mockup.scene`, inches) is painted from native shapes by `render_pptx`
+(`_lay_mockup`) and as one inline SVG by `render_web` in the pptx's own box; the pdf is the pptx's. The label is "Mock-up". The fit check
+asks an execution's picture whether it is the scene alone (`shows_an_ad`). `report.json` `graphics.mockups` lists what was drawn.
+
+### The territory tool to Deck Maker (`--territory-run RUN.json|DIR|auto`)
+
+When stage c is not recorded, a territory tool run (`territory.run --out`) becomes stage c: its cards are the candidate territories (its top
+score the default lean, flagged for Gate 2) and its newest frames (`<run>.frames/v<N>-<hash>/`) the territories' pictures (`--pictures
+creative` unless one was given). A folder gives its newest run; `auto` looks in `<stages>/territory`, `../territory` and `../../territory`
+and is only a note when none is there. A recorded stage c or d is never overwritten. Tests: `tests/test_territory_handoff.py`.
+
+## Pitch-ready and evidence (2026-11-20, `DECK_PITCH_READY`, `deck/pitch_ready.py`)
+
+Blind judging of decks built from three real client briefs scored evidence 3-5/10 and take-to-pitch 3-6/10. On by default (`=0` builds as
+before; the suite sets it to 0). After stage e and the red team, before the pictures and the layout plan, `pitch_ready.apply`:
+
+- **Evidence**: `--evidence evidence.json` (the research agent's evidence track, `engine/agent-server/research.py evidence`) is read as
+  facts `f_ev<n>` (origin `evidence`, with market, year, units and a source URL in `src_ev<n>`); it does not make a prompt-only run a
+  research tier. The presented insight, audience and proposition slides each get one or two sourced figures, picked by what they support
+  and local first, as a line with a short source tag (`source, year, market`); the layout plan never moves them to the notes. "(to confirm)"
+  comes off a figure a cited source (or the evidence) verifies and stays on anything unverified; an uncited market claim on an argument
+  slide reads "Our read: ..." (basis opinion) and a claim that only says what the inputs lack joins "What the brief doesn't tell us", so
+  `bare_claim` and the slides agree.
+- **Cover**: the client and the project (or the chosen territory's name) from the run, else the brief tool's `meta`, else stage a0's
+  `names` (kept only when the inputs state them); the label is the agency (when known) and the month and year, never "Response deck"; no
+  placeholder line (the presenter-and-date to-do is in the notes). The cover keeps its picture slot.
+- **Draft tag**: a small muted "Draft" in the footer beside the slide number replaces the DRAFT banner; the full list of what needs a
+  person is in the cover's notes, in each such slide's notes and on the appendix slide "What still needs a person".
+- **Pictures**: with no stage g subject the image plan draws the subject from the chosen territory (the work: its own visual hint; the
+  idea: the thought; the cover: the mood), lint-checked like any subject, before the code templates. With no picture yet the work slide
+  draws no empty card: the role note is a narrow column and the script takes the room.
+- **Codes**: refs (`prompt:43`, `brief:insight`, `req:R4`), ids (`ic_feeling`, `gap_chart`), labels (`T1`, `IC1`, `candidate B`), slide
+  and stage ids come off every shown text (the notes keep them); validate's and stage h's `code_leak` is an error for any left.
+
+Tests: `tests/test_pitch_ready.py`, `engine/agent-server/test_research_evidence.py` (invented fixtures only).
+
+### The figure guard (`deck/figures.py`)
+
+Stage b and stage d may write a figure only when the brief, the research or an evidence line states it, with that line's id in refs;
+otherwise they say it in words (personas carry no age, income or family size the inputs do not give; no invented spot length, site
+count, phase months or target). The guard is the backstop: after pitch-ready and before the pictures and the layout plan it reads the
+texts `numbers_trace` reads and judges each number the same way (`validate.number_corpus`, `slide_allowed`, `untraced`). An untraced
+figure is taken out and its sentence reworded ("Mary, 68." to "Mary.", "Radio (30 seconds)" to "Radio", "a 30-second spot" to "a spot",
+"Months 2 to 8" to "Timing to agree", "Months 1-3" with only 1 stated to "From month 1"); a sentence, line, stat or block left with
+nothing is dropped. Each removal is in the slide's speaker notes ("Figure removed: ..."), `meta.figures_removed`, report.json
+`figures_removed`, and the needs-a-person list (which names the slide, never the figure). `numbers_trace` stays the final check.
+Tests: `tests/test_figures.py`.

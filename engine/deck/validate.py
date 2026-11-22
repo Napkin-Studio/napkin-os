@@ -38,6 +38,9 @@ notes_unread      (spec.RECIPES, format full: 'Sent to be read') a slide whose p
 rule_broken       a brief rule's quoted phrase ("Avoid 'the Netflix of X' framing") appears in the deck
 source_required   a block or item marked "sourced" that cites nothing: information from outside the
                   three inputs (the user's prompt, the research CLAN, the brief) never reaches a slide
+code_leak         (spec.PITCH_READY) an internal reference code on a shown text: a ref (prompt:43, brief:insight, req:R4), an id
+                  (ic_feeling, gap_chart, f_ev1), a label (T1, C2, candidate B), a slide or stage id. Scrubbed by pitch_ready.scrub_deck first;
+                  one left is an error for every audience
 internal_leak     agency-only text on screen: pipeline ids, stand-in or gate labels, "to confirm",
                   the [Agency] placeholder (error for a client render; a warning in review, where
                   labelled placeholders and blocks marked internal are expected and skipped)
@@ -290,6 +293,39 @@ def _supplied_ok(sl: dict) -> bool:
                 and all(c.get("refs") for c in claims))
 
 
+def number_corpus(deck: dict, inp) -> set:
+    """Every number the inputs state: the brief, the research facts and document figures, the documents, the prompt (with the
+    client and project names) and the person's answers. numbers_trace and the figure guard (deck/figures.py) read the same set."""
+    corpus = set()
+    for f in inp.brief.values():
+        corpus |= numbers_in(json.dumps(f.get("value"), ensure_ascii=False, default=str))
+    for f in list(inp.facts.values()) + list(inp.doc_facts.values()):
+        corpus |= numbers_in(json.dumps(f, ensure_ascii=False, default=str))
+    for d in inp.docs.values():
+        corpus |= numbers_in(d["text"])
+    corpus |= numbers_in(f"{deck['meta'].get('client', '')} {deck['meta'].get('project', '')}")   # the prompt is an input
+    corpus |= numbers_in(inp.prompt_text)
+    for qid in inp.answers:
+        corpus |= numbers_in(answer_text(inp, qid))
+    return corpus
+
+
+def slide_allowed(sl: dict, R) -> set:
+    """The numbers a slide's own refs license (a ref that resolves to nothing licenses none)."""
+    allowed = set()
+    for r in slide_refs(sl):
+        if R.kind(r) != "unknown":
+            allowed |= R.numbers(r)
+    return allowed
+
+
+def untraced(n: float, allowed: set, corpus: set) -> bool:
+    """True when ``n`` is a numbers_trace error: not licensed by the slide's refs and in none of the inputs (0 and 1 are never)."""
+    if n in allowed or n in (0.0, 1.0) or round(n / 1000, 4) in allowed:   # $788K from a cited $0.788M
+        return False
+    return not (n in corpus or round(n / 100, 4) in corpus)
+
+
 def run(deck: dict, inp, audience: str = "review", profile: dict | None = None) -> list:
     """Run every check over the deck for an audience (spec.AUDIENCES). Returns the findings. ``profile`` (default:
     the deck's own, profile_of) sets which checks are errors rather than warnings (its ``strict`` map; the default
@@ -303,17 +339,7 @@ def run(deck: dict, inp, audience: str = "review", profile: dict | None = None) 
     num = {sid: i for i, sid in enumerate(deck["order"], 1)}
     story = presented(deck)
     backup = set(deck["order"]) - set(story) if deck["meta"].get("format", "pitch") == "pitch" else set()   # read, not presented
-    corpus = set()   # every number the inputs state, for figures in creative copy
-    for f in inp.brief.values():
-        corpus |= numbers_in(json.dumps(f.get("value"), ensure_ascii=False, default=str))
-    for f in list(inp.facts.values()) + list(inp.doc_facts.values()):
-        corpus |= numbers_in(json.dumps(f, ensure_ascii=False, default=str))
-    for d in inp.docs.values():
-        corpus |= numbers_in(d["text"])
-    corpus |= numbers_in(f"{deck['meta'].get('client', '')} {deck['meta'].get('project', '')}")   # the prompt is an input
-    corpus |= numbers_in(inp.prompt_text)
-    for qid in inp.answers:
-        corpus |= numbers_in(answer_text(inp, qid))
+    corpus = number_corpus(deck, inp)   # every number the inputs state, for figures in creative copy
     for sid in deck["order"]:
         sl = deck["slides"][sid]
         refs = slide_refs(sl)
@@ -339,7 +365,7 @@ def run(deck: dict, inp, audience: str = "review", profile: dict | None = None) 
             for n in numbers_in(text):
                 if n in allowed or n in (0.0, 1.0) or round(n / 1000, 4) in allowed:   # $788K from a cited $0.788M
                     continue
-                if n in corpus or round(n / 100, 4) in corpus:
+                if not untraced(n, allowed, corpus):
                     add("numbers_uncited", "warn", sid, f"'{n:g}' in \"{str(text)[:70]}\" is in the inputs but cited by no ref on this slide")
                 else:
                     add("numbers_trace", "error", sid, f"'{n:g}' in \"{str(text)[:70]}\" is in none of the inputs")
@@ -377,7 +403,8 @@ def run(deck: dict, inp, audience: str = "review", profile: dict | None = None) 
             if bl["kind"] in ("text", "small", "statement", "quote", "callout", "card") and not str(bl.get("text", "")).strip():
                 add("empty_slot", "warn", sid, f"empty {bl['kind']} block (dropped at render)")
         # placeholders
-        if sl["type"] in spec.HUMAN_ONLY_TYPES:
+        clean_ask = spec.FINISH and sl["type"] == "next_step" and sl.get("status") != "needs_human"   # finish fixes: the clean ask holds no blank
+        if sl["type"] in spec.HUMAN_ONLY_TYPES and not clean_ask:
             hum = [it for bl in sl["blocks"] for it in (bl.get("items") or []) if isinstance(it, dict) and it.get("human")]
             hum += [bl for bl in sl["blocks"] if bl.get("human")]
             for h in hum:
@@ -563,6 +590,13 @@ def run(deck: dict, inp, audience: str = "review", profile: dict | None = None) 
     for c in criteria_coverage(deck):
         for concept in c["missing"]:
             add("criteria_map", "error", None, f"scored criterion '{c['criterion']}' ({c['weight']}): no slide answers '{concept}'")
+    if spec.SHOW_WORK:   # show the work: stage b's own proposition, and the idea and two executions in the first ten (deck/show_work.py)
+        from .show_work import findings as _show_work_findings   # noqa: PLC0415
+        for chk, lvl, sid, msg in _show_work_findings(deck, story):
+            add(chk, lvl, sid, msg)
+    if spec.PITCH_READY:   # pitch-ready: an internal reference code on a shown text (prompt:43, brief:insight, ic_feeling, T1) is an error
+        from .pitch_ready import code_findings   # noqa: PLC0415
+        F += code_findings(deck)
     for f in F:   # the deck type's strictness: a check it names is that level wherever it fires
         f["level"] = ((profile or {}).get("strict") or {}).get(f["check"], f["level"])
         f["slide_no"] = num.get(f["slide"])

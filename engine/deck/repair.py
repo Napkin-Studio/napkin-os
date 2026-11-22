@@ -53,6 +53,8 @@ ACTION_MAP: dict = {
     "slot_limit": {"rungs": ("switch_layout", "shorten", "overflow_to_notes", "needs_human"), "flow": _GEOM},
     "word_budget": {"rungs": ("shorten", "overflow_to_notes", "needs_human"), "flow": ("needs_human",)},
     "text_overlap": {"rungs": ("shrink", "switch_layout", "needs_human"), "flow": _GEOM},
+    "text_collision": {"rungs": ("shrink", "switch_layout", "needs_human"), "flow": _GEOM},
+    "word_break": {"rungs": ("shrink", "switch_layout", "needs_human"), "flow": _GEOM},
     "off_slide": {"rungs": _GEOM},
     "margin": {"rungs": _GEOM},
     "min_font": {"rungs": ("undo_shrink", "switch_layout", "shorten", "overflow_to_notes", "needs_human"), "flow": _GEOM},
@@ -89,7 +91,8 @@ for _c in spec.ISSUE_CHECKS:   # content and evidence checks: a fact, a source, 
 #: The sentences a person reads, never a model's (the report's fixed table).
 SENTENCES = {
     "text_overflow": "the text ran past its box", "slot_limit": "the text did not fit its slot", "word_budget": "the slide held more words than its budget",
-    "text_overlap": "two pieces of text overlapped", "off_slide": "something ran off the slide", "margin": "text sat too close to the edge",
+    "text_overlap": "two pieces of text overlapped", "text_collision": "text ran out of its box into other text",
+    "word_break": "a large word broke across two lines", "off_slide": "something ran off the slide", "margin": "text sat too close to the edge",
     "min_font": "the type was under the readable floor", "contrast": "the text was hard to read against its background",
     "text_on_image_contrast": "the text was hard to read over the picture", "picture_stretch": "a picture was stretched",
     "picture_lowres": "a picture is low resolution", "text_on_image_fallback": "no part of the picture was calm enough to carry the words, so they sit beside it", "image_flagged": "a picture was flagged", "image_unapproved": "a picture is not approved",

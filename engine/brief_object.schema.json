@@ -19,6 +19,25 @@
           "description": "heuristic, or provider:model (e.g. nim:nvidia/...)"}
       }
     },
+    "brief_issues": {
+      "type": "array",
+      "description": "What is wrong with or missing from the brief, flagged rather than smoothed (brief_issues.py). A suspected foreign passage is quarantined here, never adopted as the client's objective.",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "topic", "what", "why_it_matters", "question"],
+        "properties": {
+          "id": {"type": "string"},
+          "kind": {"enum": ["foreign_content", "contradiction", "missing"]},
+          "topic": {"type": "string"},
+          "what": {"type": "string"},
+          "why_it_matters": {"type": "string"},
+          "question": {"type": "string"},
+          "quote": {"type": "string"},
+          "source": {"enum": ["model", "rule"]},
+          "quarantined": {"type": "array", "items": {"type": "object"}}
+        }
+      }
+    },
     "loop1_capture": {
       "type": "object",
       "description": "Loop 1 - IPA: background + objectives. NO RAG. Faithful capture only.",

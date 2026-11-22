@@ -11,7 +11,9 @@ Checks (geometry, from the pptx):
   off_slide       a shape reaches outside the slide
   margin          a text frame closer than MARGIN_IN to a slide edge (footer furniture is exempt: it
                   sits in the margin on purpose)
-  text_overlap    the estimated text of two frames overlaps
+  text_overlap    the estimated text of two frames overlaps (a warning; under spec.FINISH, when one frame's text runs out of its own
+                  box into the other, it is ``text_collision``, an ERROR: the hero '20,000' that wrapped onto 'By when' passed as a warning)
+  word_break      (spec.FINISH) a display word (20 pt and up) wider than its frame's line: it breaks across lines (an error)
   text_overflow   estimated text height clearly over its frame, or running off the slide bottom
   min_font        a run under its floor: title 24 pt, body 12 pt, caption 10 pt, footer 9 pt. The floors
                   are theme.Scale's (title_min, body_floor, caption_floor, foot_floor), the same numbers the
@@ -21,6 +23,8 @@ Checks (geometry, from the pptx):
                   blanket exemption
   placeholder     '[Agency]', 'lorem', 'TBD', 'XXX' on a presented slide (a slide the validator already
                   flags for the [Agency] placeholder is skipped)
+  code_leak       (spec.PITCH_READY) an internal reference code (pitch_ready.has_code: prompt:43, brief:insight, ic_feeling, T1) in a
+                  presented slide's text or table: an error
   contrast        WCAG ratio of a run's colour on its shape fill or the slide background, where both
                   are known: 4.5:1 text, 3:1 large text (18 pt, or 14 pt bold)
   picture_stretch a picture drawn at an aspect that differs from the crop it shows by more than spec.PICTURE_STRETCH_TOL
@@ -60,7 +64,7 @@ from collections import Counter
 from pathlib import Path
 
 from . import spec
-from .theme import LOOK_BODY, LOOK_HEAD, Scale, fit_wf
+from .theme import LOOK_BODY, LOOK_HEAD, Scale, fit_wf, is_figure
 
 EMU_IN = 914400
 MARGIN_IN = 0.5
@@ -155,12 +159,13 @@ def _est_height_in(tf, width_in: float) -> float:
     return _est_size(tf, width_in)[0]
 
 
-def glyph_k(name: str, bold: bool) -> float:
+def glyph_k(name: str, bold: bool, text: str = "") -> float:
     """Mean glyph width as a fraction of the size: the measured, fallback-safe factor for the two look fonts (deck-look), else the
     old estimate (0.5, 0.56 bold, +0.02 serif). One place for the three estimators below. Only under ``spec.LOOK_V3``: with the flag off a
-    deck's estimates stay exactly what they were, even when a brand happens to name one of the look's fonts."""
+    deck's estimates stay exactly what they were, even when a brand happens to name one of the look's fonts. A display figure
+    (``theme.is_figure``: '20,000') is measured on the capitals' widths, as the renderer fits it: digits run wider than the average."""
     if spec.LOOK_V3 and name in (LOOK_HEAD, LOOK_BODY):
-        return fit_wf(name, bool(bold))
+        return fit_wf(name, bool(bold), caps=is_figure(text))
     return (0.56 if bold else 0.5) + (0.02 if name.lower().startswith(SERIF) else 0)
 
 
@@ -178,7 +183,7 @@ def _est_size(tf, width_in: float):
         sz = _para_size(p)
         bold = any(r.font.bold for r in p.runs)
         name = next((r.font.name for r in p.runs if r.font.name), "") or ""
-        k = glyph_k(name, bold)
+        k = glyph_k(name, bold, text)
         per_line = max(int(avail_pt / (sz * k)), 1)
         lines, cur = 1, 0
         widest = max(widest, min(len(text) * sz * k, avail_pt))
@@ -222,12 +227,22 @@ def _clip(text: str, n: int = 40) -> str:
 # ---------------------------------------------------------------- per-slide geometry
 
 #: The one fixed label that may carry the word DRAFT: the watermark render_pptx adds.
-DRAFT_MARK = re.compile(r"DRAFT · (?:needs a person|\d+ slides need a person)")
+DRAFT_MARK = re.compile(r"DRAFT · (?:needs a person|\d+ slides need a person)|DRAFT|Draft")   # the last two: the pitch-ready footer tag
 
 
 def _is_draft_mark(shape, txt: str) -> bool:
     """True only for the fixed DRAFT watermark: the shape named Watermark holding exactly its label."""
     return (shape.name or "") == "Watermark" and bool(DRAFT_MARK.fullmatch(txt.strip()))
+
+
+def _scan_codes(txt: str, out: list) -> None:
+    """pitch-ready: an internal reference code (prompt:43, brief:insight, ic_feeling, T1) on a presented slide's shown text is an error."""
+    if not spec.PITCH_READY:
+        return
+    from .pitch_ready import has_code   # noqa: PLC0415
+    c = has_code(txt)
+    if c:
+        _add(out, "code_leak", "error", f"an internal code on the slide: '{c}' in \"{_clip(txt, 40)}\"")
 
 
 def _scan_filler(txt: str, out: list, validated_leak: bool) -> None:
@@ -443,6 +458,7 @@ def _check_slide(slide, W: int, H: int, validated_leak: bool) -> list:
                 for row in sh.table.rows:
                     for c in row.cells:
                         _scan_filler(c.text_frame.text, out, validated_leak)
+                        _scan_codes(c.text_frame.text, out)
             continue
         if not has_text:
             continue
@@ -472,6 +488,11 @@ def _check_slide(slide, W: int, H: int, validated_leak: bool) -> list:
             _add(out, "text_overflow", "error", f"'{sh.name}' text is about {est:.1f} in tall in a {hi:.1f} in frame: \"{_clip(txt, 24)}\"")
         elif est > hi * 1.3 and est - hi > 0.2:
             _add(out, "text_overflow", "warn", f"'{sh.name}' text is about {est:.1f} in tall in a {hi:.1f} in frame: \"{_clip(txt, 24)}\"")
+        # a display line broken inside a word (finish fixes: the hero '20,000' set as '20,00' over '0')
+        if spec.FINISH:
+            wb = _word_break(tf, wi)
+            if wb:
+                _add(out, "word_break", "error", f"'{sh.name}' breaks the word \"{_clip(wb, 20)}\" across lines (wider than its {wi:.1f} in frame)")
         # extents for overlap
         anchor = tf.vertical_anchor
         t = top_in
@@ -486,10 +507,13 @@ def _check_slide(slide, W: int, H: int, validated_leak: bool) -> list:
             left += wi - uw
         elif al == 2:    # PP_ALIGN.CENTER
             left += (wi - uw) / 2
-        ext.append((sh.name, left, t, uw, est, txt))
+        # spills: clearly taller than its own box (one extra estimated line is the estimate's margin, not a spill), or a broken word
+        spills = (est > hi * SPILL_RATIO and est - hi > SPILL_IN) or bool(spec.FINISH and _word_break(tf, wi))
+        ext.append((sh.name, left, t, uw, est, txt, spills))
         # filler on a presented slide
         if presented and not _is_draft_mark(sh, txt):
             _scan_filler(txt, out, validated_leak)
+            _scan_codes(txt, out)
         # contrast
         under = own
         if under is None:
@@ -512,8 +536,35 @@ def _check_slide(slide, W: int, H: int, validated_leak: bool) -> list:
             ox = min(a[1] + a[3], b[1] + b[3]) - max(a[1], b[1])
             oy = min(a[2] + a[4], b[2] + b[4]) - max(a[2], b[2])
             if ox > 0.1 and oy > 0.1:
-                _add(out, "text_overlap", "warn", f"text of '{a[0]}' and '{b[0]}' overlaps: \"{_clip(a[5], 20)}\" / \"{_clip(b[5], 20)}\"")
+                if spec.FINISH and (a[6] or b[6]):   # one frame's text runs out of its own box into the other's: a broken slide, not a near miss
+                    _add(out, "text_collision", "error", f"text of '{a[0]}' runs out of its frame into '{b[0]}': \"{_clip(a[5], 20)}\" / \"{_clip(b[5], 20)}\"")
+                else:
+                    _add(out, "text_overlap", "warn", f"text of '{a[0]}' and '{b[0]}' overlaps: \"{_clip(a[5], 20)}\" / \"{_clip(b[5], 20)}\"")
     return out
+
+
+#: A frame's text spills out of its box (text_collision) when its estimated height is over SPILL_RATIO times the box and SPILL_IN inches
+#: more: the character-count estimate runs about one line long on a three-line lead (19 Nov 2026 renders), which is not a spill.
+SPILL_RATIO, SPILL_IN = 1.5, 0.35
+#: The smallest size the word-break check reads (display text: heroes, figures, titles).
+WORD_BREAK_PT = 20.0
+
+
+def _word_break(tf, width_in: float) -> str:
+    """The first word of a text frame wider than the frame's line at its size (estimated as ``_est_size`` does): such a word breaks
+    across lines and its tail lands on whatever sits below. Empty when every word fits."""
+    avail_pt = max((width_in - (tf.margin_left + tf.margin_right) / EMU_IN) * 72, 10.0)
+    for p in tf.paragraphs:
+        text = "".join(r.text for r in p.runs)
+        sz = _para_size(p)
+        if sz < WORD_BREAK_PT:   # display text only: a body word near the line's width is the estimate's margin, not a break
+            continue
+        bold = any(r.font.bold for r in p.runs)
+        name = next((r.font.name for r in p.runs if r.font.name), "") or ""
+        for w in re.split(r"[\s/\u2010-\u2014-]+", text):   # a line may break after a hyphen or a slash: those are not broken words
+            if w and len(w) * sz * glyph_k(name, bold, w) > avail_pt * 1.02:
+                return w
+    return ""
 
 
 def _fill_alpha(shape) -> float:

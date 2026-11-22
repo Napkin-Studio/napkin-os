@@ -821,7 +821,12 @@ def _loads_lenient(raw, whole=False):
     if obj is not None:
         return obj
     if whole:
-        return None
+        # The one complete OUTERMOST value with only prose or a fence around it: Opus at high effort often closes its JSON and then
+        # writes a paragraph after the fence ("**Questions for the client.** ..."), which made every deck stage b reply unusable
+        # (three paid tries and a repair call per stage, 10 times in 6 client runs, 19 Nov 2026). Taking the first bracket's balanced
+        # span keeps the audit F8/G4 rule: a reply cut off part-way never closes that bracket, so it still reads as unusable, and no
+        # inner object is ever salvaged in its place.
+        return _outer_value(raw, _try)
     spans = []
     start = raw.find("{")
     while start != -1:
@@ -845,6 +850,46 @@ def _loads_lenient(raw, whole=False):
         if isinstance(obj, dict):
             return obj
     return None
+
+
+def _outer_value(raw: str, parse=None):
+    """The reply's first top-level JSON object or array, read whole: the span from the first ``{`` or ``[`` to the bracket that closes
+    it (string-aware), when the text before it holds no bracket (prose, a fence) and the span parses. Text after it (a closing fence,
+    a paragraph of notes) is ignored. None when the first bracket never closes (a truncated reply) or the span does not parse."""
+    parse = parse or (lambda s: _loads_or_none(s))
+    m = re.search(r"[{\[]", raw)
+    if not m:
+        return None
+    start = m.start()
+    pairs = {"{": "}", "[": "]"}
+    stack, in_str, esc = [], False, False
+    for i in range(start, len(raw)):
+        ch = raw[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+        elif ch == '"':
+            in_str = True
+        elif ch in pairs:
+            stack.append(pairs[ch])
+        elif ch in "}]":
+            if not stack or ch != stack.pop():
+                return None
+            if not stack:
+                return parse(raw[start:i + 1])
+    return None
+
+
+def _loads_or_none(s: str):
+    """json.loads, or None."""
+    try:
+        return json.loads(s)
+    except json.JSONDecodeError:
+        return None
 
 
 # Names parse_brief re-exports and forwards assignments for (see parse_brief._ForwardingModule).

@@ -85,6 +85,10 @@ REPAIR_SYSTEM = ("You repair a reply that was meant to be one JSON object but ca
                  "fix only the syntax (quotes, commas, brackets, truncation). Add nothing and drop nothing.")
 #: How much of a bad reply the repair call is shown (the head and the tail are what break).
 REPAIR_CHARS = 60_000
+#: Same-prompt retries before the repair call. Was 2: an unusable reply is nearly always the same reply again (19 Nov 2026: every
+#: stage b of six client runs failed three times on trailing prose after the JSON, then the repair call read it). The reader now takes
+#: the one outermost object with prose around it (brief_llm._outer_value), so a retry is for a real failure, and one is enough.
+RETRIES = 1
 
 
 def _repair_user(bad: str) -> str:
@@ -101,8 +105,9 @@ def _call(stage: str, user: str, system: str) -> tuple[dict, dict]:
     the empty ledger under the same lock). The effort goes through brief_llm.pinned_effort, which a
     pinned-model call honours (route efforts apply to routed calls only).
 
-    A reply that is not usable JSON gets one repair call (REPAIR_SYSTEM): the bad text goes back and valid JSON only is
-    asked for (investor level A failed at stage i on this). The extra call's tokens are in the usage. ``usage['usd']`` is
+    A reply is read whole (one complete outermost object; a fence or a paragraph around it is ignored, brief_llm._outer_value). A reply
+    that is still not usable JSON gets RETRIES same-prompt tries, then one repair call (REPAIR_SYSTEM): the bad text goes back and valid
+    JSON only is asked for (investor level A failed at stage i on this). The extra call's tokens are in the usage. ``usage['usd']`` is
     the ledger's real figure when the transport gives one, else an ESTIMATE from tokens (spec.estimate_usd, ``usd_estimated``)."""
     import brief_llm as L
     t = time.time()
@@ -120,7 +125,7 @@ def _call(stage: str, user: str, system: str) -> tuple[dict, dict]:
 
     repaired = False
     with L.pinned_effort(EFFORT[stage]), L._stats_scope() as led:
-        obj = ask(user, system, 2)
+        obj = ask(user, system, RETRIES)
         if obj is None and bad and str(bad[-1]).strip():
             repaired = True
             obj = ask(_repair_user(str(bad[-1])), REPAIR_SYSTEM, 0)
@@ -226,9 +231,43 @@ def merge_a0(parts: list, supplied: set, kind: str = "agency", inp=None) -> dict
            "gaps": {}, "questions": questions[:intake.MAX_QUESTIONS]}
     if conflicts:
         out["conflicts"] = conflicts
+    if spec.BRIEF_GAPS and inp is not None and not inp.brief_issues:   # brief gaps: the brief tool's detection, on what the person gave
+        raw = [i for part in parts for i in (part.get("brief_issues") or []) if isinstance(i, dict)]
+        issues = brief_issues_of(inp, raw)
+        if issues:
+            out["brief_issues"] = issues
     if inp is not None:
         out["gaps"] = intake.gap_report(inp, out, kind)
     return out
+
+
+def cover_names(parts: list, text: str) -> dict:
+    """``{client, project}`` from the a0 reads' ``names``: the first of each that the given text states word for word (case aside). A name the
+    inputs do not hold is never kept: the cover prints only what the person gave."""
+    out, low = {}, str(text or "").lower()
+    for part in parts:
+        for k in ("client", "project"):
+            v = " ".join(str(((part or {}).get("names") or {}).get(k) or "").split()) if isinstance((part or {}).get("names"), dict) else ""
+            if v and k not in out and len(v) <= 80 and v.lower() in low:
+                out[k] = v
+    return out
+
+
+def given_text(inp) -> str:
+    """What the person gave as the brief when no brief tool ran: the prompt and every attached document's text."""
+    return "\n\n".join([inp.prompt_text or ""] + [d.get("text") or "" for d in (inp.docs or {}).values()]).strip()
+
+
+def brief_issues_of(inp, raw=None) -> list:
+    """brief gaps: the issues of a run with no brief_object list (the intake's model list ``raw``, verified, plus the rule checks) on the
+    prompt and documents; the brief's own list when it has one."""
+    import brief_issues
+    if inp.brief_issues:
+        return list(inp.brief_issues)
+    if inp.has_brief():   # a brief tool ran: its list (or none, an older brief object) is the answer; an attached research
+        return []         # document is never read as the brief
+    text = given_text(inp)
+    return brief_issues.detect(text, raw) if text else []
 
 
 def intake(inp, kind: str = "agency", profile: dict | None = None) -> tuple[dict, dict]:
@@ -239,6 +278,11 @@ def intake(inp, kind: str = "agency", profile: dict | None = None) -> tuple[dict
     answers the questions in the app and a skipped question never blocks the build."""
     from . import intake as _intake
     sysmsg = _sysmsg("a0_intake.md", "a0", profile)
+    if spec.BRIEF_GAPS and not inp.brief_issues and not inp.has_brief() and given_text(inp):   # brief gaps: the brief tool's detection, here
+        import brief_issues
+        sysmsg = sysmsg.rstrip("\n") + "\n" + brief_issues.PROMPT + \
+            '\nHere the brief is the prompt and the documents. Always return "brief_issues" as one more key of the same JSON object ' \
+            '(an empty list only when the brief truly has none of these problems).\n'
     supplied = {fid for fid, f in inp.brief.items() if f.get("value") and not f.get("from_intake")}
     todo = [fid for fid in BRIEF_FIELDS if fid not in supplied]
     head = (f"<fields_to_fill>{json.dumps(todo)}</fields_to_fill>\n"
@@ -256,6 +300,9 @@ def intake(inp, kind: str = "agency", profile: dict | None = None) -> tuple[dict
             parts.append(obj); usage.append(u)
     out = merge_a0(parts, supplied, kind, inp)
     out["produced_by"] = f"live {MODELS['a0']}"
+    names = cover_names(parts, given_text(inp))
+    if names:   # pitch-ready: the client and project as the inputs state them, for the cover (pitch_ready.cover)
+        out["names"] = names
     _intake.add_type_question(out, _intake.type_card_for(inp), profile)   # the deck type comes first, computed in code
     errs = _intake.validate_a0(out)
     if errs:
@@ -492,14 +539,24 @@ ARTWORK_RULE = ("For a slot whose key starts with execution: describe the artwor
                 "with the advert in it. The deck draws the frame around it.")
 
 
+#: spec.MOCKUPS: the deck draws each presented execution in situ (deck/mockup.py), so its card is the picture inside the ad's visual area,
+#: literal and in the deck's locked setting. Only the system text changes, never the request.
+MOCKUP_RULE = ("For a slot whose key starts with execution: the deck draws the poster, phone, shelf, page or screen and sets the words, so the "
+               "card is only the picture inside the ad's visual area. key_visual: the one literal thing this execution shows, filling the "
+               "frame. setting: the scene brief's locked setting, word for word, as the place inside the picture. Never a frame, a panel, a "
+               "device, a shelf card, a billboard or any words in the picture.")
+
+
 def g_system() -> str:
-    """Stage g's system prompt: the file's own text, plus ARTWORK_RULE before the input rule when spec.GRAPHICS is on."""
-    text = _sysmsg("g_image_subjects.md", "g")
+    """Stage g's system prompt: the file's own text, plus ARTWORK_RULE (and MOCKUP_RULE under spec.MOCKUPS) before the input rule when
+    spec.GRAPHICS is on."""
+    text = _sysmsg("g_scene_cards.md" if spec.PICTURE_PLAN else "g_image_subjects.md", "g")   # the picture plan: scene cards as fields
     if not spec.GRAPHICS:
         return text
     body = text.rstrip("\n").split("\n")
     at = next((i for i, ln in enumerate(body) if ln.startswith("Inputs are the only source:")), len(body))
-    return "\n".join(body[:at] + [ARTWORK_RULE] + body[at:]) + "\n"
+    rules = [ARTWORK_RULE] + ([MOCKUP_RULE] if spec.MOCKUPS and spec.PICTURE_PLAN else [])
+    return "\n".join(body[:at] + rules + body[at:]) + "\n"
 
 
 def investor(inp, st, profile: dict | None = None) -> tuple[dict, dict]:

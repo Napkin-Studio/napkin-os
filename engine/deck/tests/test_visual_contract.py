@@ -172,7 +172,7 @@ def test_issue_vocabulary_equals_the_issue_schema_and_policy():
     assert set(_enum(i["check"])) == set(spec.ISSUE_CHECKS) and len(_enum(i["check"])) == len(spec.ISSUE_CHECKS)   # as sets: the order moved when seven names left RESERVED_CHECKS
     assert i["round"]["maximum"] == spec.REPAIR_MAX_ROUNDS
     assert set(spec.CHECKS) <= set(spec.ISSUE_CHECKS) and set(spec.QA_RENDER_CHECKS) <= set(spec.ISSUE_CHECKS)
-    assert len(spec.CHECKS) == 41 and len(set(spec.ISSUE_CHECKS)) == len(spec.ISSUE_CHECKS)
+    assert len(spec.CHECKS) == 45 and len(set(spec.ISSUE_CHECKS)) == len(spec.ISSUE_CHECKS)   # 45: proposition_line, proposition_copied, work_in_first_ten (show the work)
     # a reserved name must not shadow an existing one except placeholder, which validate and qa_render both raise
     assert (set(spec.CHECKS) & set(spec.QA_RENDER_CHECKS)) == {"placeholder"}
     assert not set(spec.RESERVED_CHECKS) & (set(spec.CHECKS) | set(spec.QA_RENDER_CHECKS))

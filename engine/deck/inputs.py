@@ -51,14 +51,17 @@ class Inputs:
     intake: dict = field(default_factory=dict)       # the a0 gaps/questions as the runner wrote them
     verified: dict = field(default_factory=dict)     # confirm ref -> {by, at}: the person's verify decisions (intake.verified.<ref>)
     marks: list | None = None                        # parts a person marked Confidential: [{path, text, kind}]; None = never checked (picture generation is refused)
+    brief_source: dict = field(default_factory=dict)  # finish fixes: the brief's own source sentences {n: text}, what its source_refs number (load_brief)
+    brief_issues: list = field(default_factory=list)  # brief gaps: what is wrong with or missing from the brief (brief_object.brief_issues)
 
     def has_brief(self) -> bool:
         """True when a brief supplied at least one field (a field an intake stage filled does not count)."""
         return any(f.get("value") and not f.get("from_intake") for f in self.brief.values())
 
     def has_research(self) -> bool:
-        """True when a research CLAN was given."""
-        return bool(self.facts or self.findings)
+        """True when a research CLAN was given. The evidence track's figures (``--evidence``, origin ``evidence``) are citable facts but not
+        a research CLAN: a prompt-only run that has them is still built from a prompt (its tier and its sketch rule stand)."""
+        return bool(self.findings) or any(f.get("origin") != "evidence" for f in self.facts.values())
 
 
 def _unwrap(doc, key):
@@ -98,7 +101,39 @@ def load_brief(path: Path) -> tuple[dict, dict, list, dict]:
     cov = {"brief_fields": len(fields), "brief_fields_filled": sum(1 for f in fields.values() if f["value"]),
            "how_to_win_points": sum(len(v) for v in htw.values() if isinstance(v, list)),
            "open_questions": len(oq), "capture_fields": len(capture.get("fields") or {})}
+    src = source_sentences(capture)
+    if src:
+        cov["source_sentences"] = src   # popped by load() into Inputs.brief_source: never part of the recorded coverage
+    if isinstance(b.get("brief_issues"), list) and b["brief_issues"]:
+        cov["brief_issues"] = [i for i in b["brief_issues"] if isinstance(i, dict)]   # popped by load() into Inputs.brief_issues
     return fields, htw, oq, cov
+
+
+def source_sentences(capture: dict) -> dict:
+    """finish fixes: the brief tool's source sentences ``{n: text}``, rebuilt from what its capture quotes. Every captured field and every
+    how-to-win point carries ``source_refs`` (sentence numbers of the client's own text) beside the words it quotes (``source_quote`` or
+    ``evidence``). The stages see those numbers and cite them as ``prompt:<n>``; with no prompt in the run they resolved to nothing
+    (unknown_ref on every slide citing one). A quote that splits into as many sentences as it has refs gives each its sentence; a
+    number never seen whole stays unknown, so nothing is guessed."""
+    from .refs import prompt_sentences
+    out: dict = {}
+
+    def walk(x):
+        if isinstance(x, dict):
+            refs_ = x.get("source_refs")
+            quote = x.get("source_quote") or x.get("evidence")
+            if isinstance(refs_, list) and refs_ and isinstance(quote, str) and all(isinstance(r, int) for r in refs_):
+                parts = prompt_sentences(quote)
+                if len(parts) == len(refs_):
+                    for n, t in zip(refs_, parts):
+                        out.setdefault(int(n), t)
+            for v in x.values():
+                walk(v)
+        elif isinstance(x, list):
+            for v in x:
+                walk(v)
+    walk(capture or {})
+    return dict(sorted(out.items()))
 
 
 def parse_research(facts, findings, sources, chain, docs=None, doc_id=None, title=None, *, chain_rejects_findings=False) -> dict:
@@ -361,8 +396,10 @@ def load(brief: Path | None, research: Path | None = None, doc_facts: Path | Non
         clan = is_clan(Path(brief))
         fields, htw, oq, cov = load_brief_clan(brief) if clan else load_brief(brief)
     marks = cov.pop("marks", None)
+    src = cov.pop("source_sentences", None) or {}
+    issues = cov.pop("brief_issues", None) or []
     inp = Inputs(brief=fields, how_to_win=htw, open_questions=oq, prompt_text=prompt_text or "",
-                 answers=answers or {}, intake=intake or {}, verified=verified or {}, marks=marks)
+                 answers=answers or {}, intake=intake or {}, verified=verified or {}, marks=marks, brief_source=src, brief_issues=issues)
     research = research or (brief if clan else None)
     if research:
         r = load_research(research)

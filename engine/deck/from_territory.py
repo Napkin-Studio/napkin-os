@@ -197,6 +197,76 @@ def write(c: dict, frames: dict, vdir: Path, stages: Path, replace: bool = False
         print(n)
 
 
+def find_run(where: Path) -> Path | None:
+    """The newest Territory run in ``where`` (a run JSON itself, or a folder holding runs): a ``*.json`` with ``territories`` and status
+    ``proceed`` (its frames, plan, baseline and blind files are skipped). None when there is none."""
+    where = Path(where)
+    if where.is_file():
+        return where
+    if not where.is_dir():
+        return None
+    found = []
+    for f in where.glob("*.json"):
+        if re.search(r"\.(frames-plan|baseline|blind-pack|blind-key)\.json$", f.name):
+            continue
+        try:
+            obj = json.loads(f.read_text())
+        except (ValueError, OSError):
+            continue
+        if isinstance(obj, dict) and obj.get("status") == "proceed" and isinstance(obj.get("territories"), list) and obj["territories"]:
+            found.append(f)
+    return max(found, key=lambda f: (f.stat().st_mtime, f.name)) if found else None
+
+
+def auto_runs(stages: Path) -> list:
+    """Where a project's Territory run is looked for when ``--territory-run auto``: ``<stages>/territory``, the stages folder's parent's
+    ``territory`` folder and the parent's parent's (a project folder beside its decks)."""
+    stages = Path(stages).resolve()
+    return [stages / "territory", stages.parent / "territory", stages.parent.parent / "territory"]
+
+
+def _default_choice(c: dict) -> None:
+    """With no --chosen, the run's top-ranked territory is the deck's lean (stage d writes from it), flagged for the person at Gate 2."""
+    if not c.get("chosen") and (c.get("ranking") or {}).get("order"):
+        c.update(chosen=c["ranking"]["order"][0], chosen_by="default: the Territory run's top score, flagged for Gate 2")
+
+
+def import_run(run_path: Path, stages: Path, brief: Path | None = None, chosen: str | None = None) -> dict:
+    """The territory tool's run as this deck's stage c (deck-concepts handoff): its cards become the candidate territories and, when the run
+    has frames (``<run>.frames/v<N>-<hash>/manifest.json``, the newest version), the chosen frames become the territories' pictures
+    (frames.json). Writes into ``stages`` as ``main`` does; refuses as ``write`` does when a stage c or d is already recorded. Returns
+    ``{run, territories, frames, made, version}``."""
+    run_path = Path(run_path)
+    run = json.loads(run_path.read_text())
+    fields = None
+    if brief:
+        from . import inputs   # noqa: PLC0415
+        fields = inputs.load_brief(Path(brief))[0]
+    versions = sorted((run_path.with_name(run_path.stem + ".frames")).glob("v*/manifest.json"),
+                      key=lambda m: (int((re.match(r"v(\d+)", m.parent.name) or [0, 0])[1]), m.parent.name))
+    plan_path = run_path.with_name(run_path.stem + ".frames-plan.json")
+    stages = Path(stages)
+    stages.mkdir(parents=True, exist_ok=True)
+    if versions and plan_path.is_file():
+        man = versions[-1]
+        c, frames = from_run(run, json.loads(man.read_text()), json.loads(plan_path.read_text()), sha12(run_path), sha12(plan_path), man.parent,
+                             run_path.name, man.parent.name, fields, chosen)
+        _default_choice(c)
+        write(c, frames, man.parent, stages)
+        made = sum(1 for f in frames["frames"].values() if f.get("status") == "made")
+        return {"run": str(run_path), "territories": len(c["territories"]), "frames": len(frames["frames"]), "made": made, "version": man.parent.name}
+    if run.get("status") != "proceed":
+        raise FromTerritoryError(f"the run's status is {run.get('status')!r}, not 'proceed': it has no territories to use")
+    check_brief(run, fields)
+    c = stage_c(run, chosen)
+    _default_choice(c)
+    cp, dp = stages / "c_territories.json", stages / "d_idea.json"
+    if cp.exists() or dp.exists():
+        raise FromTerritoryError(f"{cp if cp.exists() else dp} exists: the deck already has its territories or its idea")
+    cp.write_text(json.dumps(c, indent=1, ensure_ascii=False))
+    return {"run": str(run_path), "territories": len(c["territories"]), "frames": 0, "made": 0, "version": None}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="python3 -m deck.from_territory", description=__doc__.split("\n")[0])
     ap.add_argument("run", type=Path)
