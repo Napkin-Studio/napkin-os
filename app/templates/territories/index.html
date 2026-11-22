@@ -1279,7 +1279,7 @@ var TerritoriesLogic = (function () {
     }).join('');
     var can = rows.length > 0 && !holds(data).length;
     var w = glWords(ui.req), failed = ui.req && ui.req.state === 'failed';
-    return tray + hold + card('research', 'spend', 'This exploration so far: ' + plural(crewN, 'agent') + (lk ? ', ' + plural(lk, 'look-up') : '') + '. What it cost is kept in Decisions, next to what got greenlit.') +
+    return tray + hold + card('research', 'so far', 'This exploration so far: ' + plural(crewN, 'agent') + (lk ? ', ' + plural(lk, 'look-up') : '') + '. The running totals are in Decisions, next to what got greenlit.') +
       card('review', 'checked', 'Every route was tested against the brief, the mandatories and the rival lines. ' + ranked + ' ' + (ranked === 1 ? 'is' : 'are') + ' ranked by the blind judge.') + sends +
       '<button type="button" class="big" data-send' + (can ? '' : ' disabled') + '>Send ' + (rows.length || '') + (rows.length ? ' ' : '') + 'to production →</button>' +
       (w && /^send:/.test(ui.req.key) ? '<p class="runnote' + (failed ? ' bad' : '') + '" role="status">' + esc(w) + '</p>' : '');
