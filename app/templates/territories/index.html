@@ -387,6 +387,105 @@ button.tsrc:hover{border-color:color-mix(in srgb,var(--ink) 35%,var(--line))}
 .dock-ring svg{width:18px;height:18px}
 .dock-lbl{font:800 11px var(--font-ui);color:var(--ink-soft)}
 @media (prefers-reduced-motion:reduce){.dock-ring{transition:none}}
+/* ── the World view (territories-world-logic): a route as a campaign world, in its own palette and display face ── */
+.weyebrow{font:800 10.5px/1.4 var(--font-ui);letter-spacing:.1em;text-transform:uppercase;opacity:.75}
+.wmeta{font-size:12.5px;opacity:.75}
+.wbtn{border:1.5px solid currentColor;background:transparent;color:inherit;border-radius:999px;padding:6px 14px;font:800 12.5px var(--font-ui)}
+.wbtn:hover:not(:disabled){background:color-mix(in srgb,currentColor 12%,transparent)}
+.wbtn.on,.wbtn[aria-pressed="true"]{background:var(--t-ink);color:var(--t-bg);border-color:var(--t-ink)}
+.wbtn.sm{padding:4px 10px;font-size:12px}
+.wbtn:disabled{opacity:.35}
+.sheet.world{background:var(--t-bg);color:var(--t-ink);border-color:color-mix(in srgb,var(--t-ink) 22%,transparent);container-type:inline-size;transition:background .35s,color .35s}
+.whead2{padding:24px 28px 20px;border-bottom:1px solid color-mix(in srgb,var(--t-ink) 18%,transparent);display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap}
+.whead2 h2{margin:6px 0 8px;font-family:var(--font-serif);font-weight:var(--t-fw);font-style:var(--t-fs);font-size:clamp(34px,5vw,58px);line-height:.98;letter-spacing:-.015em}
+.world.ff-ui .whead2 h2{font-family:var(--font-ui);letter-spacing:-.03em}
+.whead2 p{margin:0;font-size:16px;max-width:46ch;opacity:.9}
+.wseg{display:inline-flex;border:1.5px solid var(--t-ink);border-radius:999px;padding:2px}
+.wseg button{border:0;background:transparent;color:inherit;padding:5px 12px;border-radius:999px;font:800 12px var(--font-ui);white-space:nowrap}
+.wseg button[aria-pressed="true"]{background:var(--t-ink);color:var(--t-bg)}
+.wbody2{padding:22px 28px 26px}
+.wnote{padding:12px 28px 90px;font-size:12.5px;opacity:.75;border-top:1px solid color-mix(in srgb,var(--t-ink) 14%,transparent)}
+@media (max-width:640px){.whead2,.wbody2,.wnote{padding-left:16px;padding-right:16px}}
+.journey{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:30px}
+.jstep{display:grid;grid-template-columns:140px minmax(0,1fr);gap:18px;align-items:start}
+@container (max-width:560px){.jstep{grid-template-columns:minmax(0,1fr);gap:10px}}
+.jwhen{display:flex;flex-direction:column;gap:3px;border-top:2px solid var(--t-ink);padding-top:7px;font-size:12.5px;line-height:1.35}
+.jwhen b{font:800 11px var(--font-ui);letter-spacing:.08em;text-transform:uppercase}
+.cq{container-type:inline-size;min-width:0}
+.j-story .cq{max-width:250px}.j-seat .cq{max-width:280px}.j-email .cq{max-width:540px}.j-poster .cq{max-width:780px}.j-radio .tp{max-width:620px}
+.wall{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.wcell{display:flex;flex-direction:column;gap:7px;min-width:0}
+.w-poster,.w-tv,.w-radio{grid-column:span 2}
+@container (min-width:820px){
+  .wall{grid-template-columns:repeat(6,minmax(0,1fr))}
+  .w-poster,.w-tv{grid-column:span 4}.w-story{grid-column:span 2;grid-row:span 2}.w-seat,.w-email,.w-radio{grid-column:span 2}
+}
+/* TV frames and the radio script */
+.tp.tv{background:transparent;box-shadow:none;overflow:visible;border-radius:0;color:inherit;display:flex;flex-direction:column;gap:10px}
+.frames{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+@container (max-width:700px){.frames{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.frames figure{margin:0;display:flex;flex-direction:column;gap:6px;min-width:0}
+.fr{position:relative;aspect-ratio:16/9;overflow:hidden;border-radius:4px;container-type:inline-size;background:var(--t-bg);color:var(--t-ink)}
+.frames.cine .fr{aspect-ratio:2.39/1}
+.fr>svg,.aframe>svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.frames.cine .fr::after,.aframe.cine::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:.16;mix-blend-mode:multiply;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E")}
+.frames figcaption{font-size:12px;line-height:1.35}
+.frames figcaption b{font:800 11px var(--font-ui);margin-right:4px}
+.super{position:absolute;inset:0;background:color-mix(in srgb,var(--t-bg) 84%,transparent);color:var(--t-ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4cqi;padding:6cqi;text-align:center}
+.super .hl{font-size:8cqi}
+.bm.inframe{position:static;font-size:6cqi}
+.tp.radio{padding:16px 18px;display:flex;flex-direction:column;gap:9px;border:1.5px solid var(--t-ink);box-shadow:none}
+.rhead{display:flex;justify-content:space-between;align-items:center;gap:8px;font:800 11px var(--font-ui);letter-spacing:.08em;text-transform:uppercase}
+.rl{display:grid;grid-template-columns:58px minmax(0,1fr);gap:10px;font-size:15px;line-height:1.4}
+.rl b{font:800 10.5px var(--font-ui);letter-spacing:.06em;padding-top:4px}
+.rl .sfx{font-style:italic;opacity:.8}
+.rmusic{font-size:12.5px;opacity:.8;border-top:1px dashed currentColor;padding-top:8px}
+/* animatic and Present */
+.anim{position:fixed;inset:0;z-index:28;background:#0b0b0b;color:#fff;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:14px;padding:20px max(16px,env(safe-area-inset-right,0px))}
+.anim{--aw:min(100%,1100px,calc((100vh - 190px) * 16 / 9))}
+.anim-top{width:var(--aw)}
+.aframe{position:relative;width:var(--aw);aspect-ratio:16/9;container-type:inline-size;overflow:hidden;background:var(--t-bg);color:var(--t-ink)}
+.aframe.cine{aspect-ratio:2.39/1}
+.aframe>svg{animation:kb 3s ease-out both}
+@keyframes kb{from{transform:scale(1.08)}to{transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.aframe>svg{animation:none}.sheet.world{transition:none}}
+.sub{position:absolute;left:50%;bottom:7%;transform:translateX(-50%);background:rgba(0,0,0,.76);color:#fff;padding:.6em 1em;font:500 2.3cqi/1.35 var(--font-serif);border-radius:4px;max-width:86%;text-align:center}
+.super.big .hl{font-size:6.4cqi}.super.big .bm.inframe{font-size:3.4cqi}
+.aprog{display:flex;gap:6px;width:var(--aw)}.aprog i{flex:1;height:3px;background:rgba(255,255,255,.25)}.aprog i.on{background:#fff}
+.anim .wbtn{color:#fff}.anim .wbtn:hover:not(:disabled){background:rgba(255,255,255,.14)}
+.tissue{position:fixed;inset:0;z-index:25;display:flex;flex-direction:column;gap:16px;background:var(--t-bg);color:var(--t-ink);padding:calc(20px + env(safe-area-inset-top,0px)) max(24px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(24px,env(safe-area-inset-left,0px));overflow:auto}
+.tissue-top,.tissue-bot{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.tissue.u h1,.tissue.u .tl{font-family:var(--font-ui)}
+.tissue h1{margin:0;font-family:var(--font-serif);font-weight:var(--t-fw);font-style:var(--t-fs);font-size:clamp(38px,5.6vw,72px);line-height:1;letter-spacing:-.02em}
+.tissue .tt{font-size:clamp(18px,2vw,24px);line-height:1.35;margin:0;opacity:.9}
+.tissue .tl{font:var(--t-fs) var(--t-fw) 21px/1.3 var(--font-serif);border-left:2px solid currentColor;padding-left:14px}
+.pgrid{flex:1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:36px;align-items:center;max-width:1300px;margin:0 auto;width:100%}
+@media (max-width:900px){.pgrid{grid-template-columns:minmax(0,1fr)}}
+.ptext{display:flex;flex-direction:column;gap:18px}
+.pvis{display:flex;flex-direction:column;gap:14px;min-width:0}
+.pmini{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start;max-width:420px}
+.pmini .cap{display:none}
+.tissue .pvis>.cq{max-width:min(100%,calc(46vh * 2))}
+/* the panel in the Booth column */
+.navrow{display:flex;align-items:center;gap:8px}
+.btn-rect.sq{min-width:36px;padding:0;justify-content:center}
+.sbox{border:1.5px solid var(--line-strong);border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.sbox-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.sbox-head b{font:800 13.5px var(--font-ui)}
+.ptabs{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;border:1px solid var(--ink);border-radius:4px;overflow:hidden;flex:none}
+.ptabs button{height:34px;border:0;background:transparent;color:var(--muted);font:800 12px var(--font-ui)}
+.ptabs button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.psec{display:flex;flex-direction:column;gap:8px}
+.psec p{margin:0;font-size:15px;line-height:1.45}
+.pdial{display:grid;grid-template-columns:78px minmax(0,1fr) 78px;gap:8px;align-items:center;font:800 11.5px var(--font-ui);color:var(--ink-soft)}
+.pdial span:last-child{text-align:right}
+.pdial input{width:100%;accent-color:var(--accent)}
+.lrow{display:flex;align-items:stretch;gap:2px}
+.lrow .lp{flex:1;display:flex;gap:10px;align-items:flex-start;text-align:left;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--paper);font:400 15px/1.35 var(--font-serif)}
+.lrow .lp::before{content:"";flex:none;width:12px;height:12px;border-radius:50%;border:1.5px solid var(--line-strong);margin-top:4px}
+.lrow.on .lp{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}.lrow.on .lp::before{background:var(--accent);border-color:var(--accent)}
+.lrow .ls{border:0;background:none;color:var(--faint);font-size:17px;padding:0 6px}.lrow .ls.on{color:var(--warn)}
+.swrow{display:flex;gap:6px}.swrow span{width:30px;height:30px;border-radius:6px;border:1px solid var(--line)}
+.spec2{display:flex;align-items:baseline;gap:10px;font:800 12px var(--font-ui);color:var(--muted)}.spec2 .aa{font:var(--t-fs) var(--t-fw) 42px/1 var(--font-serif);color:var(--ink)}.spec2 .aa.u{font-family:var(--font-ui)}
 </style>
 </head>
 <body>
@@ -1363,9 +1462,11 @@ var TerritoriesLogic = (function () {
   function view(data, ui) {
     data = isObj(data) ? data : {}; ui = isObj(ui) ? ui : {};
     var s = stepsOf(data.run), at = ui.view != null && ui.view <= s.reached ? ui.view : s.at;
-    var sheet = at === 0 ? pickSheet(data, ui) : at === 1 ? exploreSheet(data, ui) : greenlightSheet(data, ui);
+    // A developed route opened as a world (the World view, territories-world-logic) takes the sheet, the Booth and the dock of step 3.
+    var W = typeof TerritoriesWorld !== 'undefined' ? TerritoriesWorld : null, wt = at === 2 && W && ui.world ? W.route(data, ui.world) : null;
+    var sheet = at === 0 ? pickSheet(data, ui) : at === 1 ? exploreSheet(data, ui) : wt ? W.sheet(data, ui, wt) : greenlightSheet(data, ui);
     var open = ui.booth !== false;
-    return '<main class="shell">' + head(data, { view: at }, ui) + '<div class="split">' + sheet + booth(data, ui, open, at) + '</div></main>' + (at === 2 ? dock(data, ui) : '') +
+    return '<main class="shell">' + head(data, { view: at }, ui) + '<div class="split">' + sheet + (wt ? W.booth(data, ui, open, wt) : booth(data, ui, open, at)) + '</div></main>' + (at === 2 ? (wt ? W.dock(data, ui) : dock(data, ui)) : '') +
       '<button type="button" class="booth-edge" id="boothEdge" aria-controls="stab" aria-expanded="' + (open ? 'true' : 'false') + '" aria-label="Open the Booth" aria-keyshortcuts="]" tabindex="' + (open ? '-1' : '0') + '">' +
       '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 2.5 4 6l3.5 3.5"/></svg><span class="booth-lb">Booth</span></button>';
   }
@@ -1374,6 +1475,7 @@ var TerritoriesLogic = (function () {
   function dialogFor(what, data) {
     if (what === 'send') return sendDialog(data);
     if (what === 'rank') return rankDialog();
+    if (/^(more|push):/.test(what) && typeof TerritoriesWorld !== 'undefined') return TerritoriesWorld.dialog(what, data);
     if (/^route:/.test(what)) return routeDialog(what.slice(6), data);
     var up = upstreamOf(data), c = counts(data);
     if (what === 'brief' && up.brief) {
@@ -1409,6 +1511,7 @@ var TerritoriesLogic = (function () {
   /** Decide what one press does. e: { a, id, on, text }. Returns { writes: [{patch, action, rationale}], toast, start, ui } or null. */
   function act(data, ui, e, env) {
     data = isObj(data) ? data : {}; env = env || {};
+    if (typeof TerritoriesWorld !== 'undefined' && TerritoriesWorld.handles(e.a)) return TerritoriesWorld.act(data, ui, e, env);
     var by = (env.me && env.me.name) || 'You', at = env.now || new Date().toISOString().replace(/\.\d+Z$/, 'Z'), run = isObj(data.run) ? data.run : {};
     if (e.a === 'tick') {
       var p = tickPatch(data, e.id, e.on);
@@ -1473,7 +1576,7 @@ var TerritoriesLogic = (function () {
       if (reqBusy(ui.req)) return { writes: [], toast: 'The last change is still going through.' };
       return { writes: [], request: { key: 'rerank', what: 'Re-rank', input: { step: MOVES.rerank, by: by } } };
     }
-    if (e.a === 'present') return { writes: [], toast: 'Present mode is not built yet. Compare shows every route side by side.' };
+    if (e.a === 'present') return developed(data).length ? { writes: [], present: 0 } : null;
     if (e.a === 'send') {
       var dest = DESTS.filter(function (d) { return d.id === e.to; })[0], ids = greenIds(data);
       if (!dest) return null;
@@ -1489,6 +1592,8 @@ var TerritoriesLogic = (function () {
 
   return {
     MOVES: MOVES, DESTS: DESTS, developed: developed, greenIds: greenIds, greenGroups: greenGroups, gCard: gCard, touch: touch, scene: scene, greenlightSheet: greenlightSheet, greenlightBooth: greenlightBooth, holds: holds, glWords: glWords, brandOf: brandOf, headline: headline,
+    // for the World view (territories-world-logic), which reads the same helpers
+    esc: esc, text: text, plural: plural, pal: pal, tvars: tvars, refChip: refChip, crewOf: crewOf, byRank: byRank, sphere: sphere, roleName: roleName, derivedOf: derivedOf, reqBusy: reqBusy, CHECK_WORDS: CHECK_WORDS, CHECK_STATE: CHECK_STATE,
     TASKS: TASKS, BRIEF_KEYS: BRIEF_KEYS, LABELS: LABELS, KEY_FIELDS: KEY_FIELDS, seen: seen, statsOf: statsOf, fromWords: fromWords, briefValue: briefValue, textOf: textOf, STEPS: STEPS, MAX_INSIGHTS: MAX_INSIGHTS, MAX_TEXT: MAX_TEXT,
     upstreamOf: upstreamOf, resolve: resolve, counts: counts, derivedFindings: derivedFindings, sorted: sorted, dotsOf: dotsOf, originOf: originOf,
     tickPatch: tickPatch, addPatch: addPatch, playPatch: playPatch, pickState: pickState, approvePatch: approvePatch, editedPatch: editedPatch, stepsOf: stepsOf,
@@ -1496,6 +1601,311 @@ var TerritoriesLogic = (function () {
     routeOf: routeOf, radius: radius, bearing: bearing, STEER_WORDS: STEER_WORDS, BAND_WORDS: BAND_WORDS,
     boothNotes: boothNotes, view: view, dialogFor: dialogFor, act: act, insightCard: insightCard
   };
+})();
+</script>
+
+<!-- The World view (feature territories-app-world): one developed route opened as a campaign world. Pure like the block above: what the
+     screen says and what each press writes, with no DOM. It reads the route's `world` block and nothing else (docs/contracts/territories.md 5.3);
+     the dials, the lead line and the animatic make no call. app/tests/territoriesWorld.test.ts runs both blocks together. -->
+<script id="territories-world-logic">
+var TerritoriesWorld = (function () {
+  'use strict';
+  var L = typeof TerritoriesLogic !== 'undefined' ? TerritoriesLogic : null;
+
+  function isObj(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+  function arr(v) { return Array.isArray(v) ? v : []; }
+  var esc = L.esc, text = L.text;
+  /** Text a person must never see (LESSONS 15): the engine refuses it, and the page does not draw it if one slips through. */
+  var LEAK = /\(to confirm\)|\bTBC\b|\*\*|~~|\{\{|\}\}|^#\s|field is null|^(none|null|undefined)$/i;
+  function clean(v) { var s = text(v); return s && !LEAK.test(s) ? s : ''; }
+
+  var DIALS = [['tone', 'Wry', 'Sincere'], ['energy', 'Quiet', 'Loud'], ['register', 'Everyday', 'Cinematic'], ['brand', 'Brand subtle', 'Brand bold']];
+  var TP_NAMES = { tv: 'TV · 30 seconds', story: 'Instagram story', poster: 'Poster', radio: 'Radio · 30 seconds', seat: 'Table card', email: 'Email' };
+  var WALL = ['poster', 'story', 'seat', 'email', 'radio', 'tv'];
+  var JOURNEY = [{ key: 'tv', day: 'Thursday 21:00', where: 'TV, after the news' }, { key: 'story', day: 'Thursday 22:40', where: 'Instagram, scrolling in bed' },
+    { key: 'poster', day: 'Friday 08:15', where: 'Poster on the way to work' }, { key: 'radio', day: 'Friday 17:30', where: 'Drive-time radio' },
+    { key: 'seat', day: 'Saturday 09:20', where: 'The table card' }, { key: 'email', day: 'Sunday 16:00', where: 'Inbox, before the way home' }];
+  var TABS = [['feel', 'Feel'], ['lines', 'Lines'], ['why', 'Why'], ['test', 'Test']];
+  var PUSH = { 'Braver': 'Push this world further: braver, bolder, more specific, same thought.', 'Safer': 'Pull this world back: safer, plainer, less risky, same thought.',
+    'More ownable': 'Make this world more ownable: lines only this brand could say, same thought.', 'More proof': 'Make this world lean harder on the evidence the brief and the research carry, same thought.' };
+  var MAX_STARS = 16, MAX_LINE = 160;
+  var EVENTS = { lead: 1, unlead: 1, star: 1, keep: 1, dreset: 1, more: 1, push: 1 };
+
+  // ── what a route says ──
+  /** The routes in the order the gallery shows them (agent by agent, ranked inside each), so Next walks the page the person came from. */
+  function order(data) {
+    var crew = L.crewOf(data), all = L.developed(data), out = [], known = {};
+    crew.forEach(function (m) { known[m.id] = 1; all.filter(function (t) { return t.crew === m.id; }).sort(L.byRank).forEach(function (t) { out.push(t); }); });
+    all.filter(function (t) { return !known[t.crew]; }).sort(L.byRank).forEach(function (t) { out.push(t); });
+    return out;
+  }
+  function route(data, id) { return order(data).filter(function (t) { return t.id === id; })[0] || null; }
+  function n100(v, d) { v = Math.round(+v); return isFinite(v) ? Math.max(0, Math.min(100, v)) : d; }
+  function norm(d) { d = isObj(d) ? d : {}; return { tone: n100(d.tone, 50), energy: n100(d.energy, 50), register: n100(d.register, 50), brand: n100(d.brand, 50) }; }
+  /** What the route's own world says, before anyone touches a dial. */
+  function naturalDial(t) { return norm(t.world && t.world.dial); }
+  /** The saved feel (a person's, `dial_set`) or the natural one. */
+  function savedDial(t) { var w = t.world || {}; return isObj(w.dial_set) ? norm(w.dial_set) : naturalDial(t); }
+  /** The dials as they stand now: this page's own moves (view state), else the saved feel. */
+  function dialOf(t, ui) { var d = ui && isObj(ui.dials) ? ui.dials[t.id] : null; return d ? norm(d) : savedDial(t); }
+  function same(a, b) { return DIALS.every(function (x) { return a[x[0]] === b[x[0]]; }); }
+  function linesOf(t) {
+    var w = t.world || {}, h = isObj(w.headlines) ? w.headlines : {}, out = [];
+    ['wq', 'wl', 'sq', 'sl'].map(function (k) { return clean(h[k]); }).concat(arr(w.lines).map(clean)).forEach(function (s) { if (s && out.indexOf(s) === -1) out.push(s); });
+    return out;
+  }
+  /** The route as the dials and the lead line say it: the copy quadrant, the layout and the brand's size all follow, from the world block alone. */
+  function feel(t, dial) {
+    var w = {}, src = t.world || {}; Object.keys(src).forEach(function (k) { w[k] = src[k]; });
+    w.dial = dial;
+    var lead = clean(src.lead);
+    var h = {}; ['wq', 'wl', 'sq', 'sl'].forEach(function (k) { h[k] = lead || clean(isObj(src.headlines) ? src.headlines[k] : ''); });
+    w.headlines = h;
+    w.tv = arr(src.tv).filter(isObj).map(function (f) { return { scene: f.scene, text: clean(f.text) }; });
+    w.radio = arr(src.radio).filter(isObj).map(function (r) { return { voice: r.voice, text: clean(r.text) }; });
+    w.social = clean(src.social); w.seat = clean(src.seat); w.crm = arr(src.crm).map(clean); w.music = clean(src.music); w.sonic = clean(src.sonic);
+    var o = {}; Object.keys(t).forEach(function (k) { o[k] = t[k]; }); o.world = w;
+    return o;
+  }
+  function journeyOf(data) {
+    var j = arr(data && data.journey).filter(function (s) { return isObj(s) && TP_NAMES[s.key] && text(s.day) && text(s.where); });
+    return j.length ? j : JOURNEY;
+  }
+  function cine(dial) { return dial.register >= 50; }
+
+  // ── the touchpoints the template draws that the gallery does not ──
+  function markOf(brand, dial, inframe) {
+    if (!brand) return '';
+    var lvl = dial.brand < 34 ? 'sm' : dial.brand < 67 ? 'md' : 'lg';
+    return '<div class="bm bm-' + lvl + (inframe ? ' inframe' : '') + '"><svg viewBox="0 0 30 14" aria-hidden="true"><rect y="2" width="30" height="3" rx="1.5" fill="currentColor"/><rect y="9" width="30" height="3" rx="1.5" fill="currentColor"/></svg><span>' + esc(brand.toLowerCase()) + '</span></div>';
+  }
+  function superOf(s) { var m = /^super:\s*(.+)$/i.exec(s || ''); return m ? m[1] : ''; }
+  function ffOf(t) { return t.world && t.world.type && t.world.type.font === 'geist_extra_bold' ? ' ff-ui' : ''; }
+  function tvFrames(t, brand, dial) {
+    var fr = arr(t.world.tv);
+    if (!fr.length) return '<p class="wmeta">No frames in this world yet.</p>';
+    return '<div class="tp tv' + ffOf(t) + '" style="' + L.tvars(t) + '"><div class="frames' + (cine(dial) ? ' cine' : '') + '">' + fr.map(function (f, i) {
+      var sup = superOf(f.text);
+      return '<figure><div class="fr">' + L.scene(f.scene, L.pal(t)) + (sup ? '<div class="super"><div class="hl">' + esc(sup) + '</div>' + markOf(brand, dial, true) + '</div>' : '') + '</div>' +
+        '<figcaption><b>' + (i + 1) + '</b> ' + esc(sup ? 'End frame. Super and logo.' : f.text) + '</figcaption></figure>';
+    }).join('') + '</div><div class="row"><button type="button" class="wbtn sm" data-anim="' + esc(t.id) + '">▶ Play animatic</button><span class="wmeta">' + (cine(dial) ? 'Cinematic: 2.39:1, grain' : 'Everyday: 16:9, handheld') + '</span></div></div>';
+  }
+  function radioScript(t, ui) {
+    var w = t.world, lines = arr(w.radio).filter(function (r) { return r.text; });
+    return '<div class="tp radio' + ffOf(t) + '" style="' + L.tvars(t) + '"><div class="rhead"><span>Radio · 30″</span>' +
+      (ui && ui.speech === false ? '' : '<button type="button" class="wbtn sm" data-speak="' + esc(t.id) + '">▶ Read it aloud</button>') + '</div>' +
+      lines.map(function (r) { return '<div class="rl"><b>' + esc(r.voice) + '</b><span' + (r.voice === 'SFX' ? ' class="sfx"' : '') + '>' + esc(r.text) + '</span></div>'; }).join('') +
+      (w.music ? '<div class="rmusic">Music: ' + esc(w.music) + '</div>' : '') + '</div>';
+  }
+  /** One touchpoint of the journey: the gallery's four from the world block, and the TV frames and the radio script. */
+  function touchpoint(t, k, data, ui, dial) {
+    var brand = L.brandOf(data);
+    if (k === 'tv') return tvFrames(t, brand, dial);
+    if (k === 'radio') return radioScript(t, ui);
+    return cq(L.touch(t, k, brand));
+  }
+  /** The card's own measuring box: its paddings are in cqi, so it needs a container around it that is as wide as the card (not the whole sheet). */
+  function cq(h) { return '<div class="cq">' + h + '</div>'; }
+  function worldBody(data, ui, t) {
+    var dial = dialOf(t, ui), ft = feel(t, dial);
+    if (ui && ui.wview === 'wall') return '<div class="wall">' + WALL.map(function (k) { return '<div class="wcell w-' + k + '"><span class="weyebrow">' + esc(TP_NAMES[k]) + '</span>' + touchpoint(ft, k, data, ui, dial) + '</div>'; }).join('') + '</div>';
+    return '<ol class="journey">' + journeyOf(data).map(function (j) {
+      return '<li class="jstep j-' + esc(j.key) + '"><div class="jwhen"><b>' + esc(j.day) + '</b><span>' + esc(j.where) + '</span></div>' + touchpoint(ft, j.key, data, ui, dial) + '</li>';
+    }).join('') + '</ol>';
+  }
+  /** What a dial move redraws, without a page render (a slider being dragged must stay in the hand): the sheet's variables and its body. */
+  function refresh(data, ui, t) { var ft = feel(t, dialOf(t, ui)); return { style: L.tvars(ft), cls: 'sheet world' + ffOf(ft), body: worldBody(data, ui, t) }; }
+
+  function worldSheet(data, ui, t) {
+    var ft = feel(t, dialOf(t, ui)), all = order(data), i = all.indexOf(t), m = L.crewOf(data).filter(function (c) { return c.id === t.crew; })[0], wv = ui && ui.wview === 'wall' ? 'wall' : 'journey';
+    return '<article class="sheet world' + ffOf(ft) + '" id="wsheet" style="' + L.tvars(ft) + '"><header class="whead2"><div><span class="weyebrow">Route ' + String(i + 1).padStart(2, '0') + (m ? ' · found by ' + esc(m.name) : '') + '</span>' +
+      '<h2>' + esc(t.name) + '</h2><p>' + esc(t.thought) + '</p></div><div class="wseg" role="group" aria-label="How to see it">' +
+      [['journey', 'A weekend with it'], ['wall', 'All on one wall']].map(function (x) { return '<button type="button" data-wv="' + x[0] + '" aria-pressed="' + (wv === x[0] ? 'true' : 'false') + '">' + x[1] + '</button>'; }).join('') +
+      '</div></header><div class="wbody2" id="wbody">' + worldBody(data, ui, t) + '</div><div class="wnote">Sketches to show the feel, not finished work. Pictures come later.</div></article>';
+  }
+
+  // ── the Booth column: the panel for this route ──
+  function reqLine(req) {
+    if (!isObj(req) || !/^(more|push):/.test(req.key || '')) return '';
+    if (req.state === 'sending') return 'Sending it to the engine…';
+    if (req.state === 'queued' || req.state === 'running') return 'The engine is working on it. The page shows it when the document changes.';
+    if (req.state === 'failed') return req.error || 'That did not go through. Nothing changed.';
+    return '';
+  }
+  function dials(t, ui) {
+    var d = dialOf(t, ui), dirty = !same(d, savedDial(t)), custom = !same(d, naturalDial(t)) || isObj(t.world.dial_set);
+    return '<div class="psec"><span class="psec-t">Shape the feel</span>' + DIALS.map(function (x) {
+      return '<label class="pdial" for="d-' + x[0] + '"><span>' + x[1] + '</span><input type="range" id="d-' + x[0] + '" min="0" max="100" value="' + d[x[0]] + '" data-dial="' + x[0] + '" aria-label="' + x[1] + ' to ' + x[2] + '"><span>' + x[2] + '</span></label>';
+    }).join('') + '<p class="meta" style="margin:0">The words and the layout change as you move a dial. Nothing is sent.</p>' +
+      '<div class="row"><button type="button" class="btn-rect" data-w-keep="' + esc(t.id) + '"' + (dirty ? '' : ' disabled') + '>Keep this feel</button><button type="button" class="btn-rect" data-w-reset="' + esc(t.id) + '"' + (custom ? '' : ' disabled') + '>Back to its natural feel</button></div></div>';
+  }
+  function lookSection(t) {
+    var w = t.world, p = L.pal(t), ui = w.type && w.type.font === 'geist_extra_bold', ital = !ui && w.type && w.type.italic;
+    var face = ui ? 'Geist Extra Bold' : 'Newsreader' + (ital ? ', italic' : '');
+    return '<div class="psec"><span class="psec-t">Look</span><div class="swrow">' + [p.bg, p.ink, p.acc, p.soft].map(function (c) { return '<span style="background:' + c + '" title="' + c + '"></span>'; }).join('') + '</div>' +
+      '<div class="spec2"><span class="aa' + (ui ? ' u' : '') + '" style="' + L.tvars(t) + '">Aa</span>' + esc(face) + '</div></div>';
+  }
+  function tabFeel(t, ui) {
+    var w = feel(t, dialOf(t, ui)).world;
+    return dials(t, ui) + lookSection(t) +
+      (w.music || w.sonic ? '<div class="psec"><span class="psec-t">Sound</span>' + (w.music ? '<p><b>Music.</b> ' + esc(w.music) + '</p>' : '') + (w.sonic ? '<p><b>Sonic idea.</b> ' + esc(w.sonic) + '</p>' : '') + '</div>' : '') +
+      (arr(t.world.refs).length || arr(t.world.not).length ? '<div class="psec"><span class="psec-t">References</span>' +
+        (arr(t.world.refs).length ? '<p><b>Kinds of work.</b> ' + arr(t.world.refs).map(function (x) { return esc(clean(x)); }).filter(Boolean).join(' · ') + '</p>' : '') +
+        (arr(t.world.not).length ? '<p><b>Not this.</b> ' + arr(t.world.not).map(function (x) { return esc(clean(x)); }).filter(Boolean).join(' · ') + '</p>' : '') + '</div>' : '');
+  }
+  function tabLines(t, ui) {
+    var w = t.world, lead = clean(w.lead), stars = arr(w.starred), shown = L.headline(feel(t, dialOf(t, ui)));
+    return '<div class="psec"><span class="psec-t">Click a line to lead with it everywhere</span>' + linesOf(t).map(function (l) {
+      var on = lead ? lead === l : shown === l, star = stars.indexOf(l) !== -1;
+      return '<div class="lrow' + (on ? ' on' : '') + '"><button type="button" class="lp" data-w-lead="' + esc(l) + '" aria-pressed="' + (lead === l ? 'true' : 'false') + '">' + esc(l) + '</button>' +
+        '<button type="button" class="ls' + (star ? ' on' : '') + '" data-w-star="' + esc(l) + '" aria-pressed="' + (star ? 'true' : 'false') + '" aria-label="' + (star ? 'Unstar' : 'Star') + ' this line">★</button></div>';
+    }).join('') + '<div class="row"><button type="button" class="btn-rect primary" data-w-more="' + esc(t.id) + '">Write more like the starred</button>' +
+      (lead ? '<button type="button" class="btn-rect" data-w-unlead="' + esc(t.id) + '">Let the dials choose</button>' : '') + '</div>' +
+      '<p class="meta" style="margin:0">' + (lead ? 'Your line leads on every touchpoint, whatever the dials say.' : 'The dials choose the line now. Click one to lead with it instead.') + '</p>' +
+      (reqLine(ui && ui.req) ? '<p class="runnote' + (ui.req.state === 'failed' ? ' bad' : '') + '" role="status">' + esc(reqLine(ui.req)) + '</p>' : '') + '</div>';
+  }
+  function tabWhy(t, data, ui) {
+    var ev = arr(t.evidence), der = L.derivedOf(t, data), req = reqLine(ui && ui.req);
+    return (text(t.why) ? '<div class="psec"><span class="psec-t">Why it is a route</span><p>' + esc(t.why) + '</p></div>' : '') +
+      '<div class="psec"><span class="psec-t">Rests on</span><div class="row">' + (ev.length ? ev.map(function (c) { return L.refChip(c, data); }).join('') : '<span class="meta">No evidence yet</span>') +
+      (der.length ? ' <span class="dmark" title="Rests on a finding the agent worked out and nobody has verified yet">derived</span>' : '') + '</div></div>' +
+      (arr(t.risks).length ? '<div class="psec"><span class="psec-t">Watch out for</span>' + arr(t.risks).map(function (x) { return '<div class="bc-li"><span class="grow">' + esc(x) + '</span></div>'; }).join('') + '</div>' : '') +
+      '<div class="psec"><span class="psec-t">Push it</span><div class="row">' + Object.keys(PUSH).map(function (k) { return '<button type="button" class="btn-rect" data-w-push="' + esc(k) + '" data-w-id="' + esc(t.id) + '">' + k + '</button>'; }).join('') + '</div></div>' +
+      (req ? '<p class="runnote' + (ui.req.state === 'failed' ? ' bad' : '') + '" role="status">' + esc(req) + '</p>' : '');
+  }
+  function tabTest(t) {
+    var cks = arr(t.checks).filter(function (c) { return isObj(c) && c.kind !== 'judge'; }), bad = cks.filter(function (c) { return c.status !== 'ok'; }).length;
+    return '<div class="psec"><span class="psec-t">Checked against the brief and the landscape' + (cks.length ? ' · ' + (cks.length - bad) + ' of ' + cks.length + ' clear' : '') + '</span>' + (cks.length ? cks.map(function (c) {
+      return '<div class="evrow"><span class="ck ck-' + esc(c.status) + '">' + esc((L.CHECK_WORDS[c.kind] || 'Check') + ' · ' + (L.CHECK_STATE[c.status] || c.status)) + '</span><div class="grow">' + esc(text(c.text)) + '</div></div>';
+    }).join('') : '<p class="meta">No checks came back for this route.</p>') + '<p class="meta" style="margin:0">These ran when the route was developed. Moving the dials or changing a line does not run them again; Push it does.</p></div>';
+  }
+  function boothW(data, ui, open, t) {
+    var all = order(data), i = all.indexOf(t), on = L.greenIds(data).indexOf(t.id) !== -1, tab = TABS.some(function (x) { return x[0] === ui.wtab; }) ? ui.wtab : 'feel';
+    var gl = L.glWords(ui.req), body = tab === 'feel' ? tabFeel(t, ui) : tab === 'lines' ? tabLines(t, ui) : tab === 'why' ? tabWhy(t, data, ui) : tabTest(t);
+    return '<aside class="booth-col' + (open ? '' : ' booth-off') + '" id="stab" aria-label="Booth"><div class="booth"><div class="booth-hd"><span class="booth-nm">Booth</span><span class="booth-sp"></span>' +
+      '<button type="button" class="booth-hide" data-booth="hide" aria-label="Hide the Booth" aria-expanded="' + (open ? 'true' : 'false') + '" aria-controls="stab" aria-keyshortcuts="]">Hide<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5"/></svg></button></div>' +
+      '<div class="booth-body"><div class="bt-agent">' + L.sphere('strategy', 40) + '<div><div class="who">' + esc(L.roleName('strategy')) + ' agent · a developed route</div><div class="line">' + esc(t.name) + ' as a campaign across one weekend. Move a dial and the words move with it.</div></div></div>' +
+      '<div class="navrow"><button type="button" class="linkbtn" data-w-back>← All routes</button><span class="spacer"></span><button type="button" class="btn-rect sq" data-w-nav="-1" aria-label="Previous route"' + (i > 0 ? '' : ' disabled') + '>←</button>' +
+      '<span class="meta">' + (i + 1) + ' of ' + all.length + '</span><button type="button" class="btn-rect sq" data-w-nav="1" aria-label="Next route"' + (i < all.length - 1 ? '' : ' disabled') + '>→</button></div>' +
+      '<button type="button" class="big" data-green="' + esc(t.id) + '" aria-pressed="' + (on ? 'true' : 'false') + '">' + (on ? '✓ Greenlit · take it off the list' : 'Greenlight this route') + '</button>' +
+      (gl ? '<p class="runnote' + (ui.req && ui.req.state === 'failed' ? ' bad' : '') + '" role="status">' + esc(gl) + '</p>' : '') +
+      '<div class="sbox"><div class="sbox-head"><b>Route</b><span class="ymark">live</span><span class="spacer"></span><span class="meta">' + esc(typeof t.rank === 'number' ? 'Judge #' + t.rank : 'Not ranked') + '</span></div>' +
+      '<div class="row"><button type="button" class="btn-rect" data-wdock="present">Present</button><button type="button" class="btn-rect" data-wdock="anim">Animatic</button></div></div>' +
+      '<div class="ptabs" role="group" aria-label="Panel">' + TABS.map(function (x) { return '<button type="button" data-wtab="' + x[0] + '" aria-pressed="' + (tab === x[0] ? 'true' : 'false') + '">' + x[1] + '</button>'; }).join('') + '</div>' +
+      body + (ui.me && ui.me.name ? '<div class="pfoot">Changes signed as <b>' + esc(ui.me.name) + '</b></div>' : '') + '</div></div></aside>';
+  }
+  function dock(data, ui) {
+    var ic = { present: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="7 5 19 12 7 19 7 5"/></svg>',
+      anim: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><polygon points="10 9 15 12 10 15 10 9"/></svg>',
+      wall: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>' };
+    var wall = ui && ui.wview === 'wall';
+    return '<div class="dock"><div class="dock-acts" role="toolbar" aria-label="World tools">' + [['present', 'Present'], ['anim', 'Animatic'], ['wall', 'Wall']].map(function (a) {
+      return '<button type="button" class="dock-act" data-wdock="' + a[0] + '" aria-pressed="' + (a[0] === 'wall' && wall ? 'true' : 'false') + '"><span class="dock-ring">' + ic[a[0]] + '</span><span class="dock-lbl">' + a[1] + '</span></button>'; }).join('') + '</div></div>';
+  }
+
+  // ── the animatic and Present: full-screen overlays, drawn by the page one frame or one route at a time ──
+  /** The TV frames, in order, each as { html, ms }: a caption, or the supered line at the end. */
+  function animFrames(data, ui, t) {
+    var dial = dialOf(t, ui), ft = feel(t, dial), brand = L.brandOf(data), ms = 2600 - dial.energy * 12;
+    return arr(ft.world.tv).map(function (f) {
+      var sup = superOf(f.text);
+      return { ms: ms, html: '<div class="aframe' + (cine(dial) ? ' cine' : '') + (ffOf(ft) ? ' ff-ui' : '') + '" style="' + L.tvars(ft) + '">' + L.scene(f.scene, L.pal(ft)) +
+        (sup ? '<div class="super big"><div class="hl">' + esc(sup) + '</div>' + markOf(brand, dial, true) + '</div>' : f.text ? '<div class="sub">' + esc(f.text) + '</div>' : '') + '</div>' };
+    });
+  }
+  function animHtml(data, ui, t, i) {
+    var fs = animFrames(data, ui, t); if (!fs.length) return '';
+    i = Math.max(0, Math.min(i, fs.length - 1));
+    return '<div class="anim-top"><span class="weyebrow">Animatic · ' + esc(t.name) + ' · frame ' + (i + 1) + ' of ' + fs.length + '</span></div>' + fs[i].html +
+      '<div class="aprog">' + fs.map(function (_, j) { return '<i class="' + (j <= i ? 'on' : '') + '"></i>'; }).join('') + '</div>' +
+      '<div class="row" style="justify-content:center"><button type="button" class="wbtn" data-a-prev' + (i ? '' : ' disabled') + '>Back</button><button type="button" class="wbtn" data-a-again>Play again</button><button type="button" class="wbtn" data-a-next' + (i < fs.length - 1 ? '' : ' disabled') + '>Next</button><button type="button" class="wbtn" data-close-anim>Close</button></div>';
+  }
+  /** Present: one route at a time, in its own palette, with no rank, checks or sources (a tissue session reads the work, not the scores). */
+  function presentHtml(data, ui, i, react) {
+    var all = order(data); if (!all.length) return '';
+    i = Math.max(0, Math.min(i, all.length - 1));
+    var t = all[i], dial = dialOf(t, ui), ft = feel(t, dial), brand = L.brandOf(data), r = react && react[t.id];
+    return '<div class="tissue-top"><span class="weyebrow">Tissue session · route ' + String.fromCharCode(65 + (i % 26)) + ' of ' + all.length + ' · scores and sources hidden</span><button type="button" class="wbtn" data-p-end>End session</button></div>' +
+      '<div class="pgrid"><div class="ptext"><h1>' + esc(t.name) + '</h1><p class="tt">' + esc(t.thought) + '</p><div class="tl">“' + esc(L.headline(ft)) + '”</div>' +
+      '<div class="row reacts" role="group" aria-label="Reaction in the room">' + ['Lean in', 'Interesting', 'Not for us'].map(function (x) { return '<button type="button" class="wbtn" data-p-react="' + esc(x) + '" aria-pressed="' + (r === x ? 'true' : 'false') + '">' + x + '</button>'; }).join('') + '</div>' +
+      '<p class="wmeta">Reactions are for the room. They are not saved.</p></div>' +
+      '<div class="pvis">' + cq(L.touch(ft, 'poster', brand)) + '<div class="pmini">' + cq(L.touch(ft, 'story', brand)) + cq(L.touch(ft, 'seat', brand)) + '</div></div></div>' +
+      '<div class="tissue-bot"><button type="button" class="wbtn" data-p-nav="-1"' + (i ? '' : ' disabled') + '>Previous</button><span class="spacer"></span><button type="button" class="wbtn on" data-p-nav="1">' + (i === all.length - 1 ? 'Finish' : 'Next route') + '</button></div>';
+  }
+  function presentStyle(data, ui, i) { var all = order(data), t = all[Math.max(0, Math.min(i, all.length - 1))]; return t ? L.tvars(feel(t, dialOf(t, ui))) + (ffOf(t) ? ';--t-ff:var(--font-ui)' : '') : ''; }
+  /** The radio script read aloud: the spoken lines only, as one text (the sound effects are written, not played), with the voice the dials ask for. */
+  function speech(data, ui, t) {
+    var d = dialOf(t, ui), f = feel(t, d);
+    return { text: arr(f.world.radio).filter(function (r) { return r.voice !== 'SFX' && r.text; }).map(function (r) { return r.text; }).join(' ... '), rate: Math.round((0.85 + d.energy / 250) * 100) / 100, pitch: d.tone < 50 ? 1.1 : 0.95 };
+  }
+
+  // ── the confirmations that come first (a model call waits for a yes) ──
+  function dialog(what, data) {
+    var m = /^(more|push):([^:]+)(?::(.+))?$/.exec(what); if (!m) return null;
+    var t = route(data, m[2]); if (!t) return null;
+    if (m[1] === 'more') {
+      var s = arr(t.world.starred).length;
+      return { title: 'Write more like the starred?', closeInside: true, sans: true, html: '<p class="meta" style="margin:0">The engine writes up to six new lines for ' + esc(t.name) + ' in its voice' + (s ? ', starting from the ' + esc(L.plural(s, 'line')) + ' you starred' : '') + '. That is one model call, so nothing happens until you say go. The lines already there stay.</p>' +
+        '<div class="row"><button type="button" class="btn-rect primary" data-w-go="' + esc(what) + '">Go ahead</button><button type="button" class="btn-rect" data-close>Cancel</button></div>' };
+    }
+    if (!PUSH[m[3]]) return null;
+    return { title: 'Push ' + t.name + ' ' + m[3].toLowerCase() + '?', closeInside: true, sans: true, html: '<p class="meta" style="margin:0">The engine writes this route’s world again, checks it again and asks the blind judge to rank every route again. That is three model calls, so nothing happens until you say go. The rank can move. Your lead line, starred lines and kept feel stay.</p>' +
+      '<div class="row"><button type="button" class="btn-rect primary" data-w-go="' + esc(what) + '">Go ahead</button><button type="button" class="btn-rect" data-close>Cancel</button></div>' };
+  }
+
+  // ── what a press writes ──
+  /** The routes with one world changed. A person's half only: starred, lead and dial_set (nothing the engine owns). */
+  function worldPatch(data, id, change) {
+    var hit = false, ts = arr(data && data.territories).map(function (t) {
+      if (!isObj(t) || t.id !== id || !isObj(t.world)) return t;
+      hit = true;
+      var w = {}; Object.keys(t.world).forEach(function (k) { w[k] = t.world[k]; });
+      Object.keys(change).forEach(function (k) { if (change[k] === null) delete w[k]; else w[k] = change[k]; });
+      var o = {}; Object.keys(t).forEach(function (k) { o[k] = t[k]; }); o.world = w; return o;
+    });
+    return hit ? { territories: ts } : null;
+  }
+  function act(data, ui, e, env) {
+    env = env || {}; var by = (env.me && env.me.name) || 'You', t = route(data, e.id);
+    if (!t) return null;
+    var w = t.world, line = e.line == null ? '' : String(e.line);
+    if (e.a === 'lead' || e.a === 'unlead') {
+      var off = e.a === 'unlead' || clean(w.lead) === line;
+      if (off && !clean(w.lead)) return { writes: [], toast: 'The dials already choose the line.' };
+      if (!off && (!line || linesOf(t).indexOf(line) === -1 || line.length > MAX_LINE)) return null;
+      return { writes: [{ patch: worldPatch(data, t.id, { lead: off ? null : line }), action: off ? 'let the dials choose the line for ' + t.name : 'lead ' + t.name + ' with “' + line + '”', rationale: off ? 'the lead line was cleared' : 'the person led with this line on every touchpoint' }] };
+    }
+    if (e.a === 'star') {
+      var st = arr(w.starred), has = st.indexOf(line) !== -1;
+      if (!has && (!line || linesOf(t).indexOf(line) === -1)) return null;
+      if (!has && st.length >= MAX_STARS) return { writes: [], toast: 'Sixteen starred lines is the most a route holds. Unstar one first.' };
+      return { writes: [{ patch: worldPatch(data, t.id, { starred: has ? st.filter(function (x) { return x !== line; }) : st.concat([line]) }), action: (has ? 'unstar a line of ' : 'star a line of ') + t.name, rationale: has ? 'taken off the starred lines' : 'starred for “write more like these”' }] };
+    }
+    if (e.a === 'keep') {
+      var d = dialOf(t, ui);
+      if (same(d, savedDial(t))) return { writes: [], toast: 'That is already the feel it keeps.' };
+      return { writes: [{ patch: worldPatch(data, t.id, { dial_set: d }), action: 'set the feel of ' + t.name, rationale: 'dials kept at wry-sincere ' + d.tone + ', quiet-loud ' + d.energy + ', everyday-cinematic ' + d.register + ', brand ' + d.brand }], clearDial: t.id };
+    }
+    if (e.a === 'dreset') {
+      if (!isObj(w.dial_set)) return { writes: [], clearDial: t.id };
+      return { writes: [{ patch: worldPatch(data, t.id, { dial_set: null }), action: 'back to the natural feel of ' + t.name, rationale: 'the kept feel was cleared' }], clearDial: t.id };
+    }
+    if (e.a === 'more' || e.a === 'push') {
+      if (L.reqBusy(ui.req)) return { writes: [], toast: 'The last change is still going through.' };
+      if (e.a === 'more') {
+        if (!arr(w.starred).length) return { writes: [], toast: 'Star a line or two first, so the engine knows which way to go.' };
+        return { writes: [], request: { key: 'more:' + t.id, what: 'More lines', input: { step: 'more', territory_id: t.id, by: by } } };
+      }
+      if (!PUSH[e.kind]) return null;
+      return { writes: [], request: { key: 'push:' + t.id, what: 'The push', input: { step: 'push', territory_id: t.id, by: by, instruction: PUSH[e.kind] } } };
+    }
+    return null;
+  }
+  function handles(a) { return !!EVENTS[a]; }
+
+  return { DIALS: DIALS, TP_NAMES: TP_NAMES, PUSH: PUSH, order: order, route: route, dialOf: dialOf, savedDial: savedDial, naturalDial: naturalDial, feel: feel, linesOf: linesOf, journeyOf: journeyOf,
+    worldBody: worldBody, refresh: refresh, sheet: worldSheet, booth: boothW, dock: dock, animFrames: animFrames, animHtml: animHtml, presentHtml: presentHtml, presentStyle: presentStyle,
+    speech: speech, dialog: dialog, worldPatch: worldPatch, act: act, handles: handles, clean: clean };
 })();
 </script>
 
@@ -1643,8 +2053,9 @@ var TerritoriesLogic = (function () {
     if (r.draft != null) ui.draft = r.draft;
     var p = Promise.resolve();
     (r.writes || []).forEach(function (w) { p = p.then(function () { return put(w); }); });
-    p.then(function () { render(r.focus); if (r.start) startRun(); if (r.request) startRequest(r.request); });
-    if (!(r.writes || []).length) { render(r.focus); if (r.start) startRun(); if (r.request) startRequest(r.request); }
+    var after = function () { if (r.clearDial) delete ui.dials[r.clearDial]; render(r.focus); if (r.start) startRun(); if (r.request) startRequest(r.request); if (r.present != null) presOpen(r.present); };
+    p.then(after);
+    if (!(r.writes || []).length) after();
   }
 
   // ── source windows ──
@@ -1686,10 +2097,135 @@ var TerritoriesLogic = (function () {
     if (open) setTimeout(function () { var h = document.querySelector('.booth-hide'); if (ui.booth && h && document.activeElement === $('boothEdge')) h.focus({ preventScroll: true }); }, 470);
   }
 
+  // ── the World view (territories-world-logic): a route opened as a world ──
+  // Dials, lead line, star and view switches change what this page draws and make no call. A kept feel, a lead line and a star are written
+  // through put() (the person's half of the document). More like this and Push are requests, after a yes, that fail in plain words until the
+  // middleware's handlers for them are there (features/territories-handlers.clan).
+  var W = TerritoriesWorld, animEl = null, presEl = null, anim = null, pres = null;
+  ui.wview = 'journey'; ui.wtab = 'feel'; ui.dials = {}; ui.react = {};
+  ui.speech = !!(window.speechSynthesis && window.SpeechSynthesisUtterance);
+  function openWorld(id) { ui.world = id; ui.wview = 'journey'; ui.wtab = 'feel'; render(); window.scrollTo(0, 0); }
+  function worldRoute() { return ui.world ? W.route(data(), ui.world) : null; }
+  /** A dial moved: redraw the sheet in place (the slider stays in the hand) and the buttons that depend on it. */
+  function dialMoved(key, v) {
+    var t = worldRoute(); if (!t) return;
+    var d = W.dialOf(t, ui), o = {}; Object.keys(d).forEach(function (k) { o[k] = d[k]; }); o[key] = +v; ui.dials[t.id] = o;
+    var sh = $('wsheet'), r = W.refresh(data(), ui, t); if (!sh) return;
+    sh.setAttribute('style', r.style); sh.className = r.cls; $('wbody').innerHTML = r.body;
+    var keep = document.querySelector('[data-w-keep]'), reset = document.querySelector('[data-w-reset]');
+    if (keep) keep.disabled = JSON.stringify(W.dialOf(t, ui)) === JSON.stringify(W.savedDial(t));
+    if (reset) reset.disabled = JSON.stringify(W.dialOf(t, ui)) === JSON.stringify(W.naturalDial(t)) && !(t.world && t.world.dial_set);
+    lastHtml = null;
+  }
+  function walk(by) {
+    var all = W.order(data()), i = all.indexOf(worldRoute()), n = all[i + by];
+    if (n) openWorld(n.id);
+  }
+  function speak(id) {
+    var t = W.route(data(), id); if (!t) return;
+    try {
+      var ss = window.speechSynthesis; if (!ss) throw new Error('none');
+      var sp = W.speech(data(), ui, t); ss.cancel();
+      var u = new SpeechSynthesisUtterance(sp.text); u.rate = sp.rate; u.pitch = sp.pitch; ss.speak(u);
+      toast('Reading the script aloud. Sound effects are written, not played.');
+    } catch (e) { toast('This browser cannot read aloud here.'); }
+  }
+  function stopSpeech() { try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) { /* nothing was speaking */ } }
+  // The animatic: the TV frames full screen, a caption each, then the supered line. Back, Next and Play again work too.
+  function animDraw() {
+    var t = W.route(data(), anim.id); if (!t) { animClose(); return; }
+    animEl.innerHTML = W.animHtml(data(), ui, t, anim.i);
+    var f = W.animFrames(data(), ui, t); clearTimeout(anim.t);
+    if (anim.play && anim.i < f.length - 1) anim.t = setTimeout(function () { anim.i++; animDraw(); }, f[anim.i].ms);
+    else anim.play = false;
+  }
+  function animOpen(id) {
+    var t = W.route(data(), id); if (!t) return;
+    if (!W.animFrames(data(), ui, t).length) { toast('This world has no TV frames to play.'); return; }
+    animClose(true);
+    animEl = document.createElement('div'); animEl.className = 'anim'; animEl.setAttribute('role', 'dialog'); animEl.setAttribute('aria-modal', 'true'); animEl.setAttribute('aria-label', 'Animatic');
+    document.body.appendChild(animEl); anim = { id: id, i: 0, play: !window.matchMedia || !window.matchMedia('(prefers-reduced-motion: reduce)').matches, t: 0 };
+    animDraw(); var b = animEl.querySelector('[data-close-anim]'); if (b) b.focus({ preventScroll: true });
+  }
+  function animClose(quiet) { if (!animEl) return; clearTimeout(anim.t); animEl.remove(); animEl = null; anim = null; if (!quiet) { var b = document.querySelector('[data-wdock="anim"],[data-anim]'); if (b) b.focus({ preventScroll: true }); } }
+  // Present: one route at a time, no scores, no sources.
+  function presDraw() {
+    var all = W.order(data()); if (!all.length) { presClose(); return; }
+    pres.i = Math.max(0, Math.min(pres.i, all.length - 1));
+    var ps = W.presentStyle(data(), ui, pres.i); presEl.className = 'tissue' + (/--t-ff/.test(ps) ? ' u' : ''); presEl.setAttribute('style', ps); presEl.innerHTML = W.presentHtml(data(), ui, pres.i, ui.react);
+    var b = presEl.querySelector('[data-p-nav="1"]'); if (b) b.focus({ preventScroll: true });
+    presEl.scrollTop = 0;
+  }
+  function presOpen(start) {
+    var all = W.order(data()); if (!all.length) { toast('No route has been developed yet.'); return; }
+    presClose(true); pres = { i: start || 0, from: document.activeElement };
+    presEl = document.createElement('div'); presEl.className = 'tissue'; presEl.setAttribute('role', 'dialog'); presEl.setAttribute('aria-modal', 'true'); presEl.setAttribute('aria-label', 'Present');
+    document.body.appendChild(presEl); presDraw();
+  }
+  function presClose(quiet) { if (!presEl) return; var f = pres.from; presEl.remove(); presEl = null; pres = null; if (!quiet && f && f.focus && document.body.contains(f)) f.focus({ preventScroll: true }); }
+  function worldKey(ev) {
+    if (ev.key === 'Escape' && animEl) { animClose(); return true; }
+    if (ev.key === 'Escape' && presEl) { presClose(); return true; }
+    var tg = ev.target, typing = tg && /^(INPUT|TEXTAREA|SELECT)$/.test(tg.tagName || '');
+    if (presEl && !typing && (ev.key === 'ArrowRight' || ev.key === 'ArrowLeft')) { pres.i += ev.key === 'ArrowRight' ? 1 : -1; presDraw(); return true; }
+    if (animEl && !typing && (ev.key === 'ArrowRight' || ev.key === 'ArrowLeft')) { anim.play = false; anim.i = Math.max(0, anim.i + (ev.key === 'ArrowRight' ? 1 : -1)); animDraw(); return true; }
+    // Left and right walk between worlds, unless a slider or a window has them.
+    var ranged = tg && tg.type === 'range';
+    if (ui.world && !animEl && !presEl && !dialogEl && !typing && !ranged && !ev.metaKey && !ev.ctrlKey && !ev.altKey && (ev.key === 'ArrowRight' || ev.key === 'ArrowLeft')) { walk(ev.key === 'ArrowRight' ? 1 : -1); return true; }
+    return false;
+  }
+  /** True when the press was the world's. */
+  function worldClick(t) {
+    var b;
+    if (animEl) {
+      if (t.closest('[data-close-anim]')) { animClose(); return true; }
+      if (t.closest('[data-a-again]')) { anim.i = 0; anim.play = true; animDraw(); return true; }
+      if ((b = t.closest('[data-a-prev],[data-a-next]'))) { anim.play = false; anim.i += b.hasAttribute('data-a-next') ? 1 : -1; animDraw(); return true; }
+      return true;
+    }
+    if (presEl) {
+      if (t.closest('[data-p-end]')) { presClose(); return true; }
+      if ((b = t.closest('[data-p-nav]'))) {
+        var all = W.order(data()), step = +b.getAttribute('data-p-nav');
+        if (step > 0 && pres.i >= all.length - 1) presClose(); else { pres.i += step; presDraw(); }
+        return true;
+      }
+      if ((b = t.closest('[data-p-react]'))) { var r = W.order(data())[pres.i]; if (r) { ui.react[r.id] = ui.react[r.id] === b.getAttribute('data-p-react') ? null : b.getAttribute('data-p-react'); presDraw(); } return true; }
+      return true;
+    }
+    if ((b = t.closest('[data-open]'))) { if (W.route(data(), b.getAttribute('data-open'))) { openWorld(b.getAttribute('data-open')); } else openDialog('route:' + b.getAttribute('data-open'), b); return true; }
+    if (t.closest('[data-w-back]')) { ui.world = null; render(); return true; }
+    if ((b = t.closest('[data-w-nav]'))) { if (!b.disabled) walk(+b.getAttribute('data-w-nav')); return true; }
+    if ((b = t.closest('[data-wv]'))) { ui.wview = b.getAttribute('data-wv'); render(); return true; }
+    if ((b = t.closest('[data-wtab]'))) { ui.wtab = b.getAttribute('data-wtab'); render(); return true; }
+    if ((b = t.closest('[data-wdock]'))) {
+      var k = b.getAttribute('data-wdock');
+      if (k === 'wall') { ui.wview = ui.wview === 'wall' ? 'journey' : 'wall'; render(); } else if (k === 'anim') animOpen(ui.world); else presOpen(Math.max(0, W.order(data()).indexOf(worldRoute())));
+      return true;
+    }
+    if ((b = t.closest('[data-anim]'))) { animOpen(b.getAttribute('data-anim')); return true; }
+    if ((b = t.closest('[data-speak]'))) { speak(b.getAttribute('data-speak')); return true; }
+    var id = ui.world;
+    if ((b = t.closest('[data-w-lead]'))) { run({ a: 'lead', id: id, line: b.getAttribute('data-w-lead') }); return true; }
+    if ((b = t.closest('[data-w-unlead]'))) { run({ a: 'unlead', id: id }); return true; }
+    if ((b = t.closest('[data-w-star]'))) { run({ a: 'star', id: id, line: b.getAttribute('data-w-star') }); return true; }
+    if ((b = t.closest('[data-w-keep]'))) { if (!b.disabled) run({ a: 'keep', id: id }); return true; }
+    if ((b = t.closest('[data-w-reset]'))) { if (!b.disabled) run({ a: 'dreset', id: id }); return true; }
+    if ((b = t.closest('[data-w-more]'))) { openDialog('more:' + id, b); return true; }
+    if ((b = t.closest('[data-w-push]'))) { openDialog('push:' + id + ':' + b.getAttribute('data-w-push'), b); return true; }
+    if ((b = t.closest('[data-w-go]'))) {
+      var m = /^(more|push):([^:]+)(?::(.+))?$/.exec(b.getAttribute('data-w-go')); closeDialog(true);
+      if (m) run({ a: m[1], id: m[2], kind: m[3] });
+      return true;
+    }
+    return false;
+  }
+
   // ── events ──
   document.addEventListener('click', function (ev) {
     var t = ev.target && ev.target.closest ? ev.target : null; if (!t) return;
     var b;
+    if (worldClick(t)) { ev.preventDefault(); return; }
     if ((b = t.closest('[data-src]'))) { ev.preventDefault(); ev.stopPropagation(); openDialog(b.getAttribute('data-src'), b); return; }
     if ((b = t.closest('[data-arrived]'))) { openDialog(b.getAttribute('data-arrived'), b); return; }
     if ((b = t.closest('.nsrc[data-kind]'))) { openDialog(b.getAttribute('data-kind'), b); return; }
@@ -1697,7 +2233,6 @@ var TerritoriesLogic = (function () {
     if ((b = t.closest('[data-play-toggle]'))) { var id = b.getAttribute('data-play-toggle'), on = b.getAttribute('data-on') === '1'; closeDialog(true); run({ a: 'play', id: id, on: on }); return; }
     if ((b = t.closest('[data-play]'))) { run({ a: 'play', id: b.getAttribute('data-play'), on: b.getAttribute('aria-pressed') !== 'true' }); return; }
     if ((b = t.closest('[data-green]'))) { ev.preventDefault(); ev.stopPropagation(); closeDialog(true); run({ a: 'green', id: b.getAttribute('data-green') }); return; }
-    if ((b = t.closest('[data-open]'))) { openDialog('route:' + b.getAttribute('data-open'), b); return; }
     if ((b = t.closest('[data-send]'))) { if (!b.disabled) openDialog('send', b); return; }
     if ((b = t.closest('[data-dest]'))) { if (b.disabled) return; var to = b.getAttribute('data-dest'); closeDialog(true); run({ a: 'send', to: to }); return; }
     if ((b = t.closest('[data-rank-go]'))) { closeDialog(true); run({ a: 'rerank' }); return; }
@@ -1735,12 +2270,16 @@ var TerritoriesLogic = (function () {
   }
   // No <form>: the page runs sandboxed, where a form cannot submit. Add is a button, and Enter in the box presses it.
   function addOwn() { var inp = document.querySelector('input[name="own"]'); ui.draft = inp ? inp.value : ui.draft; run({ a: 'add', text: ui.draft }); }
-  document.addEventListener('input', function (ev) { if (ev.target && ev.target.name === 'own') ui.draft = ev.target.value; });
+  document.addEventListener('input', function (ev) {
+    if (ev.target && ev.target.name === 'own') ui.draft = ev.target.value;
+    if (ev.target && ev.target.getAttribute && ev.target.getAttribute('data-dial')) dialMoved(ev.target.getAttribute('data-dial'), ev.target.value);
+  });
   document.addEventListener('keydown', function (ev) {
+    if (worldKey(ev)) { ev.preventDefault(); return; }
     if (ev.key === 'Escape' && dialogEl) { closeDialog(); return; }
     if (ev.key === 'Enter' && ev.target && ev.target.name === 'own' && !ev.isComposing) { ev.preventDefault(); addOwn(); return; }
     var ob = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-open') && ev.target.getAttribute('role') === 'button' ? ev.target : null;
-    if (ob && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); openDialog('route:' + ob.getAttribute('data-open'), ob); return; }
+    if (ob && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); if (W.route(data(), ob.getAttribute('data-open'))) openWorld(ob.getAttribute('data-open')); else openDialog('route:' + ob.getAttribute('data-open'), ob); return; }
     var rb = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-route') && ev.target.getAttribute('role') === 'button' ? ev.target : null;
     if (rb && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); choose(ui.sel, rb.getAttribute('data-route')); return; }
     var tg = ev.target, typing = tg && /^(INPUT|TEXTAREA|SELECT)$/.test(tg.tagName || '');

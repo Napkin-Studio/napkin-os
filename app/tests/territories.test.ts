@@ -712,7 +712,7 @@ test('Compare shows every route side by side per touchpoint, with the same toggl
   const rk = L.dialogFor('rank', d)!
   assert.match(text(rk.html), /one more model call, so nothing happens until you say go/); assert.match(rk.html, /data-rank-go/)
   eq(L.act(d, {}, { a: 'rerank' }, ENV)!.request, { key: 'rerank', what: 'Re-rank', input: { step: 'rerank_routes', by: 'Shrey' } })
-  assert.match(L.act(d, {}, { a: 'present' }, ENV)!.toast!, /not built yet/)
+  eq(L.act(d, {}, { a: 'present' }, ENV), { writes: [], present: 0 }, 'Present opens the session (the World view draws it)')
 })
 
 test('a route opens in a window with its checks in words and the same toggle', () => {
