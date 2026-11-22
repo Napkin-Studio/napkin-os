@@ -47,14 +47,25 @@ done
     let dest = out.path().join("deck.pdf");
     let done = finish_export("pdf", &tmp, dest.to_str().unwrap()).expect("the deck prints");
     assert_eq!(done, dest.to_str().unwrap());
-    assert!(!std::path::Path::new(&tmp).exists(), "the temp page is removed");
+    assert!(
+        !std::path::Path::new(&tmp).exists(),
+        "the temp page is removed"
+    );
 
     let pdf = std::fs::read_to_string(&dest).unwrap();
     assert!(pdf.starts_with("%PDF-"));
-    assert!(pdf.contains(r#"id="s1""#) && pdf.contains(r#"id="s2""#), "every slide reaches the renderer");
-    assert!(pdf.contains("@page{size:1920px 1080px;margin:0}"), "the deck's own page size is kept");
+    assert!(
+        pdf.contains(r#"id="s1""#) && pdf.contains(r#"id="s2""#),
+        "every slide reaches the renderer"
+    );
+    assert!(
+        pdf.contains("@page{size:1920px 1080px;margin:0}"),
+        "the deck's own page size is kept"
+    );
     assert!(pdf.contains("beforeprint"), "the deck's script is kept");
-    let legible = pdf.find("data-napkin-legible").expect("the legibility check is added");
+    let legible = pdf
+        .find("data-napkin-legible")
+        .expect("the legibility check is added");
     assert!(
         legible > pdf.rfind("</section></main>").unwrap(),
         "the check goes after the slides, before the last </body>, not at the '</body>' inside a slide's text"
