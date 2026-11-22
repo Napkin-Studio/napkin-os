@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Deck visual critic rubric (docs/contracts/deck-visuals.md section 8)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "per_slide",
+    "per_deck"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "per_slide": {
+      "type": "array",
+      "maxItems": 14,
+      "items": {
+        "$ref": "#/definitions/item"
+      }
+    },
+    "per_deck": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "$ref": "#/definitions/item"
+      }
+    }
+  },
+  "definitions": {
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "question",
+        "pass_is",
+        "severity_if_fail"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^v_[a-z_]{3,30}$"
+        },
+        "question": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "pass_is": {
+          "enum": [
+            "yes",
+            "no"
+          ]
+        },
+        "applies_to": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "groups": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "functional",
+                  "content"
+                ]
+              }
+            },
+            "has_image": {
+              "type": "boolean"
+            }
+          }
+        },
+        "severity_if_fail": {
+          "enum": [
+            "major",
+            "minor"
+          ],
+          "description": "The critic never raises a blocker by itself."
+        },
+        "fix": {
+          "enum": [
+            "switch_layout",
+            "regen_image",
+            "crop_image",
+            "add_scrim",
+            "none"
+          ]
+        },
+        "confirm_with": {
+          "type": "string",
+          "description": "The code check that must agree before a fix runs: a name from spec.ISSUE_CHECKS."
+        }
+      }
+    }
+  }
+}

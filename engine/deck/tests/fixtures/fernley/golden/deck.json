@@ -1,0 +1,2211 @@
+{
+ "meta": {
+  "client": "Fernley Drinks Ltd (FICTIONAL, Cork sparkling iced tea brand)",
+  "project": "Fernley Sparkling Tea 2027 Campaign Pitch",
+  "agency": "[Agency]",
+  "kind": "agency",
+  "format": "pitch",
+  "stages": {
+   "a0": "live claude-sonnet-5-5",
+   "a": "live claude-sonnet-5-5",
+   "b": "live claude-opus-5-5",
+   "insight_judge": "live claude-sonnet-5-5",
+   "c": "live claude-opus-5-5",
+   "d": "live claude-opus-5-5"
+  },
+  "insight": {
+   "chosen": "IC5",
+   "writer_choice": "IC5",
+   "chosen_by": "writer",
+   "why": "It is the only candidate that just a tea brand could own, and the cheapest to test early. All three are unproven until research is supplied.",
+   "judged": true,
+   "judge_pass": false,
+   "needs_human": true
+  },
+  "insight_candidates": [
+   {
+    "id": "IC4",
+    "observation": "Hypothesis to confirm: at the chiller, young adults in Ireland may not be able to tell whether a sparkling iced tea is a tea or a soft drink.",
+    "refs": [
+     "brief:background",
+     "prompt:1"
+    ],
+    "tension": "They may be open to something new, yet a drink they cannot place is one they cannot picture tasting.",
+    "implication": "So Fernley should show what sparkling iced tea tastes like before it asks anyone to pick up a can.",
+    "not_in_brief": "Names a possible barrier: confusion between the tea and soft-drink categories. The brief names no barrier.",
+    "from": "No finding or verbatim was supplied. This grows only from the product description and the trial objective. It is an untested hypothesis.",
+    "swap_test": "Passes narrowly. It depends on sparkling iced tea sitting between two categories, so a cola could not say it. Another hybrid drink could.",
+    "confidence": "low: hypothesis only, needs shopper research",
+    "chosen": false,
+    "judge": {
+     "pass": false,
+     "failed": [
+      "generic",
+      "specific",
+      "follows"
+     ],
+     "paraphrase": "People will not try a drink they cannot imagine the taste of, so Fernley has to let them taste it in their head before asking them to buy.",
+     "reason": "Swap in \"[client]\" and \"[category]\": \"young adults may not be able to tell whether a [category] drink is a tea or a soft drink\" reads true for any new drink in a hard-to-place category. Nothing ties it to Fernley or Cork.; A rival in another new-drink category could say \"a drink they cannot place is one they cannot picture tasting\"; it says nothing about Fernley's situation.; The cited text only says Fernley is a Cork sparkling iced tea brand seeking a campaign (brief:background, prompt:1). Nothing there says people cannot tell tea from soft drink at the chiller; the candidate itself says \"No finding or verbatim was supplied.\""
+    }
+   },
+   {
+    "id": "IC5",
+    "observation": "Hypothesis to confirm: young adults in Ireland may see tea as something they grew up with at home, not something they would choose on a summer day out.",
+    "refs": [
+     "brief:background",
+     "brief:audience"
+    ],
+    "tension": "They may feel at home with tea, yet never think of it when they want something cold and fizzy.",
+    "implication": "So Fernley, a Cork tea brand, should take tea from the kitchen table out into the Irish summer, cold and sparkling.",
+    "not_in_brief": "Suggests the audience already knows tea but not this occasion. If true, awareness means a new moment for tea, not a new drink.",
+    "from": "No verbatim or finding was supplied. This grows from the brand being tea and the campaign running in spring and summer. It is an untested hypothesis.",
+    "swap_test": "Passes. Only a tea brand can turn familiarity with tea into a reason to try. A cola, water or juice brand could not say it.",
+    "confidence": "low: hypothesis only, needs qualitative interviews with the audience",
+    "chosen": true,
+    "judge": {
+     "pass": false,
+     "failed": [
+      "follows"
+     ],
+     "paraphrase": "Young adults know tea as a homely, indoor drink, so Fernley has to move it outdoors into summer as something cold and sparkling.",
+     "reason": "The cited text gives only the brand, Cork, sparkling iced tea, and the 18 to 34 audience. Nothing says young adults grew up with tea at home or do not think of it for summer; the candidate admits \"No verbatim or finding was supplied.\""
+    }
+   },
+   {
+    "id": "IC6",
+    "observation": "Hypothesis to confirm: young adults may expect iced tea to be sweet and still, and the word sparkling may not yet change that expectation.",
+    "refs": [
+     "brief:background"
+    ],
+    "tension": "They may want a cold drink with character, yet assume iced tea is a sugary drink with a tea label.",
+    "implication": "So Fernley should lead with the sparkle and the tea together, not rely on the words iced tea alone.",
+    "not_in_brief": "Suggests the category name itself may hold back trial. The brief gives no view of the category.",
+    "from": "No category research was supplied. This grows only from the product being sparkling iced tea. It is an untested hypothesis.",
+    "swap_test": "Passes. It depends on the iced tea category's reputation, so a rival from another category could not say it.",
+    "confidence": "low: hypothesis only, needs category perception research",
+    "chosen": false,
+    "judge": {
+     "pass": false,
+     "failed": [
+      "generic",
+      "specific",
+      "follows"
+     ],
+     "paraphrase": "People may think iced tea is just a sweet, flat drink, so Fernley has to show that its tea is fizzy and still tastes of tea.",
+     "reason": "\"Assume [category] is a sugary drink with a [category] label\" and \"lead with the sparkle and the tea\" could be said of any flavoured or iced drink. Nothing is tied to Fernley or Ireland.; Any iced tea or soft drink rival could claim that people assume the category is sweet and still; it does not rest on Fernley's situation.; The only cited ref says Fernley is a Cork sparkling iced tea brand. It says nothing about expecting iced tea to be sweet and still; the candidate says \"No category research was supplied.\""
+    }
+   }
+  ],
+  "chain": {
+   "insight_phrase": "never think of it when they want something cold and fizzy",
+   "strategy_phrase": "Fernley makes tea something to try cold and sparkling this summer.",
+   "idea_phrase": "off the kitchen table and out into the Irish summer, cold and sparkling",
+   "proof_phrase": "off the kitchen table",
+   "because": {
+    "insight_to_idea": "If they never reach for tea when they want something cold, the idea moves the tea they already know into exactly that moment.",
+    "idea_to_proof": "Taking tea off the kitchen table is tested first in interviews, then tracked in the survey and shown in the social video."
+   }
+  },
+  "length": {
+   "max_slides": 10,
+   "minutes": 30,
+   "source": "a sketch: built from a short prompt alone"
+  },
+  "sketch": {
+   "label": "SKETCH · built from a short prompt: to check and extend before use",
+   "tier": "prompt",
+   "max_slides": 10,
+   "why": "built from a prompt, or a prompt and a little document text, alone: a sketch to check and extend"
+  },
+  "research_doc_id": null,
+  "coverage": {
+   "brief_fields": 11,
+   "brief_fields_filled": 0,
+   "how_to_win_points": 0,
+   "open_questions": 0,
+   "brief_source": "none"
+  },
+  "built_from": {
+   "tier": "prompt",
+   "documents": [],
+   "brief": false,
+   "research": false,
+   "type": "agency_pitch",
+   "profile": {
+    "id": "agency_pitch",
+    "label": "Agency pitch",
+    "source": "flag",
+    "note": "--kind agency"
+   }
+  },
+  "audience": "review",
+  "confirm": [
+   {
+    "ref": "brief:background",
+    "kind": "proposal",
+    "text": "Fernley Drinks is a Cork-based sparkling iced tea brand seeking an agency pitch for a spring-to-summer 2027 campaign in Ireland.",
+    "why": "proposed by the intake: nothing you gave supports it",
+    "slide": null,
+    "verified": null
+   },
+   {
+    "ref": "brief:audience",
+    "kind": "proposal",
+    "text": "18 to 34 year olds in Ireland.",
+    "why": "proposed by the intake: nothing you gave supports it",
+    "slide": null,
+    "verified": null
+   },
+   {
+    "ref": "proposal:0123e745",
+    "kind": "proposal",
+    "text": "We believe trial depends on people being able to picture the taste first. This is a hypothesis to confirm.",
+    "why": "a proposal: nothing you gave supports it",
+    "slide": "s03",
+    "verified": null
+   },
+   {
+    "ref": "prompt:1",
+    "kind": "figure",
+    "text": "The client wants 18 to 34 year olds to know Fernley and try it.",
+    "why": "only your own statement supports this figure",
+    "slide": "s04",
+    "verified": null
+   },
+   {
+    "ref": "proposal:01a8f4b4",
+    "kind": "proposal",
+    "text": "Awareness of Fernley among 18 to 34 year olds in Ireland baseline None in the brief: set before launch",
+    "why": "a proposal: nothing you gave supports it",
+    "slide": "s07",
+    "verified": null
+   },
+   {
+    "ref": "proposal:b7aa6437",
+    "kind": "proposal",
+    "text": "Trial of Fernley among 18 to 34 year olds in Ireland baseline None in the brief: set before launch",
+    "why": "a proposal: nothing you gave supports it",
+    "slide": "s07",
+    "verified": null
+   },
+   {
+    "ref": "proposal:4f1a663d",
+    "kind": "proposal",
+    "text": "Tea seen as a cold summer choice, not only a home drink baseline None in the brief: set before launch",
+    "why": "a proposal: nothing you gave supports it",
+    "slide": "s07",
+    "verified": null
+   },
+   {
+    "ref": "proposal:3c1c45dd",
+    "kind": "proposal",
+    "text": "Without supplied awareness or trial figures, success cannot be shown.",
+    "why": "a proposal: nothing you gave supports it",
+    "slide": "s08",
+    "verified": null
+   },
+   {
+    "ref": "proposal:58741168",
+    "kind": "proposal",
+    "text": "Agree 'Tea's day out' as the campaign platform",
+    "why": "a proposal: nothing you gave supports it",
+    "slide": "s10",
+    "verified": null
+   },
+   {
+    "ref": "slide:title",
+    "kind": "slide",
+    "text": "Fernley Drinks Ltd (FICTIONAL, Cork sparkling iced tea brand): Fernley Sparkling Tea 2027 Campaign Pitch",
+    "why": "still needs a person: nothing supplies it yet",
+    "slide": "s01",
+    "verified": null
+   },
+   {
+    "ref": "slide:insight",
+    "kind": "slide",
+    "text": "Young adults may know tea well but not think of it for summer, so Fernley can make tea the cold, sparkling choice. This must be confirmed.",
+    "why": "still needs a person: nothing supplies it yet",
+    "slide": "s04",
+    "verified": null
+   },
+   {
+    "ref": "slide:team",
+    "kind": "slide",
+    "text": "The team you would work with, and work like this we have done",
+    "why": "still needs a person: nothing supplies it yet",
+    "slide": "s09",
+    "verified": null
+   },
+   {
+    "ref": "slide:investment",
+    "kind": "slide",
+    "text": "Investment, and what we would like to agree today",
+    "why": "still needs a person: nothing supplies it yet",
+    "slide": "s10",
+    "verified": null
+   },
+   {
+    "ref": "slide:competition",
+    "kind": "slide",
+    "text": "What else you could choose, and why you would choose us",
+    "why": "still needs a person: nothing supplies it yet",
+    "slide": "s15",
+    "verified": null
+   }
+  ],
+  "confirm_summary": {
+   "total": 14,
+   "verified": 0,
+   "supplied": 0,
+   "sourced": 0,
+   "open": 14,
+   "needs_person": 5
+  },
+  "narrowing": [
+   {
+    "slide": "Young adults may know tea well but not think of it for summer, so Fernley can make tea the cold, sparkling choice. This must be confirmed.",
+    "from": "Young adults may know tea well but not think of it for summer, so Fernley can make tea the cold, sparkling choice. This must be confirmed.",
+    "to": "Fernley, a Cork sparkling iced tea brand, could make tea the cold, sparkling choice for 18 to 34 year olds in Ireland; the home-drink insight is unconfirmed.",
+    "reason": "Dropped the stated young-adult tea belief as a premise; kept brand, audience and goal the evidence supports, and flagged the insight as unconfirmed.",
+    "verdict": "partly",
+    "applied": false,
+    "rejected_because": "adds a number not in the original headline: 18, 34"
+   },
+   {
+    "slide": "The single thought",
+    "from": "The single thought",
+    "to": "Fernley, a Cork-based sparkling iced tea, makes tea something to try cold and sparkling this summer.",
+    "reason": "Removed the home-only tea belief as a claim; kept only the product and origin facts the evidence supports.",
+    "verdict": "partly",
+    "applied": false,
+    "rejected_because": "longer than the original"
+   },
+   {
+    "slide": "What could go wrong, and what we would do about it",
+    "from": "What could go wrong, and what we would do about it",
+    "to": "Risks: an untested insight and no baseline, and what we would do about them",
+    "reason": "Removed alcohol-occasion and code-compliance framing, which has no cited evidence; kept the missing insight and baseline.",
+    "verdict": "partly",
+    "applied": true
+   }
+  ],
+  "red_team": {
+   "objections": [
+    {
+     "id": "o1",
+     "kind": "price_unclear",
+     "objection": "You ask us to agree a platform today, but I see no budget, no fee figure and no split. I cannot judge value or commit to anything without a cost.",
+     "slide": "Investment, and what we would like to agree today",
+     "change": {
+      "type": "placeholder",
+      "note": "Supply the agency's fee, production and media figures from the rate card, for at least option A, so the client can see what is being asked for."
+     },
+     "applied": false,
+     "outcome": "left for the person",
+     "why": "left for the person"
+    },
+    {
+     "id": "o2",
+     "kind": "claim_unsupported",
+     "objection": "Your own proposition slide says we should not believe this insight yet, yet you ask me to approve the platform built on it today.",
+     "slide": "Young adults may know tea well but not think of it for summer, so Fernley can make tea the cold, sparkling choice. This must be confirmed.",
+     "change": {
+      "type": "ask",
+      "note": "Is the agency asking for approval of the platform today, or approval after the audience interviews confirm the insight? Which one, and why?"
+     },
+     "applied": false,
+     "outcome": "left for the person",
+     "why": "left for the person"
+    },
+    {
+     "id": "o3",
+     "kind": "claim_unsupported",
+     "objection": "You show no team names and no past work with results. I cannot trust you to deliver when nobody is named and no referee is offered.",
+     "slide": "The team you would work with, and work like this we have done",
+     "change": {
+      "type": "placeholder",
+      "note": "Supply named people with one-page CVs for each role, plus two real comparable campaigns with results and a referee."
+     },
+     "applied": false,
+     "outcome": "left for the person",
+     "why": "left for the person"
+    },
+    {
+     "id": "o4",
+     "kind": "objective_unclear",
+     "objection": "Awareness and trial have no targets and no dates. I cannot tell what success looks like or when you would be judged against it.",
+     "slide": "What has to change",
+     "change": {
+      "type": "ask",
+      "note": "What awareness and trial targets, among 18 to 34 year olds, will the agency propose, and by when in the 2027 flight? The client may need to agree them."
+     },
+     "applied": false,
+     "outcome": "left for the person",
+     "why": "left for the person"
+    },
+    {
+     "id": "o5",
+     "kind": "ask_unanswered",
+     "objection": "I see an idea line but no channels, no media plan and no sense of how 'Tea's day out' reaches 18 to 34 year olds across spring to summer.",
+     "slide": "Tea's day out.",
+     "change": {
+      "type": "ask",
+      "note": "Which channels and executions will carry the idea, and what is the phasing from spring to summer 2027?"
+     },
+     "applied": false,
+     "outcome": "left for the person",
+     "why": "left for the person"
+    },
+    {
+     "id": "o6",
+     "kind": "risk_unaddressed",
+     "objection": "The alcohol-cue risk is raised, but the fix leaves legal codes to us. I need to know which rules apply to an audience starting at 18.",
+     "slide": "Risks: an untested insight and no baseline, and what we would do about them",
+     "change": {
+      "type": "ask",
+      "note": "Which advertising codes does the agency believe apply, and who confirms them before creative development?"
+     },
+     "applied": false,
+     "outcome": "left for the person",
+     "why": "left for the person"
+    }
+   ],
+   "max": 6,
+   "reads": "the finished deck",
+   "shown_at": [
+    "gate_1",
+    "gate_3"
+   ],
+   "applied": 0
+  }
+ },
+ "requirements": {
+  "R1": {
+   "id": "R1",
+   "kind": "objective",
+   "text": "Make Fernley sparkling iced tea known among the target audience (build awareness).",
+   "ref": "prompt:1"
+  },
+  "R2": {
+   "id": "R2",
+   "kind": "objective",
+   "text": "Get the target audience to try Fernley sparkling iced tea.",
+   "ref": "brief:desired_response"
+  },
+  "R3": {
+   "id": "R3",
+   "kind": "audience",
+   "text": "18 to 34 year olds in Ireland.",
+   "ref": "brief:audience"
+  },
+  "R4": {
+   "id": "R4",
+   "kind": "scope",
+   "text": "An agency pitch for a spring-to-summer 2027 campaign in Ireland.",
+   "ref": "brief:background"
+  }
+ },
+ "scoring": [],
+ "messages": [],
+ "territories": {
+  "territories": [
+   {
+    "id": "T1",
+    "name": "Tea's Day Out",
+    "thought": "Fernley takes the tea people grew up with at home off the kitchen table and out into the summer, cold and sparkling.",
+    "why": "Answers the chosen insight directly (IC5, brief:insight): if young adults know tea well but never think of it for a summer day, the work keeps the familiarity and changes the occasion. Only a tea brand can do this, which suits Fernley as a sparkling iced tea brand (brief:background). It builds awareness through a new moment rather than a new drink (req:R1), and it lowers the risk of a first sip by starting from something already liked (req:R2, brief:desired_response). Built for the spring to summer 2027 window (req:R4) and for 18 to 34 year olds in Ireland (brief:audience, req:R3).",
+    "mood": "Warm and wry. Familiar home tea rituals are moved outdoors: the kettle swapped for a chilled can, the mug swapped for a cold glass, the kitchen-table chat carried on outdoors in the sun. Light, sunny, a little playful about how ordinary tea is. Sound: the hiss of a can opening where you would expect a kettle.",
+    "references": [
+     "Transposition humour, where a familiar ritual is placed in an unfamiliar setting",
+     "Lo-fi social video shot as everyday moments, not staged ads",
+     "Outdoor posters set in summer contexts, placed near where cold drinks are bought"
+    ],
+    "risks": [
+     "It rests entirely on IC5, which is an untested hypothesis with no supporting research. If young adults do not see tea as a home-only drink, the idea loses its tension. Confirm with the proposed qualitative interviews before development.",
+     "The two halves are not defined: people who do not drink tea at home may not connect with a kitchen-table starting point.",
+     "Category safety: scenes of a summer day out must not read as an alcohol occasion or suggest Fernley is a mixer. Which advertising codes apply to this category, and to an audience that starts at 18, is a question for the client and their legal advisers.",
+     "Ownability is fairly strong because it depends on being tea, but the kitchen-to-outdoors device is a known pattern, so the execution must make it distinctly Fernley's."
+    ],
+    "sketch": "You've had tea a thousand times. Never on a day like this."
+   },
+   {
+    "id": "T2",
+    "name": "Picture the Sip",
+    "thought": "Fernley shows exactly what the drink is, tea made cold and fizzy, so clearly that people can almost taste it before they buy it.",
+    "why": "Answers the possible barrier set out in the storyline: uncertainty about what the drink is, not dislike of it (IC4, IC6). If a drink you cannot place is one you cannot picture tasting, the work removes the guesswork, which speaks to trial (req:R2, brief:desired_response). It leads with the sparkle and the tea together instead of relying on the words iced tea (IC6, brief:background), and plain clarity also builds awareness (req:R1).",
+    "mood": "Close, sensory and plain. Extreme close-ups of cold condensation, rising bubbles and tea colour in a clear glass. Very little copy, all of it literal. Sound-led: the crack of the can, the fizz, then quiet. Confident and uncluttered, close to an explainer in a single frame.",
+    "references": [
+     "Macro product photography and slow-motion pour films",
+     "ASMR-style sound-first short video",
+     "Sampling and point-of-sale work placed at the chiller, where the barrier is assumed to sit"
+    ],
+    "risks": [
+     "Rests on IC4 and IC6, both untested hypotheses. If shoppers already understand sparkling iced tea, clarity alone gives little reason to care. Shopper and category research are needed.",
+     "No flavour, ingredient or taste details were supplied, so the work cannot describe the taste beyond 'tea, cold, sparkling' until the client confirms what can be said. Any claims about sugar or health are a question for the client.",
+     "Ownability is weak to moderate. Sensory drink close-ups are common, and another hybrid drink could use the same approach (IC4 swap test passes only narrowly). It needs a distinctive Fernley device to hold.",
+     "Category safety: pour and fizz imagery must not look like an alcoholic serve."
+    ],
+    "sketch": "Tea. Cold. Sparkling. Now you know what it tastes like."
+   },
+   {
+    "id": "T3",
+    "name": "Out of Cork",
+    "thought": "Fernley uses its Cork roots as the invitation: a drink from here, made by people from here, that Ireland should try first.",
+    "why": "Takes a different route to the same tasks. Awareness comes through a clear, ownable origin rather than through the category (brief:background, req:R1). Origin gives a hard-to-place drink a sense of where it belongs, which may lower the risk of a first sip (req:R2). A Cork brand is the one thing no rival from outside Cork can claim, so it passes the swap test on origin, not on product.",
+    "mood": "Proud but not twee, with local humour and plain speech. Real-feeling streets, shopfronts and summer gatherings rather than postcard scenery. Bold type and a confident home-grown voice. Sound: local voices and everyday ambient noise, no polished voiceover.",
+    "references": [
+     "Regional-pride campaigns built on local language and in-jokes",
+     "Documentary-style street photography",
+     "Community launches and local-first rollouts that grow outwards"
+    ],
+    "risks": [
+     "Nothing in the inputs says whether Cork origin matters to 18 to 34 year olds in Ireland, or whether it lands outside Cork. It could feel parochial to the national audience (brief:audience, req:R3). This is a research question.",
+     "The inputs say only that Fernley is Cork-based. They do not say where the drink is made or brewed, so any 'made in Cork' claim needs client confirmation.",
+     "It does not directly address the storyline's chosen insight (IC5) or the possible barrier of what the drink is. Origin may build awareness without explaining the product, so it may need T2-style clarity alongside it.",
+     "Category safety: local and regional humour must not drift into drinking-culture tropes."
+    ],
+    "sketch": "Cork made tea fizzy. The rest of Ireland gets to try it this summer."
+   }
+  ],
+  "stage": "c_tissue_session",
+  "produced_by": "live claude-opus-5-5",
+  "ranking": {
+   "order": [
+    "T1",
+    "T2",
+    "T3"
+   ],
+   "reasons": {
+    "T1": "It answers the chosen insight directly by keeping tea's familiarity and changing the occasion to a cold, sparkling summer one, which only a tea brand can do, though it depends on an unproven hypothesis and the kitchen-to-outdoors device needs a distinctly Fernley execution.",
+    "T2": "It tackles the possible barrier of not knowing what the drink is and supports trial, but sensory close-ups of fizz and pour are common and easy for another hybrid drink to copy, so distinctiveness is weak to moderate.",
+    "T3": "Cork origin is ownable and hard for rivals to claim, but nothing shows it matters to a national 18 to 34 audience, it sidesteps the chosen insight and does not explain the product, and 'made in Cork' claims are unconfirmed."
+   },
+   "by": "claude-sonnet-5-5"
+  },
+  "chosen": "T1",
+  "chosen_by": "default: the judge's first choice, flagged for Gate 2",
+  "usage": {
+   "calls": 2,
+   "secs": 41.7,
+   "model": "claude-opus-5-5,claude-sonnet-5-5",
+   "prompt_tokens": 4,
+   "completion_tokens": 3364,
+   "cache_read_tokens": 0,
+   "cache_creation_tokens": 6434,
+   "usd": 0.1155,
+   "usd_estimated": true
+  }
+ },
+ "slides": {
+  "s01": {
+   "type": "title",
+   "section": "Opening",
+   "title": "Fernley Drinks Ltd (FICTIONAL, Cork sparkling iced tea brand): Fernley Sparkling Tea 2027 Campaign Pitch",
+   "label": "Fernley Drinks Ltd (FICTIONAL, Cork sparkling iced tea brand): Fernley Sparkling",
+   "blocks": [
+    {
+     "kind": "text",
+     "text": "A response from [Agency]"
+    },
+    {
+     "kind": "text",
+     "text": "Proposed (not given by the client): presented by the account lead and planner [presenter and date]. To confirm: who presents, and the date.",
+     "human": true
+    },
+    {
+     "kind": "small",
+     "text": "SKETCH · built from a short prompt: to check and extend before use",
+     "basis": "meta"
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "title"
+   },
+   "notes": "Evidence:",
+   "status": "needs_human",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s02": {
+   "type": "objective",
+   "section": "Objective",
+   "title": "What has to change",
+   "label": "What has to change",
+   "blocks": [
+    {
+     "kind": "bullets",
+     "items": [
+      {
+       "text": "Make Fernley sparkling iced tea known among the target audience (build awareness).",
+       "refs": [
+        "prompt:1",
+        "req:R1"
+       ]
+      },
+      {
+       "text": "Get the target audience to try Fernley sparkling iced tea.",
+       "refs": [
+        "brief:desired_response",
+        "req:R2"
+       ]
+      }
+     ]
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "objective"
+   },
+   "notes": "Evidence:\n[prompt:1] prompt: Fernley Drinks, a Cork sparkling iced tea brand, wants an agency pitch for a spring-to-summer 2027 Irish campaign that makes it known among \n[req:R1]\n[brief:desired_response] brief field (intake): Try Fernley sparkling iced tea. (rests on prompt:1)\n[req:R2]",
+   "status": "drafted",
+   "requirements": [
+    "R1",
+    "R2"
+   ],
+   "footnotes": [
+    1,
+    2,
+    3
+   ]
+  },
+  "s03": {
+   "type": "real_question",
+   "section": "The real question",
+   "title": "Fernley's task is to get young adults in Ireland to know and try a drink they may not yet know how to place.",
+   "label": "Fernley's task is to get young adults in Ireland to know and try a drink they ma",
+   "blocks": [
+    {
+     "kind": "statement",
+     "text": "Awareness and trial for a Cork sparkling iced tea, spring to summer 2027, with no research yet behind the audience view."
+    }
+   ],
+   "claims": [
+    {
+     "text": "The client asks for two things: be known among the audience, and be tried.",
+     "refs": [
+      "prompt:1",
+      "req:R1",
+      "req:R2"
+     ],
+     "basis": "evidence"
+    },
+    {
+     "text": "The audience is 18 to 34 year olds in Ireland.",
+     "refs": [
+      "brief:audience",
+      "req:R3"
+     ],
+     "basis": "evidence"
+    },
+    {
+     "text": "Fernley is a Cork-based sparkling iced tea brand.",
+     "refs": [
+      "brief:background"
+     ],
+     "basis": "evidence"
+    },
+    {
+     "text": "We believe trial depends on people being able to picture the taste first. This is a hypothesis to confirm.",
+     "refs": [],
+     "basis": "proposal"
+    }
+   ],
+   "visual": {
+    "kind": "layout",
+    "hint": "real_question"
+   },
+   "notes": "Evidence:\n[prompt:1] prompt: Fernley Drinks, a Cork sparkling iced tea brand, wants an agency pitch for a spring-to-summer 2027 Irish campaign that makes it known among \n[req:R1]\n[req:R2]\n[brief:audience] brief field (intake): 18 to 34 year olds in Ireland. (rests on prompt:1)\n[req:R3]\n[brief:background] brief field (intake): Fernley Drinks is a Cork-based sparkling iced tea brand seeking an agency pitch for a spring-to-summer 2027 campaign in Ireland. (rests on prompt:1)",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": [
+    1,
+    2,
+    3
+   ]
+  },
+  "s04": {
+   "type": "insight",
+   "section": "Insight",
+   "title": "Young adults may know tea well but not think of it for summer, so Fernley can make tea the cold, sparkling choice. This must be confirmed.",
+   "label": "Young adults may know tea well but not think of it for summer, so Fernley can ma",
+   "blocks": [
+    {
+     "kind": "statement",
+     "text": "Hypothesis: young adults may see tea as a home drink, not a summer choice. They may never think of it when wanting something cold and fizzy. Fernley should take tea from the kitchen table into the Irish summer, cold and sparkling.",
+     "refs": [
+      "brief:background",
+      "brief:audience"
+     ]
+    },
+    {
+     "kind": "small",
+     "text": "Our insight.",
+     "basis": "meta"
+    },
+    {
+     "kind": "small",
+     "text": "Fernley: Cork-based sparkling iced tea.",
+     "refs": [
+      "brief:background"
+     ]
+    },
+    {
+     "kind": "small",
+     "text": "Campaign: spring to summer 2027, Ireland.",
+     "refs": [
+      "brief:background",
+      "req:R4"
+     ]
+    },
+    {
+     "kind": "small",
+     "text": "Goal: 18 to 34 year olds know and try Fernley.",
+     "refs": [
+      "prompt:1",
+      "req:R1",
+      "req:R2"
+     ]
+    },
+    {
+     "kind": "small",
+     "text": "No research supplied: hypothesis.",
+     "refs": [
+      "brief:insight"
+     ]
+    }
+   ],
+   "claims": [
+    {
+     "text": "Hypothesis to confirm: young adults in Ireland may see tea as something they grew up with at home, not something they would choose on a summer day out. They may feel at home with tea, yet never think of it when they want something cold and fizzy. So Fernley, a Cork tea brand, should take tea from the kitchen table out into the Irish summer, cold and sparkling.",
+     "refs": [
+      "brief:background",
+      "brief:audience"
+     ],
+     "basis": "sourced"
+    },
+    {
+     "text": "Fernley is a Cork-based sparkling iced tea brand.",
+     "refs": [
+      "brief:background"
+     ],
+     "basis": "sourced"
+    },
+    {
+     "text": "The campaign runs from spring to summer 2027 in Ireland.",
+     "refs": [
+      "brief:background",
+      "req:R4"
+     ],
+     "basis": "sourced"
+    },
+    {
+     "text": "The client wants 18 to 34 year olds to know Fernley and try it.",
+     "refs": [
+      "prompt:1",
+      "req:R1",
+      "req:R2"
+     ],
+     "basis": "sourced"
+    },
+    {
+     "text": "No audience research was supplied, so this insight is a hypothesis to confirm.",
+     "refs": [
+      "brief:insight"
+     ],
+     "basis": "sourced"
+    }
+   ],
+   "visual": {
+    "kind": "layout",
+    "hint": "insight"
+   },
+   "notes": "Insight IC5 of 3, chosen by writer. Why: It is the only candidate that just a tea brand could own, and the cheapest to test early. All three are unproven until research is supplied. Judge: Young adults know tea as a homely, indoor drink, so Fernley has to move it outdoors into summer as something cold and sparkling. Every candidate failed the judge: IC4: Swap in \"[client]\" and \"[category]\": \"young adults may not be able to tell whether a [category] drink is a tea or a soft drink\" reads true for any new drink in a hard-to-place category. Nothing ties it to Fernley or Cork.; A rival in another new-drink category could say \"a drink they cannot place is one they cannot picture tasting\"; it says nothing about Fernley's situation.; The cited text only says Fernley is a Cork sparkling iced tea brand seeking a campaign (brief:background, prompt:1). Nothing there says people cannot tell tea from soft drink at the chiller; the candidate itself says \"No finding or verbatim was supplied.\" | IC5: The cited text gives only the brand, Cork, sparkling iced tea, and the 18 to 34 audience. Nothing says young adults grew up with tea at home or do not think of it for summer; the candidate admits \"No verbatim or finding was supplied.\" | IC6: \"Assume [category] is a sugary drink with a [category] label\" and \"lead with the sparkle and the tea\" could be said of any flavoured or iced drink. Nothing is tied to Fernley or Ireland.; Any iced tea or soft drink rival could claim that people assume the category is sweet and still; it does not rest on Fernley's situation.; The only cited ref says Fernley is a Cork sparkling iced tea brand. It says nothing about expecting iced tea to be sweet and still; the candidate says \"No category research was supplied.\"\n\nEvidence:\n[brief:background] brief field (intake): Fernley Drinks is a Cork-based sparkling iced tea brand seeking an agency pitch for a spring-to-summer 2027 campaign in Ireland. (rests on prompt:1)\n[brief:audience] brief field (intake): 18 to 34 year olds in Ireland. (rests on prompt:1)\n[req:R4]\n[prompt:1] prompt: Fernley Drinks, a Cork sparkling iced tea brand, wants an agency pitch for a spring-to-summer 2027 Irish campaign that makes it known among \n[req:R1]\n[req:R2]\n[brief:insight] brief field (missing)",
+   "status": "needs_human",
+   "requirements": [],
+   "footnotes": [
+    1,
+    2,
+    3
+   ]
+  },
+  "s05": {
+   "type": "proposition",
+   "section": "Proposition",
+   "title": "The single thought",
+   "label": "The single thought",
+   "blocks": [
+    {
+     "kind": "fromto",
+     "from": "Young adults may know tea only from home. This is a hypothesis.",
+     "to": "Fernley makes tea something to try cold and sparkling this summer.",
+     "refs": [
+      "brief:background",
+      "req:R2"
+     ]
+    },
+    {
+     "kind": "bullets",
+     "title": "Why they will believe it",
+     "items": [
+      {
+       "text": "A sparkling iced tea: tea made cold and fizzy.",
+       "refs": [
+        "brief:background"
+       ]
+      },
+      {
+       "text": "From Fernley Drinks, a Cork-based brand.",
+       "refs": [
+        "brief:background"
+       ]
+      },
+      {
+       "text": "Further reasons to believe must come from the client.",
+       "refs": [
+        "brief:reasons_to_believe"
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "small",
+     "text": "The objection it must beat: This insight rests on no research. We should not believe it yet. It is a testable hypothesis; we propose quick audience interviews to confirm or replace it before creative development."
+    }
+   ],
+   "claims": [
+    {
+     "text": "A sparkling iced tea: tea made cold and fizzy.",
+     "refs": [
+      "brief:background"
+     ]
+    },
+    {
+     "text": "From Fernley Drinks, a Cork-based brand.",
+     "refs": [
+      "brief:background"
+     ]
+    },
+    {
+     "text": "Further reasons to believe must come from the client.",
+     "refs": [
+      "brief:reasons_to_believe"
+     ]
+    }
+   ],
+   "visual": {
+    "kind": "layout",
+    "hint": "proposition"
+   },
+   "notes": "Evidence:\n[brief:background] brief field (intake): Fernley Drinks is a Cork-based sparkling iced tea brand seeking an agency pitch for a spring-to-summer 2027 campaign in Ireland. (rests on prompt:1)\n[brief:reasons_to_believe] brief field (missing)\n[req:R2]",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": [
+    2,
+    3
+   ]
+  },
+  "s06": {
+   "type": "idea",
+   "section": "The idea",
+   "title": "Tea's day out.",
+   "label": "Tea's day out.",
+   "blocks": [
+    {
+     "kind": "statement",
+     "text": "Fernley takes the tea young adults grew up with at home off the kitchen table and out into the Irish summer, cold and sparkling."
+    },
+    {
+     "kind": "text",
+     "text": ""
+    }
+   ],
+   "claims": [
+    {
+     "text": "Fernley takes the tea young adults grew up with at home off the kitchen table and out into the Irish summer, cold and sparkling.",
+     "refs": [],
+     "basis": "creative"
+    }
+   ],
+   "visual": {
+    "kind": "layout",
+    "hint": "idea"
+   },
+   "notes": "Evidence:",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s07": {
+   "type": "measurement",
+   "section": "Measurement",
+   "title": "No baseline was supplied, so a survey before launch sets one and the campaign is judged against it.",
+   "label": "No baseline was supplied, so a survey before launch sets one and the campaign is",
+   "blocks": [
+    {
+     "kind": "table",
+     "rows": [
+      [
+       "What we measure",
+       "Baseline",
+       "How"
+      ],
+      [
+       "Awareness of Fernley among 18 to 34 year olds in Ireland",
+       "None in brief: set before launch",
+       "Survey before launch and after the spring to summer 2027 flight. No figure supplied; first wave sets the baseline."
+      ],
+      [
+       "Trial of Fernley among 18 to 34 year olds in Ireland",
+       "None in brief: set before launch",
+       "Same survey asks about trying Fernley. Use of sales or stockist data is for the client to say."
+      ],
+      [
+       "Tea seen as a cold summer choice, not only a home drink",
+       "None in brief: set before launch",
+       "Pre-development interviews test whether the audience would take tea off the kitchen table on a summer day; the survey then tracks it."
+      ]
+     ],
+     "refs": [
+      "brief:desired_response",
+      "brief:insight",
+      "req:R1",
+      "req:R2",
+      "req:R3",
+      "prompt:1",
+      "brief:desired_response"
+     ]
+    }
+   ],
+   "claims": [
+    {
+     "text": "Awareness of Fernley among 18 to 34 year olds in Ireland baseline None in the brief: set before launch",
+     "refs": [
+      "req:R1",
+      "req:R3"
+     ],
+     "basis": "proposal"
+    },
+    {
+     "text": "Trial of Fernley among 18 to 34 year olds in Ireland baseline None in the brief: set before launch",
+     "refs": [
+      "req:R2",
+      "req:R3",
+      "brief:desired_response"
+     ],
+     "basis": "proposal"
+    },
+    {
+     "text": "Tea seen as a cold summer choice, not only a home drink baseline None in the brief: set before launch",
+     "refs": [
+      "brief:insight"
+     ],
+     "basis": "proposal"
+    }
+   ],
+   "visual": {
+    "kind": "layout",
+    "hint": "measurement"
+   },
+   "notes": "Evidence:\n[req:R1]\n[req:R3]\n[req:R2]\n[brief:desired_response] brief field (intake): Try Fernley sparkling iced tea. (rests on prompt:1)\n[brief:insight] brief field (missing)\n[prompt:1] prompt: Fernley Drinks, a Cork sparkling iced tea brand, wants an agency pitch for a spring-to-summer 2027 Irish campaign that makes it known among",
+   "status": "drafted",
+   "requirements": [
+    "R1",
+    "R2"
+   ],
+   "footnotes": [
+    1,
+    2,
+    3
+   ]
+  },
+  "s08": {
+   "type": "risks",
+   "section": "Risks",
+   "title": "Risks: an untested insight and no baseline, and what we would do about them",
+   "label": "What could go wrong, and what we would do about it",
+   "blocks": [
+    {
+     "kind": "kv",
+     "items": [
+      [
+       "The whole plan rests on an untested hypothesis that tea feels like a home-only drink.",
+       "Run audience interviews before creative development; replace the insight if they do not confirm it."
+      ],
+      [
+       "Summer day-out scenes could read as an alcohol occasion or a mixer, with an audience starting at 18.",
+       "Ban alcohol cues in every execution; the client and their legal advisers confirm which codes apply."
+      ],
+      [
+       "Without supplied awareness or trial figures, success cannot be shown.",
+       "Run a pre-launch survey wave to set the baseline, and agree targets with the client."
+      ]
+     ],
+     "refs": [
+      "brief:insight",
+      "req:R1",
+      "req:R2",
+      "req:R3"
+     ]
+    }
+   ],
+   "claims": [
+    {
+     "text": "The whole plan rests on an untested hypothesis that tea feels like a home-only drink.",
+     "refs": [
+      "brief:insight"
+     ],
+     "basis": "evidence"
+    },
+    {
+     "text": "Summer day-out scenes could read as an alcohol occasion or a mixer, with an audience starting at 18.",
+     "refs": [
+      "req:R3"
+     ],
+     "basis": "evidence"
+    },
+    {
+     "text": "Without supplied awareness or trial figures, success cannot be shown.",
+     "refs": [
+      "req:R1",
+      "req:R2"
+     ],
+     "basis": "proposal"
+    }
+   ],
+   "visual": {
+    "kind": "layout",
+    "hint": "risks"
+   },
+   "notes": "Evidence:\n[brief:insight] brief field (missing)\n[req:R3]\n[req:R1]\n[req:R2]",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": [
+    2,
+    3
+   ]
+  },
+  "s09": {
+   "type": "team",
+   "section": "Team and work",
+   "title": "The team you would work with, and work like this we have done",
+   "label": "The team you would work with, and work like this we have done",
+   "blocks": [
+    {
+     "kind": "bullets",
+     "items": [
+      {
+       "text": "Proposed (not given by the client): a named person [project lead]. To confirm: name and one-page CV.",
+       "human": true
+      },
+      {
+       "text": "Proposed (not given by the client): a named person [strategic planner]. To confirm: name and one-page CV.",
+       "human": true
+      },
+      {
+       "text": "Proposed (not given by the client): a named person [creative lead]. To confirm: name and one-page CV.",
+       "human": true
+      },
+      {
+       "text": "Proposed (not given by the client): a named person [digital lead]. To confirm: name and one-page CV.",
+       "human": true
+      },
+      {
+       "text": "Proposed (not given by the client): a named person [media planning and buying lead]. To confirm: name and one-page CV.",
+       "human": true
+      }
+     ]
+    },
+    {
+     "kind": "bullets",
+     "items": [
+      {
+       "text": "Proposed (not given by the client): a comparable integrated campaign with outcomes [case study 1]. To confirm: which campaign, its results and a referee.",
+       "human": true
+      },
+      {
+       "text": "Proposed (not given by the client): a second comparable integrated campaign [case study 2]. To confirm: which campaign, its results and a referee.",
+       "human": true
+      }
+     ],
+     "title": "Work like this we have done before"
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "team"
+   },
+   "notes": "Evidence:",
+   "status": "needs_human",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s10": {
+   "type": "investment",
+   "section": "Timeline and investment",
+   "title": "Investment, and what we would like to agree today",
+   "label": "Investment, and what we would like to agree today",
+   "blocks": [
+    {
+     "kind": "text",
+     "text": "Budget given: not given",
+     "refs": []
+    },
+    {
+     "kind": "bullets",
+     "items": [
+      {
+       "text": "Proposed (not given by the client): a working split of fees, production and media [option A]. To confirm: the split, from the agency's rate card.",
+       "human": true
+      },
+      {
+       "text": "Proposed (not given by the client): a media-weighted version [option B]. To confirm: whether the client wants a lean or a heavier option.",
+       "human": true
+      }
+     ]
+    },
+    {
+     "kind": "bullets",
+     "items": [
+      {
+       "text": "Agree 'Tea's day out' as the campaign platform",
+       "basis": "proposal"
+      },
+      {
+       "text": "Proposed (not given by the client): a date for the decision [decision date]. To confirm: the date the client will decide.",
+       "human": true
+      }
+     ],
+     "title": "What we would like to agree today"
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "investment"
+   },
+   "notes": "Evidence:",
+   "status": "needs_human",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s11": {
+   "type": "appendix",
+   "section": "Appendix",
+   "title": "Appendix",
+   "label": "Appendix",
+   "blocks": [
+    {
+     "kind": "text",
+     "text": "Backup for questions: everything this presentation rests on."
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "appendix"
+   },
+   "notes": "Evidence:",
+   "status": "from_source",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s12": {
+   "type": "brief_restated",
+   "section": "Your brief",
+   "title": "What you asked us to do, in your words",
+   "label": "What you asked us to do, in your words",
+   "blocks": [
+    {
+     "kind": "bullets",
+     "items": [
+      {
+       "text": "Make Fernley sparkling iced tea known among the target audience (build awareness).",
+       "refs": [
+        "prompt:1",
+        "req:R1"
+       ]
+      },
+      {
+       "text": "Get the target audience to try Fernley sparkling iced tea.",
+       "refs": [
+        "brief:desired_response",
+        "req:R2"
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "callout",
+     "text": "Success: Fernley makes tea something to try cold and sparkling this summer.",
+     "refs": [
+      "brief:objectives.attitudinal"
+     ]
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "brief_restated"
+   },
+   "notes": "Evidence:\n[prompt:1] prompt: Fernley Drinks, a Cork sparkling iced tea brand, wants an agency pitch for a spring-to-summer 2027 Irish campaign that makes it known among \n[req:R1]\n[brief:desired_response] brief field (intake): Try Fernley sparkling iced tea. (rests on prompt:1)\n[req:R2]\n[brief:objectives.attitudinal] brief field (missing)",
+   "status": "drafted",
+   "requirements": [
+    "R1",
+    "R2"
+   ],
+   "footnotes": [
+    1,
+    2,
+    3
+   ]
+  },
+  "s13": {
+   "type": "chart",
+   "section": "The real question",
+   "title": "The likely barrier to trial is uncertainty about what the drink is, not dislike of it. This must be tested.",
+   "label": "The likely barrier to trial is uncertainty about what the drink is, not dislike ",
+   "blocks": [
+    {
+     "kind": "bullets",
+     "items": [
+      {
+       "text": "The brief says nothing yet about how the audience sees iced tea. That is a research question, not a known fact.",
+       "refs": [
+        "brief:insight",
+        "brief:competitor_context"
+       ]
+      },
+      {
+       "text": "A new drink that is hard to place may be hard to picture tasting. This is a hypothesis to confirm.",
+       "refs": []
+      },
+      {
+       "text": "The client wants trial, so the work must lower the risk of a first sip.",
+       "refs": [
+        "req:R2",
+        "brief:desired_response"
+       ]
+      }
+     ]
+    }
+   ],
+   "claims": [
+    {
+     "text": "The brief says nothing yet about how the audience sees iced tea. That is a research question, not a known fact.",
+     "refs": [
+      "brief:insight",
+      "brief:competitor_context"
+     ],
+     "basis": "opinion"
+    },
+    {
+     "text": "A new drink that is hard to place may be hard to picture tasting. This is a hypothesis to confirm.",
+     "refs": [],
+     "basis": "proposal"
+    },
+    {
+     "text": "The client wants trial, so the work must lower the risk of a first sip.",
+     "refs": [
+      "req:R2",
+      "brief:desired_response"
+     ],
+     "basis": "proposal"
+    }
+   ],
+   "visual": {
+    "kind": "chart"
+   },
+   "notes": "Evidence:\n[brief:insight] brief field (missing)\n[brief:competitor_context] brief field (missing)\n[req:R2]\n[brief:desired_response] brief field (intake): Try Fernley sparkling iced tea. (rests on prompt:1)",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": [
+    2,
+    3
+   ]
+  },
+  "s14": {
+   "type": "audience",
+   "section": "Insight",
+   "title": "We are talking to 18 to 34 year olds in Ireland, and we do not yet know how they see tea.",
+   "label": "We are talking to 18 to 34 year olds in Ireland, and we do not yet know how they",
+   "blocks": [
+    {
+     "kind": "text",
+     "text": "18 to 34 year olds in Ireland.",
+     "refs": [
+      "brief:audience",
+      "req:R3",
+      "prompt:1"
+     ]
+    },
+    {
+     "kind": "text",
+     "text": "Not defined in the inputs. Proposed for research: people who drink tea at home and people who do not."
+    },
+    {
+     "kind": "card",
+     "title": "Who the work is written for",
+     "text": "Aoife. Drinks tea at home every day, but has never thought of reaching for one cold in the sun."
+    },
+    {
+     "kind": "small",
+     "text": "No secondary audience was specified."
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "audience"
+   },
+   "notes": "Evidence:\n[brief:audience] brief field (intake): 18 to 34 year olds in Ireland. (rests on prompt:1)\n[req:R3]\n[prompt:1] prompt: Fernley Drinks, a Cork sparkling iced tea brand, wants an agency pitch for a spring-to-summer 2027 Irish campaign that makes it known among",
+   "status": "drafted",
+   "requirements": [
+    "R3"
+   ],
+   "footnotes": [
+    1,
+    2,
+    3
+   ]
+  },
+  "s15": {
+   "type": "competition",
+   "section": "Competition",
+   "title": "What else you could choose, and why you would choose us",
+   "label": "What else you could choose, and why you would choose us",
+   "blocks": [
+    {
+     "kind": "bullets",
+     "items": [
+      {
+       "text": "Proposed (not given by the client): the options the client could pick instead of us, and the plan to win against each [the alternatives]. To confirm: which alternatives the client is weighing.",
+       "human": true
+      }
+     ]
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "competition"
+   },
+   "notes": "Evidence:",
+   "status": "needs_human",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s16": {
+   "type": "territory",
+   "section": "Territories",
+   "title": "Territory: Tea's Day Out",
+   "label": "Territory Tea's Day Out",
+   "blocks": [
+    {
+     "kind": "statement",
+     "text": "Fernley takes the tea people grew up with at home off the kitchen table and out into the summer, cold and sparkling.",
+     "basis": "creative"
+    },
+    {
+     "kind": "kv",
+     "items": [
+      [
+       "Why it fits",
+       "Answers the chosen insight directly (IC5, brief:insight): if young adults know tea well but never think of it for a summer day, the work keeps the familiarity and changes the occasion. Only a tea brand can do this, which suits Fernley as a sparkling iced tea brand (brief:background). It builds awareness through a new moment rather than a new drink (req:R1), and it lowers the risk of a first sip by starting from something already liked (req:R2, brief:desired_response). Built for the spring to summer 2027 window (req:R4) and for 18 to 34 year olds in Ireland (brief:audience, req:R3)."
+      ],
+      [
+       "Mood",
+       "Warm and wry. Familiar home tea rituals are moved outdoors: the kettle swapped for a chilled can, the mug swapped for a cold glass, the kitchen-table chat carried on outdoors in the sun. Light, sunny, a little playful about how ordinary tea is. Sound: the hiss of a can opening where you would expect a kettle."
+      ],
+      [
+       "Risks",
+       [
+        "It rests entirely on IC5, which is an untested hypothesis with no supporting research. If young adults do not see tea as a home-only drink, the idea loses its tension. Confirm with the proposed qualitative interviews before development.",
+        "The two halves are not defined: people who do not drink tea at home may not connect with a kitchen-table starting point.",
+        "Category safety: scenes of a summer day out must not read as an alcohol occasion or suggest Fernley is a mixer. Which advertising codes apply to this category, and to an audience that starts at 18, is a question for the client and their legal advisers.",
+        "Ownability is fairly strong because it depends on being tea, but the kitchen-to-outdoors device is a known pattern, so the execution must make it distinctly Fernley's."
+       ]
+      ]
+     ],
+     "basis": "creative"
+    },
+    {
+     "kind": "sketch",
+     "text": "You've had tea a thousand times. Never on a day like this.",
+     "basis": "creative"
+    }
+   ],
+   "claims": [
+    {
+     "text": "Fernley takes the tea people grew up with at home off the kitchen table and out into the summer, cold and sparkling.",
+     "refs": [],
+     "basis": "creative"
+    }
+   ],
+   "visual": {
+    "kind": "image_prompt",
+    "prompt": "Mood frame for 'Tea's Day Out': Warm and wry. Familiar home tea rituals are moved outdoors: the kettle swapped for a chilled can, the mug swapped for a cold glass, the kitchen-table chat carried on outdoors in the sun. Light, sunny, a little playful about how ordinary tea is. Sound: the hiss of a can opening where you would expect a kettle.",
+    "status": "illustrative, not final"
+   },
+   "notes": "Evidence:",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s17": {
+   "type": "territory",
+   "section": "Territories",
+   "title": "Territory: Picture the Sip",
+   "label": "Territory Picture the Sip",
+   "blocks": [
+    {
+     "kind": "statement",
+     "text": "Fernley shows exactly what the drink is, tea made cold and fizzy, so clearly that people can almost taste it before they buy it.",
+     "basis": "creative"
+    },
+    {
+     "kind": "kv",
+     "items": [
+      [
+       "Why it fits",
+       "Answers the possible barrier set out in the storyline: uncertainty about what the drink is, not dislike of it (IC4, IC6). If a drink you cannot place is one you cannot picture tasting, the work removes the guesswork, which speaks to trial (req:R2, brief:desired_response). It leads with the sparkle and the tea together instead of relying on the words iced tea (IC6, brief:background), and plain clarity also builds awareness (req:R1)."
+      ],
+      [
+       "Mood",
+       "Close, sensory and plain. Extreme close-ups of cold condensation, rising bubbles and tea colour in a clear glass. Very little copy, all of it literal. Sound-led: the crack of the can, the fizz, then quiet. Confident and uncluttered, close to an explainer in a single frame."
+      ],
+      [
+       "Risks",
+       [
+        "Rests on IC4 and IC6, both untested hypotheses. If shoppers already understand sparkling iced tea, clarity alone gives little reason to care. Shopper and category research are needed.",
+        "No flavour, ingredient or taste details were supplied, so the work cannot describe the taste beyond 'tea, cold, sparkling' until the client confirms what can be said. Any claims about sugar or health are a question for the client.",
+        "Ownability is weak to moderate. Sensory drink close-ups are common, and another hybrid drink could use the same approach (IC4 swap test passes only narrowly). It needs a distinctive Fernley device to hold.",
+        "Category safety: pour and fizz imagery must not look like an alcoholic serve."
+       ]
+      ]
+     ],
+     "basis": "creative"
+    },
+    {
+     "kind": "sketch",
+     "text": "Tea. Cold. Sparkling. Now you know what it tastes like.",
+     "basis": "creative"
+    }
+   ],
+   "claims": [
+    {
+     "text": "Fernley shows exactly what the drink is, tea made cold and fizzy, so clearly that people can almost taste it before they buy it.",
+     "refs": [],
+     "basis": "creative"
+    }
+   ],
+   "visual": {
+    "kind": "image_prompt",
+    "prompt": "Mood frame for 'Picture the Sip': Close, sensory and plain. Extreme close-ups of cold condensation, rising bubbles and tea colour in a clear glass. Very little copy, all of it literal. Sound-led: the crack of the can, the fizz, then quiet. Confident and uncluttered, close to an explainer in a single frame.",
+    "status": "illustrative, not final"
+   },
+   "notes": "Evidence:",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s18": {
+   "type": "territory",
+   "section": "Territories",
+   "title": "Territory: Out of Cork",
+   "label": "Territory Out of Cork",
+   "blocks": [
+    {
+     "kind": "statement",
+     "text": "Fernley uses its Cork roots as the invitation: a drink from here, made by people from here, that Ireland should try first.",
+     "basis": "creative"
+    },
+    {
+     "kind": "kv",
+     "items": [
+      [
+       "Why it fits",
+       "Takes a different route to the same tasks. Awareness comes through a clear, ownable origin rather than through the category (brief:background, req:R1). Origin gives a hard-to-place drink a sense of where it belongs, which may lower the risk of a first sip (req:R2). A Cork brand is the one thing no rival from outside Cork can claim, so it passes the swap test on origin, not on product."
+      ],
+      [
+       "Mood",
+       "Proud but not twee, with local humour and plain speech. Real-feeling streets, shopfronts and summer gatherings rather than postcard scenery. Bold type and a confident home-grown voice. Sound: local voices and everyday ambient noise, no polished voiceover."
+      ],
+      [
+       "Risks",
+       [
+        "Nothing in the inputs says whether Cork origin matters to 18 to 34 year olds in Ireland, or whether it lands outside Cork. It could feel parochial to the national audience (brief:audience, req:R3). This is a research question.",
+        "The inputs say only that Fernley is Cork-based. They do not say where the drink is made or brewed, so any 'made in Cork' claim needs client confirmation.",
+        "It does not directly address the storyline's chosen insight (IC5) or the possible barrier of what the drink is. Origin may build awareness without explaining the product, so it may need T2-style clarity alongside it.",
+        "Category safety: local and regional humour must not drift into drinking-culture tropes."
+       ]
+      ]
+     ],
+     "basis": "creative"
+    },
+    {
+     "kind": "sketch",
+     "text": "Cork made tea fizzy. The rest of Ireland gets to try it this summer.",
+     "basis": "creative"
+    }
+   ],
+   "claims": [
+    {
+     "text": "Fernley uses its Cork roots as the invitation: a drink from here, made by people from here, that Ireland should try first.",
+     "refs": [],
+     "basis": "creative"
+    }
+   ],
+   "visual": {
+    "kind": "image_prompt",
+    "prompt": "Mood frame for 'Out of Cork': Proud but not twee, with local humour and plain speech. Real-feeling streets, shopfronts and summer gatherings rather than postcard scenery. Bold type and a confident home-grown voice. Sound: local voices and everyday ambient noise, no polished voiceover.",
+    "status": "illustrative, not final"
+   },
+   "notes": "Evidence:",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s19": {
+   "type": "territory_choice",
+   "section": "Territories",
+   "title": "We recommend 'Tea's Day Out'",
+   "label": "We recommend 'Tea's Day Out'",
+   "blocks": [
+    {
+     "kind": "table",
+     "rows": [
+      [
+       "Territory",
+       "Why (or why not)"
+      ],
+      [
+       "Tea's Day Out",
+       "It answers the chosen insight directly by keeping tea's familiarity and changing the occasion to a cold, sparkling summer one, which only a tea brand can do, though it depends on an unproven hypothesis and the kitchen-to-outdoors device needs a distinctly Fernley execution."
+      ],
+      [
+       "Picture the Sip",
+       "It tackles the possible barrier of not knowing what the drink is and supports trial, but sensory close-ups of fizz and pour are common and easy for another hybrid drink to copy, so distinctiveness is weak to moderate."
+      ],
+      [
+       "Out of Cork",
+       "Cork origin is ownable and hard for rivals to claim, but nothing shows it matters to a national 18 to 34 audience, it sidesteps the chosen insight and does not explain the product, and 'made in Cork' claims are unconfirmed."
+      ]
+     ]
+    },
+    {
+     "kind": "small",
+     "text": "Chosen by: default: the judge's first choice, flagged for Gate 2. Ranked by: claude-sonnet-5-5.",
+     "basis": "meta",
+     "internal": true
+    }
+   ],
+   "claims": [
+    {
+     "text": "Recommendation",
+     "refs": [],
+     "basis": "opinion"
+    }
+   ],
+   "visual": {
+    "kind": "layout",
+    "hint": "territory_choice"
+   },
+   "notes": "Evidence:",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s20": {
+   "type": "execution",
+   "section": "The work",
+   "title": "Social video (proposed channel; to agree with the client)",
+   "label": "Execution Social video (proposed channel; to agree with the client)",
+   "blocks": [
+    {
+     "kind": "text",
+     "text": "Role: Awareness: show a familiar home tea ritual carried outdoors so Fernley is recognised as tea, not a mystery can."
+    },
+    {
+     "kind": "copy",
+     "lines": [
+      "Kettle's off.",
+      "Same chat. Different table.",
+      "Fernley. Sparkling iced tea from Cork.",
+      "Tea's day out."
+     ],
+     "answer": "Dramatises the first half of the insight, that they feel at home with tea. The kitchen-table chat carries on unchanged, but the tea comes off the kitchen table and out into the sun, cold and sparkling.",
+     "basis": "creative"
+    }
+   ],
+   "claims": [
+    {
+     "text": "Kettle's off. / Same chat. Different table. / Fernley. Sparkling iced tea from Cork. / Tea's day out.",
+     "refs": [],
+     "basis": "creative"
+    }
+   ],
+   "visual": {
+    "kind": "image_prompt",
+    "prompt": "Lo-fi, phone-shot vertical frame of two fictional young adults sitting on a sunny park bench in Ireland, mid-conversation, one handing the other a chilled unbranded can the way you would pass a mug of tea; a knitted tea cosy lies on the bench beside them as a wry nod to home; warm natural daylight, everyday not staged, no logos, no alcohol, no real people.",
+    "status": "illustrative, not final"
+   },
+   "notes": "Evidence:",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s21": {
+   "type": "execution",
+   "section": "The work",
+   "title": "Outdoor posters near where cold drinks are bought (proposed channel; to agree with the client)",
+   "label": "Execution Outdoor posters near where cold drinks are bought (proposed ",
+   "blocks": [
+    {
+     "kind": "text",
+     "text": "Role: Bridge: meet people in summer settings close to the point of purchase, so awareness can become a first purchase."
+    },
+    {
+     "kind": "copy",
+     "lines": [
+      "You've had tea a thousand times.",
+      "Never on a day like this.",
+      "Fernley. Sparkling iced tea from Cork."
+     ],
+     "answer": "Dramatises the second half of the insight, that they never think of tea when they want something cold and fizzy. It names the familiarity, then puts tea into the summer moment they had not linked it to.",
+     "basis": "creative"
+    }
+   ],
+   "claims": [
+    {
+     "text": "You've had tea a thousand times. / Never on a day like this. / Fernley. Sparkling iced tea from Cork.",
+     "refs": [],
+     "basis": "creative"
+    }
+   ],
+   "visual": {
+    "kind": "layout_hint",
+    "hint": "Large summer-sky photograph with one chilled can held up against it, condensation visible. Headline in two lines, top left; the brand line and 'sparkling iced tea from Cork' bottom right. No alcohol cues, no glassware that reads as a cocktail or mixer.",
+    "status": "illustrative, not final"
+   },
+   "notes": "Evidence:",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s22": {
+   "type": "execution",
+   "section": "The work",
+   "title": "Point of sale at the chiller (proposed channel; depends on retailer agreement)",
+   "label": "Execution Point of sale at the chiller (proposed channel; depends on r",
+   "blocks": [
+    {
+     "kind": "text",
+     "text": "Role: Trial: lower the risk of a first sip by telling the shopper at the chiller exactly what the drink is."
+    },
+    {
+     "kind": "copy",
+     "lines": [
+      "It's tea. Just cold and sparkling.",
+      "Your usual, out for the day.",
+      "Fernley. Tea's day out."
+     ],
+     "answer": "Dramatises the first half of the insight, that they feel at home with tea. 'Your usual' starts from something already known, which also answers the storyline's barrier that people may not be able to place the drink.",
+     "basis": "creative"
+    }
+   ],
+   "claims": [
+    {
+     "text": "It's tea. Just cold and sparkling. / Your usual, out for the day. / Fernley. Tea's day out.",
+     "refs": [],
+     "basis": "creative"
+    }
+   ],
+   "visual": {
+    "kind": "layout_hint",
+    "hint": "Shelf strip or chiller-door sticker at eye level. 'It's tea.' is the largest line, so the drink is placed in one glance; a small illustrated teacup turning into a cold can sits beside the product. Plain, readable from a step away.",
+    "status": "illustrative, not final"
+   },
+   "notes": "Evidence:",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s23": {
+   "type": "channel_roles",
+   "section": "How it runs",
+   "title": "Each channel has one job",
+   "label": "Each channel has one job",
+   "blocks": [
+    {
+     "kind": "table",
+     "rows": [
+      [
+       "Channel",
+       "Its one job"
+      ],
+      [
+       "Social video",
+       "Builds awareness (R1) among 18 to 34 year olds (R3) by showing tea's home ritual moved outdoors."
+      ],
+      [
+       "Outdoor posters near where cold drinks are bought",
+       "Links the idea to the summer moment and to the place of purchase, turning awareness toward trial."
+      ],
+      [
+       "Point of sale at the chiller",
+       "Drives trial (R2) at the moment of choice by saying plainly that Fernley is tea, cold and sparkling."
+      ]
+     ],
+     "refs": [
+      "prompt:1",
+      "brief:desired_response",
+      "brief:audience",
+      "brief:background"
+     ]
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "channel_roles"
+   },
+   "notes": "Scope check: the tender lists paid social, search, programmatic, broadcast radio and video, outdoor and print.\n\nEvidence:\n[prompt:1] prompt: Fernley Drinks, a Cork sparkling iced tea brand, wants an agency pitch for a spring-to-summer 2027 Irish campaign that makes it known among \n[brief:desired_response] brief field (intake): Try Fernley sparkling iced tea. (rests on prompt:1)\n[brief:audience] brief field (intake): 18 to 34 year olds in Ireland. (rests on prompt:1)\n[brief:background] brief field (intake): Fernley Drinks is a Cork-based sparkling iced tea brand seeking an agency pitch for a spring-to-summer 2027 campaign in Ireland. (rests on prompt:1)",
+   "status": "drafted",
+   "requirements": [
+    "R4"
+   ],
+   "footnotes": [
+    1,
+    3
+   ]
+  },
+  "s24": {
+   "type": "innovation",
+   "section": "How it runs",
+   "title": "The plan works harder than its media list in four ways.",
+   "label": "The plan works harder than its media list in four ways.",
+   "blocks": [
+    {
+     "kind": "bullets",
+     "items": [
+      {
+       "text": "It is research-first. The insight is tested before a frame is shot, so the money backs a confirmed truth rather than a guess.",
+       "refs": [
+        "brief:insight"
+       ],
+       "basis": "proposal"
+      },
+      {
+       "text": "One device runs through every channel: the home tea ritual moved outdoors. Each channel then has a single job, from awareness through to trial.",
+       "refs": [
+        "req:R1",
+        "req:R2"
+       ],
+       "basis": "proposal"
+      },
+      {
+       "text": "The work is placed where cold drinks are bought and at the chiller itself, so recognition turns into a first sip at the moment of choice.",
+       "refs": [
+        "req:R2",
+        "brief:desired_response"
+       ],
+       "basis": "proposal"
+      },
+      {
+       "text": "Measurement is built in from day one. Because no baseline exists, a pre-launch wave creates one, so the pitch can show what moved.",
+       "refs": [
+        "req:R1",
+        "req:R2"
+       ],
+       "basis": "proposal"
+      }
+     ]
+    }
+   ],
+   "claims": [
+    {
+     "text": "It is research-first. The insight is tested before a frame is shot, so the money backs a confirmed truth rather than a guess.",
+     "refs": [
+      "brief:insight"
+     ],
+     "basis": "proposal"
+    },
+    {
+     "text": "One device runs through every channel: the home tea ritual moved outdoors. Each channel then has a single job, from awareness through to trial.",
+     "refs": [
+      "req:R1",
+      "req:R2"
+     ],
+     "basis": "proposal"
+    },
+    {
+     "text": "The work is placed where cold drinks are bought and at the chiller itself, so recognition turns into a first sip at the moment of choice.",
+     "refs": [
+      "req:R2",
+      "brief:desired_response"
+     ],
+     "basis": "proposal"
+    },
+    {
+     "text": "Measurement is built in from day one. Because no baseline exists, a pre-launch wave creates one, so the pitch can show what moved.",
+     "refs": [
+      "req:R1",
+      "req:R2"
+     ],
+     "basis": "proposal"
+    }
+   ],
+   "visual": {
+    "kind": "layout",
+    "hint": "innovation"
+   },
+   "notes": "Evidence:\n[brief:insight] brief field (missing)\n[req:R1]\n[req:R2]\n[brief:desired_response] brief field (intake): Try Fernley sparkling iced tea. (rests on prompt:1)",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": [
+    2,
+    3
+   ]
+  },
+  "s25": {
+   "type": "guardrails",
+   "section": "How it runs",
+   "title": "What the work must never do",
+   "label": "What the work must never do",
+   "blocks": [
+    {
+     "kind": "bullets",
+     "title": "What the work must always carry, and never do",
+     "items": [
+      {
+       "text": "The brief and research set no rules here: to agree with the client.",
+       "basis": "opinion"
+      }
+     ]
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "guardrails"
+   },
+   "notes": "Evidence:",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s26": {
+   "type": "measurement_plan",
+   "section": "Measurement",
+   "title": "Every target is still to agree, because the brief gives objectives but no figures.",
+   "label": "Every target is still to agree, because the brief gives objectives but no figure",
+   "blocks": [
+    {
+     "kind": "table",
+     "rows": [
+      [
+       "KPI",
+       "Baseline",
+       "Target",
+       "Lag",
+       "Confounders"
+      ],
+      [
+       "Awareness of Fernley among 18 to 34 year olds in Ireland",
+       "None in the brief: set before launch",
+       "to agree",
+       "Can begin to move once the social video and posters are running. The exact timing is to agree.",
+       "Other Fernley activity, any move by another drinks brand, and summer seasonality. We would allow for these by comparing people who saw the campaign with people who did not, and by logging other activity during the flight."
+      ]
+     ],
+     "refs": [
+      "req:R1",
+      "req:R3",
+      "prompt:1",
+      "brief:desired_response"
+     ]
+    }
+   ],
+   "claims": [
+    {
+     "text": "Awareness of Fernley among 18 to 34 year olds in Ireland target to agree",
+     "refs": [
+      "req:R1",
+      "req:R3"
+     ],
+     "basis": "proposal"
+    }
+   ],
+   "visual": {
+    "kind": "layout",
+    "hint": "measurement_plan"
+   },
+   "notes": "Evidence:\n[req:R1]\n[req:R3]\n[prompt:1] prompt: Fernley Drinks, a Cork sparkling iced tea brand, wants an agency pitch for a spring-to-summer 2027 Irish campaign that makes it known among \n[brief:desired_response] brief field (intake): Try Fernley sparkling iced tea. (rests on prompt:1)",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": [
+    1,
+    2,
+    3
+   ]
+  },
+  "s27": {
+   "type": "process",
+   "section": "How it runs",
+   "title": "How we would run it with you",
+   "label": "How we would run it with you",
+   "blocks": [
+    {
+     "kind": "steps",
+     "items": [
+      [
+       "1",
+       "Interview 18 to 34 year olds in Ireland to test whether tea feels like a home-only drink, and define the two halves of the audience: people who drink tea at home and people who do not."
+      ],
+      [
+       "2",
+       "Ask the client which advertising codes apply to the category and to an audience that starts at 18, and agree channels, stockists and retailer access."
+      ],
+      [
+       "3",
+       "Develop the executions from the confirmed insight and check every line and image for alcohol or mixer cues."
+      ],
+      [
+       "4",
+       "Run the baseline survey wave, launch for spring to summer 2027, then run the after-campaign wave and report against agreed targets."
+      ]
+     ],
+     "basis": "proposal"
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "process"
+   },
+   "notes": "Evidence:",
+   "status": "drafted",
+   "requirements": [
+    "R4"
+   ],
+   "footnotes": []
+  },
+  "s28": {
+   "type": "timeline",
+   "section": "Timeline and investment",
+   "title": "From appointment to evaluation",
+   "label": "From appointment to evaluation",
+   "blocks": [
+    {
+     "kind": "steps",
+     "items": [
+      [
+       "Confirm or replace the insight through interviews with 18 to 34 year olds",
+       "Before creative development; dates to agree"
+      ],
+      [
+       "Develop the work and check it for category safety",
+       "After the insight is confirmed; dates to agree"
+      ],
+      [
+       "Run the baseline survey wave",
+       "Before launch; dates to agree"
+      ],
+      [
+       "Campaign live in Ireland",
+       "Spring to summer 2027"
+      ],
+      [
+       "Run the after-campaign survey wave and read results",
+       "After the summer 2027 flight; date to agree"
+      ]
+     ],
+     "refs": [
+      "brief:insight",
+      "prompt:1",
+      "req:R1",
+      "req:R2",
+      "req:R3",
+      "req:R4"
+     ]
+    }
+   ],
+   "claims": [
+    {
+     "text": "Before creative development; dates to agree",
+     "refs": [
+      "brief:insight"
+     ],
+     "basis": "proposal"
+    },
+    {
+     "text": "After the insight is confirmed; dates to agree",
+     "refs": [
+      "req:R3"
+     ],
+     "basis": "proposal"
+    },
+    {
+     "text": "Before launch; dates to agree",
+     "refs": [
+      "req:R1",
+      "req:R2"
+     ],
+     "basis": "proposal"
+    },
+    {
+     "text": "Spring to summer 2027",
+     "refs": [
+      "req:R4",
+      "prompt:1"
+     ],
+     "basis": "evidence"
+    },
+    {
+     "text": "After the summer 2027 flight; date to agree",
+     "refs": [
+      "req:R1",
+      "req:R2"
+     ],
+     "basis": "proposal"
+    }
+   ],
+   "visual": {
+    "kind": "layout",
+    "hint": "timeline"
+   },
+   "notes": "Evidence:\n[brief:insight] brief field (missing)\n[req:R3]\n[req:R1]\n[req:R2]\n[req:R4]\n[prompt:1] prompt: Fernley Drinks, a Cork sparkling iced tea brand, wants an agency pitch for a spring-to-summer 2027 Irish campaign that makes it known among",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": [
+    1,
+    2,
+    3
+   ]
+  },
+  "s29": {
+   "type": "questions",
+   "section": "Appendix",
+   "title": "Questions we would settle in the first fortnight",
+   "label": "Questions we would settle in the first fortnight",
+   "blocks": [
+    {
+     "kind": "bullets",
+     "items": [
+      {
+       "text": "What is the budget or scope range for the campaign?",
+       "basis": "meta"
+      },
+      {
+       "text": "How will success be measured?",
+       "basis": "meta"
+      },
+      {
+       "text": "How is the budget split between fees, production and media? One line per part.",
+       "basis": "meta"
+      },
+      {
+       "text": "Who would work on this, and in what role? One person per line, for example: name, role.",
+       "basis": "meta"
+      }
+     ]
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "questions"
+   },
+   "notes": "4 open questions from the brief; 0 more in the brief itself.\n\nEvidence:",
+   "status": "from_source",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s30": {
+   "type": "requirement_trace",
+   "section": "Appendix",
+   "title": "Every requirement, and where this deck answers it",
+   "label": "Every requirement, and where this deck answers it",
+   "blocks": [
+    {
+     "kind": "table",
+     "rows": [
+      [
+       "Requirement",
+       "Slides"
+      ],
+      [
+       "Make Fernley sparkling iced tea known among the target audience (build awareness).",
+       "2, 7, 12"
+      ],
+      [
+       "Get the target audience to try Fernley sparkling iced tea.",
+       "2, 7, 12"
+      ],
+      [
+       "18 to 34 year olds in Ireland.",
+       "14"
+      ],
+      [
+       "An agency pitch for a spring-to-summer 2027 campaign in Ireland.",
+       "23, 27"
+      ]
+     ],
+     "small": true,
+     "basis": "meta"
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "requirement_trace"
+   },
+   "notes": "Evidence:",
+   "status": "from_source",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s31": {
+   "type": "appendix_sources",
+   "section": "Appendix",
+   "title": "Sources",
+   "label": "Sources",
+   "blocks": [
+    {
+     "kind": "table",
+     "rows": [
+      [
+       "#",
+       "Source"
+      ],
+      [
+       "[1]",
+       "The person's prompt"
+      ],
+      [
+       "[2]",
+       "Requirement list read from the client's tender documents"
+      ],
+      [
+       "[3]",
+       "Brief maker brief (engine run), with each field's provenance"
+      ]
+     ],
+     "small": true,
+     "basis": "meta"
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "appendix_sources"
+   },
+   "notes": "",
+   "status": "from_source",
+   "requirements": []
+  }
+ },
+ "order": [
+  "s01",
+  "s02",
+  "s03",
+  "s04",
+  "s05",
+  "s06",
+  "s07",
+  "s08",
+  "s09",
+  "s10",
+  "s11",
+  "s12",
+  "s13",
+  "s14",
+  "s15",
+  "s16",
+  "s17",
+  "s18",
+  "s19",
+  "s20",
+  "s21",
+  "s22",
+  "s23",
+  "s24",
+  "s25",
+  "s26",
+  "s27",
+  "s28",
+  "s29",
+  "s30",
+  "s31"
+ ],
+ "fit": {
+  "verdicts": [
+   {
+    "title": "Fernley's task is to get young adults in Ireland to know and try a drink they may not yet know how to place.",
+    "verdict": "supported",
+    "reason": "Brief states Cork sparkling iced tea, 18-34 in Ireland, spring-summer 2027, awareness and trial. 'May not know how to place' is hedged, no research claimed."
+   },
+   {
+    "title": "Young adults may know tea well but not think of it for summer, so Fernley can make tea the cold, sparkling choice. This must be confirmed.",
+    "verdict": "partly",
+    "reason": "Brand, timing and audience facts are supported. The tea-as-home-drink insight has no evidence (insight field missing), though it is labelled a hypothesis."
+   },
+   {
+    "title": "The single thought",
+    "type": "proposition",
+    "verdict": "partly",
+    "reason": "Sparkling iced tea and Cork origin are supported. Home-only tea belief is unsupported (flagged as hypothesis); no further reasons to believe were supplied."
+   },
+   {
+    "title": "No baseline was supplied, so a survey before launch sets one and the campaign is judged against it.",
+    "verdict": "supported",
+    "reason": "Evidence shows no baseline or insight supplied and trial as desired response. The survey is a proposal, and the slide says so."
+   },
+   {
+    "title": "Risks: an untested insight and no baseline, and what we would do about them",
+    "verdict": "narrowed",
+    "reason": "Removed alcohol-occasion and code-compliance framing, which has no cited evidence; kept the missing insight and baseline.",
+    "was": "partly",
+    "was_reason": "Missing insight and missing baseline are supported. Alcohol-occasion risk and the code compliance claim have no evidence cited; mitigations are proposals.",
+    "narrowed_from": "What could go wrong, and what we would do about it"
+   },
+   {
+    "title": "The likely barrier to trial is uncertainty about what the drink is, not dislike of it. This must be tested.",
+    "verdict": "not",
+    "reason": "Evidence says nothing on audience perception or barriers; insight and competitor fields are missing. Only the trial goal is supported. The barrier is pure hypothesis."
+   },
+   {
+    "title": "We are talking to 18 to 34 year olds in Ireland, and we do not yet know how they see tea.",
+    "verdict": "supported",
+    "reason": "Audience 18-34 in Ireland is in the brief; no research on tea perception was supplied. Aoife is an illustrative persona, not a claim."
+   },
+   {
+    "title": "What else you could choose, and why you would choose us",
+    "verdict": "n/a",
+    "reason": "No factual claim; slide is a proposal to be confirmed with the client, and no evidence is cited."
+   },
+   {
+    "title": "The plan works harder than its media list in four ways.",
+    "verdict": "partly",
+    "reason": "Baseline absence and trial goal are supported. 'Works harder', placement at chiller and the confirmed-truth benefit are unevidenced assertions; no media list or channel evidence."
+   }
+  ],
+  "stage": "fit",
+  "produced_by": "live claude-sonnet-5-5",
+  "usage": {
+   "prompt_tokens": 2,
+   "completion_tokens": 873,
+   "cache_read_tokens": 0,
+   "cache_creation_tokens": 3722,
+   "model": "claude-sonnet-5-5",
+   "secs": 7.6,
+   "calls": 1,
+   "usd": 0.0271,
+   "usd_estimated": true
+  }
+ }
+}

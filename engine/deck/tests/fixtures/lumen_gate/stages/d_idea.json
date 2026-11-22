@@ -1,0 +1,56 @@
+{
+ "stage": "d",
+ "produced_by": "recorded stand-in (invented)",
+ "campaign_line": "Every drop has a story.",
+ "idea": "Each household sees its own water story.",
+ "how_it_answers": "It links the tap to the person.",
+ "executions": [
+  {
+   "channel": "outdoor",
+   "role": "Make the line famous",
+   "copy": [
+    "Every drop has a story."
+   ],
+   "answer": "Poster",
+   "visual": {
+    "kind": "image_prompt",
+    "prompt": "A tap at dawn"
+   }
+  }
+ ],
+ "channel_roles": [
+  {
+   "channel": "Outdoor",
+   "role": "Fame"
+  },
+  {
+   "channel": "Radio",
+   "role": "Reach"
+  }
+ ],
+ "measurement": [
+  {
+   "kpi": "Household use",
+   "baseline": null,
+   "how": "Utility meter data",
+   "refs": [
+    "brief:objectives.behavioural"
+   ]
+  }
+ ],
+ "process": [
+  {
+   "step": "Week 1",
+   "text": "Kick off"
+  }
+ ],
+ "timeline": [
+  {
+   "phase": "Plan",
+   "when": "Month 1",
+   "refs": [],
+   "basis": "proposal"
+  }
+ ],
+ "messages": []
+}

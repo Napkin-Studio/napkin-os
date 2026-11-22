@@ -1,0 +1,41 @@
+id: objective_panel
+version: 1
+group: content
+purpose: data
+description: The target figure large on a panel with the supporting points beside it.
+slot_summary: title, target (stat), points
+for_types:
+- objective
+when:
+  test: has_target_figure
+priority: 90
+alternatives:
+- cards
+- cards_split
+roomier: cards
+density: standard
+pick: rule
+family: objective_panel
+renderer: objective_panel
+slots:
+  title:
+    kind: text
+    role: title
+    required: true
+    min_chars: 3
+    max_lines: 3
+  target:
+    kind: stat
+    role: display
+    dominant: true
+    min_items: 1
+    max_items: 1
+  points:
+    kind: list
+    role: body
+    from_blocks:
+    - bullets
+    - text
+    - small
+    min_items: 1
+    max_items: 4

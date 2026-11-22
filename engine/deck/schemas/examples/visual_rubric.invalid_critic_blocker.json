@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "per_slide": [
+    {
+      "id": "v_one_focus",
+      "question": "Is there one clear first thing to look at?",
+      "pass_is": "yes",
+      "severity_if_fail": "blocker"
+    }
+  ],
+  "per_deck": []
+}

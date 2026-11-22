@@ -1,0 +1,200 @@
+{
+ "version": 1,
+ "cards": {
+  "c_b2fe332df1004de1": {
+   "kind": "drafts",
+   "at": "2026-11-18T10:51:40+00:00",
+   "usd": 0.35
+  }
+ },
+ "jobs": {
+  "g_857a01e9a143": {
+   "key": "g_857a01e9a143",
+   "kind": "subjects",
+   "tier": "subjects",
+   "usd": 0.0108,
+   "state": "saved",
+   "file": null
+  },
+  "j_c86c076f66141935": {
+   "key": "j_c86c076f66141935",
+   "kind": "draft",
+   "tier": "draft",
+   "model": "gemini_image3.1_flash",
+   "ratio": "1344:768",
+   "prompt_sha": "0382f1dcbfa7022253ded2ef6b93dde3a071a69df6b2864f0b12841c2a574636",
+   "refs": [],
+   "slots": [
+    "title:cover.picture"
+   ],
+   "attempt": 2,
+   "table_credits": 7,
+   "card": "c_b2fe332df1004de1",
+   "sends": 1,
+   "state": "saved",
+   "created_at": "2026-11-18T10:50:22+00:00",
+   "task": "37665a88-cd7d-4e57-aa30-f34b252b4256",
+   "status": "SUCCEEDED",
+   "estimated_credits": 7,
+   "file": "j_c86c076f66141935.jpg",
+   "cost_credits": 7,
+   "guard": {
+    "checked": true,
+    "flagged": false,
+    "found": {},
+    "reason": "clean"
+   },
+   "prompt": "a glass jug of clear water on a wooden kitchen table beside an open window, soft morning light spilling across the grain, the lower part of the frame a plain empty tabletop. Keep the lower third calm and uncluttered. Look: natural light, unstaged, documentary stills. Finish: photo-real, like a real photograph or film still. No logos, no brand names, no readable signage or text anywhere in the frame. No recognisable real people or public figures. No charts, graphs, diagrams, numbers or screens with content.",
+   "style_hash": "4ba913ca",
+   "subject": "a glass jug of clear water on a wooden kitchen table beside an open window, soft morning light spilling across the grain, the lower part of the frame a plain empty tabletop.",
+   "subject_source": "stage_g",
+   "subject_refused": null,
+   "kind_hint": "photo",
+   "sha256": "1e8eddc0e647709a250c4ad507db968fa616e8c367b1af98225b40c393765e97"
+  },
+  "j_375fcd815c8fdf2e": {
+   "key": "j_375fcd815c8fdf2e",
+   "kind": "draft",
+   "tier": "draft",
+   "model": "gemini_image3.1_flash",
+   "ratio": "1184:864",
+   "prompt_sha": "18bd6123c7207fba4115e15de2fae049bd264f3efd216527d25652265f49887d",
+   "refs": [],
+   "slots": [
+    "audience:audience.picture"
+   ],
+   "attempt": 2,
+   "table_credits": 7,
+   "card": "c_b2fe332df1004de1",
+   "sends": 1,
+   "state": "saved",
+   "created_at": "2026-11-18T10:50:23+00:00",
+   "task": "9539db62-2947-497b-a809-80489f74b777",
+   "status": "SUCCEEDED",
+   "estimated_credits": 7,
+   "file": "j_375fcd815c8fdf2e.jpg",
+   "cost_credits": 7,
+   "guard": {
+    "checked": true,
+    "flagged": false,
+    "found": {},
+    "reason": "clean"
+   },
+   "prompt": "a woman seen from behind at a kitchen sink in the evening, filling a glass without looking at it, her attention on a family chatting at the table beyond. Medium shot, one moment. Look: natural light, unstaged, documentary stills. Finish: photo-real, like a real photograph or film still. No logos, no brand names, no readable signage or text anywhere in the frame. No recognisable real people or public figures. No charts, graphs, diagrams, numbers or screens with content.",
+   "style_hash": "4ba913ca",
+   "subject": "a woman seen from behind at a kitchen sink in the evening, filling a glass without looking at it, her attention on a family chatting at the table beyond.",
+   "subject_source": "stage_g",
+   "subject_refused": null,
+   "kind_hint": "photo",
+   "sha256": "d08430ab88bfde6f097b519c42e68cbd70a154b6a3cf29a49ca4b7e004803289"
+  },
+  "j_16d04422dff62717": {
+   "key": "j_16d04422dff62717",
+   "kind": "draft",
+   "tier": "draft",
+   "model": "gemini_image3.1_flash",
+   "ratio": "1184:864",
+   "prompt_sha": "a32394ae9e7beeccec2d11e52ea81a9c33fa330d16c99564b5bda157fbc32587",
+   "refs": [],
+   "slots": [
+    "idea:idea.picture"
+   ],
+   "attempt": 2,
+   "table_credits": 7,
+   "card": "c_b2fe332df1004de1",
+   "sends": 1,
+   "state": "saved",
+   "created_at": "2026-11-18T10:50:23+00:00",
+   "task": "658813d7-d5f4-4d45-895f-0dccefa14516",
+   "status": "SUCCEEDED",
+   "estimated_credits": 7,
+   "file": "j_16d04422dff62717.jpg",
+   "cost_credits": 7,
+   "guard": {
+    "checked": true,
+    "flagged": false,
+    "found": {},
+    "reason": "clean"
+   },
+   "prompt": "a single water drop about to fall from the tip of a brass garden tap, the blurred green of a back garden glowing behind it in warm late sun. Medium shot, one moment. Look: natural light, unstaged, documentary stills. Finish: photo-real, like a real photograph or film still. No logos, no brand names, no readable signage or text anywhere in the frame. No recognisable real people or public figures. No charts, graphs, diagrams, numbers or screens with content.",
+   "style_hash": "4ba913ca",
+   "subject": "a single water drop about to fall from the tip of a brass garden tap, the blurred green of a back garden glowing behind it in warm late sun.",
+   "subject_source": "stage_g",
+   "subject_refused": null,
+   "kind_hint": "photo",
+   "sha256": "4bac2ac6104dbc2e8a6db235f20419e840fb879c2c48a8e8c3d2854e90152a87"
+  },
+  "j_3b699ae80126c2ca": {
+   "key": "j_3b699ae80126c2ca",
+   "kind": "draft",
+   "tier": "draft",
+   "model": "gemini_image3.1_flash",
+   "ratio": "896:1152",
+   "prompt_sha": "b4b8dcb59f008c09e146430ff2088c69458066749cb1179f9615122bd464f63f",
+   "refs": [],
+   "slots": [
+    "execution:outdoor.picture"
+   ],
+   "attempt": 2,
+   "table_credits": 7,
+   "card": "c_b2fe332df1004de1",
+   "sends": 1,
+   "state": "saved",
+   "created_at": "2026-11-18T10:50:24+00:00",
+   "task": "b60baa3d-b7f7-44c9-bc79-bc87acf37244",
+   "status": "SUCCEEDED",
+   "estimated_credits": 7,
+   "file": "j_3b699ae80126c2ca.jpg",
+   "cost_credits": 7,
+   "guard": {
+    "checked": true,
+    "flagged": false,
+    "found": {},
+    "reason": "clean"
+   },
+   "prompt": "a wide quiet street of terraced houses at dusk, a lone bus shelter glowing softly at the centre with a small puddle at its feet reflecting the warm light. Wide frame, one clear focal point. Look: natural light, unstaged, documentary stills. Finish: photo-real, like a real photograph or film still. No logos, no brand names, no readable signage or text anywhere in the frame. No recognisable real people or public figures. No charts, graphs, diagrams, numbers or screens with content.",
+   "style_hash": "4ba913ca",
+   "subject": "a wide quiet street of terraced houses at dusk, a lone bus shelter glowing softly at the centre with a small puddle at its feet reflecting the warm light.",
+   "subject_source": "stage_g",
+   "subject_refused": null,
+   "kind_hint": "photo",
+   "sha256": "0c058654234796d3af815a966034828262c549bd0cae8ff1da65fb27616a6a97"
+  },
+  "j_53d1abf248758929": {
+   "key": "j_53d1abf248758929",
+   "kind": "draft",
+   "tier": "draft",
+   "model": "gemini_image3.1_flash",
+   "ratio": "1344:768",
+   "prompt_sha": "cd11e7acb38697687cdb95ab8416a223bea11c2a94ebf1e80f9e81587b5e27f1",
+   "refs": [],
+   "slots": [
+    "appendix:divider-1.picture"
+   ],
+   "attempt": 2,
+   "table_credits": 7,
+   "card": "c_b2fe332df1004de1",
+   "sends": 1,
+   "state": "saved",
+   "created_at": "2026-11-18T10:50:24+00:00",
+   "task": "c4c3796b-b3ce-42ea-a3b3-be61447d72dd",
+   "status": "SUCCEEDED",
+   "estimated_credits": 7,
+   "file": "j_53d1abf248758929.jpg",
+   "cost_credits": 7,
+   "guard": {
+    "checked": true,
+    "flagged": false,
+    "found": {},
+    "reason": "clean"
+   },
+   "prompt": "a soft-focus stretch of calm river water at early morning, gentle ripples catching pale gold light on the right, the left side smooth and still. Keep the left third calm and uncluttered. Look: natural light, unstaged, documentary stills. Finish: photo-real, like a real photograph or film still. No logos, no brand names, no readable signage or text anywhere in the frame. No recognisable real people or public figures. No charts, graphs, diagrams, numbers or screens with content.",
+   "style_hash": "4ba913ca",
+   "subject": "a soft-focus stretch of calm river water at early morning, gentle ripples catching pale gold light on the right, the left side smooth and still.",
+   "subject_source": "stage_g",
+   "subject_refused": null,
+   "kind_hint": "photo",
+   "sha256": "0aead3b71aaf0313ddbb4abcac9d3c373db4f270fcae59937b6ad7a04dbcc8bb"
+  }
+ }
+}

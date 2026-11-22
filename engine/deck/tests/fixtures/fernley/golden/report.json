@@ -1,0 +1,479 @@
+{
+ "stages": {
+  "inputs": {
+   "model": null,
+   "tokens_in": 0,
+   "tokens_out": 0,
+   "usd": 0
+  },
+  "a0": {
+   "source": "recorded",
+   "produced_by": "live claude-sonnet-5-5",
+   "calls": 1,
+   "model": "claude-sonnet-5-5",
+   "prompt_tokens": 2,
+   "completion_tokens": 706,
+   "cache_read_tokens": 0,
+   "cache_creation_tokens": 1767,
+   "usd": 0.0172,
+   "usd_estimated": true
+  },
+  "a": {
+   "source": "recorded",
+   "produced_by": "live claude-sonnet-5-5",
+   "calls": 1,
+   "model": "claude-sonnet-5-5",
+   "prompt_tokens": 2,
+   "completion_tokens": 235,
+   "cache_read_tokens": 0,
+   "cache_creation_tokens": 1309,
+   "usd": 0.0084,
+   "usd_estimated": true
+  },
+  "b": {
+   "source": "recorded",
+   "produced_by": "live claude-opus-5-5",
+   "prompt_tokens": 2,
+   "completion_tokens": 4850,
+   "cache_read_tokens": 1131,
+   "cache_creation_tokens": 1731,
+   "model": "claude-opus-5-5",
+   "calls": 1,
+   "usd": 0.1326,
+   "usd_estimated": true
+  },
+  "insight_judge": {
+   "source": "recorded",
+   "produced_by": "live claude-sonnet-5-5",
+   "prompt_tokens": 2,
+   "completion_tokens": 1220,
+   "cache_read_tokens": 687,
+   "cache_creation_tokens": 2248,
+   "model": "claude-sonnet-5-5",
+   "calls": 1,
+   "usd": 0.0269,
+   "usd_estimated": true
+  },
+  "c": {
+   "source": "recorded",
+   "produced_by": "live claude-opus-5-5",
+   "calls": 2,
+   "model": "claude-opus-5-5,claude-sonnet-5-5",
+   "prompt_tokens": 4,
+   "completion_tokens": 3364,
+   "cache_read_tokens": 0,
+   "cache_creation_tokens": 6434,
+   "usd": 0.1155,
+   "usd_estimated": true
+  },
+  "d": {
+   "source": "recorded",
+   "produced_by": "live claude-opus-5-5",
+   "prompt_tokens": 2,
+   "completion_tokens": 8915,
+   "cache_read_tokens": 0,
+   "cache_creation_tokens": 6204,
+   "model": "claude-opus-5-5",
+   "calls": 1,
+   "usd": 0.2617,
+   "usd_estimated": true
+  },
+  "fit": {
+   "source": "recorded",
+   "produced_by": "live claude-sonnet-5-5",
+   "prompt_tokens": 2,
+   "completion_tokens": 873,
+   "cache_read_tokens": 0,
+   "cache_creation_tokens": 3722,
+   "model": "claude-sonnet-5-5",
+   "calls": 1,
+   "usd": 0.0271,
+   "usd_estimated": true
+  },
+  "e": {
+   "source": "recorded",
+   "produced_by": "live claude-sonnet-5-5",
+   "prompt_tokens": 2,
+   "completion_tokens": 4631,
+   "cache_read_tokens": 0,
+   "cache_creation_tokens": 3695,
+   "model": "claude-sonnet-5-5",
+   "calls": 1,
+   "usd": 0.0833,
+   "usd_estimated": true,
+   "applied": 17,
+   "narrowing": {
+    "applied": 1,
+    "rejected": 2
+   }
+  },
+  "red_team": {
+   "source": "recorded",
+   "produced_by": "live claude-sonnet-5-5",
+   "prompt_tokens": 2,
+   "completion_tokens": 875,
+   "cache_read_tokens": 0,
+   "cache_creation_tokens": 3326,
+   "model": "claude-sonnet-5-5",
+   "calls": 1,
+   "usd": 0.0256,
+   "usd_estimated": true,
+   "objections": 6,
+   "applied": 0,
+   "cost_note": "one Sonnet call on the finished deck; the plan's budget is under $1.75 a deck in all"
+  },
+  "assemble": {
+   "model": null,
+   "usd": 0
+  },
+  "validate": {
+   "model": null,
+   "usd": 0
+  },
+  "render_pptx": {
+   "model": null,
+   "usd": 0
+  },
+  "render_web": {
+   "model": null,
+   "usd": 0
+  },
+  "render_pdf_png": {
+   "model": null,
+   "usd": 0
+  }
+ },
+ "type": {
+  "id": "agency_pitch",
+  "source": "flag",
+  "note": "--kind agency"
+ },
+ "type_question": {
+  "id": "q_deck_type",
+  "text": "What kind of deck is this?",
+  "options": [
+   {
+    "id": "agency_pitch",
+    "label": "Agency pitch: An agency answers a client's brief with strategy, one idea, a plan and a price; the default.",
+    "value": "agency_pitch",
+    "origin": "proposed",
+    "source": "pitch / campaign / agency"
+   },
+   {
+    "id": "tender_response",
+    "label": "Tender response: A public or large buyer scores your answer against published criteria; compliance first.",
+    "value": "tender_response",
+    "origin": "asked"
+   },
+   {
+    "id": "investor_seed",
+    "label": "Investor deck: A company raises a seed round: problem, why now, traction, market and the ask.",
+    "value": "investor_seed",
+    "origin": "asked"
+   },
+   {
+    "id": "credentials",
+    "label": "Credentials deck: A short deck for a chemistry meeting: team and proof first, how we work, questions for you.",
+    "value": "credentials",
+    "origin": "asked"
+   }
+  ],
+  "allow_text": true,
+  "address": "deck.type",
+  "skippable": true,
+  "default": "agency_pitch"
+ },
+ "supply_questions": [
+  {
+   "id": "q_supply_budget",
+   "text": "How is the budget split between fees, production and media? One line per part.",
+   "options": [],
+   "allow_text": true,
+   "address": "slide.investment",
+   "skippable": true,
+   "kind": "supply",
+   "fills": "investment"
+  },
+  {
+   "id": "q_supply_team",
+   "text": "Who would work on this, and in what role? One person per line, for example: name, role.",
+   "options": [],
+   "allow_text": true,
+   "address": "slide.team",
+   "skippable": true,
+   "kind": "supply",
+   "fills": "team"
+  },
+  {
+   "id": "q_supply_credentials",
+   "text": "Which past cases would you show? One per line: the client, what you did, the result.",
+   "options": [],
+   "allow_text": true,
+   "address": "slide.credentials",
+   "skippable": true,
+   "kind": "supply",
+   "fills": "credentials"
+  },
+  {
+   "id": "q_supply_options",
+   "text": "Which options do you want to put to the client, and what does each cost? One per line.",
+   "options": [],
+   "allow_text": true,
+   "address": "slide.investment",
+   "skippable": true,
+   "kind": "supply",
+   "fills": "investment"
+  },
+  {
+   "id": "q_supply_decision_date",
+   "text": "By what date will the client decide?",
+   "options": [],
+   "allow_text": true,
+   "address": "slide.next_step",
+   "skippable": true,
+   "kind": "supply",
+   "fills": "next_step"
+  }
+ ],
+ "coverage": {
+  "brief_fields": 11,
+  "brief_fields_filled": 0,
+  "how_to_win_points": 0,
+  "open_questions": 0,
+  "brief_source": "none"
+ },
+ "intake": {
+  "applied": {
+   "applied": [
+    "background",
+    "audience",
+    "desired_response"
+   ],
+   "kept_brief": [],
+   "dropped": [],
+   "demoted": [
+    "background",
+    "audience"
+   ],
+   "answered": [],
+   "kept_with_flag": [
+    {
+     "field": "background",
+     "tokens": [
+      "Cork-based",
+      "Ireland"
+     ],
+     "why": "name or legal line in none of the inputs: Cork-based, Ireland",
+     "question": "not asked: the five-question cap is full"
+    },
+    {
+     "field": "audience",
+     "tokens": [
+      "Ireland"
+     ],
+     "why": "name or legal line in none of the inputs: Ireland",
+     "question": "not asked: the five-question cap is full"
+    }
+   ]
+  },
+  "gaps": {
+   "brief_fields": [
+    {
+     "field": "objectives",
+     "why": "empty: nothing the person gave states it"
+    },
+    {
+     "field": "competitor_context",
+     "why": "empty: nothing the person gave states it"
+    },
+    {
+     "field": "insight",
+     "why": "empty: nothing the person gave states it"
+    },
+    {
+     "field": "smp",
+     "why": "empty: nothing the person gave states it"
+    },
+    {
+     "field": "reasons_to_believe",
+     "why": "empty: nothing the person gave states it"
+    },
+    {
+     "field": "tone_world_assets",
+     "why": "empty: nothing the person gave states it"
+    },
+    {
+     "field": "budget_scope",
+     "why": "empty: nothing the person gave states it"
+    },
+    {
+     "field": "mandatories",
+     "why": "empty: nothing the person gave states it"
+    }
+   ],
+   "slide_types": [
+    {
+     "type": "channel_roles",
+     "why": "no budget or scope given to size the channels against"
+    },
+    {
+     "type": "investment",
+     "why": "no budget given"
+    }
+   ]
+  },
+  "questions": 5,
+  "questions_total": 5
+ },
+ "confirm": {
+  "total": 14,
+  "verified": 0,
+  "supplied": 0,
+  "sourced": 0,
+  "open": 14,
+  "needs_person": 5
+ },
+ "decisions": [
+  {
+   "by": "red_team",
+   "objection": "o1",
+   "slide": "Investment, and what we would like to agree today",
+   "type": "placeholder",
+   "applied": false,
+   "why": "left for the person"
+  },
+  {
+   "by": "red_team",
+   "objection": "o2",
+   "slide": "Young adults may know tea well but not think of it for summer, so Fernley can make tea the cold, sparkling choice. This must be confirmed.",
+   "type": "ask",
+   "applied": false,
+   "why": "left for the person"
+  },
+  {
+   "by": "red_team",
+   "objection": "o3",
+   "slide": "The team you would work with, and work like this we have done",
+   "type": "placeholder",
+   "applied": false,
+   "why": "left for the person"
+  },
+  {
+   "by": "red_team",
+   "objection": "o4",
+   "slide": "What has to change",
+   "type": "ask",
+   "applied": false,
+   "why": "left for the person"
+  },
+  {
+   "by": "red_team",
+   "objection": "o5",
+   "slide": "Tea's day out.",
+   "type": "ask",
+   "applied": false,
+   "why": "left for the person"
+  },
+  {
+   "by": "red_team",
+   "objection": "o6",
+   "slide": "Risks: an untested insight and no baseline, and what we would do about them",
+   "type": "ask",
+   "applied": false,
+   "why": "left for the person"
+  }
+ ],
+ "validation": {
+  "errors": 1,
+  "warnings": 18,
+  "by_check": {
+   "numbers_uncited": {
+    "error": 0,
+    "warn": 3
+   },
+   "word_budget": {
+    "error": 0,
+    "warn": 2
+   },
+   "internal_leak": {
+    "error": 0,
+    "warn": 2
+   },
+   "empty_slot": {
+    "error": 0,
+    "warn": 1
+   },
+   "objective_quant": {
+    "error": 0,
+    "warn": 1
+   },
+   "action_title": {
+    "error": 0,
+    "warn": 2
+   },
+   "claim_fit": {
+    "error": 1,
+    "warn": 4
+   },
+   "insight_shape": {
+    "error": 0,
+    "warn": 2
+   },
+   "chain_links": {
+    "error": 0,
+    "warn": 1
+   }
+  },
+  "pass": false
+ },
+ "relay_test": {
+  "mode": "record_only",
+  "overlap": 0.79,
+  "shared_words": [
+   "adults",
+   "cold",
+   "fernley",
+   "home",
+   "into",
+   "irish",
+   "kitchen",
+   "sparkling",
+   "summer",
+   "table",
+   "young"
+  ],
+  "insight": "Young adults may know tea well but not think of it for summer, so Fernley can make tea the cold, sparkling choice. This must be confirmed.",
+  "idea_line": "Tea's day out.",
+  "titles": [
+   "Fernley Drinks Ltd (FICTIONAL, Cork sparkling iced tea brand): Fernley Sparkling Tea 2027 Campaign Pitch",
+   "What has to change",
+   "Fernley's task is to get young adults in Ireland to know and try a drink they may not yet know how to place.",
+   "Young adults may know tea well but not think of it for summer, so Fernley can make tea the cold, sparkling choice. This must be confirmed.",
+   "The single thought",
+   "Tea's day out.",
+   "No baseline was supplied, so a survey before launch sets one and the campaign is judged against it.",
+   "Risks: an untested insight and no baseline, and what we would do about them",
+   "The team you would work with, and work like this we have done",
+   "Investment, and what we would like to agree today"
+  ],
+  "note": "lexical overlap only; a judge reading the titles and the idea slide is not run"
+ },
+ "insight": {
+  "chosen": "IC5",
+  "writer_choice": "IC5",
+  "chosen_by": "writer",
+  "why": "It is the only candidate that just a tea brand could own, and the cheapest to test early. All three are unproven until research is supplied.",
+  "judged": true,
+  "judge_pass": false,
+  "needs_human": true,
+  "candidates": 3
+ },
+ "slides": 31,
+ "slides_by_status": {
+  "from_source": 4,
+  "drafted": 22,
+  "needs_human": 5
+ },
+ "usd_total": 0.6983,
+ "usd_basis": "estimate: tokens x list price (engine/prices.json, one table for every tool), cache reads at each model's listed price and writes at 1.25x input; an unlisted model at Opus 5.5's price; not a billed amount"
+}

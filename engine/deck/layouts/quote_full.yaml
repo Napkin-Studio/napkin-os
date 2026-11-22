@@ -1,0 +1,49 @@
+id: quote_full
+version: 1
+group: content
+purpose: statement
+description: The quote set large across the slide with its source.
+slot_summary: title, quote, source, note
+for_types:
+- insight
+- audience
+when:
+  blocks_any:
+  - quote
+priority: 0
+alternatives:
+- quote_cards
+- cards
+roomier: quote_cards
+density: lean
+pick: offer
+family: quote
+renderer: quote_full
+slots:
+  title:
+    kind: text
+    role: title
+    required: true
+    min_chars: 3
+    max_lines: 3
+  quote:
+    kind: text
+    role: lead
+    from_blocks:
+    - quote
+    dominant: true
+    max_cpl: 48
+    max_chars: 163
+  source:
+    kind: text
+    role: caption
+    from_blocks:
+    - small
+    max_chars: 122
+  note:
+    kind: text
+    role: small
+    from_blocks:
+    - text
+    - small
+    max_chars: 163

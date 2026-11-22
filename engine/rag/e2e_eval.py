@@ -58,36 +58,35 @@ def _pick() -> list[str]:
             if ln.strip() and not ln.startswith("#")] if f.exists() else []
 
 
-# Order matters: matching is by substring, so "claude-opus-5-5" must precede "claude-opus-5".
-PRICES = {"claude-opus-4-6": (5, 25), "claude-opus-5-5": (4, 20), "claude-opus-5": (5, 25), "claude-sonnet-5": (2, 10),
-          "claude-haiku-4-5": (1, 5), "claude-fable-5-1": (10, 50)}
+#: Claude prices come from the one table every Napkin tool reads (engine/prices.json); this module kept
+#: its own until 19 Nov 2026 (cache reads at 0.1x for every model). Non-Claude links are priced at 0, as before.
 JUDGE_MODEL = "claude-sonnet-5"
 
 
-CACHE_READ_FACTOR, CACHE_WRITE_FACTOR = 0.1, 1.25   # Claude API: cache reads 0.1x, writes 1.25x input
-
-
-def _price(label: str) -> tuple[float, float]:
-    """(input, output) USD per million tokens for a provider:model label; 0 if not Claude."""
+def _model_of(label: str) -> str:
     if ":" not in label:                        # the Claude call records a bare "anthropic"
         import parse_brief
         label = f"{label}:{parse_brief.model_for(label)}"
-    model = label.split(":", 1)[-1].lower()
-    for k, v in PRICES.items():
-        if k in model:
-            return v
-    return (0.0, 0.0)
+    return label.split(":", 1)[-1].lower()
+
+
+def _price(label: str) -> tuple[float, float]:
+    """(input, output) USD per million tokens for a provider:model label; 0 if not Claude or not listed."""
+    import price_table as prices
+    row = prices.lookup(_model_of(label))
+    return (row[0], row[1]) if row else (0.0, 0.0)
 
 
 def _usd(label: str, tin: int, tout: int, cache_read: int = 0, cache_creation: int = 0) -> float:
-    """List-price USD for one call's tokens: uncached input and output at the model's rates,
-    cache reads at 0.1x input and cache writes at 1.25x input. Before 2026-09-25 cache
-    tokens were folded into the input and priced in full, overstating CLI runs by ~35-40%
-    (audit BW13). CLI and API costs are still not comparable: the CLI adds ~350 input
-    tokens of its own per call (~507 before 2026-09-29, when it ran from ~; ADR 0005)."""
-    pi, po = _price(label)
-    return round((tin + cache_read * CACHE_READ_FACTOR + cache_creation * CACHE_WRITE_FACTOR) / 1e6 * pi
-                 + tout / 1e6 * po, 5)
+    """List-price USD for one call's tokens: uncached input and output at the model's rates, cache reads at the model's listed
+    cache-read price and writes at 1.25x input. Before 2026-09-25 cache tokens were folded into the input and priced in full,
+    overstating CLI runs by ~35-40% (audit BW13). CLI and API costs are still not comparable: the CLI adds ~350 input tokens of its
+    own per call (~507 before 2026-09-29, when it ran from ~; ADR 0005)."""
+    import price_table as prices
+    model = _model_of(label)
+    if prices.lookup(model) is None:
+        return 0.0
+    return round(prices.usd(model, tin, tout, cache_read, cache_creation), 5)
 
 
 class Meter:

@@ -1,0 +1,38 @@
+{
+ "stage": "g",
+ "produced_by": "image_subjects",
+ "request_sha": "857a01e9a143",
+ "subjects": {
+  "title:cover.picture": {
+   "subject": "a glass jug of clear water on a wooden kitchen table beside an open window, soft morning light spilling across the grain, the lower part of the frame a plain empty tabletop.",
+   "kind": "photo"
+  },
+  "audience:audience.picture": {
+   "subject": "a woman seen from behind at a kitchen sink in the evening, filling a glass without looking at it, her attention on a family chatting at the table beyond.",
+   "kind": "photo"
+  },
+  "idea:idea.picture": {
+   "subject": "a single water drop about to fall from the tip of a brass garden tap, the blurred green of a back garden glowing behind it in warm late sun.",
+   "kind": "photo"
+  },
+  "execution:outdoor.picture": {
+   "subject": "a wide quiet street of terraced houses at dusk, a lone bus shelter glowing softly at the centre with a small puddle at its feet reflecting the warm light.",
+   "kind": "photo"
+  },
+  "appendix:divider-1.picture": {
+   "subject": "a soft-focus stretch of calm river water at early morning, gentle ripples catching pale gold light on the right, the left side smooth and still.",
+   "kind": "photo"
+  }
+ },
+ "usage": {
+  "prompt_tokens": 2,
+  "completion_tokens": 397,
+  "cache_read_tokens": 0,
+  "cache_creation_tokens": 2730,
+  "model": "claude-sonnet-5-5",
+  "secs": 5.6,
+  "calls": 1,
+  "usd": 0.0108,
+  "usd_estimated": true
+ }
+}

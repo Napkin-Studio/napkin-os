@@ -1,0 +1,41 @@
+{
+  "id": "g_idea_image_text",
+  "slide_type": "idea",
+  "deck_types": [
+    "agency_pitch"
+  ],
+  "layout": "image_text",
+  "slots": {
+    "title": {
+      "kind": "text",
+      "text": "Every refill tells a story of where water goes"
+    },
+    "body": {
+      "kind": "text",
+      "text": "Lumen Water turns each refill into a small, shareable moment."
+    },
+    "picture": {
+      "kind": "image",
+      "image": {
+        "kind": "frame",
+        "status": "empty",
+        "aspect": "4:3"
+      }
+    }
+  },
+  "why_good": [
+    "One idea, one picture, a title that says the takeaway."
+  ],
+  "not_this": {
+    "text": "Our idea is innovative and exciting.",
+    "why": "It says nothing a competitor could not say."
+  },
+  "source": {
+    "kind": "invented",
+    "client": "Lumen Water"
+  },
+  "approved": {
+    "by": "Sai",
+    "at": "2026-11-17"
+  }
+}

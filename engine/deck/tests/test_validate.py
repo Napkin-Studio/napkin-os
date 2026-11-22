@@ -288,3 +288,65 @@ def test_objective_quant_by_date_needs_a_real_month_quarter_or_year():
         assert not _FROM_TO.search(t), t
     for t in ("Reach 5,000 homes by May", "Reach 5,000 homes by Q3 2027", "Reach 5,000 homes by 2027", "Reach 5,000 homes by end of September 2027"):
         assert _FROM_TO.search(t), t
+
+
+# ---------------------------------------------------------------- picture checks (deck-frames-in)
+
+def _pic_deck(status="made", rights="generated", asset="img_aaaaaaaaaaaa", assets="ok", guard=None, approval=None, prompt=None, subject=None, brief=None):
+    im = {"kind": "frame", "status": status, "aspect": "16:9", "asset": asset, "alt": "A kettle."}
+    if approval is not None:
+        im["approval"] = approval
+    if prompt:
+        im["prompt"] = prompt
+    if subject:
+        im["subject"] = subject
+    d = _deck(_sl(type="territory", section="Creative", slots={"frame_1": {"kind": "image", "image": im}}))
+    d["meta"] = {"built_from": {"territory_run": {"same_brief": brief}}} if brief else {}
+    if assets == "ok":
+        d["assets"] = {"img_aaaaaaaaaaaa": {"sha256": "a" * 64, "file": "assets/a.png", "mime": "image/png", "width": 9, "height": 9, "rights": rights,
+                                            "guard": guard or {"checked": True, "flagged": False}}}
+    return d
+
+
+def _found(deck, audience="review"):
+    return {(f["check"], f["level"]) for f in validate.run(deck, _inp(), audience)}
+
+
+def test_image_unapproved_is_an_error_for_a_client_and_absent_for_a_review():
+    assert ("image_unapproved", "error") in _found(_pic_deck(), "client")
+    assert not {c for c, _ in _found(_pic_deck(), "review")} & {"image_unapproved"}
+    ok = {"asset": "img_aaaaaaaaaaaa", "decision": "approve", "by": "human:ann", "at": "2026-11-17T10:00:00+00:00"}
+    assert ("image_unapproved", "error") not in _found(_pic_deck("approved", approval=ok), "client")
+    other = {**ok, "asset": "img_bbbbbbbbbbbb"}   # an approval for another picture is not one for this slot
+    assert ("image_unapproved", "error") in _found(_pic_deck("approved", approval=other), "client")
+    assert ("image_unapproved", "error") in _found(_pic_deck("approved", approval=None), "client")
+
+
+def test_image_flagged_warns_in_a_review():
+    d = _pic_deck("flagged", guard={"checked": True, "flagged": True})
+    assert ("image_flagged", "warn") in _found(d)
+    assert ("image_flagged", "warn") not in _found(_pic_deck())
+
+
+def test_image_rights_and_image_missing_are_errors():
+    assert ("image_rights", "error") in _found(_pic_deck(rights="reference_only"))
+    assert ("image_missing", "error") in _found(_pic_deck(assets="none"))
+    assert not {c for c, _ in _found(_pic_deck())} & {"image_rights", "image_missing"}
+
+
+def test_an_empty_slot_is_not_a_finding():
+    d = _pic_deck("empty", asset=None, assets="none")
+    d["slides"]["s01"]["slots"]["frame_1"]["image"].pop("asset")
+    assert not {c for c, _ in _found(d, "client")} & {"image_unapproved", "image_missing", "image_flagged", "image_rights"}
+
+
+def test_an_unverified_territory_run_warns():
+    assert ("image_rights", "warn") in _found(_pic_deck(brief="unverified"))
+    assert ("image_rights", "warn") not in _found(_pic_deck(brief="verified"))
+
+
+def test_the_imagery_check_reads_an_image_slots_prompt_and_subject():
+    d = _pic_deck(prompt="A person on the railway line at dusk")
+    assert ("imagery", "error") in _found(d)
+    assert ("imagery", "error") in _found(_pic_deck(subject="the railway line at dusk"))
+    assert ("imagery", "error") not in _found(_pic_deck(prompt="A kettle on a stove"))

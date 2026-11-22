@@ -1,0 +1,175 @@
+{
+ "stage": "a0_intake",
+ "fields": {
+  "background": {
+   "value": "Fernley Drinks is a Cork-based sparkling iced tea brand seeking an agency pitch for a spring-to-summer 2027 campaign in Ireland.",
+   "kind": "prompt",
+   "refs": [
+    "prompt:1"
+   ]
+  },
+  "audience": {
+   "value": "18 to 34 year olds in Ireland.",
+   "kind": "prompt",
+   "refs": [
+    "prompt:1"
+   ]
+  },
+  "desired_response": {
+   "value": "Try Fernley sparkling iced tea.",
+   "kind": "prompt",
+   "refs": [
+    "prompt:1"
+   ]
+  }
+ },
+ "abstained": [
+  "objectives",
+  "competitor_context",
+  "insight",
+  "smp",
+  "reasons_to_believe",
+  "tone_world_assets",
+  "budget_scope",
+  "mandatories"
+ ],
+ "gaps": {
+  "brief_fields": [
+   {
+    "field": "objectives",
+    "why": "empty: nothing the person gave states it"
+   },
+   {
+    "field": "competitor_context",
+    "why": "empty: nothing the person gave states it"
+   },
+   {
+    "field": "insight",
+    "why": "empty: nothing the person gave states it"
+   },
+   {
+    "field": "smp",
+    "why": "empty: nothing the person gave states it"
+   },
+   {
+    "field": "reasons_to_believe",
+    "why": "empty: nothing the person gave states it"
+   },
+   {
+    "field": "tone_world_assets",
+    "why": "empty: nothing the person gave states it"
+   },
+   {
+    "field": "budget_scope",
+    "why": "empty: nothing the person gave states it"
+   },
+   {
+    "field": "mandatories",
+    "why": "empty: nothing the person gave states it"
+   }
+  ],
+  "slide_types": [
+   {
+    "type": "channel_roles",
+    "why": "no budget or scope given to size the channels against"
+   },
+   {
+    "type": "investment",
+    "why": "no budget given"
+   }
+  ]
+ },
+ "questions": [
+  {
+   "id": "q_deck_type",
+   "text": "What kind of deck is this?",
+   "options": [
+    {
+     "id": "agency_pitch",
+     "label": "Agency pitch: An agency answers a client's brief with strategy, one idea, a plan and a price; the default.",
+     "value": "agency_pitch",
+     "origin": "proposed",
+     "source": "pitch / campaign / agency"
+    },
+    {
+     "id": "tender_response",
+     "label": "Tender response: A public or large buyer scores your answer against published criteria; compliance first.",
+     "value": "tender_response",
+     "origin": "asked"
+    },
+    {
+     "id": "investor_seed",
+     "label": "Investor deck: A company raises a seed round: problem, why now, traction, market and the ask.",
+     "value": "investor_seed",
+     "origin": "asked"
+    },
+    {
+     "id": "credentials",
+     "label": "Credentials deck: A short deck for a chemistry meeting: team and proof first, how we work, questions for you.",
+     "value": "credentials",
+     "origin": "asked"
+    }
+   ],
+   "allow_text": true,
+   "address": "deck.type",
+   "skippable": true,
+   "default": "agency_pitch"
+  },
+  {
+   "id": "q_budget",
+   "text": "What is the budget or scope range for the campaign?",
+   "options": [],
+   "allow_text": true,
+   "address": "brief.budget_scope"
+  },
+  {
+   "id": "q_success",
+   "text": "How will success be measured?",
+   "options": [
+    {
+     "id": "aware",
+     "label": "Brand awareness uplift",
+     "value": "Brand awareness uplift among 18 to 34s"
+    },
+    {
+     "id": "trial",
+     "label": "Trial / sales",
+     "value": "Trial and sales volume"
+    },
+    {
+     "id": "both",
+     "label": "Both awareness and trial",
+     "value": "Awareness uplift and trial"
+    }
+   ],
+   "allow_text": true,
+   "address": "brief.objectives"
+  },
+  {
+   "id": "q_competitors",
+   "text": "Which brands or drinks does Fernley compete with for this audience?",
+   "options": [],
+   "allow_text": true,
+   "address": "brief.competitor_context"
+  },
+  {
+   "id": "q_mandatories",
+   "text": "Is there anything the pitch must include, such as logos, claims, or legal lines?",
+   "options": [],
+   "allow_text": true,
+   "address": "brief.mandatories"
+  }
+ ],
+ "produced_by": "live claude-sonnet-5-5",
+ "usage": {
+  "calls": 1,
+  "secs": 9.4,
+  "model": "claude-sonnet-5-5",
+  "prompt_tokens": 2,
+  "completion_tokens": 706,
+  "cache_read_tokens": 0,
+  "cache_creation_tokens": 1767,
+  "usd": 0.0172,
+  "usd_estimated": true
+ }
+}

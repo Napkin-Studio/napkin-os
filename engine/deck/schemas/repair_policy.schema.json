@@ -1,0 +1,270 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Deck repair policy (docs/contracts/deck-visuals.md section 8)",
+  "type": "object",
+  "additionalProperties": false,
+  "description": "How the repair loop runs (engine/deck/policy/repair.yaml; a profile may override). The policy a run used is stamped at deck.meta.repair_policy by the runner.",
+  "properties": {
+    "max_rounds": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2,
+      "default": 2
+    },
+    "max_usd": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 2,
+      "default": 0.6
+    },
+    "max_seconds": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 600,
+      "default": 240
+    },
+    "repair_on": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "blocker",
+          "major",
+          "minor"
+        ]
+      },
+      "default": [
+        "blocker",
+        "major"
+      ]
+    },
+    "client_export_blocks_on": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "blocker",
+          "major"
+        ]
+      },
+      "default": [
+        "blocker"
+      ]
+    },
+    "severity": {
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "numbers_trace",
+          "numbers_uncited",
+          "unverified_fig",
+          "rejected_used",
+          "proposed_used",
+          "unknown_ref",
+          "bare_claim",
+          "word_budget",
+          "empty_slot",
+          "placeholder",
+          "requirement_map",
+          "banned_phrase",
+          "watch_word",
+          "message_carried",
+          "action_title",
+          "repeated_line",
+          "copy_number",
+          "pitch_length",
+          "rule_broken",
+          "source_required",
+          "internal_leak",
+          "quote_source",
+          "criteria_map",
+          "imagery",
+          "copy_spec",
+          "budget_spread",
+          "thin_evidence",
+          "claim_fit",
+          "objective_quant",
+          "insight_shape",
+          "idea_single",
+          "chain_links",
+          "weight_share",
+          "off_slide",
+          "margin",
+          "text_overlap",
+          "text_overflow",
+          "min_font",
+          "contrast",
+          "mostly_empty",
+          "one_corner",
+          "qa_internal",
+          "unreadable",
+          "slot_limit",
+          "slot_missing",
+          "slot_unknown",
+          "slot_stale",
+          "block_unbound",
+          "layout_unknown",
+          "text_on_image_fallback",
+          "image_missing",
+          "image_unapproved",
+          "image_flagged",
+          "image_rights",
+          "style_pack_held",
+          "pitch_cap",
+          "role_words",
+          "notes_unread",
+          "golden_echo",
+          "picture_stretch",
+          "picture_lowres",
+          "text_on_image_contrast",
+          "layout_repeat",
+          "title_drift",
+          "line_length",
+          "image_style_mixed",
+          "export_failed",
+          "v_one_focus",
+          "v_balance",
+          "v_not_crowded",
+          "v_looks_finished",
+          "v_image_fits",
+          "v_image_clean",
+          "v_text_on_image",
+          "v_crop_ok",
+          "v_one_style",
+          "v_rhythm"
+        ]
+      },
+      "additionalProperties": {
+        "enum": [
+          "blocker",
+          "major",
+          "minor"
+        ]
+      },
+      "description": "Check name to severity. Every key is a check name of spec.ISSUE_CHECKS."
+    },
+    "ladder": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "shrink",
+          "switch_layout",
+          "shorten",
+          "split",
+          "overflow_to_notes",
+          "needs_human"
+        ]
+      }
+    },
+    "shrink": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "min_scale": {
+          "type": "number",
+          "minimum": 0.75,
+          "maximum": 1,
+          "default": 0.85
+        }
+      }
+    },
+    "shorten": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_slots_per_round": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20,
+          "default": 12
+        },
+        "max_cut_ratio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.4,
+          "default": 0.35
+        },
+        "guards": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "no_new_number",
+              "refs_kept",
+              "not_longer",
+              "label_titles_untouched",
+              "ledger_kept",
+              "own_words"
+            ]
+          }
+        },
+        "word_rule": {
+          "enum": [
+            "reuse",
+            "delete_only"
+          ],
+          "default": "delete_only",
+          "description": "delete_only (default): the new text is an ordered subsequence of the same field's base words and only allow-listed words (assemble.DELETABLE, or `deletable`) are deleted; reuse: content words of the base text in any order, refused on a client deck."
+        },
+        "deletable": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Replaces the default allow-list of words that may be deleted (absent: assemble.DELETABLE). Fail closed: every other word survives."
+        }
+      }
+    },
+    "images": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_regens_per_slot": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 1
+        },
+        "on_flag": {
+          "enum": [
+            "wait_for_person",
+            "regen_then_drop"
+          ],
+          "default": "wait_for_person"
+        },
+        "max_usd": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10,
+          "default": 2.5
+        }
+      }
+    },
+    "keep_round_if": {
+      "const": "blockers_and_majors_not_up_and_no_new_validator_error"
+    },
+    "critic": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "The vision critic stays advisory and off until its questions are graded."
+        },
+        "may_fix": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "switch_layout",
+              "regen_image",
+              "crop_image",
+              "add_scrim"
+            ]
+          }
+        },
+        "needs_code_confirm": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    }
+  }
+}
