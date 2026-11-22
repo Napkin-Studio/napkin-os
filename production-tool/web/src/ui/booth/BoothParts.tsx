@@ -10,6 +10,7 @@ import { AgentAvatar, AgentFigure } from '../agents/AgentFigure'
 import { CAST, castOf, type CastKey } from '../agents/cast'
 import { placeAsk } from '../askPlaces'
 import { answerLocally, sendAnswer } from '../asks'
+import { useScriptFirst } from '../useScriptFirst'
 import { useWhy } from './hooks'
 
 /** The agent at work in this room: their figure, who they are, and what waits here. */
@@ -131,6 +132,7 @@ export function ChoiceCard({ id, agent, label = 'asks', q, body, thumb, meta, ch
  *  the runner as the ask card does (ui/AskCard.tsx); the card places the ask so the dock does not repeat it. */
 export function BoothAsk({ ask, onLater, onLocalAnswer, time }: { ask: Ask; onLater?: () => void; onLocalAnswer?: (optionId: string) => Promise<void> | void; time?: string }) {
   const { runner, doc: docStore } = useServices()
+  const scriptFirst = useScriptFirst()
   const ui = useUi()
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
@@ -149,6 +151,7 @@ export function BoothAsk({ ask, onLater, onLocalAnswer, time }: { ask: Ask; onLa
         await onLocalAnswer(answer.optionId)
         return
       }
+      if (await scriptFirst(ask, answer)) return
       const said = await sendAnswer(runner, ask, answer, false, (by) => (!by ? 'Someone' : by === me ? 'You' : by.replace(/^human:/, '')))
       if (said) setNote(said)
     } catch (e) {
@@ -203,12 +206,13 @@ export function WorkingCard({ agent, text }: { agent: CastKey; text: string }) {
 }
 
 /** What happened to a card the person decided: Kept (with Undo), Discarded. */
-export function DoneCard({ agent, text, onUndo }: { agent: CastKey; text: string; onUndo?: () => void }) {
+export function DoneCard({ agent, text, onUndo, onDismiss }: { agent: CastKey; text: string; onUndo?: () => void; onDismiss?: () => void }) {
   return (
     <article className="bc done" role="status">
       <AgentAvatar agent={agent} size={18} decorative />
       <span>{text}</span>
       {onUndo && <button type="button" className="btn link" onClick={onUndo}>Undo</button>}
+      {onDismiss && <button type="button" className="btn link" onClick={onDismiss} aria-label="Dismiss this note">OK</button>}
     </article>
   )
 }

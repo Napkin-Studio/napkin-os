@@ -62,6 +62,13 @@ describe('attribution: people and the crew', () => {
     expect(jobRationale(realJob())).not.toContain('Added by Dex')
   })
 
+  it('says what the director was given, from director.input (pt-canvas-r1)', () => {
+    const j = realJob()
+    j.director!.input = { refs: [{ tag: 'in_1', role: 'character' }, { tag: 'in_2', role: 'other' }], text: 'the two on a bench', brief: { donts: [] }, context: [{}, {}] }
+    expect(jobRationale(j)).toContain('given: in_1 character, in_2 other; words "the two on a bench"; brief; 2 context')
+    expect(jobRationale(realJob())).not.toContain('given:')
+  })
+
   it('a landing is the crew member\'s, citing the job', () => {
     const w = landingWhy('doc1', realJob(), `frames[${id('frame', 1)}]`)
     expect(w.agent).toBe('wren')

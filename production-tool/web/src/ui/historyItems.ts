@@ -2,9 +2,9 @@
 // ("why does this look like this?"). It reads the addresses each decision
 // targets and cites (model/lineage.ts), never ids in the words.
 
-import type { Cost, ProductionDocument } from '../contracts/types'
+import type { Cost, DocJob, ProductionDocument } from '../contracts/types'
 import { entityOf, kindOf as kindOfDecision, type Kind } from '../model/lineage'
-import { CAST } from './agents/cast'
+import { CAST, jobWord, type CastKey } from './agents/cast'
 import { currentRender, framesOf, refName, refsList, rendersOf, shotNumber, shotsOf, takeNumber, takesOf } from '../model/selectors'
 
 export interface ChainLike {
@@ -53,7 +53,7 @@ export function historyItems(doc: ProductionDocument, docId: string): HistoryIte
   for (const [i, set] of sets.entries()) {
     const sizes = Object.values(doc.sizes ?? {}).filter((s) => s.set_id === set.id)
     if (!sizes.length) continue
-    items.push({ key: `fset:${set.id}`, label: `Campaign${sets.length > 1 ? ` ${i + 1}` : ''} · ${sizes.length} formats`, addresses: [...at('format_sets', set.id),
+    items.push({ key: `fset:${set.id}`, label: `Campaign${sets.length > 1 ? ` ${i + 1}` : ''} · ${sizes.length} ${sizes.length === 1 ? 'format' : 'formats'}`, addresses: [...at('format_sets', set.id),
       ...sizes.flatMap((s) => [...at('sizes', s.id), ...at('jobs', s.job_id), ...at('jobs', s.full?.job_id)])] })
   }
   const renders = rendersOf(doc)
@@ -86,11 +86,12 @@ export function kindOf(agent: string): AgentKind {
   return 'other'
 }
 
-/** Who an entry names, in the panel's words: You, another person, or the crew member and their sign-off. */
-export function who(agent: string, me: string | undefined): { label: string; detail?: string } {
+/** Who an entry names, in the panel's words: You, another person, or the crew member and what they did for the
+ *  entry's job (`op`): the Camera agent "draws" a picture and "films" a clip (UAT round 1 IMG-21). */
+export function who(agent: string, me: string | undefined, op?: DocJob['op']): { label: string; detail?: string } {
   const kind = kindOf(agent)
   if (kind === 'person') return { label: me && agent === `human:${me}` ? 'You' : agent.slice('human:'.length) }
-  if (kind === 'crew') { const c = CAST[agent as keyof typeof CAST]; return { label: c.given, detail: c.job } }
+  if (kind === 'crew') { const k = agent as CastKey; return { label: CAST[k].given, detail: jobWord(k, op) } }
   return { label: agent }
 }
 
@@ -100,7 +101,9 @@ export function who(agent: string, me: string | undefined): { label: string; det
 export function jobCost(cost: Cost | undefined): string | undefined {
   if (!cost) return undefined
   const fmt = (v: number) => `$${v < 0.1 ? v.toFixed(3) : v.toFixed(2)}`
-  if (cost.confirmed != null) return cost.confirmed > 0 ? fmt(cost.confirmed) : undefined
+  // The agents' Claude calls count too (UAT 2026-11-21, F21: every Dex and Skye job read $0).
+  const agent = cost.agentUsd ?? 0
+  if (cost.confirmed != null || agent > 0) { const v = (cost.confirmed ?? 0) + agent; return v > 0 ? fmt(v) : undefined }
   if (cost.unknown) return undefined
   return cost.estimate ? `about ${fmt(cost.estimate)}` : undefined
 }

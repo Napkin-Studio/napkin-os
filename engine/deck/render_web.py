@@ -20,6 +20,7 @@ from __future__ import annotations
 import base64
 import html
 import json
+import re
 from pathlib import Path
 
 from . import images, numfmt, spec
@@ -36,9 +37,17 @@ HEAD_FONT = "Cambria, Charter, 'Iowan Old Style', Georgia, serif"
 BODY_FONT = "Calibri, Carlito, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
 
 
+_STRIKE = re.compile(r"~~(.+?)~~", re.S)
+
+
+def _a(t) -> str:
+    """Escape text for an HTML attribute or the page title: money as people write it, a ``~~struck~~`` word plain (no markup in an attribute)."""
+    return _STRIKE.sub(r"\1", html.escape(numfmt.format_text(str(t)), quote=True))
+
+
 def _e(t) -> str:
-    """Escape text for HTML."""
-    return html.escape(numfmt.format_text(str(t)), quote=True)   # money as people write it, at render time only
+    """Escape text for HTML. A ``~~word~~`` the copy wrote is a real strike-through (``<s>``), never the tildes."""
+    return _STRIKE.sub(r"<s>\1</s>", html.escape(numfmt.format_text(str(t)), quote=True)).replace("~~", "")   # money as people write it, at render time only
 
 
 def chart_rows(series: list, inp) -> list:
@@ -210,20 +219,33 @@ def _framed_markup(s: dict, got: list, deck: dict, fig, label: str) -> tuple | N
     from . import graphics   # noqa: PLC0415
     if not graphics.part_on(deck, "mockups"):
         return None
+    fm = (s.get("ooh") or {}).get("formats") or []
+    cells = [(f, im) for f in fm for slot, im in got if slot == f.get("slot")]
+    if cells and spec.GRAPHICS:   # out of home: every format Production made, each in its own frame at its own aspect, named under it
+        frs = [graphics.frame_of(deck, spec.picture_of(s)[1], im) for _, im in cells]
+        if all(frs):
+            hpx = min(330.0, 1500.0 / sum(fr["ratio"] for fr in frs))
+            html_cells = ""
+            for (f, im), fr in zip(cells, frs):
+                figure = fig(f["slot"], im, f"width:100%;aspect-ratio:{fr['ratio']:.4f}").replace('class="pic', 'class="pic framed', 1)
+                html_cells += (f'<div class="ooh-cell" style="width:{fr["ratio"] * hpx:.0f}px"><div class="frame-wrap f-{fr["kind"]}">{figure}<i class="f-stand"></i></div>'
+                               f'<p class="ooh-name">{_e(f.get("name") or "")}</p></div>')
+            return (f'<div class="pics ooh-row">{html_cells}</div><div class="pics sb-pills f-pills">{_mockup(cells[0][1], label)}</div>', "pic-ooh")
     shots = [(slot, im) for slot, im in got if slot.startswith("shot_")]
-    if len(shots) >= spec.STRIP_MIN:   # stacked beside the words (a side picture or the picture column), numbered, labels at the foot
+    if len(shots) >= spec.STRIP_MIN:   # a strip across the foot of the slide: each frame at its own aspect, numbered, with its caption
         st = s.get("strip") or {}
         nums = st.get("shots") if len(st.get("shots") or []) == len(shots) else list(range(1, len(shots) + 1))
+        caps = st.get("captions") if len(st.get("captions") or []) == len(shots) else [""] * len(shots)
         assets = deck.get("assets") or {}
 
         def ratio(im):   # each frame keeps its own aspect, as the pptx draws it
             a = assets.get(im.get("asset")) or {}
             return f'{a["width"] / a["height"]:.4f}' if a.get("width") and a.get("height") else im["aspect"].replace(":", "/")
-        cells = "".join(f'<div class="sb-cell">{fig(slot, im, "width:100%;aspect-ratio:" + ratio(im))}<div class="sb-n"><b>{n}</b><i></i></div></div>'
-                        for n, (slot, im) in zip(nums, shots))
+        cells = "".join(f'<div class="sb-cell">{fig(slot, im, "width:100%;aspect-ratio:" + ratio(im))}<div class="sb-n"><b>{n}</b><i></i></div>'
+                        f'<p class="sb-cap">{_e(c)}</p></div>' for n, c, (slot, im) in zip(nums, caps, shots))
         note = f'<span class="sb-note">{_e(st["note"])}</span>' if st.get("note") else ""
-        return (f'<div class="pics side"><div class="frame-wrap sb-col" style="width:380px">{cells}<div class="f-pills">{_mockup(shots[0][1], label)}{note}</div></div></div>',
-                "pic-side pw560")
+        return (f'<div class="pics strip sb-strip" style="grid-template-columns:repeat({len(shots)},1fr)">{cells}</div>'
+                f'<div class="pics sb-pills f-pills">{_mockup(shots[0][1], label)}{note}</div>', "pic-sb")
     pic = next(((slot, im) for slot, im in got if slot == "picture"), None)
     fr = graphics.frame_of(deck, spec.picture_of(s)[1], pic[1]) if pic else None
     if not fr:
@@ -260,8 +282,8 @@ def picture_markup(sid: str, s: dict, drawn: dict, pictures: dict, src, label: s
         tag = ""
         if im.get("status") != "approved":
             tag = f'<figcaption class="plabel{" flagged" if flagged else ""}">{_e(images.picture_label(im, label) + (" · Flagged" if flagged else ""))}</figcaption>'
-        return (f'<figure class="pic{" flagged" if flagged else ""}" data-slot="{_e(slot)}" style="{style}">'
-                f'<img src="{_e(src(im["asset"], pictures[im["asset"]]))}" alt="{_e(im.get("alt") or "An illustrative picture")}"{pos}>{tag}</figure>')
+        return (f'<figure class="pic{" flagged" if flagged else ""}" data-slot="{_a(slot)}" style="{style}">'
+                f'<img src="{_a(src(im["asset"], pictures[im["asset"]]))}" alt="{_a(im.get("alt") or "An illustrative picture")}"{pos}>{tag}</figure>')
 
     if s["type"] == "territory":
         return '<div class="pics strip">' + "".join(fig(slot, im) for slot, im in got) + "</div>", "pic-strip"
@@ -631,7 +653,7 @@ def _cover_logo(deck, assets_dir) -> str | None:
         if lg.get("placement") == "none" or not (f and f.is_file()):
             return None
         import base64   # noqa: PLC0415
-        return (f'<img alt="{_e(deck["meta"].get("client", "Client"))} logo" style="height:110px;width:auto;display:block" '
+        return (f'<img alt="{_a(deck["meta"].get("client", "Client"))} logo" style="height:110px;width:auto;display:block" '
                 f'src="data:image/png;base64,{base64.b64encode(f.read_bytes()).decode()}">')
     return (deck["meta"].get("brand") or {}).get("logo_dark_svg")
 
@@ -753,6 +775,13 @@ FRAME_CSS = """
 .sb-col{gap:18px}.sb-col .sb-cell{width:100%}.sb-col .pic{border:1.5px solid var(--ink);border-radius:0}.sb-col .pic .plabel{display:none}
 .sb-n{display:flex;align-items:center;gap:14px;margin-top:8px}.sb-note{font-size:20px;color:var(--muted);align-self:center}
 .sb-n b{font:700 30px/1 var(--head)}.sb-n i{flex:1;height:1.5px;background:var(--ink)}
+.sb-strip .pic .plabel{display:none}.sb-strip{align-items:start}.sb-strip .pic{aspect-ratio:auto;height:auto}.sb-cap{margin:8px 0 0;font-size:22px;line-height:1.3;color:var(--ink)}
+.sb-pills{display:flex;gap:12px;right:112px;bottom:auto;top:560px;left:auto}
+.ooh-row{left:112px;right:112px;bottom:70px;display:flex;justify-content:center;align-items:flex-end;gap:56px}
+.ooh-cell{display:flex;flex-direction:column;align-items:stretch}.ooh-cell .pic.framed{box-sizing:border-box}
+.ooh-name{margin:14px 0 0;text-align:center;font:700 26px/1.2 var(--head);color:var(--ink)}
+.pic-ooh .sb-pills{top:440px}.pic-ooh .body{padding-bottom:600px}.pic-ooh .body.exec{grid-template-columns:5fr 6fr}.pic-ooh .body.exec .copy{max-height:180px;overflow:hidden}
+.pic-sb .body{padding-bottom:470px}.pic-sb .body.exec{grid-template-columns:5fr 6fr}.pic-sb .body.exec .copy{max-height:230px;overflow:hidden}
 """
 
 #: Picture styles: added to the stylesheet ONLY when a picture is drawn, so a deck with none keeps its exact bytes.
@@ -1118,11 +1147,11 @@ def render(deck, inp, out: Path, findings: list | None = None, pictures: dict | 
     cv = themes.canvas_of(deck)   # deck-slide-size: the stage at the deck's size (16:9: nothing added)
     slides = "\n".join(
         f'<section class="slide t-{v["type"]}{" dark" if v["dark"] else ""}{" " + v["cls"] if v["cls"] else ""}{" l-" + v["layout"] if (spec.LOOK_V2 and v["layout"]) else ""}" id="{v["id"]}" data-steps="{v["steps"]}"{" data-layout=" + chr(34) + v["layout"] + chr(34) if (spec.LOOK_V2 and v["layout"]) else ""}{v["tpt"]} '
-        f'aria-label="Slide {v["n"]}: {_e(v["title"])}">{v["html"]}</section>' for v in views)
+        f'aria-label="Slide {v["n"]}: {_a(v["title"])}">{v["html"]}</section>' for v in views)
     meta = json.dumps([{"id": v["id"], "section": v["section"], "notes": v["notes"]} for v in views], ensure_ascii=False)
     page = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{_e(m["client"])}: {_e(m["project"])}</title>
+<title>{_a(m["client"])}: {_a(m["project"])}</title>
 <meta name="generator" content="Napkin Deck Maker (render_web)"><link rel="icon" href="data:,">
 <style>{theme_css(**_brand_css(m), look=look)}{PIC_CSS if any(v["cls"] for v in views) else ""}{graphics_css(slides)}{size_css(cv)}</style></head>
 <body><div id="app"><div id="view"><div id="bar"></div><div id="stage">

@@ -11,7 +11,7 @@ import type { ModelStore } from '../model/store'
 import { download, exportClanFile } from '../export'
 import { entryKind, historyItems, jobCost, kindOf, projectEntries, spendSoFar, type ChainLike } from './historyItems'
 import { openAsks } from '../model/selectors'
-import { focusAsk, summonAsk } from './askPlaces'
+import { showAsk } from './askPlaces'
 import { AgentFigure } from './agents/AgentFigure'
 import type { CastKey } from './agents/cast'
 
@@ -100,7 +100,8 @@ export function DecisionsDrawer({ store, onClose, focus }: { store: ModelStore |
   const film = shell.index.get(project.id)?.name ?? 'This film'
   const open = (askId: string) => {
     onClose()
-    setTimeout(() => { if (!focusAsk(askId)) summonAsk(askId) }, 0)
+    // Brought into view where it waits (the canvas pans to its result), else shown by the dock (UAT round 1 IMG-1).
+    setTimeout(() => void showAsk(askId), 0)
   }
   return (
     <>
@@ -130,7 +131,7 @@ export function DecisionsDrawer({ store, onClose, focus }: { store: ModelStore |
           ) : tab === 'lineage' ? (
             <div className="dd-lineage">
               <div className="brow" aria-current="page"><span className="t"><b>{film}</b><small>You are here</small></span></div>
-              <p className="dd-hint">A brief linked into this film shows here, with the decks made from it, when the Brief node lands (features/brief-node.clan).</p>
+              <p className="dd-hint">A brief linked into this film shows here, with the decks made from it.</p>
             </div>
           ) : (
             <>

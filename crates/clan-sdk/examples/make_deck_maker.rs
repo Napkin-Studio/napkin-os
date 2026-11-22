@@ -7,8 +7,9 @@
 //!
 //! Same shape as the other app makers, plus a spin-off contract: a deck
 //! is started from the app's own Start screen (a prompt of any length and any
-//! documents), or spun off from a Brief Maker or Research Tool document, whose
-//! data is carried whole under `data.upstream` (ADR 0023, 0028). The contract
+//! documents), or spun off from a Brief Maker, Research Tool or Production document, whose
+//! data is carried whole under `data.upstream` (ADR 0023, 0028; a Production project's
+//! finals, assets and briefs, frozen: features/production-spinoff.clan). The contract
 //! takes no map and no lift: the deck's fields are never seeded from upstream. Two things this packer guards:
 //!
 //! 1. `make_template` replaces `agent/context.md` with boilerplate, so the
@@ -34,6 +35,8 @@ const APP_ID: &str = "ie.napkin.deck-maker";
 /// The apps a deck is spun off from, whole, under `upstream`.
 const BRIEF_APP_ID: &str = "ie.napkin.brief-maker";
 const RESEARCH_APP_ID: &str = "ie.napkin.campaign-research";
+/// A Production project spun off into a deck: its data (finals, assets, sizes, briefs) is carried whole, its pictures stay in the relay.
+const PRODUCTION_APP_ID: &str = "ie.napkin.production";
 /// The presentation kits a deck may hold, one at a time, never as research (deck-look-kits).
 const BRAND_APP_ID: &str = "ie.napkin.brand";
 const STYLE_PACK_APP_ID: &str = "ie.napkin.style-pack";
@@ -137,14 +140,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }),
             name: "Deck Maker".into(),
             app_id: APP_ID.into(),
-            version: "0.4.0".into(),
+            version: "0.5.0".into(),
             icon: Some(ICON_PATH.into()),
             entry: "human/index.html".into(),
             schema: Some("agent/output-schema.json".into()),
             prompt_templates: vec![],
             data_seed: None,
             spinoff: Some(SpinoffSpec {
-                accepts: vec![BRIEF_APP_ID.into(), RESEARCH_APP_ID.into()],
+                accepts: vec![
+                    BRIEF_APP_ID.into(),
+                    RESEARCH_APP_ID.into(),
+                    PRODUCTION_APP_ID.into(),
+                ],
                 upstream: true,
                 ..Default::default()
             }),
@@ -172,14 +179,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // The spin-off contract and version are asserted, not assumed: a regression
     // here must fail the packer (and the spinoff.rs test that runs it).
     let app_block = template.manifest().app.as_ref().expect("app block");
-    assert_eq!(app_block.version, "0.4.0", "the Deck template version");
+    assert_eq!(app_block.version, "0.5.0", "the Deck template version");
     let spin = app_block.spinoff.as_ref().expect("app.spinoff is declared");
     assert_eq!(
         spin.accepts,
-        vec![BRIEF_APP_ID.to_string(), RESEARCH_APP_ID.to_string()],
-        "the Deck accepts the Brief Maker and the Research Tool"
+        vec![
+            BRIEF_APP_ID.to_string(),
+            RESEARCH_APP_ID.to_string(),
+            PRODUCTION_APP_ID.to_string()
+        ],
+        "the Deck accepts the Brief Maker, the Research Tool and Production"
     );
     assert!(spin.upstream, "app.spinoff.upstream must be true");
+    assert!(
+        spin.map.is_none() && spin.lift.is_empty(),
+        "a spun-off Production project is carried whole: no map, no lift"
+    );
     let attach = app_block.attach.as_ref().expect("app.attach is declared");
     assert_eq!(
         attach.accepts,

@@ -3,6 +3,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { PRODUCTION_APP_ID } from './landing/tools'
 import Toolbar, { type Account, type ClientChip, type Crew, type ToolBrand } from '../components/Toolbar'
 import SaveStatus from '../components/SaveStatus'
 import { useLinks, useMadeFrom, useSpinoffTargets, useWakeTick } from '../components/ContinueIn'
@@ -58,8 +59,8 @@ interface Props {
   toolKey?: string | null
   /** Continue in › Start fresh: a new document of this app for this client. */
   onStartFresh?: () => void
-  /** Continue in › Production Tool on a brief (features/brief-node.clan). */
-  onStartFilm?: () => void
+  /** Continue in lists Production only where the server serves the tool (features/production-spinoff.clan). */
+  productionTarget?: boolean
   /** The document menu's way to its tool's page for its client. */
   onToolPage?: { label: string; run: () => void } | null
   /** The signed-in agency, on the bar's pill, and its page. */
@@ -87,7 +88,7 @@ interface Props {
 }
 
 /** Chrome for one running app: toolbar + (collapsible) sidebar + render surface + panels. */
-export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, client, account, toolKey, onStartFresh, onStartFilm, onToolPage, agency, agencyLogo, onAgency, user, onSignOut, mark, onCopyLink, crew, library, run }: Props) {
+export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, client, account, toolKey, onStartFresh, productionTarget, onToolPage, agency, agencyLogo, onAgency, user, onSignOut, mark, onCopyLink, crew, library, run }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false) // collapsed by default
   const { open } = running
   const docPath = open.path
@@ -137,7 +138,8 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   }, [docPath])
   // Which view the drawer shows: Graph, By part, By time or Lineage.
   const [drawerView, setDrawerView] = useState<DrawerView>('graph')
-  const targets = useSpinoffTargets(docPath)
+  const offered = useSpinoffTargets(docPath)
+  const targets = useMemo(() => (productionTarget ? offered : offered.filter(t => t.app_id !== PRODUCTION_APP_ID)), [offered, productionTarget])
   const noun = nounOf(open.manifest.app?.app_id)
   // The tool, as its manifest names it (app.home.brand, else its name); a
   // document made before tools named themselves still finds its tool.
@@ -401,7 +403,6 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           toolKey,
           onRename: host.setTitle && !open.is_template ? (t: string) => { void host.setTitle!(t).then(() => refreshApp()).catch(e => setLinkError({ docPath, message: String(e instanceof Error ? e.message : e) })) } : undefined,
           onStartFresh,
-          onStartFilm,
           onToolPage,
           onSave,
           onCopyLink: open.is_template ? undefined : onCopyLink,

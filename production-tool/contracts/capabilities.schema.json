@@ -308,6 +308,11 @@
           "type": "integer",
           "minimum": 0,
           "description": "Slots for character references (Runway subject human: 5)."
+        },
+        "maxObject": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Slots for every other reference (Runway subject object: 9 on gemini_image3_pro, its OpenAPI). Absent: only max bounds them. Added 2026-11-21 (additive, features/pt-relay-trace.clan)."
         }
       },
       "required": [
@@ -747,6 +752,13 @@
         },
         "pricing": {
           "$ref": "#/$defs/pricing"
+        },
+        "refAspect": {
+          "type": "object",
+          "description": "The width / height range Runway accepts for a picture the model is sent (a reference or a frame), from docs.dev.runwayml.com/assets/inputs; WAN 3's from its 400 ('at least 0.55'), its top assumed 1.8 as HappyHorse's. The relay pads a picture outside it to the nearest bound before submit (UAT 2026-11-21, F5).",
+          "properties": { "min": { "type": "number", "exclusiveMinimum": 0 }, "max": { "type": "number", "exclusiveMinimum": 0 } },
+          "required": ["min", "max"],
+          "additionalProperties": false
         },
         "audioParam": {
           "type": "boolean",

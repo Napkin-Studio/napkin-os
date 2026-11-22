@@ -17,7 +17,7 @@ import { systemUpdate } from '../../doc/store'
 import type { Board, BoardPurpose } from '../../contracts/types'
 import type { CanvasAdapter, CanvasElement, Pt } from '../core/canvasAdapter'
 import { canvasActions, toolLetter } from '../chrome/actions'
-import { boardIdOf, boardKey, contentsOf, deleteBoards, isBoard, jumpTo, newBoard, NEW_BOARD, PURPOSES, reconcileBoards, seedBoards } from './boards'
+import { boardIdOf, boardKey, contentsOf, deleteBoards, isBoard, jumpTo, newBoard, NEW_BOARD, PURPOSES, reconcileBoards, seedBoards, titleForPurpose } from './boards'
 import { UndoChip } from '../../ui/Undo'
 import { boardNotices } from './fitting'
 import { tidyBoard } from './gather'
@@ -221,7 +221,9 @@ export function BoardLayer({ canvas, inset = 0, tick = 0 }: { canvas: CanvasAdap
   const setPurpose = (frameId: string, purpose: BoardPurpose) => {
     const f = frameById(frameId)
     if (!f || f.purpose === purpose) return
-    canvas.transact((els) => els.map((e) => (e.id === frameId ? canvas.patch(e, { purpose } as Partial<CanvasElement>) : e)), { undoable: true })
+    // A board still called by its default (or its old purpose) takes the purpose's name (UAT round 2 R2-5: "NEW BOARD").
+    const name = titleForPurpose(typeof f.name === 'string' ? f.name : '', f.purpose as BoardPurpose | undefined, purpose)
+    canvas.transact((els) => els.map((e) => (e.id === frameId ? canvas.patch(e, { purpose, ...(name ? { name } : {}) } as Partial<CanvasElement>) : e)), { undoable: true })
   }
 
   // The Board tool's surface: drag out a board, or click for one of the default size.
@@ -440,7 +442,12 @@ function TitleEditor({ at, width, room, title, purpose, fresh, onTitle, onPurpos
           <div className="bd-chips">
             {PURPOSES.map((p) => (
               <button key={p.purpose} type="button" role="radio" aria-checked={purpose === p.purpose} className={`bd-chip ${purpose === p.purpose ? 'on' : ''}`}
-                onMouseDown={(e) => e.preventDefault()} onClick={() => onPurpose(p.purpose)}>{p.label}</button>
+                onMouseDown={(e) => e.preventDefault()} onClick={() => {
+                  // The title box follows the purpose while it still holds the default (UAT round 2 R2-5).
+                  const t = titleForPurpose(value, purpose, p.purpose)
+                  if (t) setValue(t)
+                  onPurpose(p.purpose)
+                }}>{p.label}</button>
             ))}
           </div>
           <button type="button" className="btn sm primary" onMouseDown={(e) => e.preventDefault()} onClick={() => { commit(); onDone() }}>Done</button>

@@ -16,7 +16,7 @@
 // shot alone, and a take's segments meet on a cut until take.withLast is proven (paid test P1).
 
 import { newUlidId } from '../../../clan-store/src'
-import { choiceToSend, clipRefCapacity, modelChoicesFor, modelLabel, resolveQuality, type Sheets } from '../capabilities'
+import { clipRefCapacity, modelChoicesFor, modelLabel, resolveQuality, type Sheets } from '../capabilities'
 import { SHEETS } from '../contracts/load'
 import type { CapabilitySheet, ClipQuality, Config, Id, ModelChoice, ProductionDocument, Provider, RunMode, Seam, SeamKind, Shot, VideoJoin, VideoRun } from '../contracts/types'
 import { landUpdate, systemUpdate } from '../doc/store'
@@ -193,12 +193,17 @@ export function canJoin(prev: PlanShot, next: PlanShot): boolean {
 }
 
 /** Why two shots cannot be one video, in words. */
-export function joinBlock(prev: PlanShot, next: PlanShot, n: number): string | undefined {
+export function joinBlock(prev: PlanShot, next: PlanShot, n: number, lineOf?: (shotId: Id) => string | undefined): string | undefined {
   if (canJoin(prev, next)) return undefined
   if (next.product) return `Shot ${n + 1} shows the product: it starts its own video`
   if (prev.kind === 'end_card' || next.kind === 'end_card') return 'An end card is always its own video'
   if (prev.text || next.text) return 'A shot with type on screen is always its own video'
-  if (prev.spoken || next.spoken) return 'A shot where someone speaks is its own video, with sound'
+  if (prev.spoken || next.spoken) {
+    // Which shot speaks, and its line: the Shot tab showed none, so the refusal read as wrong (UAT 2026-11-21).
+    const who = prev.spoken ? prev : next
+    const line = lineOf?.(who.id)
+    return `Shot ${prev.spoken ? n : n + 1} has a spoken line${line ? ` (“${line.length > 60 ? `${line.slice(0, 59)}…` : line}”)` : ''}, so it is its own video, with sound: a joined video trims each shot to its storyboard length, which could cut the line off`
+  }
   return 'These shots are made on their own'
 }
 
@@ -385,7 +390,13 @@ export async function makeRuns(deps: FrameDeps, opts: MakeRunsOpts): Promise<str
   const busy = opts.busy ?? (() => false)
   const shots = shotsOf(d, sb.id)
   const facts = shots.map((s) => planShot(d, s, { hasFrame: !!selectedFrame(d, s.id), videoId: opts.videoId }))
-  const plan = planRuns(facts, model, { join: 'film', speaker: speakerModel(model, sheets), takeModel: takeModelFor(model, sheets) })
+  // A person's pick (the model the box shows) is the model sent, on every run of it: a spoken line stays on the pick
+  // (the box says before Make when the pick cannot voice it) and a take never switches to another model. Only with no
+  // pick does a spoken line go to Veo with sound and an over-long run to WAN 3 (UAT round 4, R4-F1: WAN 3 shown and
+  // picked, Veo 3.1 with sound made, the third time this class came back).
+  const plan = planRuns(facts, model, opts.modelChoice
+    ? { join: 'film', speaker: model }
+    : { join: 'film', speaker: speakerModel(model, sheets), takeModel: takeModelFor(model, sheets) })
   const asked = new Set(opts.shotIds)
   // What is made: each take run an asked shot is in, unless it is one take already (or being made); each asked
   // lone shot with no clip yet (any, with again).
@@ -423,14 +434,16 @@ export async function makeRuns(deps: FrameDeps, opts: MakeRunsOpts): Promise<str
     })
   }
   for (const [i, { run: r, shotIds }] of work.entries()) {
-    const pick = r.model.model === model.model && r.model.provider === model.provider ? opts.modelChoice
-      : choiceToSend('clip', opts.config, { provider: r.model.provider, model: r.model.model }, sheets)
+    // Always by name: with none sent, the relay routes its own default, which was not the model the box showed
+    // (UAT 2026-11-21, F3: Omni shown, Veo 3.1 with sound made).
+    const pick: ModelChoice = r.model.model === model.model && r.model.provider === model.provider && opts.modelChoice ? opts.modelChoice
+      : { provider: r.model.provider, model: r.model.model }
     if (isTakeRun(r)) {
       try {
         // A take (take_refs: no frame pinned) sends the character pictures, then every shot's frame in shot
         // order, as references: capped at what the run's model carries without a frame, characters first.
         const cap = clipRefCapacity({ provider: r.model.provider, model: r.model.model }, false, opts.config, sheets)
-        await makeTake(deps, opts.videoId, ids[i], { modelChoice: pick, quality, refsMax: cap.max, ...(opts.texts ? { texts: opts.texts } : {}) })
+        await makeTake(deps, opts.videoId, ids[i], { modelChoice: pick, quality, refsMax: cap.max, fit: (s) => billedS(s, r.model), ...(opts.texts ? { texts: opts.texts } : {}) })
       } catch (e) {
         failed.push(`${name(shotIds)}: ${e instanceof Error ? e.message : 'that did not work.'}`)
       }

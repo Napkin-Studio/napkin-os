@@ -8,7 +8,7 @@ import { roughLines, roughSeconds, roughText, type ComposedScript } from './comp
 import { refNames } from './extensions'
 
 type RefNames = ReturnType<typeof refNames>
-import { SKYE_OPTIONS, wordDiff } from './skye'
+import { SKYE_OPTIONS, sceneShotSeconds, wordDiff } from './skye'
 
 type Doc = ProductionDocument
 
@@ -88,7 +88,10 @@ export function partAt(d: Doc, composed: ComposedScript, target: WriteTarget, bl
  *  the scene the caret is in or the first with words. Its chip says which when the script has several. */
 export function wholeScope(d: Doc, composed: ComposedScript, proseOf: (kind: 'scene', id: Id) => Prose | undefined, caretScene?: Id): Extract<SkyeScope, { kind: 'whole' }> {
   const scenes = composed.rows.filter((r) => r.kind === 'scene').map((r) => r.id)
-  const worded = scenes.filter((id) => (proseOf('scene', id)?.content ?? []).some((b) => blockText(b, refNames(d)).trim()) || !!d.scenes[id]?.heading.trim())
+  // A scene Plan shots made into shots has words still, in its shots (UAT round 4, R4-F3: with no heading, an ask after
+  // Plan shots had no target and went as a new draft of the script).
+  const planned = new Set(composed.rows.flatMap((r) => (r.kind === 'shot' && r.sceneId ? [r.sceneId] : [])))
+  const worded = scenes.filter((id) => (proseOf('scene', id)?.content ?? []).some((b) => blockText(b, refNames(d)).trim()) || !!d.scenes[id]?.heading.trim() || planned.has(id))
   if (worded.length <= 1) return { kind: 'whole', target: worded[0] ? { kind: 'scene', id: worded[0] } : null, label: 'Whole script' }
   const id = caretScene && worded.includes(caretScene) ? caretScene : worded[0]
   return { kind: 'whole', target: { kind: 'scene', id }, label: `Scene ${scenes.indexOf(id) + 1}` }
@@ -124,36 +127,14 @@ export function draftSeconds(d: Doc, sug: Suggestion): number {
   return roughSeconds(text)
 }
 
-/** A word-diff with long unchanged runs cut to a few words either side: the card shows what changed. */
-export function trimDiff(parts: ReturnType<typeof wordDiff>, keep = 8): ReturnType<typeof wordDiff> {
-  return parts.map((p, i) => {
-    if (p.kind !== 'same') return p
-    const words = p.text.split(/(\s+)/)
-    const n = words.filter((w) => w.trim()).length
-    if (n <= keep * 2) return p
-    const first = i === 0
-    const last = i === parts.length - 1
-    const take = (from: 'start' | 'end') => {
-      let count = 0
-      const out: string[] = []
-      const list = from === 'start' ? words : [...words].reverse()
-      for (const w of list) {
-        if (w.trim()) count += 1
-        if (count > keep) break
-        out.push(w)
-      }
-      return from === 'start' ? out.join('') : out.reverse().join('')
-    }
-    if (first) return { kind: 'same', text: `…${take('end')}` }
-    if (last) return { kind: 'same', text: `${take('start')}…` }
-    return { kind: 'same', text: `${take('start')} … ${take('end')}` }
-  })
-}
-
-/** How a card names what Skye was asked: 'From your words: “…”', 'On your selection: “…”', 'On ¶3: Tighten'. */
-export function askedWords(write: WriteInput | undefined, sug: Suggestion, part?: string): { lead: string; quote?: string } {
+/** How a card names what Skye was asked: 'From your words: “…”', 'On your selection: “…”', 'On ¶3: Tighten', and for a
+ *  shot or a line its own name ('Shot 6, from: “…”'; UAT round 5, R5-F5: a shot's card said "The whole script, from").
+ *  `item`: the shot's or line's name ("Shot 6", "This line"); a scene's card reads as the whole script. */
+export function askedWords(write: WriteInput | undefined, sug: Suggestion, part?: string, item?: string): { lead: string; quote?: string } {
   const verb = write ? SKYE_OPTIONS.find((o) => o.intent === write.intent)?.label(write.seconds ?? 0) : undefined
-  const where = write?.selection ? (part ? `On ${part}` : 'On your selection') : sug.mode === 'draft' ? 'From your words' : 'The whole script, from'
+  const named = sug.target.kind !== 'scene' ? (item ?? (sug.target.kind === 'beat' ? 'This line' : 'This shot')) : undefined
+  const where = write?.selection ? (part ? `On ${part}` : 'On your selection') : sug.mode === 'draft' ? 'From your words'
+    : named ? `${named}, from` : 'The whole script, from'
   if (write?.instruction) return { lead: where, quote: write.instruction }
   if (verb && write?.intent !== 'draft' && write?.intent !== 'instruct') return { lead: `${where}: ${verb}` }
   return { lead: sug.note }
@@ -181,4 +162,90 @@ export function scriptSuggestions(d: Doc, composed: ComposedScript): Suggestion[
 export function meterSegments(doc: ProductionDocument, composed: ComposedScript): { id: string; s: number }[] {
   if (composed.shots.length) return composed.shots.map((s) => ({ id: s.id, s: s.duration_s }))
   return roughLines(roughText(doc, composed.script.id)).map((s, i) => ({ id: `p${i}`, s: Math.round(s * 10) / 10 })).filter((x) => x.s > 0)
+}
+
+/** One row of an edit card in screenplay layout: its element (cue, parenthetical, dialogue, action…) and its
+ *  words, changed word by word where the line was rewritten, whole where it is new or gone. */
+export interface DiffRow { kind: string; parts: ReturnType<typeof wordDiff>; change: 'same' | 'changed' | 'new' | 'gone' }
+
+/**
+ * An edit as the page reads it (UAT 2026-11-21, script UX 1: the card flattened cues and parentheticals into one
+ * struck-through paragraph): the lines matched as lines first, each kept in its element's layout, and only a line
+ * that was rewritten shown word by word. Pure.
+ */
+export function lineDiff(before: { kind: string; text: string }[], after: { kind: string; text: string }[]): DiffRow[] {
+  const a = before.filter((l) => l.text.trim())
+  const b = after.filter((l) => l.text.trim())
+  const n = a.length
+  const m = b.length
+  const same = (i: number, j: number) => a[i].text.trim() === b[j].text.trim()
+  const L: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0))
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) L[i][j] = same(i, j) ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1])
+  const raw: { op: 'same' | 'gone' | 'new'; i?: number; j?: number }[] = []
+  let i = 0
+  let j = 0
+  while (i < n || j < m) {
+    if (i < n && j < m && same(i, j)) { raw.push({ op: 'same', i, j }); i++; j++ }
+    else if (j < m && (i >= n || L[i][j + 1] >= L[i + 1][j])) raw.push({ op: 'new', j: j++ })
+    else raw.push({ op: 'gone', i: i++ })
+  }
+  // Within each run of changes, a line gone and a line new of the same element are one line rewritten, shown word by
+  // word where the new line stands; what is left of the run is new or gone. The rows follow the new text's order.
+  const out: DiffRow[] = []
+  let k = 0
+  while (k < raw.length) {
+    const r = raw[k]
+    if (r.op === 'same') { out.push({ kind: b[r.j!].kind, parts: [{ kind: 'same', text: b[r.j!].text }], change: 'same' }); k++; continue }
+    const run: typeof raw = []
+    while (k < raw.length && raw[k].op !== 'same') run.push(raw[k++])
+    const gones = run.filter((x) => x.op === 'gone').map((x) => a[x.i!])
+    const used = new Set<number>()
+    for (const x of run.filter((y) => y.op === 'new')) {
+      const w = b[x.j!]
+      const g = gones.findIndex((l, q) => !used.has(q) && l.kind === w.kind)
+      if (g >= 0) { used.add(g); out.push({ kind: w.kind, parts: wordDiff(gones[g].text, w.text), change: 'changed' }) }
+      else out.push({ kind: w.kind, parts: [{ kind: 'new', text: w.text }], change: 'new' })
+    }
+    gones.forEach((l, q) => { if (!used.has(q)) out.push({ kind: l.kind, parts: [{ kind: 'gone', text: l.text }], change: 'gone' }) })
+  }
+  return out
+}
+
+/** One line as an edit card draws it: a line kept, new or gone whole, or one side of a rewritten line. */
+export interface CardLine { kind: string; change: DiffRow['change']; side?: 'was' | 'now'; parts: ReturnType<typeof wordDiff> }
+
+/**
+ * An edit card's lines (UAT round 3, R3-F7: the old and new words of a rewritten line ran together, "socks anda
+ * dressing gown creepsflips…"): a rewritten line is two lines, the old one with its cut words struck and then the
+ * new one with its new words marked, each read whole. Words are marked only inside a rewritten line; a space
+ * between two marked words is marked with them, so a phrase reads as one. Pure.
+ */
+export function cardLines(rows: DiffRow[]): CardLine[] {
+  const side = (parts: DiffRow['parts'], drop: 'new' | 'gone') => {
+    const kept = parts.filter((p) => p.kind !== drop)
+    const out: DiffRow['parts'] = []
+    kept.forEach((p, i) => {
+      const marked = (q: DiffRow['parts'][number] | undefined) => !!q && q.kind !== 'same'
+      const kind = p.kind === 'same' && !p.text.trim() && marked(kept[i - 1]) && marked(kept[i + 1]) ? kept[i - 1].kind : p.kind
+      const last = out.at(-1)
+      if (last && last.kind === kind) last.text += p.text
+      else out.push({ kind, text: p.text })
+    })
+    return out
+  }
+  return rows.flatMap((r): CardLine[] => r.change !== 'changed' ? [{ kind: r.kind, change: r.change, parts: r.parts }] : [
+    { kind: r.kind, change: r.change, side: 'was', parts: side(r.parts, 'new') },
+    { kind: r.kind, change: r.change, side: 'now', parts: side(r.parts, 'gone') },
+  ])
+}
+
+/** The part's length now, by the band's rule (or the shot's length), for "about 12 s → 9 s" on an edit card. */
+export function secondsNow(d: Doc, sug: Suggestion, lines: { kind: string; text: string }[], fromShots = false): number {
+  if (sug.target.kind === 'shot') return d.shots[sug.target.id]?.duration_s ?? 0
+  // A scene Plan shots made into shots: its shots' seconds, not its empty words (R4-F3: "about 0 s -> 8 s").
+  const scene = sug.target.kind === 'scene' ? d.scenes[sug.target.id] : undefined
+  const planned = scene ? sceneShotSeconds(d, scene.script_id, scene.id) : undefined
+  if (planned !== undefined && (fromShots || !lines.some((l) => l.text.trim()))) return planned
+  const text = lines.map((l) => (l.kind === 'character' ? l.text.toUpperCase() : l.kind === 'parenthetical' && !/^\(.*\)$/.test(l.text.trim()) ? `(${l.text})` : l.text)).join('\n')
+  return roughSeconds(text)
 }

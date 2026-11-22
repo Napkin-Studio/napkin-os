@@ -473,7 +473,7 @@ PRODUCTION_ACCEPTS = {"social": ("social",), "ooh": ("ooh", "print"), "print": (
 ASPECT_TOL = 1.25
 NEAREST_ASPECT_TOL = ASPECT_TOL
 PRODUCTION_ALT = {"master": "The campaign's key visual", "size": "The campaign picture made for this channel", "frame": "A storyboard frame from the film"}
-_FILM_WORDS = ("film", "tv", "television", "cinema", "broadcast", "bvod", "video", "youtube")
+_FILM_WORDS = ("film", "tv", "television", "cinema", "broadcast", "bvod", "video", "youtube", "storyboard", "storyboards")
 _PRINT_WORDS = ("print", "press", "magazine", "newspaper")
 _DISPLAY_WORDS = ("display", "banner", "programmatic")
 
@@ -506,6 +506,55 @@ def execution_channel(title: str) -> str | None:
     return None
 
 
+#: An execution that groups Production's finals instead of naming a channel (the Deck's idea stage writes "Size crops", "Packshot"): the
+#: words that say which finals it shows. Storyboard frames are the film channel (_FILM_WORDS). production-spinoff live test 2026-11-22.
+_SIZE_WORDS = ("size", "sizes", "crop", "crops", "resize", "resizes", "cut-down", "cut-downs", "cutdown", "cutdowns", "format", "formats")
+_PRODUCT_WORDS = ("packshot", "packshots", "pack shot", "pack shots", "product", "products")
+
+
+def execution_group(title: str) -> str | None:
+    """``sizes`` or ``product`` for an execution title that names the finals it shows rather than a channel, else None."""
+    t = (title or "").lower()
+    for g, words in (("product", _PRODUCT_WORDS), ("sizes", _SIZE_WORDS)):
+        if any(re.search(rf"(?<!\w){w}(?!\w)", t) for w in words):
+            return g
+    return None
+
+
+#: The reason of a slot a group of finals cannot fill (shown as the gap; the person supplies the picture or makes one in Production).
+GROUP_GAP = {"product": "To supply from Production: a packshot. No final in the export is a product packshot; make or mark one final, or supply a picture",
+             "sizes": "To supply from Production: the size crops. No size or resized final in the export; make the sizes in Production, or supply a picture"}
+
+
+def slide_group(slide: dict) -> str | None:
+    """The execution_group of an execution slide that names no channel (a channel's own rules come first), else None."""
+    t, title = spec.picture_of(slide)
+    return execution_group(title) if t == "execution" and not execution_channel(title) else None
+
+
+def group_pool(prod: dict, aspect: str, used=(), any_shape: bool = False, placeable_only: bool = False, group: str | None = None) -> list:
+    """Every final that may fill a ``sizes`` or ``product`` execution slot, best first: the key visuals and sizes of any Format set or channel
+    (ready or flagged, not stale), a final a person marked first, a placeable picture before one waiting for its rights, one no earlier slot
+    holds before one it does, then the nearest the slot's aspect. Without ``any_shape`` a shape beyond ASPECT_TOL, or a crop that would cut a
+    protect box, is not offered. Newest first among equals."""
+    want = ratio(aspect)
+    rows = []
+    for k, it in (prod.get("items") or {}).items():
+        if it.get("role") not in ("master", "size") or it.get("status") not in ("ready", "look") or not it.get("aspect"):
+            continue
+        if group == "product" and it.get("subject") != "packshot":   # a packshot slide shows a packshot, never the key visual or a crop of it
+            continue
+        if group == "sizes" and not (it.get("role") == "size" or it.get("subject") == "crop"):   # a crops slide shows sizes and resized crops only
+            continue
+        if placeable_only and it.get("rights") == "reference_only":
+            continue
+        dist = abs(math.log(it["aspect"]["w"] / it["aspect"]["h"] / want))
+        if not any_shape and (dist > math.log(ASPECT_TOL) or not keeps_protected(it, aspect)):
+            continue
+        rows.append(((it.get("rights") == "reference_only", k in used, not it.get("final"), it.get("status") != "ready", round(dist, 4)), k))
+    return [k for _, k in sorted(rows, key=lambda r: (r[0], tuple(-ord(c) for c in r[1])))]
+
+
 def _newest(keys):
     return max(keys) if keys else None   # ULIDs sort by the time they were made
 
@@ -523,18 +572,21 @@ def keeps_protected(it: dict, aspect) -> bool:
 
 def master_pool(prod: dict, brief_document_id: str | None = None) -> tuple:
     """``(set ids, why)``: the Format sets the key-visual rule ranks equal, of which choose_master takes the newest (the Production picker
-    reports the others as a tie). Linked to the deck's brief first; when none links to it, a placeable key visual before one waiting for its
+    reports the others as a tie). A key visual a person marked final comes before any other. Linked to the deck's brief first; when none links to it, a placeable key visual before one waiting for its
     rights. ``([], why)`` when no set has a master."""
     items = prod.get("items") or {}
     sets = {fid: r for fid, r in (prod.get("format_sets") or {}).items() if r.get("master") in items}
     if not sets:
         return [], "no Format set in the export has a key visual"
+    marked = {fid: r for fid, r in sets.items() if items[r["master"]].get("final")}
+    if marked:   # finals first (production-spinoff): the picture a person marked final, before any rule's pick
+        sets = marked
     linked = [fid for fid, r in sets.items() if brief_document_id and (r.get("brief") or {}).get("document_id") == brief_document_id]
     if linked:
-        return linked, "the newest Format set linked to this deck's brief"
+        return linked, ("a key visual marked final in Production, " if marked else "") + "the newest Format set linked to this deck's brief"
     placeable = [fid for fid in sets if items[sets[fid]["master"]].get("rights") != "reference_only"]
     if placeable:
-        why = "no Format set links to this deck's brief: the newest set whose key visual can be placed"
+        why = ("a key visual marked final in Production: " if marked else "") + "no Format set links to this deck's brief: the newest set whose key visual can be placed"
         if _newest(list(sets)) != _newest(placeable):
             why += " (a newer set's key visual waits for its rights)"
         return placeable, why
@@ -571,8 +623,8 @@ def size_pool(prod: dict, channel: str, aspect: str, prefer_set: str | None = No
     """``(keys, why)``: the sizes ranked best and equal for an execution slot (production_size takes the newest; the Production picker reports
     the others as a tie). Sizes whose channel the execution accepts (a size of a format the pinned packs do
     not know only when the channel has none), within ASPECT_TOL of the slot's aspect and whose protect boxes the slot's crop keeps whole;
-    a placeable one before one waiting for its rights, ready before flagged ('look'), the key visual's own set first, nearest the slot's
-    aspect. Stale sizes never. ``([], why)`` when sizes of the channel exist and none fits (the slot is left empty with that reason, never
+    one marked final in Production first (production-spinoff), a placeable one before one waiting for its rights, ready before flagged
+    ('look'), the key visual's own set first, nearest the slot's aspect. Stale sizes never. ``([], why)`` when sizes of the channel exist and none fits (the slot is left empty with that reason, never
     filled with a wrong shape); ``([], None)`` when Production made nothing for the channel.
 
     ``any_shape`` (deck-graphics, spec.GRAPHICS): the size is shown WHOLE in a frame whose window takes its own format's aspect, so no
@@ -599,14 +651,14 @@ def size_pool(prod: dict, channel: str, aspect: str, prefer_set: str | None = No
         if not any_shape and not keeps_protected(it, aspect):
             cut += 1 if ours else 0
             continue
-        row = (it.get("rights") == "reference_only", it.get("status") != "ready", it.get("set") != prefer_set, round(dist, 4), k)   # a placeable picture first
+        row = (not it.get("final"), it.get("rights") == "reference_only", it.get("status") != "ready", it.get("set") != prefer_set, round(dist, 4), k)   # a final first, then a placeable picture
         (matched if ours else nearest).append(row)
     if any_shape and stale and not matched:   # the channel's own sizes are all out of date: held, never a size of another format
         pool = []
     else:
         pool = matched or nearest
     if fits:   # size_fits: every size that fits, best first (newest first among equals)
-        return [p[4] for p in sorted(pool, key=lambda p: (p[:4], tuple(-ord(c) for c in p[4])))], None
+        return [p[5] for p in sorted(pool, key=lambda p: (p[:5], tuple(-ord(c) for c in p[5])))], None
     if not pool:
         if any_shape and stale:
             return [], (f"Out of date in Production: its {channel} size(s) changed since they were made. Make them again in Production, "
@@ -619,13 +671,86 @@ def size_pool(prod: dict, channel: str, aspect: str, prefer_set: str | None = No
         if cut:
             parts.append(f"{cut} {channel} size(s) would lose part of their protected area in a {aspect} crop")
         return [], "No Production size fits: " + "; ".join(parts) + ". Make one in this shape in Production, or supply a picture"
-    best = min(p[:4] for p in pool)
-    return sorted(p[4] for p in pool if p[:4] == best), None
+    best = min(p[:5] for p in pool)
+    return sorted(p[5] for p in pool if p[:5] == best), None
+
+
+#: Out of home: a Production size of an OOH format is shown in its own frame with the format named. The names a person at an agency says
+#: (the pinned pack's own names carry the media owner and the paper); a format not here is named from the pack.
+OOH_NAMES = {"uk-48-sheet": "48-sheet roadside", "uk-96-sheet": "96-sheet roadside", "uk-6-sheet": "6-sheet street furniture",
+             "uk-adshel-6-sheet": "Adshel 6-sheet", "uk-4-sheet": "4-sheet", "uk-d6": "Digital 6-sheet", "uk-d48-jcdecaux": "Digital 48-sheet (JCDecaux)",
+             "uk-d48-global": "Digital 48-sheet (Global)", "ie-d48-jcdecaux": "Digital 48-sheet (JCDecaux IE)", "ie-d48-global": "Digital 48-sheet (Global IE)",
+             "ie-48-sheet-hd": "48-sheet HD roadside", "ie-retail-6-sheet": "Retail 6-sheet", "uk-bus-tside": "Bus T-side",
+             "uk-bus-streetliner-13ft": "Bus streetliner", "uk-bus-superside": "Bus superside", "uk-bus-rear-standard": "Bus rear"}
+OOH_MAX = 3   # formats shown on one slide: more would be too small to read as frames; the person swaps among the rest in the picker
+
+
+def ooh_name(format_id: str | None) -> str:
+    """The format as a person names it: OOH_NAMES, else the pack's id as words."""
+    return OOH_NAMES.get(format_id or "") or str(format_id or "Out of home").replace("-", " ")
+
+
+def ooh_sizes(prod: dict, mset: str | None = None) -> list:
+    """The Production sizes of an out-of-home format to show, one per format (the one a person marked final, then a placeable, ready one, then
+    the key visual's own set, then the newest), at most OOH_MAX, the widest first. Only the pinned packs' OOH channel counts: a print page is
+    not an outdoor frame. ``[]`` when Production made none."""
+    best = {}
+    for k, it in (prod.get("items") or {}).items():
+        if it.get("role") != "size" or it.get("channel") != "ooh" or it.get("status") not in ("ready", "look") or not it.get("aspect"):
+            continue
+        if it.get("rights") == "reference_only":
+            continue
+        fid = (it.get("format") or {}).get("format_id") or k
+        rank = (bool(it.get("final")), it.get("status") == "ready", it.get("set") == mset, k)
+        if fid not in best or rank > best[fid][0]:
+            best[fid] = (rank, k)
+    keys = [k for _, k in best.values()]
+    # a spread of shapes first: the widest, then the tallest, then the rest by ratio
+    def r(k):
+        a = prod["items"][k]["aspect"]
+        return a["w"] / a["h"]
+    keys.sort(key=lambda k: -r(k))
+    if len(keys) > OOH_MAX:
+        keys = [keys[0], keys[-1]] + keys[1:-1][:OOH_MAX - 2]
+        keys.sort(key=lambda k: -r(k))
+    return keys
+
+
+def _nearest_aspect(w: float, h: float) -> str:
+    return min(spec.IMAGE_ASPECTS, key=lambda a: abs(math.log((w / h) / ratio(a))))
+
+
+def add_ooh_slide(deck: dict) -> str | None:
+    """The idea stage wrote no out-of-home execution but Production made OOH sizes: one execution slide for them, after the last execution (or
+    the idea). Says only what Production holds. Returns the new slide's id, or None when the deck already has an OOH execution."""
+    slides = deck["slides"]
+    for sid in deck["order"]:
+        t, title = spec.picture_of(slides[sid])
+        if t == "execution" and execution_channel(title) == "ooh":
+            return None
+    from .assemble import _slide   # noqa: PLC0415
+    new = _slide("execution", "Out of home", [{"kind": "text", "text": "The out-of-home sizes made in Production, shown in their frames."}],
+                 status="drafted", label="Execution out of home")
+    new["requirements"], new["footnotes"] = [], []
+    n = 1 + max([int(re.sub(r"\D", "", k) or 0) for k in slides] or [0])
+    sid = f"s{n:02d}"
+    pos = max([i for i, k in enumerate(deck["order"]) if slides[k]["type"] == "execution"] or [-1])
+    if pos < 0:
+        pos = max([i for i, k in enumerate(deck["order"]) if slides[k]["type"] == "idea"] or [len(deck["order"]) - 1])
+    slides[sid] = new
+    deck["order"].insert(pos + 1, sid)
+    return sid
+
+
+def _film_frames(prod: dict) -> dict:
+    """The storyboard shot frames a film execution may show: those a person marked final in Production when any is, else every picked one."""
+    frames = {k: it for k, it in (prod.get("items") or {}).items() if it.get("role") == "frame" and it.get("shot_kind", "shot") == "shot"}
+    return {k: it for k, it in frames.items() if it.get("final")} or frames
 
 
 def production_frame(prod: dict) -> str | None:
     """The one picked storyboard frame a film execution shows in v1 (fix 3): the newest storyboard's first shot (by rank) with a picked frame."""
-    frames = {k: it for k, it in (prod.get("items") or {}).items() if it.get("role") == "frame" and it.get("shot_kind", "shot") == "shot"}
+    frames = _film_frames(prod)
     sb = _newest([it.get("storyboard") or "" for it in frames.values()])
     first = sorted((str(it.get("shot_rank") or ""), k) for k, it in frames.items() if (it.get("storyboard") or "") == sb)
     return first[0][1] if first else None
@@ -635,7 +760,7 @@ def production_shots(prod: dict) -> list:
     """The newest storyboard's picked shot frames in shot order (Production's ``shot.rank``, a fractional index that sorts as a string; end
     cards left out; mock frames never reach production.json): ``[(shot number from 1, item key, placeable)]``. A rights-pending frame keeps
     its number and is not placeable."""
-    frames = {k: it for k, it in (prod.get("items") or {}).items() if it.get("role") == "frame" and it.get("shot_kind", "shot") == "shot"}
+    frames = _film_frames(prod)
     sb = _newest([it.get("storyboard") or "" for it in frames.values()])
     ordered = sorted((str(it.get("shot_rank") or ""), k) for k, it in frames.items() if (it.get("storyboard") or "") == sb)
     return [(n, k, frames[k].get("rights") != "reference_only" and frames[k].get("status", "ready") == "ready") for n, (_, k) in enumerate(ordered, 1)]
@@ -677,6 +802,32 @@ def production_slot(prod: dict, key: str, aspect: str, names=()) -> tuple:
     return {"kind": "image", "image": image}, asset
 
 
+_FRAME_LINE = re.compile(r"^\s*(?:frame|shot)\s*(\d{1,2})\s*(super|vo|voice-?over|title|card)?\s*[:.)\-\u2013\u2014]\s*(.+?)\s*$", re.I)
+
+
+def take_frame_captions(slide: dict, shots: list) -> list:
+    """The storyboard slide's own 'Frame 2: ...' lines (copy lines of the idea stage), moved out of the copy block into the strip's captions,
+    one per drawn frame in order (the line whose number is that frame's shot number; '' when the slide wrote none for it). The frames carry
+    them, so they are drawn under each frame and not twice. Nothing moves unless a line is found for at least one drawn frame."""
+    found = {}
+    for b in slide.get("blocks") or []:
+        if b.get("kind") == "copy":
+            for ln in b.get("lines") or []:
+                m = _FRAME_LINE.match(str(ln))
+                if m:
+                    what = (("VO" if m.group(2).lower().startswith("vo") else m.group(2).capitalize()) + ": ") if m.group(2) else ""   # 'Frame 2 super: Brought something still.' reads 'Super: Brought something still.'
+                    found.setdefault(int(m.group(1)), (str(ln), what + m.group(3)))
+    caps = [found[n][1] if n in found else "" for n in shots]
+    if not any(caps):
+        return []
+    taken = {found[n][0] for n in shots if n in found}
+    for b in slide["blocks"]:
+        if b.get("kind") == "copy":
+            b["lines"] = [ln for ln in b.get("lines") or [] if str(ln) not in taken]
+    slide["blocks"] = [b for b in slide["blocks"] if not (b.get("kind") == "copy" and not b.get("lines") and not b.get("answer"))]
+    return caps
+
+
 def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", names=(), brief_document_id: str | None = None) -> dict:
     """Fill picture slots from production.json (deck-prod-assets slice 2), by slide type and channel, after the supplied pictures and before
     the empty slots and the image step, so a filled slot (or one waiting for its rights) never reaches the generation plan. Cover (only with
@@ -694,6 +845,9 @@ def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", na
     def unfit(aspect, why):
         return {"kind": "image", "image": {"kind": "illustration", "status": "empty", "aspect": aspect, "basis": "creative", "reason": why[:REASON_MAX],
                                            "from": {"kind": "production", **({"run": run} if run else {})}}}
+    if spec.GRAPHICS and pictures != "none" and ooh_sizes(prod, mset):
+        got["added"] = add_ooh_slide(deck)   # OOH finals exist and the idea stage wrote no OOH execution: one slide for them
+    placed_keys = set()   # the finals earlier slots hold: a size or packshot slide takes another picture when there is one
     for sid in deck["order"]:
         s = deck["slides"][sid]
         t, title = spec.picture_of(s)
@@ -725,9 +879,38 @@ def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", na
                             if len(picks) < len(shots):   # fewer drawn than the storyboard has: say so on the slide ('4 of 9 shots')
                                 note = f"{len(picks)} of {len(shots)} shots"
                             s["strip"] = {"shots": [number[k] for k in picks], "of": len(shots), **({"note": note} if note else {})}
+                            caps = take_frame_captions(s, s["strip"]["shots"])
+                            if caps:
+                                s["strip"]["captions"] = caps
                             got.setdefault("strips", []).append({"slide": sid, "shots": len(picks), "note": note})
+                elif ch == "ooh" and spec.GRAPHICS and len(ooh_sizes(prod, mset)) >= 2 and not (
+                        ((((s.get("slots") or {}).get(slot) or {}).get("image") or {}).get("from") or {}).get("kind") in ("upload", "brand")):
+                    keys = ooh_sizes(prod, mset)   # every OOH format Production made, each in its own frame with its name (not one picture)
+                    fmts = []
+                    for i, fk in enumerate(keys, 1):
+                        it = prod["items"][fk]
+                        val, asset = production_slot(prod, fk, _nearest_aspect(it["aspect"]["w"], it["aspect"]["h"]), names)
+                        if asset:
+                            register_assets(deck, {val["image"]["asset"]: asset})
+                            got["placed"] += 1
+                        _slots(s)[f"ooh_{i}"] = val
+                        fid = (it.get("format") or {}).get("format_id")
+                        fmts.append({"slot": f"ooh_{i}", "format_id": fid, "name": ooh_name(fid)})
+                        placed_keys.add(fk)
+                    s["ooh"] = {"formats": fmts}
+                    got.setdefault("ooh", []).append({"slide": sid, "formats": [f["name"] for f in fmts]})
+                    key = keys[0]
                 elif ch:
                     key, why = production_size(prod, ch, aspect, mset, any_shape=bool(spec.GRAPHICS))
+                    if ch == "ooh" and spec.GRAPHICS and key and prod["items"][key].get("channel") == "ooh":   # one OOH format: its frame, named
+                        fid = (prod["items"][key].get("format") or {}).get("format_id")
+                        s["ooh"] = {"formats": [{"slot": slot, "format_id": fid, "name": ooh_name(fid)}]}
+                elif execution_group(title):   # "Size crops", "Packshot": the finals Production made, not a channel's sizes
+                    grp = execution_group(title)
+                    pool = group_pool(prod, aspect, placed_keys, any_shape=bool(spec.GRAPHICS), placeable_only=True, group=grp)
+                    key = pool[0] if pool else None
+                    if not key:   # no final of this kind: a clear gap, never the key visual in its place
+                        key, why = None, GROUP_GAP[grp]
             if not key and not why:
                 continue
             cur = (s.get("slots") or {}).get(slot)
@@ -740,6 +923,7 @@ def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", na
                 got["held"].append({"slide": sid, "slot": slot, "message": why[:REASON_MAX]})
                 continue
             val, asset = production_slot(prod, key, aspect, names)
+            placed_keys.add(key)
             if asset:
                 register_assets(deck, {val["image"]["asset"]: asset})
                 got["placed"] += 1

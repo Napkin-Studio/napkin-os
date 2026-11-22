@@ -41,6 +41,7 @@ async function film() {
     const shots = addShots(d, 4, { duration_s: 2 })
     shots[3].kind = 'end_card'
     shots[3].action = 'Clean like a samurai.'
+    shots[2].duration_s = 3 // its lone take is its planned length (a take longer than its shot plays the shot's, R3-F2)
     const videoId = mainVideo(d)!.id
     const runId = id('run')
     d.videos[videoId].runs = { [runId]: { shot_ids: [shots[0].id, shots[1].id], mode: 'take', model: 'mock', state: 'done', planned_by: 'crew' } }

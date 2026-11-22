@@ -320,6 +320,16 @@ export function deleteBoards(canvas: CanvasAdapter, frameIds: readonly string[],
   canvas.select([])
 }
 
+/** The name a board takes when its purpose is picked: the purpose's label, while the board still has the default name
+ *  ("New board"), none, or the old purpose's label; undefined when the person named it themselves (UAT round 2 R2-5). */
+export function titleForPurpose(name: string, was: BoardPurpose | undefined, purpose: BoardPurpose): string | undefined {
+  const label = (p: BoardPurpose | undefined) => PURPOSES.find((x) => x.purpose === p)?.label
+  const n = name.trim()
+  const ownName = n && n !== 'New board' && n !== label(was)
+  if (ownName || purpose === 'none') return undefined
+  return label(purpose)
+}
+
 /** The purposes a board can have, with the words the picker shows (ui-behaviour 3.2). */
 export const PURPOSES: readonly { purpose: BoardPurpose; label: string }[] = [
   { purpose: 'none', label: 'None' },

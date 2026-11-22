@@ -118,3 +118,66 @@ describe('the Edit room brackets', () => {
     expect(cutBrackets(v1, roomGens(store.get(), { jobs: {} }, videoId, two), two)).toEqual([{ from: 0, to: 6, label: 'Box 1 · made together' }])
   })
 })
+
+describe('a lone take longer than its shot (UAT round 3, R3-F2)', () => {
+  it('plays the shot\'s planned length from its start; Out still stretches to the real take', async () => {
+    const store = modelStore()
+    await store.create(MAYA, 'Rain')
+    let out!: { shots: Shot[]; videoId: string; g: Generation }
+    await systemUpdate(store, (d) => {
+      const shots = addShots(d, 2, { duration_s: 1.5 })
+      // Veo makes 4 s for a 1.5 s shot; the take's real length is 4.011 s.
+      const g = gen(d, [shots[0]], SHA('c'), { duration_s: 4.011 })
+      gen(d, [shots[1]], SHA('d'), { duration_s: 1.2 })
+      out = { shots, videoId: mainVideo(d)!.id, g }
+    }, 'sync')
+    await store.flush()
+    const boxes: Box[] = out.shots.map((s, i) => ({ key: boxKeyOf([s.id]), n: i + 1, shotIds: [s.id], together: false, endCard: false, lengthS: 1.5 }))
+    const gens = roomGens(store.get(), { jobs: {} }, out.videoId, boxes)
+    const g = gens.find((x) => x.id === out.g.id)!
+    expect(g.durationS).toBe(4.011)
+    expect(g.segments).toEqual([{ shotId: out.shots[0].id, inS: 0, outS: 1.5 }])
+    let n = 0
+    const cut = assemble(store.get(), out.videoId, boxes, gens, () => `c${++n}`)
+    // Shot 1 at its 1.5 s; shot 2's take is shorter than planned, so all of it.
+    expect(cut.v1.map((c) => [c.inS, c.outS, c.startS])).toEqual([[0, 1.5, 0], [0, 1.2, 1.5]])
+  })
+})
+
+describe('a voiced lone take plays its whole line (UAT round 5, R5-F2)', () => {
+  it('"Good boy." whispered, planned 1.0 s, on WAN 3 (2 s take): the window runs to the line\'s end, 2.0 s; silent, 1.0 s', async () => {
+    const store = modelStore()
+    await store.create(MAYA, 'Quietboil')
+    let out!: { shots: Shot[]; videoId: string; wan: Generation; omni: Generation }
+    await systemUpdate(store, (d) => {
+      const shots = addShots(d, 2, { duration_s: 1 })
+      for (const s of shots) {
+        const b = id('beat')
+        d.beats[b] = { id: b, v: 1, field_v: {}, shot_id: s.id, kind: 'line', at_s: 0, text: 'Good boy.', speaker: 'MAYA', parenthetical: 'whispering, to the kettle', rank: 'a0' } as never
+      }
+      // Round 5's box 5: WAN 3 (a sound switch) makes 2.02 s. Shot 2 on Omni (no switch): the line is not voiced.
+      const wan = gen(d, [shots[0]], SHA('c'), { duration_s: 2.02, provider: 'runway', inputs: { model: 'wan3' } as never })
+      const omni = gen(d, [shots[1]], SHA('d'), { duration_s: 3, provider: 'runway', inputs: { model: 'gemini_omni_flash_1.1' } as never })
+      out = { shots, videoId: mainVideo(d)!.id, wan, omni }
+    }, 'sync')
+    await store.flush()
+    const boxes: Box[] = out.shots.map((s, i) => ({ key: boxKeyOf([s.id]), n: i + 1, shotIds: [s.id], together: false, endCard: false, lengthS: 1 }))
+    const gens = roomGens(store.get(), { jobs: {} }, out.videoId, boxes)
+    expect(gens.find((x) => x.id === out.wan.id)!.segments).toEqual([{ shotId: out.shots[0].id, inS: 0, outS: 2 }])
+    expect(gens.find((x) => x.id === out.omni.id)!.segments).toEqual([{ shotId: out.shots[1].id, inS: 0, outS: 1 }])
+    let n = 0
+    const cut = assemble(store.get(), out.videoId, boxes, gens, () => `c${++n}`)
+    expect(cut.v1.map((c) => [c.inS, c.outS])).toEqual([[0, 2], [0, 1]])
+  })
+})
+
+describe('an ask about the take offers no "Make shot apart?" (UAT round 4, R4-F9)', () => {
+  it('round 4: an ask about shots 4 and 5 offers nothing; one about shot 4 alone does; a words change does', async () => {
+    const { offersApart } = await import('./apartOffer')
+    expect(offersApart('Show the empty room for shot 4, Maya in shot 5.', 4, [5])).toBe(false)
+    expect(offersApart('Hold the wide a beat longer.', 4, [5])).toBe(false)
+    expect(offersApart('Shots 4 and 5: warmer light.', 4, [5])).toBe(false)
+    expect(offersApart('In shot 4, no one is seen.', 4, [5])).toBe(true)
+    expect(offersApart(undefined, 4, [5])).toBe(true)
+  })
+})

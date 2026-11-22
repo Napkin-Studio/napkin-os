@@ -149,7 +149,7 @@ export async function makeAllSizes(deps: CampaignDeps, req: MakeRequest, by: Per
     x.boards[board.id] = board
     x.format_sets[setId] = set
     for (const s of sizes) x.sizes[s.id] = s
-  }, `make all sizes of ${req.master.label}: ${sizes.length} formats`)
+  }, `make all sizes of ${req.master.label}: ${sizes.length} ${sizes.length === 1 ? 'format' : 'formats'}`)
   canvas.select([el.id])
   // The master goes up once before the sizes fan out (QA 2026-11-17).
   if (set.master.asset) await assetRef(deps.relay, set.master.asset, doc.get()).catch(() => undefined)
@@ -264,6 +264,14 @@ export function applySize(d: ProductionDocument, job: Job, sizeId: string, plate
   if (size.job_id !== job.jobId) return undefined
   const set = d.format_sets[size.set_id]
   size.asset = out.sha256
+  // A film size's file and its real length: the tile says that, not the length asked for (UAT round 4, R4-F8: "Film
+  // 9:16 · 6 s" on a 4.5 s file).
+  if (job.op === 'cutdown' && typeof out.durationS === 'number') {
+    const had = d.assets[out.sha256]
+    d.assets[out.sha256] = had ? { ...had, duration_s: out.durationS }
+      : { sha256: out.sha256, kind: 'video', mime: 'video/mp4', origin: job.kind === 'mock' ? 'mock' : 'generated', job_id: job.jobId, locations: outputLocations(out.sha256, out.url), duration_s: out.durationS,
+        ...(out.w ? { w: out.w } : {}), ...(out.h ? { h: out.h } : {}), ...(job.kind !== 'mock' ? { rights: 'generated' as const } : {}) }
+  }
   if (plate) {
     if (!d.assets[plate.sha256]) d.assets[plate.sha256] = plate
     size.plate = plate.sha256
@@ -500,3 +508,9 @@ export function redoSize(deps: CampaignDeps, sizeId: string, by: PersonRef) {
 /** The preview each size is made at (the relay's), for names and the manifest. */
 export const previewOf = (s: Size) => previewSize(s.delivery)
 export const BOARD_PAD = PAD
+
+/** A size's length as the tile says it: its film's real length once made (to the tenth), else the length asked for. */
+export function sizeSeconds(d: Pick<ProductionDocument, 'assets'>, size: Pick<Size, 'asset' | 'length_s'>): number | undefined {
+  const real = size.asset ? d.assets[size.asset]?.duration_s : undefined
+  return typeof real === 'number' ? Math.round(real * 10) / 10 : size.length_s
+}

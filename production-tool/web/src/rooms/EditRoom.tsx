@@ -11,12 +11,13 @@ import { useDoc, useJobsTick, useServices, useUi } from '../app/context'
 import { assetRef } from '../jobs/assets'
 import { isMoving, jobAt } from '../jobs/select'
 import { spokenOf } from '../campaign/film'
-import { currentRender, rendersOf, shotNumber, storyboardOfVideo } from '../model/selectors'
+import { currentRender, rendersOf, shotNumber, shotsOf, storyboardOfVideo } from '../model/selectors'
+import { lineFacts } from '../stages/soundFacts'
 import { Float } from '../ui/Float'
 import { useSending } from '../ui/hooks'
 import type { ChangeOpen } from './ChangeDrawer'
-import { clipEnd, clipLen, fitWords, handleShort, type CutClip } from './cut'
-import { appendTake, assembleFirstCut, editCut } from './editOps'
+import { captionTimes, clipEnd, clipLen, fitWords, handleShort, MIN_CLIP_S, type CutClip } from './cut'
+import { appendTake, assembleFirstCut, assembleLoses, editCut } from './editOps'
 import { createPortal } from 'react-dom'
 import { Inspector } from './Inspector'
 import { boxName, sharesBox, type Gen } from './model'
@@ -25,8 +26,12 @@ import { tc } from './media'
 import { isStill, loadPreviewMuted, savePreviewMuted, useAssetUrl } from './media'
 import type { RoomData, Selection } from './Rooms'
 import { Timeline, type Picked } from './Timeline'
-import { compileFor, dismissedTakes, newerTake, readCut, renderPlan, whereWords } from './timeline'
+import { dismissedTakes, newerTake, readCut, renderPlan, whereWords } from './timeline'
+import { compileWithEndLine } from './endLine'
 import { Viewer } from './Viewer'
+import { DownloadButton } from '../ui/Download'
+import { mediaItem } from '../media/names'
+import { useProjectName } from '../ui/useDownload'
 
 const FRAME = 1 / 24
 
@@ -53,7 +58,7 @@ export function EditRoom({ data, sel, onSel, onChange, onSound, register, ready:
   const ui = useUi()
   useJobsTick()
   const cut = useMemo(() => readCut(doc, data.videoId), [doc, data.videoId])
-  const plan = useMemo(() => compileFor(doc, data.videoId), [doc, data.videoId])
+  const plan = useMemo(() => compileWithEndLine(doc, data.videoId), [doc, data.videoId])
   const [t, setT] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [marks, setMarks] = useState<{ in?: number; out?: number }>({})
@@ -145,15 +150,21 @@ export function EditRoom({ data, sel, onSel, onChange, onSound, register, ready:
     // The shots' spoken lines, each over its clip in the cut.
     const lines = v1.flatMap((c) => (c.follows?.shotId ? spokenOf(doc, c.follows.shotId).map((x) => ({ c, x })) : []))
     if (!lines.length) { setError('No spoken lines in these shots yet. Add lines in the Script editor, or press T to add text.'); return }
+    // Each caption stays inside its shot's clip and off any text already on screen (UAT 2026-11-21, F9: "Good boy."
+    // ran 3 s into the next shot and sat over the "1:04 a.m." super).
+    const placed = captionTimes(lines.map(({ c, x }) => ({ words: x.text.slice(0, 300), startS: c.startS + x.atS, clipStartS: c.startS, clipEndS: clipEnd(c) })), cut.text)
+    const left = lines.length - placed.length
     void (async () => {
-      for (const { c, x } of lines) {
-        await editCut.addText(docStore, data.videoId, { words: x.text.slice(0, 300), style: 'caption', startS: Math.round((c.startS + x.atS) * 10) / 10, durS: Math.min(3, clipLen(c)), fadeInS: 0.1, fadeOutS: 0.1 })
+      for (const p of placed) {
+        await editCut.addText(docStore, data.videoId, { words: p.words, style: 'caption', startS: p.startS, durS: p.durS, fadeInS: 0.1, fadeOutS: 0.1 })
       }
+      if (left) setError(`${left === 1 ? 'One line was' : `${left} lines were`} left out: text is already on screen there, or the caption is there already.`)
     })().catch((e) => setError(e instanceof Error ? e.message : 'That did not work.'))
   }
   const split = () => {
     const c = pickedClip && t > pickedClip.startS && t < clipEnd(pickedClip) ? pickedClip : clipAtPlayhead()
-    if (c) run(editCut.split(docStore, data.videoId, c, t))
+    // A split at a clip's edge cuts nothing (UAT 2026-11-21: S at 0 logged "split shot 1" and changed nothing).
+    if (c && t - c.startS >= MIN_CLIP_S && clipEnd(c) - t >= MIN_CLIP_S) run(editCut.split(docStore, data.videoId, c, t))
   }
 
   // Keys (not while typing, and not while a menu or a drawer has them).
@@ -200,10 +211,11 @@ export function EditRoom({ data, sel, onSel, onChange, onSound, register, ready:
         </span>, viewSlot)}
       {viewSlot && view === 'preview' && createPortal(
         <button type="button" className={`sp-btn rm-mute ${muted ? 'pressed' : ''}`} aria-pressed={muted} onClick={toggleMute}
-          aria-label="Mute the preview" title={muted ? 'The preview is muted' : 'The preview plays the clips\u2019 own sound, as the render does'}>
+          aria-label={muted ? 'Unmute the preview' : 'Mute the preview'} title={muted ? 'The preview is muted' : 'The preview plays the clips\u2019 own sound, as the render does'}>
           <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6v4h3l4 3V3L5 6H2z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
             {muted ? <path d="M11 6l4 4M15 6l-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /> : <path d="M11.5 5.5a3.5 3.5 0 0 1 0 5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />}</svg>
-          <span className="rm-muteword">{muted ? 'Muted' : 'Sound'}</span>
+          {/* "Sound" read as the Sound editor (UAT 2026-11-21, S3): the button says what it does. */}
+          <span className="rm-muteword">{muted ? 'Unmute' : 'Mute'}</span>
         </button>, viewSlot)}
       <section className="rm-program" aria-label="Program">
         {view === 'rendered' && render ? (
@@ -243,7 +255,7 @@ export function EditRoom({ data, sel, onSel, onChange, onSound, register, ready:
         </div>, booth)}
       <div className="rm-tlwrap">
         <Timeline data={data} cut={cut} t={t} marks={marks} picked={picked} ripple={ripple} onRipple={setRipple} snap={snap} onSnap={setSnap}
-          making={making} ready={ready} tools={toolSlot} fit={plan.lengthS > 0 ? fit : undefined}
+          making={making} ready={ready} tools={toolSlot} fit={plan.lengthS > 0 ? fit : undefined} loses={assembleLoses(cut, data.gens)}
           actions={{
             seek: (s) => { setPlaying(false); setT(Math.min(Math.max(0, s), Math.max(plan.lengthS, 0))) },
             pick,
@@ -293,13 +305,19 @@ export function EditRoom({ data, sel, onSel, onChange, onSound, register, ready:
 function RenderedPlayer({ sha, onSound }: { sha: string; onSound: () => void }) {
   const doc = useDoc()
   const url = useAssetUrl(sha)
+  // The rendered file itself (UAT 2026-11-21, F19: only Download all media (zip) or the player's own menu had it).
+  const project = useProjectName()
+  const item = mediaItem(doc, project, sha, 'ad')
   return (
     <div className="rm-viewer">
       <div className="rm-viewbox"><div className="rm-canvaswrap rendered">
         {url && !isStill(doc, sha) ? <video src={url} controls playsInline className="rm-rendered" /> : url ? <img src={url} alt="The rendered ad" className="rm-rendered" /> : <div className="rm-stage-empty">The render is on its way</div>}
         <span className="rm-viewlabel rendered">Rendered</span>
       </div></div>
-      <div className="rm-banner info">This render keeps each clip's own sound. <button type="button" className="btn link" onClick={onSound}>Open Sound</button> for music and voice.</div>
+      <div className="rm-banner info rm-renderbar">
+        <span>This render keeps each clip's own sound. <button type="button" className="btn link" onClick={onSound}>Open Sound</button> for music and voice.</span>
+        {item && <DownloadButton items={[item]} className="btn sm primary" title={`Download the ad (${item.name})`} />}
+      </div>
     </div>
   )
 }
@@ -316,7 +334,7 @@ export function RenderAd({ data }: { data: RoomData }) {
   const close = useCallback(() => setOpen(false), [])
   const [sending, send] = useSending()
   const [error, setError] = useState<string | null>(null)
-  const plan = useMemo(() => compileFor(doc, data.videoId), [doc, data.videoId])
+  const plan = useMemo(() => compileWithEndLine(doc, data.videoId), [doc, data.videoId])
   const cut = useMemo(() => readCut(doc, data.videoId), [doc, data.videoId])
   const job = jobAt(doc, ui, (c) => c.for === 'stitch' && c.videoId === data.videoId)
   const rendering = isMoving(doc, job)
@@ -336,6 +354,14 @@ export function RenderAd({ data }: { data: RoomData }) {
   if (Math.abs(off) >= 0.5) checks.push({ text: `The cut is ${Math.round(plan.lengthS * 10) / 10} s: ${Math.abs(off)} s ${off < 0 ? 'short of' : 'over'} the ${target} s it is for`, ok: false })
   // The render keeps each clip's own sound (stitch/timeline.py, owner 2026-11-18) until Sound mixes one.
   checks.push({ text: 'The render keeps each clip\u2019s own sound; music and voice come with Sound', ok: true })
+  // A line or voice-over no clip voices is said before the render, not found after it (UAT 2026-11-21, F8: the
+  // NARRATOR's end-card voice-over was never voiced and nothing said so).
+  const sb = storyboardOfVideo(doc, data.videoId)
+  // The brief's end line no clip voices and nothing says: a super over the last shot, said here (R4-F6, UX 5).
+  if (plan.endLine?.how === 'super') checks.push({ text: `The brief\u2019s end line \u201c${plan.endLine.line}\u201d is not voiced, so it shows as a super over the last shot`, ok: true })
+  for (const x of lineFacts(doc, data.videoId, sb ? shotsOf(doc, sb.id).map((s) => s.id) : []).filter((l) => !l.voiced)) {
+    checks.push({ text: `Not heard: ${x.who ? `${x.who}\u2019s ` : ''}\u201c${x.text.length > 40 ? `${x.text.slice(0, 39)}\u2026` : x.text}\u201d (shot ${x.n}). ${x.why.split(':')[0]}.`, ok: false })
+  }
   const go = () => send(async () => {
     setError(null)
     try {

@@ -137,3 +137,11 @@
 .timeline .ve-beat.cur { background: var(--tool-soft); color: var(--tool-ink); }
 .timeline .ve-beat:first-of-type { border-left-color: transparent; }
 .ve-drift { font-size: 11px; color: var(--ink2); }
+/* The film's sound as the cut has it (pt-film-r2 F8). */
+.snd-seg.on { background: var(--tool-soft, var(--soft-2)); color: var(--ink); }
+.snd-seg.off { opacity: 0.45; }
+.snd-lines { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 0; }
+.snd-line { font-size: 12px; border-radius: 6px; padding: 3px 8px; border: 1px solid var(--line); background: var(--soft-2); }
+.snd-line.off { color: var(--ink2); border-style: dashed; }
+.snd-warn { color: var(--ink); }
+.snd-shot .pt-pill.on { background: var(--tool-soft, var(--soft-2)); color: var(--ink); }

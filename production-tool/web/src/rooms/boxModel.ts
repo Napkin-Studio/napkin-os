@@ -3,7 +3,7 @@
 
 import { modelChoicesFor } from '../capabilities'
 import type { Config, ModelChoice, ProductionDocument } from '../contracts/types'
-import { lastWorkedModel } from '../jobs/follow'
+import { beatsOf } from '../model/selectors'
 import { selectedFrame } from '../jobs/frames'
 import { modelEntry, TAKE_MAX_S, TAKE_MAX_SHOTS } from '../jobs/runs'
 import type { Box } from './model'
@@ -69,10 +69,87 @@ export function boxModelNote(doc: ProductionDocument, box: Box, m: ModelChoice):
 /** The model a box is made on: the one picked for it, kept even past its limits (the box then says so and
  *  Make waits: a joined box keeps the earlier box's model, features/join-or-cut-shots.clan); else the last
  *  that worked, unless that one cannot make this box (Veo for shots made together); then the first that can. */
+/** When the box is made on another model than the one the film makes clips with (the person's pick, else the
+ *  last that worked, else the first), which one and why, for the box to say (UAT 2026-11-21: a joined box went to
+ *  Gemini Omni Flash 1.1 with Veo greyed and nothing said why). */
+export function boxModelSwitch(doc: ProductionDocument, box: Box, config: Config, picked?: ModelChoice): { to: string; from: string; why: string } | undefined {
+  if (picked) return undefined
+  const wanted = boxOwnModel(doc, box, config) ?? boxDefault(doc, box, config, false) ?? modelChoicesFor('clip', config)[0]
+  const why = wanted ? boxModelWhyNot(doc, box, wanted) : undefined
+  const got = boxModel(doc, box, config)
+  if (!wanted || !why || !got || (got.model === wanted.model && got.provider === wanted.provider)) return undefined
+  const label = (m: ModelChoice) => entryOf(m)?.label ?? m.model
+  return { to: label(got), from: label(wanted), why: why.replace(/^Can't/, "can't").replace(/^Needs/, 'needs') }
+}
+
+/** The model this box's newest take was made on, when it is still offered: a box keeps its own model after a Make
+ *  of another box (UAT 2026-11-21, F3: every box flipped to the last model that worked anywhere). */
+export function boxOwnModel(doc: ProductionDocument, box: Pick<Box, 'shotIds'>, config: Config): ModelChoice | undefined {
+  const offered = modelChoicesFor('clip', config)
+  const mine = Object.values(doc.generations ?? {})
+    .filter((g) => g.kind !== 'render' && g.kind !== 'upload' && g.kind !== 'combine' && !!g.inputs?.model && g.shot_ids.length === box.shotIds.length
+      && box.shotIds.every((id) => g.shot_ids.includes(id)))
+    .sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
+  for (const g of mine) {
+    const o = offered.find((x) => x.model === g.inputs!.model && (!g.provider || x.provider === g.provider))
+    if (o) return { provider: o.provider, model: o.model }
+  }
+  return undefined
+}
+
 export function boxModel(doc: ProductionDocument, box: Box, config: Config, picked?: ModelChoice): ModelChoice | undefined {
   if (picked && !boxModelCant(doc, box, picked)) return picked
   const options = modelChoicesFor('clip', config)
-  const wanted = picked ?? lastWorkedModel(doc, 'clip', config) ?? options[0]
+  const own = picked ? undefined : boxOwnModel(doc, box, config)
+  if (own && !boxModelWhyNot(doc, box, own)) return own
+  const wanted = picked ?? boxDefault(doc, box, config)
   if (wanted && !boxModelWhyNot(doc, box, wanted)) return wanted
   return options.find((o) => !boxModelWhyNot(doc, box, o)) ?? wanted
 }
+
+/** Whether a box's shots have a spoken line (a line beat with words): it wants a model that makes sound. */
+const spoken = (doc: ProductionDocument, box: Pick<Box, 'shotIds'>) => box.shotIds.some((id) => beatsOf(doc, id).some((b) => b.kind === 'line' && !!b.text?.trim()))
+
+/**
+ * A box's own default model, by what its shots need, never the last model used on another box (UAT round 3, F3
+ * leftover: the spoken-line box went Veo 3.1 -> WAN 3 after a WAN 3 join elsewhere). A spoken line: the first offered
+ * model with a sound switch that can make the box; else the first offered that can (a real provider before the mock
+ * when one is offered, as lastWorkedModel did).
+ */
+export function boxDefault(doc: ProductionDocument, box: Box, config: Config, canMake = true): ModelChoice | undefined {
+  const options = modelChoicesFor('clip', config)
+  const real = options.some((o) => o.provider !== 'mock')
+  const offered = options.filter((o) => !real || o.provider !== 'mock')
+  // canMake false: the one it would be by need alone (Make room's switch note says why the box is on another).
+  const can = canMake ? offered.filter((o) => !boxModelWhyNot(doc, box, o)) : offered
+  const pick = (spoken(doc, box) ? can.find((o) => entryOf(o)?.video.audioControl) : undefined) ?? can[0] ?? offered[0]
+  return pick && { provider: pick.provider, model: pick.model }
+}
+
+/** What a box's sound will be, when one of its shots has a spoken line, a VO or a sound beat (relay/sound.py, the
+ *  one rule; UAT 2026-11-21 B6: every clip came out silent). `on`: the model makes it; else the box says the model
+ *  cannot. Undefined when the box has nothing to hear. */
+/** A sound beat that asks for no sound ("Silence: the kettle boils with no noise at all"): no sound at all, never a
+ *  reason for sound on (UAT round 3, F22/R3-F6). The relay reads the same words (relay/sound.py SILENCE). */
+export const SILENCE = /\b(?:silence|silent|silently|soundless|noiseless|muted?|no (?:sound|noise)s?|without (?:a |any )?(?:sound|noise)s?|nothing (?:is )?heard|not a sound|hushed? quiet)\b/i
+export const isSilence = (b: { kind: string; text?: string }) => b.kind === 'sound' && SILENCE.test(b.text ?? '')
+
+export function boxSound(doc: ProductionDocument, box: Pick<Box, 'shotIds'>, m: ModelChoice | undefined): { on: boolean; words: string } | undefined {
+  const beats = box.shotIds.flatMap((id) => beatsOf(doc, id)).filter((b) => (b.kind === 'line' || b.kind === 'vo' || b.kind === 'sound') && b.text?.trim() && !isSilence(b))
+  if (!beats.length || !m) return undefined
+  const parts = [beats.some((b) => b.kind === 'line') && 'the spoken line', beats.some((b) => b.kind === 'vo') && 'the voice-over', beats.some((b) => b.kind === 'sound') && 'the sounds asked for']
+    .filter((x): x is string => !!x)
+  // "the spoken line, the voice-over and the sounds asked for" (UAT round 4, R4-F8: "so the voice-over, the sound will not
+  // be voiced").
+  const what = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}` : parts[0]
+  const e = entryOf(m)
+  const label = e?.label ?? m.model
+  // Said plainly that sound is on, never what it costs (owner 2026-10-13: no prices in the UI; UAT 2026-11-21, F22).
+  if (e?.video.audioControl) return { on: true, words: `Sound on: ${label} makes ${what} in the clip.` }
+  // No switch (Omni Flash 1.1, Hailuo 3): the relay asks for no music and no dialogue (decided 2026-10-06). Those
+  // that make sound on their own still put a background track on the clip (UAT 2026-11-21, F10: Omni's takes carried
+  // sound at -12 dB while the box said it made none).
+  if (e?.video.audioDefault) return { on: false, words: `${label} makes its own background sound and has no sound switch, so it will not make ${what}. Veo 3.1, Kling or WAN 3 can.` }
+  return { on: false, words: `No sound made: ${label} has no sound switch, so ${what} will not be heard. Veo 3.1, Kling or WAN 3 can.` }
+}
+

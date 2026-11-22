@@ -54,6 +54,16 @@ export const TONE_VARS: Readonly<Record<Tone, { body: string; mark: string }>> =
   mint: { body: 'var(--af-mint)', mark: 'var(--af-mark)' },
 }
 
+/** The ops that make a still picture: the Camera agent draws these, and films only clips (UAT round 1 IMG-21). */
+const PICTURE_OPS: readonly DocJob['op'][] = ['generate', 'view', 'frame', 'resize']
+
+/** What a crew member does, for one job's op when it is known: "draws" for a picture, "films" for a clip. */
+export function jobWord(agent: CastKey, op?: DocJob['op']): string {
+  if (agent === 'wren' && op && PICTURE_OPS.includes(op)) return 'draws'
+  if (agent === 'wren' && !op) return 'draws and films'
+  return CAST[agent].job
+}
+
 /** The figure shown for a crew member: their own where the cast has one, else Dex (who directs the rest). */
 export function castOf(crew: CrewId | undefined): CastKey {
   return crew && crew in CAST ? (crew as CastKey) : 'dex'

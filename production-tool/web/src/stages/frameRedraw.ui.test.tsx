@@ -162,7 +162,7 @@ describe('the switch on the Storyboard card', () => {
     await land()
     const ask = booth().querySelector('.sb-ask')!
     expect(ask.textContent).toMatch(/This changes who is in the picture\./)
-    expect(ask.textContent).toMatch(/Nothing paid yet/)
+    expect(ask.textContent).toMatch(/Nothing has been made yet/)
     expect([...ask.querySelectorAll('button')].map((b) => b.querySelector('b')?.firstChild?.textContent)).toEqual(['Redraw frame instead', 'Edit anyway'])
     expect(document.querySelector('.askcard')).toBeNull() // the card carries the ask; no second one
     await act(async () => { byText(/^Redraw frame instead/)!.click() })

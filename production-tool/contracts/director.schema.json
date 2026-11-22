@@ -365,6 +365,21 @@
         "latencyMs": {
           "type": "integer"
         },
+        "usage": {
+          "type": "object",
+          "description": "The director call's token counts, as the model reported them (features/pt-canvas-r4.clan; before, only the relay's log line had them). Absent on the passthrough and when the model reported none. Added 2026-11-21 (additive).",
+          "properties": {
+            "inputTokens": { "type": "integer", "minimum": 0 },
+            "outputTokens": { "type": "integer", "minimum": 0 },
+            "cacheReadTokens": { "type": "integer", "minimum": 0 },
+            "cacheWriteTokens": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": false
+        },
+        "input": {
+          "type": "object",
+          "description": "What the director received for this job: its input after the relay's own cuts (the brief and the context per op, wire tags, cards), kept small for the job record (relay/director/record.py): asset urls dropped (the sha256 names the picture), strings cut to 400 characters, lists to 16 items, at most about 8 KB with the biggest fields summarised past that. Absent on the passthrough and on blocks written before 2026-11-21. Added 2026-11-21 (features/pt-canvas-r1.clan, additive)."
+        },
         "cards": {
           "type": "array",
           "maxItems": 14,

@@ -4,6 +4,8 @@
 // rows and actions by the stage, so it sits over either canvas adapter.
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
+import { useToolSlot } from '../../ui/shell/toolSlot'
 import { Float } from '../../ui/Float'
 import { UndoButtons } from '../../ui/UndoButtons'
 import { NodeIcon } from '../../ui/chrome/Bar'
@@ -176,12 +178,17 @@ export function CanvasToolbar({ chrome, ratio, onNode, onBrief, onAssets, vertic
   }, [chrome, picked])
   // A chrome tool (Board, Link) is on: the engine's tool shows as not pressed. Picking an engine tool ends it.
   const shown = actions.mode ? null : tool
+  // The pen's and the text's options sit in the top bar, off the canvas (UAT round 4 S3-2: the flyout beside the rail
+  // covered the canvas's left and swallowed strokes that started under it). Without the bar (the picture editor's
+  // page), beside the rail as before.
+  const slot = useToolSlot()
+  const inBar = !!slot && slot.isConnected
   // The Text tool's options (canvas-text): while it is in hand, or a text is being typed or is selected.
   const textChoice = useTextChoice(chrome)
   const [selSize, selColor] = text ? text.split('|') : []
   const textLook = text ? { size: Number(selSize), color: selColor } : { size: TEXT_SIZE_PX[textChoice.size], color: textChoice.color }
   const textOptions = !!chrome?.setText && shown !== 'pen' && (shown === 'text' || !!text) && (
-    <TextOptions look={textLook} recent={pen.recent} vertical
+    <TextOptions look={textLook} recent={pen.recent} vertical={!inBar}
       onSize={(s) => { setText({ size: s }); chrome?.styleText?.({ size: TEXT_SIZE_PX[s] }) }}
       onColor={(c, remember, live) => {
         if (remember) rememberColour(c)
@@ -190,8 +197,8 @@ export function CanvasToolbar({ chrome, ratio, onNode, onBrief, onAssets, vertic
         if (!live) chrome?.styleText?.({ color: c.toLowerCase() })
       }} />
   )
-  // Both layouts are columns on the canvas's left now: the options open beside them.
-  const penOptions = shown === 'pen' ? <PenOptions pen={pen} vertical /> : textOptions
+  const options = shown === 'pen' ? <PenOptions pen={pen} vertical={!inBar} /> : textOptions
+  const penOptions = inBar ? (options ? createPortal(options, slot) : null) : options
   useEffect(() => {
     if (!actions.mode || !chrome) return
     const was = chrome.tool()
@@ -348,7 +355,8 @@ export function CanvasToolbar({ chrome, ratio, onNode, onBrief, onAssets, vertic
 export function ZoomPill({ chrome, touch = false }: { chrome: CanvasChrome | null; touch?: boolean }) {
   const { zoom } = useChrome(chrome)
   return (
-    <div className={`zoom-pill ${touch ? 'touch' : ''}`} role="group" aria-label="Undo and zoom">
+    // Floating dialogs keep clear of it (FLOAT_AVOID): it sat over the Name dialog's inputs (UAT round 3, R3-F14).
+    <div className={`zoom-pill ${touch ? 'touch' : ''}`} role="group" aria-label="Undo and zoom" data-float-avoid="">
       {!touch && <><UndoButtons bare /><span aria-hidden="true" className="zp-sep" /></>}
       <button type="button" aria-label="Zoom out" data-tip="Zoom out (Ctrl −)" onClick={() => chrome?.zoomBy(-1)}>−</button>
       <button type="button" className="zp-value" aria-label={`Zoom ${Math.round(zoom * 100)}%: fit everything (${OPTION}0)`} data-tip={`Fit everything (${OPTION}0)`} onClick={() => chrome?.fitAll()}>{Math.round(zoom * 100)}%</button>

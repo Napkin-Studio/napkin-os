@@ -211,6 +211,7 @@ def test_a_landed_take_goes_to_take_cuts_and_lands_with_the_cuts():
              "cuts": [{"planned_s": 3, "found_s": 3.042}, {"planned_s": 5.75, "found_s": None}]}
     job = stitch_result(h, job, "cuts.json", found)
     assert job["state"] == "completed" and job["cuts"] == [{"planned_s": 3, "found_s": 3.042}, {"planned_s": 5.75, "found_s": None}]
+    assert job["outputs"][0]["durationS"] == 9.0  # the take's own length, as stitch read it (UAT 2026-11-21, F4)
     assert job["outputs"][0]["mime"] == "video/mp4" and job["cost"]["confirmed"] == 0.9
 
 
@@ -376,3 +377,12 @@ def test_a_long_take_prompt_is_shortened_to_the_models_limit():
     starts, texts = [0, 3], ["word " * 400, "other " * 400]
     prompt = connected.take_prompt("anchor", starts, texts, 6, False, limit=1000)
     assert len(prompt) <= 1000 and connected.timing_problem(prompt, starts, 6) is None
+
+
+def test_take_cut_search_widens_to_half_the_shortest_shot():
+    """UAT 2026-11-21: a words take planned to cut at 3 s cut at about 4 s; the 1 s search found nothing."""
+    import connected
+    assert connected.take_search_s({"cutAccuracyS": None}, [0.0, 3.0], 6.0) == 1.5
+    # Short shots keep the search inside each shot, never under the model's own.
+    assert connected.take_search_s({"cutAccuracyS": None}, [0.0, 1.5, 3.0], 4.0) == 1.0
+    assert connected.take_search_s({"cutAccuracyS": 0.3}, [0.0, 3.0], 6.0) == 0.3  # measured: as before

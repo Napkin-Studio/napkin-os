@@ -40,7 +40,8 @@ const L = vm.runInNewContext(`${logicRun}; DeckLogic`) as {
   gateHolds(run: unknown): boolean
   summaryOf(inputs: unknown, deck: unknown): { title: string; note: string }
   agencyShown(inputs: unknown): string
-  upstreamSummary(data: unknown): { brief: { name: string; fields_filled: number; fields_total: number; mandatories: number } | null; research: { name: string; findings: number | null; rejected: number | null } | null; any: boolean }
+  productionSummary(doc: unknown): { name: string; finals: number; to_supply: number; brief: unknown } | null
+  upstreamSummary(data: unknown): { brief: { name: string; fields_filled: number; fields_total: number; mandatories: number } | null; research: { name: string; findings: number | null; rejected: number | null } | null; production: { name: string; finals: number; to_supply: number; brief: unknown } | null; any: boolean }
   documentsOf(data: unknown): { name: string }[]
   builtFrom(inputs: unknown, upstream: unknown, documents: unknown): { tier: string; documents: string[]; brief: boolean; research: boolean }
   describeBuiltFrom(bf: unknown, hasPrompt?: boolean): { line: string; missing: string[] }
@@ -243,7 +244,7 @@ const briefDoc = {
 const researchDoc = { title: 'Lumen research', projection: { findings: { f1: { status: 'verified' }, f2: { status: 'rejected' } } } }
 
 test('upstreamSummary: none, brief only, brief and research, research only', () => {
-  assert.deepEqual(plain(L.upstreamSummary({})), { brief: null, research: null, any: false })
+  assert.deepEqual(plain(L.upstreamSummary({})), { brief: null, research: null, production: null, any: false })
   assert.equal(L.upstreamSummary({ upstream: 'junk' }).any, false)
   const b = L.upstreamSummary({ upstream: { d1: briefDoc } })
   assert.equal(b.brief?.name, 'First Light brief')
@@ -256,6 +257,65 @@ test('upstreamSummary: none, brief only, brief and research, research only', () 
   const r = L.upstreamSummary({ upstream: { d2: researchDoc } })
   assert.equal(r.brief, null)
   assert.equal(r.research?.rejected, 1)
+})
+
+const A = (n: string) => `sha256:${n.repeat(64).slice(0, 64)}`
+const prodDoc = (over: Record<string, unknown> = {}) => ({
+  app: 'production-tool', contract_version: '3', project: { id: 'proj_x', title: 'Lumen Water launch' },
+  assets: {
+    [A('a')]: { kind: 'image', origin: 'generated' },
+    [A('b')]: { kind: 'image', origin: 'uploaded', rights: 'unknown' },
+    [A('c')]: { kind: 'image', origin: 'uploaded', rights: 'licensed' },
+    [A('d')]: { kind: 'image', origin: 'mock', rights: 'generated' },
+    [A('e')]: { kind: 'video', origin: 'generated' },
+    [A('f')]: { kind: 'image', origin: 'uploaded' },
+  },
+  finals: {
+    final_1: { of: { kind: 'picture', id: 'pic_1' }, asset: A('a') },
+    final_2: { of: { kind: 'picture', id: 'pic_2' }, asset: A('b') },
+    final_3: { of: { kind: 'picture', id: 'pic_3' }, asset: A('c') },
+    final_4: { of: { kind: 'picture', id: 'pic_4' }, asset: A('d') },
+    final_5: { of: { kind: 'picture', id: 'pic_5' }, asset: A('e') },
+    final_6: { of: { kind: 'picture', id: 'pic_6' }, asset: A('f') },
+  },
+  briefs: { brief_1: { title: 'Lumen awareness', spine: { insight: 'Nobody sees the tap', proposition: 'Every drop has a story.', mandatories: ['logo'] } } },
+  ...over,
+})
+
+test('upstreamSummary: a Production project is its own card, never the brief or the research', () => {
+  const p = L.upstreamSummary({ upstream: { 'doc-prod': prodDoc() } })
+  assert.equal(p.research, null)
+  // finals brought in: images that are not mock; to supply: stated unknown and an upload with nothing stated
+  assert.deepEqual(plain(p.production), { name: 'Lumen Water launch', finals: 4, to_supply: 2, brief: { name: 'Lumen awareness', fields_filled: 3, mandatories: 1 } })
+  assert.equal(p.any, true)
+  assert.equal(L.upstreamSummary({ upstream: { 'doc-prod': prodDoc({ finals: {}, briefs: {} }) } }).production?.finals, 0)
+})
+
+test('upstreamSummary: the Brief card shows the one a Production project froze only when the deck has none of its own', () => {
+  const none = L.upstreamSummary({ upstream: { p: prodDoc() } })
+  assert.equal(none.brief?.name, 'Lumen awareness')
+  assert.equal(none.brief?.fields_filled, 3)
+  const own = L.upstreamSummary({ upstream: { p: prodDoc(), d1: briefDoc } })
+  assert.equal(own.brief?.name, 'First Light brief')
+  assert.equal(L.upstreamSummary({ upstream: { p: prodDoc({ briefs: {} }) } }).brief, null)
+  assert.equal(L.builtFrom({}, { p: prodDoc() }, []).brief, true)
+})
+
+test('the finals count reads rights as the engine does: stated is trusted, an edit follows its frame chain, and a size follows its source', () => {
+  const gen = A('1'), edit = A('2'), orig = A('3'), made = A('4')
+  const doc = prodDoc({
+    assets: { [gen]: { kind: 'image', origin: 'generated' }, [edit]: { kind: 'image', origin: 'edited' }, [orig]: { kind: 'image', origin: 'uploaded' }, [made]: { kind: 'image', origin: 'generated' } },
+    frames: {
+      frame_g: { id: 'frame_g', kind: 'generated', asset: gen }, frame_e: { id: 'frame_e', kind: 'edited', parent_id: 'frame_g', asset: edit },
+      frame_o: { id: 'frame_o', kind: 'original', asset: orig },
+    },
+    sizes: { size_1: { id: 'size_1', asset: made, from_asset: orig } },
+    finals: { final_1: { of: { kind: 'frame', id: 'frame_e' }, asset: edit }, final_2: { of: { kind: 'size', id: 'size_1' }, asset: made } },
+  })
+  const p = L.productionSummary(doc)
+  assert.equal(p?.finals, 2)
+  assert.equal(p?.to_supply, 1) // the edit of a generated frame is placed; the size made from an uncleared upload waits
+  assert.equal(L.productionSummary({ app: 'brief-maker' }), null)
 })
 
 test('builtFrom gives each tier of the shared contract', () => {
@@ -444,7 +504,7 @@ const intakeData = {
 test('markup in a brief name, a document name, a gap or a question is escaped', () => {
   const m = mount(intakeData)
   assert.ok(m.app.innerHTML.includes('Strengthen with research'))
-  assert.ok(m.app.innerHTML.includes('Bring in a brief or research (optional)'))
+  assert.ok(m.app.innerHTML.includes('Bring in a brief, research or a Production project (optional)'))
   assert.equal(m.app.innerHTML.includes('<img'), false)
   assert.ok(m.app.innerHTML.includes('&lt;img'))
 })
@@ -2196,6 +2256,18 @@ test('a host that refuses (no engine, a run already going) is said plainly and n
   await settle()
   assert.match(m.toastEl.textContent, /no deck engine is configured/)
   assert.equal(m.timers.length, 0)
+})
+
+test('a deck the host refuses to land is said on the Build screen, not left as "No deck yet"', async () => {
+  const refused = { ok: true, status: 200, data: { api: 'napkin.middleware/1', task: 'job_status', job: { id: 'job_1', state: 'done' }, change: { applied: false, reason: 'rows has 15 items, at most 8' } } }
+  const p = proxy(reply('queued'), refused)
+  const m = mount(buildData(gateRun()), middleware(true), {}, { apiProxy: p.apiProxy, timers: true })
+  await settle()
+  m.click({}, 'approve'); await settle()
+  m.timers.shift()!.fn(); await settle()
+  assert.match(m.toastEl.textContent, /did not accept what it wrote: rows has 15 items, at most 8/)
+  assert.ok(m.app.innerHTML.includes('rows has 15 items, at most 8'), 'the screen carries the reason')
+  assert.equal(m.timers.length, 0, 'no more polling')
 })
 
 test('a job that fails says the engine\'s message', async () => {

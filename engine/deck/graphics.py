@@ -300,7 +300,7 @@ def frame_kind(channel: str | None, ratio: float, format_id: str | None = None) 
     """The frame a picture of ``ratio`` (width / height) for ``channel`` is shown in (design.mockups.frames), or None (no frame)."""
     fid = (format_id or "").lower()
     if channel == "ooh":
-        if ratio >= 3.0 or "bus" in fid:
+        if "bus" in fid or (ratio >= 3.0 and "sheet" not in fid):   # a 96-sheet (4:1) is a billboard; only a bus side or an unknown wide shape is a strip
             return "strip"
         return "billboard" if ratio >= 1.3 else "poster_portrait"
     if channel in ("social", "film"):

@@ -25,6 +25,7 @@ import type { FrameDeps } from './frames'
 import { planOrJoin, runningPlan } from './plan'
 import { linkInto, ownShotList, scriptOf, storyboardOfVideo } from './prompt'
 import { liveGet } from '../model/live'
+import { roughSeconds } from '../script/compose'
 
 export { clipMode, isScriptVideoAsk, PLAN_FIRST, scriptVideoAsk, STRAIGHT, type ClipMode } from './clipMode'
 
@@ -38,7 +39,9 @@ export function shotCount(d: Doc, scriptId: Id): { n: number; exact: boolean } {
   const sb = storyboardOfScript(d, scriptId)
   const planned = sb ? shotsOf(d, sb.id).filter((s) => s.kind !== 'end_card').length : 0
   if (planned) return { n: planned, exact: true }
-  const target = d.scripts[scriptId]?.target_s || sb?.target_s || 15
+  // The words' own length when the script has words (UAT 2026-11-21: "about 6 shots" for a 3 s script), else its target.
+  const said = roughSeconds(scriptText(d, scriptId))
+  const target = said > 0 ? said : d.scripts[scriptId]?.target_s || sb?.target_s || 15
   return { n: Math.max(1, Math.min(12, Math.round(target / SHOT_S))), exact: false }
 }
 

@@ -5,16 +5,18 @@
 // model that spends, with no prices), then Send: the versions land on the Campaign board's Film lane.
 
 import { useMemo, useState } from 'react'
-import type { CutdownPlan, Id, ModelChoice, PersonRef, SizeBeat } from '../contracts/types'
+import type { Id, ModelChoice, PersonRef, SizeBeat } from '../contracts/types'
 import { useConfig, useDoc } from '../app/context'
 import { modelChoicesFor } from '../capabilities'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
-import { CARD_S, DEFAULT_FILM_LENGTHS, FILM_LENGTHS, FILM_SHAPES, REMAKE_MODELS, beatsFor, filmSeconds, fitWindows, lastLineOf, masterShots, sameShape } from './film'
+import { CARD_S, DEFAULT_FILM_LENGTHS, FILM_LENGTHS, FILM_SHAPES, REMAKE_MODELS, beatsFor, briefShapes, filmSeconds, fitWindows, lastLineOf, masterShots, sameShape, versionsWord } from './film'
 import { endLineOf, sizesBrief } from '../brief/model'
-import { makeFilmSizes, planFilm, type FilmRow, type ShotMethod } from './filmJobs'
+import { makeFilmSizes, planFilm, type FilmPlan, type FilmRow, type ShotMethod } from './filmJobs'
 import type { CampaignDeps } from './make'
 import { setsOf, type MasterInfo } from './master'
+import { readCut } from '../rooms/timeline'
+import { cutLength } from '../rooms/cut'
 import './campaign.css'
 
 type Step = 'options' | 'planning' | 'plan' | 'tray'
@@ -34,12 +36,21 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
   const { config } = useConfig()
   const shots = useMemo(() => masterShots(doc, master.id), [doc, master.id])
   const body = shots.filter((s) => !s.endCard)
-  const filmS = filmSeconds(shots, master.length_s)
+  // The film's own length: its cut's (clips and its end card) when it has one (UAT 2026-11-21: "Film · 10.5 s" for a
+  // 12.5 s cut), else its shots as cut.
+  const filmS = useMemo(() => {
+    const videoId = master.kind === 'render' ? doc.renders?.[master.id]?.video_id : master.kind === 'video' ? master.id : undefined
+    const cut = videoId ? readCut(doc, videoId) : undefined
+    return cut?.v1.length ? cutLength(cut) : filmSeconds(shots, master.length_s)
+  }, [doc, master, shots])
   const masterS = Math.round(filmS + CARD_S)
   // Only lengths shorter than the film start picked (Playwright live test 2026-11-18: 15 s picked for an 8 s film).
   const [lengths, setLengths] = useState<number[]>(() => DEFAULT_FILM_LENGTHS.filter((l) => l < masterS))
   const [extra, setExtra] = useState('')
-  const [shapes, setShapes] = useState<Set<string>>(new Set(['film-16x9', 'film-9x16']))
+  const [shapes, setShapes] = useState<Set<string>>(() => {
+    const videoId = master.kind === 'render' ? doc.renders?.[master.id]?.video_id : master.kind === 'video' ? master.id : undefined
+    return new Set(briefShapes(videoId ? sizesBrief(doc, videoId)?.spine : undefined))
+  })
   const earlier = setsOf(doc, master).find((s) => s.copy)?.copy
   // The line on every version: the end line of the brief that drives the sizes (the newest set's linked brief,
   // else the film's own), else what the last set carried, else the film's last spoken line (re-test N2: the
@@ -50,7 +61,7 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
   })
   const [legal, setLegal] = useState(earlier?.legal ?? '')
   const [step, setStep] = useState<Step>('options')
-  const [plan, setPlan] = useState<CutdownPlan | null>(null)
+  const [plan, setPlan] = useState<FilmPlan | null>(null)
   const [beats, setBeats] = useState<Record<number, SizeBeat[]>>({})
   const [methods, setMethods] = useState<Record<string, Record<Id, ShotMethod>>>({})
   const [off, setOff] = useState<Set<string>>(new Set())
@@ -108,7 +119,8 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
       for (const s of shapeList) {
         if (isMaster(s.aspect)) continue
         m[s.id] = {}
-        for (const c of p.crops) if (c.cuts && sameShape(c.aspect, s.aspect) && aleph) m[s.id][c.shotId] = 'outpaint'
+        // Every shot starts on the free crop; a crop that cuts into the shot says so on its row, and paid new edges
+        // are the person's pick (UAT 2026-11-21, F16: a 9:16 shot was set to Aleph 2 unasked).
       }
       setMethods(m)
       setStep('plan')
@@ -135,10 +147,10 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
 
   const toggleBeat = (l: number, id: Id) => setBeats((b) => ({ ...b, [l]: (b[l] ?? []).map((x) => (x.shot_id === id ? { ...x, keep: !x.keep, by: 'person' as const } : x)) }))
   const setMethod = (shapeId: string, id: Id, how: ShotMethod) => setMethods((m) => ({ ...m, [shapeId]: { ...m[shapeId], [id]: how } }))
-  const methodWords = (how: ShotMethod) => (how === 'outpaint' ? `New edges · ${aleph?.label ?? 'Aleph 2'}` : how === 'remake' ? `Remake · ${remakeLabel}` : 'Crop · free')
+  const methodWords = (how: ShotMethod) => (how === 'outpaint' ? `New edges · ${aleph?.label ?? 'Aleph 2'}` : how === 'remake' ? `Remake · ${remakeLabel}` : 'Crop')
   const rowWords = (r: FilmRow) => {
     const shape = FILM_SHAPES.find((s) => s.id === r.shapeId)!
-    if (isMaster(shape.aspect)) return 'Re-edit · free'
+    if (isMaster(shape.aspect)) return 'Re-edit'
     const ids = kept(r.lengthS)
     const made = paid.filter((p) => p.shapeId === r.shapeId && ids.has(p.shotId))
     const edges = made.filter((p) => p.how === 'outpaint').length
@@ -186,7 +198,7 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
               <input className="cf-input" value={line} maxLength={200} placeholder="The brand line (optional)" aria-label="The brand line" onChange={(e) => setLine(e.target.value)} />
               <input className="cf-input" value={legal} maxLength={600} placeholder="Legal (optional)" aria-label="Legal" onChange={(e) => setLegal(e.target.value)} />
             </div>
-            <p className="cf-note">{rows.length} versions from the ad's own {body.length} shots. The Director agent plans which shots each length keeps and how each shot fits each shape, before anything is made. On 9:16, 4:5 and 1:1 the spoken lines are captioned for sound off; turn them off on any tile.</p>
+            <p className="cf-note">{versionsWord(rows.length)} from the ad's own {body.length} {body.length === 1 ? 'shot' : 'shots'}. The Director agent plans which shots each length keeps and how each shot fits each shape, before anything is made. On 9:16, 4:5 and 1:1 the spoken lines are captioned for sound off; turn them off on any tile.</p>
             {error && <p className="cf-error" role="alert">{error}</p>}
             <footer className="cf-foot"><span className="pt-grow" /><button type="button" className="btn primary" disabled={!rows.length || !body.length} onClick={() => void startPlan()}>Plan the cuts</button></footer>
           </div>
@@ -205,11 +217,13 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
           <div className="cf-body" data-film-plan>
             <div className="cf-trayhead">
               <AgentFigure agent="dex" size={24} decorative />
-              <span><b>{sayer('dex')}</b>: how I would cut it. Keep or drop any beat; nothing is made yet.</span>
+              {/* Said plainly when the Director agent did not plan it (UAT round 4, R4-F4, UX 4). */}
+              <span><b>{sayer('dex')}</b>: {plan.simple === 'failed' ? "I couldn't plan this one, so here is a simple cut: the opening and the payoff, fitted to each length."
+                : plan.simple === 'off' ? 'a simple cut: the opening and the payoff, fitted to each length.' : 'how I would cut it.'} Keep or drop any beat; nothing is made yet.</span>
             </div>
             <div className="cf-tray">
               {lengths.filter((l) => rows.some((r) => r.lengthS === l)).map((l) => {
-                const { windows, over } = fitWindows(body, kept(l), l)
+                const { windows, over } = fitWindows(shots, kept(l), l)
                 const reasons = new Map((plan.lengths.find((x) => Math.abs(x.lengthS - l) < 0.5)?.beats ?? []).map((b) => [b.shotId, b.why]))
                 const why = plan.lengths.find((x) => Math.abs(x.lengthS - l) < 0.5)?.why
                 return (
@@ -241,9 +255,9 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
                     return (
                       <div key={shot.shotId} className="cf-row" role="listitem" data-reframe={`${s.id}:${shot.shotId}`}>
                         <span className="cf-name">Shot {shot.number}</span>
-                        <span className="cf-note" style={{ flex: 1 }}>{c?.why ?? ''}</span>
+                        <span className="cf-note" style={{ flex: 1 }}>{c?.why ?? ''}{c?.cuts && how === 'crop' ? `${c?.why ? ' ' : ''}So the whole shot is fitted on a soft fill of itself; New edges makes real edges.` : ''}</span>
                         <select aria-label={`How shot ${shot.number} is made at ${s.label}`} value={how} onChange={(e) => setMethod(s.id, shot.shotId, e.target.value as ShotMethod)}>
-                          <option value="crop">Crop · free</option>
+                          <option value="crop">Crop</option>
                           <option value="outpaint" disabled={!aleph}>New edges · {aleph?.label ?? 'off for your agency'}</option>
                           <option value="remake" disabled={!remake}>Remake for {s.label} · {remakeLabel}</option>
                         </select>
@@ -309,11 +323,11 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
             </div>
             {error && <p className="cf-error" role="alert">{error}</p>}
             <footer className="cf-foot">
-              <span className="cf-note">{rows.filter((r) => r.on).length} versions, cut from the same takes (free){paid.length ? `; ${paid.length} ${paid.length === 1 ? 'shot' : 'shots'} on a model (cost in History)` : ''}. They land on the Campaign board's Film lane.</span>
+              <span className="cf-note">{versionsWord(rows.filter((r) => r.on).length)}, cut from the same takes{paid.length ? `; ${paid.length} ${paid.length === 1 ? 'shot' : 'shots'} on a model` : ''}. They land on the Campaign board's Film lane.</span>
               <span className="pt-grow" />
               <button type="button" className="btn ghost" onClick={() => setStep('plan')}>Back</button>
               <button type="button" className="btn primary" disabled={busy || !rows.some((r) => r.on)} onClick={() => void send()}>
-                {busy ? 'Starting…' : `Make ${rows.filter((r) => r.on).length} versions`}
+                {busy ? 'Starting…' : `Make ${versionsWord(rows.filter((r) => r.on).length)}`}
               </button>
             </footer>
           </div>

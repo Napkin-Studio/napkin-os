@@ -16,10 +16,12 @@ CONTRACTS = Path(__file__).resolve().parent.parent.parent / "contracts"
 FRAMES = "take_refs_frames_follow_images"
 WORDS = "take_refs_words_follow_no_image"
 ANCHOR = "@mira_front, a woman in a red raincoat, on a rainy city street at dusk; soft grey light, wet cobbles, 35 mm."
+# The take sends @mira_front and @mira_side first, then the frames: shot k's frame is image k + 2 (the frame's place
+# in the refs, features/pt-dex-context.clan; Runway's references carry no tags).
 LINES = [
-    "Shot 1 [0-3 s] @mira_front steps off a green tram into the rain, follows image 1 (@in_1)",
-    "Shot 2 [3-6 s] @mira_front opens a small yellow umbrella and smiles up at the sky, follows image 2 (@in_2)",
-    "Shot 3 [6-9 s] @mira_front walks past a glowing bakery window, glancing in at the bread, follows image 3 (@in_3)",
+    "Shot 1 [0-3 s] @mira_front steps off a green tram into the rain, follows image 3 (@in_1)",
+    "Shot 2 [3-6 s] @mira_front opens a small yellow umbrella and smiles up at the sky, follows image 4 (@in_2)",
+    "Shot 3 [6-9 s] @mira_front walks past a glowing bakery window, glancing in at the bread, follows image 5 (@in_3)",
 ]
 
 
@@ -42,16 +44,19 @@ def test_v11_is_v10_with_the_take_tied_to_its_frames():
     assert changed[0].startswith("  - `take_refs`:") and "follows image k" in changed[0] and "No frame is pinned" in changed[0]
 
 
-def test_the_configs_run_v14_and_the_check_allows_v11_to_v13():
+def test_the_configs_run_v17_and_the_check_allows_v11_to_v16():
     """v12 is v11 plus frame-edit-or-redraw's lines, v13 is v12 plus the brief (features/brief-node.clan), v14 is
-    v13 plus a redraw's object placement (owner 2026-11-18); v11 to v13 stay allowed for a rollback. The configs
+    v13 plus a redraw's object placement (owner 2026-11-18), v15 is v14 plus the images' places and unnamed
+    pictures as objects (features/pt-dex-context.clan), v16 is v15 plus no other brands and @previous for continuity
+    only (features/pt-canvas-r2.clan), v17 is v16 with a palette as accents and @anchor's setting only in its place
+    (features/pt-canvas-r3.clan); v11 to v16 stay allowed for a rollback. The configs
     name no prompt, so they run the bundle's default (features/config-defaults.clan)."""
     from director.claude import PROMPT_VERSION
-    assert PROMPT_VERSION == "director.v14"
+    assert PROMPT_VERSION == "director.v17"
     for name in ("config.live.json", "config.testing.json", "config.pathway.runway.json"):
         assert "promptVersion" not in json.loads((CONTRACTS / "examples" / name).read_text()).get("director", {}), name
     check = (CONTRACTS / "check.py").read_text()
-    assert all(f'"director.v{n}"' in check for n in (11, 12, 13, 14))
+    assert all(f'"director.v{n}"' in check for n in (11, 12, 13, 14, 15, 16, 17))
 
 
 def test_the_passthrough_ties_each_shot_to_its_frame_and_sends_no_first_frame():
@@ -73,18 +78,27 @@ def test_a_v11_reply_that_ties_every_shot_passes_and_one_that_does_not_fails():
     assert "error" not in good and all(score(c, good).values()), score(c, good)
     untied = answer(c, load(), "director.v11", Replay(reply(c, "\n".join([ANCHOR, *(line.split(", follows")[0] for line in LINES)]))))
     assert "error" not in untied and score(c, untied)["ties"] is False
-    # A line that follows the wrong image fails too.
-    swapped = [LINES[0], LINES[1].replace("image 2 (@in_2)", "image 3 (@in_3)"), LINES[2]]
-    assert score(c, answer(c, load(), "director.v11", Replay(reply(c, "\n".join([ANCHOR, *swapped])))))["ties"] is False
+    # A line that follows another shot's frame is made to follow its own (the relay renumbers): the score passes.
+    swapped = [LINES[0], LINES[1].replace("image 4 (@in_2)", "image 5 (@in_3)"), LINES[2]]
+    fixed = answer(c, load(), "director.v11", Replay(reply(c, "\n".join([ANCHOR, *swapped]))))
+    assert all(line in fixed["providerJob"]["prompt"] for line in LINES) and score(c, fixed)["ties"] is True
+    # v14's numbers (image k for shot k, the bug this fixes) come out as the frames' places.
+    by_shot = [line.replace(f"image {k + 3}", f"image {k + 1}") for k, line in enumerate(LINES)]
+    old = answer(c, load(), "director.v14", Replay(reply(c, "\n".join([ANCHOR, *by_shot]))))
+    assert all(line in old["providerJob"]["prompt"] for line in LINES) and score(c, old)["ties"] is True
 
 
 def test_a_shot_whose_frame_was_left_out_follows_no_image():
     """Past the model's pictures the web drops the last frames (characters first): their lines name none."""
     inp = {"refs": [{"role": "composition", "label": "Shot 1 frame", "tag": "in_1"}, {"role": "character", "label": "@mira", "tag": "mira_front"}]}
+    sent = [{"name": "in_1"}, {"name": "mira_front"}]
     assert connected.frame_tags(inp) == {1: "in_1"}
-    assert connected.tie_lines(["Steps off the tram.", "Opens the umbrella."], connected.frame_tags(inp)) == [
+    assert connected.frame_images(inp, sent) == {1: (1, "in_1")}
+    assert connected.tie_lines(["Steps off the tram.", "Opens the umbrella."], connected.frame_images(inp, sent)) == [
         "Steps off the tram, follows image 1 (@in_1)", "Opens the umbrella."]
     ok = "Shot 1 [0-3 s] steps off, follows image 1 (@in_1)\nShot 2 [3-6 s] opens the umbrella"
-    assert connected.ties_problem(ok, inp) is None
-    assert connected.ties_problem(ok + ", follows image 2 (@in_2)", inp) == "Shot 2 names an image it does not have: image 2"
-    assert connected.ties_problem("Shot 1 [0-3 s] steps off, follows image 1", inp) == "Shot 1 does not name its frame @in_1"
+    assert connected.ties_problem(ok, inp, sent) is None
+    assert connected.ties_problem(ok + ", follows image 2 (@in_2)", inp, sent) == "Shot 2 names an image it does not send: image 2"
+    assert connected.ties_problem("Shot 1 [0-3 s] steps off, follows image 1", inp, sent) == "Shot 1 does not name its frame @in_1"
+    # The relay takes out a tie to a frame the job does not send.
+    assert connected.renumber_ties(ok + ", follows image 2 (@in_2)", inp, sent) == ok

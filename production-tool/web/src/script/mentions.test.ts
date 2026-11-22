@@ -131,4 +131,42 @@ describe('@ in a shot', () => {
     expect(document.querySelector('.caretfloat')).toBeNull()
     expect(editor.getText()).toBe('@ma')
   })
+
+  it('a picked name leaves one space: none before a stop or a space already there, and a stop typed after it takes the space (UAT round 3)', async () => {
+    const { store, shot, scriptId } = await project()
+    const words = (editor: Editor) => editor.view.dom.textContent
+    const type = (editor: Editor, text: string) => {
+      const { from, to } = editor.state.selection
+      const done = editor.view.someProp('handleTextInput', (f) => f(editor.view, from, to, text, () => editor.state.tr.insertText(text, from, to)))
+      if (!done) editor.view.dispatch(editor.state.tr.insertText(text, from, to))
+    }
+    // At the end of a line: one space, ready for the next word; a comma typed then takes it.
+    const a = mount(store, shot, scriptId, [])
+    a.commands.focus('end')
+    a.commands.insertContent('Then @maya_fr')
+    await settle()
+    key(a, 'Enter')
+    await settle()
+    expect(words(a)).toBe('Then @maya_front ')
+    type(a, ',')
+    type(a, ' ')
+    type(a, 'in a gown')
+    expect(words(a)).toBe('Then @maya_front, in a gown')
+    // A second space typed after the name's space takes it too.
+    a.commands.insertContent(' and @maya_fr')
+    await settle()
+    key(a, 'Enter')
+    await settle()
+    type(a, ' ')
+    type(a, 'pours')
+    expect(words(a)).toBe('Then @maya_front, in a gown and @maya_front pours')
+    // Before words that already have their space (a name typed over "She"): no second space.
+    a.commands.setContent({ type: 'doc', content: [{ type: 'action', content: [{ type: 'text', text: 'X pours.' }] }] })
+    a.commands.setTextSelection({ from: 1, to: 2 })
+    a.commands.insertContent('@maya_fr')
+    await settle()
+    key(a, 'Enter')
+    await settle()
+    expect(words(a)).toBe('@maya_front pours.')
+  })
 })

@@ -312,6 +312,9 @@ def check_capabilities(sheet: dict, job: ProviderJob) -> None:
         raise CapabilityMissing(f"{sheet['provider']} takes at most {sheet['refs']['max']} refs")
     if sum(r.role == "character" for r in job.refs) > sheet["refs"]["maxCharacter"]:
         raise CapabilityMissing(f"{sheet['provider']} takes at most {sheet['refs']['maxCharacter']} character refs")
+    max_object = sheet["refs"].get("maxObject")
+    if max_object is not None and sum(r.role != "character" for r in job.refs) > max_object:
+        raise CapabilityMissing(f"{sheet['provider']} takes at most {max_object} object refs")
     if job.outputs and job.outputs > sheet["outputsPerCall"]:
         raise CapabilityMissing(f"{sheet['provider']} returns at most {sheet['outputsPerCall']} outputs per call")
     if job.duration_s is not None:
@@ -332,6 +335,7 @@ def prompt_max(sheet: dict, model: str) -> Optional[int]:
     return ((sheet.get("models") or {}).get(model) or {}).get("promptMax")
 
 
-def video_audio(_job: ProviderJob) -> bool:
-    """Audio is always sent explicitly; Wednesday has none (director.schema: const false)."""
-    return False
+def video_audio(job: ProviderJob) -> bool:
+    """Audio is always sent explicitly: the job's own switch (relay/sound.py sets it: on only for a clip whose
+    shots have a line, a VO or a sound beat, on a model with the switch), else off."""
+    return bool(getattr(job, "audio", False))

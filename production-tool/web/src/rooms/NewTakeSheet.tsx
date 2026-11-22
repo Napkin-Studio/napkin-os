@@ -9,9 +9,10 @@ import { useState } from 'react'
 import { useServices } from '../app/context'
 import { clipLen, HOLD_MAX_S, type Cut, type CutClip, type SwapChoice } from './cut'
 import { editCut, swapPlanFor } from './editOps'
-import { boxName, shotWindow, type Gen } from './model'
+import { boxName, coversShot, inBox, type Gen } from './model'
 import { tc } from './media'
 import { Poster } from './Poster'
+import { takeName } from './model'
 import type { RoomData } from './Rooms'
 import { notNow } from './timeline'
 
@@ -20,8 +21,13 @@ export function NewTakeSheet({ data, cut, clip, take, onClose, onError }: {
 }) {
   const { doc: docStore } = useServices()
   const old = data.gens.find((g) => g.id === clip.genId)
-  const box = old ? data.boxes.find((b) => b.key === old.boxKey) : undefined
-  const siblings = cut.v1.filter((c) => c.genId === clip.genId)
+  // The box is the new take's (the clip's shot's box): a joined take cut apart since is a take of each of its shots'
+  // boxes, and its first was named for shot 2's card (UAT 2026-11-21, F2: "Box 1 v1" on Box 2's take).
+  const box = data.boxes.find((b) => !!clip.follows?.shotId && b.shotIds.includes(clip.follows.shotId) && inBox(take, b.key))
+    ?? data.boxes.find((b) => b.key === take.boxKey)
+  // Only the clips of the old take whose shot the new take has footage for (F2: a shot-1 take was put over shot 2's
+  // clip as well, so shot 2 played shot 1's footage and its own card went).
+  const siblings = cut.v1.filter((c) => c.genId === clip.genId && (c.id === clip.id || (!!c.follows?.shotId && coversShot(take, c.follows.shotId))))
   const [all, setAll] = useState(siblings.length > 1)
   const ids = all ? siblings.map((c) => c.id) : [clip.id]
   const plan = old ? swapPlanFor(cut, take, old, ids) : undefined
@@ -32,7 +38,6 @@ export function NewTakeSheet({ data, cut, clip, take, onClose, onError }: {
   if (!old || !plan || !mine) return null
   const oldLen = clipLen(clip) - clip.holdS
   const newLen = mine.outS - mine.inS
-  const newSeg = shotWindow(take, clip.follows?.shotId)
   const needsChoice = plan.shortBy > 0
   const use = async () => {
     setBusy(true)
@@ -55,17 +60,18 @@ export function NewTakeSheet({ data, cut, clip, take, onClose, onError }: {
         <div className="rm-sheetpair">
           <figure>
             <Poster sha={old.asset} atS={clip.inS + k * oldLen} />
-            <figcaption className="rm-clamp2" title={`v${old.version} · ${old.label}`}>Now: v{old.version} · {old.label}</figcaption>
+            <figcaption className="rm-clamp2" title={`${takeName(old, data.boxes)} · ${old.label}`}>Now: {takeName(old, data.boxes)} · {old.label}</figcaption>
           </figure>
           <figure>
             <Poster sha={take.asset} atS={mine.inS + k * newLen} />
-            <figcaption className="rm-clamp2" title={`v${take.version} · ${take.label}`}>New: v{take.version} · {take.label}</figcaption>
+            <figcaption className="rm-clamp2" title={`${takeName(take, data.boxes)} · ${take.label}`}>New: {takeName(take, data.boxes)} · {take.label}</figcaption>
           </figure>
         </div>
         <label className="rm-fieldlabel">Scrub both over the clip
           <input type="range" min={0} max={1} step={0.01} value={k} onChange={(e) => setK(Number(e.target.value))} />
         </label>
-        <p className="rm-note">The clip's window {oldLen.toFixed(1)} s · the new take has {newLen.toFixed(1)} s for this shot ({tc(newSeg.inS)}-{tc(newSeg.outS)} of it).</p>
+        {/* One window in one sentence (UAT round 3, R3-F11: "has 1.5 s for this shot (0:00.0-0:03.0 of it)"). */}
+        <p className="rm-note">The clip plays {oldLen.toFixed(1)} s now · the new take would play {newLen.toFixed(1)} s of it, {tc(mine.inS)}-{tc(mine.outS)} of its {take.durationS.toFixed(1)} s.</p>
         {needsChoice && (
           <fieldset className="rm-field">
             <legend className="rm-label">The new take is {plan.shortBy.toFixed(1)} s shorter</legend>

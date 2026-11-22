@@ -58,7 +58,7 @@ export function PromptStart({ kind, nodeId, place = 'card' }: PromptStartProps) 
   return (
     <div className={`pstart pstart-${place}`} data-prompt-start={kind} {...guard}>
       {state.show === 'script' && <ScriptStart scriptId={nodeId} place={place} />}
-      {state.show === 'storyboard' && <StoryboardStart storyboardId={nodeId} fromScript={state.fromScript} place={place} />}
+      {state.show === 'storyboard' && <StoryboardStart storyboardId={nodeId} fromScript={state.fromScript} fromBrief={state.from === 'brief'} place={place} />}
       {state.show === 'video-block' && <VideoBlock videoId={nodeId} />}
       {state.show === 'video-script' && <ScriptVideoAsk videoId={nodeId} scriptId={state.scriptId} />}
       {/* Answered "straight from the script" already: Plan shots (and why it cannot go yet), never the question again. */}
@@ -194,7 +194,7 @@ export function ScriptWritePrompt({ scriptId, seed, onClose }: { scriptId: Id; s
 
 // ── storyboard (and a linked video's empty storyboard) ──────────────────────
 
-function StoryboardStart({ storyboardId, fromScript, place, scopeNode }: { storyboardId: Id; fromScript: boolean; place: 'card' | 'editor'; scopeNode?: Id }) {
+function StoryboardStart({ storyboardId, fromScript, fromBrief = false, place, scopeNode }: { storyboardId: Id; fromScript: boolean; fromBrief?: boolean; place: 'card' | 'editor'; scopeNode?: Id }) {
   const services = useServices()
   const router = useContext(RouterContext)
   const doc = useDoc()
@@ -223,13 +223,13 @@ function StoryboardStart({ storyboardId, fromScript, place, scopeNode }: { story
 
   if (fromScript) {
     // A bare @key with no front stops Plan shots before it sends: said here before it is pressed.
-    const sid = scriptOf(doc, storyboardId)
+    const sid = fromBrief ? undefined : scriptOf(doc, storyboardId)
     const fronts = sid ? keysWithoutFront(doc, services.doc.get(), scriptText(doc, sid)) : []
     const blocked = fronts.length ? new FrontsMissingError(fronts).message : null
     return (
       <section className="pstart-card" aria-label="Plan the shots">
         <Signed agent="dex" />
-        <p className="pstart-line">{PROMPT_COPY.storyboard.fromScript}</p>
+        <p className="pstart-line">{fromBrief ? PROMPT_COPY.storyboard.fromBrief : PROMPT_COPY.storyboard.fromScript}</p>
         {blocked && !error && <div className="pstart-error" role="alert">{blocked}<FrontButtons text={blocked} /></div>}
         <div className="pstart-actions">
           <button className="btn sm primary" disabled={busy} onClick={() => void attempt(() => planOrJoin(services, { storyboardId }))}>Plan shots</button>

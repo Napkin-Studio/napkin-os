@@ -8,7 +8,8 @@ import { jobsList, shotsOf } from '../model/selectors'
 import { MockRelay, mockShotList, type MockRenderer } from '../relay/mock'
 import { addKey, addRef, addScene, addShots, snapshotDoc } from '../test/jobFixtures'
 import { makeAjv, SCHEMA } from '../test/schemas'
-import { continueDrawing, drawFrame, drawTheRest, selectedFrame, selectFrame, type FrameDeps } from './frames'
+import { keepCharacter, keptFromFirst, suggestKey } from './cast'
+import { continueDrawing, drawFrame, drawTheRest, PARALLEL_FRAMES, selectedFrame, selectFrame, type FrameDeps } from './frames'
 import { JobRunner } from './runner'
 import { frameDrift, frameStale } from './stale'
 import { wireJobs } from './wire'
@@ -20,6 +21,7 @@ import { wireJobs } from './wire'
 const flush = async () => {
   for (let i = 0; i < 30; i++) await new Promise<void>((r) => setImmediate(r))
 }
+const flushMore = async () => { for (let i = 0; i < 5; i++) await flush() }
 
 async function setup(shotCount = 3) {
   let t = 1_000_000
@@ -71,7 +73,9 @@ describe('sequential storyboard frames', () => {
     expect(in1.previousFrame).toBeUndefined()
     expect(in1.refs?.map((r) => [r.name, r.asset.sha256])).toEqual([['hero_front', s.front]])
     expect(in1.shot?.refs).toEqual(['hero'])
-    expect(in1.script).toContain('yellow umbrella')
+    // Its own beat only (UAT round 3 R3-12): no whole script on a frame whose shot has words.
+    expect(in1.script).toBeUndefined()
+    expect(in1.shot?.action).toBeTruthy()
     expect(in1.ratio).toBe('16:9')
     await s.land()
     const f1 = s.frameOf(0)
@@ -80,9 +84,16 @@ describe('sequential storyboard frames', () => {
     const j2 = await drawFrame(s.deps, 1, 'next')
     const in2 = s.inputOf(j2)
     expect(in2.anchorFrame?.sha256).toBe(f1.asset)
-    expect(in2.previousFrame?.sha256).toBe(f1.asset)
+    // Frame 1 is the frame before too: the request carries it once, as @anchor (UAT round 4, R4-F5: it went as @anchor
+    // and @previous, the same sha twice, to the provider).
+    expect(in2.previousFrame).toBeUndefined()
+    const shas = [in2.anchorFrame, in2.previousFrame, ...(in2.refs ?? []).map((r) => r.asset)].filter(Boolean).map((a) => a!.sha256)
+    expect(new Set(shas).size).toBe(shas.length)
     expect(in2.refs?.[0].asset.sha256).toBe(s.front)
     expect(in2.shot?.id).toBe(s.shotId(1))
+    // A later frame reads shot 1's beat as @anchor's place, and not the rest of the script.
+    expect(in2.script?.startsWith('Shot 1 (@anchor): ')).toBe(true)
+    expect(in2.script).not.toContain(shotsOf(s.doc.get())[2].action!)
     await s.land()
     const f2 = s.frameOf(1)
 
@@ -131,7 +142,9 @@ describe('sequential storyboard frames', () => {
       expect(now[0].ctx.for === 'frame' && now[0].ctx.how).toBe(k === 1 ? 'rest' : 'chain')
       const input = s.inputOf(now[0].id)
       expect(input.anchorFrame?.sha256).toBe(s.frameOf(0).asset)
-      expect(input.previousFrame?.sha256).toBe(s.frameOf(k - 1).asset)
+      // Shot 2's frame before is frame 1, the anchor: sent once (R4-F5).
+      if (k === 1) expect(input.previousFrame).toBeUndefined()
+      else expect(input.previousFrame?.sha256).toBe(s.frameOf(k - 1).asset)
       expect(selectedFrame(s.doc.get(), s.shotId(k))).toBeUndefined()
       await s.land()
       expect(selectedFrame(s.doc.get(), s.shotId(k))).toBeDefined()
@@ -139,6 +152,56 @@ describe('sequential storyboard frames', () => {
     expect(s.running()).toHaveLength(0)
     expect(s.ui.get().drawingRest).toBe(false)
     expect(s.requests().filter((r) => r.ctx.for === 'frame')).toHaveLength(4)
+  })
+
+  it('once frame 1’s person is kept, Draw the rest draws two at a time, each with its character (UAT round 3, UX 10)', async () => {
+    const s = await setup(5)
+    await drawFrame(s.deps, 0, 'first')
+    await s.land()
+    await keepCharacter(s.doc, s.frameOf(0).asset, 'mia')
+    expect(keptFromFirst(s.doc.get(), undefined)).toBeTruthy()
+    await drawTheRest(s.deps)
+    await vi.waitFor(() => expect(s.running().length).toBe(PARALLEL_FRAMES), { timeout: 2000, interval: 5 })
+    const first = s.running()
+    expect(first.map((r) => r.ctx.for === 'frame' && r.ctx.shotId)).toEqual([s.shotId(1), s.shotId(2)])
+    for (const r of first) {
+      const input = s.inputOf(r.id)
+      expect(input.anchorFrame?.sha256).toBe(s.frameOf(0).asset)
+      expect(input.refs?.some((x) => x.role === 'character')).toBe(true) // the shot's own @hero, else the kept person (cast.ts)
+    }
+    // Shot 3 has no frame before it yet: it goes with its anchor only, never waiting on shot 2.
+    expect(s.inputOf(first[1].id).previousFrame).toBeUndefined()
+    await s.land()
+    // Shot 5 is the end card (no frame): only shot 4 is left, and it starts once. This test waited for 2 running here,
+    // which was shot 4 started twice by the two completions (UAT round 5, S2-D).
+    await vi.waitFor(() => expect(s.running().length).toBe(1), { timeout: 2000, interval: 5 })
+    await flushMore()
+    expect(s.running()).toHaveLength(1)
+    expect(s.requests().filter((r) => r.ctx.for === 'frame' && r.ctx.shotId === s.shotId(3))).toHaveLength(1)
+    await s.land()
+    await vi.waitFor(() => expect(s.ui.get().drawingRest).toBe(false), { timeout: 2000, interval: 5 })
+    expect(shotsOf(s.doc.get()).every((x) => selectedFrame(s.doc.get(), x.id))).toBe(true)
+  })
+
+  it('two frames landing together start the last shot once (UAT round 5, S2-D: shot 4 was started and paid twice)', async () => {
+    const s = await setup(4)
+    await drawFrame(s.deps, 0, 'first')
+    await s.land()
+    await keepCharacter(s.doc, s.frameOf(0).asset, 'mia')
+    await drawTheRest(s.deps)
+    await vi.waitFor(() => expect(s.running().length).toBe(PARALLEL_FRAMES), { timeout: 2000, interval: 5 })
+    // Frames 2 and 3 land in the same poll: two completion hooks each call continueDrawing.
+    await s.land()
+    await vi.waitFor(() => expect(s.running().length).toBe(1), { timeout: 2000, interval: 5 })
+    await flushMore()
+    const forShot4 = () => s.requests().filter((r) => r.ctx.for === 'frame' && r.ctx.shotId === s.shotId(3))
+    expect(forShot4()).toHaveLength(1)
+    // And two calls in the same tick, as the two hooks make them, still start it once.
+    await s.land()
+    await updateDoc(s.doc, (d) => { const sh = d.shots[s.shotId(3)]; delete sh.pick })
+    s.ui.update((u) => { u.drawingRest = true })
+    await Promise.all([continueDrawing(s.deps), continueDrawing(s.deps), continueDrawing(s.deps)])
+    expect(forShot4().filter((r) => !['completed', 'failed', 'cancelled'].includes(r.state))).toHaveLength(1)
   })
 
   it('Draw the rest picks up after a reload from what is drawn', async () => {
@@ -171,7 +234,7 @@ describe('sequential storyboard frames', () => {
     const again = await drawFrame(s.deps, 1, 'again', { text: 'closer', parent: oldF2 })
     const input = s.inputOf(again)
     expect(input.anchorFrame?.sha256).toBe(s.frameOf(0).asset)
-    expect(input.previousFrame?.sha256).toBe(s.frameOf(0).asset)
+    expect(input.previousFrame).toBeUndefined() // the same picture as the anchor: sent once (R4-F5)
     expect(input.text).toBe('closer')
     await s.land()
     const newF2 = s.frameOf(1)
@@ -258,5 +321,172 @@ describe('script length (2026-10-09)', () => {
     const d = snapshotDoc().get()
     addScene(d, 'x'.repeat(1400))
     expect(scriptText(d)).toHaveLength(600)
+  })
+})
+
+describe('who a later frame shows (UAT round 2 R2-4, reversed in round 3 R3-F1)', () => {
+  it('frame 1 never goes as an unnamed person; a person shot sends the kept character by name; no picture twice', async () => {
+    const s = await setup(3)
+    // Shots that name nobody: the planned shots lose their refs; shot 2 implies a person, shot 3 is an insert.
+    await updateDoc(s.doc, (d) => {
+      const shots = shotsOf(d)
+      for (const sh of shots) sh.refs = []
+      shots[1].action = 'She opens a yellow umbrella.'
+      shots[2].action = 'The kettle glows blue and boils without a sound.'
+    })
+    const j1 = await drawFrame(s.deps, 0, 'first')
+    await s.land()
+    expect(s.inputOf(j1).refs ?? []).toEqual([])
+    const j2 = await drawFrame(s.deps, 1, 'first')
+    expect((s.inputOf(j2).refs ?? []).filter((r) => r.role === 'character')).toEqual([])
+    expect(s.inputOf(j2).anchorFrame?.sha256).toBe(s.frameOf(0).asset)
+    await s.land()
+    // Keep her as @mia: a person shot sends @mia_front, and frame 1 (the same picture) is not sent again as anchor.
+    const name = await keepCharacter(s.doc, s.frameOf(0).asset, 'Mia')
+    expect(name).toBe('mia_front')
+    expect(keptFromFirst(s.doc.get(), shotsOf(s.doc.get())[0].storyboard_id)?.key).toBe('mia')
+    await updateDoc(s.doc, (d) => { shotsOf(d)[2].action = 'She grins at the kettle.' })
+    const j3 = await drawFrame(s.deps, 2, 'first')
+    const in3 = s.inputOf(j3)
+    expect((in3.refs ?? []).filter((r) => r.role === 'character').map((r) => r.name)).toEqual(['mia_front'])
+    expect(in3.anchorFrame).toBeUndefined()
+    const shas = [...(in3.refs ?? []).map((r) => r.asset.sha256), in3.anchorFrame?.sha256, in3.previousFrame?.sha256].filter(Boolean)
+    expect(new Set(shas).size).toBe(shas.length)
+    expect(suggestKey('Mia kneels by the puppy.')).toBe('mia')
+    expect(suggestKey('A wide street.')).toBe('')
+  })
+
+  it('an insert that names no one sends no character, even the kept one', async () => {
+    const s = await setup(3)
+    await updateDoc(s.doc, (d) => {
+      const shots = shotsOf(d)
+      for (const sh of shots) sh.refs = []
+      shots[1].action = 'The kettle glows blue and boils without a sound.'
+      delete shots[1].direction
+      for (const b of Object.values(d.beats)) if (b.shot_id === shots[1].id) delete d.beats[b.id]
+    })
+    await drawFrame(s.deps, 0, 'first')
+    await s.land()
+    await keepCharacter(s.doc, s.frameOf(0).asset, 'Mia')
+    const j2 = await drawFrame(s.deps, 1, 'first')
+    expect((s.inputOf(j2).refs ?? []).filter((r) => r.role === 'character')).toEqual([])
+  })
+})
+
+describe('namesPerson (R3-F1)', () => {
+  it('reads people from names, mentions, speakers and person words; not from things', async () => {
+    const { namesPerson } = await import('./cast')
+    const d = snapshotDoc().get()
+    addKey(d, 'maya')
+    const shot = (action: string) => ({ id: 'shot_X', action, refs: [], kind: 'shot', duration_s: 2, camera: { size: 'insert' } }) as never
+    expect(namesPerson(d, shot('The kettle glows blue and boils without a sound.'))).toBe(false)
+    expect(namesPerson(d, shot('Through the thin wall, the snoring carries on, undisturbed.'))).toBe(false)
+    expect(namesPerson(d, shot('1 a.m. A dark kitchen, lit only by the open fridge.'))).toBe(false)
+    expect(namesPerson(d, shot('@maya flips the switch, wincing.'))).toBe(true)
+    expect(namesPerson(d, shot('Maya whispers to the kettle.'))).toBe(true)
+    expect(namesPerson(d, shot('A woman in a dressing gown.'))).toBe(true)
+    expect(namesPerson(d, shot('Behind the thin wall, a flatmate keeps snoring, undisturbed.'))).toBe(true)
+    expect(namesPerson(d, shot('Her finger presses the switch.'))).toBe(true)
+  })
+})
+
+describe('castRefs (R3-F1)', () => {
+  it('a person shot promotes the one offered character; an insert leaves it optional', async () => {
+    const { castRefs } = await import('./cast')
+    const d = snapshotDoc().get()
+    addKey(d, 'maya')
+    const asset = (n: string) => ({ sha256: `sha256:${n.repeat(64)}`, url: 'x', mime: 'image/png' })
+    const refs = [
+      { id: 'ref_a', name: 'maya_front', role: 'character', kind: 'picture', asset: asset('a'), optional: true },
+      { id: 'ref_b', name: 'maya_full', role: 'character', kind: 'picture', asset: asset('b'), optional: true },
+    ] as never[]
+    const shot = (action: string) => ({ id: 'shot_X', action, refs: [], kind: 'shot', duration_s: 2, camera: { size: 'medium' } }) as never
+    const person = await castRefs({} as never, d, undefined, 2, shot('She whispers to the kettle.'), refs)
+    expect(person.map((r) => [r.name, !!r.optional])).toEqual([['maya_front', false], ['maya_full', false]])
+    const insert = await castRefs({} as never, d, undefined, 2, shot('The kettle glows blue.'), refs)
+    expect(insert.map((r) => !!r.optional)).toEqual([true, true])
+  })
+})
+
+describe('castRefs: a character only when the shot names it (UAT round 4, R4-F2)', () => {
+  const asset = (n: string) => ({ sha256: `sha256:${n.repeat(64)}`, url: 'x', mime: 'image/png' })
+  const refs = [
+    { id: 'ref_a', name: 'maya_front', role: 'character', kind: 'picture', asset: asset('a'), optional: true },
+    { id: 'ref_b', name: 'maya_full', role: 'character', kind: 'picture', asset: asset('b'), optional: true },
+  ] as never[]
+  const shot = (action: string) => ({ id: 'shot_X', action, refs: [], kind: 'shot', duration_s: 1.5, camera: { size: 'medium' } }) as never
+
+  it('round 4 repro: "a flatmate keeps snoring" sends no Maya and tells Dex the flatmate is someone else', async () => {
+    const { castRefs, castShot } = await import('./cast')
+    const d = snapshotDoc().get()
+    addKey(d, 'maya')
+    const flatmate = shot('Behind the thin wall, a flatmate keeps snoring, undisturbed.')
+    const out = await castRefs({} as never, d, undefined, 3, flatmate, refs)
+    expect(out.filter((r) => r.role === 'character')).toEqual([])
+    const js = castShot(d, flatmate, { id: 'shot_X', kind: 'shot', duration_s: 1.5, camera: { size: 'medium' } as never, action: 'x', refs: [] }, refs)
+    expect(js.direction).toBe('Cast: the flatmate here is someone else, not Maya; draw a different person.')
+    expect(js.direction).not.toContain('@')
+  })
+  it('a shot that names the character gets all its pictures, required, a person noun beside it or not', async () => {
+    const { castRefs } = await import('./cast')
+    const d = snapshotDoc().get()
+    addKey(d, 'maya')
+    for (const words of ['@maya_front raises her mug to the snoring wall, grinning.', 'Maya whispers to the kettle.', '@maya tiptoes past her flatmate.']) {
+      const out = await castRefs({} as never, d, undefined, 4, shot(words), refs)
+      expect(out.map((r) => [r.name, !!r.optional]), words).toEqual([['maya_front', false], ['maya_full', false]])
+    }
+  })
+  it('a pronoun or a hand carries on with the one offered character; an insert keeps it Dex\'s to leave out', async () => {
+    const { castRefs } = await import('./cast')
+    const d = snapshotDoc().get()
+    addKey(d, 'maya')
+    expect((await castRefs({} as never, d, undefined, 2, shot('Her finger presses the switch.'), refs)).map((r) => !!r.optional)).toEqual([false, false])
+    expect((await castRefs({} as never, d, undefined, 2, shot('Insert on the kettle: the switch goes down.'), refs)).map((r) => !!r.optional)).toEqual([true, true])
+  })
+})
+
+describe('a shot that shows no one (UAT round 5, R5-F3)', () => {
+  it('the kettle insert after "She flicks the switch": no @previous with her in it, @anchor stays, Dex is told no one is seen', async () => {
+    const s = await setup(3)
+    await updateDoc(s.doc, (d) => {
+      const [a, b, c] = shotsOf(d)
+      d.shots[a.id].action = 'Our hero tiptoes into the dark kitchen.'
+      d.shots[b.id].action = 'She flicks the switch and braces, shoulders up.'
+      d.shots[c.id].action = 'The kettle glows soft blue, murmurs, then clicks off. No roar at all.'
+      Object.assign(d.shots[c.id], { refs: [], direction: '' })
+    })
+    await drawFrame(s.deps, 0, 'first')
+    await s.land()
+    await drawFrame(s.deps, 1, 'next')
+    await s.land()
+    const j3 = await drawFrame(s.deps, 2, 'next')
+    const in3 = s.inputOf(j3)
+    expect(in3.anchorFrame?.sha256).toBe(s.frameOf(0).asset)
+    expect(in3.previousFrame).toBeUndefined()
+    expect(in3.shot?.direction).toContain('Cast: no one is seen in this shot; draw no people.')
+    // Drawn without the frame before on purpose: not "drawn from an older frame".
+    await s.land()
+    expect(frameDrift(s.doc.get(), s.shotId(2))).toBeUndefined()
+    // A shot with a person keeps its frame before and says nothing of the kind.
+    const j2 = s.requests().find((r) => (r.ctx as { shotId?: string } | undefined)?.shotId === s.shotId(1))!.id
+    expect(s.inputOf(j2).shot?.direction ?? '').not.toContain('no one is seen')
+  })
+
+  it('two shots in a row with no one keep the frame before (the place, the kettle), and both say no one is seen', async () => {
+    const s = await setup(3)
+    await updateDoc(s.doc, (d) => {
+      const [a, b, c] = shotsOf(d)
+      d.shots[a.id].action = 'Our hero tiptoes into the dark kitchen.'
+      d.shots[b.id].action = 'Insert on the kettle on the counter.'
+      d.shots[c.id].action = 'The kettle glows soft blue, then clicks off.'
+      for (const x of [b, c]) Object.assign(d.shots[x.id], { refs: [], direction: '' })
+    })
+    for (const i of [0, 1]) {
+      await drawFrame(s.deps, i, i ? 'next' : 'first')
+      await s.land()
+    }
+    const in3 = s.inputOf(await drawFrame(s.deps, 2, 'next'))
+    expect(in3.previousFrame?.sha256).toBe(s.frameOf(1).asset)
+    expect(in3.shot?.direction).toContain('no one is seen')
   })
 })

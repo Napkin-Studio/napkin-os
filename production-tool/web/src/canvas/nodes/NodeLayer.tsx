@@ -11,7 +11,7 @@
 // opened, and a double-click picks one view out of its group; on the one picture selected, it opens the
 // picture in the Image editor (dblclick.ts).
 
-import { useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import { RouterContext, useDoc, useServices, useStoredDoc } from '../../app/context'
 import { scriptRoute } from '../../app/route'
 import { updateDoc } from '../../doc/store'
@@ -21,15 +21,18 @@ import { canLink, type LinkKind } from '../core/links'
 import { canvasActions, toolLetter } from '../chrome/actions'
 import type { CardKind } from './cardChrome'
 import { NodeCard } from './cards'
-import { cardOf, CARD_KINDS, createNode, elementOfEnd, endOf, groupOf, linkCheck, linkMemory, linkNodes, reconcileLinks, seedNodes } from './nodes'
+import { planAskOn } from './planAsk'
+import { AskCard } from '../../ui/AskCard'
+import { cardOf, CARD_KINDS, createNode, elementOfEnd, endOf, groupOf, linkCheck, linkMemory, linkNodes, reconcileLinks, seedNodes, textRowOf } from './nodes'
+import { wordsOnPage } from '../../script/edits'
 import { applyKeyMerges, keyLinkMerges, mergeWords } from './mergeLinks'
 import { provenanceFixes } from './provenance'
 import { elementBounds } from '../core/geometry'
 import { isInkTool } from '../core/tools'
 import { UndoChip } from '../../ui/Undo'
 import { imageFiles, pickPictureFiles, placePictures } from './pictures'
-import { makeVideo, storyboardFor, storyboardFromShots } from './make'
-import { groupLabel, keyGroupFields, keyGroupsOn, type KeyGroup } from './keyGroups'
+import { madeFromNote, makeVideo, newScriptFor, storyboardFor, storyboardFromShots } from './make'
+import { groupLabel, keyGroupFields, keyGroupsOn, labelAnchor, type KeyGroup } from './keyGroups'
 import { setStacked } from './stack'
 import { pictureToOpen } from './dblclick'
 import './nodes.css'
@@ -38,11 +41,14 @@ import { liveGet } from '../../model/live'
 import { BriefCard } from '../../brief/BriefCard'
 import { briefOpenUrl } from '../../brief/feedWords'
 import { briefOfElement } from '../../brief/canvas'
+import { chipLook } from '../../ui/finals/chipLook'
 
 type Local = { x: number; y: number }
 const WORD: Record<CardKind, string> = { script: 'script', storyboard: 'storyboard', video: 'video' }
 /** How long a new node keeps its "New" pill and halo (ui-behaviour 3.3). */
 const NEW_MS = 4000
+/** Screen pixels between a text's right edge and its link port. */
+const TEXT_PORT_GAP = 14
 
 /** A link being made: from a port drag or the Link tool's source; `b` follows the pointer (`at`, in the scene).
  *  `single`: ⌥ was held, so a key's view links as itself, not as its whole key. */
@@ -121,6 +127,12 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
         markNew(r.el.id)
         show(r.el, from.storyboardId ? { kind: 'storyboard', id: from.storyboardId } : { kind: 'script', id: from.scriptId! })
         return r
+      },
+      scriptFor: async (storyboardId) => {
+        const r = await newScriptFor({ canvas, doc: services.doc }, storyboardId)
+        markNew(r.el.id)
+        show(r.el, { kind: 'storyboard', id: storyboardId })
+        return { scriptId: r.scriptId }
       },
       storyboardFromShots: async (videoId) => {
         const r = await storyboardFromShots({ canvas, doc: services.doc }, videoId)
@@ -288,7 +300,8 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
   /** What an end is called in the hint and the picker. */
   const word = (e: CanvasElement) => {
     const c = cardOf(e)
-    return c ? WORD[c.kind] : briefOfElement(e) ? 'brief' : (e.customData as { kind?: string } | undefined)?.kind === 'format_set' ? 'sizes' : e.type === 'image' ? 'picture' : e.type === 'text' ? 'text' : 'sketch area'
+    const kind = (e.customData as { kind?: string } | undefined)?.kind
+    return c ? WORD[c.kind] : briefOfElement(e) ? 'brief' : kind === 'format_set' ? 'sizes' : kind === 'board' ? 'board' : e.type === 'image' ? 'picture' : e.type === 'text' ? 'text' : 'sketch area'
   }
 
   const selectedAtPress = useRef<readonly string[]>([])
@@ -340,7 +353,7 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     const r = root.current?.parentElement?.getBoundingClientRect()
     return { x: cx - (r?.left ?? 0), y: cy - (r?.top ?? 0) }
   }
-  const portOf = (from: CanvasElement) => toLocal(from.x + from.width, from.y + from.height / 2)
+  const portOf = (from: CanvasElement) => toLocal(from.x + from.width + (from.type === 'text' ? TEXT_PORT_GAP / view.zoom : 0), from.y + from.height / 2)
 
   /** The key group the selection is, whole, if it is one. */
   function selectedKeyGroup(): KeyGroup | null {
@@ -525,9 +538,23 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     if (!picker) return
     const { from, scene, at } = picker
     setPicker(null)
+    const noteWords = from.type === 'text' ? textRowOf(services.doc.get(), from.id)?.words?.trim() ?? '' : ''
+    // A storyboard or film made from a note gets a script of its own with the note's words, which drives it: its plan
+    // never reads (or writes over) another script (UAT round 3 R3-1, UX 3).
+    if (noteWords && (kind === 'storyboard' || kind === 'video')) {
+      void madeFromNote({ canvas, doc: services.doc }, kind, scene, (id) => wordsOnPage(services.doc, id, noteWords), (script) => writeLink(from, script, at))
+        .then(({ script, made }) => { markNew(script.id); markNew(made.id) })
+        .then(() => cancel())
+        .catch((e) => console.warn('the node was not made', e))
+      return
+    }
+    // A script made from a note starts with the note's words on its page (UAT round 2 R2-7: it was empty).
+    const words = kind === 'script' ? noteWords : ''
     void createNode({ canvas, doc: services.doc }, kind, scene)
-      .then((el) => {
+      .then(async (el) => {
         markNew(el.id)
+        const made = cardOf(el)
+        if (words && made?.kind === 'script') await wordsOnPage(services.doc, made.id, words)
         return writeLink(from, el, at)
       })
       .then(() => cancel())
@@ -586,6 +613,15 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
           </div>
         )
       })}
+      {/* A plan waiting on the Director agent's question: its ask card beside the storyboard, at screen size (UAT round 3
+          R3-5, UX 2: the only sign was the Decisions badge). Off screen, the ask dock shows it instead. */}
+      {!source && nodes.map((e) => {
+        const c = cardOf(e)!
+        const ask = c.kind === 'storyboard' ? planAskOn(live, c.id) : undefined
+        if (!ask) return null
+        const p = toLocal(e.x + e.width, e.y)
+        return <div key={`ask-${e.id}`} className="nl-ask" style={{ left: p.x + 12, top: p.y }} onPointerDown={(ev) => ev.stopPropagation()}><AskCard ask={ask} /></div>
+      })}
       {/* The Brief node's compact card (features/brief-node.clan; production-new-ui mock v2.1). */}
       {els.filter((e) => briefOfElement(e)).map((e) => {
         const id = briefOfElement(e)!
@@ -608,7 +644,8 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
         return <span className="nl-endbox source" style={{ left: p.x, top: p.y, width: source.width * view.zoom, height: source.height * view.zoom }} />
       })()}
       {lonePort && (() => {
-        const p = toLocal(lonePort.x + lonePort.width, lonePort.y + lonePort.height / 2)
+        // A text's port sits clear of its last letters (UAT round 1 IMG-19: it covered the "r" of "her").
+        const p = toLocal(lonePort.x + lonePort.width + (lonePort.type === 'text' ? TEXT_PORT_GAP / view.zoom : 0), lonePort.y + lonePort.height / 2)
         return <span className="nl-port" role="button" aria-label={`Link from this ${word(lonePort)}`} title="Drag to link (L)"
           style={{ left: p.x, top: p.y }} onPointerDown={(ev) => startLink(lonePort, ev)} onPointerMove={follow} onPointerUp={endLink} />
       })()}
@@ -619,10 +656,13 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
         // title chip (the board's handle) at the top left (board-autolayout).
         const home = g.members[0].frameId ? canvas.elements().find((e) => e.id === g.members[0].frameId) : undefined
         const end = !!home && (home.customData as { kind?: string } | undefined)?.kind === 'board' && b.y - home.y < 60
-        const p = toLocal((end ? b.x + b.w : b.x) + (off?.dx ?? 0), b.y + (off?.dy ?? 0))
+        const at = end ? { x: b.x + b.w, y: b.y } : labelAnchor(g.members)
+        const p = toLocal(at.x + (off?.dx ?? 0), at.y + (off?.dy ?? 0))
+        const look = chipLook(view.zoom)
         return (
-          <button key={g.groupId} type="button" className={`nl-keychip ${g.stacked ? 'stacked' : ''} ${end ? 'end' : ''}`} data-key={g.key} style={{ left: p.x, top: p.y }}
-            title={g.stacked ? 'Click the stack to open it' : 'One character: its views move and link together'}
+          <button key={g.groupId} type="button" className={`nl-keychip ${g.stacked ? 'stacked' : ''} ${end ? 'end' : ''} ${look.dot ? 'dot' : ''}`} data-key={g.key}
+            style={{ left: p.x, top: p.y, '--chip-scale': look.dot ? 1 : look.scale } as CSSProperties} aria-label={groupLabel(g)}
+            title={look.dot ? groupLabel(g) : g.stacked ? 'Click the stack to open it' : 'One character: its views move and link together'}
             onPointerDown={(ev) => ev.stopPropagation()} onClick={() => canvas.select(g.members.map((m) => m.id))}>
             {groupLabel(g)}
           </button>
@@ -667,7 +707,8 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
         </div>
       )}
       {picker && (
-        <div className="nl-picker pt-panel" role="menu" aria-label="New node for this link" style={{ left: picker.at.x, top: picker.at.y }}>
+        <div className="nl-picker pt-panel pt-menu" role="menu" aria-label="New node for this link" style={{ left: picker.at.x, top: picker.at.y }}>
+          <div className="nl-pickhead">Nothing here to link to. Make a new one from this {word(picker.from)}:</div>
           {picker.kinds.map((k) => (
             <button key={k} type="button" role="menuitem" className="pt-menurow" onClick={() => pick(k)}>
               New {WORD[k]} from this {word(picker.from)}

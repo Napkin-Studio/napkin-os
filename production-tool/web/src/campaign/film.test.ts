@@ -78,7 +78,7 @@ describe('the master as the Director agent reads it', () => {
     const m = masterShots(d, video.id)
     expect(m.map((s) => s.shotId)).toEqual(shots.map((s) => s.id))
     expect(m[0]).toMatchObject({ inS: 0, outS: 3, takeS: 4, takeSize: { w: 1920, h: 1080 } })
-    expect(m[2].spoken).toBe('I never miss the first light.')
+    expect(m[2].spoken).toBe('MAYA: I never miss the first light.')
   })
 })
 
@@ -131,7 +131,8 @@ describe('a 15 s at 9:16', () => {
     expect(cut.clips![2]).toEqual({ asset: { sha256: out, url: `${CDN}/${out}`, mime: 'video/mp4' }, inS: 0, outS: 2.5, takeSize: { w: 612, h: 1088 } })
     expect(cut).toMatchObject({ endCard: true, fadeOutS: 0.5, lengthS: 15 })
     const line = cut.layers!.find((l) => l.kind === 'line')!
-    expect(line).toMatchObject({ text: 'First light. First sip.', fromS: 9.5, toS: 12.5 }) // the last 3 s of the clips
+    expect(line).toMatchObject({ text: 'First light. First sip.', toS: 12.5 }) // the last 2.5 s of the clips, after any caption (R5-F6)
+    expect(line.fromS).toBeGreaterThanOrEqual(10)
     expect(cut.layers!.some((l) => l.kind === 'captions')).toBe(true)
   })
   it('the TV shape carries no captions unless a person turns them on', async () => {
@@ -184,5 +185,178 @@ describe('the film\'s own length in Make all sizes (UAT 2026-11-18, U6: "Film ·
   it('is the render\'s length (or target) less the card when no shot has a take', () => {
     expect(filmSeconds([shot(4, 0, CARD_S, true)], 15.2)).toBeCloseTo(12.7)
     expect(filmSeconds([])).toBe(0)
+  })
+})
+
+describe('Make all sizes picks the shapes the brief asks for (UAT 2026-11-21)', () => {
+  it('reads its format and mandatories', async () => {
+    const { briefShapes } = await import('./film')
+    expect(briefShapes({ mandatories: ['Deliver in 16:9, 9:16 and 1:1.'] })).toEqual(['film-16x9', 'film-9x16', 'film-1x1'])
+    expect(briefShapes({ format: '4x5 feed and 1 : 1' })).toEqual(['film-4x5', 'film-1x1'])
+    expect(briefShapes({ format: '30 s TV spot' })).toEqual(['film-16x9', 'film-9x16'])
+    expect(briefShapes(undefined)).toEqual(['film-16x9', 'film-9x16'])
+  })
+})
+
+describe('a short size keeps its picture and says its line once (UAT round 3, R3-F12)', () => {
+  it('the cards shorten so a 6 s keeps 3.5 s of picture: the studio card first, then the film\'s card; both stay', async () => {
+    const { cardLengths, MIN_PICTURE_S } = await import('./film')
+    expect(cardLengths(6, 2.5)).toEqual({ clientS: 1.167, studioS: 1.333 })
+    expect(6 - 1.167 - 1.333).toBeCloseTo(MIN_PICTURE_S, 3)
+    expect(cardLengths(15, 2.5)).toEqual({ clientS: 2, studioS: CARD_S })
+    expect(cardLengths(6, undefined)).toEqual({ clientS: 0, studioS: CARD_S })
+    expect(cardLengths(5, 2.5)).toEqual({ clientS: 1, studioS: 1.2 })
+    const { windows } = fitWindows([{ shotId: 'a', inS: 0, outS: 4, takeS: 4 }, { shotId: 'e', inS: 0, outS: 2.5, endCard: true }], new Set(['a']), 6)
+    expect(windows[0].outS - windows[0].inS).toBeCloseTo(3.5, 3)
+  })
+  it('a 6 s size with the film\'s card: the render names the shorter studio card, and the line is not burnt in as well', async () => {
+    const ctx = master()
+    const { d, shots, video, deps } = ctx
+    shots[9].kind = 'end_card'
+    shots[9].action = 'End card with the super: "Quietboil. Let them sleep."'
+    shots[9].duration_s = 2.5
+    const ms = masterShots(d, video.id)
+    const beats = ms.filter((s) => !s.endCard).map((s, i) => ({ shot_id: s.shotId, keep: i === 0 || i === 8, why: 'Kept.', by: 'dex' as const }))
+    const shape = { w: 1080, h: 1920 }
+    const { edl } = edlFor(ms, beats, 6, shape, [])
+    expect(edl.reduce((a, w) => a + (w.out_s - w.in_s), 0)).toBeCloseTo(3.5, 2)
+    const set: FormatSet = { id: 'fset_01K7C00000000000000000FS01', v: 1, field_v: {}, master: { kind: 'video', id: video.id, w: 1920, h: 1080 }, pack: { pack_id: 'film', pack_version: '1' }, copy: { line: 'Quietboil. Let them sleep.' } }
+    const size: Size = { id: 'size_01K7C00000000000000000SZ01', v: 1, field_v: {}, set_id: set.id, rank: 'm', format: { pack_id: 'film', pack_version: '1', format_id: 'film-9x16' },
+      aspect: shape, delivery: { width: 1080, height: 1920 }, method: 'reframe', media: 'video', length_s: 6, edl, beats }
+    d.format_sets = { [set.id]: set }
+    d.sizes = { [size.id]: size }
+    const cut = (await cutdownInput(deps, set, size)).cutdown!
+    expect(cut.clientCard).toMatchObject({ headline: 'Quietboil', line: 'Let them sleep.', s: 1.167 })
+    expect(cut.studioS).toBe(1.333)
+    expect((await filmLayers(deps, set, size)).some((l) => l.kind === 'line')).toBe(true) // the size's own line…
+    expect((cut.layers ?? []).some((l) => l.kind === 'line')).toBe(false) // …left to the card
+    expect(cut.lengthS).toBe(6)
+  })
+  it('only the words the card says leave the picture; a logo and the spoken captions stay', async () => {
+    const { withoutCardWords } = await import('./filmJobs')
+    const box = { x: 0, y: 0, w: 1, h: 0.1 }
+    const laid = [
+      { kind: 'line' as const, box, text: 'Quietboil. Let them sleep.' },
+      { kind: 'legal' as const, box, text: 'Terms apply.' },
+      { kind: 'logo' as const, box },
+      { kind: 'captions' as const, box, text: 'Let them sleep.' },
+    ]
+    expect(withoutCardWords(laid as never, { headline: 'Quietboil', line: 'Let them sleep.' }).map((l) => l.kind)).toEqual(['legal', 'logo', 'captions'])
+    expect(withoutCardWords(laid as never, undefined)).toHaveLength(4)
+  })
+  it('one version is "1 version"', async () => {
+    const { versionsWord } = await import('./film')
+    expect([versionsWord(1), versionsWord(2), versionsWord(0)]).toEqual(['1 version', '2 versions', '0 versions'])
+  })
+})
+
+describe('the line and the captions apart (UAT round 5, R5-F6)', () => {
+  const box = { x: 0.035, y: 0.85, w: 0.93, h: 0.11 }
+  it('round 5\'s 6 s 9:16: 3.5 s of picture, "Good boy." captioned 0-1.48 s: the line holds 1.48-3.5 s, not 0.5-3.5 s', async () => {
+    const { linesApart, LINE_S } = await import('./filmJobs')
+    expect(LINE_S).toBe(2.5)
+    const line = { kind: 'line' as const, box, text: 'Quietboil. Let them sleep.', fromS: 3.5 - LINE_S, toS: 3.5 }
+    const cap = { kind: 'captions' as const, box: { x: 0.06, y: 0.6, w: 0.88, h: 0.12 }, text: 'Good boy.', fromS: 0, toS: 1.48 }
+    const out = linesApart([line], [cap], 3.5)
+    expect(out.laid[0]).toMatchObject({ fromS: 1.48, toS: 3.5 })
+    expect(out.caps[0]).toMatchObject({ fromS: 0, toS: 1.48 })
+  })
+  it('a caption too near the end ends where the line starts; a late one ends the line; the logo is left alone', async () => {
+    const { linesApart } = await import('./filmJobs')
+    const line = { kind: 'line' as const, box, text: 'End.', fromS: 3.5, toS: 6 }
+    const near = { kind: 'captions' as const, box, text: 'Hi.', fromS: 2.5, toS: 5 }
+    expect(linesApart([line], [near], 6).caps[0]).toMatchObject({ fromS: 2.5, toS: 3.5 })
+    const late = { kind: 'captions' as const, box, text: 'Hi.', fromS: 5.5, toS: 6 }
+    const ended = linesApart([{ ...line, fromS: 2 }], [late], 6)
+    expect(ended.laid[0]).toMatchObject({ fromS: 2, toS: 5.5 })
+    const logo = { kind: 'logo' as const, box, fromS: 0, toS: 3 }
+    expect(linesApart([logo as never], [near], 6).laid[0]).toMatchObject({ fromS: 0, toS: 3 })
+  })
+})
+
+describe('a size keeps its spoken-line caption and says the end line once (UAT walkthrough 2026-11-21, R6-F1)', () => {
+  const setup = async (withCard: boolean) => {
+    const ctx = master()
+    const { d, shots, video, deps } = ctx
+    if (withCard) {
+      shots[9].kind = 'end_card'
+      shots[9].action = 'End card with the super: "Quietboil. Let them sleep."'
+      shots[9].duration_s = 2.5
+    }
+    const ms = masterShots(d, video.id)
+    const beats = ms.filter((s) => !s.endCard).map((s, i) => ({ shot_id: s.shotId, keep: i === 2 || i === 8, why: 'Kept.', by: 'dex' as const }))
+    const shape = { w: 1080, h: 1920 }
+    const { edl } = edlFor(ms, beats, 6, shape, [])
+    const set: FormatSet = { id: 'fset_01K7C00000000000000000FS01', v: 1, field_v: {}, master: { kind: 'video', id: video.id, w: 1920, h: 1080 }, pack: { pack_id: 'film', pack_version: '1' }, copy: { line: 'Quietboil. Let them sleep.' } }
+    const size: Size = { id: 'size_01K7C00000000000000000SZ01', v: 1, field_v: {}, set_id: set.id, rank: 'm', format: { pack_id: 'film', pack_version: '1', format_id: 'film-9x16' },
+      aspect: shape, delivery: { width: 1080, height: 1920 }, method: 'reframe', media: 'video', length_s: 6, edl, beats }
+    d.format_sets = { [set.id]: set }
+    d.sizes = { [size.id]: size }
+    return { deps, set, size }
+  }
+  it('the card says the line: the 9:16 keeps the caption of the spoken line whole, and the line is not also a super', async () => {
+    const { deps, set, size } = await setup(true)
+    const cut = (await cutdownInput(deps, set, size)).cutdown!
+    const caps = (cut.layers ?? []).filter((l) => l.kind === 'captions')
+    expect(caps.length).toBeGreaterThan(0)
+    expect(caps[0].text).toContain('I never miss the first light')
+    expect((caps[0].toS ?? 0) - (caps[0].fromS ?? 0)).toBeGreaterThan(1)
+    expect((cut.layers ?? []).some((l) => l.kind === 'line')).toBe(false)
+    expect(cut.clientCard).toMatchObject({ line: 'Let them sleep.' })
+  })
+  it('no card says the line: the caption stays and the line is never on screen with it', async () => {
+    const { deps, set, size } = await setup(false)
+    const cut = (await cutdownInput(deps, set, size)).cutdown!
+    const layers = cut.layers ?? []
+    const caps = layers.filter((l) => l.kind === 'captions')
+    expect(caps.length).toBeGreaterThan(0)
+    for (const l of layers.filter((x) => x.kind === 'line' || x.kind === 'legal')) {
+      for (const c of caps) expect((l.toS ?? 99) <= (c.fromS ?? 0) + 1e-6 || (c.toS ?? 99) <= (l.fromS ?? 0) + 1e-6).toBe(true)
+    }
+  })
+  it('R6-F1\'s numbers: a caption starting 0.48 s into the line is kept and the line gives way', async () => {
+    const { linesApart } = await import('./filmJobs')
+    const box = { x: 0, y: 0.85, w: 1, h: 0.1 }
+    const line = { kind: 'line' as const, box, text: 'Quietboil. Let them sleep.', fromS: 0.52, toS: 3.02 }
+    const cap = { kind: 'captions' as const, box, text: 'Good boy.', fromS: 1, toS: 3.02 }
+    const out = linesApart([line], [cap], 3.02)
+    expect(out.caps).toEqual([cap])
+    expect(out.laid).toEqual([])
+  })
+})
+
+describe('a crop the plan says cuts the subject is fitted whole (UAT round 5, R5-F6)', () => {
+  it('round 5\'s shot 5 at 9:16: the box holds the whole 1190 px subject, not the 607 px crop', async () => {
+    const { edlFor, fitBox } = await import('./film')
+    const take = { w: 1920, h: 1080 }
+    const subject = { x: 652.8, y: 54, w: 1190.4, h: 1004.4 }
+    const box = fitBox(take, { w: 9, h: 16 }, subject)
+    expect(box.x).toBeLessThanOrEqual(subject.x)
+    expect(box.x + box.w).toBeGreaterThanOrEqual(subject.x + subject.w)
+    expect(box.h).toBe(1080)
+    const shots = [{ shotId: 'shot_5', number: 5, inS: 0, outS: 1.48, takeS: 2.02, takeId: 'gen_5', takeSize: take }, { shotId: 'shot_7', number: 7, inS: 0.958, outS: 2.978, takeS: 3, takeId: 'gen_7', takeSize: take }]
+    const crops = [
+      { shotId: 'shot_5', aspect: { w: 9, h: 16 }, keys: [{ at: 0, box: { x: 944.25, y: 0, w: 607.5, h: 1080 } }], subject, cuts: true },
+      { shotId: 'shot_7', aspect: { w: 9, h: 16 }, keys: [{ at: 0, box: { x: 627.45, y: 0, w: 607.5, h: 1080 } }], subject: { x: 691.2, y: 140.4, w: 480, h: 777.6 }, cuts: false },
+    ]
+    const beats = [{ shot_id: 'shot_5', keep: true }, { shot_id: 'shot_7', keep: true }] as never
+    const { edl } = edlFor(shots as never, beats, 6, { w: 1080, h: 1920 }, crops)
+    expect(edl[0].crop).toEqual(box)
+    expect(edl[1].crop).toEqual({ x: 627.45, y: 0, w: 607.5, h: 1080 })
+  })
+})
+
+describe('the cut plan reads who speaks and what is voiced (UAT round 5, R5-F8)', () => {
+  it('"Good boy." on WAN 3 is Maya\'s, voiced; the end line on Omni is the NARRATOR\'s V.O., not voiced', async () => {
+    const { spokenWords } = await import('./film')
+    const { d, shots } = master()
+    d.beats = {
+      ...d.beats,
+      beat_01K7C00000000000000000BT05: { id: 'beat_01K7C00000000000000000BT05', v: 1, field_v: {}, shot_id: shots[4].id, rank: 'm', at_s: 0, kind: 'line', speaker: 'MAYA', parenthetical: '(whispering, to the kettle)', text: 'Good boy.' },
+      beat_01K7C00000000000000000BT07: { id: 'beat_01K7C00000000000000000BT07', v: 1, field_v: {}, shot_id: shots[6].id, rank: 'm', at_s: 0.5, kind: 'vo', speaker: 'NARRATOR', text: 'Quietboil. Let them sleep.' },
+    } as never
+    expect(spokenWords(d, shots[4].id, { provider: 'runway', inputs: { model: 'wan3' } })).toBe('MAYA (whispering, to the kettle): Good boy.')
+    expect(spokenWords(d, shots[6].id, { provider: 'runway', inputs: { model: 'gemini_omni_flash_1.1' } }))
+      .toBe('NARRATOR (V.O.; not voiced in its take): Quietboil. Let them sleep.')
   })
 })

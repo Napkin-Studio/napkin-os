@@ -5,6 +5,7 @@ of the document is checked against the Deck Maker app's own schema. No model, no
 import copy
 import json
 import threading
+import time
 from pathlib import Path
 
 import httpx
@@ -371,3 +372,86 @@ def test_the_slide_size_goes_to_the_engine(deck, monkeypatch):
     host2.data["run"].update(state="gate", gate=GATE2)
     build(deck, host2)
     assert "look" not in fake2.posts[0]   # no size chosen: the engine's own default (the recipe's, else 16:9)
+
+
+def test_a_deck_spun_off_from_production_sends_the_carried_project_and_its_confidential_brief_parts(deck, monkeypatch):
+    fake = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    host = Host(data=deck_data(), schema=SCHEMA)
+    prod = {"app": "production-tool", "contract_version": "3", "project": {"id": "proj_01KB0000000000000000000001", "title": "Lumen Water launch"},
+            "finals": {"final_01KB0000000000000000000001": {"of": {"kind": "picture", "id": "pic_kv_0001"}, "asset": "sha256:" + "ab" * 32}},
+            "briefs": {"brief_01KB0000000000000000000001": {"title": "Lumen", "spine": {"insight": "People never link water to their own tap", "proposition": "Every drop has a story."},
+                                                           "confidential": ["insight"]}}}
+    host.data["upstream"] = {"doc-brief-1": {"insight": "x"}, "doc-prod-1": prod}
+    build(deck, host)
+    sent = fake.posts[0]
+    assert sent["production_upstream"] == {"id": "doc-prod-1", "data": prod}   # carried whole: the pictures are not in it
+    marks = {m["path"]: m for m in sent["marks"]}
+    assert "People never link water" in marks["upstream.doc-prod-1.briefs.brief_01KB0000000000000000000001.spine.insight"]["text"]
+    assert not [m for m in sent["marks"] if "proposition" in m["path"]]
+    fake2 = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    build(deck, Host(data=deck_data(), schema=SCHEMA))
+    assert "production_upstream" not in fake2.posts[0]
+
+
+PASS = "v1." + "e30" + "." + "c2ln"
+
+
+def post_assets(deck, host, assets, task="build_deck"):
+    """build_deck as napkin-web sends it: payload.production_assets set beside task and input."""
+    st, body = post_raw(deck, {"task": task, "input": {}, "production_assets": assets}, host.clan())
+    assert st == 200, body
+    return body
+
+
+def post_raw(deck, payload, clan):
+    r = httpx.post(deck.url + "/v1/tasks", json={"request_kind": "middleware", "payload": payload, "clan": clan}, timeout=30)
+    return r.status_code, r.json()
+
+
+def prod_host():
+    host = Host(data=deck_data(), schema=SCHEMA)
+    host.data["upstream"] = {"doc-prod-1": {"app": "production-tool", "contract_version": "3", "project": {"id": "proj_1", "title": "T"}}}
+    return host
+
+
+def test_the_assets_pass_goes_to_the_engine_for_a_carried_production_project_and_nowhere_else(deck, monkeypatch, caplog):
+    fake = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    host = prod_host()
+    caplog.set_level("DEBUG")
+    body = post_assets(deck, host, {"base": "https://relay.example/api/", "pass": PASS})
+    waited = 0
+    while not fake.posts and waited < 5:
+        time.sleep(0.05)
+        waited += 0.05
+    assert fake.posts[0]["production_assets"] == {"base": "https://relay.example/api", "pass": PASS}
+    assert PASS not in json.dumps(body) and PASS not in caplog.text, "a bearer token: not in a reply, not in a log"
+    # the document is untouched by it
+    assert PASS not in json.dumps(host.data)
+
+
+def test_no_pass_forwarded_without_a_production_upstream_or_with_a_bad_shape(deck, monkeypatch):
+    fake = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    post_assets(deck, Host(data=deck_data(), schema=SCHEMA), {"base": "https://relay.example/api", "pass": PASS})
+    time.sleep(0.3)
+    assert "production_assets" not in fake.posts[0], "a deck with no Production project never receives one"
+    for bad in ({"base": "http://relay.example/api", "pass": PASS}, {"base": "https://r.example/api", "pass": "nope"},
+                {"base": "https://r.example/api"}, "x", []):
+        fake2 = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+        post_assets(deck, prod_host(), bad)
+        time.sleep(0.3)
+        assert "production_assets" not in fake2.posts[0], bad
+
+
+def test_http_pass_base_is_forwarded_only_with_the_dev_opt_in():
+    from napkin.handlers import build_deck as bd
+    v = {"base": "http://127.0.0.1:18788/api/", "pass": PASS}
+    assert bd.assets_of(v) is None and bd.assets_of(v, False) is None
+    assert bd.assets_of(v, True) == {"base": "http://127.0.0.1:18788/api", "pass": PASS}
+    assert bd.assets_of({"base": "ftp://x/api", "pass": PASS}, True) is None
+
+
+def test_marks_cover_the_full_brief_a_carried_production_project_carries():
+    from napkin.handlers.build_deck import marks_of
+    data = {"upstream": {"prod-1": {"app": "production-tool", "upstream": {"brief-1": {"insight": "SECRET-FULL", "confidential_fields": ["insight"]}}}}}
+    marks = {m["path"]: m for m in marks_of(data, [])}
+    assert "SECRET-FULL" in marks["upstream.prod-1.upstream.brief-1.insight"]["text"]

@@ -78,6 +78,40 @@ def dev_question(op: str) -> dict:
 VIEW_ANGLES = {"front": 0.0, "three-quarter": 45.0, "side": 90.0, "back": 180.0}
 
 
+def _units(text: str) -> int:
+    return len(text.encode("utf-16-le")) // 2  # as providers.types.utf16_units: Runway's promptMax unit
+
+
+def cut_units(text: str, limit: int) -> str:
+    """`text` cut to at most `limit` UTF-16 units, at a word where one is near the end."""
+    if _units(text) <= limit:
+        return text
+    out, used = [], 0
+    for ch in text:
+        n = 2 if ord(ch) > 0xFFFF else 1
+        if used + n > limit:
+            break
+        out.append(ch)
+        used += n
+    cut = "".join(out)
+    space = cut.rfind(" ")
+    return (cut[:space] if space > limit // 2 else cut).rstrip()
+
+
+def fit_words(action: str, text: str, limit: int | None) -> str:
+    """The passthrough's words, `action` then the person's `text`, within `limit` UTF-16 units (the model's
+    promptMax): the person's words are kept first, the shot's action is cut, or left out, to make room
+    (features/pt-relay-trace.clan: Veo takes 1000, and a 600-unit action and 1000-unit text failed the job)."""
+    action, text = (action or "").strip(), (text or "").strip()
+    whole = f"{action} {text}".strip()
+    if limit is None or _units(whole) <= limit:
+        return whole
+    if not action or _units(text) + 1 >= limit:
+        return cut_units(text, limit)
+    action = cut_units(action, limit - _units(text) - 1)
+    return f"{action} {text}".strip()
+
+
 def fit_duration(seconds: float, spec: dict) -> float:
     """The clip length the op's model can make for a shot of `seconds` (capabilities ops[op]):
     the next longer allowed value (4/6/8 s models), else the nearest whole second within
@@ -99,6 +133,30 @@ def view_angle(op: str, inp: dict, sheet: dict | None) -> dict | None:
     if op != "view" or not (sheet or {}).get("angles") or inp.get("view") not in VIEW_ANGLES:
         return None
     return {"horizontal": VIEW_ANGLES[inp["view"]], "vertical": 0.0}
+
+
+def view_subject(job: dict, op: str, inp: dict) -> None:
+    """A view of a person goes as a person (UAT round 1 IMG-11, features/pt-canvas-r1.clan). The source picture
+    went as role `current`, which Runway sends as subject "object", and the words said only "@current, the same
+    character", though the front was a crowded cafe photo. With input.subject a character, the source picture's
+    ref is sent as `character` (Runway subject "human") and one line says who it is. Dex's job and the
+    passthrough's both pass here; a job already saying who @tag is is left alone. Changes `job` in place."""
+    subject = inp.get("subject") or {}
+    image = (inp.get("image") or {}).get("sha256")
+    if op != "view" or subject.get("role") != "character" or not image:
+        return
+    ref = next((r for r in job.get("refs") or [] if r.get("sha256") == image), None)
+    if ref is None:
+        return
+    ref["role"] = "character"
+    who = (subject.get("name") or "").strip()
+    label = " ".join((subject.get("label") or "").split())[:120]
+    if not (who or label) or f"@{ref['name']} is " in job.get("prompt", ""):
+        return
+    said = f"@{ref['name']} is {who or 'the person'}{f' ({label})' if label else ''}: this one person, exactly as in that picture."
+    job["prompt"] = f"{job.get('prompt', '').rstrip()} {said}".strip()
+
+
 def ref_roles(inp: dict, op: str, sheet: dict | None) -> list[tuple[dict, str]]:
     """The input refs in send order, each with its provider role: a character ref is `character`
     and every other role is `object`. Refs carry wire tags (names.py) by now. An `optional` ref (offered,
@@ -161,16 +219,22 @@ class PassthroughDirector:
                 add(inp.get("anchorFrame"), "anchor", "object")
         if op == "clip_edit":
             add(inp.get("video"), "current", "current")  # the clip being changed
-        prompt = inp.get("text") or ""
         shot = inp.get("shot")
-        if shot:
-            prompt = f"{shot.get('action', '')} {prompt}".strip()
-        if inp.get("view"):
-            prompt = f"{inp['view'].replace('-', ' ')} view of @current. {prompt}".strip()
+        # Within the model's promptMax, less what is said around the words (a view's lead, a landing's line).
+        from providers.types import prompt_max
+        limit = prompt_max(sheet, model) if sheet else None
+        lead = f"{inp['view'].replace('-', ' ')} view of @current. " if inp.get("view") else ""
+        if limit is not None:
+            import connected
+            landing = op == "clip" and inp.get("lastFrame") and connected.mode_of(inp) in ("frames", "redo_window")
+            limit = max(limit - _units(lead) - (_units(connected.LANDING) + 1 if landing else 0), 1)
+        prompt = fit_words((shot or {}).get("action", ""), inp.get("text") or "", limit)
+        prompt = f"{lead}{prompt}".strip()
         job = {"provider": provider, "model": model, "prompt": prompt or "the character", "refs": refs}
         angle = view_angle(op, inp, sheet)
         if angle:
             job["angle"] = angle
+        view_subject(job, op, inp)
         if op == "clip" and inp.get("image"):
             job["firstFrame"] = inp["image"]["sha256"]
         if inp.get("mask") and (sheet or {}).get("mask", "none") != "none":
@@ -197,6 +261,10 @@ class PassthroughDirector:
                 # sets the frames, refs, length and the timed prompt; a clip with none is as it was.
                 import connected
                 connected.shape(job, inp, sheet, spec, passthrough=True)
+            if op == "clip" and sheet:
+                from .director import _onscreen, _sound
+                _onscreen(job, inp)
+                _sound(job, inp, sheet, spec)
         if op == "clip" and inp.get("refused"):
             # The provider's text check refused these words (soften.py): the same words, plainer, every beat kept.
             import soften

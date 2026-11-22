@@ -29,6 +29,8 @@ export interface CanvasActions {
   storyboardFor(scriptId: string): Promise<{ storyboardId: string; made: boolean }>
   /** Make film (3.5): the Film node beside what it is made from, with its links, one undo step. */
   makeVideo(from: MakeVideoFrom): Promise<MadeVideo>
+  /** A new, empty Script beside a storyboard, driving it (UAT round 5 S3-4: a brief's script drafted before its plan). */
+  scriptFor(storyboardId: string): Promise<{ scriptId: string }>
   /** Make a storyboard from these shots (3.13): a video's own shot list as a node beside it, one undo step. */
   storyboardFromShots(videoId: string): Promise<{ storyboardId: string }>
 }
@@ -42,6 +44,7 @@ class Bus {
   private into: Pick<CanvasActions, 'linkInto'> | null = null
   private fits: Pick<CanvasActions, 'fitTo'> | null = null
   private makes: Pick<CanvasActions, 'storyboardFor' | 'makeVideo' | 'storyboardFromShots'> | null = null
+  private scripts: Pick<CanvasActions, 'scriptFor'> | null = null
   private madeCb: ((m: MadeOnCanvas) => void) | null = null
   private editCb: ((nodeId: string) => void) | null = null
   private current: CanvasMode = null
@@ -56,6 +59,7 @@ class Bus {
     if (part.linkInto) this.into = { linkInto: part.linkInto }
     if (part.fitTo) this.fits = { fitTo: part.fitTo }
     if (part.storyboardFor && part.makeVideo && part.storyboardFromShots) this.makes = { storyboardFor: part.storyboardFor, makeVideo: part.makeVideo, storyboardFromShots: part.storyboardFromShots }
+    if (part.scriptFor) this.scripts = { scriptFor: part.scriptFor }
     this.emit()
     return () => {
       if (part.node && this.nodes?.node === part.node) this.nodes = null
@@ -64,6 +68,7 @@ class Bus {
       if (part.linkInto && this.into?.linkInto === part.linkInto) this.into = null
       if (part.fitTo && this.fits?.fitTo === part.fitTo) this.fits = null
       if (part.makeVideo && this.makes?.makeVideo === part.makeVideo) this.makes = null
+      if (part.scriptFor && this.scripts?.scriptFor === part.scriptFor) this.scripts = null
       this.current = null
       this.emit()
     }
@@ -106,6 +111,11 @@ class Bus {
   /** Can the canvas make nodes from nodes (our own engine's node layer is mounted)? */
   canMake(): boolean {
     return !!this.makes
+  }
+
+  /** A new Script beside a storyboard, driving it; null when no canvas can. */
+  scriptFor(storyboardId: string): Promise<{ scriptId: string }> | null {
+    return this.scripts ? this.scripts.scriptFor(storyboardId) : null
   }
 
   /** The Storyboard a Script drives, made on the canvas when it has none; null when no canvas can. */

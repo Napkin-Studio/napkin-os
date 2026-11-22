@@ -102,11 +102,13 @@ describe('the tables in common.schema.json', () => {
     expect(LINK_RULE.rules.some((r) => r.from.includes('script') && r.to.includes('storyboard') && r.roles.includes('drives'))).toBe(true)
     expect(LINK_RULE.rules.some((r) => r.from.includes('video') && r.to.includes('script'))).toBe(false)
   })
-  it('lets a text on the canvas feed a generating node as a note, once per node, and nothing feed a text (owner 2026-10-16)', () => {
+  it('lets a text on the canvas feed a generating node as a note, once per node, and only a Brand board feed a text (owner 2026-10-16; UAT round 4 S2-2)', () => {
     const row = LINK_RULE.rules.find((r) => r.from.includes('text'))
     expect(row).toMatchObject({ roles: ['note', 'context'], per_target: 'many', per_source: 'one' })
     expect(row?.to).toEqual(['script', 'storyboard', 'video', 'sketch', 'format_set'])
-    expect(LINK_RULE.rules.some((r) => r.to.includes('text'))).toBe(false)
+    expect(LINK_RULE.rules.filter((r) => r.to.includes('text'))).toEqual([
+      { from: ['board'], to: ['text', 'note'], roles: ['brand'], per_target: 'one', board_purpose: 'brand' },
+    ])
     const doc = loadJson<{ properties: Record<string, unknown>; required: string[] }>('document.schema.json')
     expect(doc.properties.texts).toBeDefined()
     expect(doc.required).not.toContain('texts')
@@ -158,5 +160,16 @@ describe('typed fixtures', () => {
     expect(check(SCHEMA('document'), TYPED_DOC)).toEqual([])
     expect(check(`${SCHEMA('relay-api')}#/$defs/JobRequest`, TYPED_REQUEST)).toEqual([])
     expect(check(`${SCHEMA('relay-api')}#/$defs/Job`, TYPED_JOB)).toEqual([])
+  })
+
+  it('accept what the host writes into a project spun off from a brief: upstream and projection', () => {
+    // Found live (production-spinoff): the host's projection made the spun-off project refuse to open.
+    const spun: ProductionDocument = {
+      ...TYPED_DOC,
+      upstream: { 'brief-1': { client: 'Lumen Water' } },
+      projection: { built_from: { built_at: '2026-11-22T09:13:07Z', facts_sha256: 'sha256:aa', findings_sha256: 'sha256:bb' }, findings: {}, pins: {} },
+    }
+    expect(check(SCHEMA('document'), spun)).toEqual([])
+    expect(check(SCHEMA('document'), { ...spun, projection: 'x' })).not.toEqual([])
   })
 })

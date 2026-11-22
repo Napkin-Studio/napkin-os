@@ -71,6 +71,13 @@ name the stand-in, its port, or branch on which implementation answered.
   document's own members and arrive in `clan.facts` and `clan.findings`. The
   frozen data reaches a model only as §10.13 says. `upstream` is read-only:
   a `data_patch` that names it is refused (Contract 4 §8.1).
+- **`production_upstream`** (2026-11-22, features/production-spinoff): on a document whose `data.upstream` holds a Production project (a
+  copy whose `app` is `production-tool`), the first such copy whole, `{id, data}`, beside the index above (which still lists it). It is
+  the one frozen copy that travels whole, with what it carried itself put back under its own `data.upstream` (owner 2026-11-23: its full
+  brief and research, never only the Brief node's spine; a kit is left out): the Deck's `build_deck` reads its finals, assets and the FULL
+  brief (objectives, audience, mandatories, budget, timing; the spine `briefs` only when the project carries no brief) from it (no picture bytes: those are
+  fetched from the relay by hash with the assets pass), puts it back under `data.upstream.<id>` for the Confidential marks, and sends it
+  to the engine as `production_upstream`. Absent when the document carries no Production project.
 - **`upstream_ask`** (2026-11-09, features/spinoff-and-links): on a document
   whose pipeline declares `extract_ask`, the ask of the brief it carries:
   `{document_id, direct, fields: {<path>: text}}`, the paths drawn only from

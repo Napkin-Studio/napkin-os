@@ -1270,6 +1270,7 @@
                       "picture_stretch",
                       "picture_lowres",
                       "text_on_image_contrast",
+                      "q_no_hole",
                       "layout_repeat",
                       "title_drift",
                       "line_length",
@@ -1676,9 +1677,10 @@
                   "enum": [
                     "bundle",
                     "clan",
+                    "upstream",
                     "os"
                   ],
-                  "description": "bundle: the export zip through deck.from_production; clan: a Production .clan (or the zip) read by deck.prod_picker, which picks from metadata and pulls only the picked pictures; os: from the OS (later)."
+                  "description": "bundle: the export zip through deck.from_production; clan: a Production .clan (or the zip) read by deck.prod_picker, which picks from metadata and pulls only the picked pictures; upstream: the Production project this deck was spun off from, carried in data.upstream, its pictures fetched from the relay by hash; os: from the OS (later)."
                 },
                 "kept": {
                   "type": "string",
@@ -3738,6 +3740,7 @@
                   "picture_stretch",
                   "picture_lowres",
                   "text_on_image_contrast",
+                  "q_no_hole",
                   "layout_repeat",
                   "title_drift",
                   "line_length",
@@ -3949,7 +3952,8 @@
             "kind": {
               "enum": [
                 "clan",
-                "zip"
+                "zip",
+                "upstream"
               ]
             },
             "name": {
@@ -3993,6 +3997,7 @@
               "from": {
                 "enum": [
                   "embedded",
+                  "relay",
                   "https",
                   "zip",
                   "rights",
@@ -4001,6 +4006,7 @@
               },
               "by": {
                 "enum": [
+                  "final",
                   "rule",
                   "claude",
                   "person"
@@ -4044,6 +4050,7 @@
                     "reach": {
                       "enum": [
                         "embedded",
+                        "relay",
                         "https",
                         "zip",
                         "s3_only",

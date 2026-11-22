@@ -37,3 +37,15 @@ export function fitSize(width: number, height: number): Fit {
   const canvasH = w >= h ? short : Math.max(h, MIN_SIDE)
   return { w, h, canvasW, canvasH, same: w === width && h === height && canvasW === w && canvasH === h }
 }
+
+/**
+ * The size caption of an uploaded picture that was kept smaller than it came (UAT round 3 R3-7, UX 9: a 2048 x 1152
+ * upload became a 1536 x 864 master and nothing said so): "1536 × 864 · kept at 1536 px for the models". Every model
+ * this tool sends to reads at most about this much (Runway's Magnific reads 1536 px a side, Gemini and Ideogram take
+ * it whole), so the cap costs nothing there; a crop from an upload is cut from this copy. Undefined when the picture
+ * is under the cap (it was kept as it came).
+ */
+export function keptCaption(a: { w?: number; h?: number; origin?: string } | undefined): string | undefined {
+  if (!a?.w || !a.h || a.origin !== 'uploaded' || Math.max(a.w, a.h) < MAX_SIDE) return undefined
+  return `${a.w} × ${a.h} · kept at ${MAX_SIDE} px for the models`
+}

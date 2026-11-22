@@ -23,6 +23,8 @@ export interface JobEntry {
     rationale: string
     output: Record<string, unknown>
     latencyMs?: number
+    /** What the director received, cut for the record (director.schema.json agentBlock.input; pt-canvas-r1). */
+    input?: Record<string, unknown>
   }
   cost?: { estimate?: number; reserved?: number; confirmed?: number; currency: 'USD'; unknown: boolean }
   error?: { code: string; message: string; retryable?: boolean; providerCode?: string }
@@ -136,6 +138,8 @@ export function jobRationale(job: JobEntry, cards?: DirectorCard[]): string {
       added?: { name: string; why: string }[]
     }
     if (a.rationale?.trim()) parts.push(clip(a.rationale, 300))
+    const given = givenPart(a.input)
+    if (given) parts.push(given)
     const pj = out.providerJob
     if (pj?.refs?.length) parts.push(`refs: ${pj.refs.map((r) => `${r.name} as ${r.role} (${short(r.sha256)})`).join(', ')}`)
     // What Dex sent beyond what the shot asked for, and why (owner 2026-10-15, features/canvas-nodes.clan).
@@ -161,6 +165,21 @@ export function jobRationale(job: JobEntry, cards?: DirectorCard[]): string {
   if (head.length + tail.length <= RATIONALE_MAX) return head + tail
   const room = RATIONALE_MAX - tail.length
   return room >= 200 ? clip(head, room) + tail : clip(head + tail, RATIONALE_MAX)
+}
+
+/** What the director was given, in a few words (features/pt-canvas-r1.clan): its pictures by tag and role, its
+ *  words, and the brief and context it read: `given: in_1 character, in_2 other; words "…"; brief; 2 context`. */
+export function givenPart(input: Record<string, unknown> | undefined): string {
+  if (!input) return ''
+  const bits: string[] = []
+  const refs = Array.isArray(input.refs) ? (input.refs as { tag?: string; name?: string; role?: string }[]) : []
+  if (refs.length) bits.push(refs.slice(0, 8).map((r) => `${r.tag ?? r.name ?? '?'} ${r.role ?? ''}`.trim()).join(', ') + (refs.length > 8 ? ` +${refs.length - 8}` : ''))
+  if (input.image) bits.push('a picture to change')
+  if (typeof input.text === 'string' && input.text.trim()) bits.push(`words "${clip(input.text.trim(), 120)}"`)
+  if (input.brief) bits.push('brief')
+  const context = Array.isArray(input.context) ? input.context.length : 0
+  if (context) bits.push(`${context} context`)
+  return bits.length ? `given: ${bits.join('; ')}` : ''
 }
 
 /** patch.schema.json Why.rationale maxLength. */

@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from 'react'
 import { useDoc, useServices, useUi } from '../app/context'
+import { useScriptFirst } from './useScriptFirst'
 import type { Ask, Question } from '../contracts/types'
 import { LOCAL_PERSON, type AnswerChoice } from '../jobs/runner'
 import { placeAsk } from './askPlaces'
@@ -38,6 +39,7 @@ export function AskOptions({ q, disabled, onPick }: { q: Question; disabled: boo
  *  dock (ui/AskDock.tsx), which shows what no card in its place does; any other card places the ask (askPlaces). */
 export function AskCard({ ask, onLocalAnswer, docked = false }: { ask: Ask; onLocalAnswer?: (answer: AnswerChoice) => Promise<void> | void; docked?: boolean }) {
   const { runner, doc: docStore } = useServices()
+  const scriptFirst = useScriptFirst()
   const ui = useUi()
   const doc = useDoc()
   const [text, setText] = useState('')
@@ -65,6 +67,8 @@ export function AskCard({ ask, onLocalAnswer, docked = false }: { ask: Ask; onLo
         await onLocalAnswer!(answer)
         return
       }
+      // "Draft a script from the brief" does that, instead of letting the plan go ahead (UAT round 5, S3-4).
+      if (!changing && await scriptFirst(ask, answer)) return
       const said = await sendAnswer(runner, ask, answer, changing, byWords)
       if (changing) setChanging(false)
       if (said) setNote(said)

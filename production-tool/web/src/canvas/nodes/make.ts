@@ -8,14 +8,14 @@
 // the entity out with its links; reconcileLinks takes out a link whose element went), and redo brings
 // them back the same way. Nothing is hidden: what a make adds is on the canvas, beside what it came from.
 
-import type { Link, LinkEndpoint, ProductionDocument, Storyboard, Video } from '../../contracts/types'
+import type { Link, LinkEndpoint, ProductionDocument, Script, Storyboard, Video } from '../../contracts/types'
 import { systemUpdate } from '../../doc/store'
 import { newId } from '../../lib/ulid'
 import { ownShotsOf, storyboardOfScript } from '../../model/selectors'
 import { CARD_SIZE } from '../boards/layout'
 import type { CanvasElement } from '../core/canvasAdapter'
 import type { CardKind } from './cardChrome'
-import { cardOf, elementOfEnd, newEntity, placeNode, type NodeEnv } from './nodes'
+import { cardOf, createNode, elementOfEnd, newEntity, placeNode, type NodeEnv } from './nodes'
 
 type Doc = ProductionDocument
 type Box = { x: number; y: number; w: number; h: number }
@@ -28,7 +28,10 @@ const overlaps = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y <
 /** Where a new node of `kind` goes beside `src`: to its right, top-aligned, moved down clear of other nodes. */
 export function besideBox(els: readonly CanvasElement[], src: Pick<CanvasElement, 'x' | 'y' | 'width' | 'height'>, kind: CardKind): Box {
   const size = CARD_SIZE[kind]
-  const nodes = els.filter((e) => !e.isDeleted && cardOf(e)).map((e) => ({ x: e.x, y: e.y, w: e.width, h: e.height }))
+  // Every card in the way: the stage nodes, and the Brief card and pictures too (UAT 2026-11-21, F18: after Plan
+  // shots the Brief card sat on top of the new Storyboard node).
+  const inWay = (e: CanvasElement) => !!cardOf(e) || (e.customData as { kind?: string } | undefined)?.kind === 'brief' || e.type === 'image'
+  const nodes = els.filter((e) => !e.isDeleted && inWay(e)).map((e) => ({ x: e.x, y: e.y, w: e.width, h: e.height }))
   let box: Box = { x: Math.round(src.x + src.width + BESIDE_GAP), y: Math.round(src.y), ...size }
   for (let i = 0; i < 40; i++) {
     const hit = nodes.find((n) => overlaps(n, box))
@@ -54,7 +57,7 @@ export function drivenStoryboard(d: Doc, scriptId: string): Storyboard | undefin
 const newLink = (from: LinkEndpoint, to: LinkEndpoint, role: 'drives' | 'renders'): Link => ({ id: newId('link'), v: 1, field_v: {}, from, to, role })
 
 /** Write a new node and its links: the canvas first (one undoable step), then the document (a system write). */
-async function place(env: NodeEnv, kind: CardKind, entity: Storyboard | Video | { id: string }, box: Box, links: { link: Link; from: string; to: string }[], action: string): Promise<CanvasElement> {
+async function place(env: NodeEnv, kind: CardKind, entity: Storyboard | Video | Script | { id: string }, box: Box, links: { link: Link; from: string; to: string }[], action: string): Promise<CanvasElement> {
   const { canvas } = env
   const el = canvas.node({ x: box.x, y: box.y, width: box.w, height: box.h, customData: { kind, id: entity.id } })
   const ends = new Map<string, string>([[entity.id, el.id]])
@@ -76,6 +79,7 @@ async function place(env: NodeEnv, kind: CardKind, entity: Storyboard | Video | 
   await systemUpdate(env.doc, (d) => {
     if (kind === 'storyboard') d.storyboards[entity.id] = entity as Storyboard
     else if (kind === 'video') d.videos[entity.id] = entity as Video
+    else if (kind === 'script') d.scripts[entity.id] = entity as Script
     for (const l of links) d.links[l.link.id] = l.link
   }, action)
   canvas.select([el.id])
@@ -91,13 +95,50 @@ export async function storyboardFor(env: NodeEnv, scriptId: string): Promise<{ s
   if (!d.scripts[scriptId]) throw new Error('This script is gone.')
   const there = drivenStoryboard(d, scriptId)
   if (there) return { storyboardId: there.id, made: false }
+  return { ...(await newStoryboardFor(env, scriptId)), made: true }
+}
+
+/** A new Storyboard beside a script, driven by it, always a new one (never the project's main storyboard). */
+export async function newStoryboardFor(env: NodeEnv, scriptId: string): Promise<{ storyboardId: string; el: CanvasElement }> {
+  const d = env.doc.get()
   const made = newEntity(d, 'storyboard')
   const sb = { ...(made.entity as Storyboard), target_s: d.scripts[scriptId].target_s || (made.entity as Storyboard).target_s }
   const src = elementOfEnd(env.canvas.elements(), d, { kind: 'script', id: scriptId })
   const box = src ? besideBox(env.canvas.elements(), src, 'storyboard') : placeNode(env.canvas, d, 'storyboard').box
   const link = newLink({ kind: 'script', id: scriptId }, { kind: 'storyboard', id: sb.id }, 'drives')
   const el = await place(env, 'storyboard', sb, box, [{ link, from: scriptId, to: sb.id }], `add a storyboard for scripts[${scriptId}]`)
-  return { storyboardId: sb.id, made: true, el }
+  return { storyboardId: sb.id, el }
+}
+
+/** A new, empty Script beside a storyboard, driving it, one undo step (UAT round 5, S3-4: a brief storyboard's
+ *  script, drafted from the brief before its shots are planned). A driver it had is replaced: one script drives it. */
+export async function newScriptFor(env: NodeEnv, storyboardId: string): Promise<{ scriptId: string; el: CanvasElement }> {
+  const d = env.doc.get()
+  const made = newEntity(d, 'script')
+  const src = elementOfEnd(env.canvas.elements(), d, { kind: 'storyboard', id: storyboardId })
+  const box = src ? besideBox(env.canvas.elements(), src, 'script') : placeNode(env.canvas, d, 'script').box
+  const old = Object.values(d.links ?? {}).filter((l) => l.role === 'drives' && l.to.kind === 'storyboard' && l.to.id === storyboardId).map((l) => l.id)
+  if (old.length) await systemUpdate(env.doc, (x) => { for (const id of old) delete x.links[id] }, `unlink the script driving storyboards[${storyboardId}]`)
+  const link = newLink({ kind: 'script', id: made.entity.id }, { kind: 'storyboard', id: storyboardId }, 'drives')
+  const el = await place(env, 'script', made.entity, box, [{ link, from: made.entity.id, to: storyboardId }], `add a script for storyboards[${storyboardId}]`)
+  return { scriptId: made.entity.id, el }
+}
+
+/**
+ * A Storyboard or Film made from a note (the link picker's "New storyboard / film from this text"; UAT round 3 R3-1:
+ * Plan shots read the project's first script and the plan wrote Mia's shots over the harbour picnic). It gets a Script
+ * of its own holding the note's words (`words(scriptId)` puts them on its page; `link` ties the note into it), which
+ * drives it, so its plan reads those words and never another script. Three steps on the canvas, each its own undo.
+ */
+export async function madeFromNote(env: NodeEnv, kind: 'storyboard' | 'video', at: { x: number; y: number },
+  words: (scriptId: string) => Promise<void>, link: (script: CanvasElement) => Promise<unknown>): Promise<{ script: CanvasElement; made: CanvasElement }> {
+  const script = await createNode(env, 'script', at)
+  const sc = cardOf(script)
+  if (!sc) throw new Error('The script was not made.')
+  await words(sc.id)
+  await link(script)
+  const made = kind === 'storyboard' ? (await newStoryboardFor(env, sc.id)).el : (await makeVideo(env, { scriptId: sc.id })).el
+  return { script, made }
 }
 
 /**

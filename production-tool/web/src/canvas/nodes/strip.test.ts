@@ -22,3 +22,13 @@ describe('the Storyboard node line', () => {
     expect(plannedLine([dex])).toBe('The Director agent planned 1 shot from the script')
   })
 })
+
+describe('a storyboard planned from a brief says so (UAT round 4 S3-6)', () => {
+  it('names the brief when there is no script, the script otherwise', async () => {
+    const { plannedLine, planSource } = await import('./strip')
+    const dex = [{ last_writer: 'dex' }, { last_writer: 'dex' }, { last_writer: 'dex' }]
+    expect(plannedLine(dex, planSource('', true))).toBe('The Director agent planned 3 shots from the brief')
+    expect(plannedLine(dex, planSource('INT. KITCHEN', true))).toBe('The Director agent planned 3 shots from the script')
+    expect(plannedLine(dex, planSource('', false))).toBe('The Director agent planned 3 shots from the script')
+  })
+})

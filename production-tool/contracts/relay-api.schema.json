@@ -893,6 +893,17 @@
           "$ref": "common.schema.json#/$defs/view",
           "description": "view: which view to make from image (the source)."
         },
+        "subject": {
+          "type": "object",
+          "description": "view: who or what the source picture shows, from its front's reference (features/pt-canvas-r1.clan): role character sends the picture as a person (Runway subject human) and the words name them; any other role, as a thing (subject object). name is the key (ruby), label the reference's own words (the woman in the red coat). Absent: the picture goes as it did (role current, subject object). Added 2026-11-21 (additive).",
+          "properties": {
+            "role": { "$ref": "common.schema.json#/$defs/refRole" },
+            "name": { "$ref": "common.schema.json#/$defs/key" },
+            "label": { "type": "string", "maxLength": 120 }
+          },
+          "required": ["role"],
+          "additionalProperties": false
+        },
         "script": {
           "type": "string",
           "maxLength": 20000,
@@ -1053,7 +1064,7 @@
         },
         "brief": {
           "type": "object",
-          "description": "The brief in the node's scope (features/brief-node.clan): its own linked Brief node, else the one its Script (or the Storyboard that drives it) has linked. Its spine only, never the whole brief. Sent on the director-backed ops (write, shot_list, frame, frame_edit, region_edit, clip, clip_edit, clip_patch, cutdown, resize); the director writes it in a brief block cut to that op's budget, and reports a cut or size that breaks a mandatory or a don't in briefFlags (it never blocks or asks). Absent: no brief, and the director's input is exactly as before. The relay never records it in the run log.",
+          "description": "The brief in the node's scope (features/brief-node.clan): its own linked Brief node, else the one its Script (or the Storyboard that drives it) has linked. Its spine only, never the whole brief. Sent on the director-backed ops (write, shot_list, generate, frame, frame_edit, region_edit, clip, clip_edit, clip_patch, cutdown, resize; generate since features/pt-dex-context.clan, reading the project's only brief when its canvas node has none); the director writes it in a brief block cut to that op's budget (relay/brief.py: a Generate its don'ts, tone and feeling, a region_edit its don'ts only, a view none), and reports a cut or size that breaks a mandatory or a don't in briefFlags (it never blocks or asks). Absent: no brief, and the director's input is exactly as before. The relay never records it in the run log.",
           "properties": {
             "title": { "type": "string", "minLength": 1, "maxLength": 200 },
             "spine": { "$ref": "common.schema.json#/$defs/briefSpine" }
@@ -1064,7 +1075,7 @@
         "context": {
           "type": "array",
           "maxItems": 16,
-          "description": "What the node's links bring besides pictures: notes, documents and the Brand board's rules. Dex writes brand rules into the prompt and uses documents as background only.",
+          "description": "What the node's links bring besides pictures: notes, documents and the Brand board's rules. Dex writes brand rules into the prompt and uses documents as background only. Filled by the web since features/pt-dex-context.clan (web/src/jobs/context.ts): the project's brand refs (a palette's swatches, a typography ref's font, a brand rule's do, don't or tone) and the documents linked into the node, by their excerpt; linked notes go in text and the brief in brief, never here. The relay cuts it to each op's kinds and budget before Dex reads it (relay/job_context.py; a view reads none) and keeps it out of the dogfood record.",
           "items": {
             "type": "object",
             "properties": {
@@ -1418,7 +1429,28 @@
               }
             },
             "endCard": {
-              "type": "boolean"
+              "type": "boolean",
+              "description": "The studio card (Made with Napkin Studio) after the film, the dark one on every size (owner 2026-11-18)."
+            },
+            "clientCard": {
+              "type": "object",
+              "description": "render: the film's own end card (the client's: video.end_card, else the storyboard's end card shot), drawn by the relay at the size and held s seconds as the last picture before the studio card. Added 2026-11-21 (features/pt-film-r1.clan, additive): cutdowns ended on the studio card in place of the client's.",
+              "properties": {
+                "headline": { "type": "string", "maxLength": 120 },
+                "line": { "type": "string", "minLength": 1, "maxLength": 200 },
+                "cta": { "type": "string", "maxLength": 80 },
+                "bg": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+                "logo": { "$ref": "common.schema.json#/$defs/assetRef" },
+                "s": { "type": "number", "minimum": 0.5, "maximum": 10 }
+              },
+              "required": ["line", "bg", "s"],
+              "additionalProperties": false
+            },
+            "studioS": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 2.5,
+              "description": "render: how long the studio card holds, its roll sped up to fit; absent: 2.5 s. A short size shortens it so the picture keeps 3.5 s (web film.ts cardLengths, relay cutdowns.py card_lengths). Added 2026-11-21 (UAT round 3, R3-F12, additive)."
             },
             "fadeOutS": {
               "type": "number",
@@ -1514,6 +1546,16 @@
           "type": "integer",
           "minimum": 0,
           "description": "Our fair-share queue position, or the provider's when it reports one."
+        },
+        "progress": {
+          "type": "object",
+          "description": "A job that runs in several provider calls (a stepped extend, features/pt-canvas-r4.clan): the call it is on, of how many. Added 2026-11-21 (additive).",
+          "properties": {
+            "step": { "type": "integer", "minimum": 1 },
+            "steps": { "type": "integer", "minimum": 1 }
+          },
+          "required": ["step", "steps"],
+          "additionalProperties": false
         },
         "nextPollS": {
           "type": "integer",
@@ -2002,7 +2044,8 @@
                       "camera.movement",
                       "words",
                       "moment",
-                      "feel"
+                      "feel",
+                      "ask"
                     ]
                   },
                   "shotId": {
@@ -2664,14 +2707,15 @@
     },
     "RemakeDelta": {
       "type": "object",
-      "description": "One change a remake makes to its parent's held request (features/make-and-edit.clan). camera.movement: to is a cameraMovement, for shotId (the shot of a box made together; a single clip's own shot when absent). words: to is the shot's new words (its action, and its line in a timed take prompt). moment: to is {inS, outS, note, region?, still?} in the parent's own time; the relay snaps inS..outS to whole seconds of at least 2 s inside the parent (time_rules.moment_window) and makes that stretch again. feel: to is {words?, strength?}, the whole clip restyled. A moment or a feel is the only change in its request; camera.movement and words may go together.",
+      "description": "One change a remake makes to its parent's held request (features/make-and-edit.clan). camera.movement: to is a cameraMovement, for shotId (the shot of a box made together; a single clip's own shot when absent). words: to is the shot's new words (its action, and its line in a timed take prompt). moment: to is {inS, outS, note, region?, still?} in the parent's own time; the relay snaps inS..outS to whole seconds of at least 2 s inside the parent (time_rules.moment_window) and makes that stretch again. feel: to is {words?, strength?}, the whole clip restyled. ask: to is the person's words to the Camera agent (Tell the Camera agent, UAT round 3 R3-F5), sent as the held request's input.text, which the director reads first; the shots' words, refs, frames, length and model stay (op clip; added 2026-11-21, additive). A moment or a feel is the only change in its request; camera.movement, words and ask may go together.",
       "properties": {
         "field": {
           "enum": [
             "camera.movement",
             "words",
             "moment",
-            "feel"
+            "feel",
+            "ask"
           ]
         },
         "shotId": {
@@ -2685,6 +2729,24 @@
       ],
       "additionalProperties": false,
       "allOf": [
+        {
+          "if": {
+            "properties": {
+              "field": {
+                "const": "ask"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "to": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              }
+            }
+          }
+        },
         {
           "if": {
             "properties": {

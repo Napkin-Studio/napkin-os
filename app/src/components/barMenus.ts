@@ -46,9 +46,6 @@ export interface DocBar {
   onSpinoff: (appId: string) => void
   /** Continue in › Start fresh: a new document of the same app for the same client. */
   onStartFresh?: () => void
-  /** Continue in › Production Tool: a brief opens /production/?brief=<doc id>, a film started from it
-   *  (features/brief-node.clan). Present only on a brief, when this session has the Production Tool. */
-  onStartFilm?: () => void
   /** What it was made from (`GET /upstream`); absent when it was made from nothing the host holds. */
   madeFrom?: MadeFrom | null
   /** Take the newer version of what it was made from (`POST /upstream/update`). Absent on a locked document. */
@@ -249,7 +246,7 @@ export function pressContinue(doc: Pick<DocBar, 'onContinueOpen'>, open: boolean
 
 /** "Continue in ▾": turn it into another app's document, link it, and take what it was made from again. */
 export function continueItems(
-  doc: Pick<DocBar, 'targets' | 'onSpinoff' | 'madeFrom' | 'onUpdateFromUpstream' | 'linkTargets' | 'onLink' | 'linked' | 'onUpdateLinked' | 'onUnlink'> & Partial<Pick<DocBar, 'tool' | 'onStartFresh' | 'onStartFilm'>>,
+  doc: Pick<DocBar, 'targets' | 'onSpinoff' | 'madeFrom' | 'onUpdateFromUpstream' | 'linkTargets' | 'onLink' | 'linked' | 'onUpdateLinked' | 'onUnlink'> & Partial<Pick<DocBar, 'tool' | 'onStartFresh'>>,
   /** Open the Link list (the client's documents, a search, all clients); Toolbar passes it. */
   openLinkList?: () => void,
 ): { spin: MenuItem[]; link: MenuItem[]; update: MenuItem[]; fresh: MenuItem[] } {
@@ -264,8 +261,6 @@ export function continueItems(
         hint: spinHint(t, noun),
         run: () => doc.onSpinoff(t.app_id),
       })),
-      // The Production Tool is not an OS app: it reads the brief itself and freezes its spine on a Brief node.
-      ...(doc.onStartFilm ? [{ label: 'Production Tool', hint: 'A film from this brief: its Brief node and a new Script', run: doc.onStartFilm }] : []),
     ],
     link: linkItems(doc, openLinkList),
     // Start fresh (gaps.md §7 L2): the same app, the same client, new notes.

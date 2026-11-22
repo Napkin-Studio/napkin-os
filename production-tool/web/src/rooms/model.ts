@@ -6,8 +6,10 @@ import { SHEETS } from '../contracts/load'
 import type { Config, GenerationDelta, GenerationKind, Id, ProductionDocument, Shot } from '../contracts/types'
 import type { UiState } from '../doc/ui'
 import { lastWorkedModel } from '../jobs/follow'
+import { modelEntry } from '../jobs/runs'
 import { videoJoin, videoModel, videoPlan, videoRows, type Row } from '../jobs/runView'
-import { shotNumber, shotsOf, storyboardOfVideo } from '../model/selectors'
+import { beatsOf, shotNumber, shotsOf, storyboardOfVideo } from '../model/selectors'
+import { spokenEndS } from '../script/spoken'
 import { withoutAsides } from '../stages/shotTitle'
 import { changeLabel, type DeltaRow } from './delta'
 import type { ShotWindow } from './cut'
@@ -24,8 +26,15 @@ export interface Gen {
    *  apart is one take of each of those boxes (each plays its own window); absent means [boxKey]. */
   boxKeys?: string[]
   shotIds: Id[]
-  /** v1, v2… within its box, oldest first. */
+  /** v1, v2… among the takes made of the same shots, oldest first (it keeps its number when boxes change). */
   version: number
+  /** The box number of the shots it was made of (its first shot's number): "Box 2 · v1" stays shot 2's take after
+   *  shots 1-2 are joined again (UAT 2026-11-21, F15: it was renamed "Box 1 v4"). 0: not known. */
+  madeN?: number
+  /** The key of the shots it was made of (boxKeyOf), which numbers it. */
+  made?: string
+  /** The number of the last shot it was made of, when it was made of several ("Box 1–2"). */
+  madeTo?: number
   parentId?: Id
   delta: DeltaRow[]
   /** "Camera: handheld (shot 3)", "First take". */
@@ -46,7 +55,8 @@ export interface Gen {
 /** A box of the film: shots made as one generation, or one shot alone, or the end card. */
 export interface Box {
   key: string
-  /** 1-based among the boxes that are not the end card. */
+  /** The number of its first shot (end card: 0), so a box keeps its number when shots before or beside it are
+   *  joined or cut apart (UAT 2026-11-21, F15: shot 3 went Box 2, Box 3, Box 2 as the gap 1|2 was cut and joined). */
   n: number
   shotIds: Id[]
   together: boolean
@@ -82,12 +92,23 @@ export function repeatsTake(provider: string | undefined, model: string | undefi
 /** "Box 2", or "End card". */
 export const boxName = (b: Pick<Box, 'n' | 'endCard'>) => (b.endCard ? 'End card' : `Box ${b.n}`)
 
+/** "Box 1–2 · v1": a take's name, the box it was made as with its one version number, so two takes that are both v1
+ *  of different boxes say so (UAT round 3, F15: the Use this take sheet said "Now: v1 / New: v1"). */
+export function takeName(g: Gen, boxes: Box[]): string {
+  const b = boxes.find((x) => x.key === g.boxKey)
+  const name = g.madeN ? `Box ${g.madeN}${g.madeTo && g.madeTo !== g.madeN ? `–${g.madeTo}` : ''}` : b ? boxName(b) : 'Not in a box'
+  return `${name} · v${g.version}`
+}
+
 /** "Box 2 · v3 · 3.5 s". */
 export function genTitle(g: Gen, boxes: Box[]): string {
-  const b = boxes.find((x) => x.key === g.boxKey)
-  const len = `${Math.round(g.durationS * 10) / 10} s`
-  return [b ? boxName(b) : 'Not in a box', `v${g.version}`, len].join(' · ')
+  return `${takeName(g, boxes)} · ${Math.round(g.durationS * 10) / 10} s`
 }
+
+/** Whether a take has footage for a shot: its own shots or its windows (a clip with no shot: any take). One rule for
+ *  New take ready, Use this take and Swap take (UAT 2026-11-21, F2/F13: a shot-1 take was put over shot 2's clip). */
+export const coversShot = (g: Pick<Gen, 'shotIds' | 'segments'>, shotId: Id | undefined) =>
+  !shotId || g.shotIds.includes(shotId) || g.segments.some((s) => s.shotId === shotId)
 
 /** The video's boxes, in storyboard order. As one film (connected video), the planner's rows; otherwise each
  *  shot is its own box. */
@@ -100,12 +121,10 @@ export function roomBoxes(d: ProductionDocument, ui: Pick<UiState, 'jobs'>, vide
     if (model) rows = videoRows(d, ui, videoId, videoPlan(d, videoId, model))
   }
   const groups: { shotIds: Id[]; row?: Row }[] = rows?.length ? rows.map((r) => ({ shotIds: r.shotIds, row: r })) : shots.map((s) => ({ shotIds: [s.id] }))
-  let n = 0
   return groups.map((g) => {
     const endCard = g.shotIds.length === 1 && d.shots[g.shotIds[0]]?.kind === 'end_card'
-    if (!endCard) n++
     return {
-      key: boxKeyOf(g.shotIds), n: endCard ? 0 : n, shotIds: g.shotIds, together: g.shotIds.length > 1, endCard,
+      key: boxKeyOf(g.shotIds), n: endCard ? 0 : Math.max(1, shotNumber(d, g.shotIds[0])), shotIds: g.shotIds, together: g.shotIds.length > 1, endCard,
       lengthS: Math.round(g.shotIds.reduce((a, id) => a + (d.shots[id]?.duration_s ?? 0), 0) * 1000) / 1000,
       ...(g.row ? { row: g.row } : {}),
     }
@@ -130,7 +149,7 @@ export function roomGens(d: ProductionDocument, _ui: Pick<UiState, 'jobs'>, vide
     const durationS = g.duration_s ?? (g.asset ? d.assets[g.asset]?.duration_s : undefined) ?? 0
     const segments = g.segments?.length
       ? g.segments.map((x) => ({ shotId: x.shot_id, inS: x.in_s, outS: x.out_s }))
-      : g.shot_ids.length === 1 ? [{ shotId: g.shot_ids[0], inS: 0, outS: durationS }] : []
+      : g.shot_ids.length === 1 ? [{ shotId: g.shot_ids[0], inS: 0, outS: loneOut(durationS, lonePlanned(d, g)) }] : []
     // Its box: the one with exactly its shots; else (its shots were made apart, or regrouped since) every box
     // whose shots have footage in it, in film order, so each of them lists it and plays its own window.
     const exact = boxes.find((b) => b.key === key)
@@ -139,6 +158,8 @@ export function roomGens(d: ProductionDocument, _ui: Pick<UiState, 'jobs'>, vide
     const boxKeys = covering.length ? covering : [key]
     out.push({
       id: g.id, kind: g.kind, boxKey: boxKeys[0], ...(boxKeys.length > 1 ? { boxKeys } : {}), shotIds: g.shot_ids, version: 0,
+      madeN: shotNumber(d, (run?.shot_ids ?? g.shot_ids)[0]) || 0, made: key,
+      ...((run?.shot_ids ?? g.shot_ids).length > 1 ? { madeTo: shotNumber(d, (run?.shot_ids ?? g.shot_ids).at(-1)) || undefined } : {}),
       ...(g.parent_id ? { parentId: g.parent_id } : {}),
       delta: (g.delta ?? []).map((x) => deltaRow(x, g.patched?.find((p) => p.job_id === g.job_id))), label: g.label ?? '', ...(g.asset ? { asset: g.asset } : {}),
       durationS, segments, state: g.state, ...(g.job_id ? { jobId: g.job_id } : {}), createdAt: g.created_at,
@@ -148,6 +169,25 @@ export function roomGens(d: ProductionDocument, _ui: Pick<UiState, 'jobs'>, vide
   }
   numberAndLabel(out, (id) => shotNumber(d, id))
   return out.sort(newestFirst)
+}
+
+/** A lone shot's window of its take: the shot's planned length from the take's start, inside the real take. A model
+ *  makes whole seconds (Veo's 1.5 s shot is a 4 s take), so Assemble put the whole padded take in (UAT round 3, R3-F2:
+ *  a 10 s film came out 15.6 s). The Out point still stretches to the real take (the Inspector's Out goes to its
+ *  length). A shot with no length plays the whole take. */
+export const loneOut = (takeS: number, plannedS: number | undefined) =>
+  plannedS && plannedS > 0 && takeS > 0 ? Math.min(takeS, plannedS) : takeS
+
+/** The length a lone take plays from its start: its shot's planned length, and, when the take voices the shot's line
+ *  (a model with a sound switch, and a line or VO beat), at least until that line ends by the spoken rule (UAT round 5,
+ *  R5-F2: "Good boy." was planned 1.0 s, WAN 3 voiced it to 1.7 s, and the ad cut it at 1.0 s). loneOut keeps it
+ *  inside the take. The voice's real span is not measured (features/pt-film-r5.clan). */
+export function lonePlanned(d: ProductionDocument, g: { shot_ids: Id[]; provider?: string; inputs?: { model?: string } }): number | undefined {
+  const shotId = g.shot_ids[0]
+  const planned = shotId ? d.shots[shotId]?.duration_s : undefined
+  const e = g.provider && g.inputs?.model ? modelEntry(g.provider as never, g.inputs.model) : null
+  if (!shotId || !planned || !e?.video.audioControl) return planned
+  return Math.max(planned, spokenEndS(beatsOf(d, shotId)))
 }
 
 /** A document delta as the drawer's row: a moment's window is the stretch its own job made again (as the
@@ -178,10 +218,11 @@ export function makingLine(live: { state?: string; note?: string } | undefined, 
   return live?.note ? `${word} · ${live.note}` : word
 }
 
-/** v1…vn per box, oldest first; and each take's label from its delta. */
+/** v1…vn per the shots each take was made of (its box when it was made), oldest first; and each take's label
+ *  from its delta. */
 export function numberAndLabel(gens: Gen[], shotNo: (id: Id) => number) {
   const byBox = new Map<string, Gen[]>()
-  for (const g of gens) byBox.set(g.boxKey, [...(byBox.get(g.boxKey) ?? []), g])
+  for (const g of gens) { const k = g.made ?? g.boxKey; byBox.set(k, [...(byBox.get(k) ?? []), g]) }
   const before = new Map<string, Gen>()
   for (const list of byBox.values()) {
     list.sort((a, b) => -newestFirst(a, b)).forEach((g, i) => {
@@ -247,4 +288,13 @@ export function boxWindow(g: Pick<Gen, 'segments' | 'durationS'>, box: Pick<Box,
 export function boxBeats(g: Pick<Gen, 'segments'>, box: Pick<Box, 'shotIds'> | undefined, shotNo: (id: Id) => number): { atS: number; label: string }[] | undefined {
   const segs = box ? g.segments.filter((s) => box.shotIds.includes(s.shotId)) : g.segments
   return segs.length > 1 ? segs.slice(1).map((s) => ({ atS: s.inS, label: `Shot ${shotNo(s.shotId)}` })) : undefined
+}
+
+/** A box's current take: its newest ready take made of the whole box (a joined box's joined take), else its
+ *  newest ready take of any of its shots. UAT 2026-11-21: after a join and Make, the 2-shot box showed the old
+ *  shot-2 clip ("v2 · 2.5 s · In the cut") as its take. */
+export function boxTop<G extends Pick<Gen, 'boxKey' | 'boxKeys' | 'state' | 'shotIds'>>(takes: G[], box: Pick<Box, 'key' | 'shotIds'> | undefined): G | undefined {
+  const ready = takes.filter((g) => g.state === 'ready' && inBox(g, box?.key))
+  const whole = (g: G) => !!box && box.shotIds.every((id) => g.shotIds.includes(id))
+  return ready.find(whole) ?? ready[0]
 }

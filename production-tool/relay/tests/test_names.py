@@ -18,7 +18,7 @@ def test_long_and_hyphenated_names_get_short_unique_tags():
     refs = [ref(1, "maya_three-quarter"), ref(2, "maya_three-quarter-left"), ref(3, "lampshade_red-velvet-on")]
     tags = [wire_tags(refs)[r["id"]] for r in refs]
     assert all(TAG.match(t) for t in tags) and len(set(tags)) == 3
-    assert tags[0] == "maya_three_quart"  # a hyphen is not a tag character; 16 at most
+    assert tags[0] == "maya_3q"  # a hyphen is not a tag character; 16 at most
 
 
 def test_words_shot_and_shot_refs_are_rewritten_to_the_tags():
@@ -28,11 +28,11 @@ def test_words_shot_and_shot_refs_are_rewritten_to_the_tags():
             "beats": [{"kind": "line", "at_s": 1, "text": "Hi @brolly_red-ish"}],
             "refs": ["maya_three-quarter", "brolly_red"]}
     out = to_wire("frame", {"text": "Keep @maya_three-quarter's coat", "refs": refs, "shot": shot})
-    assert out["text"] == "Keep @maya_three_quart's coat"
-    assert out["shot"]["action"] == "@maya_three_quart opens @brolly_red."
+    assert out["text"] == "Keep @maya_3q's coat"
+    assert out["shot"]["action"] == "@maya_3q opens @brolly_red."
     assert out["shot"]["beats"][0]["text"] == "Hi @brolly_red-ish"  # the longest known name, then the rest as written
     assert out["shot"]["direction"] == "Slow; @brolly_red last."
-    assert out["shot"]["refs"] == ["maya_three_quart", "brolly_red"]
+    assert out["shot"]["refs"] == ["maya_3q", "brolly_red"]
     assert "tag" not in refs[0]  # the caller's input is not changed
 
 

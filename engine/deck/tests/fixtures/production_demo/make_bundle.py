@@ -82,6 +82,10 @@ def document(pics: dict) -> dict:
              "thumb": "data:image/webp;base64,THUMBDATA"}
         if kind == "image":
             a.update(w=w, h=h)
+        # As Production stamps them since #257: a provider's output generated, an upload unknown (mock states nothing).
+        stated = {"generated": "generated", "uploaded": "unknown"}.get(origin)
+        if stated:
+            a["rights"] = stated
         a.update(kw)
         return a
 
@@ -89,7 +93,7 @@ def document(pics: dict) -> dict:
               A["story"]: asset("story", "generated", job_id=JOB), A["six"]: asset("six", "generated"), A["feed"]: asset("feed", "generated"),
               A["link"]: asset("link", "generated"), A["client"]: asset("client", "generated"), A["old_story"]: asset("old_story", "generated"),
               A["f1_old"]: asset("f1_old", "generated"), A["f1"]: asset("f1", "generated", job_id=JOB), A["f2"]: asset("f2", "generated"),
-              A["f3_gen"]: asset("f3_gen", "generated"), A["f3"]: asset("f3", "edited"), A["f4"]: asset("f4", "mock"), A["fe"]: asset("fe", "generated"),
+              A["f3_gen"]: asset("f3_gen", "generated"), A["f3"]: asset("f3", "edited", rights="generated"), A["f4"]: asset("f4", "mock"), A["fe"]: asset("fe", "generated"),
               A["fn0"]: asset("fn0", "uploaded"), A["fn1"]: asset("fn1", "edited"), A["orphan"]: asset("orphan", "edited"),
               A["making"]: asset("making", "generated"),
               A["film"]: asset("film", "generated", kind="video", mime="video/mp4", duration_s=6),

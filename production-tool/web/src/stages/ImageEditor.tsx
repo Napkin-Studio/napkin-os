@@ -46,10 +46,10 @@ import { PromptStart } from '../ui/prompt/PromptStart'
 import {
   EMPTY, NOTHING_TO_TAKE, addEdit, afterSend, applyLine, clearMask, editCount, editId, hasFill, newMask, unfilledMasks, editLabel, editsForFrame, hiddenCount,
   layersOf, leftOutLine, nextStep,
-  notApplied, nothingToTake, redoUndone, toggleHidden, undoEdit, undoLast, updateEdit, upscaleSize, withMaskOp,
+  fillPlaceholder, notApplied, nothingToTake, pendingUpscale, redoUndone, sameLine, toggleHidden, undoEdit, undoLast, updateEdit, upscaleSize, upscaleWhyNot, withMaskOp,
   type Edit, type EditSession, type MaskOp, type Pt, type Undone,
 } from './imageEditor/edits'
-import { bounds, rasterize } from './imageEditor/mask'
+import { bounds, rasterize, RETRY_MASK, sendableMask, strongerWords } from './imageEditor/mask'
 import { applyProblem, compose, maskToPng, sendPlan, toPng, untouched, type Pic } from './imageEditor/compose'
 import { applyEditedStep, applyPictureEditedStep, pickPictureVersionStep } from './imageEditor/apply'
 import { subjectOf, type PictureNow } from './imageEditor/subject'
@@ -128,6 +128,10 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   // What to do with the blue (mock image): one action shown at a time in the Booth.
   const [act, setAct] = useState<'fill' | 'remove' | 'whole' | 'upscale'>('fill')
   const booth = useBooth('storyboard')
+  // The editor's tools are in its Booth: it opens shown, whatever the canvas's Booth was left at (UAT round 4 S3-4: the
+  // editor opened with its tools hidden in a collapsed Booth). Not remembered: hiding it again is the person's.
+  const bringIn = booth.bringIn
+  useEffect(() => { bringIn() }, [bringIn])
   /** A layer picked in Layers that is not a mask (Frame, a result, text): shown picked, with why
    *  it cannot be painted; the next stroke starts a new mask. A mask's pick is the session's active mask. */
   const [picked, setPicked] = useState<string | null>(null)
@@ -139,6 +143,8 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   const [versionsOpen, setVersionsOpen] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  /** A plain line about what was done for the person (a thin area widened), cleared on the next action. */
+  const [note, setNote] = useState<string | null>(null)
   /** Why the picture could not be drawn (the stage keeps the last good one), for Rhea's line. */
   const [drawError, setDrawError] = useState<string | null>(null)
   /** What the line under the stage says about the last press ("Nothing to take away yet…"), while the frame, tool and mode stay. */
@@ -237,7 +243,15 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   const showBefore = view === 'before' && !!before
   // Hidden layers are left out of every send and of Apply, and the pill, the Apply line and the tray say so (IM1).
   const applyLeftOut = hiddenCount(session, ['mask'])
+  // Upscale is offered once per version: not again on top of one in the edits (R3-4), nor past full size (R3-4).
+  const upWhy = pendingUpscale(session, (e) => stateOf(e) === 'failed') ?? upscaleWhyNot(W, H, scale)
   const activeMask = session.edits.find((e): e is MaskEdit => e.id === session.active && e.kind === 'mask')
+  // Masks whose fill came back and that were not painted since: the stage shows only their edge (UAT round 1 IMG-20).
+  const settledMasks = session.edits.flatMap((e) => {
+    if (e.kind !== 'fill' || !resultOf(e)) return []
+    const m = session.edits.find((x): x is MaskEdit => x.id === e.maskId && x.kind === 'mask')
+    return m && JSON.stringify(m.ops) === JSON.stringify(e.ops) ? [m.id] : []
+  })
   const maskHidden = !!activeMask && session.hidden.includes(activeMask.id)
   // A hidden mask cannot be filled: it is left out like any hidden layer, so there would be nothing to fill.
   const masked = !!activeMask && activeMask.ops.length > 0 && !maskHidden
@@ -431,16 +445,28 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   const send = (a: Action) => {
     setTray(null)
     setError(null)
+    setNote(null)
     let row: UnsentEdit
     if (a === 'fill' || a === 'remove') {
       if (!activeMask || !masked) {
         setError(maskHidden && activeMask ? `${activeMask.name} is hidden. Show it to ${a}.` : 'Paint the area first.')
         return
       }
+      // A very thin area comes back unchanged (UAT round 4 S2-3): widened before it is sent, and said; a thin lasso
+      // shape cannot be widened, so it is not sent at all.
+      const sendable = sendableMask(activeMask.ops, W / H)
+      if ('problem' in sendable) {
+        setError(sendable.problem)
+        return
+      }
+      if (sendable.widened) {
+        widenMask(activeMask.id, sendable.ops)
+        setNote('The area was very thin, so it was painted wider before sending: a thin area comes back unchanged.')
+      }
       // The fill keeps the mask as sent: what the result is cut by on the stage and in Apply.
       row = a === 'remove'
-        ? { id: editId(), kind: 'fill', maskId: activeMask.id, ops: activeMask.ops, words: '', keepOutside: true, remove: true }
-        : { id: editId(), kind: 'fill', maskId: activeMask.id, ops: activeMask.ops, words: fill.trim(), keepOutside }
+        ? { id: editId(), kind: 'fill', maskId: activeMask.id, ops: sendable.ops, words: '', keepOutside: true, remove: true }
+        : { id: editId(), kind: 'fill', maskId: activeMask.id, ops: sendable.ops, words: fill.trim(), keepOutside }
     } else if (a === 'whole') {
       row = { id: editId(), kind: 'whole', words: whole.trim() }
     } else {
@@ -461,6 +487,29 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
       }
     })
   }
+  // A Fill, Remove or change that came back unchanged (UAT round 3 R3-3, UX 5): sent again as it was, as a new row, or
+  // discarded with its spent mask.
+  // Never the identical request again (UAT round 4 S2-3: the same 2 %-wide mask and words came back unchanged and were
+  // charged twice): the mask is widened to RETRY_MASK and the change said more strongly.
+  const tryAgain = (e: JobEdit) => {
+    if (e.kind === 'upscale') return
+    const { jobId: _j, unsent: _u, ...rest } = e
+    let again = { ...rest, id: editId() } as UnsentEdit
+    if (again.kind === 'fill') {
+      const wide = sendableMask(again.ops ?? [], W / H, RETRY_MASK)
+      const ops = 'ops' in wide ? wide.ops : again.ops
+      if ('ops' in wide && wide.widened) widenMask(again.maskId, ops)
+      again = { ...again, ops, words: again.remove ? again.words : strongerWords('fill', again.words) }
+    } else if (again.kind === 'whole') {
+      again = { ...again, words: strongerWords('whole', again.words) }
+    }
+    setSession((s) => ({ ...s, edits: s.edits.filter((x) => x.id !== e.id) }))
+    const next = rowFirst(setSession, again, newId('job'), () => { void uiStore.flush() })
+    void attempt(SENDING[e.kind === 'fill' ? (e.remove ? 'remove' : 'fill') : 'whole'], () => sendOnce(next, { dropOnFail: true }))
+  }
+  /** A mask's steps widened (a thin area): the stage shows what is sent. */
+  const widenMask = (maskId: string, ops: MaskOp[]) => setSession((s) => ({ ...s, edits: s.edits.map((x) => (x.id === maskId && x.kind === 'mask' ? { ...x, ops } : x)) }))
+  const discardSame = (e: Edit) => setSession((s) => (e.kind === 'fill' ? undoEdit(s, e.maskId) : undoEdit(s, e.id)))
   const sendAgain = (e: JobEdit) => void attempt(SENDING[e.kind === 'fill' ? (e.remove ? 'remove' : 'fill') : e.kind], () => sendOnce(e, { dropOnFail: false }))
   const apply = () => void attempt('applying', async () => {
     if (!framePic || !frameId) return
@@ -549,8 +598,8 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
             </div>
           </>
         )}
-        primary={<button type="button" className="btn primary" disabled={running || !work || !framePic} onClick={apply}
-          title={n ? applyWords : 'Make an edit first'}>Apply as new version</button>} />
+        primary={<button type="button" className="btn primary" disabled={running || !n || !framePic} onClick={apply}
+          title={n ? applyWords : unfilledMasks(session) ? 'A mask alone changes nothing: Fill or Remove it first' : 'Make an edit first'}>Apply as new version</button>} />
       <Float anchor={versionsBtn} open={versionsOpen} onClose={() => setVersionsOpen(false)} align="end" label={`Versions of ${subject.label}`} className="ie-versions">
         <div className="ie-vhead pt-mono">{ratio ? `${ratio} locked` : 'Picture'}{own ? ` · ${own.w} × ${own.h}` : ''}</div>
         {frames.map((f) => <VersionRow key={f.id} f={f} open={f.id === current?.id} onPick={() => pickVersion(f)} />)}
@@ -570,7 +619,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
             <div className="ie-stagewrap">
             <Stage src={url} beforeSrc={before?.url} plan={shownPlan} image={image} w={W} h={H} session={session} tool={activeTool} brush={brush} zoom={zoom} pan={pan} onPan={setPan}
               before={showBefore} onAfter={() => setView('after')} motion={motion} onDrawn={setDrawError} onMaskOp={onMaskOp} onAddText={onAddText} onText={onText} onCrop={onCrop}
-              pending={runningEdit?.kind === 'fill' ? runningEdit.maskId : undefined} progress={!!runningEdit && runningEdit.kind !== 'fill'}>
+              pending={runningEdit?.kind === 'fill' ? runningEdit.maskId : undefined} progress={!!runningEdit && runningEdit.kind !== 'fill'} settled={settledMasks}>
               {showBefore && <span className="pt-mono ie-before">Before · v{before.version} as saved</span>}
             </Stage>
             </div>
@@ -665,7 +714,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
               <div className={`ie-action ${masked ? 'on' : ''}`}>
                 <div className="row"><b>{act === 'remove' ? 'Remove' : 'Fill area'}</b>{activeMask && <span className="ie-mtag">{activeMask.name}</span>}</div>
                 {act === 'fill' && <><label className="faint" htmlFor="ie-fill">Fill with...</label>
-                <textarea id="ie-fill" className="textarea" rows={2} placeholder={masked ? 'add condensation drops' : maskHidden && activeMask ? `${activeMask.name} is hidden. Show it to fill.` : 'Paint or lasso an area first'} value={fill} maxLength={1000}
+                <textarea id="ie-fill" className="textarea" rows={2} placeholder={fillPlaceholder(masked, !!activeMask && settledMasks.includes(activeMask.id), maskHidden && activeMask ? activeMask.name : undefined)} value={fill} maxLength={1000}
                   disabled={!masked || running} onChange={(e) => setFill(e.target.value)} /></>}
                 <label className="ie-check"><input type="checkbox" checked={keepOutside} onChange={(e) => setKeepOutside(e.target.checked)} /> Keep everything outside the blue exactly as it is</label>
                 <div className="row"><span className="faint">{maskHidden && activeMask ? `${activeMask.name} is hidden. Show it to fill.` : 'Only the blue area changes'}</span><span className="spacer" />
@@ -682,9 +731,9 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
                 <div className="row">
                   {/* Two lines, as Fill's: the one-line field cut its own placeholder off (live test 2026-11-16). */}
                   <textarea className="input ie-whole" rows={2} aria-label="Describe the change to the whole frame" placeholder="e.g. warmer light, keep the bottle" value={whole} maxLength={1000}
-                    disabled={!current || running} onChange={(e) => setWhole(e.target.value)}
+                    disabled={!framePic || running} onChange={(e) => setWhole(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); if (whole.trim() && !running) setTray('whole') } }} />
-                  <button ref={wholeBtn} type="button" className="btn sm" disabled={!current || !whole.trim() || running} onClick={() => setTray('whole')}>Change</button>
+                  <button ref={wholeBtn} type="button" className="btn sm" disabled={!framePic || !whole.trim() || running} onClick={() => setTray('whole')}>Change</button>
                 </div>
                 {offer && offerJob && offerEdit && shotId && (
                   <RedrawOffer askId={offer.id} n={shotNo}
@@ -708,12 +757,14 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
                     <button type="button" className="pt-mono" aria-pressed={scale === 2} onClick={() => setScale(2)}>2×</button>
                     <button type="button" className="pt-mono" aria-pressed={scale === 4} onClick={() => setScale(4)}>4×</button>
                   </div>
-                  <span className="pt-mono faint ie-out">{upscaleSize(W, H, scale)}</span>
-                  <button ref={upBtn} type="button" className="btn sm" disabled={!current || running || !controls.upscale} onClick={() => setTray('upscale')}>Upscale</button>
+                  <span className="pt-mono faint ie-out">{upWhy ? 'no bigger' : upscaleSize(W, H, scale)}</span>
+                  <button ref={upBtn} type="button" className="btn sm" disabled={!framePic || running || !controls.upscale || !!upWhy} onClick={() => setTray('upscale')}>Upscale</button>
                 </div>
+                {upWhy && <span className="faint ie-upwhy" role="note">{upWhy}</span>}
               </div>
             )}
             {error && <div role="alert" className="ie-error">{error}</div>}
+            {note && !error && <div role="status" className="ie-note faint">{note}</div>}
           </section>
           <section className="bsec ie-edits" aria-label="Edits not applied yet">
             {check && <div className="ie-rule" role="note"><AgentFigure agent="jude" size={16} decorative /> <b>Review agent:</b> {check.note}</div>}
@@ -727,18 +778,25 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
                 // The job's status, elapsed time and Cancel (or its question) live in its row, never over the stage.
                 const live = jobId && isActive(jobState(jobId) ?? 'completed') && jobId !== offerJob ? jobId : undefined
                 return (
-                  <li key={e.id} className={`${session.active === e.id ? 'on' : ''} ${live || st === 'unsent' ? 'ie-hasjob' : ''}`}>
+                  <li key={e.id} className={`${session.active === e.id ? 'on' : ''} ${live || st === 'unsent' || st === 'same' ? 'ie-hasjob' : ''}`}>
                     <button type="button" className="ie-ebody" onClick={() => { if (e.kind === 'mask') { setPicked(null); setSession((s) => ({ ...s, active: e.id })) } }}>
                       <span className="pt-mono ie-n">{i + 1}</span> {label}
                       {st === 'ready' && <span className="ie-ok">ready</span>}
                       {st === 'running' && !live && <span className="ie-run">{jobId && jobId === offerJob ? 'waiting for your choice' : 'working'}</span>}
                       {st === 'failed' && <span className="ie-bad">did not work</span>}
-                      {st === 'same' && <span className="ie-bad" title="Nothing changed in the area, so there is nothing to apply. Try other words, or undo it.">came back the same</span>}
                     </button>
+                    {st === 'same' && 'jobId' in e && (
+                      <span className="ie-jobrow ie-same" role="status">
+                        <span className="ie-bad">{sameLine(e)}</span>
+                        <span className="faint ie-samehint">{e.kind === 'fill' ? 'Try again paints the area wider and says the change more strongly. Or say what should be there another way.' : 'Try again says the change more strongly. Or say it another way.'}</span>
+                        <button type="button" className="btn sm" disabled={running} onClick={() => tryAgain(e)}>Try again</button>
+                        <button type="button" className="btn sm ghost" onClick={() => discardSame(e)}>Discard</button>
+                      </span>
+                    )}
                     {live && <span className="ie-jobrow"><JobSlot jobId={live} row onRetried={(id) => setSession((s) => updateEdit(s, e.id, { jobId: id }))} /></span>}
                     {st === 'unsent' && 'jobId' in e && (
                       <span className="ie-jobrow ie-unsent">
-                        <span className="ie-bad" title="You confirmed it, and the page closed before it reached the Retouch agent. Nothing was paid.">not sent</span>
+                        <span className="ie-bad" title="You confirmed it, and the page closed before it reached the Retouch agent. Nothing was made.">not sent</span>
                         <button type="button" className="btn sm" disabled={running} onClick={() => sendAgain(e)}>Send again</button>
                         <button type="button" className="btn sm ghost" onClick={() => setSession((s) => undoEdit(s, e.id))}>Discard</button>
                       </span>
