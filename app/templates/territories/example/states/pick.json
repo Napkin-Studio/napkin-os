@@ -1,0 +1,281 @@
+{
+ "schema_version": 1,
+ "title": "Linea: Weekend by Rail",
+ "upstream": {
+  "5b0d3a7e-4c1f-4e2a-9a55-1d6c0f2b7e11": {
+   "background": "Linea runs weekend trains from Dublin to Galway and wants more couples and families to take them.",
+   "objectives": "Lift weekend return bookings by 12% over the summer.",
+   "audience": "Couples and young families in Dublin who drive west two or three weekends a year and arrive tired.",
+   "insight": "A drive is a job somebody has to do. A train journey is time somebody gives back to you.",
+   "smp": "The weekend starts when you sit down.",
+   "desired_response": "Think the train is quicker than I assumed. Feel the trip is part of the break. Book a weekend return.",
+   "tone_world_assets": "Warm, wry, never preachy.",
+   "mandatories": "Weekend return fare. No anti-car tone (shared regional partners)."
+  },
+  "a91c64f2-7d3b-4b8e-8f10-3e5d2c9a6b47": {
+   "campaign": {
+    "name": "Linea: Weekend by Rail"
+   }
+  }
+ },
+ "finds": [],
+ "focus": {
+  "sources": [
+   {
+    "id": "brief:smp",
+    "in_play": true
+   },
+   {
+    "id": "brief:insight",
+    "in_play": true
+   },
+   {
+    "id": "brief:audience",
+    "in_play": true
+   },
+   {
+    "id": "brief:desired_response",
+    "in_play": true
+   },
+   {
+    "id": "brief:mandatories",
+    "in_play": true
+   },
+   {
+    "id": "brief:tone_world_assets",
+    "in_play": true
+   },
+   {
+    "id": "f_ROUTE0412",
+    "in_play": true
+   },
+   {
+    "id": "f_TIRED0418",
+    "in_play": true
+   },
+   {
+    "id": "f_DRIVER0431",
+    "in_play": true
+   },
+   {
+    "id": "f_FARE00440",
+    "in_play": true
+   },
+   {
+    "id": "f_BOOK00447",
+    "in_play": true
+   },
+   {
+    "id": "f_CLIMATE450",
+    "in_play": true
+   },
+   {
+    "id": "fi_NOTALK003",
+    "in_play": true
+   },
+   {
+    "id": "fi_RIVALS005",
+    "in_play": true
+   },
+   {
+    "id": "fi_FARE00007",
+    "in_play": false
+   },
+   {
+    "id": "fi_SPONT0009",
+    "in_play": true
+   }
+  ],
+  "insights": [
+   {
+    "id": "in_arrive",
+    "kind": "truth",
+    "text": "Arriving tired is the worst part of the weekend.",
+    "evidence": [
+     "f_TIRED0418"
+    ],
+    "strength": "strong",
+    "ticked": true,
+    "by": "engine",
+    "rank": 1
+   },
+   {
+    "id": "in_timeback",
+    "kind": "truth",
+    "text": "A drive is a job somebody has to do; a train journey is time somebody gives back.",
+    "evidence": [
+     "brief:insight",
+     "f_ROUTE0412"
+    ],
+    "strength": "strong",
+    "ticked": true,
+    "by": "engine",
+    "rank": 2
+   },
+   {
+    "id": "in_journey",
+    "kind": "tension",
+    "text": "Rivals sell the destination; nobody sells the journey.",
+    "evidence": [
+     "fi_RIVALS005"
+    ],
+    "strength": "strong",
+    "ticked": true,
+    "by": "engine",
+    "rank": 3
+   },
+   {
+    "id": "in_driver",
+    "kind": "tension",
+    "text": "One person does every drive, and quietly resents it.",
+    "evidence": [
+     "f_DRIVER0431",
+     "fi_NOTALK003"
+    ],
+    "strength": "moderate",
+    "ticked": true,
+    "by": "engine",
+    "rank": 4,
+    "derived": true
+   },
+   {
+    "id": "in_friday",
+    "kind": "truth",
+    "text": "Most weekends are decided on a Friday.",
+    "evidence": [
+     "f_BOOK00447"
+    ],
+    "strength": "moderate",
+    "ticked": true,
+    "by": "engine",
+    "rank": 5
+   },
+   {
+    "id": "in_fare",
+    "kind": "provocation",
+    "text": "What if the fare were the surprise, not the catch?",
+    "evidence": [
+     "f_FARE00440",
+     "fi_FARE00007"
+    ],
+    "strength": "thin",
+    "ticked": false,
+    "by": "engine",
+    "rank": 8,
+    "derived": true
+   },
+   {
+    "id": "in_nofight",
+    "kind": "yours",
+    "text": "Nobody wants to argue about the motorway.",
+    "evidence": [],
+    "strength": "thin",
+    "ticked": true,
+    "by": "Shrey",
+    "rank": 10
+   }
+  ]
+ },
+ "journey": [
+  {
+   "key": "tv",
+   "day": "Thursday 21:00",
+   "where": "TV, after the news"
+  },
+  {
+   "key": "story",
+   "day": "Thursday 22:40",
+   "where": "Instagram, scrolling in bed"
+  },
+  {
+   "key": "poster",
+   "day": "Friday 08:15",
+   "where": "48-sheet outside Heuston"
+  },
+  {
+   "key": "radio",
+   "day": "Friday 17:30",
+   "where": "Drive-time radio, stuck in traffic"
+  },
+  {
+   "key": "seat",
+   "day": "Saturday 09:20",
+   "where": "On board, the table seat"
+  },
+  {
+   "key": "email",
+   "day": "Sunday 16:00",
+   "where": "Inbox, before the trip home"
+  }
+ ],
+ "crew": [],
+ "expeditions": [],
+ "territories": [],
+ "spread": {
+  "threshold": 0.12,
+  "close": [],
+  "gaps": []
+ },
+ "greenlit": [],
+ "asks": [],
+ "actions": [],
+ "lookups": [],
+ "notes": [],
+ "sends": [],
+ "review": {
+  "sensitive": {
+   "required": false,
+   "status": "not_needed"
+  }
+ },
+ "run": {
+  "state": "gate",
+  "stage": "pick",
+  "gate": {
+   "id": "pick",
+   "n": 1,
+   "of": 2,
+   "agent": "strategy",
+   "dex": "Tick the insights the crew should explore.",
+   "checks": [],
+   "blocked_by": []
+  },
+  "stages": [
+   {
+    "id": "pick",
+    "name": "Pick",
+    "status": "now"
+   },
+   {
+    "id": "explore",
+    "name": "Explore",
+    "status": "next"
+   },
+   {
+    "id": "develop",
+    "name": "Develop",
+    "status": "next"
+   },
+   {
+    "id": "greenlight",
+    "name": "Greenlight",
+    "status": "next"
+   },
+   {
+    "id": "send",
+    "name": "Send",
+    "status": "next"
+   }
+  ],
+  "approvals": {},
+  "decisions": [],
+  "agent": {
+   "key": "strategy",
+   "activity": "human"
+  },
+  "calls": {
+   "model": 2,
+   "lookups": 0
+  }
+ }
+}

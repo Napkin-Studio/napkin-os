@@ -1,0 +1,1805 @@
+{
+ "paths": {
+  "actions": {
+   "type": "array"
+  },
+  "actions[]": {
+   "type": "object"
+  },
+  "actions[].agent": {
+   "enum": [
+    "approval",
+    "brief",
+    "copy",
+    "deck",
+    "idea",
+    "knowledge",
+    "orchestrator",
+    "research",
+    "review",
+    "strategy",
+    "synthesis"
+   ],
+   "type": "string"
+  },
+  "actions[].at": {
+   "type": "string"
+  },
+  "actions[].id": {
+   "type": "string"
+  },
+  "actions[].kind": {
+   "enum": [
+    "merged",
+    "moved",
+    "sent_agent",
+    "spread_fix"
+   ],
+   "type": "string"
+  },
+  "actions[].territory_ids": {
+   "type": "array"
+  },
+  "actions[].territory_ids[]": {
+   "type": "string"
+  },
+  "actions[].text": {
+   "type": "string"
+  },
+  "actions[].undone": {
+   "type": "boolean"
+  },
+  "actions[].undone_by": {
+   "type": "string"
+  },
+  "asks": {
+   "type": "array"
+  },
+  "asks[]": {
+   "type": "object"
+  },
+  "asks[].answer": {
+   "enum": [
+    "change",
+    "ok",
+    "send_flagged",
+    "verify"
+   ],
+   "type": "string"
+  },
+  "asks[].at": {
+   "type": "string"
+  },
+  "asks[].by": {
+   "type": "string"
+  },
+  "asks[].id": {
+   "type": "string"
+  },
+  "asks[].ids": {
+   "type": "array"
+  },
+  "asks[].ids[]": {
+   "type": "string"
+  },
+  "asks[].kind": {
+   "enum": [
+    "derived_evidence",
+    "near_mandatory",
+    "sensitive_review"
+   ],
+   "type": "string"
+  },
+  "asks[].status": {
+   "enum": [
+    "answered",
+    "open"
+   ],
+   "type": "string"
+  },
+  "asks[].territory_id": {
+   "type": "string"
+  },
+  "asks[].text": {
+   "type": "string"
+  },
+  "crew": {
+   "type": "array"
+  },
+  "crew[]": {
+   "type": "object"
+  },
+  "crew[].angle": {
+   "type": "number"
+  },
+  "crew[].colour": {
+   "type": "string"
+  },
+  "crew[].direction": {
+   "enum": [
+    "adjacent",
+    "core",
+    "custom",
+    "feel",
+    "opposite",
+    "outside",
+    "yours"
+   ],
+   "type": "string"
+  },
+  "crew[].heading": {
+   "type": "string"
+  },
+  "crew[].id": {
+   "type": "string"
+  },
+  "crew[].name": {
+   "type": "string"
+  },
+  "crew[].role": {
+   "enum": [
+    "approval",
+    "brief",
+    "copy",
+    "deck",
+    "idea",
+    "knowledge",
+    "orchestrator",
+    "research",
+    "review",
+    "strategy",
+    "synthesis"
+   ],
+   "type": "string"
+  },
+  "crew[].short": {
+   "type": "string"
+  },
+  "expeditions": {
+   "type": "array"
+  },
+  "expeditions[]": {
+   "type": "object"
+  },
+  "expeditions[].crew": {
+   "type": "string"
+  },
+  "expeditions[].id": {
+   "type": "string"
+  },
+  "expeditions[].insights": {
+   "type": "array"
+  },
+  "expeditions[].insights[]": {
+   "type": "string"
+  },
+  "expeditions[].routes": {
+   "type": "array"
+  },
+  "expeditions[].routes[]": {
+   "type": "object"
+  },
+  "expeditions[].routes[].distance": {
+   "type": "number"
+  },
+  "expeditions[].routes[].territory_id": {
+   "type": "string"
+  },
+  "expeditions[].state": {
+   "enum": [
+    "back",
+    "ready",
+    "running",
+    "stopped"
+   ],
+   "type": "string"
+  },
+  "expeditions[].steer": {
+   "type": "array"
+  },
+  "expeditions[].steer[]": {
+   "type": "object"
+  },
+  "expeditions[].steer[].at": {
+   "type": "string"
+  },
+  "expeditions[].steer[].by": {
+   "type": "string"
+  },
+  "expeditions[].steer[].kind": {
+   "enum": [
+    "cross",
+    "further",
+    "pull",
+    "stop"
+   ],
+   "type": "string"
+  },
+  "expeditions[].steer[].with": {
+   "type": "string"
+  },
+  "expeditions[].turn": {
+   "type": "string"
+  },
+  "expeditions[].way": {
+   "type": "array"
+  },
+  "expeditions[].way[]": {
+   "type": "object"
+  },
+  "expeditions[].way[].at": {
+   "type": "number"
+  },
+  "expeditions[].way[].cite": {
+   "type": "string"
+  },
+  "expeditions[].way[].text": {
+   "type": "string"
+  },
+  "finds": {
+   "type": "array"
+  },
+  "finds[]": {
+   "type": "object"
+  },
+  "finds[].date": {
+   "type": "string"
+  },
+  "finds[].id": {
+   "type": "string"
+  },
+  "finds[].in_play": {
+   "type": "boolean"
+  },
+  "finds[].kind": {
+   "enum": [
+    "case",
+    "found"
+   ],
+   "type": "string"
+  },
+  "finds[].lookup": {
+   "type": "string"
+  },
+  "finds[].quote_checked": {
+   "type": "boolean"
+  },
+  "finds[].source": {
+   "type": "string"
+  },
+  "finds[].text": {
+   "type": "string"
+  },
+  "focus": {
+   "type": "object"
+  },
+  "focus.insights": {
+   "type": "array"
+  },
+  "focus.insights[]": {
+   "type": "object"
+  },
+  "focus.insights[].by": {
+   "type": "string"
+  },
+  "focus.insights[].derived": {
+   "type": "boolean"
+  },
+  "focus.insights[].evidence": {
+   "type": "array"
+  },
+  "focus.insights[].evidence[]": {
+   "type": "string"
+  },
+  "focus.insights[].id": {
+   "type": "string"
+  },
+  "focus.insights[].kind": {
+   "enum": [
+    "borrowed",
+    "provocation",
+    "tension",
+    "truth",
+    "yours"
+   ],
+   "type": "string"
+  },
+  "focus.insights[].rank": {
+   "type": "integer"
+  },
+  "focus.insights[].strength": {
+   "enum": [
+    "moderate",
+    "strong",
+    "thin"
+   ],
+   "type": "string"
+  },
+  "focus.insights[].text": {
+   "type": "string"
+  },
+  "focus.insights[].ticked": {
+   "type": "boolean"
+  },
+  "focus.sources": {
+   "type": "array"
+  },
+  "focus.sources[]": {
+   "type": "object"
+  },
+  "focus.sources[].id": {
+   "type": "string"
+  },
+  "focus.sources[].in_play": {
+   "type": "boolean"
+  },
+  "greenlit": {
+   "type": "array"
+  },
+  "greenlit[]": {
+   "type": "object"
+  },
+  "greenlit[].at": {
+   "type": "string"
+  },
+  "greenlit[].by": {
+   "type": "string"
+  },
+  "greenlit[].derived_resolution": {
+   "enum": [
+    "pending",
+    "sent_flagged",
+    "verified"
+   ],
+   "type": "string"
+  },
+  "greenlit[].note": {
+   "type": "string"
+  },
+  "greenlit[].rests_on_derived": {
+   "type": "array"
+  },
+  "greenlit[].rests_on_derived[]": {
+   "type": "string"
+  },
+  "greenlit[].sensitive_review": {
+   "enum": [
+    "done",
+    "missing",
+    "not_needed"
+   ],
+   "type": "string"
+  },
+  "greenlit[].territory_id": {
+   "type": "string"
+  },
+  "journey": {
+   "type": "array"
+  },
+  "journey[]": {
+   "type": "object"
+  },
+  "journey[].day": {
+   "type": "string"
+  },
+  "journey[].key": {
+   "enum": [
+    "email",
+    "poster",
+    "radio",
+    "seat",
+    "story",
+    "tv"
+   ],
+   "type": "string"
+  },
+  "journey[].where": {
+   "type": "string"
+  },
+  "lookups": {
+   "type": "array"
+  },
+  "lookups[]": {
+   "type": "object"
+  },
+  "lookups[].at": {
+   "type": "string"
+  },
+  "lookups[].by": {
+   "type": "string"
+  },
+  "lookups[].found": {
+   "type": "array"
+  },
+  "lookups[].found[]": {
+   "type": "string"
+  },
+  "lookups[].id": {
+   "type": "string"
+  },
+  "lookups[].q": {
+   "type": "string"
+  },
+  "lookups[].status": {
+   "enum": [
+    "ask",
+    "done",
+    "refused"
+   ],
+   "type": "string"
+  },
+  "notes": {
+   "type": "array"
+  },
+  "notes[]": {
+   "type": "object"
+  },
+  "notes[].agent": {
+   "enum": [
+    "approval",
+    "brief",
+    "copy",
+    "deck",
+    "idea",
+    "knowledge",
+    "orchestrator",
+    "research",
+    "review",
+    "strategy",
+    "synthesis"
+   ],
+   "type": "string"
+  },
+  "notes[].at": {
+   "type": "string"
+  },
+  "notes[].cite": {
+   "type": "array"
+  },
+  "notes[].cite[]": {
+   "type": "string"
+  },
+  "notes[].id": {
+   "type": "string"
+  },
+  "notes[].text": {
+   "type": "string"
+  },
+  "review": {
+   "type": "object"
+  },
+  "review.sensitive": {
+   "type": "object"
+  },
+  "review.sensitive.at": {
+   "type": "string"
+  },
+  "review.sensitive.by": {
+   "type": "string"
+  },
+  "review.sensitive.required": {
+   "type": "boolean"
+  },
+  "review.sensitive.status": {
+   "enum": [
+    "done",
+    "missing",
+    "not_needed"
+   ],
+   "type": "string"
+  },
+  "run": {
+   "type": "object"
+  },
+  "run.agent": {
+   "type": "object"
+  },
+  "run.agent.activity": {
+   "enum": [
+    "check",
+    "complete",
+    "error",
+    "human",
+    "read",
+    "think",
+    "waiting",
+    "work",
+    "write"
+   ],
+   "type": "string"
+  },
+  "run.agent.key": {
+   "enum": [
+    "approval",
+    "brief",
+    "copy",
+    "deck",
+    "idea",
+    "knowledge",
+    "orchestrator",
+    "research",
+    "review",
+    "strategy",
+    "synthesis"
+   ],
+   "type": "string"
+  },
+  "run.agent.slow": {
+   "type": "boolean"
+  },
+  "run.agent.step_index": {
+   "type": "integer"
+  },
+  "run.agent.step_total": {
+   "type": "integer"
+  },
+  "run.agent.to": {
+   "enum": [
+    "approval",
+    "brief",
+    "copy",
+    "deck",
+    "idea",
+    "knowledge",
+    "orchestrator",
+    "research",
+    "review",
+    "strategy",
+    "synthesis"
+   ],
+   "type": "string"
+  },
+  "run.approvals": {
+   "type": "object"
+  },
+  "run.approvals.greenlight": {
+   "type": "object"
+  },
+  "run.approvals.greenlight.at": {
+   "type": "string"
+  },
+  "run.approvals.greenlight.by": {
+   "type": "string"
+  },
+  "run.approvals.greenlight.decision": {
+   "enum": [
+    "approve",
+    "edit",
+    "retry"
+   ],
+   "type": "string"
+  },
+  "run.approvals.greenlight.note": {
+   "type": "string"
+  },
+  "run.approvals.pick": {
+   "type": "object"
+  },
+  "run.approvals.pick.at": {
+   "type": "string"
+  },
+  "run.approvals.pick.by": {
+   "type": "string"
+  },
+  "run.approvals.pick.decision": {
+   "enum": [
+    "approve",
+    "edit",
+    "retry"
+   ],
+   "type": "string"
+  },
+  "run.approvals.pick.note": {
+   "type": "string"
+  },
+  "run.calls": {
+   "type": "object"
+  },
+  "run.calls.lookups": {
+   "type": "integer"
+  },
+  "run.calls.model": {
+   "type": "integer"
+  },
+  "run.decisions": {
+   "type": "array"
+  },
+  "run.decisions[]": {
+   "type": "object"
+  },
+  "run.decisions[].at": {
+   "type": "string"
+  },
+  "run.decisions[].by": {
+   "type": "string"
+  },
+  "run.decisions[].gate": {
+   "enum": [
+    "greenlight",
+    "pick"
+   ],
+   "type": "string"
+  },
+  "run.decisions[].kind": {
+   "enum": [
+    "approve",
+    "edit",
+    "retry"
+   ],
+   "type": "string"
+  },
+  "run.done": {
+   "type": "object"
+  },
+  "run.done.greenlit": {
+   "type": "integer"
+  },
+  "run.done.routes": {
+   "type": "integer"
+  },
+  "run.done.sent": {
+   "type": "integer"
+  },
+  "run.done.summary": {
+   "type": "string"
+  },
+  "run.error": {
+   "type": "object"
+  },
+  "run.error.message": {
+   "type": "string"
+  },
+  "run.error.refused": {
+   "type": "array"
+  },
+  "run.error.refused[]": {
+   "type": "string"
+  },
+  "run.error.retryable": {
+   "type": "boolean"
+  },
+  "run.error.stage": {
+   "enum": [
+    "develop",
+    "explore",
+    "greenlight",
+    "pick",
+    "send"
+   ],
+   "type": "string"
+  },
+  "run.gate": {},
+  "run.gate.agent": {
+   "enum": [
+    "approval",
+    "brief",
+    "copy",
+    "deck",
+    "idea",
+    "knowledge",
+    "orchestrator",
+    "research",
+    "review",
+    "strategy",
+    "synthesis"
+   ],
+   "type": "string"
+  },
+  "run.gate.blocked_by": {
+   "type": "array"
+  },
+  "run.gate.blocked_by[]": {
+   "type": "object"
+  },
+  "run.gate.blocked_by[].ids": {
+   "type": "array"
+  },
+  "run.gate.blocked_by[].ids[]": {
+   "type": "string"
+  },
+  "run.gate.blocked_by[].kind": {
+   "enum": [
+    "derived_evidence",
+    "near_mandatory",
+    "no_routes",
+    "nothing_picked",
+    "sensitive_review"
+   ],
+   "type": "string"
+  },
+  "run.gate.blocked_by[].text": {
+   "type": "string"
+  },
+  "run.gate.checks": {
+   "type": "array"
+  },
+  "run.gate.checks[]": {
+   "type": "object"
+  },
+  "run.gate.checks[].ok": {
+   "type": "boolean"
+  },
+  "run.gate.checks[].text": {
+   "type": "string"
+  },
+  "run.gate.dex": {
+   "type": "string"
+  },
+  "run.gate.id": {
+   "enum": [
+    "greenlight",
+    "pick"
+   ],
+   "type": "string"
+  },
+  "run.gate.n": {
+   "type": "integer"
+  },
+  "run.gate.of": {
+   "const": 2,
+   "type": "integer"
+  },
+  "run.gate_requests": {
+   "type": "array"
+  },
+  "run.gate_requests[]": {
+   "type": "object"
+  },
+  "run.gate_requests[].at": {
+   "type": "string"
+  },
+  "run.gate_requests[].gate": {
+   "enum": [
+    "greenlight",
+    "pick"
+   ],
+   "type": "string"
+  },
+  "run.gate_requests[].kind": {
+   "enum": [
+    "edit",
+    "retry"
+   ],
+   "type": "string"
+  },
+  "run.gate_requests[].status": {
+   "enum": [
+    "waiting"
+   ],
+   "type": "string"
+  },
+  "run.stage": {
+   "enum": [
+    "develop",
+    "explore",
+    "greenlight",
+    "pick",
+    "send"
+   ],
+   "type": "string"
+  },
+  "run.stages": {
+   "type": "array"
+  },
+  "run.stages[]": {
+   "type": "object"
+  },
+  "run.stages[].id": {
+   "enum": [
+    "develop",
+    "explore",
+    "greenlight",
+    "pick",
+    "send"
+   ],
+   "type": "string"
+  },
+  "run.stages[].name": {
+   "type": "string"
+  },
+  "run.stages[].status": {
+   "enum": [
+    "done",
+    "failed",
+    "next",
+    "now"
+   ],
+   "type": "string"
+  },
+  "run.stages[].sub": {
+   "type": "string"
+  },
+  "run.state": {
+   "enum": [
+    "building",
+    "done",
+    "draft",
+    "failed",
+    "gate"
+   ],
+   "type": "string"
+  },
+  "schema_version": {
+   "const": 1,
+   "type": "integer"
+  },
+  "sends": {
+   "type": "array"
+  },
+  "sends[]": {
+   "type": "object"
+  },
+  "sends[].at": {
+   "type": "string"
+  },
+  "sends[].by": {
+   "type": "string"
+  },
+  "sends[].id": {
+   "type": "string"
+  },
+  "sends[].not_chosen": {
+   "type": "array"
+  },
+  "sends[].not_chosen[]": {
+   "type": "string"
+  },
+  "sends[].status": {
+   "enum": [
+    "asked",
+    "not_built",
+    "sent"
+   ],
+   "type": "string"
+  },
+  "sends[].territory_ids": {
+   "type": "array"
+  },
+  "sends[].territory_ids[]": {
+   "type": "string"
+  },
+  "sends[].to": {
+   "enum": [
+    "deck-maker",
+    "production-tool"
+   ],
+   "type": "string"
+  },
+  "spread": {
+   "type": "object"
+  },
+  "spread.close": {
+   "type": "array"
+  },
+  "spread.close[]": {
+   "type": "object"
+  },
+  "spread.close[].a": {
+   "type": "string"
+  },
+  "spread.close[].b": {
+   "type": "string"
+  },
+  "spread.close[].distance": {
+   "type": "number"
+  },
+  "spread.gaps": {
+   "type": "array"
+  },
+  "spread.gaps[]": {
+   "type": "object"
+  },
+  "spread.gaps[].angle": {
+   "type": "number"
+  },
+  "spread.gaps[].text": {
+   "type": "string"
+  },
+  "spread.threshold": {
+   "type": "number"
+  },
+  "territories": {
+   "type": "array"
+  },
+  "territories[]": {
+   "type": "object"
+  },
+  "territories[].assumes": {
+   "type": "array"
+  },
+  "territories[].assumes[]": {
+   "type": "string"
+  },
+  "territories[].band": {
+   "enum": [
+    "core",
+    "far_out",
+    "stretch"
+   ],
+   "type": "string"
+  },
+  "territories[].blind": {
+   "type": "object"
+  },
+  "territories[].blind.advisory": {
+   "const": true,
+   "type": "boolean"
+  },
+  "territories[].blind.by_dimension": {
+   "type": "object"
+  },
+  "territories[].blind.by_dimension.assets": {
+   "type": "integer"
+  },
+  "territories[].blind.by_dimension.distinct": {
+   "type": "integer"
+  },
+  "territories[].blind.by_dimension.fame": {
+   "type": "integer"
+  },
+  "territories[].blind.by_dimension.fit": {
+   "type": "integer"
+  },
+  "territories[].blind.by_dimension.ownability": {
+   "type": "integer"
+  },
+  "territories[].blind.by_dimension.travel": {
+   "type": "integer"
+  },
+  "territories[].blind.by_dimension.truth": {
+   "type": "integer"
+  },
+  "territories[].blind.of": {
+   "const": 35,
+   "type": "integer"
+  },
+  "territories[].blind.total": {
+   "type": "integer"
+  },
+  "territories[].checks": {
+   "type": "array"
+  },
+  "territories[].checks[]": {
+   "type": "object"
+  },
+  "territories[].checks[].cite": {
+   "type": "array"
+  },
+  "territories[].checks[].cite[]": {
+   "type": "string"
+  },
+  "territories[].checks[].id": {
+   "type": "string"
+  },
+  "territories[].checks[].kind": {
+   "enum": [
+    "contrast",
+    "evidence",
+    "judge",
+    "landscape",
+    "mandatory",
+    "proposition",
+    "rival"
+   ],
+   "type": "string"
+  },
+  "territories[].checks[].status": {
+   "enum": [
+    "fail",
+    "ok",
+    "unchecked",
+    "warn"
+   ],
+   "type": "string"
+  },
+  "territories[].checks[].text": {
+   "type": "string"
+  },
+  "territories[].crew": {
+   "type": "string"
+  },
+  "territories[].distance": {
+   "type": "number"
+  },
+  "territories[].evidence": {
+   "type": "array"
+  },
+  "territories[].evidence[]": {
+   "type": "string"
+  },
+  "territories[].frames": {
+   "type": "array"
+  },
+  "territories[].frames[]": {
+   "type": "object"
+  },
+  "territories[].frames[].approved": {
+   "type": "boolean"
+  },
+  "territories[].frames[].flagged": {
+   "type": "boolean"
+  },
+  "territories[].frames[].guard_checked": {
+   "type": "boolean"
+  },
+  "territories[].frames[].model": {
+   "type": "string"
+  },
+  "territories[].frames[].path": {
+   "type": "string"
+  },
+  "territories[].frames[].prompt": {
+   "type": "string"
+  },
+  "territories[].frames[].rights": {
+   "enum": [
+    "generated",
+    "licensed",
+    "supplied",
+    "unknown"
+   ],
+   "type": "string"
+  },
+  "territories[].frames[].sha256": {
+   "type": "string"
+  },
+  "territories[].frames[].shot": {
+   "type": "string"
+  },
+  "territories[].frames[].style_version": {
+   "type": "string"
+  },
+  "territories[].id": {
+   "type": "string"
+  },
+  "territories[].kill_reason": {
+   "type": "string"
+  },
+  "territories[].marks": {
+   "type": "object"
+  },
+  "territories[].marks.fit": {
+   "type": "integer"
+  },
+  "territories[].marks.ownable": {
+   "type": "integer"
+  },
+  "territories[].marks.risk": {
+   "type": "integer"
+  },
+  "territories[].mood": {
+   "type": "string"
+  },
+  "territories[].name": {
+   "type": "string"
+  },
+  "territories[].origin": {
+   "type": "object"
+  },
+  "territories[].origin.from": {
+   "type": "array"
+  },
+  "territories[].origin.from[]": {
+   "type": "string"
+  },
+  "territories[].origin.kind": {
+   "enum": [
+    "crew",
+    "cross",
+    "further",
+    "person",
+    "pull"
+   ],
+   "type": "string"
+  },
+  "territories[].pictures": {
+   "type": "array"
+  },
+  "territories[].pictures[]": {
+   "type": "object"
+  },
+  "territories[].pictures[].gap_reason": {
+   "type": "string"
+  },
+  "territories[].pictures[].id": {
+   "type": "string"
+  },
+  "territories[].pictures[].image": {
+   "type": "string"
+  },
+  "territories[].pictures[].kind": {
+   "enum": [
+    "frame",
+    "gap",
+    "sketch"
+   ],
+   "type": "string"
+  },
+  "territories[].pictures[].prompt": {
+   "type": "string"
+  },
+  "territories[].pictures[].rights": {
+   "enum": [
+    "generated",
+    "licensed",
+    "supplied",
+    "unknown"
+   ],
+   "type": "string"
+  },
+  "territories[].pictures[].scene": {
+   "enum": [
+    "arrival",
+    "car",
+    "home",
+    "night",
+    "platform",
+    "road",
+    "sleep",
+    "table",
+    "town",
+    "window"
+   ],
+   "type": "string"
+  },
+  "territories[].pictures[].sha256": {
+   "type": "string"
+  },
+  "territories[].pictures[].touchpoint": {
+   "enum": [
+    "email",
+    "poster",
+    "radio",
+    "seat",
+    "story",
+    "tv"
+   ],
+   "type": "string"
+  },
+  "territories[].proof_cases": {
+   "type": "array"
+  },
+  "territories[].proof_cases[]": {
+   "type": "object"
+  },
+  "territories[].proof_cases[].badge": {
+   "enum": [
+    "UNVERIFIED",
+    "VERIFIED"
+   ],
+   "type": "string"
+  },
+  "territories[].proof_cases[].brand": {
+   "type": "string"
+  },
+  "territories[].proof_cases[].evidence_level": {
+   "type": "string"
+  },
+  "territories[].proof_cases[].id": {
+   "type": "string"
+  },
+  "territories[].proof_cases[].note": {
+   "type": "string"
+  },
+  "territories[].proof_cases[].source_url": {
+   "type": "string"
+  },
+  "territories[].proof_cases[].title": {
+   "type": "string"
+  },
+  "territories[].proof_cases[].year": {
+   "type": [
+    "integer",
+    "string"
+   ]
+  },
+  "territories[].rank": {
+   "type": "integer"
+  },
+  "territories[].ready": {
+   "type": "boolean"
+  },
+  "territories[].references": {
+   "type": "array"
+  },
+  "territories[].references[]": {
+   "type": "string"
+  },
+  "territories[].risks": {
+   "type": "array"
+  },
+  "territories[].risks[]": {
+   "type": "string"
+  },
+  "territories[].sketch": {
+   "type": "string"
+  },
+  "territories[].state": {
+   "enum": [
+    "developed",
+    "found"
+   ],
+   "type": "string"
+  },
+  "territories[].status": {
+   "enum": [
+    "killed",
+    "live",
+    "parked"
+   ],
+   "type": "string"
+  },
+  "territories[].tension": {
+   "type": "string"
+  },
+  "territories[].thought": {
+   "type": "string"
+  },
+  "territories[].tier": {
+   "enum": [
+    "brave",
+    "safe",
+    "stretch"
+   ],
+   "type": "string"
+  },
+  "territories[].visual": {
+   "type": "object"
+  },
+  "territories[].visual.image": {
+   "type": "string"
+  },
+  "territories[].visual.kind": {
+   "const": "image_prompt",
+   "type": "string"
+  },
+  "territories[].visual.prompt": {
+   "type": "string"
+  },
+  "territories[].visual.status": {
+   "type": "string"
+  },
+  "territories[].vote": {
+   "enum": [
+    "combine",
+    "keep",
+    "kill"
+   ],
+   "type": "string"
+  },
+  "territories[].why": {
+   "type": "string"
+  },
+  "territories[].world": {
+   "type": "object"
+  },
+  "territories[].world.crm": {
+   "type": "array"
+  },
+  "territories[].world.crm[]": {
+   "type": "string"
+  },
+  "territories[].world.dial": {
+   "type": "object"
+  },
+  "territories[].world.dial.brand": {
+   "type": "integer"
+  },
+  "territories[].world.dial.energy": {
+   "type": "integer"
+  },
+  "territories[].world.dial.register": {
+   "type": "integer"
+  },
+  "territories[].world.dial.tone": {
+   "type": "integer"
+  },
+  "territories[].world.dial_set": {
+   "type": "object"
+  },
+  "territories[].world.dial_set.brand": {
+   "type": "integer"
+  },
+  "territories[].world.dial_set.energy": {
+   "type": "integer"
+  },
+  "territories[].world.dial_set.register": {
+   "type": "integer"
+  },
+  "territories[].world.dial_set.tone": {
+   "type": "integer"
+  },
+  "territories[].world.headlines": {
+   "type": "object"
+  },
+  "territories[].world.headlines.sl": {
+   "type": "string"
+  },
+  "territories[].world.headlines.sq": {
+   "type": "string"
+  },
+  "territories[].world.headlines.wl": {
+   "type": "string"
+  },
+  "territories[].world.headlines.wq": {
+   "type": "string"
+  },
+  "territories[].world.lead": {
+   "type": "string"
+  },
+  "territories[].world.lines": {
+   "type": "array"
+  },
+  "territories[].world.lines[]": {
+   "type": "string"
+  },
+  "territories[].world.music": {
+   "type": "string"
+  },
+  "territories[].world.not": {
+   "type": "array"
+  },
+  "territories[].world.not[]": {
+   "type": "string"
+  },
+  "territories[].world.palette": {
+   "type": "object"
+  },
+  "territories[].world.palette.acc": {
+   "type": "string"
+  },
+  "territories[].world.palette.bg": {
+   "type": "string"
+  },
+  "territories[].world.palette.ink": {
+   "type": "string"
+  },
+  "territories[].world.palette.soft": {
+   "type": "string"
+  },
+  "territories[].world.radio": {
+   "type": "array"
+  },
+  "territories[].world.radio[]": {
+   "type": "object"
+  },
+  "territories[].world.radio[].text": {
+   "type": "string"
+  },
+  "territories[].world.radio[].voice": {
+   "type": "string"
+  },
+  "territories[].world.refs": {
+   "type": "array"
+  },
+  "territories[].world.refs[]": {
+   "type": "string"
+  },
+  "territories[].world.scenes": {
+   "type": "object"
+  },
+  "territories[].world.scenes.email": {
+   "enum": [
+    "arrival",
+    "car",
+    "home",
+    "night",
+    "platform",
+    "road",
+    "sleep",
+    "table",
+    "town",
+    "window"
+   ],
+   "type": "string"
+  },
+  "territories[].world.scenes.poster": {
+   "enum": [
+    "arrival",
+    "car",
+    "home",
+    "night",
+    "platform",
+    "road",
+    "sleep",
+    "table",
+    "town",
+    "window"
+   ],
+   "type": "string"
+  },
+  "territories[].world.scenes.seat": {
+   "enum": [
+    "arrival",
+    "car",
+    "home",
+    "night",
+    "platform",
+    "road",
+    "sleep",
+    "table",
+    "town",
+    "window"
+   ],
+   "type": "string"
+  },
+  "territories[].world.scenes.story": {
+   "enum": [
+    "arrival",
+    "car",
+    "home",
+    "night",
+    "platform",
+    "road",
+    "sleep",
+    "table",
+    "town",
+    "window"
+   ],
+   "type": "string"
+  },
+  "territories[].world.seat": {
+   "type": "string"
+  },
+  "territories[].world.social": {
+   "type": "string"
+  },
+  "territories[].world.sonic": {
+   "type": "string"
+  },
+  "territories[].world.starred": {
+   "type": "array"
+  },
+  "territories[].world.starred[]": {
+   "type": "string"
+  },
+  "territories[].world.tv": {
+   "type": "array"
+  },
+  "territories[].world.tv[]": {
+   "type": "object"
+  },
+  "territories[].world.tv[].scene": {
+   "enum": [
+    "arrival",
+    "car",
+    "home",
+    "night",
+    "platform",
+    "road",
+    "sleep",
+    "table",
+    "town",
+    "window"
+   ],
+   "type": "string"
+  },
+  "territories[].world.tv[].text": {
+   "type": "string"
+  },
+  "territories[].world.type": {
+   "type": "object"
+  },
+  "territories[].world.type.font": {
+   "enum": [
+    "geist_extra_bold",
+    "newsreader"
+   ],
+   "type": "string"
+  },
+  "territories[].world.type.italic": {
+   "type": "boolean"
+  },
+  "territories[].world.type.weight": {
+   "enum": [
+    "400",
+    "600",
+    "800"
+   ],
+   "type": "integer"
+  },
+  "title": {
+   "type": "string"
+  },
+  "upstream": {
+   "type": "object"
+  }
+ },
+ "required": {
+  "(document)": [
+   "crew",
+   "expeditions",
+   "focus",
+   "greenlit",
+   "run",
+   "schema_version",
+   "territories",
+   "title"
+  ],
+  "actions[]": [
+   "agent",
+   "at",
+   "id",
+   "kind",
+   "text",
+   "undone"
+  ],
+  "asks[]": [
+   "id",
+   "kind",
+   "status",
+   "text"
+  ],
+  "crew[]": [
+   "angle",
+   "direction",
+   "heading",
+   "id",
+   "name",
+   "role",
+   "short"
+  ],
+  "expeditions[]": [
+   "crew",
+   "id",
+   "insights",
+   "routes",
+   "state",
+   "turn",
+   "way"
+  ],
+  "expeditions[].routes[]": [
+   "distance",
+   "territory_id"
+  ],
+  "expeditions[].steer[]": [
+   "at",
+   "by",
+   "kind"
+  ],
+  "expeditions[].way[]": [
+   "at",
+   "text"
+  ],
+  "finds[]": [
+   "date",
+   "id",
+   "in_play",
+   "kind",
+   "source",
+   "text"
+  ],
+  "focus": [
+   "insights",
+   "sources"
+  ],
+  "focus.insights[]": [
+   "by",
+   "evidence",
+   "id",
+   "kind",
+   "strength",
+   "text",
+   "ticked"
+  ],
+  "focus.sources[]": [
+   "id",
+   "in_play"
+  ],
+  "greenlit[]": [
+   "at",
+   "by",
+   "derived_resolution",
+   "rests_on_derived",
+   "territory_id"
+  ],
+  "journey[]": [
+   "day",
+   "key",
+   "where"
+  ],
+  "lookups[]": [
+   "by",
+   "id",
+   "q",
+   "status"
+  ],
+  "notes[]": [
+   "agent",
+   "at",
+   "id",
+   "text"
+  ],
+  "review.sensitive": [
+   "required",
+   "status"
+  ],
+  "run": [
+   "state"
+  ],
+  "run.agent": [
+   "activity",
+   "key"
+  ],
+  "run.approvals.greenlight": [
+   "at",
+   "by"
+  ],
+  "run.approvals.pick": [
+   "at",
+   "by"
+  ],
+  "run.calls": [
+   "lookups",
+   "model"
+  ],
+  "run.decisions[]": [
+   "at",
+   "by",
+   "gate",
+   "kind"
+  ],
+  "run.error": [
+   "message",
+   "stage"
+  ],
+  "run.gate": [
+   "id",
+   "n",
+   "of"
+  ],
+  "run.gate.blocked_by[]": [
+   "kind",
+   "text"
+  ],
+  "run.gate.checks[]": [
+   "ok",
+   "text"
+  ],
+  "run.gate_requests[]": [
+   "gate",
+   "kind"
+  ],
+  "run.stages[]": [
+   "id",
+   "name",
+   "status"
+  ],
+  "sends[]": [
+   "at",
+   "by",
+   "id",
+   "not_chosen",
+   "status",
+   "territory_ids",
+   "to"
+  ],
+  "spread": [
+   "close",
+   "gaps",
+   "threshold"
+  ],
+  "spread.close[]": [
+   "a",
+   "b",
+   "distance"
+  ],
+  "spread.gaps[]": [
+   "angle",
+   "text"
+  ],
+  "territories[]": [
+   "band",
+   "crew",
+   "distance",
+   "evidence",
+   "id",
+   "mood",
+   "name",
+   "references",
+   "risks",
+   "sketch",
+   "state",
+   "status",
+   "thought",
+   "tier",
+   "why"
+  ],
+  "territories[].blind": [
+   "of",
+   "total"
+  ],
+  "territories[].checks[]": [
+   "id",
+   "kind",
+   "status",
+   "text"
+  ],
+  "territories[].frames[]": [
+   "path"
+  ],
+  "territories[].marks": [
+   "fit",
+   "ownable",
+   "risk"
+  ],
+  "territories[].origin": [
+   "kind"
+  ],
+  "territories[].pictures[]": [
+   "id",
+   "kind",
+   "touchpoint"
+  ],
+  "territories[].proof_cases[]": [
+   "badge",
+   "brand",
+   "title"
+  ],
+  "territories[].visual": [
+   "kind",
+   "prompt",
+   "status"
+  ],
+  "territories[].world": [
+   "crm",
+   "dial",
+   "headlines",
+   "lines",
+   "music",
+   "not",
+   "palette",
+   "radio",
+   "refs",
+   "scenes",
+   "seat",
+   "social",
+   "sonic",
+   "tv",
+   "type"
+  ],
+  "territories[].world.dial": [
+   "brand",
+   "energy",
+   "register",
+   "tone"
+  ],
+  "territories[].world.dial_set": [
+   "brand",
+   "energy",
+   "register",
+   "tone"
+  ],
+  "territories[].world.headlines": [
+   "sl",
+   "sq",
+   "wl",
+   "wq"
+  ],
+  "territories[].world.palette": [
+   "acc",
+   "bg",
+   "ink",
+   "soft"
+  ],
+  "territories[].world.radio[]": [
+   "text",
+   "voice"
+  ],
+  "territories[].world.scenes": [
+   "email",
+   "poster",
+   "seat",
+   "story"
+  ],
+  "territories[].world.tv[]": [
+   "scene",
+   "text"
+  ],
+  "territories[].world.type": [
+   "font",
+   "italic",
+   "weight"
+  ]
+ }
+}

@@ -1,0 +1,173 @@
+# Contract: the Territories document
+
+`ie.napkin.territories`. Feature `territories-contract` (wave 1). Every other Territories feature reads or writes this
+document, so the shape is written once, here and in one schema, before the engine or the screens exist.
+
+| What | Where |
+|---|---|
+| The schema (draft-07, closed: unknown members are refused) | `app/templates/territories/schema.json` |
+| The additive-only lock | `app/templates/territories/schema.lock.json` |
+| The validator every feature calls | `engine/territory/contract.py` |
+| The fixtures (fictional: Linea, a weekend return by rail in Ireland) | `app/templates/territories/example/` |
+| The fixture builder | `engine/territory/example_build.py` |
+| The contract test | `engine/territory/tests/test_contract.py` (engine suite) |
+| The CLI conformance case | `test-sandbox/pipeline/conformance.mjs`, T25a and T25b |
+
+## 1. Where it runs
+
+Territories runs **inside the middleware**, like Brief and Research (owner, 2026-11-23). Middleware task handlers
+(`server/napkin/handlers`) call `engine/territory` in-process. There is no engine server, no sidecar and no routes of
+its own. The document is the only state: a run's stage, its gates and its answers live in `data.run`, so a job that dies
+resumes from the document, and the app reads the same document through the host. The middleware image must carry
+`app/templates/territories/schema.json` (or set `NAPKIN_TERRITORIES_TEMPLATE` to where it was copied).
+
+## 2. The flow it carries
+
+Three steps, three decisions (the owner's demo):
+
+1. **Pick** (`run.gate.id = pick`). The brief and research arrive read. `focus.insights` are ranked by evidence strength with the top ones
+   `ticked`. A person ticks or adds insights and approves.
+2. **Explore** (`run.stage = explore`, no gate). The crew (`crew`) goes out, one trail each (`expeditions`), landing `territories` (routes) at a
+   measured `distance`. The Review agent fixes the spread itself (`actions`, each with Undo) and records `spread`. Steering is optional.
+3. **Greenlight** (`run.gate.id = greenlight`). Every route is `developed` (a world, checks, marks, a blind rank). A person greenlights as many as
+   are worth making (`greenlit`) and sends them (`sends`). Routes not chosen travel too.
+
+## 3. Members of `shared/data.yaml`
+
+Writers: **person** (the app, on a click), **engine** (`engine/territory`, through a middleware handler), **host** (the spin-off, the host's
+validation). Readers: **view** (the Territories app), **Deck** (Deck Maker), **Production** (the production tool), **share** (the client review share).
+`*` = required. Every member is additive-only (section 6).
+
+| Member | Written by | Read by | What |
+|---|---|---|---|
+| `schema_version`* | engine | all | `1`. Bumped only for a break, which section 6 forbids until v2 |
+| `title`* | engine | view, Deck | Project title |
+| `upstream.<doc id>` | host (spin-off) | engine, view | The brief and the research, frozen whole. Read-only for everyone else. Brief fields are bare values (`insight`, `smp`, ...) |
+| `finds[]` | engine (look-up), person (keeps it) | view, Deck | The tool's own finds, `x_` ids. Separate from research pins; never written back to Research |
+| `focus.sources[]`* | engine, person | view | `{id (a cite), in_play}`: in or out of play. By id only, no value is copied |
+| `focus.insights[]`* | engine, person | view, engine | `{id in_*, kind, text, evidence[], strength, ticked, by, rank?, derived?}`. At most 25 |
+| `journey[]` | engine | view | The weekend journey's stops: `{key touchpoint, day, where}` (later fed from the media plan) |
+| `crew[]`* | engine, person (adds one) | view | `{id cr_*, direction, role, name, short, heading, angle, colour?}`. At most 8 |
+| `expeditions[]`* | engine | view | One trail per crew member per run: `{id ex_*, crew, state, insights[], way[], turn, routes[] (at most 4), steer[]}`. `way[]` is what it picked up, each with a `cite` |
+| `territories[]`* | engine, person (vote, park, kill, lead line, dial) | view, Deck, Production, share | Routes, at most 32. See section 4 |
+| `spread` | engine (Review) | view | `{threshold, close[], gaps[]}` |
+| `greenlit[]`* | person | view, Deck, Production | `{territory_id, by, at, rests_on_derived[], derived_resolution, note?, sensitive_review?}` |
+| `asks[]` | engine, person (answers) | view | The Booth's questions: only for derived evidence at greenlight, near a mandatory, or a sensitive review |
+| `actions[]` | engine | view | What the engine did by itself, each with Undo (`undone`) |
+| `lookups[]` | engine | view | Look-ups through the research port: `{id lq_*, q, status, found[]}`. Counts only; no price |
+| `notes[]` | engine | view | Notes on the record, shown in the Booth |
+| `sends[]` | person | Deck, Production | `{id snd_*, to deck-maker or production-tool, territory_ids[], not_chosen[], by, at, status}`. `not_built` until production-spinoff merges |
+| `review.sensitive` | person | view | `{required, status not_needed or missing or done}`. Safe-messaging categories only |
+| `run`* | engine (state, stages, gate, agent, calls, error, done), person (approvals, decisions, gate_requests) | view | Mirrors `deck-maker`'s run block, so gates behave the same. `calls` is counts only. **No cost member**: costs are for the Napkin team, never the product (Sai, 2026-11-19) and prices live only in the decision history |
+
+Landscape and whitespace are not here (non-goal); `territories-landscape` adds `landscape.yaml` additively.
+
+### 3.1 Citing, never copying (LESSONS 7)
+
+A claim names its source by id and never copies the value. The grammar (`definitions.cite`):
+
+- `brief:<field>`: reads `data.upstream.<brief doc id>.<field>`, where `<field>` is one of Brief Maker's `BRIEF_FIELDS`.
+- `f_XXXXXX`: a research pin, `fi_XXXXXX`: a research finding. Both read the carried `facts` and `findings` members (ids match
+  `campaign-research/facts.schema.json` and `findings.schema.json`).
+- `x_XXXXXX`: one of the document's own `finds`.
+
+`contract.check(doc, facts=, findings=)` proves every cite resolves, so an upstream field that does not arrive fails a test instead of showing
+"No research brought in".
+
+## 4. A route (`territories[]`)
+
+A superset of Deck Maker's stage-d card: `id name thought why mood references risks sketch` are all required, so a pick lands in Gate 2 without
+translation. `engine/territory/cards.py card()` keys all carry over by name, with one change: develop's blind `score` is stored as `blind`
+(`{total, of: 35, by_dimension, advisory}`) beside the person-facing `rank` (the judge's order; the person sees only the rank).
+
+| Member | Notes |
+|---|---|
+| `tier` | Judged risk: `safe`, `stretch`, `brave` (`ladder.TIERS`). Stored, not shown by default |
+| `band`, `distance` | Measured distance from the brief, 0 to 1. `band` is shown as Core / Stretch / Far out and **must equal `contract.band_of(distance)`** (core under 0.35, stretch under 0.65, far_out from 0.65) |
+| `crew`, `origin` | The crew member that found it; `origin.kind` is `crew`, `further`, `pull`, `cross` or `person` |
+| `state` | `found` (a thought) or `developed` (adds `world`, `checks`, `marks`, `pictures`: required by the schema) |
+| `status` | `live`, `parked`, `killed`. A killed route carries `kill_reason` (required) |
+| `evidence[]` | Cites. Empty means unproven and is shown so |
+| `marks` | `{fit, ownable, risk}`, 1 to 5: the three chips at greenlight |
+| `world` | `palette` (ink on bg at least 4.5 to 1), `type` (`newsreader` or `geist_extra_bold` only), `headlines` (four corners of the tone and energy dial), `lines` (at most 16), `tv`, `radio`, `social`, `seat`, `crm`, `music`, `sonic`, `refs`, `not`, `scenes`, `dial`, `dial_set?`, `lead?`, `starred[]`. Only this block is read by the touchpoint templates |
+| `checks[]` | `{id ck_*, kind proposition or mandatory or landscape or evidence or judge or contrast or rival, status ok or warn or fail or unchecked, text, cite[]}` |
+| `pictures[]` | One slot per pictured place. v1 draws `sketch` slots from the palette (`scene` required). `frame` needs `image`, `sha256` and `rights`; `gap` needs `gap_reason` (an honest gap, never the key visual reused). The same hash may not fill two slots |
+| `proof_cases[]`, `frames[]`, `visual`, `assumes[]`, `ready`, `vote`, `tension` | Carried from `cards.py`; `frames` is reserved for `territories-pictures-frames` |
+
+## 5. Gates and blocked states (LESSONS 11)
+
+`run.gate` is `null` or `{id: pick|greenlight, n, of, dex, checks[], blocked_by[], agent}`. `blocked_by[]` says in words why the gate cannot
+be passed: `nothing_picked`, `no_routes`, `derived_evidence`, `near_mandatory`, `sensitive_review`. The contract refuses (a) a gate that is blocked
+without saying so, (b) a `sent` send while a greenlit route's `rests_on_derived` is unresolved (`derived_resolution: pending`) and (c) a `sent` send
+while a required sensitive review is not `done`. Every blocked state is a fixture (section 8), so the engine's hold logic
+(`territories-gates`) tests against the exact documents the app will see.
+
+`derived_resolution`: `verified` when the route rests on no derived finding or the person verified it, `sent_flagged` when they chose to send
+it flagged, `pending` until they answer. `rests_on_derived` must list every `proposed` finding the route cites.
+
+## 6. Additive only
+
+- A new member is **optional**. A member is never removed or retyped, an enum value is never dropped, nothing newly becomes required.
+- `schema.lock.json` records every member path with its type and every enum value. `contract.lock_problems()` (and the test) fail on a break.
+  After an additive change: `cd engine && PYTHONPATH=. python -m territory.contract lock`, and commit the new lock with the schema.
+- Enums, id patterns and limits live **only** in `schema.json`. The engine reads them (`contract.enum`, `contract.pattern`, `contract.limit`); a test
+  fails if `ladder.TIERS`, `ladder.SCORE_DIMS`, Brief's `BRIEF_FIELDS` or the agent roles drift from them.
+- Length discipline (LESSONS 16) is a schema maximum: 25 insights, 8 crew, 4 routes per trail, 32 routes, 16 lines per world. The engine clamps
+  to `contract.limit(...)` **before** it writes; the host refuses a list over its maximum. "About 5 routes per heading" is the engine's target.
+
+## 7. Using the contract
+
+```python
+from territory import contract
+
+contract.validate(doc)                               # raises ContractError; .words is the list of refusals in words
+problems = contract.check(doc, facts=f, findings=fi)   # schema + cites resolve + bands + gates + text leaks + prices
+contract.validate_shape("territory", card)           # one emitted shape (insight, expedition, crew_member, territory, world, check,
+contract.validate_all("insight", insights)           #   picture, greenlit, ask, action, lookup, note, send, find, journey, spread, run)
+contract.enum("band"); contract.limit("territories"); contract.pattern("id_territory"); contract.band_of(0.4)
+contract.mint("territory", "<stable seed>")          # deterministic ids: a resumed run never re-mints
+contract.refusal_error(problems, "develop")          # the host's refusal as run.error, in words, retryable
+contract.example("data") / contract.example("greenlight_derived_pending")   # fixtures
+```
+
+The engine calls `validate_shape` on each piece as it makes it and `check` on the whole before writing. A refusal is carried into `run.error`
+(`state: failed`, `retryable`, `refused[]` in words) and shown to the person; it is never dropped and never retried silently.
+
+Text that must never reach a person fails `lint`: `(to confirm)`, `~~`, `**`, `{{ }}`, `field is null`, a bare `None` or `null`, a leading `# `.
+No member name or key matching `cost`, `price`, `usd`, `eur`, `spend` may appear anywhere outside `upstream`.
+
+## 8. Fixtures
+
+All fictional (Linea, Galway line). `example_build.py` writes them; the test fails if the committed files differ from its output.
+
+| Path | State |
+|---|---|
+| `example/data.json` | The finished run: 5 crew, 11 routes (8 developed, 2 found, 1 killed), 3 greenlit, sent to Deck Studio, Production hand-off `not_built` |
+| `example/facts.json`, `example/findings.json` | The carried research members (valid against the campaign-research schemas); three findings are derived (`proposed`) |
+| `example/states/pick.json` | Step 1 open |
+| `example/states/explore_running.json` | The crew out, routes landing |
+| `example/states/greenlight_open.json` | Gate open, nothing greenlit (`nothing_picked`) |
+| `example/states/greenlight_derived_pending.json` | A greenlit route rests on an unverified derived finding; the ask is open |
+| `example/states/greenlight_sensitive_missing.json` | Sensitive review required and missing |
+| `example/states/failed_refused.json` | The host refused an engine reply; `run.error` in words (an over-long list, an unknown id) |
+
+## 9. Demo constants to members
+
+| Demo (`prototype.html`) | Member |
+|---|---|
+| `BRIEF.fields` `brief:smp` | `upstream.<brief id>.smp`, cited `brief:smp` (`brief:tone` is `brief:tone_world_assets`) |
+| `SRC` pins `f_0412` and findings `fi_03` | `f_` and `fi_` ids with real 6+ character A-Z0-9 tails |
+| `SRC` `x_01..x_09` | `finds[]`, `id_find` |
+| springboards, insights | `focus.insights[]` |
+| `EXPS` (`k, role, name, brief, ang, col`) | `crew[]` (`id, direction, role, name, heading, angle, colour`) |
+| `EXPS[].way, turn, finds` | `expeditions[].way, turn, routes` |
+| `TERR` `t.sc`, `t.judge` | `marks`, `rank` |
+| `TERR` `H, extra, more, tv, radio, social, seat, crm, music, sonic, refs, not, dial, P, font, fw, fs` | `world.*` |
+| `JOURNEY`, `TPN` | `journey[]`, `definitions.touchpoint` |
+| `HIST`, Booth notes | `notes[]`, `actions[]`, `asks[]` |
+| the Booth's spend text | nothing: prices stay out of the document (`run.calls` holds counts) |
+
+## 10. Defaults taken (owner may override)
+
+From `territories-contract`'s open questions, defaults in force: `tier` (judged) and `band` (measured) are separate fields; both scores are stored,
+only the rank is shown; ceilings are 5 headings by up to 4 routes plus the planner's own and one added (8 crew, 32 routes) and 25 insights.

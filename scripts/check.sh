@@ -102,6 +102,8 @@ else
         want[rust]=1 ;;
       app/src-tauri/*)
         want[desktop]=1 ;;
+      app/templates/territories/*)  # the Territories schema and fixtures: the engine's contract test and the CLI conformance case read them
+        want[engine]=1; want[conformance]=1 ;;
       app/src/shell/bridge/*)  # the frame scripts napkin-host compiles in (frame.rs)
         want[frontend]=1; want[rust]=1; want[wasm]=1; want[desktop]=1 ;;
       app/src/shell/agency/*|app/src/shell/agents/*|app/src/shell/nui/tokens.css|app/src/brand/*|app/src/components/medallion*|app/templates/shared/agent-sphere/*)

@@ -1,0 +1,2660 @@
+{
+ "schema_version": 1,
+ "title": "Linea: Weekend by Rail",
+ "upstream": {
+  "5b0d3a7e-4c1f-4e2a-9a55-1d6c0f2b7e11": {
+   "background": "Linea runs weekend trains from Dublin to Galway and wants more couples and families to take them.",
+   "objectives": "Lift weekend return bookings by 12% over the summer.",
+   "audience": "Couples and young families in Dublin who drive west two or three weekends a year and arrive tired.",
+   "insight": "A drive is a job somebody has to do. A train journey is time somebody gives back to you.",
+   "smp": "The weekend starts when you sit down.",
+   "desired_response": "Think the train is quicker than I assumed. Feel the trip is part of the break. Book a weekend return.",
+   "tone_world_assets": "Warm, wry, never preachy.",
+   "mandatories": "Weekend return fare. No anti-car tone (shared regional partners)."
+  },
+  "a91c64f2-7d3b-4b8e-8f10-3e5d2c9a6b47": {
+   "campaign": {
+    "name": "Linea: Weekend by Rail"
+   }
+  }
+ },
+ "finds": [
+  {
+   "id": "x_FORUM0001",
+   "kind": "found",
+   "text": "In travel forum threads about weekends west, the train ride itself is named as a highlight.",
+   "source": "Public travel forums, 120 posts read",
+   "date": "2025-2026",
+   "quote_checked": true,
+   "lookup": "lq_forum",
+   "in_play": true
+  },
+  {
+   "id": "x_COMPAR0002",
+   "kind": "found",
+   "text": "54% of rail passengers in a comparator market count the journey as part of the trip.",
+   "source": "Passenger survey, comparator market",
+   "date": "2025",
+   "quote_checked": true,
+   "lookup": "lq_forum",
+   "in_play": true
+  },
+  {
+   "id": "x_LOUNGE0003",
+   "kind": "case",
+   "text": "Your holiday starts here, not at the gate.",
+   "source": "Case library (example), airport lounges",
+   "date": "2023",
+   "quote_checked": true,
+   "lookup": "lq_cases",
+   "in_play": true
+  },
+  {
+   "id": "x_MEALKIT004",
+   "kind": "case",
+   "text": "Dinner in 20 minutes. The rest of the evening is yours.",
+   "source": "Case library (example), meal kits",
+   "date": "2024",
+   "quote_checked": true,
+   "lookup": "lq_cases",
+   "in_play": true
+  },
+  {
+   "id": "x_AUDIOB0005",
+   "kind": "case",
+   "text": "Your commute is now your favourite part of the day.",
+   "source": "Case library (example), audiobooks",
+   "date": "2022",
+   "quote_checked": true,
+   "lookup": "lq_cases",
+   "in_play": true
+  },
+  {
+   "id": "x_THEMEPK009",
+   "kind": "case",
+   "text": "The story starts in the queue.",
+   "source": "Case library (example), theme parks",
+   "date": "2024",
+   "quote_checked": true,
+   "lookup": "lq_cases",
+   "in_play": true
+  }
+ ],
+ "focus": {
+  "sources": [
+   {
+    "id": "brief:smp",
+    "in_play": true
+   },
+   {
+    "id": "brief:insight",
+    "in_play": true
+   },
+   {
+    "id": "brief:audience",
+    "in_play": true
+   },
+   {
+    "id": "brief:desired_response",
+    "in_play": true
+   },
+   {
+    "id": "brief:mandatories",
+    "in_play": true
+   },
+   {
+    "id": "brief:tone_world_assets",
+    "in_play": true
+   },
+   {
+    "id": "f_ROUTE0412",
+    "in_play": true
+   },
+   {
+    "id": "f_TIRED0418",
+    "in_play": true
+   },
+   {
+    "id": "f_DRIVER0431",
+    "in_play": true
+   },
+   {
+    "id": "f_FARE00440",
+    "in_play": true
+   },
+   {
+    "id": "f_BOOK00447",
+    "in_play": true
+   },
+   {
+    "id": "f_CLIMATE450",
+    "in_play": true
+   },
+   {
+    "id": "fi_NOTALK003",
+    "in_play": true
+   },
+   {
+    "id": "fi_RIVALS005",
+    "in_play": true
+   },
+   {
+    "id": "fi_FARE00007",
+    "in_play": false
+   },
+   {
+    "id": "fi_SPONT0009",
+    "in_play": true
+   },
+   {
+    "id": "x_FORUM0001",
+    "in_play": true
+   },
+   {
+    "id": "x_COMPAR0002",
+    "in_play": true
+   },
+   {
+    "id": "x_LOUNGE0003",
+    "in_play": true
+   },
+   {
+    "id": "x_MEALKIT004",
+    "in_play": true
+   },
+   {
+    "id": "x_AUDIOB0005",
+    "in_play": true
+   },
+   {
+    "id": "x_THEMEPK009",
+    "in_play": true
+   }
+  ],
+  "insights": [
+   {
+    "id": "in_arrive",
+    "kind": "truth",
+    "text": "Arriving tired is the worst part of the weekend.",
+    "evidence": [
+     "f_TIRED0418"
+    ],
+    "strength": "strong",
+    "ticked": true,
+    "by": "engine",
+    "rank": 1
+   },
+   {
+    "id": "in_timeback",
+    "kind": "truth",
+    "text": "A drive is a job somebody has to do; a train journey is time somebody gives back.",
+    "evidence": [
+     "brief:insight",
+     "f_ROUTE0412"
+    ],
+    "strength": "strong",
+    "ticked": true,
+    "by": "engine",
+    "rank": 2
+   },
+   {
+    "id": "in_journey",
+    "kind": "tension",
+    "text": "Rivals sell the destination; nobody sells the journey.",
+    "evidence": [
+     "fi_RIVALS005"
+    ],
+    "strength": "strong",
+    "ticked": true,
+    "by": "engine",
+    "rank": 3
+   },
+   {
+    "id": "in_driver",
+    "kind": "tension",
+    "text": "One person does every drive, and quietly resents it.",
+    "evidence": [
+     "f_DRIVER0431",
+     "fi_NOTALK003"
+    ],
+    "strength": "moderate",
+    "ticked": true,
+    "by": "engine",
+    "rank": 4,
+    "derived": true
+   },
+   {
+    "id": "in_friday",
+    "kind": "truth",
+    "text": "Most weekends are decided on a Friday.",
+    "evidence": [
+     "f_BOOK00447"
+    ],
+    "strength": "moderate",
+    "ticked": true,
+    "by": "engine",
+    "rank": 5
+   },
+   {
+    "id": "in_forum",
+    "kind": "truth",
+    "text": "People already call the train ride a highlight.",
+    "evidence": [
+     "x_FORUM0001",
+     "x_COMPAR0002"
+    ],
+    "strength": "moderate",
+    "ticked": true,
+    "by": "engine",
+    "rank": 6
+   },
+   {
+    "id": "in_lounge",
+    "kind": "borrowed",
+    "text": "The holiday starts before you leave: lounges and queues sell the build-up.",
+    "evidence": [
+     "x_LOUNGE0003",
+     "x_THEMEPK009"
+    ],
+    "strength": "moderate",
+    "ticked": false,
+    "by": "engine",
+    "rank": 7
+   },
+   {
+    "id": "in_fare",
+    "kind": "provocation",
+    "text": "What if the fare were the surprise, not the catch?",
+    "evidence": [
+     "f_FARE00440",
+     "fi_FARE00007"
+    ],
+    "strength": "thin",
+    "ticked": false,
+    "by": "engine",
+    "rank": 8,
+    "derived": true
+   },
+   {
+    "id": "in_mealkit",
+    "kind": "borrowed",
+    "text": "Meal kits sell the hour back.",
+    "evidence": [
+     "x_MEALKIT004"
+    ],
+    "strength": "thin",
+    "ticked": false,
+    "by": "engine",
+    "rank": 9
+   },
+   {
+    "id": "in_nofight",
+    "kind": "yours",
+    "text": "Nobody wants to argue about the motorway.",
+    "evidence": [],
+    "strength": "thin",
+    "ticked": true,
+    "by": "Shrey",
+    "rank": 10
+   }
+  ]
+ },
+ "journey": [
+  {
+   "key": "tv",
+   "day": "Thursday 21:00",
+   "where": "TV, after the news"
+  },
+  {
+   "key": "story",
+   "day": "Thursday 22:40",
+   "where": "Instagram, scrolling in bed"
+  },
+  {
+   "key": "poster",
+   "day": "Friday 08:15",
+   "where": "48-sheet outside Heuston"
+  },
+  {
+   "key": "radio",
+   "day": "Friday 17:30",
+   "where": "Drive-time radio, stuck in traffic"
+  },
+  {
+   "key": "seat",
+   "day": "Saturday 09:20",
+   "where": "On board, the table seat"
+  },
+  {
+   "key": "email",
+   "day": "Sunday 16:00",
+   "where": "Inbox, before the trip home"
+  }
+ ],
+ "crew": [
+  {
+   "id": "cr_core",
+   "direction": "core",
+   "role": "strategy",
+   "name": "Close to the core",
+   "short": "Core",
+   "heading": "Stay on the proposition. Say it as plainly and truly as possible.",
+   "angle": 250,
+   "colour": "#8C8577"
+  },
+  {
+   "id": "cr_feel",
+   "direction": "feel",
+   "role": "idea",
+   "name": "Towards warmth",
+   "short": "Warmth",
+   "heading": "Go towards the feeling the brief points at: warm, sincere, family.",
+   "angle": 185,
+   "colour": "#E07A5F"
+  },
+  {
+   "id": "cr_opposite",
+   "direction": "opposite",
+   "role": "copy",
+   "name": "The opposite pole",
+   "short": "Opposite",
+   "heading": "Go the other way from warmth: wry, loud, comic. Never mock drivers.",
+   "angle": 5,
+   "colour": "#3D5AFE"
+  },
+  {
+   "id": "cr_adjacent",
+   "direction": "adjacent",
+   "role": "research",
+   "name": "Next door",
+   "short": "Next door",
+   "heading": "Look at neighbouring categories and bring back a device.",
+   "angle": 105,
+   "colour": "#E3A21A"
+  },
+  {
+   "id": "cr_outside",
+   "direction": "outside",
+   "role": "synthesis",
+   "name": "Far outside",
+   "short": "Outside",
+   "heading": "Leap out of travel entirely: lounges, theme parks, cruises. Then come back.",
+   "angle": 318,
+   "colour": "#8E5CF0"
+  }
+ ],
+ "expeditions": [
+  {
+   "id": "ex_core",
+   "crew": "cr_core",
+   "state": "back",
+   "insights": [
+    "in_arrive",
+    "in_timeback",
+    "in_journey",
+    "in_driver",
+    "in_friday",
+    "in_forum",
+    "in_nofight"
+   ],
+   "way": [
+    {
+     "at": 0.1,
+     "text": "Read the proposition",
+     "cite": "brief:smp"
+    },
+    {
+     "at": 0.2,
+     "text": "Kept: arriving tired is the worst part",
+     "cite": "f_TIRED0418"
+    },
+    {
+     "at": 0.34,
+     "text": "Checked the fare and the times",
+     "cite": "f_ROUTE0412"
+    }
+   ],
+   "turn": "Stayed on the proposition. Every turn away from it was a job for another agent.",
+   "routes": [
+    {
+     "territory_id": "t_started",
+     "distance": 0.22
+    },
+    {
+     "territory_id": "t_sitdown",
+     "distance": 0.3
+    }
+   ]
+  },
+  {
+   "id": "ex_feel",
+   "crew": "cr_feel",
+   "state": "back",
+   "insights": [
+    "in_arrive",
+    "in_timeback",
+    "in_journey",
+    "in_driver",
+    "in_friday",
+    "in_forum",
+    "in_nofight"
+   ],
+   "way": [
+    {
+     "at": 0.14,
+     "text": "Nobody talks in the car",
+     "cite": "fi_NOTALK003"
+    },
+    {
+     "at": 0.3,
+     "text": "Tone: warm, never preachy",
+     "cite": "brief:tone_world_assets"
+    },
+    {
+     "at": 0.5,
+     "text": "The trip itself is a highlight",
+     "cite": "x_FORUM0001"
+    }
+   ],
+   "turn": "Followed the finding about family time, then kept going until the sentiment risked getting sweet.",
+   "routes": [
+    {
+     "territory_id": "t_sunday",
+     "distance": 0.42
+    },
+    {
+     "territory_id": "t_small",
+     "distance": 0.56
+    }
+   ]
+  },
+  {
+   "id": "ex_opposite",
+   "crew": "cr_opposite",
+   "state": "back",
+   "insights": [
+    "in_arrive",
+    "in_timeback",
+    "in_journey",
+    "in_driver",
+    "in_friday",
+    "in_forum",
+    "in_nofight"
+   ],
+   "way": [
+    {
+     "at": 0.12,
+     "text": "Mandatory: no anti-car tone",
+     "cite": "brief:mandatories"
+    },
+    {
+     "at": 0.3,
+     "text": "One person does every drive",
+     "cite": "f_DRIVER0431"
+    },
+    {
+     "at": 0.55,
+     "text": "Rivals all show the destination",
+     "cite": "fi_RIVALS005"
+    }
+   ],
+   "turn": "Turned hard away from warmth, and away from mocking drivers. It found the comedy in the driver's job, not the car.",
+   "routes": [
+    {
+     "territory_id": "t_passenger",
+     "distance": 0.46
+    },
+    {
+     "territory_id": "t_lonely",
+     "distance": 0.8
+    },
+    {
+     "territory_id": "t_anon",
+     "distance": 0.88
+    }
+   ]
+  },
+  {
+   "id": "ex_adjacent",
+   "crew": "cr_adjacent",
+   "state": "back",
+   "insights": [
+    "in_arrive",
+    "in_timeback",
+    "in_journey",
+    "in_driver",
+    "in_friday",
+    "in_forum",
+    "in_nofight"
+   ],
+   "way": [
+    {
+     "at": 0.2,
+     "text": "Meal kits sell the hour back",
+     "cite": "x_MEALKIT004"
+    },
+    {
+     "at": 0.4,
+     "text": "Audiobooks make dead time the best",
+     "cite": "x_AUDIOB0005"
+    },
+    {
+     "at": 0.58,
+     "text": "Most trips are decided on a Friday",
+     "cite": "f_BOOK00447"
+    }
+   ],
+   "turn": "Borrowed devices from categories that sell time and moments, then brought each one back to the train.",
+   "routes": [
+    {
+     "territory_id": "t_mixtape",
+     "distance": 0.74
+    },
+    {
+     "territory_id": "t_breakfast",
+     "distance": 0.52
+    }
+   ]
+  },
+  {
+   "id": "ex_outside",
+   "crew": "cr_outside",
+   "state": "back",
+   "insights": [
+    "in_arrive",
+    "in_timeback",
+    "in_journey",
+    "in_driver",
+    "in_friday",
+    "in_forum",
+    "in_nofight"
+   ],
+   "way": [
+    {
+     "at": 0.26,
+     "text": "Lounges: the holiday starts here",
+     "cite": "x_LOUNGE0003"
+    },
+    {
+     "at": 0.5,
+     "text": "Theme parks: the queue is the ride",
+     "cite": "x_THEMEPK009"
+    },
+    {
+     "at": 0.66,
+     "text": "Cruise: you're there when you board"
+    }
+   ],
+   "turn": "Went furthest from the brief on purpose. One route came back usable; one is out in an unproven gap.",
+   "routes": [
+    {
+     "territory_id": "t_lounge",
+     "distance": 0.68
+    },
+    {
+     "territory_id": "t_ride",
+     "distance": 0.95
+    }
+   ]
+  }
+ ],
+ "territories": [
+  {
+   "id": "t_started",
+   "name": "Already Started",
+   "thought": "The weekend doesn't start at the hotel. It starts at Platform 4.",
+   "why": "The brief says the weekend starts when you sit down; this route makes that the whole story.",
+   "mood": "",
+   "references": [],
+   "risks": [
+    "SkyHop's 'The holiday starts at the gate' is close. Rail has to own the stronger version: two hours, not fifty minutes."
+   ],
+   "sketch": "The weekend doesn't start at the hotel. It starts at Platform 4.",
+   "tension": "The brief says the weekend starts when you sit down; this route makes that the whole story.",
+   "tier": "safe",
+   "band": "core",
+   "distance": 0.22,
+   "crew": "cr_core",
+   "origin": {
+    "kind": "crew",
+    "from": [
+     "cr_core"
+    ]
+   },
+   "state": "developed",
+   "status": "live",
+   "evidence": [
+    "f_TIRED0418"
+   ],
+   "ready": true,
+   "world": {
+    "palette": {
+     "bg": "#F4B942",
+     "ink": "#1D1B4C",
+     "acc": "#FFF6E0",
+     "soft": "#E3962B"
+    },
+    "type": {
+     "font": "newsreader",
+     "weight": 600,
+     "italic": true
+    },
+    "headlines": {
+     "wq": "Platform 4. Weekend already in progress.",
+     "wl": "THE WEEKEND LEFT AT 9:05.",
+     "sq": "Somewhere past Kildare, the week lets go of you.",
+     "sl": "YOUR WEEKEND STARTS NOW. NOT IN GALWAY. NOW."
+    },
+    "lines": [
+     "Out-of-office: on.",
+     "Seat 14B. Day one of two.",
+     "Kettle on at Portarlington.",
+     "Weekend status: underway."
+    ],
+    "tv": [
+     {
+      "scene": "platform",
+      "text": "Platform 4, 9:04. A woman checks the board and smiles."
+     },
+     {
+      "scene": "window",
+      "text": "She sits. The out-of-office pings on. SFX: a long exhale."
+     },
+     {
+      "scene": "table",
+      "text": "Tea, crisps, a paperback opened for the first time since March."
+     },
+     {
+      "scene": "arrival",
+      "text": "Super: The weekend starts when you sit down."
+     }
+    ],
+    "radio": [
+     {
+      "voice": "SFX",
+      "text": "Station ambience. A departure chime."
+     },
+     {
+      "voice": "VO",
+      "text": "At 9:05 this morning, Aoife's weekend started."
+     },
+     {
+      "voice": "SFX",
+      "text": "Doors close. A long, happy exhale."
+     },
+     {
+      "voice": "VO",
+      "text": "Not in Galway. Not at the hotel. Right here, in seat 14B."
+     },
+     {
+      "voice": "VO",
+      "text": "Linea. The weekend starts when you sit down. Weekend returns from 29 euro."
+     }
+    ],
+    "social": "POV: you're twenty minutes into the weekend and you haven't left Dublin yet.",
+    "seat": "Congratulations. You are now on your weekend.",
+    "crm": [
+     "Your weekend leaves at 9:05",
+     "Seat 14B is free. Bring the book you keep meaning to start."
+    ],
+    "music": "Warm acoustic guitar, unhurried, like a Saturday-morning radio show.",
+    "sonic": "The doors' two-note chime, slowed down into a sigh.",
+    "refs": [
+     "Golden-hour documentary photography",
+     "Station-takeover typography"
+    ],
+    "not": [
+     "Sunsets-and-strings tourism films",
+     "Models pointing out of windows"
+    ],
+    "scenes": {
+     "story": "window",
+     "poster": "platform",
+     "seat": "table",
+     "email": "arrival"
+    },
+    "dial": {
+     "tone": 65,
+     "energy": 35,
+     "register": 55,
+     "brand": 40
+    }
+   },
+   "marks": {
+    "fit": 5,
+    "ownable": 4,
+    "risk": 1
+   },
+   "blind": {
+    "total": 31,
+    "of": 35,
+    "by_dimension": {
+     "fit": 5,
+     "truth": 4,
+     "ownability": 4,
+     "distinct": 4,
+     "travel": 5,
+     "fame": 4,
+     "assets": 5
+    },
+    "advisory": true
+   },
+   "rank": 1,
+   "checks": [
+    {
+     "id": "ck_starte1",
+     "kind": "proposition",
+     "status": "ok",
+     "text": "One thought, and it says the weekend starts when you sit down.",
+     "cite": [
+      "brief:smp"
+     ]
+    },
+    {
+     "id": "ck_starte2",
+     "kind": "mandatory",
+     "status": "ok",
+     "text": "Keeps the weekend return fare and never turns on the car.",
+     "cite": [
+      "brief:mandatories"
+     ]
+    },
+    {
+     "id": "ck_starte3",
+     "kind": "evidence",
+     "status": "ok",
+     "text": "Rests on checked evidence.",
+     "cite": [
+      "f_TIRED0418"
+     ]
+    },
+    {
+     "id": "ck_starte4",
+     "kind": "judge",
+     "status": "ok",
+     "text": "The blind judge ranked it number 1."
+    }
+   ],
+   "pictures": [
+    {
+     "id": "pic_started_tv1",
+     "touchpoint": "tv",
+     "scene": "platform",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_started_tv2",
+     "touchpoint": "tv",
+     "scene": "window",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_started_tv3",
+     "touchpoint": "tv",
+     "scene": "table",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_started_tv4",
+     "touchpoint": "tv",
+     "scene": "arrival",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_started_story",
+     "touchpoint": "story",
+     "scene": "window",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_started_poster",
+     "touchpoint": "poster",
+     "scene": "platform",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_started_seat",
+     "touchpoint": "seat",
+     "scene": "table",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_started_email",
+     "touchpoint": "email",
+     "scene": "arrival",
+     "kind": "sketch"
+    }
+   ]
+  },
+  {
+   "id": "t_sitdown",
+   "name": "Sit Down, It's Saturday",
+   "thought": "The proposition, said as plainly as it can be said.",
+   "why": "The safest reading of the brief. It may feel expected.",
+   "mood": "",
+   "references": [],
+   "risks": [
+    "Close to the brief, so it may feel expected."
+   ],
+   "sketch": "The proposition, said as plainly as it can be said.",
+   "tension": "The safest reading of the brief. It may feel expected.",
+   "tier": "safe",
+   "band": "core",
+   "distance": 0.3,
+   "crew": "cr_core",
+   "origin": {
+    "kind": "crew",
+    "from": [
+     "cr_core"
+    ]
+   },
+   "state": "developed",
+   "status": "live",
+   "evidence": [
+    "brief:smp"
+   ],
+   "ready": true,
+   "world": {
+    "palette": {
+     "bg": "#EFE6D2",
+     "ink": "#2A2A2A",
+     "acc": "#C9462A",
+     "soft": "#D9CCAE"
+    },
+    "type": {
+     "font": "newsreader",
+     "weight": 400,
+     "italic": false
+    },
+    "headlines": {
+     "wq": "Sit down. It's Saturday.",
+     "wl": "SIT DOWN. IT'S SATURDAY.",
+     "sq": "Sit down. The weekend can start now.",
+     "sl": "SIT DOWN. START THE WEEKEND."
+    },
+    "lines": [
+     "Sit down. It's Saturday.",
+     "Sit down. The weekend can start now."
+    ],
+    "tv": [
+     {
+      "scene": "platform",
+      "text": "Open on the journey, not the destination."
+     },
+     {
+      "scene": "window",
+      "text": "A small moment on board."
+     },
+     {
+      "scene": "table",
+      "text": "The weekend arrives early."
+     },
+     {
+      "scene": "arrival",
+      "text": "Super: Sit down. It's Saturday."
+     }
+    ],
+    "radio": [
+     {
+      "voice": "SFX",
+      "text": "A departure chime."
+     },
+     {
+      "voice": "VO",
+      "text": "Sit down. The weekend can start now."
+     },
+     {
+      "voice": "VO",
+      "text": "Linea. Sit down. It's Saturday. Weekend returns from 29 euro."
+     }
+    ],
+    "social": "Sit down. The weekend can start now.",
+    "seat": "Sit down. It's Saturday.",
+    "crm": [
+     "Sit down. It's Saturday.",
+     "Weekend returns from 29 euro."
+    ],
+    "music": "A sound brief is still to be written.",
+    "sonic": "A sound brief is still to be written.",
+    "refs": [
+     "A reference is still to be chosen."
+    ],
+    "not": [
+     "A 'not this' note is still to be written."
+    ],
+    "scenes": {
+     "story": "window",
+     "poster": "platform",
+     "seat": "table",
+     "email": "arrival"
+    },
+    "dial": {
+     "tone": 55,
+     "energy": 30,
+     "register": 40,
+     "brand": 45
+    }
+   },
+   "marks": {
+    "fit": 4,
+    "ownable": 2,
+    "risk": 1
+   },
+   "blind": {
+    "total": 24,
+    "of": 35,
+    "by_dimension": {
+     "fit": 4,
+     "truth": 4,
+     "ownability": 3,
+     "distinct": 2,
+     "travel": 4,
+     "fame": 3,
+     "assets": 4
+    },
+    "advisory": true
+   },
+   "rank": 5,
+   "checks": [
+    {
+     "id": "ck_sitdow1",
+     "kind": "proposition",
+     "status": "ok",
+     "text": "One thought, and it says the weekend starts when you sit down.",
+     "cite": [
+      "brief:smp"
+     ]
+    },
+    {
+     "id": "ck_sitdow2",
+     "kind": "mandatory",
+     "status": "ok",
+     "text": "Keeps the weekend return fare and never turns on the car.",
+     "cite": [
+      "brief:mandatories"
+     ]
+    },
+    {
+     "id": "ck_sitdow3",
+     "kind": "evidence",
+     "status": "ok",
+     "text": "Rests on checked evidence.",
+     "cite": [
+      "brief:smp"
+     ]
+    },
+    {
+     "id": "ck_sitdow4",
+     "kind": "judge",
+     "status": "ok",
+     "text": "The blind judge ranked it number 5."
+    }
+   ],
+   "pictures": [
+    {
+     "id": "pic_sitdown_tv1",
+     "touchpoint": "tv",
+     "scene": "platform",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_sitdown_tv2",
+     "touchpoint": "tv",
+     "scene": "window",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_sitdown_tv3",
+     "touchpoint": "tv",
+     "scene": "table",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_sitdown_tv4",
+     "touchpoint": "tv",
+     "scene": "arrival",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_sitdown_story",
+     "touchpoint": "story",
+     "scene": "window",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_sitdown_poster",
+     "touchpoint": "poster",
+     "scene": "platform",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_sitdown_seat",
+     "touchpoint": "seat",
+     "scene": "table",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_sitdown_email",
+     "touchpoint": "email",
+     "scene": "arrival",
+     "kind": "sketch"
+    }
+   ]
+  },
+  {
+   "id": "t_sunday",
+   "name": "Sunday Night, Sorted",
+   "thought": "The best part of the train is the trip home. Sunday evening, no traffic, no dread.",
+   "why": "Most campaigns sell the way out. Nobody sells the way home.",
+   "mood": "",
+   "references": [],
+   "risks": [
+    "The weekend-return fare has to be clear or it reads as a one-way message."
+   ],
+   "sketch": "The best part of the train is the trip home. Sunday evening, no traffic, no dread.",
+   "tension": "Most campaigns sell the way out. Nobody sells the way home.",
+   "tier": "stretch",
+   "band": "stretch",
+   "distance": 0.42,
+   "crew": "cr_feel",
+   "origin": {
+    "kind": "crew",
+    "from": [
+     "cr_feel"
+    ]
+   },
+   "state": "developed",
+   "status": "live",
+   "evidence": [
+    "f_TIRED0418"
+   ],
+   "ready": true,
+   "world": {
+    "palette": {
+     "bg": "#1E2140",
+     "ink": "#F1ECFF",
+     "acc": "#F7C873",
+     "soft": "#3A3F75"
+    },
+    "type": {
+     "font": "newsreader",
+     "weight": 400,
+     "italic": false
+    },
+    "headlines": {
+     "wq": "Sunday, 7pm. Nobody is merging.",
+     "wl": "NO SUNDAY TRAFFIC. NONE.",
+     "sq": "Come home rested. It turns out that's allowed.",
+     "sl": "THE BEST PART OF THE WEEKEND IS THE WAY HOME."
+    },
+    "lines": [
+     "Home by 9:40. Somehow rested.",
+     "The Sunday dread, cancelled.",
+     "Monday can wait in Mullingar."
+    ],
+    "tv": [
+     {
+      "scene": "road",
+      "text": "A motorway at dusk: a river of red brake lights."
+     },
+     {
+      "scene": "night",
+      "text": "Pull back. We're watching it from a lit train window."
+     },
+     {
+      "scene": "window",
+      "text": "A couple share headphones. Nobody checks the time."
+     },
+     {
+      "scene": "home",
+      "text": "Super: Sunday, sorted."
+     }
+    ],
+    "radio": [
+     {
+      "voice": "SFX",
+      "text": "A car radio traffic report, fading."
+     },
+     {
+      "voice": "RADIO",
+      "text": "Tailbacks of eight kilometres on the M6."
+     },
+     {
+      "voice": "SFX",
+      "text": "It fades to quiet. A page turns."
+     },
+     {
+      "voice": "VO",
+      "text": "Sunday, 7pm. You're on the train. None of that is your problem."
+     },
+     {
+      "voice": "VO",
+      "text": "Linea. Sunday, sorted. Weekend returns from 29 euro."
+     }
+    ],
+    "social": "The M6 at 7pm vs carriage C at 7pm. Swipe.",
+    "seat": "You'll be home by 9:40. Rested, apparently.",
+    "crm": [
+     "Sunday 7pm: the motorway is bad. You won't care.",
+     "Your return leaves Galway at 17:25. Window seats left."
+    ],
+    "music": "Slow piano, late-night radio, a little hush.",
+    "sonic": "A soft rail click that settles like a heartbeat.",
+    "refs": [
+     "Night photography of lit windows",
+     "Late-night radio idents"
+    ],
+    "not": [
+     "Melancholy for its own sake",
+     "Showing delays or crashes"
+    ],
+    "scenes": {
+     "story": "road",
+     "poster": "night",
+     "seat": "window",
+     "email": "home"
+    },
+    "dial": {
+     "tone": 72,
+     "energy": 20,
+     "register": 80,
+     "brand": 30
+    }
+   },
+   "marks": {
+    "fit": 4,
+    "ownable": 5,
+    "risk": 1
+   },
+   "blind": {
+    "total": 28,
+    "of": 35,
+    "by_dimension": {
+     "fit": 4,
+     "truth": 5,
+     "ownability": 4,
+     "distinct": 4,
+     "travel": 4,
+     "fame": 3,
+     "assets": 4
+    },
+    "advisory": true
+   },
+   "rank": 3,
+   "checks": [
+    {
+     "id": "ck_sunday1",
+     "kind": "proposition",
+     "status": "ok",
+     "text": "One thought, and it says the weekend starts when you sit down.",
+     "cite": [
+      "brief:smp"
+     ]
+    },
+    {
+     "id": "ck_sunday2",
+     "kind": "mandatory",
+     "status": "ok",
+     "text": "Keeps the weekend return fare and never turns on the car.",
+     "cite": [
+      "brief:mandatories"
+     ]
+    },
+    {
+     "id": "ck_sunday3",
+     "kind": "evidence",
+     "status": "ok",
+     "text": "Rests on checked evidence.",
+     "cite": [
+      "f_TIRED0418"
+     ]
+    },
+    {
+     "id": "ck_sunday4",
+     "kind": "judge",
+     "status": "ok",
+     "text": "The blind judge ranked it number 3."
+    }
+   ],
+   "pictures": [
+    {
+     "id": "pic_sunday_tv1",
+     "touchpoint": "tv",
+     "scene": "road",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_sunday_tv2",
+     "touchpoint": "tv",
+     "scene": "night",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_sunday_tv3",
+     "touchpoint": "tv",
+     "scene": "window",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_sunday_tv4",
+     "touchpoint": "tv",
+     "scene": "home",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_sunday_story",
+     "touchpoint": "story",
+     "scene": "road",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_sunday_poster",
+     "touchpoint": "poster",
+     "scene": "night",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_sunday_seat",
+     "touchpoint": "seat",
+     "scene": "window",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_sunday_email",
+     "touchpoint": "email",
+     "scene": "home",
+     "kind": "sketch"
+    }
+   ]
+  },
+  {
+   "id": "t_small",
+   "name": "Small Weekends",
+   "thought": "Not a holiday. Just a Saturday somewhere else, together.",
+   "why": "Families do not need a big trip; they need a reason to leave the house together.",
+   "mood": "",
+   "references": [],
+   "risks": [
+    "Small can read as unambitious. It needs one bold device."
+   ],
+   "sketch": "Not a holiday. Just a Saturday somewhere else, together.",
+   "tension": "Families do not need a big trip; they need a reason to leave the house together.",
+   "tier": "stretch",
+   "band": "stretch",
+   "distance": 0.56,
+   "crew": "cr_feel",
+   "origin": {
+    "kind": "crew",
+    "from": [
+     "cr_feel"
+    ]
+   },
+   "state": "developed",
+   "status": "live",
+   "evidence": [
+    "fi_NOTALK003",
+    "f_DRIVER0431"
+   ],
+   "ready": true,
+   "world": {
+    "palette": {
+     "bg": "#E4ECEE",
+     "ink": "#22313A",
+     "acc": "#D9472B",
+     "soft": "#B9CCD2"
+    },
+    "type": {
+     "font": "newsreader",
+     "weight": 400,
+     "italic": false
+    },
+    "headlines": {
+     "wq": "Nowhere special. Everyone you love.",
+     "wl": "A SATURDAY. SOMEWHERE ELSE.",
+     "sq": "Not a holiday. Just a Saturday somewhere else, together.",
+     "sl": "SMALL WEEKENDS. BIG DEAL."
+    },
+    "lines": [
+     "Ennis, 11:40. Ice cream nobody needed.",
+     "We didn't do much. It was great.",
+     "Population: us."
+    ],
+    "tv": [
+     {
+      "scene": "table",
+      "text": "Handheld. A family at a table seat, sharing an orange."
+     },
+     {
+      "scene": "window",
+      "text": "A kid draws the fields in the fog on the window."
+     },
+     {
+      "scene": "town",
+      "text": "Ennis, 11:40. Ice cream nobody needed."
+     },
+     {
+      "scene": "home",
+      "text": "Super: Small weekends."
+     }
+    ],
+    "radio": [
+     {
+      "voice": "SFX",
+      "text": "A kid humming. Cutlery on a table seat."
+     },
+     {
+      "voice": "MUM",
+      "text": "What will we do in Ennis?"
+     },
+     {
+      "voice": "KID",
+      "text": "Nothing!"
+     },
+     {
+      "voice": "VO",
+      "text": "Not a holiday. Just a Saturday somewhere else, together."
+     },
+     {
+      "voice": "VO",
+      "text": "Linea. Small weekends. Weekend returns from 29 euro."
+     }
+    ],
+    "social": "Things we did on Saturday: 1. got the train. 2. that was the good bit.",
+    "seat": "Write down what you did today. It counts.",
+    "crm": [
+     "Nothing planned this Saturday? Perfect.",
+     "Ennis, Athlone, Westport. Small places, two hours away."
+    ],
+    "music": "Field recordings, a kid humming, one ukulele.",
+    "sonic": "A pencil scribble, then the departure chime.",
+    "refs": [
+     "Family documentary photography",
+     "Handwritten captions"
+    ],
+    "not": [
+     "Big-holiday clichés",
+     "Perfect-family casting"
+    ],
+    "scenes": {
+     "story": "town",
+     "poster": "table",
+     "seat": "window",
+     "email": "town"
+    },
+    "dial": {
+     "tone": 40,
+     "energy": 28,
+     "register": 18,
+     "brand": 25
+    }
+   },
+   "marks": {
+    "fit": 4,
+    "ownable": 4,
+    "risk": 2
+   },
+   "blind": {
+    "total": 26,
+    "of": 35,
+    "by_dimension": {
+     "fit": 4,
+     "truth": 4,
+     "ownability": 4,
+     "distinct": 3,
+     "travel": 4,
+     "fame": 3,
+     "assets": 4
+    },
+    "advisory": true
+   },
+   "rank": 4,
+   "checks": [
+    {
+     "id": "ck_small1",
+     "kind": "proposition",
+     "status": "ok",
+     "text": "One thought, and it says the weekend starts when you sit down.",
+     "cite": [
+      "brief:smp"
+     ]
+    },
+    {
+     "id": "ck_small2",
+     "kind": "mandatory",
+     "status": "ok",
+     "text": "Keeps the weekend return fare and never turns on the car.",
+     "cite": [
+      "brief:mandatories"
+     ]
+    },
+    {
+     "id": "ck_small3",
+     "kind": "evidence",
+     "status": "warn",
+     "text": "Rests on a finding the agent derived; nobody has verified it.",
+     "cite": [
+      "fi_NOTALK003",
+      "f_DRIVER0431"
+     ]
+    },
+    {
+     "id": "ck_small4",
+     "kind": "judge",
+     "status": "ok",
+     "text": "The blind judge ranked it number 4."
+    }
+   ],
+   "pictures": [
+    {
+     "id": "pic_small_tv1",
+     "touchpoint": "tv",
+     "scene": "table",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_small_tv2",
+     "touchpoint": "tv",
+     "scene": "window",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_small_tv3",
+     "touchpoint": "tv",
+     "scene": "town",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_small_tv4",
+     "touchpoint": "tv",
+     "scene": "home",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_small_story",
+     "touchpoint": "story",
+     "scene": "town",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_small_poster",
+     "touchpoint": "poster",
+     "scene": "table",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_small_seat",
+     "touchpoint": "seat",
+     "scene": "window",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_small_email",
+     "touchpoint": "email",
+     "scene": "town",
+     "kind": "sketch"
+    }
+   ]
+  },
+  {
+   "id": "t_passenger",
+   "name": "Passenger Seat",
+   "thought": "For once, the person who always drives gets to be a passenger.",
+   "why": "One person does every drive; this gives them the weekend off.",
+   "mood": "",
+   "references": [],
+   "risks": [
+    "Rests partly on a finding the agent derived and nobody has verified yet.",
+    "Must not mock drivers (partners' no-anti-car rule)."
+   ],
+   "sketch": "For once, the person who always drives gets to be a passenger.",
+   "tension": "One person does every drive; this gives them the weekend off.",
+   "tier": "stretch",
+   "band": "stretch",
+   "distance": 0.46,
+   "crew": "cr_opposite",
+   "origin": {
+    "kind": "crew",
+    "from": [
+     "cr_opposite"
+    ]
+   },
+   "state": "developed",
+   "status": "live",
+   "evidence": [
+    "f_DRIVER0431",
+    "fi_NOTALK003"
+   ],
+   "ready": true,
+   "world": {
+    "palette": {
+     "bg": "#D7F25A",
+     "ink": "#10291C",
+     "acc": "#FF5B35",
+     "soft": "#A9CC2E"
+    },
+    "type": {
+     "font": "geist_extra_bold",
+     "weight": 800,
+     "italic": false
+    },
+    "headlines": {
+     "wq": "For once, Dad gets the window.",
+     "wl": "DESIGNATED DRIVER: NOBODY.",
+     "sq": "This weekend, the one who always drives gets to look out the window.",
+     "sl": "EVERYBODY'S A PASSENGER."
+    },
+    "lines": [
+     "Hands off the wheel. Hands on the crisps.",
+     "Sat nav: retired.",
+     "Nobody has to find parking.",
+     "Mam's turn to nap."
+    ],
+    "tv": [
+     {
+      "scene": "car",
+      "text": "Last year. Dad at the wheel. Four hours, one wrong turn, total silence."
+     },
+     {
+      "scene": "window",
+      "text": "This year. Dad at the window, eyes wide like a kid."
+     },
+     {
+      "scene": "sleep",
+      "text": "Twenty minutes later he's asleep, mouth open. The family takes a photo."
+     },
+     {
+      "scene": "arrival",
+      "text": "Super: Everybody's a passenger."
+     }
+    ],
+    "radio": [
+     {
+      "voice": "SFX",
+      "text": "An indicator ticking. A sigh from the driver's seat."
+     },
+     {
+      "voice": "KID",
+      "text": "Are we nearly there?"
+     },
+     {
+      "voice": "DAD",
+      "text": "Silence."
+     },
+     {
+      "voice": "VO",
+      "text": "This weekend, give the driver the weekend off."
+     },
+     {
+      "voice": "SFX",
+      "text": "Train chime. Dad laughing at something out the window."
+     },
+     {
+      "voice": "VO",
+      "text": "Linea. Everybody's a passenger. Weekend returns from 29 euro."
+     }
+    ],
+    "social": "Tag the person who always drives. They've earned this one.",
+    "seat": "Driver's seat: unavailable. Enjoy the view.",
+    "crm": [
+     "Give the driver the weekend off",
+     "Four tickets, one table, zero arguments about the motorway."
+    ],
+    "music": "Bouncy brass and a snare drum, sitcom energy.",
+    "sonic": "A car horn that bends into the train chime.",
+    "refs": [
+     "Observational sitcom",
+     "Phone-shot family videos"
+    ],
+    "not": [
+     "Mocking drivers",
+     "Any crash or danger imagery"
+    ],
+    "scenes": {
+     "story": "sleep",
+     "poster": "window",
+     "seat": "sleep",
+     "email": "car"
+    },
+    "dial": {
+     "tone": 20,
+     "energy": 78,
+     "register": 25,
+     "brand": 60
+    }
+   },
+   "marks": {
+    "fit": 4,
+    "ownable": 5,
+    "risk": 2
+   },
+   "blind": {
+    "total": 30,
+    "of": 35,
+    "by_dimension": {
+     "fit": 5,
+     "truth": 4,
+     "ownability": 4,
+     "distinct": 5,
+     "travel": 4,
+     "fame": 4,
+     "assets": 4
+    },
+    "advisory": true
+   },
+   "rank": 2,
+   "checks": [
+    {
+     "id": "ck_passen1",
+     "kind": "proposition",
+     "status": "ok",
+     "text": "One thought, and it says the weekend starts when you sit down.",
+     "cite": [
+      "brief:smp"
+     ]
+    },
+    {
+     "id": "ck_passen2",
+     "kind": "mandatory",
+     "status": "ok",
+     "text": "Keeps the weekend return fare and never turns on the car.",
+     "cite": [
+      "brief:mandatories"
+     ]
+    },
+    {
+     "id": "ck_passen3",
+     "kind": "evidence",
+     "status": "warn",
+     "text": "Rests on a finding the agent derived; nobody has verified it.",
+     "cite": [
+      "f_DRIVER0431",
+      "fi_NOTALK003"
+     ]
+    },
+    {
+     "id": "ck_passen4",
+     "kind": "judge",
+     "status": "ok",
+     "text": "The blind judge ranked it number 2."
+    }
+   ],
+   "pictures": [
+    {
+     "id": "pic_passenger_tv1",
+     "touchpoint": "tv",
+     "scene": "car",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_passenger_tv2",
+     "touchpoint": "tv",
+     "scene": "window",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_passenger_tv3",
+     "touchpoint": "tv",
+     "scene": "sleep",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_passenger_tv4",
+     "touchpoint": "tv",
+     "scene": "arrival",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_passenger_story",
+     "touchpoint": "story",
+     "scene": "sleep",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_passenger_poster",
+     "touchpoint": "poster",
+     "scene": "window",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_passenger_seat",
+     "touchpoint": "seat",
+     "scene": "sleep",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_passenger_email",
+     "touchpoint": "email",
+     "scene": "car",
+     "kind": "sketch"
+    }
+   ]
+  },
+  {
+   "id": "t_lonely",
+   "name": "The Lonely Motorway",
+   "thought": "The motorway, played as a character, misses the families who left it for the train.",
+   "why": "Turns the one driver's job into comedy without blaming the car.",
+   "mood": "",
+   "references": [],
+   "risks": [
+    "Close to the no-anti-car line: the motorway is sad, never the car blamed. Review flags it."
+   ],
+   "sketch": "The motorway, played as a character, misses the families who left it for the train.",
+   "tension": "Turns the one driver's job into comedy without blaming the car.",
+   "tier": "brave",
+   "band": "far_out",
+   "distance": 0.8,
+   "crew": "cr_opposite",
+   "origin": {
+    "kind": "crew",
+    "from": [
+     "cr_opposite"
+    ]
+   },
+   "state": "developed",
+   "status": "live",
+   "evidence": [
+    "f_DRIVER0431",
+    "fi_RIVALS005"
+   ],
+   "ready": true,
+   "world": {
+    "palette": {
+     "bg": "#2B2B2B",
+     "ink": "#F5F1E6",
+     "acc": "#FFD23F",
+     "soft": "#4A4A4A"
+    },
+    "type": {
+     "font": "geist_extra_bold",
+     "weight": 800,
+     "italic": false
+    },
+    "headlines": {
+     "wq": "The M6 misses you.",
+     "wl": "THE M6 MISSES YOU. IT'LL GET OVER IT.",
+     "sq": "The motorway noticed you left.",
+     "sl": "THE M6 MISSES YOU. IT'LL GET OVER IT."
+    },
+    "lines": [
+     "The M6 misses you.",
+     "The motorway noticed you left."
+    ],
+    "tv": [
+     {
+      "scene": "road",
+      "text": "Open on the journey, not the destination."
+     },
+     {
+      "scene": "night",
+      "text": "A small moment on board."
+     },
+     {
+      "scene": "window",
+      "text": "The weekend arrives early."
+     },
+     {
+      "scene": "home",
+      "text": "Super: The M6 misses you."
+     }
+    ],
+    "radio": [
+     {
+      "voice": "SFX",
+      "text": "A departure chime."
+     },
+     {
+      "voice": "VO",
+      "text": "The motorway noticed you left."
+     },
+     {
+      "voice": "VO",
+      "text": "Linea. The M6 misses you. Weekend returns from 29 euro."
+     }
+    ],
+    "social": "The motorway noticed you left.",
+    "seat": "The M6 misses you.",
+    "crm": [
+     "The M6 misses you.",
+     "Weekend returns from 29 euro."
+    ],
+    "music": "A sound brief is still to be written.",
+    "sonic": "A sound brief is still to be written.",
+    "refs": [
+     "A reference is still to be chosen."
+    ],
+    "not": [
+     "A 'not this' note is still to be written."
+    ],
+    "scenes": {
+     "story": "night",
+     "poster": "road",
+     "seat": "window",
+     "email": "home"
+    },
+    "dial": {
+     "tone": 15,
+     "energy": 70,
+     "register": 30,
+     "brand": 60
+    }
+   },
+   "marks": {
+    "fit": 3,
+    "ownable": 5,
+    "risk": 3
+   },
+   "blind": {
+    "total": 26,
+    "of": 35,
+    "by_dimension": {
+     "fit": 3,
+     "truth": 4,
+     "ownability": 4,
+     "distinct": 5,
+     "travel": 3,
+     "fame": 4,
+     "assets": 3
+    },
+    "advisory": true
+   },
+   "rank": 7,
+   "checks": [
+    {
+     "id": "ck_lonely1",
+     "kind": "proposition",
+     "status": "ok",
+     "text": "One thought, and it says the weekend starts when you sit down.",
+     "cite": [
+      "brief:smp"
+     ]
+    },
+    {
+     "id": "ck_lonely2",
+     "kind": "mandatory",
+     "status": "warn",
+     "text": "Close to the no-anti-car mandate: the motorway is the character, never the car.",
+     "cite": [
+      "brief:mandatories"
+     ]
+    },
+    {
+     "id": "ck_lonely3",
+     "kind": "evidence",
+     "status": "ok",
+     "text": "Rests on checked evidence.",
+     "cite": [
+      "f_DRIVER0431",
+      "fi_RIVALS005"
+     ]
+    },
+    {
+     "id": "ck_lonely4",
+     "kind": "judge",
+     "status": "ok",
+     "text": "The blind judge ranked it number 7."
+    }
+   ],
+   "pictures": [
+    {
+     "id": "pic_lonely_tv1",
+     "touchpoint": "tv",
+     "scene": "road",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_lonely_tv2",
+     "touchpoint": "tv",
+     "scene": "night",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_lonely_tv3",
+     "touchpoint": "tv",
+     "scene": "window",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_lonely_tv4",
+     "touchpoint": "tv",
+     "scene": "home",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_lonely_story",
+     "touchpoint": "story",
+     "scene": "night",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_lonely_poster",
+     "touchpoint": "poster",
+     "scene": "road",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_lonely_seat",
+     "touchpoint": "seat",
+     "scene": "window",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_lonely_email",
+     "touchpoint": "email",
+     "scene": "home",
+     "kind": "sketch"
+    }
+   ]
+  },
+  {
+   "id": "t_mixtape",
+   "name": "Weekend Mixtape",
+   "thought": "Every route west gets its own playlist. The train is the opening track of the weekend.",
+   "why": "Borrows the mixtape's ritual: the journey is the first song.",
+   "mood": "",
+   "references": [],
+   "risks": [
+    "Music licensing for the playlists is an open question for the client."
+   ],
+   "sketch": "Every route west gets its own playlist. The train is the opening track of the weekend.",
+   "tension": "Borrows the mixtape's ritual: the journey is the first song.",
+   "tier": "stretch",
+   "band": "far_out",
+   "distance": 0.74,
+   "crew": "cr_adjacent",
+   "origin": {
+    "kind": "crew",
+    "from": [
+     "cr_adjacent"
+    ]
+   },
+   "state": "developed",
+   "status": "live",
+   "evidence": [
+    "x_AUDIOB0005",
+    "f_BOOK00447"
+   ],
+   "ready": true,
+   "world": {
+    "palette": {
+     "bg": "#141414",
+     "ink": "#FBE3F2",
+     "acc": "#FF4FA3",
+     "soft": "#3A2A35"
+    },
+    "type": {
+     "font": "newsreader",
+     "weight": 600,
+     "italic": true
+    },
+    "headlines": {
+     "wq": "Side A: Dublin to Galway. 2h 20m.",
+     "wl": "SIDE A. NO SKIPPING.",
+     "sq": "The first track of the weekend is the 9:05.",
+     "sl": "PRESS PLAY ON PLATFORM 4."
+    },
+    "lines": [
+     "Side A: Dublin to Galway. 2h 20m.",
+     "The first track of the weekend is the 9:05."
+    ],
+    "tv": [
+     {
+      "scene": "platform",
+      "text": "Open on the journey, not the destination."
+     },
+     {
+      "scene": "window",
+      "text": "A small moment on board."
+     },
+     {
+      "scene": "table",
+      "text": "The weekend arrives early."
+     },
+     {
+      "scene": "home",
+      "text": "Super: Side A: Dublin to Galway. 2h 20m."
+     }
+    ],
+    "radio": [
+     {
+      "voice": "SFX",
+      "text": "A departure chime."
+     },
+     {
+      "voice": "VO",
+      "text": "The first track of the weekend is the 9:05."
+     },
+     {
+      "voice": "VO",
+      "text": "Linea. Side A: Dublin to Galway. 2h 20m. Weekend returns from 29 euro."
+     }
+    ],
+    "social": "The first track of the weekend is the 9:05.",
+    "seat": "Side A: Dublin to Galway. 2h 20m.",
+    "crm": [
+     "Side A: Dublin to Galway. 2h 20m.",
+     "Weekend returns from 29 euro."
+    ],
+    "music": "A sound brief is still to be written.",
+    "sonic": "A sound brief is still to be written.",
+    "refs": [
+     "A reference is still to be chosen."
+    ],
+    "not": [
+     "A 'not this' note is still to be written."
+    ],
+    "scenes": {
+     "story": "window",
+     "poster": "platform",
+     "seat": "table",
+     "email": "home"
+    },
+    "dial": {
+     "tone": 45,
+     "energy": 60,
+     "register": 60,
+     "brand": 55
+    }
+   },
+   "marks": {
+    "fit": 4,
+    "ownable": 4,
+    "risk": 2
+   },
+   "blind": {
+    "total": 26,
+    "of": 35,
+    "by_dimension": {
+     "fit": 4,
+     "truth": 4,
+     "ownability": 4,
+     "distinct": 4,
+     "travel": 4,
+     "fame": 3,
+     "assets": 3
+    },
+    "advisory": true
+   },
+   "rank": 6,
+   "checks": [
+    {
+     "id": "ck_mixtap1",
+     "kind": "proposition",
+     "status": "ok",
+     "text": "One thought, and it says the weekend starts when you sit down.",
+     "cite": [
+      "brief:smp"
+     ]
+    },
+    {
+     "id": "ck_mixtap2",
+     "kind": "mandatory",
+     "status": "ok",
+     "text": "Keeps the weekend return fare and never turns on the car.",
+     "cite": [
+      "brief:mandatories"
+     ]
+    },
+    {
+     "id": "ck_mixtap3",
+     "kind": "evidence",
+     "status": "ok",
+     "text": "Rests on checked evidence.",
+     "cite": [
+      "x_AUDIOB0005",
+      "f_BOOK00447"
+     ]
+    },
+    {
+     "id": "ck_mixtap4",
+     "kind": "judge",
+     "status": "ok",
+     "text": "The blind judge ranked it number 6."
+    }
+   ],
+   "pictures": [
+    {
+     "id": "pic_mixtape_tv1",
+     "touchpoint": "tv",
+     "scene": "platform",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_mixtape_tv2",
+     "touchpoint": "tv",
+     "scene": "window",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_mixtape_tv3",
+     "touchpoint": "tv",
+     "scene": "table",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_mixtape_tv4",
+     "touchpoint": "tv",
+     "scene": "home",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_mixtape_story",
+     "touchpoint": "story",
+     "scene": "window",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_mixtape_poster",
+     "touchpoint": "poster",
+     "scene": "platform",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_mixtape_seat",
+     "touchpoint": "seat",
+     "scene": "table",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_mixtape_email",
+     "touchpoint": "email",
+     "scene": "home",
+     "kind": "sketch"
+    }
+   ]
+  },
+  {
+   "id": "t_lounge",
+   "name": "Departure Lounge",
+   "thought": "Platform 4 is the weekend's departure lounge: the holiday starts before the train moves.",
+   "why": "Airport lounges sell the build-up; the train can do it without the wait.",
+   "mood": "",
+   "references": [],
+   "risks": [
+    "SkyHop's 'The holiday starts at the gate' is the same thought. Rail must own it with the two-hour journey, not the wait."
+   ],
+   "sketch": "Platform 4 is the weekend's departure lounge: the holiday starts before the train moves.",
+   "tension": "Airport lounges sell the build-up; the train can do it without the wait.",
+   "tier": "brave",
+   "band": "far_out",
+   "distance": 0.68,
+   "crew": "cr_outside",
+   "origin": {
+    "kind": "crew",
+    "from": [
+     "cr_outside"
+    ]
+   },
+   "state": "developed",
+   "status": "live",
+   "evidence": [
+    "x_LOUNGE0003",
+    "fi_RIVALS005"
+   ],
+   "ready": true,
+   "world": {
+    "palette": {
+     "bg": "#16213E",
+     "ink": "#F4EBD0",
+     "acc": "#C9A227",
+     "soft": "#2C3E66"
+    },
+    "type": {
+     "font": "newsreader",
+     "weight": 400,
+     "italic": false
+    },
+    "headlines": {
+     "wq": "Your lounge for the weekend: Platform 4.",
+     "wl": "THE LOUNGE HAS A TIMETABLE.",
+     "sq": "The holiday starts before the train moves.",
+     "sl": "WELCOME TO THE LOUNGE. IT MOVES."
+    },
+    "lines": [
+     "Your lounge for the weekend: Platform 4.",
+     "The holiday starts before the train moves."
+    ],
+    "tv": [
+     {
+      "scene": "platform",
+      "text": "Open on the journey, not the destination."
+     },
+     {
+      "scene": "table",
+      "text": "A small moment on board."
+     },
+     {
+      "scene": "window",
+      "text": "The weekend arrives early."
+     },
+     {
+      "scene": "arrival",
+      "text": "Super: Your lounge for the weekend: Platform 4."
+     }
+    ],
+    "radio": [
+     {
+      "voice": "SFX",
+      "text": "A departure chime."
+     },
+     {
+      "voice": "VO",
+      "text": "The holiday starts before the train moves."
+     },
+     {
+      "voice": "VO",
+      "text": "Linea. Your lounge for the weekend: Platform 4. Weekend returns from 29 euro."
+     }
+    ],
+    "social": "The holiday starts before the train moves.",
+    "seat": "Your lounge for the weekend: Platform 4.",
+    "crm": [
+     "Your lounge for the weekend: Platform 4.",
+     "Weekend returns from 29 euro."
+    ],
+    "music": "A sound brief is still to be written.",
+    "sonic": "A sound brief is still to be written.",
+    "refs": [
+     "A reference is still to be chosen."
+    ],
+    "not": [
+     "A 'not this' note is still to be written."
+    ],
+    "scenes": {
+     "story": "table",
+     "poster": "platform",
+     "seat": "window",
+     "email": "arrival"
+    },
+    "dial": {
+     "tone": 60,
+     "energy": 35,
+     "register": 70,
+     "brand": 55
+    }
+   },
+   "marks": {
+    "fit": 4,
+    "ownable": 2,
+    "risk": 2
+   },
+   "blind": {
+    "total": 24,
+    "of": 35,
+    "by_dimension": {
+     "fit": 4,
+     "truth": 3,
+     "ownability": 3,
+     "distinct": 3,
+     "travel": 4,
+     "fame": 3,
+     "assets": 4
+    },
+    "advisory": true
+   },
+   "rank": 8,
+   "checks": [
+    {
+     "id": "ck_lounge1",
+     "kind": "proposition",
+     "status": "ok",
+     "text": "One thought, and it says the weekend starts when you sit down.",
+     "cite": [
+      "brief:smp"
+     ]
+    },
+    {
+     "id": "ck_lounge2",
+     "kind": "mandatory",
+     "status": "ok",
+     "text": "Keeps the weekend return fare and never turns on the car.",
+     "cite": [
+      "brief:mandatories"
+     ]
+    },
+    {
+     "id": "ck_lounge3",
+     "kind": "evidence",
+     "status": "ok",
+     "text": "Rests on checked evidence.",
+     "cite": [
+      "x_LOUNGE0003",
+      "fi_RIVALS005"
+     ]
+    },
+    {
+     "id": "ck_lounge4",
+     "kind": "judge",
+     "status": "ok",
+     "text": "The blind judge ranked it number 8."
+    },
+    {
+     "id": "ck_lounge5",
+     "kind": "rival",
+     "status": "warn",
+     "text": "A rival line is near this thought; own it with the two-hour journey."
+    }
+   ],
+   "pictures": [
+    {
+     "id": "pic_lounge_tv1",
+     "touchpoint": "tv",
+     "scene": "platform",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_lounge_tv2",
+     "touchpoint": "tv",
+     "scene": "table",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_lounge_tv3",
+     "touchpoint": "tv",
+     "scene": "window",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_lounge_tv4",
+     "touchpoint": "tv",
+     "scene": "arrival",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_lounge_story",
+     "touchpoint": "story",
+     "scene": "table",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_lounge_poster",
+     "touchpoint": "poster",
+     "scene": "platform",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_lounge_seat",
+     "touchpoint": "seat",
+     "scene": "window",
+     "kind": "sketch"
+    },
+    {
+     "id": "pic_lounge_email",
+     "touchpoint": "email",
+     "scene": "arrival",
+     "kind": "sketch"
+    }
+   ]
+  },
+  {
+   "id": "t_breakfast",
+   "name": "Breakfast From Platform 4",
+   "thought": "Borrow the hotel ritual: the weekend begins with breakfast on board.",
+   "why": "Meal kits sell the hour back; breakfast sells the first hour of the weekend.",
+   "mood": "",
+   "references": [],
+   "risks": [
+    "Needs on-board catering at weekends. Ask the client."
+   ],
+   "sketch": "Borrow the hotel ritual: the weekend begins with breakfast on board.",
+   "tension": "Meal kits sell the hour back; breakfast sells the first hour of the weekend.",
+   "tier": "stretch",
+   "band": "stretch",
+   "distance": 0.52,
+   "crew": "cr_adjacent",
+   "origin": {
+    "kind": "crew",
+    "from": [
+     "cr_adjacent"
+    ]
+   },
+   "state": "found",
+   "status": "live",
+   "evidence": [
+    "x_MEALKIT004"
+   ],
+   "ready": false
+  },
+  {
+   "id": "t_ride",
+   "name": "The Ride Before the Ride",
+   "thought": "Like a theme-park queue, the build-up is half the fun.",
+   "why": "Far from rail; the theme-park device must stay a metaphor.",
+   "mood": "",
+   "references": [],
+   "risks": [
+    "Rests on no evidence yet. This direction is unproven."
+   ],
+   "sketch": "Like a theme-park queue, the build-up is half the fun.",
+   "tension": "Far from rail; the theme-park device must stay a metaphor.",
+   "tier": "brave",
+   "band": "far_out",
+   "distance": 0.95,
+   "crew": "cr_outside",
+   "origin": {
+    "kind": "crew",
+    "from": [
+     "cr_outside"
+    ]
+   },
+   "state": "found",
+   "status": "live",
+   "evidence": [],
+   "ready": false
+  },
+  {
+   "id": "t_anon",
+   "name": "Motorway Anonymous",
+   "thought": "A support group for people recovering from years of Friday traffic.",
+   "why": "Comedy in the driver's job.",
+   "mood": "",
+   "references": [],
+   "risks": [
+    "Very far from the brief."
+   ],
+   "sketch": "A support group for people recovering from years of Friday traffic.",
+   "tension": "Comedy in the driver's job.",
+   "tier": "brave",
+   "band": "far_out",
+   "distance": 0.88,
+   "crew": "cr_opposite",
+   "origin": {
+    "kind": "crew",
+    "from": [
+     "cr_opposite"
+    ]
+   },
+   "state": "found",
+   "status": "killed",
+   "evidence": [
+    "f_DRIVER0431"
+   ],
+   "ready": false,
+   "kill_reason": "Funny, but it leaves the proposition behind: it no longer says the weekend starts when you sit down."
+  }
+ ],
+ "spread": {
+  "threshold": 0.12,
+  "close": [],
+  "gaps": []
+ },
+ "greenlit": [
+  {
+   "territory_id": "t_started",
+   "by": "Shrey",
+   "at": "2026-11-18T10:05:00Z",
+   "rests_on_derived": [],
+   "derived_resolution": "verified"
+  },
+  {
+   "territory_id": "t_passenger",
+   "by": "Shrey",
+   "at": "2026-11-18T10:05:00Z",
+   "rests_on_derived": [
+    "fi_NOTALK003"
+   ],
+   "derived_resolution": "pending"
+  }
+ ],
+ "asks": [
+  {
+   "id": "ask_passenger",
+   "kind": "derived_evidence",
+   "territory_id": "t_passenger",
+   "ids": [
+    "fi_NOTALK003"
+   ],
+   "status": "open",
+   "text": "Passenger Seat rests on a finding the agent derived and nobody has verified. Verify it, or send it flagged?"
+  }
+ ],
+ "actions": [
+  {
+   "id": "act_spread1",
+   "agent": "review",
+   "kind": "spread_fix",
+   "at": "2026-11-18T09:40:00Z",
+   "territory_ids": [
+    "t_sunday",
+    "t_small"
+   ],
+   "undone": false,
+   "text": "Two routes sat close together; Sunday Night, Sorted was moved outward."
+  },
+  {
+   "id": "act_gap1",
+   "agent": "review",
+   "kind": "sent_agent",
+   "at": "2026-11-18T09:41:00Z",
+   "undone": false,
+   "text": "Nobody had explored far outside the brief, so an agent was sent there."
+  }
+ ],
+ "lookups": [
+  {
+   "id": "lq_forum",
+   "q": "Do people describe the train journey itself as part of the holiday?",
+   "status": "done",
+   "by": "Napkin, to back up a finding",
+   "found": [
+    "x_FORUM0001",
+    "x_COMPAR0002"
+   ],
+   "at": "2026-11-18T09:20:00Z"
+  },
+  {
+   "id": "lq_cases",
+   "q": "Which other categories sell time given back, or the journey as the treat?",
+   "status": "done",
+   "by": "Napkin, from the insights",
+   "found": [
+    "x_LOUNGE0003",
+    "x_MEALKIT004",
+    "x_AUDIOB0005",
+    "x_THEMEPK009"
+   ],
+   "at": "2026-11-18T09:24:00Z"
+  },
+  {
+   "id": "lq_table",
+   "q": "Can families book table seats on weekend trains?",
+   "status": "ask",
+   "by": "Napkin, for a route that promises a table"
+  }
+ ],
+ "notes": [
+  {
+   "id": "nt_crew",
+   "agent": "strategy",
+   "at": "2026-11-18T09:35:00Z",
+   "text": "The crew came back: 5 agents, 11 routes."
+  },
+  {
+   "id": "nt_rival",
+   "agent": "review",
+   "at": "2026-11-18T09:52:00Z",
+   "text": "Departure Lounge is close to a rival line. It is kept, with the risk written on it.",
+   "cite": [
+    "fi_RIVALS005"
+   ]
+  }
+ ],
+ "sends": [],
+ "review": {
+  "sensitive": {
+   "required": false,
+   "status": "not_needed"
+  }
+ },
+ "run": {
+  "state": "gate",
+  "stage": "greenlight",
+  "gate": {
+   "id": "greenlight",
+   "n": 2,
+   "of": 2,
+   "agent": "approval",
+   "dex": "Greenlight the routes worth making.",
+   "checks": [],
+   "blocked_by": [
+    {
+     "kind": "derived_evidence",
+     "ids": [
+      "t_passenger"
+     ],
+     "text": "Passenger Seat rests on a finding nobody has verified."
+    }
+   ]
+  },
+  "stages": [
+   {
+    "id": "pick",
+    "name": "Pick",
+    "status": "done"
+   },
+   {
+    "id": "explore",
+    "name": "Explore",
+    "status": "done"
+   },
+   {
+    "id": "develop",
+    "name": "Develop",
+    "status": "done"
+   },
+   {
+    "id": "greenlight",
+    "name": "Greenlight",
+    "status": "now"
+   },
+   {
+    "id": "send",
+    "name": "Send",
+    "status": "next"
+   }
+  ],
+  "approvals": {
+   "pick": {
+    "by": "Shrey",
+    "at": "2026-11-18T09:12:00Z",
+    "decision": "approve"
+   }
+  },
+  "decisions": [
+   {
+    "gate": "pick",
+    "kind": "approve",
+    "by": "Shrey",
+    "at": "2026-11-18T09:12:00Z"
+   }
+  ],
+  "calls": {
+   "model": 31,
+   "lookups": 4
+  },
+  "agent": {
+   "key": "approval",
+   "activity": "human"
+  }
+ }
+}
