@@ -530,3 +530,58 @@ def test_the_engine_server_gives_the_build_its_pass_and_keeps_it_out_of_everythi
         with pytest.raises(srv.Refused) as e:
             srv.validate_request({**body, "production_assets": bad}, cfg)
         assert e.value.status == 400 and PASS not in e.value.message
+
+
+# ---- the dev opt-in: a local stack's loopback relay (DECK_RELAY_ALLOW_LOOPBACK, engine environment only)
+
+class LocalNet:
+    """A loopback relay on http://127.0.0.1:<port> whose 302 points at http://localhost:<port>/blob: the local_opener (ip, port, path, timeout, headers)."""
+    PNG = b"\x89PNG\r\n\x1a\n" + b"x" * 40
+
+    def __init__(self):
+        self.requests = []
+
+    def open(self, ip, port, path, timeout, headers=None):
+        self.requests.append({"ip": ip, "port": port, "path": path, "headers": dict(headers or {})})
+        if path.startswith("/api/assets/"):
+            return FakeNet.Resp(302, {"Location": f"http://localhost:{port}/blob/x"})
+        return FakeNet.Resp(200, {"Content-Type": "image/png"}, self.PNG)
+
+
+def test_loopback_is_refused_by_default(monkeypatch):
+    net = LocalNet()
+    for env in (None, "0", "true"):
+        monkeypatch.delenv("DECK_RELAY_ALLOW_LOOPBACK", raising=False)
+        if env is not None:
+            monkeypatch.setenv("DECK_RELAY_ALLOW_LOOPBACK", env)
+        with pytest.raises(pp.RelayError, match="not https"):
+            pp.relay_fetcher("http://127.0.0.1:18788/api", PASS, local_opener=net.open)("a" * 64, 2400)
+    assert not net.requests, "nothing was requested"
+
+
+def test_loopback_opt_in_allows_loopback_only_and_keeps_the_pass_off_the_redirect(monkeypatch):
+    monkeypatch.setenv("DECK_RELAY_ALLOW_LOOPBACK", "1")
+    net = LocalNet()
+    assert pp.relay_fetcher("http://127.0.0.1:18788/api", PASS, local_opener=net.open)("a" * 64, 2400) == net.PNG
+    first, second = net.requests
+    assert first == {"ip": "127.0.0.1", "port": 18788, "path": f"/api/assets/sha256:{'a' * 64}?w=2400", "headers": {"X-Napkin-Identity": PASS}}
+    assert second["path"] == "/blob/x" and second["headers"] == {}, "the pass never goes to the redirect target"
+    # other http hosts stay refused, and a private https host still does
+    for base in ("http://example.com/api", "http://10.0.0.5/api", "http://127.0.0.1.evil.test/api", "http://user:p@127.0.0.1/api"):
+        with pytest.raises(pp.RelayError):
+            pp.relay_fetcher(base, PASS, local_opener=net.open)("a" * 64, None)
+    assert len(net.requests) == 2
+    fake = FakeNet({})
+    with pytest.raises(pp.RelayError, match="private or reserved"):
+        pp.relay_fetcher(f"https://{RELAY_HOST}/api", PASS, opener=fake.open, resolver=lambda h: ["10.0.0.5"])("a" * 64, None)
+
+
+def test_loopback_opt_in_does_not_let_a_public_relay_redirect_to_plain_http_or_a_private_host(monkeypatch):
+    monkeypatch.setenv("DECK_RELAY_ALLOW_LOOPBACK", "1")
+    net = FakeNet({})
+    net.by_hex = {"a" * 64: b""}
+    for loc in ("http://example.com/x", "http://10.0.0.5/x"):
+        net.location = loc
+        with pytest.raises(pp.RelayError, match="not plain https"):
+            transport(net)("a" * 64, None)
+    # the opt-in allows an http loopback redirect from any relay (it is a dev switch on the engine's own host)

@@ -637,6 +637,10 @@ Slice 2 is **execution frames**, slice 3 the **storyboard strip**:
   run folder and the export, never in the `.clan`. The call to the relay carries the person's read-only **assets pass**
   (`X-Napkin-Identity`, `aud: "assets"`, signed by napkin-web per build and handed through `production_assets`: see deck-maker.md and
   production-tool-identity.md); the engine sends it to the relay's host only, never to the picture's.
+  **Local stack (dev only).** With `DECK_RELAY_ALLOW_LOOPBACK=1` in the engine process's own environment (never read from a request, a
+  document or the middleware), the transport also accepts an `http` base whose host is `127.0.0.1`, `::1` or `localhost` (any port), and a
+  redirect to such a host, which is what the local relay (`production-tool/relay/local.py`, pictures at `http://localhost:<port>/<key>`)
+  serves. Off by default; every other host still has to be https and public.
 - **Production first.** `images.bind_production` under the flag takes the newest placeable size of the execution's channel whatever its
   shape (the frame shows it whole); a channel whose sizes are all out of date is held with that reason; a rights-pending size is left
   empty with `Rights to supply` and its Review notice, never placed and never replaced by a generated picture. A generated picture

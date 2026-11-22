@@ -39,6 +39,7 @@ import http.client
 import io
 import ipaddress
 import json
+import os
 import re
 import socket
 import ssl
@@ -755,7 +756,28 @@ def _public_host(host: str, resolver) -> tuple:
     return ips[0], None
 
 
-def relay_fetcher(base: str, token: str, opener=None, resolver=None, timeout: float = RELAY_TIMEOUT_S, file_max: int = FILE_MAX, clock=None):
+LOOPBACK_ENV = "DECK_RELAY_ALLOW_LOOPBACK"
+LOOPBACK_HOSTS = {"127.0.0.1": "127.0.0.1", "localhost": "127.0.0.1", "::1": "::1"}
+
+
+def loopback_allowed() -> bool:
+    """The dev opt-in for a local stack, read from this process's environment only (never from a request, a document or the middleware)."""
+    return os.environ.get(LOOPBACK_ENV, "").strip() == "1"
+
+
+def _open_http(ip: str, port: int, path: str, timeout: float, headers: dict | None = None):
+    """GET over plain http to a loopback address (the opt-in only). Same contract as _open: no redirect followed, no cookie, no proxy."""
+    conn = http.client.HTTPConnection(ip, port, timeout=timeout)
+    conn.request("GET", path, headers={"User-Agent": "napkin-deck-picker", "Accept": "image/*", "Accept-Encoding": "identity", "Connection": "close",
+                                       **(headers or {})})
+    sock = conn.sock
+    resp = conn.getresponse()
+    resp.settimeout = sock.settimeout
+    return resp
+
+
+def relay_fetcher(base: str, token: str, opener=None, resolver=None, timeout: float = RELAY_TIMEOUT_S, file_max: int = FILE_MAX, clock=None,
+                  loopback: bool | None = None, local_opener=None):
     """The transport for one build: ``fetch(sha256 hex, w)`` is ``GET {base}/assets/{sha}?w=W`` with ``X-Napkin-Identity: <token>`` (the
     assets pass napkin-web signed for the person who started the build), then the 302 the relay answers with, to the picture itself.
 
@@ -764,14 +786,21 @@ def relay_fetcher(base: str, token: str, opener=None, resolver=None, timeout: fl
     be https, with no credentials or port, resolving to public addresses only (the connection is pinned to the address checked). The redirect
     target is the picture CDN: https, no credentials or port, public addresses only, up to REDIRECTS_MAX hops, and the pass is NOT sent to it
     (nor to any hop). The answer must be 200 image/* within the byte cap and the one deadline. Every reason names a host or a status, never a
-    URL or the token."""
+    URL or the token.
+
+    Dev opt-in (``DECK_RELAY_ALLOW_LOOPBACK=1`` in the engine's own environment, never from a request): an http base whose host is
+    127.0.0.1, ::1 or localhost, and a redirect to such a host (the local relay's picture URLs), are allowed, with any port. Nothing else
+    changes: any other host still has to be https and public."""
     clock, opener, resolver = clock or time.monotonic, opener or _open, resolver or _resolve
+    loop = loopback_allowed() if loopback is None else loopback
+    local_opener = local_opener or _open_http
     root = urlsplit(base)
     host = (root.hostname or "").lower()
     bad = None
-    if root.scheme != "https" or not host:
+    local_base = loop and root.scheme == "http" and host in LOOPBACK_HOSTS
+    if not local_base and (root.scheme != "https" or not host):
         bad = "the relay's address is not https"
-    elif root.username or root.password or root.port not in (None, 443) or root.query or root.fragment:
+    elif root.username or root.password or root.query or root.fragment or (not local_base and root.port not in (None, 443)):
         bad = "the relay's address carries credentials, a port or a query: refused"
     prefix = (root.path or "").rstrip("/")
 
@@ -783,15 +812,22 @@ def relay_fetcher(base: str, token: str, opener=None, resolver=None, timeout: fl
         t0 = clock()
         url = f"{prefix}/assets/sha256:{hx}" + (f"?w={int(w)}" if w else "")
         h, first, hops = host, True, 0
+        local, port = local_base, root.port or 80
         while True:
-            ip, why = _public_host(h, resolver)
+            if local:
+                ip, why = LOOPBACK_HOSTS[h], None
+            else:
+                ip, why = _public_host(h, resolver)
             if why:
                 raise RelayError(why)
             left = timeout - (clock() - t0)
             if left <= 0:
                 raise RelayError(f"{h}: timed out")
             try:
-                resp = opener(h, ip, url, left, {"X-Napkin-Identity": token} if first else None) if first else opener(h, ip, url, left)
+                if local:
+                    resp = local_opener(ip, port, url, left, {"X-Napkin-Identity": token} if first else None)
+                else:
+                    resp = opener(h, ip, url, left, {"X-Napkin-Identity": token} if first else None) if first else opener(h, ip, url, left)
             except (socket.timeout, TimeoutError):
                 raise RelayError(f"{h}: timed out") from None
             except (OSError, ssl.SSLError, http.client.HTTPException) as e:
@@ -804,8 +840,10 @@ def relay_fetcher(base: str, token: str, opener=None, resolver=None, timeout: fl
                     if hops > REDIRECTS_MAX:
                         raise RelayError(f"{h}: more than {REDIRECTS_MAX} redirects")
                     nh = (nxt.hostname or "").lower()
-                    if nxt.scheme != "https" or not nh or nxt.username or nxt.password or nxt.port not in (None, 443):
+                    to_local = loop and nxt.scheme == "http" and nh in LOOPBACK_HOSTS and not (nxt.username or nxt.password)
+                    if not to_local and (nxt.scheme != "https" or not nh or nxt.username or nxt.password or nxt.port not in (None, 443)):
                         raise RelayError(f"{h}: redirected to a location that is not plain https: refused")
+                    local, port = to_local, ((nxt.port or 80) if to_local else 443)
                     h, url, first = nh, (nxt.path or "/") + (f"?{nxt.query}" if nxt.query else ""), False
                     continue
                 if st in (401, 403):
