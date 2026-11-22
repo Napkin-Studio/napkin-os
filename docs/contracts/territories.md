@@ -130,7 +130,7 @@ Approve always replaces an old one (an edit never disables it).
 |---|---|
 | `evaluate(doc, findings=)` | The screen: `gate`, `blocked_by`, `can_approve`, `can_approve_with_reason` (greenlighting nothing), `approval {valid, stale, words}`, open `asks`, `sensitive`, `inputs`, `checks`, `words`, `next` |
 | `next_step(doc)` | `{do: open_gate/hold/run/finish/failed/idle, stage, gate, words}` |
-| `approve`, `greenlight_route`, `answer_ask`, `record_review`, `request`, `settle_requests` | The person's moves: `(doc, refusals in words)`; a request is answered with what was done or why not |
+| `approve`, `greenlight_route`, `remove_route`, `answer_ask`, `record_review`, `request`, `settle_requests` | The person's moves (`remove_route` takes a route off the greenlit list, drops its asks and refreshes the open gate): `(doc, refusals in words)`; a request is answered with what was done or why not |
 | `open_gate`, `sync_asks`, `drive(doc, stages)` | The engine: write the gate and its asks; run stages only when `next_step` says run, stopping in words (`run.error`) on a missing stage, the cap or an error |
 
 Defaults taken: the sensitive review is a named person's (never `engine`), done after greenlighting, void when the greenlight inputs change; greenlighting

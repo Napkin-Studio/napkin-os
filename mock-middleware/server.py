@@ -87,6 +87,8 @@ REGISTRY = {
     "start_campaign": {"task": "start_campaign", "versions": {1: "1.0"}},
     "answer_question": {"task": "answer_question", "versions": {1: "1.0"}},
     "compose_report": {"task": "compose_report", "versions": {1: "1.0"}},
+    "run_territories": {"task": "run_territories", "versions": {1: "1.0"}},
+    "fetch_territories_file": {"task": "fetch_territories_file", "versions": {1: "1.0"}},
 }
 # Used only when the document carries no pipeline (the declared built-in map).
 BUILTIN_PIPELINE = {
@@ -96,6 +98,8 @@ BUILTIN_PIPELINE = {
     "start_campaign": "start_campaign@1",
     "answer_question": "answer_question@1",
     "compose_report": "compose_report@1",
+    "run_territories": "run_territories@1",
+    "fetch_territories_file": "fetch_territories_file@1",
 }
 TASKS = set(BUILTIN_PIPELINE) | {"job_status"}
 LONG_TASKS = {"research_lens", "synthesise_findings", "start_campaign"}
@@ -2507,6 +2511,18 @@ def compose_report_task(doc, base, clan, handler):
                      "messages": [{"id": mid, "text": text, "stage": "report"}]}, change, hits)
 
 
+def run_territories_stub(doc, handler, inp):
+    """run_territories@1 (middleware-api.md §13): the real one runs engine/territory in the middleware. This stand-in runs nothing and says so: a
+    finished job, no change, and a summary that names what it is, so a screen wired to it shows the honest "nothing happened" and never a made-up run."""
+    t = iso(_dt.datetime.now(_dt.timezone.utc))
+    step = inp.get("step") or "run"
+    job = {"id": "job_" + _digest(SCOPE, doc, "run_territories", step, next(_SEQ)).hex()[:20], "state": "done", "progress": {"done": 1, "total": 1},
+           "stage": step, "question": None, "started_at": t, "finished_at": t, "error": None}
+    return envelope("run_territories", handler, job,
+                    {"summary": "The mock middleware does not run Territories: nothing was done and the document is unchanged. Run the real middleware to explore.",
+                     "step": step}, None, [])
+
+
 # ---------------------------------------------------------------------------
 # Dispatch
 # ---------------------------------------------------------------------------
@@ -2556,6 +2572,10 @@ def handle(body: dict) -> dict:
         return answer_question(doc, clan, inp)
     if task == "compose_report":
         return compose_report_task(doc, base, clan, handler)
+    if task == "run_territories":
+        return run_territories_stub(doc, handler, inp)
+    if task == "fetch_territories_file":
+        raise TaskError(503, "not_built", "Exports are not built yet, so there is no file to download. (The mock middleware makes no files.)")
     if task == "extract_ask":
         result, change, hits = run_extract(doc, base, clan, inp, handler)
         job = {"id": "job_" + _digest(SCOPE, doc, base, task, inp, next(_SEQ)).hex()[:20], "state": "done",

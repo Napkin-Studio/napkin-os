@@ -1,0 +1,109 @@
+"""run_territories@1: Territories, one step of a run, in this process (middleware-api.md §13).
+
+One task with a ``step`` (the app's own seam, TASKS in app/templates/territories/index.html):
+
+    (no step) / run      explore: the insights, then the gates, to the next stop        long: runner.run
+    steer                one crew member: further, pull, cross or stop                  long: runner.steer
+    more                 more lines for one developed route                              long: runner.more
+    push                 one route's world, written again further                        long: runner.push
+    rerank_routes        the blind judge orders the routes again                         long: runner.rerank
+    undo                 take one of the Review agent's fixes back                       quick, no model
+    greenlight_route, remove_route, answer_ask, record_review, approve, send_routes      quick, no model (territory/gates.py's rules)
+
+The carried facts, findings and sources, and the Confidential marks (``build_deck.marks_of``, the same reading as the deck), go to the
+runner on every call. A long step runs in a job thread with a store of its own for the document (``NAPKIN_TERRITORY_DATA``) and the job's
+cancel Event; a document with a step already going is a 409. What the runner returns is written back as the change (territories/job.py).
+"""
+from __future__ import annotations
+
+from ..doc import ctx_data
+from ..territories import job as J
+from ..territories import moves
+from ..territories.job import TerritoriesJob
+from ..util import TaskError, bad
+from .build_deck import marks_of
+
+NAME, TASK, VERSION, KIND, CAPABILITY_MAJOR = "run_territories", "run_territories", "1.0", "territories", 1
+
+#: steps that call the model (long) and the ones that do not (answered in the request)
+MODEL_STEPS = ("run", "steer", "more", "push", "rerank_routes")
+QUICK_STEPS = ("undo", "greenlight_route", "remove_route", "answer_ask", "record_review", "approve", "send_routes")
+STEERS = ("further", "pull", "cross", "stop")
+
+
+class _Done:
+    """What a quick move hands the job: the runner's Result shape."""
+
+    def __init__(self, doc, refusals=(), note=""):
+        self.doc, self.refusals, self.note = doc, list(refusals), note
+        self.decisions, self.info, self.busy, self.stopped = [], {}, False, False
+
+
+def _engine():
+    import importlib
+    try:
+        runner, routes = importlib.import_module("territory.runner"), importlib.import_module("territory.routes")
+    except ImportError as e:     # the middleware was started without the engine on its path
+        raise TaskError(503, "engine_unavailable", "Territories is not available in this middleware: the engine package is not installed.") from e
+    return runner, routes
+
+
+def start(req, caps, settings, jid):
+    """Validate now (a 400 before any job, a 503 when the engine package is missing); build the job (the caller starts it)."""
+    inp = req.inp
+    step = inp.get("step") or "run"
+    if step not in MODEL_STEPS + QUICK_STEPS:
+        raise bad(f"input.step must be one of {', '.join(MODEL_STEPS + QUICK_STEPS)}")
+    data = ctx_data(req.clan)
+    if not data:
+        raise bad("this document has no Territories data to work on")
+    runner, routes = _engine()
+    clan = req.clan or {}
+    facts, findings, sources = clan.get("facts"), clan.get("findings"), clan.get("sources")
+    marks = marks_of(data, (clan.get("decision_chain") or {}).get("decisions") or [])
+    by = moves._s(inp, "by", 80)
+    rl = caps.runlog
+
+    def on_line(kw):
+        try:
+            rl.model(**kw)
+        except Exception:   # noqa: BLE001 - the run log never stops a run
+            pass
+
+    def common(job):
+        return dict(llm=J.make_llm(), store=runner.Store.for_doc(req.doc), facts=facts, findings=findings, sources=sources, marks=marks,
+                    cancel=job.cancel_event, doc_id=req.doc, on_line=on_line)
+
+    if step == "run":
+        total = max(1, len(data.get("crew") or routes.CREW))
+        return TerritoriesJob(jid, TASK, req.handler, req, caps, step=step, total=total,
+                              call=lambda job: runner.run(data, on_progress=job.progress, **common(job)))
+    if step == "steer":
+        cid, kind = moves.need(inp, "crew_id", "which agent"), moves._s(inp, "kind", 20)
+        if kind not in STEERS:
+            raise bad("input.kind must be further, pull, cross or stop")
+        return TerritoriesJob(jid, TASK, req.handler, req, caps, step=step,
+                              call=lambda job: runner.steer(data, cid, kind, by, with_=moves._s(inp, "with", 80) or None, **common(job)))
+    if step == "more":
+        tid = moves.need(inp, "territory_id", "the route")
+        n = inp.get("n")
+        if n is not None and (not isinstance(n, int) or isinstance(n, bool) or n < 1):
+            raise bad("input.n must be a whole number above 0")
+        return TerritoriesJob(jid, TASK, req.handler, req, caps, step=step,
+                              call=lambda job: runner.more(data, tid, by, steer_text=moves._s(inp, "steer", 300) or None, n=n, **common(job)))
+    if step == "push":
+        tid = moves.need(inp, "territory_id", "the route")
+        return TerritoriesJob(jid, TASK, req.handler, req, caps, step=step,
+                              call=lambda job: runner.push(data, tid, by, instruction=moves._s(inp, "instruction", 300) or None, **common(job)))
+    if step == "rerank_routes":
+        return TerritoriesJob(jid, TASK, req.handler, req, caps, step=step, call=lambda job: runner.rerank(data, by, **common(job)))
+    # the quick moves: no model, no store, answered in the request
+    if step == "undo":
+        aid = moves.need(inp, "action_id", "which fix")
+        return TerritoriesJob(jid, TASK, req.handler, req, caps, step=step, quick=True, call=lambda job: runner.undo(data, aid, by))
+    if step == "send_routes":
+        return TerritoriesJob(jid, TASK, req.handler, req, caps, step=step, quick=True, owns_person_keys=True,
+                              call=lambda job: _Done(*moves.send_routes(data, inp, findings, doc_id=req.doc, data=data)))
+    fn = getattr(moves, step)
+    return TerritoriesJob(jid, TASK, req.handler, req, caps, step=step, quick=True, owns_person_keys=step in ("approve", "answer_ask", "record_review"),
+                          call=lambda job: _Done(*fn(data, inp, findings)))
