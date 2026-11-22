@@ -151,6 +151,17 @@ function mount(data: Fx, extra: Extra = {}) {
   return { app, writes, click, toastEl }
 }
 
+test('a deck spun off from Production says its pictures came from Production, not that fetching links is off', () => {
+  const f = fixture('review-ready')
+  const sid = f.deck.order[0] as string
+  f.production = { ...production(sid), source: { kind: 'upstream', name: 'production:doc-1', clan_sha256: 'a'.repeat(64) } }
+  const m = mount(f)
+  m.click({ slide: sid })
+  const h = m.app.innerHTML
+  assert.ok(h.includes('data-prod-fetch>The pictures stay in Production: each one was fetched by its hash'))
+  assert.ok(!h.includes('Fetching links is off'))
+})
+
 test('the Review aside shows the slide\'s Production tiles, their badges and a swap per candidate', () => {
   const f = fixture('review-ready')
   const sid = f.deck.order[0] as string

@@ -1755,7 +1755,10 @@ var DeckProd = (function () {
         pending: want && want !== pk.key && cands.some(function (c) { return c.key === want; }) ? want : '' });
     });
     var f = isObj(p.fetch) ? p.fetch : {}, empty = f.allow_list_empty !== false;
-    var fetchLine = f.on
+    var carried = isObj(p.source) && p.source.kind === 'upstream';   // the project this deck was spun off from: its pictures come from Production by hash
+    var fetchLine = carried
+      ? 'The pictures stay in Production: each one was fetched by its hash for this build, checked, and nothing was generated.'
+      : f.on
       ? (empty ? 'Fetching links was on, but no provider host is on the fetch allow-list yet, so nothing was fetched. The hosts go in engine/deck/policy/production_fetch.yaml once they are named.'
         : 'Fetching links was on: only the picked pictures, only from the allowed hosts, each checked against its hash.')
       : 'Fetching links is off (opt-in): pictures came from the .clan or its export zip only.' +
