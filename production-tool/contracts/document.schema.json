@@ -56,6 +56,10 @@
         "type": "object"
       }
     },
+    "projection": {
+      "type": "object",
+      "description": "HOST-WRITTEN, READ-ONLY (os-layer §5): the host's scalar projection of shared/facts.yaml, shared/findings.yaml and shared/sources.yaml, rebuilt after every change to a member. A spun-off project carries it (napkin-host library::with_projection); Production neither reads nor writes it, and keeps it on save. Not patched."
+    },
     "boards": {
       "type": "object",
       "propertyNames": {
