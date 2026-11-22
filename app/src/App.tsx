@@ -19,7 +19,7 @@ import Launcher from './shell/Launcher'
 import { LandingHome } from './shell/landing/LandingHome'
 import { useLanding } from './shell/landing/useLanding'
 import { initialsOf, jobOf, routeOfDocument, whoIs } from './shell/landing/model'
-import { BRIEF_APP_ID, filmFromBriefHref, toolById, toolOfApp } from './shell/landing/tools'
+import { PRODUCTION_APP_ID, toolById, toolOfApp } from './shell/landing/tools'
 import Toolbar from './components/Toolbar'
 import { productionOn, signedInUser } from './host/http'
 import { signOut } from './shell/signOut'
@@ -173,7 +173,8 @@ export default function App() {
   const isLatest = (n: number) => n === openSeq.current
 
   const refreshApps = useCallback(async () => {
-    try { setInstalled(await host.listApps()) } catch (e) { console.error(e) }
+    // Production is installed for its spin-offs, not to launch: its projects open at /production.
+    try { setInstalled((await host.listApps()).filter(a => a.app_id !== PRODUCTION_APP_ID)) } catch (e) { console.error(e) }
   }, [])
   // Once at start too: a document opened straight from a link (or a reload)
   // names its tool in the bar from this list, without the home ever showing.
@@ -323,6 +324,13 @@ export default function App() {
     setLoading(true); setError(null)
     try {
       const src = runningRef.current?.open.manifest
+      if (appId === PRODUCTION_APP_ID) {
+        // A Production project is kept in the relay, not the library: the server makes it, then the tool opens it.
+        if (!host.spinoffToProduction) throw new Error('Production is not available here.')
+        const made = await host.spinoffToProduction(null)
+        window.location.assign(made.path)
+        return
+      }
       const result = await host.spinoffDocument(appId, spinoffTitle(src?.title, src?.app?.app_id, appId), null)
       await runArtifact(n, result)
     } catch (e) { setError(String(e)) } finally { setLoading(false) }
@@ -644,9 +652,7 @@ export default function App() {
           onExport={exportCurrent}
           onSpinoff={spinOff}
           onStartFresh={startFresh}
-          onStartFilm={production && !device && !running.open.is_template && running.open.manifest.app?.app_id === BRIEF_APP_ID
-            ? () => { window.open(filmFromBriefHref(running.open.path), '_blank', 'noopener') }
-            : undefined}
+          productionTarget={production && !device}
           // In the studio (or the desktop's files) each change is kept as it
           // is made; on the device it stays in the tab (DeviceBanner says so).
           saved={!device && !running.open.is_template}

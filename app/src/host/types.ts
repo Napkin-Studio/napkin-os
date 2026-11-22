@@ -850,6 +850,13 @@ export interface Host {
     map: string | null,
   ): Promise<OpenResult>
 
+  /**
+   * Continue in Production (features/production-spinoff.clan): the open brief becomes a project in the
+   * Production Tool's own store (the relay), carried whole, and `path` is where the tool opens it. Only the
+   * studio's server can do it: the desktop and the browser device have no relay, so they do not have this.
+   */
+  spinoffToProduction?(title: string | null): Promise<{ project: string; path: string }>
+
   // ── Getting bytes out ─────────────────────────────────────────────────────
   saveClanTo(path: string): Promise<void>
   /** Resolves with the saved file's name when the host delivered it itself (the browser), or nothing when a `clan-export-request` event follows (the desktop). */
