@@ -136,6 +136,27 @@ Approve always replaces an old one (an edit never disables it).
 Defaults taken: the sensitive review is a named person's (never `engine`), done after greenlighting, void when the greenlight inputs change; greenlighting
 nothing is allowed with a reason and sends nothing; pressing Explore is the pick approval, recorded as a decision with the ticked insights' hash.
 
+### 5.2 The crew (`engine/territory/routes.py`, feature `territories-engine-routes`)
+
+Explore is `routes.explore(doc, llm, facts=, findings=)`, the `explore` entry of `gates.drive` (`routes.stage(llm, ...)`). It refuses to run unless
+`gates.next_step` says run Explore (`routes.NotReady`, in words). It writes `crew`, `expeditions`, `territories` (state `found`), `spread` and `actions`
+in one go, or `run.error` in words with the document otherwise untouched (a retry re-pays nothing that finished: one stage per heading,
+`route_<direction>`, keyed by its message).
+
+| Part | What it does |
+|---|---|
+| Headings | Five in parallel (`routes.CREW`; a document's own `crew` wins). Each is sent the ticked insights it begins from (`start_from`: the picks dealt round the crew), every in-play source, and the OTHER headings' remit as `avoid` (a re-run also gets what the others brought back). 2 to 3 routes each (never above 4 per trail, 16 live in all) |
+| What the code owns | `cites` only in-play ids (a pick named in cites stands for its sources; a route with no cite, or an id not in play, is refused and listed in `info["dropped"]`; a heading with every route refused is asked once more); the words within the schema lengths; ids (`contract.mint`); `band` from `distance` (`contract.band_of`); a route resting on an unchecked finding says so in its `risks` |
+| Checks on every route | develop's `pipeline._kill` (crew wording `prompts/kill_crew.md`: not killed for going where its heading sent it; killed routes stay with `kill_reason`), develop's sort (`tier`, idea group) and ONE blind `distance` rating, in parallel |
+| The spread | `spread.close`: pairs of live routes under `CONFIG.threshold` (same idea group, or word overlap); `spread.gaps`: a distance band with no live route, or a bearing wider than `CONFIG.arc` with no member that came back |
+| Review fixes | At most `CONFIG.max_pair_fixes` close pairs rewritten outward and `CONFIG.max_gap_agents` agent sent into a gap, each an `actions[]` entry (`agent: review`). `spread_fix`: `territory_ids = [moved route, its replacement, the route it was too close to]`; the moved route is **parked**, never deleted. `sent_agent`: `territory_ids` = the routes the new `custom` crew member brought back |
+| `routes.undo(doc, action_id, by)` | No model call. `spread_fix`: replacement goes, original is live again. `sent_agent`: crew member, trail and routes go. The action stays, `undone: true`. A later steer does not fix an undone pair again |
+| `routes.steer(doc, llm, crew_id, kind, by, with_=)` | `further`, `pull`, `cross` (needs `with_`), `stop`. Re-runs ONLY that heading: its found routes are replaced, a developed one is parked. The instruction is in `expeditions[].steer`; `routes.steer_decision` is the history entry. `(doc, refusals in words)` |
+| Cost | About 11 calls (5 headings, kill, sort, distance, up to 3 repair calls and the two checks on what they made), about USD 0.45 to 0.60 on a real brief at the 2026-11-23 prices. Prices stay in the history, never in the document |
+
+Dev harness: `python -m territory.routes --doc <pick state> --facts f.json --findings fi.json [--live] [--baseline]`; `routes.cards(doc, 3)` feeds
+`compare.blind_pack` against `compare.baseline`.
+
 ## 6. Additive only
 
 - A new member is **optional**. A member is never removed or retyped, an enum value is never dropped, nothing newly becomes required.
