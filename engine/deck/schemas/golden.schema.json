@@ -1,0 +1,126 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Deck golden slide (docs/contracts/deck-visuals.md section 8)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "slide_type",
+    "layout",
+    "slots",
+    "why_good",
+    "source",
+    "approved"
+  ],
+  "description": "A reference slide of invented content (golden/<slide type>/<id>.yaml). Never text to reuse; Confidential material never becomes a golden.",
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^g_[a-z0-9_]{3,40}$"
+    },
+    "slide_type": {
+      "type": "string",
+      "description": "A name from spec.SLIDE_TYPES; the load check refuses an unknown one."
+    },
+    "deck_types": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "agency_pitch",
+          "tender_response",
+          "investor_seed",
+          "credentials"
+        ]
+      }
+    },
+    "layout": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{2,31}$"
+    },
+    "slots": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]{1,23}$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "text",
+              "list",
+              "group",
+              "stat",
+              "table",
+              "chart",
+              "image",
+              "copy"
+            ]
+          }
+        }
+      },
+      "description": "Valid against the layout's slots; checked on load."
+    },
+    "why_good": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": {
+        "type": "string",
+        "maxLength": 120
+      }
+    },
+    "not_this": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "why": {
+          "type": "string",
+          "maxLength": 120
+        }
+      }
+    },
+    "render": {
+      "type": "string",
+      "description": "A PNG beside the file, rebuilt by a test."
+    },
+    "source": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "invented"
+        },
+        "client": {
+          "type": "string"
+        }
+      }
+    },
+    "approved": {
+      "type": "object",
+      "required": [
+        "by",
+        "at"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "by": {
+          "type": "string"
+        },
+        "at": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

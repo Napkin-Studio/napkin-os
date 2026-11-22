@@ -1,0 +1,427 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Deck layout (docs/contracts/deck-visuals.md section 5)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "version",
+    "group",
+    "description",
+    "slot_summary",
+    "for_types",
+    "density",
+    "renderer",
+    "slots"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{2,31}$",
+      "$comment": "the file name without .yaml; 'flow' is reserved and has no file"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "$comment": "raised when a slot or a limit changes"
+    },
+    "group": {
+      "enum": [
+        "functional",
+        "content"
+      ],
+      "$comment": "functional: cover, section, appendix divider, close"
+    },
+    "purpose": {
+      "enum": [
+        "title",
+        "statement",
+        "list",
+        "compare",
+        "data",
+        "timeline",
+        "image",
+        "people"
+      ],
+      "$comment": "what the swap menu groups by"
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 160,
+      "$comment": "how it arranges things, not what it says"
+    },
+    "slot_summary": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "for_types": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      },
+      "$comment": "names from spec.SLIDE_TYPES; the library's load check refuses an unknown one"
+    },
+    "when": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "blocks_any": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "text",
+              "small",
+              "statement",
+              "quote",
+              "callout",
+              "card",
+              "bullets",
+              "table",
+              "kv",
+              "fromto",
+              "steps",
+              "chart",
+              "sketch",
+              "copy",
+              "stats"
+            ]
+          }
+        },
+        "blocks_only": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "text",
+              "small",
+              "statement",
+              "quote",
+              "callout",
+              "card",
+              "bullets",
+              "table",
+              "kv",
+              "fromto",
+              "steps",
+              "chart",
+              "sketch",
+              "copy",
+              "stats"
+            ]
+          }
+        },
+        "needs_image": {
+          "type": "boolean"
+        },
+        "needs_number": {
+          "type": "boolean"
+        },
+        "min_items": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        },
+        "max_items": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        },
+        "status": {
+          "enum": [
+            "from_source",
+            "drafted",
+            "needs_human"
+          ]
+        }
+      }
+    },
+    "priority": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "$comment": "highest first, first match wins; replaces the order of choose_layout's table"
+    },
+    "alternatives": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{2,31}$"
+      },
+      "$comment": "layouts a person may swap to; each accepts the same blocks"
+    },
+    "roomier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{2,31}$",
+      "$comment": "the next layout on the fit ladder"
+    },
+    "without_image": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{2,31}$",
+      "$comment": "the layout used when its image slot stays empty"
+    },
+    "density": {
+      "enum": [
+        "lean",
+        "standard",
+        "detailed"
+      ],
+      "$comment": "the most text the layout is meant for; the words of look.density"
+    },
+    "renderer": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{2,31}$",
+      "$comment": "the draw routine's name; every renderer has one or falls back to flow and says so"
+    },
+    "slots": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 8,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]{1,23}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/slot"
+      }
+    }
+  },
+  "definitions": {
+    "slot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "text",
+            "list",
+            "group",
+            "stat",
+            "table",
+            "chart",
+            "image",
+            "copy"
+          ]
+        },
+        "role": {
+          "enum": [
+            "display",
+            "title",
+            "lead",
+            "body",
+            "small",
+            "caption"
+          ],
+          "$comment": "the theme scale token; its floor is theme.Scale's"
+        },
+        "required": {
+          "type": "boolean",
+          "default": false,
+          "$comment": "an empty optional slot collapses and the rest re-balances; an empty required slot is an issue"
+        },
+        "dominant": {
+          "type": "boolean",
+          "$comment": "the slide's one main visual; at most one slot per layout sets it"
+        },
+        "max_line_in": {
+          "type": "number",
+          "maximum": 4.9,
+          "$comment": "body text columns: lines no wider than about 700 px of 1920"
+        },
+        "master_placeholder": {
+          "type": "string",
+          "$comment": "the placeholder this slot fills on an agency .potx master"
+        },
+        "from_blocks": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "text",
+              "small",
+              "statement",
+              "quote",
+              "callout",
+              "card",
+              "bullets",
+              "table",
+              "kv",
+              "fromto",
+              "steps",
+              "chart",
+              "sketch",
+              "copy",
+              "stats"
+            ]
+          },
+          "$comment": "block kinds it takes, in order"
+        },
+        "min_chars": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_chars": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 900,
+          "$comment": "derived from the box and the role's size at 0.85 capacity by layouts.capacity(); a test fails when the file disagrees"
+        },
+        "max_words": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 150,
+          "$comment": "never above the slide type's budget in spec.SLIDE_TYPES"
+        },
+        "max_lines": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12
+        },
+        "min_items": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        },
+        "max_items": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        },
+        "center_when_fewer": {
+          "type": "boolean"
+        },
+        "item": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "heading_max_chars": {
+              "type": "integer",
+              "maximum": 60
+            },
+            "body_max_chars": {
+              "type": "integer",
+              "maximum": 280
+            },
+            "max_words": {
+              "type": "integer",
+              "maximum": 45
+            }
+          }
+        },
+        "table": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_rows": {
+              "type": "integer",
+              "maximum": 8
+            },
+            "max_cols": {
+              "type": "integer",
+              "maximum": 5
+            },
+            "cell_max_chars": {
+              "type": "integer",
+              "maximum": 60
+            }
+          }
+        },
+        "chart": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "types": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "bar",
+                  "line",
+                  "stack",
+                  "big_number",
+                  "kpi_row"
+                ]
+              }
+            },
+            "max_categories": {
+              "type": "integer",
+              "maximum": 8
+            },
+            "max_series": {
+              "type": "integer",
+              "maximum": 4
+            },
+            "hero_max": {
+              "type": "integer",
+              "maximum": 2
+            }
+          }
+        },
+        "image": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "aspect"
+          ],
+          "properties": {
+            "aspect": {
+              "enum": [
+                "16:9",
+                "3:2",
+                "4:3",
+                "1:1",
+                "4:5",
+                "9:16"
+              ]
+            },
+            "kinds": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "photo",
+                  "illustration",
+                  "frame",
+                  "screenshot",
+                  "logo"
+                ]
+              }
+            },
+            "fit": {
+              "enum": [
+                "cover",
+                "contain"
+              ],
+              "default": "cover"
+            },
+            "min_px": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "text_over": {
+              "type": "boolean",
+              "default": false
+            },
+            "scrim": {
+              "enum": [
+                "none",
+                "dark",
+                "light"
+              ],
+              "default": "none"
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4,
+              "$comment": "4 for a territory's frame strip"
+            }
+          }
+        }
+      }
+    }
+  }
+}
