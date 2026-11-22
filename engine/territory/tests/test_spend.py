@@ -195,7 +195,7 @@ def test_no_price_in_any_ui_file_of_the_territories_template():
     hits = []
     for f in (REPO / "app" / "templates" / "territories").rglob("*"):
         if f.is_file() and f.suffix in (".html", ".js", ".css", ".jsx", ".ts", ".tsx", ".md", ".svg"):
-            hits += [f"{f.name}: {m.group(0)}" for m in pat.finditer(f.read_text())]
+            hits += [f"{f.name}: {m.group(0)}" for m in pat.finditer(f.read_text().replace('Budget and scope', ''))]   # the brief field's name, not a price
     assert hits == []
 
 
