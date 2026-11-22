@@ -349,9 +349,14 @@ the saved project off into a Deck Maker document: its contract-3 data (assets, f
 - *Pictures by link.* Each picture a build needs is fetched by sha256 from the relay's `GET /assets/{sha256}?w=2400`, cached by hash
   under the document's stages folder and checked as a picture; the original-size copy is checked against its sha256. Reach is `relay`
   (the app's badge: Linked from Production). The call is the person's own, signed with `X-Napkin-Identity`
-  (production-tool-identity.md): the engine and middleware hold neither the relay URL nor the signing key today, so the transport
-  (`prod_picker.RELAY_FETCH`) is not wired, and until it is every picture says it is not reachable (an empty slot with that reason,
-  never a generated picture). The host a build may reach is the relay's, to be named in `policy/production_fetch.yaml` when it is wired.
+  (production-tool-identity.md, "The assets pass"): the middleware holds no relay key and does not know who is asking, so napkin-web
+  signs one read-only pass (`aud: "assets"`, `GET /assets/{sha256}` only, the caller's agency, 30 minutes) for each `build_deck` it
+  forwards and adds `payload.production_assets {base, pass}` (any value the browser sent is dropped). The middleware hands it to the
+  engine only for a deck that carries a Production project; the engine's transport (`prod_picker.use_relay`, `relay_fetcher`) sends
+  it to the relay's host only, follows the relay's 302 to the picture (https, no credentials or port, public addresses, a few hops,
+  the byte cap) without the pass, and never writes or logs it. The relay's host is the server-set `base`, so it is not on
+  `policy/production_fetch.yaml` (that list is for the https locations a document names). With no relay configured, or an expired or
+  refused pass, every picture says it is not reachable (an empty slot with that reason, never a generated picture).
 - *The brief.* A deck with no brief of its own upstream takes the brief its Production project froze (`briefs`, the newest: insight,
   proposition, audience, tone, feel, mandatories), mapped onto the Brief Maker fields (`inputs.production_brief`); a part the brief
   marked Confidential stays a mark, so it never reaches a picture model (the middleware sends those marks too). A brief of the

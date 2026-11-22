@@ -634,8 +634,9 @@ Slice 2 is **execution frames**, slice 3 the **storyboard strip**:
   the original size, fetched without `w`, is also checked against its sha256. A rendition cannot be (that hash is the original's), so
   it stands as the relay's answer for that hash. A picture the relay will not give is `not reachable`, an empty slot and never a
   generated picture. The slot is the same either way: `from {kind: production, key}` and an asset with `source`; the bytes are in the
-  run folder and the export, never in the `.clan`. The signed call to the relay is a transport the host provides
-  (`prod_picker.RELAY_FETCH`, not wired yet: see deck-maker.md).
+  run folder and the export, never in the `.clan`. The call to the relay carries the person's read-only **assets pass**
+  (`X-Napkin-Identity`, `aud: "assets"`, signed by napkin-web per build and handed through `production_assets`: see deck-maker.md and
+  production-tool-identity.md); the engine sends it to the relay's host only, never to the picture's.
 - **Production first.** `images.bind_production` under the flag takes the newest placeable size of the execution's channel whatever its
   shape (the frame shows it whole); a channel whose sizes are all out of date is held with that reason; a rights-pending size is left
   empty with `Rights to supply` and its Review notice, never placed and never replaced by a generated picture. A generated picture

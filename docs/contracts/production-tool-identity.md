@@ -76,10 +76,9 @@ deck build and hands it to the build; the engine reads each picture with `GET /a
   answers `None` (401), as with no identity. The hold check is today's: the tenant in the claims must hold the
   hash, else the same 404 as an unknown picture.
 - **Lifetime: `exp = iat + 1800` (30 minutes).** A deck job's own ceiling is `MAX_WAIT = 3600` s for one
-  segment (`server/napkin/deck/job.py`), but a segment that reaches pictures is the last, and its picture
-  step follows the storyline and idea stages, which are already approved; the fetches themselves are capped at
-  20 s each and 40 pictures a run in the engine. 30 minutes covers the picture step of a build with room,
-  and a stolen pass reads one agency's pictures for at most that long. The relay refuses any pass whose
+  segment (`server/napkin/deck/job.py`); the pass is only used by the picture step, whose fetches are capped at
+  30 s each and 40 pictures a run in the engine, so it needs minutes, not the segment's whole ceiling. 30 minutes
+  covers a build's picture step with room, and a stolen pass reads one agency's pictures for at most that long. The relay refuses any pass whose
   `exp - iat` exceeds 3600, so a signer cannot mint a day-long one by mistake. napkin-web signs a fresh pass for
   every `build_deck` it forwards, so a long gate-to-gate wait never outlives one.
 - **An `aud: "relay"` assertion keeps its 60 s rule** and its binding to one request; it is not an assets pass.
