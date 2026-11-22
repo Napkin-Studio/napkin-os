@@ -9,7 +9,10 @@ from pathlib import Path
 PROMPTS = Path(__file__).parent / "prompts"
 STAGE_MODEL = {"assumed_brief": "claude-sonnet-5-5", "tensions": "claude-sonnet-5-5",
                "seeds": "claude-opus-5-5", "kill": "claude-sonnet-5-5", "sort": "claude-sonnet-5-5", "score": "claude-sonnet-5-5", "propositions": "claude-opus-5-5", "baseline": "claude-opus-5-5",
-               "frames_plan": "claude-sonnet-5-5", "insights": "claude-sonnet-5-5"}
+               "frames_plan": "claude-sonnet-5-5", "insights": "claude-sonnet-5-5",
+               # the crew (territories-engine-routes): one stage per heading so each is cached, timed and re-run alone
+               **{f"route_{d}": "claude-opus-5-5" for d in ("core", "feel", "opposite", "adjacent", "outside", "yours", "custom")},
+               "distance": "claude-sonnet-5-5", "spread_repair": "claude-sonnet-5-5"}
 
 
 def prompt(name: str) -> str:
