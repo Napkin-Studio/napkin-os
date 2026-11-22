@@ -399,12 +399,12 @@
   "rights": {
    "type": "string",
    "enum": [
-    "supplied",
-    "licensed",
     "generated",
+    "own",
+    "licensed",
     "unknown"
    ],
-   "description": "unknown reads as 'Rights to supply'."
+   "description": "Production's and the Deck's words. generated, own and licensed are trusted only when stated; unknown, unstated, a mock and anything else read 'Rights to supply'."
   },
   "picture_kind": {
    "type": "string",
@@ -446,7 +446,8 @@
     "no_routes",
     "derived_evidence",
     "near_mandatory",
-    "sensitive_review"
+    "sensitive_review",
+    "picture_rights"
    ]
   },
   "ask_kind": {
@@ -1385,7 +1386,7 @@
      "type": "string",
      "maxLength": 300,
      "minLength": 1,
-     "description": "Path or asset ref of a frame."
+     "description": "Path or asset ref of a frame; a carried picture is the link 'sha256:<64 hex>'."
     },
     "sha256": {
      "type": "string",
@@ -1404,6 +1405,16 @@
      "maxLength": 200,
      "minLength": 1,
      "description": "Why there is no picture, in words."
+    },
+    "final": {
+     "type": "boolean",
+     "description": "The one picture a person marked Final for this route's touchpoint. Only a frame can be Final, and it must carry a stated rights choice before the route is sent."
+    },
+    "source": {
+     "type": "string",
+     "maxLength": 200,
+     "minLength": 1,
+     "description": "Where a carried picture came from, in words (the document it arrived from)."
     }
    },
    "required": [
@@ -1411,7 +1422,7 @@
     "touchpoint",
     "kind"
    ],
-   "description": "A picture slot. v1 draws palette sketches; frames come with territories-pictures-frames.",
+   "description": "A picture slot. v1 draws palette sketches; a picture carried from Production or the Deck is a frame by link (image 'sha256:<hex>'), never copied bytes.",
    "allOf": [
     {
      "if": {

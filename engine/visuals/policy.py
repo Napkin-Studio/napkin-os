@@ -38,3 +38,10 @@ def label(environ=None) -> str:
     if p == "allow":
         return f"Client-derived prompts -> Runway: allowed (testing override: {ENV}=allow; the default is refuse); every prompt is linted and Confidential parts are refused"
     return "Client-derived prompts -> Runway: refused (policy); only material marked invented or demo is sent"
+
+
+def allows(client_derived: bool, environ=None) -> bool:
+    """May a prompt go to a picture provider at all? Material nobody derived from a client (marked invented or demo by a person) always
+    may. Client-derived material may only under the testing override; the default refuses. The lint and the Confidential deny-list run
+    either way, before anything is sent."""
+    return (not client_derived) or client_to_runway(environ) == "allow"

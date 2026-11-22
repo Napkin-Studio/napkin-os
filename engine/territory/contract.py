@@ -361,7 +361,14 @@ def check(doc: dict, *, facts=None, findings=None) -> list[Problem]:
             hashes = [x["sha256"] for x in t["pictures"] if x.get("sha256")]
             if len(hashes) != len(set(hashes)):
                 bad(where + ".pictures", "dup_picture", f"Route {i + 1} uses the same picture in two slots.")
+            finals = [x["touchpoint"] for x in t["pictures"] if x.get("final")]
+            if len(finals) != len(set(finals)):
+                bad(where + ".pictures", "final", f"Route {i + 1} has two pictures marked Final for the same place.")
             for slot in t["pictures"]:
+                if slot.get("final") and slot["kind"] != "frame":
+                    bad(where + ".pictures", "final", f"Route {i + 1}: only a picture can be marked Final.")
+                if slot["kind"] == "frame" and slot["image"] != "sha256:" + slot["sha256"] and slot["image"].startswith("sha256:"):
+                    bad(where + ".pictures", "hash", f"Route {i + 1}: a picture's link does not match its hash.")
                 if slot["kind"] == "sketch" and slot["touchpoint"] in ("story", "poster", "seat", "email") and \
                         slot.get("scene") != w["scenes"][slot["touchpoint"]]:
                     bad(where + ".pictures", "scene", f"Route {i + 1}: a picture does not show the scene its touchpoint calls for.")
