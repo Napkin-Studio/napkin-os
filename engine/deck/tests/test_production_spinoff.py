@@ -623,3 +623,23 @@ def test_a_body_that_closes_its_socket_with_its_last_bytes_is_still_read_whole()
 
     body = b"x" * 200_000
     assert pp._read_capped(Closing(body), "relay.test", 25_000_000, 30.0, 0.0, lambda: 0.0) == body
+
+
+def test_a_relay_rendition_is_recorded_by_the_hash_of_the_file_the_deck_holds(tmp_path, pics):
+    # Found live: the rendition is not the original's bytes, so the renderers refused the picture ("its sha256 differs").
+    import io
+    from PIL import Image
+
+    class Rendition(FakeRelay):
+        def __call__(self, hx, w):
+            raw = super().__call__(hx, w)
+            out = io.BytesIO()
+            Image.open(io.BytesIO(raw)).convert("RGB").save(out, "JPEG", quality=80)
+            return out.getvalue()
+
+    d, res, st, relay = build(tmp_path, pics, relay=Rendition(pics))
+    assert res["placed"] >= 1
+    for rec in d["assets"].values():
+        assert hashlib.sha256((st / rec["file"]).read_bytes()).hexdigest() == rec["sha256"]
+    out = tmp_path / "out"
+    assert images.copy_assets(d, out, "review", src_dirs=[st])   # the renderers' own check

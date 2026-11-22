@@ -1226,8 +1226,15 @@ def run(deck: dict, src: Source, stages: Path, pictures: str = "creative_cover",
         items = {}
         for k in keys:
             if k in where:
-                it = fp.make_item(plan.by_key[k], infos[meta["items"][k]["sha256"]], src.clan_sha256)
+                info = infos[meta["items"][k]["sha256"]]
+                it = fp.make_item(plan.by_key[k], info, src.clan_sha256)
                 it["source"] = where[k]
+                if where[k] == "relay":
+                    # a rendition is not the original's bytes: the deck records the hash of the file it holds (the renderers check it),
+                    # and the original's hash stays the Production key
+                    orig = it["sha256"]
+                    it["sha256"], it["file"], it["source_sha256"] = info["sha256"], f"assets/{info['sha256']}.{info['ext']}", orig
+                    files[info["sha256"]] = files[orig]
                 items[k] = it
         prod = {"stage": "production", "produced_by": "deck.prod_picker (a Production .clan read directly; only the picked pictures pulled; no model call "
                                                       "unless --production-agent or --production-look)",
