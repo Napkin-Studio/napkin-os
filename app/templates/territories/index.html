@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Territories</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;800&family=Geist+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&display=swap" />
+<style>
+/* The studio's paper look (the owner's demo, design/territory-explorer/prototype.html): the tool's own colour is its teal (--te).
+   A template is its own page, so the tokens are copied. The shell pushes data-color-scheme; with none set we follow the OS. */
+:root{
+  --desk:#F6F1E7; --paper:#FFFDF8; --card:#FFFFFF; --ink:#141413; --ink-soft:#2A2620; --muted:#6D655A; --line:#E2D9C8; --line-strong:#2A2620;
+  --te:#14947F; --ok:#1D8A4E; --warn:#B45309; --warn-soft:#FEF3DC;
+  --font-ui:"Geist",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif; --font-serif:"Newsreader",Georgia,serif; --font-mono:"Geist Mono",ui-monospace,Menlo,monospace;
+}
+:root[data-color-scheme="dark"]{
+  --desk:#121110; --paper:#1B1A18; --card:#201E1B; --ink:#EFE9DE; --ink-soft:#D6CEC0; --muted:#A49B8D; --line:#34302A; --line-strong:#CFC6B6;
+  --te:#3CC9AE; --ok:#5DBB83; --warn:#E09A4B; --warn-soft:#3A2A18;
+}
+@media (prefers-color-scheme:dark){:root:not([data-color-scheme="light"]):not([data-color-scheme="dark"]){
+  --desk:#121110; --paper:#1B1A18; --card:#201E1B; --ink:#EFE9DE; --ink-soft:#D6CEC0; --muted:#A49B8D; --line:#34302A; --line-strong:#CFC6B6;
+  --te:#3CC9AE; --ok:#5DBB83; --warn:#E09A4B; --warn-soft:#3A2A18;
+}}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--desk);color:var(--ink);font:15px/1.55 var(--font-ui);-webkit-font-smoothing:antialiased}
+.shell{max-width:1240px;margin:0 auto;padding:0 24px 64px}
+.app-head{padding:32px 0 22px;border-bottom:1px solid var(--line);margin-bottom:24px}
+.eyebrow{font:600 11.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.eyebrow::before{content:"";width:18px;height:2px;background:var(--te);flex:none}
+.hero-title{margin:0 0 8px;font-size:clamp(34px,4.2vw,50px);font-weight:800;letter-spacing:-.04em;line-height:.96}
+.period-dot{display:inline-block;width:.17em;height:.17em;border-radius:50%;background:var(--te);margin-left:.04em}
+.hero-sub{margin:0;font-size:14.5px;line-height:1.5;color:var(--ink-soft);max-width:62ch}
+.split{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:24px;align-items:start}
+@media (max-width:960px){.split{grid-template-columns:minmax(0,1fr)}}
+.sheet{background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:24px 26px;box-shadow:0 1px 0 rgba(255,255,255,.75) inset,0 8px 24px -8px rgba(50,38,18,.10)}
+.sheet h2{margin:0 0 4px;font:600 22px/1.2 var(--font-serif);letter-spacing:-.01em}
+.sheet .lede{margin:0 0 18px;color:var(--muted);font-size:14px}
+.stats{display:flex;flex-wrap:wrap;gap:6px 18px;margin:0 0 20px;padding:0;list-style:none;font:500 12px var(--font-mono);color:var(--ink-soft)}
+.stats b{font-weight:600;color:var(--ink)}
+.psec-t{display:block;font:600 11px var(--font-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:22px 0 8px}
+.fields{margin:0;padding:0;list-style:none;display:grid;gap:12px}
+.fields li{border-left:3px solid var(--te);padding:2px 0 2px 12px}
+.fields .fl{font:600 11px var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.fields .ft{font:400 16px/1.45 var(--font-serif);white-space:pre-line;overflow-wrap:anywhere}
+.rest{margin:10px 0 0;color:var(--muted);font-size:13px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:16px 18px}
+.panel h3{margin:0 0 6px;font-size:14px;font-weight:600}
+.panel p{margin:0;font-size:13px;line-height:1.5;color:var(--muted)}
+.panel p+p{margin-top:8px}
+.nothing{background:var(--warn-soft);border-radius:6px;padding:14px 16px;font-size:14px;color:var(--ink)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+</style>
+</head>
+<body>
+<div class="shell" id="root"></div>
+<!-- @napkin:source-card -->
+<script id="territories-logic">
+/* The pure block: what a spin-off carried, as words and counts. The same reading as engine/territory/carried.py read();
+   app/tests/territories.test.ts holds the two equal over the fixtures in app/templates/territories/example/spunoff/. */
+var TerritoriesLogic=(function(){
+  var BRIEF_KEYS={background:'background',objectives:'objectives',audience:'audience',competitor_context:'competitor_context',insight:'insight',
+    smp:'single_minded_proposition',reasons_to_believe:'reasons_to_believe',desired_response:'desired_response',tone_world_assets:'tone_and_world',
+    budget_scope:'budget_and_scope',mandatories:'mandatories'};
+  var LABELS={background:'Background',objectives:'Objectives',audience:'Audience',competitor_context:'Competitors',insight:'Insight',
+    smp:'Single-minded proposition',reasons_to_believe:'Reasons to believe',desired_response:'Desired response',tone_world_assets:'Tone and world',
+    budget_scope:'Budget and scope',mandatories:'Mandatories'};
+  var KEY_FIELDS=['insight','smp','objectives','audience','mandatories'];
+  function obj(v){ return v&&typeof v==='object'&&!Array.isArray(v)?v:{}; }
+  function textOf(v){
+    if(v&&typeof v==='object'&&!Array.isArray(v)&&'value' in v) v=v.value;
+    if(v==null) return '';
+    if(typeof v==='string') return v.trim();
+    if(typeof v==='number'||typeof v==='boolean') return String(v);
+    if(Array.isArray(v)) return v.map(textOf).filter(Boolean).join('\n');
+    if(typeof v==='object') return Object.keys(v).map(function(k){ return textOf(v[k]); }).filter(Boolean).join('\n');
+    return '';
+  }
+  function briefValue(src,name){
+    src=obj(src); var keys=[name,BRIEF_KEYS[name]];
+    for(var i=0;i<keys.length;i++) if(keys[i]&&textOf(src[keys[i]])) return src[keys[i]];
+    return null;
+  }
+  function isBrief(src){ return Object.keys(BRIEF_KEYS).some(function(n){ return briefValue(src,n)!==null; }); }
+  function titleOf(src){
+    src=obj(src); var c=[src.title,src.project_name,obj(src.campaign).name];
+    for(var i=0;i<c.length;i++){ var t=textOf(c[i]); if(t) return t; }
+    return '';
+  }
+  function split(up){
+    var brief=null, research=null;
+    Object.keys(obj(up)).forEach(function(id){
+      var s=up[id];
+      if(!s||typeof s!=='object'||Array.isArray(s)||!Object.keys(s).length||(s.kit&&typeof s.kit==='object'&&!Array.isArray(s.kit))) return;
+      if(!brief&&isBrief(s)) brief=[id,s]; else if(!research&&!isBrief(s)) research=[id,s];
+    });
+    return {brief:brief, research:research};
+  }
+  function values(o){ o=obj(o); return Object.keys(o).map(function(k){ return o[k]; }); }
+  /** What arrived. Counts are null (never a made-up 0) when the host has not said. */
+  function seen(data){
+    data=obj(data); var sp=split(data.upstream), proj=obj(data.projection);
+    var out={brief:null,research:null,from:'none'};
+    if(sp.brief){
+      var src=sp.brief[1];
+      var fields=Object.keys(BRIEF_KEYS).filter(function(n){ return briefValue(src,n)!==null; }).map(function(n){ return {id:n,label:LABELS[n],text:textOf(briefValue(src,n))}; });
+      var keyf=[]; KEY_FIELDS.forEach(function(n){ fields.forEach(function(f){ if(f.id===n) keyf.push(f); }); });
+      var mand=fields.filter(function(f){ return f.id==='mandatories'; })[0];
+      out.brief={id:sp.brief[0],title:titleOf(src),filled:fields.length,total:Object.keys(BRIEF_KEYS).length,fields:fields,key_fields:keyf,
+        mandatories:mand?mand.text.split('\n').filter(Boolean).length:0};
+    }
+    var pins='pins' in proj?values(proj.pins):null, found='findings' in proj?values(proj.findings):null, srcs='sources' in proj?values(proj.sources):null;
+    if(sp.research||(pins&&pins.length)||(found&&found.length)){
+      var st=found?found.map(function(f){ return obj(f).status; }):null;
+      var n=function(s){ return st?st.filter(function(x){ return x===s; }).length:null; };
+      out.research={id:sp.research?sp.research[0]:'',title:sp.research?titleOf(sp.research[1]):'',pins:pins?pins.length:null,findings:found?found.length:null,
+        verified:n('verified'),proposed:n('proposed'),rejected:n('rejected'),sources:srcs?srcs.length:null};
+    }
+    out.from=['brief','research'].filter(function(k){ return out[k]; }).join('+')||'none';
+    return out;
+  }
+  function plural(n,one,many){ return n+' '+(n===1?one:many); }
+  /** The stats line under the heading. */
+  function statsOf(s){
+    var out=[];
+    if(s.brief) out.push('Brief · '+plural(s.brief.filled,'field','fields')+' of '+s.brief.total);
+    if(s.research){
+      var r=s.research, bits=[];
+      if(r.pins!=null) bits.push(plural(r.pins,'pin','pins'));
+      if(r.findings!=null) bits.push(plural(r.findings,'finding','findings'));
+      if(r.sources!=null) bits.push(plural(r.sources,'source','sources'));
+      out.push('Research · '+(bits.join(', ')||'brought in'));
+      if(r.rejected) out.push(r.rejected+' rejected, never used');
+      if(r.proposed) out.push(r.proposed+' derived, not yet verified');
+    }
+    return out;
+  }
+  function fromWords(s){
+    return s.from==='brief+research'?'from a brief and its research':s.from==='brief'?'from a brief':s.from==='research'?'from research':'from nothing yet';
+  }
+  return {seen:seen,statsOf:statsOf,fromWords:fromWords,briefValue:briefValue,textOf:textOf,BRIEF_KEYS:BRIEF_KEYS,LABELS:LABELS,KEY_FIELDS:KEY_FIELDS};
+})();
+</script>
+<script id="territories-view">
+(function(){
+  var L=TerritoriesLogic;
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function clan(){ return window.__CLAN__||{}; }
+  function render(){
+    var c=clan(), data=c.data||{}, man=c.manifest||{}, s=L.seen(data), root=document.getElementById('root');
+    var title=(man.title&&man.title!=='Territories')?man.title:(s.brief&&s.brief.title)||(s.research&&s.research.title)||'';
+    var h='<header class="app-head"><div class="eyebrow">Territories · '+esc(L.fromWords(s))+'</div>'
+      +'<h1 class="hero-title">'+esc(title||'Territories')+'<span class="period-dot"></span></h1>'
+      +'<p class="hero-sub">Here is what came in, read before anything else happens. Nothing is copied: the crew will quote it by name.</p></header>';
+    if(s.from==='none'){
+      h+='<div class="split"><article class="sheet"><h2>Nothing came in with this one</h2>'
+        +'<p class="lede">It was not made from a brief or from research, so it starts from a category and a question.</p>'
+        +'<div class="nothing">Entering the category and the question, and the crew itself, arrive in the next release. Until then this document only holds what is on this page.</div></article>'
+        +'<aside class="panel"><h3>Where this goes</h3><p>Continue in, Territories, from a Brief or a Research document, brings the whole of it in.</p></aside></div>';
+      root.innerHTML=h; return;
+    }
+    var stats=L.statsOf(s);
+    h+='<div class="split"><article class="sheet"><h2>What arrived</h2><p class="lede">Read in full, in the words the brief and the research use.</p>'
+      +'<ul class="stats">'+stats.map(function(t){ return '<li><b>'+esc(t.split(' · ')[0])+'</b>'+(t.indexOf(' · ')>0?' · '+esc(t.split(' · ').slice(1).join(' · ')):'')+'</li>'; }).join('')+'</ul>'
+      +'<div id="cards"></div>';
+    if(s.brief){
+      h+='<span class="psec-t">From the brief</span>';
+      h+=s.brief.key_fields.length?'<ul class="fields" id="key-fields">'+s.brief.key_fields.map(function(f){
+        return '<li data-field="'+esc(f.id)+'"><div class="fl">'+esc(f.label)+'</div><div class="ft">'+esc(f.text)+'</div></li>'; }).join('')+'</ul>'
+        :'<p class="rest">The brief has no insight, proposition, objectives, audience or mandatories written yet.</p>';
+      var rest=s.brief.filled-s.brief.key_fields.length;
+      if(rest>0) h+='<p class="rest">And '+esc(rest===1?'one more field':rest+' more fields')+', held with the brief.</p>';
+    }
+    h+='</article><aside class="panel"><h3>Not started</h3><p>The crew has not been sent out. Picking insights and exploring routes arrive in the next release.</p>'
+      +'<p>This document keeps a frozen copy of what it was made from, so a later change to the brief or the research does not move it.</p></aside></div>';
+    root.innerHTML=h;
+    var NS=window.NapkinSource, cards=document.getElementById('cards');
+    if(NS&&cards){
+      var up=(data.upstream||{}), list=[], r=s.research;
+      if(s.brief) list.push(NS.fromUpstream(up[s.brief.id],{document_id:s.brief.id},{kind:'brief',title:s.brief.title||undefined,locked:(up[s.brief.id]||{}).locked===true}));
+      if(r) list.push(NS.fromUpstream(up[r.id]||{},{document_id:r.id,noun:'research'},{kind:'research',title:r.title||'The research this started from',
+        facts:r.pins,findings:r.findings,sources:r.sources,verified:r.verified||null,locked:(up[r.id]||{}).locked===true,status:''}));
+      NS.mount(cards,list,{});
+    }
+  }
+  render();
+})();
+</script>
+</body>
+</html>

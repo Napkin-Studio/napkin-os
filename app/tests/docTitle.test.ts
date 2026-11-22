@@ -18,6 +18,14 @@ test('a spin-off is called after its source, with what it is', () => {
   assert.equal(spinoffTitle('Ferryman Light launch · Research', RESEARCH, BRIEF), 'Ferryman Light launch · Brief', 'never one kind after another')
 })
 
+test('a Territories spin-off is called after its source, from a brief or from research', () => {
+  const T = 'ie.napkin.territories'
+  assert.equal(spinoffTitle('Linea: Weekend by Rail', BRIEF, T), 'Linea: Weekend by Rail · Territories')
+  assert.equal(spinoffTitle('Linea · Research', RESEARCH, T), 'Linea · Territories')
+  assert.equal(spinoffTitle('Linea · Territories', BRIEF, T), 'Linea · Territories', 'never one kind after another')
+  assert.deepEqual(docTitle('Territories', T, 'Territories'), { text: 'New territories', untitled: true })
+})
+
 test('a source with no title of its own, or a tool with no word, is left to the host', () => {
   assert.equal(spinoffTitle('Brief Maker', BRIEF, RESEARCH), null)
   assert.equal(spinoffTitle('', BRIEF, RESEARCH), null)

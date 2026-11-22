@@ -47,7 +47,9 @@ RUN mkdir -p /out/apps \
  && cargo run --release -p clan-sdk --example make_campaign_research -- \
       /out/apps/campaign-research.app.clan /out/apps/campaign-research.example.clan \
  && cargo run --release -p clan-sdk --example make_deck_maker -- \
-      /out/apps/deck-maker.app.clan /out/apps/deck-maker.example.clan
+      /out/apps/deck-maker.app.clan /out/apps/deck-maker.example.clan \
+ && cargo run --release -p clan-sdk --example make_territories -- \
+      /out/apps/territories.app.clan /out/apps/territories.example.clan
 
 # ── the shell ────────────────────────────────────────────────────────────────
 FROM node:20-bookworm-slim AS shell

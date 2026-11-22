@@ -263,9 +263,9 @@ def _walk(node, path=()):
 
 
 def lint(doc: dict) -> list[Problem]:
-    """Text leaks (LESSONS 15) and prices outside the decision history (LESSONS 19). ``upstream`` is carried, not ours: skipped."""
+    """Text leaks (LESSONS 15) and prices outside the decision history (LESSONS 19). ``upstream`` and ``projection`` are carried, not ours: skipped."""
     out: list[Problem] = []
-    body = {k: v for k, v in doc.items() if k != "upstream"}
+    body = {k: v for k, v in doc.items() if k not in ("upstream", "projection")}
     for path, val in _walk(body):
         label = "".join(f"[{p}]" if isinstance(p, int) else f".{p}" for p in path).lstrip(".")
         for p in path:
@@ -293,13 +293,22 @@ def contrast(a: str, b: str) -> float:
     return (la + 0.05) / (lb + 0.05)
 
 
+def _brief_value(src: dict, name: str):
+    try:
+        from territory import carried
+    except ImportError:   # run as a script from engine/territory
+        import carried  # type: ignore
+    return carried.brief_value(src, name)
+
+
 def known_cites(doc: dict, facts=None, findings=None) -> set[str]:
     """Every id a claim in ``doc`` may cite: brief fields held by an upstream brief, the carried pins and findings, the document's own finds.
     ``facts`` and ``findings`` are the carried members (a list, or wrapped in ``{"facts": [...]}``)."""
     known = {f["id"] for f in doc.get("finds") or []}
     for src in (doc.get("upstream") or {}).values():
         if isinstance(src, dict):
-            known |= {f"brief:{k}" for k in enum("brief_field") if src.get(k)}
+            # a real Brief Maker document keeps a part under its own key (single_minded_proposition): carried.brief_value reads both
+            known |= {f"brief:{k}" for k in enum("brief_field") if _brief_value(src, k) is not None}
     for rows, key in ((facts, "facts"), (findings, "findings")):
         rows = rows.get(key) if isinstance(rows, dict) else rows
         known |= {r["id"] for r in rows or []}
