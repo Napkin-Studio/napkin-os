@@ -4,6 +4,7 @@ The document's prompt (inputs.prompt), kind, format and picked deck type (inputs
 writes); the engine runs to the next gate, or on to the finished deck once the last gate is approved. With NAPKIN_DECK_ENGINE_URL
 unset there is no engine: the task says so, and writes nothing."""
 
+import os
 import re
 
 from ..deck import engine as eng
@@ -128,7 +129,8 @@ def assets_of(v) -> dict | None:
     if not isinstance(v, dict):
         return None
     base, tok = v.get("base"), v.get("pass")
-    if not (isinstance(base, str) and base.startswith("https://") and isinstance(tok, str) and tok.startswith("v1.") and len(tok) <= 4096):
+    local = os.environ.get("DECK_RELAY_ALLOW_LOOPBACK", "").strip() == "1" and isinstance(base, str) and base.startswith("http://")   # dev opt-in; the engine still checks the host
+    if not (isinstance(base, str) and (base.startswith("https://") or local) and isinstance(tok, str) and tok.startswith("v1.") and len(tok) <= 4096):
         return None
     return {"base": base.rstrip("/"), "pass": tok}
 

@@ -640,7 +640,8 @@ Slice 2 is **execution frames**, slice 3 the **storyboard strip**:
   **Local stack (dev only).** With `DECK_RELAY_ALLOW_LOOPBACK=1` in the engine process's own environment (never read from a request, a
   document or the middleware), the transport also accepts an `http` base whose host is `127.0.0.1`, `::1` or `localhost` (any port), and a
   redirect to such a host, which is what the local relay (`production-tool/relay/local.py`, pictures at `http://localhost:<port>/<key>`)
-  serves. Off by default; every other host still has to be https and public.
+  serves. The middleware's shape check and the engine server's accept an `http` base under the same variable in their own environments. Off
+  by default; every other host still has to be https and public.
 - **Production first.** `images.bind_production` under the flag takes the newest placeable size of the execution's channel whatever its
   shape (the frame shows it whole); a channel whose sizes are all out of date is held with that reason; a rights-pending size is left
   empty with `Rights to supply` and its Review notice, never placed and never replaced by a generated picture. A generated picture

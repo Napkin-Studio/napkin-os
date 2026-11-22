@@ -532,7 +532,7 @@ def test_the_engine_server_gives_the_build_its_pass_and_keeps_it_out_of_everythi
         assert e.value.status == 400 and PASS not in e.value.message
 
 
-# ---- the dev opt-in: a local stack's loopback relay (DECK_RELAY_ALLOW_LOOPBACK, engine environment only)
+# ---- the dev opt-in: a local stack's loopback relay (DECK_RELAY_ALLOW_LOOPBACK, process environment only)
 
 class LocalNet:
     """A loopback relay on http://127.0.0.1:<port> whose 302 points at http://localhost:<port>/blob: the local_opener (ip, port, path, timeout, headers)."""
@@ -585,3 +585,14 @@ def test_loopback_opt_in_does_not_let_a_public_relay_redirect_to_plain_http_or_a
         with pytest.raises(pp.RelayError, match="not plain https"):
             transport(net)("a" * 64, None)
     # the opt-in allows an http loopback redirect from any relay (it is a dev switch on the engine's own host)
+
+
+def test_the_engine_server_takes_an_http_pass_base_only_with_the_dev_opt_in(tmp_path, monkeypatch):
+    srv, cfg, _ = _srv(tmp_path)
+    body = {"doc": "doc", "inputs": {"prompt": {"text": "x", "client": "c", "project": "p", "agency": ""}, "kind": "agency", "format": "pitch"},
+            "mode": "replay", "render": True, "production_assets": {"base": "http://127.0.0.1:18788/api", "pass": PASS}}
+    monkeypatch.delenv("DECK_RELAY_ALLOW_LOOPBACK", raising=False)
+    with pytest.raises(srv.Refused):
+        srv.validate_request(body, cfg)
+    monkeypatch.setenv("DECK_RELAY_ALLOW_LOOPBACK", "1")
+    assert srv.validate_request(body, cfg)["production_assets"]["base"].startswith("http://127.0.0.1")

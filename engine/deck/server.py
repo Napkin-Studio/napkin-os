@@ -231,7 +231,8 @@ def production_assets(body: dict) -> dict | None:
     pa = body.get("production_assets")
     if pa is None:
         return None
-    if not (isinstance(pa, dict) and isinstance(pa.get("base"), str) and pa["base"].startswith("https://") and isinstance(pa.get("pass"), str)
+    if not (isinstance(pa, dict) and isinstance(pa.get("base"), str) and (pa["base"].startswith("https://") or prod_picker.loopback_allowed())
+            and isinstance(pa.get("pass"), str)
             and pa["pass"].startswith("v1.") and len(pa["pass"]) <= 4096):
         raise Refused(400, "bad_request", "production_assets must be {base, pass}: the relay's https address and the signed assets pass")
     return {"base": pa["base"], "pass": pa["pass"]}

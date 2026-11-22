@@ -440,3 +440,13 @@ def test_no_pass_forwarded_without_a_production_upstream_or_with_a_bad_shape(dec
         post_assets(deck, prod_host(), bad)
         time.sleep(0.3)
         assert "production_assets" not in fake2.posts[0], bad
+
+
+def test_http_pass_base_is_forwarded_only_with_the_dev_opt_in(monkeypatch):
+    from napkin.handlers import build_deck as bd
+    v = {"base": "http://127.0.0.1:18788/api/", "pass": PASS}
+    monkeypatch.delenv("DECK_RELAY_ALLOW_LOOPBACK", raising=False)
+    assert bd.assets_of(v) is None
+    monkeypatch.setenv("DECK_RELAY_ALLOW_LOOPBACK", "1")
+    assert bd.assets_of(v) == {"base": "http://127.0.0.1:18788/api", "pass": PASS}
+    assert bd.assets_of({"base": "ftp://x/api", "pass": PASS}) is None
