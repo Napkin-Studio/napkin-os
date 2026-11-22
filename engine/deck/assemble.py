@@ -776,7 +776,7 @@ def _complete(S, reqs, R, inp, meta, fmt, fit, scoring=None, messages=None, terr
         deck["slides"][sid] = sl
         deck["order"].append(sid)
     if reqs:
-        chunk = 14
+        chunk = TABLE_DATA_ROWS
         parts = [reqs[i:i + chunk] for i in range(0, len(reqs), chunk)]
         for i in range(len(parts)):
             _add(deck, None)  # reserve numbers first so the trace can cite later slides
@@ -786,7 +786,10 @@ def _complete(S, reqs, R, inp, meta, fmt, fit, scoring=None, messages=None, terr
             if i:
                 sl["title"] += ", continued"
             deck["slides"][deck["order"][base + i]] = sl
-    _add(deck, _sources_slide(deck, R))
+    for i, sl in enumerate(_sources_slides(deck, R)):
+        if i:
+            sl["title"] += ", continued"
+        _add(deck, sl)
     _fill_scoring(deck)
     return deck
 
@@ -1362,8 +1365,13 @@ def _trace_slide(deck, reqs):
                   [{"kind": "table", "rows": rows, "small": True, "basis": "meta"}], status="from_source")
 
 
-def _sources_slide(deck, R):
-    """The sources appendix: every source any slide's refs footnote to, numbered as on the slides."""
+#: The most data rows a table block holds besides its header: the deck contract caps ``table.rows`` at 8 (app/templates/deck-maker/schema.json),
+#: and the host refuses the whole deck above it (production-spinoff live test 2026-11-22). A longer list runs on over "continued" slides.
+TABLE_DATA_ROWS = 7
+
+
+def _sources_slides(deck, R):
+    """The sources appendix: every source any slide's refs footnote to, numbered as on the slides, TABLE_DATA_ROWS to a slide."""
     keys, labels = [], {}
     for sid in deck["order"]:
         sl = deck["slides"][sid]
@@ -1381,7 +1389,9 @@ def _sources_slide(deck, R):
         sl["footnotes"] = sorted(foot)
         sl["notes"] = (sl.get("notes", "") + "\n\nEvidence:\n" + "\n".join(R.describe(r) for r in slide_refs(sl))).strip()
     rows = [[f"[{i}]", labels[k]] for i, k in enumerate(keys, 1)]
-    return _slide("appendix_sources", "Sources", [{"kind": "table", "rows": [["#", "Source"]] + rows, "small": True, "basis": "meta"}], status="from_source")
+    parts = [rows[i:i + TABLE_DATA_ROWS] for i in range(0, len(rows), TABLE_DATA_ROWS)] or [[]]
+    return [_slide("appendix_sources", "Sources", [{"kind": "table", "rows": [["#", "Source"]] + part, "small": True, "basis": "meta"}], status="from_source")
+            for part in parts]
 
 
 def slide_refs(sl) -> list:

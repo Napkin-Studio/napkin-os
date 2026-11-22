@@ -656,7 +656,7 @@ ISSUE_STATUSES = ("open", "fixed", "unfixed", "rolled_back", "left_for_person")
 ISSUE_FIXES = ("shrink", "switch_layout", "shorten", "split", "overflow_to_notes", "add_scrim", "crop_image", "regen_image",
                "drop_image", "needs_human")
 QA_RENDER_CHECKS = ("off_slide", "margin", "text_overlap", "text_overflow", "min_font", "placeholder", "contrast", "mostly_empty",
-                    "one_corner", "qa_internal", "unreadable", "picture_stretch", "picture_lowres", "text_on_image_contrast")
+                    "one_corner", "qa_internal", "unreadable", "picture_stretch", "picture_lowres", "text_on_image_contrast", "q_no_hole")
 #: Raised by the layout plan (layouts.py) and the repair loop; once reserved, now live, so the checklist's l_slots_clean can answer.
 LAYOUT_CHECKS = ("slot_limit", "slot_missing", "slot_unknown", "slot_stale", "block_unbound", "layout_unknown", "text_on_image_fallback")
 RESERVED_CHECKS = ("golden_echo", "layout_repeat", "title_drift", "line_length", "image_style_mixed", "export_failed")

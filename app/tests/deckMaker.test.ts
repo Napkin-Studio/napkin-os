@@ -2223,6 +2223,18 @@ test('a host that refuses (no engine, a run already going) is said plainly and n
   assert.equal(m.timers.length, 0)
 })
 
+test('a deck the host refuses to land is said on the Build screen, not left as "No deck yet"', async () => {
+  const refused = { ok: true, status: 200, data: { api: 'napkin.middleware/1', task: 'job_status', job: { id: 'job_1', state: 'done' }, change: { applied: false, reason: 'rows has 15 items, at most 8' } } }
+  const p = proxy(reply('queued'), refused)
+  const m = mount(buildData(gateRun()), middleware(true), {}, { apiProxy: p.apiProxy, timers: true })
+  await settle()
+  m.click({}, 'approve'); await settle()
+  m.timers.shift()!.fn(); await settle()
+  assert.match(m.toastEl.textContent, /did not accept what it wrote: rows has 15 items, at most 8/)
+  assert.ok(m.app.innerHTML.includes('rows has 15 items, at most 8'), 'the screen carries the reason')
+  assert.equal(m.timers.length, 0, 'no more polling')
+})
+
 test('a job that fails says the engine\'s message', async () => {
   const p = proxy(reply('queued'), reply('failed', { error: { type: 'engine', message: 'the model said no' } }))
   const m = mount(buildData(gateRun()), middleware(true), {}, { apiProxy: p.apiProxy, timers: true })

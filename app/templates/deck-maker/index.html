@@ -1870,6 +1870,15 @@ var DeckProd = (function () {
   var MW = { configured: null };
   var JOB = null; // the build_deck job in flight: { id, state, delay, t, error }
   var BUSY_JOB = { sending: 1, queued: 1, running: 1 };
+  // The host refused the engine's payload (change.applied false): the deck is not in the document, and the person must be told why
+  // (live test 2026-11-22: a paid deck was refused and Review said only "No deck yet"). Cleared by the next build or a landed change.
+  var LANDING_ERROR = null;
+  function landingRefusal(b) {
+    var c = b && b.change;
+    if (!c || typeof c !== 'object' || c.applied !== false) return null;
+    if (c.reason === 'already applied' || c.noop) return null;
+    return 'The engine finished, but the document did not accept what it wrote' + (c.reason ? ': ' + c.reason : '.') + ' Build it again; if it fails the same way, tell Napkin.';
+  }
   function mwOn() { return MW.configured === true; }
   function checkMiddleware() {
     if (typeof fetch !== 'function') return;
@@ -1899,6 +1908,7 @@ var DeckProd = (function () {
   function startBuild() {
     if (!(window.clan && window.clan.apiProxy)) { toast('Building runs through the host.'); return; }
     if (JOB && BUSY_JOB[JOB.state]) { toast('The engine is still working on this step.'); return; }
+    LANDING_ERROR = null;
     JOB = { id: null, state: 'sending', delay: 900, t: 0, error: null };
     window.clan.apiProxy('middleware', { task: 'build_deck', input: {} }).then(onBuildReply, buildUnreachable);
   }
@@ -1907,6 +1917,9 @@ var DeckProd = (function () {
     if (!j) return;
     if (err) { j.state = 'failed'; j.error = err; endBuild(); toast(err); return; }
     var b = mwBody(res);
+    var refused = landingRefusal(b);
+    if (refused) { LANDING_ERROR = refused; j.state = 'failed'; j.error = refused; endBuild(); toast(refused); return; }
+    if (b.change && b.change.applied === true) LANDING_ERROR = null;
     if (b.job && typeof b.job === 'object') {
       j.id = b.job.id || j.id; j.state = b.job.state || j.state;
       if (b.job.error) j.error = b.job.error.message || b.job.error.type || String(b.job.error);
@@ -1944,7 +1957,9 @@ var DeckProd = (function () {
     return {
       inputs: Object.assign({ prompt: {}, kind: 'agency', format: 'pitch', library: { enabled: false } }, x.inputs || {}),
       raw: x, upstream: x.upstream || {}, intake: x.intake || {}, asked: x.research_request || null,
-      run: x.run || { state: 'draft', stages: [], gate: null, approvals: {} },
+      run: LANDING_ERROR && !(x.run && x.run.state === 'done')
+        ? Object.assign({}, x.run || { stages: [], gate: null, approvals: {} }, { state: 'failed', gate: null, error: { stage: 'check', message: LANDING_ERROR, retryable: false } })
+        : (x.run || { state: 'draft', stages: [], gate: null, approvals: {} }),
       deck: x.deck || { order: [], slides: {} },
       evidence: x.evidence || {}, validation: x.validation || {}, report: x.report || {}, exports: x.exports || {},
       changes: x.change_requests || []
@@ -2519,7 +2534,7 @@ var DeckProd = (function () {
 
   function review(s) {
     var ids = L.presented(s.deck);
-    if (!ids.length) return '<main class="review" style="display:block;max-width:640px"><h1 class="sm" style="margin-top:40px">No deck yet</h1><p class="lede" style="margin-top:8px">Build a deck first. Nothing to review until the engine has written one.</p></main>';
+    if (!ids.length) return '<main class="review" style="display:block;max-width:640px"><h1 class="sm" style="margin-top:40px">No deck yet</h1><p class="lede" style="margin-top:8px">Build a deck first. Nothing to review until the engine has written one.</p>' + (LANDING_ERROR ? '<p class="lede" style="margin-top:8px"><strong>' + esc(LANDING_ERROR) + '</strong></p>' : '') + '</main>';
     // The appendix opens in the rail when the deck names its slides (appendix_ids, or slide.appendix); a count alone stays a count.
     var ax = L.appendixOf(s.deck), ds = L.deckApproval(s.raw);
     if (!view.slide || (ids.indexOf(view.slide) < 0 && ax.ids.indexOf(view.slide) < 0)) view.slide = ids[Math.min(3, ids.length - 1)];
