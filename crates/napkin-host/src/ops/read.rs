@@ -553,13 +553,38 @@ pub fn clan_context_for_agent(doc: &Document) -> Value {
 pub const PRODUCTION_TOOL_APP: &str = "production-tool";
 
 /// `{id, data}` of the first entry of `data.upstream` that is a Production
-/// project (its `app` is [`PRODUCTION_TOOL_APP`]): the frozen copy whole, for
-/// the Deck's build. `None` when the document carries no such project.
+/// project (its `app` is [`PRODUCTION_TOOL_APP`]): the project whole, for the
+/// Deck's build. `None` when the document carries no such project.
+///
+/// The project is sent as the document it was (owner, 2026-11-23: a spin-off
+/// carries everything but the heavy media): what it had carried itself, its
+/// brief and its research whole, which the spin-off hoisted beside it, goes
+/// back under its own `upstream`, so the Deck reads the full brief there and
+/// not the spine the Brief node keeps. A kit (a Brand Clan, a Style Pack) is
+/// the Deck's own attachment, never the project's, and stays out.
 fn production_upstream(data: &Value) -> Option<Value> {
     let up = data.get(UPSTREAM_KEY)?.as_object()?;
-    up.iter()
-        .find(|(_, copy)| copy.get("app").and_then(Value::as_str) == Some(PRODUCTION_TOOL_APP))
-        .map(|(id, copy)| json!({ "id": id, "data": copy }))
+    let (id, copy) = up.iter().find(|(_, copy)| is_production(copy))?;
+    let mut whole = copy.clone();
+    let carried: serde_json::Map<String, Value> = up
+        .iter()
+        .filter(|(k, v)| *k != id && v.is_object() && !is_production(v) && !is_kit(v))
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    if !carried.is_empty() {
+        whole[UPSTREAM_KEY] = Value::Object(carried);
+    }
+    Some(json!({ "id": id, "data": whole }))
+}
+
+fn is_production(copy: &Value) -> bool {
+    copy.get("app").and_then(Value::as_str) == Some(PRODUCTION_TOOL_APP)
+}
+
+/// A frozen kit holds `kit.version` (the engine tells it the same way).
+fn is_kit(copy: &Value) -> bool {
+    copy.get("kit")
+        .is_some_and(|k| k.is_object() && k.get("version").is_some())
 }
 
 /// The middleware tasks that read `clan.upstream_payload`.
@@ -1440,14 +1465,22 @@ mod tests {
         }
     }
     #[test]
-    fn a_carried_production_project_is_found_whole_and_nothing_else_is() {
+    fn a_carried_production_project_is_found_whole_with_what_it_carried_and_nothing_else_is() {
         let data = json!({ "upstream": {
-            "doc-brief": { "client": "Lumen Water", "app": "ie.napkin.brief-maker" },
+            "doc-brief": { "client": "Lumen Water", "app": "ie.napkin.brief-maker", "objectives": "Sell more" },
+            "doc-kit": { "kit": { "version": 1 }, "colours": ["red"] },
             "doc-prod": { "app": "production-tool", "finals": { "final_1": { "asset": "sha256:ab" } } },
         } });
+        let got = production_upstream(&data).expect("a project");
+        assert_eq!(got["id"], "doc-prod");
         assert_eq!(
-            production_upstream(&data),
-            Some(json!({ "id": "doc-prod", "data": data["upstream"]["doc-prod"] }))
+            got["data"]["finals"],
+            data["upstream"]["doc-prod"]["finals"]
+        );
+        // the brief goes back under the project's own upstream, whole; the kit does not
+        assert_eq!(
+            got["data"]["upstream"],
+            json!({ "doc-brief": data["upstream"]["doc-brief"] })
         );
         assert_eq!(production_upstream(&json!({})), None);
         assert_eq!(

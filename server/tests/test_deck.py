@@ -448,3 +448,10 @@ def test_http_pass_base_is_forwarded_only_with_the_dev_opt_in():
     assert bd.assets_of(v) is None and bd.assets_of(v, False) is None
     assert bd.assets_of(v, True) == {"base": "http://127.0.0.1:18788/api", "pass": PASS}
     assert bd.assets_of({"base": "ftp://x/api", "pass": PASS}, True) is None
+
+
+def test_marks_cover_the_full_brief_a_carried_production_project_carries():
+    from napkin.handlers.build_deck import marks_of
+    data = {"upstream": {"prod-1": {"app": "production-tool", "upstream": {"brief-1": {"insight": "SECRET-FULL", "confidential_fields": ["insight"]}}}}}
+    marks = {m["path"]: m for m in marks_of(data, [])}
+    assert "SECRET-FULL" in marks["upstream.prod-1.upstream.brief-1.insight"]["text"]

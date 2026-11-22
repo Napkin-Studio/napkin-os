@@ -52,6 +52,8 @@ export async function newDeckFromProject(projectId: string, opts: { title?: stri
     try {
       why = String(((await r.json()) as { error?: unknown }).error ?? '')
     } catch { /* not JSON */ }
+    // The same 404 says the app is not installed (the target tool is missing here) or the project is not found.
+    if (r.status === 404 && /not installed/i.test(why)) throw new SpinoffError('Deck Maker is not installed here, so a deck cannot be made from this project.')
     throw new SpinoffError(r.status === 404 ? 'Napkin could not find the saved project. Save it, then try again.' : why || `Napkin answered ${r.status}.`)
   }
   const v = (await r.json()) as { path?: unknown; source_uri?: unknown }

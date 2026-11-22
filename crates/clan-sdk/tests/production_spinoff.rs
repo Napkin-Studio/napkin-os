@@ -49,4 +49,23 @@ fn the_packed_production_app_takes_a_brief_whole_and_its_example_carries_one() {
     let keys: Vec<_> = data.as_mapping().unwrap().keys().collect();
     assert_eq!(keys, vec!["upstream"]);
     assert!(data["upstream"][&carried.document_id]["single_minded_proposition"].is_string());
+
+    // Owner 2026-11-23: a spin-off carries everything but the heavy media. The Production project holds
+    // the WHOLE brief (every field, objectives included), not the spine its Brief node reads.
+    let brief = &data["upstream"][&carried.document_id];
+    for key in [
+        "single_minded_proposition",
+        "audience",
+        "tone_and_world",
+        "background",
+        "objectives",
+        "mandatories",
+        "budget_and_scope",
+    ] {
+        assert!(!brief[key].is_null(), "the carried brief lost {key}");
+    }
+    assert_eq!(
+        brief["objectives"]["behavioural"],
+        "Reach for Lumen first at breakfast."
+    );
 }
