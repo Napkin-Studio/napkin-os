@@ -211,6 +211,7 @@ fn example_spinoff(template: &ClanFile) -> Result<ClanFile, Box<dyn std::error::
             map: None,
             instance_id: None,
             source_uri: Some("clan-store:doc-lumen-brief".into()),
+            link_assets: false,
         },
     )?;
     Ok(ClanFile::from_bytes(bytes)?)

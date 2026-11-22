@@ -198,6 +198,7 @@ fn file_registry() -> Vec<FileEntry> {
             content_type: ct.into(),
             priority: None,
             sha256: None,
+            linked: false,
         }
     }
     vec![

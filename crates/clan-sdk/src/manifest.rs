@@ -487,6 +487,11 @@ pub struct FileEntry {
     pub priority: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sha256: Option<String>,
+    /// A link, not a file: the bytes are not in this archive but in the
+    /// workspace's content-addressed store under `sha256`, which is then
+    /// required (spec §5, features/spinoff-asset-links).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub linked: bool,
 }
 
 /// External persistent store reference (spec §13).
@@ -769,6 +774,7 @@ mod tests {
                 content_type: "application/yaml".into(),
                 priority: None,
                 sha256: Some("sha256:abc".into()),
+                linked: false,
             }],
         };
         let bytes = m.to_yaml().unwrap();

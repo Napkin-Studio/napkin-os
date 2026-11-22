@@ -100,6 +100,7 @@ fn entry(path: &str, role: &str) -> FileEntry {
         content_type: "application/yaml".into(),
         priority: None,
         sha256: None,
+        linked: false,
     }
 }
 
@@ -1009,4 +1010,79 @@ fn the_packed_research_tool_takes_a_brief_carried_whole() {
 
 fn app_info_brief() -> AppInfo {
     app("Brief Maker", BRIEF_APP, None)
+}
+
+// ── assets as links (features/spinoff-asset-links) ──────────────────────────
+
+const EMAIL: &str = "human/assets/client-email.txt";
+const SIDECAR: &str = "human/assets/.extracted/client-email.txt.txt";
+
+fn link_spin(template: &ClanFile, source: &ClanFile) -> ClanFile {
+    open(
+        spinoff(
+            template,
+            source,
+            SpinoffOptions {
+                link_assets: true,
+                ..Default::default()
+            },
+        )
+        .unwrap(),
+    )
+}
+
+#[test]
+fn a_link_spinoff_names_the_asset_by_hash_and_leaves_the_bytes_out() {
+    let source = research();
+    let bytes = source.read_entry(EMAIL).unwrap();
+    let out = link_spin(&brief_maker(), &source);
+
+    assert!(!out.has_entry(EMAIL), "no bytes in the copy");
+    let e = out.manifest().file_by_path(EMAIL).expect("registered");
+    assert!(e.linked);
+    assert_eq!(e.sha256.as_deref(), Some(sha256_prefixed(&bytes).as_str()));
+    // The extracted text stays in the document, the model reads it.
+    assert!(out.has_entry(SIDECAR));
+    assert!(validate(&out).is_valid(), "{:?}", validate(&out));
+
+    // The next hop carries the link on without bytes ever existing.
+    let deck = link_spin(&deck_template(), &out);
+    assert!(!deck.has_entry(EMAIL));
+    let e2 = deck.manifest().file_by_path(EMAIL).expect("carried");
+    assert!(e2.linked);
+    assert_eq!(e2.sha256, e.sha256);
+    // And even an embed-mode hop only carries it as the link it is.
+    let deck2 = spin(&deck_template(), &out);
+    assert!(!deck2.has_entry(EMAIL));
+    assert!(deck2.manifest().file_by_path(EMAIL).unwrap().linked);
+}
+
+#[test]
+fn the_default_spinoff_still_embeds_the_asset() {
+    let source = research();
+    let out = spin(&brief_maker(), &source);
+    assert_eq!(
+        out.read_entry(EMAIL).unwrap(),
+        source.read_entry(EMAIL).unwrap()
+    );
+    assert!(!out.manifest().file_by_path(EMAIL).unwrap().linked);
+}
+
+#[test]
+fn validate_refuses_a_link_without_a_hash() {
+    let out = link_spin(&brief_maker(), &research());
+    let mut m = out.manifest().clone();
+    m.files.iter_mut().find(|f| f.path == EMAIL).unwrap().sha256 = None;
+    let mut b = ClanBuilder::new(m);
+    for (p, v) in out.read_all_entries().unwrap() {
+        if p != MANIFEST_PATH {
+            b.add_entry(p, v);
+        }
+    }
+    let bad = open(b.build().unwrap());
+    assert!(
+        validate(&bad).structural.iter().any(|s| s.contains("linked file")),
+        "{:?}",
+        validate(&bad)
+    );
 }

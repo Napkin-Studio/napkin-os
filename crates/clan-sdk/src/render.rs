@@ -82,6 +82,7 @@ pub fn render(clan: &ClanFile) -> Result<Vec<u8>> {
                 content_type: ct.into(),
                 priority: Some(1),
                 sha256: None,
+                linked: false,
             });
         }
     }

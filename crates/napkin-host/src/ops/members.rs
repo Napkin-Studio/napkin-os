@@ -239,6 +239,7 @@ pub fn register(manifest: &mut Manifest, m: Member) {
         content_type: "application/yaml".into(),
         priority: None,
         sha256: None,
+        linked: false,
     });
 }
 
