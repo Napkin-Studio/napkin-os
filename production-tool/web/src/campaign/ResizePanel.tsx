@@ -15,7 +15,7 @@ import type { Anchor } from '../lib/place'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { methodModels } from './rules'
 import {
-  cropKeeps, frameOver, HOW_LINE, HOW_WORD, howOff, HOWS, knownProtect, rememberedProtect, rememberProtect, loadPick, makeWords, methodLine, methodOf, mixedLine, parseCustom, planResize, tooFarToExtend, tooFarWords,
+  cropKeeps, frameOver, HOW_LINE, HOW_WORD, howOff, HOWS, knownProtect, rememberedProtect, rememberProtect, loadPick, makeWords, methodLine, methodOf, mixedLine, parseCustom, planResize, tooFarToExtend, tooFarWords, wontFitWords,
   previewLayout, savePick, SHAPES, SKETCH_LINE, trayRows, type How, type Shape, type Source,
 } from './resizeSelection'
 import { panCrop } from './crop'
@@ -96,6 +96,8 @@ export function ResizePanel({ anchor, total, load, send, onClose }: {
   const pictures = sources?.length ?? 0
   // Extend picked, and a shape it cannot reach in three steps (UAT round 4 S1-1): redrawn instead, said plainly.
   const tooFar = tooFarWords(tooFarToExtend(how, sources ?? [], shapes), models)
+  // No way holds the marked product at a shape: left out and said plainly, with what to start from (features/pt-final-and-fit.clan).
+  const wont = wontFitWords(sources ?? [], shapes, models)
 
   const go = async () => {
     setBusy(true)
@@ -171,6 +173,7 @@ export function ResizePanel({ anchor, total, load, send, onClose }: {
           </div>
           {crops && sources && !sources.some((s) => s.protect?.length) && <p className="rs-line faint">Mark what must stay and every crop keeps it in; else the crop keeps the middle.</p>}
           {tooFar && <p className="rs-line rs-toofar" role="note">{tooFar}</p>}
+          {wont && <p className="rs-line rs-wont" role="note">{wont}</p>}
           {markingSrc && createPortal(
             // On the page, not over the canvas (as the Campaign board's ProtectSheet): the canvas never sees its drags.
             <div className="cf-scrim" role="presentation" onPointerDown={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) setMarking(null) }}>
@@ -216,6 +219,7 @@ export function ResizePanel({ anchor, total, load, send, onClose }: {
             ))}
           </div>
           {tooFar && <p className="rs-line rs-toofar" role="note">{tooFar}</p>}
+          {wont && <p className="rs-line rs-wont" role="note">{wont}</p>}
           <p className="rs-line faint">Each is its own job: one that fails says so on its card, the others carry on.</p>
           {error && <p className="cf-error" role="alert">{error}</p>}
           <footer className="cf-foot">

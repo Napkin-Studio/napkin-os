@@ -200,6 +200,16 @@ def check_pdf_fonts(pptx, pdf) -> dict:
     return {"named": sorted(named), "embedded": sorted({n for n, e in rows if e})}
 
 
+def web_render() -> bool:
+    """deck-cloud: NAPKIN_DECK_RENDER=web. The cloud image has no LibreOffice or poppler: the build writes deck.pptx (python-pptx) and deck.html
+    and skips only the LibreOffice PDF, the page PNGs and the PDF-based visual QA (so no repair loop). The PDF is printed from deck.html by the web host."""
+    return os.environ.get("NAPKIN_DECK_RENDER", "").strip().lower() == "web"
+
+
+#: What report.qa says when the PowerPoint was not drawn and looked at (web render mode).
+NO_PPTX_CHECK = "The PowerPoint was not visually checked here (no LibreOffice in this environment): the web deck and the PDF fit their text in the browser."
+
+
 def to_pdf(pptx, outdir, timeout: int = 180):
     """Convert a pptx to PDF with LibreOffice, in a private profile (``-env:UserInstallation``) that is removed afterwards.
     Two soffice processes that share a profile hand the second job to the first and exit 0 with no PDF, so every call gets its own.
@@ -1300,7 +1310,7 @@ def main(argv=None):
             tm = asked_tm
             deck["meta"].setdefault("preferences", {})["text_mode"] = {"mode": tm, "source": "person" if a.text_mode else "default"}
         pinned_ids = _stamp_pinned(a, deck, deck_ctx)
-        loop_on = not a.no_repair and not a.no_qa and a.until is None
+        loop_on = not a.no_repair and not a.no_qa and a.until is None and not web_render()
         policy = repair.load_policy(profile, a.repair_policy) if loop_on else None
         stop_for_shorten = loop_on and bool(policy["max_rounds"]) and repair.shorten_available(tm, a.audience, a.live, a.approve_shorten, a.stages, repair.approval_id(deck), (policy["shorten"] or {}).get("word_rule", "delete_only"))[0]
         if spec.LOOK_V3 and (a.pictures or supplied):   # deck-look step 7: measure where words may sit on the cover's and the idea's pictures (Pillow, free)
@@ -1380,14 +1390,18 @@ def main(argv=None):
         render_hyperframes.render(deck, inp, a.out / "hyperframes", findings, builds=a.builds, pictures=pics, placed=placed if pics else None, look=not a.no_layout_plan)
     rep["stages"]["render_web"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
 
-    t = time.time()
-    to_pdf(pptx, a.out)   # a private profile per call: a shared one made a second LibreOffice exit 0 with no PDF
-    (a.out / "png").mkdir(exist_ok=True)   # pdftoppm overwrites by name; nothing is deleted
-    subprocess.run(["pdftoppm", "-png", "-r", "60", str(a.out / "deck.pdf"), str(a.out / "png" / "slide")], check=True)
-    rep["stages"]["render_pdf_png"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
+    web_only = web_render()
+    if not web_only:
+        t = time.time()
+        to_pdf(pptx, a.out)   # a private profile per call: a shared one made a second LibreOffice exit 0 with no PDF
+        (a.out / "png").mkdir(exist_ok=True)   # pdftoppm overwrites by name; nothing is deleted
+        subprocess.run(["pdftoppm", "-png", "-r", "60", str(a.out / "deck.pdf"), str(a.out / "png" / "slide")], check=True)
+        rep["stages"]["render_pdf_png"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
+    else:
+        rep["qa"] = NO_PPTX_CHECK
 
     # ---- stage h: rendered-slide QA (qa_render.py). It never blocks the build: a finding is only reported. ----
-    if not a.no_qa:
+    if not a.no_qa and not web_only:
         t = time.time()
         qa = (qa_seam or qa_render.run)(pptx, a.out / "deck.pdf", a.out, findings)
         qa = repair.stamp_qa(a.out, qa)   # deck_sha: the hash of the deck.json these checks read (the same stamp in every round folder)

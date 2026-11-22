@@ -53,27 +53,27 @@ async function mount(rights: 'unknown' | 'own', origin: 'uploaded' | 'generated'
 const chip = () => document.querySelector<HTMLButtonElement>('.rights-chip')
 const item = (text: string) => [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((b) => b.textContent?.startsWith(text))
 
-describe('Rights? on an upload', () => {
-  it('asks while the rights are unknown; a choice sets them and the chip goes', async () => {
+describe('the rights chip', () => {
+  it('says "Rights?" while unknown; a choice sets them and the chip says them', async () => {
     const { services } = await mount('unknown')
     expect(chip()?.textContent).toBe('Rights?')
     act(() => chip()!.click())
-    expect([...document.querySelectorAll('[role="menuitem"]')].map((b) => b.firstChild?.textContent)).toEqual(['Ours', 'Licensed', 'Made with AI', 'Not sure'])
+    expect([...document.querySelectorAll('[role="menuitem"]')].map((b) => b.firstChild?.textContent)).toEqual(['Generated', 'Own', 'Licensed', "Don't know yet"])
     await act(async () => { item('Licensed')!.click(); await services.doc.flush() })
     expect(services.doc.get().assets[SHA('a')].rights).toBe('licensed')
-    expect(chip()).toBeNull()
+    expect(chip()?.textContent).toBe('Licensed')
   })
 
-  it('Not sure hides it and leaves the rights unknown', async () => {
+  it("Don't know yet keeps the rights unknown and the chip stays (the Deck marks it Rights to supply)", async () => {
     const { services } = await mount('unknown')
     act(() => chip()!.click())
-    act(() => item('Not sure')!.click())
-    expect(chip()).toBeNull()
+    act(() => item("Don't know yet")!.click())
+    expect(chip()?.textContent).toBe('Rights?')
     expect(services.doc.get().assets[SHA('a')].rights).toBe('unknown')
   })
 
-  it('never shows for a picture whose rights are said, or one the crew made', async () => {
+  it('shows the rights said on a picture, and nothing for a picture with none', async () => {
     await mount('own')
-    expect(chip()).toBeNull()
+    expect(chip()?.textContent).toBe('Own')
   })
 })

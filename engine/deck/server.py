@@ -328,7 +328,7 @@ class Server:
                 return self.view(d)
             if req["mode"] == "live":
                 Cap(self.s.max_usd, rs.spent(d.stages)).check()
-            if until is None and req["render"] and not (shutil.which("soffice") and shutil.which("pdftoppm")):
+            if until is None and req["render"] and not run_deck.web_render() and not (shutil.which("soffice") and shutil.which("pdftoppm")):
                 raise Refused(409, "no_renderer", "the last step builds the PowerPoint, the web deck and the PDF and needs LibreOffice (soffice) and "
                                                   "poppler (pdftoppm) on this machine; ask for render false to stop at the deck without the files")
             d.state, d.held, d.current, d.started = "building", None, None, time.time()

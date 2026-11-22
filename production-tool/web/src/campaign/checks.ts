@@ -3,8 +3,8 @@
 // checks out (an Ignore recorded on a check is kept while its result stands).
 //
 //   subject_safe    every protected box inside the safe area of the crop (a layout: of its panel; an
-//                   extend keeps the whole master; a regenerate is a new picture Jude cannot measure:
-//                   "unverified", never a pass)
+//                   extend keeps the whole master; a regenerate: the relay looked for the product in the new
+//                   picture (render.product: kept or restored pass, changed flags); with none marked "unverified")
 //   logo_safe       the logo inside the safe area (a logo on the Brand board that is not on the size too)
 //   logo_present    the Brand board has a logo, and the relay drew it on the size's picture
 //   look_match      an extend or regenerate came back near the master's colour and tone
@@ -41,7 +41,11 @@ export function checksFor(size: Size, set: FormatSet, d: ProductionDocument): Ch
   if (size.media === 'image' && set.protect?.boxes?.length) {
     // An extend keeps the whole master, placed with what must stay in the middle of the safe area (relay
     // formats.pad_plan); a regenerate is a new picture Jude cannot measure, so it makes no claim.
-    if (size.method === 'regenerate') out.subject_safe = unverified('This picture was drawn again, so I cannot measure what must stay. I told the model where it is: look at it.')
+    const product = size.render?.product
+    if (size.method === 'regenerate' && product === 'kept') out.subject_safe = pass('The product came back as it was marked.')
+    else if (size.method === 'regenerate' && product === 'restored') out.subject_safe = pass('The product was drawn wrong, so its own pixels from the master were put back over it.')
+    else if (size.method === 'regenerate' && product === 'changed') out.subject_safe = flag('The product changed in this picture and could not be put back. Redo this size, or start from a picture that fits this shape.')
+    else if (size.method === 'regenerate') out.subject_safe = unverified('This picture was drawn again, so I cannot measure what must stay. I told the model where it is: look at it.')
     else if (size.method === 'extend') out.subject_safe = pass('Extended round the whole master: what must stay is kept, in the safe area.')
     else if (size.crop && (size.method === 'crop' || size.method === 'layout')) {
       out.subject_safe = protectedInside(size.crop, set.protect.boxes, size.method === 'layout' ? [0, 0, 0, 0] : fr)

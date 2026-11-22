@@ -897,7 +897,7 @@ export interface Size extends EntityBase {
   /** The picture before its type layers: Edit type draws on it again for free; Export at full size upscales it. */
   plate?: Sha256
   /** Facts measured when the picture landed (Jude reads them): type layers the relay drew, and how far its look is from the master's (0-1). */
-  render?: { drawn?: number; look?: number }
+  render?: { drawn?: number; look?: number; product?: 'kept' | 'restored' | 'changed' }
   /** The delivery-size file Export at full size made, for the asset it was made for (from). */
   full?: { asset?: Sha256; job_id?: Id; from: Sha256; scale?: 4 | 8 }
 }
@@ -1368,7 +1368,7 @@ export interface Job {
   /** clip: Runway's text check refused the first words, so the relay sent them once more, plainer. */
   softened?: true
   /** resize only: how the size was made. */
-  resize?: { method: SizeMethod; crop: PxBox; previewPx: DeliveryPx; layers?: number; plate?: Output }
+  resize?: { method: SizeMethod; crop: PxBox; previewPx: DeliveryPx; layers?: number; plate?: Output; product?: { state: 'kept' | 'restored' | 'changed'; score?: number } }
   /** cutdown step plan only. */
   cutdownPlan?: CutdownPlan
   /** A remake (JobRequest.remakeWith): its parent and what changed, `from` filled from the parent's held request. */

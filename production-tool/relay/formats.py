@@ -87,6 +87,118 @@ def keep_words(protect: list[dict] | None, master: dict) -> str:
     return REGENERATE_KEEP.format(things=things)
 
 
+# The protected product, kept through a regenerate (features/pt-final-and-fit.clan). A model draws the picture again
+# and may lose the product (UAT 2026-11-22: a 48-sheet came back with a blank can). Two guards: the product's own pixels
+# go with the job as a hard reference (@product), and when the picture lands the relay looks for the product in it
+# (Pillow only: a coarse search of the master's product crop over the result at a few scales) and
+#   kept      it is there as drawn (score at most PRODUCT_KEPT): nothing is changed,
+#   restored  it is there but drawn wrong (at most PRODUCT_NEAR): the master's pixels are laid back over it, scaled to
+#             where it was found, on a feathered edge,
+#   changed   it could not be found: nothing is pasted (a guess would double it) and the size is flagged.
+REGENERATE_PRODUCT = " @{tag} is the {thing} itself, cut from @master: draw it exactly as it is, with its label and every word on it."
+PRODUCT_MAX = 2
+PRODUCT_KEPT = 18.0
+PRODUCT_NEAR = 38.0
+PRODUCT_SCALES = (0.35, 0.42, 0.5, 0.6, 0.72, 0.86, 1.0, 1.2, 1.44, 1.7, 2.1, 2.5, 3.0)
+PRODUCT_SEARCH_PX = 640
+PRODUCT_TIE = 4.0
+
+
+def product_boxes(protect: list[dict] | None) -> list[dict]:
+    """The boxes marked as the product (role product), usable, at most PRODUCT_MAX, biggest first."""
+    boxes = [b for b in (protect or []) if b.get("role") == "product" and b.get("w", 0) > 0 and b.get("h", 0) > 0]
+    return sorted(boxes, key=lambda b: -b["w"] * b["h"])[:PRODUCT_MAX]
+
+
+def product_crop(master_data: bytes, master_size: dict, box: dict) -> bytes:
+    """The master's pixels inside a product box, as PNG: the hard reference a regenerate is sent."""
+    from PIL import Image
+    img = Image.open(io.BytesIO(master_data))
+    img.load()
+    rgb = img.convert("RGB")
+    left, top, right, bottom = scaled(box, rgb.width / master_size["w"], rgb.height / master_size["h"], rgb.width, rgb.height)
+    out = io.BytesIO()
+    rgb.crop((left, top, right, bottom)).save(out, format="PNG")
+    return out.getvalue()
+
+
+def _locate(result, patch) -> tuple[float, tuple[int, int, int, int]]:
+    """Where `patch` (grey) best sits in `result` (grey, the search size): (mean absolute difference 0-255, the window
+    x, y, w, h). The patch is tried at PRODUCT_SCALES times its size; a coarse grid first, then a fine one round the best."""
+    from PIL import ImageChops, ImageStat
+    found: list[tuple[float, tuple[int, int, int, int]]] = []
+    rw, rh = result.size
+    for k in PRODUCT_SCALES:
+        pw, ph = max(1, round(patch.width * k)), max(1, round(patch.height * k))
+        if pw < 6 or ph < 6 or pw > rw or ph > rh:
+            continue
+        p = patch.resize((pw, ph))
+        sx, sy = max(1, pw // 4), max(1, ph // 4)
+
+        def at(x: int, y: int) -> float:
+            return ImageStat.Stat(ImageChops.difference(result.crop((x, y, x + pw, y + ph)), p)).mean[0]
+        top = (255.0, (0, 0))
+        for y in range(0, rh - ph + 1, sy):
+            for x in range(0, rw - pw + 1, sx):
+                d = at(x, y)
+                if d < top[0]:
+                    top = (d, (x, y))
+        cx, cy = top[1]
+        for y in range(max(0, cy - sy), min(rh - ph, cy + sy) + 1):
+            for x in range(max(0, cx - sx), min(rw - pw, cx + sx) + 1):
+                d = at(x, y)
+                if d < top[0]:
+                    top = (d, (x, y))
+        found.append((top[0], (top[1][0], top[1][1], pw, ph)))
+    if not found:
+        return 255.0, (0, 0, 1, 1)
+    # A small window inside a flat part of the product matches nearly as well as the whole of it (a blank can is one
+    # colour): of the scales within PRODUCT_TIE of the best, the biggest window wins.
+    low = min(f[0] for f in found)
+    return max((f for f in found if f[0] <= low + PRODUCT_TIE), key=lambda f: f[1][2] * f[1][3])
+
+
+def keep_product(result: bytes, master_data: bytes, master_size: dict, protect: list[dict] | None) -> tuple[bytes, dict | None]:
+    """A regenerate's picture with the protected product checked and, where it came back drawn wrong, put back.
+    Returns (the picture as PNG, {"state": kept|restored|changed, "score": n}) for the worst product, or (the
+    picture as it was, None) when no product is marked. The score is the mean absolute difference (0-255) of the
+    product against the best place for it; the picture is scaled to the master's frame only for the search."""
+    from PIL import Image, ImageFilter
+    boxes = product_boxes(protect)
+    if not boxes:
+        return result, None
+    out = Image.open(io.BytesIO(result))
+    out.load()
+    out = out.convert("RGB")
+    k = PRODUCT_SEARCH_PX / max(out.size)
+    small = out.resize((max(1, round(out.width * k)), max(1, round(out.height * k))), Image.LANCZOS).convert("L")
+    # The master's scale when it is laid whole inside the result: where the product's size starts from.
+    fit = min(out.width / master_size["w"], out.height / master_size["h"]) * k
+    order = {"kept": 0, "restored": 1, "changed": 2}
+    worst: dict | None = None
+    for box in boxes:
+        crop = Image.open(io.BytesIO(product_crop(master_data, master_size, box)))
+        crop.load()
+        patch = crop.convert("L").resize((max(1, round(box["w"] * fit)), max(1, round(box["h"] * fit))), Image.LANCZOS)
+        score, (x, y, w, h) = _locate(small, patch)
+        state = "kept" if score <= PRODUCT_KEPT else "restored" if score <= PRODUCT_NEAR else "changed"
+        if state == "restored":
+            # Back at full size: the window found, the master's own pixels scaled to it, the edge feathered.
+            fx0, fy0 = round(x / k), round(y / k)
+            fw, fh = max(1, round(w / k)), max(1, round(h / k))
+            piece = crop.convert("RGB").resize((fw, fh), Image.LANCZOS)
+            f = max(2, round(min(fw, fh) * 0.06))
+            mask = Image.new("L", (fw, fh), 0)
+            mask.paste(255, (f, f, max(f + 1, fw - f), max(f + 1, fh - f)))
+            out.paste(piece, (fx0, fy0), mask.filter(ImageFilter.GaussianBlur(f / 2)))
+        mine = {"state": state, "score": round(score, 1)}
+        if worst is None or order[state] > order[worst["state"]]:
+            worst = mine
+    buf = io.BytesIO()
+    out.save(buf, format="PNG")
+    return buf.getvalue(), worst
+
+
 # Another size of the same ad, already made, tagged @sibling: the new picture matches its colour, light and style, so the
 # sizes of a set look like one campaign (art-director). It is for the look only: its composition is not copied.
 REGENERATE_LOOK = (" @sibling is another size of the same ad: match its colour, light, grain and style exactly, "

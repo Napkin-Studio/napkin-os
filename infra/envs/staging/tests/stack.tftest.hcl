@@ -111,3 +111,13 @@ run "refuses_half_a_production_relay" {
 
   expect_failures = [var.production_relay_secret_arn]
 }
+
+# features/deck-cloud.clan: staging stays as it was until the owner switches the deck engine on.
+run "staging_has_no_deck_engine_yet" {
+  command = plan
+
+  assert {
+    condition     = module.services.middleware_task.containers == ["middleware"] && !contains(keys(module.services.middleware_environment), "NAPKIN_DECK_ENGINE_URL") && !contains(keys(module.services.ecr), "deck")
+    error_message = "one container, no engine URL, no deck repository"
+  }
+}

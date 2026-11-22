@@ -13,6 +13,7 @@ import { alive, bounds, cd, isUserDrawing, makeArrow, makeGenPlaceholder } from 
 import { newId } from '../lib/ulid'
 import type { JobRunner } from '../jobs/runner'
 import { autoMethod, availableMethods, extendFits, methodWords, PAID, type MethodModel } from './rules'
+import { fitFor, REDRAW_MAX_RATIO } from './fit'
 
 type El = CanvasElement
 type Models = Partial<Record<SizeMethod, MethodModel>>
@@ -43,7 +44,7 @@ export const SHAPES: readonly Shape[] = [
 /** The longest side a ratio's result is made at (the relay's preview; Make all sizes exports bigger). */
 export const LONG_SIDE = 2048
 /** The most extreme shape Resize… takes (Gemini reaches 8:1; Ideogram extends past it). */
-export const MAX_RATIO = 8
+export const MAX_RATIO = REDRAW_MAX_RATIO
 
 /** A custom shape from words: "1200x628", "1200 × 628" (pixels) or "4:1" (a ratio). Null when it is not one. */
 export function parseCustom(text: string): Shape | null {
@@ -181,10 +182,25 @@ export interface Planned { source: Source; shape: Shape; method: SizeMethod; cro
 export function planResize(sources: readonly Source[], shapes: readonly Shape[], how: How, models: Models): Planned[] {
   const out: Planned[] = []
   for (const source of sources) for (const shape of shapes) {
+    if (productWontFit(source, shape, models)) continue // nothing would hold it: said in the panel, not sent to fail
     const method = methodOf(how, source, shape, models)
     if (method) out.push({ source, shape, method })
   }
   return out
+}
+
+/** Whether no method can hold this picture's marked product at this shape (fit.ts): it is left out and said, not sent. */
+export function productWontFit(src: Pick<Source, 'w' | 'h' | 'protect'>, shape: Shape, models: Models) {
+  return fitFor({ w: src.w, h: src.h }, { w: shape.w, h: shape.h }, src.protect, availableMethods(models)).product === 'wont'
+}
+
+/** The panel's plain words for the shapes the product won't fit, with what to do: "…can't hold the product at 4:1. Start from a wider picture…". */
+export function wontFitWords(sources: readonly Pick<Source, 'w' | 'h' | 'protect'>[], shapes: readonly Shape[], models: Models): string | undefined {
+  for (const src of sources) for (const shape of shapes) {
+    const fit = fitFor({ w: src.w, h: src.h }, { w: shape.w, h: shape.h }, src.protect, availableMethods(models))
+    if (fit.product === 'wont') return fit.say?.replace(/ at (\S+)\./, ` at ${shape.id}.`)
+  }
+  return undefined
 }
 
 /** The footer's words: exactly what is made. */
