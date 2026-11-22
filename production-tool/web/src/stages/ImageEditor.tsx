@@ -100,6 +100,8 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   const asset = sha ? doc.assets[sha] : undefined
   // Final (features/prod-assets-route.clan): the version open, else a canvas picture with no versions yet.
   const finalOf: FinalOf | undefined = current ? { kind: 'frame', id: current.id } : target.kind === 'picture' ? { kind: 'picture', id: target.nodeId } : undefined
+  // The other names this picture may be final under: its canvas node (marked before it had versions) and its frames.
+  const finalNames: FinalOf[] = [...(target.kind === 'picture' ? [{ kind: 'picture' as const, id: target.nodeId }] : []), ...frames.map((f) => ({ kind: 'frame' as const, id: f.id }))]
   const ratio = subject?.ratio
   const aspect = subject?.aspect ?? 16 / 9
   // The picture's own size: the asset's, else the picture's once it loads (an older asset without w, h).
@@ -652,7 +654,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
             <button type="button" className="x" onClick={() => go('back')} title="Back (Esc)" aria-label="Close the image editor">×</button></div>
           {finalOf && (
             <div className="ie-finalrow">
-              <FinalToggle of={finalOf} asset={sha} extra={{ version }} />
+              <FinalToggle of={finalOf} asset={sha} extra={{ version }} also={finalNames} />
               <span className="faint">v{version} · the Deck Maker takes final pictures</span>
             </div>
           )}

@@ -16,7 +16,8 @@ import { placeBeside } from '../lib/place'
 import { keepsPick, onScreen, tilePick } from './pick'
 import { TileFloat } from './TileFloat'
 import { FinalToggle } from '../ui/finals/FinalToggle'
-import { sizeFinalAsset } from '../doc/finals'
+import { isFinalAsset, rightsWord, sizeFinalAsset } from '../doc/finals'
+import { FinalBadge } from '../ui/finals/FinalBadge'
 import { useConfig, useDoc, useServices, useUi } from '../app/context'
 import { modelChoicesFor } from '../capabilities'
 import type { CanvasAdapter, CanvasElement } from '../canvas/core/canvasAdapter'
@@ -36,7 +37,8 @@ import { fullPlan } from './delivery'
 import { exportSizes } from './exportZip'
 import { formatById, LANES, shortName, sizeWords } from './formats'
 import { adjustCrop, changeMethod, channelOfSize, redoSize, sendSize, setLocked, setProtect, sizesOf, staleSizes, updateSizes, upscaleForDelivery, sizeSeconds, type CampaignDeps } from './make'
-import { METHOD_WORD, methodModels, methodWords, PAID, rowFracs, STILL_METHODS, type MethodModel } from './rules'
+import { METHOD_WORD, methodModels, methodWords, PAID, rowFracs, type MethodModel } from './rules'
+import { MethodMenu } from './MethodMenu'
 import { campaignSheet } from './sheet'
 import { TypeEditor, TypeOverlay } from './TypeEditor'
 import { FilmPic, FilmTools } from './FilmTile'
@@ -460,8 +462,12 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, flagsOpen,
         {safe && adjusting && set.protect?.boxes?.map((b, i) => (
           <span key={i} className="cb-pbox" style={{ left: (b.x - adjusting.x) * s, top: (b.y - adjusting.y) * s, width: b.w * s, height: b.h * s }} />
         ))}
+        {rightsWord(doc.assets[sizeFinalAsset(size) ?? '']?.rights) && (
+          <span className={`rights-chip tile ${doc.assets[sizeFinalAsset(size)!]!.rights}`} style={{ position: 'absolute', left: 6, bottom: 6, pointerEvents: 'none' }}>{rightsWord(doc.assets[sizeFinalAsset(size)!]!.rights)}</span>
+        )}
         {/* The status and Try again side by side, never one over the other (UAT 2026-11-18: "Failed" covered it). */}
         <span className="cb-badges">
+          {isFinalAsset(doc, sizeFinalAsset(size)) && <FinalBadge small />}
           <span className={`cb-status ${status ?? 'notmade'}`} title={failure}>{status === 'failed' ? 'Failed' : status ? STATUS[status] : 'Not made'}</span>
           {status === 'failed' && !PAID.has(size.method) && (
             // A free size that failed is made again from here (QA 2026-11-17: only Adjust crop → Reset did it).
@@ -509,16 +515,7 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, flagsOpen,
             <button type="button" className="btn sm" aria-haspopup="menu" aria-expanded={methodOpen} onClick={() => setMethodOpen(!methodOpen)}>Change method</button>
             {methodOpen && (
               <div className="cb-menu pt-panel" role="menu">
-                {STILL_METHODS.map((m) => {
-                  const off = size.media !== 'image' || (PAID.has(m) && !models[m])
-                  return (
-                    <button key={m} type="button" role="menuitemradio" aria-checked={size.method === m} className="pt-menurow" disabled={off || size.method === m}
-                      title={PAID.has(m) && !models[m] ? 'Off for your agency' : undefined}
-                      onClick={() => pickMethod(m)}>
-                      {METHOD_WORD[m]}<span className="hint">{PAID.has(m) ? models[m]?.label ?? 'off' : 'in seconds'}</span>{size.method === m && ' ✓'}
-                    </button>
-                  )
-                })}
+                <MethodMenu set={set} size={size} models={models} onPick={pickMethod} />
               </div>
             )}
           </span>

@@ -14,7 +14,10 @@ import { useBlobUrl } from '../ui/hooks'
 import { formatById, shortName, sizeWords } from './formats'
 import { changeMethod, redoSize, sizeSeconds, type CampaignDeps } from './make'
 import { groupSizes, statusWord, type GroupBy, type SizeGroup } from './overview'
-import { METHOD_WORD, methodWords, PAID, STILL_METHODS, type MethodModel } from './rules'
+import { methodWords, PAID, type MethodModel } from './rules'
+import { MethodMenu } from './MethodMenu'
+import { isFinalAsset, sizeFinalAsset } from '../doc/finals'
+import { FinalBadge } from '../ui/finals/FinalBadge'
 import { TileFloat } from './TileFloat'
 import './campaign.css'
 
@@ -137,6 +140,7 @@ export function SizesOverview({ set, sizes, staleIds, models, deps, by, title, o
                           onPointerDown={(e) => { e.stopPropagation(); setSel(s.id) }}>
                           <div ref={sel === s.id ? picRef : undefined} className="ov-pic" style={{ aspectRatio: String(r) }}>
                             <OvPic size={s} />
+                            {isFinalAsset(deps.doc.get(), sizeFinalAsset(s)) && <span style={{ position: 'absolute', left: 6, bottom: 6, zIndex: 1 }}><FinalBadge small /></span>}
                             <span className={`ov-chip ${word === 'Ready' ? 'ready' : word === 'Making' ? 'run' : 'look'}`}>{word}</span>
                             {s.locked && <span className="ov-lock" title="Locked: Update sizes never changes it">🔒</span>}
                           </div>
@@ -161,15 +165,7 @@ export function SizesOverview({ set, sizes, staleIds, models, deps, by, title, o
                 <button type="button" className="btn sm" aria-haspopup="menu" aria-expanded={methodOpen} onClick={() => setMethodOpen(!methodOpen)}>Change method</button>
                 {methodOpen && (
                   <div className="cb-menu pt-panel" role="menu">
-                    {STILL_METHODS.map((m) => {
-                      const off = PAID.has(m) && !models[m]
-                      return (
-                        <button key={m} type="button" role="menuitemradio" aria-checked={picked.method === m} className="pt-menurow" disabled={off || picked.method === m}
-                          title={off ? 'Off for your agency' : undefined} onClick={() => pickMethod(picked, m)}>
-                          {METHOD_WORD[m]}<span className="hint">{PAID.has(m) ? models[m]?.label ?? 'off' : 'in seconds'}</span>{picked.method === m && ' ✓'}
-                        </button>
-                      )
-                    })}
+                    <MethodMenu set={set} size={picked} models={models} onPick={(m) => pickMethod(picked, m)} />
                   </div>
                 )}
               </span>
