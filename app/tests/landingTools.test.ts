@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { test } from 'node:test'
 
+import { formatRoute, parseRoute } from '../src/shell/route.ts'
 import { PRODUCTION_PATH, TOOLS, liveTools, toolHref } from '../src/shell/landing/tools.ts'
 
 // `npm test` runs from app/, and the bundled test does not sit where its source does.
@@ -18,6 +19,7 @@ const MAKER: Record<string, string> = {
   brief: 'make_brief_maker.rs',
   research: 'make_campaign_research.rs',
   deck: 'make_deck_maker.rs',
+  territories: 'make_territories.rs',
 }
 
 test('every tool with an app names an id its maker really builds', () => {
@@ -41,4 +43,16 @@ test('Prod opens the Production Tool at /production when the server serves it, a
   assert.equal(toolHref({ id: 'prod' }), PRODUCTION_PATH)
   assert.equal(PRODUCTION_PATH, '/production/')
   for (const t of TOOLS.filter(t => t.id !== 'prod')) assert.equal(toolHref(t), null, `${t.id} opens as a page here`)
+})
+
+test('Territories is a tool: it has its app, opens as a page, and its route round-trips', () => {
+  const t = TOOLS.find(x => x.id === 'territories')!
+  assert.equal(t.appId, 'ie.napkin.territories')
+  assert.equal(TOOLS.length, 7)
+  assert.deepEqual([...liveTools([{ app_id: 'ie.napkin.territories' }], false)], ['territories'])
+  assert.equal(toolHref(t), null)
+  const r = { level: 'tool', client: 'cli_0a1b2c3d', tool: 'territories' } as const
+  assert.equal(formatRoute(r), '#tool-cli_0a1b2c3d-territories')
+  assert.deepEqual(parseRoute('#tool-cli_0a1b2c3d-territories'), r)
+  assert.deepEqual(parseRoute('#tool-cli_0a1b2c3d-nothing'), { level: 'agency' })
 })

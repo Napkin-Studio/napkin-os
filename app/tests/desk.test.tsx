@@ -241,11 +241,11 @@ test('the client page: since, the name, a line naming the work, Needs you, work 
   assert.match(html, /aria-label="New deck for Client A"/)
   assert.equal(count(html, /data-testid="work-item"/g), 5, 'each document in its group, the one that needs you also on top')
   // no wheel: each group's heading is its tool's door, one tab stop for them, named with its count
-  assert.match(html, /aria-label="Brief Maker for Client A, 2 open, needs you \(1 of 4\)"/)
+  assert.match(html, /aria-label="Brief Maker for Client A, 2 open, needs you \(1 of 5\)"/)
   assert.match(html, /data-testid="tool-brief"[^>]*tabindex="0"|tabindex="0"[^>]*data-testid="tool-brief"/)
   assert.match(html, /data-testid="tool-deck"[^>]*tabindex="-1"|tabindex="-1"[^>]*data-testid="tool-deck"/)
   assert.match(html, /role="group" aria-label="Tools for Client A"/)
-  assert.match(html, /aria-label="Research Tool for Client A, none open, start one \(2 of 4\)"/)
+  assert.match(html, /aria-label="Research Tool for Client A, none open, start one \(2 of 5\)"/)
   assert.match(html, /class="cp-st ">Draft</)
 })
 

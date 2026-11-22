@@ -34,6 +34,7 @@ const LINE: Record<string, string> = {
   brief: 'Turn client notes, call transcripts, and verified research into a structured creative brief on a single sheet of paper.',
   research: 'Ask one sharp question. Napkin searches the open web, reads your files, pins every fact with a source, and puts every call on the record.',
   deck: 'A board deck from a brief and its facts.',
+  territories: 'Pick the insights to work on. A crew of agents goes different ways from them, and you greenlight the routes worth making.',
 }
 
 const STATE_CLASS = (s: ReturnType<typeof stateWords>) => (s.needs ? 'needs' : s.working ? 'working' : s.text === 'Done' ? 'done' : 'draft')

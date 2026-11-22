@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-// The six tools a client's circle carries, and the one table that says which
+// The seven tools a client's circle carries, and the one table that says which
 // installed app each is. Idea is dimmed "Soon": it is not built. Prod is the
 // Production Tool, which is not an installed app: napkin-web serves it at
 // /production (features/os-sign-in.clan), and its tile opens it there, in the
@@ -32,6 +32,7 @@ export const TOOLS: readonly Tool[] = [
   // Advertising Studio is retired (the Production Tool replaces it; features/os-sign-in.clan D15) and no
   // longer built. Its id stays so the ads its old documents made still file under Ads.
   { id: 'ads', name: 'Ads', full: 'Advertising Studio', appId: 'ie.napkin.film', noun: ['ad', 'ads'] },
+  { id: 'territories', name: 'Territories', full: 'Territories', appId: 'ie.napkin.territories', noun: ['exploration', 'explorations'] },
 ]
 
 export const toolById = (id: string): Tool | undefined => TOOLS.find(t => t.id === id)

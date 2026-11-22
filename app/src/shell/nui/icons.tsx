@@ -11,13 +11,14 @@ const PATHS: Record<string, ReactNode> = {
   production: <><rect x="3.5" y="6" width="17" height="12" rx="1.5" /><path d="M10 9.5l4.5 2.5-4.5 2.5z" /></>,
   brief: <><path d="M6 3.5h8.5l3.5 3.5v13.5H6z" /><path d="M14.5 3.5V7H18" opacity=".55" /><line x1="8.8" y1="11" x2="15.2" y2="11" /><line x1="8.8" y1="14" x2="15.2" y2="14" /><line x1="8.8" y1="17" x2="12.6" y2="17" /></>,
   research: <><circle cx="12" cy="5.5" r="2.3" /><circle cx="6.5" cy="18" r="2.3" /><circle cx="17.5" cy="18" r="2.3" /><path d="M12 7.8v4.2M6.5 15.7V12h11v3.7" /></>,
+  territories: <><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="3" /><path d="M12 4v2.5M20 12h-2.5M12 20v-2.5M4 12h2.5" /></>,
   deck: <><rect x="3.5" y="5" width="17" height="11" rx="1.5" /><line x1="12" y1="16" x2="12" y2="20" /></>,
 }
 
 /** The tool's own key for an icon: `prod` and `ads` draw as production, anything else as a brief. */
 function iconKey(tool: string | null | undefined): keyof typeof PATHS {
   if (tool === 'prod' || tool === 'ads' || tool === 'production') return 'production'
-  if (tool === 'research' || tool === 'deck' || tool === 'brief') return tool
+  if (tool === 'research' || tool === 'deck' || tool === 'brief' || tool === 'territories') return tool
   return 'brief'
 }
 

@@ -25,6 +25,7 @@ const GROUPS = [
   { tool: 'research', label: 'Research', kind: 'Research', icon: 'research' },
   { tool: 'deck', label: 'Decks', kind: 'Deck', icon: 'deck' },
   { tool: 'prod', label: 'Production', kind: 'Production', icon: 'production' },
+  { tool: 'territories', label: 'Territories', kind: 'Territories', icon: 'territories' },
 ] as const
 
 /** "2d", "1w", "4m", "3h": how long ago, the mock's short way. */
@@ -87,7 +88,7 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
   useEffect(() => {
     const onNumber = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || isTyping(e.target)) return
-      if (!/^[1-4]$/.test(e.key)) return
+      if (!/^[1-5]$/.test(e.key)) return
       e.preventDefault()
       pick.current(Number(e.key) - 1)
     }
@@ -111,7 +112,7 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
 
   const groups = GROUPS.map((g, n) => ({ ...g, n, docs: work.filter(i => toolOfApp(i.app_id)?.id === g.tool) }))
     // A new client lists Briefs and Research; Decks and Production once there is one (the mock's client page).
-    .filter(g => g.docs.length > 0 || g.tool === 'brief' || g.tool === 'research')
+    .filter(g => g.docs.length > 0 || g.tool === 'brief' || g.tool === 'research' || (g.tool === 'territories' && live.has('territories')))
   // Each group's heading opens its tool's own page: one tab stop for them (roving), the arrows move it, as the tool wheel did.
   const [at, setAt] = useState(0)
   const heads = useRef<(HTMLButtonElement | null)[]>([])

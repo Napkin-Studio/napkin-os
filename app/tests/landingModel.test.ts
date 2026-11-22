@@ -161,8 +161,8 @@ test('who is signed in gives a first name and an agency, and says nothing it doe
   assert.deepEqual(whoIs(null), { first: null, agency: 'Napkin Studio' })
 })
 
-test('the tool table: six tools, each live only with its app installed', () => {
-  assert.deepEqual(TOOLS.map(t => t.id), ['brief', 'research', 'idea', 'deck', 'prod', 'ads'])
+test('the tool table: seven tools, each live only with its app installed', () => {
+  assert.deepEqual(TOOLS.map(t => t.id), ['brief', 'research', 'idea', 'deck', 'prod', 'ads', 'territories'])
   const installed = [{ app_id: BRIEF }, { app_id: 'ie.napkin.deck-maker' }]
   assert.deepEqual(TOOLS.filter(t => isLive(t, installed)).map(t => t.id), ['brief', 'deck'])
   // Idea and Prod have no app to install: they are Soon whatever is installed.
