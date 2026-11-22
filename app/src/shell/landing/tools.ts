@@ -48,10 +48,10 @@ export function isLive(tool: Tool, installed: readonly Pick<InstalledApp, 'app_i
 /** The Production Tool's path on this origin. */
 export const PRODUCTION_PATH = '/production/'
 
-/** Where Continue in › Production Tool opens a brief (features/brief-node.clan): the tool reads the brief
- *  itself and freezes its spine on a Brief node on a new canvas (no Script: owner 2026-11-18). Ids only, never words. */
-export const BRIEF_APP_ID = 'ie.napkin.brief-maker'
-export const filmFromBriefHref = (docPath: string): string => `${PRODUCTION_PATH}?brief=${encodeURIComponent(docPath)}`
+/** Production is an installed app (features/production-spinoff.clan) so that it takes part in spin-offs like the
+ *  others, but its projects live in the relay and open at /production, never in the shell: it is not a tile to launch,
+ *  and Continue in offers it only where the server serves the tool. */
+export const PRODUCTION_APP_ID = 'ie.napkin.production'
 
 /** Where a tool opens with a full page load, outside the shell (Prod: the Production Tool), or null
  *  when it opens as the shell's own tool page. */

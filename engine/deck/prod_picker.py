@@ -11,7 +11,7 @@ every asset from metadata, picks by rule, and pulls only the picked pictures.
    Only https hosts are kept, never a location's path: provider URLs are capability links.
 2. Pick from metadata. images.bind_production runs on a production.json built from the metadata alone, so every rule is today's (key
    visual -> cover and idea; the typed size whose channel and aspect match -> each execution; the picked storyboard frame -> film) and
-   every check too (mock refused, forged rights ignored, aspect tolerance, protect boxes, Rights to supply never placed). Where the rules
+   every check too (mock refused, rights as stated or inferred, aspect tolerance, protect boxes, Rights to supply never placed). Where the rules
    rank several candidates equal the newest wins and the others are reported as a tie; ``--production-agent`` (off by default) asks Claude
    (stages MODELS['production_pick'], Sonnet, the deck's own brief_llm route; never Gemini) to break it on metadata rows only. An answer
    outside the eligible keys is discarded. It cannot change rights, status or eligibility: only keys of the same rank are offered.
@@ -32,11 +32,14 @@ from __future__ import annotations
 
 import argparse
 import base64
+import contextlib
+import contextvars
 import hashlib
 import http.client
 import io
 import ipaddress
 import json
+import os
 import re
 import socket
 import ssl
@@ -112,6 +115,26 @@ class Source:
         return fp._read(z, name, fp.ASSET_MAX)
 
 
+class CarriedSource:
+    """A Production project carried whole in the Deck document (``data.upstream.<id>``, production-spinoff): the same surface as Source
+    (``doc``, ``name``, ``kind``, ``clan_sha256``), but the pictures are not in the document: they are held by Production's relay under their
+    sha256 and fetched at build (``relay``: the only source). ``clan_sha256`` is the hash of the carried data, so a run and a swap are tied to
+    the version the deck froze. Refuses what deck.from_production refuses (another contract or app, no project id)."""
+    kind = "upstream"
+    relay = True
+
+    def __init__(self, doc_id: str, doc: dict):
+        self.doc = fp.check_document(doc)
+        self.doc_id = str(doc_id)
+        self.name = f"production:{self.doc_id}"
+        self.clan_sha256 = hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str).encode()).hexdigest()
+        self.outer = self.inner = None
+        self.fixture, self.embedded, self.zipped = False, set(), set()
+
+    def member(self, where: str, hx: str, mime: str):
+        return None
+
+
 # ------------------------------------------------------------------------------------------------ P1 inventory
 
 def clean(text, n: int = LABEL_MAX) -> str:
@@ -135,6 +158,8 @@ def reach_of(src: Source, asset: dict, hx: str) -> tuple:
     """``(reach, sources)``: where this asset's bytes can come from, in source order (embedded, https, zip), and the first of them; with none,
     s3_only (Production's storage, behind a sign-in), idb_only (only in a browser) or none."""
     ext = fp.IMAGE_MIMES.get(asset.get("mime"))
+    if getattr(src, "relay", False):   # carried in a Deck: the relay holds every picture under its hash, and nothing else is a source
+        return ("relay", ["relay"]) if ext else ("none", [])
     locs = [str(x) for x in asset.get("locations") or []]
     sources = []
     if ext and f"human/assets/{hx}.{ext}" in src.embedded:
@@ -310,6 +335,8 @@ def _same_rank(meta: dict, a: str, b: str) -> bool:
 
 def pool_of(meta: dict, slide: dict, aspect: str, role: str, brief_doc, mset) -> list:
     """The keys the rules rank equal for one slot (the chosen one among them), from images.master_pool / size_pool. Frames: no tie."""
+    if images.slide_group(slide):   # a size or packshot slide: no tie to report, the person picks among every final (eligible_of)
+        return []
     if role == "master":
         sets, _ = images.master_pool(meta, brief_doc)
         return sorted(meta["format_sets"][f]["master"] for f in sets)
@@ -347,7 +374,9 @@ def eligible_of(meta: dict, slide: dict, aspect: str, role: str, brief_doc, mset
     and the idea; every size that fits an execution (images.size_fits: channel, aspect tolerance, protect boxes, not stale); every picked
     storyboard frame for a film. Rights are not a test here: a candidate waiting for its rights is offered and, if chosen, held as today."""
     items = meta["items"]
-    if role == "master":
+    if images.slide_group(slide):   # "Size crops", "Packshot": every final of any Format set or size that is a picture, the rule's pick among them
+        out = images.group_pool(meta, aspect, any_shape=True, group=images.slide_group(slide))
+    elif role == "master":
         first, _ = images.master_pool(meta, brief_doc)
         sets = meta.get("format_sets") or {}
         order = sorted(first, reverse=True) + sorted((f for f in sets if f not in first and sets[f].get("master") in items), reverse=True)
@@ -511,11 +540,13 @@ class _Pinned(http.client.HTTPSConnection):
         self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
 
 
-def _open(host: str, ip: str, path: str, timeout: float):
-    """GET over the pinned connection: no redirect is followed here (http.client never does), no cookie, no auth header, no proxy. The
-    response carries ``settimeout`` (its socket's), so the stream can shrink the socket timeout to the time the fetch has left."""
+def _open(host: str, ip: str, path: str, timeout: float, headers: dict | None = None):
+    """GET over the pinned connection: no redirect is followed here (http.client never does), no cookie, no proxy, and no auth header unless
+    the caller names one (only the relay transport does, for the relay's own host). The response carries ``settimeout`` (its socket's), so the
+    stream can shrink the socket timeout to the time the fetch has left."""
     conn = _Pinned(host, ip, timeout)
-    conn.request("GET", path, headers={"User-Agent": "napkin-deck-picker", "Accept": "image/*", "Accept-Encoding": "identity", "Connection": "close"})
+    conn.request("GET", path, headers={"User-Agent": "napkin-deck-picker", "Accept": "image/*", "Accept-Encoding": "identity", "Connection": "close",
+                                       **(headers or {})})
     sock = conn.sock
     resp = conn.getresponse()
     resp.settimeout = sock.settimeout
@@ -647,11 +678,247 @@ class Fetcher:
         return dest, None
 
 
+# ------------------------------------------------------------------------------------------------ pictures by link (production-spinoff)
+
+RELAY_WIDTH = 2400   # the relay's largest rendition (GET /assets/{sha256}?w=2400): what a slide draws
+
+
+class RelayError(Exception):
+    """The relay would not give a picture: the message says why, and never carries a URL or a token."""
+
+
+class RelayAssets:
+    """Pictures by link: Production's relay holds each one under its sha256 and answers ``GET /assets/{sha256}?w=2400`` with a 302 to a copy
+    at most 2400 px wide, only for the agency that holds it. ``fetch(sha256 hex, w)`` is the transport (``w`` None: the original size); it
+    returns the picture's bytes or raises RelayError. The signed call to the relay is the transport's business, not this class's: the
+    relay host is the one host a build may reach (policy/production_fetch.yaml, ``relay_hosts``), and the transport holds the identity.
+
+    A rendition cannot be checked against the sha256 (that is the original's hash), so it is trusted as the relay's answer for that hash,
+    kept in the stages folder by hash and width, and fetched once per document; the original-size copy (``original=True``) is hashed and refused
+    when it does not match. Every picture also passes the deck's own picture check (images.inspect_file) in ``obtain``."""
+
+    def __init__(self, fetch, cache: Path, width: int = RELAY_WIDTH, file_max: int = FILE_MAX, run_max: int = RUN_MAX, files_max: int = FILES_MAX):
+        self.fetch, self.cache, self.width = fetch, Path(cache), width
+        self.file_max, self.run_max, self.files_max = file_max, run_max, files_max
+        self.files, self.bytes, self.log = 0, 0, []
+
+    def _done(self, hx: str, outcome: str):
+        self.log.append({"sha256": hx[:12], "outcome": outcome})
+        return outcome
+
+    def get(self, hx: str, dest: Path, original: bool = False) -> tuple:
+        """``(dest, None)`` with the picture's bytes at ``dest``, or ``(None, reason)``."""
+        if not re.fullmatch(r"[0-9a-f]{64}", hx or ""):
+            return None, "its key is not a sha256"
+        w = None if original else self.width
+        kept = self.cache / (f"{hx}.orig" if original else f"{hx}.w{w}")
+        if kept.is_file():
+            Path(dest).write_bytes(kept.read_bytes())
+            self._done(hx, "cached")
+            return Path(dest), None
+        if self.files >= self.files_max:
+            return None, self._done(hx, f"the run's {self.files_max}-picture fetch cap is reached")
+        self.files += 1   # an attempt counts toward the run's cap, whatever comes of it
+        try:
+            raw = self.fetch(hx, w)
+        except RelayError as e:
+            return None, self._done(hx, f"relay: {e}"[:200])
+        if not isinstance(raw, (bytes, bytearray)) or not raw:
+            return None, self._done(hx, "relay: no picture came back")
+        if len(raw) > self.file_max:
+            return None, self._done(hx, f"relay: {len(raw) // 1_000_000} MB, over the {self.file_max // 1_000_000} MB cap")
+        if self.bytes + len(raw) > self.run_max:
+            return None, self._done(hx, f"relay: the run's {self.run_max // 1_000_000} MB fetch cap would be passed")
+        if original and hashlib.sha256(raw).hexdigest() != hx:
+            return None, self._done(hx, "relay: the bytes do not hash to the document's sha256 (changed or replaced): refused")
+        self.bytes += len(raw)
+        self.cache.mkdir(parents=True, exist_ok=True)
+        part = kept.with_name(kept.name + ".part")
+        part.write_bytes(bytes(raw))
+        part.replace(kept)
+        Path(dest).write_bytes(bytes(raw))
+        self._done(hx, "ok" + (" (original size, hash checked)" if original else f" (w={w})"))
+        return Path(dest), None
+
+
+#: The transport to the relay's asset route: ``fetch(sha256 hex, w) -> bytes``, raising RelayError. Tests set it directly; in service the
+#: build's own transport is made from the server-set ``production_assets`` (``use_relay``, ``relay_fetcher``).
+RELAY_FETCH = None
+
+RELAY_TIMEOUT_S = 30.0   # one picture, the relay's sizing included (a rendition is made on its first ask)
+_RELAY: contextvars.ContextVar = contextvars.ContextVar("production_relay", default=None)
+
+
+def _public_host(host: str, resolver) -> tuple:
+    """``(ip, None)`` for a host that resolves only to public addresses, else ``(None, reason)``."""
+    try:
+        ips = list(resolver(host))
+    except OSError:
+        return None, f"{host} does not resolve"
+    if not ips or not all(is_public(ip) for ip in ips):
+        return None, f"{host} resolves to a private or reserved address: refused"
+    return ips[0], None
+
+
+LOOPBACK_ENV = "DECK_RELAY_ALLOW_LOOPBACK"
+LOOPBACK_HOSTS = {"127.0.0.1": "127.0.0.1", "localhost": "127.0.0.1", "::1": "::1"}
+
+
+def loopback_allowed() -> bool:
+    """The dev opt-in for a local stack, read from this process's environment only (never from a request, a document or the middleware)."""
+    return os.environ.get(LOOPBACK_ENV, "").strip() == "1"
+
+
+def _open_http(ip: str, port: int, path: str, timeout: float, headers: dict | None = None):
+    """GET over plain http to a loopback address (the opt-in only). Same contract as _open: no redirect followed, no cookie, no proxy."""
+    conn = http.client.HTTPConnection(ip, port, timeout=timeout)
+    conn.request("GET", path, headers={"User-Agent": "napkin-deck-picker", "Accept": "image/*", "Accept-Encoding": "identity", "Connection": "close",
+                                       **(headers or {})})
+    sock = conn.sock
+    resp = conn.getresponse()
+    resp.settimeout = sock.settimeout
+    return resp
+
+
+def relay_fetcher(base: str, token: str, opener=None, resolver=None, timeout: float = RELAY_TIMEOUT_S, file_max: int = FILE_MAX, clock=None,
+                  loopback: bool | None = None, local_opener=None):
+    """The transport for one build: ``fetch(sha256 hex, w)`` is ``GET {base}/assets/{sha}?w=W`` with ``X-Napkin-Identity: <token>`` (the
+    assets pass napkin-web signed for the person who started the build), then the 302 the relay answers with, to the picture itself.
+
+    Trust: ``base`` is the one host the pass is sent to, and it comes from napkin-web through the middleware, never from the document or the
+    person's browser, so it is not on policy/production_fetch.yaml (that list is for the https locations a document names). It still has to
+    be https, with no credentials or port, resolving to public addresses only (the connection is pinned to the address checked). The redirect
+    target is the picture CDN: https, no credentials or port, public addresses only, up to REDIRECTS_MAX hops, and the pass is NOT sent to it
+    (nor to any hop). The answer must be 200 image/* within the byte cap and the one deadline. Every reason names a host or a status, never a
+    URL or the token.
+
+    Dev opt-in (``DECK_RELAY_ALLOW_LOOPBACK=1`` in the engine's own environment, never from a request): an http base whose host is
+    127.0.0.1, ::1 or localhost, and a redirect to such a host (the local relay's picture URLs), are allowed, with any port. Nothing else
+    changes: any other host still has to be https and public."""
+    clock, opener, resolver = clock or time.monotonic, opener or _open, resolver or _resolve
+    loop = loopback_allowed() if loopback is None else loopback
+    local_opener = local_opener or _open_http
+    root = urlsplit(base)
+    host = (root.hostname or "").lower()
+    bad = None
+    local_base = loop and root.scheme == "http" and host in LOOPBACK_HOSTS
+    if not local_base and (root.scheme != "https" or not host):
+        bad = "the relay's address is not https"
+    elif root.username or root.password or root.query or root.fragment or (not local_base and root.port not in (None, 443)):
+        bad = "the relay's address carries credentials, a port or a query: refused"
+    prefix = (root.path or "").rstrip("/")
+
+    def fetch(hx: str, w) -> bytes:
+        if bad:
+            raise RelayError(bad)
+        if not re.fullmatch(r"[0-9a-f]{64}", hx or ""):
+            raise RelayError("its key is not a sha256")
+        t0 = clock()
+        url = f"{prefix}/assets/sha256:{hx}" + (f"?w={int(w)}" if w else "")
+        h, first, hops = host, True, 0
+        local, port = local_base, root.port or 80
+        while True:
+            if local:
+                ip, why = LOOPBACK_HOSTS[h], None
+            else:
+                ip, why = _public_host(h, resolver)
+            if why:
+                raise RelayError(why)
+            left = timeout - (clock() - t0)
+            if left <= 0:
+                raise RelayError(f"{h}: timed out")
+            try:
+                if local:
+                    resp = local_opener(ip, port, url, left, {"X-Napkin-Identity": token} if first else None)
+                else:
+                    resp = opener(h, ip, url, left, {"X-Napkin-Identity": token} if first else None) if first else opener(h, ip, url, left)
+            except (socket.timeout, TimeoutError):
+                raise RelayError(f"{h}: timed out") from None
+            except (OSError, ssl.SSLError, http.client.HTTPException) as e:
+                raise RelayError(f"{h}: connection failed ({type(e).__name__})") from None
+            try:
+                st = int(getattr(resp, "status", 0) or 0)
+                if st in (301, 302, 303, 307, 308):
+                    nxt = urlsplit(urljoin(f"https://{h}{url}", resp.getheader("Location") or ""))
+                    hops += 1
+                    if hops > REDIRECTS_MAX:
+                        raise RelayError(f"{h}: more than {REDIRECTS_MAX} redirects")
+                    nh = (nxt.hostname or "").lower()
+                    to_local = loop and nxt.scheme == "http" and nh in LOOPBACK_HOSTS and not (nxt.username or nxt.password)
+                    if not to_local and (nxt.scheme != "https" or not nh or nxt.username or nxt.password or nxt.port not in (None, 443)):
+                        raise RelayError(f"{h}: redirected to a location that is not plain https: refused")
+                    local, port = to_local, ((nxt.port or 80) if to_local else 443)
+                    h, url, first = nh, (nxt.path or "/") + (f"?{nxt.query}" if nxt.query else ""), False
+                    continue
+                if st in (401, 403):
+                    raise RelayError(f"{h}: refused the pass (HTTP {st}); it may have expired" if first else f"{h}: refused (HTTP {st})")
+                if st == 404:
+                    raise RelayError(f"{h}: does not hold this picture (HTTP 404)")
+                if st != 200:
+                    raise RelayError(f"{h}: HTTP {st}")
+                ctype = (resp.getheader("Content-Type") or "").split(";")[0].strip().lower()
+                if not ctype.startswith("image/"):
+                    raise RelayError(f"{h}: not a picture (content-type {clean(ctype, 40) or 'none'})")
+                clen = str(resp.getheader("Content-Length") or "")
+                if clen.isdigit() and int(clen) > file_max:
+                    raise RelayError(f"{h}: {int(clen) // 1_000_000} MB, over the {file_max // 1_000_000} MB cap")
+                return _read_capped(resp, h, file_max, timeout, t0, clock)
+            except (socket.timeout, TimeoutError):
+                raise RelayError(f"{h}: timed out") from None
+            except (OSError, http.client.HTTPException) as e:
+                raise RelayError(f"{h}: connection failed ({type(e).__name__})") from None
+            finally:
+                try:
+                    resp.close()
+                except Exception:   # noqa: BLE001
+                    pass
+
+    return fetch
+
+
+def _read_capped(resp, h: str, file_max: int, timeout: float, t0: float, clock) -> bytes:
+    out, n = [], 0
+    read = getattr(resp, "read1", None) or resp.read
+    settimeout = getattr(resp, "settimeout", None)
+    while True:
+        left = timeout - (clock() - t0)
+        if left <= 0:
+            raise RelayError(f"{h}: timed out")
+        if settimeout and not (getattr(resp, "isclosed", None) and resp.isclosed()):
+            settimeout(left)   # a response with a Content-Length closes its socket with the last bytes: nothing left to time
+        chunk = read(65536)
+        if not chunk:
+            return b"".join(out)
+        n += len(chunk)
+        if n > file_max:
+            raise RelayError(f"{h}: over the {file_max // 1_000_000} MB cap")
+        out.append(chunk)
+
+
+@contextlib.contextmanager
+def use_relay(assets: dict | None, **kw):
+    """For the build running in this thread: pictures by link go through the person's assets pass (``{base, pass}`` from napkin-web). The
+    pass lives only in this context: never in a stage file, the report or a log."""
+    ok = isinstance(assets, dict) and isinstance(assets.get("base"), str) and isinstance(assets.get("pass"), str) and assets["pass"]
+    tok = _RELAY.set(relay_fetcher(assets["base"], assets["pass"], **kw) if ok else None)
+    try:
+        yield
+    finally:
+        _RELAY.reset(tok)
+
+
+def relay_for(stages: Path) -> RelayAssets | None:
+    """The RelayAssets of a build (pictures cached under ``<stages>/relay_cache``), or None while no transport is wired for this build."""
+    fetch = RELAY_FETCH or _RELAY.get()
+    return RelayAssets(fetch, Path(stages) / "relay_cache") if fetch else None
+
+
 # ------------------------------------------------------------------------------------------------ source order
 
-def obtain(src: Source, meta: dict, keys: list, work: Path, fetcher: Fetcher | None) -> tuple:
-    """Bytes for each picked key, in source order: embedded human/assets/ -> https (only with a fetcher) -> the export zip. Each must hash to
-    its sha256 and pass images.inspect_file. Returns ``(files {hex: path}, infos {hex: info}, where {key: source}, unreachable {key: why})``."""
+def obtain(src: Source, meta: dict, keys: list, work: Path, fetcher: Fetcher | None, relay: RelayAssets | None = None) -> tuple:
+    """Bytes for each picked key, in source order: embedded human/assets/ -> the relay by link (a project carried in the deck, and only that) ->
+    https (only with a fetcher) -> the export zip. Each must hash to its sha256 (a relay rendition cannot: it is the relay's answer for that
+    hash) and pass images.inspect_file. Returns ``(files {hex: path}, infos {hex: info}, where {key: source}, unreachable {key: why})``."""
     assets = src.doc.get("assets") or {}
     files, infos, where, unreachable, total = {}, {}, {}, {}, 0
     by_hex = {}
@@ -667,8 +934,17 @@ def obtain(src: Source, meta: dict, keys: list, work: Path, fetcher: Fetcher | N
         a = assets.get("sha256:" + hx) or assets.get(hx) or {}
         dest = Path(work) / f"{hx}.{fp.IMAGE_MIMES[mime]}"
         tried, got = [], None
-        for how in ("embedded", "https", "zip"):
-            if how == "https":
+        for how in (("relay",) if getattr(src, "relay", False) else ("embedded", "https", "zip")):
+            if how == "relay":
+                if relay is None:
+                    tried.append("link: this engine has no way to the relay yet (the signed asset route is not wired)")
+                    continue
+                p, why = relay.get(hx, dest)
+                if p:
+                    got = how
+                else:
+                    tried.append(why)
+            elif how == "https":
                 urls = [x for x in a.get("locations") or [] if isinstance(x, str) and x.startswith("https://")]
                 if not urls:
                     continue
@@ -903,7 +1179,7 @@ def place(deck: dict, meta: dict, prod: dict, picks: list, chosen: dict, unreach
 
 def run(deck: dict, src: Source, stages: Path, pictures: str = "creative_cover", names=(), brief_doc: str | None = None, *, fetch: bool = False,
         agent: bool = False, look: bool = False, tie_call=None, fetcher: Fetcher | None = None, look_fns: dict | None = None,
-        at: str | None = None, choices: dict | None = None) -> dict:
+        at: str | None = None, choices: dict | None = None, relay: RelayAssets | None = None) -> dict:
     """The picker in a build (run_deck --production FILE). Binds the metadata, breaks ties (``agent``), pulls the picks (``fetch`` opens the
     https source), looks (``look``), places, and writes production_inventory.json, production.json and assets/ into ``stages``. Returns what
     run_deck reports: ``{placed, held, kept, master, picker, card, usage: {agent, look}}``."""
@@ -930,7 +1206,7 @@ def run(deck: dict, src: Source, stages: Path, pictures: str = "creative_cover",
     for pk in picks:
         sk = f"{pk['slide']}.{pk['slot']}"
         c = stored.get(sk)
-        pk["by"] = "claude" if sk in by_claude else "rule"
+        pk["by"] = "claude" if sk in by_claude else "final" if meta["items"][pk["key"]].get("final") else "rule"
         if c and c["key"] in pk["eligible"]:   # a person's swap wins over the rule and the tie-break, among the slot's own candidates only
             chosen[sk], pk["by"] = c["key"], "person"
         elif c:
@@ -950,12 +1226,19 @@ def run(deck: dict, src: Source, stages: Path, pictures: str = "creative_cover",
     if not fetch:
         fetcher = None
     with tempfile.TemporaryDirectory(dir=stages, prefix=".production-") as td:
-        files, infos, where, unreachable = obtain(src, meta, keys, Path(td), fetcher)
+        files, infos, where, unreachable = obtain(src, meta, keys, Path(td), fetcher, relay)
         items = {}
         for k in keys:
             if k in where:
-                it = fp.make_item(plan.by_key[k], infos[meta["items"][k]["sha256"]], src.clan_sha256)
+                info = infos[meta["items"][k]["sha256"]]
+                it = fp.make_item(plan.by_key[k], info, src.clan_sha256)
                 it["source"] = where[k]
+                if where[k] == "relay":
+                    # a rendition is not the original's bytes: the deck records the hash of the file it holds (the renderers check it),
+                    # and the original's hash stays the Production key
+                    orig = it["sha256"]
+                    it["sha256"], it["file"], it["source_sha256"] = info["sha256"], f"assets/{info['sha256']}.{info['ext']}", orig
+                    files[info["sha256"]] = files[orig]
                 items[k] = it
         prod = {"stage": "production", "produced_by": "deck.prod_picker (a Production .clan read directly; only the picked pictures pulled; no model call "
                                                       "unless --production-agent or --production-look)",
@@ -963,9 +1246,6 @@ def run(deck: dict, src: Source, stages: Path, pictures: str = "creative_cover",
                 "bundle": {"clan": clean(src.name, 120), "clan_sha256": src.clan_sha256, "assets_from": "+".join(sorted(set(where.values()))) or "none"},
                 "taken_at": at, "format_packs": fp.packs_record(), "format_sets": fp.format_set_rows(src.doc, items), "items": items,
                 "offer_sha256": fp.offer_sha(items), "refused": plan.refused, "not_carried": plan.not_carried}
-        warnings = fp.forged_fields(src.doc)
-        if warnings:
-            prod["warnings"] = warnings
         if src.fixture:
             prod["fixture"] = True
         rows_by = {r["key"]: r for r in plan.rows}
@@ -987,7 +1267,8 @@ def run(deck: dict, src: Source, stages: Path, pictures: str = "creative_cover",
                   "fetch": {"on": bool(fetcher), "allow_list": pol["hosts"], "allow_list_empty": not pol["hosts"],
                             "refused": fetcher.refused if fetcher else None, "log": fetcher.log if fetcher else []},
                   "look": {"on": bool(look), "rows": look_rows}, "card": card}
-        prod["picker"] = {k: report[k] for k in ("source", "picks", "not_reachable", "ties", "fetch")}
+        report["relay"] = {"on": bool(relay), "log": relay.log if relay else []}
+        prod["picker"] = {k: report[k] for k in ("source", "picks", "not_reachable", "ties", "fetch", "relay")}
         prod["not_reachable"] = res["not_reachable"]
         fp.write(prod, files, stages)
     inv = plan.inventory(at)
@@ -999,7 +1280,7 @@ def run(deck: dict, src: Source, stages: Path, pictures: str = "creative_cover",
             r["pulled_from"] = pulled.get(r["key"]) or ("rights" if r.get("rights") == "reference_only" else "not reachable")
     (stages / "production_inventory.json").write_text(json.dumps(inv, indent=1, ensure_ascii=False))
     mp = deck["meta"].get("production") or {}
-    mp.update(how="clan", offer_sha256=prod["offer_sha256"], placed=res["placed"], held=len(held), at=at)
+    mp.update(how="upstream" if src.kind == "upstream" else "clan", offer_sha256=prod["offer_sha256"], placed=res["placed"], held=len(held), at=at)
     deck["meta"]["production"] = mp
     return {"placed": res["placed"], "held": held, "kept": got["kept"], "master": got["master"], "picker": report, "card": card,
             "usage": {"agent": agent_usage, "look": look_usage if look_usage and look_usage.get("calls") else None}}

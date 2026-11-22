@@ -496,11 +496,13 @@ pub fn clan_context_for_agent(doc: &Document) -> Value {
         .unwrap_or(Value::Null);
     let m = clan.manifest();
     let pipeline = yaml_to_json("app/pipeline.yaml");
+    let raw_data = yaml_to_json("shared/data.yaml");
+    let production = production_upstream(&raw_data);
     let mut context = serde_json::json!({
         "document_type": m.document_type,
         "app": m.app.as_ref().map(|a| serde_json::json!({ "name": a.name, "app_id": a.app_id, "version": a.version })),
         "schema": schema,
-        "data": with_upstream_index(clan, yaml_to_json("shared/data.yaml")),
+        "data": with_upstream_index(clan, raw_data),
         "decision_chain": yaml_to_json("agent/decision-chain.yaml"),
         "context": clan.read_entry_string("agent/context.md").unwrap_or_default(),
         "lineage": m.lineage.as_ref().map(|l| serde_json::json!({ "parent_id": l.parent_id, "delta": l.delta })),
@@ -515,6 +517,12 @@ pub fn clan_context_for_agent(doc: &Document) -> Value {
         "edits": members::edits_map(clan),
         "pipeline": pipeline,
     });
+    // A deck spun off from a Production project is sent that project whole
+    // (its finals, assets and briefs; no picture bytes), beside the index:
+    // the build reads it and cannot from the index (production-spinoff).
+    if let Some(p) = production {
+        context["production_upstream"] = p;
+    }
     // A research started from a brief is told the brief's ask, and only
     // that: extract_ask proposes from it (features/spinoff-and-links.clan).
     if let Some(ask) = upstream_ask(clan, &context["pipeline"]) {
@@ -539,6 +547,44 @@ pub fn clan_context_for_agent(doc: &Document) -> Value {
         }
     }
     context
+}
+
+/// The app id a Production project's data carries (`app`, production-tool/contracts/document.schema.json).
+pub const PRODUCTION_TOOL_APP: &str = "production-tool";
+
+/// `{id, data}` of the first entry of `data.upstream` that is a Production
+/// project (its `app` is [`PRODUCTION_TOOL_APP`]): the project whole, for the
+/// Deck's build. `None` when the document carries no such project.
+///
+/// The project is sent as the document it was (owner, 2026-11-23: a spin-off
+/// carries everything but the heavy media): what it had carried itself, its
+/// brief and its research whole, which the spin-off hoisted beside it, goes
+/// back under its own `upstream`, so the Deck reads the full brief there and
+/// not the spine the Brief node keeps. A kit (a Brand Clan, a Style Pack) is
+/// the Deck's own attachment, never the project's, and stays out.
+fn production_upstream(data: &Value) -> Option<Value> {
+    let up = data.get(UPSTREAM_KEY)?.as_object()?;
+    let (id, copy) = up.iter().find(|(_, copy)| is_production(copy))?;
+    let mut whole = copy.clone();
+    let carried: serde_json::Map<String, Value> = up
+        .iter()
+        .filter(|(k, v)| *k != id && v.is_object() && !is_production(v) && !is_kit(v))
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    if !carried.is_empty() {
+        whole[UPSTREAM_KEY] = Value::Object(carried);
+    }
+    Some(json!({ "id": id, "data": whole }))
+}
+
+fn is_production(copy: &Value) -> bool {
+    copy.get("app").and_then(Value::as_str) == Some(PRODUCTION_TOOL_APP)
+}
+
+/// A frozen kit holds `kit.version` (the engine tells it the same way).
+fn is_kit(copy: &Value) -> bool {
+    copy.get("kit")
+        .is_some_and(|k| k.is_object() && k.get("version").is_some())
 }
 
 /// The middleware tasks that read `clan.upstream_payload`.
@@ -1417,5 +1463,29 @@ mod tests {
         for (actor, name, _) in DUMMY_ACCOUNT {
             assert_eq!(people[*actor].name, *name);
         }
+    }
+    #[test]
+    fn a_carried_production_project_is_found_whole_with_what_it_carried_and_nothing_else_is() {
+        let data = json!({ "upstream": {
+            "doc-brief": { "client": "Lumen Water", "app": "ie.napkin.brief-maker", "objectives": "Sell more" },
+            "doc-kit": { "kit": { "version": 1 }, "colours": ["red"] },
+            "doc-prod": { "app": "production-tool", "finals": { "final_1": { "asset": "sha256:ab" } } },
+        } });
+        let got = production_upstream(&data).expect("a project");
+        assert_eq!(got["id"], "doc-prod");
+        assert_eq!(
+            got["data"]["finals"],
+            data["upstream"]["doc-prod"]["finals"]
+        );
+        // the brief goes back under the project's own upstream, whole; the kit does not
+        assert_eq!(
+            got["data"]["upstream"],
+            json!({ "doc-brief": data["upstream"]["doc-brief"] })
+        );
+        assert_eq!(production_upstream(&json!({})), None);
+        assert_eq!(
+            production_upstream(&json!({ "upstream": { "doc-brief": { "client": "x" } } })),
+            None
+        );
     }
 }

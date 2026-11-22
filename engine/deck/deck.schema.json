@@ -913,6 +913,7 @@
          "picture_stretch",
          "picture_lowres",
          "text_on_image_contrast",
+         "q_no_hole",
          "layout_repeat",
          "title_drift",
          "line_length",
@@ -1316,9 +1317,10 @@
        "enum": [
         "bundle",
         "clan",
-        "os"
+        "os",
+        "upstream"
        ],
-       "description": "bundle: the export zip through deck.from_production; clan: a Production .clan (or the zip) read by deck.prod_picker, which picks from metadata and pulls only the picked pictures; os: from the OS (later)."
+       "description": "bundle: the export zip through deck.from_production; clan: a Production .clan (or the zip) read by deck.prod_picker, which picks from metadata and pulls only the picked pictures; os: from the OS (later); upstream: the Production project this Deck was spun off from, carried whole under data.upstream and read by deck.prod_picker (finals first), its pictures fetched by link from the relay."
       },
       "kept": {
        "type": "string",

@@ -57,6 +57,7 @@ either writes both in one batch.
 | `jobs[j].state/outputs/cost/error/provider/model/remote_id` | the job's runner (today the browser; later server-job-landing) | Quiet writes. |
 | `suggestions[s]` | Skye's job creates; Keep, Keep mine and staleness are patches | Keep applies the proposed prose through TextBus in the same undo step. |
 | `upstream` | the host, at spin-off | Read-only: napkin-host refuses a patch under it. |
+| `projection` | the host, at spin-off and after every change to its members | Read-only, kept on save. A project spun off from a brief carries it. |
 | `finals[f]` | the person's Final toggle (image editor, a size's bar) | Create and remove only; marking a size or a picture again replaces its final in the same undo step (features/prod-assets-route.clan). |
 | `assets[sha].rights` | the runner when an output lands (generated), the intake of an upload (unknown) or a drawing (own); then the person's choice | A patch from the picture's Rights chip. |
 | everything else | patches | |

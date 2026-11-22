@@ -1035,6 +1035,8 @@ export interface ProductionDocument extends EntityMaps {
   project: Project
   /** What the project was spun off from (os-layer §5.2). Host-written, read-only. */
   upstream?: Record<string, Record<string, unknown>>
+  /** The host's projection of facts, findings and sources (os-layer §5). Host-written, read-only; kept on save. */
+  projection?: Record<string, unknown>
   assets: Record<Sha256, DocAsset>
 }
 

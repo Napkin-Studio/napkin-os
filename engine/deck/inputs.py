@@ -384,7 +384,45 @@ def load(brief: Path | None, research: Path | None = None, doc_facts: Path | Non
 
 def _is_brief_data(d: dict) -> bool:
     """True when an upstream entry is a Brief Maker's data (it holds brief fields or a capture)."""
-    return isinstance(d, dict) and (any(k in d for k in CLAN_FIELDS.values()) or "capture" in d)
+    return isinstance(d, dict) and d.get("app") != "production-tool" and (any(k in d for k in CLAN_FIELDS.values()) or "capture" in d)
+
+
+def carried_brief(doc: dict) -> tuple | None:
+    """``(brief id, Brief Maker data)`` of the FULL brief a Production project carries under its own ``upstream`` (production-spinoff, owner
+    2026-11-23: a spin-off carries everything but the heavy media; the Brief node keeps only the spine). The brief the project's Brief node was
+    taken from (``briefs.<id>.source.document_id``, newest first) wins; else the first brief there. None when the project carries none."""
+    up = {k: v for k, v in ((doc or {}).get("upstream") or {}).items() if _is_brief_data(v)}
+    if not up:
+        return None
+    briefs = (doc or {}).get("briefs") or {}
+    for bid in sorted(briefs, reverse=True):   # ULIDs sort by the time they were made
+        src = str((((briefs[bid] or {}).get("source")) or {}).get("document_id") or "")
+        if src in up:
+            return src, up[src]
+    k = next(iter(up))
+    return k, up[k]
+
+
+def production_brief(data: dict) -> tuple | None:
+    """The brief a carried Production project holds, as ``brief_from_data`` reads it: ``(brief id, fields, how_to_win, open_questions, coverage)``;
+    None when the deck carries no Production project or it holds no brief. The FULL brief it carries under its ``upstream`` is read (objectives,
+    audience, mandatories, budget, timing, all of it); only a project with none (a brief linked in, not spun off) falls back to the Brief node's
+    frozen spine (``briefs``). Used only when the deck has no brief of its own."""
+    from . import from_production   # noqa: PLC0415  (pulls Pillow in: only when a Production project is carried)
+    got = from_production.carried(data)
+    if not got:
+        return None
+    full = carried_brief(got[1])
+    if full:
+        fields, htw, oq, cov = brief_from_data(full[1], [], full[0], {})
+        cov["brief_source"] = "production"
+        return (full[0], fields, htw, oq, cov)
+    b = from_production.brief_data(got[1])
+    if not b:
+        return None
+    fields, htw, oq, cov = brief_from_data(b[2], [], b[0], {})
+    cov["brief_source"] = "production"
+    return (b[0], fields, htw, oq, cov)
 
 
 #: Presentation kits a Deck may hold (deck-look-kits). A kit tells the deck how to look: it is never the brief,
@@ -393,6 +431,21 @@ BRAND_APP, STYLE_PACK_APP = "ie.napkin.brand", "ie.napkin.style-pack"
 KIT_APPS = (BRAND_APP, STYLE_PACK_APP)
 #: The brand layer's reference on a pin (Contract 6, section 2): ``fact://brand/<slug>/<key>@v``.
 _BRAND_REF = "fact://brand/"
+
+
+def apply_production_brief(inp: "Inputs", doc_id: str, doc: dict) -> bool:
+    """A deck with no brief of its own takes the brief its carried Production project holds (``briefs``, a frozen spine): the fields, and the
+    parts it marked Confidential as marks. Returns whether it did. A brief of the deck's own (or one an intake stage wrote) is never replaced."""
+    if inp.has_brief() or inp.coverage.get("brief_source", "none") not in ("none", None):
+        return False
+    pb = production_brief({"upstream": {doc_id: doc}})
+    if not pb:
+        return False
+    cov = pb[4]
+    inp.brief, inp.how_to_win, inp.open_questions = pb[1], pb[2], pb[3]
+    inp.marks = (inp.marks or []) + (cov.pop("marks", None) or [])
+    inp.coverage.update(cov)
+    return True
 
 
 def _is_kit(key: str, entry, apps: dict | None) -> bool:
@@ -462,7 +515,8 @@ def from_upstream(data: dict, members: dict | None = None, docs: dict | None = N
     data, members = data or {}, members or {}
     up = data.get("upstream") or {}
     kits = [k for k, v in up.items() if _is_kit(k, v, apps)]
-    up = {k: v for k, v in up.items() if k not in kits}
+    prod_ids = [k for k, v in up.items() if k not in kits and (v.get("app") == "production-tool" if isinstance(v, dict) else False)]
+    up = {k: v for k, v in up.items() if k not in kits and k not in prod_ids}   # a Production project is neither the brief nor the research
     brief_id, brief_data = next(((k, v) for k, v in up.items() if _is_brief_data(v)), (None, None))
     research_id = next((k for k, v in up.items() if k != brief_id and isinstance(v, dict) and v), None)
     dropped: list = []
@@ -482,6 +536,10 @@ def from_upstream(data: dict, members: dict | None = None, docs: dict | None = N
     else:
         fields, htw, oq, cov = empty_brief(), {}, [], {"brief_fields": len(BRIEF_FIELDS), "brief_fields_filled": 0,
                                                        "how_to_win_points": 0, "open_questions": 0, "brief_source": "none"}
+        if prod_ids:   # no brief of its own: the one a carried Production project holds
+            pb = production_brief(data)
+            if pb:
+                fields, htw, oq, cov = pb[1], pb[2], pb[3], pb[4]
     if kits:
         cov["kits_ignored"] = sorted(kits)
     if dropped:
@@ -543,7 +601,8 @@ def from_deck_document(path: Path) -> tuple[Inputs, dict]:
                 brand = up[did]
     if lib is False and any(app in KIT_APPS for app in apps.values()):
         inp.coverage["kits_gated_off"] = True
-    return inp, {"apps": apps, "look": data.get("look") or {}, "library": lib, "pack": pack, "brand": brand,
+    prod = next(((k, v) for k, v in up.items() if isinstance(v, dict) and v.get("app") == "production-tool"), None)   # carried whole (production-spinoff)
+    return inp, {"apps": apps, "look": data.get("look") or {}, "library": lib, "pack": pack, "brand": brand, "production": prod,
                  "text_mode": (data.get("inputs") or {}).get("text_mode"), "review": data.get("review") or {},
                  "deck_type": _deck_type_pick((data.get("inputs") or {}).get("deck_type"))}
 

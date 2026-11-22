@@ -67,6 +67,14 @@ export type MirrorPost = (bytes: Uint8Array, meta: { handle: string; reason: Mir
  */
 export type BeforeBytes = (reason: MirrorReason) => Promise<void>
 
+/** What a project was spun off from, as its manifest says (lineage.carried): the parent's document id (its key in
+ * data.upstream), the hash of its data when it was taken, and the project's title (a spin-off is named for its parent). */
+export interface SpunOffFrom {
+  document_id: string
+  data_sha256: string
+  title: string
+}
+
 /**
  * The store's public API (features/engine-store.clan): what ClanDocumentStore does on its own
  * thread and what the store Worker's proxy (production-tool/web/src/store/client.ts) does from the
@@ -83,6 +91,8 @@ export interface ClanStoreApi {
   patch(mergePatchBody: object, why: Why): Promise<Doc>
   record(entry: { action: string; rationale?: string; agent?: string; pinned?: boolean; targets?: string[]; cites?: string[] }, opts?: { once?: boolean }): Promise<boolean>
   exportClan(): Promise<Uint8Array>
+  /** What this project was spun off from (the manifest's lineage.carried), or null when it was not. */
+  spunOffFrom(): Promise<SpunOffFrom | null>
   onChange(cb: (d: Doc) => void): () => void
   chain(): Promise<ChainEntry[]>
   flush(): Promise<void>
@@ -260,6 +270,29 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
     return typeof v === 'string' ? v : null
   }
 
+  /** A document with no contract and no project, only what it was spun off from: data.upstream (spin-off, os-layer §5). */
+  static isSpunOff(data: unknown): boolean {
+    const d = data as { contract_version?: unknown; project?: unknown; upstream?: unknown } | null
+    return !!d && typeof d === 'object' && d.contract_version === undefined && d.project === undefined && !!d.upstream && typeof d.upstream === 'object'
+  }
+
+  /** The one write that starts a spun-off project: a blank project beside the carried upstream, by the person opening it. */
+  private startSpunOff(h: NapkinHost, data: Doc): Doc {
+    if (!this.person) throw new Error('no person: setPerson() before opening a spun-off project')
+    const m = (parseYaml(h.entry('manifest.yaml')) ?? {}) as { document_id?: string; id?: string; title?: string }
+    const first = newProjectData({ person: this.person, title: m.title?.trim() || 'Untitled film', newId: this.newId, now: this.now(), blank: true })
+    // The tool validates its own write, as every other one (the carried upstream is the host's and read-only).
+    const whole = { ...(data as object), ...first } as Doc
+    assertValid(whole, 'the new project')
+    assertIntegrity(null, whole, 'the new project')
+    const docId = m.document_id || m.id
+    route(h, '/patch-data', {
+      patch: first, agent: `human:${this.person.id}`, action: 'start the project', rationale: 'Opened for the first time from a spin-off: a blank canvas beside what it carries.',
+      ...(docId ? { targets: [`${docId}#project`] } : {}),
+    })
+    return readData(h)
+  }
+
   create(init: { person: Person; title?: string; ratio?: string; target_s?: number; blank?: boolean }): Promise<Doc> {
     return this.serial(async () => {
       this.person = init.person
@@ -378,6 +411,14 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
       this.scheduleSave()
       return true
     })
+  }
+
+  async spunOffFrom(): Promise<SpunOffFrom | null> {
+    await this.queue.catch(() => {})
+    const m = (parseYaml(this.need().entry('manifest.yaml')) ?? {}) as { title?: string; lineage?: { carried?: { document_id?: string; data_sha256?: string } } }
+    const c = m.lineage?.carried
+    if (!c?.document_id || !c.data_sha256) return null
+    return { document_id: c.document_id, data_sha256: c.data_sha256, title: m.title ?? '' }
   }
 
   async exportClan(): Promise<Uint8Array> {
@@ -517,6 +558,17 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
     } catch (e) {
       h.free()
       throw e
+    }
+    // A project born as a spin-off (features/production-spinoff.clan) is data.upstream and nothing else: the
+    // OS wrote what it carries, the tool starts the project the first time it is opened, as a blank canvas.
+    // The manifest, the carried brief and the carried decisions stay as they came; only the project is added.
+    if (ClanDocumentStore.isSpunOff(data)) {
+      try {
+        data = this.startSpunOff(h, data)
+      } catch (e) {
+        h.free()
+        throw e
+      }
     }
     // Contract 3 reads contract 3 only. Nothing is written to a document made
     // under another contract: not the schema move below, not a save.

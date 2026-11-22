@@ -53,6 +53,7 @@ const example = (name, ...out) => run('cargo', ['run', '-q', '-p', 'clan-sdk', '
 example('make_campaign_research', join(seed, 'campaign-research.app.clan'), join(scratch, 'research.example.clan'))
 example('make_brief_maker', join(seed, 'brief-maker.app.clan'), join(scratch, 'research.example.clan'))
 example('make_deck_maker', join(seed, 'deck-maker.app.clan'), join(scratch, 'deck.example.clan'))
+example('make_production', join(seed, 'production.app.clan'), join(scratch, 'production.example.clan'))
 run('cargo', ['build', '-q', '-p', 'napkin-web'])
 
 // A stand-in middleware, local and free: it answers every task as one job whose

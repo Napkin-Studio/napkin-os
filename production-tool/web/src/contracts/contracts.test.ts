@@ -161,4 +161,15 @@ describe('typed fixtures', () => {
     expect(check(`${SCHEMA('relay-api')}#/$defs/JobRequest`, TYPED_REQUEST)).toEqual([])
     expect(check(`${SCHEMA('relay-api')}#/$defs/Job`, TYPED_JOB)).toEqual([])
   })
+
+  it('accept what the host writes into a project spun off from a brief: upstream and projection', () => {
+    // Found live (production-spinoff): the host's projection made the spun-off project refuse to open.
+    const spun: ProductionDocument = {
+      ...TYPED_DOC,
+      upstream: { 'brief-1': { client: 'Lumen Water' } },
+      projection: { built_from: { built_at: '2026-11-22T09:13:07Z', facts_sha256: 'sha256:aa', findings_sha256: 'sha256:bb' }, findings: {}, pins: {} },
+    }
+    expect(check(SCHEMA('document'), spun)).toEqual([])
+    expect(check(SCHEMA('document'), { ...spun, projection: 'x' })).not.toEqual([])
+  })
 })

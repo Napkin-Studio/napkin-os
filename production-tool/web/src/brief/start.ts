@@ -1,17 +1,18 @@
-// Napkin's briefs here (features/brief-node.clan): the list Assets › From Napkin shows, and the brief a page
-// arrives with. There is no brief screen and no brief typed here: the person links one of the agency's
-// Brief Maker briefs from Assets › From Napkin, or arrives from Brief Maker with one, and the canvas gets
-// its Brief node, alone (owner 2026-11-18: a blank canvas asks nothing).
+// Napkin's briefs here (features/brief-node.clan): the list Assets › From Napkin shows, and the brief a project is
+// born with. There is no brief screen and no brief typed here: the person links one of the agency's Brief Maker
+// briefs from Assets › From Napkin, or continues in Production from Brief Maker, and the canvas gets its Brief
+// node, alone (owner 2026-11-18: a blank canvas asks nothing).
 //
-// The spin-off arrives as /production/?brief=<OS document id> (the OS's Continue in names the brief, never
-// its words: query parameters carry ids, app/route.ts). The page starts a project from it once and drops
-// the parameter.
+// Continue in › Production is a spin-off (features/production-spinoff.clan): the OS writes the project with the
+// brief carried whole under data.upstream.<brief id>, and the project's manifest says which brief that is
+// (lineage.carried). The page makes the Brief node from that carried brief, never reading the OS for it.
 
 import type { NodeEnv } from '../canvas/nodes/nodes'
+import type { SpunOffFrom } from '../../../clan-store/src'
 import { bringBrief } from './canvas'
-import { BriefReadError, type BriefSource, type OsBriefItem } from './os'
-
-const DOC_ID = /^doc-[A-Za-z0-9._-]{1,120}$/
+import { briefFromDocument } from './model'
+import { BriefReadError, type BriefSource, type OsBriefItem, type OsBriefRead } from './os'
+import { BRIEF_APP_ID } from './spine'
 
 /** Whether Assets › From Napkin lists briefs: this page can read Napkin's briefs. */
 export async function offersStartFromBrief(src: BriefSource): Promise<boolean> {
@@ -28,26 +29,20 @@ export async function briefChoices(src: BriefSource): Promise<{ items: OsBriefIt
   }
 }
 
-/** Bring the brief the page arrived with: read it now, then its Brief node alone (brief/canvas.ts bringBrief). */
-export async function bringBriefId(env: NodeEnv, src: BriefSource, documentId: string): Promise<Awaited<ReturnType<typeof bringBrief>>> {
-  return bringBrief(env, await src.read(documentId), 'spinoff')
+/** The brief a project was spun off from, as the OS would have read it: from what the project carries. Null when the
+ *  carried data holds no brief under the parent's id (a project made some other way). */
+export function carriedBrief(from: SpunOffFrom, upstream: Record<string, Record<string, unknown>> | undefined): OsBriefRead | null {
+  const data = upstream?.[from.document_id]
+  if (!data || typeof data !== 'object') return null
+  return { documentId: from.document_id, title: from.title.trim() || 'Brief', appId: BRIEF_APP_ID, dataSha256: from.data_sha256, data }
 }
 
-/** The brief a spin-off from Brief Maker names (?brief=<doc id>), or null. */
-export function briefSpinoffOf(search: string): string | null {
-  const id = new URLSearchParams(search).get('brief')
-  return id && DOC_ID.test(id) ? id : null
-}
-
-/** The page's search without the spin-off's parameter (replaced in the history once it is taken). */
-export function withoutBriefSpinoff(search: string): string {
-  const q = new URLSearchParams(search)
-  q.delete('brief')
-  const s = q.toString()
-  return s ? `?${s}` : ''
-}
-
-/** Where the OS's Continue in sends a brief to start a film from it (the tool's base, '/production/'). */
-export function briefSpinoffUrl(documentId: string, base = '/production/'): string {
-  return `${base.endsWith('/') ? base : `${base}/`}?brief=${encodeURIComponent(documentId)}`
+/** Bring the brief this project was born with: its Brief node alone (brief/canvas.ts bringBrief), made from the carried
+ *  brief. Once: a project that has a Brief node for it already is left as it is. Null when there is nothing to bring. */
+export async function bringCarriedBrief(env: NodeEnv, from: SpunOffFrom | null): Promise<Awaited<ReturnType<typeof bringBrief>> | null> {
+  if (!from) return null
+  const doc = env.doc.get()
+  if (briefFromDocument(doc, from.document_id)) return null
+  const read = carriedBrief(from, doc.upstream)
+  return read ? bringBrief(env, read, 'spinoff') : null
 }

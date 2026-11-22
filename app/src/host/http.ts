@@ -420,6 +420,9 @@ export const httpHost: Host = {
       ),
     ),
 
+  spinoffToProduction: (title) =>
+    json<{ project: string; path: string }>('/spinoff/production', postJson({ doc: requireDoc(), title })),
+
   saveClanTo: async () => {
     download(`${await base()}/d/${requireDoc()}/download`)
   },

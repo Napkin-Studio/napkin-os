@@ -8,3 +8,4 @@ rules: what is and is not evaluated (response boxes, page limits, speculative wo
 Never add a requirement the documents do not state. If a later document (e.g. Q&A) supersedes an earlier one, say so in text.
 Inputs are the only source: the user's prompt, the research CLAN and the brief. Bring no outside facts, figures, rules, names or rates; what the inputs do not say is a question for a person, never a gap to fill.
 mandatory means a rule the work must obey (claims, legal lines, brand use, naming); deliverables and scope are kind scope, never mandatory.
+Never write a requirement for a brief field that is empty or absent, and never quote the data (null, empty, "field is null"): say nothing about it.
