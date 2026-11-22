@@ -5,6 +5,7 @@ of the document is checked against the Deck Maker app's own schema. No model, no
 import copy
 import json
 import threading
+import time
 from pathlib import Path
 
 import httpx
@@ -390,3 +391,52 @@ def test_a_deck_spun_off_from_production_sends_the_carried_project_and_its_confi
     fake2 = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
     build(deck, Host(data=deck_data(), schema=SCHEMA))
     assert "production_upstream" not in fake2.posts[0]
+
+
+PASS = "v1." + "e30" + "." + "c2ln"
+
+
+def post_assets(deck, host, assets, task="build_deck"):
+    """build_deck as napkin-web sends it: payload.production_assets set beside task and input."""
+    st, body = post_raw(deck, {"task": task, "input": {}, "production_assets": assets}, host.clan())
+    assert st == 200, body
+    return body
+
+
+def post_raw(deck, payload, clan):
+    r = httpx.post(deck.url + "/v1/tasks", json={"request_kind": "middleware", "payload": payload, "clan": clan}, timeout=30)
+    return r.status_code, r.json()
+
+
+def prod_host():
+    host = Host(data=deck_data(), schema=SCHEMA)
+    host.data["upstream"] = {"doc-prod-1": {"app": "production-tool", "contract_version": "3", "project": {"id": "proj_1", "title": "T"}}}
+    return host
+
+
+def test_the_assets_pass_goes_to_the_engine_for_a_carried_production_project_and_nowhere_else(deck, monkeypatch, caplog):
+    fake = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    host = prod_host()
+    caplog.set_level("DEBUG")
+    body = post_assets(deck, host, {"base": "https://relay.example/api/", "pass": PASS})
+    waited = 0
+    while not fake.posts and waited < 5:
+        time.sleep(0.05)
+        waited += 0.05
+    assert fake.posts[0]["production_assets"] == {"base": "https://relay.example/api", "pass": PASS}
+    assert PASS not in json.dumps(body) and PASS not in caplog.text, "a bearer token: not in a reply, not in a log"
+    # the document is untouched by it
+    assert PASS not in json.dumps(host.data)
+
+
+def test_no_pass_forwarded_without_a_production_upstream_or_with_a_bad_shape(deck, monkeypatch):
+    fake = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    post_assets(deck, Host(data=deck_data(), schema=SCHEMA), {"base": "https://relay.example/api", "pass": PASS})
+    time.sleep(0.3)
+    assert "production_assets" not in fake.posts[0], "a deck with no Production project never receives one"
+    for bad in ({"base": "http://relay.example/api", "pass": PASS}, {"base": "https://r.example/api", "pass": "nope"},
+                {"base": "https://r.example/api"}, "x", []):
+        fake2 = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+        post_assets(deck, prod_host(), bad)
+        time.sleep(0.3)
+        assert "production_assets" not in fake2.posts[0], bad

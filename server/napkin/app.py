@@ -41,8 +41,10 @@ class Req:
     """What a handler is given: the document id and version, the request's
     clan (already scoped by the host), the task input and its own handler id."""
 
-    def __init__(self, doc, base, clan, inp, handler):
+    def __init__(self, doc, base, clan, inp, handler, production_assets=None):
         self.doc, self.base, self.clan, self.inp, self.handler = doc, base, clan, inp, handler
+        # napkin-web's server-set {base, pass} for reading the person's Production pictures (build_deck only; a secret: never logged or stored)
+        self.production_assets = production_assets
 
 
 class Middleware:
@@ -192,7 +194,7 @@ class Middleware:
         if not isinstance(base, (str, int)) or isinstance(base, bool) or base == "":
             raise bad("clan.version is required: a change records the version it read")
         mod, handler = registry.resolve(task, clan)
-        req = Req(doc, base, clan, inp, handler)
+        req = Req(doc, base, clan, inp, handler, payload.get("production_assets"))
 
         if mod.KIND == "answer":
             job = self.jobs.get(inp.get("job_id"), scope, doc)

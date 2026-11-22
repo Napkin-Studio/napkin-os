@@ -121,6 +121,18 @@ def production_upstream_of(data: dict) -> dict | None:
     return None
 
 
+def assets_of(v) -> dict | None:
+    """``{base, pass}`` from napkin-web's ``payload.production_assets`` (an https relay base and the signed assets pass), else None: a pass
+    that is not exactly that shape is dropped, never forwarded. It is a bearer token for one agency's pictures: it goes in the engine
+    request body and nowhere else (not the document, the job's view, a log line or an error message)."""
+    if not isinstance(v, dict):
+        return None
+    base, tok = v.get("base"), v.get("pass")
+    if not (isinstance(base, str) and base.startswith("https://") and isinstance(tok, str) and tok.startswith("v1.") and len(tok) <= 4096):
+        return None
+    return {"base": base.rstrip("/"), "pass": tok}
+
+
 def start(req, caps, settings, jid):
     """Validate now (a 400 before any job, a 503 with no engine); build the job (the caller starts it)."""
     data = ctx_data(req.clan)
@@ -145,6 +157,9 @@ def start(req, caps, settings, jid):
     pu = production_upstream_of(data)
     if pu:   # spun off from a Production project: carried whole, frozen; finals fill the slots first, pictures are fetched by link at build
         body["production_upstream"] = pu
+        pa = assets_of(getattr(req, "production_assets", None))
+        if pa:   # napkin-web's read-only pass for this person's pictures: to the engine's picture step only, never into the document
+            body["production_assets"] = pa
     dt = deck_type_of(inputs)
     if dt:   # deck-types: the person's pick on the type picker (and any new writing they confirmed): the engine builds that type, not the kind's default
         body["inputs"]["deck_type"] = dt
