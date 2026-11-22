@@ -465,6 +465,9 @@
   "notes[].text": {
    "type": "string"
   },
+  "projection": {
+   "type": "object"
+  },
   "review": {
    "type": "object"
   },

@@ -16,6 +16,7 @@
 const UNTITLED: Readonly<Record<string, string>> = {
   'ie.napkin.campaign-research': 'New question',
   'ie.napkin.brief-maker': 'New brief',
+  'ie.napkin.territories': 'New territories',
 }
 
 /**
@@ -25,6 +26,7 @@ const UNTITLED: Readonly<Record<string, string>> = {
 const TOOL_NAMES: Readonly<Record<string, string>> = {
   'ie.napkin.campaign-research': 'Research Tool',
   'ie.napkin.brief-maker': 'Brief Maker',
+  'ie.napkin.territories': 'Territories',
 }
 
 /**
@@ -48,6 +50,7 @@ export function docTitle(
 const KIND: Readonly<Record<string, string>> = {
   'ie.napkin.campaign-research': 'Research',
   'ie.napkin.brief-maker': 'Brief',
+  'ie.napkin.territories': 'Territories',
 }
 
 /**
@@ -60,6 +63,6 @@ export function spinoffTitle(source: string | null | undefined, sourceAppId: str
   const kind = KIND[targetAppId]
   const t = docTitle(source, sourceAppId)
   if (!kind || t.untitled) return null
-  const base = t.text.replace(/ · (Research|Brief)$/, '')
+  const base = t.text.replace(/ · (Research|Brief|Territories)$/, '')
   return `${base} · ${kind}`
 }

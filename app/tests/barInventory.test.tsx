@@ -164,6 +164,13 @@ test('a document: its tool icon and name with saved · valid under it, Continue 
   assert.match(cont.spin[0].hint ?? '', /A board deck from this/)
   assert.deepEqual(cont.link, [], 'nothing to link: the group says so')
   assert.deepEqual(cont.update, [], 'made from nothing: nothing to update from')
+  // Continue in, Territories (territories-spinoff-in): from a brief and from research, in the tool's own words.
+  const terr = { app_id: 'ie.napkin.territories', name: 'Territories', version: '0.1.0' }
+  const fromBrief = continueItems(doc({ targets: [terr], tool: { name: 'Brief Maker' } as DocBar['tool'] }))
+  assert.deepEqual(labels(fromBrief.spin), ['Territories'])
+  assert.equal(fromBrief.spin[0].hint, 'Routes for a campaign, from this brief')
+  const fromResearch = continueItems(doc({ targets: [terr], tool: { name: 'Research Tool' } as DocBar['tool'] }))
+  assert.equal(fromResearch.spin[0].hint, 'Routes for a campaign, from these findings')
 })
 
 test('Continue in ▾ groups: Turn it into, Link to an existing one, and Made from with Update when the parent changed', () => {
