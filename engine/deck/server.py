@@ -566,6 +566,8 @@ class Server:
             argv += ["--size", req["size"]]
         if req.get("confirm"):   # the person confirmed the new writing this type change needs (check_type_change)
             argv.append("--confirm-stages")
+        else:   # check_type_change passed without a yes: this run continues its own type (the next gate's stages are not a change's new writing)
+            argv.append("--same-type")
         swaps = (req.get("review") or {}).get("production") if isinstance(req.get("review"), dict) else None
         pinned = inp["review"].get("pinned") if isinstance(inp.get("review"), dict) else None
         if pinned or swaps:   # the pins (the repair loop leaves them alone) and the person's Production swaps (the picker honours them)

@@ -555,7 +555,7 @@ def test_the_confirmation_reaches_run_deck_and_the_pick_replaces_the_kind(tmp_pa
     assert argv[argv.index("--type") + 1] == "tender_response" and "--kind" not in argv and "--confirm-stages" in argv
     plain = server.validate_request(_req(), s.s)
     s.call_engine(d, plain, None)
-    assert seen[-1][seen[-1].index("--kind") + 1] == "agency" and "--type" not in seen[-1] and "--confirm-stages" not in seen[-1]
+    assert seen[-1][seen[-1].index("--kind") + 1] == "agency" and "--type" not in seen[-1] and "--confirm-stages" not in seen[-1] and "--same-type" in seen[-1]
 
 
 def test_a_tender_pick_builds_with_the_tender_profile_end_to_end(tmp_path, monkeypatch):

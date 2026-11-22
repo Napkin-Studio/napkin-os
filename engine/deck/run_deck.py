@@ -248,7 +248,7 @@ def _type_change(a, profile: dict) -> dict:
     model = recorded - set(profiles.CHANGE_OPTIONAL)
     if tc["needs"] and model:
         out["line"] = profiles.change_sheet(None, profile, recorded)["line"]
-        if a.live and not a.confirm_stages:
+        if a.live and not a.confirm_stages and not getattr(a, "same_type", False):
             raise SystemExit(f"refused: {profiles.NeedsStages(profile['id'], tc['needs'])}")
     return out
 
@@ -874,6 +874,9 @@ def main(argv=None):
     ap.add_argument("--confirm-stages", action="store_true",
                     help="a person's yes to the model stages a type change needs (deck-types, with --live): without it a change that needs new writing is "
                          "refused before any call, naming the stages. Pictures are never re-made by a type change either way")
+    ap.add_argument("--same-type", action="store_true",
+                    help="the caller (the engine server) has checked that this run continues the type it started with, so the stages not yet written are "
+                         "the next gate's, not a type change's new writing: the --live refusal does not apply")
     ap.add_argument("--doc", action="append", default=[], metavar="KEY=PATH",
                     help="a client document (PDF page by page, or text), cited as doc:KEY#pN; repeatable")
     ap.add_argument("--brand", type=Path, help="brand JSON: name, colors (THEME keys, accent_ink), head/body fonts, logo files")
