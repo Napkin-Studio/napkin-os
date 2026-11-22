@@ -37,6 +37,21 @@ const BRIEF_APP_ID: &str = "ie.napkin.brief-maker";
 const VERSION: &str = "1.0.0";
 const DATA_PATH: &str = "shared/data.yaml";
 
+/// The example brief. Every field of it must reach the project, whole (the spine is only the Brief node's
+/// reading of it): tests/production_spinoff.rs checks each one.
+const BRIEF_DATA: &str = "single_minded_proposition: Lumen is what the day starts with.
+audience: Adults 25 to 40.
+tone_and_world:
+  - Quiet
+background: Lumen Water sells bottled spring water.
+objectives:
+  commercial: Grow share of morning hydration by 4 points.
+  behavioural: Reach for Lumen first at breakfast.
+mandatories:
+  - Show the glass bottle
+budget_and_scope: EUR 400k, three markets.
+";
+
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
@@ -186,11 +201,7 @@ fn example_spinoff(template: &ClanFile) -> Result<ClanFile, Box<dyn std::error::
         }
         b.add_entry(path, bytes);
     }
-    b.add_entry(
-        DATA_PATH,
-        b"single_minded_proposition: Lumen is what the day starts with.\naudience: Adults 25 to 40.\ntone_and_world:\n  - Quiet\n"
-            .to_vec(),
-    );
+    b.add_entry(DATA_PATH, BRIEF_DATA.as_bytes().to_vec());
     let source = ClanFile::from_bytes(b.build()?)?;
     let bytes = spinoff(
         template,

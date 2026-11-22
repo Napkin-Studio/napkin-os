@@ -43,6 +43,10 @@ def marks_of(data: dict, chain: list) -> list:
     an empty one says the document was checked and nothing is marked (the engine refuses pictures when the key is absent)."""
     out, seen = [], set()
     scopes = [("", data)] + [(f"upstream.{k}.", v) for k, v in (data.get("upstream") or {}).items() if isinstance(v, dict)]
+    for k, v in (data.get("upstream") or {}).items():   # what a carried Production project carried itself (its full brief): marked parts are marked there too
+        for k2, v2 in ((v.get("upstream") or {}) if isinstance(v, dict) and v.get("app") == "production-tool" else {}).items():
+            if isinstance(v2, dict):
+                scopes.append((f"upstream.{k}.upstream.{k2}.", v2))
 
     def add(path, text, kind):
         text = _flat(text).strip()

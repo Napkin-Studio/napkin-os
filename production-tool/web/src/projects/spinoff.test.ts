@@ -32,6 +32,7 @@ describe('a deck from the project', () => {
 
   it('says why it could not, in the OS’s words or ours', async () => {
     await expect(newDeckFromProject('prj_x', { ...os(json(404, { error: 'x' })) })).rejects.toThrow(/Save it, then try again/)
+    await expect(newDeckFromProject('prj_x', { ...os(json(404, { error: 'app not installed: ie.napkin.deck-maker' })) })).rejects.toThrow('Deck Maker is not installed here')
     await expect(newDeckFromProject('prj_x', { ...os(json(422, { ok: false, error: 'Deck Maker is not installed' })) })).rejects.toThrow('Deck Maker is not installed')
     await expect(newDeckFromProject('prj_x', { ...os(json(200, { ok: true })) })).rejects.toBeInstanceOf(SpinoffError)
     const signedOut = async () => json(401, { signin: true })

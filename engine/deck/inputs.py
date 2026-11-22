@@ -387,12 +387,37 @@ def _is_brief_data(d: dict) -> bool:
     return isinstance(d, dict) and d.get("app") != "production-tool" and (any(k in d for k in CLAN_FIELDS.values()) or "capture" in d)
 
 
+def carried_brief(doc: dict) -> tuple | None:
+    """``(brief id, Brief Maker data)`` of the FULL brief a Production project carries under its own ``upstream`` (production-spinoff, owner
+    2026-11-23: a spin-off carries everything but the heavy media; the Brief node keeps only the spine). The brief the project's Brief node was
+    taken from (``briefs.<id>.source.document_id``, newest first) wins; else the first brief there. None when the project carries none."""
+    up = {k: v for k, v in ((doc or {}).get("upstream") or {}).items() if _is_brief_data(v)}
+    if not up:
+        return None
+    briefs = (doc or {}).get("briefs") or {}
+    for bid in sorted(briefs, reverse=True):   # ULIDs sort by the time they were made
+        src = str((((briefs[bid] or {}).get("source")) or {}).get("document_id") or "")
+        if src in up:
+            return src, up[src]
+    k = next(iter(up))
+    return k, up[k]
+
+
 def production_brief(data: dict) -> tuple | None:
     """The brief a carried Production project holds, as ``brief_from_data`` reads it: ``(brief id, fields, how_to_win, open_questions, coverage)``;
-    None when the deck carries no Production project or its project holds no brief. Used only when the deck has no brief of its own."""
+    None when the deck carries no Production project or it holds no brief. The FULL brief it carries under its ``upstream`` is read (objectives,
+    audience, mandatories, budget, timing, all of it); only a project with none (a brief linked in, not spun off) falls back to the Brief node's
+    frozen spine (``briefs``). Used only when the deck has no brief of its own."""
     from . import from_production   # noqa: PLC0415  (pulls Pillow in: only when a Production project is carried)
     got = from_production.carried(data)
-    b = from_production.brief_data(got[1]) if got else None
+    if not got:
+        return None
+    full = carried_brief(got[1])
+    if full:
+        fields, htw, oq, cov = brief_from_data(full[1], [], full[0], {})
+        cov["brief_source"] = "production"
+        return (full[0], fields, htw, oq, cov)
+    b = from_production.brief_data(got[1])
     if not b:
         return None
     fields, htw, oq, cov = brief_from_data(b[2], [], b[0], {})

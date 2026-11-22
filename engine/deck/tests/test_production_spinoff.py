@@ -145,6 +145,43 @@ def test_the_decks_own_brief_is_never_replaced_by_the_projects(pics):
     assert not inputs.apply_production_brief(inputs.load(None, prompt_text="x"), SOURCE_ID, carried_doc(pics, mutate=lambda d: d["briefs"].clear()))
 
 
+FULL_BRIEF = {
+    "app": "ie.napkin.brief-maker", "project_name": "Lumen Water", "client": "Lumen Water",
+    "background": "Lumen Water sells bottled spring water.",
+    "objectives": {"commercial": "Grow share of morning hydration by 4 points.", "behavioural": "Reach for Lumen first at breakfast.",
+                   "attitudinal": "See water as the start of the day."},
+    "audience": "Adults 25 to 40 who start the day in a rush.", "single_minded_proposition": "Lumen is what the day starts with.",
+    "mandatories": ["Show the glass bottle", "Irish spring only"], "budget_and_scope": "EUR 400k, three markets.",
+    "confidential_fields": ["insight"], "insight": "SECRET-FULL-INSIGHT",
+}
+
+
+def test_the_deck_reads_the_full_brief_the_project_carries_not_the_spine(pics):
+    """Owner 2026-11-23: the Brief node keeps the spine; the deck takes objectives, audience, mandatories, budget from the carried FULL brief."""
+    doc = carried_doc(pics)
+    doc["upstream"] = {"doc-lumen-brief": FULL_BRIEF}
+    (bid, b), = doc["briefs"].items()
+    b["source"] = {"document_id": "doc-lumen-brief", "app_id": "ie.napkin.brief-maker", "data_sha256": "sha256:" + "a" * 64, "taken": 1, "at": "2026-11-22T10:00:00Z", "how": "spinoff"}
+    assert "objectives" not in b["spine"]   # the spine never held them
+    pb = inputs.production_brief({"upstream": {SOURCE_ID: doc}})
+    assert pb and pb[0] == "doc-lumen-brief"
+    fields = pb[1]
+    assert fields["objectives"]["value"]["commercial"].startswith("Grow share") and fields["objectives"]["value"]["behavioural"].startswith("Reach for")
+    assert fields["audience"]["value"].startswith("Adults 25 to 40") and fields["mandatories"]["value"] == FULL_BRIEF["mandatories"]
+    assert fields["budget_scope"]["value"].startswith("EUR 400k") and fields["background"]["value"].startswith("Lumen Water sells")
+    assert pb[4]["brief_source"] == "production"
+    # through the engine server's way in, and the Confidential part is kept from picture models
+    inp = inputs.load(None, prompt_text="x")
+    assert inputs.apply_production_brief(inp, SOURCE_ID, doc)
+    assert inp.brief["objectives"]["value"]["commercial"].startswith("Grow share")
+    assert [m["path"] for m in inp.marks] == ["insight"] and "SECRET-FULL-INSIGHT" in inp.marks[0]["text"]
+
+
+def test_a_project_with_no_carried_brief_still_reads_its_spine(pics):
+    pb = inputs.production_brief({"upstream": {SOURCE_ID: carried_doc(pics)}})
+    assert pb and pb[1]["smp"]["value"] == "Every drop has a story." and not pb[1]["objectives"]["value"]
+
+
 # ---------------------------------------------------------------- finals first
 
 def test_without_finals_the_rules_pick_as_before(tmp_path, pics):
