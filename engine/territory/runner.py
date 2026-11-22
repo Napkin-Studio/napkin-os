@@ -46,7 +46,8 @@ STORE_VERSION = 1
 
 #: Timeouts (seconds) from measured latency: a call is waited for TIMEOUT_MULT times the slowest measured one of its stage.
 TIMEOUT_MULT, TIMEOUT_FLOOR, TIMEOUT_CAP = 3.0, 90.0, 900.0
-#: A stage nobody has measured yet. Replaced by measurement after the first call (``latency.json``); set from the first live run (2026-11-23).
+#: A stage nobody has measured yet. Replaced by measurement after the first call (``latency.json``). 300 s covers the slowest call measured in the first live run (2026-11-23, local
+#: backend: a world batch, 108 s) almost three times over.
 DEFAULT_TIMEOUT = 300.0
 ENV_TIMEOUT = "NAPKIN_TERRITORY_STAGE_TIMEOUT"
 #: How many latency samples per stage the store keeps.
