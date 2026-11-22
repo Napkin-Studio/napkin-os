@@ -9,6 +9,10 @@ One task with a ``step`` (the app's own seam, TASKS in app/templates/territories
     rerank_routes        the blind judge orders the routes again                         long: runner.rerank
     undo                 take one of the Review agent's fixes back                       quick, no model
     greenlight_route, remove_route, answer_ask, record_review, approve, send_routes      quick, no model (territory/gates.py's rules)
+    place_pictures       arrived pictures into route slots by link (pictures.fill / attach)      quick, no model
+
+A document that arrives with pictures (``assets``) has every one put on the workspace store before a run reads it (pictures.rehome, require_all):
+a partial arrival is refused in words and nothing runs (territories/arrival.py).
 
 The carried facts, findings and sources, and the Confidential marks (``build_deck.marks_of``, the same reading as the deck), go to the
 runner on every call. A long step runs in a job thread with a store of its own for the document (``NAPKIN_TERRITORY_DATA``) and the job's
@@ -17,6 +21,7 @@ cancel Event; a document with a step already going is a 409. What the runner ret
 from __future__ import annotations
 
 from ..doc import ctx_data
+from ..territories import arrival
 from ..territories import job as J
 from ..territories import moves
 from ..territories.job import TerritoriesJob
@@ -27,7 +32,7 @@ NAME, TASK, VERSION, KIND, CAPABILITY_MAJOR = "run_territories", "run_territorie
 
 #: steps that call the model (long) and the ones that do not (answered in the request)
 MODEL_STEPS = ("run", "steer", "more", "push", "rerank_routes")
-QUICK_STEPS = ("undo", "greenlight_route", "remove_route", "answer_ask", "record_review", "approve", "send_routes")
+QUICK_STEPS = ("place_pictures", "undo", "greenlight_route", "remove_route", "answer_ask", "record_review", "approve", "send_routes")
 STEERS = ("further", "pull", "cross", "stop")
 
 
@@ -46,6 +51,15 @@ def _engine():
     except ImportError as e:     # the middleware was started without the engine on its path
         raise TaskError(503, "engine_unavailable", "Territories is not available in this middleware: the engine package is not installed.") from e
     return runner, routes
+
+
+def _arrive(doc_id, data):
+    """The arrival report, or the refusal in words."""
+    from territory import pictures
+    try:
+        return arrival.arrive(doc_id, data)
+    except pictures.PictureError as e:
+        return str(e)
 
 
 def start(req, caps, settings, jid):
@@ -76,8 +90,13 @@ def start(req, caps, settings, jid):
 
     if step == "run":
         total = max(1, len(data.get("crew") or routes.CREW))
-        return TerritoriesJob(jid, TASK, req.handler, req, caps, step=step, total=total,
-                              call=lambda job: runner.run(data, on_progress=job.progress, **common(job)))
+        def go(job):
+            if arrival.has_pictures(data):
+                refused = _arrive(req.doc, data)
+                if isinstance(refused, str):
+                    return _Done(data, [refused])
+            return runner.run(data, on_progress=job.progress, **common(job))
+        return TerritoriesJob(jid, TASK, req.handler, req, caps, step=step, total=total, call=go)
     if step == "steer":
         cid, kind = moves.need(inp, "crew_id", "which agent"), moves._s(inp, "kind", 20)
         if kind not in STEERS:
@@ -101,6 +120,14 @@ def start(req, caps, settings, jid):
     if step == "undo":
         aid = moves.need(inp, "action_id", "which fix")
         return TerritoriesJob(jid, TASK, req.handler, req, caps, step=step, quick=True, call=lambda job: runner.undo(data, aid, by))
+    if step == "place_pictures":
+        def place(job):
+            rep = _arrive(req.doc, data)
+            if isinstance(rep, str):
+                return _Done(data, [rep])
+            return _Done(*arrival.place(data, data, rep, territory_id=moves._s(inp, "territory_id", 80) or None,
+                                        slot_id=moves._s(inp, "slot_id", 80) or None, sha256=moves._s(inp, "sha256", 80) or None))
+        return TerritoriesJob(jid, TASK, req.handler, req, caps, step=step, quick=True, call=place)
     if step == "send_routes":
         return TerritoriesJob(jid, TASK, req.handler, req, caps, step=step, quick=True, owns_person_keys=True,
                               call=lambda job: _Done(*moves.send_routes(data, inp, findings, doc_id=req.doc, data=data)))

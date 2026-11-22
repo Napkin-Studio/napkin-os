@@ -1903,6 +1903,13 @@ is the only state (a run's stage, gates and answers live in `data.run`), so a st
     `record_review` (`by`), `approve` (`gate`, default `greenlight`, `note?`, `by`), `send_routes` (`to` one of `deck-maker`,
     `production-tool`, `territory_ids`, `not_chosen`, `by`). The rules are `engine/territory/gates.py`'s; an open gate is refreshed after a move so
     `run.gate.blocked_by` and `asks` match the document.
+- **Pictures that arrive.** A document with pictures (an `assets` map, its own or its frozen source's at `upstream.<id>.assets`) has every one put on the
+  workspace store (`NAPKIN_TERRITORY_BLOBS`, else the territory data root; `blobs/<aa>/<sha256>`) by `territory.pictures.rehome` before `run` reads it,
+  and `require_all` refuses a partial arrival in words (`job.error.type: refused`, "19 of 23 pictures arrived ...", nothing runs). The bytes come from a
+  reader the source's feature registers (`delivery.register_asset_reader`, the signed assets pass); with none, a picture not already on the store is
+  named missing. The quick step `place_pictures` (`territory_id?`, and `slot_id` + `sha256` to name one) puts arrived pictures into slots by link:
+  `pictures.fill` (once each, never one hash in two slots or on two routes) or `pictures.attach`; a refusal is words. A greenlit Final with no stated
+  rights holds the gate (`picture_rights`, gates.blockers).
 - **What goes to the runner.** The document (`data`), the carried `facts`, `findings` and `sources` as the request holds them, the Confidential
   marks (`build_deck.marks_of`: the same reading as the deck, always a list), a per-document store (`NAPKIN_TERRITORY_DATA/<doc id>/`: the resume
   cache, so a retry never repays a finished call) and the job's cancel Event. The model is the engine's `LiveLLM` over `engine/brief_llm.py`

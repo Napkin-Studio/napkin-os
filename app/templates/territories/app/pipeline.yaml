@@ -15,8 +15,9 @@ tasks:
     job: long
     stages: [run]
     reads:
-      - step (run, steer, more, push, rerank_routes: long, call the model; undo, greenlight_route, remove_route, answer_ask, record_review, approve, send_routes: answered at once)
+      - step (run, steer, more, push, rerank_routes: long, call the model; undo, place_pictures, greenlight_route, remove_route, answer_ask, record_review, approve, send_routes: answered at once)
       - the document's upstream brief and research, the carried pins, findings and sources, and the Confidential marks (the deck's reading of them)
+      - the pictures an arriving document names (assets): all put on the workspace store before a run, or the run is refused in words
       - run.approvals, which the person wrote (a gate goes on only when its approval was given for the choices as they stand)
     never:
       - writes run.approvals, run.decisions or run.gate_requests from a model step (the person's); only approve, answer_ask and record_review, and a send that went, write the person's own move

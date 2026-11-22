@@ -404,3 +404,91 @@ def test_the_registry_and_the_pipeline_declare_the_same_two_tasks():
     for task, declared in decl.items():
         assert registry.lookup(declared, task)[0].TASK == task
     assert {"run_territories", "fetch_territories_file"} <= registry.LATER_TASKS
+
+
+# ---------------------------------------------------------------- pictures that arrive with a document
+
+
+def _png(n):
+    return bytes.fromhex("89504e470d0a1a0a") + b"made-up picture " + str(n).encode()
+
+
+def _assets(*ns, **meta):
+    import hashlib
+    return {"sha256:" + hashlib.sha256(_png(n)).hexdigest(): {"kind": "image", "mime": "image/png", "origin": "generated", "rights": "generated", **meta} for n in ns}
+
+
+def _with_assets(assets):
+    d = copy.deepcopy(UPSTREAM)
+    next(iter(d["upstream"].values()))["assets"] = assets
+    return d
+
+
+@pytest.fixture
+def blobs(tmp_path, monkeypatch):
+    monkeypatch.setenv("NAPKIN_TERRITORY_BLOBS", str(tmp_path / "workspace"))
+    monkeypatch.setattr(delivery, "ASSET_READER", None)
+    return tmp_path / "workspace"
+
+
+def _reader(have):
+    import hashlib
+    by = {hashlib.sha256(_png(n)).hexdigest(): _png(n) for n in have}
+    return lambda doc_id, data: (lambda sha: by.get(sha))
+
+
+def test_a_partial_arrival_is_refused_in_words_and_nothing_runs(terr, blobs, monkeypatch):
+    monkeypatch.setattr(delivery, "ASSET_READER", _reader([1, 2]))          # 3 pictures named, 2 come
+    host = TerritoriesHost(data=_with_assets(_assets(1, 2, 3)), schema=SCHEMA)
+    r = step(terr, host)
+    assert r[-1]["job"]["state"] == "failed" and r[-1]["job"]["error"]["type"] == "refused"
+    assert "2 of 3 pictures arrived" in r[-1]["job"]["error"]["message"] and terr.model_calls.calls == [] and host.changes == []
+
+
+def test_every_picture_is_put_on_the_workspace_store_before_the_run_reads_the_document(terr, blobs, monkeypatch):
+    import hashlib
+    monkeypatch.setattr(delivery, "ASSET_READER", _reader([1, 2, 3]))
+    host = TerritoriesHost(data=_with_assets(_assets(1, 2, 3)), schema=SCHEMA)
+    r = step(terr, host)
+    assert r[-1]["job"]["state"] == "done" and host.data["run"]["gate"]["id"] == "pick"
+    for n in (1, 2, 3):
+        h = hashlib.sha256(_png(n)).hexdigest()
+        assert (blobs / "blobs" / h[:2] / h).read_bytes() == _png(n)
+    assert not any(k == "assets" for k in host.data), "the document gets no copy of the bytes"
+
+
+def test_without_a_reader_a_picture_not_on_the_store_is_missing_never_invented(terr, blobs):
+    host = TerritoriesHost(data=_with_assets(_assets(1)), schema=SCHEMA)
+    r = step(terr, host)
+    assert r[-1]["job"]["state"] == "failed" and "0 of 1 pictures arrived" in r[-1]["job"]["error"]["message"]
+
+
+def test_arrived_pictures_go_into_route_slots_by_link_once_each(terr, blobs, monkeypatch):
+    import hashlib
+    monkeypatch.setattr(delivery, "ASSET_READER", _reader([1, 2]))
+    base = copy.deepcopy(contract.example("data"))
+    next(iter(base["upstream"].values()))["assets"] = _assets(1, 2)
+    host = TerritoriesHost(data=base, schema=SCHEMA)
+    ts = [t for t in host.data["territories"] if t["status"] == "live" and t["state"] == "developed" and t.get("pictures")]
+    r = step(terr, host, "place_pictures", territory_id=ts[0]["id"])
+    assert r[0]["job"]["state"] == "done" and "2 pictures placed" in r[0]["result"]["summary"]
+    frames = [s for t in host.data["territories"] for s in t.get("pictures") or [] if s.get("kind") == "frame"]
+    assert sorted(s["sha256"] for s in frames) == sorted(hashlib.sha256(_png(n)).hexdigest() for n in (1, 2))
+    assert all(s["image"] == "sha256:" + s["sha256"] and s["rights"] == "generated" for s in frames)
+    r = step(terr, host, "place_pictures", territory_id=ts[0]["id"])           # nothing left: said in words, nothing changes
+    assert r[0]["job"]["state"] == "failed" and "no picture left" in r[0]["job"]["error"]["message"]
+    assert contract.problems(host.data) == []
+
+
+def test_attach_names_the_slot_and_the_picture_and_refuses_a_picture_that_did_not_arrive(terr, blobs, monkeypatch):
+    import hashlib
+    monkeypatch.setattr(delivery, "ASSET_READER", _reader([1]))
+    base = copy.deepcopy(contract.example("data"))
+    next(iter(base["upstream"].values()))["assets"] = _assets(1)
+    host = TerritoriesHost(data=base, schema=SCHEMA)
+    t = next(t for t in host.data["territories"] if t.get("pictures") and t["status"] == "live")
+    slot = next(s for s in t["pictures"] if s["kind"] != "frame")["id"]
+    h = hashlib.sha256(_png(1)).hexdigest()
+    assert step(terr, host, "place_pictures", territory_id=t["id"], slot_id=slot, sha256=h)[0]["job"]["state"] == "done"
+    assert next(s for s in next(x for x in host.data["territories"] if x["id"] == t["id"])["pictures"] if s["id"] == slot)["sha256"] == h
+    assert step(terr, host, "place_pictures", territory_id=t["id"], slot_id=slot, sha256=hashlib.sha256(_png(9)).hexdigest())[0]["job"]["state"] == "failed"
