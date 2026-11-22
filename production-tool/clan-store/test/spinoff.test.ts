@@ -8,9 +8,9 @@
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { unzipSync } from 'fflate'
+import { unzipSync, zipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
-import { parse as parseYaml } from 'yaml'
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { LocalPatchBus } from '../src/index'
 import { MAYA, id, store } from './fixtures'
 
@@ -40,6 +40,18 @@ describe('a project born as a spin-off', () => {
     const chain = await s.chain()
     expect(chain[0].action).toBe('start the project')
     expect(chain.some((d) => String(d.action).startsWith('spin off'))).toBe(true)
+  })
+
+  it('opens and keeps the projection the host writes into a project spun off by napkin-web', async () => {
+    // Found live: napkin-web's host adds data.projection (library::with_projection); the template's schema refused it.
+    const z = unzipSync(fixture())
+    const data = parseYaml(new TextDecoder().decode(z['shared/data.yaml']))
+    data.projection = { built_from: { built_at: '2026-11-22T09:13:07Z', facts_sha256: 'sha256:aa', findings_sha256: 'sha256:bb' }, findings: {}, pins: {} }
+    z['shared/data.yaml'] = new TextEncoder().encode(stringifyYaml(data))
+    const s = store()
+    const doc = await s.open(zipSync(z))
+    expect((doc as any).projection.pins).toEqual({})
+    expect(entries(await s.exportClan()).data.projection).toEqual(data.projection)
   })
 
   it('a project that was not spun off says so', async () => {
