@@ -302,6 +302,91 @@ button.tsrc:hover{border-color:color-mix(in srgb,var(--ink) 35%,var(--line))}
 .later{padding:36px 32px 40px;display:flex;flex-direction:column;gap:12px}
 .later h3{margin:0;font:500 26px/1.15 var(--font-serif)}
 .later p{margin:0;max-width:60ch;color:var(--ink-soft)}
+
+/* step 3: the gallery, the greenlit tray, the dock and the Send window (stills 14, 15, 19, 20, 21) */
+.gcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+.gcard{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;min-width:0}
+.gcard.green{border-color:var(--ok);box-shadow:0 0 0 2px var(--ok),var(--shadow-card)}
+.gopen{display:flex;flex-direction:column;gap:10px;padding:14px 16px 6px;cursor:pointer;text-align:left}
+.gopen:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.gopen h4{margin:0;font:500 22px/1.15 var(--font-serif);overflow-wrap:anywhere}
+.gopen p{margin:0;font-size:15px;line-height:1.4;color:var(--ink-soft)}
+.gfoot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 16px;padding:10px 0 14px;border-top:1px solid var(--line);margin-top:auto}
+.grefs{display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center;min-width:0}
+.gl{height:30px;padding:0 14px;border-radius:999px;border:1.5px solid var(--ok);background:var(--card);color:var(--ok);font:800 12.5px var(--font-ui);white-space:nowrap;flex:none}
+.gl.on{background:var(--ok);color:#fff}
+.gl.sm{height:28px;padding:0 10px;font-size:12px}
+.ck{font:800 10px/1.5 var(--font-ui);letter-spacing:.06em;text-transform:uppercase;border-radius:4px;padding:1px 6px;white-space:nowrap;background:var(--paper-2);color:var(--muted)}
+.ck-warn{background:var(--warn-soft);color:var(--warn)}.ck-fail{background:var(--alert-soft);color:var(--alert)}
+.chip{height:28px;padding:0 12px;border-radius:999px;border:1px solid var(--line-strong);background:var(--card);font:800 12px var(--font-ui)}
+.chip.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.cmpgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:18px}
+.cmpcell{display:flex;flex-direction:column;gap:8px;min-width:0}
+.cmpcell .phone{max-width:250px}
+.cname{font:500 17px var(--font-serif)}
+.tray{display:flex;flex-direction:column;gap:2px}
+.glrow{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px dashed var(--line);font-size:15px}
+.glrow b{font:600 16px var(--font-serif);min-width:0;overflow-wrap:anywhere}
+.glrow .linkbtn{margin-left:auto;font-size:12px}
+.sw{width:16px;height:16px;border-radius:4px;border:1.5px solid;flex:none}
+.big{width:100%;min-height:44px;border-radius:999px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);font:800 14px var(--font-ui);padding:0 14px;flex:none}
+.big:disabled{opacity:.35}
+.wsrow{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;text-align:left;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);width:100%}
+.wsrow:hover:not(:disabled){border-color:var(--ink)}
+.wsrow:disabled{opacity:.7}
+.wsrow b{font:600 17px var(--font-serif)}
+.wsdot{width:12px;height:12px;border-radius:50%;margin-top:6px}
+/* a route as a sketch: the palette, the cleared face, the world's own headline (ported from the demo's touchpoints) */
+.tp{container-type:inline-size;position:relative;overflow:hidden;background:var(--t-bg);color:var(--t-ink);border-radius:6px;box-shadow:0 1px 0 rgba(0,0,0,.08),0 10px 22px -14px rgba(0,0,0,.5)}
+.tp .scn{position:absolute;inset:0}
+.tp svg{display:block;width:100%;height:100%}
+.hl{font-family:var(--font-serif);font-weight:var(--t-fw);font-style:var(--t-fs);line-height:1.02;letter-spacing:-.01em;text-wrap:balance}
+.ff-ui .hl{font-family:var(--font-ui)}
+.poster{aspect-ratio:2/1}
+.poster .ptxt{position:absolute;display:flex;align-items:flex-end}
+.lay-quiet .ptxt{left:4%;bottom:8%;max-width:54%;background:var(--t-bg);padding:2.2cqi 2.6cqi;border-radius:2px}
+.lay-quiet .hl{font-size:4.3cqi}
+.lay-mid .scn{right:auto;width:55%}
+.lay-mid .ptxt{left:55%;right:0;top:0;bottom:0;padding:5cqi 4cqi 9cqi;align-items:center;background:var(--t-bg)}
+.lay-mid .hl{font-size:5.2cqi}
+.lay-loud{background:var(--t-ink)}
+.lay-loud .scn{top:auto;height:32%}
+.lay-loud .ptxt{left:4%;right:4%;top:5%;bottom:34%;align-items:center}
+.lay-loud .hl{font-size:7.4cqi;color:var(--t-bg)}
+.bm{position:absolute;right:3%;bottom:6%;display:flex;align-items:center;gap:.4em;color:var(--t-ink);font:800 1em/1 var(--font-ui);letter-spacing:-.03em}
+.bm svg{width:2em!important;height:.95em!important}
+.bm-sm{font-size:2.1cqi}.bm-md,.bm-lg{font-size:3.1cqi}
+.lay-loud .bm{color:var(--t-bg)}
+.phone{display:flex;flex-direction:column;gap:8px;min-width:0}
+.story{aspect-ratio:9/16;border-radius:22px;border:7px solid #111}
+.sbar{position:absolute;top:3cqi;left:5cqi;right:5cqi;display:flex;gap:2cqi}
+.sbar i{flex:1;height:3px;border-radius:2px;background:rgba(255,255,255,.6)}.sbar i:first-child{background:#fff}
+.shl{position:absolute;left:6cqi;right:6cqi;top:10cqi;background:var(--t-bg);padding:4cqi 5cqi;border-radius:3cqi}
+.shl .hl{font-size:8.2cqi}
+.cap{margin:0;font-size:12.5px;line-height:1.4}
+.seat{aspect-ratio:3/4;display:flex;flex-direction:column;padding:9cqi;gap:7cqi}
+.seatscn{width:44cqi;height:44cqi;border-radius:50%;overflow:hidden;border:2cqi solid var(--t-ink);flex:none}
+.seat .hl{font-size:10cqi}
+.seat .bm{right:9cqi;bottom:7cqi}.seat .bm-sm{font-size:5cqi}.seat .bm-md,.seat .bm-lg{font-size:7cqi}
+.tp.email{background:var(--card);color:var(--ink);display:flex;flex-direction:column}
+.inbox{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 10px;padding:12px 14px;border-bottom:1px solid var(--line);font-size:13px}
+.inbox .subj{font-weight:600}.inbox .prev{grid-column:2;color:var(--muted);font-size:12px}
+.ehero{position:relative;aspect-ratio:2/1;container-type:inline-size}
+.ehero .ptxt{position:absolute;left:5%;bottom:8%;max-width:64%;background:var(--t-bg);color:var(--t-ink);padding:2.4cqi 3cqi;display:flex}
+.ehero .hl{font-size:4.8cqi}
+.dialog .tp.poster{margin:2px 0}
+.dialog.sans h3{font:800 24px/1.2 var(--font-ui);letter-spacing:-.02em}
+/* the dock: Present, Compare, Re-rank */
+.dock{position:fixed;left:0;right:0;bottom:calc(14px + env(safe-area-inset-bottom,0px));display:flex;justify-content:center;z-index:12;pointer-events:none}
+.dock>*{pointer-events:auto}
+.dock-acts{display:inline-flex;gap:12px;padding:8px 12px 6px;background:color-mix(in srgb,var(--paper) 94%,transparent);backdrop-filter:blur(12px);border:1px solid var(--line);border-radius:20px;box-shadow:0 10px 28px -10px rgba(20,20,19,.25)}
+.dock-act{display:grid;justify-items:center;gap:5px;background:none;border:0;padding:0}
+.dock-ring{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--paper);border:1px solid var(--line-strong);color:var(--ink);transition:transform .15s}
+.dock-act:hover .dock-ring{transform:translateY(-2px)}
+.dock-act[aria-pressed="true"] .dock-ring{background:var(--ag-acc);border-color:var(--ag-acc);color:var(--ag-acc-ink)}
+.dock-ring svg{width:18px;height:18px}
+.dock-lbl{font:800 11px var(--font-ui);color:var(--ink-soft)}
+@media (prefers-reduced-motion:reduce){.dock-ring{transition:none}}
 </style>
 </head>
 <body>
@@ -1005,6 +1090,234 @@ var TerritoriesLogic = (function () {
     return panel + notes;
   }
 
+  // ══ step 3: review and greenlight (territories-app-greenlight; stills 14, 15, 19, 20, 21 of the owner's demo) ══
+  // The page only reads and asks. Every move (greenlight, remove, re-rank, send) is a request to the middleware, named after the engine's own
+  // move (engine/territory/gates.py: greenlight_route, answer_ask, record_review, approve), and the document it writes back is what the
+  // gallery and the tray show. The page keeps no second copy of the gate's rules (run.gate.blocked_by and asks[] are the engine's words).
+  var MOVES = { greenlight: 'greenlight_route', remove: 'remove_route', rerank: 'rerank_routes', send: 'send_routes' };
+  var DESTS = [{ id: 'deck-maker', name: 'Deck Maker', dot: 'var(--muted)', does: 'Pitch it: the deck opens with the greenlit routes as the recommendation.', built: true },
+    { id: 'production-tool', name: 'Production tool', dot: '#FF6A55', does: 'Make it: scripts, boards and films start from each route’s world.', built: false }];
+  var BAND_PHRASE = { core: 'close to the brief', stretch: 'a stretch', far_out: 'far out' };
+  var TOUCH = [['poster', 'Poster'], ['story', 'Instagram story'], ['seat', 'Table card'], ['email', 'Email']];
+  var HEX6 = /^#[0-9a-fA-F]{6}$/;
+
+  /** The routes the gallery shows: live and developed, in the judge's order inside each agent (unranked last). */
+  function developed(data) {
+    return arr(data && data.territories).filter(function (t) { return isObj(t) && t.state === 'developed' && t.status === 'live' && isObj(t.world); });
+  }
+  function byRank(a, b) { var x = typeof a.rank === 'number' ? a.rank : 1e9, y = typeof b.rank === 'number' ? b.rank : 1e9; return x - y; }
+  function greenIds(data) { return arr(data && data.greenlit).filter(isObj).map(function (g) { return g.territory_id; }); }
+  function pal(t) {
+    var p = isObj(t.world && t.world.palette) ? t.world.palette : {}, g = function (k, d) { return HEX6.test(p[k] || '') ? p[k] : d; };
+    return { bg: g('bg', '#F3ECDC'), ink: g('ink', '#141413'), acc: g('acc', '#FFFFFF'), soft: g('soft', '#C9C0AE') };
+  }
+  function headline(t) {
+    var w = t.world || {}, d = isObj(w.dial) ? w.dial : {}, h = isObj(w.headlines) ? w.headlines : {};
+    return text(h[(d.tone < 50 ? 'w' : 's') + (d.energy < 50 ? 'q' : 'l')]) || text(h.wq) || text(h.sq) || t.name;
+  }
+  function brandOf(data) { var s = text(data && data.title), i = s.indexOf(':'); return (i > 0 ? s.slice(0, i) : s.split(/\s+/)[0] || '').trim(); }
+  function hills(y, amp, fill, op) { return '<path d="M0 ' + y + ' Q100 ' + (y - amp) + ' 200 ' + y + ' T400 ' + y + ' T600 ' + y + ' T800 ' + y + ' V300 H0Z" fill="' + fill + '" opacity="' + (op == null ? 1 : op) + '"/>'; }
+  /** One scene of the cleared list, drawn from the route's palette alone (a sketch slot: kind "sketch"; no picture is made or paid for). */
+  function scene(k, p) {
+    var s = '<rect width="400" height="300" fill="' + p.bg + '"/>', I = p.ink, A = p.acc, S = p.soft, B = p.bg, n6 = [0, 1, 2, 3, 4, 5];
+    function win(inner) {
+      return '<rect width="400" height="300" fill="' + I + '"/><svg x="40" y="28" width="320" height="196" viewBox="0 0 320 196"><rect width="320" height="196" fill="' + B + '"/>' + inner + '</svg>' +
+        '<rect x="40" y="28" width="320" height="196" rx="26" fill="none" stroke="' + S + '" stroke-width="12"/><rect x="0" y="246" width="400" height="54" fill="' + S + '"/>' +
+        '<rect x="292" y="222" width="28" height="26" rx="5" fill="' + A + '"/>';
+    }
+    switch (k) {
+      case 'platform':
+        s += '<circle cx="300" cy="86" r="46" fill="' + A + '"/><rect x="0" y="204" width="400" height="96" fill="' + S + '"/>' +
+          '<rect x="-10" y="128" width="380" height="74" rx="20" fill="' + I + '"/>' + n6.map(function (i) { return '<rect x="' + (8 + i * 58) + '" y="146" width="40" height="26" rx="6" fill="' + A + '"/>'; }).join('') +
+          '<rect x="0" y="200" width="400" height="6" fill="' + I + '"/><line x1="0" y1="246" x2="400" y2="246" stroke="' + I + '" stroke-width="3" stroke-dasharray="16 12"/>' +
+          '<g transform="translate(70,48)"><line y1="-24" y2="-48" stroke="' + I + '" stroke-width="3"/><circle r="24" fill="' + A + '" stroke="' + I + '" stroke-width="4"/><line y2="-15" stroke="' + I + '" stroke-width="3"/><line x2="11" y2="4" stroke="' + I + '" stroke-width="3"/></g>';
+        break;
+      case 'window': s = win('<circle cx="236" cy="56" r="26" fill="' + A + '"/>' + hills(120, 26, S) + hills(158, 18, I, .35)); break;
+      case 'sleep': s = win('<circle cx="236" cy="56" r="26" fill="' + A + '"/>' + hills(124, 24, S) + hills(160, 16, I, .35)) +
+        '<path d="M60 84 h40 l-40 40 h40 M108 66 h26 l-26 26 h26" stroke="' + A + '" stroke-width="7" stroke-linejoin="round" stroke-linecap="round" fill="none"/>'; break;
+      case 'table':
+        s = '<rect width="400" height="300" fill="' + S + '"/><rect x="56" y="34" width="288" height="232" rx="18" fill="' + B + '"/>' +
+          '<circle cx="118" cy="96" r="22" fill="' + I + '"/><circle cx="118" cy="96" r="14" fill="' + A + '"/><circle cx="282" cy="204" r="22" fill="' + I + '"/><circle cx="282" cy="204" r="14" fill="' + A + '"/>' +
+          '<rect x="170" y="120" width="96" height="64" rx="4" fill="' + A + '" transform="rotate(-8 218 152)"/><line x1="218" y1="114" x2="214" y2="186" stroke="' + I + '" stroke-width="2" transform="rotate(-8 218 152)"/>' +
+          '<circle cx="120" cy="214" r="18" fill="' + I + '" opacity=".85"/><rect x="262" y="60" width="34" height="58" rx="7" fill="' + I + '"/>';
+        break;
+      case 'arrival':
+        s += '<circle cx="210" cy="190" r="70" fill="' + A + '"/><rect x="0" y="190" width="400" height="110" fill="' + S + '"/>' +
+          [0, 1, 2, 3].map(function (i) { return '<line x1="' + (30 + i * 40) + '" y1="' + (214 + i * 18) + '" x2="' + (370 - i * 30) + '" y2="' + (214 + i * 18) + '" stroke="' + B + '" stroke-width="3" stroke-dasharray="30 18"/>'; }).join('') +
+          '<path d="M0 190 L0 120 Q60 100 130 140 L160 190Z" fill="' + I + '"/>' + [0, 1, 2, 3].map(function (i) { return '<rect x="' + (16 + i * 28) + '" y="' + (138 + (i % 2) * 8) + '" width="20" height="18" fill="' + A + '"/>'; }).join('');
+        break;
+      case 'car':
+        s = '<rect width="400" height="300" fill="' + I + '"/><path d="M40 36 H360 L330 172 H70Z" fill="' + S + '"/><path d="M186 172 L200 70 L214 172Z" fill="' + B + '" opacity=".7"/>' +
+          '<path d="M0 180 Q200 150 400 180 V300 H0Z" fill="' + I + '"/><circle cx="130" cy="262" r="70" fill="none" stroke="' + A + '" stroke-width="14"/>';
+        break;
+      case 'night':
+        s += Array.apply(null, Array(26)).map(function (x, i) { return '<circle cx="' + ((i * 71) % 400) + '" cy="' + ((i * 37) % 140) + '" r="' + (i % 3 ? 1.2 : 2) + '" fill="' + I + '" opacity=".7"/>'; }).join('') +
+          '<circle cx="330" cy="60" r="22" fill="' + A + '"/>' + hills(214, 30, S) + '<rect x="10" y="182" width="370" height="40" rx="12" fill="' + I + '" opacity=".95"/>' +
+          [0, 1, 2, 3, 4, 5, 6, 7].map(function (i) { return '<rect x="' + (22 + i * 44) + '" y="190" width="30" height="18" rx="3" fill="' + A + '"/>'; }).join('') + '<rect x="0" y="230" width="400" height="70" fill="' + S + '" opacity=".6"/>';
+        break;
+      case 'road':
+        s += '<rect y="0" width="400" height="140" fill="' + S + '" opacity=".6"/><path d="M170 140 H230 L400 300 H0Z" fill="' + S + '"/>' +
+          [0, 1, 2, 3].map(function (i) { return '<rect x="' + (197 - i) + '" y="' + (150 + i * 36) + '" width="' + (4 + i * 2) + '" height="' + (10 + i * 6) + '" fill="' + I + '" opacity=".7"/>'; }).join('');
+        break;
+      case 'home':
+        s += '<circle cx="320" cy="64" r="24" fill="' + A + '"/><rect x="0" y="228" width="400" height="72" fill="' + S + '"/><path d="M120 228 V150 L190 104 L260 150 V228Z" fill="' + I + '"/>' +
+          '<rect x="150" y="160" width="34" height="30" fill="' + A + '"/><rect x="200" y="186" width="30" height="42" fill="' + A + '" opacity=".8"/>';
+        break;
+      default:
+        s += '<circle cx="320" cy="70" r="30" fill="' + A + '" opacity=".85"/>' +
+          [0, 1, 2, 3, 4, 5, 6].map(function (i) { var h = [80, 104, 70, 118, 90, 76, 100][i], c = [A, S, I, S, A, I, S][i]; return '<rect x="' + (i * 58) + '" y="' + (236 - h) + '" width="56" height="' + h + '" fill="' + c + '"/>'; }).join('') +
+          '<rect x="0" y="236" width="400" height="64" fill="' + S + '"/>';
+    }
+    return '<svg viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice" aria-hidden="true">' + s + '</svg>';
+  }
+  function tvars(t) {
+    var p = pal(t), ty = isObj(t.world && t.world.type) ? t.world.type : {}, ui = ty.font === 'geist_extra_bold';
+    return '--t-bg:' + p.bg + ';--t-ink:' + p.ink + ';--t-acc:' + p.acc + ';--t-soft:' + p.soft +
+      ';--t-fw:' + (ui ? 800 : Math.max(400, Math.min(600, +ty.weight || 500))) + ';--t-fs:' + (!ui && ty.italic ? 'italic' : 'normal');
+  }
+  function sceneOf(t, key) {
+    var w = t.world || {}, sc = isObj(w.scenes) ? w.scenes : {}, pic = arr(t.pictures).filter(function (x) { return isObj(x) && x.touchpoint === key; })[0];
+    return sc[key] || (pic && pic.scene) || 'platform';
+  }
+  function mark(t, brand) {
+    if (!brand) return '';
+    var d = isObj(t.world && t.world.dial) ? t.world.dial : {}, b = +d.brand || 0, lvl = b < 34 ? 'sm' : b < 67 ? 'md' : 'lg';
+    return '<div class="bm bm-' + lvl + '"><svg viewBox="0 0 30 14" aria-hidden="true"><rect y="2" width="30" height="3" rx="1.5" fill="currentColor"/><rect y="9" width="30" height="3" rx="1.5" fill="currentColor"/></svg><span>' + esc(brand.toLowerCase()) + '</span></div>';
+  }
+  /** One touchpoint, as a sketch from the world block alone: poster, story, table card or email. */
+  function touch(t, k, brand) {
+    var w = t.world || {}, H = esc(headline(t)), d = isObj(w.dial) ? w.dial : {}, E = +d.energy || 0, lay = E >= 67 ? 'loud' : E >= 34 ? 'mid' : 'quiet', st = ' style="' + tvars(t) + '"', ff = isObj(w.type) && w.type.font === 'geist_extra_bold' ? ' ff-ui' : '';
+    if (k === 'story') return '<div class="phone"><div class="tp story' + ff + '"' + st + '><div class="scn">' + scene(sceneOf(t, 'story'), pal(t)) + '</div><div class="sbar"><i></i><i></i><i></i></div><div class="shl"><div class="hl">' + H + '</div></div></div><p class="cap">' + esc(text(w.social)) + '</p></div>';
+    if (k === 'seat') return '<div class="tp seat' + ff + '"' + st + '><div class="seatscn">' + scene(sceneOf(t, 'seat'), pal(t)) + '</div><div class="hl">' + esc(text(w.seat) || headline(t)) + '</div>' + mark(t, brand) + '</div>';
+    if (k === 'email') { var c = arr(w.crm); return '<div class="tp email' + ff + '"' + st + '><div class="inbox"><b>' + esc(brand || 'Sender') + '</b><span class="subj">' + esc(text(c[0])) + '</span><span class="prev">' + esc(text(c[1])) + '</span></div><div class="ehero"><div class="scn">' + scene(sceneOf(t, 'email'), pal(t)) + '</div><div class="ptxt"><div class="hl">' + H + '</div></div></div></div>'; }
+    return '<div class="tp poster' + ff + ' lay-' + lay + '"' + st + '><div class="scn">' + scene(sceneOf(t, 'poster'), pal(t)) + '</div><div class="ptxt"><div class="hl">' + H + '</div></div>' + mark(t, brand) + '</div>';
+  }
+
+  var CHECK_WORDS = { proposition: 'Proposition', mandatory: 'Mandatory', rival: 'Rival lines', evidence: 'Evidence', contrast: 'Contrast', landscape: 'Landscape', judge: 'Judge' };
+  var CHECK_STATE = { ok: 'ok', warn: 'watch', fail: 'fails', unchecked: 'not checked' };
+  /** The checks that need a look (anything not ok), as small marks on the card. */
+  function checkMarks(t) {
+    return arr(t.checks).filter(function (c) { return isObj(c) && c.status && c.status !== 'ok' && c.kind !== 'judge'; }).map(function (c) {
+      return '<span class="ck ck-' + esc(c.status) + '" title="' + esc(text(c.text)) + '">' + esc((CHECK_WORDS[c.kind] || 'Check') + ' · ' + (CHECK_STATE[c.status] || c.status)) + '</span>';
+    }).join('');
+  }
+  function glButton(t, on, small) {
+    return '<button type="button" class="gl' + (on ? ' on' : '') + (small ? ' sm' : '') + '" data-green="' + esc(t.id) + '" aria-pressed="' + (on ? 'true' : 'false') + '" aria-label="' + (on ? 'Greenlit: ' : 'Greenlight ') + esc(t.name) + '">' + (on ? '✓ Greenlit' : 'Greenlight') + '</button>';
+  }
+  /** The derived findings a route rests on: its evidence the research holds as derived, and what the engine recorded when it was greenlit or asked. */
+  function derivedOf(t, data) {
+    var der = derivedFindings(data), out = arr(t.evidence).filter(function (c) { return der.indexOf(c) !== -1; });
+    arr(data && data.greenlit).forEach(function (g) { if (isObj(g) && g.territory_id === t.id) arr(g.rests_on_derived).forEach(function (c) { if (out.indexOf(c) === -1) out.push(c); }); });
+    arr(data && data.asks).forEach(function (a) { if (isObj(a) && a.kind === 'derived_evidence' && a.territory_id === t.id) arr(a.ids).forEach(function (c) { if (out.indexOf(c) === -1) out.push(c); }); });
+    return out;
+  }
+  function gCard(t, m, data) {
+    var on = greenIds(data).indexOf(t.id) !== -1, rank = typeof t.rank === 'number' ? 'Judge #' + t.rank : 'Not ranked', ev = arr(t.evidence);
+    var derived = derivedOf(t, data).length > 0, refs = ev.slice(0, 3).map(function (c) { return refChip(c, data); }).join('') + (ev.length > 3 ? '<span class="meta">+' + (ev.length - 3) + '</span>' : '');
+    var ck = checkMarks(t), tag = (m ? m.short : '') + (BAND_PHRASE[t.band] ? ' · ' + BAND_PHRASE[t.band] : '');
+    return '<article class="gcard' + (on ? ' green' : '') + '" data-gcard="' + esc(t.id) + '"><div class="gopen" role="button" tabindex="0" data-open="' + esc(t.id) + '" aria-label="Open ' + esc(t.name) + '">' +
+      '<div class="rcard-top"><span>' + esc(tag) + '</span><span>' + esc(rank) + '</span></div>' + touch(t, 'poster', brandOf(data)) + '<h4>' + esc(t.name) + '</h4><p>' + esc(t.thought) + '</p>' +
+      (themeChip(t) || ck ? '<div class="row">' + themeChip(t) + ck + '</div>' : '') + '</div>' +
+      '<div class="gfoot"><span class="grefs">' + (refs || '<span class="meta">No evidence yet</span>') + (derived ? ' <span class="dmark" title="Rests on a finding the agent worked out and nobody has verified yet">derived</span>' : '') + '</span>' + glButton(t, on) + '</div></article>';
+  }
+  function greenGroups(data) {
+    var crew = crewOf(data), all = developed(data);
+    var groups = crew.map(function (m) { return { m: m, ts: all.filter(function (t) { return t.crew === m.id; }).sort(byRank) }; }).filter(function (g) { return g.ts.length; });
+    var known = {}; crew.forEach(function (m) { known[m.id] = 1; });
+    var rest = all.filter(function (t) { return !known[t.crew]; }).sort(byRank);
+    if (rest.length) groups.push({ m: null, ts: rest });
+    return groups.map(function (g) {
+      var m = g.m;
+      return '<section class="grp" aria-label="' + esc(m ? m.name : 'Other routes') + '"><div class="grp-head"><span class="t"' + (m ? ' style="color:' + m.colour + '"' : '') + '>● ' + esc(m ? m.name : 'Other routes') + ' · ' + esc(plural(g.ts.length, 'route')) + '</span>' +
+        (m ? '<span class="pill st-plain">' + esc(roleName(m.role)) + '</span><span class="h">' + esc(m.heading) + '</span>' : '') + '</div><div class="gcards">' + g.ts.map(function (t) { return gCard(t, m, data); }).join('') + '</div></section>';
+    }).join('');
+  }
+  /** Compare feel: every route's one touchpoint side by side, with its Greenlight toggle. */
+  function compareGrid(data, ui) {
+    var tp = TOUCH.some(function (x) { return x[0] === ui.tp; }) ? ui.tp : 'poster', brand = brandOf(data), ids = greenIds(data);
+    return '<div class="row" role="group" aria-label="Touchpoint"><span class="psec-t" style="margin:0">Touchpoint</span>' + TOUCH.map(function (x) {
+      return '<button type="button" class="chip' + (x[0] === tp ? ' on' : '') + '" data-tp="' + x[0] + '" aria-pressed="' + (x[0] === tp ? 'true' : 'false') + '">' + esc(x[1]) + '</button>'; }).join('') + '</div>' +
+      '<div class="cmpgrid">' + developed(data).sort(byRank).map(function (t) {
+        return '<div class="cmpcell"><div class="row" style="justify-content:space-between;flex-wrap:nowrap"><b class="cname">' + esc(t.name) + '</b>' + glButton(t, ids.indexOf(t.id) !== -1, true) + '</div>' + touch(t, tp, brand) + '</div>'; }).join('') + '</div>';
+  }
+  function glWords(req) {
+    if (!isObj(req) || !/^(gl:|rerank|send:)/.test(req.key || '')) return '';
+    if (req.state === 'sending') return 'Sending it to the engine…';
+    if (req.state === 'queued' || req.state === 'running') return 'The engine is working on it. The page shows it when the document changes.';
+    if (req.state === 'failed') return req.error || 'That did not go through. Nothing changed.';
+    return '';
+  }
+  /** What holds the greenlight, in the engine's own words: run.gate.blocked_by without the one a click clears ("greenlight at least one"). */
+  function holds(data) {
+    var run = isObj(data && data.run) ? data.run : {}, g = isObj(run.gate) && run.gate.id === 'greenlight' ? run.gate : null;
+    return g ? arr(g.blocked_by).filter(function (b) { return isObj(b) && b.kind !== 'nothing_picked' && text(b.text); }) : [];
+  }
+  function greenlightSheet(data, ui) {
+    var all = developed(data), n = greenIds(data).length, ranked = all.filter(function (t) { return typeof t.rank === 'number'; }).length, run = isObj(data && data.run) ? data.run : {};
+    var err = isObj(run.error) ? '<p class="runnote bad" role="alert">' + esc(run.error.message) + '</p>' : '';
+    var words = glWords(ui.req), body;
+    if (!all.length) body = '<div class="crew-empty" role="status">No route has been developed yet. They appear here, ranked, as the engine finishes them.</div>';
+    else body = ui.cmp ? compareGrid(data, ui) : greenGroups(data);
+    return '<article class="sheet"><header class="sheet-head"><div class="sheet-eyebrow">Step 3 · Review and greenlight</div><h2>Developed, then chosen</h2>' +
+      '<p>Every route comes back developed: a campaign world, lines, checks and a blind rank. Greenlight as many as are worth making.</p></header>' +
+      '<div class="stats"><span>' + esc(plural(all.length, 'route')) + '</span><span>' + n + ' greenlit</span><span>' + esc(ranked + ' ranked by the blind judge') + '</span></div>' +
+      '<div class="sheet-body">' + err + (words ? '<p class="runnote' + (ui.req && ui.req.state === 'failed' ? ' bad' : '') + '" role="status">' + esc(words) + '</p>' : '') + body + '</div></article>';
+  }
+  function greenlightBooth(data, ui) {
+    var all = developed(data), ids = greenIds(data), byId = {}; all.forEach(function (t) { byId[t.id] = t; });
+    var rows = ids.map(function (id) { return byId[id]; }).filter(Boolean);
+    var tray = '<div class="tray" aria-label="Greenlit routes"><span class="psec-t" style="margin:0">Greenlit · ' + rows.length + '</span>' + (rows.length ? rows.map(function (t) {
+      var p = pal(t);
+      return '<div class="glrow"><span class="sw" style="background:' + p.bg + ';border-color:' + p.ink + '"></span><b>' + esc(t.name) + '</b><button type="button" class="linkbtn" data-green="' + esc(t.id) + '" aria-label="Take ' + esc(t.name) + ' off the greenlit list">remove</button></div>'; }).join('') :
+      '<p class="bt-hint">None yet. Open a route to see it as a world, or greenlight straight from its card.</p>') + '</div>';
+    var crewN = arr(data && data.crew).length, lk = arr(data && data.lookups).length, ranked = all.filter(function (t) { return typeof t.rank === 'number'; }).length;
+    var card = function (role, label, body) { return '<article class="bc"><header class="bc-hd">' + sphere(role, 20) + '<span class="bc-who">' + esc(roleName(role)) + ' · ' + esc(label) + '</span></header><div class="bc-note">' + esc(body) + '</div></article>'; };
+    var hold = holds(data).map(function (b) { return card('review', 'before sending', b.text); }).join('');
+    var sends = arr(data && data.sends).filter(isObj).map(function (s) {
+      var d = DESTS.filter(function (x) { return x.id === s.to; })[0];
+      return card('strategy', 'sent', (d ? d.name : 'Elsewhere') + (s.status === 'sent' ? ': ' + plural(arr(s.territory_ids).length, 'route') + ' went, with the other ' + arr(s.not_chosen).length + ' as routes not chosen.' : ': not built yet, so nothing went.'));
+    }).join('');
+    var can = rows.length > 0 && !holds(data).length;
+    var w = glWords(ui.req), failed = ui.req && ui.req.state === 'failed';
+    return tray + hold + card('research', 'spend', 'This exploration so far: ' + plural(crewN, 'agent') + (lk ? ', ' + plural(lk, 'look-up') : '') + '. What it cost is kept in Decisions, next to what got greenlit.') +
+      card('review', 'checked', 'Every route was tested against the brief, the mandatories and the rival lines. ' + ranked + ' ' + (ranked === 1 ? 'is' : 'are') + ' ranked by the blind judge.') + sends +
+      '<button type="button" class="big" data-send' + (can ? '' : ' disabled') + '>Send ' + (rows.length || '') + (rows.length ? ' ' : '') + 'to production →</button>' +
+      (w && /^send:/.test(ui.req.key) ? '<p class="runnote' + (failed ? ' bad' : '') + '" role="status">' + esc(w) + '</p>' : '');
+  }
+  function dock(data, ui) {
+    if (!developed(data).length) return '';
+    var ic = { present: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="7 5 19 12 7 19 7 5"/></svg>',
+      compare: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="7" height="16" rx="1.5"/><rect x="14" y="4" width="7" height="16" rx="1.5"/></svg>',
+      rank: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M4 12h7M4 17h4M18 5v14M15 16l3 3 3-3"/></svg>' };
+    return '<div class="dock"><div class="dock-acts" role="toolbar" aria-label="Gallery tools">' + [['present', 'Present'], ['compare', 'Compare'], ['rank', 'Re-rank']].map(function (a) {
+      return '<button type="button" class="dock-act" data-dock="' + a[0] + '" aria-pressed="' + (a[0] === 'compare' && ui.cmp ? 'true' : 'false') + '"><span class="dock-ring">' + ic[a[0]] + '</span><span class="dock-lbl">' + a[1] + '</span></button>'; }).join('') + '</div></div>';
+  }
+  /** The window for one route: its poster, the thought, every check in words, what it rests on, and the toggle. */
+  function routeDialog(id, data) {
+    var t = developed(data).filter(function (x) { return x.id === id; })[0]; if (!t) return null;
+    var on = greenIds(data).indexOf(id) !== -1, m = crewOf(data).filter(function (c) { return c.id === t.crew; })[0];
+    var cks = arr(t.checks).filter(function (c) { return isObj(c) && c.kind !== 'judge'; });
+    return { title: t.name, closeInside: true, html: touch(t, 'poster', brandOf(data)) + '<div class="tsrc-q">' + esc(t.thought) + '</div>' +
+      (text(t.why) ? '<span class="psec-t">Why it is a route</span><p class="meta" style="margin:0">' + esc(t.why) + '</p>' : '') +
+      (cks.length ? '<span class="psec-t">Checks</span>' + cks.map(function (c) { return '<div class="evrow"><span class="ck ck-' + esc(c.status) + '">' + esc((CHECK_WORDS[c.kind] || 'Check') + ' · ' + (CHECK_STATE[c.status] || c.status)) + '</span><div class="grow">' + esc(text(c.text)) + '</div></div>'; }).join('') : '') +
+      (arr(t.risks).length ? '<span class="psec-t">Watch out for</span>' + arr(t.risks).map(function (x) { return '<div class="bc-li"><span class="grow">' + esc(x) + '</span></div>'; }).join('') : '') +
+      '<span class="psec-t">Rests on</span><div class="row">' + (arr(t.evidence).length ? arr(t.evidence).map(function (c) { return refChip(c, data); }).join('') : '<span class="meta">No evidence yet</span>') + '</div>' +
+      '<div class="row">' + glButton(t, on) + '<span class="meta">' + esc((m ? m.name + ' · ' : '') + (typeof t.rank === 'number' ? 'Judge #' + t.rank : 'Not ranked')) + '</span><span class="spacer"></span><button type="button" class="btn-rect" data-close>Close</button></div>' };
+  }
+  function sendDialog(data) {
+    var all = developed(data), ids = greenIds(data), names = ids.map(function (id) { var t = all.filter(function (x) { return x.id === id; })[0]; return t ? t.name : ''; }).filter(Boolean);
+    var rest = all.length - names.length;
+    return { title: 'Send to production', closeInside: true, sans: true, html: '<p class="meta" style="margin:0">' + esc(_list(names)) + ' go with their worlds, lines, checks and sources. The other ' + esc(plural(rest, 'route')) + ' travel as routes not chosen.</p>' +
+      DESTS.map(function (d) {
+        return '<button type="button" class="wsrow" data-dest="' + d.id + '"' + (d.built ? '' : ' disabled aria-disabled="true"') + '><span class="wsdot" style="background:' + d.dot + '"></span><span><b>' + esc(d.name) + '</b>' + (d.built ? '' : ' <span class="mark-undone">not built yet</span>') + '<br><span class="meta">' + esc(d.does) + '</span></span></button>'; }).join('') +
+      '<div class="row"><button type="button" class="btn-rect" data-close>Cancel</button></div>' };
+  }
+  function _list(a) { return a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]; }
+  function rankDialog() {
+    return { title: 'Ask the blind judge again?', closeInside: true, sans: true, html: '<p class="meta" style="margin:0">The judge reads every developed route again, without names, and puts them in a new order. That is one more model call, so nothing happens until you say go.</p>' +
+      '<div class="row"><button type="button" class="btn-rect primary" data-rank-go>Go ahead</button><button type="button" class="btn-rect" data-close>Cancel</button></div>' };
+  }
+
   function laterSheet(data, which) {
     var run = isObj(data && data.run) ? data.run : {}, n = arr(data && data.territories).length, crew = arr(data && data.crew).length;
     var title = which === 'explore' ? 'The crew explores' : 'Review and greenlight';
@@ -1016,20 +1329,20 @@ var TerritoriesLogic = (function () {
 
   function booth(data, ui, open, at) {
     var run = isObj(data && data.run) ? data.run : {}, gate = isObj(run.gate) ? run.gate : null, role = gate && gate.agent ? gate.agent : 'knowledge';
-    var crewNow = crewOf(data), line = at === 1 ? (!crewNow.length ? 'The crew is setting off.' : allBack(crewNow) ? 'The crew is back. Steer any agent if you want to; you do not have to.' : 'I lead the crew. Each agent takes its own heading, and I keep them apart.') :
+    var crewNow = crewOf(data), line = at === 2 ? 'I tested every route. Greenlight as many as you like; I will ask only if one needs proof.' : at === 1 ? (!crewNow.length ? 'The crew is setting off.' : allBack(crewNow) ? 'The crew is back. Steer any agent if you want to; you do not have to.' : 'I lead the crew. Each agent takes its own heading, and I keep them apart.') :
       gate && gate.dex ? gate.dex : pickState(run) === 'none' && !focusOf(data).insights.length ? 'I read what came in. The crew has not started yet.' : 'I read the brief and the research. Tick what the crew should work on.';
-    var notes = at === 1 ? exploreBooth(data, ui) : boothNotes(data).map(function (n) {
+    var notes = at === 2 ? greenlightBooth(data, ui) : at === 1 ? exploreBooth(data, ui) : boothNotes(data).map(function (n) {
       return '<article class="bc"><header class="bc-hd">' + sphere(n.role, 20) + '<span class="bc-who">' + esc(roleName(n.role)) + ' · ' + esc(n.label) + '</span><span class="bc-t">' + esc(n.time || 'now') + '</span></header>' +
         '<div class="bc-note">' + (n.cites.length ? n.cites.map(function (c) { return refChip(c, data); }).join(' ') + ' ' : '') + esc(n.body) + '</div></article>';
     }).join('');
-    if (at === 1) role = 'strategy';
+    if (at === 1) role = 'strategy'; if (at === 2) role = 'review';
     var me = ui.me && ui.me.name ? '<div class="pfoot">Checks signed as <b>' + esc(ui.me.name) + '</b></div>' : '';
     return '<aside class="booth-col' + (open ? '' : ' booth-off') + '" id="stab" aria-label="Booth"><div class="booth"><div class="booth-hd"><span class="booth-nm">Booth</span><span class="booth-sp"></span>' +
       '<button type="button" class="booth-hide" data-booth="hide" aria-label="Hide the Booth" aria-expanded="' + (open ? 'true' : 'false') + '" aria-controls="stab" aria-keyshortcuts="]">Hide<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5"/></svg></button></div>' +
       '<div class="booth-body"><div class="bt-agent">' + sphere(role, 40) + '<div><div class="who">' + esc(roleName(role)) + ' agent · ' + esc(roleJob(role)) + '</div><div class="line">' + esc(line) + '</div></div>' +
       '<span class="bt-crew" aria-hidden="true">' + sphere('research', 22) + sphere('strategy', 22) + '</span></div>' + notes +
-      '<div class="bt-box"><textarea rows="2" disabled placeholder="Ask the Research agent to look something up…" aria-label="Ask the Research agent to look something up"></textarea>' +
-      '<div class="bt-hint">Look-ups are not built into Territories yet, so nothing can be searched from here.</div><div class="row"><span class="bt-scope">Whole exploration</span><span class="spacer"></span><button type="button" class="btn dark" disabled>Look it up</button></div></div>' +
+      (at === 2 ? '' : '<div class="bt-box"><textarea rows="2" disabled placeholder="Ask the Research agent to look something up…" aria-label="Ask the Research agent to look something up"></textarea>' +
+      '<div class="bt-hint">Look-ups are not built into Territories yet, so nothing can be searched from here.</div><div class="row"><span class="bt-scope">Whole exploration</span><span class="spacer"></span><button type="button" class="btn dark" disabled>Look it up</button></div></div>') +
       me + '</div></div></aside>';
   }
 
@@ -1050,15 +1363,18 @@ var TerritoriesLogic = (function () {
   function view(data, ui) {
     data = isObj(data) ? data : {}; ui = isObj(ui) ? ui : {};
     var s = stepsOf(data.run), at = ui.view != null && ui.view <= s.reached ? ui.view : s.at;
-    var sheet = at === 0 ? pickSheet(data, ui) : at === 1 ? exploreSheet(data, ui) : laterSheet(data, 'greenlight');
+    var sheet = at === 0 ? pickSheet(data, ui) : at === 1 ? exploreSheet(data, ui) : greenlightSheet(data, ui);
     var open = ui.booth !== false;
-    return '<main class="shell">' + head(data, { view: at }, ui) + '<div class="split">' + sheet + booth(data, ui, open, at) + '</div></main>' +
+    return '<main class="shell">' + head(data, { view: at }, ui) + '<div class="split">' + sheet + booth(data, ui, open, at) + '</div></main>' + (at === 2 ? dock(data, ui) : '') +
       '<button type="button" class="booth-edge" id="boothEdge" aria-controls="stab" aria-expanded="' + (open ? 'true' : 'false') + '" aria-label="Open the Booth" aria-keyshortcuts="]" tabindex="' + (open ? '-1' : '0') + '">' +
       '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 2.5 4 6l3.5 3.5"/></svg><span class="booth-lb">Booth</span></button>';
   }
 
   /** The window onto one source (a cite) or onto what arrived (brief, research, finds). Returns { title, html } or null. */
   function dialogFor(what, data) {
+    if (what === 'send') return sendDialog(data);
+    if (what === 'rank') return rankDialog();
+    if (/^route:/.test(what)) return routeDialog(what.slice(6), data);
     var up = upstreamOf(data), c = counts(data);
     if (what === 'brief' && up.brief) {
       return { title: briefTitle(data, up), html: '<span class="psec-t">What came from the brief · ' + esc(plural(c.briefFields, 'field')) + '</span>' +
@@ -1144,10 +1460,35 @@ var TerritoriesLogic = (function () {
       if (ac.undone) return { writes: [], toast: 'That was already taken back.' };
       return { writes: [], request: { key: 'undo:' + ac.id, what: 'Undo', input: { step: 'undo', action_id: ac.id, by: by } } };
     }
+    // Step 3: every move is a request to the middleware. The page shows what the document says once the engine has written it back.
+    if (e.a === 'green') {
+      var gt = developed(data).filter(function (x) { return x.id === e.id; })[0];
+      if (!gt) return null;
+      if (reqBusy(ui.req)) return { writes: [], toast: 'The last change is still going through.' };
+      var turnOn = greenIds(data).indexOf(gt.id) === -1;
+      return { writes: [], request: { key: 'gl:' + gt.id, what: turnOn ? 'The greenlight' : 'Taking it off the list', input: { step: turnOn ? MOVES.greenlight : MOVES.remove, territory_id: gt.id, by: by } } };
+    }
+    if (e.a === 'rerank') {
+      if (!developed(data).length) return null;
+      if (reqBusy(ui.req)) return { writes: [], toast: 'The last change is still going through.' };
+      return { writes: [], request: { key: 'rerank', what: 'Re-rank', input: { step: MOVES.rerank, by: by } } };
+    }
+    if (e.a === 'present') return { writes: [], toast: 'Present mode is not built yet. Compare shows every route side by side.' };
+    if (e.a === 'send') {
+      var dest = DESTS.filter(function (d) { return d.id === e.to; })[0], ids = greenIds(data);
+      if (!dest) return null;
+      if (!dest.built) return { writes: [], toast: dest.name + ' is not built yet, so nothing was sent.' };
+      if (!ids.length) return { writes: [], toast: 'Greenlight at least one route first.' };
+      if (holds(data).length) return { writes: [], toast: holds(data)[0].text };
+      if (reqBusy(ui.req)) return { writes: [], toast: 'The last change is still going through.' };
+      var not = developed(data).map(function (x) { return x.id; }).filter(function (id) { return ids.indexOf(id) === -1; });
+      return { writes: [], request: { key: 'send:' + dest.id, what: 'The send', input: { step: MOVES.send, to: dest.id, territory_ids: ids, not_chosen: not, by: by } } };
+    }
     return null;
   }
 
   return {
+    MOVES: MOVES, DESTS: DESTS, developed: developed, greenIds: greenIds, greenGroups: greenGroups, gCard: gCard, touch: touch, scene: scene, greenlightSheet: greenlightSheet, greenlightBooth: greenlightBooth, holds: holds, glWords: glWords, brandOf: brandOf, headline: headline,
     TASKS: TASKS, BRIEF_KEYS: BRIEF_KEYS, LABELS: LABELS, KEY_FIELDS: KEY_FIELDS, seen: seen, statsOf: statsOf, fromWords: fromWords, briefValue: briefValue, textOf: textOf, STEPS: STEPS, MAX_INSIGHTS: MAX_INSIGHTS, MAX_TEXT: MAX_TEXT,
     upstreamOf: upstreamOf, resolve: resolve, counts: counts, derivedFindings: derivedFindings, sorted: sorted, dotsOf: dotsOf, originOf: originOf,
     tickPatch: tickPatch, addPatch: addPatch, playPatch: playPatch, pickState: pickState, approvePatch: approvePatch, editedPatch: editedPatch, stepsOf: stepsOf,
@@ -1312,7 +1653,7 @@ var TerritoriesLogic = (function () {
     closeDialog(true);
     dialogFrom = from || document.activeElement;
     var ov = document.createElement('div'); ov.className = 'overlay';
-    ov.innerHTML = '<div class="dialog" role="dialog" aria-modal="true" aria-label="' + String(d.title).replace(/"/g, '&quot;') + '"><h3></h3>' + d.html + (d.closeInside ? '' : '<div class="row"><span class="spacer"></span><button type="button" class="btn-rect" data-close>Close</button></div>') + '</div>';
+    ov.innerHTML = '<div class="dialog' + (d.sans ? ' sans' : '') + '" role="dialog" aria-modal="true" aria-label="' + String(d.title).replace(/"/g, '&quot;') + '"><h3></h3>' + d.html + (d.closeInside ? '' : '<div class="row"><span class="spacer"></span><button type="button" class="btn-rect" data-close>Close</button></div>') + '</div>';
     ov.querySelector('h3').textContent = d.title;
     document.body.appendChild(ov); dialogEl = ov;
     var b = ov.querySelector('[data-close]'); if (b) b.focus({ preventScroll: true });
@@ -1355,6 +1696,17 @@ var TerritoriesLogic = (function () {
     if ((b = t.closest('[data-close]')) || (dialogEl && t === dialogEl)) { closeDialog(); return; }
     if ((b = t.closest('[data-play-toggle]'))) { var id = b.getAttribute('data-play-toggle'), on = b.getAttribute('data-on') === '1'; closeDialog(true); run({ a: 'play', id: id, on: on }); return; }
     if ((b = t.closest('[data-play]'))) { run({ a: 'play', id: b.getAttribute('data-play'), on: b.getAttribute('aria-pressed') !== 'true' }); return; }
+    if ((b = t.closest('[data-green]'))) { ev.preventDefault(); ev.stopPropagation(); closeDialog(true); run({ a: 'green', id: b.getAttribute('data-green') }); return; }
+    if ((b = t.closest('[data-open]'))) { openDialog('route:' + b.getAttribute('data-open'), b); return; }
+    if ((b = t.closest('[data-send]'))) { if (!b.disabled) openDialog('send', b); return; }
+    if ((b = t.closest('[data-dest]'))) { if (b.disabled) return; var to = b.getAttribute('data-dest'); closeDialog(true); run({ a: 'send', to: to }); return; }
+    if ((b = t.closest('[data-rank-go]'))) { closeDialog(true); run({ a: 'rerank' }); return; }
+    if ((b = t.closest('[data-tp]'))) { ui.tp = b.getAttribute('data-tp'); render(); return; }
+    if ((b = t.closest('[data-dock]'))) {
+      var dk = b.getAttribute('data-dock');
+      if (dk === 'compare') { ui.cmp = !ui.cmp; render(); } else if (dk === 'rank') openDialog('rank', b); else run({ a: 'present' });
+      return;
+    }
     if ((b = t.closest('[data-undo]'))) { run({ a: 'undo', id: b.getAttribute('data-undo') }); return; }
     if ((b = t.closest('[data-steer]'))) {
       var kind = b.getAttribute('data-steer'), cid = b.getAttribute('data-crew');
@@ -1387,6 +1739,8 @@ var TerritoriesLogic = (function () {
   document.addEventListener('keydown', function (ev) {
     if (ev.key === 'Escape' && dialogEl) { closeDialog(); return; }
     if (ev.key === 'Enter' && ev.target && ev.target.name === 'own' && !ev.isComposing) { ev.preventDefault(); addOwn(); return; }
+    var ob = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-open') && ev.target.getAttribute('role') === 'button' ? ev.target : null;
+    if (ob && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); openDialog('route:' + ob.getAttribute('data-open'), ob); return; }
     var rb = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-route') && ev.target.getAttribute('role') === 'button' ? ev.target : null;
     if (rb && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); choose(ui.sel, rb.getAttribute('data-route')); return; }
     var tg = ev.target, typing = tg && /^(INPUT|TEXTAREA|SELECT)$/.test(tg.tagName || '');

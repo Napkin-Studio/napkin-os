@@ -57,6 +57,14 @@ const L = vm.runInNewContext(`${engine}${helper}\n${logicSrc}; TerritoriesLogic`
   radius(d: number): number
   tickPatch(d: Doc, id: string, on: boolean): Doc | null
   approvePatch(run: unknown, n: number, by: string, at: string): Doc | null
+  MOVES: Record<string, string>
+  DESTS: { id: string; name: string; built: boolean }[]
+  developed(d: Doc): Doc[]
+  greenIds(d: Doc): string[]
+  holds(d: Doc): { kind: string; text: string }[]
+  glWords(req: Ui | null): string
+  touch(t: Doc, k: string, brand: string): string
+  scene(k: string, p: Record<string, string>): string
 }
 
 // Values made inside the page's own context compare by what they hold, not by which realm made them.
@@ -582,4 +590,167 @@ test('step 2 keeps to the house words and the two faces; no price anywhere', () 
     assert.ok(!/<form/.test(page))
   }
   assert.ok(!/font:\s*[1-7]00[^;{}]*var\(--font-ui\)/.test(html), 'Geist only at 800')
+})
+
+
+// ---- step 3: the gallery, the greenlight tray and Send (territories-app-greenlight; stills 14, 15, 19, 20, 21) ----
+const gl = (n: 'greenlight_open' | 'greenlight_derived_pending' | 'greenlight_sensitive_missing'): Doc => json(`example/states/${n}.json`)
+/** The document as the engine writes it back after greenlight_route / remove_route (engine/territory/gates.py), so a view can be checked after a move. */
+const greenlit = (d: Doc, ids: string[]): Doc => {
+  const o = JSON.parse(JSON.stringify(d)) as Doc
+  o.greenlit = ids.map(id => ({ territory_id: id, by: 'Shrey', at: '2026-11-23T10:00:00Z', rests_on_derived: [], derived_resolution: 'verified' }))
+  return o
+}
+const cards = (page: string) => page.match(/class="gcard[ "]/g) ?? []
+
+test('step 3 opens on the run: the gallery has one card per live developed route, grouped by agent, with Greenlight on each', () => {
+  for (const n of ['greenlight_open', 'greenlight_derived_pending', 'greenlight_sensitive_missing'] as const) {
+    const d = gl(n), page = L.view(d, {})
+    assert.match(page, /data-step="greenlight" aria-current="step"/); assert.ok(!/not built in this version/.test(page))
+    const dev = L.developed(d)
+    assert.equal(dev.length, 8, 'killed, parked and still-a-thought routes are not in the gallery')
+    assert.equal(cards(page).length, dev.length)
+    for (const t of dev) { assert.ok(page.includes(`data-gcard="${t.id}"`) && page.includes(`data-green="${t.id}"`) && page.includes(`data-open="${t.id}"`)); assert.ok(text(page).includes(t.name)) }
+    assert.ok(!page.includes('data-gcard="t_anon"') && !page.includes('data-gcard="t_breakfast"'))
+    for (const m of L.crewOf(d).filter(c => dev.some(t => t.crew === c.id))) assert.ok(page.includes(`aria-label="${m.name}"`), `a group for ${m.name}`)
+    eq(errs(d).filter(e => !/upstream/.test(e)), [])
+  }
+})
+
+test('a card shows the judge rank, where it sits, its sources and the idea chip, and never the tier, the band score or the /35', () => {
+  const d = gl('greenlight_derived_pending'), page = L.view(d, {}), t = text(page)
+  assert.match(t, /Judge #1/); assert.match(t, /Core · close to the brief/); assert.match(t, /the weekend starts early/i)
+  assert.ok(page.includes('class="theme"'), 'the idea chip is the Explore chip')
+  assert.ok(page.includes('data-src="f_TIRED0418"'), 'sources are the same chips as everywhere')
+  assert.ok(!/\/\s?35|\bscore\b|\btier\b|\bbrave\b|\bsafe\b|blind\b[^.]*\d{2}/i.test(t.replace(/ranked by the blind judge/g, '')), 'no tier, band score or /35')
+  for (const tt of d.territories as Doc[]) if (tt.blind) assert.ok(!t.includes(`${tt.blind.total}/`), 'the stored total is never shown')
+  // the derived mark sits on a route that rests on a derived finding
+  // the derived mark: the engine recorded t_passenger as resting on an unverified finding (greenlit.rests_on_derived, and its open ask)
+  assert.equal((page.match(/class="dmark"/g) ?? []).length, 1)
+  assert.match(page.split('<article class="gcard').find(c => c.includes('data-gcard="t_passenger"'))!, /class="dmark"/)
+  assert.ok(!/<form/.test(page))
+})
+
+test('a route that fails or strains a check says so on its card, in words', () => {
+  const d = gl('greenlight_open'), tt = d.territories.find((x: Doc) => x.id === 't_started')
+  tt.checks[1] = { ...tt.checks[1], status: 'fail', text: 'Leaves out the weekend return fare.' }
+  const page = L.view(d, {})
+  assert.match(text(page), /Mandatory · fails/); assert.ok(page.includes('class="ck ck-fail"'))
+  assert.ok(!/Mandatory · ok/.test(text(L.view(gl('greenlight_open'), {}))), 'a check that passed is not shouted')
+})
+
+test('Greenlight is a request to the engine under its own move name; the page writes nothing itself', () => {
+  const d = gl('greenlight_open')
+  const a = L.act(d, {}, { a: 'green', id: 't_started' }, ENV)!
+  eq(a.writes, []); eq(a.request, { key: 'gl:t_started', what: 'The greenlight', input: { step: 'greenlight_route', territory_id: 't_started', by: 'Shrey' } })
+  const g = greenlit(d, ['t_started'])
+  eq(L.act(g, {}, { a: 'green', id: 't_started' }, ENV)!.request, { key: 'gl:t_started', what: 'Taking it off the list', input: { step: 'remove_route', territory_id: 't_started', by: 'Shrey' } })
+  assert.equal(L.act(d, {}, { a: 'green', id: 't_anon' }, ENV), null, 'a killed route cannot be greenlit')
+  assert.equal(L.act(d, {}, { a: 'green', id: 't_breakfast' }, ENV), null, 'a thought that was never developed cannot be greenlit')
+  assert.match(L.act(d, { req: { key: 'gl:t_sunday', state: 'running' } }, { a: 'green', id: 't_started' }, ENV)!.toast!, /still going through/)
+  assert.equal(L.TASKS.run, 'run_territories')
+})
+
+test('after a greenlight or a remove, the card, the count and the tray follow the document with no reload (LESSONS 18)', () => {
+  const d = gl('greenlight_open')
+  let page = L.view(d, {}), t = text(page)
+  assert.match(t, /0 greenlit/); assert.match(t, /Greenlit · 0/); assert.match(t, /None yet\. Open a route to see it as a world/)
+  assert.match(page, /<button type="button" class="big" data-send disabled>/)
+  const two = greenlit(d, ['t_started', 't_sunday'])
+  page = L.view(two, {}); t = text(page)
+  assert.match(t, /2 greenlit/); assert.match(t, /Greenlit · 2/); assert.equal((page.match(/class="glrow"/g) ?? []).length, 2)
+  assert.equal((page.match(/class="gcard green"/g) ?? []).length, 2); assert.match(t, /Send 2 to production/)
+  assert.ok(!/<button type="button" class="big" data-send disabled>/.test(page))
+  assert.match(page, /data-green="t_started"[^>]*aria-pressed="true"[^>]*>✓ Greenlit/)
+  const one = greenlit(d, ['t_sunday']); page = L.view(one, {})
+  assert.match(text(page), /Greenlit · 1/); assert.ok(!/class="glrow"[^>]*>(?:(?!<\/div>)[\s\S])*Already Started/.test(page))
+  assert.match(text(page), /Send 1 to production/)
+})
+
+test('the engine\'s own holds disable Send and are said in its words; nothing is re-derived in the page', () => {
+  const d = gl('greenlight_derived_pending')
+  eq(L.holds(d).map(h => h.kind), ['derived_evidence'])
+  const page = L.view(d, {})
+  assert.match(page, /<button type="button" class="big" data-send disabled>/)
+  assert.match(text(page), /Review · before sending[\s\S]*Passenger Seat rests on a finding nobody has verified/)
+  assert.match(L.act(d, {}, { a: 'send', to: 'deck-maker' }, ENV)!.toast!, /Passenger Seat rests on a finding/)
+  eq(L.holds(gl('greenlight_open')), [], 'nothing_picked is cleared by a click, so it is not a hold')
+  eq(L.holds(gl('greenlight_sensitive_missing')).map(h => h.kind), ['sensitive_review'])
+})
+
+test('Send opens the choice: Deck Maker sends the greenlit ids and the rest as not chosen; the Production tool says it is not built yet', () => {
+  const d = greenlit(gl('greenlight_open'), ['t_started', 't_passenger'])
+  const dlg = L.dialogFor('send', d)!
+  assert.equal(dlg.title, 'Send to production')
+  assert.match(text(dlg.html), /Already Started and Passenger Seat go with their worlds, lines, checks and sources\. The other 6 routes travel as routes not chosen/)
+  assert.match(dlg.html, /data-dest="deck-maker"/); assert.match(dlg.html, /data-dest="production-tool"[^>]*disabled/); assert.match(text(dlg.html), /Production tool not built yet/)
+  const a = L.act(d, {}, { a: 'send', to: 'deck-maker' }, ENV)!
+  eq(a.writes, [])
+  eq(a.request, { key: 'send:deck-maker', what: 'The send', input: { step: 'send_routes', to: 'deck-maker', territory_ids: ['t_started', 't_passenger'], not_chosen: ['t_sitdown', 't_sunday', 't_small', 't_lonely', 't_mixtape', 't_lounge'], by: 'Shrey' } })
+  const p = L.act(d, {}, { a: 'send', to: 'production-tool' }, ENV)!
+  assert.equal(p.request, undefined); assert.match(p.toast!, /not built yet, so nothing was sent/)
+  assert.match(L.act(gl('greenlight_open'), {}, { a: 'send', to: 'deck-maker' }, ENV)!.toast!, /Greenlight at least one route first/)
+  assert.equal(L.act(d, {}, { a: 'send', to: 'nowhere' }, ENV), null)
+})
+
+test('a request that fails says why in plain words and leaves the page as it was', () => {
+  const d = gl('greenlight_open')
+  for (const k of ['gl:t_started', 'rerank', 'send:deck-maker']) assert.ok(L.glWords({ key: k, state: 'sending' }).length > 0)
+  assert.equal(L.glWords({ key: 'steer:cr_core', state: 'failed', error: 'x' }), '', 'a steer is not this step\'s')
+  const page = L.view(d, { req: { key: 'gl:t_started', state: 'failed', error: 'The greenlight did not go through. This workspace has no middleware set up. Nothing changed.' } })
+  assert.match(page, /role="status">The greenlight did not go through\. This workspace has no middleware set up\. Nothing changed\./)
+  assert.equal(cards(page).length, 8); assert.match(text(page), /0 greenlit/)
+})
+
+test('Compare shows every route side by side per touchpoint, with the same toggle; Re-rank asks first, then asks the engine; Present says it is not built', () => {
+  const d = greenlit(gl('greenlight_open'), ['t_started'])
+  const page = L.view(d, { cmp: true, tp: 'seat' })
+  assert.equal((page.match(/class="cmpcell"/g) ?? []).length, 8); assert.ok(!/class="gcard/.test(page))
+  assert.match(page, /data-tp="seat"[^>]*aria-pressed="true"/); assert.match(page, /data-dock="compare" aria-pressed="true"/)
+  assert.equal((page.match(/data-green="/g) ?? []).length, 8 + 1, 'a toggle on each cell, and the tray row')
+  for (const tp of ['poster', 'story', 'seat', 'email']) assert.match(L.view(d, { cmp: true, tp }), /class="cmpcell"/)
+  const rk = L.dialogFor('rank', d)!
+  assert.match(text(rk.html), /one more model call, so nothing happens until you say go/); assert.match(rk.html, /data-rank-go/)
+  eq(L.act(d, {}, { a: 'rerank' }, ENV)!.request, { key: 'rerank', what: 'Re-rank', input: { step: 'rerank_routes', by: 'Shrey' } })
+  assert.match(L.act(d, {}, { a: 'present' }, ENV)!.toast!, /not built yet/)
+})
+
+test('a route opens in a window with its checks in words and the same toggle', () => {
+  const d = gl('greenlight_derived_pending'), w = L.dialogFor('route:t_started', d)!
+  assert.equal(w.title, 'Already Started'); assert.match(text(w.html), /Proposition · ok|Rests on/); assert.match(w.html, /data-green="t_started"/)
+  assert.equal(L.dialogFor('route:t_anon', d), null); assert.equal(L.dialogFor('route:nope', d), null)
+  assert.ok(!/\/\s?35|\btier\b/i.test(text(w.html)))
+})
+
+test('the sketches use the route\'s palette and the two cleared faces only, and nothing is drawn from a picture', () => {
+  const d = gl('greenlight_open')
+  for (const t of L.developed(d)) {
+    const pal = t.world.palette as Record<string, string>
+    for (const k of ['poster', 'story', 'seat', 'email']) {
+      const h = L.touch(t, k, 'Linea')
+      assert.ok(h.includes(`--t-bg:${pal.bg}`) && h.includes(`--t-ink:${pal.ink}`), `${t.id} ${k} takes its palette`)
+      assert.ok(!/--t-font/.test(h)); assert.equal(h.includes('ff-ui'), t.world.type.font === 'geist_extra_bold'); assert.ok(!/<img|url\(|font-family/i.test(h), 'no picture and no other face')
+    }
+  }
+  for (const sc of ['platform', 'window', 'table', 'arrival', 'car', 'sleep', 'road', 'night', 'home', 'town']) {
+    const svg = L.scene(sc, { bg: '#111111', ink: '#222222', acc: '#333333', soft: '#444444' })
+    assert.ok(svg.startsWith('<svg') && !/font-family|<text/.test(svg), `${sc} draws shapes, not type`)
+  }
+  assert.ok(!/<form/.test(L.view(d, {})))
+})
+
+test('step 3 keeps to the house words and the two faces; no price anywhere, no text leaks', () => {
+  for (const [d, ui] of [[gl('greenlight_open'), {}], [greenlit(gl('greenlight_open'), ['t_started', 't_sunday']), {}], [gl('greenlight_derived_pending'), {}], [gl('greenlight_open'), { cmp: true }]] as [Doc, Ui][]) {
+    const page = L.view(d, ui)
+    for (const bad of ['(to confirm)', '~~', '**', '{{', '[object', 'undefined', 'NaN', '>null<', '>None<', 'derived_evidence', 'near_mandatory']) assert.ok(!page.includes(bad), `page has ${bad}`)
+    assert.ok(!/€|£|\$\d|\d\s?(euro|EUR|USD)\b|\bUSD\b|¢/i.test(text(page)), 'no price on the page')
+  }
+  const dlg = [L.dialogFor('send', greenlit(gl('greenlight_open'), ['t_started'])), L.dialogFor('rank', gl('greenlight_open')), L.dialogFor('route:t_started', gl('greenlight_open'))]
+  for (const x of dlg) assert.ok(!/€|£|\$\d|\d\s?(euro|EUR|USD)\b|\bUSD\b/i.test(text(x!.html)))
+})
+
+test('the finished run reads the same way: three greenlit, the Deck send listed, the Production send said to be not built', () => {
+  const d = json('example/data.json'), page = L.view(d, {}), t = text(page)
+  assert.match(t, /3 greenlit/); assert.match(t, /Greenlit · 3/)
+  assert.match(t, /Deck Maker: 3 routes went, with the other 5 as routes not chosen/); assert.match(t, /Production tool: not built yet, so nothing went/)
 })
