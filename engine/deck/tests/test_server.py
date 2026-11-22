@@ -177,6 +177,25 @@ def test_the_last_step_without_a_renderer_is_refused_before_it_starts(engine, mo
     assert status == 409 and err["error"]["type"] == "no_renderer" and "soffice" in err["error"]["message"]
 
 
+def test_web_render_builds_the_pptx_and_the_web_deck_with_no_libreoffice(engine, monkeypatch):
+    """deck-cloud: NAPKIN_DECK_RENDER=web. No soffice or pdftoppm: the last step is not refused, deck.pptx and deck.html are written,
+    no deck.pdf is, and the report says the PowerPoint was not visually checked."""
+    done = {"storyline": {"decision": "approve"}, "territories": {"decision": "approve"}, "idea": {"decision": "approve"}}
+    start(engine); wait(engine.base, "doc1")
+    start(engine, approvals={"storyline": done["storyline"]}); wait(engine.base, "doc1")
+    start(engine, approvals={k: done[k] for k in ("storyline", "territories")}); wait(engine.base, "doc1")
+    monkeypatch.setattr(srv.shutil, "which", lambda name: None)
+    monkeypatch.setenv("NAPKIN_DECK_RENDER", "web")
+    status, _ = call(engine.base, "/run", {"doc": "doc1", "inputs": INPUTS, "approvals": done, "mode": "replay"})
+    assert status == 202
+    v = wait(engine.base, "doc1")
+    assert v["state"] == "done", v
+    files = {p.name for p in (engine.dir / "doc1").rglob("*") if p.is_file()}
+    assert {"deck.pptx", "deck.html"} <= files and "deck.pdf" not in files
+    assert "not visually checked" in v["payload"]["report"]["qa"]
+    assert set(v["payload"]["exports"]) == {"web", "pptx"}
+
+
 def test_a_territory_picked_in_a_replay_is_said_not_applied(engine):
     start(engine); wait(engine.base, "doc1")
     _, v = start(engine, approvals={"storyline": {"decision": "approve"}}); v = wait(engine.base, "doc1")

@@ -297,6 +297,9 @@ module "services" {
   github_repository_ids    = var.github_repository_ids
   certificate_arn          = var.certificate_arn
   middleware_count         = var.middleware_count
+  # The Deck Maker engine as a second container of the middleware task (features/deck-cloud.clan): on here first;
+  # staging switches it on later, by the same module variable.
+  deck_enabled = var.deck_enabled
   middleware_env = {
     NAPKIN_RESEARCH_WEB = "tavily" # Tavily, Nova grounding when it fails (server/napkin/websearch.py)
     # Until the middleware takes its scope from the signed-in person's agency,

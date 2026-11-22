@@ -1884,3 +1884,4 @@ deck engine (`engine/deck/server.py`) and writes what the engine reports into th
   passes `inputs.production {sha256, fetch, look}` on every segment (absent when the document names no file); the engine adds
   `--production FILE`, and `--production-fetch` / `--production-look` only when the person turned them on. The payload gains
   `production` (the picker's view, never a location). Nothing is fetched by the middleware.
+- **Deck files (deck-cloud).** `fetch_deck_file@1` (short, writes nothing) takes `input {name}`, `deck.html` or `deck.pptx`, and answers `result {name, media_type, bytes, data_b64}` from the deck engine's `GET /file/<doc>/<name>`; any other name is a 400, a file not built yet a 404 `no_file`, no engine a 503. The PDF is not served: the app sends `deck.html` to the host's Chromium export.

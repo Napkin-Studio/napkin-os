@@ -16,7 +16,7 @@ terraform {
 data "aws_caller_identity" "me" {}
 
 locals {
-  apps    = toset(["web", "middleware"])
+  apps    = toset(concat(["web", "middleware"], var.deck_enabled ? ["deck"] : []))
   https   = var.certificate_arn != ""
   ns      = "svc.${var.name}"
   mw_port = 8798                                                      # the middleware refuses 8080 (local development keeps it for napkin-web)
@@ -170,6 +170,19 @@ data "aws_iam_policy_document" "middleware" {
       }
     }
   }
+  # The deck engine's run cache: through its own access point only.
+  dynamic "statement" {
+    for_each = var.deck_enabled ? [1] : []
+    content {
+      actions   = ["elasticfilesystem:ClientMount", "elasticfilesystem:ClientWrite"]
+      resources = [aws_efs_file_system.web.arn]
+      condition {
+        test     = "StringEquals"
+        variable = "elasticfilesystem:AccessPointArn"
+        values   = [aws_efs_access_point.deck[0].arn]
+      }
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "middleware" {
@@ -274,7 +287,7 @@ resource "aws_security_group" "efs" {
     from_port       = 2049
     to_port         = 2049
     protocol        = "tcp"
-    security_groups = concat([aws_security_group.web.id], var.middleware_runlog ? [aws_security_group.middleware.id] : [])
+    security_groups = concat([aws_security_group.web.id], var.middleware_runlog || var.deck_enabled ? [aws_security_group.middleware.id] : [])
   }
 }
 
@@ -313,6 +326,26 @@ resource "aws_efs_access_point" "runlog" {
   }
   root_directory {
     path = "/napkin-web/_runlog"
+    creation_info {
+      owner_uid   = 10001
+      owner_gid   = 10001
+      permissions = "750"
+    }
+  }
+}
+
+# The deck engine's run cache (NAPKIN_DECK_DATA): the stage files a run resumes from, so a restarted task
+# does not make a person pay for the same stages twice. At the file system's own /deck, outside web's
+# /data, so napkin-web neither serves nor purges it. Same POSIX user as the image's `napkin`.
+resource "aws_efs_access_point" "deck" {
+  count          = var.deck_enabled ? 1 : 0
+  file_system_id = aws_efs_file_system.web.id
+  posix_user {
+    uid = 10001
+    gid = 10001
+  }
+  root_directory {
+    path = "/deck"
     creation_info {
       owner_uid   = 10001
       owner_gid   = 10001
@@ -461,21 +494,62 @@ resource "aws_ecs_task_definition" "web" {
 
 locals {
   runlog_dir = "/runlog"
+  # The deck engine needs room beside the middleware: 2 vCPU and 4 GB when it runs (the middleware keeps its 1 vCPU / 2 GB share).
+  middleware_cpu    = var.deck_enabled ? 2048 : 1024
+  middleware_memory = var.deck_enabled ? 4096 : 2048
+  deck_dir          = "/data"
+  deck_port         = 8793
   middleware_environment = merge({
     NAPKIN_HOST         = "0.0.0.0"
     NAPKIN_PORT         = tostring(local.mw_port)
     NAPKIN_MODEL_API    = "bedrock"
     NAPKIN_MODEL_REGION = var.region
-  }, var.middleware_runlog ? { NAPKIN_RUNLOG_DIR = local.runlog_dir } : {}, var.middleware_runlog_bodies ? { NAPKIN_RUNLOG_BODIES = "1" } : {}, var.middleware_env)
+    }, var.middleware_runlog ? { NAPKIN_RUNLOG_DIR = local.runlog_dir } : {},
+    var.middleware_runlog_bodies ? { NAPKIN_RUNLOG_BODIES = "1" } : {},
+    # The deck engine is a second container of this task: the containers share one network namespace.
+    var.deck_enabled ? { NAPKIN_DECK_ENGINE_URL = "http://127.0.0.1:${local.deck_port}" } : {},
+  var.middleware_env)
   middleware_mounts = var.middleware_runlog ? [{ sourceVolume = "runlog", containerPath = local.runlog_dir }] : []
+
+  # The deck engine (engine/deck/Dockerfile): live (paid, capped), Claude on Bedrock with the task role, the PowerPoint
+  # and web deck without LibreOffice (the PDF is printed by napkin-web from deck.html), no picture generation.
+  deck_environment = {
+    NAPKIN_DECK_PORT    = tostring(local.deck_port)
+    NAPKIN_DECK_DATA    = local.deck_dir
+    NAPKIN_DECK_LIVE    = "1"
+    NAPKIN_DECK_MAX_USD = var.deck_max_usd
+    NAPKIN_MODEL_API    = "bedrock"
+    NAPKIN_MODEL_REGION = var.region
+    NAPKIN_DECK_RENDER  = "web"
+    NAPKIN_DECK_IMAGES  = "0"
+    AWS_DEFAULT_REGION  = var.region
+  }
+  deck_mounts = [{ sourceVolume = "deck", containerPath = local.deck_dir }]
+  deck_container = var.deck_enabled ? [{
+    name         = "deck"
+    image        = "${aws_ecr_repository.app["deck"].repository_url}:bootstrap"
+    essential    = false # a deck engine that dies (or runs out of memory) must not take the middleware down
+    memory       = var.deck_memory
+    portMappings = [{ containerPort = local.deck_port, protocol = "tcp" }]
+    mountPoints  = local.deck_mounts
+    environment  = [for k, v in local.deck_environment : { name = k, value = v }]
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        awslogs-group         = aws_cloudwatch_log_group.app["deck"].name
+        awslogs-region        = var.region
+        awslogs-stream-prefix = "deck"
+      }
+    }
+  }] : []
 }
 
 resource "aws_ecs_task_definition" "middleware" {
   family                   = "${var.name}-middleware"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = 1024
-  memory                   = 2048
+  cpu                      = local.middleware_cpu
+  memory                   = local.middleware_memory
   execution_role_arn       = aws_iam_role.execution.arn
   task_role_arn            = aws_iam_role.middleware.arn
   dynamic "volume" {
@@ -492,7 +566,21 @@ resource "aws_ecs_task_definition" "middleware" {
       }
     }
   }
-  container_definitions = jsonencode([{
+  dynamic "volume" {
+    for_each = var.deck_enabled ? [1] : []
+    content {
+      name = "deck"
+      efs_volume_configuration {
+        file_system_id     = aws_efs_file_system.web.id
+        transit_encryption = "ENABLED"
+        authorization_config {
+          access_point_id = aws_efs_access_point.deck[0].id
+          iam             = "ENABLED"
+        }
+      }
+    }
+  }
+  container_definitions = jsonencode(concat([{
     name         = "middleware"
     image        = "${aws_ecr_repository.app["middleware"].repository_url}:bootstrap"
     essential    = true
@@ -508,7 +596,7 @@ resource "aws_ecs_task_definition" "middleware" {
         awslogs-stream-prefix = "middleware"
       }
     }
-  }])
+  }], local.deck_container))
 }
 
 # ── services ──────────────────────────────────────────────────────────────────

@@ -238,7 +238,8 @@ suite_image() {
     return 0
   fi
   docker build -q --target runtime -t napkin-web:check . >/dev/null &&
-  docker run --rm --entrypoint test napkin-web:check -f /srv/napkin/production/index.html
+  docker run --rm --entrypoint test napkin-web:check -f /srv/napkin/production/index.html &&
+  docker run --rm --entrypoint test napkin-web:check -f /srv/napkin/seed/deck-maker.app.clan
 }
 suite_production-tool() {
   # Installs and the CLAN store build first (the web app builds on clan-store/src/wasm and the canvas

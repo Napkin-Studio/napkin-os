@@ -77,3 +77,35 @@ def test_every_build_passes_the_production_file_its_opt_ins_and_the_swaps(deck, 
     fake2 = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
     build(deck, Host(data=deck_data(), schema=SCHEMA))
     assert "production" not in fake2.posts[0]["inputs"]                                          # opt-in: no file, no flag
+
+
+# ── fetch_deck_file@1 (deck-cloud): the app asks for a finished file of its deck by name ──
+
+class FileEngine:
+    def __init__(self, status=200, body=b"<html>deck</html>"):
+        self.gets, self.status, self.body = [], status, body
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        assert request.method == "GET", request.url
+        self.gets.append(request.url.path)
+        return httpx.Response(self.status, content=self.body)
+
+
+def test_fetch_deck_file_hands_the_app_a_file_and_writes_nothing(deck, monkeypatch):
+    fake = use(monkeypatch, FileEngine())
+    st, body = post(deck, "fetch_deck_file", {"name": "deck.html"}, Host(data=deck_data(), schema=SCHEMA).clan())
+    assert st == 200, body
+    assert body["change"] is None and body["job"]["state"] == "done"
+    assert base64.b64decode(body["result"]["data_b64"]) == b"<html>deck</html>" and body["result"]["media_type"].startswith("text/html")
+    assert len(fake.gets) == 1 and fake.gets[0].endswith("/deck.html")
+
+
+def test_fetch_deck_file_names_only_the_decks_files_and_says_when_one_is_missing(deck, monkeypatch):
+    fake = use(monkeypatch, FileEngine(status=404, body=b"{}"))
+    clan = Host(data=deck_data(), schema=SCHEMA).clan()
+    for bad_name in ("deck.pdf", "../etc/passwd", "report.json", None):
+        st, _ = post(deck, "fetch_deck_file", {"name": bad_name}, clan)
+        assert st == 400, bad_name
+    assert fake.gets == []
+    st, body = post(deck, "fetch_deck_file", {"name": "deck.pptx"}, clan)
+    assert st == 404 and body["error"]["type"] == "no_file"
