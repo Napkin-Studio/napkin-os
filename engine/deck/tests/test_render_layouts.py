@@ -18,7 +18,8 @@ from deck.inputs import Inputs
 from deck.spec import shown_blocks
 
 FIX = Path(__file__).parent / "fixtures" / "lumen_water"
-SOFFICE = Path("/Applications/LibreOffice.app/Contents/MacOS/soffice")
+# Found as run_deck._soffice finds it: on the PATH (Linux), else the macOS app.
+SOFFICE = Path(shutil.which("soffice") or "/Applications/LibreOffice.app/Contents/MacOS/soffice")
 
 
 def _deck():
