@@ -97,7 +97,8 @@
     "strength": "strong",
     "ticked": true,
     "by": "engine",
-    "rank": 1
+    "rank": 1,
+    "theme": "arriving rested"
    },
    {
     "id": "in_timeback",
@@ -110,7 +111,8 @@
     "strength": "strong",
     "ticked": true,
     "by": "engine",
-    "rank": 2
+    "rank": 2,
+    "theme": "time given back"
    },
    {
     "id": "in_journey",
@@ -122,7 +124,8 @@
     "strength": "strong",
     "ticked": true,
     "by": "engine",
-    "rank": 3
+    "rank": 3,
+    "theme": "the journey as the treat"
    },
    {
     "id": "in_driver",
@@ -136,7 +139,8 @@
     "ticked": true,
     "by": "engine",
     "rank": 4,
-    "derived": true
+    "derived": true,
+    "theme": "car guilt"
    },
    {
     "id": "in_friday",
@@ -148,7 +152,8 @@
     "strength": "moderate",
     "ticked": true,
     "by": "engine",
-    "rank": 5
+    "rank": 5,
+    "theme": "spontaneous weekends"
    },
    {
     "id": "in_fare",
@@ -162,7 +167,8 @@
     "ticked": false,
     "by": "engine",
     "rank": 8,
-    "derived": true
+    "derived": true,
+    "theme": "the fare"
    },
    {
     "id": "in_nofight",

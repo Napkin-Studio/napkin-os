@@ -687,6 +687,12 @@
     "derived": {
      "type": "boolean",
      "description": "True when it rests on a derived (unverified) finding."
+    },
+    "theme": {
+     "type": "string",
+     "maxLength": 40,
+     "minLength": 1,
+     "description": "The idea group in a few words (what the card is about), shown as a chip. Optional: absent when the engine had none."
     }
    },
    "required": [
@@ -1702,6 +1708,12 @@
       "$ref": "#/definitions/picture"
      },
      "maxItems": 12
+    },
+    "theme": {
+     "type": "string",
+     "maxLength": 40,
+     "minLength": 1,
+     "description": "The idea group in a few words (what the card is about), shown as a chip. Optional: absent when the engine had none."
     }
    },
    "required": [

@@ -182,7 +182,8 @@
     "strength": "strong",
     "ticked": true,
     "by": "engine",
-    "rank": 1
+    "rank": 1,
+    "theme": "arriving rested"
    },
    {
     "id": "in_timeback",
@@ -195,7 +196,8 @@
     "strength": "strong",
     "ticked": true,
     "by": "engine",
-    "rank": 2
+    "rank": 2,
+    "theme": "time given back"
    },
    {
     "id": "in_journey",
@@ -207,7 +209,8 @@
     "strength": "strong",
     "ticked": true,
     "by": "engine",
-    "rank": 3
+    "rank": 3,
+    "theme": "the journey as the treat"
    },
    {
     "id": "in_driver",
@@ -221,7 +224,8 @@
     "ticked": true,
     "by": "engine",
     "rank": 4,
-    "derived": true
+    "derived": true,
+    "theme": "car guilt"
    },
    {
     "id": "in_friday",
@@ -233,7 +237,8 @@
     "strength": "moderate",
     "ticked": true,
     "by": "engine",
-    "rank": 5
+    "rank": 5,
+    "theme": "spontaneous weekends"
    },
    {
     "id": "in_forum",
@@ -246,7 +251,8 @@
     "strength": "moderate",
     "ticked": true,
     "by": "engine",
-    "rank": 6
+    "rank": 6,
+    "theme": "the journey as the treat"
    },
    {
     "id": "in_lounge",
@@ -259,7 +265,8 @@
     "strength": "moderate",
     "ticked": false,
     "by": "engine",
-    "rank": 7
+    "rank": 7,
+    "theme": "the build-up"
    },
    {
     "id": "in_fare",
@@ -273,7 +280,8 @@
     "ticked": false,
     "by": "engine",
     "rank": 8,
-    "derived": true
+    "derived": true,
+    "theme": "the fare"
    },
    {
     "id": "in_mealkit",
@@ -285,7 +293,8 @@
     "strength": "thin",
     "ticked": false,
     "by": "engine",
-    "rank": 9
+    "rank": 9,
+    "theme": "time given back"
    },
    {
     "id": "in_nofight",
@@ -627,6 +636,7 @@
     "f_TIRED0418"
    ],
    "ready": true,
+   "theme": "the weekend starts early",
    "world": {
     "palette": {
      "bg": "#F4B942",
@@ -854,6 +864,7 @@
     "brief:smp"
    ],
    "ready": true,
+   "theme": "the proposition, plainly",
    "world": {
     "palette": {
      "bg": "#EFE6D2",
@@ -1069,6 +1080,7 @@
     "f_TIRED0418"
    ],
    "ready": true,
+   "theme": "the way home",
    "world": {
     "palette": {
      "bg": "#1E2140",
@@ -1296,6 +1308,7 @@
     "f_DRIVER0431"
    ],
    "ready": true,
+   "theme": "small weekends",
    "world": {
     "palette": {
      "bg": "#E4ECEE",
@@ -1525,6 +1538,7 @@
     "fi_NOTALK003"
    ],
    "ready": true,
+   "theme": "car guilt",
    "world": {
     "palette": {
      "bg": "#D7F25A",
@@ -1758,6 +1772,7 @@
     "fi_RIVALS005"
    ],
    "ready": true,
+   "theme": "the motorway",
    "world": {
     "palette": {
      "bg": "#2B2B2B",
@@ -1975,6 +1990,7 @@
     "f_BOOK00447"
    ],
    "ready": true,
+   "theme": "the journey as the treat",
    "world": {
     "palette": {
      "bg": "#141414",
@@ -2192,6 +2208,7 @@
     "fi_RIVALS005"
    ],
    "ready": true,
+   "theme": "the build-up",
    "world": {
     "palette": {
      "bg": "#16213E",
@@ -2413,7 +2430,8 @@
    "evidence": [
     "x_MEALKIT004"
    ],
-   "ready": false
+   "ready": false,
+   "theme": "time given back"
   },
   {
    "id": "t_ride",
@@ -2440,7 +2458,8 @@
    "state": "found",
    "status": "live",
    "evidence": [],
-   "ready": false
+   "ready": false,
+   "theme": "the build-up"
   },
   {
    "id": "t_anon",
@@ -2470,7 +2489,8 @@
     "f_DRIVER0431"
    ],
    "ready": false,
-   "kill_reason": "Funny, but it leaves the proposition behind: it no longer says the weekend starts when you sit down."
+   "kill_reason": "Funny, but it leaves the proposition behind: it no longer says the weekend starts when you sit down.",
+   "theme": "car guilt"
   }
  ],
  "spread": {

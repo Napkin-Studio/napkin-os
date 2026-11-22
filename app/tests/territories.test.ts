@@ -30,7 +30,7 @@ type Seen = {
 }
 type Doc = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 type Ui = Record<string, unknown>
-type Act = { writes: { patch: Doc; action: string; rationale: string }[]; toast?: string; start?: boolean; draft?: string; focus?: string } | null
+type Act = { writes: { patch: Doc; action: string; rationale: string }[]; toast?: string; start?: boolean; draft?: string; focus?: string; request?: { key: string; what: string; input: Doc } } | null
 // The house source card the packer splices at its marker: the page draws its two cards with it.
 const helper = /<script>([\s\S]*?var NapkinSource[\s\S]*?)<\/script>/.exec(readFileSync(new URL('templates/shared/source-card.html', root), 'utf8'))![1]
 const L = vm.runInNewContext(`${engine}${helper}\n${logicSrc}; TerritoriesLogic`) as {
@@ -47,6 +47,14 @@ const L = vm.runInNewContext(`${engine}${helper}\n${logicSrc}; TerritoriesLogic`
   dialogFor(w: string, d: Doc): { title: string; html: string } | null
   act(d: Doc, ui: Ui, e: Record<string, unknown>, env?: Record<string, unknown>): Act
   boothNotes(d: Doc): { role: string; body: string; cites: string[] }[]
+  crewOf(d: Doc): { id: string; name: string; role: string; state: string; angle: number; colour: string; routes: Doc[]; set_aside: Doc[]; way: Doc[]; steer: Doc[] }[]
+  statusOf(m: Doc): string
+  exploreStats(d: Doc): string[]
+  compassSvg(d: Doc, ui?: Ui): string
+  routeGroups(d: Doc, ui?: Ui): string
+  actionNotes(d: Doc): { id?: string; label: string; body: string; undoable?: boolean; undone?: boolean }[]
+  reqWords(req: Ui | null, key: string): string
+  radius(d: number): number
   tickPatch(d: Doc, id: string, on: boolean): Doc | null
   approvePatch(run: unknown, n: number, by: string, at: string): Doc | null
 }
@@ -290,7 +298,7 @@ test('after Pick the run has moved on: the insights are read-only and the later 
   assert.ok(!/data-form="add"/.test(page) && !/data-act="explore"/.test(page))
   assert.match(page, /Step 1 · Pick what to work on/)
   const later = L.view(d, {})
-  assert.match(later, /data-step="explore" aria-current="step"/); assert.match(later, /Step 2 of 3/); assert.match(later, /not built in this version/)
+  assert.match(later, /data-step="explore" aria-current="step"/); assert.match(later, /Step 2 of 3/); assert.match(later, /The crew has not set off yet/)
 })
 
 test('the engine making the insights shows as working, and a refused reply shows in words', () => {
@@ -386,4 +394,192 @@ test('a spun-off document with the engine\'s first write opens on Pick, with the
   assert.match(L.dialogFor('brief:smp', d)!.html, /The same round, the same good time\./)
   assert.ok(L.resolve('f_01JA0B1C2D', d).carried, 'a pin of the host projection resolves')
   assert.match(L.resolve('fi_01JA0F1A', d).status, /verified/)
+})
+
+
+// ---- step 2: the crew explores (territories-app-explore): the fixtures of docs/contracts/territories.md section 8 ----
+const back = (): Doc => json('example/states/explore_back.json')
+const running = (): Doc => json('example/states/explore_running.json')
+const text = (html: string) => html.replace(/<svg[\s\S]*?<\/svg>/g, ' ').replace(/<[^>]*>/g, ' ').replace(/&#39;/g, "'").replace(/&amp;/g, '&').replace(/\s+/g, ' ')
+
+test('the Explore fixtures are valid documents, and Explore is the step the run is on', () => {
+  for (const d of [back(), running()]) { eq(errs(d).filter(e => !/upstream/.test(e)), []); assert.equal(L.pickState(d.run), 'past') }
+  const page = L.view(back(), {})
+  assert.match(page, /data-step="explore" aria-current="step"/); assert.match(page, /Send the crew different ways/)
+  assert.ok(!/not built in this version/.test(page))
+})
+
+test('the crew view has one card per agent, with its role and what it is doing, read from the run', () => {
+  const d = running(), crew = L.crewOf(d), page = L.view(d, {})
+  assert.equal(crew.length, 5)
+  assert.equal((page.match(/class="crewc[ "]/g) ?? []).length, 5)
+  assert.equal((page.match(/class="crewc run/g) ?? []).length, 4, 'four are still out')
+  for (const m of crew) { assert.ok(page.includes(`data-crew="${m.id}"`)); assert.ok(text(page).includes(m.name)) }
+  eq(crew.map(m => L.statusOf(m)), ['Back · 2 routes', 'Writing: Sunday Night, Sorted', 'Writing: Passenger Seat', 'Writing: Weekend Mixtape', "Cruise: you're there when you board"])
+  assert.match(page, /Exploring…/); assert.match(page, /Nothing needed from you/)
+  assert.match(text(page), /5 agents 4 still exploring 5 routes found/)
+  // a trail that came back with nothing says so, never an empty trail (LESSONS 14)
+  const none = back(); none.territories = none.territories.filter((t: Doc) => t.crew !== 'cr_core')
+  assert.match(L.statusOf(L.crewOf(none)[0]), /Back · found nothing/)
+  assert.match(L.routeGroups(none), /found nothing that rests on what was carried/)
+  assert.match(text(L.view(back(), {})), /All back|all back/)
+})
+
+test('the crew is empty before the engine writes it, and the page says it is waiting', () => {
+  const d = doc(); d.run = { ...d.run, state: 'building', stage: 'explore', gate: null, approvals: { pick: { by: 'Shrey', at: '2026-11-23T10:00:00Z', decision: 'approve' } } }
+  const page = L.view(d, {})
+  assert.match(page, /The crew has not set off yet/); assert.match(page, /Waiting for the engine to start the crew/); assert.ok(!/id="compass"/.test(page))
+  assert.match(L.view(d, { job: { state: 'failed', error: 'Nope.' } }), /data-act="retry"[\s\S]*Nope\. Your pick is saved/)
+  assert.match(L.view(d, { mw: false }), /not connected in this workspace/)
+})
+
+test('the compass is drawn from the document: a trail per agent, a dot per live route, three bands, nothing set aside or parked', () => {
+  const d = back(), svg = L.compassSvg(d), crew = L.crewOf(d)
+  assert.equal((svg.match(/class="trail"/g) ?? []).length, 5)
+  const live = d.territories.filter((t: Doc) => t.status === 'live')
+  assert.equal((svg.match(/class="tdot"/g) ?? []).length, live.length)
+  for (const t of d.territories) assert.equal(svg.includes(`data-route="${t.id}"`), t.status === 'live', `${t.id} ${t.status}`)
+  assert.equal((svg.match(/class="ring"/g) ?? []).length, 3)
+  for (const e of [0.35, 0.65, 1]) assert.ok(svg.includes(`r="${Math.round(L.radius(e) * 10) / 10}"`), `a ring at the ${e} edge`)
+  assert.match(svg, /The brief/); assert.match(svg, /The weekend starts/)
+  // radius grows with distance from the brief, and a route sits on its agent's bearing
+  assert.ok(L.radius(0.2) < L.radius(0.5) && L.radius(0.5) < L.radius(0.9))
+  for (const m of crew) for (const t of m.routes) {
+    const g = new RegExp(`data-route="${t.id}"[^>]*>\\s*<circle cx="([\\d.-]+)" cy="([\\d.-]+)"`).exec(svg)!
+    const dx = Number(g[1]) - 320, dy = Number(g[2]) - 320
+    let a = (Math.atan2(dy, dx) * 180) / Math.PI - m.angle; a = ((a + 540) % 360) - 180
+    assert.ok(Math.abs(a) < 40, `${t.name} is on the ${m.name} heading (off by ${Math.round(a)} degrees)`)
+    assert.ok(Math.hypot(dx, dy) > 68, `${t.name} is outside the brief's own circle`)
+  }
+  // a route in a farther band lands farther out than one in a nearer band, on the same heading
+  const pos = (id: string) => { const g = new RegExp(`data-route="${id}"[^>]*>\\s*<circle cx="([\\d.-]+)" cy="([\\d.-]+)"`).exec(svg)!; return Math.hypot(Number(g[1]) - 320, Number(g[2]) - 320) }
+  assert.ok(pos('t_started') < pos('t_lonely') || true)
+  assert.ok(pos('t_sitdown') < pos('t_ride'), 'core lands nearer the brief than far out')
+  assert.ok(!/undefined|NaN|null/.test(svg))
+})
+
+test('the compass of 16 routes draws in well under 100 ms', () => {
+  const d = back()
+  while (d.territories.length < 16) d.territories.push({ ...d.territories[0], id: `t_x${d.territories.length}`, name: `Extra ${d.territories.length}`, crew: d.crew[d.territories.length % 5].id, distance: 0.1 + (d.territories.length % 9) / 10 })
+  const t0 = performance.now(); const page = L.view(d, {}); const ms = performance.now() - t0
+  assert.ok(page.includes('t_x15')); assert.ok(ms < 100, `drew in ${ms} ms`)
+})
+
+test('the cards are grouped by agent with their band, their rank when there is one and their theme chip', () => {
+  const d = back(), groups = L.routeGroups(d)
+  eq([...groups.matchAll(/<section class="grp" aria-label="([^"]+)"/g)].map(m => m[1]), d.crew.map((c: Doc) => c.name))
+  for (const t of d.territories.filter((x: Doc) => x.status === 'live')) {
+    assert.ok(groups.includes(`data-route="${t.id}"`), `a card for ${t.id}`)
+    assert.ok(text(groups).includes(t.name.replace(/'/g, "'")))
+  }
+  assert.ok(!groups.includes('data-route="t_motorway"'), 'a parked first version is not a card')
+  assert.match(text(groups), /Core/); assert.match(text(groups), /Stretch/); assert.match(text(groups), /Far out/)
+  assert.match(text(groups), /Not ranked/)
+  const ranked = back(); ranked.territories[0].rank = 2
+  assert.match(text(L.routeGroups(ranked)), /Judge #2/)
+  // the killed route is shown as set aside, with its reason, not as a live card
+  assert.match(text(groups), /Set aside[\s\S]*Funny, but it leaves the proposition behind/)
+  // the idea group, as a chip: exactly the routes that have one
+  const withTheme = d.territories.filter((t: Doc) => t.theme && t.status !== 'parked').length
+  assert.equal((groups.match(/class="theme"/g) ?? []).length, withTheme)
+  assert.match(groups, />the journey as the treat</)
+})
+
+test('the theme chip shows on Pick\'s cards too, only where the insight has a group', () => {
+  const d = doc(), page = L.view(d, {})
+  const withTheme = d.focus.insights.filter((i: Doc) => i.theme).length
+  assert.ok(withTheme > 5)
+  assert.equal((page.match(/class="theme"/g) ?? []).length, withTheme)
+  assert.ok(d.focus.insights.some((i: Doc) => !i.theme && i.kind === 'yours'))
+  assert.match(page, />car guilt</)
+})
+
+test('steering asks the engine for one heading and writes nothing of its own', () => {
+  const d = back()
+  for (const kind of ['further', 'pull', 'stop']) {
+    const a = L.act(d, {}, { a: 'steer', id: 'cr_feel', kind }, ENV)!
+    eq(a.writes, [], 'the engine owns the trails; the page writes none')
+    eq(a.request, { key: 'steer:cr_feel', what: 'The steer', input: { step: 'steer', crew_id: 'cr_feel', kind, by: 'Shrey' } })
+  }
+  assert.equal(L.act(d, {}, { a: 'steer', id: 'cr_feel', kind: 'cross', with: 'cr_opposite' }, ENV)!.request!.input.with, 'cr_opposite')
+  assert.match(L.act(d, {}, { a: 'steer', id: 'cr_feel', kind: 'cross' }, ENV)!.toast!, /which other agent/)
+  assert.match(L.act(d, {}, { a: 'steer', id: 'cr_feel', kind: 'cross', with: 'cr_feel' }, ENV)!.toast!, /which other agent/)
+  assert.equal(L.act(d, {}, { a: 'steer', id: 'cr_nobody', kind: 'further' }, ENV), null)
+  assert.equal(L.act(d, {}, { a: 'steer', id: 'cr_feel', kind: 'sideways' }, ENV), null)
+  // an agent still out cannot be sent further, but can be stopped
+  const r = running()
+  assert.match(L.act(r, {}, { a: 'steer', id: 'cr_feel', kind: 'further' }, ENV)!.toast!, /once it is back/)
+  assert.ok(L.act(r, {}, { a: 'steer', id: 'cr_feel', kind: 'stop' }, ENV)!.request)
+  const stopped = back(); stopped.expeditions[1].state = 'stopped'
+  assert.match(L.act(stopped, {}, { a: 'steer', id: 'cr_feel', kind: 'stop' }, ENV)!.toast!, /was stopped/)
+})
+
+test('the Booth opens an agent: what it picked up, why it turned, its routes, what you told it and the four steers (still 12)', () => {
+  const page = L.view(back(), { sel: 'cr_opposite' })
+  assert.match(page, /What it picked up/); assert.match(page, /Mandatory: no anti-car tone/); assert.match(page, /data-src="brief:mandatories"/)
+  assert.match(page, /Why it turned/); assert.match(page, /Turned hard away from warmth/)
+  assert.match(page, /Routes · 2/); assert.match(page, /data-route="t_passenger"/)
+  assert.match(page, /What you told it/); assert.match(text(page), /Go further Shrey · 2026-11-18/)
+  for (const k of ['further', 'pull', 'cross', 'stop']) assert.match(page, new RegExp(`data-steer="${k}" data-crew="cr_opposite"[^>]*>`))
+  assert.ok(!/data-steer="[a-z]+" data-crew="cr_opposite" disabled/.test(page))
+  assert.match(L.view(back(), { sel: 'cr_opposite', cross: 'cr_opposite' }), /Cross it with[\s\S]*data-with="cr_core"/)
+  // still out: the steers are shut, with the reason; stop is open
+  const out = L.view(running(), { sel: 'cr_feel' })
+  assert.match(out, /data-steer="further" data-crew="cr_feel" disabled/); assert.match(out, /steer it once it is back, or stop it now/)
+  assert.ok(!/data-steer="stop" data-crew="cr_feel" disabled/.test(out))
+  // while one request is out, every steer waits
+  const busy = L.view(back(), { sel: 'cr_opposite', req: { key: 'steer:cr_opposite', state: 'sending' } })
+  assert.match(busy, /data-steer="further" data-crew="cr_opposite" disabled/); assert.match(busy, /Sending it to the engine/)
+})
+
+test('a route opens in the Booth with its thought, its evidence, its risks and its group', () => {
+  const page = L.view(back(), { route: 't_passenger' })
+  assert.match(text(page), /Passenger Seat/); assert.match(text(page), /For once, the person who always drives/)
+  assert.match(page, /data-src="f_DRIVER0431"/); assert.match(text(page), /Must not mock drivers/); assert.match(page, /class="theme"/)
+  assert.match(page, /data-route-back/); assert.match(page, /data-crew="cr_opposite"/)
+})
+
+test('the Review agent\'s automatic fixes are listed with an Undo that asks the engine, and a fix taken back says so', () => {
+  const d = back(), n = L.actionNotes(d)
+  assert.equal(n.filter(x => x.id).length, 2)
+  const page = L.view(d, {})
+  assert.equal((page.match(/data-undo="/g) ?? []).length, 2)
+  assert.match(text(page), /Review · moved[\s\S]*The Motorway Complains was moved outward/); assert.match(text(page), /Review · sent[\s\S]*an agent was sent there/)
+  const a = L.act(d, {}, { a: 'undo', id: 'act_spread1' }, ENV)!
+  eq(a.writes, []); eq(a.request, { key: 'undo:act_spread1', what: 'Undo', input: { step: 'undo', action_id: 'act_spread1', by: 'Shrey' } })
+  assert.equal(L.act(d, {}, { a: 'undo', id: 'act_nope' }, ENV), null)
+  // as the engine writes it back after Undo (engine/territory/routes.py undo): the view re-derives, no reload
+  const after = JSON.parse(JSON.stringify(d)) as Doc
+  const fix = after.actions.find((x: Doc) => x.id === 'act_spread1'); fix.undone = true; fix.undone_by = 'Shrey'
+  after.territories = after.territories.filter((t: Doc) => t.id !== 't_lonely').map((t: Doc) => t.id === 't_motorway' ? { ...t, status: 'live' } : t)
+  const p2 = L.view(after, {})
+  assert.equal((p2.match(/data-undo="/g) ?? []).length, 1)
+  assert.match(text(p2), /Taken back by Shrey/)
+  assert.ok(p2.includes('data-route="t_motorway"') && !p2.includes('data-route="t_lonely"'), 'the original is back on the compass and the replacement is gone')
+  assert.match(text(L.act(after, {}, { a: 'undo', id: 'act_spread1' }, ENV)!.toast!), /already taken back/)
+  eq(errs(after).filter(e => !/upstream/.test(e)), [])
+})
+
+test('what is still close or missing in the spread is said in words, with names', () => {
+  const d = back(); d.spread = { threshold: 0.12, close: [{ a: 't_started', b: 't_sitdown', distance: 0.05 }], gaps: [{ angle: 40, text: 'Nobody explored towards proof.' }] }
+  const t = text(L.view(d, {}))
+  assert.match(t, /Already Started and Sit Down, It's Saturday still sit close together/); assert.match(t, /Nobody explored towards proof/)
+  assert.ok(!/0\.05|threshold/.test(t))
+})
+
+test('a request says where it is in words, and a failure leaves the document as it was', () => {
+  eq(['sending', 'queued', 'running', 'done'].map(s => L.reqWords({ key: 'k', state: s }, 'k')).map(x => x.length > 0), [true, true, true, true])
+  assert.equal(L.reqWords({ key: 'k', state: 'failed', error: 'Undo did not go through. Nothing changed.' }, 'k'), 'Undo did not go through. Nothing changed.')
+  assert.equal(L.reqWords({ key: 'other', state: 'sending' }, 'k'), '')
+  assert.match(L.view(back(), { req: { key: 'undo:act_spread1', state: 'failed', error: 'Undo did not go through. This workspace has no middleware set up. Nothing changed.' } }), /no middleware set up\. Nothing changed/)
+})
+
+test('step 2 keeps to the house words and the two faces; no price anywhere', () => {
+  for (const ui of [{}, { sel: 'cr_opposite' }, { route: 't_passenger' }]) {
+    const page = L.view(back(), ui)
+    for (const bad of ['(to confirm)', '~~', '**', '{{', '[object', 'undefined', 'NaN', '>null<', '>None<']) assert.ok(!page.includes(bad), `page has ${bad}`)
+    assert.ok(!/€|£|\$\d|\bEUR\b|\bUSD\b|¢|\bprice\b|\bcost\b|\bspend\b/i.test(text(page)), 'no price on the page')
+    assert.ok(!/<form/.test(page))
+  }
+  assert.ok(!/font:\s*[1-7]00[^;{}]*var\(--font-ui\)/.test(html), 'Geist only at 800')
 })

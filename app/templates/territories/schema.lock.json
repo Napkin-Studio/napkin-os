@@ -318,6 +318,9 @@
   "focus.insights[].text": {
    "type": "string"
   },
+  "focus.insights[].theme": {
+   "type": "string"
+  },
   "focus.insights[].ticked": {
    "type": "boolean"
   },
@@ -1245,6 +1248,9 @@
    "type": "string"
   },
   "territories[].tension": {
+   "type": "string"
+  },
+  "territories[].theme": {
    "type": "string"
   },
   "territories[].thought": {

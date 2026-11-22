@@ -182,7 +182,8 @@
     "strength": "strong",
     "ticked": true,
     "by": "engine",
-    "rank": 1
+    "rank": 1,
+    "theme": "arriving rested"
    },
    {
     "id": "in_timeback",
@@ -195,7 +196,8 @@
     "strength": "strong",
     "ticked": true,
     "by": "engine",
-    "rank": 2
+    "rank": 2,
+    "theme": "time given back"
    },
    {
     "id": "in_journey",
@@ -207,7 +209,8 @@
     "strength": "strong",
     "ticked": true,
     "by": "engine",
-    "rank": 3
+    "rank": 3,
+    "theme": "the journey as the treat"
    },
    {
     "id": "in_driver",
@@ -221,7 +224,8 @@
     "ticked": true,
     "by": "engine",
     "rank": 4,
-    "derived": true
+    "derived": true,
+    "theme": "car guilt"
    },
    {
     "id": "in_friday",
@@ -233,7 +237,8 @@
     "strength": "moderate",
     "ticked": true,
     "by": "engine",
-    "rank": 5
+    "rank": 5,
+    "theme": "spontaneous weekends"
    },
    {
     "id": "in_forum",
@@ -246,7 +251,8 @@
     "strength": "moderate",
     "ticked": true,
     "by": "engine",
-    "rank": 6
+    "rank": 6,
+    "theme": "the journey as the treat"
    },
    {
     "id": "in_lounge",
@@ -259,7 +265,8 @@
     "strength": "moderate",
     "ticked": false,
     "by": "engine",
-    "rank": 7
+    "rank": 7,
+    "theme": "the build-up"
    },
    {
     "id": "in_fare",
@@ -273,7 +280,8 @@
     "ticked": false,
     "by": "engine",
     "rank": 8,
-    "derived": true
+    "derived": true,
+    "theme": "the fare"
    },
    {
     "id": "in_mealkit",
@@ -285,7 +293,8 @@
     "strength": "thin",
     "ticked": false,
     "by": "engine",
-    "rank": 9
+    "rank": 9,
+    "theme": "time given back"
    },
    {
     "id": "in_nofight",
@@ -601,7 +610,8 @@
    "evidence": [
     "f_TIRED0418"
    ],
-   "ready": false
+   "ready": false,
+   "theme": "the weekend starts early"
   },
   {
    "id": "t_sitdown",
@@ -630,7 +640,8 @@
    "evidence": [
     "brief:smp"
    ],
-   "ready": false
+   "ready": false,
+   "theme": "the proposition, plainly"
   },
   {
    "id": "t_sunday",
@@ -659,7 +670,8 @@
    "evidence": [
     "f_TIRED0418"
    ],
-   "ready": false
+   "ready": false,
+   "theme": "the way home"
   },
   {
    "id": "t_passenger",
@@ -690,7 +702,8 @@
     "f_DRIVER0431",
     "fi_NOTALK003"
    ],
-   "ready": false
+   "ready": false,
+   "theme": "car guilt"
   },
   {
    "id": "t_mixtape",
@@ -720,7 +733,8 @@
     "x_AUDIOB0005",
     "f_BOOK00447"
    ],
-   "ready": false
+   "ready": false,
+   "theme": "the journey as the treat"
   }
  ],
  "spread": {

@@ -152,6 +152,7 @@ in one go, or `run.error` in words with the document otherwise untouched (a retr
 | Review fixes | At most `CONFIG.max_pair_fixes` close pairs rewritten outward and `CONFIG.max_gap_agents` agent sent into a gap, each an `actions[]` entry (`agent: review`). `spread_fix`: `territory_ids = [moved route, its replacement, the route it was too close to]`; the moved route is **parked**, never deleted. `sent_agent`: `territory_ids` = the routes the new `custom` crew member brought back |
 | `routes.undo(doc, action_id, by)` | No model call. `spread_fix`: replacement goes, original is live again. `sent_agent`: crew member, trail and routes go. The action stays, `undone: true`. A later steer does not fix an undone pair again |
 | `routes.steer(doc, llm, crew_id, kind, by, with_=)` | `further`, `pull`, `cross` (needs `with_`), `stop`. Re-runs ONLY that heading: its found routes are replaced, a developed one is parked. The instruction is in `expeditions[].steer`; `routes.steer_decision` is the history entry. `(doc, refusals in words)` |
+| Theme | `territory.theme` and `insight.theme` (optional, 1 to 40 characters): the idea group in a few words, the chip under a card. Routes take develop's sort group (`routes.themed`); insights take the model's own words (`insights.theme_of`). Absent when there is none, never an id |
 | Cost | About 11 calls (5 headings, kill, sort, distance, up to 3 repair calls and the two checks on what they made), about USD 0.45 to 0.60 on a real brief at the 2026-11-23 prices. Prices stay in the history, never in the document |
 
 Dev harness: `python -m territory.routes --doc <pick state> --facts f.json --findings fi.json [--live] [--baseline]`; `routes.cards(doc, 3)` feeds
@@ -199,6 +200,7 @@ All fictional (Linea, Galway line). `example_build.py` writes them; the test fai
 | `example/spunoff/data.json`, `facts.json`, `findings.json`, `seen.json` | A real spin-off (research to brief to Territories) as the host produced it, and what the reader and the page make of it |
 | `example/states/pick.json` | Step 1 open |
 | `example/states/explore_running.json` | The crew out, routes landing |
+| `example/states/explore_back.json` | Every trail home; the Review agent's two fixes are real, undoable actions (the parked first version is in the document) |
 | `example/states/greenlight_open.json` | Gate open, nothing greenlit (`nothing_picked`) |
 | `example/states/greenlight_derived_pending.json` | A greenlit route rests on an unverified derived finding; the ask is open |
 | `example/states/greenlight_sensitive_missing.json` | Sensitive review required and missing |
