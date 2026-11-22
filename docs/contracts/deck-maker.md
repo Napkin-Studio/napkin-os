@@ -336,7 +336,7 @@ the saved project off into a Deck Maker document: its contract-3 data (assets, f
 `finals` map, item 26) is carried whole under `data.upstream.<project's document id>` with `source_uri production:<project id>@<etag>`
 (app id `ie.napkin.production`). The pictures are not embedded: they stay in the relay under their sha256.
 
-- *Reading.* `build_deck@1` sends the carried entry (the first `data.upstream` entry whose `app` is `production-tool`) to the engine
+- *Reading.* `build_deck@1` sends the carried entry (the host's `clan.production_upstream`, the first `data.upstream` entry whose `app` is `production-tool`: `data.upstream` itself reaches the middleware as an index, middleware-api.md §1) to the engine
   server as `production_upstream {id, data}`; the engine server writes it to the document's folder and runs with
   `--production-upstream FILE`. A Deck document read directly (`run_deck --deck FILE.clan`) needs no flag: `inputs.from_deck_document`
   names the entry. The entry is never the brief or the research. An explicit `--production FILE` (below) wins; an investor deck, or a

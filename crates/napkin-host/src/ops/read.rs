@@ -496,11 +496,13 @@ pub fn clan_context_for_agent(doc: &Document) -> Value {
         .unwrap_or(Value::Null);
     let m = clan.manifest();
     let pipeline = yaml_to_json("app/pipeline.yaml");
+    let raw_data = yaml_to_json("shared/data.yaml");
+    let production = production_upstream(&raw_data);
     let mut context = serde_json::json!({
         "document_type": m.document_type,
         "app": m.app.as_ref().map(|a| serde_json::json!({ "name": a.name, "app_id": a.app_id, "version": a.version })),
         "schema": schema,
-        "data": with_upstream_index(clan, yaml_to_json("shared/data.yaml")),
+        "data": with_upstream_index(clan, raw_data),
         "decision_chain": yaml_to_json("agent/decision-chain.yaml"),
         "context": clan.read_entry_string("agent/context.md").unwrap_or_default(),
         "lineage": m.lineage.as_ref().map(|l| serde_json::json!({ "parent_id": l.parent_id, "delta": l.delta })),
@@ -515,6 +517,12 @@ pub fn clan_context_for_agent(doc: &Document) -> Value {
         "edits": members::edits_map(clan),
         "pipeline": pipeline,
     });
+    // A deck spun off from a Production project is sent that project whole
+    // (its finals, assets and briefs; no picture bytes), beside the index:
+    // the build reads it and cannot from the index (production-spinoff).
+    if let Some(p) = production {
+        context["production_upstream"] = p;
+    }
     // A research started from a brief is told the brief's ask, and only
     // that: extract_ask proposes from it (features/spinoff-and-links.clan).
     if let Some(ask) = upstream_ask(clan, &context["pipeline"]) {
@@ -539,6 +547,19 @@ pub fn clan_context_for_agent(doc: &Document) -> Value {
         }
     }
     context
+}
+
+/// The app id a Production project's data carries (`app`, production-tool/contracts/document.schema.json).
+pub const PRODUCTION_TOOL_APP: &str = "production-tool";
+
+/// `{id, data}` of the first entry of `data.upstream` that is a Production
+/// project (its `app` is [`PRODUCTION_TOOL_APP`]): the frozen copy whole, for
+/// the Deck's build. `None` when the document carries no such project.
+fn production_upstream(data: &Value) -> Option<Value> {
+    let up = data.get(UPSTREAM_KEY)?.as_object()?;
+    up.iter()
+        .find(|(_, copy)| copy.get("app").and_then(Value::as_str) == Some(PRODUCTION_TOOL_APP))
+        .map(|(id, copy)| json!({ "id": id, "data": copy }))
 }
 
 /// The middleware tasks that read `clan.upstream_payload`.
@@ -1417,5 +1438,21 @@ mod tests {
         for (actor, name, _) in DUMMY_ACCOUNT {
             assert_eq!(people[*actor].name, *name);
         }
+    }
+    #[test]
+    fn a_carried_production_project_is_found_whole_and_nothing_else_is() {
+        let data = json!({ "upstream": {
+            "doc-brief": { "client": "Lumen Water", "app": "ie.napkin.brief-maker" },
+            "doc-prod": { "app": "production-tool", "finals": { "final_1": { "asset": "sha256:ab" } } },
+        } });
+        assert_eq!(
+            production_upstream(&data),
+            Some(json!({ "id": "doc-prod", "data": data["upstream"]["doc-prod"] }))
+        );
+        assert_eq!(production_upstream(&json!({})), None);
+        assert_eq!(
+            production_upstream(&json!({ "upstream": { "doc-brief": { "client": "x" } } })),
+            None
+        );
     }
 }

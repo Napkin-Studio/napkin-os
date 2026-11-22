@@ -113,6 +113,17 @@ def size_of(data: dict) -> str | None:
     return None
 
 
+def with_production(data: dict, pu) -> dict:
+    """``data`` with the carried Production project put back whole under ``upstream.<id>``. The host sends ``clan.data.upstream`` as an index
+    (middleware-api.md §1) and the project beside it as ``clan.production_upstream {id, data}``; the marks and the engine read the project from
+    ``data.upstream`` as it is in the document. A ``pu`` that is not ``{id, data: {app: production-tool}}`` changes nothing."""
+    if not (isinstance(pu, dict) and isinstance(pu.get("id"), str) and pu["id"] and isinstance(pu.get("data"), dict)
+            and pu["data"].get("app") == "production-tool"):
+        return data
+    up = data.get("upstream") if isinstance(data.get("upstream"), dict) else {}
+    return {**data, "upstream": {**up, pu["id"]: pu["data"]}}
+
+
 def production_upstream_of(data: dict) -> dict | None:
     """``{id, data}``: the Production project (``app: production-tool``) the Deck carries under ``data.upstream`` (the first one), as the engine
     reads it (finals, assets, sizes, briefs). The pictures are not in it: they are held by the relay under their sha256."""
@@ -137,7 +148,7 @@ def assets_of(v) -> dict | None:
 
 def start(req, caps, settings, jid):
     """Validate now (a 400 before any job, a 503 with no engine); build the job (the caller starts it)."""
-    data = ctx_data(req.clan)
+    data = with_production(ctx_data(req.clan), (req.clan or {}).get("production_upstream"))
     inputs = data.get("inputs") if isinstance(data.get("inputs"), dict) else {}
     prompt = inputs.get("prompt") if isinstance(inputs.get("prompt"), dict) else {}
     if not str(prompt.get("text") or "").strip():

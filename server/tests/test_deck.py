@@ -450,3 +450,31 @@ def test_http_pass_base_is_forwarded_only_with_the_dev_opt_in(monkeypatch):
     monkeypatch.setenv("DECK_RELAY_ALLOW_LOOPBACK", "1")
     assert bd.assets_of(v) == {"base": "http://127.0.0.1:18788/api", "pass": PASS}
     assert bd.assets_of({"base": "ftp://x/api", "pass": PASS}) is None
+
+
+def test_the_carried_project_arrives_beside_the_upstream_index_as_the_host_sends_it(deck, monkeypatch):
+    # Found live: the host sends data.upstream as an index, so the project (finals, assets, briefs) never reached the engine.
+    fake = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    host = Host(data=deck_data(), schema=SCHEMA)
+    prod = {"app": "production-tool", "contract_version": "3", "project": {"id": "proj_1", "title": "T"},
+            "finals": {"final_01KB0000000000000000000001": {"of": {"kind": "picture", "id": "pic_kv_0001"}, "asset": "sha256:" + "ab" * 32}},
+            "briefs": {"brief_01KB0000000000000000000001": {"title": "L", "spine": {"insight": "A secret insight"}, "confidential": ["insight"]}}}
+    host.data["upstream"] = {"doc-prod-1": {"direct": True, "keys": sorted(prod), "open_contests": []}}   # the index, as the host sends it
+    clan = host.clan()
+    clan["production_upstream"] = {"id": "doc-prod-1", "data": prod}
+    st, body = post_raw(deck, {"task": "build_deck", "input": {}}, clan)
+    assert st == 200, body
+    waited = 0
+    while not fake.posts and waited < 5:
+        time.sleep(0.1)
+        waited += 0.1
+    sent = fake.posts[0]
+    assert sent["production_upstream"] == {"id": "doc-prod-1", "data": prod}
+    assert any(m["path"].endswith("briefs.brief_01KB0000000000000000000001.spine.insight") for m in sent["marks"])
+    # a malformed one is ignored, never half-read
+    fake2 = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    clan2 = Host(data=deck_data(), schema=SCHEMA).clan()
+    clan2["production_upstream"] = {"id": "x", "data": {"app": "something-else"}}
+    st, _ = post_raw(deck, {"task": "build_deck", "input": {}}, clan2)
+    time.sleep(0.5)
+    assert st == 200 and "production_upstream" not in fake2.posts[0]

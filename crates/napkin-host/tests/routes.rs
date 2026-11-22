@@ -910,6 +910,10 @@ mod upstream {
         let clan = brief.session.clan_context_for_agent();
         let index = &clan["data"]["upstream"][&research.doc];
         assert_eq!(index["direct"], true);
+        assert!(
+            clan.get("production_upstream").is_none(),
+            "only a Production project travels whole"
+        );
         let keys: Vec<&str> = index["keys"]
             .as_array()
             .unwrap()
