@@ -161,15 +161,17 @@ pub fn router_full(
     if let Some(relay) = &production {
         api = api.layer(axum::Extension(relay.clone()));
     }
+    // The sandbox signs a read-only assets pass for a deck build (sandbox.rs).
+    let mut sandbox = sandbox::router().layer(DefaultBodyLimit::max(UPLOAD_MAX));
+    if let Some(relay) = &production {
+        sandbox = sandbox.layer(axum::Extension(relay.clone()));
+    }
     let mut app = Router::new()
         // The shell API is the only part that runs on a cookie session.
         .nest("/api", api)
         // The sandbox authenticates with its token and nothing else, so the
         // session layer deliberately does not apply to it.
-        .nest(
-            "/s",
-            sandbox::router().layer(DefaultBodyLimit::max(UPLOAD_MAX)),
-        );
+        .nest("/s", sandbox);
     if let Some(relay) = production {
         // Not under dogfood::capture_api: the relay keeps the tool's own record.
         app = app.merge(production::router(relay, identity));

@@ -181,6 +181,10 @@ struct Server {
 }
 
 fn server(relay_url: Option<String>) -> Server {
+    server_with(relay_url, Arc::new(NoConfig))
+}
+
+fn server_with(relay_url: Option<String>, config: Arc<dyn napkin_host::HostConfig>) -> Server {
     let dir = tempfile::tempdir().unwrap();
     let seed = dir.path().join("seed");
     std::fs::create_dir_all(&seed).unwrap();
@@ -204,9 +208,8 @@ fn server(relay_url: Option<String>) -> Server {
         template(DECK, "Deck Maker", Some(upstream(PRODUCTION))),
     )
     .unwrap();
-    let ctx = Arc::new(
-        AppCtx::new(dir.path().join("data"), Arc::new(NoConfig), None, 40).with_seed(Some(seed)),
-    );
+    let ctx =
+        Arc::new(AppCtx::new(dir.path().join("data"), config, None, 40).with_seed(Some(seed)));
     let tool = dir.path().join("production");
     std::fs::create_dir_all(&tool).unwrap();
     std::fs::write(tool.join("index.html"), "<!doctype html>").unwrap();
@@ -668,4 +671,123 @@ async fn a_project_is_not_continued_into_production_or_by_a_bad_id() {
     )
     .await;
     assert_eq!(r.status, StatusCode::NOT_FOUND);
+}
+
+// ── The assets pass for a deck build (src/sandbox.rs, docs/contracts/production-tool-identity.md) ──
+
+/// A middleware that keeps the body of every task it is sent.
+struct Capture(String);
+
+impl napkin_host::HostConfig for Capture {
+    fn workspace(&self) -> Option<napkin_host::WorkspaceConfig> {
+        serde_json::from_value(
+            serde_json::json!({ "proxies": {"middleware": {"endpoint": self.0}} }),
+        )
+        .ok()
+    }
+    fn secret(&self, _: &str) -> Option<String> {
+        None
+    }
+}
+
+async fn capturing_middleware() -> (String, Arc<Mutex<Vec<Value>>>) {
+    let seen: Arc<Mutex<Vec<Value>>> = Arc::default();
+    let keep = seen.clone();
+    let app = Router::new().route(
+        "/v1/tasks",
+        axum::routing::post(move |axum::Json(body): axum::Json<Value>| {
+            let keep = keep.clone();
+            async move {
+                keep.lock().unwrap().push(body);
+                axum::Json(serde_json::json!({
+                    "api": "napkin.middleware/1", "task": "build_deck", "handler": "build_deck@1",
+                    "job": {"id": "job_0123abcd", "state": "queued"},
+                    "result": {"summary": "queued"}, "change": null, "trace": {},
+                }))
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    (format!("http://{addr}/v1/tasks"), seen)
+}
+
+async fn proxy(s: &Server, token: &str, task: &str, extra: Value) -> Reply {
+    let mut payload = serde_json::json!({ "task": task, "input": {} });
+    payload
+        .as_object_mut()
+        .unwrap()
+        .extend(extra.as_object().unwrap().clone());
+    send(
+        s,
+        Request::builder()
+            .method("POST")
+            .uri(format!("/s/{token}/api-proxy"))
+            .body(Body::from(
+                serde_json::json!({ "request_kind": "middleware", "payload": payload }).to_string(),
+            ))
+            .unwrap(),
+    )
+    .await
+}
+
+#[tokio::test]
+async fn a_forwarded_build_deck_carries_the_callers_assets_pass_and_no_planted_one() {
+    let (url, rs) = relay().await;
+    let (mw, seen) = capturing_middleware().await;
+    let s = server_with(Some(url), Arc::new(Capture(mw)));
+    let me = sign_in(&s, "visionary", "napkin").await;
+    let _ = rs;
+    let doc = napkin_host::DocId::new(a_brief(&s, &me, "Deck"));
+    let token = s.ctx.tokens.mint(&me.tenant, "visionary@napkin", &doc);
+    let planted =
+        serde_json::json!({ "production_assets": { "base": "https://evil.example", "pass": "x" } });
+
+    let r = proxy(&s, &token, "build_deck", planted.clone()).await;
+    assert_eq!(
+        r.status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&r.body)
+    );
+    let r = proxy(&s, &token, "draft_brief", planted).await;
+    assert_eq!(r.status, StatusCode::OK);
+
+    let bodies = seen.lock().unwrap().clone();
+    let assets = &bodies[0]["payload"]["production_assets"];
+    assert!(assets["base"].as_str().unwrap().ends_with("/api"));
+    assert_ne!(assets["base"], "https://evil.example");
+    let part = assets["pass"].as_str().unwrap().split('.').nth(1).unwrap();
+    let c: Value = serde_json::from_slice(&B64.decode(part).unwrap()).unwrap();
+    assert_eq!(
+        (c["aud"].as_str(), c["a"].as_str()),
+        (Some("assets"), Some("napkin"))
+    );
+    assert_eq!(c["t"], me.tenant.to_string());
+    assert!(
+        bodies[1]["payload"].get("production_assets").is_none(),
+        "not on another task"
+    );
+}
+
+#[tokio::test]
+async fn without_a_relay_a_build_deck_has_no_assets_field_and_a_planted_one_is_gone() {
+    let (mw, seen) = capturing_middleware().await;
+    let s = server_with(None, Arc::new(Capture(mw)));
+    let me = sign_in(&s, "visionary", "napkin").await;
+    let doc = napkin_host::DocId::new(a_brief(&s, &me, "Deck"));
+    let token = s.ctx.tokens.mint(&me.tenant, "visionary@napkin", &doc);
+    let planted =
+        serde_json::json!({ "production_assets": { "base": "https://evil.example", "pass": "x" } });
+    let r = proxy(&s, &token, "build_deck", planted).await;
+    assert_eq!(
+        r.status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&r.body)
+    );
+    assert!(seen.lock().unwrap()[0]["payload"]
+        .get("production_assets")
+        .is_none());
 }
