@@ -30,7 +30,7 @@ import hashlib
 import json
 from datetime import datetime, timezone
 
-from . import contract
+from . import contract, pictures
 
 GATES = ("pick", "greenlight")
 RELEASES = {"pick": "explore", "greenlight": "send"}          # the stage a gate lets through
@@ -200,6 +200,7 @@ def blockers(doc: dict, gate: str, *, findings=None) -> list[dict]:
                             " close to a mandatory. Confirm it is fine, or change it."})
     if sensitive_state(doc)["required"] and not sensitive_state(doc)["done"]:
         out.append({"kind": "sensitive_review", "text": sensitive_state(doc)["words"]})
+    out.extend(pictures.blockers(doc))
     return out
 
 

@@ -105,7 +105,7 @@ translation. `engine/territory/cards.py card()` keys all carry over by name, wit
 | `marks` | `{fit, ownable, risk}`, 1 to 5: the three chips at greenlight |
 | `world` | `palette` (ink on bg at least 4.5 to 1), `type` (`newsreader` or `geist_extra_bold` only), `headlines` (four corners of the tone and energy dial), `lines` (at most 16), `tv`, `radio`, `social`, `seat`, `crm`, `music`, `sonic`, `refs`, `not`, `scenes`, `dial`, `dial_set?`, `lead?`, `starred[]`. Only this block is read by the touchpoint templates |
 | `checks[]` | `{id ck_*, kind proposition or mandatory or landscape or evidence or judge or contrast or rival, status ok or warn or fail or unchecked, text, cite[]}` |
-| `pictures[]` | One slot per pictured place. v1 draws `sketch` slots from the palette (`scene` required). `frame` needs `image`, `sha256` and `rights`; `gap` needs `gap_reason` (an honest gap, never the key visual reused). The same hash may not fill two slots |
+| `pictures[]` | One slot per pictured place. `sketch` (palette-drawn, `scene` required, labelled Mock-up) is the default and needs no rights. `frame` is a real picture held **by link** (`image` is `sha256:<hex>`, never copied bytes) and needs `image`, `sha256` and `rights`; it is labelled Illustrative. `gap` needs `gap_reason` (an honest gap, never the key visual reused). `final` (frames only, one per touchpoint of a route) marks the picture a person chose; `source` says in words where a carried picture came from. A picture is picked by slot id or hash, never by position. The same hash may not fill two slots. Rules and words live in `engine/territory/pictures.py` |
 | `proof_cases[]`, `frames[]`, `visual`, `assumes[]`, `ready`, `vote`, `tension` | Carried from `cards.py`; `frames` is reserved for `territories-pictures-frames` |
 
 ## 5. Gates and blocked states (LESSONS 11)
@@ -250,3 +250,16 @@ All fictional (Linea, Galway line). `example_build.py` writes them; the test fai
 
 From `territories-contract`'s open questions, defaults in force: `tier` (judged) and `band` (measured) are separate fields; both scores are stored,
 only the rank is shown; ceilings are 5 headings by up to 4 routes plus the planner's own and one added (8 crew, 32 routes) and 25 insights.
+
+## Pictures: rights, Final, carrying in (territories-pictures-rights)
+
+* **Rights** use Production's and the Deck's words: `generated`, `own`, `licensed` (trusted only when someone stated them) and `unknown`. Unknown, unstated,
+  a mock, `client_supplied`, `reference_only` or any other word reads **Rights to supply**; nothing is inferred from where a picture came from (an edit or an
+  upload states none). The enum is read from `schema.json` only.
+* **Final** is a person's mark on one frame per touchpoint (marking another replaces it). A Final with no stated rights holds the greenlight gate with
+  `blocked_by` kind `picture_rights` (`pictures.blockers`, read by `gates.blockers`), so Send waits and the Booth asks whose picture it is.
+* **Carrying in.** `pictures.rehome(assets, reader, store)` puts every picture of an arriving document (its `assets` map) on this document's own store (a
+  content-addressed store: the hosted workspace's `blobs/<aa>/<sha256>`, verified on write, never overwritten) and names the ones that did not arrive;
+  `require_all` refuses a partial arrival ("19 of 23 pictures arrived"). A mock is never used. Local check: `python -m territory.pictures carry <export.zip> <dir>`.
+* **Provider.** `visuals.policy.allows(client_derived)`: material a person did not mark invented or demo is never sent to a picture provider by default
+  (`VISUALS_CLIENT_TO_RUNWAY=allow` is the tester's override; the lint and the Confidential deny-list run either way).

@@ -721,6 +721,7 @@
     "near_mandatory",
     "no_routes",
     "nothing_picked",
+    "picture_rights",
     "sensitive_review"
    ],
    "type": "string"
@@ -1053,7 +1054,7 @@
    "enum": [
     "generated",
     "licensed",
-    "supplied",
+    "own",
     "unknown"
    ],
    "type": "string"
@@ -1116,6 +1117,9 @@
   "territories[].pictures[]": {
    "type": "object"
   },
+  "territories[].pictures[].final": {
+   "type": "boolean"
+  },
   "territories[].pictures[].gap_reason": {
    "type": "string"
   },
@@ -1140,7 +1144,7 @@
    "enum": [
     "generated",
     "licensed",
-    "supplied",
+    "own",
     "unknown"
    ],
    "type": "string"
@@ -1161,6 +1165,9 @@
    "type": "string"
   },
   "territories[].pictures[].sha256": {
+   "type": "string"
+  },
+  "territories[].pictures[].source": {
    "type": "string"
   },
   "territories[].pictures[].touchpoint": {
