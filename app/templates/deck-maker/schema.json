@@ -3949,7 +3949,8 @@
             "kind": {
               "enum": [
                 "clan",
-                "zip"
+                "zip",
+                "upstream"
               ]
             },
             "name": {
@@ -3993,6 +3994,7 @@
               "from": {
                 "enum": [
                   "embedded",
+                  "relay",
                   "https",
                   "zip",
                   "rights",
@@ -4001,6 +4003,7 @@
               },
               "by": {
                 "enum": [
+                  "final",
                   "rule",
                   "claude",
                   "person"
@@ -4044,6 +4047,7 @@
                     "reach": {
                       "enum": [
                         "embedded",
+                        "relay",
                         "https",
                         "zip",
                         "s3_only",

@@ -11,7 +11,8 @@ where the last segment stopped and recorded stages replay for free.
 Routes (JSON; failures are non-2xx with ``{"error": {"type", "message"}}``, never a 200 with an error in it)::
 
     GET  /status                 what is on and what is busy
-    POST /run                    {doc, inputs, approvals, mode, render?}: start the next segment of this document's run
+    POST /run                    {doc, inputs, approvals, mode, render?, production_upstream?}: start the next segment of this document's run
+                                 (production_upstream {id, data}: the Production project the deck was spun off from, carried whole)
     GET  /run/<doc>              the run so far: state, the run object the screens read, and once built the payload
     GET  /file/<doc>/<name>      a finished file (deck.html, deck.pptx, deck.pdf, report.json)
     POST /production             {doc, name, data_b64}: keep a Production .clan or export zip for this document (deck-prod-picker); every
@@ -218,7 +219,20 @@ def validate_request(body: dict, settings: Settings) -> dict:
     return {"size": size, "doc": doc, "inputs": inp, "prompt": prompt, "kind": kind, "format": inp.get("format", "pitch"), "mode": mode,
             "type": prof["id"], "picked": bool(picked_type(inp)), "type_stages": list(prof["stages"]), "confirmed": confirmed_stages(body, inp),
             "approvals": approvals, "render": body.get("render", True) is not False, "marks": marks,
-            "review": body.get("review") if isinstance(body.get("review"), dict) else {}, "approver": str(body.get("approver") or "")}
+            "review": body.get("review") if isinstance(body.get("review"), dict) else {}, "approver": str(body.get("approver") or ""),
+            "production_upstream": production_upstream(body)}
+
+
+def production_upstream(body: dict) -> dict | None:
+    """``{id, data}``: the Production project the deck was spun off from, carried whole (the middleware reads it from the deck's
+    ``data.upstream``); None when the deck has none. The pictures are not in it: they are fetched by link at build."""
+    pu = body.get("production_upstream")
+    if pu is None:
+        return None
+    if not (isinstance(pu, dict) and isinstance(pu.get("id"), str) and pu["id"].strip() and isinstance(pu.get("data"), dict)
+            and pu["data"].get("app") == "production-tool"):
+        raise Refused(400, "bad_request", "production_upstream must be {id, data}: the Production project's document id and its data (app production-tool)")
+    return {"id": pu["id"].strip(), "data": pu["data"]}
 
 
 def plan_for(kind: str, stages: list | None = None) -> list:
@@ -555,6 +569,12 @@ class Server:
                 argv.append("--production-fetch")
             if prod.get("look") is True:
                 argv.append("--production-look")
+        pu = req.get("production_upstream")
+        if pu and req["kind"] != "investor" and not (prod and prod.get("sha256")):   # spun off from Production: finals first, pictures by link (an attached file wins)
+            d.root.mkdir(parents=True, exist_ok=True)
+            pf_up = d.root / "production_upstream.json"
+            pf_up.write_text(json.dumps(pu, ensure_ascii=False, sort_keys=True))
+            argv += ["--production-upstream", str(pf_up)]
         ap_id = inp.get("approve_shorten")
         if isinstance(ap_id, str) and ap_id.startswith("apv_"):   # an approval id bound to the shortenable words' hash, never a bare yes
             argv += ["--approve-shorten", ap_id]

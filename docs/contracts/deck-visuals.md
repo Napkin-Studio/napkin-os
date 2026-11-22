@@ -146,7 +146,7 @@ image: { kind, status, aspect, asset?, from?, subject?, prompt?, style?, referen
 | `status` | `empty` · `planned` · `made` · `flagged` · `approved` · `rejected` · `failed` | §4.3 |
 | `aspect` | `16:9` · `3:2` · `4:3` · `1:1` · `4:5` · `9:16` | the slot's shape. A renderer crops with `cover`; it never stretches |
 | `asset` | `img_` + 12 hex | a key of `deck.assets` |
-| `from` | `{kind, key?, run?}` | `kind`: `territory_frame` · `upload` · `brand` · `generated` · `production` (deck-prod-assets: a Production Tool picture; its asset carries `source` {app, project_id, entity, role, version, origin, job_id?, format_id?, channel?, bundle_sha256}). `key`: the frame key `<territory id>-<shot>-<flash\|pro>`, a material id, a Brand Clan logo id, or a Production item key (an entity id; a key visual is `<format set id>#master`). `run`: the territory run's 12-character hash, or the first 12 hex of the exported .clan's sha256 |
+| `from` | `{kind, key?, run?}` | `kind`: `territory_frame` · `upload` · `brand` · `generated` · `production` (deck-prod-assets: a Production Tool picture; its asset carries `source` {app, project_id, entity, role, version, origin, job_id?, format_id?, channel?, bundle_sha256}). `key`: the frame key `<territory id>-<shot>-<flash\|pro>`, a material id, a Brand Clan logo id, or a Production item key (an entity id; a key visual is `<format set id>#master`). `run`: the territory run's 12-character hash, or the first 12 hex of the exported .clan's sha256 (for a project carried in the deck, of its carried data) |
 | `subject` | up to 400 characters | what a camera could see, from the slide's own creative text. No brand name, person's name, figure or words to paint |
 | `prompt` | up to 2400 characters | the exact text sent: subject, style block, guard rails. Recorded, never edited by hand |
 | `style` | `{pack, version, hash}` | the Style Pack and its 8-hex hash (`style._hash`) |
@@ -616,6 +616,26 @@ Slice 2 is **execution frames**, slice 3 the **storyboard strip**:
 - **Window aspect.** A Production size: its format's aspect from `vendor/format-packs.json` (else its own pixels), so it is drawn
   whole. Anything else: the frame's default format (`spec.FRAME_FORMATS`: uk-6-sheet, uk-48-sheet, meta-stories-9x16, film-16x9,
   mag-a4-dps, uk-bus-tside), cropped to it around its focal point.
+- **Finals first** (production-spinoff). A picture a person marked final in Production (the `finals` map of contract 3, item 26) comes
+  before any rule's pick: a key visual (a Format set's master picture, or a canvas picture no set holds, which becomes a key visual of
+  its own) goes to the cover and the idea; a size to the execution of its channel; a still storyboard frame to the film execution, and
+  once any frame is final only finals reach it (a final frame stands in for the pick of its shot). The picture used is the exact one
+  marked (`final.asset`), even when its size or master has been remade since; a final of a removed size still stands. The pick is
+  reported `by: final`. A person's own swap on Review (`review.production`, `--production-pick`) still wins. The rules below fill the
+  slots no final reaches.
+- **Rights.** A stated `assets[sha].rights` of `generated`, `own` or `licensed` is trusted (Production writes it when a provider made
+  the picture or a person said so); `unknown` is `Rights to supply`. With none stated the origin decides and only ever lowers
+  (generated, drawn are placeable; uploaded, extracted, an edit of an upload or of a canvas picture wait; an edit of generated
+  frames only is generated). Mock output is refused first, whatever is stated. A size made from a picture that waits for its rights
+  waits too. Nothing is called forged: the old ignore-and-warn treatment of a `rights` field is gone, because contract 3 now defines it.
+- **Pictures by link.** A project carried in the deck holds no pictures. Each picture a build needs is fetched by its sha256 from the
+  relay's asset route, `GET /assets/{sha256}?w=2400` (a 302 to a copy at most 2400 px wide, only for the agency that holds it), kept
+  in the document's stages folder by hash and width (`relay_cache/`) and passed through the deck's own picture check; the copy at
+  the original size, fetched without `w`, is also checked against its sha256. A rendition cannot be (that hash is the original's), so
+  it stands as the relay's answer for that hash. A picture the relay will not give is `not reachable`, an empty slot and never a
+  generated picture. The slot is the same either way: `from {kind: production, key}` and an asset with `source`; the bytes are in the
+  run folder and the export, never in the `.clan`. The signed call to the relay is a transport the host provides
+  (`prod_picker.RELAY_FETCH`, not wired yet: see deck-maker.md).
 - **Production first.** `images.bind_production` under the flag takes the newest placeable size of the execution's channel whatever its
   shape (the frame shows it whole); a channel whose sizes are all out of date is held with that reason; a rights-pending size is left
   empty with `Rights to supply` and its Review notice, never placed and never replaced by a generated picture. A generated picture

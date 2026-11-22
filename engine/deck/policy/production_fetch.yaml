@@ -5,4 +5,9 @@
 # the document's sha256. With `hosts: []` (the default) every fetch refuses and says so: the provider output hosts that
 # production-tool/web/src/jobs/runner.ts writes as https:// locations are to be named by Shrey (Q12). Exact host names, lower case,
 # no scheme, no path, no wildcard.
+#
+# A project spun off from Production and carried in the deck (production-spinoff) does not use this list for its pictures: they are
+# fetched by sha256 from the relay's own asset route (GET /assets/{sha256}?w=2400, deck.prod_picker.RelayAssets), signed as the person.
+# That transport is not wired yet (the engine holds neither the relay URL nor the signing key); when it is, the relay's host is the one
+# host it may reach and is named with it, not here. An attached .clan or zip still follows this list for its https locations.
 hosts: []

@@ -896,15 +896,76 @@ var DeckLogic = (function () {
     return out;
   }
 
+  /** A Production project spun off into this deck (contract 3, carried whole and frozen): its data says app production-tool. */
+  function isProduction(doc) { return isObj(doc) && doc.app === 'production-tool'; }
+
   /**
-   * What the Brief and Research cards show, read from data.upstream (frozen, read-only):
+   * The rights of one picture of a carried Production project, as the deck engine reads them (engine/deck/from_production.py rights_of):
+   * 'mock' (never used), 'ok' (generated, own or licensed), or 'supply' (Rights to supply). A STATED rights field is trusted; with none
+   * stated the origin decides and only ever lowers (an edit is generated only when its frame chain reaches only generated frames).
+   */
+  function pictureRights(doc, sha, seen) {
+    var a = (isObj(doc.assets) && doc.assets[sha]) || {};
+    if (a.origin === 'mock') return 'mock';
+    if (a.rights === 'generated' || a.rights === 'own' || a.rights === 'licensed') return 'ok';
+    if (a.rights === 'unknown') return 'supply';
+    if (a.origin === 'generated' || a.origin === 'drawn') return 'ok';
+    if (a.origin !== 'edited') return 'supply';
+    var frames = isObj(doc.frames) ? doc.frames : {};
+    var f = null;
+    Object.keys(frames).sort().forEach(function (k) { if (frames[k] && frames[k].asset === sha) f = frames[k]; });
+    var hops = seen || {};
+    while (f) {
+      if (hops[f.id]) return 'supply';
+      hops[f.id] = true;
+      if (f.kind === 'mock') return 'mock';
+      if (f.kind === 'original') return 'supply';
+      if (f.kind === 'generated') return f.asset === sha ? 'ok' : (pictureRights(doc, f.asset, hops) === 'ok' ? 'ok' : 'supply');
+      f = f.parent_id ? frames[f.parent_id] : null;
+    }
+    return 'supply';
+  }
+
+  /**
+   * What the Production card shows, read from the carried project: { name, finals, to_supply, brief } or null when the deck carries none.
+   * `finals` counts the pictures a person marked final that the deck can use (an image, never mock output); `to_supply` those of them whose
+   * rights are not stated generated, own or licensed (the deck shows them as Rights to supply); `brief` the brief the project froze, if any.
+   */
+  function productionSummary(doc) {
+    if (!isProduction(doc)) return null;
+    var assets = isObj(doc.assets) ? doc.assets : {}, finals = isObj(doc.finals) ? doc.finals : {}, sizes = isObj(doc.sizes) ? doc.sizes : {};
+    var n = 0, supply = 0;
+    Object.keys(finals).forEach(function (id) {
+      var f = finals[id], a = isObj(f) && assets[f.asset];
+      if (!a || a.kind !== 'image') return;
+      var r = pictureRights(doc, f.asset);
+      var sz = isObj(f.of) && f.of.kind === 'size' && sizes[f.of.id];
+      if (r === 'ok' && sz && sz.from_asset && pictureRights(doc, sz.from_asset) !== 'ok') r = 'supply'; // a size made from a picture that waits for its rights waits too
+      if (r === 'mock') return;
+      n++;
+      if (r === 'supply') supply++;
+    });
+    var title = isObj(doc.project) && typeof doc.project.title === 'string' && doc.project.title.trim() ? doc.project.title.trim() : 'Production project';
+    var briefs = isObj(doc.briefs) ? doc.briefs : {}, bids = Object.keys(briefs).sort().reverse(), brief = null;
+    for (var i = 0; i < bids.length && !brief; i++) {
+      var sp = isObj(briefs[bids[i]]) && isObj(briefs[bids[i]].spine) ? briefs[bids[i]].spine : {};
+      var filledParts = ['insight', 'proposition', 'audience', 'tone', 'feel', 'mandatories'].filter(function (k) { return hasContent(sp[k]); });
+      if (filledParts.length) brief = { name: String(briefs[bids[i]].title || 'Brief'), fields_filled: filledParts.length, mandatories: Array.isArray(sp.mandatories) ? sp.mandatories.length : 0 };
+    }
+    return { name: title, finals: n, to_supply: supply, brief: brief };
+  }
+
+  /**
+   * What the Brief, Research and Production cards show, read from data.upstream (frozen, read-only):
    * { brief: {name, fields_filled, fields_total, mandatories} | null, research: {name, findings, rejected} | null,
-   * any }. Nothing is ever stored back; both are null when there is no upstream. Never throws.
+   * production: {name, finals, to_supply, brief} | null, any }. Nothing is ever stored back; all are null when there is no upstream. Never throws.
+   * A deck with no brief of its own takes the one its Production project froze, so the Brief card then shows that.
    */
   function upstreamSummary(data) {
     var up = data && isObj(data.upstream) ? data.upstream : {};
-    var brief = null, research = null;
+    var brief = null, research = null, production = null;
     Object.keys(up).forEach(function (id) {
+      if (isProduction(up[id])) { if (!production) production = productionSummary(up[id]); return; } // a project is neither the brief nor the research
       if (isKit(up[id])) return; // a Style Pack or Brand Clan says how the deck looks: it is never the brief or the research
       var c = classifyUpstream(up[id]);
       if (c.brief && !brief) brief = c.brief;
@@ -916,7 +977,10 @@ var DeckLogic = (function () {
         if (ic.research && !research) research = ic.research;
       });
     });
-    return { brief: brief, research: research, any: !!(brief || research) };
+    if (!brief && production && production.brief) {
+      brief = { name: production.brief.name, fields_filled: production.brief.fields_filled, fields_total: BRIEF_KEYS.length, mandatories: production.brief.mandatories, from: 'production' };
+    }
+    return { brief: brief, research: research, production: production, any: !!(brief || research || production) };
   }
 
   /** The documents a person attached, as a name list: inputs.documents, else the document's materials. */
@@ -1619,7 +1683,7 @@ var DeckLogic = (function () {
   return {
     appendixOf: appendixOf, deckApproval: deckApproval, approveDeck: approveDeck, exportRows: exportRows, reportLine: reportLine,
     AGENTS: AGENTS, ACTIVITY_WORD: ACTIVITY_WORD, circleSvg: circleSvg, agentState: agentState, circleSizeFor: circleSizeFor, circleCentreSize: circleCentreSize, circleSays: circleSays, arcPath: arcPath, runView: runView, ENGINE_STATE: ENGINE_STATE,
-    upstreamSummary: upstreamSummary, documentsOf: documentsOf, builtFrom: builtFrom, describeBuiltFrom: describeBuiltFrom,
+    upstreamSummary: upstreamSummary, productionSummary: productionSummary, documentsOf: documentsOf, builtFrom: builtFrom, describeBuiltFrom: describeBuiltFrom,
     canBuild: canBuild, gapView: gapView, questionState: questionState, answerPatch: answerPatch,
     DECK_TYPES: DECK_TYPES, deckTypeOf: deckTypeOf, typeHints: typeHints, kindOfType: kindOfType, typePatch: typePatch,
     DECK_TYPE_CARDS: DECK_TYPE_CARDS, cardOf: cardOf, typeCaption: typeCaption, SIZES: SIZES, defaultSize: defaultSize, sizeOf: sizeOf, recipesOn: recipesOn, sizePatch: sizePatch, pickPatch: pickPatch, builtTypeOf: builtTypeOf, offeredCards: offeredCards,
@@ -1643,12 +1707,13 @@ var DeckProd = (function () {
   function isObj(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
   function str(v, n) { return String(v == null ? '' : v).slice(0, n || 200); }
   var SLIDE = /^s[0-9]{2,3}$/, SLOT = /^[a-z][a-z0-9_]{1,23}$/, KEY = /^[A-Za-z0-9_#]{6,80}$/;
-  /** Where a picture comes from, as a badge: [tone, word]. Only these four words: idb, s3 and nowhere are not reachable. */
-  var REACH = { embedded: ['ok', 'Embedded'], https: ['plain', 'https link'], zip: ['ok', 'Export zip'] };
+  /** Where a picture comes from, as a badge: [tone, word]. Only these words: idb, s3 and nowhere are not reachable. A project spun off from
+   *  Production keeps its pictures in Production and links them: 'Linked from Production'. */
+  var REACH = { embedded: ['ok', 'Embedded'], relay: ['ok', 'Linked from Production'], https: ['plain', 'https link'], zip: ['ok', 'Export zip'] };
   var NOT_REACHABLE = ['warn', 'Not reachable'];
   var RIGHTS = { generated: ['ok', 'Made in Production'], own: ['ok', 'Own'], licensed: ['ok', 'Licensed'], client_supplied: ['ok', 'Client supplied'],
     reference_only: ['warn', 'Rights to supply'] };
-  var BY = { rule: 'Picked by the rules', claude: 'Tie broken by Claude', person: 'Your swap' };
+  var BY = { final: 'Marked final in Production', rule: 'Picked by the rules', claude: 'Tie broken by Claude', person: 'Your swap' };
   var ROLE = { key_visual: 'Key visual', size: 'Channel size', storyboard_frame: 'Storyboard frame' };
   /** What the vision check costs and where the pictures go: said wherever it can be turned on. */
   var HAIKU_NOTE = 'It uses the local Ollama model first; when that is not running it falls back to Claude Haiku, which sends the pictures ' +
@@ -1659,7 +1724,7 @@ var DeckProd = (function () {
   /** The picked picture's badge: where it was pulled from on the last build; a picture held for its rights shows its reach instead. */
   function pulledBadge(from, reach) {
     if (from === 'https') return ['ok', 'Fetched link'];
-    if (from === 'embedded' || from === 'zip') return REACH[from];
+    if (from === 'embedded' || from === 'zip' || from === 'relay') return REACH[from];
     if (from === 'rights') return reachBadge(reach);
     return NOT_REACHABLE;
   }
@@ -2127,7 +2192,7 @@ var DeckProd = (function () {
   function upstreamCards(s) {
     var u = L.upstreamSummary({ upstream: s.upstream });
     var attached = '<span class="pill ok">Brought in</span>', opt = '<span class="pill plain">Optional</span>';
-    var r = u.research, b = u.brief;
+    var r = u.research, b = u.brief, pr = u.production;
     var kitNote = kitChanged.map(function (n) {
       return '<div class="upnote" role="status" data-kit-notice="' + esc(n.kind) + '">' + esc(n.text) +
         (n.canUpdate ? ' <button class="btn sm" data-kit-update="' + esc(n.document_id) + '">Update</button>' : '') + '</div>';
@@ -2135,13 +2200,16 @@ var DeckProd = (function () {
     var an = L.agencyLookNotice(s.raw);
     if (an) kitNote += '<div class="upnote" role="status" data-agency-look-notice>' + esc(an.text) +
       (an.canUpdate && !an.requested ? ' <button class="btn sm" data-agency-update>Update to current look</button>' : (an.requested ? ' <b>Asked: the next build takes it.</b>' : '')) + '</div>';
-    return '<div class="eyebrow dark">Bring in a brief or research (optional)</div>' + changedNote() + kitNote + '<div class="two">' +
+    return '<div class="eyebrow dark">Bring in a brief, research or a Production project (optional)</div>' + changedNote() + kitNote + '<div class="three">' +
       '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">04</span><b>Research</b><div class="spacer"></div>' + (r ? attached : opt) + '</div>' +
         (r ? '<div class="doc"><span class="ico">.clan</span><div><div style="font-size:14px;font-weight:600">' + esc(r.name) + '</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + (r.findings == null ? 'report brought in' : esc(r.findings) + ' findings · ' + esc(r.rejected) + ' rejected') + '</div></div></div>' +
           '<p class="note" style="margin-top:10px">Rejected findings are never used on a slide.' + (r.findings == null ? ' Finding counts show once the Research Tool shares them.' : '') + '</p>' : '<p class="note">No research brought in. Start one from a Research Tool document with Spin off.</p>') + '</section>' +
       '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">04</span><b>Brief</b><div class="spacer"></div>' + (b ? attached : opt) + '</div>' +
         (b ? '<div class="doc"><span class="ico">.clan</span><div><div style="font-size:14px;font-weight:600">' + esc(b.name) + '</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + esc(b.fields_filled) + ' of ' + esc(b.fields_total) + ' fields · ' + esc(b.mandatories) + ' mandatories</div></div></div>' +
-          '<p class="note" style="margin-top:10px">Mandatories become requirements the deck must answer.</p>' : '<p class="note">No brief brought in. The deck builds from your prompt and documents.</p>') + '</section></div>';
+          '<p class="note" style="margin-top:10px">Mandatories become requirements the deck must answer.' + (b.from === 'production' ? ' This one came with the Production project.' : '') + '</p>' : '<p class="note">No brief brought in. The deck builds from your prompt and documents.</p>') + '</section>' +
+      '<section class="card sec" data-production-card><div class="sec-h"><span class="mono eyebrow">04</span><b>Production</b><div class="spacer"></div>' + (pr ? attached : opt) + '</div>' +
+        (pr ? '<div class="doc"><span class="ico">.clan</span><div><div style="font-size:14px;font-weight:600">' + esc(pr.name) + '</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + esc(pr.finals) + (pr.finals === 1 ? ' final' : ' finals') + ' brought in' + (pr.to_supply ? ' · ' + esc(pr.to_supply) + ' rights to supply' : '') + '</div></div></div>' +
+          '<p class="note" style="margin-top:10px">The pictures marked final go on the cover, the idea and the executions first. The pictures stay in Production and are fetched when you build.' + (pr.to_supply ? ' A picture whose rights are not stated waits as Rights to supply.' : '') + '</p>' : '<p class="note">No Production project brought in. Start one from a Production project with New deck from this project.</p>') + '</section></div>';
   }
 
   /** Start's "Look" card: the per-deck opt-out of the agency look, and (with the library on) the attached Style Pack and brand kit. */

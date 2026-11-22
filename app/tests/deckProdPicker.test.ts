@@ -89,6 +89,18 @@ test('tiles carry a reach badge (embedded, https, zip, not reachable) and a righ
   }
 })
 
+test('a picture linked from Production and one marked final get their own words', () => {
+  const p = production('s01')
+  const linked = P.prodView({ production: { ...p, picks: [{ ...p.picks[0], from: 'relay', by: 'final' }] } })!
+  assert.deepEqual(plain(linked.slots[0].chosen.reach), ['ok', 'Linked from Production'])
+  assert.equal(linked.slots[0].by, 'Marked final in Production')
+  const asReach = production('s01')
+  asReach.picks[0].eligible[1].reach = 'relay'
+  assert.deepEqual(plain(P.prodView({ production: asReach })!.slots[0].candidates[0].reach), ['ok', 'Linked from Production'])
+  // the engine's payload for a spun-off deck validates against the app's own schema
+  assert.deepEqual(validate({ production: { ...production('s01'), source: { kind: 'upstream', name: 'production:doc-1' }, picks: [{ ...p.picks[0], from: 'relay', by: 'final' }] } }, schema), [])
+})
+
 test('fetch and the vision check are opt-in, and an empty allow-list is said plainly', () => {
   const off = P.prodView({ production: production('s01') })!
   assert.match(off.fetchLine, /off \(opt-in\)/)

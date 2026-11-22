@@ -220,10 +220,11 @@ test('exports take the older `true` and file-name shapes as well as the object',
   assert.notDeepEqual(validate(d, schema), [])
 })
 
-test('the Deck template is 0.4.0 and takes a Brand Clan and a Style Pack one at a time (deck-look-kits)', () => {
+test('the Deck template is 0.5.0 and takes a Production project spun off, and takes a Brand Clan and a Style Pack one at a time (deck-look-kits)', () => {
   const rs = readFileSync(new URL('../crates/clan-sdk/examples/make_deck_maker.rs', root), 'utf8')
-  assert.match(rs, /version: "0\.4\.0"\.into\(\)/)
-  assert.match(rs, /assert_eq!\(app_block\.version, "0\.4\.0"/)
+  assert.match(rs, /version: "0\.5\.0"\.into\(\)/)
+  assert.match(rs, /assert_eq!\(app_block\.version, "0\.5\.0"/)
+  assert.match(rs, /RESEARCH_APP_ID\.into\(\),\s+PRODUCTION_APP_ID\.into\(\)/)
   assert.match(rs, /BRAND_APP_ID\.into\(\),\s+STYLE_PACK_APP_ID\.into\(\)/)
   assert.match(rs, /many: vec!\[RESEARCH_APP_ID\.into\(\)\]/)
 })
