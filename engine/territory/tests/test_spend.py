@@ -190,7 +190,8 @@ def test_the_outcome_is_counts_plus_totals_in_the_history_only():
 
 
 def test_no_price_in_any_ui_file_of_the_territories_template():
-    pat = re.compile(r"(€|\$|£)\s?\d|\b(USD|EUR|GBP)\b|\b(price|spend|spent|budget)\b", re.I)
+    # 'Budget' is allowed: it is the carried brief's own field label (budget_and_scope), not a price we show.
+    pat = re.compile(r"(€|\$|£)\s?\d|\b(USD|EUR|GBP)\b|\b(price|prices|spend|spent|costs?)\b", re.I)
     hits = []
     for f in (REPO / "app" / "templates" / "territories").rglob("*"):
         if f.is_file() and f.suffix in (".html", ".js", ".css", ".jsx", ".ts", ".tsx", ".md", ".svg"):
