@@ -21,6 +21,7 @@ use crate::html::{
 };
 use crate::log::log;
 use crate::session::{AppMeta, LineageInfo, ManifestInfo, OpenResult};
+use crate::store::BlobStore;
 use crate::view;
 
 use super::edit::UPSTREAM_KEY;
@@ -214,8 +215,19 @@ fn reprojected(clan: &ClanFile, data: &Value) -> Option<Value> {
 /// the same name. With a library view, a name the document does not hold is
 /// then looked up in the installed template, so an asset a newer view added
 /// resolves.
-pub fn serve_asset(doc: &Document, rel: &str) -> HostResult<(String, Vec<u8>)> {
+///
+/// A link (`FileEntry::linked`) is read from the workspace's file store by
+/// its hash; with that file missing the asset answers 404 naming it and the
+/// document still opens.
+pub fn serve_asset(
+    doc: &Document,
+    rel: &str,
+    blobs: Option<&dyn BlobStore>,
+) -> HostResult<(String, Vec<u8>)> {
     let full = format!("human/assets/{rel}");
+    if let Some(bytes) = linked_asset(doc.clan(), &full, blobs)? {
+        return Ok((content_type_for(rel).to_string(), bytes));
+    }
     let bytes = doc
         .clan()
         .read_entry(&full)
@@ -225,6 +237,25 @@ pub fn serve_asset(doc: &Document, rel: &str) -> HostResult<(String, Vec<u8>)> {
         })
         .map_err(|_| HostError::not_found(format!("asset not found: {rel}")))?;
     Ok((content_type_for(rel).to_string(), bytes))
+}
+
+/// The bytes of `path` when the manifest lists it as a link; `None` when it
+/// is not one.
+fn linked_asset(
+    clan: &clan_sdk::ClanFile,
+    path: &str,
+    blobs: Option<&dyn BlobStore>,
+) -> HostResult<Option<Vec<u8>>> {
+    let Some(f) = clan.manifest().file_by_path(path).filter(|f| f.linked) else {
+        return Ok(None);
+    };
+    let sha = f.sha256.as_deref().unwrap_or_default();
+    match blobs {
+        Some(b) => crate::blobs::linked_bytes(b, path, sha).map(Some),
+        None => Err(HostError::not_found(format!(
+            "{path} is a link and this host holds no file store"
+        ))),
+    }
 }
 
 /// Refuse an asset path that could escape `human/assets/`. Checked before a
@@ -293,14 +324,21 @@ pub fn compose_export(
 /// decode it), while a task names it as written (`a b.pdf`): the lookup missed and the agent
 /// read nothing. Both spellings are tried, so files uploaded then are found without rewriting
 /// their documents.
-fn asset_bytes(doc: &Document, dir: &str, name: &str, suffix: &str) -> Option<Vec<u8>> {
+fn asset_bytes(
+    doc: &Document,
+    blobs: Option<&dyn BlobStore>,
+    dir: &str,
+    name: &str,
+    suffix: &str,
+) -> Option<Vec<u8>> {
     let clan = doc.clan();
-    clan.read_entry(&format!("{dir}{name}{suffix}"))
-        .ok()
-        .or_else(|| {
-            clan.read_entry(&format!("{dir}{}{suffix}", crate::routes::uri_encode(name)))
-                .ok()
-        })
+    let read = |path: String| match linked_asset(clan, &path, blobs) {
+        Ok(Some(bytes)) => Some(bytes),
+        Ok(None) => clan.read_entry(&path).ok(),
+        Err(_) => None,
+    };
+    read(format!("{dir}{name}{suffix}"))
+        .or_else(|| read(format!("{dir}{}{suffix}", crate::routes::uri_encode(name))))
 }
 
 /// For each attachment carrying a `name`, read its cached extracted-text
@@ -311,20 +349,20 @@ fn asset_bytes(doc: &Document, dir: &str, name: &str, suffix: &str) -> Option<Ve
 /// top level and reads the text as `extracted_text`. A `napkin.middleware/1`
 /// task lists them under `input` and reads it as `text` (middleware-api §1);
 /// an attachment there without it is recorded as unread and grounds nothing.
-pub fn attach_extracted_text(doc: &Document, payload: &mut Value) {
-    splice_text(doc, payload.get_mut("attachments"), "extracted_text");
+pub fn attach_extracted_text(doc: &Document, blobs: Option<&dyn BlobStore>, payload: &mut Value) {
+    splice_text(doc, blobs, payload.get_mut("attachments"), "extracted_text");
     let under_input = payload
         .get_mut("input")
         .and_then(|i| i.get_mut("attachments"));
-    splice_text(doc, under_input, "text");
+    splice_text(doc, blobs, under_input, "text");
     let under_input = payload
         .get_mut("input")
         .and_then(|i| i.get_mut("attachments"));
-    splice_images(doc, under_input);
+    splice_images(doc, blobs, under_input);
     let under_input = payload
         .get_mut("input")
         .and_then(|i| i.get_mut("attachments"));
-    splice_documents(doc, under_input);
+    splice_documents(doc, blobs, under_input);
 }
 
 /// The most bytes one PDF `document` may carry, decoded: the model API's own limit.
@@ -336,7 +374,11 @@ pub const DOCUMENT_MAX_BYTES: usize = 32 * 1024 * 1024;
 /// the model (reading.py): a deck, an image-heavy or scanned PDF is read page by page as a
 /// person sees it; a text-heavy report keeps to its text. This replaces the page rendering
 /// the TODO above asked of the host: the model reads the PDF's pages itself.
-fn splice_documents(doc: &Document, attachments: Option<&mut Value>) {
+fn splice_documents(
+    doc: &Document,
+    blobs: Option<&dyn BlobStore>,
+    attachments: Option<&mut Value>,
+) {
     use base64::Engine as _;
     let b64 = |b: &[u8]| base64::engine::general_purpose::STANDARD.encode(b);
     let Some(atts) = attachments.and_then(|v| v.as_array_mut()) else {
@@ -353,7 +395,7 @@ fn splice_documents(doc: &Document, attachments: Option<&mut Value>) {
         if !matches!(ext.as_str(), "pdf" | "docx" | "pptx") {
             continue;
         }
-        let Some(bytes) = asset_bytes(doc, "human/assets/", &name, "") else {
+        let Some(bytes) = asset_bytes(doc, blobs, "human/assets/", &name, "") else {
             continue;
         };
         let Some(obj) = a.as_object_mut() else {
@@ -404,7 +446,7 @@ pub const IMAGE_MAX_BYTES: usize = 5 * 1024 * 1024;
 /// and send them here as `images: [...]` (at most 20 per call). It needs a PDF
 /// rasteriser in the host (pdfium or mupdf bindings, native only), which this
 /// build does not carry yet.
-fn splice_images(doc: &Document, attachments: Option<&mut Value>) {
+fn splice_images(doc: &Document, blobs: Option<&dyn BlobStore>, attachments: Option<&mut Value>) {
     use base64::Engine as _;
     let Some(atts) = attachments.and_then(|v| v.as_array_mut()) else {
         return;
@@ -424,7 +466,7 @@ fn splice_images(doc: &Document, attachments: Option<&mut Value>) {
         if !IMAGE_TYPES.contains(&media_type.as_str()) {
             continue;
         }
-        let Some(bytes) = asset_bytes(doc, "human/assets/", &name, "") else {
+        let Some(bytes) = asset_bytes(doc, blobs, "human/assets/", &name, "") else {
             continue;
         };
         if bytes.len() > IMAGE_MAX_BYTES {
@@ -442,7 +484,12 @@ fn splice_images(doc: &Document, attachments: Option<&mut Value>) {
     }
 }
 
-fn splice_text(doc: &Document, attachments: Option<&mut Value>, key: &str) {
+fn splice_text(
+    doc: &Document,
+    blobs: Option<&dyn BlobStore>,
+    attachments: Option<&mut Value>,
+    key: &str,
+) {
     let Some(atts) = attachments.and_then(|v| v.as_array_mut()) else {
         return;
     };
@@ -450,7 +497,7 @@ fn splice_text(doc: &Document, attachments: Option<&mut Value>, key: &str) {
         let Some(name) = a.get("name").and_then(|v| v.as_str()).map(str::to_string) else {
             continue;
         };
-        if let Some(text) = asset_bytes(doc, "human/assets/.extracted/", &name, ".txt")
+        if let Some(text) = asset_bytes(doc, blobs, "human/assets/.extracted/", &name, ".txt")
             .and_then(|b| String::from_utf8(b).ok())
         {
             if let Some(obj) = a.as_object_mut() {

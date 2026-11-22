@@ -610,7 +610,7 @@ pub fn spinoff(template: &ClanFile, source: &ClanFile, opts: SpinoffOptions) -> 
             if !path.starts_with(ASSET_PREFIX) {
                 continue;
             }
-            if opts.link_assets && linkable(path) {
+            if opts.link_assets && linkable_asset(path) {
                 link_asset(&mut manifest.files, &entries, src_manifest, path, bytes);
             } else if !entries.iter().any(|(p, _)| p == path)
                 && !manifest.files.iter().any(|f| f.path == *path && f.linked)
@@ -951,7 +951,7 @@ pub(crate) fn carry_upstream(
         if !carries {
             continue;
         }
-        if link_assets && linkable(path) {
+        if link_assets && linkable_asset(path) {
             link_asset(files, entries, src_manifest, path, bytes);
             continue;
         }
@@ -967,7 +967,7 @@ pub(crate) fn carry_upstream(
 /// Whether a source asset travels as a link: every asset but the extracted
 /// text beside an upload, which is small, is what the model reads, and stays
 /// in the document.
-fn linkable(path: &str) -> bool {
+pub fn linkable_asset(path: &str) -> bool {
     path.starts_with(ASSET_PREFIX) && !path.starts_with(EXTRACTED_PREFIX)
 }
 
@@ -985,15 +985,18 @@ fn link_asset(
         return;
     }
     let name = path.strip_prefix(ASSET_PREFIX).unwrap_or(path);
-    let mut entry = src.file_by_path(path).cloned().unwrap_or_else(|| FileEntry {
-        id: format!("human-asset-{}", name.replace(['/', '.'], "-")),
-        path: path.to_string(),
-        role: "human-asset".into(),
-        content_type: "application/octet-stream".into(),
-        priority: None,
-        sha256: None,
-        linked: false,
-    });
+    let mut entry = src
+        .file_by_path(path)
+        .cloned()
+        .unwrap_or_else(|| FileEntry {
+            id: format!("human-asset-{}", name.replace(['/', '.'], "-")),
+            path: path.to_string(),
+            role: "human-asset".into(),
+            content_type: "application/octet-stream".into(),
+            priority: None,
+            sha256: None,
+            linked: false,
+        });
     entry.sha256 = Some(sha256_prefixed(bytes));
     entry.linked = true;
     if files.iter().any(|f| f.id == entry.id) {

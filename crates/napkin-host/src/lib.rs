@@ -20,6 +20,7 @@
 //! desktop binds that to a custom URI scheme and Tauri events; a web server
 //! binds the same table to HTTP.
 
+pub mod blobs;
 pub mod clients;
 pub mod config;
 pub mod ctx;
@@ -67,5 +68,5 @@ pub use session::{
 };
 #[cfg(feature = "native")]
 pub use store::FsStore;
-pub use store::{DocId, DocStore, Library, PartStore};
+pub use store::{BlobInfo, BlobStore, DocId, DocStore, Library, PartStore};
 pub use view::{LibraryView, ViewSource};

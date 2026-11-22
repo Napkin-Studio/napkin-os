@@ -592,6 +592,16 @@ fn spinoff_from(
             ),
         ));
     }
+    // A workspace with a file store carries the source's files as links:
+    // the bytes go into the store first (written once, whatever the chain
+    // length), the copy names them by hash. A store without one embeds.
+    let link_assets = match store.blobs() {
+        Some(blobs) => {
+            crate::blobs::ingest_assets(blobs, source)?;
+            true
+        }
+        None => false,
+    };
     // With `upstream` declared the SDK refuses a `map` (422, Contract 4
     // §5.1) and carries the source whole.
     let bytes = spinoff(
@@ -604,6 +614,7 @@ fn spinoff_from(
             // `clan-store:<DocId>` is the store's own address for the file;
             // recording it is what lets a restore find the parent again.
             source_uri: Some(source_uri),
+            link_assets,
         },
     )?;
     let bytes = with_projection(bytes)?;
@@ -1901,6 +1912,268 @@ mod tests {
         // A new document, not a rewrite of the source.
         assert_ne!(out, source);
         assert!(store.exists(&source));
+    }
+
+    use crate::store::BlobStore as _;
+
+    /// A workspace store: the in-memory documents plus a file store.
+    #[derive(Default)]
+    struct LinkStore {
+        docs: MemStore,
+        blobs: crate::blobs::testing::MemBlobs,
+    }
+
+    impl PartStore for LinkStore {
+        fn read(&self, id: &DocId) -> HostResult<Vec<u8>> {
+            self.docs.read(id)
+        }
+        fn exists(&self, id: &DocId) -> bool {
+            self.docs.exists(id)
+        }
+        fn apply(&self, change: &Change) -> HostResult<Version> {
+            self.docs.apply(change)
+        }
+        fn blobs(&self) -> Option<&dyn crate::store::BlobStore> {
+            Some(&self.blobs)
+        }
+    }
+
+    impl Library for LinkStore {
+        fn app_candidates(&self) -> Vec<DocId> {
+            self.docs.app_candidates()
+        }
+        fn app_template(&self, app_id: &str) -> DocId {
+            self.docs.app_template(app_id)
+        }
+        fn documents(&self) -> Vec<DocId> {
+            self.docs.documents()
+        }
+        fn new_document(&self, app_id: &str, id_short: &str) -> HostResult<DocId> {
+            self.docs.new_document(app_id, id_short)
+        }
+        fn home(&self, version_tag: &str) -> HostResult<DocId> {
+            self.docs.home(version_tag)
+        }
+        fn fork_branch(&self, parent: &DocId, agent: &str) -> DocId {
+            self.docs.fork_branch(parent, agent)
+        }
+    }
+
+    const PDF: &[u8] = b"%PDF-1.4 a client brief that must be stored once";
+
+    fn chain_spec(accepts: &[&str]) -> SpinoffSpec {
+        SpinoffSpec {
+            accepts: accepts.iter().map(|s| s.to_string()).collect(),
+            upstream: true,
+            ..Default::default()
+        }
+    }
+
+    /// A brief that still holds its file inside (the way documents made
+    /// before links do).
+    fn brief_with_embedded_pdf(store: &LinkStore) -> DocId {
+        let id = source_document(store, "ie.napkin.brief");
+        let clan = ClanFile::from_bytes(store.read(&id).unwrap()).unwrap();
+        let bytes = clan_sdk::patch_asset_with(&clan, "client.pdf", PDF.to_vec(), None).unwrap();
+        let base = store.version(&id).unwrap();
+        store
+            .apply(&Change::replace(id.clone(), base, bytes))
+            .unwrap();
+        id
+    }
+
+    fn links(store: &dyn DocStore, id: &DocId) -> (ClanFile, Option<String>) {
+        let clan = ClanFile::from_bytes(store.read(id).unwrap()).unwrap();
+        let sha = clan
+            .manifest()
+            .file_by_path("human/assets/client.pdf")
+            .filter(|f| f.linked)
+            .and_then(|f| f.sha256.clone());
+        (clan, sha)
+    }
+
+    #[test]
+    fn a_spinoff_chain_shares_one_stored_file_and_survives_the_source_going() {
+        let store = LinkStore::default();
+        let brief = brief_with_embedded_pdf(&store);
+        install_template_app(
+            &store,
+            "Production",
+            "ie.napkin.prod",
+            Some(chain_spec(&["ie.napkin.brief"])),
+        );
+        install_template_app(
+            &store,
+            "Deck",
+            "ie.napkin.deck",
+            Some(chain_spec(&["ie.napkin.brief", "ie.napkin.prod"])),
+        );
+
+        let prod = spinoff_document(&store, &brief, "ie.napkin.prod", None, None).unwrap();
+        let deck = spinoff_document(&store, &prod, "ie.napkin.deck", None, None).unwrap();
+
+        let want = clan_sdk::hash::sha256_prefixed(PDF);
+        for id in [&prod, &deck] {
+            let (clan, sha) = links(&store, id);
+            assert_eq!(sha.as_deref(), Some(want.as_str()), "{id}");
+            assert!(
+                !clan.has_entry("human/assets/client.pdf"),
+                "no bytes in {id}"
+            );
+        }
+        assert_eq!(store.blobs.len(), 1, "one stored file for the whole chain");
+
+        // The source goes; the copies still open and still serve the file.
+        store.docs.files.lock().unwrap().remove(brief.as_str());
+        store.docs.files.lock().unwrap().remove(prod.as_str());
+        let doc = crate::Document::load(&store, deck.clone()).unwrap();
+        let (ct, bytes) = crate::ops::read::serve_asset(&doc, "client.pdf", store.blobs()).unwrap();
+        assert_eq!(bytes, PDF);
+        assert_eq!(ct, "application/pdf");
+
+        // What leaves the workspace carries the bytes.
+        let (clan, _) = links(&store, &deck);
+        let whole =
+            ClanFile::from_bytes(crate::blobs::materialise(&clan, store.blobs()).unwrap()).unwrap();
+        assert_eq!(whole.read_entry("human/assets/client.pdf").unwrap(), PDF);
+        assert!(clan_sdk::validate(&whole).is_valid());
+    }
+
+    #[test]
+    fn an_upload_is_stored_once_and_the_document_holds_a_link() {
+        let store = LinkStore::default();
+        let id = source_document(&store, "ie.napkin.brief");
+        let doc = crate::Document::load(&store, id.clone()).unwrap();
+        let out = crate::ops::edit::upload_asset(
+            &Ctx::local(),
+            &doc,
+            store.blobs(),
+            "client.pdf",
+            None,
+            PDF.to_vec(),
+        )
+        .unwrap();
+        let change = &out.changes[0];
+        let clan = ClanFile::from_bytes(change.bytes.clone()).unwrap();
+        let f = clan
+            .manifest()
+            .file_by_path("human/assets/client.pdf")
+            .unwrap();
+        assert!(f.linked);
+        assert!(!clan.has_entry("human/assets/client.pdf"));
+        assert_eq!(
+            f.sha256.as_deref(),
+            Some(clan_sdk::hash::sha256_prefixed(PDF).as_str())
+        );
+        assert!(clan_sdk::validate(&clan).is_valid());
+        // The same file again is the same stored file.
+        crate::ops::edit::upload_asset(
+            &Ctx::local(),
+            &doc,
+            store.blobs(),
+            "again.pdf",
+            None,
+            PDF.to_vec(),
+        )
+        .unwrap();
+        assert_eq!(store.blobs.len(), 1);
+    }
+
+    #[test]
+    fn a_missing_file_does_not_stop_the_document_but_names_itself() {
+        let store = LinkStore::default();
+        let brief = brief_with_embedded_pdf(&store);
+        install_template_app(
+            &store,
+            "Deck",
+            "ie.napkin.deck",
+            Some(chain_spec(&["ie.napkin.brief"])),
+        );
+        let deck = spinoff_document(&store, &brief, "ie.napkin.deck", None, None).unwrap();
+        let sha = clan_sdk::hash::sha256_prefixed(PDF);
+        store.blobs.remove(&sha).unwrap();
+
+        let doc = crate::Document::load(&store, deck.clone()).unwrap();
+        let err = crate::ops::read::serve_asset(&doc, "client.pdf", store.blobs()).unwrap_err();
+        assert_eq!(err.status, 404);
+        assert!(err.message.contains("client.pdf"), "{}", err.message);
+        let (clan, _) = links(&store, &deck);
+        let err = crate::blobs::materialise(&clan, store.blobs()).unwrap_err();
+        assert!(err.message.contains("client.pdf"), "{}", err.message);
+        let err = crate::blobs::materialise(&clan, None).unwrap_err();
+        assert_eq!(err.status, 409);
+    }
+
+    #[test]
+    fn a_store_without_files_still_embeds() {
+        let store = MemStore::default();
+        let source = source_document(&store, "ie.napkin.brief");
+        let clan = ClanFile::from_bytes(store.read(&source).unwrap()).unwrap();
+        let bytes = clan_sdk::patch_asset_with(&clan, "client.pdf", PDF.to_vec(), None).unwrap();
+        let base = store.version(&source).unwrap();
+        store
+            .apply(&Change::replace(source.clone(), base, bytes))
+            .unwrap();
+        install_template_app(
+            &store,
+            "Deck",
+            "ie.napkin.deck",
+            Some(chain_spec(&["ie.napkin.brief"])),
+        );
+        let deck = spinoff_document(&store, &source, "ie.napkin.deck", None, None).unwrap();
+        let deck = ClanFile::from_bytes(store.read(&deck).unwrap()).unwrap();
+        assert_eq!(deck.read_entry("human/assets/client.pdf").unwrap(), PDF);
+        assert!(
+            !deck
+                .manifest()
+                .file_by_path("human/assets/client.pdf")
+                .unwrap()
+                .linked
+        );
+    }
+
+    #[test]
+    fn the_sweep_keeps_what_is_linked_or_young_and_removes_the_rest() {
+        let store = LinkStore::default();
+        let brief = brief_with_embedded_pdf(&store);
+        install_template_app(
+            &store,
+            "Deck",
+            "ie.napkin.deck",
+            Some(chain_spec(&["ie.napkin.brief"])),
+        );
+        let _deck = spinoff_document(&store, &brief, "ie.napkin.deck", None, None).unwrap();
+        // The brief still embeds its copy, so only the deck links the PDF.
+        *store.blobs.clock.lock().unwrap() = 100;
+        let orphan = store.blobs.put(b"nobody links this").unwrap();
+        let held = store.blobs.put(b"a relay project links this").unwrap();
+        store.blobs.pin(&held).unwrap();
+        *store.blobs.clock.lock().unwrap() = 200;
+        let young = store.blobs.put(b"just written").unwrap();
+
+        let week = 7 * 24 * 3600;
+        let dry = crate::blobs::sweep(&store, 100 + week + 1, week, true).unwrap();
+        assert_eq!(dry.removed, vec![orphan.clone()]);
+        assert!(store.blobs.has(&orphan), "a dry run removes nothing");
+        // The PDF (written at clock 0, linked) and the pinned one stay.
+        assert_eq!(dry.referenced, 2);
+        assert_eq!(dry.young, 1);
+
+        let done = crate::blobs::sweep(&store, 100 + week + 1, week, false).unwrap();
+        assert_eq!(done.removed, vec![orphan.clone()]);
+        assert!(!store.blobs.has(&orphan));
+        assert!(store.blobs.has(&held) && store.blobs.has(&young));
+        assert!(store.blobs.has(&clan_sdk::hash::sha256_prefixed(PDF)));
+    }
+
+    #[test]
+    fn spinoff_documents_across_workspaces_stay_refused_with_links() {
+        // The store is the workspace: a hash another workspace holds does not
+        // resolve in this one.
+        let a = crate::blobs::testing::MemBlobs::default();
+        let b = crate::blobs::testing::MemBlobs::default();
+        let sha = crate::store::BlobStore::put(&a, PDF).unwrap();
+        assert!(!crate::store::BlobStore::has(&b, &sha));
     }
 
     #[test]

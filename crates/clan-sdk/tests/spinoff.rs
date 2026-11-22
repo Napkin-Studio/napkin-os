@@ -1081,7 +1081,10 @@ fn validate_refuses_a_link_without_a_hash() {
     }
     let bad = open(b.build().unwrap());
     assert!(
-        validate(&bad).structural.iter().any(|s| s.contains("linked file")),
+        validate(&bad)
+            .structural
+            .iter()
+            .any(|s| s.contains("linked file")),
         "{:?}",
         validate(&bad)
     );

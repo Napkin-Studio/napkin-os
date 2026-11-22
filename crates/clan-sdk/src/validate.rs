@@ -97,10 +97,9 @@ pub fn validate(clan: &ClanFile) -> ValidationReport {
             // A link names bytes held elsewhere by their hash; with no hash
             // it names nothing (spec §5).
             if !entry.sha256.as_deref().is_some_and(hash::is_valid_prefixed) {
-                report.structural.push(format!(
-                    "linked file has no valid sha256: {}",
-                    entry.path
-                ));
+                report
+                    .structural
+                    .push(format!("linked file has no valid sha256: {}", entry.path));
             }
             continue;
         }
