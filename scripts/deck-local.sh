@@ -10,7 +10,8 @@
 # (override DECK_WEB_PORT); it never touches 8787 or 8788. Env it reads: NAPKIN_DECK_LIVE, NAPKIN_DECK_MAX_USD (default 2.00),
 # NAPKIN_DECK_REPLAY (a folder of recorded stages), NAPKIN_DECK_RENDER (0 skips the pptx, web and pdf files: no LibreOffice needed;
 # default 0 here unless soffice and pdftoppm are installed), NAPKIN_WEB_BIN (a built napkin-web binary, else cargo run).
-# Live runs use the engine's own model access: ANTHROPIC_API_KEY, or BRIEF_CLAUDE_TRANSPORT=cli for the Claude Code login.
+# Live runs use the engine's own model access: ANTHROPIC_API_KEY, else the one local model backend (scripts/model-local,
+# answered by `claude -p` on your Claude Code login), which this script starts when neither it nor ANTHROPIC_BASE_URL is set.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RUN="${DECK_LOCAL_DIR:-$ROOT/.deck-local}"
@@ -18,7 +19,11 @@ WEB_PORT="${DECK_WEB_PORT:-8099}"
 if [ "${NAPKIN_DECK_LIVE:-}" = 1 ]; then
   # Live: the real engine, paid model calls. No recording unless you ask for one (a recording would win over live).
   REPLAY="${NAPKIN_DECK_REPLAY:-}"
-  export BRIEF_CLAUDE_TRANSPORT="${BRIEF_CLAUDE_TRANSPORT:-auto}"   # the API key when there is one, else the Claude Code login
+  if [ -z "${ANTHROPIC_API_KEY:-}" ] && [ -z "${ANTHROPIC_BASE_URL:-}" ]; then   # no key: the local backend on the Claude Code login
+    "$ROOT/scripts/model-local" start >/dev/null
+    eval "$("$ROOT/scripts/model-local" env --sh)"
+  fi
+  MODEL_WIRE="${ANTHROPIC_BASE_URL:+local backend at $ANTHROPIC_BASE_URL}"; MODEL_WIRE="${MODEL_WIRE:-API key}"
 else
   REPLAY="${NAPKIN_DECK_REPLAY:-$ROOT/engine/deck/tests/fixtures/fernley/stages}"
 fi
@@ -62,6 +67,6 @@ for url in "http://127.0.0.1:8793/status" "http://127.0.0.1:8795/healthz" "http:
   curl -fs "$url" >/dev/null 2>&1 || { echo "did not start: $url (see $RUN/logs)"; exit 1; }
 done
 echo "Deck Maker: http://127.0.0.1:$WEB_PORT/   (engine :8793, middleware :8795; logs in $RUN/logs)"
-if [ "${NAPKIN_DECK_LIVE:-}" = 1 ]; then echo "LIVE: the real engine on your prompt. Paid model calls ($BRIEF_CLAUDE_TRANSPORT transport), capped at ${NAPKIN_DECK_MAX_USD:-2.00} USD a run."; else echo "Replay only: free, no model."; fi
+if [ "${NAPKIN_DECK_LIVE:-}" = 1 ]; then echo "LIVE: the real engine on your prompt. Paid model calls ($MODEL_WIRE), capped at ${NAPKIN_DECK_MAX_USD:-2.00} USD a run."; else echo "Replay only: free, no model."; fi
 [ "$RENDER" = 1 ] || echo "Files (pptx, web, pdf) are skipped: soffice and pdftoppm are not both installed."
 wait

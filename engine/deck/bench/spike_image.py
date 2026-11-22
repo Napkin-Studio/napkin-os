@@ -5,7 +5,7 @@
 
 It builds a 64 x 64 PNG that is red on the left and blue on the right, sends it as one image content block through
 ``claude -p --input-format stream-json --output-format stream-json --verbose`` (the logged-in account: the API key is
-stripped from the environment, as brief_llm._chat_claude_cli does), and checks that the reply names both colours. The
+stripped from the environment, as the retired brief_llm._chat_claude_cli did), and checks that the reply names both colours. The
 picture is invented: this spike never carries client material. Client slides use the Napkin API key, never the login.
 Standalone: brief_llm is not edited in phase 1. Exit 0 = image input works, 1 = it ran and did not, 2 = refused or not run.
 """

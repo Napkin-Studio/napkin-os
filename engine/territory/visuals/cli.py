@@ -16,7 +16,7 @@ derived from an append-only ledger outside the frames folder (visuals.jobs.Ledge
 for the run's lifetime (``--max-usd``, default $2.00, never above $2.50).
 
 Runway key: environment variable RUNWAYML_API_SECRET only. The frame plan goes through the engine's model path
-(BRIEF_CLAUDE_TRANSPORT=cli for the Claude Code login). Quick model (gemini_image3.1_flash) for all territories,
+(the local model backend, scripts/model-local, for the Claude Code login). Quick model (gemini_image3.1_flash) for all territories,
 best (gemini_image3_pro) for ``--shortlist``."""
 from __future__ import annotations
 
