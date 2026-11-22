@@ -309,6 +309,11 @@ def test_run_deck_builds_from_the_carried_project_with_no_key_and_no_spend(tmp_p
     assert rep["production"]["usd"] == 0 and rep.get("usd_total", 0) == 0 and rep["production"]["picker"]["source"]["kind"] == "upstream"
     deck_ = json.loads((run / "deck.json").read_text())
     assert deck_["meta"]["production"]["how"] == "upstream"
+    # found live: the template's data schema refused how: upstream, so the whole build result was rejected
+    import jsonschema
+    schema = json.loads((HERE.parents[2] / "app" / "templates" / "deck-maker" / "schema.json").read_text())
+    mp_schema = schema["properties"]["deck"]["properties"]["meta"]["properties"]["production"]
+    jsonschema.validate(deck_["meta"]["production"], mp_schema)
     cover = next(i for _, _, i in images.image_slots(deck_) if (i.get("from") or {}).get("key") == MASTER_OLD)
     assert cover["status"] == "made" and {w for _, w in relay.calls} == {2400}
     # the engine holds the picked pictures as files the renderers draw, none of them from the document
