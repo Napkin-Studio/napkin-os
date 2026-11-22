@@ -587,7 +587,7 @@ var TerritoriesLogic = (function () {
 
   function sourceCards(data) {
     var NS = typeof NapkinSource !== 'undefined' ? NapkinSource : null, sn = seen(data), upd = isObj(data && data.upstream) ? data.upstream : {}, list = [];
-    if (NS && sn.brief) list.push(NS.fromUpstream(upd[sn.brief.id], { document_id: sn.brief.id }, { kind: 'brief', title: sn.brief.title || undefined, locked: (upd[sn.brief.id] || {}).locked === true }));
+    if (NS && sn.brief) list.push(NS.fromUpstream(upd[sn.brief.id], { document_id: sn.brief.id }, { kind: 'brief', title: sn.brief.title || text(data && data.title) || undefined, locked: (upd[sn.brief.id] || {}).locked === true }));
     if (NS && sn.research) {
       var r = sn.research;
       list.push(NS.fromUpstream(upd[r.id] || {}, { document_id: r.id, noun: 'research' }, { kind: 'research', title: r.title || 'The research this started from', facts: r.pins, findings: r.findings,
@@ -874,13 +874,26 @@ var TerritoriesLogic = (function () {
 
   // ── drawing ──
   var dialogEl = null, dialogFrom = null;
+  // Drawn when it differs: the bridge says "data changed" after our own writes too, and a redraw of the same page would restart the
+  // Booth's circles for nothing (a circle redrawn mid-load stays blank).
+  var lastHtml = null, lastBooth = '';
   function render(focusId) {
     var app = $('app'); if (!app) return;
+    ui.title = ((window.__CLAN__ || {}).manifest || {}).title || '';
+    var html = L.view(data(), ui);
+    if (html === lastHtml && !dialogEl) { if (focusId) { var f0 = app.querySelector('[data-tick="' + focusId + '"]'); if (f0) f0.focus({ preventScroll: true }); } return; }
+    var sig = (/<aside class="booth-col[\s\S]*?<\/aside>/.exec(html) || [''])[0], keepBooth = sig && sig === lastBooth && $('stab');
+    lastHtml = html; lastBooth = sig;
     var keepY = window.pageYOffset, active = document.activeElement, hadAdd = active && active.name === 'own', pos = hadAdd ? active.selectionStart : 0;
     // The frame is as tall as this page, and a shorter one for a moment would move the reader: hold the height across the redraw.
     app.style.minHeight = app.offsetHeight + 'px';
-    ui.title = ((window.__CLAN__ || {}).manifest || {}).title || '';
-    app.innerHTML = L.view(data(), ui);
+    if (keepBooth) {
+      // The Booth said the same thing: keep its node (and its live circles) and redraw only the sheet around it.
+      var tmp = document.createElement('div'); tmp.innerHTML = html;
+      var fresh = tmp.querySelector('#stab'); if (fresh && fresh.parentNode) fresh.parentNode.replaceChild(keepBooth, fresh);
+      while (app.firstChild) app.removeChild(app.firstChild);
+      while (tmp.firstChild) app.appendChild(tmp.firstChild);
+    } else app.innerHTML = html;
     setTimeout(function () { app.style.minHeight = ''; }, 350);
     if (Roles) { try { Roles.auto(); } catch (e) { /* the circles stay their still frames */ } }
     boothApply(true);
@@ -908,7 +921,7 @@ var TerritoriesLogic = (function () {
     ov.innerHTML = '<div class="dialog" role="dialog" aria-modal="true" aria-label="' + String(d.title).replace(/"/g, '&quot;') + '"><h3></h3>' + d.html + (d.closeInside ? '' : '<div class="row"><span class="spacer"></span><button type="button" class="btn-rect" data-close>Close</button></div>') + '</div>';
     ov.querySelector('h3').textContent = d.title;
     document.body.appendChild(ov); dialogEl = ov;
-    var b = ov.querySelector('[data-close]'); if (b) b.focus();
+    var b = ov.querySelector('[data-close]'); if (b) b.focus({ preventScroll: true });
   }
   function closeDialog(quiet) {
     if (!dialogEl) return;

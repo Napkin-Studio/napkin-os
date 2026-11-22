@@ -62,9 +62,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|| "territories.example.clan".to_string());
 
     let schema = fs::read_to_string(dir.join("schema.json"))?;
-    let index_html = app_ui::inline_source_card(
+    // The source cards and the one agent engine (the Booth's circles) are inlined at the page's markers.
+    let index_html = app_ui::inline_sphere(
         &dir.join(".."),
-        &fs::read_to_string(dir.join("index.html"))?,
+        &app_ui::inline_source_card(
+            &dir.join(".."),
+            &fs::read_to_string(dir.join("index.html"))?,
+        )?,
     )?;
     let requirements = fs::read_to_string(dir.join("agent/requirements.yaml"))?;
     let context = fs::read_to_string(dir.join("context.md"))?;
