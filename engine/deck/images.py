@@ -473,7 +473,7 @@ PRODUCTION_ACCEPTS = {"social": ("social",), "ooh": ("ooh", "print"), "print": (
 ASPECT_TOL = 1.25
 NEAREST_ASPECT_TOL = ASPECT_TOL
 PRODUCTION_ALT = {"master": "The campaign's key visual", "size": "The campaign picture made for this channel", "frame": "A storyboard frame from the film"}
-_FILM_WORDS = ("film", "tv", "television", "cinema", "broadcast", "bvod", "video", "youtube")
+_FILM_WORDS = ("film", "tv", "television", "cinema", "broadcast", "bvod", "video", "youtube", "storyboard", "storyboards")
 _PRINT_WORDS = ("print", "press", "magazine", "newspaper")
 _DISPLAY_WORDS = ("display", "banner", "programmatic")
 
@@ -504,6 +504,46 @@ def execution_channel(title: str) -> str | None:
         if any(re.search(rf"(?<!\w){w}(?!\w)", t) for w in words):
             return ch
     return None
+
+
+#: An execution that groups Production's finals instead of naming a channel (the Deck's idea stage writes "Size crops", "Packshot"): the
+#: words that say which finals it shows. Storyboard frames are the film channel (_FILM_WORDS). production-spinoff live test 2026-11-22.
+_SIZE_WORDS = ("size", "sizes", "crop", "crops", "resize", "resizes", "cut-down", "cut-downs", "cutdown", "cutdowns", "format", "formats")
+_PRODUCT_WORDS = ("packshot", "packshots", "pack shot", "pack shots", "product", "products")
+
+
+def execution_group(title: str) -> str | None:
+    """``sizes`` or ``product`` for an execution title that names the finals it shows rather than a channel, else None."""
+    t = (title or "").lower()
+    for g, words in (("product", _PRODUCT_WORDS), ("sizes", _SIZE_WORDS)):
+        if any(re.search(rf"(?<!\w){w}(?!\w)", t) for w in words):
+            return g
+    return None
+
+
+def slide_group(slide: dict) -> str | None:
+    """The execution_group of an execution slide that names no channel (a channel's own rules come first), else None."""
+    t, title = spec.picture_of(slide)
+    return execution_group(title) if t == "execution" and not execution_channel(title) else None
+
+
+def group_pool(prod: dict, aspect: str, used=(), any_shape: bool = False, placeable_only: bool = False) -> list:
+    """Every final that may fill a ``sizes`` or ``product`` execution slot, best first: the key visuals and sizes of any Format set or channel
+    (ready or flagged, not stale), a final a person marked first, a placeable picture before one waiting for its rights, one no earlier slot
+    holds before one it does, then the nearest the slot's aspect. Without ``any_shape`` a shape beyond ASPECT_TOL, or a crop that would cut a
+    protect box, is not offered. Newest first among equals."""
+    want = ratio(aspect)
+    rows = []
+    for k, it in (prod.get("items") or {}).items():
+        if it.get("role") not in ("master", "size") or it.get("status") not in ("ready", "look") or not it.get("aspect"):
+            continue
+        if placeable_only and it.get("rights") == "reference_only":
+            continue
+        dist = abs(math.log(it["aspect"]["w"] / it["aspect"]["h"] / want))
+        if not any_shape and (dist > math.log(ASPECT_TOL) or not keeps_protected(it, aspect)):
+            continue
+        rows.append(((it.get("rights") == "reference_only", k in used, not it.get("final"), it.get("status") != "ready", round(dist, 4)), k))
+    return [k for _, k in sorted(rows, key=lambda r: (r[0], tuple(-ord(c) for c in r[1])))]
 
 
 def _newest(keys):
@@ -703,6 +743,7 @@ def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", na
     def unfit(aspect, why):
         return {"kind": "image", "image": {"kind": "illustration", "status": "empty", "aspect": aspect, "basis": "creative", "reason": why[:REASON_MAX],
                                            "from": {"kind": "production", **({"run": run} if run else {})}}}
+    placed_keys = set()   # the finals earlier slots hold: a size or packshot slide takes another picture when there is one
     for sid in deck["order"]:
         s = deck["slides"][sid]
         t, title = spec.picture_of(s)
@@ -737,6 +778,9 @@ def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", na
                             got.setdefault("strips", []).append({"slide": sid, "shots": len(picks), "note": note})
                 elif ch:
                     key, why = production_size(prod, ch, aspect, mset, any_shape=bool(spec.GRAPHICS))
+                elif execution_group(title):   # "Size crops", "Packshot": the finals Production made, not a channel's sizes
+                    pool = group_pool(prod, aspect, placed_keys, any_shape=bool(spec.GRAPHICS), placeable_only=True)
+                    key = pool[0] if pool else None
             if not key and not why:
                 continue
             cur = (s.get("slots") or {}).get(slot)
@@ -749,6 +793,7 @@ def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", na
                 got["held"].append({"slide": sid, "slot": slot, "message": why[:REASON_MAX]})
                 continue
             val, asset = production_slot(prod, key, aspect, names)
+            placed_keys.add(key)
             if asset:
                 register_assets(deck, {val["image"]["asset"]: asset})
                 got["placed"] += 1

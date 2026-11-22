@@ -335,6 +335,8 @@ def _same_rank(meta: dict, a: str, b: str) -> bool:
 
 def pool_of(meta: dict, slide: dict, aspect: str, role: str, brief_doc, mset) -> list:
     """The keys the rules rank equal for one slot (the chosen one among them), from images.master_pool / size_pool. Frames: no tie."""
+    if images.slide_group(slide):   # a size or packshot slide: no tie to report, the person picks among every final (eligible_of)
+        return []
     if role == "master":
         sets, _ = images.master_pool(meta, brief_doc)
         return sorted(meta["format_sets"][f]["master"] for f in sets)
@@ -372,7 +374,9 @@ def eligible_of(meta: dict, slide: dict, aspect: str, role: str, brief_doc, mset
     and the idea; every size that fits an execution (images.size_fits: channel, aspect tolerance, protect boxes, not stale); every picked
     storyboard frame for a film. Rights are not a test here: a candidate waiting for its rights is offered and, if chosen, held as today."""
     items = meta["items"]
-    if role == "master":
+    if images.slide_group(slide):   # "Size crops", "Packshot": every final of any Format set or size that is a picture, the rule's pick among them
+        out = images.group_pool(meta, aspect, any_shape=True)
+    elif role == "master":
         first, _ = images.master_pool(meta, brief_doc)
         sets = meta.get("format_sets") or {}
         order = sorted(first, reverse=True) + sorted((f for f in sets if f not in first and sets[f].get("master") in items), reverse=True)
