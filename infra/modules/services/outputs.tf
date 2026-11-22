@@ -45,3 +45,17 @@ output "execution_secret_arns" {
   description = "The secrets the execution role may read (GetSecretValue) to start the tasks"
   value       = concat([var.session_secret_arn], values(var.middleware_secrets), local.production_secret_arns)
 }
+
+output "deck_container" {
+  description = "The deck engine container of the middleware task, as registered (empty when deck_enabled is off)"
+  value       = local.deck_container
+}
+
+output "middleware_task" {
+  description = "The middleware task's size and container names (the tests read it)"
+  value = {
+    cpu        = local.middleware_cpu
+    memory     = local.middleware_memory
+    containers = concat(["middleware"], [for c in local.deck_container : c.name])
+  }
+}

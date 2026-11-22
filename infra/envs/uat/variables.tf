@@ -115,6 +115,12 @@ variable "middleware_count" {
   default     = 1
 }
 
+variable "deck_enabled" {
+  description = "Run the Deck Maker engine beside the middleware (a second container, 2 vCPU / 4 GB task). false drops the container and the middleware's NAPKIN_DECK_ENGINE_URL; build_deck then says the engine is off."
+  type        = bool
+  default     = true
+}
+
 variable "github_oidc_provider_arn" {
   description = "The account's existing token.actions.githubusercontent.com provider (staging's stack owns it; AWS allows one per account)"
   type        = string

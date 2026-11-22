@@ -89,6 +89,56 @@ run "plans_with_two_agencies" {
   }
 }
 
+# features/deck-cloud.clan: the Deck Maker engine is a second container of the middleware task on UAT.
+run "uat_runs_the_deck_engine_beside_the_middleware" {
+  command = plan
+
+  assert {
+    condition     = module.services.middleware_task.containers == ["middleware", "deck"] && module.services.middleware_task.cpu == 2048 && module.services.middleware_task.memory == 4096
+    error_message = "two containers in a 2048 / 4096 task"
+  }
+  assert {
+    condition     = module.services.deck_container[0].essential == false && module.services.deck_container[0].memory == 2048
+    error_message = "the deck container is not essential and has its own memory limit, so it cannot take the middleware down"
+  }
+  assert {
+    condition     = module.services.middleware_environment["NAPKIN_DECK_ENGINE_URL"] == "http://127.0.0.1:8793"
+    error_message = "the middleware reaches the engine on the task's loopback"
+  }
+  assert {
+    condition = alltrue([for k, v in {
+      NAPKIN_DECK_LIVE   = "1", NAPKIN_DECK_MAX_USD = "2.00", NAPKIN_MODEL_API = "bedrock", NAPKIN_MODEL_REGION = "eu-west-1",
+      NAPKIN_DECK_RENDER = "web", NAPKIN_DECK_IMAGES = "0", NAPKIN_DECK_DATA = "/data", NAPKIN_DECK_PORT = "8793",
+    } : one([for e in module.services.deck_container[0].environment : e.value if e.name == k]) == v])
+    error_message = "the engine runs live and capped, on Bedrock, in web render mode, with no picture generation"
+  }
+  assert {
+    condition     = module.services.deck_container[0].mountPoints[0].sourceVolume == "deck" && module.services.deck_container[0].mountPoints[0].containerPath == "/data"
+    error_message = "the run cache is on EFS, so it outlives a task"
+  }
+  assert {
+    condition     = contains(keys(module.services.ecr), "deck")
+    error_message = "a repository for the deck image"
+  }
+}
+
+run "uat_with_the_deck_engine_off_is_as_before" {
+  command = plan
+
+  variables {
+    deck_enabled = false
+  }
+
+  assert {
+    condition     = module.services.middleware_task.containers == ["middleware"] && module.services.middleware_task.cpu == 1024 && module.services.middleware_task.memory == 2048
+    error_message = "one container, the old size"
+  }
+  assert {
+    condition     = !contains(keys(module.services.middleware_environment), "NAPKIN_DECK_ENGINE_URL") && length(module.services.deck_container) == 0 && !contains(keys(module.services.ecr), "deck")
+    error_message = "no engine URL, no container, no repository"
+  }
+}
+
 run "uat_is_its_own_stack_and_takes_any_branch" {
   command = plan
 
