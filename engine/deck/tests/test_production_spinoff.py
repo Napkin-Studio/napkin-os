@@ -596,3 +596,25 @@ def test_the_engine_server_takes_an_http_pass_base_only_with_the_dev_opt_in(tmp_
         srv.validate_request(body, cfg)
     monkeypatch.setenv("DECK_RELAY_ALLOW_LOOPBACK", "1")
     assert srv.validate_request(body, cfg)["production_assets"]["base"].startswith("http://127.0.0.1")
+
+
+def test_a_body_that_closes_its_socket_with_its_last_bytes_is_still_read_whole():
+    # Found live: http.client closes the socket as soon as Content-Length bytes are in, and the next settimeout raised EBADF.
+    class Closing:
+        def __init__(self, body):
+            self.b, self.closed = body, False
+
+        def read1(self, n):
+            out, self.b = self.b[:n], self.b[n:]
+            self.closed = not self.b
+            return out
+
+        def isclosed(self):
+            return self.closed
+
+        def settimeout(self, t):
+            if self.closed:
+                raise OSError(9, "Bad file descriptor")
+
+    body = b"x" * 200_000
+    assert pp._read_capped(Closing(body), "relay.test", 25_000_000, 30.0, 0.0, lambda: 0.0) == body

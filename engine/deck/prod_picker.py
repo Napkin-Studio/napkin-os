@@ -880,8 +880,8 @@ def _read_capped(resp, h: str, file_max: int, timeout: float, t0: float, clock) 
         left = timeout - (clock() - t0)
         if left <= 0:
             raise RelayError(f"{h}: timed out")
-        if settimeout:
-            settimeout(left)
+        if settimeout and not (getattr(resp, "isclosed", None) and resp.isclosed()):
+            settimeout(left)   # a response with a Content-Length closes its socket with the last bytes: nothing left to time
         chunk = read(65536)
         if not chunk:
             return b"".join(out)
