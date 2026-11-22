@@ -88,7 +88,7 @@ const L = vm.runInNewContext(`${logicRun}; DeckLogic`) as {
   appendixOf(deck: unknown): { ids: string[]; count: number; selectable: boolean }
   deckApproval(data: unknown): DeckApproval | null
   approveDeck(run: unknown, by: string, at: string): Record<string, unknown> | null
-  exportRows(exports: unknown): { key: string; x: string; name: string; action: string; ready: boolean; file: string; note: string }[]
+  exportRows(exports: unknown, opts?: { hostPdf?: boolean }): { key: string; x: string; name: string; action: string; ready: boolean; file: string; note: string }[]
   reportLine(data: unknown): { known: boolean; errors: number | null; line: string }
 }
 type TypeCard = {
@@ -460,7 +460,8 @@ test('nothing in the app writes inputs.brief or inputs.research', () => {
 
 // A stub DOM: enough to run the page script, render, and click.
 type Writes = { obj: Record<string, unknown>; action: string }[]
-type MountOpts = { apiProxy?: (kind: string, payload: { task: string; input: Record<string, unknown> }) => Promise<unknown>; timers?: boolean }
+type MountOpts = { apiProxy?: (kind: string, payload: { task: string; input: Record<string, unknown> }) => Promise<unknown>; timers?: boolean
+  exportDoc?: (kind: string, name: string, html: string) => Promise<unknown> }
 function mount(data: Record<string, unknown>, fetchImpl?: unknown, extraEls: Record<string, unknown> = {}, opts: MountOpts = {}) {
   const writes: Writes = []
   const handlers: Record<string, ((e: unknown) => void)[]> = {}
@@ -475,18 +476,19 @@ function mount(data: Record<string, unknown>, fetchImpl?: unknown, extraEls: Rec
   const win: Record<string, unknown> = {
     __CLAN__: { data },
     clan: { patchData: (obj: Record<string, unknown>, o: { action: string }) => { writes.push({ obj, action: o.action }); return Promise.resolve() },
-            ...(opts.apiProxy ? { apiProxy: opts.apiProxy } : {}) },
-    addEventListener() {},
+            ...(opts.apiProxy ? { apiProxy: opts.apiProxy } : {}), ...(opts.exportDoc ? { exportDoc: opts.exportDoc } : {}) },
+    addEventListener: (t: string, f: (e: unknown) => void) => { (handlers['win:' + t] ||= []).push(f) },
   }
   const timers: { fn: () => void; ms: number }[] = []   // with opts.timers the page's timeouts wait here until a test runs them
   const fakeTimeout = (fn: () => void, ms: number) => { if (ms >= 3000) return 0; timers.push({ fn, ms }); return timers.length }   // the toast's own timer is not a poll
   const src = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).pop()!
-  const ctx = vm.createContext({ window: win, document: doc, navigator: { userAgent: 'Mac' }, fetch: fetchImpl, Promise, setTimeout: opts.timers ? fakeTimeout : setTimeout, clearTimeout: opts.timers ? () => {} : clearTimeout, Date })
+  const ctx = vm.createContext({ window: win, document: doc, navigator: { userAgent: 'Mac' }, fetch: fetchImpl, Promise, atob, TextDecoder, Uint8Array, setTimeout: opts.timers ? fakeTimeout : setTimeout, clearTimeout: opts.timers ? () => {} : clearTimeout, Date })
   vm.runInContext(logicRun, ctx)
   vm.runInContext(src, ctx)
   const click = (attrs: Record<string, string>, id = '') =>
     handlers.click.forEach(h => h({ target: { closest: () => ({ dataset: attrs, id }) } }))
-  return { app, writes, click, toastEl, doc, timers }
+  const fire = (t: string, e: Record<string, unknown>) => (handlers['win:' + t] || []).forEach(h => h(e))
+  return { app, writes, click, toastEl, doc, timers, fire }
 }
 
 const hostile = '<img src=x onerror=alert(1)>'
@@ -1729,6 +1731,16 @@ test('exportRows: absent is Not built yet, `true` is ready, an object or a strin
   assert.equal(L.exportRows({ pdf: 5, pptx: false, web: { url: 'u' } }).filter(r => r.ready).length, 0)
 })
 
+test('exportRows with hostPdf: the PDF is ready when the web deck is, because the host prints it (deck-cloud)', () => {
+  const web = { web: { file: 'deck.html' }, pptx: { file: 'deck.pptx' } }
+  assert.equal(L.exportRows(web)[3].ready, false, 'without the option the engine must write the pdf')
+  const rows = L.exportRows(web, { hostPdf: true })
+  assert.deepEqual(plain(rows.map(r => [r.key, r.ready])), [['web', true], ['pptx', true], ['anim', false], ['pdf', true]])
+  assert.equal(rows[3].note, 'Printed from the web deck')
+  assert.equal(L.exportRows({}, { hostPdf: true })[3].ready, false, 'no web deck, no PDF')
+  assert.equal(L.exportRows({ web: { file: 'deck.html' }, pdf: { file: 'a.pdf' } }, { hostPdf: true })[3].file, 'a.pdf', 'a pdf the engine wrote still names itself')
+})
+
 test('reportLine: errors from the checker, every number traced only at 0 errors, then placeholders', () => {
   assert.equal(L.reportLine(fixture('export-ready')).line, '0 errors, every number traced, placeholders none')
   assert.equal(L.reportLine(fixture('done')).line, '0 errors, every number traced, placeholders 2 to supply')
@@ -1854,12 +1866,34 @@ test('Present: with no files every row is Not built yet, and an unapproved deck 
   assert.ok(m.app.innerHTML.includes('id="approve-deck"'))
 })
 
-test('Present: an export click names its file and writes nothing; a run not yet done keeps the old Checked chip', () => {
-  const m = present('export-ready')
-  m.click({ export: 'pptx' })
-  assert.equal(m.toastEl.textContent, 'Open better-with-ballymaloe.pptx from the document export.')
+test('Present: an export click fetches the file from the engine, the web deck and the PDF go to the host export; a run not yet done keeps the old Checked chip', async () => {
+  const deckHtml = '<!doctype html><html><body><section class="slide">Fernley</section></body></html>'
+  const file = { ok: true, status: 200, data: { api: 'napkin.middleware/1', task: 'fetch_deck_file', job: { id: 'j', state: 'done' }, change: null,
+    result: { name: 'deck.html', media_type: 'text/html', data_b64: Buffer.from(deckHtml).toString('base64') } } }
+  const p = proxy(file)
+  const sent: { kind: string; name: string; html: string }[] = []
+  const m = mount(fixture('export-ready'), undefined, {}, { apiProxy: p.apiProxy, exportDoc: (kind, name, html) => { sent.push({ kind, name, html }); return Promise.resolve({ ok: true }) } })
+  m.click({ export: 'pdf' })
+  await new Promise(r => setTimeout(r, 20))
+  assert.deepEqual(plain(p.calls), [{ kind: 'middleware', task: 'fetch_deck_file', input: { name: 'deck.html' } }], 'the PDF is printed from the web deck, never asked of the engine')
+  assert.equal(sent.length, 1)
+  assert.equal(sent[0].kind, 'pdf')
+  assert.equal(sent[0].html, deckHtml)
+  assert.match(sent[0].name, /^[\w.-]+$/)
   m.click({ export: 'web' })
-  assert.equal(m.toastEl.textContent, 'Open index.html from the document export.')
+  await new Promise(r => setTimeout(r, 20))
+  assert.equal(sent[1].kind, 'html')
+  // the OS bar's Export is claimed once a deck is built, and prints the deck
+  let prevented = false
+  m.fire('clan:export', { detail: { kind: 'pdf' }, preventDefault: () => { prevented = true } })
+  await new Promise(r => setTimeout(r, 20))
+  assert.equal(prevented, true)
+  assert.equal(sent[2].kind, 'pdf')
+  // nothing built: the shell keeps its own export
+  const empty = mount(runData(), undefined, {}, { apiProxy: p.apiProxy, exportDoc: () => Promise.resolve({ ok: true }) })
+  let kept = true
+  empty.fire('clan:export', { detail: { kind: 'pdf' }, preventDefault: () => { kept = false } })
+  assert.equal(kept, true)
   assert.equal(m.writes.length, 0)
   const old = present({ ...runData(), run: { state: 'building', stages: [], gate: null, approvals: {} }, exports: { web: true, pptx: true, pdf: true } })
   const ex = exportCard(old.app.innerHTML)
@@ -1944,7 +1978,8 @@ test('the export rows take the older file-name string and the animated deck on P
   const ex = exportCard(present(f).app.innerHTML)
   assert.ok(ex.includes('>deck.pptx</div></div><button class="btn sm" data-export="pptx" style="font-weight:600" aria-label="Download deck.pptx">Download</button>'))
   assert.ok(ex.includes('>deck.hf.json</div></div><button class="btn sm" data-export="anim" style="font-weight:600" aria-label="Get project deck.hf.json">Get project</button>'))
-  assert.ok(ex.includes('data-export="pdf" disabled'))
+  assert.ok(ex.includes('data-export="pdf" style="font-weight:600">Download</button>'), 'the host prints the PDF from the web deck, so it is ready with it')
+  assert.ok(ex.includes('>Printed from the web deck<'))
 })
 
 test('a territory, the appendix toggle and Approve the deck keep the keyboard after they re-render', () => {

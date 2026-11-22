@@ -184,6 +184,17 @@ and the report line from `DeckLogic.reportLine` (`validation.errors`; at 0 error
 since an untraced number is an error; then placeholders from the To supply count). The confirm list
 stays on Present as well as Review.
 
+## Delivering the files (deck-cloud)
+
+The engine keeps `deck.html` and `deck.pptx` on its own disk. The Export card's buttons ask for one by name through the
+middleware task `fetch_deck_file@1` (`input {name: "deck.html" | "deck.pptx"}`; short, writes nothing; the result carries
+`{name, media_type, bytes, data_b64}`; 404 `no_file` before it is built). The web deck and the PDF go to the host's export,
+`clan.exportDoc('html' | 'pdf', name, html)`: the host saves the HTML, or prints the same page to PDF with headless Chromium,
+exactly as a Brief's PDF is printed. So the PDF is ready whenever the web deck is (`DeckLogic.exportRows(exports,
+{hostPdf: true})`), and the cloud engine (`NAPKIN_DECK_RENDER=web`, no LibreOffice) never writes `deck.pdf`. The PowerPoint is
+saved by the app from the bytes. The shell's own Export (the OS bar's Save, PDF) is claimed by the app once a deck is built
+(`clan:export`) and prints the deck, not the screen.
+
 ## Rules the screens keep
 
 - Inputs are the person's prompt, the documents they attach, the research and the brief (ADR 0023,
@@ -386,8 +397,7 @@ sends the pictures to Anthropic and is paid, on every build while it is on. Fina
 - Acting on a gate's edit or retry request (the app records it; the engine has no gates yet). The engine
   writes none of gates 2 and 3: the territories, `first_pick`, the idea's one-line execution summaries,
   tags and `rests_on`, `territory_name` and the Deck agent's notes come from the state fixtures only.
-- File delivery for `exports` (Open and Download name the file and say where to find it), the animated deck,
-  and the engine writing `exports.*.file`, `appendix_ids`, `run.checks` at review or `run.approvals.deck`.
+- The animated deck, and the engine writing `exports.*.file`, `appendix_ids`, `run.checks` at review or `run.approvals.deck`.
 - Live (paid) model stages from the app: `--live` is a command-line option, run on request only.
 - Live measures for the twelve craft fixes (ADR 0030 to 0032 are proposed), the app reading the Gate 1 payload, and the
   `schema.json` entries for the new slide types.

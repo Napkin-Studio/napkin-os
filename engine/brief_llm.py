@@ -387,11 +387,77 @@ _ANTHROPIC_CLIENTS: dict = {}
 _ANTHROPIC_CLIENTS_LOCK = threading.Lock()
 
 
+def _bedrock_on() -> bool:
+    """NAPKIN_MODEL_API=bedrock: `anthropic:` links go to Claude in Amazon Bedrock with the AWS
+    credentials of the task role (no API key). Unset or `anthropic`: today's behaviour."""
+    return os.environ.get("NAPKIN_MODEL_API", "").strip().lower() == "bedrock"
+
+
+_BEDROCK_ALIASES: "dict | None" = None
+
+
+def _bedrock_aliases() -> dict:
+    """Anthropic model id -> Bedrock inference-profile id, from the table the middleware uses
+    (server/napkin/model_routes.py ALIASES, stdlib only; the deck image copies that file to the
+    same relative place), so a model id is mapped in one place. An id not in it is sent as is."""
+    global _BEDROCK_ALIASES
+    if _BEDROCK_ALIASES is None:
+        import importlib.util
+        from pathlib import Path
+        path = Path(__file__).resolve().parent.parent / "server" / "napkin" / "model_routes.py"
+        spec = importlib.util.spec_from_file_location("_napkin_model_routes", path)
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = mod   # its dataclasses look their module up here
+        spec.loader.exec_module(mod)
+        _BEDROCK_ALIASES = {v["anthropic"]: v["bedrock"] for v in mod.ALIASES.values()}
+    return _BEDROCK_ALIASES
+
+
+def bedrock_model_id(model) -> str:
+    """The Bedrock id for an Anthropic model id (an id with no mapping is returned unchanged)."""
+    return _bedrock_aliases().get(str(model), model)
+
+
+class _BedrockMessages:
+    """messages.create with the model id mapped to its inference profile, so every caller that
+    holds the client (the stages, the Haiku look in prod_picker) names models the one way."""
+
+    def __init__(self, messages):
+        self._m = messages
+
+    def create(self, *a, **kw):
+        if "model" in kw:
+            kw["model"] = bedrock_model_id(kw["model"])
+        return self._m.create(*a, **kw)
+
+    def __getattr__(self, name):
+        return getattr(self._m, name)
+
+
+class _BedrockClient:
+    def __init__(self, client):
+        self._c = client
+        self.messages = _BedrockMessages(client.messages)
+
+    def __getattr__(self, name):
+        return getattr(self._c, name)
+
+
 def _anthropic_client():
     """One Anthropic SDK client per (SDK class, API key), reused across calls: a client per
     call rebuilt the HTTP connection pool and TLS session every time (audit BW16). Keyed on
-    the class too, so a test's fake SDK never meets a cached real client."""
+    the class too, so a test's fake SDK never meets a cached real client.
+    With NAPKIN_MODEL_API=bedrock it is an AnthropicBedrock client (region NAPKIN_MODEL_REGION,
+    AWS credentials from the environment) whose calls map model ids to inference profiles."""
     import anthropic
+    if _bedrock_on():
+        region = os.environ.get("NAPKIN_MODEL_REGION", "").strip() or None
+        k = (anthropic.AnthropicBedrock, "bedrock", region)
+        with _ANTHROPIC_CLIENTS_LOCK:
+            if k not in _ANTHROPIC_CLIENTS:
+                kw = {"aws_region": region} if region else {}
+                _ANTHROPIC_CLIENTS[k] = _BedrockClient(anthropic.AnthropicBedrock(**kw))
+            return _ANTHROPIC_CLIENTS[k]
     key = os.environ["ANTHROPIC_API_KEY"]
     k = (anthropic.Anthropic, key)
     with _ANTHROPIC_CLIENTS_LOCK:

@@ -160,3 +160,21 @@ variable "middleware_env" {
   type        = map(string)
   default     = {}
 }
+
+variable "deck_enabled" {
+  description = "Run the Deck Maker engine (engine/deck/Dockerfile) as a second container of the middleware task: ECR repository <name>/deck, an EFS access point for its run cache, the middleware's NAPKIN_DECK_ENGINE_URL, and a task of 2048 CPU / 4096 MiB (features/deck-cloud.clan). Off: one container, no repository, no access point."
+  type        = bool
+  default     = false
+}
+
+variable "deck_memory" {
+  description = "The deck container's hard memory limit in MiB (it is not essential: past it only the deck container is stopped). The rest of the task's 4096 is the middleware's."
+  type        = number
+  default     = 2048
+}
+
+variable "deck_max_usd" {
+  description = "The most one deck run may spend on model calls (NAPKIN_DECK_MAX_USD); a deck costs about 0.50 to 1.25 USD"
+  type        = string
+  default     = "2.00"
+}

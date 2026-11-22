@@ -1655,12 +1655,19 @@ var DeckLogic = (function () {
    * (the web deck says Ready to open), else Not built yet. The animated deck reads like the others: the engine does
    * not build it yet, so it is Not built yet until a runner writes it. Never throws.
    */
-  function exportRows(exports) {
+  function exportRows(exports, opts) {
     var ex = isObj(exports) ? exports : {};
+    var hostPdf = !!(opts && opts.hostPdf);
     return EXPORTS.map(function (f) {
       var v = own(ex, f[0]) ? ex[f[0]] : undefined;
       var file = isObj(v) ? fileName(v.file) : (typeof v === 'string' && v.trim() ? fileName(v) : '');
       var ready = v === true || !!file;
+      if (f[0] === 'pdf' && !ready && hostPdf) {   // deck-cloud: no PDF file from the engine; the host prints the web deck, so it is ready when the web deck is
+        var w = own(ex, 'web') ? ex.web : undefined;
+        if (w === true || (isObj(w) ? fileName(w.file) : (typeof w === 'string' && w.trim()))) {
+          return { key: f[0], x: f[1], name: f[2], action: f[3], ready: true, file: '', note: 'Printed from the web deck' };
+        }
+      }
       return {
         key: f[0], x: f[1], name: f[2], action: f[3], ready: ready, file: ready ? file : '',
         note: !ready ? 'Not built yet' : f[0] === 'web' ? 'Ready to open' : file || f[4]
@@ -2614,7 +2621,7 @@ var DeckProd = (function () {
       (ds ? deckSide(s, ds) : '') + '</aside>' +
       '<aside class="stack">' + confirmPanel(s) + '<div class="frost" style="padding:22px"><div style="display:flex;align-items:center;gap:10px"><span style="font-weight:700;font-size:18px;letter-spacing:-.02em">Export</span><div class="spacer"></div>' + head + '</div>' +
       '<p class="note" style="margin:4px 0 16px">Same deck, three ways, plus a PDF. A file shows here once the engine has written it.</p>' + unapproved +
-      L.exportRows(s.exports).map(function (r) {
+      L.exportRows(s.exports, { hostPdf: true }).map(function (r) {
         return '<div class="fmt" data-fmt="' + r.key + '"><span class="x" aria-hidden="true">' + r.x + '</span><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">' + r.name + '</div><div class="note" style="font-size:12px;overflow-wrap:anywhere">' + esc(r.note) + '</div></div>' +
           '<button class="btn sm" data-export="' + r.key + '"' + (r.ready ? '' : ' disabled') + ' style="font-weight:600"' + (r.file ? ' aria-label="' + esc(r.action + ' ' + r.file) + '"' : '') + '>' + r.action + '</button></div>';
       }).join('') +
@@ -3046,11 +3053,56 @@ var DeckProd = (function () {
       return;
     }
     if (a.export) {
-      var row = L.exportRows(s.exports).filter(function (r) { return r.key === a.export; })[0];
-      toast(row && row.file ? 'Open ' + row.file + ' from the document export.' : 'Open the file from the document export.');
+      exportDeck(a.export, s);
       return;
     }
   });
+
+  // ── Export: the web deck, the PowerPoint and the PDF (deck-cloud) ──
+  // The engine keeps the files; fetch_deck_file hands one over by name. The web deck and the PDF go to the host's export
+  // (clan.exportDoc), which saves the HTML and prints the PDF from it with Chromium, as a Brief's PDF is printed. The PowerPoint is saved here.
+  var EXPORTING = false;
+  function exportBase(s) {
+    var m = (s && s.deck && s.deck.meta) || {};
+    return String(m.project || m.client || 'deck').replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'deck';
+  }
+  function fetchDeckFile(name) {
+    return window.clan.apiProxy('middleware', { task: 'fetch_deck_file', input: { name: name } }).then(function (res) {
+      var err = hostErr(res);
+      if (err) throw new Error(err);
+      var r = (mwBody(res) || {}).result || {};
+      if (!r.data_b64) throw new Error('The engine did not hand over ' + name + '.');
+      var bin = atob(r.data_b64), bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return { bytes: bytes, type: r.media_type || 'application/octet-stream' };
+    });
+  }
+  function exportDeck(key, s) {
+    if (key === 'anim') { toast('The animated deck is not built yet.'); return; }
+    if (!(window.clan && window.clan.apiProxy && window.clan.exportDoc)) { toast('Export needs the Napkin host and the engine.'); return; }
+    if (EXPORTING) { toast('An export is already running.'); return; }
+    EXPORTING = true;
+    var base = exportBase(s);
+    toast('Preparing ' + (key === 'pdf' ? 'PDF' : key === 'pptx' ? 'PowerPoint' : 'web deck') + '…');
+    fetchDeckFile(key === 'pptx' ? 'deck.pptx' : 'deck.html').then(function (f) {
+      if (key === 'pptx') {
+        var url = URL.createObjectURL(new Blob([f.bytes], { type: f.type })), a = document.createElement('a');
+        a.href = url; a.download = base + '.pptx'; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 30000);
+        return null;
+      }
+      var html = new TextDecoder('utf-8').decode(f.bytes);
+      return window.clan.exportDoc(key === 'pdf' ? 'pdf' : 'html', base, html).then(function (res) { if (res && res.ok === false) throw new Error('Could not start the export.'); });
+    }).catch(function (e) { toast('Export failed: ' + ((e && e.message) || e)); }).then(function () { EXPORTING = false; });
+  }
+  // The shell's Export (the OS bar's Save, PDF) offers the job to the app first: claim it and print the deck, not this screen.
+  window.addEventListener('clan:export', function (e) {
+    var s = d();
+    if (!L.exportRows(s.exports, { hostPdf: true })[0].ready) return;   // no deck built yet: the shell's own export
+    e.preventDefault();
+    exportDeck(e.detail && e.detail.kind === 'html' ? 'web' : 'pdf', s);
+  });
+  // ── end Export ──
 
   document.addEventListener('input', function () { stashDraft(); });
 

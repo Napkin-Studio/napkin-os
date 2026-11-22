@@ -474,7 +474,74 @@ jobs:
         if: steps.changed.outputs.build == 'true'
         run: |
           docker run --rm --entrypoint test napkin-web:ci -f /srv/napkin/production/index.html
-          docker image ls napkin-web:ci
+      - name: Deck Maker is in the seed (deck-cloud)
+        if: steps.changed.outputs.build == 'true'
+        run: |
+          docker run --rm --entrypoint test napkin-web:ci -f /srv/napkin/seed/deck-maker.app.clan
+          docker run --rm --entrypoint test napkin-web:ci ! -f /srv/napkin/seed/deck-maker.example.clan
+      - name: Image size
+        if: steps.changed.outputs.build == 'true'
+        run: docker image ls napkin-web:ci
+
+  # The deck engine's image (deck-cloud): builds engine/deck/Dockerfile, starts it in replay + web render mode, answers /status,
+  # and builds a deck from the Fernley recording with no soffice or pdftoppm on the machine (deck.pptx and deck.html, no deck.pdf).
+  deck-image:
+    name: Deck image — engine docker build and web-mode replay
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: changed
+        name: Does the change reach the deck image
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "build=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if git diff --name-only "$(git merge-base "$BASE" HEAD)" HEAD |
+             grep -qE '^(engine/|server/napkin/model_routes\.py)'; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Nothing the deck image bundles changed: not building it."
+          fi
+      - uses: docker/setup-buildx-action@v3
+        if: steps.changed.outputs.build == 'true'
+      - name: Build the deck image (no push)
+        if: steps.changed.outputs.build == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: engine/deck/Dockerfile
+          target: runtime
+          push: false
+          load: true
+          tags: napkin-deck:ci
+          cache-from: type=gha,scope=deck
+      - name: Start it (replay, web render) and read /status
+        if: steps.changed.outputs.build == 'true'
+        run: |
+          docker run -d --name deck -e NAPKIN_DECK_REPLAY=/srv/napkin/engine/deck/tests/fixtures/fernley/stages napkin-deck:ci
+          for i in $(seq 1 30); do
+            docker exec deck python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8793/status',timeout=4).status==200 else 1)" && ok=1 && break
+            sleep 1
+          done
+          test "${ok:-0}" = 1 || { docker logs deck; exit 1; }
+          docker exec deck python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8793/status').read().decode())"
+      - name: A replay build in web mode writes deck.pptx and deck.html, with no soffice present
+        if: steps.changed.outputs.build == 'true'
+        run: |
+          ! docker exec deck sh -c 'command -v soffice || command -v pdftoppm'
+          docker exec deck python -m deck.web_smoke http://127.0.0.1:8793 || { docker logs deck; exit 1; }
+      - name: The Bedrock client and the model-id mapping are in the image
+        if: steps.changed.outputs.build == 'true'
+        run: |
+          docker exec -e NAPKIN_MODEL_API=bedrock -e NAPKIN_MODEL_REGION=eu-west-1 -e AWS_ACCESS_KEY_ID=x -e AWS_SECRET_ACCESS_KEY=x deck python -c "import brief_llm as L; c=L._anthropic_client(); print(type(c._c).__name__, L.bedrock_model_id('claude-opus-5-5'))"
+      - name: Image size
+        if: steps.changed.outputs.build == 'true'
+        run: docker image ls napkin-deck:ci
 
   # The licence gate (features/licence-gate.clan, docs/contracts/licences.md): every
   # lockfile we ship or run, fonts, binaries and model weights against licences/policy.toml.

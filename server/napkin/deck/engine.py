@@ -3,6 +3,7 @@
   POST <url>/run          {doc, inputs, approvals, render?}  start the next segment of the document's run (202)
   GET  <url>/run/<doc>    {state, run, notices, payload?, error?}  poll it: state is building, gate, done or failed
   POST <url>/production   {doc, name, data_b64}  keep a Production .clan or export zip for the document (deck-prod-picker)
+  GET  <url>/file/<doc>/<name>  a finished file's bytes (deck.html, deck.pptx; fetch_deck_file)
 
 The engine keeps each run's stage outputs in a cache of its own, so a segment resumes where the last one stopped; this port holds
 no state. A failing, slow or unreadable engine is an `EngineError` carrying what it said (or why it could not be read); the job
@@ -64,6 +65,20 @@ class DeckEnginePort:
     def store_production(self, body: dict) -> dict:
         """Hand the engine a Production file for one document: ``{ok, sha256, name, kind, rows, eligible}``."""
         return self._call("POST", "/production", body, run=False)
+
+    def file(self, doc: str, name: str) -> bytes:
+        """A finished file of the document's deck, as bytes."""
+        try:
+            r = self.client.get(f"{self.url}/file/{doc}/{name}")
+        except httpx.TimeoutException as e:
+            raise EngineError(0, "engine_timeout", "the deck engine did not answer in time") from e
+        except httpx.HTTPError as e:
+            raise EngineError(0, "engine_unreachable", f"the deck engine could not be reached ({type(e).__name__})") from e
+        if r.status_code == 404:
+            raise EngineError(404, "no_file", f"the deck engine holds no {name} for this document yet")
+        if r.status_code != 200:
+            raise EngineError(r.status_code, "engine_error", f"the deck engine answered HTTP {r.status_code}")
+        return r.content
 
 
 def port_for(settings) -> DeckEnginePort | None:
