@@ -1,0 +1,246 @@
+{
+ "type": "agency_pitch",
+ "order": [
+  "title",
+  "objective",
+  "real_question",
+  "insight",
+  "audience",
+  "proposition",
+  "idea",
+  "channel_roles",
+  "measurement",
+  "investment",
+  "appendix",
+  "brief_restated",
+  "territory",
+  "territory_choice",
+  "process",
+  "timeline",
+  "questions",
+  "appendix",
+  "competition",
+  "risks",
+  "team",
+  "requirement_trace",
+  "appendix_sources"
+ ],
+ "presented": 10,
+ "plan": {
+  "slides": {
+   "s01": {
+    "layout": "cover",
+    "chosen_by": "rule",
+    "alternatives": [],
+    "rung": "as_is",
+    "moved": [
+     {
+      "block": 0,
+      "item": null,
+      "sha": "d7ab03d2153c"
+     },
+     {
+      "block": 1,
+      "item": null,
+      "sha": "d5f78d645c8b"
+     }
+    ]
+   },
+   "s02": {
+    "layout": "statement_points",
+    "chosen_by": "rule",
+    "alternatives": [
+     "objective_panel",
+     "cards"
+    ],
+    "rung": "as_is",
+    "moved": []
+   },
+   "s03": {
+    "layout": "reframe",
+    "chosen_by": "rule",
+    "alternatives": [
+     "cards",
+     "cards_split"
+    ],
+    "rung": "as_is",
+    "moved": []
+   },
+   "s04": {
+    "layout": "statement_points",
+    "chosen_by": "rule",
+    "alternatives": [
+     "cards",
+     "quote_cards"
+    ],
+    "rung": "as_is",
+    "moved": []
+   },
+   "s05": {
+    "layout": "statement_points",
+    "chosen_by": "rule",
+    "alternatives": [],
+    "rung": "as_is",
+    "moved": []
+   },
+   "s06": {
+    "layout": "shift_line",
+    "chosen_by": "rule",
+    "alternatives": [
+     "comparison",
+     "cards"
+    ],
+    "rung": "as_is",
+    "moved": []
+   },
+   "s07": {
+    "layout": "emphasis_bar",
+    "chosen_by": "rule",
+    "alternatives": [],
+    "rung": "as_is",
+    "moved": []
+   },
+   "s08": {
+    "layout": "rows_aside",
+    "chosen_by": "rule",
+    "alternatives": [
+     "cards",
+     "native_table"
+    ],
+    "rung": "as_is",
+    "moved": []
+   },
+   "s09": {
+    "layout": "rows_aside",
+    "chosen_by": "rule",
+    "alternatives": [
+     "cards"
+    ],
+    "rung": "as_is",
+    "moved": []
+   },
+   "s10": {
+    "layout": "close",
+    "chosen_by": "rule",
+    "alternatives": [
+     "placeholder_card",
+     "placeholder_split"
+    ],
+    "rung": "as_is",
+    "moved": []
+   },
+   "s11": {
+    "layout": "emphasis_bar",
+    "chosen_by": "rule",
+    "alternatives": [],
+    "rung": "as_is",
+    "moved": []
+   },
+   "s12": {
+    "layout": "cards",
+    "chosen_by": "rule",
+    "alternatives": [],
+    "rung": "as_is",
+    "moved": []
+   },
+   "s13": {
+    "layout": "territory",
+    "chosen_by": "rule",
+    "alternatives": [],
+    "rung": "as_is",
+    "moved": []
+   },
+   "s14": {
+    "layout": "big_statement",
+    "chosen_by": "rule",
+    "alternatives": [
+     "cards",
+     "native_table"
+    ],
+    "rung": "as_is",
+    "moved": []
+   },
+   "s15": {
+    "layout": "big_statement",
+    "chosen_by": "rule",
+    "alternatives": [
+     "timeline_rows"
+    ],
+    "rung": "as_is",
+    "moved": []
+   },
+   "s16": {
+    "layout": "big_statement",
+    "chosen_by": "rule",
+    "alternatives": [
+     "timeline_rows"
+    ],
+    "rung": "as_is",
+    "moved": []
+   },
+   "s17": {
+    "layout": "cards",
+    "chosen_by": "rule",
+    "alternatives": [],
+    "rung": "as_is",
+    "moved": []
+   },
+   "s18": {
+    "layout": "emphasis_bar",
+    "chosen_by": "rule",
+    "alternatives": [],
+    "rung": "as_is",
+    "moved": []
+   },
+   "s19": {
+    "layout": "placeholder_card",
+    "chosen_by": "rule",
+    "alternatives": [],
+    "rung": "as_is",
+    "moved": []
+   },
+   "s20": {
+    "layout": "placeholder_card",
+    "chosen_by": "rule",
+    "alternatives": [],
+    "rung": "as_is",
+    "moved": []
+   },
+   "s21": {
+    "layout": "placeholder_card",
+    "chosen_by": "rule",
+    "alternatives": [],
+    "rung": "shrunk",
+    "moved": []
+   },
+   "s22": {
+    "layout": "native_table",
+    "chosen_by": "rule",
+    "alternatives": [
+     "cards"
+    ],
+    "rung": "as_is",
+    "moved": []
+   },
+   "s23": {
+    "layout": "native_table",
+    "chosen_by": "rule",
+    "alternatives": [
+     "cards"
+    ],
+    "rung": "as_is",
+    "moved": []
+   }
+  },
+  "layout_title_pt": {
+   "statement_points": 36,
+   "reframe": 36,
+   "shift_line": 36,
+   "rows_aside": 36,
+   "cards": 36,
+   "territory": 36,
+   "placeholder_card": 28,
+   "native_table": 36
+  }
+ }
+}

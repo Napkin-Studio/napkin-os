@@ -1,0 +1,84 @@
+id: timeline_rows
+version: 1
+group: content
+purpose: timeline
+description: 'Steps as rows: a marker, a label and a line.'
+slot_summary: title, steps
+for_types:
+- title
+- objective
+- brief_restated
+- scoring
+- criterion_answer
+- real_question
+- chart
+- insight
+- audience
+- proposition
+- territory
+- territory_choice
+- idea
+- execution
+- channel_roles
+- innovation
+- guardrails
+- process
+- measurement
+- measurement_plan
+- timeline
+- investment
+- team
+- credentials
+- next_step
+- appendix
+- problem
+- why_now
+- solution
+- product
+- market
+- business_model
+- traction
+- what_we_know
+- competition
+- gtm
+- financials
+- upside
+- founders
+- ask
+- risks
+- close
+- conflicts
+- questions
+- requirement_trace
+- appendix_sources
+when:
+  blocks_any:
+  - steps
+priority: 0
+alternatives:
+- timeline_strip
+- role_grid
+roomier: timeline_strip
+density: standard
+pick: offer
+family: timeline
+renderer: timeline_rows
+slots:
+  title:
+    kind: text
+    role: title
+    required: true
+    min_chars: 3
+    max_lines: 3
+  steps:
+    kind: list
+    role: body
+    from_blocks:
+    - steps
+    min_items: 2
+    max_items: 10
+    dominant: true
+    max_cpl: 48
+    item:
+      heading_max_chars: 40
+      body_max_chars: 160

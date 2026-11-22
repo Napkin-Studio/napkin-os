@@ -1,0 +1,59 @@
+{
+  "max_rounds": 2,
+  "max_usd": 0.6,
+  "max_seconds": 240,
+  "repair_on": [
+    "blocker",
+    "major"
+  ],
+  "client_export_blocks_on": [
+    "blocker"
+  ],
+  "severity": {
+    "off_slide": "blocker",
+    "text_overflow": "blocker",
+    "text_overlap": "blocker",
+    "image_flagged": "blocker",
+    "min_font": "major",
+    "contrast": "major",
+    "slot_limit": "major",
+    "mostly_empty": "minor",
+    "one_corner": "minor",
+    "layout_repeat": "minor"
+  },
+  "ladder": [
+    "shrink",
+    "switch_layout",
+    "shorten",
+    "split",
+    "overflow_to_notes",
+    "needs_human"
+  ],
+  "shrink": {
+    "min_scale": 0.85
+  },
+  "shorten": {
+    "max_slots_per_round": 12,
+    "max_cut_ratio": 0.35,
+    "guards": [
+      "no_new_number",
+      "refs_kept",
+      "not_longer",
+      "label_titles_untouched"
+    ]
+  },
+  "images": {
+    "max_regens_per_slot": 1,
+    "on_flag": "wait_for_person",
+    "max_usd": 2.5
+  },
+  "keep_round_if": "blockers_and_majors_not_up_and_no_new_validator_error",
+  "critic": {
+    "enabled": false,
+    "may_fix": [
+      "switch_layout",
+      "crop_image"
+    ],
+    "needs_code_confirm": true
+  }
+}

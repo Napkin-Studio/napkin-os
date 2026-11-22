@@ -74,14 +74,18 @@ def _label_thin(S: list, inp) -> None:
             sl["status"] = "drafted"
 
 
-def _slide(type_, title, blocks, claims=None, status="drafted", visual=None, notes="", reqs=None, label=None):
-    """One slide record in the deck contract (deck.schema.json)."""
+def _slide(type_, title, blocks, claims=None, status="drafted", visual=None, notes="", reqs=None, label=None, slots=None):
+    """One slide record in the deck contract (deck.schema.json). ``slots`` (image slots, bound by territory id when pictures are asked
+    for) is written only when given: a deck built with no pictures has no ``slots`` key, so every golden is byte-identical."""
     claims = list(claims or [])
     blocks = _dedupe_blocks(title, blocks, claims)
-    return {"type": type_, "section": spec.SLIDE_TYPES[type_]["section"], "title": title,
-            "label": label or title[:80], "blocks": blocks, "claims": claims,
-            "visual": visual or {"kind": "layout", "hint": type_}, "notes": notes,
-            "status": status, "requirements": reqs or []}
+    sl = {"type": type_, "section": spec.SLIDE_TYPES[type_]["section"], "title": title,
+          "label": label or title[:80], "blocks": blocks, "claims": claims,
+          "visual": visual or {"kind": "layout", "hint": type_}, "notes": notes,
+          "status": status, "requirements": reqs or []}
+    if slots:
+        sl["slots"] = slots
+    return sl
 
 
 def _objective_items(inp, reqs: list) -> list:
@@ -126,6 +130,49 @@ def _objective_slide(inp, items: list):
     shown = " ".join([b.get("text", "") for b in blocks] + [i["text"] for b in blocks for i in b.get("items") or []])
     quantified = bool(re.search(r"\d", shown))   # a number, a baseline or a date in the person's words; else the slide does not promise one
     return _slide("objective", "What has to change, by how much and by when" if quantified else "What has to change", blocks, status="from_source")
+
+
+#: deck-look (spec.LOOK_V3): brief fields the deck held but never showed, and the one slide each belongs on (design.density
+#: where_words_come_from; one field, one home). (slide type, brief field, label as engine words, block kind)
+SURFACED_FIELDS = (("objective", "objectives.attitudinal", None, "bullets"),
+                   ("real_question", "background", "Background", "kv"),
+                   ("audience", "desired_response", "What we want them to do", "kv"))
+
+
+def _deck_texts(S: list) -> str:
+    """Every word the slides show, normalised (``spec.norm_text``): what 'already said' is checked against."""
+    out = []
+    for sl in S:
+        out.append(sl.get("title", ""))
+        for b in sl["blocks"]:
+            out += [str(b.get(k, "")) for k in ("text", "from", "to", "title")]
+            for i in b.get("items") or []:
+                out += [str(x) for x in (i if isinstance(i, (list, tuple)) else [i.get("text", "") if isinstance(i, dict) else i])]
+            out += [" ".join(map(str, r)) for r in b.get("rows") or []]
+    return " | ".join(spec.norm_text(x) for x in out if str(x).strip())
+
+
+def _surface_brief_fields(S: list, inp) -> None:
+    """Add each field of ``SURFACED_FIELDS`` to its home slide, in the brief's own words with its ref, when the brief holds it, the home
+    slide is in the deck and no slide already says it (a sentence is said once). Density comes from distinct brief fields only, never
+    from a layout asking for more words."""
+    for typ, field, label, kind in SURFACED_FIELDS:
+        home = next((sl for sl in S if sl["type"] == typ), None)
+        top, _, sub = field.partition(".")
+        v = (inp.brief.get(top) or {}).get("value")
+        v = v.get(sub) if (sub and isinstance(v, dict)) else (None if sub else v)
+        text = str(v).strip() if isinstance(v, str) else ""
+        if not (home and text) or spec.norm_text(text) in _deck_texts(S):
+            continue
+        ref = f"brief:{field}"
+        if kind == "bullets":
+            bl = next((b for b in home["blocks"] if b["kind"] == "bullets"), None)
+            if bl is None:
+                continue
+            bl["items"] = list(bl["items"]) + [{"text": text, "refs": [ref]}]
+        else:
+            home["blocks"] = [b for b in home["blocks"] if not (b["kind"] in ("text", "small") and not str(b.get("text", "")).strip())] + \
+                [{"kind": kind, "items": [[label, text]], "refs": [ref]}]
 
 
 def _dedupe_blocks(title: str, blocks: list, claims: list) -> list:
@@ -446,12 +493,14 @@ def _criterion_slides(st: dict, scoring: list) -> list:
 
 
 def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]", fmt: str = "pitch", fit: dict | None = None,
-          profile: dict | None = None) -> dict:
+          profile: dict | None = None, pictures: dict | None = None) -> dict:
     """Build the deck dict. ``st`` holds stage outputs keyed a, b, c, d (any may be absent);
     ``fmt``: spec.FORMATS, the agency pitch (default) or the full deck; ``fit``: the fit judge's
     verdicts, which decide the evidence a pitch presents; ``profile``: a deck type (profiles.load).
     With none, or an ``arrange: legacy`` one, the deck is built exactly as before types existed; an
-    ``arrange: spine`` one orders and filters the slides by its spine (_arrange_spine)."""
+    ``arrange: spine`` one orders and filters the slides by its spine (_arrange_spine). ``pictures`` (images.bind_frames) holds the image
+    slots to attach, found by territory id here, never by a slide's title or place; None (the default) writes no slot and no asset."""
+    pictures = pictures or {}
     _intake_apply(inp, st)
     st = _normalize(st)
     a, b, c, d = st.get("a") or {}, st.get("b") or {}, st.get("c") or {}, st.get("d") or {}
@@ -465,7 +514,7 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
     S.append(_slide("title", f"{client}: {project}",
                     [{"kind": "text", "text": f"A response from {agency}"},
                      {"kind": "text", "text": _placeholder("presenter and date", "presented by the account lead and planner", "who presents, and the date"), "human": True}],
-                    status="needs_human"))
+                    status="needs_human", slots=pictures.get("title")))
 
     # 2. Brief restated
     items = _objective_items(inp, reqs)
@@ -535,7 +584,7 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
                      *[{"kind": "quote", "text": v["text"], "refs": v["refs"]} for v in au.get("voices", []) if v.get("refs")],
                      {"kind": "card", "title": "Who the work is written for", "text": f"{au['persona']['name']}. {au['persona']['line']}"} if au.get("persona") else {"kind": "text", "text": ""},
                      {"kind": "small", "text": au.get("also", "")}],
-                    status="drafted"))
+                    status="drafted", slots=None))
 
     # 8. Proposition
     pr = b.get("proposition") or {}
@@ -556,11 +605,11 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
     for t in c.get("territories", []):
         S.append(_slide("territory", f"Territory: {t['name']}",
                         [{"kind": "statement", "text": t["thought"], "basis": "creative"},
-                         {"kind": "kv", "items": [["Why it fits", t["why"]], ["Mood", t["mood"]], ["Risks", t["risks"]]], "basis": "creative"},
+                         {"kind": "kv", "items": [["Why it fits", t["why"]]] + [[k, t[f]] for k, f in (("Mood", "mood"), ("Risks", "risks")) if t.get(f)], "basis": "creative"},
                          {"kind": "sketch", "text": t["sketch"], "basis": "creative"}],
                         claims=[{"text": t["thought"], "refs": [], "basis": "creative"}], status="drafted",
-                        visual={"kind": "image_prompt", "prompt": f"Mood frame for '{t['name']}': {t['mood']}", "status": "illustrative, not final"},
-                        label=f"Territory {t['name']}"))
+                        visual={"kind": "image_prompt", "prompt": f"Mood frame for '{t['name']}': {t.get('mood') or t['sketch']}", "status": "illustrative, not final"},
+                        label=f"Territory {t['name']}", slots=(pictures.get("territory") or {}).get(t["id"])))
     if c.get("territories"):
         rk = c.get("ranking") or {}
         names = {t["id"]: t["name"] for t in c["territories"]}
@@ -576,7 +625,7 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
     if d.get("campaign_line"):
         S.append(_slide("idea", d["campaign_line"],
                         [{"kind": "statement", "text": d["idea"]}, {"kind": "text", "text": d.get("how_it_answers", "")}],
-                        claims=[{"text": d["idea"], "refs": [], "basis": "creative"}], status="drafted"))
+                        claims=[{"text": d["idea"], "refs": [], "basis": "creative"}], status="drafted", slots=pictures.get("idea")))
     # 11. Executions
     for x in d.get("executions", []):
         S.append(_slide("execution", x["channel"][:1].upper() + x["channel"][1:],
@@ -696,6 +745,12 @@ def _complete(S, reqs, R, inp, meta, fmt, fit, scoring=None, messages=None, terr
             "territories": territories or {}, "slides": {}, "order": []}
     if fit:
         deck["fit"] = fit
+    if spec.GRAPHICS:   # deck-graphics slices 4-5: each chart block is drawn only from ledger values of one measure and unit, else a hero,
+        from . import graphics   # noqa: PLC0415   a stat row or a table (nothing computed, no word added); the record goes in meta.graphics
+        deck["meta"]["graphics"] = {"charts": graphics.charts_pass(S, inp, R)}
+
+    if spec.LOOK_V3:   # deck-look: three brief fields the deck never showed, each on its one home slide (said once)
+        _surface_brief_fields(S, inp)
 
     # Requirement mapping, trace and sources slides go last (they read the slides above).
     for r in reqs:
@@ -707,7 +762,11 @@ def _complete(S, reqs, R, inp, meta, fmt, fit, scoring=None, messages=None, terr
         S = _arrange_spine(S, profile, {v["title"] for v in (fit or {}).get("verdicts", []) if v["verdict"] == "supported"},
                            routes_asked(reqs), messages or [], scoring or [], fmt, cap)
     elif fmt == "pitch":   # after mapping, so merged slides carry both slides' requirements
-        S = _arrange_pitch(S, {v["title"] for v in (fit or {}).get("verdicts", []) if v["verdict"] == "supported"}, routes_asked(reqs), messages or [], cap)
+        rec = profiles.recipe(profile, fmt) if profile and profiles.recipes_on() else None   # deck-types: the type's target (flag off: spec.PITCH_TARGET)
+        S = _arrange_pitch(S, {v["title"] for v in (fit or {}).get("verdicts", []) if v["verdict"] == "supported"}, routes_asked(reqs), messages or [], cap,
+                           **({"target": rec["length"]["target"]} if rec else {}))
+    if spec.LOOK_V3:   # deck-look (fix 2): a sentence is said once on the presented slides
+        _say_once(S)
     if sketch:   # the cover says so, with a fixed label (like the DRAFT mark: no input words)
         cover = next((x for x in S if x["type"] == "title"), None)
         if cover:
@@ -759,7 +818,7 @@ def build_investor(inp, st: dict, *, client: str, project: str, agency: str = "[
             continue
         blocks, claims = [], []
         if sec.get("statement"):
-            blocks.append({"kind": "statement", "text": sec["statement"], "basis": "creative" if t == "close" else None})
+            blocks.append({"kind": "statement", "text": sec["statement"], "basis": "creative" if t == "close" else "opinion"})
         if sec.get("stats"):
             items = [{"value": str(x.get("value", "")), "label": x.get("label", ""), "refs": x.get("refs", [])} for x in sec["stats"][:3]]
             blocks.append({"kind": "stats", "items": items})
@@ -884,25 +943,24 @@ def _shown_charts(S: list, supported: set | None) -> list:
     return shown_charts[:spec.PITCH_CHARTS]
 
 
-def _arrange_pitch(S: list, supported: set | None = None, routes: int = 1, messages: list | None = None, limit: int | None = None) -> list:
+#: _arrange_pitch's target when no recipe gives one: spec.PITCH_TARGET, read at call time (a test may set it).
+_SPEC_TARGET = object()
+
+
+def _arrange_pitch(S: list, supported: set | None = None, routes: int = 1, messages: list | None = None, limit: int | None = None,
+                   target=_SPEC_TARGET) -> list:
     """The agency pitch: the presented story (merges applied, team before the ask), an Appendix
     divider, then the backup in story order. Numbering, the trace and footnotes follow this order.
     One recommended idea by default; as many routes as the brief asks for when it asks (routes);
     the presented executions are the ones that carry the most mandated messages (messages). ``limit``
-    (a stated limit or a sketch's) moves the least needed slides behind the divider until the story fits (_trim)."""
+    (a stated limit or a sketch's) moves the least needed slides behind the divider until the story fits (_trim). ``target`` (deck-types:
+    the type's recipe, profiles.recipe; None for no target) replaces spec.PITCH_TARGET for the soft target's cheap moves."""
     by_type = lambda t: next((x for x in S if x["type"] == t), None)
-    for keep, into, title in spec.PITCH_MERGES:
-        k, m = by_type(keep), by_type(into)
+    for keep, into, title in spec.PITCH_MERGES + (spec.PITCH_MERGES_V3 if spec.LOOK_V3 else ()):
+        k = by_type(keep)
+        m = (_shown_executions(S, messages)[:1] or [None])[0] if into == "execution" else by_type(into)   # the first PRESENTED execution
         if k and m:
-            k["title"], k["label"] = title, title[:80]
-            k["blocks"] = k["blocks"] + [{**b, "title": b.get("title") or m["title"]} if b["kind"] == "bullets" else b for b in m["blocks"]]
-            k["claims"] += m["claims"]
-            k["requirements"] += [r for r in m["requirements"] if r not in k["requirements"]]
-            if m["status"] == "needs_human":
-                k["status"] = "needs_human"
-            if m.get("supplied"):   # what the person supplied to the absorbed slide still counts as supplied on the merged one
-                ks = k.get("supplied")
-                k["supplied"] = ({**ks, "refs": sorted(set(ks.get("refs") or []) | set(m["supplied"].get("refs") or []))} if ks else dict(m["supplied"]))
+            _merge(k, m, title)
             S = [x for x in S if x is not m]
     shown = _shown_executions(S, messages)
     shown_charts = _shown_charts(S, supported)
@@ -916,10 +974,176 @@ def _arrange_pitch(S: list, supported: set | None = None, routes: int = 1, messa
         story.remove(team)
         story.insert(story.index(inv), team)
     story, backup = _trim(S, story, backup, limit)
-    if not backup:
+    supply = []
+    target = spec.PITCH_TARGET if target is _SPEC_TARGET else target
+    if spec.LOOK_V3 and not limit and target is not None:   # deck-look step 5: a soft target by cheap moves only (a stated limit keeps _trim, above)
+        story, backup, supply = _to_target(S, story, backup, target, keep)
+    if not backup and not supply:
         return story
     divider = _slide("appendix", "Appendix", [{"kind": "text", "text": "Backup for questions: everything this presentation rests on."}], status="from_source")
-    return story + [divider] + backup
+    if supply:   # the 'To supply' part: last in the appendix, and counted on the close of a review build (Q6) so no gap is buried
+        ask = next((x for x in reversed(story) if x["type"] in ("investment", "ask", "close", "next_step")), None)
+        if ask is not None:
+            ask["blocks"] = ask["blocks"] + [{"kind": "small", "text": f"To supply: {len(supply)} slide{'s' if len(supply) != 1 else ''} in the appendix",
+                                              "basis": "meta", "internal": True}]
+        supply = [_slide("appendix", spec.TO_SUPPLY_TITLE, [{"kind": "text", "text": spec.TO_SUPPLY_TEXT}], status="from_source")] + supply
+    return story + [divider] + backup + supply
+
+
+#: deck-look step 5: the absorbed blocks that can carry the absorbed slide's title as their heading (a bullets list's title, a card's,
+#: a kv or text block's title as its kicker). The first headless one takes it.
+_HEADED = ("bullets", "text", "statement", "kv", "card")
+
+
+def _merge(k: dict, m: dict, title) -> None:
+    """Merge slide ``m`` into ``k`` in place (spec.PITCH_MERGES rows). ``title`` a string: the merged slide takes it and every absorbed
+    bullets block is headed by ``m``'s title (as before). ``title`` None (deck-look, spec.PITCH_MERGES_V3): ``k`` keeps its own title
+    verbatim; ``m``'s title heads the first headless absorbed block that can carry a heading, else it goes to ``k``'s notes, so it is
+    never said twice and never lost; ``m``'s notes join ``k``'s and ``k.merged`` records what was absorbed (its picture follows it:
+    spec.picture_of). Claims, requirements, the needs-a-person status and what a person supplied carry over in both modes."""
+    if title is not None:
+        k["title"], k["label"] = title, title[:80]
+        k["blocks"] = k["blocks"] + [{**b, "title": b.get("title") or m["title"]} if b["kind"] == "bullets" else b for b in m["blocks"]]
+    else:
+        put, add = False, []
+        for b in m["blocks"]:
+            if not put and b["kind"] in _HEADED and not b.get("title") and str(m.get("title") or "").strip():
+                b, put = {**b, "title": m["title"]}, True
+            add.append(b)
+        k["blocks"] = k["blocks"] + add
+        vis = m.get("visual") or {}
+        shown = [f"Image prompt ({vis.get('status', 'illustrative')}): {vis.get('prompt', '')}"] if vis.get("kind") == "image_prompt" else []   # drawn on the absorbed slide
+        extra = [x for x in ([] if put else [f"Merged here from the slide '{m['title']}'."]) + shown + [m.get("notes") or ""] if str(x).strip()]
+        if extra:
+            k["notes"] = "\n\n".join([x for x in [k.get("notes") or ""] if x.strip()] + extra)
+        k["merged"] = list(k.get("merged") or []) + [{"type": m["type"], "title": m["title"]}]
+        if m.get("slots") and not k.get("slots"):
+            k["slots"] = m["slots"]
+    k["claims"] += m["claims"]
+    k["requirements"] += [r for r in m["requirements"] if r not in k["requirements"]]
+    if m["status"] == "needs_human":
+        k["status"] = "needs_human"
+    if m.get("supplied"):   # what the person supplied to the absorbed slide still counts as supplied on the merged one
+        ks = k.get("supplied")
+        k["supplied"] = ({**ks, "refs": sorted(set(ks.get("refs") or []) | set(m["supplied"].get("refs") or []))} if ks else dict(m["supplied"]))
+
+
+def _sentence_keys(text) -> list:
+    """The sentences of a text as comparison keys (lower case, punctuation gone), those of four words or more (validate's repeated_line)."""
+    out = []
+    for sent in re.split(r"(?<=[.!?])\s+", str(text or "")):
+        key = re.sub(r"\W+", " ", sent.lower()).strip()
+        if len(key.split()) >= 4:
+            out.append(key)
+    return out
+
+
+def _split_said(text, said: dict) -> tuple:
+    """``(kept, moved, first)``: the sentences of ``text`` an earlier slide already said (by ``_sentence_keys``) apart from the rest, each
+    verbatim and in order. ``first`` is the earliest slide that said one of them (None when none was said). A sentence under four words is
+    never 'said' (no key), so it always stays."""
+    kept, moved, first = [], [], None
+    for sent in re.split(r"(?<=[.!?])\s+", str(text or "").strip()):
+        if not sent:
+            continue
+        hit = [said[k] for k in _sentence_keys(sent) if k in said]
+        if hit:
+            moved.append(sent)
+            first = min([first, *hit]) if first is not None else min(hit)
+        else:
+            kept.append(sent)
+    return " ".join(kept), moved, first
+
+
+def _say_once(S: list) -> None:
+    """deck-look (fix 2, Q13): no sentence is said twice on the presented slides (the story, before the Appendix divider). In story order,
+    only the REPEATED SENTENCES move, never the line or block around them: an idea title keeps its sentences no earlier slide said, and only
+    when none is left does it lead with its own stage text (its first statement becomes its title, so the idea says what it is); a copy
+    line keeps its new sentences ("Every drop has a story. Book your free leak check at lumen.ie today." keeps the call to action), a line
+    left empty leaves, and a block left with no line leaves the slide. What leaves goes to the slide's notes verbatim, after
+    spec.SAID_ONCE_NOTE, so no word is lost and none is written. A slide left with nothing else keeps its own layout rules (a statement
+    layout needs no second sentence)."""
+    end = next((i for i, x in enumerate(S) if x["type"] == "appendix"), len(S))
+    said: dict = {}
+    keep = lambda sl, lines: sl.__setitem__("notes", "\n\n".join([x for x in [sl.get("notes") or ""] if x.strip()] + lines))
+    for n, sl in enumerate(S[:end], 1):
+        moved = []
+        if sl["type"] == "idea":
+            rest, gone, first = _split_said(sl["title"], said)
+            if gone:
+                st = next((b for b in sl["blocks"] if b["kind"] == "statement" and str(b.get("text") or "").strip()), None)
+                if rest.strip():
+                    moved.append(f"{spec.SAID_ONCE_NOTE.format(n=first)} {' '.join(gone)}")
+                    sl["title"] = rest
+                elif st is not None:
+                    moved.append(f"{spec.SAID_ONCE_NOTE.format(n=first)} {sl['title']}")
+                    sl["title"] = str(st["text"]).strip()
+                    sl["blocks"] = [b for b in sl["blocks"] if b is not st]
+        out = []
+        for b in sl["blocks"]:
+            if b["kind"] == "copy" and b.get("lines"):
+                lines, gone, first = [], [], None
+                for ln in b["lines"]:
+                    rest, g, f = _split_said(ln, said)
+                    if g:
+                        gone += g
+                        first = f if first is None else min(first, f)
+                        if rest.strip():
+                            lines.append(rest)
+                    else:
+                        lines.append(ln)
+                if gone:
+                    whole = not lines
+                    moved.append(f"{spec.SAID_ONCE_NOTE.format(n=first)} " + " / ".join(gone) + (f" ({b['answer']})" if whole and b.get("answer") else ""))
+                    if whole:
+                        continue
+                    b = {**b, "lines": lines}
+            out.append(b)
+        sl["blocks"] = out
+        if moved:
+            keep(sl, moved)
+        for t in [sl["title"]] + [str(b.get(k) or "") for b in sl["blocks"] for k in ("text", "from", "to")] + \
+                 [str(x) for b in sl["blocks"] for x in b.get("lines") or []] + \
+                 [str(i.get("text", "")) if isinstance(i, dict) else " ".join(map(str, i)) if isinstance(i, (list, tuple)) else str(i) for b in sl["blocks"] for i in b.get("items") or []]:
+            for k in _sentence_keys(t):
+                said.setdefault(k, n)
+
+
+def _unfilled(x: dict) -> bool:
+    """A placeholder slide still waiting for a person: needs_human, and every item and text it shows is a labelled placeholder (a
+    competition, risks, team or credentials slide nobody has filled). One sourced line on it and it is not unfilled."""
+    if x["status"] != "needs_human":
+        return False
+    seen = False
+    for b in x["blocks"]:
+        for i in b.get("items") or []:
+            seen = True
+            if not (isinstance(i, dict) and i.get("human")):
+                return False
+        if str(b.get("text") or "").strip():
+            seen = True
+            if not (b.get("human") or str(b["text"]).strip().startswith(spec.PLACEHOLDER_PREFIX)):
+                return False
+    return seen
+
+
+def _to_target(S: list, story: list, backup: list, target: int, keep: set) -> tuple:
+    """Bring a pitch's presented story toward ``target`` slides by the cheap moves only, in order, one slide at a time and only while it
+    is longer (design.length.order): an unfilled placeholder slide (``_unfilled``) to the 'To supply' part, then a thin slide
+    (``layouts.is_thin``: a one-row table, a one-step timeline) to the backup. Types in spec.TARGET_KEEPS, routes the client asked
+    to see and the presented executions and charts (``keep``) never move. Nothing is trimmed past that, reworded or dropped: a story
+    still over the target stays so (the target is soft, PITCH_CAP only advisory). Returns ``(story, backup, supply)``."""
+    from . import layouts   # late: layouts imports spec, not this module
+    story, backup, supply = list(story), list(backup), []
+    movable = lambda x: x["type"] not in spec.TARGET_KEEPS and id(x) not in keep
+    for test, dest in ((_unfilled, supply), (lambda x: layouts.is_thin(x["blocks"]), backup)):
+        for x in [y for y in story if movable(y) and test(y)]:
+            if len(story) <= target:
+                break
+            story.remove(x)
+            dest.append(x)
+    at = {id(x): i for i, x in enumerate(S)}
+    return story, sorted(backup, key=lambda x: at.get(id(x), len(S))), supply
 
 
 def _trim(S: list, story: list, backup: list, limit: int | None) -> tuple:
@@ -1272,6 +1496,118 @@ def _headline_problem(old: str, new, slide_type: str, judged: tuple) -> str:
     extra = numbers_in(new) - numbers_in(old)
     if extra:
         return "adds a number not in the original headline: " + ", ".join(f"{n:g}" for n in sorted(extra))
+    return ""
+
+
+# ---------------------------------------------------------------- the shorten guard (deck-repair-loop)
+
+#: Words that do not count as a slide's own words when the own-words guard compares a rewrite with the base text.
+STOP_WORDS = frozenset("a an and are as at be but by for from has have he her his i in is it its of on or our she so that the their them "
+                       "then there these they this those to us was we were what when which who will with you your".split())
+
+
+def content_words(text) -> set:
+    """The lower-cased words of a text without the fixed stop words: what the own-words guard compares."""
+    return {w for w in re.findall(r"[a-z0-9]+(?:['\u2019][a-z]+)?", str(text or "").lower()) if w not in STOP_WORDS}
+
+
+#: The words a shortened field may lose (decided by Fable 5.2 for Sai, 18 November 2026; Sai to confirm). Fail closed: every other word survives. Not on the list, on
+#: purpose: a, that, which, currently, overall, basically, essentially, quite, and any other punctuation. "in order" goes only when "to" follows; a trailing full stop may go.
+DELETABLE = frozenset("the an very really truly highly extremely incredibly actually simply clearly obviously certainly definitely also additionally furthermore moreover indeed".split())
+_TOK = re.compile(r"[a-z0-9]+(?:['\u2019][a-z]+)?|[^\sa-z0-9]")
+
+
+def _toks(text) -> list:
+    return _TOK.findall(str(text or "").lower())
+
+
+def deleted_words(old: str, new: str) -> list | None:
+    """The tokens of ``old`` (lower-case words and punctuation marks) that ``new`` lacks, as ``[(position in old, token)]``, when ``new`` is ``old`` with some tokens
+    deleted and nothing else (an ordered subsequence); None when ``new`` reorders, adds or changes anything."""
+    ot, nt = _toks(old), _toks(new)
+    out, j = [], 0
+    for i, t in enumerate(ot):
+        if j < len(nt) and nt[j] == t:
+            j += 1
+        else:
+            out.append((i, t))
+    return out if j == len(nt) else None
+
+
+def mark_deleted(old: str, new: str) -> str:
+    """``old`` with each deleted word in ``[-...-]``, for the approver: what a shortening takes away, highlighted. Empty when ``new`` is not a deletion of ``old``."""
+    gone = deleted_words(old, new)
+    if gone is None:
+        return ""
+    drop = {i for i, _ in gone}
+    out = ""
+    for i, m in enumerate(re.finditer(_TOK.pattern, str(old or ""), flags=re.I)):
+        piece = ("[-" + m.group(0) + "-]") if i in drop else m.group(0)
+        out += piece if (not out or not (m.group(0)[0].isalnum())) else " " + piece
+    return out
+
+
+def words_problem(old: str, new: str, rule: str = "delete_only", deletable=None) -> str:
+    """The word rule of the shorten guard, one place so either policy drops in. ``delete_only`` (the default): ``new`` is an ordered subsequence of the same field's
+    BASE words, and only words on the ``deletable`` allow-list (``DELETABLE``; fail closed, a policy may replace it) may go, plus a trailing full stop and "in order"
+    before "to"; every other word and every other mark survives. Never a word directly after not, no, never or n't, and never one directly before few or little
+    ("not very profitable" does not become "not profitable"; "a few" does not become "few"). ``reuse`` (a switch; never on a client deck): every content word of ``new``
+    is a content word of ``old``, in any order. Returns why it is refused, or ''."""
+    if rule != "delete_only":
+        extra = content_words(new) - content_words(old)
+        return ("uses words that are not in the field: " + ", ".join(sorted(extra)[:4])) if extra else ""
+    gone = deleted_words(old, new)
+    if gone is None:
+        return "reorders or adds words: only deleting is allowed"
+    allow = DELETABLE if deletable is None else frozenset(deletable)
+    ot = _toks(old)
+    drop = {i for i, _ in gone}
+    bad = []
+    for i, t in gone:
+        prev, nxt = (ot[i - 1] if i > 0 else ""), (ot[i + 1] if i + 1 < len(ot) else "")
+        if prev in ("not", "no", "never") or prev.endswith(("n't", "n\u2019t")):
+            bad.append(t)   # a word right after a negation
+        elif nxt in ("few", "little"):
+            bad.append(t)   # a word right before few or little ("a few")
+        elif t == "." and i == len(ot) - 1:
+            continue
+        elif t in ("in", "order") and ((t == "in" and nxt == "order" and i + 2 < len(ot) and ot[i + 2] == "to" and (i + 1) in drop)
+                                        or (t == "order" and prev == "in" and nxt == "to" and (i - 1) in drop)):
+            continue
+        elif t not in allow:
+            bad.append(t)
+    return ("deletes words that carry the claim: " + ", ".join(sorted(set(bad))[:4])) if bad else ""
+
+
+def shorten_problem(old_base: str, new, slide_base_text: str = "", known=frozenset(), guards: tuple = (), max_cut_ratio: float = 0.35,
+                    current: str | None = None, is_label: bool = False, word_rule: str = "delete_only", deletable=None) -> str:
+    """Why a shortened field is refused, or '' when it is acceptable. ``old_base`` is the field in the BASE deck (never the previous round's).
+    The guards (spec.REPAIR_SHORTEN_GUARDS), all on by default: ``label_titles_untouched`` (a title or label is never a field), ``not_longer``
+    than the base, at most ``max_cut_ratio`` of the base's characters cut, ``no_new_number``, ``ledger_kept`` (numbers incl. letter-attached ones,
+    the word after each number, percent, currency, order, capitalised names, months, years, negations and hedges: ``ledger.tokens``) and
+    ``own_words`` (``words_problem``: the words come from the SAME field's base text only, never the rest of the slide and never an internal note;
+    ``slide_base_text`` is kept for old callers and ignored). ``refs_kept`` holds by construction (only a field's text is replaced)."""
+    from . import ledger
+    from .refs import numbers_in
+    guards = guards or ("no_new_number", "refs_kept", "not_longer", "label_titles_untouched", "ledger_kept", "own_words")
+    new = str(new or "").strip()
+    if "label_titles_untouched" in guards and is_label:
+        return "a title or label is never edited"
+    if not new:
+        return "empty"
+    if new == str(current if current is not None else old_base).strip():
+        return "unchanged"
+    if "not_longer" in guards and len(new) > len(old_base.strip()):
+        return "longer than the base text"
+    if word_rule != "delete_only" and len(new) < (1 - max_cut_ratio) * len(old_base.strip()):   # the allow-list bounds a deletion; a number caps only reuse
+        return f"cuts more than {int(max_cut_ratio * 100)} percent of the base text"
+    if "no_new_number" in guards and (numbers_in(new) - numbers_in(old_base)):
+        return "adds a number the base text did not have"
+    known = ledger.known_names([old_base])   # this field's own names only
+    if "ledger_kept" in guards and ledger.tokens(new, known) != ledger.tokens(old_base, known):
+        return "changes the ledger (a number, the word after it, a name, month, year, negation or hedge, or their order)"
+    if "own_words" in guards:
+        return words_problem(old_base, new, word_rule, deletable)
     return ""
 
 

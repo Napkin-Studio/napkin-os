@@ -1,0 +1,83 @@
+{
+ "objections": [
+  {
+   "kind": "price_unclear",
+   "objection": "You ask us to agree a platform today, but I see no budget, no fee figure and no split. I cannot judge value or commit to anything without a cost.",
+   "slide": "Investment, and what we would like to agree today",
+   "change": {
+    "type": "placeholder",
+    "note": "Supply the agency's fee, production and media figures from the rate card, for at least option A, so the client can see what is being asked for.",
+    "text": "",
+    "after": ""
+   }
+  },
+  {
+   "kind": "claim_unsupported",
+   "objection": "Your own proposition slide says we should not believe this insight yet, yet you ask me to approve the platform built on it today.",
+   "slide": "Young adults may know tea well but not think of it for summer, so Fernley can make tea the cold, sparkling choice. This must be confirmed.",
+   "change": {
+    "type": "ask",
+    "note": "Is the agency asking for approval of the platform today, or approval after the audience interviews confirm the insight? Which one, and why?",
+    "text": "",
+    "after": ""
+   }
+  },
+  {
+   "kind": "claim_unsupported",
+   "objection": "You show no team names and no past work with results. I cannot trust you to deliver when nobody is named and no referee is offered.",
+   "slide": "The team you would work with, and work like this we have done",
+   "change": {
+    "type": "placeholder",
+    "note": "Supply named people with one-page CVs for each role, plus two real comparable campaigns with results and a referee.",
+    "text": "",
+    "after": ""
+   }
+  },
+  {
+   "kind": "objective_unclear",
+   "objection": "Awareness and trial have no targets and no dates. I cannot tell what success looks like or when you would be judged against it.",
+   "slide": "What has to change",
+   "change": {
+    "type": "ask",
+    "note": "What awareness and trial targets, among 18 to 34 year olds, will the agency propose, and by when in the 2027 flight? The client may need to agree them.",
+    "text": "",
+    "after": ""
+   }
+  },
+  {
+   "kind": "ask_unanswered",
+   "objection": "I see an idea line but no channels, no media plan and no sense of how 'Tea's day out' reaches 18 to 34 year olds across spring to summer.",
+   "slide": "Tea's day out.",
+   "change": {
+    "type": "ask",
+    "note": "Which channels and executions will carry the idea, and what is the phasing from spring to summer 2027?",
+    "text": "",
+    "after": ""
+   }
+  },
+  {
+   "kind": "risk_unaddressed",
+   "objection": "The alcohol-cue risk is raised, but the fix leaves legal codes to us. I need to know which rules apply to an audience starting at 18.",
+   "slide": "Risks: an untested insight and no baseline, and what we would do about them",
+   "change": {
+    "type": "ask",
+    "note": "Which advertising codes does the agency believe apply, and who confirms them before creative development?",
+    "text": "",
+    "after": ""
+   }
+  }
+ ],
+ "stage": "red_team",
+ "produced_by": "live claude-sonnet-5-5",
+ "usage": {
+  "prompt_tokens": 2,
+  "completion_tokens": 875,
+  "cache_read_tokens": 0,
+  "cache_creation_tokens": 3326,
+  "model": "claude-sonnet-5-5",
+  "secs": 8.4,
+  "calls": 1,
+  "usd": 0.0256,
+  "usd_estimated": true
+ }
+}

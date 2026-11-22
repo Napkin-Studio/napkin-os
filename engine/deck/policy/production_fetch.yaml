@@ -1,0 +1,8 @@
+# The Production picker's fetch allow-list (deck-prod-picker; deck-graphics part 5, Q12). Read by deck.prod_picker.fetch_policy.
+#
+# `run_deck --production FILE --production-fetch` downloads a picked picture over https only when its host is listed here AND appears in
+# the .clan's own asset locations, resolves to a public address, answers 200 with an image/* body under the caps, and the bytes hash to
+# the document's sha256. With `hosts: []` (the default) every fetch refuses and says so: the provider output hosts that
+# production-tool/web/src/jobs/runner.ts writes as https:// locations are to be named by Shrey (Q12). Exact host names, lower case,
+# no scheme, no path, no wildcard.
+hosts: []

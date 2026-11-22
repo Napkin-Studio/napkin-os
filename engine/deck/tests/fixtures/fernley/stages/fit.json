@@ -1,0 +1,63 @@
+{
+ "verdicts": [
+  {
+   "title": "Fernley's task is to get young adults in Ireland to know and try a drink they may not yet know how to place.",
+   "verdict": "supported",
+   "reason": "Brief states Cork sparkling iced tea, 18-34 in Ireland, spring-summer 2027, awareness and trial. 'May not know how to place' is hedged, no research claimed."
+  },
+  {
+   "title": "Young adults may know tea well but not think of it for summer, so Fernley can make tea the cold, sparkling choice. This must be confirmed.",
+   "verdict": "partly",
+   "reason": "Brand, timing and audience facts are supported. The tea-as-home-drink insight has no evidence (insight field missing), though it is labelled a hypothesis."
+  },
+  {
+   "title": "The single thought",
+   "type": "proposition",
+   "verdict": "partly",
+   "reason": "Sparkling iced tea and Cork origin are supported. Home-only tea belief is unsupported (flagged as hypothesis); no further reasons to believe were supplied."
+  },
+  {
+   "title": "No baseline was supplied, so a survey before launch sets one and the campaign is judged against it.",
+   "verdict": "supported",
+   "reason": "Evidence shows no baseline or insight supplied and trial as desired response. The survey is a proposal, and the slide says so."
+  },
+  {
+   "title": "What could go wrong, and what we would do about it",
+   "verdict": "partly",
+   "reason": "Missing insight and missing baseline are supported. Alcohol-occasion risk and the code compliance claim have no evidence cited; mitigations are proposals."
+  },
+  {
+   "title": "The likely barrier to trial is uncertainty about what the drink is, not dislike of it. This must be tested.",
+   "verdict": "not",
+   "reason": "Evidence says nothing on audience perception or barriers; insight and competitor fields are missing. Only the trial goal is supported. The barrier is pure hypothesis."
+  },
+  {
+   "title": "We are talking to 18 to 34 year olds in Ireland, and we do not yet know how they see tea.",
+   "verdict": "supported",
+   "reason": "Audience 18-34 in Ireland is in the brief; no research on tea perception was supplied. Aoife is an illustrative persona, not a claim."
+  },
+  {
+   "title": "What else you could choose, and why you would choose us",
+   "verdict": "n/a",
+   "reason": "No factual claim; slide is a proposal to be confirmed with the client, and no evidence is cited."
+  },
+  {
+   "title": "The plan works harder than its media list in four ways.",
+   "verdict": "partly",
+   "reason": "Baseline absence and trial goal are supported. 'Works harder', placement at chiller and the confirmed-truth benefit are unevidenced assertions; no media list or channel evidence."
+  }
+ ],
+ "stage": "fit",
+ "produced_by": "live claude-sonnet-5-5",
+ "usage": {
+  "prompt_tokens": 2,
+  "completion_tokens": 873,
+  "cache_read_tokens": 0,
+  "cache_creation_tokens": 3722,
+  "model": "claude-sonnet-5-5",
+  "secs": 7.6,
+  "calls": 1,
+  "usd": 0.0271,
+  "usd_estimated": true
+ }
+}

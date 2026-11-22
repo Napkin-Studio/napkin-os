@@ -1,3 +1,5 @@
+> **Update, 2 Nov 2026 (Laurence's reply):** the conventions map (Section 4, step 3) is cut for now. A kill gate now sits straight after the 30 seeds, before the Safe/Stretch/Brave sort, and tiers are placed by definition (safe answers the brief as written; stretch is a sharper door; brave changes the shape). Sections 4 and 6 below are the original plan and are superseded where they mention the convention map or the convention-count ladder. The rest was confirmed, including a real FMCG brief (client name withheld) plus one no-brief run against a plain prompt.
+
 # Napkin after Brief Maker: what happens next, and how to plan with thin or no client info
 
 *Prepared for Sai, 2 Nov 2026 (revised after critic review). The agency-practice material is partly research-backed, from web research with skeptic checks. The data counts come from reading docs and feature records in the repo. Claims that failed or only half passed a skeptic check are marked **[weak]** or **[unverified]**. Rows and steps that are Napkin's own invention are marked **[design bet]**.*
@@ -83,8 +85,7 @@ Open sources are thin here. The points below separate what is sourced from what 
 | **awardlib slice built** | About 1,190 chunks (24 duplicates, 30 no category, 27 failing rights skipped). Earlier slices of about 1,593 and 2,211 rows were also used. | As above | Gated thin-category fill | See experiments below |
 | **cans** | About 327 films (claimed) | award, film name, campaign, brand, agency, notes (as described) | Possibly a light exemplar and stimulus list | **Not found.** Reported to have no year, country, category, insight, results or rights field, to be confirmed on profiling. Rows may be executions of repeated campaigns. |
 | **Research Tool** | 109-leaf category taxonomy, 8 lenses, pins and findings model | Facts typed with tier, confidence derived in code, decision chain | Provenance machinery, `category_codes`, consumer_culture, brands_positioning. Needs only a category leaf and a market. | Brand-centred intake. **No populated real category store found**, only a fabricated example. Web-dependent, about 13 minutes on the one measured run. Research quality never evaluated. The cite rule drops claims containing years or euro amounts. **No link to awardlib or RAG.** |
-| **Brief Maker clan** | 18 content keys. The Ballymaloe run also writes `job`, `barrier`, `objection`. | Per-value provenance, `review.scorecard`, "To confirm" flags | Direct input. Ballymaloe came from a one-line prompt. | Most drafted content is "To confirm" |
-| **Ballymaloe test clan** | 1 real brief | | Thin-brief baseline | Lives in `~/Downloads`, not the repo |
+| **Brief Maker clan** | 18 content keys. A thin-brief run also writes `job`, `barrier`, `objection`. | Per-value provenance, `review.scorecard`, "To confirm" flags | Direct input. One test brief came from a one-line prompt. | Most drafted content is "To confirm" |
 | **Deck-maker stage c** | 3 territories, blind judge, insight judge (4 tests plus swap test) | id, name, thought, why, mood, references, risks, sketch | Pipeline shape, judges, key names | Fixed at 3, no ladder or score. Prompt forbids outside facts, conflicting with award proof. |
 | **~91k award boards** | Not found | | Planned stage 2 | Treat as internal-only |
 
@@ -182,28 +183,15 @@ The minimum viable input is a **category leaf plus a market**, which the Researc
 - Export in deck-maker stage-d key names (id, name, thought, why, mood, references, risks, sketch) plus tension, tier, assumes and proof_cases.
 - Client-facing export carries public facts only: film, brand, agency, award, year.
 
-### 4a. Worked example: Ballymaloe (illustrative, not a run)
-No real data was run. Built from the Ballymaloe run's content (insight, SMP, objection, competitors Heinz and own-label chutneys). Case ids and conventions are placeholders to be filled by a real run.
-
-- **Assumed brief:** audience under-35s in Ireland *(given)*. Barrier "I never think about the sauce, I just grab the usual" *(inferred, To confirm)*. Commercial target *(assumed, no baseline)*.
-- **Conventions (hypotheses, each needs 3 case ids from a real run):** (1) condiment ads show a family table and heritage; (2) the product is a red, glossy hero shot; (3) claims are about taste, not about the meal.
-- **Tensions:** (a) "They take trouble over the meal, then reach for whatever sauce is already there" *(from the brief, observed)*. (b) "Everyone says sauce is a side, but it is the part people tell friends about" *(invented-by-model)*. (c) "Ketchup does the job, but nobody chose it" *(inferred from objection, to confirm)*.
-- **Territory card (Stretch):**
-  - Line: "The last decision at the table".
-  - Tension: (a).
-  - Why it fits: speaks to the barrier directly.
-  - Proof: [case id], UNVERIFIED, mechanism "elevating an overlooked ritual", from a non-food category.
-  - Not copied: that case's execution.
-  - Assumes: the audience cooks at home at least weekly.
-  - Client questions: What is the price gap to Heinz? Is there product proof (awards, taste tests)?
-  - Vote: keep / kill / combine.
+### 4a. Worked example (removed)
+The worked example was built from a real brief and has been removed here (client name withheld). The method it showed: from the assumed brief, list convention hypotheses that each need 3 case ids from a real run, state tensions with their provenance (from the brief, inferred, or invented-by-model), then write each territory card with line, tension, proof (UNVERIFIED until a case id is checked), what is not copied, assumptions, client questions and a keep / kill / combine vote.
 
 ### 4b. Zero-input decision tree
 | Input | Action |
 |---|---|
 | Clan with a category and market | Proceed. Compute thinness. |
 | Brand name or URL only | Infer a category leaf and market, then ask one confirmation question. Nothing runs until confirmed. |
-| One-line prompt only | Extract category and market, then confirm (Ballymaloe came from this). |
+| One-line prompt only | Extract category and market, then confirm (a real FMCG brief, client name withheld, came from this). |
 | No brand, no category | Ask one question for category and market. If still unknown, **produce no territories** and say why. |
 | Category known but no audience | Run, with the audience marked assumed and every card marked assumption-dependent. |
 
@@ -305,7 +293,7 @@ Follow the repo workflow first: open a feature record, get your approval of the 
 7. **Crowding check** by text embedding against awardlib.
 8. **Output** in deck-maker key names.
 
-**How to know it worked:** run Ballymaloe plus one no-brief run (category and market only). Have Laurence or a CD blind-compare against a plain single-prompt 3-territory output and a planner's own set. Record distinctiveness, trust in each proposition, distinct mechanisms and cluster spread.
+**How to know it worked:** run a real FMCG brief (client name withheld) plus one no-brief run (category and market only). Have Laurence or a CD blind-compare against a plain single-prompt 3-territory output and a planner's own set. Record distinctiveness, trust in each proposition, distinct mechanisms and cluster spread.
 
 **Defer:** the cans ingest (profile the day it lands), mechanism tagging at scale, 91k image search, Goldenberg taxonomy, web dossier, concept starters and client export.
 
@@ -337,5 +325,5 @@ Follow the repo workflow first: open a feature record, get your approval of the 
 - **Not verified at all:** cans contents, any count read from a file (all counts are as documented), Cannes jury practice, chemistry sessions, and whether convention-breaking raises effectiveness.
 - **Unmeasured:** cost and latency per step, research-dossier quality, ladder validity, and whether any of this beats a single good prompt.
 - **Not researched:** primary agency process documents, client-side steps, how creatives actually use stimulus, and how reference-finding works at award-winning teams.
-- **Illustrative only:** the Ballymaloe worked example in 4a was not run.
+- **Illustrative only:** the worked example that was in 4a was not run, and has been removed.
 - **Next steps to close gaps:** find the missing files and re-measure counts, profile cans, run the blind comparison, and read Turnbull & Wheeler and the Goldenberg paper in full.

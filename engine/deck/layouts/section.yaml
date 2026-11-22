@@ -1,0 +1,28 @@
+id: section
+version: 1
+group: functional
+purpose: title
+description: 'A section break: a large label and an optional picture.'
+slot_summary: label, picture 16:9
+for_types:
+- appendix
+- real_question
+- idea
+priority: 95
+alternatives:
+- emphasis_bar
+without_image: section
+density: lean
+pick: offer
+family: section
+renderer: section
+slots:
+  title:
+    kind: text
+    role: display
+    required: true
+    max_chars: 40
+  picture:
+    kind: image
+    image:
+      aspect: '16:9'

@@ -1,0 +1,49 @@
+id: shift_line
+version: 1
+group: content
+purpose: compare
+description: The single thought as a hero line, from and to in two columns under a two-stop line, the reasons to believe under a hairline.
+slot_summary: title (hero), pair, support, rtb
+for_types:
+- proposition
+- objective
+when:
+  blocks_any:
+  - fromto
+priority: 60
+alternatives:
+- comparison
+- cards
+roomier: comparison
+density: lean
+pick: rule
+family: shift_line
+renderer: shift_line
+slots:
+  title:
+    kind: text
+    role: display
+    required: true
+    min_chars: 3
+    max_lines: 3
+  pair:
+    kind: group
+    role: lead
+    from_blocks:
+    - fromto
+    dominant: true
+    min_items: 1
+    max_items: 2
+  support:
+    kind: text
+    role: body
+    from_blocks:
+    - text
+    - small
+  rtb:
+    kind: list
+    role: body
+    from_blocks:
+    - bullets
+    min_items: 1
+    max_items: 3

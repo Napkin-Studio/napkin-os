@@ -204,3 +204,89 @@ licence = "OFL-1.1"
 embedded_licence = "unknown: Microsoft supplied font. You may use this font to create, display, and print content as permitted by the license terms o"
 sha256 = "038e1f243f90420c02ad33d88782c2f7288bcc835e6ffc3c5726a80a9a1711d3"
 source_url = "https://github.com/microsoft/cascadia-code/releases/download/v2407.24/CascadiaCode-2407.24.zip"
+
+# ---- Deck Maker (engine/deck/fonts, tracked) ------------------------------------
+# Upstream files byte for byte, unmodified (fetched 2026-11-18; engine/deck/fonts/README.md).
+# Variable files feed the web deck; the static faces draw the pptx, PDF and PNGs. The OFL-1.1
+# text travels with each family (OFL.txt beside the files). One entry per file to pin it.
+# Approved by Shrey, 2026-11-22.
+
+[[family]]
+name = "Archivo (Archivo[wdth,wght].ttf)"
+shipped_by = "repo"
+files = ["Archivo[[]wdth,wght].ttf"]
+licence = "OFL-1.1"
+sha256 = "0e094a7d3c7c4c25cf1310c4b30014f1dae9332220b1c2c88f4fa996f0b05053"
+source_url = "https://github.com/google/fonts/tree/7af0d90b4d532ffa4b041937b560c6df4e7b1e95/ofl/archivo"
+
+[[family]]
+name = "Archivo (Archivo-Bold.ttf)"
+shipped_by = "repo"
+files = ["Archivo-Bold.ttf"]
+licence = "OFL-1.1"
+sha256 = "951a0ebab63b1bb0d90a26c27625bda803d570dace3851fa2f1eea65852d8983"
+source_url = "https://github.com/Omnibus-Type/Archivo/tree/211127690e8ff106c36c935f7e5e697114cff103/fonts/ttf"
+
+[[family]]
+name = "Archivo (Archivo-BoldItalic.ttf)"
+shipped_by = "repo"
+files = ["Archivo-BoldItalic.ttf"]
+licence = "OFL-1.1"
+sha256 = "2a6a93a878804257237ce188ab31245fa4b8a0fb1c29a4b34588e8e1ed642b1d"
+source_url = "https://github.com/Omnibus-Type/Archivo/tree/211127690e8ff106c36c935f7e5e697114cff103/fonts/ttf"
+
+[[family]]
+name = "Archivo (Archivo-Italic.ttf)"
+shipped_by = "repo"
+files = ["Archivo-Italic.ttf"]
+licence = "OFL-1.1"
+sha256 = "344ac62b73990a6e7f18d28af41c9e952098faf58dbe46048b02aca7128c0974"
+source_url = "https://github.com/Omnibus-Type/Archivo/tree/211127690e8ff106c36c935f7e5e697114cff103/fonts/ttf"
+
+[[family]]
+name = "Archivo (Archivo-Regular.ttf)"
+shipped_by = "repo"
+files = ["Archivo-Regular.ttf"]
+licence = "OFL-1.1"
+sha256 = "59fbfd8a9bb41301bfe950e7b097fd42d52af224a07761e2c1b2c959a4c9cf9a"
+source_url = "https://github.com/Omnibus-Type/Archivo/tree/211127690e8ff106c36c935f7e5e697114cff103/fonts/ttf"
+
+[[family]]
+name = "Source Sans 3 (SourceSans3[wght].ttf)"
+shipped_by = "repo"
+files = ["SourceSans3[[]wght].ttf"]
+licence = "OFL-1.1"
+sha256 = "042fe2cc0b933e328410d7acbd0aa6a1873dca5aef81875f4bc214b08825c7b9"
+source_url = "https://github.com/google/fonts/tree/7af0d90b4d532ffa4b041937b560c6df4e7b1e95/ofl/sourcesans3"
+
+[[family]]
+name = "Source Sans 3 (SourceSans3-Bold.ttf)"
+shipped_by = "repo"
+files = ["SourceSans3-Bold.ttf"]
+licence = "OFL-1.1"
+sha256 = "9214b9d95e4231c609802815c2646c98174e2102d0d37f88978a7f8e71006e6a"
+source_url = "https://github.com/adobe-fonts/source-sans/releases/tag/3.052R"
+
+[[family]]
+name = "Source Sans 3 (SourceSans3-BoldIt.ttf)"
+shipped_by = "repo"
+files = ["SourceSans3-BoldIt.ttf"]
+licence = "OFL-1.1"
+sha256 = "7978291fc1bf314db887e0366853b33c5cf2e964c7b95cfb9ce403a6ec46a842"
+source_url = "https://github.com/adobe-fonts/source-sans/releases/tag/3.052R"
+
+[[family]]
+name = "Source Sans 3 (SourceSans3-It.ttf)"
+shipped_by = "repo"
+files = ["SourceSans3-It.ttf"]
+licence = "OFL-1.1"
+sha256 = "192afd78f0f54a3c69eaf02d43f4d9a821e9d6110e41d3d25d61a7385cd580e4"
+source_url = "https://github.com/adobe-fonts/source-sans/releases/tag/3.052R"
+
+[[family]]
+name = "Source Sans 3 (SourceSans3-Regular.ttf)"
+shipped_by = "repo"
+files = ["SourceSans3-Regular.ttf"]
+licence = "OFL-1.1"
+sha256 = "4644c81b86ec9caaa76b634889968ed3c4f4f52f054855933acc7c2b21e53b0f"
+source_url = "https://github.com/adobe-fonts/source-sans/releases/tag/3.052R"

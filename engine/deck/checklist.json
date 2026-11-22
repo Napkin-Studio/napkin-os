@@ -1,0 +1,999 @@
+{
+ "version": 4,
+ "about": "The deck visual checklist: one entry per check. kind yes_no answers yes, no or n/a; kind metric answers a value or n/a. n/a is never a pass. bench/checklist.py holds one function per id. Thresholds read from spec, theme or qa_render are named in the source, not copied. Each item has a tier: gate items count in compare --fail-on-regress; advisory items are reported but never fail it. A metric may carry direction higher, lower or same (any change is worse).",
+ "items": [
+  {
+   "id": "g_no_blocker",
+   "group": "gate",
+   "kind": "yes_no",
+   "question": "Is no blocker left: no finding at level error in validation.json or qa.json?",
+   "source": "docs/contracts/deck-visuals.md §7: with no policy severity entry, error is blocker and warn is minor (policy/repair.yaml does not exist until deck-repair-loop; when it does, its severity map is used)",
+   "inputs": [
+    "validation.json",
+    "qa.json"
+   ],
+   "na_when": "validation.json is missing or is not a list; or qa.json is missing (a --no-qa run) or its only finding is 'unreadable' under the key 'deck'",
+   "threshold": {
+    "max_blockers": 0
+   },
+   "tier": "gate"
+  },
+  {
+   "id": "g_no_validator_error",
+   "group": "gate",
+   "kind": "yes_no",
+   "question": "Does validation.json hold no error?",
+   "source": "validate.py: level error fails the run's gate (ADR 0016)",
+   "inputs": [
+    "validation.json"
+   ],
+   "na_when": "validation.json is missing or is not a list",
+   "threshold": {
+    "max": 0
+   },
+   "tier": "gate"
+  },
+  {
+   "id": "g_no_qa_error",
+   "group": "gate",
+   "kind": "yes_no",
+   "question": "Does qa.json hold no error on a presented slide?",
+   "source": "qa_render.py levels; contract §7 default mapping",
+   "inputs": [
+    "qa.json",
+    "deck.json"
+   ],
+   "na_when": "qa.json is missing (a --no-qa run) or its only finding is 'unreadable' under the key 'deck'",
+   "threshold": {
+    "max": 0
+   },
+   "tier": "gate"
+  },
+  {
+   "id": "g_no_major",
+   "group": "gate",
+   "kind": "yes_no",
+   "question": "Is no major left?",
+   "source": "Claude outputs/deck-maker-plan.md §2.7 severity defaults; docs/contracts/deck-visuals.md §7 and §8",
+   "inputs": [
+    "validation.json",
+    "qa.json",
+    "policy/repair.yaml"
+   ],
+   "na_when": "no repair policy with a severity map exists (engine/deck/policy/repair.yaml, deck-repair-loop): without one nothing is major, so the answer is unjudgeable, not yes",
+   "threshold": {
+    "max_majors": 0
+   },
+   "today": "n/a",
+   "tier": "gate"
+  },
+  {
+   "id": "g_checks_current",
+   "group": "gate",
+   "kind": "yes_no",
+   "question": "Were the checks run on this exact deck.json (qa.deck_sha equals the deck's hash)?",
+   "source": "docs/contracts/deck-visuals.md §7 (deck_sha, current); PPTAgent's hash-gated finish (Claude outputs/deck-maker-plan.md §6)",
+   "inputs": [
+    "qa.json",
+    "deck.json"
+   ],
+   "na_when": "qa.json carries no deck_sha (today's qa_render writes none; deck-repair-loop adds it)",
+   "today": "n/a",
+   "tier": "gate"
+  },
+  {
+   "id": "q_no_overflow",
+   "group": "render_qa",
+   "kind": "yes_no",
+   "question": "Is no presented slide's text running past its frame or off the slide (text_overflow)?",
+   "source": "qa_render.py text_overflow",
+   "inputs": [
+    "qa.json",
+    "deck.json"
+   ],
+   "na_when": "qa.json is missing (a --no-qa run) or its only finding is 'unreadable' under the key 'deck'",
+   "tier": "gate"
+  },
+  {
+   "id": "q_no_overlap",
+   "group": "render_qa",
+   "kind": "yes_no",
+   "question": "Does no text overlap other text on a presented slide (text_overlap)?",
+   "source": "qa_render.py text_overlap",
+   "inputs": [
+    "qa.json",
+    "deck.json"
+   ],
+   "na_when": "qa.json is missing (a --no-qa run) or its only finding is 'unreadable' under the key 'deck'",
+   "tier": "gate"
+  },
+  {
+   "id": "q_no_off_slide",
+   "group": "render_qa",
+   "kind": "yes_no",
+   "question": "Does every shape stay on the slide (off_slide)?",
+   "source": "qa_render.py off_slide",
+   "inputs": [
+    "qa.json"
+   ],
+   "na_when": "qa.json is missing (a --no-qa run) or its only finding is 'unreadable' under the key 'deck'",
+   "tier": "gate"
+  },
+  {
+   "id": "q_margins_kept",
+   "group": "render_qa",
+   "kind": "yes_no",
+   "question": "Does every text frame keep the 0.5 in margin (margin)?",
+   "source": "qa_render.MARGIN_IN = 0.5; Pitch margins and gaps (plan §6)",
+   "inputs": [
+    "qa.json",
+    "deck.json"
+   ],
+   "na_when": "qa.json is missing (a --no-qa run) or its only finding is 'unreadable' under the key 'deck'",
+   "threshold": {
+    "margin_in": 0.5
+   },
+   "tier": "gate"
+  },
+  {
+   "id": "q_body_floor",
+   "group": "render_qa",
+   "kind": "yes_no",
+   "question": "Is no body text under the size floor (min_font: body 12 pt, caption 10 pt, title 28 pt)?",
+   "source": "theme.Scale body_floor 12, caption_floor 10, title_min 28; docs/contracts/deck-visuals.md §6.2; Pitch 28-32 px body is 14-16 pt (plan §2.4)",
+   "inputs": [
+    "qa.json",
+    "deck.json"
+   ],
+   "na_when": "qa.json is missing (a --no-qa run) or its only finding is 'unreadable' under the key 'deck'",
+   "threshold": {
+    "body_pt": 12,
+    "caption_pt": 10,
+    "title_pt": 28
+   },
+   "tier": "gate"
+  },
+  {
+   "id": "q_contrast",
+   "group": "render_qa",
+   "kind": "yes_no",
+   "question": "Does every run meet WCAG contrast (4.5:1 text, 3:1 large) where colours are known (contrast)?",
+   "source": "qa_render.py contrast (WCAG 2.x)",
+   "inputs": [
+    "qa.json",
+    "deck.json"
+   ],
+   "na_when": "qa.json is missing (a --no-qa run) or its only finding is 'unreadable' under the key 'deck'",
+   "threshold": {
+    "large": 3.0,
+    "text": 4.5
+   },
+   "tier": "gate"
+  },
+  {
+   "id": "q_no_filler",
+   "group": "render_qa",
+   "kind": "yes_no",
+   "question": "Is there no left-over filler ([Agency], lorem, TBD, XXX) on a presented slide?",
+   "source": "qa_render.py placeholder (FILLER)",
+   "inputs": [
+    "qa.json",
+    "deck.json"
+   ],
+   "na_when": "qa.json is missing (a --no-qa run) or its only finding is 'unreadable' under the key 'deck'",
+   "tier": "gate"
+  },
+  {
+   "id": "q_not_empty",
+   "group": "render_qa",
+   "kind": "yes_no",
+   "question": "Is no presented slide blank or almost empty (mostly_empty)?",
+   "source": "qa_render.EMPTY_WARN 0.02, EMPTY_ERROR 0.004",
+   "inputs": [
+    "qa.json"
+   ],
+   "na_when": "qa.json has no 'pixels' entries (no PDF: summary.notes says 'pixels skipped')",
+   "threshold": {
+    "min_ink_share": 0.02
+   },
+   "depends_on": "pixels",
+   "tier": "gate"
+  },
+  {
+   "id": "q_not_cornered",
+   "group": "render_qa",
+   "kind": "yes_no",
+   "question": "Does no presented slide sit its content in one corner (one_corner)?",
+   "source": "qa_render.CORNER_SHARE 0.8",
+   "inputs": [
+    "qa.json"
+   ],
+   "na_when": "qa.json has no 'pixels' entries (no PDF: summary.notes says 'pixels skipped')",
+   "threshold": {
+    "max_corner_share": 0.8
+   },
+   "depends_on": "pixels",
+   "tier": "gate"
+  },
+  {
+   "id": "l_no_fallback_flow",
+   "group": "layout",
+   "kind": "yes_no",
+   "question": "Was no presented slide drawn by the fallback flow (its layout raised NoFit and the flow drew it)?",
+   "source": "render_pptx.py 'Safe fallback'; Claude outputs/deck-maker-plan.md slice 4 done-when (5): fallback count to zero or each listed",
+   "inputs": [
+    "layouts.json | deck.slides.<id>.layout",
+    "deck.json"
+   ],
+   "na_when": "no layout record: neither deck.slides.<id>.layout (slice 4) nor layouts.json (this slice) is in the run folder; or the deck was drawn with the classic theme (every slide is flow by theme, recorded as theme: classic)",
+   "tier": "gate"
+  },
+  {
+   "id": "l_no_rule_flow",
+   "group": "layout",
+   "kind": "yes_no",
+   "question": "Did the rules give every presented slide a library layout (choose_layout never returned flow)?",
+   "source": "render_pptx.choose_layout's last rule; docs/contracts/deck-visuals.md §3.1 (flow is reserved: no library layout)",
+   "inputs": [
+    "layouts.json | deck.slides.<id>.layout"
+   ],
+   "na_when": "no layout record: neither deck.slides.<id>.layout (slice 4) nor layouts.json (this slice) is in the run folder",
+   "tier": "gate"
+  },
+  {
+   "id": "l_not_relaxed",
+   "group": "layout",
+   "kind": "yes_no",
+   "question": "Was no presented slide set relaxed (body text let down to the caption floor to fit)?",
+   "source": "Renderer._relaxed; docs/contracts/deck-visuals.md §3.1 layout.fit.relaxed",
+   "inputs": [
+    "layouts.json | deck.slides.<id>.layout.fit"
+   ],
+   "na_when": "no layout record: neither deck.slides.<id>.layout (slice 4) nor layouts.json (this slice) is in the run folder",
+   "tier": "gate"
+  },
+  {
+   "id": "l_repeat_max2",
+   "group": "layout",
+   "kind": "yes_no",
+   "question": "Are there never more than 2 identical content layouts in a row among presented content slides, unless the run is parallel slides of one slide type (three territories may look alike)?",
+   "source": "Claude outputs/deck-maker-plan.md §2.1 picker rules and §6 (Pitch teardown: no more than two alike in a row); reserved check layout_repeat",
+   "inputs": [
+    "layouts.json | deck.slides.<id>.layout",
+    "deck.json"
+   ],
+   "na_when": "no layout record: neither deck.slides.<id>.layout (slice 4) nor layouts.json (this slice) is in the run folder; or fewer than 3 presented content slides",
+   "threshold": {
+    "max_run": 2
+   },
+   "tier": "advisory"
+  },
+  {
+   "id": "l_variety",
+   "group": "layout",
+   "kind": "yes_no",
+   "question": "Does every window of 10 presented content slides use at least 6 distinct layouts (ceil(0.6 x n) for n < 10)?",
+   "source": "Claude outputs/deck-maker-plan.md §2.1: Pitch's 10-slide template uses 8 distinct layouts; the checklist asks 6 in 10 (teardown evidence pitch_tpl_1440.measure.json)",
+   "inputs": [
+    "layouts.json | deck.slides.<id>.layout",
+    "deck.json"
+   ],
+   "na_when": "no layout record: neither deck.slides.<id>.layout (slice 4) nor layouts.json (this slice) is in the run folder; or fewer than 5 presented content slides; or a presented content slide has no layout record",
+   "threshold": {
+    "min_distinct": 6,
+    "window": 10
+   },
+   "tier": "advisory"
+  },
+  {
+   "id": "l_in_library",
+   "group": "layout",
+   "kind": "yes_no",
+   "question": "Is every presented slide's layout one of the library's (spec.LAYOUT_IDS) or flow, never invented?",
+   "source": "Claude outputs/deck-maker-plan.md decision 9 (closed catalogue of at most 40); docs/contracts/deck-visuals.md rule 8; reserved check layout_unknown",
+   "inputs": [
+    "layouts.json | deck.slides.<id>.layout"
+   ],
+   "na_when": "no layout record: neither deck.slides.<id>.layout (slice 4) nor layouts.json (this slice) is in the run folder",
+   "tier": "gate"
+  },
+  {
+   "id": "l_one_dominant",
+   "group": "layout",
+   "kind": "yes_no",
+   "question": "Does every presented content slide have at most one dominant visual?",
+   "source": "Claude outputs/deck-maker-plan.md §6 (Pitch: one dominant visual); layout.schema.json slot.dominant",
+   "inputs": [
+    "deck.slides.<id>.layout",
+    "engine/deck/layouts/*.yaml"
+   ],
+   "na_when": "no layout library on disk (engine/deck/layouts/, deck-layout-library): no slot is marked dominant, so it cannot be judged",
+   "today": "n/a",
+   "tier": "gate"
+  },
+  {
+   "id": "l_alternatives",
+   "group": "layout",
+   "kind": "yes_no",
+   "question": "Does every presented content slide offer at least one alternative layout a person could swap to?",
+   "source": "Claude outputs/deck-maker-plan.md §2.1 alternatives, §6 (Beautiful.ai offers several per slide); docs/contracts/deck-visuals.md §3.1",
+   "inputs": [
+    "deck.slides.<id>.layout.alternatives"
+   ],
+   "na_when": "no slide records layout.alternatives (written by deck-layout-library)",
+   "today": "n/a",
+   "tier": "gate"
+  },
+  {
+   "id": "l_slots_clean",
+   "group": "layout",
+   "kind": "yes_no",
+   "question": "Is every slot within its limits and bound (no slot_limit, slot_missing, slot_unknown, block_unbound, slot_stale)?",
+   "source": "docs/contracts/deck-visuals.md §3.3 binding rules",
+   "inputs": [
+    "validation.json",
+    "deck.slides.<id>.slots"
+   ],
+   "na_when": "no slide has slots, or while the check name it reads is still in spec.RESERVED_CHECKS (no code raises it yet)",
+   "today": "n/a",
+   "tier": "gate"
+  },
+  {
+   "id": "w_type_budget",
+   "group": "words",
+   "kind": "yes_no",
+   "question": "Is every presented slide within its slide type's word budget (no word_budget finding)?",
+   "source": "spec.SLIDE_TYPES words; validate.word_budget",
+   "inputs": [
+    "validation.json"
+   ],
+   "na_when": "validation.json is missing or is not a list",
+   "tier": "gate"
+  },
+  {
+   "id": "w_density_met",
+   "group": "words",
+   "kind": "yes_no",
+   "question": "Is every presented content slide at or under the deck's density target (lean 30, standard 60, detailed: the type budget)?",
+   "source": "spec.DENSITY_WORDS {lean: 30, standard: 60}; Sai 2026-11-17 (docs/contracts/deck-visuals.md §10, §11.6); teardown: the leaders' content slides carry about 30 words (Claude outputs/deck-maker-plan.md §6)",
+   "inputs": [
+    "deck.json (meta.preferences.density, slides)"
+   ],
+   "na_when": "deck.meta.preferences.density is absent: the build applied no density (the engine does not apply it until deck-layout-library), so a target the build did not aim at is not judged",
+   "threshold": {
+    "lean": 30,
+    "standard": 60
+   },
+   "today": "n/a",
+   "tier": "gate"
+  },
+  {
+   "id": "w_pitch_length",
+   "group": "words",
+   "kind": "yes_no",
+   "question": "Is the presented story within spec.PITCH_MAX (18) slides (no pitch_length finding)?",
+   "source": "spec.PITCH_MAX = 18; validate.pitch_length",
+   "inputs": [
+    "validation.json"
+   ],
+   "na_when": "validation.json is missing or is not a list",
+   "threshold": {
+    "max_slides": 18
+   },
+   "tier": "gate"
+  },
+  {
+   "id": "w_takeaway_titles",
+   "group": "words",
+   "kind": "yes_no",
+   "question": "Is every presented title a full-sentence takeaway (no action_title finding)?",
+   "source": "validate.action_title",
+   "inputs": [
+    "validation.json"
+   ],
+   "na_when": "validation.json is missing or is not a list",
+   "tier": "gate"
+  },
+  {
+   "id": "w_line_length",
+   "group": "words",
+   "kind": "yes_no",
+   "question": "Is no presented body text set at more than about 75 characters per line when it runs to more than one line (box width over the mean glyph width at the run's font size)?",
+   "source": "Claude outputs/deck-maker-plan.md §2.1 max_line_in 4.9 (Pitch body lines of 700 px of 1920 = 4.86 in, about 65 characters at 12 pt); the check is in characters so size is accounted for; reserved check line_length",
+   "inputs": [
+    "deck.pptx",
+    "deck.json"
+   ],
+   "na_when": "deck.pptx is missing or cannot be opened",
+   "threshold": {
+    "max_chars": 75,
+    "by_role": {}
+   },
+   "tier": "advisory",
+   "note": "by_role may hold a per-role limit (body, caption, lead ...); a role without an entry uses max_chars. Slice 4 may fill it from the layout's slot role."
+  },
+  {
+   "id": "m_share_le_30",
+   "group": "words",
+   "kind": "metric",
+   "question": "What share of presented content slides carry 30 words or fewer (validate.words: title, labelled placeholders and ad copy excluded)?",
+   "source": "spec.DENSITY_WORDS lean 30; teardown about 30 words (Claude outputs/deck-maker-plan.md §6 'One measured gap')",
+   "inputs": [
+    "deck.json"
+   ],
+   "na_when": "no presented content slide",
+   "direction": "higher",
+   "tier": "gate"
+  },
+  {
+   "id": "m_share_le_60",
+   "group": "words",
+   "kind": "metric",
+   "question": "What share of presented content slides carry 60 words or fewer?",
+   "source": "spec.DENSITY_WORDS standard 60 (Sai 2026-11-17)",
+   "inputs": [
+    "deck.json"
+   ],
+   "na_when": "no presented content slide",
+   "direction": "higher",
+   "tier": "gate"
+  },
+  {
+   "id": "m_median_words",
+   "group": "words",
+   "kind": "metric",
+   "question": "What is the median word count of presented content slides?",
+   "source": "same count as validate.words",
+   "inputs": [
+    "deck.json"
+   ],
+   "na_when": "no presented content slide",
+   "direction": "lower",
+   "tier": "gate"
+  },
+  {
+   "id": "t_title_one_place",
+   "group": "type",
+   "kind": "yes_no",
+   "question": "Across presented slides of one layout, is the title in one place and one size (top and left within 0.05 in, size within 1 pt)?",
+   "source": "Claude outputs/deck-maker-plan.md §1 step 12 and §6 (Pitch teardown: title_drift); reserved check title_drift",
+   "inputs": [
+    "deck.pptx (shape named Title)",
+    "layouts.json | deck.slides.<id>.layout"
+   ],
+   "na_when": "no layout record: neither deck.slides.<id>.layout (slice 4) nor layouts.json (this slice) is in the run folder; or deck.pptx is missing or cannot be opened; or no layout has 2 or more presented slides with a Title shape",
+   "threshold": {
+    "pos_in": 0.05,
+    "size_pt": 1.0
+   },
+   "tier": "gate"
+  },
+  {
+   "id": "t_title_range",
+   "group": "type",
+   "kind": "yes_no",
+   "question": "Is every presented content-slide title set between the floor and the top of the title role (28 to 44 pt)?",
+   "source": "docs/contracts/deck-visuals.md §6.2 title role 36-44 pt, title_min 28; Pitch 72-88 px titles = 36-44 pt (plan §2.4)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json"
+   ],
+   "na_when": "deck.pptx is missing or cannot be opened",
+   "threshold": {
+    "max_pt": 44,
+    "min_pt": 28
+   },
+   "tier": "gate"
+  },
+  {
+   "id": "t_cover_title",
+   "group": "type",
+   "kind": "yes_no",
+   "question": "Is the cover title at least 1.4 times the size of the content-slide titles (median)?",
+   "source": "Claude outputs/deck-maker-plan.md §2.4 and §6: Pitch's cover title is 60-80 pt against 36-44 pt content titles (a ratio of about 1.6 to 2); docs/contracts/deck-visuals.md §6.2 display 44-80",
+   "inputs": [
+    "deck.pptx",
+    "deck.json"
+   ],
+   "na_when": "deck.pptx is missing or cannot be opened; or no presented slide of type title; or no presented content slide has a sized Title shape",
+   "threshold": {
+    "min_ratio": 1.4
+   },
+   "tier": "advisory",
+   "note": "Pitch's absolute cover size is 60 pt; kept as a note, not the test, so a smaller theme scale is judged by its own ratio."
+  },
+  {
+   "id": "t_two_families",
+   "group": "type",
+   "kind": "yes_no",
+   "question": "Do presented slides use at most two font families?",
+   "source": "Claude outputs/deck-maker-plan.md §6 (Pitch: two font families at most); docs/contracts/deck-visuals.md §6.2 fonts head and body",
+   "inputs": [
+    "deck.pptx"
+   ],
+   "na_when": "deck.pptx is missing or cannot be opened",
+   "threshold": {
+    "max_families": 2
+   },
+   "tier": "gate"
+  },
+  {
+   "id": "p_where_asked",
+   "group": "pictures",
+   "kind": "yes_no",
+   "question": "Does every presented slide that the picture preference asks a picture for carry one?",
+   "source": "docs/contracts/deck-visuals.md §4.4 and §6.3 look.pictures (default creative_cover, Laurence default §11.1)",
+   "inputs": [
+    "deck.json (meta.preferences.pictures, slides.<id>.slots)"
+   ],
+   "na_when": "deck.meta.preferences.pictures is absent or 'none': the build was not asked for pictures",
+   "today": "n/a",
+   "tier": "gate"
+  },
+  {
+   "id": "m_creative_pictured",
+   "group": "pictures",
+   "kind": "metric",
+   "question": "What share of presented creative slides (spec.PICTURE_SLIDE_TYPES) carry a filled image slot?",
+   "source": "spec.PICTURE_SLIDE_TYPES; Claude outputs/deck-maker-plan.md slice 3 bench (picture coverage)",
+   "inputs": [
+    "deck.json"
+   ],
+   "na_when": "no presented slide of a picture type",
+   "today": "0.0 on every fixture: nothing draws a picture yet",
+   "direction": "higher",
+   "tier": "gate"
+  },
+  {
+   "id": "p_only_creative",
+   "group": "pictures",
+   "kind": "yes_no",
+   "question": "Is every picture on a creative slide type, none on an evidence slide?",
+   "source": "Claude outputs/deck-maker-plan.md decision 7; docs/contracts/deck-visuals.md rule 6 and §4.4",
+   "inputs": [
+    "deck.json"
+   ],
+   "na_when": "no presented slide has a filled image slot (status made, flagged or approved): a vacuous 'all pictures are fine' is never a yes",
+   "today": "n/a",
+   "tier": "gate"
+  },
+  {
+   "id": "p_all_approved",
+   "group": "pictures",
+   "kind": "metric",
+   "question": "What share of placed pictures is approved by a person, the approval naming the slot's own asset? (a review build shows it as a number; a client build needs 1.0)",
+   "source": "ADR 0027 and docs/contracts/deck-visuals.md §4.3 and §12 (approval.asset equals asset)",
+   "inputs": [
+    "deck.json"
+   ],
+   "na_when": "no presented slide has a filled image slot (status made, flagged or approved): a vacuous 'all pictures are fine' is never a yes",
+   "today": "n/a",
+   "tier": "gate",
+   "direction": "higher"
+  },
+  {
+   "id": "p_client_approved",
+   "group": "pictures",
+   "kind": "yes_no",
+   "question": "On a client build, is every placed picture approved by the deck's approver, the approval naming the slot's own asset?",
+   "source": "docs/contracts/deck-visuals.md §4.3 (a client render draws only approved pictures); check image_unapproved",
+   "inputs": [
+    "deck.json"
+   ],
+   "na_when": "no presented slide has a filled image slot (status made, flagged or approved): a vacuous 'all pictures are fine' is never a yes; or the build is not for the client (deck.meta.audience), where p_all_approved is the number",
+   "today": "n/a",
+   "tier": "gate"
+  },
+  {
+   "id": "p_one_style",
+   "group": "pictures",
+   "kind": "yes_no",
+   "question": "Do all styled pictures share one Style Pack hash (one picture style per deck)? A hash that differs from the current pack's (meta.preferences.style_pack.hash) is stale, counted on its own, not mixed.",
+   "source": "Claude outputs/deck-maker-plan.md §6 (Pitch teardown: one image style per deck) and §2.8 v_one_style; reserved check image_style_mixed",
+   "inputs": [
+    "deck.json (slots.<slot>.image.style.hash)"
+   ],
+   "na_when": "fewer than 2 placed pictures carry a style hash",
+   "today": "n/a",
+   "tier": "gate"
+  },
+  {
+   "id": "p_assets_resolve",
+   "group": "pictures",
+   "kind": "yes_no",
+   "question": "Does every placed picture's asset exist in deck.assets with its file in the run folder? (a client build looks only at the approved pictures it draws)",
+   "source": "docs/contracts/deck-visuals.md §4.2; check image_missing",
+   "inputs": [
+    "deck.json",
+    "run folder assets/"
+   ],
+   "na_when": "no presented slide has a filled image slot (status made, flagged or approved): a vacuous 'all pictures are fine' is never a yes",
+   "today": "n/a",
+   "tier": "gate"
+  },
+  {
+   "id": "p_rights_ok",
+   "group": "pictures",
+   "kind": "yes_no",
+   "question": "Is no slot filled with a reference_only asset?",
+   "source": "docs/contracts/deck-visuals.md §4.2 and §6.3 rules; reserved check image_rights",
+   "inputs": [
+    "deck.json"
+   ],
+   "na_when": "no presented slide has a filled image slot (status made, flagged or approved): a vacuous 'all pictures are fine' is never a yes",
+   "today": "n/a",
+   "tier": "gate"
+  },
+  {
+   "id": "p_alt_text",
+   "group": "pictures",
+   "kind": "yes_no",
+   "question": "Does every placed picture carry alt text?",
+   "source": "docs/contracts/deck-visuals.md §4.1 alt; Claude outputs/deck-maker-plan.md slice 3 done-when (3)",
+   "inputs": [
+    "deck.json"
+   ],
+   "na_when": "no presented slide has a filled image slot (status made, flagged or approved): a vacuous 'all pictures are fine' is never a yes",
+   "today": "n/a",
+   "tier": "gate"
+  },
+  {
+   "id": "p_no_stretch",
+   "group": "pictures",
+   "kind": "yes_no",
+   "question": "Is no picture stretched (picture_stretch)?",
+   "source": "Claude outputs/deck-maker-plan.md §1 step 12; check picture_stretch",
+   "inputs": [
+    "qa.json"
+   ],
+   "na_when": "no presented slide has a filled image slot (status made, flagged or approved): a vacuous 'all pictures are fine' is never a yes",
+   "today": "n/a",
+   "tier": "gate"
+  },
+  {
+   "id": "p_no_lowres",
+   "group": "pictures",
+   "kind": "yes_no",
+   "question": "Does every picture show at least spec.PICTURE_MIN_PPI pixels per inch of its box, measured on the crop that is shown (picture_lowres)?",
+   "source": "deck-frames-in design (fix: low-resolution pictures); check picture_lowres",
+   "inputs": [
+    "qa.json"
+   ],
+   "na_when": "no presented slide has a filled image slot (status made, flagged or approved): a vacuous 'all pictures are fine' is never a yes",
+   "today": "n/a",
+   "tier": "gate"
+  },
+  {
+   "id": "p_text_on_image",
+   "group": "pictures",
+   "kind": "yes_no",
+   "question": "Is every word set over a picture readable (text_on_image_contrast)?",
+   "source": "Claude outputs/deck-maker-plan.md §1 step 12; check text_on_image_contrast",
+   "inputs": [
+    "qa.json"
+   ],
+   "na_when": "no presented slide has a filled image slot (status made, flagged or approved): a vacuous 'all pictures are fine' is never a yes",
+   "today": "n/a",
+   "tier": "gate"
+  },
+  {
+   "id": "m_usd",
+   "group": "run",
+   "kind": "metric",
+   "question": "What did the deck cost in dollars (report.json usd_total; usd_basis says when it is an estimate)?",
+   "source": "Claude outputs/deck-maker-plan.md §4 (cost per deck in every slice PR)",
+   "inputs": [
+    "report.json"
+   ],
+   "na_when": "report.json is missing",
+   "direction": "lower",
+   "tier": "gate"
+  },
+  {
+   "id": "m_seconds",
+   "group": "run",
+   "kind": "metric",
+   "question": "How many seconds did the build take (report.json wall_secs, with seconds per stage)?",
+   "source": "Claude outputs/deck-maker-plan.md §4 (seconds per deck)",
+   "inputs": [
+    "report.json"
+   ],
+   "na_when": "report.json is missing",
+   "depends_on": "time",
+   "direction": "lower",
+   "tier": "advisory"
+  },
+  {
+   "id": "w_words_sha",
+   "group": "words",
+   "kind": "metric",
+   "question": "What is the hash of the deck's words (titles, blocks, speaker notes, in slide order), excluding layout, slots, assets, meta.theme, meta.preferences and pinned? A change means words changed.",
+   "source": "ADR 0027: no word comes from a look or a picture; slices 3 and 7 must leave it unchanged",
+   "inputs": [
+    "deck.json"
+   ],
+   "na_when": "no presented slide",
+   "direction": "same",
+   "tier": "gate"
+  },
+  {
+   "id": "w_notes_kept",
+   "group": "words",
+   "kind": "yes_no",
+   "question": "Where the fit ladder moved words off a slide (fit.rung overflow_to_notes), do the speaker notes hold them (notes not empty)?",
+   "source": "docs/contracts/deck-visuals.md §3.1 fit.rung and §6.3 density (the rest in the speaker notes); the viewer's lean-slide promise",
+   "inputs": [
+    "deck.slides.<id>.layout.fit",
+    "deck.slides.<id>.notes"
+   ],
+   "na_when": "no slide records layout.fit.rung overflow_to_notes (written by deck-layout-library, slice 4)",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "k_palette_only",
+   "group": "kit",
+   "kind": "yes_no",
+   "question": "Do the colours in the pptx (fills, text, lines) come only from meta.theme.colors, its semantic colours and its chart colours?",
+   "source": "docs/contracts/deck-visuals.md §6.1; a brand kit is worn, never mixed with invented colours",
+   "inputs": [
+    "deck.pptx",
+    "deck.json (meta.theme)"
+   ],
+   "na_when": "deck.meta.theme is absent (the runner writes it); or deck.pptx is missing or cannot be opened",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "k_logo_cover",
+   "group": "kit",
+   "kind": "yes_no",
+   "question": "When meta.theme.logo is set (an asset, placement not none), does the cover slide carry a picture?",
+   "source": "docs/contracts/deck-visuals.md §6.1 logo.placement; render_pptx._logo",
+   "inputs": [
+    "deck.json (meta.theme.logo)",
+    "deck.pptx"
+   ],
+   "na_when": "deck.meta.theme.logo is absent, has no asset or placement none; or deck.pptx is missing or cannot be opened; or no presented slide of type title",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "i_icon_allowlist",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is every icon shape one of the vendored ids (vendor/icons/icons.json), none a brand, drawn as a native stroke-only freeform?",
+   "source": "features/deck-graphics.clan design.checklist and design.icons (slice 1); graphics.ICON_DENY",
+   "inputs": [
+    "deck.pptx"
+   ],
+   "na_when": "no presented slide carries an icon (shape named 'Icon: <id>'), e.g. DECK_GRAPHICS is off; or deck.pptx is missing or cannot be opened",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "i_icon_contrast",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is every icon stroke 3:1 or better against its slide's ground (WCAG non-text contrast)?",
+   "source": "features/deck-graphics.clan design.checklist and design.icons (slice 1); graphics.ICON_CONTRAST",
+   "inputs": [
+    "deck.pptx"
+   ],
+   "na_when": "no presented slide carries an icon (shape named 'Icon: <id>'), e.g. DECK_GRAPHICS is off; or deck.pptx is missing or cannot be opened",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "i_icon_groups",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Does every icon group have an icon on every item, all different (at least graphics.ICON_GROUP_MIN items)?",
+   "source": "features/deck-graphics.clan design.checklist and design.icons (slice 1) (all-or-none per group)",
+   "inputs": [
+    "deck.pptx",
+    "layouts.json | deck.slides.<id>.layout"
+   ],
+   "na_when": "no presented slide carries an icon (shape named 'Icon: <id>'), e.g. DECK_GRAPHICS is off; or deck.pptx is missing or cannot be opened",
+   "tier": "advisory",
+   "today": "n/a"
+  },
+  {
+   "id": "i_icon_share",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Are icons on at most 3 of any 10 presented slides?",
+   "source": "features/deck-graphics.clan design.checklist and design.icons (slice 1) (design.icons.layouts: at most 3 icon slides in any 10 presented)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json"
+   ],
+   "na_when": "no presented slide carries an icon (shape named 'Icon: <id>'), e.g. DECK_GRAPHICS is off; or deck.pptx is missing or cannot be opened",
+   "threshold": {
+    "max_slides": 3,
+    "window": 10
+   },
+   "tier": "advisory",
+   "today": "n/a"
+  },
+  {
+   "id": "m_mockup_labelled",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Does every slide with a drawn frame or storyboard strip carry the fixed 'Mock-up' label (spec.MOCKUP_LABEL)?",
+   "source": "features/deck-graphics.clan design.mockups and design.checklist (slices 2-3) (Q6: on every frame, client builds too)",
+   "inputs": [
+    "deck.pptx"
+   ],
+   "na_when": "no presented slide carries a drawn frame or storyboard strip (shapes named 'Frame: <kind>'), e.g. DECK_GRAPHICS is off; or deck.pptx is missing or cannot be opened",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "m_frame_aspect",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is every framed Production picture drawn whole (no crop past spec.PICTURE_STRETCH_TOL on any side) in a window of its own aspect?",
+   "source": "features/deck-graphics.clan design.mockups and design.checklist (slices 2-3) (design.mockups.aspect: a Production size is never cropped)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json (slots, assets)"
+   ],
+   "na_when": "no presented slide carries a drawn frame or storyboard strip (shapes named 'Frame: <kind>'), e.g. DECK_GRAPHICS is off; or deck.pptx is missing or cannot be opened; or no framed picture is a Production picture",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "m_frame_rights",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is no rights-pending (reference_only) or mock picture inside a frame or a strip?",
+   "source": "features/deck-graphics.clan design.mockups and design.checklist (slices 2-3) (design.mockups.rights; p_rights_ok extended)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json (slots, assets)"
+   ],
+   "na_when": "no presented slide carries a drawn frame or storyboard strip (shapes named 'Frame: <kind>'), e.g. DECK_GRAPHICS is off; or deck.pptx is missing or cannot be opened",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "m_production_first",
+   "group": "graphics",
+   "kind": "metric",
+   "question": "What share of the drawn frames and strips hold a Production picture?",
+   "source": "features/deck-graphics.clan design.mockups and design.checklist (slices 2-3) (design.mockups.sources_order: Production first)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json (slots)"
+   ],
+   "na_when": "no presented slide carries a drawn frame or storyboard strip (shapes named 'Frame: <kind>'), e.g. DECK_GRAPHICS is off; or deck.pptx is missing or cannot be opened",
+   "direction": "higher",
+   "tier": "advisory",
+   "today": "n/a"
+  },
+  {
+   "id": "s_strip_order",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is every storyboard strip 3 or 4 Production frames, numbered shot_1 to shot_n with no gap, one drawn picture per shot?",
+   "source": "features/deck-graphics.clan design.mockups and design.checklist (slices 2-3) (design.mockups.storyboard_strip: all Production or not drawn)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json (slots)"
+   ],
+   "na_when": "no presented slide carries a storyboard strip; or deck.pptx is missing or cannot be opened",
+   "tier": "advisory",
+   "today": "n/a"
+  },
+  {
+   "id": "c_chart_sourced",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Does every chart carry its source line ('Source: ...') and a meta.graphics.charts record whose every point is a fact or document-figure ref?",
+   "source": "features/deck-graphics.clan design.charts, design.diagrams and design.checklist (slices 4-8)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json (meta.graphics.charts)"
+   ],
+   "na_when": "no presented slide carries a native chart (a graphic frame holding c:chart), or deck.pptx is missing or cannot be opened",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "c_chart_numbers",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is every number in every chart part (values and categories) a ledger value or label of that chart's record (no computed or stray value)?",
+   "source": "features/deck-graphics.clan design.charts, design.diagrams and design.checklist (slices 4-8)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json (meta.graphics.charts)"
+   ],
+   "na_when": "no presented slide carries a native chart (a graphic frame holding c:chart), or deck.pptx is missing or cannot be opened",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "c_chart_form",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is every chart a bar, column, line or 100% segmented bar, on one axis, bars from zero, at most 8 categories and 3 series?",
+   "source": "features/deck-graphics.clan design.charts, design.diagrams and design.checklist (slices 4-8)",
+   "inputs": [
+    "deck.pptx"
+   ],
+   "na_when": "no presented slide carries a native chart (a graphic frame holding c:chart), or deck.pptx is missing or cannot be opened",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "c_chart_contrast",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is every chart mark 3:1 or better on its slide's ground?",
+   "source": "features/deck-graphics.clan design.charts, design.diagrams and design.checklist (slices 4-8)",
+   "inputs": [
+    "deck.pptx"
+   ],
+   "na_when": "no presented slide carries a native chart (a graphic frame holding c:chart), or deck.pptx is missing or cannot be opened",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "c_chart_emphasis",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Does every single-series chart pick out at most 2 marks in the accent?",
+   "source": "features/deck-graphics.clan design.charts, design.diagrams and design.checklist (slices 4-8)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json (meta.theme)"
+   ],
+   "na_when": "no presented slide carries a native chart (a graphic frame holding c:chart), or deck.pptx is missing or cannot be opened",
+   "tier": "advisory",
+   "today": "n/a"
+  },
+  {
+   "id": "d_own_words",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is every word in a diagram a word of the slide's own blocks or title (no step, label or marker written by code)?",
+   "source": "features/deck-graphics.clan design.charts, design.diagrams and design.checklist (slices 4-8)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json"
+   ],
+   "na_when": "no presented slide carries a diagram (shapes named 'Diagram: <kind>'), or deck.pptx is missing or cannot be opened",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "d_matrix_axes",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Does every 2x2 have both axes with sourced refs?",
+   "source": "features/deck-graphics.clan design.charts, design.diagrams and design.checklist (slices 4-8)",
+   "inputs": [
+    "deck.json"
+   ],
+   "na_when": "no presented slide is laid out as matrix_2x2",
+   "tier": "gate",
+   "today": "n/a"
+  },
+  {
+   "id": "d_min_items",
+   "group": "graphics",
+   "kind": "yes_no",
+   "question": "Is no diagram drawn under its minimum (3 steps, phases or stages)?",
+   "source": "features/deck-graphics.clan design.charts, design.diagrams and design.checklist (slices 4-8)",
+   "inputs": [
+    "deck.pptx",
+    "deck.json"
+   ],
+   "na_when": "no presented slide carries a diagram (shapes named 'Diagram: <kind>'), or deck.pptx is missing or cannot be opened",
+   "tier": "advisory",
+   "today": "n/a"
+  }
+ ]
+}

@@ -814,7 +814,7 @@ fn the_packed_deck_maker_declares_its_spinoff_contract() {
     let _ = std::fs::remove_dir_all(&out);
     let app = packed.manifest().app.as_ref().expect("app block");
     assert_eq!(app.app_id, "ie.napkin.deck-maker");
-    assert_eq!(app.version, "0.2.1");
+    assert_eq!(app.version, "0.4.0");
     let spec = app.spinoff.as_ref().expect("app.spinoff");
     assert_eq!(
         spec.accepts,

@@ -1,0 +1,73 @@
+{
+ "status": "proceed",
+ "gate": {
+  "action": "proceed",
+  "category": "water utilities",
+  "market": "IE",
+  "why": "invented fixture run"
+ },
+ "assumed_brief": {
+  "fields": [
+   {
+    "key": "background",
+    "value": "Lumen Water is a regional water utility. Customers rarely think about water until a bill arrives.",
+    "tag": "given"
+   },
+   {
+    "key": "audience",
+    "value": "Households of adults aged 25 to 54",
+    "tag": "assumed"
+   }
+  ]
+ },
+ "territories": [
+  {
+   "id": "t1",
+   "line": "The Tap Tells",
+   "tier": "safe",
+   "tier_reason": "Close to what the category already says, so it is easy to explain.",
+   "proposition": "Let the tap speak for the household.",
+   "tension_text": "People value water but never link it to their own tap.",
+   "mechanism": "A tap that tells each household a small story about its own day.",
+   "score": {
+    "total": 27,
+    "of": 35
+   },
+   "ready": true,
+   "proposition_ok": true,
+   "assumption_dependent": false
+  },
+  {
+   "id": "t2",
+   "line": "Every Drop Counted",
+   "tier": "stretch",
+   "tier_reason": "Asks the audience to look at a number it has never seen.",
+   "proposition": "Make the invisible measure visible.",
+   "tension_text": "Use is easy to ignore because nobody sees it.",
+   "mechanism": "A household counter that turns daily use into something you can see.",
+   "score": {
+    "total": 24,
+    "of": 35
+   },
+   "ready": true,
+   "proposition_ok": true,
+   "assumption_dependent": false
+  },
+  {
+   "id": "t3",
+   "line": "The Quiet Mains",
+   "tier": "brave",
+   "tier_reason": "Gives the water network a voice, which the category has not done.",
+   "proposition": "Hear the network that never stops working.",
+   "tension_text": "The network is trusted because it is never noticed.",
+   "mechanism": "Sound from the pipes under the street, played back above ground.",
+   "score": {
+    "total": 21,
+    "of": 35
+   },
+   "ready": false,
+   "proposition_ok": true,
+   "assumption_dependent": true
+  }
+ ]
+}
