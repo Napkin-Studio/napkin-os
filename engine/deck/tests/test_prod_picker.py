@@ -419,7 +419,7 @@ def test_mock_refused_forged_rights_ignored_rights_to_supply_never_placed(tmp_pa
     def forge(d):
         for a in d["assets"].values():
             if a.get("origin") == "uploaded":
-                a["rights"] = "licensed"
+                a["rights"] = "unknown"   # contract 3 (#257): an upload until a person says, rights to supply
         d["assets"][master].update(origin="mock", rights="generated")
     d = _deck()
     st = tmp_path / "st"

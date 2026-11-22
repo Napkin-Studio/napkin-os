@@ -1867,9 +1867,17 @@ deck engine (`engine/deck/server.py`) and writes what the engine reports into th
   19 Nov 2026). The engine's `run.cost_usd` and its report's `cost_usd`, `engine_usd_total` and `usd_basis` are dropped here, and
   an older document's `run.cost_usd` is set to `null`. The picture cards keep their prices: a yes to a spend names it. `trace.usage` reports
   zeros: the engine's model calls are its own, capped there (`NAPKIN_DECK_MAX_USD`), not metered by this middleware.
-- **Not yet.** `ask_change` (rewrite one slide's words; no handler, so a request for it is `400 unknown_task`), the document's brief and
-  research as inputs, the person's intake answers, attached documents, acting on an `edit` or `retry` decision, and a poll that survives a
-  restart of the middleware (an in-memory job store, as everywhere here: the next `build_deck` resumes from the engine's cache).
+- **Handoffs (deck-handoffs, 2026-11-20).** Each only when the document has it, so an older document's body is unchanged:
+  `inputs.upstream` (the frozen brief and research, whole) with `members {facts, findings, sources, decisions}` (the document's own, the
+  newest 5,000 of each), which the engine reads through a snapshot Deck document (`run_deck --deck`) and keys its cache by; `inputs.look`
+  (the rest of `look` beside the size); `requests` (the person's waiting `run.gate_requests` that carry an `id`: `{id, gate, kind: edit |
+  retry | own, by, at, edits?, note?, own?}`; a request recorded with no id or no words stays a record); `reactions` (`tissue.reactions`,
+  the client's tissue-session reactions); and `inputs.format: tissue`. The engine-owned run keys gain `run.human` (every human edit and each
+  request's status), `run.tissue` (the kit's files and routes) and `run.handoffs` (the production brief's files); the middleware still never
+  writes `run.gate_requests`. See deck-maker.md, "Handoffs".
+- **Not yet.** `ask_change` (rewrite one slide's words; no handler, so a request for it is `400 unknown_task`), the person's intake answers,
+  attached documents, and a poll that survives a restart of the middleware (an in-memory job store, as everywhere here: the next
+  `build_deck` resumes from the engine's cache).
 - **Pictures (deck-image-gen).** With `NAPKIN_DECK_IMAGES=1` on the engine, the request may carry `marks` (always sent by `build_deck`: the
   document's Confidential parts, `[]` when none), `review` and `approver`, and `run.approvals.images {decision approve, by human:<id>, at,
   card, usd}` (a yes to ONE card by id). The engine answers with `run.images {state, cards {subjects?, pictures?, heroes?}, spent_usd,

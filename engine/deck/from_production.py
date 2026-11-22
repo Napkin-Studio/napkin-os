@@ -31,6 +31,20 @@ Fable 5.2's review fixes, as applied here:
 
 When the inner .clan carries finished pictures in ``human/assets/<hex>.<ext>`` (proposed to the Production Tool, not built there yet),
 they are preferred over the zip's ``assets/``; either way every byte is hashed against its key. This module imports no provider code.
+
+Contract 3 with finals and rights (develop #257, production-tool/contracts README item 26; deck-handoffs):
+
+* ``assets[sha].rights`` (generated, own, licensed, unknown) is read now that the contract defines it. ``unknown`` is rights to supply.
+  A person's ``own`` or ``licensed`` on an upload (or extract) makes it placeable; a stated value never raises a mock, and ``generated``
+  stated on a picture Production did not make is not believed (reference_only, with a warning). A value outside the enum is ignored
+  and named in ``warnings``. Absent: inferred from the origin, as before.
+* ``finals`` (a person's Final toggle): a final of a size or a frame offers the exact picture it names, marked ``final`` with who and
+  when, ahead of the shot's pick; a final of a canvas picture that is a Format set's master marks that master. Other picture finals are
+  listed under ``finals`` (no slot takes them yet).
+* Every item says ``client_showable`` (its rights are generated, own or licensed) and ``asset_size`` (the asset's own width and height in
+  the document); ``relay`` names the relay's sized copies (``GET /assets/{sha256}?w=480|1200|2400``), never a location.
+* A contract 2 document (lists, one script, frames with ``selected``) is still read: its selected storyboard frames are offered as
+  frames, its rights inferred from origin; the record says ``source_contract: "2"``.
 """
 from __future__ import annotations
 
@@ -54,6 +68,14 @@ PACKS = HERE / "vendor" / "format-packs.json"
 PACKS_SOURCE = HERE / "vendor" / "format-packs.source.json"
 APP_ID = "ie.napkin.production-tool"
 CONTRACT = "3"
+#: The contracts a document may be in: 3, and the older 2 (read through ``from_v2``).
+CONTRACTS = ("2", "3")
+#: contract 3's assets[].rights (develop #257): what a person or Production stated. unknown is rights to supply.
+STATED_RIGHTS = ("generated", "own", "licensed", "unknown")
+#: The relay's sized copies of a picture (GET /assets/{sha256}?w=...): at most this wide.
+RELAY_WIDTHS = (480, 1200, 2400)
+#: Rights a client may see a picture under.
+SHOWABLE = ("generated", "own", "licensed")
 #: Caps, checked on the zip's own sizes BEFORE a member is read, then again on the bytes read (a header can lie).
 BUNDLE_MAX = 2_000_000_000          # the export zip on disk
 MEMBERS_MAX = 6_000                 # assets are at most 5000 (schema) plus the .clan and the canvas file
@@ -130,10 +152,12 @@ def read_document(inner: zipfile.ZipFile) -> dict:
     if not isinstance(doc, dict):
         raise FromProductionError("shared/data.yaml is not a document")
     cv = str(doc.get("contract_version"))
-    if cv != CONTRACT:
-        raise FromProductionError(f"the document is contract {cv!r}; the deck reads only contract {CONTRACT!r}: refused")
+    if cv not in CONTRACTS:
+        raise FromProductionError(f"the document is contract {cv!r}; the deck reads contract {' or '.join(repr(c) for c in CONTRACTS)}: refused")
     if doc.get("app") != "production-tool":
         raise FromProductionError(f"the document's app is {doc.get('app')!r}, not 'production-tool': refused")
+    if cv == "2":
+        return from_v2(doc)
     if not re.fullmatch(rf"proj_{ULID}", str((doc.get("project") or {}).get("id") or "")):
         raise FromProductionError("the document has no project id: refused")
     return doc
@@ -141,6 +165,40 @@ def read_document(inner: zipfile.ZipFile) -> dict:
 
 def _hex(sha: str) -> str:
     return str(sha or "").removeprefix("sha256:")
+
+
+def from_v2(doc: dict) -> dict:
+    """A contract 2 document in contract 3's shape, for the offer: assets keyed by sha256, frames and shots keyed by id, each shot's
+    ``selected`` frame as its pick. Contract 2 has no format sets, sizes, finals or rights: only storyboard frames are offered. Its project
+    id is made from the participant (contract 2 has no project), stable for the same document. Refuses a document that is not contract 2's
+    shape (lists)."""
+    for k in ("assets", "frames", "shots"):
+        if doc.get(k) is not None and not isinstance(doc.get(k), list):
+            raise FromProductionError(f"a contract '2' document holds {k} as a list: this one is not contract 2's shape: refused")
+    assets = {}
+    for a in doc.get("assets") or []:
+        if isinstance(a, dict) and a.get("sha256"):
+            assets[a["sha256"]] = {k: a.get(k) for k in ("sha256", "kind", "mime", "w", "h", "origin", "job_id") if a.get(k) is not None}
+    frames, picks = {}, {}
+    for f in doc.get("frames") or []:
+        if isinstance(f, dict) and f.get("id"):
+            frames[f["id"]] = {k: f.get(k) for k in ("id", "shot_id", "asset", "job_id", "kind") if f.get(k) is not None}
+            if f.get("parent"):
+                frames[f["id"]]["parent_id"] = f["parent"]
+            if f.get("selected"):
+                picks[f.get("shot_id")] = f["id"]
+    shots = {}
+    for i, sh in enumerate(doc.get("shots") or []):
+        if isinstance(sh, dict) and sh.get("id"):
+            cur = sh.get("storyboard_frame") or picks.get(sh["id"])
+            shots[sh["id"]] = {"id": sh["id"], "rank": f"a{i:03d}", "kind": "shot", **({"pick": {"current": cur}} if cur else {})}
+    who = str((doc.get("participant") or {}).get("id") or "")
+    digest = hashlib.sha256(("v2:" + who).encode()).hexdigest().upper()
+    alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+    pid = "proj_" + "".join(alphabet[int(digest[i:i + 2], 16) % 32] for i in range(0, 52, 2))
+    return {"contract_version": CONTRACT, "source_contract": "2", "app": "production-tool",
+            "project": {"id": pid, "title": str((doc.get("participant") or {}).get("handle") or "Production (contract 2)")},
+            "assets": assets, "frames": frames, "shots": shots}
 
 
 # ------------------------------------------------------------------------------------------------ channels (fix 7)
@@ -188,11 +246,16 @@ def rights_of(doc: dict, sha: str, by_asset: dict | None = None) -> tuple:
     origin = a.get("origin")
     if origin == "mock":
         return "mock", "mock output"
+    stated = a.get("rights") if a.get("rights") in STATED_RIGHTS else None   # contract 3 (#257); a value outside it is ignored (forged_fields)
+    if stated == "unknown":
+        return "reference_only", "its rights are unknown in Production (a person has not said)"
     if origin == "generated":
         return "generated", "made in Production"
     if origin == "drawn":
         return "own", "drawn on the canvas"
     if origin in ("uploaded", "extracted"):
+        if stated in ("own", "licensed"):
+            return stated, f"{origin}; a person said it is {'the agency’s own' if stated == 'own' else 'licensed'} in Production"
         return "reference_only", f"{origin} with no stated licence"
     if origin != "edited":
         return "reference_only", f"origin {origin!r} is not known"
@@ -210,6 +273,9 @@ def rights_of(doc: dict, sha: str, by_asset: dict | None = None) -> tuple:
         if kind == "mock":
             return "mock", "an edit of mock output"
         if kind == "original":
+            root = (doc.get("assets") or {}).get(f.get("asset")) or {}
+            if f.get("asset") != sha and root.get("rights") in ("own", "licensed") and root.get("origin") != "mock":
+                return root["rights"], f"an edit of a canvas picture a person said is {root['rights']} in Production"
             return "reference_only", "an edit of a canvas picture (its licence is not stated)"
         if kind == "generated":
             r, why = rights_of(doc, f.get("asset"), by_asset) if f.get("asset") != sha else ("generated", "")
@@ -222,11 +288,39 @@ def rights_of(doc: dict, sha: str, by_asset: dict | None = None) -> tuple:
 
 
 def forged_fields(doc: dict) -> list:
-    """Warnings for asset fields contract 3 does not define that would change what the deck places (``rights``): ignored, and named,
-    because only a forged or hand-altered export carries one."""
-    return [{"entity": sha, "warning": "the asset carries a 'rights' field contract 3 does not define: ignored (a forged or altered export); "
-                                       "its rights come from its origin"}
-            for sha, a in sorted((doc.get("assets") or {}).items()) if isinstance(a, dict) and "rights" in a]
+    """Warnings for a stated ``rights`` the deck does not believe: a value outside contract 3's enum (generated, own, licensed, unknown), or
+    ``generated`` on a picture Production did not make. Each is ignored and named: only a forged or hand-altered export carries one."""
+    out = []
+    for sha, a in sorted((doc.get("assets") or {}).items()):
+        if not isinstance(a, dict) or "rights" not in a:
+            continue
+        r = a.get("rights")
+        if r not in STATED_RIGHTS:
+            out.append({"entity": sha, "warning": f"the asset's rights {r!r} is not one contract 3 defines (generated, own, licensed, unknown): "
+                                                  "ignored (a forged or altered export); its rights come from its origin"})
+        elif r == "generated" and a.get("origin") not in ("generated", "edited"):
+            out.append({"entity": sha, "warning": f"the asset says rights 'generated' but its origin is {a.get('origin')!r}: not believed (a forged "
+                                                  "or altered export); its rights come from its origin"})
+        elif a.get("origin") == "mock":
+            out.append({"entity": sha, "warning": "a mock asset states rights: ignored; mock output is never used as real work"})
+    return out
+
+
+def finals_of(doc: dict) -> dict:
+    """``{(kind, id): final}`` from contract 3's ``finals`` (#257): what a person marked final, one per frame, size or picture (the newest
+    when a document holds two for one thing). Each final names its exact picture (``asset``)."""
+    out = {}
+    for fid, f in sorted((doc.get("finals") or {}).items()):
+        if not isinstance(f, dict) or not isinstance(f.get("of"), dict) or not f.get("asset"):
+            continue
+        k = (f["of"].get("kind"), f["of"].get("id"))
+        if k not in out or str(f.get("at") or "") > str(out[k].get("at") or ""):
+            out[k] = {**f, "id": f.get("id") or fid}
+    return out
+
+
+def _final_mark(f: dict) -> dict:
+    return {k: f.get(k) for k in ("id", "at", "by", "version") if f.get(k) is not None}
 
 
 def lower(*rights) -> str:
@@ -357,6 +451,7 @@ def plan_offer(doc: dict, packs: dict) -> tuple:
         why = next((w for rr, w in rs if rr == r), "")
         return r, why
 
+    finals = finals_of(doc)
     fsets = doc.get("format_sets") or {}
     for fid in sorted(fsets):
         fs = fsets[fid]
@@ -364,6 +459,9 @@ def plan_offer(doc: dict, packs: dict) -> tuple:
         sha = m.get("asset")
         if not sha and m.get("kind") == "frame":
             sha = ((doc.get("frames") or {}).get(m.get("id")) or {}).get("asset")
+        mfinal = finals.get((m.get("kind"), m.get("id"))) if m.get("kind") in ("picture", "frame") else None
+        if mfinal and mfinal.get("asset") in assets:
+            sha = mfinal["asset"]
         if m.get("kind") in ("video", "render"):
             not_carried["video_masters"] += 1
         elif sha:
@@ -378,6 +476,7 @@ def plan_offer(doc: dict, packs: dict) -> tuple:
                     cands.append({"key": f"{fid}#master", "entity": fid, "role": "master", "set": fid, "version": fs.get("v"), "sha": sha,
                                   "origin": a.get("origin"), "rights": rr[0], "rights_why": rr[1], "status": "ready", "focal": focal, "focal_by": by,
                                   "keep": master_keep(fs, w, h),
+                                  **({"final": _final_mark(mfinal)} if mfinal else {}),
                                   **({"job_id": a["job_id"]} if a.get("job_id") else {})})
     sizes = doc.get("sizes") or {}
     for sid in sorted(sizes):
@@ -386,10 +485,15 @@ def plan_offer(doc: dict, packs: dict) -> tuple:
         if s.get("media") == "video":
             not_carried["video_sizes"] += 1
             continue
-        if st not in ("ready", "look", "stale"):
-            continue   # making, or not made yet: nothing to show
+        sfinal = finals.get(("size", sid))
+        if sfinal and sfinal.get("asset") not in assets:
+            sfinal = None
+        if st not in ("ready", "look", "stale") and not sfinal:
+            continue   # making, or not made yet: nothing to show (a final stands until it is unmarked)
         full = s.get("full") or {}
         sha = full.get("asset") if full.get("asset") and full.get("from") == s.get("asset") else s.get("asset")
+        if sfinal:   # the exact picture the person marked final
+            sha, st = sfinal["asset"], "ready"
         if not sha:
             continue
         a = image_asset(sha, sid)
@@ -418,12 +522,18 @@ def plan_offer(doc: dict, packs: dict) -> tuple:
             c["reason"] = "Flagged by review in Production: needs a look"
         elif st == "stale":
             c["reason"] = "Out of date in Production: what it was made from changed"
+        if sfinal:
+            c["final"] = _final_mark(sfinal)
         cands.append(c)
     frames = doc.get("frames") or {}
     shots = doc.get("shots") or {}
     for shid in sorted(shots):
         sh = shots[shid]
         cur = ((sh.get("pick") or {}).get("current"))
+        ffinal = next((fl for (k, i), fl in sorted(finals.items(), key=lambda kv: str(kv[1].get("at") or ""), reverse=True)
+                       if k == "frame" and (frames.get(i) or {}).get("shot_id") == shid), None)
+        if ffinal:   # a frame of this shot a person marked final: it is offered ahead of the pick
+            cur = ffinal["of"]["id"]
         f = frames.get(cur) if cur else None
         if not f or f.get("shot_id") != shid:
             continue   # v1: only the frame a person picked for the shot
@@ -441,8 +551,32 @@ def plan_offer(doc: dict, packs: dict) -> tuple:
         cands.append({"key": cur, "entity": cur, "role": "frame", "shot": shid, "storyboard": sh.get("storyboard_id"), "shot_rank": sh.get("rank"),
                       "shot_kind": sh.get("kind") or "shot", "version": f.get("v"), "sha": f["asset"], "origin": a.get("origin"), "rights": rr[0],
                       "rights_why": rr[1], "status": "ready", "focal": dict(CENTRE), "focal_by": "centre",
+                      **({"final": _final_mark(ffinal)} if ffinal else {}),
                       **({"job_id": f["job_id"]} if f.get("job_id") else {})})
     return cands, refused, not_carried
+
+
+def finals_rows(doc: dict, items: dict) -> list:
+    """production.json's ``finals``: every final in the document, whether an item carries it (``item``) and, for one no slot takes yet (a
+    canvas picture that is no set's master), its rights and whether a client may see it. Ids, hashes and rights only: no location."""
+    by_asset = _frames_by_asset(doc)
+    carried = {(it.get("final") or {}).get("id"): key for key, it in items.items() if it.get("final")}
+    rows = []
+    for (kind, oid), f in sorted(finals_of(doc).items(), key=lambda kv: kv[1]["id"]):
+        r, why = rights_of(doc, f["asset"], by_asset) if f["asset"] in (doc.get("assets") or {}) else ("reference_only", "its asset is not in the document")
+        row = {"id": f["id"], "of": {"kind": kind, "id": oid}, "sha256": _hex(f["asset"]), "rights": "refused" if r == "mock" else r,
+               "client_showable": r in SHOWABLE, "at": f.get("at"), "by": f.get("by")}
+        for k in ("channel", "set_id", "version"):
+            if f.get(k) is not None:
+                row[k] = f[k]
+        if (f.get("format") or {}).get("format_id"):
+            row["format_id"] = f["format"]["format_id"]
+        row["item"] = carried.get(f["id"])
+        if not row["item"]:
+            row["why_not_placed"] = "a final of a canvas picture that is no Format set's master: no slot takes it yet" if kind == "picture" else \
+                                    "its picture was not offered (see refused)"
+        rows.append(row)
+    return rows
 
 
 def asset_bytes(zf: zipfile.ZipFile, inner: zipfile.ZipFile, sha: str, mime: str) -> tuple:
@@ -477,9 +611,11 @@ def make_item(c: dict, info: dict, clan_hex: str) -> dict:
     if c["rights"] == "reference_only":
         it["to_supply"] = "rights"
         it["rights_why"] = c.get("rights_why", "")
-    for k in ("set", "job_id", "channel", "channel_by", "format", "aspect", "delivery", "method", "reason", "shot", "storyboard", "shot_rank", "shot_kind", "keep"):
+    for k in ("set", "job_id", "channel", "channel_by", "format", "aspect", "delivery", "method", "reason", "shot", "storyboard", "shot_rank", "shot_kind", "keep",
+              "final", "asset_size"):
         if c.get(k) not in (None, "", {}):
             it[k] = c[k]
+    it["client_showable"] = c["rights"] in SHOWABLE   # deck-handoffs: what a client may see is decided by its rights alone
     if c["role"] != "size":
         it["aspect"] = {"w": info["width"], "h": info["height"]}
     return it
@@ -517,6 +653,8 @@ def build(bundle: Path, at: str | None = None, work: Path | None = None) -> tupl
     for c in cands:
         a = assets[c["sha"]]
         hx = _hex(c["sha"])
+        if a.get("w") and a.get("h"):
+            c["asset_size"] = {"w": int(a["w"]), "h": int(a["h"])}
         if hx not in infos:
             try:
                 raw, how = asset_bytes(zf, inner, c["sha"], a.get("mime"))
@@ -552,7 +690,13 @@ def build(bundle: Path, at: str | None = None, work: Path | None = None) -> tupl
             "bundle": {"clan": clan_name, "clan_sha256": clan_hex, "assets_from": "+".join(sorted(where)) or "none"},
             "taken_at": at or datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "format_packs": packs_record(), "format_sets": fsets, "items": items, "offer_sha256": offer_sha(items),
-            "refused": refused, "not_carried": not_carried}
+            "refused": refused, "not_carried": not_carried,
+            "relay": {"route": "GET /assets/{sha256}", "widths": list(RELAY_WIDTHS)}}
+    frows = finals_rows(doc, items)
+    if frows:
+        prod["finals"] = frows
+    if doc.get("source_contract"):
+        prod["source_contract"] = doc["source_contract"]
     warnings = forged_fields(doc)
     if warnings:
         prod["warnings"] = warnings
