@@ -31,6 +31,8 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates/ ./crates/
 COPY spec/ ./spec/
 COPY app/templates/ ./app/templates/
+# The Production Tool's document template (make_production reads it: its schema is the tool's own).
+COPY production-tool/clan-store/src/app-template.gen.ts ./production-tool/clan-store/src/app-template.gen.ts
 # The frame scripts napkin-host compiles in (crates/napkin-host/src/frame.rs).
 COPY app/src/shell/bridge/ ./app/src/shell/bridge/
 RUN sed -i 's#, "app/src-tauri"##' Cargo.toml
@@ -46,6 +48,10 @@ RUN mkdir -p /out/apps \
  && mv brief-maker.app.clan /out/apps/ \
  && cargo run --release -p clan-sdk --example make_campaign_research -- \
       /out/apps/campaign-research.app.clan /out/apps/campaign-research.example.clan
+# Production takes part in spin-offs as an app (features/production-spinoff.clan); its documents
+# stay in the relay and open at /production.
+RUN cargo run --release -p clan-sdk --example make_production -- \
+      /out/apps/production.app.clan /tmp/production.example.clan
 
 # ── the shell ────────────────────────────────────────────────────────────────
 FROM node:20-bookworm-slim AS shell
