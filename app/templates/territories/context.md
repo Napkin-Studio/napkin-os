@@ -14,3 +14,8 @@ with neither starts from a category and a question.
 - Brief fields are read by their contract names (`smp`) or Brief Maker's own keys (`single_minded_proposition`); `engine/territory/carried.py` is the one reading.
 - The first screen says what arrived in words (counts and the key brief fields), never as field names or "field is null".
 - Do not generate or edit HTML.
+
+## What the page writes (Pick)
+- The page writes only the person's half: `focus` (ticks, their own insights, what is in play), `run.approvals.pick` and `run.decisions`. It never writes `run.state`, `run.stage`, `run.gate` or `run.agent`: those are the engine's.
+- Editing the ticks after approving Pick records an edit, so the approval no longer stands and Explore is live again.
+- No figure of money appears on any screen. Fonts are Newsreader and Geist ExtraBold only.

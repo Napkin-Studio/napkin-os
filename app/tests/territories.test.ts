@@ -2,74 +2,329 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-// The Territories template's first screen (feature territories-spinoff-in): what a spin-off carried is on the screen, as counts and as
-// the brief's own words (LESSONS 7). The fixture is what the host produced for a real spin-off
-// (crates/napkin-host/tests/territories_spinoff.rs); the golden seen.json is the engine reader's output over the same data
-// (engine/territory/carried.py), so the page and the engine read it the same way.
+// The Territories template (shell, Booth, Pick): what its screens say and what each press writes, from the contract's own
+// fixture (example/states/pick.json), with the carried research put where Research keeps it (upstream.<id>.projection).
+// The page's pure block runs alone; every write is checked against schema.json.
 
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import vm from 'node:vm'
+import { validate, type Schema } from './schemaCheck'
 
 let root = new URL('.', import.meta.url)
 while (!existsSync(new URL('package.json', root))) root = new URL('..', root)
-const tpl = new URL('templates/territories/', root)
-const read = (rel: string) => readFileSync(new URL(rel, tpl), 'utf8')
-const json = (rel: string) => JSON.parse(read(rel))
-// The page as the packer makes it: the source-card helper spliced in at its marker.
-const MARKER = '<!-- @napkin:source-card -->'
-const html = read('index.html').replace(MARKER, readFileSync(new URL('templates/shared/source-card.html', root), 'utf8').trim())
-const scripts = [...html.matchAll(/<script(?: id="([^"]+)")?>([\s\S]*?)<\/script>/g)].map(m => ({ id: m[1] ?? '', src: m[2] }))
-const helper = scripts.find(s => s.src.includes('var NapkinSource'))!.src
-const logic = scripts.find(s => s.id === 'territories-logic')!.src
-const view = scripts.find(s => s.id === 'territories-view')!.src
+const dir = new URL('templates/territories/', root)
+const html = readFileSync(new URL('index.html', dir), 'utf8')
+const logicSrc = /<script id="territories-logic">([\s\S]*?)<\/script>/.exec(html)?.[1]
+assert.ok(logicSrc, 'the template has its pure block')
 
-const DATA = json('example/spunoff/data.json')
-const SEEN = json('example/spunoff/seen.json')
-const FACTS = json('example/spunoff/facts.json')
-const FINDINGS = json('example/spunoff/findings.json')
+// The agent engine the page inlines at its marker (the circles stay their still frames: no WebGL here).
+const sphereDir = new URL('templates/shared/agent-sphere/', root)
+const engine = `(function (window) {\n${['finish.js', 'agent-view.js', 'extra.js', 'roles.js'].map(f => readFileSync(new URL(f, sphereDir), 'utf8')).join('\n')}\n})(globalThis);\n`
 
 type Seen = {
   brief: null | { id: string; title: string; filled: number; total: number; fields: { id: string; label: string; text: string }[]; key_fields: { id: string; text: string }[]; mandatories: number }
   research: null | { id: string; title: string; pins: number | null; findings: number | null; verified: number | null; proposed: number | null; rejected: number | null; sources: number | null }
   from: string
 }
-const L = vm.runInNewContext(`${logic}; TerritoriesLogic`) as {
-  seen(data: unknown): Seen
+type Doc = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
+type Ui = Record<string, unknown>
+type Act = { writes: { patch: Doc; action: string; rationale: string }[]; toast?: string; start?: boolean; draft?: string; focus?: string } | null
+// The house source card the packer splices at its marker: the page draws its two cards with it.
+const helper = /<script>([\s\S]*?var NapkinSource[\s\S]*?)<\/script>/.exec(readFileSync(new URL('templates/shared/source-card.html', root), 'utf8'))![1]
+const L = vm.runInNewContext(`${engine}${helper}\n${logicSrc}; TerritoriesLogic`) as {
+  seen(d: unknown): Seen
   statsOf(s: Seen): string[]
   fromWords(s: Seen): string
   BRIEF_KEYS: Record<string, string>
+  TASKS: Record<string, string>
+  counts(d: Doc): Record<string, number | boolean>
+  derivedFindings(d: Doc): string[]
+  resolve(c: string, d: Doc): { carried: boolean; kind: string | null; text: string; status: string }
+  pickState(run: unknown): string
+  view(d: Doc, ui?: Ui): string
+  dialogFor(w: string, d: Doc): { title: string; html: string } | null
+  act(d: Doc, ui: Ui, e: Record<string, unknown>, env?: Record<string, unknown>): Act
+  boothNotes(d: Doc): { role: string; body: string; cites: string[] }[]
+  tickPatch(d: Doc, id: string, on: boolean): Doc | null
+  approvePatch(run: unknown, n: number, by: string, at: string): Doc | null
 }
 
-/** The page run against a fake document: what it writes into #root and #cards. */
-function screen(data: unknown, title = 'Territories'): { root: string; cards: string } {
-  const els: Record<string, { innerHTML: string; querySelectorAll: () => unknown[] }> = {}
-  const el = (id: string) => (els[id] ??= { innerHTML: '', querySelectorAll: () => [] })
-  const win: Record<string, unknown> = { __CLAN__: { data, manifest: { title } } }
-  const ctx = vm.createContext({ window: win, document: { getElementById: (id: string) => el(id) } })
-  vm.runInContext(`${helper}\nwindow.NapkinSource = NapkinSource;`, ctx)
-  vm.runInContext(logic, ctx)
-  vm.runInContext(view, ctx)
-  return { root: el('root').innerHTML, cards: el('cards').innerHTML }
+// Values made inside the page's own context compare by what they hold, not by which realm made them.
+const eq = (a: unknown, b: unknown, m?: string) => assert.deepEqual(JSON.parse(JSON.stringify(a)), b, m)
+const BRIEF_ID = '5b0d3a7e-4c1f-4e2a-9a55-1d6c0f2b7e11'
+const RESEARCH_ID = 'a91c64f2-7d3b-4b8e-8f10-3e5d2c9a6b47'
+const json = (rel: string) => JSON.parse(readFileSync(new URL(rel, dir), 'utf8')) as Doc
+
+/** schema.json with its $refs inlined and its if/then rules left out (they guard routes; Pick writes none), for the small checker. */
+function deref(schema: Doc): Schema {
+  const defs = schema.definitions as Doc
+  const walk = (n: unknown, depth = 0): unknown => {
+    if (Array.isArray(n)) return n.map(x => walk(x, depth))
+    if (n && typeof n === 'object') {
+      const o = n as Doc
+      if (typeof o.$ref === 'string') { assert.ok(depth < 12, 'a $ref cycle'); return walk(defs[o.$ref.split('/').pop()!], depth + 1) }
+      const out: Doc = {}
+      for (const [k, v] of Object.entries(o)) if (k !== 'allOf' && k !== 'definitions' && k !== '$schema') out[k] = walk(v, depth)
+      return out
+    }
+    return n
+  }
+  return walk(schema) as Schema
 }
+const schema = deref(json('schema.json'))
+
+/** The fixture as the app meets it: Pick open, the research's pins and findings under its projection. */
+function doc(): Doc {
+  const d = json('example/states/pick.json')
+  const pins: Doc = {}
+  for (const f of json('example/facts.json').facts as Doc[]) pins[f.id] = { layer: 'brand', entity: f.entity, key: f.key, value: f.value, unit: f.unit, as_of: f.as_of, confidence: f.confidence, licence: f.licence, stale: false }
+  const findings: Doc = {}
+  for (const f of json('example/findings.json').findings as Doc[]) findings[f.id] = { statement: f.statement, status: f.status, confidence: f.confidence, cites: f.cites }
+  d.upstream[RESEARCH_ID] = { campaign: { name: 'Weekend travel west' } }
+  d.projection = { pins, findings }
+  return d
+}
+const merge = (d: Doc, patch: Doc): Doc => { const o = JSON.parse(JSON.stringify(d)) as Doc; for (const k of Object.keys(patch)) o[k] = typeof patch[k] === 'object' && !Array.isArray(patch[k]) && patch[k] && typeof o[k] === 'object' ? { ...o[k], ...patch[k] } : patch[k]; return o }
+const apply = (d: Doc, a: Act): Doc => { assert.ok(a); return a.writes.reduce((x, w) => merge(x, w.patch), d) }
+const ENV = { me: { name: 'Shrey' }, now: '2026-11-23T10:00:00Z' }
+const errs = (d: Doc) => validate(d, schema)
+
+test('the fixture, with the research carried, is a valid document to start from', () => {
+  eq(errs(doc()).filter(e => !/upstream/.test(e)), [])
+})
+
+test('what arrived is counted from the document, and each carried id resolves (LESSONS 7)', () => {
+  const d = doc(), c = L.counts(d)
+  assert.equal(c.briefFields, Object.keys(d.upstream[BRIEF_ID]).length)
+  assert.equal(c.pins, json('example/facts.json').facts.length)
+  assert.equal(c.findings, json('example/findings.json').findings.length)
+  assert.equal(c.insights, d.focus.insights.length)
+  assert.equal(c.ticked, d.focus.insights.filter((i: Doc) => i.ticked).length)
+  eq(L.derivedFindings(d), ['fi_FARE00007', 'fi_NOTALK003', 'fi_SPONT0009'])
+  for (const s of d.focus.sources) assert.ok(L.resolve(s.id, d).carried, `${s.id} resolves`)
+  for (const i of d.focus.insights) for (const e of i.evidence) assert.ok(L.resolve(e, d).carried, `${e} resolves`)
+  const page = L.view(d, {})
+  assert.match(page, new RegExp(`Brief · ${c.briefFields} fields of 11`))
+  assert.match(page, new RegExp(`Research · ${c.pins} pins, ${c.findings} findings`))
+  assert.match(page, new RegExp(`${c.insights} insights`))
+})
+
+test('a cite that does not arrive is shown as not carried, never hidden', () => {
+  const d = doc(); delete d.projection.pins.f_ROUTE0412
+  assert.equal(L.resolve('f_ROUTE0412', d).carried, false)
+  assert.match(L.view(d, {}), /Not carried in this document/)
+  assert.match(L.dialogFor('f_ROUTE0412', d)!.html, /Not carried in this document/)
+  const none = doc(); none.upstream = {}; delete none.projection
+  assert.match(L.view(none, {}), /Nothing came in with this one/)
+})
+
+test('the page shows every insight, its strength, its sources, the derived mark and the yours label', () => {
+  const d = doc(), page = L.view(d, {})
+  for (const i of d.focus.insights) {
+    assert.ok(page.includes(i.text.replace(/'/g, '&#39;')), `shows: ${i.text}`)
+    assert.ok(page.includes(`data-tick="${i.id}"`), `has a tick box for ${i.id}`)
+    for (const e of i.evidence) assert.ok(page.includes(`data-src="${e}"`), `has a chip for ${e}`)
+  }
+  assert.equal((page.match(/class="dmark"/g) ?? []).length, d.focus.insights.filter((i: Doc) => i.derived).length)
+  assert.match(page, /ymark">yours/)
+  assert.match(page, /Explore 6 insights/)
+  // strongest first: in_arrive (rank 1) before in_nofight (rank 10)
+  assert.ok(page.indexOf('data-tick="in_arrive"') < page.indexOf('data-tick="in_nofight"'))
+})
+
+test('it keeps to the house words: no leaks, no prices, no keys', () => {
+  const page = L.view(doc(), {})
+  for (const bad of ['(to confirm)', '~~', '**', '{{', '[object', 'undefined', 'field is null', '>null<', '>None<']) assert.ok(!page.includes(bad), `page has ${bad}`)
+  assert.ok(!/€|£|\$\d|\bEUR\b|\bUSD\b|¢|\bprice\b|\bcost\b|\bspend\b/i.test(page), 'no price anywhere on the page')
+  assert.ok(!/€|£|\$\d|\bEUR\b|\bUSD\b|¢/.test(html), 'no price in the file')
+  for (const w of ['brief:smp', 'schema_version', 'in_play']) assert.ok(!page.replace(/data-[a-z-]+="[^"]*"/g, '').includes(w) || w === 'brief:smp', `no key ${w}`)
+})
+
+test('the file uses Newsreader and Geist ExtraBold only', () => {
+  const families = new Set([...html.matchAll(/font-family:\s*([^;}]+)/g)].map(m => m[1].split(',')[0].replace(/["'\s]/g, '').replace(/var\(--font-(ui|serif)\)/, 'var')))
+  for (const f of families) assert.ok(/^(var|var\(--font-ui\)|var\(--font-serif\)|inherit)$/.test(f) || f === 'var', `font-family ${f}`)
+  const fontVars = [...html.matchAll(/--font-(ui|serif):\s*([^;]+);/g)].map(m => m[2].split(',')[0].replace(/["'\s]/g, ''))
+  eq([...new Set(fontVars)].sort(), ['Geist', 'Newsreader'])
+  const link = /fonts\.googleapis\.com\/css2\?([^"]+)"/.exec(html)![1]
+  eq([...link.matchAll(/family=([A-Za-z]+)/g)].map(m => m[1]).sort(), ['Geist', 'Newsreader'])
+  assert.match(link, /Geist:wght@800(&|$)/)
+  assert.ok(!/Geist Mono|font-weight:\s*(100|200|300|400|500|600|700)\b[^;]*var\(--font-ui\)/.test(html))
+  // every Geist shorthand is weight 800
+  for (const m of html.matchAll(/font:\s*(\d{3})[^;{}]*var\(--font-ui\)/g)) assert.equal(m[1], '800', `Geist at ${m[1]}: ${m[0]}`)
+})
+
+test('ticking works by id, whatever the order, and writes a valid document', () => {
+  const d = doc()
+  const a = L.act(d, {}, { a: 'tick', id: 'in_fare', on: true }, ENV)
+  const next = apply(d, a)
+  assert.equal(next.focus.insights.find((i: Doc) => i.id === 'in_fare').ticked, true)
+  assert.equal(next.focus.insights.find((i: Doc) => i.id === 'in_arrive').ticked, true)
+  assert.equal(L.counts(next).ticked, Number(L.counts(d).ticked) + 1)
+  eq(errs(next).filter(e => !/upstream/.test(e)), [])
+  // reordered: the same press does the same thing
+  const rev = JSON.parse(JSON.stringify(d)); rev.focus.insights.reverse()
+  const b = apply(rev, L.act(rev, {}, { a: 'tick', id: 'in_fare', on: true }, ENV))
+  eq(b.focus.insights.filter((i: Doc) => i.ticked).map((i: Doc) => i.id).sort(), next.focus.insights.filter((i: Doc) => i.ticked).map((i: Doc) => i.id).sort())
+  assert.equal(L.act(d, {}, { a: 'tick', id: 'in_arrive', on: true }, ENV), null, 'no change, no write')
+  assert.equal(L.act(d, {}, { a: 'tick', id: 'in_nope', on: true }, ENV), null)
+})
+
+test('your own insight joins ticked and labelled yours; empty, long and a full list are refused in words', () => {
+  const d = doc()
+  const a = L.act(d, {}, { a: 'add', text: '  Nobody   wants a lecture on the way to Galway. ' }, ENV)!
+  const next = apply(d, a), mine = next.focus.insights[next.focus.insights.length - 1]
+  assert.equal(mine.kind, 'yours'); assert.equal(mine.ticked, true); assert.equal(mine.by, 'Shrey'); eq(mine.evidence, [])
+  assert.equal(mine.text, 'Nobody wants a lecture on the way to Galway.')
+  assert.match(mine.id, /^in_[a-z0-9]{2,12}$/)
+  eq(errs(next).filter(e => !/upstream/.test(e)), [])
+  assert.equal(a.draft, '')
+  assert.match(L.act(d, {}, { a: 'add', text: '   ' }, ENV)!.toast!, /Write the insight first/)
+  assert.match(L.act(d, {}, { a: 'add', text: 'x'.repeat(301) }, ENV)!.toast!, /300/)
+  const full = doc(); while (full.focus.insights.length < 25) full.focus.insights.push({ ...full.focus.insights[0], id: `in_f${full.focus.insights.length}` })
+  assert.match(L.act(full, {}, { a: 'add', text: 'one more' }, ENV)!.toast!, /full/)
+  const shown = L.view(next, {})
+  assert.match(shown, /added by Shrey/)
+})
+
+test('Explore writes only the person half, and editing the ticks after it makes Explore live again (LESSONS 18)', () => {
+  let d = doc()
+  assert.equal(L.pickState(d.run), 'open')
+  const go = L.act(d, {}, { a: 'explore' }, ENV)!
+  assert.equal(go.start, true)
+  assert.equal(go.writes.length, 1)
+  eq(Object.keys(go.writes[0].patch), ['run'])
+  eq(Object.keys(go.writes[0].patch.run).sort(), ['approvals', 'decisions'], 'never the engine half')
+  d = apply(d, go)
+  eq(errs(d).filter(e => !/upstream/.test(e)), [])
+  assert.equal(d.run.state, 'gate', 'the page did not touch state')
+  assert.equal(d.run.approvals.pick.by, 'Shrey')
+  assert.equal(L.pickState(d.run), 'approved')
+  assert.match(L.view(d, { mw: false }), /not connected in this workspace/)
+  assert.match(L.view(d, {}), /Approved ✓/)
+  assert.ok(L.act(d, {}, { a: 'explore' }, ENV)!.toast, 'a second press says why nothing happens')
+  // the ticks change after approval: the approval no longer stands
+  const t = L.act(d, {}, { a: 'tick', id: 'in_fare', on: true }, { me: { name: 'Shrey' }, now: '2026-11-23T10:05:00Z' })!
+  assert.equal(t.writes.length, 2)
+  d = apply(d, t)
+  eq(errs(d).filter(e => !/upstream/.test(e)), [])
+  assert.equal(L.pickState(d.run), 'open')
+  assert.match(L.view(d, {}), /Explore 7 insights/)
+  const again = L.act(d, {}, { a: 'explore' }, { me: { name: 'Shrey' }, now: '2026-11-23T10:06:00Z' })!
+  assert.equal(again.start, true)
+  d = apply(d, again)
+  assert.equal(L.pickState(d.run), 'approved')
+  assert.equal(d.run.decisions.length, 3)
+})
+
+test('Explore with nothing ticked is refused in words and writes nothing', () => {
+  const d = doc(); d.focus.insights.forEach((i: Doc) => { i.ticked = false })
+  const r = L.act(d, {}, { a: 'explore' }, ENV)!
+  eq(r.writes, []); assert.match(r.toast!, /Tick at least one/)
+  assert.match(L.view(d, {}), /<button type="button" class="btn-pill primary" data-act="explore" disabled>/)
+})
+
+test('a failed start is said in words with a way to try again; the pick stays saved', () => {
+  const d = apply(doc(), L.act(doc(), {}, { a: 'explore' }, ENV))
+  const page = L.view(d, { job: { state: 'failed', error: 'This workspace has no middleware set up, so the engine cannot be reached.' } })
+  assert.match(page, /no middleware set up/); assert.match(page, /Your pick is saved/); assert.match(page, /data-act="retry"/)
+  assert.equal(L.act(d, {}, { a: 'retry' }, ENV)!.start, true)
+  assert.equal(L.act(doc(), {}, { a: 'retry' }, ENV), null, 'nothing to retry before approving')
+  assert.match(L.view(d, { job: { state: 'running' } }), /setting off/)
+})
+
+test('the seam names only what territories-handlers plans', () => {
+  eq(L.TASKS, { run: 'run_territories', status: 'job_status' })
+  const planned = readFileSync(new URL('../features/territories-handlers.clan', root))
+  assert.ok(planned.length > 0)
+})
+
+test('a source window opens for a brief field, a pin, a finding (with its derived mark) and a find; in play toggles write by id', () => {
+  const d = doc()
+  const brief = L.dialogFor('brief:smp', d)!; assert.match(brief.html, /The weekend starts when you sit down/); assert.match(brief.html, /Single-minded proposition/)
+  const pin = L.dialogFor('f_TIRED0418', d)!; assert.match(pin.html, /61%/); assert.match(pin.html, /pinned/)
+  const fi = L.dialogFor('fi_NOTALK003', d)!; assert.match(fi.html, /derived/); assert.match(fi.html, /data-src="f_DRIVER0431"/)
+  assert.match(fi.html, /Take it out of play/)
+  d.finds = [{ id: 'x_FORUM0001', kind: 'found', text: 'Forum threads call the train a highlight.', source: 'Public forums', date: '2025', quote_checked: true, in_play: true }]
+  const x = L.dialogFor('x_FORUM0001', d)!; assert.match(x.html, /Found by Territories/); assert.match(x.html, /quote checked/)
+  assert.match(L.view(d, {}), /data-arrived="finds"/)
+  assert.equal(L.dialogFor('nope', d), null)
+  const off = apply(d, L.act(d, {}, { a: 'play', id: 'fi_FARE00007', on: true }, ENV))
+  assert.equal(off.focus.sources.find((s: Doc) => s.id === 'fi_FARE00007').in_play, true)
+  assert.match(L.dialogFor('fi_FARE00007', off)!.html, /Take it out of play/)
+  eq(errs(off).filter(e => !/upstream/.test(e)), [])
+  for (const w of ['brief', 'research']) assert.ok(L.dialogFor(w, d), `what arrived: ${w}`)
+})
+
+test('every control the page draws does something or is disabled with its reason', () => {
+  const page = L.view(doc(), {})
+  const acts = new Set([...page.matchAll(/data-act="([a-z]+)"/g)].map(m => m[1]))
+  for (const a of acts) assert.ok(L.act(apply(doc(), L.act(doc(), {}, { a: 'explore' }, ENV)), {}, { a }, ENV) !== undefined, `an action for ${a}`)
+  assert.ok(acts.has('explore') && acts.has('add'))
+  assert.ok(!/<form/.test(page), 'no form: the sandboxed page cannot submit one')
+  assert.match(page, /data-tick=/); assert.match(page, /data-form="add"/); assert.match(page, /data-play=/); assert.match(page, /data-src=/); assert.match(page, /data-booth="hide"/); assert.match(page, /id="boothEdge"/)
+  // the look-up box is disabled and says so (look-ups are another feature)
+  assert.match(page, /<textarea rows="2" disabled/); assert.match(page, /Look-ups are not built into Territories yet/)
+  // the steps after Pick are shut until the run reaches them
+  assert.match(page, /data-step="explore"[^>]*disabled/); assert.match(page, /data-step="greenlight"[^>]*disabled/)
+})
+
+test('the Booth speaks from the document: what it read, what is derived, the gate line, the notes', () => {
+  const d = doc(), n = L.boothNotes(d)
+  assert.match(n[0].body, /Read the brief \(8 fields\) and the research \(6 pins, 4 findings\)\. Nothing copied/)
+  eq(n[1].cites, ['fi_FARE00007', 'fi_NOTALK003', 'fi_SPONT0009'])
+  d.notes = [{ id: 'nt_aaaa11', agent: 'review', text: 'Two routes landed close.', at: '2026-11-23T09:00:00Z' }]
+  assert.ok(L.boothNotes(d).some(x => /Two routes landed close/.test(x.body)))
+  const page = L.view(doc(), { me: { name: 'Shrey' } })
+  assert.match(page, /Tick the insights the crew should explore/); assert.match(page, /Checks signed as <b>Shrey<\/b>/)
+  assert.match(page, /aria-label="Booth"/); assert.match(page, /aria-expanded="true"/)
+  assert.match(L.view(doc(), { booth: false }), /class="booth-col booth-off"/)
+})
+
+test('after Pick the run has moved on: the insights are read-only and the later steps open', () => {
+  const d = doc(); d.run = { ...d.run, state: 'building', stage: 'explore', gate: null, approvals: { pick: { by: 'Shrey', at: '2026-11-23T10:00:00Z', decision: 'approve' } } }
+  assert.equal(L.pickState(d.run), 'past')
+  const page = L.view(d, { view: 0 })
+  assert.match(page, /data-tick="in_arrive" checked disabled/)
+  assert.ok(!/data-form="add"/.test(page) && !/data-act="explore"/.test(page))
+  assert.match(page, /Step 1 · Pick what to work on/)
+  const later = L.view(d, {})
+  assert.match(later, /data-step="explore" aria-current="step"/); assert.match(later, /Step 2 of 3/); assert.match(later, /not built in this version/)
+})
+
+test('the engine making the insights shows as working, and a refused reply shows in words', () => {
+  const d = doc(); d.run = { state: 'building', stage: 'pick', stages: d.run.stages, approvals: {}, decisions: [] }
+  assert.equal(L.pickState(d.run), 'working')
+  assert.match(L.view(d, {}), /still writing the insights/)
+  const f = doc(); f.run = { ...f.run, state: 'failed', error: { stage: 'pick', message: 'The engine sent more insights than the list holds.', retryable: true, refused: ['26 insights, at most 25.'] } }
+  assert.match(L.view(f, {}), /more insights than the list holds/)
+})
+
+
+// ---- the first screen of a spun-off document (territories-spinoff-in): the host's own fixture, the engine reader's golden ----
+const SDATA = json('example/spunoff/data.json') as Doc
+const SSEEN = json('example/spunoff/seen.json') as Seen
+const SFACTS = json('example/spunoff/facts.json') as Doc
+const SFINDINGS = json('example/spunoff/findings.json') as Doc
+const screen = (data: unknown, title = 'Territories'): { root: string; cards: string } => { const h = L.view(data as Doc, { title }); return { root: h, cards: h } }
 
 test('the page reads a spin-off exactly as the engine reader does (the golden)', () => {
-  assert.deepEqual(JSON.parse(JSON.stringify(L.seen(DATA))), SEEN)
+  eq(L.seen(SDATA), SSEEN)
 })
 
 test('the counts on screen are the counts of the carried members', () => {
-  assert.equal(SEEN.research!.pins, FACTS.facts.length)
-  assert.equal(SEEN.research!.findings, FINDINGS.findings.length)
-  const { root } = screen(DATA)
-  assert.match(root, new RegExp(`${FACTS.facts.length} pins`))
-  assert.match(root, new RegExp(`${FINDINGS.findings.length} findings`))
-  assert.match(root, new RegExp(`${SEEN.brief!.filled} fields of ${SEEN.brief!.total}`))
+  assert.equal(SSEEN.research!.pins, SFACTS.facts.length)
+  assert.equal(SSEEN.research!.findings, SFINDINGS.findings.length)
+  const { root } = screen(SDATA)
+  assert.match(root, new RegExp(`${SFACTS.facts.length} pins`))
+  assert.match(root, new RegExp(`${SFINDINGS.findings.length} findings`))
+  assert.match(root, new RegExp(`${SSEEN.brief!.filled} fields of ${SSEEN.brief!.total}`))
 })
 
 test('every key brief field that arrived is on the screen in the brief\'s own words, under its name as words', () => {
-  const { root } = screen(DATA)
-  const keyed = SEEN.brief!.key_fields
+  const { root } = screen(SDATA)
+  const keyed = SSEEN.brief!.key_fields
   assert.ok(keyed.length >= 4, 'the fixture carries the key fields')
   for (const f of keyed) {
     const text = f.text.split('\n')[0].replace(/&/g, '&amp;')
@@ -81,52 +336,54 @@ test('every key brief field that arrived is on the screen in the brief\'s own wo
 })
 
 test('the source cards are the brief\'s and the research\'s, in their own identity', () => {
-  const { cards } = screen(DATA)
+  const { cards } = screen(SDATA)
   assert.match(cards, /nsrc-brief/)
   assert.match(cards, /nsrc-research/)
   assert.match(cards, /Lúnasa 0\.0 launch brief/)
-  assert.match(cards, new RegExp(`<b>${FACTS.facts.length}</b> facts`))
+  assert.match(cards, new RegExp(`<b>${SFACTS.facts.length}</b> facts`))
 })
 
 test('no field name, null or placeholder leaks onto the screen', () => {
-  const { root, cards } = screen(DATA)
-  // What a person reads: the markup's tags and attributes (data-field="smp") are not text.
-  const said = (root + cards).replace(/<[^>]*>/g, ' ')
+  const said = screen(SDATA).root.replace(/<[^>]*>/g, ' ')
   for (const bad of ['field is null', 'null', 'undefined', 'NaN', '[object', '{{', '(to confirm)', '~~', 'single_minded_proposition', 'tone_and_world', 'smp']) {
     assert.ok(!said.includes(bad), `the screen says "${bad}"`)
   }
 })
 
 test('a brief alone, research alone, and nothing at all each say so plainly', () => {
-  const briefId = SEEN.brief!.id
-  const researchId = SEEN.research!.id
-  const onlyBrief = screen({ upstream: { [briefId]: DATA.upstream[briefId] } }).root
+  const briefId = SSEEN.brief!.id, researchId = SSEEN.research!.id
+  const onlyBrief = screen({ upstream: { [briefId]: SDATA.upstream[briefId] } }).root
   assert.match(onlyBrief, /from a brief/)
   assert.ok(!/Research · /.test(onlyBrief))
-  const onlyResearch = screen({ upstream: { [researchId]: DATA.upstream[researchId] } }).root
+  const onlyResearch = screen({ upstream: { [researchId]: SDATA.upstream[researchId] } }).root
   assert.match(onlyResearch, /from research/)
-  // No projection and no members here: the count is not known, so it is not shown, never shown as 0
-  assert.ok(!/0 pins|0 findings/.test(onlyResearch))
+  assert.ok(!/0 pins|0 findings/.test(onlyResearch), 'an unknown count is not shown as 0: ' + String(onlyResearch.replace(/<[^>]*>/g, ' ').match(/.{40}(0 pins|0 findings).{20}/)))
   const none = screen({}).root
   assert.match(none, /Nothing came in with this one/)
   assert.ok(!/undefined|null/.test(none))
 })
 
-test('the page says what is not built yet, and offers nothing that does nothing', () => {
-  const { root } = screen(DATA)
+test('before the engine has written, the page says what is not built and offers nothing that does nothing', () => {
+  const { root } = screen(SDATA)
   assert.match(root, /not been sent out/)
-  assert.ok(!/<button/.test(root), 'no button on a page that cannot act yet')
-})
-
-test('the page uses only the fonts the umbrella allows and no price', () => {
-  assert.ok(/Newsreader/.test(html) && /Geist/.test(html))
-  assert.ok(!/(€|\$|£)\s?\d|\bUSD\b|\bEUR\b/.test(read('index.html')))
+  assert.ok(!/data-act=|data-tick=|data-form=|data-play=/.test(root), 'no pick control on a page with nothing to pick')
+  assert.match(root, /<textarea rows="2" disabled/)
 })
 
 test('the name, the contract and the seed: the app block is the contract\'s', () => {
-  const ctxmd = read('context.md')
-  assert.match(ctxmd, /Cite, never copy/)
+  assert.match(readFileSync(new URL('context.md', dir), 'utf8'), /Cite, never copy/)
   const seed = json('seed.json')
-  assert.deepEqual(seed.run.approvals, {})
+  eq(seed.run.approvals, {})
   assert.equal(seed.schema_version, 1)
+})
+
+test('a spun-off document with the engine\'s first write opens on Pick, with the real brief keys read through the contract names', () => {
+  const d = JSON.parse(JSON.stringify(SDATA)) as Doc
+  d.focus = { sources: [], insights: [{ id: 'in_aa11', kind: 'truth', text: 'The same round, the same good time.', evidence: ['brief:smp'], strength: 'strong', ticked: true, by: 'engine', rank: 1 }] }
+  d.run = { state: 'gate', stage: 'pick', gate: { id: 'pick', n: 1, of: 2, agent: 'strategy', dex: 'Tick the insights the crew should explore.', checks: [], blocked_by: [] }, approvals: {}, decisions: [] }
+  assert.equal(L.pickState(d.run), 'open')
+  assert.match(L.view(d, {}), /data-tick="in_aa11"/)
+  assert.match(L.dialogFor('brief:smp', d)!.html, /The same round, the same good time\./)
+  assert.ok(L.resolve('f_01JA0B1C2D', d).carried, 'a pin of the host projection resolves')
+  assert.match(L.resolve('fi_01JA0F1A', d).status, /verified/)
 })
