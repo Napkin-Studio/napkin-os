@@ -97,7 +97,7 @@ export function rightsWord(r: AssetRights | undefined): string | undefined {
  *  upload: unknown). */
 export function defaultRights(a: DocAsset | undefined): AssetRights {
   if (a?.rights) return a.rights
-  return landingRights(a?.origin) ?? 'unknown'
+  return (a ? landingRights(a.origin) : undefined) ?? 'unknown'
 }
 
 /** Mark a picture final and state its rights in one draft (one undo step): the Deck reads the asset's rights. */
