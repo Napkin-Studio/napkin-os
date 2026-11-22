@@ -802,7 +802,7 @@ def production_slot(prod: dict, key: str, aspect: str, names=()) -> tuple:
     return {"kind": "image", "image": image}, asset
 
 
-_FRAME_LINE = re.compile(r"^\s*(?:frame|shot)\s*(\d{1,2})\s*[:.)\-\u2013\u2014]\s*(.+?)\s*$", re.I)
+_FRAME_LINE = re.compile(r"^\s*(?:frame|shot)\s*(\d{1,2})\s*(super|vo|voice-?over|title|card)?\s*[:.)\-\u2013\u2014]\s*(.+?)\s*$", re.I)
 
 
 def take_frame_captions(slide: dict, shots: list) -> list:
@@ -815,7 +815,8 @@ def take_frame_captions(slide: dict, shots: list) -> list:
             for ln in b.get("lines") or []:
                 m = _FRAME_LINE.match(str(ln))
                 if m:
-                    found.setdefault(int(m.group(1)), (str(ln), m.group(2)))
+                    what = (("VO" if m.group(2).lower().startswith("vo") else m.group(2).capitalize()) + ": ") if m.group(2) else ""   # 'Frame 2 super: Brought something still.' reads 'Super: Brought something still.'
+                    found.setdefault(int(m.group(1)), (str(ln), what + m.group(3)))
     caps = [found[n][1] if n in found else "" for n in shots]
     if not any(caps):
         return []

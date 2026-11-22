@@ -82,6 +82,12 @@ def test_a_storyboard_slide_draws_its_frames_with_their_captions(built):
     assert web.count('class="sb-cap"') == 3 and "A glass fills." in web and 'sb-strip' in web
 
 
+def test_a_frame_line_with_a_super_keeps_its_kind():
+    sl = {"blocks": [{"kind": "copy", "lines": ["Frame 2 super: Brought something still.", "End frame: Hollow Oak.", "Frame 4 VO: One."], "answer": "a"}]}
+    assert images.take_frame_captions(sl, [1, 2, 3, 4]) == ["", "Super: Brought something still.", "", "VO: One."]
+    assert sl["blocks"][0]["lines"] == ["End frame: Hollow Oak."]
+
+
 def test_a_storyboard_without_frame_lines_still_draws_numbered_frames(built):
     prod, files, tmp = built
     d = _deck(("execution", "TV film", [{"kind": "text", "text": "Role: x"}, {"kind": "copy", "lines": ["VO: one."], "answer": "a", "basis": "creative"}]))
