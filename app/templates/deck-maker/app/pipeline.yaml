@@ -33,3 +33,10 @@ tasks:
     never:
       - writes to the document (the app records inputs.production itself once the engine holds the file)
       - fetches anything: fetching picked pictures stays the person's opt-in, behind the engine's host allow-list
+  fetch_deck_file:
+    handler: fetch_deck_file@1
+    job: short
+    reads:
+      - input.name, deck.html or deck.pptx: a finished file of this deck, which the engine holds on its own disk (the PDF is printed from deck.html by the host's export)
+    never:
+      - writes to the document
