@@ -63,7 +63,7 @@ def estimate_call(stage: str, model: str | None = None) -> float:
     recorded after the call."""
     import price_table
     from . import cost
-    row = cost.STAGES.get(stage)
+    row = cost.STAGES.get(stage) or cost.DEVELOP.get(stage)
     if row:
         _, tin, tout, m = row
         return round(price_table.usd(model or m, tin, tout) * cost.CALIBRATION, 4)
