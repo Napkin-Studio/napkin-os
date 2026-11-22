@@ -624,9 +624,9 @@ Slice 2 is **execution frames**, slice 3 the **storyboard strip**:
   reported `by: final`. A person's own swap on Review (`review.production`, `--production-pick`) still wins. The rules below fill the
   slots no final reaches.
 - **Rights.** A stated `assets[sha].rights` of `generated`, `own` or `licensed` is trusted (Production writes it when a provider made
-  the picture or a person said so); `unknown` is `Rights to supply`. With none stated the origin decides and only ever lowers
-  (generated, drawn are placeable; uploaded, extracted, an edit of an upload or of a canvas picture wait; an edit of generated
-  frames only is generated). Mock output is refused first, whatever is stated. A size made from a picture that waits for its rights
+  the picture or a person said so); `unknown` is `Rights to supply`, and so is a picture with none stated, whatever its origin (owner,
+  2026-11-22: trust what is stated, ask for the rest; the origin never raises the rights). Mock output, or an edit whose frame
+  chain reaches mock output, is refused first, whatever is stated. A size made from a picture that waits for its rights
   waits too. Nothing is called forged: the old ignore-and-warn treatment of a `rights` field is gone, because contract 3 now defines it.
 - **Pictures by link.** A project carried in the deck holds no pictures. Each picture a build needs is fetched by its sha256 from the
   relay's asset route, `GET /assets/{sha256}?w=2400` (a 302 to a copy at most 2400 px wide, only for the agency that holds it), kept

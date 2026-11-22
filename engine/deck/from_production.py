@@ -228,50 +228,40 @@ STATED_RIGHTS = ("generated", "own", "licensed")
 
 def rights_of(doc: dict, sha: str, by_asset: dict | None = None) -> tuple:
     """``(rights, why)`` of one asset, or ``("mock", why)`` for mock output (refused, checked first, whatever is stated). A stated
-    ``rights`` of generated, own or licensed is trusted (Production sets it: a provider made the picture, or a person said so); a stated
-    ``unknown`` is ``reference_only`` (Rights to supply). With none stated the origin decides and only ever lowers: generated -> generated;
-    drawn -> own; uploaded or extracted -> reference_only; edited -> generated only when its frame chain reaches only generated frames,
-    else reference_only."""
+    ``rights`` of generated, own or licensed is trusted (Production sets it: a provider made the picture, or a person said so).
+    ``unknown`` or none stated is ``reference_only`` (Rights to supply; owner, 2026-11-22: trust what is stated, ask for the rest);
+    the origin is read only to refuse mock output, never to raise the rights."""
     a = (doc.get("assets") or {}).get(sha) or {}
     origin = a.get("origin")
     if origin == "mock":
         return "mock", "mock output"
+    if origin == "edited" and _edit_of_mock(doc, sha, by_asset if by_asset is not None else _frames_by_asset(doc)):
+        return "mock", "an edit of mock output"
     stated = a.get("rights")
     if stated in STATED_RIGHTS:
         return stated, {"generated": "made in Production", "own": "stated own in Production", "licensed": "stated licensed in Production"}[stated]
     if stated == "unknown":
         return "reference_only", f"{origin or 'a picture'} with its rights not yet stated in Production"
-    if origin == "generated":
-        return "generated", "made in Production"
-    if origin == "drawn":
-        return "own", "drawn on the canvas"
-    if origin in ("uploaded", "extracted"):
-        return "reference_only", f"{origin} with no stated licence"
-    if origin != "edited":
-        return "reference_only", f"origin {origin!r} is not known"
-    by_asset = by_asset if by_asset is not None else _frames_by_asset(doc)
+    return "reference_only", f"{origin or 'a picture'} with no rights stated in Production"
+
+
+def _edit_of_mock(doc: dict, sha: str, by_asset: dict, seen: set | None = None) -> bool:
+    """Whether an edited picture's frame chain reaches mock output (a mock frame, or a picture whose origin is mock)."""
+    seen = seen if seen is not None else set()
     chain = by_asset.get(sha) or []
-    if not chain:
-        return "reference_only", "an edit with no frame chain"
     frames = doc.get("frames") or {}
-    f, seen = chain[-1], set()
-    while f is not None:
-        if f.get("id") in seen:
-            return "reference_only", "an edit whose frame chain loops"
+    f = chain[-1] if chain else None
+    while f is not None and f.get("id") not in seen:
         seen.add(f.get("id"))
-        kind = f.get("kind")
-        if kind == "mock":
-            return "mock", "an edit of mock output"
-        if kind == "original":
-            return "reference_only", "an edit of a canvas picture (its licence is not stated)"
-        if kind == "generated":
-            r, why = rights_of(doc, f.get("asset"), by_asset) if f.get("asset") != sha else ("generated", "")
-            return ("generated", "an edit of a picture made in Production") if r == "generated" else (r, f"an edit of: {why}")
-        parent = f.get("parent_id")
-        if not parent:
-            return "reference_only", "an edit whose chain reaches no generated frame"
-        f = frames.get(parent)
-    return "reference_only", "an edit whose parent frame is missing"
+        if f.get("kind") == "mock":
+            return True
+        other = f.get("asset")
+        if other and other != sha:
+            o = ((doc.get("assets") or {}).get(other) or {}).get("origin")
+            if o == "mock" or (o == "edited" and _edit_of_mock(doc, other, by_asset, seen)):
+                return True
+        f = frames.get(f.get("parent_id")) if f.get("parent_id") else None
+    return False
 
 
 def lower(*rights) -> str:
