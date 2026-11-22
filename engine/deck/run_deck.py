@@ -736,6 +736,25 @@ def _picture_style(a, deck_ctx, client: str):
     return vstyle.load(None)
 
 
+def _production_upstream(a, inp, deck_ctx) -> tuple | None:
+    """``(source document id, data)`` of the Production project this deck was spun off from, or None: from ``--production-upstream FILE`` (the
+    engine server's way: the middleware sends the carried data) or from the Deck document's own ``data.upstream`` (``--deck``). With no brief
+    of its own the deck takes the one the project carries (inputs.apply_production_brief). An explicit ``--production`` wins over both."""
+    got = None
+    if a.production_upstream:
+        try:
+            raw = json.loads(a.production_upstream.read_text())
+            got = (str(raw["id"]), raw["data"]) if isinstance(raw, dict) and isinstance(raw.get("data"), dict) and raw.get("id") else None
+        except (OSError, ValueError, KeyError):
+            got = None
+        if got is None:
+            raise SystemExit("refused: --production-upstream must be a JSON file {id, data}: the Production project's document id and its data")
+        inputs.apply_production_brief(inp, *got)
+    elif (deck_ctx or {}).get("production"):
+        got = deck_ctx["production"]
+    return None if a.production else got
+
+
 def _add_marks(a, inp) -> None:
     """``--marks FILE`` adds to the marks the document carried (an empty list is a real answer: the marks are known). Applied once, at load, so the picture step and
     the paid shorten request both see them."""
@@ -899,6 +918,10 @@ def main(argv=None):
                          "Bare: stages/production.json from deck.from_production. With FILE (a Production .clan, or its export zip): the picker "
                          "(deck.prod_picker) lists every asset from metadata, picks by rule and pulls only the picked pictures (the .clan's own, then "
                          "https with --production-fetch, then the zip). Nothing is made or spent; implies --pictures creative_cover unless --pictures says otherwise")
+    ap.add_argument("--production-upstream", type=Path, metavar="FILE",
+                    help="the Production project this deck was spun off from, carried whole (JSON {id, data}: the source document id and its shared/data.yaml): "
+                         "its finals fill the slots first, then the rules for the empty ones; its pictures are fetched by link from the relay. A --deck document "
+                         "that carries one under data.upstream needs no flag. An explicit --production beats it")
     ap.add_argument("--production-fetch", action="store_true",
                     help="with --production FILE: download picked pictures from their https:// locations (hosts on policy/production_fetch.yaml only; "
                          "empty by default, so it refuses until the hosts are named). Off: nothing is downloaded")
@@ -1008,6 +1031,9 @@ def main(argv=None):
             raise SystemExit(f"refused: {e}")
     _add_marks(a, inp)
     _master_size(a, _explicit_size(a, deck_ctx, answers))   # deck-slide-size: a master/size conflict is refused here, before any paid stage
+    prod_up = _production_upstream(a, inp, deck_ctx)   # production-spinoff: the Production project carried whole, unless a --production file was given
+    if prod_up and a.pictures is None:
+        a.pictures = "creative_cover"
     rep["stages"]["inputs"] = {"secs": round(time.time() - t, 2), "model": None, "tokens_in": 0, "tokens_out": 0, "usd": 0}
     pick = a.deck_type or (deck_ctx or {}).get("deck_type")   # deck-types: the person's explicit pick (--type, or the document's inputs.deck_type)
     try:
@@ -1019,6 +1045,10 @@ def main(argv=None):
     rec = profiles.recipe(profile, a.format) if profiles.recipes_on() else None   # deck-types: resolved once (None with the flag off)
     if rec and not a.pictures_asked and a.pictures is not None:
         a.pictures = rec["pictures"]["on"]   # the person set no picture preference: the type's default (only where pictures were asked for at all)
+    if prod_up and (kind == "investor" or a.pictures == "none"):   # nobody asked for it by flag: an investor deck or a no-pictures run just does not use it
+        prod_up = None
+        if kind == "investor" and not a.pictures_asked and a.images == "off":
+            a.pictures = None
     if a.production and kind == "investor":   # never silently ignored, and refused before any stage runs or spends
         raise SystemExit("refused: --production places the Production Tool's campaign pictures on a pitch deck's cover, idea and executions; "
                          "an investor deck has none of those slides. Drop --production")
@@ -1113,6 +1143,9 @@ def main(argv=None):
             if isinstance(a.production, str):   # a .clan or the export zip: opened and checked now, picked once the deck exists (deck-prod-picker)
                 from . import prod_picker
                 picker_src = prod_picker.Source(Path(a.production).expanduser())
+            elif prod_up and not a.production:   # the Production project carried in the deck: finals first, pictures by link (production-spinoff)
+                from . import prod_picker
+                picker_src = prod_picker.CarriedSource(*prod_up)
             elif a.production:   # production.json is read ONLY with --production: a stray one changes nothing (deck-prod-assets)
                 prod = images.load_production(a.stages)
                 if prod is None:
@@ -1120,7 +1153,7 @@ def main(argv=None):
     except images.ImageError as e:
         raise SystemExit(f"refused: {e}")
     except ValueError as e:   # from_production.FromProductionError (and a YAML error) from the picker's file: refused before any build
-        raise SystemExit(f"refused: --production {Path(str(a.production)).name}: {e}")
+        raise SystemExit(f"refused: {'--production ' + Path(str(a.production)).name if a.production else 'the Production project this deck carries'}: {e}")
     extra = {"pictures": bound} if bound else {}
     build = lambda f: builder(inp, st, client=a.client, project=a.project, agency=a.agency, fmt=a.format, fit=f, profile=profile, **extra)
     deck = build(fit)
@@ -1187,7 +1220,8 @@ def main(argv=None):
                     rvw = rvw.get("review", rvw) if isinstance(rvw, dict) else {}   # the app's {review: ...} wrapper, or the bare object
                     swaps = {**prod_picker.choices_from_review(rvw), **prod_picks}
                     pres = prod_picker.run(deck, picker_src, a.stages, a.pictures, images.deck_names(deck), brief_doc, fetch=a.production_fetch,
-                                           agent=a.production_agent, look=a.production_look, choices=swaps)
+                                           agent=a.production_agent, look=a.production_look, choices=swaps,
+                                           relay=prod_picker.relay_for(a.stages) if picker_src.kind == "upstream" else None)
                     prod = images.load_production(a.stages)
                     for name, u in (("production_agent", pres["usage"]["agent"]), ("production_look", pres["usage"]["look"])):
                         if u:   # only on its flag: pulling itself never spends

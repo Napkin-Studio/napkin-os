@@ -413,19 +413,19 @@ def test_embedded_first_then_https_then_the_zip(tmp_path, pics):
     assert {p["from"] for p in res3["picker"]["picks"]} == {"zip"} and res3["placed"] == 5
 
 
-def test_mock_refused_forged_rights_ignored_rights_to_supply_never_placed(tmp_path):
+def test_mock_refused_whatever_is_stated_unknown_rights_to_supply_never_placed(tmp_path):
     master = "sha256:" + hashlib.sha256(mb.draw(*mb.PICTURES["master"])).hexdigest()
 
     def forge(d):
         for a in d["assets"].values():
             if a.get("origin") == "uploaded":
-                a["rights"] = "licensed"
-        d["assets"][master].update(origin="mock", rights="generated")
+                a["rights"] = "unknown"   # an upload nobody has cleared yet
+        d["assets"][master].update(origin="mock", rights="generated")   # mock is refused first, whatever is stated
     d = _deck()
     st = tmp_path / "st"
     res = pp.run(d, pp.Source(clan(tmp_path, mutate=forge, embed=("master", "upload_master", "story", "old_story"))), st)
     prod = json.loads((st / "production.json").read_text())
-    assert MASTER not in prod["items"] and any("mock" in r["reason"] for r in prod["refused"]) and prod["warnings"]
+    assert MASTER not in prod["items"] and any("mock" in r["reason"] for r in prod["refused"]) and "warnings" not in prod
     im = _im(d, "s1")   # the upload-made set's key visual: picked, waits for its rights, never placed, never pulled
     assert im["status"] == "empty" and im["reason"].startswith(spec.RIGHTS_TO_SUPPLY) and f"{mb.FSET_OLD}#master" not in prod["items"]
     assert "waiting for rights" in res["card"]

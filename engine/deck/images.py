@@ -523,18 +523,21 @@ def keeps_protected(it: dict, aspect) -> bool:
 
 def master_pool(prod: dict, brief_document_id: str | None = None) -> tuple:
     """``(set ids, why)``: the Format sets the key-visual rule ranks equal, of which choose_master takes the newest (the Production picker
-    reports the others as a tie). Linked to the deck's brief first; when none links to it, a placeable key visual before one waiting for its
+    reports the others as a tie). A key visual a person marked final comes before any other. Linked to the deck's brief first; when none links to it, a placeable key visual before one waiting for its
     rights. ``([], why)`` when no set has a master."""
     items = prod.get("items") or {}
     sets = {fid: r for fid, r in (prod.get("format_sets") or {}).items() if r.get("master") in items}
     if not sets:
         return [], "no Format set in the export has a key visual"
+    marked = {fid: r for fid, r in sets.items() if items[r["master"]].get("final")}
+    if marked:   # finals first (production-spinoff): the picture a person marked final, before any rule's pick
+        sets = marked
     linked = [fid for fid, r in sets.items() if brief_document_id and (r.get("brief") or {}).get("document_id") == brief_document_id]
     if linked:
-        return linked, "the newest Format set linked to this deck's brief"
+        return linked, ("a key visual marked final in Production, " if marked else "") + "the newest Format set linked to this deck's brief"
     placeable = [fid for fid in sets if items[sets[fid]["master"]].get("rights") != "reference_only"]
     if placeable:
-        why = "no Format set links to this deck's brief: the newest set whose key visual can be placed"
+        why = ("a key visual marked final in Production: " if marked else "") + "no Format set links to this deck's brief: the newest set whose key visual can be placed"
         if _newest(list(sets)) != _newest(placeable):
             why += " (a newer set's key visual waits for its rights)"
         return placeable, why
@@ -571,8 +574,8 @@ def size_pool(prod: dict, channel: str, aspect: str, prefer_set: str | None = No
     """``(keys, why)``: the sizes ranked best and equal for an execution slot (production_size takes the newest; the Production picker reports
     the others as a tie). Sizes whose channel the execution accepts (a size of a format the pinned packs do
     not know only when the channel has none), within ASPECT_TOL of the slot's aspect and whose protect boxes the slot's crop keeps whole;
-    a placeable one before one waiting for its rights, ready before flagged ('look'), the key visual's own set first, nearest the slot's
-    aspect. Stale sizes never. ``([], why)`` when sizes of the channel exist and none fits (the slot is left empty with that reason, never
+    one marked final in Production first (production-spinoff), a placeable one before one waiting for its rights, ready before flagged
+    ('look'), the key visual's own set first, nearest the slot's aspect. Stale sizes never. ``([], why)`` when sizes of the channel exist and none fits (the slot is left empty with that reason, never
     filled with a wrong shape); ``([], None)`` when Production made nothing for the channel.
 
     ``any_shape`` (deck-graphics, spec.GRAPHICS): the size is shown WHOLE in a frame whose window takes its own format's aspect, so no
@@ -599,14 +602,14 @@ def size_pool(prod: dict, channel: str, aspect: str, prefer_set: str | None = No
         if not any_shape and not keeps_protected(it, aspect):
             cut += 1 if ours else 0
             continue
-        row = (it.get("rights") == "reference_only", it.get("status") != "ready", it.get("set") != prefer_set, round(dist, 4), k)   # a placeable picture first
+        row = (not it.get("final"), it.get("rights") == "reference_only", it.get("status") != "ready", it.get("set") != prefer_set, round(dist, 4), k)   # a final first, then a placeable picture
         (matched if ours else nearest).append(row)
     if any_shape and stale and not matched:   # the channel's own sizes are all out of date: held, never a size of another format
         pool = []
     else:
         pool = matched or nearest
     if fits:   # size_fits: every size that fits, best first (newest first among equals)
-        return [p[4] for p in sorted(pool, key=lambda p: (p[:4], tuple(-ord(c) for c in p[4])))], None
+        return [p[5] for p in sorted(pool, key=lambda p: (p[:5], tuple(-ord(c) for c in p[5])))], None
     if not pool:
         if any_shape and stale:
             return [], (f"Out of date in Production: its {channel} size(s) changed since they were made. Make them again in Production, "
@@ -619,13 +622,19 @@ def size_pool(prod: dict, channel: str, aspect: str, prefer_set: str | None = No
         if cut:
             parts.append(f"{cut} {channel} size(s) would lose part of their protected area in a {aspect} crop")
         return [], "No Production size fits: " + "; ".join(parts) + ". Make one in this shape in Production, or supply a picture"
-    best = min(p[:4] for p in pool)
-    return sorted(p[4] for p in pool if p[:4] == best), None
+    best = min(p[:5] for p in pool)
+    return sorted(p[5] for p in pool if p[:5] == best), None
+
+
+def _film_frames(prod: dict) -> dict:
+    """The storyboard shot frames a film execution may show: those a person marked final in Production when any is, else every picked one."""
+    frames = {k: it for k, it in (prod.get("items") or {}).items() if it.get("role") == "frame" and it.get("shot_kind", "shot") == "shot"}
+    return {k: it for k, it in frames.items() if it.get("final")} or frames
 
 
 def production_frame(prod: dict) -> str | None:
     """The one picked storyboard frame a film execution shows in v1 (fix 3): the newest storyboard's first shot (by rank) with a picked frame."""
-    frames = {k: it for k, it in (prod.get("items") or {}).items() if it.get("role") == "frame" and it.get("shot_kind", "shot") == "shot"}
+    frames = _film_frames(prod)
     sb = _newest([it.get("storyboard") or "" for it in frames.values()])
     first = sorted((str(it.get("shot_rank") or ""), k) for k, it in frames.items() if (it.get("storyboard") or "") == sb)
     return first[0][1] if first else None
@@ -635,7 +644,7 @@ def production_shots(prod: dict) -> list:
     """The newest storyboard's picked shot frames in shot order (Production's ``shot.rank``, a fractional index that sorts as a string; end
     cards left out; mock frames never reach production.json): ``[(shot number from 1, item key, placeable)]``. A rights-pending frame keeps
     its number and is not placeable."""
-    frames = {k: it for k, it in (prod.get("items") or {}).items() if it.get("role") == "frame" and it.get("shot_kind", "shot") == "shot"}
+    frames = _film_frames(prod)
     sb = _newest([it.get("storyboard") or "" for it in frames.values()])
     ordered = sorted((str(it.get("shot_rank") or ""), k) for k, it in frames.items() if (it.get("storyboard") or "") == sb)
     return [(n, k, frames[k].get("rights") != "reference_only" and frames[k].get("status", "ready") == "ready") for n, (_, k) in enumerate(ordered, 1)]

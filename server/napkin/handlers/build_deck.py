@@ -56,6 +56,11 @@ def marks_of(data: dict, chain: list) -> list:
         for mid, m in (mats.items() if isinstance(mats, dict) else [(x.get("id"), x) for x in mats or [] if isinstance(x, dict)]):
             if isinstance(m, dict) and str(m.get("licence") or "").lower() == "client-confidential":
                 add(f"{prefix}materials[{mid}]", f"{m.get('name') or ''} {m.get('text') or ''}", "licence")
+    for k, v in (data.get("upstream") or {}).items():   # a carried Production project: the brief parts it froze as Confidential (its spine, in full)
+        if isinstance(v, dict) and v.get("app") == "production-tool":
+            for bid, b in (v.get("briefs") or {}).items():
+                for part in (b or {}).get("confidential") or []:
+                    add(f"upstream.{k}.briefs.{bid}.spine.{part}", ((b.get("spine") or {}).get(part)), "confidential_field")
     for d in chain or []:
         if not isinstance(d, dict) or d.get("kind") != "classify" or d.get("superseded_by"):
             continue
@@ -107,6 +112,15 @@ def size_of(data: dict) -> str | None:
     return None
 
 
+def production_upstream_of(data: dict) -> dict | None:
+    """``{id, data}``: the Production project (``app: production-tool``) the Deck carries under ``data.upstream`` (the first one), as the engine
+    reads it (finals, assets, sizes, briefs). The pictures are not in it: they are held by the relay under their sha256."""
+    for k, v in (data.get("upstream") or {}).items():
+        if isinstance(v, dict) and v.get("app") == "production-tool":
+            return {"id": str(k), "data": v}
+    return None
+
+
 def start(req, caps, settings, jid):
     """Validate now (a 400 before any job, a 503 with no engine); build the job (the caller starts it)."""
     data = ctx_data(req.clan)
@@ -128,6 +142,9 @@ def start(req, caps, settings, jid):
     if re.fullmatch(r"(sha256:)?[0-9a-f]{64}", str(prod.get("sha256") or "")):   # the person's Production file (attach_production), on every build
         body["inputs"]["production"] = {"sha256": str(prod["sha256"]).removeprefix("sha256:"), "fetch": prod.get("fetch") is True,
                                         "look": prod.get("look") is True}
+    pu = production_upstream_of(data)
+    if pu:   # spun off from a Production project: carried whole, frozen; finals fill the slots first, pictures are fetched by link at build
+        body["production_upstream"] = pu
     dt = deck_type_of(inputs)
     if dt:   # deck-types: the person's pick on the type picker (and any new writing they confirmed): the engine builds that type, not the kind's default
         body["inputs"]["deck_type"] = dt

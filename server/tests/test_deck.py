@@ -371,3 +371,22 @@ def test_the_slide_size_goes_to_the_engine(deck, monkeypatch):
     host2.data["run"].update(state="gate", gate=GATE2)
     build(deck, host2)
     assert "look" not in fake2.posts[0]   # no size chosen: the engine's own default (the recipe's, else 16:9)
+
+
+def test_a_deck_spun_off_from_production_sends_the_carried_project_and_its_confidential_brief_parts(deck, monkeypatch):
+    fake = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    host = Host(data=deck_data(), schema=SCHEMA)
+    prod = {"app": "production-tool", "contract_version": "3", "project": {"id": "proj_01KB0000000000000000000001", "title": "Lumen Water launch"},
+            "finals": {"final_01KB0000000000000000000001": {"of": {"kind": "picture", "id": "pic_kv_0001"}, "asset": "sha256:" + "ab" * 32}},
+            "briefs": {"brief_01KB0000000000000000000001": {"title": "Lumen", "spine": {"insight": "People never link water to their own tap", "proposition": "Every drop has a story."},
+                                                           "confidential": ["insight"]}}}
+    host.data["upstream"] = {"doc-brief-1": {"insight": "x"}, "doc-prod-1": prod}
+    build(deck, host)
+    sent = fake.posts[0]
+    assert sent["production_upstream"] == {"id": "doc-prod-1", "data": prod}   # carried whole: the pictures are not in it
+    marks = {m["path"]: m for m in sent["marks"]}
+    assert "People never link water" in marks["upstream.doc-prod-1.briefs.brief_01KB0000000000000000000001.spine.insight"]["text"]
+    assert not [m for m in sent["marks"] if "proposition" in m["path"]]
+    fake2 = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    build(deck, Host(data=deck_data(), schema=SCHEMA))
+    assert "production_upstream" not in fake2.posts[0]

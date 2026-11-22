@@ -11,7 +11,7 @@ every asset from metadata, picks by rule, and pulls only the picked pictures.
    Only https hosts are kept, never a location's path: provider URLs are capability links.
 2. Pick from metadata. images.bind_production runs on a production.json built from the metadata alone, so every rule is today's (key
    visual -> cover and idea; the typed size whose channel and aspect match -> each execution; the picked storyboard frame -> film) and
-   every check too (mock refused, forged rights ignored, aspect tolerance, protect boxes, Rights to supply never placed). Where the rules
+   every check too (mock refused, rights as stated or inferred, aspect tolerance, protect boxes, Rights to supply never placed). Where the rules
    rank several candidates equal the newest wins and the others are reported as a tie; ``--production-agent`` (off by default) asks Claude
    (stages MODELS['production_pick'], Sonnet, the deck's own brief_llm route; never Gemini) to break it on metadata rows only. An answer
    outside the eligible keys is discarded. It cannot change rights, status or eligibility: only keys of the same rank are offered.
@@ -112,6 +112,26 @@ class Source:
         return fp._read(z, name, fp.ASSET_MAX)
 
 
+class CarriedSource:
+    """A Production project carried whole in the Deck document (``data.upstream.<id>``, production-spinoff): the same surface as Source
+    (``doc``, ``name``, ``kind``, ``clan_sha256``), but the pictures are not in the document: they are held by Production's relay under their
+    sha256 and fetched at build (``relay``: the only source). ``clan_sha256`` is the hash of the carried data, so a run and a swap are tied to
+    the version the deck froze. Refuses what deck.from_production refuses (another contract or app, no project id)."""
+    kind = "upstream"
+    relay = True
+
+    def __init__(self, doc_id: str, doc: dict):
+        self.doc = fp.check_document(doc)
+        self.doc_id = str(doc_id)
+        self.name = f"production:{self.doc_id}"
+        self.clan_sha256 = hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str).encode()).hexdigest()
+        self.outer = self.inner = None
+        self.fixture, self.embedded, self.zipped = False, set(), set()
+
+    def member(self, where: str, hx: str, mime: str):
+        return None
+
+
 # ------------------------------------------------------------------------------------------------ P1 inventory
 
 def clean(text, n: int = LABEL_MAX) -> str:
@@ -135,6 +155,8 @@ def reach_of(src: Source, asset: dict, hx: str) -> tuple:
     """``(reach, sources)``: where this asset's bytes can come from, in source order (embedded, https, zip), and the first of them; with none,
     s3_only (Production's storage, behind a sign-in), idb_only (only in a browser) or none."""
     ext = fp.IMAGE_MIMES.get(asset.get("mime"))
+    if getattr(src, "relay", False):   # carried in a Deck: the relay holds every picture under its hash, and nothing else is a source
+        return ("relay", ["relay"]) if ext else ("none", [])
     locs = [str(x) for x in asset.get("locations") or []]
     sources = []
     if ext and f"human/assets/{hx}.{ext}" in src.embedded:
@@ -647,11 +669,85 @@ class Fetcher:
         return dest, None
 
 
+# ------------------------------------------------------------------------------------------------ pictures by link (production-spinoff)
+
+RELAY_WIDTH = 2400   # the relay's largest rendition (GET /assets/{sha256}?w=2400): what a slide draws
+
+
+class RelayError(Exception):
+    """The relay would not give a picture: the message says why, and never carries a URL or a token."""
+
+
+class RelayAssets:
+    """Pictures by link: Production's relay holds each one under its sha256 and answers ``GET /assets/{sha256}?w=2400`` with a 302 to a copy
+    at most 2400 px wide, only for the agency that holds it. ``fetch(sha256 hex, w)`` is the transport (``w`` None: the original size); it
+    returns the picture's bytes or raises RelayError. The signed call to the relay is the transport's business, not this class's: the
+    relay host is the one host a build may reach (policy/production_fetch.yaml, ``relay_hosts``), and the transport holds the identity.
+
+    A rendition cannot be checked against the sha256 (that is the original's hash), so it is trusted as the relay's answer for that hash,
+    kept in the stages folder by hash and width, and fetched once per document; the original-size copy (``original=True``) is hashed and refused
+    when it does not match. Every picture also passes the deck's own picture check (images.inspect_file) in ``obtain``."""
+
+    def __init__(self, fetch, cache: Path, width: int = RELAY_WIDTH, file_max: int = FILE_MAX, run_max: int = RUN_MAX, files_max: int = FILES_MAX):
+        self.fetch, self.cache, self.width = fetch, Path(cache), width
+        self.file_max, self.run_max, self.files_max = file_max, run_max, files_max
+        self.files, self.bytes, self.log = 0, 0, []
+
+    def _done(self, hx: str, outcome: str):
+        self.log.append({"sha256": hx[:12], "outcome": outcome})
+        return outcome
+
+    def get(self, hx: str, dest: Path, original: bool = False) -> tuple:
+        """``(dest, None)`` with the picture's bytes at ``dest``, or ``(None, reason)``."""
+        if not re.fullmatch(r"[0-9a-f]{64}", hx or ""):
+            return None, "its key is not a sha256"
+        w = None if original else self.width
+        kept = self.cache / (f"{hx}.orig" if original else f"{hx}.w{w}")
+        if kept.is_file():
+            Path(dest).write_bytes(kept.read_bytes())
+            self._done(hx, "cached")
+            return Path(dest), None
+        if self.files >= self.files_max:
+            return None, self._done(hx, f"the run's {self.files_max}-picture fetch cap is reached")
+        self.files += 1   # an attempt counts toward the run's cap, whatever comes of it
+        try:
+            raw = self.fetch(hx, w)
+        except RelayError as e:
+            return None, self._done(hx, f"relay: {e}"[:200])
+        if not isinstance(raw, (bytes, bytearray)) or not raw:
+            return None, self._done(hx, "relay: no picture came back")
+        if len(raw) > self.file_max:
+            return None, self._done(hx, f"relay: {len(raw) // 1_000_000} MB, over the {self.file_max // 1_000_000} MB cap")
+        if self.bytes + len(raw) > self.run_max:
+            return None, self._done(hx, f"relay: the run's {self.run_max // 1_000_000} MB fetch cap would be passed")
+        if original and hashlib.sha256(raw).hexdigest() != hx:
+            return None, self._done(hx, "relay: the bytes do not hash to the document's sha256 (changed or replaced): refused")
+        self.bytes += len(raw)
+        self.cache.mkdir(parents=True, exist_ok=True)
+        part = kept.with_name(kept.name + ".part")
+        part.write_bytes(bytes(raw))
+        part.replace(kept)
+        Path(dest).write_bytes(bytes(raw))
+        self._done(hx, "ok" + (" (original size, hash checked)" if original else f" (w={w})"))
+        return Path(dest), None
+
+
+#: The transport to the relay's asset route: ``fetch(sha256 hex, w) -> bytes``, raising RelayError. It belongs to the host that holds the
+#: person's signed identity (docs/contracts/production-tool-identity.md); nothing in this repo sets it yet, so a build says so per picture.
+RELAY_FETCH = None
+
+
+def relay_for(stages: Path) -> RelayAssets | None:
+    """The RelayAssets of a build (pictures cached under ``<stages>/relay_cache``), or None while no transport is wired."""
+    return RelayAssets(RELAY_FETCH, Path(stages) / "relay_cache") if RELAY_FETCH else None
+
+
 # ------------------------------------------------------------------------------------------------ source order
 
-def obtain(src: Source, meta: dict, keys: list, work: Path, fetcher: Fetcher | None) -> tuple:
-    """Bytes for each picked key, in source order: embedded human/assets/ -> https (only with a fetcher) -> the export zip. Each must hash to
-    its sha256 and pass images.inspect_file. Returns ``(files {hex: path}, infos {hex: info}, where {key: source}, unreachable {key: why})``."""
+def obtain(src: Source, meta: dict, keys: list, work: Path, fetcher: Fetcher | None, relay: RelayAssets | None = None) -> tuple:
+    """Bytes for each picked key, in source order: embedded human/assets/ -> the relay by link (a project carried in the deck, and only that) ->
+    https (only with a fetcher) -> the export zip. Each must hash to its sha256 (a relay rendition cannot: it is the relay's answer for that
+    hash) and pass images.inspect_file. Returns ``(files {hex: path}, infos {hex: info}, where {key: source}, unreachable {key: why})``."""
     assets = src.doc.get("assets") or {}
     files, infos, where, unreachable, total = {}, {}, {}, {}, 0
     by_hex = {}
@@ -667,8 +763,17 @@ def obtain(src: Source, meta: dict, keys: list, work: Path, fetcher: Fetcher | N
         a = assets.get("sha256:" + hx) or assets.get(hx) or {}
         dest = Path(work) / f"{hx}.{fp.IMAGE_MIMES[mime]}"
         tried, got = [], None
-        for how in ("embedded", "https", "zip"):
-            if how == "https":
+        for how in (("relay",) if getattr(src, "relay", False) else ("embedded", "https", "zip")):
+            if how == "relay":
+                if relay is None:
+                    tried.append("link: this engine has no way to the relay yet (the signed asset route is not wired)")
+                    continue
+                p, why = relay.get(hx, dest)
+                if p:
+                    got = how
+                else:
+                    tried.append(why)
+            elif how == "https":
                 urls = [x for x in a.get("locations") or [] if isinstance(x, str) and x.startswith("https://")]
                 if not urls:
                     continue
@@ -903,7 +1008,7 @@ def place(deck: dict, meta: dict, prod: dict, picks: list, chosen: dict, unreach
 
 def run(deck: dict, src: Source, stages: Path, pictures: str = "creative_cover", names=(), brief_doc: str | None = None, *, fetch: bool = False,
         agent: bool = False, look: bool = False, tie_call=None, fetcher: Fetcher | None = None, look_fns: dict | None = None,
-        at: str | None = None, choices: dict | None = None) -> dict:
+        at: str | None = None, choices: dict | None = None, relay: RelayAssets | None = None) -> dict:
     """The picker in a build (run_deck --production FILE). Binds the metadata, breaks ties (``agent``), pulls the picks (``fetch`` opens the
     https source), looks (``look``), places, and writes production_inventory.json, production.json and assets/ into ``stages``. Returns what
     run_deck reports: ``{placed, held, kept, master, picker, card, usage: {agent, look}}``."""
@@ -930,7 +1035,7 @@ def run(deck: dict, src: Source, stages: Path, pictures: str = "creative_cover",
     for pk in picks:
         sk = f"{pk['slide']}.{pk['slot']}"
         c = stored.get(sk)
-        pk["by"] = "claude" if sk in by_claude else "rule"
+        pk["by"] = "claude" if sk in by_claude else "final" if meta["items"][pk["key"]].get("final") else "rule"
         if c and c["key"] in pk["eligible"]:   # a person's swap wins over the rule and the tie-break, among the slot's own candidates only
             chosen[sk], pk["by"] = c["key"], "person"
         elif c:
@@ -950,7 +1055,7 @@ def run(deck: dict, src: Source, stages: Path, pictures: str = "creative_cover",
     if not fetch:
         fetcher = None
     with tempfile.TemporaryDirectory(dir=stages, prefix=".production-") as td:
-        files, infos, where, unreachable = obtain(src, meta, keys, Path(td), fetcher)
+        files, infos, where, unreachable = obtain(src, meta, keys, Path(td), fetcher, relay)
         items = {}
         for k in keys:
             if k in where:
@@ -963,9 +1068,6 @@ def run(deck: dict, src: Source, stages: Path, pictures: str = "creative_cover",
                 "bundle": {"clan": clean(src.name, 120), "clan_sha256": src.clan_sha256, "assets_from": "+".join(sorted(set(where.values()))) or "none"},
                 "taken_at": at, "format_packs": fp.packs_record(), "format_sets": fp.format_set_rows(src.doc, items), "items": items,
                 "offer_sha256": fp.offer_sha(items), "refused": plan.refused, "not_carried": plan.not_carried}
-        warnings = fp.forged_fields(src.doc)
-        if warnings:
-            prod["warnings"] = warnings
         if src.fixture:
             prod["fixture"] = True
         rows_by = {r["key"]: r for r in plan.rows}
@@ -987,7 +1089,8 @@ def run(deck: dict, src: Source, stages: Path, pictures: str = "creative_cover",
                   "fetch": {"on": bool(fetcher), "allow_list": pol["hosts"], "allow_list_empty": not pol["hosts"],
                             "refused": fetcher.refused if fetcher else None, "log": fetcher.log if fetcher else []},
                   "look": {"on": bool(look), "rows": look_rows}, "card": card}
-        prod["picker"] = {k: report[k] for k in ("source", "picks", "not_reachable", "ties", "fetch")}
+        report["relay"] = {"on": bool(relay), "log": relay.log if relay else []}
+        prod["picker"] = {k: report[k] for k in ("source", "picks", "not_reachable", "ties", "fetch", "relay")}
         prod["not_reachable"] = res["not_reachable"]
         fp.write(prod, files, stages)
     inv = plan.inventory(at)
@@ -999,7 +1102,7 @@ def run(deck: dict, src: Source, stages: Path, pictures: str = "creative_cover",
             r["pulled_from"] = pulled.get(r["key"]) or ("rights" if r.get("rights") == "reference_only" else "not reachable")
     (stages / "production_inventory.json").write_text(json.dumps(inv, indent=1, ensure_ascii=False))
     mp = deck["meta"].get("production") or {}
-    mp.update(how="clan", offer_sha256=prod["offer_sha256"], placed=res["placed"], held=len(held), at=at)
+    mp.update(how="upstream" if src.kind == "upstream" else "clan", offer_sha256=prod["offer_sha256"], placed=res["placed"], held=len(held), at=at)
     deck["meta"]["production"] = mp
     return {"placed": res["placed"], "held": held, "kept": got["kept"], "master": got["master"], "picker": report, "card": card,
             "usage": {"agent": agent_usage, "look": look_usage if look_usage and look_usage.get("calls") else None}}
