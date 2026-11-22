@@ -18,4 +18,4 @@ with neither starts from a category and a question.
 ## What the page writes (Pick)
 - The page writes only the person's half: `focus` (ticks, their own insights, what is in play), `run.approvals.pick` and `run.decisions`. It never writes `run.state`, `run.stage`, `run.gate` or `run.agent`: those are the engine's.
 - Editing the ticks after approving Pick records an edit, so the approval no longer stands and Explore is live again.
-- No price or cost appears on any screen. Fonts are Newsreader and Geist ExtraBold only.
+- No figure of money appears on any screen. Fonts are Newsreader and Geist ExtraBold only.
