@@ -143,3 +143,54 @@ def test_a_warm_instance_picks_up_a_rotated_secret(monkeypatch):
     t[0] += 2
     assert identity.keys() == ["second-" + "b" * 32, "first-" + "a" * 32]  # 301 s later, no rebuild
     assert sm.calls == 2
+
+
+# -- aud "assets": a read-only pass for GET /assets/{sha256}[?w=] (features/production-spinoff.clan) ----------------
+
+SHA = "a" * 64
+EMPTY = hashlib.sha256(b"").hexdigest()
+
+
+def assets_claims(**over):
+    return claims(**{"aud": "assets", "exp": NOW + 1800, "m": "GET", "p": "/api/assets/*", "bh": EMPTY, **over})
+
+
+def assets_check(token, method="GET", pq=f"/api/assets/sha256:{SHA}?w=2400", body=None, now=NOW + 5):
+    return verify_assertion(token, method, pq, body, [KEY], now)
+
+
+def test_an_assets_pass_names_the_tenant_for_any_picture():
+    token = sign(assets_claims(), KEY)
+    who = assets_check(token)
+    assert who["tenant"] == {"id": tenant_id("napkin"), "agency": "napkin"}
+    # one pass, many pictures and widths: it is not bound to one path
+    assert assets_check(token, pq=f"/assets/sha256:{'b' * 64}") is not None
+    assert assets_check(token, pq=f"/api/assets/{SHA}") is not None
+    assert assets_check(token, pq=f"/api/assets/sha256%3A{SHA}?w=1200") is not None
+
+
+@pytest.mark.parametrize("method,pq,body", [
+    ("POST", f"/api/assets/{SHA}", None), ("DELETE", f"/api/assets/{SHA}", None),
+    ("GET", "/api/clan/p1", None), ("GET", "/api/projects", None), ("GET", "/api/uploads", None),
+    ("GET", "/api/jobs/job_1", None), ("GET", "/api/me", None), ("GET", "/api/library/x/y", None),
+    ("GET", "/api/assets/", None), ("GET", f"/api/assets/{SHA}/more", None), ("GET", f"/api/x/assets/{SHA}", None),
+    ("GET", f"/api/assets/{SHA}", b"x"),
+])
+def test_an_assets_pass_is_refused_everywhere_but_get_assets(method, pq, body):
+    assert assets_check(sign(assets_claims(), KEY), method=method, pq=pq, body=body) is None
+
+
+def test_an_assets_pass_expires_and_has_a_ceiling():
+    token = sign(assets_claims(), KEY)
+    assert assets_check(token, now=NOW + 1800 + 30) is not None
+    assert assets_check(token, now=NOW + 1800 + 31) is None
+    assert assets_check(sign(assets_claims(exp=NOW + 3601), KEY)) is None  # a pass longer than an hour is not one of ours
+    assert assets_check(sign(assets_claims(exp=NOW + 3600), KEY)) is not None
+
+
+def test_a_relay_assertion_keeps_its_rules_and_is_not_an_assets_pass():
+    # exp = iat + 60 and bound to its request: a relay assertion on /assets still has to name that exact call
+    own = sign(claims(m="GET", p=f"/api/assets/{SHA}", bh=EMPTY), KEY)
+    assert assets_check(own) is None
+    assert assets_check(own, pq=f"/api/assets/{SHA}") is not None
+    assert assets_check(sign(assets_claims(t=tenant_id("other")), KEY)) is None

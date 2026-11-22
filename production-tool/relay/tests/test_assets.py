@@ -141,3 +141,62 @@ def test_the_local_relay_serves_its_own_files(tmp_path, monkeypatch):
     assert blobs.mime(f"out/w480/{sha}") == "image/jpeg"
     with Image.open(blobs.path(f"out/w480/{sha}")) as im:
         assert im.size == (480, 320)
+
+
+# -- the assets pass (docs/contracts/production-tool-identity.md): napkin-web's read-only audience for a deck build --
+
+def pass_for(agency, now, life=1800):
+    from identity import sign
+    key = "k" * 40
+    c = {"u": "ann@" + agency, "a": agency, "t": identity.tenant_id(agency), "aud": "assets", "iat": int(now),
+         "exp": int(now) + life, "m": "GET", "p": "/api/assets/*", "bh": hashlib.sha256(b"").hexdigest()}
+    return sign(c, key)
+
+
+def with_passes(h, monkeypatch):
+    """The relay under the real identity seam (assertions under a key), as the Function URL runs it."""
+    monkeypatch.setattr(identity, "_local", None)
+    monkeypatch.setattr(identity, "_refresh", None)
+    monkeypatch.setenv("TOKEN_SECRET", "k" * 40)
+    h.relay.who = lambda m, p, hd, b: identity.who(m, p, hd, b, now=h.clock())
+
+
+def pass_call(h, token, method, path, body=None):
+    path, _, query = path.partition("?")
+    status, out, _ = h.relay.http(method, path, {"X-Napkin-Identity": token}, body, query)
+    return status, out
+
+
+def test_the_assets_pass_reads_pictures_its_agency_holds_and_nothing_else(h, monkeypatch):
+    key = h.as_person()
+    sha = uploaded(h, key, png(40, 30))
+    with_passes(h, monkeypatch)
+    token = pass_for("blue", h.clock())
+    assert pass_call(h, token, "GET", f"/api/assets/{sha}?w=2400")[0] == 302
+    assert pass_call(h, token, "GET", f"/api/assets/{sha}")[0] == 302
+    # every other route and method refuses the pass (401, as with no identity)
+    for method, path, body in [("GET", "/api/me", None), ("GET", "/api/projects", None), ("GET", "/api/clan/p1", None),
+                               ("GET", "/api/library", None), ("GET", "/api/jobs/job_1", None),
+                               ("POST", "/api/clan", b"x"), ("POST", "/api/uploads", b"{}"), ("POST", "/api/jobs", b"{}"),
+                               ("DELETE", f"/api/assets/{sha}", None), ("POST", f"/api/assets/{sha}", None)]:
+        assert pass_call(h, token, method, path, body)[0] == 401, (method, path)
+
+
+def test_an_expired_assets_pass_is_refused(h, monkeypatch):
+    key = h.as_person()
+    sha = uploaded(h, key, png(40, 30))
+    with_passes(h, monkeypatch)
+    token = pass_for("blue", h.clock())
+    assert pass_call(h, token, "GET", f"/api/assets/{sha}")[0] == 302
+    h.clock.tick(1800 + 31)
+    assert pass_call(h, token, "GET", f"/api/assets/{sha}")[0] == 401
+
+
+def test_another_agencys_pass_still_gets_the_404(h, monkeypatch):
+    key = h.as_person()
+    sha = uploaded(h, key, png(40, 30))
+    h.tenant("green")
+    with_passes(h, monkeypatch)
+    status, out = pass_call(h, pass_for("green", h.clock()), "GET", f"/api/assets/{sha}")
+    status2, unknown = pass_call(h, pass_for("green", h.clock()), "GET", "/api/assets/sha256:" + "e" * 64)
+    assert status == 404 and (status2, unknown) == (404, out)

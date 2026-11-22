@@ -23,12 +23,16 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import time
 import uuid
 
 DEFAULT_LOCAL = ("local", "napkin")
 HEADER = "x-napkin-identity"
 AUDIENCE = "relay"
+ASSETS_AUDIENCE = "assets"
+ASSETS_PATH = re.compile(r"/(?:api/)?assets/[^/?]+")
+ASSETS_MAX_LIFE_S = 3600  # a pass longer than this is refused; napkin-web signs 1800
 SKEW_S = 30
 MAX_HEADER = 4096
 
@@ -121,14 +125,23 @@ def verify_assertion(header: str | None, method: str, path_and_query: str, body:
         iat, exp = float(claims["iat"]), float(claims["exp"])
     except (KeyError, TypeError, ValueError):
         return None
-    if claims.get("aud") != AUDIENCE:
+    aud = claims.get("aud")
+    if aud not in (AUDIENCE, ASSETS_AUDIENCE):
         return None
     if iat > now + SKEW_S or now > exp + SKEW_S:
         return None
-    if claims.get("m") != method.upper() or claims.get("p") != path_and_query:
-        return None
-    if claims.get("bh") != hashlib.sha256(body or b"").hexdigest():
-        return None
+    if aud == ASSETS_AUDIENCE:
+        # A read-only pass for one agency's pictures (docs/contracts/production-tool-identity.md): good for any
+        # GET /assets/{sha256}[?w=] until it expires, and for nothing else, so it is not bound to one path.
+        if exp - iat > ASSETS_MAX_LIFE_S or method.upper() != "GET" or body:
+            return None
+        if not ASSETS_PATH.fullmatch(path_and_query.partition("?")[0]):
+            return None
+    else:
+        if claims.get("m") != method.upper() or claims.get("p") != path_and_query:
+            return None
+        if claims.get("bh") != hashlib.sha256(body or b"").hexdigest():
+            return None
     handle = u.partition("@")[0].strip()
     if not handle or not a or t != tenant_id(a):
         return None
