@@ -48,5 +48,5 @@ fn the_packed_production_app_takes_a_brief_whole_and_its_example_carries_one() {
         serde_yaml::from_slice(&example.read_entry("shared/data.yaml").unwrap()).unwrap();
     let keys: Vec<_> = data.as_mapping().unwrap().keys().collect();
     assert_eq!(keys, vec!["upstream"]);
-    assert!(data["upstream"][&carried.document_id]["brief"].is_mapping());
+    assert!(data["upstream"][&carried.document_id]["single_minded_proposition"].is_string());
 }

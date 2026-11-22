@@ -67,6 +67,14 @@ export type MirrorPost = (bytes: Uint8Array, meta: { handle: string; reason: Mir
  */
 export type BeforeBytes = (reason: MirrorReason) => Promise<void>
 
+/** What a project was spun off from, as its manifest says (lineage.carried): the parent's document id (its key in
+ * data.upstream), the hash of its data when it was taken, and the project's title (a spin-off is named for its parent). */
+export interface SpunOffFrom {
+  document_id: string
+  data_sha256: string
+  title: string
+}
+
 /**
  * The store's public API (features/engine-store.clan): what ClanDocumentStore does on its own
  * thread and what the store Worker's proxy (production-tool/web/src/store/client.ts) does from the
@@ -83,6 +91,8 @@ export interface ClanStoreApi {
   patch(mergePatchBody: object, why: Why): Promise<Doc>
   record(entry: { action: string; rationale?: string; agent?: string; pinned?: boolean; targets?: string[]; cites?: string[] }, opts?: { once?: boolean }): Promise<boolean>
   exportClan(): Promise<Uint8Array>
+  /** What this project was spun off from (the manifest's lineage.carried), or null when it was not. */
+  spunOffFrom(): Promise<SpunOffFrom | null>
   onChange(cb: (d: Doc) => void): () => void
   chain(): Promise<ChainEntry[]>
   flush(): Promise<void>
@@ -401,6 +411,14 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
       this.scheduleSave()
       return true
     })
+  }
+
+  async spunOffFrom(): Promise<SpunOffFrom | null> {
+    await this.queue.catch(() => {})
+    const m = (parseYaml(this.need().entry('manifest.yaml')) ?? {}) as { title?: string; lineage?: { carried?: { document_id?: string; data_sha256?: string } } }
+    const c = m.lineage?.carried
+    if (!c?.document_id || !c.data_sha256) return null
+    return { document_id: c.document_id, data_sha256: c.data_sha256, title: m.title ?? '' }
   }
 
   async exportClan(): Promise<Uint8Array> {

@@ -12,7 +12,7 @@
 
 import * as Y from 'yjs'
 import {
-  HostRefused, InvalidDocument, UnsupportedContract, type BeforeBytes, type ChainEntry, type ClanStoreApi, type Doc, type MirrorPost,
+  HostRefused, InvalidDocument, UnsupportedContract, type BeforeBytes, type ChainEntry, type ClanStoreApi, type Doc, type MirrorPost, type SpunOffFrom,
   type MirrorReason, type Person, type Why,
 } from '../../../clan-store/src'
 import { PROTOCOL, type Endpoint, type FromWorker, type SceneOpened, type StoreMethod, type ToWorker, type WireError } from './protocol'
@@ -201,6 +201,10 @@ export class StoreClient implements ClanStoreApi {
 
   exportClan(): Promise<Uint8Array> {
     return this.call<Uint8Array>('exportClan')
+  }
+
+  spunOffFrom(): Promise<SpunOffFrom | null> {
+    return this.call<SpunOffFrom | null>('spunOffFrom')
   }
 
   onChange(cb: (d: Doc) => void): () => void {

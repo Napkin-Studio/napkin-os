@@ -48,7 +48,7 @@ import type { AnswerChoice } from '../jobs/runner'
 import type { BrandChoice, BrandRow } from '../jobs/context'
 import { alive, bounds, byOwnId, cd, imageOf, type Canvas, type El } from '../canvas/scene'
 import { scriptToWrite } from './scriptToWrite'
-import { useBriefSpinoff } from '../brief/useBriefSpinoff'
+import { useCarriedBrief } from '../brief/useCarriedBrief'
 import { BriefBooth } from '../brief/BriefBooth'
 import { briefOfElement } from '../brief/canvas'
 import { Booth } from '../ui/booth/Booth'
@@ -532,9 +532,9 @@ export function Character({ initial, active, onPictureEditor }: {
     }
   }, [docStore, services, canvas, offerUndo])
 
-  // A blank canvas asks nothing (owner 2026-11-18): no Start card, no prompt. Arriving from Brief Maker
-  // (?brief=<doc id>) puts that brief's Brief node on it, alone, once (features/production-new-ui.clan).
-  useBriefSpinoff(canvas?.engine === 'own' ? { canvas, doc: docStore } : null)
+  // A blank canvas asks nothing (owner 2026-11-18): no Start card, no prompt. A project spun off from a brief
+  // (Continue in › Production) puts that brief's Brief node on it, alone, once (features/production-spinoff.clan).
+  useCarriedBrief(canvas?.engine === 'own' ? { canvas, doc: docStore } : null, services.clan?.clan ?? null)
   // Dev only: the canvas for window.__seed.brief (dev/seed.ts), so a Brief node can be put on it in a screenshot.
   useEffect(() => {
     if (!import.meta.env.DEV || !canvas) return

@@ -134,7 +134,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let carried = example.manifest().carried().expect("lineage.carried");
     let data: serde_yaml::Value = serde_yaml::from_slice(&example.read_entry(DATA_PATH)?)?;
     assert!(
-        data["upstream"][&carried.document_id]["brief"].is_mapping(),
+        data["upstream"][&carried.document_id]["single_minded_proposition"].is_string(),
         "the brief is carried under data.upstream.<brief id>"
     );
     for (label, file) in [("template", &template), ("example", &example)] {
@@ -188,7 +188,7 @@ fn example_spinoff(template: &ClanFile) -> Result<ClanFile, Box<dyn std::error::
     }
     b.add_entry(
         DATA_PATH,
-        b"brief:\n  title: Lumen Water\n  objective: Make people choose tap over bottled.\n"
+        b"single_minded_proposition: Lumen is what the day starts with.\naudience: Adults 25 to 40.\ntone_and_world:\n  - Quiet\n"
             .to_vec(),
     );
     let source = ClanFile::from_bytes(b.build()?)?;

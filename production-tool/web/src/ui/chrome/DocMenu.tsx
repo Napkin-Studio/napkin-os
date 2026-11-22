@@ -6,13 +6,14 @@
 // Two-line rows as the mock's .pop .mi. Import/Export, Continue in and Share open in place (a ‹ back row on
 // top), so the menu never stacks a second popover.
 
-import { useContext, useRef, useState, type ReactNode } from 'react'
+import { useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { RouterContext, useDoc, useServices, useShell, useUi } from '../../app/context'
 import { DataSharing } from '../DataSharing'
 import { MenuItem } from '../Float'
 import { saveTime, useSave } from '../useSave'
 import { useProjectName } from '../useDownload'
 import { exportBundle, download } from '../../export'
+import { deckOffered, newDeckFromProject, SpinoffError } from '../../projects/spinoff'
 import { downloadAllMedia } from '../../media/download'
 import { mediaItems, viewsOnCanvas } from '../../media/names'
 import { idbGet } from '../../lib/idb'
@@ -42,6 +43,13 @@ export function DocMenu({ close, page }: { close: () => void; page?: { title: st
   const [deleting, setDeleting] = useState(false)
   const [sharing, setSharing] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  // A deck is made in Napkin, so only where this page is served by it (the relay-only dev stack has no shell).
+  const [deckOn, setDeckOn] = useState(false)
+  useEffect(() => {
+    let live = true
+    deckOffered().then((on) => { if (live) setDeckOn(on) }, () => {})
+    return () => { live = false }
+  }, [])
   const run = async (what: string, fn: () => Promise<string | null>) => {
     setBusy(what)
     setNote(null)
@@ -75,7 +83,7 @@ export function DocMenu({ close, page }: { close: () => void; page?: { title: st
         </button>
         <div className="pt-menusep" />
         {view === 'export' && <ExportRows busy={busy} run={run} onOpen={openPicker} />}
-        {view === 'continue' && <ContinueRows close={close} />}
+        {view === 'continue' && <ContinueRows close={close} deck={deckOn && saving.can} busy={busy} run={run} save={saving.save} projectId={project.id} />}
         {view === 'share' && <ShareRows run={run} />}
         {status}
         {picker}
@@ -90,7 +98,7 @@ export function DocMenu({ close, page }: { close: () => void; page?: { title: st
       <MenuItem icon="▤" hint="Every project you can open" onSelect={() => { close(); void shell.goHome() }}>All projects</MenuItem>
       <SubItem icon="⇅" hint="Media, the project as .clan, the script" onSelect={() => setView('export')}>Import/Export</SubItem>
       <div className="pt-menusep" />
-      <SubItem icon="→" hint="A deck from this film, or link a brief" onSelect={() => setView('continue')}>Continue in</SubItem>
+      <SubItem icon="→" hint="A deck from this project, or link a brief" onSelect={() => setView('continue')}>Continue in</SubItem>
       <MenuItem icon={<LinkIcon />} hint="Copy the link for people at your agency" onSelect={() => setView('share')}>Share…</MenuItem>
       {renaming !== null ? (
         <form className="pt-menuform" onSubmit={(e) => { e.preventDefault(); const n = renaming.trim(); if (n) void shell.rename(project.id, n).then(close, () => setNote('Could not rename it. Try again.')); else setRenaming(null) }}>
@@ -198,7 +206,15 @@ function ExportRows({ busy, run, onOpen }: { busy: string | null; run: (what: st
 
 /** Continue in: where this film goes next. Link a brief… opens Assets › From Napkin on the canvas, where the
  *  agency's Brief Maker briefs are (features/brief-node.clan; live test 2026-11-18). */
-function ContinueRows({ close }: { close: () => void }) {
+function ContinueRows({ close, deck, busy, run, save, projectId }: {
+  close: () => void
+  /** A deck can be made: this page is served by Napkin and the project can be saved. */
+  deck: boolean
+  busy: string | null
+  run: (what: string, fn: () => Promise<string | null>) => Promise<void>
+  save: () => Promise<boolean>
+  projectId: string
+}) {
   const { ui } = useServices()
   // Read at the click only: the bar also shows where no router is (the editors' own tests).
   const router = useContext(RouterContext)
@@ -212,7 +228,18 @@ function ContinueRows({ close }: { close: () => void }) {
   }
   return (
     <>
-      <MenuItem icon="+" disabled hint={SOON} onSelect={() => {}}>New deck from this film</MenuItem>
+      {deck && (
+        <MenuItem icon="+" disabled={!!busy} hint="Saves it, then opens the deck in Napkin" onSelect={() => void run('deck', async () => {
+          // The deck is made from the relay's copy, so the project is saved first: what was just changed goes too.
+          if (!(await save())) return 'The project could not be saved, so the deck was not made. Try again.'
+          try {
+            window.location.assign((await newDeckFromProject(projectId)).url)
+            return null
+          } catch (e) {
+            return e instanceof SpinoffError ? e.message : 'The deck could not be made. Try again.'
+          }
+        })}>{busy === 'deck' ? 'Making the deck…' : 'New deck from this project'}</MenuItem>
+      )}
       <MenuItem icon="↔" hint="From Brief Maker, in Assets › From Napkin" onSelect={linkBrief}>Link a brief…</MenuItem>
     </>
   )

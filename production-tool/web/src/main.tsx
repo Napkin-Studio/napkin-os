@@ -14,8 +14,6 @@ import { INDEX_CHANNEL, ProjectIndex } from './projects/projectIndex'
 import { ProjectServer } from './projects/server'
 import { browserClan } from './projects/session'
 import { Shell } from './projects/shell'
-import { briefSpinoffOf, withoutBriefSpinoff } from './brief/start'
-import { holdBriefSpinoff } from './brief/useBriefSpinoff'
 import { browserStorage } from './projects/storage'
 import { createRelay } from './relay'
 import { AccessStore, type Access } from './relay/access'
@@ -74,25 +72,12 @@ async function boot() {
   const server = relay.kind === 'http' && relayUrl ? new ProjectServer({ base: relayUrl, signedIn: () => !!app.get().me, onUnauthorised: refused }) : undefined
   const shell = new Shell({ relay, app, index, storage, remoteConfig, makeClan: browserClan, server })
   // A deep link (/production/p/:project/script/:scriptId) opens its project; else back where the person was.
-  // A spin-off from Brief Maker (/production/?brief=<doc id>, features/brief-node.clan): a new film started from
-  // that brief, never the last project. The id is held before the router rewrites the URL (brief/useBriefSpinoff).
-  const spinoff = briefSpinoffOf(window.location.search)
-  if (spinoff) {
-    holdBriefSpinoff(spinoff)
-    // Signed out: the link stays as it came, so Sign in (Root, signInHref) comes back to it with the brief
-    // (re-test N4: the sign-in link was /?next=%2Fproduction%2F and the person landed on Home with no film).
-    if (access.get() === 'ok') window.history.replaceState(window.history.state, '', window.location.pathname + withoutBriefSpinoff(window.location.search) + window.location.hash)
-  }
   const router = new Router()
-  // The names the relay already lists, so a film naming itself never takes one (re-test N-D). Not waited for,
-  // but a spin-off names itself from the brief at once, so it waits a moment for them.
-  const listed = app.get().me ? shell.serverProjects().catch(() => []) : Promise.resolve([])
+  // The names the relay already lists, so a film naming itself never takes one (re-test N-D). Not waited for.
+  if (app.get().me) void shell.serverProjects().catch(() => [])
   // Blank films nothing was added to are not kept (owner 2026-11-18): those an earlier visit left go first.
   if (app.get().me) await shell.pruneDrafts().catch((e) => console.warn('could not tidy blank films', e))
-  if (app.get().me && spinoff) {
-    await Promise.race([listed, new Promise((r) => setTimeout(r, 2000))])
-    await shell.newProject().catch((e) => console.error('could not start a film from the brief', e))
-  } else if (app.get().me) {
+  if (app.get().me) {
     // Entry is the blank canvas, never All projects and never a question (owner 2026-11-18); a link or a reload
     // that names a film opens that film.
     const opened = await openRouteProject(shell, router).catch((e) => {

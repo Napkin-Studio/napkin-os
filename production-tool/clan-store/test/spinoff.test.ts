@@ -33,11 +33,19 @@ describe('a project born as a spin-off', () => {
     expect(Object.keys(doc.storyboards)).toEqual([])
     const before = entries(fixture())
     const briefId = before.manifest.lineage.carried.document_id
-    expect((doc as any).upstream[briefId].brief.title).toBe('Lumen Water')
+    expect((doc as any).upstream[briefId].single_minded_proposition).toBe('Lumen is what the day starts with.')
+    // the manifest says which brief, and its version (the tool makes the Brief node from it)
+    expect(await s.spunOffFrom()).toEqual({ document_id: briefId, data_sha256: before.manifest.lineage.carried.data_sha256, title: 'Lumen Water' })
     // starting the project is a decision of the person who opened it, after the carried ones
     const chain = await s.chain()
     expect(chain[0].action).toBe('start the project')
     expect(chain.some((d) => String(d.action).startsWith('spin off'))).toBe(true)
+  })
+
+  it('a project that was not spun off says so', async () => {
+    const s = store()
+    await s.create({ person: MAYA, title: 'Plain', blank: true })
+    expect(await s.spunOffFrom()).toBeNull()
   })
 
   it('keeps the manifest, the carried brief and the carried decisions through open, edit and save', async () => {

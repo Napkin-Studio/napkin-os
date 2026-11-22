@@ -62,7 +62,7 @@ export const saveTime = (d: Date) => d.toLocaleTimeString([], { hour: '2-digit',
 
 /** The save state and Save now. `can` is false without the relay and the .clan store (the in-browser
  *  mock, the plain-data fallback): then there is no Save anywhere. */
-export function useSave(): { can: boolean; state: SaveState; save: () => Promise<void> } {
+export function useSave(): { can: boolean; state: SaveState; save: () => Promise<boolean> } {
   const { clan, relay, project, serverCopy } = useServices()
   const index = useContext(ShellContext)?.index
   const manual = useSyncExternalStore(store.subscribe, () => store.get(clan))
@@ -71,15 +71,16 @@ export function useSave(): { can: boolean; state: SaveState; save: () => Promise
   const state = merged(manual, serverAt, conflict)
   const can = !!clan && relay.kind === 'http'
   const save = useCallback(async () => {
-    if (!clan || relay.kind !== 'http') return
+    if (!clan || relay.kind !== 'http') return false
     const start = Date.now()
     const r = await store.run(clan, async () => {
       await clan.flush() // what was just changed goes too
       await clan.clan.mirrorNow('manual')
     })
-    if (r.kind === 'saving') return // one was already on its way
+    if (r.kind === 'saving') return true // one was already on its way
     record('save', 'manual', { ok: r.kind === 'saved', ms: Date.now() - start })
     if (r.kind === 'failed') errorShown('save', r.why)
+    return r.kind !== 'failed'
   }, [clan, relay.kind])
   return { can, state, save }
 }
