@@ -474,6 +474,11 @@ jobs:
         if: steps.changed.outputs.build == 'true'
         run: |
           docker run --rm --entrypoint test napkin-web:ci -f /srv/napkin/production/index.html
+      - name: Deck Maker is in the seed (deck-cloud)
+        if: steps.changed.outputs.build == 'true'
+        run: |
+          docker run --rm --entrypoint test napkin-web:ci -f /srv/napkin/seed/deck-maker.app.clan
+          docker run --rm --entrypoint test napkin-web:ci ! -f /srv/napkin/seed/deck-maker.example.clan
           docker image ls napkin-web:ci
 
   # The licence gate (features/licence-gate.clan, docs/contracts/licences.md): every
