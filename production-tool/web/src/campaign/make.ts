@@ -281,6 +281,7 @@ export function applySize(d: ProductionDocument, job: Job, sizeId: string, plate
   const render: NonNullable<Size['render']> = {}
   if (typeof job.resize?.layers === 'number') render.drawn = job.resize.layers
   if (look !== undefined) render.look = Math.round(look * 1000) / 1000
+  if (job.resize?.product) render.product = job.resize.product.state
   if (Object.keys(render).length) size.render = render
   else delete size.render
   if (set) size.checks = checksFor(size, set, d)

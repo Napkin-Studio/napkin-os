@@ -103,6 +103,9 @@ describe('The Review agent on what a picture cannot show (art-director)', () => 
   it('a regenerated picture cannot be measured: unverified, never a pass; an extend keeps what must stay', () => {
     expect(checksFor(made({ method: 'regenerate' }), SETP, DOC).subject_safe?.result).toBe('unverified')
     expect(checksFor(made({ method: 'extend' }), SETP, DOC).subject_safe?.result).toBe('pass')
+    // The relay looked for the product in the redrawn picture (pt-final-and-fit): found as drawn or laid back passes; lost flags.
+    const seen = (product: 'kept' | 'restored' | 'changed') => checksFor(made({ method: 'regenerate', render: { product } }), SETP, DOC).subject_safe?.result
+    expect([seen('kept'), seen('restored'), seen('changed')]).toEqual(['pass', 'pass', 'flag'])
   })
   it('an unverified check never makes a size need a look', async () => {
     const { flagged } = await import('./checks')
