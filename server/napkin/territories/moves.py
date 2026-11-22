@@ -115,3 +115,77 @@ def send_routes(doc, inp, findings, *, doc_id: str, data: dict):
             return doc, ref, ""
         d = gates.drive(d, {}, findings=findings)           # approved and sent: the machine finishes the run
     return d, [], note
+
+
+# ---------------------------------------------------------------- a person's choices about a world (small moves, never the whole `territories` array)
+#
+# The World view used to write these by sending the whole ``territories`` array as a patch; RFC 7396 replaces arrays, so an engine write (a
+# push or more) and a person's choice at the same moment lost one of the two. They are moves now: applied to the CURRENT document, and while a
+# model step of the document is running they wait inside that job and are applied to the document it returns, so both survive
+# (``TerritoriesJob.defer``, the request path in app.py). Each is ``fn(doc) -> (doc, refusals)`` built by ``live_move``.
+
+LIVE_STEPS = ("set_lead", "star_line", "keep_feel")
+MAX_STARS, DIALS = 16, ("tone", "energy", "register", "brand")
+
+
+def _route_of(doc: dict, tid: str):
+    return next((t for t in doc.get("territories") or [] if t.get("id") == tid), None)
+
+
+def _lines_of(w: dict) -> list:
+    return [*(w.get("lines") or []), *((w.get("headlines") or {}).values())]
+
+
+def live_move(step: str, inp: dict):
+    """The move ``step`` asks for as ``fn(doc) -> (doc, refusals)``; a 400 for a missing or malformed input."""
+    tid = need(inp, "territory_id", "the route")
+    if step == "set_lead":
+        line = inp.get("line")
+        if line is not None and (not isinstance(line, str) or len(line.strip()) > 160):
+            raise bad("input.line must be a line of the world, or null to let the dials choose")
+        line = line.strip() if isinstance(line, str) and line.strip() else None
+        return lambda d: _edit(d, tid, lambda w: _set(w, "lead", line) if line is None or line in _lines_of(w) else "That line is not in this world.")
+    if step == "star_line":
+        line, on = need(inp, "line", "the line"), inp.get("on")
+        if not isinstance(on, bool):
+            raise bad("input.on must be true or false")
+
+        def star(w):
+            st = [x for x in w.get("starred") or [] if x != line]
+            if on:
+                if line not in _lines_of(w):
+                    return "That line is not in this world."
+                if len(st) >= MAX_STARS:
+                    return "Sixteen starred lines is the most a route holds. Unstar one first."
+                st.append(line)
+            return _set(w, "starred", st)
+        return lambda d: _edit(d, tid, star)
+    dial = inp.get("dial_set")
+    if dial is not None and not (isinstance(dial, dict) and set(dial) == set(DIALS) and all(isinstance(dial[k], int) and not isinstance(dial[k], bool) and 0 <= dial[k] <= 10 for k in DIALS)):
+        raise bad("input.dial_set must be four whole numbers from 0 to 10 (tone, energy, register, brand), or null for the natural feel")
+    return lambda d: _edit(d, tid, lambda w: _set(w, "dial_set", dial))
+
+
+def _set(w: dict, key: str, value) -> None:
+    if value is None or value == []:
+        w.pop(key, None) if key != "starred" else w.__setitem__("starred", [])
+    else:
+        w[key] = value
+    return None
+
+
+def _edit(doc: dict, tid: str, fn):
+    """Apply ``fn(world)`` to route ``tid`` of ``doc``: ``(doc, refusals)``. ``fn`` returns a refusal in words, or None."""
+    from territory import contract
+    t = _route_of(doc, tid)
+    if t is None or not isinstance(t.get("world"), dict):
+        return doc, ["That route has no world yet, so there is nothing to change."]
+    d = copy.deepcopy(doc)
+    w = _route_of(d, tid)["world"]
+    why = fn(w)
+    if why:
+        return doc, [why]
+    ps = contract.problems(d)
+    if ps:
+        return doc, [ps[0].words]
+    return d, []

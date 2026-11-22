@@ -244,7 +244,18 @@ class Middleware:
             jid = self.jobs.new_id()
             caps.bind_job(jid)
             job = mod.start(req, caps, self.settings, jid)  # validates: a 400 or 503 before a 409
-            if self.jobs.unfinished(scope, doc, ("run_territories",)):
+            running = self.jobs.unfinished(scope, doc, ("run_territories",))
+            if running and getattr(job, "move", None) is not None:
+                # a person's choice about a world while a step runs: it waits inside that step and is applied to the document the step returns
+                from .doc import ctx_data
+                _, ref = job.move(ctx_data(clan))          # a move the document refuses is refused now, in words, not lost later
+                if ref:
+                    first = {**job.view(), "state": "failed", "finished_at": iso(), "error": {"type": "refused", "message": " ".join(ref)}}
+                    return self.envelope(job.task, job.handler, first, {"summary": "Failed: " + " ".join(ref), "step": job.step}, None, job.caps)
+                if running[0].defer(job.move):
+                    first = {**job.view(), "state": "done", "progress": {"done": 1, "total": 1}, "finished_at": iso(), "error": None}
+                    return self.envelope(job.task, job.handler, first, {"summary": "Saved. It is kept with the step that is running.", "step": job.step}, None, job.caps)
+            elif running:
                 raise TaskError(409, "job_state", "a run_territories step on this document is still running; one step at a time")
             self.jobs.add(job)
             job.start()

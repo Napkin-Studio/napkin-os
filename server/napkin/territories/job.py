@@ -92,6 +92,7 @@ class TerritoriesJob:
         self.last_change = None
         self.hits: list = []
         self.summary = ""
+        self.pending: list = []                 # a person's small moves that came while the step ran: applied to the document it returns
         self.done_n, self.total_n = 0, max(1, total)
         self.info: dict = {}
         self.thread = threading.Thread(target=self._run, name=f"{task}-{jid}", daemon=True)
@@ -110,8 +111,31 @@ class TerritoriesJob:
             if self.state not in UNFINISHED:
                 return False
             self.state, self.finished_at = "cancelled", iso()
+            if self.pending:        # what the person chose while it ran is theirs: written as a change of its own, not lost with the step
+                doc, _ = self._apply_pending(copy.deepcopy(self.data))
+                patch = self._patch(doc)
+                if patch:
+                    self._take_decisions(type("R", (), {"decisions": []}), patch)
         self.caps.jobs.stop()
         return True
+
+    def defer(self, move) -> bool:
+        """Hold a person's move (``fn(doc) -> (doc, refusals)``) until the running step has its document: True when it will be applied there,
+        False when the step has already finished (the caller applies the move to the current document). Decided under the job's lock, the one
+        the finish takes, so a move is never both missed and lost."""
+        with self.lock:
+            if self.state not in UNFINISHED:
+                return False
+            self.pending.append(move)
+            return True
+
+    def _apply_pending(self, doc: dict) -> tuple[dict, list]:
+        refusals = []
+        for mv in self.pending:
+            doc, ref = mv(doc)
+            refusals += ref
+        self.pending = []
+        return doc, refusals
 
     def progress(self, p: dict):
         with self.lock:
@@ -162,6 +186,8 @@ class TerritoriesJob:
                 self._fail("refused", " ".join(refusals), locked=True)
                 self._take_decisions(res, patch={})
                 return
+            if self.pending:
+                res.doc, _ = self._apply_pending(res.doc)
             patch = self._patch(res.doc)
             self._take_decisions(res, patch)
             self.summary = getattr(res, "note", "") or self._summary(res)

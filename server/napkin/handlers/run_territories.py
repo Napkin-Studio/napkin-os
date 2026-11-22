@@ -9,6 +9,7 @@ One task with a ``step`` (the app's own seam, TASKS in app/templates/territories
     rerank_routes        the blind judge orders the routes again                         long: runner.rerank
     undo                 take one of the Review agent's fixes back                       quick, no model
     greenlight_route, remove_route, answer_ask, record_review, approve, send_routes      quick, no model (territory/gates.py's rules)
+    set_lead, star_line, keep_feel   a person's choices about a world (small moves; while a model step runs they wait in it and both survive)
     place_pictures       arrived pictures into route slots by link (pictures.fill / attach)      quick, no model
 
 A document that arrives with pictures (``assets``) has every one put on the workspace store before a run reads it (pictures.rehome, require_all):
@@ -32,7 +33,11 @@ NAME, TASK, VERSION, KIND, CAPABILITY_MAJOR = "run_territories", "run_territorie
 
 #: steps that call the model (long) and the ones that do not (answered in the request)
 MODEL_STEPS = ("run", "steer", "more", "push", "rerank_routes")
-QUICK_STEPS = ("place_pictures", "undo", "greenlight_route", "remove_route", "answer_ask", "record_review", "approve", "send_routes")
+QUICK_STEPS = (*moves.LIVE_STEPS, "place_pictures", "undo", "greenlight_route", "remove_route", "answer_ask", "record_review", "approve", "send_routes")
+#: the four pushes the World view offers, by name (any other text is the person's own instruction)
+PUSH_WORDS = {"braver": "Push this world further: braver, bolder, more specific, same thought.", "safer": "Pull this world back: safer, plainer, less risky, same thought.",
+              "more ownable": "Make this world more ownable: lines only this brand could say, same thought.",
+              "more proof": "Make this world lean harder on the evidence the brief and the research carry, same thought."}
 STEERS = ("further", "pull", "cross", "stop")
 
 
@@ -112,11 +117,18 @@ def start(req, caps, settings, jid):
                               call=lambda job: runner.more(data, tid, by, steer_text=moves._s(inp, "steer", 300) or None, n=n, **common(job)))
     if step == "push":
         tid = moves.need(inp, "territory_id", "the route")
+        ins = moves._s(inp, "instruction", 300)
+        ins = PUSH_WORDS.get(ins.lower(), ins) or None
         return TerritoriesJob(jid, TASK, req.handler, req, caps, step=step,
-                              call=lambda job: runner.push(data, tid, by, instruction=moves._s(inp, "instruction", 300) or None, **common(job)))
+                              call=lambda job: runner.push(data, tid, by, instruction=ins, **common(job)))
     if step == "rerank_routes":
         return TerritoriesJob(jid, TASK, req.handler, req, caps, step=step, call=lambda job: runner.rerank(data, by, **common(job)))
     # the quick moves: no model, no store, answered in the request
+    if step in moves.LIVE_STEPS:
+        mv = moves.live_move(step, inp)
+        job = TerritoriesJob(jid, TASK, req.handler, req, caps, step=step, quick=True, owns_person_keys=True, call=lambda job: _Done(*mv(data), note="Saved."))
+        job.move = mv
+        return job
     if step == "undo":
         aid = moves.need(inp, "action_id", "which fix")
         return TerritoriesJob(jid, TASK, req.handler, req, caps, step=step, quick=True, call=lambda job: runner.undo(data, aid, by))

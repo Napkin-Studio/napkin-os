@@ -492,3 +492,98 @@ def test_attach_names_the_slot_and_the_picture_and_refuses_a_picture_that_did_no
     assert step(terr, host, "place_pictures", territory_id=t["id"], slot_id=slot, sha256=h)[0]["job"]["state"] == "done"
     assert next(s for s in next(x for x in host.data["territories"] if x["id"] == t["id"])["pictures"] if s["id"] == slot)["sha256"] == h
     assert step(terr, host, "place_pictures", territory_id=t["id"], slot_id=slot, sha256=hashlib.sha256(_png(9)).hexdigest())[0]["job"]["state"] == "failed"
+
+
+# ---------------------------------------------------------------- a person's choices about a world, and an engine write at the same moment
+
+
+def _route_with_lines(host):
+    t = next(t for t in host.data["territories"] if t["status"] == "live" and t["state"] == "developed")
+    return t["id"], t["world"]["lines"][0], t["world"]["lines"][1]
+
+
+def test_a_choice_and_an_engine_write_that_interleave_both_survive(terr, monkeypatch):
+    host = at_greenlight(terr)
+    tid, l0, l1 = _route_with_lines(host)
+    held = Held(terr.model_calls)
+    monkeypatch.setattr(tjob, "make_llm", lambda: held)
+    st, more = post(terr, "run_territories", {"step": "more", "territory_id": tid, "by": "Shrey"}, host.clan())
+    assert st == 200 and held.entered.wait(10)                      # the engine is writing this world now
+    for inp in ({"step": "star_line", "territory_id": tid, "line": l0, "on": True},
+                {"step": "set_lead", "territory_id": tid, "line": l1},
+                {"step": "keep_feel", "territory_id": tid, "dial_set": {"tone": 2, "energy": 3, "register": 4, "brand": 5}}):
+        st, body = post(terr, "run_territories", inp, host.clan())
+        assert st == 200 and body["job"]["state"] == "done" and body["change"] is None and "kept with the step" in body["result"]["summary"]
+    held.go.set()
+    for _ in range(300):
+        st, b = post(terr, "job_status", {"job_id": more["job"]["id"]}, host.clan())
+        if b["job"]["state"] != "running" and b["job"]["state"] != "queued":
+            break
+        time.sleep(0.05)
+    assert b["job"]["state"] == "done"
+    host.apply(b["change"])
+    w = next(t for t in host.data["territories"] if t["id"] == tid)["world"]
+    assert "Brand new line one." in w["lines"], "the engine's write survived"
+    assert w["starred"] == [l0] and w["lead"] == l1 and w["dial_set"] == {"tone": 2, "energy": 3, "register": 4, "brand": 5}, "so did the person's choices"
+    valid(host)
+
+
+def test_a_choice_while_a_step_runs_that_the_document_refuses_is_refused_now_in_words(terr, monkeypatch):
+    host = at_greenlight(terr)
+    tid, l0, _ = _route_with_lines(host)
+    held = Held(terr.model_calls)
+    monkeypatch.setattr(tjob, "make_llm", lambda: held)
+    st, more = post(terr, "run_territories", {"step": "more", "territory_id": tid, "by": "Shrey"}, host.clan())
+    assert held.entered.wait(10)
+    st, body = post(terr, "run_territories", {"step": "set_lead", "territory_id": tid, "line": "a line nobody wrote"}, host.clan())
+    assert st == 200 and body["job"]["state"] == "failed" and "not in this world" in body["job"]["error"]["message"]
+    st, body = post(terr, "run_territories", {"step": "greenlight_route", "territory_id": tid, "by": "Shrey"}, host.clan())
+    assert st == 409                                                  # a greenlight is not a world choice: one step at a time
+    held.go.set()
+
+
+def test_a_cancelled_step_keeps_the_choice_made_while_it_ran(terr, monkeypatch):
+    host = at_greenlight(terr)
+    tid, l0, _ = _route_with_lines(host)
+    held = Held(terr.model_calls)
+    monkeypatch.setattr(tjob, "make_llm", lambda: held)
+    st, more = post(terr, "run_territories", {"step": "more", "territory_id": tid, "by": "Shrey"}, host.clan())
+    assert held.entered.wait(10)
+    post(terr, "run_territories", {"step": "star_line", "territory_id": tid, "line": l0, "on": True}, host.clan())
+    st, c = post(terr, "cancel_job", {"job_id": more["job"]["id"]}, host.clan())
+    assert c["job"]["state"] == "cancelled" and c["change"]
+    host.apply(c["change"])
+    held.go.set()
+    assert next(t for t in host.data["territories"] if t["id"] == tid)["world"]["starred"] == [l0]
+    valid(host)
+
+
+def test_the_moves_without_a_running_step_apply_at_once_and_say_no_in_words(terr):
+    host = at_greenlight(terr)
+    tid, l0, l1 = _route_with_lines(host)
+    r = step(terr, host, "star_line", territory_id=tid, line=l0, on=True)
+    assert len(r) == 1 and r[0]["job"]["state"] == "done" and r[0]["change"]
+    r = step(terr, host, "star_line", territory_id=tid, line=l0, on=False)
+    assert next(t for t in host.data["territories"] if t["id"] == tid)["world"]["starred"] == []
+    step(terr, host, "set_lead", territory_id=tid, line=l1)
+    step(terr, host, "set_lead", territory_id=tid, line=None)
+    assert "lead" not in next(t for t in host.data["territories"] if t["id"] == tid)["world"]
+    assert step(terr, host, "set_lead", territory_id="t_nope", line=l1)[0]["job"]["state"] == "failed"
+    for bad in ({"step": "keep_feel", "territory_id": tid, "dial_set": {"tone": 99, "energy": 1, "register": 1, "brand": 1}}, {"step": "star_line", "territory_id": tid, "line": l0},
+                {"step": "set_lead", "territory_id": tid, "line": 5}):
+        assert post(terr, "run_territories", bad, host.clan())[0] == 400
+    valid(host)
+
+
+def test_the_push_names_the_world_view_offers_become_the_engines_instruction(terr, monkeypatch):
+    seen = {}
+    real = runner.push
+
+    def spy(doc, tid, by, **kw):
+        seen["ins"] = kw.get("instruction")
+        return real(doc, tid, by, **kw)
+    monkeypatch.setattr(runner, "push", spy)
+    host = at_greenlight(terr)
+    tid, _, _ = _route_with_lines(host)
+    step(terr, host, "push", territory_id=tid, by="Shrey", instruction="more proof")
+    assert "evidence" in seen["ins"]

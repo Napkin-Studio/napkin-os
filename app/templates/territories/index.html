@@ -1869,26 +1869,29 @@ var TerritoriesWorld = (function () {
     env = env || {}; var by = (env.me && env.me.name) || 'You', t = route(data, e.id);
     if (!t) return null;
     var w = t.world, line = e.line == null ? '' : String(e.line);
+    // A person's choice about a world is a small move for the middleware (set_lead, star_line, keep_feel), never the whole `territories` array:
+    // RFC 7396 replaces arrays, so an engine write (a push, more lines) and a choice at the same moment lost one of the two. The middleware applies
+    // the move to the current document, or holds it inside the step that is running, so both survive. The page shows it once the host has applied it.
     if (e.a === 'lead' || e.a === 'unlead') {
       var off = e.a === 'unlead' || clean(w.lead) === line;
       if (off && !clean(w.lead)) return { writes: [], toast: 'The dials already choose the line.' };
       if (!off && (!line || linesOf(t).indexOf(line) === -1 || line.length > MAX_LINE)) return null;
-      return { writes: [{ patch: worldPatch(data, t.id, { lead: off ? null : line }), action: off ? 'let the dials choose the line for ' + t.name : 'lead ' + t.name + ' with “' + line + '”', rationale: off ? 'the lead line was cleared' : 'the person led with this line on every touchpoint' }] };
+      return { writes: [], move: { what: off ? 'Letting the dials choose' : 'The lead line', input: { step: 'set_lead', territory_id: t.id, line: off ? null : line, by: by } } };
     }
     if (e.a === 'star') {
       var st = arr(w.starred), has = st.indexOf(line) !== -1;
       if (!has && (!line || linesOf(t).indexOf(line) === -1)) return null;
       if (!has && st.length >= MAX_STARS) return { writes: [], toast: 'Sixteen starred lines is the most a route holds. Unstar one first.' };
-      return { writes: [{ patch: worldPatch(data, t.id, { starred: has ? st.filter(function (x) { return x !== line; }) : st.concat([line]) }), action: (has ? 'unstar a line of ' : 'star a line of ') + t.name, rationale: has ? 'taken off the starred lines' : 'starred for “write more like these”' }] };
+      return { writes: [], move: { what: has ? 'Unstarring' : 'The star', input: { step: 'star_line', territory_id: t.id, line: line, on: !has, by: by } } };
     }
     if (e.a === 'keep') {
       var d = dialOf(t, ui);
       if (same(d, savedDial(t))) return { writes: [], toast: 'That is already the feel it keeps.' };
-      return { writes: [{ patch: worldPatch(data, t.id, { dial_set: d }), action: 'set the feel of ' + t.name, rationale: 'dials kept at wry-sincere ' + d.tone + ', quiet-loud ' + d.energy + ', everyday-cinematic ' + d.register + ', brand ' + d.brand }], clearDial: t.id };
+      return { writes: [], move: { what: 'The feel', input: { step: 'keep_feel', territory_id: t.id, dial_set: d, by: by } }, clearDial: t.id };
     }
     if (e.a === 'dreset') {
       if (!isObj(w.dial_set)) return { writes: [], clearDial: t.id };
-      return { writes: [{ patch: worldPatch(data, t.id, { dial_set: null }), action: 'back to the natural feel of ' + t.name, rationale: 'the kept feel was cleared' }], clearDial: t.id };
+      return { writes: [], move: { what: 'The natural feel', input: { step: 'keep_feel', territory_id: t.id, dial_set: null, by: by } }, clearDial: t.id };
     }
     if (e.a === 'more' || e.a === 'push') {
       if (L.reqBusy(ui.req)) return { writes: [], toast: 'The last change is still going through.' };
@@ -1985,6 +1988,16 @@ var TerritoriesWorld = (function () {
 
   // A steer or an Undo: a request to the same task, with its step. It fails in plain words until the middleware's handler for it is there
   // (features/territories-handlers.clan), and nothing in the document changes until the engine writes its answer back.
+  // A person's choice about a world (set_lead, star_line, keep_feel): sent beside whatever step is running, never through ui.req, so it is not
+  // dropped while a push or more is going. The middleware applies it to the current document, or keeps it with the running step.
+  function sendMove(mv) {
+    if (!(window.clan && window.clan.apiProxy)) { toast(mv.what + ' runs through the host, and the host is not here. Nothing changed.'); return; }
+    window.clan.apiProxy('middleware', { task: L.TASKS.run, input: mv.input }).then(function (res) {
+      var err = hostErr(res), b = err ? null : mwBody(res);
+      if (err) { toast(mv.what + ' did not go through. ' + err); return; }
+      if (b.job && b.job.error) toast(mv.what + ' did not go through. ' + (b.job.error.message || 'The engine said no.') + ' Nothing changed.');
+    }, function (e) { toast('The middleware could not be reached: ' + (e && e.message || e) + ' Nothing changed.'); });
+  }
   function startRequest(rq) {
     if (ui.req && BUSY[ui.req.state]) return;
     ui.cross = null;
@@ -2053,7 +2066,7 @@ var TerritoriesWorld = (function () {
     if (r.draft != null) ui.draft = r.draft;
     var p = Promise.resolve();
     (r.writes || []).forEach(function (w) { p = p.then(function () { return put(w); }); });
-    var after = function () { if (r.clearDial) delete ui.dials[r.clearDial]; render(r.focus); if (r.start) startRun(); if (r.request) startRequest(r.request); if (r.present != null) presOpen(r.present); };
+    var after = function () { if (r.clearDial) delete ui.dials[r.clearDial]; render(r.focus); if (r.start) startRun(); if (r.request) startRequest(r.request); if (r.move) sendMove(r.move); if (r.present != null) presOpen(r.present); };
     p.then(after);
     if (!(r.writes || []).length) after();
   }
