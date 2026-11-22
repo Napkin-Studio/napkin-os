@@ -4,6 +4,7 @@ answers every stage, and the live-mode tests send it through ``Spend.wrap`` and 
 from __future__ import annotations
 
 import copy
+import dataclasses
 import hashlib
 import json
 import re
@@ -177,6 +178,33 @@ def test_each_heading_gets_the_others_remit_as_avoid_and_never_its_own():
         assert u["insights"] and u["brief"] and u["pins"] and u["findings"]
 
 
+def test_every_heading_begins_from_its_own_picks():
+    seen = {}
+    def spy(dr):
+        def fn(u):
+            seen[dr] = json.loads(u)["start_from"]
+            return heading_out(dr)
+        return fn
+    d, _ = run(llm=FakeLLM(outputs(**{f"route_{k}": spy(k) for k in DIRS})))
+    ticked = [i["id"] for i in d["focus"]["insights"] if i["ticked"]]
+    assert all(seen[k] and set(seen[k]) <= set(ticked) for k in DIRS)
+    assert len({seen[k][0] for k in DIRS}) == min(5, len(ticked))          # not all five on the strongest finding
+    assert [e["insights"] for e in d["expeditions"]] == [seen[k] for k in DIRS]
+
+
+def test_a_heading_whose_routes_were_all_thrown_away_is_asked_once_more_and_no_more():
+    calls = []
+    def bad_then_good(u):
+        calls.append(json.loads(u))
+        return {"turn": "x", "picked_up": [], "routes": [route_row("feel", 1, cites=[])]} if len(calls) == 1 else heading_out("feel")
+    d, _ = run(llm=FakeLLM(outputs(route_feel=bad_then_good)))
+    assert len(calls) == 2 and "redo" in calls[1] and "cites" in calls[1]["redo"]
+    assert [t for t in d["territories"] if t["crew"] == "cr_feel"]
+    again = []
+    run(llm=FakeLLM(outputs(route_feel=lambda u: (again.append(u), {"routes": [route_row("feel", 1, cites=[])]})[1])))
+    assert len(again) == 2                                                  # asked once more, then it is a gap, not a loop
+
+
 def test_a_source_marked_out_of_play_is_not_sent_and_cannot_be_cited():
     d = doc0(lambda x: next(s for s in x["focus"]["sources"] if s["id"] == PIN).update(in_play=False))
     seen = {}
@@ -202,6 +230,24 @@ def test_a_route_with_no_cite_or_a_cite_not_in_play_is_refused_with_a_reason():
     _, info = routes.explore_ex(doc0(), FakeLLM(outputs(route_core=lambda u: bad)), facts=FACTS, findings=FINDINGS)
     why = {x["reason"] for x in info["dropped"]}
     assert "a route with no cites is not shown" in why and any(w.startswith("cites an id that is not in play") for w in why)
+
+
+def test_a_pick_named_in_cites_stands_for_its_sources():
+    d = doc0()
+    first = next(i for i in d["focus"]["insights"] if i["ticked"])
+    res, _ = run(d, FakeLLM(outputs(route_core=lambda u: heading_out("core", cites=[first["id"]]))))
+    core = [t for t in res["territories"] if t["crew"] == "cr_core"]
+    assert core and all(t["evidence"] == first["evidence"] for t in core)
+
+
+def test_a_member_whose_routes_were_all_killed_still_explored_its_bearing(monkeypatch):
+    monkeypatch.setattr(routes, "CONFIG", dataclasses.replace(routes.CONFIG, min_keep=0))
+    def kill(u):
+        rows = json.loads(u)["seeds"]
+        return {"verdicts": [{"id": r["id"], "keep": not r["line"].startswith("Loud"), "strength": 2, "tests": {}} for r in rows]}
+    res, _ = run(llm=FakeLLM(outputs(kill=kill)))
+    assert not [t for t in live(res) if t["crew"] == "cr_opposite"]
+    assert res["spread"]["gaps"] == [] and res["actions"] == []
 
 
 def test_the_words_are_plain_and_inside_the_schema_lengths():
@@ -238,7 +284,18 @@ def test_a_route_resting_on_an_unchecked_finding_says_so_in_words():
     assert gates._findings_derived(FINDINGS) >= {PROPOSED}
 
 
-def test_the_kill_check_marks_a_route_killed_with_its_reason_and_keeps_enough():
+def test_the_kill_check_sees_each_routes_heading():
+    seen = {}
+    def kill(u):
+        seen.update(json.loads(u))
+        return kill_fn(u)
+    run(llm=FakeLLM(outputs(kill=kill)))
+    heads = {c["heading"] for c in routes.CREW}
+    assert seen["seeds"] and all(s["heading"] in heads for s in seen["seeds"]) and seen["tensions"] and seen["assumed_brief"]["fields"]
+
+
+def test_the_kill_check_marks_a_route_killed_with_its_reason_and_keeps_enough(monkeypatch):
+    monkeypatch.setattr(routes, "CONFIG", dataclasses.replace(routes.CONFIG, min_keep=6))
     def kill(u):
         rows = json.loads(u)["seeds"]
         return {"verdicts": [{"id": r["id"], "keep": r["line"].startswith("Platform"), "strength": 2 if not r["line"].startswith("Platform") else 4,
@@ -281,12 +338,16 @@ def test_the_spread_check_flags_a_planted_near_duplicate_and_an_unexplored_band(
     assert contract.check(d, facts=FACTS, findings=FINDINGS) == []
 
 
-def test_a_gap_is_recorded_when_the_review_has_no_budget_left():
-    # two close pairs use up both fixes, so the empty band stays on the spread in words
-    llm = FakeLLM(_dupe_outputs(route_opposite=lambda u: {**heading_out("feel"), "routes": heading_out("feel")["routes"]}))
+def test_pair_fixes_do_not_use_up_the_budget_for_sending_an_agent_into_a_gap():
+    # three close pairs (only two are fixed) and nothing far out: the agent still goes
+    same = lambda dr: heading_out(dr)
+    dup = lambda u: {**heading_out("feel", n=2), "routes": [dict(route_row("feel", 1), name="Platform Dup One"), dict(route_row("feel", 1), name="Platform Dup Two")]}
+    llm = FakeLLM(_dupe_outputs(route_opposite=dup, route_adjacent=dup))
     d, _ = routes.explore_ex(doc0(), llm, facts=FACTS, findings=FINDINGS)
+    kinds = [a["kind"] for a in d["actions"]]
+    assert kinds.count("spread_fix") <= routes.CONFIG.max_pair_fixes and kinds.count("sent_agent") == routes.CONFIG.max_gap_agents
+    assert contract.check(d, facts=FACTS, findings=FINDINGS) == []
     assert contract.validate_shape("spread", d["spread"]) == []
-    assert all(g["text"] for g in d["spread"]["gaps"]) and not WORDS_BAD.search(json.dumps(d["spread"]["gaps"]))
 
 
 def test_a_clean_spread_makes_no_repair_calls():

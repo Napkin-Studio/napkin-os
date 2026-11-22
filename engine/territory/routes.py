@@ -23,7 +23,7 @@ needs another service; ``distance_of`` is the one place to change. Two routes ar
 the same idea group (develop's sort step) or word overlap (``diversity.jaccard``, the pipeline's own near-duplicate rule). Gaps: a distance band
 nobody landed in, and a bearing wider than ``CONFIG.arc`` with no route.
 
-The Review agent fixes at most ``CONFIG.max_repairs`` things, close pairs first: a close pair is fixed by rewriting ONE route outward (the
+The Review agent fixes at most ``CONFIG.max_pair_fixes`` close pairs and sends at most ``CONFIG.max_gap_agents`` agent into a gap: a close pair is fixed by rewriting ONE route outward (the
 original is PARKED, not deleted; Undo parks the new one and brings the original back); a gap is fixed by sending one new crew member there
 (Undo removes it). Both are recorded in ``actions``. Everything undone stays undone: a later steer does not re-fix a pair a person took back.
 
@@ -49,8 +49,9 @@ class Config:
     arc: float = 140.0           # a bearing gap wider than this, with no route, is a direction nobody explored
     per_heading: int = 3         # routes kept from one heading (the schema holds 4 per trail)
     max_routes: int = 16         # live routes after the crew is back (about 10-16)
-    min_keep: int = 6            # the kill check never leaves fewer than this (it restores the strongest, and says so)
-    max_repairs: int = 2         # automatic fixes per run: close pairs first, then one agent sent into a gap
+    min_keep: int = 10           # the kill check never leaves fewer than this (about 10-16 routes) (it restores the strongest, and says so)
+    max_pair_fixes: int = 2      # close pairs rewritten per run
+    max_gap_agents: int = 1      # agents sent into a gap per run (its own budget: a gap is not left open because pairs were fixed)
 
 
 CONFIG = Config()
@@ -66,7 +67,7 @@ CREW = [
     {"id": "cr_adjacent", "direction": "adjacent", "role": "research", "name": "Next door", "short": "Next door", "angle": 105, "colour": "#E3A21A",
      "heading": "Look at neighbouring categories and bring back a device this category does not use."},
     {"id": "cr_outside", "direction": "outside", "role": "synthesis", "name": "Far outside", "short": "Outside", "angle": 318, "colour": "#8E5CF0",
-     "heading": "Leap out of the category entirely, then come back with something the brief could use."},
+     "heading": "Leap out of the category entirely: take the idea from a world that has nothing to do with it, not a variation of the category's own situation. Then come back with something the brief could use."},
 ]
 
 #: What the Review agent says to a person, by band, and the heading it sends a new agent on.
@@ -203,10 +204,26 @@ def _dump(o) -> str:
 # ---------------------------------------------------------------- one heading
 
 
-def _heading_user(ctx: Ctx, member: dict, avoid: list[dict], steer: dict | None) -> str:
+def start_from(ctx: Ctx, crew: list[dict], member_id: str) -> list[str]:
+    """The ticked insights a member begins from: the picks dealt out round the crew (member k takes picks k, k+5, ...), so five agents reading the same
+    brief do not all start from the strongest finding and land on one idea. Every member gets at least one. The rest of the picks stay in view as context."""
+    ids = [i["id"] for i in ctx.ticked]
+    ids_crew = [c["id"] for c in crew]
+    k = ids_crew.index(member_id) if member_id in ids_crew else 0
+    if not ids:
+        return []
+    n = len(ids_crew)
+    return [ids[k % len(ids)], *[ids[i] for i in range(k + n, len(ids), n)]]
+
+
+def _heading_user(ctx: Ctx, member: dict, avoid: list[dict], steer: dict | None, start: list[str] | None = None, redo: str | None = None) -> str:
     u = {"heading": {"name": member["name"], "go": member["heading"]}, "avoid": avoid, **ctx.payload}
+    if start:
+        u["start_from"] = start
     if steer:
         u["steer"] = steer
+    if redo:
+        u["redo"] = redo
     return _dump(u)
 
 
@@ -231,7 +248,9 @@ def shape_route(raw, member: dict, ctx: Ctx, origin: dict, taken: set) -> tuple[
     name, thought = _fit(raw.get("name"), 80), _fit(raw.get("thought"), 240)
     if not name or not thought:
         return None, "a route needs a name and a thought"
-    cites = [str(c) for c in dict.fromkeys(raw.get("cites") or [])]
+    cites = [str(c) for c in raw.get("cites") or []]
+    by_insight = {i["id"]: i.get("evidence") or [] for i in ctx.ticked}
+    cites = list(dict.fromkeys(e for c in cites for e in (by_insight[c] if c in by_insight else [c])))   # a pick named instead of its sources: its sources
     if not cites:
         return None, "a route with no cites is not shown"
     bad = [c for c in cites if c not in ctx.ix]
@@ -260,32 +279,42 @@ def shape_route(raw, member: dict, ctx: Ctx, origin: dict, taken: set) -> tuple[
 
 
 def run_heading(llm, ctx: Ctx, member: dict, crew: list[dict], *, landed=None, steer=None, origin=None, stage=None, system=None, cancel=None,
-                taken=None) -> dict:
+                taken=None, start=None) -> dict:
     """One member's trip. Returns ``{member, state, way, turn, routes, dropped, error}``. Never raises: a failure is data (``error`` in words)."""
     out = {"member": member, "state": "back", "way": [], "turn": "", "routes": [], "dropped": [], "error": None}
     if cancel is not None and cancel.is_set():
         return {**out, "state": "stopped", "turn": "Stopped before setting out."}
-    try:
-        stage = stage or f"route_{member['direction']}"
-        obj, _ = llm(stage, system or prompt("route"), _heading_user(ctx, member, _avoid(crew, member["id"], landed), steer))
-    except BaseException as e:   # noqa: BLE001: a heading's failure must not take the others with it
-        if e.__class__.__name__ == "CapReached":
-            msg = str(e)
-        elif isinstance(e, TimeoutError):
-            msg = f"The {member['name']} trail is taking longer than expected."
-        else:
-            msg = f"The {member['name']} trail stopped before it finished."
-        return {**out, "state": "stopped", "error": msg[:400], "cap": e.__class__.__name__ == "CapReached"}
-    obj = obj if isinstance(obj, dict) else {}
+    stage = stage or f"route_{member['direction']}"
+    avoid = _avoid(crew, member["id"], landed)
     origin = origin or {"kind": "crew", "from": [member["id"]]}
     used = set(taken or ())
-    for raw in (obj.get("routes") or [])[:CONFIG.per_heading + 2]:
-        t, why = shape_route(raw, member, ctx, origin, used)
-        if t is None:
-            out["dropped"].append({"crew": member["id"], "text": _fit((raw or {}).get("name") if isinstance(raw, dict) else raw, 60), "reason": why})
-        elif len(out["routes"]) < CONFIG.per_heading:
-            used.add(t["id"])
-            out["routes"].append(t)
+    obj: dict = {}
+    redo = None
+    for attempt in range(2):
+        try:
+            got, _ = llm(stage, system or prompt("route"), _heading_user(ctx, member, avoid, steer, start, redo))
+        except BaseException as e:   # noqa: BLE001: a heading's failure must not take the others with it
+            if e.__class__.__name__ == "CapReached":
+                msg = str(e)
+            elif isinstance(e, TimeoutError):
+                msg = f"The crew member “{member['name']}” is taking longer than expected."
+            else:
+                msg = f"The crew member “{member['name']}” stopped before it finished."
+            return {**out, "state": "stopped", "error": msg[:400], "cap": e.__class__.__name__ == "CapReached"}
+        obj = got if isinstance(got, dict) else {}
+        out["dropped"] = []
+        for raw in (obj.get("routes") or [])[:CONFIG.per_heading + 2]:
+            t, why = shape_route(raw, member, ctx, origin, used)
+            if t is None:
+                out["dropped"].append({"crew": member["id"], "text": _fit((raw or {}).get("name") if isinstance(raw, dict) else raw, 60), "reason": why})
+            elif len(out["routes"]) < CONFIG.per_heading:
+                used.add(t["id"])
+                out["routes"].append(t)
+        if out["routes"] or not out["dropped"]:
+            break
+        # every route was thrown away (a missing cite, an id in the text): ask ONCE more, naming why; a different message, so it is paid for once
+        redo = "Every route you wrote was thrown away: " + "; ".join(sorted({d["reason"] for d in out["dropped"]})) + \
+               ". Write them again; every route must carry its own \"cites\" list of ids from the input."
     pu = [p for p in obj.get("picked_up") or [] if isinstance(p, dict) and _fit(p.get("text"), 160)][:4]
     out["way"] = [{"at": round((n + 1) / (len(pu) + 1), 2), "text": _fit(p["text"], 160),
                    **({"cite": p["cite"]} if p.get("cite") in ctx.ix else {})} for n, p in enumerate(pu)]
@@ -297,17 +326,21 @@ def run_heading(llm, ctx: Ctx, member: dict, crew: list[dict], *, landed=None, s
 # ---------------------------------------------------------------- the checks every route passes: kill, tier and group, distance
 
 
-def _seed(t: dict) -> dict:
-    return {"id": t["id"], "line": f"{t['name']}: {t['thought']}", "tension": t.get("tension") or t["why"], "mechanism": t["why"] or t["sketch"]}
+def _seed(t: dict, heading: str | None = None) -> dict:
+    s = {"id": t["id"], "line": f"{t['name']}: {t['thought']}", "tension": t.get("tension") or t["why"], "mechanism": t["why"] or t["sketch"]}
+    return {**s, "heading": heading} if heading else s
 
 
-def _kill_check(llm, ctx: Ctx, cands: list[dict], min_keep: int) -> tuple[dict, dict]:
-    """Develop's own kill gate (``pipeline._kill``, ``prompts/kill_gate.md``) over the candidates. Returns ({id: reason} killed, {id} restored)."""
+def _kill_check(llm, ctx: Ctx, cands: list[dict], min_keep: int, crew: list[dict]) -> tuple[dict, dict]:
+    """Develop's own kill gate (``pipeline._kill``) over the candidates, with the crew's wording (``prompts/kill_crew.md``): the same four tests, but
+    a route is not killed for going where its heading sent it. Returns ({id: reason} killed, {id} restored)."""
     if not cands:
         return {}, set()
     assumed = {"fields": [{"key": k, "text": v, "tag": "given"} for k, v in ctx.payload["brief"].items()]}
     tensions = [{"id": i["id"], "x_but_y": i["text"]} for i in ctx.payload["insights"]]
-    _, killed, restored = pipeline._kill(llm, {}, assumed, tensions, [_seed(t) for t in cands], min_keep=min_keep)
+    head = {c["id"]: c["heading"] for c in crew}
+    _, killed, restored = pipeline._kill(llm, {}, assumed, tensions, [_seed(t, head.get(t["crew"])) for t in cands], min_keep=min_keep,
+                                         system=prompt("kill_crew"), keys=("id", "line", "tension", "mechanism", "heading"))
     why = {}
     for k in killed:
         fails = [(n, (v or {}).get("reason")) for n, v in ((k.get("kill_gate") or {}).get("tests") or {}).items() if (v or {}).get("fails")]
@@ -348,11 +381,11 @@ def distance_of(llm, ctx: Ctx, cands: list[dict]) -> tuple[dict, list]:
     return got, missing
 
 
-def _checks(llm, ctx: Ctx, cands: list[dict], context: list[dict] | None = None, min_keep: int = 0, kill: bool = True) -> dict:
+def _checks(llm, ctx: Ctx, cands: list[dict], crew: list[dict], context: list[dict] | None = None, min_keep: int = 0, kill: bool = True) -> dict:
     """Kill, sort and distance are independent of each other: three calls at once. ``context`` are routes already on the compass: they join the
     sort call so a new route's group can match an old one (their own tier and group are not changed)."""
     with ThreadPoolExecutor(max_workers=3) as ex:
-        fk = ex.submit(_kill_check, llm, ctx, cands, min_keep) if kill else None
+        fk = ex.submit(_kill_check, llm, ctx, cands, min_keep, crew) if kill else None
         fs = ex.submit(_sort_all, llm, [*(context or []), *cands])
         fd = ex.submit(distance_of, llm, ctx, cands)
         killed, restored = fk.result() if fk else ({}, set())
@@ -409,7 +442,7 @@ def gaps_of(ts: list[dict], crew: list[dict]) -> list[dict]:
     """Where nobody went: a distance band with no live route, then a bearing wider than ``CONFIG.arc`` with no route."""
     live = _live(ts)
     by = {c["id"]: c for c in crew}
-    angles = [by[t["crew"]]["angle"] for t in live if t["crew"] in by]
+    angles = [by[c]["angle"] for c in {t["crew"] for t in ts} if c in by]       # a member that came back explored its bearing, even if its routes were killed
     width, mid = _gap_arc(angles)
     out = [{"angle": round(mid, 1), "text": BAND_WORDS[b], "band": b} for b in ("far_out", "core", "stretch") if not any(t["band"] == b for t in live)]
     if width > CONFIG.arc and not out:
@@ -477,16 +510,15 @@ def _review(llm, ctx: Ctx, doc: dict, crew: list[dict], ts: list[dict], groups: 
     pairs = [p for p in close_pairs(ts, groups) if frozenset((p["a"], p["b"])) not in skip and (only is None or p["a"] in only or p["b"] in only)]
     jobs, claimed = [], set()
     for p in pairs:
-        if len(jobs) >= CONFIG.max_repairs:
+        if len(jobs) >= CONFIG.max_pair_fixes:
             break
         mover, other = _mover(by[p["a"]], by[p["b"]], order)
         if mover["id"] in claimed or other["id"] in claimed or mover["crew"] not in crew_by:
             continue
         claimed |= {mover["id"], other["id"]}
         jobs.append((mover, other))
-    budget = CONFIG.max_repairs - len(jobs)
     gap_job = None
-    gaps = gaps_of(ts, crew) if (allow_gap and budget > 0 and len(_live(ts)) < CONFIG.max_routes - 1 and len(crew) < contract.limit("crew")) else []
+    gaps = gaps_of(ts, crew) if (allow_gap and CONFIG.max_gap_agents > 0 and len(_live(ts)) < CONFIG.max_routes - 1 and len(crew) < contract.limit("crew")) else []
     if gaps:
         g = gaps[0]
         gap_job = _new_member(g["band"], g["angle"], len([a for a in doc.get("actions") or [] if a.get("kind") == "sent_agent"]) + 1), g
@@ -507,20 +539,19 @@ def _review(llm, ctx: Ctx, doc: dict, crew: list[dict], ts: list[dict], groups: 
         new_routes += agent["routes"]
     else:
         agent = None
-    res = _checks(llm, ctx, new_routes, kill=False) if new_routes else {"sort": {}, "distance": {}, "killed": {}, "restored": set(), "unrated": []}
-    out = {"routes": list(ts), "crew": list(crew), "actions": [], "groups": dict(groups),
+    res = _checks(llm, ctx, new_routes, crew, context=[t for t in _live(ts) if t["id"] not in {m["id"] for m, _, _ in made["fix"]}], kill=False) if new_routes else {"sort": {}, "distance": {}, "killed": {}, "restored": set(), "unrated": []}
+    # the sort call that tiers the new routes also saw the live ones, so one label means one idea across old and new
+    out = {"routes": list(ts), "crew": list(crew), "actions": [], "groups": {**groups, **{k: v[1] for k, v in res["sort"].items()}},
            "dropped": list(agent["dropped"]) if agent else []}
     for m, o, t in made["fix"]:
         t = _apply(t, res)
         out["routes"] = [dict(x, status="parked") if x["id"] == m["id"] else x for x in out["routes"]] + [t]
-        out["groups"][t["id"]] = t["id"]
         out["actions"].append(_action("spread_fix", f"Two routes sat close together; {m['name']} was moved outward and its first version is parked.",
                                       [m["id"], t["id"], o["id"]], f"fix:{m['id']}:{t['id']}"))
     if agent:
         mem, gap = gap_job[0], gap_job[1]
         rs = [_apply(t, res) for t in agent["routes"]]
         out["routes"] += rs
-        out["groups"].update({r["id"]: r["id"] for r in rs})
         out["crew"].append(mem)
         out["new_expedition"] = (mem, agent, rs)
         out["actions"].append(_action("sent_agent", BAND_SENT[gap["band"]] if gap["band"] else "Nobody had explored one direction, so an agent was sent there.",
@@ -615,11 +646,12 @@ def explore_ex(doc: dict, llm, *, facts=None, findings=None, sources=None, marks
     if ps:
         return _fail(doc, {}, contract.refusal_error(ps, "explore")["message"], [p.words for p in ps]), info
     insight_ids = [i["id"] for i in ctx.ticked]
+    starts = {m["id"]: start_from(ctx, crew, m["id"]) for m in crew}
     results: dict[str, dict] = {}
     lock = threading.Lock()
 
     def go(m):
-        r = run_heading(counted, ctx, m, crew, cancel=cancel)
+        r = run_heading(counted, ctx, m, crew, cancel=cancel, start=starts[m["id"]])
         with lock:
             results[m["id"]] = r
             if on_progress:
@@ -643,7 +675,7 @@ def explore_ex(doc: dict, llm, *, facts=None, findings=None, sources=None, marks
         return _fail(doc, {}, "The run was stopped before any route came back." if stopped else
                      "The crew came back with nothing that rests on what was carried, so no routes were made. Try again.", retryable=True), info
     try:
-        res = _checks(counted, ctx, cands, min_keep=CONFIG.min_keep)
+        res = _checks(counted, ctx, cands, crew, min_keep=CONFIG.min_keep)
         tcs = [_apply(t, res) for t in cands]
         groups = {k: v[1] for k, v in res["sort"].items()}
         rev = _review(counted, ctx, doc, crew, tcs, groups)
@@ -656,7 +688,7 @@ def explore_ex(doc: dict, llm, *, facts=None, findings=None, sources=None, marks
         gone = {t["id"] for t in sorted(live, key=lambda t: (len(t["evidence"]), t["id"]))[:len(live) - CONFIG.max_routes]}
         tcs = [dict(t, status="parked") if t["id"] in gone else t for t in tcs]
     hds = {**results, **({rev["new_expedition"][0]["id"]: rev["new_expedition"][1]} if rev.get("new_expedition") else {})}
-    exps = [_expedition(m, hds[m["id"]], _refs(tcs, m["id"]), insight_ids) for m in crew2]
+    exps = [_expedition(m, hds[m["id"]], _refs(tcs, m["id"]), starts.get(m["id"]) or insight_ids) for m in crew2]
     members = _members(doc, crew2, exps, tcs, rev["actions"], spread_record(tcs, crew2, groups))
     ps = _problems(doc, members, facts, findings)
     if ps:
@@ -730,14 +762,15 @@ def steer(doc: dict, llm, crew_id: str, kind: str, by: str, *, with_: str | None
     member, ts = crew[crew_id], d["territories"]
     others_live = [t for t in ts if t["crew"] != crew_id]
     origin = {"kind": kind, "from": [crew_id, with_] if kind == "cross" else [crew_id]}
-    hd = run_heading(counted, ctx, member, list(crew.values()), landed=_landed(others_live), origin=origin, taken={t["id"] for t in others_live},
+    start = start_from(ctx, list(crew.values()), crew_id) if member["direction"] != "custom" else None
+    hd = run_heading(counted, ctx, member, list(crew.values()), landed=_landed(others_live), origin=origin, taken={t["id"] for t in others_live}, start=start,
                      steer=_steer_text(kind, [t for t in ts if t["crew"] == crew_id and t["status"] == "live"], other))
     if hd["error"]:
         return refuse(hd["error"].rstrip(".") + ". Nothing was changed.")
     if not hd["routes"]:
         return refuse("That trail came back with nothing that rests on what was carried. Nothing was changed.")
     try:
-        res = _checks(counted, ctx, hd["routes"], context=_live(others_live), min_keep=1)
+        res = _checks(counted, ctx, hd["routes"], list(crew.values()), context=_live(others_live), min_keep=1)
     except Exception as ex:   # noqa: BLE001
         return refuse((str(ex) if ex.__class__.__name__ == "CapReached" else "The checks on the new routes stopped before they finished.") + " Nothing was changed.")
     new = [_apply(t, res) for t in hd["routes"]]
@@ -749,7 +782,7 @@ def steer(doc: dict, llm, crew_id: str, kind: str, by: str, *, with_: str | None
     d["actions"] = [*(d.get("actions") or []), *rev["actions"]]
     for x in d["expeditions"]:
         if x["crew"] == crew_id:
-            x.update(_expedition(member, {**hd, "state": "back"}, _refs(d["territories"], crew_id), [i["id"] for i in ctx.ticked]))
+            x.update(_expedition(member, {**hd, "state": "back"}, _refs(d["territories"], crew_id), start or [i["id"] for i in ctx.ticked]))
         else:
             x["routes"] = [{"territory_id": t["id"], "distance": t["distance"]} for t in _refs(d["territories"], x["crew"])][:contract.limit("expedition", "routes")]
     d["spread"] = spread_record(d["territories"], list(crew.values()), groups)

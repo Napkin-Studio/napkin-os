@@ -82,12 +82,12 @@ def _seeds(llm, tensions, n_seeds, threshold):
     return kept, dropped, len(seeds)
 
 
-def _kill(llm, task, assumed, tensions, seeds, min_keep) -> tuple[list[dict], list[dict], list[dict]]:
+def _kill(llm, task, assumed, tensions, seeds, min_keep, *, system: str | None = None, keys=("id", "line", "tension", "mechanism")) -> tuple[list[dict], list[dict], list[dict]]:
     """The kill gate (Laurence, 2 Nov 2026): drop the weak seeds before they are sorted onto the ladder.
     Returns (survivors, killed, restored). A seed the gate did not judge is kept and flagged. If fewer than
     min_keep survive, the strongest killed seeds are restored and flagged, so the run never ends empty-handed."""
-    blind = [{k: s.get(k) for k in ("id", "line", "tension", "mechanism")} for s in seeds]
-    out = _ask(llm, "kill", prompt("kill_gate"), {"assumed_brief": assumed, "tensions": tensions, "seeds": blind})
+    blind = [{k: s.get(k) for k in keys} for s in seeds]
+    out = _ask(llm, "kill", system or prompt("kill_gate"), {"assumed_brief": assumed, "tensions": tensions, "seeds": blind})
     verdicts = {v["id"]: v for v in out.get("verdicts") or [] if "id" in v}
     survivors, killed = [], []
     for s in seeds:
