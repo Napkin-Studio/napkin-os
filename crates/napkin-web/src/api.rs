@@ -96,6 +96,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .merge(crate::admin::router())
         // Production is an app whose projects live in the relay: the bridge (spinoff.rs)
         .merge(crate::spinoff::router())
+        .merge(crate::blobs::router())
 }
 
 /// An opened document, plus what the shell needs to render it: the capability

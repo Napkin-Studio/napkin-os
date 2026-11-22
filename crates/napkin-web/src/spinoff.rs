@@ -118,6 +118,15 @@ async fn brief_to_production(
     // project, and a project that is later spun off again is checked against this too.
     let bytes = library::stamp_tenant(&acting, change.bytes)?;
     let clan = ClanFile::from_bytes(bytes.clone()).map_err(HostError::from)?;
+    // The project is kept in the relay, outside the library the sweep reads:
+    // pin the files it links to, so clearing unused ones never takes them.
+    if let Some(blobs) = ws.store.blobs() {
+        for f in clan.manifest().files.iter().filter(|f| f.linked) {
+            if let Some(sha) = &f.sha256 {
+                blobs.pin(sha)?;
+            }
+        }
+    }
     let name = clan.manifest().title.clone();
     let project = new_project_id();
     let answer = relay

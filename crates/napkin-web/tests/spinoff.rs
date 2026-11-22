@@ -180,6 +180,12 @@ struct Server {
     app: Router,
 }
 
+impl Server {
+    fn _dir_path(&self) -> &std::path::Path {
+        self._dir.path()
+    }
+}
+
 fn server(relay_url: Option<String>) -> Server {
     server_with(relay_url, Arc::new(NoConfig))
 }
@@ -216,7 +222,7 @@ fn server_with(relay_url: Option<String>, config: Arc<dyn napkin_host::HostConfi
     let roster = dir.path().join("accounts.tsv");
     std::fs::write(
         &roster,
-        "visionary@napkin\tLaurance\nplanner@javelin\tPia\n",
+        "visionary@napkin\tLaurance\nplanner@javelin\tPia\nengineer@napkin\tEngineer\n",
     )
     .unwrap();
     let identity = napkin_web::tenant::Identity {
@@ -790,4 +796,193 @@ async fn without_a_relay_a_build_deck_has_no_assets_field_and_a_planted_one_is_g
     assert!(seen.lock().unwrap()[0]["payload"]
         .get("production_assets")
         .is_none());
+}
+
+// ── Assets as links (features/spinoff-asset-links) ───────────────────────────
+
+const PDF: &[u8] = b"%PDF-1.4 the client's own brief, stored once per agency";
+
+/// A brief that holds the PDF, uploaded through the host the way a person does.
+fn a_brief_with_pdf(s: &Server, p: &Person) -> String {
+    let id = a_brief(s, p, "Hollow Oak");
+    let ws = s.ctx.workspace(&p.tenant);
+    let session = napkin_host::Session::with_ctx(ws.store.clone(), p.tenant.ctx());
+    session.open(napkin_host::DocId::new(id.clone())).unwrap();
+    session
+        .upload_asset("client.pdf", None, PDF.to_vec())
+        .unwrap();
+    id
+}
+
+fn blob_files(s: &Server, p: &Person) -> usize {
+    use napkin_host::BlobStore as _;
+    napkin_web::store::TenantStore::new(s._dir_path().join("data").join(p.tenant.as_str()))
+        .list()
+        .len()
+}
+
+#[tokio::test]
+async fn a_chain_brief_production_deck_stores_one_file_and_survives_the_source() {
+    let (url, rs) = relay().await;
+    let s = server(Some(url));
+    let me = sign_in(&s, "visionary", "napkin").await;
+    let brief = a_brief_with_pdf(&s, &me);
+    let want = clan_sdk::hash::sha256_prefixed(PDF);
+
+    // The upload is a link already: no bytes in the brief, one file in the workspace.
+    let stored = clan_of(
+        &s.ctx
+            .workspace(&me.tenant)
+            .store
+            .read(&napkin_host::DocId::new(brief.clone()))
+            .unwrap(),
+    );
+    assert!(!stored.has_entry("human/assets/client.pdf"));
+    assert!(
+        stored
+            .manifest()
+            .file_by_path("human/assets/client.pdf")
+            .unwrap()
+            .linked
+    );
+    assert_eq!(blob_files(&s, &me), 1);
+
+    // Brief to Production: the project in the relay holds the link, not the bytes.
+    let made = post_json(
+        &s,
+        &me,
+        "/spinoff/production",
+        serde_json::json!({ "doc": brief }),
+    )
+    .await;
+    assert_eq!(
+        made.status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&made.body)
+    );
+    let project = made.json()["project"].as_str().unwrap().to_string();
+    let saved = clan_of(&rs.lock().unwrap().projects[me.tenant.as_str()][&project].bytes);
+    assert!(!saved.has_entry("human/assets/client.pdf"));
+    let f = saved
+        .manifest()
+        .file_by_path("human/assets/client.pdf")
+        .unwrap();
+    assert!(f.linked);
+    assert_eq!(f.sha256.as_deref(), Some(want.as_str()));
+
+    // Production to Deck: the same link, and still one file.
+    let r = post_json(
+        &s,
+        &me,
+        &format!("/production/{project}/spinoff"),
+        serde_json::json!({ "target_app_id": DECK }),
+    )
+    .await;
+    assert_eq!(
+        r.status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&r.body)
+    );
+    let doc = r.json()["path"].as_str().unwrap().to_string();
+    assert_eq!(
+        blob_files(&s, &me),
+        1,
+        "one stored file for the whole chain"
+    );
+
+    // The source is deleted; the deck still opens and serves the file.
+    std::fs::remove_file(
+        s._dir_path()
+            .join("data")
+            .join(me.tenant.as_str())
+            .join("documents")
+            .read_dir()
+            .unwrap()
+            .flatten()
+            .map(|e| e.path())
+            .find(|p| {
+                p.file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .contains(&brief["doc-".len()..])
+            })
+            .unwrap(),
+    )
+    .unwrap();
+    let ws = s.ctx.workspace(&me.tenant);
+    let session = napkin_host::Session::with_ctx(ws.store.clone(), me.tenant.ctx());
+    session
+        .open(napkin_host::DocId::new(
+            doc.rsplit('/').next().unwrap().to_string(),
+        ))
+        .unwrap_or_else(|e| panic!("{e:?}"));
+    let (_, bytes) = session.serve_asset("client.pdf").unwrap();
+    assert_eq!(bytes, PDF);
+
+    // The download leaves with the bytes: it opens on its own.
+    let dl = get(
+        &s,
+        &me,
+        &format!("/d/{}/download", doc.rsplit('/').next().unwrap()),
+    )
+    .await;
+    assert_eq!(dl.status, StatusCode::OK);
+    let whole = clan_of(&dl.body);
+    assert_eq!(whole.read_entry("human/assets/client.pdf").unwrap(), PDF);
+    assert!(clan_sdk::validate(&whole).is_valid());
+
+    // Another agency's workspace holds no such file.
+    let other = sign_in(&s, "planner", "javelin").await;
+    assert_eq!(blob_files(&s, &other), 0);
+    use napkin_host::BlobStore as _;
+    let theirs =
+        napkin_web::store::TenantStore::new(s._dir_path().join("data").join(other.tenant.as_str()));
+    assert!(!theirs.has(&want));
+}
+
+#[tokio::test]
+async fn the_sweep_is_for_admins_and_keeps_what_a_relay_project_links() {
+    let (url, _rs) = relay().await;
+    let s = server(Some(url));
+    let me = sign_in(&s, "visionary", "napkin").await;
+    let brief = a_brief_with_pdf(&s, &me);
+    let made = post_json(
+        &s,
+        &me,
+        "/spinoff/production",
+        serde_json::json!({ "doc": brief }),
+    )
+    .await;
+    assert_eq!(made.status, StatusCode::OK);
+    // The brief is gone, only the relay project names the file: it is pinned.
+    let docs = s
+        ._dir_path()
+        .join("data")
+        .join(me.tenant.as_str())
+        .join("documents");
+    for e in docs.read_dir().unwrap().flatten() {
+        std::fs::remove_file(e.path()).unwrap();
+    }
+    let admin = sign_in(&s, "engineer", "napkin").await;
+    let r = post_json(
+        &s,
+        &admin,
+        "/blobs/sweep?dry_run=false&grace_days=0",
+        serde_json::json!({}),
+    )
+    .await;
+    assert_eq!(
+        r.status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&r.body)
+    );
+    assert_eq!(r.json()["removed"].as_array().unwrap().len(), 0);
+    assert_eq!(blob_files(&s, &me), 1);
+
+    // A person who is not a Napkin admin may not sweep.
+    let r = post_json(&s, &me, "/blobs/sweep", serde_json::json!({})).await;
+    assert_eq!(r.status, StatusCode::FORBIDDEN);
 }
