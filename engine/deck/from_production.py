@@ -565,7 +565,62 @@ def plan_offer(doc: dict, packs: dict) -> tuple:
                       "rights_why": rr[1], "status": "ready", "focal": dict(CENTRE), "focal_by": "centre",
                       **({"final": True} if ff else {}),
                       **({"job_id": f["job_id"]} if f.get("job_id") else {})})
-    return cands, refused, not_carried
+    packs_, crops_ = _made_pictures(doc)
+    for c in cands:   # what a picture is, from the job that made it (the deck's "Packshot" and "Size crops" slides take only their own kind)
+        if c["sha"] in packs_:
+            c["subject"] = "packshot"
+        elif c["sha"] in crops_:
+            c["subject"] = "crop"
+    return _one_of_each(cands, not_carried), refused, not_carried
+
+
+_PACKSHOT = re.compile(r"pack[\s-]?shots?\b", re.I)
+
+
+def _made_pictures(doc: dict) -> tuple:
+    """``(packshot shas, crop shas)`` from the jobs that made the pictures. A packshot is a picture whose job's own words ask for one ('Product
+    packshot of ...'), and so is every picture made from it by a resize; a crop is a picture a resize job made from another. The brief's words
+    never count. Anything else (a key visual, a scene) is neither."""
+    jobs = [j for j in (doc.get("jobs") or {}).values() if isinstance(j, dict)]
+
+    def shas(v):
+        out = []
+        for x in v or []:
+            x = x.get("sha256") or x.get("asset") if isinstance(x, dict) else x
+            if isinstance(x, str):
+                out.append(x)
+        return out
+    packs, crops = set(), set()
+    for j in jobs:
+        text = json.dumps({k: v for k, v in j.items() if k not in ("cost", "director")}, ensure_ascii=False) + " " + str(((j.get("director") or {}).get("input") or {}).get("text") or "")
+        if _PACKSHOT.search(text):
+            packs |= set(shas(j.get("outputs")))
+        if j.get("op") == "resize":
+            crops |= set(shas(j.get("outputs")))
+    changed = True
+    while changed:   # a resize of a packshot is a packshot
+        changed = False
+        for j in jobs:
+            if j.get("op") == "resize" and set(shas(j.get("input_hashes"))) & packs and not set(shas(j.get("outputs"))) <= packs:
+                packs |= set(shas(j.get("outputs")))
+                changed = True
+    return packs, crops - packs
+
+
+def _one_of_each(cands: list, not_carried: dict) -> list:
+    """Every key visual once. Production can hold one picture as the key visual of two Format sets (UAT 2026-11-22: the same sha256 listed
+    twice): the offer lists it once, the one a person marked final first, then the newest entity (ULIDs sort by time),
+    so no picker row and no slot sees the same key visual twice. The count of those dropped goes in ``not_carried['duplicates']``."""
+    best = {}
+    for c in cands:
+        if c["role"] != "master":   # sizes and frames are separate things a person may pick among even when two share a file
+            continue
+        if c["sha"] not in best or (bool(c.get("final")), c["key"]) > (bool(best[c["sha"]].get("final")), best[c["sha"]]["key"]):
+            best[c["sha"]] = c
+    out = [c for c in cands if c["role"] != "master" or best[c["sha"]] is c]
+    if len(out) != len(cands):
+        not_carried["duplicates"] = len(cands) - len(out)
+    return out
 
 
 def asset_bytes(zf: zipfile.ZipFile, inner: zipfile.ZipFile, sha: str, mime: str) -> tuple:
@@ -602,7 +657,7 @@ def make_item(c: dict, info: dict, clan_hex: str) -> dict:
     if c["rights"] == "reference_only":
         it["to_supply"] = "rights"
         it["rights_why"] = c.get("rights_why", "")
-    for k in ("set", "job_id", "channel", "channel_by", "format", "aspect", "delivery", "method", "reason", "shot", "storyboard", "shot_rank", "shot_kind", "keep"):
+    for k in ("set", "job_id", "channel", "channel_by", "format", "aspect", "delivery", "method", "reason", "shot", "storyboard", "shot_rank", "shot_kind", "keep", "subject"):
         if c.get(k) not in (None, "", {}):
             it[k] = c[k]
     if c["role"] != "size":

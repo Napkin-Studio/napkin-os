@@ -3,6 +3,7 @@
 Kept in one module so the schema file, the assembler, the validators and the renderer agree.
 """
 import os
+import re
 
 #: Every slide type the renderer has a layout for, with the word budget for the slide's
 #: on-screen text (title excluded). Budgets follow the agency rule of thumb that a presented
@@ -270,7 +271,7 @@ def blocks_sha(s: dict, audience: str = "review") -> str:
 #: copy limits it is held to (validate: copy_spec).
 FRAMES = (("phone", ("social", "instagram", "tiktok", "snapchat", "stories", "reels")),
           ("search", ("search",)), ("audio", ("audio", "radio", "podcast", "spotify")),
-          ("poster", ("outdoor", "ooh", "billboard", "poster", "transit", "6-sheet", "six-sheet")))
+          ("poster", ("outdoor", "ooh", "out of home", "out-of-home", "billboard", "poster", "transit", "6-sheet", "six-sheet", "48-sheet", "96-sheet", "roadside")))
 
 
 def frame_for(title: str) -> str | None:
@@ -591,6 +592,15 @@ RIGHTS_TO_SUPPLY = "Rights to supply"
 MOCKUP_LABEL = "Mock-up"
 #: deck-graphics slice 2: the frames the deck draws from native shapes, and each one's default format (vendor/format-packs.json id) whose
 #: aspect a generated or supplied picture takes. A Production size keeps its own format's aspect, whole and uncropped.
+#: Words of the engine's own record (a null field) that a model may copy into a requirement: such a line is never a client's requirement.
+_INTERNAL_WORDING = re.compile(r"\(\s*(?:the\s+)?field\s+(?:is\s+)?(?:null|empty|missing|none)\s*\)|\bfield is null\b", re.I)
+
+
+def internal_wording(text: str) -> bool:
+    """True when ``text`` carries the record's own wording ('field is null'): never shown on a slide."""
+    return bool(_INTERNAL_WORDING.search(str(text or "")))
+
+
 FRAME_FORMATS = {"poster_portrait": "uk-6-sheet", "billboard": "uk-48-sheet", "phone": "meta-stories-9x16", "screen": "film-16x9",
                  "spread": "mag-a4-dps", "strip": "uk-bus-tside"}
 #: The frame a channel's generated picture is shown in (graphics.frame_of): film in a screen, social on a phone, OOH and print on a poster.

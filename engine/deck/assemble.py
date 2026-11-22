@@ -506,7 +506,7 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
     a, b, c, d = st.get("a") or {}, st.get("b") or {}, st.get("c") or {}, st.get("d") or {}
     if not d.get("how_it_answers") and isinstance(d.get("answers_objection"), dict):   # a live stage d's shape
         d = {**d, "how_it_answers": d["answers_objection"].get("how", "")}
-    reqs = a.get("requirements") or []
+    reqs = [r for r in a.get("requirements") or [] if not spec.internal_wording(r.get("text"))]   # a stage that copied 'field is null' into a requirement
     R = Resolver(inp, reqs)
     S = []  # ordered slides
 

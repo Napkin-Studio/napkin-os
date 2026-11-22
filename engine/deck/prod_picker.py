@@ -375,7 +375,7 @@ def eligible_of(meta: dict, slide: dict, aspect: str, role: str, brief_doc, mset
     storyboard frame for a film. Rights are not a test here: a candidate waiting for its rights is offered and, if chosen, held as today."""
     items = meta["items"]
     if images.slide_group(slide):   # "Size crops", "Packshot": every final of any Format set or size that is a picture, the rule's pick among them
-        out = images.group_pool(meta, aspect, any_shape=True)
+        out = images.group_pool(meta, aspect, any_shape=True, group=images.slide_group(slide))
     elif role == "master":
         first, _ = images.master_pool(meta, brief_doc)
         sets = meta.get("format_sets") or {}

@@ -2101,17 +2101,20 @@ class Renderer:
             x += pw + 0.1
         return x + self._mockup_pill(sl, x, y)
 
+    STRIP_CAP_H = 0.62   # the caption row under a strip's numbers (two lines of 11 pt)
+
     def _strip_info(self) -> tuple:
-        """``(shot numbers, note)`` of the slide's storyboard strip (images.bind_production: the storyboard's own shot numbers and, when
-        fewer frames are drawn than it has shots, '4 of 9 shots'); ``(None, '')`` when the slide carries none."""
+        """``(shot numbers, note, captions)`` of the slide's storyboard strip (images.bind_production: the storyboard's own shot numbers, when
+        fewer frames are drawn than it has shots '4 of 9 shots', and each frame's caption from the slide's own 'Frame n:' line);
+        ``(None, '', [])`` when the slide carries none."""
         st = ((self.deck.get("slides") or {}).get(self._sid) or {}).get("strip") or {}
-        return st.get("shots"), str(st.get("note") or "")
+        return st.get("shots"), str(st.get("note") or ""), list(st.get("captions") or [])
 
     def _strip_note(self, sl, x, y, note):
         if note:
             self.text(sl, x + 0.12, y, 2.4, self.PILL_H, note, size=12, color=self.p.mute, anchor=MSO_ANCHOR.MIDDLE, name="StripNote")
 
-    def _framed(self, sl, x, y, w, h, im, fr, ground=None) -> None:
+    def _framed(self, sl, x, y, w, h, im, fr, ground=None, pills=True):
         """An execution's picture in its drawn frame (graphics.frame_geometry) contained in the box: the frame's parts in the ink token
         (a blank screen in the paper, its bars in the rule token), the picture in the window at the window's exact aspect (a Production
         size: its own format's, so nothing is cut), then the labels in a row under the frame, never on it."""
@@ -2143,15 +2146,62 @@ class Renderer:
         if gutter:   # a magazine spread: the fold as a hairline over the two pages
             self.hairline(sl, gutter[0], gutter[1], gutter[0], gutter[1] + gutter[2], color=self.th.rule, name=f"Frame: {fr['kind']}")
         ox, oy, ow, oh = geo["outer"]
-        self._pills(sl, ox, min(y + h - self.PILL_H, oy + oh + 0.18), im)
+        if pills:
+            self._pills(sl, ox, min(y + h - self.PILL_H, oy + oh + 0.18), im)
+        return geo
+
+    OOH_NAME_H = 0.36   # the format's name under its frame
+
+    def _ooh_plan(self, sid, s):
+        """The out-of-home slide's frames (images.bind_production wrote ``slide.ooh``): ``{body_end, cells, row}`` or None. Each frame at its own
+        format's aspect, widths in proportion to the frames so a wide 48-sheet and a tall 6-sheet share the row at one height."""
+        fm = (s.get("ooh") or {}).get("formats") or []
+        got = {slot: im for (i, slot), im in self.drawn.items() if i == sid}
+        cells = [(f, got[f["slot"]]) for f in fm if f.get("slot") in got]
+        if not cells or not spec.GRAPHICS:
+            return None
+        from . import graphics   # noqa: PLC0415
+        g = self.th.grid
+        title = spec.picture_of(s)[1]
+        frs = [graphics.frame_of(self.deck, title, im) for _, im in cells]
+        if not all(frs):
+            return None
+        top = 3.2
+        h = g.body_end - self.OOH_NAME_H - 0.1 - top
+        gap = 0.45
+        want = [fr["ratio"] * h + 0.6 for fr in frs]
+        avail = (self.x1 - self.x0) - gap * (len(cells) - 1)
+        k = min(1.0, avail / sum(want))
+        ws = [w * k for w in want]
+        x = self.x0 + (avail - sum(ws)) / 2
+        out = []
+        for (f, im), fr, w in zip(cells, frs, ws):
+            out.append((f, im, fr, x, top, w, h))
+            x += w + gap
+        return {"body_end": top - self.PILL_H - 0.3, "cells": out}
+
+    def _ooh_draw(self, sl, plan):
+        """The frames, each named under it, and the labels (the picture's own, then 'Mock-up') above the row at its right end."""
+        for f, im, fr, x, y, w, h in plan["cells"]:
+            m = self._mark(sl)
+            geo = self._framed(sl, x, y, w, h + self.OOH_NAME_H + 0.1, im, fr, pills=False)
+            ox, oy, ow, oh = geo["outer"]
+            self.text(sl, x - 0.2, oy + oh + 0.1, w + 0.4, self.OOH_NAME_H, str(f.get("name") or ""), size=14, bold=True, align=PP_ALIGN.CENTER,
+                      name="FormatName")
+            self._build(sl, m)
+        f0, im0, fr0, *_ = plan["cells"][0]
+        x_end = plan["cells"][-1][3] + plan["cells"][-1][5]
+        lab = (self._label_w(im0, 3.0) + 0.1) if im0.get("status") != "approved" else 0.0
+        py = plan["cells"][0][4] - self.PILL_H - 0.12
+        self._pills(sl, x_end - lab - self._unk(0.24 + 0.085 * len(spec.MOCKUP_LABEL)), py, im0)
 
     def _strip_draw(self, sl, plan):
         """The storyboard strip (slice 3): each Production frame in a hairline window at its own aspect, numbered 1 to n under a hairline
         (numbers only: no shot caption is carried or written), the labels above the strip at its right end."""
         boxes = plan["boxes"]
         m = self._mark(sl)
-        numbers, note = self._strip_info()
-        self._strip_cells(sl, boxes, numbers)
+        numbers, note, caps = self._strip_info()
+        self._strip_cells(sl, boxes, numbers, caps)
         x_end = boxes[-1][1] + boxes[-1][3]
         im0 = boxes[0][5]
         lab = (self._label_w(im0, 3.0) + 0.1) if im0.get("status") != "approved" else 0.0
@@ -2160,7 +2210,7 @@ class Renderer:
         self._strip_note(sl, boxes[0][1] - 0.12, py, note)
         self._build(sl, m)
 
-    def _strip_cells(self, sl, boxes, numbers=None):
+    def _strip_cells(self, sl, boxes, numbers=None, caps=None):
         """Each storyboard frame in a hairline window at its own aspect, numbered under it beside a hairline with its shot number in the
         storyboard (numbers only: no caption is carried or written)."""
         numbers = numbers if numbers and len(numbers) == len(boxes) else list(range(1, len(boxes) + 1))
@@ -2169,6 +2219,10 @@ class Renderer:
             self.rect(sl, x, y, w, h, line=self.p.fg, lw=0.75, name="Frame: storyboard")
             self.text(sl, x, y + h + 0.04, 0.3, 0.3, str(n), size=14, bold=True, font=self.th.head, name="StripNumber")
             self.hairline(sl, x + 0.32, y + h + 0.19, x + w, y + h + 0.19)
+        if caps and len(caps) == len(boxes):   # the frame's own line from the idea stage, under its number
+            for c, (slot, x, y, w, h, im) in zip(caps, boxes):
+                if c:
+                    self.text(sl, x, y + h + 0.26, w, self.STRIP_CAP_H - 0.06, c, size=11, color=self.p.fg, name="StripCaption")
 
     def _strip_shots(self) -> list:
         """``[(slot, image)]`` of the slide's drawn storyboard shots in order, when they make a strip (spec.STRIP_MIN or more), else []."""
@@ -2190,7 +2244,7 @@ class Renderer:
         for i, ((k, im), r) in enumerate(zip(shots, rs)):
             fw = fh * r
             boxes.append((k, ix + (iw - fw) / 2, top + i * (fh + num + gap), fw, fh, im))
-        numbers, note = self._strip_info()
+        numbers, note, caps = self._strip_info()
         self._strip_cells(sl, boxes, numbers)
         end = self._pills(sl, boxes[0][1], iy + ih + 0.2, shots[0][1])
         self._strip_note(sl, end, iy + ih + 0.2, note)
@@ -4302,6 +4356,7 @@ class Renderer:
         for sid in self.deck["order"]:
             self.slide(sid, self.deck["slides"][sid], nums[sid])
         self._sections()
+        _strike_runs(self.prs)
         self.prs.core_properties.title = f"{self.deck['meta']['client']}: {self.deck['meta']['project']}"
         self.prs.core_properties.author = "Napkin Deck Maker"
         self.prs.save(str(out))
@@ -4358,8 +4413,22 @@ class Renderer:
             for slot, v in _slots.items():
                 for bi in v.get("blocks", []):
                     self._slotmap[id(s["blocks"][bi])] = (slot, bi)
-        plan = self._picture_plan(sid, s, name)
-        if plan:   # one carve: x1 and body_end are narrowed before the layout runs, so the layout (its id) is the one it would pick anyway
+        plan, done = self._picture_plan(sid, s, name), False
+        if spec.GRAPHICS and s["type"] == "execution" and sum(1 for k in want if k.startswith("shot_")) >= spec.STRIP_MIN:
+            sp = self._picture_plan(sid, s, "execution")   # a storyboard: its own slide, the words above a strip of numbered, captioned frames
+            if sp and sp.get("strip"):
+                self._storyboard(sl, {**s, "visual": {}}, sp)
+                self._draw_pictures(sl, sp)
+                self.placed |= {(sid, b[0]) for b in sp["boxes"]}
+                plan, done, name = sp, True, "flow"
+        if spec.GRAPHICS and s["type"] == "execution" and (s.get("ooh") or {}).get("formats") and not done:
+            op = self._ooh_plan(sid, s)   # out of home: every format Production made, each in its frame, named
+            if op:
+                self._storyboard(sl, {**s, "visual": {}}, op)
+                self._ooh_draw(sl, op)
+                self.placed |= {(sid, c[0]["slot"]) for c in op["cells"]}
+                plan, done, name = {"boxes": [(c[0]["slot"],) for c in op["cells"]], "also": ["picture"]}, True, "flow"
+        if plan and not done:   # one carve: x1 and body_end are narrowed before the layout runs, so the layout (its id) is the one it would pick anyway
             n_sh, n_st = len(sl.shapes), len(self.steps)
             cs = {**s, "visual": {}} if s["type"] == "execution" else s   # the picture replaces the 'Image prompt' note
             self._carve(plan)
@@ -4502,14 +4571,16 @@ class Renderer:
                 ims = [got[k] for k in shots]
                 rs = [self._asset_ratio(im) for im in ims]
                 w = (x1 - x0 - gx * (len(shots) - 1)) / len(shots)
-                h = min(w / max(rs), (g.body_end - self.EXEC_TOP) * 0.42)
-                y = g.body_end - 0.36 - h
+                caps = (self._strip_info()[2] or [])
+                cap_h = self.STRIP_CAP_H if any(caps) else 0.0
+                h = min(w / max(rs), (g.body_end - self.EXEC_TOP - cap_h) * 0.42)
+                y = g.body_end - 0.36 - cap_h - h
                 boxes, cx = [], x0
                 for k, im, r in zip(shots, ims, rs):
                     bw = min(w, h * r)
                     boxes.append((k, cx + (w - bw) / 2, y, bw, h, im))
                     cx += w + gx
-                return {"x1": x1, "body_end": y - self.PILL_H - 0.35, "boxes": boxes, "strip": True, "also": ["picture"]}
+                return {"x1": x1, "body_end": y - self.PILL_H - 0.35, "boxes": boxes, "strip": True, "also": ["picture"], "caps": caps}
             if self._frame_for(im):   # the frame takes the whole right half and contains itself in it
                 half = (x1 - x0 - gap) / 2
                 return {"x1": x1 - half - gap, "body_end": g.body_end, "framed": True,
@@ -4843,6 +4914,26 @@ class Renderer:
             self.text(sl, 8.7, y + 3.75, 3.73, 0.4, "Illustrative, not final", size=10, italic=True, color=t.accent_on_dark, cap=True)
             self._build(sl, m)
 
+    def _storyboard(self, sl, s, plan):
+        """A storyboard slide (deck-graphics slice 3): the title, the role and notes left and the lines of the film (voice-over, super, the
+        answer) right, small, above the strip ``plan`` places along the foot. Never a dark card: the frames are the slide."""
+        t = self.th
+        y = self._title_text(sl, s, size=28)
+        bottom = plan["body_end"]
+        cps = [b for b in s["blocks"] if b["kind"] == "copy"]
+        self._fit_flow(sl, [b for b in s["blocks"] if b["kind"] != "copy"], self.x0, y, 5.6, bottom=bottom)
+        if cps:
+            lines = "\n".join(str(x) for b in cps for x in b.get("lines") or [])
+            answers = " ".join(str(b.get("answer") or "") for b in cps).strip()
+            fx, fw = 6.7, self.x1 - 6.7
+            m = self._mark(sl)
+            h_ans = self._eh(answers, fw, 12, 1.1) if answers else 0.0
+            if lines:
+                self.text(sl, fx, y, fw, max(0.4, bottom - y - h_ans - 0.1), lines, size=13, color=self.p.fg, name="StoryboardLines")
+            if answers:
+                self.text(sl, fx, bottom - h_ans, fw, h_ans, answers, size=12, bold=True, color=self.p.acc_t, name="StoryboardAnswer")
+            self._build(sl, m)
+
     def _execution(self, sl, s):
         """Role and notes left; the copy in a frame shaped by the channel right."""
         t = self.th
@@ -4882,6 +4973,42 @@ class Renderer:
             sl = etree.SubElement(sec, f"{{{P14}}}sldIdLst")
             for sid in ids:
                 etree.SubElement(sl, f"{{{P14}}}sldId").set("id", str(sid))
+
+
+def _strike_runs(prs) -> None:
+    """A ``~~word~~`` the copy wrote becomes a real strike-through run (``strike="sngStrike"``), the tildes gone, wherever the text sits (a
+    text box, a card, a table cell). Speaker notes lose the tildes only. An odd tilde pair is dropped without a strike, never shown."""
+    A = "http://schemas.openxmlformats.org/drawingml/2006/main"
+    parts = [sl._element for sl in prs.slides]
+    for el in parts:
+        for r in list(el.iter(f"{{{A}}}r")):
+            t = r.find(f"{{{A}}}t")
+            if t is None or not t.text or "~~" not in t.text:
+                continue
+            segs = t.text.split("~~")
+            if len(segs) % 2 == 0:   # unmatched marker: plain text without the tildes
+                t.text = "".join(segs)
+                continue
+            parent, at = r.getparent(), r.getparent().index(r)
+            parent.remove(r)
+            for i, seg in enumerate(segs):
+                if not seg:
+                    continue
+                n = copy.deepcopy(r)
+                n.find(f"{{{A}}}t").text = seg
+                if i % 2:
+                    rpr = n.find(f"{{{A}}}rPr")
+                    if rpr is None:
+                        rpr = etree.Element(f"{{{A}}}rPr")
+                        n.insert(0, rpr)
+                    rpr.set("strike", "sngStrike")
+                parent.insert(at, n)
+                at += 1
+    for sl in prs.slides:
+        if sl.has_notes_slide:
+            for r in sl.notes_slide._element.iter(f"{{{A}}}t"):
+                if r.text and "~~" in r.text:
+                    r.text = r.text.replace("~~", "")
 
 
 def render(deck, inp, out: Path, master: Path | None = None, findings: list | None = None, animate=False, theme=themes.DEFAULT,

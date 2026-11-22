@@ -38,35 +38,36 @@ def _from(d, sid):
 
 
 @pytest.mark.parametrize("graphics", [False, True])
-def test_size_packshot_and_storyboard_slides_each_take_a_final_from_production(tmp_path, monkeypatch, graphics):
+def test_the_storyboard_slide_takes_a_frame_and_size_and_packshot_slides_are_gaps_without_their_own_finals(tmp_path, monkeypatch, graphics):
     d, res = _bound(tmp_path, monkeypatch, graphics)
     items = res["picker"]["picks"]
     by_slot = {p["slot"]: p for p in items}
-    assert {"s1.picture", "s2.picture", "s3.picture", "s4.picture", "s5.picture"} <= set(by_slot), sorted(by_slot)
-    for sid in ("s3", "s4", "s5"):
-        im, fr = _from(d, sid)
-        assert fr.get("kind") == "production" and fr.get("key"), (sid, im)
-    keys = {sid: _from(d, sid)[1]["key"] for sid in ("s3", "s4", "s5")}
-    assert by_slot["s5.picture"]["role"] == "storyboard_frame"           # the storyboard slide shows a frame
-    assert by_slot["s3.picture"]["role"] in ("key_visual", "size")        # the crops slide shows a Format set's picture or a size
-    if graphics:   # the live default: every shape is shown whole, so each slide takes a picture no earlier slide holds
-        held = [_from(d, "s1")[1]["key"], _from(d, "s2")[1]["key"]]
-        assert keys["s3"] not in held and keys["s4"] not in held and keys["s3"] != keys["s4"]
-    for sid in ("s3", "s4"):   # the person can swap among every final of the group
-        assert len(by_slot[f"{sid}.picture"]["eligible"]) > 1
+    assert {"s1.picture", "s2.picture", "s5.picture"} <= set(by_slot), sorted(by_slot)
+    im, fr = _from(d, "s5")
+    assert fr.get("kind") == "production" and fr.get("key") and by_slot["s5.picture"]["role"] == "storyboard_frame"   # the storyboard slide shows a frame
+    held = {_from(d, "s1")[1]["key"], _from(d, "s2")[1]["key"]}
+    im, fr = _from(d, "s3")   # the crops slide shows one of Production's sizes (any shape when frames are drawn), never the key visual
+    if graphics:
+        assert fr.get("kind") == "production" and by_slot["s3.picture"]["role"] == "size" and fr["key"] not in held
+    else:
+        assert fr.get("key") not in held and (im["status"] == "empty" or by_slot["s3.picture"]["role"] == "size")
+    im, fr = _from(d, "s4")   # the demo holds no packshot final: a clear gap, never the key visual or another slide's picture
+    assert im["status"] == "empty" and im["reason"].startswith("To supply from Production: a packshot") and fr.get("key") not in held
+    assert "s4.picture" not in by_slot
 
 
-def test_a_group_pool_offers_every_final_and_puts_the_unused_placeable_ones_first(tmp_path, monkeypatch):
+def test_a_group_pool_offers_only_the_finals_of_its_kind_and_puts_the_unused_ones_first(tmp_path, monkeypatch):
     monkeypatch.setattr(spec, "GRAPHICS", True)
     d = _deck()
     clan = tmp_path / "lumen.clan"
     mb.build_clan(clan)
     meta = pp.Plan(pp.Source(clan)).metadata_prod()
-    pool = images.group_pool(meta, "16:9", any_shape=True)
+    assert images.group_pool(meta, "16:9", any_shape=True, group="product") == []   # no packshot final in the demo
+    pool = images.group_pool(meta, "16:9", any_shape=True, group="sizes")
     roles = {meta["items"][k]["role"] for k in pool}
-    assert roles <= {"master", "size"} and len(pool) >= 3
+    assert roles == {"size"} and len(pool) >= 2
     used = {pool[0]}
-    again = images.group_pool(meta, "16:9", used, any_shape=True)
+    again = images.group_pool(meta, "16:9", used, any_shape=True, group="sizes")
     assert again[0] != pool[0] and set(again) == set(pool)
     assert images.execution_group("Size crops") == "sizes" and images.execution_group("Packshot") == "product"
     assert images.execution_group("Key visual") is None and images.execution_channel("Storyboard frames") == "film"
