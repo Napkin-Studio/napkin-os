@@ -619,7 +619,7 @@ names and shapes below are that branch's, so it merges onto them.
    `campaign.client_org.value → project.client` (owner, 2026-11-09: research
    to production is upstream + lift). Each `by_source` key is accepted.
 
-### 5.9 Production: a spin-off app whose documents stay in the relay
+### 5.8 Production: a spin-off app whose documents stay in the relay
 
 Production (`ie.napkin.production`, packed by `clan-sdk/examples/make_production.rs`, installed with the
 other apps by the Dockerfile) declares `spinoff { accepts: [ie.napkin.brief-maker], upstream: true }`, so a
