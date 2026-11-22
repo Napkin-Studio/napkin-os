@@ -181,3 +181,15 @@ def test_cap_reached_is_plain_words():
 def test_napkins_idea_is_thin_even_when_it_cites_a_spark():
     res, _ = run(raw({"kind": "provocation", "text": "What if the round was the ad?", "cites": [VERIFIED["id"], "brief:audience"]}))
     assert res["insights"][0]["strength"] == "thin"
+
+
+def test_a_theme_is_a_few_plain_words_and_left_out_when_unfit():
+    res, _ = run(raw(
+        {"kind": "truth", "text": "A drink in hand is a ticket to the conversation.", "cites": [PIN], "theme": "  the **ticket** in hand "},
+        {"kind": "provocation", "text": "What if the zero was the only thing on the label nobody could ignore?", "cites": [], "theme": "x" * 41},
+        {"kind": "borrowed", "text": "Borrow the lounge: the build-up is half the trip.", "cites": [], "theme": VERIFIED["id"]},
+        {"kind": "borrowed", "text": "Borrow the meal kit: the hour back is the product.", "cites": []}))
+    by = {r["text"][:12]: r.get("theme") for r in res["insights"]}
+    assert by["A drink in h"] == "the ticket in hand"
+    assert by["What if the "] is None and by["Borrow the l"] is None and by["Borrow the m"] is None
+    assert contract.validate_all("insight", res["insights"]) == []

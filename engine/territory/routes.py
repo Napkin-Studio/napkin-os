@@ -108,6 +108,20 @@ def _fit(text, n: int) -> str:
     return cut.rsplit(" ", 1)[0].rstrip(",;:- ")
 
 
+def themed(ts: list[dict], groups: dict) -> list[dict]:
+    """Each route's idea group (develop's sort step) as its ``theme``: the few words the page shows as a chip under the card. A route keeps a
+    theme it already has, and one the sort left as the route's own id (no group given) gets none, so a chip is never an id or a half word."""
+    out = []
+    for t in ts:
+        g = groups.get(t["id"])
+        label = _fit(g, contract.limit("territory", "theme", what="maxLength")) if isinstance(g, str) else ""
+        if t.get("theme") or not label or label.lower() == t["id"].lower() or insights._ID_IN_TEXT.search(label):
+            out.append(t)
+        else:
+            out.append({**t, "theme": label})
+    return out
+
+
 def _angle(a) -> float:
     return float(a) % 360
 
@@ -683,6 +697,7 @@ def explore_ex(doc: dict, llm, *, facts=None, findings=None, sources=None, marks
         msg = str(e) if e.__class__.__name__ == "CapReached" else "The checks on the routes stopped before they finished. What the crew brought back is kept; try again."
         return _fail(doc, {}, msg), info
     tcs, crew2, groups = rev["routes"], rev["crew"], rev["groups"]
+    tcs = themed(tcs, groups)
     live = _live(tcs)
     if len(live) > CONFIG.max_routes:        # never above the plan: the least-cited extras are parked, not deleted
         gone = {t["id"] for t in sorted(live, key=lambda t: (len(t["evidence"]), t["id"]))[:len(live) - CONFIG.max_routes]}
@@ -778,7 +793,7 @@ def steer(doc: dict, llm, crew_id: str, kind: str, by: str, *, with_: str | None
     d["territories"] = [*others_live, *[t for t in mine_now if t], *new]
     groups = {k: v[1] for k, v in res["sort"].items()}
     rev = _review(counted, ctx, d, list(crew.values()), d["territories"], groups, only={n["id"] for n in new}, allow_gap=False)
-    d["territories"], groups = rev["routes"], rev["groups"]
+    d["territories"], groups = themed(rev["routes"], rev["groups"]), rev["groups"]
     d["actions"] = [*(d.get("actions") or []), *rev["actions"]]
     for x in d["expeditions"]:
         if x["crew"] == crew_id:

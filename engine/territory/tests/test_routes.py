@@ -356,6 +356,19 @@ def test_a_clean_spread_makes_no_repair_calls():
     assert d["spread"]["gaps"] == []
 
 
+def test_a_routes_idea_group_is_its_theme_and_an_id_or_a_missing_group_is_never_one():
+    def grouped(u):
+        rows = json.loads(u)["territories"]
+        return {"tiers": [{"id": r["id"], "tier": "stretch", "reason": "x", "group": ("the journey as the treat" if i % 2 else r["id"])} for i, r in enumerate(rows)]}
+    d, _ = run(llm=FakeLLM(outputs(sort=grouped)))
+    themes = [t.get("theme") for t in d["territories"]]
+    assert "the journey as the treat" in themes and None in themes
+    assert all(t is None or (0 < len(t) <= contract.limit("territory", "theme", what="maxLength") and not insights._ID_IN_TEXT.search(t)) for t in themes)
+    assert contract.check(d, facts=FACTS, findings=FINDINGS) == []
+    again = routes.themed(d["territories"], {t["id"]: "something else" for t in d["territories"]})
+    assert [t.get("theme") for t in again] == [t.get("theme") or "something else" for t in d["territories"]], "a theme a route has is kept"
+
+
 def test_undo_takes_a_fix_back_and_an_agent_away_and_only_once():
     llm = FakeLLM(_dupe_outputs(spread_repair=lambda u: both()))
     d, _ = routes.explore_ex(doc0(), llm, facts=FACTS, findings=FINDINGS)
@@ -372,6 +385,19 @@ def test_undo_takes_a_fix_back_and_an_agent_away_and_only_once():
     assert not [x for x in d3["territories"] if x["id"] in agent["territory_ids"]]
     assert contract.check(d3, facts=FACTS, findings=FINDINGS) == []
     plain(*routes.undo(d, "act_nosuch", "Shrey")[1], *routes.undo(d2, fix["id"], "Shrey")[1])
+
+
+def test_the_explore_back_fixture_undoes_for_real():
+    """The page's Undo asks for exactly this: the committed fixture must round-trip through routes.undo and stay a valid document."""
+    d = contract.example("states/explore_back")
+    fix = next(a for a in d["actions"] if a["kind"] == "spread_fix")
+    d2, r = routes.undo(d, fix["id"], "Shrey")
+    assert r == [] and {t["id"]: t for t in d2["territories"]}[fix["territory_ids"][0]]["status"] == "live"
+    assert fix["territory_ids"][1] not in {t["id"] for t in d2["territories"]}
+    agent = next(a for a in d2["actions"] if a["kind"] == "sent_agent")
+    d3, r = routes.undo(d2, agent["id"], "Shrey")
+    assert r == [] and len(d3["crew"]) == 4
+    contract.validate(d3)
 
 
 # ---------------------------------------------------------------- steering

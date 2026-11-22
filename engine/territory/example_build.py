@@ -90,6 +90,15 @@ INSIGHTS = [  # id, kind, text, evidence, strength, ticked, by
 ]
 
 
+#: The idea group each insight and each route is filed under (what the card shows as its chip).
+THEMES = {"in_arrive": "arriving rested", "in_timeback": "time given back", "in_journey": "the journey as the treat", "in_driver": "car guilt",
+          "in_friday": "spontaneous weekends", "in_forum": "the journey as the treat", "in_lounge": "the build-up", "in_fare": "the fare",
+          "in_mealkit": "time given back",
+          "t_started": "the weekend starts early", "t_sitdown": "the proposition, plainly", "t_sunday": "the way home", "t_small": "small weekends",
+          "t_passenger": "car guilt", "t_lonely": "the motorway", "t_mixtape": "the journey as the treat", "t_lounge": "the build-up",
+          "t_breakfast": "time given back", "t_ride": "the build-up", "t_anon": "car guilt", "t_motorway": "car guilt"}
+
+
 def pal(bg, ink, acc, soft):
     return {"bg": bg, "ink": ink, "acc": acc, "soft": soft}
 
@@ -250,6 +259,8 @@ def _territory(r: dict) -> dict:
          "origin": {"kind": "crew", "from": [r["crew"]]}, "state": r["state"], "status": r["status"], "evidence": r["ev"], "ready": r["state"] == "developed"}
     if r.get("kill_reason"):
         t["kill_reason"] = r["kill_reason"]
+    if r["id"] in THEMES:
+        t["theme"] = THEMES[r["id"]]
     if r["state"] == "developed":
         w = _world(r)
         t["world"] = w
@@ -325,7 +336,8 @@ def final() -> dict:
                   + [{"id": f[0], "in_play": True} for f in FACTS]
                   + [{"id": f[0], "in_play": f[0] != "fi_FARE00007"} for f in FINDINGS] + [{"id": f[0], "in_play": True} for f in FINDS],
                   "insights": [dict(id=i, kind=k, text=t, evidence=e, strength=s, ticked=tk, by=by, rank=n + 1,
-                                    **({"derived": True} if any(c in ("fi_NOTALK003", "fi_FARE00007", "fi_SPONT0009") for c in e) else {}))
+                                    **({"derived": True} if any(c in ("fi_NOTALK003", "fi_FARE00007", "fi_SPONT0009") for c in e) else {}),
+                                    **({"theme": THEMES[i]} if i in THEMES else {}))
                                for n, (i, k, t, e, s, tk, by) in enumerate(INSIGHTS)]},
         "journey": [{"key": k, "day": d, "where": w} for k, d, w in JOURNEY],
         "crew": [{"id": i, "direction": d, "role": r, "name": n, "short": s, "heading": h, "angle": a, "colour": c} for i, d, r, n, s, h, a, c in CREW],
@@ -402,6 +414,30 @@ def states(d: dict) -> dict[str, dict]:
                 "stages": [dict(s, status="done" if s["id"] == "pick" else ("now" if s["id"] == "explore" else "next")) for s in d["run"]["stages"]],
                 "approvals": {"pick": d["run"]["approvals"]["pick"]}, "decisions": d["run"]["decisions"][:1], "calls": {"model": 9, "lookups": 4}}
     out["explore_running"] = e
+    # explore_back: every trail is home and the Review agent has fixed the spread itself (each fix is a real, undoable action)
+    b = copy.deepcopy(d)
+    b["territories"] = [_found_only(t) for t in b["territories"]]
+    for t in b["territories"]:
+        t.pop("rank", None)
+    first = _found_only(_territory(dict(key="motorway", id="t_motorway", name="The Motorway Complains", thought="The motorway, played as a grumpy host, grumbles about the families who left.",
+                                       why="Comedy in the driver's job.", crew="cr_opposite", d=.5, ev=["f_DRIVER0431"], tier="stretch", state="found", status="parked",
+                                       risks=["Too close to Passenger Seat: both hand the driver the weekend off."])))
+    first["status"] = "parked"
+    b["territories"].append(first)
+    for x in b["expeditions"]:
+        x["state"] = "back"
+        if x["crew"] == "cr_opposite":
+            x["steer"] = [{"kind": "further", "by": "Shrey", "at": "2026-11-18T09:30:00Z"}]
+    b["actions"] = [
+        {"id": "act_spread1", "agent": "review", "kind": "spread_fix", "at": "2026-11-18T09:40:00Z", "territory_ids": ["t_motorway", "t_lonely", "t_passenger"], "undone": False,
+         "text": "Two routes sat close together; The Motorway Complains was moved outward and its first version is parked."},
+        {"id": "act_gap1", "agent": "review", "kind": "sent_agent", "at": "2026-11-18T09:41:00Z", "territory_ids": ["t_lounge", "t_ride"], "undone": False,
+         "text": "Nobody had explored far outside the brief, so an agent was sent there."}]
+    b.update({"greenlit": [], "asks": [], "sends": [], "notes": [{"id": "nt_crew", "agent": "strategy", "at": "2026-11-18T09:35:00Z", "text": "The crew came back: 5 agents, 10 routes."}]})
+    b["run"] = {"state": "building", "stage": "explore", "gate": None, "agent": {"key": "strategy", "activity": "work", "step_index": 2, "step_total": 5},
+                "stages": [dict(s, status="done" if s["id"] == "pick" else ("now" if s["id"] == "explore" else "next")) for s in d["run"]["stages"]],
+                "approvals": {"pick": d["run"]["approvals"]["pick"]}, "decisions": d["run"]["decisions"][:1], "calls": {"model": 11, "lookups": 4}}
+    out["explore_back"] = b
     # greenlight states
     g = _at_greenlight(d)
     g["greenlit"] = []

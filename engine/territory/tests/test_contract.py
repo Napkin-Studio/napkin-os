@@ -49,7 +49,7 @@ def test_every_fixture_passes_the_whole_contract(name):
 
 
 def test_the_expected_states_exist():
-    assert set(contract.example_states()) == {"pick", "explore_running", "greenlight_open", "greenlight_derived_pending",
+    assert set(contract.example_states()) == {"pick", "explore_running", "explore_back", "greenlight_open", "greenlight_derived_pending",
                                               "greenlight_sensitive_missing", "failed_refused"}
 
 

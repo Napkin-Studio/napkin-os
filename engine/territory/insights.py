@@ -8,7 +8,7 @@ ranked, cited insights in ONE model call.
 
 ``llm`` is ``llm(stage, system, user) -> (obj, usage)``; give it ``Spend.wrap(...)`` so every call is capped and never paid twice.
 
-The model writes ``kind``, ``text`` and ``cites`` only. The CODE does the rest: it drops an insight that cites an id not in play (and
+The model writes ``kind``, ``text``, ``cites`` and an optional ``theme`` (a few words for the chip) only. The CODE does the rest: it drops an insight that cites an id not in play (and
 says why in ``dropped``), computes ``strength`` from the cited items, sets ``derived`` when a cited finding is not verified, ranks, and
 ticks the top five. An insight that cites nothing is Napkin's own idea (a provocation or a borrowed move): it is never ``strong`` and
 never ``derived``; a provocation or borrowed move is ``thin`` even when it cites what sparked it. Dev harness: ``python -m territory.insights --doc data.json [--facts f.json --findings fi.json] [--live]``.
@@ -89,6 +89,16 @@ def _shape_problems(rows: list[dict], doc: dict, facts, findings) -> list:
     return [p for p in contract.check(base, facts=facts or [], findings=findings or []) if str(p.path).startswith("focus.insights")]
 
 
+def theme_of(raw) -> str:
+    """The model's few words for what an insight is about, for the chip under its card: plain, within the schema's length, never an id.
+    Empty when it gave none or gave something unfit (the chip is then left out, not made up)."""
+    t = _plain(raw)
+    n = contract.limit("insight", "theme", what="maxLength")
+    if not t or len(t) > n or _ID_IN_TEXT.search(t):
+        return ""
+    return t
+
+
 def build(raw: list, inp: dict) -> tuple[list[dict], list[dict]]:
     """Raw model insights -> (insights in rank order, dropped with the reason). Pure code: no model."""
     ix = _index(inp)
@@ -123,8 +133,12 @@ def build(raw: list, inp: dict) -> tuple[list[dict], list[dict]]:
             s, derived, _ = strength_of(cites, ix)
             if kind not in NEEDS_CITE:
                 s = "thin"          # Napkin's idea: what sparked it is cited, but it is never shown as evidence-strong
-            out.append({"id": contract.mint("insight", text), "kind": kind, "text": text, "evidence": cites[:8], "strength": s,
-                        "ticked": False, "by": "engine", "derived": derived})
+            row = {"id": contract.mint("insight", text), "kind": kind, "text": text, "evidence": cites[:8], "strength": s,
+                   "ticked": False, "by": "engine", "derived": derived}
+            theme = theme_of(r.get("theme"))
+            if theme:
+                row["theme"] = theme
+            out.append(row)
     out.sort(key=lambda i: (ORDER[i["strength"]], -len(i["evidence"])))
     out = out[:contract.limit("focus", "insights")]
     for n, i in enumerate(out, 1):
