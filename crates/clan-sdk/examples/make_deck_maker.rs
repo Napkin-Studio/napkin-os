@@ -34,6 +34,9 @@ const APP_ID: &str = "ie.napkin.deck-maker";
 /// The apps a deck is spun off from, whole, under `upstream`.
 const BRIEF_APP_ID: &str = "ie.napkin.brief-maker";
 const RESEARCH_APP_ID: &str = "ie.napkin.campaign-research";
+/// The presentation kits a deck may hold, one at a time, never as research (deck-look-kits).
+const BRAND_APP_ID: &str = "ie.napkin.brand";
+const STYLE_PACK_APP_ID: &str = "ie.napkin.style-pack";
 const PIPELINE_PATH: &str = "app/pipeline.yaml";
 const ICON_PATH: &str = "app/icon.svg";
 const DATA_PATH: &str = "shared/data.yaml";
@@ -134,7 +137,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }),
             name: "Deck Maker".into(),
             app_id: APP_ID.into(),
-            version: "0.2.1".into(),
+            version: "0.4.0".into(),
             icon: Some(ICON_PATH.into()),
             entry: "human/index.html".into(),
             schema: Some("agent/output-schema.json".into()),
@@ -145,9 +148,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 upstream: true,
                 ..Default::default()
             }),
-            // Link an existing brief (one) or research (several) into a deck.
+            // Link an existing brief (one), research (several), a Brand Clan (one) or a
+            // Style Pack (one) into a deck. The two kits take no lift: a kit never seeds a field.
             attach: Some(AttachSpec {
-                accepts: vec![BRIEF_APP_ID.into(), RESEARCH_APP_ID.into()],
+                accepts: vec![
+                    BRIEF_APP_ID.into(),
+                    RESEARCH_APP_ID.into(),
+                    BRAND_APP_ID.into(),
+                    STYLE_PACK_APP_ID.into(),
+                ],
                 many: vec![RESEARCH_APP_ID.into()],
                 ..Default::default()
             }),
@@ -163,7 +172,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // The spin-off contract and version are asserted, not assumed: a regression
     // here must fail the packer (and the spinoff.rs test that runs it).
     let app_block = template.manifest().app.as_ref().expect("app block");
-    assert_eq!(app_block.version, "0.2.1", "the Deck template version");
+    assert_eq!(app_block.version, "0.4.0", "the Deck template version");
     let spin = app_block.spinoff.as_ref().expect("app.spinoff is declared");
     assert_eq!(
         spin.accepts,
@@ -171,6 +180,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "the Deck accepts the Brief Maker and the Research Tool"
     );
     assert!(spin.upstream, "app.spinoff.upstream must be true");
+    let attach = app_block.attach.as_ref().expect("app.attach is declared");
+    assert_eq!(
+        attach.accepts,
+        vec![
+            BRIEF_APP_ID.to_string(),
+            RESEARCH_APP_ID.to_string(),
+            BRAND_APP_ID.to_string(),
+            STYLE_PACK_APP_ID.to_string()
+        ],
+        "the Deck attaches a brief, research, a Brand Clan and a Style Pack"
+    );
+    assert_eq!(
+        attach.many,
+        vec![RESEARCH_APP_ID.to_string()],
+        "only research may be held more than once"
+    );
+    assert!(attach.lift.is_empty(), "a kit never seeds a deck field");
 
     // 7. Self-checks: the contracts travel into an instance, and the input rule survived.
     let instance = ClanFile::from_bytes(instantiate(

@@ -2,7 +2,7 @@
 # Built from the repository root:  docker build -f server/Dockerfile .
 # It reads the apps' pipeline declarations (app/templates/*/app/pipeline.yaml)
 # and the measure list the knowledge layers enforce
-# (layers-service/data/measures.json, NAPKIN_MEASURES), nothing else outside server/.
+# (layers-service/data/measures.json, NAPKIN_MEASURES) and the price table (engine/prices.json), nothing else outside server/.
 FROM python:3.12-slim AS runtime
 
 COPY --from=ghcr.io/astral-sh/uv:0.8 /uv /usr/local/bin/uv
@@ -15,6 +15,8 @@ COPY server/napkin ./napkin
 COPY app/templates/campaign-research/app/pipeline.yaml ../app/templates/campaign-research/app/pipeline.yaml
 COPY app/templates/brief-maker/app/pipeline.yaml ../app/templates/brief-maker/app/pipeline.yaml
 COPY layers-service/data/measures.json ../layers-service/data/measures.json
+# The one price table every tool reads (engine/prices.json; napkin/runlog.py prices model calls from it).
+COPY engine/prices.json ../engine/prices.json
 # Which model each call uses (NAPKIN_MODEL_ROUTES; the deployment points at it).
 COPY server/model-routes.example.json ./model-routes.json
 # Aurora is reached with sslmode=verify-full: the RDS certificate authorities.

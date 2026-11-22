@@ -113,7 +113,7 @@ describe('the Make room strip', () => {
     await until(() => r.boxes().length === 4)
     expect(r.boxes()).toEqual([1, 1, 1, 1])
     expect(r.el.querySelector('.rm-waits .bc.done')).toBeNull()
-  })
+  }, 20_000) // a flip, the agent's note and an Undo, each awaited: just over 5 s on a CI runner (develop CI, 2026-11-18)
 
   it('← and → move between gaps; a keyboard flip keeps the focus on its gap; the tip says what a flip does', async () => {
     const r = await room([3.5, 3.5, 4])

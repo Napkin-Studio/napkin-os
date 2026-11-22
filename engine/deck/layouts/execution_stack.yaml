@@ -1,0 +1,47 @@
+id: execution_stack
+version: 1
+group: content
+purpose: image
+description: The copy frame across the top, the role and notes in two columns beneath.
+slot_summary: title, copy, role, notes
+for_types:
+- execution
+when:
+  blocks_any:
+  - copy
+priority: 0
+alternatives:
+- execution
+- execution_visual
+roomier: execution
+density: standard
+pick: offer
+family: execution
+renderer: execution_stack
+slots:
+  title:
+    kind: text
+    role: title
+    required: true
+    min_chars: 3
+    max_lines: 3
+  copy:
+    kind: copy
+    from_blocks:
+    - copy
+    dominant: true
+  role:
+    kind: text
+    role: body
+    from_blocks:
+    - text
+    max_cpl: 48
+    max_chars: 367
+  notes:
+    kind: list
+    role: body
+    from_blocks:
+    - bullets
+    min_items: 1
+    max_items: 3
+    max_cpl: 48

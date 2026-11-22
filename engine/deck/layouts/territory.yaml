@@ -1,0 +1,45 @@
+id: territory
+version: 1
+group: content
+purpose: statement
+description: The territory's thought, its reasons and the sketch in a dark panel.
+slot_summary: title, thought, reasons, sketch
+for_types:
+- territory
+priority: 65
+alternatives:
+- territory_wide
+- frames_strip
+- image_text
+roomier: territory_wide
+density: standard
+pick: rule
+family: territory
+renderer: territory
+slots:
+  title:
+    kind: text
+    role: title
+    required: true
+    min_chars: 3
+    max_lines: 3
+  thought:
+    kind: text
+    role: lead
+    from_blocks:
+    - statement
+    max_chars: 136
+  reasons:
+    kind: group
+    role: body
+    from_blocks:
+    - kv
+    min_items: 1
+    max_items: 4
+  sketch:
+    kind: text
+    role: lead
+    from_blocks:
+    - sketch
+    dominant: true
+    max_chars: 136

@@ -59,5 +59,20 @@ engine/rag/golden/labels/client/
 # Local secrets (RAG, NVIDIA, Qdrant keys)
 *.env
 
+# Territory tool outputs next to a saved run: pictures, frame plans and review records of real client runs (never commit)
+*.frames/
+*.frames-plan.json
+*.safe-review.json
+*.material.json
+# the one exception: the INVENTED Lumen Water demo set of deck-frames-in (abstract Pillow drawings, fixture: true in its manifest)
+!engine/deck/tests/fixtures/frames_demo/lumen_run.frames/
+!engine/deck/tests/fixtures/frames_demo/lumen_run.frames-plan.json
+
 # Research run measurements (server/tools)
 runs/metrics/
+
+# the Deck Maker engine server per-document run folders (engine/deck/server.py)
+engine/deck-runs/
+
+# scripts/deck-local.sh: the local Deck Maker stack's runtime files
+.deck-local/

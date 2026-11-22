@@ -116,6 +116,10 @@ python = [
 exclude = [
   "mock-backend/*", "mock-middleware/*", "mock-agent/*", "test-sandbox/*", "site/*",
   "docs/*", "AI-Generated Brief App Design/*", "scripts/licences/*",
+  # Deck Maker pinned copies, each with a .source.json naming origin and version: a 72-icon
+  # subset of lucide-static (ISC, LICENSE kept beside it) and this repo's own
+  # production-tool/contracts/format-packs.json. Excluded by Shrey's decision, 2026-11-22.
+  "engine/deck/vendor/*",
 ]
 # Our own licences: a tracked file may carry these SPDX headers.
 own_licences = ["MPL-2.0", "CC-BY-4.0"]

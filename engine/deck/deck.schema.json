@@ -152,7 +152,7 @@
       },
       "profile": {
        "type": "object",
-       "$comment": "how the type was chosen: id, label, source (flag, answer, skipped, default) and note",
+       "$comment": "how the type was chosen: id, label, source (pick, flag, answer, inferred, skipped, default), note, and with deck-types the quoted evidence and the format",
        "properties": {
         "id": {
          "type": "string"
@@ -162,14 +162,30 @@
         },
         "source": {
          "enum": [
+          "pick",
           "flag",
           "answer",
+          "inferred",
           "skipped",
           "default"
          ]
         },
         "note": {
          "type": "string"
+        },
+        "evidence": {
+         "type": "array",
+         "items": {
+          "type": "string"
+         },
+         "$comment": "deck-types: the words quoted from the inputs when the type was inferred"
+        },
+        "format": {
+         "enum": [
+          "pitch",
+          "full"
+         ],
+         "$comment": "deck-types: the format the recipe was resolved for"
         }
        }
       }
@@ -190,8 +206,10 @@
       },
       "source": {
        "enum": [
+        "pick",
         "flag",
         "answer",
+        "inferred",
         "skipped",
         "default"
        ]
@@ -442,6 +460,879 @@
        "type": "integer"
       }
      }
+    },
+    "theme": {
+     "type": "object",
+     "required": [
+      "name",
+      "source",
+      "colors",
+      "fonts",
+      "scale",
+      "grid"
+     ],
+     "additionalProperties": false,
+     "description": "The look the deck used (theme.Theme made visible), written by the runner.",
+     "properties": {
+      "name": {
+       "type": "string"
+      },
+      "source": {
+       "enum": [
+        "default",
+        "brand_clan",
+        "style_pack",
+        "agency_look",
+        "brand_file",
+        "master"
+       ]
+      },
+      "kit": {
+       "type": "object",
+       "properties": {
+        "document_id": {
+         "type": "string"
+        },
+        "version": {
+         "type": "integer"
+        }
+       }
+      },
+      "colors": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "ink",
+        "paper",
+        "panel",
+        "rule",
+        "mute",
+        "accent",
+        "accent_ink",
+        "on_dark",
+        "on_dark_mute",
+        "accent_on_dark"
+       ],
+       "properties": {
+        "ink": {
+         "type": "string",
+         "pattern": "^[0-9A-F]{6}$"
+        },
+        "paper": {
+         "type": "string",
+         "pattern": "^[0-9A-F]{6}$"
+        },
+        "panel": {
+         "type": "string",
+         "pattern": "^[0-9A-F]{6}$"
+        },
+        "rule": {
+         "type": "string",
+         "pattern": "^[0-9A-F]{6}$"
+        },
+        "mute": {
+         "type": "string",
+         "pattern": "^[0-9A-F]{6}$"
+        },
+        "accent": {
+         "type": "string",
+         "pattern": "^[0-9A-F]{6}$"
+        },
+        "accent_ink": {
+         "type": "string",
+         "pattern": "^[0-9A-F]{6}$"
+        },
+        "on_dark": {
+         "type": "string",
+         "pattern": "^[0-9A-F]{6}$"
+        },
+        "on_dark_mute": {
+         "type": "string",
+         "pattern": "^[0-9A-F]{6}$"
+        },
+        "accent_on_dark": {
+         "type": "string",
+         "pattern": "^[0-9A-F]{6}$"
+        },
+        "chart": {
+         "type": "array",
+         "maxItems": 8,
+         "items": {
+          "type": "string",
+          "pattern": "^[0-9A-F]{6}$"
+         }
+        }
+       }
+      },
+      "semantic": {
+       "type": "object",
+       "properties": {
+        "positive": {
+         "type": "string",
+         "pattern": "^[0-9A-F]{6}$"
+        },
+        "negative": {
+         "type": "string",
+         "pattern": "^[0-9A-F]{6}$"
+        }
+       }
+      },
+      "accent_use": {
+       "enum": [
+        "fill",
+        "outline"
+       ]
+      },
+      "header_position": {
+       "enum": [
+        "left",
+        "center"
+       ]
+      },
+      "canvas": {
+       "type": "object",
+       "properties": {
+        "w_in": {
+         "const": 13.333
+        },
+        "h_in": {
+         "const": 7.5
+        }
+       }
+      },
+      "fonts": {
+       "type": "object",
+       "required": [
+        "head",
+        "body"
+       ],
+       "additionalProperties": false,
+       "properties": {
+        "head": {
+         "type": "string"
+        },
+        "body": {
+         "type": "string"
+        },
+        "fallback": {
+         "type": "array",
+         "maxItems": 2,
+         "items": {
+          "type": "string"
+         }
+        }
+       }
+      },
+      "line_height": {
+       "type": "object",
+       "properties": {
+        "head": {
+         "type": "number",
+         "minimum": 0.9,
+         "maximum": 1.15
+        },
+        "body": {
+         "type": "number",
+         "minimum": 1.3,
+         "maximum": 1.5
+        }
+       }
+      },
+      "scale": {
+       "type": "object",
+       "additionalProperties": false,
+       "properties": {
+        "display": {
+         "type": "integer",
+         "minimum": 44,
+         "maximum": 80
+        },
+        "title": {
+         "type": "integer",
+         "minimum": 36,
+         "maximum": 44
+        },
+        "title_min": {
+         "type": "integer",
+         "minimum": 28
+        },
+        "lead": {
+         "type": "integer",
+         "minimum": 20,
+         "maximum": 24
+        },
+        "body": {
+         "type": "integer",
+         "minimum": 14,
+         "maximum": 16
+        },
+        "small": {
+         "type": "integer",
+         "minimum": 10
+        },
+        "caption": {
+         "type": "integer",
+         "minimum": 10,
+         "maximum": 12
+        },
+        "body_floor": {
+         "type": "integer",
+         "minimum": 12
+        },
+        "caption_floor": {
+         "type": "integer",
+         "minimum": 10
+        },
+        "foot_floor": {
+         "type": "integer",
+         "minimum": 9
+        }
+       }
+      },
+      "grid": {
+       "type": "object",
+       "properties": {
+        "margin_in": {
+         "type": "number",
+         "minimum": 0.5,
+         "maximum": 1.0
+        },
+        "gutter_in": {
+         "type": "number",
+         "minimum": 0.25,
+         "maximum": 0.5
+        },
+        "unit_in": {
+         "type": "number"
+        }
+       }
+      },
+      "logo": {
+       "type": "object",
+       "properties": {
+        "asset": {
+         "type": "string"
+        },
+        "placement": {
+         "enum": [
+          "cover_only",
+          "cover_and_footer",
+          "none"
+         ]
+        },
+        "min_height_in": {
+         "type": "number",
+         "minimum": 0.3
+        }
+       }
+      },
+      "derived": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "problems": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "from": {
+       "type": "object",
+       "description": "Which tier gave each token: a colour role, head, body or logo. Written by the runner (deck-look-kits). meta.theme.source is the highest tier that gave any token.",
+       "additionalProperties": {
+        "enum": [
+         "brand_clan",
+         "brand_file",
+         "master",
+         "style_pack",
+         "agency_look",
+         "default",
+         "derived"
+        ]
+       }
+      },
+      "style_pack": {
+       "type": "object",
+       "description": "The Style Pack the deck's look and pictures used: its document, version and computed style hash (deck-look-kits).",
+       "properties": {
+        "document_id": {
+         "type": "string"
+        },
+        "version": {
+         "type": "integer"
+        },
+        "hash": {
+         "type": "string",
+         "pattern": "^[0-9a-f]{8}$"
+        }
+       }
+      },
+      "agency": {
+       "type": "object",
+       "description": "The agency look the deck wore: its id and revision, so Review can say the look changed since the last build (deck-look-kits).",
+       "properties": {
+        "id": {
+         "type": "string"
+        },
+        "rev": {
+         "type": [
+          "integer",
+          "string"
+         ]
+        }
+       }
+      },
+      "accent_line": {
+       "type": "string",
+       "pattern": "^[0-9A-F]{6}$",
+       "description": "The accent where it is a thin line, rule or chart series. Set when the accent is under 3:1 on the paper (a pale accent is a fill only); absent means the accent itself."
+      },
+      "held": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       },
+       "description": "What the look held back and why (for example a client logo whose brand is not the brief's client). Never dropped silently."
+      }
+     }
+    },
+    "repair_policy": {
+     "type": "object",
+     "additionalProperties": false,
+     "description": "How the repair loop runs (engine/deck/policy/repair.yaml; a profile may override). The policy a run used is stamped at deck.meta.repair_policy by the runner.",
+     "properties": {
+      "max_rounds": {
+       "type": "integer",
+       "minimum": 0,
+       "maximum": 2,
+       "default": 2
+      },
+      "max_usd": {
+       "type": "number",
+       "minimum": 0,
+       "maximum": 2,
+       "default": 0.6
+      },
+      "max_seconds": {
+       "type": "integer",
+       "minimum": 0,
+       "maximum": 600,
+       "default": 240
+      },
+      "repair_on": {
+       "type": "array",
+       "items": {
+        "enum": [
+         "blocker",
+         "major",
+         "minor"
+        ]
+       },
+       "default": [
+        "blocker",
+        "major"
+       ]
+      },
+      "client_export_blocks_on": {
+       "type": "array",
+       "items": {
+        "enum": [
+         "blocker",
+         "major"
+        ]
+       },
+       "default": [
+        "blocker"
+       ]
+      },
+      "severity": {
+       "type": "object",
+       "propertyNames": {
+        "enum": [
+         "numbers_trace",
+         "numbers_uncited",
+         "unverified_fig",
+         "rejected_used",
+         "proposed_used",
+         "unknown_ref",
+         "bare_claim",
+         "word_budget",
+         "empty_slot",
+         "placeholder",
+         "requirement_map",
+         "banned_phrase",
+         "watch_word",
+         "message_carried",
+         "action_title",
+         "repeated_line",
+         "copy_number",
+         "pitch_length",
+         "rule_broken",
+         "source_required",
+         "internal_leak",
+         "quote_source",
+         "criteria_map",
+         "imagery",
+         "copy_spec",
+         "budget_spread",
+         "thin_evidence",
+         "claim_fit",
+         "objective_quant",
+         "insight_shape",
+         "idea_single",
+         "chain_links",
+         "weight_share",
+         "off_slide",
+         "margin",
+         "text_overlap",
+         "text_overflow",
+         "min_font",
+         "contrast",
+         "mostly_empty",
+         "one_corner",
+         "qa_internal",
+         "unreadable",
+         "slot_limit",
+         "slot_missing",
+         "slot_unknown",
+         "slot_stale",
+         "block_unbound",
+         "layout_unknown",
+         "text_on_image_fallback",
+         "image_missing",
+         "image_unapproved",
+         "image_flagged",
+         "image_rights",
+         "style_pack_held",
+         "pitch_cap",
+         "role_words",
+         "notes_unread",
+         "golden_echo",
+         "picture_stretch",
+         "picture_lowres",
+         "text_on_image_contrast",
+         "layout_repeat",
+         "title_drift",
+         "line_length",
+         "image_style_mixed",
+         "export_failed",
+         "v_one_focus",
+         "v_balance",
+         "v_not_crowded",
+         "v_looks_finished",
+         "v_image_fits",
+         "v_image_clean",
+         "v_text_on_image",
+         "v_crop_ok",
+         "v_one_style",
+         "v_rhythm"
+        ]
+       },
+       "additionalProperties": {
+        "enum": [
+         "blocker",
+         "major",
+         "minor"
+        ]
+       },
+       "description": "Check name to severity. Every key is a check name of spec.ISSUE_CHECKS."
+      },
+      "ladder": {
+       "type": "array",
+       "items": {
+        "enum": [
+         "shrink",
+         "switch_layout",
+         "shorten",
+         "split",
+         "overflow_to_notes",
+         "needs_human"
+        ]
+       }
+      },
+      "shrink": {
+       "type": "object",
+       "additionalProperties": false,
+       "properties": {
+        "min_scale": {
+         "type": "number",
+         "minimum": 0.75,
+         "maximum": 1,
+         "default": 0.85
+        }
+       }
+      },
+      "shorten": {
+       "type": "object",
+       "additionalProperties": false,
+       "properties": {
+        "max_slots_per_round": {
+         "type": "integer",
+         "minimum": 0,
+         "maximum": 20,
+         "default": 12
+        },
+        "max_cut_ratio": {
+         "type": "number",
+         "minimum": 0,
+         "maximum": 0.4,
+         "default": 0.35
+        },
+        "guards": {
+         "type": "array",
+         "items": {
+          "enum": [
+           "no_new_number",
+           "refs_kept",
+           "not_longer",
+           "label_titles_untouched",
+           "ledger_kept",
+           "own_words"
+          ]
+         }
+        },
+        "word_rule": {
+         "enum": [
+          "reuse",
+          "delete_only"
+         ],
+         "default": "delete_only",
+         "description": "delete_only (default): the new text is an ordered subsequence of the same field's base words and only allow-listed words (assemble.DELETABLE, or `deletable`) are deleted; reuse: content words of the base text in any order, refused on a client deck."
+        },
+        "deletable": {
+         "type": "array",
+         "items": {
+          "type": "string"
+         },
+         "description": "Replaces the default allow-list of words that may be deleted (absent: assemble.DELETABLE). Fail closed: every other word survives."
+        }
+       }
+      },
+      "images": {
+       "type": "object",
+       "additionalProperties": false,
+       "properties": {
+        "max_regens_per_slot": {
+         "type": "integer",
+         "minimum": 0,
+         "maximum": 1,
+         "default": 1
+        },
+        "on_flag": {
+         "enum": [
+          "wait_for_person",
+          "regen_then_drop"
+         ],
+         "default": "wait_for_person"
+        },
+        "max_usd": {
+         "type": "number",
+         "minimum": 0,
+         "maximum": 10,
+         "default": 2.5
+        }
+       }
+      },
+      "keep_round_if": {
+       "const": "blockers_and_majors_not_up_and_no_new_validator_error"
+      },
+      "critic": {
+       "type": "object",
+       "additionalProperties": false,
+       "properties": {
+        "enabled": {
+         "type": "boolean",
+         "default": false,
+         "description": "The vision critic stays advisory and off until its questions are graded."
+        },
+        "may_fix": {
+         "type": "array",
+         "items": {
+          "enum": [
+           "switch_layout",
+           "regen_image",
+           "crop_image",
+           "add_scrim"
+          ]
+         }
+        },
+        "needs_code_confirm": {
+         "type": "boolean",
+         "default": true
+        }
+       }
+      }
+     }
+    },
+    "preferences": {
+     "type": "object",
+     "additionalProperties": false,
+     "description": "The resolved preferences a build used, each the field's values plus source: person or default. Written by the runner.",
+     "properties": {
+      "pictures": {
+       "type": "object",
+       "properties": {
+        "on": {
+         "enum": [
+          "creative_cover",
+          "creative",
+          "none",
+          "custom"
+         ]
+        },
+        "slides": {
+         "type": "object"
+        },
+        "source": {
+         "enum": [
+          "person",
+          "default"
+         ]
+        }
+       }
+      },
+      "density": {
+       "type": "object",
+       "properties": {
+        "level": {
+         "enum": [
+          "lean",
+          "standard",
+          "detailed"
+         ]
+        },
+        "source": {
+         "enum": [
+          "person",
+          "default"
+         ]
+        }
+       }
+      },
+      "size": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": ["canvas", "source"],
+       "description": "deck-slide-size: the slide size the deck is drawn at (theme.CANVASES), written only when a person, the document or a recipe gave one; absent means 16:9.",
+       "properties": {
+        "canvas": {"enum": ["16:9", "4:3", "a4"]},
+        "source": {"enum": ["person", "master", "recipe", "default"]}
+       }
+      },
+      "picture_source": {
+       "type": "object",
+       "properties": {
+        "allow": {
+         "enum": [
+          "existing",
+          "generated"
+         ]
+        },
+        "cap_usd": {
+         "type": "number"
+        },
+        "source": {
+         "enum": [
+          "person",
+          "default"
+         ]
+        }
+       }
+      },
+      "style_pack": {
+       "type": "object",
+       "properties": {
+        "use": {
+         "enum": [
+          "territory",
+          "other"
+         ]
+        },
+        "document_id": {
+         "type": "string"
+        },
+        "source": {
+         "enum": [
+          "person",
+          "default"
+         ]
+        },
+        "hash": {
+         "type": "string",
+         "pattern": "^[0-9a-f]{8}$",
+         "description": "The 8-hex hash of the Style Pack the deck now uses (the runner's stamp); a picture whose style hash differs is stale, not mixed."
+        },
+        "hold": {
+         "type": "boolean",
+         "description": "True when the Style Pack could not be read (a StyleError): the build went on and the pictures keep the style they were made in."
+        },
+        "hold_reason": {
+         "type": "string",
+         "maxLength": 300
+        }
+       }
+      },
+      "brand": {
+       "type": "object",
+       "properties": {
+        "wears": {
+         "enum": [
+          "agency",
+          "client",
+          "co_branded"
+         ]
+        },
+        "source": {
+         "enum": [
+          "person",
+          "default"
+         ]
+        }
+       }
+      },
+      "picture_approval": {
+       "type": "object",
+       "properties": {
+        "approver": {
+         "enum": [
+          "owner",
+          "named"
+         ]
+        },
+        "user": {
+         "type": "string"
+        },
+        "label": {
+         "type": "string"
+        },
+        "source": {
+         "enum": [
+          "person",
+          "default"
+         ]
+        }
+       }
+      },
+      "agency_look": {
+       "type": "object",
+       "properties": {
+        "use": {
+         "type": "boolean"
+        },
+        "source": {
+         "enum": [
+          "person",
+          "default"
+         ]
+        }
+       }
+      },
+      "look": {
+       "type": "object",
+       "additionalProperties": false,
+       "description": "deck-graphics: the switchable parts a person turned on or off for this deck (read only under DECK_GRAPHICS=1): icons, mockups.",
+       "properties": {
+        "graphics": {
+         "type": "object",
+         "additionalProperties": false,
+         "properties": {
+          "icons": {
+           "type": "boolean"
+          },
+          "mockups": {
+           "type": "boolean"
+          }
+         }
+        }
+       }
+      }
+     }
+    },
+    "style_hold": {
+     "type": "object",
+     "description": "Set when a Style Pack was given but could not be used (it broke its rules or could not be read). The deck was built with the default style and pictures are held: image steps (deck-frames-in, deck-image-gen) read this and make nothing until a person fixes the pack.",
+     "required": [
+      "reason"
+     ],
+     "properties": {
+      "reason": {
+       "type": "string"
+      },
+      "pack": {
+       "type": "string"
+      }
+     }
+    },
+    "layout_title_pt": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "integer",
+      "minimum": 24,
+      "maximum": 48
+     },
+     "description": "The title size in points stamped for each layout used in this deck (36, 32, 30 or 28), read by the pptx, web and HyperFrames renderers."
+    },
+    "layout_plan": {
+     "type": "object",
+     "description": "What the layout plan did: density and the count of slides per fit rung."
+    },
+    "production": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "project_id",
+      "data_sha256",
+      "offer_sha256",
+      "how"
+     ],
+     "description": "The Production Tool export this deck's pulled pictures were taken from (deck-prod-assets), the shape of Production's own briefs[].source. offer_sha256 (the offered entity ids and asset hashes) is the update key, never the relay ETag. Optional: a deck with no pulled picture has none.",
+     "properties": {
+      "project_id": {
+       "type": "string",
+       "pattern": "^proj_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "title": {
+       "type": "string",
+       "maxLength": 120
+      },
+      "data_sha256": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{64}$"
+      },
+      "offer_sha256": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{64}$"
+      },
+      "taken": {
+       "type": "integer",
+       "minimum": 1
+      },
+      "at": {
+       "type": "string"
+      },
+      "how": {
+       "enum": [
+        "bundle",
+        "clan",
+        "os"
+       ],
+       "description": "bundle: the export zip through deck.from_production; clan: a Production .clan (or the zip) read by deck.prod_picker, which picks from metadata and pulls only the picked pictures; os: from the OS (later)."
+      },
+      "kept": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{64}$"
+      },
+      "placed": {
+       "type": "integer",
+       "minimum": 0
+      },
+      "held": {
+       "type": "integer",
+       "minimum": 0
+      }
+     }
     }
    }
   },
@@ -508,6 +1399,16 @@
     }
    },
    "$comment": "award criteria and their scored parts; each concept must be answered by a slide (validate: criteria_map)"
+  },
+  "assets": {
+   "type": "object",
+   "propertyNames": {
+    "pattern": "^img_[0-9a-f]{12}$"
+   },
+   "description": "Pictures, keyed by img_ plus the first 12 hex of the file's SHA-256, so one file is one asset in every slot and run. Written by the image plan and image step.",
+   "additionalProperties": {
+    "$ref": "#/definitions/asset"
+   }
   }
  },
  "definitions": {
@@ -598,7 +1499,8 @@
       "steps",
       "chart",
       "sketch",
-      "copy"
+      "copy",
+      "stats"
      ]
     },
     "text": {
@@ -806,6 +1708,1116 @@
        "items": {
         "type": "string"
        }
+      }
+     }
+    },
+    "layout": {
+     "type": "object",
+     "required": [
+      "id",
+      "chosen_by"
+     ],
+     "additionalProperties": false,
+     "description": "Which layout the slide is drawn with and why. Written by the layout plan (code); a person's swap is look.layouts.<slide id>, stamped here. Absent: the renderer works it out as today.",
+     "properties": {
+      "id": {
+       "type": "string",
+       "pattern": "^(flow|[a-z][a-z0-9_]{2,31})$",
+       "description": "A library layout id, or flow (reserved: no library layout, no slots)."
+      },
+      "version": {
+       "type": "integer",
+       "minimum": 1
+      },
+      "chosen_by": {
+       "enum": [
+        "rule",
+        "fit_ladder",
+        "repair",
+        "person"
+       ]
+      },
+      "alternatives": {
+       "type": "array",
+       "maxItems": 4,
+       "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{2,31}$"
+       }
+      },
+      "why": {
+       "type": "string",
+       "maxLength": 160
+      },
+      "fit": {
+       "type": "object",
+       "additionalProperties": false,
+       "properties": {
+        "rung": {
+         "enum": [
+          "as_is",
+          "shrunk",
+          "switched",
+          "shortened",
+          "split",
+          "overflow_to_notes",
+          "no_fit"
+         ]
+        },
+        "scale": {
+         "type": "number",
+         "minimum": 0.6,
+         "maximum": 1.6
+        },
+        "relaxed": {
+         "type": "boolean"
+        },
+        "moved": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "required": [
+           "block",
+           "item",
+           "sha"
+          ],
+          "additionalProperties": false,
+          "properties": {
+           "block": {
+            "type": "integer",
+            "minimum": 0
+           },
+           "item": {
+            "type": [
+             "integer",
+             "null"
+            ],
+            "minimum": 0
+           },
+           "sha": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{12}$"
+           },
+           "refs": {
+            "type": "array",
+            "items": {
+             "type": "string"
+            }
+           }
+          }
+         },
+         "description": "Points the layout plan moved to the speaker notes: an overlay, never an edit of the blocks. block is the index in slide.blocks, item the index in its items (null: the whole block), sha the first 12 hex of the verbatim text, refs the point's refs."
+        },
+        "cpl": {
+         "type": "integer",
+         "minimum": 48,
+         "maximum": 75,
+         "description": "Characters per line the slide was fitted at when 48 would not fit (60): the last step before type goes to the caption floor."
+        },
+        "title_pt": {
+         "type": "integer",
+         "minimum": 28,
+         "maximum": 36,
+         "description": "deck-slide-size: the title size this one slide was fitted at at 4:3 or A4 when the layout's stamped size would not fit (the last rung before no_fit)."
+        },
+        "by_size": {
+         "type": "boolean",
+         "description": "deck-slide-size: the slide holds its layout at 16:9 and needed the ladder only at this size: its findings are never shortened (no paid call for a size change)."
+        }
+       }
+      },
+      "blocks_sha": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{12}$",
+       "description": "First 12 hex of the SHA-256 of the canonical JSON of [title, shown blocks] when the slots were bound. A different hash makes layout and slots read as absent."
+      }
+     }
+    },
+    "slots": {
+     "type": "object",
+     "propertyNames": {
+      "pattern": "^[a-z][a-z0-9_]{1,23}$"
+     },
+     "description": "Blocks bound to the layout's named boxes, keyed by slot name so each is a data path (deck.slides.s07.slots.picture). Written by code, never by the app. The blocks stay the only source of words.",
+     "additionalProperties": {
+      "oneOf": [
+       {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+         "kind",
+         "text"
+        ],
+        "properties": {
+         "kind": {
+          "const": "text"
+         },
+         "text": {
+          "type": "string"
+         },
+         "blocks": {
+          "type": "array",
+          "items": {
+           "type": "integer",
+           "minimum": 0
+          },
+          "description": "Indexes, among the slide's shown blocks, this value was bound from."
+         },
+         "refs": {
+          "type": "array",
+          "items": {
+           "$ref": "#/definitions/ref"
+          }
+         },
+         "basis": {
+          "enum": [
+           "sourced",
+           "creative",
+           "opinion",
+           "proposal",
+           "meta"
+          ]
+         },
+         "chars": {
+          "type": "integer",
+          "minimum": 0
+         },
+         "words": {
+          "type": "integer",
+          "minimum": 0
+         }
+        }
+       },
+       {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+         "kind",
+         "items"
+        ],
+        "properties": {
+         "kind": {
+          "const": "list"
+         },
+         "items": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+           "type": "object",
+           "required": [
+            "text"
+           ],
+           "properties": {
+            "text": {
+             "type": "string"
+            },
+            "heading": {
+             "type": "string"
+            },
+            "human": {
+             "type": "boolean"
+            },
+            "refs": {
+             "type": "array",
+             "items": {
+              "$ref": "#/definitions/ref"
+             }
+            }
+           }
+          }
+         },
+         "blocks": {
+          "type": "array",
+          "items": {
+           "type": "integer",
+           "minimum": 0
+          },
+          "description": "Indexes, among the slide's shown blocks, this value was bound from."
+         },
+         "refs": {
+          "type": "array",
+          "items": {
+           "$ref": "#/definitions/ref"
+          }
+         },
+         "basis": {
+          "enum": [
+           "sourced",
+           "creative",
+           "opinion",
+           "proposal",
+           "meta"
+          ]
+         },
+         "chars": {
+          "type": "integer",
+          "minimum": 0
+         },
+         "words": {
+          "type": "integer",
+          "minimum": 0
+         }
+        }
+       },
+       {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+         "kind",
+         "items"
+        ],
+        "properties": {
+         "kind": {
+          "const": "group"
+         },
+         "items": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+           "type": "object",
+           "required": [
+            "text"
+           ],
+           "properties": {
+            "text": {
+             "type": "string"
+            },
+            "heading": {
+             "type": "string"
+            },
+            "refs": {
+             "type": "array",
+             "items": {
+              "$ref": "#/definitions/ref"
+             }
+            }
+           }
+          }
+         },
+         "blocks": {
+          "type": "array",
+          "items": {
+           "type": "integer",
+           "minimum": 0
+          },
+          "description": "Indexes, among the slide's shown blocks, this value was bound from."
+         },
+         "refs": {
+          "type": "array",
+          "items": {
+           "$ref": "#/definitions/ref"
+          }
+         },
+         "basis": {
+          "enum": [
+           "sourced",
+           "creative",
+           "opinion",
+           "proposal",
+           "meta"
+          ]
+         },
+         "chars": {
+          "type": "integer",
+          "minimum": 0
+         },
+         "words": {
+          "type": "integer",
+          "minimum": 0
+         }
+        }
+       },
+       {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+         "kind",
+         "items"
+        ],
+        "properties": {
+         "kind": {
+          "const": "stat"
+         },
+         "items": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+           "type": "object",
+           "required": [
+            "value",
+            "text"
+           ],
+           "properties": {
+            "value": {
+             "type": "string"
+            },
+            "text": {
+             "type": "string"
+            },
+            "refs": {
+             "type": "array",
+             "items": {
+              "$ref": "#/definitions/ref"
+             }
+            }
+           }
+          }
+         },
+         "blocks": {
+          "type": "array",
+          "items": {
+           "type": "integer",
+           "minimum": 0
+          },
+          "description": "Indexes, among the slide's shown blocks, this value was bound from."
+         },
+         "refs": {
+          "type": "array",
+          "items": {
+           "$ref": "#/definitions/ref"
+          }
+         },
+         "basis": {
+          "enum": [
+           "sourced",
+           "creative",
+           "opinion",
+           "proposal",
+           "meta"
+          ]
+         },
+         "chars": {
+          "type": "integer",
+          "minimum": 0
+         },
+         "words": {
+          "type": "integer",
+          "minimum": 0
+         }
+        }
+       },
+       {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+         "kind",
+         "rows"
+        ],
+        "properties": {
+         "kind": {
+          "const": "table"
+         },
+         "rows": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+           "type": "array",
+           "maxItems": 5,
+           "items": {
+            "type": "string"
+           }
+          }
+         },
+         "blocks": {
+          "type": "array",
+          "items": {
+           "type": "integer",
+           "minimum": 0
+          },
+          "description": "Indexes, among the slide's shown blocks, this value was bound from."
+         },
+         "refs": {
+          "type": "array",
+          "items": {
+           "$ref": "#/definitions/ref"
+          }
+         },
+         "basis": {
+          "enum": [
+           "sourced",
+           "creative",
+           "opinion",
+           "proposal",
+           "meta"
+          ]
+         },
+         "chars": {
+          "type": "integer",
+          "minimum": 0
+         },
+         "words": {
+          "type": "integer",
+          "minimum": 0
+         }
+        }
+       },
+       {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+         "kind",
+         "chart"
+        ],
+        "properties": {
+         "kind": {
+          "const": "chart"
+         },
+         "chart": {
+          "type": "object"
+         },
+         "blocks": {
+          "type": "array",
+          "items": {
+           "type": "integer",
+           "minimum": 0
+          },
+          "description": "Indexes, among the slide's shown blocks, this value was bound from."
+         },
+         "refs": {
+          "type": "array",
+          "items": {
+           "$ref": "#/definitions/ref"
+          }
+         },
+         "basis": {
+          "enum": [
+           "sourced",
+           "creative",
+           "opinion",
+           "proposal",
+           "meta"
+          ]
+         },
+         "chars": {
+          "type": "integer",
+          "minimum": 0
+         },
+         "words": {
+          "type": "integer",
+          "minimum": 0
+         }
+        }
+       },
+       {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+         "kind",
+         "image"
+        ],
+        "properties": {
+         "kind": {
+          "const": "image"
+         },
+         "image": {
+          "$ref": "#/definitions/image_slot"
+         },
+         "blocks": {
+          "type": "array",
+          "items": {
+           "type": "integer",
+           "minimum": 0
+          },
+          "description": "Indexes, among the slide's shown blocks, this value was bound from."
+         },
+         "refs": {
+          "type": "array",
+          "items": {
+           "$ref": "#/definitions/ref"
+          }
+         },
+         "basis": {
+          "enum": [
+           "sourced",
+           "creative",
+           "opinion",
+           "proposal",
+           "meta"
+          ]
+         },
+         "chars": {
+          "type": "integer",
+          "minimum": 0
+         },
+         "words": {
+          "type": "integer",
+          "minimum": 0
+         }
+        }
+       },
+       {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+         "kind",
+         "lines"
+        ],
+        "properties": {
+         "kind": {
+          "const": "copy"
+         },
+         "lines": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "answer": {
+          "type": "string"
+         },
+         "blocks": {
+          "type": "array",
+          "items": {
+           "type": "integer",
+           "minimum": 0
+          },
+          "description": "Indexes, among the slide's shown blocks, this value was bound from."
+         },
+         "refs": {
+          "type": "array",
+          "items": {
+           "$ref": "#/definitions/ref"
+          }
+         },
+         "basis": {
+          "enum": [
+           "sourced",
+           "creative",
+           "opinion",
+           "proposal",
+           "meta"
+          ]
+         },
+         "chars": {
+          "type": "integer",
+          "minimum": 0
+         },
+         "words": {
+          "type": "integer",
+          "minimum": 0
+         }
+        }
+       }
+      ]
+     }
+    },
+    "pinned": {
+     "type": "boolean",
+     "description": "The runner's stamp of review.pinned.<slide id>: the trim, the red team's reorder and the repair loop leave the slide's words and place alone."
+    }
+   }
+  },
+  "image_slot": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": [
+    "kind",
+    "status",
+    "aspect"
+   ],
+   "description": "The request for one picture and the person's decision on it. What was made is on deck.assets. Written by the image plan and image step; approval is the runner's stamp of review.images.",
+   "properties": {
+    "kind": {
+     "enum": [
+      "photo",
+      "illustration",
+      "frame",
+      "screenshot",
+      "logo"
+     ]
+    },
+    "status": {
+     "enum": [
+      "empty",
+      "planned",
+      "made",
+      "flagged",
+      "approved",
+      "rejected",
+      "failed"
+     ]
+    },
+    "aspect": {
+     "enum": [
+      "16:9",
+      "3:2",
+      "4:3",
+      "1:1",
+      "4:5",
+      "9:16"
+     ]
+    },
+    "asset": {
+     "type": "string",
+     "pattern": "^img_[0-9a-f]{12}$",
+     "description": "A key of deck.assets."
+    },
+    "from": {
+     "type": "object",
+     "required": [
+      "kind"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "kind": {
+       "enum": [
+        "territory_frame",
+        "upload",
+        "brand",
+        "generated",
+        "production"
+       ]
+      },
+      "key": {
+       "type": "string",
+       "description": "The frame key <territory id>-<shot>-<flash|pro>, a material id, or a Brand Clan logo id, or a Production Tool item key (an entity id; a key visual is <format set id>#master)."
+      },
+      "run": {
+       "type": "string",
+       "description": "The territory run's 12-character hash, or for a Production picture the first 12 hex of the exported .clan's sha256."
+      }
+     }
+    },
+    "subject": {
+     "type": "string",
+     "maxLength": 400,
+     "description": "What a camera could see, from the slide's own creative text. No brand name, person's name, figure or words to paint."
+    },
+    "prompt": {
+     "type": "string",
+     "maxLength": 2400,
+     "description": "The exact text sent: subject, style block, guard rails. Recorded, never edited by hand."
+    },
+    "style": {
+     "type": "object",
+     "additionalProperties": false,
+     "properties": {
+      "pack": {
+       "type": "string"
+      },
+      "version": {
+       "type": "integer"
+      },
+      "hash": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{8}$"
+      }
+     }
+    },
+    "reference_images": {
+     "type": "array",
+     "maxItems": 14,
+     "uniqueItems": true,
+     "items": {
+      "type": "string",
+      "pattern": "^img_[0-9a-f]{12}$"
+     }
+    },
+    "target_px": {
+     "type": "array",
+     "minItems": 2,
+     "maxItems": 2,
+     "items": {
+      "type": "integer",
+      "minimum": 1
+     }
+    },
+    "basis": {
+     "const": "creative",
+     "description": "Every picture is creative, never sourced. There is no stored label: a renderer draws the picture label when status is not approved."
+    },
+    "fit": {
+     "enum": [
+      "cover",
+      "contain"
+     ]
+    },
+    "focal": {
+     "type": "object",
+     "properties": {
+      "x": {
+       "type": "number",
+       "minimum": 0,
+       "maximum": 1
+      },
+      "y": {
+       "type": "number",
+       "minimum": 0,
+       "maximum": 1
+      }
+     }
+    },
+    "guards": {
+     "type": "object",
+     "additionalProperties": false,
+     "properties": {
+      "no_text": {
+       "const": true
+      },
+      "no_logos": {
+       "const": true
+      },
+      "no_real_people": {
+       "const": true
+      },
+      "no_chart_as_image": {
+       "const": true
+      },
+      "banned_imagery": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "safe_messaging": {
+       "type": "object",
+       "properties": {
+        "packs": {
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        },
+        "reviewed": {
+         "type": [
+          "object",
+          "null"
+         ],
+         "properties": {
+          "by": {
+           "type": "string"
+          },
+          "at": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     }
+    },
+    "alt": {
+     "type": "string",
+     "maxLength": 140,
+     "description": "Written by code from subject. Never from a picture's metadata."
+    },
+    "attempts": {
+     "type": "integer",
+     "minimum": 0,
+     "maximum": 2
+    },
+    "reason": {
+     "type": "string",
+     "maxLength": 300,
+     "description": "Why the slot is empty, failed or held back."
+    },
+    "approval": {
+     "type": [
+      "object",
+      "null"
+     ],
+     "additionalProperties": false,
+     "required": [
+      "asset",
+      "decision",
+      "by",
+      "at"
+     ],
+     "description": "The runner's stamp of review.images.<slide id>.<slot>. An approval names one asset: a changed asset is unapproved again. That approval.asset equals the slot's asset is checked in code, not by the schema.",
+     "properties": {
+      "asset": {
+       "type": "string",
+       "pattern": "^img_[0-9a-f]{12}$"
+      },
+      "decision": {
+       "enum": [
+        "approve",
+        "replace",
+        "remove"
+       ]
+      },
+      "by": {
+       "type": "string",
+       "minLength": 1,
+       "pattern": "^human:.+$"
+      },
+      "at": {
+       "type": "string",
+       "minLength": 1
+      },
+      "note": {
+       "type": "string"
+      }
+     }
+    },
+    "candidate": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "asset",
+      "job"
+     ],
+     "description": "A hero (pro) picture beside the approved draft (deck-image-gen). slot.asset stays the draft; only a person's approval of the candidate's own asset promotes it. Never drawn while pending, flagged or removed.",
+     "properties": {
+      "asset": {
+       "type": "string",
+       "pattern": "^img_[0-9a-f]{12}$"
+      },
+      "job": {
+       "type": "string"
+      }
+     }
+    },
+    "scrim": {
+     "enum": [
+      "none",
+      "dark",
+      "light"
+     ]
+    },
+    "text_zone": {
+     "type": "object",
+     "additionalProperties": false,
+     "description": "deck-look (LOOK_V3): where words may sit on this picture, from images.text_zone (the calm-zone finder and scrim solver) or pinned by a repair or a person. A zone: the words' colour, the scrim's colour and alpha (0.40 to 0.60), the 10th-percentile contrast it predicts and the zone's luminance s.d. none: no zone reads at AA, so the words sit beside the picture.",
+     "properties": {
+      "zone": {
+       "enum": [
+        "bottom_left",
+        "top_left",
+        "middle_left",
+        "bottom_right",
+        "top_right",
+        "middle_right"
+       ]
+      },
+      "text": {
+       "type": "string",
+       "pattern": "^[0-9A-Fa-f]{6}$"
+      },
+      "colour": {
+       "type": "string",
+       "pattern": "^[0-9A-Fa-f]{6}$"
+      },
+      "alpha": {
+       "type": "number",
+       "minimum": 0,
+       "maximum": 1
+      },
+      "p10": {
+       "type": "number",
+       "minimum": 0
+      },
+      "busy_sd": {
+       "type": "number",
+       "minimum": 0
+      },
+      "by": {
+       "enum": [
+        "finder",
+        "repair",
+        "person"
+       ]
+      },
+      "none": {
+       "const": true
+      },
+      "reason": {
+       "type": "string",
+       "maxLength": 300
+      },
+      "best": {
+       "type": "object"
+      }
+     }
+    }
+   },
+   "if": {
+    "properties": {
+     "status": {
+      "const": "approved"
+     }
+    },
+    "required": [
+     "status"
+    ]
+   },
+   "then": {
+    "required": [
+     "asset",
+     "approval"
+    ],
+    "properties": {
+     "approval": {
+      "type": "object",
+      "required": [
+       "asset",
+       "decision",
+       "by",
+       "at"
+      ],
+      "properties": {
+       "decision": {
+        "const": "approve"
+       }
+      }
+     }
+    }
+   }
+  },
+  "asset": {
+   "type": "object",
+   "required": [
+    "sha256",
+    "file",
+    "mime",
+    "width",
+    "height",
+    "rights"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "sha256": {
+     "type": "string",
+     "pattern": "^[0-9a-f]{64}$"
+    },
+    "file": {
+     "type": "string",
+     "description": "assets/<sha256>.<ext> in the run folder; human/assets/ in the document."
+    },
+    "mime": {
+     "enum": [
+      "image/png",
+      "image/jpeg",
+      "image/webp",
+      "image/svg+xml"
+     ]
+    },
+    "width": {
+     "type": "integer",
+     "minimum": 1
+    },
+    "height": {
+     "type": "integer",
+     "minimum": 1
+    },
+    "bytes": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "rights": {
+     "enum": [
+      "generated",
+      "own",
+      "licensed",
+      "client_supplied",
+      "reference_only"
+     ],
+     "description": "A reference_only asset is a style reference and never fills a slot. Client-supplied or unclear images default to reference_only."
+    },
+    "made": {
+     "type": "object",
+     "properties": {
+      "provider": {
+       "type": "string"
+      },
+      "model": {
+       "type": "string"
+      },
+      "task": {
+       "type": "string"
+      },
+      "at": {
+       "type": "string"
+      },
+      "credits": {
+       "type": "number",
+       "minimum": 0
+      },
+      "usd": {
+       "type": "number",
+       "minimum": 0
+      }
+     }
+    },
+    "guard": {
+     "type": "object",
+     "additionalProperties": false,
+     "properties": {
+      "checked": {
+       "type": "boolean"
+      },
+      "by": {
+       "type": "string",
+       "description": "ollama:<model>, or 'not checked'."
+      },
+      "flagged": {
+       "type": "boolean"
+      },
+      "found": {
+       "type": "object"
+      },
+      "reason": {
+       "type": "string",
+       "maxLength": 300
+      }
+     }
+    },
+    "source": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "app",
+      "project_id",
+      "entity"
+     ],
+     "description": "Where a pulled picture came from (deck-prod-assets): the Production Tool project, the entity and its version, the asset's origin, the job that made it and the hash of the exported .clan. Never a file path or a URL.",
+     "properties": {
+      "app": {
+       "const": "ie.napkin.production-tool"
+      },
+      "project_id": {
+       "type": "string",
+       "pattern": "^proj_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "entity": {
+       "type": "string",
+       "maxLength": 64
+      },
+      "role": {
+       "enum": [
+        "master",
+        "size",
+        "frame"
+       ]
+      },
+      "version": {
+       "type": "integer",
+       "minimum": 1
+      },
+      "origin": {
+       "enum": [
+        "uploaded",
+        "drawn",
+        "generated",
+        "edited",
+        "extracted"
+       ]
+      },
+      "job_id": {
+       "type": "string",
+       "maxLength": 64
+      },
+      "format_id": {
+       "type": "string",
+       "maxLength": 64
+      },
+      "channel": {
+       "type": "string",
+       "maxLength": 32
+      },
+      "bundle_sha256": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{64}$"
       }
      }
     }

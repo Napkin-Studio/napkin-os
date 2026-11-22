@@ -1,0 +1,43 @@
+id: full_bleed_statement
+version: 2
+group: content
+purpose: image
+description: 'Full-bleed picture; the statement and its line on the calm zone the finder measured, under a solved scrim; label in the opposite corner.'
+slot_summary: title (hero), statement, picture 16:9 (text over, scrim solved)
+for_types:
+- idea
+- real_question
+when:
+  test: bleed_ready
+priority: 98
+alternatives:
+- picture_column
+- big_statement
+- emphasis_bar
+without_image: big_statement
+density: lean
+pick: rule
+family: full_bleed_statement
+renderer: full_bleed_statement
+slots:
+  title:
+    kind: text
+    role: display
+    required: true
+    min_chars: 3
+    max_lines: 3
+  statement:
+    kind: text
+    role: lead
+    from_blocks:
+    - statement
+    - text
+    max_chars: 163
+  picture:
+    kind: image
+    required: true
+    dominant: true
+    image:
+      aspect: '16:9'
+      text_over: true
+      scrim: auto

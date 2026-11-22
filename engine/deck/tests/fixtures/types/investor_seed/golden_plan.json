@@ -1,0 +1,74 @@
+{
+ "slides": {
+  "s01": {
+   "layout": "cover",
+   "chosen_by": "rule",
+   "alternatives": [
+    "cards",
+    "text_columns"
+   ],
+   "rung": "as_is",
+   "moved": []
+  },
+  "s02": {
+   "layout": "cards",
+   "chosen_by": "rule",
+   "alternatives": [
+    "cards_split",
+    "text_columns"
+   ],
+   "rung": "as_is",
+   "moved": []
+  },
+  "s03": {
+   "layout": "big_number",
+   "chosen_by": "rule",
+   "alternatives": [
+    "cards",
+    "kpi_row"
+   ],
+   "rung": "as_is",
+   "moved": []
+  },
+  "s04": {
+   "layout": "cards",
+   "chosen_by": "rule",
+   "alternatives": [
+    "cards_split",
+    "text_columns"
+   ],
+   "rung": "as_is",
+   "moved": []
+  },
+  "s05": {
+   "layout": "emphasis_bar",
+   "chosen_by": "rule",
+   "alternatives": [
+    "cards"
+   ],
+   "rung": "as_is",
+   "moved": []
+  },
+  "s06": {
+   "layout": "cards",
+   "chosen_by": "rule",
+   "alternatives": [],
+   "rung": "as_is",
+   "moved": []
+  },
+  "s07": {
+   "layout": "big_statement",
+   "chosen_by": "rule",
+   "alternatives": [
+    "cards",
+    "native_table"
+   ],
+   "rung": "as_is",
+   "moved": []
+  }
+ },
+ "layout_title_pt": {
+  "cards": 36,
+  "big_number": 36
+ }
+}

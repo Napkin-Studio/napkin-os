@@ -1,0 +1,26 @@
+{
+ "stage": "a_requirements",
+ "produced_by": "recorded stand-in (invented)",
+ "requirements": [
+  {
+   "id": "r_01",
+   "kind": "objective",
+   "text": "Cut household use by 5% in 12 months",
+   "ref": "prompt:2"
+  },
+  {
+   "id": "r_02",
+   "kind": "audience",
+   "text": "Reach households aged 25 to 54",
+   "ref": "prompt:3"
+  },
+  {
+   "id": "r_03",
+   "kind": "mandatory",
+   "text": "Show the Lumen Water logo on every execution",
+   "ref": "prompt:4"
+  }
+ ],
+ "scoring": [],
+ "rules": []
+}

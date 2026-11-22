@@ -310,13 +310,19 @@ def test_trim_never_moves_a_type_it_does_not_name():
 # ---------------------------------------------------------------- 12: cost and transport hygiene
 
 def test_estimate_usd_uses_the_price_table():
-    """Opus 5.5 at 5/25 and Sonnet 5.5 at 3/15 dollars per million tokens in/out; an unknown model is 0; a list names the dearest."""
-    assert spec.PRICE_PER_MTOK == {"claude-opus-5-5": (5.0, 25.0), "claude-sonnet-5-5": (3.0, 15.0)}
-    assert spec.estimate_usd("claude-opus-5-5", 1_000_000, 1_000_000) == 30.0
-    assert spec.estimate_usd("claude-sonnet-5-5", 2_000, 500) == round(2_000 / 1e6 * 3 + 500 / 1e6 * 15, 4)
-    assert spec.estimate_usd("nope", 5, 5) == 0.0
-    assert spec.estimate_usd("claude-sonnet-5-5,claude-opus-5-5", 1_000_000, 0) == 5.0
-    assert spec.estimate_usd("claude-sonnet-5-5", 0, 0, cache_read=1_000_000, cache_creation=1_000_000) == round(3 * 0.1 + 3 * 1.25, 4)
+    """Opus 5.5 at 4/20 and Sonnet 5.5 at 2/10 dollars per million tokens in/out; their cache reads at 0.05x, writes 1.25x; an unknown
+    model is priced as Opus 5.5 (never 0); a list names the dearest. One table for every tool (engine/prices.json): Haiku is
+    listed (it was priced as Opus before 19 Nov 2026) and the older models' cache reads are 0.1x."""
+    assert spec.PRICE_PER_MTOK["claude-opus-5-5"] == (4.0, 20.0) and spec.PRICE_PER_MTOK["claude-sonnet-5-5"] == (2.0, 10.0)
+    assert spec.estimate_usd("claude-haiku-4-5-20251001", 1_000_000, 1_000_000) == 6.0
+    assert spec.estimate_usd("claude-opus-4-6", 0, 0, cache_read=1_000_000) == 0.5   # 0.1x of 5 on the older Opus
+    assert spec.estimate_usd("claude-opus-5-5", 1_000_000, 1_000_000) == 24.0
+    assert spec.estimate_usd("claude-sonnet-5-5", 2_000, 500) == round(2_000 / 1e6 * 2 + 500 / 1e6 * 10, 4)
+    assert spec.estimate_usd("nope", 1_000_000, 1_000_000) == 24.0 and spec.estimate_usd("nope", 5, 5) > 0
+    assert spec.estimate_usd("claude-sonnet-5-5,mystery", 1_000_000, 0) == 4.0   # one unknown name prices the lot at the maximum
+    assert spec.estimate_usd("claude-sonnet-5-5,claude-opus-5-5", 1_000_000, 0) == 4.0
+    assert spec.estimate_usd("claude-sonnet-5-5", 0, 0, cache_read=1_000_000, cache_creation=1_000_000) == round(2 * 0.05 + 2 * 1.25, 4)
+    assert spec.estimate_usd("claude-opus-5-5", 0, 0) == 0.0
 
 
 class _Ledger(dict):
@@ -441,11 +447,11 @@ def test_sum_adds_usd_and_keeps_the_flags():
 def test_report_prices_every_stage_that_has_tokens(monkeypatch, tmp_path):
     """A recorded stage whose usage holds tokens but no dollars is priced (estimate, labelled), so usd_total is not 0."""
     row = run_deck._price_stage({"source": "recorded", "model": "claude-opus-5-5", "prompt_tokens": 100_000, "completion_tokens": 20_000})
-    assert row["usd"] == spec.estimate_usd("claude-opus-5-5", 100_000, 20_000) == 1.0 and row["usd_estimated"] is True
+    assert row["usd"] == spec.estimate_usd("claude-opus-5-5", 100_000, 20_000) == 0.8 and row["usd_estimated"] is True
     real = {"model": "claude-opus-5-5", "prompt_tokens": 100_000, "usd": 2.5}
     assert run_deck._price_stage(real) == real   # a real figure is kept
     assert run_deck._price_stage({"source": "missing"}) == {"source": "missing"}
-    assert run_deck._price_stage({"model": "claude-sonnet-5-5", "tokens_in": 1_000_000, "tokens_out": 0})["usd"] == 3.0
+    assert run_deck._price_stage({"model": "claude-sonnet-5-5", "tokens_in": 1_000_000, "tokens_out": 0})["usd"] == 2.0
     d = tmp_path / "stages"
     d.mkdir()
     for f in ("a_requirements.json", "b_storyline.json", "c_territories.json", "d_idea.json"):

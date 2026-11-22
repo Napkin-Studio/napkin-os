@@ -1,0 +1,46 @@
+# The repair loop's policy (deck-repair-loop; contract docs/contracts/deck-visuals.md section 8). Checked against
+# schemas/repair_policy.schema.json when loaded (repair.load_policy). A deck type's profile may override any key
+# with an optional `repair:` block. The policy a run used is stamped at deck.meta.repair_policy, and only when a round ran.
+max_rounds: 2          # at most two rounds; 0 turns the loop off
+max_usd: 0.6           # the paid shorten rung, per deck (the server's NAPKIN_DECK_MAX_USD caps a run as well)
+max_seconds: 240       # live runs only: before a round, stop when the time so far plus the slowest round would pass this
+repair_on: [blocker, major]
+client_export_blocks_on: [blocker]
+# block_unbound and slot_stale count as blockers in the keep gate whatever this map says (repair.gate), so they have no entry here.
+severity:
+  text_overflow: blocker
+  text_overlap: blocker
+  off_slide: blocker
+  slot_limit: major
+  slot_missing: major
+  margin: major
+  min_font: major
+  contrast: major
+  text_on_image_contrast: major
+  picture_stretch: major
+  picture_lowres: minor
+  image_flagged: blocker
+  image_unapproved: blocker
+  image_rights: blocker
+  image_missing: major
+  title_drift: major
+  image_style_mixed: major
+  layout_repeat: minor
+  line_length: minor
+ladder: [shrink, switch_layout, shorten, overflow_to_notes, needs_human]
+shrink:
+  min_scale: 0.85
+shorten:
+  max_slots_per_round: 12
+  max_cut_ratio: 0.35
+  word_rule: delete_only   # delete_only (default): the same field's words in order, only allow-listed words deleted (assemble.DELETABLE); reuse: any order, never on a client deck
+  guards: [no_new_number, refs_kept, not_longer, label_titles_untouched, ledger_kept, own_words]
+images:
+  max_regens_per_slot: 1
+  on_flag: wait_for_person
+  max_usd: 2.5
+keep_round_if: blockers_and_majors_not_up_and_no_new_validator_error
+critic:
+  enabled: false
+  may_fix: [switch_layout, crop_image, add_scrim]
+  needs_code_confirm: true

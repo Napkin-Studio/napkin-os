@@ -1,0 +1,56 @@
+id: quote_cards
+version: 1
+group: content
+purpose: statement
+description: The quote large, its source, and the points as cards.
+slot_summary: title, quote, source, lead, points
+for_types:
+- insight
+when:
+  blocks_all:
+  - quote
+  - bullets
+priority: 55
+alternatives:
+- cards
+- cards_split
+- quote_full
+roomier: cards
+density: standard
+pick: rule
+family: quote
+renderer: quote_cards
+slots:
+  title:
+    kind: text
+    role: title
+    required: true
+    min_chars: 3
+    max_lines: 3
+  quote:
+    kind: text
+    role: lead
+    from_blocks:
+    - quote
+    dominant: true
+    max_chars: 136
+  source:
+    kind: text
+    role: caption
+    from_blocks:
+    - small
+    max_chars: 122
+  lead:
+    kind: text
+    role: small
+    from_blocks:
+    - text
+    - statement
+    max_chars: 163
+  points:
+    kind: list
+    role: body
+    from_blocks:
+    - bullets
+    min_items: 1
+    max_items: 4

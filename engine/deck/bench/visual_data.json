@@ -1,0 +1,99 @@
+{
+ "_about": "Bench-only data for the vision critic, version 1 (feature deck-vision-critic, phase 1). The rubric itself is engine/deck/visual_rubric.json; canned messages and confirm bands stay here until phase 2 moves them into the rubric with an approved additive schema change. Nothing here reaches a deck, a prompt or an export.",
+ "version": 1,
+ "questions": {
+  "v_one_focus": {
+   "n": 1,
+   "session": "A",
+   "scope": "slide",
+   "looks_at": "Whether the eye lands on the title or one visual, or two or three blocks of equal weight compete.",
+   "canned_message": "The slide may not have one clear first thing to look at.",
+   "on_fail": "shown only (advisory at most); Review may offer 'Try another layout' as a click.",
+   "applies_to": "every presented slide"
+  },
+  "v_balance": {
+   "n": 2,
+   "session": "A",
+   "scope": "slide",
+   "looks_at": "Content bunched in one corner or side with the rest bare.",
+   "canned_message": "The slide may have a large empty area.",
+   "on_fail": "acts only if the critic beats the band alone (see code_baseline); then switch_layout inside the band.",
+   "applies_to": "every presented slide",
+   "confirm_band": "corner share of ink >= 0.65 or ink share <= 0.04 (code fires at 0.8 and 0.02)"
+  },
+  "v_not_crowded": {
+   "n": 3,
+   "session": "A",
+   "scope": "slide",
+   "looks_at": "Too many blocks, tight gaps, text wall to wall, small type everywhere.",
+   "canned_message": "The slide may look crowded.",
+   "on_fail": "acts only if the critic beats the band alone; then switch to roomier. No slots before slice 4 means no confirm: left for the person.",
+   "applies_to": "content slides",
+   "confirm_band": "a text slot at >= 90% of max_chars, or the slide over its density target"
+  },
+  "v_looks_finished": {
+   "n": 4,
+   "session": "A",
+   "scope": "slide",
+   "looks_at": "Finish, spacing, hierarchy; a template left half filled.",
+   "canned_message": "The slide may not look finished.",
+   "on_fail": "shown only; the headline number for the bench and gallery.",
+   "applies_to": "every presented slide, cover and last slide included"
+  },
+  "v_image_fits": {
+   "n": 5,
+   "session": "B",
+   "scope": "slide",
+   "looks_at": "Subject, setting and mood of the picture against the title.",
+   "canned_message": "The picture may not match the slide's title.",
+   "on_fail": "shown only; Review offers 'Make a new picture' with its cost card.",
+   "applies_to": "slides with a placed picture"
+  },
+  "v_image_clean": {
+   "n": 6,
+   "session": "B",
+   "scope": "slide",
+   "looks_at": "Signs, labels, packaging, screens, watermarks, logos inside the picture itself.",
+   "canned_message": "The picture may contain text or a logo.",
+   "on_fail": "when acts, adds a flag (the guard's power, no more): the picture waits for a person.",
+   "applies_to": "slides with a placed picture"
+  },
+  "v_text_on_image": {
+   "n": 7,
+   "session": "B",
+   "scope": "slide",
+   "looks_at": "Words over busy or mid-tone parts of a photo; thin type on texture.",
+   "canned_message": "Words over the picture may be hard to read.",
+   "on_fail": "acts only if the critic beats the band alone; then add a scrim inside the band.",
+   "applies_to": "slides with text over a picture",
+   "confirm_band": "measured contrast under 7:1 behind any word on the picture (code fires under 4.5:1)"
+  },
+  "v_crop_ok": {
+   "n": 8,
+   "session": "B",
+   "scope": "slide",
+   "looks_at": "Heads, faces, products or the subject cut at the slot's edge.",
+   "canned_message": "The picture's subject may be cut off.",
+   "on_fail": "never automatic (no code confirm); Review offers 'Re-centre the picture'.",
+   "applies_to": "slides with a placed picture"
+  },
+  "v_one_style": {
+   "n": 9,
+   "session": "bench only",
+   "scope": "deck",
+   "looks_at": "Colour, light, finish and kind of image across the deck.",
+   "canned_message": "The pictures may not look like one set.",
+   "on_fail": "bench and gallery only in version 1: 12 contact sheets cannot measure it. Graded later only with >= 20 seeded contact sheets.",
+   "applies_to": "decks with 2 or more pictures (contact sheet)"
+  },
+  "v_rhythm": {
+   "n": 10,
+   "session": "bench only",
+   "scope": "deck",
+   "looks_at": "The same layout over and over, or a jumble with no system.",
+   "canned_message": "The deck's layouts may look repetitive or random.",
+   "on_fail": "bench and gallery only in version 1, as v_one_style.",
+   "applies_to": "decks with 5 or more presented slides (contact sheet)"
+  }
+ }
+}
