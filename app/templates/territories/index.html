@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Territories</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<!-- The two licensed faces only (owner default, features/territories.clan): Newsreader for what is read, Geist ExtraBold for what is pressed or labelled. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Geist:wght@800&display=swap" />
+<style>
+/* The studio's tokens (design/new-ui/napkin-app-v1.html; the same block Brief Maker carries), tinted by the agency's base
+   (--ag-base, from clan:me). Territories' own identity is the teal (--te), the owner's demo. Documents stay on paper. */
+:root{
+  --ag-base:#515BFF; --ag-acc:#C8CBFF; --ag-base-ink:#FFFFFF; --ag-acc-ink:#141413;
+  --ag-act:var(--ag-base); --ag-act-ink:var(--ag-base-ink);
+  --desk:color-mix(in srgb,var(--ag-base) 6%,#F6F1E7); --paper:color-mix(in srgb,var(--ag-base) 2.5%,#FFFDF8);
+  --paper-2:#F3ECDC; --card:#FFFFFF;
+  --ink:#141413; --ink-soft:#2A2620; --muted:#6D655A; --faint:#9A9082;
+  --line:color-mix(in srgb,var(--ag-base) 10%,#E2D9C8); --line-strong:#2A2620; --chip-line:#D4CCCD;
+  --accent:var(--ag-base); --accent-soft:color-mix(in srgb,var(--ag-base) 9%,#FFFFFF);
+  --ok:#1D8A4E; --ok-soft:#E6F6EC; --warn:#B45309; --warn-soft:#FEF3DC; --alert:#C9462A; --alert-soft:#FFF1EE;
+  --te:#14947F; --te-ink:#FFFFFF;
+  --ask-line:#F08A6E; --ask-glow:rgba(255,79,46,.08);
+  --font-ui:"Geist",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+  --font-serif:"Newsreader",Georgia,"Iowan Old Style",serif;
+  --shadow-paper:0 1px 0 rgba(255,255,255,.75) inset,0 8px 24px -8px rgba(50,38,18,.10),0 1px 3px rgba(50,38,18,.08);
+  --shadow-card:0 1px 2px rgba(20,20,19,.06),0 4px 12px -4px rgba(20,20,19,.08);
+  --booth-dur:460ms; --booth-ease:cubic-bezier(.2,.7,.2,1);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-color-scheme="light"]){
+    --ag-act:var(--ag-acc); --ag-act-ink:#141413;
+    --desk:color-mix(in srgb,var(--ag-base) 12%,#121110); --paper:color-mix(in srgb,var(--ag-base) 9%,#1B1A18);
+    --paper-2:#262320; --card:color-mix(in srgb,var(--ag-base) 7%,#201E1B);
+    --ink:#EFE9DE; --ink-soft:#D6CEC0; --muted:#A49B8D; --faint:#7B7367;
+    --line:color-mix(in srgb,var(--ag-base) 16%,#34302A); --line-strong:#CFC6B6; --chip-line:#4A443C;
+    --accent-soft:color-mix(in srgb,var(--ag-base) 22%,#1B1A18);
+    --ok:#5DBB83; --ok-soft:#1C2E23; --warn:#E09A4B; --warn-soft:#3A2A18; --alert:#F08A70; --alert-soft:#33201B;
+    --te:#3CC9AE; --te-ink:#0E1A17; --ask-line:#C8664C; --ask-glow:rgba(255,79,46,.10); color-scheme:dark;
+  }
+}
+:root[data-color-scheme="dark"]{
+  --ag-act:var(--ag-acc); --ag-act-ink:#141413;
+  --desk:color-mix(in srgb,var(--ag-base) 12%,#121110); --paper:color-mix(in srgb,var(--ag-base) 9%,#1B1A18);
+  --paper-2:#262320; --card:color-mix(in srgb,var(--ag-base) 7%,#201E1B);
+  --ink:#EFE9DE; --ink-soft:#D6CEC0; --muted:#A49B8D; --faint:#7B7367;
+  --line:color-mix(in srgb,var(--ag-base) 16%,#34302A); --line-strong:#CFC6B6; --chip-line:#4A443C;
+  --accent-soft:color-mix(in srgb,var(--ag-base) 22%,#1B1A18);
+  --ok:#5DBB83; --ok-soft:#1C2E23; --warn:#E09A4B; --warn-soft:#3A2A18; --alert:#F08A70; --alert-soft:#33201B;
+  --te:#3CC9AE; --te-ink:#0E1A17; --ask-line:#C8664C; --ask-glow:rgba(255,79,46,.10); color-scheme:dark;
+}
+/* An agency whose accent is a line, never a fill (Catapult): the primary stays the base in dark too. */
+@media (prefers-color-scheme:dark){ :root[data-agency-accent="line"]:not([data-color-scheme="light"]){ --ag-act:var(--ag-base); --ag-act-ink:var(--ag-base-ink); } }
+:root[data-agency-accent="line"][data-color-scheme="dark"]{ --ag-act:var(--ag-base); --ag-act-ink:var(--ag-base-ink); }
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{min-height:100%}
+body{margin:0;background:var(--desk);color:var(--ink);font:16px/1.5 var(--font-serif);-webkit-font-smoothing:antialiased;padding-bottom:48px}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+button:disabled{cursor:not-allowed}
+button:focus-visible,input:focus-visible,textarea:focus-visible,summary:focus-visible,label:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+h1,h2,h3{text-wrap:balance}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.spacer{flex:1}
+.meta{font-size:13px;color:var(--muted)}
+.muted{color:var(--muted);font-size:14px}
+/* Geist ExtraBold is the label voice: small caps, tracked. Weight is always 800 (the one licensed weight). */
+.lbl{font:800 10.5px/1.4 var(--font-ui);letter-spacing:.1em;text-transform:uppercase}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* app head */
+.shell{max-width:1240px;margin:0 auto;padding:0 max(16px,env(safe-area-inset-left,0px))}
+.app-head{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:24px;padding:32px 0 22px;border-bottom:1px solid var(--line);margin-bottom:24px}
+@media (max-width:900px){.app-head{grid-template-columns:minmax(0,1fr)}}
+.eyebrow{font:800 11.5px var(--font-ui);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px;color:var(--ink)}
+.eyebrow::before{content:"";width:18px;height:2px;background:var(--te);flex:none}
+.hero-title{margin:0 0 8px;font:800 clamp(34px,4.2vw,50px)/.96 var(--font-ui);letter-spacing:-.04em}
+.period-dot{display:inline-block;width:.17em;height:.17em;border-radius:50%;background:var(--te);margin-left:.04em}
+.hero-sub{margin:0;font-size:16px;line-height:1.5;color:var(--ink-soft);max-width:62ch}
+.flow-steps{list-style:none;display:flex;align-items:center;margin:0;padding:0;flex-wrap:wrap;row-gap:8px}
+.flow-steps li{display:flex;align-items:center}
+.flow-steps li+li::before{content:"";width:22px;height:1px;background:var(--line-strong);margin:0 4px 18px}
+.flow-steps button{display:grid;justify-items:center;gap:6px;background:none;border:0;color:var(--muted);font:800 11px var(--font-ui);letter-spacing:.06em;text-transform:uppercase;padding:0}
+.flow-steps i{font-style:normal;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--line-strong);background:var(--paper);color:var(--ink-soft);font:800 12px var(--font-ui)}
+.flow-steps button.done i{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.flow-steps button[aria-current="step"]{color:var(--ink)}
+.flow-steps button[aria-current="step"] i{background:var(--te);border-color:var(--te);color:var(--te-ink)}
+.flow-steps button:disabled{cursor:default;opacity:.75}
+
+/* sheet + Booth column */
+.split{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0;align-items:start}
+@media (max-width:900px){.split{grid-template-columns:minmax(0,1fr)}}
+.sheet{background:var(--paper);border:1px solid var(--line);border-radius:4px;box-shadow:var(--shadow-paper);min-width:0;overflow:hidden}
+.sheet-head{padding:26px 32px 20px;border-bottom:4px solid var(--te)}
+.sheet-eyebrow{font:800 11px var(--font-ui);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.sheet-head h2{margin:0 0 6px;font:500 32px/1.1 var(--font-serif);letter-spacing:-.02em}
+.sheet-head p{margin:0;color:var(--muted);font-size:15px}
+.stats{display:flex;flex-wrap:wrap;gap:6px 0;padding:13px 32px;border-bottom:1px solid var(--line);font:800 11.5px var(--font-ui);letter-spacing:.02em;color:var(--ink-soft)}
+.stats>*{padding:0 12px;border-right:1px solid var(--line)}.stats>*:first-child{padding-left:0}.stats>*:last-child{border-right:0}
+.sheet-body{padding:18px 32px 28px;display:flex;flex-direction:column;gap:14px}
+@media (max-width:640px){.sheet-head,.stats,.sheet-body{padding-left:18px;padding-right:18px}}
+
+/* the three sources: a brief (dog-eared sheet, manila tab), research (ink band, lens dots), what Territories found (teal band) */
+.srcrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-top:10px}
+.tsrc{position:relative;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:6px;display:flex;flex-direction:column;text-align:left;min-width:0;padding:0}
+button.tsrc:hover{border-color:color-mix(in srgb,var(--ink) 35%,var(--line))}
+.tsrc-band{display:flex;align-items:center;gap:8px;background:var(--ink);color:var(--card);padding:6px 14px;font:800 10.5px/1.5 var(--font-ui);letter-spacing:.12em;text-transform:uppercase;border-radius:5px 5px 0 0}
+.tsrc-band.te{background:var(--te);color:var(--te-ink)}
+.tsrc-lens{display:inline-flex;gap:4px;margin-left:auto}.tsrc-lens i{width:9px;height:9px;border-radius:50%;border:1.5px solid currentColor}.tsrc-lens i.f{background:currentColor}
+.tsrc-brief{margin-top:20px;background:var(--paper)}
+.tsrc-tab{position:absolute;top:-19px;left:14px;height:19px;display:inline-flex;align-items:center;padding:0 10px;background:#E7D5AC;border:1px solid #C4AA75;border-bottom:0;border-radius:4px 4px 0 0;font:800 10.5px var(--font-ui);letter-spacing:.1em;text-transform:uppercase;color:#5A4A2A}
+.tsrc-brief::after{content:"";position:absolute;top:-1px;right:-1px;width:16px;height:16px;background:linear-gradient(225deg,var(--desk) 50%,color-mix(in srgb,var(--ink) 14%,var(--paper)) 50%);border-bottom-left-radius:2px}
+.tsrc-body{padding:10px 14px 12px;display:flex;flex-direction:column;gap:7px}
+.tsrc-t{font:600 18px/1.25 var(--font-serif)}
+.tsrc-row{display:flex;flex-wrap:wrap;gap:4px 12px;font:800 11px/1.5 var(--font-ui);color:var(--muted);letter-spacing:.02em}
+.tsrc-q{font-family:var(--font-serif);font-size:17px;line-height:1.4;border-left:3px solid var(--line-strong);padding-left:12px}
+
+/* insight cards */
+.inslist{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+.ins{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--line);border-radius:8px;background:var(--card);padding:12px 14px;cursor:pointer;transition:border-color .15s,box-shadow .15s;min-width:0}
+.ins.on{border-color:var(--te);box-shadow:0 0 0 1px var(--te)}
+.ins input{width:18px;height:18px;margin-top:2px;accent-color:var(--te);flex:none}
+.ins-b{display:flex;flex-direction:column;gap:7px;min-width:0;flex:1}
+.ins .sbtext{font-size:17px}
+.dcard-top{display:flex;justify-content:space-between;align-items:center;gap:8px;font:800 10.5px/1.4 var(--font-ui);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.sbtext{font-family:var(--font-serif);font-size:19px;line-height:1.3;letter-spacing:-.005em;overflow-wrap:anywhere}
+.dots{display:inline-flex;gap:3px;flex:none}.dots i{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--muted)}.dots i.on{background:var(--ok);border-color:var(--ok)}.dots i.half{background:linear-gradient(90deg,var(--warn) 50%,transparent 50%);border-color:var(--warn)}
+.ref{border:0;cursor:pointer;font:800 10.5px var(--font-ui);letter-spacing:.02em;color:var(--accent);background:var(--accent-soft);border-radius:4px;padding:1px 6px;white-space:nowrap}
+.ref:hover{text-decoration:underline}
+.ref.derived{color:var(--warn);background:var(--warn-soft)}
+.ref.gone{color:var(--muted);background:var(--paper-2)}
+.dmark{font:800 10px var(--font-ui);letter-spacing:.06em;text-transform:uppercase;color:var(--warn);border:1px solid var(--warn);border-radius:4px;padding:1px 6px;white-space:nowrap}
+.ymark{font:800 10px var(--font-ui);letter-spacing:.06em;text-transform:uppercase;color:var(--te);border:1px solid var(--te);border-radius:4px;padding:1px 6px;white-space:nowrap}
+
+/* add your own */
+.addsb{display:flex;flex-direction:column;gap:10px;border:2px solid var(--ink);border-radius:16px;padding:12px 14px;background:var(--paper)}
+.addsb input{border:0;background:transparent;font-size:18px;color:var(--ink);padding:4px 2px;outline:0}
+.addsb input::placeholder{color:var(--faint)}
+.addsb:focus-within{border-color:var(--accent)}
+.btn-rect{min-height:36px;padding:0 14px;border-radius:4px;border:1px solid var(--line);background:var(--paper);font:800 13px var(--font-ui);display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.btn-rect:hover{border-color:var(--ink)}
+.btn-rect.primary{background:var(--ag-act);color:var(--ag-act-ink);border-color:var(--ag-act-line,var(--ag-act))}
+.btn-rect:disabled{opacity:.45}
+.btn-pill{height:44px;padding:0 24px;border-radius:999px;font:800 15px var(--font-ui);border:1px solid var(--line);background:var(--paper)}
+.btn-pill.primary{background:var(--ag-act);color:var(--ag-act-ink);border-color:var(--ag-act-line,var(--ag-act))}
+.btn-pill:disabled{opacity:.45}
+.linkbtn{background:none;border:0;padding:0;font:800 13px var(--font-ui);text-decoration:underline;text-underline-offset:3px;color:var(--ink)}
+.runline{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:6px}
+.runnote{font-size:14.5px;color:var(--ink-soft);max-width:60ch}
+.runnote.bad{color:var(--alert)}
+
+/* everything the crew may quote */
+.evd{border:1px solid var(--line);border-radius:8px;padding:10px 14px;background:var(--card)}
+.evd summary{cursor:pointer;font:800 11px var(--font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.evlist{display:flex;flex-direction:column;margin-top:6px}
+.evrow{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line);font-size:15.5px;line-height:1.4}
+.evrow:last-child{border-bottom:0}
+.evrow.off{opacity:.5}.evrow .grow{flex:1;min-width:0}
+.tog{flex:none;width:34px;height:20px;border-radius:999px;border:1px solid var(--line-strong);background:var(--paper-2);position:relative;margin-top:1px;padding:0}
+.tog::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--muted);transition:transform .15s}
+.tog[aria-pressed="true"]{background:var(--te);border-color:var(--te)}.tog[aria-pressed="true"]::after{transform:translateX(14px);background:#fff}
+.pill{font:800 10px var(--font-ui);letter-spacing:.05em;text-transform:uppercase;padding:2px 6px;border-radius:4px;white-space:nowrap}
+.st-verified{background:var(--ok-soft);color:var(--ok)}.st-derived{background:var(--warn-soft);color:var(--warn)}.st-found{background:color-mix(in srgb,var(--te) 16%,transparent);color:var(--te)}.st-plain{background:var(--paper-2);color:var(--muted)}
+
+/* The Booth: its own column; hiding closes it and the work recentres (features/booth.clan) */
+.booth-col{--bw:400px;flex:none;position:relative;align-self:stretch;width:calc(var(--bw) + 24px);transition:width var(--booth-dur) var(--booth-ease);overflow-x:clip}
+@media (max-width:1180px){.booth-col{--bw:340px}}
+@media (max-width:900px){.booth-col{width:auto}.booth{margin-left:0!important;margin-top:24px}}
+.booth-col.booth-off{width:0}
+.booth{position:sticky;top:16px;margin-left:24px;width:var(--bw);max-width:100%;max-height:calc(100vh - 32px);display:flex;flex-direction:column;min-height:0;
+  background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-card);color:var(--ink);font-size:14.5px;
+  transition:transform var(--booth-dur) var(--booth-ease),opacity .3s ease .06s,visibility 0s}
+.booth-off .booth{opacity:0;visibility:hidden;pointer-events:none;transform:translateX(28px);transition:transform var(--booth-dur) var(--booth-ease),opacity .22s ease,visibility 0s linear var(--booth-dur)}
+.booth-hd{display:flex;align-items:center;gap:8px;padding:9px 10px 9px 18px;border-bottom:1px solid var(--line);flex:none;min-height:49px}
+.booth-nm{font:800 10.5px var(--font-ui);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.booth-sp{flex:1}
+.booth-hide{height:30px;padding:0 10px 0 12px;border-radius:999px;border:1px solid var(--line);display:inline-flex;align-items:center;gap:6px;color:var(--ink-soft);font:800 12px var(--font-ui);background:var(--card)}
+.booth-hide svg{width:14px;height:14px}
+.booth-hide:hover{background:color-mix(in srgb,var(--te) 8%,var(--card));color:var(--ink);border-color:color-mix(in srgb,var(--te) 30%,var(--line))}
+@media (max-width:1100px){.booth-hide,.booth-edge{display:none}}
+.booth-body{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:14px 18px 18px;display:flex;flex-direction:column;gap:14px;overscroll-behavior:contain}
+.booth-body>*{flex-shrink:0}
+.bt-agent{display:flex;align-items:center;gap:12px}
+.bt-agent .who{font:800 10.5px var(--font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft)}
+.bt-agent .line{font-size:15px;color:var(--ink);line-height:1.4;margin-top:2px}
+.bt-crew{display:flex;gap:6px;margin-left:auto;align-self:flex-start}
+.bc{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:12px 14px;display:grid;gap:9px;min-width:0}
+.bc-hd{display:flex;align-items:center;gap:8px;min-width:0}
+.bc-who{font:800 10.5px var(--font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);white-space:nowrap}
+.bc-t{font-size:12.5px;color:var(--muted);margin-left:auto;white-space:nowrap}
+.bc-note{margin:0;font-size:15px;color:var(--ink);line-height:1.45}
+.bt-box{border:1px solid var(--line);border-radius:12px;background:var(--paper);padding:10px 10px 8px 12px;display:grid;gap:8px}
+.bt-box textarea{border:0;outline:none;background:transparent;resize:none;width:100%;min-height:44px;font:inherit;font-size:15px;line-height:1.45;color:var(--ink);padding:0}
+.bt-box textarea::placeholder{color:var(--faint)}
+.bt-box textarea:disabled{opacity:.7}
+.bt-hint{font-size:13.5px;color:var(--ink-soft);line-height:1.4}
+.bt-scope{white-space:nowrap;display:inline-flex;align-items:center;height:24px;padding:0 9px;border-radius:999px;background:var(--paper-2);color:var(--ink-soft);font:800 11px var(--font-ui)}
+.btn{height:32px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--card);font:800 12.5px var(--font-ui);color:var(--ink)}
+.btn.dark{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.btn:disabled{opacity:.45}
+.pfoot{border-top:1px solid var(--line);padding-top:12px;font-size:14px;color:var(--muted)}
+.pfoot b{color:var(--ink);font-weight:600}
+.booth-edge{all:unset;box-sizing:border-box;cursor:pointer;position:fixed;right:0;top:120px;z-index:40;width:38px;padding:14px 0 16px;display:flex;flex-direction:column;align-items:center;gap:10px;
+  border:1px solid var(--line);border-right:0;border-radius:9px 0 0 9px;background:var(--card);color:var(--ink-soft);box-shadow:-1px 0 0 color-mix(in srgb,var(--te) 18%,transparent);
+  transform:translate(110%,0);opacity:0;visibility:hidden;pointer-events:none;transition:transform .2s var(--booth-ease),opacity .15s ease,visibility 0s linear .2s,width .18s}
+.booth-folded .booth-edge{transform:none;opacity:1;visibility:visible;pointer-events:auto;transition:transform .32s var(--booth-ease) .14s,opacity .2s ease .14s,width .18s,visibility 0s}
+.booth-edge:hover{width:44px;color:var(--ink)}
+.booth-edge:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.booth-edge .booth-lb{writing-mode:vertical-rl;transform:rotate(180deg);font:800 12px var(--font-ui);letter-spacing:.2em;text-transform:uppercase}
+.booth-edge svg{width:16px;height:16px;flex:none}
+@media (prefers-reduced-motion:reduce){.booth-col,.booth,.booth-edge{transition:opacity .15s ease!important;transform:none!important}}
+
+/* a window onto one source, and what arrived */
+.overlay{position:fixed;inset:0;background:rgba(20,20,19,.45);display:flex;align-items:center;justify-content:center;padding:16px;z-index:30}
+.dialog{background:var(--card);border:1px solid var(--line);border-radius:12px;max-width:560px;width:100%;padding:22px;display:flex;flex-direction:column;gap:12px;max-height:90vh;overflow:auto}
+.dialog h3{margin:0;font:500 24px/1.2 var(--font-serif);letter-spacing:-.01em}
+.psec-t{font:800 10.5px var(--font-ui);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.toast{position:fixed;left:50%;top:16px;transform:translateX(-50%) translateY(-8px);background:var(--ink);color:var(--paper);padding:9px 16px;border-radius:999px;font:800 13px var(--font-ui);z-index:40;max-width:calc(100% - 32px);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s}
+.toast.on{opacity:1;transform:translateX(-50%)}
+
+/* the steps that are not built here yet */
+.later{padding:36px 32px 40px;display:flex;flex-direction:column;gap:12px}
+.later h3{margin:0;font:500 26px/1.15 var(--font-serif)}
+.later p{margin:0;max-width:60ch;color:var(--ink-soft)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- The one agent engine (app/templates/shared/agent-sphere), inlined by the packer at this marker: every circle is its sphere. -->
+<!-- @napkin:agent-sphere -->
+
+<!-- The pure part: what each screen says and what each press writes, with no DOM. app/tests/territories.test.ts runs this block alone. -->
+<script id="territories-logic">
+var TerritoriesLogic = (function () {
+  'use strict';
+
+  var Roles = typeof NapkinRoles !== 'undefined' ? NapkinRoles : null;
+
+  // ── the seam to the middleware ─────────────────────────────────────────
+  // The only names the app uses for the engine's tasks, as territories-handlers plans them (features/territories-handlers.clan):
+  // run_territories@1 is the long job (Pick's Explore asks for it once the pick approval is written; the page polls job_status).
+  // fetch_territories_file@1 is the download and look_up@1 is territories-lookups': neither is used on Pick.
+  var TASKS = { run: 'run_territories', status: 'job_status' };
+
+  var BRIEF_FIELDS = [
+    ['background', 'Background'], ['objectives', 'Objectives'], ['audience', 'Audience'], ['competitor_context', 'Competitor context'],
+    ['insight', 'Insight'], ['smp', 'Single-minded proposition'], ['reasons_to_believe', 'Reasons to believe'],
+    ['desired_response', 'Desired response'], ['tone_world_assets', 'Tone, world and assets'], ['budget_scope', 'Budget and scope'],
+    ['mandatories', 'Mandatories']
+  ];
+  var KIND_WORDS = { tension: 'Tension', truth: 'Human truth', provocation: 'What if', borrowed: 'Borrowed', yours: 'Yours' };
+  var STRENGTH_WORDS = { strong: 'strong', moderate: 'moderate', thin: 'thin' };
+  var MAX_INSIGHTS = 25, MAX_TEXT = 300;
+  var STEPS = [['pick', 'Pick'], ['explore', 'Explore'], ['greenlight', 'Greenlight']];
+
+  function isObj(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+  function arr(v) { return Array.isArray(v) ? v : []; }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function val(v) { return isObj(v) && 'value' in v ? v.value : v; }
+  function text(v) { v = val(v); return typeof v === 'string' ? v.trim() : (typeof v === 'number' || typeof v === 'boolean') ? String(v) : ''; }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
+
+  // ── what arrived (LESSONS 7: read from the document, counted, never assumed) ──
+  function briefFieldsOf(doc) {
+    doc = isObj(doc) ? doc : {};
+    return BRIEF_FIELDS.map(function (f) { return { key: f[0], label: f[1], text: text(doc[f[0]]) }; }).filter(function (f) { return f.text; });
+  }
+  /** Brief or research, by what the frozen copy holds. null for anything else (a kit, an unknown document). */
+  function kindOfDoc(doc) {
+    if (!isObj(doc)) return null;
+    if (briefFieldsOf(doc).length) return 'brief';
+    if (doc.campaign || doc.projection || doc.report || doc.selection) return 'research';
+    return null;
+  }
+  function upstreamOf(data) {
+    var up = isObj(data && data.upstream) ? data.upstream : {}, out = { brief: null, research: null };
+    Object.keys(up).forEach(function (id) {
+      var k = kindOfDoc(up[id]);
+      if (k && !out[k]) out[k] = { id: id, doc: up[id] };
+    });
+    if (out.brief) out.brief.fields = briefFieldsOf(out.brief.doc);
+    if (out.research) {
+      var pr = isObj(out.research.doc.projection) ? out.research.doc.projection : {};
+      out.research.pins = isObj(pr.pins) ? pr.pins : {};
+      out.research.findings = isObj(pr.findings) ? pr.findings : {};
+      var c = isObj(out.research.doc.campaign) ? out.research.doc.campaign : {};
+      out.research.title = text(c.name) || text(out.research.doc.title) || 'Research';
+      var cov = isObj(out.research.doc.selection) && isObj(out.research.doc.selection.coverage) ? out.research.doc.selection.coverage : {};
+      out.research.lens = Object.keys(cov).map(function (k) { return cov[k]; });
+    }
+    return out;
+  }
+  function briefTitle(data, up) {
+    var c = up.brief && isObj(up.brief.doc.campaign) ? text(up.brief.doc.campaign.name) : '';
+    return c || text(data && data.title) || 'The brief';
+  }
+
+  /**
+   * A cite as a card: { cite, kind (brief|pin|finding|find), label, text, status, statusWords, meta[], cites[], carried }.
+   * carried is false when the id does not resolve in this document: it is shown that way, never hidden.
+   */
+  function resolve(cite, data) {
+    cite = String(cite || '');
+    var up = upstreamOf(data), out = { cite: cite, kind: null, label: '', text: '', status: '', statusWords: '', meta: [], cites: [], carried: false };
+    var m;
+    if ((m = /^brief:([a-z_]+)$/.exec(cite))) {
+      out.kind = 'brief';
+      var f = BRIEF_FIELDS.filter(function (x) { return x[0] === m[1]; })[0];
+      out.label = f ? f[1] : 'Brief';
+      var bf = up.brief ? up.brief.fields.filter(function (x) { return x.key === m[1]; })[0] : null;
+      if (bf) { out.text = bf.text; out.carried = true; out.status = 'plain'; out.statusWords = 'brief'; out.meta = [briefTitle(data, up)]; }
+      return out;
+    }
+    if (/^f_/.test(cite)) {
+      out.kind = 'pin'; out.label = 'Pinned fact';
+      var p = up.research && up.research.pins[cite];
+      if (p) {
+        out.carried = true; out.text = text(p.value) + (p.unit && p.unit !== 'text' ? ' ' + p.unit : ''); out.status = 'verified'; out.statusWords = 'pinned';
+        out.meta = [up.research.title, p.as_of ? 'as of ' + p.as_of : '', p.confidence ? p.confidence + ' confidence' : ''].filter(Boolean);
+      }
+      return out;
+    }
+    if (/^fi_/.test(cite)) {
+      out.kind = 'finding'; out.label = 'Finding';
+      var fi = up.research && up.research.findings[cite];
+      if (fi) {
+        out.carried = true; out.text = text(fi.statement);
+        out.status = fi.status === 'verified' ? 'verified' : fi.status === 'proposed' ? 'derived' : 'plain';
+        out.statusWords = fi.status === 'verified' ? 'verified' : fi.status === 'proposed' ? 'derived' : String(fi.status || '');
+        out.cites = arr(fi.cites); out.meta = [up.research.title, fi.confidence ? fi.confidence + ' confidence' : ''].filter(Boolean);
+      }
+      return out;
+    }
+    if (/^x_/.test(cite)) {
+      out.kind = 'find'; out.label = 'Found by Territories';
+      var x = arr(data && data.finds).filter(function (y) { return y && y.id === cite; })[0];
+      if (x) {
+        out.carried = true; out.text = text(x.text); out.status = 'found'; out.statusWords = 'found';
+        out.meta = [text(x.source), text(x.date), x.quote_checked ? 'quote checked' : ''].filter(Boolean);
+      }
+      return out;
+    }
+    return out;
+  }
+  function derivedFindings(data) {
+    var up = upstreamOf(data);
+    if (!up.research) return [];
+    return Object.keys(up.research.findings).filter(function (id) { return up.research.findings[id].status === 'proposed'; }).sort();
+  }
+  function counts(data) {
+    var up = upstreamOf(data), ins = arr(data && data.focus && data.focus.insights);
+    return {
+      briefFields: up.brief ? up.brief.fields.length : 0, hasBrief: !!up.brief,
+      pins: up.research ? Object.keys(up.research.pins).length : 0, findings: up.research ? Object.keys(up.research.findings).length : 0,
+      hasResearch: !!up.research, derived: derivedFindings(data).length,
+      insights: ins.length, ticked: ins.filter(function (i) { return i.ticked; }).length,
+      own: ins.filter(function (i) { return i.kind === 'yours'; }).length
+    };
+  }
+
+  // ── the insights ───────────────────────────────────────────────────────
+  function focusOf(data) {
+    var f = isObj(data && data.focus) ? data.focus : {};
+    return { sources: arr(f.sources).filter(isObj), insights: arr(f.insights).filter(isObj) };
+  }
+  /** Strongest first: by rank, then by the order the engine gave; a card with no rank (a person's own) stands after the ranked. */
+  function sorted(list) {
+    return list.map(function (x, i) { return [x, i]; }).sort(function (a, b) {
+      var ra = typeof a[0].rank === 'number' ? a[0].rank : 1e6, rb = typeof b[0].rank === 'number' ? b[0].rank : 1e6;
+      return ra - rb || a[1] - b[1];
+    }).map(function (p) { return p[0]; });
+  }
+  /** Three dots: strong 3, moderate 2, thin 1; a derived insight's last dot is half (it counts half). */
+  function dotsOf(i) {
+    var n = i.strength === 'strong' ? 3 : i.strength === 'moderate' ? 2 : 1, out = [];
+    for (var k = 1; k <= 3; k++) out.push(k < n ? 'on' : k === n ? (i.derived ? 'half' : 'on') : '');
+    return out;
+  }
+  function originOf(i, data) {
+    if (i.kind === 'yours') return 'added by ' + (text(i.by) || 'you');
+    var names = [];
+    arr(i.evidence).forEach(function (c) {
+      var k = /^brief:/.test(c) ? 'the brief' : /^x_/.test(c) ? 'its own look-ups' : /^f_|^fi_/.test(c) ? 'research' : '';
+      if (k && names.indexOf(k) < 0) names.push(k);
+    });
+    return names.length ? 'from ' + names.join(' and ') : 'no evidence yet';
+  }
+
+  // ── what a press writes (every write is a pure patch over the document's own data) ──
+  function uniqueId(ids) {
+    var base = Date.now().toString(36).slice(-6), id, n = 0;
+    do { id = 'in_' + base + (n ? n.toString(36) : ''); n++; } while (ids.indexOf(id) >= 0);
+    return id;
+  }
+  /** Tick or untick one insight, by id. null when the id is not there or nothing changes. */
+  function tickPatch(data, id, on) {
+    var f = focusOf(data), hit = false, changed = false;
+    var ins = f.insights.map(function (i) {
+      if (i.id !== id) return i;
+      hit = true; if (i.ticked === !!on) return i;
+      changed = true; var o = {}; Object.keys(i).forEach(function (k) { o[k] = i[k]; }); o.ticked = !!on; return o;
+    });
+    return hit && changed ? { focus: { sources: f.sources, insights: ins } } : null;
+  }
+  /** Add the person's own insight, ticked and labelled as theirs. { patch, id } or { error } in words. */
+  function addPatch(data, raw, by) {
+    var t = String(raw == null ? '' : raw).replace(/\s+/g, ' ').trim(), f = focusOf(data);
+    if (!t) return { error: 'Write the insight first.' };
+    if (t.length > MAX_TEXT) return { error: 'That is ' + t.length + ' characters. An insight holds ' + MAX_TEXT + ' at most.' };
+    if (f.insights.length >= MAX_INSIGHTS) return { error: 'The list is full: ' + MAX_INSIGHTS + ' insights is the most it holds.' };
+    var id = uniqueId(f.insights.map(function (i) { return i.id; }));
+    var mine = { id: id, kind: 'yours', text: t, evidence: [], strength: 'thin', ticked: true, by: text(by) || 'You' };
+    return { id: id, patch: { focus: { sources: f.sources, insights: f.insights.concat([mine]) } } };
+  }
+  /** A source in or out of play, by id. null when nothing changes. */
+  function playPatch(data, id, on) {
+    var f = focusOf(data), hit = false;
+    var src = f.sources.map(function (s) { if (s.id !== id || s.in_play === !!on) return s; hit = true; return { id: s.id, in_play: !!on }; });
+    return hit ? { focus: { sources: src, insights: f.insights } } : null;
+  }
+
+  // ── where the run is (derived from the document after every press: LESSONS 18) ──
+  function approvalOf(run) { var a = isObj(run && run.approvals) ? run.approvals.pick : null; return isObj(a) && a.at ? a : null; }
+  function decisionsOf(run) { return arr(run && run.decisions).filter(isObj); }
+  /**
+   * 'open' (the Pick gate waits for a person), 'approved' (they approved and the ticks have not changed since),
+   * 'working' (the engine is making the insights), 'past' (the crew has gone or the run moved on), 'none' (no run yet).
+   */
+  function pickState(run) {
+    run = isObj(run) ? run : {};
+    var ap = approvalOf(run), gate = isObj(run.gate) ? run.gate : null;
+    if (gate && gate.id === 'pick') {
+      if (!ap) return 'open';
+      var edited = decisionsOf(run).some(function (d) { return d.gate === 'pick' && d.kind === 'edit' && String(d.at) > String(ap.at); });
+      return edited ? 'open' : 'approved';
+    }
+    if (run.state === 'building' && (!run.stage || run.stage === 'pick')) return 'working';
+    if (ap || (run.stage && run.stage !== 'pick')) return 'past';
+    return 'none';
+  }
+  /** The person's half of approving Pick: { approvals, decisions }, nothing the engine owns. null when it would be refused. */
+  function approvePatch(run, tickedCount, by, at) {
+    if (pickState(run) !== 'open' || !(tickedCount > 0)) return null;
+    var approvals = {}; Object.keys(isObj(run.approvals) ? run.approvals : {}).forEach(function (k) { approvals[k] = run.approvals[k]; });
+    approvals.pick = { by: by, at: at, decision: 'approve', note: plural(tickedCount, 'insight') + ' ticked' };
+    return { approvals: approvals, decisions: decisionsOf(run).concat([{ gate: 'pick', kind: 'approve', by: by, at: at }]) };
+  }
+  /** Ticks changed after the approval: recorded once, so the approval no longer stands and Explore is live again. */
+  function editedPatch(run, by, at) {
+    if (pickState(run) !== 'approved') return null;
+    return { decisions: decisionsOf(run).concat([{ gate: 'pick', kind: 'edit', by: by, at: at }]) };
+  }
+  function stepsOf(run) {
+    run = isObj(run) ? run : {};
+    var st = run.stage || 'pick', at = st === 'pick' ? 0 : st === 'greenlight' || st === 'send' ? 2 : 1;
+    if (run.state === 'done') at = 2;
+    return { at: at, reached: at, list: STEPS.map(function (s) { return s[0]; }) };
+  }
+
+  // ── the Booth's words, from the document ───────────────────────────────
+  function boothNotes(data) {
+    var c = counts(data), out = [], ids = derivedFindings(data);
+    var read = [];
+    read.push(c.hasBrief ? 'the brief (' + plural(c.briefFields, 'field') + ')' : 'no brief');
+    read.push(c.hasResearch ? 'the research (' + plural(c.pins, 'pin') + ', ' + plural(c.findings, 'finding') + ')' : 'no research');
+    out.push({ role: 'knowledge', label: 'read', time: '', body: 'Read ' + read.join(' and ') + '. Nothing copied: everything is quoted by id.', cites: [] });
+    if (ids.length) {
+      out.push({ role: 'review', label: 'flagged', time: '', cites: ids,
+        body: 'are derived. Anything built on ' + (ids.length === 1 ? 'it' : 'them') + ' will say so, and I will only ask if ' + (ids.length === 1 ? 'it reaches' : 'one of them reaches') + ' a greenlight.' });
+    }
+    arr(data && data.notes).filter(isObj).slice().reverse().forEach(function (n) {
+      out.push({ role: n.agent || 'strategy', label: 'note', time: String(n.at || '').slice(0, 10), body: text(n.text), cites: arr(n.cite) });
+    });
+    return out;
+  }
+
+  // ── the pieces ─────────────────────────────────────────────────────────
+  function sphere(role, size) {
+    return Roles ? Roles.tag(role, { size: size, decorative: true }) : '<span class="nk-ag" style="display:inline-block;width:' + size + 'px;height:' + size + 'px"></span>';
+  }
+  function roleName(r) { return Roles ? Roles.name(r).replace(/ agent$/i, '') : r; }
+  function roleJob(r) { return Roles ? Roles.job(r) : ''; }
+
+  function refChip(cite, data) {
+    var r = resolve(cite, data), cls = !r.carried ? ' gone' : r.status === 'derived' ? ' derived' : '';
+    return '<button type="button" class="ref' + cls + '" data-src="' + esc(cite) + '" title="' + esc(r.carried ? r.label + (r.statusWords ? ', ' + r.statusWords : '') : 'Not carried in this document') + '">' + esc(cite) + '</button>';
+  }
+  function stateChip(r) {
+    if (!r.carried) return '<span class="pill st-plain">not carried</span>';
+    return '<span class="pill st-' + (r.status === 'verified' ? 'verified' : r.status === 'derived' ? 'derived' : r.status === 'found' ? 'found' : 'plain') + '">' + esc(r.statusWords) + '</span>';
+  }
+
+  function insightCard(i, data, editable) {
+    var kind = KIND_WORDS[i.kind] || 'Insight', dots = dotsOf(i), why = STRENGTH_WORDS[i.strength] || 'thin';
+    var chips = arr(i.evidence).map(function (c) { return refChip(c, data); }).join('');
+    if (!chips && i.kind !== 'yours') chips = '<span class="meta">No evidence yet</span>';
+    return '<label class="ins' + (i.ticked ? ' on' : '') + '" data-ins="' + esc(i.id) + '">' +
+      '<input type="checkbox" data-tick="' + esc(i.id) + '"' + (i.ticked ? ' checked' : '') + (editable ? '' : ' disabled') + ' aria-label="Work on this insight">' +
+      '<span class="ins-b"><span class="dcard-top"><span>' + esc(kind) + ' · ' + esc(originOf(i, data)) + '</span>' +
+      '<span class="dots" title="Evidence strength: ' + why + (i.derived ? ', counted half where it rests on a derived finding' : '') + '" role="img" aria-label="Evidence strength: ' + why + '">' +
+      dots.map(function (d) { return '<i class="' + d + '"></i>'; }).join('') + '</span></span>' +
+      '<span class="sbtext">' + esc(i.text) + '</span>' +
+      '<span class="row">' + chips + (i.derived ? '<span class="dmark" title="Rests on a finding the agent worked out and nobody has verified yet">derived</span>' : '') + (i.kind === 'yours' ? '<span class="ymark">yours</span>' : '') + '</span></span></label>';
+  }
+
+  function sourceCards(data) {
+    var up = upstreamOf(data), c = counts(data), out = [];
+    if (up.brief) {
+      out.push('<button type="button" class="tsrc tsrc-brief" data-arrived="brief" aria-label="What came from the brief"><span class="tsrc-tab">Brief</span><span class="tsrc-body"><span class="tsrc-t">' + esc(briefTitle(data, up)) +
+        '</span><span class="tsrc-row"><span>' + esc(plural(c.briefFields, 'field')) + '</span><span>read ✓</span></span></span></button>');
+    }
+    if (up.research) {
+      var lens = up.research.lens.length ? '<span class="tsrc-lens" aria-hidden="true">' + up.research.lens.map(function (v) { return '<i class="' + (v === 'filled' ? 'f' : '') + '"></i>'; }).join('') + '</span>' : '';
+      out.push('<button type="button" class="tsrc" data-arrived="research" aria-label="What came from the research"><span class="tsrc-band">Research' + lens + '</span><span class="tsrc-body"><span class="tsrc-t">' + esc(up.research.title) +
+        '</span><span class="tsrc-row"><span>' + esc(plural(c.pins, 'pin') + ' · ' + plural(c.findings, 'finding')) + '</span><span>read ✓</span></span></span></button>');
+    }
+    var finds = arr(data && data.finds).filter(isObj);
+    if (finds.length) {
+      out.push('<button type="button" class="tsrc" data-arrived="finds" aria-label="What Territories found"><span class="tsrc-band te">Found by Territories</span><span class="tsrc-body"><span class="tsrc-t">Its own look-ups</span>' +
+        '<span class="tsrc-row"><span>' + esc(plural(finds.length, 'find')) + ' kept</span></span></span></button>');
+    }
+    if (!up.brief && !up.research) {
+      out.push('<div class="tsrc"><span class="tsrc-body"><span class="tsrc-t">Nothing came with this document</span><span class="tsrc-row"><span>No brief and no research were carried in.</span></span></span></div>');
+    }
+    return '<div class="srcrow">' + out.join('') + '</div>';
+  }
+
+  function everything(data) {
+    var f = focusOf(data), on = f.sources.filter(function (s) { return s.in_play; }).length;
+    var rows = f.sources.map(function (s) {
+      var r = resolve(s.id, data);
+      return '<div class="evrow' + (s.in_play ? '' : ' off') + '"><button type="button" class="tog" data-play="' + esc(s.id) + '" aria-pressed="' + (s.in_play ? 'true' : 'false') + '" aria-label="Let the crew quote ' + esc(s.id) + '"></button>' +
+        refChip(s.id, data) + '<div class="grow">' + (r.kind === 'brief' ? '<b style="font-weight:600">' + esc(r.label) + '.</b> ' : '') +
+        (r.carried ? esc(r.text) : '<span class="meta">Not carried in this document.</span>') + '</div>' + stateChip(r) + '</div>';
+    }).join('');
+    return '<details class="evd"' + '><summary>Everything the crew may quote · ' + esc(on) + ' in play</summary><div class="evlist">' + (rows || '<p class="meta">Nothing yet.</p>') + '</div></details>';
+  }
+
+  function runLine(data, ui, st, c) {
+    var run = isObj(data && data.run) ? data.run : {}, job = ui.job, mw = ui.mw;
+    var busy = job && (job.state === 'sending' || job.state === 'queued' || job.state === 'running');
+    var note = '', cls = '', primary = '', extra = '';
+    if (st === 'open') {
+      primary = '<button type="button" class="btn-pill primary" data-act="explore"' + (c.ticked ? '' : ' disabled') + '>' + (c.ticked ? 'Explore ' + esc(plural(c.ticked, 'insight')) + ' →' : 'Explore →') + '</button>';
+      note = c.ticked ? 'The crew sets off on its own. You can steer it, but you do not have to.' : 'Tick at least one insight, then explore.';
+    } else if (st === 'approved') {
+      primary = '<button type="button" class="btn-pill" disabled>Approved ✓</button>';
+      if (busy) note = 'The crew is setting off.';
+      else if (job && job.state === 'failed') { note = (job.error || 'The engine stopped.') + ' Your pick is saved.'; cls = ' bad'; extra = '<button type="button" class="btn-rect" data-act="retry">Send the crew out again</button>'; }
+      else { note = mw === false ? 'Approved. The engine is not connected in this workspace, so the crew has not set off. Your pick is saved.' : 'Approved. Waiting for the engine to start the crew.'; extra = busy ? '' : '<button type="button" class="btn-rect" data-act="retry">Send the crew out</button>'; }
+    } else if (st === 'working') {
+      primary = '<button type="button" class="btn-pill" disabled>Reading…</button>'; note = 'The engine is still writing the insights.';
+    }
+    return '<div class="runline">' + primary + extra + (note ? '<span class="runnote' + cls + '" role="status">' + esc(note) + '</span>' : '') + '</div>';
+  }
+
+  function pickSheet(data, ui) {
+    var run = isObj(data && data.run) ? data.run : {}, st = pickState(run), c = counts(data), f = focusOf(data);
+    var editable = st === 'open' || st === 'approved';
+    var cards = sorted(f.insights).map(function (i) { return insightCard(i, data, editable); }).join('');
+    var stats = [c.hasBrief ? 'Brief · ' + plural(c.briefFields, 'field') : 'No brief', c.hasResearch ? plural(c.pins, 'pin') + ' · ' + plural(c.findings, 'finding') : 'No research',
+      plural(c.insights, 'insight'), c.ticked + ' ticked'];
+    if (c.derived) stats.push(c.derived + ' derived');
+    var add = editable ? '<div class="addsb" data-form="add"><input name="own" value="' + esc(ui.draft || '') + '" placeholder="Add your own insight, tension or what-if…" autocomplete="off" maxlength="' + MAX_TEXT + '" aria-label="Add your own insight">' +
+      '<div class="row"><span class="muted">It joins the list ticked, labelled as yours.</span><span class="spacer"></span><button class="btn-rect primary" type="button" data-act="add">Add</button></div></div>' : '';
+    var err = isObj(run.error) && run.error.stage === 'pick' ? '<p class="runnote bad" role="alert">' + esc(run.error.message) + (arr(run.error.refused).length ? ' ' + esc(arr(run.error.refused).join(' ')) : '') + '</p>' : '';
+    return '<article class="sheet"><header class="sheet-head"><div class="sheet-eyebrow">Step 1 · Pick what to work on</div><h2>Which insights should the crew explore?</h2>' +
+      '<p>Strongest first, with what each one rests on. Untick, tick or add your own, then explore.</p></header>' +
+      '<div class="stats">' + stats.map(function (s) { return '<span>' + esc(s) + '</span>'; }).join('') + '</div>' +
+      '<div class="sheet-body">' + sourceCards(data) + err +
+      (cards ? '<div class="inslist">' + cards + '</div>' : '<p class="meta">' + (st === 'working' ? 'The insights are on their way.' : 'No insights yet.') + '</p>') +
+      add + everything(data) + runLine(data, ui, st, c) + '</div></article>';
+  }
+
+  function laterSheet(data, which) {
+    var run = isObj(data && data.run) ? data.run : {}, n = arr(data && data.territories).length, crew = arr(data && data.crew).length;
+    var title = which === 'explore' ? 'The crew explores' : 'Review and greenlight';
+    var err = isObj(run.error) ? '<p class="runnote bad" role="alert">' + esc(run.error.message) + '</p>' : '';
+    return '<article class="sheet"><div class="later"><div class="sheet-eyebrow">Step ' + (which === 'explore' ? 2 : 3) + '</div><h3>' + title + '</h3>' + err +
+      '<p>' + (n || crew ? 'The document holds ' + esc(plural(crew, 'crew member')) + ' and ' + esc(plural(n, 'route')) + '. ' : 'Nothing has come back from the crew yet. ') +
+      'This view is not built in this version of Territories: the work is in the document, and the screen for it arrives with the next release.</p></div></article>';
+  }
+
+  function booth(data, ui, open) {
+    var run = isObj(data && data.run) ? data.run : {}, gate = isObj(run.gate) ? run.gate : null, role = gate && gate.agent ? gate.agent : 'knowledge';
+    var line = gate && gate.dex ? gate.dex : 'I read the brief and the research. Tick what the crew should work on.';
+    var notes = boothNotes(data).map(function (n) {
+      return '<article class="bc"><header class="bc-hd">' + sphere(n.role, 20) + '<span class="bc-who">' + esc(roleName(n.role)) + ' · ' + esc(n.label) + '</span><span class="bc-t">' + esc(n.time || 'now') + '</span></header>' +
+        '<div class="bc-note">' + (n.cites.length ? n.cites.map(function (c) { return refChip(c, data); }).join(' ') + ' ' : '') + esc(n.body) + '</div></article>';
+    }).join('');
+    var me = ui.me && ui.me.name ? '<div class="pfoot">Checks signed as <b>' + esc(ui.me.name) + '</b></div>' : '';
+    return '<aside class="booth-col' + (open ? '' : ' booth-off') + '" id="stab" aria-label="Booth"><div class="booth"><div class="booth-hd"><span class="booth-nm">Booth</span><span class="booth-sp"></span>' +
+      '<button type="button" class="booth-hide" data-booth="hide" aria-label="Hide the Booth" aria-expanded="' + (open ? 'true' : 'false') + '" aria-controls="stab" aria-keyshortcuts="]">Hide<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5"/></svg></button></div>' +
+      '<div class="booth-body"><div class="bt-agent">' + sphere(role, 40) + '<div><div class="who">' + esc(roleName(role)) + ' agent · ' + esc(roleJob(role)) + '</div><div class="line">' + esc(line) + '</div></div>' +
+      '<span class="bt-crew" aria-hidden="true">' + sphere('research', 22) + sphere('strategy', 22) + '</span></div>' + notes +
+      '<div class="bt-box"><textarea rows="2" disabled placeholder="Ask the Research agent to look something up…" aria-label="Ask the Research agent to look something up"></textarea>' +
+      '<div class="bt-hint">Look-ups are not built into Territories yet, so nothing can be searched from here.</div><div class="row"><span class="bt-scope">Whole exploration</span><span class="spacer"></span><button type="button" class="btn dark" disabled>Look it up</button></div></div>' +
+      me + '</div></div></aside>';
+  }
+
+  function head(data, st) {
+    var title = text(data && data.title) || 'Territories', parts = title.split(/:\s+/);
+    var eyebrow = parts.length > 1 ? parts[0] + ' · ' + parts.slice(1).join(': ') : title;
+    var s = stepsOf(data && data.run), sub = ['Step 1 of 3. Napkin has read the brief and the research. Tick the insights the crew should work on.',
+      'Step 2 of 3. The crew explores on its own: different headings, other categories. Steer it if you want to.',
+      'Step 3 of 3. Every route comes back developed. Greenlight as many as are worth making.'][s.at];
+    return '<section class="app-head"><div><div class="eyebrow">' + esc(eyebrow) + '</div><h1 class="hero-title">Territories<span class="period-dot"></span></h1><p class="hero-sub">' + esc(sub) + '</p></div>' +
+      '<ol class="flow-steps" aria-label="Steps">' + STEPS.map(function (p, i) {
+        var live = i <= s.reached;
+        return '<li><button type="button" data-step="' + p[0] + '"' + (i === (st.view != null ? st.view : s.at) ? ' aria-current="step"' : '') + (i < s.at ? ' class="done"' : '') + (live ? '' : ' disabled title="Opens when the step before it is done"') + '><i>' + (i < s.at ? '✓' : i + 1) + '</i><span>' + p[1] + '</span></button></li>';
+      }).join('') + '</ol></section>';
+  }
+
+  /** The whole page: the head, the step's sheet and the Booth. ui: { view (step index or null), draft, job, mw, me, booth }. */
+  function view(data, ui) {
+    data = isObj(data) ? data : {}; ui = isObj(ui) ? ui : {};
+    var s = stepsOf(data.run), at = ui.view != null && ui.view <= s.reached ? ui.view : s.at;
+    var sheet = at === 0 ? pickSheet(data, ui) : laterSheet(data, at === 1 ? 'explore' : 'greenlight');
+    var open = ui.booth !== false;
+    return '<main class="shell">' + head(data, { view: at }) + '<div class="split">' + sheet + booth(data, ui, open) + '</div></main>' +
+      '<button type="button" class="booth-edge" id="boothEdge" aria-controls="stab" aria-expanded="' + (open ? 'true' : 'false') + '" aria-label="Open the Booth" aria-keyshortcuts="]" tabindex="' + (open ? '-1' : '0') + '">' +
+      '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 2.5 4 6l3.5 3.5"/></svg><span class="booth-lb">Booth</span></button>';
+  }
+
+  /** The window onto one source (a cite) or onto what arrived (brief, research, finds). Returns { title, html } or null. */
+  function dialogFor(what, data) {
+    var up = upstreamOf(data), c = counts(data);
+    if (what === 'brief' && up.brief) {
+      return { title: briefTitle(data, up), html: '<span class="psec-t">What came from the brief · ' + esc(plural(c.briefFields, 'field')) + '</span>' +
+        up.brief.fields.map(function (f) { return '<div class="evrow"><div class="grow"><b style="font-weight:600">' + esc(f.label) + '.</b> ' + esc(f.text) + '</div>' + refChip('brief:' + f.key, data) + '</div>'; }).join('') };
+    }
+    if (what === 'research' && up.research) {
+      var pins = Object.keys(up.research.pins).sort(), fis = Object.keys(up.research.findings).sort();
+      return { title: up.research.title, html: '<span class="psec-t">What came from the research · ' + esc(plural(pins.length, 'pin') + ', ' + plural(fis.length, 'finding')) + '</span>' +
+        pins.concat(fis).map(function (id) { var r = resolve(id, data); return '<div class="evrow">' + refChip(id, data) + '<div class="grow">' + esc(r.text) + '</div>' + stateChip(r) + '</div>'; }).join('') };
+    }
+    if (what === 'finds') {
+      var fs = arr(data && data.finds).filter(isObj);
+      return { title: 'Found by Territories', html: '<span class="psec-t">Its own look-ups · ' + esc(plural(fs.length, 'find')) + '</span>' +
+        fs.map(function (x) { var r = resolve(x.id, data); return '<div class="evrow">' + refChip(x.id, data) + '<div class="grow">' + esc(r.text) + '<div class="meta">' + esc(r.meta.join(' · ')) + '</div></div></div>'; }).join('') };
+    }
+    var r = resolve(what, data);
+    if (!r.kind) return null;
+    var fp = focusOf(data).sources.filter(function (s) { return s.id === what; })[0];
+    var body;
+    if (!r.carried) {
+      body = '<div class="tsrc-q">Not carried in this document.</div><p class="meta">The id ' + esc(what) + ' is cited here, but the ' + (r.kind === 'brief' ? 'brief field' : r.kind === 'find' ? 'find' : 'research') + ' it names did not come with it.</p>';
+    } else {
+      var band = r.kind === 'brief' ? '<span class="tsrc-tab">Brief</span>' : r.kind === 'find' ? '<span class="tsrc-band te">Found by Territories</span>' : '<span class="tsrc-band">Research</span>';
+      body = '<div class="tsrc' + (r.kind === 'brief' ? ' tsrc-brief' : '') + '">' + band + '<div class="tsrc-body"><span class="psec-t">' + esc(r.label) + ' · ' + esc(what) + ' ' + stateChip(r) + '</span><div class="tsrc-q">' + esc(r.text) + '</div>' +
+        (r.meta.length ? '<div class="tsrc-row">' + r.meta.map(function (m) { return '<span>' + esc(m) + '</span>'; }).join('') + '</div>' : '') +
+        (r.cites.length ? '<div class="row">' + r.cites.map(function (k) { return refChip(k, data); }).join('') + '</div>' : '') + '</div></div>';
+    }
+    var play = fp && r.carried ? '<button type="button" class="btn-rect" data-play-toggle="' + esc(what) + '" data-on="' + (fp.in_play ? '0' : '1') + '">' + (fp.in_play ? 'Take it out of play' : 'Put it back in play') + '</button>' : '';
+    return { title: r.label, html: body + '<div class="row">' + play + '<span class="spacer"></span><button type="button" class="btn-rect" data-close>Close</button></div>', closeInside: true };
+  }
+
+  /** Decide what one press does. e: { a, id, on, text }. Returns { writes: [{patch, action, rationale}], toast, start, ui } or null. */
+  function act(data, ui, e, env) {
+    data = isObj(data) ? data : {}; env = env || {};
+    var by = (env.me && env.me.name) || 'You', at = env.now || new Date().toISOString().replace(/\.\d+Z$/, 'Z'), run = isObj(data.run) ? data.run : {};
+    if (e.a === 'tick') {
+      var p = tickPatch(data, e.id, e.on);
+      if (!p) return null;
+      var w = [{ patch: p, action: (e.on ? 'tick ' : 'untick ') + e.id, rationale: (e.on ? 'ticked' : 'unticked') + ' for the crew to explore' }];
+      var ed = editedPatch(run, by, at);
+      if (ed) w.push({ patch: { run: ed }, action: 'change the pick', rationale: 'ticks changed after Explore was approved, so the approval no longer stands' });
+      return { writes: w, focus: e.id };
+    }
+    if (e.a === 'add') {
+      var r = addPatch(data, e.text, by);
+      if (r.error) return { writes: [], toast: r.error, keepDraft: true };
+      var w2 = [{ patch: r.patch, action: 'add my own insight', rationale: 'the person added it, ticked, labelled as theirs' }];
+      var ed2 = editedPatch(run, by, at);
+      if (ed2) w2.push({ patch: { run: ed2 }, action: 'change the pick', rationale: 'an insight was added after Explore was approved, so the approval no longer stands' });
+      return { writes: w2, focus: r.id, draft: '' };
+    }
+    if (e.a === 'play') {
+      var pp = playPatch(data, e.id, e.on);
+      return pp ? { writes: [{ patch: pp, action: (e.on ? 'put ' : 'took ') + e.id + (e.on ? ' back in play' : ' out of play'), rationale: 'the crew may ' + (e.on ? '' : 'not ') + 'quote it' }] } : null;
+    }
+    if (e.a === 'explore') {
+      var c = counts(data), ap = approvePatch(run, c.ticked, by, at);
+      if (!ap) return { writes: [], toast: c.ticked ? 'Explore is already approved for these ticks.' : 'Tick at least one insight first.' };
+      return { writes: [{ patch: { run: ap }, action: 'approve pick', rationale: 'gate 1 of 2 approved: ' + plural(c.ticked, 'insight') + ' ticked' }], start: true, toast: 'Approved.' };
+    }
+    if (e.a === 'retry') {
+      return pickState(run) === 'approved' ? { writes: [], start: true } : null;
+    }
+    return null;
+  }
+
+  return {
+    TASKS: TASKS, BRIEF_FIELDS: BRIEF_FIELDS, STEPS: STEPS, MAX_INSIGHTS: MAX_INSIGHTS, MAX_TEXT: MAX_TEXT,
+    upstreamOf: upstreamOf, resolve: resolve, counts: counts, derivedFindings: derivedFindings, sorted: sorted, dotsOf: dotsOf, originOf: originOf,
+    tickPatch: tickPatch, addPatch: addPatch, playPatch: playPatch, pickState: pickState, approvePatch: approvePatch, editedPatch: editedPatch, stepsOf: stepsOf,
+    boothNotes: boothNotes, view: view, dialogFor: dialogFor, act: act, insightCard: insightCard
+  };
+})();
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var L = TerritoriesLogic, Roles = typeof NapkinRoles !== 'undefined' ? NapkinRoles : null;
+  var clanScheme = navigator.userAgent.indexOf('Windows') !== -1 ? 'http://clan.localhost' : 'clan://localhost';
+  var inShell = !!window.parent && window.parent !== window;
+  // View state only. Anything the document should keep is written through put().
+  var ui = { view: null, draft: '', job: null, mw: null, me: null, booth: true };
+  var BOOTH_MIN = 1101, BUSY = { sending: 1, queued: 1, running: 1 };
+  var MW_API = 'napkin.middleware/1';
+
+  function data() { return (window.__CLAN__ && window.__CLAN__.data) || {}; }
+  function $(id) { return document.getElementById(id); }
+  function toast(m) { var t = $('toast'); if (!t) return; t.textContent = m; t.classList.add('on'); clearTimeout(t._t); t._t = setTimeout(function () { t.classList.remove('on'); }, 3600); }
+  function nowIso() { return new Date().toISOString().replace(/\.\d+Z$/, 'Z'); }
+
+  // ── writes: the person's half only ──
+  // The bridge replaces a top-level key whole in its own copy, so a partial `run` would hide the engine's half from this page until
+  // the next load. The host merges (RFC 7396) what is sent; the page keeps the full run beside it.
+  function put(w) {
+    if (!window.clan || !window.clan.patchData) { toast('No host bridge: changes are not being saved.'); return Promise.resolve(null); }
+    var patch = w.patch, full = null;
+    if (patch.run && data().run) { full = {}; Object.keys(data().run).forEach(function (k) { full[k] = data().run[k]; }); Object.keys(patch.run).forEach(function (k) { full[k] = patch.run[k]; }); }
+    return window.clan.patchData(patch, { actor: 'human', action: w.action, rationale: w.rationale || '', pinned: false }).then(function (res) {
+      if (full && window.__CLAN__ && window.__CLAN__.data) { window.__CLAN__.data.run = full; }
+      return res;
+    });
+  }
+  function env() { return { me: ui.me, now: nowIso() }; }
+
+  // ── the engine, through the middleware (docs/contracts/middleware-api.md section 12; the same shape as Deck Maker's) ──
+  function mwBody(res) { return (res && typeof res === 'object' && 'ok' in res && 'data' in res) ? res.data : res; }
+  function hostErr(res) {
+    if (!res) return 'Empty reply from the host.';
+    if (res.error) {
+      var e = res.error;
+      if (e && e.type === 'no_middleware') { ui.mw = false; return 'This workspace has no middleware set up, so the engine cannot be reached.'; }
+      return typeof e === 'string' ? e : (e.message || e.type || 'The engine did not accept the request.');
+    }
+    if (res.ok === false) return 'The host could not complete the call' + (res.status ? ' (status ' + res.status + ')' : '') + '. Nothing was applied.';
+    var b = mwBody(res);
+    if (!b || typeof b !== 'object' || b.api !== MW_API) return 'Not a ' + MW_API + ' reply. Nothing was applied.';
+    return null;
+  }
+  function checkMiddleware() {
+    if (typeof fetch !== 'function') return;
+    fetch(clanScheme + '/middleware').then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (v) { if (v && typeof v.configured === 'boolean') { ui.mw = v.configured; render(); } }).catch(function () {});
+  }
+  function startRun() {
+    if (ui.job && BUSY[ui.job.state]) return;
+    if (!(window.clan && window.clan.apiProxy)) { ui.job = { state: 'failed', error: 'Sending the crew out runs through the host.' }; render(); return; }
+    ui.job = { id: null, state: 'sending', delay: 900, t: 0, error: null };
+    render();
+    window.clan.apiProxy('middleware', { task: L.TASKS.run, input: {} }).then(onReply, unreachable);
+  }
+  function onReply(res) {
+    var j = ui.job, err = hostErr(res);
+    if (!j) return;
+    if (err) { j.state = 'failed'; j.error = err; render(); return; }
+    var b = mwBody(res);
+    if (b.job && typeof b.job === 'object') {
+      j.id = b.job.id || j.id; j.state = b.job.state || j.state;
+      if (b.job.error) j.error = b.job.error.message || b.job.error.type || String(b.job.error);
+    }
+    if (j.state === 'queued' || j.state === 'running') {
+      clearTimeout(j.t);
+      j.t = setTimeout(function () { if (ui.job && ui.job.id) window.clan.apiProxy('middleware', { task: L.TASKS.status, input: { job_id: ui.job.id } }).then(onReply, unreachable); }, j.delay);
+      j.delay = Math.min(Math.round(j.delay * 1.4), 2500);
+    } else if (j.state === 'failed' && !j.error) j.error = 'The engine stopped.';
+    render();
+  }
+  function unreachable(e) { if (!ui.job) return; ui.job.state = 'failed'; ui.job.error = 'The middleware could not be reached: ' + (e && e.message || e); render(); }
+
+  // ── drawing ──
+  var dialogEl = null, dialogFrom = null;
+  function render(focusId) {
+    var app = $('app'); if (!app) return;
+    var keepY = window.pageYOffset, active = document.activeElement, hadAdd = active && active.name === 'own', pos = hadAdd ? active.selectionStart : 0;
+    // The frame is as tall as this page, and a shorter one for a moment would move the reader: hold the height across the redraw.
+    app.style.minHeight = app.offsetHeight + 'px';
+    app.innerHTML = L.view(data(), ui);
+    setTimeout(function () { app.style.minHeight = ''; }, 350);
+    if (Roles) { try { Roles.auto(); } catch (e) { /* the circles stay their still frames */ } }
+    boothApply(true);
+    if (focusId) { var el = app.querySelector('[data-tick="' + focusId + '"]'); if (el) el.focus({ preventScroll: true }); }
+    else if (hadAdd) { var inp = app.querySelector('input[name="own"]'); if (inp) { inp.focus({ preventScroll: true }); try { inp.setSelectionRange(pos, pos); } catch (e) { /* not selectable */ } } }
+    window.scrollTo(0, keepY);
+  }
+  function run(e) {
+    var r = L.act(data(), ui, e, env());
+    if (!r) return;
+    if (r.toast) toast(r.toast);
+    if (r.draft != null) ui.draft = r.draft;
+    var p = Promise.resolve();
+    (r.writes || []).forEach(function (w) { p = p.then(function () { return put(w); }); });
+    p.then(function () { render(r.focus); if (r.start) startRun(); });
+    if (!(r.writes || []).length) { render(r.focus); if (r.start) startRun(); }
+  }
+
+  // ── source windows ──
+  function openDialog(what, from) {
+    var d = L.dialogFor(what, data()); if (!d) { toast('That source is not in this document.'); return; }
+    closeDialog(true);
+    dialogFrom = from || document.activeElement;
+    var ov = document.createElement('div'); ov.className = 'overlay';
+    ov.innerHTML = '<div class="dialog" role="dialog" aria-modal="true" aria-label="' + String(d.title).replace(/"/g, '&quot;') + '"><h3></h3>' + d.html + (d.closeInside ? '' : '<div class="row"><span class="spacer"></span><button type="button" class="btn-rect" data-close>Close</button></div>') + '</div>';
+    ov.querySelector('h3').textContent = d.title;
+    document.body.appendChild(ov); dialogEl = ov;
+    var b = ov.querySelector('[data-close]'); if (b) b.focus();
+  }
+  function closeDialog(quiet) {
+    if (!dialogEl) return;
+    dialogEl.remove(); dialogEl = null;
+    if (!quiet && dialogFrom && dialogFrom.focus && document.body.contains(dialogFrom)) dialogFrom.focus();
+  }
+
+  // ── the Booth (features/booth.clan; the pattern Brief Maker keeps) ──
+  // Hidden or shown is the shell's to remember per person and tool (clan:booth): this frame is sandboxed and its storage throws.
+  // Nothing hides at 1100px and below. ] hides and shows it.
+  function boothCan() { return window.innerWidth >= BOOTH_MIN; }
+  function boothApply(instant) {
+    var col = $('stab'), edge = $('boothEdge'), hid = !ui.booth && boothCan();
+    document.body.classList.toggle('booth-folded', hid);
+    if (!col) return;
+    col.classList.toggle('booth-off', hid); col.inert = hid;
+    var hb = col.querySelector('.booth-hide'); if (hb) hb.setAttribute('aria-expanded', String(!hid));
+    if (edge) { edge.tabIndex = hid ? 0 : -1; edge.setAttribute('aria-expanded', String(!hid)); }
+  }
+  function boothSet(open, fromShell) {
+    if (!open && !boothCan()) return;
+    if (ui.booth === open) return;
+    var inCol = $('stab') && $('stab').contains(document.activeElement);
+    ui.booth = open; boothApply(false);
+    if (!fromShell) { try { window.parent.postMessage({ type: 'clan:booth', open: open }, '*'); } catch (x) { /* no shell */ } }
+    if (!open && inCol) setTimeout(function () { var e = $('boothEdge'); if (e && !ui.booth) e.focus({ preventScroll: true }); }, 470);
+    if (open) setTimeout(function () { var h = document.querySelector('.booth-hide'); if (ui.booth && h && document.activeElement === $('boothEdge')) h.focus({ preventScroll: true }); }, 470);
+  }
+
+  // ── events ──
+  document.addEventListener('click', function (ev) {
+    var t = ev.target && ev.target.closest ? ev.target : null; if (!t) return;
+    var b;
+    if ((b = t.closest('[data-src]'))) { ev.preventDefault(); ev.stopPropagation(); openDialog(b.getAttribute('data-src'), b); return; }
+    if ((b = t.closest('[data-arrived]'))) { openDialog(b.getAttribute('data-arrived'), b); return; }
+    if ((b = t.closest('[data-close]')) || (dialogEl && t === dialogEl)) { closeDialog(); return; }
+    if ((b = t.closest('[data-play-toggle]'))) { var id = b.getAttribute('data-play-toggle'), on = b.getAttribute('data-on') === '1'; closeDialog(true); run({ a: 'play', id: id, on: on }); return; }
+    if ((b = t.closest('[data-play]'))) { run({ a: 'play', id: b.getAttribute('data-play'), on: b.getAttribute('aria-pressed') !== 'true' }); return; }
+    if ((b = t.closest('[data-act="add"]'))) { addOwn(); return; }
+    if ((b = t.closest('[data-act]'))) { run({ a: b.getAttribute('data-act') }); return; }
+    if ((b = t.closest('[data-step]'))) { if (b.disabled) return; ui.view = ['pick', 'explore', 'greenlight'].indexOf(b.getAttribute('data-step')); render(); return; }
+    if (t.closest('[data-booth="hide"]')) { boothSet(false); return; }
+    if (t.closest('#boothEdge')) boothSet(true);
+  });
+  document.addEventListener('change', function (ev) {
+    var t = ev.target; if (!t || !t.getAttribute) return;
+    var id = t.getAttribute('data-tick'); if (id) run({ a: 'tick', id: id, on: !!t.checked });
+  });
+  // No <form>: the page runs sandboxed, where a form cannot submit. Add is a button, and Enter in the box presses it.
+  function addOwn() { var inp = document.querySelector('input[name="own"]'); ui.draft = inp ? inp.value : ui.draft; run({ a: 'add', text: ui.draft }); }
+  document.addEventListener('input', function (ev) { if (ev.target && ev.target.name === 'own') ui.draft = ev.target.value; });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape' && dialogEl) { closeDialog(); return; }
+    if (ev.key === 'Enter' && ev.target && ev.target.name === 'own' && !ev.isComposing) { ev.preventDefault(); addOwn(); return; }
+    var tg = ev.target, typing = tg && /^(INPUT|TEXTAREA|SELECT)$/.test(tg.tagName || '');
+    if (ev.key === ']' && !ev.defaultPrevented && !ev.metaKey && !ev.ctrlKey && !ev.altKey && !typing) { ev.preventDefault(); boothSet(!ui.booth); }
+  });
+  window.addEventListener('resize', function () { boothApply(false); });
+  window.addEventListener('message', function (e) {
+    var m = e.data; if (!inShell || e.source !== window.parent || !m) return;
+    if (m.type === 'clan:booth') boothSet(m.open !== false, true);
+  });
+  // The bridge fires these when the document's data changes or loads.
+  window.addEventListener('clan:dataupdated', function () { render(); });
+  window.addEventListener('napkin:ready', function () { render(); });
+  window.addEventListener('clan:colorscheme', function () { render(); });
+
+  // The agency's colours on this document's own controls (clan:me), as the shell hands them over; nothing here is the document's.
+  function agency(c) {
+    var HEX = /^#[0-9a-f]{6}$/i; if (!c || !HEX.test(c.base || '') || !HEX.test(c.accent || '')) return;
+    function inkOn(h) { var n = parseInt(h.slice(1), 16), v = [n >> 16, (n >> 8) & 255, n & 255].map(function (x) { x /= 255; return x <= .03928 ? x / 12.92 : Math.pow((x + .055) / 1.055, 2.4); }); return (.2126 * v[0] + .7152 * v[1] + .0722 * v[2]) > .3 ? '#141413' : '#FFFFFF'; }
+    var r = document.documentElement;
+    r.style.setProperty('--ag-base', c.base); r.style.setProperty('--ag-acc', c.accent);
+    r.style.setProperty('--ag-base-ink', inkOn(c.base)); r.style.setProperty('--ag-acc-ink', HEX.test(c.accentInk || '') ? c.accentInk : inkOn(c.accent));
+    if (c.accentUse === 'line') { r.setAttribute('data-agency-accent', 'line'); r.style.setProperty('--ag-act-line', c.accent); }
+    else { r.removeAttribute('data-agency-accent'); r.style.removeProperty('--ag-act-line'); }
+  }
+  function start() {
+    if (window.clan && typeof window.clan.me === 'function') window.clan.me().then(function (m) { if (m) { ui.me = { name: m.name || null }; agency(m.agency); render(); } }, function () {});
+  }
+  if (document.readyState === 'complete') setTimeout(start, 0); else window.addEventListener('load', start);
+
+  render();
+  checkMiddleware();
+})();
+</script>
+</body>
+</html>

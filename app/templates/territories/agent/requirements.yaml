@@ -1,0 +1,10 @@
+# Capability requirements (CLAN spec §22) for Territories.
+requires:
+  tools:
+    - name: llm_inference
+      why: "the insights, the crew's headings, the routes and their worlds"
+    - name: durable_jobs
+      optional: true
+      why: "a run takes minutes and outlives a browser session"
+  model_hints:
+    min_context_tokens: 64000
