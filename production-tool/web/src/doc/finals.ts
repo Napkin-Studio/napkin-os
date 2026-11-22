@@ -67,3 +67,42 @@ export function landingRights(origin: DocAsset['origin']): AssetRights | undefin
 export function asksRights(a: DocAsset | undefined): boolean {
   return a?.origin === 'uploaded' && a.rights === 'unknown'
 }
+
+// ── Final by picture, and the rights it states (features/pt-final-and-fit.clan) ──
+
+/** The final that names this exact picture, by hash, whatever it is final of (a node, a frame or a size). */
+export function finalOfAsset(d: Pick<ProductionDocument, 'finals'>, asset: Sha256 | undefined): Final | undefined {
+  if (!asset) return undefined
+  return Object.values(d.finals ?? {}).find((f) => f.asset === asset)
+}
+
+/** Whether this picture is final: the canvas and the Campaign board both ask this, of the hash alone. */
+export const isFinalAsset = (d: Pick<ProductionDocument, 'finals'>, asset: Sha256 | undefined): boolean => !!finalOfAsset(d, asset)
+
+/** The rights choices, in the order the menu lists them, with the words a person reads. */
+export const RIGHTS_CHOICES: readonly { rights: AssetRights; label: string; hint: string }[] = [
+  { rights: 'generated', label: 'Generated', hint: "Made by the agency's tools." },
+  { rights: 'own', label: 'Own', hint: 'Drawn or shot by the agency.' },
+  { rights: 'licensed', label: 'Licensed', hint: 'Someone has said it is licensed.' },
+  { rights: 'unknown', label: "Don't know yet", hint: 'The Deck marks it "Rights to supply".' },
+]
+
+/** The chip's word for a picture's rights; "Rights?" while they are not known. */
+export function rightsWord(r: AssetRights | undefined): string | undefined {
+  if (!r) return undefined
+  return r === 'unknown' ? 'Rights?' : RIGHTS_CHOICES.find((c) => c.rights === r)!.label
+}
+
+/** What Final starts on: the rights already said, else what the picture's origin says (generated here: generated; an
+ *  upload: unknown). */
+export function defaultRights(a: DocAsset | undefined): AssetRights {
+  if (a?.rights) return a.rights
+  return landingRights(a?.origin) ?? 'unknown'
+}
+
+/** Mark a picture final and state its rights in one draft (one undo step): the Deck reads the asset's rights. */
+export function markFinalWithRights(d: ProductionDocument, of: FinalOf, asset: Sha256, rights: AssetRights, by: PersonRef, extra: Extra = {}, also: readonly FinalOf[] = []) {
+  setFinal(d, of, asset, true, by, extra, undefined, also)
+  const a = d.assets[asset]
+  if (a) a.rights = rights
+}

@@ -26,6 +26,7 @@ import { cropBox, previewSize } from './crop'
 import { channelOf, formatById, PACKS_VERSION, type PlanRow } from './formats'
 import { currentMasterAsset, type MasterInfo } from './master'
 import { aspectOf, PAID, rowFracs, type MethodChoice } from './rules'
+import { fitOfSize, methodOffered, methodWhy } from './fit'
 import { checksFor, flagged } from './checks'
 import { lookOf } from './look'
 import { brandKit, layersFor, layoutPanel, panelCrop } from './layout'
@@ -452,6 +453,9 @@ export async function changeMethod(deps: CampaignDeps, sizeId: string, method: S
   const size = d.sizes[sizeId]
   const set = size && d.format_sets[size.set_id]
   if (!size || !set || size.media !== 'image' || size.method === method) return null
+  // Never send a method that will fail (UAT 2026-11-22: Extend at 4:1 from a 4:5 master was refused by the relay after it was chosen).
+  const fit = fitOfSize(set, size)
+  if (fit && !methodOffered(fit, method)) throw new Error(methodWhy(fit, method) ?? `${method} cannot run for this size.`)
   const master = { w: set.master.w!, h: set.master.h! }
   const shape = { w: size.delivery.width, h: size.delivery.height }
   const row = formatById(size.format.format_id)

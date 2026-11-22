@@ -220,3 +220,13 @@
 .ov-cap { margin-top: 6px; font-size: 11.5px; }
 .ov-cap b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ov-cap span { color: var(--ink3); font-size: 11px; white-space: nowrap; }
+
+/* Change method: what cannot run is greyed with its reason; the product that will not fit is said plainly (features/pt-final-and-fit.clan). */
+.cb-menu .pt-menurow { flex-wrap: wrap; }
+.cb-menu .pt-menurow.unfit { opacity: 0.6; cursor: not-allowed; }
+.cb-mrow { display: inline-flex; align-items: baseline; gap: 6px; }
+.cb-why { display: block; flex-basis: 100%; color: var(--ink3); font-size: 11.5px; font-weight: 400; white-space: normal; text-align: left; }
+.cb-wont { margin: 6px; padding: 10px 12px; border: 1px solid var(--warn-border); background: var(--warn-bg); border-radius: 12px; max-width: 300px; font-size: 12.5px; }
+.cb-wont b { display: block; margin-bottom: 3px; }
+.cb-wont p { margin: 0; color: var(--ink2); }
+.rs-wont { color: var(--ink); background: var(--warn-bg); border: 1px solid var(--warn-border); border-radius: 6px; padding: 6px 8px; }

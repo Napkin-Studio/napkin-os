@@ -4,9 +4,10 @@
 // when none can hold the protected product, says so in plain words with what to do. Pure; the numbers are the relay's:
 // rules.ts extendFits is relay/formats.py extend_fits (three steps of 35 %), and REDRAW_MAX_RATIO is Gemini's 8:1.
 
-import type { Aspect, ProtectBox, SizeMethod } from '../contracts/types'
+import type { Aspect, FormatSet, ProtectBox, Size, SizeMethod } from '../contracts/types'
 import { cropBox, unionOf, type Fracs, NO_INSET } from './crop'
-import { extendFits, extendSteps, EXTEND_STEPS_MAX, filled } from './rules'
+import { formatById } from './formats'
+import { extendFits, extendSteps, EXTEND_STEPS_MAX, filled, rowFracs } from './rules'
 
 /** The most extreme shape a Redraw (Gemini) reaches, as a ratio either way (resizeSelection.ts MAX_RATIO is this). */
 export const REDRAW_MAX_RATIO = 8
@@ -89,3 +90,11 @@ export function methodWhy(fit: Fit, method: SizeMethod): string | undefined {
 
 /** How far a master is from a shape: 1 is the same shape, below 0.25 an extend leaves it small (rules.SET_REGENERATE_BELOW). */
 export const closeness = (master: Aspect, target: Aspect): number => filled(master, target)
+
+/** The fit of one size of a Campaign board: its set's master and marked boxes against the size's shape. `available`: the
+ *  methods the agency can run (default: all, for a check that does not know the agency). */
+export function fitOfSize(set: Pick<FormatSet, 'master' | 'protect'>, size: Pick<Size, 'delivery' | 'format'>, available: ReadonlySet<SizeMethod> = new Set<SizeMethod>(['crop', 'layout', 'extend', 'regenerate'])): Fit | undefined {
+  if (!set.master.w || !set.master.h) return undefined
+  const row = formatById(size.format.format_id)
+  return fitFor({ w: set.master.w, h: set.master.h }, { w: size.delivery.width, h: size.delivery.height }, set.protect?.boxes, available, row ? rowFracs({ format: row.format }) : NO_INSET)
+}

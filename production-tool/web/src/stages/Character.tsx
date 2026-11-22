@@ -54,11 +54,12 @@ import { briefOfElement } from '../brief/canvas'
 import { Booth } from '../ui/booth/Booth'
 import { useBooth } from '../ui/booth/useBooth'
 import { boothEarned } from '../ui/booth/state'
-import { ImageEditor, VersionRow } from './ImageEditor'
+import { ImageEditor } from './ImageEditor'
 import { editablePicture } from '../canvas/nodes/dblclick'
 import { pickPictureVersionStep } from './imageEditor/apply'
-import { Float } from '../ui/Float'
 import { RightsChip } from '../ui/finals/RightsChip'
+import { FinalBadge } from '../ui/finals/FinalBadge'
+import { isFinalAsset } from '../doc/finals'
 import { chipLook } from '../ui/finals/chipLook'
 import { noteCanvasWork, registerCanvasUndo } from '../ui/undoOrder'
 import { BrandFields } from './BrandFields'
@@ -801,8 +802,9 @@ export function Character({ initial, active, onPictureEditor }: {
               <span key={e.id}>
                 {named && !stacked && <NameChip r={named} at={toView({ x: e.x, y: e.y + e.height })} width={e.width * zoom} zoom={zoom} />}
                 {c?.kind === 'gen' && <GenOverlay el={e} c={c} toView={toView} zoom={zoom} ctrl={ctrl} named={!!named} />}
-                {img && img.kind !== 'drawn' && !stacked && <VersionChip nodeId={img.id} at={toView({ x: e.x + e.width, y: e.y })} />}
-                {img?.kind === 'pic' && img.asset && !stacked && <RightsChip sha={img.asset} at={toView({ x: e.x, y: e.y })} zoom={zoom} />}
+                {img && img.kind !== 'drawn' && !stacked && <VersionStrip nodeId={img.id} at={toView({ x: e.x, y: e.y + e.height })} zoom={zoom} below={named ? NAME_LINE : 0} />}
+                {img && img.kind !== 'drawn' && img.asset && !stacked && <FinalMark sha={img.asset} at={toView({ x: e.x, y: e.y })} zoom={zoom} />}
+                {img && img.kind !== 'drawn' && img.asset && !stacked && <RightsChip sha={img.asset} at={toView({ x: e.x, y: e.y + e.height })} zoom={zoom} />}
                 {/* An upload kept at 1536 px says so under it while it is the one picked (UAT round 3 R3-7, UX 9). */}
                 {img?.kind === 'pic' && img.asset && !stacked && (vs?.selected ?? []).length === 1 && vs?.selected[0] === e.id && keptCaption(doc.assets[img.asset]) && !chipLook(zoom).dot && (
                   <div className="gencaption" style={{ left: toView({ x: e.x, y: e.y }).x, top: toView({ x: e.x, y: e.y + e.height }).y + (named ? NAME_LINE * chipLook(zoom).scale : 0), transform: `scale(${chipLook(zoom).scale})`, transformOrigin: 'top left' }}>{keptCaption(doc.assets[img.asset])}</div>
@@ -979,22 +981,40 @@ export function Character({ initial, active, onPictureEditor }: {
 
 // ── A picture's versions: "v2" on it, and its versions to pick (edit-canvas-pictures) ──
 
-function VersionChip({ nodeId, at }: { nodeId: string; at: Pt }) {
+/** The Final marker over a final picture, top-left, by its hash (the Campaign board's tiles wear the same pill). */
+function FinalMark({ sha, at, zoom }: { sha: string; at: Pt; zoom: number }) {
+  const doc = useDoc()
+  if (!isFinalAsset(doc, sha)) return null
+  const look = chipLook(zoom)
+  return (
+    <div className="final-badge-wrap" style={{ position: 'absolute', left: at.x, top: at.y, transformOrigin: 'top left', transform: `translate(${look.dot ? 4 : 8}px, ${look.dot ? 4 : 8}px) scale(${look.scale})`, pointerEvents: 'none' }}>
+      <FinalBadge dot={look.dot} />
+    </div>
+  )
+}
+
+/** A picture's versions as a strip under it (owner-approved mock): "v1 v2 v3", the open one outlined, the Final one solid
+ *  with a tick. A click opens that version; Final is read from the hash, so a newer version is plainly not the Final. */
+function VersionStrip({ nodeId, at, zoom, below }: { nodeId: string; at: Pt; zoom: number; below: number }) {
   const { doc: store } = useServices()
   const doc = useDoc()
-  const [open, setOpen] = useState(false)
-  const btn = useRef<HTMLButtonElement>(null)
   const versions = pictureVersions(doc, nodeId)
   const current = currentPictureFrame(doc, nodeId)
-  if (versions.length < 2 || !current) return null
+  const look = chipLook(zoom)
+  if (versions.length < 2 || !current || look.dot) return null
   return (
-    <>
-      <button ref={btn} type="button" className="vchip pt-mono" style={{ left: at.x, top: at.y }} aria-haspopup="menu" aria-expanded={open}
-        title={`v${current.version} of ${versions.length}: pick another version`} onClick={() => setOpen((o) => !o)}>v{current.version}</button>
-      <Float anchor={btn} open={open} onClose={() => setOpen(false)} align="end" label="Versions of this picture" className="ie-versions">
-        {versions.map((f) => <VersionRow key={f.id} f={f} open={f.id === current.id} onPick={() => { setOpen(false); void pickPictureVersionStep(store, f.id) }} />)}
-      </Float>
-    </>
+    <div className="vstrip" role="group" aria-label="Versions of this picture" style={{ left: at.x, top: at.y, transform: `translateY(${(6 + below) * look.scale}px) scale(${look.scale})` }}>
+      {versions.slice(-6).map((f) => {
+        const fin = isFinalAsset(doc, f.asset)
+        return (
+          <button key={f.id} type="button" className={`ver pt-mono${f.id === current.id ? ' sel' : ''}${fin ? ' fin' : ''}`} aria-pressed={f.id === current.id}
+            title={`v${f.version} of ${versions.length}${fin ? ', Final' : ''}: ${f.id === current.id ? 'open now' : 'open this version'}`}
+            onClick={() => { if (f.id !== current.id) void pickPictureVersionStep(store, f.id) }}>
+            {fin && <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M2 6.5l2.6 2.6L10 3.4" /></svg>}v{f.version}{fin ? ' Final' : ''}
+          </button>
+        )
+      })}
+    </div>
   )
 }
 

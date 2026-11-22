@@ -55,3 +55,32 @@ describe('what holds', () => {
     expect(tiny.methods.regenerate.why).toMatch(/too small to read/)
   })
 })
+
+describe('wired into the menus and Resize (pt-final-and-fit)', () => {
+  const set = { master: { kind: 'picture' as const, id: 'pic_m', asset: 'sha256:' + 'a'.repeat(64), w: 1536, h: 1920 }, protect: { boxes: [can] } }
+  const sheet96 = { delivery: { width: 14400, height: 3600 }, format: { pack_id: 'ooh', pack_version: 'x', format_id: 'unknown-96' } }
+
+  it('fitOfSize reads the set\'s master and boxes against the size\'s shape', async () => {
+    const { fitOfSize } = await import('./fit')
+    const fit = fitOfSize(set, sheet96)!
+    expect(fit.methods.extend.ok).toBe(false)
+    expect(fit.methods.regenerate.ok).toBe(true)
+  })
+
+  it('changeMethod refuses Extend where it would fail, before anything is sent', async () => {
+    const { changeMethod } = await import('./make')
+    const size = { id: 'size_1', media: 'image', method: 'regenerate', set_id: 'fset_1', ...sheet96 }
+    const deps = { doc: { get: () => ({ sizes: { size_1: size }, format_sets: { fset_1: set } }) }, canvas: {}, runner: {}, relay: {} } as never
+    await expect(changeMethod(deps, 'size_1', 'extend', 'human:p_x')).rejects.toThrow(/too far from this picture's shape to extend/)
+  })
+
+  it('Resize leaves out a shape no method can hold the product at, and says what to do', async () => {
+    const { planResize, wontFitWords, SHAPES } = await import('./resizeSelection')
+    const models = {}
+    const src = { elId: 'e1', nodeId: 'n1', asset: 'sha256:' + 'a'.repeat(64), w: 1536, h: 1920, kind: 'picture' as const, protect: [can] }
+    const four = { id: '4:1', w: 4, h: 1 }
+    expect(planResize([src], [four, SHAPES[1]], 'auto', models).map((p) => p.shape.id)).toEqual(['4:5'])
+    expect(wontFitWords([src], [four], models)).toBe("This picture can't hold the product at 4:1. Start from a wider picture, one close to 4:1, and make this size from that.")
+    expect(wontFitWords([src], [SHAPES[1]], models)).toBeUndefined()
+  })
+})
