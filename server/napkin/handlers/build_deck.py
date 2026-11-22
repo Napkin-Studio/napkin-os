@@ -4,7 +4,6 @@ The document's prompt (inputs.prompt), kind, format and picked deck type (inputs
 writes); the engine runs to the next gate, or on to the finished deck once the last gate is approved. With NAPKIN_DECK_ENGINE_URL
 unset there is no engine: the task says so, and writes nothing."""
 
-import os
 import re
 
 from ..deck import engine as eng
@@ -133,14 +132,14 @@ def production_upstream_of(data: dict) -> dict | None:
     return None
 
 
-def assets_of(v) -> dict | None:
+def assets_of(v, loopback: bool = False) -> dict | None:
     """``{base, pass}`` from napkin-web's ``payload.production_assets`` (an https relay base and the signed assets pass), else None: a pass
     that is not exactly that shape is dropped, never forwarded. It is a bearer token for one agency's pictures: it goes in the engine
     request body and nowhere else (not the document, the job's view, a log line or an error message)."""
     if not isinstance(v, dict):
         return None
     base, tok = v.get("base"), v.get("pass")
-    local = os.environ.get("DECK_RELAY_ALLOW_LOOPBACK", "").strip() == "1" and isinstance(base, str) and base.startswith("http://")   # dev opt-in; the engine still checks the host
+    local = loopback and isinstance(base, str) and base.startswith("http://")   # dev opt-in (settings.deck_relay_loopback); the engine still checks the host
     if not (isinstance(base, str) and (base.startswith("https://") or local) and isinstance(tok, str) and tok.startswith("v1.") and len(tok) <= 4096):
         return None
     return {"base": base.rstrip("/"), "pass": tok}
@@ -170,7 +169,7 @@ def start(req, caps, settings, jid):
     pu = production_upstream_of(data)
     if pu:   # spun off from a Production project: carried whole, frozen; finals fill the slots first, pictures are fetched by link at build
         body["production_upstream"] = pu
-        pa = assets_of(getattr(req, "production_assets", None))
+        pa = assets_of(getattr(req, "production_assets", None), bool(getattr(settings, "deck_relay_loopback", False)))
         if pa:   # napkin-web's read-only pass for this person's pictures: to the engine's picture step only, never into the document
             body["production_assets"] = pa
     dt = deck_type_of(inputs)
