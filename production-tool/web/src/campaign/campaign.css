@@ -230,3 +230,4 @@
 .cb-wont b { display: block; margin-bottom: 3px; }
 .cb-wont p { margin: 0; color: var(--ink2); }
 .rs-wont { color: var(--ink); background: var(--warn-bg); border: 1px solid var(--warn-border); border-radius: 6px; padding: 6px 8px; }
+.cb-mrow b { font-weight: 600; font-size: 13px; }
