@@ -1,10 +1,9 @@
 # Capability requirements (CLAN spec §22) for Territories.
+# The document is the only state (docs/contracts/territories.md): a run's stage, gates and answers live in data.run.
+# The engine runs inside the middleware (napkin.middleware/1 tasks); the tasks arrive with territories-handlers.
+# Without the middleware the document is still complete to read: what was carried in, and anything already made.
 requires:
   tools:
-    - name: llm_inference
-      why: "the insights, the crew's headings, the routes and their worlds"
-    - name: durable_jobs
+    - name: middleware
       optional: true
-      why: "a run takes minutes and outlives a browser session"
-  model_hints:
-    min_context_tokens: 64000
+      why: "the crew's runs (insights, routes, worlds) are middleware tasks; reading a document and what it was made from needs nothing"

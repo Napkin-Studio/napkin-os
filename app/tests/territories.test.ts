@@ -23,10 +23,21 @@ assert.ok(logicSrc, 'the template has its pure block')
 const sphereDir = new URL('templates/shared/agent-sphere/', root)
 const engine = `(function (window) {\n${['finish.js', 'agent-view.js', 'extra.js', 'roles.js'].map(f => readFileSync(new URL(f, sphereDir), 'utf8')).join('\n')}\n})(globalThis);\n`
 
+type Seen = {
+  brief: null | { id: string; title: string; filled: number; total: number; fields: { id: string; label: string; text: string }[]; key_fields: { id: string; text: string }[]; mandatories: number }
+  research: null | { id: string; title: string; pins: number | null; findings: number | null; verified: number | null; proposed: number | null; rejected: number | null; sources: number | null }
+  from: string
+}
 type Doc = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 type Ui = Record<string, unknown>
 type Act = { writes: { patch: Doc; action: string; rationale: string }[]; toast?: string; start?: boolean; draft?: string; focus?: string } | null
-const L = vm.runInNewContext(`${engine}${logicSrc}; TerritoriesLogic`) as {
+// The house source card the packer splices at its marker: the page draws its two cards with it.
+const helper = /<script>([\s\S]*?var NapkinSource[\s\S]*?)<\/script>/.exec(readFileSync(new URL('templates/shared/source-card.html', root), 'utf8'))![1]
+const L = vm.runInNewContext(`${engine}${helper}\n${logicSrc}; TerritoriesLogic`) as {
+  seen(d: unknown): Seen
+  statsOf(s: Seen): string[]
+  fromWords(s: Seen): string
+  BRIEF_KEYS: Record<string, string>
   TASKS: Record<string, string>
   counts(d: Doc): Record<string, number | boolean>
   derivedFindings(d: Doc): string[]
@@ -71,7 +82,8 @@ function doc(): Doc {
   for (const f of json('example/facts.json').facts as Doc[]) pins[f.id] = { layer: 'brand', entity: f.entity, key: f.key, value: f.value, unit: f.unit, as_of: f.as_of, confidence: f.confidence, licence: f.licence, stale: false }
   const findings: Doc = {}
   for (const f of json('example/findings.json').findings as Doc[]) findings[f.id] = { statement: f.statement, status: f.status, confidence: f.confidence, cites: f.cites }
-  d.upstream[RESEARCH_ID] = { campaign: { name: 'Weekend travel west' }, projection: { pins, findings } }
+  d.upstream[RESEARCH_ID] = { campaign: { name: 'Weekend travel west' } }
+  d.projection = { pins, findings }
   return d
 }
 const merge = (d: Doc, patch: Doc): Doc => { const o = JSON.parse(JSON.stringify(d)) as Doc; for (const k of Object.keys(patch)) o[k] = typeof patch[k] === 'object' && !Array.isArray(patch[k]) && patch[k] && typeof o[k] === 'object' ? { ...o[k], ...patch[k] } : patch[k]; return o }
@@ -94,18 +106,18 @@ test('what arrived is counted from the document, and each carried id resolves (L
   for (const s of d.focus.sources) assert.ok(L.resolve(s.id, d).carried, `${s.id} resolves`)
   for (const i of d.focus.insights) for (const e of i.evidence) assert.ok(L.resolve(e, d).carried, `${e} resolves`)
   const page = L.view(d, {})
-  assert.match(page, new RegExp(`Brief · ${c.briefFields} fields`))
-  assert.match(page, new RegExp(`${c.pins} pins · ${c.findings} findings`))
+  assert.match(page, new RegExp(`Brief · ${c.briefFields} fields of 11`))
+  assert.match(page, new RegExp(`Research · ${c.pins} pins, ${c.findings} findings`))
   assert.match(page, new RegExp(`${c.insights} insights`))
 })
 
 test('a cite that does not arrive is shown as not carried, never hidden', () => {
-  const d = doc(); delete d.upstream[RESEARCH_ID].projection.pins.f_ROUTE0412
+  const d = doc(); delete d.projection.pins.f_ROUTE0412
   assert.equal(L.resolve('f_ROUTE0412', d).carried, false)
   assert.match(L.view(d, {}), /Not carried in this document/)
   assert.match(L.dialogFor('f_ROUTE0412', d)!.html, /Not carried in this document/)
-  const none = doc(); none.upstream = {}
-  assert.match(L.view(none, {}), /Nothing came with this document/)
+  const none = doc(); none.upstream = {}; delete none.projection
+  assert.match(L.view(none, {}), /Nothing came in with this one/)
 })
 
 test('the page shows every insight, its strength, its sources, the derived mark and the yours label', () => {
@@ -287,4 +299,91 @@ test('the engine making the insights shows as working, and a refused reply shows
   assert.match(L.view(d, {}), /still writing the insights/)
   const f = doc(); f.run = { ...f.run, state: 'failed', error: { stage: 'pick', message: 'The engine sent more insights than the list holds.', retryable: true, refused: ['26 insights, at most 25.'] } }
   assert.match(L.view(f, {}), /more insights than the list holds/)
+})
+
+
+// ---- the first screen of a spun-off document (territories-spinoff-in): the host's own fixture, the engine reader's golden ----
+const SDATA = json('example/spunoff/data.json') as Doc
+const SSEEN = json('example/spunoff/seen.json') as Seen
+const SFACTS = json('example/spunoff/facts.json') as Doc
+const SFINDINGS = json('example/spunoff/findings.json') as Doc
+const screen = (data: unknown, title = 'Territories'): { root: string; cards: string } => { const h = L.view(data as Doc, { title }); return { root: h, cards: h } }
+
+test('the page reads a spin-off exactly as the engine reader does (the golden)', () => {
+  eq(L.seen(SDATA), SSEEN)
+})
+
+test('the counts on screen are the counts of the carried members', () => {
+  assert.equal(SSEEN.research!.pins, SFACTS.facts.length)
+  assert.equal(SSEEN.research!.findings, SFINDINGS.findings.length)
+  const { root } = screen(SDATA)
+  assert.match(root, new RegExp(`${SFACTS.facts.length} pins`))
+  assert.match(root, new RegExp(`${SFINDINGS.findings.length} findings`))
+  assert.match(root, new RegExp(`${SSEEN.brief!.filled} fields of ${SSEEN.brief!.total}`))
+})
+
+test('every key brief field that arrived is on the screen in the brief\'s own words, under its name as words', () => {
+  const { root } = screen(SDATA)
+  const keyed = SSEEN.brief!.key_fields
+  assert.ok(keyed.length >= 4, 'the fixture carries the key fields')
+  for (const f of keyed) {
+    const text = f.text.split('\n')[0].replace(/&/g, '&amp;')
+    assert.ok(root.includes(text), `${f.id} is not on the screen: ${text}`)
+    assert.ok(root.includes(`data-field="${f.id}"`))
+  }
+  assert.match(root, /Single-minded proposition/)
+  assert.match(root, /The same round, the same good time\./)
+})
+
+test('the source cards are the brief\'s and the research\'s, in their own identity', () => {
+  const { cards } = screen(SDATA)
+  assert.match(cards, /nsrc-brief/)
+  assert.match(cards, /nsrc-research/)
+  assert.match(cards, /Lúnasa 0\.0 launch brief/)
+  assert.match(cards, new RegExp(`<b>${SFACTS.facts.length}</b> facts`))
+})
+
+test('no field name, null or placeholder leaks onto the screen', () => {
+  const said = screen(SDATA).root.replace(/<[^>]*>/g, ' ')
+  for (const bad of ['field is null', 'null', 'undefined', 'NaN', '[object', '{{', '(to confirm)', '~~', 'single_minded_proposition', 'tone_and_world', 'smp']) {
+    assert.ok(!said.includes(bad), `the screen says "${bad}"`)
+  }
+})
+
+test('a brief alone, research alone, and nothing at all each say so plainly', () => {
+  const briefId = SSEEN.brief!.id, researchId = SSEEN.research!.id
+  const onlyBrief = screen({ upstream: { [briefId]: SDATA.upstream[briefId] } }).root
+  assert.match(onlyBrief, /from a brief/)
+  assert.ok(!/Research · /.test(onlyBrief))
+  const onlyResearch = screen({ upstream: { [researchId]: SDATA.upstream[researchId] } }).root
+  assert.match(onlyResearch, /from research/)
+  assert.ok(!/0 pins|0 findings/.test(onlyResearch), 'an unknown count is not shown as 0: ' + String(onlyResearch.replace(/<[^>]*>/g, ' ').match(/.{40}(0 pins|0 findings).{20}/)))
+  const none = screen({}).root
+  assert.match(none, /Nothing came in with this one/)
+  assert.ok(!/undefined|null/.test(none))
+})
+
+test('before the engine has written, the page says what is not built and offers nothing that does nothing', () => {
+  const { root } = screen(SDATA)
+  assert.match(root, /not been sent out/)
+  assert.ok(!/data-act=|data-tick=|data-form=|data-play=/.test(root), 'no pick control on a page with nothing to pick')
+  assert.match(root, /<textarea rows="2" disabled/)
+})
+
+test('the name, the contract and the seed: the app block is the contract\'s', () => {
+  assert.match(readFileSync(new URL('context.md', dir), 'utf8'), /Cite, never copy/)
+  const seed = json('seed.json')
+  eq(seed.run.approvals, {})
+  assert.equal(seed.schema_version, 1)
+})
+
+test('a spun-off document with the engine\'s first write opens on Pick, with the real brief keys read through the contract names', () => {
+  const d = JSON.parse(JSON.stringify(SDATA)) as Doc
+  d.focus = { sources: [], insights: [{ id: 'in_aa11', kind: 'truth', text: 'The same round, the same good time.', evidence: ['brief:smp'], strength: 'strong', ticked: true, by: 'engine', rank: 1 }] }
+  d.run = { state: 'gate', stage: 'pick', gate: { id: 'pick', n: 1, of: 2, agent: 'strategy', dex: 'Tick the insights the crew should explore.', checks: [], blocked_by: [] }, approvals: {}, decisions: [] }
+  assert.equal(L.pickState(d.run), 'open')
+  assert.match(L.view(d, {}), /data-tick="in_aa11"/)
+  assert.match(L.dialogFor('brief:smp', d)!.html, /The same round, the same good time\./)
+  assert.ok(L.resolve('f_01JA0B1C2D', d).carried, 'a pin of the host projection resolves')
+  assert.match(L.resolve('fi_01JA0F1A', d).status, /verified/)
 })

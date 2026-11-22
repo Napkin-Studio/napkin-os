@@ -823,6 +823,98 @@ fn the_packed_deck_maker_declares_its_spinoff_contract() {
     assert!(spec.upstream);
 }
 
+/// Runs the real packer for Territories (`examples/make_territories.rs`) and returns the packed template.
+fn packed_territories() -> ClanFile {
+    // Once per test binary: the tests run in parallel and the packer writes its files under one directory.
+    static PACKED: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
+    open(PACKED.get_or_init(pack_territories).clone())
+}
+
+fn pack_territories() -> Vec<u8> {
+    let out = std::env::temp_dir().join(format!("territories-pack-{}", std::process::id()));
+    std::fs::create_dir_all(&out).unwrap();
+    let app_path = out.join("territories.app.clan");
+    let example_path = out.join("territories.example.clan");
+    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    let run = std::process::Command::new(cargo)
+        .args([
+            "run",
+            "-q",
+            "--locked",
+            "-p",
+            "clan-sdk",
+            "--example",
+            "make_territories",
+            "--",
+        ])
+        .arg(&app_path)
+        .arg(&example_path)
+        .output()
+        .unwrap();
+    assert!(
+        run.status.success(),
+        "packer failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let packed = std::fs::read(&app_path).unwrap();
+    let _ = std::fs::remove_dir_all(&out);
+    packed
+}
+
+#[test]
+fn the_packed_territories_declares_its_spinoff_contract() {
+    let packed = packed_territories();
+    let app = packed.manifest().app.as_ref().expect("app block");
+    assert_eq!(app.app_id, "ie.napkin.territories");
+    assert_eq!(app.version, "0.1.0");
+    let spec = app.spinoff.as_ref().expect("app.spinoff");
+    assert_eq!(
+        spec.accepts,
+        vec![BRIEF_APP.to_string(), RESEARCH_APP.to_string()]
+    );
+    assert!(spec.upstream && spec.map.is_none() && spec.lift.is_empty());
+}
+
+#[test]
+fn research_to_brief_to_territories_holds_both_whole_and_carries_no_approval() {
+    let research = research();
+    let brief = spin(&brief_maker(), &research);
+    let brief_doc = brief.manifest().document_id().to_string();
+    let territories = spin(&packed_territories(), &brief);
+
+    let data = yaml(&territories, DATA);
+    let up = data["upstream"].as_mapping().unwrap();
+    assert_eq!(up.len(), 2, "the brief and the research, side by side");
+    assert_eq!(data["upstream"][RESEARCH_DOC], frozen(&research));
+    assert_eq!(data["upstream"][brief_doc.as_str()], frozen(&brief));
+    assert_eq!(
+        territories
+            .manifest()
+            .carried()
+            .expect("lineage.carried")
+            .document_id,
+        brief_doc
+    );
+    // The source's pins and findings are merged into this document's own members.
+    assert_eq!(
+        yaml(&territories, FACTS)["facts"],
+        yaml(&research, FACTS)["facts"]
+    );
+    assert_eq!(
+        yaml(&territories, FINDINGS)["findings"],
+        yaml(&research, FINDINGS)["findings"]
+    );
+    // No gate is pre-passed: nothing under `run` comes from a source, and carrying the same source twice adds none.
+    assert!(data.get("run").is_none());
+    let again = spin(&packed_territories(), &brief);
+    assert!(yaml(&again, DATA).get("run").is_none());
+    assert!(
+        validate(&territories).is_valid(),
+        "{}",
+        validate(&territories).display()
+    );
+}
+
 // ── Taking the parent's newer version (§5.5, reversed for spin-offs) ─────────
 
 /// The research moved on after the brief was spun off: a field changed, one

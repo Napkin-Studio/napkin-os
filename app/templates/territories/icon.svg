@@ -1,5 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44">
-  <!-- Territories' mark: a compass ring with its needle. One colour on transparent. -->
-  <circle fill="none" stroke="black" stroke-width="3" cx="22" cy="22" r="15"/>
-  <path fill="black" d="M22 9l4.5 13L22 35l-4.5-13z"/>
+  <!-- The Territories mark: one compass ring with three routes leaving it. One colour on transparent. -->
+  <circle fill="none" stroke="black" stroke-width="3" cx="22" cy="22" r="8"/>
+  <path fill="none" stroke="black" stroke-width="3" stroke-linecap="round" d="M22 14V5M28.9 26l7.8 4.5M15.1 26l-7.8 4.5"/>
+  <circle fill="black" cx="22" cy="22" r="2.5"/>
 </svg>

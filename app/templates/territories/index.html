@@ -220,6 +220,19 @@ button.tsrc:hover{border-color:color-mix(in srgb,var(--ink) 35%,var(--line))}
 .toast{position:fixed;left:50%;top:16px;transform:translateX(-50%) translateY(-8px);background:var(--ink);color:var(--paper);padding:9px 16px;border-radius:999px;font:800 13px var(--font-ui);z-index:40;max-width:calc(100% - 32px);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s}
 .toast.on{opacity:1;transform:translateX(-50%)}
 
+
+/* the house source card (shared/source-card.html) on this page's tokens and its two faces: Newsreader to read, Geist ExtraBold to label */
+.nsrc-list{--ns-ui:var(--font-serif);--ns-mono:var(--font-ui);margin-top:6px}
+.nsrc-list.many{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.nsrc-list .nsrc-row,.nsrc-list .nsrc-chip,.nsrc-list .nsrc-band,.nsrc-list .nsrc-tab{font-weight:800}
+.nothing{background:var(--warn-soft);border-radius:6px;padding:14px 16px;font-size:16px;color:var(--ink)}
+.fields{margin:0;padding:0;list-style:none;display:grid;gap:12px}
+.fields li{border-left:3px solid var(--te);padding:2px 0 2px 12px}
+.fields .fl{font:800 11px var(--font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.fields .ft{font:400 17px/1.45 var(--font-serif);white-space:pre-line;overflow-wrap:anywhere}
+.rest{margin:10px 0 0;color:var(--muted);font-size:14.5px}
+.psec-t{display:block;margin-top:10px}
+
 /* the steps that are not built here yet */
 .later{padding:36px 32px 40px;display:flex;flex-direction:column;gap:12px}
 .later h3{margin:0;font:500 26px/1.15 var(--font-serif)}
@@ -232,6 +245,8 @@ button.tsrc:hover{border-color:color-mix(in srgb,var(--ink) 35%,var(--line))}
 
 <!-- The one agent engine (app/templates/shared/agent-sphere), inlined by the packer at this marker: every circle is its sphere. -->
 <!-- @napkin:agent-sphere -->
+<!-- The house source card (app/templates/shared/source-card.html): the brief's dog-eared sheet and the research's ink band. -->
+<!-- @napkin:source-card -->
 
 <!-- The pure part: what each screen says and what each press writes, with no DOM. app/tests/territories.test.ts runs this block alone. -->
 <script id="territories-logic">
@@ -246,12 +261,6 @@ var TerritoriesLogic = (function () {
   // fetch_territories_file@1 is the download and look_up@1 is territories-lookups': neither is used on Pick.
   var TASKS = { run: 'run_territories', status: 'job_status' };
 
-  var BRIEF_FIELDS = [
-    ['background', 'Background'], ['objectives', 'Objectives'], ['audience', 'Audience'], ['competitor_context', 'Competitor context'],
-    ['insight', 'Insight'], ['smp', 'Single-minded proposition'], ['reasons_to_believe', 'Reasons to believe'],
-    ['desired_response', 'Desired response'], ['tone_world_assets', 'Tone, world and assets'], ['budget_scope', 'Budget and scope'],
-    ['mandatories', 'Mandatories']
-  ];
   var KIND_WORDS = { tension: 'Tension', truth: 'Human truth', provocation: 'What if', borrowed: 'Borrowed', yours: 'Yours' };
   var STRENGTH_WORDS = { strong: 'strong', moderate: 'moderate', thin: 'thin' };
   var MAX_INSIGHTS = 25, MAX_TEXT = 300;
@@ -264,40 +273,106 @@ var TerritoriesLogic = (function () {
   function text(v) { v = val(v); return typeof v === 'string' ? v.trim() : (typeof v === 'number' || typeof v === 'boolean') ? String(v) : ''; }
   function plural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
 
-  // ── what arrived (LESSONS 7: read from the document, counted, never assumed) ──
-  function briefFieldsOf(doc) {
-    doc = isObj(doc) ? doc : {};
-    return BRIEF_FIELDS.map(function (f) { return { key: f[0], label: f[1], text: text(doc[f[0]]) }; }).filter(function (f) { return f.text; });
+  // ── what a spin-off carried (territories-spinoff-in's reading; engine/territory/carried.py reads it the same way) ──
+  // A just-spun-off document is the carried upstream plus the host-written projection and nothing else: every other member
+  // arrives with the engine's first write, so each reader below works with no focus and no run.
+  var BRIEF_KEYS = { background: 'background', objectives: 'objectives', audience: 'audience', competitor_context: 'competitor_context', insight: 'insight',
+    smp: 'single_minded_proposition', reasons_to_believe: 'reasons_to_believe', desired_response: 'desired_response', tone_world_assets: 'tone_and_world',
+    budget_scope: 'budget_and_scope', mandatories: 'mandatories' };
+  var LABELS = { background: 'Background', objectives: 'Objectives', audience: 'Audience', competitor_context: 'Competitors', insight: 'Insight', smp: 'Single-minded proposition',
+    reasons_to_believe: 'Reasons to believe', desired_response: 'Desired response', tone_world_assets: 'Tone and world', budget_scope: 'Budget and scope', mandatories: 'Mandatories' };
+  var KEY_FIELDS = ['insight', 'smp', 'objectives', 'audience', 'mandatories'];
+  function textOf(v) {
+    if (v && typeof v === 'object' && !Array.isArray(v) && 'value' in v) v = v.value;
+    if (v == null) return '';
+    if (typeof v === 'string') return v.trim();
+    if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+    if (Array.isArray(v)) return v.map(textOf).filter(Boolean).join('\n');
+    if (typeof v === 'object') return Object.keys(v).map(function (k) { return textOf(v[k]); }).filter(Boolean).join('\n');
+    return '';
   }
-  /** Brief or research, by what the frozen copy holds. null for anything else (a kit, an unknown document). */
-  function kindOfDoc(doc) {
-    if (!isObj(doc)) return null;
-    if (briefFieldsOf(doc).length) return 'brief';
-    if (doc.campaign || doc.projection || doc.report || doc.selection) return 'research';
+  function briefValue(src, name) {
+    src = isObj(src) ? src : {}; var keys = [name, BRIEF_KEYS[name]];
+    for (var i = 0; i < keys.length; i++) if (keys[i] && textOf(src[keys[i]])) return src[keys[i]];
     return null;
   }
-  function upstreamOf(data) {
-    var up = isObj(data && data.upstream) ? data.upstream : {}, out = { brief: null, research: null };
+  function isBrief(src) { return Object.keys(BRIEF_KEYS).some(function (n) { return briefValue(src, n) !== null; }); }
+  function titleOf(src) {
+    src = isObj(src) ? src : {}; var c = [src.title, src.project_name, isObj(src.campaign) ? src.campaign.name : ''];
+    for (var i = 0; i < c.length; i++) { var t = textOf(c[i]); if (t) return t; }
+    return '';
+  }
+  function split(up) {
+    var brief = null, research = null; up = isObj(up) ? up : {};
     Object.keys(up).forEach(function (id) {
-      var k = kindOfDoc(up[id]);
-      if (k && !out[k]) out[k] = { id: id, doc: up[id] };
+      var s = up[id];
+      if (!s || typeof s !== 'object' || Array.isArray(s) || !Object.keys(s).length || (s.kit && typeof s.kit === 'object' && !Array.isArray(s.kit))) return;
+      if (!brief && isBrief(s)) brief = [id, s]; else if (!research && !isBrief(s)) research = [id, s];
     });
-    if (out.brief) out.brief.fields = briefFieldsOf(out.brief.doc);
-    if (out.research) {
-      var pr = isObj(out.research.doc.projection) ? out.research.doc.projection : {};
-      out.research.pins = isObj(pr.pins) ? pr.pins : {};
-      out.research.findings = isObj(pr.findings) ? pr.findings : {};
-      var c = isObj(out.research.doc.campaign) ? out.research.doc.campaign : {};
-      out.research.title = text(c.name) || text(out.research.doc.title) || 'Research';
-      var cov = isObj(out.research.doc.selection) && isObj(out.research.doc.selection.coverage) ? out.research.doc.selection.coverage : {};
-      out.research.lens = Object.keys(cov).map(function (k) { return cov[k]; });
+    return { brief: brief, research: research };
+  }
+  function values(o) { o = isObj(o) ? o : {}; return Object.keys(o).map(function (k) { return o[k]; }); }
+  /** What arrived. Counts are null (never a made-up 0) when the host has not said. */
+  function seen(data) {
+    data = isObj(data) ? data : {}; var sp = split(data.upstream), proj = isObj(data.projection) ? data.projection : {};
+    var out = { brief: null, research: null, from: 'none' };
+    if (sp.brief) {
+      var src = sp.brief[1];
+      var fields = Object.keys(BRIEF_KEYS).filter(function (n) { return briefValue(src, n) !== null; }).map(function (n) { return { id: n, label: LABELS[n], text: textOf(briefValue(src, n)) }; });
+      var keyf = []; KEY_FIELDS.forEach(function (n) { fields.forEach(function (f) { if (f.id === n) keyf.push(f); }); });
+      var mand = fields.filter(function (f) { return f.id === 'mandatories'; })[0];
+      out.brief = { id: sp.brief[0], title: titleOf(src), filled: fields.length, total: Object.keys(BRIEF_KEYS).length, fields: fields, key_fields: keyf,
+        mandatories: mand ? mand.text.split('\n').filter(Boolean).length : 0 };
+    }
+    var pins = 'pins' in proj ? values(proj.pins) : null, found = 'findings' in proj ? values(proj.findings) : null, srcs = 'sources' in proj ? values(proj.sources) : null;
+    if (sp.research || (pins && pins.length) || (found && found.length)) {
+      var st = found ? found.map(function (f) { return isObj(f) ? f.status : null; }) : null;
+      var n = function (x) { return st ? st.filter(function (y) { return y === x; }).length : null; };
+      out.research = { id: sp.research ? sp.research[0] : '', title: sp.research ? titleOf(sp.research[1]) : '', pins: pins ? pins.length : null, findings: found ? found.length : null,
+        verified: n('verified'), proposed: n('proposed'), rejected: n('rejected'), sources: srcs ? srcs.length : null };
+    }
+    out.from = ['brief', 'research'].filter(function (k) { return out[k]; }).join('+') || 'none';
+    return out;
+  }
+  /** The stats line under the heading. */
+  function statsOf(s) {
+    var out = [];
+    if (s.brief) out.push('Brief · ' + plural(s.brief.filled, 'field', 'fields') + ' of ' + s.brief.total);
+    if (s.research) {
+      var r = s.research, bits = [];
+      if (r.pins != null) bits.push(plural(r.pins, 'pin', 'pins'));
+      if (r.findings != null) bits.push(plural(r.findings, 'finding', 'findings'));
+      if (r.sources != null) bits.push(plural(r.sources, 'source', 'sources'));
+      out.push('Research · ' + (bits.join(', ') || 'brought in'));
+      if (r.rejected) out.push(r.rejected + ' rejected, never used');
+      if (r.proposed) out.push(r.proposed + ' derived, not yet verified');
     }
     return out;
   }
-  function briefTitle(data, up) {
-    var c = up.brief && isObj(up.brief.doc.campaign) ? text(up.brief.doc.campaign.name) : '';
-    return c || text(data && data.title) || 'The brief';
+  function fromWords(s) {
+    return s.from === 'brief+research' ? 'from a brief and its research' : s.from === 'brief' ? 'from a brief' : s.from === 'research' ? 'from research' : 'from nothing yet';
   }
+
+  // The same reading, shaped for the cites: the brief's fields, and the research's pins and findings (the host's projection;
+  // a research document's own copy of it is the fallback).
+  function upstreamOf(data) {
+    data = isObj(data) ? data : {}; var sp = split(data.upstream), proj = isObj(data.projection) ? data.projection : {}, out = { brief: null, research: null };
+    if (sp.brief) {
+      var doc = sp.brief[1];
+      out.brief = { id: sp.brief[0], doc: doc, title: titleOf(doc), fields: Object.keys(BRIEF_KEYS).filter(function (n) { return briefValue(doc, n) !== null; })
+        .map(function (n) { return { key: n, label: LABELS[n], text: textOf(briefValue(doc, n)) }; }) };
+    }
+    var rdoc = sp.research ? sp.research[1] : {}, own = isObj(rdoc.projection) ? rdoc.projection : {};
+    var pins = isObj(proj.pins) && Object.keys(proj.pins).length ? proj.pins : (isObj(own.pins) ? own.pins : {});
+    var fnd = isObj(proj.findings) && Object.keys(proj.findings).length ? proj.findings : (isObj(own.findings) ? own.findings : {});
+    if (sp.research || Object.keys(pins).length || Object.keys(fnd).length) {
+      var cov = isObj(rdoc.selection) && isObj(rdoc.selection.coverage) ? rdoc.selection.coverage : {};
+      out.research = { id: sp.research ? sp.research[0] : '', doc: rdoc, pins: pins, findings: fnd, title: titleOf(rdoc) || 'Research',
+        lens: Object.keys(cov).map(function (k) { return cov[k]; }) };
+    }
+    return out;
+  }
+  function briefTitle(data, up) { return (up.brief && up.brief.title) || text(data && data.title) || 'The brief'; }
 
   /**
    * A cite as a card: { cite, kind (brief|pin|finding|find), label, text, status, statusWords, meta[], cites[], carried }.
@@ -309,8 +384,7 @@ var TerritoriesLogic = (function () {
     var m;
     if ((m = /^brief:([a-z_]+)$/.exec(cite))) {
       out.kind = 'brief';
-      var f = BRIEF_FIELDS.filter(function (x) { return x[0] === m[1]; })[0];
-      out.label = f ? f[1] : 'Brief';
+      out.label = LABELS[m[1]] || 'Brief';
       var bf = up.brief ? up.brief.fields.filter(function (x) { return x.key === m[1]; })[0] : null;
       if (bf) { out.text = bf.text; out.carried = true; out.status = 'plain'; out.statusWords = 'brief'; out.meta = [briefTitle(data, up)]; }
       return out;
@@ -463,10 +537,14 @@ var TerritoriesLogic = (function () {
 
   // ── the Booth's words, from the document ───────────────────────────────
   function boothNotes(data) {
-    var c = counts(data), out = [], ids = derivedFindings(data);
-    var read = [];
-    read.push(c.hasBrief ? 'the brief (' + plural(c.briefFields, 'field') + ')' : 'no brief');
-    read.push(c.hasResearch ? 'the research (' + plural(c.pins, 'pin') + ', ' + plural(c.findings, 'finding') + ')' : 'no research');
+    var out = [], ids = derivedFindings(data);
+    var sn = seen(data), read = [], rb = [];
+    read.push(sn.brief ? 'the brief (' + plural(sn.brief.filled, 'field') + ')' : 'no brief');
+    if (sn.research) {
+      if (sn.research.pins != null) rb.push(plural(sn.research.pins, 'pin'));
+      if (sn.research.findings != null) rb.push(plural(sn.research.findings, 'finding'));
+    }
+    read.push(sn.research ? 'the research' + (rb.length ? ' (' + rb.join(', ') + ')' : '') : 'no research');
     out.push({ role: 'knowledge', label: 'read', time: '', body: 'Read ' + read.join(' and ') + '. Nothing copied: everything is quoted by id.', cites: [] });
     if (ids.length) {
       out.push({ role: 'review', label: 'flagged', time: '', cites: ids,
@@ -508,25 +586,43 @@ var TerritoriesLogic = (function () {
   }
 
   function sourceCards(data) {
-    var up = upstreamOf(data), c = counts(data), out = [];
-    if (up.brief) {
-      out.push('<button type="button" class="tsrc tsrc-brief" data-arrived="brief" aria-label="What came from the brief"><span class="tsrc-tab">Brief</span><span class="tsrc-body"><span class="tsrc-t">' + esc(briefTitle(data, up)) +
-        '</span><span class="tsrc-row"><span>' + esc(plural(c.briefFields, 'field')) + '</span><span>read ✓</span></span></span></button>');
+    var NS = typeof NapkinSource !== 'undefined' ? NapkinSource : null, sn = seen(data), upd = isObj(data && data.upstream) ? data.upstream : {}, list = [];
+    if (NS && sn.brief) list.push(NS.fromUpstream(upd[sn.brief.id], { document_id: sn.brief.id }, { kind: 'brief', title: sn.brief.title || undefined, locked: (upd[sn.brief.id] || {}).locked === true }));
+    if (NS && sn.research) {
+      var r = sn.research;
+      list.push(NS.fromUpstream(upd[r.id] || {}, { document_id: r.id, noun: 'research' }, { kind: 'research', title: r.title || 'The research this started from', facts: r.pins, findings: r.findings,
+        sources: r.sources, verified: r.verified || null, locked: (upd[r.id] || {}).locked === true, status: '' }));
     }
-    if (up.research) {
-      var lens = up.research.lens.length ? '<span class="tsrc-lens" aria-hidden="true">' + up.research.lens.map(function (v) { return '<i class="' + (v === 'filled' ? 'f' : '') + '"></i>'; }).join('') + '</span>' : '';
-      out.push('<button type="button" class="tsrc" data-arrived="research" aria-label="What came from the research"><span class="tsrc-band">Research' + lens + '</span><span class="tsrc-body"><span class="tsrc-t">' + esc(up.research.title) +
-        '</span><span class="tsrc-row"><span>' + esc(plural(c.pins, 'pin') + ' · ' + plural(c.findings, 'finding')) + '</span><span>read ✓</span></span></span></button>');
-    }
+    var out = NS && list.length ? NS.listHtml(list) : '';
     var finds = arr(data && data.finds).filter(isObj);
     if (finds.length) {
-      out.push('<button type="button" class="tsrc" data-arrived="finds" aria-label="What Territories found"><span class="tsrc-band te">Found by Territories</span><span class="tsrc-body"><span class="tsrc-t">Its own look-ups</span>' +
-        '<span class="tsrc-row"><span>' + esc(plural(finds.length, 'find')) + ' kept</span></span></span></button>');
+      out += '<div class="srcrow"><button type="button" class="tsrc" data-arrived="finds" aria-label="What Territories found"><span class="tsrc-band te">Found by Territories</span><span class="tsrc-body"><span class="tsrc-t">Its own look-ups</span>' +
+        '<span class="tsrc-row"><span>' + esc(plural(finds.length, 'find')) + ' kept</span></span></span></button></div>';
     }
-    if (!up.brief && !up.research) {
-      out.push('<div class="tsrc"><span class="tsrc-body"><span class="tsrc-t">Nothing came with this document</span><span class="tsrc-row"><span>No brief and no research were carried in.</span></span></span></div>');
+    return out;
+  }
+
+  /** The first screen of a document the engine has not written to yet: what came in, read before anything else happens. */
+  function arrivedSheet(data, ui) {
+    var sn = seen(data);
+    if (sn.from === 'none') {
+      return '<article class="sheet"><div class="later"><div class="sheet-eyebrow">Step 1 · Pick what to work on</div><h3>Nothing came in with this one</h3>' +
+        '<p>It was not made from a brief or from research, so it starts from a category and a question.</p>' +
+        '<div class="nothing">Entering the category and the question, and the crew itself, arrive in the next release. Until then this document only holds what is on this page.</div></div></article>';
     }
-    return '<div class="srcrow">' + out.join('') + '</div>';
+    var keyf = '';
+    if (sn.brief) {
+      keyf = '<span class="psec-t">From the brief</span>' + (sn.brief.key_fields.length ? '<ul class="fields" id="key-fields">' + sn.brief.key_fields.map(function (f) {
+        return '<li data-field="' + esc(f.id) + '"><div class="fl">' + esc(f.label) + '</div><div class="ft">' + esc(f.text) + '</div></li>'; }).join('') + '</ul>' :
+        '<p class="rest">The brief has no insight, proposition, objectives, audience or mandatories written yet.</p>');
+      var rest = sn.brief.filled - sn.brief.key_fields.length;
+      if (rest > 0) keyf += '<p class="rest">And ' + esc(rest === 1 ? 'one more field' : rest + ' more fields') + ', held with the brief.</p>';
+    }
+    return '<article class="sheet"><header class="sheet-head"><div class="sheet-eyebrow">Step 1 · What arrived</div><h2>What arrived</h2>' +
+      '<p>Made ' + esc(fromWords(sn)) + '. Read in full, in the words the brief and the research use. Nothing is copied: the crew will quote it by name.</p></header>' +
+      '<div class="stats">' + statsOf(sn).map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + '</div>' +
+      '<div class="sheet-body">' + sourceCards(data) + keyf +
+      '<p class="rest">The crew has not been sent out. The insights to pick from arrive with the engine’s first run; until then nothing here can be ticked.</p></div></article>';
   }
 
   function everything(data) {
@@ -560,18 +656,17 @@ var TerritoriesLogic = (function () {
 
   function pickSheet(data, ui) {
     var run = isObj(data && data.run) ? data.run : {}, st = pickState(run), c = counts(data), f = focusOf(data);
+    if (st === 'none' && !f.insights.length) return arrivedSheet(data, ui);
     var editable = st === 'open' || st === 'approved';
     var cards = sorted(f.insights).map(function (i) { return insightCard(i, data, editable); }).join('');
-    var stats = [c.hasBrief ? 'Brief · ' + plural(c.briefFields, 'field') : 'No brief', c.hasResearch ? plural(c.pins, 'pin') + ' · ' + plural(c.findings, 'finding') : 'No research',
-      plural(c.insights, 'insight'), c.ticked + ' ticked'];
-    if (c.derived) stats.push(c.derived + ' derived');
+    var stats = statsOf(seen(data)).concat([plural(c.insights, 'insight'), c.ticked + ' ticked']);
     var add = editable ? '<div class="addsb" data-form="add"><input name="own" value="' + esc(ui.draft || '') + '" placeholder="Add your own insight, tension or what-if…" autocomplete="off" maxlength="' + MAX_TEXT + '" aria-label="Add your own insight">' +
       '<div class="row"><span class="muted">It joins the list ticked, labelled as yours.</span><span class="spacer"></span><button class="btn-rect primary" type="button" data-act="add">Add</button></div></div>' : '';
     var err = isObj(run.error) && run.error.stage === 'pick' ? '<p class="runnote bad" role="alert">' + esc(run.error.message) + (arr(run.error.refused).length ? ' ' + esc(arr(run.error.refused).join(' ')) : '') + '</p>' : '';
     return '<article class="sheet"><header class="sheet-head"><div class="sheet-eyebrow">Step 1 · Pick what to work on</div><h2>Which insights should the crew explore?</h2>' +
       '<p>Strongest first, with what each one rests on. Untick, tick or add your own, then explore.</p></header>' +
       '<div class="stats">' + stats.map(function (s) { return '<span>' + esc(s) + '</span>'; }).join('') + '</div>' +
-      '<div class="sheet-body">' + sourceCards(data) + err +
+      '<div class="sheet-body">' + sourceCards(data) + (seen(data).from === 'none' ? '<div class="nothing">Nothing came in with this one: no brief and no research were carried in.</div>' : '') + err +
       (cards ? '<div class="inslist">' + cards + '</div>' : '<p class="meta">' + (st === 'working' ? 'The insights are on their way.' : 'No insights yet.') + '</p>') +
       add + everything(data) + runLine(data, ui, st, c) + '</div></article>';
   }
@@ -587,7 +682,7 @@ var TerritoriesLogic = (function () {
 
   function booth(data, ui, open) {
     var run = isObj(data && data.run) ? data.run : {}, gate = isObj(run.gate) ? run.gate : null, role = gate && gate.agent ? gate.agent : 'knowledge';
-    var line = gate && gate.dex ? gate.dex : 'I read the brief and the research. Tick what the crew should work on.';
+    var line = gate && gate.dex ? gate.dex : pickState(run) === 'none' && !focusOf(data).insights.length ? 'I read what came in. The crew has not started yet.' : 'I read the brief and the research. Tick what the crew should work on.';
     var notes = boothNotes(data).map(function (n) {
       return '<article class="bc"><header class="bc-hd">' + sphere(n.role, 20) + '<span class="bc-who">' + esc(roleName(n.role)) + ' · ' + esc(n.label) + '</span><span class="bc-t">' + esc(n.time || 'now') + '</span></header>' +
         '<div class="bc-note">' + (n.cites.length ? n.cites.map(function (c) { return refChip(c, data); }).join(' ') + ' ' : '') + esc(n.body) + '</div></article>';
@@ -602,8 +697,8 @@ var TerritoriesLogic = (function () {
       me + '</div></div></aside>';
   }
 
-  function head(data, st) {
-    var title = text(data && data.title) || 'Territories', parts = title.split(/:\s+/);
+  function head(data, st, ui) {
+    var sn = seen(data), title = (ui && ui.title && ui.title !== 'Territories' ? ui.title : '') || text(data && data.title) || (sn.brief && sn.brief.title) || (sn.research && sn.research.title) || 'Territories', parts = title.split(/:\s+/);
     var eyebrow = parts.length > 1 ? parts[0] + ' · ' + parts.slice(1).join(': ') : title;
     var s = stepsOf(data && data.run), sub = ['Step 1 of 3. Napkin has read the brief and the research. Tick the insights the crew should work on.',
       'Step 2 of 3. The crew explores on its own: different headings, other categories. Steer it if you want to.',
@@ -621,7 +716,7 @@ var TerritoriesLogic = (function () {
     var s = stepsOf(data.run), at = ui.view != null && ui.view <= s.reached ? ui.view : s.at;
     var sheet = at === 0 ? pickSheet(data, ui) : laterSheet(data, at === 1 ? 'explore' : 'greenlight');
     var open = ui.booth !== false;
-    return '<main class="shell">' + head(data, { view: at }) + '<div class="split">' + sheet + booth(data, ui, open) + '</div></main>' +
+    return '<main class="shell">' + head(data, { view: at }, ui) + '<div class="split">' + sheet + booth(data, ui, open) + '</div></main>' +
       '<button type="button" class="booth-edge" id="boothEdge" aria-controls="stab" aria-expanded="' + (open ? 'true' : 'false') + '" aria-label="Open the Booth" aria-keyshortcuts="]" tabindex="' + (open ? '-1' : '0') + '">' +
       '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 2.5 4 6l3.5 3.5"/></svg><span class="booth-lb">Booth</span></button>';
   }
@@ -695,7 +790,7 @@ var TerritoriesLogic = (function () {
   }
 
   return {
-    TASKS: TASKS, BRIEF_FIELDS: BRIEF_FIELDS, STEPS: STEPS, MAX_INSIGHTS: MAX_INSIGHTS, MAX_TEXT: MAX_TEXT,
+    TASKS: TASKS, BRIEF_KEYS: BRIEF_KEYS, LABELS: LABELS, KEY_FIELDS: KEY_FIELDS, seen: seen, statsOf: statsOf, fromWords: fromWords, briefValue: briefValue, textOf: textOf, STEPS: STEPS, MAX_INSIGHTS: MAX_INSIGHTS, MAX_TEXT: MAX_TEXT,
     upstreamOf: upstreamOf, resolve: resolve, counts: counts, derivedFindings: derivedFindings, sorted: sorted, dotsOf: dotsOf, originOf: originOf,
     tickPatch: tickPatch, addPatch: addPatch, playPatch: playPatch, pickState: pickState, approvePatch: approvePatch, editedPatch: editedPatch, stepsOf: stepsOf,
     boothNotes: boothNotes, view: view, dialogFor: dialogFor, act: act, insightCard: insightCard
@@ -784,6 +879,7 @@ var TerritoriesLogic = (function () {
     var keepY = window.pageYOffset, active = document.activeElement, hadAdd = active && active.name === 'own', pos = hadAdd ? active.selectionStart : 0;
     // The frame is as tall as this page, and a shorter one for a moment would move the reader: hold the height across the redraw.
     app.style.minHeight = app.offsetHeight + 'px';
+    ui.title = ((window.__CLAN__ || {}).manifest || {}).title || '';
     app.innerHTML = L.view(data(), ui);
     setTimeout(function () { app.style.minHeight = ''; }, 350);
     if (Roles) { try { Roles.auto(); } catch (e) { /* the circles stay their still frames */ } }
@@ -848,6 +944,7 @@ var TerritoriesLogic = (function () {
     var b;
     if ((b = t.closest('[data-src]'))) { ev.preventDefault(); ev.stopPropagation(); openDialog(b.getAttribute('data-src'), b); return; }
     if ((b = t.closest('[data-arrived]'))) { openDialog(b.getAttribute('data-arrived'), b); return; }
+    if ((b = t.closest('.nsrc[data-kind]'))) { openDialog(b.getAttribute('data-kind'), b); return; }
     if ((b = t.closest('[data-close]')) || (dialogEl && t === dialogEl)) { closeDialog(); return; }
     if ((b = t.closest('[data-play-toggle]'))) { var id = b.getAttribute('data-play-toggle'), on = b.getAttribute('data-on') === '1'; closeDialog(true); run({ a: 'play', id: id, on: on }); return; }
     if ((b = t.closest('[data-play]'))) { run({ a: 'play', id: b.getAttribute('data-play'), on: b.getAttribute('aria-pressed') !== 'true' }); return; }

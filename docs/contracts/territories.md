@@ -43,6 +43,7 @@ validation). Readers: **view** (the Territories app), **Deck** (Deck Maker), **P
 | `schema_version`* | engine | all | `1`. Bumped only for a break, which section 6 forbids until v2 |
 | `title`* | engine | view, Deck | Project title |
 | `upstream.<doc id>` | host (spin-off) | engine, view | The brief and the research, frozen whole. Read-only for everyone else. Brief fields are bare values (`insight`, `smp`, ...) |
+| `projection` | host (spin-off) | view | The carried research's pins, findings and sources as the host reads them, built at spin-off from the merged members (`projection.pins`, `.findings`, `.sources`, `.built_from`). Read-only for everyone. The screen counts from it; the engine reads the members. Added by `territories-spinoff-in` (additive) |
 | `finds[]` | engine (look-up), person (keeps it) | view, Deck | The tool's own finds, `x_` ids. Separate from research pins; never written back to Research |
 | `focus.sources[]`* | engine, person | view | `{id (a cite), in_play}`: in or out of play. By id only, no value is copied |
 | `focus.insights[]`* | engine, person | view, engine | `{id in_*, kind, text, evidence[], strength, ticked, by, rank?, derived?}`. At most 25 |
@@ -62,11 +63,24 @@ validation). Readers: **view** (the Territories app), **Deck** (Deck Maker), **P
 
 Landscape and whitespace are not here (non-goal); `territories-landscape` adds `landscape.yaml` additively.
 
+### 3.0 A document just spun off
+
+Continue in, Territories (`territories-spinoff-in`) carries the Brief or Research document **whole** (os-layer 5.1: its data, frozen under `upstream.<doc id>`;
+its decisions in the chain; the pins, findings and sources merged into this document's members; its assets), with the spin-off declared by
+`crates/clan-sdk/examples/make_territories.rs` (`accepts` Brief Maker and Research Tool, `upstream: true`, no map, no lift). Research brought through a brief
+is hoisted beside it: both sit under `upstream`. Hosts start a document from `{}`, so a document just spun off holds **only `upstream` and `projection`**.
+It does not validate yet (the engine's members are required) and does not need to: the engine's first write adds `schema_version`, `title`, `focus`, `crew`,
+`expeditions`, `territories`, `greenlit` and `run` in one patch, and every document after that passes the whole contract. A spin-off carries no `run`, so no gate
+is open and none is passed: `run.approvals` starts empty, however often the same source is carried. Brief alone, research alone, or neither all start the same way.
+
+`engine/territory/carried.py` is the ONE reading of what arrived (`read` for the screen, `engine_input` for the engine); the page's counts are tested equal to it over
+`example/spunoff/` (the document the host produced for a real spin-off, written by `crates/napkin-host/tests/territories_spinoff.rs`).
+
 ### 3.1 Citing, never copying (LESSONS 7)
 
 A claim names its source by id and never copies the value. The grammar (`definitions.cite`):
 
-- `brief:<field>`: reads `data.upstream.<brief doc id>.<field>`, where `<field>` is one of Brief Maker's `BRIEF_FIELDS`.
+- `brief:<field>`: reads `data.upstream.<brief doc id>.<field>`, where `<field>` is one of the contract's brief fields. A real Brief Maker document keeps three of them under its own key (`smp` is `single_minded_proposition`, `tone_world_assets` is `tone_and_world`, `budget_scope` is `budget_and_scope`): `carried.BRIEF_KEYS` maps them (equal to `engine/deck/inputs.py` CLAN_FIELDS, by test) and `contract.known_cites` reads both, so a cite resolves against a real brief and against a fixture.
 - `f_XXXXXX`: a research pin, `fi_XXXXXX`: a research finding. Both read the carried `facts` and `findings` members (ids match
   `campaign-research/facts.schema.json` and `findings.schema.json`).
 - `x_XXXXXX`: one of the document's own `finds`.
@@ -144,6 +158,7 @@ All fictional (Linea, Galway line). `example_build.py` writes them; the test fai
 |---|---|
 | `example/data.json` | The finished run: 5 crew, 11 routes (8 developed, 2 found, 1 killed), 3 greenlit, sent to Deck Studio, Production hand-off `not_built` |
 | `example/facts.json`, `example/findings.json` | The carried research members (valid against the campaign-research schemas); three findings are derived (`proposed`) |
+| `example/spunoff/data.json`, `facts.json`, `findings.json`, `seen.json` | A real spin-off (research to brief to Territories) as the host produced it, and what the reader and the page make of it |
 | `example/states/pick.json` | Step 1 open |
 | `example/states/explore_running.json` | The crew out, routes landing |
 | `example/states/greenlight_open.json` | Gate open, nothing greenlit (`nothing_picked`) |

@@ -1,16 +1,21 @@
-# Territories: routes a campaign could take
+# Territories: routes for a campaign, from a brief and its research
 
-We are finding **territories** (creative routes) from a brief and research the planner already made, in three steps and three decisions
-(the contract is `docs/contracts/territories.md`, the shape is `schema.json`):
+A Territories document explores routes for a campaign. Its shape is `docs/contracts/territories.md` and `schema.json`; the document is the only state.
 
-1. **Pick** (`run.gate.id = pick`). `focus.insights` are ranked by evidence strength. A person ticks, unticks or adds their own, then approves with Explore.
-2. **Explore** (`run.stage = explore`). A crew of agents goes out on different headings and lands `territories`. The engine fixes the spread itself, each fix with Undo.
-3. **Greenlight** (`run.gate.id = greenlight`). Every route comes back developed. A person greenlights as many as are worth making and sends them on.
+**How it starts.** A person starts it with Continue in, Territories, from a Brief Maker or Research Tool document. The host spin-off carries the source whole under
+`data.upstream.<source document id>` (the brief's fields and everything the research holds; the facts, findings and sources are merged into this document's own members
+and the host builds `data.projection` from them). All of it is read-only: no one writes under `upstream` or `projection`. Brief or research alone also works. A document made
+with neither starts from a category and a question.
 
-Rules the view and any agent keep:
-- A claim names its source by id (`brief:<field>`, `f_`, `fi_`, `x_`) and never copies the value. The brief and the research are carried whole under `upstream` and are read-only.
-- A finding the agent worked out (status `proposed`) is derived and says so wherever it is used.
-- The page writes only the person's half: `focus` (ticks, their own insights, what is in play), `run.approvals`, `run.decisions`. It never writes `run.state`, `run.stage`, `run.gate` or `run.agent`: those are the engine's.
-- A gate stops the run until a person approves. Editing the ticks after approving makes Explore live again.
-- No price, cost or spend appears in this document or on any screen: costs are for the Napkin team only.
-- Fonts are Newsreader and Geist ExtraBold only.
+**Rules every agent keeps.**
+- Cite, never copy. A claim names its source (`brief:<field>`, `f_` a pin, `fi_` a finding, `x_` its own find); the value is read from what was carried.
+- A new document starts with `run.approvals` empty. A spin-off never carries an approval: no gate is passed before a person passes it.
+- A finding a person rejected upstream is never used.
+- Brief fields are read by their contract names (`smp`) or Brief Maker's own keys (`single_minded_proposition`); `engine/territory/carried.py` is the one reading.
+- The first screen says what arrived in words (counts and the key brief fields), never as field names or "field is null".
+- Do not generate or edit HTML.
+
+## What the page writes (Pick)
+- The page writes only the person's half: `focus` (ticks, their own insights, what is in play), `run.approvals.pick` and `run.decisions`. It never writes `run.state`, `run.stage`, `run.gate` or `run.agent`: those are the engine's.
+- Editing the ticks after approving Pick records an edit, so the approval no longer stands and Explore is live again.
+- No price, cost or spend appears on any screen. Fonts are Newsreader and Geist ExtraBold only.
