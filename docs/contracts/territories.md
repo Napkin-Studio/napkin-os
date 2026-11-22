@@ -158,6 +158,30 @@ in one go, or `run.error` in words with the document otherwise untouched (a retr
 Dev harness: `python -m territory.routes --doc <pick state> --facts f.json --findings fi.json [--live] [--baseline]`; `routes.cards(doc, 3)` feeds
 `compare.blind_pack` against `compare.baseline`.
 
+### 5.3 The worlds (`engine/territory/world.py`, feature `territories-engine-develop`)
+
+Develop is `world.develop_ex(doc, llm, facts=, findings=)`, the `develop` entry of `gates.drive` (`world.stage(llm, ...)`). It refuses to run unless
+`gates.next_step` says run Develop (`routes.NotReady`, in words). It develops every **live** route that is still a thought (`state: found`; parked and
+killed routes are left alone) into `state: developed` with `world`, `checks`, `marks`, `pictures`, `blind` and `rank`, sets `journey` (the weekend's six
+stops) if absent, and returns `(doc, info)`; or the same document with `run.error` in words. Stage names live in `llm.STAGE_MODEL` (`world`,
+`world_checks`, `judge`, `world_more`); prompts are in `engine/territory/prompts/`.
+
+| Part | What it does |
+|---|---|
+| Writing | `world` stage: one call per batch of 4 routes (batches at once), never per touchpoint, then ONE more call for every route whose world was refused, naming why. Each route has a `palette_lean` (a starting hue and light/dark, spread by the golden angle) so routes written in parallel look different; `info["palette_clash"]` lists pairs that still look alike |
+| What the code owns | Words and characters per field (`world.CONFIG`: a headline 14 words, a line 12, a TV frame 30, ...); at most 12 lines kept (the schema holds 16); markdown stripped; text with `(to confirm)`, `TBC`, a bare `SUPER`, brackets, snake_case keys, `derived`, internal ids or a Confidential part is refused (a list item is dropped, a headline refuses the world); ink moved until it reads at 4.5 to 1 (`readable_ink`); font held to `newsreader` / `geist_extra_bold`; scenes and radio voices held to their lists |
+| Checks (`checks[]`) | In order: `proposition`, `mandatory`, `rival` (ONE `world_checks` call for all routes; a verdict that did not come back is `unchecked`, never `ok`; `unchecked` is also what a brief with no proposition or no mandatories gets, in words), `evidence` (code: `warn` when a cited finding is derived or the words state a price or percentage the brief and research do not), `contrast` (code), `landscape` (a safety pack's watch words, `warn`), `judge` (the rank). At most 8 |
+| The blind judge | ONE `judge` call on a second model (Sonnet, the writer is Opus). It is sent the brief, and per route under a shuffled letter: the thought, the tension, the evidence in words and the words of the world. Never a name, tier, band, distance, heading or id. An incomplete score gets one more call; a route never fully scored has no `blind` (nothing is made up). `blind` is the /35 score (stored), `rank` the judge's order (shown; `world.show`), `tier` stays the sort step's judged tier |
+| Marks | `fit` and `ownable` are the judge's scores for them (else the checker's verdicts); `risk` is `world.risk_mark`: the judged tier, plus one for a derived finding, plus one for a mandatory under strain |
+| Pictures | One `sketch` slot per TV frame and one each for the story, poster, table card and email, from the palette (`scene` matches `world.scenes`) |
+| Safety packs | `engine/deck/packs/*.yaml` are read when the brief or research names a pack's trigger (`world.packs_for`, no YAML parser: the middleware image stays light; `NAPKIN_TERRITORY_PACKS` points elsewhere). A banned phrase or banned imagery refuses the world; watch words go in the route's `risks` and a `landscape` check; `review.sensitive` is set `{required: true, status: missing}` (never `done`: a named person does that, `gates.record_review`). **The packs folder must be in the middleware image**: if none is found Develop refuses (`retryable: false`) rather than run without the rules |
+| `world.more(doc, llm, id, by)` | "Write more like this": one call, `world.lines` grows by up to 6 (never above 16), nothing else changes |
+| `world.push(doc, llm, id, by, instruction=)` | Writes ONE route's world again from its current one, runs its judged checks again and the judge again over the whole set (a rank is relative): 3 calls. `starred`, `lead` and `dial_set` (a person's) stay |
+| Cost | About 4 calls for 6 routes (2 batches, checks, judge; a fifth if the judge left a score empty), about USD 0.45 on a real brief at the 2026-11-23 prices; about 7 calls for 16 routes. Prices stay in the history, never in the document |
+
+Dials need no model: `headlines` holds the four corners, `lines` the rest, `dial` the natural position. Dev harness:
+`python -m territory.world --doc <result or data.json> --facts f.json --findings fi.json [--keep N] [--live]`.
+
 ## 6. Additive only
 
 - A new member is **optional**. A member is never removed or retyped, an enum value is never dropped, nothing newly becomes required.

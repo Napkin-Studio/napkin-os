@@ -12,7 +12,9 @@ STAGE_MODEL = {"assumed_brief": "claude-sonnet-5-5", "tensions": "claude-sonnet-
                "frames_plan": "claude-sonnet-5-5", "insights": "claude-sonnet-5-5",
                # the crew (territories-engine-routes): one stage per heading so each is cached, timed and re-run alone
                **{f"route_{d}": "claude-opus-5-5" for d in ("core", "feel", "opposite", "adjacent", "outside", "yours", "custom")},
-               "distance": "claude-sonnet-5-5", "spread_repair": "claude-sonnet-5-5"}
+               "distance": "claude-sonnet-5-5", "spread_repair": "claude-sonnet-5-5",
+               # develop (territories-engine-develop): the writer and the blind judge are different models, on purpose
+               "world": "claude-opus-5-5", "world_more": "claude-opus-5-5", "world_checks": "claude-sonnet-5-5", "judge": "claude-sonnet-5-5"}
 
 
 def prompt(name: str) -> str:
