@@ -1,7 +1,8 @@
 // A project's pictures and clips on the relay (features/personal-workspaces.clan), so it opens in
 // another browser with every one of them.
-//   - Saving sends each picture the relay cannot already reach (no https location: drawn, uploaded,
-//     or a result on the dev server) to in/<sha256>, by its own hash, once per session.
+//   - Saving sends each picture this browser holds to in/<sha256>, by its own hash, once per session. The relay
+//     says "exists" for one it has, and nothing travels: a location in the document is never taken as proof that
+//     THIS relay has it (an Export's pictures point at the relay that made them; opened on another, 20 of 23 404ed).
 //   - Opening fetches each one this browser lacks: from its https locations, else from in/<sha256>;
 //     the bytes must hash to the name. One that cannot be found stops the open and is named.
 
@@ -31,14 +32,12 @@ function remember(sha: string) {
   }, 500)
 }
 
-const reachable = (a: DocAsset) => a.locations.some((l) => l.startsWith('https://'))
-
-/** Send the pictures the relay cannot reach yet. `upload` is the relay's (POST /uploads, then PUT). */
+/** Make sure the relay has every picture this browser holds. `upload` is the relay's (POST /uploads, then PUT when it lacks it). */
 export async function sendAssets(doc: ProductionDocument, upload: (blob: Blob, mime: InputMime) => Promise<unknown>): Promise<number> {
   let sent = 0
   await restore()
   for (const a of Object.values(doc.assets)) {
-    if (onServer.has(a.sha256) || reachable(a) || !SENDABLE.includes(a.mime as InputMime)) continue
+    if (onServer.has(a.sha256) || !SENDABLE.includes(a.mime as InputMime)) continue
     const blob = await getBlob(a.sha256)
     if (!blob) continue // not in this browser: it came from elsewhere, and is wherever it came from
     await upload(blob, a.mime as InputMime)
