@@ -477,6 +477,9 @@
   "review.sensitive.by": {
    "type": "string"
   },
+  "review.sensitive.inputs": {
+   "type": "string"
+  },
   "review.sensitive.required": {
    "type": "boolean"
   },
@@ -569,6 +572,9 @@
    ],
    "type": "string"
   },
+  "run.approvals.greenlight.inputs": {
+   "type": "string"
+  },
   "run.approvals.greenlight.note": {
    "type": "string"
   },
@@ -587,6 +593,9 @@
     "edit",
     "retry"
    ],
+   "type": "string"
+  },
+  "run.approvals.pick.inputs": {
    "type": "string"
   },
   "run.approvals.pick.note": {
@@ -618,6 +627,9 @@
     "greenlight",
     "pick"
    ],
+   "type": "string"
+  },
+  "run.decisions[].inputs": {
    "type": "string"
   },
   "run.decisions[].kind": {
