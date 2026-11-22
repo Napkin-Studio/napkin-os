@@ -7,19 +7,21 @@ import { finalsOf, isFinal, setFinal, type FinalOf } from '../../doc/finals'
 import { updateDoc } from '../../doc/store'
 import './finals.css'
 
-export function FinalToggle({ of, asset, extra, className = 'btn sm' }: {
+export function FinalToggle({ of, asset, extra, also, className = 'btn sm' }: {
   of: FinalOf
   /** The exact picture shown (a size: its delivery-size file when one was made, doc/finals sizeFinalAsset). */
   asset: Sha256 | undefined
   /** What the Deck reads beside it: a frame's version, a size's set, format and lane. */
   extra?: Pick<Final, 'version' | 'set_id' | 'format' | 'channel'>
+  /** Other names for the same picture (a canvas picture's node, its frames): a final under any counts, and Unmark removes them all. */
+  also?: FinalOf[]
   className?: string
 }) {
   const doc = useDoc()
   const { doc: store } = useServices()
   const ui = useUi()
   if (!asset) return null
-  const on = isFinal(doc, of, asset)
+  const on = isFinal(doc, of, asset, also)
   const earlier = !on && of.kind !== 'frame' && finalsOf(doc, of).length > 0
   const by = ui.me ? `human:${ui.me.participantId}` : 'human:p_local'
   const title = on ? 'Final: the Deck Maker takes this picture. Click to unmark it.'
@@ -27,7 +29,7 @@ export function FinalToggle({ of, asset, extra, className = 'btn sm' }: {
     : 'Mark this picture final: the Deck Maker takes final pictures.'
   return (
     <button type="button" className={`${className} final-toggle ${on ? 'on' : ''}`} aria-pressed={on} title={title}
-      onClick={() => void updateDoc(store, (d) => setFinal(d, of, asset, !on, by, extra), `${on ? 'unmark' : 'mark'} final ${of.kind} ${of.id}`)}>
+      onClick={() => void updateDoc(store, (d) => setFinal(d, of, asset, !on, by, extra, undefined, also), `${on ? 'unmark' : 'mark'} final ${of.kind} ${of.id}`)}>
       {on ? 'Final ✓' : 'Final'}
     </button>
   )

@@ -17,21 +17,28 @@ export function finalsOf(d: ProductionDocument, of: FinalOf): Final[] {
   return Object.values(d.finals ?? {}).filter((f) => sameOf(f.of, of))
 }
 
-/** Whether this picture of it is marked final. */
-export function isFinal(d: ProductionDocument, of: FinalOf, asset: Sha256 | undefined): boolean {
-  return !!asset && finalsOf(d, of).some((f) => f.asset === asset)
+/** Whether this picture of it is marked final. `also`: other names for the same picture (a canvas picture's node and
+ *  its frames): a final under any of them counts. */
+export function isFinal(d: ProductionDocument, of: FinalOf, asset: Sha256 | undefined, also: readonly FinalOf[] = []): boolean {
+  return !!asset && [of, ...also].some((o) => finalsOf(d, o).some((f) => f.asset === asset))
 }
 
-/** Mark (on) or unmark (off) a picture final, in a draft (one undo step with updateDoc). */
-export function setFinal(d: ProductionDocument, of: FinalOf, asset: Sha256, on: boolean, by: PersonRef, extra: Extra = {}, at = new Date().toISOString()) {
+/** Mark (on) or unmark (off) a picture final, in a draft (one undo step with updateDoc).
+ *  A canvas picture is final under its node until it has versions, then under a frame: UAT 2026-11-22, a final marked
+ *  on the picture stayed in the project after Final was switched off in the editor on the frame of the same picture,
+ *  because the two were different names. `also` lists the other names (the node, the other frames): switching off
+ *  removes the final of this asset under every one of them, and marking on retires the node's own earlier final. */
+export function setFinal(d: ProductionDocument, of: FinalOf, asset: Sha256, on: boolean, by: PersonRef, extra: Extra = {}, at = new Date().toISOString(), also: readonly FinalOf[] = []) {
   const all = (d.finals ??= {})
   const mine = finalsOf(d, of)
   if (!on) {
-    for (const f of mine) if (f.asset === asset) delete all[f.id]
+    for (const o of [of, ...also]) for (const f of finalsOf(d, o)) if (f.asset === asset) delete all[f.id]
     return
   }
   if (mine.some((f) => f.asset === asset)) return
   if (of.kind !== 'frame') for (const f of mine) delete all[f.id] // a size or a picture keeps one
+  // A frame's final replaces the picture's own: the picture is the first version, not a second final.
+  if (of.kind === 'frame') for (const o of also) if (o.kind === 'picture') for (const f of finalsOf(d, o)) delete all[f.id]
   const id = newUlidId('final')
   const keep = Object.fromEntries(Object.entries(extra).filter(([, v]) => v !== undefined)) as Extra
   all[id] = { id, v: 1, field_v: {}, of: { kind: of.kind, id: of.id }, asset, ...keep, at, by }
