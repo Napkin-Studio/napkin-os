@@ -156,6 +156,71 @@ impl Relay {
     }
 }
 
+/// What the relay answered a call made by the server itself.
+pub struct Answer {
+    pub status: StatusCode,
+    pub etag: Option<String>,
+    pub body: axum::body::Bytes,
+}
+
+/// Why a call made by the server itself got no answer from the relay.
+#[derive(Debug)]
+pub enum Unreached {
+    Timeout,
+    Down,
+}
+
+impl Relay {
+    /// One call to the relay as `account`, signed exactly as the proxy signs
+    /// (`/api` + `path`, the body hashed): for the spin-off routes
+    /// (`crate::spinoff`), which move a `.clan` between the library and the
+    /// relay on the caller's behalf. The same assertion means the same
+    /// workspace check: a project of another agency is not found.
+    pub async fn call(
+        &self,
+        account: &Account,
+        method: Method,
+        path: &str,
+        headers: &[(&str, String)],
+        body: Vec<u8>,
+    ) -> Result<Answer, Unreached> {
+        let path_and_query = format!("/api{path}");
+        let claims = Claims::for_request(account, method.as_str(), &path_and_query, &body, now_s());
+        let assertion = sign(&self.config.key, &claims);
+        let url = format!("{}{path_and_query}", self.config.relay_url);
+        let mut out = self.client.request(method, url);
+        for (name, value) in headers {
+            out = out.header(*name, value);
+        }
+        let answer = out
+            .header(IDENTITY_HEADER, assertion)
+            .body(body)
+            .send()
+            .await
+            .map_err(|e| {
+                if e.is_timeout() {
+                    Unreached::Timeout
+                } else {
+                    Unreached::Down
+                }
+            })?;
+        let status = answer.status();
+        let etag = answer
+            .headers()
+            .get(header::ETAG)
+            .and_then(|v| v.to_str().ok())
+            .map(|v| v.trim_start_matches("W/").trim_matches('"').to_string());
+        let body = answer.bytes().await.map_err(|e| {
+            if e.is_timeout() {
+                Unreached::Timeout
+            } else {
+                Unreached::Down
+            }
+        })?;
+        Ok(Answer { status, etag, body })
+    }
+}
+
 // ── The assertion ────────────────────────────────────────────────────────────
 
 /// What the relay is told, in the order the contract writes it.
