@@ -536,6 +536,23 @@ def greenlight_route(doc: dict, territory_id: str, by: str, at: str | None = Non
     return doc, []
 
 
+def remove_route(doc: dict, territory_id: str, by: str, at: str | None = None, *, findings=None) -> tuple[dict, list[str]]:
+    """The person takes a route off the greenlit list. Its asks go with it (``sync_asks``), an approval or a sensitive review given for
+    the old list stops counting (the inputs hash moves), and an open greenlight gate is refreshed so ``blocked_by`` matches. Taking off a
+    route that is not on the list is refused in words, and nothing changes."""
+    if not _who(by):
+        return _refuse(doc, "Say who is taking it off. Only a named person can.")
+    if not any(g["territory_id"] == territory_id for g in doc.get("greenlit") or []):
+        return _refuse(doc, "That route is not on the greenlit list, so there is nothing to take off.")
+    doc = copy.deepcopy(doc)
+    doc["greenlit"] = [g for g in doc.get("greenlit") or [] if g["territory_id"] != territory_id]
+    doc = sync_asks(doc, findings=findings)
+    run = doc.get("run") or {}
+    if run.get("state") == "gate" and (run.get("gate") or {}).get("id") == "greenlight":
+        doc = open_gate(doc, "greenlight", findings=findings)
+    return doc, []
+
+
 def request(doc: dict, gate: str, kind: str, at: str | None = None) -> dict:
     """The person asks for ``edit`` or ``retry`` at ``gate``. Recorded as a waiting request; ``settle_requests`` answers it."""
     doc = copy.deepcopy(doc)

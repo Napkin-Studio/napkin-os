@@ -932,6 +932,30 @@ def push(doc: dict, llm, territory_id: str, by: str, *, instruction: str | None 
     return d, [], info
 
 
+def rerank(doc: dict, llm, by: str, *, facts=None, findings=None, sources=None, marks=None) -> tuple[dict, list[str]]:
+    """Ask the blind judge to order the live developed routes again (one call; nothing else changes: not a world, not a check). A rank is
+    relative, so after a route was pushed or edited it is worth asking again. ``(doc, refusals in words)``."""
+    live = [t for t in doc.get("territories") or [] if t["status"] == "live" and t["state"] == "developed"]
+    if len(live) < 2:
+        return doc, ["There is nothing to put in order yet: ranking needs at least two developed routes."]
+    if not str(by or "").strip():
+        return doc, ["Say who is asking, so the change is on record."]
+    ctx = _context(doc, facts, findings, sources, marks)
+    try:
+        judged = run_judge(llm, ctx, live)
+    except Exception as e:   # noqa: BLE001
+        return doc, [str(e) if e.__class__.__name__ in ("CapReached", "NotReady") else "The judge stopped before it ordered the routes. Nothing was changed."]
+    d = copy.deepcopy(doc)
+    d["territories"] = _rank_all(d["territories"], judged)
+    ps = _problems(d, d["territories"], facts, findings)
+    if ps:
+        return doc, [p.words for p in ps][:3]
+    d.setdefault("run", {"state": "building"})
+    c = d["run"].setdefault("calls", {"model": 0, "lookups": 0})
+    c["model"] = int(c.get("model") or 0) + 1
+    return d, []
+
+
 # ---------------------------------------------------------------- the person reads a world: what to show
 
 

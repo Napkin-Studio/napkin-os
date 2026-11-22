@@ -339,6 +339,15 @@ def test_steer_and_undo_go_through_the_same_store_and_lock(tmp_path):
     assert un.refusals == ["That action is not in this run."]
 
 
+def test_rerank_goes_through_the_same_store_and_lock(tmp_path):
+    st = store_in(tmp_path)
+    res = go(Counting(), st, approved(go(Counting(), st)))
+    m = Counting()
+    out = runner.rerank(res.doc, "Shrey", llm=m, store=st, facts=FACTS, findings=FINDINGS)
+    assert not out.busy and out.refusals == [] and out.info["calls"] == {"judge": 1} and contract.problems(out.doc) == []     # the same ask as develop's: read from the store, not paid again
+    assert runner.rerank(res.doc, "", llm=m, store=st).refusals
+
+
 # ---------------------------------------------------------------- Bedrock, and no deck package (LESSONS 2, 3)
 
 
