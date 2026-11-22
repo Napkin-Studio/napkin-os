@@ -88,14 +88,15 @@ test('Edit opens the picture; Apply puts v2 in place with v1 in its versions; Un
   const v2 = await page.evaluate((n) => Object.values(window.__pt.doc.get().frames as Record<string, { node?: string; version: number; asset: string; kind: string }>)
     .filter((f) => f.node === n).sort((a, b) => a.version - b.version).map((f) => [f.version, f.kind, f.asset]), p.node)
   expect(v2).toEqual([[1, 'original', p.sha], [2, 'edited', after.sha]])
-  await page.locator('.vchip').click()
-  await expect(page.locator('.ie-vrow').first()).toContainText('v1 · as it was on the canvas')
-  await page.keyboard.press('Escape')
+  // The version strip under the picture (features/pt-final-and-fit.clan): v1 is the original, v2 is open.
+  await expect(page.locator('.vstrip .ver')).toHaveCount(2)
+  await expect(page.locator('.vstrip .ver').first()).toHaveAttribute('title', /^v1 · as it was on the canvas/)
+  await expect(page.locator('.vstrip .ver.sel')).toHaveText('v2')
 
   // The document's Undo (the zoom pill's): v1 is back on the canvas and the chip goes.
   await page.getByRole('button', { name: /^Undo: apply edits to the picture as v2/ }).click()
   await expect.poll(async () => (await pictures(page))[0].sha).toBe(p.sha)
-  await expect(page.locator('.vchip')).toHaveCount(0)
+  await expect(page.locator('.vstrip')).toHaveCount(0)
 })
 
 test('a double-click opens a picture on its own; in a group the first picks it out and the next opens it', async ({ page }) => {

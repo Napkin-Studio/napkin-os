@@ -1008,7 +1008,7 @@ function VersionStrip({ nodeId, at, zoom, below }: { nodeId: string; at: Pt; zoo
         const fin = isFinalAsset(doc, f.asset)
         return (
           <button key={f.id} type="button" className={`ver pt-mono${f.id === current.id ? ' sel' : ''}${fin ? ' fin' : ''}`} aria-pressed={f.id === current.id}
-            title={`v${f.version} of ${versions.length}${fin ? ', Final' : ''}: ${f.id === current.id ? 'open now' : 'open this version'}`}
+            title={`v${f.version}${f.kind === 'original' ? ' · as it was on the canvas' : f.kind === 'edited' ? ' · edited' : ''} (of ${versions.length})${fin ? ', Final' : ''}: ${f.id === current.id ? 'open now' : 'open this version'}`}
             onClick={() => { if (f.id !== current.id) void pickPictureVersionStep(store, f.id) }}>
             {fin && <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M2 6.5l2.6 2.6L10 3.4" /></svg>}v{f.version}{fin ? ' Final' : ''}
           </button>
