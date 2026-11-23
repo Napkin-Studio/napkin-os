@@ -7,7 +7,7 @@ import { newUlidId } from '../../../clan-store/src'
 import { compileTimeline, type PlanClip as StorePlanClip, type PlanEndCard as StorePlanEndCard, type PlanText as StorePlanText, type TimelineItem as StoreTimelineItem } from '../../../clan-store/src'
 import type { AssetRef, EndCard, Id, ProductionDocument, TimelineItem, TimelinePlan, TransitionIn } from '../contracts/types'
 import { updateDoc } from '../doc/store'
-import { briefForJob, legalOf } from '../brief/model'
+import { briefForJob, endLineOf, legalOf } from '../brief/model'
 import { quoted } from '../lib/quotes'
 import type { DocumentStore } from '../doc/types'
 import { beatsOf, shotsOf, storyboardOfVideo } from '../model/selectors'
@@ -168,14 +168,30 @@ const bare = (t: string) => t.replace(/[.!?]$/, '').trim()
  */
 export function endCardFrom(d: ProductionDocument, videoId: Id): CutEndCard | undefined {
   const card = endCardOf(d, storyboardOfVideo(d, videoId)?.id)
-  return card && withBriefLegal(d, videoId, card)
+  return card && withBriefLegal(d, videoId, withCampaignLine(d, videoId, card))
 }
 
 /** A new end card for a film with no end-card shot: the brand name set in type (the project's name; there is no logo without a
  *  brand book) and the linked Brief's legal line as its legal. */
 export function newEndCard(d: ProductionDocument, videoId: Id): CutEndCard {
   const named = d.project.title && !/^untitled/i.test(d.project.title) ? d.project.title : 'Your brand'
-  return withBriefLegal(d, videoId, { headline: '', line: named, bg: '#14161B', durS: 1.5 })
+  return withBriefLegal(d, videoId, withCampaignLine(d, videoId, { headline: '', line: named, bg: '#14161B', durS: 1.5 }))
+}
+
+/** The campaign's line for a film: the linked Brief's end line ("Proper crunch."), else the script's own last spoken line. */
+export function campaignLine(d: ProductionDocument, videoId: Id): string | undefined {
+  const brief = endLineOf(briefForJob(d, { kind: 'video', id: videoId })?.brief.spine)
+  if (brief) return brief.slice(0, 120)
+  const sb = storyboardOfVideo(d, videoId)
+  const said = sb ? closingLine(d, shotsOf(d, sb.id).map((s) => s.id)) : undefined
+  return said?.slice(0, 120)
+}
+
+/** A new card's headline starts as the campaign line (UAT round 3: it was empty, and the person typed it); the person can overwrite it. */
+function withCampaignLine(d: ProductionDocument, videoId: Id, card: CutEndCard): CutEndCard {
+  if (card.headline.trim()) return card
+  const line = campaignLine(d, videoId)
+  return line ? { ...card, headline: line } : card
 }
 
 /** The legal line of the Brief linked to this film (never one that is only in the project): what an end card starts with. */
