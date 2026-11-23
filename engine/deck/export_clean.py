@@ -19,6 +19,7 @@ import re
 
 _SENT = re.compile(r"(?<=[.!?])\s+")
 _LEAD = re.compile(r"^\s*to confirm\b\s*(:)?\s*", re.I)
+_PAREN = re.compile(r"\s*\([^()]*\bto confirm\b[^()]*\)", re.I)   # '(to confirm)', '(draft insight, to confirm)'
 _BLANK = re.compile(r"\s*\[(?:[^\]\n]*\s[^\]\n]*|Agency|Client|Project)\]")   # a bracket holding at least two words ('[presenter and date]'); '[1]' and '[req:R3]' stay
 _NO_AGENCY = re.compile(r"^\s*a response from \[(?:agency|[^\]]*)\]\.?\s*$", re.I)
 _TEXT_KEYS = ("text", "title", "answer", "kicker", "caption", "from", "to", "label", "quote", "attribution")
@@ -45,6 +46,10 @@ def clean_text(text: str) -> tuple[str, list]:
             continue
         kept.append(sent)
     out = " ".join(kept)
+    parens = [p.strip() for p in _PAREN.findall(out)]
+    if parens:
+        found += parens
+        out = _PAREN.sub("", out)
     blanks = [b.strip() for b in _BLANK.findall(out)]
     if blanks:
         found += blanks
@@ -54,26 +59,30 @@ def clean_text(text: str) -> tuple[str, list]:
     return out, found
 
 
-def _walk(node, found: list):
-    """``node`` cleaned in place of its text, returning the cleaned node, or None when it is empty after cleaning."""
+def _walk(node, found: list, drop_human: bool = False):
+    """``node`` cleaned in place of its text, returning the cleaned node, or None when it is empty after cleaning. A card a person fills
+    (``human``) stays (it is the 'To supply' list) unless ``drop_human``: on a presented slide it moves to the list."""
     if isinstance(node, str):
         out, f = clean_text(node)
         found.extend(f)
         return out if out.strip() else None
     if isinstance(node, list):
-        out = [x for x in (_walk(i, found) for i in node) if x is not None]
+        out = [x for x in (_walk(i, found, drop_human) for i in node) if x is not None]
         return out
     if isinstance(node, dict):
-        if node.get("human"):   # a card a person fills: it is the list itself
-            return node
+        if node.get("human"):   # a card a person fills: it is the list itself (kept in the appendix)
+            if not drop_human:
+                return node
+            found.extend(str(node[k]) for k in ("text",) if isinstance(node.get(k), str) and node[k].strip())
+            return None
         out = {}
         for k, v in node.items():
             if k == "rows" and isinstance(v, list):   # a table keeps its shape: a cell that was only an open item is left empty
-                out[k] = [[(_walk(c, found) or "") if isinstance(c, str) else c for c in r] if isinstance(r, list) else r for r in v]
+                out[k] = [[(_walk(c, found, drop_human) or "") if isinstance(c, str) else c for c in r] if isinstance(r, list) else r for r in v]
             elif k in _SKIP_KEYS or not isinstance(v, (str, list, dict)):
                 out[k] = v
             elif k in _TEXT_KEYS or isinstance(v, (list, dict)):
-                got = _walk(v, found)
+                got = _walk(v, found, drop_human)
                 if got is None and k == "text":
                     return None   # a bullet or line whose text was only an open item
                 out[k] = got if got is not None else ("" if isinstance(v, str) else v)
@@ -86,9 +95,10 @@ def _walk(node, found: list):
 def scrub(deck: dict) -> dict:
     """Move the deck's open items to one appendix slide, in place. Returns ``{items, slides}``: how many were moved and from how many slides."""
     open_items, touched = [], 0
-    for sid in deck["order"]:
+    divider = next((i for i, k in enumerate(deck["order"]) if deck["slides"][k]["type"] == "appendix"), len(deck["order"]))   # no divider: nothing is behind it
+    for pos, sid in enumerate(deck["order"]):
         s = deck["slides"][sid]
-        if s["type"] in ("requirement_trace", "appendix_sources"):
+        if s["type"] == "appendix_sources":
             continue
         found = []
         t, f = clean_text(str(s.get("title") or ""))
@@ -98,7 +108,8 @@ def scrub(deck: dict) -> dict:
         lab, _ = clean_text(str(s.get("label") or ""))
         if lab.strip():
             s["label"] = lab[:80]
-        s["blocks"] = [b for b in (_walk(b, found) for b in s.get("blocks") or [] if not (isinstance(b, dict) and b.get("internal"))) if b]
+        presented = pos < divider
+        s["blocks"] = [b for b in (_walk(b, found, presented) for b in s.get("blocks") or [] if not (isinstance(b, dict) and b.get("internal"))) if b]
         if found:
             touched += 1
             on = str(s.get("title") or s.get("label") or sid)
@@ -124,11 +135,12 @@ def has_marks(text: str) -> bool:
     return bool(_LEAD.match(str(text or ""))) or bool(_BLANK.search(str(text or ""))) or bool(re.search(r"(?i)\bto confirm\b", str(text or "")))
 
 
-_EVID = re.compile(r"^\s*\[(?:req|f|fi|doc|prompt|brief|answer|src)[:_][^\]]*\]\s*$")
+_EVID = re.compile(r"^\s*\[(?:req|f|fi|doc|prompt|brief|answer|src)[:_][^\]]*\]")
 
 
 def notes_of(notes) -> str:
-    """A slide's notes for an export: without the evidence ids (``Evidence:`` and its ``[req:R3]`` lines), which are the build's, not the room's."""
+    """A slide's notes for an export: without the evidence lines (``Evidence:`` and its ``[req:R3]`` / ``[brief:insight] brief field: ...`` lines, which
+    carry the build's ids and the brief's own open words), which are the build's, not the room's."""
     lines = [ln for ln in str(notes or "").splitlines() if not _EVID.match(ln)]
     while lines and lines[-1].strip().lower() in ("evidence:", ""):
         lines.pop()

@@ -51,9 +51,11 @@ def test_a_production_deck_keeps_its_out_of_home_execution_on_its_own_slide(monk
 
 def test_a_production_deck_presents_the_executions_its_finals_fill_first():
     ex = _slides(("execution", "Social stills"), ("execution", "15-second film"), ("execution", "Key visual"), ("execution", "Out of home"),
-                 ("execution", "Packshot"), ("execution", "Storyboard frames"))
+                 ("execution", "Out of home"), ("execution", "Packshot"), ("execution", "Storyboard frames"))
     got = [x["title"] for x in assemble._shown_executions(ex, [], production=True)]
-    assert got == ["Social stills", "Key visual", "Out of home", "Packshot"]   # four, in story order, the film never first
+    assert got == ["Social stills", "Key visual", "Out of home", "Packshot"]   # four kinds, in story order, the film never first
+    ex = _slides(("execution", "Key visual"), ("execution", "Out of home"), ("execution", "Out of home"), ("execution", "Packshot"), ("execution", "Storyboard frames"))
+    assert [x["title"] for x in assemble._shown_executions(ex, [], production=True)] == ["Key visual", "Out of home", "Packshot", "Storyboard frames"]
 
 
 def test_no_film_in_a_deck_made_from_pictures():
@@ -98,9 +100,24 @@ def test_open_items_leave_the_slides_for_one_appendix_slide():
     assert texts and not any(export_clean.has_marks(t) for t in texts)
 
 
+def test_a_presented_slide_hands_its_supply_cards_and_parentheticals_to_the_list_and_the_appendix_keeps_its_own():
+    cover = assemble._slide("title", "Lumen", [{"kind": "text", "text": "Hello"}, {"kind": "text", "human": True, "text": "Proposed (not given by the client): a presenter [presenter and date]. To confirm: who."}])
+    story = assemble._slide("insight", "A claim", [{"kind": "bullets", "items": [{"text": "Cider is fizzy (draft insight, to confirm)."}, {"text": "Fee split", "human": True}]}])
+    divider = assemble._slide("appendix", "Appendix", [{"kind": "text", "text": "Backup"}])
+    behind = assemble._slide("team", "The team", [{"kind": "bullets", "items": [{"text": "Proposed (not given by the client): a lead. To confirm: name.", "human": True}]}])
+    deck = {"meta": {}, "order": ["s01", "s02", "s03", "s04"], "slides": dict(zip(["s01", "s02", "s03", "s04"], [cover, story, divider, behind]))}
+    export_clean.scrub(deck)
+    assert [b["text"] for b in deck["slides"]["s01"]["blocks"]] == ["Hello"]
+    assert deck["slides"]["s02"]["blocks"][0]["items"] == [{"text": "Cider is fizzy."}]
+    assert "To confirm: name" in str(deck["slides"]["s04"]["blocks"])   # behind the divider the card stays: it is the To supply list
+    listed = str(deck["slides"][deck["order"][-1]]["blocks"])
+    assert "presenter" in listed and "draft insight, to confirm" in listed and "Fee split" in listed
+
+
 def test_the_exported_notes_carry_no_evidence_ids_and_the_cover_no_agency_line():
     assert export_clean.notes_of("Said once, on slide 9.\n\nEvidence:\n[req:R3]\n[f_ab12]") == "Said once, on slide 9."
     assert export_clean.notes_of("Evidence:\n[req:R3]") == ""
+    assert export_clean.notes_of("Role.\n\nEvidence:\n[brief:insight] brief field (brief-maker): To confirm: a line.") == "Role."
     assert export_clean.clean_text("A response from [Agency]") == ("", [])
 
 

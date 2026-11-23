@@ -946,13 +946,15 @@ def drop_film(d: dict) -> dict:
     return out
 
 
-def _production_fillable(x: dict) -> bool:
-    """True when Production's finals can fill an execution slide's picture: it names a channel Production makes sizes for (out of home,
-    social, print, display), the storyboard's frames, or a group of finals (key visual, size crops, packshot)."""
+def _production_kind(x: dict) -> str | None:
+    """What Production's finals would fill an execution slide with: ``storyboard``, a group of finals (``keyvisual``, ``sizes``, ``product``) or a
+    channel (``ooh``, ``social``, ``print``, ``display``); None when none of its pictures can."""
     from . import images   # noqa: PLC0415  (late: images imports assemble's helpers)
     title = str(x.get("title") or "")
     ch = images.execution_channel(title)
-    return bool(images.execution_group(title) or (ch == "film" and "storyboard" in title.lower()) or ch in ("ooh", "social", "print", "display"))
+    if ch == "film":
+        return "storyboard" if "storyboard" in title.lower() else None
+    return images.execution_group(title) or (ch if ch in ("ooh", "social", "print", "display") else None)
 
 
 def _shown_executions(S: list, messages: list | None, production: bool = False) -> list:
@@ -962,7 +964,12 @@ def _shown_executions(S: list, messages: list | None, production: bool = False) 
     execs = [x for x in S if x["type"] == "execution"]
     core = [x for x in execs if not re.search(spec.OPTIONAL, str(x["blocks"][0].get("text", "")))]
     if production:
-        fill = [x for x in core if _production_fillable(x)][:spec.PITCH_PRODUCTION_EXECUTIONS]
+        fill, seen = [], set()
+        for x in core:   # one execution of each kind: a second 'Out of home' shows the same finals again
+            kind = _production_kind(x)
+            if kind and kind not in seen and len(fill) < spec.PITCH_PRODUCTION_EXECUTIONS:
+                seen.add(kind)
+                fill.append(x)
         if fill:
             return fill
     shown, covered = [], set()   # greedily the executions that carry the most mandated messages not yet carried
