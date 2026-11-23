@@ -38,7 +38,7 @@ export const toolById = (id: string): Tool | undefined => TOOLS.find(t => t.id =
 
 /** The tool an app id belongs to. */
 export const toolOfApp = (appId: string | null | undefined): Tool | undefined =>
-  appId ? TOOLS.find(t => t.appId === appId) : undefined
+  appId ? TOOLS.find(t => t.appId === appId) ?? (appId === PRODUCTION_APP_ID ? TOOLS.find(t => t.id === 'prod') : undefined) : undefined
 
 /** A tool is live when it has an app and that app is installed; otherwise it is "Soon". */
 export function isLive(tool: Tool, installed: readonly Pick<InstalledApp, 'app_id'>[]): boolean {
