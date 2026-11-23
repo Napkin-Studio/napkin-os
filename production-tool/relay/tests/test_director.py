@@ -186,7 +186,7 @@ def test_only_the_v6_and_later_prompts_are_bundled():
     continuity only (pt-canvas-r2); v17 makes a palette accents and keeps @anchor's setting only in its place
     (pt-canvas-r3). The older ones stay, so a rollback is a config change."""
     assert sorted(p.name for p in PROMPTS.glob("director.v*.md")) == [
-        "director.v10.md", "director.v11.md", "director.v12.md", "director.v13.md", "director.v14.md", "director.v15.md", "director.v16.md", "director.v17.md", "director.v6.1.md", "director.v6.md", "director.v7.md", "director.v8.md", "director.v9.1.md", "director.v9.md"]
+        "director.v10.md", "director.v11.md", "director.v12.md", "director.v13.md", "director.v14.md", "director.v15.md", "director.v16.md", "director.v17.md", "director.v18.md", "director.v6.1.md", "director.v6.md", "director.v7.md", "director.v8.md", "director.v9.1.md", "director.v9.md"]
 
 
 def test_v7_is_v6_1_with_the_words_first_no_prices_and_a_frame_edit_section():
