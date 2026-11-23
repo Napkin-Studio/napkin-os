@@ -95,6 +95,12 @@ PREVIOUS_IS_NOT_A_COPY = ("@previous is the moment before, for continuity only: 
 NO_ONE_SEEN = "Cast: no one is seen in this shot"
 NO_PEOPLE = "No people in this shot."
 _PEOPLE_SAID = re.compile(r"\bno (?:people|person|one|figures?|humans?)\b|\bnobody\b|\bempty of people\b", re.I)
+# The brief says "no real faces" (UAT 2026-11-24: the tram frames showed real, clear faces): that means unrecognisable only
+# (owner 2026-11-23), so people may appear but no one identifiable, even when the shot's text shows people.
+UNRECOGNISABLE = ("People may appear, but no one is recognisable: seen from behind, at a distance, blurred, or cropped "
+                  "to hands; no clear face of any real person.")
+_UNRECOGNISABLE_SAID = re.compile(r"\bunrecogni[sz]able\b|\bno one (?:is )?recogni[sz]able\b|\bnot recogni[sz]able\b", re.I)
+FACES_OPS = ("frame", "clip")
 # UAT round 4: frame 2 nearly copied frame 1's framing. A frame says its shot's own size and angle from the shot list,
 # when Dex's prompt has not said them.
 SHOT_FRAMING = "Frame it as a {size} shot{angle}, as the shot list says."
@@ -340,6 +346,14 @@ def _no_people(job: dict, op: str, payload: dict, sheet: dict) -> None:
     if any(r.get("role") == "character" for r in job.get("refs") or []) or _PEOPLE_SAID.search(job.get("prompt") or ""):
         return
     _add_line(job, NO_PEOPLE, sheet)
+
+
+def _unrecognisable_people(job: dict, op: str, faces: bool, sheet: dict) -> None:
+    """A frame or a clip of a project whose linked brief says no real faces says, as its own line, that people may
+    appear but no one is recognisable, even when the shot's text shows people (the brief is read whole, not as cut
+    to the op's budget, which drops a mandatory from a clip)."""
+    if faces and op in FACES_OPS and not _UNRECOGNISABLE_SAID.search(job.get("prompt") or ""):
+        _add_line(job, UNRECOGNISABLE, sheet)
 
 
 def _shot_framing(job: dict, op: str, payload: dict, sheet: dict) -> None:
@@ -905,7 +919,8 @@ class Director:
             output["providerJob"].setdefault("audio", False)  # explicit on every video request
         briefs.settle_flags(output, payload)  # only lines of the brief this job was given
         try:
-            self._check(op, payload, provider_name, sheet, output, set(extra_hashes))
+            self._check(op, payload, provider_name, sheet, output, set(extra_hashes),
+                        faces=briefs.no_real_faces(raw.get("brief")))
         except DirectorError as e:
             e.answer = output  # what Dex wrote, for the relay's director_rejected line
             e.given = given
@@ -923,7 +938,7 @@ class Director:
             raise DirectorError(f"agent block: {errs[0].message}")
         return DirectorResult(output, agent_block, usage.as_dict())
 
-    def _check(self, op, payload, provider_name, sheet, output, extra=frozenset()) -> None:
+    def _check(self, op, payload, provider_name, sheet, output, extra=frozenset(), faces: bool = False) -> None:
         asked = op  # a frame_edit runs as frame below; its refs are Dex's to choose (frame-change-edit)
         errs = sorted(self._validate("director.schema.json").iter_errors(output), key=lambda e: list(e.path))
         if errs:
@@ -1033,6 +1048,7 @@ class Director:
         _views_are_one(job, op, payload)  # the relay's own words: outside the director's budget
         _previous_is_not_a_copy(job, asked, sheet)
         _no_people(job, asked, payload, sheet)
+        _unrecognisable_people(job, asked, faces, sheet)
         _shot_framing(job, asked, payload, sheet)
         _layout_is_a_photo(job, asked, payload, sheet)
         _no_other_brands(job, asked, sheet)

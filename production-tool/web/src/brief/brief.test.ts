@@ -14,7 +14,7 @@ import { removeBrief } from '../doc/remove'
 import { BRIEF_SPINE, cutAtWord, isDont, projectSpine, spineLines, spineSummary } from './spine'
 import {
   BRIEF_OPS, briefFeeds, briefFlagsOn, briefForJob, briefNotice, briefOf, briefSendRow, freshness, ignoreBriefFlag, keepVersion, newBrief,
-  endLineOf, recordBriefFlags, sizesBrief, sizesBriefOf, takeNewer, withBrief,
+  endLineOf, legalOf, recordBriefFlags, sizesBrief, sizesBriefOf, takeNewer, withBrief,
 } from './model'
 import { osBriefSource, type OsBriefRead } from './os'
 import { newId } from '../lib/ulid'
@@ -387,5 +387,29 @@ describe('Start from a brief: the data path', () => {
     const files = ['../main.tsx', './start.ts', '../stages/Character.tsx']
     for (const f of files) expect(readFileSync(new URL(f, import.meta.url), 'utf8'), f).not.toMatch(/briefSpinoffOf|holdBriefSpinoff|withoutBriefSpinoff|useBriefSpinoff|\?brief=/)
     expect(existsSync(new URL('./useBriefSpinoff.ts', import.meta.url))).toBe(false)
+  })
+})
+
+describe('the legal line a brief carries (UAT 2026-11-24: the Ferncliff caffeine line was missed)', () => {
+  const CAFFEINE = 'Contains caffeine. Not recommended for children or pregnant women.'
+  // The real Ferncliff mandatory, with its tail: the quoted words only go on the card.
+  const FERNCLIFF = `Include '${CAFFEINE}' To confirm: the wording against GB rules, which exempt drinks with 'coffee' in the name from the high-caffeine label.`
+  const spine = (...mandatories: string[]) => ({ mandatories })
+
+  it('takes the quoted words of an "Include \'…\'" mandatory, never its "To confirm" tail', () => {
+    expect(legalOf(spine('No real people\'s faces on posters', FERNCLIFF))).toBe(CAFFEINE)
+    expect(legalOf(spine(`Include '${CAFFEINE}' To confirm: ...`))).toBe(CAFFEINE)
+    expect(legalOf(spine(`Include '${CAFFEINE}'`))).toBe(CAFFEINE)
+  })
+  it('finds "must carry", "Carry:" and alcohol or health warnings', () => {
+    expect(legalOf(spine('The film must carry "Please enjoy responsibly."'))).toBe('Please enjoy responsibly.')
+    expect(legalOf(spine('Carry: Contains alcohol. 18+ only.'))).toBe('Contains alcohol. 18+ only.')
+    expect(legalOf(spine('Show the health warning: Not recommended for people with a heart condition.'))).toBe('Not recommended for people with a heart condition.')
+  })
+  it('still reads the old phrasings, and an ordinary or end-line mandatory is not a legal line', () => {
+    expect(legalOf(spine('Legal: Please drink responsibly. 18+ only.'))).toBe('Please drink responsibly. 18+ only.')
+    expect(legalOf(spine('Terms apply. See hollowoak.example'))).toBe('Terms apply. See hollowoak.example')
+    expect(legalOf(spine("Include 'Flat out good.' as the end line", 'Include the can on every poster', 'No caffeine hype in the tone'))).toBeUndefined()
+    expect(legalOf(undefined)).toBeUndefined()
   })
 })

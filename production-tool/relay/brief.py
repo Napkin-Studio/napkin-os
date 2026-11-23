@@ -118,6 +118,22 @@ def for_op(op: str, payload: dict) -> dict:
     return {**rest, "brief": {"title": brief.get("title", "Brief"), "spine": cut}} if cut else rest
 
 
+# "No real people's faces", "no real faces", "no identifiable people", "no recognisable faces", "no faces": the brief's
+# people rule. It means unrecognisable only (owner 2026-11-23): people may appear, no one identifiable.
+_NO_REAL_FACES = re.compile(
+    r"\bno\b[^.;\n]{0,30}?\b(?:real|actual|recogni[sz]able|identifiable|identified|named|celebrity|famous)\b[^.;\n]{0,20}?"
+    r"\b(?:faces?|people|persons?|humans?|individuals?|celebrit\w+|models?|actors?)\b"
+    r"|\b(?:no|avoid|without|never (?:show|use)|do(?: not|n't) show)\b[^.;\n]{0,20}?\b(?:real|recogni[sz]able|identifiable) "
+    r"(?:faces?|people|persons?)\b"
+    r"|\bno (?:clear |visible |close(?:-| )?up )?faces?\b", re.I)
+
+
+def no_real_faces(brief: dict | None) -> bool:
+    """The (uncut) linked brief carries a no-real-faces / no-recognisable-people mandatory or don't."""
+    spine = (brief or {}).get("spine") or {}
+    return any(_NO_REAL_FACES.search(str(line)) for key in LISTS for line in spine.get(key) or [])
+
+
 def _plain(s: str) -> str:
     return re.sub(r"\s+", " ", (s or "").strip().lower().rstrip(".!"))
 

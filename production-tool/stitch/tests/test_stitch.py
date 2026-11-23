@@ -114,38 +114,23 @@ def test_agents_appear_as_the_disc_passes_them():
 
 # ── the command ───────────────────────────────────────────────────────────────
 
-def test_command_normalises_trims_and_appends_card():
+def test_command_normalises_trims_and_carries_no_studio_card():
     clips = [{"path": "/t/a.mp4", "trimS": 4.5}, {"path": "/t/b.mp4"}]
-    a = stitch.load_assets("roll-up")
-    cmd = stitch.build_command("ffmpeg", clips, (720, 1280), "roll-up", a, "/t/out.mp4")
+    cmd = stitch.build_command("ffmpeg", clips, (720, 1280), "/t/out.mp4")
     # trim goes before its own input only
     assert cmd[cmd.index("/t/a.mp4") - 3:cmd.index("/t/a.mp4") + 1] == ["-t", "4.5", "-i", "/t/a.mp4"]
     assert cmd[cmd.index("/t/b.mp4") - 1] == "-i" and cmd[cmd.index("/t/b.mp4") - 2] != "4.5"
-    # the 2.5 s card: a white ground at the same size and fps, then the pieces
-    i = cmd.index("color=c=0xFFFFFF:s=720x1280:r=24")
-    assert cmd[i - 5:i] == ["-f", "lavfi", "-t", "2.5", "-i"]
-    for piece in a.values():
-        j = cmd.index(piece["path"])
-        assert cmd[j - 7:j] == ["-loop", "1", "-framerate", "24", "-t", "2.5", "-i"]
     graph = cmd[cmd.index("-filter_complex") + 1]
     assert graph.count("scale=720:1280:force_original_aspect_ratio=decrease") == 2
-    assert "rotate=a='-4*PI*(1-" in graph and ":c=none:" in graph
-    assert graph.count("overlay=") == 2 + len(stitch.CREW) + 3   # covers, crew, word, made, disc
-    assert "[v0][v1][card]concat=n=3:v=1:a=0[out]" in graph
+    # A client ad never carries the studio card (owner 2026-11-23): two clips, one concat, no card, no card pieces.
+    assert "[v0][v1]concat=n=2:v=1:a=0[out]" in graph
+    assert "[card]" not in graph and "overlay=" not in graph and "color=c=" not in " ".join(cmd)
     assert "-an" in cmd and cmd[-1] == "/t/out.mp4"
     assert "+faststart" in cmd
 
 
-def test_the_ink_version_uses_the_ink_ground_and_its_own_pieces():
-    a = stitch.load_assets("roll-up-ink")
-    cmd = stitch.build_command("ffmpeg", [{"path": "/t/a.mp4"}], (1280, 720), "roll-up-ink", a, "/t/o.mp4")
-    assert "color=c=0x0F1114:s=1280x720:r=24" in cmd
-    assert all("/roll-up-ink/" in p["path"] for p in a.values())
-
-
 def test_no_event_line_is_drawn():
-    a = stitch.load_assets("roll-up")
-    cmd = stitch.build_command("ffmpeg", [{"path": "/t/a.mp4"}], (720, 1280), "roll-up", a, "/t/o.mp4")
+    cmd = stitch.build_command("ffmpeg", [{"path": "/t/a.mp4"}], (720, 1280), "/t/o.mp4")
     joined = " ".join(cmd)
     assert "drawtext" not in joined and "textfile" not in joined
 
@@ -161,7 +146,6 @@ def test_failure_writes_an_error_result():
                      get=get, put=lambda *a: None, put_json=lambda k, d: results.__setitem__(k, d),
                      ffmpeg="ffmpeg", ffprobe="ffprobe")
     assert out["ok"] is False and "FileNotFoundError" in out["error"]
-    assert out["endCard"] == stitch.card_version("job_x")
     assert results["ads/x.json"] == out
 
 
@@ -189,59 +173,15 @@ def test_real_ffmpeg_stitch(tmp_path):
     res, store = _stitch(tmp_path, "job_x", [("a", "320x568", 2), ("b", "480x480", 2)], [1, None])
     assert res["ok"], res
     assert (res["w"], res["h"]) == (320, 568)
-    assert 5.3 <= res["durationS"] <= 5.7  # 1 s + 2 s + 2.5 s card
+    assert 2.9 <= res["durationS"] <= 3.1  # 1 s + 2 s: no studio card after them (owner 2026-11-23)
     assert res["sha256"].startswith("sha256:") and len(store["ads/x.mp4"]) == res["bytes"]
-    assert json.loads(store["ads/x.json"])["endCard"] == stitch.card_version("job_x")
+    assert "endCard" not in json.loads(store["ads/x.json"])
 
 
 @needs_ffmpeg
 def test_clips_longer_than_their_shots_are_cut_to_the_shots(tmp_path):
     # The FACET ad (2026-10-07): veo3.1_fast clips come back at 4, 6 or 8 s, and untrimmed
-    # 15 s of shots made a 21 s ad. With trimS = each shot's duration_s, the ad is the sum + the card.
+    # 15 s of shots made a 21 s ad. With trimS = each shot's duration_s, the ad is the sum of the shots.
     res, _ = _stitch(tmp_path, "job_t", [("a", "360x640", 4), ("b", "360x640", 6), ("c", "360x640", 8)], [3, 2, 4])
     assert res["ok"], res
-    assert abs(res["durationS"] - (3 + 2 + 4 + stitch.CARD_S)) <= 0.15
-
-
-def _last_frame_rgb(mp4: Path, w: int, h: int) -> bytes:
-    r = subprocess.run(["ffmpeg", "-loglevel", "error", "-sseof", "-0.05", "-i", str(mp4), "-frames:v", "1",
-                        "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], capture_output=True, check=True)
-    assert len(r.stdout) == w * h * 3
-    return r.stdout
-
-
-def _px(buf: bytes, w: int, x: float, y: float) -> tuple[int, int, int]:
-    i = (int(y) * w + int(x)) * 3
-    return buf[i], buf[i + 1], buf[i + 2]
-
-
-def _near(a, b, tol=40):
-    return all(abs(x - y) <= tol for x, y in zip(a, b))
-
-
-@needs_ffmpeg
-@pytest.mark.parametrize("job,version", [("job_sample1", "roll-up"), ("job_sample0", "roll-up-ink")])
-@pytest.mark.parametrize("size", [(720, 1280), (1280, 720)])
-def test_both_versions_render_the_card(tmp_path, job, version, size):
-    assert stitch.card_version(job) == version
-    w, h = size
-    res, store = _stitch(tmp_path, job, [("a", f"{w}x{h}", 1)], [None])
-    assert res["ok"] and res["endCard"] == version, res
-    mp4 = tmp_path / "ad.mp4"
-    mp4.write_bytes(store["ads/x.mp4"])
-    buf = _last_frame_rgb(mp4, w, h)
-    L = stitch.card_layout(w, h, stitch.load_assets(version))
-    ground = stitch.GROUND[version]
-    for x, y in ((4, 4), (w - 5, 4), (4, h - 5), (w - 5, h - 5)):
-        assert _near(_px(buf, w, x, y), ground, 8)
-    # The disc at rest, Create (orange) pointing up.
-    m = L["mark"]
-    assert _near(_px(buf, w, L["xl"] + m / 2, L["mark_y"] + m * 0.2), (0xFF, 0x4F, 0x2E))
-    # The word: ink pixels across its line box.
-    wx, wy, ww, wh = L["word"]
-    row = [_px(buf, w, x, wy + wh / 2) for x in range(int(wx), int(wx + ww))]
-    assert sum(_near(p, stitch.INK[version], 60) for p in row) > 10
-    # Max (cobalt) is standing on the line.
-    f = L["figs"][1]
-    body = [_px(buf, w, f["x"] + f["w"] / 2, L["line_y"] - f["h"] * t) for t in (0.6, 0.7, 0.8)]
-    assert any(_near(p, (0x2F, 0x64, 0xF5), 60) for p in body), body
+    assert abs(res["durationS"] - (3 + 2 + 4)) <= 0.15

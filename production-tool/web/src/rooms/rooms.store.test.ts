@@ -315,3 +315,38 @@ describe('the end card\'s words (live test 2026-11-18: "Hearth Oats end card" as
     expect(await said('Quietboil end card \u2013 "Let them sleep."')).toMatchObject({ headline: 'Quietboil', line: 'Let them sleep.' })
   })
 })
+
+describe('the end card from a planner\'s staged shot (UAT 2026-11-24: "appears, the legal line small beneath" became the card)', () => {
+  const FERNCLIFF = 'END CARD: the can centred on clean colour. Flat out good. appears, the legal line small beneath.'
+  const CAFFEINE = 'Contains caffeine. Not recommended for children or pregnant women.'
+
+  it('the headline is the words said; the stage directions are not on the card', async () => {
+    const { store, shots, videoId } = await film()
+    await systemUpdate(store, (d) => { d.shots[shots[3].id].action = FERNCLIFF }, 'sync')
+    const card = endCardFrom(store.get(), videoId)!
+    expect(card).toMatchObject({ headline: 'Flat out good.', line: 'Flat out good.' })
+    expect(JSON.stringify(card)).not.toMatch(/appears|beneath|centred|legal line/)
+  })
+
+  it('the quoted words win when the direction quotes them; one without any words falls back to the project name', async () => {
+    const { store, shots, videoId } = await film()
+    const said = async (action: string, title = 'Flat Out Good') => {
+      await systemUpdate(store, (d) => { d.shots[shots[3].id].action = action; d.project.title = title }, 'sync')
+      return endCardFrom(store.get(), videoId)!
+    }
+    expect(await said('END CARD: the can centred on clean colour. "Flat out good." appears, the legal line small beneath.')).toMatchObject({ headline: 'Flat out good.' })
+    expect(await said('END CARD: the can centred on clean colour, the legal line small beneath.', 'Ferncliff')).toMatchObject({ headline: 'Ferncliff', line: 'Ferncliff' })
+    // No label: a direction after the words is dropped too.
+    expect(await said('Flat out good. The can sits centred on clean colour.')).toMatchObject({ headline: 'Flat out good.' })
+  })
+
+  it('writes the brief\'s quoted legal line where the renderer draws it today (cta), only the quoted words', async () => {
+    const { store, shots, videoId } = await film()
+    await systemUpdate(store, (d) => {
+      d.shots[shots[3].id].action = FERNCLIFF
+      const b = { id: id('brief'), title: 'Brief', source: { taken: 1 }, spine: { mandatories: [`Include '${CAFFEINE}' To confirm: the wording against GB rules.`] } } as unknown as NonNullable<ProductionDocument['briefs']>[string]
+      d.briefs = { [b.id]: b }
+    }, 'sync')
+    expect(endCardFrom(store.get(), videoId)).toMatchObject({ headline: 'Flat out good.', cta: CAFFEINE })
+  })
+})

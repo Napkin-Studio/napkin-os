@@ -308,6 +308,4 @@ def test_an_event_with_no_mode_builds_the_same_ad_command():
         "one_clip": [{"path": "/tmp/c0.mp4"}],
     }
     for name, clips in cases.items():
-        for version in stitch.VERSIONS:
-            cmd = stitch.build_command("ffmpeg", clips, (1280, 720), version, stitch.load_assets(version), "/tmp/ad.mp4")
-            assert [c.replace(str(stitch.ENDCARD_DIR), "<endcard>") for c in cmd] == want[f"{name}/{version}"]
+        assert stitch.build_command("ffmpeg", clips, (1280, 720), "/tmp/ad.mp4") == want[name]

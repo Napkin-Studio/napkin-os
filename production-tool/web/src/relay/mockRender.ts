@@ -4,7 +4,6 @@
 import type { Aspect, JobRequest, KeyframeRef, Ratio, StitchTransition, View } from '../contracts/types'
 import { aspectOfRatio, centreCrop, sameShape } from '../canvas/core/sketch'
 import { runwaySize } from '../lib/runwaySizes'
-import { END_CARD_S } from '../jobs/clips'
 import type { MockRenderer, RenderedOutput } from './mock'
 
 const ACCENT = '#FF4F2E'
@@ -454,42 +453,6 @@ async function renderTake(req: JobRequest, input: Input): Promise<RenderedOutput
   })
 }
 
-/** The roll-up end card at rest: the studio mark beside "Napkin Studio", "Made with" above. */
-function endCard(ctx: CanvasRenderingContext2D, w: number, h: number) {
-  const s = Math.min(w, h)
-  const m = s * 0.096
-  ctx.fillStyle = '#FFFFFF'
-  ctx.fillRect(0, 0, w, h)
-  ctx.font = `600 ${s * 0.076}px Geist, sans-serif`
-  const word = ctx.measureText('Napkin Studio').width
-  const x = (w - (m + s * 0.026 + word)) / 2
-  const cy = h * 0.47 - (s * 0.15) / 2 + m / 2
-  ctx.save()
-  ctx.beginPath()
-  ctx.arc(x + m / 2, cy, m / 2, 0, Math.PI * 2)
-  ctx.clip()
-  ctx.translate(x + m / 2, cy)
-  ctx.rotate(-Math.PI / 4)
-  const quarters: [number, number, string][] = [[-1, -1, INK], [0, -1, ACCENT], [-1, 0, '#DADDE3'], [0, 0, '#8B919E']]
-  for (const [qx, qy, fill] of quarters) {
-    ctx.fillStyle = fill
-    ctx.fillRect(qx * m, qy * m, m, m)
-  }
-  ctx.restore()
-  ctx.fillStyle = INK
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'middle'
-  const tx = x + m + s * 0.026
-  ctx.fillText('Napkin Studio', tx, cy)
-  ctx.fillStyle = '#737987'
-  ctx.font = `500 ${s * 0.026}px Geist, sans-serif`
-  ctx.textBaseline = 'bottom'
-  ctx.fillText('Made with', tx, cy - s * 0.049)
-  ctx.textAlign = 'center'
-  ctx.font = `500 ${Math.max(11, s * 0.024)}px Geist, sans-serif`
-  ctx.fillText('MOCK render', w / 2, h * 0.62)
-}
-
 /** A stitch clip's place in the mock ad: when it starts, how long its slot is, and the join into it. */
 export interface StitchSlot { start: number; dur: number; kind: 'cut' | 'dissolve' | 'dip'; s: number }
 
@@ -542,7 +505,7 @@ async function renderStitch(req: JobRequest, input: Input): Promise<RenderedOutp
     clips.push({ v, dur, inS, ...(c.outS !== undefined ? { outS: c.outS } : {}), ...(c.transition ? { transition: c.transition } : {}) })
   }
   const slots = stitchTimeline(clips)
-  const total = clips.reduce((s, c) => s + c.dur, 0) + END_CARD_S
+  const total = clips.reduce((s, c) => s + c.dur, 0)
   const started = new Set<number>()
   const out = await record(w, h, total, async (ctx, t) => {
     const { idx, prev, p } = stitchAt(slots, t)
@@ -569,9 +532,7 @@ async function renderStitch(req: JobRequest, input: Input): Promise<RenderedOutp
         contain(ctx, clips[idx].v, 0, 0, w, h)
       }
     } else {
-      clips.forEach((c) => c.v.pause())
-      // The end card, as its last frame (the real one is stitch.py's roll-up card).
-      endCard(ctx, w, h)
+      clips.forEach((c) => c.v.pause()) // no studio card after the clips (owner 2026-11-23)
     }
   })
   clips.forEach((c) => URL.revokeObjectURL(c.v.src))

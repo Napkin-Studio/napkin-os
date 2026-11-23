@@ -10,7 +10,7 @@ import { beatsOf, cutItemFor, jobsList, mainVideo, shotsOf } from '../model/sele
 import { pickTake } from '../stages/videoEdits'
 import { MockRelay, type MockRenderer } from '../relay/mock'
 import { addKey, addRef, addScene, addShots, note, planned, snapshotDoc } from '../test/jobFixtures'
-import { END_CARD_S, adLengthS, makeClip, renderAd, selectedTake, stitchInput } from './clips'
+import { adLengthS, makeClip, renderAd, selectedTake, stitchInput } from './clips'
 import { fixFrameLanded, fixInShot, fixProgress, remakeFixClip, resumeFixes, shotsBeingFixed } from './fix'
 import { beginFollow, cancelFollow, continueFollow, lastWorkedModel, shotsInTheMaking, makeAwaited, planFollow, planFor, planMissing, planWords, restAsTheyAre, startFollow } from './follow'
 import { drawFrame, selectedFrame, selectFrame, type FrameDeps } from './frames'
@@ -322,10 +322,9 @@ describe('the ad is trimmed to the shots', () => {
     expect(s.inputOf(id).clips!.map((c) => c.trimS)).toEqual([3, 2, 4, 4, 2])
   })
 
-  it('ad length = the sum of the shots + the 2.5 s end card (the FACET ad: 15 s of shots is 17.5 s, not 21)', () => {
-    expect(END_CARD_S).toBe(2.5)
-    expect(adLengthS([{ duration_s: 3 }, { duration_s: 2 }, { duration_s: 2 }, { duration_s: 4 }, { duration_s: 4 }])).toBe(17.5)
-    expect(adLengthS([{ duration_s: 2.5 }, { duration_s: 4 }])).toBe(9)
+  it('ad length = the sum of the shots, no studio card after them (UAT 2026-11-24: a 15 s ad came out 17.4 s)', () => {
+    expect(adLengthS([{ duration_s: 3 }, { duration_s: 2 }, { duration_s: 2 }, { duration_s: 4 }, { duration_s: 4 }])).toBe(15)
+    expect(adLengthS([{ duration_s: 2.5 }, { duration_s: 4 }])).toBe(6.5)
   })
 
   it('the ad lands as a render of the main video, picked, by edie', async () => {
