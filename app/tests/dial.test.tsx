@@ -25,21 +25,21 @@ const dial = (items: LibraryItem[], live = new Set(['brief', 'research', 'deck']
   client: c, items, live, place: { left: -8, top: -12, origin: '74px 70px' }, onOpenTool: noop, onSoon: noop, onOpenClient: noop, onClose: noop,
 }))
 
-test('four quadrants in the mock order, each with its number key and what is in it', () => {
+test('five quadrants in the order Brief, Research, Territories, Production, Deck, each with its number key and what is in it', () => {
   const html = dial([
     item('ie.napkin.brief-maker', { state: { needs_you: 2, locked: false } }),
     item('ie.napkin.campaign-research', { run: { state: 'working', label: 'x' } }),
   ])
   const ids = [...html.matchAll(/data-testid="quadrant-(\w+)"/g)].map(m => m[1])
-  assert.deepEqual(ids, ['brief', 'research', 'deck', 'prod'])
-  for (let i = 1; i <= 4; i++) assert.match(html, new RegExp(`aria-keyshortcuts="${i}"`))
+  assert.deepEqual(ids, ['brief', 'research', 'territories', 'prod', 'deck'])
+  for (let i = 1; i <= 5; i++) assert.match(html, new RegExp(`aria-keyshortcuts="${i}"`))
   assert.match(html, /class="dz-tag">YOUR CALL</)
-  assert.match(html, /aria-label="Brief Maker for Client Alpha, needs your call \(1 of 4\)"/)
+  assert.match(html, /aria-label="Brief Maker for Client Alpha, needs your call \(1 of 5\)"/)
   assert.match(html, /data-testid="quadrant-research" data-activity="work"/, 'the quadrant says its ring\'s verb')
   assert.match(html, /data-testid="quadrant-brief"[^>]*tabindex|tabindex="0"[^>]*data-testid="quadrant-brief"/)
   assert.match(html, /class="dz-sub">Agents working</)
   assert.match(html, /class="dz-sub">Nothing yet</)
-  assert.match(html, /aria-label="Production Tool for Client Alpha, coming soon \(4 of 4\)"[^>]*aria-disabled="true"|aria-disabled="true"[^>]*aria-label="Production Tool for Client Alpha, coming soon/)
+  assert.match(html, /aria-label="Production Tool for Client Alpha, coming soon \(4 of 5\)"[^>]*aria-disabled="true"|aria-disabled="true"[^>]*aria-label="Production Tool for Client Alpha, coming soon/)
   assert.match(html, /class="dz-rim needs"/)
 })
 
@@ -73,4 +73,19 @@ test('a Soon quadrant dims its words and icon, never its fill (the desk would pr
   const css = readFileSync(resolve(process.cwd(), 'src', 'shell', 'nui', 'shell.css'), 'utf8')
   assert.match(css, /\.dial \.dz\[aria-disabled="true"\] > :not\(path\) \{ opacity: \.55; \}/)
   assert.doesNotMatch(css, /\.dial \.dz\[aria-disabled="true"\] \{ opacity/)
+})
+
+test('Territories is the third quadrant: its icon, its count, Soon until its app is served', () => {
+  const soon = dial([])
+  assert.match(soon, /data-testid="quadrant-territories"[^>]*aria-disabled="true"/)
+  assert.match(soon, /Territories for Client Alpha, coming soon \(3 of 5\)/)
+  const live = new Set(['brief', 'research', 'territories', 'deck'])
+  const none = dial([], live)
+  assert.doesNotMatch(none, /data-testid="quadrant-territories"[^>]*aria-disabled/)
+  assert.match(none, /Territories for Client Alpha, nothing yet \(3 of 5\)/)
+  const two = dial([item('ie.napkin.territories'), item('ie.napkin.territories')], live)
+  assert.match(two, /class="dz-sub">2 explorations</)
+  assert.match(two, /aria-label="Territories for Client Alpha, 2 explorations \(3 of 5\)"/)
+  // its icon is the shell's Territories icon (a ring with a core and four ticks)
+  assert.match(two, /data-testid="quadrant-territories".*?<circle cx="12" cy="12" r="8"><\/circle><circle cx="12" cy="12" r="3">/s)
 })

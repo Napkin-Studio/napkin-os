@@ -10,7 +10,7 @@
 // are read from each research's own selection.
 
 import type { ClientRecord, LibraryItem } from '../../host'
-import type { Tool } from './tools'
+import { startsFromBrief, type Tool } from './tools'
 import { initialsOf } from './model'
 import { clientName, ago, stateWords } from '../nui/deskData'
 import { ToolIcon } from '../nui/icons'
@@ -27,6 +27,8 @@ interface Props {
   onBack: () => void
   /** Each research's lens dots, read from its own selection (useLensDots). */
   lenses?: Readonly<Record<string, Cov[]>>
+  /** A line under the heading (Territories sent here from nothing says it starts from a brief). */
+  note?: string
 }
 
 /** What each tool says under its name (the mock's tool headers). */
@@ -39,7 +41,7 @@ const LINE: Record<string, string> = {
 
 const STATE_CLASS = (s: ReturnType<typeof stateWords>) => (s.needs ? 'needs' : s.working ? 'working' : s.text === 'Done' ? 'done' : 'draft')
 
-export function ToolPage({ client, tool, items, onNew, onOpenItem, onBack, lenses = {} }: Props) {
+export function ToolPage({ client, tool, items, onNew, onOpenItem, onBack, lenses = {}, note }: Props) {
   const [one, many] = tool.noun
   const name = clientName(client)
   const kind = tool.id === 'brief' ? 'brief' : tool.id === 'research' ? 'research' : 'other'
@@ -83,6 +85,7 @@ export function ToolPage({ client, tool, items, onNew, onOpenItem, onBack, lense
             <div className="eyebrow" id="hero-eyebrow">{name} · {many.charAt(0).toUpperCase() + many.slice(1)}</div>
             <h1 className="hero-title" id="hero-title" tabIndex={-1}>{tool.id === 'research' ? tool.name : tool.full}<span className="period-dot" aria-hidden /></h1>
             <p className="hero-sub" id="hero-sub">{LINE[tool.id] ?? ''}</p>
+            {note && <p className="nui-note" role="status" data-testid="tool-note"><b>{note}</b></p>}
           </div>
         </section>
         <section className="section-block"
@@ -91,9 +94,9 @@ export function ToolPage({ client, tool, items, onNew, onOpenItem, onBack, lense
           <h2 className="sec-title">Pick one to open, or start a new {one === 'research' ? 'research question' : one}</h2>
           <div className={`home-grid ${kind === 'brief' ? 'bm-homes' : kind === 'research' ? 'rs-homes' : ''}`}>
             {items.map(card)}
-            <button type="button" className="home-card home-new" data-testid="new-doc" onClick={onNew} aria-label={`New ${one} for ${name}`}>
-              <small>NEW</small><b>+ New {one === 'research' ? 'research question' : one}</b>
-              <span>{kind === 'brief' ? 'From notes, calls and decks' : kind === 'research' ? 'Sources pinned to every fact' : `For ${name}, theirs from the start`}</span>
+            <button type="button" className="home-card home-new" data-testid="new-doc" onClick={onNew} aria-label={startsFromBrief(tool) ? `Start ${one} for ${name} from a brief` : `New ${one} for ${name}`}>
+              <small>NEW</small><b>{startsFromBrief(tool) ? 'Start from a brief' : `+ New ${one === 'research' ? 'research question' : one}`}</b>
+              <span>{startsFromBrief(tool) ? 'Opens the Brief; Continue in makes it' : kind === 'brief' ? 'From notes, calls and decks' : kind === 'research' ? 'Sources pinned to every fact' : `For ${name}, theirs from the start`}</span>
             </button>
           </div>
           {items.length === 0 && <p className="nui-empty">Nothing yet. Start the first {one} for {name}; it is theirs from the start.</p>}

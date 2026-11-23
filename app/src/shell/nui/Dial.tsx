@@ -3,10 +3,10 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 // A client's dial on the desk, as the mock draws it (buildDial, phase 33):
-// four quadrants (Brief, Research, Deck, Production), each with its icon, its
+// five segments (Brief, Research, Territories, Production, Deck), each with its icon, its
 // name and what is in it ("YOUR CALL", "1 deck", "Agents working", "Nothing
 // yet"), a rim arc for what needs you or runs, and the client's own colour in
-// the hub, which opens the client. 1 to 4 pick a quadrant, Escape closes it.
+// the hub, which opens the client. 1 to 5 pick a quadrant, Escape closes it.
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { LibraryItem } from '../../host'
@@ -28,12 +28,13 @@ function arcD(r: number, a0: number, a1: number): string {
   return `M${f1(x0)} ${f1(y0)}A${r} ${r} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${f1(x1)} ${f1(y1)}`
 }
 
-/** The dial's four tools, in the mock's order round from the top. */
+/** The dial's five tools, in the mock's order round from the top. */
 const QUADRANTS = [
   { id: 'brief', name: 'Brief', noun: ['brief', 'briefs'] },
   { id: 'research', name: 'Research', noun: ['question', 'questions'] },
-  { id: 'deck', name: 'Deck', noun: ['deck', 'decks'] },
+  { id: 'territories', name: 'Territories', noun: ['exploration', 'explorations'] },
   { id: 'prod', name: 'Production', noun: ['film', 'films'] },
+  { id: 'deck', name: 'Deck', noun: ['deck', 'decks'] },
 ] as const
 
 type AreaState = 'needs' | 'working' | 'done' | ''
@@ -62,7 +63,7 @@ interface Props {
 
 export function Dial({ client, items, live, place, onOpenTool, onSoon, onOpenClient, onClose, focusFirst }: Props) {
   const ref = useRef<HTMLDivElement>(null)
-  // One tab stop for the four quadrants (roving): the arrows move it, and it starts on the first.
+  // One tab stop for the five quadrants (roving): the arrows move it, and it starts on the first.
   const [at, setAt] = useState(0)
   const quads = useRef<(SVGGElement | null)[]>([])
   const n = QUADRANTS.length, span = (2 * Math.PI) / n, start = -Math.PI / 2 - span / 2
@@ -78,7 +79,7 @@ export function Dial({ client, items, live, place, onOpenTool, onSoon, onOpenCli
     const onKey = (e: KeyboardEvent) => {
       if (e.altKey || e.ctrlKey || e.metaKey) return
       if (e.key === 'Escape') { e.preventDefault(); onClose(); return }
-      if (/^[1-4]$/.test(e.key)) { e.preventDefault(); pick.current(Number(e.key) - 1) }
+      if (/^[1-5]$/.test(e.key)) { e.preventDefault(); pick.current(Number(e.key) - 1) }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)

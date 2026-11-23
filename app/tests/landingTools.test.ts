@@ -11,7 +11,7 @@ import { resolve } from 'node:path'
 import { test } from 'node:test'
 
 import { formatRoute, parseRoute } from '../src/shell/route.ts'
-import { PRODUCTION_PATH, TOOLS, liveTools, toolHref } from '../src/shell/landing/tools.ts'
+import { CLIENT_TOOL_ORDER, PRODUCTION_PATH, TOOLS, liveTools, sendsToBrief, startsFromBrief, toolHref } from '../src/shell/landing/tools.ts'
 
 // `npm test` runs from app/, and the bundled test does not sit where its source does.
 const examples = resolve(process.cwd(), '..', 'crates', 'clan-sdk', 'examples')
@@ -33,7 +33,7 @@ test('every tool with an app names an id its maker really builds', () => {
 })
 
 test('Idea and Prod have no app yet, and every other tool has one', () => {
-  assert.deepEqual(TOOLS.filter(t => !t.appId).map(t => t.id), ['idea', 'prod'])
+  assert.deepEqual(TOOLS.filter(t => !t.appId).map(t => t.id), ['prod', 'idea'])
 })
 
 test('Prod opens the Production Tool at /production when the server serves it, and is Soon when not', () => {
@@ -55,4 +55,20 @@ test('Territories is a tool: it has its app, opens as a page, and its route roun
   assert.equal(formatRoute(r), '#tool-cli_0a1b2c3d-territories')
   assert.deepEqual(parseRoute('#tool-cli_0a1b2c3d-territories'), r)
   assert.deepEqual(parseRoute('#tool-cli_0a1b2c3d-nothing'), { level: 'agency' })
+})
+
+test('a client lists its tools Brief, Research, Territories, Production, Deck', () => {
+  assert.deepEqual(CLIENT_TOOL_ORDER, ['brief', 'research', 'territories', 'prod', 'deck'])
+  assert.deepEqual(TOOLS.map(t => t.id).filter(id => (CLIENT_TOOL_ORDER as readonly string[]).includes(id)), [...CLIENT_TOOL_ORDER])
+})
+
+test('Territories with no documents goes to the Brief; with some it opens as its page; "+" always starts from a brief', () => {
+  const t = TOOLS.find(x => x.id === 'territories')!
+  assert.equal(sendsToBrief(t, 0), true)
+  assert.equal(sendsToBrief(t, 2), false)
+  assert.equal(startsFromBrief(t), true)
+  for (const o of TOOLS.filter(x => x.id !== 'territories')) {
+    assert.equal(sendsToBrief(o, 0), false, `${o.id} opens its own page when empty`)
+    assert.equal(startsFromBrief(o), false)
+  }
 })
