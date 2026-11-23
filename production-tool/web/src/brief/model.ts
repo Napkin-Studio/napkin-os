@@ -181,13 +181,20 @@ const CARRY_LABEL = /^(?:the\s+(?:film|ad|card|end card)\s+)?(?:must\s+|should\s
  *  confirm: …" tail. Undefined: it names none. The film's end card carries it (UAT 2026-11-22: the end card had no
  *  legal line; 2026-11-24: a quoted caffeine warning was missed). */
 export function legalOf(spine: BriefSpine | undefined): string | undefined {
-  for (const m of spine?.mandatories ?? []) {
+  const mandatories = spine?.mandatories ?? []
+  // The "Include '…'" / "must carry …" / "Carry: …" forms win over any other mandatory that merely mentions legal.
+  const forms = (m: string) => /\b(?:must\s+)?(?:carry|carries|include)\b\s*[:\-\u2013\u2014]?\s*['"\u2018\u201c]/i.test(m)
+  for (const m of [...mandatories.filter(forms), ...mandatories.filter((x) => !forms(x))]) {
     const text = m.trim().replace(/\s*\bTo confirm\s*:[\s\S]*$/i, '').trim()
     const keyword = /\b(legal|disclaimer|small print|drink(?:\s+\w+)?\s+responsibl[ey]|responsibl[ey]|18\+|over[\s-]18|t&cs?|terms\s+(?:and|&)\s+conditions|terms apply|age[\s-]?(?:gate|verif)\w*)\b/i.test(text)
     const warned = WARNING.test(text) && (CARRY.test(text) || /\bwarning\b/i.test(text) || !!quoted(text))
     const carried = /\b(?:must\s+)?carry\b\s*[:\-\u2013\u2014'"\u2018\u201c]/i.test(text)
-    if (!keyword && !warned && !carried) continue
-    const line = (quoted(text) ?? text.replace(LEGAL_LABEL, '').replace(WARNING_LABEL, '').replace(CARRY_LABEL, '').replace(LINE_VERB, '')).replace(/^["'\u201c\u2018]+|["'\u201d\u2019]+$/g, '').trim()
+    if (!keyword && !warned && !carried && !(forms(m) && !/\b(?:end(?:s|ing)?\s+(?:on|with|line)|end[\s-]?line|sign[\s-]?off|tag[\s-]?line|brand\s+line)\b/i.test(m))) continue
+    const q = quoted(text)
+    // Only a quoted sentence-like line counts (words and a full stop, or a warning phrase): a stray quoted word
+    // near "legal" ('Cornish') is never the legal line, and the mandatory is skipped, not read whole.
+    if (q !== undefined && !(/\S\s+\S/.test(q) && (/[.!?]/.test(q) || WARNING.test(q)))) continue
+    const line = (q ?? text.replace(LEGAL_LABEL, '').replace(WARNING_LABEL, '').replace(CARRY_LABEL, '').replace(LINE_VERB, '')).replace(/^["'\u201c\u2018]+|["'\u201d\u2019]+$/g, '').trim()
     if (line) return line.slice(0, 200)
   }
   return undefined
