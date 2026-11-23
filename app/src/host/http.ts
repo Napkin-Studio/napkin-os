@@ -33,6 +33,7 @@ import type {
   OpenResult,
   RecentDoc,
   SpinoffTarget,
+  TrashItem,
   Unlisten,
   UploadedAsset,
   UpstreamUpdateReply,
@@ -409,6 +410,12 @@ export const httpHost: Host = {
     restore: id => json<ClientRecord>(`/clients/${encodeURIComponent(id)}/restore`, { method: 'POST' }),
     legacy: () => json<LegacyName[]>('/clients/legacy'),
     adopt: names => json<Adopted>('/clients/adopt', postJson({ names })),
+  },
+
+  trash: {
+    list: client => json<TrashItem[]>(`/trash${client ? `?client=${encodeURIComponent(client)}` : ''}`),
+    move: async path => { await json<unknown>(`/d/${encodeURIComponent(path)}`, { method: 'DELETE' }) },
+    restore: async path => { await json<unknown>(`/d/${encodeURIComponent(path)}/restore`, { method: 'POST' }) },
   },
 
   spinoffTargets: () => json<SpinoffTarget[]>(`/d/${requireDoc()}/spinoff-targets`),

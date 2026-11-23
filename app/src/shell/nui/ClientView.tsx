@@ -20,6 +20,10 @@ import { clientLine, clientLook, clientName, monogramOf, stateWords, callsIn, ty
 import { ToolIcon } from './icons'
 import { Pop } from './Pop'
 import { usePop } from './popKit'
+import { TrashConfirm } from './TrashConfirm'
+import { TrashToastView } from './TrashToast'
+import type { TrashDesk, TrashState } from './trashDesk'
+import './trash.css'
 
 const GROUPS = [
   { tool: 'brief', label: 'Briefs', kind: 'Brief', icon: 'brief' },
@@ -55,10 +59,15 @@ interface Props {
   /** Rename and archive, when the host lets this screen look after the registry. */
   onRename?: (name: string) => Promise<string | null>
   onArchive?: () => Promise<string | null>
+  /** This client's Trash: a ⋯ on every document, and the Trash link. Absent where the host has none. */
+  trash?: { desk: TrashDesk; state: TrashState }
+  onOpenTrash?: () => void
 }
 
-export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, onOpenTool, onSoon, onDecisions, onRename, onArchive }: Props) {
-  const pop = usePop<'more' | 'deck'>()
+export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, onOpenTool, onSoon, onDecisions, onRename, onArchive, trash, onOpenTrash }: Props) {
+  const pop = usePop<'more' | 'deck' | 'row'>()
+  const [rowFor, setRowFor] = useState<LibraryItem | null>(null)
+  const [ask, setAsk] = useState<LibraryItem | null>(null)
   const [mode, setMode] = useState<'idle' | 'rename' | 'archive'>('idle')
   const look = clientLook(c.id, c.name)
   // The registry's display name where it shows; Rename still edits the stored name.
@@ -100,13 +109,22 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
     const t = toolOfApp(i.app_id)
     const g = GROUPS.find(x => x.tool === t?.id)
     const st = stateWords(i)
-    return (
-      <button key={i.path} type="button" className="cp-row" data-testid="work-item" onClick={() => onOpenItem(i.path)}>
+    const open = (
+      <button type="button" className="cp-row" data-testid="work-item" onClick={() => onOpenItem(i.path)}>
         <span className={`cp-ico k-${g?.icon ?? 'production'}`}><ToolIcon tool={g?.icon ?? 'production'} /></span>
         <span className="cp-t"><b>{i.title || 'Untitled'}</b><small>{g?.kind ?? 'Other'}</small></span>
         <span className={`cp-st ${st.needs ? 'needs' : st.working ? 'working' : ''}`}>{st.text}</span>
         <span className="cp-d">{short(i.updated_at)}</span>
       </button>
+    )
+    if (!trash) return <div key={i.path} className="cp-rw">{open}</div>
+    return (
+      <div key={i.path} className="cp-rw">
+        {open}
+        <button type="button" className="cp-dots" data-testid="row-more" aria-label={`Options for ${i.title || 'Untitled'}`} aria-haspopup="menu"
+          aria-expanded={pop.open?.key === 'row' && rowFor?.path === i.path}
+          onClick={e => { setRowFor(i); pop.toggle('row', e.currentTarget) }}>⋯</button>
+      </div>
     )
   }
 
@@ -223,6 +241,9 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
             )}
           </section>
 
+          {trash && onOpenTrash && trash.state.rows.length > 0 && (
+            <p className="cp-record cp-trash"><button type="button" className="side-link" data-testid="trash-link" onClick={onOpenTrash}>Trash ({trash.state.rows.length})</button></p>
+          )}
           {read > 0 && (
             <p className="cp-record">
               <button type="button" className="side-link" onClick={onDecisions} data-testid="client-record">
@@ -239,6 +260,13 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
           {onArchive && <button type="button" role="menuitem" onClick={() => { pop.close(false); setMode('archive') }}>Archive<small>Off the desk; restore it any time</small></button>}
         </Pop>
       )}
+      {pop.open?.key === 'row' && rowFor && (
+        <Pop anchor={pop.open.anchor} align="right" onClose={pop.close} label={`Options for ${rowFor.title || 'Untitled'}`} testid="row-menu">
+          <button type="button" role="menuitem" onClick={() => { pop.close(false); setAsk(rowFor) }}>Move to Trash<small>Restorable for 30 days</small></button>
+        </Pop>
+      )}
+      {ask && trash && <TrashConfirm title={ask.title || 'Untitled'} onCancel={() => setAsk(null)} onConfirm={() => { const p = ask.path; setAsk(null); void trash.desk.move(p) }} />}
+      {trash && <TrashToastView state={trash.state} desk={trash.desk} />}
       {pop.open?.key === 'deck' && (
         <Pop anchor={pop.open.anchor} align="right" onClose={pop.close} label="Start a deck from" testid="deck-from">
           <div className="pp-h">Start a deck from</div>

@@ -21,6 +21,7 @@
 
 import { Fragment, useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { LogoSpinner } from '../brand/LogoSpinner'
+import { TrashConfirm } from '../shell/nui/TrashConfirm'
 import { accountItems, continueItems, docMenuItems, linkList, linkedChip, linkedRows, plural, pressContinue, shareItems, type Account, type BarPlace, type ClientChip, type Crew, type DocBar, type LinkRow, type LinkedRow, type MenuItem } from './barMenus'
 import { DeepOMark } from '../brand/DeepOMark'
 import type { MarkTarget } from './medallionMotion'
@@ -447,6 +448,7 @@ export default function Toolbar({
     // Measuring the laid-out bar, then stepping one level: a layout effect's own job, settled before paint.
     if (el.scrollWidth > el.clientWidth + 1 && fit < 5) setFit(f => f + 1)
   }, [sig, fit])
+  const [askTrash, setAskTrash] = useState(false)
   // The tba-menu sits 40px under the app slot, at the button's own left (the mock's .tba-menu).
   const underSlot = useCallback((r: DOMRect) => {
     const slot = appRef.current?.getBoundingClientRect()
@@ -648,10 +650,11 @@ export default function Toolbar({
         </header>
       </div>
       {popovers}
+      {askTrash && doc.onTrash && <TrashConfirm title={doc.title ?? 'This document'} onCancel={() => setAskTrash(false)} onConfirm={() => { setAskTrash(false); doc.onTrash?.() }} />}
       {pop.open?.key === 'doc' && (
         <Pop anchor={pop.open.anchor} onClose={pop.close} label="Document" testid="doc-menu">
           <div className="pp-h">{doc.title ?? 'This document'}</div>
-          <Rows items={docMenuItems(doc, () => setRenaming(true))} close={pop.close} />
+          <Rows items={docMenuItems({ ...doc, onTrash: doc.onTrash && (() => setAskTrash(true)) }, () => setRenaming(true))} close={pop.close} />
         </Pop>
       )}
       {pop.open?.key === 'cont' && (
