@@ -68,8 +68,7 @@ async function boot() {
 
   // The person's projects on the relay (features/personal-workspaces.clan): saved from here, listed
   // on Home and opened from any browser under the same name. Not on the in-browser mock relay.
-  const relayUrl = import.meta.env.VITE_RELAY_URL as string | undefined
-  const server = relay.kind === 'http' && relayUrl ? new ProjectServer({ base: relayUrl, signedIn: () => !!app.get().me, onUnauthorised: refused }) : undefined
+  const server = relay.kind === 'http' ? new ProjectServer({ signedIn: () => !!app.get().me, onUnauthorised: refused }) : undefined
   const shell = new Shell({ relay, app, index, storage, remoteConfig, makeClan: browserClan, server })
   // A deep link (/production/d/:doc/script/:scriptId) opens its project; else back where the person was.
   const router = new Router()

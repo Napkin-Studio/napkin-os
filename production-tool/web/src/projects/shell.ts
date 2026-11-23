@@ -377,7 +377,7 @@ export class Shell {
     let doc: ProductionDocument
     try {
       doc = await store.open(got.bytes)
-      if (server) await fetchAssets(doc, server)
+      if (server) await fetchAssets(doc, server, id)
     } finally {
       await store.close().catch(() => {})
     }
@@ -439,7 +439,7 @@ export class Shell {
     const { storage, makeClan, index, server } = this.deps
     const id = opts.id
     const fetchFirst = async (doc: ProductionDocument) => {
-      if (opts.fetchAssets && server) await fetchAssets(doc, server)
+      if (opts.fetchAssets && server) await fetchAssets(doc, server, opts.id)
     }
     let doc: ProductionDocument
     if (unpacked.clan) {

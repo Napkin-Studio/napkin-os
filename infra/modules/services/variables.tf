@@ -107,6 +107,16 @@ variable "production_relay_secret_arn" {
   }
 }
 
+variable "production_service_key_arn" {
+  description = "Secrets Manager ARN of napkin-web's service key for the relay (NAPKIN_PRODUCTION_SERVICE_KEY; the hackathon stack's SERVICE_KEY, napkin-hackathon/SERVICE_KEY): every call but the Deck's picture pass carries it as a bearer and signs the user claim with it (features/production-jobs-via-host.clan). Set together with production_relay_url."
+  type        = string
+  default     = ""
+  validation {
+    condition     = (var.production_service_key_arn == "") == (var.production_relay_url == "")
+    error_message = "production_relay_url and production_service_key_arn are set together, or neither"
+  }
+}
+
 variable "middleware_runlog" {
   description = "Keep the middleware's per-job run log (sizes and costs; bodies only with middleware_runlog_bodies) on web's EFS under /data/_runlog, where napkin-web serves and purges it (NAPKIN_RUNLOG_DIR; features/dogfood-log-quality.clan). Dogfood environments only."
   type        = bool

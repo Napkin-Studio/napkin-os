@@ -75,7 +75,7 @@ describe('the upload is bound to its hash', () => {
       return new Response('', { status: 200 })
     }))
     const blob = new Blob([new TextEncoder().encode('x')], { type: 'image/png' })
-    await new HttpRelay('http://relay.test').upload(blob, 'image/png')
+    await new HttpRelay({ host: '/api', tenant: async () => 't1', doc: () => 'doc-1' }).upload(blob, 'image/png')
     const put = calls.find(([url]) => url.startsWith('https://bucket.test'))!
     expect((put[1]?.headers as Record<string, string>)['x-amz-checksum-sha256']).toBe('LXEWQrcmsEQBYnyp+6wy9chTD7GQPMTbAiWHF5IaSIE=')
   })

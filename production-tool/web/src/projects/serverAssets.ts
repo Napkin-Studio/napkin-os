@@ -73,7 +73,7 @@ export class MissingPictures extends NotAProject {}
 /** How many pictures and clips come down at once (a browser keeps about six connections to one host). */
 export const FETCH_AT_ONCE = 6
 
-export async function fetchAssets(doc: ProductionDocument, server: Pick<ProjectServer, 'where' | 'download'>): Promise<number> {
+export async function fetchAssets(doc: ProductionDocument, server: Pick<ProjectServer, 'where' | 'download'>, docId: string): Promise<number> {
   const missing: string[] = []
   let got = 0
   let bytesIn = 0
@@ -86,7 +86,7 @@ export async function fetchAssets(doc: ProductionDocument, server: Pick<ProjectS
     const tries = mediaUrls(a)
     let bytes: Uint8Array | null = null
     for (let i = 0; i <= tries.length && !bytes; i++) {
-      const url = i < tries.length ? tries[i] : await server.where(a.sha256, a.mime, a.bytes ?? 1).catch(() => null)
+      const url = i < tries.length ? tries[i] : await server.where(docId, a.sha256, a.mime, a.bytes ?? 1).catch(() => null)
       if (!url) break
       const b = await server.download(url)
       if (b && (await sha256Hex(b)) === hexOf(a.sha256)) bytes = b

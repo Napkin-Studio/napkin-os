@@ -77,7 +77,7 @@ class FakeRelay {
     }
     if (this.offline) throw new TypeError('Failed to fetch')
     if (!this.identity) return this.json(401, { error: 'Sign in again.' })
-    if (url === '/relay/uploads') {
+    if (/^\/api\/t\/t1\/d\/[^/]+\/production\/uploads$/.test(url)) {
       const req = JSON.parse(String(init.body)) as { sha256: string }
       return this.json(200, this.uploads.has(req.sha256) ? { exists: true, url: `${CDN}/in/${req.sha256}` } : { exists: false, putUrl: 'x', url: `${CDN}/in/${req.sha256}` })
     }
@@ -157,7 +157,7 @@ function browser(fake: FakeRelay) {
   const mock = new MockRelay({ renderer, now: () => 0, delayMs: 10, persistKey: null })
   // The real relay over HTTP, as far as saving is concerned.
   const relay = Object.assign(Object.create(mock) as Relay, { kind: 'http' as const, upload: fake.upload })
-  const server = new ProjectServer({ base: '/relay', host: '/api', signedIn: () => !!app.get().me, fetchFn: fake.fetch as typeof fetch })
+  const server = new ProjectServer({ host: '/api', signedIn: () => !!app.get().me, fetchFn: fake.fetch as typeof fetch })
   const shell = new Shell({ relay, app, index, storage, remoteConfig: null, makeClan, summaryDelayMs: 1, server })
   return { storage, index, shell, app }
 }
@@ -281,7 +281,7 @@ describe('a project saved in one browser opens in another', () => {
     const a: DocAsset = { sha256: `sha256:${'0'.repeat(64)}`, kind: 'video', mime: 'video/mp4', origin: 'generated' }
     expect(describeAsset(doc, a)).toBe('a clip (00000000)')
     const { fetchAssets } = await import('./serverAssets')
-    const err = await fetchAssets({ ...doc, assets: { [a.sha256]: a } }, { where: async () => null, download: async () => new TextEncoder().encode('not it') }).catch((x: unknown) => x)
+    const err = await fetchAssets({ ...doc, assets: { [a.sha256]: a } }, { where: async () => null, download: async () => new TextEncoder().encode('not it') }, 'doc-1').catch((x: unknown) => x)
     expect(err).toBeInstanceOf(MissingPictures)
   })
 })
@@ -309,7 +309,7 @@ describe('a fresh browser brings the pictures down', () => {
       },
     }
     const doc = { refs: {}, shots: {}, frames: {}, takes: {}, renders: {}, exports: {}, assets: Object.fromEntries(pics.map((p) => [p.a.sha256, p.a])) } as unknown as ProductionDocument
-    expect(await fetchAssets(doc, server)).toBe(14)
+    expect(await fetchAssets(doc, server, 'doc-1')).toBe(14)
     expect(most).toBeGreaterThan(1)
     expect(most).toBeLessThanOrEqual(FETCH_AT_ONCE)
     for (const p of pics) expect(await getBlob(p.a.sha256)).toBeDefined()
@@ -538,7 +538,7 @@ describe('the host client', () => {
       seen.push(new Headers(i?.headers))
       return fake.fetch(u, i)
     }) as typeof fetch
-    const server = new ProjectServer({ base: '/relay', host: '/api/', signedIn: () => true, fetchFn })
+    const server = new ProjectServer({ host: '/api/', signedIn: () => true, fetchFn })
     const id = await server.create('Ad')
     const first = await server.open(id)
     const saved = await server.save(id, new Uint8Array([80, 75, 3, 4]), { reason: 'manual', ifMatch: first.etag })
@@ -553,14 +553,14 @@ describe('the host client', () => {
     expect((stale as SaveConflict).latest).toBe(saved.etag)
     expect((await server.version(id))?.etag).toBe(saved.etag)
     await expect(server.save(id, new Uint8Array([1]), { reason: 'interval' })).rejects.toThrow('based on')
-    await expect(new ProjectServer({ base: '/relay', signedIn: () => false, fetchFn }).list()).rejects.toThrow('Sign in through Napkin Studio.')
+    await expect(new ProjectServer({ signedIn: () => false, fetchFn }).list()).rejects.toThrow('Sign in through Napkin Studio.')
     fake.identity = false
     await expect(server.list()).rejects.toMatchObject({ status: 401 })
   })
 
   it('lists only the library\'s Production documents, newest first', async () => {
     const fake = new FakeRelay()
-    const server = new ProjectServer({ base: '/relay', host: '/api', signedIn: () => true, fetchFn: fake.fetch as typeof fetch })
+    const server = new ProjectServer({ host: '/api', signedIn: () => true, fetchFn: fake.fetch as typeof fetch })
     const a = await server.create('A')
     const b = await server.create('B')
     expect((await server.list()).map((r) => r.id)).toEqual([b, a])

@@ -11,44 +11,50 @@
 //!   (features/production-app-page.clan).
 //! * Every page of the tool carries one Content-Security-Policy, report-only
 //!   for now; violations come to `POST /production/csp-report` and the log.
-//! * `/production/api/*`: a proxy to the relay, `{relay}/api/<rest>?<query>`.
-//!   It answers only for a signed-in account and adds one signed, short-lived
-//!   statement of who is asking (`X-Napkin-Identity`, see
-//!   docs/contracts/production-tool-identity.md). The session cookie never
-//!   leaves this server.
+//! * The tool's calls to the relay are napkin-web's own routes under the shell
+//!   API, `/api/t/{tenant}/production/…` and `/api/t/{tenant}/d/{doc}/production/…`
+//!   ([`api_router`], features/production-jobs-via-host.clan). napkin-web calls
+//!   the relay itself with a service credential and a claim it mints from the
+//!   session ([`crate::relay_client`]); nothing the browser sends is a credential
+//!   and the browser never reaches the relay. `/production/api/*` is gone.
+//! * A job's outcome waits in the document's inbox until the tool lands it
+//!   ([`napkin_host::inbox`]); the shell's library watcher settles a job whose
+//!   tab was closed ([`settle`]).
 //!
 //! Mounted only when `NAPKIN_PRODUCTION_RELAY_URL` is set in accounts mode.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use axum::body::Body;
-use axum::extract::{Query, Request, State};
+use axum::body::Bytes;
+use axum::extract::{Path as UrlPath, Query, Request, State};
 use axum::http::{header, HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Redirect, Response};
-use axum::routing::{get, post};
-use axum::Router;
+use axum::routing::{any, get, post};
+use axum::{Extension, Router};
 use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64;
 use base64::Engine as _;
 use hmac::{Hmac, Mac};
+use napkin_host::inbox::{self, Entry, InboxStore, Put, Settled};
+use napkin_host::DocId;
 use serde::Serialize;
-use sha2::{Digest, Sha256};
+use sha2::Sha256;
 use tower_http::services::{ServeDir, ServeFile};
 
 use crate::auth::Account;
-use crate::tenant::{Identity, Mode, TenantId};
+use crate::relay_client::{now_s, Answer, RelayClient};
+use crate::state::AppCtx;
+use crate::tenant::TenantId;
 
-/// The header the relay reads.
-pub const IDENTITY_HEADER: &str = "x-napkin-identity";
+pub use crate::relay_client::body_hash;
 /// The largest body the proxy forwards: a Function URL takes 6 MB, and binary
 /// bodies arrive base64-encoded (4.5 MB becomes 6 MB).
 pub const BODY_MAX: usize = 4_500_000;
 /// Above the relay Lambda's 60 s timeout (infra/envs/hackathon/lambda.tf).
 pub const TIMEOUT: Duration = Duration::from_secs(65);
-/// How long an assertion is good for.
-pub const ASSERTION_TTL_S: u64 = 60;
 /// How long an assets pass is good for: a deck build's picture step, with room
 /// (docs/contracts/production-tool-identity.md, "The assets pass"). The relay
 /// refuses any pass that lives past an hour.
@@ -58,33 +64,22 @@ pub const MIN_SECRET: usize = 32;
 /// Where the image puts the tool's build.
 pub const DEFAULT_STATIC: &str = "/srv/napkin/production";
 
-/// Request headers the relay is given, and nothing else (projects/server.ts,
-/// relay service.py).
-const FORWARD: [&str; 3] = ["content-type", "if-match", "x-clan-reason"];
-/// Response headers passed back to the tool. `location`: GET /assets/{sha}
-/// answers 302 to the picture's URL, which the browser follows (the client
-/// below never does; features/prod-assets-route.clan).
-const PASS_BACK: [&str; 5] = [
-    "content-type",
-    "cache-control",
-    "etag",
-    "x-saved-at",
-    "location",
-];
-
 /// The proxy's settings, from the environment (`main.rs`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Config {
     /// The relay's base URL, without a trailing slash.
     pub relay_url: String,
-    /// The signing key: the first of the comma-separated keys in the secret.
+    /// The assets pass's signing key: the first of the comma-separated keys in the secret.
     pub key: Vec<u8>,
+    /// The service key napkin-web calls the relay with (the first of `new,old`).
+    pub service_key: Vec<u8>,
     /// The tool's build.
     pub static_dir: PathBuf,
 }
 
 impl Config {
-    /// `NAPKIN_PRODUCTION_RELAY_URL`, `NAPKIN_PRODUCTION_RELAY_SECRET` and
+    /// `NAPKIN_PRODUCTION_RELAY_URL`, `NAPKIN_PRODUCTION_RELAY_SECRET` (the
+    /// assets pass), `NAPKIN_PRODUCTION_SERVICE_KEY` (every other call) and
     /// `NAPKIN_PRODUCTION_STATIC`. `None` when the URL is unset (no
     /// `/production`). Refused: a URL with anonymous sign-in (anyone could
     /// spend), or a key under 32 bytes.
@@ -92,6 +87,7 @@ impl Config {
         accounts: bool,
         url: Option<&str>,
         secret: Option<&str>,
+        service_key: Option<&str>,
         static_dir: Option<&str>,
     ) -> Result<Option<Self>, String> {
         let Some(url) = url.map(str::trim).filter(|u| !u.is_empty()) else {
@@ -116,9 +112,21 @@ impl Config {
                 "NAPKIN_PRODUCTION_RELAY_SECRET must be at least {MIN_SECRET} bytes"
             ));
         }
+        let service = service_key
+            .unwrap_or_default()
+            .split(',')
+            .next()
+            .unwrap_or_default()
+            .trim();
+        if service.len() < MIN_SECRET {
+            return Err(format!(
+                "NAPKIN_PRODUCTION_SERVICE_KEY must be at least {MIN_SECRET} bytes"
+            ));
+        }
         Ok(Some(Self {
             relay_url: url.trim_end_matches('/').to_string(),
             key: key.as_bytes().to_vec(),
+            service_key: service.as_bytes().to_vec(),
             static_dir: PathBuf::from(
                 static_dir
                     .map(str::trim)
@@ -139,7 +147,8 @@ pub struct Relay {
     pub timeout: Duration,
     /// The https base pictures come from (NAPKIN_PRODUCTION_MEDIA_BASE): the CSP names its origin.
     pub media_base: Option<String>,
-    client: reqwest::Client,
+    /// How napkin-web calls the relay (service credential and user claim).
+    pub client: RelayClient,
 }
 
 impl Relay {
@@ -149,11 +158,7 @@ impl Relay {
 
     /// The same proxy with another timeout (tests).
     pub fn with_timeout(config: Config, timeout: Duration) -> Self {
-        let client = reqwest::Client::builder()
-            .timeout(timeout)
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .expect("the HTTP client builds");
+        let client = RelayClient::new(&config.relay_url, &config.service_key, timeout);
         Self {
             config,
             timeout,
@@ -171,7 +176,8 @@ impl Relay {
 
 // ── The assertion ────────────────────────────────────────────────────────────
 
-/// What the relay is told, in the order the contract writes it.
+/// What an assets pass says, in the order the contract writes it (the per-user
+/// `relay` assertion is gone: napkin-web's other calls use the service credential).
 #[derive(Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct Claims {
     pub u: String,
@@ -185,30 +191,6 @@ pub struct Claims {
     pub m: String,
     pub p: String,
     pub bh: String,
-}
-
-impl Claims {
-    /// The claims for one relay call by `account`, made at `now`.
-    pub fn for_request(
-        account: &Account,
-        method: &str,
-        path_and_query: &str,
-        body: &[u8],
-        now: u64,
-    ) -> Self {
-        Self {
-            u: account.username.clone(),
-            a: account.agency.clone(),
-            t: TenantId::of_agency(&account.agency).to_string(),
-            n: account.name.clone(),
-            aud: "relay".into(),
-            iat: now,
-            exp: now + ASSERTION_TTL_S,
-            m: method.to_ascii_uppercase(),
-            p: path_and_query.to_string(),
-            bh: body_hash(body),
-        }
-    }
 }
 
 impl Claims {
@@ -245,14 +227,6 @@ impl Relay {
     }
 }
 
-/// SHA-256 of the body, lower-case hex.
-pub fn body_hash(body: &[u8]) -> String {
-    Sha256::digest(body)
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect()
-}
-
 /// `v1.<b64url claims>.<b64url HMAC-SHA256(key, "v1." + b64url claims)>`.
 pub fn sign(key: &[u8], claims: &Claims) -> String {
     let json = serde_json::to_vec(claims).expect("claims serialise");
@@ -262,34 +236,18 @@ pub fn sign(key: &[u8], claims: &Claims) -> String {
     format!("{head}.{}", B64.encode(mac.finalize().into_bytes()))
 }
 
-fn now_s() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0)
-}
-
 // ── The routes ───────────────────────────────────────────────────────────────
 
-/// `/production` and everything under it (merged by `router_full`): the API
-/// proxy behind the session layer, and the tool's build for everything else.
-pub fn router<S: Clone + Send + Sync + 'static>(
-    relay: Arc<Relay>,
-    identity: Arc<Identity>,
-) -> Router<S> {
-    let api = Router::new()
-        .fallback(proxy)
-        .with_state(relay.clone())
-        .layer(axum::middleware::from_fn_with_state(
-            identity.clone(),
-            crate::tenant::layer,
-        ))
-        .layer(axum::Extension(identity));
+/// `/production` and everything under it (merged by `router_full`): the tool's
+/// build, and a 404 for the retired `/production/api/*`.
+pub fn router<S: Clone + Send + Sync + 'static>(relay: Arc<Relay>) -> Router<S> {
     let dir = &relay.config.static_dir;
     let index = dir.join("index.html");
     let policy = Arc::new(csp(relay.media_base.as_deref()));
     let tool = Router::new()
-        .nest("/api", api)
+        // the tool's calls are the shell API's now (api_router); an old page asking here is told so
+        .route("/api", any(gone))
+        .route("/api/{*rest}", any(gone))
         .route("/csp-report", post(csp_report))
         // a project is a page: the library document's id; its sub-routes (/d/{doc}/video ...) fall through
         .route_service("/d/{doc}", ServeFile::new(&index))
@@ -418,32 +376,27 @@ async fn cache_headers(request: Request, next: Next) -> Response {
     response
 }
 
-fn json(status: StatusCode, body: serde_json::Value) -> Response {
-    Response::builder()
-        .status(status)
-        .header(header::CONTENT_TYPE, "application/json")
-        .header(header::CACHE_CONTROL, "no-store")
-        .body(Body::from(body.to_string()))
-        .unwrap()
+fn answer(a: Answer) -> Response {
+    let mut response = Response::builder()
+        .status(a.status)
+        .body(Body::from(a.body))
+        .unwrap();
+    *response.headers_mut() = a.headers;
+    response
 }
 
 /// The relay's error shape (common.schema.json).
 fn relay_error(status: StatusCode, code: &str, message: &str, retryable: bool) -> Response {
-    json(
-        status,
-        serde_json::json!({"error": {"code": code, "message": message, "retryable": retryable}}),
-    )
+    answer(Answer::error(status, code, message, retryable))
 }
 
-/// The same 401 the session layer gives, so the tool reads one shape.
-fn sign_in_first(identity: &Identity) -> Response {
-    let password = match &identity.mode {
-        Mode::Accounts { provider, .. } => provider.uses_passwords(),
-        Mode::Anonymous => false,
-    };
-    json(
-        StatusCode::UNAUTHORIZED,
-        serde_json::json!({"ok": false, "error": "sign in", "signin": true, "password": password}),
+/// `/production/api/*`, retired: a stale page learns to reload.
+async fn gone() -> Response {
+    relay_error(
+        StatusCode::NOT_FOUND,
+        "not_found",
+        "Reload the page: Production now talks to Napkin Studio, not to a separate address.",
+        false,
     )
 }
 
@@ -466,38 +419,119 @@ fn foreign_origin(headers: &HeaderMap) -> bool {
     }
 }
 
-/// What the relay answers to the tool, and so the only paths napkin-web signs an identity for:
-/// jobs, uploads, pictures (assets), the person, config, the shelves, the log and the dogfood
-/// record. Documents, lists and saves are napkin-web's own (the library); they never reach the relay
-/// (features/production-app-page.clan, TEST-PLAN S2-2).
-fn relay_path(rest: &str) -> bool {
-    [
-        "/jobs", "/uploads", "/assets", "/me", "/config", "/health", "/library", "/log", "/dogfood",
-    ]
-    .iter()
-    .any(|p| rest == *p || rest.strip_prefix(p).is_some_and(|r| r.starts_with('/')))
-}
-
-/// The relay's retired document routes (features/production-in-library.clan):
-/// projects live in the library of napkin-web now, so a stale page asking the
-/// relay for them gets a 404 here and never reaches it.
-fn retired(rest: &str) -> bool {
-    ["/clan", "/projects"]
+fn under(rest: &str, prefixes: &[&str]) -> bool {
+    prefixes
         .iter()
         .any(|p| rest == *p || rest.strip_prefix(p).is_some_and(|r| r.starts_with('/')))
 }
 
-async fn proxy(State(relay): State<Arc<Relay>>, request: Request) -> Response {
-    let (parts, body) = request.into_parts();
-    let identity = parts.extensions.get::<Arc<Identity>>().cloned();
-    // The session layer lets /auth/* and /healthz through signed out; the
-    // relay is never reached without an account.
-    let Some(account) = parts.extensions.get::<Account>().cloned() else {
-        return match identity {
-            Some(i) => sign_in_first(&i),
-            None => sign_in_first(&Identity::anonymous(false)),
-        };
+/// What the person's workspace asks of the relay with no document: who they are, the
+/// config, the agency's shelves and the tool's log. Documents, lists and saves are
+/// napkin-web's own (the library); they never reach the relay (TEST-PLAN S2-2).
+const FREE: [&str; 5] = ["/me", "/config", "/health", "/library", "/log"];
+/// What belongs to one document: its jobs, its uploads and its pictures.
+const BOUND: [&str; 3] = ["/jobs", "/uploads", "/assets"];
+
+// ── The typed routes ─────────────────────────────────────────────────────────
+
+/// The Production routes of the shell API (merged into `api::router`):
+///
+/// ```text
+/// ANY  /t/{t}/production/{me,config,health,library/..,log}          no document
+/// ANY  /t/{t}/d/{doc}/production/{jobs/..,uploads,assets/..}        the document's own calls
+/// GET  /t/{t}/d/{doc}/production/inbox                              outcomes waiting to land
+/// POST /t/{t}/d/{doc}/production/inbox/{job}/ack                    the tool has landed one
+/// ```
+///
+/// A document route answers only for a Production document of the caller's workspace
+/// and puts its id in the relay claim.
+pub fn api_router() -> Router<Arc<AppCtx>> {
+    Router::new()
+        .route("/t/{tenant}/production/{*rest}", any(free_call))
+        .route("/t/{tenant}/d/{doc}/production/inbox", get(inbox_list))
+        .route(
+            "/t/{tenant}/d/{doc}/production/inbox/{job}/ack",
+            post(inbox_ack),
+        )
+        .route("/t/{tenant}/d/{doc}/production/{*rest}", any(doc_call))
+}
+
+type Who = Option<Extension<Account>>;
+type Tool = Option<Extension<Arc<Relay>>>;
+
+fn not_here() -> Response {
+    relay_error(
+        StatusCode::NOT_FOUND,
+        "not_found",
+        "Production is not set up on this server.",
+        false,
+    )
+}
+
+fn sign_in() -> Response {
+    relay_error(
+        StatusCode::UNAUTHORIZED,
+        "unauthorised",
+        "Sign in to Napkin Studio to use Production.",
+        false,
+    )
+}
+
+async fn free_call(
+    State(ctx): State<Arc<AppCtx>>,
+    crate::tenant::Tenant(tenant): crate::tenant::Tenant,
+    relay: Tool,
+    account: Who,
+    UrlPath((_t, rest)): UrlPath<(String, String)>,
+    request: Request,
+) -> Response {
+    call(&ctx, &tenant, relay, account, None, &rest, request).await
+}
+
+async fn doc_call(
+    State(ctx): State<Arc<AppCtx>>,
+    crate::tenant::Tenant(tenant): crate::tenant::Tenant,
+    relay: Tool,
+    account: Who,
+    UrlPath((_t, doc, rest)): UrlPath<(String, String, String)>,
+    request: Request,
+) -> Response {
+    call(&ctx, &tenant, relay, account, Some(doc), &rest, request).await
+}
+
+/// `doc` is a Production document of this tenant's library, or a 404 in the relay's shape.
+fn production_doc(ctx: &AppCtx, tenant: &TenantId, doc: &str) -> Result<DocId, Response> {
+    let missing = || {
+        relay_error(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            "This project is not in your library.",
+            false,
+        )
     };
+    let (_ws, session, id) = crate::api::doc_session(ctx, tenant, doc).map_err(|_| missing())?;
+    if session.app_id().as_deref() != Some(crate::save::PRODUCTION_APP_ID) {
+        return Err(missing());
+    }
+    Ok(id)
+}
+
+async fn call(
+    ctx: &AppCtx,
+    tenant: &TenantId,
+    relay: Tool,
+    account: Who,
+    doc: Option<String>,
+    rest: &str,
+    request: Request,
+) -> Response {
+    let Some(Extension(relay)) = relay else {
+        return not_here();
+    };
+    let Some(Extension(account)) = account else {
+        return sign_in();
+    };
+    let (parts, body) = request.into_parts();
     if parts.method != Method::GET && parts.method != Method::HEAD && foreign_origin(&parts.headers)
     {
         return relay_error(
@@ -507,110 +541,408 @@ async fn proxy(State(relay): State<Arc<Relay>>, request: Request) -> Response {
             false,
         );
     }
-    if retired(parts.uri.path()) {
+    let rest = format!("/{rest}");
+    let allowed = under(&rest, &FREE) || (doc.is_some() && under(&rest, &BOUND));
+    if !allowed {
         return relay_error(
             StatusCode::NOT_FOUND,
             "not_found",
-            "Reload the page: projects now live in the library.",
+            if under(&rest, &BOUND) {
+                "Open a project first: that call belongs to one."
+            } else {
+                "That is not a Production Tool route."
+            },
             false,
         );
     }
-    if !relay_path(parts.uri.path()) {
-        return relay_error(
-            StatusCode::NOT_FOUND,
-            "not_found",
-            "That is not a Production Tool route.",
-            false,
-        );
-    }
+    let doc_id = match &doc {
+        Some(d) => match production_doc(ctx, tenant, d) {
+            Ok(id) => Some(id),
+            Err(r) => return r,
+        },
+        None => None,
+    };
     let body = match axum::body::to_bytes(body, BODY_MAX).await {
         Ok(b) => b,
         Err(_) => {
             return relay_error(
                 StatusCode::PAYLOAD_TOO_LARGE,
                 "invalid_input",
-                "This project is too big to save online (over 4.5 MB). Export it instead.",
+                "This is too big to send (over 4.5 MB).",
                 false,
             )
         }
     };
     // What the relay receives: /api plus the rest, with the query as sent.
-    let rest = parts.uri.path();
     let path_and_query = match parts.uri.query() {
         Some(q) => format!("/api{rest}?{q}"),
         None => format!("/api{rest}"),
     };
-    let claims = Claims::for_request(
-        &account,
-        parts.method.as_str(),
-        &path_and_query,
-        &body,
-        now_s(),
-    );
-    let assertion = sign(&relay.config.key, &claims);
-
-    let url = format!("{}{path_and_query}", relay.config.relay_url);
-    let mut out = relay.client.request(parts.method.clone(), url);
-    for name in FORWARD {
-        for value in parts.headers.get_all(name) {
-            out = out.header(name, value.clone());
+    let mut a = relay
+        .client
+        .call(
+            &account,
+            doc.as_deref(),
+            parts.method.clone(),
+            &path_and_query,
+            &parts.headers,
+            body,
+        )
+        .await;
+    if a.status.is_success() {
+        let method = parts.method.as_str();
+        if under(&rest, &["/jobs"]) {
+            // Every job the tool starts or reads is known to the host's registry, so the
+            // library says "working" and the watcher settles it if the tab closes.
+            if let (Some(id), Some(job)) = (&doc_id, a.json()) {
+                if job.get("jobId").is_some() {
+                    inbox::note_run(&ctx.workspace(tenant).library.runs(), id, &job);
+                }
+            }
+        } else if method == "GET" && rest == "/me" {
+            a = fold_me(ctx, &account, a);
+        } else if method == "GET" && rest == "/config" {
+            a = fold_config(ctx, a);
         }
     }
-    out = out.header(IDENTITY_HEADER, assertion).body(body);
+    answer(a)
+}
 
-    let answer = match out.send().await {
-        Ok(r) => r,
-        Err(e) if e.is_timeout() => {
-            tracing::warn!(target: "napkin_web::production", error = %e, "relay timed out");
-            return relay_error(
-                StatusCode::GATEWAY_TIMEOUT,
-                "timeout",
-                "The Production Tool took too long to answer. Try again.",
-                true,
-            );
+/// The dogfood record is napkin-web's alone (dogfood.rs): the tool's `me.dogfood` says
+/// whether this person has read the notice there, and only on a build that records.
+fn fold_me(ctx: &AppCtx, account: &Account, mut a: Answer) -> Answer {
+    if let Some(mut me) = a.json() {
+        match &ctx.dogfood {
+            Some(d) => {
+                me["dogfood"] = serde_json::json!({"consented": d.consented(&account.username)})
+            }
+            None => {
+                if let Some(o) = me.as_object_mut() {
+                    o.remove("dogfood");
+                }
+            }
         }
-        Err(e) => {
-            tracing::warn!(target: "napkin_web::production", error = %e, "relay unreachable");
-            return relay_error(
-                StatusCode::BAD_GATEWAY,
-                "provider_unavailable",
-                "The Production Tool could not be reached. Try again in a moment.",
-                true,
-            );
-        }
-    };
-    let status = answer.status();
-    let mut headers = HeaderMap::new();
-    for name in PASS_BACK {
-        if let Some(v) = answer.headers().get(name) {
-            headers.insert(HeaderName::from_static(name), v.clone());
+        a.body = Bytes::from(me.to_string());
+    }
+    a
+}
+
+/// `flags.dogfood` is whether napkin-web records, not what the relay's file says.
+fn fold_config(ctx: &AppCtx, mut a: Answer) -> Answer {
+    if let Some(mut cfg) = a.json() {
+        if let Some(flags) = cfg.get_mut("flags").and_then(|f| f.as_object_mut()) {
+            flags.insert("dogfood".into(), ctx.dogfood.is_some().into());
+            a.body = Bytes::from(cfg.to_string());
         }
     }
-    let bytes = match answer.bytes().await {
-        Ok(b) => b,
-        Err(e) if e.is_timeout() => {
-            return relay_error(
-                StatusCode::GATEWAY_TIMEOUT,
-                "timeout",
-                "The Production Tool took too long to answer. Try again.",
-                true,
-            )
+    a
+}
+
+// ── The inbox ────────────────────────────────────────────────────────────────
+
+/// The inbox as files: `<tenant>/inbox/<doc>/<job>.json` while an outcome waits and
+/// `<job>.acked` once the tool has landed it (a marker, kept so a later settle of the
+/// same job writes nothing). Beside the documents, never inside one, and never listed
+/// in the library.
+pub struct FsInbox {
+    dir: PathBuf,
+}
+
+/// An acknowledged marker is let go after this long: the host stops settling a job a day on.
+const MARKER_KEEP_S: u64 = 30 * 24 * 60 * 60;
+
+impl FsInbox {
+    pub fn new(tenant_root: &Path) -> Self {
+        Self {
+            dir: tenant_root.join("inbox"),
         }
-        Err(_) => {
-            return relay_error(
-                StatusCode::BAD_GATEWAY,
-                "provider_unavailable",
-                "The Production Tool could not be reached. Try again in a moment.",
-                true,
-            )
+    }
+
+    fn doc_dir(&self, doc: &DocId) -> PathBuf {
+        let safe: String = doc
+            .as_str()
+            .chars()
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                    c
+                } else {
+                    '_'
+                }
+            })
+            .collect();
+        self.dir.join(safe)
+    }
+
+    fn io(e: std::io::Error) -> napkin_host::HostError {
+        napkin_host::HostError::internal(format!("the inbox could not be written: {e}"))
+    }
+}
+
+impl InboxStore for FsInbox {
+    fn put_if_absent(&self, doc: &DocId, entry: &Entry) -> napkin_host::HostResult<Put> {
+        if !inbox::valid_job_id(&entry.job) {
+            return Err(napkin_host::HostError::bad_request("not a job id"));
         }
+        let dir = self.doc_dir(doc);
+        std::fs::create_dir_all(&dir).map_err(Self::io)?;
+        let acked = dir.join(format!("{}.acked", entry.job));
+        let file = dir.join(format!("{}.json", entry.job));
+        if acked.exists() {
+            return Ok(Put::AlreadyApplied);
+        }
+        // Written whole, then linked into place: the link fails if the entry exists, so of
+        // two racing settlers one wins, and a reader never sees half an entry.
+        let tmp = dir.join(format!(
+            ".{}.{}.{}.tmp",
+            entry.job,
+            std::process::id(),
+            TMP_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        std::fs::write(&tmp, serde_json::to_vec(entry).expect("entry serialises"))
+            .map_err(Self::io)?;
+        let linked = std::fs::hard_link(&tmp, &file);
+        let _ = std::fs::remove_file(&tmp);
+        match linked {
+            Ok(()) => {
+                // The tool acknowledged it while this was being stored: it is landed.
+                if acked.exists() {
+                    let _ = std::fs::remove_file(&file);
+                    return Ok(Put::AlreadyApplied);
+                }
+                Ok(Put::Stored)
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(Put::AlreadyApplied),
+            Err(e) => Err(Self::io(e)),
+        }
+    }
+
+    fn pending(&self, doc: &DocId) -> napkin_host::HostResult<Vec<Entry>> {
+        let dir = self.doc_dir(doc);
+        let Ok(read) = std::fs::read_dir(&dir) else {
+            return Ok(Vec::new());
+        };
+        let mut out = Vec::new();
+        for e in read.flatten() {
+            let path = e.path();
+            let name = e.file_name().to_string_lossy().into_owned();
+            if name.ends_with(".acked") {
+                let old = e
+                    .metadata()
+                    .and_then(|m| m.modified())
+                    .ok()
+                    .and_then(|m| m.elapsed().ok())
+                    .is_some_and(|age| age.as_secs() > MARKER_KEEP_S);
+                if old {
+                    let _ = std::fs::remove_file(&path);
+                }
+                continue;
+            }
+            let Some(job) = name.strip_suffix(".json") else {
+                continue;
+            };
+            if dir.join(format!("{job}.acked")).exists() {
+                continue;
+            }
+            if let Some(entry) = std::fs::read(&path)
+                .ok()
+                .and_then(|b| serde_json::from_slice::<Entry>(&b).ok())
+            {
+                out.push(entry);
+            }
+        }
+        out.sort_by(|a, b| a.at.cmp(&b.at).then_with(|| a.job.cmp(&b.job)));
+        Ok(out)
+    }
+
+    fn ack(&self, doc: &DocId, job: &str) -> napkin_host::HostResult<()> {
+        if !inbox::valid_job_id(job) {
+            return Err(napkin_host::HostError::bad_request("not a job id"));
+        }
+        let dir = self.doc_dir(doc);
+        std::fs::create_dir_all(&dir).map_err(Self::io)?;
+        // The marker first, then the outcome goes: a settler that finds either says "already applied".
+        std::fs::write(dir.join(format!("{job}.acked")), b"").map_err(Self::io)?;
+        match std::fs::remove_file(dir.join(format!("{job}.json"))) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(Self::io(e)),
+        }
+    }
+}
+
+static TMP_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+fn inbox_of(ctx: &AppCtx, tenant: &TenantId) -> Result<FsInbox, Response> {
+    ctx.workspace(tenant)
+        .tenant_store
+        .as_ref()
+        .map(|t| FsInbox::new(t.root()))
+        .ok_or_else(|| {
+            relay_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "internal",
+                "This workspace keeps no inbox.",
+                false,
+            )
+        })
+}
+
+fn ok_json(v: serde_json::Value) -> Response {
+    (
+        StatusCode::OK,
+        [
+            (header::CONTENT_TYPE, "application/json"),
+            (header::CACHE_CONTROL, "no-store"),
+        ],
+        v.to_string(),
+    )
+        .into_response()
+}
+
+fn host_failed(e: napkin_host::HostError) -> Response {
+    relay_error(
+        StatusCode::from_u16(e.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+        "internal",
+        &e.message,
+        false,
+    )
+}
+
+/// `GET .../production/inbox`: the outcomes waiting for this document's tool.
+async fn inbox_list(
+    State(ctx): State<Arc<AppCtx>>,
+    crate::tenant::Tenant(tenant): crate::tenant::Tenant,
+    UrlPath((_t, doc)): UrlPath<(String, String)>,
+) -> Response {
+    let id = match production_doc(&ctx, &tenant, &doc) {
+        Ok(i) => i,
+        Err(r) => return r,
     };
-    let mut response = Response::builder()
-        .status(status)
-        .body(Body::from(bytes))
-        .unwrap();
-    *response.headers_mut() = headers;
-    response
+    let inbox = match inbox_of(&ctx, &tenant) {
+        Ok(i) => i,
+        Err(r) => return r,
+    };
+    match tokio::task::spawn_blocking(move || inbox.pending(&id)).await {
+        Ok(Ok(entries)) => ok_json(serde_json::json!({ "entries": entries })),
+        Ok(Err(e)) => host_failed(e),
+        Err(_) => host_failed(napkin_host::HostError::internal(
+            "the inbox could not be read",
+        )),
+    }
+}
+
+/// `POST .../production/inbox/{job}/ack`: the tool has landed this job (from the inbox,
+/// or directly while its tab was open). Twice, or for a job with no entry, is fine.
+async fn inbox_ack(
+    State(ctx): State<Arc<AppCtx>>,
+    crate::tenant::Tenant(tenant): crate::tenant::Tenant,
+    UrlPath((_t, doc, job)): UrlPath<(String, String, String)>,
+) -> Response {
+    let id = match production_doc(&ctx, &tenant, &doc) {
+        Ok(i) => i,
+        Err(r) => return r,
+    };
+    if !inbox::valid_job_id(&job) {
+        return relay_error(
+            StatusCode::BAD_REQUEST,
+            "invalid_input",
+            "That is not a job id.",
+            false,
+        );
+    }
+    let inbox = match inbox_of(&ctx, &tenant) {
+        Ok(i) => i,
+        Err(r) => return r,
+    };
+    let runs = ctx.workspace(&tenant).library.runs();
+    let j = job.clone();
+    let i = id.clone();
+    match tokio::task::spawn_blocking(move || inbox.ack(&i, &j)).await {
+        Ok(Ok(())) => {
+            runs.forget_job(&id, &job);
+            ok_json(serde_json::json!({ "ok": true }))
+        }
+        Ok(Err(e)) => host_failed(e),
+        Err(_) => host_failed(napkin_host::HostError::internal(
+            "the inbox could not be written",
+        )),
+    }
+}
+
+/// Settle one job of a Production document for the library watcher
+/// (`POST /t/{t}/d/{doc}/jobs/{job}/settle`, `api::settle_job`): read the job from the
+/// relay as the person who runs it, tell the registry, and once it has finished keep its
+/// outcome in the inbox, once. The document is not touched.
+pub async fn settle(
+    ctx: &AppCtx,
+    tenant: &TenantId,
+    relay: &Relay,
+    account: &Account,
+    doc: &str,
+    job: &str,
+) -> Response {
+    let id = match production_doc(ctx, tenant, doc) {
+        Ok(i) => i,
+        Err(r) => return r,
+    };
+    let runs = ctx.workspace(tenant).library.runs();
+    let a = relay
+        .client
+        .call(
+            account,
+            Some(doc),
+            Method::GET,
+            &format!("/api/jobs/{job}"),
+            &HeaderMap::new(),
+            Bytes::new(),
+        )
+        .await;
+    if a.status == StatusCode::NOT_FOUND {
+        // The relay never had it, or no longer does: nobody can land it.
+        runs.forget_job(&id, job);
+        return ok_json(serde_json::json!({ "ok": true, "job": job, "settled": "lost" }));
+    }
+    let Some(j) = a.json().filter(|_| a.status.is_success()) else {
+        return answer(a);
+    };
+    if j.get("jobId").and_then(|v| v.as_str()) != Some(job) {
+        return relay_error(
+            StatusCode::BAD_GATEWAY,
+            "internal",
+            "The relay answered about another job.",
+            true,
+        );
+    }
+    let inbox = match inbox_of(ctx, tenant) {
+        Ok(i) => i,
+        Err(r) => return r,
+    };
+    let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    let (i, j2, r2) = (id.clone(), j.clone(), runs.clone());
+    let settled =
+        tokio::task::spawn_blocking(move || inbox::settle(&inbox, &r2, &i, &j2, &now)).await;
+    match settled {
+        Ok(Ok(s)) => {
+            let (word, state) = match &s {
+                Settled::Running(st) => ("running", st.clone()),
+                Settled::Stored(st) => ("stored", st.clone()),
+                Settled::AlreadyApplied(st) => ("already applied", st.clone()),
+            };
+            if matches!(s, Settled::Stored(_)) {
+                ctx.events.publish(
+                    tenant,
+                    &napkin_host::HostEvent::JobSettled(
+                        serde_json::json!({ "doc": doc, "job": job, "state": state }),
+                    ),
+                );
+            }
+            ok_json(serde_json::json!({ "ok": true, "job": job, "state": state, "settled": word }))
+        }
+        Ok(Err(e)) => host_failed(e),
+        Err(_) => host_failed(napkin_host::HostError::internal(
+            "the job could not be settled",
+        )),
+    }
 }
 
 #[cfg(test)]
@@ -623,31 +955,32 @@ mod tests {
         serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
     }
 
-    fn laurance() -> Account {
-        Account {
-            username: "visionary@napkin".into(),
-            agency: "napkin".into(),
-            name: Some("Laurance".into()),
+    /// The claims of the vector, as the assets pass writes them.
+    fn vector_claims(v: &serde_json::Value) -> Claims {
+        let c = &v["claims"];
+        Claims {
+            u: c["u"].as_str().unwrap().into(),
+            a: c["a"].as_str().unwrap().into(),
+            t: c["t"].as_str().unwrap().into(),
+            n: c["n"].as_str().map(str::to_string),
+            aud: c["aud"].as_str().unwrap().into(),
+            iat: c["iat"].as_u64().unwrap(),
+            exp: c["exp"].as_u64().unwrap(),
+            m: c["m"].as_str().unwrap().into(),
+            p: c["p"].as_str().unwrap().into(),
+            bh: c["bh"].as_str().unwrap().into(),
         }
     }
 
     #[test]
-    fn the_signer_produces_the_shared_vector_exactly() {
+    fn the_assets_pass_signer_still_produces_the_shared_vector_exactly() {
         let v = vector();
-        let c = &v["claims"];
-        let claims = Claims::for_request(
-            &laurance(),
-            v["method"].as_str().unwrap(),
-            v["pathAndQuery"].as_str().unwrap(),
-            v["body"].as_str().unwrap().as_bytes(),
-            c["iat"].as_u64().unwrap(),
-        );
+        let claims = vector_claims(&v);
         assert_eq!(
             serde_json::to_string(&claims).unwrap(),
             v["claimsJson"].as_str().unwrap()
         );
-        assert_eq!(claims.t, c["t"].as_str().unwrap());
-        assert_eq!(claims.bh, c["bh"].as_str().unwrap());
+        assert_eq!(body_hash(v["body"].as_str().unwrap().as_bytes()), claims.bh);
         assert_eq!(
             sign(v["key"].as_str().unwrap().as_bytes(), &claims),
             v["assertion"].as_str().unwrap()
@@ -663,41 +996,16 @@ mod tests {
     }
 
     #[test]
-    fn an_assertion_is_for_the_relay_and_lives_a_minute() {
-        let c = Claims::for_request(&laurance(), "get", "/api/me", b"", 1000);
+    fn an_assets_pass_is_read_only_and_lives_half_an_hour() {
+        let c = Claims::assets_pass("visionary@napkin", "napkin", 1000);
         let d = decode(&sign(&[7u8; 32], &c));
-        assert_eq!(d["aud"], "relay");
-        assert_eq!(d["iat"], 1000);
-        assert_eq!(d["exp"], 1060);
-        assert_eq!(d["m"], "GET");
-    }
-
-    #[test]
-    fn an_assertion_names_the_path_with_its_query_and_hashes_the_body() {
-        let c = Claims::for_request(&laurance(), "POST", "/api/clan?x=1&y=2", b"PK\x03\x04", 1);
-        assert_eq!(c.p, "/api/clan?x=1&y=2");
-        assert_eq!(c.bh, body_hash(b"PK\x03\x04"));
-        assert_ne!(c.bh, body_hash(b""));
-        // the empty body hashes too
+        assert_eq!(d["aud"], "assets");
         assert_eq!(
-            body_hash(b""),
-            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            (d["iat"].as_u64(), d["exp"].as_u64()),
+            (Some(1000), Some(2800))
         );
-        // no display name: no `n`
-        let nameless = Account {
-            name: None,
-            ..laurance()
-        };
-        let d = decode(&sign(
-            &[7u8; 32],
-            &Claims::for_request(&nameless, "GET", "/api/me", b"", 1),
-        ));
+        assert_eq!(d["m"], "GET");
         assert!(d.get("n").is_none());
-    }
-
-    #[test]
-    fn a_different_key_signs_differently() {
-        let c = Claims::for_request(&laurance(), "GET", "/api/me", b"", 1);
         assert_ne!(sign(&[1u8; 32], &c), sign(&[2u8; 32], &c));
     }
 
@@ -705,13 +1013,20 @@ mod tests {
 
     #[test]
     fn no_relay_url_means_no_production() {
-        assert_eq!(Config::from_vars(true, None, Some(KEY), None), Ok(None));
-        assert_eq!(Config::from_vars(false, Some("  "), None, None), Ok(None));
+        assert_eq!(
+            Config::from_vars(true, None, Some(KEY), Some(KEY), None),
+            Ok(None)
+        );
+        assert_eq!(
+            Config::from_vars(false, Some("  "), None, None, None),
+            Ok(None)
+        );
     }
 
     #[test]
     fn a_relay_without_sign_in_is_refused() {
-        let e = Config::from_vars(false, Some("http://relay"), Some(KEY), None).unwrap_err();
+        let e =
+            Config::from_vars(false, Some("http://relay"), Some(KEY), Some(KEY), None).unwrap_err();
         assert!(e.contains("NAPKIN_AUTH"), "{e}");
     }
 
@@ -723,8 +1038,18 @@ mod tests {
             Some("short"),
             Some("short,0123456789abcdef0123456789abcdef"),
         ] {
-            let e = Config::from_vars(true, Some("http://relay"), secret, None).unwrap_err();
+            let e =
+                Config::from_vars(true, Some("http://relay"), secret, Some(KEY), None).unwrap_err();
             assert!(e.contains("32 bytes"), "{secret:?}: {e}");
+        }
+    }
+
+    #[test]
+    fn a_short_or_missing_service_key_is_refused() {
+        for key in [None, Some(""), Some("short")] {
+            let e =
+                Config::from_vars(true, Some("http://relay"), Some(KEY), key, None).unwrap_err();
+            assert!(e.contains("NAPKIN_PRODUCTION_SERVICE_KEY"), "{key:?}: {e}");
         }
     }
 
@@ -734,18 +1059,20 @@ mod tests {
             true,
             Some("https://relay.example/"),
             Some(&format!("{KEY}, old-key-old-key-old-key-old-key-old")),
+            Some(&format!("{KEY}x, old-key-old-key-old-key-old-key-old")),
             None,
         )
         .unwrap()
         .unwrap();
         assert_eq!(c.relay_url, "https://relay.example");
         assert_eq!(c.key, KEY.as_bytes());
+        assert_eq!(c.service_key, format!("{KEY}x").as_bytes());
         assert_eq!(c.static_dir, PathBuf::from(DEFAULT_STATIC));
-        let c = Config::from_vars(true, Some("http://r"), Some(KEY), Some("/tmp/x"))
+        let c = Config::from_vars(true, Some("http://r"), Some(KEY), Some(KEY), Some("/tmp/x"))
             .unwrap()
             .unwrap();
         assert_eq!(c.static_dir, PathBuf::from("/tmp/x"));
-        assert!(Config::from_vars(true, Some("relay:8787"), Some(KEY), None).is_err());
+        assert!(Config::from_vars(true, Some("relay:8787"), Some(KEY), Some(KEY), None).is_err());
     }
 
     #[test]

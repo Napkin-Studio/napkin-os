@@ -447,11 +447,13 @@ locals {
     var.production_media_base != "" ? [{ name = "NAPKIN_PRODUCTION_MEDIA_BASE", value = var.production_media_base }] : [],
   )
   production             = var.production_relay_url != ""
-  production_secret_arns = local.production ? [var.production_relay_secret_arn] : []
+  production_secret_arns = local.production ? [var.production_relay_secret_arn, var.production_service_key_arn] : []
   web_secrets = concat(
     [{ name = "NAPKIN_SESSION_SECRET", valueFrom = var.session_secret_arn }],
-    # the key napkin-web signs each proxied call's X-Napkin-Identity with
+    # the key napkin-web signs the Deck's read-only picture pass with (X-Napkin-Identity, aud assets)
     local.production ? [{ name = "NAPKIN_PRODUCTION_RELAY_SECRET", valueFrom = var.production_relay_secret_arn }] : [],
+    # napkin-web's credential for every other relay call: bearer plus the signed user claim
+    local.production ? [{ name = "NAPKIN_PRODUCTION_SERVICE_KEY", valueFrom = var.production_service_key_arn }] : [],
   )
 }
 

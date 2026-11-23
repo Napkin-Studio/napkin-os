@@ -142,6 +142,16 @@ variable "production_relay_secret_arn" {
   }
 }
 
+variable "production_service_key_arn" {
+  description = "The ARN of napkin-hackathon/SERVICE_KEY (the hackathon stack's secret_ids output), which napkin-web calls the relay with (bearer plus signed user claim)"
+  type        = string
+  default     = ""
+  validation {
+    condition     = (var.production_service_key_arn == "") == (var.production_relay_url == "")
+    error_message = "production_relay_url and production_service_key_arn are set together, or neither"
+  }
+}
+
 variable "production_media_base" {
   description = "The https base Production's pictures are served from: the hackathon stack's CloudFront address (its url output). napkin-web tells the tool in /api/session as media_base."
   type        = string
