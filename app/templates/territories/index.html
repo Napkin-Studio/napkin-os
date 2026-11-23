@@ -1678,7 +1678,9 @@ var TerritoriesLogic = (function () {
     if (e.a === 'explore') {
       var c = counts(data), ap = approvePatch(run, c.ticked, by, at);
       if (!ap) return { writes: [], toast: c.ticked ? 'Explore is already approved for these ticks.' : 'Tick at least one insight first.' };
-      return { writes: [{ patch: { run: ap }, action: 'approve pick', rationale: 'gate 1 of 2 approved: ' + plural(c.ticked, 'insight') + ' ticked' }], start: true, toast: 'Approved.' };
+      // The ENGINE approves (gates.approve, step approve): its approval carries the hash of the choices it was given for, and a page-written one
+      // without it is stale to the engine, so the crew would never set off. The run starts when the approval has landed.
+      return { writes: [], request: { key: 'approve:pick', what: 'The approval', input: { step: MOVES.approve, gate: 'pick', by: by }, startAfter: true }, toast: 'Approved.' };
     }
     if (e.a === 'first') {
       return pickState(run) === 'none' && !focusOf(data).insights.length ? { writes: [], start: true } : null;
@@ -2654,7 +2656,7 @@ var TerritoriesLookups = (function () {
     ui.cross = null;
     if (!(window.clan && window.clan.apiProxy)) { ui.req = { key: rq.key, state: 'failed', error: rq.what + ' runs through the host, and the host is not here. Nothing changed.' }; render(); return; }
     if (ui.mw === false) { ui.req = { key: rq.key, state: 'failed', error: 'The engine is not connected in this workspace, so nothing was sent. Nothing changed.' }; render(); return; }
-    ui.req = { key: rq.key, what: rq.what, state: 'sending', id: null, delay: 900, t: 0, error: null, then: rq.then || null, continueIn: rq.continueIn || null, after: rq.after || null };
+    ui.req = { key: rq.key, what: rq.what, state: 'sending', id: null, delay: 900, t: 0, error: null, then: rq.then || null, startAfter: !!rq.startAfter, continueIn: rq.continueIn || null, after: rq.after || null };
     render();
     var me = ui.req;
     window.clan.apiProxy('middleware', { task: L.TASKS.run, input: rq.input }).then(function (res) { onRequest(me, res); }, function (e) { reqFailed(me, 'The middleware could not be reached: ' + (e && e.message || e)); });
@@ -2670,6 +2672,7 @@ var TerritoriesLookups = (function () {
       if (b.job.error) { reqFailed(r, r.what + ' did not go through. ' + (b.job.error.message || b.job.error.type || String(b.job.error))); return; }
     } else r.state = 'done';
     if (r.state === 'done' && r.after === 'frames') { r.after = null; refreshFrames(); }
+    if (r.state === 'done' && r.startAfter) { r.startAfter = false; render(); startRun(); return; }
     if (r.state === 'done' && r.then) { var nx = r.then; r.then = null; render(); startRequest(nx); return; }
     // A written send asks the shell to make the spin-off (clan:continue-in); the shell says in its own words when the target is not installed.
     if (r.state === 'done' && r.continueIn) { var app = r.continueIn; r.continueIn = null; try { window.parent.postMessage({ type: 'clan:continue-in', app_id: app }, '*'); } catch (x) { /* no shell */ } }

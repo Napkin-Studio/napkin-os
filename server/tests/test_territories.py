@@ -123,6 +123,20 @@ def test_the_run_sees_the_brief_though_the_host_sends_the_upstream_as_an_index(t
     assert host.data["upstream"] == UPSTREAM["upstream"], "the frozen copies are never rewritten by a step"
 
 
+def test_the_engines_own_approval_of_the_pick_sets_the_crew_off_where_a_pageless_stamp_does_not(terr):
+    """The page asks for step approve and then run. A bare approval with no inputs hash (what the page used to write itself) is stale to the engine."""
+    host = at_pick(terr)
+    host.data["run"]["approvals"] = {"pick": {"by": "Shrey", "at": "2026-11-23T10:00:00Z", "decision": "approve"}}
+    step(terr, host)
+    assert host.data["run"]["state"] == "gate" and host.data["run"]["gate"]["id"] == "pick", "a stamp without the inputs hash holds the run at Pick"
+    host.data["run"].pop("approvals")
+    r = step(terr, host, "approve", gate="pick", by="Shrey")
+    assert r[-1]["job"]["state"] == "done"
+    assert gates.approval_state(host.data, "pick")["valid"]
+    step(terr, host)
+    assert host.data["run"]["gate"]["id"] == "greenlight" and host.data["territories"], "approved by the engine, the next run explores and develops"
+
+
 def test_the_approved_pick_runs_explore_and_develop_to_the_greenlight_gate(terr):
     host = at_greenlight(terr)
     d = host.data
