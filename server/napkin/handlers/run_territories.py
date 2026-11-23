@@ -255,6 +255,8 @@ def _frames(step, inp, req, caps, jid, data, by, on_line, marks):
 
     def run(job):
         if not fr.enabled():
+            if step == "frames_status":      # the page asks on every open: a read with nothing held, never a failed job on the person's desk
+                return _Done(data)
             return _Done(data, ["Pictures are not switched on in this workspace."])
         f, store = engine(J.make_llm() if step == "frames" and card_id and ok else None)
         lock = runner._lock_of(store)
