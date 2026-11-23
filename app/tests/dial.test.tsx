@@ -13,7 +13,8 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 import type { LibraryItem } from '../src/host/types.ts'
-import { Dial, dialBoxes } from '../src/shell/nui/Dial.tsx'
+import { Dial } from '../src/shell/nui/Dial.tsx'
+import { dialBoxes } from '../src/shell/nui/dialGeometry.ts'
 
 const c = { id: 'cli_00000001', name: 'Client Alpha', sector: null, look: { cl: '#DA291C', ink: '#FFC72C' } }
 const item = (app: string, over: Partial<LibraryItem> = {}): LibraryItem => ({
