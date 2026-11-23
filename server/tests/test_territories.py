@@ -35,9 +35,16 @@ UPSTREAM = {"upstream": contract.example("data")["upstream"]}
 
 
 class TerritoriesHost(Host):
+    """The real host's request: ``data.upstream`` is the INDEX (keys only, middleware-api.md §1) and the frozen brief and research ride whole
+    beside it as ``carried_upstream``. A test that handed the engine the full data directly passed while the real run found no brief."""
+
     def clan(self):
         c = super().clan()
         c["facts"], c["findings"] = copy.deepcopy(FACTS), copy.deepcopy(FINDINGS)
+        up = (c["data"] or {}).get("upstream")
+        if isinstance(up, dict) and up:
+            c["carried_upstream"] = copy.deepcopy(up)
+            c["data"]["upstream"] = {k: {"direct": False, "keys": sorted(v), "open_contests": []} for k, v in up.items()}
         return c
 
 
@@ -103,6 +110,31 @@ def test_a_new_document_runs_to_the_pick_gate_and_the_document_holds_it(terr):
     assert host.data["run"]["state"] == "gate" and host.data["run"]["gate"]["id"] == "pick"
     assert host.data["focus"]["insights"] and terr.model_calls.calls == ["insights"]
     valid(host)
+
+
+def test_the_run_sees_the_brief_though_the_host_sends_the_upstream_as_an_index(terr):
+    host = TerritoriesHost(data=copy.deepcopy(UPSTREAM), schema=SCHEMA)
+    host.clan = lambda base=host.clan: {**base(), "facts": [], "findings": []}     # a brief and no research: the brief is all there is to read
+    sent = host.clan()
+    assert all("keys" in v and "background" not in v for v in sent["data"]["upstream"].values()), "data.upstream is only the index"
+    assert sent["carried_upstream"]
+    step(terr, host)
+    assert host.data["run"]["state"] == "gate", "a run with the brief carried finds its insights, not 'I need the category and the market'"
+    assert host.data["upstream"] == UPSTREAM["upstream"], "the frozen copies are never rewritten by a step"
+
+
+def test_the_engines_own_approval_of_the_pick_sets_the_crew_off_where_a_pageless_stamp_does_not(terr):
+    """The page asks for step approve and then run. A bare approval with no inputs hash (what the page used to write itself) is stale to the engine."""
+    host = at_pick(terr)
+    host.data["run"]["approvals"] = {"pick": {"by": "Shrey", "at": "2026-11-23T10:00:00Z", "decision": "approve"}}
+    step(terr, host)
+    assert host.data["run"]["state"] == "gate" and host.data["run"]["gate"]["id"] == "pick", "a stamp without the inputs hash holds the run at Pick"
+    host.data["run"].pop("approvals")
+    r = step(terr, host, "approve", gate="pick", by="Shrey")
+    assert r[-1]["job"]["state"] == "done"
+    assert gates.approval_state(host.data, "pick")["valid"]
+    step(terr, host)
+    assert host.data["run"]["gate"]["id"] == "greenlight" and host.data["territories"], "approved by the engine, the next run explores and develops"
 
 
 def test_the_approved_pick_runs_explore_and_develop_to_the_greenlight_gate(terr):
@@ -272,7 +304,7 @@ def test_bad_input_is_a_400_before_any_job(terr):
     for inp in ({"step": "dance"}, {"step": "steer", "kind": "further"}, {"step": "steer", "crew_id": "c", "kind": "sideways"}, {"step": "undo"}, {"step": "more"}):
         st, body = post(terr, "run_territories", inp, host.clan())
         assert st == 400, (inp, body)
-    st, body = post(terr, "run_territories", {}, {**host.clan(), "data": {}})
+    st, body = post(terr, "run_territories", {}, {**host.clan(), "data": {}, "carried_upstream": {}})
     assert st == 400
 
 
@@ -641,8 +673,12 @@ def test_the_moves_without_a_running_step_apply_at_once_and_say_no_in_words(terr
     step(terr, host, "set_lead", territory_id=tid, line=l1)
     step(terr, host, "set_lead", territory_id=tid, line=None)
     assert "lead" not in next(t for t in host.data["territories"] if t["id"] == tid)["world"]
+    # the page's sliders run 0 to 100, which is the schema's dial: a moved slider must be kept, not refused (live walk 2026-11-23)
+    assert step(terr, host, "keep_feel", territory_id=tid, dial_set={"tone": 73, "energy": 0, "register": 100, "brand": 41})[0]["job"]["state"] == "done"
+    assert next(t for t in host.data["territories"] if t["id"] == tid)["world"]["dial_set"]["tone"] == 73
+    valid(host)
     assert step(terr, host, "set_lead", territory_id="t_nope", line=l1)[0]["job"]["state"] == "failed"
-    for bad in ({"step": "keep_feel", "territory_id": tid, "dial_set": {"tone": 99, "energy": 1, "register": 1, "brand": 1}}, {"step": "star_line", "territory_id": tid, "line": l0},
+    for bad in ({"step": "keep_feel", "territory_id": tid, "dial_set": {"tone": 101, "energy": 1, "register": 1, "brand": 1}}, {"step": "star_line", "territory_id": tid, "line": l0},
                 {"step": "set_lead", "territory_id": tid, "line": 5}):
         assert post(terr, "run_territories", bad, host.clan())[0] == 400
     valid(host)

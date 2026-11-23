@@ -59,6 +59,13 @@ def history(h):
     return [d for d in h.chain if d["agent"].endswith("/ledger")]
 
 
+def test_the_status_read_with_the_switch_off_is_not_a_failed_job(fr):
+    """The page asks frames_status every time it opens: with pictures off that is an empty answer, not a refusal that lands on the desk as Failed."""
+    h = host()
+    r = step(fr, h, "frames_status")
+    assert r[-1]["job"]["state"] == "done" and fr.rw.posts == []
+
+
 def test_the_switch_is_off_by_default_and_says_so(fr):
     h = host()
     r = step(fr, h, "frames", ids=["t_started"], by="Shrey")

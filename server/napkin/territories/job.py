@@ -20,7 +20,7 @@ import traceback
 
 from .. import reasoning as rsn
 from ..brief.job import Chunk, combine
-from ..doc import apply_patch, ctx_data, decision, get_dotted
+from ..doc import apply_patch, ctx_data_carried, decision, get_dotted
 from ..jobs import Abandoned
 from ..util import TaskError, iso, uid
 from . import telemetry
@@ -102,7 +102,7 @@ class TerritoriesJob:
         self.doc, self.base, self.clan = req.doc, req.base, req.clan
         self.caps, self.scope = caps, caps.scope
         self.call, self.quick, self.owns_person_keys = call, quick, owns_person_keys
-        self.data = copy.deepcopy(ctx_data(req.clan))
+        self.data = copy.deepcopy(ctx_data_carried(req.clan))
         self.cancel_event: threading.Event = caps.jobs.stopped
         self.lock = threading.RLock()
         self.state, self.started_at, self.finished_at, self.error = "queued", iso(), None, None

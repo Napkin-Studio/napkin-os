@@ -206,34 +206,29 @@ test('your own insight joins ticked and labelled yours; empty, long and a full l
   assert.match(shown, /added by Shrey/)
 })
 
-test('Explore writes only the person half, and editing the ticks after it makes Explore live again (LESSONS 18)', () => {
-  let d = doc()
+/** What the engine writes when it approves the pick (gates.approve): the approval stamped with the hash of the choices. */
+const engineApproved = (d: Doc) => { d.run.approvals = { pick: { by: 'Shrey', at: '2026-11-23T10:00:00Z', decision: 'approve', inputs: 'a1b2c3d4e5f6' } }; d.run.decisions = [{ gate: 'pick', kind: 'approve', by: 'Shrey', at: '2026-11-23T10:00:00Z', inputs: 'a1b2c3d4e5f6' }]; return d }
+
+test('Explore asks the ENGINE to approve the pick, then sets the crew off; the page never writes the approval (owner live walk 2026-11-23)', () => {
+  const d = doc()
   assert.equal(L.pickState(d.run), 'open')
   const go = L.act(d, {}, { a: 'explore' }, ENV)!
-  assert.equal(go.start, true)
-  assert.equal(go.writes.length, 1)
-  eq(Object.keys(go.writes[0].patch), ['run'])
-  eq(Object.keys(go.writes[0].patch.run).sort(), ['approvals', 'decisions'], 'never the engine half')
-  d = apply(d, go)
-  eq(errs(d).filter(e => !/upstream/.test(e)), [])
-  assert.equal(d.run.state, 'gate', 'the page did not touch state')
-  assert.equal(d.run.approvals.pick.by, 'Shrey')
+  eq(go.writes, [], 'a page-written approval has no inputs hash, so the engine counts it stale and the run stops at Pick again')
+  assert.equal(go.request!.input.step, 'approve'); assert.equal(go.request!.input.gate, 'pick'); assert.equal(go.request!.input.by, 'Shrey')
+  assert.equal(go.request!.startAfter, true, 'the run starts when the approval has landed')
+})
+
+test('after the engine approves, Explore is approved; editing the ticks makes it live again (LESSONS 18)', () => {
+  let d = engineApproved(doc())
   assert.equal(L.pickState(d.run), 'approved')
-  assert.match(L.view(d, { mw: false }), /not connected in this workspace/)
   assert.match(L.view(d, {}), /Approved ✓/)
   assert.ok(L.act(d, {}, { a: 'explore' }, ENV)!.toast, 'a second press says why nothing happens')
-  // the ticks change after approval: the approval no longer stands
   const t = L.act(d, {}, { a: 'tick', id: 'in_fare', on: true }, { me: { name: 'Shrey' }, now: '2026-11-23T10:05:00Z' })!
   assert.equal(t.writes.length, 2)
   d = apply(d, t)
   eq(errs(d).filter(e => !/upstream/.test(e)), [])
   assert.equal(L.pickState(d.run), 'open')
   assert.match(L.view(d, {}), /Explore 7 insights/)
-  const again = L.act(d, {}, { a: 'explore' }, { me: { name: 'Shrey' }, now: '2026-11-23T10:06:00Z' })!
-  assert.equal(again.start, true)
-  d = apply(d, again)
-  assert.equal(L.pickState(d.run), 'approved')
-  assert.equal(d.run.decisions.length, 3)
 })
 
 test('Explore with nothing ticked is refused in words and writes nothing', () => {
@@ -244,7 +239,7 @@ test('Explore with nothing ticked is refused in words and writes nothing', () =>
 })
 
 test('a failed start is said in words with a way to try again; the pick stays saved', () => {
-  const d = apply(doc(), L.act(doc(), {}, { a: 'explore' }, ENV))
+  const d = engineApproved(doc())
   const page = L.view(d, { job: { state: 'failed', error: 'This workspace has no middleware set up, so the engine cannot be reached.' } })
   assert.match(page, /no middleware set up/); assert.match(page, /Your pick is saved/); assert.match(page, /data-act="retry"/)
   assert.equal(L.act(d, {}, { a: 'retry' }, ENV)!.start, true)
@@ -278,7 +273,7 @@ test('a source window opens for a brief field, a pin, a finding (with its derive
 test('every control the page draws does something or is disabled with its reason', () => {
   const page = L.view(doc(), {})
   const acts = new Set([...page.matchAll(/data-act="([a-z]+)"/g)].map(m => m[1]))
-  for (const a of acts) assert.ok(L.act(apply(doc(), L.act(doc(), {}, { a: 'explore' }, ENV)), {}, { a }, ENV) !== undefined, `an action for ${a}`)
+  for (const a of acts) assert.ok(L.act(engineApproved(doc()), {}, { a }, ENV) !== undefined, `an action for ${a}`)
   assert.ok(acts.has('explore') && acts.has('add'))
   assert.ok(!/<form/.test(page), 'no form: the sandboxed page cannot submit one')
   assert.match(page, /data-tick=/); assert.match(page, /data-form="add"/); assert.match(page, /data-play=/); assert.match(page, /data-src=/); assert.match(page, /data-booth="hide"/); assert.match(page, /id="boothEdge"/)
@@ -871,4 +866,36 @@ test('a document nothing has run on yet offers Find the insights, and it starts 
   assert.equal(L.act(d, {}, { a: 'first' }, ENV)!.start, true)
   assert.equal(L.act(doc(), {}, { a: 'first' }, ENV), null, 'once insights exist, the pick takes over')
   assert.match(L.view(d, { job: { state: 'running' } }), /data-act="first" disabled/)
+})
+
+test('a failed first run says why in the engine\'s words, offers the action at the top and names the step honestly (owner walk 2026-11-23)', () => {
+  const d = doc(); d.focus.insights = []
+  d.run = { state: 'failed', stage: 'pick', error: { stage: 'pick', message: 'To start I need the category and the market.', retryable: false } }
+  const page = L.view(d, {})
+  assert.match(page, /To start I need the category and the market\./, 'the document\'s run.error is on the page')
+  assert.doesNotMatch(page, /Nothing has been sent out yet/)
+  assert.match(page, /data-act="first"[^>]*>Try again/)
+  assert.ok(page.indexOf('data-act="first"') < page.indexOf('From the brief'), 'the action sits above the long brief, not below it')
+  assert.doesNotMatch(page, /Tick the insights the crew should work on\.[^<]*<\/p><ol/, 'nothing to tick yet')
+  assert.match(page, /Find the insights, then tick/)
+})
+
+test('the eyebrow is one clamped line and its full text is the title', () => {
+  const d = doc(); d.title = 'A very long working title: ' + 'x'.repeat(200)
+  const page = L.view(d, {})
+  assert.match(page, /<div class="eyebrow" title="[^"]*"><span>/)
+})
+
+test('"To confirm:" is a quiet mark on the brief field, not a prefix in its words (owner walk 2026-11-23)', () => {
+  const d = doc(); d.focus.insights = []; d.run = {}
+  const k = Object.keys(d.upstream).find((x: string) => 'insight' in d.upstream[x] || 'single_minded_proposition' in d.upstream[x])!
+  d.upstream[k].insight = 'To confirm: Real beats shiny.'
+  const page = L.view(d, {})
+  assert.doesNotMatch(page, /To confirm: Real beats/); assert.match(page, /Real beats shiny\./); assert.match(page, /class="tbc"/)
+})
+
+test('the line under the title names the step on screen, not the run\'s furthest step (live walk 2026-11-23)', () => {
+  const d = doc(); d.run = { ...d.run, state: 'gate', stage: 'greenlight', gate: { id: 'greenlight', n: 0, of: 1 } }
+  assert.match(L.view(d, { view: 1 }), /Step 2 of 3\. The crew explores/)
+  assert.match(L.view(d, { view: 2 }), /Step 3 of 3\./)
 })

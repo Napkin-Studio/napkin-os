@@ -76,6 +76,7 @@ h1,h2,h3{text-wrap:balance}
 @media (max-width:900px){.app-head{grid-template-columns:minmax(0,1fr)}}
 .eyebrow{font:800 11.5px var(--font-ui);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px;color:var(--ink)}
 .eyebrow::before{content:"";width:18px;height:2px;background:var(--te);flex:none}
+.eyebrow>span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hero-title{margin:0 0 8px;font:800 clamp(34px,4.2vw,50px)/.96 var(--font-ui);letter-spacing:-.04em}
 .period-dot{display:inline-block;width:.17em;height:.17em;border-radius:50%;background:var(--te);margin-left:.04em}
 .hero-sub{margin:0;font-size:16px;line-height:1.5;color:var(--ink-soft);max-width:62ch}
@@ -243,6 +244,7 @@ button.tsrc:hover{border-color:color-mix(in srgb,var(--ink) 35%,var(--line))}
 .fields{margin:0;padding:0;list-style:none;display:grid;gap:12px}
 .fields li{border-left:3px solid var(--te);padding:2px 0 2px 12px}
 .fields .fl{font:800 11px var(--font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.fields .tbc{font:800 10px var(--font-ui);letter-spacing:.06em;text-transform:none;color:var(--muted);border:1px dashed var(--line,#bbb);border-radius:999px;padding:0 6px;margin-left:6px;vertical-align:1px}
 .fields .ft{font:400 17px/1.45 var(--font-serif);white-space:pre-line;overflow-wrap:anywhere}
 .rest{margin:10px 0 0;color:var(--muted);font-size:14.5px}
 .psec-t{display:block;margin-top:10px}
@@ -628,6 +630,8 @@ var TerritoriesLogic = (function () {
     });
     return { brief: brief, research: research };
   }
+  /** "To confirm:" is how the brief marks a part it assumed. Territories shows the brief's words clean and marks the field quietly, as the brief does. */
+  function unconfirmed(t) { var m = /^\s*to confirm:\s*/i.exec(t || ''); return m ? { text: t.slice(m[0].length), tbc: true } : { text: t || '', tbc: false }; }
   function values(o) { o = isObj(o) ? o : {}; return Object.keys(o).map(function (k) { return o[k]; }); }
   /** What arrived. Counts are null (never a made-up 0) when the host has not said. */
   function seen(data) {
@@ -703,7 +707,7 @@ var TerritoriesLogic = (function () {
       out.kind = 'brief';
       out.label = LABELS[m[1]] || 'Brief';
       var bf = up.brief ? up.brief.fields.filter(function (x) { return x.key === m[1]; })[0] : null;
-      if (bf) { out.text = bf.text; out.carried = true; out.status = 'plain'; out.statusWords = 'brief'; out.meta = [briefTitle(data, up)]; }
+      if (bf) { out.text = unconfirmed(bf.text).text; out.carried = true; out.status = 'plain'; out.statusWords = 'brief'; out.meta = [briefTitle(data, up)]; }
       return out;
     }
     if (/^f_/.test(cite)) {
@@ -922,13 +926,17 @@ var TerritoriesLogic = (function () {
   }
 
   /** The first run: the crew reads what arrived and brings back the insights to pick from (the engine's `run` with no pick stops at Pick). */
-  function firstRunLine(ui) {
+  function firstRunLine(ui, data) {
     var job = ui && ui.job, busy = !!(job && (job.state === 'sending' || job.state === 'queued' || job.state === 'running'));
+    var run = isObj(data && data.run) ? data.run : {}, runErr = !busy && run.state === 'failed' && isObj(run.error) && text(run.error.message) ? run.error : null;
+    var failed = !!(job && job.state === 'failed') || !!runErr;
+    // A failed run says why in the engine's own words (the document's run.error, which survives a reload), never "nothing has been sent out".
     var note = busy ? 'The crew is reading the brief and the research. The insights to pick from appear here.' :
       job && job.state === 'failed' ? (job.error || 'The engine stopped.') + ' Nothing was lost.' :
-      'Nothing has been sent out yet. The crew reads the brief and the research and brings back the insights you pick from.';
-    return '<p class="rest' + (job && job.state === 'failed' ? ' bad' : '') + '" role="status">' + esc(note) + '</p>' +
-      '<div class="row"><button type="button" class="btn-pill primary" data-act="first"' + (busy ? ' disabled' : '') + '>' + (job && job.state === 'failed' ? 'Try again' : 'Find the insights') + '</button></div>';
+      runErr ? text(runErr.message) + (arr(runErr.refused).length ? ' ' + arr(runErr.refused).join(' ') : '') + ' Nothing was lost.' :
+      'Nothing has been sent out yet. The crew reads what arrived and brings back the insights you pick from.';
+    return '<div class="firstrun"><p class="rest' + (failed ? ' bad' : '') + '"' + (failed ? ' role="alert"' : ' role="status"') + '>' + esc(note) + '</p>' +
+      '<div class="row"><button type="button" class="btn-pill primary" data-act="first"' + (busy ? ' disabled' : '') + '>' + (failed ? 'Try again' : 'Find the insights') + '</button></div></div>';
   }
 
   /** The first screen of a document the engine has not written to yet: what came in, read before anything else happens. */
@@ -942,7 +950,7 @@ var TerritoriesLogic = (function () {
     var keyf = '';
     if (sn.brief) {
       keyf = '<span class="psec-t">From the brief</span>' + (sn.brief.key_fields.length ? '<ul class="fields" id="key-fields">' + sn.brief.key_fields.map(function (f) {
-        return '<li data-field="' + esc(f.id) + '"><div class="fl">' + esc(f.label) + '</div><div class="ft">' + esc(f.text) + '</div></li>'; }).join('') + '</ul>' :
+        return '<li data-field="' + esc(f.id) + '"><div class="fl">' + esc(f.label) + (unconfirmed(f.text).tbc ? ' <span class="tbc" title="The brief has not confirmed this yet">to confirm</span>' : '') + '</div><div class="ft">' + esc(unconfirmed(f.text).text) + '</div></li>'; }).join('') + '</ul>' :
         '<p class="rest">The brief has no insight, proposition, objectives, audience or mandatories written yet.</p>');
       var rest = sn.brief.filled - sn.brief.key_fields.length;
       if (rest > 0) keyf += '<p class="rest">And ' + esc(rest === 1 ? 'one more field' : rest + ' more fields') + ', held with the brief.</p>';
@@ -950,8 +958,7 @@ var TerritoriesLogic = (function () {
     return '<article class="sheet"><header class="sheet-head"><div class="sheet-eyebrow">Step 1 · What arrived</div><h2>What arrived</h2>' +
       '<p>Made ' + esc(fromWords(sn)) + '. Read in full, in the words the brief and the research use. Nothing is copied: the crew will quote it by name.</p></header>' +
       '<div class="stats">' + statsOf(sn).map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + '</div>' +
-      '<div class="sheet-body">' + sourceCards(data) + keyf +
-      firstRunLine(ui) + '</div></article>';
+      '<div class="sheet-body">' + firstRunLine(ui, data) + sourceCards(data) + keyf + '</div></article>';
   }
 
   function everything(data) {
@@ -1578,10 +1585,12 @@ var TerritoriesLogic = (function () {
   function head(data, st, ui) {
     var sn = seen(data), title = (ui && ui.title && ui.title !== 'Territories' ? ui.title : '') || text(data && data.title) || (sn.brief && sn.brief.title) || (sn.research && sn.research.title) || 'Territories', parts = title.split(/:\s+/);
     var eyebrow = parts.length > 1 ? parts[0] + ' · ' + parts.slice(1).join(': ') : title;
-    var s = stepsOf(data && data.run), sub = ['Step 1 of 3. Napkin has read the brief and the research. Tick the insights the crew should work on.',
+    var s = stepsOf(data && data.run), noPick = !focusOf(data).insights.length,
+      readWords = sn.brief && sn.research ? 'the brief and the research' : sn.research ? 'the research' : 'the brief',
+      sub = [noPick ? 'Step 1 of 3. This is what arrived. Find the insights, then tick the ones the crew should work on.' : 'Step 1 of 3. Napkin has read ' + readWords + '. Tick the insights the crew should work on.',
       'Step 2 of 3. The crew explores on its own: different headings, other categories. Steer it if you want to.',
-      'Step 3 of 3. Every route comes back developed. Greenlight as many as are worth making.'][s.at];
-    return '<section class="app-head"><div><div class="eyebrow">' + esc(eyebrow) + '</div><h1 class="hero-title">Territories<span class="period-dot"></span></h1><p class="hero-sub">' + esc(sub) + '</p></div>' +
+      'Step 3 of 3. Every route comes back developed. Greenlight as many as are worth making.'][st.view != null ? st.view : s.at];
+    return '<section class="app-head"><div><div class="eyebrow" title="' + esc(eyebrow) + '"><span>' + esc(eyebrow) + '</span></div><h1 class="hero-title">Territories<span class="period-dot"></span></h1><p class="hero-sub">' + esc(sub) + '</p></div>' +
       '<ol class="flow-steps" aria-label="Steps">' + STEPS.map(function (p, i) {
         var live = i <= s.reached;
         return '<li><button type="button" data-step="' + p[0] + '"' + (i === (st.view != null ? st.view : s.at) ? ' aria-current="step"' : '') + (i < s.at ? ' class="done"' : '') + (live ? '' : ' disabled title="Opens when the step before it is done"') + '><i>' + (i < s.at ? '✓' : i + 1) + '</i><span>' + p[1] + '</span></button></li>';
@@ -1611,7 +1620,7 @@ var TerritoriesLogic = (function () {
     var up = upstreamOf(data), c = counts(data);
     if (what === 'brief' && up.brief) {
       return { title: briefTitle(data, up), html: '<span class="psec-t">What came from the brief · ' + esc(plural(c.briefFields, 'field')) + '</span>' +
-        up.brief.fields.map(function (f) { return '<div class="evrow"><div class="grow"><b style="font-weight:600">' + esc(f.label) + '.</b> ' + esc(f.text) + '</div>' + refChip('brief:' + f.key, data) + '</div>'; }).join('') };
+        up.brief.fields.map(function (f) { return '<div class="evrow"><div class="grow"><b style="font-weight:600">' + esc(f.label) + '.</b> ' + esc(unconfirmed(f.text).text) + '</div>' + refChip('brief:' + f.key, data) + '</div>'; }).join('') };
     }
     if (what === 'research' && up.research) {
       var pins = Object.keys(up.research.pins).sort(), fis = Object.keys(up.research.findings).sort();
@@ -1669,7 +1678,9 @@ var TerritoriesLogic = (function () {
     if (e.a === 'explore') {
       var c = counts(data), ap = approvePatch(run, c.ticked, by, at);
       if (!ap) return { writes: [], toast: c.ticked ? 'Explore is already approved for these ticks.' : 'Tick at least one insight first.' };
-      return { writes: [{ patch: { run: ap }, action: 'approve pick', rationale: 'gate 1 of 2 approved: ' + plural(c.ticked, 'insight') + ' ticked' }], start: true, toast: 'Approved.' };
+      // The ENGINE approves (gates.approve, step approve): its approval carries the hash of the choices it was given for, and a page-written one
+      // without it is stale to the engine, so the crew would never set off. The run starts when the approval has landed.
+      return { writes: [], request: { key: 'approve:pick', what: 'The approval', input: { step: MOVES.approve, gate: 'pick', by: by }, startAfter: true }, toast: 'Approved.' };
     }
     if (e.a === 'first') {
       return pickState(run) === 'none' && !focusOf(data).insights.length ? { writes: [], start: true } : null;
@@ -2482,7 +2493,7 @@ var TerritoriesLookups = (function () {
   function section(data, ui) {
     if (!isObj(data && data.run)) {      // nothing for a request to name until the engine has written the document
       return '<div class="bt-box"><textarea rows="2" disabled placeholder="Ask the Research agent to look something up…" aria-label="Ask the Research agent to look something up"></textarea>' +
-        '<div class="bt-hint">Look-ups open once the engine has read the brief and the research.</div><div class="row"><span class="bt-scope">Whole exploration</span><span class="spacer"></span><button type="button" class="btn dark" disabled>Look it up</button></div></div>';
+        '<div class="bt-hint">Look-ups open once the crew has read what arrived: use Find the insights first.</div><div class="row"><span class="bt-scope">Whole exploration</span><span class="spacer"></span><button type="button" class="btn dark" disabled>Look it up</button></div></div>';
     }
     var qs = lookups(data), wait = qs.filter(function (q) { return q.status === 'ask'; });
     var done = qs.filter(function (q) { return q.status === 'done'; }).slice(-SHOWN).reverse();
@@ -2645,7 +2656,7 @@ var TerritoriesLookups = (function () {
     ui.cross = null;
     if (!(window.clan && window.clan.apiProxy)) { ui.req = { key: rq.key, state: 'failed', error: rq.what + ' runs through the host, and the host is not here. Nothing changed.' }; render(); return; }
     if (ui.mw === false) { ui.req = { key: rq.key, state: 'failed', error: 'The engine is not connected in this workspace, so nothing was sent. Nothing changed.' }; render(); return; }
-    ui.req = { key: rq.key, what: rq.what, state: 'sending', id: null, delay: 900, t: 0, error: null, then: rq.then || null, continueIn: rq.continueIn || null, after: rq.after || null };
+    ui.req = { key: rq.key, what: rq.what, state: 'sending', id: null, delay: 900, t: 0, error: null, then: rq.then || null, startAfter: !!rq.startAfter, continueIn: rq.continueIn || null, after: rq.after || null };
     render();
     var me = ui.req;
     window.clan.apiProxy('middleware', { task: L.TASKS.run, input: rq.input }).then(function (res) { onRequest(me, res); }, function (e) { reqFailed(me, 'The middleware could not be reached: ' + (e && e.message || e)); });
@@ -2661,6 +2672,7 @@ var TerritoriesLookups = (function () {
       if (b.job.error) { reqFailed(r, r.what + ' did not go through. ' + (b.job.error.message || b.job.error.type || String(b.job.error))); return; }
     } else r.state = 'done';
     if (r.state === 'done' && r.after === 'frames') { r.after = null; refreshFrames(); }
+    if (r.state === 'done' && r.startAfter) { r.startAfter = false; render(); startRun(); return; }
     if (r.state === 'done' && r.then) { var nx = r.then; r.then = null; render(); startRequest(nx); return; }
     // A written send asks the shell to make the spin-off (clan:continue-in); the shell says in its own words when the target is not installed.
     if (r.state === 'done' && r.continueIn) { var app = r.continueIn; r.continueIn = null; try { window.parent.postMessage({ type: 'clan:continue-in', app_id: app }, '*'); } catch (x) { /* no shell */ } }
@@ -3002,7 +3014,7 @@ var TerritoriesLookups = (function () {
     else { r.removeAttribute('data-agency-accent'); r.style.removeProperty('--ag-act-line'); }
   }
   function start() {
-    if (window.clan && typeof window.clan.me === 'function') window.clan.me().then(function (m) { if (m) { ui.me = { name: m.name || null }; agency(m.agency); render(); } }, function () {});
+    if (window.clan && typeof window.clan.me === 'function') window.clan.me().then(function (m) { if (m) { ui.me = { name: m.name || (m.id ? 'You' : null) }; agency(m.agency); render(); } }, function () {});
   }
   if (document.readyState === 'complete') setTimeout(start, 0); else window.addEventListener('load', start);
 

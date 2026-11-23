@@ -78,6 +78,11 @@ name the stand-in, its port, or branch on which implementation answered.
   brief (objectives, audience, mandatories, budget, timing; the spine `briefs` only when the project carries no brief) from it (no picture bytes: those are
   fetched from the relay by hash with the assets pass), puts it back under `data.upstream.<id>` for the Confidential marks, and sends it
   to the engine as `production_upstream`. Absent when the document carries no Production project.
+- **`carried_upstream`** (2026-11-23, features/territories): on a Territories document (app `ie.napkin.territories`), the frozen copies of
+  `data.upstream` that are a brief or research, whole, `{<document id>: copy}`, beside the index above (a kit and a Production project are
+  left out). `run_territories` reads the brief from them (`doc.ctx_data_carried` puts them back under `data.upstream`), because from the
+  index alone the engine finds no brief and asks for a category and a market. The index still lists them. Absent when the document
+  carries none, and on every other app.
 - **`upstream_ask`** (2026-11-09, features/spinoff-and-links): on a document
   whose pipeline declares `extract_ask`, the ask of the brief it carries:
   `{document_id, direct, fields: {<path>: text}}`, the paths drawn only from
@@ -1918,7 +1923,7 @@ is the only state (a run's stage, gates and answers live in `data.run`), so a st
   `pictures.fill` (once each, never one hash in two slots or on two routes) or `pictures.attach`; a refusal is words. A greenlit Final with no stated
   rights holds the gate (`picture_rights`, gates.blockers).
 - **A person's choices about a world, and the write race.** `set_lead` (`territory_id`, `line` or null), `star_line` (`territory_id`, `line`, `on`) and
-  `keep_feel` (`territory_id`, `dial_set` of `tone`, `energy`, `register`, `brand` as whole numbers 0 to 10, or null) are small moves, not a patch of
+  `keep_feel` (`territory_id`, `dial_set` of `tone`, `energy`, `register`, `brand` as whole numbers 0 to 100 (the schema's dial), or null) are small moves, not a patch of
   the whole `territories` array (RFC 7396 replaces arrays, so an engine write and a choice at the same moment lost one of the two). With no step of the
   document running a move applies to the current document and the reply carries its change. While a step runs (a `push`, a `more`) the move is checked
   against the document now (a refusal is a failed job in words) and **held inside that step**: it is applied to the document the step returns, under the
