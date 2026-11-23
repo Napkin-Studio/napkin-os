@@ -231,7 +231,23 @@ files:
     role: "spec-agent-guide"
     type: "text/markdown"
     sha256: "sha256:..."
+  - id: "human-asset-brief-pdf"       # a LINK: no entry in the archive
+    path: "human/assets/brief.pdf"
+    role: "human-asset"
+    type: "application/pdf"
+    sha256: "sha256:..."              # REQUIRED on a link: names the bytes
+    linked: true                      # optional, default false
 ```
+
+A file entry with `linked: true` is a *link*: its bytes are not in the archive
+but in a content-addressed store the host keeps (the hosted workspace's blob
+store), under the entry's `sha256`. A link MUST carry a valid `sha256`; there
+is no archive entry at `path`, so the "listed file must exist" and hash checks
+skip it. A spin-off carries a link on as a link. A host that holds no such store
+(desktop, browser) embeds the bytes instead, and anything that leaves a
+workspace (download, export) MUST put the bytes back in so the file opens
+alone. Readers that do not know `linked` see a file entry whose entry is
+absent.
 
 ### Role Enumeration
 

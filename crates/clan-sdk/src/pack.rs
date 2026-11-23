@@ -455,6 +455,7 @@ pub fn pack(
                             content_type: "application/octet-stream".into(),
                             priority: None,
                             sha256: None,
+                            linked: false,
                         });
                     }
                 }
@@ -467,6 +468,7 @@ pub fn pack(
                         content_type: "text/html".into(),
                         priority: Some(1),
                         sha256: None,
+                        linked: false,
                     });
                 }
             }
@@ -1331,6 +1333,7 @@ fn repack_with_entry_decision(
             content_type: "application/octet-stream".to_string(), // Builder will override this if it can infer
             priority: None,
             sha256: None,
+            linked: false,
         });
     }
 
@@ -1466,6 +1469,7 @@ mod tests {
                 content_type: ct.into(),
                 priority: None,
                 sha256: None,
+                linked: false,
             }
         }
         let manifest = Manifest {

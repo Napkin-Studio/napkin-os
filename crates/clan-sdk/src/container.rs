@@ -265,6 +265,7 @@ mod tests {
                 content_type: "application/yaml".into(),
                 priority: None,
                 sha256: None,
+                linked: false,
             }],
         }
     }
@@ -350,6 +351,7 @@ mod tests {
             content_type: "text/markdown".into(),
             priority: None,
             sha256: None,
+            linked: false,
         });
         let mut builder = ClanBuilder::new(manifest);
         builder.add_entry("shared/data.yaml", b"vendor: Acme\n".to_vec());

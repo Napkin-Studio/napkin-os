@@ -344,6 +344,7 @@ pub fn attach(target: &ClanFile, source: &ClanFile) -> Result<AttachOutcome> {
         last_decision,
         // An update brings the source's newer files over the older copies.
         verb == AttachVerb::Updated,
+        false,
     )?;
     let record = Attached {
         app_id: src_app.clone(),

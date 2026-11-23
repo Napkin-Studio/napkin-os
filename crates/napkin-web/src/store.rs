@@ -22,7 +22,9 @@
 
 use std::path::PathBuf;
 
-use napkin_host::{Change, DocId, HostError, HostResult, Library, PartStore, Version};
+use napkin_host::{
+    BlobInfo, BlobStore, Change, DocId, HostError, HostResult, Library, PartStore, Version,
+};
 
 pub struct TenantStore {
     root: PathBuf,
@@ -109,6 +111,122 @@ impl PartStore for TenantStore {
         }
         std::fs::write(&path, &change.bytes).map_err(|e| HostError::internal(e.to_string()))?;
         Ok(change.archive_version())
+    }
+
+    fn blobs(&self) -> Option<&dyn BlobStore> {
+        Some(self)
+    }
+}
+
+/// The tenant's files, each once, under the sha256 of its bytes:
+///
+/// ```text
+/// <root>/<tenant>/blobs/<aa>/<hex>          the file (aa: first two hex digits)
+/// <root>/<tenant>/blobs/.pins/<hex>         held by a document outside the library
+/// ```
+///
+/// The directory is the tenant's own, so a hash another tenant stores does not
+/// exist here (features/spinoff-asset-links).
+impl TenantStore {
+    fn blobs_dir(&self) -> PathBuf {
+        self.root.join("blobs")
+    }
+
+    /// The path of `sha256` (`sha256:<64 hex>`), or a refusal: the hash comes
+    /// from a document and must not become any other path.
+    fn blob_path(&self, sha256: &str) -> HostResult<PathBuf> {
+        let hex = sha256
+            .strip_prefix("sha256:")
+            .filter(|h| h.len() == 64 && h.bytes().all(|b| b.is_ascii_hexdigit()))
+            .ok_or_else(|| HostError::bad_request(format!("not a sha256: {sha256}")))?;
+        let hex = hex.to_ascii_lowercase();
+        Ok(self.blobs_dir().join(&hex[..2]).join(hex))
+    }
+}
+
+impl BlobStore for TenantStore {
+    fn put(&self, bytes: &[u8]) -> HostResult<String> {
+        let sha = clan_sdk::hash::sha256_prefixed(bytes);
+        let path = self.blob_path(&sha)?;
+        if path.exists() {
+            return Ok(sha); // never overwritten
+        }
+        let dir = path.parent().expect("a blob path has a parent");
+        std::fs::create_dir_all(dir).map_err(|e| HostError::internal(e.to_string()))?;
+        // Written whole beside it, then renamed: a reader never sees half a file.
+        let tmp = dir.join(format!(".tmp-{}-{}", std::process::id(), &sha[7..15]));
+        std::fs::write(&tmp, bytes).map_err(|e| HostError::internal(e.to_string()))?;
+        std::fs::rename(&tmp, &path).map_err(|e| HostError::internal(e.to_string()))?;
+        Ok(sha)
+    }
+
+    fn get(&self, sha256: &str) -> HostResult<Vec<u8>> {
+        let path = self.blob_path(sha256)?;
+        std::fs::read(path).map_err(|_| HostError::not_found(format!("no stored file {sha256}")))
+    }
+
+    fn has(&self, sha256: &str) -> bool {
+        self.blob_path(sha256).map(|p| p.is_file()).unwrap_or(false)
+    }
+
+    fn list(&self) -> Vec<BlobInfo> {
+        let mut out = Vec::new();
+        let Ok(top) = std::fs::read_dir(self.blobs_dir()) else {
+            return out;
+        };
+        for shard in top.flatten() {
+            let name = shard.file_name().to_string_lossy().to_string();
+            if name.len() != 2 || !shard.path().is_dir() {
+                continue; // .pins and anything else
+            }
+            let Ok(files) = std::fs::read_dir(shard.path()) else {
+                continue;
+            };
+            for f in files.flatten() {
+                let hex = f.file_name().to_string_lossy().to_string();
+                if hex.len() != 64 {
+                    continue; // a .tmp- file mid-write
+                }
+                let written_at = f
+                    .metadata()
+                    .and_then(|m| m.modified())
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map_or(0, |d| d.as_secs());
+                out.push(BlobInfo {
+                    sha256: format!("sha256:{hex}"),
+                    written_at,
+                });
+            }
+        }
+        out
+    }
+
+    fn remove(&self, sha256: &str) -> HostResult<()> {
+        let path = self.blob_path(sha256)?;
+        match std::fs::remove_file(path) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(HostError::internal(e.to_string())),
+        }
+    }
+
+    fn pin(&self, sha256: &str) -> HostResult<()> {
+        let hex = self.blob_path(sha256)?;
+        let hex = hex.file_name().expect("a name").to_owned();
+        let dir = self.blobs_dir().join(".pins");
+        std::fs::create_dir_all(&dir).map_err(|e| HostError::internal(e.to_string()))?;
+        std::fs::write(dir.join(hex), b"").map_err(|e| HostError::internal(e.to_string()))
+    }
+
+    fn pinned(&self) -> Vec<String> {
+        let Ok(rd) = std::fs::read_dir(self.blobs_dir().join(".pins")) else {
+            return Vec::new();
+        };
+        rd.flatten()
+            .filter_map(|e| e.file_name().into_string().ok())
+            .map(|h| format!("sha256:{h}"))
+            .collect()
     }
 }
 
@@ -229,6 +347,28 @@ mod tests {
         );
         assert!(b.read(&id).is_err());
         assert_eq!(a.read(&id).unwrap(), b"tenant a's bytes");
+    }
+
+    #[test]
+    fn a_file_is_stored_once_and_one_tenant_cannot_read_anothers() {
+        let dir = tempfile::tempdir().unwrap();
+        let a = TenantStore::new(dir.path().join("a"));
+        let b = TenantStore::new(dir.path().join("b"));
+        let sha = a.put(b"a client pdf").unwrap();
+        assert_eq!(a.put(b"a client pdf").unwrap(), sha);
+        assert_eq!(a.list().len(), 1);
+        assert_eq!(a.get(&sha).unwrap(), b"a client pdf");
+        assert!(!b.has(&sha));
+        assert_eq!(b.get(&sha).unwrap_err().status, 404);
+        // A hash from a document is never a path.
+        for bad in ["sha256:../../x", "../x", "sha256:abc", "sha256:"] {
+            assert!(a.get(bad).is_err(), "{bad}");
+        }
+        a.pin(&sha).unwrap();
+        assert_eq!(a.pinned(), vec![sha.clone()]);
+        assert_eq!(a.list().len(), 1, "a pin is not a file");
+        a.remove(&sha).unwrap();
+        assert!(a.list().is_empty());
     }
 
     #[test]

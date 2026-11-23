@@ -1074,6 +1074,7 @@ fn cmd_spinoff(
             source_uri: std::fs::canonicalize(&from)
                 .ok()
                 .map(|p| format!("file://{}", p.display())),
+            link_assets: false,
         },
     )
     .context("failed to spin off")?;
