@@ -25,7 +25,7 @@ const doc = {
   onBarAction: (id: string) => { (window as unknown as { __acted: string[] }).__acted = [...((window as unknown as { __acted?: string[] }).__acted ?? []), id] },
 }
 createRoot(document.getElementById('root')!).render(createElement(Toolbar, {
-  agency: 'Studio A', onAgency: noop, onHome: noop, needs: 0, onDecisions: noop, user: 'sam', onSignOut: noop,
+  agency: 'Napkin Studio', onAgency: noop, onHome: noop, needs: 0, onDecisions: noop, user: 'sam', onSignOut: noop,
   account: { name: 'Sam Agent', initials: 'SA', line: 'Studio A' },
   client: { name: 'Harbour Bakes', mono: 'HB', look: { cl: '#DA291C', ink: '#FFC72C' }, switcher: [{ id: 'c1', name: 'Harbour Bakes' }], onSwitch: noop },
   doc,
