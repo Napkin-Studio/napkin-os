@@ -648,3 +648,17 @@ def test_the_estimate_names_every_stage_the_crew_calls():
     for stage in [f"route_{d}" for d in ("core", "feel", "opposite", "adjacent", "outside", "yours", "custom")] + ["distance", "spread_repair", "kill", "sort"]:
         assert stage in STAGE_MODEL
         assert sp.estimate_call(stage) > 0
+
+
+def test_the_crew_is_named_setting_off_before_any_member_is_back_then_each_one_back():
+    """Explore says who sets off before the pool starts (one event, every member with its lane's words), then one event per member as it is
+    back: what the job status shows while the document is still unwritten (territories-redesign, engine progress option A)."""
+    seen = []
+    routes.explore_ex(doc0(), FakeLLM(outputs()), facts=FACTS, findings=FINDINGS, on_progress=seen.append)
+    first = seen[0]
+    assert set(first) == {"setting_off"}
+    assert [m["id"] for m in first["setting_off"]] == [m["id"] for m in routes.CREW]
+    assert all(set(m) == {"id", "name", "short", "role", "colour", "heading"} for m in first["setting_off"])
+    back = seen[1:]
+    assert sorted(e["crew"] for e in back) == sorted(m["id"] for m in routes.CREW)
+    assert all(e["state"] in ("back", "stopped") and isinstance(e["routes"], int) for e in back)

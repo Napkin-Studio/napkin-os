@@ -672,6 +672,9 @@ def explore_ex(doc: dict, llm, *, facts=None, findings=None, sources=None, marks
                 on_progress({"crew": m["id"], "state": r["state"], "routes": len(r["routes"])})
         return r
 
+    if on_progress:     # who is setting off, before any of them is back: the page draws one lane per member from the job (not the document)
+        on_progress({"setting_off": [{k: m.get(k) for k in ("id", "name", "short", "role", "colour", "heading")} for m in crew]})
+
     with ThreadPoolExecutor(max_workers=len(crew)) as ex:
         list(ex.map(go, crew))
     info["dropped"] = [d for m in crew for d in results[m["id"]]["dropped"]]

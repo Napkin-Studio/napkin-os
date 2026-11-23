@@ -113,6 +113,7 @@ class TerritoriesJob:
         self.pending: list = []                 # a person's small moves that came while the step ran: applied to the document it returns
         self.done_n, self.total_n = 0, max(1, total)
         self.info: dict = {}
+        self.crew: list[dict] = []              # the crew's lanes while explore runs (progress): who is out, who is back and with how many routes
         self.res = None                         # what the runner returned, for the run log's record
         self.store, self.seg_base, self.t0 = None, 0, None    # set when the step starts: the run's store, its segments before it, its start (the ledger's clock)
         self.tele = telemetry.Collector()
@@ -159,8 +160,19 @@ class TerritoriesJob:
         return doc, refusals
 
     def progress(self, p: dict):
+        """The runner's word on the crew: ``{setting_off: [member]}`` once before they go (not counted), then ``{crew, state, routes}`` as each
+        is back. The job keeps one entry per member for its status (``crew``), so the page can show who is out and who is back while the
+        document is still unwritten (it gets crew, expeditions and territories only at the end)."""
         with self.lock:
+            if isinstance(p, dict) and isinstance(p.get("setting_off"), list):
+                self.crew = [{"id": m.get("id"), "name": m.get("name"), "short": m.get("short"), "role": m.get("role"), "colour": m.get("colour"),
+                              "heading": m.get("heading"), "state": "out", "routes": 0} for m in p["setting_off"] if isinstance(m, dict) and m.get("id")]
+                return
             self.done_n = min(self.total_n, self.done_n + 1)
+            if isinstance(p, dict) and p.get("crew"):
+                for m in self.crew:
+                    if m["id"] == p["crew"]:
+                        m["state"], m["routes"] = str(p.get("state") or "back"), int(p.get("routes") or 0)
 
     def _cancelled(self) -> bool:
         return self.state == "cancelled"
@@ -304,7 +316,8 @@ class TerritoriesJob:
     def view(self):
         with self.lock:
             return {"id": self.id, "state": self.state, "progress": {"done": self.total_n if self.state == "done" else self.done_n, "total": self.total_n},
-                    "stage": self.step, "question": None, "started_at": self.started_at, "finished_at": self.finished_at, "error": self.error}
+                    "stage": self.step, "question": None, "started_at": self.started_at, "finished_at": self.finished_at, "error": self.error,
+                    "crew": [dict(m) for m in self.crew]}
 
     def result(self):
         with self.lock:
