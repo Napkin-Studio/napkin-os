@@ -97,6 +97,8 @@ pub fn router() -> Router<Arc<AppCtx>> {
         // Production is an app whose projects live in the relay: the bridge (spinoff.rs)
         .merge(crate::spinoff::router())
         .merge(crate::blobs::router())
+        .merge(crate::save::router())
+        .merge(crate::trash::router())
 }
 
 /// An opened document, plus what the shell needs to render it: the capability
@@ -156,6 +158,9 @@ struct SessionInfo {
     /// The Production Tool is at `/production` for this person: a relay is
     /// configured and they are signed in (features/os-sign-in.clan).
     production: bool,
+    /// Where Production's pictures live (`NAPKIN_PRODUCTION_MEDIA_BASE`), or
+    /// null. An address base only, never a secret (features/production-in-library).
+    media_base: Option<String>,
 }
 
 /// The shell's first call: who am I, and where do app frames live.
@@ -180,6 +185,7 @@ async fn session(
         dogfood,
         consented,
         production,
+        media_base: ctx.media_base.clone(),
     })
 }
 
@@ -737,13 +743,35 @@ async fn download(
     Tenant(tenant): Tenant,
     Path((_t, doc)): Path<(String, String)>,
 ) -> ApiResult<Response> {
-    let (_ws, session, _) = doc_session(&ctx, &tenant, &doc)?;
-    let bytes = session.raw_bytes()?;
+    let (ws, session, id) = doc_session(&ctx, &tenant, &doc)?;
+    // A Production project is handed out exactly as stored: the tool saves
+    // these bytes back, and the version it names is their hash.
+    let bytes = if session.app_id().as_deref() == Some(crate::save::PRODUCTION_APP_ID) {
+        session.stored_bytes()?
+    } else {
+        session.raw_bytes()?
+    };
     let name = format!(
         "{}.clan",
         filename_stem(&session.title().unwrap_or_default())
     );
-    Ok(attachment("application/zip", &name, bytes))
+    let mut resp = attachment("application/zip", &name, bytes);
+    // The version a save names in If-Match (contract 2.2): the stored one.
+    if let Some(v) = session.current_version() {
+        if let Ok(h) = header::HeaderValue::from_str(&format!("\"{v}\"")) {
+            resp.headers_mut().insert(header::ETAG, h);
+        }
+    }
+    if let Some(ms) = ws.tenant_store.as_ref().and_then(|t| t.saved_at_ms(&id)) {
+        if let Some(at) = chrono::DateTime::from_timestamp_millis(ms as i64) {
+            if let Ok(h) = header::HeaderValue::from_str(
+                &at.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+            ) {
+                resp.headers_mut().insert("x-saved-at", h);
+            }
+        }
+    }
+    Ok(resp)
 }
 
 #[derive(Deserialize)]
