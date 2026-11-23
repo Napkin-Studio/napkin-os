@@ -336,6 +336,21 @@ button.tsrc:hover{border-color:color-mix(in srgb,var(--ink) 35%,var(--line))}
 .wsrow:disabled{opacity:.7}
 .wsrow b{font:600 17px var(--font-serif)}
 .wsdot{width:12px;height:12px;border-radius:50%;margin-top:6px}
+/* the ask cards (the approved mock): a needs-you card is a Booth card with the ask line round it */
+.ask{border:1.5px solid var(--ask-line);box-shadow:0 0 0 4px var(--ask-glow);background:var(--card)}
+.ask .need{margin-left:auto;font:800 10px var(--font-ui);letter-spacing:.1em;text-transform:uppercase;color:var(--alert);border:1px solid var(--ask-line);border-radius:999px;padding:1px 8px;white-space:nowrap}
+.ask .q{font:600 19px/1.25 var(--font-serif)}
+.ask .quote .lbl{display:block;color:var(--muted)}
+.ask .quote.bad{border-color:var(--alert)}
+.ask .quote{border-left:3px solid var(--warn);padding:2px 0 2px 10px;font-size:15px;line-height:1.4;color:var(--ink-soft)}
+.ask .reason{display:block;border:1px solid var(--line-strong);border-radius:8px;background:var(--paper);padding:8px 10px}
+.ask .reason .lbl{color:var(--muted);display:block;margin-bottom:4px}
+.ask .reason textarea{width:100%;border:0;outline:0;background:transparent;resize:none;font:inherit;font-size:15px;line-height:1.4;color:var(--ink);min-height:42px;padding:0}
+.ask .reason textarea::placeholder{color:var(--faint)}
+.ask .reason:focus-within{border-color:var(--accent)}
+.ask .acts{display:flex;flex-wrap:wrap;gap:8px}
+.ask .hint{font-size:13.5px;line-height:1.4;color:var(--muted)}
+.ask.off{border-color:var(--line-strong);box-shadow:none;background:var(--paper-2)}
 /* a route as a sketch: the palette, the cleared face, the world's own headline (ported from the demo's touchpoints) */
 .tp{container-type:inline-size;position:relative;overflow:hidden;background:var(--t-bg);color:var(--t-ink);border-radius:6px;box-shadow:0 1px 0 rgba(0,0,0,.08),0 10px 22px -14px rgba(0,0,0,.5)}
 .tp .scn{position:absolute;inset:0}
@@ -1193,7 +1208,7 @@ var TerritoriesLogic = (function () {
   // The page only reads and asks. Every move (greenlight, remove, re-rank, send) is a request to the middleware, named after the engine's own
   // move (engine/territory/gates.py: greenlight_route, answer_ask, record_review, approve), and the document it writes back is what the
   // gallery and the tray show. The page keeps no second copy of the gate's rules (run.gate.blocked_by and asks[] are the engine's words).
-  var MOVES = { greenlight: 'greenlight_route', remove: 'remove_route', rerank: 'rerank_routes', send: 'send_routes' };
+  var MOVES = { greenlight: 'greenlight_route', remove: 'remove_route', rerank: 'rerank_routes', send: 'send_routes', approve: 'approve', answer: 'answer_ask', review: 'record_review' };
   var DESTS = [{ id: 'deck-maker', name: 'Deck Maker', dot: 'var(--muted)', does: 'Pitch it: the deck opens with the greenlit routes as the recommendation.', built: true },
     { id: 'production-tool', name: 'Production tool', dot: '#FF6A55', does: 'Make it: scripts, boards and films start from each route’s world.', built: false }];
   var BAND_PHRASE = { core: 'close to the brief', stretch: 'a stretch', far_out: 'far out' };
@@ -1340,7 +1355,7 @@ var TerritoriesLogic = (function () {
         return '<div class="cmpcell"><div class="row" style="justify-content:space-between;flex-wrap:nowrap"><b class="cname">' + esc(t.name) + '</b>' + glButton(t, ids.indexOf(t.id) !== -1, true) + '</div>' + touch(t, tp, brand) + '</div>'; }).join('') + '</div>';
   }
   function glWords(req) {
-    if (!isObj(req) || !/^(gl:|rerank|send:)/.test(req.key || '')) return '';
+    if (!isObj(req) || !/^(gl:|rerank|send:|ask:|review)/.test(req.key || '')) return '';
     if (req.state === 'sending') return 'Sending it to the engine…';
     if (req.state === 'queued' || req.state === 'running') return 'The engine is working on it. The page shows it when the document changes.';
     if (req.state === 'failed') return req.error || 'That did not go through. Nothing changed.';
@@ -1354,13 +1369,56 @@ var TerritoriesLogic = (function () {
   function greenlightSheet(data, ui) {
     var all = developed(data), n = greenIds(data).length, ranked = all.filter(function (t) { return typeof t.rank === 'number'; }).length, run = isObj(data && data.run) ? data.run : {};
     var err = isObj(run.error) ? '<p class="runnote bad" role="alert">' + esc(run.error.message) + '</p>' : '';
-    var words = glWords(ui.req), body;
+    var words = /^(ask:|review)/.test((ui.req && ui.req.key) || '') ? '' : glWords(ui.req), body;
     if (!all.length) body = '<div class="crew-empty" role="status">No route has been developed yet. They appear here, ranked, as the engine finishes them.</div>';
     else body = ui.cmp ? compareGrid(data, ui) : greenGroups(data);
     return '<article class="sheet"><header class="sheet-head"><div class="sheet-eyebrow">Step 3 · Review and greenlight</div><h2>Developed, then chosen</h2>' +
       '<p>Every route comes back developed: a campaign world, lines, checks and a blind rank. Greenlight as many as are worth making.</p></header>' +
       '<div class="stats"><span>' + esc(plural(all.length, 'route')) + '</span><span>' + n + ' greenlit</span><span>' + esc(ranked + ' ranked by the blind judge') + '</span></div>' +
       '<div class="sheet-body">' + err + (words ? '<p class="runnote' + (ui.req && ui.req.state === 'failed' ? ' bad' : '') + '" role="status">' + esc(words) + '</p>' : '') + body + '</div></article>';
+  }
+  /** The asks the engine has open for a route that is greenlit (an ask for any other route is not shown), in the engine's order. */
+  function openAsks(data) {
+    var ids = greenIds(data);
+    return arr(data && data.asks).filter(function (a) { return isObj(a) && a.status === 'open' && (a.kind === 'sensitive_review' || ids.indexOf(a.territory_id) !== -1); });
+  }
+  function mandatoryOf(t) {
+    var cs = arr(t && t.checks).filter(function (c) { return isObj(c) && c.kind === 'mandatory' && (c.status === 'fail' || c.status === 'warn'); });
+    var bad = cs.filter(function (c) { return c.status === 'fail'; })[0] || cs[0] || null;
+    return bad ? { status: bad.status, text: text(bad.text) } : { status: 'ok', text: '' };
+  }
+  function reqWords2(req, key) { return isObj(req) && req.key === key && req.state !== 'done' ? glWords(req) : ''; }
+  /** One needs-you card of the Booth (the approved mock, mock/greenlight-asks): the engine's ask, in words, with what answers it. */
+  function askCard(a, data, ui) {
+    var all = developed(data), t = all.filter(function (x) { return x.id === a.territory_id; })[0] || null, name = t ? t.name : 'This route';
+    var key = a.kind === 'sensitive_review' ? 'review' : 'ask:' + a.id, w = reqWords2(ui.req, key), failed = ui.req && ui.req.key === key && ui.req.state === 'failed', busy = reqBusy(ui.req);
+    var head = '<header class="bc-hd">' + sphere('review', 20) + '<span class="bc-who">Review · ' + (a.kind === 'sensitive_review' ? 'sensitive topic' : 'before sending') + '</span><span class="need">Needs you</span></header>';
+    var tail = w ? '<div class="runnote' + (failed ? ' bad' : '') + '" role="status">' + esc(w) + '</div>' : '';
+    var body, q;
+    var btn = function (label, attrs, dark, dis) { return '<button type="button" class="btn' + (dark ? ' dark' : '') + '" ' + attrs + (dis ? ' disabled' : '') + '>' + esc(label) + '</button>'; };
+    var A = ' data-ask="' + esc(a.id) + '"';
+    if (a.kind === 'derived_evidence') {
+      q = name + ' rests on a finding nobody has verified.';
+      var quotes = arr(a.ids).slice(0, 3).map(function (c) { var r = resolve(c, data); return '<div class="quote">' + refChip(c, data) + ' ' + esc(r.text) + '</div>'; }).join('');
+      body = '<div class="q">' + esc(q) + '</div>' + quotes + '<div class="acts">' + btn('Verify it', A + ' data-answer="verify"', true, busy) + btn('Send it flagged', A + ' data-answer="send_flagged"', false, busy) + btn('Take it off the list', A + ' data-answer="change"', false, busy) + '</div>' +
+        '<div class="hint">Verify it means you have checked it. Send it flagged keeps it, marked unverified.</div>';
+    } else if (a.kind === 'near_mandatory') {
+      var m = mandatoryOf(t), fail = m.status === 'fail', note = (ui.reason && ui.reason[a.id]) || '';
+      q = name + (fail ? ' fails a mandatory.' : ' is close to a mandatory.');
+      body = '<div class="q">' + esc(q) + '</div>' + (m.text ? '<div class="quote' + (fail ? ' bad' : '') + '"><span class="lbl">Mandatory · ' + (fail ? 'fails' : 'watch') + '</span>' + esc(m.text) + '</div>' : '') +
+        (fail ? '<label class="reason"><span class="lbl">Why it goes ahead</span><textarea rows="2" data-reason="' + esc(a.id) + '" placeholder="Say why. It is kept with the route." aria-label="Why ' + esc(name) + ' goes ahead">' + esc(note) + '</textarea></label>' : '') +
+        '<div class="acts">' + btn('Go ahead', A + ' data-answer="ok" data-go="' + esc(a.id) + '"', true, busy || (fail && !note.trim())) + btn('Take it off the list', A + ' data-answer="change"', false, busy) + '</div>';
+    } else {
+      var names = greenIds(data).map(function (id) { var x = all.filter(function (y) { return y.id === id; })[0]; return x ? x.name : ''; }).filter(Boolean), who = ui.me && ui.me.name;
+      body = '<div class="q">' + esc(text(a.text) || 'This category needs a person to review the routes before they are sent.') + '</div>' +
+        '<div class="bc-note">Read ' + esc(_list(names)) + ', then mark them reviewed. The engine cannot review its own work.</div><div class="acts">' + btn(who ? 'Mark as reviewed by ' + who : 'Mark as reviewed', 'data-review', true, busy || !who) + '</div>' +
+        '<div class="hint">' + (who ? 'Changing the greenlit routes afterwards means it has to be done again.' : 'Sign in first: only a named person can review.') + '</div>';
+    }
+    return '<article class="bc ask" data-ask-card="' + esc(a.id) + '">' + head + body + tail + '</article>';
+  }
+  function engineOffCard() {
+    return '<article class="bc ask off"><header class="bc-hd">' + sphere('knowledge', 20) + '<span class="bc-who">Engine · off</span></header><div class="q">The engine is not connected in this workspace.</div>' +
+      '<div class="bc-note">A greenlight, a remove, a re-rank or a send cannot be saved here, so nothing was changed. Your routes are as they were.</div><div class="acts"><button type="button" class="btn" data-act="recheck">Check again</button></div></article>';
   }
   function greenlightBooth(data, ui) {
     var all = developed(data), ids = greenIds(data), byId = {}; all.forEach(function (t) { byId[t.id] = t; });
@@ -1371,16 +1429,20 @@ var TerritoriesLogic = (function () {
       '<p class="bt-hint">None yet. Open a route to see it as a world, or greenlight straight from its card.</p>') + '</div>';
     var crewN = arr(data && data.crew).length, lk = arr(data && data.lookups).length, ranked = all.filter(function (t) { return typeof t.rank === 'number'; }).length;
     var card = function (role, label, body) { return '<article class="bc"><header class="bc-hd">' + sphere(role, 20) + '<span class="bc-who">' + esc(roleName(role)) + ' · ' + esc(label) + '</span></header><div class="bc-note">' + esc(body) + '</div></article>'; };
-    var hold = holds(data).map(function (b) { return card('review', 'before sending', b.text); }).join('');
+    var asks = openAsks(data), covered = {}; asks.forEach(function (a) { covered[a.kind] = 1; });
+    var hold = holds(data).filter(function (b) { return !covered[b.kind]; }).map(function (b) { return card('review', 'before sending', b.text); }).join('');
     var sends = arr(data && data.sends).filter(isObj).map(function (s) {
       var d = DESTS.filter(function (x) { return x.id === s.to; })[0];
       return card('strategy', 'sent', (d ? d.name : 'Elsewhere') + (s.status === 'sent' ? ': ' + plural(arr(s.territory_ids).length, 'route') + ' went, with the other ' + arr(s.not_chosen).length + ' as routes not chosen.' : ': not built yet, so nothing went.'));
     }).join('');
-    var can = rows.length > 0 && !holds(data).length;
+    var can = rows.length > 0 && !holds(data).length && !asks.length;
     var w = glWords(ui.req), failed = ui.req && ui.req.state === 'failed';
-    return tray + hold + card('research', 'so far', 'This exploration so far: ' + plural(crewN, 'agent') + (lk ? ', ' + plural(lk, 'look-up') : '') + '. The running totals are in Decisions, next to what got greenlit.') +
+    return tray + asks.map(function (a) { return askCard(a, data, ui); }).join('') + hold +
+      card('research', 'so far', 'This exploration so far: ' + plural(crewN, 'agent') + (lk ? ', ' + plural(lk, 'look-up') : '') + '. The running totals are in Decisions, next to what got greenlit.') +
       card('review', 'checked', 'Every route was tested against the brief, the mandatories and the rival lines. ' + ranked + ' ' + (ranked === 1 ? 'is' : 'are') + ' ranked by the blind judge.') + sends +
-      '<button type="button" class="big" data-send' + (can ? '' : ' disabled') + '>Send ' + (rows.length || '') + (rows.length ? ' ' : '') + 'to production →</button>' +
+      (ui.mw === false ? engineOffCard() : '') +
+      '<button type="button" class="big" data-send' + (can ? '' : ' disabled') + '>Send' + (rows.length ? ' ' + rows.length : '') + ' →</button>' +
+      (asks.length ? '<div class="hint" style="text-align:center">Answer ' + (asks.length === 1 ? 'the question' : 'the ' + asks.length + ' questions') + ' first.</div>' : '') +
       (w && /^send:/.test(ui.req.key) ? '<p class="runnote' + (failed ? ' bad' : '') + '" role="status">' + esc(w) + '</p>' : '');
   }
   function dock(data, ui) {
@@ -1576,22 +1638,44 @@ var TerritoriesLogic = (function () {
       if (reqBusy(ui.req)) return { writes: [], toast: 'The last change is still going through.' };
       return { writes: [], request: { key: 'rerank', what: 'Re-rank', input: { step: MOVES.rerank, by: by } } };
     }
+    if (e.a === 'answer') {
+      var ak = openAsks(data).filter(function (x) { return x.id === e.id; })[0];
+      if (!ak || ak.kind === 'sensitive_review') return null;
+      var okA = ak.kind === 'derived_evidence' ? ['verify', 'send_flagged', 'change'] : ['ok', 'change'];
+      if (okA.indexOf(e.answer) === -1) return null;
+      var at2 = developed(data).filter(function (x) { return x.id === ak.territory_id; })[0], why = text(e.note);
+      if (e.answer === 'ok' && mandatoryOf(at2).status === 'fail' && !why) return { writes: [], toast: 'Say why it goes ahead first.' };
+      if (reqBusy(ui.req)) return { writes: [], toast: 'The last change is still going through.' };
+      var ain = { step: MOVES.answer, ask_id: ak.id, answer: e.answer, by: by };
+      if (e.answer === 'ok' && why) ain.note = why;
+      return { writes: [], request: { key: 'ask:' + ak.id, what: 'Your answer', input: ain } };
+    }
+    if (e.a === 'review') {
+      if (!(env.me && env.me.name)) return { writes: [], toast: 'Sign in first: only a named person can review.' };
+      if (!openAsks(data).some(function (x) { return x.kind === 'sensitive_review'; })) return null;
+      if (reqBusy(ui.req)) return { writes: [], toast: 'The last change is still going through.' };
+      return { writes: [], request: { key: 'review', what: 'The review', input: { step: MOVES.review, by: by } } };
+    }
+    if (e.a === 'recheck') return { writes: [], toast: 'Checking the engine…', recheck: true };
     if (e.a === 'present') return developed(data).length ? { writes: [], present: 0 } : null;
     if (e.a === 'send') {
       var dest = DESTS.filter(function (d) { return d.id === e.to; })[0], ids = greenIds(data);
       if (!dest) return null;
       if (!dest.built) return { writes: [], toast: dest.name + ' is not built yet, so nothing was sent.' };
       if (!ids.length) return { writes: [], toast: 'Greenlight at least one route first.' };
-      if (holds(data).length) return { writes: [], toast: holds(data)[0].text };
+      if (holds(data).length || openAsks(data).length) return { writes: [], toast: holds(data).length ? holds(data)[0].text : 'Answer the questions in the Booth first.' };
       if (reqBusy(ui.req)) return { writes: [], toast: 'The last change is still going through.' };
       var not = developed(data).map(function (x) { return x.id; }).filter(function (id) { return ids.indexOf(id) === -1; });
-      return { writes: [], request: { key: 'send:' + dest.id, what: 'The send', input: { step: MOVES.send, to: dest.id, territory_ids: ids, not_chosen: not, by: by } } };
+      var sendRq = { key: 'send:' + dest.id, what: 'The send', input: { step: MOVES.send, to: dest.id, territory_ids: ids, not_chosen: not, by: by } };
+      // The gate is approved first when it is still open at greenlight (gates.approve replaces an older approval); the send follows once that is done.
+      if (isObj(run.gate) && run.gate.id === 'greenlight') return { writes: [], request: { key: sendRq.key, what: 'The approval', input: { step: MOVES.approve, gate: 'greenlight', by: by }, then: sendRq } };
+      return { writes: [], request: sendRq };
     }
     return null;
   }
 
   return {
-    MOVES: MOVES, DESTS: DESTS, developed: developed, greenIds: greenIds, greenGroups: greenGroups, gCard: gCard, touch: touch, scene: scene, greenlightSheet: greenlightSheet, greenlightBooth: greenlightBooth, holds: holds, glWords: glWords, brandOf: brandOf, headline: headline,
+    MOVES: MOVES, DESTS: DESTS, developed: developed, greenIds: greenIds, greenGroups: greenGroups, gCard: gCard, touch: touch, scene: scene, greenlightSheet: greenlightSheet, greenlightBooth: greenlightBooth, holds: holds, openAsks: openAsks, askCard: askCard, glWords: glWords, brandOf: brandOf, headline: headline,
     // for the World view (territories-world-logic), which reads the same helpers
     esc: esc, text: text, plural: plural, pal: pal, tvars: tvars, refChip: refChip, crewOf: crewOf, byRank: byRank, sphere: sphere, roleName: roleName, derivedOf: derivedOf, reqBusy: reqBusy, CHECK_WORDS: CHECK_WORDS, CHECK_STATE: CHECK_STATE,
     TASKS: TASKS, BRIEF_KEYS: BRIEF_KEYS, LABELS: LABELS, KEY_FIELDS: KEY_FIELDS, seen: seen, statsOf: statsOf, fromWords: fromWords, briefValue: briefValue, textOf: textOf, STEPS: STEPS, MAX_INSIGHTS: MAX_INSIGHTS, MAX_TEXT: MAX_TEXT,
@@ -1990,7 +2074,7 @@ var TerritoriesWorld = (function () {
     ui.cross = null;
     if (!(window.clan && window.clan.apiProxy)) { ui.req = { key: rq.key, state: 'failed', error: rq.what + ' runs through the host, and the host is not here. Nothing changed.' }; render(); return; }
     if (ui.mw === false) { ui.req = { key: rq.key, state: 'failed', error: 'The engine is not connected in this workspace, so nothing was sent. Nothing changed.' }; render(); return; }
-    ui.req = { key: rq.key, what: rq.what, state: 'sending', id: null, delay: 900, t: 0, error: null };
+    ui.req = { key: rq.key, what: rq.what, state: 'sending', id: null, delay: 900, t: 0, error: null, then: rq.then || null };
     render();
     var me = ui.req;
     window.clan.apiProxy('middleware', { task: L.TASKS.run, input: rq.input }).then(function (res) { onRequest(me, res); }, function (e) { reqFailed(me, 'The middleware could not be reached: ' + (e && e.message || e)); });
@@ -2005,6 +2089,7 @@ var TerritoriesWorld = (function () {
       r.id = b.job.id || r.id; r.state = b.job.state || 'done';
       if (b.job.error) { reqFailed(r, r.what + ' did not go through. ' + (b.job.error.message || b.job.error.type || String(b.job.error))); return; }
     } else r.state = 'done';
+    if (r.state === 'done' && r.then) { var nx = r.then; r.then = null; render(); startRequest(nx); return; }
     if (r.state === 'queued' || r.state === 'running') {
       clearTimeout(r.t);
       r.t = setTimeout(function () { if (ui.req === r && r.id) window.clan.apiProxy('middleware', { task: L.TASKS.status, input: { job_id: r.id } }).then(function (x) { onRequest(r, x); }, function (e) { reqFailed(r, 'The middleware could not be reached: ' + (e && e.message || e)); }); }, r.delay);
@@ -2050,6 +2135,7 @@ var TerritoriesWorld = (function () {
     var r = L.act(data(), ui, e, env());
     if (!r) return;
     if (r.toast) toast(r.toast);
+    if (r.recheck) checkMiddleware();
     if (r.draft != null) ui.draft = r.draft;
     var p = Promise.resolve();
     (r.writes || []).forEach(function (w) { p = p.then(function () { return put(w); }); });
@@ -2193,6 +2279,8 @@ var TerritoriesWorld = (function () {
       if ((b = t.closest('[data-p-react]'))) { var r = W.order(data())[pres.i]; if (r) { ui.react[r.id] = ui.react[r.id] === b.getAttribute('data-p-react') ? null : b.getAttribute('data-p-react'); presDraw(); } return true; }
       return true;
     }
+    if ((b = t.closest('[data-answer]'))) { if (b.disabled) return; var aid = b.getAttribute('data-ask'); run({ a: 'answer', id: aid, answer: b.getAttribute('data-answer'), note: (ui.reason || {})[aid] || '' }); return; }
+    if ((b = t.closest('[data-review]'))) { if (!b.disabled) run({ a: 'review' }); return; }
     if ((b = t.closest('[data-open]'))) { if (W.route(data(), b.getAttribute('data-open'))) { openWorld(b.getAttribute('data-open')); } else openDialog('route:' + b.getAttribute('data-open'), b); return true; }
     if (t.closest('[data-w-back]')) { ui.world = null; render(); return true; }
     if ((b = t.closest('[data-w-nav]'))) { if (!b.disabled) walk(+b.getAttribute('data-w-nav')); return true; }
@@ -2272,6 +2360,8 @@ var TerritoriesWorld = (function () {
   function addOwn() { var inp = document.querySelector('input[name="own"]'); ui.draft = inp ? inp.value : ui.draft; run({ a: 'add', text: ui.draft }); }
   document.addEventListener('input', function (ev) {
     if (ev.target && ev.target.name === 'own') ui.draft = ev.target.value;
+    var rid = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-reason');
+    if (rid) { ui.reason = ui.reason || {}; ui.reason[rid] = ev.target.value; var go = document.querySelector('[data-go="' + rid + '"]'); if (go) go.disabled = !ev.target.value.trim() || !!BUSY[(ui.req || {}).state]; }
     if (ev.target && ev.target.getAttribute && ev.target.getAttribute('data-dial')) dialMoved(ev.target.getAttribute('data-dial'), ev.target.value);
   });
   document.addEventListener('keydown', function (ev) {

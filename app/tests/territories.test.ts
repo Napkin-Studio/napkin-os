@@ -659,12 +659,12 @@ test('after a greenlight or a remove, the card, the count and the tray follow th
   const two = greenlit(d, ['t_started', 't_sunday'])
   page = L.view(two, {}); t = text(page)
   assert.match(t, /2 greenlit/); assert.match(t, /Greenlit · 2/); assert.equal((page.match(/class="glrow"/g) ?? []).length, 2)
-  assert.equal((page.match(/class="gcard green"/g) ?? []).length, 2); assert.match(t, /Send 2 to production/)
+  assert.equal((page.match(/class="gcard green"/g) ?? []).length, 2); assert.match(t, /Send 2 →/)
   assert.ok(!/<button type="button" class="big" data-send disabled>/.test(page))
   assert.match(page, /data-green="t_started"[^>]*aria-pressed="true"[^>]*>✓ Greenlit/)
   const one = greenlit(d, ['t_sunday']); page = L.view(one, {})
   assert.match(text(page), /Greenlit · 1/); assert.ok(!/class="glrow"[^>]*>(?:(?!<\/div>)[\s\S])*Already Started/.test(page))
-  assert.match(text(page), /Send 1 to production/)
+  assert.match(text(page), /Send 1 →/)
 })
 
 test('the engine\'s own holds disable Send and are said in its words; nothing is re-derived in the page', () => {
@@ -686,7 +686,10 @@ test('Send opens the choice: Deck Maker sends the greenlit ids and the rest as n
   assert.match(dlg.html, /data-dest="deck-maker"/); assert.match(dlg.html, /data-dest="production-tool"[^>]*disabled/); assert.match(text(dlg.html), /Production tool not built yet/)
   const a = L.act(d, {}, { a: 'send', to: 'deck-maker' }, ENV)!
   eq(a.writes, [])
-  eq(a.request, { key: 'send:deck-maker', what: 'The send', input: { step: 'send_routes', to: 'deck-maker', territory_ids: ['t_started', 't_passenger'], not_chosen: ['t_sitdown', 't_sunday', 't_small', 't_lonely', 't_mixtape', 't_lounge'], by: 'Shrey' } })
+  // the gate is open at greenlight, so the approval goes first and the send follows it
+  eq(a.request, { key: 'send:deck-maker', what: 'The approval', input: { step: 'approve', gate: 'greenlight', by: 'Shrey' }, then: { key: 'send:deck-maker', what: 'The send', input: { step: 'send_routes', to: 'deck-maker', territory_ids: ['t_started', 't_passenger'], not_chosen: ['t_sitdown', 't_sunday', 't_small', 't_lonely', 't_mixtape', 't_lounge'], by: 'Shrey' } } })
+  const done = JSON.parse(JSON.stringify(d)) as Doc; done.run.gate = null; done.run.stage = 'send'
+  eq(L.act(done, {}, { a: 'send', to: 'deck-maker' }, ENV)!.request!.input, { step: 'send_routes', to: 'deck-maker', territory_ids: ['t_started', 't_passenger'], not_chosen: ['t_sitdown', 't_sunday', 't_small', 't_lonely', 't_mixtape', 't_lounge'], by: 'Shrey' })
   const p = L.act(d, {}, { a: 'send', to: 'production-tool' }, ENV)!
   assert.equal(p.request, undefined); assert.match(p.toast!, /not built yet, so nothing was sent/)
   assert.match(L.act(gl('greenlight_open'), {}, { a: 'send', to: 'deck-maker' }, ENV)!.toast!, /Greenlight at least one route first/)
@@ -753,4 +756,79 @@ test('the finished run reads the same way: three greenlit, the Deck send listed,
   const d = json('example/data.json'), page = L.view(d, {}), t = text(page)
   assert.match(t, /3 greenlit/); assert.match(t, /Greenlit · 3/)
   assert.match(t, /Deck Maker: 3 routes went, with the other 5 as routes not chosen/); assert.match(t, /Production tool: not built yet, so nothing went/)
+})
+
+
+// ---- phase 2: the ask cards (the owner-approved mock, mock/greenlight-asks) ----
+const asked = (n: 'greenlight_derived_pending' | 'greenlight_sensitive_missing'): Doc => gl(n)
+const withAsk = (d: Doc, ask: Doc, ids: string[]): Doc => { const o = greenlit(d, ids); o.asks = [ask]; return o }
+const failMandatory = (d: Doc, id: string): Doc => { const t = d.territories.find((x: Doc) => x.id === id); t.checks.find((c: Doc) => c.kind === 'mandatory').status = 'fail'; t.checks.find((c: Doc) => c.kind === 'mandatory').text = 'Leaves out the weekend return fare.'; return d }
+
+test('a derived finding asks first: Verify it, Send it flagged or Take it off the list, with the finding in words; Send stays off', () => {
+  const d = asked('greenlight_derived_pending')
+  d.projection = { pins: {}, findings: Object.fromEntries((json('example/findings.json').findings as Doc[]).map(f => [f.id, { statement: f.statement, status: f.status, confidence: f.confidence, cites: f.cites }])) }
+  const page = L.view(d, {}), t = text(page)
+  assert.equal(L.openAsks(d).length, 1)
+  assert.match(t, /Review · before sending Needs you Passenger Seat rests on a finding nobody has verified\./)
+  assert.ok(page.includes('data-ask="ask_passenger" data-answer="verify"') && page.includes('data-answer="send_flagged"') && page.includes('data-answer="change"'))
+  assert.match(t, /Families describe the drive as the part where nobody talks/)
+  assert.match(page, /<button type="button" class="big" data-send disabled>Send 2 →/); assert.match(t, /Answer the question first/)
+  eq(L.act(d, {}, { a: 'answer', id: 'ask_passenger', answer: 'verify' }, ENV)!.request, { key: 'ask:ask_passenger', what: 'Your answer', input: { step: 'answer_ask', ask_id: 'ask_passenger', answer: 'verify', by: 'Shrey' } })
+  eq(L.act(d, {}, { a: 'answer', id: 'ask_passenger', answer: 'change' }, ENV)!.request!.input, { step: 'answer_ask', ask_id: 'ask_passenger', answer: 'change', by: 'Shrey' })
+  assert.equal(L.act(d, {}, { a: 'answer', id: 'ask_passenger', answer: 'ok' }, ENV), null, 'ok is not an answer to a derived finding')
+  // as the engine writes it back once answered (gates.answer_ask): the card goes, Send opens
+  const after = JSON.parse(JSON.stringify(d)) as Doc
+  after.asks[0].status = 'answered'; after.greenlit[1].derived_resolution = 'sent_flagged'; after.run.gate.blocked_by = []
+  const p2 = L.view(after, {}); assert.ok(!p2.includes('data-ask-card')); assert.ok(!/class="big" data-send disabled/.test(p2))
+})
+
+test('a failed mandatory needs a reason before Go ahead; a close one does not', () => {
+  const d = withAsk(failMandatory(gl('greenlight_open'), 't_sitdown'), { id: 'ask_m', kind: 'near_mandatory', territory_id: 't_sitdown', status: 'open', text: 'x' }, ['t_started', 't_sitdown'])
+  const page = L.view(d, {}), t = text(page)
+  assert.match(t, /Sit Down, It's Saturday fails a mandatory\./); assert.match(t, /Mandatory · fails Leaves out the weekend return fare/)
+  assert.ok(page.includes('data-reason="ask_m"')); assert.match(page, /data-answer="ok" data-go="ask_m" disabled/)
+  assert.match(L.act(d, {}, { a: 'answer', id: 'ask_m', answer: 'ok', note: '  ' }, ENV)!.toast!, /Say why it goes ahead/)
+  eq(L.act(d, {}, { a: 'answer', id: 'ask_m', answer: 'ok', note: ' Partners agreed in writing. ' }, ENV)!.request!.input, { step: 'answer_ask', ask_id: 'ask_m', answer: 'ok', by: 'Shrey', note: 'Partners agreed in writing.' })
+  assert.ok(!/ disabled/.test(/data-answer="ok" data-go="ask_m"[^>]*>/.exec(L.view(d, { reason: { ask_m: 'Agreed.' } }))![0]), 'a reason opens the button')
+  assert.match(L.view(d, { reason: { ask_m: 'Agreed.' } }), />Agreed\.<\/textarea>/)
+  const warn = withAsk(gl('greenlight_open'), { id: 'ask_w', kind: 'near_mandatory', territory_id: 't_sitdown', status: 'open', text: 'x' }, ['t_sitdown'])
+  warn.territories.find((x: Doc) => x.id === 't_sitdown').checks.find((c: Doc) => c.kind === 'mandatory').status = 'warn'
+  const wp = L.view(warn, {}); assert.match(text(wp), /is close to a mandatory/); assert.ok(!wp.includes('data-reason'))
+  assert.equal(L.act(warn, {}, { a: 'answer', id: 'ask_w', answer: 'ok' }, ENV)!.request!.input.note, undefined)
+})
+
+test('the sensitive review is a named person\'s: Mark as reviewed by them, never answered as a question', () => {
+  const d = asked('greenlight_sensitive_missing'), page = L.view(d, { me: { name: 'Shrey' } })
+  assert.match(text(page), /Review · sensitive topic Needs you This category needs a person to review the routes before they are sent\./)
+  assert.match(text(page), /Read Already Started, then mark them reviewed\. The engine cannot review its own work/); assert.match(page, /data-review[^>]*>Mark as reviewed by Shrey/)
+  assert.match(L.view(d, {}), /data-review disabled>Mark as reviewed</)
+  eq(L.act(d, { me: { name: 'Shrey' } }, { a: 'review' }, ENV)!.request, { key: 'review', what: 'The review', input: { step: 'record_review', by: 'Shrey' } })
+  assert.match(L.act(d, {}, { a: 'review' }, { me: null, now: ENV.now })!.toast!, /Sign in first/)
+  assert.equal(L.act(d, {}, { a: 'answer', id: 'ask_sensitive', answer: 'ok' }, ENV), null)
+  assert.match(L.view(d, {}), /class="big" data-send disabled/)
+})
+
+test('an ask for a route that is not greenlit is not shown, and an answered ask is never asked again', () => {
+  const d = gl('greenlight_derived_pending'); d.greenlit = d.greenlit.filter((g: Doc) => g.territory_id !== 't_passenger')
+  eq(L.openAsks(d), []); assert.ok(!L.view(d, {}).includes('data-ask-card'))
+  const e = gl('greenlight_derived_pending'); e.asks[0].status = 'answered'; e.asks[0].answer = 'verify'
+  eq(L.openAsks(e), [])
+})
+
+test('engine off is said once, in the Booth, with Check again; a failed answer says why and changes nothing', () => {
+  const d = gl('greenlight_derived_pending'), page = L.view(d, { mw: false })
+  assert.match(text(page), /Engine · off The engine is not connected in this workspace\. A greenlight, a remove, a re-rank or a send cannot be saved here/)
+  assert.match(page, /data-act="recheck"/); assert.ok(!L.view(d, {}).includes('Engine · off'))
+  assert.equal(L.act(d, {}, { a: 'recheck' }, ENV)!.recheck, true)
+  const f = L.view(d, { req: { key: 'ask:ask_passenger', state: 'failed', error: 'Your answer did not go through. Nothing changed.' } })
+  assert.match(f, /role="status">Your answer did not go through\. Nothing changed\./); assert.ok(f.includes('data-ask-card="ask_passenger"'))
+  const bad = f.split('role="status"').length - 1; assert.equal(bad, 1, 'said once, under its own card')
+})
+
+test('the ask cards keep to the house words: no price, no raw keys', () => {
+  for (const [d, ui] of [[asked('greenlight_derived_pending'), { mw: false }], [asked('greenlight_sensitive_missing'), { me: { name: 'Shrey' } }], [withAsk(failMandatory(gl('greenlight_open'), 't_sitdown'), { id: 'ask_m', kind: 'near_mandatory', territory_id: 't_sitdown', status: 'open', text: 'x' }, ['t_sitdown']), {}]] as [Doc, Ui][]) {
+    const page = L.view(d, ui)
+    for (const bad of ['near_mandatory', 'derived_evidence', 'sensitive_review', 'undefined', '[object', '{{']) assert.ok(!page.replace(/data-[a-z-]+="[^"]*"/g, '').includes(bad), `page has ${bad}`)
+    assert.ok(!/€|£|\$\d|\bUSD\b/.test(text(page)))
+  }
 })
