@@ -746,3 +746,141 @@ async fn another_agency_cannot_delete_restore_or_purge_a_project() {
         1
     );
 }
+
+// ── Copies and imports ───────────────────────────────────────────────────────
+
+/// A document made by upload keeps the source's `manifest.document_id`. The
+/// save rule compares what is sent with the STORED bytes' identity (never a
+/// library key), so a copy or an import saves on its first try, and the copy
+/// is a separate library document with its own version and its own file.
+#[tokio::test]
+async fn a_copy_or_import_saves_on_its_first_try_and_stays_its_own_document() {
+    let s = server();
+    let me = sign_in(&s, "visionary", "napkin").await;
+    let (src, bytes, _) = project(&s, &me);
+
+    let up = call(
+        &s,
+        Some(&me),
+        &me.tenant,
+        "POST",
+        "/documents/upload",
+        &[("content-type", "application/vnd.clan+zip".into())],
+        bytes.clone(),
+    )
+    .await;
+    assert_eq!(
+        up.status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&up.body)
+    );
+    let copy = up.json()["path"].as_str().unwrap().to_string();
+    assert_ne!(copy, src);
+
+    let (got, etag) = me.download(&s, &copy).await;
+    let v = etag.unwrap().trim_matches('"').to_string();
+    assert_eq!(v, version_of(&got));
+    let edited = big_doc::with_entry(&got, "shared/data.yaml", b"edited: copy\n".to_vec());
+    let r = me.save(&s, &copy, &v, &edited, None).await;
+    assert_eq!(
+        r.status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&r.body)
+    );
+
+    // the source is untouched, and the copy has its own version and identity
+    assert!(me.download(&s, &src).await.0 == bytes);
+    assert!(me.download(&s, &copy).await.0 == edited);
+    let id_of = |b: &[u8]| {
+        clan_sdk::ClanFile::from_bytes(b.to_vec())
+            .unwrap()
+            .document_id()
+            .to_string()
+    };
+    assert_ne!(
+        id_of(&bytes),
+        id_of(&edited),
+        "a copy is a distinct document"
+    );
+    // neither takes the other's bytes
+    let r = me.save(&s, &src, &version_of(&bytes), &edited, None).await;
+    assert_eq!(
+        r.status.as_u16(),
+        422,
+        "the copy's bytes are not the source's"
+    );
+    let r = me.save(&s, &copy, &version_of(&edited), &bytes, None).await;
+    assert_eq!(
+        r.status.as_u16(),
+        422,
+        "the source's bytes are not the copy's"
+    );
+
+    // another app's upload keeps its identity (spin-offs address it)
+    let brief = instance(&s, &me, "ie.napkin.brief-maker", "B");
+    let bb = prod_bytes(&s, &me, &brief);
+    let up = call(
+        &s,
+        Some(&me),
+        &me.tenant,
+        "POST",
+        "/documents/upload",
+        &[],
+        bb.clone(),
+    )
+    .await;
+    let path = up.json()["path"].as_str().unwrap().to_string();
+    assert_eq!(id_of(&me.download(&s, &path).await.0), id_of(&bb));
+}
+
+// ── HEAD on download ─────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn head_on_download_names_the_version_and_time_with_no_body() {
+    let s = server();
+    let me = sign_in(&s, "visionary", "napkin").await;
+    let (doc, bytes, v0) = project(&s, &me);
+    let head = call(
+        &s,
+        Some(&me),
+        &me.tenant,
+        "HEAD",
+        &format!("/d/{doc}/download"),
+        &[],
+        vec![],
+    )
+    .await;
+    assert_eq!(head.status, StatusCode::OK);
+    assert!(head.body.is_empty());
+    let get = me.get(&s, &format!("/d/{doc}/download")).await;
+    assert_eq!(head.header("etag"), Some(format!("\"{v0}\"")));
+    assert_eq!(head.header("etag"), get.header("etag"));
+    assert_eq!(head.header("x-saved-at"), get.header("x-saved-at"));
+    assert!(head.header("x-saved-at").is_some());
+    let _ = bytes;
+    // a missing document and no session behave as for GET
+    let r = call(
+        &s,
+        Some(&me),
+        &me.tenant,
+        "HEAD",
+        "/d/doc-missing/download",
+        &[],
+        vec![],
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::NOT_FOUND);
+    let r = call(
+        &s,
+        None,
+        &me.tenant,
+        "HEAD",
+        &format!("/d/{doc}/download"),
+        &[],
+        vec![],
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::UNAUTHORIZED);
+}

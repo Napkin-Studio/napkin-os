@@ -537,9 +537,10 @@ async fn upload_document(
     if let Err(e) = clan_sdk::ClanFile::from_bytes(body.to_vec()) {
         return Err(ApiError::new(400, format!("not a readable .clan: {e}")));
     }
-    // A fresh uuid: this is a new document, never a replacement.
-    ws.store
-        .apply(&Change::create(doc.clone(), body.to_vec()))?;
+    // A fresh uuid: this is a new document, never a replacement. A Production
+    // project also gets a new identity of its own (save.rs).
+    let bytes = crate::save::with_fresh_identity(&body);
+    ws.store.apply(&Change::create(doc.clone(), bytes))?;
     Ok(Json(open_view(&ctx, &tenant, &person, &ws, doc)?))
 }
 
