@@ -1,0 +1,276 @@
+--- 1 hidden=False pics=0
+   T: RESPONSE DECK
+   T: Harrowgate Bakery Co.: Proper Crunch
+   T: OPENING
+   T: 1
+--- 2 hidden=False pics=0
+   T: Objective
+   T: What has to change
+   T: Attitudinal: people believe a baked sourdough crisp can be properly crunchy, and feel it is a tasty, slightly 
+   T: Behavioural: shoppers choose Oven Crisps in the meal-deal snack slot instead of a big-brand fried crisp, and t
+   T: Sources [1] [2]  (appendix)
+   T: 2
+--- 3 hidden=False pics=0
+   T: The real question
+   T: Oven Crisps win as the meal deal's most satisfying treat, not its most forgivable crisp.
+   T: Proper crunch from a real bakery, picked in the meal-deal slot because it tastes like a treat.
+   T: Background
+   T: A bread maker launches baked sourdough crisps (120 g, sea salt & cider vinegar first) in March, wanting buzz b
+   T: Sources [1] [2] [3] [4]  (appendix)
+   NOTES:  |  | Claims: | - The meal deal is the route to trial: promotion decides the brand far more often than virtue does. | - Taste is the number one purchase driver, so the work sells crunch, not fat. | - The open space is a baked crisp with bakery credentials and audible crunch that never flees into health cues. | - The bakery is the proof of craft, never the thing to swap away from: no bread on screen.
+--- 4 hidden=False pics=0
+   T: The real question
+   T: Deals, not virtue, decide which crisp goes in the meal deal.
+   T: 43%
+   T: Price promotion drives brand choice
+   T: 11%
+   T: Buy the 'less guilty' option
+   NOTES:  |  | Claims: | - 43% choose on promotion while 11% buy the less guilty option (to confirm). Trial comes through the deal, and the treat must not apologise.
+--- 5 hidden=False pics=0
+   T: Insight
+   T: Shoppers rarely act on the category's virtue promise, so a baked crisp should arrive as a proper treat, not an
+   T: The lighter end of snacks leads with virtue, such as 'better for you' claims and healthier ranges, yet few sho
+   T: Only 11% buy the 'less guilty' option.
+   T: Taste is the number one driver: 59% say health isn't a consideration.
+   T: Propercorn already claims 'better for you', so virtue is taken and the unapologetic baked crisp is open.
+   NOTES: Insight C of 3, chosen by writer and judge agree. Why: It turns the brief's open space into a reason grounded in evidence, ties it to a baked crisp, and keeps the work on treat, not health. Judge: Lighter crisps keep apologising for being healthy, so Oven Crisps can win by being a baked treat that leads with craft and crunch. |  | Claims: | - The lighter end of snacks leads with virtue, such as 'better 
+--- 6 hidden=False pics=0
+   T: Insight
+   T: We are talking to young lunchers who pick a crisp in seconds, often as the lunch itself.
+   T: 18-35 office lunchers and students choosing a meal-deal crisp in seconds, often on promotion.
+   T: Office lunchers making a quick deal choice, and students for whom the snack often stands in for a meal.
+   T: Parents buying for lunchboxes, and food-curious shoppers. Not diet-first shoppers or loyal fried-crisp heavy u
+   T: Sources [1] [2] [6]  (appendix)
+--- 7 hidden=False pics=0
+   T: Proposition
+   T: Proper crunch.
+   T: FROM
+   T: A lighter crisp asking to be forgiven.
+   T: TO
+   T: The proper-crunch treat in the meal deal, made by a real bakery.
+   NOTES:  |  | Claims: | - Made with the 80-year sourdough starter, so a real bakery makes the crisp. | - 40% less fat than the leading ready-salted fried crisps, lab tested. To confirm: comparator range, same-quantity wording and CAP Section 15 clearance. | - No palm oil. | - To confirm: a texture or blind taste test against a fried crisp to prove the crunch. |  | Moved from the slide: | - No palm oil. [refs: req:R14,brief
+--- 8 hidden=False pics=0
+   T: Competition
+   T: The route the client could pick instead
+   T: The alternative
+   T: Why you might pick it
+   T: How we win
+   T: Lead with the '40% less fat' reason to believe
+   NOTES:  |  | Claims: | - Lead with the '40% less fat' reason to believe: It is a concrete, lab-tested number and feels like the safest point of difference. | - Few shoppers act on the less guilty option, and health cues are a worn-out code. The claim also needs clearance before it can run. We keep it as a supporting line and lead with treat and crunch.
+--- 9 hidden=False pics=0
+   T: The idea
+   T: Proper crunch. Not sorry.
+   T: While the lighter end of the fixture keeps saying sorry for being a treat, Oven Crisps, made by a real bakery 
+   T: 9
+   NOTES:  |  | Claims: | - While the lighter end of the fixture keeps saying sorry for being a treat, Oven Crisps, made by a real bakery with its 80-year sourdough starter, stops apologising and just says crunch.
+--- 10 hidden=False pics=1
+   T: Production
+   T: The work
+   T: Key visual
+   T: Role: The anchor picture that every size and still is cut from. The bag is the hero, with the logo top left, a
+   T: Proper crunch. Not sorry. / Baked by a real bakery, with our 80-year sourdough starter. / No palm oil. / Conta
+   T: 10
+   NOTES:  |  | Claims: | - Proper crunch. Not sorry. / Baked by a real bakery, with our 80-year sourdough starter. / No palm oil. / Contains wheat. See pack for allergens.
+--- 11 hidden=False pics=3
+   T: The work
+   T: Out of home: uk 48 sheet and uk 96 sheet, near stations
+   T: Role: The national burst on the commute. It names the category's habit of saying sorry and walks away from it.
+   T: Baked crisps have spent years saying sorry. / This one's just saying crunch. / Proper crunch. Harrowgate Oven 
+   T: 96-sheet roadside
+   T: 48-sheet roadside
+   NOTES: Said once, on slide 10: See pack for allergens. |  | Claims: | - Baked crisps have spent years saying sorry. / This one's just saying crunch. / Proper crunch. Harrowgate Oven Crisps. / Contains wheat. See pack for allergens.
+--- 12 hidden=False pics=0
+   T: The work
+   T: Storyboard frames: six stills as an Instagram and TikTok carousel
+   T: Role: A swipeable sequence of stills that carries the line into social and asks people to share the crunch.
+   T: Frame 1: Baked crisps, always apologising. /  / Frame 2: Sorry for being tasty? /  / Frame 3: Not this one. / 
+   T: 12
+   NOTES: Said once, on slide 10: See pack for allergens. |  | Claims: | - Frame 1: Baked crisps, always apologising. / Frame 2: Sorry for being tasty? / Frame 3: Not this one. / Frame 4: CRUNCH. / Frame 5: Made with our 80-year sourdough starter. No palm oil. / Frame 6: Proper crunch. Not sorry. Share your crunch. Contains wheat. See pack for allergens.
+--- 13 hidden=False pics=4
+   T: The work
+   T: Storyboard frames
+   T: The storyboard frames made in Production, in shot order.
+   T: 1
+   T: 3
+   T: 4
+--- 14 hidden=False pics=0
+   T: How it runs
+   T: Each channel has one job
+   T: Channel
+   T: Its one job
+   T: Key visual
+   T: Sets the bold, warm, unapologetic look that every other piece is cut from.
+   NOTES: Scope check: the tender lists paid social, search, programmatic, broadcast radio and video, outdoor and print.
+--- 15 hidden=False pics=0
+   T: How it runs
+   T: Four ways the plan works harder than its media list
+   T: Silent media made to sound. Huge type and crumbs in the air make the crunch almost audible on posters and stil
+   T: Sampling stands in for proof. Until a texture or blind test arrives, tasting in about 200 stores proves the cr
+   T: The category's own code becomes the creative. Sending up the apologetic 'better for you' look makes every ligh
+   T: Sources [2] [3] [4] [7] [10] [11] [12]  (appendix)
+   NOTES:  |  | Claims: | - Silent media made to sound. Huge type and crumbs in the air make the crunch almost audible on posters and stills, which keeps the brief's sound-led world. | - Sampling stands in for proof. Until a texture or blind test arrives, tasting in about 200 stores proves the crunch. In-store tasting raises purchase intent for new snack brands. | - Posters on the lunchtime walk. Station and supermar
+--- 16 hidden=False pics=0
+   T: Measurement
+   T: We will know it worked when the bag is listed, bought and believed to be properly crunchy.
+   T: What the work must always carry, and never do / Do not frame the work as a swap away from the loaves; the clie
+   T: Tone and world: warm but cheeky; premium but everyday; not like the big crisp brands; sound-led and bakery-rea
+   T: Sources [1] [2] [3] [11]  (appendix)
+   T: 16
+   NOTES: Merged here from the slide 'What the work must never do'. |  | Claims: | - Number of big-5 supermarket meal deals listing Oven Crisps baseline None in the brief: set before launch | - Bags sold in the first 12 weeks baseline None in the brief: set before launch | - Belief that a baked sourdough crisp can be properly crunchy and feels like a treat baseline None in the brief: set before launch | - Sales in samp
+--- 17 hidden=False pics=0
+   T: Timeline and investment
+   T: From appointment to evaluation
+   T: Ideas presented / Thursday, per the brief
+   T: Fat claim wording and CAP Section 15 clearance; crunch test sought / Before any fat line runs; date to agree
+   T: On shelf and meal-deal listings / March
+   T: Poster burst, social stills and sampling build buzz / Before Easter on 5 April; exact dates to agree
+   NOTES:  |  | Claims: | - Thursday, per the brief | - Before any fat line runs; date to agree | - March | - Before Easter on 5 April; exact dates to agree | - First 12 weeks on shelf
+--- 18 hidden=False pics=0
+   T: Risks
+   T: What could go wrong, and what we would do about it
+   T: Rejecting guilt reminds people of guilt, or seems to mock those who choose lighter snacks. / Never say guilt. 
+   T: The fat claim runs without the right comparator or clearance. / Keep the fat line off all copy until the compa
+   T: 'Proper crunch' is unproven because no texture or taste test exists. / Treat it as a promise and let sampling 
+   T: Sources [1] [2] [3] [4] [5] [9]  (appendix)
+   NOTES:  |  | Claims: | - Rejecting guilt reminds people of guilt, or seems to mock those who choose lighter snacks. | - The fat claim runs without the right comparator or clearance. | - 'Proper crunch' is unproven because no texture or taste test exists.
+--- 19 hidden=False pics=0
+   T: Timeline and investment
+   T: Investment, and what we would like to agree today
+   T: Budget given: £180,000 ex VAT, media included: one national poster burst near stations and supermarkets, Insta
+   T: What we would like to agree today
+   T: Agree 'Proper crunch. Not sorry' as the campaign platform
+   T: Sources [1]  (appendix)
+--- 20 hidden=True pics=0
+   T: Proper Crunch
+   T: Appendix
+   T: Backup for questions: everything this presentation rests on.
+   T: 20
+--- 21 hidden=True pics=0
+   T: Your brief
+   T: What you asked us to do, in your words
+   T: Attitudinal: people believe a baked sourdough crisp can be properly crunchy, and feel it is a tasty, slightly 
+   T: Behavioural: shoppers choose Oven Crisps in the meal-deal snack slot instead of a big-brand fried crisp, and t
+   T: Commercial: be listed in 3 of the big 5 supermarket meal deals by March.
+   T: Commercial: sell 2 million bags in the first 12 weeks.
+--- 22 hidden=True pics=0
+   T: The real question
+   T: Oven Crisps must win in seconds on taste, with a crunch not yet proven and a fat claim that needs careful word
+   T: Big brands own the fixture: Walkers holds 25.6% volume share of potato chips.
+   T: Any 'less fat' line must name a same-category comparator range and state the difference for the same quantity 
+   T: No texture or blind taste test exists yet, so 'proper crunch' stays a promise until proof arrives.
+   T: Health cues are a worn-out code, and leaning on them would put the crisp in the apologising corner.
+   NOTES:  |  | Claims: | - Big brands own the fixture: Walkers holds 25.6% volume share of potato chips (to confirm). | - Any 'less fat' line must name a same-category comparator range and state the difference for the same quantity of food. | - No texture or blind taste test exists yet, so 'proper crunch' stays a promise until proof arrives. | - Health cues are a worn-out code, and leaning on them would put the crisp 
+--- 23 hidden=True pics=0
+   T: Territories
+   T: Territory: Not Sorry
+   T: Oven Crisps is the baked crisp that refuses to apologise for being a treat, and openly breaks with the lighter
+   T: Baked crisps have spent years saying sorry. This one's just saying crunch.
+   T: Illustrative, not final
+   T: Why it fits / Few shoppers act on the category's virtue promise, so the apology is the weakness to exploit. Th
+   NOTES:  |  | Claims: | - Oven Crisps is the baked crisp that refuses to apologise for being a treat, and openly breaks with the lighter end of the fixture's habit of saying sorry.
+--- 24 hidden=True pics=0
+   T: Territories
+   T: Territory: The Starter
+   T: The 80-year sourdough starter is the hero, a living bakery heirloom that gives Oven Crisps its craft and its c
+   T: Our starter's eighty years old. Your crisp will last about four seconds.
+   T: Illustrative, not final
+   T: Why it fits / It turns the bakery into the proof of craft that makes a treat worth choosing. It also answers t
+   NOTES:  |  | Claims: | - The 80-year sourdough starter is the hero, a living bakery heirloom that gives Oven Crisps its craft and its crunch.
+--- 25 hidden=True pics=0
+   T: Territories
+   T: Territory: The Best Bit of the Deal
+   T: Oven Crisps is the pick that makes the meal deal feel like a proper lunch, a generous, crunchy treat chosen in
+   T: Sandwich, drink, and the bit you actually look forward to.
+   T: Illustrative, not final
+   T: Why it fits / The meal deal is the route to trial, and the promotion settles the brand far more often than vir
+   NOTES:  |  | Claims: | - Oven Crisps is the pick that makes the meal deal feel like a proper lunch, a generous, crunchy treat chosen in the few seconds at the fixture.
+--- 26 hidden=True pics=0
+   T: Territories
+   T: We recommend 'Not Sorry'
+   T: 26
+   NOTES:  |  | Claims: | - Recommendation
+--- 27 hidden=True pics=0
+   T: Measurement
+   T: Listings and sales are the hard tests; belief, sampling and shares tell us why they moved.
+   T: KPI: Number of big-5 supermarket meal deals listing Oven Crisps
+   T: Baseline: None in the brief: set before launch / Target: 3 of the big 5 by March / Lag: Set by buyer decisions
+   T: Sources [1] [2]  (appendix)
+   T: 27
+   NOTES:  |  | Claims: | - Number of big-5 supermarket meal deals listing Oven Crisps target 3 of the big 5 by March
+--- 28 hidden=True pics=0
+   T: How it runs
+   T: How we would run it with you
+   T: 1
+   T: Agree the line and the key visual. Check every piece against the mandatories: bag as hero, logo top left, alle
+   T: 2
+   T: Settle the fat claim wording and get clearance before it appears anywhere. Ask for a crunch test.
+--- 29 hidden=True pics=0
+   T: Appendix
+   T: Questions we would settle in the first fortnight
+   T: 29
+   NOTES: 0 open questions from the brief; 0 more in the brief itself.
+--- 30 hidden=True pics=0
+   T: Appendix
+   T: To supply
+   T: Slides that wait for what only a person can give: fill them and they return to the story.
+   T: 30
+--- 31 hidden=True pics=0
+   T: Team and work
+   T: The team you would work with, and work like this we have done
+   T: PROPOSED
+   T: TO SUPPLY
+   T: Proposed (not given by the client): a named person [project lead]. To settle: name and one-page CV.
+   T: PROPOSED
+--- 32 hidden=True pics=0
+   T: Appendix
+   T: Open items to confirm
+   T: On "Harrowgate Bakery Co.: Proper Crunch": Proposed (not given by the client): presented by the account lead a
+   T: On "Shoppers rarely act on the category's virtue promise, so a baked crisp": (to confirm) / On "Proper crunch.
+   T: 32
+--- 33 hidden=True pics=0
+   T: Appendix
+   T: Open items to confirm, continued
+   T: On "Investment, and what we would like to agree today": Proposed (not given by the client): a media-weighted v
+   T: On "What you asked us to do, in your words": (to confirm) / On "What you asked us to do, in your words": (to c
+   T: 33
+--- 34 hidden=True pics=0
+   T: Appendix
+   T: Open items to confirm, continued
+   T: On "Every requirement, and where this deck answers it, continued": (to confirm)
+   T: On "Every requirement, and where this deck answers it, continued": (to confirm)
+   T: On "Every requirement, and where this deck answers it, continued": (to confirm)
+   T: 34
+--- 35 hidden=True pics=0
+   T: Appendix
+   T: Every requirement, and where this deck answers it
+   T: 35
+--- 36 hidden=True pics=0
+   T: Appendix
+   T: Every requirement, and where this deck answers it, continued
+   T: 36
+--- 37 hidden=True pics=0
+   T: Appendix
+   T: Every requirement, and where this deck answers it, continued
+   T: 37
+--- 38 hidden=True pics=0
+   T: Appendix
+   T: Every requirement, and where this deck answers it, continued
+   T: 38
+--- 39 hidden=True pics=0
+   T: Appendix
+   T: Every requirement, and where this deck answers it, continued
+   T: 39
+--- 40 hidden=True pics=0
+   T: Appendix
+   T: Sources
+   T: 40
+--- 41 hidden=True pics=0
+   T: Appendix
+   T: Sources, continued
+   T: 41
+--- 42 hidden=True pics=0
+   T: Appendix
+   T: Sources, continued
+   T: #: [15]
+   T: Source: Renewable Energy Assurance Ltd (CMCS), "https://www.qualitycompost.org.uk/images/upload/news_133_REAL_
+   T: 42

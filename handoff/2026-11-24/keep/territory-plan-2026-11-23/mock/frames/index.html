@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Territories frames: clickable mock</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Geist:wght@500;600;700;800&display=swap">
+<style>
+:root{
+  --ag-base:#515BFF; --ag-acc:#C8CBFF; --ag-base-ink:#FFFFFF; --ag-acc-ink:#141413;
+  --ag-act:var(--ag-base); --ag-act-ink:var(--ag-base-ink);
+  --desk:color-mix(in srgb,var(--ag-base) 6%,#F6F1E7); --paper:color-mix(in srgb,var(--ag-base) 2.5%,#FFFDF8);
+  --paper-2:#F3ECDC; --card:#FFFFFF;
+  --ink:#141413; --ink-soft:#2A2620; --muted:#6D655A; --faint:#9A9082;
+  --line:color-mix(in srgb,var(--ag-base) 10%,#E2D9C8); --line-strong:#2A2620; --chip-line:#D4CCCD;
+  --accent:var(--ag-base); --accent-soft:color-mix(in srgb,var(--ag-base) 9%,#FFFFFF);
+  --ok:#1D8A4E; --ok-soft:#E6F6EC; --warn:#B45309; --warn-soft:#FEF3DC; --alert:#C9462A; --alert-soft:#FFF1EE;
+  --te:#14947F; --te-ink:#FFFFFF;
+  --ask-line:#F08A6E; --ask-glow:rgba(255,79,46,.08);
+  --font-ui:"Geist",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+  --font-serif:"Newsreader",Georgia,"Iowan Old Style",serif;
+  --shadow-paper:0 1px 0 rgba(255,255,255,.75) inset,0 8px 24px -8px rgba(50,38,18,.10),0 1px 3px rgba(50,38,18,.08);
+  --shadow-card:0 1px 2px rgba(20,20,19,.06),0 4px 12px -4px rgba(20,20,19,.08);
+  --booth-dur:460ms; --booth-ease:cubic-bezier(.2,.7,.2,1);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-color-scheme="light"]){
+    --ag-act:var(--ag-acc); --ag-act-ink:#141413;
+    --desk:color-mix(in srgb,var(--ag-base) 12%,#121110); --paper:color-mix(in srgb,var(--ag-base) 9%,#1B1A18);
+    --paper-2:#262320; --card:color-mix(in srgb,var(--ag-base) 7%,#201E1B);
+    --ink:#EFE9DE; --ink-soft:#D6CEC0; --muted:#A49B8D; --faint:#7B7367;
+    --line:color-mix(in srgb,var(--ag-base) 16%,#34302A); --line-strong:#CFC6B6; --chip-line:#4A443C;
+    --accent-soft:color-mix(in srgb,var(--ag-base) 22%,#1B1A18);
+    --ok:#5DBB83; --ok-soft:#1C2E23; --warn:#E09A4B; --warn-soft:#3A2A18; --alert:#F08A70; --alert-soft:#33201B;
+    --te:#3CC9AE; --te-ink:#0E1A17; --ask-line:#C8664C; --ask-glow:rgba(255,79,46,.10); color-scheme:dark;
+  }
+}
+:root[data-color-scheme="dark"]{
+  --ag-act:var(--ag-acc); --ag-act-ink:#141413;
+  --desk:color-mix(in srgb,var(--ag-base) 12%,#121110); --paper:color-mix(in srgb,var(--ag-base) 9%,#1B1A18);
+  --paper-2:#262320; --card:color-mix(in srgb,var(--ag-base) 7%,#201E1B);
+  --ink:#EFE9DE; --ink-soft:#D6CEC0; --muted:#A49B8D; --faint:#7B7367;
+  --line:color-mix(in srgb,var(--ag-base) 16%,#34302A); --line-strong:#CFC6B6; --chip-line:#4A443C;
+  --accent-soft:color-mix(in srgb,var(--ag-base) 22%,#1B1A18);
+  --ok:#5DBB83; --ok-soft:#1C2E23; --warn:#E09A4B; --warn-soft:#3A2A18; --alert:#F08A70; --alert-soft:#33201B;
+  --te:#3CC9AE; --te-ink:#0E1A17; --ask-line:#C8664C; --ask-glow:rgba(255,79,46,.10); color-scheme:dark;
+}
+/* An agency whose accent is a line, never a fill (Catapult): the primary stays the base in dark too. */
+@media (prefers-color-scheme:dark){ :root[data-agency-accent="line"]:not([data-color-scheme="light"]){ --ag-act:var(--ag-base); --ag-act-ink:var(--ag-base-ink); } }
+:root[data-agency-accent="line"][data-color-scheme="dark"]{ --ag-act:var(--ag-base); --ag-act-ink:var(--ag-base-ink); }
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{min-height:100%}
+body{margin:0;background:var(--desk);color:var(--ink);font:16px/1.5 var(--font-serif);-webkit-font-smoothing:antialiased;padding:32px 36px 56px}
+button{font:inherit;color:inherit;cursor:pointer}
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{min-height:100%}
+body{margin:0;background:var(--desk);color:var(--ink);font:16px/1.5 var(--font-serif);-webkit-font-smoothing:antialiased;padding:28px 32px 56px}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+button:disabled{cursor:not-allowed}
+.kick{font:800 11px/1 var(--font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--ink);display:flex;gap:10px;align-items:center}
+.kick::before{content:"";width:22px;height:2px;background:var(--te)}
+h1{font:800 32px/1.1 var(--font-ui);margin:12px 0 8px;letter-spacing:-.01em}
+.lead{max-width:780px;color:var(--ink-soft);margin:0 0 14px;font-size:15.5px}
+.states{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 20px}
+.states button{border:1px solid var(--chip-line);background:var(--card);border-radius:99px;padding:6px 12px;font:700 11.5px/1 var(--font-ui)}
+.states button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 372px;gap:24px;align-items:start}
+.panel{background:var(--paper);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow-paper);padding:16px 18px 18px;margin-bottom:18px}
+.eyebrow{font:700 10.5px/1 var(--font-ui);letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:0 0 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tag{font:600 10px/1 var(--font-ui);letter-spacing:.04em;padding:3px 7px;border-radius:5px;background:var(--paper-2);color:var(--ink-soft);text-transform:none}
+.tag.ok{background:var(--ok-soft);color:var(--ok)}.tag.warn{background:var(--warn-soft);color:var(--warn)}
+h2{font:600 22px/1.2 var(--font-serif);margin:0 0 2px}
+.sub{color:var(--muted);font-size:14px;margin:0 0 12px}
+.slots{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.slot{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px;box-shadow:var(--shadow-card);min-width:0}
+.pic{position:relative;aspect-ratio:16/9;border-radius:8px;overflow:hidden;background:var(--paper-2)}
+.pic svg.scene{position:absolute;inset:0;width:100%;height:100%}
+.pic.sk{background:repeating-linear-gradient(135deg,var(--paper-2) 0 8px,var(--paper) 8px 16px);border:1px dashed var(--chip-line)}
+.pic.gap{background:var(--paper);border:1px dashed var(--chip-line);display:grid;place-items:center;text-align:center;padding:8px;color:var(--muted);font-size:11.5px;line-height:1.3}
+.pic.held,.pic.unk{display:grid;place-items:center}.pic.held{border:1.5px dashed var(--warn);background:var(--warn-soft)}
+.pic.unk{border:1.5px dashed var(--alert);background:var(--alert-soft);color:var(--ink-soft)}
+.pic.mk{background:var(--paper);border:1px dashed var(--chip-line)}
+.pic.mk i{position:absolute;left:0;top:0;height:100%;background:color-mix(in srgb,var(--te) 18%,transparent);transition:width .6s}
+.pic.mk span{position:absolute;inset:0;display:grid;place-items:center;font:700 11px/1 var(--font-ui);color:var(--ink-soft)}
+.lab{position:absolute;right:6px;top:6px;z-index:2;font:700 9px/1 var(--font-ui);letter-spacing:.05em;text-transform:uppercase;padding:4px 6px;border-radius:5px;background:rgba(255,253,248,.92);color:var(--ink-soft)}
+.chip{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--muted);font:600 10.5px/1 var(--font-ui)}
+.chip.ok{border-color:var(--ok);color:var(--ok);background:var(--ok-soft)}
+.chip.sup{border:1px dashed var(--warn);color:var(--warn);background:var(--warn-soft)}
+.chip.no{border:1px dashed var(--alert);color:var(--alert);background:var(--alert-soft)}
+.pic .chip{position:absolute;left:6px;bottom:6px;z-index:2}
+.meta{display:flex;justify-content:space-between;align-items:baseline;gap:6px;margin-top:7px;font:600 12px/1.2 var(--font-ui)}
+.meta .dim{font:500 11px/1.2 var(--font-ui);color:var(--muted)}
+.hash{font:500 10.5px/1 ui-monospace,Menlo,monospace;color:var(--faint)}
+.route-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.route-head .swatch{width:14px;height:14px;border-radius:4px;border:1.5px solid var(--ink);flex:none;margin-top:6px}
+.line{font-size:14px;color:var(--ink-soft);margin:0 0 12px}
+.booth{background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow-card);padding:0;overflow:hidden}
+.bh{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);font:700 10.5px/1 var(--font-ui);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.bh b{font:700 12px/1 var(--font-ui);letter-spacing:0;text-transform:none;border:1px solid var(--chip-line);border-radius:99px;padding:6px 12px;color:var(--ink)}
+.bb{padding:14px 16px 16px}
+.agent{display:flex;gap:10px;align-items:flex-start;font-size:14.5px;margin-bottom:12px}
+.agent .dot{width:22px;height:30px;border-radius:50%;background:var(--ink);flex:none;margin-top:2px}
+.agent .k{font:800 9.5px/1 var(--font-ui);letter-spacing:.07em;text-transform:uppercase;display:block;margin-bottom:4px;color:var(--ink)}
+.gl{font:800 9.5px/1 var(--font-ui);letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
+.glrow{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px dashed var(--line);font:600 15px/1.2 var(--font-serif)}
+.glrow .sw{display:inline-block;width:12px;height:12px;border-radius:3px;border:1.5px solid var(--ink);margin-right:8px;vertical-align:-1px}
+.glrow u{font:800 11px/1 var(--font-ui);color:var(--ink)}
+.ask{border:1.5px solid var(--ask-line);box-shadow:0 0 0 3px var(--ask-glow);border-radius:14px;padding:14px;margin:12px 0}
+.ask.calm{border-color:var(--line);box-shadow:none;background:var(--paper)}
+.ask .k{font:800 9.5px/1 var(--font-ui);letter-spacing:.07em;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center}
+.ask .k i{font-style:normal;color:var(--alert);border:1px solid var(--ask-line);border-radius:99px;padding:3px 7px}
+.ask .k i.ok{color:var(--ok);border-color:var(--ok)}
+.ask h3{font:600 19px/1.25 var(--font-serif);margin:10px 0 8px}.ask p{margin:0 0 10px;font-size:14.5px}
+.ask p.small,.small{font-size:13px;color:var(--muted)}
+.btn{display:inline-block;border:1px solid var(--chip-line);border-radius:99px;padding:8px 14px;font:700 12.5px/1 var(--font-ui);background:#fff;margin:0 4px 6px 0}
+.btn.pri{background:var(--ink);color:#fff;border-color:var(--ink)}
+.btn:disabled{background:#adadad;color:#fff;border-color:#adadad}
+.btn:focus-visible,.states button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.send{display:block;width:100%;text-align:center;border:0;border-radius:99px;padding:13px;background:#adadad;color:#fff;font:700 13px/1 var(--font-ui);margin-top:12px}
+.note{font-size:13px;color:var(--muted);text-align:center;margin:8px 0 0}
+.foot{border-top:1px solid var(--line);margin-top:14px;padding-top:10px;font-size:13px;color:var(--muted)}.foot b{color:var(--ink)}
+.rrow{display:flex;gap:9px;align-items:flex-start;padding:8px 0;border-bottom:1px dashed var(--line);font-size:14px;line-height:1.35}
+.rrow input{margin-top:4px;accent-color:var(--ink)}
+.rrow b{display:block;font:600 15px/1.25 var(--font-serif)}
+.rrow.off{opacity:.62}
+.rrow .why{color:var(--muted);font-size:12.5px;display:block;margin-top:1px}
+.fmt{display:flex;flex-wrap:wrap;gap:5px;margin:4px 0 6px}
+.fmt .chip{cursor:default}
+.box{border:1px solid var(--chip-line);border-radius:10px;padding:10px 12px;margin:0 0 10px;background:var(--paper)}
+.box .l{font:800 9.5px/1 var(--font-ui);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:5px}
+.opt{display:flex;gap:8px;align-items:flex-start;font-size:14px;line-height:1.3;margin:6px 0}
+.opt input{margin-top:3px;accent-color:var(--ink)}
+.name{width:100%;border:1px solid var(--ink);border-radius:8px;padding:8px 10px;background:#fff;font:600 13px/1.2 var(--font-ui);margin:4px 0 8px}
+.prog{height:6px;border-radius:99px;background:var(--paper-2);overflow:hidden;margin:6px 0 4px}
+.prog i{display:block;height:100%;background:var(--te);border-radius:99px;transition:width .6s}
+.prow{padding:9px 0;border-bottom:1px dashed var(--line);font-size:14px}
+.prow b{font:600 15px/1.25 var(--font-serif)}
+.prow .r{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.prow .r span{font:600 11.5px/1.2 var(--font-ui);color:var(--muted)}
+.thumb{position:relative;aspect-ratio:16/9;border-radius:8px;overflow:hidden;margin:2px 0 10px}
+.thumb svg{position:absolute;inset:0;width:100%;height:100%}
+.thumb .lab{right:6px;top:6px}
+.why-box{border-left:3px solid var(--warn);padding:6px 0 6px 12px;margin:0 0 12px;font-size:14.5px}
+.why-box .l{font:800 9.5px/1 var(--font-ui);letter-spacing:.07em;text-transform:uppercase;color:var(--warn);display:block;margin-bottom:4px}
+.why-box.red{border-color:var(--alert)}.why-box.red .l{color:var(--alert)}
+.words{font:600 13px/1.2 ui-monospace,Menlo,monospace;background:var(--warn-soft);color:var(--warn);padding:1px 5px;border-radius:4px}
+.msg{font-size:13.5px;background:var(--paper-2);border-radius:10px;padding:9px 12px;margin:0 0 10px;color:var(--ink-soft)}
+.sep{height:1px;background:var(--line);margin:14px 0}
+@media (max-width:1100px){
+  body{padding:22px 22px 48px}
+  .grid{grid-template-columns:minmax(0,1fr) 340px;gap:18px}
+  .slots{gap:8px}
+}
+</style></head><body>
+<div class="kick">Mock · Territories frames · not the build</div>
+<h1>Making pictures for the routes you greenlit</h1>
+<p class="lead" id="lead"></p>
+<div class="states" id="states" role="tablist" aria-label="States"></div>
+<div class="grid"><main id="main"></main><aside class="booth" id="booth"></aside></div>
+
+<script>
+var $=function(s){return document.querySelector(s)};
+var SLOTS=[["tv1","TV","open",1],["tv2","TV","turn",1],["poster","Poster","",1],["email","Email","",1],["story","Story","",0],["seat","Table card","",0]];
+var ROUTES=[
+ {id:"a",name:"Flat Out Good",sw:"#F0B84A",line:"A cup that is simply, plainly good. No fuss, no story.",pal:["#e8d3a8","#b98a4e","#6b4a2a"]},
+ {id:"b",name:"The Second Cup",sw:"#9ED08C",line:"The cup you were going to skip, and then did not.",pal:["#c9dcc2","#6f9a7c","#3a5c4a"]}
+];
+var GREY=[
+ {name:"Slow Mornings, Fast Coffee",why:"Greenlit, but not developed yet. It has no places for pictures."},
+ {name:"Cup Number Nine",why:"Not greenlit. Pictures are made only for routes a person has greenlit."}
+];
+var HASH={a:["3fa9c1d2","b81e04c7","0d7a55e9","91c2ab36"],b:["5c20de71","e47b9a03","27f1c8b5","a6ed5ecf"]};
+var S; // state
+function reset(){S={phase:"ask",sel:{a:true,b:true},origin:null,by:"Shrey",declared:false,frames:{},tryagain:null,msg:null,progress:{a:0,b:0}}}
+function fr(route,slot,status,extra){var o={route:route,slot:slot,status:status};for(var k in extra||{})o[k]=extra[k];S.frames[route+"-"+slot]=o}
+function scenario(n){
+ reset();
+ if(n==="s1a"){S.phase="ask"}
+ if(n==="s1b"){S.phase="ask";S.origin="invented";S.declared=true}
+ if(n==="s2"){S.phase="making";S.origin="invented";S.declared=true;S.progress={a:3,b:1};
+   ["tv1","tv2","poster"].forEach(function(s){fr("a",s,"placed")});fr("a","email","making");fr("b","tv1","placed");["tv2","poster","email"].forEach(function(s){fr("b",s,"making")})}
+ if(n==="s3"){S.phase="done";S.origin="invented";S.declared=true;allPlaced(true)}
+ if(n==="s4a"||n==="s4b"){S.phase="done";S.origin="invented";S.declared=true;allPlaced();
+   fr("a","email","held",{why:"Readable text: ‘FERNCLIFF’. The planned line was ‘Flat out good.’",kind:"text",words:"FERNCLIFF"});
+   fr("b","poster","held",{why:"Nobody could check this picture for text or brands, so a person looks first.",kind:"unchecked"});
+   if(n==="s4b")S.tryagain={route:"a",slot:"email"}}
+ if(n==="s5a"||n==="s5b"){S.phase="done";S.origin="invented";S.declared=true;allPlaced();
+   fr("b","tv2","unknown");if(n==="s5b")S.tryagain={route:"b",slot:"tv2",unknown:true}}
+ S.name=n;
+}
+function allPlaced(){["a","b"].forEach(function(r){["tv1","tv2","poster","email"].forEach(function(s){fr(r,s,"placed")})})}
+
+/* a small scene so each frame looks different: a hill, a window of light, a cup */
+function scene(r,slot,text){
+ var R=ROUTES.filter(function(x){return x.id===r})[0],p=R.pal,i=["tv1","tv2","poster","email"].indexOf(slot);
+ var cx=[108,112,118,110][i],cy=[52,56,50,54][i],hill=[62,58,66,60][i];
+ return '<svg class="scene" viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><defs><linearGradient id="g'+r+i+'" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="'+p[0]+'"/><stop offset="1" stop-color="'+p[1]+'"/></linearGradient></defs>'+
+ '<rect width="160" height="90" fill="url(#g'+r+i+')"/><circle cx="'+(20+i*34)+'" cy="22" r="'+(10+i*2)+'" fill="#fff" opacity=".35"/>'+
+ '<path d="M0 '+hill+' Q40 '+(hill-16)+' 80 '+(hill-4)+' T160 '+(hill-10)+' V90 H0Z" fill="'+p[2]+'" opacity=".55"/>'+
+ '<rect x="0" y="74" width="160" height="16" fill="'+p[2]+'" opacity=".75"/>'+
+ '<rect x="'+(cx-11)+'" y="'+cy+'" width="22" height="22" rx="4" fill="#FFFDF8"/><path d="M'+(cx+11)+' '+(cy+5)+' h5 a5 5 0 0 1 0 10 h-5" fill="none" stroke="#FFFDF8" stroke-width="3"/>'+
+ '<rect x="'+(cx-11)+'" y="'+cy+'" width="22" height="5" rx="2" fill="#7a4e2a"/>'+
+ '<path d="M'+(cx-4)+' '+(cy-4)+' q-3 -5 0 -9 M'+(cx+3)+' '+(cy-4)+' q3 -5 0 -9" fill="none" stroke="#fff" stroke-width="1.6" opacity=".7" stroke-linecap="round"/>'+
+ (text?'<rect x="'+(cx-26)+'" y="'+(cy-30)+'" width="52" height="11" rx="2" fill="#FFFDF8" opacity=".92"/><text x="'+cx+'" y="'+(cy-22)+'" text-anchor="middle" font-family="Geist,Arial,sans-serif" font-weight="800" font-size="7" fill="#2A2620">'+text+'</text>':'')+'</svg>';
+}
+function frameHash(r,slot){return HASH[r][["tv1","tv2","poster","email"].indexOf(slot)]}
+
+function slotHtml(R,s){
+ var key=R.id+"-"+s[0],f=S.frames[key],t=s[1]+(s[2]?" · "+s[2]:""),body="",dim="",hash="";
+ if(!s[3]){body='<div class="pic gap">Not offered. A 16:9 frame would lose too much of a '+s[1]+' place.</div>';dim=' <span class="dim">not offered</span>'}
+ else if(!f){body='<div class="pic sk"><span class="lab">Mock-up</span></div>';dim=' <span class="dim">sketch</span>'}
+ else if(f.status==="placed"){body='<div class="pic">'+scene(R.id,s[0])+'<span class="lab">Illustrative</span><span class="chip ok">Generated</span></div>';hash='<span class="hash">'+frameHash(R.id,s[0])+'</span>'}
+ else if(f.status==="making"){var w=40+((s[0].length*17)%50);body='<div class="pic mk"><i style="width:'+w+'%"></i><span>Being made</span></div>';dim=' <span class="dim">in progress</span>'}
+ else if(f.status==="held"){body='<div class="pic held"><div style="padding:8px;text-align:center;font-size:11.5px;line-height:1.3;color:var(--warn)"><b style="font:700 11px var(--font-ui)">Held for a person</b><br>Not placed yet.</div><span class="chip sup" style="position:absolute;left:6px;bottom:6px">Held</span></div>';dim=' <span class="dim">held</span>'}
+ else if(f.status==="unknown"){body='<div class="pic unk"><div style="padding:8px;text-align:center;font-size:11.5px;line-height:1.3"><b style="font:700 11px var(--font-ui)">Not sure it was made</b><br>Nothing is placed.</div><span class="chip no" style="position:absolute;left:6px;bottom:6px">Unknown</span></div>';dim=' <span class="dim">waiting</span>'}
+ else if(f.status==="out"){body='<div class="pic gap">Left out. This place stays a sketch until you ask for another.</div>';dim=' <span class="dim">left out</span>'}
+ return '<div class="slot"><div class="meta" style="margin:0 0 7px"><span>'+t+dim+'</span>'+hash+'</div>'+body+'</div>';
+}
+function routeHtml(R){
+ var made=0,placed=0,held=0,unk=0,mk=0;for(var k in S.frames){var f=S.frames[k];if(f.route!==R.id)continue;made++;if(f.status==="placed")placed++;if(f.status==="held")held++;if(f.status==="unknown")unk++;if(f.status==="making")mk++}
+ var tags="";if(placed)tags+='<span class="tag ok">'+placed+' placed</span>';if(mk)tags+='<span class="tag">'+mk+' being made</span>';if(held)tags+='<span class="tag warn">'+held+' held</span>';if(unk)tags+='<span class="tag warn">'+unk+' not sure</span>';
+ return '<section class="panel"><p class="eyebrow"><span>Greenlit route</span>'+tags+'</p><div class="route-head"><div><h2>'+R.name+'</h2><p class="line">'+R.line+'</p></div></div>'+
+ '<div class="slots">'+SLOTS.map(function(s){return slotHtml(R,s)}).join("")+'</div></section>';
+}
+function renderMain(){
+ var h='';
+ ROUTES.forEach(function(R){h+=routeHtml(R)});
+ $("#main").innerHTML=h;
+}
+
+/* the Booth */
+function boothTop(){
+ return '<div class="bh"><span>Booth</span><b>Hide</b></div><div class="bb"><div class="agent"><span class="dot"></span><div><span class="k">Review agent · checks every claim</span>'+
+ (S.phase==="ask"?'Two routes are developed and greenlit. I can make pictures for them; I will ask you first.':S.phase==="making"?'I am making the frames. You can keep working.':(Object.keys(S.frames).some(function(k){var s=S.frames[k].status;return s==="held"||s==="unknown"})?'Most frames are placed. A few need a person before they can be.':'Every frame was checked for readable words, brands and banned imagery before it was placed.'))+'</div></div>'+
+ '<p class="gl">Greenlit · 4</p>'+ROUTES.map(function(R){return '<div class="glrow"><span><i class="sw" style="background:'+R.sw+'"></i>'+R.name+'</span><u>remove</u></div>'}).join("")+
+ '<div class="glrow"><span><i class="sw" style="background:#E8A0A0"></i>Slow Mornings, Fast Coffee</span><u>remove</u></div><div class="glrow"><span><i class="sw" style="background:#F3ECDC"></i>Cup Number Nine</span><u>remove</u></div>';
+}
+function boothBottom(txt){
+ return '<button class="send" disabled>Send 4 →</button><p class="note">'+(txt||'Frames first, then send.')+'</p><div class="foot">Checks signed as <b>Shrey</b></div></div>';
+}
+function nSel(){return ROUTES.filter(function(r){return S.sel[r.id]}).length}
+function askCard(){
+ var n=nSel(),fr_=n*4,ready=S.declared&&S.origin!=="client"&&n>0;
+ var h='<div class="ask"><div class="k"><span>Make frames · before sending</span><i>Needs you</i></div><h3>Make '+(fr_||"no")+' frame'+(fr_===1?"":"s")+' for '+(n===1?"one route":n===2?"two routes":"your routes")+'?</h3>'+
+ '<p class="small" style="margin-top:-2px">Frames are drawn by an outside picture tool, four for each route you tick. Every one is marked Illustrative and starts with rights Generated.</p>';
+ h+='<div class="box"><span class="l">Which routes</span>';
+ ROUTES.forEach(function(R){h+='<label class="rrow"><input type="checkbox" data-sel="'+R.id+'"'+(S.sel[R.id]?" checked":"")+'><span><b>'+R.name+'</b><span class="why" style="color:var(--ink-soft)">Greenlit and developed · 4 frames</span></span></label>'});
+ GREY.forEach(function(g){h+='<div class="rrow off"><input type="checkbox" disabled aria-label="'+g.name+' is not offered"><span><b>'+g.name+'</b><span class="why">'+g.why+'</span></span></div>'});
+ h+='</div><div class="box"><span class="l">Where a frame can go</span><div class="fmt"><span class="chip ok">TV · open</span><span class="chip ok">TV · turn</span><span class="chip ok">Poster</span><span class="chip ok">Email</span></div>'+
+ '<div class="fmt"><span class="chip sup">Story</span><span class="chip sup">Table card</span></div><span class="small">Story and Table card are not offered: a 16:9 frame would lose too much of them. They stay sketches.</span></div>';
+ h+='<div class="box"><span class="l">Look</span><span style="font-size:14px">Taken from the client’s brand notes. A stand-in until Brand Clan is ready.</span></div>';
+ if(!S.declared){
+  h+='<div class="box" style="border-color:var(--ask-line)"><span class="l">First, what is this material?</span><span class="small">Words from a brief go to the outside picture tool only if a named person says the material is invented or a demo. Client material is not sent.</span>'+
+  '<label class="opt"><input type="radio" name="org" value="invented"'+(S.origin==="invented"?" checked":"")+'><span><b style="font:700 13px var(--font-ui)">Invented</b><br><span class="small">Made up for this exercise. No real client.</span></span></label>'+
+  '<label class="opt"><input type="radio" name="org" value="demo"'+(S.origin==="demo"?" checked":"")+'><span><b style="font:700 13px var(--font-ui)">A demo</b><br><span class="small">Shown to people, but not a client’s.</span></span></label>'+
+  '<label class="opt"><input type="radio" name="org" value="client"'+(S.origin==="client"?" checked":"")+'><span><b style="font:700 13px var(--font-ui)">The client’s</b><br><span class="small">Real client material.</span></span></label>';
+  if(S.origin==="client")h+='<p class="msg" style="margin-top:8px">Client material is not sent to the picture tool, so no frames are made. Nothing was sent.</p>';
+  else h+='<input class="name" aria-label="Your name" value="'+S.by+'"><button class="btn pri" data-declare'+(S.origin?"":" disabled")+'>Confirm as '+S.by+'</button>';
+  h+='</div>';
+ } else h+='<div class="box"><span class="l">Material</span><span style="font-size:14px"><b style="font-family:var(--font-ui)">'+(S.origin==="demo"?"A demo":"Invented")+'</b>, confirmed by '+S.by+'.</span></div>';
+ h+='<p class="small" style="margin:0 0 10px">A frame is made once. If the picture tool does not answer, nothing is made again until you say so. What it costs is kept in Decisions.</p>';
+ h+='<button class="btn pri" data-make'+(ready?"":" disabled")+'>Make frames</button><button class="btn" data-notnow>Not now</button>';
+ h+='</div>';return h;
+}
+function makingCard(){
+ var h='<div class="ask calm"><div class="k"><span>Making frames</span><i class="ok" style="color:var(--te);border-color:var(--te)">Working</i></div><h3>Making the frames.</h3><p class="small">You can keep working. Each frame is checked as it arrives, then placed or held.</p>';
+ ROUTES.forEach(function(R){var d=S.progress[R.id];h+='<div class="prow"><div class="r"><b>'+R.name+'</b><span>'+d+' of 4 made</span></div><div class="prog"><i style="width:'+(d*25)+'%"></i></div><span class="small">'+(d>=4?'All made. Checking the last one.':d?'Checking each frame for words and brands as it arrives.':'Starting.')+'</span></div>'});
+ h+='<p class="small" style="margin:10px 0 0">Closing this page does not stop it. The frames land on the route cards when they are ready.</p></div>';return h;
+}
+function placedCard(){
+ var p=0;for(var k in S.frames)if(S.frames[k].status==="placed")p++;
+ return '<div class="ask calm"><div class="k"><span>Frames · done</span><i class="ok">All placed</i></div><h3>'+p+' frames are on your routes.</h3><p>Each shows Illustrative and starts with rights Generated. A person can change the rights on a frame, as with any picture.</p>'+
+ '<p class="small" style="margin:0">Story and Table card stay sketches. A frame was checked for readable words, brands and banned imagery before it was placed.</p></div>';
+}
+function heldCards(){
+ var h='';
+ Object.keys(S.frames).forEach(function(k){var f=S.frames[k];if(f.status!=="held")return;
+  var R=ROUTES.filter(function(r){return r.id===f.route})[0],sl=SLOTS.filter(function(s){return s[0]===f.slot})[0],pl=sl[1]+(sl[2]?" · "+sl[2]:"");
+  if(S.tryagain&&S.tryagain.route===f.route&&S.tryagain.slot===f.slot){h+=newAsk(R,pl,f);return}
+  h+='<div class="ask"><div class="k"><span>Review · held frame</span><i>Needs you</i></div><h3>A frame for '+R.name+' is held.</h3>'+
+  '<div class="thumb">'+(f.kind==="text"?scene(f.route,f.slot,f.words):scene(f.route,f.slot))+'<span class="lab">Illustrative</span></div>'+
+  '<div class="why-box"><span class="l">Why it is held · '+pl+'</span>'+(f.kind==="text"?'Readable text: <span class="words">‘FERNCLIFF’</span>. The planned line was ‘Flat out good.’ Words are added later by the studio; they are never painted into a frame.':f.why)+'</div>'+
+  '<button class="btn pri" data-approve="'+k+'">Approve as '+S.by+'</button><button class="btn" data-again="'+k+'">Try again</button><button class="btn" data-out="'+k+'">Leave it out</button>'+
+  '<p class="small" style="margin:4px 0 0">Approve places it as Illustrative, rights Generated, and your name goes with it. Try again asks you first. Leave it out keeps the place a sketch.</p></div>';
+ });
+ return h;
+}
+function newAsk(R,pl,f,unk){
+ return '<div class="ask"><div class="k"><span>Make frames · new ask</span><i>Needs you</i></div><h3>Make 1 new frame for '+R.name+'?</h3>'+
+ '<p>'+(unk?'One more frame for '+pl+'. The first one may already have been made by the picture tool. If it was, you will have both, and you can leave one out.':'One more frame for '+pl+'. The held one stays out of the route.')+'</p>'+
+ '<p class="small">It is checked like the others and marked Illustrative, rights Generated. What it costs is kept in Decisions.</p>'+
+ '<button class="btn pri" data-newmake>Make 1 frame</button><button class="btn" data-notnow2>Not now</button></div>';
+}
+function unknownCards(){
+ var h='';
+ Object.keys(S.frames).forEach(function(k){var f=S.frames[k];if(f.status!=="unknown")return;
+  var R=ROUTES.filter(function(r){return r.id===f.route})[0],sl=SLOTS.filter(function(s){return s[0]===f.slot})[0],pl=sl[1]+(sl[2]?" · "+sl[2]:"");
+  if(S.tryagain&&S.tryagain.unknown){h+=newAsk(R,pl,f,true);return}
+  h+='<div class="ask"><div class="k"><span>Review · not sure</span><i>Needs you</i></div><h3>One frame for '+R.name+' got no answer.</h3>'+
+  '<p>We asked the picture tool for the '+pl+' frame and it never said whether it made it. It may have, and it may already be counted on the tool’s side. Nothing is placed, and nothing is made again by itself.</p>'+
+  (S.msg?'<p class="msg">'+S.msg+'</p>':'')+
+  '<button class="btn pri" data-check>Check again</button><button class="btn" data-again-u="'+k+'">Try again</button>'+
+  '<p class="small" style="margin:4px 0 0">Check again asks the tool once more whether it finished; it makes nothing new. Try again is a new ask and may make a second frame.</p></div>';
+ });
+ return h;
+}
+function renderBooth(){
+ var h=boothTop(),note;
+ if(S.phase==="ask"){h+=askCard();note="Answer the question first."}
+ else if(S.phase==="making"){h+=makingCard();note="Frames first, then send."}
+ else if(S.phase==="idle"){h+='<div class="ask calm"><div class="k"><span>Frames</span></div><h3>No frames made.</h3><p class="small">The routes stay sketches until you ask for frames.</p><button class="btn pri" data-reopen>Make frames</button></div>';note="Frames are optional. Send works without them."}
+ else{
+  var held=Object.keys(S.frames).some(function(k){return S.frames[k].status==="held"}),unk=Object.keys(S.frames).some(function(k){return S.frames[k].status==="unknown"});
+  if(held){h+=heldCards();note="Answer the question first."}
+  else if(unk){h+=unknownCards();note="Answer the question first."}
+  else{h+=placedCard();note="Frames are done. Send when ready."}
+ }
+ if(S.phase==="done"&&!Object.keys(S.frames).some(function(k){var s=S.frames[k].status;return s==="held"||s==="unknown"}))h=h.replace('class="send" disabled','class="send"');
+ $("#booth").innerHTML=h+boothBottom(note);
+ if(S.phase==="done"&&!Object.keys(S.frames).some(function(k){var s=S.frames[k].status;return s==="held"||s==="unknown"}))$("#booth .send").removeAttribute("disabled"),$("#booth .send").style.background="var(--ag-act)",$("#booth .send").style.color="var(--ag-act-ink)";
+}
+var LEADS={
+ s1a:"1a · The ask, before the material is declared. Only greenlit, developed routes can be ticked; the others are greyed with the reason. Make frames stays off until a named person says what the material is.",
+ s1b:"1b · The ask, ready. Material declared invented by a named person; two routes ticked; Make frames and Not now. No prices: the cost is in Decisions.",
+ s2:"2 · Making. Progress per route in the Booth and on the cards; nothing blocks, and the frames that are ready are already on their places.",
+ s3:"3 · Placed. Frames sit in the TV, Poster and Email places of each route card, marked Illustrative and Generated. Story and Table card are not offered and stay sketches.",
+ s4a:"4a · Review held frames. A frame with readable words, or one nobody could check, is held with its reason. Approve (a named person), Try again (a new ask) or Leave it out.",
+ s4b:"4b · Try again opens a new ask for one frame; the held one stays out. Nothing is made until Make 1 frame.",
+ s5a:"5a · A frame the picture tool never answered for. Plain words, and two choices: Check again (makes nothing) or Try again (a new ask).",
+ s5b:"5b · Try again after an unknown frame: a new ask that says the first may already exist."
+};
+var ORDER=[["s1a","1a Ask: declare"],["s1b","1b Ask: ready"],["s2","2 Making"],["s3","3 Placed"],["s4a","4a Held"],["s4b","4b Held: try again"],["s5a","5a Unknown"],["s5b","5b Unknown: try again"]];
+function render(){
+ $("#lead").textContent=LEADS[S.name]||LEADS.s3;
+ $("#states").innerHTML=ORDER.map(function(o){return '<button role="tab" data-go="'+o[0]+'" class="'+(S.name===o[0]?"on":"")+'">'+o[1]+'</button>'}).join("");
+ renderMain();renderBooth();
+}
+var timer;
+document.addEventListener("click",function(e){
+ var t=e.target.closest("[data-go],[data-declare],[data-make],[data-notnow],[data-notnow2],[data-reopen],[data-approve],[data-again],[data-again-u],[data-out],[data-check],[data-newmake]");if(!t)return;
+ clearInterval(timer);
+ if(t.dataset.go){scenario(t.dataset.go);location.hash=t.dataset.go;render();return}
+ if(t.hasAttribute("data-declare")){S.declared=true;S.name="s1b";render();return}
+ if(t.hasAttribute("data-make")){startMaking();return}
+ if(t.hasAttribute("data-notnow")){S.phase="idle";render();return}
+ if(t.hasAttribute("data-reopen")){S.phase="ask";render();return}
+ if(t.hasAttribute("data-approve")){S.frames[t.dataset.approve].status="placed";render();return}
+ if(t.hasAttribute("data-out")){S.frames[t.dataset.out].status="out";render();return}
+ if(t.dataset.again){var f=S.frames[t.dataset.again];S.tryagain={route:f.route,slot:f.slot};render();return}
+ if(t.hasAttribute("data-again-u")){S.tryagain={unknown:true};render();return}
+ if(t.hasAttribute("data-notnow2")){S.tryagain=null;render();return}
+ if(t.hasAttribute("data-check")){S.msg="Still no answer from the picture tool. Nothing was made twice.";render();return}
+ if(t.hasAttribute("data-newmake")){var k;for(k in S.frames){var f2=S.frames[k];if(f2.status==="held"&&S.tryagain&&f2.slot===S.tryagain.slot)f2.status="making";if(f2.status==="unknown"&&S.tryagain&&S.tryagain.unknown)f2.status="making"}S.tryagain=null;S.phase="making";S.progress={a:3,b:3};render();setTimeout(function(){for(var k in S.frames)if(S.frames[k].status==="making")S.frames[k].status="placed";S.phase="done";render()},1800);return}
+});
+document.addEventListener("change",function(e){
+ var t=e.target;
+ if(t.dataset&&t.dataset.sel){S.sel[t.dataset.sel]=t.checked;renderBooth();return}
+ if(t.name==="org"){S.origin=t.value;renderBooth();return}
+});
+document.addEventListener("input",function(e){if(e.target.classList.contains("name")){S.by=e.target.value||"Shrey";var b=$("[data-declare]");if(b)b.textContent="Confirm as "+S.by}});
+function startMaking(){
+ S.phase="making";S.name="s2";S.progress={a:0,b:0};
+ ROUTES.forEach(function(R){if(S.sel[R.id])["tv1","tv2","poster","email"].forEach(function(s){fr(R.id,s,"making")})});
+ render();var n=0;
+ timer=setInterval(function(){n++;S.progress={a:Math.min(4,n),b:Math.min(4,n-1<0?0:n-1)};
+  if(n>=6){clearInterval(timer);S.frames={};ROUTES.forEach(function(R){if(S.sel[R.id])["tv1","tv2","poster","email"].forEach(function(s){fr(R.id,s,"placed")})});S.phase="done";S.name="s3"}
+  render()},900);
+}
+var start=(location.hash||"#s1a").slice(1);if(!LEADS[start])start="s1a";scenario(start);render();
+</script></body></html>

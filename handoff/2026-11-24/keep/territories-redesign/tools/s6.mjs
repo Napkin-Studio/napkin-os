@@ -1,0 +1,10 @@
+import { open } from './lib.mjs'
+const { b, page, F } = await open()
+const f = F()
+page.on('request', r => { if (r.method()!=='GET') console.log('REQ', r.method(), r.url().slice(-70)) })
+const g = f.locator('button', { hasText: /^Greenlight$/ }).first()
+console.log(await g.evaluate(el=>el.outerHTML.slice(0,300)))
+await g.evaluate(el=>el.click()); await page.waitForTimeout(6000)
+console.log((await f.locator('.runnote,.toast,#toast').allInnerTexts()).join(' | '))
+console.log((await f.locator('body').innerText()).match(/\d+ greenlit/)?.[0])
+await b.close()

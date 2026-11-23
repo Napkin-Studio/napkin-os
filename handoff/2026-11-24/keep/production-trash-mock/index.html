@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Trash</title>
+<style>
+html,body{margin:0;height:100%;background:#1b1c20;color:#ddd;font:13px system-ui,sans-serif}
+body{display:flex;flex-direction:column}
+nav{display:flex;gap:6px;padding:8px 12px;align-items:center}
+nav a{color:#ddd;text-decoration:none;padding:4px 10px;border-radius:999px;border:1px solid #444}
+nav a.on{background:#5b5bf7;border-color:#5b5bf7;color:#fff}
+nav .sp{flex:1}
+main{flex:1;min-height:0;display:flex;justify-content:center;align-items:flex-start;overflow:auto;padding:0 12px 12px}
+img{max-width:100%;height:auto;box-shadow:0 4px 24px #0008;cursor:pointer}
+</style></head><body>
+<nav id="nav"></nav><main><img id="img" alt=""></main>
+<script>
+const N=4; let w=1280;
+const n=()=>Math.min(N,Math.max(1,parseInt(location.hash.replace('#tr',''))||1));
+function draw(){
+  const i=n(); img.src='tr'+i+'-'+w+'.png';
+  nav.innerHTML=[...Array(N)].map((_,k)=>`<a href="#tr${k+1}" class="${k+1===i?'on':''}">tr${k+1}</a>`).join('')+'<span class="sp"></span>'+[1280,1024].map(x=>`<a href="#tr${i}" data-w="${x}" class="${x===w?'on':''}">${x}</a>`).join('');
+  nav.querySelectorAll('[data-w]').forEach(a=>a.onclick=e=>{w=+a.dataset.w;draw()});
+}
+addEventListener('hashchange',draw);
+img.onclick=()=>{location.hash='#tr'+(n()%N+1)};
+addEventListener('keydown',e=>{if(e.key==='ArrowRight')location.hash='#tr'+(n()%N+1);if(e.key==='ArrowLeft')location.hash='#tr'+((n()+N-2)%N+1)});
+draw();
+</script></body></html>

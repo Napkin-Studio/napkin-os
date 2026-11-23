@@ -1,0 +1,12 @@
+await page.mouse.click(1350, 820);
+await page.keyboard.press("Escape"); await page.getByRole("button", { name: "Text (T)" }).click();
+await page.mouse.click(190, 580);
+await page.waitForTimeout(500);
+await page.keyboard.type("A busy Paris street corner in the morning: a café terrace with newspapers on the tables, parked scooters, shop signs and a delivery van. Photo.");
+await page.keyboard.press("Escape");
+await page.waitForTimeout(800);
+await page.getByRole("button", { name: "Generate", exact: true }).first().click();
+await page.waitForTimeout(1200);
+await S("paris-tray");
+const t = await page.locator("body").innerText();
+return t.slice(t.indexOf("What the Director"), t.indexOf("What the Director") + 600);

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Greenlight asks: static mock</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Geist:wght@800&display=swap">
+<style>
+
+/* The studio's tokens (design/new-ui/napkin-app-v1.html; the same block Brief Maker carries), tinted by the agency's base
+   (--ag-base, from clan:me). Territories' own identity is the teal (--te), the owner's demo. Documents stay on paper. */
+:root{
+  --ag-base:#515BFF; --ag-acc:#C8CBFF; --ag-base-ink:#FFFFFF; --ag-acc-ink:#141413;
+  --ag-act:var(--ag-base); --ag-act-ink:var(--ag-base-ink);
+  --desk:color-mix(in srgb,var(--ag-base) 6%,#F6F1E7); --paper:color-mix(in srgb,var(--ag-base) 2.5%,#FFFDF8);
+  --paper-2:#F3ECDC; --card:#FFFFFF;
+  --ink:#141413; --ink-soft:#2A2620; --muted:#6D655A; --faint:#9A9082;
+  --line:color-mix(in srgb,var(--ag-base) 10%,#E2D9C8); --line-strong:#2A2620; --chip-line:#D4CCCD;
+  --accent:var(--ag-base); --accent-soft:color-mix(in srgb,var(--ag-base) 9%,#FFFFFF);
+  --ok:#1D8A4E; --ok-soft:#E6F6EC; --warn:#B45309; --warn-soft:#FEF3DC; --alert:#C9462A; --alert-soft:#FFF1EE;
+  --te:#14947F; --te-ink:#FFFFFF;
+  --ask-line:#F08A6E; --ask-glow:rgba(255,79,46,.08);
+  --font-ui:"Geist",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+  --font-serif:"Newsreader",Georgia,"Iowan Old Style",serif;
+  --shadow-paper:0 1px 0 rgba(255,255,255,.75) inset,0 8px 24px -8px rgba(50,38,18,.10),0 1px 3px rgba(50,38,18,.08);
+  --shadow-card:0 1px 2px rgba(20,20,19,.06),0 4px 12px -4px rgba(20,20,19,.08);
+  --booth-dur:460ms; --booth-ease:cubic-bezier(.2,.7,.2,1);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-color-scheme="light"]){
+    --ag-act:var(--ag-acc); --ag-act-ink:#141413;
+    --desk:color-mix(in srgb,var(--ag-base) 12%,#121110); --paper:color-mix(in srgb,var(--ag-base) 9%,#1B1A18);
+    --paper-2:#262320; --card:color-mix(in srgb,var(--ag-base) 7%,#201E1B);
+    --ink:#EFE9DE; --ink-soft:#D6CEC0; --muted:#A49B8D; --faint:#7B7367;
+    --line:color-mix(in srgb,var(--ag-base) 16%,#34302A); --line-strong:#CFC6B6; --chip-line:#4A443C;
+    --accent-soft:color-mix(in srgb,var(--ag-base) 22%,#1B1A18);
+    --ok:#5DBB83; --ok-soft:#1C2E23; --warn:#E09A4B; --warn-soft:#3A2A18; --alert:#F08A70; --alert-soft:#33201B;
+    --te:#3CC9AE; --te-ink:#0E1A17; --ask-line:#C8664C; --ask-glow:rgba(255,79,46,.10); color-scheme:dark;
+  }
+}
+:root[data-color-scheme="dark"]{
+  --ag-act:var(--ag-acc); --ag-act-ink:#141413;
+  --desk:color-mix(in srgb,var(--ag-base) 12%,#121110); --paper:color-mix(in srgb,var(--ag-base) 9%,#1B1A18);
+  --paper-2:#262320; --card:color-mix(in srgb,var(--ag-base) 7%,#201E1B);
+  --ink:#EFE9DE; --ink-soft:#D6CEC0; --muted:#A49B8D; --faint:#7B7367;
+  --line:color-mix(in srgb,var(--ag-base) 16%,#34302A); --line-strong:#CFC6B6; --chip-line:#4A443C;
+  --accent-soft:color-mix(in srgb,var(--ag-base) 22%,#1B1A18);
+  --ok:#5DBB83; --ok-soft:#1C2E23; --warn:#E09A4B; --warn-soft:#3A2A18; --alert:#F08A70; --alert-soft:#33201B;
+  --te:#3CC9AE; --te-ink:#0E1A17; --ask-line:#C8664C; --ask-glow:rgba(255,79,46,.10); color-scheme:dark;
+}
+/* An agency whose accent is a line, never a fill (Catapult): the primary stays the base in dark too. */
+@media (prefers-color-scheme:dark){ :root[data-agency-accent="line"]:not([data-color-scheme="light"]){ --ag-act:var(--ag-base); --ag-act-ink:var(--ag-base-ink); } }
+:root[data-agency-accent="line"][data-color-scheme="dark"]{ --ag-act:var(--ag-base); --ag-act-ink:var(--ag-base-ink); }
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{min-height:100%}
+body{margin:0;background:var(--desk);color:var(--ink);font:16px/1.5 var(--font-serif);-webkit-font-smoothing:antialiased;padding:32px 36px 56px}
+button{font:inherit;color:inherit;cursor:pointer}
+.kick{font:800 11px/1 var(--font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--ink);display:flex;gap:10px;align-items:center}
+.kick::before{content:"";width:22px;height:2px;background:var(--te)}
+h1{font:800 34px/1.1 var(--font-ui);margin:14px 0 8px;letter-spacing:-.01em}
+.lead{max-width:760px;color:var(--ink-soft);margin:0 0 26px}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:28px;align-items:start}
+.panel{background:var(--paper);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow-paper);padding:18px 20px 22px;margin-bottom:24px}
+.eyebrow{font:700 10.5px/1 var(--font-ui);letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:0 0 12px;display:flex;gap:8px;align-items:center}
+.tag{font:600 10px/1 var(--font-ui);letter-spacing:.04em;padding:3px 7px;border-radius:5px;background:var(--paper-2);color:var(--ink-soft);text-transform:none}
+h2{font:600 22px/1.2 var(--font-serif);margin:0 0 4px}
+.sub{color:var(--muted);font-size:14px;margin:0 0 14px}
+.slots{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.slot{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px;box-shadow:var(--shadow-card)}
+.pic{position:relative;aspect-ratio:4/3;border-radius:8px;overflow:hidden;background:linear-gradient(150deg,#d9cdb6,#b79f7c)}
+.pic.b{background:linear-gradient(150deg,#b8c9bd,#6f9482)}.pic.c{background:linear-gradient(150deg,#d6c3c0,#a8837e)}.pic.d{background:linear-gradient(150deg,#c7cbd8,#8790b3)}
+.pic.sk{background:repeating-linear-gradient(135deg,var(--paper-2) 0 8px,var(--paper) 8px 16px);border:1px dashed var(--chip-line)}
+.pic.gap{background:var(--paper);border:1px dashed var(--chip-line);display:grid;place-items:center;text-align:center;padding:10px;color:var(--muted);font-size:12px;line-height:1.35}
+.pic .shape{position:absolute;left:34%;top:18%;width:32%;height:66%;border-radius:12px 12px 6px 6px;background:rgba(255,255,255,.4)}
+.pic.sk .shape{background:var(--chip-line);opacity:.5}
+.final{position:absolute;left:7px;top:7px;z-index:2;display:inline-flex;align-items:center;gap:5px;height:21px;padding:0 9px 0 7px;border-radius:999px;background:var(--ink);color:var(--paper);font:700 11px/1 var(--font-ui);box-shadow:0 1px 3px rgba(20,20,19,.25)}
+.final svg{width:11px;height:11px}
+.lab{position:absolute;right:7px;top:7px;font:700 9.5px/1 var(--font-ui);letter-spacing:.05em;text-transform:uppercase;padding:4px 6px;border-radius:5px;background:rgba(255,253,248,.92);color:var(--ink-soft)}
+.chip{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--muted);font:600 10.5px/1 var(--font-ui);cursor:pointer}
+.chip.ok{border-color:var(--ok);color:var(--ok);background:var(--ok-soft)}
+.chip.sup{border:1px dashed var(--warn);color:var(--warn);background:var(--warn-soft)}
+.pic .chip{position:absolute;left:7px;bottom:7px}
+.meta{display:flex;justify-content:space-between;align-items:baseline;gap:6px;margin-top:7px;font:600 12px/1.2 var(--font-ui)}
+.meta .dim{font:500 11px/1.2 var(--font-ui);color:var(--muted)}
+.hash{font:500 10.5px/1 ui-monospace,Menlo,monospace;color:var(--faint)}
+.world{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:18px}
+.pic.big{aspect-ratio:4/5;border-radius:10px}
+.pic.big .chip{height:24px;font-size:11.5px;left:10px;bottom:10px}
+.pic.big .final{left:10px;top:10px;height:24px;font-size:12px}
+.menu{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px -10px rgba(50,38,18,.28);padding:8px;width:270px}
+.menu b{display:block;font:700 12.5px/1.3 var(--font-ui);padding:6px 8px 2px}
+.menu p{margin:0;padding:0 8px 6px;font-size:13px;color:var(--muted);line-height:1.35}
+.menu .row{display:block;padding:7px 8px;border-radius:8px;font:600 13px/1.25 var(--font-ui)}
+.menu .row span{display:block;font:500 12px/1.3 var(--font-serif);color:var(--muted);margin-top:1px}
+.menu .row.on{background:var(--accent-soft);outline:1px solid var(--accent)}
+dl{margin:0;font-size:14px}dt{font:700 10px/1 var(--font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:14px 0 4px}dd{margin:0;color:var(--ink-soft)}
+.booth{background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow-card);padding:16px;position:sticky;top:20px}
+.ask{border:1.5px solid var(--ask-line);box-shadow:0 0 0 3px var(--ask-glow);border-radius:14px;padding:14px;margin:12px 0}
+.ask .k{font:800 9.5px/1 var(--font-ui);letter-spacing:.07em;text-transform:uppercase;display:flex;justify-content:space-between}
+.ask .k i{font-style:normal;color:var(--alert);border:1px solid var(--ask-line);border-radius:99px;padding:3px 7px}
+.ask h3{font:600 19px/1.25 var(--font-serif);margin:10px 0 8px}.ask p{margin:0 0 10px;font-size:14.5px}
+.btn{display:inline-block;border:1px solid var(--chip-line);border-radius:99px;padding:7px 14px;font:700 12.5px/1 var(--font-ui);background:#fff;margin:0 4px 6px 0}
+.btn.pri{background:var(--ink);color:#fff;border-color:var(--ink)}
+.send{display:block;text-align:center;border-radius:99px;padding:13px;background:#adadad;color:#fff;font:700 13px/1 var(--font-ui);margin-top:12px}
+.note{font-size:13px;color:var(--muted);text-align:center;margin:8px 0 0}
+</style></head><body>
+<div class="kick">Mock · pictures, rights and Final · not the build</div>
+<h1>Whose picture is it, and which one is Final</h1>
+<p class="lead">Three places show the same two marks. On a route card each picture slot wears its label, its rights chip and its short hash; the picture a person chose wears the Final pill. In the World view the same marks sit on the big picture, and the chip opens the rights menu. Send waits in the Booth until a Final picture has a rights choice. Words and look are Production's approved ones (Final pill, rights chip, rights menu). Pictures are stand-ins; the brand is invented.</p>
+<div class="grid"><div>
+
+<section class="panel"><p class="eyebrow">1 · On a route card <span class="tag">Sit Down, It’s Saturday · 8 slots</span></p>
+<h2>Eight places, each its own picture or an honest gap</h2>
+<p class="sub">A picture is picked by what it is (its hash), never by where it sits. Two near-identical pictures of one place show which is Final.</p>
+<div class="slots">
+ <div class="slot"><div class="pic"><span class="final"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6.5l2.6 2.6L10 3.4"/></svg>Final</span><span class="lab">Illustrative</span><i class="shape"></i><span class="chip ok">Generated</span></div><div class="meta"><span>TV · open</span><span class="hash">3fa9c1d2</span></div></div>
+ <div class="slot"><div class="pic b"><span class="lab">Illustrative</span><i class="shape"></i><span class="chip ok">Own</span></div><div class="meta"><span>TV · open <span class="dim">not Final</span></span><span class="hash">b81e04c7</span></div></div>
+ <div class="slot"><div class="pic c"><span class="lab">Illustrative</span><i class="shape"></i><span class="chip sup">Rights to supply</span></div><div class="meta"><span>TV · turn</span><span class="hash">0d7a55e9</span></div></div>
+ <div class="slot"><div class="pic d"><span class="lab">Illustrative</span><i class="shape"></i><span class="chip ok">Licensed</span></div><div class="meta"><span>Story</span><span class="hash">91c2ab36</span></div></div>
+ <div class="slot"><div class="pic sk"><span class="lab">Mock-up</span><i class="shape"></i></div><div class="meta"><span>Poster <span class="dim">sketch</span></span></div></div>
+ <div class="slot"><div class="pic sk"><span class="lab">Mock-up</span><i class="shape"></i></div><div class="meta"><span>Table card <span class="dim">sketch</span></span></div></div>
+ <div class="slot"><div class="pic gap">No picture yet. The same one was already placed on this route; this place needs its own.</div><div class="meta"><span>Email <span class="dim">gap</span></span></div></div>
+ <div class="slot"><div class="pic sk"><span class="lab">Mock-up</span><i class="shape"></i></div><div class="meta"><span>Radio <span class="dim">sketch</span></span></div></div>
+</div></section>
+
+<section class="panel"><p class="eyebrow">2 · In the World view <span class="tag">Poster</span></p>
+<div class="world">
+ <div><div class="pic big"><span class="final"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6.5l2.6 2.6L10 3.4"/></svg>Final</span><span class="lab">Illustrative</span><i class="shape"></i><span class="chip sup">Rights to supply</span></div>
+ <div class="meta" style="margin-top:9px"><span>Poster <span class="dim">· from Production, Hollow Oak ‘Still’</span></span><span class="hash">a6ed5ecf…</span></div></div>
+ <div>
+  <div class="menu"><b>Whose picture is this?</b><p>A client sees what you choose. Nobody has said yet, so it reads “Rights to supply”.</p>
+   <div class="row">Generated<span>Made by the agency’s tools.</span></div>
+   <div class="row">Own<span>Drawn or shot by the agency.</span></div>
+   <div class="row">Licensed<span>Someone has said it is licensed.</span></div>
+   <div class="row on">Rights to supply<span>Nobody has said yet.</span></div></div>
+  <dl><dt>Marked Final</dt><dd>This poster picture goes to the Deck and Production. Marking another poster picture Final replaces it.</dd><dt>Who made it</dt><dd>Its hash and where it came from stay with it, so the same picture is never mistaken for a near twin.</dd></dl>
+ </div>
+</div></section>
+
+</div>
+<aside class="booth"><p class="eyebrow" style="margin:0">Booth</p>
+<div class="ask"><div class="k"><span>Review · before sending</span><i>Needs you</i></div>
+<h3>Passenger Seat has a Final picture with no rights chosen.</h3>
+<p>Say whose it is, or take it off Final. A client would see it marked “Rights to supply”.</p>
+<span class="btn pri">Choose rights</span><span class="btn">Take it off Final</span></div>
+<span class="send">Send 3 →</span><p class="note">Answer the question first.</p></aside></div>
+</body></html>

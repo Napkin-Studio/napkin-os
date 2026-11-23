@@ -1,0 +1,52 @@
+Start
+Build
+Review
+Present
+HOW THE DECK GETS BUILT
+✓
+Read the inputs
+Read
+✓
+Read image-only pages
+No documents attached
+✓
+Storyline
+Approved
+✓
+Territories
+Picked
+✓
+One idea and its work
+Approved
+✓
+Slide copy
+Done
+•
+Check
+Checking
+You review the deck
+Then present or export
+Something failed
+
+The engine finished, but the document did not accept what it wrote: agent output rejected: {"blocks":[0],"chars":1848,"items":[{"text":"Which date matters most: awareness by Christmas or a March launch? — Answer: Launch in March is the date that matters. Christmas is a teaser and awareness build, not the goal."},{"text":"What is the budget, does it include VAT, and does media sit inside it? — Answer: Working budget is 250k GBP excl. VAT, media included. Production must be lean."},{"text":"What share, sales or distribution targets and measures of success do you hold? — Answer: Target: 8% share of the UK convenience RTD coffee fridge within 12 months of launch, tracked by retailer sales data."},{"text":"Is 'no added sugar' verified, and can 'barista quality' be used? — Answer: No added sugar is not verified yet; do not claim it. Do not use the words barista quality in any copy."},{"text":"What is the agreed age range and priority audience? — Answer: Lead audience is 25-40 urban commuters and gym-goers; students, school-run mums and night-shift nurses are secondary."},{"text":"How should we treat the cafés you supply while winning café share? — Answer: Treat the cafes we supply as partners: never knock cafes. We win from energy drinks first; cafes are secondary."},{"text":"Which line is chosen: 'Flat out good' or the longer 'Really...' line? — Answer: Use Flat out good as the line. Keep Really coffee as a secondary sign-off only."},{"text":"Do you hold evidence for the recyclable and Rainforest Alliance claims? — Answer: Yes. We hold the aluminium recyclability certificate and the Rainforest Alliance certificate for the beans; copies to follow."},{"text":"What share or sales targets do you hold, and is retailer data available to read them? — Answer: Target stays 8% of the convenience RTD coffee fridge in 12 months. Retailer sales data is available through our two wholesalers."},{"text":"Which age range is agreed, and what data supports it? — Answer: 25-40 is agreed for the lead audience; the data person's survey backs it. 18-45 and 25-55 are dropped."}],"kind":"list","words":318} is not valid under any of the schemas listed in the 'oneOf' keyword; {"blocks":[0],"chars":1797,"items":[{"text":"On \"Ferncliff Coffee Co.: Flat Out Good\": Proposed (not given by the client): presented by the account lead and planner [presenter and date]. To confirm: who presents, and the date."},{"text":"On \"What has to change\": To confirm: Canned coffee shifts from energy-drink stand-in to real coffee that happens to be cold."},{"text":"On \"Most energy-drink buyers come for the boost, yet most think the drink \": (57%, to confirm)"},{"text":"On \"Most energy-drink buyers come for the boost, yet most think the drink \": (59%, to confirm)"},{"text":"On \"Most energy-drink buyers come for the boost, yet most think the drink \": (39%, to confirm)"},{"text":"On \"People value the energy-drink boost yet see the drink as unhealthy, wh\": (2018, to confirm)"},{"text":"On \"People value the energy-drink boost yet see the drink as unhealthy, wh\": (2018, to confirm)"},{"text":"On \"We are talking to people in a hurry who want real coffee but keep sett\": (age range to confirm)"},{"text":"On \"Café-style oat coffee, as quick to grab from the fridge as an energy d\": To confirm: per can, on the final recipe."},{"text":"On \"Café-style oat coffee, as quick to grab from the fridge as an energy d\": (to confirm)"},{"text":"On \"Investment, and what we would like to agree today\": Proposed (not given by the client): a working split of fees, production and media [option A]. To confirm: the split, from the agency's rate card."},{"text":"On \"Investment, and what we would like to agree today\": Proposed (not given by the client): a media-weighted version [option B]. To confirm: whether the client wants a lean or a heavier option."},{"text":"On \"Investment, and what we would like to agree today\": Proposed (not given by the client): a date for the decision [decision date]. To confirm: the date the client will decide."},{"text":"On \"Every requirement, and where this deck answers it, continued\": To confirm: that this is per can and holds on the final recipe."}],"kind":"list","words":316} is not valid under any of the schemas listed in the 'oneOf' keyword Build it again; if it fails the same way, tell Napkin.
+
+NUMBERS BEING CHECKED
+!
+The engine's code checks
+checking the whole deck now
+Failed
+Try again
+Nothing you approved is lost. The run starts again from this step.
+Review agent
+Checks every claim
+FAILED
+Step 6 of 7
+CHECKED SO FAR
+✓
+Built from: brief+research
+✓
+Insight judge: 1 of 3 insight candidates passed
+Built from: the brief, the research
+Deck type: Agency pitch
+Things you must supply, like the presenter or the budget split, show as labelled placeholders. They are never made up.
+The engine finished, but the document did not accept what it wrote: agent output rejected: {"blocks":[0],"chars":1848,"items":[{"text":"Which date matters most: awareness by Christmas or a March launch? — Answer: Launch in March is the date that matters. Christmas is a teaser and awareness build, not the goal."},{"text":"What is the budget, does it include VAT, and does media sit inside it? — Answer: Working budget is 250k GBP excl. VAT, media included. Production must be lean."},{"text":"What share, sales or distribution targets and measures of success do you hold? — Answer: Target: 8% share of the UK convenience RTD coffee fridge within 12 months of launch, tracked by retailer sales data."},{"text":"Is 'no added sugar' verified, and can 'barista quality' be used? — Answer: No added sugar is not verified yet; do not claim it. Do not use the words barista quality in any copy."},{"text":"What is the agreed age range and priority audience? — Answer: Lead audience is 25-40 urban commuters and gym-goers; students, school-run mums and night-shift nurses are secondary."},{"text":"How should we treat the cafés you supply while winning café share? — Answer: Treat the cafes we supply as partners: never knock cafes. We win from energy drinks first; cafes are secondary."},{"text":"Which line is chosen: 'Flat out good' or the longer 'Really...' line? — Answer: Use Flat out good as the line. Keep Really coffee as a secondary sign-off only."},{"text":"Do you hold evidence for the recyclable and Rainforest Alliance claims? — Answer: Yes. We hold the aluminium recyclability certificate and the Rainforest Alliance certificate for the beans; copies to follow."},{"text":"What share or sales targets do you hold, and is retailer data available to read them? — Answer: Target stays 8% of the convenience RTD coffee fridge in 12 months. Retailer sales data is available through our two wholesalers."},{"text":"Which age range is agreed, and what data supports it? — Answer: 25-40 is agreed for the lead audience; the data person's survey backs it. 18-45 and 25-55 are dropped."}],"kind":"list","words":318} is not valid under any of the schemas listed in the 'oneOf' keyword; {"blocks":[0],"chars":1797,"items":[{"text":"On \"Ferncliff Coffee Co.: Flat Out Good\": Proposed (not given by the client): presented by the account lead and planner [presenter and date]. To confirm: who presents, and the date."},{"text":"On \"What has to change\": To confirm: Canned coffee shifts from energy-drink stand-in to real coffee that happens to be cold."},{"text":"On \"Most energy-drink buyers come for the boost, yet most think the drink \": (57%, to confirm)"},{"text":"On \"Most energy-drink buyers come for the boost, yet most think the drink \": (59%, to confirm)"},{"text":"On \"Most energy-drink buyers come for the boost, yet most think the drink \": (39%, to confirm)"},{"text":"On \"People value the energy-drink boost yet see the drink as unhealthy, wh\": (2018, to confirm)"},{"text":"On \"People value the energy-drink boost yet see the drink as unhealthy, wh\": (2018, to confirm)"},{"text":"On \"We are talking to people in a hurry who want real coffee but keep sett\": (age range to confirm)"},{"text":"On \"Café-style oat coffee, as quick to grab from the fridge as an energy d\": To confirm: per can, on the final recipe."},{"text":"On \"Café-style oat coffee, as quick to grab from the fridge as an energy d\": (to confirm)"},{"text":"On \"Investment, and what we would like to agree today\": Proposed (not given by the client): a working split of fees, production and media [option A]. To confirm: the split, from the agency's rate card."},{"text":"On \"Investment, and what we would like to agree today\": Proposed (not given by the client): a media-weighted version [option B]. To confirm: whether the client wants a lean or a heavier option."},{"text":"On \"Investment, and what we would like to agree today\": Proposed (not given by the client): a date for the decision [decision date]. To confirm: the date the client will decide."},{"text":"On \"Every requirement, and where this deck answers it, continued\": To confirm: that this is per can and holds on the final recipe."}],"kind":"list","words":316} is not valid under any of the schemas listed in the 'oneOf' keyword Build it again; if it fails the same way, tell Napkin.

@@ -1,0 +1,16 @@
+await page.getByRole("button", { name: "Text (T)" }).click();
+await page.mouse.click(150, 150);
+await page.waitForTimeout(500);
+await page.keyboard.type("A harbour picnic film: three friends spread a blanket on the old harbour wall, pour lemonade, and watch the fishing boats come in at sunset. Two shots.");
+await page.keyboard.press("Escape");
+await page.waitForTimeout(800);
+await page.getByRole("button", { name: "Select (V)" }).click();
+await S("noteA");
+await page.getByRole("button", { name: "Link two nodes (L)" }).click();
+await page.mouse.click(300, 160);
+await page.waitForTimeout(400);
+await page.mouse.click(300, 400);
+await page.waitForTimeout(1200);
+await S("noteA-link-menu");
+const t = await page.locator("body").innerText();
+return t.slice(t.indexOf("Canvas"), t.indexOf("Canvas") + 800);

@@ -1,0 +1,21 @@
+import { createRequire } from 'module';
+import fs from 'fs';
+const require = createRequire('/home/batunii/Documents/Code/napkin-wt-prod-spinoff/app/package.json');
+const { chromium } = require('@playwright/test');
+const B='http://127.0.0.1:18090', K='/home/batunii/Documents/napkin-local-keep/full-flow-2026-11-22/spinoff-upstream';
+const br = await chromium.launch({headless:true});
+const ctx = await br.newContext({viewport:{width:1440,height:900},storageState:K+'/auth.json'});
+const page = await ctx.newPage();
+page.on('response',async r=>{ if(r.request().method()!=='GET' && /\/api\//.test(r.url())) {let b='';try{b=(await r.text()).slice(0,300)}catch{} fs.appendFileSync(K+'/resp.log',`${r.status()} ${r.url()} ${b}\n`)}});
+await page.goto(B+'/?open=doc-ie-napkin-deck-maker-7da0246b'); await page.waitForTimeout(6000);
+let F=null; for(const f of page.frames()){ if(await f.getByText('Agency pitch').count()) F=f; } console.log('frames',page.frames().length, !!F); F=F||page;
+await F.getByText('Agency pitch').first().click();
+const ta = F.locator('textarea').first();
+await ta.fill('A campaign pitch for Marrow Oat, "Rise Slow". Build the case from the brief.');
+await page.waitForTimeout(500);
+await F.getByRole('button',{name:'Build deck'}).first().click();
+for (let i=0;i<60;i++){ await page.waitForTimeout(10000); const t=await F.locator('body').innerText(); if(/Objective|objective/.test(t) && i>2) {console.log('objective text seen at',i);} if(/Approve|approve/.test(t) && i>3 && !/Building/.test(t)) {console.log('gate at',i); break;} }
+await page.screenshot({path:K+'/shots/04-after-build.png'});
+fs.writeFileSync(K+'/body.txt', await F.locator('body').innerText());
+await ctx.storageState({path:K+'/auth.json'});
+await br.close();

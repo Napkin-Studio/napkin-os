@@ -1,0 +1,11 @@
+- 00:44:04Z FREE: Continue in -> Production Tool (new project)
+- 00:45-00:47Z write: draft 12.2 s, ask1 dialogue 9.1 s, ask2 length ~8.5 s (+ target offer shown at once), ask3 12.2 s
+- 00:54Z Plan shots 9-10.6 s (job_01M7XSH36PD7EMZTG2TFJKX7DR), 5 shots + end card, sound beats: shot3 'Silence', shot5 snoring, line beat shot4, VO end card
+- 00:55-00:58Z frames 1-5 (frame1 26.5 s relay; rest 185 s total for 4)
+- BUG: castRef (web/src/jobs/cast.ts) sends frame 1 as required character 'the person from shot 1' for shots naming no character (shot 3 insert kettle, shot 5 wall) -> insert drawn as medium with Maya; Dex prompt "The character is @in_1"
+- 01:00-01:12Z clips: WAN join 1+2 (158 s UI), Omni shot1 + WAN shot2 separate (85 s for both), Veo shot4 audio, Omni shot3, WAN shot5 audio (~92 s for 3 parallel-ish)
+- F2/F13 fixed: Use this take shot1 then shot2 switch only own clip; undo/redo OK; Swap take lists only covering takes
+- REGRESSION (F4 side effect): Assemble first cut again plays whole real-length takes (Omni 3 s min, Veo 4 s min) -> 15.6 s on a 10 s target ('Over by 5.6 s'); rooms/model.ts shotWindow falls back to {0,durationS}
+- First takes of boxes not yet in the cut (shots 3-5) do not land in the existing cut and no card asks; only Assemble again (which drops trims) brings them in
+- 01:30Z BUG: Script 'Whole script' ask after Plan shots sends target=scene with lines [] and neighbours = only shots 1-3 (script/skye.ts writeInput/neighbours) -> agent says 'This scene has no snoring line yet... scene text is empty' (job_01M7XVNBR33Y6DE8SHQFF38MFH)
+- F12: bar Undo/Redo of 'put the joined take into the cut' works; the note's own Undo said 'The cut has changed since' with no change

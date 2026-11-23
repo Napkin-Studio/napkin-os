@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ad fixes mock: end card legal and link nudge</title>
+<style>
+:root{--desk:#F6F1E7;--paper:#FFFDF8;--paper-2:#F3ECDC;--card:#FFFFFF;--ink:#141413;--muted:#6D655A;--faint:#9A9082;--line:#E2D9C8;--warn:#B45309;--warn-soft:#FEF3DC;--ok:#1D8A4E;--ok-soft:#E6F6EC;--ag-act:#515BFF;--ag-acc:#C8CBFF;--ink2:var(--muted);--ink3:var(--muted);--soft:var(--paper-2);--line-soft:color-mix(in srgb,var(--line) 60%,transparent);--r-pill:999px;
+--shadow-pop:0 18px 40px -14px rgba(20,20,19,.38),0 2px 6px rgba(20,20,19,.08);--shadow-card:0 1px 2px rgba(20,20,19,.06),0 4px 12px -4px rgba(20,20,19,.08);
+--f:"Geist",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;--mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;--manila:#E7D5AC;--manila2:#F3E8CC;--manila-line:#C4AA75}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{font-family:var(--f);background:var(--desk);color:var(--ink);font-size:15px;line-height:1.55;overflow:hidden;-webkit-font-smoothing:antialiased}
+button,input,textarea{font:inherit;color:inherit}
+.mono{font-family:var(--mono)}
+/* mock chrome (hidden in screenshots) */
+#mocknav{height:40px;background:#141413;color:#EFE9DE;display:flex;align-items:center;gap:6px;padding:0 12px;font-size:12px}
+#mocknav b{margin-right:8px;font-weight:600}
+#mocknav button{background:transparent;border:1px solid #4a443c;color:#EFE9DE;border-radius:999px;height:26px;padding:0 12px;cursor:pointer;font-size:12px}
+#mocknav button.on{background:#EFE9DE;color:#141413}
+#mocknav .sp{flex:1}
+body.shot #mocknav{display:none}
+#app{height:calc(100vh - 40px);display:flex;flex-direction:column}
+body.shot #app{height:100vh}
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 14px;border-radius:var(--r-pill);border:1px solid var(--line);background:var(--card);font-weight:500;font-size:13px;cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--soft)}
+.btn.primary{background:var(--ag-act);border-color:var(--ag-act);color:#fff;font-weight:600;padding:0 16px}
+.btn.primary:hover{background:color-mix(in srgb,var(--ag-act) 86%,var(--ink))}
+.btn.ghost{background:transparent;border-color:transparent}.btn.ghost:hover{background:var(--soft)}
+.btn.sm{height:28px;padding:0 12px;font-size:12px}.btn.xs{height:24px;padding:0 9px;font-size:11.5px}
+/* top bar */
+.top{height:63px;flex:none;display:flex;align-items:center;gap:14px;padding:0 24px 0 24px;background:color-mix(in srgb,var(--paper) 70%,var(--desk));border-bottom:1px solid var(--line)}
+.logo{display:flex;align-items:center;gap:0;position:relative;height:44px}
+.logo i{width:44px;height:44px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#8e9bff,#2a2f9e 70%);border:3px solid #fff;box-shadow:var(--shadow-card);z-index:1}
+.logo span{background:var(--ag-acc);margin-left:-18px;padding:0 16px 0 28px;height:38px;border-radius:19px;display:flex;align-items:center;font-weight:600;font-size:14px}
+.pname{display:flex;flex-direction:column;line-height:1.15;margin-left:10px;font-weight:600;font-size:15px}.pname small{font:400 10px var(--mono);color:var(--muted)}
+.crumb{font-size:13.5px;color:var(--muted)}.crumb b{color:var(--ink)}.crumb u{color:var(--ink);font-weight:500}
+.top .grow{flex:1}.av{width:32px;height:32px;border-radius:50%;background:var(--ag-act);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:600}
+/* edit room */
+.tool{height:48px;flex:none;display:flex;align-items:center;gap:10px;padding:0 18px;border-bottom:1px solid var(--line);background:var(--paper)}
+.seg{display:inline-flex;background:var(--paper-2);border:1px solid var(--line);border-radius:999px;padding:3px}.seg span{padding:3px 16px;border-radius:999px;font-size:13px;color:var(--muted)}.seg span.on{background:#fff;color:var(--ink);font-weight:600}
+.pill{font:11.5px var(--mono);border:1px solid var(--line);border-radius:999px;padding:3px 12px;color:var(--muted)}
+.room{flex:1;display:flex;min-height:0}
+.stage{flex:1;min-width:0;background:var(--paper);display:flex;flex-direction:column;align-items:center;padding:22px 20px 0;gap:14px}
+.preview{width:min(460px,100%);aspect-ratio:16/9;border-radius:6px;overflow:hidden;position:relative;background:#14161B;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#fff;padding:6%}
+.preview .tag{position:absolute;top:10px;left:10px;background:rgba(0,0,0,.55);font-size:11px;font-weight:600;padding:2px 9px;border-radius:5px}
+.preview .hl{font-size:clamp(20px,3.6vw,32px);font-weight:700;letter-spacing:-.01em}
+.preview .ln{font-size:13px;opacity:.85;margin-top:4px}
+.preview .cta{margin-top:10px;font-size:12px;font-weight:600;border:1px solid rgba(255,255,255,.6);border-radius:999px;padding:3px 14px}
+.preview .lg{position:absolute;left:8%;right:8%;bottom:9px;font-size:9px;line-height:1.3;opacity:.7;min-height:11px}
+.preview .can{width:30px;height:46px;border-radius:5px 5px 7px 7px;background:#F1E7D3;margin-bottom:8px;position:relative}
+.preview .can:after{content:"";position:absolute;left:5px;right:5px;top:15px;height:14px;background:#B5A07A;opacity:.6;border-radius:2px}
+.tl{width:100%;margin-top:auto;border-top:1px solid var(--line);padding:10px 0 12px;font-size:12px;color:var(--muted)}
+.tl .tr{display:flex;gap:2px;height:42px;margin-top:6px}.tl .tr i{flex:1;background:#d9cdb4;border-radius:3px}.tl .tr i:last-child{flex:.9;background:#14161B;outline:2px solid var(--ag-act);outline-offset:-2px}
+.booth{width:316px;flex:none;border-left:1px solid var(--line);background:var(--paper);overflow:auto}
+.boothhead{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line);font:500 10.5px var(--mono);letter-spacing:.08em;color:var(--muted)}
+.rm-tab{display:flex;flex-direction:column;gap:14px;padding:12px 16px 20px}
+.crumb2{font-size:12px;color:var(--muted)}.crumb2 u{color:var(--ink)}.crumb2 b{color:var(--ink)}
+.rm-tabhead{display:flex;flex-direction:column;gap:4px}.rm-tabhead b{font-size:15px;line-height:1.35}
+.rm-kicker{font:500 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.rm-fieldlabel{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--ink2)}
+.lbl{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:18px}
+.rm-input,.rm-textarea{width:100%;border:1px solid var(--line);border-radius:4px;background:var(--card);padding:6px 12px;font-size:12.5px;color:var(--ink)}
+.rm-input{height:32px}.rm-textarea{padding:8px 12px;resize:vertical;line-height:1.45;min-height:76px}
+.rm-input:focus,.rm-textarea:focus{outline:2px solid var(--ag-act);outline-offset:2px}
+.rm-note{color:var(--ink2);font-size:12.5px;line-height:1.45;margin:0}
+.rm-faint{color:var(--muted);font-size:12.5px}
+.src{font:500 10.5px var(--mono);letter-spacing:.04em;color:var(--ok);background:var(--ok-soft);border:1px solid color-mix(in srgb,var(--ok) 35%,transparent);border-radius:999px;padding:1px 9px;display:inline-flex;gap:6px;align-items:center}
+.src.edited{color:var(--muted);background:var(--paper-2);border-color:var(--line)}
+.src button{background:none;border:0;padding:0;color:var(--ag-act);font:inherit;text-decoration:underline;cursor:pointer}
+.cnt{display:flex;justify-content:space-between;gap:10px;font-size:11.5px;color:var(--muted)}.cnt .mono{font-size:11px;white-space:nowrap}
+.hint{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:baseline}
+.cnt button,.hint button{background:none;border:0;padding:0;color:var(--ag-act);font:inherit;font-weight:500;text-decoration:underline;cursor:pointer}
+.rm-num{display:flex;align-items:center;gap:8px;font-size:12.5px}.rm-num .rowname{font:500 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);flex:1}
+.sw{width:64px;height:32px;border:1px solid var(--line);border-radius:4px;padding:4px;background:#fff}.sw i{display:block;height:100%;background:#14161B;border-radius:2px}
+/* canvas */
+.canvas{flex:1;position:relative;overflow:hidden;background-color:var(--desk);background-image:radial-gradient(color-mix(in srgb,var(--ink) 16%,transparent) 1px,transparent 1.2px);background-size:16px 16px}
+svg.links{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.lk{fill:none;stroke:var(--ag-act);stroke-width:2;stroke-dasharray:none}
+.lk.new{stroke-dasharray:600;stroke-dashoffset:600;animation:draw .6s ease forwards}@keyframes draw{to{stroke-dashoffset:0}}
+.lkchip{position:absolute;transform:translate(-50%,-50%);font:500 10.5px var(--mono);letter-spacing:.04em;background:var(--card);border:1px solid var(--ag-act);color:var(--ag-act);border-radius:999px;padding:1px 9px;box-shadow:var(--shadow-card)}
+.node{position:absolute;background:var(--paper);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow-card);padding:12px 14px}
+.node.sel{outline:2px solid var(--ag-act);outline-offset:2px}
+.node h4{margin:0 0 6px;font:500 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:500}
+.node p{margin:0;font-size:12px;line-height:1.4;color:var(--ink)}
+.node.brief{background:var(--manila2);border-color:var(--manila-line)}
+.node.brief li{font-size:11.5px;margin:2px 0}.node.brief ul{margin:0;padding-left:16px}
+.node.pic{padding:8px;display:flex;flex-direction:column;align-items:center;gap:6px;background:var(--card)}
+.canpic{width:100%;height:112px;border-radius:5px;background:linear-gradient(#cfd3d8,#b7bcc4);display:grid;place-items:center}
+.canpic i{width:42px;height:84px;border-radius:7px 7px 9px 9px;background:#F1E7D3;position:relative;box-shadow:0 2px 6px rgba(0,0,0,.25)}
+.canpic i:after{content:"FERNCLIFF OAT FLAT WHITE";position:absolute;left:4px;right:4px;top:26px;font:700 7px/1.1 var(--f);color:#6a5a3a;text-align:center}
+.name{font:500 12px var(--mono);color:var(--ink)}
+.sbgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}.sbgrid i{aspect-ratio:16/9;background:#d9cdb4;border-radius:2px}
+.dot{position:absolute;width:9px;height:9px;border-radius:50%;background:var(--card);border:2px solid var(--ag-act)}
+.hoverbar{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(100% + 12px);display:flex;align-items:center;gap:2px;padding:4px;border-radius:12px;background:var(--card);border:1px solid var(--line-soft);box-shadow:var(--shadow-pop);white-space:nowrap;z-index:5}
+.hoverbar .btn{border-color:transparent;background:transparent;height:30px;padding:0 12px}.hoverbar .btn:hover{background:var(--soft)}
+.hoverbar .btn.act{background:var(--paper-2)}
+.hoverbar .sep{width:1px;height:18px;background:var(--line);margin:0 3px}
+.nudge{position:absolute;left:50%;transform:translateX(-50%);width:318px;bottom:calc(100% + 66px);z-index:6;background:var(--card);border:1px solid var(--warn-border,color-mix(in srgb,var(--warn) 40%,transparent));border-radius:12px;box-shadow:var(--shadow-pop);padding:12px 14px 12px;font-size:13px;line-height:1.45}
+.nudge:after{content:"";position:absolute;left:50%;bottom:-6px;width:10px;height:10px;background:var(--card);border-right:1px solid color-mix(in srgb,var(--warn) 40%,transparent);border-bottom:1px solid color-mix(in srgb,var(--warn) 40%,transparent);transform:translateX(-50%) rotate(45deg)}
+.nudge .what{display:flex;gap:8px;align-items:flex-start}
+.nudge .mk{flex:none;width:6px;align-self:stretch;border-radius:3px;background:var(--warn)}
+.nudge b{font-weight:600}.nudge .why{color:var(--muted);font-size:12.5px;margin-top:2px}
+.nudge .acts{display:flex;gap:6px;margin-top:10px;justify-content:flex-end}
+.toast{position:absolute;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--paper);border-radius:999px;padding:8px 8px 8px 16px;font-size:13px;display:flex;gap:10px;align-items:center;box-shadow:var(--shadow-pop)}
+.toast .btn{color:var(--paper);text-decoration:underline;height:26px;background:transparent;border:0}
+.toast .btn:hover{background:transparent;opacity:.85}
+.tools{position:absolute;left:14px;top:14px;width:46px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-card);padding:6px;display:flex;flex-direction:column;gap:6px}.tools i{height:32px;border-radius:8px;background:var(--paper-2)}.tools i:first-child{background:var(--ag-act)}
+.legend{position:absolute;right:14px;bottom:14px;font-size:12px;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:6px 14px;box-shadow:var(--shadow-card)}
+[hidden]{display:none!important}
+</style></head>
+<body>
+<div id="mocknav">
+ <b>Mock: two small changes</b>
+ <button data-s="endcard-filled">1a End card, brief linked</button>
+ <button data-s="endcard-empty">1b End card, no brief</button>
+ <button data-s="nudge-ref">2a Plan shots, @ferncan not linked</button>
+ <button data-s="nudge-ref-after">2a after</button>
+ <button data-s="nudge-brief">2b Draw storyboard, Brief not linked</button>
+ <button data-s="nudge-brief-after">2b after</button>
+ <span class="sp"></span><span style="opacity:.6">Click around: everything marked is live</span>
+</div>
+<div id="app"></div>
+
+<script>
+const BRIEF_LEGAL="Contains caffeine. Not recommended for children or pregnant women.";
+const $=s=>document.querySelector(s);
+let S={scene:'endcard-filled'};
+
+function topbar(crumb){return `<div class="top"><div class="logo"><i></i><span>Napkin Studio</span></div>
+<div class="pname">Flat Out Good<small>saved 14:56</small></div><div class="crumb">› ${crumb}</div><div class="grow"></div>
+<button class="btn sm">Decisions</button><div class="av">MT</div></div>`}
+
+/* ---------- 1: end card ---------- */
+let legal, fromBrief, briefLinked;
+function endcard(linked){
+  briefLinked=linked; legal=linked?BRIEF_LEGAL:''; fromBrief=linked;
+  $('#app').innerHTML=topbar('<u>Canvas</u> › <b>Edit</b>')+`
+  <div class="tool"><span class="seg"><span>Make</span><span class="on">Edit</span></span><span class="pill">16:9 · 14.9 s</span><span style="flex:1"></span><button class="btn primary">Render ad</button></div>
+  <div class="room"><div class="stage"><div class="preview"><span class="tag">Preview</span><div class="can"></div><div class="hl" id="pHl">Flat out good.</div><div class="ln" id="pLn">Ferncliff Oat Flat White</div><div class="cta" id="pCta">Try one today</div><div class="lg" id="pLg"></div></div>
+   <div class="tl"><span>The cut · 6 clips · end card. Editing never sends anything.</span><div class="tr"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div></div>
+  <aside class="booth"><div class="boothhead"><span>BOOTH</span><button class="btn xs">Hide</button></div>
+   <div class="rm-tab">
+    <div class="crumb2"><u>← The cut</u> › <b>End card</b></div>
+    <div class="rm-tabhead"><span class="rm-kicker">End card · locked last</span><b>Flat out good.</b></div>
+    <label class="rm-fieldlabel"><span class="lbl">Headline</span><input class="rm-input" maxlength="120" value="Flat out good."></label>
+    <label class="rm-fieldlabel"><span class="lbl">Line</span><input class="rm-input" maxlength="200" value="Ferncliff Oat Flat White"></label>
+    <label class="rm-fieldlabel"><span class="lbl">Call to action</span><input class="rm-input" id="cta" maxlength="80" value="Try one today"></label>
+    <div class="rm-fieldlabel"><span class="lbl"><label for="legal">Legal</label><span id="srcmark"></span></span>
+      <textarea class="rm-textarea" id="legal" rows="3" maxlength="200" placeholder="Small print under the card (optional)"></textarea>
+      <div class="cnt"><span id="legalhint"></span><span class="mono" id="count">0 / 200</span></div></div>
+    <div class="rm-num"><span class="rowname">Colour</span><span class="sw"><i></i></span><span class="mono rm-faint">#14161B</span></div>
+    <div class="rm-num"><span class="rowname">Length</span><span class="mono rm-faint">2.0 s</span></div>
+    <p class="rm-note">The logo comes from the Brand board when it has one.</p>
+    <button class="btn ghost" style="width:100%">Remove the end card</button>
+   </div></aside></div>`;
+  const ta=$('#legal'); ta.value=legal;
+  ta.addEventListener('input',()=>{legal=ta.value;if(fromBrief&&legal!==BRIEF_LEGAL)fromBrief=false;refresh()});
+  $('#cta').addEventListener('input',e=>$('#pCta').textContent=e.target.value);
+  refresh();
+}
+function refresh(){
+  $('#count').textContent=legal.length+' / 200';
+  $('#pLg').textContent=legal;
+  const m=$('#srcmark'),h=$('#legalhint');
+  if(briefLinked&&fromBrief){m.innerHTML='<span class="src">from the brief</span>';h.textContent='Overwrite it if the line should read differently.'}
+  else if(briefLinked){m.innerHTML=`<span class="src edited">edited · <button type="button" id="reuse">use the brief's line</button></span>`;h.textContent='';
+    $('#reuse').onclick=()=>{legal=BRIEF_LEGAL;fromBrief=true;$('#legal').value=legal;refresh()}}
+  else{m.innerHTML='';h.innerHTML=legal?'':'<button type="button" id="goLink">Link the Brief</button> to fill this from its legal line.'
+    const g=$('#goLink');if(g)g.onclick=()=>{endcard(true)}}
+}
+
+/* ---------- 2: canvas ---------- */
+let L, nudgeOpen, toast, newLink;
+const N={brief:{x:90,y:230,w:210,h:130},ref:{x:90,y:440,w:130,h:170},script:{x:520,y:215,w:200,h:115},sb:{x:520,y:520,w:200,h:130}};
+function canvasScene(kind){
+  newLink=null;toast=null;nudgeOpen=true;
+  if(kind==='ref'){L={briefScript:true,refScript:false,briefSb:false,refSb:false};S.target='script'}
+  if(kind==='brief'){L={briefScript:true,refScript:true,briefSb:false,refSb:true};S.target='sb'}
+  drawCanvas();
+}
+function missing(){
+  const t=S.target;
+  if(t==='script'&&!L.refScript)return {what:'@ferncan',scope:'the Script',why:"Plan shots only uses a named picture that is linked to the Script or named in a shot.",act:'Plan shots',link:'refScript'};
+  if(t==='sb'&&!L.briefSb)return {what:'The Brief',scope:'the Storyboard',why:"Its rules (no real faces, the legal line) only reach the frames when it is linked to the Storyboard.",act:'Draw storyboard',link:'briefSb'};
+  return null;
+}
+function curve(a,b,id,cls){const x1=a.x+a.w,y1=a.y+a.h/2,x2=b.x,y2=b.y+b.h/2,dx=(x2-x1)/2;
+  return `<path class="lk ${cls||''}" d="M${x1} ${y1} C${x1+dx} ${y1} ${x2-dx} ${y2} ${x2} ${y2}"/>`}
+function mid(a,b){return {x:(a.x+a.w+b.x)/2,y:(a.y+a.h/2+b.y+b.h/2)/2}}
+function drawCanvas(){
+  const sel=S.target,m=missing(),n=N;
+  let paths='',chips='';
+  const add=(k,a,b,lab)=>{if(L[k]){paths+=curve(n[a],n[b],k,newLink===k?'new':'');const p=mid(n[a],n[b]);chips+=`<span class="lkchip" style="left:${p.x}px;top:${p.y}px">${lab}</span>`}};
+  add('briefScript','brief','script','brief');add('refScript','ref','script','@ferncan');
+  add('briefSb','brief','sb','brief');add('refSb','ref','sb','@ferncan');
+  // script->sb is the normal flow arrow
+  paths+=`<path d="M${n.script.x+n.script.w/2} ${n.script.y+n.script.h} L${n.sb.x+n.sb.w/2} ${n.sb.y}" fill="none" stroke="var(--faint)" stroke-width="1.5" stroke-dasharray="4 4"/>`;
+  const bar=(t,label)=>`<div class="hoverbar"><button class="btn">Open</button><button class="btn act" data-run="${t}">${label}</button><button class="btn" data-run="film">Make film</button><span class="sep"></span><button class="btn">···</button></div>`;
+  const nd=m&&nudgeOpen?`<div class="nudge" role="status"><div class="what"><span class="mk"></span><div><b>${m.what}</b> is not linked to ${m.scope}.<div class="why">${m.why}</div></div></div>
+   <div class="acts"><button class="btn sm ghost" data-skip>Run without it</button><button class="btn sm primary" data-link="${m.link}">Link it</button></div></div>`:'';
+  const style=nd=>`left:${nd.x}px;top:${nd.y}px;width:${nd.w}px;min-height:${nd.h}px`;
+  $('#app').innerHTML=topbar('<b>Canvas</b>')+`<div class="canvas">
+   <div class="tools"><i></i><i></i><i></i><i></i><i></i></div>
+   <svg class="links">${paths}</svg>${chips}
+   <div class="node brief" style="${style(n.brief)}"><h4>Brief · Ferncliff</h4><ul><li>No real people's faces</li><li>The can is the hero</li><li>${BRIEF_LEGAL.split('.')[0]}. Not recommended…</li></ul></div>
+   <div class="node pic" style="${style(n.ref)}"><div class="canpic"><i></i></div><span class="name">@ferncan</span></div>
+   <div class="node ${sel==='script'?'sel':''}" style="${style(n.script)}"><h4>Script · 15 seconds</h4><p>INT. TRAM – MORNING<br>6 shots and an end card</p>${sel==='script'?bar('script','Plan shots')+nd:''}</div>
+   <div class="node ${sel==='sb'?'sel':''}" style="${style(n.sb)}"><h4>Storyboard</h4><div class="sbgrid"><i></i><i></i><i></i><i></i><i></i><i></i></div>${sel==='sb'?bar('sb','Draw storyboard')+nd:''}</div>
+   ${toast?`<div class="toast">${toast.t}${toast.undo?'<button class="btn" data-undo>Undo</button>':''}</div>`:''}
+   <div class="legend">${L.refScript||L.briefSb?'Blue lines show what is linked':'Blue lines show what is linked'}</div>
+  </div>`;
+  document.querySelectorAll('[data-link]').forEach(b=>b.onclick=()=>{const k=b.dataset.link;L[k]=true;newLink=k;nudgeOpen=false;
+    toast={t:`Linked ${m.what.replace('The Brief','the Brief')} to ${m.scope}`,undo:true};drawCanvas();history.replaceState(null,'','#'+(S.target==='script'?'nudge-ref-after':'nudge-brief-after'))});
+  document.querySelectorAll('[data-skip]').forEach(b=>b.onclick=()=>{nudgeOpen=false;toast={t:`${m.act} running without ${m.what.replace('The Brief','the Brief')}`};drawCanvas()});
+  document.querySelectorAll('[data-undo]').forEach(b=>b.onclick=()=>{const k=missing()||null;const key=S.target==='script'?'refScript':'briefSb';L[key]=false;newLink=null;toast=null;nudgeOpen=true;drawCanvas()});
+  document.querySelectorAll('[data-run]').forEach(b=>b.onclick=()=>{
+    const mm=missing();
+    if(b.dataset.run!=='film'&&mm){nudgeOpen=!nudgeOpen;toast=null}
+    else{nudgeOpen=false;toast={t:b.dataset.run==='film'?'Make film started':(S.target==='script'?'Planning shots with @ferncan':'Drawing the storyboard with the Brief')}}
+    drawCanvas()});
+}
+
+function go(s){
+  S.scene=s;location.hash=s;
+  document.querySelectorAll('#mocknav button').forEach(b=>b.classList.toggle('on',b.dataset.s===s));
+  if(s==='endcard-filled')endcard(true);
+  else if(s==='endcard-empty')endcard(false);
+  else if(s==='nudge-ref')canvasScene('ref');
+  else if(s==='nudge-brief')canvasScene('brief');
+  else if(s==='nudge-ref-after'){canvasScene('ref');L.refScript=true;newLink='refScript';nudgeOpen=false;toast={t:'Linked @ferncan to the Script',undo:true};drawCanvas()}
+  else if(s==='nudge-brief-after'){canvasScene('brief');L.briefSb=true;newLink='briefSb';nudgeOpen=false;toast={t:'Linked the Brief to the Storyboard',undo:true};drawCanvas()}
+}
+document.querySelectorAll('#mocknav button').forEach(b=>b.onclick=()=>go(b.dataset.s));
+if(location.search.includes('shot'))document.body.classList.add('shot');
+go(location.hash.slice(1)||'endcard-filled');
+</script></body></html>

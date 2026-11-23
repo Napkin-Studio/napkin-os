@@ -1,0 +1,40 @@
+- [Design before code](design-before-code.md) — features get an approved design + features/<slug>.clan before any code
+- [Commit authorship](commit-authorship.md) — no Co-Authored-By / Generated-with lines; commits are the feature owner's alone
+- [Production Tool providers](production-tool-providers.md) — Runway only since 2026-10-13; fal/HeyGen removed; no deploy before os-sign-in
+- [No backward compat by default](no-backward-compat-by-default.md) — clean shapes, no compat shims/flags unless the user asks; ask, never presume
+- [Production Tool overhaul](production-tool-overhaul.md) — owner decisions: canvas-first, external customers, permissive OSS, live collab, /production, devices
+- [Clean up worktrees](clean-up-worktrees.md) — remove worktrees once done (keep branch); stop demo/test stacks I am not using
+- [Local live relay](local-live-relay.md) — owner stack 8091/8788 (real Runway, $50 stop) stopped 2026-11-22; agents must not smoke-test on it
+- [Board sizing decision](board-sizing-decision.md) — boards grow automatically, never shrink or push neighbours; build after links-and-ink
+- [Relay restart loses jobs](relay-restart-inflight.md) — never restart the live relay with paid jobs in flight; recover lost ones via Runway task id
+- [Owner test builds are live](owner-test-builds-live.md) — test builds for Shrey run --live on real backends; say up front what is not built yet
+- [Build speed rules](build-speed-rules.md) — no hand-run full check before push; max 2 build agents; small fixes done directly
+- [Brand Clan decisions](brand-clan-decisions.md) — per agency always; client kit wins deck look; re-theme only on Update look; owner to give workflow → mocks before more build (2026-11-23)
+- [Review stays in the document](review-stays-in-document.md) — verify/reject/correct change only the doc + downstream (agent rewrites each time); layers change only via client-accepted harvest; research writes stay
+- [Verify UI before handoff](verify-ui-before-handoff.md) — clickable mock approved first, real-store tests, click through on a copy; never test on Shrey's live project
+- [Delayering feature](delayering-feature.md) — research done 2026-10-23, record exploring, awaiting owner answers; Production Tool code lives on feat/production-tool-v2
+- [Sphere + ring design v1](sphere-ring-design-v1.md) — frozen 2026-10-29: one morphing sphere, travelling-arc ring, progress panel; mock in ~/Documents/napkin-design-mocks/sphere-ring-v1
+- [Never mock unless asked](never-mock-unless-asked.md) — run the tool locally live (real director + Runway, $50 cap); never mock unless explicitly asked
+- [Napkin identity / logo](napkin-identity-logo.md) — logo first; brief-grid-v3 + deck-simple-start-v1; no napkin imagery; mark re-tints; orange vs blue open; boards identity-v1..v5 (v5 = look + base/accent playground)
+- [How we work (Jira)](how-we-work-jira.md) — team rules in Jira PM-46 (PM-47..49), in force 2026-11-09; PM bot routines on #eng-standup
+- [Build matches the mock](build-matches-mock.md) — UI done = paired mock-vs-build screenshots I've looked at; green tests are not enough (PR 151 miss, 2026-11-09)
+- [Keep merged branches](keep-merged-branches.md) — never delete a branch after merge (local or remote); overrides CLAUDE.md
+- [UAT loop authority](uat-loop-authority.md) — may merge fixes to develop + deploy UAT; no spend cap but report; no more UAT CPU; engineer@napkin only for People checks
+- [Napkin Studio named once](napkin-studio-named-once.md) — Napkin or no agency: 'Napkin Studio' once; no placeholder, no second line, no rules around empty gaps
+- [Confidential means Napkin never sees](confidential-means-napkin-never-sees.md) — client copy shows everything; Confidential = Napkin RAG/layers/training never take it in
+- [Own engine is the default](own-engine-default.md) — 2026-11-16: own canvas engine is default, Excalidraw fallback only; PT lands on develop from feat/art-director
+- [One-video character drift](one-video-character-drift.md) — 2026-11-16 live test: frame-pinned takes drift after cut 1; take_refs keeps identity; bugs fixed on production-tool-land
+- [Post-build live testing](post-build-live-testing.md) — ANY tool, before ANY hand-off (incl. a local stack): live click-through vs the real backend first (missed on Territories 2026-11-23)
+- [Laptop first](laptop-first.md) — PT UI: laptops 1024–1440 first, phone polish takes a back seat (2026-11-18)
+- [Blank canvas entry](blank-canvas-entry.md) — PT opens on the blank canvas, asks nothing; from a brief only the Brief node (2026-11-18)
+- [Stena demo rehearsal](stena-demo-rehearsal.md) — Laurence's ACNE/Deloitte demo: Stena brief + research, rehearse-fix-judge loop (2026-11-19)
+- [UAT loop 2026-11-21](uat-loop-production-2026-11-21.md) — PT UAT loop ran 6 rounds; fixes merged 2026-11-23 (#267); UAT now on develop with the deck engine container
+- [Spin-off carries everything](spinoff-carries-everything.md) — owner rule: hand-offs carry the full upstream minus heavy media; Brief node uses the spine only
+- [Territories build](territories-build.md) — feat/territories, in-middleware; UAT only after the 4-tool flow (Brief→Research→Production→Deck) is fully tested on UAT
+- [UAT Terraform values](uat-terraform-values.md) — plan UAT with the real relay URL/secret ARN or the plan strips the Production Tool from web
+- [Production as a clan app](production-on-relay-question.md) — PRIORITY 1 (then Territories, then Brand Clan; all after 4-tool UAT pass); stage 0+1 in develop, stage 2 PR, stage 3 next
+- [Deck uses Territories](deck-uses-territories.md) — deck skips its territory step with Territories upstream; otherwise runs a light Territories engine (later)
+- [/tmp is a small tmpfs](tmp-is-small-tmpfs.md) — 7.7 GB RAM /tmp filled 2026-11-23 and stopped all agents; clean pglayers/node cache, keep big temp out
+- [Production refs and studio card](production-refs-and-studio-card.md) — refs/brief reach jobs only when linked; no real faces = unrecognisable; no studio card on client ads (2026-11-23)
+- [Style per client](style-per-client.md) — style per CLIENT via Brand Clan (stand-in until built), re-theme after a deck is made; Territories frames: Bedrock vision check, rights Generated
+- [Control states basics](control-states-basics.md) — every button: disabled+reason, primary when input valid, busy, done/failed; check dark theme (owner uses it)

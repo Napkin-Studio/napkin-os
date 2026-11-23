@@ -1,0 +1,392 @@
+module.rag.random_password.api_key["sandbox"]: Refreshing state... [id=none]
+module.rag.random_password.house_read_only: Refreshing state... [id=none]
+module.identity.random_password.session: Refreshing state... [id=none]
+module.databases.random_password.app["napkin_agency_sandbox"]: Refreshing state... [id=none]
+module.databases.random_password.app["napkin_category"]: Refreshing state... [id=none]
+module.rag.random_password.api_key["house"]: Refreshing state... [id=none]
+module.rag.data.aws_ssm_parameter.al2023_arm64: Reading...
+module.services.data.aws_caller_identity.me: Reading...
+data.aws_vpc.staging[0]: Reading...
+module.services.data.aws_iam_policy_document.ecs_tasks: Reading...
+module.network.aws_vpc.this: Refreshing state... [id=vpc-01be7dc03875e727d]
+module.services.aws_ecr_repository.app["web"]: Refreshing state... [id=napkin-uat/web]
+module.services.aws_ecr_repository.app["middleware"]: Refreshing state... [id=napkin-uat/middleware]
+module.admin.aws_iam_role.admin: Refreshing state... [id=napkin-uat-admin]
+module.services.aws_ecr_repository.app["deck"]: Refreshing state... [id=napkin-uat/deck]
+module.services.aws_ecs_cluster.this: Refreshing state... [id=arn:aws:ecs:eu-west-1:741448934623:cluster/napkin-uat]
+module.services.data.aws_iam_policy_document.ecs_tasks: Read complete after 0s [id=1077804475]
+module.services.data.aws_iam_policy_document.backup_assume: Reading...
+module.services.data.aws_iam_policy_document.backup_assume: Read complete after 0s [id=1497918837]
+module.aurora.aws_rds_cluster_parameter_group.this: Refreshing state... [id=napkin-uat-aurora-postgresql16]
+module.services.data.aws_caller_identity.me: Read complete after 0s [id=741448934623]
+module.network.aws_eip.nat: Refreshing state... [id=eipalloc-08929da8e0be7318c]
+module.rag.data.aws_ssm_parameter.al2023_arm64: Read complete after 0s [id=/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64]
+module.rag.aws_iam_role.rag: Refreshing state... [id=napkin-uat-rag]
+module.services.data.aws_iam_policy_document.deploy_trust: Reading...
+module.services.data.aws_iam_policy_document.deploy_trust: Read complete after 0s [id=2064053537]
+module.admin.data.aws_ssm_parameter.al2023_arm64: Reading...
+module.admin.data.aws_ssm_parameter.al2023_arm64: Read complete after 0s [id=/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64]
+module.services.aws_cloudwatch_log_group.app["web"]: Refreshing state... [id=/napkin/napkin-uat/web]
+module.services.aws_cloudwatch_log_group.app["middleware"]: Refreshing state... [id=/napkin/napkin-uat/middleware]
+module.network.data.aws_availability_zones.available: Reading...
+module.rag.aws_iam_role.dlm: Refreshing state... [id=napkin-uat-rag-dlm]
+module.network.data.aws_availability_zones.available: Read complete after 0s [id=eu-west-1]
+module.identity.aws_cognito_user_pool.studio: Refreshing state... [id=eu-west-1_BtULiA5Ix]
+module.rag.aws_kms_key.agency["sandbox"]: Refreshing state... [id=bc1169cc-57c7-4349-a59e-a393b15625b1]
+data.aws_vpc.staging[0]: Read complete after 2s [id=vpc-0a7d6bde72136da21]
+aws_kms_key.data: Refreshing state... [id=6b02e0ee-12e8-4e41-b7d2-5e974fc6cd7e]
+data.aws_caller_identity.me: Reading...
+data.aws_secretsmanager_secrets.staging_db[0]: Reading...
+data.aws_caller_identity.me: Read complete after 0s [id=741448934623]
+module.services.aws_cloudwatch_log_group.app["deck"]: Refreshing state... [id=/napkin/napkin-uat/deck]
+aws_ssm_document.provision_databases: Refreshing state... [id=napkin-uat-provision-databases]
+module.services.aws_iam_role.execution: Refreshing state... [id=napkin-uat-ecs-execution]
+module.services.aws_iam_role.middleware: Refreshing state... [id=napkin-uat-middleware]
+module.services.aws_iam_role.web: Refreshing state... [id=napkin-uat-web]
+module.services.aws_ecs_cluster_capacity_providers.this: Refreshing state... [id=napkin-uat]
+data.aws_secretsmanager_secrets.staging_db[0]: Read complete after 0s [id=eu-west-1]
+module.services.aws_iam_role.deploy: Refreshing state... [id=napkin-uat-github-deploy]
+module.services.aws_ecr_lifecycle_policy.app["web"]: Refreshing state... [id=napkin-uat/web]
+module.services.aws_ecr_lifecycle_policy.app["deck"]: Refreshing state... [id=napkin-uat/deck]
+module.services.aws_ecr_lifecycle_policy.app["middleware"]: Refreshing state... [id=napkin-uat/middleware]
+data.aws_security_group.staging_db[0]: Reading...
+data.aws_route_table.staging_private[0]: Reading...
+aws_iam_policy.model_invoke: Refreshing state... [id=arn:aws:iam::741448934623:policy/napkin-uat-model-invoke]
+module.identity.aws_cognito_user_pool_client.web: Refreshing state... [id=5f4sjupk6e8l9pvg01ane1iqke]
+data.aws_security_group.staging_db[0]: Read complete after 0s [id=sg-0c84454098e922960]
+module.network.aws_route53_zone.internal: Refreshing state... [id=Z08658003C97KI8E213R6]
+data.aws_route_table.staging_private[0]: Read complete after 0s [id=rtb-0612d97fe25b56b10]
+module.network.aws_internet_gateway.this: Refreshing state... [id=igw-0fc2204f563b951b9]
+module.rag.aws_dlm_lifecycle_policy.stores: Refreshing state... [id=policy-03a94bc7c0c8df47d]
+module.rag.aws_iam_role_policy_attachment.dlm: Refreshing state... [id=napkin-uat-rag-dlm/arn:aws:iam::aws:policy/service-role/AWSDataLifecycleManagerServiceRole]
+module.admin.aws_iam_role_policy_attachment.ssm: Refreshing state... [id=napkin-uat-admin/arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore]
+module.admin.aws_iam_instance_profile.admin: Refreshing state... [id=napkin-uat-admin]
+module.rag.aws_iam_role_policy_attachment.ssm: Refreshing state... [id=napkin-uat-rag/arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore]
+module.rag.aws_iam_instance_profile.rag: Refreshing state... [id=napkin-uat-rag]
+module.rag.aws_kms_alias.agency["sandbox"]: Refreshing state... [id=alias/napkin-uat-rag-sandbox]
+aws_secretsmanager_secret.tavily: Refreshing state... [id=arn:aws:secretsmanager:eu-west-1:741448934623:secret:napkin-uat/research/tavily-api-key-fWOss5]
+aws_secretsmanager_secret.jev: Refreshing state... [id=arn:aws:secretsmanager:eu-west-1:741448934623:secret:napkin-uat/research/jev-api-key-uRDXE7]
+aws_kms_alias.data: Refreshing state... [id=alias/napkin-uat-data]
+module.network.aws_subnet.public[0]: Refreshing state... [id=subnet-0df1d35ec6723d555]
+module.network.aws_subnet.private[0]: Refreshing state... [id=subnet-0949d896487b5e84a]
+module.network.aws_subnet.private[1]: Refreshing state... [id=subnet-059e5e13008c9d250]
+module.network.aws_subnet.public[1]: Refreshing state... [id=subnet-0ea21505ffd185f93]
+module.storage.aws_s3_bucket.this["backups"]: Refreshing state... [id=napkin-uat-backups-741448934623]
+module.storage.aws_s3_bucket.this["blobs"]: Refreshing state... [id=napkin-uat-blobs-741448934623]
+module.storage.aws_s3_bucket.this["corpus"]: Refreshing state... [id=napkin-uat-corpus-741448934623]
+module.network.aws_route_table.public: Refreshing state... [id=rtb-046ed41605bd158df]
+aws_security_group.data_clients: Refreshing state... [id=sg-0ab8b0b67ae823615]
+aws_vpc_peering_connection.staging[0]: Refreshing state... [id=pcx-0a897503d381b437b]
+data.aws_route_table.uat_private[0]: Reading...
+module.services.aws_iam_role_policy_attachment.execution: Refreshing state... [id=napkin-uat-ecs-execution/arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy]
+data.aws_secretsmanager_secret.staging_db["napkin_category"]: Reading...
+data.aws_secretsmanager_secret.staging_db["napkin_agency_sandbox"]: Reading...
+module.rag.aws_secretsmanager_secret.house_read_only: Refreshing state... [id=arn:aws:secretsmanager:eu-west-1:741448934623:secret:napkin-uat/rag/house/read-only-key-wNPd1z]
+data.aws_route_table.uat_private[0]: Read complete after 1s [id=rtb-0a54250578741239a]
+module.services.aws_efs_file_system.web: Refreshing state... [id=fs-0bfe2371541e1b6b2]
+module.rag.aws_secretsmanager_secret.api_key["house"]: Refreshing state... [id=arn:aws:secretsmanager:eu-west-1:741448934623:secret:napkin-uat/rag/house/api-key-tHz4YJ]
+data.aws_secretsmanager_secret.staging_db["napkin_category"]: Read complete after 1s [id=arn:aws:secretsmanager:eu-west-1:741448934623:secret:napkin-staging/db/napkin_category-G3OXL5]
+data.aws_secretsmanager_secret.staging_db["napkin_agency_sandbox"]: Read complete after 1s [id=arn:aws:secretsmanager:eu-west-1:741448934623:secret:napkin-staging/db/napkin_agency_sandbox-IFroKU]
+module.databases.aws_secretsmanager_secret.app["napkin_category"]: Refreshing state... [id=arn:aws:secretsmanager:eu-west-1:741448934623:secret:napkin-uat/db/napkin_category-OeiFIU]
+module.rag.aws_secretsmanager_secret.api_key["sandbox"]: Refreshing state... [id=arn:aws:secretsmanager:eu-west-1:741448934623:secret:napkin-uat/rag/sandbox/api-key-X0SCeS]
+module.databases.aws_secretsmanager_secret.app["napkin_agency_sandbox"]: Refreshing state... [id=arn:aws:secretsmanager:eu-west-1:741448934623:secret:napkin-uat/db/napkin_agency_sandbox-KYDRXl]
+module.identity.aws_secretsmanager_secret.session: Refreshing state... [id=arn:aws:secretsmanager:eu-west-1:741448934623:secret:napkin-uat/web/session-secret-JrnoNu]
+module.rag.aws_security_group.rag: Refreshing state... [id=sg-06e022093b5f83c7d]
+module.aurora.aws_security_group.db: Refreshing state... [id=sg-032218b4c541b8a05]
+module.admin.aws_security_group.admin: Refreshing state... [id=sg-0e41beb358c1aa161]
+module.services.aws_service_discovery_private_dns_namespace.svc: Refreshing state... [id=ns-lfuocz4eijn564lg]
+module.services.aws_security_group.alb: Refreshing state... [id=sg-0fdb3e024de7c12e6]
+module.services.aws_lb_target_group.web: Refreshing state... [id=arn:aws:elasticloadbalancing:eu-west-1:741448934623:targetgroup/napkin-uat-web/e8967565a10796d8]
+module.network.aws_nat_gateway.this: Refreshing state... [id=nat-03fa217718e5ab7cc]
+module.admin.aws_iam_role_policy_attachment.extra["model_invoke"]: Refreshing state... [id=napkin-uat-admin/arn:aws:iam::741448934623:policy/napkin-uat-model-invoke]
+module.network.aws_route_table_association.public[1]: Refreshing state... [id=rtbassoc-0b801a2d14b5f1fa5]
+module.network.aws_route_table_association.public[0]: Refreshing state... [id=rtbassoc-0a787d678af8da615]
+aws_vpc_security_group_ingress_rule.staging_db_from_uat[0]: Refreshing state... [id=sgr-0ae897ed311fb0f9a]
+aws_route.staging_to_uat[0]: Refreshing state... [id=r-rtb-0612d97fe25b56b102563356952]
+aws_route.uat_to_staging[0]: Refreshing state... [id=r-rtb-0a54250578741239a1415821702]
+module.rag.aws_secretsmanager_secret_version.house_read_only: Refreshing state... [id=arn:aws:secretsmanager:eu-west-1:741448934623:secret:napkin-uat/rag/house/read-only-key-wNPd1z|terraform-wiqH66vWtAPeB3ydqDbsIGznFd]
+module.rag.aws_vpc_security_group_egress_rule.https: Refreshing state... [id=sgr-09300e3e280a66ea5]
+module.rag.aws_vpc_security_group_egress_rule.http: Refreshing state... [id=sgr-09ee676a7537ed8f2]
+module.services.aws_efs_access_point.web: Refreshing state... [id=fsap-027f7949aab703dfc]
+module.rag.aws_secretsmanager_secret_version.api_key["house"]: Refreshing state... [id=arn:aws:secretsmanager:eu-west-1:741448934623:secret:napkin-uat/rag/house/api-key-tHz4YJ|terraform-hu9sgHXWK3GDmhqRzLIF56jtIS]
+module.rag.aws_secretsmanager_secret_version.api_key["sandbox"]: Refreshing state... [id=arn:aws:secretsmanager:eu-west-1:741448934623:secret:napkin-uat/rag/sandbox/api-key-X0SCeS|terraform-dSAH1ooRYD66eh3np8qBfMjdYD]
+module.services.aws_efs_access_point.runlog[0]: Refreshing state... [id=fsap-0b387b38a88bffbaf]
+module.identity.aws_secretsmanager_secret_version.session: Refreshing state... [id=arn:aws:secretsmanager:eu-west-1:741448934623:secret:napkin-uat/web/session-secret-JrnoNu|terraform-pYYShKDaT6cy1fx70VN1ysG6Yw]
+module.services.data.aws_iam_policy_document.web: Reading...
+module.services.data.aws_iam_policy_document.web: Read complete after 0s [id=1340331377]
+module.services.aws_efs_access_point.deck[0]: Refreshing state... [id=fsap-04c0816700149799c]
+module.admin.aws_vpc_security_group_egress_rule.https: Refreshing state... [id=sgr-0317f6747f51727f5]
+module.admin.aws_vpc_security_group_egress_rule.qdrant: Refreshing state... [id=sgr-06b70421f991fb962]
+module.admin.aws_vpc_security_group_egress_rule.http: Refreshing state... [id=sgr-0cf1245bd29e18f9d]
+module.admin.aws_vpc_security_group_egress_rule.postgres: Refreshing state... [id=sgr-05cd526076b7d3289]
+module.network.aws_route_table.private: Refreshing state... [id=rtb-0a54250578741239a]
+module.aurora.aws_vpc_security_group_ingress_rule.from_clients: Refreshing state... [id=sgr-0275156a36d197433]
+module.rag.aws_vpc_security_group_ingress_rule.agencies: Refreshing state... [id=sgr-020559ff69c8f6ac2]
+module.services.aws_security_group.web: Refreshing state... [id=sg-01c8ec01eefff1ef0]
+module.rag.aws_vpc_security_group_ingress_rule.house: Refreshing state... [id=sgr-02939643e5eb0ce2a]
+module.aurora.aws_db_subnet_group.this: Refreshing state... [id=napkin-uat]
+module.admin.aws_instance.admin: Refreshing state... [id=i-08d0008d4f0b56c1e]
+module.rag.aws_instance.rag: Refreshing state... [id=i-06624dc9f4508e9cf]
+module.rag.data.aws_subnet.this: Reading...
+module.services.aws_service_discovery_service.middleware: Refreshing state... [id=srv-qvhvucvsdg7hiqv4]
+module.services.aws_iam_role_policy.web: Refreshing state... [id=napkin-uat-web:efs]
+module.services.aws_lb.web: Refreshing state... [id=arn:aws:elasticloadbalancing:eu-west-1:741448934623:loadbalancer/app/napkin-uat-web/ad2e03b3097b5044]
+module.rag.data.aws_subnet.this: Read complete after 0s [id=subnet-0949d896487b5e84a]
+module.services.data.aws_iam_policy_document.middleware: Reading...
+module.services.data.aws_iam_policy_document.middleware: Read complete after 0s [id=173519361]
+module.network.aws_vpc_endpoint.s3: Refreshing state... [id=vpce-052a3d8c71d3f885e]
+module.network.aws_route_table_association.private[1]: Refreshing state... [id=rtbassoc-0f8cc85299a5f2c64]
+module.network.aws_route_table_association.private[0]: Refreshing state... [id=rtbassoc-0f8baddc1babec114]
+module.services.aws_security_group.middleware: Refreshing state... [id=sg-0c851499ac1bc6370]
+module.rag.aws_ebs_volume.store["house"]: Refreshing state... [id=vol-02b4598b53e5262ae]
+module.services.aws_iam_role_policy.middleware: Refreshing state... [id=napkin-uat-middleware:bedrock]
+module.rag.aws_ebs_volume.store["sandbox"]: Refreshing state... [id=vol-0cb40eca2bddfe74d]
+module.aurora.aws_rds_cluster.this: Refreshing state... [id=napkin-uat]
+module.services.aws_ecs_task_definition.web: Refreshing state... [id=napkin-uat-web]
+module.services.aws_security_group.efs: Refreshing state... [id=sg-06c5ebb8ae9d52321]
+module.services.data.aws_iam_policy_document.execution_secrets: Reading...
+module.services.aws_ecs_task_definition.middleware: Refreshing state... [id=napkin-uat-middleware]
+module.services.data.aws_iam_policy_document.execution_secrets: Read complete after 0s [id=3694669464]
+module.services.aws_lb_listener.http: Refreshing state... [id=arn:aws:elasticloadbalancing:eu-west-1:741448934623:listener/app/napkin-uat-web/ad2e03b3097b5044/47b4f5d8bd3861e8]
+module.rag.aws_ssm_parameter.stores: Refreshing state... [id=/napkin-uat/rag/stores]
+module.services.aws_iam_role_policy.execution_secrets: Refreshing state... [id=napkin-uat-ecs-execution:secrets]
+module.storage.aws_s3_bucket_ownership_controls.this["blobs"]: Refreshing state... [id=napkin-uat-blobs-741448934623]
+module.storage.aws_s3_bucket_ownership_controls.this["corpus"]: Refreshing state... [id=napkin-uat-corpus-741448934623]
+module.storage.aws_s3_bucket_ownership_controls.this["backups"]: Refreshing state... [id=napkin-uat-backups-741448934623]
+module.storage.aws_s3_bucket_lifecycle_configuration.this["corpus"]: Refreshing state... [id=napkin-uat-corpus-741448934623]
+module.storage.aws_s3_bucket_lifecycle_configuration.this["backups"]: Refreshing state... [id=napkin-uat-backups-741448934623]
+module.storage.aws_s3_bucket_lifecycle_configuration.this["blobs"]: Refreshing state... [id=napkin-uat-blobs-741448934623]
+module.storage.aws_s3_bucket_public_access_block.this["backups"]: Refreshing state... [id=napkin-uat-backups-741448934623]
+module.storage.aws_s3_bucket_server_side_encryption_configuration.this["blobs"]: Refreshing state... [id=napkin-uat-blobs-741448934623]
+module.storage.aws_s3_bucket_public_access_block.this["blobs"]: Refreshing state... [id=napkin-uat-blobs-741448934623]
+module.storage.aws_s3_bucket_public_access_block.this["corpus"]: Refreshing state... [id=napkin-uat-corpus-741448934623]
+module.storage.aws_s3_bucket_versioning.this["corpus"]: Refreshing state... [id=napkin-uat-corpus-741448934623]
+module.storage.aws_s3_bucket_server_side_encryption_configuration.this["corpus"]: Refreshing state... [id=napkin-uat-corpus-741448934623]
+module.storage.aws_s3_bucket_server_side_encryption_configuration.this["backups"]: Refreshing state... [id=napkin-uat-backups-741448934623]
+module.storage.aws_s3_bucket_versioning.this["backups"]: Refreshing state... [id=napkin-uat-backups-741448934623]
+module.storage.aws_s3_bucket_versioning.this["blobs"]: Refreshing state... [id=napkin-uat-blobs-741448934623]
+module.services.aws_efs_mount_target.web[1]: Refreshing state... [id=fsmt-0d95bd0c83fb4620e]
+module.services.aws_efs_mount_target.web[0]: Refreshing state... [id=fsmt-058116367672e0b28]
+module.services.aws_ecs_service.middleware: Refreshing state... [id=arn:aws:ecs:eu-west-1:741448934623:service/napkin-uat/middleware]
+module.aurora.aws_rds_cluster_instance.writer: Refreshing state... [id=napkin-uat-1]
+module.rag.aws_iam_role_policy.rag: Refreshing state... [id=napkin-uat-rag:rag]
+module.storage.aws_s3_bucket_policy.tls_only["blobs"]: Refreshing state... [id=napkin-uat-blobs-741448934623]
+module.storage.aws_s3_bucket_policy.tls_only["corpus"]: Refreshing state... [id=napkin-uat-corpus-741448934623]
+module.storage.aws_s3_bucket_policy.tls_only["backups"]: Refreshing state... [id=napkin-uat-backups-741448934623]
+aws_route53_record.db: Refreshing state... [id=Z08658003C97KI8E213R6_db.napkin.internal_CNAME]
+module.services.aws_ecs_service.web: Refreshing state... [id=arn:aws:ecs:eu-west-1:741448934623:service/napkin-uat/web]
+module.databases.aws_secretsmanager_secret_version.app["napkin_category"]: Refreshing state... [id=arn:aws:secretsmanager:eu-west-1:741448934623:secret:napkin-uat/db/napkin_category-OeiFIU|terraform-4uS62c97RbyUzN5exqJYtQTWLf]
+module.databases.aws_secretsmanager_secret_version.app["napkin_agency_sandbox"]: Refreshing state... [id=arn:aws:secretsmanager:eu-west-1:741448934623:secret:napkin-uat/db/napkin_agency_sandbox-KYDRXl|terraform-Ir0HLx01hiXBGwPkUjRKsMTthN]
+module.databases.aws_ssm_parameter.databases: Refreshing state... [id=/napkin-uat/db/databases]
+module.rag.aws_route53_record.store["house"]: Refreshing state... [id=Z08658003C97KI8E213R6_qdrant-house.napkin.internal_A]
+module.rag.aws_route53_record.store["sandbox"]: Refreshing state... [id=Z08658003C97KI8E213R6_qdrant-sandbox.napkin.internal_A]
+module.rag.aws_volume_attachment.store["sandbox"]: Refreshing state... [id=vai-96067981]
+module.rag.aws_volume_attachment.store["house"]: Refreshing state... [id=vai-2230548634]
+module.services.data.aws_iam_policy_document.deploy: Reading...
+module.services.data.aws_iam_policy_document.deploy: Read complete after 0s [id=788780284]
+module.services.aws_iam_role_policy.deploy: Refreshing state... [id=napkin-uat-github-deploy:deploy]
+module.rag.aws_ssm_association.reconcile: Refreshing state... [id=4c873dfc-a2ef-4ce7-8e51-d7a2b21e193d]
+module.admin.aws_iam_role_policy.admin: Refreshing state... [id=napkin-uat-admin:admin]
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+-/+ destroy and then create replacement
+
+Terraform will perform the following actions:
+
+  # module.services.aws_backup_plan.web[0] will be created
+  + resource "aws_backup_plan" "web" {
+      + arn      = (known after apply)
+      + id       = (known after apply)
+      + name     = "napkin-uat-web-daily"
+      + region   = "eu-west-1"
+      + tags_all = {
+          + "Env"       = "uat"
+          + "ManagedBy" = "terraform"
+          + "Project"   = "napkin"
+        }
+      + version  = (known after apply)
+
+      + rule {
+          + completion_window                            = 180
+          + enable_continuous_backup                     = false
+          + rule_id                                      = (known after apply)
+          + rule_name                                    = "daily-0300-utc"
+          + schedule                                     = "cron(0 3 * * ? *)"
+          + schedule_expression_timezone                 = "Etc/UTC"
+          + start_window                                 = 60
+          + target_vault_name                            = "napkin-uat-web"
+            # (1 unchanged attribute hidden)
+
+          + lifecycle {
+              + delete_after                              = 35
+              + opt_in_to_archive_for_supported_resources = (known after apply)
+            }
+        }
+    }
+
+  # module.services.aws_backup_selection.web[0] will be created
+  + resource "aws_backup_selection" "web" {
+      + iam_role_arn  = (known after apply)
+      + id            = (known after apply)
+      + name          = "napkin-uat-web-efs"
+      + not_resources = (known after apply)
+      + plan_id       = (known after apply)
+      + region        = "eu-west-1"
+      + resources     = [
+          + "arn:aws:elasticfilesystem:eu-west-1:741448934623:file-system/fs-0bfe2371541e1b6b2",
+        ]
+
+      + condition (known after apply)
+    }
+
+  # module.services.aws_backup_vault.web[0] will be created
+  + resource "aws_backup_vault" "web" {
+      + arn             = (known after apply)
+      + force_destroy   = false
+      + id              = (known after apply)
+      + kms_key_arn     = "arn:aws:kms:eu-west-1:741448934623:key/6b02e0ee-12e8-4e41-b7d2-5e974fc6cd7e"
+      + name            = "napkin-uat-web"
+      + recovery_points = (known after apply)
+      + region          = "eu-west-1"
+      + tags            = {
+          + "Name" = "napkin-uat-web"
+        }
+      + tags_all        = {
+          + "Env"       = "uat"
+          + "ManagedBy" = "terraform"
+          + "Name"      = "napkin-uat-web"
+          + "Project"   = "napkin"
+        }
+    }
+
+  # module.services.aws_ecs_task_definition.web must be replaced
+-/+ resource "aws_ecs_task_definition" "web" {
+      ~ arn                      = "arn:aws:ecs:eu-west-1:741448934623:task-definition/napkin-uat-web:27" -> (known after apply)
+      ~ arn_without_revision     = "arn:aws:ecs:eu-west-1:741448934623:task-definition/napkin-uat-web" -> (known after apply)
+      ~ container_definitions    = jsonencode(
+          ~ [
+              ~ {
+                  ~ environment      = [
+                        # (3 unchanged elements hidden)
+                        {
+                            name  = "NAPKIN_DOGFOOD"
+                            value = "1"
+                        },
+                      + {
+                          + name  = "NAPKIN_PRODUCTION_MEDIA_BASE"
+                          + value = "https://d1kyxuk8u2ulz5.cloudfront.net"
+                        },
+                        {
+                            name  = "NAPKIN_PRODUCTION_RELAY_URL"
+                            value = "https://aoh5c6pyhf6z7446c5q2bugu4i0dzioo.lambda-url.eu-west-1.on.aws/"
+                        },
+                        # (2 unchanged elements hidden)
+                    ]
+                    name             = "web"
+                  ~ portMappings     = [
+                      ~ {
+                          - hostPort      = 8080
+                            # (2 unchanged attributes hidden)
+                        },
+                    ]
+                  - systemControls   = []
+                  - volumesFrom      = []
+                    # (5 unchanged attributes hidden)
+                },
+            ] # forces replacement
+        )
+      ~ enable_fault_injection   = false -> (known after apply)
+      ~ id                       = "napkin-uat-web" -> (known after apply)
+      ~ revision                 = 27 -> (known after apply)
+      - tags                     = {} -> null
+        # (13 unchanged attributes hidden)
+
+      - volume {
+          - configure_at_launch = false -> null
+          - name                = "data" -> null
+            # (1 unchanged attribute hidden)
+
+          - efs_volume_configuration {
+              - file_system_id          = "fs-0bfe2371541e1b6b2" -> null
+              - root_directory          = "/" -> null
+              - transit_encryption      = "ENABLED" -> null
+              - transit_encryption_port = 0 -> null
+
+              - authorization_config {
+                  - access_point_id = "fsap-027f7949aab703dfc" -> null
+                  - iam             = "ENABLED" -> null
+                }
+            }
+        }
+      + volume {
+          + configure_at_launch = (known after apply)
+          + name                = "data"
+            # (1 unchanged attribute hidden)
+
+          + efs_volume_configuration {
+              + file_system_id          = "fs-0bfe2371541e1b6b2"
+              + root_directory          = "/"
+              + transit_encryption      = "ENABLED"
+              + transit_encryption_port = 0
+
+              + authorization_config {
+                  + access_point_id = "fsap-027f7949aab703dfc"
+                  + iam             = "ENABLED"
+                }
+            }
+        }
+    }
+
+  # module.services.aws_iam_role.backup[0] will be created
+  + resource "aws_iam_role" "backup" {
+      + arn                   = (known after apply)
+      + assume_role_policy    = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action    = "sts:AssumeRole"
+                      + Effect    = "Allow"
+                      + Principal = {
+                          + Service = "backup.amazonaws.com"
+                        }
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + create_date           = (known after apply)
+      + force_detach_policies = false
+      + id                    = (known after apply)
+      + managed_policy_arns   = (known after apply)
+      + max_session_duration  = 3600
+      + name                  = "napkin-uat-backup"
+      + name_prefix           = (known after apply)
+      + path                  = "/"
+      + tags_all              = {
+          + "Env"       = "uat"
+          + "ManagedBy" = "terraform"
+          + "Project"   = "napkin"
+        }
+      + unique_id             = (known after apply)
+
+      + inline_policy (known after apply)
+    }
+
+  # module.services.aws_iam_role_policy_attachment.backup[0] will be created
+  + resource "aws_iam_role_policy_attachment" "backup" {
+      + id         = (known after apply)
+      + policy_arn = "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup"
+      + role       = "napkin-uat-backup"
+    }
+
+Plan: 6 to add, 0 to change, 1 to destroy.
+
+─────────────────────────────────────────────────────────────────────────────
+
+Saved the plan to:
+/home/batunii/Documents/Code/napkin-wt-pc-a/infra/envs/uat/../../../target/uat-pc.tfplan
+
+To perform exactly these actions, run the following command to apply:
+    terraform apply "/home/batunii/Documents/Code/napkin-wt-pc-a/infra/envs/uat/../../../target/uat-pc.tfplan"

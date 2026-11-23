@@ -1,0 +1,30 @@
+Deck from Territories (Linea, 2 routes sent), slide list
+01  title              Linea Rail (FICTIONAL): Linea Weekend 2027
+02  objective          What has to change
+03  real_question      Linea Rail's weekend return lets Irish commuters start the weekend when they sit
+04  insight            Linea Rail's weekend return puts the start of the weekend at the moment a commut
+05  proposition        The weekend starts when you sit down.
+06  idea               YOUR WEEKEND STARTS NOW. NOT IN GALWAY. NOW.
+07  measurement        No baselines were supplied, so every measure below needs a starting figure from 
+08  risks              What could go wrong, and what we would do about it
+09  team               The team you would work with, and work like this we have done
+10  investment         Investment, and what we would like to agree today
+11  appendix           Appendix
+12  brief_restated     What you asked us to do, in your words
+13  chart              Commuters may file the train under work, and the routes needed to prove otherwis
+14  audience           Irish commuters already own the seat; the job is to give it a second meaning.
+15  competition        What else you could choose, and why you would choose us
+16  territory          Territory: Already Started
+17  territory          Territory: Sunday Night, Sorted
+18  territory_choice   We recommend 'Already Started'
+19  execution          In-carriage seat-back card (proposal)
+20  execution          Weekend return e-ticket and booking confirmation (proposal: depends on what Line
+21  execution          Friday station digital screens (proposal)
+22  channel_roles      Each channel has one job
+23  innovation         The plan uses the journey itself as the medium, so the work sits where the weeke
+24  measurement_plan   Targets wait on the client's objectives; until then each measure has a method, a
+25  process            How we would run it with you
+26  timeline           From appointment to evaluation
+27  questions          Questions we would settle in the first fortnight
+28  requirement_trace  Every requirement, and where this deck answers it
+29  appendix_sources   Sources

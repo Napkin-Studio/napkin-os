@@ -1,0 +1,18 @@
+# Deck Maker: a pitch deck from what you give it
+
+We are making a **pitch deck** from what the person gave and nothing else (ADR 0023, amended by 0028): their prompt (client, project, agency and an open text of any length), the documents they attach, and, optionally, the brief tool's and research tool's output, frozen at `data.upstream` by a spin-off (read-only). A deck builds from any one of these. The brief and research cards are derived from `upstream`, never stored. Outside facts enter only through the Research Tool, and only when the person says yes: the Strengthen button records `research_request` and launches nothing.
+
+The runner's intake (`intake.gaps`, `intake.questions`) is shown on Start; the person's answers are written at `intake.answers.<qid>`. A skipped or unanswered question never blocks a build.
+
+The deck type is the first step of Start: the "What kind of deck?" picker shows the five types (agency_pitch, tender_response, investor_seed, credentials, creative_work), each with its spine, length, size and picture policy from the generated `DECK_TYPE_CARDS` block (never hand-edited: `python3 -m deck.profiles cards` from `engine/` writes it), and a sixth card, "Not sure: decide from my brief". A pick is written at `inputs.deck_type` as `{id, by, at}`; "Not sure" writes `inputs.deck_type: null`. The type is decided in this order: the pick, then an answer to the engine's question `q_deck_type` at `intake.answers.q_deck_type`, then the type the engine inferred from the brief (shown preselected with the words it was read from, but not a pick until clicked), then agency pitch. `inputs.kind` is derived from a picked or answered type (investor_seed is investor, the others agency). Under the picker, "How will it be used?" writes `inputs.format`: pitch (presented on a screen) or full (sent to be read: every slide in story order). Under that, "Slide size" writes the person's choice at `look.size` as `{canvas, by: 'person', at, via: 'start'}` (canvas 16:9, 4:3 or a4); absent, the recipe's default applies (the picked card's `size` when presented, `size_read` when sent to be read, a4 for a tender response), and the option that is the default is marked. Once a deck is built, picking a different type first shows what the change will do (re-arranged for free from the recorded stages, or the stages that need new writing); pictures are never remade by a type change.
+
+The engine is `engine/deck/`. It writes `deck.json`, `validation.json` and `report.json`; this document holds them as `deck`, `validation` and `report`. The view renders from `shared/data.yaml`. Do not generate or edit HTML.
+
+Rules the view and any agent keep:
+- Every number on a slide traces to the research, the brief or the prompt. A claim with no source is labelled an opinion, proposal or creative line, never hidden.
+- A finding a person rejected is never used on a slide.
+- What only the user knows (presenter, budget split, agency name) stays a labelled placeholder such as `[Agency]`. It is never made up and the view has no way to fill it for the user.
+- A gate (storyline, territory, idea) stops the run until a person approves. Approve, edit and retry are each one attributed decision. Nothing past an open gate runs.
+- Optional team-library inputs (brand kit, pictures) stay off until ADR 0027 is approved.
+
+The picker shows a type that needs the deck recipes (`recipe_only` on its card, today creative_work) only when the engine's `run.types.offered` names it. A confirmed Change sheet that needs new writing writes `inputs.deck_type.confirmed_stages`; without it the engine refuses the change (409 needs_stages) before anything runs.

@@ -1,0 +1,12 @@
+await page.getByRole("button", { name: "Cancel" }).last().click();
+await page.evaluate(() => window.getSelection()?.removeAllRanges());
+await page.mouse.click(1300, 330);
+await page.waitForTimeout(300);
+await page.mouse.move(395, 90); await page.mouse.down(); await page.mouse.move(800, 400, { steps: 10 }); await page.mouse.move(1098, 616, { steps: 10 }); await page.mouse.up();
+await page.waitForTimeout(800);
+await S("marquee-14");
+await page.getByRole("button", { name: "Generate", exact: true }).first().click();
+await page.waitForTimeout(1500);
+await S("tray-14b");
+const t = await page.locator("body").innerText();
+return t.slice(t.indexOf("What the Director"), t.indexOf("What the Director") + 1800);

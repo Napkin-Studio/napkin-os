@@ -1,0 +1,27 @@
+- 22:26:49Z PAID(small, Claude) write: Draft from the brief
+- 22:27:37Z PAID(small) write rewrite 1 tone
+- 22:27:59Z PAID(small) write rewrite 2 length
+- 22:28:13Z PAID(small) write rewrite 3 add dialogue+snore
+- 22:33:59Z PAID(small) shot_list: Plan shots
+- 22:36:32Z PAID(small) shot_list: Plan shots (storyboard node)
+- 22:37:44Z PAID(small) shot_list: Plan shots (storyboard node)
+- 22:39:32Z PAID ~$0.20 frame: Draw frame 1
+- 22:40:24Z PAID ~$0.80 frames: Draw the rest (2-5)
+- 22:45:39Z PAID ~$1.60 clip: Box 2 (shot 3, whispered line) on Veo 3.1 with sound
+  - NOTE: my click hit Box 1 (shots 1+2 joined, Omni) not Box 2: job_01M7XJ61ZX95P7DB15FGTASPE4 $0.54. Used as the B2 join test.
+- 22:47:41Z BUG: false 'saved from another browser' conflict: two POST /api/clan 0.24 s apart (22:47:06.721 + 22:47:06.959), 2nd 409. Clicked 'Save this as a new version'.
+- 22:48:02Z PAID ~$1.60 clip: Box 2 (shot 3, whispered line) on Veo 3.1 with sound (booth Make)
+- 22:51:05Z PAID ~$0.50 clip take: Box 3 (shots 4 snore + 5) joined on WAN 3 with sound
+- 22:57:03Z PAID ~$0.50 take: Box 1 new take (shots 1+2 joined) on WAN 3 (B2 lands-in-cut test; trims on shot 3 In 0.3 + text overlay '1:04 a.m.' set before)
+- 22:57:55Z BUG: WAN 3 retake failed 400 ref aspect 0.534 (<0.55) maya_full (job_01M7XJTZQTF9B0BBHM84P0F3H0, $0). Retrying Box 1 on Omni. PAID ~$0.54
+- 23:00:53Z 2nd false conflict: POST 23:00:05.897 (landing) + 23:00:06.959 (minute tick) -> 409. Resolved with Save this as a new version.
+- 23:01:33Z PAID ~$0.70 two separate Omni clips: shot 1 and shot 2 (character separate test, B2 setup)
+- 23:02:27Z misclick: 2nd click made shot 3 again (job_01M7XK3DDK144KWSJHXJWVMP5Q) on the flipped default (Omni, no sound). Now PAID ~$0.35 shot 2 separate
+- 23:05:11Z BUG: Use this take (Box 1 v3 = shot-1-only separate take) replaced BOTH shot 1 and shot 2 clips; shot 2 now plays shot 1 footage (Box 1 at 0:01.0 at ad 3.5 s). Box 2's (shot 2) card vanished. shots/090
+- 23:06:49Z BUG confirmed both ways: after cutting gap 1|2 of the joined Box 1, Use this take on Box 2 (shot 2) put shot-2 footage in BOTH shot 1 and 2 clips (and dropped Box 1 card); dialog titled 'Box 1 v1'. Undo restores.
+- 23:07:35Z PAID ~$0.54 B2 test: rejoined Box 1 (shots 1+2), Make new take on Omni (default shown); cut has separate shot1/shot2 clips, shot 5 trim (out 4.3, fade out), text '1:04 a.m.'
+- 23:11:14Z PAID ~$0.35 B1 retest: + New box words only (shot 6), Omni, 3 s
+- 23:12:38Z B1: first Make drew a frame ($0.20 job_01M7XKMXE18TQ6YB81BHQR4DGZ), no clip. PAID ~$0.41 Make again for the clip (Omni)
+- 23:15:36Z FREE: Render ad
+- 23:20:51Z PAID(small) cutdown plan (film_plan) 6 s x 16:9 + 9:16
+- 23:23:18Z FREE: Make 2 versions (6 s 16:9 re-edit, 9:16 crop)

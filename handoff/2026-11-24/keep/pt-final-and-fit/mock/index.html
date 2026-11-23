@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>Production: Final marker, rights and fit (mock)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="tokens.css">
+<style>
+  /* The tool's own tokens, each in terms of the shell's (production-tool/web/src/styles.css). */
+  :root { --plan: var(--ink); --tool: var(--ag-act); --tool-ink: var(--ag-act); --tool-soft: color-mix(in srgb, var(--ag-act) 12%, transparent);
+    --create: var(--warn); --create-soft: color-mix(in srgb, var(--warn) 12%, transparent); --r-pill: 999px; --r-card: 12px; --r-board: 16px; --canvas-bg: var(--desk);
+    --canvas-dot: color-mix(in srgb, var(--ink) 16%, transparent); --shadow-pop: 0 18px 40px -14px rgba(20,20,19,.38), 0 2px 6px rgba(20,20,19,.08); }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--desk); color: var(--ink); font: 13px/1.45 var(--font-ui); }
+  .page { max-width: 1400px; margin: 0 auto; padding: 24px 32px 48px; }
+  h1 { font-size: 15px; margin: 0 0 4px; } .lead { color: var(--muted); margin: 0 0 20px; max-width: 760px; }
+  h2 { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+  .grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 20px; }
+  .panel { background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-board); padding: 16px; box-shadow: var(--shadow-card); }
+  .canvas { background: var(--canvas-bg); background-image: radial-gradient(var(--canvas-dot) 1px, transparent 1px); background-size: 18px 18px; border: 1px solid var(--line); border-radius: var(--r-card); padding: 22px; display: flex; gap: 26px; align-items: flex-start; }
+  .note { color: var(--muted); font-size: 12px; margin: 10px 0 0; }
+  /* a picture node on the canvas */
+  .node { position: relative; width: 190px; }
+  .pic { height: 240px; border-radius: 6px; background: linear-gradient(160deg, #d9c8a8, #b99f78); position: relative; overflow: hidden; border: 1px solid var(--line); }
+  .pic.b { background: linear-gradient(165deg, #cdbd9f, #a98f68); }
+  .can { position: absolute; left: 62px; top: 62px; width: 66px; height: 128px; border-radius: 9px 9px 7px 7px; background: linear-gradient(90deg, #14503a, #1f7a58 45%, #14503a); }
+  .can::after { content: 'HOLLOW OAK'; position: absolute; left: 6px; right: 6px; top: 46px; text-align: center; font: 700 8px var(--font-ui); color: #f3ead2; letter-spacing: .04em; }
+  .pic.b .can { left: 66px; top: 58px; } .pic.b .can::after { content: 'HOLLOW OAK'; }
+  .node.on .pic { outline: 2px solid var(--plan); outline-offset: 2px; }
+  .label { margin-top: 7px; font-size: 12px; display: flex; flex-wrap: wrap; white-space: nowrap; gap: 6px; align-items: center; color: var(--ink-soft); }
+  .label .dim { color: var(--muted); }
+  /* THE FINAL MARKER: a solid ink pill, top left of the picture, with a tick; the version line says which one */
+  .badge-final { position: absolute; left: 8px; top: 8px; z-index: 2; display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px 0 7px; border-radius: var(--r-pill); background: var(--plan); color: var(--paper); font-weight: 600; font-size: 11.5px; box-shadow: var(--shadow-pill, 0 1px 3px rgba(20,20,19,.2)); }
+  .badge-final svg { width: 12px; height: 12px; }
+  .badge-final.sm { height: 18px; font-size: 10.5px; padding: 0 7px 0 5px; left: 6px; top: 6px; }
+  .vers { display: flex; gap: 4px; margin-top: 8px; }
+  .ver { height: 22px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--card); font-size: 11px; display: inline-flex; align-items: center; gap: 4px; color: var(--ink-soft); }
+  .ver.sel { border-color: var(--ink); }
+  .ver.fin { background: var(--plan); color: var(--paper); border-color: var(--plan); font-weight: 600; }
+  .ver.fin svg { width: 10px; height: 10px; }
+  /* the rights chip (production-tool ui/finals/finals.css .rights-chip, now also on a final) */
+  .rights { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px; border-radius: 6px; border: 1px solid var(--line); background: var(--card); color: var(--ink-soft); font-size: 11px; cursor: pointer; }
+  .rights.generated { border-color: var(--ok); color: var(--ok); background: var(--ok-soft); }
+  .rights.own, .rights.licensed { border-color: var(--ok); color: var(--ok); background: var(--ok-soft); }
+  .rights.unknown { border: 1px dashed var(--warn); color: var(--warn); background: var(--warn-soft); }
+  .pic .rights { position: absolute; left: 8px; bottom: 8px; }
+  /* the rights choice, a small menu on Final, not a blocking dialog */
+  .pop { width: 292px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-pop); padding: 12px; }
+  .pop h3 { font-size: 13px; margin: 0 0 2px; } .pop p { color: var(--muted); margin: 0 0 8px; font-size: 12px; }
+  .opt { display: flex; gap: 9px; padding: 8px 9px; border-radius: 8px; border: 1px solid transparent; cursor: pointer; }
+  .opt + .opt { margin-top: 2px; }
+  .opt.sel { background: var(--tool-soft); border-color: var(--tool); }
+  .opt i { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--faint); margin-top: 2px; flex: none; }
+  .opt.sel i { border-color: var(--tool); background: radial-gradient(var(--tool) 45%, transparent 50%); }
+  .opt b { display: block; font-weight: 600; } .opt span { color: var(--muted); font-size: 12px; }
+  .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+  .btn { height: 28px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); font: inherit; color: var(--ink); }
+  .btn.pri { background: var(--ag-act); border-color: var(--ag-act); color: var(--ag-act-ink); font-weight: 600; }
+  /* a Campaign board tile */
+  .tiles { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+  .tile { width: 168px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px; position: relative; }
+  .tile .thumb { height: 120px; border-radius: 5px; background: linear-gradient(160deg, #d9c8a8, #b99f78); position: relative; overflow: hidden; }
+  .tile .thumb.wide { height: 52px; margin-top: 34px; margin-bottom: 34px; }
+  .tile .can { transform: scale(.5); transform-origin: top left; left: 46px; top: 22px; }
+  .tile .thumb.wide .can { transform: scale(.28); left: 90px; top: 8px; }
+  .tile .meta { margin-top: 7px; font-size: 12px; } .tile .meta b { font-weight: 600; } .tile .meta .dim { color: var(--muted); display: block; font-size: 11.5px; }
+  .tile .foot { display: flex; gap: 6px; margin-top: 6px; align-items: center; }
+  /* fit: the Change method menu and the plain message */
+  .menu { width: 300px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-pop); padding: 6px; }
+  .menu .mi { display: block; padding: 7px 9px; border-radius: 8px; }
+  .menu .mi b { font-weight: 600; } .menu .mi small { display: block; color: var(--muted); font-size: 11.5px; }
+  .menu .mi.off { opacity: .55; cursor: not-allowed; } .menu .mi.off b { text-decoration: none; color: var(--muted); }
+  .menu .mi.cur { background: var(--tool-soft); }
+  .menu .head { padding: 6px 9px 4px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+  .wont { width: 330px; border: 1px solid var(--warn-border, color-mix(in srgb, var(--warn) 40%, transparent)); background: var(--warn-soft); border-radius: 12px; padding: 12px 14px; }
+  .wont b { display: block; margin-bottom: 3px; } .wont p { margin: 0 0 8px; color: var(--ink-soft); }
+  .wont .shape { display: flex; gap: 10px; align-items: center; margin: 8px 0 10px; }
+  .shapebox { border: 1.5px dashed var(--warn); border-radius: 3px; background: rgba(255,255,255,.5); font-size: 10.5px; color: var(--warn); display: grid; place-items: center; }
+  .stack { max-width: 300px; display: flex; flex-direction: column; gap: 18px; }
+  .cols { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+  .tag { display: inline-block; font-size: 10.5px; background: var(--paper-2); border-radius: 4px; padding: 1px 6px; color: var(--muted); margin-left: 6px; text-transform: none; letter-spacing: 0; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Production: a clear Final, rights on Final, and fit</h1>
+  <p class="lead">Static mock for the owner. Three pieces: the Final marker on canvas pictures and Campaign board tiles; the rights choice and chip when a picture is marked Final; and the plain "won't fit" message with the method menu no longer offering what will fail. Pictures are stand-ins.</p>
+
+  <div class="grid">
+    <section class="panel">
+      <h2>1. The Final marker on the canvas <span class="tag">canvas picture</span></h2>
+      <div class="canvas">
+        <div class="node on">
+          <div class="pic"><span class="badge-final"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6.5l2.6 2.6L10 3.4"/></svg>Final</span><div class="can"></div><span class="rights generated">Generated</span></div>
+          <div class="label"><b>Key visual</b> <span class="dim">v2 of 3</span></div>
+          <div class="vers"><span class="ver">v1</span><span class="ver fin sel"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6.5l2.6 2.6L10 3.4"/></svg>v2 Final</span><span class="ver">v3</span></div>
+        </div>
+        <div class="node">
+          <div class="pic b"><div class="can"></div><span class="rights generated">Generated</span></div>
+          <div class="label"><b>Key visual</b> <span class="dim">v3 of 3 · newer, not final</span></div>
+          <div class="vers"><span class="ver">v1</span><span class="ver">v2</span><span class="ver sel">v3</span></div>
+        </div>
+        <div class="node">
+          <div class="pic" style="background:linear-gradient(160deg,#c7d0d8,#98a6b3)"><div class="can" style="display:none"></div><span class="rights unknown">Rights?</span></div>
+          <div class="label"><b>Packshot</b> <span class="dim">upload · not final</span></div>
+        </div>
+      </div>
+      <div class="canvas" style="margin-top:12px; gap:18px; align-items:center; flex-wrap:wrap">
+        <div><div class="label" style="margin:0 0 6px"><b>Un-mark, in the image editor</b></div>
+          <div style="display:flex; gap:10px; align-items:center"><span class="btn" style="background:var(--plan);color:var(--paper);border-color:var(--plan);font-weight:600">Final ✓</span><span class="dim" style="color:var(--muted)">v2 · the Deck takes this picture. Click to un-mark.</span></div></div>
+        <span style="color:var(--muted)">click →</span>
+        <div><div class="label" style="margin:0 0 6px"><b>After</b> <span class="dim">the pill and the version tick go; the chip stays</span></div>
+          <div style="display:flex; gap:10px; align-items:center"><span class="btn">Final</span><span class="ver">v2</span><span class="rights generated">Generated</span></div></div>
+      </div>
+      <p class="note">Un-marking removes the Final from the project for that picture whichever way it was marked (on the canvas picture or on a version), so the marker, the editor button and the exported list always agree. Two near-identical pictures now read differently at a glance: the solid ink pill is the Final one, and the version strip names which version is Final (v2 here, even though v3 is newer). Same ink as today's Final button, so it needs no new colour.</p>
+    </section>
+
+    <section class="panel">
+      <h2>2. On a Campaign board tile <span class="tag">board tile</span></h2>
+      <div class="tiles">
+        <div class="tile"><div class="thumb"><span class="badge-final sm"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6.5l2.6 2.6L10 3.4"/></svg>Final</span><div class="can"></div></div>
+          <div class="meta"><b>Instagram Story</b><span class="dim">1080 × 1920 · Crop</span></div><div class="foot"><span class="rights generated">Generated</span></div></div>
+        <div class="tile"><div class="thumb wide"><div class="can"></div></div>
+          <div class="meta"><b>48-sheet</b><span class="dim">6.1 × 3.0 m · Redraw</span></div><div class="foot"><span class="rights generated">Generated</span></div></div>
+        <div class="tile"><div class="thumb"><span class="badge-final sm"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6.5l2.6 2.6L10 3.4"/></svg>Final</span><div class="can"></div></div>
+          <div class="meta"><b>Feed 4:5</b><span class="dim">1080 × 1350 · Crop</span></div><div class="foot"><span class="rights licensed">Licensed</span></div></div>
+      </div>
+      <p class="note">A tile that is Final wears the same pill, top left of its picture, and the rights chip sits in its footer. Tiles that are not Final show neither marker, only the chip once rights are known.</p>
+    </section>
+  </div>
+
+  <div class="grid" style="margin-top:20px; grid-template-columns: 1.4fr 1fr;">
+    <section class="panel">
+      <h2>3. Marking Final asks for rights <span class="tag">small menu on Final</span></h2>
+      <div class="cols">
+        <div class="stack">
+          <div class="pop" style="width:268px">
+            <h3>Mark this picture Final</h3>
+            <p>The Deck uses the rights you state. Generated is set because Wren made this picture.</p>
+            <div class="opt sel"><i></i><div><b>Generated</b><span>Made by the agency's tools. Shown to the client.</span></div></div>
+            <div class="opt"><i></i><div><b>Own</b><span>Drawn or shot by the agency.</span></div></div>
+            <div class="opt"><i></i><div><b>Licensed</b><span>Someone has said it is licensed.</span></div></div>
+            <div class="opt"><i></i><div><b>Don't know yet</b><span>The Deck marks it "Rights to supply".</span></div></div>
+            <div class="row"><button class="btn">Cancel</button><button class="btn pri">Mark Final</button></div>
+          </div>
+        </div>
+        <div class="stack">
+          <div class="pop" style="width:268px">
+            <h3>Mark this upload Final</h3>
+            <p>No one has said where this came from yet.</p>
+            <div class="opt"><i></i><div><b>Generated</b><span>Made by the agency's tools.</span></div></div>
+            <div class="opt"><i></i><div><b>Own</b><span>Drawn or shot by the agency.</span></div></div>
+            <div class="opt"><i></i><div><b>Licensed</b><span>Someone has said it is licensed.</span></div></div>
+            <div class="opt sel"><i></i><div><b>Don't know yet</b><span>The Deck marks it "Rights to supply".</span></div></div>
+            <div class="row"><button class="btn">Cancel</button><button class="btn pri">Mark Final</button></div>
+          </div>
+          <p class="note" style="margin:0">Default: Generated for a generated picture, Don't know yet for an upload. One click on Mark Final still works; the chip beside Final changes it later.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>4. Fit: no method that will fail <span class="tag">4:1 96-sheet from a 4:5 master</span></h2>
+      <div class="cols">
+        <div class="menu">
+          <div class="head">Change method · 96-sheet 4:1</div>
+          <div class="mi off"><b>Crop</b><small>A crop to 4:1 would cut what must stay (the can).</small></div>
+          <div class="mi off"><b>Extend · Ideogram 4.5</b><small>4:1 is too far from this picture's shape: it takes 6 steps and Extend makes at most 3.</small></div>
+          <div class="mi cur"><b>Redraw · Gemini 3 Pro</b><small>Draws it again at 4:1; the can's own pixels are kept or put back.</small></div>
+        </div>
+        <div class="stack">
+          <div class="wont">
+            <b>This picture can't hold the product at 4:1</b>
+            <p>Start from a wider picture, one close to 4:1, and make this size from that.</p>
+            <div class="shape"><div class="shapebox" style="width:44px;height:55px">4:5<br>this</div><span>→</span><div class="shapebox" style="width:132px;height:33px">4:1 wanted</div></div>
+            <button class="btn">Choose a wider picture…</button>
+          </div>
+          <p class="note" style="margin:0">Shown on the tile and in Resize only when no method can keep the product (for example Redraw is off for the agency, or past 8:1). Otherwise the menu above simply greys out what cannot run, with the reason underneath.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+</body>
+</html>

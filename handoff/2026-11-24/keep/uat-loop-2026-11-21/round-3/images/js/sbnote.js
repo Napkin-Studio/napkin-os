@@ -1,0 +1,16 @@
+await page.keyboard.press("Escape");
+await page.mouse.click(1350, 820);
+await page.getByRole("button", { name: "Text (T)" }).click();
+await page.mouse.click(190, 760);
+await page.waitForTimeout(500);
+await page.keyboard.type("Mia, a woman in her thirties with long blonde braided hair and a yellow raincoat, finds a lost puppy in the rain on a city street. 1: Mia spots the shivering puppy under a bench. 2: She kneels and wraps it in her scarf. 3: She carries it into a warm corner cafe. 4: The puppy laps milk from a saucer while Mia laughs. Four shots, no dialogue.");
+await page.keyboard.press("Escape");
+await page.waitForTimeout(800);
+await S("sb-note");
+await page.getByRole("button", { name: "Link two nodes (L)" }).click();
+await page.mouse.click(300, 770);
+await page.waitForTimeout(400);
+await page.mouse.click(160, 860);
+await page.waitForTimeout(1000);
+await S("sb-note-link-menu");
+return (await page.locator("body").innerText()).match(/Nothing here[\s\S]{0,200}/)?.[0];

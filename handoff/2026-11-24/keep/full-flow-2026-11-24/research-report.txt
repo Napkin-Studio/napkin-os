@@ -1,0 +1,271 @@
+RESEARCH · FERNCLIFF COFFEE CO.
+Oat flat white - open space
+
+Written 23 Nov, 14:21 by the Synthesis agent · 21 sources read · 65 facts pinned · 169 decisions on the record
+
+21 sources
+65 pins
+3 findings
+11 gaps
+nothing needs your call
+00 — THE ASK
+What the client asked
+CLIENT
+We inferred
+Ferncliff Coffee Co.
+BRAND
+We inferred
+Ferncliff Coffee Co.
+MARKETS
+You said
+Great Britain
+AUDIENCE
+We inferred
+Lead: 25-40 urban commuters and gym-goers, grabbing a drink on the move…
+IN MARKET
+not given
+OBJECTIVE
+We inferred
+Reach 8% share of the UK convenience RTD coffee fridge within 12 months…
+CONSTRAINTS
+not given
+THE PROBLEM
+We inferred
+Ferncliff is a 30-year hot roaster that also supplies some cafés. It is entering cold ready-to-drink coffee with a canned Oat Flat White that is cold and made with oat. The launch is in March, with Christmas used only for a teaser phase, not as the awareness …
+
+10 of 19 fields filled · Read the ask again
+
+01 Created
+02 Research
+03 Brief-ready
+Still missing: Ask source and the lock.
+
+ALL 19 FIELDS · 10 FILLED
+YOUR REQUEST AND ANSWERS
+
+HEADLINE
+A cold oat coffee can take energy-drink share by offering a less guilt-laden boost, launched through sampling scaled to a small budget 
+F1 · F3 · F2
+SUMMARY
+Energy drinks are mostly sold off-trade in cans, and the evidence on them is thin and low confidence. 
+Mordor Intelligence · 2 pins
+Energy is valued, but many see energy drinks as unhealthy, which leaves room for a cold oat coffee. 
+F1
+A coffee-named can is exempt from the high-caffeine warning, but any no-added-sugar line needs care. 
+F2
+Costa's sampling shows the route, but its scale must be reduced. 
+F3
+01 — MARKET STRUCTURE · GB
+The market
+
+Energy drinks, the first source of share, are a large market led by Red Bull. 
+Mordor Intelligence · Statista · 2 pins
+
+Sales are mostly off-trade and in cans, which is the format Ferncliff is launching. 
+Mordor Intelligence · 2 pins
+
+GAP
+Size volume for energy drinks in GB
+Behind this section · 4 cited · 2 more facts · 5 more gaps →
+02 — BRANDS & POSITIONING · GB
+Brands and comparators
+GAP
+Claim for Ferncliff Coffee Co in GB
+Behind this section · 1 more gap →
+03 — CONSUMER & CULTURE · GB
+Who it is for
+
+Energy drinks are bought for a boost, yet most people also think them unhealthy. 
+F1 · 2 pins
+
+Specialist ingredients and online exposure drive trial and willingness to pay more in coffee. 
+Tea & Coffee Trade Journal · 2 pins
+
+Working professionals' daily routines are a core occasion. 
+IMARC Group · 1 pin
+
+Energy drinks are valued mainly for a quick boost, yet many people see them as unhealthy. That tension gives a cold oat coffee room to offer energy from a different, less guilt-laden source, aimed at working professionals' daily routines. FINDING 1 · VERIFIED
+✓ You agreed
+
+GAP
+Convenience purchase share for convenience forecourt in GB Not on the measure list: proposed. The fact: convenience purchase share for convenience forecourt = 0.27 proportion, as of 2025-02-14, from https://yougov.com/en-gb/articles/51615-how-many-brits-are-consuming-energy-drinks-protein-shakes-and-probiotic-beverages-regularly: "Convenience stores, including Co-op and SPAR, account for 27% of purchases".
+Behind this section · 5 cited · 15 more facts →
+04 — CATEGORY CODES · GB
+Category codes
+
+Only one general pin on category conventions was found, so codes need further work. 
+Global Drinks Intel · 1 pin
+
+Behind this section · 1 cited →
+05 — REGULATION & CLEARANCE · GB
+Clearance
+
+A no-added-sugar claim must meet GB Register conditions, and the ASA has ruled against a drink sweetened by fruit concentrates. 
+F2 · 2 pins
+
+A coffee-named drink is exempt from the high-caffeine warning. 
+F2 · 1 pin
+
+Recyclability claims need evidence. 
+ASA | CAP · 1 pin
+
+Any 'no added sugar' line on the can needs care: the claim is only allowed if the product has no added sugars and no food used for sweetening, and the ASA has already ruled against a drink whose fruit concentrates sweetened it. The high-caffeine warning does not apply to drinks with 'coffee' in the name, so a coffee-named can is exempt. FINDING 2 · VERIFIED
+✓ You agreed
+
+GAP
+Grant for energy drinks in GB
+Behind this section · 4 cited · 17 more facts · 1 more gap →
+06 — EFFECTIVENESS EVIDENCE · GB
+Effectiveness
+
+Costa RTD became a top-three RTD coffee brand within a year after sampling. 
+F3 · 2 pins
+
+Many Costa buyers were new to the sector. 
+Coca-Cola Europacific Partners GB · 2 pins
+
+Costa's sampling scale may exceed a small budget. 
+F3 · 1 pin
+
+Sampling is the pinned launch tactic for RTD coffee in convenience. Costa used household and park sampling and reached a top-three RTD position within a year, with many of its buyers new to the sector. Costa's scale of sampling may be beyond a smaller budget, so sampling would have to be scaled down. FINDING 3 · VERIFIED
+✓ You agreed
+
+Behind this section · 5 cited · 12 more facts →
+07 — BEFORE THE BRIEF
+Confirm
+Brand: Ferncliff Coffee Co.
+Proposed from pinned facts; a person has not confirmed it yet.
+We inferred this
+Confirm…
+Markets: GB
+Read from the material; a person has not confirmed it yet.
+You said this
+Confirm…
+Client: Ferncliff Coffee Co.
+Proposed from pinned facts; a person has not confirmed it yet.
+We inferred this
+Confirm…
+Problem
+Proposed from pinned facts; a person has not confirmed it yet.
+We inferred this
+Confirm…
+Objective
+Proposed from pinned facts; a person has not confirmed it yet.
+We inferred this
+Confirm…
+Audience stated
+Proposed from pinned facts; a person has not confirmed it yet.
+We inferred this
+Confirm…
+The researched audience
+Proposed from pinned facts; a person has not confirmed it yet.
+We inferred this
+Confirm…
+08 — SCOPE
+Not researched
+Category codes
+· every market
+The prompt lists only four lenses: "Regulation & clearance, Market structure, Brands & positioning, Consumer & culture". Category codes is not among them.
+Rhythm & moments
+· every market
+Not among the four lenses the prompt lists, and it asks nothing about timing.
+Media & spend
+· every market
+Not among the four lenses the prompt lists, and it asks nothing about media.
+Effectiveness evidence
+· every market
+Not among the four lenses the prompt lists, and it asks nothing about what has worked before.
+RESEARCH ACTIVITY
+done
+reconsider
+reconsider@2.0
+4 of 4 steps
+The Review agent: I went through what rested on your review. 1 review(s): 0 finding(s) checked, 0 still stand, 0 superseded by what they were worked out again as, 0 no longer stand.
+SCOPE
+brand brand/dev-brand · org org/sandbox
+BACKEND
+napkin-middleware/0.1+model-bedrock
+CHANGE
+applied by the host version sha256:d83cf4ea8b03f0634d6844db668e2c83fab5b5b67420c0b52aedfa1d0b386283
+done
+reconsider
+reconsider@2.0
+4 of 4 steps
+The Review agent: I went through what rested on your review. 1 review(s): 0 finding(s) checked, 0 still stand, 0 superseded by what they were worked out again as, 0 no longer stand.
+SCOPE
+brand brand/dev-brand · org org/sandbox
+BACKEND
+napkin-middleware/0.1+model-bedrock
+CHANGE
+applied by the host version sha256:69c3a6bbfd42e109d13e89197e1ac8bfcee7372257f9a0761b7dffc0cedd9437
+done
+reconsider
+reconsider@2.0
+4 of 4 steps
+The Review agent: I went through what rested on your review. 1 review(s): 0 finding(s) checked, 0 still stand, 0 superseded by what they were worked out again as, 0 no longer stand.
+SCOPE
+brand brand/dev-brand · org org/sandbox
+BACKEND
+napkin-middleware/0.1+model-bedrock
+CHANGE
+applied by the host version sha256:af9b0227210f9c1eeed3caf8e6f0a1cedd5fc3fa4721546714c096c33bc2982a
+Everything recorded
+The ask, every pinned fact, the findings and what research drew on. Who decided what, and why, is in Decisions.
+BOOTH
+Hide
+Report
+Evidence map
+Report
+○ Draft
+· 23 Nov, 14:21
+Lock the report
+Every call is settled
+▤ ◆ 
+Uses 12 of 21 sources · 21 of 65 facts · 3 of 3 findings
+›
+All 3 findings kept
+facts used
+§1 The market
+GB
+6 couldn’t find
+›
+§2 Brands and comparators
+GB
+2 couldn’t find
+›
+§3 Who it is for
+GB
+1 couldn’t find
+›
+§4 Category codes
+GB
+›
+§5 Clearance
+GB
+2 couldn’t find
+›
+§6 Effectiveness
+GB
+›
+⌕
+–
+Left out · 0 0◆
+›
+░
+Found, not used · 44◆ 9▤
+›
+┄
+Couldn’t find · 11
+›
+Ask the research
+About ·
+anything
+▾
+Ask
+Check before the brief · 7 ›
+How it ran ›
+Jump to ▾
+
+Checks signed as Mock tester
+
+Finding 3 kept

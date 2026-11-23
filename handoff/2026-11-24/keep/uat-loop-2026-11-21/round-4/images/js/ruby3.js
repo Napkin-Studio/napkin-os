@@ -1,0 +1,16 @@
+await page.keyboard.press("Escape");
+const fcP = page.waitForEvent("filechooser", { timeout: 5000 });
+await page.getByRole("button", { name: /Add a picture/ }).click();
+const fc = await fcP;
+await fc.setFiles([OUT + "/uploads/p06_ruby_back.png"]);
+await page.waitForTimeout(3000);
+await page.getByText("Name…", { exact: true }).click();
+await page.waitForTimeout(400);
+await page.locator("input[placeholder=maya]").fill("ruby");
+await page.locator('input[placeholder^="front"]').fill("back-three-quarter");
+await page.waitForTimeout(400);
+await S("name-ruby-back3q");
+await page.getByRole("button", { name: /^Save|^Add to/ }).click();
+await page.waitForTimeout(2500);
+await S("ruby-named");
+return (await page.locator("body").innerText()).slice(0, 600);

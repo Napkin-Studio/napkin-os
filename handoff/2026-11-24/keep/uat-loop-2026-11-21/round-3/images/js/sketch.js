@@ -1,0 +1,21 @@
+await page.keyboard.press("Escape");
+await page.mouse.click(1380, 300);
+await page.getByRole("button", { name: /^Sketch area/ }).click();
+await page.waitForTimeout(300);
+await page.mouse.move(100, 90); await page.mouse.down(); await page.mouse.move(250, 180, { steps: 8 }); await page.mouse.move(420, 280, { steps: 8 }); await page.mouse.up();
+await page.waitForTimeout(800);
+await S("sketch-area");
+await page.getByRole("button", { name: "Pen (P)" }).click();
+await page.waitForTimeout(300);
+const stroke = async (pts) => { await page.mouse.move(...pts[0]); await page.mouse.down(); for (const p of pts.slice(1)) await page.mouse.move(p[0], p[1], { steps: 4 }); await page.mouse.up(); };
+// house: square, roof, door; sun; ground line
+await stroke([[180,240],[180,190],[240,190],[240,240],[180,240]]);
+await stroke([[175,192],[210,160],[245,192]]);
+await stroke([[203,240],[203,215],[217,215],[217,240]]);
+await stroke([[350,120],[365,112],[378,122],[372,138],[355,138],[348,126],[350,120]]);
+await stroke([[110,242],[410,242]]);
+await stroke([[290,240],[290,205]]); await stroke([[275,215],[290,195],[305,215],[275,215]]);
+await page.waitForTimeout(600);
+await page.getByRole("button", { name: "Select (V)" }).click();
+await S("sketch-drawn");
+return (await page.locator("body").innerText()).slice(0, 300);

@@ -1,0 +1,16 @@
+2026-11-21T06:31:42Z | job_01M7YCVDBCDJNW75BWPHT6B76H | write | completed | prov=0.00 | est=0.0 | claude=0.0268 |  | 
+2026-11-21T06:31:58Z | job_01M7YCVXHXD97Q2BC28NAHPG6X | write | completed | prov=0.00 | est=0.0 | claude=0.0300 |  | 
+2026-11-21T06:34:04Z | job_01M7YCZQS7975Z7CYA1MXK55EX | shot_list | completed | prov=0.00 | est=0.0 | claude=0.0339 |  | 
+2026-11-21T06:34:47Z | job_01M7YD12E0D6DWEMMWVEQD102B | write | completed | prov=0.00 | est=0.0 | claude=0.0197 |  | 
+2026-11-21T06:36:25Z | job_01M7YD41T93N9A2421A1J2KZ7Q | write | completed | prov=0.00 | est=0.0 | claude=0.0219 |  | 
+2026-11-21T06:36:54Z | job_01M7YD4XTA4T0RHQ6HMVS5VQKT | write | completed | prov=0.00 | est=0.0 | claude=0.0236 |  | 
+2026-11-21T06:37:19Z | job_01M7YD5PS8CTEE2AW5QPTDFMN8 | write | completed | prov=0.00 | est=0.0 | claude=0.0254 |  | 
+2026-11-21T06:37:59Z | job_01M7YD6XYS7YZXZSN001FT0PVK | frame | completed | prov=0.20 | est=0.2 | claude=0.0256 | gemini_image3_pro | 
+2026-11-21T06:39:16Z | job_01M7YD9900224BKX1HYB25BS0C | frame | completed | prov=0.20 | est=0.2 | claude=0.0263 | gemini_image3_pro | 
+2026-11-21T06:40:14Z | job_01M7YDB1FZ51RQEGR898PAD8Q4 | frame | completed | prov=0.20 | est=0.2 | claude=0.0236 | gemini_image3_pro | 
+2026-11-21T06:42:03Z | job_01M7YDEBWRAS7CY8NZZ8Y97K5N | frame | completed | prov=0.20 | est=0.2 | claude=0.0277 | gemini_image3_pro | 
+2026-11-21T06:42:51Z | job_01M7YDFV6ACCQDXBTS22DKW8RP | clip | completed | prov=0.30 | est=0.3 | claude=0.0290 | wan3 | 
+2026-11-21T06:46:05Z | job_01M7YDNR9V53H8R7MGDZJDTWJJ | stitch | completed | prov=0.00 | est=0.0 | claude=0.0000 | ffmpeg | 
+2026-11-21T06:46:57Z | job_01M7YDQANV13V932FNHR4MTDFZ | cutdown | completed | prov=0.00 | est=0.0 | claude=0.0087 |  | 
+2026-11-21T06:47:13Z | job_01M7YDQTYJNN7DJ5HHC0AAMV7Y | cutdown | completed | prov=0.00 | est=0.0 | claude=0.0000 | ffmpeg | 
+jobs=15 provider_usd=1.10 claude_usd=0.3222
