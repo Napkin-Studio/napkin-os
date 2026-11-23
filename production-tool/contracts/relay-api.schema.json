@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://napkin.ie/production-tool/contracts/relay-api.schema.json",
   "title": "Relay HTTP API: request and response bodies",
-  "description": "Every route but GET /config needs an identity: who is asking comes from the relay's identity seam (relay/identity.py). Behind napkin-web (/production/api, features/os-sign-in.clan) that is napkin-web's signed X-Napkin-Identity assertion (docs/contracts/production-tool-identity.md); standalone local development (relay/local.py with no TOKEN_SECRET, the mock relay) names a fixed local person. No identity is a 401. A person whose agency (tenant) is not turned on gets 403 flag_off on every route but GET /health and GET /config. Errors are a non-2xx status with {error} (common error). A 2xx body never carries an error key. Contract 3: a body whose contractVersion is not '3' gets 400 invalid_input 'This build reads contract 3; reload the page.' before anything else is read. Routes: GET /me, POST /uploads, POST /jobs, GET /jobs/{jobId}, DELETE /jobs/{jobId}, POST /jobs/{jobId}/answer, POST /log, POST /clan, GET /projects, GET /clan/{projectId}, GET|PUT /clan/{projectId}/canvas, GET /library/{shelf}, GET|POST /library/{shelf}/{key}[/{ver}], POST /dogfood/consent, POST /dogfood/events, GET /config (served by CloudFront as config.json).",
+  "description": "Every route but GET /config needs an identity: who is asking comes from the relay's identity seam (relay/identity.py). Behind napkin-web (/production/api, features/os-sign-in.clan) that is napkin-web's signed X-Napkin-Identity assertion (docs/contracts/production-tool-identity.md); standalone local development (relay/local.py with no TOKEN_SECRET, the mock relay) names a fixed local person. No identity is a 401. A person whose agency (tenant) is not turned on gets 403 flag_off on every route but GET /health and GET /config. Errors are a non-2xx status with {error} (common error). A 2xx body never carries an error key. Contract 3: a body whose contractVersion is not '3' gets 400 invalid_input 'This build reads contract 3; reload the page.' before anything else is read. Retired 2026-11-23 (features/production-in-library.clan): projects live in the library of Napkin OS, so POST /clan, GET /projects, GET /clan/{projectId} and GET|PUT /clan/{projectId}/canvas answer 410 gone for one release ({error:{code:\"gone\",message:\"Reload the page: projects now live in the library.\"}}) and are then deleted; they have no schema here. Routes: GET /me, POST /uploads, POST /jobs, GET /jobs/{jobId}, DELETE /jobs/{jobId}, POST /jobs/{jobId}/answer, POST /log, GET /library/{shelf}, GET|POST /library/{shelf}/{key}[/{ver}], POST /dogfood/consent, POST /dogfood/events, GET /config (served by CloudFront as config.json).",
   "$defs": {
     "Me": {
       "type": "object",
@@ -50,7 +50,7 @@
         "projects": {
           "type": "integer",
           "minimum": 0,
-          "description": "How many projects the agency has saved on the relay (GET /projects)."
+          "description": "How many projects the agency saved on the relay before they moved to the library (the retired GET /projects); no new one is added."
         },
         "team": {
           "type": "string",
@@ -2172,26 +2172,6 @@
       ],
       "additionalProperties": false
     },
-    "ClanMirror": {
-      "type": "object",
-      "description": "POST /clan (added 2026-10-06, additive): the participant's current .clan. Not JSON: the body is the .clan bytes (a ZIP, at most 5 MiB). Headers: Authorization Bearer token, Content-Type application/vnd.clan+zip, X-Clan-Reason interval|accept|manual, and optionally X-Project-Id (a project id, the common id pattern; added 2026-10-09, features/project-home.clan). With X-Project-Id the save is one of the person's projects (features/personal-workspaces.clan, 2026-10-09): optional X-Project-Name (the name Home shows, percent-encoded UTF-8, at most 80 characters) and optional If-Match (the project's ETag this save started from). With If-Match, 409 conflict when someone saved the project since (nothing is overwritten); without it the save is taken as before. It answers 200 ClanSaved, stored at s3 clan/<participantId>/<projectId>/<UTC time>-<etag8>-<reason>.clan (every save, kept) and clan/<participantId>/<projectId>/latest.clan, listed in clan/<participantId>/projects.json. Without X-Project-Id it answers 204, stored at clan/<participantId>/latest.clan and clan/<participantId>/<UTC time>-<reason>.clan. 401 without a valid token; 400 when the body is not a ZIP or X-Project-Id is not an id; 413 above 5 MiB. This object documents the headers only.",
-      "properties": {
-        "contentType": {
-          "const": "application/vnd.clan+zip"
-        },
-        "reason": {
-          "enum": [
-            "interval",
-            "accept",
-            "manual"
-          ]
-        },
-        "maxBytes": {
-          "const": 5242880
-        }
-      },
-      "additionalProperties": false
-    },
     "LibraryRef": {
       "type": "object",
       "description": "One variant of a published key.",
@@ -2396,105 +2376,6 @@
         "workspace",
         "shelf",
         "keys"
-      ],
-      "additionalProperties": false
-    },
-    "SavedProject": {
-      "type": "object",
-      "description": "One saved project of the person's (GET /projects, ClanSaved). Added 2026-10-09 (features/personal-workspaces.clan).",
-      "properties": {
-        "id": {
-          "$ref": "common.schema.json#/$defs/id"
-        },
-        "name": {
-          "type": "string",
-          "maxLength": 80,
-          "description": "X-Project-Name of the newest save that sent one; absent when none did."
-        },
-        "savedAt": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "bytes": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "Size of the saved .clan."
-        },
-        "etag": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{64}$",
-          "description": "SHA-256 (hex) of the saved .clan bytes: send it as If-Match on the next save."
-        }
-      },
-      "required": [
-        "id",
-        "savedAt",
-        "bytes",
-        "etag"
-      ],
-      "additionalProperties": false
-    },
-    "ProjectList": {
-      "type": "object",
-      "description": "GET /projects: the caller's saved projects (any browser), newest save first. Only the caller's own.",
-      "properties": {
-        "projects": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/SavedProject"
-          }
-        }
-      },
-      "required": [
-        "projects"
-      ],
-      "additionalProperties": false
-    },
-    "ClanSaved": {
-      "type": "object",
-      "description": "POST /clan with X-Project-Id: the save the relay kept. Its etag goes in If-Match on the next save.",
-      "properties": {
-        "project": {
-          "$ref": "#/$defs/SavedProject"
-        }
-      },
-      "required": [
-        "project"
-      ],
-      "additionalProperties": false
-    },
-    "ProjectOpen": {
-      "type": "object",
-      "description": "GET /clan/{projectId}: the newest saved .clan of the caller's project. Not JSON: the body is the .clan bytes (application/vnd.clan+zip), with headers ETag (the quoted SavedProject.etag) and X-Saved-At. 404 when the caller has no such project; 413 when it is over 4.3 MB (a Lambda answer is at most 6 MB base64-encoded: export it instead). This object documents the headers only.",
-      "properties": {
-        "etag": {
-          "type": "string"
-        },
-        "savedAt": {
-          "type": "string",
-          "format": "date-time"
-        }
-      },
-      "additionalProperties": false
-    },
-    "ProjectCanvas": {
-      "type": "object",
-      "description": "PUT /clan/{projectId}/canvas (body, 204) and GET /clan/{projectId}/canvas (answer): the canvas that goes with the project's saved .clan, so it opens in another browser as it was. The Excalidraw elements only; pictures are rebuilt from the project's assets by hash (customdata.schema.json). At most 4 MB. 404 when the project is not saved, or (GET) has no canvas. Added 2026-10-09 (features/personal-workspaces.clan).",
-      "properties": {
-        "elements": {
-          "type": "array",
-          "items": {
-            "type": "object"
-          }
-        },
-        "savedAt": {
-          "type": "string",
-          "format": "date-time",
-          "description": "Set by the relay; ignored on PUT."
-        }
-      },
-      "required": [
-        "elements"
       ],
       "additionalProperties": false
     },

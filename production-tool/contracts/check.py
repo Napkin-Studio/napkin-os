@@ -215,7 +215,6 @@ CASES = [
     ("examples/library-index.json", "relay-api.schema.json", "#/$defs/LibraryIndex", None),
     ("examples/library-publish.*.json", "relay-api.schema.json", "#/$defs/LibraryPublish", None),
     ("examples/me.response.json", "relay-api.schema.json", "#/$defs/Me", None),
-    ("examples/projects.response.json", "relay-api.schema.json", "#/$defs/ProjectList", None),
     ("examples/director.*.json", "director.schema.json", "", None),
     ("examples/customdata.*.json", "customdata.schema.json", "", None),
     ("examples/document*.json", "document.schema.json", "", document_rules),

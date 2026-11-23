@@ -65,8 +65,7 @@ uv run python -m local            # http://localhost:8787
 - Routes answer both bare (`/jobs`) and under `/api` (`/api/jobs`). CORS is open.
 - `GET /me` says who the relay takes the caller to be (`relay-api.schema.json#/$defs/Me`):
   participant id, handle, team, workspace, today's remaining quotas and saved projects.
-- `POST /clan` takes the person's `.clan` bytes (`Content-Type: application/vnd.clan+zip`, `X-Clan-Reason: interval|accept|manual`, at most 4.5 MB). With `X-Project-Id: <project id>` it is a saved project of the agency (`projects.py`): kept under `tenants/<tenantId>/projects/<projectId>/` (every save, plus `latest.clan`) and listed in `tenants/<tenantId>/projects/index.json`; it answers the save's ETag, and with `If-Match` a save someone else got in before is a 409. Without the header it keeps `clan/<participantId>/latest.clan` plus a timestamped copy and answers 204.
-- `GET /projects` lists the agency's saved projects; `GET /clan/<projectId>` answers the newest `.clan` with its `ETag`; `PUT`/`GET /clan/<projectId>/canvas` keep the canvas that goes with it.
+- `/clan*` and `/projects*` (any method) answer 410 `gone`, `{"error":{"code":"gone","message":"Reload the page: projects now live in the library."}}`, for one release (features/production-in-library.clan): documents live in the library of Napkin OS (napkin-web), not here. The code that stored them (`projects.py`, kept only for `GET /me`'s old `projects` count) is deleted in a follow-up. Old `tenants/<tenantId>/projects/` objects are left where they are; `scripts/import-production-projects` moves them into the library.
 - Pruning, once the data has been studied: `scripts/prune_workspaces.py` (dry run unless `--yes`; see its docstring).
 - Uploads: `putUrl` is `http://localhost:8787/_upload/in/sha256:…` (PUT the bytes).
   Files are served from `.local-data/` at `/in/`, `/out/` and `/ads/`.

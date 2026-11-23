@@ -11,7 +11,8 @@ def allowed() -> set[str]:
 
 
 def test_preflight_allows_the_headers_the_web_sends():
-    assert {"content-type", "x-clan-reason", "x-project-id", "x-project-name", "if-match"} <= allowed()
+    assert {"content-type"} <= allowed()
+    assert not {"x-clan-reason", "x-project-id", "x-project-name", "if-match"} & allowed()  # the project routes are gone
     assert "x-amz-checksum-sha256" in allowed()  # the upload's putHeaders (features/tenant-limits.clan)
 
 

@@ -50,9 +50,9 @@ from store import FileStore, MemoryStore
 HERE = Path(__file__).resolve().parent
 # Every header the web app sends. The browser preflights each one; a header missing here drops
 # the request before it leaves the browser.
-CORS_ALLOW_HEADERS = "Content-Type, If-Match, X-Clan-Reason, X-Project-Id, X-Project-Name, x-amz-checksum-sha256"
-# Response headers the web app reads: GET /clan/{project} carries the project's ETag and when it was saved.
-CORS_EXPOSE_HEADERS = "ETag, X-Saved-At"
+CORS_ALLOW_HEADERS = "Content-Type, x-amz-checksum-sha256"
+# Response headers the web app reads: none now that the project routes are gone.
+CORS_EXPOSE_HEADERS = ""
 log = logging.getLogger("relay.local")
 
 
@@ -214,7 +214,7 @@ def serve(port: int, data_dir: Path) -> None:
 
         def do_PUT(self):
             if not self.path.startswith("/_upload/"):
-                return self._relay()  # PUT /clan/{project}/canvas
+                return self._relay()  # PUT /clan/... answers 410 gone
             key = self.path[len("/_upload/"):].split("?", 1)[0]
             data = self.rfile.read(int(self.headers.get("Content-Length", 0)))
             # As S3 does with the presigned PUT's checksum (features/tenant-limits.clan): other bytes are refused.

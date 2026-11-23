@@ -29,7 +29,7 @@ def test_me_says_who_the_seam_names_with_quotas(h):
 
 
 def test_no_identity_is_401_everywhere_but_health_and_config(h):
-    for method, path, body in (("POST", "/jobs", job_request("generate", new_id("job"))), ("GET", "/projects", None),
+    for method, path, body in (("POST", "/jobs", job_request("generate", new_id("job"))),
                                ("GET", "/me", None), ("GET", "/jobs/job_x", None), ("GET", "/library", None),
                                ("POST", "/uploads", {"sha256": "sha256:" + "a" * 64, "mime": "image/png", "bytes": 1})):
         _, out = h.call(method, path, body, expect=401)
@@ -48,7 +48,7 @@ def test_the_relay_fails_closed_with_no_identity_source(h):
     identity.use_local(None)
     relay = Relay(store=h.store, blobs=h.blobs, registry=h.relay.registry, director=h.relay.director,
                   config=lambda: h.cfg, clock=h.clock)
-    for method, path in (("POST", "/jobs"), ("GET", "/projects"), ("GET", "/me")):
+    for method, path in (("POST", "/jobs"), ("GET", "/me")):
         status, out, _ = relay.http(method, path, {"Authorization": "Bearer anything"}, b"{}")
         assert status == 401 and out["error"]["code"] == "unauthorised", path
     assert relay.http("GET", "/health", {}, None)[0] == 200
@@ -102,65 +102,6 @@ def test_invalid_job_request_is_rejected(h):
 def test_log_returns_204(h):
     token = h.as_person()
     h.call("POST", "/log", {"level": "report", "message": "the button did nothing", "node": {"kind": "storyboard", "id": new_id("storyboard")}}, token, expect=204)
-
-
-def _clan_post(h, token, body, reason="accept", project=None):
-    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/vnd.clan+zip", "X-Clan-Reason": reason}
-    if project is not None:
-        headers["X-Project-Id"] = project
-    return h.relay.http("POST", "/api/clan", headers, body)
-
-
-def test_clan_mirror_keeps_latest_and_history(h):
-    token = h.as_person()
-    body = b"PK\x03\x04" + b"x" * 100
-    status, out, ctx = _clan_post(h, token, body)
-    assert (status, out) == (204, None)
-    keys = [k for k in h.blobs.objects if k.startswith("clan/")]
-    assert any(k.endswith("/latest.clan") for k in keys)
-    assert any(k.endswith("-accept.clan") for k in keys)
-    assert all(h.blobs.objects[k] == (body, "application/vnd.clan+zip") for k in keys)
-    assert ctx["clanBytes"] == len(body)
-
-
-def test_clan_mirror_keeps_one_copy_per_project(h):
-    token = h.as_person()
-    a, b = "prj_01J9Z8Y7X6W5V4T3S2R1Q0P9N8", "prj_01J9Z8Y7X6W5V4T3S2R1Q0P9N9"
-    _clan_post(h, token, b"PK\x03\x04" + b"a" * 10, project=a)
-    _clan_post(h, token, b"PK\x03\x04" + b"b" * 10, reason="manual", project=b)
-    base = f"tenants/{tenant_id('blue')}/projects"  # the agency's projects (features/os-sign-in.clan)
-    keys = sorted(k for k in h.blobs.objects if k.startswith(base))
-    assert f"{base}/{a}/latest.clan" in keys and f"{base}/{b}/latest.clan" in keys
-    assert h.blobs.objects[f"{base}/{a}/latest.clan"][0].endswith(b"a" * 10)
-    assert h.blobs.objects[f"{base}/{b}/latest.clan"][0].endswith(b"b" * 10)
-    assert any(k.startswith(f"{base}/{a}/") and k.endswith("-accept.clan") for k in keys)
-    assert any(k.startswith(f"{base}/{b}/") and k.endswith("-manual.clan") for k in keys)
-    # Without the header: the person's own copy, as before.
-    _clan_post(h, token, b"PK\x03\x04" + b"c" * 10)
-    pid = person("alice", "blue")["pid"]
-    assert h.blobs.objects[f"clan/{pid}/latest.clan"][0].endswith(b"c" * 10)
-
-
-def test_clan_mirror_refuses_a_bad_project_id(h):
-    token = h.as_person()
-    for bad in ("", "../other", "prj_short", "PRJ_01J9Z8Y7X6W5V4T3S2R1Q0P9N8", "prj_01J9Z8Y7X6W5V4T3S2R1Q0P9N8/x"):
-        status, out, _ = _clan_post(h, token, b"PK\x03\x04" + b"x" * 10, project=bad)
-        assert status == 400 and out["error"]["code"] == "invalid_input", bad
-    assert not [k for k in h.blobs.objects if k.startswith(("clan/", "tenants/"))]
-
-
-def test_clan_mirror_refuses_bad_bodies(h):
-    token = h.as_person()
-    status, out, _ = _clan_post(h, token, b"not a zip")
-    assert status == 400 and out["error"]["code"] == "invalid_input"
-    # 4.5 MB is what napkin-web's proxy and a Function URL take (features/os-sign-in.clan).
-    status, out, _ = _clan_post(h, token, b"PK\x03\x04" + b"0" * (4_500_000 - 3))
-    assert status == 413 and "Export it instead" in out["error"]["message"]
-    status, out, _ = h.relay.http("POST", "/clan", {}, b"PK\x03\x04")
-    assert status == 401
-    assert not [k for k in h.blobs.objects if k.startswith(("clan/", "tenants/"))]
-    status, _, _ = _clan_post(h, token, b"PK\x03\x04" + b"0" * (4_500_000 - 4))  # exactly 4.5 MB
-    assert status == 204
 
 
 # ── the ledger ──────────────────────────────────────────────────────────────
