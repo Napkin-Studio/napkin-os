@@ -97,8 +97,11 @@ NO_PEOPLE = "No people in this shot."
 _PEOPLE_SAID = re.compile(r"\bno (?:people|person|one|figures?|humans?)\b|\bnobody\b|\bempty of people\b", re.I)
 # The brief says "no real faces" (UAT 2026-11-24: the tram frames showed real, clear faces): that means unrecognisable only
 # (owner 2026-11-23), so people may appear but no one identifiable, even when the shot's text shows people.
-UNRECOGNISABLE = ("People may appear, but no one is recognisable: seen from behind, at a distance, blurred, or cropped "
-                  "to hands; no clear face of any real person.")
+# UAT 2026-11-23 (Tidewell): the old line ("no clear face of any real person") was in frame 5's prompt and the picture still
+# showed laughing faces; an image model does not read a generated face as a "real person". So the line is a composition:
+# nobody shows a face, and nobody looks at the camera.
+UNRECOGNISABLE = ("People may appear, but no one is recognisable: seen only from behind, in silhouette, at a distance or "
+                  "cropped to hands and shoulders; no face is visible, sharp or in close-up, and no one looks at the camera.")
 _UNRECOGNISABLE_SAID = re.compile(r"\bunrecogni[sz]able\b|\bno one (?:is )?recogni[sz]able\b|\bnot recogni[sz]able\b", re.I)
 FACES_OPS = ("frame", "clip")
 # UAT round 4: frame 2 nearly copied frame 1's framing. A frame says its shot's own size and angle from the shot list,
@@ -354,6 +357,14 @@ def _unrecognisable_people(job: dict, op: str, faces: bool, sheet: dict) -> None
     to the op's budget, which drops a mandatory from a clip)."""
     if faces and op in FACES_OPS and not _UNRECOGNISABLE_SAID.search(job.get("prompt") or ""):
         _add_line(job, UNRECOGNISABLE, sheet)
+
+
+def say_unrecognisable(out: dict, op: str, brief: dict | None, sheet: dict | None) -> None:
+    """The same line on an answer that did not come from the director's own check (the passthrough: a one-video take, a
+    director fault), which the Tidewell UAT clip never had. In place; a no-op unless the brief says no real faces."""
+    job = out.get("providerJob")
+    if job and sheet and op in FACES_OPS and briefs.no_real_faces(brief):
+        _unrecognisable_people(job, op, True, sheet)
 
 
 def _shot_framing(job: dict, op: str, payload: dict, sheet: dict) -> None:

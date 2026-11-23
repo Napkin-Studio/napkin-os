@@ -265,6 +265,13 @@ export function pictureJob(d: Doc, nodeId: Id) {
     .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0]
 }
 
+/** The ratio the person wrote in their words ("Key visual, 4:5 poster"): they asked for that shape. UAT 2026-11-23: a 4:5
+ *  key visual came out 16:9 because only the storyboard's ratio reached the job. The first one named wins. */
+export function ratioInWords(words: string): Ratio | undefined {
+  const m = /(?<![\d:.])(16:9|9:16|4:5|1:1)(?![\d:])/.exec(words)
+  return m ? (m[1] as Ratio) : undefined
+}
+
 /**
  * A picture node from words (decision 1): Fin's generate, the existing image path, words only plus
  * the node's scope. Its outputs land in the document's assets (jobs/runner); naming it is the next step.
@@ -277,7 +284,7 @@ export async function pictureFromWords(deps: FrameDeps, nodeId: Id, words: strin
   const running = pictureJob(d, nodeId)
   if (running && isActive(running.state)) return running.id
   const refs = await promptRefs(deps.relay, d, nodeId, words)
-  const input: JobInput = { text: words.trim().slice(0, 1000), ratio: ratio ?? mainStoryboard(d)?.ratio ?? '16:9', ...(refs.length ? { refs } : {}) }
+  const input: JobInput = { text: words.trim().slice(0, 1000), ratio: ratioInWords(words) ?? ratio ?? mainStoryboard(d)?.ratio ?? '16:9', ...(refs.length ? { refs } : {}) }
   return deps.runner.submit('generate', input, [], { for: 'canvas' }, undefined, undefined, { node: { kind: 'group', id: nodeId } })
 }
 
