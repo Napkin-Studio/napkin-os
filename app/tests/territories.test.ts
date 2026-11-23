@@ -18,6 +18,8 @@ const dir = new URL('templates/territories/', root)
 const html = readFileSync(new URL('index.html', dir), 'utf8')
 const logicSrc = /<script id="territories-logic">([\s\S]*?)<\/script>/.exec(html)?.[1]
 assert.ok(logicSrc, 'the template has its pure block')
+const lookupsSrc = /<script id="territories-lookups-logic">([\s\S]*?)<\/script>/.exec(html)?.[1] ?? ''
+assert.ok(lookupsSrc, 'the template has its look-up block')
 
 // The agent engine the page inlines at its marker (the circles stay their still frames: no WebGL here).
 const sphereDir = new URL('templates/shared/agent-sphere/', root)
@@ -33,7 +35,7 @@ type Ui = Record<string, unknown>
 type Act = { writes: { patch: Doc; action: string; rationale: string }[]; toast?: string; start?: boolean; draft?: string; focus?: string; request?: { key: string; what: string; input: Doc } } | null
 // The house source card the packer splices at its marker: the page draws its two cards with it.
 const helper = /<script>([\s\S]*?var NapkinSource[\s\S]*?)<\/script>/.exec(readFileSync(new URL('templates/shared/source-card.html', root), 'utf8'))![1]
-const L = vm.runInNewContext(`${engine}${helper}\n${logicSrc}; TerritoriesLogic`) as {
+const L = vm.runInNewContext(`${engine}${helper}\n${logicSrc};\n${lookupsSrc}; TerritoriesLogic`) as {
   seen(d: unknown): Seen
   statsOf(s: Seen): string[]
   fromWords(s: Seen): string
@@ -280,8 +282,8 @@ test('every control the page draws does something or is disabled with its reason
   assert.ok(acts.has('explore') && acts.has('add'))
   assert.ok(!/<form/.test(page), 'no form: the sandboxed page cannot submit one')
   assert.match(page, /data-tick=/); assert.match(page, /data-form="add"/); assert.match(page, /data-play=/); assert.match(page, /data-src=/); assert.match(page, /data-booth="hide"/); assert.match(page, /id="boothEdge"/)
-  // the look-up box is disabled and says so (look-ups are another feature)
-  assert.match(page, /<textarea rows="2" disabled/); assert.match(page, /Look-ups are not built into Territories yet/)
+  // the look-up box is live (territories-lookups): the button stays off until a question is typed and a person is signed in
+  assert.match(page, /<textarea rows="2" data-lq-draft/); assert.match(page, /data-act="lookup" disabled/); assert.doesNotMatch(page, /not built into Territories/)
   // the steps after Pick are shut until the run reaches them
   assert.match(page, /data-step="explore"[^>]*disabled/); assert.match(page, /data-step="greenlight"[^>]*disabled/)
 })

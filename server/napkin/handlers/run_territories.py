@@ -10,6 +10,9 @@ One task with a ``step`` (the app's own seam, TASKS in app/templates/territories
     undo                 take one of the Review agent's fixes back                       quick, no model
     greenlight_route, remove_route, answer_ask, record_review, approve, send_routes      quick, no model (territory/gates.py's rules)
     set_lead, star_line, keep_feel, set_final, set_rights   a person's choices about a world and its pictures (small moves; while a model step runs they wait in it and both survive)
+    lookup               the Booth's "Look it up": q alone asks (the OK card, no call); lookup_id + ok true runs ONE search through the research port
+                         (long, paid through the spend module's caps, once per look-up); ok false says no. Results arrive as finds and a Booth note
+    pin_quote            a named person pins a checked quote into the document (find_id, on)
     place_pictures       arrived pictures into route slots by link (pictures.fill / attach)      quick, no model
 
 A document that arrives with pictures (``assets``) has every one put on the workspace store before a run reads it (pictures.rehome, require_all):
@@ -33,7 +36,7 @@ NAME, TASK, VERSION, KIND, CAPABILITY_MAJOR = "run_territories", "run_territorie
 
 #: steps that call the model (long) and the ones that do not (answered in the request)
 MODEL_STEPS = ("run", "steer", "more", "push", "rerank_routes")
-QUICK_STEPS = (*moves.LIVE_STEPS, "place_pictures", "undo", "greenlight_route", "remove_route", "answer_ask", "record_review", "approve", "send_routes")
+QUICK_STEPS = (*moves.LIVE_STEPS, "lookup", "place_pictures", "undo", "greenlight_route", "remove_route", "answer_ask", "record_review", "approve", "send_routes")
 #: the four pushes the World view offers, by name (any other text is the person's own instruction)
 PUSH_WORDS = {"braver": "Push this world further: braver, bolder, more specific, same thought.", "safer": "Pull this world back: safer, plainer, less risky, same thought.",
               "more ownable": "Make this world more ownable: lines only this brand could say, same thought.",
@@ -133,6 +136,8 @@ def start(req, caps, settings, jid):
         job = TerritoriesJob(jid, TASK, req.handler, req, caps, step=step, quick=True, owns_person_keys=True, call=lambda job: _Done(*mv(data), note="Saved."))
         job.move = mv
         return job
+    if step == "lookup":
+        return _lookup(inp, req, caps, jid, data, by, on_line)
     if step == "undo":
         aid = moves.need(inp, "action_id", "which fix")
         return TerritoriesJob(jid, TASK, req.handler, req, caps, step=step, quick=True, call=lambda job: runner.undo(data, aid, by))
@@ -150,3 +155,40 @@ def start(req, caps, settings, jid):
     fn = getattr(moves, step)
     return TerritoriesJob(jid, TASK, req.handler, req, caps, step=step, quick=True, owns_person_keys=step in ("approve", "answer_ask", "record_review"),
                           call=lambda job: _Done(*fn(data, inp, findings)))
+
+
+def _lookup(inp, req, caps, jid, data, by, on_line):
+    """The ``lookup`` step. No ``lookup_id``: ask (the OK card is the new look-up, status ask; nothing is called). ``lookup_id`` with ``ok``
+    false: no. With ``ok`` true: the one paid call, in a job thread, through ``engine/territory/lookups.run`` and the spend module."""
+    from territory import lookups
+    lid = moves._s(inp, "lookup_id", 80)
+    if not lid:
+        q, proposer = moves.need(inp, "q", "what to look up"), moves._s(inp, "proposer", 160) or None
+        mv = lambda d: lookups.propose(d, q, by, proposer)[:2]      # noqa: E731
+        job = TerritoriesJob(jid, TASK, req.handler, req, caps, step="lookup", quick=True, owns_person_keys=True,
+                             call=lambda job: _Done(*lookups.propose(data, q, by, proposer)))
+        job.move = mv
+        return job
+    ok = inp.get("ok")
+    if not isinstance(ok, bool):
+        raise bad("input.ok must be true (look it up) or false (do not)")
+    if not ok:
+        return TerritoriesJob(jid, TASK, req.handler, req, caps, step="lookup", quick=True, owns_person_keys=True,
+                              call=lambda job: _Done(*lookups.decline(data, lid, by)))
+    runner, _ = _engine()
+
+    def go(job):
+        from territory import spend as sp
+        store = runner.Store.for_doc(req.doc)
+        lock = runner._lock_of(store)
+        if not lock.acquire(blocking=False):
+            return runner._busy(data)
+        try:
+            spend = sp.Spend(doc=req.doc, store=store.spend_path, on_line=on_line)
+            doc, refusals, note = lookups.run(data, lid, by, research=caps.research, spend=spend, market=moves._s(inp, "market", 8))
+            res = _Done(doc, refusals, note)
+            res.decisions = spend.decisions()
+            return res
+        finally:
+            lock.release()
+    return TerritoriesJob(jid, TASK, req.handler, req, caps, step="lookup", call=go)

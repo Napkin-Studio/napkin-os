@@ -270,6 +270,9 @@
   "finds[].text": {
    "type": "string"
   },
+  "finds[].url": {
+   "type": "string"
+  },
   "focus": {
    "type": "object"
   },
@@ -418,6 +421,9 @@
    "type": "string"
   },
   "lookups[].id": {
+   "type": "string"
+  },
+  "lookups[].ok_by": {
    "type": "string"
   },
   "lookups[].q": {

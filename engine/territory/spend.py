@@ -28,10 +28,14 @@ from concurrent.futures import Future
 from concurrent.futures import TimeoutError as FutureTimeout
 from pathlib import Path
 
-CLAUDE, PICTURES = "claude", "runway"
+CLAUDE, PICTURES, SEARCH = "claude", "runway", "search"
 #: Defaults, set in config (env), never in the UI, raised only by whoever owns the deployment (owner's proposal, territories-costs).
 DEFAULT_CAP_USD, DEFAULT_IMAGES_CAP_USD = 3.00, 2.00
 ENV_CAP, ENV_IMAGES_CAP = "NAPKIN_TERRITORY_MAX_USD", "NAPKIN_TERRITORY_IMAGES_MAX_USD"
+#: Web look-ups (feature territories-lookups): a count cap (how many a document may run, the number the Booth's note can say) and a money cap
+#: of their own, so a look-up never eats the model budget and the model budget never stops a look-up (LESSONS 24, 25).
+DEFAULT_SEARCH_CAP_USD, DEFAULT_LOOKUPS_MAX = 0.50, 8
+ENV_SEARCH_CAP, ENV_LOOKUPS_MAX = "NAPKIN_TERRITORY_SEARCH_MAX_USD", "NAPKIN_TERRITORY_LOOKUPS_MAX"
 #: Size assumed for a stage the card does not list (a frames plan, a repair): the biggest listed stage, so an estimate is never low.
 _FALLBACK_TOKENS = (5000, 4000)
 
@@ -40,9 +44,13 @@ class CapReached(RuntimeError):
     """A paid call was refused: it would pass the run's cap. The message is for a person; it carries no price."""
 
     def __init__(self, provider: str):
-        what = "pictures" if provider == PICTURES else "model work"
-        super().__init__(f"This run reached the limit set for {what}, so it stopped before the next paid step. "
-                         "What was made is saved; the limit is set by the team, not in the app.")
+        if provider == SEARCH:
+            super().__init__("This document reached the number of look-ups the team allows, so nothing was looked up. "
+                             "What was found is saved; the limit is set by the team, not in the app.")
+        else:
+            what = "pictures" if provider == PICTURES else "model work"
+            super().__init__(f"This run reached the limit set for {what}, so it stopped before the next paid step. "
+                             "What was made is saved; the limit is set by the team, not in the app.")
         self.provider = provider
 
 
@@ -52,6 +60,14 @@ def _cap_from_env(name: str, default: float) -> float:
     except ValueError:
         return default
     return v if math.isfinite(v) and v > 0 else default     # nan, inf, zero and negatives never remove or zero the cap
+
+
+def lookups_max() -> int:
+    try:
+        v = int(os.environ.get(ENV_LOOKUPS_MAX) or DEFAULT_LOOKUPS_MAX)
+    except ValueError:
+        return DEFAULT_LOOKUPS_MAX
+    return v if v > 0 else DEFAULT_LOOKUPS_MAX
 
 
 def caps() -> tuple[float, float]:
@@ -90,9 +106,13 @@ def _usd(usage: dict, model: str | None) -> tuple[float, bool]:
 
 class Spend:
     def __init__(self, cap_usd: float | None = None, images_cap_usd: float | None = None, *, doc: str = "", store: Path | None = None,
-                 on_line=None, clock=time.time):
+                 on_line=None, clock=time.time, search_cap_usd: float | None = None, max_lookups: int | None = None):
         c, i = caps()
-        self.cap = {CLAUDE: float(cap_usd) if cap_usd is not None else c, PICTURES: float(images_cap_usd) if images_cap_usd is not None else i}
+        self.cap = {CLAUDE: float(cap_usd) if cap_usd is not None else c, PICTURES: float(images_cap_usd) if images_cap_usd is not None else i,
+                    SEARCH: float(search_cap_usd) if search_cap_usd is not None else _cap_from_env(ENV_SEARCH_CAP, DEFAULT_SEARCH_CAP_USD)}
+        self.max_lookups = int(max_lookups) if max_lookups is not None else lookups_max()
+        if self.max_lookups < 1:
+            raise ValueError("the look-up count cap must be a whole number above 0")
         for p, v in self.cap.items():
             if not (math.isfinite(v) and v > 0):
                 raise ValueError(f"the {p} cap must be a number above 0")
@@ -101,6 +121,7 @@ class Spend:
         self.lines: list[dict] = []          # one per paid call, in order
         self.outputs: dict[str, dict] = {}   # call key -> finished output, kept for a resume
         self.inflight: dict[str, Future] = {}
+        self._provider_of: dict[str, str] = {}
         self.events: list[dict] = []         # ask / outcome entries
         self.stops: list[str] = []           # this session only (never stored): the provider of each paid call the cap refused
         self.reused = 0                      # this session only: calls answered from the record or joined in flight, which paid nothing
@@ -122,6 +143,12 @@ class Spend:
     # ---------------------------------------------------------------- totals and the cap
     def total(self, provider: str | None = None) -> float:
         return round(sum(l["usd"] for l in self.lines if provider in (None, l["provider"])), 6)
+
+    def count(self, provider: str) -> int:
+        return sum(1 for l in self.lines if l["provider"] == provider)
+
+    def inflight_of(self, provider: str) -> list:
+        return [k for k in self.inflight if self._provider_of.get(k) == provider]
 
     def admit(self, provider: str, est_usd: float) -> None:
         """The cap check, for every paid call of either kind. Raises ``CapReached`` when spent plus the estimate passes the cap."""
@@ -153,6 +180,7 @@ class Spend:
         """The cost card as a decision the person says yes to. It names both caps; it is the first entry of the run, before any call."""
         e = {"kind": "ask", "at": self.clock(), "by": by, "estimate_usd": card.get("est_usd"), "calls": card.get("calls"), "estimated": True,
              "cap_usd": {"claude": self.cap[CLAUDE], "pictures": self.cap[PICTURES]}}
+        e.update({k: card[k] for k in ("what", "lookup") if k in card})
         with self.lock:
             self.events.append(e)
             self._save()
@@ -187,6 +215,11 @@ class Spend:
         is joined, and a new one first passes the pictures cap."""
         return self._once(key, PICTURES, "picture", None, est_usd, create, None, picture=True)
 
+    def charge_lookup(self, key: str, est_usd: float, run):
+        """One web look-up through ``run()`` -> (result, real usd) at most once per ``key`` (a replay of the same approval reads the recorded
+        result and pays nothing). A new one first passes the look-up count cap and the search cap."""
+        return self._once(key, SEARCH, "lookup", None, est_usd, run, None, picture=True)
+
     def _once(self, key, provider, stage, model, est, run, timeout, picture=False):
         with self.lock:
             done = self.outputs.get(key)
@@ -197,10 +230,11 @@ class Spend:
             if fut is not None:
                 self.reused += 1
             if fut is None:
-                if self.total(provider) + est > self.cap[provider]:
+                if self.total(provider) + est > self.cap[provider] or (provider == SEARCH and self.count(SEARCH) + len(self.inflight_of(SEARCH)) >= self.max_lookups):
                     self.stops.append(provider)
                     raise CapReached(provider)
                 fut = self.inflight[key] = Future()
+                self._provider_of[key] = provider
                 threading.Thread(target=self._work, args=(fut, key, provider, stage, model, run, picture), daemon=True).start()
         try:
             return fut.result(timeout)
@@ -219,7 +253,7 @@ class Spend:
             if picture:
                 result, usd = got
                 self.outputs[key] = {"result": result}
-                self._record(provider, stage, "runway", {}, float(usd or 0), False, key)
+                self._record(provider, stage, "runway" if provider == PICTURES else provider, {}, float(usd or 0), False, key)
                 out = result
             else:
                 obj, usage = got

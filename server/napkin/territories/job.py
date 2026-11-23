@@ -43,13 +43,20 @@ def make_llm():
 def _words(e: dict) -> str:
     """One runner history entry as a sentence for the decision history. A price is written here and nowhere else."""
     k = e.get("kind")
+    if k == "ask" and e.get("what") == "lookup":
+        return f"A look-up was approved by {e.get('by') or 'a person'} before it was made, estimated at ${float(e.get('estimate_usd') or 0):.3f}."
     if k == "ask":
         cap = e.get("cap_usd") or {}
         return (f"The run was costed before the first paid call: about {e.get('calls', '?')} model calls, estimated at ${float(e.get('estimate_usd') or 0):.2f}"
                 + (f", capped at ${float(cap['claude']):.2f} for model work" if cap.get("claude") is not None else "") + f". Asked by {e.get('by') or 'the engine'}.")
+    if k == "spend" and e.get("provider") == "search":
+        return f"A look-up was made through the research port: ${float(e.get('usd') or 0):.4f}."
     if k == "spend":
         return (f"{e.get('stage')}: {e.get('model') or e.get('provider')}, {e.get('tokens_in', 0)} tokens in, {e.get('tokens_out', 0)} out, "
                 f"${float(e.get('usd') or 0):.4f}" + (" (estimated)" if e.get("estimated") else "") + ".")
+    if k == "outcome" and e.get("what") == "look-up":
+        c = e.get("counts") or {}
+        return f"The look-up found {c.get('finds', 0)} quotes on {c.get('pages', 0)} pages."
     sp = e.get("spent_usd") or {}
     counts = ", ".join(f"{n} {x}" for x, n in (e.get("counts") or {}).items())
     return f"The run came to {counts or 'nothing yet'}; spent so far ${float(sp.get('claude') or 0):.2f} on model work."
