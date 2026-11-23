@@ -34,6 +34,8 @@ use std::path::{Path, PathBuf};
 
 const APP_ID: &str = "ie.napkin.production";
 const BRIEF_APP_ID: &str = "ie.napkin.brief-maker";
+const RESEARCH_APP_ID: &str = "ie.napkin.campaign-research";
+const TERRITORIES_APP_ID: &str = "ie.napkin.territories";
 const VERSION: &str = "1.0.0";
 const DATA_PATH: &str = "shared/data.yaml";
 
@@ -119,7 +121,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             prompt_templates: vec![],
             data_seed: None,
             spinoff: Some(SpinoffSpec {
-                accepts: vec![BRIEF_APP_ID.into()],
+                accepts: vec![
+                    BRIEF_APP_ID.into(),
+                    RESEARCH_APP_ID.into(),
+                    TERRITORIES_APP_ID.into(),
+                ],
                 upstream: true,
                 ..Default::default()
             }),
@@ -133,7 +139,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = template.manifest().app.as_ref().expect("app block");
     assert_eq!(app.app_id, APP_ID);
     let spin = app.spinoff.as_ref().expect("app.spinoff is declared");
-    assert_eq!(spin.accepts, vec![BRIEF_APP_ID.to_string()]);
+    assert_eq!(
+        spin.accepts,
+        vec![
+            BRIEF_APP_ID.to_string(),
+            RESEARCH_APP_ID.to_string(),
+            TERRITORIES_APP_ID.to_string()
+        ]
+    );
     assert!(spin.upstream, "app.spinoff.upstream must be true");
     assert!(template.has_entry("agent/output-schema.json"));
 
