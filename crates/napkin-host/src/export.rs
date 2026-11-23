@@ -97,6 +97,28 @@ pub fn write_temp_html(html: &str) -> HostResult<String> {
     Ok(path.display().to_string())
 }
 
+/// Write bytes given in base64 to a persistent temp file ending `suffix` (removed by [`finish_export`]): a file an app holds whole, such as a
+/// deck's PowerPoint, which the app frame cannot download itself.
+pub fn write_temp_bytes_b64(b64: &str, suffix: &str) -> HostResult<String> {
+    use base64::Engine as _;
+    use std::io::Write;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(b64.trim())
+        .map_err(|_| HostError::bad_request("the file is not valid base64"))?;
+    if bytes.is_empty() {
+        return Err(HostError::bad_request("the file is empty"));
+    }
+    let tf = tempfile::Builder::new()
+        .prefix("napkin-export-")
+        .suffix(suffix)
+        .tempfile()
+        .map_err(|e| HostError::internal(e.to_string()))?;
+    let (mut file, path) = tf.keep().map_err(|e| HostError::internal(e.to_string()))?;
+    file.write_all(&bytes)
+        .map_err(|e| HostError::internal(e.to_string()))?;
+    Ok(path.display().to_string())
+}
+
 /// Render `tmp_html` to a PDF at `dest` with a headless browser.
 ///
 /// Chromium will not start without a home it can write its profile to, and
@@ -239,11 +261,11 @@ fn renderer_said(stderr: &[u8]) -> String {
     format!("; renderer said: {tail}")
 }
 
-/// Finish an export the shell has a destination for. `html` → copy the temp
+/// Finish an export the shell has a destination for. `html` and `pptx` → copy the temp
 /// file; `pdf` → render it. The temp source is always cleaned up.
 pub fn finish_export(kind: &str, tmp_html: &str, dest: &str) -> HostResult<String> {
     let result = match kind {
-        "html" => std::fs::copy(tmp_html, dest)
+        "html" | "pptx" => std::fs::copy(tmp_html, dest)
             .map(|_| ())
             .map_err(|e| HostError::internal(e.to_string())),
         "pdf" => render_pdf(tmp_html, dest),

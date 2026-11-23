@@ -41,6 +41,7 @@ const L = vm.runInNewContext(`${logicRun}; DeckLogic`) as {
   summaryOf(inputs: unknown, deck: unknown): { title: string; note: string }
   agencyShown(inputs: unknown): string
   productionSummary(doc: unknown): { name: string; finals: number; to_supply: number; brief: unknown } | null
+  startDefaults(data: unknown): { client: string; project: string }
   upstreamSummary(data: unknown): { brief: { name: string; fields_filled: number; fields_total: number; mandatories: number } | null; research: { name: string; findings: number | null; rejected: number | null } | null; production: { name: string; finals: number; to_supply: number; brief: unknown } | null; any: boolean }
   documentsOf(data: unknown): { name: string }[]
   builtFrom(inputs: unknown, upstream: unknown, documents: unknown): { tier: string; documents: string[]; brief: boolean; research: boolean }
@@ -2648,4 +2649,20 @@ test('Review draws the slide\'s pictures and the picker shows thumbnails, once t
   assert.match(m.app.innerHTML, /data-pics><img src="data:image\/png;base64,iVBORw0KGgo="/)
   assert.match(m.app.innerHTML, /data-prod-thumb/)
   assert.doesNotMatch(m.app.innerHTML, /evil\.example/)
+})
+
+test('the Start form names the client and the project from what the deck carries', () => {
+  const up = {
+    p: { app: 'production-tool', project: { title: "Hollow Oak 'Still'" } },
+    b: { client: 'Hollow Oak Cider, a 140-year-old, orchard-grown brand', project_name: 'x' },
+    k: { client: 'A Kit Name', kit: { version: 1 } },
+  }
+  assert.deepEqual(plain(L.startDefaults({ upstream: up })), { client: 'Hollow Oak Cider', project: "Hollow Oak 'Still'" })
+  assert.deepEqual(plain(L.startDefaults({})), { client: '', project: '' })
+  assert.deepEqual(plain(L.startDefaults({ upstream: 'junk' })), { client: '', project: '' })
+})
+
+test('the PowerPoint leaves the app frame through the host export, not a blob link the sandbox would not save', () => {
+  assert.ok(!/a\.download\s*=\s*base\s*\+\s*'\.pptx'/.test(html), 'no blob download of the pptx in the frame')
+  assert.ok(/exportDoc\('pptx', base, btoa\(bin\)\)/.test(html), 'the pptx goes to clan.exportDoc')
 })

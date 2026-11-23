@@ -23,7 +23,7 @@ import json
 import re
 from pathlib import Path
 
-from . import images, numfmt, spec
+from . import export_clean, images, numfmt, spec
 from . import theme as themes
 from .refs import fmt
 from .layouts import picture_sides as _pic_sides
@@ -312,11 +312,13 @@ def _body(s, b: _Slide, blocks: list, pictured: bool = False) -> str:
         return f'<div class="body split side"><div class="col">{left}</div><div class="col">{b.blocks([pick("sketch")])}</div></div>'
     if typ == "execution" and pick("copy"):
         left = b.blocks(rest("copy"))
-        copy = {**pick("copy"), "frame": frame_for(s["title"])}
+        copy = {**pick("copy"), "frame": None if (s.get("ooh") or s.get("strip")) else frame_for(s["title"])}   # a slide with its own frames (out of home, a strip) sets its copy as plain text: a poster or phone beside them took the frames' ground
         vis = s.get("visual") or {}
         if vis.get("kind") == "image_prompt" and not pictured:   # a drawn picture takes the place of the 'Image prompt' note
             b.f += 1
             left += b.rv("b-prompt", _e(f"Image prompt ({vis.get('status', 'illustrative')}): {vis.get('prompt', '')}"), "p")
+        if not copy.get("lines") and not copy.get("answer"):   # nothing of the copy is left to show (its lines are the strip's captions, its answer is in the notes): no empty panel
+            return f'<div class="body col">{left}</div>'
         return f'<div class="body split exec{" framed" if copy["frame"] else ""}"><div class="col">{left}</div><div class="col">{b.blocks([copy])}</div></div>'
     return f'<div class="body col">{b.blocks(blocks)}</div>'
 
@@ -619,8 +621,8 @@ LOOK_V3_LAYOUT_CSS = """
 .v3sl .cols{display:grid;grid-template-columns:1fr 1fr}.v3sl .cols>div+div{border-left:1.5px solid var(--ink);padding-left:36px}
 .v3sl .val{font:700 76px/.95 var(--head)}.v3sl .val.from{color:var(--muted)}.v3sl .sup{font-size:32px;line-height:1.3;margin-top:20px}
 .v3sl .rtb{margin-top:auto;border-top:1.5px solid var(--ink);padding-top:30px}.v3sl .rtb p{font-size:38px;line-height:1.25}
-.v3pc{display:flex;flex-direction:column}.v3pc.nopts{justify-content:center;padding-bottom:120px}
-.v3pc .lead{font-size:44px;line-height:1.25;margin-top:48px}.v3pc .copyline{font:700 52px/1.05 var(--head);margin-top:36px}
+.v3pc{display:flex;flex-direction:column}.v3pc.nopts{justify-content:safe center;padding-bottom:120px}
+.v3pc .lead{font-size:calc(var(--s)*44px);line-height:1.25;margin-top:calc(var(--s)*48px)}.v3pc .copyline{font:700 calc(var(--s)*52px)/1.05 var(--head);margin-top:calc(var(--s)*36px)}
 .v3pc .pt{border-top:1.5px solid var(--ink);padding-top:28px;margin-top:auto}.v3pc .pt+.pt{margin-top:36px}.v3pc .pt p{font-size:36px;line-height:1.25}
 .dark .v3pc .pt{border-color:var(--dark-text)}
 .v3cv{display:flex;flex-direction:column;justify-content:center;padding-bottom:80px}.v3cv .hero{font-size:100px;margin:24px 0 44px}
@@ -659,7 +661,7 @@ def _cover_logo(deck, assets_dir) -> str | None:
 
 
 def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictures: dict | None = None, src=None, placed: set | None = None,
-                icons: dict | None = None) -> list:
+                icons: dict | None = None, clean: bool = False) -> list:
     """Per slide, in order: id, number, type, dark, inner markup, notes, build-step count and, per
     step, the latest reveal delay (ms) up to and including it."""
     failed = {}
@@ -690,6 +692,8 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
         lay = s.get("layout") or {}
         planned = bool(lay.get("blocks_sha") and lay["blocks_sha"] == blocks_sha(s, audience))
         v3lid = lay["id"] if (v3 and planned and lay.get("id") in _web_ids()) else None
+        if pic_cls in ("pic-ooh", "pic-sb"):   # frames of its own (out of home, a storyboard strip) take the slide's foot: a layout that sets its own picture column cannot share it
+            v3lid = None
         if v3lid in GRAPHICS_WEB and spec.GRAPHICS:   # a chart or diagram the slide cannot hold here: the blocks as before
             probe = _Slide(inp)
             probe.icons = b.icons
@@ -721,17 +725,19 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
             foot += f'<span class="src">Sources {" ".join(f"[{k}]" for k in s["footnotes"][:14])} (appendix)</span>'
         foot += f'<span class="num">{n}</span>'
         flags = ""
-        if n_human:
+        if n_human and not clean:
             flags += f'<span class="draft">DRAFT · {"needs a person" if s["status"] == "needs_human" else f"{n_human} slides need a person"}</span>'
-        if sid in failed and audience != "client":
+        if sid in failed and audience != "client" and not clean:
             flags += f'<span class="failed">CHECK FAILED: {_e(", ".join(sorted(failed[sid])))}</span>'
         head = f"<header>{kick}{title}</header>" if (kick or title) else ""
         inner = (f'<div class="flags">{flags}</div>{head}{body}{pic_html}'
                  f'<footer>{foot}</footer>')
-        notes = (s.get("notes") or "") + f"\n\nSlide id {sid} · status {s['status']} · requirements {', '.join(s.get('requirements') or []) or 'none'}"
+        notes = (export_clean.notes_of(s.get("notes")) if clean else (s.get("notes") or "")) + ("" if clean else f"\n\nSlide id {sid} · status {s['status']} · requirements {', '.join(s.get('requirements') or []) or 'none'}")
+        if spec.answer_notes(s):   # the answer kept off the slide, as in the pptx notes
+            notes += "\n\n" + spec.answer_notes(s)
         if planned and spec.moved_map(s, audience):   # the points the plan moved off the slide: verbatim, with their refs, as in the pptx notes
             from . import layouts
-            notes += "\n\nMoved from the slide:\n" + "\n".join(layouts.moved_line(t_, r_) for t_, r_ in layouts.moved_texts(s))
+            notes += "\n\nMoved from the slide:\n" + "\n".join(layouts.moved_line(t_, r_) for t_, r_ in layouts.moved_texts(s) if not (clean and spec.unresolved_line(t_)))
         pt = (deck["meta"].get("layout_title_pt") or {}).get(lay.get("id")) if planned else None
         out.append({"layout": lay["id"] if planned else None, "tpt": f' style="--tpt:{pt * 2}px"' if (spec.LOOK_V2 and pt) else "", "id": sid, "n": n, "type": s["type"], "section": s["section"], "dark": dark, "cls": pic_cls,
                     "title": s["title"], "html": inner, "notes": notes, "steps": b.f, "status": s["status"],
@@ -780,8 +786,8 @@ FRAME_CSS = """
 .ooh-row{left:112px;right:112px;bottom:70px;display:flex;justify-content:center;align-items:flex-end;gap:56px}
 .ooh-cell{display:flex;flex-direction:column;align-items:stretch}.ooh-cell .pic.framed{box-sizing:border-box}
 .ooh-name{margin:14px 0 0;text-align:center;font:700 26px/1.2 var(--head);color:var(--ink)}
-.pic-ooh .sb-pills{top:440px}.pic-ooh .body{padding-bottom:600px}.pic-ooh .body.exec{grid-template-columns:5fr 6fr}.pic-ooh .body.exec .copy{max-height:180px;overflow:hidden}
-.pic-sb .body{padding-bottom:470px}.pic-sb .body.exec{grid-template-columns:5fr 6fr}.pic-sb .body.exec .copy{max-height:230px;overflow:hidden}
+.pic-ooh .sb-pills{top:440px}.pic-ooh .body{padding-bottom:600px}.pic-ooh .body.exec{grid-template-columns:5fr 6fr}
+.pic-sb .body{padding-bottom:470px}.pic-sb .body.exec{grid-template-columns:5fr 6fr}
 """
 
 #: Picture styles: added to the stylesheet ONLY when a picture is drawn, so a deck with none keeps its exact bytes.
@@ -969,7 +975,9 @@ if(qs.has('audience'))document.body.classList.add('audience');
 function scale(box,el){const r=box.getBoundingClientRect(),k=Math.min(r.width/1920,r.height/1080);
   el.style.transform=box===view?`translate(-50%,-50%) scale(${k})`:`scale(${r.width/1920})`;}
 function fit(s){const b=s.querySelector('.body');if(!b)return;const was=s.style.visibility;s.style.visibility='hidden';s.style.opacity='0';
-  for(const k of [1.16,1.08,1,.93,.86,.8,.74,.68,.62]){s.style.setProperty('--s',k);if(b.scrollHeight<=b.clientHeight+2&&b.scrollWidth<=b.clientWidth+2)break;}
+  const inside=()=>{const r=b.getBoundingClientRect(),pb=parseFloat(getComputedStyle(b).paddingBottom)||0;   // content never above the body, nor below its padding (a frame's ground is reserved there)
+    return [...b.children].every(c=>{const q=c.getBoundingClientRect();return q.top>=r.top-2&&q.bottom<=r.bottom-pb+2;});};
+  for(const k of [1.16,1.08,1,.93,.86,.8,.74,.68,.62,.56,.5,.45]){s.style.setProperty('--s',k);if(b.scrollHeight<=b.clientHeight+2&&b.scrollWidth<=b.clientWidth+2&&inside())break;}
   s.style.visibility=was;s.style.opacity='';}
 function count(el,delay){const v=parseFloat(el.dataset.v),sfx=el.dataset.sfx||'',dec=(el.dataset.v.split('.')[1]||'').length;
   if(reduce||isNaN(v))return;const t0=performance.now()+delay+120,dur=1100;el.textContent=(0).toFixed(dec)+sfx;
@@ -1139,10 +1147,10 @@ def _brand_css(meta: dict) -> dict:
 
 
 def render(deck, inp, out: Path, findings: list | None = None, pictures: dict | None = None, placed: set | None = None, look: bool = True,
-           icons: dict | None = None) -> Path:
+           icons: dict | None = None, clean: bool = False) -> Path:
     """Write the deck as one self-contained HTML file at ``out`` (pictures, when given, inline as data URIs). ``icons``: the icons the
     pptx drew (deck-graphics), drawn here as inline SVG at the same items; None or empty draws none and changes nothing."""
-    views = slide_views(deck, inp, findings, Path(out).parent, pictures, placed=placed, icons=icons)
+    views = slide_views(deck, inp, findings, Path(out).parent, pictures, placed=placed, icons=icons, clean=clean)
     m = deck["meta"]
     cv = themes.canvas_of(deck)   # deck-slide-size: the stage at the deck's size (16:9: nothing added)
     slides = "\n".join(

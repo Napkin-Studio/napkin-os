@@ -510,19 +510,21 @@ def execution_channel(title: str) -> str | None:
 #: words that say which finals it shows. Storyboard frames are the film channel (_FILM_WORDS). production-spinoff live test 2026-11-22.
 _SIZE_WORDS = ("size", "sizes", "crop", "crops", "resize", "resizes", "cut-down", "cut-downs", "cutdown", "cutdowns", "format", "formats")
 _PRODUCT_WORDS = ("packshot", "packshots", "pack shot", "pack shots", "product", "products")
+_KEYVISUAL_WORDS = ("key visual", "key visuals", "key art", "keyart", "hero image", "hero visual", "mood frame", "mood frames")
 
 
 def execution_group(title: str) -> str | None:
-    """``sizes`` or ``product`` for an execution title that names the finals it shows rather than a channel, else None."""
+    """``sizes``, ``product`` or ``keyvisual`` for an execution title that names the finals it shows rather than a channel, else None."""
     t = (title or "").lower()
-    for g, words in (("product", _PRODUCT_WORDS), ("sizes", _SIZE_WORDS)):
+    for g, words in (("product", _PRODUCT_WORDS), ("sizes", _SIZE_WORDS), ("keyvisual", _KEYVISUAL_WORDS)):
         if any(re.search(rf"(?<!\w){w}(?!\w)", t) for w in words):
             return g
     return None
 
 
 #: The reason of a slot a group of finals cannot fill (shown as the gap; the person supplies the picture or makes one in Production).
-GROUP_GAP = {"product": "To supply from Production: a packshot. No final in the export is a product packshot; make or mark one final, or supply a picture",
+GROUP_GAP = {"keyvisual": "To supply from Production: a key visual. No key visual final in the export; make or mark one final, or supply a picture",
+             "product": "To supply from Production: a packshot. No final in the export is a product packshot; make or mark one final, or supply a picture",
              "sizes": "To supply from Production: the size crops. No size or resized final in the export; make the sizes in Production, or supply a picture"}
 
 
@@ -545,6 +547,8 @@ def group_pool(prod: dict, aspect: str, used=(), any_shape: bool = False, placea
         if group == "product" and it.get("subject") != "packshot":   # a packshot slide shows a packshot, never the key visual or a crop of it
             continue
         if group == "sizes" and not (it.get("role") == "size" or it.get("subject") == "crop"):   # a crops slide shows sizes and resized crops only
+            continue
+        if group == "keyvisual" and not (it.get("role") == "master" and it.get("subject") not in ("packshot", "crop")):   # a key visual slide shows a key visual
             continue
         if placeable_only and it.get("rights") == "reference_only":
             continue
@@ -742,6 +746,35 @@ def add_ooh_slide(deck: dict) -> str | None:
     return sid
 
 
+def is_slide_executing_film(deck: dict, sid: str) -> bool:
+    """True when slide ``sid`` is an execution whose channel is film (a storyboard's frames included): it takes the storyboard's strip."""
+    t, title = spec.picture_of(deck["slides"][sid])
+    return t == "execution" and execution_channel(title) == "film"
+
+
+def add_storyboard_slide(deck: dict) -> str | None:
+    """Production holds a storyboard's frames but the idea stage wrote no execution for them (a deck of a Production project writes no film):
+    one execution slide, 'Storyboard frames', after the last execution, which the strip fills with the frames in shot order. Says only what
+    Production holds. Returns the new slide's id, or None when the deck already has a film or storyboard execution."""
+    slides = deck["slides"]
+    for sid in deck["order"]:
+        t, title = spec.picture_of(slides[sid])
+        if t == "execution" and execution_channel(title) == "film":
+            return None
+    from .assemble import _slide   # noqa: PLC0415
+    new = _slide("execution", "Storyboard frames", [{"kind": "text", "text": "The storyboard frames made in Production, in shot order."}],
+                 status="drafted", label="Execution storyboard frames")
+    new["requirements"], new["footnotes"] = [], []
+    n = 1 + max([int(re.sub(r"\D", "", k) or 0) for k in slides] or [0])
+    sid = f"s{n:02d}"
+    pos = max([i for i, k in enumerate(deck["order"]) if slides[k]["type"] == "execution"] or [-1])
+    if pos < 0:
+        pos = max([i for i, k in enumerate(deck["order"]) if slides[k]["type"] == "idea"] or [len(deck["order"]) - 1])
+    slides[sid] = new
+    deck["order"].insert(pos + 1, sid)
+    return sid
+
+
 def _film_frames(prod: dict) -> dict:
     """The storyboard shot frames a film execution may show: those a person marked final in Production when any is, else every picked one."""
     frames = {k: it for k, it in (prod.get("items") or {}).items() if it.get("role") == "frame" and it.get("shot_kind", "shot") == "shot"}
@@ -847,6 +880,8 @@ def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", na
                                            "from": {"kind": "production", **({"run": run} if run else {})}}}
     if spec.GRAPHICS and pictures != "none" and ooh_sizes(prod, mset):
         got["added"] = add_ooh_slide(deck)   # OOH finals exist and the idea stage wrote no OOH execution: one slide for them
+    if spec.GRAPHICS and pictures != "none" and len(production_shots(prod)) >= 3 and not any(is_slide_executing_film(deck, k) for k in deck["order"]):
+        got["added_storyboard"] = add_storyboard_slide(deck)   # a storyboard's frames exist and no execution shows them: one slide, a strip of stills
     placed_keys = set()   # the finals earlier slots hold: a size or packshot slide takes another picture when there is one
     for sid in deck["order"]:
         s = deck["slides"][sid]

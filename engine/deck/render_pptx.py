@@ -100,7 +100,7 @@ from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.oxml.ns import nsdecls, qn
 from pptx.util import Emu, Inches, Pt
 
-from . import images, layouts, numfmt, spec
+from . import export_clean, images, layouts, numfmt, spec
 from . import theme as themes
 from .refs import Resolver, fmt
 from .spec import HUMAN_ONLY_TYPES, shown_blocks
@@ -360,6 +360,7 @@ class Renderer:
         self.drawn = {k: v for k, v in images.drawn(deck, deck["meta"].get("audience", "review")).items() if v["asset"] in (pictures or {})} if pictures else {}
         self.pic_label = ((deck["meta"].get("preferences") or {}).get("picture_approval") or {}).get("label") or spec.PICTURE_LABEL
         self.picture_findings = []   # [{check, level, slide, message}]: a picture dropped because its slide would not fit it
+        self._answer_to_notes = {}   # slide id -> the answer a frames slide had no room for
         self.placed = set()          # (slide id, slot) of every picture this renderer really drew: the web outputs draw exactly these
         self.th = themes.get_theme(theme, (deck["meta"].get("brand") or {}))
         self.theme_problems = themes.check_palette(self.th)
@@ -406,6 +407,7 @@ class Renderer:
         self._lid, self._tpt, self._min_sc, self._scale_cap, self._pics = None, dict(deck["meta"].get("layout_title_pt") or {}), 1.0, None, {}
         self.shapes_by_slide = {}   # slide id -> [{name, slot, blocks}]: what each slot shape is, for layouts.json
         self.no_plan = False        # --no-layout-plan: choose_layout on every slide, as before the library
+        self.clean = False          # True: an export (render(clean=)): no DRAFT mark, no CHECK FAILED flag, no ids in the notes
         self.notes = True           # False: a notes-free export (no speaker notes at all, the moved points included)
         self._slotmap, self._shapes_now, self._sid = {}, [], None
         self._band_drawn = False
@@ -4480,7 +4482,7 @@ class Renderer:
             self.text(sl, nx, 7.0, nw, 0.3, "Sources " + " ".join(f"[{k}]" for k in s["footnotes"][:14]) + "  (appendix)", size=foot, cap=True, color=p.mute, align=PP_ALIGN.RIGHT, name="Footnotes")
         nx = fx1 - 0.63 if side else 12.1
         self.text(sl, nx, 7.0, fx1 - nx, 0.3, str(n), size=foot, cap=True, color=p.mute, align=PP_ALIGN.RIGHT, name="SlideNumber")
-        if self.n_human:
+        if self.n_human and not self.clean:
             tag = "DRAFT · needs a person" if s["status"] == "needs_human" else f"DRAFT · {self.n_human} slides need a person"
             wx = 8.7 if self._foot is None else max(fx0, fx1 - 4.03)
             if self._bleed:   # on a full-bleed picture the mark sits on a pill of the slide's ground, its box no wider than the pill
@@ -4488,15 +4490,17 @@ class Renderer:
                 self.rect(sl, fx1 - tw_ + 0.1, 0.08, tw_, 0.38, fill=p.bg, name="MarkGround")
                 wx = fx1 - tw_ + 0.15
             self.text(sl, wx, 0.12, fx1 - wx, 0.3, tag, size=foot, cap=True, color=p.acc_t, bold=True, align=PP_ALIGN.RIGHT, name="Watermark")
-        if sid in self.failed and audience != "client":   # a client slide never prints a check id (a failing client build is withheld by run_deck)
+        if sid in self.failed and audience != "client" and not self.clean:   # a client slide never prints a check id (a failing client build is withheld by run_deck)
             red = "FF9B8E" if dark else "B03225"
             self.text(sl, 4.5, 0.12, 4.1, 0.3, "CHECK FAILED: " + ", ".join(sorted(set(self.failed[sid]))), size=foot, cap=True, color=red, bold=True, align=PP_ALIGN.RIGHT, name="CheckFailed")
         if self.notes:
-            sl.notes_slide.notes_text_frame.text = (s.get("notes") or "") + f"\n\nSlide id {sid} · status {s['status']} · requirements {', '.join(s.get('requirements') or []) or 'none'}"
+            sl.notes_slide.notes_text_frame.text = (export_clean.notes_of(s.get("notes")) if self.clean else (s.get("notes") or "")) + ("" if self.clean else f"\n\nSlide id {sid} · status {s['status']} · requirements {', '.join(s.get('requirements') or []) or 'none'}")
             if t.layouts and s.get("claims"):   # the claims stay in the file, in the notes, word for word
                 sl.notes_slide.notes_text_frame.text += "\n\nClaims:\n" + "\n".join("- " + c["text"] for c in s["claims"])
+            if self._answer_to_notes.get(sid) or spec.answer_notes(s):   # the answer kept off the slide (it did not fit above the frames, or the picture is the slide): in the notes
+                sl.notes_slide.notes_text_frame.text += "\n\n" + (spec.answer_notes(s) or "What it dramatises:\n" + self._answer_to_notes[sid])
             if planned and spec.moved_map(s_full, audience):   # points the plan moved off the slide: verbatim, each with its refs, labelled
-                sl.notes_slide.notes_text_frame.text += "\n\nMoved from the slide:\n" + "\n".join(layouts.moved_line(t_, r_) for t_, r_ in layouts.moved_texts(s_full))
+                sl.notes_slide.notes_text_frame.text += "\n\nMoved from the slide:\n" + "\n".join(layouts.moved_line(t_, r_) for t_, r_ in layouts.moved_texts(s_full) if not (self.clean and spec.unresolved_line(t_)))
         if s["type"] == "appendix":
             self.hiding = True
         if getattr(self, "hiding", False):   # the appendix stays in the file, hidden from the slideshow
@@ -4924,14 +4928,30 @@ class Renderer:
         self._fit_flow(sl, [b for b in s["blocks"] if b["kind"] != "copy"], self.x0, y, 5.6, bottom=bottom)
         if cps:
             lines = "\n".join(str(x) for b in cps for x in b.get("lines") or [])
-            answers = " ".join(str(b.get("answer") or "") for b in cps).strip()
+            answers = " ".join(str(b.get("answer") or "") for b in cps if not spec.production_made(s)).strip()
             fx, fw = 6.7, self.x1 - 6.7
             m = self._mark(sl)
-            h_ans = self._eh(answers, fw, 12, 1.1) if answers else 0.0
+            avail = max(0.4, bottom - y)
+            # The lines and the answer must fit above the frames' band: the largest size at which both do; else the answer goes to the notes
+            # (it says which half of the insight the work dramatises, not what the work says) and the lines take the band alone.
+            size, h_ans, h_lines = 10, 0.0, 0.0
+            for size in (13, 12, 11, 10):
+                h_lines = self._eh(lines, fw, size, 1.15) if lines else 0.0
+                h_ans = self._eh(answers, fw, size - 1, 1.1) if answers else 0.0
+                if h_lines + h_ans + (0.1 if lines and answers else 0.0) <= avail:
+                    break
+            else:
+                if answers:
+                    self._answer_to_notes[self._sid] = answers
+                    answers, h_ans = "", 0.0
+                for size in (13, 12, 11, 10):
+                    h_lines = self._eh(lines, fw, size, 1.15) if lines else 0.0
+                    if h_lines <= avail:
+                        break
             if lines:
-                self.text(sl, fx, y, fw, max(0.4, bottom - y - h_ans - 0.1), lines, size=13, color=self.p.fg, name="StoryboardLines")
+                self.text(sl, fx, y, fw, max(0.4, min(avail - h_ans - 0.1, h_lines + 0.05)) if answers else avail, lines, size=size, color=self.p.fg, name="StoryboardLines")
             if answers:
-                self.text(sl, fx, bottom - h_ans, fw, h_ans, answers, size=12, bold=True, color=self.p.acc_t, name="StoryboardAnswer")
+                self.text(sl, fx, bottom - h_ans, fw, h_ans, answers, size=size - 1, bold=True, color=self.p.acc_t, name="StoryboardAnswer")
             self._build(sl, m)
 
     def _execution(self, sl, s):
@@ -5013,8 +5033,10 @@ def _strike_runs(prs) -> None:
 
 def render(deck, inp, out: Path, master: Path | None = None, findings: list | None = None, animate=False, theme=themes.DEFAULT,
            layouts_out: Path | None = None, pictures: dict | None = None, picture_findings: list | None = None, placed: set | None = None,
-           notes: bool = True, no_plan: bool = False, icons: dict | None = None, protect: dict | None = None) -> Path:
+           notes: bool = True, no_plan: bool = False, icons: dict | None = None, protect: dict | None = None, clean: bool = False) -> Path:
     """Render a deck to ``out`` (.pptx); slides with a failed check carry a visible flag.
+
+    ``clean``: an export (``--clean-export``): no DRAFT mark, no CHECK FAILED flag and no slide id or status line in the notes.
 
     ``animate``: False (static), True or ``"auto"`` (builds play in order), ``"click"`` (one block per click).
     ``theme``: ``"napkin"`` (default, the layout library) or ``"classic"`` (the earlier look, flow only);
@@ -5026,7 +5048,7 @@ def render(deck, inp, out: Path, master: Path | None = None, findings: list | No
     ``protect``: asset id -> a Production picture's protect boxes (deck-slide-size: a re-crop at 4:3 or A4 that cuts them is a finding).
     """
     r = Renderer(deck, inp, master, findings, animate, theme, pictures)
-    r.notes, r.no_plan, r.protect = notes, no_plan, dict(protect or {})
+    r.notes, r.no_plan, r.protect, r.clean = notes, no_plan, dict(protect or {}), clean
     r.render(out, layouts_out)
     if picture_findings is not None:
         picture_findings.extend(r.picture_findings)

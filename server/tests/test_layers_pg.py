@@ -63,7 +63,7 @@ def _postgres():
         return admin, lambda: None
     try:
         import pgserver  # noqa: PLC0415
-        srv = pgserver.get_server(tempfile.mkdtemp(prefix="napkin-pglayers-"), cleanup_mode="stop")
+        srv = pgserver.get_server(tempfile.mkdtemp(prefix="napkin-pglayers-"), cleanup_mode="delete")  # stop and remove its folder
         return srv.get_uri("postgres"), lambda: None
     except ImportError:
         pass
@@ -80,8 +80,9 @@ def _postgres():
                         f"-k {d} -p {port} -c listen_addresses=''", "start"], check=True, capture_output=True)
     except (subprocess.CalledProcessError, OSError) as e:
         pytest.skip(f"could not start a local PostgreSQL: {e}")
-    stop = lambda: subprocess.run([pg_ctl, "-D", str(d / "data"), "-m", "immediate", "stop"],  # noqa: E731
-                                  capture_output=True)
+    def stop():  # stop the server, then remove its folder: each run left ~65 MB in /tmp
+        subprocess.run([pg_ctl, "-D", str(d / "data"), "-m", "immediate", "stop"], capture_output=True)
+        shutil.rmtree(d, ignore_errors=True)
     return make_conninfo(host=str(d), port=str(port), user="postgres", dbname="postgres"), stop
 
 

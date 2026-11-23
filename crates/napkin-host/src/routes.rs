@@ -787,7 +787,11 @@ fn route(ctx: &Ctx, session: &Session, cfg: &dyn HostConfig, req: HostRequest) -
             // genuinely code (e.g. brief-maker's report builder).
             let v = req.body_json();
             let kind = v.get("kind").and_then(|x| x.as_str()).unwrap_or("html");
-            let kind = if kind == "pdf" { "pdf" } else { "html" };
+            let kind = match kind {
+                "pdf" => "pdf",
+                "pptx" => "pptx",
+                _ => "html",
+            };
             let filename = v
                 .get("filename")
                 .and_then(|x| x.as_str())
@@ -795,6 +799,32 @@ fn route(ctx: &Ctx, session: &Session, cfg: &dyn HostConfig, req: HostRequest) -
             let html = v.get("html").and_then(|x| x.as_str()).unwrap_or("");
             if html.trim().is_empty() {
                 return HostResponse::error(400, "missing html");
+            }
+            // A file the app holds as bytes (a deck's PowerPoint): `html` carries
+            // them in base64. The app frame may not download by itself (its
+            // sandbox has no allow-downloads), so the file goes the way the PDF
+            // goes: stashed here, claimed by the shell, saved by the page.
+            if kind == "pptx" {
+                #[cfg(feature = "native")]
+                {
+                    return match crate::export::write_temp_bytes_b64(html, ".pptx") {
+                        Ok(tmp) => HostResponse::ok_json().with_event(HostEvent::ExportRequest {
+                            kind: kind.to_string(),
+                            filename: filename.to_string(),
+                            tmp_html: tmp,
+                        }),
+                        Err(e) => HostResponse::error(400, &e.message),
+                    };
+                }
+                #[cfg(not(feature = "native"))]
+                {
+                    return HostResponse::json(
+                        200,
+                        &serde_json::json!({
+                            "ok": true, "kind": kind, "filename": filename, "data_b64": html,
+                        }),
+                    );
+                }
             }
             // Native: stash it and let the shell pick a destination.
             #[cfg(feature = "native")]
