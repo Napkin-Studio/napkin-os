@@ -493,7 +493,7 @@ def _criterion_slides(st: dict, scoring: list) -> list:
 
 
 def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]", fmt: str = "pitch", fit: dict | None = None,
-          profile: dict | None = None, pictures: dict | None = None) -> dict:
+          profile: dict | None = None, pictures: dict | None = None, production: bool = False) -> dict:
     """Build the deck dict. ``st`` holds stage outputs keyed a, b, c, d (any may be absent);
     ``fmt``: spec.FORMATS, the agency pitch (default) or the full deck; ``fit``: the fit judge's
     verdicts, which decide the evidence a pitch presents; ``profile``: a deck type (profiles.load).
@@ -504,6 +504,8 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
     _intake_apply(inp, st)
     st = _normalize(st)
     a, b, c, d = st.get("a") or {}, st.get("b") or {}, st.get("c") or {}, st.get("d") or {}
+    if production:   # pictures only: no film execution, whatever the brief's channels or a recorded idea say
+        d = drop_film(d)
     if not d.get("how_it_answers") and isinstance(d.get("answers_objection"), dict):   # a live stage d's shape
         d = {**d, "how_it_answers": d["answers_objection"].get("how", "")}
     reqs = [r for r in a.get("requirements") or [] if not spec.internal_wording(r.get("text"))]   # a stage that copied 'field is null' into a requirement
@@ -714,10 +716,10 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
     if isinstance(d.get("chain"), dict) and any(str(d["chain"].get(k) or "").strip() for k in CHAIN_PHRASES):
         meta["chain"] = d["chain"]   # stage d's written chain: the phrases validate.chain_links finds on the slides they name
     return _complete(S, reqs, R, inp, meta, fmt, fit, scoring=a.get("scoring") or [], messages=d.get("messages") or [], territories=c,
-                     profile=profile, rules=a.get("rules") or [])
+                     profile=profile, rules=a.get("rules") or [], production=production)
 
 
-def _complete(S, reqs, R, inp, meta, fmt, fit, scoring=None, messages=None, territories=None, profile=None, rules=None) -> dict:
+def _complete(S, reqs, R, inp, meta, fmt, fit, scoring=None, messages=None, territories=None, profile=None, rules=None, production=False) -> dict:
     """The work every deck kind shares once its slides exist: requirement mapping, the pitch arrangement,
     numbering, the requirement trace, the sources appendix and the scoring map. ``profile`` (a deck type)
     records ``built_from.type``; a spine profile also arranges the slides, records ``meta.profile``,
@@ -760,11 +762,11 @@ def _complete(S, reqs, R, inp, meta, fmt, fit, scoring=None, messages=None, terr
                 sl["requirements"].append(r["id"])
     if spine:   # after mapping, so a slide dropped by the profile has already passed its requirements to the others
         S = _arrange_spine(S, profile, {v["title"] for v in (fit or {}).get("verdicts", []) if v["verdict"] == "supported"},
-                           routes_asked(reqs), messages or [], scoring or [], fmt, cap)
+                           routes_asked(reqs), messages or [], scoring or [], fmt, cap, production)
     elif fmt == "pitch":   # after mapping, so merged slides carry both slides' requirements
         rec = profiles.recipe(profile, fmt) if profile and profiles.recipes_on() else None   # deck-types: the type's target (flag off: spec.PITCH_TARGET)
         S = _arrange_pitch(S, {v["title"] for v in (fit or {}).get("verdicts", []) if v["verdict"] == "supported"}, routes_asked(reqs), messages or [], cap,
-                           **({"target": rec["length"]["target"]} if rec else {}))
+                           production=production, **({"target": rec["length"]["target"]} if rec else {}))
     if spec.LOOK_V3:   # deck-look (fix 2): a sentence is said once on the presented slides
         _say_once(S)
     if sketch:   # the cover says so, with a fixed label (like the DRAFT mark: no input words)
@@ -924,11 +926,45 @@ def _carried(slide: dict, messages: list) -> set:
     return {m["req"] for m in messages if any(p in text for p in spec.message_parts(m.get("line", "")))}
 
 
-def _shown_executions(S: list, messages: list | None) -> list:
+_FILM_TITLE = re.compile(r"(?<!\w)(?:film|films|tv|television|cinema|broadcast|bvod|video|videos|youtube|tiktok|reel|reels|\d+[- ]?(?:second|sec|s)\b)", re.I)
+
+
+def is_film_channel(name) -> bool:
+    """True when an execution's channel names moving pictures (a film, TV, video, a 15-second spot). A storyboard's frames are stills: never film."""
+    t = str(name or "")
+    return bool(_FILM_TITLE.search(t)) and "storyboard" not in t.lower()
+
+
+def drop_film(d: dict) -> dict:
+    """``d`` (stage d) without film: a deck made from a Production project shows pictures only (owner, 2026-11-23: "We don't add movies in the
+    deck. Just visuals."), so no execution and no channel role names a film. Copy of the top level, the lists filtered; ``d`` is not changed."""
+    out = dict(d)
+    if isinstance(d.get("executions"), list):
+        out["executions"] = [x for x in d["executions"] if not (isinstance(x, dict) and is_film_channel(x.get("channel")))]
+    if isinstance(d.get("channel_roles"), list):
+        out["channel_roles"] = [r for r in d["channel_roles"] if not (isinstance(r, dict) and is_film_channel(r.get("channel")))]
+    return out
+
+
+def _production_fillable(x: dict) -> bool:
+    """True when Production's finals can fill an execution slide's picture: it names a channel Production makes sizes for (out of home,
+    social, print, display), the storyboard's frames, or a group of finals (key visual, size crops, packshot)."""
+    from . import images   # noqa: PLC0415  (late: images imports assemble's helpers)
+    title = str(x.get("title") or "")
+    ch = images.execution_channel(title)
+    return bool(images.execution_group(title) or (ch == "film" and "storyboard" in title.lower()) or ch in ("ooh", "social", "print", "display"))
+
+
+def _shown_executions(S: list, messages: list | None, production: bool = False) -> list:
     """The executions a pitch presents: at most spec.PITCH_EXECUTIONS of the core (not optional) ones,
-    greedily those that carry the most mandated messages not yet carried, kept in story order."""
+    greedily those that carry the most mandated messages not yet carried, kept in story order. A deck spun off from a Production project
+    (``production``) presents first the executions its finals can fill (up to spec.PITCH_PRODUCTION_EXECUTIONS), then the greedy rest."""
     execs = [x for x in S if x["type"] == "execution"]
     core = [x for x in execs if not re.search(spec.OPTIONAL, str(x["blocks"][0].get("text", "")))]
+    if production:
+        fill = [x for x in core if _production_fillable(x)][:spec.PITCH_PRODUCTION_EXECUTIONS]
+        if fill:
+            return fill
     shown, covered = [], set()   # greedily the executions that carry the most mandated messages not yet carried
     for _ in range(min(spec.PITCH_EXECUTIONS, len(core))):
         pool = [i for i in range(len(core)) if all(core[i] is not y for y in shown)]   # by identity: equal slides are still two
@@ -951,7 +987,7 @@ _SPEC_TARGET = object()
 
 
 def _arrange_pitch(S: list, supported: set | None = None, routes: int = 1, messages: list | None = None, limit: int | None = None,
-                   target=_SPEC_TARGET) -> list:
+                   target=_SPEC_TARGET, production: bool = False) -> list:
     """The agency pitch: the presented story (merges applied, team before the ask), an Appendix
     divider, then the backup in story order. Numbering, the trace and footnotes follow this order.
     One recommended idea by default; as many routes as the brief asks for when it asks (routes);
@@ -960,12 +996,14 @@ def _arrange_pitch(S: list, supported: set | None = None, routes: int = 1, messa
     the type's recipe, profiles.recipe; None for no target) replaces spec.PITCH_TARGET for the soft target's cheap moves."""
     by_type = lambda t: next((x for x in S if x["type"] == t), None)
     for keep, into, title in spec.PITCH_MERGES + (spec.PITCH_MERGES_V3 if spec.LOOK_V3 else ()):
+        if production and into == "execution":   # an execution that Production's pictures fill keeps its own slide: a merged one drew none of them
+            continue
         k = by_type(keep)
         m = (_shown_executions(S, messages)[:1] or [None])[0] if into == "execution" else by_type(into)   # the first PRESENTED execution
         if k and m:
             _merge(k, m, title)
             S = [x for x in S if x is not m]
-    shown = _shown_executions(S, messages)
+    shown = _shown_executions(S, messages, production)
     shown_charts = _shown_charts(S, supported)
     keep = {id(x) for x in shown_charts + shown}   # by identity: two slides can hold equal content
     if routes > 1:   # the client asked to see that many routes: present them, in the ranking's order
@@ -1274,7 +1312,7 @@ def _slide_rank(slide: dict, scoring: list) -> int | None:
     return _criteria_rank(slide["type"], scoring)
 
 
-def _arrange_spine(S: list, profile: dict, supported: set | None, routes: int, messages: list, scoring: list, fmt: str, limit: int | None = None) -> list:
+def _arrange_spine(S: list, profile: dict, supported: set | None, routes: int, messages: list, scoring: list, fmt: str, limit: int | None = None, production: bool = False) -> list:
     """Order and filter slides by a profile. Slides of a type outside ``spine`` and ``appendix`` are dropped
     (a requirement that only they answered is then reported by requirement_map, at the profile's level).
     The presented story follows the spine order (a repeated type keeps its built order); the types in
@@ -1289,7 +1327,7 @@ def _arrange_spine(S: list, profile: dict, supported: set | None, routes: int, m
     spine, appx = profile["spine"], set(profile.get("appendix") or [])
     S = [x for x in S if x["type"] in spine or x["type"] in appx]
     pitch = fmt == "pitch"
-    keep = {id(x) for x in _shown_charts(S, supported) + _shown_executions(S, messages)}
+    keep = {id(x) for x in _shown_charts(S, supported) + _shown_executions(S, messages, production)}
     if routes > 1:
         keep |= {id(x) for x in [x for x in S if x["type"] == "territory"][:routes]}
     answered = {x["criterion"] for x in S if x.get("criterion") and x.get("status") != "needs_human"}   # criteria with a written answer: the answer is their presented slide

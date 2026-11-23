@@ -309,6 +309,8 @@ PITCH_CHARTS = 2
 #: Slide types whose titles are labels by convention (a channel, a territory name, the line itself).
 LABEL_TITLE_TYPES = ("title", "idea", "execution", "territory", "appendix", "requirement_trace", "appendix_sources")
 PITCH_EXECUTIONS = 3
+#: A deck spun off from a Production project presents up to this many executions its finals can fill (key visual, out of home, packshot, storyboard).
+PITCH_PRODUCTION_EXECUTIONS = 4
 OPTIONAL = r"(?i)\bif budget allows\b|\boptional\b"
 #: Pairs merged into one presented slide in a pitch: (kept, merged into it, the merged title).
 PITCH_MERGES = (("team", "credentials", "The team you would work with, and work like this we have done"),

@@ -360,11 +360,33 @@ def territories(inp, st, profile: dict | None = None) -> tuple[dict, dict]:
     return obj, _sum([u1, u2])
 
 
+def _visuals_block(inp) -> str:
+    """A deck made from a Production project shows its finished pictures and no film: what the finals are, and the rule, for stage d."""
+    v = getattr(inp, "production_visuals", None)
+    if not v:
+        return ""
+    have = []
+    if v.get("key_visuals"):
+        have.append("a key visual")
+    if v.get("ooh_formats"):
+        have.append("out-of-home sizes (" + ", ".join(str(f).replace("-", " ") for f in v["ooh_formats"]) + ")")
+    if v.get("packshots"):
+        have.append("a packshot")
+    if v.get("storyboard_frames"):
+        have.append(f"{v['storyboard_frames']} storyboard frames (stills)")
+    if v.get("crops"):
+        have.append("size crops")
+    return ("\n<production_finals>\nThis deck is made from finished pictures Production holds: " + (", ".join(have) or "none yet") + ". "
+            "Show visuals only. Write NO film, TV, video, cinema or social-film execution, and no film in a channel role, the timeline, the process or any budget or plan copy "
+            "(the brief's channels may be named in strategy text, but no film is proposed or costed). Name each execution after a picture Production holds, using these words "
+            "in the channel field: 'Key visual', 'Out of home', 'Packshot', 'Storyboard frames' (only those listed above). Say what the picture does, never invent one it does not have.\n</production_finals>")
+
+
 def idea(inp, st, profile: dict | None = None) -> tuple[dict, dict]:
     """Stage d: the line, the idea and 3-6 executions in the channels the brief names (after Gate 2)."""
     chosen = next((t for t in (st.get("c") or {}).get("territories", []) if t["id"] == (st.get("c") or {}).get("chosen")), None)
     user = (f"<storyline>{json.dumps(st.get('b'), ensure_ascii=False)}</storyline>\n<territory>{json.dumps(chosen, ensure_ascii=False)}</territory>\n"
-            f"<requirements>{json.dumps((st.get('a') or {}).get('requirements', []), ensure_ascii=False)}</requirements>\n<evidence>\n{_facts_block(inp)}\n</evidence>{_prompt_block(inp)}")
+            f"<requirements>{json.dumps((st.get('a') or {}).get('requirements', []), ensure_ascii=False)}</requirements>\n<evidence>\n{_facts_block(inp)}\n</evidence>{_prompt_block(inp)}{_visuals_block(inp)}")
     obj, u = _call("d", user, _sysmsg("d_idea.md", "d", profile))
     obj.update(stage="d_idea_and_executions", produced_by=f"live {MODELS['d']}")
     return obj, u

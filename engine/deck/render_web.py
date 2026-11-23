@@ -23,7 +23,7 @@ import json
 import re
 from pathlib import Path
 
-from . import images, numfmt, spec
+from . import export_clean, images, numfmt, spec
 from . import theme as themes
 from .refs import fmt
 from .layouts import picture_sides as _pic_sides
@@ -659,7 +659,7 @@ def _cover_logo(deck, assets_dir) -> str | None:
 
 
 def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictures: dict | None = None, src=None, placed: set | None = None,
-                icons: dict | None = None) -> list:
+                icons: dict | None = None, clean: bool = False) -> list:
     """Per slide, in order: id, number, type, dark, inner markup, notes, build-step count and, per
     step, the latest reveal delay (ms) up to and including it."""
     failed = {}
@@ -721,17 +721,17 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
             foot += f'<span class="src">Sources {" ".join(f"[{k}]" for k in s["footnotes"][:14])} (appendix)</span>'
         foot += f'<span class="num">{n}</span>'
         flags = ""
-        if n_human:
+        if n_human and not clean:
             flags += f'<span class="draft">DRAFT · {"needs a person" if s["status"] == "needs_human" else f"{n_human} slides need a person"}</span>'
-        if sid in failed and audience != "client":
+        if sid in failed and audience != "client" and not clean:
             flags += f'<span class="failed">CHECK FAILED: {_e(", ".join(sorted(failed[sid])))}</span>'
         head = f"<header>{kick}{title}</header>" if (kick or title) else ""
         inner = (f'<div class="flags">{flags}</div>{head}{body}{pic_html}'
                  f'<footer>{foot}</footer>')
-        notes = (s.get("notes") or "") + f"\n\nSlide id {sid} · status {s['status']} · requirements {', '.join(s.get('requirements') or []) or 'none'}"
+        notes = (export_clean.notes_of(s.get("notes")) if clean else (s.get("notes") or "")) + ("" if clean else f"\n\nSlide id {sid} · status {s['status']} · requirements {', '.join(s.get('requirements') or []) or 'none'}")
         if planned and spec.moved_map(s, audience):   # the points the plan moved off the slide: verbatim, with their refs, as in the pptx notes
             from . import layouts
-            notes += "\n\nMoved from the slide:\n" + "\n".join(layouts.moved_line(t_, r_) for t_, r_ in layouts.moved_texts(s))
+            notes += "\n\nMoved from the slide:\n" + "\n".join(layouts.moved_line(t_, r_) for t_, r_ in layouts.moved_texts(s) if not (clean and spec.unresolved_line(t_)))
         pt = (deck["meta"].get("layout_title_pt") or {}).get(lay.get("id")) if planned else None
         out.append({"layout": lay["id"] if planned else None, "tpt": f' style="--tpt:{pt * 2}px"' if (spec.LOOK_V2 and pt) else "", "id": sid, "n": n, "type": s["type"], "section": s["section"], "dark": dark, "cls": pic_cls,
                     "title": s["title"], "html": inner, "notes": notes, "steps": b.f, "status": s["status"],
@@ -1139,10 +1139,10 @@ def _brand_css(meta: dict) -> dict:
 
 
 def render(deck, inp, out: Path, findings: list | None = None, pictures: dict | None = None, placed: set | None = None, look: bool = True,
-           icons: dict | None = None) -> Path:
+           icons: dict | None = None, clean: bool = False) -> Path:
     """Write the deck as one self-contained HTML file at ``out`` (pictures, when given, inline as data URIs). ``icons``: the icons the
     pptx drew (deck-graphics), drawn here as inline SVG at the same items; None or empty draws none and changes nothing."""
-    views = slide_views(deck, inp, findings, Path(out).parent, pictures, placed=placed, icons=icons)
+    views = slide_views(deck, inp, findings, Path(out).parent, pictures, placed=placed, icons=icons, clean=clean)
     m = deck["meta"]
     cv = themes.canvas_of(deck)   # deck-slide-size: the stage at the deck's size (16:9: nothing added)
     slides = "\n".join(
