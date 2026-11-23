@@ -686,7 +686,12 @@ test('Send opens the choice: Deck Maker sends the greenlit ids and the rest as n
   const dlg = L.dialogFor('send', d)!
   assert.equal(dlg.title, 'Send to production')
   assert.match(text(dlg.html), /Already Started and Passenger Seat go with their worlds, lines, checks and sources\. The other 6 routes travel as routes not chosen/)
-  assert.match(dlg.html, /data-dest="deck-maker"/); assert.doesNotMatch(dlg.html, /data-dest="production-tool"[^>]*disabled/); assert.doesNotMatch(text(dlg.html), /not built yet/)
+  assert.match(dlg.html, /data-dest-pick="deck-maker"/); assert.doesNotMatch(dlg.html, /data-dest-pick="production-tool"[^>]*disabled/); assert.doesNotMatch(text(dlg.html), /not built yet/)
+  // choosing alone sends nothing: the Send button is off until a place is chosen, then names it (territories-redesign, the mock's send screens)
+  assert.match(dlg.html, /class="b pri lg" disabled>Send<\/button>/); assert.doesNotMatch(dlg.html, /data-dest="/)
+  const picked = L.dialogFor('send:production-tool', d)!
+  assert.match(picked.html, /data-dest-pick="production-tool" aria-pressed="true"/); assert.match(picked.html, /class="b pri lg" data-dest="production-tool">Send to Production/)
+  assert.match(text(L.dialogFor('send', greenlit(gl('greenlight_open'), ['t_started']))!.html), /Already Started goes with its world/)
   const a = L.act(d, {}, { a: 'send', to: 'deck-maker' }, ENV)!
   eq(a.writes, [])
   // the gate is open at greenlight, so the approval goes first and the send follows it

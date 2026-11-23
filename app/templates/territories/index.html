@@ -356,6 +356,11 @@ button.tsrc:hover{border-color:color-mix(in srgb,var(--ink) 35%,var(--line))}
 .wsrow:hover:not(:disabled){border-color:var(--ink)}
 .wsrow:disabled{opacity:.7}
 .wsrow b{font:600 17px var(--font-serif)}
+.wsrow.opt{grid-template-columns:22px minmax(0,1fr);gap:4px 12px}
+.wsrow.opt .rd{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--muted);margin-top:3px;display:grid;place-items:center}
+.wsrow.opt.on{border-color:var(--te);box-shadow:0 0 0 1px var(--te)}
+.wsrow.opt.on .rd{border-color:var(--te)}.wsrow.opt.on .rd::after{content:"";width:9px;height:9px;border-radius:50%;background:var(--te)}
+.sendfoot{align-items:center;gap:10px;flex-wrap:wrap}.sendfoot .why{max-width:none}
 .wsdot{width:12px;height:12px;border-radius:50%;margin-top:6px}
 /* the ask cards (the approved mock): a needs-you card is a Booth card with the ask line round it */
 .ask{border:1.5px solid var(--ask-line);box-shadow:0 0 0 4px var(--ask-glow);background:var(--card)}
@@ -681,10 +686,19 @@ details.fold>.fold-b{padding:0 12px 12px;display:grid;gap:10px}
 /* the Booth: the agent Brief's size (NapkinRoles.side, 88 px), then notes, then tools */
 .booth-body>.side-agent{--side-bleed:18px;margin-top:-14px}
 .side-agent.idle::after{display:none}
+.booth .side-agent.bt-side .nk-job-do{-webkit-line-clamp:5;font-size:15px}
+/* Explore back: the compass beside the crew as rows (the mock's routes screen); a crew row opens its agent and the steering in the Booth */
+.exgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,260px);gap:16px;align-items:start}
+.exgrid .compass-wrap{margin:0}
+.exgrid .crew{grid-template-columns:minmax(0,1fr);gap:8px}
+.exgrid .crewc{border-top-width:1px;border-left:3px solid var(--ec);padding:8px 10px}
+@media (max-width:900px){.exgrid{grid-template-columns:minmax(0,1fr)}}
 .bt-box .btn[data-act="lookup"]:not(:disabled){background:var(--ag-act);border-color:var(--ag-act);color:var(--ag-act-ink)}
 .bt-box .btn[data-act="lookup"]:disabled{background:transparent;border:1px dashed var(--muted);color:var(--muted)}
 /* the World: its primary in the header; the pictures one line while they are sketches */
-.whead2 .wact{display:grid;justify-items:end;gap:7px;text-align:right;align-self:start}
+.sheet.world .whead2{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:18px}
+.whead2 .wact{display:grid;justify-items:end;gap:7px;text-align:right;align-self:start;padding-top:6px;max-width:260px}
+@media (max-width:760px){.sheet.world .whead2{grid-template-columns:minmax(0,1fr)}.whead2 .wact{justify-items:start;text-align:left}}
 .whead2 .wact .why{color:inherit;opacity:.85;text-align:right}
 .whead2 .wact .lnk{color:inherit}
 .sheet.world .b{border-color:color-mix(in srgb,var(--t-ink) 60%,transparent);color:var(--t-ink)}
@@ -1163,7 +1177,7 @@ var TerritoriesLogic = (function () {
   /** Pick's primary and its words, by the pick's state (the engine's run.approvals.pick and the job). */
   function pickAct(data, ui, st, c) {
     var job = ui.job, mw = ui.mw, busy = job && BUSY_STATES[job.state];
-    if (st === 'open') return c.ticked ? priBtn('Explore ' + plural(c.ticked, 'insight') + ' →', 'data-act="explore"') + why('Usually 2 to 3 minutes. The crew sets off on its own; you can steer it, but you do not have to.') :
+    if (st === 'open') return c.ticked ? priBtn('Explore ' + plural(c.ticked, 'insight') + ' →', 'data-act="explore"') + why('Usually 2 to 3 minutes. The crew sets off on its own.') :
       priBtn('Explore →', 'data-act="explore"', { disabled: true }) + why('Tick at least one insight, then explore.', 'lock');
     if (st === 'approved') {
       if (busy) return priBtn('Approved ✓', '', { disabled: true }) + why('The crew is setting off.');
@@ -1388,8 +1402,8 @@ var TerritoriesLogic = (function () {
     }
     return '<article class="sheet">' + sheetHead('Step 2 of 3 · Explore', h2, p, act) +
       '<div class="stats">' + exploreStats(data, ui).map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + '</div>' +
-      '<div class="sheet-body">' + err + crewCards(data, ui) +
-      (crew.length ? '<section class="compass-wrap" aria-label="The compass">' + compassSvg(data, ui) + compassKey(data) + '</section>' + routeGroups(data, ui) : '') +
+      '<div class="sheet-body">' + err +
+      (crew.length ? '<div class="exgrid"><section class="compass-wrap" aria-label="The compass">' + compassSvg(data, ui) + compassKey(data) + '</section>' + crewCards(data, ui) + '</div>' + routeGroups(data, ui) : crewCards(data, ui)) +
       '</div></article>';
   }
 
@@ -1654,11 +1668,11 @@ var TerritoriesLogic = (function () {
       '<button type="button" class="b sm" data-dock="export" aria-pressed="false"' + (xw.ok ? '' : ' aria-disabled="true" title="' + esc(xw.why) + '"') + '>Export…</button></div>';
   }
   /** Send, for the Greenlight header and the World header: on while a route is greenlit and nothing holds it, with why beside it. */
-  function sendAct(data, ui, label) {
+  function sendAct(data, ui, label, quiet) {
     var n = greenIds(data).length, asks = openAsks(data), covered = {}; asks.forEach(function (a) { covered[a.kind] = 1; });
     var open = holds(data).filter(function (b) { return !covered[b.kind]; }), q = asks.length + open.length, can = n > 0 && !holds(data).length && !asks.length;
     var w = glWords(ui.req), sending = w && /^send:/.test((ui.req && ui.req.key) || '');
-    var words = q ? 'Answer ' + (q === 1 ? 'the question' : 'the ' + q + ' questions') + ' first.' : !n ? 'Greenlight at least one route to send it.' : can ? 'Choose Production or Deck Maker next.' : '';
+    var words = q ? 'Answer ' + (q === 1 ? 'the question' : 'the ' + q + ' questions') + ' first.' : !n ? 'Greenlight at least one route to send it.' : can && !quiet ? 'Choose Production or Deck Maker next.' : '';
     return '<button type="button" class="b pri lg" data-send' + (can ? '' : ' disabled') + '>' + esc(label || (n ? 'Send ' + plural(n, 'route') + ' →' : 'Send →')) + '</button>' +
       why(sending ? w : words, sending && ui.req.state === 'failed' ? 'bad' : can ? '' : 'lock');
   }
@@ -1780,13 +1794,16 @@ var TerritoriesLogic = (function () {
       (typeof TerritoriesPictures !== 'undefined' ? TerritoriesPictures.panel(t, {}) : '') +
       '<div class="row">' + glButton(t, on) + '<span class="meta">' + esc((m ? m.name + ' · ' : '') + (typeof t.rank === 'number' ? 'Judge #' + t.rank : 'Not ranked')) + '</span><span class="spacer"></span><button type="button" class="btn-rect" data-close>Close</button></div>' };
   }
-  function sendDialog(data) {
+  /** Send onward (the mock's send screens): choose where, then Send. Choosing alone sends nothing; the Send button names the place. */
+  function sendDialog(data, pick) {
     var all = developed(data), ids = greenIds(data), names = ids.map(function (id) { var t = all.filter(function (x) { return x.id === id; })[0]; return t ? t.name : ''; }).filter(Boolean);
-    var rest = all.length - names.length;
-    return { title: 'Send to production', closeInside: true, sans: true, html: '<p class="meta" style="margin:0">' + esc(_list(names)) + ' go with their worlds, lines, checks and sources. The other ' + esc(plural(rest, 'route')) + ' travel as routes not chosen.</p>' +
+    var rest = all.length - names.length, d0 = DESTS.filter(function (d) { return d.id === pick && d.built; })[0] || null;
+    return { title: 'Send to production', closeInside: true, sans: true, html: '<p class="meta" style="margin:0">' + esc(_list(names)) + (names.length === 1 ? ' goes with its world, lines, checks and sources.' : ' go with their worlds, lines, checks and sources.') +
+      (rest ? ' The other ' + esc(plural(rest, 'route')) + ' travel as routes not chosen.' : '') + '</p>' +
       DESTS.map(function (d) {
-        return '<button type="button" class="wsrow" data-dest="' + d.id + '"' + (d.built ? '' : ' disabled aria-disabled="true"') + '><span class="wsdot" style="background:' + d.dot + '"></span><span><b>' + esc(d.name) + '</b>' + (d.built ? '' : ' <span class="mark-undone">not built yet</span>') + '<br><span class="meta">' + esc(d.does) + '</span></span></button>'; }).join('') +
-      '<div class="row"><button type="button" class="btn-rect" data-close>Cancel</button></div>' };
+        return '<button type="button" class="wsrow opt' + (d0 && d0.id === d.id ? ' on' : '') + '" data-dest-pick="' + d.id + '" aria-pressed="' + (d0 && d0.id === d.id ? 'true' : 'false') + '"' + (d.built ? '' : ' disabled aria-disabled="true"') + '><span class="rd" aria-hidden="true"></span><span><b>' + esc(d.name) + '</b>' + (d.built ? '' : ' <span class="mark-undone">not built yet</span>') + '<br><span class="meta">' + esc(d.does) + '</span></span></button>'; }).join('') +
+      '<div class="row sendfoot">' + why(d0 ? 'It opens ' + d0.name + ' when the send is through.' : 'Choose where it goes.', d0 ? '' : 'lock') + '<span class="spacer"></span><button type="button" class="b" data-close>Cancel</button>' +
+      (d0 ? priBtn('Send to ' + d0.name, 'data-dest="' + d0.id + '"') : priBtn('Send', '', { disabled: true })) + '</div>' };
   }
   function _list(a) { return a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]; }
   function rankDialog() {
@@ -1906,14 +1923,14 @@ var TerritoriesLogic = (function () {
     if (stg) return '<main class="shell">' + head(data, { view: /^explor/.test(stg) ? 1 : 0 }, ui) + stageHtml(stg, data, ui) + '</main>';
     var sheet = at === 0 ? pickSheet(data, ui) : at === 1 ? exploreSheet(data, ui) : wt ? W.sheet(data, ui, wt) : greenlightSheet(data, ui);
     var open = ui.booth !== false;
-    return '<main class="shell">' + head(data, { view: at }, ui) + '<div class="split">' + sheet + (wt ? W.booth(data, ui, open, wt) : booth(data, ui, open, at)) + '</div></main>' + (at === 2 ? (wt ? W.dock(data, ui) : dock(data, ui)) : '') +
+    return '<main class="shell">' + head(data, { view: at }, ui) + '<div class="split">' + sheet + (wt ? W.booth(data, ui, open, wt) : booth(data, ui, open, at)) + '</div></main>' +
       '<button type="button" class="booth-edge" id="boothEdge" aria-controls="stab" aria-expanded="' + (open ? 'true' : 'false') + '" aria-label="Open the Booth" aria-keyshortcuts="]" tabindex="' + (open ? '-1' : '0') + '">' +
       '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 2.5 4 6l3.5 3.5"/></svg><span class="booth-lb">Booth</span></button>';
   }
 
   /** The window onto one source (a cite) or onto what arrived (brief, research, finds). Returns { title, html } or null. */
   function dialogFor(what, data) {
-    if (what === 'send') return sendDialog(data);
+    if (what === 'send' || /^send:/.test(what)) return sendDialog(data, what.split(':')[1] || '');
     if (what === 'rank') return rankDialog();
     if (/^(more|push):/.test(what) && typeof TerritoriesWorld !== 'undefined') return TerritoriesWorld.dialog(what, data);
     if (/^rights:/.test(what) && typeof TerritoriesPictures !== 'undefined') return TerritoriesPictures.dialog(what, data);
@@ -2193,13 +2210,13 @@ var TerritoriesWorld = (function () {
   function worldSheet(data, ui, t) {
     var ft = feel(t, dialOf(t, ui)), all = order(data), i = all.indexOf(t), m = L.crewOf(data).filter(function (c) { return c.id === t.crew; })[0], wv = ui && ui.wview === 'wall' ? 'wall' : 'journey';
     var on = L.greenIds(data).indexOf(t.id) !== -1, n = L.greenIds(data).length;
-    var act = on ? L.sendAct(data, ui || {}, 'Send ' + n + ' greenlit →') + L.why('This route is greenlit.', 'ok') + '<button type="button" class="lnk" data-green="' + esc(t.id) + '" aria-pressed="true">Take it off the list</button>' :
+    var act = on ? L.sendAct(data, ui || {}, 'Send ' + n + ' greenlit →', true) + L.why('This route is greenlit.', 'ok') + '<button type="button" class="lnk" data-green="' + esc(t.id) + '" aria-pressed="true">Take it off the list</button>' :
       L.priBtn('Greenlight this route', 'data-green="' + esc(t.id) + '" aria-pressed="false"') + L.why('Then send it onward from here.');
     return '<article class="sheet world' + ffOf(ft) + '" id="wsheet" style="' + L.tvars(ft) + '"><header class="whead2"><div><span class="weyebrow">Route ' + String(i + 1).padStart(2, '0') + (m ? ' · found by ' + esc(m.name) : '') +
       (typeof t.rank === 'number' ? ' · Judge #' + t.rank : '') + '</span>' +
       '<h2>' + esc(t.name) + '</h2><p>' + esc(t.thought) + '</p></div><div class="wact">' + act + '</div></header><div class="wtools"><div class="wseg" role="group" aria-label="How to see it">' +
       [['journey', 'A weekend with it'], ['wall', 'All on one wall']].map(function (x) { return '<button type="button" data-wv="' + x[0] + '" aria-pressed="' + (wv === x[0] ? 'true' : 'false') + '">' + x[1] + '</button>'; }).join('') +
-      '</div></div><div class="wbody2" id="wbody">' + worldBody(data, ui, t) + '</div><div class="wnote">Sketches to show the feel, not finished work. Pictures come later.</div></article>';
+      '</div><span class="spacer" style="flex:1"></span><button type="button" class="b sm" data-wdock="anim">▶ Play animatic</button><button type="button" class="b sm" data-wdock="present">▶ Present</button></div><div class="wbody2" id="wbody">' + worldBody(data, ui, t) + '</div><div class="wnote">Sketches to show the feel, not finished work. Pictures come later.</div></article>';
   }
 
   // ── the Booth column: the panel for this route ──
@@ -2268,8 +2285,6 @@ var TerritoriesWorld = (function () {
       '<div class="navrow"><button type="button" class="linkbtn" data-w-back>← All routes</button><span class="spacer"></span><button type="button" class="btn-rect sq" data-w-nav="-1" aria-label="Previous route"' + (i > 0 ? '' : ' disabled') + '>←</button>' +
       '<span class="meta">' + (i + 1) + ' of ' + all.length + '</span><button type="button" class="btn-rect sq" data-w-nav="1" aria-label="Next route"' + (i < all.length - 1 ? '' : ' disabled') + '>→</button></div>' +
       (gl ? '<p class="runnote' + (ui.req && ui.req.state === 'failed' ? ' bad' : '') + '" role="status">' + esc(gl) + '</p>' : '') +
-      '<div class="sbox"><div class="sbox-head"><b>Route</b><span class="ymark">live</span><span class="spacer"></span><span class="meta">' + esc(typeof t.rank === 'number' ? 'Judge #' + t.rank : 'Not ranked') + '</span></div>' +
-      '<div class="row"><button type="button" class="btn-rect" data-wdock="present">Present</button><button type="button" class="btn-rect" data-wdock="anim">Animatic</button></div></div>' +
       '<div class="ptabs" role="group" aria-label="Panel">' + TABS.map(function (x) { return '<button type="button" data-wtab="' + x[0] + '" aria-pressed="' + (tab === x[0] ? 'true' : 'false') + '">' + x[1] + '</button>'; }).join('') + '</div>' +
       body + (ui.me && ui.me.name ? '<div class="pfoot">Changes signed as <b>' + esc(ui.me.name) + '</b></div>' : '') + '</div></div></aside>';
   }
@@ -3263,6 +3278,7 @@ var TerritoriesLookups = (function () {
     if ((b = t.closest('[data-green]'))) { ev.preventDefault(); ev.stopPropagation(); closeDialog(true); run({ a: 'green', id: b.getAttribute('data-green') }); return; }
     if ((b = t.closest('[data-export]'))) { if (!b.disabled) exportGo(b.getAttribute('data-export')); return; }
     if ((b = t.closest('[data-send]'))) { if (!b.disabled) openDialog('send', b); return; }
+    if ((b = t.closest('[data-dest-pick]'))) { if (b.disabled) return; openDialog('send:' + b.getAttribute('data-dest-pick'), dialogFrom); return; }
     if ((b = t.closest('[data-dest]'))) { if (b.disabled) return; var to = b.getAttribute('data-dest'); closeDialog(true); run({ a: 'send', to: to }); return; }
     if ((b = t.closest('[data-rank-go]'))) { closeDialog(true); run({ a: 'rerank' }); return; }
     if ((b = t.closest('[data-tp]'))) { ui.tp = b.getAttribute('data-tp'); render(); return; }
