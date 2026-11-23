@@ -1924,3 +1924,7 @@ reply body, whatever `NAPKIN_RUNLOG_BODIES` says; no error message carries what 
   `422 unreadable_file`, `415 unsupported_file`. Result: `{summary, mode, document_id, path, name, pending, counts, gaps (areas), actor}`, no bible text. `change` is always null. `cancel_job`
   stops the spend and the write.
 - **Not yet.** PDF logos drawn as vectors (no renderer is installed, so only embedded pictures can be cut); CMYK, masked and JPX pictures; a file over 64 MB (the middleware's request cap).
+- **The shell's side** (`app/src/shell/brand/`). An app that stored a file in its document says so to the shell with `window.parent.postMessage({type: 'clan:file-added', name: <stored name>, label: <the person's name>}, '*')`
+  (Brief Maker and Research after `upload-asset`, Production after its own upload). The shell hears only its own frame, and only in Brief Maker, Research and Production. It calls `brand_identify` with that one
+  attachment through the document's `/api-proxy` (each `brand_identify` and `brand_build` is a charged call; `job_status` is not), asks the one question when `ask` is true, and starts `brand_build` on the answer. A job
+  in flight is kept in the tab's session storage and picked up again after a reload. Detection that fails leaves a small "Build a Brand Clan from this" action and asks nothing.
