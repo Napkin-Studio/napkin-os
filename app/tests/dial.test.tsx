@@ -74,3 +74,10 @@ test('a Soon quadrant dims its words and icon, never its fill (the desk would pr
   assert.match(css, /\.dial \.dz\[aria-disabled="true"\] > :not\(path\) \{ opacity: \.55; \}/)
   assert.doesNotMatch(css, /\.dial \.dz\[aria-disabled="true"\] \{ opacity/)
 })
+
+test('a Production project of the client counts on its dial, whatever made it (UAT round 3: "Nothing yet" for Harrowgate)', () => {
+  const live = new Set(['brief', 'research', 'deck', 'prod'])
+  const html = dial([item('ie.napkin.production'), item('ie.napkin.production')], live)
+  assert.match(html, /data-testid="quadrant-prod"[\s\S]*?class="dz-sub">2 films</)
+  assert.doesNotMatch(html, /quadrant-prod"[\s\S]*?Nothing yet/)
+})
