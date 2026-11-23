@@ -264,3 +264,46 @@ def test_a_route_that_is_not_greenlit_has_no_one_pager():
     with pytest.raises(TaskError) as e:
         make("doc", doc())
     assert e.value.status == 409 and "not greenlit" in str(e.value)
+
+
+# ---------------------------------------------------------------- end to end: the real middleware, the real task, every file the window offers
+
+
+from test_territories import terr, TerritoriesHost                   # noqa: E402,F401  (the real server fixture)
+from test_brief import post                                           # noqa: E402
+
+
+def test_every_file_the_window_offers_comes_through_fetch_territories_file(terr):
+    d = doc()
+    host = TerritoriesHost(data=d, schema=SCHEMA)
+    ids = [t["id"] for t in ex.greenlit_routes(d)]
+    names = [ex.BOARD, ex.BOARD_CLIENT, ex.JSON_FILE] + [f"{ex.ROUTE_PREFIX}{i}.html" for i in ids] + [f"{ex.ROUTE_CLIENT_PREFIX}{i}.html" for i in ids]
+    n = len(host.changes)
+    for name in names:
+        st, body = post(terr, "fetch_territories_file", {"name": name}, host.clan())
+        assert st == 200 and body["change"] is None, (name, body)
+        r = body["result"]
+        raw = base64.b64decode(r["data_b64"])
+        assert r["bytes"] == len(raw) and r["media_type"] == ("application/json" if name.endswith(".json") else "text/html")
+        if name.endswith(".json"):
+            assert [x["id"] for x in json.loads(raw)["routes"]] == ids
+        else:
+            page = raw.decode("utf-8")
+            assert page.startswith("<!doctype html>") and "Napkin Studio · powered by CLAN" in page and "Made with Napkin" not in page
+    assert len(host.changes) == n, "an export writes nothing to the document"
+
+
+def test_nothing_greenlit_is_said_in_words_by_the_task(terr):
+    d = doc()
+    d["greenlit"] = []
+    host = TerritoriesHost(data=d, schema=SCHEMA)
+    for name in (ex.BOARD, ex.JSON_FILE):
+        st, body = post(terr, "fetch_territories_file", {"name": name}, host.clan())
+        assert st == 409 and "Nothing is greenlit yet" in body["error"]["message"]
+    st, body = post(terr, "fetch_territories_file", {"name": ex.ROUTE_PREFIX + "t_gone.html"}, host.clan())
+    assert st == 409
+
+
+def test_the_footer_is_napkin_studio_once(d):
+    for name, h in all_files(d).items():
+        assert visible(h).count("Napkin Studio") == 1, name

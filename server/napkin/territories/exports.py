@@ -51,7 +51,7 @@ LEAK = re.compile(r"\(to confirm\)|\bTBC\b|\*\*|~~|\{\{|\}\}|\[[^\]]*\]|^#\s|fie
                   r"|\b[a-z]+(?:_[a-z0-9]+)+\b|\b(?:t|cr|ex|ck|ask|act|lq|nt|snd|pic|in|x|f|fi)_[0-9A-Za-z_]{2,}\b", re.I)
 FONTS_LINK = ("https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400"
               "&family=Geist:wght@800&display=swap")
-BRAND_LINE = "Made with Napkin"
+BRAND_LINE = "Napkin Studio"
 # the label the screen puts on a sketch; written in two pieces because the middleware names no stand-in anywhere in its source (test_model)
 SKETCH_LABEL = "Mo" + "ck-up"
 
@@ -266,10 +266,19 @@ def pictures(t: dict, reader=None) -> list[dict]:
     if not slots:
         sc = _obj(_obj(t.get("world")).get("scenes"))
         slots = [{"kind": "sketch", "touchpoint": k, "scene": sc.get(k) or "platform"} for k in ("poster", "story", "seat", "email")]
+    # a still the person looks at first (poster, story, table card, email) leads; the TV frames follow; "TV 2" when a place has more than one
+    order = ("poster", "story", "seat", "email", "tv", "radio")
+    slots = sorted(slots, key=lambda s: order.index(s.get("touchpoint")) if s.get("touchpoint") in order else len(order))
+    count: dict = {}
+    for s in slots:
+        count[s.get("touchpoint")] = count.get(s.get("touchpoint"), 0) + 1
+    seen: dict = {}
     out = []
     for s in slots:
-        kind = s.get("kind")
-        row = {"kind": kind, "touchpoint": TOUCH_NAMES.get(s.get("touchpoint"), "Picture"), "scene": s.get("scene") or "platform", "final": bool(s.get("final"))}
+        kind, tp = s.get("kind"), s.get("touchpoint")
+        seen[tp] = seen.get(tp, 0) + 1
+        name = TOUCH_NAMES.get(tp, "Picture") + (f" {seen[tp]}" if count[tp] > 1 else "")
+        row = {"kind": kind, "touchpoint": name, "scene": s.get("scene") or "platform", "final": bool(s.get("final"))}
         if kind == "gap":
             row.update(gap=clean(s.get("gap_reason")) or "No picture yet.", label=None)
         elif kind == "frame":
