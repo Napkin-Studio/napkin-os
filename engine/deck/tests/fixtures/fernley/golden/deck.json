@@ -777,19 +777,19 @@
    ],
    "claims": [
     {
-     "text": "A sparkling iced tea: tea made cold and fizzy.",
+     "text": "It is a sparkling iced tea, which is tea made cold and fizzy.",
      "refs": [
       "brief:background"
      ]
     },
     {
-     "text": "From Fernley Drinks, a Cork-based brand.",
+     "text": "It comes from Fernley Drinks, a Cork-based brand.",
      "refs": [
       "brief:background"
      ]
     },
     {
-     "text": "Further reasons to believe must come from the client.",
+     "text": "Further reasons to believe must come from the client. None were supplied.",
      "refs": [
       "brief:reasons_to_believe"
      ]
@@ -1247,9 +1247,8 @@
      "text": "Not defined in the inputs. Proposed for research: people who drink tea at home and people who do not."
     },
     {
-     "kind": "card",
-     "title": "Who the work is written for",
-     "text": "Aoife. Drinks tea at home every day, but has never thought of reaching for one cold in the sun."
+     "kind": "text",
+     "text": ""
     },
     {
      "kind": "small",
@@ -1314,7 +1313,7 @@
      "items": [
       [
        "Why it fits",
-       "Answers the chosen insight directly (IC5, brief:insight): if young adults know tea well but never think of it for a summer day, the work keeps the familiarity and changes the occasion. Only a tea brand can do this, which suits Fernley as a sparkling iced tea brand (brief:background). It builds awareness through a new moment rather than a new drink (req:R1), and it lowers the risk of a first sip by starting from something already liked (req:R2, brief:desired_response). Built for the spring to summer 2027 window (req:R4) and for 18 to 34 year olds in Ireland (brief:audience, req:R3)."
+       "Answers the chosen insight directly: if young adults know tea well but never think of it for a summer day, the work keeps the familiarity and changes the occasion. Only a tea brand can do this, which suits Fernley as a sparkling iced tea brand. It builds awareness through a new moment rather than a new drink, and it lowers the risk of a first sip by starting from something already liked. Built for the spring to summer 2027 window and for 18 to 34 year olds in Ireland."
       ],
       [
        "Mood",
@@ -1371,7 +1370,7 @@
      "items": [
       [
        "Why it fits",
-       "Answers the possible barrier set out in the storyline: uncertainty about what the drink is, not dislike of it (IC4, IC6). If a drink you cannot place is one you cannot picture tasting, the work removes the guesswork, which speaks to trial (req:R2, brief:desired_response). It leads with the sparkle and the tea together instead of relying on the words iced tea (IC6, brief:background), and plain clarity also builds awareness (req:R1)."
+       "Answers the possible barrier set out in the storyline: uncertainty about what the drink is, not dislike of it (IC4, IC6). If a drink you cannot place is one you cannot picture tasting, the work removes the guesswork, which speaks to trial. It leads with the sparkle and the tea together instead of relying on the words iced tea, and plain clarity also builds awareness."
       ],
       [
        "Mood",
@@ -1428,7 +1427,7 @@
      "items": [
       [
        "Why it fits",
-       "Takes a different route to the same tasks. Awareness comes through a clear, ownable origin rather than through the category (brief:background, req:R1). Origin gives a hard-to-place drink a sense of where it belongs, which may lower the risk of a first sip (req:R2). A Cork brand is the one thing no rival from outside Cork can claim, so it passes the swap test on origin, not on product."
+       "Takes a different route to the same tasks. Awareness comes through a clear, ownable origin rather than through the category. Origin gives a hard-to-place drink a sense of where it belongs, which may lower the risk of a first sip. A Cork brand is the one thing no rival from outside Cork can claim, so it passes the swap test on origin, not on product."
       ],
       [
        "Mood",
@@ -1437,7 +1436,7 @@
       [
        "Risks",
        [
-        "Nothing in the inputs says whether Cork origin matters to 18 to 34 year olds in Ireland, or whether it lands outside Cork. It could feel parochial to the national audience (brief:audience, req:R3). This is a research question.",
+        "Nothing in the inputs says whether Cork origin matters to 18 to 34 year olds in Ireland, or whether it lands outside Cork. It could feel parochial to the national audience. This is a research question.",
         "The inputs say only that Fernley is Cork-based. They do not say where the drink is made or brewed, so any 'made in Cork' claim needs client confirmation.",
         "It does not directly address the storyline's chosen insight (IC5) or the possible barrier of what the drink is. Origin may build awareness without explaining the product, so it may need T2-style clarity alongside it.",
         "Category safety: local and regional humour must not drift into drinking-culture tropes."

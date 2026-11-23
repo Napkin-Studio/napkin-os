@@ -7,7 +7,11 @@ export function stageChip(s: ProjectSummary): { tone: 'on' | 'warn' | 'done'; te
   const label = s.stage === 'character' ? 'Canvas' : s.stage === 'storyboard' ? 'Storyboard' : 'Film'
   if (s.behind > 0) return { tone: 'warn', text: `${label} · ${s.behind} behind` }
   if (s.adSeconds !== null) return { tone: 'done', text: `Ad rendered · ${s.adSeconds} s` }
-  if (s.stage === 'character') return { tone: 'on', text: s.pictures ? `Canvas · ${s.pictures} ${s.pictures === 1 ? 'picture' : 'pictures'}` : 'Canvas · empty' }
+  if (s.stage === 'character') {
+    if (s.pictures) return { tone: 'on', text: `Canvas · ${s.pictures} ${s.pictures === 1 ? 'picture' : 'pictures'}` }
+    const items = s.items ?? 0
+    return { tone: 'on', text: items ? `Canvas · ${items} ${items === 1 ? 'item' : 'items'}` : 'Canvas · empty' }
+  }
   return { tone: 'on', text: `${label} · ${s.shots} ${s.shots === 1 ? 'shot' : 'shots'}` }
 }
 

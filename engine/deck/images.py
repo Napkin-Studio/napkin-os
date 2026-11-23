@@ -862,7 +862,7 @@ def take_frame_captions(slide: dict, shots: list) -> list:
 
 
 _COUNT_WORDS = {n: w for n, w in enumerate("zero one two three four five six seven eight nine ten eleven twelve".split())}
-_STILLS = re.compile(r"\b(" + "|".join(w for n, w in _COUNT_WORDS.items() if n) + r"|\d{1,2})(\s+)(stills|frames|shots)\b", re.I)
+_STILLS = re.compile(r"\b(" + "|".join(w for n, w in _COUNT_WORDS.items() if n) + r"|\d{1,2})(\s+)(still pictures|stills|frames|shots)\b", re.I)
 
 
 def fit_storyboard_copy(slide: dict, shots: list) -> list:
@@ -877,6 +877,9 @@ def fit_storyboard_copy(slide: dict, shots: list) -> list:
         w = _COUNT_WORDS[n] if not m.group(1).isdigit() else str(n)
         return (w.capitalize() if m.group(1)[:1].isupper() else w) + m.group(2) + m.group(3)
     moved = []
+    for k in ("title", "label"):   # the heading too: 'Storyboard frames (5 stills)' over a strip of four (full-flow UAT 2026-11-23: only the body was fitted)
+        if isinstance(slide.get(k), str):
+            slide[k] = _STILLS.sub(count, slide[k])
     for b in slide.get("blocks") or []:
         if b.get("kind") in ("text", "small", "statement") and isinstance(b.get("text"), str):
             b["text"] = _STILLS.sub(count, b["text"])

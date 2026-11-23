@@ -40,8 +40,8 @@ const src = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8
 describe('the film\'s ▾ menu holds the film\'s actions; each page\'s actions are in its band', () => {
   const bars = src('./TopBars.tsx')
   const menu = src('./DocMenu.tsx')
-  it('the menu: New, Open…, All projects, Import/Export; Continue in, Share…, Rename, Duplicate; Data sharing, Light / Dark, Delete…', () => {
-    const order = ['>New<', "'Open…'", '>All projects<', '>Import/Export<', '>Continue in<', '>Share…<', '>Rename<', "'Duplicate'", '>Data sharing<', '<ThemeRow />', '>Delete…<']
+  it('the menu: New, Open…, All projects, Import/Export; Continue in, Share…, Rename, Duplicate; Data sharing, Light / Dark, Move to Trash…', () => {
+    const order = ['>New<', "'Open…'", '>All projects<', '>Import/Export<', '>Continue in<', '>Share…<', '>Rename<', "'Duplicate'", '>Data sharing<', '<ThemeRow />', '{TRASH_LABEL}</MenuItem>']
     const main = menu.slice(menu.indexOf('  return (\n    <>'))
     const at = order.map((o) => main.indexOf(o))
     expect(at.every((i) => i >= 0)).toBe(true)

@@ -268,6 +268,8 @@ main.build:has(.dkstage.nk-asking){padding-bottom:16px}
 .slide h2{margin:12px 0 0;font-size:clamp(22px,3vw,34px);line-height:1.12;letter-spacing:-.03em;font-weight:800;max-width:70%}
 .slide .pimgs{position:absolute;right:5%;top:22%;bottom:14%;width:30%;display:flex;flex-direction:column;gap:8px;justify-content:center}
 .pslide .pimgs{position:absolute;right:5%;top:22%;bottom:14%;width:30%;display:flex;flex-direction:column;gap:8px;justify-content:center}
+.slide.has-pics h2,.slide.has-pics ul{max-width:52%}
+.pslide.has-pics h2{max-width:52%;font-size:clamp(24px,3.4vw,46px)}
 .pslide .pimgs img{width:100%;min-height:0;flex:1 1 0;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
 .slide .pimgs img{width:100%;min-height:0;flex:1 1 0;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
 .doc .thumb-img{width:64px;height:44px;border-radius:6px;object-fit:cover;border:1px solid var(--line);flex-shrink:0}
@@ -345,6 +347,40 @@ var DeckLogic = (function () {
   /** The agent's marks from a block: a placeholder is text only the user can supply. */
   function isPlaceholder(block) {
     return !!(block && (block.human === true || /^\[[^\]]+\]$/.test(String(block.text || '').trim())));
+  }
+
+  /**
+   * The lines of words a block draws in the review: its text, or its items, lines, from/to and table rows as text. Empty when it has none
+   * (a block that holds no words draws no bullet). Never throws.
+   */
+  function blockLines(b) {
+    var out = [];
+    var add = function (x) {
+      if (x == null) return;
+      if (Array.isArray(x)) { var t = x.map(function (y) { return isObj(y) ? String(y.text || '') : String(y == null ? '' : y); }).filter(function (y) { return y.trim(); }).join(': '); if (t.trim()) out.push(t); return; }
+      var v = isObj(x) ? x.text : x;
+      if (typeof v === 'string' && v.trim()) out.push(v);
+    };
+    if (!isObj(b)) return out;
+    add(b.text);
+    ['items', 'lines'].forEach(function (k) { if (Array.isArray(b[k])) b[k].forEach(add); });
+    if (typeof b.from === 'string') add(b.from);
+    if (typeof b.to === 'string') add(b.to);
+    if (Array.isArray(b.rows)) b.rows.slice(0, 8).forEach(function (r) { if (Array.isArray(r)) { var t = r.map(function (c) { return String(c == null ? '' : c); }).filter(function (c) { return c.trim(); }).join(' · '); if (t) out.push(t); } });
+    return out;
+  }
+
+  /**
+   * A slide's notes as a person reads them in the app: the build's "Evidence:" block (ids and the brief's own words, kept in the document for the
+   * Evidence panel) is cut off, and an id left inside a sentence goes. Sources stay in the Evidence panel, in plain words; the notes keep the talk.
+   */
+  var NOTE_ID = '(?:\\b(?:f|fi|t|d|src)_[A-Za-z0-9_]{4,}|\\b(?:brief|req|doc|prompt|answer|calc):[A-Za-z0-9_](?:[A-Za-z0-9_.#\\-]*[A-Za-z0-9_])?)';
+  function plainNotes(notes) {
+    var t = String(notes == null ? '' : notes);
+    var at = t.search(/(^|\n)\s*Evidence:\s*(\n|$)/);
+    if (at >= 0) t = t.slice(0, at);
+    t = t.replace(new RegExp('\\s*[\\(\\[]\\s*' + NOTE_ID + '(?:\\s*[,;]\\s*' + NOTE_ID + ')*\\s*[\\)\\]]', 'g'), '');
+    return t.trim();
   }
 
   /** Slide ids in story order. Backup slides (after the divider) are counted, not listed. */
@@ -575,7 +611,7 @@ var DeckLogic = (function () {
         : 'At most ' + (card.max || 18) + ' slides, then a hidden appendix');
     var n = presented(deck).length;
     return {
-      title: kind + ' for ' + (inputs.prompt.client || '[Client]'),
+      title: kind + (inputs.prompt.client ? ' for ' + inputs.prompt.client : ''), // no client yet: the line says only what kind of deck, never '[Client]'
       note: size + '. Every number points to what you gave: your prompt, a document, the brief or the research.',
       built: n
     };
@@ -583,7 +619,13 @@ var DeckLogic = (function () {
 
   /** The agency name, or the placeholder the deck itself shows. */
   function agencyShown(inputs) {
-    return (inputs.prompt.agency || '').trim() || '[Agency]';
+    var a = (inputs.prompt.agency || '').trim();
+    return a === '[Agency]' ? '' : a; // no agency named: nothing to show, never the build's placeholder (UAT 2026-11-23: "[Agency]" sat in every footer)
+  }
+
+  /** The foot of a slide in the app: the agency (when one is named) and the client, never a bracketed blank. */
+  function footLabel(agency, client) {
+    return [agency, client].map(function (x) { return String(x == null ? '' : x).trim(); }).filter(function (x) { return x && x !== '[Agency]'; }).join(' · ');
   }
 
   // ── deck types: what kind of deck this is (the engine asks q_deck_type first) ──
@@ -991,7 +1033,7 @@ var DeckLogic = (function () {
   /**
    * What the Start form shows in Client and Project before the person types: the project's title from the carried Production project, and the
    * client's name from the carried brief (its client line up to the first comma). Only ever a starting value: what the person typed wins.
-   * { client, project }, each '' when nothing carried names it. Never throws.
+   * { client, project, text }, each '' when nothing carried names it. Never throws.
    */
   function startDefaults(data) {
     var up = data && isObj(data.upstream) ? data.upstream : {}, client = '', project = '';
@@ -1007,7 +1049,9 @@ var DeckLogic = (function () {
       c = c.split(/[,;\n]/)[0].replace(/^To confirm:\s*/i, '').trim();
       if (!client && c && c.length <= 80) client = c;
     });
-    return { client: client, project: project };
+    // A starting prompt too, so the form is not half empty: only what the carried project and brief name, nothing added.
+    var text = (client || project) ? 'A pitch deck for ' + (client || 'the client') + (project ? ': ' + project : '') + '.' : '';
+    return { client: client, project: project, text: text };
   }
 
   /** The documents a person attached, as a name list: inputs.documents, else the document's materials. */
@@ -1037,6 +1081,7 @@ var DeckLogic = (function () {
     var tier = sum.brief && sum.research ? 'brief+research' : sum.brief ? 'brief' : sum.research ? 'research'
       : names.length ? 'prompt+documents' : 'prompt';
     var out = { tier: tier, documents: names, brief: !!sum.brief, research: !!sum.research };
+    if (sum.production) out.production = true; // a Production project is a source too: the line says so
     if (typeById(type)) out.type = type;
     return out;
   }
@@ -1051,8 +1096,9 @@ var DeckLogic = (function () {
     if (docs.length) parts.push(docs.length + (docs.length === 1 ? ' document' : ' documents'));
     if (bf.brief) parts.push('the brief');
     if (bf.research) parts.push('the research');
+    if (bf.production) parts.push('the Production project');
     var missing = [];
-    if (!bf.brief && !bf.research && !docs.length) missing.push('No sources for figures: numbers stay placeholders');
+    if (!bf.brief && !bf.research && !docs.length && !bf.production) missing.push('No sources for figures: numbers stay placeholders');
     if (!bf.research) missing.push('No research brought in');
     var t = typeById(bf.type);
     return { line: 'Built from: ' + (parts.length ? parts.join(', ') : 'nothing yet'), missing: missing, type: t ? t.label : '' };
@@ -1545,6 +1591,18 @@ var DeckLogic = (function () {
   }
 
   /**
+   * What a failed step says to a person: its own message when it reads as words, and a plain sentence when it is a program error (a Python
+   * 'TypeError: can only concatenate str (not "float") to str' means nothing to the person who pressed Build; UAT 2026-11-23). Never throws.
+   */
+  function plainError(message, retry) {
+    var m = String(message == null ? '' : message).trim();
+    var technical = /Traceback|\b[A-Za-z]*(Error|Exception)\b\s*:|can only concatenate|NoneType|object is not (subscriptable|iterable|callable)|object has no attribute|unhashable|KeyError|IndexError|\bat line \d+/.test(m);
+    if (!m) return retry ? 'A step did not finish. It is trying again by itself.' : 'A step did not finish. Try it again.';
+    if (technical) return 'A step could not read something it was given, so it stopped. Nothing you wrote is lost. ' + (retry ? 'It is trying again by itself.' : 'Try it again; if it stops again, tell us which deck it was.');
+    return m;
+  }
+
+  /**
    * What the Build screen shows with no gate open, as data: { kind, title, lede, head, grid, items, tail, stage,
    * retryable }. kind is 'gate' (the gate's own view), 'failed', 'done', 'running' (a live feed: run.agent, or items on
    * the running stage) or 'waiting' (nothing reports progress, so the engine is not connected). The words come from
@@ -1567,7 +1625,7 @@ var DeckLogic = (function () {
         var rows = itemRows(fs, fc, dk, retry ? 'Failed, retrying' : 'Failed');
         return fill({
           kind: 'failed', title: 'Something failed', head: fc.head, grid: !!fc.grid, retryable: retry,
-          lede: String(err.message || (retry ? 'A step did not finish. It is trying again by itself.' : 'A step did not finish. Try it again.')),
+          lede: plainError(err.message, retry),
           stage: fs ? String(fs.id) : String(err.stage || r.stage || ''),
           items: rows.filter(function (x) { return !x.tail; }), tail: rows.filter(function (x) { return x.tail; }).map(function (x) { return x.title; })
         });
@@ -1735,7 +1793,7 @@ var DeckLogic = (function () {
 
   return {
     picturesFromHtml: picturesFromHtml, appendixOf: appendixOf, deckApproval: deckApproval, approveDeck: approveDeck, exportRows: exportRows, reportLine: reportLine,
-    AGENTS: AGENTS, ACTIVITY_WORD: ACTIVITY_WORD, circleSvg: circleSvg, agentState: agentState, circleSizeFor: circleSizeFor, circleCentreSize: circleCentreSize, circleSays: circleSays, arcPath: arcPath, runView: runView, ENGINE_STATE: ENGINE_STATE,
+    AGENTS: AGENTS, ACTIVITY_WORD: ACTIVITY_WORD, circleSvg: circleSvg, agentState: agentState, circleSizeFor: circleSizeFor, circleCentreSize: circleCentreSize, circleSays: circleSays, arcPath: arcPath, runView: runView, plainError: plainError, ENGINE_STATE: ENGINE_STATE,
     upstreamSummary: upstreamSummary, startDefaults: startDefaults, productionSummary: productionSummary, documentsOf: documentsOf, builtFrom: builtFrom, describeBuiltFrom: describeBuiltFrom,
     canBuild: canBuild, gapView: gapView, questionState: questionState, answerPatch: answerPatch,
     DECK_TYPES: DECK_TYPES, deckTypeOf: deckTypeOf, typeHints: typeHints, kindOfType: kindOfType, typePatch: typePatch,
@@ -1743,9 +1801,9 @@ var DeckLogic = (function () {
     recordedStages: recordedStages, changeSheet: changeSheet,
     researchRequest: researchRequest, upstreamChanged: upstreamChanged, kitNotices: kitNotices, agencyLookNotice: agencyLookNotice, agencyUpdatePatch: agencyUpdatePatch, lookPanel: lookPanel, agencyPatch: agencyPatch, isKit: isKit,
     supplyCards: supplyCards, toSupply: toSupply, confirmList: confirmList, verifyPatch: verifyPatch, sourcedCounts: sourcedCounts,
-    isPlaceholder: isPlaceholder, presented: presented, refsOf: refsOf, evidenceFor: evidenceFor,
+    isPlaceholder: isPlaceholder, blockLines: blockLines, plainNotes: plainNotes, presented: presented, refsOf: refsOf, evidenceFor: evidenceFor,
     statusOf: statusOf, STATUS: STATUS, checksFor: checksFor, approveGate: approveGate, humanApproval: humanApproval, gateRequest: gateRequest,
-    GATES: GATES, gateView: gateView, gateHolds: gateHolds, summaryOf: summaryOf, agencyShown: agencyShown,
+    GATES: GATES, gateView: gateView, gateHolds: gateHolds, summaryOf: summaryOf, agencyShown: agencyShown, footLabel: footLabel,
     isObj: isObj, own: own
   };
 })();
@@ -2313,10 +2371,10 @@ var DeckProd = (function () {
     var dt = L.deckTypeOf(s.raw), typed = dt.source === 'picked' || dt.source === 'answered';
     var kind = typed ? L.kindOfType(dt.id) : (pending.kind || inp.kind), format = pending.format || inp.format;
     var docs = L.documentsOf(s.raw);
-    var sum = L.summaryOf({ prompt: p, kind: kind, format: format, type: typed ? dt.id : null }, s.deck);
-    var text = draft('text', p.text);
-    var bf = L.builtFrom(inp, s.upstream, docs, typed ? dt.id : null);
     var sd = L.startDefaults(s.raw);   // a deck of a Production project starts with its client and project named
+    var sum = L.summaryOf({ prompt: Object.assign({}, p, { client: p.client || sd.client }), kind: kind, format: format, type: typed ? dt.id : null }, s.deck);
+    var text = draft('text', p.text || sd.text);
+    var bf = L.builtFrom(inp, s.upstream, docs, typed ? dt.id : null);
     function field(id, lab, val, ph) {
       return '<div><label class="lab" for="' + id + '">' + lab + '</label><input class="inp" id="' + id + '" value="' + esc(draft(id, val)) + '"' + (ph ? ' placeholder="' + esc(ph) + '"' : '') + ' /></div>';
     }
@@ -2331,7 +2389,7 @@ var DeckProd = (function () {
       '<div class="stack">' + typePicker(s, format) + lookSection(s) +
       '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">02</span><b>Your prompt</b><div class="spacer"></div>' +
         '<span class="pill ' + (hasText ? 'ok' : 'plain') + '">' + (hasText ? 'Ready' : 'A line is enough') + '</span></div>' +
-        '<div class="three">' + field('client', 'Client', p.client || sd.client) + field('project', 'Project', p.project || sd.project) + field('agency', 'Agency (optional)', p.agency, 'Shows as [Agency]') + '</div>' +
+        '<div class="three">' + field('client', 'Client', p.client || sd.client) + field('project', 'Project', p.project || sd.project) + field('agency', 'Agency (optional)', p.agency, 'Left off the slides when empty') + '</div>' +
         '<div style="margin-top:14px"><label class="lab" for="ptext">What are we pitching? (a line is enough; paste everything you have)</label><textarea class="inp ta" id="ptext">' + esc(text) + '</textarea></div></section>' +
       '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">03</span><b>Documents</b><div class="spacer"></div><span class="pill ' + (docs.length ? 'ok' : 'plain') + '">' + (docs.length ? docs.length + ' attached' : 'Optional') + '</span></div>' +
         docList + '<div style="margin-top:10px"><label class="btn sm" style="display:inline-flex;align-items:center" for="attach">Attach files</label><input type="file" id="attach" multiple style="position:absolute;left:-9999px" aria-label="Attach documents" />' +
@@ -2591,8 +2649,10 @@ var DeckProd = (function () {
     var sl = s.deck.slides[id];
     var items = (sl.blocks || []).map(function (b) {
       if (L.isPlaceholder(b)) return '<li><span class="dot"></span><span class="ph"><i>To supply</i>' + esc(b.text) + '</span></li>';
-      var refs = (b.refs || []).map(esc).join(', ');
-      return '<li><span class="dot"></span><span>' + esc(b.text) + (refs ? '<sup>' + refs + '</sup>' : '') + '</span></li>';
+      // A bullet is a line of words: a block with none (a picture slot, a table, an emptied block) draws none, so no stray empty bullet (UAT 2026-11-23, slides 10-12).
+      var lines = L.blockLines(b);
+      if (!lines.length) return '';
+      return lines.map(function (t) { return '<li><span class="dot"></span><span>' + esc(t) + '</span></li>'; }).join('');
     }).join('');
     return { items: items, sl: sl, pics: slidePics(id) };
   }
@@ -2680,9 +2740,9 @@ var DeckProd = (function () {
         (inAx ? '' : '<button class="btn sm" data-act="appendix">Move to appendix</button>') + '<button class="btn sm" data-tab="evidence">Why this slide</button>' + approve + '</div>' +
       (ds ? approveNote(ds) : '') + (upChanged.length ? '<div style="margin-bottom:12px">' + changedNote() + '</div>' : '') +
       '<div style="margin-bottom:12px">' + builtLine(builtOf(s), null, typeChip(s)) + '</div>' +
-      '<div class="slide"><div class="kick">' + esc(sl.section) + '</div><h2>' + esc(sl.title) + '</h2><ul>' + s1.items + '</ul>' + (s1.pics ? '<div class="pimgs" data-pics>' + s1.pics + '</div>' : '') +
-        '<div class="foot"><span>' + esc(agency) + ' · ' + esc(s.deck.meta && s.deck.meta.client) + '</span><div class="spacer"></div><span>' + (inAx ? 'A' + n : String(n).padStart(2, '0')) + '</span></div></div>' +
-      '<div class="card" style="margin-top:14px;padding:14px 18px;border-radius:16px;box-shadow:none"><div class="eyebrow" style="margin-bottom:6px">Speaker notes</div><div style="font-size:14px;line-height:1.5;color:var(--ink2)">' + esc(sl.notes || 'No notes for this slide.') + '</div></div></section>' +
+      '<div class="slide' + (s1.pics ? ' has-pics' : '') + '"><div class="kick">' + esc(sl.section) + '</div><h2>' + esc(sl.title) + '</h2><ul>' + s1.items + '</ul>' + (s1.pics ? '<div class="pimgs" data-pics>' + s1.pics + '</div>' : '') +
+        '<div class="foot"><span>' + esc(L.footLabel(agency, s.deck.meta && s.deck.meta.client)) + '</span><div class="spacer"></div><span>' + (inAx ? 'A' + n : String(n).padStart(2, '0')) + '</span></div></div>' +
+      '<div class="card" style="margin-top:14px;padding:14px 18px;border-radius:16px;box-shadow:none"><div class="eyebrow" style="margin-bottom:6px">Speaker notes</div><div style="font-size:14px;line-height:1.5;color:var(--ink2)">' + esc(L.plainNotes(sl.notes) || 'No notes for this slide.') + '</div></div></section>' +
       '<aside class="side"><div class="frost" style="padding:16px"><div class="tabs" role="tablist">' + tabs + '</div>' + panel + '</div>' + supplyPanel(s) + confirmPanel(s) + prodPanel(s, id) +
       '<div class="card" style="padding:16px"><div style="font-size:13px;font-weight:600;margin-bottom:8px">Ask for a change</div><div style="display:flex;gap:8px;flex-wrap:wrap">' +
         [['shorter', 'Shorter'], ['add_figure', 'Add the figure'], ['rephrase', 'Say it another way']].map(function (c) { return '<button class="btn sm" data-change="' + c[0] + '">' + c[1] + '</button>'; }).join('') +
@@ -2700,11 +2760,11 @@ var DeckProd = (function () {
     var ds = L.deckApproval(s.raw), rep = L.reportLine(s.raw), ax = L.appendixOf(s.deck);
     var head = ds ? deckStat(ds) : '<span class="chip ' + ((s.validation.errors || 0) ? 'warn' : 'ok') + '">' + ((s.validation.errors || 0) ? 'Has errors' : 'Checked') + '</span>';
     var unapproved = ds && ds.state === 'open' ? '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-6px 0 14px" data-approve-hint><span class="note" style="flex:1;min-width:160px">The deck is not approved yet.</span><button class="btn tall" data-go="review">Approve it on Review</button></div>' : '';
-    return '<main class="present"><section><div class="pslide"><div class="kick">' + esc(sl.section) + '</div><h2>' + esc(sl.title) + '</h2>' + (pp ? '<div class="pimgs" data-pics>' + pp + '</div>' : '') +
-      '<div class="foot"><span>' + esc(agency) + ' · ' + esc(s.deck.meta && s.deck.meta.client) + '</span><div class="spacer"></div><span>' + (i + 1) + ' / ' + ids.length + '</span></div></div>' +
+    return '<main class="present"><section><div class="pslide' + (pp ? ' has-pics' : '') + '"><div class="kick">' + esc(sl.section) + '</div><h2>' + esc(sl.title) + '</h2>' + (pp ? '<div class="pimgs" data-pics>' + pp + '</div>' : '') +
+      '<div class="foot"><span>' + esc(L.footLabel(agency, s.deck.meta && s.deck.meta.client)) + '</span><div class="spacer"></div><span>' + (i + 1) + ' / ' + ids.length + '</span></div></div>' +
       '<div class="controls"><button class="circ" aria-label="Previous slide" data-pres="-1"' + (i === 0 ? ' disabled' : '') + '>←</button><button class="circ" style="background:var(--ink);color:var(--paper);border:0" aria-label="Next slide" data-pres="1"' + (i === ids.length - 1 ? ' disabled' : '') + '>→</button>' +
       '<span class="mono" style="font-size:13px;padding:0 10px">' + (i + 1) + ' / ' + ids.length + '</span><div class="prog"><span style="width:' + Math.round(((i + 1) / ids.length) * 100) + '%"></span></div></div>' +
-      '<div class="card" style="margin-top:14px;padding:18px 22px"><div class="eyebrow" style="margin-bottom:8px">Notes for this slide</div><div style="font-size:18px;line-height:1.5">' + esc(sl.notes || 'No notes for this slide.') + '</div>' +
+      '<div class="card" style="margin-top:14px;padding:18px 22px"><div class="eyebrow" style="margin-bottom:8px">Notes for this slide</div><div style="font-size:18px;line-height:1.5">' + esc(L.plainNotes(sl.notes) || 'No notes for this slide.') + '</div>' +
       (refs ? '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">' + refs + '</div>' : '') + '</div></section>' +
       '<aside class="stack"><div class="eyebrow">Next</div>' + (nx ? '<div class="mini"><div class="k">' + esc(nx.section) + '</div><div class="t">' + esc(nx.title) + '</div></div>' : '<div class="note">That is the last presented slide.</div>') +
       '<div class="eyebrow" style="margin-top:6px">Appendix</div><div class="note" style="background:var(--soft);border-radius:12px;padding:12px">' + esc(ax.count) + ' backup slides are hidden. They keep their sources.</div>' +
@@ -3038,7 +3098,7 @@ var DeckProd = (function () {
     if (t.id === 'build') {
       stashDraft();
       var sdb = L.startDefaults(s.raw), pb = s.inputs.prompt || {};
-      var prompt = { client: draft('client', pb.client || sdb.client), project: draft('project', pb.project || sdb.project), agency: draft('agency', ''), text: draft('text', '') };
+      var prompt = { client: draft('client', pb.client || sdb.client), project: draft('project', pb.project || sdb.project), agency: draft('agency', ''), text: draft('text', pb.text || sdb.text) };
       Object.keys(prompt).forEach(function (k) { prompt[k] = String(prompt[k]).trim(); });
       var guard = L.canBuild({ prompt: prompt }, s.upstream, L.documentsOf(s.raw));
       if (!guard.ok) { toast(guard.message); return; }

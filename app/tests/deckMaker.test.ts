@@ -40,8 +40,12 @@ const L = vm.runInNewContext(`${logicRun}; DeckLogic`) as {
   gateHolds(run: unknown): boolean
   summaryOf(inputs: unknown, deck: unknown): { title: string; note: string }
   agencyShown(inputs: unknown): string
+  footLabel(agency: unknown, client: unknown): string
+  blockLines(b: unknown): string[]
+  plainError(message: unknown, retry: boolean): string
+  plainNotes(notes: unknown): string
   productionSummary(doc: unknown): { name: string; finals: number; to_supply: number; brief: unknown } | null
-  startDefaults(data: unknown): { client: string; project: string }
+  startDefaults(data: unknown): { client: string; project: string; text?: string }
   upstreamSummary(data: unknown): { brief: { name: string; fields_filled: number; fields_total: number; mandatories: number } | null; research: { name: string; findings: number | null; rejected: number | null } | null; production: { name: string; finals: number; to_supply: number; brief: unknown } | null; any: boolean }
   documentsOf(data: unknown): { name: string }[]
   builtFrom(inputs: unknown, upstream: unknown, documents: unknown): { tier: string; documents: string[]; brief: boolean; research: boolean }
@@ -171,9 +175,48 @@ test('an unsourced line is labelled, not flagged as a missing source', () => {
   assert.ok(checks.some((c: Check) => /opinion/.test(c.text)))
 })
 
-test('the agency shows as a placeholder until the user gives one', () => {
-  assert.equal(L.agencyShown({ prompt: { agency: '' } }), '[Agency]')
+test('no agency named shows nothing, never the placeholder', () => {
+  assert.equal(L.agencyShown({ prompt: { agency: '' } }), '')
+  assert.equal(L.agencyShown({ prompt: { agency: '[Agency]' } }), '')
   assert.equal(L.agencyShown({ prompt: { agency: ' Acme ' } }), 'Acme')
+  // the foot of a slide in the review and present views (UAT 2026-11-23: "[Agency]" sat in every footer)
+  assert.equal(L.footLabel('', 'Tidewell'), 'Tidewell')
+  assert.equal(L.footLabel('[Agency]', 'Tidewell'), 'Tidewell')
+  assert.equal(L.footLabel('Acme', 'Tidewell'), 'Acme · Tidewell')
+  assert.equal(L.footLabel('', undefined), '')
+})
+
+test('the Start summary never says [Client], and a carried project starts a prompt too', () => {
+  assert.equal(L.summaryOf({ prompt: {}, kind: 'agency', format: 'pitch' }, { order: [], slides: {} }).title, 'An agency pitch')
+  const up = { p: { app: 'production-tool', project: { title: 'Tidewell Tides In launch' } }, b: { client: 'Tidewell Sparkling Water, a brand' } }
+  const d = plain(L.startDefaults({ upstream: up })) as { text: string }
+  assert.equal(d.text, 'A pitch deck for Tidewell Sparkling Water: Tidewell Tides In launch.')
+  assert.equal((plain(L.startDefaults({})) as { text: string }).text, '')
+})
+
+test('Built from names the Production project, and an empty block draws no bullet', () => {
+  const prod = { p: { app: 'production-tool', project: { title: 'P' }, assets: {}, finals: {}, sizes: {} }, b: briefDoc, r: researchDoc }
+  const bf = L.builtFrom({}, { d1: briefDoc, d2: researchDoc, p: prod.p }, [])
+  assert.equal(L.describeBuiltFrom(bf, false).line, 'Built from: the brief, the research, the Production project')
+  assert.equal(L.describeBuiltFrom({ tier: 'brief+research', documents: [], brief: true, research: true, production: true }, false).line, 'Built from: the brief, the research, the Production project')
+  assert.deepEqual(plain(L.blockLines({ kind: 'bullets', items: [{ text: 'a' }, { text: ' ' }, 'b'] })), ['a', 'b'])
+  assert.deepEqual(plain(L.blockLines({ kind: 'sketch', text: '' })), [])
+  assert.deepEqual(plain(L.blockLines({ kind: 'kv', items: [['Why it fits', 'x'], ['Mood', '']] })), ['Why it fits: x', 'Mood'])
+})
+
+test('the notes a person reads carry no evidence block and no id', () => {
+  assert.equal(L.plainNotes('Say it slowly (brief:audience, req:r6).\n\nEvidence:\n[brief:audience] brief field: x\n[f_ab12cdef] y'), 'Say it slowly.')
+  assert.equal(L.plainNotes('Evidence:'), '')
+  assert.equal(L.plainNotes(undefined), '')
+})
+
+test('a program error is never shown to a person as the reason a step failed', () => {
+  const raw = 'TypeError: can only concatenate str (not "float") to str'
+  assert.doesNotMatch(L.plainError(raw, true), /TypeError|concatenate/)
+  assert.match(L.plainError(raw, true), /trying again by itself/)
+  assert.match(L.plainError(raw, false), /Try it again/)
+  assert.equal(L.plainError('The cost cap for this deck is reached.', false), 'The cost cap for this deck is reached.')
+  assert.match(L.plainError('', true), /did not finish/)
 })
 
 test('the summary comes from the inputs, never fixed numbers', () => {
@@ -2657,9 +2700,9 @@ test('the Start form names the client and the project from what the deck carries
     b: { client: 'Hollow Oak Cider, a 140-year-old, orchard-grown brand', project_name: 'x' },
     k: { client: 'A Kit Name', kit: { version: 1 } },
   }
-  assert.deepEqual(plain(L.startDefaults({ upstream: up })), { client: 'Hollow Oak Cider', project: "Hollow Oak 'Still'" })
-  assert.deepEqual(plain(L.startDefaults({})), { client: '', project: '' })
-  assert.deepEqual(plain(L.startDefaults({ upstream: 'junk' })), { client: '', project: '' })
+  assert.deepEqual(plain(L.startDefaults({ upstream: up })), { client: 'Hollow Oak Cider', project: "Hollow Oak 'Still'", text: "A pitch deck for Hollow Oak Cider: Hollow Oak 'Still'." })
+  assert.deepEqual(plain(L.startDefaults({})), { client: '', project: '', text: '' })
+  assert.deepEqual(plain(L.startDefaults({ upstream: 'junk' })), { client: '', project: '', text: '' })
 })
 
 test('the PowerPoint leaves the app frame through the host export, not a blob link the sandbox would not save', () => {

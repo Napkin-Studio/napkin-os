@@ -299,3 +299,21 @@ def test_the_brief_phrasings_of_no_real_faces(line, yes):
     assert briefs.no_real_faces(_brief(line)) is yes
     assert briefs.no_real_faces({"title": "t", "spine": {"mandatories": [], "donts": [line]}}) is yes
     assert briefs.no_real_faces(None) is False
+
+
+def test_a_clip_the_passthrough_made_says_it_too_the_tidewell_uat_take_had_no_such_line():
+    """UAT 2026-11-23: the one-video take went out as the passthrough (director.v0) with the brief linked, so the film's
+    last shot showed laughing faces. The relay says the line on any frame or clip answer, whoever wrote it."""
+    from director.director import UNRECOGNISABLE, say_unrecognisable
+
+    sheet = load_sheet("runway")
+    brief = _brief("No real, recognisable faces (we had an issue with a lookalike last year).")
+    out = {"providerJob": {"provider": "runway", "model": "wan3", "prompt": "Shot 5 [10.38-13 s] Silhouettes laugh."}}
+    say_unrecognisable(out, "clip", brief, sheet)
+    assert UNRECOGNISABLE in out["providerJob"]["prompt"]
+    say_unrecognisable(out, "clip", brief, sheet)
+    assert out["providerJob"]["prompt"].count(UNRECOGNISABLE) == 1
+    plain = {"providerJob": {"provider": "runway", "model": "wan3", "prompt": "A can."}}
+    say_unrecognisable(plain, "clip", _brief("Include the can."), sheet)
+    say_unrecognisable(plain, "resize", brief, sheet)
+    assert UNRECOGNISABLE not in plain["providerJob"]["prompt"]

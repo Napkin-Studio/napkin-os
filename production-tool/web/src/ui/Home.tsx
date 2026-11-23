@@ -9,7 +9,7 @@ import { useShell } from '../app/context'
 import { download } from '../export'
 import { errorShown, setScreen } from '../dogfood/recorder'
 import type { SavedProject } from '../contracts/types'
-import { deleteWords } from '../projects/deleteWords'
+import { TRASH_GO, TRASH_LABEL, trashHref, trashQuestion, TRASH_SUB } from '../projects/deleteWords'
 import { homeItems, itemId } from '../projects/homeList'
 import type { ProjectEntry } from '../projects/projectIndex'
 import type { ProjectSummary } from '../projects/summary'
@@ -129,6 +129,7 @@ export function Home() {
                   <small className="faint">A Napkin file (.clan) or an export .zip</small>
                 </div>
               </div>
+              {relay.kind === 'http' && <TrashLink clientId={shell.deps.clientId} />}
               <p className="pp-foot">
                 {ui.savedAt && relay.kind === 'http' && <>Saved to the server · {clock(ui.savedAt)} · </>}
                 {all.length} {all.length === 1 ? 'film' : 'films'} · {relay.kind === 'http'
@@ -149,6 +150,11 @@ export function Home() {
       </main>
     </div>
   )
+}
+
+/** Home's way to the Trash: the client's own page of it, or the agency's when no client opened this tool. */
+export function TrashLink({ clientId }: { clientId?: string }) {
+  return <p className="pp-trash"><a className="side-link" data-testid="home-trash" href={trashHref(clientId)}>Trash</a></p>
 }
 
 /** The bar where no film is open (ui/shell/ShellBar.tsx PlaceBar): no Beta tag, no thumbs (owner 2026-11-19). */
@@ -190,7 +196,7 @@ function ServerCard({ row, name, onError }: { row: SavedProject; name: string; o
   )
 }
 
-function ProjectCard({ p, server, newerThere, menu, onMenu, onError }: {
+export function ProjectCard({ p, server, newerThere, menu, onMenu, onError }: {
   p: ProjectEntry; server?: SavedProject; newerThere: boolean; menu: boolean; onMenu: (open: boolean) => void; onError: (m: string) => void
 }) {
   const shell = useShell()
@@ -235,7 +241,7 @@ function ProjectCard({ p, server, newerThere, menu, onMenu, onError }: {
           {item('Duplicate', () => void shell.duplicate(p.id).catch(fail('Could not duplicate it')))}
           {item('Export', () => void shell.exportProject(p.id).then(({ blob, name }) => download(blob, name)).catch(fail('Could not export it')))}
           <div className="pt-menusep" />
-          {item('Delete…', () => setDeleting(true), 'del')}
+          {item(TRASH_LABEL, () => setDeleting(true), 'del')}
         </div>
       )}
       <div className="t">
@@ -257,11 +263,11 @@ function ProjectCard({ p, server, newerThere, menu, onMenu, onError }: {
         {!server && <><span>Kept</span><span>in this browser</span></>}
       </div>
       {deleting && (
-        <div className="pp-confirm" role="alertdialog" aria-label={`Delete ${p.name}?`} onClick={(e) => e.stopPropagation()}>
-          <span>{deleteWords(p.name)}</span>
+        <div className="pp-confirm" role="alertdialog" aria-label={trashQuestion(p.name)} onClick={(e) => e.stopPropagation()}>
+          <span><b>{trashQuestion(p.name)}</b> {TRASH_SUB}</span>
           <div className="pp-acts">
-            <button type="button" className="btn-rect" onClick={() => setDeleting(false)}>Keep</button>
-            <button type="button" className="btn-rect danger" autoFocus onClick={() => { setDeleting(false); shell.remove(p.id).catch(fail('Could not delete it')) }}>Delete</button>
+            <button type="button" className="btn-rect" onClick={() => setDeleting(false)}>Cancel</button>
+            <button type="button" className="btn-rect danger" autoFocus onClick={() => { setDeleting(false); shell.remove(p.id).catch(fail('Could not move it to the Trash')) }}>{TRASH_GO}</button>
           </div>
         </div>
       )}
@@ -269,6 +275,8 @@ function ProjectCard({ p, server, newerThere, menu, onMenu, onError }: {
   )
 }
 
-function Placeholder({ stage }: { stage: ProjectSummary['stage'] }) {
-  return <span className={`pp-ph ${stage}`}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 9h18M7 5l2 4M12 5l2 4M17 5l2 4" /></svg></span>
+// The stage rides as data, never as a class: `.character` is the canvas page's own (position: absolute; inset: 0), and as a
+// class on this span it covered the whole card, Delete included (Tidewell UAT).
+export function Placeholder({ stage }: { stage: ProjectSummary['stage'] }) {
+  return <span className="pp-ph" data-stage={stage}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 9h18M7 5l2 4M12 5l2 4M17 5l2 4" /></svg></span>
 }
