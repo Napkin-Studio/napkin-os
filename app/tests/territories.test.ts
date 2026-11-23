@@ -872,3 +872,27 @@ test('a document nothing has run on yet offers Find the insights, and it starts 
   assert.equal(L.act(doc(), {}, { a: 'first' }, ENV), null, 'once insights exist, the pick takes over')
   assert.match(L.view(d, { job: { state: 'running' } }), /data-act="first" disabled/)
 })
+
+test('a failed first run says why in the engine\'s words, offers the action at the top and names the step honestly (owner walk 2026-11-23)', () => {
+  const d = doc(); d.focus.insights = []
+  d.run = { state: 'failed', stage: 'pick', error: { stage: 'pick', message: 'To start I need the category and the market.', retryable: false } }
+  const page = L.view(d, {})
+  assert.match(page, /To start I need the category and the market\./, 'the document\'s run.error is on the page')
+  assert.doesNotMatch(page, /Nothing has been sent out yet/)
+  assert.match(page, /data-act="first"[^>]*>Try again/)
+  assert.ok(page.indexOf('data-act="first"') < page.indexOf('From the brief'), 'the action sits above the long brief, not below it')
+  assert.doesNotMatch(page, /Tick the insights the crew should work on\.[^<]*<\/p><ol/, 'nothing to tick yet')
+  assert.match(page, /Find the insights, then tick/)
+})
+
+test('the eyebrow is one clamped line and its full text is the title', () => {
+  const d = doc(); d.title = 'A very long working title: ' + 'x'.repeat(200)
+  const page = L.view(d, {})
+  assert.match(page, /<div class="eyebrow" title="[^"]*"><span>/)
+})
+
+test('a long "from" chip shrinks before the document name in the bar does (owner walk 2026-11-23: the name read "P…")', () => {
+  const css = readFileSync(new URL('src/shell/nui/shell.css', root), 'utf8')
+  assert.match(css, /\.nui \.tb-app > \.tba-line \{[^}]*flex-shrink: 2;[^}]*max-width: 220px/)
+  assert.match(css, /\.nui \.tb-app > \.tba-name \{ flex-shrink: 1; min-width: 150px; \}/)
+})

@@ -546,6 +546,9 @@ pub fn clan_context_for_agent(doc: &Document) -> Value {
     let raw_data = yaml_to_json("shared/data.yaml");
     let production = production_upstream(&raw_data);
     let territories = territories_upstream(&raw_data);
+    let carried = (doc.app_id() == Some(TERRITORIES_APP))
+        .then(|| carried_upstream(&raw_data))
+        .flatten();
     let mut context = serde_json::json!({
         "document_type": m.document_type,
         "app": m.app.as_ref().map(|a| serde_json::json!({ "name": a.name, "app_id": a.app_id, "version": a.version })),
@@ -578,6 +581,12 @@ pub fn clan_context_for_agent(doc: &Document) -> Value {
     if let Some(t) = territories {
         context["territories_upstream"] = t;
     }
+    // A Territories document reads the brief and research it was made from
+    // (the engine's input, and the exports): they travel whole beside the
+    // index, or its run finds no brief (territories-live-walk).
+    if let Some(c) = carried {
+        context["carried_upstream"] = c;
+    }
     // A research started from a brief is told the brief's ask, and only
     // that: extract_ask proposes from it (features/spinoff-and-links.clan).
     if let Some(ask) = upstream_ask(clan, &context["pipeline"]) {
@@ -602,6 +611,22 @@ pub fn clan_context_for_agent(doc: &Document) -> Value {
         }
     }
     context
+}
+
+/// The app id of Territories documents (`make_territories`).
+pub const TERRITORIES_APP: &str = "ie.napkin.territories";
+
+/// `{<id>: frozen copy}` of every entry of `data.upstream` that is a brief or
+/// research (not a kit, not a Production project): what a Territories
+/// document's engine reads. `None` when the document carries none.
+fn carried_upstream(data: &Value) -> Option<Value> {
+    let up = data.get(UPSTREAM_KEY)?.as_object()?;
+    let carried: serde_json::Map<String, Value> = up
+        .iter()
+        .filter(|(_, v)| v.is_object() && !is_kit(v) && !is_production(v))
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    (!carried.is_empty()).then(|| Value::Object(carried))
 }
 
 /// The app id a Production project's data carries (`app`, production-tool/contracts/document.schema.json).
@@ -1518,6 +1543,23 @@ mod tests {
             build_clan_context(&open(&research()), &serde_yaml::Value::Null)["manifest"]["client"]
                 .is_null()
         );
+    }
+
+    #[test]
+    fn a_territories_document_gets_its_carried_brief_whole_and_others_get_none() {
+        let data = "upstream:\n  doc-brief:\n    background: Sales are flat.\n    insight: Real beats shiny.\n  doc-kit:\n    kit: {version: 1}\n    colours: [red]\nterritories: []\n";
+        let t = open(&doc(
+            "Territories",
+            app("Territories", TERRITORIES_APP, None),
+            None,
+            &[("shared/data.yaml", data.as_bytes(), None)],
+        ));
+        let ctx = clan_context_for_agent(&t);
+        // the index is all `data.upstream` holds; the brief itself rides beside it
+        assert!(ctx["data"]["upstream"]["doc-brief"].get("background").is_none());
+        assert_eq!(ctx["carried_upstream"]["doc-brief"]["background"], "Sales are flat.");
+        assert!(ctx["carried_upstream"].get("doc-kit").is_none());
+        assert!(clan_context_for_agent(&brief()).get("carried_upstream").is_none());
     }
 
     #[test]

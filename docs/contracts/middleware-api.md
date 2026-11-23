@@ -78,6 +78,11 @@ name the stand-in, its port, or branch on which implementation answered.
   brief (objectives, audience, mandatories, budget, timing; the spine `briefs` only when the project carries no brief) from it (no picture bytes: those are
   fetched from the relay by hash with the assets pass), puts it back under `data.upstream.<id>` for the Confidential marks, and sends it
   to the engine as `production_upstream`. Absent when the document carries no Production project.
+- **`carried_upstream`** (2026-11-23, features/territories): on a Territories document (app `ie.napkin.territories`), the frozen copies of
+  `data.upstream` that are a brief or research, whole, `{<document id>: copy}`, beside the index above (a kit and a Production project are
+  left out). `run_territories` reads the brief from them (`doc.ctx_data_carried` puts them back under `data.upstream`), because from the
+  index alone the engine finds no brief and asks for a category and a market. The index still lists them. Absent when the document
+  carries none, and on every other app.
 - **`upstream_ask`** (2026-11-09, features/spinoff-and-links): on a document
   whose pipeline declares `extract_ask`, the ask of the brief it carries:
   `{document_id, direct, fields: {<path>: text}}`, the paths drawn only from

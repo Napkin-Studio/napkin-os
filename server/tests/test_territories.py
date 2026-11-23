@@ -35,9 +35,16 @@ UPSTREAM = {"upstream": contract.example("data")["upstream"]}
 
 
 class TerritoriesHost(Host):
+    """The real host's request: ``data.upstream`` is the INDEX (keys only, middleware-api.md §1) and the frozen brief and research ride whole
+    beside it as ``carried_upstream``. A test that handed the engine the full data directly passed while the real run found no brief."""
+
     def clan(self):
         c = super().clan()
         c["facts"], c["findings"] = copy.deepcopy(FACTS), copy.deepcopy(FINDINGS)
+        up = (c["data"] or {}).get("upstream")
+        if isinstance(up, dict) and up:
+            c["carried_upstream"] = copy.deepcopy(up)
+            c["data"]["upstream"] = {k: {"direct": False, "keys": sorted(v), "open_contests": []} for k, v in up.items()}
         return c
 
 
@@ -103,6 +110,17 @@ def test_a_new_document_runs_to_the_pick_gate_and_the_document_holds_it(terr):
     assert host.data["run"]["state"] == "gate" and host.data["run"]["gate"]["id"] == "pick"
     assert host.data["focus"]["insights"] and terr.model_calls.calls == ["insights"]
     valid(host)
+
+
+def test_the_run_sees_the_brief_though_the_host_sends_the_upstream_as_an_index(terr):
+    host = TerritoriesHost(data=copy.deepcopy(UPSTREAM), schema=SCHEMA)
+    host.clan = lambda base=host.clan: {**base(), "facts": [], "findings": []}     # a brief and no research: the brief is all there is to read
+    sent = host.clan()
+    assert all("keys" in v and "background" not in v for v in sent["data"]["upstream"].values()), "data.upstream is only the index"
+    assert sent["carried_upstream"]
+    step(terr, host)
+    assert host.data["run"]["state"] == "gate", "a run with the brief carried finds its insights, not 'I need the category and the market'"
+    assert host.data["upstream"] == UPSTREAM["upstream"], "the frozen copies are never rewritten by a step"
 
 
 def test_the_approved_pick_runs_explore_and_develop_to_the_greenlight_gate(terr):
@@ -272,7 +290,7 @@ def test_bad_input_is_a_400_before_any_job(terr):
     for inp in ({"step": "dance"}, {"step": "steer", "kind": "further"}, {"step": "steer", "crew_id": "c", "kind": "sideways"}, {"step": "undo"}, {"step": "more"}):
         st, body = post(terr, "run_territories", inp, host.clan())
         assert st == 400, (inp, body)
-    st, body = post(terr, "run_territories", {}, {**host.clan(), "data": {}})
+    st, body = post(terr, "run_territories", {}, {**host.clan(), "data": {}, "carried_upstream": {}})
     assert st == 400
 
 

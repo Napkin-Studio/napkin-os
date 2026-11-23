@@ -1003,3 +1003,26 @@ async fn the_sweep_is_for_admins_and_keeps_what_a_project_links() {
     let r = post_json(&s, &me, "/blobs/sweep", serde_json::json!({})).await;
     assert_eq!(r.status, StatusCode::FORBIDDEN);
 }
+
+// ── A Territories run is sent the brief it was made from (territories-live-walk) ──
+
+#[tokio::test]
+async fn a_forwarded_run_territories_carries_the_brief_whole_beside_the_upstream_index() {
+    let (mw, seen) = capturing_middleware().await;
+    let s = server_with(None, Arc::new(Capture(mw)));
+    let me = sign_in(&s, "visionary", "napkin").await;
+    let data = "upstream:\n  doc-brief:\n    background: Sales have been flat since a supermarket opened.\n    insight: Real beats shiny.\nterritories: []\ngreenlit: []\ncrew: []\n";
+    let doc = a_document(&s, &me, TERRITORIES, "Routes", data);
+    let doc = napkin_host::DocId::new(doc);
+    let token = s.ctx.tokens.mint(&me.tenant, "visionary@napkin", &doc);
+    let r = proxy(&s, &token, "run_territories", serde_json::json!({})).await;
+    assert_eq!(r.status, StatusCode::OK, "{}", String::from_utf8_lossy(&r.body));
+    let body = seen.lock().unwrap()[0].clone();
+    let clan = &body["clan"];
+    // `data.upstream` is the index (keys only) and the brief rides beside it, in full.
+    assert!(clan["data"]["upstream"]["doc-brief"].get("background").is_none());
+    assert_eq!(
+        clan["carried_upstream"]["doc-brief"]["background"],
+        "Sales have been flat since a supermarket opened."
+    );
+}
