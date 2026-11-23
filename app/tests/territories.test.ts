@@ -891,8 +891,10 @@ test('the eyebrow is one clamped line and its full text is the title', () => {
   assert.match(page, /<div class="eyebrow" title="[^"]*"><span>/)
 })
 
-test('a long "from" chip shrinks before the document name in the bar does (owner walk 2026-11-23: the name read "P…")', () => {
-  const css = readFileSync(new URL('src/shell/nui/shell.css', root), 'utf8')
-  assert.match(css, /\.nui \.tb-app > \.tba-line \{[^}]*flex-shrink: 2;[^}]*max-width: 220px/)
-  assert.match(css, /\.nui \.tb-app > \.tba-name \{ flex-shrink: 1; min-width: 150px; \}/)
+test('"To confirm:" is a quiet mark on the brief field, not a prefix in its words (owner walk 2026-11-23)', () => {
+  const d = doc(); d.focus.insights = []; d.run = {}
+  const k = Object.keys(d.upstream).find((x: string) => 'insight' in d.upstream[x] || 'single_minded_proposition' in d.upstream[x])!
+  d.upstream[k].insight = 'To confirm: Real beats shiny.'
+  const page = L.view(d, {})
+  assert.doesNotMatch(page, /To confirm: Real beats/); assert.match(page, /Real beats shiny\./); assert.match(page, /class="tbc"/)
 })

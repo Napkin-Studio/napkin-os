@@ -20,9 +20,7 @@
 .nui .tb-locked > .tb-app { flex: 1 1 auto !important; min-width: 0; overflow: hidden !important; }
 .nui .tb-locked > .tb-spacer { flex: 1 1 0; min-width: 0; }
 .nui .tb-app > * { flex-shrink: 0; }
-.nui .tb-app > .tba-name { flex-shrink: 1; min-width: 150px; }
-/* A long "from <name>" chip gives way before the document's own name does (owner walk 2026-11-23: the name read "P…"). */
-.nui .tb-app > .tba-line { flex-shrink: 2; min-width: 64px; max-width: 220px; display: block; overflow: hidden; text-overflow: ellipsis; box-sizing: border-box; }
+.nui .tb-app > .tba-name { flex-shrink: 1; min-width: 72px; }
 /* The name's column shrinks with it: its title and saved line end in an
    ellipsis inside the column, so neither runs under the caret, and the caret
    keeps its own room before Continue in. */

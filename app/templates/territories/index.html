@@ -244,6 +244,7 @@ button.tsrc:hover{border-color:color-mix(in srgb,var(--ink) 35%,var(--line))}
 .fields{margin:0;padding:0;list-style:none;display:grid;gap:12px}
 .fields li{border-left:3px solid var(--te);padding:2px 0 2px 12px}
 .fields .fl{font:800 11px var(--font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.fields .tbc{font:800 10px var(--font-ui);letter-spacing:.06em;text-transform:none;color:var(--muted);border:1px dashed var(--line,#bbb);border-radius:999px;padding:0 6px;margin-left:6px;vertical-align:1px}
 .fields .ft{font:400 17px/1.45 var(--font-serif);white-space:pre-line;overflow-wrap:anywhere}
 .rest{margin:10px 0 0;color:var(--muted);font-size:14.5px}
 .psec-t{display:block;margin-top:10px}
@@ -629,6 +630,8 @@ var TerritoriesLogic = (function () {
     });
     return { brief: brief, research: research };
   }
+  /** "To confirm:" is how the brief marks a part it assumed. Territories shows the brief's words clean and marks the field quietly, as the brief does. */
+  function unconfirmed(t) { var m = /^\s*to confirm:\s*/i.exec(t || ''); return m ? { text: t.slice(m[0].length), tbc: true } : { text: t || '', tbc: false }; }
   function values(o) { o = isObj(o) ? o : {}; return Object.keys(o).map(function (k) { return o[k]; }); }
   /** What arrived. Counts are null (never a made-up 0) when the host has not said. */
   function seen(data) {
@@ -704,7 +707,7 @@ var TerritoriesLogic = (function () {
       out.kind = 'brief';
       out.label = LABELS[m[1]] || 'Brief';
       var bf = up.brief ? up.brief.fields.filter(function (x) { return x.key === m[1]; })[0] : null;
-      if (bf) { out.text = bf.text; out.carried = true; out.status = 'plain'; out.statusWords = 'brief'; out.meta = [briefTitle(data, up)]; }
+      if (bf) { out.text = unconfirmed(bf.text).text; out.carried = true; out.status = 'plain'; out.statusWords = 'brief'; out.meta = [briefTitle(data, up)]; }
       return out;
     }
     if (/^f_/.test(cite)) {
@@ -947,7 +950,7 @@ var TerritoriesLogic = (function () {
     var keyf = '';
     if (sn.brief) {
       keyf = '<span class="psec-t">From the brief</span>' + (sn.brief.key_fields.length ? '<ul class="fields" id="key-fields">' + sn.brief.key_fields.map(function (f) {
-        return '<li data-field="' + esc(f.id) + '"><div class="fl">' + esc(f.label) + '</div><div class="ft">' + esc(f.text) + '</div></li>'; }).join('') + '</ul>' :
+        return '<li data-field="' + esc(f.id) + '"><div class="fl">' + esc(f.label) + (unconfirmed(f.text).tbc ? ' <span class="tbc" title="The brief has not confirmed this yet">to confirm</span>' : '') + '</div><div class="ft">' + esc(unconfirmed(f.text).text) + '</div></li>'; }).join('') + '</ul>' :
         '<p class="rest">The brief has no insight, proposition, objectives, audience or mandatories written yet.</p>');
       var rest = sn.brief.filled - sn.brief.key_fields.length;
       if (rest > 0) keyf += '<p class="rest">And ' + esc(rest === 1 ? 'one more field' : rest + ' more fields') + ', held with the brief.</p>';
@@ -1617,7 +1620,7 @@ var TerritoriesLogic = (function () {
     var up = upstreamOf(data), c = counts(data);
     if (what === 'brief' && up.brief) {
       return { title: briefTitle(data, up), html: '<span class="psec-t">What came from the brief · ' + esc(plural(c.briefFields, 'field')) + '</span>' +
-        up.brief.fields.map(function (f) { return '<div class="evrow"><div class="grow"><b style="font-weight:600">' + esc(f.label) + '.</b> ' + esc(f.text) + '</div>' + refChip('brief:' + f.key, data) + '</div>'; }).join('') };
+        up.brief.fields.map(function (f) { return '<div class="evrow"><div class="grow"><b style="font-weight:600">' + esc(f.label) + '.</b> ' + esc(unconfirmed(f.text).text) + '</div>' + refChip('brief:' + f.key, data) + '</div>'; }).join('') };
     }
     if (what === 'research' && up.research) {
       var pins = Object.keys(up.research.pins).sort(), fis = Object.keys(up.research.findings).sort();
