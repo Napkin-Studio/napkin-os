@@ -11,8 +11,8 @@ import { fileURLToPath } from 'node:url'
 import { unzipSync, zipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
-import { LocalPatchBus } from '../src/index'
-import { MAYA, id, store } from './fixtures'
+import { BRIEF_VERSION_ACTION, ClanDocumentStore, LocalPatchBus, memoryPersistence } from '../src/index'
+import { MAYA, id, store, wasmBytes } from './fixtures'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const fixture = () => new Uint8Array(readFileSync(join(here, 'fixtures', 'brief-spun-off.clan')))
@@ -112,5 +112,76 @@ describe('a project born as a spin-off', () => {
     const starts = (await t.chain()).filter((d) => d.action === 'start the project')
     expect(starts).toHaveLength(1)
     expect(MAYA.id).toBeTruthy()
+  })
+})
+
+// A Brief node made before `source.version` (owner, 2026-11-23: "Migrate once on open"): its document's own schema
+// forbids the field, so the version is filled once, when it opens, and saved.
+describe('a Brief node from before source.version', () => {
+  const BRIEF = 'brief_01K6XA7Q3M9V2D4R8T0B000001'
+  const node = (how: 'link' | 'spinoff', version?: number) => ({
+    id: BRIEF, v: 1, field_v: {}, title: 'First Light', spine: { proposition: 'Lumen.' },
+    source: { document_id: 'doc-first-light', app_id: 'ie.napkin.brief-maker', data_sha256: `sha256:${'b'.repeat(64)}`, taken: 1, ...(version ? { version } : {}), at: '2026-11-20T10:00:00Z', how },
+  })
+  /** A saved project with one Brief node, written the way an older build did: no version, and a schema that forbids it. */
+  async function older(how: 'link' | 'spinoff', version?: number): Promise<Uint8Array> {
+    const s = store()
+    await s.create({ person: MAYA, title: 'Old', blank: true })
+    await s.patch({ briefs: { [BRIEF]: node(how, version ?? 2) } }, { action: 'seed' })
+    const z = unzipSync(await s.exportClan())
+    if (!version) {
+      const data = parseYaml(new TextDecoder().decode(z['shared/data.yaml']))
+      delete data.briefs[BRIEF].source.version
+      z['shared/data.yaml'] = new TextEncoder().encode(stringifyYaml(data))
+      const strip = (o: any): void => {
+        if (!o || typeof o !== 'object') return
+        if (o.properties?.taken && o.properties?.version) { delete o.properties.version; o.required = o.required.filter((k: string) => k !== 'version') }
+        for (const v of Object.values(o)) strip(v)
+      }
+      const schema = JSON.parse(new TextDecoder().decode(z['agent/output-schema.json']))
+      strip(schema)
+      z['agent/output-schema.json'] = new TextEncoder().encode(JSON.stringify(schema))
+    }
+    return zipSync(z)
+  }
+  const open = (bytes: Uint8Array, briefVersion?: (id: string) => Promise<number | null>, persistence = memoryPersistence()) => {
+    const s = new ClanDocumentStore({ wasm: wasmBytes(), persistence, saveDebounceMs: 0, person: MAYA, ...(briefVersion ? { briefVersion } : {}) })
+    return { s, persistence, opened: s.open(bytes) }
+  }
+
+  it('a linked one gets the linked brief\'s version from Napkin, saved once', async () => {
+    const asked: string[] = []
+    const { s, persistence, opened } = open(await older('link'), async (id) => { asked.push(id); return 3 })
+    const doc = (await opened) as any
+    expect(doc.briefs[BRIEF].source.version).toBe(3)
+    expect(asked).toEqual(['doc-first-light'])
+    expect((await s.chain()).some((d) => d.action === BRIEF_VERSION_ACTION)).toBe(true)
+    await s.flush()
+    // saved: the next open asks nothing and keeps 3
+    const again = new ClanDocumentStore({ wasm: wasmBytes(), persistence, saveDebounceMs: 0, person: MAYA, briefVersion: async () => { throw new Error('asked again') } })
+    expect(((await again.load()) as any).briefs[BRIEF].source.version).toBe(3)
+  })
+
+  it('a linked one whose brief cannot be read gets 1', async () => {
+    const { opened } = open(await older('link'), async () => null)
+    expect(((await opened) as any).briefs[BRIEF].source.version).toBe(1)
+  })
+
+  it('a spun-off one counts the approves carried in the chain, and asks Napkin nothing', async () => {
+    const bytes = await older('spinoff')
+    const z = unzipSync(bytes)
+    const chain = parseYaml(new TextDecoder().decode(z['agent/decision-chain.yaml'])) as { decisions: Record<string, any>[] }
+    const approve = (n: number) => ({ id: `d_lock${n}`, kind: 'approve', agent: 'human', actor: 'human:u_a', action: 'lock', targets: ['doc-first-light#'], rationale: 'Locked.', timestamp: `2026-11-1${n}T12:00:00Z` })
+    chain.decisions = [approve(2), approve(1), ...chain.decisions]
+    z['agent/decision-chain.yaml'] = new TextEncoder().encode(stringifyYaml(chain))
+    const { opened } = open(zipSync(z), async () => { throw new Error('asked') })
+    expect(((await opened) as any).briefs[BRIEF].source.version).toBe(2)
+  })
+
+  it('a document that already has a version is left untouched', async () => {
+    const { s, opened } = open(await older('link', 4), async () => { throw new Error('asked') })
+    const doc = (await opened) as any
+    expect(doc.briefs[BRIEF].source.version).toBe(4)
+    expect((await s.chain()).some((d) => d.action === BRIEF_VERSION_ACTION)).toBe(false)
   })
 })
