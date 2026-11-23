@@ -44,15 +44,15 @@ export async function download(request: APIRequestContext, tenant: string, doc: 
 }
 
 /** The document's data as the host holds it (GET .../data). */
-export async function dataOf(request: APIRequestContext, tenant: string, doc: string): Promise<Record<string, unknown[]>> {
+export async function dataOf(request: APIRequestContext, tenant: string, doc: string): Promise<Record<string, Record<string, unknown>>> {
   const r = await request.get(`/api/t/${tenant}/d/${doc}/data`)
   expect(r.ok(), 'data').toBeTruthy()
   return (await r.json()).data
 }
 
-/** Entity kinds of a Production document that hold something: the canvas nodes, by kind. */
-export const nodeKinds = (d: Record<string, unknown>) =>
-  ['scripts', 'storyboards', 'videos', 'briefs', 'boards', 'frames', 'shots'].filter((k) => Array.isArray(d[k]) && (d[k] as unknown[]).length > 0)
+/** Entity kinds of a Production document that hold something: the canvas nodes, by kind (each kind is an id-keyed map). */
+export const nodeKinds = (d: Record<string, Record<string, unknown>>) =>
+  ['scripts', 'storyboards', 'videos', 'briefs', 'boards', 'frames', 'shots'].filter((k) => d[k] && Object.keys(d[k]).length > 0)
 
 export const toolUrl = (doc: string) => `/production/?doc=${encodeURIComponent(doc)}`
 
@@ -75,15 +75,14 @@ export function watchOrigins(page: Page): { foreign: string[] } {
 
 
 
-/** The film's ▾ menu: More, then Rename (ui/chrome/DocMenu): the one edit every stage has. */
-export async function renameProject(page: Page, name: string) {
-  await page.getByRole('button', { name: 'More' }).first().click()
-  await page.getByRole('menuitem', { name: /Rename/ }).click()
-  await page.getByLabel("The project's name").fill(name)
-  await page.getByRole('button', { name: 'Rename', exact: true }).click()
+/** A real document edit: + Node, then Script / Storyboard / Film (lands in `data.scripts` etc.). The project name
+ *  in the bar is only the tool's own index, so Rename is not a document edit. */
+export async function addNode(page: Page, kind: 'Script' | 'Storyboard' | 'Film') {
+  await page.getByRole('button', { name: '+ Node' }).click()
+  await page.getByRole('menuitem', { name: new RegExp(`^${kind}`) }).click()
 }
 
-/** Waits until the host's copy of the project has this title (a save landed). */
-export async function waitSavedTitle(request: APIRequestContext, tenant: string, doc: string, title: string, timeout = 30_000) {
-  await expect.poll(async () => manifestTitle((await download(request, tenant, doc)).bytes), { timeout }).toBe(title)
+/** Waits until the host's copy has a node of this kind (a save landed). */
+export async function waitSavedKind(request: APIRequestContext, tenant: string, doc: string, kind: string, timeout = 30_000) {
+  await expect.poll(async () => nodeKinds(await dataOf(request, tenant, doc)), { timeout }).toContain(kind)
 }

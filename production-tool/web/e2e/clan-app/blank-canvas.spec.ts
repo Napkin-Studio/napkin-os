@@ -31,7 +31,12 @@ at(1)('S1-6 from a brief only the Brief node is placed', async ({ page }, info) 
   const doc = (await sp.json()).path as string
   await page.goto(toolUrl(doc))
   await expect(page.locator('canvas').first()).toBeVisible({ timeout: 60_000 })
-  const kinds = nodeKinds(await dataOf(page.request, tenant, doc))
+  // the Brief node is placed by the page on open; a save puts it on the host
+  await page.waitForTimeout(3000)
+  await page.keyboard.press('Control+s')
+  await page.waitForTimeout(3000)
+  const data = await dataOf(page.request, tenant, doc)
+  const kinds = nodeKinds(data)
   expect(kinds, 'exactly the Brief').toContain('briefs')
   expect(kinds).not.toContain('scripts')
   for (const w of WIDTHS) {
