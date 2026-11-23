@@ -65,7 +65,7 @@ uv run python -m local            # http://localhost:8787
 - Routes answer both bare (`/jobs`) and under `/api` (`/api/jobs`). CORS is open.
 - `GET /me` says who the relay takes the caller to be (`relay-api.schema.json#/$defs/Me`):
   participant id, handle, team, workspace, today's remaining quotas and saved projects.
-- `/clan*` and `/projects*` (any method) answer 410 `gone`, `{"error":{"code":"gone","message":"Reload the page: projects now live in the library."}}`, for one release (features/production-in-library.clan): documents live in the library of Napkin OS (napkin-web), not here. The code that stored them (`projects.py`, kept only for `GET /me`'s old `projects` count) is deleted in a follow-up. Old `tenants/<tenantId>/projects/` objects are left where they are; `scripts/import-production-projects` moves them into the library.
+- `/clan*` and `/projects*` (any method) answer 410 `gone`, `{"error":{"code":"gone","message":"Reload the page: projects now live in the library."}}`, for one release (features/production-in-library.clan): documents live in the library of Napkin OS (napkin-web), not here. The code that stored them (`projects.py`, kept only for `GET /me`'s old `projects` count) is deleted in a follow-up. Old `tenants/<tenantId>/projects/` objects are left where they are: fresh start, nothing is imported into the library.
 - Pruning, once the data has been studied: `scripts/prune_workspaces.py` (dry run unless `--yes`; see its docstring).
 - Uploads: `putUrl` is `http://localhost:8787/_upload/in/sha256:…` (PUT the bytes).
   Files are served from `.local-data/` at `/in/`, `/out/` and `/ads/`.
