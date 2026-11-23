@@ -50,6 +50,7 @@ class Inputs:
     built_from: dict = field(default_factory=dict)   # intake.tier(): {tier, documents, brief, research}
     intake: dict = field(default_factory=dict)       # the a0 gaps/questions as the runner wrote them
     verified: dict = field(default_factory=dict)     # confirm ref -> {by, at}: the person's verify decisions (intake.verified.<ref>)
+    production_visuals: dict | None = None           # a deck made from a Production project: what its finals are (from_production.finals_summary); the deck shows visuals only, no film
     marks: list | None = None                        # parts a person marked Confidential: [{path, text, kind}]; None = never checked (picture generation is refused)
 
     def has_brief(self) -> bool:
@@ -431,6 +432,23 @@ BRAND_APP, STYLE_PACK_APP = "ie.napkin.brand", "ie.napkin.style-pack"
 KIT_APPS = (BRAND_APP, STYLE_PACK_APP)
 #: The brand layer's reference on a pin (Contract 6, section 2): ``fact://brand/<slug>/<key>@v``.
 _BRAND_REF = "fact://brand/"
+
+
+def apply_research(inp: "Inputs", members: dict | None) -> bool:
+    """The research a Deck document carries (its merged ``facts``, ``findings``, ``sources`` and the whole decision ``decisions`` chain, each a
+    list or wrapped in its top-level key) becomes the deck's evidence: the engine server is sent these beside the prompt, so the evidence panel
+    and the stages know the research the person carried. A finding rejected in the chain stays rejected; a pin the brand layer owns is dropped.
+    Returns whether any research was taken. Never replaces research the Inputs already hold."""
+    members = dict(members or {})
+    if inp.has_research() or not any(members.get(k) for k in ("facts", "findings")):
+        return False
+    members, _ = _drop_kit_pins(members, set(), set())
+    chain = members.get("decisions") if "decisions" in members else members.get("chain")
+    r = parse_research(members.get("facts"), members.get("findings"), members.get("sources"), chain, chain_rejects_findings=True)
+    inp.facts, inp.findings, inp.sources = r["facts"], r["findings"], r["sources"]
+    inp.rejected_pins, inp.research_doc_id, inp.research_title = r["rejected_pins"], r["doc_id"], r["title"]
+    inp.coverage.update(_research_coverage(inp, r["chain_len"]))
+    return inp.has_research()
 
 
 def apply_production_brief(inp: "Inputs", doc_id: str, doc: dict) -> bool:

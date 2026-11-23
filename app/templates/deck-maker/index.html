@@ -266,6 +266,9 @@ main.build:has(.dkstage.nk-asking){padding-bottom:16px}
 .slide{aspect-ratio:16/9;width:100%;background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow-lift);padding:5.5% 6.5%;position:relative;overflow:hidden}
 .slide .kick{font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--create)}
 .slide h2{margin:12px 0 0;font-size:clamp(22px,3vw,34px);line-height:1.12;letter-spacing:-.03em;font-weight:800;max-width:70%}
+.slide .pimgs{position:absolute;right:5%;top:22%;bottom:14%;width:30%;display:flex;flex-direction:column;gap:8px;justify-content:center}
+.slide .pimgs img{width:100%;min-height:0;flex:1 1 0;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
+.doc .thumb-img{width:64px;height:44px;border-radius:6px;object-fit:cover;border:1px solid var(--line);flex-shrink:0}
 .slide ul{list-style:none;margin-top:22px;display:flex;flex-direction:column;gap:12px;max-width:62%}
 .slide li{display:flex;gap:12px;align-items:flex-start;font-size:clamp(14px,1.5vw,17px);line-height:1.45}
 .slide li .dot{margin-top:9px;background:var(--ink)}
@@ -983,6 +986,28 @@ var DeckLogic = (function () {
     return { brief: brief, research: research, production: production, any: !!(brief || research || production) };
   }
 
+  /**
+   * What the Start form shows in Client and Project before the person types: the project's title from the carried Production project, and the
+   * client's name from the carried brief (its client line up to the first comma). Only ever a starting value: what the person typed wins.
+   * { client, project }, each '' when nothing carried names it. Never throws.
+   */
+  function startDefaults(data) {
+    var up = data && isObj(data.upstream) ? data.upstream : {}, client = '', project = '';
+    Object.keys(up).forEach(function (id) {
+      var u = up[id];
+      if (!isObj(u)) return;
+      if (isProduction(u)) {
+        if (!project && isObj(u.project) && typeof u.project.title === 'string') project = u.project.title.trim();
+        return;
+      }
+      if (isKit(u)) return;
+      var c = typeof u.client === 'string' ? u.client : (isObj(u.client) && typeof u.client.value === 'string' ? u.client.value : '');
+      c = c.split(/[,;\n]/)[0].replace(/^To confirm:\s*/i, '').trim();
+      if (!client && c && c.length <= 80) client = c;
+    });
+    return { client: client, project: project };
+  }
+
   /** The documents a person attached, as a name list: inputs.documents, else the document's materials. */
   function documentsOf(data) {
     var inp = (data && data.inputs) || {};
@@ -1687,10 +1712,29 @@ var DeckLogic = (function () {
     return { known: true, errors: e, line: e === 0 ? '0 errors, every number traced, ' + ph : e + (e === 1 ? ' error' : ' errors') + ' to fix, see Checks on Review, ' + ph };
   }
 
+  /**
+   * The pictures a built deck.html carries, by slide and slot: { s07: { picture: 'data:image/jpeg;base64,...' } }. The engine keeps the
+   * pictures (the document holds none; pulled ones are fetched by hash from Production at build) and writes them inline into deck.html, so
+   * the preview reads them from there. Only inline images count: nothing is ever loaded from a link. Never throws.
+   */
+  function picturesFromHtml(html) {
+    var out = {};
+    try {
+      var parts = String(html || '').split(/<section\b/);
+      for (var i = 1; i < parts.length; i++) {
+        var id = /\bid="(s[0-9]{2,3})"/.exec(parts[i].slice(0, 600));
+        if (!id) continue;
+        var re = /<figure\b[^>]*\bdata-slot="([a-z][a-z0-9_]{1,23})"[^>]*>\s*<img\b[^>]*?\bsrc="(data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+\/=]+)"/g, m;
+        while ((m = re.exec(parts[i]))) { (out[id[1]] = out[id[1]] || {})[m[1]] = m[2]; }
+      }
+    } catch (e) { /* no pictures */ }
+    return out;
+  }
+
   return {
-    appendixOf: appendixOf, deckApproval: deckApproval, approveDeck: approveDeck, exportRows: exportRows, reportLine: reportLine,
+    picturesFromHtml: picturesFromHtml, appendixOf: appendixOf, deckApproval: deckApproval, approveDeck: approveDeck, exportRows: exportRows, reportLine: reportLine,
     AGENTS: AGENTS, ACTIVITY_WORD: ACTIVITY_WORD, circleSvg: circleSvg, agentState: agentState, circleSizeFor: circleSizeFor, circleCentreSize: circleCentreSize, circleSays: circleSays, arcPath: arcPath, runView: runView, ENGINE_STATE: ENGINE_STATE,
-    upstreamSummary: upstreamSummary, productionSummary: productionSummary, documentsOf: documentsOf, builtFrom: builtFrom, describeBuiltFrom: describeBuiltFrom,
+    upstreamSummary: upstreamSummary, startDefaults: startDefaults, productionSummary: productionSummary, documentsOf: documentsOf, builtFrom: builtFrom, describeBuiltFrom: describeBuiltFrom,
     canBuild: canBuild, gapView: gapView, questionState: questionState, answerPatch: answerPatch,
     DECK_TYPES: DECK_TYPES, deckTypeOf: deckTypeOf, typeHints: typeHints, kindOfType: kindOfType, typePatch: typePatch,
     DECK_TYPE_CARDS: DECK_TYPE_CARDS, cardOf: cardOf, typeCaption: typeCaption, SIZES: SIZES, defaultSize: defaultSize, sizeOf: sizeOf, recipesOn: recipesOn, sizePatch: sizePatch, pickPatch: pickPatch, builtTypeOf: builtTypeOf, offeredCards: offeredCards,
@@ -1860,6 +1904,9 @@ var DeckProd = (function () {
   }
 
   // View state only. Anything the document should keep is written with put().
+  var QUEUED_GATE = 'Queued. Your edit or retry applies the next time the deck is built. Nothing has changed yet.';
+  var QUEUED_CHANGE = 'Queued. This change applies the next time the deck is built. Nothing on the slide has changed yet.';
+  var CHANGE_WORDS = { shorter: 'Shorter', add_figure: 'Add the figure', rephrase: 'Say it another way' };
   var view = { screen: null, slide: null, tab: 'evidence', present: 0, appendix: false, typeAsk: null };
   var qdraft = {}; // free-text answers typed but not saved, by question id
   var pending = {}; // inputs picked on the Start screen, written when Build is pressed
@@ -1959,14 +2006,22 @@ var DeckProd = (function () {
     pollBuild();
   }
 
+  /** A run as the screens read it: stages and approvals are always there, whatever a write or the engine left (UAT 2026-11-22:
+   *  after an Edit or a Retry at a gate the page threw "reading 'map'" in Build and Approve did nothing until a reload). */
+  function runOf(r) {
+    var obj = function (v) { return !!v && typeof v === 'object' && !Array.isArray(v); };
+    var run = obj(r) ? r : { state: 'draft', gate: null };
+    if (Array.isArray(run.stages) && obj(run.approvals)) return run;
+    return Object.assign({}, run, { stages: Array.isArray(run.stages) ? run.stages : [], approvals: obj(run.approvals) ? run.approvals : {} });
+  }
   function d() {
     var x = data();
     return {
       inputs: Object.assign({ prompt: {}, kind: 'agency', format: 'pitch', library: { enabled: false } }, x.inputs || {}),
       raw: x, upstream: x.upstream || {}, intake: x.intake || {}, asked: x.research_request || null,
       run: LANDING_ERROR && !(x.run && x.run.state === 'done')
-        ? Object.assign({}, x.run || { stages: [], gate: null, approvals: {} }, { state: 'failed', gate: null, error: { stage: 'check', message: LANDING_ERROR, retryable: false } })
-        : (x.run || { state: 'draft', stages: [], gate: null, approvals: {} }),
+        ? runOf(Object.assign({}, x.run || { stages: [], gate: null, approvals: {} }, { state: 'failed', gate: null, error: { stage: 'check', message: LANDING_ERROR, retryable: false } }))
+        : runOf(x.run || { state: 'draft', stages: [], gate: null, approvals: {} }),
       deck: x.deck || { order: [], slides: {} },
       evidence: x.evidence || {}, validation: x.validation || {}, report: x.report || {}, exports: x.exports || {},
       changes: x.change_requests || []
@@ -2259,6 +2314,7 @@ var DeckProd = (function () {
     var sum = L.summaryOf({ prompt: p, kind: kind, format: format, type: typed ? dt.id : null }, s.deck);
     var text = draft('text', p.text);
     var bf = L.builtFrom(inp, s.upstream, docs, typed ? dt.id : null);
+    var sd = L.startDefaults(s.raw);   // a deck of a Production project starts with its client and project named
     function field(id, lab, val, ph) {
       return '<div><label class="lab" for="' + id + '">' + lab + '</label><input class="inp" id="' + id + '" value="' + esc(draft(id, val)) + '"' + (ph ? ' placeholder="' + esc(ph) + '"' : '') + ' /></div>';
     }
@@ -2273,7 +2329,7 @@ var DeckProd = (function () {
       '<div class="stack">' + typePicker(s, format) + lookSection(s) +
       '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">02</span><b>Your prompt</b><div class="spacer"></div>' +
         '<span class="pill ' + (hasText ? 'ok' : 'plain') + '">' + (hasText ? 'Ready' : 'A line is enough') + '</span></div>' +
-        '<div class="three">' + field('client', 'Client', p.client) + field('project', 'Project', p.project) + field('agency', 'Agency (optional)', p.agency, 'Shows as [Agency]') + '</div>' +
+        '<div class="three">' + field('client', 'Client', p.client || sd.client) + field('project', 'Project', p.project || sd.project) + field('agency', 'Agency (optional)', p.agency, 'Shows as [Agency]') + '</div>' +
         '<div style="margin-top:14px"><label class="lab" for="ptext">What are we pitching? (a line is enough; paste everything you have)</label><textarea class="inp ta" id="ptext">' + esc(text) + '</textarea></div></section>' +
       '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">03</span><b>Documents</b><div class="spacer"></div><span class="pill ' + (docs.length ? 'ok' : 'plain') + '">' + (docs.length ? docs.length + ' attached' : 'Optional') + '</span></div>' +
         docList + '<div style="margin-top:10px"><label class="btn sm" style="display:inline-flex;align-items:center" for="attach">Attach files</label><input type="file" id="attach" multiple style="position:absolute;left:-9999px" aria-label="Attach documents" />' +
@@ -2377,7 +2433,7 @@ var DeckProd = (function () {
   function gateActions(gv) {
     var none = gv.body === 'territories' && !gv.picked;
     var asked = gv.asked.length ? '<p class="note asked" role="status" data-asked>You asked ' + (gv.asked.indexOf('edit') >= 0 && gv.asked.indexOf('retry') >= 0 ? 'for an edit and a new try'
-      : gv.asked.indexOf('edit') >= 0 ? 'for an edit' : 'the Deck agent to try again') + '. It waits for the engine, which is not connected yet; nothing has changed.</p>' : '';
+      : gv.asked.indexOf('edit') >= 0 ? 'for an edit' : 'the Deck agent to try again') + '. Queued: it applies the next time the deck is built. Nothing has changed yet.</p>' : '';
     return '<div class="gacts" style="margin-top:18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><button class="btn go big" id="approve"' + (none ? ' disabled' : '') + '>' + esc(gv.approve) + '</button>' +
       '<button class="btn big" style="padding:0 20px;font-size:14px" data-edit="' + esc(gv.edit_key) + '">' + esc(gv.edit_label) + '</button><button class="btn big" style="padding:0 20px;font-size:14px" data-retry="' + esc(gv.id) + '">Ask the Deck agent to try again</button></div>' +
       (gv.body === 'beats' ? '' : '<p class="note" style="margin-top:12px;font-size:13px">' + (none ? 'Pick a territory first. ' : '') + 'Every approve, edit or retry is recorded with who did it.</p>') + asked;
@@ -2536,7 +2592,39 @@ var DeckProd = (function () {
       var refs = (b.refs || []).map(esc).join(', ');
       return '<li><span class="dot"></span><span>' + esc(b.text) + (refs ? '<sup>' + refs + '</sup>' : '') + '</span></li>';
     }).join('');
-    return { items: items, sl: sl };
+    return { items: items, sl: sl, pics: slidePics(id) };
+  }
+
+  // ── the deck's pictures, read from the built deck.html (see DeckLogic.picturesFromHtml) ──
+  var PICS = {}, PICS_KEY = null;
+  function picsKey(s) {
+    var a = s.raw && s.raw.deck && s.raw.deck.assets, p = s.raw && s.raw.production && s.raw.production.picks;
+    return Object.keys(a || {}).sort().join(',') + '|' + (Array.isArray(p) ? p.map(function (x) { return x && x.key; }).join(',') : '') + '|' + ((s.run && s.run.state) || '');
+  }
+  /** Fetch the built deck.html once per built deck and keep its pictures; the preview and the picker draw them. Any failure leaves letters and text. */
+  function loadPictures(s) {
+    if (!mwOn() || !(window.clan && window.clan.apiProxy) || !L.presented(s.deck).length) return;
+    var key = picsKey(s);
+    if (key === PICS_KEY) return;
+    PICS_KEY = key;
+    try {
+      fetchDeckFile('deck.html').then(function (f) {
+        PICS = L.picturesFromHtml(new TextDecoder('utf-8').decode(f.bytes));
+        if (Object.keys(PICS).length) render();
+      }).catch(function () { /* the engine holds no deck.html yet: no pictures to draw */ });
+    } catch (e) { /* no host */ }
+  }
+  function slidePics(id) {
+    var m = PICS[id];
+    return m ? Object.keys(m).map(function (k) { return '<img src="' + esc(m[k]) + '" alt="Picture on this slide" data-pic="' + esc(k) + '">'; }).join('') : '';
+  }
+
+  /** The changes asked for on a slide that wait for the next build, said plainly (UAT 2026-11-22: they were recorded and nothing showed). */
+  function queuedChanges(s, slideId) {
+    var q = (s.changes || []).filter(function (c) { return c && c.slide === slideId && c.status === 'waiting'; });
+    if (!q.length) return '';
+    return '<p class="note" role="status" data-queued style="margin-top:10px;font-size:13px;color:var(--warn-fg)">Queued for the next build: ' +
+      q.map(function (c) { return esc(CHANGE_WORDS[c.change] || c.change); }).join(', ') + '.</p>';
   }
 
   function review(s) {
@@ -2590,13 +2678,13 @@ var DeckProd = (function () {
         (inAx ? '' : '<button class="btn sm" data-act="appendix">Move to appendix</button>') + '<button class="btn sm" data-tab="evidence">Why this slide</button>' + approve + '</div>' +
       (ds ? approveNote(ds) : '') + (upChanged.length ? '<div style="margin-bottom:12px">' + changedNote() + '</div>' : '') +
       '<div style="margin-bottom:12px">' + builtLine(builtOf(s), null, typeChip(s)) + '</div>' +
-      '<div class="slide"><div class="kick">' + esc(sl.section) + '</div><h2>' + esc(sl.title) + '</h2><ul>' + s1.items + '</ul>' +
+      '<div class="slide"><div class="kick">' + esc(sl.section) + '</div><h2>' + esc(sl.title) + '</h2><ul>' + s1.items + '</ul>' + (s1.pics ? '<div class="pimgs" data-pics>' + s1.pics + '</div>' : '') +
         '<div class="foot"><span>' + esc(agency) + ' · ' + esc(s.deck.meta && s.deck.meta.client) + '</span><div class="spacer"></div><span>' + (inAx ? 'A' + n : String(n).padStart(2, '0')) + '</span></div></div>' +
       '<div class="card" style="margin-top:14px;padding:14px 18px;border-radius:16px;box-shadow:none"><div class="eyebrow" style="margin-bottom:6px">Speaker notes</div><div style="font-size:14px;line-height:1.5;color:var(--ink2)">' + esc(sl.notes || 'No notes for this slide.') + '</div></div></section>' +
       '<aside class="side"><div class="frost" style="padding:16px"><div class="tabs" role="tablist">' + tabs + '</div>' + panel + '</div>' + supplyPanel(s) + confirmPanel(s) + prodPanel(s, id) +
       '<div class="card" style="padding:16px"><div style="font-size:13px;font-weight:600;margin-bottom:8px">Ask for a change</div><div style="display:flex;gap:8px;flex-wrap:wrap">' +
         [['shorter', 'Shorter'], ['add_figure', 'Add the figure'], ['rephrase', 'Say it another way']].map(function (c) { return '<button class="btn sm" data-change="' + c[0] + '">' + c[1] + '</button>'; }).join('') +
-      '</div><p class="note" style="margin-top:10px;font-size:12px;color:var(--ink3)">Only the words on this slide change. Its sources stay.</p></div></aside></main>';
+      '</div>' + queuedChanges(s, id) + '<p class="note" style="margin-top:10px;font-size:12px;color:var(--ink3)">These apply the next time the deck is built, and only to the words on this slide. Its sources stay.</p></div></aside></main>';
   }
 
   // ── 4 · Present and export ────────────────────────────────────────────
@@ -2727,6 +2815,7 @@ var DeckProd = (function () {
       try { var fb = document.querySelector(focusSel); if (fb && fb.focus) fb.focus(); } catch (e) { /* a selector the page cannot read */ }
     }
     loadUpstream(s);
+    if (scr === 'review') loadPictures(s);
   }
 
   /**
@@ -2785,8 +2874,9 @@ var DeckProd = (function () {
 
   // ── Production picker (deck-prod-picker P6): the panel on a slide's Review aside. Self-contained; DeckProd decides. ──
   function prodBadge(b) { return '<span class="chip ' + (b[0] === 'ok' ? 'ok' : b[0] === 'warn' ? 'warn' : '') + '">' + esc(b[1]) + '</span>'; }
-  function prodTile(t, swapSlot) {
-    return '<div class="doc" style="margin-top:8px;align-items:flex-start" data-prod-tile="' + esc(t.key) + '"><span class="ico">' + (swapSlot ? 'ALT' : 'PICK') + '</span><div style="flex:1;min-width:0">' +
+  function prodTile(t, swapSlot, thumb) {
+    var pic = thumb ? '<img class="thumb-img" alt="" src="' + esc(thumb) + '" data-prod-thumb>' : '<span class="ico">' + (swapSlot ? 'ALT' : 'PICK') + '</span>';
+    return '<div class="doc" style="margin-top:8px;align-items:flex-start" data-prod-tile="' + esc(t.key) + '">' + pic + '<div style="flex:1;min-width:0">' +
       '<div style="font-size:13px;font-weight:600">' + esc(t.label) + '</div>' +
       '<div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + esc(t.role) + (t.aspect ? ' · ' + esc(t.aspect) : '') + (t.status && t.status !== 'ready' ? ' · ' + esc(t.status) : '') + '</div>' +
       '<div class="chips">' + prodBadge(t.reach) + prodBadge(t.rights) + '</div>' +
@@ -2798,7 +2888,7 @@ var DeckProd = (function () {
     var mine = DeckProd.slideSlots(pv, slideId);
     var body = mine.length ? mine.map(function (x) {
       return '<div style="margin-top:10px" data-prod-slot="' + esc(x.id) + '"><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">Slot ' + esc(x.slot) + ' · ' + esc(x.by) + '</div>' +
-        prodTile(x.chosen, null) +
+        prodTile(x.chosen, null, (PICS[x.slide] || {})[x.slot]) +
         (x.notReachable ? '<p class="note" style="margin-top:6px">Not reachable: re-save or export it in Production. The slot stays empty; nothing is generated in its place.</p>' : '') +
         (x.note ? '<p class="note" style="margin-top:6px">' + esc(x.note) + '</p>' : '') +
         (x.pending ? '<p class="note" style="margin-top:6px" data-prod-pending>Your swap is recorded. The next build uses it.</p>' : '') +
@@ -2945,7 +3035,8 @@ var DeckProd = (function () {
     if (a.pres) { view.present += Number(a.pres); return render(); }
     if (t.id === 'build') {
       stashDraft();
-      var prompt = { client: draft('client', ''), project: draft('project', ''), agency: draft('agency', ''), text: draft('text', '') };
+      var sdb = L.startDefaults(s.raw), pb = s.inputs.prompt || {};
+      var prompt = { client: draft('client', pb.client || sdb.client), project: draft('project', pb.project || sdb.project), agency: draft('agency', ''), text: draft('text', '') };
       Object.keys(prompt).forEach(function (k) { prompt[k] = String(prompt[k]).trim(); });
       var guard = L.canBuild({ prompt: prompt }, s.upstream, L.documentsOf(s.raw));
       if (!guard.ok) { toast(guard.message); return; }
@@ -3014,7 +3105,7 @@ var DeckProd = (function () {
     }
     if (t.id === 'approve') {
       var gv = L.gateView(s.run, view.pick);
-      if (!gv) return;
+      if (!gv) { toast('There is no step waiting for you. Reload the page if one should be.'); return; }
       if (gv.body === 'territories' && !gv.picked) { toast('Pick a territory first.'); return; }
       var choice = gv.picked ? { picked: gv.picked } : null;
       var picked = gv.territories.filter(function (x) { return x.id === gv.picked; })[0];
@@ -3024,7 +3115,7 @@ var DeckProd = (function () {
         // what it reports lands as the middleware's change: the page never writes run.state, stages, gate or agent itself.
         if (JOB && BUSY_JOB[JOB.state]) { toast('The engine is still working on this step.'); return; }
         var human = L.humanApproval(s.run, gv.id, 'You', now(), choice);
-        if (!human) return;
+        if (!human) { toast('That step cannot be approved from here. Reload the page and try again.'); return; }
         view.pick = null;
         var wrote = put({ run: human }, 'approve ' + s.run.gate.id, why);
         toast('Approved. The engine is working on the next step.');
@@ -3032,24 +3123,24 @@ var DeckProd = (function () {
         return;
       }
       var next = L.approveGate(s.run, gv.id, 'You', now(), choice);
-      if (!next) return;
+      if (!next) { toast('That step cannot be approved from here. Reload the page and try again.'); return; }
       view.pick = null;
       put({ run: next }, 'approve ' + s.run.gate.id, why);
       return;
     }
-    if (a.retry && !s.run.gate) { toast('Retrying a step needs the engine server, which is not connected yet.'); return; }
+    if (a.retry && !s.run.gate) { toast('Use Build deck on Start to run a step again.'); return; }
     if (a.edit || a.retry) {
       // At the open gate an edit or a retry is recorded (run.decisions, run.gate_requests) and launches nothing.
       var kind = a.edit ? 'edit' : 'retry', req = s.run.gate ? L.gateRequest(s.run, s.run.gate.id, kind, 'You', now()) : null;
-      if (req) put({ run: req }, kind + ' ' + s.run.gate.id, 'gate ' + s.run.gate.n + ' of ' + s.run.gate.of + ': asked, launches nothing');
-      toast('Recorded. Editing and retrying a gate need the engine server.');
+      if (req) put({ run: req }, kind + ' ' + s.run.gate.id, 'gate ' + s.run.gate.n + ' of ' + s.run.gate.of + ': queued for the next build, launches nothing');
+      toast(QUEUED_GATE);
       return;
     }
-    if (a.act === 'appendix') { toast('Moving slides to the appendix needs the engine server.'); return; }
+    if (a.act === 'appendix') { toast('Moving a slide to the appendix is not built yet. It stays where it is.'); return; }
     if (a.change) {
       var reqs = (s.changes || []).concat([{ slide: view.slide, change: a.change, at: now(), status: 'waiting' }]);
-      put({ change_requests: reqs }, 'ask for a change: ' + a.change, 'slide ' + view.slide);
-      toast('Recorded. The words change when the engine is connected; sources stay.');
+      put({ change_requests: reqs }, 'ask for a change: ' + a.change, 'slide ' + view.slide + ': queued for the next build');
+      toast(QUEUED_CHANGE);
       return;
     }
     if (a.export) {
@@ -3060,7 +3151,7 @@ var DeckProd = (function () {
 
   // ── Export: the web deck, the PowerPoint and the PDF (deck-cloud) ──
   // The engine keeps the files; fetch_deck_file hands one over by name. The web deck and the PDF go to the host's export
-  // (clan.exportDoc), which saves the HTML and prints the PDF from it with Chromium, as a Brief's PDF is printed. The PowerPoint is saved here.
+  // (clan.exportDoc), which saves the HTML and prints the PDF from it with Chromium, as a Brief's PDF is printed. The PowerPoint goes the same way, as bytes.
   var EXPORTING = false;
   function exportBase(s) {
     var m = (s && s.deck && s.deck.meta) || {};
@@ -3086,10 +3177,11 @@ var DeckProd = (function () {
     toast('Preparing ' + (key === 'pdf' ? 'PDF' : key === 'pptx' ? 'PowerPoint' : 'web deck') + '…');
     fetchDeckFile(key === 'pptx' ? 'deck.pptx' : 'deck.html').then(function (f) {
       if (key === 'pptx') {
-        var url = URL.createObjectURL(new Blob([f.bytes], { type: f.type })), a = document.createElement('a');
-        a.href = url; a.download = base + '.pptx'; document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(function () { URL.revokeObjectURL(url); }, 30000);
-        return null;
+        // The app frame is sandboxed without allow-downloads, so a blob link here saves nothing in a browser: the file goes through the host's
+        // export, as the PDF does (clan.exportDoc: for 'pptx' the third argument is the file's bytes in base64).
+        var bin = '', step = 0x8000;
+        for (var i = 0; i < f.bytes.length; i += step) bin += String.fromCharCode.apply(null, f.bytes.subarray(i, i + step));
+        return window.clan.exportDoc('pptx', base, btoa(bin)).then(function (res) { if (res && res.ok === false) throw new Error('Could not start the export.'); });
       }
       var html = new TextDecoder('utf-8').decode(f.bytes);
       return window.clan.exportDoc(key === 'pdf' ? 'pdf' : 'html', base, html).then(function (res) { if (res && res.ok === false) throw new Error('Could not start the export.'); });

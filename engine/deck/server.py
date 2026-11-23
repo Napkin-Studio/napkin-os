@@ -221,7 +221,18 @@ def validate_request(body: dict, settings: Settings) -> dict:
             "type": prof["id"], "picked": bool(picked_type(inp)), "type_stages": list(prof["stages"]), "confirmed": confirmed_stages(body, inp),
             "approvals": approvals, "render": body.get("render", True) is not False, "marks": marks,
             "review": body.get("review") if isinstance(body.get("review"), dict) else {}, "approver": str(body.get("approver") or ""),
-            "production_upstream": production_upstream(body), "production_assets": production_assets(body)}
+            "production_upstream": production_upstream(body), "production_assets": production_assets(body), "members": members_of(body)}
+
+
+def members_of(body: dict) -> dict | None:
+    """``{facts, findings, sources, decisions}``: the research the Deck document carries (the middleware sends its merged members); None when
+    it sends none. Lists (or a list wrapped in its own key) only: anything else is refused."""
+    m = body.get("members")
+    if m is None:
+        return None
+    if not (isinstance(m, dict) and all(isinstance(v, (list, dict)) for v in m.values()) and set(m) <= {"facts", "findings", "sources", "decisions"}):
+        raise Refused(400, "bad_request", "members must be {facts, findings, sources, decisions}: the research the deck carries, each a list")
+    return m
 
 
 def production_assets(body: dict) -> dict | None:
@@ -520,8 +531,13 @@ class Server:
     def load_inputs(self, d: Doc, req: dict):
         """The engine's own reading of the inputs (no model): what the rows under 'Read the inputs' say, and what the evidence resolves against."""
         answers, verified = run_deck._read_answers(None)
-        return inputs_mod.load(None, None, d.stages / "doc_facts.json", [], prompt_text=str(req["prompt"].get("text") or "").strip(),
-                               answers=answers, verified=verified)
+        inp = inputs_mod.load(None, None, d.stages / "doc_facts.json", [], prompt_text=str(req["prompt"].get("text") or "").strip(),
+                              answers=answers, verified=verified)
+        pu = req.get("production_upstream")
+        if pu:   # the brief a carried Production project holds, and the research the deck carries: the evidence the build reads
+            inputs_mod.apply_production_brief(inp, pu["id"], pu["data"])
+        inputs_mod.apply_research(inp, req.get("members"))
+        return inp
 
     def seed(self, d: Doc, req: dict, until: str | None) -> None:
         """Replay only: copy the recorded stage files for the stages up to the stop into the cache, as a live run would write them."""
@@ -586,6 +602,13 @@ class Server:
                 argv.append("--production-fetch")
             if prod.get("look") is True:
                 argv.append("--production-look")
+        if req.get("members"):   # the research the deck carries: the same evidence the panel shows
+            mf = d.root / "members.json"
+            d.root.mkdir(parents=True, exist_ok=True)
+            mf.write_text(json.dumps(req["members"], ensure_ascii=False))
+            argv += ["--members", str(mf)]
+        if run_deck.web_render():   # the cloud's exports carry no internal banner, bracket or open 'to confirm'
+            argv.append("--clean-export")
         pu = req.get("production_upstream")
         if pu and req["kind"] != "investor" and not (prod and prod.get("sha256")):   # spun off from Production: finals first, pictures by link (an attached file wins)
             d.root.mkdir(parents=True, exist_ok=True)

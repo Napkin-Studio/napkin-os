@@ -42,7 +42,7 @@ from .drafters import _query
 from .fields import ARRAY_KEYS, KEYS, LABELS, _is_human, bare, clean, filled, get, last_writer, put
 from .job import BriefJob, log
 from . import checks, intake
-from .questions import dedupe, without_answered
+from .questions import answered_items, dedupe, without_answered
 
 # The Review agent's whole-brief review: a full brief's dimensions, claims and notes run past 8000 output
 # tokens (thinking counts against the cap), and a cut-off review writes only half the parts.
@@ -1093,7 +1093,8 @@ class PlannedBriefJob(BriefJob):
                                       **({"reason_code": "brief_review"} if fix else {})))
         decisions += self._passed(decisions)
         # the open questions: the plan's, the draft's and the Review agent's, once each
-        qs = self._question_seed()
+        # what the planner already answered stays, first, so a twin the agents ask again is merged into it
+        qs = answered_items(get(self.W, "open_questions")) + self._question_seed()
         qs += list((self.whole.get("open_questions") or {}).get("value") or [])
         qs += list(rv.get("questions") or [])
         qs += checks.figure_questions(self.whole, lambda k: LABELS.get(k, k))  # a figure left unmarked is still to confirm

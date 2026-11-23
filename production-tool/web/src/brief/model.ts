@@ -167,6 +167,19 @@ export function endLineOf(spine: BriefSpine | undefined): string | undefined {
   return undefined
 }
 
+/** The legal line a brief carries among its mandatories ("Legal: Please drink responsibly", "Must carry 18+ only",
+ *  "Terms apply"): the words after its label, else the whole mandatory. Undefined: it names none. The film's end card
+ *  carries it (UAT 2026-11-22: the end card had no legal line). */
+export function legalOf(spine: BriefSpine | undefined): string | undefined {
+  for (const m of spine?.mandatories ?? []) {
+    const text = m.trim()
+    if (!/\b(legal|disclaimer|small print|drink(?:\s+\w+)?\s+responsibl[ey]|responsibl[ey]|18\+|over[\s-]18|t&cs?|terms\s+(?:and|&)\s+conditions|terms apply|age[\s-]?(?:gate|verif)\w*)\b/i.test(text)) continue
+    const line = (quoted(text) ?? text.replace(/^(?:legal(?:\s+line)?|disclaimer|small print)\s*[:\-\u2013\u2014]\s*/i, '').replace(LINE_VERB, '')).replace(/^["'\u201c\u2018]+|["'\u201d\u2019]+$/g, '').trim()
+    if (line) return line.slice(0, 200)
+  }
+  return undefined
+}
+
 /** JobInput.brief: the title and the spine, nothing else of the brief. */
 export const jobBrief = (b: BriefNode): JobBrief => ({ title: b.title.slice(0, 200) || 'Brief', spine: { ...b.spine } })
 

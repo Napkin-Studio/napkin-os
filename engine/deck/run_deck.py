@@ -34,7 +34,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from . import assemble, imagegen, images, inputs, intake, look, profiles, qa_render, render_hyperframes, render_pptx, render_web, repair, spec, validate
+from . import assemble, export_clean, from_production, imagegen, images, inputs, intake, look, profiles, qa_render, render_hyperframes, render_pptx, render_web, repair, spec, validate
 from . import theme as themes
 
 #: Stage a0 (intake) comes first: it fills the brief fields the brief does not supply.
@@ -475,7 +475,7 @@ def _repair(a, inp, profile: dict, deck: dict, findings: list, qa: dict, pics, p
         else:
             pic_f, pl, ic = [], set(), {}
             render_pptx.render(d, inp, folder / "deck.pptx", a.master, f, animate=a.animate or False, layouts_out=folder / "layouts.json", pictures=pics, picture_findings=pic_f,
-                               placed=pl, notes=not a.no_notes, no_plan=a.no_layout_plan, icons=ic,
+                               placed=pl, notes=not a.no_notes, no_plan=a.no_layout_plan, icons=ic, clean=a.clean_export,
                                protect=_protect_boxes(a, d) if themes.size_of(d) != spec.SIZE_DEFAULT else None)   # deck-slide-size: as the first render
             got = {"pptx": folder / "deck.pptx", "pic_findings": pic_f, "placed": pl, "icons": ic}
         return {**got, "pptx": got["pptx"] if got.get("pptx") and Path(got["pptx"]).exists() else None}
@@ -543,7 +543,7 @@ def _repair(a, inp, profile: dict, deck: dict, findings: list, qa: dict, pics, p
         deck, findings, placed = final["deck"], final["findings"], (final.get("placed") or placed)
         rep["validation"] = validate.summary(findings)
         render_web.render(deck, inp, out / "deck.html", findings, pictures=pics, placed=placed if pics else None, look=not a.no_layout_plan,
-                          icons=final.get("icons"))
+                          icons=final.get("icons"), clean=a.clean_export)
         if a.hyperframes:
             render_hyperframes.render(deck, inp, out / "hyperframes", findings, builds=a.builds, pictures=pics, placed=placed if pics else None, look=not a.no_layout_plan)
         if (out / "deck.pdf").exists():
@@ -762,6 +762,17 @@ def _production_upstream(a, inp, deck_ctx) -> tuple | None:
         inputs.apply_production_brief(inp, *got)
     elif (deck_ctx or {}).get("production"):
         got = deck_ctx["production"]
+    doc = None
+    try:   # what the project's finals are, for the idea stage: a deck of a Production project shows its pictures and no film
+        if isinstance(a.production, str):
+            from . import prod_picker   # noqa: PLC0415
+            doc = prod_picker.Source(Path(a.production).expanduser()).doc
+        elif got:
+            doc = from_production.carried({"upstream": {got[0]: got[1]}})[1]
+        if doc:
+            inp.production_visuals = from_production.finals_summary(doc)
+    except Exception:   # noqa: BLE001  (a bad project is refused later, with its reason; here it only means no summary)
+        inp.production_visuals = None
     return None if a.production else got
 
 
@@ -931,6 +942,12 @@ def main(argv=None):
                          "Bare: stages/production.json from deck.from_production. With FILE (a Production .clan, or its export zip): the picker "
                          "(deck.prod_picker) lists every asset from metadata, picks by rule and pulls only the picked pictures (the .clan's own, then "
                          "https with --production-fetch, then the zip). Nothing is made or spent; implies --pictures creative_cover unless --pictures says otherwise")
+    ap.add_argument("--members", type=Path, metavar="FILE",
+                    help="the research the Deck document carries, JSON {facts, findings, sources, decisions} (the engine server's way: the middleware sends it): "
+                         "taken as the deck's research evidence when no --research is given")
+    ap.add_argument("--clean-export", action="store_true",
+                    help="the exported files carry no internal check banner (DRAFT, CHECK FAILED), no bracket placeholder and no open 'to confirm' on a slide: "
+                         "open items go to the appendix, and the page numbers and notes carry no ids (the cloud's web render)")
     ap.add_argument("--production-upstream", type=Path, metavar="FILE",
                     help="the Production project this deck was spun off from, carried whole (JSON {id, data}: the source document id and its shared/data.yaml): "
                          "its finals fill the slots first, then the rules for the empty ones; its pictures are fetched by link from the relay. A --deck document "
@@ -1042,6 +1059,11 @@ def main(argv=None):
             inp = inputs.load(a.brief, a.research, a.stages / "doc_facts.json", docs, prompt_text=prompt_text, answers=answers, verified=verified)
         except inputs.MarksError as e:
             raise SystemExit(f"refused: {e}")
+    if a.members and not a.research:
+        try:
+            inputs.apply_research(inp, json.loads(a.members.read_text()))
+        except (OSError, ValueError) as e:
+            raise SystemExit(f"refused: --members must be a JSON file of the carried research ({e})")
     _add_marks(a, inp)
     _master_size(a, _explicit_size(a, deck_ctx, answers))   # deck-slide-size: a master/size conflict is refused here, before any paid stage
     prod_up = _production_upstream(a, inp, deck_ctx)   # production-spinoff: the Production project carried whole, unless a --production file was given
@@ -1168,6 +1190,8 @@ def main(argv=None):
     except ValueError as e:   # from_production.FromProductionError (and a YAML error) from the picker's file: refused before any build
         raise SystemExit(f"refused: {'--production ' + Path(str(a.production)).name if a.production else 'the Production project this deck carries'}: {e}")
     extra = {"pictures": bound} if bound else {}
+    if (picker_src or prod) and kind != "investor":   # a deck whose pictures are Production's finals: its executions keep their own slides
+        extra["production"] = True
     build = lambda f: builder(inp, st, client=a.client, project=a.project, agency=a.agency, fmt=a.format, fit=f, profile=profile, **extra)
     deck = build(fit)
     if fit:
@@ -1283,6 +1307,8 @@ def main(argv=None):
         imagegen.mark_planned(deck, plan_res["plan"])
     rep["stages"]["assemble"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
 
+    if a.clean_export and kind != "investor":   # the exported files carry no agency-only text: open items move to one appendix slide
+        rep["export_clean"] = export_clean.scrub(deck)
     plan_issues = []
     loop_on, policy, base_deck, pinned_ids, swaps, level, tm = False, None, None, set(), {}, None, None
     if not a.no_layout_plan:   # the layout plan (deck-layout-library): after stage e, the red team and the pictures, before validate
@@ -1375,7 +1401,7 @@ def main(argv=None):
             raise SystemExit(f"refused: {e}")
     t = time.time()
     pptx = render_pptx.render(deck, inp, a.out / "deck.pptx", a.master, findings, animate=a.animate or False, layouts_out=a.out / "layouts.json", pictures=pics, picture_findings=pic_findings, placed=placed,
-                              notes=not a.no_notes, no_plan=a.no_layout_plan, icons=icons, protect=_protect_boxes(a, deck) if size != spec.SIZE_DEFAULT else None)
+                              notes=not a.no_notes, no_plan=a.no_layout_plan, icons=icons, clean=a.clean_export, protect=_protect_boxes(a, deck) if size != spec.SIZE_DEFAULT else None)
     if pic_findings:   # a slide drawn without its picture because it would not fit beside it: say so in the findings
         for f in pic_findings:
             f["slide_no"] = deck["order"].index(f["slide"]) + 1
@@ -1385,7 +1411,8 @@ def main(argv=None):
     rep["stages"]["render_pptx"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}
 
     t = time.time()
-    render_web.render(deck, inp, a.out / "deck.html", findings, pictures=pics, placed=placed if pics else None, look=not a.no_layout_plan, icons=icons)
+    render_web.render(deck, inp, a.out / "deck.html", findings, pictures=pics, placed=placed if pics else None, look=not a.no_layout_plan, icons=icons,
+                      clean=a.clean_export)
     if a.hyperframes:
         render_hyperframes.render(deck, inp, a.out / "hyperframes", findings, builds=a.builds, pictures=pics, placed=placed if pics else None, look=not a.no_layout_plan)
     rep["stages"]["render_web"] = {"secs": round(time.time() - t, 2), "model": None, "usd": 0}

@@ -110,6 +110,17 @@ def dedupe(questions: list[str]) -> tuple[list[str], list[tuple[str, str]]]:
     return kept, merged
 
 
+# An open question the planner answered (or left open, with why) keeps its words and gains the answer in the same
+# list item: "Q? — Answer: Yes" (brief-maker answerQ). The page reads the item back with this shape.
+_QA = re.compile(r"\s+—\s+(?:Answer|Left open):\s*\S")
+
+
+def answered_items(items) -> list[str]:
+    """The items of open_questions the planner has already answered or left open: a redraft keeps them
+    (UAT 2026-11-22: Draft it again dropped nine answers and asked the questions again)."""
+    return [x.strip() for x in items or [] if isinstance(x, str) and _QA.search(x)]
+
+
 def without_answered(questions: list[str], answered: dict[str, str]) -> list[str]:
     """The questions with those the person already answered at intake taken out (brief/intake.py).
     `answered` maps an intake key to the words it was asked in. A question goes when everything it is about

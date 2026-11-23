@@ -127,6 +127,20 @@ STALE_BUILD = "This build reads contract 3; reload the page."
 QUOTA_CLASS = dict(_COMMON["opQuotaClass"]["const"])
 # No provider: the director, the stitch Lambda or Skye (writer.py).
 INTERNAL_OPS = {"shot_list", "stitch", "write"}
+
+ASSET_HASH = re.compile(r"sha256:[0-9a-f]{64}")
+
+
+def output_shas(node) -> list[str]:
+    """Every sha256 a job's outputs name, nested ones (a plate, a frame) too: the hashes its agency holds."""
+    if isinstance(node, dict):
+        found = [node["sha256"]] if isinstance(node.get("sha256"), str) and ASSET_HASH.fullmatch(node["sha256"]) else []
+        return found + [h for v in node.values() for h in output_shas(v)]
+    if isinstance(node, list):
+        return [h for v in node for h in output_shas(v)]
+    return []
+
+
 # Ops contract 3 names that this relay does not build yet: 422 capability_missing before quota or spend.
 # The Image editor's Remove (relay-api input.remove; features/image-editor-masks-layers.clan, 2026-10-16):
 # the person writes nothing, so the relay writes the removal. The director reads them as words that
@@ -1459,6 +1473,11 @@ class Relay:
                            queuePosition=None, **changes)
         if saved is None:
             return self._reload(job)
+        if state == "completed" and job.get("_tenant"):
+            # Whatever kind it is, the agency that asked for it may read every picture it came to (a cropped,
+            # kept or redrawn output is a new hash the provider copy's hold does not cover).
+            for sha in output_shas(changes.get("outputs")):
+                self.store.hold(job["_tenant"], sha)
         now = self.clock()
         self._stage(saved, "landed" if state == "completed" else state,
                     since=job.get("_fetchedAt") if state == "completed" else None,

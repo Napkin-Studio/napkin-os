@@ -235,6 +235,23 @@ def moved_map(s: dict, audience: str = "review") -> dict:
     return out
 
 
+def production_made(s: dict) -> bool:
+    """True for an execution slide holding a finished picture from Production. Its picture is the slide: the line saying which half of the
+    insight it dramatises is the agency's reasoning, not the room's (and it kept the picture column too full to hold the picture), so it goes to
+    the notes (``answer_notes``). The words stay in the deck's data."""
+    return s.get("type") == "execution" and any(
+        isinstance(v, dict) and (v.get("image") or {}).get("status") in ("made", "flagged") and ((v.get("image") or {}).get("from") or {}).get("kind") == "production"
+        for v in (s.get("slots") or {}).values())
+
+
+def answer_notes(s: dict) -> str:
+    """The reasoning lines ``production_made`` keeps off the slide, as a note; '' when none."""
+    if not production_made(s):
+        return ""
+    got = [str(b["answer"]) for b in s.get("blocks") or [] if b.get("kind") == "copy" and b.get("answer")]
+    return ("What it dramatises:\n" + "\n".join(got)) if got else ""
+
+
 def _shown(s: dict, audience: str, moved: dict) -> list:
     out = []
     for bi, b in enumerate(s["blocks"]):
@@ -246,6 +263,8 @@ def _shown(s: dict, audience: str, moved: dict) -> list:
             b = {**b, "text": "Internal note: " + str(b.get("text", ""))}
         if bi in moved and isinstance(b.get("items"), list):
             b = {**b, "items": [i for k, i in enumerate(b["items"]) if k not in moved[bi]]}
+        if b.get("kind") == "copy" and b.get("answer") and production_made(s):   # the reasoning line of an execution that shows Production's picture: in the notes, never on the slide
+            b = {**b, "answer": ""}
         out.append(b)
         if b["kind"] == "quote" and not b.get("refs") and str(b.get("text", "")).strip():
             out.append({"kind": "small", "text": ILLUSTRATIVE_QUOTE, "basis": "meta"})
@@ -309,6 +328,8 @@ PITCH_CHARTS = 2
 #: Slide types whose titles are labels by convention (a channel, a territory name, the line itself).
 LABEL_TITLE_TYPES = ("title", "idea", "execution", "territory", "appendix", "requirement_trace", "appendix_sources")
 PITCH_EXECUTIONS = 3
+#: A deck spun off from a Production project presents up to this many executions its finals can fill (key visual, out of home, packshot, storyboard).
+PITCH_PRODUCTION_EXECUTIONS = 4
 OPTIONAL = r"(?i)\bif budget allows\b|\boptional\b"
 #: Pairs merged into one presented slide in a pitch: (kept, merged into it, the merged title).
 PITCH_MERGES = (("team", "credentials", "The team you would work with, and work like this we have done"),
