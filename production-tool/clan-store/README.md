@@ -64,6 +64,7 @@ npm ci
 npm run build   # cargo build napkin-wasm (wasm32) + wasm-bindgen --target web → src/wasm/
 npm test        # vitest, node, against the built wasm and the real `clan` CLI on PATH
 npm run lint    # tsc --noEmit
+npm run validators  # rebuild src/validators.gen.js (ajv standalone: no eval, CSP-clean) after a contract change
 npm run app     # rebuild src/app-template.gen.ts after a contract change (needs `clan`)
 ```
 

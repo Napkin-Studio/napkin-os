@@ -15,6 +15,7 @@
   "scripts": {
     "wasm": "cargo build -q -p napkin-wasm --target wasm32-unknown-unknown --release && wasm-bindgen --target web --typescript --out-dir src/wasm ../../target/wasm32-unknown-unknown/release/napkin_wasm.wasm",
     "app": "node scripts/make-app.mjs",
+    "validators": "node scripts/make-validators.mjs",
     "build": "npm run wasm",
     "lint": "tsc --noEmit",
     "test": "vitest run"
