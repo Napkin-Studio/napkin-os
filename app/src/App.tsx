@@ -173,7 +173,7 @@ export default function App() {
   const isLatest = (n: number) => n === openSeq.current
 
   const refreshApps = useCallback(async () => {
-    // Production is installed for its spin-offs, not to launch: its projects open in the Production Tool (/production/?doc=<id>).
+    // Production is installed for its spin-offs, not to launch: its projects open in the Production Tool (/production/d/<id>).
     try { setInstalled((await host.listApps()).filter(a => a.app_id !== PRODUCTION_APP_ID)) } catch (e) { console.error(e) }
   }, [])
   // Once at start too: a document opened straight from a link (or a reload)
