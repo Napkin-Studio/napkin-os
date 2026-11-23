@@ -42,3 +42,8 @@ test('Prod opens the Production Tool at /production when the server serves it, a
   assert.equal(PRODUCTION_PATH, '/production/')
   for (const t of TOOLS.filter(t => t.id !== 'prod')) assert.equal(toolHref(t), null, `${t.id} opens as a page here`)
 })
+
+test('Prod from a client\'s dial carries the client, so the film it starts belongs to them', () => {
+  assert.equal(toolHref({ id: 'prod' }, 'cl_tide well'), '/production/?client=cl_tide%20well')
+  assert.equal(toolHref({ id: 'brief' }, 'cl_1'), null)
+})

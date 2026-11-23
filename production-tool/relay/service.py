@@ -63,6 +63,7 @@ import agent_cost
 from blobs import checksum_header
 from contracts import Contracts, api
 from contracts_dir import contracts_dir, pricing
+from director.director import say_unrecognisable
 from director.base import Director, PassthroughDirector, PromptTooOld, fit_duration, new_id
 from ledger import Ledger, LimitReached, SpendStop
 from providers import Registry
@@ -1914,6 +1915,7 @@ class Relay:
                 if images:
                     kw = {"images": images}
             out = dict(director.direct({**req, "input": wired}, sheet, **kw))
+            say_unrecognisable(out, req["op"], raw.get("brief"), sheet)  # a passthrough take had no such line (Tidewell UAT)
             if unseen:
                 out["rationale"] = f"Dex could not look at the frame ({unseen}), so your words went as they are."[:300]
         except PromptTooOld as e:  # a config with director.v5 under contract 3: said plainly, never run

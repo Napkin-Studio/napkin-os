@@ -57,8 +57,10 @@ export const productionDocUrl = (docId: string): string => `${PRODUCTION_PATH}?d
 export const PRODUCTION_APP_ID = 'ie.napkin.production'
 
 /** Where a tool opens with a full page load, outside the shell (Prod: the Production Tool), or null
- *  when it opens as the shell's own tool page. */
-export const toolHref = (tool: { id: string }): string | null => (tool.id === 'prod' ? PRODUCTION_PATH : null)
+ *  when it opens as the shell's own tool page. From a client's dial it carries that client (`?client=`), so the
+ *  film the Production Tool starts belongs to the client (Tidewell UAT: the dial said "Nothing yet"). */
+export const toolHref = (tool: { id: string }, clientId?: string): string | null =>
+  tool.id === 'prod' ? (clientId ? `${PRODUCTION_PATH}?client=${encodeURIComponent(clientId)}` : PRODUCTION_PATH) : null
 
 /** The tools a person can open now: each whose app is installed, and Prod when this server serves
  *  the Production Tool to this person (/api/session `production`). */
