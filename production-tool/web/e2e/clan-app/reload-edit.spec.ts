@@ -1,0 +1,17 @@
+// S1-12: an edit followed at once by a reload is not lost (UAT round 6: an edit + reload within about 0.4 s
+// was lost silently). The browser's working copy is flushed first, then pushed on open.
+import { addNode, at, createProject, expect, signIn, toolUrl, waitSavedKind } from './support'
+
+at(1)('S1-12 an edit and a reload within 300 ms keeps the edit', async ({ page }) => {
+  const tenant = await signIn(page.request)
+  const doc = await createProject(page.request, tenant, 'Reload fast')
+  await page.goto(toolUrl(doc))
+  await expect(page.locator('canvas').first()).toBeVisible({ timeout: 60_000 })
+  await addNode(page, 'Script')
+  await page.waitForTimeout(250)
+  await page.reload()
+  await expect(page.locator('canvas').first()).toBeVisible({ timeout: 60_000 })
+  // the edit is in the page after the reload: a save puts it on the host (the open also pushes the working copy)
+  await page.keyboard.press('Control+s')
+  await waitSavedKind(page.request, tenant, doc, 'scripts', 30_000)
+})

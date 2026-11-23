@@ -133,3 +133,9 @@ variable "production_relay_secret_arn" {
     error_message = "production_relay_url and production_relay_secret_arn are set together, or neither"
   }
 }
+
+variable "production_media_base" {
+  description = "The https base Production's pictures are served from: the hackathon stack's CloudFront address (its url output). napkin-web tells the tool in /api/session as media_base."
+  type        = string
+  default     = "https://d1kyxuk8u2ulz5.cloudfront.net"
+}

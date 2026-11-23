@@ -2,13 +2,23 @@
 // is a still (the mock makes stills for clips), and a time as the rooms write it.
 
 import { useDoc } from '../app/context'
-import { remoteUrl } from '../jobs/assets'
+import { resolveMediaUrl } from '../lib/media'
 import { useBlobUrl } from '../ui/hooks'
+import { useEffect, useState } from 'react'
 
-/** The URL a take's file plays from: this browser's copy, else the relay's. */
+/** The URL a take's file plays from: this browser's copy, else the relay's (found by its hash, lib/media.ts). */
 export function useAssetUrl(sha: string | undefined): string | undefined {
   const doc = useDoc()
-  return useBlobUrl(sha) ?? remoteUrl(doc, sha)
+  const local = useBlobUrl(sha)
+  const asset = sha ? doc.assets[sha] : undefined
+  const [remote, setRemote] = useState<{ sha: string; url: string } | null>(null)
+  useEffect(() => {
+    let alive = true
+    if (!sha || !asset || local) return
+    void resolveMediaUrl(asset).then((url) => { if (alive && url) setRemote({ sha, url }) })
+    return () => { alive = false }
+  }, [sha, asset, local])
+  return local ?? (remote && remote.sha === sha ? remote.url : undefined)
 }
 
 export function isStill(doc: { assets: Record<string, { mime: string } | undefined> }, sha: string | undefined): boolean {

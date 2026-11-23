@@ -736,3 +736,12 @@ def test_every_build_runs_with_the_production_file_its_opt_ins_and_the_swaps(tmp
     with pytest.raises(srv.Refused) as e:
         s.call_engine(d, gone, None)
     assert e.value.kind == "production_missing" and len(seen) == 3
+
+
+def test_the_default_resolver_lists_ipv4_before_ipv6(monkeypatch):
+    # UAT 2026-11-23 (Ferncliff): the relay's Lambda URL resolves to IPv6 and IPv4; sorted as text, IPv6 came first, the VPC has no IPv6 route,
+    # and every picture failed with "connection failed (OSError)". The fetch connects to the first address, so it must be IPv4 when there is one.
+    v6, v4 = ["2a05:d018:856:f01::1", "2a05:d018:856:f02::2"], ["34.250.208.75", "52.214.97.96"]
+    monkeypatch.setattr(pp.socket, "getaddrinfo", lambda h, port, type=0: [(10, 1, 6, "", (a, port, 0, 0)) for a in v6] + [(2, 1, 6, "", (a, port)) for a in v4])
+    got = pp._resolve("relay.example")
+    assert got[:2] == sorted(v4) and set(got[2:]) == set(v6)

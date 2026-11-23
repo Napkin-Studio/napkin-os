@@ -98,8 +98,10 @@ def end_card_png(card: dict, size: tuple[int, int], fetch: Optional[Callable[[st
     if card.get("headline"):
         layers.append({"kind": "line", "box": {"x": 0.08, "y": 0.34, "w": 0.84, "h": 0.18}, "text": card["headline"],
                        "sizeFrac": 0.08, "align": "centre", "weight": "bold", "colour": ink})
-    layers.append({"kind": "line", "box": {"x": 0.08, "y": 0.54, "w": 0.84, "h": 0.14}, "text": card["line"],
-                   "sizeFrac": 0.05, "align": "centre", "weight": "regular", "colour": ink})
+    # A card whose one line is also its headline ("Flat out good.") says it once, as the headline.
+    if (card["line"] or "").strip().lower() != (card.get("headline") or "").strip().lower():
+        layers.append({"kind": "line", "box": {"x": 0.08, "y": 0.54, "w": 0.84, "h": 0.14}, "text": card["line"],
+                       "sizeFrac": 0.05, "align": "centre", "weight": "regular", "colour": ink})
     if card.get("cta"):
         layers.append({"kind": "legal", "box": {"x": 0.08, "y": 0.72, "w": 0.84, "h": 0.08}, "text": card["cta"],
                        "sizeFrac": 0.03, "align": "centre", "weight": "regular", "colour": ink})

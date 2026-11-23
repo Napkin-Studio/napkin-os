@@ -41,7 +41,8 @@ export interface DocAsset {
   kind: 'image' | 'video' | 'audio' | 'document' | 'font' | 'vector'
   mime: string
   origin: 'uploaded' | 'drawn' | 'generated' | 'mock' | 'edited' | 'extracted'
-  locations: string[]
+  /** Ignored: bytes are found by sha256 (lib/media.ts). Never written; old documents may still carry it. */
+  locations?: string[]
   bytes?: number
   w?: number
   h?: number

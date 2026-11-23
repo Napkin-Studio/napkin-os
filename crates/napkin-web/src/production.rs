@@ -54,13 +54,7 @@ pub const DEFAULT_STATIC: &str = "/srv/napkin/production";
 
 /// Request headers the relay is given, and nothing else (projects/server.ts,
 /// relay service.py).
-const FORWARD: [&str; 5] = [
-    "content-type",
-    "if-match",
-    "x-clan-reason",
-    "x-project-id",
-    "x-project-name",
-];
+const FORWARD: [&str; 3] = ["content-type", "if-match", "x-clan-reason"];
 /// Response headers passed back to the tool. `location`: GET /assets/{sha}
 /// answers 302 to the picture's URL, which the browser follows (the client
 /// below never does; features/prod-assets-route.clan).
@@ -157,71 +151,6 @@ impl Relay {
             timeout,
             client,
         }
-    }
-}
-
-/// What the relay answered a call made by the server itself.
-pub struct Answer {
-    pub status: StatusCode,
-    pub etag: Option<String>,
-    pub body: axum::body::Bytes,
-}
-
-/// Why a call made by the server itself got no answer from the relay.
-#[derive(Debug)]
-pub enum Unreached {
-    Timeout,
-    Down,
-}
-
-impl Relay {
-    /// One call to the relay as `account`, signed exactly as the proxy signs
-    /// (`/api` + `path`, the body hashed): for the spin-off routes
-    /// (`crate::spinoff`), which move a `.clan` between the library and the
-    /// relay on the caller's behalf. The same assertion means the same
-    /// workspace check: a project of another agency is not found.
-    pub async fn call(
-        &self,
-        account: &Account,
-        method: Method,
-        path: &str,
-        headers: &[(&str, String)],
-        body: Vec<u8>,
-    ) -> Result<Answer, Unreached> {
-        let path_and_query = format!("/api{path}");
-        let claims = Claims::for_request(account, method.as_str(), &path_and_query, &body, now_s());
-        let assertion = sign(&self.config.key, &claims);
-        let url = format!("{}{path_and_query}", self.config.relay_url);
-        let mut out = self.client.request(method, url);
-        for (name, value) in headers {
-            out = out.header(*name, value);
-        }
-        let answer = out
-            .header(IDENTITY_HEADER, assertion)
-            .body(body)
-            .send()
-            .await
-            .map_err(|e| {
-                if e.is_timeout() {
-                    Unreached::Timeout
-                } else {
-                    Unreached::Down
-                }
-            })?;
-        let status = answer.status();
-        let etag = answer
-            .headers()
-            .get(header::ETAG)
-            .and_then(|v| v.to_str().ok())
-            .map(|v| v.trim_start_matches("W/").trim_matches('"').to_string());
-        let body = answer.bytes().await.map_err(|e| {
-            if e.is_timeout() {
-                Unreached::Timeout
-            } else {
-                Unreached::Down
-            }
-        })?;
-        Ok(Answer { status, etag, body })
     }
 }
 
@@ -438,6 +367,15 @@ fn foreign_origin(headers: &HeaderMap) -> bool {
     }
 }
 
+/// The relay's retired document routes (features/production-in-library.clan):
+/// projects live in the library of napkin-web now, so a stale page asking the
+/// relay for them gets a 404 here and never reaches it.
+fn retired(rest: &str) -> bool {
+    ["/clan", "/projects"]
+        .iter()
+        .any(|p| rest == *p || rest.strip_prefix(p).is_some_and(|r| r.starts_with('/')))
+}
+
 async fn proxy(State(relay): State<Arc<Relay>>, request: Request) -> Response {
     let (parts, body) = request.into_parts();
     let identity = parts.extensions.get::<Arc<Identity>>().cloned();
@@ -455,6 +393,14 @@ async fn proxy(State(relay): State<Arc<Relay>>, request: Request) -> Response {
             StatusCode::FORBIDDEN,
             "unauthorised",
             "This request came from another site.",
+            false,
+        );
+    }
+    if retired(parts.uri.path()) {
+        return relay_error(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            "Reload the page: projects now live in the library.",
             false,
         );
     }

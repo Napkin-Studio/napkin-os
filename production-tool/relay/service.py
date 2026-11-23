@@ -212,23 +212,16 @@ NO_FALLBACK = {"moderated", "invalid_input"}  # the floor would refuse the same
 UNKNOWN_PRICE_USD = 1.0      # reserved for an op whose sheet has no price
 # How long a queued job may wait for a free provider slot, per class, when config.json sets no queueTimeoutS.
 QUEUE_TIMEOUT_S = {"image": 1800, "video": 1800}
-# What napkin-web's proxy and a Function URL both take (binary bodies arrive base64-encoded, and a
-# Lambda request is at most 6 MB): features/os-sign-in.clan.
-CLAN_MAX_BYTES = 4_500_000
-CLAN_TOO_BIG = "This project is too big to save online (over 4.5 MB). Export it instead."
 NOT_ON = "The Production Tool is not on for your agency yet."
 TENANT_TTL_S = 30
-CLAN_MIME = "application/vnd.clan+zip"
-CLAN_REASONS = {"interval", "accept", "manual"}
-# X-Project-Id on POST /clan: a project's id, made by the web app like every id (common.schema.json#/$defs/id).
-PROJECT_ID = re.compile(r"^[a-z]+_[0-9A-HJKMNP-TV-Z]{26}$")
+# The document routes retired for one release (features/production-in-library.clan): projects live in
+# the library now. Any method answers 410 `gone`; deleting the code is a follow-up.
+GONE_PATHS = {"/clan", "/projects"}
+GONE_PREFIXES = ("/clan/", "/projects/")
+GONE_MESSAGE = "Reload the page: projects now live in the library."
 KEY = re.compile(r"^[a-z][a-z0-9]{1,23}$")
 ASSET_SHA = re.compile(r"^(?:sha256:)?([0-9a-f]{64})$")
 NO_PICTURE = "No such picture."
-# GET /clan/{project} answers with the bytes. A Lambda response is at most 6 MB once base64-encoded,
-# so a larger project is opened from an Export instead (features/personal-workspaces.clan).
-OPEN_MAX_BYTES = 4_300_000
-CANVAS_MAX_BYTES = 4_000_000
 SUBMITTING_STALE_S = 120       # a submit that never came back
 STITCH_BAD_CLIP = "bad_clip"   # stitch.py: a clip it could not read (the result names which)
 FETCH_LEASE_S = 90
@@ -237,7 +230,7 @@ STATUS_ERRORS = {
     "invalid_input": 400, "unauthorised": 401, "blocked": 403, "flag_off": 403, "not_allowed": 403,
     "quota_exhausted": 429, "queue_full": 429, "limit_reached": 429, "spend_stop": 503, "capability_missing": 422,
     "moderated": 422, "provider_failed": 502, "provider_unavailable": 503, "timeout": 504,
-    "uncertain": 409, "conflict": 409, "internal": 500,
+    "uncertain": 409, "conflict": 409, "gone": 410, "internal": 500,
 }
 
 # ── Fix this moment (features/clip-moment-edit.clan) ─────────────────────────
@@ -293,7 +286,7 @@ def _usage_block(usage) -> dict | None:
 
 
 class Raw:
-    """A response that is not JSON (GET /clan/{project}: the .clan bytes), with its own headers."""
+    """A response that is not JSON (GET /assets/{sha}: a redirect), with its own headers."""
 
     def __init__(self, data: bytes, mime: str, headers: dict | None = None):
         self.data, self.mime, self.headers = data, mime, headers or {}
@@ -311,19 +304,6 @@ class ApiError(Exception):
         if self.retry_after is not None:
             err["retryAfterS"] = self.retry_after
         return {"error": err}
-
-
-def project_name(raw: str | None) -> str | None:
-    """X-Project-Name: the name Home shows, percent-encoded UTF-8. None when absent or unreadable."""
-    if not raw:
-        return None
-    from urllib.parse import unquote
-
-    try:
-        name = " ".join(unquote(raw, errors="strict").split())[:80]
-    except UnicodeDecodeError:
-        return None
-    return name or None
 
 
 def iso(ts: float) -> str:
@@ -441,6 +421,8 @@ class Relay:
             return 200, self.config()
         if method == "GET" and path == "/health":
             return 200, {"ok": True}
+        if path in GONE_PATHS or path.startswith(GONE_PREFIXES):
+            raise ApiError("gone", GONE_MESSAGE)  # projects moved to the library (features/production-in-library.clan)
         who = self._auth(method, signed, headers, body)
         ctx["participant"] = who["pid"]
         ctx["tenant"] = who["tenant"]["id"]
@@ -477,14 +459,6 @@ class Relay:
             return 200, self.library_route(who, method, path, body, ctx)
         if method == "GET" and path.startswith("/assets/"):
             return self.asset(who, path[len("/assets/"):], query, ctx)
-        if method == "POST" and path == "/clan":
-            self._not_blocked(who)
-            saved = self.mirror_clan(who, headers, body, ctx)
-            return (200, saved) if saved else (204, None)
-        if method == "GET" and path == "/projects":
-            return 200, {"projects": [projects.public_row(r) for r in self._projects().list(self._workspace(who))]}
-        if path.startswith("/clan/"):
-            return self.project_route(who, method, path[len("/clan/"):], body, ctx)
         if method == "POST" and path == "/log":
             entry = self._json(body, "LogEntry")
             ctx.update({"clientLevel": entry["level"], "clientMessage": entry["message"][:500],
@@ -671,9 +645,6 @@ class Relay:
             return
         name = route
         project = heads.get("x-project-id")
-        if route.startswith("/clan/"):  # a saved project's routes (personal workspaces): one name each
-            project = project or route.split("/")[2]
-            name = "/clan/{project}/canvas" if route.endswith("/canvas") else "/clan/{project}"
         for prefix, label in (("/jobs/", "/jobs/{id}"), ("/library/", "/library/{shelf}/{key}"), ("/assets/", "/assets/{sha}")):
             if route.startswith(prefix):
                 name = label
@@ -695,8 +666,6 @@ class Relay:
             data["body"] = dogfood.body_value(body or b"")
         elif body:
             data["bytes"] = len(body)
-        if route == "/clan":
-            data["reason"] = heads.get("x-clan-reason")
         self._dog(lambda: self.dogfood.record(pid, "request", f"{method} {name}", data, project=project))
 
     def _dog_job(self, job: dict, before: str | None) -> None:
@@ -816,68 +785,6 @@ class Relay:
 
     def _projects(self) -> projects.Projects:
         return projects.Projects(self.blobs, lambda: iso(self.clock()))
-
-    def mirror_clan(self, who: dict, headers: dict, body: bytes | None, ctx: dict) -> dict | None:
-        """POST /clan: keep the person's .clan. With X-Project-Id it is a saved project
-        (projects.py): checked against If-Match, listed by GET /projects; answers ClanSaved.
-        Without it, the participant's own latest copy and a timestamped one, as before (None: 204)."""
-        data = body or b""
-        if len(data) > CLAN_MAX_BYTES:
-            raise ApiError("invalid_input", CLAN_TOO_BIG, status=413)
-        if not data.startswith(b"PK\x03\x04"):
-            raise ApiError("invalid_input", "The body is not a .clan file.")
-        reason = headers.get("x-clan-reason", "manual")
-        if reason not in CLAN_REASONS:
-            reason = "manual"
-        # One copy per project when the app says which (features/project-home.clan); the participant's own path without it.
-        project = headers.get("x-project-id")
-        if project is not None and not PROJECT_ID.match(project):
-            raise ApiError("invalid_input", "X-Project-Id is not a project id.")
-        ctx["clanBytes"] = len(data)
-        if not project:
-            base = f"clan/{who['pid']}"
-            stamp = iso(self.clock()).replace(":", "")
-            for key in (f"{base}/latest.clan", f"{base}/{stamp}-{reason}.clan"):
-                self.blobs.put(key, data, CLAN_MIME)
-            return None
-        ctx["project"] = project
-        try:
-            row = self._projects().save(self._workspace(who), project, data, reason,
-                                        if_match=projects.parse_if_match(headers.get("if-match")),
-                                        name=project_name(headers.get("x-project-name")))
-        except projects.Stale as e:
-            raise ApiError("conflict", str(e)) from None
-        except projects.Busy as e:
-            raise ApiError("conflict", str(e), retryable=True) from None
-        return {"project": projects.public_row(row)}
-
-    def project_route(self, who: dict, method: str, rest: str, body: bytes | None, ctx: dict):
-        """GET /clan/{project}: the saved bytes (Raw, with their ETag). GET|PUT /clan/{project}/canvas."""
-        project, _, sub = rest.partition("/")
-        if not PROJECT_ID.match(project) or sub not in ("", "canvas"):
-            raise ApiError("invalid_input", f"No route {method} /clan/{rest}.", status=404)
-        ctx["project"] = project
-        store = self._projects()
-        workspace = self._workspace(who)
-        try:
-            if method == "GET" and not sub:
-                data, row = store.read(workspace, project)
-                if len(data) > OPEN_MAX_BYTES:
-                    raise ApiError("invalid_input", "This project is too large to open from the server. "
-                                   "Export it in the browser that made it, and open the file here.", status=413)
-                return 200, Raw(data, CLAN_MIME, {"ETag": f'"{row["etag"]}"', "X-Saved-At": row["savedAt"]})
-            if method == "GET":
-                return 200, store.canvas(workspace, project)
-            if method == "PUT" and sub:
-                self._not_blocked(who)
-                if len(body or b"") > CANVAS_MAX_BYTES:
-                    raise ApiError("invalid_input", "The canvas is larger than 4 MB.", status=413)
-                canvas = self._json(body, "ProjectCanvas")
-                store.put_canvas(workspace, project, {**canvas, "savedAt": iso(self.clock())})
-                return 204, None
-        except projects.Missing as e:
-            raise ApiError("invalid_input", str(e), status=404) from None
-        raise ApiError("invalid_input", f"No route {method} /clan/{rest}.", status=404)
 
     # ── the workspace library ───────────────────────────────────────────────
     def library_route(self, who: dict, method: str, path: str, body: bytes | None, ctx: dict) -> dict:
@@ -2237,8 +2144,8 @@ class Relay:
                 key = f"ads/cuts/{job['jobId']}/layer{i}.png"
                 self.blobs.put(key, png, "image/png")
                 layers.append({"key": key, **({"fromS": a} if a is not None else {}), **({"toS": b} if b is not None else {})})
-            # The film's own end card (the client's), drawn at the size and held as the last picture, before the
-            # studio card stitch adds (features/pt-film-r1.clan, B4: the sizes ended on the studio card alone).
+            # The film's own end card (the client's), drawn at the size and held as the last picture
+            # (features/pt-film-r1.clan, B4; a client ad carries no studio card, owner 2026-11-23).
             if cut.get("clientCard"):
                 key = f"ads/cuts/{job['jobId']}/client-card.png"
                 self.blobs.put(key, timeline_layers.end_card_png(cut["clientCard"], size, self.blobs.fetch), "image/png")
@@ -2254,8 +2161,6 @@ class Relay:
             return self._reload(job)
         event = {"jobId": job["jobId"], "mode": "cutdown", "size": list(size), "clips": clips, "layers": layers,
                  "endCard": cut.get("endCard", True), "fadeOutS": cut.get("fadeOutS", 0.5),
-                 # a short size's shorter studio card (cutdowns.card_lengths; UAT round 3, R3-F12)
-                 **({"cardS": float(cut["studioS"])} if cut.get("studioS") else {}),
                  "outKey": f"ads/cuts/{job['jobId']}.mp4", "resultKey": f"ads/cuts/{job['jobId']}.json"}
         try:
             self.stitch(event)

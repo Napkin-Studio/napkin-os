@@ -1539,6 +1539,33 @@ mod tests {
         }
     }
     #[test]
+    fn a_library_production_project_is_found_by_its_document_id_with_no_addresses_and_its_hoisted_ancestors(
+    ) {
+        // A Deck spun off from a library Production document: the spin-off hoisted the project's brief and
+        // research beside it; the project carries no picture address (the tool writes none).
+        let data = json!({ "upstream": {
+            "doc-brief": { "client": "Lumen Water", "objectives": { "commercial": "Sell more" } },
+            "doc-research": { "findings": [] },
+            "doc-8f1c2a4e-library-production": {
+                "app": "production-tool",
+                "assets": { "sha256:ab": { "mime": "image/png", "kind": "image" } },
+                "finals": { "f1": { "asset": "sha256:ab" }, "f2": { "asset": "sha256:ab" } },
+            },
+        } });
+        let got = production_upstream(&data).expect("a project");
+        assert_eq!(got["id"], "doc-8f1c2a4e-library-production");
+        assert_eq!(got["data"]["finals"].as_object().unwrap().len(), 2);
+        assert!(got["data"]["assets"]["sha256:ab"]
+            .get("locations")
+            .is_none());
+        assert_eq!(
+            got["data"]["upstream"]["doc-brief"],
+            data["upstream"]["doc-brief"]
+        );
+        assert!(got["data"]["upstream"].get("doc-research").is_some());
+    }
+
+    #[test]
     fn a_carried_production_project_is_found_whole_with_what_it_carried_and_nothing_else_is() {
         let data = json!({ "upstream": {
             "doc-brief": { "client": "Lumen Water", "app": "ie.napkin.brief-maker", "objectives": "Sell more" },

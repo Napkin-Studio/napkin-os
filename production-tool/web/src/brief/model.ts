@@ -167,14 +167,27 @@ export function endLineOf(spine: BriefSpine | undefined): string | undefined {
   return undefined
 }
 
+/** A warning a drink carries by law or custom (caffeine, alcohol, pregnancy, health): its own mandatory is the legal line. */
+const WARNING = /\b(?:caffeine|alcohol|health warning|not recommended for|pregnan\w*|contains (?:caffeine|alcohol|nuts|sulphites|allergens?))\b/i
+/** "Include '…'", "must carry '…'", "Carry: …": a mandatory that names the words to carry. */
+const CARRY = /\b(?:must\s+(?:carry|include)|carr(?:y|ies)|include)\b/i
+const LEGAL_LABEL = /^(?:legal(?:\s+line)?|disclaimer|small print)\s*[:\-\u2013\u2014]\s*/i
+const WARNING_LABEL = /^(?:(?:show|add|carry|include)\s+)?(?:the\s+)?(?:(?:health|caffeine|alcohol)\s+)?warning\s*[:\-\u2013\u2014]\s*/i
+const CARRY_LABEL = /^(?:the\s+(?:film|ad|card|end card)\s+)?(?:must\s+|should\s+)?(?:carr(?:y|ies)|include)\s*[:\-\u2013\u2014]?\s*/i
+
 /** The legal line a brief carries among its mandatories ("Legal: Please drink responsibly", "Must carry 18+ only",
- *  "Terms apply"): the words after its label, else the whole mandatory. Undefined: it names none. The film's end card
- *  carries it (UAT 2026-11-22: the end card had no legal line). */
+ *  "Terms apply"; and one that quotes the line to carry: "Include 'Contains caffeine. Not recommended for children or
+ *  pregnant women.' To confirm: the wording against GB rules", "Carry: …"): the words to carry only, never the "To
+ *  confirm: …" tail. Undefined: it names none. The film's end card carries it (UAT 2026-11-22: the end card had no
+ *  legal line; 2026-11-24: a quoted caffeine warning was missed). */
 export function legalOf(spine: BriefSpine | undefined): string | undefined {
   for (const m of spine?.mandatories ?? []) {
-    const text = m.trim()
-    if (!/\b(legal|disclaimer|small print|drink(?:\s+\w+)?\s+responsibl[ey]|responsibl[ey]|18\+|over[\s-]18|t&cs?|terms\s+(?:and|&)\s+conditions|terms apply|age[\s-]?(?:gate|verif)\w*)\b/i.test(text)) continue
-    const line = (quoted(text) ?? text.replace(/^(?:legal(?:\s+line)?|disclaimer|small print)\s*[:\-\u2013\u2014]\s*/i, '').replace(LINE_VERB, '')).replace(/^["'\u201c\u2018]+|["'\u201d\u2019]+$/g, '').trim()
+    const text = m.trim().replace(/\s*\bTo confirm\s*:[\s\S]*$/i, '').trim()
+    const keyword = /\b(legal|disclaimer|small print|drink(?:\s+\w+)?\s+responsibl[ey]|responsibl[ey]|18\+|over[\s-]18|t&cs?|terms\s+(?:and|&)\s+conditions|terms apply|age[\s-]?(?:gate|verif)\w*)\b/i.test(text)
+    const warned = WARNING.test(text) && (CARRY.test(text) || /\bwarning\b/i.test(text) || !!quoted(text))
+    const carried = /\b(?:must\s+)?carry\b\s*[:\-\u2013\u2014'"\u2018\u201c]/i.test(text)
+    if (!keyword && !warned && !carried) continue
+    const line = (quoted(text) ?? text.replace(LEGAL_LABEL, '').replace(WARNING_LABEL, '').replace(CARRY_LABEL, '').replace(LINE_VERB, '')).replace(/^["'\u201c\u2018]+|["'\u201d\u2019]+$/g, '').trim()
     if (line) return line.slice(0, 200)
   }
   return undefined

@@ -3,7 +3,8 @@
 // render request (windows, crops, a reframed shot's own clip, type timed in the film, captions on the
 // social shapes only), and the free and paid jobs' purposes.
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { forgetMedia, setMediaBase } from '../lib/media'
 import cases from '../../../contracts/examples/cutdown-cases.json'
 import type { CutdownPlan, FormatSet, ProductionDocument, PxBox, Size } from '../contracts/types'
 import { isFreeRequest } from '../jobs/runner'
@@ -12,7 +13,7 @@ import { purposeOf, purposeWords } from '../model/purpose'
 import type { Relay } from '../relay/types'
 import { MAYA, snapshotDoc } from '../test/jobFixtures'
 import { SHA, addShots, addTake, job } from '../test/model'
-import { alephRatio, CARD_S, captionLayers, cropKeys, edlFor, filmLength, filmSeconds, fitWindows, isSocialShape, masterShots, reframeKey, reframesOf } from './film'
+import { alephRatio, captionLayers, cropKeys, edlFor, filmLength, filmSeconds, fitWindows, isSocialShape, masterShots, reframeKey, reframesOf } from './film'
 import { cutdownInput, filmLayers, withoutRepeats } from './filmJobs'
 import { checksFor } from './checks'
 import { fileName } from './exportZip'
@@ -50,6 +51,13 @@ describe('the relay\'s maths, from one case table', () => {
 
 const CDN = 'https://cdn.test/out'
 
+// The relay's files are found by their hash at the media base (lib/media.ts); out/ answers for what it made.
+beforeEach(() => {
+  setMediaBase('https://cdn.test')
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => ({ ok: String(url).startsWith('https://cdn.test/out/') }) as Response))
+})
+afterEach(() => { vi.unstubAllGlobals(); forgetMedia() })
+
 /** A 30 s master of ten 3 s shots, each with its take (4 s, 1920x1080, on the relay), shot 3 with a spoken line. */
 function master() {
   const store = snapshotDoc(MAYA)
@@ -59,7 +67,7 @@ function master() {
   for (const [i, s] of shots.entries()) {
     const sha = SHA(String.fromCharCode(97 + i))
     addTake(d, s, sha, job(d, 'clip', [], sha), { pick: true })
-    d.assets[sha] = { ...d.assets[sha], kind: 'video', mime: 'video/mp4', w: 1920, h: 1080, duration_s: 4, locations: [`${CDN}/${sha}`] }
+    d.assets[sha] = { ...d.assets[sha], kind: 'video', mime: 'video/mp4', w: 1920, h: 1080, duration_s: 4 }
   }
   const beat = Object.values(d.beats ?? {}).find((b) => b.shot_id === shots[2].id)
   d.beats = { ...d.beats, beat_01K7C00000000000000000BT01: { ...(beat ?? {}), id: 'beat_01K7C00000000000000000BT01', v: 1, field_v: {}, shot_id: shots[2].id, rank: 'm', at_s: 0.5, kind: 'line', speaker: 'MAYA', text: 'I never miss the first light.' } as never }
@@ -97,18 +105,18 @@ describe('a 15 s at 9:16', () => {
     ctx.d.sizes = { [size.id]: size }
     return { ...ctx, ms, set, size, over }
   }
-  it('keeps the planned shots, windows fitted to 15 s with the end card, each cropped at 9:16', () => {
+  it('keeps the planned shots, windows fitted to 15 s (no studio card after them), each cropped at 9:16', () => {
     const { size, ms, over } = sized()
     expect(size.edl!.map((w) => w.shot_id)).toEqual([0, 2, 4, 7, 9].map((i) => ms[i].shotId))
     expect(filmLength(size.edl)).toBeCloseTo(15, 2)
     expect(over).toBeCloseTo(0, 3)
-    expect(size.edl![0]).toMatchObject({ in_s: 0, out_s: 2.5, crop: { x: 656.25, w: 607.5 }, crop_by: 'rule', take_size: { w: 1920, h: 1080 } })
+    expect(size.edl![0]).toMatchObject({ in_s: 0, out_s: 3, crop: { x: 656.25, w: 607.5 }, crop_by: 'rule', take_size: { w: 1920, h: 1080 } })
   })
   it('captions each spoken line in its time in the cut, and the Review agent counts them for sound off', () => {
     const { d, size, set } = sized()
     const caps = captionLayers(d, size.edl!, { x: 0.1, y: 0.6, w: 0.8, h: 0.08 })
     expect(caps).toHaveLength(1)
-    expect(caps[0]).toMatchObject({ kind: 'captions', text: 'I never miss the first light.', fromS: 3, toS: 5 }) // shot 3 starts at 2.5 s, its line 0.5 s in
+    expect(caps[0]).toMatchObject({ kind: 'captions', text: 'I never miss the first light.', fromS: 3.5, toS: 6 }) // shot 2 starts at 3 s, its line 0.5 s in
     expect(checksFor(size, set, d).sound_off?.result).toBe('pass')
     expect(checksFor(size, set, d).end_card?.result).toBe('pass') // stitch draws the card at its size
     expect(checksFor({ ...size, layers: { captions: { hidden: true } } }, set, d).sound_off?.result).toBe('flag')
@@ -119,7 +127,7 @@ describe('a 15 s at 9:16', () => {
     set.reframes = { [key]: { generation_id: ms[4].takeId!, shot_id: ms[4].shotId, aspect: { w: 1080, h: 1920 }, method: 'outpaint', job_id: 'job_01K7C00000000000000000JB01' } }
     expect(reframesOf(set, size)).toEqual([{ key, done: false }])
     const out = SHA('z')
-    d.assets[out] = { sha256: out, kind: 'video', mime: 'video/mp4', origin: 'mock', locations: [`${CDN}/${out}`] } as never
+    d.assets[out] = { sha256: out, kind: 'video', mime: 'video/mp4', origin: 'mock' } as never
     set.reframes[key].asset = out
     set.reframes[key].size = { w: 612, h: 1088 }
     expect(reframesOf(set, size)).toEqual([{ key, done: true }])
@@ -127,11 +135,11 @@ describe('a 15 s at 9:16', () => {
     const cut = input.cutdown!
     expect(cut.step).toBe('render')
     expect(cut.clips!.map((c) => c.asset.sha256)).toEqual([0, 2, 4, 7, 9].map((i) => (i === 4 ? out : ms[i].takeAsset)))
-    expect(cut.clips![0]).toMatchObject({ inS: 0, outS: 2.5, takeSize: { w: 1920, h: 1080 }, crop: { x: 656.25 } })
-    expect(cut.clips![2]).toEqual({ asset: { sha256: out, url: `${CDN}/${out}`, mime: 'video/mp4' }, inS: 0, outS: 2.5, takeSize: { w: 612, h: 1088 } })
+    expect(cut.clips![0]).toMatchObject({ inS: 0, outS: 3, takeSize: { w: 1920, h: 1080 }, crop: { x: 656.25 } })
+    expect(cut.clips![2]).toEqual({ asset: { sha256: out, url: `${CDN}/${out}`, mime: 'video/mp4' }, inS: 0, outS: 3, takeSize: { w: 612, h: 1088 } })
     expect(cut).toMatchObject({ endCard: true, fadeOutS: 0.5, lengthS: 15 })
     const line = cut.layers!.find((l) => l.kind === 'line')!
-    expect(line).toMatchObject({ text: 'First light. First sip.', toS: 12.5 }) // the last 2.5 s of the clips, after any caption (R5-F6)
+    expect(line).toMatchObject({ text: 'First light. First sip.', toS: 15 }) // the last 2.5 s of the clips (15 s now: no studio card after them), after any caption (R5-F6)
     expect(line.fromS).toBeGreaterThanOrEqual(10)
     expect(cut.layers!.some((l) => l.kind === 'captions')).toBe(true)
   })
@@ -179,11 +187,11 @@ describe('the words shown once (re-test N-G)', () => {
 
 describe('the film\'s own length in Make all sizes (UAT 2026-11-18, U6: "Film · 15 s" for a 12.7 s cut)', () => {
   const shot = (n: number, inS: number, outS: number, endCard = false) => ({ shotId: `shot_${n}`, number: n, inS, outS, ...(endCard ? { endCard } : {}) })
-  it('is its shots as cut now, without the end card stitch adds', () => {
-    expect(filmSeconds([shot(1, 0, 4), shot(2, 0.5, 4.2), shot(3, 0, 5), shot(4, 0, CARD_S, true)], 15)).toBe(12.7)
+  it('is its shots as cut now, without the end card shot', () => {
+    expect(filmSeconds([shot(1, 0, 4), shot(2, 0.5, 4.2), shot(3, 0, 5), shot(4, 0, 2.5, true)], 15)).toBe(12.7)
   })
-  it('is the render\'s length (or target) less the card when no shot has a take', () => {
-    expect(filmSeconds([shot(4, 0, CARD_S, true)], 15.2)).toBeCloseTo(12.7)
+  it('is the render\'s length (or target) when no shot has a take: it carries no studio card', () => {
+    expect(filmSeconds([shot(4, 0, 2.5, true)], 15.2)).toBeCloseTo(15.2)
     expect(filmSeconds([])).toBe(0)
   })
 })
@@ -199,17 +207,17 @@ describe('Make all sizes picks the shapes the brief asks for (UAT 2026-11-21)', 
 })
 
 describe('a short size keeps its picture and says its line once (UAT round 3, R3-F12)', () => {
-  it('the cards shorten so a 6 s keeps 3.5 s of picture: the studio card first, then the film\'s card; both stay', async () => {
-    const { cardLengths, MIN_PICTURE_S } = await import('./film')
-    expect(cardLengths(6, 2.5)).toEqual({ clientS: 1.167, studioS: 1.333 })
-    expect(6 - 1.167 - 1.333).toBeCloseTo(MIN_PICTURE_S, 3)
-    expect(cardLengths(15, 2.5)).toEqual({ clientS: 2, studioS: CARD_S })
-    expect(cardLengths(6, undefined)).toEqual({ clientS: 0, studioS: CARD_S })
-    expect(cardLengths(5, 2.5)).toEqual({ clientS: 1, studioS: 1.2 })
-    const { windows } = fitWindows([{ shotId: 'a', inS: 0, outS: 4, takeS: 4 }, { shotId: 'e', inS: 0, outS: 2.5, endCard: true }], new Set(['a']), 6)
-    expect(windows[0].outS - windows[0].inS).toBeCloseTo(3.5, 3)
+  it('the film\'s card is the last picture, no studio card after it; on a very short size it shortens to keep the picture', async () => {
+    const { cardLength, MIN_PICTURE_S } = await import('./film')
+    expect(cardLength(6, 2.5)).toBe(2)
+    expect(cardLength(15, 2.5)).toBe(2)
+    expect(cardLength(6, undefined)).toBe(0)
+    expect(cardLength(4, 2.5)).toBe(1) // 4 - 1.333 would leave 2.667 of picture: the card goes to 1 s, the picture gets 3
+    expect(4 - cardLength(4, 2.5)).toBeLessThan(MIN_PICTURE_S)
+    const { windows } = fitWindows([{ shotId: 'a', inS: 0, outS: 5, takeS: 5 }, { shotId: 'e', inS: 0, outS: 2.5, endCard: true }], new Set(['a']), 6)
+    expect(windows[0].outS - windows[0].inS).toBeCloseTo(4, 3) // 6 s less the film's own 2 s card: no studio card
   })
-  it('a 6 s size with the film\'s card: the render names the shorter studio card, and the line is not burnt in as well', async () => {
+  it('a 6 s size with the film\'s card: its card is the last picture, and the line is not burnt in as well', async () => {
     const ctx = master()
     const { d, shots, video, deps } = ctx
     shots[9].kind = 'end_card'
@@ -219,15 +227,15 @@ describe('a short size keeps its picture and says its line once (UAT round 3, R3
     const beats = ms.filter((s) => !s.endCard).map((s, i) => ({ shot_id: s.shotId, keep: i === 0 || i === 8, why: 'Kept.', by: 'dex' as const }))
     const shape = { w: 1080, h: 1920 }
     const { edl } = edlFor(ms, beats, 6, shape, [])
-    expect(edl.reduce((a, w) => a + (w.out_s - w.in_s), 0)).toBeCloseTo(3.5, 2)
+    expect(edl.reduce((a, w) => a + (w.out_s - w.in_s), 0)).toBeCloseTo(4, 2)
     const set: FormatSet = { id: 'fset_01K7C00000000000000000FS01', v: 1, field_v: {}, master: { kind: 'video', id: video.id, w: 1920, h: 1080 }, pack: { pack_id: 'film', pack_version: '1' }, copy: { line: 'Quietboil. Let them sleep.' } }
     const size: Size = { id: 'size_01K7C00000000000000000SZ01', v: 1, field_v: {}, set_id: set.id, rank: 'm', format: { pack_id: 'film', pack_version: '1', format_id: 'film-9x16' },
       aspect: shape, delivery: { width: 1080, height: 1920 }, method: 'reframe', media: 'video', length_s: 6, edl, beats }
     d.format_sets = { [set.id]: set }
     d.sizes = { [size.id]: size }
     const cut = (await cutdownInput(deps, set, size)).cutdown!
-    expect(cut.clientCard).toMatchObject({ headline: 'Quietboil', line: 'Let them sleep.', s: 1.167 })
-    expect(cut.studioS).toBe(1.333)
+    expect(cut.clientCard).toMatchObject({ headline: 'Quietboil', line: 'Let them sleep.', s: 2 })
+    expect('studioS' in cut).toBe(false)
     expect((await filmLayers(deps, set, size)).some((l) => l.kind === 'line')).toBe(true) // the size's own line…
     expect((cut.layers ?? []).some((l) => l.kind === 'line')).toBe(false) // …left to the card
     expect(cut.lengthS).toBe(6)

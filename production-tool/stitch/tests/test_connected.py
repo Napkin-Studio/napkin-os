@@ -109,7 +109,7 @@ def test_windows_of_one_take_are_its_shots_in_order_and_it_is_fetched_once(tmp_p
                      put_json=lambda key, d: store.__setitem__(key, d), ffmpeg="ffmpeg", ffprobe="ffprobe")
     assert res["ok"], res
     assert fetched == ["take.mp4"]
-    assert frames_of(store["ad.mp4"], tmp_path) == round((6 + stitch.CARD_S) * FPS)
+    assert frames_of(store["ad.mp4"], tmp_path) == round(6 * FPS)
     # Each window joins the next where the take itself cut: the seams sit at the take's cuts.
     assert [s["at_s"] for s in res["seams"]] == [2.0, 4.5]
 
@@ -147,7 +147,7 @@ def test_fit_speed_keeps_the_ad_as_long_as_the_plan_and_shows_the_landing_frame(
     sped, ss = render(tmp_path, [{"key": "landing.mp4", "trimS": 3.2, "fit": "speed"}, {"key": "next.mp4", "trimS": 2}])
     for res, store in ((trimmed, st), (sped, ss)):
         assert res["ok"], res
-        assert frames_of(store["ads/x.mp4"], tmp_path) == round((5.2 + stitch.CARD_S) * FPS)
+        assert frames_of(store["ads/x.mp4"], tmp_path) == round(5.2 * FPS)
     assert reds(st["ads/x.mp4"], tmp_path) == []
     assert reds(ss["ads/x.mp4"], tmp_path) == [round(3.2 * FPS) - 1]  # the slot's last frame is the landing frame
 
@@ -170,7 +170,7 @@ def test_the_shared_frame_shows_once_and_the_ad_keeps_its_length(tmp_path):
     joined = [{"key": "a.mp4", "trimS": 1, "fit": "speed"}, {"key": "b.mp4", "trimS": 1, "transition": {"kind": "continue"}}]
     res, store = render(tmp_path, joined)
     assert res["ok"], res
-    assert frames_of(store["ads/x.mp4"], tmp_path) == round((2 + stitch.CARD_S) * FPS)
+    assert frames_of(store["ads/x.mp4"], tmp_path) == round(2 * FPS)
     assert reds(store["ads/x.mp4"], tmp_path) == [24]  # once, as b's first frame
     assert res["seams"][0]["kind"] == "cut" and res["seams"][0]["at_s"] == 1.0
 
@@ -228,7 +228,7 @@ def test_fit_speed_with_an_out_point_ends_the_slot_on_the_landing_frame(tmp_path
     res, store = render(tmp_path, [{"key": "landing.mp4", "trimS": 3.2, "outS": 90 / FPS, "fit": "speed"},
                                    {"key": "next.mp4", "trimS": 2}])
     assert res["ok"], res
-    assert frames_of(store["ads/x.mp4"], tmp_path) == round((5.2 + stitch.CARD_S) * FPS)
+    assert frames_of(store["ads/x.mp4"], tmp_path) == round(5.2 * FPS)
     assert reds(store["ads/x.mp4"], tmp_path) == [round(3.2 * FPS) - 1]  # the slot ends on the landing frame
     f = tmp_path / "g.mp4"
     f.write_bytes(store["ads/x.mp4"])

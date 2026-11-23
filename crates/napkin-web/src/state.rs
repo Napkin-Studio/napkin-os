@@ -45,16 +45,29 @@ pub struct Workspace {
     /// What the library listing worked out per document, so a poll does not
     /// re-read every decision chain (napkin-host `listing`).
     pub library: LibraryCache,
+    /// The same store as [`Self::store`], as the tenant's own: the whole-document
+    /// save, snapshots and the trash need what the traits do not carry. `None`
+    /// for a test's stand-in store.
+    pub tenant_store: Option<Arc<TenantStore>>,
 }
 
 impl Workspace {
     fn new(store: Arc<dyn DocStore>, ctx: Ctx) -> Self {
         Self {
             store,
+            tenant_store: None,
             ctx,
             sessions: Mutex::new(SessionCache::default()),
             library: LibraryCache::new(),
         }
+    }
+
+    /// Drop the cached session of `doc` (it was deleted or restored), so the
+    /// next request reads the store afresh.
+    pub fn forget(&self, doc: &DocId) {
+        let mut cache = self.sessions.lock().unwrap();
+        cache.open.remove(doc);
+        cache.order.retain(|d| d != doc);
     }
 
     /// The session for one document, opening it if this is the first request.
@@ -120,6 +133,9 @@ pub struct AppCtx {
     pub sandbox_origin: Option<String>,
     /// The dogfood build's record (`NAPKIN_DOGFOOD=1`); `None` everywhere else.
     pub dogfood: Option<Arc<crate::dogfood::Dogfood>>,
+    /// Where Production's pictures live (`NAPKIN_PRODUCTION_MEDIA_BASE`),
+    /// told to the tool in `/api/session`.
+    pub media_base: Option<String>,
     workspaces: Mutex<HashMap<TenantId, Arc<Workspace>>>,
 }
 
@@ -140,6 +156,7 @@ impl AppCtx {
             meter: Meter::new(agent_cap),
             sandbox_origin,
             dogfood: None,
+            media_base: None,
             workspaces: Mutex::new(HashMap::new()),
         }
     }
@@ -156,6 +173,12 @@ impl AppCtx {
         self
     }
 
+    /// Tell the tool where pictures live (see [`crate::media`]).
+    pub fn with_media_base(mut self, base: Option<String>) -> Self {
+        self.media_base = base;
+        self
+    }
+
     /// Give `tenant` a workspace on `store` (tests that count what reaches it).
     #[cfg(test)]
     pub(crate) fn put_workspace(&self, tenant: &TenantId, store: Arc<dyn DocStore>) {
@@ -168,11 +191,14 @@ impl AppCtx {
         if let Some(existing) = workspaces.get(tenant) {
             return existing.clone();
         }
-        let store: Arc<dyn DocStore> = Arc::new(TenantStore::new(self.root.join(tenant.as_str())));
+        let tenant_store = Arc::new(TenantStore::new(self.root.join(tenant.as_str())));
+        let store: Arc<dyn DocStore> = tenant_store.clone();
         if let Some(seed) = &self.seed {
             seed_library(&*store, seed);
         }
-        let workspace = Arc::new(Workspace::new(store, tenant.ctx()));
+        let mut workspace = Workspace::new(store, tenant.ctx());
+        workspace.tenant_store = Some(tenant_store);
+        let workspace = Arc::new(workspace);
         workspaces.insert(tenant.clone(), workspace.clone());
         workspace
     }

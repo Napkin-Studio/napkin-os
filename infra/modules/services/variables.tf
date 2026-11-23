@@ -178,3 +178,19 @@ variable "deck_max_usd" {
   type        = string
   default     = "2.00"
 }
+
+variable "backup_enabled" {
+  description = "Back up web's EFS (every project and library document) with AWS Backup: daily at 03:00 UTC, kept 35 days, in its own vault (features/production-in-library). Off by default; uat and staging turn it on."
+  type        = bool
+  default     = false
+}
+
+variable "production_media_base" {
+  description = "The https base Production's pictures are served from (NAPKIN_PRODUCTION_MEDIA_BASE; the hackathon stack's CloudFront url). napkin-web tells the tool in /api/session as media_base. Empty: media_base is null."
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.production_media_base == "" || startswith(var.production_media_base, "https://")
+    error_message = "production_media_base is empty or an https:// address"
+  }
+}

@@ -2,146 +2,37 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-//! The spin-off routes to and from Production (src/spinoff.rs,
-//! features/production-spinoff.clan), against a stand-in relay that keeps
-//! projects per workspace the way the real one does: by the tenant the signed
-//! identity names. Every call it takes is checked for its signature.
+//! Production in the spin-off chain (features/production-in-library.clan, stage 1): a brief, research or
+//! territories become a Production project, and a project a deck, through the one plain route
+//! `POST /t/{tenant}/d/{doc}/spinoff`. A Production project is a library document like any other: it lists
+//! under its client, carries the whole upstream, and there is no bridge to the relay.
 
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use axum::body::{Body, Bytes};
-use axum::extract::Request as AxumRequest;
 use axum::http::{header, HeaderMap, Request, StatusCode};
 use axum::Router;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64;
 use base64::Engine as _;
 use clan_sdk::{ClanBuilder, ClanFile, SpinoffSpec};
-use hmac::{Hmac, Mac};
 use http_body_util::BodyExt;
-use napkin_host::{library, NoConfig};
-use napkin_web::production::{body_hash, Config, Relay};
+use napkin_host::{library, DocId, NoConfig};
+use napkin_web::production::{Config, Relay};
 use napkin_web::state::AppCtx;
 use napkin_web::tenant::TenantId;
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 use tower::ServiceExt;
 
 const KEY: &str = "a-dev-identity-secret-of-32-bytes-or-more";
 const BRIEF: &str = "ie.napkin.brief-maker";
+const RESEARCH: &str = "ie.napkin.campaign-research";
+const TERRITORIES: &str = "ie.napkin.territories";
 const PRODUCTION: &str = "ie.napkin.production";
 const DECK: &str = "ie.napkin.deck-maker";
 const CHECKPOINT: &str = "human/assets/canvas.ybin.zst";
-
-// ── The stand-in relay ───────────────────────────────────────────────────────
-
-/// One saved project, as the relay holds it.
-#[derive(Clone)]
-struct Saved {
-    bytes: Vec<u8>,
-    etag: String,
-}
-
-#[derive(Default)]
-struct RelayState {
-    /// tenant -> project -> newest save. The real relay keeps them under `tenants/<t>/projects/`.
-    projects: HashMap<String, HashMap<String, Saved>>,
-    /// Every call: method, path, project header.
-    calls: Vec<(String, String, Option<String>)>,
-    /// A relay that forgot to check the tenant: it answers for any project of any workspace.
-    leaky: bool,
-}
-
-type State = Arc<Mutex<RelayState>>;
-
-fn claims_of(headers: &HeaderMap, method: &str, path: &str, body: &[u8]) -> Value {
-    let assertion = headers
-        .get("x-napkin-identity")
-        .expect("every call carries the signed identity")
-        .to_str()
-        .unwrap();
-    let (head, sig) = assertion.rsplit_once('.').unwrap();
-    let mut mac = Hmac::<Sha256>::new_from_slice(KEY.as_bytes()).unwrap();
-    mac.update(head.as_bytes());
-    mac.verify_slice(&B64.decode(sig).unwrap())
-        .expect("signed with the shared key");
-    let c: Value =
-        serde_json::from_slice(&B64.decode(head.strip_prefix("v1.").unwrap()).unwrap()).unwrap();
-    assert_eq!(c["aud"], "relay");
-    assert_eq!(c["m"], method);
-    assert_eq!(c["p"], path);
-    assert_eq!(c["bh"], body_hash(body));
-    c
-}
-
-async fn relay() -> (String, State) {
-    let state: State = Arc::default();
-    let st = state.clone();
-    let app = Router::new().fallback(move |req: AxumRequest| {
-        let st = st.clone();
-        async move {
-            let (parts, body) = req.into_parts();
-            let body = body.collect().await.unwrap().to_bytes();
-            let path = parts.uri.path().to_string();
-            let claims = claims_of(&parts.headers, parts.method.as_str(), &path, &body);
-            let tenant = claims["t"].as_str().unwrap().to_string();
-            let project = parts
-                .headers
-                .get("x-project-id")
-                .map(|v| v.to_str().unwrap().to_string());
-            let mut s = st.lock().unwrap();
-            s.calls
-                .push((parts.method.to_string(), path.clone(), project.clone()));
-            let reply = |status: u16| {
-                axum::response::Response::builder()
-                    .status(status)
-                    .body(Body::empty())
-                    .unwrap()
-            };
-            if parts.method == "POST" && path == "/api/clan" {
-                let project = project.expect("a saved project names its id");
-                assert!(body.starts_with(b"PK\x03\x04"), "a .clan");
-                let etag = format!("{:x}", Sha256::digest(&body));
-                s.projects.entry(tenant).or_default().insert(
-                    project,
-                    Saved {
-                        bytes: body.to_vec(),
-                        etag: etag.clone(),
-                    },
-                );
-                return axum::response::Response::builder()
-                    .status(200)
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(
-                        serde_json::json!({"project": {"etag": etag}}).to_string(),
-                    ))
-                    .unwrap();
-            }
-            if let Some(id) = path.strip_prefix("/api/clan/") {
-                let found = if s.leaky {
-                    s.projects.values().find_map(|m| m.get(id)).cloned()
-                } else {
-                    s.projects.get(&tenant).and_then(|m| m.get(id)).cloned()
-                };
-                return match found {
-                    Some(p) => axum::response::Response::builder()
-                        .status(200)
-                        .header(header::CONTENT_TYPE, "application/vnd.clan+zip")
-                        .header(header::ETAG, format!("\"{}\"", p.etag))
-                        .body(Body::from(p.bytes))
-                        .unwrap(),
-                    None => reply(404),
-                };
-            }
-            reply(404)
-        }
-    });
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
-    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    (format!("http://{addr}"), state)
-}
+/// A real brief's data (Hollow Oak 'Still', carried upstream in the project export of 2026-11-22).
+const HOLLOW_OAK: &str = include_str!("fixtures/hollow-oak-brief.yaml");
 
 // ── The server ───────────────────────────────────────────────────────────────
 
@@ -191,6 +82,15 @@ fn server(relay_url: Option<String>) -> Server {
 }
 
 fn server_with(relay_url: Option<String>, config: Arc<dyn napkin_host::HostConfig>) -> Server {
+    server_apps(relay_url, config, true)
+}
+
+/// `deck`: whether Deck Maker is installed (a seed without it is the "app not installed" case).
+fn server_apps(
+    relay_url: Option<String>,
+    config: Arc<dyn napkin_host::HostConfig>,
+    deck: bool,
+) -> Server {
     let dir = tempfile::tempdir().unwrap();
     let seed = dir.path().join("seed");
     std::fs::create_dir_all(&seed).unwrap();
@@ -205,15 +105,35 @@ fn server_with(relay_url: Option<String>, config: Arc<dyn napkin_host::HostConfi
     )
     .unwrap();
     std::fs::write(
-        seed.join("production.app.clan"),
-        template(PRODUCTION, "Production", Some(upstream(BRIEF))),
+        seed.join("research.app.clan"),
+        template(RESEARCH, "Research Tool", None),
     )
     .unwrap();
     std::fs::write(
-        seed.join("deck.app.clan"),
-        template(DECK, "Deck Maker", Some(upstream(PRODUCTION))),
+        seed.join("territories.app.clan"),
+        template(TERRITORIES, "Territories", None),
     )
     .unwrap();
+    std::fs::write(
+        seed.join("production.app.clan"),
+        template(
+            PRODUCTION,
+            "Production",
+            Some(SpinoffSpec {
+                accepts: vec![BRIEF.into(), RESEARCH.into(), TERRITORIES.into()],
+                upstream: true,
+                ..Default::default()
+            }),
+        ),
+    )
+    .unwrap();
+    if deck {
+        std::fs::write(
+            seed.join("deck.app.clan"),
+            template(DECK, "Deck Maker", Some(upstream(PRODUCTION))),
+        )
+        .unwrap();
+    }
     let ctx =
         Arc::new(AppCtx::new(dir.path().join("data"), config, None, 40).with_seed(Some(seed)));
     let tool = dir.path().join("production");
@@ -365,318 +285,361 @@ fn clan_of(bytes: &[u8]) -> ClanFile {
 fn yaml(clan: &ClanFile, path: &str) -> serde_yaml::Value {
     serde_yaml::from_slice(&clan.read_entry(path).unwrap()).unwrap()
 }
+/// The relay is never called by these tests (the proxy needs only a configured address).
+const RELAY_URL: &str = "http://127.0.0.1:9";
 
-/// What the project would be in the relay when the tool had saved it: the spun-off
-/// document, with a canvas checkpoint and a picture added, the way the tool leaves it.
-fn with_checkpoint(bytes: &[u8]) -> Vec<u8> {
-    let clan = clan_of(bytes);
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+/// A document of `app` in the library, its data set to `data`. Returns its library id.
+fn a_document(s: &Server, p: &Person, app: &str, title: &str, data: &str) -> String {
+    let ws = s.ctx.workspace(&p.tenant);
+    let id = library::create_instance(&*ws.store, app, Some(title.into())).unwrap();
+    set_data(s, p, &id, data);
+    id.to_string()
+}
+
+fn set_data(s: &Server, p: &Person, id: &DocId, data: &str) {
+    let ws = s.ctx.workspace(&p.tenant);
+    let clan = clan_of(&ws.store.read(id).unwrap());
     let mut b = ClanBuilder::new(clan.manifest().clone());
-    for (path, entry) in clan.read_all_entries().unwrap() {
-        if path != clan_sdk::MANIFEST_PATH {
-            b.add_entry(path, entry);
+    for (path, bytes) in clan.read_all_entries().unwrap() {
+        if path != clan_sdk::MANIFEST_PATH && path != "shared/data.yaml" {
+            b.add_entry(path, bytes);
         }
     }
-    b.add_entry(CHECKPOINT, vec![7u8; 4096]);
-    b.build().unwrap()
+    b.add_entry("shared/data.yaml", data.as_bytes().to_vec());
+    let base = ws.store.version(id).unwrap();
+    ws.store
+        .apply(&napkin_host::Change::replace(
+            id.clone(),
+            base,
+            b.build().unwrap(),
+        ))
+        .unwrap();
 }
 
-// ── Brief to Production ──────────────────────────────────────────────────────
-
-#[tokio::test]
-async fn a_brief_continues_in_production_as_one_relay_project_and_no_document() {
-    let (url, rs) = relay().await;
-    let s = server(Some(url));
-    let me = sign_in(&s, "visionary", "napkin").await;
-    let brief = a_brief(&s, &me, "Lumen Water");
-    let in_library_before = get(&s, &me, "/library").await.json()["items"]
-        .as_array()
-        .unwrap()
-        .len();
-
-    let r = post_json(
-        &s,
-        &me,
-        "/spinoff/production",
-        serde_json::json!({ "doc": brief }),
+fn stored(s: &Server, p: &Person, doc: &str) -> ClanFile {
+    clan_of(
+        &s.ctx
+            .workspace(&p.tenant)
+            .store
+            .read(&DocId::new(doc))
+            .unwrap(),
     )
-    .await;
-    assert_eq!(
-        r.status,
-        StatusCode::OK,
-        "{}",
-        String::from_utf8_lossy(&r.body)
-    );
-    let v = r.json();
-    let project = v["project"].as_str().unwrap();
-    // the id is one the relay accepts, and the answer says where the tool opens it
-    assert!(regex_like_project_id(project), "{project}");
-    assert_eq!(v["path"], format!("/production/p/{project}"));
-
-    // exactly one write to the relay, under that id, and nothing else
-    {
-        let st = rs.lock().unwrap();
-        assert_eq!(
-            st.calls,
-            vec![(
-                "POST".to_string(),
-                "/api/clan".to_string(),
-                Some(project.to_string())
-            )]
-        );
-        let saved = &st.projects[me.tenant.as_str()][project];
-        let clan = clan_of(&saved.bytes);
-        // the brief, whole, and where it came from
-        let carried = clan.manifest().carried().expect("lineage.carried");
-        let brief_doc = clan_of(
-            &s.ctx
-                .workspace(&me.tenant)
-                .store
-                .read(&napkin_host::DocId::new(brief.clone()))
-                .unwrap(),
-        );
-        assert_eq!(carried.document_id, brief_doc.manifest().document_id());
-        assert!(yaml(&clan, "shared/data.yaml")["upstream"][&carried.document_id].is_mapping());
-        assert_eq!(
-            clan.manifest().lineage.as_ref().unwrap().parent_uri,
-            format!("clan-store:{brief}")
-        );
-        assert_eq!(clan.manifest().app.as_ref().unwrap().app_id, PRODUCTION);
-        // stamped with the workspace it was made in
-        let chain = yaml(&clan, "agent/decision-chain.yaml");
-        assert_eq!(
-            chain["decisions"][0]["scope"]["org"],
-            me.tenant.as_str(),
-            "the spin-off's own entry names the workspace"
-        );
-    }
-
-    // no Production document was written to the library
-    assert_eq!(documents_of(&s, &me, PRODUCTION).await, 0);
-    let after = get(&s, &me, "/library").await.json()["items"]
-        .as_array()
-        .unwrap()
-        .len();
-    assert_eq!(after, in_library_before);
 }
 
-fn regex_like_project_id(s: &str) -> bool {
-    s.len() == 30
-        && s.starts_with("prj_")
-        && s[4..]
-            .bytes()
-            .all(|b| b"0123456789ABCDEFGHJKMNPQRSTVWXYZ".contains(&b))
-}
-
-#[tokio::test]
-async fn the_generic_route_never_writes_a_production_document_to_the_library() {
-    let (url, _rs) = relay().await;
-    let s = server(Some(url));
-    let me = sign_in(&s, "visionary", "napkin").await;
-    let brief = a_brief(&s, &me, "Lumen Water");
-    let r = post_json(
-        &s,
-        &me,
-        &format!("/d/{brief}/spinoff"),
-        serde_json::json!({ "app_id": PRODUCTION }),
-    )
-    .await;
-    assert_eq!(r.status, StatusCode::UNPROCESSABLE_ENTITY);
-    assert_eq!(documents_of(&s, &me, PRODUCTION).await, 0);
-}
-
-#[tokio::test]
-async fn a_brief_of_another_workspace_is_not_continued() {
-    let (url, rs) = relay().await;
-    let s = server(Some(url));
-    let me = sign_in(&s, "visionary", "napkin").await;
-    let them = sign_in(&s, "planner", "javelin").await;
-    let theirs = a_brief(&s, &them, "Theirs");
-    // not in my library at all: 404, and nothing reaches the relay
-    let r = post_json(
-        &s,
-        &me,
-        "/spinoff/production",
-        serde_json::json!({ "doc": theirs }),
-    )
-    .await;
-    assert_eq!(r.status, StatusCode::NOT_FOUND);
-    assert!(rs.lock().unwrap().calls.is_empty());
-}
-
-#[tokio::test]
-async fn without_a_relay_there_is_no_bridge() {
-    let s = server(None);
-    let me = sign_in(&s, "visionary", "napkin").await;
-    let brief = a_brief(&s, &me, "Lumen Water");
-    let r = post_json(
-        &s,
-        &me,
-        "/spinoff/production",
-        serde_json::json!({ "doc": brief }),
-    )
-    .await;
-    assert_eq!(r.status, StatusCode::NOT_FOUND);
-}
-
-// ── Production to an app ─────────────────────────────────────────────────────
-
-/// A project the tool saved: a brief continued in Production, then given its canvas checkpoint.
-async fn a_saved_project(s: &Server, rs: &State, p: &Person) -> (String, String) {
-    let brief = a_brief(s, p, "Lumen Water");
-    let made = post_json(
+async fn spinoff(s: &Server, p: &Person, doc: &str, app: &str) -> Reply {
+    post_json(
         s,
         p,
-        "/spinoff/production",
-        serde_json::json!({ "doc": brief }),
+        &format!("/d/{doc}/spinoff"),
+        serde_json::json!({ "app_id": app }),
     )
-    .await;
-    assert_eq!(made.status, StatusCode::OK);
-    let project = made.json()["project"].as_str().unwrap().to_string();
-    let mut st = rs.lock().unwrap();
-    let saved = st
-        .projects
-        .get_mut(p.tenant.as_str())
-        .unwrap()
-        .get_mut(&project)
-        .unwrap();
-    saved.bytes = with_checkpoint(&saved.bytes);
-    saved.etag = format!("{:x}", Sha256::digest(&saved.bytes));
-    let etag = saved.etag.clone();
-    st.calls.clear();
-    (project, etag)
+    .await
 }
 
-#[tokio::test]
-async fn a_project_continues_in_a_deck_without_its_canvas_and_names_its_source() {
-    let (url, rs) = relay().await;
-    let s = server(Some(url));
-    let me = sign_in(&s, "visionary", "napkin").await;
-    let (project, etag) = a_saved_project(&s, &rs, &me).await;
-    let source = clan_of(&rs.lock().unwrap().projects[me.tenant.as_str()][&project].bytes);
-    assert!(
-        source.has_entry(CHECKPOINT),
-        "the project in the relay holds its canvas"
-    );
+/// The file name a library id has on disk (`doc-<name>` is `<name>.clan`).
+fn stem(doc: &str) -> &str {
+    doc.strip_prefix("doc-").unwrap_or(doc)
+}
 
-    let r = post_json(
-        &s,
-        &me,
-        &format!("/production/{project}/spinoff"),
-        serde_json::json!({ "target_app_id": DECK, "title": "Lumen deck" }),
-    )
-    .await;
+fn path_of(r: &Reply) -> String {
     assert_eq!(
         r.status,
         StatusCode::OK,
         "{}",
         String::from_utf8_lossy(&r.body)
     );
-    let v = r.json();
-    let uri = format!("production:{project}@{etag}");
-    assert_eq!(v["source_uri"], uri.as_str());
-    let doc = v["path"].as_str().unwrap();
-
-    // read once from the relay, through the caller's signed identity; written nowhere in it
-    assert_eq!(
-        rs.lock().unwrap().calls,
-        vec![("GET".to_string(), format!("/api/clan/{project}"), None)]
-    );
-
-    // the deck is in the library: the project whole under upstream, no canvas, the source named
-    let deck = get(&s, &me, &format!("/d/{doc}/download")).await;
-    assert_eq!(deck.status, StatusCode::OK);
-    let deck = clan_of(&deck.body);
-    assert_eq!(deck.manifest().app.as_ref().unwrap().app_id, DECK);
-    assert_eq!(deck.manifest().title, "Lumen deck");
-    assert!(
-        !deck.has_entry(CHECKPOINT),
-        "the canvas checkpoint is not carried"
-    );
-    assert!(deck
-        .read_all_entries()
-        .unwrap()
-        .iter()
-        .all(|(p, _)| !p.ends_with("canvas.ybin.zst")));
-    let lineage = deck.manifest().lineage.as_ref().unwrap();
-    assert_eq!(lineage.parent_uri, uri);
-    let carried = deck.manifest().carried().expect("lineage.carried");
-    assert_eq!(carried.document_id, source.manifest().document_id());
-    assert!(yaml(&deck, "shared/data.yaml")["upstream"][&carried.document_id].is_mapping());
-    // the brief the project carried reaches the deck, hoisted beside it
-    let brief_id = source.manifest().carried().unwrap().document_id.clone();
-    assert!(yaml(&deck, "shared/data.yaml")["upstream"][&brief_id].is_mapping());
-    assert_eq!(documents_of(&s, &me, DECK).await, 1);
+    r.json()["path"].as_str().unwrap().to_string()
 }
 
-#[tokio::test]
-async fn another_agencys_project_is_refused_and_no_document_is_written() {
-    let (url, rs) = relay().await;
-    let s = server(Some(url));
-    let me = sign_in(&s, "visionary", "napkin").await;
-    let them = sign_in(&s, "planner", "javelin").await;
-    let (theirs, _) = a_saved_project(&s, &rs, &them).await;
+async fn library_item(s: &Server, p: &Person, doc: &str) -> Value {
+    let v = get(s, p, "/library").await.json();
+    v["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|i| i["path"] == doc)
+        .unwrap_or_else(|| panic!("{doc} is not listed: {v}"))
+        .clone()
+}
 
-    // the relay keeps workspaces apart: it does not find it under my identity
-    let r = post_json(
-        &s,
-        &me,
-        &format!("/production/{theirs}/spinoff"),
-        serde_json::json!({ "target_app_id": DECK }),
-    )
-    .await;
-    assert_eq!(r.status, StatusCode::NOT_FOUND);
-    assert_eq!(documents_of(&s, &me, DECK).await, 0);
-
-    // and when a relay forgets to, the project's own stamp does: 403 from the host
-    rs.lock().unwrap().leaky = true;
-    let r = post_json(
-        &s,
-        &me,
-        &format!("/production/{theirs}/spinoff"),
-        serde_json::json!({ "target_app_id": DECK }),
-    )
-    .await;
+async fn a_client(s: &Server, p: &Person, name: &str) -> String {
+    let r = post_json(s, p, "/clients", serde_json::json!({ "name": name })).await;
     assert_eq!(
         r.status,
-        StatusCode::FORBIDDEN,
+        StatusCode::CREATED,
         "{}",
         String::from_utf8_lossy(&r.body)
     );
-    assert_eq!(documents_of(&s, &me, DECK).await, 0);
-    assert_eq!(documents_of(&s, &them, DECK).await, 0);
+    r.json()["id"].as_str().unwrap().to_string()
+}
+
+// ── Production in the library (S1-1) ─────────────────────────────────────────
+
+#[tokio::test]
+async fn a_production_project_lists_under_its_client_or_under_none() {
+    let s = server(None);
+    let me = sign_in(&s, "visionary", "napkin").await;
+    let client = a_client(&s, &me, "Hollow Oak Cider").await;
+    let with = post_json(
+        &s,
+        &me,
+        "/documents",
+        serde_json::json!({ "app_id": PRODUCTION, "title": "Still", "client_id": client }),
+    )
+    .await;
+    let with = with.json()["path"].as_str().unwrap().to_string();
+    let item = library_item(&s, &me, &with).await;
+    assert_eq!(item["app_id"], PRODUCTION);
+    assert_eq!(item["client"]["id"], client);
+    assert_eq!(item["client"]["name"], "Hollow Oak Cider");
+
+    let none = post_json(
+        &s,
+        &me,
+        "/documents",
+        serde_json::json!({ "app_id": PRODUCTION, "title": "Loose" }),
+    )
+    .await;
+    let none = none.json()["path"].as_str().unwrap().to_string();
+    assert!(library_item(&s, &me, &none).await["client"].is_null());
+}
+
+// ── Brief, research, territories to Production (S1-2, S1-3, S1-5, S1-20, S1-21) ──
+
+#[tokio::test]
+async fn a_brief_continues_in_production_under_its_client_and_carries_every_field() {
+    let s = server(None);
+    let me = sign_in(&s, "visionary", "napkin").await;
+    let client = a_client(&s, &me, "Hollow Oak Cider").await;
+    let made = post_json(
+        &s,
+        &me,
+        "/documents",
+        serde_json::json!({ "app_id": BRIEF, "title": "Still", "client_id": client }),
+    )
+    .await;
+    let brief = made.json()["path"].as_str().unwrap().to_string();
+    set_data(&s, &me, &DocId::new(brief.clone()), HOLLOW_OAK);
+    let source = stored(&s, &me, &brief);
+    let want: serde_yaml::Value = serde_yaml::from_str(HOLLOW_OAK).unwrap();
+
+    let r = spinoff(&s, &me, &brief, PRODUCTION).await;
+    let prod = path_of(&r);
+
+    // In the library, under the brief's client.
+    let item = library_item(&s, &me, &prod).await;
+    assert_eq!(item["app_id"], PRODUCTION);
+    assert_eq!(item["client"]["id"], client);
+
+    // The whole brief, key for key and field for field: nothing summarised.
+    let clan = stored(&s, &me, &prod);
+    let data = yaml(&clan, "shared/data.yaml");
+    let carried = &data["upstream"][source.document_id()];
+    let keys = |v: &serde_yaml::Value| -> Vec<String> {
+        let mut k: Vec<String> = v
+            .as_mapping()
+            .unwrap()
+            .keys()
+            .map(|k| k.as_str().unwrap().to_string())
+            .collect();
+        k.sort();
+        k
+    };
+    assert_eq!(keys(carried), keys(&want));
+    for (k, v) in want.as_mapping().unwrap() {
+        assert_eq!(&carried[k], v, "{k:?} arrived whole");
+    }
+    assert!(!carried["objectives"].is_null() && !carried["audience"].is_null());
+    assert!(clan.manifest().carried().is_some());
+    // The source is named by id and version, the address the save route's ETag carries.
+    let uri = &clan.manifest().lineage.as_ref().unwrap().parent_uri;
+    assert_eq!(
+        uri,
+        &format!(
+            "doc:{brief}@{}",
+            clan_sdk::hash::sha256_prefixed(source.raw_bytes())
+        )
+    );
 }
 
 #[tokio::test]
-async fn a_project_is_not_continued_into_production_or_by_a_bad_id() {
-    let (url, rs) = relay().await;
-    let s = server(Some(url));
+async fn production_is_a_target_for_brief_research_and_territories_and_never_for_itself() {
+    let s = server(None);
     let me = sign_in(&s, "visionary", "napkin").await;
-    let (project, _) = a_saved_project(&s, &rs, &me).await;
-    let r = post_json(
-        &s,
-        &me,
-        &format!("/production/{project}/spinoff"),
-        serde_json::json!({ "target_app_id": PRODUCTION }),
-    )
-    .await;
-    assert_eq!(r.status, StatusCode::UNPROCESSABLE_ENTITY);
-    let r = post_json(
-        &s,
-        &me,
-        "/production/not-a-project/spinoff",
-        serde_json::json!({ "target_app_id": DECK }),
-    )
-    .await;
+    for app in [BRIEF, RESEARCH, TERRITORIES] {
+        let doc = a_document(&s, &me, app, "Source", "note: x\n");
+        let t = get(&s, &me, &format!("/d/{doc}/spinoff-targets")).await;
+        assert_eq!(t.status, StatusCode::OK);
+        let ids: Vec<String> = t
+            .json()
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["app_id"].as_str().unwrap().to_string())
+            .collect();
+        assert!(ids.contains(&PRODUCTION.to_string()), "{app}: {ids:?}");
+        assert!(
+            !ids.contains(&DECK.to_string()),
+            "{app} does not feed the deck"
+        );
+    }
+    let prod = a_document(&s, &me, PRODUCTION, "Project", "note: x\n");
+    let t = get(&s, &me, &format!("/d/{prod}/spinoff-targets")).await;
+    let ids: Vec<String> = t
+        .json()
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["app_id"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(ids, vec![DECK.to_string()]);
+}
+
+#[tokio::test]
+async fn territories_continue_in_production_through_the_plain_spinoff() {
+    let s = server(None);
+    let me = sign_in(&s, "visionary", "napkin").await;
+    let data =
+        "territories:\n- name: The quiet orchard\n  idea: Still, in every glass\nchosen: 0\n";
+    let terr = a_document(&s, &me, TERRITORIES, "Hollow Oak territories", data);
+    let source = stored(&s, &me, &terr);
+    let prod = path_of(&spinoff(&s, &me, &terr, PRODUCTION).await);
+    let data = yaml(&stored(&s, &me, &prod), "shared/data.yaml");
+    let carried = &data["upstream"][source.document_id()];
+    assert_eq!(carried, &yaml(&source, "shared/data.yaml"));
+    assert_eq!(carried["territories"][0]["name"], "The quiet orchard");
+}
+
+#[tokio::test]
+async fn the_old_special_routes_are_gone() {
+    let s = server(None);
+    let me = sign_in(&s, "visionary", "napkin").await;
+    let brief = a_document(&s, &me, BRIEF, "Still", "note: x\n");
+    // No API route answers either path: whatever the shell's fallback says, no document is made.
+    for (path, body) in [
+        ("/spinoff/production", serde_json::json!({ "doc": brief })),
+        (
+            "/production/prj_01K7A000000000000000000012/spinoff",
+            serde_json::json!({ "target_app_id": DECK }),
+        ),
+    ] {
+        let r = post_json(&s, &me, path, body).await;
+        let is_json = r
+            .headers
+            .get(header::CONTENT_TYPE)
+            .is_some_and(|v| v.to_str().unwrap_or("").contains("json"));
+        assert!(!is_json, "{path} answered with JSON: {:?}", r.body);
+        assert_eq!(documents_of(&s, &me, PRODUCTION).await, 0, "{path}");
+    }
+    // And the generic route no longer refuses Production (the old 422 guard).
+    assert_eq!(
+        spinoff(&s, &me, &brief, PRODUCTION).await.status,
+        StatusCode::OK
+    );
+    assert_eq!(documents_of(&s, &me, PRODUCTION).await, 1);
+}
+
+#[tokio::test]
+async fn a_spinoff_from_another_workspace_is_not_made() {
+    let s = server(None);
+    let mine = sign_in(&s, "visionary", "napkin").await;
+    let brief = a_document(&s, &mine, BRIEF, "Still", "note: x\n");
+    let other = sign_in(&s, "planner", "javelin").await;
+    // Their own workspace has no such document.
+    let r = spinoff(&s, &other, &brief, PRODUCTION).await;
     assert_eq!(r.status, StatusCode::NOT_FOUND);
-    // a target that is not installed: the host's own 404
-    let r = post_json(
+    // Another tenant's path with their cookie is refused outright.
+    let r = send(
         &s,
-        &me,
-        &format!("/production/{project}/spinoff"),
-        serde_json::json!({ "target_app_id": "ie.napkin.nothing" }),
+        Request::builder()
+            .method("POST")
+            .uri(format!("/api/t/{}/d/{brief}/spinoff", mine.tenant))
+            .header(header::HOST, "studio.test")
+            .header(header::COOKIE, &other.cookie)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(
+                serde_json::json!({ "app_id": PRODUCTION }).to_string(),
+            ))
+            .unwrap(),
     )
     .await;
-    assert_eq!(r.status, StatusCode::NOT_FOUND);
+    assert!(
+        r.status == StatusCode::FORBIDDEN || r.status == StatusCode::NOT_FOUND,
+        "{}",
+        r.status
+    );
+}
+
+// ── Production to Deck (S1-4, S1-5) ──────────────────────────────────────────
+
+#[tokio::test]
+async fn a_project_continues_in_a_deck_without_its_canvas_and_with_the_whole_brief() {
+    let s = server(None);
+    let me = sign_in(&s, "visionary", "napkin").await;
+    let client = a_client(&s, &me, "Hollow Oak Cider").await;
+    let made = post_json(
+        &s,
+        &me,
+        "/documents",
+        serde_json::json!({ "app_id": BRIEF, "title": "Still", "client_id": client }),
+    )
+    .await;
+    let brief = made.json()["path"].as_str().unwrap().to_string();
+    set_data(&s, &me, &DocId::new(brief.clone()), HOLLOW_OAK);
+    let brief_doc = stored(&s, &me, &brief).document_id().to_string();
+    let prod = path_of(&spinoff(&s, &me, &brief, PRODUCTION).await);
+
+    // The tool's save leaves a canvas checkpoint in the project.
+    {
+        let ws = s.ctx.workspace(&me.tenant);
+        let id = DocId::new(prod.clone());
+        let clan = stored(&s, &me, &prod);
+        let mut b = ClanBuilder::new(clan.manifest().clone());
+        for (path, bytes) in clan.read_all_entries().unwrap() {
+            if path != clan_sdk::MANIFEST_PATH {
+                b.add_entry(path, bytes);
+            }
+        }
+        b.add_entry(CHECKPOINT, vec![7u8; 4096]);
+        let base = ws.store.version(&id).unwrap();
+        ws.store
+            .apply(&napkin_host::Change::replace(id, base, b.build().unwrap()))
+            .unwrap();
+    }
+    let project = stored(&s, &me, &prod);
+    assert!(project.has_entry(CHECKPOINT));
+
+    let deck = path_of(&spinoff(&s, &me, &prod, DECK).await);
+    let clan = stored(&s, &me, &deck);
+    assert!(!clan.has_entry(CHECKPOINT));
+    assert_eq!(library_item(&s, &me, &deck).await["client"]["id"], client);
+    let data = yaml(&clan, "shared/data.yaml");
+    // The project is carried whole, and so is the brief it carried: objectives are there, not null.
+    let want: serde_yaml::Value = serde_yaml::from_str(HOLLOW_OAK).unwrap();
+    assert_eq!(data["upstream"][&brief_doc], want);
+    assert!(data["upstream"][project.document_id()].is_mapping());
+    assert!(!data["upstream"][&brief_doc]["objectives"].is_null());
+    assert_eq!(
+        clan.manifest().lineage.as_ref().unwrap().parent_uri,
+        format!(
+            "doc:{prod}@{}",
+            clan_sdk::hash::sha256_prefixed(project.raw_bytes())
+        )
+    );
+}
+
+#[tokio::test]
+async fn a_missing_app_is_named_in_plain_words() {
+    let s = server_apps(None, Arc::new(NoConfig), false);
+    let me = sign_in(&s, "visionary", "napkin").await;
+    let prod = a_document(&s, &me, PRODUCTION, "Project", "note: x\n");
+    let r = spinoff(&s, &me, &prod, DECK).await;
+    assert!(!r.status.is_success());
+    let why = r.json()["error"].as_str().unwrap().to_string();
+    assert!(why.contains("app not installed"), "{why}");
+    assert!(!why.contains("saved project"));
 }
 
 // ── The assets pass for a deck build (src/sandbox.rs, docs/contracts/production-tool-identity.md) ──
@@ -740,11 +703,9 @@ async fn proxy(s: &Server, token: &str, task: &str, extra: Value) -> Reply {
 
 #[tokio::test]
 async fn a_forwarded_build_deck_carries_the_callers_assets_pass_and_no_planted_one() {
-    let (url, rs) = relay().await;
     let (mw, seen) = capturing_middleware().await;
-    let s = server_with(Some(url), Arc::new(Capture(mw)));
+    let s = server_with(Some(RELAY_URL.into()), Arc::new(Capture(mw)));
     let me = sign_in(&s, "visionary", "napkin").await;
-    let _ = rs;
     let doc = napkin_host::DocId::new(a_brief(&s, &me, "Deck"));
     let token = s.ctx.tokens.mint(&me.tenant, "visionary@napkin", &doc);
     let planted =
@@ -823,46 +784,15 @@ fn blob_files(s: &Server, p: &Person) -> usize {
 
 #[tokio::test]
 async fn a_chain_brief_production_deck_stores_one_file_and_survives_the_source() {
-    let (url, rs) = relay().await;
-    let s = server(Some(url));
+    let s = server(None);
     let me = sign_in(&s, "visionary", "napkin").await;
     let brief = a_brief_with_pdf(&s, &me);
     let want = clan_sdk::hash::sha256_prefixed(PDF);
-
-    // The upload is a link already: no bytes in the brief, one file in the workspace.
-    let stored = clan_of(
-        &s.ctx
-            .workspace(&me.tenant)
-            .store
-            .read(&napkin_host::DocId::new(brief.clone()))
-            .unwrap(),
-    );
-    assert!(!stored.has_entry("human/assets/client.pdf"));
-    assert!(
-        stored
-            .manifest()
-            .file_by_path("human/assets/client.pdf")
-            .unwrap()
-            .linked
-    );
     assert_eq!(blob_files(&s, &me), 1);
 
-    // Brief to Production: the project in the relay holds the link, not the bytes.
-    let made = post_json(
-        &s,
-        &me,
-        "/spinoff/production",
-        serde_json::json!({ "doc": brief }),
-    )
-    .await;
-    assert_eq!(
-        made.status,
-        StatusCode::OK,
-        "{}",
-        String::from_utf8_lossy(&made.body)
-    );
-    let project = made.json()["project"].as_str().unwrap().to_string();
-    let saved = clan_of(&rs.lock().unwrap().projects[me.tenant.as_str()][&project].bytes);
+    // Brief to Production: the project holds the link, not the bytes.
+    let prod = path_of(&spinoff(&s, &me, &brief, PRODUCTION).await);
+    let saved = stored(&s, &me, &prod);
     assert!(!saved.has_entry("human/assets/client.pdf"));
     let f = saved
         .manifest()
@@ -872,62 +802,35 @@ async fn a_chain_brief_production_deck_stores_one_file_and_survives_the_source()
     assert_eq!(f.sha256.as_deref(), Some(want.as_str()));
 
     // Production to Deck: the same link, and still one file.
-    let r = post_json(
-        &s,
-        &me,
-        &format!("/production/{project}/spinoff"),
-        serde_json::json!({ "target_app_id": DECK }),
-    )
-    .await;
-    assert_eq!(
-        r.status,
-        StatusCode::OK,
-        "{}",
-        String::from_utf8_lossy(&r.body)
-    );
-    let doc = r.json()["path"].as_str().unwrap().to_string();
+    let doc = path_of(&spinoff(&s, &me, &prod, DECK).await);
     assert_eq!(
         blob_files(&s, &me),
         1,
         "one stored file for the whole chain"
     );
 
-    // The source is deleted; the deck still opens and serves the file.
-    std::fs::remove_file(
-        s._dir_path()
-            .join("data")
-            .join(me.tenant.as_str())
-            .join("documents")
-            .read_dir()
-            .unwrap()
-            .flatten()
-            .map(|e| e.path())
-            .find(|p| {
-                p.file_name()
-                    .unwrap()
-                    .to_string_lossy()
-                    .contains(&brief["doc-".len()..])
-            })
-            .unwrap(),
-    )
-    .unwrap();
+    // The source and the project are deleted; the deck still opens and serves the file.
+    let docs = s
+        ._dir_path()
+        .join("data")
+        .join(me.tenant.as_str())
+        .join("documents");
+    for e in docs.read_dir().unwrap().flatten() {
+        let name = e.file_name().to_string_lossy().to_string();
+        if name.contains(stem(&brief)) || name.contains(stem(&prod)) {
+            std::fs::remove_file(e.path()).unwrap();
+        }
+    }
     let ws = s.ctx.workspace(&me.tenant);
     let session = napkin_host::Session::with_ctx(ws.store.clone(), me.tenant.ctx());
     session
-        .open(napkin_host::DocId::new(
-            doc.rsplit('/').next().unwrap().to_string(),
-        ))
+        .open(napkin_host::DocId::new(doc.clone()))
         .unwrap_or_else(|e| panic!("{e:?}"));
     let (_, bytes) = session.serve_asset("client.pdf").unwrap();
     assert_eq!(bytes, PDF);
 
     // The download leaves with the bytes: it opens on its own.
-    let dl = get(
-        &s,
-        &me,
-        &format!("/d/{}/download", doc.rsplit('/').next().unwrap()),
-    )
-    .await;
+    let dl = get(&s, &me, &format!("/d/{doc}/download")).await;
     assert_eq!(dl.status, StatusCode::OK);
     let whole = clan_of(&dl.body);
     assert_eq!(whole.read_entry("human/assets/client.pdf").unwrap(), PDF);
@@ -936,34 +839,24 @@ async fn a_chain_brief_production_deck_stores_one_file_and_survives_the_source()
     // Another agency's workspace holds no such file.
     let other = sign_in(&s, "planner", "javelin").await;
     assert_eq!(blob_files(&s, &other), 0);
-    use napkin_host::BlobStore as _;
-    let theirs =
-        napkin_web::store::TenantStore::new(s._dir_path().join("data").join(other.tenant.as_str()));
-    assert!(!theirs.has(&want));
 }
 
 #[tokio::test]
-async fn the_sweep_is_for_admins_and_keeps_what_a_relay_project_links() {
-    let (url, _rs) = relay().await;
-    let s = server(Some(url));
+async fn the_sweep_is_for_admins_and_keeps_what_a_project_links() {
+    let s = server(None);
     let me = sign_in(&s, "visionary", "napkin").await;
     let brief = a_brief_with_pdf(&s, &me);
-    let made = post_json(
-        &s,
-        &me,
-        "/spinoff/production",
-        serde_json::json!({ "doc": brief }),
-    )
-    .await;
-    assert_eq!(made.status, StatusCode::OK);
-    // The brief is gone, only the relay project names the file: it is pinned.
+    let prod = path_of(&spinoff(&s, &me, &brief, PRODUCTION).await);
+    // The brief is gone; only the project names the file.
     let docs = s
         ._dir_path()
         .join("data")
         .join(me.tenant.as_str())
         .join("documents");
     for e in docs.read_dir().unwrap().flatten() {
-        std::fs::remove_file(e.path()).unwrap();
+        if !e.file_name().to_string_lossy().contains(stem(&prod)) {
+            std::fs::remove_file(e.path()).unwrap();
+        }
     }
     let admin = sign_in(&s, "engineer", "napkin").await;
     let r = post_json(

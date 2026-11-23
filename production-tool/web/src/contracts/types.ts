@@ -570,7 +570,8 @@ export interface DocAsset {
   /** Absent: not stated (made before it, an edit, a mock); readers infer from origin. */
   rights?: AssetRights
   job_id?: Id
-  locations: string[]
+  /** Ignored: bytes are found by sha256 (lib/media.ts). Never written; old documents may still carry it. */
+  locations?: string[]
   thumb?: string
 }
 
@@ -1076,19 +1077,17 @@ export interface Me {
   dogfood?: { consented: boolean }
 }
 
-/** One of the agency's saved projects (GET /projects, POST /clan with X-Project-Id). */
+/** One of the agency's Production projects: a library document (GET /api/t/{t}/library). */
 export interface SavedProject {
+  /** The library document's id. */
   id: Id
   name?: string
   savedAt: string
   bytes: number
-  /** SHA-256 (hex) of the saved .clan: If-Match on the next save. */
+  /** SHA-256 (hex) of the saved .clan, the version; '' when the listing did not say (the library lists none). */
   etag: string
+  client?: { id: string; name: string } | null
 }
-export interface ProjectList { projects: SavedProject[] }
-export interface ClanSaved { project: SavedProject }
-/** The canvas that goes with a saved project (elements only; pictures come back from the assets). */
-export interface ProjectCanvas { elements: unknown[]; savedAt?: string }
 
 export interface UploadRequest { sha256: Sha256; mime: Mime; bytes: number }
 export interface UploadResponse {
@@ -1217,12 +1216,10 @@ export interface CutdownInput {
   aspects?: Aspect[]
   targetRatio?: AlephRatio
   clips?: CutdownClip[]
-  /** The studio card after the film (owner 2026-11-18). */
+  /** render: the size carries the film's own end card (never a studio card, owner 2026-11-23). */
   endCard?: boolean
-  /** render: the film's own end card, drawn by the relay at the size, before the studio card (features/pt-film-r1.clan). */
+  /** render: the film's own end card, drawn by the relay at the size (features/pt-film-r1.clan). */
   clientCard?: { headline?: string; line: string; cta?: string; bg: string; logo?: AssetRef; s: number }
-  /** render: how long the studio card holds when a short size shortens it (its roll sped up); absent: 2.5 s. */
-  studioS?: number
   fadeOutS?: number
   layers?: TypeLayer[]
 }

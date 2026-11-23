@@ -93,20 +93,16 @@ def takes(tmp_path):
     return tmp_path
 
 
-def test_a_15s_cutdown_is_its_windows_then_the_end_card_with_the_sound_faded(takes):
+def test_a_15s_cutdown_is_its_windows_alone_with_the_sound_faded_and_no_studio_card(takes):
     clips = [{"key": "a.mp4", "inS": 0, "outS": 4.5}, {"key": "b.mp4", "inS": 1, "outS": 5.5},
              {"key": "c.mp4", "inS": 0.5, "outS": 4.0}]
     out = render(takes, {"mode": "cutdown", "size": [320, 180], "clips": clips, "endCard": True, "fadeOutS": 0.5})
     s = streams(takes / "out.mp4")
     body = 4.5 + 4.5 + 3.5
     assert (s["w"], s["h"]) == (320, 180) and s["audio"]
-    assert abs(s["duration"] - (body + stitch.CARD_S)) <= 2 / stitch.FPS + 0.03, s  # 15 s within a frame or two
-    assert out["durationS"] == pytest.approx(15, abs=0.1)
-    # The last CARD_S seconds are the end card: the dark one on every size (owner 2026-11-18), not the test pattern.
-    assert out["endCard"] == "roll-up-ink"
-    ground = stitch.GROUND["roll-up-ink"]
-    px = frame_at(takes / "out.mp4", body + 0.05, takes / "card.png").getpixel((4, 4))
-    assert all(abs(a - b) < 40 for a, b in zip(px, ground)), px
+    assert abs(s["duration"] - body) <= 2 / stitch.FPS + 0.03, s  # 12.5 s: its windows, no studio card after them
+    assert out["durationS"] == pytest.approx(body, abs=0.1)
+    assert "endCard" not in out
 
 
 def test_a_9x16_reframe_crops_each_shot_its_own_way_and_draws_the_caption_in_its_time(takes):
@@ -122,7 +118,7 @@ def test_a_9x16_reframe_crops_each_shot_its_own_way_and_draws_the_caption_in_its
                    "layers": [{"key": "cap.png", "fromS": 3.5, "toS": 5.5}]})
     s = streams(takes / "out.mp4")
     assert (s["w"], s["h"]) == size
-    assert abs(s["duration"] - (8 + stitch.CARD_S)) <= 2 / stitch.FPS + 0.03
+    assert abs(s["duration"] - 8) <= 2 / stitch.FPS + 0.03
     # The caption shows in its time and not before.
     before = frame_at(takes / "out.mp4", 1.0, takes / "f1.png").getpixel((size[0] // 2, size[1] - 40))
     during = frame_at(takes / "out.mp4", 4.0, takes / "f2.png").getpixel((size[0] // 2, size[1] - 40))
@@ -142,35 +138,17 @@ def test_a_crop_is_scaled_to_the_pixels_the_take_really_has():
 
 
 def test_the_ads_own_render_builds_the_same_command_as_before(takes):
-    assets = stitch.load_assets("roll-up")
-    cmd = stitch.build_command("ffmpeg", [{"path": "a.mp4", "trimS": 4}], (320, 180), "roll-up", assets, "o.mp4")
+    cmd = stitch.build_command("ffmpeg", [{"path": "a.mp4", "trimS": 4}], (320, 180), "o.mp4")
     assert "cutdown" not in " ".join(cmd) and "-an" in cmd
 
 
-def test_a_short_size_ends_on_a_shorter_studio_card_its_roll_sped_up(takes):
-    """UAT round 3 (R3-F12): the 6 s 9:16 had 2.25 s of picture. A short size's event names a shorter studio card
-    (cardS); the card holds that long, silent, its whole roll played faster. Out of range clamps to 1..CARD_S."""
+def test_a_cutdown_carries_no_studio_card_whatever_cardS_the_event_says(takes):
+    """A client ad never carries the studio card (owner 2026-11-23): a size is its windows, to the frame."""
     clips = [{"key": "a.mp4", "inS": 0, "outS": 3.5}]
     out = render(takes, {"mode": "cutdown", "size": [180, 320], "clips": clips, "endCard": True, "fadeOutS": 0.5, "cardS": 1.333})
     s = streams(takes / "out.mp4")
-    assert abs(s["duration"] - (3.5 + 1.333)) <= 2 / stitch.FPS + 0.03, s
-    assert out["endCard"] == "roll-up-ink"
-    px = frame_at(takes / "out.mp4", 3.5 + 0.05).getpixel((4, 4))
-    assert all(abs(a - b) < 40 for a, b in zip(px, stitch.GROUND["roll-up-ink"])), px
-    assert cutdown.card_seconds({}) == stitch.CARD_S and cutdown.card_seconds({"cardS": 0.2}) == 1.0
-    assert cutdown.card_seconds({"cardS": 9}) == stitch.CARD_S and cutdown.card_seconds({"cardS": "x"}) == stitch.CARD_S
-
-
-def test_a_shorter_card_plays_its_roll_faster_and_a_whole_one_is_unchanged():
-    assets = stitch.load_assets("roll-up-ink")
-    layout = stitch.card_layout(1080, 1920, assets)
-    layout["paths"] = {name: a["path"] for name, a in assets.items()}
-    whole_in, whole = stitch.card_graph(3, "roll-up-ink", layout)
-    same_in, same = stitch.card_graph(3, "roll-up-ink", layout, card_s=stitch.CARD_S)
-    assert (whole_in, whole) == (same_in, same)
-    short_in, short = stitch.card_graph(3, "roll-up-ink", layout, card_s=1.25)
-    assert "-t" in short_in and short_in[short_in.index("-t") + 1] == "1.25"
-    assert f"fade=t=in:st={stitch.MADE_AT * 0.5:g}:d={stitch.MADE_S * 0.5:g}" in ";".join(short)
+    assert abs(s["duration"] - 3.5) <= 2 / stitch.FPS + 0.03, s
+    assert "endCard" not in out
 
 
 def test_r5_a_box_round_the_whole_subject_is_fitted_on_a_blurred_fill_not_stretched(takes):

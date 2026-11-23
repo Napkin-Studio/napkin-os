@@ -24,17 +24,20 @@ pub mod error;
 pub mod etag;
 pub mod events;
 pub mod exports;
+pub mod media;
 pub mod meter;
 pub mod people;
 pub mod production;
 pub mod sandbox;
-pub mod spinoff;
+pub mod save;
+pub mod snapshots;
 pub mod state;
 pub mod store;
 pub mod svg_sanitise;
 pub mod tenant;
 pub mod timing;
 pub mod tokens;
+pub mod trash;
 
 use std::path::Path;
 use std::sync::Arc;
@@ -157,10 +160,6 @@ pub fn router_full(
         .layer(axum::Extension(identity.clone()));
     if production.is_some() {
         api = api.layer(axum::Extension(production::Enabled));
-    }
-    // The spin-off routes to and from Production call the relay themselves (spinoff.rs).
-    if let Some(relay) = &production {
-        api = api.layer(axum::Extension(relay.clone()));
     }
     // The sandbox signs a read-only assets pass for a deck build (sandbox.rs).
     let mut sandbox = sandbox::router().layer(DefaultBodyLimit::max(UPLOAD_MAX));

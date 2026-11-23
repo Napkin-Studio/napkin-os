@@ -23,7 +23,7 @@ import { accountItems, continueItems, deskItems, docMenuItems, linkList, linkedC
 import { __test as dogfood } from '../src/dogfood/recorder.ts'
 import { betaNoticeOpen, betaNoticeOpener, closeBetaNotice } from '../src/dogfood/notice.ts'
 import { barFrom } from '../src/shell/appBar.ts'
-import { PRODUCTION_APP_ID } from '../src/shell/landing/tools.ts'
+import { PRODUCTION_APP_ID, productionDocUrl } from '../src/shell/landing/tools.ts'
 
 const noop = () => {}
 const doc = (over: Partial<DocBar> = {}): DocBar => ({
@@ -206,17 +206,18 @@ test('Continue in on a brief: Production is a target like the others, and pickin
   assert.deepEqual(labels(continueItems(doc()).spin), ['Deck'])
   const app = readFileSync('src/App.tsx', 'utf8')
   assert.doesNotMatch(app, /\?brief=|filmFromBriefHref|onStartFilm/)
-  // App.tsx sends Production's pick to the server's bridge, and keeps it off the launcher's tiles
-  assert.match(app, /appId === PRODUCTION_APP_ID/)
-  assert.match(app, /host\.spinoffToProduction/)
+  // Production's pick is the plain spin-off; the project it makes opens in the tool by its id (no bridge route).
+  assert.doesNotMatch(app, /spinoffToProduction/)
+  assert.match(app, /open\.manifest\.app\?\.app_id === PRODUCTION_APP_ID/)
+  assert.match(app, /window\.location\.assign\(productionDocUrl\(open\.path\)\)/)
+  assert.equal(productionDocUrl('doc-1a2b'), '/production/?doc=doc-1a2b')
   assert.match(app, /filter\(a => a\.app_id !== PRODUCTION_APP_ID\)/)
   // Production is offered only where the server serves the tool, never on the device (no relay there)
   assert.match(app, /productionTarget=\{production && !device\}/)
   const host = readFileSync('src/shell/AppHost.tsx', 'utf8')
   assert.match(host, /productionTarget \? offered : offered\.filter\(t => t\.app_id !== PRODUCTION_APP_ID\)/)
-  for (const device of ['src/host/wasm.ts', 'src/host/tauri.ts'])
-    assert.doesNotMatch(readFileSync(device, 'utf8'), /spinoffToProduction/, `${device} has no relay`)
-  assert.match(readFileSync('src/host/http.ts', 'utf8'), /'\/spinoff\/production', postJson\(\{ doc: requireDoc\(\), title \}\)/)
+  for (const f of ['src/host/wasm.ts', 'src/host/tauri.ts', 'src/host/http.ts', 'src/host/types.ts'])
+    assert.doesNotMatch(readFileSync(f, 'utf8'), /spinoffToProduction/, `${f} has no bridge call`)
 })
 
 test('the old More menu\'s every action still has a home in the new bar (inventory)', () => {

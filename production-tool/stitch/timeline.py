@@ -15,12 +15,12 @@ clip's fades go from and to black over its own length. A dissolve or dip into a 
 one before it ends overlaps them by s seconds taken from the outgoing clip's footage after its outS (its
 last frame held when it has none), so every clip keeps its place: stitch.py's rule. The person's end card
 (a PNG the relay drew) follows the last clip for s seconds with its own transition. The texts lie over the
-whole film at their times, fading in and out with their alpha. The film is exactly lengthS long; then the
-studio's roll-up card (stitch.card_graph) as always. Every input is scaled and padded to one size (the
+whole film at their times, fading in and out with their alpha. The film is exactly lengthS long and carries no studio card.
+Every input is scaled and padded to one size (the
 first clip's, even, at most 1280 on the long side), 24 fps. The sound is each clip's own, as the cut-downs
 keep it (owner 2026-11-18, until the Sound feature mixes one): placed, sped, faded and crossfaded with its
 picture; a gap, a still, a clip with no sound, the end card and the roll-up are silent. The result
-is written like stitch's: {"ok", "sha256", "bytes", "w", "h", "durationS", "endCard", "lengthS"}.
+is written like stitch's: {"ok", "sha256", "bytes", "w", "h", "durationS", "lengthS"}.
 """
 
 from __future__ import annotations
@@ -123,7 +123,7 @@ def _silence(seconds: float, label: str) -> str:
 
 
 def build_command(ffmpeg: str, clips: list[dict], texts: list[dict], end_card: dict | None, size: tuple[int, int],
-                  version: str, assets: dict, out: str, fps: int = st.FPS) -> list[str]:
+                  out: str, fps: int = st.FPS) -> list[str]:
     """clips: the event's clips with "path" (and "still" for a picture, "audio" when it has sound); texts:
     [{"path", "fromS", "toS", "fadeInS"?, "fadeOutS"?}]; end_card: {"path", "s", "transitionIn"?} or None."""
     w, h = size
@@ -156,10 +156,6 @@ def build_command(ffmpeg: str, clips: list[dict], texts: list[dict], end_card: d
     text_at = n_in
     for t in texts:
         cmd += ["-loop", "1", "-framerate", str(fps), "-t", st._secs(length), "-i", t["path"]]
-    layout = st.card_layout(w, h, assets)
-    layout["paths"] = {name: a["path"] for name, a in assets.items()}
-    card_inputs, card_parts = st.card_graph(text_at + len(texts), version, layout, fps)
-    cmd += card_inputs
 
     parts = []
     norm = f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1"
@@ -223,11 +219,8 @@ def build_command(ffmpeg: str, clips: list[dict], texts: list[dict], end_card: d
         parts.append(f"[{label}][t{j}]overlay=0:0:format=auto:enable='between(t,{st._secs(a)},{st._secs(b)})',format=yuv420p[body{j + 1}]")
         label = f"body{j + 1}"
     parts.append(f"[{label}]trim=duration={st._secs(length)},setpts=PTS-STARTPTS[film]")
-    parts += card_parts
-    parts.append("[film][card]concat=n=2:v=1:a=0[out]")
-    parts.append(f"[abody]atrim=duration={st._secs(length)},asetpts=PTS-STARTPTS[afilm]")
-    parts.append(_silence(st.CARD_S, "acard"))
-    parts.append("[afilm][acard]concat=n=2:v=0:a=1[aout]")
+    parts.append("[film]null[out]")
+    parts.append(f"[abody]atrim=duration={st._secs(length)},asetpts=PTS-STARTPTS[aout]")
     cmd += ["-filter_complex", ";".join(parts), "-map", "[out]", "-map", "[aout]",
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", out]
@@ -235,7 +228,6 @@ def build_command(ffmpeg: str, clips: list[dict], texts: list[dict], end_card: d
 
 
 def run(event: dict, *, get, put, put_json, ffmpeg: str, ffprobe: str) -> dict:
-    version = st.card_version(event.get("jobId", ""))
     try:
         with tempfile.TemporaryDirectory() as tmp:
             clips, first = [], None
@@ -277,7 +269,7 @@ def run(event: dict, *, get, put, put_json, ffmpeg: str, ffprobe: str) -> dict:
                 raise BadPlan(f"the plan says {event['lengthS']} s, its clips and card make {want:g} s")
             size = st.target_size(first["w"], first["h"])
             out = os.path.join(tmp, "ad.mp4")
-            cmd = build_command(ffmpeg, clips, texts, card, size, version, st.load_assets(version), out)
+            cmd = build_command(ffmpeg, clips, texts, card, size, out)
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
             if r.returncode != 0:
                 print(json.dumps({"kind": "timeline_ffmpeg", "jobId": event.get("jobId"), "stderr": r.stderr.strip()[-2000:]}))
@@ -286,15 +278,15 @@ def run(event: dict, *, get, put, put_json, ffmpeg: str, ffprobe: str) -> dict:
             meta = st.probe(ffprobe, out)
             put(event["outKey"], out, "video/mp4")
             result = {"ok": True, "sha256": "sha256:" + hashlib.sha256(data).hexdigest(), "bytes": len(data),
-                      "w": meta["w"], "h": meta["h"], "durationS": round(meta["durationS"], 2), "endCard": version,
+                      "w": meta["w"], "h": meta["h"], "durationS": round(meta["durationS"], 2),
                       "lengthS": round(want, 3)}
     except st.BadClip as e:
-        result = {"ok": False, "code": "bad_clip", "clip": e.index, "error": str(e), "endCard": version}
+        result = {"ok": False, "code": "bad_clip", "clip": e.index, "error": str(e)}
     except BadPlan as e:
-        result = {"ok": False, "code": "bad_clip", "error": f"This cut cannot be rendered: {e}.", "endCard": version}
+        result = {"ok": False, "code": "bad_clip", "error": f"This cut cannot be rendered: {e}."}
     except Exception as e:
         message = str(e) if isinstance(e, RuntimeError) else f"{type(e).__name__}: {e}"
-        result = {"ok": False, "error": message[:500], "endCard": version}
+        result = {"ok": False, "error": message[:500]}
     put_json(event["resultKey"], result)
     print(json.dumps({"kind": "timeline", "jobId": event.get("jobId"), **result}))
     return result

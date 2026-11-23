@@ -218,7 +218,7 @@ def test_lambda_handler_end_to_end(aws, monkeypatch):
         return r["statusCode"], json.loads(r["body"]) if "body" in r else None
 
     # No TOKEN_SECRET on the Lambda: every route but health and config is a 401 (fails closed), signed or not.
-    for method, path in (("GET", "/api/me"), ("POST", "/api/jobs"), ("GET", "/api/projects")):
+    for method, path in (("GET", "/api/me"), ("POST", "/api/jobs")):
         status, out = http(method, path, {} if method == "POST" else None)
         assert status == 401 and out["error"]["code"] == "unauthorised", path
     assert http("GET", "/api/health")[0] == 200
@@ -253,25 +253,6 @@ def test_lambda_handler_end_to_end(aws, monkeypatch):
     assert status == 422 and out["error"]["code"] == "capability_missing"
     assert handler.handler({"source": "aws.events"}, None) == {"advanced": 0}
 
-    # A saved project comes back as its bytes (base64, as a Function URL wants them) with its ETag.
-    project, data = "prj_01J9Z8Y7X6W5V4T3S2R1Q0P9N8", b"PK\x03\x04" + bytes(range(256))
-    headers = {"x-project-id": project, "x-napkin-identity": assertion("POST", "/api/clan", "", data)}
-    r = handler.handler({"rawPath": "/api/clan", "requestContext": {"http": {"method": "POST"}}, "headers": headers,
-                         "body": base64.b64encode(data).decode(), "isBase64Encoded": True}, None)
-    assert r["statusCode"] == 200
-    etag = json.loads(r["body"])["project"]["etag"]
-    status, listed = http("GET", "/api/projects")
-    assert status == 200 and [p["id"] for p in listed["projects"]] == [project]
-    headers = {"x-napkin-identity": assertion("GET", f"/api/clan/{project}", "", b"")}
-    r = handler.handler({"rawPath": f"/api/clan/{project}", "requestContext": {"http": {"method": "GET"}},
-                         "headers": headers}, None)
-    assert r["statusCode"] == 200 and r["isBase64Encoded"] is True
-    assert base64.b64decode(r["body"]) == data
-    assert r["headers"]["Content-Type"] == "application/vnd.clan+zip" and r["headers"]["ETag"] == f'"{etag}"'
-    status, me = http("GET", "/api/me")
-    assert status == 200 and me["projects"] == 1
-    saved = s3.list_objects_v2(Bucket="napkin-test", Prefix=f"tenants/{identity.tenant_id('blue')}/projects/")
-    assert saved["KeyCount"] >= 3  # index.json, the timed copy and latest.clan
 
 
 def test_s3_blobs_get_list_and_delete(aws):

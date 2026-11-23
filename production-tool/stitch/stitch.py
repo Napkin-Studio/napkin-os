@@ -1,18 +1,18 @@
-"""Stitch Lambda: the selected clips → one MP4 with the Napkin end card.
+"""Stitch Lambda: the selected clips → one MP4. A client ad carries no studio card (owner 2026-11-23).
 
 Invoked asynchronously by the relay with
   {"jobId", "clips": [{"key": "out/sha256:…", "trimS": 4.5?, "inS": 0.5?, "outS": 4?, "fit": "trim"|"speed"?,
                        "transition": {"kind": "cut"|"continue"|"dissolve"|"dip", "s": 0.5?}?}, …],
    "outKey": "ads/<jobId>.mp4", "resultKey": "ads/<jobId>.json"}
 It writes outKey, then resultKey = {"ok": true, "sha256", "bytes", "w", "h",
-"durationS", "endCard", "seams"?} or {"ok": false, "error", "endCard"}, with "code":
+"durationS", "seams"?} or {"ok": false, "error"}, with "code":
 "bad_clip" and "clip" (its index) when one clip cannot be read; the relay polls
 for resultKey. The card draws no text of the job's own.
 
 Every clip is scaled and padded to one size (the first clip's, even, at most
 1280 on the long side), one fps (24), trimmed to trimS seconds when given and
 held on its last frame up to trimS when shorter, audio dropped (no audio on
-Wednesday), then the 2.5 s end card.
+Wednesday).
 
 In and out points and transitions (features/connected-video.clan, phase 1): a clip
 starts at inS in its source (absent: 0) and never shows a frame past outS; its slot
@@ -21,7 +21,7 @@ the join into it from the clip before: a cut (absent), a dissolve, or a dip thro
 black, over s seconds (TRANSITION_S when absent). The overlap comes from the
 outgoing clip's out-handle (its frames after its slot: clips are billed longer than
 shots), held on its last frame when it has none, so the ad is still the sum of the
-slots plus the card. A request of videos with no inS, outS, fit or transition builds
+slots. A request of videos with no inS, outS, fit or transition builds
 exactly the command it always did.
 
 Joined shots (features/connected-video.clan, phases A and B): `fit` "speed" retimes the
@@ -348,9 +348,9 @@ def fit_windows(clips: list[dict], probes: list[dict], job_id: str | None = None
         c["speed"], c["window"] = factor, window
 
 
-def build_command(ffmpeg: str, clips: list[dict], size: tuple[int, int], version: str, assets: dict,
+def build_command(ffmpeg: str, clips: list[dict], size: tuple[int, int],
                   out: str, fps: int = FPS) -> list[str]:
-    """clips: [{"path", "trimS"?, "still"?, "inS"?, "outS"?, "transition"?}]; assets: load_assets(version).
+    """clips: [{"path", "trimS"?, "still"?, "inS"?, "outS"?, "transition"?}].
     A still is looped for its trimS (or STILL_S): one frame made the mock's ads only the end card
     (2026-10-09). With no inS, outS or transition, the command is exactly what it was before them."""
     w, h = size
@@ -385,11 +385,7 @@ def build_command(ffmpeg: str, clips: list[dict], size: tuple[int, int], version
             else:
                 holds.append(None)
         cmd += ["-i", c["path"]]
-    layout = card_layout(w, h, assets)
-    layout["paths"] = {name: a["path"] for name, a in assets.items()}
     n = len(clips)
-    card_inputs, card_parts = card_graph(n, version, layout, fps)
-    cmd += card_inputs
     parts = []
     for i, c in enumerate(clips):
         # A clip shorter than its shot (Veo stops at 8 s, a feel edit at 5) holds its last frame up to
@@ -414,8 +410,6 @@ def build_command(ffmpeg: str, clips: list[dict], size: tuple[int, int], version
         parts.append(f"[{labels[-1]}][v{i}]xfade=transition={XFADE[kind]}:duration={_secs(s)}:offset={_secs(offset)}[x{i}]")
         labels[-1] = f"x{i}"
         acc = offset + lengths[i]
-    parts += card_parts
-    labels.append("card")
     parts.append(f"{''.join(f'[{lab}]' for lab in labels)}concat=n={len(labels)}:v=1:a=0[out]")
     cmd += ["-filter_complex", ";".join(parts), "-map", "[out]", "-an",
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
@@ -512,7 +506,6 @@ def run(event: dict, *, get, put, put_json, ffmpeg: str, ffprobe: str) -> dict:
         import splice  # beside this file, in the Lambda zip too
 
         return splice.run(event, get=get, put=put, put_json=put_json, ffmpeg=ffmpeg, ffprobe=ffprobe)
-    version = card_version(event.get("jobId", ""))
     try:
         with tempfile.TemporaryDirectory() as tmp:
             clips, probes = [], []
@@ -540,7 +533,7 @@ def run(event: dict, *, get, put, put_json, ffmpeg: str, ffprobe: str) -> dict:
             fit_windows(clips, probes, event.get("jobId"))
             size = target_size(probes[0]["w"], probes[0]["h"])
             out = os.path.join(tmp, "ad.mp4")
-            cmd = build_command(ffmpeg, clips, size, version, load_assets(version), out)
+            cmd = build_command(ffmpeg, clips, size, out)
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
             if r.returncode != 0:  # ffmpeg's own words (temp paths) go to the log, not to the participant
                 print(json.dumps({"kind": "stitch_ffmpeg", "jobId": event.get("jobId"), "stderr": r.stderr.strip()[-2000:]}))
@@ -549,7 +542,7 @@ def run(event: dict, *, get, put, put_json, ffmpeg: str, ffprobe: str) -> dict:
             meta = probe(ffprobe, out)
             put(event["outKey"], out, "video/mp4")
             result = {"ok": True, "sha256": "sha256:" + hashlib.sha256(data).hexdigest(), "bytes": len(data),
-                      "w": meta["w"], "h": meta["h"], "durationS": round(meta["durationS"], 2), "endCard": version}
+                      "w": meta["w"], "h": meta["h"], "durationS": round(meta["durationS"], 2)}
             if len(clips) > 1:  # Jude's scores; the ad stands whatever happens to them
                 try:
                     lengths = [slot_s(c) if slot_s(c) is not None else max(0.0, p["durationS"] - float(c.get("inS") or 0))
@@ -563,10 +556,10 @@ def run(event: dict, *, get, put, put_json, ffmpeg: str, ffprobe: str) -> dict:
                 except Exception as e:  # noqa: BLE001
                     print(json.dumps({"kind": "stitch_seams_failed", "jobId": event.get("jobId"), "error": str(e)[:500]}))
     except BadClip as e:  # the relay shows this as invalid_input, not retried
-        result = {"ok": False, "code": "bad_clip", "clip": e.index, "error": str(e), "endCard": version}
+        result = {"ok": False, "code": "bad_clip", "clip": e.index, "error": str(e)}
     except Exception as e:  # the relay shows this as provider_failed
         message = str(e) if isinstance(e, RuntimeError) else f"{type(e).__name__}: {e}"
-        result = {"ok": False, "error": message[:500], "endCard": version}
+        result = {"ok": False, "error": message[:500]}
     put_json(event["resultKey"], result)
     print(json.dumps({"kind": "stitch", "jobId": event.get("jobId"), **result}))
     return result
