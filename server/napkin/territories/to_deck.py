@@ -18,7 +18,8 @@ DESTINATION = "deck-maker"
 DECK_APP = "ie.napkin.deck-maker"
 
 
-def deliver(doc_id: str, data: dict, send: dict) -> dict:
+def check_routes(data: dict, send: dict, where: str) -> None:
+    """Refuse (``delivery.Refused``, in words) a send of a route that is gone, was killed, or is only a find. ``where`` names the tool in the words."""
     by_id = {t.get("id"): t for t in (data or {}).get("territories") or [] if isinstance(t, dict)}
     for tid in send.get("territory_ids") or []:
         t = by_id.get(tid)
@@ -27,7 +28,11 @@ def deliver(doc_id: str, data: dict, send: dict) -> dict:
         if t.get("status") == "killed":
             raise delivery.Refused(f"{t.get('name') or tid} was taken off the list. Greenlight a route that is still on it.")
         if t.get("state") != "developed":
-            raise delivery.Refused(f"{t.get('name') or tid} is only a find so far: develop it before it goes to Deck Maker.")
+            raise delivery.Refused(f"{t.get('name') or tid} is only a find so far: develop it before it goes to {where}.")
+
+
+def deliver(doc_id: str, data: dict, send: dict) -> dict:
+    check_routes(data, send, "Deck Maker")
     return {"status": "sent"}
 
 

@@ -1265,7 +1265,7 @@ var TerritoriesLogic = (function () {
   // gallery and the tray show. The page keeps no second copy of the gate's rules (run.gate.blocked_by and asks[] are the engine's words).
   var MOVES = { greenlight: 'greenlight_route', remove: 'remove_route', rerank: 'rerank_routes', send: 'send_routes', approve: 'approve', answer: 'answer_ask', review: 'record_review' };
   var DESTS = [{ id: 'deck-maker', name: 'Deck Maker', dot: 'var(--muted)', does: 'Pitch it: the deck opens with the greenlit routes as the recommendation.', built: true, continueIn: 'ie.napkin.deck-maker' },
-    { id: 'production-tool', name: 'Production tool', dot: '#FF6A55', does: 'Make it: scripts, boards and films start from each route’s world.', built: false }];
+    { id: 'production-tool', name: 'Production tool', dot: '#FF6A55', does: 'Make it: scripts, boards and films start from each route’s world.', built: true, continueIn: 'ie.napkin.production' }];
   var BAND_PHRASE = { core: 'close to the brief', stretch: 'a stretch', far_out: 'far out' };
   var TOUCH = [['poster', 'Poster'], ['story', 'Instagram story'], ['seat', 'Table card'], ['email', 'Email']];
   var HEX6 = /^#[0-9a-fA-F]{6}$/;

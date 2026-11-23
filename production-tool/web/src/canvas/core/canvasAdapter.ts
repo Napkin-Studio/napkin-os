@@ -349,6 +349,11 @@ export interface CanvasAdapter {
   link(intent: LinkIntent): CanvasElement
   /** A board frame (art-boards). */
   board(intent: BoardIntent): CanvasElement
+  /**
+   * Write a text with these words, its first line centred on `at` (a system write, never an undo step): the words a
+   * spin-off brings in. Optional: the engine may not make text from code. Returns the element id, or null when nothing was made.
+   */
+  addText?(at: Pt, words: string): string | null
 
   // ── containers and overlays ──
   /** The live elements whose container is `id`. */

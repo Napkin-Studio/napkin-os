@@ -8,6 +8,7 @@ import type { ClanStoreApi } from '../../../clan-store/src'
 import type { NodeEnv } from '../canvas/nodes/nodes'
 import { fitClear } from '../canvas/boards/boards'
 import { bringCarriedBrief } from './start'
+import { bringCarriedRoutes } from './routes'
 
 export function useCarriedBrief(env: NodeEnv | null, clan: Pick<ClanStoreApi, 'spunOffFrom'> | null): void {
   // Once per project's store, whatever number of times the canvas environment is rebuilt.
@@ -16,13 +17,14 @@ export function useCarriedBrief(env: NodeEnv | null, clan: Pick<ClanStoreApi, 's
     if (!env || !clan || taken.current === clan) return
     taken.current = clan
     clan.spunOffFrom()
-      .then((from) => bringCarriedBrief(env, from))
-      .then((made) => {
+      .then(async (from) => ({ made: await bringCarriedBrief(env, from), routes: await bringCarriedRoutes(env, from) }))
+      .then(({ made, routes }) => {
+        if (routes) return // the routes were fitted into view as they came in
         if (!made) return
         // In view clear of the tool rail, at most 100% (re-test 2b: at 1116 px the Brief landed half under the rail).
         env.canvas.select([])
         fitClear(env.canvas, [made.el], { zoomFactor: 0.8 })
       })
-      .catch((e) => console.warn('the brief this project carries could not be brought in', e))
+      .catch((e) => console.warn('what this project carries could not be brought in', e))
   }, [env, clan])
 }

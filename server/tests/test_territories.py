@@ -317,10 +317,11 @@ def test_the_sensitive_review_is_recorded_by_a_named_person(terr):
     assert host.data["review"]["sensitive"]["status"] == "done" and host.data["review"]["sensitive"]["by"] == "Aoife"
 
 
-def test_a_send_to_a_destination_that_is_not_built_says_so_and_is_never_written_sent(terr):
+def test_a_send_to_a_destination_that_is_not_built_says_so_and_is_never_written_sent(terr, monkeypatch):
     host = TerritoriesHost(data=copy.deepcopy(contract.example("greenlight_open")), schema=SCHEMA)
     tid = next(t["id"] for t in host.data["territories"] if t["status"] == "live" and t["state"] == "developed")
     step(terr, host, "greenlight_route", territory_id=tid, by="Shrey")
+    monkeypatch.delitem(delivery.DESTINATIONS, "production-tool")   # nothing registered: the destination is not built
     r = step(terr, host, "send_routes", to="production-tool", territory_ids=[tid], not_chosen=[], by="Shrey")
     assert r[0]["job"]["state"] == "done" and "not built yet" in r[0]["result"]["summary"]
     assert [s["status"] for s in host.data["sends"]] == ["not_built"] and host.data["run"]["state"] == "gate"
@@ -347,7 +348,7 @@ def test_a_send_to_a_registered_destination_is_sent_approved_and_finishes_the_ru
 def test_a_send_to_deck_maker_is_real_by_default_and_names_what_it_refuses(terr):
     """territories-spinoff-out-deck: with nothing stubbed, deck-maker is a registered destination: the send is written ``sent`` with the routes and the
     ones not chosen (the record the Deck reads after the host's spin-off), the gate is approved and the run finishes."""
-    assert "deck-maker" in delivery.DESTINATIONS and "production-tool" not in delivery.DESTINATIONS
+    assert "deck-maker" in delivery.DESTINATIONS and "production-tool" in delivery.DESTINATIONS
     host = TerritoriesHost(data=copy.deepcopy(contract.example("greenlight_open")), schema=SCHEMA)
     live = [t["id"] for t in host.data["territories"] if t["status"] == "live" and t["state"] == "developed"]
     ids, rest = live[:2], live[2:4]
@@ -374,6 +375,44 @@ def test_the_deck_maker_destination_refuses_a_route_that_is_only_a_find_or_was_k
         with pytest.raises(delivery.Refused, match=words):
             to_deck.deliver("d", data, {"territory_ids": [dev, tid]})
     assert by_state[dev]["state"] == "developed"
+
+
+def test_a_send_to_the_production_tool_is_real_and_names_what_it_refuses(terr):
+    """territories-spinoff-out-production: production-tool is a registered destination like deck-maker: the send is written ``sent`` with the routes and the
+    ones not chosen (the record the Production page reads after the host's spin-off), and a send with no greenlit route is refused in words."""
+    host = TerritoriesHost(data=copy.deepcopy(contract.example("greenlight_open")), schema=SCHEMA)
+    live = [t["id"] for t in host.data["territories"] if t["status"] == "live" and t["state"] == "developed"]
+    ids, rest = live[:2], live[2:4]
+    host.data["greenlit"] = []
+    r = step(terr, host, "send_routes", to="production-tool", territory_ids=ids, not_chosen=rest, by="Shrey")
+    assert r[0]["job"]["state"] == "failed" and "Greenlight" in r[0]["job"]["error"]["message"] and not host.data.get("sends")
+    for tid in ids:
+        step(terr, host, "greenlight_route", territory_id=tid, by="Shrey")
+    r = step(terr, host, "send_routes", to="production-tool", territory_ids=ids, not_chosen=rest, by="Shrey")
+    assert r[0]["job"]["state"] == "done" and "Sent to Production tool" in r[0]["result"]["summary"]
+    send = host.data["sends"][-1]
+    assert (send["to"], send["status"], send["territory_ids"], send["not_chosen"], send["by"]) == ("production-tool", "sent", ids, rest, "Shrey")
+    valid(host)
+
+
+def test_the_production_destination_refuses_no_greenlit_route_a_find_a_killed_route_or_a_gone_one():
+    from napkin.territories import to_production
+    data = copy.deepcopy(contract.example("greenlight_open"))
+    dev = next(t["id"] for t in data["territories"] if t["state"] == "developed" and t["status"] == "live")
+    data["greenlit"] = [{"territory_id": dev, "by": "Shrey", "at": "2026-11-23T10:00:00Z", "rests_on_derived": [], "derived_resolution": "verified"}]
+    assert to_production.deliver("d", data, {"territory_ids": [dev]}) == {"status": "sent"}
+    with pytest.raises(delivery.Refused, match="No greenlit route"):
+        to_production.deliver("d", data, {"territory_ids": []})
+    with pytest.raises(delivery.Refused, match="No greenlit route"):
+        to_production.deliver("d", {**data, "greenlit": []}, {"territory_ids": [dev]})
+    killed = copy.deepcopy(data)
+    next(t for t in killed["territories"] if t["id"] == dev)["status"] = "killed"
+    with pytest.raises(delivery.Refused, match="taken off the list"):
+        to_production.deliver("d", killed, {"territory_ids": [dev]})
+    find = copy.deepcopy(data)
+    next(t for t in find["territories"] if t["id"] == dev)["state"] = "found"
+    with pytest.raises(delivery.Refused, match="only a find"):
+        to_production.deliver("d", find, {"territory_ids": [dev]})
 
 
 def test_a_send_is_held_while_a_greenlit_route_rests_on_an_unanswered_derived_finding(terr):

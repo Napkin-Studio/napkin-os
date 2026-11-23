@@ -512,6 +512,96 @@ async fn territories_continue_in_production_through_the_plain_spinoff() {
     assert_eq!(carried["territories"][0]["name"], "The quiet orchard");
 }
 
+/// Picture bytes a Territories route holds as a frame: the heavy media a spin-off links, never copies.
+const FRAME: &[u8] = b"\x89PNG a generated frame the route holds, stored once per agency";
+
+/// A Territories document as the example holds it (greenlit routes, worlds, checks, sources), plus one picture by link: a
+/// frame with the hash of `FRAME` and its stated rights, and one whose rights nobody stated.
+fn territories_with_frames() -> String {
+    let mut d: Value =
+        serde_json::from_str(include_str!("../../../app/templates/territories/example/data.json"))
+            .unwrap();
+    let want = clan_sdk::hash::sha256_prefixed(FRAME);
+    let hex = want.trim_start_matches("sha256:");
+    let t = d["territories"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|t| t["id"] == "t_started")
+        .unwrap();
+    t["pictures"] = serde_json::json!([
+        {"id": "pic_started_f1", "touchpoint": "tv", "kind": "frame", "sha256": hex, "rights": "generated", "final": true},
+        {"id": "pic_started_f2", "touchpoint": "poster", "kind": "frame", "sha256": "ab".repeat(32)}
+    ]);
+    serde_json::to_string(&d).unwrap()
+}
+
+#[tokio::test]
+async fn greenlit_routes_continue_in_production_whole_under_their_client_with_pictures_as_links() {
+    let s = server(None);
+    let me = sign_in(&s, "visionary", "napkin").await;
+    let client = a_client(&s, &me, "Hollow Oak Cider").await;
+    let made = post_json(
+        &s,
+        &me,
+        "/documents",
+        serde_json::json!({ "app_id": TERRITORIES, "title": "Rail territories", "client_id": client }),
+    )
+    .await;
+    let terr = made.json()["path"].as_str().unwrap().to_string();
+    let data = territories_with_frames();
+    set_data(&s, &me, &DocId::new(terr.clone()), &data);
+    // The picture the frame links to is uploaded through the host the way the Territories page does it.
+    let ws = s.ctx.workspace(&me.tenant);
+    let session = napkin_host::Session::with_ctx(ws.store.clone(), me.tenant.ctx());
+    session.open(DocId::new(terr.clone())).unwrap();
+    session
+        .upload_asset("frame-started.png", None, FRAME.to_vec())
+        .unwrap();
+    let source = stored(&s, &me, &terr);
+    let want: Value = serde_json::from_str(&data).unwrap();
+    assert_eq!(blob_files(&s, &me), 1);
+
+    let prod = path_of(&spinoff(&s, &me, &terr, PRODUCTION).await);
+
+    // In the library, a Production project under the same client.
+    let item = library_item(&s, &me, &prod).await;
+    assert_eq!(item["app_id"], PRODUCTION);
+    assert_eq!(item["client"]["id"], client);
+
+    // The whole document, every route with its world, words, checks, sources and rights, and who greenlit which.
+    let clan = stored(&s, &me, &prod);
+    let carried = serde_json::to_value(&yaml(&clan, "shared/data.yaml")["upstream"][source.document_id()]).unwrap();
+    let ids = |v: &Value, key: &str, field: &str| -> Vec<String> {
+        v[key].as_array().unwrap().iter().map(|r| r[field].as_str().unwrap().to_string()).collect()
+    };
+    assert_eq!(ids(&carried, "territories", "id"), ids(&want, "territories", "id"));
+    assert_eq!(ids(&carried, "greenlit", "territory_id"), ids(&want, "greenlit", "territory_id"));
+    assert!(!ids(&carried, "greenlit", "by").is_empty());
+    for key in ["territories", "greenlit", "crew", "sends", "run", "review"] {
+        assert_eq!(carried[key], want[key], "{key} arrived whole");
+    }
+    // What the Territories document had carried (its brief and research) is hoisted beside it, not lost.
+    let all = serde_json::to_value(&yaml(&clan, "shared/data.yaml")["upstream"]).unwrap();
+    for (id, held) in want["upstream"].as_object().unwrap() {
+        assert_eq!(&all[id], held, "{id} stays in the project's upstream");
+    }
+    let t = carried["territories"].as_array().unwrap().iter().find(|t| t["id"] == "t_started").unwrap();
+    assert!(t["world"]["palette"]["bg"].is_string() && !t["checks"].as_array().unwrap().is_empty());
+    assert_eq!(t["pictures"][0]["rights"], "generated");
+
+    // Pictures are links: the project holds the hash, the file is not in its archive, and nothing was stored twice.
+    assert_eq!(t["pictures"][0]["sha256"], clan_sdk::hash::sha256_prefixed(FRAME).trim_start_matches("sha256:"));
+    assert!(!clan.has_entry("human/assets/frame-started.png"));
+    let f = clan.manifest().file_by_path("human/assets/frame-started.png").unwrap();
+    assert!(f.linked);
+    assert_eq!(f.sha256.as_deref(), Some(clan_sdk::hash::sha256_prefixed(FRAME).as_str()));
+    assert_eq!(blob_files(&s, &me), 1, "one stored file");
+    // The source is named by id and version.
+    let uri = &clan.manifest().lineage.as_ref().unwrap().parent_uri;
+    assert_eq!(uri, &format!("doc:{terr}@{}", clan_sdk::hash::sha256_prefixed(source.raw_bytes())));
+}
+
 #[tokio::test]
 async fn the_old_special_routes_are_gone() {
     let s = server(None);

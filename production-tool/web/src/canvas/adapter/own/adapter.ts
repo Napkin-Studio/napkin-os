@@ -632,6 +632,17 @@ export class OwnAdapter implements CanvasAdapter {
     return s
   }
 
+  /** Words written on the canvas from code (CanvasAdapter.addText): the Text tool's own begin and commit, so the scene, the sync
+   *  that records texts[id] and undo see it as they see a typed one. Nothing stays selected. */
+  addText(at: Pt, words: string): string | null {
+    if (this.scene.readOnly || !words.trim()) return null
+    this.startText(at)
+    const id = this.commitText(words)
+    this.selector.set([])
+    this.changed()
+    return id
+  }
+
   /** Edit a text in place (a double-click, or T on a text). False when it cannot be edited. */
   editText(id: string): boolean {
     if (this.scene.readOnly) return false
