@@ -4226,13 +4226,24 @@
     return '<div class="editrow"><button type="button" class="save act-fix" data-v="'+esc(d.id)+'"'+(FIX||DRAFT?' disabled':'')
       +' title="'+esc(STRAT_)+' looks up what it needs, '+esc(WRITER)+' rewrites the parts, '+esc(REV)+' checks them">Fix this with the agents</button></div>';
   }
+  // The middleware's refusals, in plain words (UAT 2026-11-22: a raw `invalid_input (400): input.verdict is not a bad
+  // verdict still standing...` stood in the booth). A note already answered is not a fault: the page re-reads the
+  // chain, the note goes away, and nothing is shown.
+  function plainFixError(msg){
+    var m=String(msg||'');
+    if(/not a bad verdict still standing|must be the id of a bad verdict/i.test(m)) return {text:'', stale:true};
+    if(/locked/i.test(m)) return {text:'The brief is locked. Reopen a part to have the agents fix it.', stale:false};
+    if(/^\s*invalid_input\b/i.test(m)||/\binput\.\w+/.test(m)) return {text:'The agents could not start that fix. Please try again.', stale:false};
+    return {text:m, stale:false};
+  }
   function fixParts(vid, resumeId){
     if(!window.clan||FIX) return;
     if(noMiddleware()){ setStatus(esc(NO_MW)); return; }
     var j=FIX={task:'fix_parts', verdict:vid, fields:{}, onUpdate:function(){ walk(); },
       onEnd:function(j){
         FIX=null; walk();
-        setStatus(j.error?esc(j.error):j.summary?esc(j.summary):'');
+        var pe=j.error?plainFixError(j.error):null;
+        setStatus(pe?esc(pe.text):j.summary?esc(j.summary):'');
         if(phase==='doc') renderStructured();
       }};
     setStatus(''); walk();
