@@ -357,6 +357,7 @@ def test_a_send_is_held_while_a_greenlit_route_rests_on_an_unanswered_derived_fi
 
 def test_fetch_territories_file_says_so_when_nothing_is_built(terr, monkeypatch):
     monkeypatch.setattr(delivery, "FILES", {})
+    monkeypatch.setattr(delivery, "FAMILIES", {})
     host = at_pick(terr)
     st, body = post(terr, "fetch_territories_file", {"name": "board.pdf"}, host.clan())
     assert st == 503 and body["error"]["type"] == "not_built" and "not built" in body["error"]["message"]
@@ -364,6 +365,7 @@ def test_fetch_territories_file_says_so_when_nothing_is_built(terr, monkeypatch)
 
 def test_fetch_territories_file_hands_over_a_registered_file_and_writes_nothing(terr, monkeypatch):
     monkeypatch.setattr(delivery, "FILES", {})
+    monkeypatch.setattr(delivery, "FAMILIES", {})
     delivery.register_file("board.pdf", "application/pdf", lambda doc_id, data: b"%PDF-1.4 " + doc_id.encode() + str(len(data)).encode())
     host = at_pick(terr)
     n = len(host.changes)

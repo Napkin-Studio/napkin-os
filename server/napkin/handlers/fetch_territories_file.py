@@ -9,8 +9,10 @@ from __future__ import annotations
 import base64
 
 from ..doc import ctx_data
-from ..territories import delivery
+from ..territories import delivery, exports
 from ..util import TaskError, bad
+
+exports.register()   # territories-exports: the board, the one-pagers, the JSON
 
 NAME, TASK, VERSION, KIND, CAPABILITY_MAJOR = "fetch_territories_file", "fetch_territories_file", "1.0", "territories_file", 1
 
@@ -19,11 +21,12 @@ def run(req, settings) -> dict:
     name = req.inp.get("name")
     if not isinstance(name, str) or not name:
         raise bad("input.name is required: the file to fetch")
-    if not delivery.FILES:
+    if not (delivery.FILES or delivery.FAMILIES):
         raise TaskError(503, "not_built", "Exports are not built yet, so there is no file to download.")
-    if name not in delivery.FILES:
-        raise bad(f"input.name must be one of {', '.join(sorted(delivery.FILES))}", "unknown_file")
-    media, make = delivery.FILES[name]
+    found = delivery.resolve(name)
+    if found is None:
+        raise bad(f"input.name must be one of {', '.join(delivery.names())}", "unknown_file")
+    media, make = found
     try:
         raw = make(req.doc, ctx_data(req.clan))
     except TaskError:
