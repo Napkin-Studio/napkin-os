@@ -14,7 +14,7 @@ export function useRoutePicture(p: Pick<RoutePicture, 'sha256' | 'rights'>): { u
   useEffect(() => {
     let alive = true
     if (local) return
-    void resolveMediaUrl({ sha256: p.sha256, origin: p.rights === 'generated' ? 'generated' : undefined })
+    void resolveMediaUrl({ sha256: p.sha256, origin: p.rights === 'generated' ? 'generated' : 'uploaded' })
       .then((url) => alive && setRemote({ sha: p.sha256, url }))
       .catch(() => alive && setRemote({ sha: p.sha256, url: null }))
     return () => { alive = false }
