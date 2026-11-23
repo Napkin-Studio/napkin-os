@@ -574,6 +574,27 @@ def plan_offer(doc: dict, packs: dict) -> tuple:
     return _one_of_each(cands, not_carried), refused, not_carried
 
 
+def finals_summary(doc: dict) -> dict:
+    """What a Production project's pictures are, in words the idea stage can name its executions after (no bytes read): ``{key_visuals,
+    ooh_formats: [format id, ...], packshots, storyboard_frames, crops}``, counting what the offer would carry (placeable, not mock)."""
+    cands, _, _ = plan_offer(doc, load_packs())
+    out = {"key_visuals": 0, "ooh_formats": [], "packshots": 0, "storyboard_frames": 0, "crops": 0}
+    for c in cands:
+        if c.get("role") == "frame":
+            out["storyboard_frames"] += 1
+        elif c.get("subject") == "packshot":
+            out["packshots"] += 1
+        elif c.get("role") == "size" and c.get("channel") == "ooh":
+            fid = (c.get("format") or {}).get("format_id")
+            if fid and fid not in out["ooh_formats"]:
+                out["ooh_formats"].append(fid)
+        elif c.get("role") == "master" and c.get("subject") != "crop":
+            out["key_visuals"] += 1
+        elif c.get("role") == "master":
+            out["crops"] += 1
+    return out
+
+
 _PACKSHOT = re.compile(r"pack[\s-]?shots?\b", re.I)
 
 

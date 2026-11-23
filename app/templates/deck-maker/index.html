@@ -986,6 +986,28 @@ var DeckLogic = (function () {
     return { brief: brief, research: research, production: production, any: !!(brief || research || production) };
   }
 
+  /**
+   * What the Start form shows in Client and Project before the person types: the project's title from the carried Production project, and the
+   * client's name from the carried brief (its client line up to the first comma). Only ever a starting value: what the person typed wins.
+   * { client, project }, each '' when nothing carried names it. Never throws.
+   */
+  function startDefaults(data) {
+    var up = data && isObj(data.upstream) ? data.upstream : {}, client = '', project = '';
+    Object.keys(up).forEach(function (id) {
+      var u = up[id];
+      if (!isObj(u)) return;
+      if (isProduction(u)) {
+        if (!project && isObj(u.project) && typeof u.project.title === 'string') project = u.project.title.trim();
+        return;
+      }
+      if (isKit(u)) return;
+      var c = typeof u.client === 'string' ? u.client : (isObj(u.client) && typeof u.client.value === 'string' ? u.client.value : '');
+      c = c.split(/[,;\n]/)[0].replace(/^To confirm:\s*/i, '').trim();
+      if (!client && c && c.length <= 80) client = c;
+    });
+    return { client: client, project: project };
+  }
+
   /** The documents a person attached, as a name list: inputs.documents, else the document's materials. */
   function documentsOf(data) {
     var inp = (data && data.inputs) || {};
@@ -1712,7 +1734,7 @@ var DeckLogic = (function () {
   return {
     picturesFromHtml: picturesFromHtml, appendixOf: appendixOf, deckApproval: deckApproval, approveDeck: approveDeck, exportRows: exportRows, reportLine: reportLine,
     AGENTS: AGENTS, ACTIVITY_WORD: ACTIVITY_WORD, circleSvg: circleSvg, agentState: agentState, circleSizeFor: circleSizeFor, circleCentreSize: circleCentreSize, circleSays: circleSays, arcPath: arcPath, runView: runView, ENGINE_STATE: ENGINE_STATE,
-    upstreamSummary: upstreamSummary, productionSummary: productionSummary, documentsOf: documentsOf, builtFrom: builtFrom, describeBuiltFrom: describeBuiltFrom,
+    upstreamSummary: upstreamSummary, startDefaults: startDefaults, productionSummary: productionSummary, documentsOf: documentsOf, builtFrom: builtFrom, describeBuiltFrom: describeBuiltFrom,
     canBuild: canBuild, gapView: gapView, questionState: questionState, answerPatch: answerPatch,
     DECK_TYPES: DECK_TYPES, deckTypeOf: deckTypeOf, typeHints: typeHints, kindOfType: kindOfType, typePatch: typePatch,
     DECK_TYPE_CARDS: DECK_TYPE_CARDS, cardOf: cardOf, typeCaption: typeCaption, SIZES: SIZES, defaultSize: defaultSize, sizeOf: sizeOf, recipesOn: recipesOn, sizePatch: sizePatch, pickPatch: pickPatch, builtTypeOf: builtTypeOf, offeredCards: offeredCards,
@@ -2292,6 +2314,7 @@ var DeckProd = (function () {
     var sum = L.summaryOf({ prompt: p, kind: kind, format: format, type: typed ? dt.id : null }, s.deck);
     var text = draft('text', p.text);
     var bf = L.builtFrom(inp, s.upstream, docs, typed ? dt.id : null);
+    var sd = L.startDefaults(s.raw);   // a deck of a Production project starts with its client and project named
     function field(id, lab, val, ph) {
       return '<div><label class="lab" for="' + id + '">' + lab + '</label><input class="inp" id="' + id + '" value="' + esc(draft(id, val)) + '"' + (ph ? ' placeholder="' + esc(ph) + '"' : '') + ' /></div>';
     }
@@ -2306,7 +2329,7 @@ var DeckProd = (function () {
       '<div class="stack">' + typePicker(s, format) + lookSection(s) +
       '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">02</span><b>Your prompt</b><div class="spacer"></div>' +
         '<span class="pill ' + (hasText ? 'ok' : 'plain') + '">' + (hasText ? 'Ready' : 'A line is enough') + '</span></div>' +
-        '<div class="three">' + field('client', 'Client', p.client) + field('project', 'Project', p.project) + field('agency', 'Agency (optional)', p.agency, 'Shows as [Agency]') + '</div>' +
+        '<div class="three">' + field('client', 'Client', p.client || sd.client) + field('project', 'Project', p.project || sd.project) + field('agency', 'Agency (optional)', p.agency, 'Shows as [Agency]') + '</div>' +
         '<div style="margin-top:14px"><label class="lab" for="ptext">What are we pitching? (a line is enough; paste everything you have)</label><textarea class="inp ta" id="ptext">' + esc(text) + '</textarea></div></section>' +
       '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">03</span><b>Documents</b><div class="spacer"></div><span class="pill ' + (docs.length ? 'ok' : 'plain') + '">' + (docs.length ? docs.length + ' attached' : 'Optional') + '</span></div>' +
         docList + '<div style="margin-top:10px"><label class="btn sm" style="display:inline-flex;align-items:center" for="attach">Attach files</label><input type="file" id="attach" multiple style="position:absolute;left:-9999px" aria-label="Attach documents" />' +
@@ -3012,7 +3035,8 @@ var DeckProd = (function () {
     if (a.pres) { view.present += Number(a.pres); return render(); }
     if (t.id === 'build') {
       stashDraft();
-      var prompt = { client: draft('client', ''), project: draft('project', ''), agency: draft('agency', ''), text: draft('text', '') };
+      var sdb = L.startDefaults(s.raw), pb = s.inputs.prompt || {};
+      var prompt = { client: draft('client', pb.client || sdb.client), project: draft('project', pb.project || sdb.project), agency: draft('agency', ''), text: draft('text', '') };
       Object.keys(prompt).forEach(function (k) { prompt[k] = String(prompt[k]).trim(); });
       var guard = L.canBuild({ prompt: prompt }, s.upstream, L.documentsOf(s.raw));
       if (!guard.ok) { toast(guard.message); return; }
@@ -3127,7 +3151,7 @@ var DeckProd = (function () {
 
   // ── Export: the web deck, the PowerPoint and the PDF (deck-cloud) ──
   // The engine keeps the files; fetch_deck_file hands one over by name. The web deck and the PDF go to the host's export
-  // (clan.exportDoc), which saves the HTML and prints the PDF from it with Chromium, as a Brief's PDF is printed. The PowerPoint is saved here.
+  // (clan.exportDoc), which saves the HTML and prints the PDF from it with Chromium, as a Brief's PDF is printed. The PowerPoint goes the same way, as bytes.
   var EXPORTING = false;
   function exportBase(s) {
     var m = (s && s.deck && s.deck.meta) || {};
@@ -3153,10 +3177,11 @@ var DeckProd = (function () {
     toast('Preparing ' + (key === 'pdf' ? 'PDF' : key === 'pptx' ? 'PowerPoint' : 'web deck') + '…');
     fetchDeckFile(key === 'pptx' ? 'deck.pptx' : 'deck.html').then(function (f) {
       if (key === 'pptx') {
-        var url = URL.createObjectURL(new Blob([f.bytes], { type: f.type })), a = document.createElement('a');
-        a.href = url; a.download = base + '.pptx'; document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(function () { URL.revokeObjectURL(url); }, 30000);
-        return null;
+        // The app frame is sandboxed without allow-downloads, so a blob link here saves nothing in a browser: the file goes through the host's
+        // export, as the PDF does (clan.exportDoc: for 'pptx' the third argument is the file's bytes in base64).
+        var bin = '', step = 0x8000;
+        for (var i = 0; i < f.bytes.length; i += step) bin += String.fromCharCode.apply(null, f.bytes.subarray(i, i + step));
+        return window.clan.exportDoc('pptx', base, btoa(bin)).then(function (res) { if (res && res.ok === false) throw new Error('Could not start the export.'); });
       }
       var html = new TextDecoder('utf-8').decode(f.bytes);
       return window.clan.exportDoc(key === 'pdf' ? 'pdf' : 'html', base, html).then(function (res) { if (res && res.ok === false) throw new Error('Could not start the export.'); });

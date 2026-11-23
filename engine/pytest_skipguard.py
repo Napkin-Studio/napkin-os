@@ -15,7 +15,7 @@ from pathlib import Path
 
 #: Skips that are fine on a machine that has everything the deck needs: a tool the deck itself never needs, or a font check that depends
 #: on what the machine happens to have installed. Anything else that skips fails a guarded run.
-ALLOW = (r"no SVG rasteriser", r"Arial \(the fallback\) is not on this machine")
+ALLOW = (r"no SVG rasteriser", r"no headless browser", r"Arial \(the fallback\) is not on this machine")
 RENDER_TOOLS = re.compile(r"libre ?office|soffice|pdftoppm|pdftotext|pdffonts", re.I)
 _skips: list = []
 

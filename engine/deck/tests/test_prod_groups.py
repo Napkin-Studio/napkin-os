@@ -70,5 +70,5 @@ def test_a_group_pool_offers_only_the_finals_of_its_kind_and_puts_the_unused_one
     again = images.group_pool(meta, "16:9", used, any_shape=True, group="sizes")
     assert again[0] != pool[0] and set(again) == set(pool)
     assert images.execution_group("Size crops") == "sizes" and images.execution_group("Packshot") == "product"
-    assert images.execution_group("Key visual") is None and images.execution_channel("Storyboard frames") == "film"
+    assert images.execution_group("Key visual") == "keyvisual" and images.execution_channel("Storyboard frames") == "film"
     del d
