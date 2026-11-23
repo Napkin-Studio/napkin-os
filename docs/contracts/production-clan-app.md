@@ -48,10 +48,10 @@ Stage 1: `/production/?doc=<doc>`; the page reads the tenant from `/api/session`
 
 All under `/api/t/{t}`, session required. Each agency has its own trash: another agency gets 404 on its own path and 4xx on the owner's.
 - `DELETE /d/{doc}`: 200 `{"trashed":true,"restorable_until":"<RFC 3339, +30 days>"}`; 404 missing or already trashed; 400 if the id is not a `doc-` id (a template or home is never deleted).
-- `GET /trash`: 200 `[{"path","trashed_at","restorable_until"}]`, newest first.
+- `GET /trash[?client=<id>]`: 200 `[{"path","trashed_at","restorable_until","title","app_id","client_id","by"}]`, newest first. `title`, `app_id` and `client_id` are what the document said when it was deleted; `by` is the signed-in person's display name (their sign-in name when they have none), recorded at DELETE time. All four are `null` for a document deleted before they were kept. `?client=` lists only that client's documents (a document with no client is in no client's Trash). One Trash page per client, for any tool, reads this; there is no permanent delete in the UI.
 - `POST /d/{doc}/restore`: 200 `{"restored":true,"path":"<doc>"}`; 404 not in the trash; 409 that id is already in the library.
 - `POST /trash/purge` body `{"dry_run":true}`: `dry_run` defaults to true (an empty body is a dry run); Napkin admins only, else 403; 200 `{"dry_run":bool,"older_than_days":30,"purged":["<doc>",...]}`; a dry run removes nothing.
-- Trashed documents are not in `GET /library` or the client listings. Storage: `<tenant>/trash/<unix-ms>-<slug>.clan`.
+- Trashed documents are not in `GET /library` or the client listings. Storage: `<tenant>/trash/<unix-ms>-<slug>.clan`, with its details beside it in `<unix-ms>-<slug>.json` (removed on restore and on purge).
 - Stage 1 "no Delete" in section 5 is superseded: the tool may offer Delete (a new screen still needs an approved mock).
 
 ## 9. Document (contract 3)

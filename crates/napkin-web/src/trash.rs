@@ -9,7 +9,10 @@
 //!
 //! * `DELETE /api/t/{tenant}/d/{doc}`: to the trash. 200
 //!   `{"trashed":true,"restorable_until":"<RFC 3339>"}`.
-//! * `GET /api/t/{tenant}/trash`: `[{"path","trashed_at","restorable_until"}]`.
+//! * `GET /api/t/{tenant}/trash[?client=<id>]`: `[{"path","trashed_at",
+//!   "restorable_until","title","app_id","client_id","by"}]`, newest first. The
+//!   last four are what the document said when it was trashed and who trashed
+//!   it (null for a document trashed before they were kept).
 //! * `POST /api/t/{tenant}/d/{doc}/restore`: back to the library. 200
 //!   `{"restored":true,"path":"<doc>"}`; 409 if the id is in use; 404 if not trashed.
 //! * `POST /api/t/{tenant}/trash/purge` `{"dry_run":true}` (default): Napkin
@@ -21,7 +24,7 @@
 
 use std::sync::Arc;
 
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::routing::{delete, get, post};
 use axum::{Extension, Json, Router};
 use napkin_host::DocId;
@@ -67,12 +70,18 @@ fn store(ws: &crate::state::Workspace) -> ApiResult<&crate::store::TenantStore> 
 async fn trash_document(
     State(ctx): State<Arc<AppCtx>>,
     Tenant(tenant): Tenant,
+    account: Option<Extension<Account>>,
     Path((_t, doc)): Path<(String, String)>,
 ) -> ApiResult<Json<Value>> {
     let ws = ctx.workspace(&tenant);
     let id = DocId::new(doc);
     let at = now_ms();
-    store(&ws)?.trash(&id, at)?;
+    let by = account.map(|Extension(a)| {
+        a.name
+            .filter(|n| !n.trim().is_empty())
+            .unwrap_or(a.username)
+    });
+    store(&ws)?.trash(&id, at, by.as_deref())?;
     ws.forget(&id);
     Ok(Json(json!({
         "trashed": true,
@@ -95,16 +104,30 @@ async fn restore_document(
 async fn list_trash(
     State(ctx): State<Arc<AppCtx>>,
     Tenant(tenant): Tenant,
+    Query(q): Query<std::collections::HashMap<String, String>>,
 ) -> ApiResult<Json<Value>> {
     let ws = ctx.workspace(&tenant);
-    let items: Vec<Value> = store(&ws)?
+    let st = store(&ws)?;
+    let items: Vec<Value> = st
         .trashed()
         .into_iter()
         .map(|(id, ms)| {
+            let n = st.trash_note(&id, ms);
+            (id, ms, n)
+        })
+        .filter(|(_, _, n)| {
+            q.get("client")
+                .map_or(true, |c| n.client_id.as_deref() == Some(c.as_str()))
+        })
+        .map(|(id, ms, n)| {
             json!({
                 "path": id.as_str(),
                 "trashed_at": rfc3339(ms),
                 "restorable_until": rfc3339(ms + RETAIN_DAYS * DAY_MS),
+                "title": n.title,
+                "app_id": n.app_id,
+                "client_id": n.client_id,
+                "by": n.by,
             })
         })
         .collect();
