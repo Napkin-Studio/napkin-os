@@ -200,3 +200,78 @@ def test_another_agencys_pass_still_gets_the_404(h, monkeypatch):
     status, out = pass_call(h, pass_for("green", h.clock()), "GET", f"/api/assets/{sha}")
     status2, unknown = pass_call(h, pass_for("green", h.clock()), "GET", "/api/assets/sha256:" + "e" * 64)
     assert status == 404 and (status2, unknown) == (404, out)
+
+
+# ── every picture a job made is its agency's (the Hollow Oak 404s of 2026-11-22) ─────────────────────────
+
+import sys  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+import pytest  # noqa: E402
+
+import service  # noqa: E402
+from conftest import asset, ref  # noqa: E402
+from director import new_id  # noqa: E402
+from test_aspect import SHOT, finish  # noqa: E402
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+import backfill_holds  # noqa: E402
+
+KINDS = {
+    "generate (cropped to its frame)": ("generate", (1376, 768), {"text": "a packshot", "refs": [ref(1, kind="drawing")],
+                                                                  "aspect": {"w": 16, "h": 9}}),
+    "frame (cropped to its ratio)": ("frame", (1344, 768), {"shot": {**SHOT, "id": "shot_x"}, "image": asset(3), "ratio": "16:9"}),
+    "region_edit (kept shape)": ("region_edit", (1344, 768), {"image": asset(3), "text": "a red hat", "aspect": {"w": 1344, "h": 756}}),
+    "view (not cropped)": ("view", (64, 64), {"view": "side", "image": asset(2)}),
+}
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_each_kind_of_output_is_served_to_its_agency_and_refused_to_another(h, kind):
+    op, size, inp = KINDS[kind]
+    h.limits("blue", allow={"claude": True, "makers": ["runway", "google"]})
+    alice, eve = h.as_person(), h.as_person("eve", "red")
+    done, _, _ = finish(h, alice, op, size, **({**inp, "shot": {**inp["shot"], "id": new_id("shot")}} if "shot" in inp else inp))
+    shas = service.output_shas(done["outputs"])
+    assert shas
+    for sha in shas:
+        status, out = get(h, alice, f"/assets/{sha}")
+        assert status == 302 and out.headers["Location"] == f"{CDN}/out/{sha}"
+        assert get(h, eve, f"/assets/{sha}")[0] == 404
+
+
+def test_a_cropped_output_is_held_by_its_agency_not_only_the_providers_copy(h):
+    alice = h.as_person()
+    done, _, _ = finish(h, alice, "generate", (1376, 768), text="a mood frame", refs=[ref(1, kind="drawing")],
+                        aspect={"w": 16, "h": 9})
+    (o,) = done["outputs"]
+    assert "croppedFrom" in o and h.store.holds(identity.tenant_id("blue"), o["sha256"])
+
+
+def test_an_output_made_before_the_fix_is_served_after_the_backfill_and_it_is_idempotent(h):
+    alice = h.as_person()
+    done, _, _ = finish(h, alice, "generate", (1376, 768), text="a packshot", refs=[ref(1, kind="drawing")],
+                        aspect={"w": 16, "h": 9})
+    (o,) = done["outputs"]
+    tenant = identity.tenant_id("blue")
+    h.store.held.discard(f"has#{tenant}#{o['sha256']}")  # what the old relay left: no index entry
+    assert get(h, alice, f"/assets/{o['sha256']}")[0] == 404
+    dry = backfill_holds.backfill(h.store)
+    assert [m[1] for m in dry["missing"]] == [o["sha256"]] and dry["written"] == 0
+    assert get(h, alice, f"/assets/{o['sha256']}")[0] == 404  # a dry run writes nothing
+    assert backfill_holds.backfill(h.store, apply=True)["written"] == 1
+    assert get(h, alice, f"/assets/{o['sha256']}")[0] == 302
+    assert backfill_holds.backfill(h.store, apply=True) == {**dry, "missing": [], "written": 0}
+    assert get(h, h.as_person("eve", "red"), f"/assets/{o['sha256']}")[0] == 404
+
+
+def test_a_hash_no_job_made_stays_a_404_after_the_backfill(h):
+    alice = h.as_person()
+    backfill_holds.backfill(h.store, apply=True)
+    assert get(h, alice, "/assets/sha256:" + "9" * 64)[0] == 404
+
+
+def test_output_shas_finds_nested_hashes_only():
+    a, b = "sha256:" + "a" * 64, "sha256:" + "b" * 64
+    assert service.output_shas([{"sha256": a, "plate": {"sha256": b}}, {"sha256": "nope"}, None]) == [a, b]
+    assert service.output_shas(None) == []
