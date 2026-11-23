@@ -484,15 +484,15 @@ describe('opening a project checks the relay for a newer version (re-test R2)', 
     fake.loseAnswers = fake.offline = false
     const saves = fake.saves.length
     await laptop.shell.open(p.id)
-    // Its own save is its base, not "saved from another browser or tab"; the work after it is still here.
+    // Its own save is its base, not "saved from another browser or tab"; the work after it is still here, and it goes
+    // up at once on that base (S1-12: not at the minute's save).
     const copy = services(laptop.shell).serverCopy!
     expect(copy.get()).toBeNull()
-    expect(copy.basedOn()?.etag).toBe(mine.etag)
     expect(keys(laptop.shell)).toEqual(expect.arrayContaining(['kite', 'lamp']))
-    expect(fake.saves.length).toBe(saves)
-    await services(laptop.shell).clan!.clan.mirrorNow('manual')
+    await vi.waitFor(() => expect(fake.saves.length).toBe(saves + 1))
     expect(fake.saves.at(-1)).toMatchObject({ id: p.id, ifMatch: mine.etag })
     expect(fake.projects.get(p.id)!.row.etag).not.toBe(mine.etag)
+    expect(copy.get()).toBeNull()
   })
 
   it('the same version as here: it opens with no question and no download', async () => {

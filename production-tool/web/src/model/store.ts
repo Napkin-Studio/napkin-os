@@ -10,7 +10,7 @@
 // LocalUndo's, kept in ProjectUi.undo so it survives a reload.
 
 import {
-  LocalPatchBus, LocalTextBus, LocalUndo, recordJobOutcome, TERMINAL, TEXT_OWNED,
+  diffMergePatch, LocalPatchBus, LocalTextBus, LocalUndo, recordJobOutcome, TERMINAL, TEXT_OWNED,
   type ChainEntry, type ClanStoreApi, type JobEntry, type Person, type Persistence, type SerializedUndo,
 } from '../../../clan-store/src'
 import { TypingBursts } from '../script/typing'
@@ -19,6 +19,7 @@ import type { ProductionDocument } from '../contracts/types'
 import { record as recordEvent } from '../dogfood/recorder'
 import type { Doc, DocumentStore, UndoResult, WriteWhy } from '../doc/types'
 import { changeOf, textTouched } from './diff'
+import { clearPending, keepPending, takePending, type Recover } from './recover'
 
 export type { ChainEntry } from '../../../clan-store/src'
 
@@ -36,6 +37,8 @@ export interface ModelStoreOptions {
   /** Where the undo steps are kept (ProjectUi.undo), and where they come from on open. */
   undo?: { saved: SerializedUndo | null | undefined; save: (s: SerializedUndo) => void }
   debounceMs?: number
+  /** Keep what is not yet written to the browser where a reload cannot lose it (model/recover.ts). */
+  recover?: Recover
 }
 
 export class ModelStore implements DocumentStore {
@@ -55,6 +58,9 @@ export class ModelStore implements DocumentStore {
   private readonly outcomes = new Set<string>()
   private readonly delay: number
   private closed = false
+  private readonly recover: Recover | null
+  /** The document as the browser holds it durably: what a pending patch is a difference from. */
+  private durable: Doc | null = null
   /** The last write the .clan refused, if any. */
   trouble: string | null = null
 
@@ -65,6 +71,7 @@ export class ModelStore implements DocumentStore {
     this.undoer = new LocalUndo({ saved: opts.undo?.saved ?? null, onChange: (s) => opts.undo?.save(s) })
     this.undoer.bind(this.bus, this.text)
     this.delay = opts.debounceMs ?? 250
+    this.recover = opts.recover ?? null
     this.typing = new TypingBursts(this.text, { changed: () => this.scheduleCheckpoint() })
     // A burst is always its own step, older than whatever comes next (an edit, a Keep, an undo).
     this.undoer.beforePush = () => this.typing.closeAll()
@@ -81,6 +88,7 @@ export class ModelStore implements DocumentStore {
   async load(): Promise<Doc | null> {
     const d = await this.clan.load()
     if (!d) return null
+    await this.recoverPending()
     return this.opened()
   }
 
@@ -103,9 +111,26 @@ export class ModelStore implements DocumentStore {
     return this.opened()
   }
 
+  /** An edit the last page made and never wrote to the browser (it was reloaded first): applied before anything reads. */
+  private async recoverPending(): Promise<void> {
+    if (!this.recover) return
+    const kept = takePending(this.recover)
+    if (!kept) return
+    try {
+      await this.clan.patch(kept.patch, { action: 'kept an edit made just before the page reloaded', rationale: `It was made at ${kept.at} and the browser had not written it yet.` })
+      // The library lists the manifest's title, which a rename sets beside the document's own: the same edit.
+      const title = (kept.patch as { project?: { title?: unknown } }).project?.title
+      if (typeof title === 'string' && title.trim()) await this.clan.setTitle(title).catch(() => {})
+    } catch (e) {
+      console.warn('could not keep the edit made just before the reload', e)
+    }
+    clearPending(this.recover)
+  }
+
   private opened(): Doc {
     this.text.hydrateAll()
     this.value = this.clan.get() as unknown as Doc
+    this.durable = this.value
     this.emit()
     this.notifyChain()
     void this.serial(async () => {
@@ -151,6 +176,8 @@ export class ModelStore implements DocumentStore {
       (why.quiet && last.why.quiet) || (why.coalesce && last.why.coalesce === why.coalesce))
     if (folds) last!.after = after
     else this.pending.push({ why, after, base: before })
+    // At once, in a way a closing page can finish: what differs from what the browser holds.
+    if (this.recover && this.durable) keepPending(this.recover, diffMergePatch(this.durable, after))
     this.emit()
     this.schedule()
     return Promise.resolve(after)
@@ -172,6 +199,14 @@ export class ModelStore implements DocumentStore {
     await this.serial(() => this.drain())
     await this.checkpointText()
     await this.clan.flush()
+    this.written()
+  }
+
+  /** Everything is in the browser now: the pending patch has nothing left to keep. */
+  private written() {
+    if (!this.recover || this.pending.length || this.timer) return
+    this.durable = this.value
+    clearPending(this.recover)
   }
 
   // ── live text from the editors ──
@@ -315,7 +350,14 @@ export class ModelStore implements DocumentStore {
     const typing = !!this.pending.at(-1)?.why.coalesce
     this.timer = setTimeout(() => {
       this.timer = null
-      void this.serial(() => this.drain())
+      void this.serial(async () => {
+        await this.drain()
+        // The browser's own write follows at once, so the pending patch is cleared only once it is durable.
+        if (this.recover && !this.pending.length) {
+          await this.clan.flush()
+          this.written()
+        }
+      })
     }, typing ? Math.max(this.delay, 1500) : this.delay)
   }
 
