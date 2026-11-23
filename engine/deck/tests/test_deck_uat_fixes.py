@@ -302,3 +302,23 @@ def test_a_second_out_of_home_or_storyboard_execution_never_repeats_the_same_fin
     assert [x["channel"] for x in out["executions"]] == ["Key visual", "Out of home", "Packshot", "Storyboard frames", "Key visual"]   # kinds that draw the same frames once; a key visual may show another final
     assert [r["channel"] for r in out["channel_roles"]] == ["Out of home", "Packshot"]
     assert len(d["executions"]) == 7
+
+
+def test_the_reasoning_line_of_a_picture_execution_leaves_the_slide_but_not_the_deck():
+    pic = {"picture": {"kind": "image", "image": {"status": "made", "from": {"kind": "production", "key": "k"}, "asset": "img_x", "aspect": "16:9"}}}
+    s = assemble._slide("execution", "Packshot", [{"kind": "text", "text": "Role: x"}, {"kind": "copy", "lines": ["a"], "answer": "Dramatises the first half.", "basis": "creative"}], slots=pic)
+    shown = spec.shown_blocks(s)
+    assert next(b for b in shown if b["kind"] == "copy")["answer"] == ""                      # not on the slide
+    assert next(b for b in s["blocks"] if b["kind"] == "copy")["answer"] == "Dramatises the first half."   # still in the data: the words never depend on pictures
+    assert spec.answer_notes(s) == "What it dramatises:\nDramatises the first half."
+    bare = assemble._slide("execution", "Packshot", [{"kind": "copy", "lines": ["a"], "answer": "x", "basis": "creative"}])
+    assert spec.answer_notes(bare) == "" and next(b for b in spec.shown_blocks(bare) if b["kind"] == "copy")["answer"] == "x"
+
+
+def test_the_web_deck_draws_no_empty_copy_panel_on_a_slide_whose_copy_is_all_captions_and_notes(tmp_path, monkeypatch):
+    deck, _out, page = _frames_deck(tmp_path, monkeypatch)
+    html = page.read_text()
+    for sid in deck["order"]:
+        if deck["slides"][sid].get("strip"):
+            sec = html.split(f'id="{sid}"', 1)[1].split("</section>", 1)[0]
+            assert 'class="col"><div class="frame copy"></div>' not in sec

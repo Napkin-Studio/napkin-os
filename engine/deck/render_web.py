@@ -317,6 +317,8 @@ def _body(s, b: _Slide, blocks: list, pictured: bool = False) -> str:
         if vis.get("kind") == "image_prompt" and not pictured:   # a drawn picture takes the place of the 'Image prompt' note
             b.f += 1
             left += b.rv("b-prompt", _e(f"Image prompt ({vis.get('status', 'illustrative')}): {vis.get('prompt', '')}"), "p")
+        if not copy.get("lines") and not copy.get("answer"):   # nothing of the copy is left to show (its lines are the strip's captions, its answer is in the notes): no empty panel
+            return f'<div class="body col">{left}</div>'
         return f'<div class="body split exec{" framed" if copy["frame"] else ""}"><div class="col">{left}</div><div class="col">{b.blocks([copy])}</div></div>'
     return f'<div class="body col">{b.blocks(blocks)}</div>'
 
@@ -731,6 +733,8 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
         inner = (f'<div class="flags">{flags}</div>{head}{body}{pic_html}'
                  f'<footer>{foot}</footer>')
         notes = (export_clean.notes_of(s.get("notes")) if clean else (s.get("notes") or "")) + ("" if clean else f"\n\nSlide id {sid} · status {s['status']} · requirements {', '.join(s.get('requirements') or []) or 'none'}")
+        if spec.answer_notes(s):   # the answer kept off the slide, as in the pptx notes
+            notes += "\n\n" + spec.answer_notes(s)
         if planned and spec.moved_map(s, audience):   # the points the plan moved off the slide: verbatim, with their refs, as in the pptx notes
             from . import layouts
             notes += "\n\nMoved from the slide:\n" + "\n".join(layouts.moved_line(t_, r_) for t_, r_ in layouts.moved_texts(s) if not (clean and spec.unresolved_line(t_)))

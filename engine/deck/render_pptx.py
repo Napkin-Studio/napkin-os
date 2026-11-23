@@ -4497,8 +4497,8 @@ class Renderer:
             sl.notes_slide.notes_text_frame.text = (export_clean.notes_of(s.get("notes")) if self.clean else (s.get("notes") or "")) + ("" if self.clean else f"\n\nSlide id {sid} · status {s['status']} · requirements {', '.join(s.get('requirements') or []) or 'none'}")
             if t.layouts and s.get("claims"):   # the claims stay in the file, in the notes, word for word
                 sl.notes_slide.notes_text_frame.text += "\n\nClaims:\n" + "\n".join("- " + c["text"] for c in s["claims"])
-            if self._answer_to_notes.get(sid):   # an answer that did not fit above the frames: kept, in the notes
-                sl.notes_slide.notes_text_frame.text += "\n\nWhat it dramatises:\n" + self._answer_to_notes[sid]
+            if self._answer_to_notes.get(sid) or spec.answer_notes(s):   # the answer kept off the slide (it did not fit above the frames, or the picture is the slide): in the notes
+                sl.notes_slide.notes_text_frame.text += "\n\n" + (spec.answer_notes(s) or "What it dramatises:\n" + self._answer_to_notes[sid])
             if planned and spec.moved_map(s_full, audience):   # points the plan moved off the slide: verbatim, each with its refs, labelled
                 sl.notes_slide.notes_text_frame.text += "\n\nMoved from the slide:\n" + "\n".join(layouts.moved_line(t_, r_) for t_, r_ in layouts.moved_texts(s_full) if not (self.clean and spec.unresolved_line(t_)))
         if s["type"] == "appendix":
@@ -4928,7 +4928,7 @@ class Renderer:
         self._fit_flow(sl, [b for b in s["blocks"] if b["kind"] != "copy"], self.x0, y, 5.6, bottom=bottom)
         if cps:
             lines = "\n".join(str(x) for b in cps for x in b.get("lines") or [])
-            answers = " ".join(str(b.get("answer") or "") for b in cps).strip()
+            answers = " ".join(str(b.get("answer") or "") for b in cps if not spec.production_made(s)).strip()
             fx, fw = 6.7, self.x1 - 6.7
             m = self._mark(sl)
             avail = max(0.4, bottom - y)
