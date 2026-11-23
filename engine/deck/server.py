@@ -269,7 +269,14 @@ def plan_for(kind: str, stages: list | None = None) -> list:
     return [(s, g) for s, g in PLAN[kind] if stages is None or s in stages]
 
 
-def plan_segment(kind: str, present: set[str], approvals: dict, stages: list | None = None) -> tuple[str | None, str | None]:
+def auto_gates(stages_dir: Path) -> frozenset:
+    """Gates nobody has to pass. Gate 2 only asks which greenlit route leads: with exactly one route carried from Territories there is nothing to pick,
+    so it is not held (the owner, 2026-11-23: one tool per job). A deck with no Territories upstream, or two or more routes, holds it as ever."""
+    c = rs.stage_file(stages_dir, "c_territories.json") or {}
+    return frozenset({"territories"}) if (c.get("from_territories") or {}).get("count") == 1 else frozenset()
+
+
+def plan_segment(kind: str, present: set[str], approvals: dict, stages: list | None = None, auto: frozenset = frozenset()) -> tuple[str | None, str | None]:
     """How far to run: (until, held). ``until`` is the stage to stop after (None: the last segment); ``held`` a gate already waiting.
     A gate goes on only when the person approved it AND its stage output existed already, so an old approval never skips a new gate."""
     for stage, gate in plan_for(kind, stages):
@@ -277,6 +284,8 @@ def plan_segment(kind: str, present: set[str], approvals: dict, stages: list | N
         if fn not in present:
             return stage, None
         a = approvals.get(gate)
+        if gate in auto:
+            continue
         if not a or a.get("decision", "approve") != "approve":
             return None, gate
     return None, None
@@ -332,7 +341,7 @@ class Server:
             d.req, d.notices, d.error, d.pay = req, [], None, None
             present = {p.name for p in d.stages.glob("*.json")}
             self.check_type_change(d, req, present)   # deck-types: before anything runs or spends
-            until, held = plan_segment(req["kind"], present, req["approvals"], req.get("type_stages"))
+            until, held = plan_segment(req["kind"], present, req["approvals"], req.get("type_stages"), auto_gates(d.stages))
             self.apply_pick(d, req, present)
             if held:
                 d.state, d.held, d.current = "gate", held, None
@@ -512,6 +521,9 @@ class Server:
             inp = self.load_inputs(d, req)
             d.summary = {**rs.inputs_summary(inp), "needs_intake": run_deck._needs_intake(inp)}
             rep = self.call_engine(d, req, until)
+            if until == "c" and "territories" in auto_gates(d.stages):   # one route from Territories: no gate 2, the idea starts from it
+                until = "d"
+                rep = self.call_engine(d, req, until)
             with self.lock:
                 if until:
                     d.state, d.held = "gate", next(g for s, g in plan_for(req["kind"], req.get("type_stages")) if s == until)

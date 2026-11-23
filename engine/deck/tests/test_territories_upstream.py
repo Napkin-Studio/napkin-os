@@ -189,10 +189,10 @@ def _server(tmp_path, monkeypatch, asked=None, users=None):
     return server.Server(server.Settings({"NAPKIN_DECK_DATA": str(tmp_path / "runs"), "NAPKIN_DECK_LIVE": "1", "NAPKIN_DECK_MAX_USD": "5", "NAPKIN_DECK_PORT": "0"}))
 
 
-def _go(s, approvals, doc=DOC, tu=True):
+def _go(s, approvals, doc=DOC, tu=True, data=None):
     body = {"doc": doc, "inputs": INPUTS, "approvals": approvals, "mode": "live", "render": False}
     if tu:
-        body["territories_upstream"] = {"id": "src-territories", "data": territories()}
+        body["territories_upstream"] = {"id": "src-territories", "data": data or territories()}
     v = s.run(body)
     end = time.time() + 120
     while s.busy and time.time() < end:
@@ -243,3 +243,34 @@ def test_a_bad_territories_upstream_is_refused_not_ignored():
     with pytest.raises(server.Refused):
         server.territories_upstream({"territories_upstream": {"id": "x", "data": {"app": "production-tool"}}})
     assert server.territories_upstream({}) is None
+
+
+def test_one_greenlit_route_skips_gate_2_and_the_idea_is_the_routes(tmp_path, monkeypatch):
+    """The owner (2026-11-23): one tool per job. With one route carried there is nothing to pick: no gate 2 and no model call for the territories; the
+    idea stage starts from the route and the model's framing never replaces the route's line or thought."""
+    asked, users = [], {}
+    s = _server(tmp_path, monkeypatch, asked, users)
+    one = territories(sent=("t_started",), not_chosen=("t_sunday", "t_passenger"))
+    route = next(t for t in one["territories"] if t["id"] == "t_started")
+    v = _go(s, {}, data=one)
+    assert v["state"] == "gate" and v["run"]["stage"] == "storyline"
+    v = _go(s, _approve("storyline"), data=one)
+    assert v["state"] == "gate" and v["run"]["stage"] == "idea", v["run"].get("error")     # straight past gate 2
+    assert "c" not in asked and "c_judge" not in asked and "d" in asked
+    assert "their_words" in users["d"] and "<fixed_idea>" in users["d"] and route["thought"] in users["d"]
+    idea = json.loads(next(iter((tmp_path / "runs" / DOC).glob("*/stages/d_idea.json"))).read_text())
+    assert idea["idea"] == route["thought"] and idea["campaign_line"] in (*route["world"]["headlines"].values(), *route["world"]["lines"])
+    assert idea["idea_from"]["territory"] == "t_started"
+    assert idea["chain"]["idea_phrase"] in idea["idea"]
+    assert v["run"]["gate"]["idea"]["territory_id"] == "t_started"
+    v = _go(s, _approve("storyline", "idea"), data=one)                                  # no territories approval is ever asked
+    assert v["state"] != "failed", v["run"].get("error")
+
+
+def test_two_routes_still_hold_gate_2_and_a_deck_with_none_asks_the_model(tmp_path, monkeypatch):
+    asked = []
+    s = _server(tmp_path, monkeypatch, asked)
+    _go(s, {})
+    v = _go(s, _approve("storyline"))
+    assert v["run"]["stage"] == "territories" and "c" not in asked
+    assert server.auto_gates(Path(tmp_path)) == frozenset()                               # no stage c there: nothing is skipped
