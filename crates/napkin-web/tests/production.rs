@@ -37,7 +37,7 @@ struct Seen {
 type Log = Arc<Mutex<Vec<Seen>>>;
 
 /// A relay that records every call and answers with the headers the tool
-/// reads. `/api/slow` sleeps 2 s.
+/// reads. `/api/jobs/slow` sleeps 2 s.
 async fn stub_relay() -> (String, Log) {
     let log: Log = Arc::default();
     let seen = log.clone();
@@ -56,7 +56,7 @@ async fn stub_relay() -> (String, Log) {
                 headers: parts.headers.clone(),
                 body,
             });
-            if parts.uri.path() == "/api/slow" {
+            if parts.uri.path() == "/api/jobs/slow" {
                 tokio::time::sleep(Duration::from_secs(2)).await;
             }
             if parts.uri.path().starts_with("/api/assets/") {
@@ -141,8 +141,17 @@ fn identity(dir: &std::path::Path) -> napkin_web::tenant::Identity {
     }
 }
 
+/// The same, told where pictures live.
+fn server_with_media(relay_url: Option<String>, media: Option<String>) -> Server {
+    server_in(relay_url, Duration::from_secs(5), media)
+}
+
 /// Roster sign-in with the tool mounted in front of `relay_url`.
 fn server(relay_url: Option<String>, timeout: Duration) -> Server {
+    server_in(relay_url, timeout, None)
+}
+
+fn server_in(relay_url: Option<String>, timeout: Duration, media: Option<String>) -> Server {
     let dir = tempfile::tempdir().unwrap();
     let ctx = Arc::new(AppCtx::new(
         dir.path().to_path_buf(),
@@ -156,7 +165,7 @@ fn server(relay_url: Option<String>, timeout: Duration) -> Server {
         let config = Config::from_vars(true, Some(&url), Some(KEY), Some(tool.to_str().unwrap()))
             .unwrap()
             .unwrap();
-        Arc::new(Relay::with_timeout(config, timeout))
+        Arc::new(Relay::with_timeout(config, timeout).with_media_base(media))
     });
     let app = napkin_web::router_full(
         ctx,
@@ -394,14 +403,164 @@ async fn the_retired_document_routes_are_a_404_and_never_reach_the_relay() {
         let r = send(&s, req).await;
         assert_eq!(r.status, StatusCode::NOT_FOUND, "{method} {uri}");
     }
-    // a name that only starts the same way is not retired
+    // a name that only starts the same way is no relay route either
     let r = send(&s, get("/production/api/clanship", Some(&cookie))).await;
-    assert_eq!(r.status, StatusCode::CREATED);
-    assert_eq!(
-        log.lock().unwrap().len(),
-        1,
-        "only the clanship call reached the relay"
+    assert_eq!(r.status, StatusCode::NOT_FOUND);
+    assert!(log.lock().unwrap().is_empty(), "nothing reached the relay");
+}
+
+// S2-2: documents, lists and saves are napkin-web's own; only job and media calls (and the person, the
+// config, the shelves, the log) reach the relay, and each carries one identity.
+#[tokio::test]
+async fn a_session_signs_an_identity_only_for_calls_the_relay_answers() {
+    let (url, log) = stub_relay().await;
+    let s = server(Some(url), Duration::from_secs(5));
+    let cookie = sign_in(&s, "visionary@napkin").await;
+    let session = send(&s, get("/api/session", Some(&cookie))).await.json();
+    let tenant = session["tenant"].as_str().unwrap().to_string();
+    // the library, a document's data and its download: the host's, never the relay's
+    for uri in [
+        format!("/api/t/{tenant}/library"),
+        format!("/api/t/{tenant}/d/doc1/data"),
+        format!("/api/t/{tenant}/d/doc1/download"),
+    ] {
+        send(&s, get(&uri, Some(&cookie))).await;
+    }
+    // what a stale page or script might still ask the relay for
+    for (method, uri) in [
+        ("GET", "/production/api/clan"),
+        ("PUT", "/production/api/clan/x"),
+        ("GET", "/production/api/projects"),
+        ("GET", "/production/api/documents"),
+        ("POST", "/production/api/t/x/d/y/save"),
+        ("GET", "/production/api/library-of-everything"),
+    ] {
+        let req = Request::builder()
+            .method(method)
+            .uri(uri)
+            .header(header::HOST, "studio.test")
+            .header(header::ORIGIN, "https://studio.test")
+            .header(header::COOKIE, cookie.clone())
+            .body(Body::empty())
+            .unwrap();
+        let r = send(&s, req).await;
+        assert_eq!(r.status, StatusCode::NOT_FOUND, "{method} {uri}");
+    }
+    assert!(
+        log.lock().unwrap().is_empty(),
+        "a document call reached the relay"
     );
+    // the calls the relay does answer
+    for uri in [
+        "/production/api/me",
+        "/production/api/config",
+        "/production/api/library/keys/a",
+        "/production/api/assets/sha256:abc",
+        "/production/api/jobs/j1",
+    ] {
+        send(&s, get(uri, Some(&cookie))).await;
+    }
+    let seen = log.lock().unwrap().clone();
+    assert_eq!(seen.len(), 5);
+    for call in &seen {
+        let ids: Vec<_> = call.headers.get_all("x-napkin-identity").iter().collect();
+        assert_eq!(ids.len(), 1, "{}", call.path_and_query);
+    }
+}
+
+// S2-5: the old ways in become the page's own address for one release.
+#[tokio::test]
+async fn the_old_doc_query_redirects_to_the_project_page() {
+    let (url, _log) = stub_relay().await;
+    let s = server(Some(url), Duration::from_secs(5));
+    let r = send(&s, get("/production/?doc=doc_01J-x", None)).await;
+    assert!(r.status.is_redirection(), "{}", r.status);
+    assert_eq!(r.headers[header::LOCATION], "/production/d/doc_01J-x");
+    // an id the tool cannot route is not echoed into a Location
+    for bad in [
+        "/production/?doc=a%2F..%2Fb",
+        "/production/?doc=",
+        "/production/?doc=x%20y",
+    ] {
+        let r = send(&s, get(bad, None)).await;
+        assert_eq!(r.status, StatusCode::OK, "{bad}");
+        assert!(r.text().contains("<title>Production</title>"), "{bad}");
+    }
+    // the project list stays at /production/
+    let r = send(&s, get("/production/", None)).await;
+    assert_eq!(r.status, StatusCode::OK);
+    // the project page and its sub-routes are the tool's index
+    for path in [
+        "/production/d/doc1",
+        "/production/d/doc1/storyboard",
+        "/production/d/doc1/script/s1?shot=x",
+    ] {
+        let r = send(&s, get(path, None)).await;
+        assert_eq!(r.status, StatusCode::OK, "{path}");
+        assert!(r.text().contains("<title>Production</title>"), "{path}");
+        assert_eq!(r.headers[header::CACHE_CONTROL], "no-cache", "{path}");
+    }
+}
+
+// S2-3 (host half): one policy, on the tool's pages, report-only, naming the picture origin; reports are logged.
+#[tokio::test]
+async fn the_tool_pages_carry_one_report_only_policy() {
+    let (url, _log) = stub_relay().await;
+    let s = server_with_media(Some(url), Some("https://cdn.example.com/m".into()));
+    for path in [
+        "/production/",
+        "/production/d/doc1",
+        "/production/assets/x-abc123.js",
+        "/production/d/doc1/video",
+    ] {
+        let r = send(&s, get(path, None)).await;
+        let all: Vec<_> = r
+            .headers
+            .get_all("content-security-policy-report-only")
+            .iter()
+            .collect();
+        assert_eq!(all.len(), 1, "{path}");
+        let policy = all[0].to_str().unwrap();
+        assert!(policy.contains("default-src 'self'"), "{policy}");
+        assert!(
+            policy.contains("img-src 'self' data: blob: https://cdn.example.com;"),
+            "{policy}"
+        );
+        assert!(
+            policy.contains("connect-src 'self' https://cdn.example.com;"),
+            "{policy}"
+        );
+        assert!(
+            policy.contains("report-uri /production/csp-report"),
+            "{policy}"
+        );
+        assert!(!policy.contains("script-src 'self' 'unsafe"), "{policy}");
+        assert!(
+            r.headers.get("content-security-policy").is_none(),
+            "{path}: not enforcing yet"
+        );
+    }
+    // the API answers carry none; the shell is untouched
+    let r = send(&s, get("/production/api/me", None)).await;
+    assert!(r
+        .headers
+        .get("content-security-policy-report-only")
+        .is_none());
+    let r = send(&s, get("/", None)).await;
+    assert!(r
+        .headers
+        .get("content-security-policy-report-only")
+        .is_none());
+    // a violation report is taken without a session
+    let req = Request::builder()
+        .method("POST")
+        .uri("/production/csp-report")
+        .header(header::CONTENT_TYPE, "application/csp-report")
+        .body(Body::from(
+            r#"{"csp-report":{"violated-directive":"img-src"}}"#,
+        ))
+        .unwrap();
+    assert_eq!(send(&s, req).await.status, StatusCode::NO_CONTENT);
 }
 
 #[tokio::test]
@@ -462,7 +621,7 @@ async fn a_relay_that_is_down_is_a_502_and_one_too_slow_a_504() {
     let (url, _log) = stub_relay().await;
     let s = server(Some(url), Duration::from_secs(1));
     let cookie = sign_in(&s, "visionary@napkin").await;
-    let r = send(&s, get("/production/api/slow", Some(&cookie))).await;
+    let r = send(&s, get("/production/api/jobs/slow", Some(&cookie))).await;
     assert_eq!(r.status, StatusCode::GATEWAY_TIMEOUT);
     assert_eq!(r.json()["error"]["code"], "timeout");
     assert_eq!(r.json()["error"]["retryable"], true);
