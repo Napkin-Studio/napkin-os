@@ -129,6 +129,10 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
   wireJobs(frameDeps)
   runner.resume()
   void resumeChains(frameDeps)
+  // What finished while the project was closed lands now, and when the host says another has (S3-3): its inbox,
+  // through the runner's own landing. Only the real relay has one.
+  void runner.landInbox()
+  const stopListening = relay.onSettled?.(id, () => { void runner.landInbox() })
 
   const canvasKey = canvasKeyFor(id)
 
@@ -197,6 +201,7 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
         console.warn('could not save before closing the project', e)
       }
     }
+    stopListening?.()
     runner.stop()
     offChange()
     if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; changedSinceOpen = true }

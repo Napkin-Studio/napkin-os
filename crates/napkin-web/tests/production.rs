@@ -46,12 +46,12 @@ type Log = Arc<Mutex<Vec<Seen>>>;
 
 /// The stub relay's state: the state each job is in, and an optional refusal for every call.
 #[derive(Default)]
-struct Relay_ {
+struct StubState {
     jobs: Mutex<HashMap<String, String>>,
     refuse: Mutex<Option<(u16, String)>>,
 }
 
-type Control = Arc<Relay_>;
+type Control = Arc<StubState>;
 
 fn job_json(id: &str, state: &str) -> String {
     let mut j = serde_json::json!({"jobId": id, "state": state, "op": "clip"});

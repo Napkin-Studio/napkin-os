@@ -339,9 +339,9 @@ describe('cancel', () => {
       d.jobs[j.id] = j
       return { j }
     })
-    const runner = new JobRunner(new HttpRelay('http://relay.test'), s, new SnapshotStore<UiState>(initialUi()))
+    const runner = new JobRunner(new HttpRelay({ host: '/api', tenant: async () => 't1', doc: () => 'doc-1' }), s, new SnapshotStore<UiState>(initialUi()))
     await runner.cancel(j.id)
-    expect(calls).toEqual([{ url: `http://relay.test/jobs/${j.id}`, method: 'DELETE' }])
+    expect(calls).toEqual([{ url: `/api/t/t1/d/doc-1/production/jobs/${j.id}`, method: 'DELETE' }])
     expect(s.get().jobs[j.id].state).toBe('cancelled')
   })
 
