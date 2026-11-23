@@ -93,7 +93,8 @@ def candidates_prompt(req: dict, lens_text: str, today: str) -> str:
         f"Today's date: {today}",
         f"Research question: {req['query']}",
         f"Lens: {req['lens']} — {lens_text}",
-        f"Market: {req['market']} (ISO 3166-1 alpha-2). Pages must bear on this market.",
+        (f"Market: {req['market']} (ISO 3166-1 alpha-2). Pages must bear on this market." if req.get("market")
+         else "No market is given: take the market the question names."),
     ]
     if "category" in req:
         lines.append(f"Category (leaf code): {req['category']}")
@@ -207,7 +208,7 @@ def jev_client():
 
 
 def jev_state(req: dict, lens_text: str) -> dict:
-    return {"research_question": req["query"], "lens": lens_text, "market": MARKETS.get(req["market"], req["market"]),
+    return {"research_question": req["query"], "lens": lens_text, "market": MARKETS.get(req.get("market", ""), req.get("market", "")),
             "category": req.get("category", ""), "entity": req.get("entity", "")}
 
 
@@ -317,7 +318,7 @@ def run(research, req: dict, lens_text: str, today: str) -> dict:
         else:
             why = g.get("failed") or "thin_text"
             failed[why] = failed.get(why, 0) + 1
-    log(f"search-jev {req['lens']}/{req['market']}: {len(cands)} candidates, {len(pages)} readable")
+    log(f"search-jev {req['lens']}/{req.get('market', '-')}: {len(cands)} candidates, {len(pages)} readable")
     reader = {"candidates": len(cands), "read": len(pages), "failed": failed, "fallback": not pages,
               "passages": 0, "kept_chars": 0, "sources": 0, "jev_tokens": 0}
     if not pages:  # nothing readable: the ordinary agent does the unit
