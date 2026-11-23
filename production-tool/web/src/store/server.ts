@@ -98,6 +98,7 @@ export class StoreServer {
       case 'create': return await this.need().create(args[0] as Parameters<ClanDocumentStore['create']>[0])
       case 'setPerson': return this.need().setPerson(args[0] as Person)
       case 'patch': return await this.need().patch(args[0] as object, args[1] as Why)
+      case 'setTitle': return await this.need().setTitle(args[0] as string)
       case 'record': return await this.need().record(args[0] as Parameters<ClanDocumentStore['record']>[0], args[1] as { once?: boolean })
       case 'exportClan': return await this.need().exportClan()
       case 'spunOffFrom': return await this.need().spunOffFrom()

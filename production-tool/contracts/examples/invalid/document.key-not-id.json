@@ -14,66 +14,45 @@
       "sha256": "sha256:102ce40d373598887d55b7ffc70dea7cb7b8f25ec6a6eb35697aaf56c4deaa1d",
       "kind": "image",
       "mime": "image/jpeg",
-      "origin": "uploaded",
-      "locations": [
-        "idb://sha256/102ce40d373598887d55b7ffc70dea7cb7b8f25ec6a6eb35697aaf56c4deaa1d"
-      ]
+      "origin": "uploaded"
     },
     "sha256:23211f0a5f6c317fa10454dda640194a9f7291c3cde3c24106604118efce6a0b": {
       "sha256": "sha256:23211f0a5f6c317fa10454dda640194a9f7291c3cde3c24106604118efce6a0b",
       "kind": "image",
       "mime": "image/png",
       "origin": "generated",
-      "locations": [
-        "idb://sha256/23211f0a5f6c317fa10454dda640194a9f7291c3cde3c24106604118efce6a0b"
-      ],
       "job_id": "job_01K7A00000000000000000001V"
     },
     "sha256:27d21229139572f00cfc56986fc9ece27049387c6e1dd911bf10a3f47fea1137": {
       "sha256": "sha256:27d21229139572f00cfc56986fc9ece27049387c6e1dd911bf10a3f47fea1137",
       "kind": "image",
       "mime": "image/png",
-      "origin": "uploaded",
-      "locations": [
-        "idb://sha256/27d21229139572f00cfc56986fc9ece27049387c6e1dd911bf10a3f47fea1137"
-      ]
+      "origin": "uploaded"
     },
     "sha256:2de8301f666559efcd8054c0d13234598b7b83b454526ad17e888a003b353cc0": {
       "sha256": "sha256:2de8301f666559efcd8054c0d13234598b7b83b454526ad17e888a003b353cc0",
       "kind": "image",
       "mime": "image/png",
       "origin": "generated",
-      "locations": [
-        "idb://sha256/2de8301f666559efcd8054c0d13234598b7b83b454526ad17e888a003b353cc0"
-      ],
       "job_id": "job_01K7A00000000000000000001W"
     },
     "sha256:31deeeba6a233f3004af27aa26d0ebfdc37cb572860092bb5031f41346f5c7d4": {
       "sha256": "sha256:31deeeba6a233f3004af27aa26d0ebfdc37cb572860092bb5031f41346f5c7d4",
       "kind": "image",
       "mime": "image/png",
-      "origin": "uploaded",
-      "locations": [
-        "idb://sha256/31deeeba6a233f3004af27aa26d0ebfdc37cb572860092bb5031f41346f5c7d4"
-      ]
+      "origin": "uploaded"
     },
     "sha256:3fd09589a4c1d39fd2ba2ed461f4c4911147c3bec2b20bf214657e41cee54a1d": {
       "sha256": "sha256:3fd09589a4c1d39fd2ba2ed461f4c4911147c3bec2b20bf214657e41cee54a1d",
       "kind": "image",
       "mime": "image/png",
-      "origin": "generated",
-      "locations": [
-        "idb://sha256/3fd09589a4c1d39fd2ba2ed461f4c4911147c3bec2b20bf214657e41cee54a1d"
-      ]
+      "origin": "generated"
     },
     "sha256:5bbcb32d82b32d836279691d2226df7db69d0452d48d214ddd24f5cbe1998ee7": {
       "sha256": "sha256:5bbcb32d82b32d836279691d2226df7db69d0452d48d214ddd24f5cbe1998ee7",
       "kind": "video",
       "mime": "video/mp4",
       "origin": "generated",
-      "locations": [
-        "idb://sha256/5bbcb32d82b32d836279691d2226df7db69d0452d48d214ddd24f5cbe1998ee7"
-      ],
       "duration_s": 2
     },
     "sha256:63873dc6591a141d75fd840611883c1c80d3d5143779bbe3fe0be7b11af40561": {
@@ -81,9 +60,6 @@
       "kind": "image",
       "mime": "image/png",
       "origin": "edited",
-      "locations": [
-        "idb://sha256/63873dc6591a141d75fd840611883c1c80d3d5143779bbe3fe0be7b11af40561"
-      ],
       "job_id": "job_01K7A00000000000000000001J"
     },
     "sha256:64d797a00568213c0fc775806e3408a40f7f1ba17c620c73722c790f2d229400": {
@@ -91,75 +67,51 @@
       "kind": "document",
       "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       "origin": "uploaded",
-      "locations": [
-        "idb://sha256/64d797a00568213c0fc775806e3408a40f7f1ba17c620c73722c790f2d229400"
-      ],
       "pages": 2
     },
     "sha256:689ae89037dfda4f52948be2f9cf981c4862cd8ec3b4c388f8943d803a1dbb36": {
       "sha256": "sha256:689ae89037dfda4f52948be2f9cf981c4862cd8ec3b4c388f8943d803a1dbb36",
       "kind": "image",
       "mime": "image/png",
-      "origin": "extracted",
-      "locations": [
-        "idb://sha256/689ae89037dfda4f52948be2f9cf981c4862cd8ec3b4c388f8943d803a1dbb36"
-      ]
+      "origin": "extracted"
     },
     "sha256:7c9d98d474a970e8cb805c1c5a9ff647411176b2de48c18396602871a6bacf99": {
       "sha256": "sha256:7c9d98d474a970e8cb805c1c5a9ff647411176b2de48c18396602871a6bacf99",
       "kind": "video",
       "mime": "video/mp4",
       "origin": "edited",
-      "locations": [
-        "idb://sha256/7c9d98d474a970e8cb805c1c5a9ff647411176b2de48c18396602871a6bacf99"
-      ],
       "duration_s": 5
     },
     "sha256:83281d59fb05b7ce64052f6438b96237677b1e5ceb6dcbdc2931afe4d89ac835": {
       "sha256": "sha256:83281d59fb05b7ce64052f6438b96237677b1e5ceb6dcbdc2931afe4d89ac835",
       "kind": "image",
       "mime": "image/jpeg",
-      "origin": "uploaded",
-      "locations": [
-        "idb://sha256/83281d59fb05b7ce64052f6438b96237677b1e5ceb6dcbdc2931afe4d89ac835"
-      ]
+      "origin": "uploaded"
     },
     "sha256:93ad49869708c5fa02f9c27366b1fb377bfa171b1683f7fbc6a43212807d65c2": {
       "sha256": "sha256:93ad49869708c5fa02f9c27366b1fb377bfa171b1683f7fbc6a43212807d65c2",
       "kind": "image",
       "mime": "image/png",
-      "origin": "mock",
-      "locations": [
-        "idb://sha256/93ad49869708c5fa02f9c27366b1fb377bfa171b1683f7fbc6a43212807d65c2"
-      ]
+      "origin": "mock"
     },
     "sha256:a3f55ce3012f843ffb35d062837d041430350878710e5a5616870392f0034bc5": {
       "sha256": "sha256:a3f55ce3012f843ffb35d062837d041430350878710e5a5616870392f0034bc5",
       "kind": "video",
       "mime": "video/mp4",
       "origin": "generated",
-      "locations": [
-        "idb://sha256/a3f55ce3012f843ffb35d062837d041430350878710e5a5616870392f0034bc5"
-      ],
       "duration_s": 15
     },
     "sha256:c2b3a5f0b9e8a918bb5d240127759b0ec6f359ba4354e793d0e35778c9d51a3d": {
       "sha256": "sha256:c2b3a5f0b9e8a918bb5d240127759b0ec6f359ba4354e793d0e35778c9d51a3d",
       "kind": "vector",
       "mime": "image/svg+xml",
-      "origin": "extracted",
-      "locations": [
-        "idb://sha256/c2b3a5f0b9e8a918bb5d240127759b0ec6f359ba4354e793d0e35778c9d51a3d"
-      ]
+      "origin": "extracted"
     },
     "sha256:d0fb89804463b8d57104cff35cdea1046c166e63e65551a946c2b7c4d69cc7c1": {
       "sha256": "sha256:d0fb89804463b8d57104cff35cdea1046c166e63e65551a946c2b7c4d69cc7c1",
       "kind": "image",
       "mime": "image/png",
       "origin": "generated",
-      "locations": [
-        "idb://sha256/d0fb89804463b8d57104cff35cdea1046c166e63e65551a946c2b7c4d69cc7c1"
-      ],
       "job_id": "job_01K7A00000000000000000001G"
     },
     "sha256:da88bea3ef39d03a3aebbeae40cdc8cffc2e046e0ae2d7bfc6e467827322aaf7": {
@@ -167,9 +119,6 @@
       "kind": "document",
       "mime": "application/pdf",
       "origin": "uploaded",
-      "locations": [
-        "idb://sha256/da88bea3ef39d03a3aebbeae40cdc8cffc2e046e0ae2d7bfc6e467827322aaf7"
-      ],
       "pages": 32,
       "bytes": 4200000
     },
@@ -178,28 +127,19 @@
       "kind": "video",
       "mime": "video/mp4",
       "origin": "generated",
-      "locations": [
-        "idb://sha256/ea5153261dca1d9b08a657c2991e8a944da7998e76439585270c4e6149355e56"
-      ],
       "duration_s": 5
     },
     "sha256:f736f04bd7f60d712a921b0580c33c672f79098841d6f6a6f6922cb80d9c6e6a": {
       "sha256": "sha256:f736f04bd7f60d712a921b0580c33c672f79098841d6f6a6f6922cb80d9c6e6a",
       "kind": "document",
       "mime": "application/zip",
-      "origin": "generated",
-      "locations": [
-        "idb://sha256/f736f04bd7f60d712a921b0580c33c672f79098841d6f6a6f6922cb80d9c6e6a"
-      ]
+      "origin": "generated"
     },
     "sha256:fa60c18d5b79b485b551e8a9198820cb551164c4a8b0f7c2099cab7052e81b48": {
       "sha256": "sha256:fa60c18d5b79b485b551e8a9198820cb551164c4a8b0f7c2099cab7052e81b48",
       "kind": "video",
       "mime": "video/mp4",
       "origin": "generated",
-      "locations": [
-        "idb://sha256/fa60c18d5b79b485b551e8a9198820cb551164c4a8b0f7c2099cab7052e81b48"
-      ],
       "duration_s": 15
     },
     "sha256:fd19d615d1e2dad847a3a0de41a03266fd8d3c777b7627dfdb8c76ac0cc940c9": {
@@ -207,9 +147,6 @@
       "kind": "image",
       "mime": "image/png",
       "origin": "generated",
-      "locations": [
-        "idb://sha256/fd19d615d1e2dad847a3a0de41a03266fd8d3c777b7627dfdb8c76ac0cc940c9"
-      ],
       "job_id": "job_01K7A00000000000000000001H"
     }
   },

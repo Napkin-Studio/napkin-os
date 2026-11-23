@@ -1,0 +1,93 @@
+{
+  "vector": "save-conflict",
+  "tenant": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+  "now": "2026-11-23T10:00:00Z",
+  "session_cookie": "napkin_session=vector-session",
+  "covers": [
+    "S0-3",
+    "S1-10"
+  ],
+  "description": "Two saves from V0: the second is refused with the winner's version and nothing is overwritten.",
+  "documents": [
+    {
+      "tenant": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+      "id": "doc-hollow-oak-still",
+      "app_id": "ie.napkin.production",
+      "identity": "11111111-2222-4333-8444-555555555555",
+      "template": false,
+      "title": "Hollow Oak Still",
+      "bytes_base64": "UEsDBBQAAAAIAABQd12c+qpyXAAAAIMAAAANAAAAbWFuaWZlc3QueWFtbEvOScyLL0stKs7Mz7NSMOTKTLFSMIACXTBhAiIsYFwY4ErJTy7NTc0riQfpMIQCXSMjIyNdE2NjY10LExMTXVMkwFWSWZKTaqXgkZ+Tk1+u4J+YrRBckpmTwwUAUEsBAhQDFAAAAAgAAFB3XZz6qnJcAAAAgwAAAA0AAAAAAAAAAAAAAIABAAAAAG1hbmlmZXN0LnlhbWxQSwUGAAAAAAEAAQA7AAAAhwAAAAAA",
+      "version": "sha256:7f57f22ea9ed8d2e539243bdb72015faf6326159aa285954a9d71bda15eef7fa",
+      "saved_at": "2026-11-23T09:00:00Z"
+    }
+  ],
+  "steps": [
+    {
+      "name": "first save wins",
+      "request": {
+        "method": "PUT",
+        "path": "/api/t/5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f/d/doc-hollow-oak-still/save",
+        "headers": {
+          "Content-Type": "application/vnd.clan+zip",
+          "If-Match": "\"sha256:7f57f22ea9ed8d2e539243bdb72015faf6326159aa285954a9d71bda15eef7fa\"",
+          "X-Clan-Reason": "manual",
+          "Cookie": "napkin_session=vector-session"
+        },
+        "body_base64": "UEsDBBQAAAAIAABQd128jSZ+ZgAAAIwAAAANAAAAbWFuaWZlc3QueWFtbEvOScyLL0stKs7Mz7NSMOTKTLFSMIACXTBhAiIsYFwoMORKyU8uzU3NK4kH6TCEAl0jIyMjXRNjY2NdCxMTE11TJMBVklmSk2ql4JGfk5NfruCfmK0QXJKZk8NVlFpmpZCfl8oFAFBLAQIUAxQAAAAIAABQd128jSZ+ZgAAAIwAAAANAAAAAAAAAAAAAACAAQAAAABtYW5pZmVzdC55YW1sUEsFBgAAAAABAAEAOwAAAJEAAAAAAA=="
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "ETag": "\"sha256:6254c5234e7d2bde4ec7b5248b8d4cba486fde69f2a6e4edb1d8be6242c869ef\""
+        },
+        "body": {
+          "version": "sha256:6254c5234e7d2bde4ec7b5248b8d4cba486fde69f2a6e4edb1d8be6242c869ef",
+          "saved_at": "2026-11-23T10:00:00Z",
+          "snapshot": true
+        }
+      }
+    },
+    {
+      "name": "second save from V0 loses",
+      "request": {
+        "method": "PUT",
+        "path": "/api/t/5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f/d/doc-hollow-oak-still/save",
+        "headers": {
+          "Content-Type": "application/vnd.clan+zip",
+          "If-Match": "\"sha256:7f57f22ea9ed8d2e539243bdb72015faf6326159aa285954a9d71bda15eef7fa\"",
+          "X-Clan-Reason": "interval",
+          "Cookie": "napkin_session=vector-session"
+        },
+        "body_base64": "UEsDBBQAAAAIAABQd13USKQMZgAAAIwAAAANAAAAbWFuaWZlc3QueWFtbEvOScyLL0stKs7Mz7NSMOTKTLFSMIACXTBhAiIsYFwoMOJKyU8uzU3NK4kH6TCEAl0jIyMjXRNjY2NdCxMTE11TJMBVklmSk2ql4JGfk5NfruCfmK0QXJKZk8NVlFpmpVBSns8FAFBLAQIUAxQAAAAIAABQd13USKQMZgAAAIwAAAANAAAAAAAAAAAAAACAAQAAAABtYW5pZmVzdC55YW1sUEsFBgAAAAABAAEAOwAAAJEAAAAAAA=="
+      },
+      "response": {
+        "status": 409,
+        "headers": {},
+        "body": {
+          "error": {
+            "code": "conflict",
+            "message": "This project was saved from somewhere else since you opened it."
+          },
+          "latest": "sha256:6254c5234e7d2bde4ec7b5248b8d4cba486fde69f2a6e4edb1d8be6242c869ef"
+        }
+      }
+    },
+    {
+      "name": "download is the winner",
+      "request": {
+        "method": "GET",
+        "path": "/api/t/5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f/d/doc-hollow-oak-still/download",
+        "headers": {
+          "Cookie": "napkin_session=vector-session"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "ETag": "\"sha256:6254c5234e7d2bde4ec7b5248b8d4cba486fde69f2a6e4edb1d8be6242c869ef\""
+        },
+        "body_base64": "UEsDBBQAAAAIAABQd128jSZ+ZgAAAIwAAAANAAAAbWFuaWZlc3QueWFtbEvOScyLL0stKs7Mz7NSMOTKTLFSMIACXTBhAiIsYFwoMORKyU8uzU3NK4kH6TCEAl0jIyMjXRNjY2NdCxMTE11TJMBVklmSk2ql4JGfk5NfruCfmK0QXJKZk8NVlFpmpZCfl8oFAFBLAQIUAxQAAAAIAABQd128jSZ+ZgAAAIwAAAANAAAAAAAAAAAAAACAAQAAAABtYW5pZmVzdC55YW1sUEsFBgAAAAABAAEAOwAAAJEAAAAAAA=="
+      }
+    }
+  ]
+}

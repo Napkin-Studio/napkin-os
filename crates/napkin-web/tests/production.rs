@@ -280,7 +280,7 @@ async fn signed_in_a_call_reaches_the_relay_with_a_valid_assertion_and_nothing_e
     let body = b"PK\x03\x04 a project".to_vec();
     let req = Request::builder()
         .method("POST")
-        .uri("/production/api/clan?reason=manual&x=%2F")
+        .uri("/production/api/jobs?reason=manual&x=%2F")
         .header(header::HOST, "studio.test")
         .header(header::ORIGIN, "https://studio.test")
         .header(header::COOKIE, format!("{cookie}; other=1"))
@@ -289,7 +289,6 @@ async fn signed_in_a_call_reaches_the_relay_with_a_valid_assertion_and_nothing_e
         .header(header::IF_MATCH, "\"etag1\"")
         .header("x-clan-reason", "manual")
         .header("x-project-id", "prj_01J00000000000000000000000")
-        .header("x-project-name", "Lumen%20Water")
         .header("x-napkin-identity", "v1.forged.sig")
         .header("x-forwarded-for", "1.2.3.4")
         .header(header::CONNECTION, "keep-alive")
@@ -312,7 +311,7 @@ async fn signed_in_a_call_reaches_the_relay_with_a_valid_assertion_and_nothing_e
     assert_eq!(seen.len(), 1);
     let call = &seen[0];
     assert_eq!(call.method, "POST");
-    assert_eq!(call.path_and_query, "/api/clan?reason=manual&x=%2F");
+    assert_eq!(call.path_and_query, "/api/jobs?reason=manual&x=%2F");
     assert_eq!(call.body.as_ref(), body.as_slice());
     assert!(
         call.headers.get(header::COOKIE).is_none(),
@@ -325,11 +324,7 @@ async fn signed_in_a_call_reaches_the_relay_with_a_valid_assertion_and_nothing_e
     assert_eq!(call.headers["content-type"], "application/vnd.clan+zip");
     assert_eq!(call.headers["if-match"], "\"etag1\"");
     assert_eq!(call.headers["x-clan-reason"], "manual");
-    assert_eq!(
-        call.headers["x-project-id"],
-        "prj_01J00000000000000000000000"
-    );
-    assert_eq!(call.headers["x-project-name"], "Lumen%20Water");
+    assert!(call.headers.get("x-project-id").is_none());
     // one identity header: ours, not the forged one
     let ids: Vec<_> = call.headers.get_all("x-napkin-identity").iter().collect();
     assert_eq!(ids.len(), 1);
@@ -377,6 +372,39 @@ async fn a_picture_is_a_redirect_the_browser_follows() {
 }
 
 #[tokio::test]
+async fn the_retired_document_routes_are_a_404_and_never_reach_the_relay() {
+    let (url, log) = stub_relay().await;
+    let s = server(Some(url), Duration::from_secs(5));
+    let cookie = sign_in(&s, "visionary@napkin").await;
+    for (method, uri) in [
+        ("GET", "/production/api/clan"),
+        ("POST", "/production/api/clan?reason=manual"),
+        ("PUT", "/production/api/clan/x"),
+        ("GET", "/production/api/projects"),
+        ("PUT", "/production/api/projects/prj_1"),
+    ] {
+        let req = Request::builder()
+            .method(method)
+            .uri(uri)
+            .header(header::HOST, "studio.test")
+            .header(header::ORIGIN, "https://studio.test")
+            .header(header::COOKIE, cookie.clone())
+            .body(Body::empty())
+            .unwrap();
+        let r = send(&s, req).await;
+        assert_eq!(r.status, StatusCode::NOT_FOUND, "{method} {uri}");
+    }
+    // a name that only starts the same way is not retired
+    let r = send(&s, get("/production/api/clanship", Some(&cookie))).await;
+    assert_eq!(r.status, StatusCode::CREATED);
+    assert_eq!(
+        log.lock().unwrap().len(),
+        1,
+        "only the clanship call reached the relay"
+    );
+}
+
+#[tokio::test]
 async fn a_get_without_a_query_names_the_bare_path() {
     let (url, log) = stub_relay().await;
     let s = server(Some(url), Duration::from_secs(5));
@@ -400,7 +428,7 @@ async fn a_body_over_four_and_a_half_megabytes_is_refused_in_the_relay_shape() {
     let post = |n: usize| {
         Request::builder()
             .method("POST")
-            .uri("/production/api/clan")
+            .uri("/production/api/jobs")
             .header(header::COOKIE, &cookie)
             .body(Body::from(vec![b'x'; n]))
             .unwrap()

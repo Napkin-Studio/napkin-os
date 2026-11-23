@@ -218,12 +218,9 @@ class Harness:
         elif status == 204:
             assert out is None
         else:
-            name = {"/me": "Me", "/uploads": "UploadResponse", "/library": "LibraryIndex",
-                    "/projects": "ProjectList"}.get(path, "Job")
+            name = {"/me": "Me", "/uploads": "UploadResponse", "/library": "LibraryIndex"}.get(path, "Job")
             if path.startswith("/library/"):
                 name = "LibraryIndex" if path.count("/") == 2 else "LibraryEntry"
-            if path.startswith("/clan/"):
-                name = "ProjectCanvas" if path.endswith("/canvas") else None  # GET /clan/{project} is the bytes
             if path in ("/config", "/health") or "/assets/" in path:  # GET /assets/{sha} is a 302
                 name = None
             if name:

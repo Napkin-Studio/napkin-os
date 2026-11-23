@@ -20,19 +20,159 @@
 //! That the same handlers serve both shapes is the whole point of splitting
 //! storage into a `PartStore` and a `Library`.
 
-use std::path::PathBuf;
+use std::collections::HashMap;
+use std::io::Write as _;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 
 use napkin_host::{
-    BlobInfo, BlobStore, Change, DocId, HostError, HostResult, Library, PartStore, Version,
+    Base, BlobInfo, BlobStore, Change, DocId, HostError, HostResult, Library, PartStore, Version,
 };
 
 pub struct TenantStore {
     root: PathBuf,
+    /// One lock per document path: the version check and the write are one
+    /// critical section, so two writers from the same version cannot both win.
+    locks: Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>,
 }
+
+/// Distinguishes the temp files of concurrent writers within one process.
+static TMP_SEQ: AtomicU64 = AtomicU64::new(0);
 
 impl TenantStore {
     pub fn new(root: PathBuf) -> Self {
-        Self { root }
+        Self {
+            root,
+            locks: Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// This tenant's directory.
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
+    /// Where this tenant's snapshots live (never listed in the library).
+    pub fn snapshots_dir(&self) -> PathBuf {
+        self.root.join("snapshots")
+    }
+
+    /// When `id` was last written, as milliseconds since the epoch.
+    pub fn saved_at_ms(&self, id: &DocId) -> Option<u128> {
+        let m = std::fs::metadata(self.path_for(id).ok()?).ok()?;
+        m.modified()
+            .ok()?
+            .duration_since(std::time::UNIX_EPOCH)
+            .ok()
+            .map(|d| d.as_millis())
+    }
+
+    /// Where deleted documents wait: `<tenant>/trash/<unix-ms>-<slug>.clan`.
+    fn trash_dir(&self) -> PathBuf {
+        self.root.join("trash")
+    }
+
+    /// Move a document to the trash and say when (ms since the epoch).
+    /// Only `doc-` documents: an app template or the home page is never trashed.
+    pub fn trash(&self, id: &DocId, now_ms: u128) -> HostResult<()> {
+        if !id.as_str().starts_with("doc-") {
+            return Err(HostError::bad_request("only a document can be deleted"));
+        }
+        let path = self.path_for(id)?;
+        let lock = self.lock_for(&path);
+        let _held = lock.lock().unwrap_or_else(|p| p.into_inner());
+        if !path.is_file() {
+            return Err(HostError::not_found(format!("{id}: no such document")));
+        }
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("doc.clan");
+        let dir = self.trash_dir();
+        let io = |e: std::io::Error| HostError::internal(e.to_string());
+        std::fs::create_dir_all(&dir).map_err(io)?;
+        std::fs::rename(&path, dir.join(format!("{now_ms}-{name}"))).map_err(io)?;
+        sync_dir(&dir);
+        if let Some(d) = path.parent() {
+            sync_dir(d);
+        }
+        Ok(())
+    }
+
+    /// Every trashed document, as `(id, trashed_at_ms)`, newest first. A
+    /// document trashed twice (restored in between) lists once per trashing.
+    pub fn trashed(&self) -> Vec<(DocId, u128)> {
+        let Ok(rd) = std::fs::read_dir(self.trash_dir()) else {
+            return Vec::new();
+        };
+        let mut out: Vec<(DocId, u128)> = rd
+            .flatten()
+            .filter_map(|e| {
+                let n = e.file_name().into_string().ok()?;
+                let stem = n.strip_suffix(".clan")?;
+                let (ms, slug) = stem.split_once('-')?;
+                Some((doc_id(slug), ms.parse().ok()?))
+            })
+            .collect();
+        out.sort_by_key(|(_, ms)| std::cmp::Reverse(*ms));
+        out
+    }
+
+    /// Put the newest trashed copy of `id` back. A 409 when a document of that
+    /// id is in the library already, a 404 when nothing of it is in the trash.
+    pub fn restore(&self, id: &DocId) -> HostResult<()> {
+        let path = self.path_for(id)?;
+        let lock = self.lock_for(&path);
+        let _held = lock.lock().unwrap_or_else(|p| p.into_inner());
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("doc.clan");
+        let (_, ms) = self
+            .trashed()
+            .into_iter()
+            .find(|(d, _)| d == id)
+            .ok_or_else(|| HostError::not_found(format!("{id}: not in the trash")))?;
+        if path.exists() {
+            return Err(HostError::conflict(format!(
+                "{id} is in the library already"
+            )));
+        }
+        let io = |e: std::io::Error| HostError::internal(e.to_string());
+        let dir = path.parent().expect("a document path has a parent");
+        std::fs::create_dir_all(dir).map_err(io)?;
+        std::fs::rename(self.trash_dir().join(format!("{ms}-{name}")), &path).map_err(io)?;
+        sync_dir(dir);
+        sync_dir(&self.trash_dir());
+        Ok(())
+    }
+
+    /// Remove trashed documents trashed at or before `cutoff_ms`; with
+    /// `dry_run` only list them. Returns the files' document ids.
+    pub fn purge_trash(&self, cutoff_ms: u128, dry_run: bool) -> HostResult<Vec<DocId>> {
+        let mut out = Vec::new();
+        for (id, ms) in self.trashed() {
+            if ms > cutoff_ms {
+                continue;
+            }
+            if !dry_run {
+                let name = format!("{ms}-{}.clan", id.as_str().trim_start_matches("doc-"));
+                std::fs::remove_file(self.trash_dir().join(name))
+                    .map_err(|e| HostError::internal(e.to_string()))?;
+            }
+            out.push(id);
+        }
+        Ok(out)
+    }
+
+    fn lock_for(&self, path: &Path) -> Arc<Mutex<()>> {
+        self.locks
+            .lock()
+            .unwrap()
+            .entry(path.to_path_buf())
+            .or_default()
+            .clone()
     }
 
     /// Resolve an id to a path inside this tenant's tree, or refuse it.
@@ -84,6 +224,37 @@ fn slugify(s: &str) -> String {
         .collect()
 }
 
+/// Temp file, fsync, rename over `target`, fsync the directory. A leftover
+/// `*.tmp` from a crash ends in `.tmp`, so no listing takes it for a document.
+pub(crate) fn write_durably(dir: &Path, target: &Path, bytes: &[u8]) -> HostResult<()> {
+    let io = |e: std::io::Error| HostError::internal(e.to_string());
+    let name = target.file_name().and_then(|n| n.to_str()).unwrap_or("doc");
+    let tmp = dir.join(format!(
+        ".{name}.{}-{}.tmp",
+        std::process::id(),
+        TMP_SEQ.fetch_add(1, Ordering::SeqCst)
+    ));
+    let written = (|| {
+        let mut f = std::fs::File::create(&tmp)?;
+        f.write_all(bytes)?;
+        f.sync_all()?;
+        std::fs::rename(&tmp, target)
+    })();
+    if let Err(e) = written {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(io(e));
+    }
+    // Directory fsync makes the rename itself durable (not available everywhere).
+    sync_dir(dir);
+    Ok(())
+}
+
+fn sync_dir(dir: &Path) {
+    if let Ok(d) = std::fs::File::open(dir) {
+        let _ = d.sync_all();
+    }
+}
+
 pub fn doc_id(slug: &str) -> DocId {
     DocId::new(format!("doc-{}", slugify(slug)))
 }
@@ -102,14 +273,47 @@ impl PartStore for TenantStore {
         self.path_for(id).map(|p| p.exists()).unwrap_or(false)
     }
 
-    /// The only write. Unchecked until W2-A4: `change.base` against
-    /// `self.version(&change.doc)` belongs here.
+    /// The only write. Under the document's lock it compares `change.base`
+    /// with the version on disk (read again here, not remembered from open):
+    /// `Base::Absent` over an existing document and `Base::At(v)` when the
+    /// document has moved on are both a 409 that names the version now there;
+    /// `Base::At` on a missing document is a 404. The bytes go to a temp file
+    /// beside the target, are fsynced, renamed over it, and the directory is
+    /// fsynced, so an answered write survives a kill and a reader never sees
+    /// half a file.
     fn apply(&self, change: &Change) -> HostResult<Version> {
         let path = self.path_for(&change.doc)?;
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| HostError::internal(e.to_string()))?;
+        let lock = self.lock_for(&path);
+        let _held = lock.lock().unwrap_or_else(|p| p.into_inner());
+        let current = match std::fs::read(&path) {
+            Ok(b) => Some(Version::of_archive(&b)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => return Err(HostError::internal(e.to_string())),
+        };
+        match (&change.base, &current) {
+            (Base::Absent, Some(latest)) => {
+                return Err(HostError::conflict_with_latest(
+                    format!("{} already exists", change.doc),
+                    latest.as_str(),
+                ))
+            }
+            (Base::At(_), None) => {
+                return Err(HostError::not_found(format!(
+                    "{}: no such document",
+                    change.doc
+                )))
+            }
+            (Base::At(v), Some(latest)) if v != latest => {
+                return Err(HostError::conflict_with_latest(
+                    "This project was saved from somewhere else since you opened it.",
+                    latest.as_str(),
+                ))
+            }
+            _ => {}
         }
-        std::fs::write(&path, &change.bytes).map_err(|e| HostError::internal(e.to_string()))?;
+        let dir = path.parent().expect("a document path has a parent");
+        std::fs::create_dir_all(dir).map_err(|e| HostError::internal(e.to_string()))?;
+        write_durably(dir, &path, &change.bytes)?;
         Ok(change.archive_version())
     }
 
