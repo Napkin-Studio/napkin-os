@@ -80,7 +80,7 @@ person (403), except that `create` with a candidate and `proposal.set` also acce
 
 ## 3. The default
 
-`default_brand_clan: <document id>` is **one field on the client record** (the registry in `napkin_host::clients`): one write, no document revision, cannot
+`default_brand_clan: <the Brand Clan's document_id>` is **one field on the client record** (the registry in `napkin_host::clients`): one write, no document revision, cannot
 be on two documents. It is set to the first Brand Clan a client gets (by `create`), and moved by `default.set`. A document that is not an `ie.napkin.brand` of that
 client is refused (422). `list` answers `default` as that id or null. New work starts on the default.
 
@@ -108,6 +108,8 @@ candidate **has that section non-empty**; a section it leaves out is kept, never
 
 ## 5. Routes
 
+**Two ids, never mixed.** `document_id` is the manifest's id: what attach records (`lineage.attached[].document_id`, `data.upstream.<document_id>`), what `/attach` and `/attach/update` take, and what the client's `default_brand_clan` holds. `path` is the store's id for the document (what the shell opens it by): the routes' `{doc}` and every `path` in a reply. A work document is always named by its `path`.
+
 Tenant routes under `/api/t/{tenant}` on napkin-web. The same operations are one function, `napkin_host::brand_clan::call(store, ctx, op, input)`, which the wasm and desktop hosts
 call by op name (the **op** is in brackets). JSON in and out. Errors are the host's: 400 bad input, 403 not a person (or another tenant's document), 404, 409 conflict (a stale
 `expect_version`, no draft, nothing to publish), 422 not a Brand Clan.
@@ -116,7 +118,7 @@ call by op name (the **op** is in brackets). JSON in and out. Errors are the hos
 |---|---|---|
 | `GET /clients/{client}/brand-clans` [`list`] | | `{default, items[Summary], behind[Behind]}` (`list.reply.json`) |
 | `POST /clients/{client}/brand-clans` [`create`] | `{name, note?, candidate?, source?, from?}` | the `View` |
-| `PUT /clients/{client}/default-brand-clan` [`default.set`] | `{document_id}` | the client record, with `default_brand_clan` |
+| `PUT /clients/{client}/default-brand-clan` [`default.set`] | `{document_id}` (the Brand Clan's manifest id) | the client record, with `default_brand_clan` |
 | `GET /brand-clans/{doc}` [`get`] (`?version=N`) | | the `View` (`view.reply.json`); with `version`, that version, `readonly: true` |
 | `GET /brand-clans/{doc}/history` [`history`] | | `[HistoryEntry]` (`history.reply.json`) |
 | `PUT /brand-clans/{doc}/draft` [`draft.save`] | `{candidate, expect_version?}` | the `View` |
@@ -126,12 +128,12 @@ call by op name (the **op** is in brackets). JSON in and out. Errors are the hos
 | `POST /brand-clans/{doc}/proposal` [`proposal.set`] | `{candidate, source, from}` (`proposal.request.json`) | the `View` with `pending` |
 | `POST /brand-clans/{doc}/proposal/accept` [`proposal.accept`] | `{take: "all" \| [change id], expect_version}` | the `View`, at version + 1 |
 | `POST /brand-clans/{doc}/proposal/keep` [`proposal.keep`] | | the `View`, pending cleared, version unchanged |
-| `POST /brand-clans/{doc}/update-work` [`work.update`] | `{document_id}` (a work document) | the attach reply of `/attach/update` |
+| `POST /brand-clans/{doc}/update-work` [`work.update`] | `{path}` (a work document) | the attach reply of `/attach/update` |
 | `POST /brand-clans/{doc}/assets?name=` [`asset.put`] | the file's bytes | `{name, path}` (`path` is `human/assets/<name>`; the name is made unique by a content prefix) |
 | `GET /brand-clans/{doc}/assets/{name}` [`asset.get`] | | the bytes (SVG served as an image only) |
 
 **Summary** (`list`): `{document_id, path, name, note, version, default, updated_at, palette[<=5 hex], logo (asset path|null), source {file}|null, pending {from_version, changes, at, by, file}|null, draft {based_on, changes, by, at}|null}`.
-**Behind** (`list`): a work document whose frozen Brand Clan is older than the Brand Clan's published version: `{path, title, app_id, brand_clan, brand_name, held, current}`. This is what the **Update chip** reads.
+**Behind** (`list`): a work document whose frozen Brand Clan is older than the Brand Clan's published version: `{path, title, app_id, brand_clan (its document_id), brand_name, held, current}`. This is what the **Update chip** reads.
 **View**: `{document_id, path, client, name, note, version, default, readonly, shown {version, state published|draft|pending}, data, draft, pending, used_by[{path, title, app_id, held, behind}]}`.
 `data` is the shown Brand Bible (published; or version N when `?version`). `draft` and `pending` are as in 2.2, each with `changes[]` computed against the published version.
 **HistoryEntry**: `{version, state published|draft, at, by, from, summary, changes[]}`, newest first, the open draft on top as the next version.
