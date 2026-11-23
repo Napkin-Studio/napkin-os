@@ -3,7 +3,7 @@
   1. signals.read: free rules over the file name and its text. `no` stops here: no model call, no question.
   2. one Claude Haiku call (purpose `brand_identify`, about a cent) on the name, the page count and the first pages' text:
      {brand_bible, brand_name, confidence}. It counts in the job's usage (`trace.usage`), as every model call does.
-  3. the question (mock a1): offered when the model says yes with confidence of at least ASK_AT.
+  3. the question (screen a1 of the design): offered when the model says yes with confidence of at least ASK_AT.
 
 Detection that fails or times out asks nothing: the file chip keeps its small "Build a Brand Clan from this" action (DESIGN 3).
 The brand name is matched to the client record, never typed by the person."""
@@ -52,7 +52,7 @@ def preselect(file_name: str, clans: list, client_name: str | None = None) -> di
 
 
 def question(name: str, pages: int, clans: list, client_name: str | None) -> dict:
-    """What mock a1 shows: the choices, and the one preselected. Not a decision: nothing is built until the person answers."""
+    """What screen a1 of the design shows: the choices, and the one preselected. Not a decision: nothing is built until the person answers."""
     pick = preselect(name, clans, client_name)
     if not clans:
         mode, options = "new", ["build", "not_bible"]
