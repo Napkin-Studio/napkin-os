@@ -67,7 +67,8 @@ export type Tool = keyof typeof TOOLS
 /** The tool's button on a client's dial (opening the dial first). */
 export async function dialButton(page: Page, client: string, tool: Tool) {
   await page.getByRole('button', { name: new RegExp(`^(Open )?${client}\\b`) }).first().click()
-  return page.getByRole('button', { name: new RegExp(`^${TOOLS[tool]} for ${client}`) })
+  // Each quadrant is a button named for its tool and what is in it ("Brief, nothing yet").
+  return page.getByTestId('dial').getByRole('button', { name: new RegExp(`^${tool},`) })
 }
 
 /** Open a tool from the client's dial. */

@@ -18,10 +18,23 @@ import type { ClientLook } from './deskData'
 const R = { o0: 100, o1: 300, rim: 308 }
 const pol = (r: number, a: number): [number, number] => [320 + r * Math.cos(a), 320 + r * Math.sin(a)]
 const f1 = (n: number) => n.toFixed(1)
-function sector(r0: number, r1: number, a0: number, a1: number): string {
+/** A box in the 640-unit picture, and the sector's drawing inside it. */
+interface Box { x: number; y: number; w: number; h: number }
+/** The box that just holds a sector: the ends of its two arcs, and any point where an arc passes a compass point. */
+function sectorBox(r0: number, r1: number, a0: number, a1: number): Box {
+  const pts: [number, number][] = [pol(r0, a0), pol(r0, a1), pol(r1, a0), pol(r1, a1)]
+  for (let k = Math.ceil(a0 / (Math.PI / 2)); k * (Math.PI / 2) <= a1; k++) pts.push(pol(r1, k * (Math.PI / 2)))
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1])
+  const x = Math.min(...xs), y = Math.min(...ys)
+  return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y }
+}
+/** With a `box`, the path is drawn in that box's own unit square (what a button's clip-path wants); without, in the picture. */
+function sector(r0: number, r1: number, a0: number, a1: number, box?: Box): string {
   const L = a1 - a0 > Math.PI ? 1 : 0
-  const [x0, y0] = pol(r1, a0), [x1, y1] = pol(r1, a1), [x2, y2] = pol(r0, a1), [x3, y3] = pol(r0, a0)
-  return `M${f1(x0)} ${f1(y0)}A${r1} ${r1} 0 ${L} 1 ${f1(x1)} ${f1(y1)}L${f1(x2)} ${f1(y2)}A${r0} ${r0} 0 ${L} 0 ${f1(x3)} ${f1(y3)}Z`
+  const kx = box ? 1 / box.w : 1, ky = box ? 1 / box.h : 1, fx = box ? (n: number) => n.toFixed(4) : f1
+  const P = ([x, y]: [number, number]) => `${fx((x - (box?.x ?? 0)) * kx)} ${fx((y - (box?.y ?? 0)) * ky)}`
+  const A = (r: number) => `${fx(r * kx)} ${fx(r * ky)}`
+  return `M${P(pol(r1, a0))}A${A(r1)} 0 ${L} 1 ${P(pol(r1, a1))}L${P(pol(r0, a1))}A${A(r0)} 0 ${L} 0 ${P(pol(r0, a0))}Z`
 }
 function arcD(r: number, a0: number, a1: number): string {
   const [x0, y0] = pol(r, a0), [x1, y1] = pol(r, a1)
@@ -61,11 +74,19 @@ interface Props {
   focusFirst?: boolean
 }
 
+/** Exported for the test: where each quadrant's button sits, as percentages of the dial. */
+export const dialBoxes = (): Box[] => {
+  const span = (2 * Math.PI) / QUADRANTS.length, start = -Math.PI / 2 - span / 2
+  return QUADRANTS.map((_, i) => sectorBox(R.o0, R.o1, start + i * span, start + (i + 1) * span))
+}
+
 export function Dial({ client, items, live, place, onOpenTool, onSoon, onOpenClient, onClose, focusFirst }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   // One tab stop for the five quadrants (roving): the arrows move it, and it starts on the first.
   const [at, setAt] = useState(0)
-  const quads = useRef<(SVGGElement | null)[]>([])
+  const quads = useRef<(HTMLButtonElement | null)[]>([])
+  // The quadrant under the pointer, or the one the keyboard is on: its fill shows it (the button above the picture takes the pointer).
+  const [lit, setLit] = useState<number | null>(null)
   const n = QUADRANTS.length, span = (2 * Math.PI) / n, start = -Math.PI / 2 - span / 2
   const choose = (i: number) => {
     const t = toolById(QUADRANTS[i].id)
@@ -94,6 +115,8 @@ export function Dial({ client, items, live, place, onOpenTool, onSoon, onOpenCli
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Each button is just its quadrant's box, so its middle (where a click or Playwright aims) lies in its own quadrant, not on the hub.
+  const boxes = QUADRANTS.map((_, i) => sectorBox(R.o0, R.o1, start + i * span, start + (i + 1) * span))
   const parts = QUADRANTS.map((q, i) => {
     const mine = items.filter(it => toolOfApp(it.app_id)?.id === q.id)
     const st = areaState(mine)
@@ -102,26 +125,10 @@ export function Dial({ client, items, live, place, onOpenTool, onSoon, onOpenCli
     const [lx, ly] = pol(212, am)
     const c = mine.length
     const sub = !on ? 'Soon' : st === 'needs' ? '' : st === 'working' ? 'Agents working' : c ? `${c} ${q.noun[c > 1 ? 1 : 0]}` : 'Nothing yet'
-    const t = toolById(q.id)
-    const said = `${t?.full ?? q.name} for ${client.name}, ${!on ? 'coming soon' : st === 'needs' ? 'needs your call' : sub.toLowerCase()} (${i + 1} of ${n})`
-    const move = (to: number) => { const k = (to + n) % n; setAt(k); quads.current[k]?.focus() }
     return (
       <g key={q.id}>
-        <g className={`dz dz-out${st === 'needs' ? ' dz-needs' : ''}`} data-i={i} style={{ ['--d' as string]: `${i * 55}ms` }}
-          role="button" tabIndex={i === at ? 0 : -1} aria-label={said} aria-keyshortcuts={String(i + 1)} data-testid={`quadrant-${q.id}`}
-          data-activity={strongest(mine.map(activityOfItem))}
-          ref={el => { quads.current[i] = el }}
-          aria-disabled={on ? undefined : true}
-          onFocus={() => setAt(i)}
-          onClick={e => { e.stopPropagation(); choose(i) }}
-          onKeyDown={e => {
-            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(i) }
-            else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); move(i + 1) }
-            else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); move(i - 1) }
-            else if (e.key === 'Home') { e.preventDefault(); move(0) }
-            else if (e.key === 'End') { e.preventDefault(); move(n - 1) }
-          }}>
-          <title>{q.name}</title>
+        <g className={`dz dz-out${st === 'needs' ? ' dz-needs' : ''}${lit === i ? ' dz-lit' : ''}`} data-i={i} style={{ ['--d' as string]: `${i * 55}ms` }}
+          aria-disabled={on ? undefined : true} data-activity={strongest(mine.map(activityOfItem))}>
           <path d={sector(R.o0, R.o1, a0, a1)} />
           <g className="dz-ico" transform={`translate(${f1(lx - 22)} ${f1(ly - 64)}) scale(1.83)`}>
             <g fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><ToolPaths tool={q.id} /></g>
@@ -153,7 +160,39 @@ export function Dial({ client, items, live, place, onOpenTool, onSoon, onOpenCli
         title={`Open ${client.name}`} aria-label={`Open ${client.name}`} onClick={e => { e.stopPropagation(); onOpenClient() }}>
         <b>{hub.big}</b><small>{hub.small}</small>
       </button>
-      <svg className="dial-svg" viewBox="0 0 640 640" aria-hidden={false}>{parts}</svg>
+      <svg className="dial-svg" viewBox="0 0 640 640" aria-hidden="true" focusable="false">
+        <defs>{QUADRANTS.map((q, i) => (
+          <clipPath key={q.id} id={`dz-clip-${q.id}`} clipPathUnits="objectBoundingBox"><path d={sector(R.o0, R.o1, start + i * span, start + (i + 1) * span, boxes[i])} /></clipPath>
+        ))}</defs>
+        {parts}
+      </svg>
+      {/* One real button per quadrant, over the picture and cut to its shape: a name for a screen reader (and getByRole), the keys 1 to 5, the arrows. */}
+      {QUADRANTS.map((q, i) => {
+        const mine = items.filter(it => toolOfApp(it.app_id)?.id === q.id)
+        const st = areaState(mine), on = live.has(q.id), c = mine.length
+        const sub = !on ? 'Soon' : st === 'needs' ? '' : st === 'working' ? 'Agents working' : c ? `${c} ${q.noun[c > 1 ? 1 : 0]}` : 'Nothing yet'
+        const t = toolById(q.id)
+        const state = !on ? 'coming soon' : st === 'needs' ? 'needs your call' : sub.toLowerCase()
+        const move = (to: number) => { const k = (to + n) % n; setAt(k); quads.current[k]?.focus() }
+        return (
+          <button key={q.id} type="button" className="dz-hit" style={{ clipPath: `url(#dz-clip-${q.id})`, left: `${f1(boxes[i].x / 6.4)}%`, top: `${f1(boxes[i].y / 6.4)}%`, width: `${f1(boxes[i].w / 6.4)}%`, height: `${f1(boxes[i].h / 6.4)}%` }}
+            tabIndex={i === at ? 0 : -1} aria-label={`${q.name}, ${state}`} title={`${t?.full ?? q.name} for ${client.name} (${i + 1} of ${n})`}
+            aria-keyshortcuts={String(i + 1)} data-testid={`quadrant-${q.id}`} data-i={i}
+            data-activity={strongest(mine.map(activityOfItem))} aria-disabled={on ? undefined : true}
+            ref={el => { quads.current[i] = el }}
+            onFocus={e => { setAt(i); if (e.currentTarget.matches(':focus-visible')) setLit(i) }}
+            onBlur={() => setLit(l => (l === i ? null : l))}
+            onMouseEnter={() => setLit(i)} onMouseLeave={() => setLit(l => (l === i ? null : l))}
+            onClick={e => { e.stopPropagation(); choose(i) }}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(i) }
+              else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); move(i + 1) }
+              else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); move(i - 1) }
+              else if (e.key === 'Home') { e.preventDefault(); move(0) }
+              else if (e.key === 'End') { e.preventDefault(); move(n - 1) }
+            }} />
+        )
+      })}
     </div>
   )
 }
