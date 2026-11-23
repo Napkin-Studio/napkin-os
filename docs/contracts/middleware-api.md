@@ -1892,3 +1892,32 @@ deck engine (`engine/deck/server.py`) and writes what the engine reports into th
   `--production FILE`, and `--production-fetch` / `--production-look` only when the person turned them on. The payload gains
   `production` (the picker's view, never a location). Nothing is fetched by the middleware.
 - **Deck files (deck-cloud).** `fetch_deck_file@1` (short, writes nothing) takes `input {name}`, `deck.html` or `deck.pptx`, and answers `result {name, media_type, bytes, data_b64}` from the deck engine's `GET /file/<doc>/<name>`; any other name is a 400, a file not built yet a 404 `no_file`, no engine a 503. The PDF is not served: the app sends `deck.html` to the host's Chromium export.
+
+## 13. Brand Clan: `brand_identify`, `brand_build`
+
+*Added 2026-11-23* (`features/brand-clan.clan`, lane B; the Brand Clan itself is `docs/contracts/brand-clan.md`, section 7 is what these write against). Two tasks, both per agency
+(the scope's tenant), both on the document the file was added to (`clan` names that Brief, Research or Production document; it is never written). **Confidential**
+(owner, 2026-11-13): the bible goes to the model and nowhere else. No purpose here (`brand_identify`, `brand_build_piece`, `brand_build_pictures`) is ever logged with a request or
+reply body, whatever `NAPKIN_RUNLOG_BODIES` says; no error message carries what the file said; nothing reaches the shared layers, RAG or evals.
+
+- **`brand_identify@1`** (short, writes nothing). `input {file {name, pages?, text?, data_b64?}, client {id, name}, brand_clans [{document_id, path, name, default}]}`. The host's
+  text and page count are used as sent; with only `data_b64` the middleware reads the file itself (PDF, Word, PowerPoint, zip, picture, text). Step 1 is free rules over the file name and text
+  (`brand/signals.py`: name words, "logo clear space", "colour palette", "typography", "tone of voice", hex or Pantone codes, more than 8 pages, a zip's logo or font files): `no` stops there, **no
+  model call, no question**. Otherwise step 2 is **one** Claude Haiku call (purpose `brand_identify`, Bedrock id from `model_routes.ALIASES["haiku-4.5"]`, built-in route, a routes file overrides it;
+  at most 6,000 characters of text, 200 tokens out; about a cent), counted in `trace.usage` like every model call. Result: `{ask, reason, pages, signals {score, verdict, found}, model_called,
+  brand_bible, brand_name, confidence, matches_client, question}`. `ask` is true when the model says yes with confidence of at least 0.5. `question` is mock a1:
+  `{mode new|choose, options, update {document_id, name}|null, pages, over_cap, page_cap: 120}`; with no Brand Clan `options` is `[build, not_bible]`, otherwise `[update, new, not_bible]`
+  with `update` the Brand Clan whose name is in the file's name (a non-default one is preselected, still asked), else the default. A detection that fails or times out is **not an error**:
+  `ask: false, reason: detection_failed`; the file chip keeps its "Build a Brand Clan from this" action. `brand_name` is matched to `client.name` (`matches_client`), never typed by the person.
+- **`brand_build@1`** (long). `input {file {name, data_b64}, client {id}, mode new|update, name? (new, default "Original"), brand_clan {document_id, path, name} (update), confirmed_over_cap?}`.
+  `400` for bad input, `503 host_unavailable` when no host is configured to write to (`NAPKIN_BRAND_HOST_URL`, `NAPKIN_BRAND_HOST_TOKEN`, `NAPKIN_BRAND_TENANT`), `409 over_cap` for a file over
+  **120 pages** until `confirmed_over_cap: true` (the middleware never reads more than 400), `409 job_state` while another `brand_build` runs on the document. The job reads the file in runs of 15 pages, each
+  sent as its own PDF so the model sees logos and colour chips as pictures (`brand_build_piece`, Sonnet 5.5), then the pictures the file holds (embedded JPEGs and 8-bit images of a PDF, a zip's picture
+  files) in batches of 12, each classified logo, example or other (`brand_build_pictures`). The merge (`brand/merge.py`) invents nothing: an invalid hex, an unknown role or a picture the model never
+  saw is dropped; every item gets a stable id; a section the file did not give is omitted from the candidate and listed in `candidate.gaps`. **Nothing is written unless the build has content**
+  (`422 no_content`, the file untouched). The write goes through the host as `process:brand_build` (`brand/writer.py`; the actor is named on the request, the host records it from its context):
+  `asset.put` for each logo, example and the source file, then **new**: `create {name, candidate, source, from {kind build, file}}`; **update**: `proposal.set {candidate, source, from {kind upload, file}}`
+  (a new version waiting for a person: nothing changes until they take it). A write the host refuses ends the job `failed` (`502 host_write_failed`, the host's status and reason); an unreadable file
+  `422 unreadable_file`, `415 unsupported_file`. Result: `{summary, mode, document_id, path, name, pending, counts, gaps (areas), actor}`, no bible text. `change` is always null. `cancel_job`
+  stops the spend and the write.
+- **Not yet.** PDF logos drawn as vectors (no renderer is installed, so only embedded pictures can be cut); CMYK, masked and JPX pictures; a file over 64 MB (the middleware's request cap).

@@ -1,0 +1,54 @@
+{
+ "colours": [
+  {
+   "name": "Tide blue",
+   "hex": "#0a6ba0",
+   "role": "accent"
+  },
+  {
+   "name": "Foam",
+   "hex": "#F4F6F7",
+   "role": "paper"
+  },
+  {
+   "name": "Ink",
+   "hex": "#1c2630",
+   "role": "ink"
+  },
+  {
+   "name": "Bad one",
+   "hex": "blue",
+   "role": "accent"
+  }
+ ],
+ "typography": [
+  {
+   "family": "Tidewell Serif",
+   "weight": "700",
+   "use": "headlines",
+   "role": "head"
+  },
+  {
+   "family": "Tidewell Sans",
+   "weight": "400 / 600",
+   "use": "body copy",
+   "role": "body"
+  }
+ ],
+ "tone": "Warm, plain, never shouty.",
+ "rules": [
+  {
+   "text": "Write in short sentences.",
+   "kind": "do"
+  },
+  {
+   "text": "Do not use exclamation marks.",
+   "kind": "dont"
+  }
+ ],
+ "imagery_style": "Real people by the water, in natural light.",
+ "imagery_bans": [
+  "Stock handshakes"
+ ],
+ "logo_note": "Keep the height of the T clear on every side."
+}
