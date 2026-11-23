@@ -94,8 +94,6 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/events", get(events))
         // The People page: who signs in, and their agencies (admin only; admin.rs)
         .merge(crate::admin::router())
-        // Production is an app whose projects live in the relay: the bridge (spinoff.rs)
-        .merge(crate::spinoff::router())
         .merge(crate::blobs::router())
         .merge(crate::save::router())
         .merge(crate::trash::router())
@@ -498,13 +496,6 @@ async fn spinoff_document(
     Path((_t, doc)): Path<(String, String)>,
     Json(body): Json<Spinoff>,
 ) -> ApiResult<Json<OpenView>> {
-    // A Production project lives in the relay, never in the library: it has its own route.
-    if body.app_id == crate::spinoff::PRODUCTION_APP_ID {
-        return Err(ApiError::new(
-            422,
-            "Production projects live in the relay: continue in Production through /spinoff/production.",
-        ));
-    }
     let ws = ctx.workspace(&tenant);
     let out = library::spinoff_document_as(
         &*ws.store,

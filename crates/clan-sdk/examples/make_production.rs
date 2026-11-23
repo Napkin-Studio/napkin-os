@@ -5,14 +5,12 @@
 //!
 //! Defaults: `production.app.clan` and `production.example.clan`.
 //!
-//! Production documents are not library documents: they live in the relay
-//! (S3) and open at `/production`, never in the shell. The app is installed in
-//! every workspace for one reason: so that Production takes part in spin-offs
-//! like any other app. It declares `spinoff { accepts: [Brief Maker], upstream }`
-//! (a brief is carried whole under `data.upstream.<brief id>`), and it is the
-//! source app of a Production to Deck spin-off (the Deck declares that it
-//! accepts it). `napkin-web` bridges the bytes to and from the relay
-//! (`docs/contracts/os-layer.md` §5.9).
+//! A Production project is a library document like any other (features/production-in-library.clan): the
+//! Production Tool edits it, the shell opens it at `/production/?doc=<id>`, and it takes part in spin-offs
+//! through the host's one plain route. The app declares
+//! `spinoff { accepts: [Brief Maker, Research Tool, Territories], upstream }` (the source is carried whole
+//! under `data.upstream.<source id>`), and it is the source app of a Production to Deck spin-off (the Deck
+//! declares that it accepts it).
 //!
 //! The data schema, the seed and the summary view are not repeated here: they
 //! are the ones `production-tool/clan-store` builds with `npm run app` (from

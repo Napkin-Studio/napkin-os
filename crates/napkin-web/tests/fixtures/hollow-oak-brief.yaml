@@ -1,0 +1,814 @@
+audience: 'To confirm: lead with 25-40 drinkers who rarely drink cider, women slightly ahead. At a friend''s table, in the pub or at a Friday supper they reach for lager, wine or kombucha. They like to treat themselves to one good bottle rather than a bulk pack. The brief is not led by students, pub landlords or Gen Z. The 55+ rural core is protected, not targeted.'
+background: 'Still launches in September and nothing is on shelf before then, so summer work builds anticipation, not sales. Premium is where cider is growing: GB crafted cider value is up 7.6% while retail volume is down 1.7%, and shoppers are trading up to a single good bottle as a treat.'
+barrier: 'To confirm: ''Cider without bubbles sounds flat.'' To a rare cider drinker, no fizz reads as a cider that has lost something, and cider already feels sweet and heavy.'
+brief_input: |-
+  From: Marketing, Hollow Oak Cider
+  Subject: RE: RE: brief for the new thing (v3 FINAL final)
+
+  Hi team,
+
+  As discussed on the call, here's the brief. Sorry it's a bit rushed, the board wants to see something by end of month.
+
+  We're launching Hollow Oak "Still" — it's our cider but without the bubbles (and less sugar?? R&D still confirming, don't say that yet). Basically we want people to think of it as the cider for everyone, but also premium, but also not expensive. Think Apple meets Guinness meets a farmers' market.
+
+  OBJECTIVES:
+  - Awareness (huge)
+  - Sales up 30% (all products, not just Still)
+  - Make Hollow Oak cool with Gen Z
+  - Don't alienate our core drinkers (55+, rural, they love the current bottle)
+  - Win an award ideally
+
+  TARGET: Everyone who drinks. Maybe women 25-40 primarily. Or students. Jim from sales thinks pub landlords are the real audience. Let's keep it broad.
+
+  KEY MESSAGE: Still Hollow Oak. Still Delicious. Still Made Right. Still Here For You. (we love all of these, can we use all four?)
+
+  Also must mention: 140 years of heritage, orchard-grown, the new recyclable can, our sponsorship of the county hurling team, and the competition (win a weekend in the orchards).
+
+  TONE: Fun and irreverent but serious and trustworthy. Nothing that looks like an ad.
+
+  CHANNELS: TV, outdoor, TikTok, the website, radio maybe, in-store, and a 15 second video for social that could also be the TV ad. Possibly a stunt?
+
+  BUDGET: Small. We'll know more after Q1. Production budget is basically what we have left over from last year's Christmas campaign.
+
+  TIMING: Launch ASAP, ideally for summer but the product won't be in stores until September.
+
+  MANDATORIES: Logo big. The orchard. Our founder's portrait (the 1884 painting). The new can AND the old bottle. Legal line about responsible drinking. No apples in the visuals (legal is worried about something, not sure what).
+
+  COMPETITORS: Everyone, but especially the big lager brands and also kombucha.
+
+  Let me know if you need anything else! Can we see 3 routes by Friday?
+
+  Thanks,
+  Marketing
+budget_and_scope: 'Budget is small: what is left over from last year''s Christmas production, to be known after Q1. No figure was given, so we need the figure, whether it includes VAT and whether media sits inside it. Prioritise the 15-second film for social, which could also serve TV if affordable, plus stills. Three routes by Friday; the board wants to see work by month end. Summer builds anticipation; September drives trial.'
+capture:
+  built_at: 2026-11-22T15:42:15Z
+  gaps:
+  - business_problem
+  - success_metrics
+  - proof_points
+  - evaluation_criteria
+  - anti_target
+  - decision_makers
+  handler: draft_brief@1.0
+  how_to_win:
+  - evidence: R&D still confirming, don't say that yet
+    kind: likely_landmines
+    material_id: mat_9c186c4af8095eeb
+    point: Less-sugar claim is unconfirmed and must not be used.
+  - evidence: Don't alienate our core drinkers (55+, rural, they love the current bottle)
+    kind: likely_landmines
+    material_id: mat_9c186c4af8095eeb
+    point: Appealing to Gen Z while not alienating 55+ rural core who love the current bottle is in tension.
+  - evidence: ideally for summer but the product won't be in stores until September
+    kind: likely_landmines
+    material_id: mat_9c186c4af8095eeb
+    point: Launch timing for summer conflicts with product availability in September.
+  - evidence: No apples in the visuals (legal is worried about something, not sure what).
+    kind: likely_landmines
+    material_id: mat_9c186c4af8095eeb
+    point: No apples in visuals for an apple cider brand, reason unknown.
+  - evidence: the cider for everyone, but also premium, but also not expensive
+    kind: unstated_needs
+    material_id: mat_9c186c4af8095eeb
+    point: Positioning is contradictory (everyone, premium, not expensive) and needs focus.
+  items:
+    cap_00d5704d4fb07235:
+      key: background_context
+      material_id: mat_9c186c4af8095eeb
+      quote: Sorry it's a bit rushed, the board wants to see something by end of month.
+      status: fact
+      value: Hollow Oak is launching 'Still', its cider without bubbles. The board wants to see something by end of month; the brief is rushed.
+    cap_036c77964353d996:
+      key: constraints
+      material_id: mat_9c186c4af8095eeb
+      quote: R&D still confirming, don't say that yet
+      status: fact
+      value: Do not mention reduced sugar until R&D confirms.
+    cap_043cd69cd623d699:
+      key: objective
+      material_id: mat_9c186c4af8095eeb
+      objective_type: behavioural
+      quote: Don't alienate our core drinkers (55+, rural, they love the current bottle)
+      status: fact
+      value: Don't alienate core drinkers (55+, rural, who love the current bottle)
+    cap_046eee830492dc76:
+      key: objective
+      material_id: mat_9c186c4af8095eeb
+      objective_type: attitudinal
+      quote: Win an award ideally
+      status: fact
+      value: Win an award, ideally
+    cap_0cbdfd582047cbf6:
+      key: objective
+      material_id: mat_9c186c4af8095eeb
+      objective_type: behavioural
+      quote: Don't alienate our core drinkers (55+, rural, they love the current bottle)
+      status: fact
+      value: Do not alienate core drinkers (55+, rural, who love the current bottle).
+    cap_0d458a2442119f7a:
+      key: key_message
+      material_id: mat_9c186c4af8095eeb
+      quote: Still Hollow Oak. Still Delicious. Still Made Right. Still Here For You. (we love all of these, can we use all four?)
+      status: fact
+      value: Still Hollow Oak. Still Delicious. Still Made Right. Still Here For You. Client would like to use all four.
+    cap_12f0e0adc25590cd:
+      key: constraints
+      material_id: mat_9c186c4af8095eeb
+      quote: (and less sugar?? R&D still confirming, don't say that yet)
+      status: fact
+      value: Possibly lower sugar, but R&D is still confirming. Do not claim this yet.
+    cap_19fcfe2ebc76c71b:
+      key: business_problem
+      material_id: mat_9c186c4af8095eeb
+      status: assumption
+      value: Not explicitly stated; implied tension between attracting new/younger drinkers and keeping the core 55+ rural base while launching a new product.
+    cap_1aaedc850d3db2f5:
+      key: objective
+      material_id: mat_9c186c4af8095eeb
+      objective_type: attitudinal
+      quote: Make Hollow Oak cool with Gen Z
+      status: fact
+      value: Make Hollow Oak cool with Gen Z.
+    cap_1c0643aa462839e7:
+      key: objective
+      material_id: mat_9c186c4af8095eeb
+      objective_type: attitudinal
+      quote: Awareness (huge)
+      status: fact
+      value: Build awareness (described as huge).
+    cap_1ced2b2702d5caaf:
+      key: deliverables
+      material_id: mat_9c186c4af8095eeb
+      quote: Can we see 3 routes by Friday?
+      status: fact
+      value: Three routes by Friday.
+    cap_1d19c59a29024860:
+      key: target_audience
+      material_id: mat_9c186c4af8095eeb
+      quote: Everyone who drinks. Maybe women 25-40 primarily. Or students. Jim from sales thinks pub landlords are the real audience. Let's keep it broad.
+      status: fact
+      value: Everyone who drinks; maybe women 25-40 primarily, or students; Jim from sales thinks pub landlords are the real audience. Client wants to keep it broad. Also Gen Z and core 55+ rural drinkers per objectives.
+    cap_2171af9417b2f316:
+      key: background_context
+      material_id: mat_9c186c4af8095eeb
+      quote: Sorry it's a bit rushed, the board wants to see something by end of month.
+      status: fact
+      value: Hollow Oak is launching 'Still', its cider without the bubbles. The board wants to see something by end of month; the brief is rushed.
+    cap_266ef9646fb530d1:
+      key: success_metrics
+      material_id: mat_9c186c4af8095eeb
+      quote: Win an award ideally
+      status: fact
+      value: Win an award (ideally); sales up 30%.
+    cap_273b4ff33981748a:
+      key: background_context
+      material_id: mat_9c186c4af8095eeb
+      quote: We're launching Hollow Oak "Still" — it's our cider but without the bubbles
+      status: fact
+      value: Hollow Oak is launching 'Still', its cider without the bubbles. The board wants to see something by end of month; the brief is acknowledged as rushed.
+    cap_2f6cb9c973c088ff:
+      key: constraints
+      material_id: mat_9c186c4af8095eeb
+      quote: R&D still confirming, don't say that yet
+      status: fact
+      value: Do not state the less-sugar claim yet; R&D is still confirming.
+    cap_30ea26a76cf9b2bb:
+      key: mandatories
+      material_id: mat_9c186c4af8095eeb
+      quote: Logo big. The orchard. Our founder's portrait (the 1884 painting). The new can AND the old bottle. Legal line about responsible drinking.
+      status: fact
+      value: Logo big; the orchard; founder's 1884 portrait; new can AND old bottle; responsible drinking legal line.
+    cap_332c4341d3028a29:
+      key: decision_makers
+      material_id: mat_9c186c4af8095eeb
+      quote: the board wants to see something by end of month
+      status: fact
+      value: The board wants to see work by end of month.
+    cap_3bb806e904eebf65:
+      key: objective
+      material_id: mat_9c186c4af8095eeb
+      objective_type: commercial
+      quote: Sales up 30% (all products, not just Still)
+      status: fact
+      value: Increase sales by 30% across all products, not just Still.
+    cap_3c84ec0df1cea95a:
+      key: objective
+      material_id: mat_9c186c4af8095eeb
+      objective_type: commercial
+      quote: Sales up 30% (all products, not just Still)
+      status: fact
+      value: Increase sales by 30% across all products, not just Still
+    cap_3fddc1f0bd0dfbd4:
+      key: deliverables
+      material_id: mat_9c186c4af8095eeb
+      quote: Can we see 3 routes by Friday?
+      status: fact
+      value: Three creative routes by Friday.
+    cap_41828c6cead12939:
+      key: mandatories
+      material_id: mat_9c186c4af8095eeb
+      quote: Logo big. The orchard. Our founder's portrait (the 1884 painting). The new can AND the old bottle. Legal line about responsible drinking.
+      status: fact
+      value: Big logo; the orchard; founder's portrait (1884 painting); the new can AND the old bottle; legal line about responsible drinking.
+    cap_4f57d96d7a2ae554:
+      key: objective
+      material_id: mat_9c186c4af8095eeb
+      objective_type: attitudinal
+      quote: Make Hollow Oak cool with Gen Z
+      status: fact
+      value: Make Hollow Oak cool with Gen Z
+    cap_5133533d4b7c74c3:
+      key: mandatories
+      material_id: mat_9c186c4af8095eeb
+      quote: Logo big. The orchard. Our founder's portrait (the 1884 painting). The new can AND the old bottle. Legal line about responsible drinking. No apples in the visuals (legal is worried about something, not sure what).
+      status: fact
+      value: Logo big; the orchard; founder's portrait (1884 painting); the new can AND the old bottle; legal line about responsible drinking; no apples in the visuals (legal concern, reason unknown).
+    cap_5228be43ef230bdc:
+      key: objective
+      material_id: mat_9c186c4af8095eeb
+      objective_type: attitudinal
+      quote: Awareness (huge)
+      status: fact
+      value: Build awareness (described as 'huge')
+    cap_52f697d165d4cef8:
+      key: mandatories
+      material_id: mat_9c186c4af8095eeb
+      quote: No apples in the visuals (legal is worried about something, not sure what).
+      status: fact
+      value: No apples in the visuals (legal concerned, reason unknown).
+    cap_56171eb082c8011d:
+      key: competitors_market
+      material_id: mat_9c186c4af8095eeb
+      quote: Everyone, but especially the big lager brands and also kombucha.
+      status: fact
+      value: Everyone, especially the big lager brands and kombucha.
+    cap_603c6897e0c70967:
+      key: target_audience
+      material_id: mat_9c186c4af8095eeb
+      quote: Everyone who drinks. Maybe women 25-40 primarily. Or students. Jim from sales thinks pub landlords are the real audience. Let's keep it broad.
+      status: fact
+      value: 'Broad: everyone who drinks. Maybe women 25-40 primarily, or students. Sales colleague Jim thinks pub landlords are the real audience. Client wants to keep it broad. Also Gen Z and core drinkers 55+ rural per objectives.'
+    cap_655cd210d0ff9a95:
+      key: deliverables
+      material_id: mat_9c186c4af8095eeb
+      quote: TV, outdoor, TikTok, the website, radio maybe, in-store, and a 15 second video for social that could also be the TV ad. Possibly a stunt?
+      status: fact
+      value: 'Channels: TV, outdoor, TikTok, website, radio (maybe), in-store, and a 15 second video for social that could also be the TV ad. Possibly a stunt. Three routes by Friday.'
+    cap_6807ed9d698671f4:
+      key: key_message
+      material_id: mat_9c186c4af8095eeb
+      quote: Still Hollow Oak. Still Delicious. Still Made Right. Still Here For You. (we love all of these, can we use all four?)
+      status: fact
+      value: 'Client proposes four ''Still'' lines: Still Hollow Oak. Still Delicious. Still Made Right. Still Here For You. Asks whether all four can be used (not a single-minded message).'
+    cap_6e188d6ba50342f0:
+      key: deliverables
+      material_id: mat_9c186c4af8095eeb
+      quote: Can we see 3 routes by Friday?
+      status: fact
+      value: Client asks to see 3 routes by Friday.
+    cap_748a086a161ac0f5:
+      key: deliverables
+      material_id: mat_9c186c4af8095eeb
+      quote: TV, outdoor, TikTok, the website, radio maybe, in-store, and a 15 second video for social that could also be the TV ad. Possibly a stunt?
+      status: fact
+      value: 'Channels: TV, outdoor, TikTok, website, radio (maybe), in-store, and a 15 second social video that could also be the TV ad. Possibly a stunt.'
+    cap_74e88729127ea8e9:
+      key: background_context
+      material_id: mat_9c186c4af8095eeb
+      quote: We're launching Hollow Oak "Still" — it's our cider but without the bubbles (and less sugar?? R&D still confirming, don't say that yet).
+      status: fact
+      value: Hollow Oak "Still" is the cider without the bubbles. Less sugar is possibly a feature but R&D is still confirming, so it must not be claimed yet.
+    cap_78701c2548c79991:
+      key: mandatories
+      material_id: mat_9c186c4af8095eeb
+      quote: No apples in the visuals (legal is worried about something, not sure what).
+      status: fact
+      value: No apples in the visuals (legal is worried about something, reason unknown).
+    cap_7ab17fc97d3eaf30:
+      key: decision_makers
+      material_id: mat_9c186c4af8095eeb
+      quote: the board wants to see something by end of month
+      status: fact
+      value: The board will review the work.
+    cap_83df9c8b5e198d72:
+      key: constraints
+      material_id: mat_9c186c4af8095eeb
+      quote: R&D still confirming, don't say that yet
+      status: fact
+      value: Do not claim reduced sugar until R&D confirms.
+    cap_843891a60b612622:
+      key: background_context
+      material_id: mat_9c186c4af8095eeb
+      quote: We're launching Hollow Oak "Still" — it's our cider but without the bubbles (and less sugar?? R&D still confirming, don't say that yet).
+      status: fact
+      value: Hollow Oak "Still" is cider without bubbles; positioned as the cider for everyone, premium but not expensive. Sugar reduction is unconfirmed by R&D and must not be mentioned yet.
+    cap_8528e174bf1081b4:
+      key: strategic_angle
+      material_id: mat_9c186c4af8095eeb
+      quote: Basically we want people to think of it as the cider for everyone, but also premium, but also not expensive. Think Apple meets Guinness meets a farmers' market.
+      status: fact
+      value: 'Position as the cider for everyone, but premium, but not expensive: ''Apple meets Guinness meets a farmers'' market''.'
+    cap_869224620ab0835b:
+      key: deliverables
+      material_id: mat_9c186c4af8095eeb
+      quote: TV, outdoor, TikTok, the website, radio maybe, in-store, and a 15 second video for social that could also be the TV ad. Possibly a stunt?
+      status: fact
+      value: 'Channels: TV, outdoor, TikTok, website, radio maybe, in-store, and a 15 second video for social that could also be the TV ad. Possibly a stunt. Three routes by Friday.'
+    cap_87d80a8e82e06f41:
+      key: target_audience
+      material_id: mat_9c186c4af8095eeb
+      quote: core drinkers (55+, rural, they love the current bottle)
+      status: fact
+      value: Core drinkers are 55+ and rural; Gen Z is also a goal.
+    cap_894f06691f3541c5:
+      key: mandatories
+      material_id: mat_9c186c4af8095eeb
+      quote: 'Also must mention: 140 years of heritage, orchard-grown, the new recyclable can, our sponsorship of the county hurling team, and the competition (win a weekend in the orchards).'
+      status: fact
+      value: 'Must mention: 140 years of heritage, orchard-grown, the new recyclable can, the county hurling team sponsorship, and the competition (win a weekend in the orchards).'
+    cap_8a5f01d5ecddcf23:
+      key: proof_points
+      material_id: mat_9c186c4af8095eeb
+      status: assumption
+      value: 140 years of heritage; orchard-grown; new recyclable can.
+    cap_8b6bfdc0f2eb9235:
+      key: decision_makers
+      material_id: mat_9c186c4af8095eeb
+      quote: the board wants to see something by end of month
+      status: fact
+      value: The board wants to see something by end of month.
+    cap_8c61f3871d84758c:
+      key: deliverables
+      material_id: mat_9c186c4af8095eeb
+      quote: Can we see 3 routes by Friday?
+      status: fact
+      value: Three routes by Friday
+    cap_8ed59a7b58f2ec79:
+      key: competitors_market
+      material_id: mat_9c186c4af8095eeb
+      quote: Everyone, but especially the big lager brands and also kombucha.
+      status: fact
+      value: Everyone, but especially the big lager brands and also kombucha.
+    cap_8edb785f45636d28:
+      key: decision_makers
+      material_id: mat_9c186c4af8095eeb
+      quote: Jim from sales thinks pub landlords are the real audience. Let's keep it broad.
+      status: fact
+      value: Jim from sales believes pub landlords are the real audience. Let's keep it broad.
+    cap_97339ff8505855fa:
+      key: tone_and_brand
+      material_id: mat_9c186c4af8095eeb
+      quote: Fun and irreverent but serious and trustworthy. Nothing that looks like an ad.
+      status: fact
+      value: Fun and irreverent but serious and trustworthy; nothing that looks like an ad.
+    cap_99f8af6c4b9c9f69:
+      key: mandatories
+      material_id: mat_9c186c4af8095eeb
+      quote: Logo big. The orchard. Our founder's portrait (the 1884 painting). The new can AND the old bottle. Legal line about responsible drinking.
+      status: fact
+      value: Logo big. The orchard. The founder's portrait (1884 painting). The new can AND the old bottle. Legal line about responsible drinking.
+    cap_9dabaea786edb393:
+      key: deliverables
+      material_id: mat_9c186c4af8095eeb
+      quote: TV, outdoor, TikTok, the website, radio maybe, in-store, and a 15 second video for social that could also be the TV ad. Possibly a stunt?
+      status: fact
+      value: 'Channels: TV, outdoor, TikTok, website, radio maybe, in-store, and a 15 second social video that could also be the TV ad. Possibly a stunt.'
+    cap_9deeec107b9fd8b3:
+      key: key_message
+      material_id: mat_9c186c4af8095eeb
+      quote: Still Hollow Oak. Still Delicious. Still Made Right. Still Here For You. (we love all of these, can we use all four?)
+      status: fact
+      value: 'Four candidate lines: Still Hollow Oak. Still Delicious. Still Made Right. Still Here For You. The client asks whether all four can be used, so there is no single message.'
+    cap_a1db54fdf61cf153:
+      key: target_audience
+      material_id: mat_9c186c4af8095eeb
+      quote: Everyone who drinks. Maybe women 25-40 primarily. Or students. Jim from sales thinks pub landlords are the real audience. Let's keep it broad.
+      status: fact
+      value: 'Broad: everyone who drinks. Possibly women 25-40 primarily, or students. Sales colleague Jim thinks pub landlords are the real audience. Gen Z and core 55+ rural drinkers are also referenced in objectives.'
+    cap_a3f610f8d5f36256:
+      key: competitors_market
+      material_id: mat_9c186c4af8095eeb
+      quote: Everyone, but especially the big lager brands and also kombucha.
+      status: fact
+      value: Everyone, especially big lager brands and kombucha.
+    cap_a8bc2766abe7257c:
+      key: target_audience
+      material_id: mat_9c186c4af8095eeb
+      quote: Everyone who drinks. Maybe women 25-40 primarily. Or students.
+      status: fact
+      value: Everyone who drinks; maybe women 25-40 primarily, or students. Client wants to keep it broad.
+    cap_aa29b4a75a237e32:
+      key: timeline
+      material_id: mat_9c186c4af8095eeb
+      quote: Launch ASAP, ideally for summer but the product won't be in stores until September.
+      status: fact
+      value: Launch ASAP, ideally for summer, but the product will not be in stores until September.
+    cap_adcf9d05d6817479:
+      key: background_context
+      material_id: mat_9c186c4af8095eeb
+      quote: the board wants to see something by end of month
+      status: fact
+      value: The board wants to see something by end of month.
+    cap_b6301a158e407c51:
+      key: budget
+      material_id: mat_9c186c4af8095eeb
+      quote: Small. We'll know more after Q1. Production budget is basically what we have left over from last year's Christmas campaign.
+      status: fact
+      value: Small; more known after Q1. Production budget is what is left over from last year's Christmas campaign.
+    cap_b64a1c4439b7c8c6:
+      key: proof_points
+      material_id: mat_9c186c4af8095eeb
+      quote: 140 years of heritage, orchard-grown, the new recyclable can
+      status: fact
+      value: 140 years of heritage; orchard-grown; new recyclable can
+    cap_c7f3e2de3b3dd2bf:
+      key: objective
+      material_id: mat_9c186c4af8095eeb
+      objective_type: attitudinal
+      quote: Awareness (huge)
+      status: fact
+      value: Build awareness (described as huge)
+    cap_cae311ab4ea83711:
+      key: key_message
+      material_id: mat_9c186c4af8095eeb
+      quote: Still Hollow Oak. Still Delicious. Still Made Right. Still Here For You. (we love all of these, can we use all four?)
+      status: fact
+      value: 'Four candidate lines: Still Hollow Oak. Still Delicious. Still Made Right. Still Here For You. Client asks whether all four can be used (conflicts with single-minded message).'
+    cap_caeda73a58b3644e:
+      key: competitors_market
+      material_id: mat_9c186c4af8095eeb
+      quote: Everyone, but especially the big lager brands and also kombucha.
+      status: fact
+      value: Everyone, especially the big lager brands and also kombucha.
+    cap_cbdd5a883ac9e569:
+      key: mandatories
+      material_id: mat_9c186c4af8095eeb
+      quote: 'Also must mention: 140 years of heritage, orchard-grown, the new recyclable can, our sponsorship of the county hurling team, and the competition (win a weekend in the orchards).'
+      status: fact
+      value: 'Must mention: 140 years of heritage, orchard-grown, the new recyclable can, sponsorship of the county hurling team, and the competition (win a weekend in the orchards).'
+    cap_d56132a9927a94e6:
+      key: tone_and_brand
+      material_id: mat_9c186c4af8095eeb
+      quote: Fun and irreverent but serious and trustworthy. Nothing that looks like an ad.
+      status: fact
+      value: Fun and irreverent but serious and trustworthy. Nothing that looks like an ad.
+    cap_d5ad3fd8fe6726dd:
+      key: strategic_angle
+      material_id: mat_9c186c4af8095eeb
+      quote: we want people to think of it as the cider for everyone, but also premium, but also not expensive. Think Apple meets Guinness meets a farmers' market.
+      status: fact
+      value: 'Positioning: the cider for everyone, but premium, but not expensive. Reference: Apple meets Guinness meets a farmers'' market.'
+    cap_d926c09242260929:
+      key: objective
+      material_id: mat_9c186c4af8095eeb
+      objective_type: behavioural
+      quote: Don't alienate our core drinkers (55+, rural, they love the current bottle)
+      status: fact
+      value: Do not alienate core drinkers (55+, rural, who love the current bottle)
+    cap_dde71f5be4cb61ba:
+      key: background_context
+      material_id: mat_9c186c4af8095eeb
+      quote: it's our cider but without the bubbles (and less sugar?? R&D still confirming, don't say that yet)
+      status: fact
+      value: Hollow Oak "Still" is the cider without the bubbles. Less sugar is possibly a feature but R&D is still confirming, so it must not be stated yet.
+    cap_e8669fd1f39ef80d:
+      key: strategic_angle
+      material_id: mat_9c186c4af8095eeb
+      quote: Basically we want people to think of it as the cider for everyone, but also premium, but also not expensive. Think Apple meets Guinness meets a farmers' market.
+      status: fact
+      value: 'Position as the cider for everyone, but also premium, but also not expensive: Apple meets Guinness meets a farmers'' market.'
+    cap_fca40a5ea9ab4f25:
+      key: timeline
+      material_id: mat_9c186c4af8095eeb
+      quote: Can we see 3 routes by Friday?
+      status: fact
+      value: Board wants to see something by end of month; 3 routes requested by Friday.
+    cap_ff4f7a4d8614fe9e:
+      key: timeline
+      material_id: mat_9c186c4af8095eeb
+      quote: Launch ASAP, ideally for summer but the product won't be in stores until September.
+      status: fact
+      value: Launch ASAP, ideally summer, but product not in stores until September. Board wants to see something by end of month; 3 routes by Friday.
+  ledger:
+    coverage_pct: 79.1
+    mapped_segments: 34
+    total_segments: 43
+    unmapped:
+    - material_id: mat_9c186c4af8095eeb
+      segment: 'From: Marketing, Hollow Oak Cider'
+    - material_id: mat_9c186c4af8095eeb
+      segment: 'Subject: RE: RE: brief for the new thing (v3 FINAL final)'
+    - material_id: mat_9c186c4af8095eeb
+      segment: Hi team,
+    - material_id: mat_9c186c4af8095eeb
+      segment: As discussed on the call, here's the brief.
+    - material_id: mat_9c186c4af8095eeb
+      segment: 'KEY MESSAGE: Still Hollow Oak.'
+    - material_id: mat_9c186c4af8095eeb
+      segment: 'BUDGET: Small.'
+    - material_id: mat_9c186c4af8095eeb
+      segment: 'MANDATORIES: Logo big.'
+    - material_id: mat_9c186c4af8095eeb
+      segment: Let me know if you need anything else!
+    - material_id: mat_9c186c4af8095eeb
+      segment: Thanks, Marketing
+client: Hollow Oak Cider, a 140-year-old, orchard-grown brand with a loyal 55+ rural core, launching its first still cider.
+competitor_context: The client names big lager and kombucha, which stand for easy refreshment. Among ciders, Magners owns fizz and serving over ice. Strongbow is moving from orchard and rural codes to everyday British culture. No checked rival claims a still orchard position, so Still may be able to own it.
+desired_response:
+  do: 'To confirm: Look for Still in September and try it.'
+  feel: 'To confirm: Curious, relaxed and a little proud to be in on something good, never lectured or sold to.'
+  think: 'To confirm: Hollow Oak Still is a real orchard cider, made properly, and I haven''t had cider like this.'
+insight: 'To confirm: "I like the idea of an honest apple drink, but cider has come to mean fizzy, sweet and heavy, so I order something else."'
+job: 'To confirm: move a 25-40 drinker who rarely has cider from ''cider is fizzy and not for me'' to ''a still orchard cider is worth trying''.'
+link_notice:
+  fc6b1b39-5879-4e27-8d36-d8aa25e6e12a:
+    how: used
+    taken: 1
+mandatories:
+- 'Legal: responsible drinking line.'
+- 'Legal: no reduced-sugar, health or mood claims (CAP/BCAP); the sugar story is held until R&D confirms, and GB rules do not permit such a claim in any case.'
+- 'Legal: competition needs legal terms and a no-purchase route.'
+- 'To confirm: why legal wants no apples in the visuals; until explained, show none.'
+- 'Brand assets: logo, the orchard and the new recyclable can.'
+- 'To confirm: whether the old bottle sits beside the can.'
+- 'Open items: heritage, hurling and the 1884 portrait go in other assets.'
+materials:
+  mat_9c186c4af8095eeb:
+    kind: prompt
+    licence: client-confidential
+    media_type: text/plain
+    name: prompt
+    received_at: 2026-11-22T15:22:49Z
+    sha256: 9c186c4af8095eebfaa4fe1fd48ff44d29bec274c084a952cdac739fe23a3a7a
+    text: |-
+      From: Marketing, Hollow Oak Cider
+      Subject: RE: RE: brief for the new thing (v3 FINAL final)
+
+      Hi team,
+
+      As discussed on the call, here's the brief. Sorry it's a bit rushed, the board wants to see something by end of month.
+
+      We're launching Hollow Oak "Still" — it's our cider but without the bubbles (and less sugar?? R&D still confirming, don't say that yet). Basically we want people to think of it as the cider for everyone, but also premium, but also not expensive. Think Apple meets Guinness meets a farmers' market.
+
+      OBJECTIVES:
+      - Awareness (huge)
+      - Sales up 30% (all products, not just Still)
+      - Make Hollow Oak cool with Gen Z
+      - Don't alienate our core drinkers (55+, rural, they love the current bottle)
+      - Win an award ideally
+
+      TARGET: Everyone who drinks. Maybe women 25-40 primarily. Or students. Jim from sales thinks pub landlords are the real audience. Let's keep it broad.
+
+      KEY MESSAGE: Still Hollow Oak. Still Delicious. Still Made Right. Still Here For You. (we love all of these, can we use all four?)
+
+      Also must mention: 140 years of heritage, orchard-grown, the new recyclable can, our sponsorship of the county hurling team, and the competition (win a weekend in the orchards).
+
+      TONE: Fun and irreverent but serious and trustworthy. Nothing that looks like an ad.
+
+      CHANNELS: TV, outdoor, TikTok, the website, radio maybe, in-store, and a 15 second video for social that could also be the TV ad. Possibly a stunt?
+
+      BUDGET: Small. We'll know more after Q1. Production budget is basically what we have left over from last year's Christmas campaign.
+
+      TIMING: Launch ASAP, ideally for summer but the product won't be in stores until September.
+
+      MANDATORIES: Logo big. The orchard. Our founder's portrait (the 1884 painting). The new can AND the old bottle. Legal line about responsible drinking. No apples in the visuals (legal is worried about something, not sure what).
+
+      COMPETITORS: Everyone, but especially the big lager brands and also kombucha.
+
+      Let me know if you need anything else! Can we see 3 routes by Friday?
+
+      Thanks,
+      Marketing
+measurement:
+- 'To confirm: Judged by trial of Still among 25-40s, read through sales and distribution after September, and the 30% objective.'
+- 'To confirm, if budgeted: a tracker wave before launch on ''cider is not for me''.'
+- 'To confirm, if budgeted: a regional holdout.'
+- 'The lag: sales land after September.'
+media_roles:
+- 'To confirm: Social/TikTok: the 15-second film builds curiosity among 25-40s before September.'
+- 'In-store: turns curiosity into trial at the shelf.'
+- 'To confirm: Outdoor: one can-and-oak image, only if the budget allows.'
+objection: 'To confirm: "Cider without bubbles sounds flat."'
+objectives:
+  attitudinal: 'To confirm: shift the lead drinker from ''cider is not for me'' to ''a still orchard cider is worth trying'', and build awareness of Still among them. Making Hollow Oak cool with Gen Z is secondary, and the 55+ rural core must not be alienated.'
+  behavioural: 'To confirm: Get 25-40 drinkers who rarely drink cider to look for Still and try it from September. Core drinkers keep buying the current bottle.'
+  commercial: Grow total Hollow Oak sales by 30%, all products included, not just Still. The client gave no baseline or period. We propose 12 months from the September launch against the prior year, for the client to confirm. Winning an award is an ambition, not a business objective.
+open_questions:
+- 'What is the production budget figure, does it include VAT, and does media sit inside it? — Answer: Production budget is 120,000 pounds all-in, excluding VAT, and media sits outside it. Spend it on the 15-second film, stills and in-store; no TV or stunt.'
+- 'What is the baseline and period for the 30% sales uplift, and does it include Still? — Answer: Baseline is last year''s total Hollow Oak sales volume; target is plus 30 percent over 12 months from the September launch, across all products including Still.'
+- 'Can legal explain the ''no apples'' concern? — Answer: Legal worry is apple imagery implying a fruit or health claim we cannot back. Hard rule: no apples anywhere in visuals. Show the oak, bare orchard trees, the can, the glass.'
+- 'How is Still made without fizz, and what does that do to the taste? — Answer: Still is made like the sparkling cider but left uncarbonated, which gives a rounder, softer, drier taste. Say that plainly, with no reduced-sugar claim.'
+- 'Do you accept one lead audience (25-40 rare cider drinkers) and one lead line, rather than all four ''Still'' lines? — Answer: Yes. One lead audience, 25-40 drinkers who rarely drink cider, and one lead line only: Still. Hollow Oak.'
+- 'What is the competition mechanic, and will legal supply the terms and a no-purchase route? — Answer: Win a weekend in the orchards. Entry on social, after launch, with a no-purchase route. Legal terms come from the client''s legal team before anything is published.'
+- 'Must the old bottle appear beside the can? — Answer: Yes. Show the new can as the hero and the old bottle once, small, beside it, so core drinkers recognise the brand.'
+- 'Which measures count as success, and is there budget for a tracker or holdout? — Answer: Primary: trial of Still among 25-40s, read through sales and distribution after September. Secondary: awareness in a before-and-after tracker. An award is a bonus.'
+project_name: Hollow Oak 'Still'
+reasons_to_believe:
+- 'Orchard-grown: the whole-orchard claim starts with fruit the brand grows itself.'
+- 140 years of growing apples.
+- 'To confirm: how Still is made without fizz and why it keeps its depth of flavour; the client must supply this.'
+review:
+  based_on:
+    version: sha256:1a7592cf5f179ef321161dafaefa70cb5571737f7d07b794cba0fff1d0506ae3
+  built_at: 2026-11-22T15:44:10Z
+  handler: draft_brief@1.0
+  judge:
+    definition_of_done:
+    - id: objectives_linked
+      status: review
+    - id: smp_single
+      status: review
+    - id: rtb_supports_smp
+      status: pass
+    - id: evaluation_present
+      status: review
+    - id: all_required_filled
+      status: pass
+    dependencies:
+    - id: chain
+      note: jev reads it as one argument
+      status: pass
+    fields:
+      audience:
+        checks:
+        - check: claim_supported
+          method: auto
+          note: 'To confirm: lead with 25-40 drinkers who rarely drink cider, women slightly ahead.: nothing given supports it: to confirm'
+          status: review
+        - check: claim_supported
+          method: auto
+          note: 'The 55+ rural core is protected, not targeted.: nothing given supports it: to confirm'
+          status: review
+        outcome: passed
+      background:
+        checks: []
+        outcome: revised
+      barrier:
+        checks:
+        - check: claim_supported
+          method: auto
+          note: 'To confirm: ''Cider without bubbles sounds flat.: nothing given supports it: to confirm'
+          status: review
+        outcome: passed
+      budget_and_scope:
+        checks: []
+        outcome: passed
+      client:
+        checks: []
+        outcome: passed
+      competitor_context:
+        checks: []
+        outcome: revised
+      desired_response.do:
+        checks:
+        - check: claim_supported
+          method: auto
+          note: 'To confirm: Look for Still in September and try it.: nothing given supports it: to confirm'
+          status: review
+        outcome: passed
+      desired_response.feel:
+        checks:
+        - check: claim_supported
+          method: auto
+          note: 'To confirm: Curious, relaxed and a little proud to be in on something good, never lectured or sold to.: nothing given supports it: to confirm'
+          status: review
+        outcome: passed
+      desired_response.think:
+        checks:
+        - check: claim_supported
+          method: auto
+          note: 'To confirm: Hollow Oak Still is a real orchard cider, made properly, and I haven''t had cider like this.: nothing given supports it: to confirm'
+          status: review
+        outcome: passed
+      insight:
+        checks:
+        - check: claim_supported
+          method: auto
+          note: 'To confirm: "I like the idea of an honest apple drink, but cider has come to mean fizzy, sweet and heavy, so I order something else.": nothing given supports it: to confirm'
+          status: review
+        outcome: passed
+      job:
+        checks:
+        - check: claim_supported
+          method: auto
+          note: 'To confirm: move a 25-40 drinker who rarely has cider from ''cider is fizzy and not for me'' to ''a still orchard cider is worth trying''.: nothing given supports it: to confirm'
+          status: review
+        outcome: passed
+      mandatories:
+        checks:
+        - check: claim_supported
+          method: auto
+          note: 'To confirm: why legal wants no apples in the visuals; until explained, show none.: nothing given supports it: to confirm'
+          status: review
+        - check: claim_supported
+          method: auto
+          note: 'To confirm: whether the old bottle sits beside the can.: nothing given supports it: to confirm'
+          status: review
+        outcome: revised
+      measurement:
+        checks:
+        - check: claim_supported
+          method: auto
+          note: 'To confirm: Judged by trial of Still among 25-40s, read through sales and distribution after September, and the 30% objective.: nothing given supports it: to confirm'
+          status: review
+        - check: claim_supported
+          method: auto
+          note: 'To confirm, if budgeted: a tracker wave before launch on ''cider is not for me''.: nothing given supports it: to confirm'
+          status: review
+        - check: claim_supported
+          method: auto
+          note: 'To confirm, if budgeted: a regional holdout.: nothing given supports it: to confirm'
+          status: review
+        outcome: passed
+      media_roles:
+        checks:
+        - check: claim_supported
+          method: auto
+          note: 'To confirm: Social/TikTok: the 15-second film builds curiosity among 25-40s before September.: nothing given supports it: to confirm'
+          status: review
+        - check: claim_supported
+          method: auto
+          note: 'To confirm: Outdoor: one can-and-oak image, only if the budget allows.: nothing given supports it: to confirm'
+          status: review
+        outcome: passed
+      objection:
+        checks:
+        - check: claim_supported
+          method: auto
+          note: 'To confirm: "Cider without bubbles sounds flat.": nothing given supports it: to confirm'
+          status: review
+        outcome: passed
+      objectives.attitudinal:
+        checks:
+        - check: claim_supported
+          method: auto
+          note: 'To confirm: shift the lead drinker from ''cider is not for me'' to ''a still orchard cider is worth trying'', and build awareness of Still among them.: nothing given supports it: to confirm'
+          status: review
+        outcome: passed
+      objectives.behavioural:
+        checks:
+        - check: claim_supported
+          method: auto
+          note: 'To confirm: Get 25-40 drinkers who rarely drink cider to look for Still and try it from September.: nothing given supports it: to confirm'
+          status: review
+        outcome: passed
+      objectives.commercial:
+        checks:
+        - check: claim_supported
+          method: auto
+          note: 'We propose 12 months from the September launch against the prior year, for the client to confirm.: worked out: 3 - 15 = 12'
+          status: pass
+        outcome: passed
+      open_questions:
+        checks: []
+        outcome: passed
+      project_name:
+        checks: []
+        outcome: passed
+      reasons_to_believe:
+        checks:
+        - check: claim_supported
+          method: auto
+          note: 'To confirm: how Still is made without fizz and why it keeps its depth of flavour; the client must supply this.: nothing given supports it: to confirm'
+          status: review
+        outcome: revised
+      single_minded_proposition:
+        checks:
+        - check: claim_supported
+          method: auto
+          note: 'To confirm: Hollow Oak Still gives you the whole orchard in every glass, with nothing fizzy or heavy in the way.: nothing given supports it: to confirm'
+          status: review
+        outcome: passed
+      tone_and_world:
+        checks: []
+        outcome: passed
+    health: 64
+    reason_codes_version: '1'
+  scorecard:
+    dimensions:
+    - dimension: objectives_quality
+      verdict: vague
+    - dimension: audience_vividness
+      verdict: pass
+    - dimension: single_minded_message
+      verdict: vague
+    - dimension: evaluation_criteria
+      verdict: vague
+    - dimension: budget_interlock
+      verdict: vague
+    - dimension: strategic_clarity
+      verdict: pass
+    - dimension: language
+      verdict: vague
+    single_mindedness:
+      split_into: []
+      verdict: single
+    summary: A quick check read every part and flagged 13; the Review agent and code's checks sent 4 back to the Brief agent, who rewrote 4.
+single_minded_proposition: 'To confirm: Hollow Oak Still gives you the whole orchard in every glass, with nothing fizzy or heavy in the way.'
+tone_and_world:
+- Dry, warm, irreverent wit with serious craft behind it
+- Playful in voice, exact in facts
+- Orchard and farmers' market texture, with no apples shown
+- Nothing that looks like an ad
+- Stand apart from the ice-and-fizz and pastoral-somnolent cider codes

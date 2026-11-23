@@ -541,31 +541,13 @@ pub fn spinoff_change_as(
     map: Option<String>,
 ) -> HostResult<Change> {
     let uri = source_uri(source.id(), source.clan().raw_bytes());
-    spinoff_change_from(store, ctx, source, target_app_id, title, map, uri)
-}
-
-/// [`spinoff_change_as`] for a source that is not a document of this store
-/// but is held as one, read from elsewhere (a Production project in the
-/// relay): `source_uri` is how the new document names where it came from
-/// (`production:<project>@<etag>`, `docs/contracts/os-layer.md` §5.9). The host
-/// only builds the document; reading the source and writing the result are the
-/// caller's, so this stays free of HTTP and files.
-pub fn spinoff_change_from(
-    store: &dyn DocStore,
-    ctx: &Ctx,
-    source: &Document,
-    target_app_id: &str,
-    title: Option<String>,
-    map: Option<String>,
-    source_uri: String,
-) -> HostResult<Change> {
     let template = load_template(store, target_app_id)?;
     spinoff_from(
         store,
         ctx,
         &template,
         source.clan(),
-        source_uri,
+        uri,
         target_app_id,
         title,
         map,
@@ -695,41 +677,6 @@ fn with_projection(bytes: Vec<u8>) -> HostResult<Vec<u8>> {
         b.add_entry(path, entry);
     }
     b.add_entry(DATA, data.into_bytes());
-    Ok(b.build()?)
-}
-
-/// Make the workspace of `ctx` part of what `bytes` says about itself: the
-/// newest decision of its chain (a spin-off's own marker) gets the context's
-/// scope, so [`foreign`] can tell later whose it is. For a document that does
-/// not live in this store and so is not under its tenant's directory (a
-/// Production project, kept in the relay): the relay keeps tenants apart by
-/// where it stores a project, and this is what the document itself says.
-/// A document already stamped, or a context with no workspace, is returned as it came.
-pub fn stamp_tenant(ctx: &Ctx, bytes: Vec<u8>) -> HostResult<Vec<u8>> {
-    let clan = ClanFile::from_bytes(bytes)?;
-    if ctx.scope.org.is_none() {
-        return Ok(clan.raw_bytes().to_vec());
-    }
-    let mut chain = chain_of(&clan);
-    let Some(newest) = chain.decisions.first_mut() else {
-        return Ok(clan.raw_bytes().to_vec());
-    };
-    if newest.scope.as_ref().and_then(|s| s.org.as_ref()).is_some() {
-        return Ok(clan.raw_bytes().to_vec());
-    }
-    newest.scope = Some(clan_sdk::decision::DecisionScope {
-        org: ctx.scope.org.clone(),
-        brand: ctx.scope.brand.clone(),
-        extra: Default::default(),
-    });
-    let mut b = ClanBuilder::new(clan.manifest().clone());
-    for (path, entry) in clan.read_all_entries()? {
-        if path == clan_sdk::MANIFEST_PATH || path == CHAIN {
-            continue;
-        }
-        b.add_entry(path, entry);
-    }
-    b.add_entry(CHAIN, chain.to_yaml()?);
     Ok(b.build()?)
 }
 
