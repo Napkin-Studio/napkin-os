@@ -147,3 +147,30 @@ async fn save(
     }
     Ok(resp)
 }
+
+/// An uploaded copy or import of a Production project is a document of its own:
+/// it gets a fresh `manifest.document_id`, so the save rule (the bytes sent
+/// must carry the stored document's identity) can tell it from its source and
+/// from other copies. Any other app's upload is stored as it came: spin-offs
+/// and links address those by the identity they carry. Bytes that are not a
+/// readable Production instance come back unchanged.
+pub fn with_fresh_identity(bytes: &[u8]) -> Vec<u8> {
+    let Ok(clan) = clan_sdk::ClanFile::from_bytes(bytes.to_vec()) else {
+        return bytes.to_vec();
+    };
+    if check_instance(&clan).is_err() {
+        return bytes.to_vec();
+    }
+    let mut manifest = clan.manifest().clone();
+    manifest.document_id = Some(uuid::Uuid::new_v4().to_string());
+    let mut b = clan_sdk::ClanBuilder::new(manifest);
+    let Ok(entries) = clan.read_all_entries() else {
+        return bytes.to_vec();
+    };
+    for (path, entry) in entries {
+        if path != clan_sdk::MANIFEST_PATH {
+            b.add_entry(path, entry);
+        }
+    }
+    b.build().unwrap_or_else(|_| bytes.to_vec())
+}
