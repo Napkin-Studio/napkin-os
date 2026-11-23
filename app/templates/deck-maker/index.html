@@ -267,6 +267,8 @@ main.build:has(.dkstage.nk-asking){padding-bottom:16px}
 .slide .kick{font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--create)}
 .slide h2{margin:12px 0 0;font-size:clamp(22px,3vw,34px);line-height:1.12;letter-spacing:-.03em;font-weight:800;max-width:70%}
 .slide .pimgs{position:absolute;right:5%;top:22%;bottom:14%;width:30%;display:flex;flex-direction:column;gap:8px;justify-content:center}
+.pslide .pimgs{position:absolute;right:5%;top:22%;bottom:14%;width:30%;display:flex;flex-direction:column;gap:8px;justify-content:center}
+.pslide .pimgs img{width:100%;min-height:0;flex:1 1 0;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
 .slide .pimgs img{width:100%;min-height:0;flex:1 1 0;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
 .doc .thumb-img{width:64px;height:44px;border-radius:6px;object-fit:cover;border:1px solid var(--line);flex-shrink:0}
 .slide ul{list-style:none;margin-top:22px;display:flex;flex-direction:column;gap:12px;max-width:62%}
@@ -2611,7 +2613,7 @@ var DeckProd = (function () {
       fetchDeckFile('deck.html').then(function (f) {
         PICS = L.picturesFromHtml(new TextDecoder('utf-8').decode(f.bytes));
         if (Object.keys(PICS).length) render();
-      }).catch(function () { /* the engine holds no deck.html yet: no pictures to draw */ });
+      }).catch(function () { PICS_KEY = null; /* the engine holds no deck.html yet: no pictures to draw; the next render asks again */ });
     } catch (e) { /* no host */ }
   }
   function slidePics(id) {
@@ -2692,13 +2694,13 @@ var DeckProd = (function () {
     var ids = L.presented(s.deck);
     if (!ids.length) return '<main class="review" style="display:block;max-width:640px"><h1 class="sm" style="margin-top:40px">Nothing to present yet</h1></main>';
     var i = Math.max(0, Math.min(view.present, ids.length - 1)), sl = s.deck.slides[ids[i]], nx = s.deck.slides[ids[i + 1]];
-    var agency = L.agencyShown({ prompt: { agency: s.deck.meta && s.deck.meta.agency } });
+    var agency = L.agencyShown({ prompt: { agency: s.deck.meta && s.deck.meta.agency } }), pp = slidePics(ids[i]);
     var supply = L.toSupply(s.raw).ids.length, counts = L.sourcedCounts(s.raw);
     var refs = L.refsOf(sl).map(function (r) { return '<span class="mono" style="font-size:11px;color:var(--tool-ink);background:var(--tool-soft);border-radius:999px;padding:4px 10px">' + esc(r) + '</span>'; }).join('');
     var ds = L.deckApproval(s.raw), rep = L.reportLine(s.raw), ax = L.appendixOf(s.deck);
     var head = ds ? deckStat(ds) : '<span class="chip ' + ((s.validation.errors || 0) ? 'warn' : 'ok') + '">' + ((s.validation.errors || 0) ? 'Has errors' : 'Checked') + '</span>';
     var unapproved = ds && ds.state === 'open' ? '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-6px 0 14px" data-approve-hint><span class="note" style="flex:1;min-width:160px">The deck is not approved yet.</span><button class="btn tall" data-go="review">Approve it on Review</button></div>' : '';
-    return '<main class="present"><section><div class="pslide"><div class="kick">' + esc(sl.section) + '</div><h2>' + esc(sl.title) + '</h2>' +
+    return '<main class="present"><section><div class="pslide"><div class="kick">' + esc(sl.section) + '</div><h2>' + esc(sl.title) + '</h2>' + (pp ? '<div class="pimgs" data-pics>' + pp + '</div>' : '') +
       '<div class="foot"><span>' + esc(agency) + ' · ' + esc(s.deck.meta && s.deck.meta.client) + '</span><div class="spacer"></div><span>' + (i + 1) + ' / ' + ids.length + '</span></div></div>' +
       '<div class="controls"><button class="circ" aria-label="Previous slide" data-pres="-1"' + (i === 0 ? ' disabled' : '') + '>←</button><button class="circ" style="background:var(--ink);color:var(--paper);border:0" aria-label="Next slide" data-pres="1"' + (i === ids.length - 1 ? ' disabled' : '') + '>→</button>' +
       '<span class="mono" style="font-size:13px;padding:0 10px">' + (i + 1) + ' / ' + ids.length + '</span><div class="prog"><span style="width:' + Math.round(((i + 1) / ids.length) * 100) + '%"></span></div></div>' +
@@ -2815,7 +2817,7 @@ var DeckProd = (function () {
       try { var fb = document.querySelector(focusSel); if (fb && fb.focus) fb.focus(); } catch (e) { /* a selector the page cannot read */ }
     }
     loadUpstream(s);
-    if (scr === 'review') loadPictures(s);
+    if (scr === 'review' || scr === 'present') loadPictures(s);
   }
 
   /**
