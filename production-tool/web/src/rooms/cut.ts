@@ -48,7 +48,10 @@ export interface CutText {
 export interface CutEndCard {
   headline: string
   line: string
+  /** The call to action, only that. */
   cta?: string
+  /** Its legal line, small at the bottom: saved with the card (prefilled from the linked Brief when the card is made); '' once cleared. */
+  legal?: string
   /** Its colour, #rrggbb. */
   bg: string
   logo?: string

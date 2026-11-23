@@ -236,7 +236,7 @@ def plan(a: dict, b: dict) -> dict:
     return {"clips": [{"asset": a, "startS": 0, "inS": 0, "outS": 2, "fadeInS": 0.3},
                       {"asset": b, "startS": 2, "inS": 0.5, "outS": 1.5, "holdS": 0.2, "transitionIn": {"kind": "dissolve", "s": 0.5}}],
             "texts": [{"words": "Clean like a samurai.", "style": "super", "fromS": 0.5, "toS": 2, "fadeInS": 0.2}],
-            "endCard": {"headline": "SuperSamurai", "line": "Clean in one sweep", "cta": "supersamurai.example", "bg": "#F2F3F5", "s": 1,
+            "endCard": {"headline": "SuperSamurai", "line": "Clean in one sweep", "cta": "supersamurai.example", "legal": "Terms apply.", "bg": "#F2F3F5", "s": 1,
                         "transitionIn": {"kind": "dip_black", "s": 0.5}},
             "lengthS": 4.2}
 
@@ -322,15 +322,33 @@ def test_the_relays_event_renders_on_the_real_stitch(tmp_path):
 
 
 def test_an_end_card_whose_line_is_its_headline_says_it_once(monkeypatch):
-    """A card made from one quoted line ("Flat out good.") has it as headline and line: drawn once, the legal line
-    (cta) still under it."""
+    """A card made from one quoted line ("Flat out good.") has it as headline and line: drawn once, the call to
+    action and the legal line (its own key) under it."""
     import timeline_layers
     import typeset
 
     drawn = []
     monkeypatch.setattr(typeset, "draw", lambda img, layers, fetch=None: drawn.append(layers))
-    card = {"headline": "Flat out good.", "line": "Flat out good.", "cta": "Contains caffeine.", "bg": "#14161B", "s": 2}
+    card = {"headline": "Flat out good.", "line": "Flat out good.", "cta": "Find it near you", "legal": "Contains caffeine.", "bg": "#14161B", "s": 2}
     assert timeline_layers.end_card_png(card, (320, 180))[:4] == b"\x89PNG"
-    assert [(l["kind"], l["text"]) for l in drawn[-1]] == [("line", "Flat out good."), ("legal", "Contains caffeine.")]
+    assert [(l["kind"], l["text"]) for l in drawn[-1]] == [("line", "Flat out good."), ("line", "Find it near you"), ("legal", "Contains caffeine.")]
     timeline_layers.end_card_png({**card, "headline": "Quietboil", "line": "Let them sleep."}, (320, 180))
-    assert [l["text"] for l in drawn[-1]] == ["Quietboil", "Let them sleep.", "Contains caffeine."]
+    assert [l["text"] for l in drawn[-1]] == ["Quietboil", "Let them sleep.", "Find it near you", "Contains caffeine."]
+
+
+def test_an_end_card_draws_its_legal_line_apart_from_the_call_to_action(monkeypatch):
+    """legal is its own key (2026-11-23): small, at the bottom; the call to action is never the legal line."""
+    import timeline_layers
+    import typeset
+
+    drawn = []
+    monkeypatch.setattr(typeset, "draw", lambda img, layers, fetch=None: drawn.append(layers))
+    base = {"headline": "Ferncliff", "line": "Cool, lightly.", "bg": "#14161B", "s": 2}
+    timeline_layers.end_card_png({**base, "cta": "Find Ferncliff near you", "legal": "Please recycle."}, (320, 180))
+    cta, legal = drawn[-1][-2], drawn[-1][-1]
+    assert (cta["text"], legal["text"]) == ("Find Ferncliff near you", "Please recycle.")
+    assert legal["kind"] == "legal" and legal["box"]["y"] > cta["box"]["y"] and legal["sizeFrac"] < cta["sizeFrac"]
+    timeline_layers.end_card_png({**base, "cta": "Find Ferncliff near you"}, (320, 180))
+    assert [l["text"] for l in drawn[-1]] == ["Ferncliff", "Cool, lightly.", "Find Ferncliff near you"]
+    timeline_layers.end_card_png({**base, "legal": "Please recycle.", "cta": ""}, (320, 180))
+    assert [l["text"] for l in drawn[-1]] == ["Ferncliff", "Cool, lightly.", "Please recycle."]

@@ -54,7 +54,7 @@ function drawText(ctx: CanvasRenderingContext2D, t: PlanText, alpha: number, w: 
   ctx.restore()
 }
 
-/** The end card as the relay draws it: its colour, the headline, the line and the call to action. */
+/** The end card as the relay draws it: its colour, the headline, the line, the call to action and its legal line. */
 function drawCard(ctx: CanvasRenderingContext2D, card: NonNullable<Plan['endCard']>, alpha: number, w: number, h: number) {
   ctx.save()
   ctx.globalAlpha = alpha
@@ -74,6 +74,12 @@ function drawCard(ctx: CanvasRenderingContext2D, card: NonNullable<Plan['endCard
   if (card.cta) {
     ctx.font = TEXT_FONT.replace('{px}', String(Math.round(h * 0.04)))
     ctx.fillText(card.cta, w / 2, h * 0.68, w * 0.86)
+  }
+  // The legal line: its own key, small at the bottom (as the relay draws it).
+  if (card.legal) {
+    ctx.font = TEXT_FONT.replace('{px}', String(Math.max(9, Math.round(h * 0.026)))).replace('600', '400')
+    ctx.globalAlpha = alpha * 0.72
+    ctx.fillText(card.legal, w / 2, h * 0.93, w * 0.86)
   }
   ctx.restore()
 }
