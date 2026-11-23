@@ -379,7 +379,7 @@ export function AddForm({ onAdd, onClose }: { onAdd: (name: string, sector: stri
   return (
     <form className="cl-add-form" id="cl-add-form" noValidate data-testid="add-form" aria-label="Add a client"
       onSubmit={submit} onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); onClose() } }}>
-      <label>Client name<input id="cl-add-name" type="text" placeholder="e.g. Kerrygold" required autoFocus autoComplete="off" maxLength={60}
+      <label>Client name<input id="cl-add-name" type="text" placeholder="e.g. Larkfield Dairy" required autoFocus autoComplete="off" maxLength={60}
         value={name} onChange={e => setName(e.target.value)} aria-invalid={error ? true : undefined} aria-describedby={error ? 'cl-add-err' : undefined} /></label>
       <label>Sector<input id="cl-add-sector" type="text" placeholder="e.g. Dairy · Export" autoComplete="off" maxLength={60}
         value={sector} onChange={e => setSector(e.target.value)} /></label>
