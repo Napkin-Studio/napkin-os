@@ -801,7 +801,11 @@ async fn export_download(
     Path((_t, handle)): Path<(String, String)>,
     Query(q): Query<ExportKind>,
 ) -> ApiResult<Response> {
-    let kind = if q.kind == "pdf" { "pdf" } else { "html" };
+    let kind = match q.kind.as_str() {
+        "pdf" => "pdf",
+        "json" => "json",
+        _ => "html",
+    };
     let (tmp, filename) = ctx
         .exports
         .take(&tenant, &handle, q.token.as_deref())
@@ -817,10 +821,10 @@ async fn export_download(
     let bytes = std::fs::read(&dest).map_err(|e| ApiError::new(500, e.to_string()))?;
     let _ = std::fs::remove_file(&dest);
 
-    let ct = if kind == "pdf" {
-        "application/pdf"
-    } else {
-        "text/html; charset=utf-8"
+    let ct = match kind {
+        "pdf" => "application/pdf",
+        "json" => "application/json",
+        _ => "text/html; charset=utf-8",
     };
     Ok(attachment(ct, &format!("{filename}.{kind}"), bytes))
 }

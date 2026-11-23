@@ -787,7 +787,12 @@ fn route(ctx: &Ctx, session: &Session, cfg: &dyn HostConfig, req: HostRequest) -
             // genuinely code (e.g. brief-maker's report builder).
             let v = req.body_json();
             let kind = v.get("kind").and_then(|x| x.as_str()).unwrap_or("html");
-            let kind = if kind == "pdf" { "pdf" } else { "html" };
+            // `json` is a data file the app made (Territories' JSON): saved as it is, never printed.
+            let kind = match kind {
+                "pdf" => "pdf",
+                "json" => "json",
+                _ => "html",
+            };
             let filename = v
                 .get("filename")
                 .and_then(|x| x.as_str())
@@ -799,7 +804,12 @@ fn route(ctx: &Ctx, session: &Session, cfg: &dyn HostConfig, req: HostRequest) -
             // Native: stash it and let the shell pick a destination.
             #[cfg(feature = "native")]
             {
-                match write_temp_html(html) {
+                let written = if kind == "json" {
+                    crate::export::write_temp_raw(html, ".json")
+                } else {
+                    write_temp_html(html)
+                };
+                match written {
                     Ok(tmp) => HostResponse::ok_json().with_event(HostEvent::ExportRequest {
                         kind: kind.to_string(),
                         filename: filename.to_string(),

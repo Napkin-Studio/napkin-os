@@ -97,6 +97,21 @@ pub fn write_temp_html(html: &str) -> HostResult<String> {
     Ok(path.display().to_string())
 }
 
+/// Write a file the app made itself (a JSON export) to a persistent temp file,
+/// byte for byte: no legibility script, nothing added. Removed by [`finish_export`].
+pub fn write_temp_raw(content: &str, suffix: &str) -> HostResult<String> {
+    use std::io::Write;
+    let tf = tempfile::Builder::new()
+        .prefix("napkin-export-")
+        .suffix(suffix)
+        .tempfile()
+        .map_err(|e| HostError::internal(e.to_string()))?;
+    let (mut file, path) = tf.keep().map_err(|e| HostError::internal(e.to_string()))?;
+    file.write_all(content.as_bytes())
+        .map_err(|e| HostError::internal(e.to_string()))?;
+    Ok(path.display().to_string())
+}
+
 /// Render `tmp_html` to a PDF at `dest` with a headless browser.
 ///
 /// Chromium will not start without a home it can write its profile to, and
@@ -239,11 +254,11 @@ fn renderer_said(stderr: &[u8]) -> String {
     format!("; renderer said: {tail}")
 }
 
-/// Finish an export the shell has a destination for. `html` → copy the temp
-/// file; `pdf` → render it. The temp source is always cleaned up.
+/// Finish an export the shell has a destination for. `html` and `json` → copy
+/// the temp file; `pdf` → render it. The temp source is always cleaned up.
 pub fn finish_export(kind: &str, tmp_html: &str, dest: &str) -> HostResult<String> {
     let result = match kind {
-        "html" => std::fs::copy(tmp_html, dest)
+        "html" | "json" => std::fs::copy(tmp_html, dest)
             .map(|_| ())
             .map_err(|e| HostError::internal(e.to_string())),
         "pdf" => render_pdf(tmp_html, dest),

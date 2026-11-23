@@ -419,7 +419,7 @@ export default function App() {
       host.on('clan-request-save', () => { saveCurrent() }),
       host.on('clan-export-request', async p => {
         if (!p) return
-        const ext = p.kind === 'pdf' ? 'pdf' : 'html'
+        const ext = p.kind === 'pdf' ? 'pdf' : p.kind === 'json' ? 'json' : 'html'
         const dest = await host.pickSaveDestination(p.filename, ext)
         if (!dest) return
         setBusy(`Saving the ${ext.toUpperCase()}…`)
