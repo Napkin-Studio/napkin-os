@@ -20,7 +20,7 @@ WORKDIR = "/srv/napkin/server"
 
 #: What Territories reads at run time, relative to the repository root (and so to /srv/napkin in the image).
 NEEDED = ["engine/territory/__init__.py", "engine/territory/runner.py", "engine/territory/prompts", "engine/brief_llm.py", "engine/price_table.py",
-          "engine/prices.json", "engine/deck/packs", "app/templates/territories/schema.json", "app/templates/territories/seed.json",
+          "engine/prices.json", "engine/deck/packs", "engine/visuals/runway.py", "engine/visuals/jobs.py", "engine/visuals/lint.py", "engine/visuals/data/common_words.txt", "engine/visuals/words/visual.txt", "app/templates/territories/schema.json", "app/templates/territories/seed.json",
           "app/templates/territories/example/data.json", "server/napkin/model_routes.py"]
 
 
@@ -80,6 +80,13 @@ llm = FakeLLM({"insights": {"insights": [
     {"kind": "truth", "text": "Sitting down on a train is the first minute of the weekend.", "cites": ["brief:insight"]}]}})
 res = runner.run(doc, llm=llm, store=runner.Store(Path(sys.argv[1])))
 assert res.doc["run"]["gate"]["id"] == "pick" and not res.error, res.error
+from territory import frames                                                # the pictures step: the shared picture library must be in the image too
+import tempfile
+tmp = Path(tempfile.mkdtemp())
+f = frames.Frames(contract.example("data"), runner.Store(tmp / "s"), None, doc_id="d", marks=[], environ={})
+f.declare("invented", "Shrey")
+card = f.ask(["t_started"])[3]["card"]
+assert card["frames"] == 4 and card["plan_call"], card
 print(json.dumps({"ok": True, "packs": len(packs), "contract": str(contract.TEMPLATE)}))
 '''
     env = {"PATH": "/usr/bin:/bin", "PYTHONPATH": str(base / "engine"), "HOME": str(tmp_path)}

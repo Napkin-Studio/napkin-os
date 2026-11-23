@@ -180,7 +180,7 @@ class Spend:
         """The cost card as a decision the person says yes to. It names both caps; it is the first entry of the run, before any call."""
         e = {"kind": "ask", "at": self.clock(), "by": by, "estimate_usd": card.get("est_usd"), "calls": card.get("calls"), "estimated": True,
              "cap_usd": {"claude": self.cap[CLAUDE], "pictures": self.cap[PICTURES]}}
-        e.update({k: card[k] for k in ("what", "lookup") if k in card})
+        e.update({k: card[k] for k in ("what", "lookup", "card_id", "frames", "routes") if k in card})
         with self.lock:
             self.events.append(e)
             self._save()
@@ -214,6 +214,14 @@ class Spend:
         """Make one picture through ``create()`` -> (result, real usd) at most once per ``key``: a recorded one is returned, one in flight
         is joined, and a new one first passes the pictures cap."""
         return self._once(key, PICTURES, "picture", None, est_usd, create, None, picture=True)
+
+    def record_external(self, provider: str, stage: str, key: str, usd: float, model: str):
+        """One paid call made by a module that has its own create-and-poll rules (the picture jobs): recorded once per ``key`` for the history and
+        the totals. The provider's own ledger, not this record, decides what may be sent."""
+        with self.lock:
+            if any(l["key"] == key for l in self.lines):
+                return None
+            return self._record(provider, stage, model, {}, float(usd or 0), False, key)
 
     def charge_lookup(self, key: str, est_usd: float, run):
         """One web look-up through ``run()`` -> (result, real usd) at most once per ``key`` (a replay of the same approval reads the recorded

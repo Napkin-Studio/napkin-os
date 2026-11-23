@@ -217,3 +217,11 @@ def test_the_cli_live_run_goes_through_the_spend_module(tmp_path, capsys):
     runmod.main(base + ["--live", "--yes-cost", cid.group(1), "--out", str(out)], llm_factory=lambda: Paid())
     ledger = __import__("json").loads((tmp_path / "r.spend.json").read_text())
     assert ledger["events"][0]["kind"] == "ask" and len(ledger["lines"]) >= 7
+
+
+def test_record_external_books_a_picture_attempt_once_under_the_pictures_line():
+    s = sp.Spend(cap_usd=3.0, images_cap_usd=2.0)
+    PICTURES, CLAUDE = sp.PICTURES, sp.CLAUDE
+    assert s.record_external(PICTURES, "frame", "k1:task-1", 0.07, "runway")["usd"] == 0.07
+    assert s.record_external(PICTURES, "frame", "k1:task-1", 0.07, "runway") is None, "the same attempt is not booked twice"
+    assert s.total(PICTURES) == 0.07 and s.total(CLAUDE) == 0.0

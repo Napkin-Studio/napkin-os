@@ -14,6 +14,10 @@ One task with a ``step`` (the app's own seam, TASKS in app/templates/territories
                          (long, paid through the spend module's caps, once per look-up); ok false says no. Results arrive as finds and a Booth note
     pin_quote            a named person pins a checked quote into the document (find_id, on)
     place_pictures       arrived pictures into route slots by link (pictures.fill / attach)      quick, no model
+    frames               pictures for the GREENLIT routes (territory/frames.py), behind NAPKIN_TERRITORY_IMAGES=1: no card_id asks (the cost card, no
+                         call, the ask goes to the history); card_id (+ ok true) makes them: the plan once, Runway, the guard, the placing (long, paid
+                         through the pictures cap and the lifetime ledger). frames_approve (a named person accepts held pictures), frames_material
+                         (a named person says invented, demo or client), frames_status: quick, no model
 
 A document that arrives with pictures (``assets``) has every one put on the workspace store before a run reads it (pictures.rehome, require_all):
 a partial arrival is refused in words and nothing runs (territories/arrival.py).
@@ -43,6 +47,17 @@ PUSH_WORDS = {"braver": "Push this world further: braver, bolder, more specific,
               "more ownable": "Make this world more ownable: lines only this brand could say, same thought.",
               "more proof": "Make this world lean harder on the evidence the brief and the research carry, same thought."}
 STEERS = ("further", "pull", "cross", "stop")
+FRAME_STEPS = ("frames", "frames_approve", "frames_material", "frames_status")
+
+
+def make_transport():
+    """The Runway transport (None: the client's own https one). A test replaces this function with a fake Runway; nothing here is paid in a test."""
+    return None
+
+
+def make_guard_post():
+    """The guard's vision call (None: the local Ollama one, which the cloud does not have, so frames come back 'not checked' and are held for a person)."""
+    return None
 
 
 class _Done:
@@ -75,8 +90,8 @@ def start(req, caps, settings, jid):
     """Validate now (a 400 before any job, a 503 when the engine package is missing); build the job (the caller starts it)."""
     inp = req.inp
     step = inp.get("step") or "run"
-    if step not in MODEL_STEPS + QUICK_STEPS:
-        raise bad(f"input.step must be one of {', '.join(MODEL_STEPS + QUICK_STEPS)}")
+    if step not in MODEL_STEPS + QUICK_STEPS + FRAME_STEPS:
+        raise bad(f"input.step must be one of {', '.join(MODEL_STEPS + QUICK_STEPS + FRAME_STEPS)}")
     data = ctx_data(req.clan)
     if not data:
         raise bad("this document has no Territories data to work on")
@@ -139,6 +154,8 @@ def start(req, caps, settings, jid):
         return job
     if step == "lookup":
         return _lookup(inp, req, caps, jid, data, by, on_line)
+    if step in FRAME_STEPS:
+        return _frames(step, inp, req, caps, jid, data, by, on_line, marks)
     if step == "undo":
         aid = moves.need(inp, "action_id", "which fix")
         return TerritoriesJob(jid, TASK, req.handler, req, caps, step=step, quick=True, call=lambda job: runner.undo(data, aid, by))
@@ -193,3 +210,70 @@ def _lookup(inp, req, caps, jid, data, by, on_line):
         finally:
             lock.release()
     return TerritoriesJob(jid, TASK, req.handler, req, caps, step="lookup", call=go)
+
+
+def _frames(step, inp, req, caps, jid, data, by, on_line, marks):
+    """The pictures steps. Every refusal is the engine's, in words (``frames.Refuse``); a paid one runs in a job thread under the document's lock."""
+    from territory import frames as fr
+    runner, _ = _engine()
+
+    def ids_of():
+        v = inp.get("ids")
+        if v is None:
+            return None
+        if not isinstance(v, list) or not all(isinstance(x, str) for x in v):
+            raise bad("input.ids must be a list of route ids")
+        return v
+
+    def keys_of():
+        v = inp.get("keys")
+        if not isinstance(v, list) or not v or not all(isinstance(x, str) for x in v):
+            raise bad("input.keys must be a list of picture keys")
+        return v
+
+    ids = ids_of() if step == "frames" else None
+    card_id = moves._s(inp, "card_id", 40)
+    ok = inp.get("ok", True)
+    if step == "frames" and not isinstance(ok, bool):
+        raise bad("input.ok must be true or false")
+    retry = inp.get("retry_flagged") or []
+    if not isinstance(retry, list) or not all(isinstance(x, str) for x in retry):
+        raise bad("input.retry_flagged must be a list of picture keys")
+    retry_unknown = inp.get("retry_unknown", False)
+    if not isinstance(retry_unknown, bool):
+        raise bad("input.retry_unknown must be true or false")
+    keys = keys_of() if step == "frames_approve" else None
+    origin = moves._s(inp, "origin", 20)
+
+    def engine(llm=None):
+        store = runner.Store.for_doc(req.doc)
+        return fr.Frames(data, store, arrival.blob_store(), doc_id=req.doc, marks=marks, llm=llm, transport=make_transport(), guard_post=make_guard_post(), on_line=on_line), store
+
+    def run(job):
+        if not fr.enabled():
+            return _Done(data, ["Pictures are not switched on in this workspace."])
+        f, store = engine(J.make_llm() if step == "frames" and card_id and ok else None)
+        lock = runner._lock_of(store)
+        if not lock.acquire(blocking=False):
+            return runner._busy(data)
+        try:
+            if step == "frames":
+                if card_id and not ok:
+                    return _Done(data, [], "Not made.")
+                got = (f.make(ids, card_id, retry, retry_unknown, by or "a person") if card_id else f.ask(ids, retry, retry_unknown, by or "a person"))
+            elif step == "frames_approve":
+                got = f.approve(keys, by)
+            elif step == "frames_material":
+                got = f.declare(origin, by)
+            else:
+                got = f.status()
+        except fr.Refuse as e:
+            return _Done(data, [str(e)])
+        finally:
+            lock.release()
+        doc, refusals, note, info, decisions = got
+        res = _Done(doc, refusals, note)
+        res.info, res.decisions = info, decisions
+        return res
+    paid = step == "frames" and bool(card_id) and ok
+    return TerritoriesJob(jid, TASK, req.handler, req, caps, step=step, quick=not paid, owns_person_keys=step in ("frames_approve", "frames_material"), call=run)

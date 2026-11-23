@@ -25,6 +25,9 @@ COPY engine/prices.json ../engine/prices.json
 COPY engine/territory ../engine/territory
 COPY engine/brief_llm.py engine/price_table.py ../engine/
 COPY engine/deck/packs ../engine/deck/packs
+# The pictures of the greenlit routes (features/territories-pictures-frames, behind NAPKIN_TERRITORY_IMAGES=1): the shared picture library the Deck also uses
+# (the Runway client and its no-double-pay rules, the prompt lint and its word lists, the policy, the style pack, the guard), read by territory/frames.py.
+COPY engine/visuals ../engine/visuals
 COPY app/templates/territories/schema.json app/templates/territories/seed.json ../app/templates/territories/
 COPY app/templates/territories/example/data.json ../app/templates/territories/example/data.json
 # Which model each call uses (NAPKIN_MODEL_ROUTES; the deployment points at it).

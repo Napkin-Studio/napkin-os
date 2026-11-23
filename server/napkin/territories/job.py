@@ -45,15 +45,24 @@ def _words(e: dict) -> str:
     k = e.get("kind")
     if k == "ask" and e.get("what") == "lookup":
         return f"A look-up was approved by {e.get('by') or 'a person'} before it was made, estimated at ${float(e.get('estimate_usd') or 0):.3f}."
+    if k == "ask" and e.get("what") == "frames":
+        cap = e.get("cap_usd") or {}
+        return (f"Pictures were costed before the first one was made: {e.get('frames', '?')} pictures for {e.get('routes', '?')} greenlit routes, estimated at "
+                f"${float(e.get('estimate_usd') or 0):.2f}, capped at ${float(cap.get('pictures') or 0):.2f} for pictures. Asked by {e.get('by') or 'a person'}.")
     if k == "ask":
         cap = e.get("cap_usd") or {}
         return (f"The run was costed before the first paid call: about {e.get('calls', '?')} model calls, estimated at ${float(e.get('estimate_usd') or 0):.2f}"
                 + (f", capped at ${float(cap['claude']):.2f} for model work" if cap.get("claude") is not None else "") + f". Asked by {e.get('by') or 'the engine'}.")
     if k == "spend" and e.get("provider") == "search":
         return f"A look-up was made through the research port: ${float(e.get('usd') or 0):.4f}."
+    if k == "spend" and e.get("provider") == "runway":
+        return f"A picture attempt was made through the picture provider: ${float(e.get('usd') or 0):.2f}."
     if k == "spend":
         return (f"{e.get('stage')}: {e.get('model') or e.get('provider')}, {e.get('tokens_in', 0)} tokens in, {e.get('tokens_out', 0)} out, "
                 f"${float(e.get('usd') or 0):.4f}" + (" (estimated)" if e.get("estimated") else "") + ".")
+    if k == "outcome" and e.get("what") == "frames":
+        c = e.get("counts") or {}
+        return f"The pictures step made {c.get('made', 0)}, placed {c.get('placed', 0)} and held {c.get('held', 0)} for a person to look at."
     if k == "outcome" and e.get("what") == "look-up":
         c = e.get("counts") or {}
         return f"The look-up found {c.get('finds', 0)} quotes on {c.get('pages', 0)} pages."
@@ -302,4 +311,4 @@ class TerritoriesJob:
             s = {"done": self.summary or "Done.", "failed": f"Failed: {(self.error or {}).get('message')}",
                  "cancelled": "Cancelled: what was already paid for is saved, and the next run goes on from there."}.get(
                      self.state, "The crew is working." if self.state == "running" else "queued")
-            return {"summary": s, "step": self.step, "info": {k: v for k, v in self.info.items() if k in ("calls",)}}
+            return {"summary": s, "step": self.step, "info": {k: v for k, v in self.info.items() if k in ("calls", "frames", "card")}}
