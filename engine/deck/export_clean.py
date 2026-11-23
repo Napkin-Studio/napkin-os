@@ -25,7 +25,7 @@ _NO_AGENCY = re.compile(r"^\s*a response from \[(?:agency|[^\]]*)\]\.?\s*$", re.
 _TEXT_KEYS = ("text", "title", "answer", "kicker", "caption", "from", "to", "label", "quote", "attribution")
 _SKIP_KEYS = {"refs", "basis", "kind", "id", "ref", "src", "source", "layout", "hint"}
 OPEN_TITLE = "Open items to confirm"
-OPEN_MAX = 60
+OPEN_MAX = 48          # six appendix slides of LIST_ITEMS; any more go word for word into the last one's notes
 _NOTE = 220
 
 
@@ -115,17 +115,19 @@ def scrub(deck: dict) -> dict:
             on = str(s.get("title") or s.get("label") or sid)
             open_items += [{"text": f"On \"{on[:70]}\": {x[:_NOTE]}"} for x in found]
     if open_items:
-        from .assemble import _slide   # noqa: PLC0415
-        items = open_items[:OPEN_MAX]
-        if len(open_items) > OPEN_MAX:
-            items.append({"text": f"{len(open_items) - OPEN_MAX} more open items, on the slides' notes."})
-        new = _slide("appendix", OPEN_TITLE, [{"kind": "bullets", "items": items}], status="from_source")
-        new["requirements"], new["footnotes"] = [], []
-        n = 1 + max([int(re.sub(r"\D", "", k) or 0) for k in deck["slides"]] or [0])
-        nid = f"s{n:02d}"
+        from .assemble import LIST_ITEMS, _slide   # noqa: PLC0415
+        shown, rest = open_items[:OPEN_MAX], open_items[OPEN_MAX:]
+        chunks = [shown[i:i + LIST_ITEMS] for i in range(0, len(shown), LIST_ITEMS)]   # the host takes at most LIST_ITEMS a list
         at = next((i for i, k in enumerate(deck["order"]) if deck["slides"][k]["type"] in ("requirement_trace", "appendix_sources")), len(deck["order"]))
-        deck["slides"][nid] = new
-        deck["order"].insert(at, nid)
+        for c, items in enumerate(chunks):
+            last = c == len(chunks) - 1
+            notes = "" if not (last and rest) else f"{len(rest)} more open items:\n" + "\n".join(f"- {x['text']}" for x in rest)
+            new = _slide("appendix", OPEN_TITLE + (", continued" if c else ""), [{"kind": "bullets", "items": items}], status="from_source", notes=notes)
+            new["requirements"], new["footnotes"] = [], []
+            n = 1 + max([int(re.sub(r"\D", "", k) or 0) for k in deck["slides"]] or [0])
+            nid = f"s{n:02d}"
+            deck["slides"][nid] = new
+            deck["order"].insert(at + c, nid)
     deck.setdefault("meta", {})["export_clean"] = {"open_items": len(open_items), "slides": touched}
     return {"items": len(open_items), "slides": touched}
 
