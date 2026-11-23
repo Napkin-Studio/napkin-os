@@ -138,8 +138,8 @@ def _lines_of(w: dict) -> list:
 
 def live_move(step: str, inp: dict, findings=None):
     """The move ``step`` asks for as ``fn(doc) -> (doc, refusals)``; a 400 for a missing or malformed input."""
-    if step == "set_rights":
-        return _picture_move(step, "", inp, findings)
+    if step == "set_rights":                       # the route is optional: a hash is on one route
+        return _picture_move(step, _s(inp, "territory_id", 80), inp, findings)
     tid = need(inp, "territory_id", "the route")
     if step == "set_lead":
         line = inp.get("line")
@@ -196,17 +196,17 @@ def _edit(doc: dict, tid: str, fn):
 
 
 def _picture_move(step: str, tid: str, inp: dict, findings=None):
-    """``set_final`` (``territory_id``, ``slot_id`` or ``sha256``, ``final`` true/false) and ``set_rights`` (``sha256``, ``rights``): the Pictures
+    """``set_final`` (``territory_id``, ``picture_id`` / ``slot_id`` / ``sha256``, ``on`` true/false) and ``set_rights`` (``territory_id?``, ``picture_id`` or ``sha256``, ``rights``): the Pictures
     view's choices, through ``territory.pictures``. A picture is found by its slot id or its hash; ``set_rights`` needs only the hash (it is on one
     route). The open gate is refreshed, since a Final with no stated rights holds the greenlight."""
     from territory import pictures
-    ref = _s(inp, "slot_id", 80) or _s(inp, "sha256", 80)
+    ref = _s(inp, "slot_id", 80) or _s(inp, "picture_id", 80) or _s(inp, "sha256", 80)      # picture_id: the slot id (or the hash) the Pictures view names
     if not ref:
         raise bad("input.slot_id or input.sha256 is required: which picture")
     if step == "set_final":
-        on = inp.get("final")
+        on = inp.get("on") if "on" in inp else inp.get("final")
         if not isinstance(on, bool):
-            raise bad("input.final must be true or false")
+            raise bad("input.on must be true or false")
         act = lambda t: pictures.set_final(t, ref, on)      # noqa: E731
     else:
         rights = _s(inp, "rights", 20)
@@ -218,7 +218,7 @@ def _picture_move(step: str, tid: str, inp: dict, findings=None):
         from territory import contract
         d = copy.deepcopy(doc)
         ts = [t for t in d.get("territories") or [] if (not tid or t.get("id") == tid) and t.get("pictures")]
-        if step == "set_rights":
+        if step == "set_rights" and not tid:
             try:
                 sha = pictures.bare(ref)
             except pictures.PictureError as e:

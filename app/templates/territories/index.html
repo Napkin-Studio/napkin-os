@@ -1992,12 +1992,18 @@ var TerritoriesPictures = (function () {
     var same = slots(t).filter(function (s) { return s.touchpoint === c.touchpoint; });
     return (TP[c.touchpoint] || 'Picture') + (same.length > 1 ? ' ' + (same.map(function (s) { return s.id; }).indexOf(c.id) + 1) : '');
   }
+  /** Where the host serves a picture of this document: its `/assets/<name>` under the host's scheme, the way Deck Maker reads its files
+   *  (a relative `assets/...` from inside the frame resolves to no route of the host). */
+  function assetUrl(sha) {
+    var ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+    return (ua.indexOf('Windows') !== -1 ? 'http://clan.localhost' : 'clan://localhost') + '/assets/' + encodeURIComponent(sha);
+  }
   /** The picture itself: a carried frame by its hash link, a sketch from the route's palette, a gap in words. */
   function face(t, c, big) {
     var p = L.pal(t), cls = 'pface' + (big ? ' big' : '');
     if (c.kind === 'gap') return '<div class="' + cls + ' gap"><span>' + esc(c.gap_reason || 'No picture yet.') + '</span></div>';
     var inner = c.kind === 'sketch' ? '<div class="scn">' + L.scene(c.scene || 'platform', p) + '</div>'
-      : '<img src="assets/' + esc(c.sha256) + '" alt="" loading="lazy" onerror="this.remove()">';
+      : '<img src="' + esc(assetUrl(c.sha256)) + '" alt="" loading="lazy" onerror="this.remove()">';
     return '<div class="' + cls + (c.kind === 'sketch' ? ' sk' : '') + '" style="background:' + p.bg + '">' + inner + (c.final ? pill() : '') +
       '<span class="plab">' + esc(c.label) + '</span>' + (c.kind === 'frame' ? rightsChip(t, c) : '') + '</div>';
   }

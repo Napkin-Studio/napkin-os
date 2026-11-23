@@ -609,14 +609,14 @@ def test_set_rights_and_set_final_are_small_moves_through_territory_pictures(ter
     slot = next(s for s in t["pictures"] if s["kind"] == "frame")
     h = slot["sha256"]
     assert step(terr, host, "set_rights", sha256=h, rights="licensed", by="Shrey")[0]["job"]["state"] == "done"
-    assert step(terr, host, "set_final", territory_id=tid, slot_id=slot["id"], final=True, by="Shrey")[0]["job"]["state"] == "done"
+    assert step(terr, host, "set_final", territory_id=tid, slot_id=slot["id"], on=True, by="Shrey")[0]["job"]["state"] == "done"
     s2 = next(s for s in next(x for x in host.data["territories"] if x["id"] == tid)["pictures"] if s["id"] == slot["id"])
     assert s2["rights"] == "licensed" and s2["final"] is True
-    assert step(terr, host, "set_final", territory_id=tid, sha256=h, final=False, by="Shrey")[0]["job"]["state"] == "done"
+    assert step(terr, host, "set_final", territory_id=tid, sha256=h, on=False, by="Shrey")[0]["job"]["state"] == "done"
     assert "final" not in next(s for s in next(x for x in host.data["territories"] if x["id"] == tid)["pictures"] if s["id"] == slot["id"])
     assert step(terr, host, "set_rights", sha256=hashlib.sha256(b"nothing").hexdigest(), rights="own", by="Shrey")[0]["job"]["state"] == "failed"
-    assert step(terr, host, "set_final", territory_id=tid, slot_id=next(s for s in t["pictures"] if s["kind"] != "frame")["id"], final=True, by="Shrey")[0]["job"]["state"] == "failed"
-    for bad in ({"step": "set_rights", "sha256": h, "rights": "client_supplied"}, {"step": "set_final", "territory_id": tid, "sha256": h}, {"step": "set_rights", "rights": "own"}):
+    assert step(terr, host, "set_final", territory_id=tid, slot_id=next(s for s in t["pictures"] if s["kind"] != "frame")["id"], on=True, by="Shrey")[0]["job"]["state"] == "failed"
+    for bad in ({"step": "set_rights", "sha256": h, "rights": "client_supplied"}, {"step": "set_final", "territory_id": tid, "picture_id": h}, {"step": "set_rights", "rights": "own"}):
         assert post(terr, "run_territories", bad, host.clan())[0] == 400
     assert contract.problems(host.data) == []
 
@@ -628,7 +628,7 @@ def test_a_final_with_no_stated_rights_holds_the_gate_until_the_rights_move(terr
     t = next(x for x in host.data["territories"] if x["id"] == tid)
     slot = next(s for s in t["pictures"] if s["kind"] == "frame")
     step(terr, host, "set_rights", sha256=slot["sha256"], rights="unknown", by="Shrey")
-    step(terr, host, "set_final", territory_id=tid, slot_id=slot["id"], final=True, by="Shrey")
+    step(terr, host, "set_final", territory_id=tid, slot_id=slot["id"], on=True, by="Shrey")
     assert any(b["kind"] == "picture_rights" for b in host.data["run"]["gate"]["blocked_by"])
     step(terr, host, "set_rights", sha256=slot["sha256"], rights="own", by="Shrey")
     assert not any(b["kind"] == "picture_rights" for b in host.data["run"]["gate"]["blocked_by"])
@@ -653,3 +653,13 @@ def test_a_picture_choice_interleaves_with_a_running_step(terr, blobs, monkeypat
     host.apply(b["change"])
     t2 = next(x for x in host.data["territories"] if x["id"] == tid)
     assert next(s for s in t2["pictures"] if s["id"] == slot["id"])["rights"] == "licensed"
+
+
+def test_the_pictures_view_names_the_slot_by_picture_id(terr, blobs, monkeypatch):
+    host, tid = _with_frames(terr, monkeypatch, blobs)
+    t = next(x for x in host.data["territories"] if x["id"] == tid)
+    slot = next(s for s in t["pictures"] if s["kind"] == "frame")
+    assert step(terr, host, "set_rights", territory_id=tid, picture_id=slot["id"], rights="own", by="Shrey")[0]["job"]["state"] == "done"
+    assert step(terr, host, "set_final", territory_id=tid, picture_id=slot["id"], on=True, by="Shrey")[0]["job"]["state"] == "done"
+    s2 = next(s for s in next(x for x in host.data["territories"] if x["id"] == tid)["pictures"] if s["id"] == slot["id"])
+    assert s2["rights"] == "own" and s2["final"] is True
