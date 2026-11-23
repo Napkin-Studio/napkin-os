@@ -488,7 +488,7 @@ function mount(data: Record<string, unknown>, fetchImpl?: unknown, extraEls: Rec
   const click = (attrs: Record<string, string>, id = '') =>
     handlers.click.forEach(h => h({ target: { closest: () => ({ dataset: attrs, id }) } }))
   const fire = (t: string, e: Record<string, unknown>) => (handlers['win:' + t] || []).forEach(h => h(e))
-  return { app, writes, click, toastEl, doc, timers, fire }
+  return { app, writes, click, toastEl, doc, timers, fire, win }
 }
 
 const hostile = '<img src=x onerror=alert(1)>'
@@ -1372,7 +1372,7 @@ test('Build, failed: a failed run opens on Build with the failure, the failed ro
   assert.ok(h.includes('<span class="ring failed" aria-hidden="true">!</span>'), 'the stage list marks the failed stage')
   m.click({ retry: 'check' })
   assert.equal(m.writes.length, 0)
-  assert.match(m.toastEl.textContent, /Retrying a step needs the engine server/)
+  assert.match(m.toastEl.textContent, /Use Build deck on Start to run a step again/)
 })
 
 test('Build, done: the deck is ready, what to supply is listed, and Open the deck goes to Review', () => {
@@ -1573,10 +1573,10 @@ test('Edit and Ask the Deck agent at any gate record a request and say it waits;
     const w = (m.writes[0].obj as Write).run
     assert.deepEqual(plain(Object.keys(w).sort()), ['decisions', 'gate_requests'])
     assert.equal(w.gate_requests.at(-1).status, 'waiting')
-    assert.match(m.toastEl.textContent, /^Recorded\. Editing and retrying a gate need the engine server/)
+    assert.match(m.toastEl.textContent, /^Queued\. Your edit or retry applies the next time the deck is built/)
     const f = fixture(name)
     f.run.gate_requests = [{ gate, kind: 'edit', at, status: 'waiting' }]
-    assert.ok(mount(f).app.innerHTML.includes('data-asked>You asked for an edit. It waits for the engine'))
+    assert.ok(mount(f).app.innerHTML.includes('data-asked>You asked for an edit. Queued: it applies the next time the deck is built'))
   }
 })
 
@@ -2568,4 +2568,84 @@ test('Review shows the deck type as a chip with Change, which goes back to Start
   inf.deck.meta.built_from.type = 'tender_response'
   inf.intake = { ...(inf.intake || {}), questions: [typeQ({ options: [{ id: 'tender_response', label: 'T', value: 'tender_response', origin: 'proposed', source: 'invitation to tender' }] })], answers: {} }
   assert.ok(mount(inf).app.innerHTML.includes('Read as a tender response because: &quot;invitation to tender&quot;.'))
+})
+
+
+// ── UAT 2026-11-22 (deck leg): the gates, the changes and the pictures ──
+test('after Edit or Retry at a gate, the next Approve still works, with the engine connected', async () => {
+  for (const [name, edit, gate] of [['gate1', 'beats', 'storyline'], ['gate2', 'territories', 'territories']]) {
+    const jobs: string[] = []
+    const apiProxy = (_k: string, p: { task: string }) => { jobs.push(p.task); return Promise.resolve({ ok: true }) }
+    const m = mount(fixture(name), () => Promise.resolve({ ok: true, json: () => Promise.resolve({ configured: true }) }), {}, { apiProxy })
+    await new Promise(r => setTimeout(r, 0))
+    m.click({ edit })
+    const data = (m.win.__CLAN__ as { data: unknown })
+    data.data = merge(data.data, m.writes[0].obj)   // what the store does with the put
+    m.fire('clan:dataupdated', {})
+    m.click({ retry: gate })
+    data.data = merge(data.data, m.writes[1].obj)
+    m.fire('clan:dataupdated', {})
+    if (name === 'gate2') m.click({ territory: (fixture(name).run.gate.territories[1] as { id: string }).id })
+    const before = m.writes.length
+    m.click({}, 'approve')
+    assert.equal(m.writes.length, before + 1, `${name}: Approve writes the approval after an Edit and a Retry`)
+    assert.match(m.writes[before].action, /^approve /)
+  }
+})
+
+test('a run a write left bare (no stages) still draws, and Approve then says why instead of doing nothing', () => {
+  const f = fixture('gate1')
+  const m = mount(f)
+  m.click({ edit: 'beats' })
+  // a store that replaced run with just the request (what the UAT page behaved as): the screens must not throw
+  const bare = { ...f, run: { ...(m.writes[0].obj as { run: Record<string, unknown> }).run, state: 'gate', gate: f.run.gate } }
+  ;(m.win.__CLAN__ as { data: unknown }).data = bare
+  assert.doesNotThrow(() => m.fire('clan:dataupdated', {}))
+  assert.ok(m.app.innerHTML.includes('id="approve"'), 'the gate is still drawn')
+  const before = m.writes.length
+  m.click({}, 'approve')
+  assert.ok(m.writes.length === before + 1 || m.toastEl.textContent.length > 0, 'Approve writes, or says why it cannot')
+})
+
+test('Shorter, Say it another way and Add the figure say plainly that they are queued for the next build, and show it', () => {
+  const f = { ...fixture('done'), change_requests: [] as unknown[] }
+  const m = mount(f)
+  m.click({ go: 'review' })
+  m.click({ change: 'shorter' })
+  assert.match(m.toastEl.textContent, /^Queued\. This change applies the next time the deck is built/)
+  assert.doesNotMatch(m.toastEl.textContent, /engine is connected/)
+  const w = (m.writes.at(-1)!.obj as { change_requests: { slide: string; change: string }[] }).change_requests
+  const slide = w[0].slide
+  const after = mount({ ...fixture('done'), change_requests: [{ slide, change: 'shorter', at: 't', status: 'waiting' }] })
+  after.click({ go: 'review' })
+  assert.match(after.app.innerHTML, /data-queued[^>]*>Queued for the next build: Shorter\./)
+})
+
+const PNG = 'data:image/png;base64,iVBORw0KGgo='
+const deckHtml = `<html><body><section class="slide t-cover" id="s01"><figure class="pic" data-slot="picture" style="x"><img src="${PNG}" alt="a"></figure></section>
+<section class="slide" id="s02"><figure class="pic" data-slot="picture"><img src="https://evil.example/x.png"></figure></section></body></html>`
+
+test('the pictures a built deck.html carries are read by slide and slot; only inline images count', () => {
+  assert.deepEqual(plain(L.picturesFromHtml(deckHtml)), { s01: { picture: PNG } })
+  assert.deepEqual(plain(L.picturesFromHtml(null)), {})
+  assert.deepEqual(plain(L.picturesFromHtml('<section id="s01"><figure data-slot="Bad Slot"><img src="data:image/png;base64,AAAA"></figure>')), {})
+})
+
+test('Review draws the slide\'s pictures and the picker shows thumbnails, once the engine hands over deck.html', async () => {
+  const f = fixture('done') as Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
+  const first = f.deck.order[0] as string
+  const html = deckHtml.replace(/s01/g, first)
+  f.production = { card: 'Production: 1 picked', source: { kind: 'upstream', name: 'production:x' }, fetch: { on: false, allow_list_empty: true }, look: { on: false },
+    picks: [{ slot: `${first}.picture`, key: 'fset_01KB0000000000000000000002#master', label: 'Key visual', role: 'key_visual', from: 'relay', by: 'final', rights: 'generated', status: 'ready',
+      eligible: [{ key: 'fset_01KB0000000000000000000002#master', label: 'Key visual', role: 'key_visual', reach: 'relay', rights: 'generated', status: 'ready' }] }] }
+  const apiProxy = (_k: string, p: { task: string; input: { name?: string } }) =>
+    Promise.resolve({ ok: true, data: { api: 'napkin.middleware/1', result: { name: p.input.name, media_type: 'text/html', data_b64: Buffer.from(html).toString('base64') } } })
+  const m = mount(f, () => Promise.resolve({ ok: true, json: () => Promise.resolve({ configured: true }) }), {}, { apiProxy })
+  await new Promise(r => setTimeout(r, 0))
+  m.click({ go: 'review' })
+  m.click({ slide: first })
+  await new Promise(r => setTimeout(r, 10))
+  assert.match(m.app.innerHTML, /data-pics><img src="data:image\/png;base64,iVBORw0KGgo="/)
+  assert.match(m.app.innerHTML, /data-prod-thumb/)
+  assert.doesNotMatch(m.app.innerHTML, /evil\.example/)
 })
