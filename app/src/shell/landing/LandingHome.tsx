@@ -22,6 +22,7 @@ import { Desk } from '../nui/Desk'
 import { ClientView } from '../nui/ClientView'
 import type { Facts } from '../nui/deskData'
 import { useLensDots } from '../nui/lenses'
+import { useTerritoryCounts } from '../nui/useTerritoryCounts'
 import './landing.css'
 
 const NONE: never[] = []
@@ -141,6 +142,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
   const mine = client ? data.items.filter(i => i.client?.id === client.id) : []
   const inTool = tool?.appId ? mine.filter(i => i.app_id === tool.appId) : []
   const lenses = useLensDots(tool?.id === 'research' ? inTool : NONE)
+  const counts = useTerritoryCounts(tool?.id === 'territories' ? inTool : NONE)
   // a repeated word is still a change to the region, so it is said again
   const say = soon?.key === key ? soon.text + (soon.n % 2 ? '' : ' ') : arrival(route, {
     agency: who.agency, client: client?.name, tool: tool?.full, tools: 5, open: inTool.length,
@@ -157,6 +159,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         onOpenItem={onOpenDocument}
         onBack={() => go({ level: 'client', client: client.id })}
         lenses={lenses}
+        counts={counts}
         note={tool.id === 'brief' && fromBrief === key ? 'Territories starts from a brief. Open one, then Continue in ▾ Territories.' : undefined}
       />
     )
