@@ -16,7 +16,7 @@ One task with a ``step`` (the app's own seam, TASKS in app/templates/territories
     place_pictures       arrived pictures into route slots by link (pictures.fill / attach)      quick, no model
     frames               pictures for the GREENLIT routes (territory/frames.py), behind NAPKIN_TERRITORY_IMAGES=1: no card_id asks (the cost card, no
                          call, the ask goes to the history); card_id (+ ok true) makes them: the plan once, Runway, the guard, the placing (long, paid
-                         through the pictures cap and the lifetime ledger). frames_approve (a named person accepts held pictures), frames_material
+                         through the pictures cap and the lifetime ledger). frames_approve (a named person accepts held pictures), frames_leave (a named person leaves them out), frames_material
                          (a named person says invented, demo or client), frames_status: quick, no model
 
 A document that arrives with pictures (``assets``) has every one put on the workspace store before a run reads it (pictures.rehome, require_all):
@@ -47,7 +47,7 @@ PUSH_WORDS = {"braver": "Push this world further: braver, bolder, more specific,
               "more ownable": "Make this world more ownable: lines only this brand could say, same thought.",
               "more proof": "Make this world lean harder on the evidence the brief and the research carry, same thought."}
 STEERS = ("further", "pull", "cross", "stop")
-FRAME_STEPS = ("frames", "frames_approve", "frames_material", "frames_status")
+FRAME_STEPS = ("frames", "frames_approve", "frames_leave", "frames_material", "frames_status")
 
 
 def make_transport():
@@ -245,7 +245,7 @@ def _frames(step, inp, req, caps, jid, data, by, on_line, marks):
     retry_unknown = inp.get("retry_unknown", False)
     if not isinstance(retry_unknown, bool):
         raise bad("input.retry_unknown must be true or false")
-    keys = keys_of() if step == "frames_approve" else None
+    keys = keys_of() if step in ("frames_approve", "frames_leave") else None
     origin = moves._s(inp, "origin", 20)
 
     def engine(llm=None):
@@ -266,6 +266,8 @@ def _frames(step, inp, req, caps, jid, data, by, on_line, marks):
                 got = (f.make(ids, card_id, retry, retry_unknown, by or "a person") if card_id else f.ask(ids, retry, retry_unknown, by or "a person"))
             elif step == "frames_approve":
                 got = f.approve(keys, by)
+            elif step == "frames_leave":
+                got = f.leave(keys, by)
             elif step == "frames_material":
                 got = f.declare(origin, by)
             else:
@@ -279,4 +281,4 @@ def _frames(step, inp, req, caps, jid, data, by, on_line, marks):
         res.info, res.decisions = info, decisions
         return res
     paid = step == "frames" and bool(card_id) and ok
-    return TerritoriesJob(jid, TASK, req.handler, req, caps, step=step, quick=not paid, owns_person_keys=step in ("frames_approve", "frames_material"), call=run)
+    return TerritoriesJob(jid, TASK, req.handler, req, caps, step=step, quick=not paid, owns_person_keys=step in ("frames_approve", "frames_leave", "frames_material"), call=run)

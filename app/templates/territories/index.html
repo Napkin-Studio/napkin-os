@@ -2156,19 +2156,18 @@ var TerritoriesPictures = (function () {
   // The engine's steps (run_territories): frames without a card_id asks (the offer card; the page shows only its count), with the card_id
   // makes; frames_status says which made pictures are held and why; frames_approve accepts one. A held picture is not in the document: the page
   // draws it in the open place a picture can fill, from the host's blob store by its hash, and the engine places it only when a person approves.
-  var MAKE = { ask: 'frames', approve: 'frames_approve', status: 'frames_status' };
+  var MAKE = { ask: 'frames', approve: 'frames_approve', leave: 'frames_leave', status: 'frames_status' };
   function heldOf(t, ui) {
     var f = ui && ui.frames; if (!f || !t) return [];
-    return arr(f.held).filter(function (h) { return h.route === t.id && HEX.test(h.sha256 || '') && !(ui.left && ui.left[h.key]); })
+    return arr(f.held).filter(function (h) { return h.route === t.id && HEX.test(h.sha256 || ''); })
       .sort(function (a, b) { return String(a.shot) < String(b.shot) ? -1 : String(a.shot) > String(b.shot) ? 1 : 0; });
   }
-  /** The slots as drawn: a held picture takes the next open place that a picture can fill (a sketch, not a place the engine said it cannot fill). */
+  /** The slots as drawn: a held picture sits in the place the engine says it was made for (its status names it), while that place is still a sketch. */
   function withHeld(t, ui) {
     var v = view(t), hs = heldOf(t, ui); if (!hs.length) return v;
-    var no = arr(ui.frames.notOffered), i = 0;
     return v.map(function (c) {
-      if (c.kind !== 'sketch' || no.indexOf(c.touchpoint) !== -1 || i >= hs.length) return c;
-      var h = hs[i++];
+      var h = c.kind === 'sketch' ? hs.filter(function (x) { return x.place === c.id; })[0] : null;
+      if (!h) return c;
       return { id: c.id, kind: 'frame', touchpoint: c.touchpoint, label: 'Illustrative', final: false, source: null, rights: null, trusted: null, sha256: h.sha256, hash: h.sha256.slice(0, 8), held: h.key, why: h.why || '' };
     });
   }
@@ -2208,8 +2207,7 @@ var TerritoriesPictures = (function () {
   /** The frames_status answer as the page keeps it: the held pictures and the places the engine said a picture cannot fill. */
   function framesFrom(info) {
     var f = isObj(info) && isObj(info.frames) ? info.frames : null; if (!f || !Array.isArray(f.frames)) return null;
-    return { held: f.frames.filter(function (x) { return isObj(x) && x.held && x.key; }).map(function (x) { return { key: x.key, route: x.route, shot: x.shot, sha256: x.sha256, why: x.why || '' }; }),
-      notOffered: arr(isObj(f.card) ? f.card.not_offered : []).map(function (n) { return n.touchpoint; }) };
+    return { held: f.frames.filter(function (x) { return isObj(x) && x.held && x.key; }).map(function (x) { return { key: x.key, route: x.route, place: x.place || null, sha256: x.sha256, why: x.why || '' }; }) };
   }
   function makeAct(data, ui, e, env) {
     var by = (env && env.me && env.me.name) || 'You';
@@ -2218,6 +2216,7 @@ var TerritoriesPictures = (function () {
       return { writes: [], request: { key: 'pic:make:' + e.tid, what: 'Making the pictures', input: { step: MAKE.ask, ids: [e.tid], card_id: ui.mk.card.id, by: by }, after: 'frames' } };
     }
     if (e.a === 'pic_ok') return { writes: [], request: { key: 'pic:held:' + e.id, what: 'Approving the picture', input: { step: MAKE.approve, keys: [e.id], by: by }, after: 'frames' } };
+    if (e.a === 'pic_leave') return { writes: [], request: { key: 'pic:held:' + e.id, what: 'Leaving the picture out', input: { step: MAKE.leave, keys: [e.id], by: by }, after: 'frames' } };
     return null;
   }
 
@@ -2254,9 +2253,9 @@ var TerritoriesPictures = (function () {
   }
 
   // ── the person's moves: requests, never writes ──
-  function handles(a) { return a === 'pic_final' || a === 'pic_rights' || a === 'pic_go' || a === 'pic_ok'; }
+  function handles(a) { return a === 'pic_final' || a === 'pic_rights' || a === 'pic_go' || a === 'pic_ok' || a === 'pic_leave'; }
   function act(data, ui, e, env) {
-    if (e.a === 'pic_go' || e.a === 'pic_ok') return L.reqBusy(ui && ui.req) ? { writes: [], toast: 'The last change is still going through.' } : makeAct(data, ui, e, env);
+    if (e.a === 'pic_go' || e.a === 'pic_ok' || e.a === 'pic_leave') return L.reqBusy(ui && ui.req) ? { writes: [], toast: 'The last change is still going through.' } : makeAct(data, ui, e, env);
     var f = find(data, e.tid, e.id); if (!f || f.s.kind !== 'frame') return null;
     var by = (env && env.me && env.me.name) || 'You';
     if (L.reqBusy(ui && ui.req)) return { writes: [], toast: 'The last change is still going through.' };
@@ -2510,7 +2509,7 @@ var TerritoriesLookups = (function () {
   var clanScheme = navigator.userAgent.indexOf('Windows') !== -1 ? 'http://clan.localhost' : 'clan://localhost';
   var inShell = !!window.parent && window.parent !== window;
   // View state only. Anything the document should keep is written through put().
-  var ui = { view: null, draft: '', job: null, mw: null, me: null, booth: true, sel: null, route: null, cross: null, req: null, frames: null, mk: null, left: {} };
+  var ui = { view: null, draft: '', job: null, mw: null, me: null, booth: true, sel: null, route: null, cross: null, req: null, frames: null, mk: null };
   var BOOTH_MIN = 1101, BUSY = { sending: 1, queued: 1, running: 1 };
   var MW_API = 'napkin.middleware/1';
 
@@ -2905,7 +2904,7 @@ var TerritoriesLookups = (function () {
     if ((b = t.closest('[data-pic-go]'))) { var gt = b.getAttribute('data-pic-go'); closeDialog(true); run({ a: 'pic_go', tid: gt }); return; }
     if ((b = t.closest('[data-pic-held]'))) { ev.stopPropagation(); var ph = b.getAttribute('data-pic-held').split('|'); openDialog('held:' + ph[0] + ':' + ph[1], b); return; }
     if ((b = t.closest('[data-pic-ok]'))) { var po = b.getAttribute('data-pic-ok').split('|'); closeDialog(true); run({ a: 'pic_ok', tid: po[0], id: po[1] }); return; }
-    if ((b = t.closest('[data-pic-leave]'))) { ui.left[b.getAttribute('data-pic-leave').split('|')[1]] = true; closeDialog(true); lastHtml = null; render(); return; }
+    if ((b = t.closest('[data-pic-leave]'))) { var pl = b.getAttribute('data-pic-leave').split('|'); closeDialog(true); run({ a: 'pic_leave', tid: pl[0], id: pl[1] }); return; }
     if ((b = t.closest('[data-pic-final]'))) { ev.stopPropagation(); var pf = b.getAttribute('data-pic-final').split('|'); closeDialog(true); run({ a: 'pic_final', tid: pf[0], id: pf[1], on: b.hasAttribute('data-pic-off') ? false : undefined }); return; }
     if ((b = t.closest('[data-pic-rights]'))) { ev.stopPropagation(); var pr = b.getAttribute('data-pic-rights').split('|'); openDialog('rights:' + pr[0] + ':' + pr[1], b); return; }
     if ((b = t.closest('[data-pic-set]'))) { var ps = { tid: b.getAttribute('data-pic-t'), id: b.getAttribute('data-pic-s'), rights: b.getAttribute('data-pic-set') }; closeDialog(true); run({ a: 'pic_rights', tid: ps.tid, id: ps.id, rights: ps.rights }); return; }

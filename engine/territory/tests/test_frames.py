@@ -442,3 +442,46 @@ def test_each_client_has_its_own_style_and_never_the_agency(tmp_path, monkeypatc
     r2.declare()
     assert r2.make()._prepare(None)["sty"].hash == base.hash, "a client with no pack gets the built-in default, not another client's"
     assert frames.client_slug("../Évil/Co") == "evil-co" and frames.style_folder(sd, "") is None
+
+
+def test_a_left_out_frame_is_never_placed_is_gone_from_status_and_a_new_ask_may_fill_its_place_again(tmp_path, monkeypatch):
+    def guard(url, body):
+        png = base64.b64decode(body["messages"][0]["images"][0])
+        if b"task-1" in png and b"task-1" + b"0" not in png:
+            return {"message": {"content": json.dumps({"readable_text": [], "logos_or_brands": ["ACMELOGO"], "banned_imagery": []})}}
+        return {"message": {"content": json.dumps({"readable_text": [], "logos_or_brands": [], "banned_imagery": []})}}
+    r = Rig(tmp_path, monkeypatch, guard=guard)
+    r.declare()
+    out = r.run(["t_started"])
+    assert out[3]["frames"]["placed"] == 3 and out[3]["frames"]["held"] == 1
+    held = [x for x in r.make().status()[3]["frames"]["frames"] if x["held"]]
+    assert len(held) == 1
+    with pytest.raises(frames.Refuse, match="named person"):
+        r.make().leave([held[0]["key"]], "")
+    with pytest.raises(frames.Refuse, match="waiting for a person"):
+        r.make().leave(["no-such-key"], "Shrey")
+    doc, _ref, note, _info, decisions = r.make().leave([held[0]["key"]], "Shrey")
+    assert "1 left out by Shrey" in note
+    assert any(d.get("what") == "frames_left_out" and d["counts"]["by"] == "Shrey" for d in decisions), "who did it is in the history"
+    assert not [x for x in r.make().status()[3]["frames"]["frames"] if x["held"]], "gone from the status"
+    with pytest.raises(frames.Refuse, match="waiting for a person"):
+        r.make().leave([held[0]["key"]], "Shrey")
+    assert len([s for s in slots(doc, "t_started") if s["kind"] == "frame"]) == 3, "its place stays a sketch"
+    assert r.make().ask(["t_started"])[3]["card"]["frames"] == 1, "a later ask counts it as new"
+
+
+def test_status_says_the_place_each_frame_was_made_for_and_placing_keeps_to_it(tmp_path, monkeypatch):
+    def guard(url, body):
+        png = base64.b64decode(body["messages"][0]["images"][0])
+        if b"task-3" in png and b"task-3" + b"0" not in png:                  # the third shot is held
+            return {"message": {"content": json.dumps({"readable_text": [], "logos_or_brands": ["ACMELOGO"], "banned_imagery": []})}}
+        return {"message": {"content": json.dumps({"readable_text": [], "logos_or_brands": [], "banned_imagery": []})}}
+    r = Rig(tmp_path, monkeypatch, guard=guard)
+    r.declare()
+    out = r.run(["t_started"])
+    t = next(x for x in out[0]["territories"] if x["id"] == "t_started")
+    tv = [s for s in t["pictures"] if s["touchpoint"] == "tv"]
+    st = {x["shot"]: x for x in r.make().status()[3]["frames"]["frames"]}
+    assert st["f3"]["held"] and st["f3"]["place"] == tv[2]["id"] and tv[2]["kind"] != "frame", "the held one keeps its own place open"
+    assert [s["kind"] for s in tv] == ["frame", "frame", "sketch", "frame"]
+    assert st["f1"]["place"] == tv[0]["id"]

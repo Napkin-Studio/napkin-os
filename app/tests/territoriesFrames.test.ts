@@ -36,7 +36,7 @@ function doc(): Doc {
 }
 const route = (d: Doc, id = 't_started') => d.territories.find((x: Doc) => x.id === id)
 const WHY = 'It has the word FERNCLIFF in it.'
-const frames = (held: boolean) => ({ held: [{ key: 't_started-abc123-f3-tv', route: 't_started', shot: 3, sha256: H(3), why: WHY }].filter(() => held), notOffered: ['story', 'seat'] })
+const frames = (held: boolean) => ({ held: [{ key: 't_started-abc123-f3-tv', route: 't_started', place: 'pic_started_tv3', sha256: H(3), why: WHY }].filter(() => held) })
 const PRICE = /\$|€|£|usd|eur|price|cost|credit|cap\b/i
 
 test('the button is on the Pictures line of a greenlit developed route with sketches, and nowhere else', () => {
@@ -48,7 +48,7 @@ test('the button is on the Pictures line of a greenlit developed route with sket
   assert.doesNotMatch(L.dialogFor('route:t_started', d).html, /Make pictures/, 'the route window has no button')
   const made = doc(); Object.assign(route(made).pictures[0], { kind: 'frame', sha256: H(1), image: 'sha256:' + H(1), rights: 'generated' })
   assert.doesNotMatch(W.worldBody(made, {}, route(made)), /Make pictures/, 'already made')
-  assert.doesNotMatch(W.worldBody(d, { frames: frames(true), left: {} }, t), /Make pictures/, 'a picture is waiting for a person')
+  assert.doesNotMatch(W.worldBody(d, { frames: frames(true) }, t), /Make pictures/, 'a picture is waiting for a person')
   const dev = doc(); route(dev).state = 'sketched'
   assert.doesNotMatch(W.worldBody(dev, {}, route(dev)), /Make pictures/)
 })
@@ -78,19 +78,20 @@ test('Make sends the card id of the card that was shown, by name; asking is neve
 test('a held picture is drawn dimmed in the next open place, with Needs you and no rights chip or Final button', () => {
   const d = doc(), t = route(d)
   Object.assign(t.pictures[0], { kind: 'frame', sha256: H(1), image: 'sha256:' + H(1), rights: 'generated' })
-  const h = P.panel(t, { frames: frames(true), left: {} }, { green: true }) as string
+  const h = P.panel(t, { frames: frames(true) }, { green: true }) as string
   assert.equal((h.match(/class="pslot held"/g) || []).length, 1)
-  assert.match(h, /data-pslot="pic_started_tv2"/)
-  const slot = /<figure class="pslot held" data-pslot="pic_started_tv2">[\s\S]*?<\/figure>/.exec(h)![0]
+  assert.match(h, /data-pslot="pic_started_tv3"/)
+  const slot = /<figure class="pslot held" data-pslot="pic_started_tv3">[\s\S]*?<\/figure>/.exec(h)![0]
   assert.match(slot, new RegExp(`/assets/${H(3)}`)); assert.match(slot, />Needs you<\/button>/); assert.match(slot, /Illustrative/)
   assert.doesNotMatch(slot, /data-pic-rights|data-pic-final|Generated/)
   assert.doesNotMatch(h, /Make pictures/)
-  assert.doesNotMatch(P.panel(t, { frames: { ...frames(true), notOffered: ['tv', 'story', 'seat', 'poster', 'email', 'radio'] }, left: {} }, {}), /pslot held/, 'a place the engine cannot fill stays a sketch')
-  assert.doesNotMatch(P.panel(t, { frames: frames(true), left: { 't_started-abc123-f3-tv': true } }, {}), /pslot held/, 'left out')
+  assert.doesNotMatch(P.panel(t, { frames: { held: [{ ...frames(true).held[0], place: 'pic_started_tv1' }] } }, {}), /pslot held/, 'a place that already holds a picture is not drawn over')
+  assert.match(P.panel(t, { frames: { held: [{ ...frames(true).held[0], place: 'pic_started_tv4' }] } }, {}), /<figure class="pslot held" data-pslot="pic_started_tv4"/, 'the place the engine names, not the first open one')
+  assert.doesNotMatch(P.panel(t, { frames: { held: [] } }, {}), /pslot held/, 'left out or approved: the status no longer lists it')
 })
 
-test('Needs you shows the held picture above the engine\'s reason; Approve calls frames_approve, Leave it out calls nothing', () => {
-  const d = doc(), ui = { frames: frames(true), left: {} }
+test('Needs you shows the held picture above the engine\'s reason; Approve calls frames_approve, Leave it out calls frames_leave', () => {
+  const d = doc(), ui = { frames: frames(true) }
   const dlg = P.makeDialog('held:t_started:t_started-abc123-f3-tv', d, ui)
   assert.equal(dlg.title, 'Needs you')
   assert.ok(dlg.html.indexOf('<img') < dlg.html.indexOf(WHY), 'the picture comes first')
@@ -100,12 +101,16 @@ test('Needs you shows the held picture above the engine\'s reason; Approve calls
   const r = L.act(d, ui, { a: 'pic_ok', tid: 't_started', id: 't_started-abc123-f3-tv' }, ENV)
   eq(r.request.input, { step: 'frames_approve', keys: ['t_started-abc123-f3-tv'], by: 'Shrey' })
   assert.equal(r.request.after, 'frames')
+  const lv = L.act(d, ui, { a: 'pic_leave', tid: 't_started', id: 't_started-abc123-f3-tv' }, ENV)
+  eq(lv.writes, []); eq(lv.request.input, { step: 'frames_leave', keys: ['t_started-abc123-f3-tv'], by: 'Shrey' })
+  assert.equal(lv.request.after, 'frames', 'the status is read again, so a reload shows the same: it is the engine that remembers')
+  assert.match(dlg.html, /data-pic-leave="t_started\|t_started-abc123-f3-tv"/)
   assert.equal(P.makeDialog('held:t_started:nope', d, ui), null)
 })
 
 test('frames_status becomes the page\'s held list and the places a picture cannot fill; held ones only', () => {
-  const info = { frames: { frames: [{ key: 'a', route: 't_started', shot: 1, sha256: H(1), held: false, why: null }, { key: 'b', route: 't_started', shot: 3, sha256: H(3), held: true, why: WHY }], card: { not_offered: [{ touchpoint: 'story', why: 'x' }] } } }
-  eq(P.framesFrom(info), { held: [{ key: 'b', route: 't_started', shot: 3, sha256: H(3), why: WHY }], notOffered: ['story'] })
+  const info = { frames: { frames: [{ key: 'a', route: 't_started', place: 'pic_started_tv1', sha256: H(1), held: false, why: null }, { key: 'b', route: 't_started', place: 'pic_started_tv3', sha256: H(3), held: true, why: WHY }], card: { not_offered: [{ touchpoint: 'story', why: 'x' }] } } }
+  eq(P.framesFrom(info), { held: [{ key: 'b', route: 't_started', place: 'pic_started_tv3', sha256: H(3), why: WHY }] })
   assert.equal(P.framesFrom({ frames: { refused: 'no' } }), null)
   assert.equal(P.framesFrom(undefined), null)
 })
@@ -114,5 +119,5 @@ test('the page asks, makes and approves only through the engine\'s steps and kee
   const src = html.slice(html.indexOf('id="territories-pictures-logic"'), html.indexOf('id="territories-exports-logic"'))
   const words = [...src.matchAll(/'([^'\n]{12,})'/g)].map((m: RegExpMatchArray) => m[1]).filter((w: string) => /^[A-Z]/.test(w))
   for (const w of words) assert.doesNotMatch(w, /\$|€|£|\busd\b|\bprice\b|credits?\b/i, w)
-  assert.match(src, /ask: 'frames', approve: 'frames_approve', status: 'frames_status'/)
+  assert.match(src, /ask: 'frames', approve: 'frames_approve', leave: 'frames_leave', status: 'frames_status'/)
 })

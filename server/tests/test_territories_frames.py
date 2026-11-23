@@ -154,3 +154,25 @@ def test_the_guard_is_the_cloud_check_in_bedrock_and_the_local_one_otherwise(mon
     assert isinstance(rt.make_guard_post(), cloud_guard.CloudGuard)
     monkeypatch.setenv("NAPKIN_TERRITORY_GUARD", "local")
     assert rt.make_guard_post() is None
+
+
+def test_leaving_a_held_frame_out_needs_a_named_person_and_sticks(fr, monkeypatch):
+    monkeypatch.setenv("NAPKIN_TERRITORY_IMAGES", "1")
+    fr.guard = lambda url, body: (_ for _ in ()).throw(OSError("guard unreachable"))
+    h = host()
+    step(fr, h, "frames_material", origin="invented", by="Shrey")
+    card = step(fr, h, "frames", ids=["t_started"], by="Shrey")[-1]["result"]["info"]["card"]
+    step(fr, h, "frames", ids=["t_started"], card_id=card["id"], by="Shrey")
+    st = step(fr, h, "frames_status", by="Shrey")[-1]["result"]["info"]["frames"]["frames"]
+    keys = [x["key"] for x in st]
+    assert all(x["place"] for x in st), "each held frame says its place"
+    for inp in ({"step": "frames_leave"}, {"step": "frames_leave", "keys": []}):
+        status, body = post(fr, "run_territories", inp, host().clan())
+        assert status == 400, (inp, body)
+    r = step(fr, h, "frames_leave", keys=keys[:1], by="")
+    assert r[-1]["job"]["state"] == "failed" and "named person" in r[-1]["job"]["error"]["message"]
+    r = step(fr, h, "frames_leave", keys=keys[:1], by="Shrey")
+    assert r[-1]["job"]["state"] == "done"
+    left = step(fr, h, "frames_status", by="Shrey")[-1]["result"]["info"]["frames"]["frames"]
+    assert [x["key"] for x in left] == keys[1:], "gone from the status, and it stays gone"
+    valid(h)

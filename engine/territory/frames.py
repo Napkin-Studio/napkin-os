@@ -101,6 +101,11 @@ def eligible(doc: dict, ids=None) -> tuple[list[dict], list[str]]:
     return out, why
 
 
+def place_of(fits: list[dict], shot) -> str | None:
+    """The place a shot was made for: shot ``f<n>`` is the n-th place of its route that a frame can fill. ``None`` when the route has fewer."""
+    return fits[SHOTS.index(shot)]["id"] if shot in SHOTS and SHOTS.index(shot) < len(fits) else None
+
+
 def route_hash(t: dict) -> str:
     """6 hex of the words a route's pictures illustrate: when they change, its old frames are another route's and new ones are asked for."""
     blob = json.dumps([t.get("name"), t.get("thought"), t.get("tension"), t.get("theme"), (t.get("world") or {}).get("tv")], sort_keys=True, ensure_ascii=False)
@@ -460,7 +465,8 @@ class Frames:
             if t is None:
                 continue
             mine = sorted(((e["shot"], k, e) for k, e in (P["manifest"].get("frames") or {}).items() if re.match(rf"^{re.escape(tid)}-{th}-f\d-", k)), key=lambda x: x[0])
-            open_slots = [s for s in offered(t)[0] if s.get("kind") != "frame"]
+            fits = offered(t)[0]
+            open_slots = [s for s in fits if s.get("kind") != "frame"]
             for _shot, _k, e in mine:
                 if not e.get("file") or not (P["vdir"] / e["file"]).exists():
                     continue
@@ -472,7 +478,10 @@ class Frames:
                     continue
                 if sha in used or not open_slots:
                     continue
-                pictures.attach(t, open_slots.pop(0)["id"], {"sha256": sha, "rights": "generated", "source": SOURCE})
+                own = place_of(fits, e.get("shot"))      # the place this frame was made for; the first open one only when that is taken
+                slot = next((s for s in open_slots if s["id"] == own), open_slots[0])
+                open_slots.remove(slot)
+                pictures.attach(t, slot["id"], {"sha256": sha, "rights": "generated", "source": SOURCE})
                 used.add(sha)
                 placed += 1
         return d, placed, held
@@ -495,6 +504,32 @@ class Frames:
         doc, placed, _held = self._place(self.doc, P)
         return doc, [], f"{len(keys)} accepted by {by}; {placed} placed.", {}, []
 
+    def leave(self, keys, by: str):
+        """A named person leaves held frames out: each is never placed, is gone from the status, and its place stays a sketch. It is moved aside as a
+        retry is (its credits stay in its history), so a later ask counts it as new and a new Make may fill the place again."""
+        by = (by or "").strip()
+        if not by:
+            raise Refuse("Say who is leaving the pictures out. Only a named person can.")
+        keys = list(dict.fromkeys(keys or []))
+        if not keys:
+            raise Refuse("Say which pictures.")
+        P = self._prepare(None)
+        frames = P["manifest"].get("frames") or {}
+        if any(not (frames.get(k) or {}).get("file") or not self.held(frames[k]) for k in keys):
+            raise Refuse("Only a picture that is waiting for a person can be left out.")
+        for k in keys:
+            e = frames[k]
+            aside = f"{k}.left-{e.get('attempts', 1)}.png"
+            if (P["vdir"] / e["file"]).exists():
+                (P["vdir"] / e["file"]).rename(P["vdir"] / aside)
+            runway.retire(e)
+            if e.get("history"):
+                e["history"][-1]["file"] = aside
+            e.update(file=None, task=None, status="RETRY", guard=None, sha256=None, left_out_by=by, left_out_at=now())
+        runway.save_manifest(P["vdir"], P["manifest"])
+        self.spend.outcome("frames_left_out", left_out=len(keys), by=by, keys=keys)
+        return self.doc, [], f"{len(keys)} left out by {by}.", {}, self.spend.decisions()
+
     # -------- reading
     def status(self):
         try:
@@ -502,8 +537,13 @@ class Frames:
         except Refuse as e:
             return self.doc, [], str(e), {"frames": {"refused": str(e)}}, []
         out = []
+        by_id = {t["id"]: t for t in self.doc.get("territories") or []}
         for k, e in sorted((P["manifest"].get("frames") or {}).items()):
+            if e.get("left_out_by") and not e.get("file"):
+                continue                      # a person left it out: not waiting, not placed
             why = self.held(e)
-            out.append({"key": k, "route": e.get("territory"), "shot": e.get("shot"), "status": e.get("status"), "sha256": e.get("sha256"), "held": bool(why), "why": why,
+            t = by_id.get(e.get("territory"))
+            out.append({"key": k, "route": e.get("territory"), "shot": e.get("shot"), "place": place_of(offered(t)[0], e.get("shot")) if t else None,
+                        "status": e.get("status"), "sha256": e.get("sha256"), "held": bool(why), "why": why,
                         "approved_by": e.get("approved_by")})
         return self.doc, [], "", {"frames": {"frames": out, "card": self.public(self._card(P))}}, []
