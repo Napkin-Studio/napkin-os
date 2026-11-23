@@ -17,6 +17,7 @@ import { JobRunner } from '../jobs/runner'
 import { CONFIGS } from '../contracts/load'
 import { resumeChains, wireJobs } from '../jobs/wire'
 import { ModelStore, type ModelStoreOptions } from '../model/store'
+import { pendingKey } from '../model/recover'
 import { browserClanStore } from '../store/browser'
 import type { Relay } from '../relay'
 import type { ProjectIndex } from './projectIndex'
@@ -31,12 +32,12 @@ export const MIRROR_EVERY_MS = 60_000
 
 /** A .clan store over a project's own database (the browser's by default; tests pass the wasm and memory).
  *  `person` is who writes (absent: only to read it); `undo` where its undo steps are kept. */
-export type MakeClan = (persistence: Persistence, opts?: { person?: Person; undo?: ModelStoreOptions['undo'] }) => ModelStore
+export type MakeClan = (persistence: Persistence, opts?: { person?: Person; undo?: ModelStoreOptions['undo']; recover?: ModelStoreOptions['recover'] }) => ModelStore
 
 /** In the browser the .clan lives in the project's store Worker, the one writer (features/engine-store.clan). */
 export const browserClan: MakeClan = (persistence, opts = {}) => {
   if (!persistence.idbName) throw new Error('the browser store needs an IndexedDB database')
-  return new ModelStore(browserClanStore(persistence.idbName, opts.person), { undo: opts.undo })
+  return new ModelStore(browserClanStore(persistence.idbName, opts.person), { undo: opts.undo, recover: opts.recover })
 }
 
 /** Who writes when nobody is signed in (the in-browser mock, or a relay that cannot say who). */
@@ -103,7 +104,7 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
     person,
     title: index.get(id)?.name,
     undo,
-    make: () => deps.makeClan(storage.clan(clanDbFor(id)), { person, undo }),
+    make: () => deps.makeClan(storage.clan(clanDbFor(id)), { person, undo, recover: { key: pendingKey(id) } }),
     storage,
   })
   if (isRefused(opened)) {

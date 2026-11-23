@@ -21,6 +21,7 @@ import { baseKeyFor, canvasKeyFor, clanDbFor, docKeyFor, uiKeyFor } from './stor
 import { autoName, hasContent, summarise, UNTITLED as UNTITLED_TITLE } from './summary'
 import { updateDoc } from '../doc/store'
 import { sha256Hex } from '../lib/hash'
+import { clearPending, pendingKey } from '../model/recover'
 import { clearLiveLog } from '../store/liveLog'
 import type { ProjectUi } from '../doc/ui'
 
@@ -86,6 +87,7 @@ export class Shell {
           const held = await this.newerThere(id)
           const session = await openProjectSession(id, this.deps)
           if (held) session.services.serverCopy?.hold(held)
+          else await this.pushUnsaved(id, session)
           this.set({ session })
         } catch (e) {
           if (e instanceof ProjectRefused) await this.remember({ view: 'home' })
@@ -95,6 +97,15 @@ export class Shell {
       this.set({ view: 'project' })
       await this.remember({ view: 'project', project: id })
     })
+  }
+
+  /** A copy opened with work the host lacks (a reload came before the minute's save, S1-12) goes up at once, on the
+   *  version it is based on: a refusal is the usual choice (serverCopy.ts), never an overwrite. */
+  private async pushUnsaved(id: string, session: ProjectSession): Promise<void> {
+    const { storage, index } = this.deps
+    const clan = session.services.clan
+    if (!clan || !session.services.serverCopy || !(await readBase(storage, index, id)).unsaved) return
+    void clan.clan.mirrorNow('landing').catch((e) => console.warn('could not send the work kept from before the reload', e))
   }
 
   goHome(): Promise<void> {
@@ -191,6 +202,7 @@ export class Shell {
       }
       const { storage, index } = this.deps
       await index.remove(id)
+      clearPending({ key: pendingKey(id) })
       await storage.dropClan(clanDbFor(id))
       await Promise.all([storage.del(canvasKeyFor(id)), storage.del(uiKeyFor(id)), storage.del(docKeyFor(id)), storage.del(baseKeyFor(id))])
     })
@@ -369,6 +381,7 @@ export class Shell {
     } finally {
       await store.close().catch(() => {})
     }
+    clearPending({ key: pendingKey(id) }) // an edit the replaced copy never wrote is not applied to the host's version
     // The scene's live store is the replaced copy's: the scene opens from the new .clan's checkpoint instead.
     await clearLiveLog(`${clanDbFor(id)}:scene`)
     const ui = await storage.get<ProjectUi>(uiKeyFor(id))
