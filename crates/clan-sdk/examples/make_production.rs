@@ -5,14 +5,12 @@
 //!
 //! Defaults: `production.app.clan` and `production.example.clan`.
 //!
-//! Production documents are not library documents: they live in the relay
-//! (S3) and open at `/production`, never in the shell. The app is installed in
-//! every workspace for one reason: so that Production takes part in spin-offs
-//! like any other app. It declares `spinoff { accepts: [Brief Maker], upstream }`
-//! (a brief is carried whole under `data.upstream.<brief id>`), and it is the
-//! source app of a Production to Deck spin-off (the Deck declares that it
-//! accepts it). `napkin-web` bridges the bytes to and from the relay
-//! (`docs/contracts/os-layer.md` §5.9).
+//! A Production project is a library document like any other (features/production-in-library.clan): the
+//! Production Tool edits it, the shell opens it at `/production/?doc=<id>`, and it takes part in spin-offs
+//! through the host's one plain route. The app declares
+//! `spinoff { accepts: [Brief Maker, Research Tool, Territories], upstream }` (the source is carried whole
+//! under `data.upstream.<source id>`), and it is the source app of a Production to Deck spin-off (the Deck
+//! declares that it accepts it).
 //!
 //! The data schema, the seed and the summary view are not repeated here: they
 //! are the ones `production-tool/clan-store` builds with `npm run app` (from
@@ -34,6 +32,8 @@ use std::path::{Path, PathBuf};
 
 const APP_ID: &str = "ie.napkin.production";
 const BRIEF_APP_ID: &str = "ie.napkin.brief-maker";
+const RESEARCH_APP_ID: &str = "ie.napkin.campaign-research";
+const TERRITORIES_APP_ID: &str = "ie.napkin.territories";
 const VERSION: &str = "1.0.0";
 const DATA_PATH: &str = "shared/data.yaml";
 
@@ -119,7 +119,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             prompt_templates: vec![],
             data_seed: None,
             spinoff: Some(SpinoffSpec {
-                accepts: vec![BRIEF_APP_ID.into()],
+                accepts: vec![
+                    BRIEF_APP_ID.into(),
+                    RESEARCH_APP_ID.into(),
+                    TERRITORIES_APP_ID.into(),
+                ],
                 upstream: true,
                 ..Default::default()
             }),
@@ -133,7 +137,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = template.manifest().app.as_ref().expect("app block");
     assert_eq!(app.app_id, APP_ID);
     let spin = app.spinoff.as_ref().expect("app.spinoff is declared");
-    assert_eq!(spin.accepts, vec![BRIEF_APP_ID.to_string()]);
+    assert_eq!(
+        spin.accepts,
+        vec![
+            BRIEF_APP_ID.to_string(),
+            RESEARCH_APP_ID.to_string(),
+            TERRITORIES_APP_ID.to_string()
+        ]
+    );
     assert!(spin.upstream, "app.spinoff.upstream must be true");
     assert!(template.has_entry("agent/output-schema.json"));
 

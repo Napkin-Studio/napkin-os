@@ -87,15 +87,19 @@ async function boot() {
     if (!opened) await shell.newProject().catch((e) => console.error('could not open a blank canvas', e))
   }
 
-  window.addEventListener('pagehide', () => {
+  // What is waiting is written down as the page goes, and as it is hidden (a reload, a tab switch, a mobile close):
+  // pagehide alone came too late for an edit followed at once by a reload (UAT round 6, S1-12).
+  const writeDown = (leaving = true) => {
     const s = shell.get().session?.services
     if (s) {
-      for (const fn of s.project.beforeClose) void fn()
+      if (leaving) for (const fn of s.project.beforeClose) void fn()
       void (s.doc as { flush?: () => Promise<void> }).flush?.()
       void s.ui.flush()
     }
     void app.flush()
-  })
+  }
+  window.addEventListener('pagehide', () => writeDown())
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') writeDown(false) })
 
   // For poking at in the dev server's console (and the e2e checks); not in a build.
   if (import.meta.env.DEV) {

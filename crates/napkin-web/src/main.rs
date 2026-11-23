@@ -132,6 +132,8 @@ fn dogfood(data_root: &std::path::Path) -> Option<Arc<napkin_web::dogfood::Dogfo
 ///   NAPKIN_PRODUCTION_RELAY_SECRET  32+ bytes; signs X-Napkin-Identity (the
 ///                                   first of `new,old` during a rotation)
 ///   NAPKIN_PRODUCTION_STATIC        the tool's build (default /srv/napkin/production)
+///   NAPKIN_PRODUCTION_MEDIA_BASE    https base of Production's pictures; told to the
+///                                   tool in /api/session as `media_base` (unset: null)
 /// Refuses to start with a relay and no sign-in, or with a short secret.
 fn production(identity: &Identity) -> Option<Arc<napkin_web::production::Relay>> {
     let accounts = matches!(identity.mode, Mode::Accounts { .. });
@@ -255,7 +257,8 @@ async fn main() {
             settings.agent_cap,
         )
         .with_seed(settings.seed_dir.clone())
-        .with_dogfood(dogfood.clone()),
+        .with_dogfood(dogfood.clone())
+        .with_media_base(napkin_web::media::from_env()),
     );
 
     let production = production(&identity);

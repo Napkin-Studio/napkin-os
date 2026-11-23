@@ -37,7 +37,14 @@ fn the_packed_production_app_takes_a_brief_whole_and_its_example_carries_one() {
     let block = app.manifest().app.as_ref().expect("app block");
     assert_eq!(block.app_id, "ie.napkin.production");
     let spin = block.spinoff.as_ref().expect("app.spinoff");
-    assert_eq!(spin.accepts, vec!["ie.napkin.brief-maker".to_string()]);
+    assert_eq!(
+        spin.accepts,
+        vec![
+            "ie.napkin.brief-maker".to_string(),
+            "ie.napkin.campaign-research".to_string(),
+            "ie.napkin.territories".to_string()
+        ]
+    );
     assert!(spin.upstream);
     // the tool's own document schema travels, so every write to a project is checked against it
     assert!(app.has_entry("agent/output-schema.json"));

@@ -5,7 +5,6 @@
 
 import { newUlidId } from '../../../../clan-store/src'
 import type { Frame, Mime, ProductionDocument } from '../../contracts/types'
-import { idbLocation } from '../../lib/blobs'
 import { currentPictureFrame, framesOf, pictureVersions, refsList } from '../../model/selectors'
 import { markStale } from '../../doc/remove'
 import { nameOf } from '../../lib/names'
@@ -20,7 +19,7 @@ export function applyEdited(d: ProductionDocument, shotId: string, parentId: str
   if (!shot || !parent) return undefined
   if (!d.assets[out.sha]) {
     d.assets[out.sha] = { sha256: out.sha, kind: 'image', mime: 'image/png' as Mime, bytes: out.bytes, w: out.w, h: out.h,
-      origin: 'edited', locations: [idbLocation(out.sha)] }
+      origin: 'edited' }
   }
   const frame: Frame = {
     id: newUlidId('frame'),
@@ -88,7 +87,7 @@ function keepOriginal(d: ProductionDocument, pic: CanvasPicture, now: string): F
 export function applyPictureEdited(d: ProductionDocument, pic: CanvasPicture, out: Edited, now = new Date().toISOString()): Frame | undefined {
   if (!d.assets[out.sha]) {
     d.assets[out.sha] = { sha256: out.sha, kind: 'image', mime: 'image/png' as Mime, bytes: out.bytes, w: out.w, h: out.h,
-      origin: 'edited', locations: [idbLocation(out.sha)] }
+      origin: 'edited' }
   }
   const parent = keepOriginal(d, pic, now)
   const versions = pictureVersions(d, pic.nodeId)

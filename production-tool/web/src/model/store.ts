@@ -90,6 +90,11 @@ export class ModelStore implements DocumentStore {
     return this.opened()
   }
 
+  /** The name the library lists (manifest.title), kept with the project's own title. */
+  setTitle(title: string): Promise<void> {
+    return this.clan.setTitle(title)
+  }
+
   async create(person: Person, title?: string, blank = false): Promise<Doc> {
     if (this.timer) clearTimeout(this.timer)
     this.timer = null

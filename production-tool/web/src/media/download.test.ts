@@ -3,6 +3,7 @@ import { unzipSync } from 'fflate'
 import type { DocAsset, Mime, ProductionDocument } from '../contracts/types'
 import { emptyDocument } from '../doc/store'
 import { mainStoryboard, mainVideo } from '../model/selectors'
+import { forgetMedia, setMediaBase } from '../lib/media'
 import { MAYA } from '../test/model'
 
 const blobs = new Map<string, Blob>()
@@ -16,8 +17,8 @@ const { downloadAllMedia, downloadItem, mediaBytes, mediaZip } = await import('.
 const { mediaItem } = await import('./names')
 
 const SHA = (c: string) => `sha256:${c.repeat(64)}`
-const asset = (c: string, mime: string, locations: string[] = []): DocAsset =>
-  ({ sha256: SHA(c), kind: mime.startsWith('video/') ? 'video' : 'image', mime: mime as Mime, origin: 'generated', locations })
+const asset = (c: string, mime: string): DocAsset =>
+  ({ sha256: SHA(c), kind: mime.startsWith('video/') ? 'video' : 'image', mime: mime as Mime, origin: 'generated' })
 
 const e = { v: 1, field_v: {} }
 
@@ -25,9 +26,9 @@ function project(): ProductionDocument {
   const d = emptyDocument(MAYA)
   for (const a of [
     asset('a', 'image/png'),
-    asset('b', 'image/png', ['idb://sha256/bbb', 'https://relay.example/out/b.png']),
+    asset('b', 'image/png'),
     asset('c', 'image/png'),
-    asset('d', 'video/mp4', ['https://relay.example/out/d.mp4']),
+    asset('d', 'video/mp4'),
     asset('e', 'video/mp4'),
   ]) d.assets[a.sha256] = a
   d.keys.key_1 = { ...e, id: 'key_1', key: 'maya', role: 'character' }
@@ -40,8 +41,8 @@ function project(): ProductionDocument {
 }
 
 const fetchMock = vi.fn(async (url: string) => {
-  if (url.endsWith('/b.png')) return new Response(new Blob(['relay b'], { type: 'image/png' }))
-  if (url.endsWith('/d.mp4')) return new Response(new Blob(['relay d'], { type: 'video/mp4' }))
+  if (url === `https://relay.example/out/${SHA('b')}`) return new Response(new Blob(['relay b'], { type: 'image/png' }))
+  if (url === `https://relay.example/out/${SHA('d')}`) return new Response(new Blob(['relay d'], { type: 'video/mp4' }))
   return new Response('gone', { status: 404 })
 })
 
@@ -51,8 +52,9 @@ beforeEach(() => {
   events.length = 0
   fetchMock.mockClear()
   vi.stubGlobal('fetch', fetchMock)
+  setMediaBase('https://relay.example') // the relay's files are found by their hash (lib/media.ts)
 })
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => { vi.unstubAllGlobals(); forgetMedia() })
 
 describe('media bytes: this browser, else the relay, else nothing', () => {
   it('this browser first: the relay is not asked', async () => {
@@ -63,16 +65,16 @@ describe('media bytes: this browser, else the relay, else nothing', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('not in this browser: the first https location', async () => {
+  it('not in this browser: the media base, by its hash', async () => {
     const got = await mediaBytes(project(), SHA('b'))
     expect(got?.from).toBe('relay')
     expect(await got?.blob.text()).toBe('relay b')
-    expect(fetchMock).toHaveBeenCalledWith('https://relay.example/out/b.png')
+    expect(fetchMock).toHaveBeenCalledWith(`https://relay.example/out/${SHA('b')}`)
   })
 
   it('neither: null, and a failed fetch is the same', async () => {
-    expect(await mediaBytes(project(), SHA('c'))).toBeNull()
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(await mediaBytes(project(), SHA('c'))).toBeNull() // asked for, and not there
+    expect(fetchMock.mock.calls.every(([u]) => String(u).startsWith('https://relay.example/'))).toBe(true)
     fetchMock.mockImplementationOnce(async () => { throw new TypeError('offline') })
     expect(await mediaBytes(project(), SHA('d'))).toBeNull()
   })
@@ -126,7 +128,7 @@ describe('the media zip', () => {
 
   it('nothing anywhere: no zip is saved', async () => {
     const d = project()
-    for (const a of Object.values(d.assets)) a.locations = []
+    setMediaBase(null)
     expect(await downloadAllMedia(d, 'P')).toEqual({ packed: 0, missing: 5 })
     expect(saved).toEqual([])
   })
