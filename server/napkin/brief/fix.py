@@ -256,8 +256,20 @@ def standing_problem(doc: str, chain: list, verdict_id: str) -> tuple[list, list
 
     def open_parts(i, d):
         later = chain[:i]  # newer than d
-        return [k for k in keys_of(d) if not any(e.get("kind") in ("edit", "resolve") and e.get("action") != "propose"
-                                                 and wrote(e, doc, k) for e in later)]
+
+        # The page's own rule (brief-maker verdictState): a bad verdict is answered by a person who wrote the part,
+        # or by a later good verdict that gives a reason (the Review agent passing a redraft). An agent's rewrite
+        # alone does not answer it: the note still stands on the sheet, so the fix must still run.
+        def answered(k):
+            for e in later:
+                if e.get("kind") in ("edit", "resolve") and e.get("action") != "propose" and not e.get("superseded_by") \
+                        and _is_human(e) and wrote(e, doc, k):
+                    return True
+                if e.get("kind") == "verdict" and e.get("polarity") == "good" \
+                        and (e.get("reasoning") or str(e.get("rationale") or "").strip()) and wrote(e, doc, k):
+                    return True
+            return False
+        return [k for k in keys_of(d) if not answered(k)]
 
     parts = open_parts(idx, v)
     if not parts:
