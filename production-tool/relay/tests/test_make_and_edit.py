@@ -319,3 +319,18 @@ def test_the_relays_event_renders_on_the_real_stitch(tmp_path):
     assert res["ok"], res
     assert res["lengthS"] == 4.2 and abs(res["durationS"] - 4.2) <= 0.05
     assert h.blobs.get(f"ads/{job['jobId']}.mp4")
+
+
+def test_an_end_card_whose_line_is_its_headline_says_it_once(monkeypatch):
+    """A card made from one quoted line ("Flat out good.") has it as headline and line: drawn once, the legal line
+    (cta) still under it."""
+    import timeline_layers
+    import typeset
+
+    drawn = []
+    monkeypatch.setattr(typeset, "draw", lambda img, layers, fetch=None: drawn.append(layers))
+    card = {"headline": "Flat out good.", "line": "Flat out good.", "cta": "Contains caffeine.", "bg": "#14161B", "s": 2}
+    assert timeline_layers.end_card_png(card, (320, 180))[:4] == b"\x89PNG"
+    assert [(l["kind"], l["text"]) for l in drawn[-1]] == [("line", "Flat out good."), ("legal", "Contains caffeine.")]
+    timeline_layers.end_card_png({**card, "headline": "Quietboil", "line": "Let them sleep."}, (320, 180))
+    assert [l["text"] for l in drawn[-1]] == ["Quietboil", "Let them sleep.", "Contains caffeine."]
