@@ -149,6 +149,17 @@ def assets_of(v, loopback: bool = False) -> dict | None:
     return {"base": base.rstrip("/"), "pass": tok}
 
 
+def members_of(clan) -> dict | None:
+    """``{facts, findings, sources, decisions}``: the research the Deck document carries (its merged members and decision chain, as the host
+    sends them beside the data), for the engine's evidence. None when there are none: a deck of a prompt alone sends nothing."""
+    clan = clan if isinstance(clan, dict) else {}
+    chain = clan.get("decision_chain")
+    out = {"facts": clan.get("facts"), "findings": clan.get("findings"), "sources": clan.get("sources"),
+           "decisions": chain.get("decisions") if isinstance(chain, dict) else chain}
+    out = {k: v for k, v in out.items() if isinstance(v, (list, dict)) and v}
+    return out if out.get("facts") or out.get("findings") else None
+
+
 def start(req, caps, settings, jid):
     """Validate now (a 400 before any job, a 503 with no engine); build the job (the caller starts it)."""
     data = with_production(ctx_data(req.clan), (req.clan or {}).get("production_upstream"))
@@ -170,6 +181,9 @@ def start(req, caps, settings, jid):
     if re.fullmatch(r"(sha256:)?[0-9a-f]{64}", str(prod.get("sha256") or "")):   # the person's Production file (attach_production), on every build
         body["inputs"]["production"] = {"sha256": str(prod["sha256"]).removeprefix("sha256:"), "fetch": prod.get("fetch") is True,
                                         "look": prod.get("look") is True}
+    members = members_of(req.clan)
+    if members:   # the research this deck carries: the engine's evidence (and its panel) knows it, not only the prompt
+        body["members"] = members
     pu = production_upstream_of(data)
     if pu:   # spun off from a Production project: carried whole, frozen; finals fill the slots first, pictures are fetched by link at build
         body["production_upstream"] = pu

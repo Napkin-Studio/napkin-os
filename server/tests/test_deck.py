@@ -455,3 +455,24 @@ def test_marks_cover_the_full_brief_a_carried_production_project_carries():
     data = {"upstream": {"prod-1": {"app": "production-tool", "upstream": {"brief-1": {"insight": "SECRET-FULL", "confidential_fields": ["insight"]}}}}}
     marks = {m["path"]: m for m in marks_of(data, [])}
     assert "SECRET-FULL" in marks["upstream.prod-1.upstream.brief-1.insight"]["text"]
+
+
+def test_the_research_a_deck_carries_goes_to_the_engine_as_its_evidence(deck, monkeypatch):
+    """The first UAT deck said 'Built from: prompt' and 'No research brought in': the engine was sent the prompt and nothing else of what the deck carries."""
+    from napkin.handlers import build_deck as bd
+    clan = {"facts": [{"id": "f_1", "entity": "market", "key": "value", "value": 7.6}], "findings": [{"id": "fi_1", "statement": "Cider lost share.", "status": "verified"}],
+            "sources": [], "decision_chain": {"decisions": [{"id": "d_1", "kind": "verify"}]}}
+    assert bd.members_of(clan) == {"facts": clan["facts"], "findings": clan["findings"], "decisions": clan["decision_chain"]["decisions"]}
+    assert bd.members_of({}) is None and bd.members_of({"facts": [], "findings": []}) is None and bd.members_of(None) is None
+    fake = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    host = Host(data=deck_data(), schema=SCHEMA)
+    st, body = post_raw(deck, {"task": "build_deck", "input": {}}, {**host.clan(), **clan})
+    assert st == 200, body
+    waited = 0
+    while not fake.posts and waited < 5:
+        time.sleep(0.05)
+        waited += 0.05
+    assert fake.posts[0]["members"]["facts"] == clan["facts"] and fake.posts[0]["members"]["findings"] == clan["findings"]
+    fake2 = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    build(deck, Host(data=deck_data(), schema=SCHEMA))
+    assert "members" not in fake2.posts[0]
