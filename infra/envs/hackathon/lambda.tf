@@ -159,9 +159,10 @@ resource "aws_lambda_alias" "relay_live" {
   }
 }
 
-# Public: the relay refuses every call without a valid X-Napkin-Identity, which
-# napkin-web's /production/api proxy signs with TOKEN_SECRET
-# (docs/contracts/production-tool-identity.md). CloudFront sends /api/* here.
+# Public: the relay refuses every call without napkin-web's service credential (Authorization: Bearer
+# SERVICE_KEY and a signed X-Napkin-User claim) or the Deck's read-only assets pass (TOKEN_SECRET)
+# (docs/contracts/production-tool-identity.md). Both keys reach the function through SECRET_ARNS.
+# CloudFront sends /api/* here.
 resource "aws_lambda_function_url" "relay" {
   function_name      = aws_lambda_function.relay.function_name
   qualifier          = aws_lambda_alias.relay_live.name

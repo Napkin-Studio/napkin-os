@@ -189,6 +189,7 @@ def test_lambda_handler_end_to_end(aws, monkeypatch):
                  "QUOTAS_TABLE": "quotas", "BLOCKED_TABLE": "blocked", "TENANTS_TABLE": "tenants"}.items():
         monkeypatch.setenv(k, v)
     monkeypatch.delenv("TOKEN_SECRET", raising=False)
+    monkeypatch.delenv("SERVICE_KEY", raising=False)
     monkeypatch.delenv("SECRET_ARNS", raising=False)
     monkeypatch.delenv("PUBLIC_BASE_URL", raising=False)
     boto3.client("ssm", region_name="eu-west-1").put_parameter(
@@ -201,32 +202,42 @@ def test_lambda_handler_end_to_end(aws, monkeypatch):
     key = "k" * 40
     monkeypatch.setattr(identity, "_refresh", None)
 
-    def assertion(method, path, query, raw, agency="blue"):
+    def credential(method, path, query, raw, agency="blue"):
+        """napkin-web's service credential: the bearer and the signed user claim."""
         now = int(time.time())
-        return identity.sign({"u": f"alice@{agency}", "a": agency, "t": identity.tenant_id(agency), "aud": "relay",
-                              "iat": now, "exp": now + 60, "m": method, "p": path + (f"?{query}" if query else ""),
-                              "bh": hashlib.sha256(raw).hexdigest()}, key)
+        claims = {"u": f"alice@{agency}", "a": agency, "t": identity.tenant_id(agency), "iat": now, "exp": now + 60}
+        return {"authorization": f"Bearer {key}",
+                "x-napkin-user": identity.sign_user(claims, key, method, path + (f"?{query}" if query else ""), raw)}
+
+    def assertion(method, path, query, raw, agency="blue"):
+        """The Deck's read-only assets pass."""
+        now = int(time.time())
+        return identity.sign({"u": f"alice@{agency}", "a": agency, "t": identity.tenant_id(agency), "aud": "assets",
+                              "iat": now, "exp": now + 1800, "m": "GET", "p": "/api/assets/*",
+                              "bh": hashlib.sha256(b"").hexdigest()}, key)
 
     def http(method, path, body=None, query="", sign=True):
         raw = json.dumps(body).encode() if body is not None else b""
         headers = {"authorization": "Bearer anything"}
         if sign:
-            headers["x-napkin-identity"] = assertion(method, path, query, raw)
+            headers = credential(method, path, query, raw)
         event = {"rawPath": path, "rawQueryString": query, "requestContext": {"http": {"method": method}},
                  "headers": headers, "body": raw.decode() if body is not None else None, "isBase64Encoded": False}
         r = handler.handler(event, None)
         return r["statusCode"], json.loads(r["body"]) if "body" in r else None
 
-    # No TOKEN_SECRET on the Lambda: every route but health and config is a 401 (fails closed), signed or not.
+    # No SERVICE_KEY on the Lambda: every route but health and config is a 401 (fails closed), signed or not.
     for method, path in (("GET", "/api/me"), ("POST", "/api/jobs")):
         status, out = http(method, path, {} if method == "POST" else None)
         assert status == 401 and out["error"]["code"] == "unauthorised", path
     assert http("GET", "/api/health")[0] == 200
     assert http("GET", "/api/config")[0] == 200
 
-    # With the key: no assertion is still a 401; a signed person whose agency is not on is a 403.
-    monkeypatch.setenv("TOKEN_SECRET", key)
+    # With the key: no credential, or a wrong bearer, is still a 401; a signed person whose agency is not on is a 403.
+    monkeypatch.setenv("SERVICE_KEY", key)
+    monkeypatch.setenv("TOKEN_SECRET", key)  # the Deck's assets pass key
     assert http("GET", "/api/me", sign=False)[0] == 401
+    assert http("GET", "/api/me", sign=False)[1]["error"]["code"] == "unauthorised"
     status, out = http("GET", "/api/me", query="a=1")
     assert status == 403 and out["error"]["code"] == "flag_off" and "not on for your agency" in out["error"]["message"]
 

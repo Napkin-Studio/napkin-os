@@ -425,6 +425,7 @@ class Relay:
             raise ApiError("gone", GONE_MESSAGE)  # projects moved to the library (features/production-in-library.clan)
         who = self._auth(method, signed, headers, body)
         ctx["participant"] = who["pid"]
+        ctx["doc"] = who.get("doc")
         ctx["tenant"] = who["tenant"]["id"]
         self._tenant_on(who)
         ctx["_who"] = who
@@ -488,7 +489,10 @@ class Relay:
 
     def _auth(self, method: str, signed: str, headers: dict, body: bytes | None) -> dict:
         """The person from the identity seam; fails closed (features/drop-hackathon-extras.clan)."""
-        who = self.who(method, signed, headers, body)
+        try:
+            who = self.who(method, signed, headers, body)
+        except identity.Forbidden:
+            raise ApiError("not_allowed", "That identity claim is not one this relay will act on.") from None
         if not who:
             raise ApiError("unauthorised", "Sign in to use the Production Tool.")
         return who
