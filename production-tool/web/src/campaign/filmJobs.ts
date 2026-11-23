@@ -20,7 +20,7 @@ import { jobShot, refsFor } from '../jobs/select'
 import { getBlob } from '../lib/blobs'
 import { boardLayout } from './board'
 import { checksFor } from './checks'
-import { CARD_S, alephRatio, captionBox, captionLayers, cardLengths, cropKeys, edlFor, isSocialShape, masterShots, reframeKey, reframesOf, sameShape, shapeOf, type MasterShot } from './film'
+import { alephRatio, captionBox, captionLayers, cardLength, cropKeys, edlFor, isSocialShape, masterShots, reframeKey, reframesOf, sameShape, shapeOf, type MasterShot } from './film'
 import { endCardFrom, readCut } from '../rooms/timeline'
 import { formatById, PACKS_VERSION } from './formats'
 import { brandKit, layersFor } from './layout'
@@ -354,13 +354,11 @@ export async function cutdownInput(deps: Pick<CampaignDeps, 'relay' | 'doc'>, se
   const clientCard = await clientCardOf(deps, set, size.length_s)
   // The film's card says its line: the size's own line goes from the picture, so it is not said twice (R3-F12).
   const layers = await filmLayers(deps, set, size, clientCard)
-  const { studioS } = cardLengths(size.length_s, clientCard ? clientCardLen(d, set) : undefined, !!clientCard)
   return {
     aspect: { w: size.delivery.width, h: size.delivery.height }, delivery: { ...size.delivery },
     ...(size.safe_area ? { safeArea: size.safe_area } : {}),
     cutdown: {
-      step: 'render', lengthS: size.length_s ?? clips.reduce((a, c) => a + (c.outS - c.inS), 0) + (clientCard?.s ?? 0) + studioS, clips, endCard: true, fadeOutS: 0.5,
-      ...(studioS < CARD_S ? { studioS } : {}),
+      step: 'render', lengthS: size.length_s ?? clips.reduce((a, c) => a + (c.outS - c.inS), 0) + (clientCard?.s ?? 0), clips, endCard: true, fadeOutS: 0.5,
       ...(layers.length ? { layers } : {}), ...(clientCard ? { clientCard } : {}),
     },
   }
@@ -386,8 +384,8 @@ function clientCardLen(d: ProductionDocument, set: FormatSet): number | undefine
 }
 
 /** The film's own end card (the client's) for a size: the Edit room's card, else the storyboard's end card shot's
- *  (rooms/timeline endCardFrom), at its cutdown length (film.ts clientCardS). Every size ends on it, then on the
- *  studio card (owner 2026-11-18; UAT 2026-11-21, B4: the sizes ended on the studio card alone). */
+ *  (rooms/timeline endCardFrom), at its cutdown length (film.ts clientCardS). Every size ends on it; a client ad
+ *  carries no studio card (owner 2026-11-23). */
 export async function clientCardOf(deps: Pick<CampaignDeps, 'relay' | 'doc'>, set: FormatSet, lengthS?: number): Promise<CutdownInput['clientCard'] | undefined> {
   const d = liveGet(deps.doc)
   const videoId = set.master.kind === 'video' ? set.master.id : undefined
@@ -398,7 +396,7 @@ export async function clientCardOf(deps: Pick<CampaignDeps, 'relay' | 'doc'>, se
   return {
     ...(card.headline.trim() ? { headline: card.headline.trim().slice(0, 120) } : {}), line: (card.line.trim() || card.headline.trim()).slice(0, 200),
     ...(card.cta?.trim() ? { cta: card.cta.trim().slice(0, 80) } : {}), bg: /^#[0-9a-f]{6}$/i.test(card.bg) ? card.bg : '#14161B',
-    ...(logo ? { logo } : {}), s: cardLengths(lengthS, clientCardLen(d, set), true).clientS,
+    ...(logo ? { logo } : {}), s: cardLength(lengthS, clientCardLen(d, set), true),
   }
 }
 

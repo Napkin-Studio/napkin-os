@@ -238,3 +238,64 @@ def test_r5_a_frame_of_a_shot_with_no_one_says_no_people_in_its_prompt():
         ({"prompt": "A kettle, no person in sight.", "refs": []}, "frame", {"shot": shot})):
         _no_people(j, op, payload, sheet)
         assert NO_PEOPLE not in j["prompt"]
+
+
+FERNCLIFF_FACES = "No real people's faces on posters, in the film or on social."
+CROWDED_TRAM = "A crowded tram at rush hour. Hands grip the rails; commuters pack the aisle."
+
+
+def _brief(*mandatories):
+    return {"title": "Ferncliff brief", "spine": {"proposition": "Flat out good.", "mandatories": list(mandatories), "donts": []}}
+
+
+def test_a_frame_of_a_crowded_tram_says_people_may_appear_but_no_one_is_recognisable_when_the_linked_brief_says_no_real_faces():
+    """UAT 2026-11-24: the brief said 'No real people's faces'; the frames of the crowded tram showed clear, real
+    faces. 'No real faces' means unrecognisable only (owner 2026-11-23): its own line, even when the shot shows people."""
+    from director.director import UNRECOGNISABLE
+
+    def with_brief(i):
+        i["shot"]["action"] = CROWDED_TRAM
+        i["brief"] = _brief(FERNCLIFF_FACES)
+
+    res, _, _ = direct("frame_runway_first", edit_input=with_brief)
+    prompt = res.output["providerJob"]["prompt"]
+    assert UNRECOGNISABLE in prompt and prompt.count(UNRECOGNISABLE) == 1
+
+    def no_brief(i):
+        i["shot"]["action"] = CROWDED_TRAM
+
+    res, _, _ = direct("frame_runway_first", edit_input=no_brief)
+    assert UNRECOGNISABLE not in res.output["providerJob"]["prompt"]  # a brief reaches a job only when linked
+
+    def other_brief(i):
+        i["shot"]["action"] = CROWDED_TRAM
+        i["brief"] = _brief("Include the can on every poster.")
+
+    res, _, _ = direct("frame_runway_first", edit_input=other_brief)
+    assert UNRECOGNISABLE not in res.output["providerJob"]["prompt"]
+
+
+def test_a_clip_gets_the_line_too_even_though_its_brief_budget_has_no_mandatories():
+    from director.director import UNRECOGNISABLE
+
+    def with_brief(i):
+        i["brief"] = _brief(FERNCLIFF_FACES)
+
+    res, asked, _ = direct("clip_runway", edit_input=with_brief)
+    assert UNRECOGNISABLE in res.output["providerJob"]["prompt"]
+    assert "No real people" not in json.dumps(asked.get("brief", {}))  # the cut brief a clip reads has no mandatory
+    res, _, _ = direct("clip_runway")
+    assert UNRECOGNISABLE not in res.output["providerJob"]["prompt"]
+
+
+@pytest.mark.parametrize("line,yes", [
+    ("No real people's faces on posters", True), ("No real faces.", True), ("no identifiable people", True),
+    ("No recognisable people or celebrities", True), ("Never show recognizable faces", True), ("No faces at all", True),
+    ("Include the can on every poster", False), ("Real people tested the flavour", False), ("No real sugar", False),
+])
+def test_the_brief_phrasings_of_no_real_faces(line, yes):
+    import brief as briefs
+
+    assert briefs.no_real_faces(_brief(line)) is yes
+    assert briefs.no_real_faces({"title": "t", "spine": {"mandatories": [], "donts": [line]}}) is yes
+    assert briefs.no_real_faces(None) is False

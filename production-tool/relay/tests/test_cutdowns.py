@@ -78,8 +78,8 @@ def test_the_plan_is_free_uncounted_and_names_every_shot_kept_or_dropped():
     assert [b["shotId"] for b in fifteen["beats"]] == [SHOT.format(i) for i in range(10)]  # never the end card
     kept = [b for b in fifteen["beats"] if b["keep"]]
     assert kept[0]["shotId"] == SHOT.format(0) and kept[-1]["shotId"] == SHOT.format(9)
-    # 15 s less the studio card and the film's own card (features/pt-film-r1.clan): its 2.5 s held to 2 s.
-    assert sum(b["outS"] - b["inS"] for b in kept) == pytest.approx(15 - cutdowns.CARD_S - 2.0, abs=0.01)
+    # 15 s less the film's own card (features/pt-film-r1.clan): its 2.5 s held to 2 s; no studio card follows.
+    assert sum(b["outS"] - b["inS"] for b in kept) == pytest.approx(15 - 2.0, abs=0.01)
     # The opening and the payoff, truly (UAT round 4, R4-F4: the 6 s kept the payoff alone).
     assert [b["shotId"] for b in six["beats"] if b["keep"]] == [SHOT.format(0), SHOT.format(9)]
     assert all(b["why"] for b in fifteen["beats"])
@@ -227,24 +227,24 @@ def test_a_failed_cut_plan_is_a_simple_cut_said_so_that_fills_the_length_and_cos
     six = job["cutdownPlan"]["lengths"][0]
     kept = [b for b in six["beats"] if b["keep"]]
     assert [b["shotId"] for b in kept] == [SHOT.format(0), SHOT.format(4)]  # the opening and the payoff, truly
-    # 6 s less the studio card (2.5 s): 3.5 s of picture, so the file is 6 s.
-    assert sum(b["outS"] - b["inS"] for b in kept) == pytest.approx(3.5, abs=0.01)
+    # 6 s, no studio card: 6 s of picture, so the file is 6 s (the two shots' own takes may hold less).
+    assert sum(b["outS"] - b["inS"] for b in kept) == pytest.approx(6.0, abs=0.01)
     assert job["cost"].get("agentUsd", 0) > 0  # what Dex spent before failing (F21)
 
 
 def test_a_simple_plan_short_of_its_length_keeps_more_shots_and_dexs_own_says_it_is_short():
-    # The payoff alone for 6 s: 2 s of picture with no handle. A simple cut keeps the longest dropped shot too.
+    # The payoff alone for 6 s: 2 s of picture with no handle (no studio card to leave room for). A simple cut keeps the longest dropped shot too.
     shots = round4_master()
     payoff = [{"lengthS": 6, "beats": [{"shotId": SHOT.format(4), "keep": True, "why": "The payoff."}]}]
     out = cutdowns.settle_lengths(shots, payoff, [6], fill=True)
     kept = [b for b in out[0]["beats"] if b["keep"]]
     assert [b["shotId"] for b in kept] == [SHOT.format(0), SHOT.format(4)]
     assert kept[0]["why"] == "Kept to fill the length."
-    assert sum(b["outS"] - b["inS"] for b in kept) == pytest.approx(3.5, abs=0.01)
+    assert sum(b["outS"] - b["inS"] for b in kept) == pytest.approx(6.0, abs=0.01)
     # Dex's own plan stays as he chose it, and says it comes out short.
     dex = cutdowns.settle_lengths(shots, payoff, [6])
     assert [b["shotId"] for b in dex[0]["beats"] if b["keep"]] == [SHOT.format(4)]
-    assert "1.5 s short" in dex[0]["why"]
+    assert "4.0 s short" in dex[0]["why"]
 
 
 def _png() -> bytes:
@@ -297,9 +297,9 @@ def test_a_render_goes_to_stitch_free_with_its_crops_and_its_words_drawn_here():
     assert done["outputs"][0]["durationS"] == 15 and h.store.counters("spend").get("usd", 0) == 0
 
 
-def test_a_size_ends_on_the_films_own_end_card_then_the_studio_card():
+def test_a_size_ends_on_the_films_own_end_card_and_no_studio_card():
     """UAT 2026-11-21 (B4): every 6 s size ended on the studio card, the client's end card missing. The film's card
-    is drawn here at the size and held as the last clip; stitch adds the studio card after it (endCard)."""
+    is drawn here at the size and held as the last clip; no studio card follows it (owner 2026-11-23)."""
     h = Harness(base_config())
     token = h.as_person()
     inp = render_input(h)
@@ -312,38 +312,33 @@ def test_a_size_ends_on_the_films_own_end_card_then_the_studio_card():
     assert "Let them sleep" not in json.dumps(event)  # drawn, never sent as words
 
 
-def test_the_film_card_comes_off_a_sizes_length_before_the_studio_card():
+def test_the_film_card_comes_off_a_sizes_length_and_no_studio_card_follows():
     shots = [{"shotId": "a", "inS": 0, "outS": 3}, {"shotId": "b", "inS": 0, "outS": 3}, {"shotId": "e", "inS": 0, "outS": 2, "endCard": True}]
     windows, over = cutdowns.fit_windows(shots, {"a", "b"}, 8.0)
-    # 8 s less the studio card (2.5) and the film's card (a third of the 5.5 s left, under its 2 s): 3.667 of picture.
-    assert sum(w["outS"] - w["inS"] for w in windows) == pytest.approx(3.667, abs=0.002) and abs(over) <= 0.001
-    assert cutdowns.client_card_s(2.5, 6.0) == 1.167 and cutdowns.client_card_s(2.5, 30.0) == 2.0 and cutdowns.client_card_s(1.5, 30.0) == 1.5
+    # 8 s less the film's own card (a third of 8 s, over its 2 s cap: 2 s): 6 s of picture, and the file is 8 s.
+    assert sum(w["outS"] - w["inS"] for w in windows) == pytest.approx(6.0, abs=0.002) and abs(over) <= 0.001
+    assert cutdowns.client_card_s(2.5, 3.0) == 1.0 and cutdowns.client_card_s(2.5, 30.0) == 2.0 and cutdowns.client_card_s(1.5, 30.0) == 1.5
+    assert not hasattr(cutdowns, "CARD_S") and not hasattr(cutdowns, "STUDIO_MIN_S")
 
 
-def test_a_short_size_keeps_3_5_s_of_picture_by_shortening_its_cards():
-    """UAT round 3 (R3-F12): the 6 s 9:16 had 2.25 s of picture, then 1.2 s of the film's card and 2.5 s of the
-    studio card. Both cards stay; the studio card shortens first (to 1.2 s), then the film's card (to 1 s)."""
-    assert cutdowns.card_lengths(6.0, 2.5) == (1.167, 1.333)
-    assert cutdowns.card_lengths(15.0, 2.5) == (2.0, 2.5)  # long enough: nothing shortens
-    assert cutdowns.card_lengths(6.0, None) == (0.0, 2.5)  # no film card: 3.5 s of picture already
-    assert cutdowns.card_lengths(5.0, 2.5) == (1.0, 1.2)  # as short as they go; the picture gets what is left
-    assert cutdowns.card_lengths(None, 2.5) == (2.0, 2.5)
-    shots = [{"shotId": "a", "inS": 0, "outS": 4, "takeS": 4}, {"shotId": "e", "inS": 0, "outS": 2.5, "endCard": True}]
+def test_a_short_size_keeps_its_picture_by_shortening_the_films_card_only():
+    """UAT round 3 (R3-F12), reframed (owner 2026-11-23): a client ad carries no studio card, so only the film's own
+    card shortens, to 1 s at the least, for the picture."""
+    assert cutdowns.card_length(6.0, 2.5) == 2.0
+    assert cutdowns.card_length(15.0, 2.5) == 2.0
+    assert cutdowns.card_length(6.0, None) == 0.0  # no film card
+    assert cutdowns.card_length(4.0, 2.5) == 1.0  # 1.333 would leave 2.667 of picture: it shortens to its 1 s floor
+    assert cutdowns.card_length(None, 2.5) == 2.0
+    shots = [{"shotId": "a", "inS": 0, "outS": 5, "takeS": 5}, {"shotId": "e", "inS": 0, "outS": 2.5, "endCard": True}]
     windows, over = cutdowns.fit_windows(shots, {"a"}, 6.0)
-    assert sum(w["outS"] - w["inS"] for w in windows) == pytest.approx(3.5, abs=0.002) and abs(over) <= 0.001
+    assert sum(w["outS"] - w["inS"] for w in windows) == pytest.approx(4.0, abs=0.002) and abs(over) <= 0.001
 
 
-def test_a_render_passes_a_short_sizes_studio_card_length_to_stitch():
+def test_a_render_sends_stitch_no_studio_card_length():
     h = Harness(base_config())
     token = h.as_person()
-    inp = render_input(h)
-    inp["cutdown"]["studioS"] = 1.333
-    _, job = h.post_job(token, op="cutdown", expect=200, **inp)
+    _, job = h.post_job(token, op="cutdown", expect=200, **render_input(h))
     [event] = h.stitched
-    assert event["cardS"] == 1.333
-    h2 = Harness(base_config())
-    _, job = h2.post_job(h2.as_person(), op="cutdown", expect=200, **render_input(h2))
-    [event] = h2.stitched
     assert "cardS" not in event
 
 

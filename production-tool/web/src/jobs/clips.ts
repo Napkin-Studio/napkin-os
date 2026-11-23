@@ -282,8 +282,8 @@ export async function remakeAsFinal(deps: Pick<FrameDeps, 'doc' | 'ui' | 'runner
 
 /** The stitch request: every shot's clip in the cut, in shot order, cut to the shot's length, from its edl
  *  item's in point (in_s; absent or 0: the clip's start, sent as nothing) up to its out point (out_s). An end
- *  card shot's clip plays like any other (it is the person's own closing screen; the stitch's studio card follows
- *  it, owner 2026-10-19); one with no clip is left out.
+ *  card shot's clip plays like any other (it is the person's own closing screen; no studio card follows,
+ *  owner 2026-11-23); one with no clip is left out.
  *  (features/connected-video.clan: the walk stays in shot order for now, because edl ranks follow the order
  *  clips landed in, not the storyboard's; see the record's open question.)
  *  Connected video: a take's window (segments[0]) is its in and out point; an end-framed clip is retimed whole
@@ -311,7 +311,7 @@ export async function stitchInput(deps: Pick<FrameDeps, 'relay' | 'doc'>, videoI
     const outS = item?.source?.out_s ?? seg?.out_s ?? landed
     const transition = joinInto(item?.transition_in)
     // Clips come back at the model's lengths (4, 6 or 8 s on veo3.1_fast), so each is
-    // trimmed to its shot: the ad is the sum of the shots plus the end card (END_CARD_S).
+    // trimmed to its shot: the ad is the sum of the shots (the end card is one of them; no studio card follows).
     clips.push({
       asset: await assetRef(deps.relay, t.asset, d),
       trimS: s.duration_s,
@@ -341,12 +341,10 @@ export async function renderAd(deps: FrameDeps, opts: { followRun?: string; vide
   return deps.runner.submit('stitch', input, parents, other ? { for: 'stitch', videoId: opts.videoId } : { for: 'stitch' }, undefined, undefined, opts.followRun ? { local: { followRun: opts.followRun } } : {})
 }
 
-/** The end card the stitch adds after the clips: the 2.5 s roll-up card (stitch.py CARD_S). */
-export const END_CARD_S = 2.5
 /** One frame of the stitch's 24 fps: a landed take is used up to and including its landing frame (end.at_s). */
 const FRAME_S = 1 / 24
 
-/** How long the rendered ad is: the shots' lengths plus the end card. */
+/** How long the rendered ad is: the shots' lengths (a client ad carries no studio card, owner 2026-11-23). */
 export function adLengthS(shots: Pick<Shot, 'duration_s'>[]): number {
-  return shots.reduce((a, s) => a + s.duration_s, 0) + END_CARD_S
+  return shots.reduce((a, s) => a + s.duration_s, 0)
 }

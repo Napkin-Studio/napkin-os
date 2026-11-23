@@ -147,6 +147,11 @@ export function assemble(d: ProductionDocument, videoId: Id, boxes: Box[], gens:
 const END_LABEL = /\s*\bend[ -]?card\b[.!]?$/i
 /** The director's label before the card's words: "End card with the super:", "Quietboil end card –". */
 const END_PREFIX = /^(.*?)\bend[ -]?card\b[^:\u2013\u2014"\u201c]*(?:[:\u2013\u2014]\s*|(?=["\u201c]))/i
+/** A planner's stage directions inside a card shot ("the can centred on clean colour", "appears, the legal line small
+ *  beneath"): they say how the card looks, not what it says (UAT 2026-11-24: they became the card's words). */
+const STAGE = /\b(?:appears?|centred|centered|beneath|underneath|clean colou?r|legal line|small print)\b|^(?:the|a)\s+(?:can|pack|bottle|logo|product)\b/i
+/** The words a direction says: the quoted ones, else its sentences less the stage directions. */
+const spoken = (t: string) => quoted(t) ?? sentences(t).filter((x) => !STAGE.test(x)).join(' ')
 const sentences = (t: string) => t.trim().split(/(?<=[.!?])\s+/).filter(Boolean)
 const bare = (t: string) => t.replace(/[.!?]$/, '').trim()
 
@@ -190,16 +195,19 @@ export function endCardOf(d: ProductionDocument, storyboardId: Id | undefined): 
   const card = (headline: string, line: string) => ({ headline: headline || named, line: line || headline || named, bg: '#14161B', durS: shot.duration_s || 1.5 })
   const label = END_PREFIX.exec(words)
   const after = label ? words.slice(label[0].length).trim() : ''
-  const said = quoted(after) ?? after
+  const said = after ? spoken(after) : ''
   if (said) {
     const [head, ...rest] = sentences(said)
-    return rest.length ? card(bare(head), rest.join(' ')) : card(bare(label?.[1] ?? ''), said)
+    if (rest.length) return card(bare(head), rest.join(' '))
+    // The one line a staged card says is its headline ("Flat out good."); a label that names the brand keeps the brand there.
+    return STAGE.test(after) && !label?.[1] ? card(said, '') : card(bare(label?.[1] ?? ''), said)
   }
-  if (words && !END_LABEL.test(words)) {
-    const [head, ...rest] = sentences(words)
-    return card(bare(head ?? ''), rest.join(' '))
+  if (words && !END_LABEL.test(words) && !(label && after)) {
+    const heard = spoken(words)
+    const [head, ...rest] = sentences(heard)
+    return heard !== words && !rest.length ? card(heard, '') : card(bare(head ?? ''), rest.join(' '))
   }
-  const brand = bare(words.replace(END_LABEL, ''))
+  const brand = bare((label && after ? label[1] : words).replace(END_LABEL, ''))
   const closing = closingLine(d, shots.map((s) => s.id))
   if (!closing) return card(brand, '')
   const [first, ...rest] = sentences(closing)
