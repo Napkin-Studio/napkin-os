@@ -525,7 +525,10 @@ NAT64_LOCAL = ipaddress.ip_network("64:ff9b:1::/48")
 
 
 def _resolve(host: str) -> list:
-    return sorted({ai[4][0] for ai in socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)})
+    """Every address of the host, IPv4 first: the fetch connects to the first one, and a network with no IPv6 route (UAT's VPC, 2026-11-23:
+    the relay's Lambda URL lists IPv6 first and every picture failed with OSError) must not be handed an IPv6 address while an IPv4 one exists."""
+    ips = {ai[4][0] for ai in socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)}
+    return sorted(ips, key=lambda a: (ipaddress.ip_address(a).version, a))
 
 
 class _Pinned(http.client.HTTPSConnection):
