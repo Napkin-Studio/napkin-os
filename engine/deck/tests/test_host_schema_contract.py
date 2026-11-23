@@ -78,3 +78,42 @@ def test_every_check_id_the_engine_emits_is_in_the_host_schemas_rule_enum():
     assert "q_no_hole" in emitted
     for enum in enums:
         assert emitted <= set(enum), sorted(emitted - set(enum))
+
+
+def _bullets_cap() -> int:
+    """A bullets block becomes a slide's `list` slot, and the host caps that slot's items."""
+    caps = [n["items"]["maxItems"] for n in _find(TEMPLATE, "properties") if isinstance(n.get("kind"), dict) and n["kind"].get("const") == "list" and "items" in n]
+    assert caps
+    return min(caps)
+
+
+def _bullets(deck):
+    return [(sid, b) for sid in deck["order"] for b in (deck["slides"][sid] or {}).get("blocks", []) if b.get("kind") == "bullets"]
+
+
+def test_a_brief_with_many_open_questions_keeps_every_list_inside_the_schema_cap():
+    # full-flow UAT 2026-11-23 (Ferncliff): 14 open questions put 10 on one slide and the host refused every deck at Check.
+    cap = _bullets_cap()
+    assert assemble.LIST_ITEMS <= cap
+    from deck.tests.test_core import _build
+    inp = _brief_inp()
+    inp.open_questions = [{"question": f"Open question number {i}?", "why": "", "priority": "high"} for i in range(14)]
+    deck = _build(inp)
+    assert all(len(b["items"]) <= cap for _, b in _bullets(deck))
+    q = [deck["slides"][sid] for sid in deck["order"] if deck["slides"][sid]["type"] == "questions"]
+    assert q and len(q[0]["blocks"][0]["items"]) == assemble.LIST_ITEMS
+    assert all(f"Open question number {i}?" in q[0]["notes"] for i in range(assemble.LIST_ITEMS, 14))   # the rest, word for word
+
+
+def test_many_open_items_run_on_over_appendix_slides_inside_the_schema_cap_and_lose_none():
+    from deck import export_clean
+    cap = _bullets_cap()
+    slides = {f"s{i:02d}": assemble._slide("insight", f"Point {i}", [{"kind": "bullets", "items": [{"text": f"To confirm: claim {i}."}]}]) for i in range(1, 71)}
+    deck = {"meta": {}, "order": list(slides), "slides": slides}
+    res = export_clean.scrub(deck)
+    assert res["items"] == 70
+    added = [deck["slides"][sid] for sid in deck["order"] if deck["slides"][sid]["title"].startswith(export_clean.OPEN_TITLE)]
+    assert len(added) == export_clean.OPEN_MAX // assemble.LIST_ITEMS and added[1]["title"].endswith(", continued")
+    assert all(len(b["items"]) <= cap for _, b in _bullets(deck))
+    carried = " ".join(str(s["blocks"]) + s.get("notes", "") for s in added)
+    assert all(f"claim {i}." in carried for i in range(1, 71))
