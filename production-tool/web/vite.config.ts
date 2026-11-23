@@ -54,5 +54,10 @@ export default defineConfig({
     // script perf budget fails whenever the machine is busy. It runs in `npm run test:perf`, which
     // scripts/check.sh runs after the suites and reports without failing the check.
     exclude: process.env.NAPKIN_PERF === '1' ? [] : ['src/script/perf.test.ts'],
+    // CI runs two test files at a time. GitHub's runner has 4 vCPUs; with the default worker count the
+    // DOM tests (happy-dom) starve each other and a different slow test trips its time limit each run
+    // (develop 2026-11-23: lineage, shotBooth, replan, editor at 5 s+ vs 0.6 s locally). Local runs keep
+    // every core. No time limit or test changes.
+    ...(process.env.CI ? { maxWorkers: 2 } : {}),
   },
 })
