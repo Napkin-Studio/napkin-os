@@ -384,6 +384,26 @@ describe('a save from somewhere else is never overwritten', () => {
     expect(fake.projects.get(p.id)!.row.etag).not.toBe(first)
   })
 
+  it('the session ending mid-edit: the save is refused 401, the copy stays, sign-in is asked, and the next save carries the right If-Match (S2-6)', async () => {
+    forgetSent()
+    const fake = new FakeRelay()
+    const { laptop, p } = await made(fake)
+    const first = fake.projects.get(p.id)!.row.etag
+    await nameKey(services(laptop.shell).doc, 'kite')
+    await services(laptop.shell).clan!.flush()
+    fake.identity = false // the cookie ended
+    const err = await services(laptop.shell).clan!.clan.mirrorNow('manual').catch((x: unknown) => x)
+    expect(err).toMatchObject({ status: 401 })
+    expect(fake.projects.get(p.id)!.row.etag).toBe(first) // nothing was saved
+    // the working copy is still here, with the edit in it
+    expect(Object.values((services(laptop.shell).doc.get() as ProductionDocument).keys).some((k) => k.key === 'kite')).toBe(true)
+    // signed in again: the next save goes through on the version the copy started from
+    fake.identity = true
+    await services(laptop.shell).clan!.clan.mirrorNow('manual')
+    expect(fake.saves.at(-1)).toMatchObject({ ifMatch: first })
+    expect(fake.projects.get(p.id)!.row.etag).not.toBe(first)
+  })
+
   it('a tab with no base never saves blind over the relay\u2019s copy: the person chooses (re-test N3)', async () => {
     forgetSent()
     const fake = new FakeRelay()

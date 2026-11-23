@@ -82,7 +82,7 @@ export function Rooms() {
     boxes, gens,
   } : null
 
-  // The room is the route's (/p/:id/video/make, /edit, /sound): reload, Back and Share return to it. It is
+  // The room is the route's (/d/:id/video/make, /edit, /sound): reload, Back and Share return to it. It is
   // written in place as the person switches. Outside a video route (tests) it is kept here.
   const router = useRouter()
   const route = useRoute()

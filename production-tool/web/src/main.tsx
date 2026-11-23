@@ -71,7 +71,7 @@ async function boot() {
   const relayUrl = import.meta.env.VITE_RELAY_URL as string | undefined
   const server = relay.kind === 'http' && relayUrl ? new ProjectServer({ base: relayUrl, signedIn: () => !!app.get().me, onUnauthorised: refused }) : undefined
   const shell = new Shell({ relay, app, index, storage, remoteConfig, makeClan: browserClan, server })
-  // A deep link (/production/p/:project/script/:scriptId) opens its project; else back where the person was.
+  // A deep link (/production/d/:doc/script/:scriptId) opens its project; else back where the person was.
   const router = new Router()
   // The names the relay already lists, so a film naming itself never takes one (re-test N-D). Not waited for.
   if (app.get().me) void shell.serverProjects().catch(() => [])
