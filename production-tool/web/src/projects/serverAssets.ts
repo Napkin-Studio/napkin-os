@@ -3,13 +3,14 @@
 //   - Saving sends each picture this browser holds to in/<sha256>, by its own hash, once per session. The relay
 //     says "exists" for one it has, and nothing travels: a location in the document is never taken as proof that
 //     THIS relay has it (an Export's pictures point at the relay that made them; opened on another, 20 of 23 404ed).
-//   - Opening fetches each one this browser lacks: from its https locations, else from in/<sha256>;
+//   - Opening fetches each one this browser lacks: from the media base by its hash, else from in/<sha256> by the relay;
 //     the bytes must hash to the name. One that cannot be found stops the open and is named.
 
 import type { DocAsset, InputMime, ProductionDocument } from '../contracts/types'
 import { getBlob, putBlobAs } from '../lib/blobs'
 import { framesOf, refsList, shotName, takesOf, takeVersion } from '../model/selectors'
 import { hexOf, sha256Hex } from '../lib/hash'
+import { mediaUrls } from '../lib/media'
 import { idbGet, idbPut } from '../lib/idb'
 import { NotAProject } from './openFile'
 import { SENDABLE, type ProjectServer } from './server'
@@ -77,10 +78,12 @@ export async function fetchAssets(doc: ProductionDocument, server: Pick<ProjectS
   let got = 0
   let bytesIn = 0
   const t0 = performance.now()
-  // One picture: where it is (each https location, else the relay's presigned one), its bytes, its hash.
+  // One picture: where it is (the media base by its hash, else the relay's by-hash route), its bytes, its hash.
   const one = async (a: DocAsset) => {
     if (await getBlob(a.sha256)) return
-    const tries = a.locations.filter((l) => l.startsWith('https://'))
+    // By its hash only: the media base's in/ and out/, then the relay's by-hash route. An address the document
+    // carries is never fetched (S1-16, S1-17).
+    const tries = mediaUrls(a)
     let bytes: Uint8Array | null = null
     for (let i = 0; i <= tries.length && !bytes; i++) {
       const url = i < tries.length ? tries[i] : await server.where(a.sha256, a.mime, a.bytes ?? 1).catch(() => null)

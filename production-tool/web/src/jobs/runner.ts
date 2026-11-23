@@ -19,7 +19,7 @@ import { CONTRACT_VERSION, TERMINAL_STATES } from '../contracts/types'
 import { systemUpdate, type DocumentStore } from '../doc/store'
 import type { JobCtx, JobLocal, JobPurpose, ProjectUi } from '../doc/ui'
 import { jobState, record } from '../dogfood/recorder'
-import { idbLocation, putBlobAs } from '../lib/blobs'
+import { putBlobAs } from '../lib/blobs'
 import { newId, ulid } from '../lib/ulid'
 import { purposeInputs, purposeNode, purposeOf, purposeWords } from '../model/purpose'
 import { withLinkedText } from './linkedText'
@@ -737,7 +737,6 @@ export class JobRunner {
             mime: o.mime as Mime,
             origin: job.kind === 'mock' ? 'mock' : 'generated',
             job_id: job.jobId,
-            locations: outputLocations(o.sha256, o.url),
           }
           if (job.kind !== 'mock') a.rights = 'generated' // made for the agency (features/prod-assets-route.clan)
           if (o.bytes) a.bytes = o.bytes
@@ -799,12 +798,6 @@ export class JobRunner {
       this.fail(job.jobId, asContractError(e))
     }
   }
-}
-
-/** Where an output's bytes can be found. The document only takes idb://, s3:// and https:// locations,
- *  so a local dev relay's http://localhost URL is left out (the bytes are in this browser anyway). */
-export function outputLocations(sha256: string, url: string): string[] {
-  return /^https:\/\//.test(url) ? [idbLocation(sha256), url] : [idbLocation(sha256)]
 }
 
 /** Prompt files renamed without changing their content. A .clan made before the promptVersion

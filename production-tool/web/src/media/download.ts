@@ -1,13 +1,13 @@
 // Saving media (features/media-download.clan): one file, or all of it as one zip. The bytes come
-// from this browser first, else from the relay's copy (the asset's first https location); with
+// from this browser first, else from the relay's copy (found by its hash, lib/media.ts); with
 // neither, nothing is saved and the caller says so. Each download is one beta event, never bytes.
 
 import { zipSync, type Zippable } from 'fflate'
 import type { ProductionDocument, Sha256 } from '../contracts/types'
 import { record } from '../dogfood/recorder'
 import { download } from '../export'
-import { remoteUrl } from '../jobs/assets'
 import { getBlob } from '../lib/blobs'
+import { mediaUrls } from '../lib/media'
 import { mediaItems, zipName, type MediaItem, type ViewOf } from './names'
 
 export type BytesFrom = 'browser' | 'relay'
@@ -16,12 +16,14 @@ export type BytesFrom = 'browser' | 'relay'
 export async function mediaBytes(doc: Pick<ProductionDocument, 'assets'>, sha: Sha256): Promise<{ blob: Blob; from: BytesFrom } | null> {
   const local = await getBlob(sha)
   if (local) return { blob: local, from: 'browser' }
-  const url = remoteUrl(doc, sha)
-  if (!url) return null
-  try {
-    const res = await fetch(url)
-    if (res.ok) return { blob: await res.blob(), from: 'relay' }
-  } catch { /* not reachable: said as missing */ }
+  const a = doc.assets[sha]
+  if (!a) return null
+  for (const url of mediaUrls(a)) {
+    try {
+      const res = await fetch(url)
+      if (res.ok) return { blob: await res.blob(), from: 'relay' }
+    } catch { /* not reachable: try the next, else said as missing */ }
+  }
   return null
 }
 

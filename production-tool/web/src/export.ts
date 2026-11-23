@@ -10,16 +10,16 @@ import type { CanvasSnapshot } from './canvas/controller'
 import type { DocAsset } from './contracts/types'
 import type { DocumentStore } from './doc/types'
 import { getBlob } from './lib/blobs'
+import { mediaUrls } from './lib/media'
 import { extFor, hexOf } from './lib/hash'
 import { idbGet } from './lib/idb'
 import { ModelStore } from './model/store'
 
-/** Bytes for an asset: this browser first, then its https locations. */
-export async function assetBytes(a: Pick<DocAsset, 'sha256' | 'locations'>): Promise<Uint8Array | null> {
+/** Bytes for an asset: this browser first, then the media base by its hash (never an address the document names). */
+export async function assetBytes(a: Pick<DocAsset, 'sha256' | 'origin'>): Promise<Uint8Array | null> {
   const blob = await getBlob(a.sha256)
   if (blob) return new Uint8Array(await blob.arrayBuffer())
-  for (const loc of a.locations ?? []) {
-    if (!loc.startsWith('https://')) continue
+  for (const loc of mediaUrls(a)) {
     try {
       const res = await fetch(loc)
       if (res.ok) return new Uint8Array(await res.arrayBuffer())

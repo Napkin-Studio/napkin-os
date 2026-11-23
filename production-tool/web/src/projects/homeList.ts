@@ -26,7 +26,7 @@ export function homeItems(local: readonly ProjectEntry[], server: readonly Saved
   const t = Date.parse
   const items: HomeItem[] = local.map((p) => {
     const row = there.get(p.id)
-    const newerThere = !!row && row.etag !== p.server?.etag && (!p.server || t(row.savedAt) > t(p.server.savedAt))
+    const newerThere = !!row && (row.etag ? row.etag !== p.server?.etag : true) && (!p.server || t(row.savedAt) > t(p.server.savedAt))
     return { kind: 'local', p, server: row, newerThere, at: row && t(row.savedAt) > t(p.updated) ? row.savedAt : p.updated }
   })
   const mine = new Set(local.map((p) => p.id))
