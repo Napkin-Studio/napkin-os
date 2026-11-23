@@ -1092,6 +1092,8 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
         for a in _alternatives(lib, ids[sid_], base_, aud, ready.get(sid_, frozenset()), (fx.get(sid_) or {}).get("avoid", [])):
             if lib[a]["family"] in avoid_fams or lib[a]["group"] != "content":
                 continue
+            if ready.get(sid_) and not any(sl.get("kind") == "image" for sl in (lib[a].get("slots") or {}).values()):
+                continue   # a slide whose picture is made keeps a layout that draws it: variety never drops a picture
             r = probe(shown_, a)
             if r["ok"] and not r["relaxed"] and R.title_fits(s_["title"], 36):
                 return a

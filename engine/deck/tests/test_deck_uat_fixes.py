@@ -150,3 +150,23 @@ def test_the_carried_research_is_the_decks_evidence():
     assert inputs.apply_research(inp, members) is True and inp.has_research()
     assert inp.findings and inp.coverage["facts"] == 1
     assert inputs.apply_research(inputs.Inputs(brief={}), {"facts": [], "findings": []}) is False
+
+
+def test_variety_never_moves_a_slide_whose_picture_is_made_onto_a_layout_that_draws_none(monkeypatch):
+    """The UAT packshot slide held its picture but was swapped to the flow layout ('too few families in ten slides'), which has no picture box."""
+    import gzip
+    import json
+    from deck import layouts
+    for name in ("LOOK_V2", "LOOK_V3", "GRAPHICS"):
+        monkeypatch.setattr(spec, name, True)
+    deck = json.loads(gzip.open(HERE / "fixtures" / "production_deck_story.json.gz", "rt").read())
+    planned, _issues, _pending = layouts.plan(deck, prefs={"density": "lean"})
+    lib = layouts.load()
+    lost = []
+    for sid in planned["order"]:
+        s = planned["slides"][sid]
+        made = [k for k, v in (s.get("slots") or {}).items() if isinstance(v, dict) and (v.get("image") or {}).get("status") in ("made", "flagged")]
+        lid = (s.get("layout") or {}).get("id")
+        if s["type"] == "execution" and not s.get("ooh") and not s.get("strip") and made and lid and not any(sl.get("kind") == "image" for sl in (lib[lid].get("slots") or {}).values()):
+            lost.append((sid, lid))
+    assert not lost, lost
