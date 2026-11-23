@@ -5,14 +5,14 @@
 // One client's page, as the approved mock draws it (renderClientPage, phase
 // 33; gaps.md §2): the client's disc, "CLIENT · SINCE MAR 2025", the name and
 // a line naming the work, the ⋯ menu (Rename, Archive); then Needs you, the
-// work by tool (Briefs, Research, Decks, Production, each with its +), the
-// Brand Clan card and the decisions on record. No tool wheel: 1 to 4 open a
+// work by tool (Briefs, Research, Territories, Production, Decks, each with its +), the
+// Brand Clan card and the decisions on record. No tool wheel: 1 to 5 open a
 // tool's own page, as the wheel's number keys did.
 
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKey } from 'react'
 import type { ClientRecord, LibraryItem } from '../../host'
 import { activityOfItem, needsYou, strongest } from '../landing/model'
-import { toolById, toolOfApp, type Tool } from '../landing/tools'
+import { startsFromBrief, toolById, toolOfApp, type Tool } from '../landing/tools'
 import { isTyping } from '../landing/keys'
 import { BRAND_APP } from '../landing/BrandClanCard'
 import { clientLine, clientLook, clientName, monogramOf, stateWords, callsIn, type Facts } from './deskData'
@@ -23,9 +23,9 @@ import { usePop } from './popKit'
 const GROUPS = [
   { tool: 'brief', label: 'Briefs', kind: 'Brief', icon: 'brief' },
   { tool: 'research', label: 'Research', kind: 'Research', icon: 'research' },
-  { tool: 'deck', label: 'Decks', kind: 'Deck', icon: 'deck' },
-  { tool: 'prod', label: 'Production', kind: 'Production', icon: 'production' },
   { tool: 'territories', label: 'Territories', kind: 'Territories', icon: 'territories' },
+  { tool: 'prod', label: 'Production', kind: 'Production', icon: 'production' },
+  { tool: 'deck', label: 'Decks', kind: 'Deck', icon: 'deck' },
 ] as const
 
 /** "2d", "1w", "4m", "3h": how long ago, the mock's short way. */
@@ -184,7 +184,7 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
                   </h2>
                   <span className="cp-new">
                     <button type="button" className="cp-plus" data-new={g.tool} data-testid={`new-${g.tool}`}
-                      title={on ? `New ${t.noun[0]}` : `${t.full} is coming soon`} aria-label={on ? `New ${t.noun[0]} for ${name}` : `${t.full} is coming soon`}
+                      title={on ? (startsFromBrief(t) ? 'Start from a brief' : `New ${t.noun[0]}`) : `${t.full} is coming soon`} aria-label={on ? (startsFromBrief(t) ? `Start a ${t.noun[0]} for ${name} from a brief` : `New ${t.noun[0]} for ${name}`) : `${t.full} is coming soon`}
                       aria-disabled={on ? undefined : true}
                       onClick={e => {
                         if (!on) { onSoon(t); return }
@@ -193,7 +193,7 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
                       }}>+</button>
                   </span>
                 </div>
-                <div className="cp-box">{g.docs.length ? g.docs.map(row) : <p className="cp-empty">Nothing here yet.</p>}</div>
+                <div className="cp-box">{g.docs.length ? g.docs.map(row) : <p className="cp-empty">{startsFromBrief(t) ? 'Start from a brief.' : 'Nothing here yet.'}</p>}</div>
               </section>
             )
           })}

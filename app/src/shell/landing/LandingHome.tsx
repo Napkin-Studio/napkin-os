@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ToolPage } from './ToolPage'
 import type { Manage } from './useLanding'
 import { agencySummary, newsOf, whoIs, type AgencySummary } from './model'
-import { liveTools, toolById, toolHref, type Tool } from './tools'
+import { liveTools, sendsToBrief, startsFromBrief, toolById, toolHref, toolOfApp, type Tool } from './tools'
 import { productionOn } from '../../host/http'
 import { arrival, isTyping } from './keys'
 import type { LandingData } from './store'
@@ -91,9 +91,20 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
   const live = useMemo(() => liveTools(installed, production), [installed, production])
   // A tool with a page here: live, and not one that opens outside the shell (Prod).
   const routable = useCallback((id: string) => live.has(id) && toolHref({ id }) === null, [live])
+  // Territories starts from a brief: with none of its documents, or from a "+", the client's Brief opens
+  // and says so; nothing empty is made.
+  const [fromBrief, setFromBrief] = useState<string | null>(null)
+  const startFromBrief = (clientId: string) => {
+    const brief = toolById('brief')!
+    if (!live.has('brief')) { sayingSoon(brief); return }
+    const to: Route = { level: 'tool', client: clientId, tool: 'brief' }
+    setFromBrief(formatRoute(to))
+    go(to)
+  }
   const openTool = (clientId: string, t: Tool) => {
     const href = toolHref(t)
     if (href) window.location.assign(href)
+    else if (sendsToBrief(t, data.items.filter(i => i.client?.id === clientId && toolOfApp(i.app_id)?.id === t.id).length)) startFromBrief(clientId)
     else go({ level: 'tool', client: clientId, tool: t.id })
   }
 
@@ -132,7 +143,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
   const lenses = useLensDots(tool?.id === 'research' ? inTool : NONE)
   // a repeated word is still a change to the region, so it is said again
   const say = soon?.key === key ? soon.text + (soon.n % 2 ? '' : ' ') : arrival(route, {
-    agency: who.agency, client: client?.name, tool: tool?.full, tools: 4, open: inTool.length,
+    agency: who.agency, client: client?.name, tool: tool?.full, tools: 5, open: inTool.length,
   })
 
   let body
@@ -142,10 +153,11 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         client={client}
         tool={tool}
         items={inTool}
-        onNew={() => { if (tool.appId) onStart(tool.appId, client.id) }}
+        onNew={() => { if (startsFromBrief(tool)) startFromBrief(client.id); else if (tool.appId) onStart(tool.appId, client.id) }}
         onOpenItem={onOpenDocument}
         onBack={() => go({ level: 'client', client: client.id })}
         lenses={lenses}
+        note={tool.id === 'brief' && fromBrief === key ? 'Territories starts from a brief. Open one, then Continue in ▾ Territories.' : undefined}
       />
     )
   } else if (clientId && client) {
@@ -156,7 +168,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         facts={facts}
         live={live}
         onOpenItem={onOpenDocument}
-        onNew={t => { if (t.appId) onStart(t.appId, client.id) }}
+        onNew={t => { if (startsFromBrief(t)) startFromBrief(client.id); else if (t.appId) onStart(t.appId, client.id) }}
         onOpenTool={t => openTool(client.id, t)}
         onSoon={sayingSoon}
         onDecisions={onDecisions}

@@ -38,6 +38,7 @@ const BRIEF = 'ie.napkin.brief-maker', RESEARCH = 'ie.napkin.campaign-research',
 const noop = () => {}
 const count = (html: string, re: RegExp) => (html.match(re) || []).length
 const LIVE = new Set(['brief', 'research', 'deck'])
+const LIVE_T = new Set(['brief', 'research', 'territories', 'prod', 'deck'])
 const data = (clients: ClientRecord[], items: LibraryItem[] = []): LandingData => ({
   clients, items, unassigned: items.filter(i => !i.client).length, person: { actor: 'human:sam@studio-a', id: 'sam@studio-a', name: 'Sam Test' }, apps: [BRIEF, RESEARCH, DECK],
 })
@@ -247,6 +248,27 @@ test('the client page: since, the name, a line naming the work, Needs you, work 
   assert.match(html, /role="group" aria-label="Tools for Client A"/)
   assert.match(html, /aria-label="Research Tool for Client A, none open, start one \(2 of 5\)"/)
   assert.match(html, /class="cp-st ">Draft</)
+})
+
+test('the client page lists Brief, Research, Territories, Production, Deck; Territories documents have their own section', () => {
+  const a = client(0)
+  const html = page([
+    item(a, BRIEF, { title: 'B' }), item(a, DECK, { title: 'D' }),
+    item(a, 'ie.napkin.territories', { title: 'Routes one' }), item(a, 'ie.napkin.territories', { title: 'Routes two' }),
+  ], { live: LIVE_T })
+  const ids = [...html.matchAll(/data-testid="group-(\w+)"/g)].map(m => m[1])
+  assert.deepEqual(ids, ['brief', 'research', 'territories', 'deck'], 'Production is not an installed app: its section appears with its documents, between Territories and Decks')
+  assert.doesNotMatch(html, /data-testid="group-other"/, 'Territories documents are not Other')
+  assert.match(html, /data-testid="group-territories".*?Routes one.*?Routes two.*?data-testid="group-deck"/s)
+  assert.match(html, /data-testid="tool-territories"[^>]*>.*?Territories<small>2<\/small>/s)
+  assert.match(html, /aria-label="Territories for Client A, 2 open \(3 of 5\)"/)
+})
+
+test('Territories with none: the group says Start from a brief, and its + starts from a brief, not an empty one', () => {
+  const html = page([], { live: LIVE_T })
+  assert.match(html, /data-testid="group-territories".*?Start from a brief\./s)
+  assert.match(html, /data-testid="new-territories"[^>]*title="Start from a brief"/)
+  assert.match(html, /aria-label="Territories for Client A, none open, start one \(3 of 5\)"/)
 })
 
 test('a new client: No work yet, Briefs and Research each say Nothing here yet', () => {
