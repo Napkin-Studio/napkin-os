@@ -8,6 +8,7 @@
 // in rank order; the ratio and the target length are the storyboard's; the frame in a shot is its pick.
 
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { LinkNotice } from '../LinkNotice'
 import { useConfig, useDoc, useJobsTick, useRouter, useServices, useUi } from '../app/context'
 import type { Ask, ProductionDocument, Ratio, Shot } from '../contracts/types'
 import { isRunning, jobAt, ratioAspect } from '../jobs/select'
@@ -266,7 +267,7 @@ export function Storyboard() {
           {shots.length > 1 && <span className="hint sb-reorder">Drag ⋮⋮ to reorder, or Space and the arrows</span>}
           {shots.length > 0 && <button className="sp-btn" disabled={drawnCount(shots) >= MAX_SHOTS} title={drawnCount(shots) >= MAX_SHOTS ? `A film has at most ${MAX_SHOTS} drawn shots` : undefined} onClick={() => void attempt(() => updateDoc(docStore, (d) => { addShot(d) }, 'add shot'))}>+ Add shot</button>}
         </>}
-        primary={primary} />
+        primary={<span className="ln-anchor">{primary}{sb && <LinkNotice kind="storyboard" id={sb.id} />}</span>} />
       <div className="booth-row">
       <div className="panel sb-body sb-desk">
       <article className="sb-sheet" aria-label="Storyboard">

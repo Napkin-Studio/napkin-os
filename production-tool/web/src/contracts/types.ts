@@ -723,7 +723,7 @@ export interface TimelineItem {
   to_s?: number
 }
 /** The person's own end card (document endCard), drawn by the relay as the locked last piece of V1. */
-export interface EndCard { headline?: string; line: string; cta?: string; bg: string; logo_asset?: Sha256; s: number; transition_in?: TransitionIn }
+export interface EndCard { headline?: string; line: string; cta?: string; legal?: string; bg: string; logo_asset?: Sha256; s: number; transition_in?: TransitionIn }
 /** How a shot joins the one before it (features/connected-video.clan): continue (same setup, action carries on),
  *  cut (new angle or place), match (new angle, same moment), dissolve or dip (asked for). by: Dex, or a person. */
 export type SeamKind = 'cut' | 'continue' | 'match' | 'dissolve' | 'dip'
@@ -1219,7 +1219,7 @@ export interface CutdownInput {
   /** render: the size carries the film's own end card (never a studio card, owner 2026-11-23). */
   endCard?: boolean
   /** render: the film's own end card, drawn by the relay at the size (features/pt-film-r1.clan). */
-  clientCard?: { headline?: string; line: string; cta?: string; bg: string; logo?: AssetRef; s: number }
+  clientCard?: { headline?: string; line: string; cta?: string; legal?: string; bg: string; logo?: AssetRef; s: number }
   fadeOutS?: number
   layers?: TypeLayer[]
 }
@@ -1301,7 +1301,7 @@ export interface RemakeWith { parentJobId: Id; parentId?: Id; delta: RemakeDelta
 export interface TimelinePlan {
   clips: { asset: AssetRef; startS: number; inS: number; outS: number; speed?: number; holdS?: number; fadeInS?: number; fadeOutS?: number; transitionIn?: TransitionIn }[]
   texts?: { words: string; style: 'caption' | 'title' | 'super'; fromS: number; toS: number; fadeInS?: number; fadeOutS?: number }[]
-  endCard?: { headline?: string; line: string; cta?: string; bg: string; logo?: AssetRef; s: number; transitionIn?: TransitionIn }
+  endCard?: { headline?: string; line: string; cta?: string; legal?: string; bg: string; logo?: AssetRef; s: number; transitionIn?: TransitionIn }
   lengthS: number
 }
 

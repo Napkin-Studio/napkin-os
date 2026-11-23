@@ -7,7 +7,7 @@ import { newUlidId } from '../../../clan-store/src'
 import { compileTimeline, type PlanClip as StorePlanClip, type PlanEndCard as StorePlanEndCard, type PlanText as StorePlanText, type TimelineItem as StoreTimelineItem } from '../../../clan-store/src'
 import type { AssetRef, EndCard, Id, ProductionDocument, TimelineItem, TimelinePlan, TransitionIn } from '../contracts/types'
 import { updateDoc } from '../doc/store'
-import { briefForJob, legalOf, onlyBrief } from '../brief/model'
+import { briefForJob, legalOf } from '../brief/model'
 import { quoted } from '../lib/quotes'
 import type { DocumentStore } from '../doc/types'
 import { beatsOf, shotsOf, storyboardOfVideo } from '../model/selectors'
@@ -52,8 +52,9 @@ export function readCut(d: ProductionDocument, videoId: Id | undefined): Cut {
   }
   const card = v.end_card
   const ctr = transitionOf(card?.transition_in)
+  const legal = card && videoId ? cardLegal(d, videoId, card.legal) : card?.legal
   const endCard: CutEndCard | undefined = card ? {
-    headline: card.headline ?? '', line: card.line, ...(card.cta ? { cta: card.cta } : {}), bg: card.bg,
+    headline: card.headline ?? '', line: card.line, ...(card.cta ? { cta: card.cta } : {}), ...(legal !== undefined ? { legal } : {}), bg: card.bg,
     ...(card.logo_asset ? { logo: card.logo_asset } : {}), durS: card.s, ...(ctr ? { transition: ctr } : {}),
   } : undefined
   return { v1: sortV1(v1), v2: sortV1(v2), text: text.sort((a, b) => a.startS - b.startS), ...(endCard ? { endCard } : {}) }
@@ -87,7 +88,7 @@ export function toTimeline(cut: Cut): Record<Id, TimelineItem> {
 /** The plain end card as the document keeps it (video.end_card). */
 export function toEndCard(e: CutEndCard): EndCard {
   return {
-    ...(e.headline ? { headline: e.headline } : {}), line: e.line.trim() || e.headline || 'Your brand', ...(e.cta ? { cta: e.cta } : {}), bg: e.bg,
+    ...(e.headline ? { headline: e.headline } : {}), line: e.line.trim() || e.headline || 'Your brand', ...(e.cta ? { cta: e.cta } : {}), ...(e.legal !== undefined ? { legal: e.legal.trim() } : {}), bg: e.bg,
     ...(e.logo ? { logo_asset: e.logo } : {}), s: r3(Math.min(10, Math.max(0.5, e.durS))),
     ...(e.transition ? { transition_in: { kind: e.transition.kind, s: r3(e.transition.s) } } : {}),
   }
@@ -167,22 +168,29 @@ const bare = (t: string) => t.replace(/[.!?]$/, '').trim()
  */
 export function endCardFrom(d: ProductionDocument, videoId: Id): CutEndCard | undefined {
   const card = endCardOf(d, storyboardOfVideo(d, videoId)?.id)
-  return card && withLegal(d, videoId, card)
+  return card && withBriefLegal(d, videoId, card)
 }
 
 /** A new end card for a film with no end-card shot: the brand name set in type (the project's name; there is no logo without a
- *  brand book) and the brief's legal line, so no slot is left blank. */
+ *  brand book) and the linked Brief's legal line as its legal. */
 export function newEndCard(d: ProductionDocument, videoId: Id): CutEndCard {
   const named = d.project.title && !/^untitled/i.test(d.project.title) ? d.project.title : 'Your brand'
-  return withLegal(d, videoId, { headline: '', line: named, bg: '#14161B', durS: 1.5 })
+  return withBriefLegal(d, videoId, { headline: '', line: named, bg: '#14161B', durS: 1.5 })
 }
 
-/** The card with the brief's legal line as its small line when it has none of its own: the film never loses the legal ask
- *  (UAT 2026-11-22: no legal line on the end card, and an empty call to action). */
-export function withLegal(d: ProductionDocument, videoId: Id, card: CutEndCard): CutEndCard {
-  if (card.cta?.trim()) return card
-  const legal = legalOf((onlyBrief(d) ?? briefForJob(d, { kind: 'video', id: videoId })?.brief)?.spine)
-  return legal ? { ...card, cta: legal } : card
+/** The legal line of the Brief linked to this film (never one that is only in the project): what an end card starts with. */
+export function briefLegal(d: ProductionDocument, videoId: Id): string | undefined {
+  return legalOf(briefForJob(d, { kind: 'video', id: videoId })?.brief.spine)
+}
+
+/** The card's legal line: its own saved words ('' once the person cleared it), else the linked Brief's. */
+export const cardLegal = (d: ProductionDocument, videoId: Id, own: string | undefined) => own ?? briefLegal(d, videoId)
+
+/** The card with the linked Brief's legal line as its own `legal`, which the person can then overwrite (owner 2026-11-23: it
+ *  was the call to action's fallback before). Without a linked Brief it has none. */
+function withBriefLegal(d: ProductionDocument, videoId: Id, card: CutEndCard): CutEndCard {
+  const legal = briefLegal(d, videoId)
+  return legal ? { ...card, legal } : card
 }
 
 /** The end card a storyboard's end card shot makes (endCardFrom), for the Film's cut or the storyboard's cell. */
@@ -281,7 +289,8 @@ export interface Plan {
 export function compileFor(d: ProductionDocument, videoId: Id): Plan {
   const v = d.videos[videoId]
   if (!v) return { clips: [], texts: [], lengthS: 0, missing: [] }
-  const plan = compileTimeline({ timeline: v.timeline as Record<string, StoreTimelineItem>, ...(v.end_card ? { end_card: v.end_card } : {}) }, d.generations)
+  const legal = v.end_card ? cardLegal(d, videoId, v.end_card.legal) : undefined
+  const plan = compileTimeline({ timeline: v.timeline as Record<string, StoreTimelineItem>, ...(v.end_card ? { end_card: legal === undefined ? v.end_card : { ...v.end_card, legal } } : {}) }, d.generations)
   const clips = plan.clips.map((c) => {
     const g = c.generation_id ? d.generations[c.generation_id] : undefined
     const speed = c.speed ?? 1
@@ -306,7 +315,7 @@ export async function renderPlan(plan: Plan, ref: (sha: string) => Promise<Asset
   const texts = plan.texts.map((t) => ({ words: t.words, style: t.style, fromS: t.fromS, toS: t.toS, ...(t.fadeInS ? { fadeInS: t.fadeInS } : {}), ...(t.fadeOutS ? { fadeOutS: t.fadeOutS } : {}) }))
   const e = plan.endCard
   const endCard = e ? {
-    ...(e.headline ? { headline: e.headline } : {}), line: e.line, ...(e.cta ? { cta: e.cta } : {}), bg: e.bg,
+    ...(e.headline ? { headline: e.headline } : {}), line: e.line, ...(e.cta ? { cta: e.cta } : {}), ...(e.legal ? { legal: e.legal } : {}), bg: e.bg,
     ...(e.logo_sha256 ? { logo: await ref(e.logo_sha256) } : {}), s: e.s, ...(e.transitionIn ? { transitionIn: e.transitionIn } : {}),
   } : undefined
   return { clips, ...(texts.length ? { texts } : {}), ...(endCard ? { endCard } : {}), lengthS: plan.lengthS }
