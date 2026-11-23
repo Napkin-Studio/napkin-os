@@ -196,6 +196,20 @@ button.tsrc:hover{border-color:color-mix(in srgb,var(--ink) 35%,var(--line))}
 .bt-box textarea::placeholder{color:var(--faint)}
 .bt-box textarea:disabled{opacity:.7}
 .bt-hint{font-size:13.5px;color:var(--ink-soft);line-height:1.4}
+.fq{border:1px solid var(--line);border-radius:6px;background:var(--card);overflow:hidden}
+.fq .tsrc-band{padding:5px 12px}
+.fq .tsrc-band.warn{background:var(--warn-soft);color:var(--warn)}
+.fq .tsrc-body{padding:9px 12px 10px;gap:6px}
+.fq .qt{font-family:var(--font-serif);font-size:16.5px;line-height:1.4;border-left:3px solid var(--te);padding-left:10px}
+.fq.un .qt{border-color:var(--warn)}
+.fq .meta{font:800 11px/1.5 var(--font-ui);color:var(--muted);display:flex;flex-wrap:wrap;gap:2px 10px}
+.fq .meta a,.lqlink{color:var(--accent);text-decoration:underline;word-break:break-all}
+.fq .acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.fq .btn{white-space:nowrap;flex:none}
+.fq .pinned{font:800 11px var(--font-ui);letter-spacing:.06em;text-transform:uppercase;color:var(--ok)}
+.bt-scope.ok{background:var(--ok-soft);color:var(--ok)}
+.okc .quote{border-left:3px solid var(--te);padding:2px 0 2px 10px;font-size:15px;line-height:1.4;color:var(--ink-soft)}
+.bt-box .row{display:flex;align-items:center;gap:8px}
 .bt-scope{white-space:nowrap;display:inline-flex;align-items:center;height:24px;padding:0 9px;border-radius:999px;background:var(--paper-2);color:var(--ink-soft);font:800 11px var(--font-ui)}
 .btn{height:32px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--card);font:800 12.5px var(--font-ui);color:var(--ink)}
 .btn.dark{background:var(--ink);color:var(--paper);border-color:var(--ink)}
@@ -710,7 +724,7 @@ var TerritoriesLogic = (function () {
       var x = arr(data && data.finds).filter(function (y) { return y && y.id === cite; })[0];
       if (x) {
         out.carried = true; out.text = text(x.text); out.status = 'found'; out.statusWords = 'found';
-        out.meta = [text(x.source), text(x.date), x.quote_checked ? 'quote checked' : ''].filter(Boolean);
+        out.meta = [text(x.source), text(x.date), x.quote_checked ? 'quote checked' : ''].filter(Boolean); out.url = typeof x.url === 'string' ? x.url : '';
       }
       return out;
     }
@@ -847,6 +861,7 @@ var TerritoriesLogic = (function () {
         body: 'are derived. Anything built on ' + (ids.length === 1 ? 'it' : 'them') + ' will say so, and I will only ask if ' + (ids.length === 1 ? 'it reaches' : 'one of them reaches') + ' a greenlight.' });
     }
     arr(data && data.notes).filter(isObj).slice().reverse().forEach(function (n) {
+      if (typeof TerritoriesLookups !== 'undefined' && TerritoriesLookups.isLookupNote(n, data)) return;      // the look-up box draws its own notes
       out.push({ role: n.agent || 'strategy', label: 'note', time: String(n.at || '').slice(0, 10), body: text(n.text), cites: arr(n.cite) });
     });
     return out;
@@ -863,6 +878,7 @@ var TerritoriesLogic = (function () {
     var r = resolve(cite, data), cls = !r.carried ? ' gone' : r.status === 'derived' ? ' derived' : '';
     return '<button type="button" class="ref' + cls + '" data-src="' + esc(cite) + '" title="' + esc(r.carried ? r.label + (r.statusWords ? ', ' + r.statusWords : '') : 'Not carried in this document') + '">' + esc(cite) + '</button>';
   }
+  function findLink(url) { return typeof TerritoriesLookups !== 'undefined' ? TerritoriesLookups.link(url) : ''; }
   function stateChip(r) {
     if (!r.carried) return '<span class="pill st-plain">not carried</span>';
     return '<span class="pill st-' + (r.status === 'verified' ? 'verified' : r.status === 'derived' ? 'derived' : r.status === 'found' ? 'found' : 'plain') + '">' + esc(r.statusWords) + '</span>';
@@ -1536,8 +1552,7 @@ var TerritoriesLogic = (function () {
       '<button type="button" class="booth-hide" data-booth="hide" aria-label="Hide the Booth" aria-expanded="' + (open ? 'true' : 'false') + '" aria-controls="stab" aria-keyshortcuts="]">Hide<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5"/></svg></button></div>' +
       '<div class="booth-body"><div class="bt-agent">' + sphere(role, 40) + '<div><div class="who">' + esc(roleName(role)) + ' agent · ' + esc(roleJob(role)) + '</div><div class="line">' + esc(line) + '</div></div>' +
       '<span class="bt-crew" aria-hidden="true">' + sphere('research', 22) + sphere('strategy', 22) + '</span></div>' + notes +
-      (at === 2 ? '' : '<div class="bt-box"><textarea rows="2" disabled placeholder="Ask the Research agent to look something up…" aria-label="Ask the Research agent to look something up"></textarea>' +
-      '<div class="bt-hint">Look-ups are not built into Territories yet, so nothing can be searched from here.</div><div class="row"><span class="bt-scope">Whole exploration</span><span class="spacer"></span><button type="button" class="btn dark" disabled>Look it up</button></div></div>') +
+      (at === 2 || typeof TerritoriesLookups === 'undefined' ? '' : TerritoriesLookups.section(data, ui)) +
       me + '</div></div></aside>';
   }
 
@@ -1587,7 +1602,7 @@ var TerritoriesLogic = (function () {
     if (what === 'finds') {
       var fs = arr(data && data.finds).filter(isObj);
       return { title: 'Found by Territories', html: '<span class="psec-t">Its own look-ups · ' + esc(plural(fs.length, 'find')) + '</span>' +
-        fs.map(function (x) { var r = resolve(x.id, data); return '<div class="evrow">' + refChip(x.id, data) + '<div class="grow">' + esc(r.text) + '<div class="meta">' + esc(r.meta.join(' · ')) + '</div></div></div>'; }).join('') };
+        fs.map(function (x) { var r = resolve(x.id, data); return '<div class="evrow">' + refChip(x.id, data) + '<div class="grow">' + esc(r.text) + '<div class="meta">' + esc(r.meta.join(' · ')) + '</div>' + findLink(r.url) + '</div></div>'; }).join('') };
     }
     var r = resolve(what, data);
     if (!r.kind) return null;
@@ -1598,7 +1613,7 @@ var TerritoriesLogic = (function () {
     } else {
       var band = r.kind === 'brief' ? '<span class="tsrc-tab">Brief</span>' : r.kind === 'find' ? '<span class="tsrc-band te">Found by Territories</span>' : '<span class="tsrc-band">Research</span>';
       body = '<div class="tsrc' + (r.kind === 'brief' ? ' tsrc-brief' : '') + '">' + band + '<div class="tsrc-body"><span class="psec-t">' + esc(r.label) + ' · ' + esc(what) + ' ' + stateChip(r) + '</span><div class="tsrc-q">' + esc(r.text) + '</div>' +
-        (r.meta.length ? '<div class="tsrc-row">' + r.meta.map(function (m) { return '<span>' + esc(m) + '</span>'; }).join('') + '</div>' : '') +
+        (r.meta.length ? '<div class="tsrc-row">' + r.meta.map(function (m) { return '<span>' + esc(m) + '</span>'; }).join('') + '</div>' : '') + (r.kind === 'find' ? findLink(r.url) : '') +
         (r.cites.length ? '<div class="row">' + r.cites.map(function (k) { return refChip(k, data); }).join('') + '</div>' : '') + '</div></div>';
     }
     var play = fp && r.carried ? '<button type="button" class="btn-rect" data-play-toggle="' + esc(what) + '" data-on="' + (fp.in_play ? '0' : '1') + '">' + (fp.in_play ? 'Take it out of play' : 'Put it back in play') + '</button>' : '';
@@ -1610,6 +1625,7 @@ var TerritoriesLogic = (function () {
     data = isObj(data) ? data : {}; env = env || {};
     if (typeof TerritoriesWorld !== 'undefined' && TerritoriesWorld.handles(e.a)) return TerritoriesWorld.act(data, ui, e, env);
     if (typeof TerritoriesPictures !== 'undefined' && TerritoriesPictures.handles(e.a)) return TerritoriesPictures.act(data, ui, e, env);
+    if (typeof TerritoriesLookups !== 'undefined' && TerritoriesLookups.handles(e.a)) return TerritoriesLookups.act(data, ui, e, env);
     var by = (env.me && env.me.name) || 'You', at = env.now || new Date().toISOString().replace(/\.\d+Z$/, 'Z'), run = isObj(data.run) ? data.run : {};
     if (e.a === 'tick') {
       var p = tickPatch(data, e.id, e.on);
@@ -2176,6 +2192,133 @@ var TerritoriesPictures = (function () {
 })();
 </script>
 
+<script id="territories-lookups-logic">
+// Look-ups in the Booth (territories-lookups): the box, the OK card that comes first, the Research note a look-up leaves and its quote cards with
+// Pin / Unpin. The page keeps no rule of its own: a question, an OK, a no and a pin are requests to the middleware (run_territories steps
+// lookup and pin_quote); engine/territory/lookups.py decides, and the page shows what the document then says. No price is drawn here.
+var TerritoriesLookups = (function () {
+  'use strict';
+  var L = typeof TerritoriesLogic !== 'undefined' ? TerritoriesLogic : null;
+  function isObj(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+  function arr(v) { return Array.isArray(v) ? v : []; }
+  function esc(s) { return L.esc(s); }
+  var SHOWN = 3;            // the look-ups whose quotes the Booth lists (the newest)
+  var NEEDS_NAME = 'Sign in first: only a named person can look things up or pin a quote.';
+
+  function norm(s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); }
+  function lookups(data) { return arr(data && data.lookups).filter(isObj); }
+  function finds(data) { return arr(data && data.finds).filter(isObj); }
+  function named(ui) { return !!(ui && ui.me && ui.me.name); }
+  function by(env) { return (env && env.me && env.me.name) || ''; }
+  function busy(ui) { return L.reqBusy(ui && ui.req); }
+  function safeUrl(u) { return typeof u === 'string' && /^https?:\/\//i.test(u) ? u : ''; }
+  function host(u) { var m = /^https?:\/\/([^\/?#]+)/i.exec(u); return m ? m[1].replace(/^www\./, '') : u; }
+  /** The page a quote was read on, as a link; nothing when it has none. */
+  function link(u) {
+    u = safeUrl(u);
+    return u ? '<div class="meta"><a class="lqlink" href="' + esc(u) + '" target="_blank" rel="noopener noreferrer">' + esc(host(u)) + '</a></div>' : '';
+  }
+  /** A Research note a look-up wrote: the box draws it with its quotes, so the plain notes list leaves it out. */
+  function isLookupNote(n, data) {
+    var c = arr(n && n.cite);
+    return !!n && n.agent === 'research' && c.length > 0 && c.every(function (x) { return /^x_/.test(x); }) &&
+      lookups(data).some(function (q) { return arr(q.found).indexOf(c[0]) !== -1; });
+  }
+  function words(req, key) {      // the engine's own sentence, without the page's framing
+    if (!isObj(req) || req.key !== key) return '';
+    if (req.state === 'sending') return 'Sending it to the engine…';
+    if (req.state === 'queued' || req.state === 'running') return 'Looking it up. The result appears here when it is back.';
+    if (req.state === 'failed') return String(req.error || '').replace(/^.*?did not go through\.\s*/, '').replace(/\s*Nothing changed\.?$/, '') || 'That did not go through.';
+    return '';
+  }
+  function btn(label, attrs, dark, dis) { return '<button type="button" class="btn' + (dark ? ' dark' : '') + '" ' + attrs + (dis ? ' disabled' : '') + '>' + esc(label) + '</button>'; }
+
+  /** The box. The question is only asked here: nothing is searched until the card it makes is OK'd. */
+  function box(data, ui) {
+    var draft = ui && typeof ui.lq === 'string' ? ui.lq : '';
+    if (lookups(data).some(function (q) { return norm(q.q).toLowerCase() === norm(draft).toLowerCase(); })) draft = '';     // it became a card
+    var w = words(ui && ui.req, 'lq:new'), failed = ui && ui.req && ui.req.key === 'lq:new' && ui.req.state === 'failed';
+    return '<div class="bt-box"><textarea rows="2" data-lq-draft maxlength="240" placeholder="Ask the Research agent to look something up…" aria-label="Ask the Research agent to look something up">' + esc(draft) + '</textarea>' +
+      '<div class="bt-hint">' + esc(named(ui) ? 'Searches the open web. Only quotes that check against their page can be pinned.' : NEEDS_NAME) + '</div>' +
+      (w ? '<div class="runnote' + (failed ? ' bad' : '') + '" role="status">' + esc(w) + '</div>' : '') +
+      '<div class="row"><span class="bt-scope">Whole exploration</span><span class="spacer"></span><button type="button" class="btn dark" data-act="lookup"' +
+      (!norm(draft) || !named(ui) || busy(ui) ? ' disabled' : '') + '>Look it up</button></div></div>';
+  }
+
+  /** The OK card: what will be looked up and who wants it. No price. */
+  function okCard(q, ui) {
+    var key = 'lq:' + q.id, w = words(ui && ui.req, key), failed = ui && ui.req && ui.req.key === key && ui.req.state === 'failed', dis = busy(ui) || !named(ui);
+    var head = function (what, need) { return '<header class="bc-hd">' + L.sphere('research', 20) + '<span class="bc-who">Research · ' + what + '</span>' + (need ? '<span class="need">Needs you</span>' : '') + '</header>'; };
+    if (failed) {
+      var capped = /number of look-ups/.test(w);
+      return '<article class="bc ask off" data-lq-card="' + esc(q.id) + '">' + head('not looked up', false) + '<div class="q">' + esc(w) + '</div>' +
+        '<div class="bc-note">' + esc(norm(q.q)) + '</div><div class="acts">' + (capped ? '' : btn('Try again', 'data-lq-ok="' + esc(q.id) + '"', false, dis)) + btn('Not now', 'data-lq-no="' + esc(q.id) + '"', false, dis) + '</div></article>';
+    }
+    var mine = norm(q.by) === norm(ui && ui.me && ui.me.name) || !/^napkin/i.test(norm(q.by));
+    return '<article class="bc ask okc" data-lq-card="' + esc(q.id) + '">' + head('before looking up', true) + '<div class="q">Look this up on the open web?</div>' +
+      '<div class="quote">' + esc(norm(q.q)) + '</div><div class="bc-note" style="font-size:14px;color:var(--muted)">' +
+      (mine ? 'Asked by ' + esc(norm(q.by)) + '.' : esc(norm(q.by).replace(/^Napkin,?\s*/i, 'Napkin would like this, ').replace(/^Napkin would like this, $/, 'Napkin would like this.')) + '.') +
+      ' Nothing is searched until you say OK.</div>' +
+      '<div class="acts">' + btn('OK, look it up', 'data-lq-ok="' + esc(q.id) + '"', true, dis) + btn('Not now', 'data-lq-no="' + esc(q.id) + '"', false, dis) + '</div>' +
+      (w ? '<div class="runnote" role="status">' + esc(w) + '</div>' : '') + (named(ui) ? '' : '<div class="hint">' + esc(NEEDS_NAME) + '</div>') + '</article>';
+  }
+
+  /** The note a look-up wrote, then its quotes. */
+  function resultCards(q, data, ui) {
+    var ids = arr(q.found), note = arr(data && data.notes).filter(function (n) { return isObj(n) && arr(n.cite)[0] === ids[0]; })[0];
+    var out = '';
+    if (note) out += '<article class="bc"><header class="bc-hd">' + L.sphere('research', 20) + '<span class="bc-who">Research · looked up</span><span class="bc-t">' + esc(String(note.at || '').slice(0, 10) || 'now') + '</span></header>' +
+      '<div class="bc-note">' + arr(note.cite).map(function (c) { return L.refChip(c, data); }).join(' ') + ' ' + esc(L.text(note.text)) + '</div></article>';
+    else out += '<article class="bc"><header class="bc-hd">' + L.sphere('research', 20) + '<span class="bc-who">Research · looked up</span></header><div class="bc-note">' + esc(norm(q.q)) + ' Nothing usable came back, so nothing was added.</div></article>';
+    return out + ids.map(function (id) { return findCard(finds(data).filter(function (f) { return f.id === id; })[0], ui); }).join('');
+  }
+  function findCard(f, ui) {
+    if (!f) return '';
+    var ok = f.quote_checked === true, pinned = f.in_play === true, dis = busy(ui) || !named(ui);
+    return '<div class="fq' + (ok ? '' : ' un') + '" data-find-card="' + esc(f.id) + '"><span class="tsrc-band ' + (ok ? 'te' : 'warn') + '">Found by Territories' + (ok ? '' : ' · not checked') + '</span><div class="tsrc-body">' +
+      '<div class="qt">' + esc(L.text(f.text)) + '</div><div class="meta"><span>' + esc(L.text(f.source)) + '</span><span>' + esc(L.text(f.date)) + '</span></div>' + link(f.url) +
+      '<div class="acts">' + (pinned ? '<span class="pinned">✓ Pinned</span>' + btn('Unpin', 'data-pin="' + esc(f.id) + '" data-on="0"', false, dis) :
+        ok ? btn('Pin it', 'data-pin="' + esc(f.id) + '" data-on="1"', true, dis) : btn('Pin it', '', false, true)) +
+      (ok ? '<span class="bt-scope ok">Checked against the page</span>' : '<span class="bt-hint">Could not be checked against its page, so it cannot be pinned.</span>') + '</div></div></div>';
+  }
+
+  /** What the Booth carries for look-ups: the box, the cards waiting for an OK, and what the newest look-ups found. */
+  function section(data, ui) {
+    if (!isObj(data && data.run)) {      // nothing for a request to name until the engine has written the document
+      return '<div class="bt-box"><textarea rows="2" disabled placeholder="Ask the Research agent to look something up…" aria-label="Ask the Research agent to look something up"></textarea>' +
+        '<div class="bt-hint">Look-ups open once the engine has read the brief and the research.</div><div class="row"><span class="bt-scope">Whole exploration</span><span class="spacer"></span><button type="button" class="btn dark" disabled>Look it up</button></div></div>';
+    }
+    var qs = lookups(data), wait = qs.filter(function (q) { return q.status === 'ask'; });
+    var done = qs.filter(function (q) { return q.status === 'done'; }).slice(-SHOWN).reverse();
+    return wait.map(function (q) { return okCard(q, ui); }).join('') + done.map(function (q) { return resultCards(q, data, ui); }).join('') + box(data, ui);
+  }
+
+  // ── the person's moves: requests, never writes ──
+  function handles(a) { return a === 'lookup' || a === 'lq_ok' || a === 'lq_no' || a === 'pin'; }
+  function act(data, ui, e, env) {
+    var who = by(env);
+    if (!who) return { writes: [], toast: NEEDS_NAME };
+    if (e.a === 'pin') {
+      var f = finds(data).filter(function (x) { return x.id === e.id; })[0];
+      if (!f) return null;
+      if (e.on && f.quote_checked !== true) return { writes: [], toast: 'That quote could not be checked against its page, so it cannot be pinned.' };
+      return { writes: [], move: { what: e.on ? 'Pinning the quote' : 'Unpinning the quote', input: { step: 'pin_quote', find_id: f.id, on: !!e.on, by: who, text: f.text } } };
+    }
+    if (busy(ui)) return { writes: [], toast: 'The last change is still going through.' };
+    if (e.a === 'lookup') {
+      var q = norm(ui && ui.lq);
+      if (!q) return { writes: [], toast: 'Say what to look up first.' };
+      return { writes: [], request: { key: 'lq:new', what: 'The question', input: { step: 'lookup', q: q, by: who } } };
+    }
+    var lq = lookups(data).filter(function (x) { return x.id === e.id && x.status === 'ask'; })[0];
+    if (!lq) return null;
+    return { writes: [], request: { key: 'lq:' + lq.id, what: 'The look-up', input: { step: 'lookup', lookup_id: lq.id, ok: e.a === 'lq_ok', by: who } } };
+  }
+
+  return { box: box, okCard: okCard, resultCards: resultCards, findCard: findCard, section: section, link: link, isLookupNote: isLookupNote, handles: handles, act: act, words: words };
+})();
+</script>
+
 <script>
 (function () {
   'use strict';
@@ -2536,6 +2679,9 @@ var TerritoriesPictures = (function () {
     if ((b = t.closest('[data-route-back]'))) { choose(ui.sel, null); return; }
     if ((b = t.closest('[data-route]'))) { choose(ui.sel, b.getAttribute('data-route')); return; }
     if ((b = t.closest('[data-crew]'))) { choose(b.getAttribute('data-crew'), null); return; }
+    if ((b = t.closest('[data-lq-ok]'))) { if (!b.disabled) run({ a: 'lq_ok', id: b.getAttribute('data-lq-ok') }); return; }
+    if ((b = t.closest('[data-lq-no]'))) { if (!b.disabled) run({ a: 'lq_no', id: b.getAttribute('data-lq-no') }); return; }
+    if ((b = t.closest('[data-pin]'))) { if (!b.disabled) run({ a: 'pin', id: b.getAttribute('data-pin'), on: b.getAttribute('data-on') === '1' }); return; }
     if ((b = t.closest('[data-act="add"]'))) { addOwn(); return; }
     if ((b = t.closest('[data-act]'))) { run({ a: b.getAttribute('data-act') }); return; }
     if ((b = t.closest('[data-step]'))) { if (b.disabled) return; ui.view = ['pick', 'explore', 'greenlight'].indexOf(b.getAttribute('data-step')); render(); return; }
@@ -2556,6 +2702,7 @@ var TerritoriesPictures = (function () {
   function addOwn() { var inp = document.querySelector('input[name="own"]'); ui.draft = inp ? inp.value : ui.draft; run({ a: 'add', text: ui.draft }); }
   document.addEventListener('input', function (ev) {
     if (ev.target && ev.target.name === 'own') ui.draft = ev.target.value;
+    if (ev.target && ev.target.getAttribute && ev.target.hasAttribute('data-lq-draft')) { ui.lq = ev.target.value; var lb = document.querySelector('[data-act="lookup"]'); if (lb) lb.disabled = !ev.target.value.trim() || !(ui.me && ui.me.name) || !!BUSY[(ui.req || {}).state]; }
     var rid = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-reason');
     if (rid) { ui.reason = ui.reason || {}; ui.reason[rid] = ev.target.value; var go = document.querySelector('[data-go="' + rid + '"]'); if (go) go.disabled = !ev.target.value.trim() || !!BUSY[(ui.req || {}).state]; }
     if (ev.target && ev.target.getAttribute && ev.target.getAttribute('data-dial')) dialMoved(ev.target.getAttribute('data-dial'), ev.target.value);
