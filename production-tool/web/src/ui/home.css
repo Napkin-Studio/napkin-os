@@ -68,6 +68,9 @@
 .pp-acts { display: flex; gap: 8px; justify-content: flex-end; }
 .btn-rect.danger { background: var(--alert); border-color: var(--alert); color: #fff; }
 
+.pp-trash { margin-top: 22px; }
+.pp-trash .side-link { font: 500 11px var(--font-mono); color: var(--faint); }
+.pp-trash + .pp-foot { margin-top: 10px; }
 .pp-foot { margin-top: 22px; font: 500 11px var(--font-mono); color: var(--faint); }
 .pp-asidehead { margin: 0 0 12px; color: var(--ink); }
 .crewlist { display: flex; flex-direction: column; gap: 2px; }
