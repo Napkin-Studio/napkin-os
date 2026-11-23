@@ -124,7 +124,7 @@ def send_routes(doc, inp, findings, *, doc_id: str, data: dict):
 # model step of the document is running they wait inside that job and are applied to the document it returns, so both survive
 # (``TerritoriesJob.defer``, the request path in app.py). Each is ``fn(doc) -> (doc, refusals)`` built by ``live_move``.
 
-LIVE_STEPS = ("set_lead", "star_line", "keep_feel", "set_final", "set_rights")
+LIVE_STEPS = ("set_lead", "star_line", "keep_feel", "set_final", "set_rights", "pin_quote")
 MAX_STARS, DIALS = 16, ("tone", "energy", "register", "brand")
 
 
@@ -138,6 +138,15 @@ def _lines_of(w: dict) -> list:
 
 def live_move(step: str, inp: dict, findings=None):
     """The move ``step`` asks for as ``fn(doc) -> (doc, refusals)``; a 400 for a missing or malformed input."""
+    if step == "pin_quote":                        # a find, not a route (engine/territory/lookups.py): a named person pins a checked quote, or takes it out
+        from territory import lookups
+        fid, by, on = need(inp, "find_id", "the quote"), _s(inp, "by", 80), inp.get("on", True)
+        if not isinstance(on, bool):
+            raise bad("input.on must be true or false")
+        text = inp.get("text")
+        if text is not None and not isinstance(text, str):
+            raise bad("input.text must be the quote as it was shown")
+        return lambda d: lookups.pin_quote(d, fid, by, on, text)[:2]
     if step == "set_rights":                       # the route is optional: a hash is on one route
         return _picture_move(step, _s(inp, "territory_id", 80), inp, findings)
     tid = need(inp, "territory_id", "the route")
