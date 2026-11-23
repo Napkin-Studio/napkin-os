@@ -95,6 +95,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
         // The People page: who signs in, and their agencies (admin only; admin.rs)
         .merge(crate::admin::router())
         .merge(crate::blobs::router())
+        .merge(crate::brand_clan::router())
         .merge(crate::save::router())
         .merge(crate::trash::router())
 }

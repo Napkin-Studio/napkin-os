@@ -416,6 +416,7 @@ fn s0_11_every_apply_caller_is_listed_with_its_base() {
     }
     let expect = [
         // (file, Change::create = Base::Absent, Change::replace = Base::At(read version), Base::At)
+        ("napkin-host/src/brand_clan/mod.rs", 1, 0, 0),
         ("napkin-host/src/clients.rs", 1, 2, 0),
         ("napkin-host/src/document.rs", 0, 0, 3),
         ("napkin-host/src/library.rs", 4, 1, 0),

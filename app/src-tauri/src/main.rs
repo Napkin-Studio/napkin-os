@@ -226,6 +226,26 @@ fn set_client_archived(
         .map_err(String::from)
 }
 
+/// One Brand Clan operation (docs/contracts/brand-clan.md section 5).
+#[tauri::command]
+fn brand_clan(
+    app: tauri::AppHandle,
+    op: String,
+    input: serde_json::Value,
+    body: Option<Vec<u8>>,
+) -> Result<serde_json::Value, String> {
+    let ctx = host(&app);
+    napkin_host::brand_clan::call(
+        &**ctx.session.store(),
+        ctx.session.ctx(),
+        &op,
+        &input,
+        body.unwrap_or_default(),
+    )
+    .map(|r| r.transport())
+    .map_err(String::from)
+}
+
 #[tauri::command]
 fn legacy_client_names(app: tauri::AppHandle) -> Result<Vec<clients::LegacyName>, String> {
     let ctx = host(&app);
@@ -419,6 +439,7 @@ fn main() {
             new_document_from_app,
             list_library,
             list_clients,
+            brand_clan,
             create_client,
             update_client,
             set_client_archived,

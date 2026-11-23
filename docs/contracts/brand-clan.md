@@ -112,7 +112,7 @@ candidate **has that section non-empty**; a section it leaves out is kept, never
 
 Tenant routes under `/api/t/{tenant}` on napkin-web. The same operations are one function, `napkin_host::brand_clan::call(store, ctx, op, input)`, which the wasm and desktop hosts
 call by op name (the **op** is in brackets). JSON in and out. Errors are the host's: 400 bad input, 403 not a person (or another tenant's document), 404, 409 conflict (a stale
-`expect_version`, no draft, nothing to publish), 422 not a Brand Clan.
+`expect_version`, no draft, nothing to publish), 422 not a Brand Clan, or a bible the schema refuses (on create and publish; a draft or proposal the schema refuses is 400).
 
 | Route [op] | Body | Reply |
 |---|---|---|
@@ -128,7 +128,7 @@ call by op name (the **op** is in brackets). JSON in and out. Errors are the hos
 | `POST /brand-clans/{doc}/proposal` [`proposal.set`] | `{candidate, source, from}` (`proposal.request.json`) | the `View` with `pending` |
 | `POST /brand-clans/{doc}/proposal/accept` [`proposal.accept`] | `{take: "all" \| [change id], expect_version}` | the `View`, at version + 1 |
 | `POST /brand-clans/{doc}/proposal/keep` [`proposal.keep`] | | the `View`, pending cleared, version unchanged |
-| `POST /brand-clans/{doc}/update-work` [`work.update`] | `{path}` (a work document) | the attach reply of `/attach/update` |
+| `POST /brand-clans/{doc}/update-work` [`work.update`] | `{work}` (a work document's `path`) | the attach reply of `/attach/update` |
 | `POST /brand-clans/{doc}/assets?name=` [`asset.put`] | the file's bytes | `{name, path}` (`path` is `human/assets/<name>`; the name is made unique by a content prefix) |
 | `GET /brand-clans/{doc}/assets/{name}` [`asset.get`] | | the bytes (SVG served as an image only) |
 
