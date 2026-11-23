@@ -8,9 +8,11 @@ its status. Human-only parts become labelled placeholders, never invented conten
 from __future__ import annotations
 
 import datetime as _dt
+import json
 import re
 
 from . import intake, profiles, spec
+from .inputs import answered_question
 from .refs import Resolver, answer_text, fmt
 
 #: requirement kind -> slide types that answer it (stage b can override per requirement)
@@ -250,6 +252,44 @@ def _fill_human_only(S: list, inp) -> list:
     return done
 
 
+def _input_corpus(inp) -> str:
+    """Every word the inputs hold, lower-cased: the brief's fields, the research (pins, findings), the documents, the prompt and the answers."""
+    parts = [json.dumps((f or {}).get("value"), ensure_ascii=False, default=str) for f in inp.brief.values()]
+    parts += [str(f.get("value")) for f in inp.facts.values()] + [str(f.get("statement") or "") + " " + str(f.get("so_what") or "") for f in inp.findings.values()]
+    parts += [str(d.get("text") or "") for d in inp.docs.values()] + [str(inp.prompt_text or "")]
+    parts += [answer_text(inp, q) for q in (inp.answers or {})]
+    return " ".join(parts).lower()
+
+
+def persona_grounded(inp, persona) -> bool:
+    """True when a persona (``{name, line}``, stage b) is in the inputs: its name, and an age if it states one, are in the brief, the research,
+    the documents, the prompt or the answers. A model asked for 'who the work is written for' invents a name and an age ('Maya, 31', full-flow
+    UAT 2026-11-23); a client deck names no one the client never described."""
+    if not isinstance(persona, dict):
+        return False
+    name = str(persona.get("name") or "").strip()
+    if not name:
+        return False
+    hay = _input_corpus(inp)
+    first = re.split(r"[,\s]", name)[0].lower()
+    if not first or not re.search(rf"\b{re.escape(first)}\b", hay):
+        return False
+    ages = re.findall(r"\b\d{2}\b", name + " " + str(persona.get("line") or ""))[:1]
+    return all(re.search(rf"\b{a}\b", hay) for a in ages)
+
+
+_PROVENANCE = re.compile(r"\s*\([^()]*\b(?:agreed since|e-?mail|emailed|call|phone|meeting|told us|said|per the|as discussed|verbally|since the|slack|whatsapp|note)\b[^()]*\)", re.I)
+
+
+def _for_the_room(text: str) -> str:
+    """A brief field's words for a slide the client reads: how we came to know it ('(agreed since the client's email, which said only ...)') is the
+    agency's provenance, not the client's, so a parenthetical that says where or when the client told us is left out, and so is a leading 'Budget:' label
+    the slide's own label repeats. The brief keeps the full text; only the slide's words change (full-flow UAT 2026-11-23, the investment slide)."""
+    out = _PROVENANCE.sub("", str(text or ""))
+    out = re.sub(r"^\s*(?:budget|scope)\s*:\s*", "", out, flags=re.I)
+    return re.sub(r"\s+([.,;:])", r"\1", out).strip()
+
+
 def _brief_text(inp, fid, default=""):
     """A brief field as plain text, or the default when the field is empty."""
     v = (inp.brief.get(fid) or {}).get("value")
@@ -257,6 +297,8 @@ def _brief_text(inp, fid, default=""):
         return " ".join(f"{k}: {x}" for k, x in v.items() if x)
     if isinstance(v, list):
         return "; ".join(map(str, v))
+    if isinstance(v, (int, float)) and not isinstance(v, bool):   # a number field (a budget of 150000.0): text, never a float
+        return f"{v:,.0f}" if float(v).is_integer() else str(v)
     return v or default
 
 
@@ -493,7 +535,7 @@ def _criterion_slides(st: dict, scoring: list) -> list:
 
 
 def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]", fmt: str = "pitch", fit: dict | None = None,
-          profile: dict | None = None, pictures: dict | None = None, production: bool = False) -> dict:
+          profile: dict | None = None, pictures: dict | None = None, production: bool = False, working_title: str = "") -> dict:
     """Build the deck dict. ``st`` holds stage outputs keyed a, b, c, d (any may be absent);
     ``fmt``: spec.FORMATS, the agency pitch (default) or the full deck; ``fit``: the fit judge's
     verdicts, which decide the evidence a pitch presents; ``profile``: a deck type (profiles.load).
@@ -513,7 +555,9 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
     S = []  # ordered slides
 
     # 1. Title
-    S.append(_slide("title", f"{client}: {project}",
+    line = str(d.get("campaign_line") or "").strip()
+    named_by_project = production and line and working_title.strip() and project.strip() == working_title.strip()   # Start prefilled the Production project's name and nobody changed it
+    S.append(_slide("title", f"{client}: {line}" if named_by_project else f"{client}: {project}",   # then the cover names the client and its line, not a working name
                     [{"kind": "text", "text": f"A response from {agency}"},
                      {"kind": "text", "text": _placeholder("presenter and date", "presented by the account lead and planner", "who presents, and the date"), "human": True}],
                     status="needs_human", slots=pictures.get("title")))
@@ -580,6 +624,8 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
 
     # 7. Audience
     au = b.get("audience") or {}
+    if au.get("persona") and not persona_grounded(inp, au["persona"]):
+        au = {k: v for k, v in au.items() if k != "persona"}   # a person the inputs never named ('Maya, 31') is an invention: left out, never shown
     S.append(_slide("audience", au.get("title") or "Who we are talking to",
                     [{"kind": "text", "text": au.get("primary") or _brief_text(inp, "audience"), "refs": au.get("refs", ["brief:audience"])},
                      {"kind": "text", "text": au.get("two_halves", "")},
@@ -654,12 +700,13 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
 
     # 14. Measurement
     if d.get("measurement"):
-        base = lambda m: m.get("baseline") or "None in the brief: set before launch"
-        rows = [["What we measure", "Baseline", "How"]] + [[m["kpi"], base(m), m.get("how", "")] for m in d["measurement"]]
+        # a model may write a baseline or a KPI as a bare number (23.8): every cell and claim is text
+        base = lambda m: str(m.get("baseline") or "").strip() or "None in the brief: set before launch"
+        rows = [["What we measure", "Baseline", "How"]] + [[str(m["kpi"]), base(m), str(m.get("how") or "")] for m in d["measurement"]]
         refs = sorted({r for m in d["measurement"] for r in m.get("refs", [])})
         S.append(_slide("measurement", d.get("measurement_title") or "How we will know it worked",
                         [{"kind": "table", "rows": rows, "refs": refs + [r["ref"] for r in reqs if r["kind"] == "objective"]}],
-                        claims=[{"text": m["kpi"] + " baseline " + base(m), "refs": m.get("refs", []), "basis": m.get("basis", "sourced") if m.get("refs") else "proposal"} for m in d["measurement"]],
+                        claims=[{"text": f"{m['kpi']} baseline {base(m)}", "refs": m.get("refs", []), "basis": m.get("basis", "sourced") if m.get("refs") else "proposal"} for m in d["measurement"]],
                         status="drafted"))
     mp = _measurement_plan_slide(d, reqs)   # 14b. the plan behind the measures: baseline, target, lag, confounders
     if mp:
@@ -686,7 +733,7 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
     # 16b. Risks: presented, before the investment and the ask (the deck does not end on them)
     S.append(_risks_slide(d))
     # 17-20. Human-only
-    budget = _brief_text(inp, "budget_scope", "")
+    budget = _for_the_room(_brief_text(inp, "budget_scope", ""))
     inv_blocks = [{"kind": "text", "text": "Budget given: " + (budget or "not given"), "refs": ["brief:budget_scope"] if budget else []}]
     inv_blocks.append({"kind": "bullets", "items": [
         {"text": _placeholder("option A", "a working split of fees, production and media", "the split, from the agency's rate card"), "human": True},
@@ -705,7 +752,7 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
                                                    {"text": _placeholder("decision date", "a date for the decision", "the date the client will decide"), "human": True}]}],
                     status="needs_human"))
     # 21. Questions
-    qs = list(dict.fromkeys(q["question"] for q in inp.open_questions if q.get("question")))
+    qs = list(dict.fromkeys(q["question"] for q in inp.open_questions if q.get("question") and not answered_question(q["question"])))   # only open ones: an answered question is settled
     S.append(_slide("questions", "Questions we would settle in the first fortnight",
                     [{"kind": "bullets", "items": [{"text": q, "basis": "meta"} for q in qs[:LIST_ITEMS]]}], status="from_source",
                     notes=f"{len(qs)} open questions from the brief; {max(0, len(qs) - LIST_ITEMS)} more in the brief itself." + (f"\n{_more_questions(qs)}" if len(qs) > LIST_ITEMS else "")))
@@ -719,14 +766,38 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
                      profile=profile, rules=a.get("rules") or [], production=production)
 
 
+def _strip_ids_on_slides(S: list) -> None:
+    """No evidence id on a slide: a stage that wrote '(f_AB12CD, brief:audience, req:r6)' into a sentence (the territory text did, full-flow UAT
+    2026-11-23: 15 in the PDF) has it taken out here, at the source, so the review, the present view and every export read the same words.
+    A ``refs`` list is data and stays; only the words shown change."""
+    from .export_clean import _SKIP_KEYS, strip_ids   # noqa: PLC0415
+
+    def walk(node):
+        if isinstance(node, str):
+            return strip_ids(node)
+        if isinstance(node, list):
+            return [walk(x) for x in node]
+        if isinstance(node, dict):
+            return {k: (v if k in _SKIP_KEYS else walk(v)) for k, v in node.items()}
+        return node
+    for sl in S:
+        for k in ("title", "label"):
+            if isinstance(sl.get(k), str):
+                sl[k] = strip_ids(sl[k])
+        sl["blocks"] = walk(sl.get("blocks") or [])
+
+
 def _complete(S, reqs, R, inp, meta, fmt, fit, scoring=None, messages=None, territories=None, profile=None, rules=None, production=False) -> dict:
     """The work every deck kind shares once its slides exist: requirement mapping, the pitch arrangement,
     numbering, the requirement trace, the sources appendix and the scoring map. ``profile`` (a deck type)
     records ``built_from.type``; a spine profile also arranges the slides, records ``meta.profile``,
     ``meta.length`` (its limit, or the buyer's stated one) and ``meta.weights`` (the buyer's, or our default)."""
     inp.built_from = intake.tier(inp)
+    if production:   # the Production project is an input too: Start and Review say "the brief, the research, Production" (UAT 2026-11-23: only run_state did)
+        inp.built_from = {**inp.built_from, "production": True}
     if profile:
         inp.built_from = {**inp.built_from, "type": profile["id"]}
+    _strip_ids_on_slides(S)
     _label_thin(S, inp)
     spine = bool(profile and profile["arrange"] == "spine")
     sketch = _sketch(inp)
@@ -853,7 +924,7 @@ def build_investor(inp, st: dict, *, client: str, project: str, agency: str = "[
                         notes="Re-run the brief tool with the company's documents as material to bring the brief in line."))
     _fill_human_only(S, inp)   # a gap the person has since answered (answer:<qid>) is sourced and presented again
     gaps = [c["text"] for c in intake.gap_questions([x["type"] for x in S if _is_gap(x)])]
-    qs = list(dict.fromkeys([q for q in i.get("open_questions") or [] if q] + [q["question"] for q in inp.open_questions if q.get("question")] + gaps))
+    qs = list(dict.fromkeys([q for q in i.get("open_questions") or [] if q] + [q["question"] for q in inp.open_questions if q.get("question") and not answered_question(q["question"])] + gaps))
     if qs:
         S.append(_slide("questions", "Questions only the founders can answer", [{"kind": "bullets", "items": [{"text": q, "basis": "meta"} for q in qs[:LIST_ITEMS]]}], status="from_source",
                         notes=_more_questions(qs)))
@@ -1412,12 +1483,18 @@ def _first_words(text: str, limit: int = 40) -> str:
     return " ".join(out)
 
 
+#: A mandatory that is a clearance gate on a word or claim: a rule for the people making the work (kept in the notes), never copy on a slide.
+_CLEARANCE_RULE = re.compile(r"\b(?:only once|until|unless|once)\b[^.]{0,60}\b(?:cleared|clearance|approved|signed off|legal)\b|\blegal has (?:not )?cleared\b", re.I)
+
+
 def _guardrails(inp, st):
     """What the work must always carry and never do, from the inputs only: the client's mandatories
     and tone (stage a, read from their documents) and the research CLAN's clearance and category-code
     findings (rejected ones excluded). Nothing here comes from outside the brief and the research."""
     reqs = (st.get("a") or {}).get("requirements") or []
     items = [{"text": r["text"], "refs": [r["ref"], "req:" + r["id"]], "basis": "sourced"} for r in reqs if r["kind"] == "mandatory"]
+    held = [x for x in items if _CLEARANCE_RULE.search(x["text"])]   # "Use 'Cornish' only once legal has cleared it": the agency's rule of work, not a line for the room
+    items = [x for x in items if x not in held]
     for f in inp.findings.values():
         if f.get("lens") in ("regulation_clearance", "category_codes") and f.get("status") != "rejected":
             items.append({"text": _first_words(f["statement"]), "refs": [f["id"]], "basis": "sourced"})
@@ -1425,7 +1502,8 @@ def _guardrails(inp, st):
     blocks = [{"kind": "bullets", "title": "What the work must always carry, and never do", "items": items or [{"text": "The brief and research set no rules here: to agree with the client.", "basis": "opinion"}]}]
     if tone:
         blocks.append({"kind": "small", "text": tone["text"], "refs": [tone["ref"], "req:" + tone["id"]]})
-    return _slide("guardrails", "What the work must never do", blocks, status="from_source")
+    return _slide("guardrails", "What the work must never do", blocks, status="from_source",
+                  notes=("Rules we hold, not for the slide: " + " / ".join(x["text"] for x in held)) if held else "")
 
 def _trace_slide(deck, reqs):
     """Every requirement and the slide numbers that carry it (validated: none unmapped)."""

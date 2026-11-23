@@ -1192,6 +1192,8 @@ def main(argv=None):
     extra = {"pictures": bound} if bound else {}
     if (picker_src or prod) and kind != "investor":   # a deck whose pictures are Production's finals: its executions keep their own slides
         extra["production"] = True
+        _doc = (prod_up[1] if prod_up else getattr(picker_src, "doc", None)) or {}
+        extra["working_title"] = str(((_doc.get("project") or {}) if isinstance(_doc, dict) else {}).get("title") or "")   # the name Start prefilled: not a cover title
     build = lambda f: builder(inp, st, client=a.client, project=a.project, agency=a.agency, fmt=a.format, fit=f, profile=profile, **extra)
     deck = build(fit)
     if fit:
