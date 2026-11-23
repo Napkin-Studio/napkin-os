@@ -360,7 +360,7 @@ button.tsrc:hover{border-color:color-mix(in srgb,var(--ink) 35%,var(--line))}
 .wsrow.opt .rd{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--muted);margin-top:3px;display:grid;place-items:center}
 .wsrow.opt.on{border-color:var(--te);box-shadow:0 0 0 1px var(--te)}
 .wsrow.opt.on .rd{border-color:var(--te)}.wsrow.opt.on .rd::after{content:"";width:9px;height:9px;border-radius:50%;background:var(--te)}
-.sendfoot{align-items:center;gap:10px;flex-wrap:wrap}.sendfoot .why{max-width:none}
+.sendfoot{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.sendfoot .why{max-width:none;flex:1 1 100%}.sendfoot .spacer{flex:1}
 .wsdot{width:12px;height:12px;border-radius:50%;margin-top:6px}
 /* the ask cards (the approved mock): a needs-you card is a Booth card with the ask line round it */
 .ask{border:1.5px solid var(--ask-line);box-shadow:0 0 0 4px var(--ask-glow);background:var(--card)}
@@ -2827,7 +2827,7 @@ var TerritoriesLookups = (function () {
 
   /** What the Booth carries for look-ups: the box, the cards waiting for an OK, and what the newest look-ups found. */
   function section(data, ui) {
-    if (!isObj(data && data.run)) return '';      // nothing for a request to name until the engine has written the document (redesign: not shown)
+    if (!isObj(data && data.run) || !Object.keys(data.run).length) return '';      // nothing for a request to name until the engine has written the document (redesign: not shown)
     var qs = lookups(data), wait = qs.filter(function (q) { return q.status === 'ask'; });
     var done = qs.filter(function (q) { return q.status === 'done'; }).slice(-SHOWN).reverse();
     var open = !!norm(ui && ui.lq) || lookingUp(ui) || !!(ui && ui.lqOpen);
