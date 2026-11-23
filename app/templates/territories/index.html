@@ -2195,7 +2195,7 @@ var TerritoriesPictures = (function () {
 <script id="territories-lookups-logic">
 // Look-ups in the Booth (territories-lookups): the box, the OK card that comes first, the Research note a look-up leaves and its quote cards with
 // Pin / Unpin. The page keeps no rule of its own: a question, an OK, a no and a pin are requests to the middleware (run_territories steps
-// lookup and pin_quote); engine/territory/lookups.py decides, and the page shows what the document then says. No price is drawn here.
+// lookup and pin_quote); engine/territory/lookups.py decides, and the page shows what the document then says.
 var TerritoriesLookups = (function () {
   'use strict';
   var L = typeof TerritoriesLogic !== 'undefined' ? TerritoriesLogic : null;
@@ -2245,7 +2245,7 @@ var TerritoriesLookups = (function () {
       (!norm(draft) || !named(ui) || busy(ui) ? ' disabled' : '') + '>Look it up</button></div></div>';
   }
 
-  /** The OK card: what will be looked up and who wants it. No price. */
+  /** The OK card: what will be looked up and who wants it. */
   function okCard(q, ui) {
     var key = 'lq:' + q.id, w = words(ui && ui.req, key), failed = ui && ui.req && ui.req.key === key && ui.req.state === 'failed', dis = busy(ui) || !named(ui);
     var head = function (what, need) { return '<header class="bc-hd">' + L.sphere('research', 20) + '<span class="bc-who">Research · ' + what + '</span>' + (need ? '<span class="need">Needs you</span>' : '') + '</header>'; };
