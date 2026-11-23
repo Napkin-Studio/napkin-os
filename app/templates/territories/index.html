@@ -1589,7 +1589,7 @@ var TerritoriesLogic = (function () {
       readWords = sn.brief && sn.research ? 'the brief and the research' : sn.research ? 'the research' : 'the brief',
       sub = [noPick ? 'Step 1 of 3. This is what arrived. Find the insights, then tick the ones the crew should work on.' : 'Step 1 of 3. Napkin has read ' + readWords + '. Tick the insights the crew should work on.',
       'Step 2 of 3. The crew explores on its own: different headings, other categories. Steer it if you want to.',
-      'Step 3 of 3. Every route comes back developed. Greenlight as many as are worth making.'][s.at];
+      'Step 3 of 3. Every route comes back developed. Greenlight as many as are worth making.'][st.view != null ? st.view : s.at];
     return '<section class="app-head"><div><div class="eyebrow" title="' + esc(eyebrow) + '"><span>' + esc(eyebrow) + '</span></div><h1 class="hero-title">Territories<span class="period-dot"></span></h1><p class="hero-sub">' + esc(sub) + '</p></div>' +
       '<ol class="flow-steps" aria-label="Steps">' + STEPS.map(function (p, i) {
         var live = i <= s.reached;

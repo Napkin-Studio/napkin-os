@@ -673,8 +673,12 @@ def test_the_moves_without_a_running_step_apply_at_once_and_say_no_in_words(terr
     step(terr, host, "set_lead", territory_id=tid, line=l1)
     step(terr, host, "set_lead", territory_id=tid, line=None)
     assert "lead" not in next(t for t in host.data["territories"] if t["id"] == tid)["world"]
+    # the page's sliders run 0 to 100, which is the schema's dial: a moved slider must be kept, not refused (live walk 2026-11-23)
+    assert step(terr, host, "keep_feel", territory_id=tid, dial_set={"tone": 73, "energy": 0, "register": 100, "brand": 41})[0]["job"]["state"] == "done"
+    assert next(t for t in host.data["territories"] if t["id"] == tid)["world"]["dial_set"]["tone"] == 73
+    valid(host)
     assert step(terr, host, "set_lead", territory_id="t_nope", line=l1)[0]["job"]["state"] == "failed"
-    for bad in ({"step": "keep_feel", "territory_id": tid, "dial_set": {"tone": 99, "energy": 1, "register": 1, "brand": 1}}, {"step": "star_line", "territory_id": tid, "line": l0},
+    for bad in ({"step": "keep_feel", "territory_id": tid, "dial_set": {"tone": 101, "energy": 1, "register": 1, "brand": 1}}, {"step": "star_line", "territory_id": tid, "line": l0},
                 {"step": "set_lead", "territory_id": tid, "line": 5}):
         assert post(terr, "run_territories", bad, host.clan())[0] == 400
     valid(host)

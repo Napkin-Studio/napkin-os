@@ -893,3 +893,9 @@ test('"To confirm:" is a quiet mark on the brief field, not a prefix in its word
   const page = L.view(d, {})
   assert.doesNotMatch(page, /To confirm: Real beats/); assert.match(page, /Real beats shiny\./); assert.match(page, /class="tbc"/)
 })
+
+test('the line under the title names the step on screen, not the run\'s furthest step (live walk 2026-11-23)', () => {
+  const d = doc(); d.run = { ...d.run, state: 'gate', stage: 'greenlight', gate: { id: 'greenlight', n: 0, of: 1 } }
+  assert.match(L.view(d, { view: 1 }), /Step 2 of 3\. The crew explores/)
+  assert.match(L.view(d, { view: 2 }), /Step 3 of 3\./)
+})

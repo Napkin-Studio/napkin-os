@@ -176,8 +176,8 @@ def live_move(step: str, inp: dict, findings=None):
     if step == "set_final":
         return _picture_move(step, tid, inp, findings)
     dial = inp.get("dial_set")
-    if dial is not None and not (isinstance(dial, dict) and set(dial) == set(DIALS) and all(isinstance(dial[k], int) and not isinstance(dial[k], bool) and 0 <= dial[k] <= 10 for k in DIALS)):
-        raise bad("input.dial_set must be four whole numbers from 0 to 10 (tone, energy, register, brand), or null for the natural feel")
+    if dial is not None and not (isinstance(dial, dict) and set(dial) == set(DIALS) and all(isinstance(dial[k], int) and not isinstance(dial[k], bool) and 0 <= dial[k] <= 100 for k in DIALS)):
+        raise bad("input.dial_set must be four whole numbers from 0 to 100 (tone, energy, register, brand), or null for the natural feel")
     return lambda d: _edit(d, tid, lambda w: _set(w, "dial_set", dial))
 
 
