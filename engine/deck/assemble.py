@@ -707,8 +707,8 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
     # 21. Questions
     qs = list(dict.fromkeys(q["question"] for q in inp.open_questions if q.get("question")))
     S.append(_slide("questions", "Questions we would settle in the first fortnight",
-                    [{"kind": "bullets", "items": [{"text": q, "basis": "meta"} for q in qs[:10]]}], status="from_source",
-                    notes=f"{len(qs)} open questions from the brief; {max(0, len(qs) - 10)} more in the brief itself."))
+                    [{"kind": "bullets", "items": [{"text": q, "basis": "meta"} for q in qs[:LIST_ITEMS]]}], status="from_source",
+                    notes=_questions_notes(qs)))
 
     _fill_human_only(S, inp)   # what the person supplied (answers to supply cards, their own documents) fills what a model never invents
     meta = {"client": client, "project": project, "agency": agency, "kind": "agency", "format": fmt,
@@ -855,7 +855,8 @@ def build_investor(inp, st: dict, *, client: str, project: str, agency: str = "[
     gaps = [c["text"] for c in intake.gap_questions([x["type"] for x in S if _is_gap(x)])]
     qs = list(dict.fromkeys([q for q in i.get("open_questions") or [] if q] + [q["question"] for q in inp.open_questions if q.get("question")] + gaps))
     if qs:
-        S.append(_slide("questions", "Questions only the founders can answer", [{"kind": "bullets", "items": [{"text": q, "basis": "meta"} for q in qs[:10]]}], status="from_source"))
+        S.append(_slide("questions", "Questions only the founders can answer", [{"kind": "bullets", "items": [{"text": q, "basis": "meta"} for q in qs[:LIST_ITEMS]]}], status="from_source",
+                        notes=_questions_notes(qs)))
     meta = {"client": client, "project": project, "agency": agency, "kind": "investor", "format": fmt,
             "stages": {k: (v or {}).get("produced_by") for k, v in st.items()}}
     return _complete(S, reqs, R, inp, meta, fmt, fit, profile=profile)
@@ -1440,6 +1441,16 @@ def _trace_slide(deck, reqs):
 #: The most data rows a table block holds besides its header: the deck contract caps ``table.rows`` at 8 (app/templates/deck-maker/schema.json),
 #: and the host refuses the whole deck above it (production-spinoff live test 2026-11-22). A longer list runs on over "continued" slides.
 TABLE_DATA_ROWS = 7
+#: A bullets block's items: the host's schema takes at most 8 (app/templates/deck-maker/schema.json) and refuses the whole deck above it
+#: (full-flow UAT 2026-11-23: a brief with 14 open items failed every deck at Check). A longer list goes to the notes or runs on.
+LIST_ITEMS = 8
+
+
+def _questions_notes(qs: list[str]) -> str:
+    """The slide's notes for a questions list: how many there are and, word for word, the ones past the slide's eight."""
+    more = qs[LIST_ITEMS:]
+    head = f"{len(qs)} open questions from the brief."
+    return head + ("" if not more else f" The other {len(more)}:\n" + "\n".join(f"- {q}" for q in more))
 
 
 def _sources_slides(deck, R):
