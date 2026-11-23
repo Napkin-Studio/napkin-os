@@ -771,6 +771,30 @@ def test_a_redraft_gives_the_plan_and_the_draft_the_parts_as_they_stand_and_who_
         assert "background" not in ch["data_patch"]
 
 
+def test_a_redraft_keeps_the_open_questions_the_planner_answered(tmp_path):
+    """UAT 2026-11-22: Draft it again after linking research dropped nine answered open questions and asked them
+    again. An answered (or left-open) item keeps its words and its answer; a twin the agents ask again is merged."""
+    s = Server(tmp_path, model=planned_model({}), retrieval=retrieval(), settings_kw={"brief_flow": "planned"})
+    try:
+        host = Host()
+        run(s, host, inp={"prompt": THIN, "attachments": []})
+        asked = list(host.data["open_questions"])
+        assert asked, "the first draft asks something"
+        host.data["open_questions"] = [asked[0] + " — Answer: Yes, 20% of the budget", "Who signs it off? — Left open: not yet known"] + asked[1:]
+        keep = host.data["open_questions"][:2]
+        host.chain.insert(0, {"id": "d_HUMAN00010", "kind": "edit", "actor": "human:shrey", "agent": "human:shrey",
+                              "action": "answer an open question", "targets": [f"{DOC}#open_questions"],
+                              "timestamp": "2026-11-12T10:00:00Z"})
+        replies = run(s, host, inp={"prompt": THIN, "attachments": [], "intake": False, "redraft": True})
+    finally:
+        s.stop()
+    # a person wrote the list last, so the redraft proposes it (or writes it): either way the answers stand, first
+    props = {p["field"]: p["value"] for p in replies[-1]["result"]["proposals"]}
+    now = props.get("open_questions") or host.data["open_questions"]
+    assert now[:2] == keep, "the answers stand, first"
+    assert not [q for q in now[2:] if q.split(" — ")[0] == asked[0].split(" — ")[0]], "the answered question is not asked again"
+
+
 def test_input_redraft_must_be_a_boolean(tmp_path):
     s = Server(tmp_path, model=planned_model({}), retrieval=retrieval(), settings_kw={"brief_flow": "planned"})
     try:
