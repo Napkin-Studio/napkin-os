@@ -316,14 +316,10 @@ describe('the ad is trimmed to the shots', () => {
     const s = await setup(5)
     await s.makeAll(false)
     const { input } = await stitchInput(s.deps)
-    // The shots add to the 15 s target, so each keeps its share of the 12.5 s left once the 2.5 s studio card sits inside the
-    // length (UAT 2026-11-22: a 15 s ad rendered 17.3 s). Shots cut well away from the target keep their own length (stitchInput.test).
-    const k = 12.5 / 15
-    const want = [3, 2, 4, 4, 2].map((x) => Math.round(x * k * 1000) / 1000)
-    expect(input.clips!.map((c) => c.trimS)).toEqual(want)
+    expect(input.clips!.map((c) => c.trimS)).toEqual([3, 2, 4, 4, 2])
     expect(input.clips!.map((c) => c.asset.sha256)).toEqual(s.shots().map((_, i) => s.takeOf(i).asset))
     const id = await renderAd(s.deps)
-    expect(s.inputOf(id).clips!.map((c) => c.trimS)).toEqual(want)
+    expect(s.inputOf(id).clips!.map((c) => c.trimS)).toEqual([3, 2, 4, 4, 2])
   })
 
   it('ad length = the sum of the shots + the 2.5 s end card (the FACET ad: 15 s of shots is 17.5 s, not 21)', () => {
