@@ -9,6 +9,7 @@ import { useShell } from '../app/context'
 import { download } from '../export'
 import { errorShown, setScreen } from '../dogfood/recorder'
 import type { SavedProject } from '../contracts/types'
+import { deleteWords } from '../projects/deleteWords'
 import { homeItems, itemId } from '../projects/homeList'
 import type { ProjectEntry } from '../projects/projectIndex'
 import type { ProjectSummary } from '../projects/summary'
@@ -257,7 +258,7 @@ function ProjectCard({ p, server, newerThere, menu, onMenu, onError }: {
       </div>
       {deleting && (
         <div className="pp-confirm" role="alertdialog" aria-label={`Delete ${p.name}?`} onClick={(e) => e.stopPropagation()}>
-          <span>Delete “{p.name}” from this browser? Its pictures and the server's copy are kept.</span>
+          <span>{deleteWords(p.name)}</span>
           <div className="pp-acts">
             <button type="button" className="btn-rect" onClick={() => setDeleting(false)}>Keep</button>
             <button type="button" className="btn-rect danger" autoFocus onClick={() => { setDeleting(false); shell.remove(p.id).catch(fail('Could not delete it')) }}>Delete</button>

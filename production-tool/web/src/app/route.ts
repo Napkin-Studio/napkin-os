@@ -44,6 +44,11 @@ export function parseRoute(url: { pathname: string; search?: string }, base: str
     return { kind: 'none' }
   }
   path = path.slice(b.length)
+  // The shell's open path (stage 1): /production/?doc=<library document id>. The id is the project's id here.
+  if (!path) {
+    const doc = new URLSearchParams(url.search ?? '').get('doc')
+    return doc && ID.test(doc) ? { kind: 'project', projectId: doc } : { kind: 'none' }
+  }
   const parts = path.split('/').filter(Boolean).map((p) => {
     try {
       return decodeURIComponent(p)

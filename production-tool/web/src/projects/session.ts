@@ -11,7 +11,7 @@ import type { ProjectHandle, Services } from '../app/context'
 import type { CanvasSnapshot } from '../canvas/controller'
 import type { Config, Me } from '../contracts/types'
 import { isRefused, openDocument } from '../doc/open'
-import { SnapshotStore } from '../doc/store'
+import { SnapshotStore, systemUpdate } from '../doc/store'
 import { initialProjectUi, type AppUi, type ProjectUi } from '../doc/ui'
 import { JobRunner } from '../jobs/runner'
 import { CONFIGS } from '../contracts/load'
@@ -111,6 +111,11 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
     throw new ProjectRefused(opened.refused)
   }
   const { doc, clan, storeNote } = opened
+  // An address a document carries (an older save: idb://, a CloudFront URL) is never read and is not kept: the next
+  // save is without it (S1-16). Quiet, no decision.
+  if (Object.values(doc.get().assets).some((a) => (a as { locations?: unknown }).locations !== undefined)) {
+    await systemUpdate(doc, (d) => { for (const a of Object.values(d.assets)) delete (a as { locations?: unknown }).locations }, 'drop stored addresses').catch((e) => console.warn('could not drop stored addresses', e))
+  }
 
   const runner = new JobRunner(relay, doc, ui)
   // Never send past the relay's per-person limit: the rest wait here, "In the queue" (it answered 429 before).
@@ -126,13 +131,13 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
 
   const canvasKey = canvasKeyFor(id)
 
-  // The project's copy on the relay (POST /clan with X-Project-Id), which the same name opens from
-  // any browser: every 5 minutes when something changed, on each lock, on export and on Save, each
-  // checked against the relay's version this tab's document is based on (serverCopy.ts). Not on the mock.
+  // The project's copy in the library (PUT /api/t/{t}/d/{doc}/save), which any browser opens by its id: every minute
+  // when something changed, on each lock, on export and on Save, each checked against the version this tab's
+  // document is based on (serverCopy.ts). Not on the mock.
   let serverCopy: ServerCopy | null = null
   if (clan && relay.kind === 'http' && deps.server) {
     serverCopy = new ServerCopy({
-      id, server: deps.server, index, storage, canvasKey, doc: () => doc.get(),
+      id, server: deps.server, index, storage, doc: () => doc.get(),
       upload: (blob, mime) => relay.upload(blob, mime),
       onPosted: (at) => app.update((a) => { a.savedAt = at.toISOString() }),
       base: await readBase(storage, index, id),

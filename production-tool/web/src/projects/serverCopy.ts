@@ -1,5 +1,5 @@
-// The open project's copy on the relay (features/personal-workspaces.clan): what Save, the
-// 5-minute save and a lock send (the .clan store's mirror calls `post`).
+// The open project's copy in the library (features/production-in-library.clan): what Save, the
+// minute save and a lock send (the .clan store's mirror calls `post`).
 //
 // Each save sends If-Match with the ETag of the relay's version THIS TAB's document is based on: the one
 // it opened, its own last save, or the one it took when the person chose in a conflict (re-test R1,
@@ -15,8 +15,6 @@
 // kept under base:<id> (LocalBase), so opening it can tell a newer save elsewhere from local work
 // (re-test R2, shell.ts `open`).
 
-import { engineOf } from '../canvas/adapter'
-import type { CanvasSnapshot } from '../canvas/controller'
 import type { InputMime, ProductionDocument } from '../contracts/types'
 import { sha256Hex } from '../lib/hash'
 import type { ProjectIndex, ServerMark } from './projectIndex'
@@ -52,17 +50,14 @@ export interface Conflict {
   message: string
 }
 
-// The mirror's reasons; the relay knows three (X-Clan-Reason), so a handoff, an export or a save moment (a new
-// project, a landed generation: features/pt-film-r1.clan) is saved as manual (features/engine-store.clan).
+// The mirror's reasons are the host's X-Clan-Reason values as they are (handoff, export and landing take a snapshot too).
 type Reason = 'interval' | 'accept' | 'manual' | 'handoff' | 'export' | 'landing'
-const relayReason = (r: Reason): 'interval' | 'accept' | 'manual' => (r === 'handoff' || r === 'export' || r === 'landing' ? 'manual' : r)
 
 export interface ServerCopyDeps {
   id: string
   server: ProjectServer
   index: ProjectIndex
   storage: ProjectStorage
-  canvasKey: string
   doc: () => ProductionDocument
   upload: (blob: Blob, mime: InputMime) => Promise<unknown>
   onPosted?: (at: Date) => void
@@ -133,20 +128,19 @@ export class ServerCopy {
   }
 
   private postNow = async (bytes: Uint8Array, meta: { reason: Reason }, again = false): Promise<void> => {
-    const { server, index, id } = this.d
+    const { server, id } = this.d
     if (!server.signedIn) return // not signed in: nothing to save to
     if (this.conflict) throw new SaveConflict(this.conflict.message)
     // Pictures first: a project the relay lists must open elsewhere with every one of them.
     const edits = this.edits
     await sendAssets(this.d.doc(), this.d.upload)
-    const entry = index.get(id)
     const etag = await sha256Hex(bytes)
     // The same bytes as the version this tab is based on: nothing new to send (two save moments at once).
     if (this.base?.etag === etag) return
     // No base: never a blind save over a copy the relay has (re-test N3: a lost mark sent a save with no
     // If-Match, and the relay took it). The same bytes: that is the base. Others: the person chooses.
     if (!this.base) {
-      const there = (await server.list()).find((p) => p.id === id)
+      const there = await server.version(id)
       if (there) {
         if (there.etag === etag) {
           await this.based({ etag: there.etag, savedAt: there.savedAt }, this.edits !== edits)
@@ -161,7 +155,7 @@ export class ServerCopy {
     // base, and nothing goes (no refused save, no banner).
     if (this.inherited.has(etag)) {
       this.inherited.delete(etag)
-      const there = (await server.list().catch(() => [])).find((p) => p.id === id)
+      const there = await server.version(id).catch(() => null)
       if (there?.etag === etag) {
         this.unanswered = this.unanswered.filter((u) => u.etag !== etag)
         await this.based({ etag: there.etag, savedAt: there.savedAt }, this.edits !== edits)
@@ -177,7 +171,7 @@ export class ServerCopy {
     this.sent = [...this.sent.filter((x) => x !== etag), etag].slice(-8)
     let saved
     try {
-      saved = await server.save(id, bytes, { reason: relayReason(meta.reason), ifMatch: this.base?.etag, name: entry?.name })
+      saved = await server.save(id, bytes, { reason: meta.reason, ifMatch: this.base?.etag })
     } catch (e) {
       // Refused: it did not land. Any other failure (the network went with the answer) may have landed, so
       // what went stays noted for the next open to recognise.
@@ -186,7 +180,7 @@ export class ServerCopy {
         this.note(true)
         // The newer copy on the relay is one this tab sent (its answer was lost, or two of ours crossed): that is our
         // base, and this save goes again on it. Never the "another browser" banner for our own save (F1).
-        const there = again ? undefined : (await server.list().catch(() => [])).find((p) => p.id === id)
+        const there = again ? undefined : e.latest ? { etag: e.latest, savedAt: new Date().toISOString() } : (await server.version(id).catch(() => null)) ?? undefined
         // The relay holds these very bytes (an earlier page's save, or a twin of this one): that is the base, and this
         // save has nothing to add (R5-F7).
         if (there && there.etag === etag) {
@@ -204,20 +198,6 @@ export class ServerCopy {
     this.unanswered = []
     await this.based({ etag: saved.etag, savedAt: saved.savedAt }, this.edits !== edits)
     this.d.onPosted?.(new Date(saved.savedAt))
-    await this.sendCanvas().catch((e) => console.warn('could not save the canvas to the server', e))
-  }
-
-  /**
-   * The canvas as it is kept in this browser, elements only (the pictures come back from the assets): an
-   * Excalidraw scene only. A scene on our own engine travels in the .clan itself (its checkpoint,
-   * human/assets/canvas.ybin.zst, written at this same mirror moment; features/engine-store.clan), so
-   * the relay's canvas.json stays as Excalidraw last left it: the original a converted project rolls
-   * back to (features/canvas-engine.clan, production-tool-land.clan).
-   */
-  async sendCanvas(): Promise<void> {
-    const canvas = await this.d.storage.get<CanvasSnapshot>(this.d.canvasKey)
-    if (!canvas || engineOf(canvas) === 'own') return
-    await this.d.server.putCanvas(this.d.id, canvas.elements ?? [])
   }
 
   /** The person chose (shell.ts): saves go again, on top of `theirs`, the copy now on the relay

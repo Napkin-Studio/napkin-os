@@ -111,6 +111,16 @@ export class Shell {
   async newProject(): Promise<ProjectEntry> {
     const entry = await this.serial('Starting a new project…', async () => {
       await this.closeSession()
+      const { server, relay } = this.deps
+      // With the host: the project is a library document first (its id is the library's), brought down and started.
+      if (server?.signedIn && relay.kind === 'http') {
+        const id = await server.create(UNTITLED_TITLE)
+        const got = await server.open(id)
+        return this.importUnpacked(
+          { clan: got.bytes, assets: [], mismatched: 0, fileName: '' },
+          { id, draft: true, server: { etag: got.etag, savedAt: got.savedAt }, unsaved: true },
+        )
+      }
       return this.index.create({ draft: true })
     })
     await this.open(entry.id)
@@ -127,6 +137,8 @@ export class Shell {
     const doc = session.services.doc
     if (doc.get().project.title === (n || UNTITLED_TITLE)) return
     await updateDoc(doc, (d) => { d.project.title = n || UNTITLED_TITLE }, n ? `rename the film to ${n}` : 'let the film name itself')
+    // The library lists the manifest's title, so the name reaches it too.
+    await session.services.clan?.setTitle(n || UNTITLED_TITLE).catch((e) => console.warn('could not name the library document', e))
   }
 
   /** A copy with its own document, canvas and UI; the pictures are shared, as all of them are. */
@@ -136,11 +148,14 @@ export class Shell {
       if (!src) throw new Error('That project is not in this browser any more.')
       if (this.state.session?.id === id) await this.state.session.close().then(() => this.set({ session: null, view: 'home' }))
       const { storage, index } = this.deps
-      const entry = await index.create({ name: copyName(src.name, index.all().map((p) => p.name)), naming: 'person', summary: { ...src.summary, active: 0, making: undefined } })
       const saved = await storage.clan(clanDbFor(id)).read()
+      // With the host a copy is a library document of its own, made from this copy's bytes.
+      const home = await this.hostHome(saved?.bytes)
+      const entry = await index.create({ id: home?.id, server: home?.mark, name: copyName(src.name, index.all().map((p) => p.name)), naming: 'person', summary: { ...src.summary, active: 0, making: undefined } })
       if (saved) {
         await storage.clan(clanDbFor(entry.id)).write(saved)
-        await this.ownProjectId(entry.id)
+        await this.ownProjectId(entry.id, entry.name)
+        if (home) await storage.put(baseKeyFor(entry.id), { mark: home.mark, unsaved: true } satisfies LocalBase)
       }
       const json = await storage.get<ProductionDocument>(docKeyFor(id))
       if (json) await storage.put(docKeyFor(entry.id), { ...json, project: { ...json.project, id: newUlidId('proj') } })
@@ -156,10 +171,19 @@ export class Shell {
     })
   }
 
-  /** Delete: the project's own document, canvas and UI. Never the pictures (other projects may use
-   *  them; Clean up handles those), never the server's copy. */
+  /** Delete: the project goes to the host's Trash (restorable for 30 days), and this browser's copy, canvas and UI
+   *  go. Never the pictures (other projects may use them; Clean up handles those). A project the host does not have
+   *  (a draft that never saved, or no host) is only forgotten here. */
   remove(id: string): Promise<void> {
     return this.serial(null, async () => {
+      const { server, relay } = this.deps
+      if (server?.signedIn && relay.kind === 'http') {
+        try {
+          await server.remove(id)
+        } catch (e) {
+          if (!(e instanceof RelayError && e.status === 404)) throw e // not there (or already in the Trash): forgotten here
+        }
+      }
       if (this.state.session?.id === id) {
         await this.closeSession()
         this.set({ view: 'home' })
@@ -195,7 +219,8 @@ export class Shell {
   async openFile(file: Blob, fileName: string): Promise<ProjectEntry> {
     const entry = await this.serial('Opening the file…', async () => {
       const unpacked = await unpackFile(new Uint8Array(await file.arrayBuffer()), fileName)
-      return this.importUnpacked(unpacked, { id: newProjectId(), copy: true })
+      const home = await this.hostHome(unpacked.clan)
+      return this.importUnpacked(unpacked, { id: home?.id ?? newProjectId(), copy: true, server: home?.mark })
     })
     await this.open(entry.id)
     return entry
@@ -223,7 +248,7 @@ export class Shell {
     const entry = await this.serial('Downloading the project…', async () => {
       const got = await this.download(row.id)
       return this.importUnpacked(
-        { clan: got.bytes, assets: [], mismatched: 0, fileName: row.name ?? '', canvas: got.canvas },
+        { clan: got.bytes, assets: [], mismatched: 0, fileName: row.name ?? '' },
         { id: row.id, name: row.name, server: { etag: got.etag, savedAt: got.savedAt }, fetchAssets: true },
       )
     })
@@ -235,18 +260,17 @@ export class Shell {
    *  on the relay too), then save this one on top of it. Nothing is lost either way. */
   keepTheirsAsCopy(): Promise<ProjectEntry> {
     return this.serial('Keeping their version as a copy…', async () => {
-      const { session, copy, server } = this.inConflict()
+      const { session, copy } = this.inConflict()
       const src = this.index.get(session.id)!
       const got = await this.download(session.id)
       const name = copyName(src.name, this.index.all().map((p) => p.name))
+      // Theirs becomes a library document of its own (the host keeps the bytes as they are); this browser's copy of
+      // it carries its own project id and name, a change the host's copy lacks.
+      const home = await this.hostHome(got.bytes)
       const entry = await this.importUnpacked(
-        { clan: got.bytes, assets: [], mismatched: 0, fileName: name, canvas: got.canvas },
-        { id: newProjectId(), name, naming: 'person', fetchAssets: true, copy: true },
+        { clan: got.bytes, assets: [], mismatched: 0, fileName: name },
+        { id: home?.id ?? newProjectId(), name, naming: 'person', fetchAssets: true, copy: true, server: home?.mark },
       )
-      const saved = await server.save(entry.id, got.bytes, { reason: 'manual', name })
-      // Its own project id is in this browser's copy only: a change the relay's copy lacks.
-      await this.based(entry.id, { mark: { etag: saved.etag, savedAt: saved.savedAt }, unsaved: true })
-      if (got.canvas) await server.putCanvas(entry.id, got.canvas.elements).catch(() => {})
       await this.saveOver(session, copy, { etag: got.etag, savedAt: got.savedAt })
       return entry
     })
@@ -257,8 +281,8 @@ export class Shell {
   saveAsNewVersion(): Promise<void> {
     return this.serial('Saving…', async () => {
       const { session, copy, server } = this.inConflict()
-      const latest = (await server.list()).find((p) => p.id === session.id)
-      await this.saveOver(session, copy, latest ?? null)
+      const latest = await server.version(session.id)
+      await this.saveOver(session, copy, latest)
     })
   }
 
@@ -297,11 +321,9 @@ export class Shell {
   private async newerThere(id: string): Promise<string | null> {
     const { server, storage, index, relay } = this.deps
     if (!server?.signedIn || relay.kind !== 'http') return null
-    let there: SavedProject | undefined
+    let there: { etag: string; savedAt: string } | null
     try {
-      const rows = await server.list()
-      index.knowRemote(rows)
-      there = rows.find((p) => p.id === id)
+      there = await server.version(id)
     } catch {
       return null
     }
@@ -347,8 +369,6 @@ export class Shell {
     } finally {
       await store.close().catch(() => {})
     }
-    if (got.canvas) await storage.put(canvasKeyFor(id), got.canvas satisfies CanvasSnapshot)
-    else await storage.del(canvasKeyFor(id))
     // The scene's live store is the replaced copy's: the scene opens from the new .clan's checkpoint instead.
     await clearLiveLog(`${clanDbFor(id)}:scene`)
     const ui = await storage.get<ProjectUi>(uiKeyFor(id))
@@ -371,21 +391,29 @@ export class Shell {
   private async download(id: string) {
     const server = this.deps.server
     if (!server) throw new Error('There is no server to open it from.')
-    const got = await server.open(id)
-    const canvas = await server.canvas(id).catch(() => null)
-    return { ...got, canvas: canvas ? { elements: canvas.elements, files: {} } as unknown as CanvasSnapshot : undefined }
+    return server.open(id)
+  }
+
+  /** A .clan's bytes as a library document of their own (a copy, a file opened): its id and the version the host holds
+   *  (the bytes' own hash). null without a host (the in-browser mock): the project is only this browser's. */
+  private async hostHome(bytes: Uint8Array | undefined): Promise<{ id: string; mark: ServerMark } | null> {
+    const { server, relay } = this.deps
+    if (!bytes || !server?.signedIn || relay.kind !== 'http') return null
+    const id = await server.upload(bytes)
+    return { id, mark: { etag: await sha256Hex(bytes), savedAt: new Date().toISOString() } }
   }
 
   /** A file's or the relay's project into this browser. With `fetchAssets`, every picture it uses
    *  that this browser lacks comes from the relay first; one that cannot stops it, and nothing is kept. */
   /** A copy is its own project to the relay: a new document project id, so its jobs are never filed under the
    *  original's (QA 2026-11-17: the QA copy's jobs went under Shrey's proj_01M7MFGTR1GJR90QJDH74R08TM). */
-  private async ownProjectId(projectId: string): Promise<void> {
+  private async ownProjectId(projectId: string, title?: string): Promise<void> {
     const { storage, makeClan } = this.deps
     const store = makeClan(storage.clan(clanDbFor(projectId)), { person: personOf(this.deps.app.get().me) })
     try {
       if (!(await store.load())) return
       await newProjectIdIn(store)
+      if (title) await store.setTitle(title).catch((e) => console.warn('could not name the library document', e))
       await store.flush()
     } finally {
       await store.close().catch(() => {})
@@ -394,7 +422,7 @@ export class Shell {
 
   /** `copy`: opened from a file or kept as a copy, so it gets its own project id; a project opened from the
    *  server keeps its own. */
-  private async importUnpacked(unpacked: Unpacked, opts: { id: string; name?: string; naming?: ProjectEntry['naming']; server?: ServerMark; fetchAssets?: boolean; copy?: boolean }): Promise<ProjectEntry> {
+  private async importUnpacked(unpacked: Unpacked, opts: { id: string; name?: string; naming?: ProjectEntry['naming']; server?: ServerMark; fetchAssets?: boolean; copy?: boolean; draft?: boolean; unsaved?: boolean }): Promise<ProjectEntry> {
     const { storage, makeClan, index, server } = this.deps
     const id = opts.id
     const fetchFirst = async (doc: ProductionDocument) => {
@@ -412,6 +440,7 @@ export class Shell {
           await store.flush()
           doc = store.get()
         }
+        if (opts.name && opts.copy) await store.setTitle(opts.name).catch((e) => console.warn('could not name the library document', e))
         await store.close()
       } catch (e) {
         await store.close().catch(() => {})
@@ -434,8 +463,8 @@ export class Shell {
     const name = opts.name ?? auto ?? unpacked.fileName
     const naming = opts.naming ?? (opts.name ? (opts.name === auto ? 'auto' : 'person') : auto || !unpacked.fileName ? 'auto' : 'person')
     // Brought down from the relay: this browser's copy is that version, with nothing of its own yet.
-    if (opts.server && !opts.copy) await storage.put(baseKeyFor(id), { mark: opts.server, unsaved: false } satisfies LocalBase)
-    return index.create({ id, name, naming, summary: summarise(doc), server: opts.server })
+    if (opts.server) await storage.put(baseKeyFor(id), { mark: opts.server, unsaved: !!opts.copy || !!opts.unsaved } satisfies LocalBase)
+    return index.create({ id, name, naming, summary: summarise(doc), server: opts.server, ...(opts.draft ? { draft: true as const } : {}) })
   }
 
   private async closeSession() {
@@ -465,7 +494,7 @@ export class Shell {
     if (!entry?.draft) return
     const { storage, index } = this.deps
     const s = entry.summary
-    if (held || entry.naming === 'person' || entry.server || s.pictures || s.shots || s.active || s.adSeconds !== null) return index.keep(id)
+    if (held || entry.naming === 'person' || s.pictures || s.shots || s.active || s.adSeconds !== null) return index.keep(id)
     try {
       const canvas = await storage.get<CanvasSnapshot>(canvasKeyFor(id))
       if (canvas?.elements?.some((e) => !(e as { isDeleted?: boolean }).isDeleted)) return index.keep(id)
@@ -474,6 +503,8 @@ export class Shell {
       console.warn('kept a blank film whose storage could not be read', e)
       return index.keep(id)
     }
+    // A blank draft the host made a document for goes to the Trash (restorable), not left in the library.
+    if (entry.server && this.deps.server?.signedIn) await this.deps.server.remove(id).catch(() => {})
     await index.remove(id)
     await storage.dropClan(clanDbFor(id)).catch(() => {})
     await Promise.all([storage.del(canvasKeyFor(id)), storage.del(uiKeyFor(id)), storage.del(docKeyFor(id)), storage.del(baseKeyFor(id))]).catch(() => {})

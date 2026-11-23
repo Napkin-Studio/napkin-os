@@ -7,13 +7,15 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useDoc } from '../app/context'
-import { remoteUrl } from '../jobs/assets'
+import type { DocAsset } from '../contracts/types'
+import { resolveMediaUrl } from '../lib/media'
 import { blobUrl, cachedBlobUrl } from '../lib/blobs'
 import { frameAt, soundAt, type Plan, type PlanText } from './timeline'
 
-/** A file's URL: this browser's copy, else the relay's. */
-async function urlOf(doc: { assets: Record<string, { locations?: string[] } | undefined> }, sha: string): Promise<string | undefined> {
-  return cachedBlobUrl(sha) ?? (await blobUrl(sha).catch(() => undefined)) ?? remoteUrl(doc as never, sha)
+/** A file's URL: this browser's copy, else the relay's (by its hash). */
+async function urlOf(doc: { assets: Record<string, { sha256: string; origin: DocAsset['origin'] } | undefined> }, sha: string): Promise<string | undefined> {
+  const a = doc.assets[sha]
+  return cachedBlobUrl(sha) ?? (await blobUrl(sha).catch(() => undefined)) ?? (a ? (await resolveMediaUrl(a)) ?? undefined : undefined)
 }
 
 const TEXT_FONT = "600 {px}px 'Geist', system-ui, sans-serif"

@@ -641,7 +641,7 @@
             "pattern": "^(idb|s3|https)://"
           },
           "maxItems": 8,
-          "description": "Where to find the bytes, in resolution order: idb://sha256/<hex>, s3://<bucket>/assets/<hex>, then our https URL."
+          "description": "Never written, ignored on read (features/production-in-library.clan): the bytes are found by sha256 alone, in this browser, then at the session's media base, then by the relay's by-hash route. Old documents may still carry it."
         },
         "thumb": {
           "type": "string",
@@ -653,8 +653,7 @@
         "sha256",
         "kind",
         "mime",
-        "origin",
-        "locations"
+        "origin"
       ],
       "additionalProperties": false
     },

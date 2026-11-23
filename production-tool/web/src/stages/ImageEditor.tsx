@@ -23,7 +23,7 @@ import { SHEETS } from '../contracts/load'
 import { changeFrame, frameEditCopy } from '../jobs/frameEdit'
 import { placeAsk } from '../ui/askPlaces'
 import type { JobShot, Shot } from '../contracts/types'
-import { getBlob, idbLocation, putBlob } from '../lib/blobs'
+import { getBlob, putBlob } from '../lib/blobs'
 import { deleteFrom, removeFrame } from '../doc/remove'
 import { systemUpdate } from '../doc/store'
 import { errorShown } from '../dogfood/recorder'
@@ -366,7 +366,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
     }
   }
   const registerAsset = (sha: string, blob: Blob, w: number, h: number) => systemUpdate(docStore, (d) => {
-    if (!d.assets[sha]) d.assets[sha] = { sha256: sha, kind: 'image', mime: (blob.type || 'image/png') as Mime, bytes: blob.size, w, h, origin: 'edited', locations: [idbLocation(sha)] }
+    if (!d.assets[sha]) d.assets[sha] = { sha256: sha, kind: 'image', mime: (blob.type || 'image/png') as Mime, bytes: blob.size, w, h, origin: 'edited' }
   }, 'image editor picture')
   /** The picture an action starts from: the frame, or the edits so far without text, masks or crop. */
   const inputPic = async (): Promise<Pic> => {

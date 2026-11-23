@@ -195,6 +195,10 @@ export class StoreClient implements ClanStoreApi {
     return this.call<Doc>('patch', [body, why])
   }
 
+  setTitle(title: string): Promise<void> {
+    return this.call<void>('setTitle', [title])
+  }
+
   record(entry: Parameters<ClanStoreApi['record']>[0], opts: { once?: boolean } = {}): Promise<boolean> {
     return this.call<boolean>('record', [entry, opts])
   }
