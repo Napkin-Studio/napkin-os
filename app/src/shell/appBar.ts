@@ -164,3 +164,10 @@ export function overflowButtons(bar: BarItem[]): Button[] {
   return bar.filter((i): i is Button => i.kind === 'button').slice(BAR_BUTTONS_SHOWN).filter(b => !b.disabled)
     .flatMap(b => b.menu ? b.menu.map(m => ({ kind: 'button' as const, id: m.id, label: m.label, title: m.title, primary: false, disabled: false })) : [b])
 }
+
+/** The second of the bar's buttons: the one that moves into the ⋯ menu when the bar is tight (the first, the primary, stays). */
+export const secondButton = (bar: BarItem[]): Extract<BarItem, { kind: 'button' }> | null =>
+  bar.filter((i): i is Extract<BarItem, { kind: 'button' }> => i.kind === 'button')[1] ?? null
+
+/** A tight bar's Working chip: the step ("4/4") alone, the whole label on its title. */
+export const shortStep = (label: string): string => /\d+\s*(?:\/|of)\s*\d+/i.exec(label)?.[0].replace(/\s*of\s*/i, '/') ?? label

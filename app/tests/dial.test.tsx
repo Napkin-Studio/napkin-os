@@ -13,6 +13,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 import type { LibraryItem } from '../src/host/types.ts'
+import { contrast, readableInk } from '../src/shell/agency/palette.ts'
 import { Dial } from '../src/shell/nui/Dial.tsx'
 import { dialBoxes } from '../src/shell/nui/dialGeometry.ts'
 
@@ -47,7 +48,7 @@ test('five quadrants in the order Brief, Research, Territories, Production, Deck
 
 test('the hub is the client in its own colour and opens it; with no sector the name\'s last word goes under', () => {
   const html = dial([])
-  assert.match(html, /data-testid="dial-hub"[^>]*style="--cl:#DA291C;--cl-ink:#FFC72C"[^>]*title="Open Client Alpha"/)
+  assert.match(html, /data-testid="dial-hub"[^>]*style="--cl:#DA291C;--cl-ink:#FFFFFF"[^>]*title="Open Client Alpha"/)
   assert.match(html, /<b>Client<\/b><small>Alpha<\/small>/)
   assert.match(html, /left:-8px;top:-12px;transform-origin:74px 70px/)
   assert.ok(html.indexOf('data-testid="dial-hub"') < html.indexOf('data-testid="quadrant-brief"'), 'the hub first: Shift+Tab from the first quadrant reaches it')
@@ -133,4 +134,16 @@ test('each button’s middle lies in its own quadrant, so a click or getByRole a
     assert.ok(r > 100 && r < 300, `quadrant ${i}: radius ${r.toFixed(0)} is in the ring`)
     assert.ok(a >= start + i * span && a <= start + (i + 1) * span, `quadrant ${i}: angle is in its wedge`)
   })
+})
+
+// Owner, 2026-11-23: the client name was yellow on bright red in the hub. The hub's ink meets WCAG AA on any client colour.
+test('the hub’s text reads on the client’s colour (AA, 4.5:1): its own ink when it does, else light or dark by luminance', () => {
+  assert.ok(contrast('#DA291C', '#FFC72C') < 4.5, 'the McDonald’s-style pair does not read')
+  assert.equal(readableInk('#DA291C', '#FFC72C'), '#FFFFFF', 'white on red')
+  assert.equal(readableInk('#FFC72C', '#DA291C'), '#101114', 'dark on yellow')
+  assert.equal(readableInk('#0B3D91', '#FFFFFF'), '#FFFFFF', 'an ink that already reads is kept')
+  for (const cl of ['#DA291C', '#FFC72C', '#7A1E8C', '#86BC25', '#00A3E0', '#F4F0E6', '#101010', '#FF6600', '#808080']) {
+    for (const ink of ['#FFC72C', '#FFFFFF', '#000000', '#DA291C']) assert.ok(contrast(cl, readableInk(cl, ink)) >= 4.5, `${ink} on ${cl}`)
+  }
+  assert.match(dial([]), /--cl:#DA291C;--cl-ink:#FFFFFF/, 'the hub is drawn with the readable ink')
 })
