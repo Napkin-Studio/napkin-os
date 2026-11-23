@@ -10,7 +10,7 @@ import { test } from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
-import { BAR_LIMITS, barFrom, overflowButtons, statusOf } from '../src/shell/appBar.ts'
+import { BAR_LIMITS, barFrom, believePage, overflowButtons, pageWorking, statusOf } from '../src/shell/appBar.ts'
 import { BarButtons, BarChips } from '../src/components/AppBarItems.tsx'
 
 const btn = (id: string, extra = {}) => ({ kind: 'button', id, label: id, ...extra })
@@ -99,4 +99,24 @@ test('a button may carry a menu: drawn with ▾, its choices unique in the bar, 
   const html = draw(bar)
   assert.ok(html.includes('aria-haspopup="menu"') && html.includes('Save · PDF<span class="ch-btn-car" aria-hidden="true"> ▾</span>'))
   assert.deepEqual(overflowButtons(bar).map(b => b.id), ['clan'])
+})
+
+// Brief Maker's finished state (owner, 2026-11-23): the sheet was on screen with Save and Draft it again, and the bar
+// still said "Working · step 4/4", because the host's last-heard run record (kept up to ten minutes) said running.
+test('a page that says it runs no agents is believed over the host’s stale working record', () => {
+  const run = { state: 'working', label: 'Working: judge (4 of 4)' }
+  const crew = { working: 'working', agent: 'judge', progress: [4, 4] as const, people: [] }
+  assert.equal(pageWorking(barFrom({ v: 1, items: [{ kind: 'run', working: false }] })), false)
+  assert.equal(pageWorking(barFrom({ v: 1, items: [{ kind: 'run', working: 'no' }] })), null, 'only a boolean counts')
+  const done = barFrom({ v: 1, items: [{ kind: 'run', working: false }, btn('pdf')] })
+  const got = believePage(done, run, crew)
+  assert.equal(got.run?.state, 'idle', 'the medallion and the desk stop working')
+  assert.equal(got.crew?.working, null, 'the bar drops its Working chip')
+  assert.equal(got.crew?.progress, null)
+  assert.deepEqual(got.crew?.people, [], 'the rest of the crew is as it was')
+  // Silent, or working: the host's record stands (a redraft in place, another app).
+  for (const bar of [barFrom({ v: 1, items: [btn('pdf')] }), barFrom({ v: 1, items: [{ kind: 'run', working: true }] })]) {
+    assert.deepEqual(believePage(bar, run, crew), { run, crew })
+  }
+  assert.equal(barFrom({ v: 1, items: [{ kind: 'run', working: false }, { kind: 'run', working: true }] }).length, 1, 'one run item')
 })

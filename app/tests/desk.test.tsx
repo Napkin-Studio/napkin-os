@@ -180,7 +180,8 @@ test('Archived · N is on the desk where the registry can be managed', () => {
 
 test('the add form: Client name and Sector, sixty characters each, Add client and Cancel', () => {
   const html = renderToStaticMarkup(createElement(AddForm, { onAdd: async () => null, onClose: noop }))
-  assert.match(html, /<label>Client name<input[^>]*placeholder="e\.g\. Kerrygold"/)
+  assert.match(html, /<label>Client name<input[^>]*placeholder="e\.g\. Larkfield Dairy"/)
+  assert.doesNotMatch(html, /Kerrygold|Tesco|Guinness|Aldi|Lidl/i, 'the example is an invented brand, never a real one')
   assert.match(html, /<label>Sector<input[^>]*placeholder="e\.g\. Dairy · Export"/)
   assert.equal(count(html, /maxLength="60"|maxlength="60"/gi), 2)
   assert.match(html, />Add client</)

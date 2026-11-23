@@ -33,6 +33,9 @@ export type BarItem =
    *  the name alone) or `working` (the crew at work: the name and a status chip, "Working · step 1/4").
    *  At most one; none means the document itself, with every action. */
   | { kind: 'mode'; mode: 'ask' | 'working'; label: string }
+  /** Whether the page itself is running its agents. `working: false` is believed over the host's last-heard
+   *  run record, which keeps saying "running" for up to ten minutes after a job ended unseen. At most one. */
+  | { kind: 'run'; working: boolean }
 
 export type BarStatus = Extract<BarItem, { kind: 'status' }>
 
@@ -65,7 +68,11 @@ export function barFrom(message: unknown): BarItem[] {
   for (const raw of m.items) {
     const it = (raw ?? {}) as Record<string, unknown>
     const kind = it.kind
-    if (kind !== 'button' && kind !== 'chip' && kind !== 'status' && kind !== 'gate' && kind !== 'mode') continue // a kind from the future, or a retired tab
+    if (kind !== 'button' && kind !== 'chip' && kind !== 'status' && kind !== 'gate' && kind !== 'mode' && kind !== 'run') continue // a kind from the future, or a retired tab
+    if (kind === 'run') {
+      if (typeof it.working === 'boolean' && !out.some(o => o.kind === 'run')) out.push({ kind, working: it.working })
+      continue
+    }
     if (kind === 'mode') {
       if ((it.mode === 'ask' || it.mode === 'working') && count.mode < BAR_LIMITS.mode) {
         out.push({ kind, mode: it.mode, label: text(it.label, BAR_LIMITS.label) })
@@ -123,6 +130,27 @@ export function statusOf(bar: BarItem[]): BarStatus | null {
 /** Where the document is, when the app says it is before the document (the prompt, the crew at work). */
 export function modeOf(bar: BarItem[]): Extract<BarItem, { kind: 'mode' }> | null {
   return bar.find((i): i is Extract<BarItem, { kind: 'mode' }> => i.kind === 'mode') ?? null
+}
+
+/** Whether the page says it runs agents now: true, false, or null when it did not say. */
+export function pageWorking(bar: BarItem[]): boolean | null {
+  const r = bar.find((i): i is Extract<BarItem, { kind: 'run' }> => i.kind === 'run')
+  return r ? r.working : null
+}
+
+/**
+ * The run the bar shows for a document: the page's own word (`run`) over the host's last-heard record. A page
+ * that says it runs no agents drops a "working" run and chip the host still holds; one that says nothing, or
+ * says it works, leaves them as they were.
+ */
+export function believePage<R extends { state: string }, C extends { working?: string | null; agent?: string | null; progress?: readonly [number, number] | null }>(
+  bar: BarItem[], run: R | null | undefined, crew: C | undefined,
+): { run: R | null | undefined; crew: C | undefined } {
+  if (pageWorking(bar) !== false) return { run, crew }
+  return {
+    run: run?.state === 'working' ? { ...run, state: 'idle' } : run,
+    crew: crew?.working ? { ...crew, working: null, agent: null, progress: null } : crew,
+  }
 }
 
 /** The app's gate line for Continue in, when it sent one. */
