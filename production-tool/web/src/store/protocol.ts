@@ -16,7 +16,7 @@ import type { Doc, MirrorReason, Person } from '../../../clan-store/src'
 export const PROTOCOL = 1
 
 export type StoreMethod =
-  | 'init' | 'load' | 'open' | 'create' | 'setPerson' | 'patch' | 'record' | 'exportClan' | 'chain' | 'flush'
+  | 'init' | 'load' | 'open' | 'create' | 'setPerson' | 'patch' | 'record' | 'exportClan' | 'spunOffFrom' | 'chain' | 'flush'
   | 'startMirror' | 'stopMirror' | 'mirrorNow' | 'writeAsset' | 'readAsset' | 'dispose' | 'sceneOpen'
 
 export interface InitArgs {

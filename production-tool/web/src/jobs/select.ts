@@ -1,7 +1,7 @@
 // Finding the job that belongs at a spot in the UI (pending or failed), and
 // what a job sends about a shot and its names (contract 3).
 
-import type { Id, JobInputRef, JobShot, NamedRef, ProductionDocument, Ratio, RefRole, Shot } from '../contracts/types'
+import type { AssetRef, Id, JobInputRef, JobShot, NamedRef, ProductionDocument, Ratio, RefRole, Shot } from '../contracts/types'
 import type { JobCtx, UiState } from '../doc/ui'
 import { KEY_EXTRAS, MENTION, NoFrontError } from '../lib/names'
 import { scopeOf, type ScopeItem } from '../model/scope'
@@ -76,6 +76,15 @@ export async function namedInput(relay: Relay, doc: ProductionDocument, r: Named
   return { id: r.id, name: refName(r), role: r.role, ...(r.label ? { label: r.label } : {}), kind, asset: await assetRef(relay, r.asset) }
 }
 
+/** A picture on the canvas with no name (a drawing, a generated image, a dropped picture) as a job input
+ *  (features/pt-dex-context.clan): role `other`, so the relay sends it as an object (Runway subject "object"),
+ *  never a person, unless the words say it is one (Dex decides, director.v15). It went as `character` before,
+ *  and a drawn product reached Runway as subject "human" (UAT Dex audit, 2026-11-21). `role` character: the
+ *  person marked it as a person in the Generate tray (features/pt-canvas-r1.clan). */
+export function unnamedInput(id: Id, kind: 'pic' | 'drawn' | 'gen', asset: AssetRef, role: 'other' | 'character' = 'other'): JobInputRef {
+  return { id, role, kind: kind === 'drawn' ? 'drawing' : kind === 'gen' ? 'generated' : 'picture', asset }
+}
+
 /** An asset-bearing scope item (a linked frame, a rendered ad, a format set's master) as a job input:
  *  a picture a generation can build on, under `role`, so storyboard references reach the job too, not
  *  only character refs — they showed as linked in the inputs strip but were dropped (owner 2026-11-04). */
@@ -142,10 +151,10 @@ export async function refsFor(relay: Relay, doc: ProductionDocument, shot: Shot,
 }
 
 /** Every named picture, for the shot list: the director picks the names each shot shows. */
-export async function allNamed(relay: Relay, doc: ProductionDocument): Promise<JobInputRef[]> {
+export async function allNamed(relay: Relay, doc: ProductionDocument, keep: (r: NamedRef) => boolean = () => true): Promise<JobInputRef[]> {
   const out: JobInputRef[] = []
   // Fronts first: a bare @key in the plan needs its front among the 14 (the relay's director checks).
-  const named = refsList(doc).filter((x) => x.asset)
+  const named = refsList(doc).filter((x) => x.asset && keep(x))
   const ordered = [...named.filter((x) => x.variant === 'front'), ...named.filter((x) => x.variant !== 'front')]
   for (const r of ordered.slice(0, 14)) out.push(await namedInput(relay, doc, r))
   return out

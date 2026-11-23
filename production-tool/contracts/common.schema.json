@@ -368,7 +368,7 @@
       "description": "A link's label (ui-behaviour 3.4). A reference's link carries its role (character, lighting, …); 'layout' is both a ref role and a shot's layout guide."
     },
     "linkRule": {
-      "description": "Every link that may exist (ui-behaviour 3.4), the one table the canvas's canLink(), clan-store's integrity check and check.py read. A link is allowed when a rule has its from kind, its to kind and its role; the first such rule decides its limits. per_target one: at most one link of that role into one target. per_source one: at most one link from one source into one target. system: made only by the tool. generating: the nodes that send work to an agent. Refused besides: a link into a ref, a document, a brief or a brand board; a link out of a video except as a format set's master; a link that makes a loop.",
+      "description": "Every link that may exist (ui-behaviour 3.4), the one table the canvas's canLink(), clan-store's integrity check and check.py read. A link is allowed when a rule has its from kind, its to kind and its role; the first such rule decides its limits. per_target one: at most one link of that role into one target. per_source one: at most one link from one source into one target. system: made only by the tool. generating: the nodes that send work to an agent. A Brand board may also feed a text (a note on the canvas): 'use this brand' for whatever the note feeds (UAT round 4 S2-2, added 2026-11-21, additive). Refused besides: a link into a ref, a document, a brief or a brand board; a link out of a video except as a format set's master; a link that makes a loop.",
       "const": {
         "generating": ["script", "storyboard", "video", "sketch", "format_set"],
         "rules": [
@@ -381,6 +381,7 @@
           { "from": ["board", "group"], "to": ["script", "storyboard", "video", "sketch", "format_set"], "roles": ["input"], "per_target": "many", "per_source": "one" },
           { "from": ["note", "ink", "document", "text"], "to": ["script", "storyboard", "video", "sketch", "format_set"], "roles": ["note", "context"], "per_target": "many", "per_source": "one" },
           { "from": ["board"], "to": ["script", "storyboard", "video", "sketch", "format_set"], "roles": ["brand"], "per_target": "one", "board_purpose": "brand" },
+          { "from": ["board"], "to": ["text", "note"], "roles": ["brand"], "per_target": "one", "board_purpose": "brand" },
           { "from": ["frame", "ref", "render", "video"], "to": ["format_set"], "roles": ["master"], "per_target": "one", "system": true },
           { "from": ["sketch"], "to": ["frame"], "roles": ["made_from"], "per_target": "one", "system": true },
           { "from": ["ink"], "to": ["shot"], "roles": ["note_on_shot"], "per_target": "many", "per_source": "one" },
@@ -485,6 +486,7 @@
       "properties": {
         "estimate": { "type": "number", "minimum": 0 },
         "reserved": { "type": "number", "minimum": 0 },
+        "agentUsd": { "type": "number", "minimum": 0, "description": "What the agents' Claude calls for this job cost: their tokens at the model's price (relay agent_cost.py; config director.prices). Recorded and in the ledger, never shown in the UI. Added 2026-11-21 (pt-film-r2, F21), additive." },
         "confirmed": { "type": "number", "minimum": 0 },
         "currency": { "const": "USD" },
         "unknown": { "type": "boolean" }

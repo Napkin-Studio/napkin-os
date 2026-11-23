@@ -234,7 +234,8 @@
 .rm-modelrow { min-height: 44px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 2px; padding: 6px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); cursor: pointer; text-align: left; color: var(--ink); }
 .rm-modelrow.on { border: 2px solid var(--plan); padding: 5px 13px; font-weight: 600; }
 .rm-modelrow:disabled { opacity: 0.55; cursor: not-allowed; }
-.rm-num { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.rm-num { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }
+.rm-numnote { flex-basis: 100%; font-size: 11.5px; color: var(--ink2, var(--muted)); }
 .rm-num input:not([type='color']) { width: 72px; height: 44px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); text-align: center; font-size: 13px; }
 .rm-colour { width: 64px; height: 44px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); padding: 4px; cursor: pointer; }
 .rm-fieldlabel { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--ink2); }
@@ -319,6 +320,7 @@
 .rm-keysfloat { width: 320px; padding: 12px; }
 /* The cut in a line under the timeline (mock edit): what it holds, then the next things to do. */
 .rm-cutsum { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; padding: 8px 24px 10px; border-top: 1px solid var(--line-soft); font-size: 12.5px; color: var(--ink2); flex-shrink: 0; }
+.rm-ask { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; padding: 2px 8px; border-radius: 6px; background: var(--warn-bg); color: var(--ink); }
 .rm-linkbtn { all: unset; cursor: pointer; font-weight: 600; color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
 .rm-linkbtn:hover, .rm-linkbtn:focus-visible { color: var(--ag-base, var(--ink)); }
 .rm-tlzoom { display: inline-flex; align-items: center; gap: 2px; }
@@ -727,3 +729,19 @@ html[data-theme='dark'] .jc-box.sel { box-shadow: 0 0 0 2px var(--ag-acc, var(--
 /* The Edit room's band keeps Render ad on screen on a laptop (Shrey 2026-11-19: page actions live in the band). */
 @media (max-width: 1439px) { .rooms .rm-wide { display: none; } }
 @media (max-width: 1279px) { .rooms .rm-tltools { gap: 4px; } }
+.rm-lines { list-style: none; margin: 0 0 6px; padding: 0; display: grid; gap: 4px; font-size: 13px; color: var(--ink); }
+.jc-sound { font-size: 12px; color: var(--ink2); padding: 0 2px; }
+.jc-sound::before { content: '\266A\00a0'; color: var(--tool-ink); }
+.jc-sound.off { color: var(--warn); }
+.jc-box > .jc-sound { width: 0; min-width: 100%; box-sizing: border-box; }
+/* The Edit room's band at 1280-1680 px (UAT 2026-11-21: at 1440 px it clipped Render ad and redo, with the Booth
+   open or not): it drops what it drops on a laptop, so its page actions stay on screen. */
+@media (max-width: 1680px) {
+  .rooms[data-room="edit"] .rm-soundword, .rooms[data-room="edit"] .rm-wide,
+  .rooms[data-room="edit"] .rm-tltools .sp-btn kbd { display: none; }
+  .rooms[data-room="edit"] .rm-tltools { gap: 4px; }
+  .rooms[data-room="edit"] .rm-tltools .sp-btn { padding: 0 8px; }
+}
+
+/* The Rendered view's note with Download the ad beside it (pt-film-r2 F19). */
+.rm-renderbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }

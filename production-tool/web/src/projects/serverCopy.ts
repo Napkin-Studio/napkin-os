@@ -52,9 +52,10 @@ export interface Conflict {
   message: string
 }
 
-// The mirror's reasons; the relay knows three (X-Clan-Reason), so a handoff or an export is saved as manual (features/engine-store.clan).
-type Reason = 'interval' | 'accept' | 'manual' | 'handoff' | 'export'
-const relayReason = (r: Reason): 'interval' | 'accept' | 'manual' => (r === 'handoff' || r === 'export' ? 'manual' : r)
+// The mirror's reasons; the relay knows three (X-Clan-Reason), so a handoff, an export or a save moment (a new
+// project, a landed generation: features/pt-film-r1.clan) is saved as manual (features/engine-store.clan).
+type Reason = 'interval' | 'accept' | 'manual' | 'handoff' | 'export' | 'landing'
+const relayReason = (r: Reason): 'interval' | 'accept' | 'manual' => (r === 'handoff' || r === 'export' || r === 'landing' ? 'manual' : r)
 
 export interface ServerCopyDeps {
   id: string
@@ -85,7 +86,15 @@ export class ServerCopy {
   constructor(deps: ServerCopyDeps) {
     this.d = deps
     this.base = deps.base.mark
+    // Saves an earlier page of this browser sent and never heard back about (it reloaded as they went) are this tab's
+    // own still (UAT round 5, R5-F7: a reload's save went with the old base and was refused as "somewhere else").
+    this.unanswered = (deps.base.unanswered ?? []).map((u) => ({ ...u }))
+    this.sent = this.unanswered.map((u) => u.etag)
+    this.inherited = new Set(this.sent)
   }
+
+  /** The etags of saves an earlier page sent with no answer: before sending one of them again, ask the relay first. */
+  private readonly inherited: Set<string>
 
   get = (): Conflict | null => this.conflict
   /** The relay's version this tab's document is based on (null: none known). */
@@ -109,8 +118,21 @@ export class ServerCopy {
     return () => this.listeners.delete(fn)
   }
 
+  /** Saves on their way, one at a time: each goes on the base the one before it left (UAT 2026-11-21, F1: two saves
+   *  0.24 s apart both sent the old base, and the relay refused the second as someone else's save). */
+  private queue: Promise<unknown> = Promise.resolve()
+  /** The versions this tab sent (newest last), and an earlier page's unanswered ones: a refusal whose newer copy is
+   *  one of ours is not a conflict. */
+  private sent: string[] = []
+
   /** The .clan store's MirrorPost. Throws SaveConflict while a choice is waiting. */
-  post = async (bytes: Uint8Array, meta: { reason: Reason }): Promise<void> => {
+  post = (bytes: Uint8Array, meta: { reason: Reason }): Promise<void> => {
+    const run = this.queue.then(() => this.postNow(bytes, meta), () => this.postNow(bytes, meta))
+    this.queue = run.catch(() => {})
+    return run
+  }
+
+  private postNow = async (bytes: Uint8Array, meta: { reason: Reason }, again = false): Promise<void> => {
     const { server, index, id } = this.d
     if (!server.signedIn) return // not signed in: nothing to save to
     if (this.conflict) throw new SaveConflict(this.conflict.message)
@@ -119,6 +141,8 @@ export class ServerCopy {
     await sendAssets(this.d.doc(), this.d.upload)
     const entry = index.get(id)
     const etag = await sha256Hex(bytes)
+    // The same bytes as the version this tab is based on: nothing new to send (two save moments at once).
+    if (this.base?.etag === etag) return
     // No base: never a blind save over a copy the relay has (re-test N3: a lost mark sent a save with no
     // If-Match, and the relay took it). The same bytes: that is the base. Others: the person chooses.
     if (!this.base) {
@@ -133,12 +157,24 @@ export class ServerCopy {
         throw new SaveConflict(message)
       }
     }
+    // These very bytes went from an earlier page whose answer never came (R5-F7): when the relay has them, they are the
+    // base, and nothing goes (no refused save, no banner).
+    if (this.inherited.has(etag)) {
+      this.inherited.delete(etag)
+      const there = (await server.list().catch(() => [])).find((p) => p.id === id)
+      if (there?.etag === etag) {
+        this.unanswered = this.unanswered.filter((u) => u.etag !== etag)
+        await this.based({ etag: there.etag, savedAt: there.savedAt }, this.edits !== edits)
+        return
+      }
+    }
     // Noted before it goes (not awaited: the save never waits on it), so a page closed before the answer can
     // tell its own save from someone else's when it opens again (shell.ts newerThere).
     const went: Unanswered = { etag, edited: this.edits !== edits }
     for (const u of this.unanswered) u.edited ||= u.etag !== etag
     this.unanswered = [...this.unanswered.filter((u) => u.etag !== etag), went].slice(-UNANSWERED)
     this.note(true)
+    this.sent = [...this.sent.filter((x) => x !== etag), etag].slice(-8)
     let saved
     try {
       saved = await server.save(id, bytes, { reason: relayReason(meta.reason), ifMatch: this.base?.etag, name: entry?.name })
@@ -148,6 +184,19 @@ export class ServerCopy {
       if (e instanceof SaveConflict) {
         this.unanswered = this.unanswered.filter((u) => u !== went)
         this.note(true)
+        // The newer copy on the relay is one this tab sent (its answer was lost, or two of ours crossed): that is our
+        // base, and this save goes again on it. Never the "another browser" banner for our own save (F1).
+        const there = again ? undefined : (await server.list().catch(() => [])).find((p) => p.id === id)
+        // The relay holds these very bytes (an earlier page's save, or a twin of this one): that is the base, and this
+        // save has nothing to add (R5-F7).
+        if (there && there.etag === etag) {
+          await this.based({ etag: there.etag, savedAt: there.savedAt }, this.edits !== edits)
+          return
+        }
+        if (there && this.sent.includes(there.etag)) {
+          await this.based({ etag: there.etag, savedAt: there.savedAt }, true)
+          return this.postNow(bytes, meta, true)
+        }
         this.set({ message: e.message })
       }
       throw e

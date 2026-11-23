@@ -43,6 +43,10 @@ pub const BODY_MAX: usize = 4_500_000;
 pub const TIMEOUT: Duration = Duration::from_secs(65);
 /// How long an assertion is good for.
 pub const ASSERTION_TTL_S: u64 = 60;
+/// How long an assets pass is good for: a deck build's picture step, with room
+/// (docs/contracts/production-tool-identity.md, "The assets pass"). The relay
+/// refuses any pass that lives past an hour.
+pub const ASSETS_TTL_S: u64 = 1800;
 /// The shortest signing key accepted, as for the session cookies.
 pub const MIN_SECRET: usize = 32;
 /// Where the image puts the tool's build.
@@ -156,6 +160,71 @@ impl Relay {
     }
 }
 
+/// What the relay answered a call made by the server itself.
+pub struct Answer {
+    pub status: StatusCode,
+    pub etag: Option<String>,
+    pub body: axum::body::Bytes,
+}
+
+/// Why a call made by the server itself got no answer from the relay.
+#[derive(Debug)]
+pub enum Unreached {
+    Timeout,
+    Down,
+}
+
+impl Relay {
+    /// One call to the relay as `account`, signed exactly as the proxy signs
+    /// (`/api` + `path`, the body hashed): for the spin-off routes
+    /// (`crate::spinoff`), which move a `.clan` between the library and the
+    /// relay on the caller's behalf. The same assertion means the same
+    /// workspace check: a project of another agency is not found.
+    pub async fn call(
+        &self,
+        account: &Account,
+        method: Method,
+        path: &str,
+        headers: &[(&str, String)],
+        body: Vec<u8>,
+    ) -> Result<Answer, Unreached> {
+        let path_and_query = format!("/api{path}");
+        let claims = Claims::for_request(account, method.as_str(), &path_and_query, &body, now_s());
+        let assertion = sign(&self.config.key, &claims);
+        let url = format!("{}{path_and_query}", self.config.relay_url);
+        let mut out = self.client.request(method, url);
+        for (name, value) in headers {
+            out = out.header(*name, value);
+        }
+        let answer = out
+            .header(IDENTITY_HEADER, assertion)
+            .body(body)
+            .send()
+            .await
+            .map_err(|e| {
+                if e.is_timeout() {
+                    Unreached::Timeout
+                } else {
+                    Unreached::Down
+                }
+            })?;
+        let status = answer.status();
+        let etag = answer
+            .headers()
+            .get(header::ETAG)
+            .and_then(|v| v.to_str().ok())
+            .map(|v| v.trim_start_matches("W/").trim_matches('"').to_string());
+        let body = answer.bytes().await.map_err(|e| {
+            if e.is_timeout() {
+                Unreached::Timeout
+            } else {
+                Unreached::Down
+            }
+        })?;
+        Ok(Answer { status, etag, body })
+    }
+}
+
 // ── The assertion ────────────────────────────────────────────────────────────
 
 /// What the relay is told, in the order the contract writes it.
@@ -195,6 +264,40 @@ impl Claims {
             p: path_and_query.to_string(),
             bh: body_hash(body),
         }
+    }
+}
+
+impl Claims {
+    /// The claims of a read-only assets pass for `username` of `agency`, made
+    /// at `now`: `aud: "assets"`, good for `GET /assets/{sha256}` of that
+    /// agency's tenant and nothing else. `m`, `p` and `bh` are fixed and are
+    /// not matched against any one request.
+    pub fn assets_pass(username: &str, agency: &str, now: u64) -> Self {
+        Self {
+            u: username.to_string(),
+            a: agency.to_string(),
+            t: TenantId::of_agency(agency).to_string(),
+            n: None,
+            aud: "assets".into(),
+            iat: now,
+            exp: now + ASSETS_TTL_S,
+            m: "GET".into(),
+            p: "/api/assets/*".into(),
+            bh: body_hash(b""),
+        }
+    }
+}
+
+impl Relay {
+    /// `{base, pass}` for a deck build run by `username` of `agency`: where the
+    /// engine reads pictures (`<relay>/api`) and the signed assets pass. Handed
+    /// only to the middleware's `build_deck` (`crate::sandbox`).
+    pub fn production_assets(&self, username: &str, agency: &str) -> serde_json::Value {
+        let pass = sign(
+            &self.config.key,
+            &Claims::assets_pass(username, agency, now_s()),
+        );
+        serde_json::json!({ "base": format!("{}/api", self.config.relay_url), "pass": pass })
     }
 }
 

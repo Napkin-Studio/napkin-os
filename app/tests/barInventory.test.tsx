@@ -23,7 +23,7 @@ import { accountItems, continueItems, deskItems, docMenuItems, linkList, linkedC
 import { __test as dogfood } from '../src/dogfood/recorder.ts'
 import { betaNoticeOpen, betaNoticeOpener, closeBetaNotice } from '../src/dogfood/notice.ts'
 import { barFrom } from '../src/shell/appBar.ts'
-import { BRIEF_APP_ID, filmFromBriefHref } from '../src/shell/landing/tools.ts'
+import { PRODUCTION_APP_ID } from '../src/shell/landing/tools.ts'
 
 const noop = () => {}
 const doc = (over: Partial<DocBar> = {}): DocBar => ({
@@ -191,19 +191,32 @@ test('Continue in ▾ groups: Turn it into, Link to an existing one, and Made fr
   }
 })
 
-test('Continue in on a brief: Production Tool opens /production/?brief=<doc id>, only when offered (features/brief-node.clan)', () => {
-  let ran = 0
-  const cont = continueItems(doc({ onStartFilm: () => { ran++ } }))
-  assert.deepEqual(labels(cont.spin), ['Deck', 'Production Tool'])
-  assert.match(cont.spin[1].hint ?? '', /Brief node/)
+test('Continue in on a brief: Production is a target like the others, and picking it spins the brief off (features/production-spinoff.clan)', () => {
+  const picked: string[] = []
+  const targets = [
+    { app_id: 'ie.napkin.deck-maker', name: 'Deck Maker', version: '1' },
+    { app_id: PRODUCTION_APP_ID, name: 'Production', version: '1.0.0' },
+  ]
+  const cont = continueItems(doc({ targets, onSpinoff: (id: string) => { picked.push(id) } }))
+  assert.deepEqual(labels(cont.spin), ['Deck', 'Production'])
+  assert.match(cont.spin[1].hint ?? '', /Films and stills from this brief/)
   cont.spin[1].run()
-  assert.equal(ran, 1)
-  assert.deepEqual(labels(continueItems(doc()).spin), ['Deck'], 'no Production Tool where the session has none, or on another tool')
-  assert.equal(filmFromBriefHref('doc-spring brief'), '/production/?brief=doc-spring%20brief')
-  assert.equal(BRIEF_APP_ID, 'ie.napkin.brief-maker')
-  // App.tsx offers it only for a Brief Maker document, off the device, when the session serves the Production Tool.
+  assert.deepEqual(picked, ['ie.napkin.production'])
+  // the old ?brief= hop is gone: no separate "Production Tool" item, no query to the tool
+  assert.deepEqual(labels(continueItems(doc()).spin), ['Deck'])
   const app = readFileSync('src/App.tsx', 'utf8')
-  assert.match(app, /onStartFilm=\{production && !device && !running\.open\.is_template && running\.open\.manifest\.app\?\.app_id === BRIEF_APP_ID/)
+  assert.doesNotMatch(app, /\?brief=|filmFromBriefHref|onStartFilm/)
+  // App.tsx sends Production's pick to the server's bridge, and keeps it off the launcher's tiles
+  assert.match(app, /appId === PRODUCTION_APP_ID/)
+  assert.match(app, /host\.spinoffToProduction/)
+  assert.match(app, /filter\(a => a\.app_id !== PRODUCTION_APP_ID\)/)
+  // Production is offered only where the server serves the tool, never on the device (no relay there)
+  assert.match(app, /productionTarget=\{production && !device\}/)
+  const host = readFileSync('src/shell/AppHost.tsx', 'utf8')
+  assert.match(host, /productionTarget \? offered : offered\.filter\(t => t\.app_id !== PRODUCTION_APP_ID\)/)
+  for (const device of ['src/host/wasm.ts', 'src/host/tauri.ts'])
+    assert.doesNotMatch(readFileSync(device, 'utf8'), /spinoffToProduction/, `${device} has no relay`)
+  assert.match(readFileSync('src/host/http.ts', 'utf8'), /'\/spinoff\/production', postJson\(\{ doc: requireDoc\(\), title \}\)/)
 })
 
 test('the old More menu\'s every action still has a home in the new bar (inventory)', () => {

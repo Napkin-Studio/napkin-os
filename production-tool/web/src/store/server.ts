@@ -100,6 +100,7 @@ export class StoreServer {
       case 'patch': return await this.need().patch(args[0] as object, args[1] as Why)
       case 'record': return await this.need().record(args[0] as Parameters<ClanDocumentStore['record']>[0], args[1] as { once?: boolean })
       case 'exportClan': return await this.need().exportClan()
+      case 'spunOffFrom': return await this.need().spunOffFrom()
       case 'chain': return await this.need().chain()
       case 'flush': {
         await this.sceneQueue

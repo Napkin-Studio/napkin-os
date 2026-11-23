@@ -56,6 +56,8 @@ Write 2 to 4 short lines, each one plain fact about what is visible:
 - the drawing or rendering style (rough pencil sketch, flat 2D, photo, 3D render);
 - the pose or view (front, side, three-quarter, back) when it has one.
 
+In a rough sketch, name each shape by what it plainly stands for (a rough ring or circle in the sky is the sun, a triangle on a box is a roof), never by its geometry (no "pentagon").
+
 Describe only what is in the picture. No names, no story, no guesses about intent, no praise. Do not repeat any text written in the picture except to say that it has writing.
 
 `kind` is what the picture mainly is: character (a person, animal or creature), object (a thing or prop), setting (a place or scene), style (a sample of a look or rendering), other (a texture, pattern, palette or anything else)."""

@@ -57,7 +57,7 @@ export async function linkBrief(env: NodeEnv, briefId: Id, to: LinkEndpoint): Pr
 }
 
 /**
- * The brief a page arrives with (Brief Maker's Continue in › Production Tool, ?brief=<doc id>): its Brief node
+ * The brief a project is born with (Brief Maker's Continue in › Production, carried in the project: start.ts): its Brief node
  * (the one already made from this brief, else a new frozen copy), placed in view and nothing else: no Script,
  * no link, nothing selected, so no Booth opens. The person links it to what they add.
  */

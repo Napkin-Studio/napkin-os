@@ -7,7 +7,8 @@ import type { Id, ProductionDocument, Question } from '../../contracts/types'
 import { pictureJob, scriptHasWords, storyboardOfVideo, type PromptKind } from '../../jobs/prompt'
 import { isActive } from '../../jobs/runner'
 import { scopeOf } from '../../model/scope'
-import { currentFrame, framesOf, scenesOf, shotsOf } from '../../model/selectors'
+import { currentFrame, framesOf, scenesOf, scriptOfStoryboard, scriptText, shotsOf } from '../../model/selectors'
+import { briefOf } from '../../brief/model'
 import { waitsOnScriptAsk } from '../../jobs/scriptVideo'
 
 type Doc = ProductionDocument
@@ -17,7 +18,7 @@ export type { PromptKind } from '../../jobs/prompt'
 /** The words each start shows (the spec's, where it has them). One copy for the card and the editors. */
 export const PROMPT_COPY = {
   script: { placeholder: 'Paste a script, or write the idea in a line.', hint: 'Enter: The Script agent drafts it here · Shift+Enter: new line', busy: 'The Script agent is drafting from your line' },
-  storyboard: { placeholder: 'Describe the ad in a line', hint: 'The Director agent plans the shots from it', fromScript: 'The Director agent plans the shots from the script.', busy: 'The Director agent is planning the shots' },
+  storyboard: { placeholder: 'Describe the ad in a line', hint: 'The Director agent plans the shots from it', fromScript: 'The Director agent plans the shots from the script.', fromBrief: 'The Director agent plans the shots from the brief.', busy: 'The Director agent is planning the shots' },
   video: { placeholder: 'Describe it in a line or two. Type @ to pull in a character, place or product.', busy: 'The Director agent is planning the shots' },
   image: { placeholder: 'Describe the picture', hint: 'The Camera agent makes it, then you say what it is', busy: 'The Camera agent is making the picture' },
   later: 'You can always switch later.',
@@ -53,7 +54,7 @@ export function videoBlocked(d: Doc, videoId: Id): boolean {
 /** Which start a node shows now, or null when it has something already (or is busy making it). */
 export type PromptState =
   | { show: 'script' }
-  | { show: 'storyboard'; fromScript: boolean }
+  | { show: 'storyboard'; fromScript: boolean; from?: 'brief' }
   | { show: 'video-block' }
   | { show: 'video-script'; scriptId: Id }
   | { show: 'video-plan'; storyboardId: Id }
@@ -67,7 +68,13 @@ export function promptState(d: Doc, kind: PromptKind, nodeId: Id): PromptState {
       return scriptEmpty(d, nodeId) && !running(d, 'write', { kind: 'script', id: nodeId }) ? { show: 'script' } : null
     case 'storyboard': {
       if (!d.storyboards[nodeId] || shotsOf(d, nodeId).length || running(d, 'shot_list', { kind: 'storyboard', id: nodeId })) return null
-      return { show: 'storyboard', fromScript: scriptHasWords(d, nodeId) }
+      const fromScript = scriptHasWords(d, nodeId)
+      // A brief's storyboard with no words of its own plans from the brief (UAT round 5, S3-6b: it said "from the
+      // script", the project's main script, which its plan never reads: jobs/plan.ts reads scriptOfStoryboard).
+      // With no script words anywhere it offers the line box, as before.
+      const own = scriptOfStoryboard(d, nodeId)
+      if (fromScript && briefOf(d, nodeId) && !(own && scriptText(d, own.id).trim())) return { show: 'storyboard', fromScript: true, from: 'brief' }
+      return { show: 'storyboard', fromScript }
     }
     case 'video': {
       if (!d.videos[nodeId]) return null

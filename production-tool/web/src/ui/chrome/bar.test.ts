@@ -46,7 +46,7 @@ describe('the film\'s ▾ menu holds the film\'s actions; each page\'s actions a
     const at = order.map((o) => main.indexOf(o))
     expect(at.every((i) => i >= 0)).toBe(true)
     expect([...at].sort((x, y) => x - y)).toEqual(at)
-    for (const row of ['Download all media (zip)', 'Project as .clan + assets', 'Save now', 'Copy link', 'Link a brief…', 'New deck from this film']) expect(menu).toContain(row)
+    for (const row of ['Download all media (zip)', 'Project as .clan + assets', 'Save now', 'Copy link', 'Link a brief…', 'New deck from this project']) expect(menu).toContain(row)
     expect(menu).toContain('shell.goHome()')
   })
   it('the canvas and every editor use it; an editor adds its own rows under its title', () => {

@@ -22,7 +22,7 @@ import { InlineConfirm } from './Undo'
 import { fmtElapsed, useElapsed } from './hooks'
 import { Thumbs } from '../dogfood/Dogfood'
 import { errorShown, feedback } from '../dogfood/recorder'
-import { failedActions } from './jobActions'
+import { failedActions, stepWords } from './jobActions'
 import { plainJobError } from '../jobs/errorWords'
 
 const STATE_LABEL: Record<string, string> = {
@@ -36,7 +36,9 @@ const STATE_LABEL: Record<string, string> = {
 
 /** `row`: one line in a list (the Image editor's Edits row): status, elapsed time and Cancel with its confirm,
  *  never a loader over the work. Its other states are the compact ones. */
-export function JobNode({ jobId, compact: small = false, row = false, onRetried }: { jobId: string; compact?: boolean; row?: boolean; onRetried?: (newId: string) => void }) {
+/** `askElsewhere`: the job's question is shown in a card of its own beside this node (the canvas: a placeholder
+ *  is too small to hold it, UAT round 1 IMG-1), so the node only says it waits for an answer. */
+export function JobNode({ jobId, compact: small = false, row = false, onRetried, askElsewhere = false }: { jobId: string; compact?: boolean; row?: boolean; onRetried?: (newId: string) => void; askElsewhere?: boolean }) {
   const compact = small || row
   const { runner } = useServices()
   const doc = useDoc()
@@ -65,12 +67,13 @@ export function JobNode({ jobId, compact: small = false, row = false, onRetried 
 
   if (waiting) {
     // The agent asked instead of guessing: the question, not a loader.
-    return ask
+    return ask && !askElsewhere
       ? <AskCard ask={ask} />
       : (
         <div className={`pending waiting ${compact ? 'compact' : ''}`} role="status">
           <AgentFigure agent={who.agent} state={who.state} size={compact ? 72 : 96} decorative />
-          <div className="state">{who.line}</div>
+          {/* The question is in its card beside the node: a short line here, never clipped words. */}
+          <div className="state">{ask && compact ? 'Waiting for your answer' : who.line}</div>
         </div>
       )
   }
@@ -141,6 +144,7 @@ export function JobNode({ jobId, compact: small = false, row = false, onRetried 
   }
 
   const q = live?.queuePosition
+  const step = stepWords(live?.progress)
   const model = job.model ? modelLabel(job.provider, job.model) : undefined
   const cancel = state !== 'fetching' && (confirming
     ? <InlineConfirm text={cancelText(job, config)} yes="Stop it" onYes={() => { setConfirming(false); void runner.cancel(jobId) }} onNo={() => setConfirming(false)} />
@@ -148,7 +152,7 @@ export function JobNode({ jobId, compact: small = false, row = false, onRetried 
   if (row) {
     return (
       <span className="jobrow" aria-live="polite" title={who.line}>
-        <span className="meta">{STATE_LABEL[state] ?? 'Working…'}{q ? ` · #${q} in queue` : ''} · {fmtElapsed(elapsed)}</span>
+        <span className="meta">{STATE_LABEL[state] ?? 'Working…'}{step}{q ? ` · #${q} in queue` : ''} · {fmtElapsed(elapsed)}</span>
         {cancel}
       </span>
     )
@@ -161,7 +165,7 @@ export function JobNode({ jobId, compact: small = false, row = false, onRetried 
       <AgentFigure agent={who.agent} state={who.state} size={compact ? 72 : 96} decorative />
       {!compact && <div className="state" title={ctx?.fallbackReason}>{who.line}</div>}
       <div className="meta" title={compact ? who.line : undefined}>
-        {STATE_LABEL[state] ?? 'Working…'}{model && !compact ? ` · ${model}` : ''}{q ? ` · #${q} in queue` : ''} · {fmtElapsed(elapsed)}
+        {STATE_LABEL[state] ?? 'Working…'}{step}{model && !compact ? ` · ${model}` : ''}{q ? ` · #${q} in queue` : ''} · {fmtElapsed(elapsed)}
       </div>
       {!compact && live?.note && <div className="meta" role="status">{live.note}</div>}
       {/* Downloading the result: it lands as it is, so there is nothing to cancel. */}

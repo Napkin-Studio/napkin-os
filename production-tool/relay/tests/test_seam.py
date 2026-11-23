@@ -120,7 +120,7 @@ def test_relay_job_reaches_runway_in_its_own_request_shape(seam):
     (out,) = done["outputs"]
     assert out["url"].startswith(f"{CDN}/out/sha256:") and out["mime"] == "image/png"
     assert done["director"]["model"] == base_config()["director"]["perClickModel"]
-    assert done["director"]["promptVersion"] == base_config()["director"]["promptVersion"] == "director.v14"
+    assert done["director"]["promptVersion"] == base_config()["director"]["promptVersion"] == "director.v17"
 
 
 def test_director_wrapper_output_validates_against_the_contract():
@@ -130,6 +130,8 @@ def test_director_wrapper_output_validates_against_the_contract():
     out = d.direct({"jobId": "job_01K6XA7Q3M9V2D4R8T0B5C1E6F", "op": "generate", "input": generate_input()}, sheet)
     assert out.pop("_model") == d.director.per_click_model
     assert out.pop("_promptVersion") == PROMPT_VERSION
+    assert isinstance(out.pop("_input"), dict)  # what Dex received, for the job record (pt-canvas-r1)
+    assert isinstance(out.pop("_usage"), dict)  # its tokens, which the relay prices (pt-film-r2 F21)
     assert Contracts().errors("director.schema.json", out) == []
 
 
@@ -141,6 +143,7 @@ def test_a_director_answer_that_fails_its_checks_falls_back_to_the_passthrough()
     req = {"jobId": "job_01K6XA7Q3M9V2D4R8T0B5C1E6F", "op": "generate", "input": names.to_wire("generate", generate_input())}
     out = d.direct(req, sheet)
     assert out.pop("_model") == "passthrough" and out.pop("_promptVersion") == PassthroughDirector.prompt_version
+    assert out.pop("_input")["text"]  # what Dex was given, kept though its answer was refused (pt-canvas-r2)
     assert out["providerJob"]["provider"] == "runway"
     assert out["rationale"].startswith("The director's answer could not be used (")
     assert Contracts().errors("director.schema.json", out) == []

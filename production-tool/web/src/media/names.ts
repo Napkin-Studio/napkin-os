@@ -5,18 +5,19 @@
 //   pictures/<project>-maya-side.png         a turnaround view whose name was taken
 //   pictures/<project>-picture-3.png         any other picture, numbered in the document's order
 //   storyboard/<project>-shot3-frame-v2.png  every version of every frame (shots numbered by rank)
-//   clips/<project>-shot3-clip-v1.mp4        every version of every clip
+//   clips/<project>-shot3-clip-v1.mp4        every version of every clip (its version as the Bin numbers it)
 //   ad/<project>-ad.mp4                      the ad's render (ad-v1, ad-v2… when there are several)
+//   ad/<project>-ad-6s-9x16.mp4              each made size of the film (its length and shape; -v2… when two match)
 //
 // The extension comes from the asset's mime. Drawings the canvas turns into pictures are left out
 // unless they are named: one is made each time the strokes change.
 
-import type { CustomData, Key, ProductionDocument, Sha256, View } from '../contracts/types'
+import type { CustomData, Key, ProductionDocument, Sha256, Size, View } from '../contracts/types'
 import { extFor } from '../lib/hash'
 import { nameOf } from '../lib/names'
-import { assetsList, framesOf, refsList, rendersOf, shotsOf, takesOf } from '../model/selectors'
+import { assetsList, framesOf, refsList, rendersOf, shotsOf, takesOf, takeVersion } from '../model/selectors'
 
-export type MediaKind = 'picture' | 'view' | 'frame' | 'clip' | 'ad'
+export type MediaKind = 'picture' | 'view' | 'frame' | 'clip' | 'ad' | 'cutdown'
 export type MediaFolder = 'pictures' | 'storyboard' | 'clips' | 'ad'
 
 export interface MediaItem {
@@ -83,6 +84,28 @@ export function mediaItems(doc: ProductionDocument, project: string | undefined,
     taken.add(a.sha256)
     out.push({ kind: v ? 'view' : 'picture', sha256: a.sha256, mime: a.mime, name: file(base, a.sha256), folder: 'pictures', which: v ? `${v.key}_${v.view}` : a.sha256 })
   }
+  // A canvas picture's versions from the Image editor (v1 as it was, v2, v3…), each a file of its own, named after
+  // the picture: they were left out, so the versions menu and a result's bar had no Download (UAT round 1 IMG-16).
+  const versions = Object.values(doc.frames).filter((f) => !f.shot_id && !!f.node && !taken.has(f.asset))
+    .sort((a, b) => (a.node! < b.node! ? -1 : a.node! > b.node! ? 1 : a.version - b.version))
+  const pictureNo = new Map<string, number>()
+  for (const f of versions) {
+    if (taken.has(f.asset)) continue
+    const r = refsList(doc).find((x) => x.node === f.node)
+    if (!r && !pictureNo.has(f.node!)) pictureNo.set(f.node!, ++n)
+    taken.add(f.asset)
+    out.push({ kind: 'picture', sha256: f.asset, mime: mimeOf(f.asset), name: file(`${r ? nameOf(r) : `picture-${pictureNo.get(f.node!)}`}-v${f.version}`, f.asset), folder: 'pictures', which: f.id })
+  }
+
+  // A result made from a sketch area (a frame with sketch_id, no shot, no node yet) is a picture too: before an Apply
+  // gave it a node it had no file, so its bar had no Download (UAT round 2, IMG-16 leftover).
+  const sketchNo = new Map<string, number>()
+  for (const f of Object.values(doc.frames).filter((x) => !x.shot_id && !x.node && !taken.has(x.asset)).sort((a, b) => a.id < b.id ? -1 : 1)) {
+    const key = f.sketch_id ?? f.id
+    if (!sketchNo.has(key)) sketchNo.set(key, sketchNo.size + 1)
+    taken.add(f.asset)
+    out.push({ kind: 'picture', sha256: f.asset, mime: mimeOf(f.asset), name: file(`sketch-${sketchNo.get(key)}-v${f.version}`, f.asset), folder: 'pictures', which: f.id })
+  }
 
   // Storyboard frames and clips, every version, by shot (numbered by rank).
   shots.forEach((s, i) => {
@@ -90,16 +113,47 @@ export function mediaItems(doc: ProductionDocument, project: string | undefined,
       out.push({ kind: 'frame', sha256: f.asset, mime: mimeOf(f.asset), name: file(`shot${i + 1}-frame-v${f.version}`, f.asset), folder: 'storyboard', which: f.id })
     }
   })
+  // A take of several shots (joined) is one file, named for its shots, once (UAT 2026-11-21, F15: the zip held each
+  // joined take twice, once under each shot).
+  const clipped = new Set<string>()
+  const numberOf = new Map(shots.map((s, i) => [s.id, i + 1]))
   shots.forEach((s, i) => {
-    for (const [k, t] of takesOf(doc, s.id).entries()) {
-      if (!t.asset) continue
-      out.push({ kind: 'clip', sha256: t.asset, mime: mimeOf(t.asset), name: file(`shot${i + 1}-clip-v${k + 1}`, t.asset), folder: 'clips', which: t.id })
+    for (const t of takesOf(doc, s.id)) {
+      if (!t.asset || clipped.has(t.id)) continue
+      clipped.add(t.id)
+      // Its one version number, the Bin's (UAT round 3, F15: the zip said shot1-clip-v2 for the Bin's "Box 1 · v1").
+      const v = takeVersion(doc, t.id)
+      const ns = (t.shot_ids ?? []).map((id) => numberOf.get(id)).filter((n): n is number => !!n)
+      const base = ns.length > 1 ? `shots${ns[0]}-${ns.at(-1)}-clip-v${v}` : `shot${i + 1}-clip-v${v}`
+      out.push({ kind: 'clip', sha256: t.asset, mime: mimeOf(t.asset), name: file(base, t.asset), folder: 'clips', which: t.id })
     }
   })
   for (const r of ads) {
     out.push({ kind: 'ad', sha256: r.asset, mime: mimeOf(r.asset), name: file(ads.length > 1 ? `ad-v${r.version}` : 'ad', r.asset), folder: 'ad', which: r.id })
   }
+  // The film's sizes (cutdowns and re-aspects), each made one by its length and shape, in the ad folder (UAT round 3,
+  // R3-F12: they were missing from the zip). Two of the same length and shape (two sets) are -v2, -v3…
+  const seen = new Map<string, number>()
+  const sizes = Object.values(doc.sizes ?? {}).filter((z) => z.media === 'video' && !!z.asset && !taken.has(z.asset!))
+    .sort((a, b) => ((a.length_s ?? 0) - (b.length_s ?? 0)) || (a.set_id < b.set_id ? -1 : a.set_id > b.set_id ? 1 : a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0))
+  for (const z of sizes) {
+    taken.add(z.asset!)
+    const base = ['ad', z.length_s ? `${Math.round(z.length_s)}s` : '', shapeWord(z)].filter(Boolean).join('-')
+    const k = (seen.get(base) ?? 0) + 1
+    seen.set(base, k)
+    const mime = doc.assets[z.asset!]?.mime ?? 'video/mp4'
+    out.push({ kind: 'cutdown', sha256: z.asset!, mime, name: `${p}-${k > 1 ? `${base}-v${k}` : base}.${extFor(mime)}`, folder: 'ad', which: z.id })
+  }
   return out
+}
+
+/** A size's shape for its file name: its format's ("film-9x16" → 9x16), else its delivery's, reduced. */
+function shapeWord(z: Pick<Size, 'format' | 'delivery'>): string {
+  const named = /(\d+x\d+)$/.exec(z.format?.format_id ?? '')?.[1]
+  if (named) return named
+  const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a)
+  const g = gcd(z.delivery.width, z.delivery.height) || 1
+  return `${z.delivery.width / g}x${z.delivery.height / g}`
 }
 
 /** The item for one asset (a picture, a frame version, a clip version or an ad). */

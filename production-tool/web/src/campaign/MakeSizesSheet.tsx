@@ -114,8 +114,8 @@ export function MakeSizesSheet({ master, deps, by, near, onClose, onMade }: {
             </div>
             <p className="cf-note">The line, the logo from the Brand board and legal are laid out on each size as layers, drawn on our server; never sent to a model. Edit them on any tile.</p>
             <p className="cf-note">{master.media === 'video'
-              ? `${rows.length} formats. Films are cut from the ad's own takes; stills are made from a key visual.`
-              : `${rows.length} still formats from this picture. ${FILMS_FROM_VIDEO}`}</p>
+              ? `${rows.length} ${rows.length === 1 ? 'format' : 'formats'}. Films are cut from the ad's own takes; stills are made from a key visual.`
+              : `${rows.length} still ${rows.length === 1 ? 'format' : 'formats'} from this picture. ${FILMS_FROM_VIDEO}`}</p>
             <footer className="cf-foot"><span className="pt-grow" /><button type="button" className="btn primary" onClick={next}>Next</button></footer>
           </div>
         )}

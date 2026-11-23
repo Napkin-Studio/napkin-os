@@ -144,52 +144,62 @@ def test_rights_from_origin(prod):
     assert it[f"{mb.FSET_NEW}#master"]["rights"] == "generated" and "to_supply" not in it[f"{mb.FSET_NEW}#master"]
     up = it[f"{mb.FSET_OLD}#master"]
     assert up["rights"] == "reference_only" and up["to_supply"] == "rights" and "uploaded" in up["rights_why"]
-    assert it[mb.S_OLD_STORY]["rights"] == "reference_only"   # a size made from an upload is the upload's: inference only lowers
-    assert it[mb.F3]["rights"] == "generated"                  # an edit whose chain reaches only a generated frame
+    assert it[mb.S_OLD_STORY]["rights"] == "reference_only"   # a size made from an upload waits with it
+    assert it[mb.F3]["rights"] == "generated"                  # stated generated
     assert mb.F4 not in it and "mock" in refused(prod, mb.F4)  # mock output is refused
 
 
-def test_edits_with_no_chain_or_of_a_canvas_picture_are_reference_only():
+def test_none_stated_waits_as_rights_to_supply_whatever_the_origin_and_an_edit_of_mock_is_refused():
+    """Owner 2026-11-22: trust what is stated, ask for the rest. The origin never raises the rights; it only refuses mock."""
     doc = mb.document({k: mb.draw(*v) for k, v in mb.PICTURES.items()})
     sha = {k: "sha256:" + hashlib.sha256(mb.draw(*v)).hexdigest() for k, v in mb.PICTURES.items()}
-    assert fp.rights_of(doc, sha["fn1"])[0] == "reference_only" and "canvas picture" in fp.rights_of(doc, sha["fn1"])[1]
-    assert fp.rights_of(doc, sha["orphan"]) == ("reference_only", "an edit with no frame chain")
-    assert fp.rights_of(doc, sha["f3"])[0] == "generated"
-    doc["assets"][sha["upload_master"]]["origin"] = "drawn"
-    assert fp.rights_of(doc, sha["upload_master"])[0] == "own"
+    assert fp.rights_of(doc, sha["fn1"])[0] == "reference_only"
+    assert fp.rights_of(doc, sha["orphan"]) == ("reference_only", "edited with no rights stated in Production")
+    assert fp.rights_of(doc, sha["f3"])[0] == "generated"          # stated
+    for name in ("master", "f3"):
+        doc["assets"][sha[name]].pop("rights")
+    assert fp.rights_of(doc, sha["master"]) == ("reference_only", "generated with no rights stated in Production")
+    doc["assets"][sha["upload_master"]].update(origin="drawn")
+    doc["assets"][sha["upload_master"]].pop("rights")
+    assert fp.rights_of(doc, sha["upload_master"])[0] == "reference_only"
     doc["assets"][sha["f3_gen"]]["origin"] = "mock"
     assert fp.rights_of(doc, sha["f3"])[0] == "mock"
 
 
-def test_a_rights_field_never_raises_mock_or_an_upload_and_is_reported_as_forged():
-    """Contract 3 defines no rights field on an asset: a forged one is ignored, mock is refused first, and the export is named forged."""
+def test_a_stated_right_is_trusted_unknown_waits_and_mock_wins():
+    """Contract 3 item 25: assets[sha].rights generated|own|licensed is trusted, unknown is Rights to supply, and so is none stated (owner,
+    2026-11-22); mock is refused first whatever is stated."""
     doc = mb.document({k: mb.draw(*v) for k, v in mb.PICTURES.items()})
     sha = {k: "sha256:" + hashlib.sha256(mb.draw(*v)).hexdigest() for k, v in mb.PICTURES.items()}
     doc["assets"][sha["master"]].update(origin="mock", rights="generated")
     assert fp.rights_of(doc, sha["master"]) == ("mock", "mock output")
-    doc["assets"][sha["upload_master"]].update(origin="uploaded", rights="licensed")
-    assert fp.rights_of(doc, sha["upload_master"])[0] == "reference_only"
-    for forged in ("own", "client_supplied", "generated"):
-        doc["assets"][sha["upload_master"]]["rights"] = forged
-        assert fp.rights_of(doc, sha["upload_master"])[0] == "reference_only", forged
-    assert {w["entity"] for w in fp.forged_fields(doc)} == {sha["master"], sha["upload_master"]}
+    up = doc["assets"][sha["upload_master"]]
+    assert fp.rights_of(doc, sha["upload_master"])[0] == "reference_only"   # stated unknown: waits
+    for stated in ("own", "licensed", "generated"):
+        up["rights"] = stated
+        assert fp.rights_of(doc, sha["upload_master"])[0] == stated, stated
+    up["rights"] = "unknown"
+    r, why = fp.rights_of(doc, sha["upload_master"])
+    assert r == "reference_only" and "not yet stated" in why
+    gen = doc["assets"][sha["story"]]   # made in Production, but a person said it is unknown: the person's word lowers it
+    gen["rights"] = "unknown"
+    assert fp.rights_of(doc, sha["story"])[0] == "reference_only"
+    assert not hasattr(fp, "forged_fields")   # the forged treatment is gone
 
 
-def test_a_forged_rights_field_in_a_bundle_is_ignored_and_warned(tmp_path):
+def test_stated_rights_in_a_bundle_place_an_upload_and_nothing_is_called_forged(tmp_path):
     master = "sha256:" + hashlib.sha256(mb.draw(*mb.PICTURES["master"])).hexdigest()
 
-    def forge(d):
+    def state(d):
         for a in d["assets"].values():
             if a.get("origin") == "uploaded":
                 a["rights"] = "licensed"
         d["assets"][master].update(origin="mock", rights="generated")
-    p, _ = fp.build(make(tmp_path, mutate=forge))
+    p, _ = fp.build(make(tmp_path, mutate=state))
     up = p["items"][f"{mb.FSET_OLD}#master"]
-    assert up["rights"] == "reference_only" and up["to_supply"] == "rights"
+    assert up["rights"] == "licensed" and "to_supply" not in up
     assert f"{mb.FSET_NEW}#master" not in p["items"] and "mock" in refused(p, mb.FSET_NEW)
-    assert p["warnings"] and all("forged" in w["warning"] for w in p["warnings"])
-    clean, _ = fp.build(make(tmp_path))
-    assert "warnings" not in clean
+    assert "warnings" not in p
 
 
 # ---------------------------------------------------------------- focal points, channels

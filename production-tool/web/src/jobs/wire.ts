@@ -9,21 +9,29 @@ import { landFrameEditIn } from './frameEdit'
 import { continueDrawing, type FrameDeps } from './frames'
 import { landFrame, landRemake, landRender, landRunTake, landTake } from './handlers'
 import { landShotList } from './plan'
+import { makeClip } from './clips'
+import type { JobLocal } from '../doc/ui'
 import { purposeOf } from '../model/purpose'
+import { videoOfShot } from '../model/selectors'
 import type { DocumentStore } from '../doc/types'
 import type { Job } from '../contracts/types'
 import { landWrites } from '../script/skye'
 import { landSize } from '../campaign/make'
 import { landFilmPlan, landReframe } from '../campaign/filmJobs'
+import { placeJoinedTake } from '../rooms/editOps'
 
 const warn = (what: string) => (e: unknown) => console.warn(`${what} stopped`, e)
 
 export function wireJobs(deps: FrameDeps) {
-  const { doc, runner } = deps
+  const { doc } = deps
+  // Every landing is a save moment (deps.landed, debounced in projects/session.ts: the landing is written by then).
+  const runner = { onComplete: (...[purpose, handler]: Parameters<FrameDeps['runner']['onComplete']>) =>
+    deps.runner.onComplete(purpose, (job, ctx) => { handler(job, ctx); deps.landed?.() }) }
   runner.onComplete('shot_list', (job, ctx) => void landShotList(doc, job, ctx.for === 'shot_list' ? ctx : undefined).catch(warn('the plan')))
   runner.onComplete('frame', (job, ctx) => {
     if (ctx.for !== 'frame') return
     void landFrame(doc, job, ctx).then(async () => {
+      await clipAfterFrame(deps, job.jobId, ctx.shotId).catch(warn('the clip from the new frame'))
       await continueFix(deps, job.jobId, ctx).catch(warn('fix it in the shot'))
       await continueDrawing(deps).catch(warn('draw the rest'))
       await continueFollow(deps).catch(warn('update what follows'))
@@ -36,14 +44,23 @@ export function wireJobs(deps: FrameDeps) {
   })
   // A new take: in the Film editor it is picked in the cut; in the rooms it lands beside the others only.
   const inCut = () => ({ inCut: !deps.rooms?.() })
+  // In the rooms, a box's first take that lands while a cut exists goes into the cut at its place, said with Undo
+  // (rooms/editOps placeJoinedTake; UAT round 3, R3-F4: it went only to the Bin, with no card).
   runner.onComplete('clip', (job, ctx) => {
     if (ctx.for !== 'clip') return
-    void landTake(doc, job, ctx, inCut()).then(() => continueFollow(deps)).catch(warn('update what follows'))
+    const video = () => videoOfShot(doc.get(), ctx.shotId)?.id
+    void landTake(doc, job, ctx, inCut())
+      .then(() => { const v = video(); return deps.rooms?.() && v ? placeJoinedTake(doc, deps.ui, v, job.jobId) : false })
+      .then(() => continueFollow(deps)).catch(warn('update what follows'))
   })
   // One take of a run: one generation of the box, a window of it per shot (features/connected-video.clan).
+  // In the rooms, a take of shots the person joined goes into the cut in place of their separate clips, one undo
+  // step, said with Undo (rooms/editOps placeJoinedTake; UAT 2026-11-21, B2).
   runner.onComplete('run', (job, ctx) => {
     if (ctx.for !== 'run') return
-    void landRunTake(doc, job, ctx, inCut()).then(() => continueFollow(deps)).catch(warn('the take'))
+    void landRunTake(doc, job, ctx, inCut())
+      .then(() => (deps.rooms?.() ? placeJoinedTake(doc, deps.ui, ctx.videoId, job.jobId) : false))
+      .then(() => continueFollow(deps)).catch(warn('the take'))
   })
   // Change this…: a new take beside its parent, never in the cut (features/make-and-edit.clan).
   runner.onComplete('remake', (job, ctx) => {
@@ -64,6 +81,17 @@ export function wireJobs(deps: FrameDeps) {
   })
   runner.onComplete('stitch', (job, ctx) => void landRender(doc, job, ctx.for === 'stitch' ? ctx : undefined)
     .then(() => continueFollow(deps)).catch(warn('update what follows')))
+}
+
+/** A box's Make drew the frame first (a character reaches a clip only through a frame): the clip is made from it
+ *  now, on the model the box showed, so one Make gives the clip (UAT 2026-11-21, F7). Once per frame job. */
+export async function clipAfterFrame(deps: FrameDeps, jobId: string, shotId: string): Promise<boolean> {
+  const after = (deps.ui.get().jobs[jobId] as JobLocal | undefined)?.clipAfter
+  if (!after) return false
+  deps.ui.update((u) => { const c = u.jobs[jobId] as JobLocal | undefined; if (c) delete c.clipAfter })
+  if (!deps.doc.get().shots[shotId]) return false
+  await makeClip(deps, shotId, { ...(after.videoId ? { videoId: after.videoId } : {}), ...(after.modelChoice ? { modelChoice: after.modelChoice } : {}) })
+  return true
 }
 
 /**

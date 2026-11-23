@@ -433,7 +433,7 @@ const DECK_APP: &str = "ie.napkin.deck-maker";
 /// The Deck Maker's attach contract, as `examples/make_deck_maker.rs` declares it.
 fn deck_app() -> AppInfo {
     let mut a = app("Deck Maker", DECK_APP, "deck");
-    a.version = "0.4.0".into();
+    a.version = "0.5.0".into();
     a.attach = Some(AttachSpec {
         accepts: vec![
             BRIEF_APP.into(),
@@ -674,7 +674,7 @@ fn the_packed_style_pack_attaches_into_the_packed_deck() {
     );
     assert!(app_block.spinoff.is_none() && app_block.attach.is_none());
     let deck_app_block = deck_tpl.manifest().app.as_ref().unwrap();
-    assert_eq!(deck_app_block.version, "0.4.0");
+    assert_eq!(deck_app_block.version, "0.5.0");
     assert!(deck_app_block
         .attach
         .as_ref()

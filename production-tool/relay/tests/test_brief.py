@@ -60,6 +60,18 @@ def test_a_brief_is_validated_with_the_job():
 
 # ── no brief: the director's input as before ─────────────────────────────────
 
+def cut_sheet(user: str) -> str:
+    """The golden input with its sheet cut to the op, as Dex has read it since features/pt-canvas-r2.clan (R2-3):
+    everything else byte for byte as it was."""
+    from director.director import sheet_for
+    head, rest = user.split("<input>\n", 1)
+    body, tail = rest.rsplit("\n</input>", 1)
+    ask = json.loads(body)
+    if "sheet" in ask:
+        ask["sheet"] = sheet_for(ask["op"], ask["sheet"], ask.get("input") or {})
+    return f"{head}<input>\n{json.dumps(ask, ensure_ascii=False, separators=(',', ':'))}\n</input>{tail}"
+
+
 @pytest.mark.parametrize("name", sorted(GOLDEN))
 def test_with_no_brief_the_director_input_is_byte_for_byte_the_golden(name):
     f = fixture(name)
@@ -70,7 +82,7 @@ def test_with_no_brief_the_director_input_is_byte_for_byte_the_golden(name):
         except DirectorError:
             pass  # a check after the call; the input was sent
         sent = wire.calls[0]
-        assert sent["turns"][0]["text"] == GOLDEN[name]["user"], (version, name)
+        assert sent["turns"][0]["text"] == cut_sheet(GOLDEN[name]["user"]), (version, name)
         if version == "director.v12":
             assert hashlib.sha256(sent["system"].encode()).hexdigest() == GOLDEN[name]["system_sha256"], name
 
@@ -78,7 +90,7 @@ def test_with_no_brief_the_director_input_is_byte_for_byte_the_golden(name):
 def test_for_op_leaves_an_input_without_a_brief_untouched():
     inp = {"text": "wide", "refs": []}
     assert briefs.for_op("frame", inp) is inp
-    assert "brief" not in briefs.for_op("generate", {**inp, "brief": SHORT})  # an op that reads none: left out
+    assert "brief" not in briefs.for_op("view", {**inp, "brief": SHORT})  # an op that reads none: left out
 
 
 # ── the budget ───────────────────────────────────────────────────────────────
@@ -97,6 +109,24 @@ def test_a_plan_reads_most_of_a_short_brief_and_a_clip_only_its_tone_feel_and_do
     assert plan == {k: SHORT["spine"][k] for k in ("proposition", "audience", "tone", "feel", "mandatories", "donts", "format")}
     assert briefs.spine_for("clip", SHORT["spine"]) == {k: SHORT["spine"][k] for k in ("tone", "feel", "donts", "audience")}
     assert briefs.spine_for("cutdown", SHORT["spine"])["mandatories"] == SHORT["spine"]["mandatories"]
+
+
+def test_the_script_agent_keeps_the_end_line_and_the_donts_of_a_full_brief():
+    """UAT 2026-11-21 (B3): proposition, audience, tone, feel and insight used 868 of the write budget's 900, so
+    the end line (a mandatory) and every don't were dropped. By priority they go first; the rest share the room."""
+    spine = {
+        "insight": "I" * 300, "proposition": "Quietboil boils without the roar, so nobody wakes up.",
+        "audience": "A" * 300, "tone": "T" * 250, "feel": "F" * 150,
+        "mandatories": ["End line must be 'Quietboil. Let them sleep.'", "Deliver in 16:9, 9:16 and 1:1."],
+        "donts": ["Don't show anyone asleep in bed.", "No product close-ups before the end card."],
+    }
+    cut = briefs.spine_for("write", spine)
+    assert cut["mandatories"] == spine["mandatories"] and cut["donts"] == spine["donts"]
+    assert cut["proposition"] == spine["proposition"]
+    assert briefs.size(cut) <= briefs.BUDGET["write"][0]
+    # The rest share what is left, each cut at a word, none dropped for an earlier one.
+    assert all(k in cut for k in ("tone", "feel", "audience", "insight")), sorted(cut)
+    assert list(cut)[:3] == ["mandatories", "donts", "proposition"]
 
 
 def _frame_reply(prompt: str, flags=None) -> dict:
@@ -249,3 +279,14 @@ def test_the_recorded_v13_plans_follow_each_brief_and_differ_as_named():
     assert len(plans["brief_quiet_morning"]) < len(plans["brief_brisk_gen_z"]) and avg["brief_quiet_morning"] > avg["brief_brisk_gen_z"]
     assert "fast" in speeds["brief_brisk_gen_z"] and "fast" not in speeds["brief_quiet_morning"] | speeds["brief_premium_ritual"]
     assert any(s["camera"]["size"] in ("insert", "close", "extreme_close") for s in plans["brief_premium_ritual"])
+
+
+def test_the_web_send_preview_lists_the_parts_each_op_reads():
+    """The web's BRIEF_PARTS (brief/model.ts) is the relay's parts_of, in order (UAT 2026-11-21: Draw frame listed
+    every part of the brief, and a frame reads five)."""
+    import re
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[2] / "web" / "src" / "brief" / "model.ts").read_text()
+    block = re.search(r"export const BRIEF_PARTS[^{]*\{(.*?)\n\}", src, re.S).group(1)
+    web = {m.group(1): re.findall(r"'([a-z]+)'", m.group(2)) for m in re.finditer(r"(\w+): \[([^\]]*)\]", block)}
+    assert web == {op: list(briefs.parts_of(op)) for op in briefs.BUDGET}

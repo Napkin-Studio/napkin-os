@@ -102,12 +102,13 @@ for (const kind of ['fill', 'remove'] as const) {
   })
 }
 
-test('Apply refuses a painted mask with nothing filled, and says so', async ({ page }) => {
+test('Apply stays off for a painted mask with nothing filled, and says why (UAT round 1 IMG-10)', async ({ page }) => {
   const seeded = await openEditor(page)
   await page.keyboard.press('b')
   await stroke(page, [0.6, 0.45], [0.8, 0.45], 12)
-  await page.getByRole('button', { name: 'Apply as new version' }).click()
-  await expect(page.locator('[role="alert"]')).toContainText('Mask 1 is painted but not filled or removed')
+  const apply = page.getByRole('button', { name: 'Apply as new version' })
+  await expect(apply).toBeDisabled()
+  await expect(apply).toHaveAttribute('title', 'A mask alone changes nothing: Fill or Remove it first')
   expect((await savedPixel(page, seeded.shotId, 0.5, 0.5)).version).toBe(1)
 })
 

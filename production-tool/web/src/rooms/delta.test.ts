@@ -58,3 +58,20 @@ describe('the preview draws the plan', () => {
     expect(sourceTime(plan.clips[1], 2.5)).toBe(1.5)
   })
 })
+
+describe('an ask to the Camera agent (UAT round 3, R3-F5)', () => {
+  it('is said as an ask that keeps every shot\'s words, and labels its take', async () => {
+    const { diffLines, changeLabel, keepsWords, VERBS } = await import('./delta')
+    expect(VERBS[0].id).toBe('ask')
+    expect(diffLines([{ field: 'ask', to: 'Send both of Maya\'s pictures' }], () => 1)).toEqual(['Asked of the Camera agent: “Send both of Maya\'s pictures”. Every shot\'s words stay.'])
+    expect(changeLabel([{ field: 'ask', to: 'Send both pictures' }], () => 1)).toBe('Asked: Send both pictures')
+    expect(keepsWords('ask', { refs: ['maya'], lengthS: 4, seed: true })).toBe('Start frame · References @maya · Words · Length 4 s')
+  })
+
+  it('stays out of the take\'s delta and becomes its label on landing', async () => {
+    const { askLabel, remakeDelta } = await import('../jobs/handlers')
+    const job = { remake: { parentJobId: 'job_x', delta: [{ field: 'ask' as const, to: 'Send both of Maya\'s pictures.' }] } }
+    expect(remakeDelta(job)).toEqual([])
+    expect(askLabel(job)).toBe('Asked: Send both of Maya\'s pictures.')
+  })
+})

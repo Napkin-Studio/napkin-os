@@ -45,6 +45,7 @@ from urllib.parse import parse_qs, unquote
 from aspect import crop_png, measure, target_aspect
 import dogfood
 import identity
+import jobtrace
 import library
 import names
 import writer as writers
@@ -56,6 +57,9 @@ import sameness
 import sized
 import time_rules
 import timeline_layers
+import sound
+import mp4
+import agent_cost
 from blobs import checksum_header
 from contracts import Contracts, api
 from contracts_dir import contracts_dir, pricing
@@ -148,7 +152,7 @@ NO_DIRECTOR_OPS = {"upscale", "resize", "cutdown"}
 # Ops with Draft, Standard and Final (features/clip-quality.clan); Remake as Final promotes a draft within this.
 QUALITY_OPS = ("clip", "clip_edit")
 # Change this… (features/make-and-edit.clan): the op each change runs as, and the jobs a take can be changed from.
-REMAKE_OP = {"camera.movement": "clip", "words": "clip", "moment": "clip_patch", "feel": "clip_edit"}
+REMAKE_OP = {"camera.movement": "clip", "words": "clip", "ask": "clip", "moment": "clip_patch", "feel": "clip_edit"}
 REMAKE_PARENTS = ("clip", "clip_edit", "clip_patch")
 DRAFT_KEEP_S = 7 * 24 * 3600  # Runway keeps a Seedance 2.5 draft promotable for 7 days (openapi: draftTaskId)
 UNBUILT_OPS = set(QUOTA_CLASS) - BUILT_OPS
@@ -249,6 +253,29 @@ def provider_op_for(op: str, spec: dict | None) -> str:
     if op != "clip_patch":
         return op
     return "clip" if (spec or {}).get("mode") == "first_last" else "clip_edit"
+
+
+
+def _with_agent(cost: dict) -> float | None:
+    """The job's cost as recorded: the provider's (confirmed, else reserved) plus its agents' Claude calls."""
+    base = cost.get("confirmed", cost.get("reserved"))
+    agent = float(cost.get("agentUsd") or 0)
+    if base is None and not agent:
+        return None
+    return round(float(base or 0) + agent, 6)
+
+def _usage_block(usage) -> dict | None:
+    """A model call's usage as the job record keeps it (director.schema agentBlock.usage), or None."""
+    if not usage:
+        return None
+    get = usage.get if isinstance(usage, dict) else (lambda k, d=None: getattr(usage, k, d))
+    out = {}
+    for src, dst in (("input_tokens", "inputTokens"), ("output_tokens", "outputTokens"),
+                     ("cache_read_input_tokens", "cacheReadTokens"), ("cache_creation_input_tokens", "cacheWriteTokens")):
+        v = get(src, None)
+        if isinstance(v, (int, float)) and v >= 0:
+            out[dst] = int(v)
+    return out or None
 
 
 class Raw:
@@ -381,7 +408,7 @@ class Relay:
             ctx["provider"] = out.get("provider")
             ctx["model"] = out.get("model")
             cost = out.get("cost") or {}
-            ctx["costUsd"] = cost.get("confirmed", cost.get("reserved"))
+            ctx["costUsd"] = _with_agent(cost)
             if out.get("error"):
                 ctx["error"] = out["error"]["code"]
             if out["state"] in TERMINAL and out.get("updatedAt"):
@@ -644,9 +671,12 @@ class Relay:
                 data[k] = ctx[k]
         if route == "/jobs":
             kept, briefed = dogfood.without_brief(body or b"")
+            kept, contexted = dogfood.without_context(kept)
             data["body"] = dogfood.body_value(kept)
             if briefed:
                 data["brief"] = True  # a brief went with it; its words stay out of the record
+            if contexted:
+                data["context"] = True  # brand rules or documents went with it; their words stay out too
         elif route.startswith("/library/"):
             data["body"] = dogfood.body_value(body or b"")
         elif body:
@@ -670,8 +700,8 @@ class Relay:
             if job.get(k) is not None:
                 data[k] = job[k]
         cost = job.get("cost") or {}
-        if cost.get("confirmed") is not None or cost.get("reserved"):
-            data["costUsd"] = cost.get("confirmed", cost.get("reserved"))
+        if cost.get("confirmed") is not None or cost.get("reserved") or cost.get("agentUsd"):
+            data["costUsd"] = _with_agent(cost)
         block = job.get("director")
         if block:
             data["director"] = {"model": block.get("model"), "promptVersion": block.get("promptVersion"),
@@ -953,7 +983,8 @@ class Relay:
         """What the request says about the settings its price depends on (contracts/pricing.py):
         four options, the clip's length, an edit's input length, a clip_patch's billed seconds (the
         range or the cut, whole seconds, at least the op's minS: features/clip-moment-edit.clan).
-        The rest are the op's defaults. Audio stays off (providers/types.py video_audio)."""
+        The rest are the op's defaults. Audio is on only where sound.py turns it on (a clip with a line, a VO or
+        a sound beat, on a model with the switch)."""
         settings: dict = {}
         if "more_options" in (inp.get("chips") or []):
             settings["outputs"] = max(spec.get("outputs") or [sheet.get("outputsPerCall", 1)])
@@ -1006,6 +1037,9 @@ class Relay:
                 settings["durationS"] = fit_duration(seconds, spec)
             elif op == "clip_edit":
                 settings["inputS"] = seconds
+        # A clip made with sound is priced with it (Veo 3.1: 40 credits a second, not 20; sound.py's one rule).
+        if op == "clip" and sound.audio_on(inp, sheet):
+            settings["audio"] = True
         return settings
 
     def _estimate(self, op: str, provider: str, model: str | None = None, inp: dict | None = None,
@@ -1021,7 +1055,34 @@ class Relay:
         sheet = effective_sheet(sheet, op, model)
         spec = sheet["ops"][op]
         price = pricing().op_usd(sheet, op, None, self._settings(op, spec, sheet, inp or {}, seconds, sized))
-        return (UNKNOWN_PRICE_USD, True) if price is None else (float(price), False)
+        if price is None:
+            return UNKNOWN_PRICE_USD, True
+        return float(price) * self._extend_calls(op, inp or {}), False
+
+    @staticmethod
+    def _extend_calls(op: str, inp: dict) -> int:
+        """The provider calls a job makes: an extend runs in steps (round 3, IMG-9), each one paid; anything else one."""
+        import formats
+        rz = inp.get("resize") or {}
+        ms, a = rz.get("masterSize") or {}, inp.get("aspect") or {}
+        if op != "resize" or rz.get("method") != "extend" or not ms.get("w") or not a.get("w"):
+            return 1
+        return formats.step_count(ms["w"], ms["h"], a["w"], a["h"])
+
+    @staticmethod
+    def _check_extend(inp: dict) -> None:
+        """An extend reaches its shape in at most formats.EXTEND_STEPS_MAX steps of 35 % (round 4, S1-1: 16:9 to 9:16
+        in three bigger steps stacked mirrored suns and legs). Past that it is refused before any spend: the web
+        offers Redraw at that shape instead."""
+        import formats
+        rz = inp.get("resize") or {}
+        ms, a = rz.get("masterSize") or {}, inp.get("aspect") or {}
+        if rz.get("method") != "extend" or not ms.get("w") or not a.get("w"):
+            return
+        if not formats.extend_fits(ms["w"], ms["h"], a["w"], a["h"]):
+            shape = f"{a['w']}:{a['h']}"
+            raise ApiError("invalid_input", f"{shape} is too far from this picture's shape to extend without repeating it. "
+                                            f"Redraw it at {shape} instead.")
 
     @staticmethod
     def _cut_seconds(job: dict) -> float | None:
@@ -1038,6 +1099,7 @@ class Relay:
             image = inp.get("image")
             if not image or not str(image.get("mime", "")).startswith("image/"):
                 raise ApiError("invalid_input", "Rhea needs the picture itself (input.image) for this.")
+            Relay._check_extend(inp)
             return
         if req["op"] != "clip":
             return
@@ -1166,6 +1228,9 @@ class Relay:
                 job["_keepSeed"] = remade["seed"]
         if pick:  # where the job meant to run, for fallbackFrom
             job["_first"] = {"provider": pick["provider"], "model": pick["model"]}
+        steps = self._extend_calls(op, req["input"])
+        if steps > 1:  # a stepped extend says which step it is on (round 4, S1-1: "step 1 of 3")
+            job["progress"] = {"step": 1, "steps": steps}
         if patch:  # the model is chosen before the job runs, and shown on it from the start
             job.update(model=patch["model"], patch=patch["record"], _patch=patch["settings"], _lock=patch["lock"])
         if not self.store.create_job(job):  # the same jobId raced in: undo, return theirs
@@ -1176,6 +1241,7 @@ class Relay:
             self.ledger.adjust(tenant, month, -estimate)
             return self._existing(who, self.store.get_job(req["jobId"]))
         self._dog_job(job, None)
+        self._stage(job, "queued", quotaClass=qclass, pick=(pick or {}).get("model"))
         return self._dispatch(job, cfg)
 
     def _promotion(self, who: dict, req: dict) -> dict:
@@ -1237,7 +1303,7 @@ class Relay:
             raise ApiError("invalid_input", "Each change is named once.")
         ops = {REMAKE_OP[f] for f in fields}
         if len(ops) > 1 or (ops & {"clip_patch", "clip_edit"} and len(delta) > 1):
-            raise ApiError("invalid_input", "A moment or the whole feel changes on its own; the camera and the words can go together.")
+            raise ApiError("invalid_input", "A moment or the whole feel changes on its own; the camera, the words and an ask can go together.")
         op = ops.pop()
         if req["op"] != op:
             raise ApiError("invalid_input", f"This change is made as {op}; send op {op}.")
@@ -1252,6 +1318,13 @@ class Relay:
             inp = json.loads(json.dumps(held["req"].get("input") or {}))
             filled = []
             for d in delta:
+                if d["field"] == "ask":
+                    # Tell the Camera agent (UAT round 3, R3-F5): the person's words go to the director as the job's
+                    # words, read first; the shots' own words stay as they are (it pasted the ask over shot 1's words).
+                    was = inp.get("text")
+                    inp["text"] = str(d["to"]).strip()[:1000]
+                    filled.append({**d, **({"from": was} if was else {})})
+                    continue
                 shot, i = self._remake_shot(inp, d.get("shotId"))
                 if d["field"] == "camera.movement":
                     camera = shot.setdefault("camera", {"size": "medium"})
@@ -1339,6 +1412,18 @@ class Relay:
         return self._with_poll(job)
 
     # ── transitions ─────────────────────────────────────────────────────────
+    def _stage(self, job: dict, stage: str, since: float | None = None, **fields) -> None:
+        """One job_stage line (features/pt-relay-trace.clan): the stage, ms since `since` (the stage before)
+        and totalMs since the job was made. Never raises."""
+        try:
+            now = self.clock()
+            total = now - parse_iso(job["createdAt"]) if job.get("createdAt") else None
+            jobtrace.trace("job_stage", job.get("jobId"), stage=stage, op=job.get("op"),
+                           provider=fields.pop("provider", job.get("provider")), model=fields.pop("model", job.get("model")),
+                           ms=jobtrace.ms(None if since is None else now - since), totalMs=jobtrace.ms(total), **fields)
+        except Exception:  # a trace never fails a job
+            log.warning("job_stage %s for %s could not be written", stage, job.get("jobId"))
+
     def _save(self, job: dict, **changes) -> dict | None:
         """Apply changes and save; None when someone else saved first."""
         trial = dict(job)
@@ -1374,6 +1459,14 @@ class Relay:
                            queuePosition=None, **changes)
         if saved is None:
             return self._reload(job)
+        now = self.clock()
+        self._stage(saved, "landed" if state == "completed" else state,
+                    since=job.get("_fetchedAt") if state == "completed" else None,
+                    taskId=job.get("requestId"), error=(error or {}).get("code"),
+                    message=jobtrace.clip((error or {}).get("message"), 500),
+                    outputs=len(changes.get("outputs") or []) or None,
+                    sinceSubmittedMs=jobtrace.ms(now - job["_submittedAt"]) if job.get("_submittedAt") else None,
+                    costUsd=_with_agent(cost) if cost.get("agentUsd") else cost.get("confirmed"))
         self._release_take(job, job["jobId"])  # a clip_patch's take is free for the next fix, whatever the end
         if not job.get("_released"):
             if not job.get("_free"):
@@ -1566,6 +1659,8 @@ class Relay:
         front = [p for p in self._job_candidates(cfg, job) if p != floor]
         tried = job["_tried"] + [p for p in front if p not in job["_tried"]]
         log.info("job %s: %s failed (%s); making it on %s", job["jobId"], provider, code, floor)
+        self._stage(job, "requeued", error=code, message=jobtrace.clip(message, 500), to=floor,
+                    taskId=job.get("requestId"))
         saved = self._save(job, state="queued", provider=None, model=None, requestId=None, _slot=None, _queue="q",
                            queuePosition=None, cost=cost, _tried=tried,
                            _first=job.get("_first") or {"provider": provider, "model": job.get("model")},
@@ -1645,7 +1740,7 @@ class Relay:
         if job["op"] == "clip" and job.get("_frames"):  # a take's stills the clip starts and lands on
             made += list(job["_frames"].values())
         sized = self._sized(job, provider, model, pjob)
-        set_job_context(run_as, asset_refs(job["_req"]["input"]) + made)
+        set_job_context(run_as, asset_refs(job["_req"]["input"]) + made, job["jobId"])
         softened_from = None  # the words the provider's text check refused, when the job was sent again plainer
         while True:
             try:
@@ -1688,6 +1783,7 @@ class Relay:
                         back = self._save(job, state="queued", provider=None, model=None, _slot=None, _queue="q",
                                           _lastError=f"{provider}: {e.message}"[:300], _notBefore=self.clock() + wait)
                         self.store.incr(slot, "n", -1)
+                        self._stage(job, "requeued", error=e.code, message=jobtrace.clip(e.message, 500), retryAfterS=wait)
                         if back is None:
                             return self._reload(job)
                         return self._with_poll(back)
@@ -1698,6 +1794,7 @@ class Relay:
                                       _tried=tried, _lastError=f"{provider}: {e.message}"[:300],
                                       _sheetOnly=sheet_only, _floorSheet=sheet, fallbackReason=reason)
                     self.store.incr(slot, "n", -1)
+                    self._stage(job, "requeued", error=e.code, message=jobtrace.clip(e.message, 500), refused=True)
                     if back is None:
                         log.error("job %s: could not requeue after %s refused", job["jobId"], provider)
                     return None
@@ -1714,6 +1811,9 @@ class Relay:
         saved = self._save(job, state="submitted", requestId=str(request_id),
                            director=self._softened_block(block, pjob) if softened_from else block,
                            _submittedAt=now, _nextCheckAt=now + min_poll, quality=sized, **plainer)
+        self._stage(job, "submitted", since=job.get("_queuedAt") or parse_iso(job["createdAt"]), taskId=str(request_id),
+                    provider=provider, model=pjob.get("model") or model, runAs=run_as if run_as != job["op"] else None,
+                    softened=True if softened_from else None, lostRace=True if saved is None else None)
         if saved is None:
             log.error("job %s: provider %s accepted request %s but the ledger write lost a race",
                       job["jobId"], provider, request_id)
@@ -1734,7 +1834,7 @@ class Relay:
         pjob = {**pjob, "prompt": self._plainer(job, sheet, pjob)}
         log.info(json.dumps({"kind": "softened", "jobId": job["jobId"], "providerCode": st.provider_code, "at": "status"}))
         made = list((job.get("_frames") or {}).values()) if job.get("_frames") else []
-        set_job_context("clip", asset_refs(job["_req"]["input"]) + made)
+        set_job_context("clip", asset_refs(job["_req"]["input"]) + made, job["jobId"])
         try:
             request_id = adapter.submit(pjob)
         except Moderated as e:
@@ -1746,6 +1846,8 @@ class Relay:
             return None
         saved = self._save(job, state="submitted", requestId=str(request_id), director=self._softened_block(block, pjob),
                            _submittedAt=now, _nextCheckAt=now + min_poll, softened=True, _softenedFrom=refused)
+        self._stage(job, "submitted", since=job.get("_submittedAt"), taskId=str(request_id), softened=True,
+                    replaces=job.get("requestId"))
         return self._with_poll(saved or job)
 
     def _plainer(self, job: dict, sheet: dict, pjob: dict) -> str:
@@ -1895,12 +1997,20 @@ class Relay:
             log.exception("director failed")
             raise ApiError("internal", f"The director failed ({type(e).__name__}).") from e
         model = out.pop("_model", getattr(director, "model", "unknown"))
+        usage = out.pop("_usage", None)
+        self._agent_spend(job, usage, model)
         version = out.pop("_promptVersion", getattr(director, "prompt_version", "director.v0"))
+        given = out.pop("_input", None)  # what Dex received (director/record.py); the passthrough has none
         errors = self.contracts.errors("director.schema.json", out)
         if errors:
             raise ApiError("internal", f"The director's answer did not match its schema: {errors[0]}")
         block = {"model": model, "promptVersion": version, "output": out,
                  "rationale": out.get("rationale", ""), "latencyMs": int((self.clock() - start) * 1000)}
+        if given is not None:
+            block["input"] = given
+        tokens = _usage_block(usage)
+        if tokens:  # the director call's token counts on the job record (round 4: only the relay log had them)
+            block["usage"] = tokens
         # What the director was told each picture shows (the History's "What the director saw").
         used = [{"tag": r["tag"], "sha256": r["asset"]["sha256"], "kind": kinds.get(r["asset"]["sha256"], "other"), "card": r["card"]}
                 for r in wired.get("refs") or [] if r.get("card") and r.get("tag")]
@@ -1931,8 +2041,32 @@ class Relay:
             return self._fail(saved, e.code, e.message, paid=False, refund=True)
         if out.get("question"):
             return self._ask(saved, out["question"], block)
-        return self._finish(saved, "completed", shots=out["shots"], director=block, outputs=[],
+        # Only the sound beats the script asks for (sound.py; UAT 2026-11-21, F22: each one turned sound on, at
+        # Veo's doubled price, for shots that need no sound).
+        shots, dropped = sound.keep_asked_sounds(out["shots"], ((saved.get("_req") or {}).get("input") or {}).get("script") or "")
+        if dropped:
+            log.info("job %s: left out sound beats the script does not ask for: %s", saved["jobId"], "; ".join(dropped)[:300])
+        # A shot that speaks gets at least its line's spoken length (sound.py spoken_floor; UAT round 5, R5-F2).
+        shots, timed = sound.spoken_floor(shots, ((saved.get("_req") or {}).get("input") or {}).get("targetS"))
+        if timed:
+            log.info("job %s: timed the spoken lines: %s", saved["jobId"], "; ".join(timed)[:300])
+        return self._finish(saved, "completed", shots=shots, director=block, outputs=[],
                             kind="generated", paid=False)
+
+    def _agent_spend(self, job: dict, usage: dict | None, model: str | None) -> None:
+        """An agent's Claude calls for this job, at the model's price (agent_cost.py): added to the job's
+        cost.agentUsd (saved with the job's next save) and to the ledger at once (UAT 2026-11-21, F21)."""
+        try:
+            usd = agent_cost.usd(usage, model, (self.config().get("director") or {}).get("prices"))
+        except Exception:
+            log.exception("job %s: agent cost", job.get("jobId"))
+            return
+        if usd <= 0:
+            return
+        cost = dict(job.get("cost") or {"currency": "USD", "unknown": True})
+        cost["agentUsd"] = round(float(cost.get("agentUsd") or 0) + usd, 6)
+        job["cost"] = cost
+        self.ledger.adjust(job.get("_tenant"), job.get("_month") or self.ledger.month(), usd)
 
     def _use_director_config(self, director) -> None:
         """config.json's director block (the model ids and prompt version) on the director, before it or
@@ -1955,7 +2089,11 @@ class Relay:
             log.exception("writer failed")
             return self._fail(saved, "internal", f"Skye could not write this ({type(e).__name__}).", paid=False, refund=True)
         latency = out.pop("_latencyMs", int((self.clock() - start) * 1000))
-        out.pop("_usage", None)
+        usage = out.pop("_usage", None)
+        self._agent_spend(saved, usage, getattr(self.writer, "model", None))
+        # The same director line every other agent call writes (UAT 2026-11-21: Skye's showed only as "model writer").
+        jobtrace.trace("director", saved["jobId"], op="write", model=getattr(self.writer, "model", "unknown"),
+                       promptVersion=getattr(self.writer, "prompt_version", None), latencyMs=latency, usage=usage)
         errors = writers.check(self.contracts, out)
         if errors:
             return self._fail(saved, "internal", f"Skye's draft did not match its schema: {errors[0]}", paid=False, refund=True)
@@ -2026,14 +2164,21 @@ class Relay:
         except Exception as e:
             log.exception("cutdown plan of %s failed", saved["jobId"])
             if cutter is self.cutter and not isinstance(cutter, cutdowns.PassthroughCutter):
+                # What Dex spent before failing is still on the job (F21; UAT round 4, R4-F4 had no agentUsd).
+                self._agent_spend(saved, getattr(e, "usage", None), getattr(cutter, "model", None))
                 # Dex could not answer: the passthrough's plan, said so, rather than no plan at all.
                 out = dict(cutdowns.PassthroughCutter().plan(saved["_req"]))
-                out["rationale"] = f"Dex could not plan this ({type(e).__name__}), so the plan keeps the opening and the payoff."
+                out["rationale"] = (f"Dex could not plan this ({type(e).__name__}), so this is a simple cut: the opening "
+                                    "and the payoff, fitted to each length.")
                 cutter = cutdowns.PassthroughCutter()
             else:
                 return self._fail(saved, "internal", f"Dex could not plan the cutdowns ({type(e).__name__}).",
                                   retryable=True, paid=False, refund=True)
         latency = out.pop("_latencyMs", int((self.clock() - start) * 1000))
+        usage = out.pop("_usage", None)
+        self._agent_spend(saved, usage, getattr(cutter, "model", None))
+        jobtrace.trace("director", saved["jobId"], op="cutdown", step="plan", model=getattr(cutter, "model", "unknown"),
+                       promptVersion=getattr(cutter, "prompt_version", None), latencyMs=latency, usage=usage)
         rationale = out.pop("rationale", "") or ""
         plan = {"lengths": out["lengths"], "crops": out["crops"]}
         errors = self.contracts.errors("relay-api.schema.json#/$defs/Job/properties/cutdownPlan", plan)
@@ -2073,6 +2218,12 @@ class Relay:
                 key = f"ads/cuts/{job['jobId']}/layer{i}.png"
                 self.blobs.put(key, png, "image/png")
                 layers.append({"key": key, **({"fromS": a} if a is not None else {}), **({"toS": b} if b is not None else {})})
+            # The film's own end card (the client's), drawn at the size and held as the last picture, before the
+            # studio card stitch adds (features/pt-film-r1.clan, B4: the sizes ended on the studio card alone).
+            if cut.get("clientCard"):
+                key = f"ads/cuts/{job['jobId']}/client-card.png"
+                self.blobs.put(key, timeline_layers.end_card_png(cut["clientCard"], size, self.blobs.fetch), "image/png")
+                clips.append({"key": key, "inS": 0, "outS": float(cut["clientCard"]["s"])})
         except Exception as e:
             log.exception("cutdown layers of %s failed", job["jobId"])
             return self._fail(job, "internal", f"Edie could not draw this film's words ({type(e).__name__}).",
@@ -2084,6 +2235,8 @@ class Relay:
             return self._reload(job)
         event = {"jobId": job["jobId"], "mode": "cutdown", "size": list(size), "clips": clips, "layers": layers,
                  "endCard": cut.get("endCard", True), "fadeOutS": cut.get("fadeOutS", 0.5),
+                 # a short size's shorter studio card (cutdowns.card_lengths; UAT round 3, R3-F12)
+                 **({"cardS": float(cut["studioS"])} if cut.get("studioS") else {}),
                  "outKey": f"ads/cuts/{job['jobId']}.mp4", "resultKey": f"ads/cuts/{job['jobId']}.json"}
         try:
             self.stitch(event)
@@ -2140,23 +2293,19 @@ class Relay:
         pjob = {"provider": provider, "model": model, "outputs": 1}
         made: list = []
         if rz["method"] == "extend":
+            # Stepped outpainting (round 3, IMG-9): this job's step, grown from the step before (the master first).
             try:
-                data = self.blobs.fetch(inp["image"]["url"])
-                ms = rz["masterSize"]
-                from PIL import Image
-                with Image.open(io.BytesIO(data)) as im:
-                    pw, ph = im.size
-                k = pw / ms["w"]  # protect is in masterSize pixels; the plate may be another size
-                boxes = [{**b, "x": b["x"] * k, "y": b["y"] * ph / ms["h"], "w": b["w"] * k, "h": b["h"] * ph / ms["h"]}
-                         for b in rz.get("protect") or []]
-                plan = formats.pad_plan(pw, ph, aw, ah, boxes, formats.safe_fracs(inp.get("safeArea"), inp.get("delivery")))
-                canvas, mask = formats.padded(data, plan)
+                master = self.blobs.fetch(inp["image"]["url"])
+                step = job.get("_extendStep", 0)
+                plan = self._extend_steps(inp, master)[step]
+                base = self.blobs.fetch(job["_extendFrom"]) if step and job.get("_extendFrom") else master
+                canvas, mask = formats.padded_step(base, plan)
             except Exception as e:
                 log.exception("job %s: could not pad the master", job["jobId"])
                 raise ApiError("invalid_input", f"Wren could not read the master to extend it ({type(e).__name__}).") from e
             scratch = self._scratch(job)
-            plate = self._put_made(f"{scratch}/canvas.jpg", canvas, "image/jpeg")
-            ours = self._put_made(f"{scratch}/mask.png", mask, "image/png")
+            plate = self._put_made(f"{scratch}/canvas-{step + 1}.jpg", canvas, "image/jpeg")
+            ours = self._put_made(f"{scratch}/mask-{step + 1}.png", mask, "image/png")
             pjob.update(prompt=formats.EXTEND_PROMPT, refs=[{"sha256": plate["sha256"], "name": "current", "role": "current"}],
                         mask=ours["sha256"])
             made = [plate, ours]
@@ -2193,14 +2342,67 @@ class Relay:
         self.blobs.put(key, data, mime)
         return {"sha256": "sha256:" + hashlib.sha256(data).hexdigest(), "url": self.blobs.public_url(key), "mime": mime}
 
+    @staticmethod
+    def _extend_plan(inp: dict, data: bytes) -> dict:
+        """Where an extend puts the master on its canvas (formats.pad_plan): the same at submit and at landing."""
+        import formats
+        from PIL import Image
+        rz = inp["resize"]
+        ms = rz["masterSize"]
+        with Image.open(io.BytesIO(data)) as im:
+            pw, ph = im.size
+        k = pw / ms["w"]  # protect is in masterSize pixels; the plate may be another size
+        boxes = [{**b, "x": b["x"] * k, "y": b["y"] * ph / ms["h"], "w": b["w"] * k, "h": b["h"] * ph / ms["h"]}
+                 for b in rz.get("protect") or []]
+        return formats.pad_plan(pw, ph, inp["aspect"]["w"], inp["aspect"]["h"], boxes,
+                                formats.safe_fracs(inp.get("safeArea"), inp.get("delivery")))
+
+    @classmethod
+    def _extend_steps(cls, inp: dict, data: bytes) -> list[dict]:
+        """An extend's steps (formats.step_plans of its pad plan): the same at every submit and landing."""
+        import formats
+        return formats.step_plans(cls._extend_plan(inp, data))
+
+    def _next_extend_step(self, job: dict, grown: bytes, step: int, cost_usd: float | None) -> dict:
+        """A step of a stepped extend landed and more are to come (round 3, IMG-9): its picture, laid back on its
+        input, is kept as the next step's input, and the job queues again for the provider. The reservation already
+        covers every step (_estimate); what each step cost adds up for the landing."""
+        key = f"{self._scratch(job)}/step-{step + 1}.png"
+        self.blobs.put(key, grown, "image/png")
+        spent = job.get("_stepCost")
+        spent = None if (cost_usd is None or (step and spent is None)) else (spent or 0.0) + cost_usd
+        self._stage(job, "extend_step", step=step + 1, steps=job.get("_extendSteps"), costUsd=cost_usd)
+        now = self.clock()
+        saved = self._save(job, state="queued", provider=None, model=None, requestId=None, _slot=None, _queue="q",
+                           queuePosition=None, _queuedAt=now, _submittedAt=None, _nextCheckAt=None, _leaseUntil=None,
+                           _fetchErrors=None, _extendStep=step + 1, _extendFrom=self.blobs.public_url(key),
+                           _stepCost=spent, progress={"step": step + 2, "steps": job.get("_extendSteps") or step + 2})
+        if saved is None:
+            return self._reload(job)
+        if job.get("_slot"):
+            self.store.incr(job["_slot"], "n", -1)
+        return self._dispatch(saved, self.config())
+
     def _land_resize(self, job: dict, raw: dict, cost_usd: float | None) -> dict:
         """A paid size's picture: cropped to the size's exact shape, scaled to the preview, kept clean as the
-        plate, the type layers drawn on a copy. The provider's bill stands whatever happens here."""
+        plate, the type layers drawn on a copy. The provider's bill stands whatever happens here. An extend lands
+        step by step: every step but the last goes back to the provider (_next_extend_step)."""
         import formats
         inp = job["_req"]["input"]
         rz = inp["resize"]
         try:
             data = self.blobs.fetch(raw["url"])
+            if rz["method"] == "extend":  # each step laid back over the picture it grew from, on a ramp (IMG-9)
+                master = self.blobs.fetch(inp["image"]["url"])
+                steps = self._extend_steps(inp, master)
+                step = job.get("_extendStep", 0)
+                base = self.blobs.fetch(job["_extendFrom"]) if step and job.get("_extendFrom") else master
+                data = formats.feathered(data, base, steps[step])
+                if step + 1 < len(steps):
+                    return self._next_extend_step({**job, "_extendSteps": len(steps)}, data, step, cost_usd)
+                if step:
+                    spent = job.get("_stepCost")
+                    cost_usd = None if spent is None or cost_usd is None else round(spent + cost_usd, 6)
             out_w, out_h = formats.preview_size(inp["delivery"], rz.get("previewMaxPx"))
             plate, png, (rw, rh), drawn = formats.finish(data, (inp["aspect"]["w"], inp["aspect"]["h"]), (out_w, out_h),
                                                          rz.get("layers"), self.blobs.fetch)
@@ -2672,7 +2874,7 @@ class Relay:
         stitch cannot read (the mock's still, no stitch here) lands with every found_s null."""
         inp = job["_req"]["input"]
         sheet = effective_sheet(self.registry.sheet(job["provider"]), "clip", job.get("model"))
-        _, starts, _ = connected.take_plan(inp, sheet["ops"]["clip"])
+        duration, starts, _ = connected.take_plan(inp, sheet["ops"]["clip"])
         kind = "mock" if job["provider"] == "mock" else "generated"
         key = self.blobs.key_for_url(outputs[0]["url"])
         if self.stitch is None or key is None or not str(outputs[0].get("mime", "")).startswith("video/"):
@@ -2681,7 +2883,7 @@ class Relay:
         if job.get("_slot"):
             self.store.incr(job["_slot"], "n", -1)
         event = {"jobId": job["jobId"], "mode": "take_cuts", "key": key, "cuts": starts[1:],
-                 "searchS": connected.search_s((sheet.get("video") or {}).get("take")),
+                 "searchS": connected.take_search_s((sheet.get("video") or {}).get("take"), starts, duration),
                  "threshold": connected.CUT_THRESHOLD, "resultKey": f"{self._scratch(job)}/cuts.json"}
         saved = self._save(job, state="submitted", _stage="take_cuts", _stageAt=self.clock(), _landed=outputs,
                            _starts=starts, _confirmed=cost_usd, _slot=None, _queue="r", _leaseUntil=None)
@@ -2764,12 +2966,15 @@ class Relay:
         if result is None and now - job["_stageAt"] <= CUT_TIMEOUT_S:
             return self._with_poll(job)
         found = None
+        landed = job["_landed"]
         if result and result.get("ok"):
             found = [c.get("found_s") for c in result.get("cuts") or []]
+            if result.get("takeS") and landed:  # stitch read the take's own length: it is the take's (F4)
+                landed = [{**landed[0], "durationS": round(float(result["takeS"]), 3)}, *landed[1:]]
         else:  # the take stands: its cuts are the planned ones
             log.warning("job %s: take_cuts %s", job["jobId"], (result or {}).get("error") or f"no result in {CUT_TIMEOUT_S} s")
         kind = "mock" if job.get("provider") == "mock" else "generated"
-        return self._finish(job, "completed", outputs=job["_landed"], kind=kind, confirmed=job.get("_confirmed"),
+        return self._finish(job, "completed", outputs=landed, kind=kind, confirmed=job.get("_confirmed"),
                             cuts=connected.merge_cuts(job["_starts"], found))
 
     def _patch_question(self, job: dict, q: dict) -> dict:
@@ -2962,6 +3167,8 @@ class Relay:
         claimed = self._save(job, state="fetching", _leaseUntil=now + FETCH_LEASE_S)
         if claimed is None:
             return self._reload(job)
+        self._stage(job, "provider_done", since=job.get("_submittedAt"), taskId=job.get("requestId"),
+                    attempt=(job.get("_fetchErrors") or 0) + 1, costUsd=st.cost_usd, outputs=len(st.outputs or []))
         try:
             outputs = []
             for o in st.outputs:
@@ -2977,6 +3184,10 @@ class Relay:
                 for k in ("w", "h", "durationS"):
                     if o.get(k) is not None:
                         out[k] = o[k]
+                if mime.startswith("video/") and out.get("durationS") is None:
+                    seconds = mp4.duration_s(data)  # the file's own length, never the plan's (F4)
+                    if seconds:
+                        out["durationS"] = seconds
                 if mime.startswith("image/"):
                     out = self._true_shape(out, data, job.get("_aspect"))
                 outputs.append(out)
@@ -2984,12 +3195,17 @@ class Relay:
                 raise ValueError("the provider reported success with no outputs")
         except Exception as e:
             log.exception("copying outputs of %s failed", job["jobId"])
+            self._stage(job, "fetch_failed", since=now, taskId=job.get("requestId"), error=type(e).__name__,
+                        message=jobtrace.clip(str(e), 500))
             attempts = claimed.get("_fetchErrors", 0) + 1
             if attempts >= MAX_FETCH_ATTEMPTS:
                 return self._fail(claimed, "provider_failed", f"Could not copy the result ({type(e).__name__}).",
                                   retryable=True)
             back = self._save(claimed, state="submitted", _fetchErrors=attempts, _nextCheckAt=now + 2)
             return self._with_poll(back or claimed)
+        claimed["_fetchedAt"] = self.clock()  # kept by the next save, for landed's ms (a take's cuts land later)
+        self._stage(claimed, "fetched", since=now, taskId=job.get("requestId"), outputs=len(outputs),
+                    bytes=sum(o.get("bytes") or 0 for o in outputs))
         if job["op"] == "clip_patch":  # the model's window, spliced back into the take before it lands
             return self._run_splice(claimed, outputs[0], st.cost_usd)
         if job["op"] == "resize":  # cropped to the exact shape, scaled to the preview, the type drawn

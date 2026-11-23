@@ -3,6 +3,7 @@
 // notice and its decisions, removal with its card, Start from a brief, and that the spine stays in the
 // project (export) but out of Napkin's own record.
 
+import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import type { BriefNode, JobInput, Link, ProductionDocument } from '../contracts/types'
 import { loadJson } from '../test/schemas'
@@ -17,7 +18,7 @@ import {
 } from './model'
 import { osBriefSource, type OsBriefRead } from './os'
 import { newId } from '../lib/ulid'
-import { briefChoices, briefSpinoffOf, briefSpinoffUrl, offersStartFromBrief, withoutBriefSpinoff } from './start'
+import { briefChoices, carriedBrief, offersStartFromBrief } from './start'
 
 const ex = loadJson<ProductionDocument>('examples/document.ad.json')
 const SB = 'storyboard_01K7A000000000000000000012'
@@ -204,7 +205,22 @@ describe('scope', () => {
     expect(Object.keys(out.input.brief!)).toEqual(['title', 'spine'])
     expect(out.rows).toEqual([{ kind: 'brief', ref: b1.id, link_id: expect.any(String), used_as: 'brief (from its script)', included: true, text: 'First Light brief v1' }])
     for (const op of BRIEF_OPS) expect(withBrief(d, op, { kind: 'shot', id: S15 }, {}).input.brief).toBeTruthy()
-    for (const op of ['generate', 'view', 'stitch', 'upscale', 'cutout', 'transcribe'] as const) expect(withBrief(d, op, { kind: 'shot', id: S15 }, {}).input.brief).toBeUndefined()
+    for (const op of ['view', 'stitch', 'upscale', 'cutout', 'transcribe'] as const) expect(withBrief(d, op, { kind: 'shot', id: S15 }, {}).input.brief).toBeUndefined()
+  })
+
+  it('a canvas Generate reads the project\'s only brief; with two it reads none; a frame edit inside a picture reads its shot\'s (pt-dex-context)', () => {
+    const GROUP = { kind: 'group', id: 'node_01K7A0000000000000000000G1' } as const
+    const one = withBrief_(ex, b1)
+    const out = withBrief(one, 'generate', GROUP, { text: 'a lamp' })
+    expect(out.input.brief).toEqual({ title: 'First Light brief', spine: b1.spine })
+    expect(out.rows).toEqual([{ kind: 'brief', ref: b1.id, used_as: "brief (the project's)", included: true, text: 'First Light brief v1' }])
+    // Only Generate falls back to it: a view on the same canvas reads none.
+    expect(withBrief(one, 'view', GROUP, {}).input.brief).toBeUndefined()
+    expect(withBrief(withBrief_(one, b2), 'generate', GROUP, {}).input.brief).toBeUndefined()
+    expect(withBrief(ex, 'generate', GROUP, {}).input.brief).toBeUndefined()
+    // A region_edit on a storyboard frame reads the brief its shot reads (the relay keeps its don'ts only).
+    const linked = withBrief_(ex, b1, link(b1.id, { kind: 'script', id: SCRIPT }))
+    expect(withBrief(linked, 'region_edit', { kind: 'shot', id: S15 }, {}).input.brief?.title).toBe('First Light brief')
   })
 
   it('"What Dex will send" lists it, with where it comes from', () => {
@@ -357,12 +373,19 @@ describe('Start from a brief: the data path', () => {
     expect(got.items.map((i) => i.documentId)).toEqual(['doc-b', 'doc-a'])
     expect((await briefChoices(src(true))).empty).toMatch(/Brief Maker/)
   })
-  it('a spin-off from Brief Maker arrives as ?brief=<doc id>, taken once', () => {
-    expect(briefSpinoffOf('?brief=doc-first-light&engine=own')).toBe('doc-first-light')
-    expect(briefSpinoffOf('?brief=../../etc')).toBeNull()
-    expect(briefSpinoffOf('')).toBeNull()
-    expect(withoutBriefSpinoff('?brief=doc-a&engine=own')).toBe('?engine=own')
-    expect(withoutBriefSpinoff('?brief=doc-a')).toBe('')
-    expect(briefSpinoffUrl('doc-a')).toBe('/production/?brief=doc-a')
+  it('a project spun off from Brief Maker makes its Brief node from the brief it carries, not from the OS', () => {
+    const from = { document_id: 'doc-first-light', data_sha256: SHA('b'), title: ' First Light ' }
+    expect(carriedBrief(from, { 'doc-first-light': BRIEF_DATA })).toEqual({
+      documentId: 'doc-first-light', title: 'First Light', appId: 'ie.napkin.brief-maker', dataSha256: SHA('b'), data: BRIEF_DATA,
+    })
+    // nothing carried under the parent's id: nothing to bring (the hoisted research of the brief is not the brief)
+    expect(carriedBrief(from, { 'doc-research': BRIEF_DATA })).toBeNull()
+    expect(carriedBrief(from, undefined)).toBeNull()
+    expect(carriedBrief({ ...from, title: '' }, { 'doc-first-light': BRIEF_DATA })?.title).toBe('Brief')
+  })
+  it('the ?brief= arrival hop is gone', () => {
+    const files = ['../main.tsx', './start.ts', '../stages/Character.tsx']
+    for (const f of files) expect(readFileSync(new URL(f, import.meta.url), 'utf8'), f).not.toMatch(/briefSpinoffOf|holdBriefSpinoff|withoutBriefSpinoff|useBriefSpinoff|\?brief=/)
+    expect(existsSync(new URL('./useBriefSpinoff.ts', import.meta.url))).toBe(false)
   })
 })

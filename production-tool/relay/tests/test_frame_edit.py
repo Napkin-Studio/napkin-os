@@ -123,7 +123,10 @@ def post(h: Harness, token: str, inp: dict, expect=200, **req):
 
 
 def spent(h: Harness) -> float:
-    return round(h.store.counters("spend").get("usd", 0), 6)
+    """What the providers were paid: the ledger without the agents' Claude calls, which every directed job now
+    records too (cost.agentUsd, pt-film-r2 F21)."""
+    agents = sum(float((j.get("cost") or {}).get("agentUsd") or 0) for j in h.store._jobs.values())
+    return round(h.store.counters("spend").get("usd", 0) - agents, 6)
 
 
 # ── the op: who works it, what it needs, what it refuses ──────────────────────────────────────
@@ -181,7 +184,7 @@ def test_a_camera_reading_runs_as_frame_with_the_current_frame_and_no_continuity
     (images,) = [t["images"] for t in wire.calls[0]["turns"][:1]]
     assert len(images) == 1 and images[0]["media_type"] == "image/jpeg"
     assert Image.open(io.BytesIO(__import__("base64").b64decode(images[0]["data"]))).size[0] <= 768
-    assert job["director"]["promptVersion"] == "director.v14"  # v14 adds only a redraw's object placement, v13 the brief; the configs name v11 (features/join-or-cut-shots.clan); frame_edit is unchanged from v7
+    assert job["director"]["promptVersion"] == "director.v17"  # v17 makes a palette accents (pt-canvas-r3), v16 adds no other brands (pt-canvas-r2), v15 numbers a take's images (pt-dex-context), v14 adds only a redraw's object placement, v13 the brief; the configs name v11 (features/join-or-cut-shots.clan); frame_edit is unchanged from v7
 
 
 def test_other_ops_send_the_model_no_image():

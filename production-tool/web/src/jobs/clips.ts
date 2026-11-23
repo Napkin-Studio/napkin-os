@@ -19,6 +19,7 @@ import { takeTiming } from './takeTiming'
 import { liveGet } from '../model/live'
 import { checkFronts } from '../lib/names'
 import { startPicture } from './startFrame'
+import { castShot, withoutOfferedCast } from './cast'
 
 export { jobShot }
 
@@ -93,7 +94,9 @@ export async function makeClip(
   if (!source) throw new Error(fromWords ? 'This shot has no frame and no words yet.' : 'This shot has no frame yet.')
   const image = frame ? await assetRef(deps.relay, frame.asset) : start ? await assetRef(deps.relay, start.sha) : undefined
   const text = extra.text?.trim()
-  const refs = await refsFor(deps.relay, d, shot, text, { offer: true, declined: deps.ui.get().declinedAdds?.[shot.id] })
+  const offered = await refsFor(deps.relay, d, shot, text, { offer: true, declined: deps.ui.get().declinedAdds?.[shot.id] })
+  // A shot of an unnamed person ("a flatmate") sends no character picture, and says the person is someone else (R4-F2).
+  const refs = withoutOfferedCast(d, shot, offered).refs
   // Belt and braces (the owner's @on ad came out a generic person, 2026-11): a clip made from words alone
   // (no frame) that names a required character cannot carry it on a model without refsWithoutFrame, so refuse
   // here with a clear message rather than submit a character-less job. The Make room makes a frame first; this
@@ -109,7 +112,9 @@ export async function makeClip(
   const end = extra.endShotId && image ? selectedFrame(d, extra.endShotId) : undefined
   const lastFrame = end ? await assetRef(deps.relay, end.asset) : undefined
   const input: JobInput = {
-    shot: jobShot(d, shot), ...(image ? { image } : {}), ...(refs.length ? { refs } : {}), ...(ratio ? { ratio } : {}), ...(text ? { text: clipText(text, 1000) } : {}),
+    // Every beat, spoken lines too: the relay says them in a clip made with sound and keeps them from Dex and from
+    // a silent clip (relay/sound.py, director _without_dialogue; features/pt-film-r1.clan).
+    shot: castShot(d, shot, jobShot(d, shot, false), offered), ...(image ? { image } : {}), ...(refs.length ? { refs } : {}), ...(ratio ? { ratio } : {}), ...(text ? { text: clipText(text, 1000) } : {}),
     ...(lastFrame ? { mode: 'frames' as const, lastFrame } : {}),
   }
   const purpose: JobPurpose = {
@@ -136,7 +141,7 @@ export async function makeTake(
   deps: FrameDeps,
   videoId: Id,
   runId: Id,
-  opts: { modelChoice?: ModelChoice; quality?: ClipQuality; refsMax?: number; texts?: Record<Id, string> } = {},
+  opts: { modelChoice?: ModelChoice; quality?: ClipQuality; refsMax?: number; texts?: Record<Id, string>; fit?: (seconds: number) => number } = {},
 ): Promise<string> {
   const d = liveGet(deps.doc)
   const run = d.videos[videoId]?.runs?.[runId]
@@ -163,10 +168,14 @@ export async function makeTake(
   const declined = deps.ui.get().declinedAdds
   for (const s of shots) {
     for (const r of await refsFor(deps.relay, d, s, opts.texts?.[s.id], { offer: true, declined: declined?.[s.id] })) {
-      if (!refs.some((x) => x.id === r.id)) refs.push(r)
+      const at = refs.findIndex((x) => x.id === r.id)
+      if (at < 0) refs.push(r)
+      // A picture one shot only offers and a later shot names is required: it went optional because shot 1 offered it
+      // first, so Dex left @maya_full out of every WAN 3 take and its padding never ran (UAT round 3, F5).
+      else if (refs[at].optional && !r.optional) refs[at] = r
     }
   }
-  const { starts } = takeTiming(shots.map((s) => s.duration_s))
+  const { starts } = takeTiming(shots.map((s) => s.duration_s), opts.fit)
   // Each shot's line: its action, then any words given for it only (Make clip's box).
   const line = (s: Shot, i: number) => [s.action?.trim() || s.direction?.trim() || `Shot ${i + 1}`, opts.texts?.[s.id]?.trim()].filter(Boolean).join(' ')
   const cuts = shots.map((s, i) => ({ atS: starts[i], text: clipText(line(s, i), 600) }))
@@ -180,7 +189,7 @@ export async function makeTake(
   const chars = refs.filter((r) => r.role === 'character').sort((a, b) => sheet(a) - sheet(b))
   const ordered = [...chars, ...refs.filter((r) => r.role !== 'character')]
   const input: JobInput = {
-    shot: jobShot(d, shots[0]), shots: shots.map((s) => jobShot(d, s)), mode, cuts,
+    shot: jobShot(d, shots[0], false), shots: shots.map((s) => jobShot(d, s, false)), mode, cuts,
     ...(image ? { image } : {}), ...(ordered.length ? { refs: ordered.slice(0, max) } : {}), ...(ratio ? { ratio } : {}),
   }
   const parents = frames.map((f) => f?.job_id).filter(Boolean) as string[]

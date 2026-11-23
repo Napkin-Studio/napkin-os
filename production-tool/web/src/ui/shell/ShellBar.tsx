@@ -5,6 +5,7 @@
 // where you are (the steps before the current one are links). Right: only the agent status dot (ui/JobTray),
 // Decisions and you. Every page's own actions sit in its band (Band) under the bar, never in it.
 
+import { TOOL_OPTIONS_SLOT } from './toolSlot'
 import { useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { useShell } from '../../app/context'
 import { Float } from '../Float'
@@ -114,8 +115,10 @@ export function DecisionsButton({ needs, own }: { needs: number; own?: { on: boo
   const toggle = own ? own.toggle : () => panels.toggle('history')
   return (
     <button type="button" className={`tb-decisions-btn ${needs ? 'has-needs' : ''}`} aria-pressed={on} aria-label={`Decisions${needs ? `, ${needs} need you` : ''}`}
-      title="Decisions: every decision, who made it and why, and what each job cost" onClick={toggle}>
-      <span className="lbl-t">Decisions</span><span className="cnt">{needs}</span>
+      title="Decisions: every decision, who made it and why" onClick={toggle}>
+      {/* The count is what needs you, shown only when something does (UAT 2026-11-21: "0" read as "no decisions"
+          beside a drawer of 91). */}
+      <span className="lbl-t">Decisions</span>{needs > 0 && <span className="cnt" title={`${needs} need${needs === 1 ? 's' : ''} you`}>{needs}</span>}
     </button>
   )
 }
@@ -146,6 +149,7 @@ export function ShellBar({ crumb, menu, job, className = '', bar, history }: {
           <DocSlot menu={menu} />
           {crumb && crumb.length > 0 && <Crumbs crumb={crumb} />}
         </div>
+        {bar === 'canvas' && <span className="tb-tooloptions" id={TOOL_OPTIONS_SLOT} />}
         <span className="tb-spacer" />
         <span className="tb-right">
           {job}

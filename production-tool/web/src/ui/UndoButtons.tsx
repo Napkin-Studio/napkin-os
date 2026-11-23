@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
 import { useDoc, useServices, useUi } from '../app/context'
 import { redo, stepWords, undo, undoLabels } from '../doc/undo'
 import { keepsItsOwnUndo } from './undoKeys'
+import { canvasTakesUndo } from './undoOrder'
 import { MenuItem } from './Float'
 
 // The last undo note, shared by every pair on screen (the pill and an editor's bar say the same).
@@ -44,7 +45,10 @@ export function UndoKeys() {
       const k = e.key.toLowerCase()
       if (k === 'z' || k === 'y') {
         e.preventDefault()
-        void ref.current(k === 'y' || e.shiftKey ? 'redo' : 'undo')
+        const way = k === 'y' || e.shiftKey ? 'redo' : 'undo'
+        // The canvas was touched last (a pen stroke): its step goes first (UAT round 4 S3-3).
+        if (canvasTakesUndo(way)) return
+        void ref.current(way)
       }
     }
     window.addEventListener('keydown', onKey)

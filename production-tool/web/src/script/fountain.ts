@@ -156,7 +156,7 @@ export class FountainTooBig extends Error {
 export function sceneFlat(blocks: FountainBlock[]): string {
   return blocks.map((b) =>
     b.type === 'character' || b.type === 'transition' ? b.text.toUpperCase()
-      : b.type === 'parenthetical' ? `(${b.text})`
+      : b.type === 'parenthetical' ? (/^\(.*\)$/s.test(b.text.trim()) ? b.text.trim() : `(${b.text})`)
         : b.text).join('\n')
 }
 

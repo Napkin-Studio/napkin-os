@@ -127,3 +127,9 @@ describe('parseFountain', () => {
     expect(() => checkSizes(s, () => 70 * 1024)).toThrow(/over 64 KB/)
   })
 })
+
+describe('a parenthetical keeps one pair of brackets (UAT 2026-11-21)', () => {
+  it('"(whispering)" stays "(whispering)" in the flat text the Director reads', () => {
+    expect(sceneFlat([{ type: 'parenthetical', text: '(whispering)' } as never, { type: 'parenthetical', text: 'softly' } as never])).toBe('(whispering)\n(softly)')
+  })
+})

@@ -275,13 +275,13 @@ def requirements(inp, profile: dict | None = None) -> tuple[dict, dict]:
             reqs += obj.get("requirements", []); scoring += obj.get("scoring", []); rules += obj.get("rules", [])
             usage.append(u)
     if not inp.docs:  # brief-only: the brief's own mandatories and objectives are the requirements
-        brief = json.dumps({k: v["value"] for k, v in inp.brief.items()}, ensure_ascii=False)
+        brief = json.dumps({k: v["value"] for k, v in inp.brief.items() if v.get("value") not in (None, "", [], {})}, ensure_ascii=False)   # an empty field is not sent: the model once wrote '(field is null)' as a requirement
         obj, u = _call("a", f"<brief>\n{brief}\n</brief>{_prompt_block(inp)}", sysmsg)
         reqs, scoring, rules = obj.get("requirements", []), obj.get("scoring", []), obj.get("rules", [])
         usage.append(u)
     seen, merged = set(), []
     for r in reqs:
-        if r.get("text") and r["text"].lower() not in seen:
+        if r.get("text") and not spec.internal_wording(r["text"]) and r["text"].lower() not in seen:
             seen.add(r["text"].lower()); merged.append(r)
     for i, r in enumerate(merged, 1):
         r.setdefault("id", f"r_{i:02d}")

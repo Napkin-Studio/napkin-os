@@ -156,7 +156,7 @@ export function checkpoint(kind: FragmentKind, prose: Prose, opts: { refs: RefNa
     const lines = blocks.map((b) => {
       const t = text(b)
       if (b.type === 'character' || b.type === 'transition') return t.toUpperCase()
-      if (b.type === 'parenthetical') return `(${t})`
+      if (b.type === 'parenthetical') return /^\(.*\)$/s.test(t.trim()) ? t.trim() : `(${t})`
       return t
     })
     keep('text', lines.join('\n'), LIMITS.scene.text)

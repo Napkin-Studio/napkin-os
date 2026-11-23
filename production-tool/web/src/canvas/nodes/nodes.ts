@@ -116,13 +116,22 @@ export function endOf(e: CanvasElement | undefined, doc: ProductionDocument, opt
   // A Format set (the Sizes board's node): a target only, for a brief or a master (live test 2026-11-18: a
   // brief could not be linked to it, so the board never offered itself).
   if (t.kind === 'format_set' && t.id) return doc.format_sets?.[t.id] ? { el: e, doc: { kind: 'format_set', id: t.id }, core: { kind: 'format_set' } } : null
+  // A Brand board (UAT round 2 R2-5): a source into a generating node (core/links.ts, role brand); its brand refs feed the
+  // job (model/scope.ts). Other boards are not link ends (yet).
+  if (t.kind === 'board' && t.id) {
+    const b = doc.boards?.[t.id]
+    const purpose = (e as CanvasElement & { purpose?: string }).purpose ?? b?.purpose
+    return b && purpose === 'brand' ? { el: e, doc: { kind: 'board', id: b.id }, core: { kind: 'board', purpose: 'brand' } } : null
+  }
   if (e.type === 'text' && !(e as CanvasElement & { containerId?: string | null }).containerId) {
     const row = textRowOf(doc, e.id)
     return row ? { el: e, doc: { kind: 'text', id: row.id }, core: { kind: 'note' } } : { refuse: 'Type something in this text first, then link it.' }
   }
   if (e.type === 'image') {
     const ref = refsList(doc).find((r) => r.node && (r.node === e.id || r.node === t.id))
-    if (!ref) return t.kind === 'pic' || !t.kind ? { refuse: 'Name this picture first (Name… on its bar), then link it.' } : null
+    // Any unnamed picture, a result or a drawing too, says what to do: before, a result was "empty canvas" and offered
+    // a new Script from the text, with no word why (UAT round 1 IMG-18).
+    if (!ref) return t.kind === 'pic' || t.kind === 'gen' || t.kind === 'drawn' || !t.kind ? { refuse: 'Name this picture first (Name… on its bar), then link it.' } : null
     const key = keyNamed(doc, ref.key)
     const role = (key?.role ?? ref.role) as RefRole
     if (key && !opts.single && isKeyGroup(doc, ref.key)) return { el: e, doc: { kind: 'key', id: key.id }, core: { kind: 'picture', role }, refRole: role }
@@ -159,7 +168,7 @@ const coreRole = (l: Pick<Link, 'from' | 'role'>): CoreRole => (l.from.kind === 
 export function linkGraph(els: readonly CanvasElement[], doc: ProductionDocument): LinkGraph {
   // A key's view is an end both as its key and as itself.
   const ends = els.flatMap((e) => [endOf(e, doc), endOf(e, doc, { single: true })]).filter(isEnd)
-  const nodes = [...new Map(ends.map((x) => [x.doc.id, { id: x.doc.id, kind: x.core.kind, ...(x.core.role ? { role: x.core.role } : {}) }])).values()]
+  const nodes = [...new Map(ends.map((x) => [x.doc.id, { id: x.doc.id, kind: x.core.kind, ...(x.core.role ? { role: x.core.role } : {}), ...(x.core.purpose ? { purpose: x.core.purpose } : {}) }])).values()]
   const links = Object.values(doc.links ?? {}).map((l) => ({ from: l.from.id, to: l.to.id, role: coreRole(l) }))
   return { nodes, links }
 }

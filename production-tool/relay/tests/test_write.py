@@ -46,7 +46,7 @@ def test_write_is_skyes_internal_job_on_the_text_quota_with_no_spend(h):
     assert draft["base_hash"] == BASE  # echoed: a draft lands after a reload, and goes stale on Keep if the text moved
     assert draft["lines"][0]["text"] == "@maya_front walks the waterline."
     assert draft["note"] == "I tightened it."
-    assert job["director"]["promptVersion"] == "skye.v6"
+    assert job["director"]["promptVersion"] == "skye.v8"
 
 
 def test_a_draft_writes_from_the_instruction_not_the_items_words(h):
@@ -145,7 +145,7 @@ def test_the_model_writer_asks_sonnet_with_skye_v3_and_the_relay_owns_target_and
     [asked] = port.asked
     # No model of her own: the port's route (writer.make hands her the director's, below).
     assert asked["purpose"] == "writer" and asked["model"] is None
-    assert asked["system"].startswith("# Skye · scripts (skye.v6)")
+    assert asked["system"].startswith("# Skye · scripts (skye.v8)")
     assert asked["payload"]["input"]["write"]["context"]["refs"] == [{"name": "maya_front", "role": "character"}]
     assert [d["target"] for d in out["writes"]] == [target]
     assert out["writes"][0]["base_hash"] == BASE
@@ -196,6 +196,22 @@ def test_v6_is_v5_plus_one_length_rule_with_the_band_and_v5_still_loads():
     assert old.system.startswith("# Skye · scripts (skye.v5)")
 
 
+def test_v7_is_v6_plus_a_shorter_version_keeps_the_spoken_lines_and_v6_still_loads():
+    """UAT round 3 (R3-F7): "Make it 10 seconds" cut the whispered line the person had just asked for. skye.v7
+    adds rule 11 (a shorter version keeps every spoken line); skye.v6 stays loadable for a rollback."""
+    root = Path(__file__).parent.parent / "prompts"
+    v6 = (root / "skye.v6.md").read_text()
+    v7 = (root / "skye.v7.md").read_text()
+    assert v7.startswith("# Skye · scripts (skye.v7)")
+    assert "11. What a shorter version keeps." in v7 and "word for word" in v7 and "11. " not in v6
+    # Nothing else of v6 changed: v7 is v6 with its title, the fit line's pointer and rule 11.
+    rule11 = v7[v7.index("\n\n11. "):v7.index("\n\nAnswer with the JSON only")]
+    assert v7.replace(rule11, "").replace("(skye.v7)", "(skye.v6)").replace(" Rule 11\n    says what stays.", "") == v6
+    old = ModelWriter(FakePort({"writes": []}), contracts_dir(), prompt_version="skye.v6")
+    assert old.system.startswith("# Skye · scripts (skye.v6)")
+    assert ModelWriter(FakePort({"writes": []}), contracts_dir(), prompt_version="skye.v7").system.startswith("# Skye · scripts (skye.v7)")
+
+
 def test_rough_seconds_is_the_bands_rule():
     # The same lines as web compose.test.ts ('a slugline is no speaker…'): 14/6 + 14/6 + 6/2.5 + 2 = 9.1.
     lines = [{"type": "action", "text": "INT. FARMHOUSE KITCHEN - DAWN"},
@@ -233,7 +249,7 @@ def test_settle_keeps_new_beats_inside_the_length():
 
 
 def test_the_prompt_file_is_versioned_and_says_no_chat():
-    for v in ("skye.v1", "skye.v2", "skye.v3", "skye.v4", "skye.v5", "skye.v6"):
+    for v in ("skye.v1", "skye.v2", "skye.v3", "skye.v4", "skye.v5", "skye.v6", "skye.v7"):
         text = (Path(__file__).parent.parent / "prompts" / f"{v}.md").read_text()
         assert "You never chat" in text and "No prices, no costs" in text
 
@@ -418,10 +434,124 @@ def test_v5_is_v4_plus_the_brief_and_reads_it_cut_to_the_write_budget():
     ModelWriter(port, contracts_dir()).write({"op": "write", "jobId": new_id("job"), "input": inp})
     [asked] = port.asked
     spine = asked["payload"]["input"]["brief"]["spine"]
-    assert list(spine)[:4] == ["proposition", "audience", "tone", "feel"]
+    # By priority (features/pt-film-r1.clan, UAT 2026-11-21: the end line, a mandatory, was dropped): the mandatories
+    # and the proposition whole first, the rest sharing what is left.
+    assert list(spine)[:2] == ["mandatories", "proposition"] and len(spine["mandatories"]) == 6
     assert sum(len(v) if isinstance(v, str) else sum(map(len, v)) for v in spine.values()) <= 900
     # No brief: the input goes to Skye as it came.
     port2 = FakePort({"writes": [{"lines": [{"kind": "action", "text": "x"}], "note": "n"}], "rationale": "r"})
     plain = write_input()
     ModelWriter(port2, contracts_dir()).write({"op": "write", "jobId": new_id("job"), "input": plain})
     assert port2.asked[0]["payload"]["input"] == plain
+
+
+def test_skyes_claude_calls_are_priced_on_the_job_and_in_the_ledger(h):
+    """UAT 2026-11-21, F21: every Dex and Skye job read $0 in the ledger."""
+    inner = h.relay.writer
+
+    class Priced:
+        model = "eu.anthropic.claude-sonnet-5-5"
+        prompt_version = getattr(inner, "prompt_version", "skye.v7")
+
+        def write(self, req):
+            out = dict(inner.write(req))
+            out["_usage"] = {"input_tokens": 20_000, "output_tokens": 1_000}
+            return out
+
+    h.relay.writer = Priced()
+    token = h.as_person()
+    _, job = post_write(h, token)
+    assert job["state"] == "completed"
+    assert job["cost"]["agentUsd"] == 0.05
+    assert round(h.store.counters("spend").get("usd", 0), 6) == 0.05
+
+
+# ── UAT round 5, R5-F1: a shot ask keeps the shot's own line as its beat and its length ──────────────────────
+
+# Round 5's request for "Make Maya funnier" on shot 5 of the 7-shot Quietboil film (job_01M7Y972F9693P4G9BGP1F30YK),
+# with the web's whole-shot neighbours (script/skye.ts neighbours): shot 5's own "Good boy." under its own header.
+R5_NEIGHBOURS = ("Shot 2: @maya fills the kettle, wincing at every gurgle from the tap.\n  sound: Tap gurgles\n"
+                 "Shot 3: @maya flicks the switch and braces, shoulders up, eyes squeezed shut.\n"
+                 "Shot 4: The kettle glows soft blue, murmurs, then clicks off. No roar at all.\n"
+                 "  sound: Soft murmur of the kettle\n  sound: Click as it switches off\n"
+                 "Shot 5 (this shot: its words are the lines you write; its beats below are its own and stay as they are)\n"
+                 "  line MAYA (whispering, to the kettle): Good boy.\n"
+                 "Shot 6: Down the hall, a flatmate's snoring carries on, undisturbed.\n  sound: Flatmate snoring behind the door\n"
+                 "Shot 7: @maya grins and raises a steaming mug to the snoring door.\n  vo NARRATOR: Quietboil. Let them sleep.")
+
+
+def r5_ask(instruction="Make Maya funnier", intent="instruct"):
+    target = {"kind": "shot", "id": new_id("shot")}
+    inp = {"write": {"intent": intent, "mode": "revise", "target": target, "base_hash": BASE, "instruction": instruction,
+                     "lines": [{"type": "action", "text": "@maya whispers to the kettle."}],
+                     "context": {"script_title": "Script", "target_s": 10, "neighbours": R5_NEIGHBOURS,
+                                 "refs": [{"name": "maya", "role": "character"}]}}}
+    return target, inp
+
+
+def draft(target, text, duration=None):
+    d = {"target": target, "base_hash": BASE, "lines": [{"type": "action", "text": text}], "note": "I made Maya funnier."}
+    return {**d, **({"duration_s": duration} if duration is not None else {})}
+
+
+def test_r5_a_shot_ask_not_about_length_keeps_the_shots_length():
+    target, inp = r5_ask()
+    out = settle(inp, {"writes": [draft(target, "@maya crouches and whispers to the kettle like a hostage negotiator.", 4)]})
+    assert "duration_s" not in out["writes"][0]
+    # A length ask, and Make it N s, still set it.
+    _, longer = r5_ask("Make it 2 seconds longer")
+    longer["write"]["target"] = target
+    assert settle(longer, {"writes": [draft(target, "x.", 3)]})["writes"][0]["duration_s"] == 3
+    _, fit = r5_ask(intent="fit_seconds")
+    fit["write"]["target"] = target
+    assert settle(fit, {"writes": [draft(target, "x.", 1.5)]})["writes"][0]["duration_s"] == 1.5
+
+
+def test_r5_a_spoken_line_written_into_the_action_is_asked_again_without_it():
+    target, inp = r5_ask()
+    first = draft(target, '@maya crouches to the kettle and whispers like a hostage negotiator: "Easy now. Nobody wakes up."', 4)
+    second = draft(target, "@maya crouches to the kettle and pats it like a hostage negotiator calming a bomb.")
+    port = FakePort([{"writes": [first], "rationale": "a"}, {"writes": [second], "rationale": "b"}])
+    out = ModelWriter(port, contracts_dir()).write({"op": "write", "jobId": new_id("job"), "input": inp})
+    assert len(port.asked) == 2
+    redo = port.asked[1]["payload"]["input"]["write"]["redo"]
+    assert "quotes" in redo and "rule 12" in redo
+    # The first ask saw shot 5's own line under its own header, not under shot 4.
+    seen = port.asked[0]["payload"]["input"]["write"]["context"]["neighbours"]
+    assert seen.index("line MAYA") > seen.index("Shot 5 (this shot")
+    assert out["writes"][0]["lines"] == second["lines"]
+    assert "duration_s" not in out["writes"][0]
+    assert out["rationale"].startswith("relay: the first draft wrote")
+    # The prompt says the rule the redo names.
+    assert "12. A shot's own beats." in ModelWriter(port, contracts_dir()).system
+
+
+def test_r5_speech_still_in_the_second_answer_is_taken_out_of_the_action():
+    target, inp = r5_ask()
+    again = draft(target, '@maya whispers to the kettle: "Shh, good lad."')
+    port = FakePort([{"writes": [again], "rationale": "a"}, {"writes": [again], "rationale": "b"}])
+    out = ModelWriter(port, contracts_dir()).write({"op": "write", "jobId": new_id("job"), "input": inp})
+    assert out["writes"][0]["lines"] == [{"type": "action", "text": "@maya whispers to the kettle."}]
+    assert "took the quoted speech out" in out["rationale"]
+
+
+def test_r5_an_ask_for_a_line_may_write_one_and_a_quote_already_there_stays():
+    target, inp = r5_ask("Give her a funnier line to say")
+    port = FakePort({"writes": [draft(target, '@maya whispers: "Who is a quiet boy?"')], "rationale": "a"})
+    ModelWriter(port, contracts_dir()).write({"op": "write", "jobId": new_id("job"), "input": inp})
+    assert len(port.asked) == 1
+    target, inp = r5_ask()
+    inp["write"]["lines"] = [{"type": "action", "text": 'A sign reads "QUIET PLEASE".'}]
+    port = FakePort({"writes": [draft(target, 'A wonky sign reads "QUIET PLEASE".')], "rationale": "a"})
+    ModelWriter(port, contracts_dir()).write({"op": "write", "jobId": new_id("job"), "input": inp})
+    assert len(port.asked) == 1
+
+
+def test_v8_is_v7_plus_rule_12_and_the_redo_field_and_v7_still_loads():
+    root = Path(__file__).parent.parent / "prompts"
+    v7 = (root / "skye.v7.md").read_text()
+    v8 = (root / "skye.v8.md").read_text()
+    assert v8.startswith("# Skye · scripts (skye.v8)")
+    rule12 = v8[v8.index("\n\n12. "):v8.index("\n\nAnswer with the JSON only")]
+    redo = v8[v8.index("- `input.write.redo`"):v8.index("- `input.write.too_long`")]
+    assert v8.replace(rule12, "").replace(redo, "").replace("(skye.v8)", "(skye.v7)") == v7

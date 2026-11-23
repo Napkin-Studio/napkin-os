@@ -70,7 +70,7 @@ function fountainOf(e: ScriptElement): string {
   switch (e.el) {
     case 'heading': return `\n${e.text}`
     case 'character': return `\n${e.text}${e.dual ? ' ^' : ''}`
-    case 'parenthetical': return `(${e.text})`
+    case 'parenthetical': return /^\(.*\)$/s.test(e.text.trim()) ? e.text.trim() : `(${e.text})`
     case 'dialogue': return e.text
     case 'transition': return `\n${/\bTO:$/.test(e.text) ? e.text : `> ${e.text}`}`
     case 'centered': return `\n> ${e.text} <`

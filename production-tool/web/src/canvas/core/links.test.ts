@@ -71,16 +71,22 @@ describe('canLink: every row of 3.4', () => {
     else expect(got).toEqual({ ok: true, roles: want })
   })
 
-  it('the table is 3.4 as written, plus the owner’s Script → Video and Brief rows: twelve rows, three refusals', () => {
+  it('the table is 3.4 as written, plus the owner’s Script → Video, Brief and Brand board → Note rows: thirteen rows, three refusals', () => {
     expect(LINK_TABLE.map((r) => r.fromTo)).toEqual([
       'Script → Storyboard', 'Storyboard → Video', 'Script → Video', 'Reference → any generating node, or a Shot', 'Board or group → any generating node',
-      'Note, ink group or Document → any generating node', 'Brand board → any generating node', 'Frame, key visual or Video → Format set',
+      'Note, ink group or Document → any generating node', 'Brand board → any generating node', 'Brand board → Note', 'Frame, key visual or Video → Format set',
       'Image, frame or generated picture → Shot', 'Sketch area → Frame', 'Ink group → Shot', 'Brief → Script, Storyboard, Video or Format set',
     ])
     expect(REFUSALS.map((r) => r.fromTo)).toEqual([
       'Anything → Reference, Product, Document, Brief or Brand board', 'Video → anything but a Format set', 'A link that would form a loop',
     ])
     expect(LINK_TABLE.find((r) => r.fromTo === 'Sketch area → Frame')!.allowed).toBe('Created by the system only')
+  })
+
+  it('a Brand board links into a note as its brand, and nothing else does (UAT round 3 R2-5)', () => {
+    expect(canLink({ kind: 'board', purpose: 'brand' }, 'note')).toEqual({ ok: true, roles: ['brand'] })
+    expect(canLink('board', 'note').ok).toBe(false)
+    expect(canLink('picture', 'note').ok).toBe(false)
   })
 
   it('a reference feeds every generating node', () => {

@@ -2,5 +2,8 @@
 .final-toggle.on { background: var(--plan); color: var(--paper); border-color: var(--plan); }
 .rights-chip { position: absolute; transform: translate(6px, 6px); height: 20px; padding: 0 7px; border-radius: 6px; border: 1px dashed var(--line); background: var(--card); color: var(--ink2); font-size: 11px; box-shadow: var(--shadow-pill); cursor: pointer; }
 .rights-chip:hover, .rights-chip[aria-expanded="true"] { border-color: var(--tool); color: var(--tool-ink); }
+/* Scaled with the canvas from its top-left; a dot when zoomed far out (UAT round 2 R2-11). */
+.rights-chip { transform-origin: top left; }
+.rights-chip.dot { width: 10px; height: 10px; padding: 0; border-radius: 50%; border-style: solid; background: var(--tool, #c8553d); transform: translate(4px, 4px); box-shadow: none; }
 .rights-menu .pt-menurow .hint { margin-left: 8px; }
 .ie-finalrow { display: flex; align-items: center; gap: 8px; padding: 0 0 10px; }

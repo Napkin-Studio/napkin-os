@@ -43,6 +43,10 @@ def marks_of(data: dict, chain: list) -> list:
     an empty one says the document was checked and nothing is marked (the engine refuses pictures when the key is absent)."""
     out, seen = [], set()
     scopes = [("", data)] + [(f"upstream.{k}.", v) for k, v in (data.get("upstream") or {}).items() if isinstance(v, dict)]
+    for k, v in (data.get("upstream") or {}).items():   # what a carried Production project carried itself (its full brief): marked parts are marked there too
+        for k2, v2 in ((v.get("upstream") or {}) if isinstance(v, dict) and v.get("app") == "production-tool" else {}).items():
+            if isinstance(v2, dict):
+                scopes.append((f"upstream.{k}.upstream.{k2}.", v2))
 
     def add(path, text, kind):
         text = _flat(text).strip()
@@ -56,6 +60,11 @@ def marks_of(data: dict, chain: list) -> list:
         for mid, m in (mats.items() if isinstance(mats, dict) else [(x.get("id"), x) for x in mats or [] if isinstance(x, dict)]):
             if isinstance(m, dict) and str(m.get("licence") or "").lower() == "client-confidential":
                 add(f"{prefix}materials[{mid}]", f"{m.get('name') or ''} {m.get('text') or ''}", "licence")
+    for k, v in (data.get("upstream") or {}).items():   # a carried Production project: the brief parts it froze as Confidential (its spine, in full)
+        if isinstance(v, dict) and v.get("app") == "production-tool":
+            for bid, b in (v.get("briefs") or {}).items():
+                for part in (b or {}).get("confidential") or []:
+                    add(f"upstream.{k}.briefs.{bid}.spine.{part}", ((b.get("spine") or {}).get(part)), "confidential_field")
     for d in chain or []:
         if not isinstance(d, dict) or d.get("kind") != "classify" or d.get("superseded_by"):
             continue
@@ -107,9 +116,42 @@ def size_of(data: dict) -> str | None:
     return None
 
 
+def with_production(data: dict, pu) -> dict:
+    """``data`` with the carried Production project put back whole under ``upstream.<id>``. The host sends ``clan.data.upstream`` as an index
+    (middleware-api.md §1) and the project beside it as ``clan.production_upstream {id, data}``; the marks and the engine read the project from
+    ``data.upstream`` as it is in the document. A ``pu`` that is not ``{id, data: {app: production-tool}}`` changes nothing."""
+    if not (isinstance(pu, dict) and isinstance(pu.get("id"), str) and pu["id"] and isinstance(pu.get("data"), dict)
+            and pu["data"].get("app") == "production-tool"):
+        return data
+    up = data.get("upstream") if isinstance(data.get("upstream"), dict) else {}
+    return {**data, "upstream": {**up, pu["id"]: pu["data"]}}
+
+
+def production_upstream_of(data: dict) -> dict | None:
+    """``{id, data}``: the Production project (``app: production-tool``) the Deck carries under ``data.upstream`` (the first one), as the engine
+    reads it (finals, assets, sizes, briefs). The pictures are not in it: they are held by the relay under their sha256."""
+    for k, v in (data.get("upstream") or {}).items():
+        if isinstance(v, dict) and v.get("app") == "production-tool":
+            return {"id": str(k), "data": v}
+    return None
+
+
+def assets_of(v, loopback: bool = False) -> dict | None:
+    """``{base, pass}`` from napkin-web's ``payload.production_assets`` (an https relay base and the signed assets pass), else None: a pass
+    that is not exactly that shape is dropped, never forwarded. It is a bearer token for one agency's pictures: it goes in the engine
+    request body and nowhere else (not the document, the job's view, a log line or an error message)."""
+    if not isinstance(v, dict):
+        return None
+    base, tok = v.get("base"), v.get("pass")
+    local = loopback and isinstance(base, str) and base.startswith("http://")   # dev opt-in (settings.deck_relay_loopback); the engine still checks the host
+    if not (isinstance(base, str) and (base.startswith("https://") or local) and isinstance(tok, str) and tok.startswith("v1.") and len(tok) <= 4096):
+        return None
+    return {"base": base.rstrip("/"), "pass": tok}
+
+
 def start(req, caps, settings, jid):
     """Validate now (a 400 before any job, a 503 with no engine); build the job (the caller starts it)."""
-    data = ctx_data(req.clan)
+    data = with_production(ctx_data(req.clan), (req.clan or {}).get("production_upstream"))
     inputs = data.get("inputs") if isinstance(data.get("inputs"), dict) else {}
     prompt = inputs.get("prompt") if isinstance(inputs.get("prompt"), dict) else {}
     if not str(prompt.get("text") or "").strip():
@@ -128,6 +170,12 @@ def start(req, caps, settings, jid):
     if re.fullmatch(r"(sha256:)?[0-9a-f]{64}", str(prod.get("sha256") or "")):   # the person's Production file (attach_production), on every build
         body["inputs"]["production"] = {"sha256": str(prod["sha256"]).removeprefix("sha256:"), "fetch": prod.get("fetch") is True,
                                         "look": prod.get("look") is True}
+    pu = production_upstream_of(data)
+    if pu:   # spun off from a Production project: carried whole, frozen; finals fill the slots first, pictures are fetched by link at build
+        body["production_upstream"] = pu
+        pa = assets_of(getattr(req, "production_assets", None), bool(getattr(settings, "deck_relay_loopback", False)))
+        if pa:   # napkin-web's read-only pass for this person's pictures: to the engine's picture step only, never into the document
+            body["production_assets"] = pa
     dt = deck_type_of(inputs)
     if dt:   # deck-types: the person's pick on the type picker (and any new writing they confirmed): the engine builds that type, not the kind's default
         body["inputs"]["deck_type"] = dt

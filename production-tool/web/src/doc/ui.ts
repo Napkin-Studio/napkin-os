@@ -11,7 +11,7 @@
 // script's words into the document (features/contract-v3.clan).
 
 import type { SerializedUndo } from '../../../clan-store/src'
-import type { ClipQuality, DirectorCard, JobRequest, Me, ModelChoice, Region } from '../contracts/types'
+import type { ClipQuality, DirectorCard, JobRequest, Me, ModelChoice, Region, TimelineItem } from '../contracts/types'
 import type { ConfigChoice, ProviderChoice } from '../capabilities'
 import type { JobPurpose } from '../model/purpose'
 import type { EditSession } from '../stages/imageEditor/edits'
@@ -41,6 +41,9 @@ export interface JobLocal {
   cards?: DirectorCard[]
   /** Started by that run of "Update what follows" (jobs/follow.ts). */
   followRun?: string
+  /** A frame drawn first for a box's Make: its clip is made from it when it lands, on this model, in this film
+   *  (UAT 2026-11-21, F7: the frame landed and the box stopped until a second Make). */
+  clipAfter?: { videoId?: string; modelChoice?: ModelChoice }
   /** A "Fix it in the shot" edit: the clip model the person picked for the clip made after it lands. */
   fixModelChoice?: ModelChoice
   /** …and the quality picked for it (features/clip-quality.clan). */
@@ -99,6 +102,23 @@ export interface ProjectUi {
   script?: Record<string, ScriptUi>
   /** "Choose Kapi's front" is open on the canvas for this key (stages/FrontsNeeded.tsx). */
   chooseFront?: string
+  /** Where Choose a front was opened from (the Script editor's route), to go back to when it is done (UAT
+   *  2026-11-21, F17: after choosing, the person was left on the canvas). */
+  chooseFrontFrom?: import('../app/route').Route
+  /** A joined take Edie put into the cut (rooms/editOps placeJoinedTake), said in the rooms with Undo until
+   *  dismissed: the V1 items before and after, so Undo puts back exactly what was there. */
+  joinedInCut?: JoinedInCut
+}
+
+/** A joined take placed in the cut (UAT 2026-11-21, B2). */
+export interface JoinedInCut {
+  videoId: string
+  genId: string
+  text: string
+  /** The video's V1 items before the take went in, by id. */
+  before: Record<string, TimelineItem>
+  /** The V1 items right after, as JSON: Undo restores `before` only while the cut is still this. */
+  after: string
 }
 
 /** One person's choices in one script (features/script-editor.clan). */

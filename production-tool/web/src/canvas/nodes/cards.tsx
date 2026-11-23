@@ -13,8 +13,9 @@ import { discardDraft, keep as keepDraft } from '../../script/skye'
 import { draftLines } from '../../script/skyeBooth'
 import { cameraLabel } from '../../jobs/frameEdit'
 import { askOf } from '../../jobs/runner'
+import { planAskOn } from './planAsk'
 import { isRunning, jobAt } from '../../jobs/select'
-import { beatsOf, currentFrame, currentRender, currentTake, mainScript, mainStoryboard, mainVideo, scenesOf, shotsOf, staleList, storyboardOfScript, storyboardOfVideo } from '../../model/selectors'
+import { beatsOf, currentFrame, currentRender, currentTake, mainScript, mainStoryboard, mainVideo, scenesOf, scriptOfStoryboard, scriptText, shotsOf, staleList, storyboardOfScript, storyboardOfVideo } from '../../model/selectors'
 import type { ProductionDocument, Shot, Suggestion } from '../../contracts/types'
 import { InputsStrip } from '../../stages/InputsStrip'
 import { isEmptyNode } from './nodes'
@@ -23,7 +24,10 @@ import { CardChromeContext, type Agent, type CardKind } from './cardChrome'
 import { useBlobUrl } from '../../ui/hooks'
 import { useProjectName } from '../../ui/useDownload'
 import { shotsWords } from '../../jobs/runs'
-import { plannedLine, stripOf } from './strip'
+import { plannedLine, planSource, stripOf } from './strip'
+import { answerBrand, brandQuestion, NO_BRAND } from '../../jobs/briefBrand'
+import { briefOf } from '../../brief/model'
+import { LOCAL_PERSON } from '../../jobs/runner'
 
 /** @names in blue (mock Main). */
 const withRefs = (t: string): ReactNode[] => t.split(/(@[a-z][a-z0-9_]*)/g).map((p, i) => (p.startsWith('@') ? <span key={i} className="pt-mention">{p}</span> : p))
@@ -70,9 +74,11 @@ export function AtWork({ line, warm = false }: { line: string; warm?: boolean; a
   )
 }
 
-/** Is a job of this op running on this node (the document's jobs[id].node)? */
+/** Is a job of this op running on this node (the document's jobs[id].node)? A job waiting on a person's answer is not
+ *  running (UAT round 3 R3-5: the storyboard said "planning the shots" while Dex waited on a question). */
 const runningOn = (doc: ProductionDocument, op: string, kind: string, id: string | undefined) =>
-  !!id && Object.values(doc.jobs ?? {}).some((j) => j.op === op && j.node?.kind === kind && j.node.id === id && isRunning(doc, j.id))
+  !!id && Object.values(doc.jobs ?? {}).some((j) => j.op === op && j.node?.kind === kind && j.node.id === id && isRunning(doc, j.id) && j.state !== 'needs_input')
+
 
 /** The chrome's prompt start for an empty node, if it lends one; else `fallback`. */
 function Start({ kind, id, fallback }: { kind: CardKind; id: string | undefined; fallback: ReactNode }) {
@@ -143,24 +149,53 @@ export function StoryboardCard({ id, onOpen, openButton }: { id?: string; onOpen
   const total = shots.reduce((a, s) => a + s.duration_s, 0)
   const behind = staleList(doc).filter((m) => (m.target.kind === 'frame' && mine.has(doc.frames[m.target.id]?.shot_id ?? '')) || (m.target.kind === 'shot' && mine.has(m.target.id))).length
   const planning = runningOn(doc, 'shot_list', 'storyboard', sb?.id)
+  const asking = planAskOn(doc, sb?.id)
   const drawingIdx = shots.findIndex((s) => isRunning(doc, jobAt(doc, ui, (c) => c.for === 'frame' && c.shotId === s.id)))
   const strip = stripOf(shots.length)
+  const sbScript = sb ? scriptOfStoryboard(doc, sb.id) : undefined
+  const from = planSource(sbScript ? scriptText(doc, sbScript.id) : '', !!(sb && briefOf(doc, sb.id)))
+  const brandAsk = !!sb && !!brandQuestion(doc, sb.id)
   // Its own name when it has one ("Cut-down · 9:16"); the main one is "Storyboard · 16:9" (mock).
   const own = sb?.title?.trim() && sb.title.trim() !== 'Storyboard' && !/^untitled/i.test(sb.title.trim()) ? sb.title.trim() : undefined
   return (
     <Card icon="storyboard" kind="Storyboard" name={own ? `${chrome.title(own, 'Storyboard', project)} · ${sb?.ratio ?? '16:9'}` : sb?.ratio ?? '16:9'}
       meta={drawingIdx >= 0 ? `drawing frame ${drawingIdx + 1} of ${shots.length}` : `${shots.length} shots · ${Math.round(total)} s`}
       extra={behind ? <span className="pt-pill warn">{behind} behind the script</span> : undefined} onOpen={onOpen} openButton={openButton}
-      className={planning || drawingIdx >= 0 ? 'writing' : ''} inputs={<InputsStrip nodeId={sb?.id} />} style={{ height: 194 }}>
+      className={planning || drawingIdx >= 0 ? 'writing' : ''} tag={asking ? 'Needs your call' : undefined} inputs={<InputsStrip nodeId={sb?.id} />} style={{ height: brandAsk ? 226 : 194 }}>
       {shots.length ? (
         <div className="bl-strip">
           {shots.slice(0, strip.shown).map((s, i) => <FrameTile key={s.id} shot={s} n={i + 1} drawing={i === drawingIdx} />)}
           {strip.more > 0 && <figure className="bl-frame bl-more" title={`${strip.more} more shots: open the Storyboard to see them all`}><span className="bl-noframe">+{strip.more}</span><figcaption>more</figcaption></figure>}
         </div>
       ) : <Start kind="storyboard" id={sb?.id} fallback={<p className="bl-excerpt faint">No shots yet · write the script, then plan shots.</p>} />}
-      {planning ? <AtWork agent="dex" line="The Director agent is planning the shots from the script" />
-        : shots.length ? <span className="bl-meta">{plannedLine(shots)}</span> : null}
+      {asking ? <AtWork agent="dex" warm line="The Director agent has a question: see beside this storyboard" />
+        : planning ? <AtWork agent="dex" line={`The Director agent is planning the shots from the ${from}`} />
+        : shots.length ? <span className="bl-meta">{plannedLine(shots, from)}</span> : null}
+      {sb && <BrandAsk storyboardId={sb.id} />}
     </Card>
+  )
+}
+
+/** A brief's storyboard with no Brand board asks which brand, or none (UAT round 4 S2-6, UX 4). Nothing of the
+ *  project's brand goes on its pictures until the person picks one; "No brand" is kept, so it is not asked again. */
+function BrandAsk({ storyboardId }: { storyboardId: string }) {
+  const doc = useDoc()
+  const ui = useUi()
+  const { doc: store } = useServices()
+  const [busy, setBusy] = useState(false)
+  const q = brandQuestion(doc, storyboardId)
+  if (!q) return null
+  const me = ui.me?.participantId ? `human:${ui.me.participantId}` : LOCAL_PERSON
+  const pick = (boardId: string | null) => {
+    setBusy(true)
+    void answerBrand(store, storyboardId, boardId, me).finally(() => setBusy(false))
+  }
+  return (
+    <div className="bl-brandask" role="group" aria-label="Which brand goes on this brief's pictures" onPointerDown={(e) => e.stopPropagation()}>
+      <span className="bl-meta">No Brand board on this brief. Use a brand?</span>
+      {q.boards.map((b) => <button key={b.id} type="button" className="btn xs" disabled={busy} onClick={() => pick(b.id)}>{b.title}</button>)}
+      <button type="button" className="btn xs ghost" disabled={busy} data-option={NO_BRAND} onClick={() => pick(null)}>No brand</button>
+    </div>
   )
 }
 

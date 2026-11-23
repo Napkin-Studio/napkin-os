@@ -619,6 +619,50 @@ names and shapes below are that branch's, so it merges onto them.
    `campaign.client_org.value → project.client` (owner, 2026-11-09: research
    to production is upstream + lift). Each `by_source` key is accepted.
 
+### 5.8 Production: a spin-off app whose documents stay in the relay
+
+Production (`ie.napkin.production`, packed by `clan-sdk/examples/make_production.rs`, installed with the
+other apps by the Dockerfile) declares `spinoff { accepts: [ie.napkin.brief-maker], upstream: true }`, so a
+brief is offered Production in Continue in like any app. Its documents are not library documents: they live in
+the relay (S3) and open at `/production/p/<project>`. Two napkin-web routes bridge the two (`src/spinoff.rs`).
+They need sign-in and a relay (`NAPKIN_PRODUCTION_RELAY_URL`); without one they answer 404. The host does
+the spin-off in both: `library::spinoff_change_as` and `library::spinoff_change_from`; napkin-web only moves
+bytes, through the caller's signed identity (`X-Napkin-Identity`, `production.rs`), so napkin-host stays free
+of HTTP.
+
+| Route | Body | Answer |
+|---|---|---|
+| `POST /api/t/{tenant}/spinoff/production` | `{doc, title?}`: a library document (a brief) | `{ok, project, title, path: "/production/p/<project>", etag}` |
+| `POST /api/t/{tenant}/production/{project}/spinoff` | `{target_app_id, title?}` | `{ok, path: <library doc id>, source_uri}` |
+
+**Into Production.** The new `.clan` is built from the Production template and the brief (carried whole under
+`data.upstream.<brief document id>`, its decisions pinned, `lineage.carried` set) and is **not** written to the
+library. Its bytes are posted to the relay's `POST /clan` with a fresh `X-Project-Id` (`prj_` and a ULID, the
+relay's `PROJECT_ID`) and `X-Clan-Reason: manual`. The spin-off's own decision (newest in the chain) is stamped
+with the caller's workspace (`library::stamp_tenant`), so the document says whose it is. The generic
+`/d/{doc}/spinoff` refuses Production as a target (422). The first time the Production Tool opens such a
+project, its store adds the project (`contract_version`, `project`, empty maps) beside `upstream` in one
+attributed write ("start the project"); nothing else of the manifest, the carried brief or the decisions
+changes, and later saves keep them (clan-store `test/spinoff.test.ts`). The tool makes the Brief node from the
+carried brief (`data.upstream.<lineage.carried.document_id>`, hash `lineage.carried.data_sha256`).
+
+**Out of Production.** The saved project is read with `GET /clan/{project}` as the caller (the relay keeps
+workspaces apart by where it stores a project, so another agency's project is 404 there), its canvas
+checkpoint `human/assets/canvas.ybin.zst` is removed (and its manifest entry), and the result is spun off into
+`target_app_id` (not Production) and written to the caller's library. A project whose own chain names another
+workspace is refused 403 by the host, as for library documents. Nothing else is written to the relay.
+
+**`source_uri`.** A document of the library is recorded as `clan-store:<doc id>`. A Production project is
+recorded as `production:<project id>@<etag>` (the relay's ETag of the bytes read, quotes removed) in the new
+document's `lineage.parent_uri`. That is the spin-off's own first revision: a later write to the document moves
+`lineage.parent_uri` on to its previous revision (the SDK does this for every document), so afterwards the
+parent is found by `lineage.carried.document_id` (§7.4), which every write keeps.
+
+**The Deck's carry.** For a Production source the Deck document holds `data.upstream.<project document id>`
+(the project's data less its own `projection`/`upstream`: the finals, assets and briefs of contract 3), the
+project's carried brief hoisted beside it under `data.upstream.<brief document id>`, and `lineage.carried` naming
+the project. The source app id is `ie.napkin.production`; the Deck declares that it accepts it.
+
 ---
 
 ## 6. Parallel work (N4)

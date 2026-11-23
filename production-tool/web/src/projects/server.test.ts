@@ -212,6 +212,18 @@ describe('a project saved in one browser opens in another', () => {
     expect(desktop.shell.get().session!.initialCanvas).toEqual({ elements: [{ id: 'el1', type: 'image', fileId: 'abc' }], files: {} })
   })
 
+  it('sends a picture whose location is another relay\'s: an opened Export has every picture on the relay it was opened in', async () => {
+    forgetSent()
+    const { sendAssets } = await import('./serverAssets')
+    const own = await picture(`export own ${Math.random()}`)
+    const foreign = { ...(await picture(`export foreign ${Math.random()}`)), origin: 'generated' as const, locations: ['https://other-relay.test/in/x'] }
+    const doc = { assets: { [own.sha256]: own, [foreign.sha256]: foreign } } as unknown as ProductionDocument
+    const sent: string[] = []
+    const n = await sendAssets(doc, async (blob) => { sent.push(await sha256Hex(new Uint8Array(await blob.arrayBuffer()))) })
+    expect(n).toBe(2)
+    expect(sent.sort()).toEqual([hexOf(own.sha256), hexOf(foreign.sha256)].sort())
+  })
+
   it('names the picture it could not download, and keeps nothing half-made', async () => {
     forgetSent()
     const fake = new FakeRelay()

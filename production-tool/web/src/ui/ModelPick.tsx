@@ -12,6 +12,12 @@ import { Float } from './Float'
 
 const keyOf = (c: ModelChoice) => `${c.provider}:${c.model}`
 
+/** The menu's heading in the words of what it makes (UAT round 1 IMG-21: "Make the next version with" over views). */
+const PICK_HEAD: Partial<Record<Op, string>> = {
+  generate: 'Make the picture with', view: 'Make the views with', frame: 'Draw the frame with', region_edit: 'Change it with',
+  clip: 'Make the clip with', clip_edit: 'Change the clip with', resize: 'Make the sizes with',
+}
+
 /** A provider's small square mark: the first letter on its colour. */
 export function ProviderMark({ provider }: { provider: string }) {
   return <span className={`pmark pmark-${provider}`} aria-hidden="true">{provider.slice(0, 1).toUpperCase()}</span>
@@ -57,7 +63,7 @@ export function ModelPick({ op, value, onChange }: { op: Op; value?: ModelChoice
         <span className="caret" aria-hidden="true">▾</span>
       </button>
       <Float anchor={ref} open={open} onClose={close} label="Model for the next version" className="modelmenu">
-        <div className="fhead">Make the next version with</div>
+        <div className="fhead">{PICK_HEAD[op] ?? 'Make it with'}</div>
         <ModelItems options={options} current={chosen} onPick={(o) => { onChange({ provider: o.provider, model: o.model }); close() }} />
       </Float>
     </span>

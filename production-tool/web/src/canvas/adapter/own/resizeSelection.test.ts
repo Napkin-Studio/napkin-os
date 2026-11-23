@@ -14,8 +14,8 @@ import { SHA } from '../../../test/model'
 import { choicesFor, FILMS_FROM_VIDEO, rowsFor } from '../../../campaign/formats'
 import { autoMethod, methodModels } from '../../../campaign/rules'
 import {
-  deliveryOf, frameOver, loadPick, makeWords, methodOf, mixedLine, otherViews, parseCustom, placeResults, planResize, planSlots,
-  resizableIn, resizeInput, resizePictures, savePick, SHAPES, trayRows, type Source,
+  deliveryOf, frameOver, loadPick, makeWords, methodOf, mixedLine, otherViews, parseCustom, placeResults, planResize, planSlots, tooFarToExtend, tooFarWords,
+  resizableIn, resizeInput, resizePictures, savePick, SHAPES, trayRows, knownProtect, type Source,
 } from '../../../campaign/resizeSelection'
 
 const models = methodModels()
@@ -88,9 +88,21 @@ describe('how, and the count', () => {
   it('Redraw is regenerate, Extend extend, Crop crop; a way the agency has off is null', () => {
     const p = { w: 1920, h: 1080 }
     expect(methodOf('regenerate', p, shape('9:16'), models)).toBe('regenerate')
-    expect(methodOf('extend', p, shape('9:16'), models)).toBe('extend')
+    expect(methodOf('extend', p, shape('4:5'), models)).toBe('extend')
     expect(methodOf('crop', p, shape('9:16'), models)).toBe('crop')
-    expect(methodOf('extend', p, shape('9:16'), { regenerate: models.regenerate })).toBeNull()
+    expect(methodOf('extend', p, shape('4:5'), { regenerate: models.regenerate })).toBeNull()
+  })
+  it('Extend to a shape past three steps of 35 % is a Redraw at that shape, said in plain words (UAT round 4 S1-1)', () => {
+    // The live repro: a 1536 x 864 sunset to 9:16 (3.2x) stacked four suns in three bigger steps.
+    const p = { w: 1536, h: 864 }
+    expect(methodOf('extend', p, shape('9:16'), models)).toBe('regenerate')
+    expect(methodOf('extend', p, shape('21:9'), models)).toBe('extend')
+    expect(methodOf('extend', p, shape('9:16'), { extend: models.extend })).toBeNull() // Redraw off: nothing is made
+    const far = tooFarToExtend('extend', [p], [shape('9:16'), shape('21:9'), shape('4:5')])
+    expect(far.map((s) => s.id)).toEqual(['9:16'])
+    expect(tooFarToExtend('regenerate', [p], [shape('9:16')])).toEqual([])
+    expect(tooFarWords(far, models)).toBe("9:16 is too far from this picture's shape to extend without repeating it, so it is redrawn at that shape from the picture instead (Redraw).")
+    expect(trayRows(planResize([{ ...p, elId: 'a', asset: 'x', kind: 'picture' } as never], [shape('9:16')], 'extend', models), models, () => 'P')[0].words).toBe('Redraw · Gemini 3 Pro')
   })
   it('Auto: crop when little is lost, extend when close, redraw when the picture would sit small', () => {
     expect(autoMethod({ w: 1920, h: 1080 }, { w: 3, h: 2 })).toBe('crop')
@@ -107,7 +119,7 @@ describe('how, and the count', () => {
     const rows = trayRows(planned, models, (_s, i) => `Picture ${i + 1}`)
     expect(rows[0]).toMatchObject({ name: 'Picture 1 · 9:16', words: 'Redraw · Gemini 3 Pro' })
     expect(rows[5].name).toBe('Picture 3 · 1:1')
-    expect(trayRows(planResize(sources, [shape('9:16')], 'crop', models), models, () => 'P')[0].words).toBe('Crop · free')
+    expect(trayRows(planResize(sources, [shape('9:16')], 'crop', models), models, () => 'P')[0].words).toBe('Crop')
     expect(JSON.stringify(rows)).not.toMatch(/\$|USD|credit|cost/i)
   })
   it('the preview draws a crop inside the picture and an extend or a redraw round it', () => {
@@ -119,16 +131,50 @@ describe('how, and the count', () => {
   })
 })
 
-describe('the last pick, in this browser', () => {
-  it('is kept and read back; broken or missing storage starts afresh', () => {
+describe('the last How, in this browser (never the shapes: UAT round 1 IMG-17)', () => {
+  it('is kept and read back; old saved shapes are ignored; broken or missing storage starts afresh', () => {
     const mem = new Map<string, string>()
     const store = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v) }
-    savePick({ shapes: [shape('9:16'), parseCustom('1200x628')!], how: 'extend' }, store)
-    expect(loadPick(store)).toEqual({ shapes: [shape('9:16'), parseCustom('1200x628')!], how: 'extend' })
+    savePick({ how: 'extend' }, store)
+    expect(loadPick(store)).toEqual({ how: 'extend' })
+    expect(mem.get('napkin.resize.last')).toBe('{"how":"extend"}')
+    mem.set('napkin.resize.last', JSON.stringify({ shapes: [shape('9:16')], how: 'crop' }))
+    expect(loadPick(store)).toEqual({ how: 'crop' })
     mem.set('napkin.resize.last', '{nope')
-    expect(loadPick(store)).toEqual({ shapes: [], how: 'regenerate' })
-    expect(loadPick({ getItem: () => { throw new Error('blocked') } })).toEqual({ shapes: [], how: 'regenerate' })
-    expect(() => savePick({ shapes: [], how: 'crop' }, { setItem: () => { throw new Error('full') } })).not.toThrow()
+    expect(loadPick(store)).toEqual({ how: 'regenerate' })
+    expect(loadPick({ getItem: () => { throw new Error('blocked') } })).toEqual({ how: 'regenerate' })
+    expect(() => savePick({ how: 'crop' }, { setItem: () => { throw new Error('full') } })).not.toThrow()
+  })
+})
+
+describe('a crop keeps what must stay, and can be moved (UAT round 1 IMG-4)', () => {
+  const wide = { elId: 'p', nodeId: 'n', asset: SHA('w'), w: 1600, h: 900, kind: 'picture' as const }
+  const person = { role: 'subject' as const, x: 120, y: 200, w: 200, h: 600 }
+  const ref = (sha: string): AssetRef => ({ sha256: sha, url: `https://cdn.test/${sha.slice(7, 12)}`, mime: 'image/png' })
+
+  it('the preview frame is the relay\'s crop: round the subject when one is marked, the middle otherwise', () => {
+    const middle = frameOver(wide, shape('4:5'), 'crop')
+    expect(middle.x).toBe((1600 - middle.w) / 2)
+    const kept = frameOver({ ...wide, protect: [person] }, shape('4:5'), 'crop')
+    expect(kept.x).toBeLessThanOrEqual(person.x)
+    expect(kept.x + kept.w).toBeGreaterThanOrEqual(person.x + person.w)
+    expect(frameOver(wide, shape('4:5'), 'crop', { x: 10, y: 0, w: 720, h: 900 })).toEqual({ x: 10, y: 0, w: 720, h: 900 })
+  })
+
+  it('the job carries what must stay, and a moved crop on a crop only', () => {
+    const src = { ...wide, protect: [person] }
+    const crop = resizeInput({ source: src, shape: shape('4:5'), method: 'crop', crop: { x: 10.4, y: 0, w: 720, h: 900 } }, ref(SHA('w')))
+    expect(crop.resize).toMatchObject({ method: 'crop', protect: [person], crop: { x: 10, y: 0, w: 720, h: 900 }, masterSize: { w: 1600, h: 900 } })
+    const redraw = resizeInput({ source: src, shape: shape('4:5'), method: 'regenerate', crop: { x: 10, y: 0, w: 720, h: 900 } }, ref(SHA('w')))
+    expect(redraw.resize).toMatchObject({ protect: [person] })
+    expect(redraw.resize?.crop).toBeUndefined()
+    expect(resizeInput({ source: wide, shape: shape('4:5'), method: 'crop' }, ref(SHA('w'))).resize?.protect).toBeUndefined()
+  })
+
+  it('uses a Make all sizes set\'s boxes for the same picture, scaled to its pixels', () => {
+    const doc = { format_sets: { fs1: { master: { kind: 'picture', id: 'n', w: 3200, h: 1800 }, protect: { boxes: [{ ...person, x: 240, y: 400, w: 400, h: 1200 }] } } } } as never
+    expect(knownProtect(doc, wide)).toEqual([person])
+    expect(knownProtect({ format_sets: {} } as never, wide)).toBeUndefined()
   })
 })
 
@@ -231,7 +277,11 @@ describe('the jobs', () => {
     expect(r.sent[2].input.refs).toBeUndefined()
     const e = run('extend')
     await e.go()
-    expect(e.sent.every((s) => !s.input.refs)).toBe(true)
+    // 1:1 extends and sends the picture only; 9:16 is past three extend steps of a 16:9 picture, so it is a Redraw.
+    const extended = e.sent.filter((s) => s.input.resize?.method === 'extend')
+    expect(extended.length).toBeGreaterThan(0)
+    expect(extended.every((s) => !s.input.refs)).toBe(true)
+    expect(e.sent.some((s) => s.input.aspect?.h === 2048 && s.input.resize?.method === 'regenerate' && s.input.resize.masterSize.w === 1920)).toBe(true)
     expect(otherViews(doc, views[0]).map((x) => x.id)).toEqual(['ref_side', 'ref_back'])
     expect(otherViews(doc, undefined)).toEqual([])
   })

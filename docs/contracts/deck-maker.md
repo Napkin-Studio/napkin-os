@@ -131,10 +131,10 @@ The Deck never searches the web and never launches research on its own.
 
 ## Spin-off
 
-The Deck template declares `app.spinoff { accepts: [ie.napkin.brief-maker, ie.napkin.campaign-research],
-upstream: true }`, no map and no lift, and its version is `0.2.1` (`crates/clan-sdk/examples/make_deck_maker.rs`,
+The Deck template declares `app.spinoff { accepts: [ie.napkin.brief-maker, ie.napkin.campaign-research,
+ie.napkin.production], upstream: true }`, no map and no lift, and its version is `0.5.0` (`crates/clan-sdk/examples/make_deck_maker.rs`,
 which asserts both; `crates/clan-sdk/tests/spinoff.rs` runs it).
-A deck spun off from a Brief Maker or Research Tool document carries that document whole, frozen, under
+A deck spun off from a Brief Maker, Research Tool or Production document carries that document whole, frozen, under
 `data.upstream.<source document id>`. A deck is a frozen snapshot of its brief and research: on Start and on
 Review the app shows "<title> changed since this deck" when the host reports a source changed since
 (`GET /upstream`, an entry with `status: changed`); the deck keeps the version it has, does not take the
@@ -336,13 +336,47 @@ When a build used a Production file (`run_deck --production FILE`, a .clan or it
 (`engine/deck/run_state.production_payload`): the card line (`Production: N picked, M not reachable`), each picked slot with
 its candidates (label, role, reach, rights, status; never a location), and the opt-in switches as the build had them (fetch,
 with `allow_list_empty`; the tie-break; the vision check). The Review aside shows a slide's Production tiles with a reach badge
-(Embedded, https link or Fetched link, Export zip, Not reachable) and a rights badge (Rights to supply when the picture waits
+(Embedded, Linked from Production, https link or Fetched link, Export zip, Not reachable) and a rights badge (Rights to supply when the picture waits
 for its rights). A person swaps a slot to another of its candidates: the app writes `review.production.<slide>.<slot>`
 `{key, by, at}`; the engine honours it while the key is still a candidate for that slot (never over a rights or reach check)
 and records it in its stages (`production_choices.json`), as `--production-pick SLIDE.SLOT=KEY` does. Fetch and the vision check
 stay opt-in, and the panel says so; with an empty host allow-list it says nothing can be fetched yet.
 
-**The Production file.** The person attaches a Production .clan or export zip with Attach files (or picks one already attached);
+**A Production project spun off into the deck** (production-spinoff, owner 2026-11-22). Production's *New deck from this project* spins
+the saved project off into a Deck Maker document: its contract-3 data (assets, frames, format sets, sizes, renders, briefs and the
+`finals` map, item 26) is carried whole under `data.upstream.<project's document id>` with `source_uri production:<project id>@<etag>`
+(app id `ie.napkin.production`). The pictures are not embedded: they stay in the relay under their sha256.
+
+- *Reading.* `build_deck@1` sends the carried entry (the host's `clan.production_upstream`, the first `data.upstream` entry whose `app` is `production-tool`: `data.upstream` itself reaches the middleware as an index, middleware-api.md §1) to the engine
+  server as `production_upstream {id, data}`; the engine server writes it to the document's folder and runs with
+  `--production-upstream FILE`. A Deck document read directly (`run_deck --deck FILE.clan`) needs no flag: `inputs.from_deck_document`
+  names the entry. The entry is never the brief or the research. An explicit `--production FILE` (below) wins; an investor deck, or a
+  run with `--pictures none`, does not use it.
+- *Finals first, then the rules.* `deck.from_production.plan_offer` marks each candidate a person marked final (`final: true`), and
+  `images.bind_production` takes finals before Sai's rules (`master_pool`, `size_pool`, `_film_frames`); the rules fill what no final
+  reaches. A swap on Review or `--production-pick` still wins. The picker reports a final's pick `by: final`. See deck-visuals.md.
+- *Rights.* A stated `assets[sha].rights` (generated, own, licensed) is trusted; `unknown` waits as `Rights to supply`; with none
+  stated the origin decides, only lowering. Nothing is called forged any more (`forged_fields` is gone).
+- *Pictures by link.* Each picture a build needs is fetched by sha256 from the relay's `GET /assets/{sha256}?w=2400`, cached by hash
+  under the document's stages folder and checked as a picture; the original-size copy is checked against its sha256. Reach is `relay`
+  (the app's badge: Linked from Production). The call is the person's own, signed with `X-Napkin-Identity`
+  (production-tool-identity.md, "The assets pass"): the middleware holds no relay key and does not know who is asking, so napkin-web
+  signs one read-only pass (`aud: "assets"`, `GET /assets/{sha256}` only, the caller's agency, 30 minutes) for each `build_deck` it
+  forwards and adds `payload.production_assets {base, pass}` (any value the browser sent is dropped). The middleware hands it to the
+  engine only for a deck that carries a Production project; the engine's transport (`prod_picker.use_relay`, `relay_fetcher`) sends
+  it to the relay's host only, follows the relay's 302 to the picture (https, no credentials or port, public addresses, a few hops,
+  the byte cap) without the pass, and never writes or logs it. The relay's host is the server-set `base`, so it is not on
+  `policy/production_fetch.yaml` (that list is for the https locations a document names). With no relay configured, or an expired or
+  refused pass, every picture says it is not reachable (an empty slot with that reason, never a generated picture).
+- *The brief.* A deck with no brief of its own upstream takes the brief its Production project froze (`briefs`, the newest: insight,
+  proposition, audience, tone, feel, mandatories), mapped onto the Brief Maker fields (`inputs.production_brief`); a part the brief
+  marked Confidential stays a mark, so it never reaches a picture model (the middleware sends those marks too). A brief of the
+  deck's own is never replaced.
+- *Start.* A Production card sits beside Brief and Research, read from `data.upstream` and never stored: the project's title, "N
+  finals brought in" (images that are not mock output) and how many wait as rights to supply. No prices.
+
+**An attached Production file** (kept: the older manual path, for an export zip or a .clan that was not spun off). The person attaches
+a Production .clan or export zip with Attach files (or picks one already attached);
 Start then shows a Production pictures card, and Use for pictures reads the file from the host (`/assets/<name>`) and sends it once
 through the middleware task `attach_production@1` to the engine (`POST /production`, 64 MB at most, checked as the picker reads it,
 kept locally by its sha256). The app records `inputs.production {name, sha256, fetch, look}` with both opt-ins off; every
@@ -351,7 +385,7 @@ kept locally by its sha256). The app records `inputs.production {name, sha256, f
 fails the build with `production_missing`: choose it again. The engine keeps a document's newest five Production files, 200 MB
 together at most. A file chosen anew clears `review.production`, and the engine drops a recorded swap whose key is no longer a
 candidate, or that was made against another file. The vision check says what it costs: local Ollama first, else Claude Haiku, which
-sends the pictures to Anthropic and is paid, on every build while it is on.
+sends the pictures to Anthropic and is paid, on every build while it is on. Finals and stated rights apply to it too.
 
 ## Not built
 

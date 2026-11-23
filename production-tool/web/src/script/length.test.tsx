@@ -59,3 +59,12 @@ describe('the target length', () => {
     expect(d2.storyboards[sb.id].target_s).toBe(15)
   })
 })
+
+describe('the length an ask names (UAT 2026-11-21, F22)', () => {
+  it('reads seconds in the words, or none', async () => {
+    const { askedSeconds } = await import('./length')
+    expect(askedSeconds('Cut it to 10 seconds')).toBe(10)
+    expect(askedSeconds('make it 6s and punchier')).toBe(6)
+    expect(askedSeconds('make it punchier')).toBeNull()
+  })
+})

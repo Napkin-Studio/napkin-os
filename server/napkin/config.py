@@ -105,6 +105,7 @@ class Settings:
     brief_engine_url: str | None = None
     deck_engine_url: str | None = None
     deck_render: bool = True
+    deck_relay_loopback: bool = False   # dev only: DECK_RELAY_ALLOW_LOOPBACK=1 lets an http relay base through (the engine checks the host)
     runlog_dir: str | None = None
     jev_api_key: str | None = None
     jev_model: str = "jev-latest"
@@ -170,6 +171,7 @@ class Settings:
                    brief_engine_url=e("NAPKIN_BRIEF_ENGINE_URL") or None,
                    deck_engine_url=e("NAPKIN_DECK_ENGINE_URL") or None,
                    deck_render=(e("NAPKIN_DECK_RENDER") or "1").strip().lower() not in ("0", "false", "off", "no"),
+                   deck_relay_loopback=(e("DECK_RELAY_ALLOW_LOOPBACK") or "").strip() == "1",
                    runlog_dir=e("NAPKIN_RUNLOG_DIR") or None,
                    jev_api_key=e("NAPKIN_JEV_API_KEY") or e("TYPESAFE_API_KEY") or None,
                    jev_model=e("NAPKIN_JEV_MODEL") or "jev-latest",
