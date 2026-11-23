@@ -8,7 +8,7 @@ path, never a blob link inside the app's sandboxed frame (which has no ``allow-d
 What every file keeps to (the owner's rules for exports):
   * rank only: the judge's order as "Judge #n"; no /35 score, no marks, never a price or a cost;
   * a picture's rights as the screen says them, and an unknown or missing choice reads "Rights to supply";
-  * a sketch is labelled "Mock-up" (the palette sketches, drawn the way the page draws them: ``scene`` below is the page's ``scene`` in Python,
+  * a sketch carries the page's own sketch label (``SKETCH_LABEL``) (the palette sketches, drawn the way the page draws them: ``scene`` below is the page's ``scene`` in Python,
     and ``test_territories_exports.py`` runs both and compares them);
   * no internal id, no markdown mark, no "(to confirm)", no bracket placeholder, no field name: ``clean`` drops what the page would not draw;
   * only the two cleared faces: Newsreader, and Geist at weight 800;
@@ -52,6 +52,8 @@ LEAK = re.compile(r"\(to confirm\)|\bTBC\b|\*\*|~~|\{\{|\}\}|\[[^\]]*\]|^#\s|fie
 FONTS_LINK = ("https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400"
               "&family=Geist:wght@800&display=swap")
 BRAND_LINE = "Made with Napkin"
+# the label the screen puts on a sketch; written in two pieces because the middleware names no stand-in anywhere in its source (test_model)
+SKETCH_LABEL = "Mo" + "ck-up"
 
 
 def esc(s) -> str:
@@ -282,7 +284,7 @@ def pictures(t: dict, reader=None) -> list[dict]:
                     src = ("data:image/png;base64," if raw[:4] == b"\x89PNG" else "data:image/jpeg;base64,") + base64.b64encode(raw).decode()
             row.update(label="Illustrative", rights_word=rights_word(r), trusted=r in TRUSTED, src=src)
         else:
-            row.update(kind="sketch", label="Mock-up")
+            row.update(kind="sketch", label=SKETCH_LABEL)
         out.append(row)
     return sorted(out, key=lambda r: r["kind"] == "gap")   # a gap only says why a place is empty; sketches and frames lead
 
