@@ -151,6 +151,27 @@ impl NapkinHost {
             .map_err(err)
     }
 
+    /// One Brand Clan operation (docs/contracts/brand-clan.md section 5): `op`
+    /// by name, `input` JSON, `body` a file's bytes for `asset.put`.
+    #[wasm_bindgen(js_name = brandClan)]
+    pub fn brand_clan(
+        &self,
+        op: &str,
+        input: &str,
+        body: Option<Vec<u8>>,
+    ) -> Result<JsValue, JsValue> {
+        let input: serde_json::Value = serde_json::from_str(input).map_err(err)?;
+        napkin_host::brand_clan::call(
+            &*self.store,
+            self.session.ctx(),
+            op,
+            &input,
+            body.unwrap_or_default(),
+        )
+        .map(|r| to_js(&r.transport()))
+        .map_err(err)
+    }
+
     /// The free-text client names no client has yet, with their document counts.
     #[wasm_bindgen(js_name = legacyClientNames)]
     pub fn legacy_client_names(&self) -> Result<JsValue, JsValue> {

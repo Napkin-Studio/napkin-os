@@ -112,7 +112,7 @@ candidate **has that section non-empty**; a section it leaves out is kept, never
 
 Tenant routes under `/api/t/{tenant}` on napkin-web. The same operations are one function, `napkin_host::brand_clan::call(store, ctx, op, input)`, which the wasm and desktop hosts
 call by op name (the **op** is in brackets). JSON in and out. Errors are the host's: 400 bad input, 403 not a person (or another tenant's document), 404, 409 conflict (a stale
-`expect_version`, no draft, nothing to publish), 422 not a Brand Clan.
+`expect_version`, no draft, nothing to publish), 422 not a Brand Clan, or a bible the schema refuses (on create and publish; a draft or proposal the schema refuses is 400).
 
 | Route [op] | Body | Reply |
 |---|---|---|
@@ -128,7 +128,7 @@ call by op name (the **op** is in brackets). JSON in and out. Errors are the hos
 | `POST /brand-clans/{doc}/proposal` [`proposal.set`] | `{candidate, source, from}` (`proposal.request.json`) | the `View` with `pending` |
 | `POST /brand-clans/{doc}/proposal/accept` [`proposal.accept`] | `{take: "all" \| [change id], expect_version}` | the `View`, at version + 1 |
 | `POST /brand-clans/{doc}/proposal/keep` [`proposal.keep`] | | the `View`, pending cleared, version unchanged |
-| `POST /brand-clans/{doc}/update-work` [`work.update`] | `{path}` (a work document) | the attach reply of `/attach/update` |
+| `POST /brand-clans/{doc}/update-work` [`work.update`] | `{work}` (a work document's `path`) | the attach reply of `/attach/update` |
 | `POST /brand-clans/{doc}/assets?name=` [`asset.put`] | the file's bytes | `{name, path}` (`path` is `human/assets/<name>`; the name is made unique by a content prefix) |
 | `GET /brand-clans/{doc}/assets/{name}` [`asset.get`] | | the bytes (SVG served as an image only) |
 
@@ -157,7 +157,9 @@ rules and tone, imagery style, the source file, and no UI for the provisions), e
 * **Build** (`brand_build` job, a stronger model reading the whole file in pieces) produces a **complete candidate** (section 2.2) and a `source`, then writes it through the host:
   a first build: `create {name: "Original", candidate, source, from {kind build, file}}` as `process:brand_build`; an update to an existing one: `proposal.set {candidate, source, from {kind upload, file}}`.
   The job writes the document **only when it has content**; a failed build creates nothing half-made. A section it cannot find is omitted and listed in `candidate.gaps`.
-* Assets (a logo cut from a page, the source file) go up first by `asset.put`, and the candidate names them by `human/assets/<name>`.
+* **Order for assets on a first build** (there is no route that uploads before the document exists): (1) `create` with the candidate, naming each file as `human/assets/<sha10>-<name>`, where `<sha10>` is the first 10 hex digits of the SHA-256 of the file's bytes and `<name>` is the file name (the host's naming rule, so the job knows the names beforehand); (2) `asset.put` each file into the new document (the reply's `path` must equal the name the candidate used); (3) done. A candidate may name a file that is not there yet; the Bible shows it as a missing picture until `asset.put` lands. For an update, `asset.put` into the existing document first, then `proposal.set`.
+* **The service credential.** The job is not a signed-in person. napkin-web lets a request in without a session when it carries `Authorization: Bearer <NAPKIN_BRAND_HOST_TOKEN>` (32+ bytes, set on napkin-web and on the middleware as the same secret) and `X-Napkin-Actor: process:brand_build`, and only for: `GET /clients/{c}/brand-clans`, `GET /brand-clans/{doc}`, `POST /clients/{c}/brand-clans`, `POST /brand-clans/{doc}/proposal`, `POST /brand-clans/{doc}/assets`. The workspace is the `{tenant}` in the path. The actor on every decision and every changelog entry is `process:brand_build`, so history reads "built from <file>" by Napkin. A wrong token, another actor name, or any other route is 401. The host refuses a `process:` actor everywhere except `create` with a candidate, `proposal.set` and `asset.put` (403), so the credential cannot publish, accept, edit or set the default.
+* The shell reads a client's Brand Clans and default with `host.brandClans.list(clientId)` (`{default, items, behind}`), on every host (`app/src/host/brandClans.ts`: also `get`, `history`, `create`, `saveDraft`, `publish`, `setDefault`, `updateWork`, …).
 
 ## 8. What reads it (phase 2, lane B; frozen shapes)
 

@@ -119,6 +119,66 @@ impl Identity {
     }
 }
 
+/// The job acting in this request instead of a person: the build job writing a
+/// Brand Clan (`docs/contracts/brand-clan.md` section 7). Only [`service_actor`] makes one.
+#[derive(Clone, Debug)]
+pub struct ServiceActor(pub String);
+
+/// The one service credential: `NAPKIN_BRAND_HOST_TOKEN` (32+ bytes), read once.
+fn brand_token() -> Option<&'static str> {
+    static TOKEN: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    TOKEN
+        .get_or_init(|| {
+            std::env::var("NAPKIN_BRAND_HOST_TOKEN")
+                .ok()
+                .filter(|t| t.len() >= 32)
+        })
+        .as_deref()
+}
+
+/// `process:brand_build`, when the request carries the service token and an
+/// `X-Napkin-Actor` naming that job, and asks for one of the few Brand Clan
+/// routes the job uses (read a client's list or one Brand Clan, make one,
+/// propose a new version, put a file). Anything else is not let in by this
+/// door: it falls through to the session check, and so is refused without one.
+/// The tenant is the one the path names: the token is the authority, the job
+/// works for whichever agency's upload it is building.
+fn service_actor(parts: &Parts) -> Option<(TenantId, String)> {
+    let token = brand_token()?;
+    let given = parts
+        .headers
+        .get(header::AUTHORIZATION)?
+        .to_str()
+        .ok()?
+        .strip_prefix("Bearer ")?;
+    // Compared without stopping at the first difference.
+    let same = given.len() == token.len()
+        && given
+            .bytes()
+            .zip(token.bytes())
+            .fold(0u8, |acc, (a, b)| acc | (a ^ b))
+            == 0;
+    let actor = parts.headers.get("x-napkin-actor")?.to_str().ok()?;
+    if !same || actor != "process:brand_build" {
+        return None;
+    }
+    let rest = parts.uri.path().strip_prefix("/t/")?;
+    let (tenant, route) = rest.split_once('/')?;
+    let seg: Vec<&str> = route.split('/').collect();
+    let get = parts.method == axum::http::Method::GET;
+    let post = parts.method == axum::http::Method::POST;
+    let allowed = match seg.as_slice() {
+        ["clients", _, "brand-clans"] => get || post,
+        ["brand-clans", _] => get,
+        ["brand-clans", _, "proposal" | "assets"] => post,
+        _ => false,
+    };
+    allowed
+        .then(|| TenantId::parse(tenant))
+        .flatten()
+        .map(|t| (t, actor.to_string()))
+}
+
 /// The person acting in this request: the signed-in account's name, or the
 /// anonymous tenant itself.
 #[derive(Clone, Debug)]
@@ -133,6 +193,18 @@ impl<S: Send + Sync> FromRequestParts<S> for Acting {
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let Tenant(t) = Tenant::from_request_parts(parts, state).await?;
+        if let Some(ServiceActor(job)) = parts.extensions.get::<ServiceActor>() {
+            let actor = job
+                .strip_prefix("process:")
+                .and_then(|j| napkin_host::Actor::process(j).ok())
+                .ok_or_else(|| deny(StatusCode::FORBIDDEN, "not a job"))?;
+            return Ok(Acting(napkin_host::Ctx::new(actor).with_scope(
+                napkin_host::Scope {
+                    org: Some(t.as_str().to_string()),
+                    brand: None,
+                },
+            )));
+        }
         let person = parts.extensions.get::<Person>().map(|p| p.0.clone());
         Ok(Acting(match person {
             Some(p) => t.ctx_for(&p),
@@ -204,6 +276,14 @@ pub async fn layer(
     next: Next,
 ) -> Response {
     let (mut parts, body) = request.into_parts();
+    if let Some((tenant, job)) = service_actor(&parts) {
+        crate::timing::note_who(tenant.as_str(), &job);
+        parts.extensions.insert(tenant);
+        parts.extensions.insert(ServiceActor(job));
+        return next
+            .run(axum::extract::Request::from_parts(parts, body))
+            .await;
+    }
     match &identity.mode {
         Mode::Anonymous => {
             let existing = cookie_value(&parts, COOKIE_NAME)

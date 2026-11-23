@@ -20,6 +20,7 @@ import type { LandingData } from './store'
 import { correctRoute, formatRoute, sameRoute, up, type Route } from '../route'
 import { Desk } from '../nui/Desk'
 import { ClientView } from '../nui/ClientView'
+import type { BrandApi } from '../../host/brandClans'
 import type { Facts } from '../nui/deskData'
 import { useLensDots } from '../nui/lenses'
 import './landing.css'
@@ -45,9 +46,11 @@ interface Props {
   onOffline?: () => void
   /** The Decisions drawer (the client page's record line opens it). */
   onDecisions?: () => void
+  /** The Brand Clan operations of the shell's host (the client page's Brand Clans). */
+  brand?: BrandApi
 }
 
-export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDocument, onRefresh, facts = {}, onOpenFile, onOffline, onDecisions }: Props) {
+export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDocument, onRefresh, facts = {}, onOpenFile, onOffline, onDecisions, brand }: Props) {
   const top = useRef<HTMLDivElement>(null)
   const [registryNote, setRegistryNote] = useState<string | null>(null)
 
@@ -160,6 +163,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         onOpenTool={t => openTool(client.id, t)}
         onSoon={sayingSoon}
         onDecisions={onDecisions}
+        brand={brand}
         onRename={manage ? name => manage.rename(client.id, name) : undefined}
         onArchive={manage ? async () => {
           const refused = await manage.archive(client.id)

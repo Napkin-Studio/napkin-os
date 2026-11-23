@@ -48,6 +48,11 @@ export class NapkinHost {
      */
     installApp(bytes: Uint8Array): any;
     /**
+     * One Brand Clan operation (docs/contracts/brand-clan.md section 5): `op`
+     * by name, `input` JSON, `body` a file's bytes for `asset.put`.
+     */
+    brandClan(op: string, input: string, body?: Uint8Array | null): any;
+    /**
      * The free-text client names no client has yet, with their document counts.
      */
     legacyClientNames(): any;
