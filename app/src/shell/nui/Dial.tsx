@@ -94,7 +94,9 @@ export function Dial({ client, items, live, place, onOpenTool, onSoon, onOpenCli
     const a0 = start + i * span, a1 = a0 + span, am = (a0 + a1) / 2
     const [lx, ly] = pol(212, am)
     const c = mine.length
-    const sub = !on ? 'Soon' : st === 'needs' ? '' : st === 'working' ? 'Agents working' : c ? `${c} ${q.noun[c > 1 ? 1 : 0]}` : 'Nothing yet'
+    // The count is what every slice says; what needs you is a small mark under it (never in its place).
+    const count = c ? `${c} ${q.noun[c > 1 ? 1 : 0]}` : 'Nothing yet'
+    const sub = !on ? 'Soon' : st === 'needs' ? count : st === 'working' ? 'Agents working' : count
     return (
       <g key={q.id}>
         <g className={`dz dz-out${st === 'needs' ? ' dz-needs' : ''}${lit === i ? ' dz-lit' : ''}`} data-i={i} style={{ ['--d' as string]: `${i * 55}ms` }}
@@ -104,10 +106,10 @@ export function Dial({ client, items, live, place, onOpenTool, onSoon, onOpenCli
             <g fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><ToolPaths tool={q.id} /></g>
           </g>
           <text x={f1(lx)} y={f1(ly + 4)} className="dz-name">{q.name}</text>
-          {sub && <text x={f1(lx)} y={f1(ly + 30)} className="dz-sub">{sub}</text>}
+          {sub && <text x={f1(lx)} y={f1(ly + (st === 'needs' ? 24 : 30))} className="dz-sub">{sub}</text>}
           {st === 'needs' && <>
-            <rect className="dz-tagbg" x={f1(lx - 58)} y={f1(ly + 16)} width="116" height="24" rx="3" />
-            <text x={f1(lx)} y={f1(ly + 34)} className="dz-tag">YOUR CALL</text>
+            <rect className="dz-tagbg" x={f1(lx - 40)} y={f1(ly + 34)} width="80" height="16" rx="3" />
+            <text x={f1(lx)} y={f1(ly + 45.5)} className="dz-tag dz-tag-sm">YOUR CALL</text>
           </>}
         </g>
         {st && <path className={`dz-rim ${st}`} d={arcD(R.rim, a0 + 0.03, a0 + 0.03 + (span - 0.06) * (st === 'done' ? 1 : st === 'needs' ? 0.8 : 0.45))} />}
@@ -140,7 +142,9 @@ export function Dial({ client, items, live, place, onOpenTool, onSoon, onOpenCli
       {QUADRANTS.map((q, i) => {
         const mine = items.filter(it => toolOfApp(it.app_id)?.id === q.id)
         const st = areaState(mine), on = live.has(q.id), c = mine.length
-        const sub = !on ? 'Soon' : st === 'needs' ? '' : st === 'working' ? 'Agents working' : c ? `${c} ${q.noun[c > 1 ? 1 : 0]}` : 'Nothing yet'
+        // The count is what every slice says; what needs you is a small mark under it (never in its place).
+    const count = c ? `${c} ${q.noun[c > 1 ? 1 : 0]}` : 'Nothing yet'
+    const sub = !on ? 'Soon' : st === 'needs' ? count : st === 'working' ? 'Agents working' : count
         const t = toolById(q.id)
         const state = !on ? 'coming soon' : st === 'needs' ? 'needs your call' : sub.toLowerCase()
         const move = (to: number) => { const k = (to + n) % n; setAt(k); quads.current[k]?.focus() }

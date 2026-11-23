@@ -213,8 +213,10 @@ button.tsrc:hover{border-color:color-mix(in srgb,var(--ink) 35%,var(--line))}
 .bt-box .row{display:flex;align-items:center;gap:8px}
 .bt-scope{white-space:nowrap;display:inline-flex;align-items:center;height:24px;padding:0 9px;border-radius:999px;background:var(--paper-2);color:var(--ink-soft);font:800 11px var(--font-ui)}
 .btn{height:32px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--card);font:800 12.5px var(--font-ui);color:var(--ink)}
-.btn.dark{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.btn.dark,.btn.primary{background:var(--ag-act);color:var(--ag-act-ink);border-color:var(--ag-act-line,var(--ag-act))}
 .btn:disabled{opacity:.45}
+.spin-s{display:inline-block;width:11px;height:11px;margin-right:6px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;vertical-align:-1px;animation:tspin .8s linear infinite}
+@keyframes tspin{to{transform:rotate(360deg)}}
 .pfoot{border-top:1px solid var(--line);padding-top:12px;font-size:14px;color:var(--muted)}
 .pfoot b{color:var(--ink);font-weight:600}
 .booth-edge{all:unset;box-sizing:border-box;cursor:pointer;position:fixed;right:0;top:120px;z-index:40;width:38px;padding:14px 0 16px;display:flex;flex-direction:column;align-items:center;gap:10px;
@@ -244,7 +246,7 @@ button.tsrc:hover{border-color:color-mix(in srgb,var(--ink) 35%,var(--line))}
 .fields{margin:0;padding:0;list-style:none;display:grid;gap:12px}
 .fields li{border-left:3px solid var(--te);padding:2px 0 2px 12px}
 .fields .fl{font:800 11px var(--font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-.fields .tbc{font:800 10px var(--font-ui);letter-spacing:.06em;text-transform:none;color:var(--muted);border:1px dashed var(--line,#bbb);border-radius:999px;padding:0 6px;margin-left:6px;vertical-align:1px}
+.tbc{font:800 10px var(--font-ui);letter-spacing:.06em;text-transform:none;color:var(--muted);border:1px dashed var(--line,#bbb);border-radius:999px;padding:0 6px;margin-left:6px;vertical-align:1px}
 .fields .ft{font:400 17px/1.45 var(--font-serif);white-space:pre-line;overflow-wrap:anywhere}
 .rest{margin:10px 0 0;color:var(--muted);font-size:14.5px}
 .psec-t{display:block;margin-top:10px}
@@ -268,6 +270,7 @@ button.tsrc:hover{border-color:color-mix(in srgb,var(--ink) 35%,var(--line))}
 .compass-wrap{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:8px 8px 12px;display:flex;flex-direction:column;align-items:center;gap:6px}
 #compass{width:100%;max-width:760px;height:auto;overflow:visible}
 #compass .cl{font:800 10.5px var(--font-ui);letter-spacing:.12em;text-transform:uppercase;fill:var(--muted)}
+#compass .cbt{font:800 10px var(--font-ui);fill:var(--muted)}
 #compass .cb{font:500 14px var(--font-serif);fill:var(--ink)}
 #compass .tn{font:800 12px var(--font-ui);fill:var(--ink);paint-order:stroke;stroke:var(--paper);stroke-width:4px;stroke-linejoin:round}
 #compass .trail,#compass .tdot{cursor:pointer}
@@ -345,8 +348,10 @@ button.tsrc:hover{border-color:color-mix(in srgb,var(--ink) 35%,var(--line))}
 .glrow b{font:600 16px var(--font-serif);min-width:0;overflow-wrap:anywhere}
 .glrow .linkbtn{margin-left:auto;font-size:12px}
 .sw{width:16px;height:16px;border-radius:4px;border:1.5px solid;flex:none}
-.big{width:100%;min-height:44px;border-radius:999px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);font:800 14px var(--font-ui);padding:0 14px;flex:none}
+.big{width:100%;min-height:44px;border-radius:999px;border:1px solid var(--ag-act-line,var(--ag-act));background:var(--ag-act);color:var(--ag-act-ink);font:800 14px var(--font-ui);padding:0 14px;flex:none}
 .big:disabled{opacity:.35}
+/* A control that cannot act is plainly off: no fill, a dashed edge, muted words (its reason is written beside it), never a dimmed copy of the live one. */
+.btn:disabled,.btn.dark:disabled,.btn.primary:disabled,.btn-rect:disabled,.btn-rect.primary:disabled,.btn-pill:disabled,.btn-pill.primary:disabled,.big:disabled{opacity:1;background:transparent;color:var(--muted);border:1px dashed var(--line);box-shadow:none}
 .wsrow{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;text-align:left;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);width:100%}
 .wsrow:hover:not(:disabled){border-color:var(--ink)}
 .wsrow:disabled{opacity:.7}
@@ -632,6 +637,8 @@ var TerritoriesLogic = (function () {
   }
   /** "To confirm:" is how the brief marks a part it assumed. Territories shows the brief's words clean and marks the field quietly, as the brief does. */
   function unconfirmed(t) { var m = /^\s*to confirm:\s*/i.exec(t || ''); return m ? { text: t.slice(m[0].length), tbc: true } : { text: t || '', tbc: false }; }
+  /** The small "to confirm" tag after a part the brief assumed (its words are shown without the prefix). */
+  function tbcTag(t) { return unconfirmed(t).tbc ? ' <span class="tbc" title="The brief has not confirmed this yet">to confirm</span>' : ''; }
   function values(o) { o = isObj(o) ? o : {}; return Object.keys(o).map(function (k) { return o[k]; }); }
   /** What arrived. Counts are null (never a made-up 0) when the host has not said. */
   function seen(data) {
@@ -849,6 +856,21 @@ var TerritoriesLogic = (function () {
     if (pickState(run) !== 'approved') return null;
     return { decisions: decisionsOf(run).concat([{ gate: 'pick', kind: 'edit', by: by, at: at }]) };
   }
+  /** The send-out job is running from this page: its progress, or null. The document only changes when the engine writes it back at the end of the run. */
+  function crewOut(run, ui) {
+    var job = ui && ui.job;
+    return !!(job && (job.state === 'sending' || job.state === 'queued' || job.state === 'running') && pickState(run) === 'approved');
+  }
+  /** What the job says about the crew, in words: 'The crew is out: 2 of 5 agents back.' Empty before the host has said anything. */
+  function crewWords(ui) {
+    var pr = ui && ui.job && ui.job.progress;
+    if (!pr || !(pr.total > 0)) return 'The crew is setting off.';
+    if (pr.done >= pr.total) return 'The crew is back. The engine is developing their routes.';
+    return pr.done > 0 ? 'The crew is out: ' + pr.done + ' of ' + plural(pr.total, 'agent') + ' back.' : 'The crew is out: ' + plural(pr.total, 'agent') + ' exploring.';
+  }
+  function stepsNow(run, ui) {
+    return crewOut(run, ui) ? { at: 1, reached: 1, list: stepsOf(run).list } : stepsOf(run);
+  }
   function stepsOf(run) {
     run = isObj(run) ? run : {};
     var st = run.stage || 'pick', at = st === 'pick' ? 0 : st === 'greenlight' || st === 'send' ? 2 : 1;
@@ -990,6 +1012,8 @@ var TerritoriesLogic = (function () {
     return '<div class="runline">' + primary + extra + (note ? '<span class="runnote' + cls + '" role="status">' + esc(note) + '</span>' : '') + '</div>';
   }
 
+  /** What sits beside Add: why it is off, or what it will do. */
+  function ownWhy(d) { return (d || '').trim() ? 'It joins the list ticked, labelled as yours.' : 'Type an insight, tension or what-if to add it.'; }
   function pickSheet(data, ui) {
     var run = isObj(data && data.run) ? data.run : {}, st = pickState(run), c = counts(data), f = focusOf(data);
     if (st === 'none' && !f.insights.length) return arrivedSheet(data, ui);
@@ -997,7 +1021,7 @@ var TerritoriesLogic = (function () {
     var cards = sorted(f.insights).map(function (i) { return insightCard(i, data, editable); }).join('');
     var stats = statsOf(seen(data)).concat([plural(c.insights, 'insight'), c.ticked + ' ticked']);
     var add = editable ? '<div class="addsb" data-form="add"><input name="own" value="' + esc(ui.draft || '') + '" placeholder="Add your own insight, tension or what-if…" autocomplete="off" maxlength="' + MAX_TEXT + '" aria-label="Add your own insight">' +
-      '<div class="row"><span class="muted">It joins the list ticked, labelled as yours.</span><span class="spacer"></span><button class="btn-rect primary" type="button" data-act="add">Add</button></div></div>' : '';
+      '<div class="row"><span class="muted" data-add-why>' + esc(ownWhy(ui.draft)) + '</span><span class="spacer"></span><button class="btn-rect primary" type="button" data-act="add"' + ((ui.draft || '').trim() ? '' : ' disabled') + '>Add</button></div></div>' : '';
     var err = isObj(run.error) && run.error.stage === 'pick' ? '<p class="runnote bad" role="alert">' + esc(run.error.message) + (arr(run.error.refused).length ? ' ' + esc(arr(run.error.refused).join(' ')) : '') + '</p>' : '';
     return '<article class="sheet"><header class="sheet-head"><div class="sheet-eyebrow">Step 1 · Pick what to work on</div><h2>Which insights should the crew explore?</h2>' +
       '<p>Strongest first, with what each one rests on. Untick, tick or add your own, then explore.</p></header>' +
@@ -1037,10 +1061,11 @@ var TerritoriesLogic = (function () {
     if (m.state === 'stopped') return 'Stopped' + (n ? ' · ' + plural(n, 'route') : '');
     if (m.state === 'back') return n ? 'Back · ' + plural(n, 'route') : 'Back · found nothing';
     var last = m.routes[m.routes.length - 1], w = m.way[m.way.length - 1];
-    return last ? 'Writing: ' + last.name : w && text(w.text) ? text(w.text) : 'Setting off';
+    return last ? 'Writing: ' + last.name : w && text(w.text) ? unconfirmed(text(w.text)).text : 'Setting off';
   }
   /** The crew's progress: how many are out, and the stats line for the heading. */
-  function exploreStats(data) {
+  function exploreStats(data, ui) {
+    if (!crewOf(data).length && ui && ui.job && BUSY_STATES[ui.job.state]) { var pr = ui.job.progress; return ['crew out', pr && pr.total > 0 ? Math.min(pr.done, pr.total) + ' of ' + plural(pr.total, 'agent') + ' back' : 'setting off']; }
     var crew = crewOf(data), cites = {}, routes = 0, aside = 0;
     crew.forEach(function (m) { routes += m.routes.length; aside += m.set_aside.length; m.way.forEach(function (w) { if (w.cite) cites[w.cite] = 1; }); });
     var out = [plural(crew.length, 'agent')];
@@ -1105,7 +1130,7 @@ var TerritoriesLogic = (function () {
       s += '<g class="trail" data-crew="' + esc(m.id) + '" opacity="' + dim(m.id) + '"><path class="hit" d="' + d + '"/><path d="' + d + '" fill="none" stroke="' + m.colour + '" stroke-width="' + (sel === m.id ? 5 : 3.2) + '" stroke-linecap="round"/></g>';
       m.way.forEach(function (w) {
         var q = trailPt(m, Math.min(+w.at || 0, cur));
-        s += '<rect x="' + f1(q[0] - 4) + '" y="' + f1(q[1] - 4) + '" width="8" height="8" transform="rotate(45 ' + f1(q[0]) + ' ' + f1(q[1]) + ')" fill="' + m.colour + '" stroke="var(--paper)" stroke-width="1.5" opacity="' + dim(m.id) + '"><title>' + esc(text(w.text) + (w.cite ? ' (' + w.cite + ')' : '')) + '</title></rect>';
+        s += '<rect x="' + f1(q[0] - 4) + '" y="' + f1(q[1] - 4) + '" width="8" height="8" transform="rotate(45 ' + f1(q[0]) + ' ' + f1(q[1]) + ')" fill="' + m.colour + '" stroke="var(--paper)" stroke-width="1.5" opacity="' + dim(m.id) + '"><title>' + esc(unconfirmed(text(w.text)).text + (unconfirmed(text(w.text)).tbc ? ' (to confirm)' : '') + (w.cite ? ' (' + w.cite + ')' : '')) + '</title></rect>';
       });
       var tip = trailPt(m, cur);
       if (Roles && Roles.still && (m.state === 'running' || m.state === 'ready')) s += Roles.still(m.role, 30).replace('<svg ', '<svg x="' + f1(tip[0] - 15) + '" y="' + f1(tip[1] - 15) + '" ');
@@ -1136,8 +1161,9 @@ var TerritoriesLogic = (function () {
           '<text x="' + f1(lx) + '" y="' + f1(ly) + '" text-anchor="' + (right ? 'start' : 'end') + '" class="tn">' + esc(t.name) + '</text></g>';
       });
     });
-    var lines = wrap(briefLine(data), 19, 3), y0 = lines.length > 2 ? 300 : 306;
+    var bl = unconfirmed(briefLine(data)), lines = wrap(bl.text, 19, 3), y0 = lines.length > 2 ? 300 : 306;
     s += '<circle cx="' + CX + '" cy="' + CY + '" r="68" fill="var(--paper)" stroke="var(--ink)" stroke-width="1.5"/><text x="' + CX + '" y="' + (y0 - 4) + '" text-anchor="middle" class="cl">The brief</text>';
+    if (bl.tbc) s += '<g class="cbtbc"><title>The brief has not confirmed this yet</title><rect x="' + (CX - 30) + '" y="' + (y0 + 17 + lines.length * 18 - 4) + '" width="60" height="16" rx="8" fill="none" stroke="var(--muted)" stroke-dasharray="3 2"/><text x="' + CX + '" y="' + (y0 + 17 + lines.length * 18 + 8) + '" text-anchor="middle" class="cbt">to confirm</text></g>';
     lines.forEach(function (l, i) { s += '<text x="' + CX + '" y="' + (y0 + 17 + i * 18) + '" text-anchor="middle" class="cb">' + esc(l) + '</text>'; });
     return s + '</svg>';
   }
@@ -1148,7 +1174,7 @@ var TerritoriesLogic = (function () {
 
   function crewCards(data, ui) {
     var crew = crewOf(data);
-    if (!crew.length) return '<div class="crew-empty" role="status">The crew has not set off yet. Its trails appear here as each agent starts.</div>';
+    if (!crew.length) return '<div class="crew-empty" role="status">' + (ui.job && BUSY_STATES[ui.job.state] ? crewWords(ui) + ' Its trails appear here as each agent comes back.' : 'The crew has not set off yet. Its trails appear here as each agent starts.') + '</div>';
     return '<div class="crew">' + crew.map(function (m) {
       var busy = m.state === 'running' || m.state === 'ready';
       return '<button type="button" class="crewc' + (ui.sel === m.id ? ' sel' : '') + (busy ? ' run' : '') + '" data-crew="' + esc(m.id) + '" style="--ec:' + m.colour + '" aria-pressed="' + (ui.sel === m.id ? 'true' : 'false') + '">' +
@@ -1184,13 +1210,13 @@ var TerritoriesLogic = (function () {
       note = ''; retry = '<button type="button" class="btn-rect" data-act="retry"' + (jbusy ? ' disabled' : '') + '>Send the crew out again</button>';
     } else if (job && job.state === 'failed') {
       note = (job.error || 'The engine stopped.') + ' Your pick is saved.'; retry = '<button type="button" class="btn-rect" data-act="retry">Send the crew out again</button>';
-    } else if (!crew.length) note = jbusy ? 'The crew is setting off.' : ui.mw === false ? 'The engine is not connected in this workspace, so the crew has not set off. Your pick is saved.' : 'Waiting for the engine to start the crew.';
+    } else if (!crew.length) note = jbusy ? crewWords(ui) : ui.mw === false ? 'The engine is not connected in this workspace, so the crew has not set off. Your pick is saved.' : 'Waiting for the engine to start the crew.';
     else if (busy) note = 'Nothing needed from you. Each trail shows what the agent picks up and where its routes land.';
     else note = 'The crew is back. Click a trail or a card to steer that agent, if you want to. Click a dot to open its route.';
     var primary = busy || (!crew.length && jbusy) ? '<button type="button" class="btn-pill" disabled><span class="spin" aria-hidden="true"></span>Exploring…</button>' : '';
     return '<article class="sheet"><header class="sheet-head"><div class="sheet-eyebrow">Step 2 · The crew explores</div><h2>Send the crew different ways</h2>' +
       '<p>Every agent starts from the same brief and evidence, then takes its own heading. Some stay close; some go as far as they can. You can steer them.</p></header>' +
-      '<div class="stats">' + exploreStats(data).map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + '</div>' +
+      '<div class="stats">' + exploreStats(data, ui).map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + '</div>' +
       '<div class="sheet-body">' + err + crewCards(data, ui) +
       '<div class="runline">' + primary + retry + (note ? '<span class="runnote' + (retry && !err ? ' bad' : '') + '" role="status">' + esc(note) + '</span>' : '') + '</div>' +
       (crew.length ? '<section class="compass-wrap" aria-label="The compass">' + compassSvg(data, ui) + compassKey(data) + '</section>' + routeGroups(data, ui) : '') +
@@ -1228,7 +1254,7 @@ var TerritoriesLogic = (function () {
   function agentPanel(m, data, ui) {
     var back = m.state === 'back', stopped = m.state === 'stopped', lock = reqBusy(ui.req), key = 'steer:' + m.id;
     var picked = m.way.length ? '<div class="bc-sec"><span class="psec-t">What it picked up</span>' + m.way.map(function (w) {
-      return '<div class="bc-li">' + (w.cite ? refChip(w.cite, data) : '') + '<span class="grow">' + esc(text(w.text)) + '</span></div>'; }).join('') + '</div>' : '';
+      return '<div class="bc-li">' + (w.cite ? refChip(w.cite, data) : '') + '<span class="grow">' + esc(unconfirmed(text(w.text)).text) + tbcTag(text(w.text)) + '</span></div>'; }).join('') + '</div>' : '';
     var turned = m.turn ? '<div class="bc-sec"><span class="psec-t">Why it turned</span><div class="bc-note">' + esc(m.turn) + '</div></div>' : '';
     var rs = m.routes.length ? '<div class="bc-sec"><span class="psec-t">Routes · ' + m.routes.length + '</span>' + m.routes.map(function (t) {
       return '<button type="button" class="bc-route" data-route="' + esc(t.id) + '"><span>' + esc(t.name) + '</span><span class="num">' + esc(BAND_WORDS[t.band] || '') + '</span></button>'; }).join('') + '</div>'
@@ -1240,7 +1266,7 @@ var TerritoriesLogic = (function () {
     var btn = function (k, dark) { return '<button type="button" class="btn' + (dark ? ' dark' : '') + '" data-steer="' + k + '" data-crew="' + esc(m.id) + '"' + (can ? '' : ' disabled') + '>' + STEER_WORDS[k] + '</button>'; };
     var cross = ui.cross === m.id && can ? '<div class="bc-sec"><span class="psec-t">Cross it with</span><div class="bc-act">' + crewOf(data).filter(function (c) { return c.id !== m.id; }).map(function (c) {
       return '<button type="button" class="btn" data-steer="cross" data-crew="' + esc(m.id) + '" data-with="' + esc(c.id) + '" style="border-color:' + c.colour + '">' + esc(c.name) + '</button>'; }).join('') + '</div></div>' : '';
-    var why = stopped ? 'This agent was stopped. It stays where it is.' : !back ? (m.state === 'running' ? 'You can steer it once it is back, or stop it now.' : '') : '';
+    var why = stopped ? 'This agent was stopped. It stays where it is.' : back && lock ? 'Waiting for the last change to finish.' : !back ? (m.state === 'running' ? 'You can steer it once it is back, or stop it now.' : '') : '';
     var stop = '<button type="button" class="btn" data-steer="stop" data-crew="' + esc(m.id) + '"' + ((back || m.state === 'running') && !lock ? '' : ' disabled') + '>' + STEER_WORDS.stop + '</button>';
     var words = reqWords(ui.req, key);
     return '<article class="bc" style="border-color:' + m.colour + '"><header class="bc-hd">' + sphere(m.role, 20) + '<span class="bc-who">' + esc(roleName(m.role)) + ' · ' + esc(m.short) + '</span><span class="bc-t">' + esc(statusOf(m)) + '</span></header>' +
@@ -1478,7 +1504,7 @@ var TerritoriesLogic = (function () {
       var m = mandatoryOf(t), fail = m.status === 'fail', note = (ui.reason && ui.reason[a.id]) || '';
       q = name + (fail ? ' fails a mandatory.' : ' is close to a mandatory.');
       body = '<div class="q">' + esc(q) + '</div>' + (m.text ? '<div class="quote' + (fail ? ' bad' : '') + '"><span class="lbl">Mandatory · ' + (fail ? 'fails' : 'watch') + '</span>' + esc(m.text) + '</div>' : '') +
-        (fail ? '<label class="reason"><span class="lbl">Why it goes ahead</span><textarea rows="2" data-reason="' + esc(a.id) + '" placeholder="Say why. It is kept with the route." aria-label="Why ' + esc(name) + ' goes ahead">' + esc(note) + '</textarea></label>' : '') +
+        (fail ? '<label class="reason"><span class="lbl">Why it goes ahead</span><textarea rows="2" data-reason="' + esc(a.id) + '" placeholder="Say why. It is kept with the route." aria-label="Why ' + esc(name) + ' goes ahead">' + esc(note) + '</textarea><span class="hint">Say why to go ahead.</span></label>' : '') +
         '<div class="acts">' + btn('Go ahead', A + ' data-answer="ok" data-go="' + esc(a.id) + '"', true, busy || (fail && !note.trim())) + btn('Take it off the list', A + ' data-answer="change"', false, busy) + '</div>';
     } else {
       var names = greenIds(data).map(function (id) { var x = all.filter(function (y) { return y.id === id; })[0]; return x ? x.name : ''; }).filter(Boolean), who = ui.me && ui.me.name;
@@ -1515,6 +1541,7 @@ var TerritoriesLogic = (function () {
       card('review', 'checked', 'Every route was tested against the brief, the mandatories and the rival lines. ' + ranked + ' ' + (ranked === 1 ? 'is' : 'are') + ' ranked by the blind judge.') + sends +
       (ui.mw === false ? engineOffCard() : '') +
       '<button type="button" class="big" data-send' + (can ? '' : ' disabled') + '>Send' + (rows.length ? ' ' + rows.length : '') + ' →</button>' +
+      (!rows.length && !asks.length && !open.length ? '<div class="hint" style="text-align:center">Greenlight at least one route to send it.</div>' : '') +
       (asks.length + open.length ? '<div class="hint" style="text-align:center">Answer ' + (asks.length + open.length === 1 ? 'the question' : 'the ' + (asks.length + open.length) + ' questions') + ' first.</div>' : '') +
       (w && /^send:/.test(ui.req.key) ? '<p class="runnote' + (failed ? ' bad' : '') + '" role="status">' + esc(w) + '</p>' : '');
   }
@@ -1566,7 +1593,9 @@ var TerritoriesLogic = (function () {
 
   function booth(data, ui, open, at) {
     var run = isObj(data && data.run) ? data.run : {}, gate = isObj(run.gate) ? run.gate : null, role = gate && gate.agent ? gate.agent : 'knowledge';
-    var crewNow = crewOf(data), line = at === 2 ? 'I tested every route. Greenlight as many as you like; I will ask only if one needs proof.' : at === 1 ? (!crewNow.length ? 'The crew is setting off.' : allBack(crewNow) ? 'The crew is back. Steer any agent if you want to; you do not have to.' : 'I lead the crew. Each agent takes its own heading, and I keep them apart.') :
+    var crewNow = crewOf(data), line = at === 2 ? 'I tested every route. Greenlight as many as you like; I will ask only if one needs proof.' : at === 1 ? (!crewNow.length ? crewWords(ui) : allBack(crewNow) ? 'The crew is back. Steer any agent if you want to; you do not have to.' : 'I lead the crew. Each agent takes its own heading, and I keep them apart.') :
+      pickState(run) === 'approved' && !crewNow.length ? (crewOut(run, ui) ? crewWords(ui) : 'You picked. Waiting for the engine to send the crew out.') :
+      pickState(run) === 'working' ? 'I am reading what came in and writing the insights.' :
       gate && gate.dex ? gate.dex : pickState(run) === 'none' && !focusOf(data).insights.length ? 'I read what came in. The crew has not started yet.' : 'I read the brief and the research. Tick what the crew should work on.';
     var notes = at === 2 ? greenlightBooth(data, ui) : at === 1 ? exploreBooth(data, ui) : boothNotes(data).map(function (n) {
       return '<article class="bc"><header class="bc-hd">' + sphere(n.role, 20) + '<span class="bc-who">' + esc(roleName(n.role)) + ' · ' + esc(n.label) + '</span><span class="bc-t">' + esc(n.time || 'now') + '</span></header>' +
@@ -1585,9 +1614,9 @@ var TerritoriesLogic = (function () {
   function head(data, st, ui) {
     var sn = seen(data), title = (ui && ui.title && ui.title !== 'Territories' ? ui.title : '') || text(data && data.title) || (sn.brief && sn.brief.title) || (sn.research && sn.research.title) || 'Territories', parts = title.split(/:\s+/);
     var eyebrow = parts.length > 1 ? parts[0] + ' · ' + parts.slice(1).join(': ') : title;
-    var s = stepsOf(data && data.run), noPick = !focusOf(data).insights.length,
+    var run0 = isObj(data && data.run) ? data.run : {}, s = stepsNow(data && data.run, ui), noPick = !focusOf(data).insights.length,
       readWords = sn.brief && sn.research ? 'the brief and the research' : sn.research ? 'the research' : 'the brief',
-      sub = [noPick ? 'Step 1 of 3. This is what arrived. Find the insights, then tick the ones the crew should work on.' : 'Step 1 of 3. Napkin has read ' + readWords + '. Tick the insights the crew should work on.',
+      sub = [noPick ? 'Step 1 of 3. This is what arrived. Find the insights, then tick the ones the crew should work on.' : pickState(run0) === 'approved' || pickState(run0) === 'past' ? 'Step 1 of 3. Your pick is in. Napkin read ' + readWords + '. The crew works from what you picked.' : 'Step 1 of 3. Napkin has read ' + readWords + '. Tick the insights the crew should work on.',
       'Step 2 of 3. The crew explores on its own: different headings, other categories. Steer it if you want to.',
       'Step 3 of 3. Every route comes back developed. Greenlight as many as are worth making.'][st.view != null ? st.view : s.at];
     return '<section class="app-head"><div><div class="eyebrow" title="' + esc(eyebrow) + '"><span>' + esc(eyebrow) + '</span></div><h1 class="hero-title">Territories<span class="period-dot"></span></h1><p class="hero-sub">' + esc(sub) + '</p></div>' +
@@ -1600,7 +1629,7 @@ var TerritoriesLogic = (function () {
   /** The whole page: the head, the step's sheet and the Booth. ui: { view (step index or null), draft, job, mw, me, booth }. */
   function view(data, ui) {
     data = isObj(data) ? data : {}; ui = isObj(ui) ? ui : {};
-    var s = stepsOf(data.run), at = ui.view != null && ui.view <= s.reached ? ui.view : s.at;
+    var s = stepsNow(data.run, ui), at = ui.view != null && ui.view <= s.reached ? ui.view : s.at;
     // A developed route opened as a world (the World view, territories-world-logic) takes the sheet, the Booth and the dock of step 3.
     var W = typeof TerritoriesWorld !== 'undefined' ? TerritoriesWorld : null, wt = at === 2 && W && ui.world ? W.route(data, ui.world) : null;
     var sheet = at === 0 ? pickSheet(data, ui) : at === 1 ? exploreSheet(data, ui) : wt ? W.sheet(data, ui, wt) : greenlightSheet(data, ui);
@@ -1767,7 +1796,7 @@ var TerritoriesLogic = (function () {
     esc: esc, text: text, plural: plural, pal: pal, tvars: tvars, refChip: refChip, crewOf: crewOf, byRank: byRank, sphere: sphere, roleName: roleName, derivedOf: derivedOf, reqBusy: reqBusy, CHECK_WORDS: CHECK_WORDS, CHECK_STATE: CHECK_STATE,
     TASKS: TASKS, BRIEF_KEYS: BRIEF_KEYS, LABELS: LABELS, KEY_FIELDS: KEY_FIELDS, seen: seen, statsOf: statsOf, fromWords: fromWords, briefValue: briefValue, textOf: textOf, STEPS: STEPS, MAX_INSIGHTS: MAX_INSIGHTS, MAX_TEXT: MAX_TEXT,
     upstreamOf: upstreamOf, resolve: resolve, counts: counts, derivedFindings: derivedFindings, sorted: sorted, dotsOf: dotsOf, originOf: originOf,
-    tickPatch: tickPatch, addPatch: addPatch, playPatch: playPatch, pickState: pickState, approvePatch: approvePatch, editedPatch: editedPatch, stepsOf: stepsOf,
+    tickPatch: tickPatch, ownWhy: ownWhy, addPatch: addPatch, playPatch: playPatch, pickState: pickState, approvePatch: approvePatch, editedPatch: editedPatch, stepsOf: stepsOf,
     crewOf: crewOf, statusOf: statusOf, exploreStats: exploreStats, compassSvg: compassSvg, routeGroups: routeGroups, actionNotes: actionNotes, reqWords: reqWords, themeChip: themeChip,
     routeOf: routeOf, radius: radius, bearing: bearing, STEER_WORDS: STEER_WORDS, BAND_WORDS: BAND_WORDS,
     boothNotes: boothNotes, view: view, dialogFor: dialogFor, act: act, insightCard: insightCard
@@ -1904,12 +1933,14 @@ var TerritoriesWorld = (function () {
     if (req.state === 'failed') return req.error || 'That did not go through. Nothing changed.';
     return '';
   }
+  /** Beside Keep this feel and Back to its natural feel: why one is off. */
+  function keepWhy(dirty, custom) { return dirty ? 'Keep it to save this feel for the route.' : custom ? 'Move a dial to change the feel; Back to its natural feel undoes what is kept.' : 'Move a dial to change the feel, then keep it.'; }
   function dials(t, ui) {
     var d = dialOf(t, ui), dirty = !same(d, savedDial(t)), custom = !same(d, naturalDial(t)) || isObj(t.world.dial_set);
     return '<div class="psec"><span class="psec-t">Shape the feel</span>' + DIALS.map(function (x) {
       return '<label class="pdial" for="d-' + x[0] + '"><span>' + x[1] + '</span><input type="range" id="d-' + x[0] + '" min="0" max="100" value="' + d[x[0]] + '" data-dial="' + x[0] + '" aria-label="' + x[1] + ' to ' + x[2] + '"><span>' + x[2] + '</span></label>';
     }).join('') + '<p class="meta" style="margin:0">The words and the layout change as you move a dial. Nothing is sent.</p>' +
-      '<div class="row"><button type="button" class="btn-rect" data-w-keep="' + esc(t.id) + '"' + (dirty ? '' : ' disabled') + '>Keep this feel</button><button type="button" class="btn-rect" data-w-reset="' + esc(t.id) + '"' + (custom ? '' : ' disabled') + '>Back to its natural feel</button></div></div>';
+      '<div class="row"><button type="button" class="btn-rect' + (dirty ? ' primary' : '') + '" data-w-keep="' + esc(t.id) + '"' + (dirty ? '' : ' disabled') + '>Keep this feel</button><button type="button" class="btn-rect" data-w-reset="' + esc(t.id) + '"' + (custom ? '' : ' disabled') + '>Back to its natural feel</button></div><p class="meta" data-keep-why style="margin:0">' + esc(keepWhy(dirty, custom)) + '</p></div>';
   }
   function lookSection(t) {
     var w = t.world, p = L.pal(t), ui = w.type && w.type.font === 'geist_extra_bold', ital = !ui && w.type && w.type.italic;
@@ -2078,7 +2109,7 @@ var TerritoriesWorld = (function () {
   }
   function handles(a) { return !!EVENTS[a]; }
 
-  return { DIALS: DIALS, TP_NAMES: TP_NAMES, PUSH: PUSH, order: order, route: route, dialOf: dialOf, savedDial: savedDial, naturalDial: naturalDial, feel: feel, linesOf: linesOf, journeyOf: journeyOf,
+  return { DIALS: DIALS, TP_NAMES: TP_NAMES, PUSH: PUSH, order: order, route: route, dialOf: dialOf, savedDial: savedDial, naturalDial: naturalDial, keepWhy: keepWhy, feel: feel, linesOf: linesOf, journeyOf: journeyOf,
     worldBody: worldBody, refresh: refresh, sheet: worldSheet, booth: boothW, dock: dock, animFrames: animFrames, animHtml: animHtml, presentHtml: presentHtml, presentStyle: presentStyle,
     speech: speech, dialog: dialog, worldPatch: worldPatch, act: act, handles: handles, clean: clean };
 })();
@@ -2203,7 +2234,7 @@ var TerritoriesPictures = (function () {
   }
   function makeButton(t, ui) {
     var asking = ui && ui.mk && ui.mk.tid === t.id && ui.mk.state === 'asking';
-    return '<button type="button" class="btn-rect pic-make" data-pic-make="' + esc(t.id) + '"' + (asking ? ' disabled' : '') + '>Make pictures</button>';
+    return '<button type="button" class="btn-rect pic-make" data-pic-make="' + esc(t.id) + '"' + (asking ? ' disabled' : '') + '>' + (asking ? '<span class="spin-s" aria-hidden="true"></span>Asking…' : 'Make pictures') + '</button>';
   }
   function needChip(t, c) {
     return '<button type="button" class="pchip sup need" data-pic-held="' + esc(t.id + '|' + c.held) + '" aria-haspopup="dialog">Needs you</button>';
@@ -2440,16 +2471,26 @@ var TerritoriesLookups = (function () {
   }
   function btn(label, attrs, dark, dis) { return '<button type="button" class="btn' + (dark ? ' dark' : '') + '" ' + attrs + (dis ? ' disabled' : '') + '>' + esc(label) + '</button>'; }
 
+  function lookingUp(ui) { var r = ui && ui.req; return !!(r && r.key === 'lq:new' && BUSY_REQ[r.state]); }
+  var BUSY_REQ = { sending: 1, queued: 1, running: 1 };
+  /** The words beside the button: why it is off, or what it will do. */
+  function why(ui) {
+    if (!named(ui)) return NEEDS_NAME;
+    if (lookingUp(ui)) return 'Looking it up. The result appears here when it is back.';
+    if (busy(ui)) return 'Waiting for the last change to finish.';
+    if (!norm(ui && ui.lq)) return 'Type a question to look it up.';
+    return 'Searches the open web. Only quotes that check against their page can be pinned.';
+  }
   /** The box. The question is only asked here: nothing is searched until the card it makes is OK'd. */
   function box(data, ui) {
     var draft = ui && typeof ui.lq === 'string' ? ui.lq : '';
     if (lookups(data).some(function (q) { return norm(q.q).toLowerCase() === norm(draft).toLowerCase(); })) draft = '';     // it became a card
     var w = words(ui && ui.req, 'lq:new'), failed = ui && ui.req && ui.req.key === 'lq:new' && ui.req.state === 'failed';
     return '<div class="bt-box"><textarea rows="2" data-lq-draft maxlength="240" placeholder="Ask the Research agent to look something up…" aria-label="Ask the Research agent to look something up">' + esc(draft) + '</textarea>' +
-      '<div class="bt-hint">' + esc(named(ui) ? 'Searches the open web. Only quotes that check against their page can be pinned.' : NEEDS_NAME) + '</div>' +
+      '<div class="bt-hint" data-lq-why>' + esc(why(ui)) + '</div>' +
       (w ? '<div class="runnote' + (failed ? ' bad' : '') + '" role="status">' + esc(w) + '</div>' : '') +
       '<div class="row"><span class="bt-scope">Whole exploration</span><span class="spacer"></span><button type="button" class="btn dark" data-act="lookup"' +
-      (!norm(draft) || !named(ui) || busy(ui) ? ' disabled' : '') + '>Look it up</button></div></div>';
+      (!norm(draft) || !named(ui) || busy(ui) ? ' disabled' : '') + '>' + (lookingUp(ui) ? '<span class="spin-s" aria-hidden="true"></span>Looking it up…' : 'Look it up') + '</button></div></div>';
   }
 
   /** The OK card: what will be looked up and who wants it. */
@@ -2522,7 +2563,7 @@ var TerritoriesLookups = (function () {
     return { writes: [], request: { key: 'lq:' + lq.id, what: 'The look-up', input: { step: 'lookup', lookup_id: lq.id, ok: e.a === 'lq_ok', by: who } } };
   }
 
-  return { box: box, okCard: okCard, resultCards: resultCards, findCard: findCard, section: section, link: link, isLookupNote: isLookupNote, handles: handles, act: act, words: words };
+  return { box: box, okCard: okCard, resultCards: resultCards, findCard: findCard, section: section, why: why, link: link, isLookupNote: isLookupNote, handles: handles, act: act, words: words };
 })();
 </script>
 
@@ -2628,6 +2669,7 @@ var TerritoriesLookups = (function () {
     var b = mwBody(res);
     if (b.job && typeof b.job === 'object') {
       j.id = b.job.id || j.id; j.state = b.job.state || j.state;
+      if (b.job.progress && typeof b.job.progress === 'object') j.progress = { done: +b.job.progress.done || 0, total: +b.job.progress.total || 0 };
       if (b.job.error) j.error = b.job.error.message || b.job.error.type || String(b.job.error);
     }
     if (j.state === 'queued' || j.state === 'running') {
@@ -2804,7 +2846,9 @@ var TerritoriesLookups = (function () {
     var sh = $('wsheet'), r = W.refresh(data(), ui, t); if (!sh) return;
     sh.setAttribute('style', r.style); sh.className = r.cls; $('wbody').innerHTML = r.body;
     var keep = document.querySelector('[data-w-keep]'), reset = document.querySelector('[data-w-reset]');
-    if (keep) keep.disabled = JSON.stringify(W.dialOf(t, ui)) === JSON.stringify(W.savedDial(t));
+    var kd = JSON.stringify(W.dialOf(t, ui)) !== JSON.stringify(W.savedDial(t)), kc = !(JSON.stringify(W.dialOf(t, ui)) === JSON.stringify(W.naturalDial(t)) && !(t.world && t.world.dial_set));
+    if (keep) { keep.disabled = !kd; keep.classList.toggle('primary', kd); }
+    var kw = document.querySelector('[data-keep-why]'); if (kw) kw.textContent = W.keepWhy(kd, kc);
     if (reset) reset.disabled = JSON.stringify(W.dialOf(t, ui)) === JSON.stringify(W.naturalDial(t)) && !(t.world && t.world.dial_set);
     lastHtml = null;
   }
@@ -2974,10 +3018,15 @@ var TerritoriesLookups = (function () {
     var bb = document.querySelector('.booth-body'); if (bb) bb.scrollTop = 0;
   }
   // No <form>: the page runs sandboxed, where a form cannot submit. Add is a button, and Enter in the box presses it.
-  function addOwn() { var inp = document.querySelector('input[name="own"]'); ui.draft = inp ? inp.value : ui.draft; run({ a: 'add', text: ui.draft }); }
+  function addOwn() { var inp = document.querySelector('input[name="own"]'); ui.draft = inp ? inp.value : ui.draft; if (!(ui.draft || '').trim()) return; run({ a: 'add', text: ui.draft }); }
   document.addEventListener('input', function (ev) {
-    if (ev.target && ev.target.name === 'own') ui.draft = ev.target.value;
-    if (ev.target && ev.target.getAttribute && ev.target.hasAttribute('data-lq-draft')) { ui.lq = ev.target.value; var lb = document.querySelector('[data-act="lookup"]'); if (lb) lb.disabled = !ev.target.value.trim() || !(ui.me && ui.me.name) || !!BUSY[(ui.req || {}).state]; }
+    if (ev.target && ev.target.name === 'own') {
+      ui.draft = ev.target.value;
+      var ab = document.querySelector('[data-act="add"]'), aw = document.querySelector('[data-add-why]');
+      if (ab) ab.disabled = !ui.draft.trim(); if (aw) aw.textContent = TerritoriesLogic.ownWhy(ui.draft);
+    }
+    if (ev.target && ev.target.getAttribute && ev.target.hasAttribute('data-lq-draft')) { ui.lq = ev.target.value; var lb = document.querySelector('[data-act="lookup"]'); if (lb) lb.disabled = !ev.target.value.trim() || !(ui.me && ui.me.name) || !!BUSY[(ui.req || {}).state];
+      var lh = document.querySelector('[data-lq-why]'); if (lh && typeof TerritoriesLookups !== 'undefined') lh.textContent = TerritoriesLookups.why(ui); }
     var rid = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-reason');
     if (rid) { ui.reason = ui.reason || {}; ui.reason[rid] = ev.target.value; var go = document.querySelector('[data-go="' + rid + '"]'); if (go) go.disabled = !ev.target.value.trim() || !!BUSY[(ui.req || {}).state]; }
     if (ev.target && ev.target.getAttribute && ev.target.getAttribute('data-dial')) dialMoved(ev.target.getAttribute('data-dial'), ev.target.value);
@@ -2985,6 +3034,9 @@ var TerritoriesLookups = (function () {
   document.addEventListener('keydown', function (ev) {
     if (worldKey(ev)) { ev.preventDefault(); return; }
     if (ev.key === 'Escape' && dialogEl) { closeDialog(); return; }
+    if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing && ev.target && ev.target.hasAttribute && ev.target.hasAttribute('data-lq-draft')) {
+      ev.preventDefault(); var lbn = document.querySelector('[data-act="lookup"]'); if (lbn && !lbn.disabled) lbn.click(); return;
+    }
     if (ev.key === 'Enter' && ev.target && ev.target.name === 'own' && !ev.isComposing) { ev.preventDefault(); addOwn(); return; }
     var ob = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-open') && ev.target.getAttribute('role') === 'button' ? ev.target : null;
     if (ob && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); if (W.route(data(), ob.getAttribute('data-open'))) openWorld(ob.getAttribute('data-open')); else openDialog('route:' + ob.getAttribute('data-open'), ob); return; }

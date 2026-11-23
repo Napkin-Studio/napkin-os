@@ -517,6 +517,7 @@ html[data-theme="dark"] .dz-lit:where(.nui, .nui *) path { fill: #2A2723; }
 .dz-sub:where(.nui, .nui *) { font: 500 15px var(--font-ui); fill: var(--muted); }
 .dz-tagbg:where(.nui, .nui *) { fill: var(--ink); }
 .dz-tag:where(.nui, .nui *) { font: 700 16px var(--font-mono); letter-spacing: .1em; fill: var(--paper); }
+.dz-tag-sm:where(.nui, .nui *) { font-size: 10px; letter-spacing: .08em; }
 .dz-rim:where(.nui, .nui *) { fill: none; stroke-width: 4; stroke-linecap: round; }
 .dz-rim.working:where(.nui, .nui *),
 .dz-rim.done:where(.nui, .nui *) { display: none; }
