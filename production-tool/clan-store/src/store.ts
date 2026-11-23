@@ -73,6 +73,9 @@ export interface SpunOffFrom {
   document_id: string
   data_sha256: string
   title: string
+  /** The parent's version as its app says it: its approve decisions carried in this project's chain, at least 1
+   *  (Brief Maker's "v2": the same count its docVersion() makes, the parent's own address being `<id>#…`). */
+  version: number
 }
 
 /**
@@ -437,7 +440,10 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
     const m = (parseYaml(this.need().entry('manifest.yaml')) ?? {}) as { title?: string; lineage?: { carried?: { document_id?: string; data_sha256?: string } } }
     const c = m.lineage?.carried
     if (!c?.document_id || !c.data_sha256) return null
-    return { document_id: c.document_id, data_sha256: c.data_sha256, title: m.title ?? '' }
+    const chain = (parseYaml(this.need().entry('agent/decision-chain.yaml')) ?? {}) as { decisions?: ChainEntry[] }
+    const mine = `${c.document_id}#`
+    const approvals = (chain.decisions ?? []).filter((d) => d.kind === 'approve' && (d.targets ?? []).some((t) => typeof t === 'string' && t.startsWith(mine))).length
+    return { document_id: c.document_id, data_sha256: c.data_sha256, title: m.title ?? '', version: Math.max(1, approvals) }
   }
 
   async exportClan(): Promise<Uint8Array> {

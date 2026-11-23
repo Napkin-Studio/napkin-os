@@ -374,9 +374,9 @@ describe('Start from a brief: the data path', () => {
     expect((await briefChoices(src(true))).empty).toMatch(/Brief Maker/)
   })
   it('a project spun off from Brief Maker makes its Brief node from the brief it carries, not from the OS', () => {
-    const from = { document_id: 'doc-first-light', data_sha256: SHA('b'), title: ' First Light ' }
+    const from = { document_id: 'doc-first-light', data_sha256: SHA('b'), title: ' First Light ', version: 2 }
     expect(carriedBrief(from, { 'doc-first-light': BRIEF_DATA })).toEqual({
-      documentId: 'doc-first-light', title: 'First Light', appId: 'ie.napkin.brief-maker', dataSha256: SHA('b'), version: 1, data: BRIEF_DATA,
+      documentId: 'doc-first-light', title: 'First Light', appId: 'ie.napkin.brief-maker', dataSha256: SHA('b'), version: 2, data: BRIEF_DATA,
     })
     // nothing carried under the parent's id: nothing to bring (the hoisted research of the brief is not the brief)
     expect(carriedBrief(from, { 'doc-research': BRIEF_DATA })).toBeNull()

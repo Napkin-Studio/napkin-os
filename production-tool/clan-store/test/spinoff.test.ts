@@ -35,7 +35,7 @@ describe('a project born as a spin-off', () => {
     const briefId = before.manifest.lineage.carried.document_id
     expect((doc as any).upstream[briefId].single_minded_proposition).toBe('Lumen is what the day starts with.')
     // the manifest says which brief, and its version (the tool makes the Brief node from it)
-    expect(await s.spunOffFrom()).toEqual({ document_id: briefId, data_sha256: before.manifest.lineage.carried.data_sha256, title: 'Lumen Water' })
+    expect(await s.spunOffFrom()).toEqual({ document_id: briefId, data_sha256: before.manifest.lineage.carried.data_sha256, title: 'Lumen Water', version: 1 })
     // starting the project is a decision of the person who opened it, after the carried ones
     const chain = await s.chain()
     expect(chain[0].action).toBe('start the project')
@@ -52,6 +52,19 @@ describe('a project born as a spin-off', () => {
     const doc = await s.open(zipSync(z))
     expect((doc as any).projection.pins).toEqual({})
     expect(entries(await s.exportClan()).data.projection).toEqual(data.projection)
+  })
+
+  it('a brief approved twice, spun off, is v2: the parent\'s approves carried in its chain are counted', async () => {
+    const z = unzipSync(fixture())
+    const briefId = parseYaml(new TextDecoder().decode(z['manifest.yaml'])).lineage.carried.document_id
+    const chain = parseYaml(new TextDecoder().decode(z['agent/decision-chain.yaml'])) as { decisions: Record<string, any>[] }
+    const approve = (n: number) => ({ id: `d_lock${n}`, kind: 'approve', agent: 'human', actor: 'human:u_a', action: 'lock', targets: [`${briefId}#`], rationale: 'Locked.', timestamp: `2026-11-1${n}T12:00:00Z` })
+    const other = { id: 'd_con', kind: 'contest', agent: 'human', actor: 'human:u_a', action: 'open_contest', targets: [`${briefId}#`], rationale: 'Not an approval.', timestamp: '2026-11-09T12:00:00Z' }
+    chain.decisions = [approve(2), approve(1), other, ...chain.decisions]
+    z['agent/decision-chain.yaml'] = new TextEncoder().encode(stringifyYaml(chain))
+    const s = store()
+    await s.open(zipSync(z))
+    expect((await s.spunOffFrom())?.version).toBe(2)
   })
 
   it('a project that was not spun off says so', async () => {
