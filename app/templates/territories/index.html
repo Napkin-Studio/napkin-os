@@ -2182,7 +2182,7 @@ var TerritoriesPictures = (function () {
 // Exports (territories-exports): what the Export window offers and how a file reaches the person. The middleware makes the files
 // (fetch_territories_file@1: the board and the one-pagers as HTML, the routes as JSON); the host's export prints the HTML to a PDF with
 // Chromium and delivers every file through the shell's own download, because this frame is sandboxed without allow-downloads, so no blob link
-// would save anything. Nothing here is a rule about content: the middleware's exports.py keeps those (rank only, no price, Rights to supply).
+// would save anything. Nothing here is a rule about content: the middleware's exports.py keeps those (rank only, Rights to supply).
 var TerritoriesExports = (function () {
   'use strict';
   function isObj(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
