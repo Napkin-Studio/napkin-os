@@ -20,7 +20,11 @@
 .nui .tb-locked > .tb-app { flex: 1 1 auto !important; min-width: 0; overflow: hidden !important; }
 .nui .tb-locked > .tb-spacer { flex: 1 1 0; min-width: 0; }
 .nui .tb-app > * { flex-shrink: 0; }
-.nui .tb-app > .tba-name { flex-shrink: 1; min-width: 72px; }
+.nui .tb-app > .tba-name { flex-shrink: 1; min-width: min(196px, 100%); }
+/* The buttons beside the name give way before the name does: a title that ends in an ellipsis at "P…" is no name
+   (owner, 2026-11-23). Past the room, Continue in and Share are clipped, as Share was already. */
+.nui .tb-app > .tba-acts { flex-shrink: 1; min-width: 0; overflow: hidden; }
+.nui .tb-app > .tba-acts > * { flex-shrink: 0; }
 /* The name's column shrinks with it: its title and saved line end in an
    ellipsis inside the column, so neither runs under the caret, and the caret
    keeps its own room before Continue in. */

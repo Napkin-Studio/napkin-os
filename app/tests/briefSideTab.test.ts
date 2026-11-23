@@ -154,12 +154,12 @@ test('the side tab holds the brief view and the part view apart, the brief view 
   assert.match(bv, /<details class="b-fold" id="logoFold"><summary>Logos<small id="logoSum"><\/small><\/summary>/)
   assert.doesNotMatch(bv, /id="(lookFold|logoFold)"[^>]* open/, 'folded until opened')
   for (const k of ['data-look="frame"', 'data-look="headings"', 'data-look="cover"', 'data-look="why"', 'id="swatches"', 'id="resetLook"']) assert.ok(bv.slice(bv.indexOf('id="lookFold"'), bv.indexOf('id="logoFold"')).includes(k), `${k} is in Look`)
-  const L = new Function('$', 'layoutData', 'get', 'derivedTitle', 'SWATCHES', 'window', 'agencyName', 'esc', 'patch', 'renderLogos', 'renderBrandLine', 'document',
+  const L = new Function('$', 'layoutData', 'get', 'derivedTitle', 'SWATCHES', 'window', 'agencyName', 'esc', 'patch', 'renderLogos', 'renderBrandLine', 'document', 'shortName',
     `${fn(BM, 'renderLook')} return renderLook;`)
   const ids: Record<string, El> = { sheet: new El(), sheetTab: new El(), swatches: new El('div', { input: new El() }), lookSum: new El() }
   ;(ids.sheet as unknown as { style: object }).style = { setProperty() {}, removeProperty() {} }
   ;(ids.sheetTab as unknown as { style: object }).style = { removeProperty() {} }
-  L((id: string) => ids[id] ?? null, () => ({ frame: 'boxed' }), () => '', () => '', [['', 'x']], {}, () => '', esc, () => {}, () => {}, () => {}, { querySelectorAll: () => [] })()
+  L((id: string) => ids[id] ?? null, () => ({ frame: 'boxed' }), () => '', () => '', [['', 'x']], {}, () => '', esc, () => {}, () => {}, () => {}, { querySelectorAll: () => [] }, (v: unknown) => String(v ?? '').trim())()
   assert.equal(ids.lookSum.textContent, 'Boxed · Label · Plain', '▸ Look · Boxed · Label · Plain')
   assert.match(fn(BM, 'renderLogos'), /if\(sm\) sm\.textContent=on\?String\(on\):'· none on the sheet';/, '▸ Logos · 2, counting what the sheet shows (briefLogos.test.ts)')
   // A part selected: the brief view goes (in the script, and in CSS for a drill-down with nothing selected).
