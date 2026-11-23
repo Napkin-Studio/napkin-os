@@ -536,4 +536,25 @@ for p in filter(None, problems):
 if not any(problems):
     print("✓ examples/identity-assertion.vector.json")
 
+# The service-credential vector (docs/contracts/production-tool-identity.md): recomputed here without the relay's
+# code, so the contract and the verifier cannot drift together.
+sv = json.loads((HERE / "examples" / "service-credential.vector.json").read_text())
+sc_json = json.dumps(sv["claims"], separators=(",", ":"), ensure_ascii=False)
+sc_b64 = b64(sc_json.encode())
+sc_msg = "\n".join(["napkin-user-v1", sv["method"], sv["pathAndQuery"], hashlib.sha256(sv["body"].encode()).hexdigest(), sc_b64])
+sc_user = sc_b64 + "." + b64(hmac.new(sv["key"].encode(), sc_msg.encode(), hashlib.sha256).digest())
+sc = sv["claims"]
+sc_problems = [
+    sc_json != sv["claimsJson"] and "claimsJson is not the compact claims",
+    sc_user != sv["userHeader"] and "userHeader does not match its claims, key and request",
+    sv["authorization"] != "Bearer " + sv["key"] and "authorization is not the bearer of the key",
+    len(sv["key"]) < 32 and "the key is shorter than the relay's 32-character minimum",
+    sc["t"] != str(uuid.uuid5(uuid.NAMESPACE_URL, "napkin:agency:" + sc["a"])) and "t is not the agency's tenant id",
+    sc["exp"] - sc["iat"] > 120 and "the claim lives longer than the relay allows",
+]
+for p in filter(None, sc_problems):
+    fail(f"✗ examples/service-credential.vector.json: {p}")
+if not any(sc_problems):
+    print("✓ examples/service-credential.vector.json")
+
 sys.exit(1 if failures else 0)

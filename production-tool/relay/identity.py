@@ -9,11 +9,16 @@ workspace id (UUIDv5 of "napkin:agency:<agency>", as napkin-web's TenantId::of_a
 identity: the relay answers 401 on every route but GET /health and GET /config. It fails closed: with
 no source set, nobody is anyone.
 
-Two sources:
-- napkin-web's X-Napkin-Identity v1 assertion (docs/contracts/production-tool-identity.md), signed
-  with a key in TOKEN_SECRET ("new,old" during a rotation). The keys are re-read through the
-  refresher handler.py hands use_secrets() (Secrets Manager, at most every 5 minutes).
-- The local person: relay/local.py with no TOKEN_SECRET calls use_local(local_person()).
+Three sources, tried in this order:
+- napkin-web's service credential (docs/contracts/production-tool-identity.md, features/production-jobs-via-host.clan):
+  `Authorization: Bearer <service key>` plus `X-Napkin-User: <b64url claims>.<b64url HMAC>` naming the
+  person, bound to this one request. The key is SERVICE_KEY ("new,old" during a rotation), re-read through
+  the refresher handler.py hands use_secrets(). No bearer, or a wrong one, is no identity (401); a good
+  bearer with a bad, expired or other-request claim is 401; a good bearer and signature whose claim names
+  a tenant that is not its agency's is Forbidden (403).
+- napkin-web's read-only assets pass (X-Napkin-Identity v1, aud "assets", signed with TOKEN_SECRET): good
+  for GET /assets/{sha256} and nothing else. The per-user "relay" assertion is gone.
+- The local person: relay/local.py with no SERVICE_KEY calls use_local(local_person()).
 """
 
 from __future__ import annotations
@@ -28,13 +33,16 @@ import time
 import uuid
 
 DEFAULT_LOCAL = ("local", "napkin")
-HEADER = "x-napkin-identity"
-AUDIENCE = "relay"
+HEADER = "x-napkin-identity"  # the assets pass
+USER_HEADER = "x-napkin-user"  # the service credential's user claim
+USER_DOMAIN = "napkin-user-v1"  # the first line of what the claim's HMAC covers
+USER_MAX_LIFE_S = 120  # napkin-web signs 60; a claim longer than this is refused
 ASSETS_AUDIENCE = "assets"
 ASSETS_PATH = re.compile(r"/(?:api/)?assets/[^/?]+")
 ASSETS_MAX_LIFE_S = 3600  # a pass longer than this is refused; napkin-web signs 1800
 SKEW_S = 30
 MAX_HEADER = 4096
+MIN_KEY = 32
 
 _local: dict | None = None
 _refresh = None  # () -> None: puts TOKEN_SECRET into os.environ when it is due (runtime.EnvSecrets)
@@ -71,18 +79,31 @@ def use_local(who: dict | None) -> None:
     _local = dict(who) if who else None
 
 
+class Forbidden(Exception):
+    """A valid service credential carrying a claim the relay will not act on (403, not 401)."""
+
+
 def use_secrets(refresh) -> None:
     """The refresher called before every verification (handler.py: its one EnvSecrets)."""
     global _refresh
     _refresh = refresh
 
 
-def keys() -> list[str]:
-    """The assertion keys, newest first."""
+def _env_keys(name: str) -> list[str]:
     if _refresh is not None:
         _refresh()
-    raw = os.environ.get("TOKEN_SECRET", "")
+    raw = os.environ.get(name, "")
     return [k.strip() for k in raw.split(",") if k.strip() and k.strip() != "PLACEHOLDER"]
+
+
+def keys() -> list[str]:
+    """The assets-pass keys (TOKEN_SECRET), newest first."""
+    return _env_keys("TOKEN_SECRET")
+
+
+def service_keys() -> list[str]:
+    """The service keys (SERVICE_KEY), newest first. A key shorter than 32 characters is no key."""
+    return [k for k in _env_keys("SERVICE_KEY") if len(k) >= MIN_KEY]
 
 
 def _b64d(s: str) -> bytes:
@@ -101,7 +122,7 @@ def sign(claims: dict, key: str) -> str:
 
 def verify_assertion(header: str | None, method: str, path_and_query: str, body: bytes | None,
                      keys: list[str], now: float) -> dict | None:
-    """The person an X-Napkin-Identity v1 assertion names, or None when anything about it is wrong."""
+    """The person an X-Napkin-Identity v1 assets pass names, or None when anything about it is wrong."""
     if not header or not keys or len(header) > MAX_HEADER:
         return None
     parts = header.split(".")
@@ -125,23 +146,16 @@ def verify_assertion(header: str | None, method: str, path_and_query: str, body:
         iat, exp = float(claims["iat"]), float(claims["exp"])
     except (KeyError, TypeError, ValueError):
         return None
-    aud = claims.get("aud")
-    if aud not in (AUDIENCE, ASSETS_AUDIENCE):
-        return None
+    if claims.get("aud") != ASSETS_AUDIENCE:
+        return None  # the per-user "relay" assertion is retired: napkin-web uses the service credential
     if iat > now + SKEW_S or now > exp + SKEW_S:
         return None
-    if aud == ASSETS_AUDIENCE:
-        # A read-only pass for one agency's pictures (docs/contracts/production-tool-identity.md): good for any
-        # GET /assets/{sha256}[?w=] until it expires, and for nothing else, so it is not bound to one path.
-        if exp - iat > ASSETS_MAX_LIFE_S or method.upper() != "GET" or body:
-            return None
-        if not ASSETS_PATH.fullmatch(path_and_query.partition("?")[0]):
-            return None
-    else:
-        if claims.get("m") != method.upper() or claims.get("p") != path_and_query:
-            return None
-        if claims.get("bh") != hashlib.sha256(body or b"").hexdigest():
-            return None
+    # A read-only pass for one agency's pictures (docs/contracts/production-tool-identity.md): good for any
+    # GET /assets/{sha256}[?w=] until it expires, and for nothing else, so it is not bound to one path.
+    if exp - iat > ASSETS_MAX_LIFE_S or method.upper() != "GET" or body:
+        return None
+    if not ASSETS_PATH.fullmatch(path_and_query.partition("?")[0]):
+        return None
     handle = u.partition("@")[0].strip()
     if not handle or not a or t != tenant_id(a):
         return None
@@ -149,9 +163,67 @@ def verify_assertion(header: str | None, method: str, path_and_query: str, body:
     return person(handle, a, name if isinstance(name, str) and name.strip() else None)
 
 
+def user_mac(key: str, method: str, path_and_query: str, body: bytes | None, claims_b64: str) -> str:
+    """The HMAC over the request and the claim: what X-Napkin-User's second part is (napkin-web signs it)."""
+    msg = "\n".join([USER_DOMAIN, method.upper(), path_and_query, hashlib.sha256(body or b"").hexdigest(), claims_b64])
+    return _b64e(hmac.new(key.encode(), msg.encode(), hashlib.sha256).digest())
+
+
+def sign_user(claims: dict, key: str, method: str, path_and_query: str, body: bytes | None) -> str:
+    """An X-Napkin-User value (tests and the vector; napkin-web is the real signer)."""
+    c = _b64e(json.dumps(claims, separators=(",", ":"), ensure_ascii=False).encode())
+    return c + "." + user_mac(key, method, path_and_query, body, c)
+
+
+def verify_service(authorization: str | None, user: str | None, method: str, path_and_query: str,
+                   body: bytes | None, keys: list[str], now: float) -> dict | None:
+    """The person napkin-web's service credential names. None (401) when the bearer, the signature, the time
+    or the binding to this request is wrong; Forbidden (403) when everything checks out but the claim's
+    tenant is not the one its agency has."""
+    if not authorization or not user or not keys or len(user) > MAX_HEADER:
+        return None
+    scheme, _, bearer = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not bearer:
+        return None
+    # Every key is tried (no early exit on the first match), so timing does not say which one was close.
+    ok = [k for k in keys if hmac.compare_digest(k.encode(), bearer.strip().encode())]
+    if not ok:
+        return None
+    parts = user.split(".")
+    if len(parts) != 2:
+        return None
+    try:
+        sig = _b64d(parts[1])
+    except ValueError:
+        return None
+    if not hmac.compare_digest(_b64d(user_mac(ok[0], method, path_and_query, body, parts[0])), sig):
+        return None
+    try:
+        claims = json.loads(_b64d(parts[0]))
+        u, a, t = str(claims["u"]), str(claims["a"]), str(claims["t"])
+        iat, exp = float(claims["iat"]), float(claims["exp"])
+    except (KeyError, TypeError, ValueError, UnicodeDecodeError):
+        return None
+    if not isinstance(claims, dict) or iat > now + SKEW_S or now > exp + SKEW_S or exp - iat > USER_MAX_LIFE_S:
+        return None
+    handle = u.partition("@")[0].strip()
+    if not handle or not a:
+        return None
+    if t != tenant_id(a):
+        raise Forbidden("The signed claim names a tenant that is not its agency's.")
+    name, doc = claims.get("n"), claims.get("doc")
+    who = person(handle, a, name if isinstance(name, str) and name.strip() else None)
+    if isinstance(doc, str) and doc.strip():
+        who["doc"] = doc.strip()[:200]
+    return who
+
+
 def who(method: str, path_and_query: str, headers: dict, body: bytes | None, now: float | None = None) -> dict | None:
     if _local:
         return dict(_local)
     heads = {k.lower(): v for k, v in headers.items()}
-    return verify_assertion(heads.get(HEADER), method, path_and_query, body, keys(),
-                            time.time() if now is None else now)
+    now = time.time() if now is None else now
+    if heads.get("authorization"):
+        return verify_service(heads.get("authorization"), heads.get(USER_HEADER), method, path_and_query, body,
+                              service_keys(), now)
+    return verify_assertion(heads.get(HEADER), method, path_and_query, body, keys(), now)
