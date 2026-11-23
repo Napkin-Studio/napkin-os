@@ -539,6 +539,13 @@ button.tsrc:hover{border-color:color-mix(in srgb,var(--ink) 35%,var(--line))}
 .pslot figcaption{margin-bottom:auto}
 .pfbtn{flex-basis:100%;min-height:28px;border:1px solid var(--line);border-radius:6px;background:var(--paper);font:800 11.5px var(--font-ui);cursor:pointer}
 .pfbtn.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+/* Make pictures (territories-pictures-frames): the head line of the panel, a held picture and its window */
+.pic-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:32px;margin-top:10px}
+.pic-head .psec-t{margin-top:0}
+.pic-make{min-height:30px;padding:0 12px;font-size:12px}
+.pslot.held .pface img{opacity:.42;filter:saturate(.55)}
+.pface .pchip.need{cursor:pointer}
+.pic-thumb{display:block;width:100%;max-height:220px;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
 .pstrip{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
 .pmenu{display:grid;gap:4px}
 .prow{display:grid;gap:1px;text-align:left;padding:9px 10px;border-radius:8px;border:1px solid transparent;background:transparent;font:inherit;cursor:pointer}
@@ -1848,7 +1855,7 @@ var TerritoriesWorld = (function () {
   function cq(h) { return '<div class="cq">' + h + '</div>'; }
   function worldBody(data, ui, t) {
     var dial = dialOf(t, ui), ft = feel(t, dial);
-    var pp = typeof TerritoriesPictures !== 'undefined' ? TerritoriesPictures.panel(t, ui) : '';
+    var pp = typeof TerritoriesPictures !== 'undefined' ? TerritoriesPictures.panel(t, ui, { green: L.greenIds(data).indexOf(t.id) !== -1 }) : '';
     if (ui && ui.wview === 'wall') return pp + '<div class="wall">' + WALL.map(function (k) { return '<div class="wcell w-' + k + '"><span class="weyebrow">' + esc(TP_NAMES[k]) + '</span>' + touchpoint(ft, k, data, ui, dial) + '</div>'; }).join('') + '</div>';
     return pp + '<ol class="journey">' + journeyOf(data).map(function (j) {
       return '<li class="jstep j-' + esc(j.key) + '"><div class="jwhen"><b>' + esc(j.day) + '</b><span>' + esc(j.where) + '</span></div>' + touchpoint(ft, j.key, data, ui, dial) + '</li>';
@@ -2110,20 +2117,20 @@ var TerritoriesPictures = (function () {
     var inner = c.kind === 'sketch' ? '<div class="scn">' + L.scene(c.scene || 'platform', p) + '</div>'
       : '<img src="' + esc(assetUrl(c.sha256)) + '" alt="" loading="lazy" onerror="this.remove()">';
     return '<div class="' + cls + (c.kind === 'sketch' ? ' sk' : '') + '" style="background:' + p.bg + '">' + inner + (c.final ? pill() : '') +
-      '<span class="plab">' + esc(c.label) + '</span>' + (c.kind === 'frame' ? rightsChip(t, c) : '') + '</div>';
+      '<span class="plab">' + esc(c.label) + '</span>' + (c.held ? needChip(t, c) : c.kind === 'frame' ? rightsChip(t, c) : '') + '</div>';
   }
   function slotHtml(t, c, big) {
-    var fin = c.kind === 'frame' ? '<button type="button" class="pfbtn' + (c.final ? ' on' : '') + '" data-pic-final="' + esc(t.id + '|' + c.id) + '" aria-pressed="' + (c.final ? 'true' : 'false') + '">' + (c.final ? 'Final ✓' : 'Mark Final') + '</button>' : '';
-    return '<figure class="pslot' + (big ? ' big' : '') + '" data-pslot="' + esc(c.id) + '">' + face(t, c, big) +
+    var fin = c.kind === 'frame' && !c.held ? '<button type="button" class="pfbtn' + (c.final ? ' on' : '') + '" data-pic-final="' + esc(t.id + '|' + c.id) + '" aria-pressed="' + (c.final ? 'true' : 'false') + '">' + (c.final ? 'Final ✓' : 'Mark Final') + '</button>' : '';
+    return '<figure class="pslot' + (big ? ' big' : '') + (c.held ? ' held' : '') + '" data-pslot="' + esc(c.id) + '">' + face(t, c, big) +
       '<figcaption><b>' + esc(name(t, c)) + '</b>' + (c.kind === 'sketch' ? '<span class="meta">sketch</span>' : c.kind === 'gap' ? '<span class="meta">gap</span>' : '') +
       (c.hash ? '<span class="phash" title="The picture\'s own name (its hash)">' + esc(c.hash) + '</span>' : '') + fin + '</figcaption>' +
       (c.source ? '<span class="meta psrc">' + esc(c.source) + '</span>' : '') + '</figure>';
   }
   /** Every slot of a route, in the World view and the route's window. */
-  function panel(t, ui) {
-    var v = view(t); if (!v.length) return '';
+  function panel(t, ui, opts) {
+    var v = withHeld(t, ui); if (!v.length) return '';
     var w = reqWords(ui && ui.req);
-    return '<section class="ppanel" aria-label="Pictures"><span class="psec-t">Pictures · ' + v.length + ' places</span>' +
+    return '<section class="ppanel" aria-label="Pictures"><div class="pic-head"><span class="psec-t">Pictures · ' + v.length + ' places</span>' + (opts && opts.green && canMake(t, ui) ? makeButton(t, ui) : '') + '</div>' +
       '<div class="pgrid">' + v.map(function (c) { return slotHtml(t, c, false); }).join('') + '</div>' +
       '<p class="meta pnote">A picture is named by its hash, never by where it sits. Marking another one of a place Final replaces the first.</p>' +
       (w ? '<p class="runnote' + (ui.req.state === 'failed' ? ' bad' : '') + '" role="status">' + esc(w) + '</p>' : '') + '</section>';
@@ -2142,6 +2149,76 @@ var TerritoriesPictures = (function () {
     if (req.state === 'queued' || req.state === 'running') return 'The engine is working on it. The page shows it when the document changes.';
     if (req.state === 'failed') return req.error || 'That did not go through. Nothing changed.';
     return '';
+  }
+
+
+  // ── Make pictures (territories-pictures-frames) ──
+  // The engine's steps (run_territories): frames without a card_id asks (the offer card; the page shows only its count), with the card_id
+  // makes; frames_status says which made pictures are held and why; frames_approve accepts one. A held picture is not in the document: the page
+  // draws it in the open place a picture can fill, from the host's blob store by its hash, and the engine places it only when a person approves.
+  var MAKE = { ask: 'frames', approve: 'frames_approve', status: 'frames_status' };
+  function heldOf(t, ui) {
+    var f = ui && ui.frames; if (!f || !t) return [];
+    return arr(f.held).filter(function (h) { return h.route === t.id && HEX.test(h.sha256 || '') && !(ui.left && ui.left[h.key]); })
+      .sort(function (a, b) { return String(a.shot) < String(b.shot) ? -1 : String(a.shot) > String(b.shot) ? 1 : 0; });
+  }
+  /** The slots as drawn: a held picture takes the next open place that a picture can fill (a sketch, not a place the engine said it cannot fill). */
+  function withHeld(t, ui) {
+    var v = view(t), hs = heldOf(t, ui); if (!hs.length) return v;
+    var no = arr(ui.frames.notOffered), i = 0;
+    return v.map(function (c) {
+      if (c.kind !== 'sketch' || no.indexOf(c.touchpoint) !== -1 || i >= hs.length) return c;
+      var h = hs[i++];
+      return { id: c.id, kind: 'frame', touchpoint: c.touchpoint, label: 'Illustrative', final: false, source: null, rights: null, trusted: null, sha256: h.sha256, hash: h.sha256.slice(0, 8), held: h.key, why: h.why || '' };
+    });
+  }
+  function canMake(t, ui) {
+    if (t.state !== 'developed' || t.status !== 'live') return false;
+    if (!slots(t).some(function (s) { return s.kind === 'sketch'; }) || slots(t).some(function (s) { return s.kind === 'frame'; })) return false;
+    if (heldOf(t, ui).length) return false;
+    var r = ui && ui.req; return !(r && L.reqBusy(r) && r.key === 'pic:make:' + t.id);
+  }
+  function makeButton(t, ui) {
+    var asking = ui && ui.mk && ui.mk.tid === t.id && ui.mk.state === 'asking';
+    return '<button type="button" class="btn-rect pic-make" data-pic-make="' + esc(t.id) + '"' + (asking ? ' disabled' : '') + '>Make pictures</button>';
+  }
+  function needChip(t, c) {
+    return '<button type="button" class="pchip sup need" data-pic-held="' + esc(t.id + '|' + c.held) + '" aria-haspopup="dialog">Needs you</button>';
+  }
+  function pluralPic(n) { return n + (n === 1 ? ' picture' : ' pictures'); }
+  /** The two windows: the confirm (the count from the engine's card, or its refusal in one line and no Make) and Needs you (the picture, why, two ways). */
+  function makeDialog(what, data, ui) {
+    var m = /^make:(.+)$/.exec(what), h = /^held:([^:]+):(.+)$/.exec(what), t;
+    if (m) {
+      t = L.developed(data).filter(function (x) { return x.id === m[1]; })[0]; var mk = ui && ui.mk;
+      if (!t || !mk || mk.tid !== t.id) return null;
+      if (mk.refused) return { title: 'Make pictures for ' + t.name + '?', closeInside: true, sans: true, html: '<p class="meta" style="margin:0">' + esc(mk.refused) + '</p>' +
+        '<div class="row"><span class="spacer" style="flex:1"></span><button type="button" class="btn-rect" data-close>Close</button></div>' };
+      return { title: 'Make ' + pluralPic(mk.card.frames) + ' for ' + t.name + '?', closeInside: true, sans: true, html: '<p class="meta" style="margin:0">Illustrative, made by an outside picture tool.</p>' +
+        '<div class="row"><span class="spacer" style="flex:1"></span><button type="button" class="btn-rect" data-close>Cancel</button><button type="button" class="btn-rect primary" data-pic-go="' + esc(t.id) + '">Make</button></div>' };
+    }
+    if (!h) return null;
+    t = L.developed(data).filter(function (x) { return x.id === h[1]; })[0];
+    var c = t && withHeld(t, ui).filter(function (x) { return x.held === h[2]; })[0]; if (!c) return null;
+    var key = esc(t.id + '|' + c.held);
+    return { title: 'Needs you', closeInside: true, sans: true, html: '<img class="pic-thumb" src="' + esc(assetUrl(c.sha256)) + '" alt="The picture that needs you" onerror="this.remove()">' +
+      '<p class="meta" style="margin:0">' + esc(c.why) + '</p>' +
+      '<div class="row"><span class="spacer" style="flex:1"></span><button type="button" class="btn-rect" data-pic-leave="' + key + '">Leave it out</button><button type="button" class="btn-rect primary" data-pic-ok="' + key + '">Approve</button></div>' };
+  }
+  /** The frames_status answer as the page keeps it: the held pictures and the places the engine said a picture cannot fill. */
+  function framesFrom(info) {
+    var f = isObj(info) && isObj(info.frames) ? info.frames : null; if (!f || !Array.isArray(f.frames)) return null;
+    return { held: f.frames.filter(function (x) { return isObj(x) && x.held && x.key; }).map(function (x) { return { key: x.key, route: x.route, shot: x.shot, sha256: x.sha256, why: x.why || '' }; }),
+      notOffered: arr(isObj(f.card) ? f.card.not_offered : []).map(function (n) { return n.touchpoint; }) };
+  }
+  function makeAct(data, ui, e, env) {
+    var by = (env && env.me && env.me.name) || 'You';
+    if (e.a === 'pic_go') {
+      if (!ui.mk || ui.mk.tid !== e.tid || !ui.mk.card) return null;
+      return { writes: [], request: { key: 'pic:make:' + e.tid, what: 'Making the pictures', input: { step: MAKE.ask, ids: [e.tid], card_id: ui.mk.card.id, by: by }, after: 'frames' } };
+    }
+    if (e.a === 'pic_ok') return { writes: [], request: { key: 'pic:held:' + e.id, what: 'Approving the picture', input: { step: MAKE.approve, keys: [e.id], by: by }, after: 'frames' } };
+    return null;
   }
 
   // ── the rights menu (a small window) ──
@@ -2177,8 +2254,9 @@ var TerritoriesPictures = (function () {
   }
 
   // ── the person's moves: requests, never writes ──
-  function handles(a) { return a === 'pic_final' || a === 'pic_rights'; }
+  function handles(a) { return a === 'pic_final' || a === 'pic_rights' || a === 'pic_go' || a === 'pic_ok'; }
   function act(data, ui, e, env) {
+    if (e.a === 'pic_go' || e.a === 'pic_ok') return L.reqBusy(ui && ui.req) ? { writes: [], toast: 'The last change is still going through.' } : makeAct(data, ui, e, env);
     var f = find(data, e.tid, e.id); if (!f || f.s.kind !== 'frame') return null;
     var by = (env && env.me && env.me.name) || 'You';
     if (L.reqBusy(ui && ui.req)) return { writes: [], toast: 'The last change is still going through.' };
@@ -2192,7 +2270,7 @@ var TerritoriesPictures = (function () {
   }
 
   return { STEPS: STEPS, CHOICES: CHOICES, view: view, chip: chip, rightsWord: rightsWord, rightsOf: rightsOf, labelOf: labelOf, panel: panel, strip: strip, slotHtml: slotHtml,
-    dialog: dialog, boothCard: boothCard, firstOpen: firstOpen, handles: handles, act: act, reqWords: reqWords };
+    dialog: dialog, makeDialog: makeDialog, framesFrom: framesFrom, heldOf: heldOf, withHeld: withHeld, canMake: canMake, STEPS_MAKE: MAKE, boothCard: boothCard, firstOpen: firstOpen, handles: handles, act: act, reqWords: reqWords };
 })();
 </script>
 
@@ -2432,7 +2510,7 @@ var TerritoriesLookups = (function () {
   var clanScheme = navigator.userAgent.indexOf('Windows') !== -1 ? 'http://clan.localhost' : 'clan://localhost';
   var inShell = !!window.parent && window.parent !== window;
   // View state only. Anything the document should keep is written through put().
-  var ui = { view: null, draft: '', job: null, mw: null, me: null, booth: true, sel: null, route: null, cross: null, req: null };
+  var ui = { view: null, draft: '', job: null, mw: null, me: null, booth: true, sel: null, route: null, cross: null, req: null, frames: null, mk: null, left: {} };
   var BOOTH_MIN = 1101, BUSY = { sending: 1, queued: 1, running: 1 };
   var MW_API = 'napkin.middleware/1';
 
@@ -2473,6 +2551,45 @@ var TerritoriesLookups = (function () {
     if (typeof fetch !== 'function') return;
     fetch(clanScheme + '/middleware').then(function (r) { return r.ok ? r.json() : null; })
       .then(function (v) { if (v && typeof v.configured === 'boolean') { ui.mw = v.configured; render(); } }).catch(function () {});
+  }
+
+  // ── Make pictures: a step run to its end for the window that needs the answer (the ask, the status), not through ui.req ──
+  function stepCall(input) {
+    return new Promise(function (resolve) {
+      if (!(window.clan && window.clan.apiProxy) || ui.mw === false) { resolve({ ok: false, why: 'The engine is not connected in this workspace, so nothing was sent.' }); return; }
+      var delay = 500, tries = 0;
+      function done(res) {
+        var err = hostErr(res); if (err) { resolve({ ok: false, why: err }); return; }
+        var b = mwBody(res) || {}, j = b.job || {};
+        if (j.error) { resolve({ ok: false, why: j.error.message || j.error.type || 'The engine said no.' }); return; }
+        if (j.state === 'failed') { resolve({ ok: false, why: 'The engine stopped.' }); return; }
+        if (j.state === 'queued' || j.state === 'running' || j.state === 'sending') {
+          if (++tries > 60) { resolve({ ok: false, why: 'The engine is taking too long.' }); return; }
+          setTimeout(function () { window.clan.apiProxy('middleware', { task: L.TASKS.status, input: { job_id: j.id } }).then(done, fail); }, delay); delay = Math.min(Math.round(delay * 1.4), 2500); return;
+        }
+        resolve({ ok: true, info: b.result && b.result.info });
+      }
+      function fail(e) { resolve({ ok: false, why: 'The middleware could not be reached: ' + (e && e.message || e) }); }
+      window.clan.apiProxy('middleware', { task: L.TASKS.run, input: input }).then(done, fail);
+    });
+  }
+  function refreshFrames() {
+    if (!(data().greenlit || []).length || typeof TerritoriesPictures === 'undefined') return;
+    stepCall({ step: TerritoriesPictures.STEPS_MAKE.status }).then(function (r) {
+      var f = r.ok ? TerritoriesPictures.framesFrom(r.info) : null;
+      if (f) { ui.frames = f; render(); }
+    });
+  }
+  function makeAsk(tid) {
+    if (ui.mk && ui.mk.state === 'asking') return;
+    if (ui.req && BUSY[ui.req.state]) { toast('The last change is still going through.'); return; }
+    var by = (ui.me && ui.me.name) || 'You';
+    ui.mk = { tid: tid, state: 'asking' }; render();
+    stepCall({ step: TerritoriesPictures.STEPS_MAKE.ask, ids: [tid], by: by }).then(function (r) {
+      var card = r.ok && r.info && r.info.card;
+      ui.mk = card && card.id ? { tid: tid, state: 'ready', card: card } : { tid: tid, state: 'refused', refused: r.ok ? 'The engine did not make an offer, so nothing was made.' : r.why.replace(/\s+$/, '') };
+      render(); openDialog('make:' + tid, document.querySelector('[data-pic-make="' + tid + '"]'));
+    });
   }
   function startRun() {
     if (ui.job && BUSY[ui.job.state]) return;
@@ -2516,7 +2633,7 @@ var TerritoriesLookups = (function () {
     ui.cross = null;
     if (!(window.clan && window.clan.apiProxy)) { ui.req = { key: rq.key, state: 'failed', error: rq.what + ' runs through the host, and the host is not here. Nothing changed.' }; render(); return; }
     if (ui.mw === false) { ui.req = { key: rq.key, state: 'failed', error: 'The engine is not connected in this workspace, so nothing was sent. Nothing changed.' }; render(); return; }
-    ui.req = { key: rq.key, what: rq.what, state: 'sending', id: null, delay: 900, t: 0, error: null, then: rq.then || null, continueIn: rq.continueIn || null };
+    ui.req = { key: rq.key, what: rq.what, state: 'sending', id: null, delay: 900, t: 0, error: null, then: rq.then || null, continueIn: rq.continueIn || null, after: rq.after || null };
     render();
     var me = ui.req;
     window.clan.apiProxy('middleware', { task: L.TASKS.run, input: rq.input }).then(function (res) { onRequest(me, res); }, function (e) { reqFailed(me, 'The middleware could not be reached: ' + (e && e.message || e)); });
@@ -2531,6 +2648,7 @@ var TerritoriesLookups = (function () {
       r.id = b.job.id || r.id; r.state = b.job.state || 'done';
       if (b.job.error) { reqFailed(r, r.what + ' did not go through. ' + (b.job.error.message || b.job.error.type || String(b.job.error))); return; }
     } else r.state = 'done';
+    if (r.state === 'done' && r.after === 'frames') { r.after = null; refreshFrames(); }
     if (r.state === 'done' && r.then) { var nx = r.then; r.then = null; render(); startRequest(nx); return; }
     // A written send asks the shell to make the spin-off (clan:continue-in); the shell says in its own words when the target is not installed.
     if (r.state === 'done' && r.continueIn) { var app = r.continueIn; r.continueIn = null; try { window.parent.postMessage({ type: 'clan:continue-in', app_id: app }, '*'); } catch (x) { /* no shell */ } }
@@ -2609,7 +2727,7 @@ var TerritoriesLookups = (function () {
   // ── end Export ──
 
   function openDialog(what, from) {
-    var d = what === 'export' && typeof TerritoriesExports !== 'undefined' ? TerritoriesExports.dialog(data(), ui) : L.dialogFor(what, data()); if (!d) { toast('That source is not in this document.'); return; }
+    var d = what === 'export' && typeof TerritoriesExports !== 'undefined' ? TerritoriesExports.dialog(data(), ui) : /^(make|held):/.test(what) && typeof TerritoriesPictures !== 'undefined' ? TerritoriesPictures.makeDialog(what, data(), ui) : L.dialogFor(what, data()); if (!d) { toast('That source is not in this document.'); return; }
     closeDialog(true);
     dialogFrom = from || document.activeElement;
     var ov = document.createElement('div'); ov.className = 'overlay';
@@ -2783,6 +2901,11 @@ var TerritoriesLookups = (function () {
     if ((b = t.closest('[data-close]')) || (dialogEl && t === dialogEl)) { closeDialog(); return; }
     if ((b = t.closest('[data-play-toggle]'))) { var id = b.getAttribute('data-play-toggle'), on = b.getAttribute('data-on') === '1'; closeDialog(true); run({ a: 'play', id: id, on: on }); return; }
     if ((b = t.closest('[data-play]'))) { run({ a: 'play', id: b.getAttribute('data-play'), on: b.getAttribute('aria-pressed') !== 'true' }); return; }
+    if ((b = t.closest('[data-pic-make]'))) { ev.stopPropagation(); if (!b.disabled) makeAsk(b.getAttribute('data-pic-make')); return; }
+    if ((b = t.closest('[data-pic-go]'))) { var gt = b.getAttribute('data-pic-go'); closeDialog(true); run({ a: 'pic_go', tid: gt }); return; }
+    if ((b = t.closest('[data-pic-held]'))) { ev.stopPropagation(); var ph = b.getAttribute('data-pic-held').split('|'); openDialog('held:' + ph[0] + ':' + ph[1], b); return; }
+    if ((b = t.closest('[data-pic-ok]'))) { var po = b.getAttribute('data-pic-ok').split('|'); closeDialog(true); run({ a: 'pic_ok', tid: po[0], id: po[1] }); return; }
+    if ((b = t.closest('[data-pic-leave]'))) { ui.left[b.getAttribute('data-pic-leave').split('|')[1]] = true; closeDialog(true); lastHtml = null; render(); return; }
     if ((b = t.closest('[data-pic-final]'))) { ev.stopPropagation(); var pf = b.getAttribute('data-pic-final').split('|'); closeDialog(true); run({ a: 'pic_final', tid: pf[0], id: pf[1], on: b.hasAttribute('data-pic-off') ? false : undefined }); return; }
     if ((b = t.closest('[data-pic-rights]'))) { ev.stopPropagation(); var pr = b.getAttribute('data-pic-rights').split('|'); openDialog('rights:' + pr[0] + ':' + pr[1], b); return; }
     if ((b = t.closest('[data-pic-set]'))) { var ps = { tid: b.getAttribute('data-pic-t'), id: b.getAttribute('data-pic-s'), rights: b.getAttribute('data-pic-set') }; closeDialog(true); run({ a: 'pic_rights', tid: ps.tid, id: ps.id, rights: ps.rights }); return; }
@@ -2873,6 +2996,7 @@ var TerritoriesLookups = (function () {
 
   render();
   checkMiddleware();
+  setTimeout(refreshFrames, 600);
 })();
 </script>
 </body>

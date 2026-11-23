@@ -1,0 +1,118 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+// Territories Make pictures (territories-pictures-frames): the button on the route's Pictures line, the confirm (count from the engine's card,
+// or its refusal and no Make), a held picture and its Needs you window. Every move is a request to the engine's steps; no price is shown anywhere.
+
+import assert from 'node:assert/strict'
+import { existsSync, readFileSync } from 'node:fs'
+import { test } from 'node:test'
+import vm from 'node:vm'
+
+let root = new URL('.', import.meta.url)
+while (!existsSync(new URL('package.json', root))) root = new URL('..', root)
+const dir = new URL('templates/territories/', root)
+const html = readFileSync(new URL('index.html', dir), 'utf8')
+const block = (id: string) => new RegExp(`<script id="${id}">([\\s\\S]*?)</script>`).exec(html)![1]
+const sphereDir = new URL('templates/shared/agent-sphere/', root)
+const engine = `(function (window) {\n${['finish.js', 'agent-view.js', 'extra.js', 'roles.js'].map(f => readFileSync(new URL(f, sphereDir), 'utf8')).join('\n')}\n})(globalThis);\n`
+const helper = /<script>([\s\S]*?var NapkinSource[\s\S]*?)<\/script>/.exec(readFileSync(new URL('templates/shared/source-card.html', root), 'utf8'))![1]
+
+type Doc = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
+const both = vm.runInNewContext(`${engine}${helper}\n${block('territories-logic')};\n${block('territories-world-logic')};\n${block('territories-pictures-logic')}; ({ L: TerritoriesLogic, W: TerritoriesWorld, P: TerritoriesPictures })`) as { L: Doc; W: Doc; P: Doc }
+const { L, W, P } = both
+const json = (rel: string) => JSON.parse(readFileSync(new URL(rel, dir), 'utf8')) as Doc
+const plain = (h: string) => h.replace(/<svg[\s\S]*?<\/svg>/g, ' ').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ')
+const H = (n: number) => String(n).repeat(64).slice(0, 64)
+const eq = (a: unknown, b: unknown, m?: string) => assert.deepEqual(JSON.parse(JSON.stringify(a)), JSON.parse(JSON.stringify(b)), m)
+const ENV = { me: { name: 'Shrey' } }
+
+
+function doc(): Doc {
+  const d = json('example/states/greenlight_open.json')
+  d.greenlit = ['t_started', 't_sunday'].map(id => ({ territory_id: id, by: 'Shrey', at: '2026-11-23T10:00:00Z', rests_on_derived: [], derived_resolution: 'verified' }))
+  return d
+}
+const route = (d: Doc, id = 't_started') => d.territories.find((x: Doc) => x.id === id)
+const WHY = 'It has the word FERNCLIFF in it.'
+const frames = (held: boolean) => ({ held: [{ key: 't_started-abc123-f3-tv', route: 't_started', shot: 3, sha256: H(3), why: WHY }].filter(() => held), notOffered: ['story', 'seat'] })
+const PRICE = /\$|€|£|usd|eur|price|cost|credit|cap\b/i
+
+test('the button is on the Pictures line of a greenlit developed route with sketches, and nowhere else', () => {
+  const d = doc(), t = route(d)
+  const on = W.worldBody(d, {}, t) as string
+  assert.match(on, /<div class="pic-head"><span class="psec-t">Pictures · 8 places<\/span><button type="button" class="btn-rect pic-make" data-pic-make="t_started">Make pictures<\/button>/)
+  const ungreen = W.worldBody(d, {}, route(d, 't_small')) as string
+  assert.doesNotMatch(ungreen, /Make pictures/, 'small is developed but not greenlit')
+  assert.doesNotMatch(L.dialogFor('route:t_started', d).html, /Make pictures/, 'the route window has no button')
+  const made = doc(); Object.assign(route(made).pictures[0], { kind: 'frame', sha256: H(1), image: 'sha256:' + H(1), rights: 'generated' })
+  assert.doesNotMatch(W.worldBody(made, {}, route(made)), /Make pictures/, 'already made')
+  assert.doesNotMatch(W.worldBody(d, { frames: frames(true), left: {} }, t), /Make pictures/, 'a picture is waiting for a person')
+  const dev = doc(); route(dev).state = 'sketched'
+  assert.doesNotMatch(W.worldBody(dev, {}, route(dev)), /Make pictures/)
+})
+
+test('the confirm says the count from the card; a refusal is one line and has no Make; neither shows a price', () => {
+  const d = doc()
+  const ok = P.makeDialog('make:t_started', d, { mk: { tid: 't_started', state: 'ready', card: { id: 'c_1', frames: 4, usd: 9.5, price: 12 } } })
+  assert.equal(ok.title, 'Make 4 pictures for Already Started?')
+  eq([...ok.html.matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((m: RegExpMatchArray) => m[1]), ['Cancel', 'Make'])
+  assert.match(ok.html, /Illustrative, made by an outside picture tool\./)
+  assert.doesNotMatch(plain(ok.title + ok.html), PRICE)
+  assert.equal(P.makeDialog('make:t_started', d, { mk: { tid: 't_started', state: 'ready', card: { id: 'c_1', frames: 1 } } }).title, 'Make 1 picture for Already Started?')
+  const no = P.makeDialog('make:t_started', d, { mk: { tid: 't_started', state: 'refused', refused: 'Say whether the material is invented, a demo or the client\'s.' } })
+  assert.match(no.html, /Say whether the material is invented/); assert.doesNotMatch(no.html, /data-pic-go|>Make</)
+  eq([...no.html.matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((m: RegExpMatchArray) => m[1]), ['Close'])
+  assert.equal(P.makeDialog('make:t_started', d, {}), null)
+})
+
+test('Make sends the card id of the card that was shown, by name; asking is never a click on Make', () => {
+  const d = doc(), ui = { mk: { tid: 't_started', state: 'ready', card: { id: 'c_77', frames: 4 } } }
+  const r = L.act(d, ui, { a: 'pic_go', tid: 't_started' }, ENV)
+  eq(r.writes, []); eq(r.request.input, { step: 'frames', ids: ['t_started'], card_id: 'c_77', by: 'Shrey' })
+  assert.equal(L.act(d, {}, { a: 'pic_go', tid: 't_started' }, ENV), null, 'no card, no make')
+  assert.match(L.act(d, { ...ui, req: { key: 'gl:x', state: 'running' } }, { a: 'pic_go', tid: 't_started' }, ENV).toast, /still going through/)
+})
+
+test('a held picture is drawn dimmed in the next open place, with Needs you and no rights chip or Final button', () => {
+  const d = doc(), t = route(d)
+  Object.assign(t.pictures[0], { kind: 'frame', sha256: H(1), image: 'sha256:' + H(1), rights: 'generated' })
+  const h = P.panel(t, { frames: frames(true), left: {} }, { green: true }) as string
+  assert.equal((h.match(/class="pslot held"/g) || []).length, 1)
+  assert.match(h, /data-pslot="pic_started_tv2"/)
+  const slot = /<figure class="pslot held" data-pslot="pic_started_tv2">[\s\S]*?<\/figure>/.exec(h)![0]
+  assert.match(slot, new RegExp(`/assets/${H(3)}`)); assert.match(slot, />Needs you<\/button>/); assert.match(slot, /Illustrative/)
+  assert.doesNotMatch(slot, /data-pic-rights|data-pic-final|Generated/)
+  assert.doesNotMatch(h, /Make pictures/)
+  assert.doesNotMatch(P.panel(t, { frames: { ...frames(true), notOffered: ['tv', 'story', 'seat', 'poster', 'email', 'radio'] }, left: {} }, {}), /pslot held/, 'a place the engine cannot fill stays a sketch')
+  assert.doesNotMatch(P.panel(t, { frames: frames(true), left: { 't_started-abc123-f3-tv': true } }, {}), /pslot held/, 'left out')
+})
+
+test('Needs you shows the held picture above the engine\'s reason; Approve calls frames_approve, Leave it out calls nothing', () => {
+  const d = doc(), ui = { frames: frames(true), left: {} }
+  const dlg = P.makeDialog('held:t_started:t_started-abc123-f3-tv', d, ui)
+  assert.equal(dlg.title, 'Needs you')
+  assert.ok(dlg.html.indexOf('<img') < dlg.html.indexOf(WHY), 'the picture comes first')
+  assert.match(dlg.html, new RegExp(`<img class="pic-thumb" src="clan://localhost/assets/${H(3)}"`))
+  eq([...dlg.html.matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((m: RegExpMatchArray) => m[1]), ['Leave it out', 'Approve'])
+  assert.doesNotMatch(plain(dlg.html), PRICE)
+  const r = L.act(d, ui, { a: 'pic_ok', tid: 't_started', id: 't_started-abc123-f3-tv' }, ENV)
+  eq(r.request.input, { step: 'frames_approve', keys: ['t_started-abc123-f3-tv'], by: 'Shrey' })
+  assert.equal(r.request.after, 'frames')
+  assert.equal(P.makeDialog('held:t_started:nope', d, ui), null)
+})
+
+test('frames_status becomes the page\'s held list and the places a picture cannot fill; held ones only', () => {
+  const info = { frames: { frames: [{ key: 'a', route: 't_started', shot: 1, sha256: H(1), held: false, why: null }, { key: 'b', route: 't_started', shot: 3, sha256: H(3), held: true, why: WHY }], card: { not_offered: [{ touchpoint: 'story', why: 'x' }] } } }
+  eq(P.framesFrom(info), { held: [{ key: 'b', route: 't_started', shot: 3, sha256: H(3), why: WHY }], notOffered: ['story'] })
+  assert.equal(P.framesFrom({ frames: { refused: 'no' } }), null)
+  assert.equal(P.framesFrom(undefined), null)
+})
+
+test('the page asks, makes and approves only through the engine\'s steps and keeps no price in its words', () => {
+  const src = html.slice(html.indexOf('id="territories-pictures-logic"'), html.indexOf('id="territories-exports-logic"'))
+  const words = [...src.matchAll(/'([^'\n]{12,})'/g)].map((m: RegExpMatchArray) => m[1]).filter((w: string) => /^[A-Z]/.test(w))
+  for (const w of words) assert.doesNotMatch(w, /\$|€|£|\busd\b|\bprice\b|credits?\b/i, w)
+  assert.match(src, /ask: 'frames', approve: 'frames_approve', status: 'frames_status'/)
+})
