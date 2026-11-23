@@ -436,10 +436,13 @@ async fn a_brief_continues_in_production_as_one_relay_project_and_no_document() 
         );
         assert_eq!(carried.document_id, brief_doc.manifest().document_id());
         assert!(yaml(&clan, "shared/data.yaml")["upstream"][&carried.document_id].is_mapping());
-        assert_eq!(
-            clan.manifest().lineage.as_ref().unwrap().parent_uri,
-            format!("clan-store:{brief}")
-        );
+        assert!(clan
+            .manifest()
+            .lineage
+            .as_ref()
+            .unwrap()
+            .parent_uri
+            .starts_with(&format!("doc:{brief}@sha256:")));
         assert_eq!(clan.manifest().app.as_ref().unwrap().app_id, PRODUCTION);
         // stamped with the workspace it was made in
         let chain = yaml(&clan, "agent/decision-chain.yaml");
