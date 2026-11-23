@@ -387,9 +387,30 @@ def idea(inp, st, profile: dict | None = None) -> tuple[dict, dict]:
     chosen = next((t for t in (st.get("c") or {}).get("territories", []) if t["id"] == (st.get("c") or {}).get("chosen")), None)
     user = (f"<storyline>{json.dumps(st.get('b'), ensure_ascii=False)}</storyline>\n<territory>{json.dumps(chosen, ensure_ascii=False)}</territory>\n"
             f"<requirements>{json.dumps((st.get('a') or {}).get('requirements', []), ensure_ascii=False)}</requirements>\n<evidence>\n{_facts_block(inp)}\n</evidence>{_prompt_block(inp)}{_visuals_block(inp)}")
+    fixed = carried_idea(chosen)
+    if fixed:
+        user += (f"\n<fixed_idea>The idea belongs to the Territories route the person sent, and it is not rewritten. campaign_line is exactly "
+                 f"{json.dumps(fixed['campaign_line'], ensure_ascii=False)}; idea is exactly {json.dumps(fixed['idea'], ensure_ascii=False)}. Write how_it_answers, the executions "
+                 f"and the rest around it, using the route's own words in territory.their_words for headlines and copy before any new line.</fixed_idea>")
     obj, u = _call("d", user, _sysmsg("d_idea.md", "d", profile))
     obj.update(stage="d_idea_and_executions", produced_by=f"live {MODELS['d']}")
+    if fixed:
+        obj.update(fixed)   # a route's idea is the route's: the model's framing never replaces it
+        ch = obj.get("chain")
+        if isinstance(ch, dict) and str(ch.get("idea_phrase") or "") not in fixed["idea"]:
+            ch["idea_phrase"] = " ".join(fixed["idea"].split()[:8])   # the chain quotes the idea as it now reads
+        obj["idea_from"] = {"territory": chosen["id"], "name": chosen.get("name")}
     return obj, u
+
+
+def carried_idea(chosen) -> dict | None:
+    """``{campaign_line, idea}`` of a route carried from Territories (its lead line or first headline, and its one-thought proposition), else None.
+    The deck makes no idea of its own for such a route (territories-spinoff-out-deck)."""
+    if not (isinstance(chosen, dict) and chosen.get("from_territories")):
+        return None
+    words = chosen.get("their_words") or []
+    line, thought = (words[0] if words else chosen.get("name")), chosen.get("thought")
+    return {"campaign_line": line, "idea": thought} if line and thought else None
 
 
 def criterion_answer(inp, st, criterion: dict, budget: int, profile: dict | None = None) -> tuple[dict, dict]:

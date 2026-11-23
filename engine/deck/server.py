@@ -11,7 +11,7 @@ where the last segment stopped and recorded stages replay for free.
 Routes (JSON; failures are non-2xx with ``{"error": {"type", "message"}}``, never a 200 with an error in it)::
 
     GET  /status                 what is on and what is busy
-    POST /run                    {doc, inputs, approvals, mode, render?, production_upstream?}: start the next segment of this document's run
+    POST /run                    {doc, inputs, approvals, mode, render?, production_upstream?, territories_upstream?}: start the next segment of this document's run
                                  (production_upstream {id, data}: the Production project the deck was spun off from, carried whole;
                                  production_assets {base, pass}: the relay's address and napkin-web's read-only assets pass for it, a secret)
     GET  /run/<doc>              the run so far: state, the run object the screens read, and once built the payload
@@ -221,7 +221,8 @@ def validate_request(body: dict, settings: Settings) -> dict:
             "type": prof["id"], "picked": bool(picked_type(inp)), "type_stages": list(prof["stages"]), "confirmed": confirmed_stages(body, inp),
             "approvals": approvals, "render": body.get("render", True) is not False, "marks": marks,
             "review": body.get("review") if isinstance(body.get("review"), dict) else {}, "approver": str(body.get("approver") or ""),
-            "production_upstream": production_upstream(body), "production_assets": production_assets(body), "members": members_of(body)}
+            "production_upstream": production_upstream(body), "production_assets": production_assets(body), "members": members_of(body),
+            "territories_upstream": territories_upstream(body)}
 
 
 def members_of(body: dict) -> dict | None:
@@ -261,13 +262,32 @@ def production_upstream(body: dict) -> dict | None:
     return {"id": pu["id"].strip(), "data": pu["data"]}
 
 
+def territories_upstream(body: dict) -> dict | None:
+    """``{id, data}``: the Territories document the deck was spun off from, carried whole (the middleware reads it from the deck's ``data.upstream``);
+    None when the deck has none. Its sent routes are stage c (territories-spinoff-out-deck)."""
+    tu = body.get("territories_upstream")
+    if tu is None:
+        return None
+    from . import from_territory
+    if not (isinstance(tu, dict) and isinstance(tu.get("id"), str) and tu["id"].strip() and from_territory.is_territories(tu.get("data"))):
+        raise Refused(400, "bad_request", "territories_upstream must be {id, data}: the Territories document's id and its data (routes, greenlit, crew)")
+    return {"id": tu["id"].strip(), "data": tu["data"]}
+
+
 def plan_for(kind: str, stages: list | None = None) -> list:
     """The gates a run holds at: PLAN[kind], cut to the stages the deck type runs (a credentials deck writes no territories or idea, so it
     has no gate 2 or 3). With no type given it is PLAN[kind], as before deck types."""
     return [(s, g) for s, g in PLAN[kind] if stages is None or s in stages]
 
 
-def plan_segment(kind: str, present: set[str], approvals: dict, stages: list | None = None) -> tuple[str | None, str | None]:
+def auto_gates(stages_dir: Path) -> frozenset:
+    """Gates nobody has to pass. Gate 2 only asks which greenlit route leads: with exactly one route carried from Territories there is nothing to pick,
+    so it is not held (the owner, 2026-11-23: one tool per job). A deck with no Territories upstream, or two or more routes, holds it as ever."""
+    c = rs.stage_file(stages_dir, "c_territories.json") or {}
+    return frozenset({"territories"}) if (c.get("from_territories") or {}).get("count") == 1 else frozenset()
+
+
+def plan_segment(kind: str, present: set[str], approvals: dict, stages: list | None = None, auto: frozenset = frozenset()) -> tuple[str | None, str | None]:
     """How far to run: (until, held). ``until`` is the stage to stop after (None: the last segment); ``held`` a gate already waiting.
     A gate goes on only when the person approved it AND its stage output existed already, so an old approval never skips a new gate."""
     for stage, gate in plan_for(kind, stages):
@@ -275,6 +295,8 @@ def plan_segment(kind: str, present: set[str], approvals: dict, stages: list | N
         if fn not in present:
             return stage, None
         a = approvals.get(gate)
+        if gate in auto:
+            continue
         if not a or a.get("decision", "approve") != "approve":
             return None, gate
     return None, None
@@ -330,7 +352,7 @@ class Server:
             d.req, d.notices, d.error, d.pay = req, [], None, None
             present = {p.name for p in d.stages.glob("*.json")}
             self.check_type_change(d, req, present)   # deck-types: before anything runs or spends
-            until, held = plan_segment(req["kind"], present, req["approvals"], req.get("type_stages"))
+            until, held = plan_segment(req["kind"], present, req["approvals"], req.get("type_stages"), auto_gates(d.stages))
             self.apply_pick(d, req, present)
             if held:
                 d.state, d.held, d.current = "gate", held, None
@@ -510,6 +532,9 @@ class Server:
             inp = self.load_inputs(d, req)
             d.summary = {**rs.inputs_summary(inp), "needs_intake": run_deck._needs_intake(inp)}
             rep = self.call_engine(d, req, until)
+            if until == "c" and "territories" in auto_gates(d.stages):   # one route from Territories: no gate 2, the idea starts from it
+                until = "d"
+                rep = self.call_engine(d, req, until)
             with self.lock:
                 if until:
                     d.state, d.held = "gate", next(g for s, g in plan_for(req["kind"], req.get("type_stages")) if s == until)
@@ -615,6 +640,12 @@ class Server:
             pf_up = d.root / "production_upstream.json"
             pf_up.write_text(json.dumps(pu, ensure_ascii=False, sort_keys=True))
             argv += ["--production-upstream", str(pf_up)]
+        tu = req.get("territories_upstream")
+        if tu and req["kind"] != "investor":   # spun off from Territories: the routes sent are gate 2's territories (a recorded stage c stands)
+            d.root.mkdir(parents=True, exist_ok=True)
+            tf = d.root / "territories_upstream.json"
+            tf.write_text(json.dumps(tu, ensure_ascii=False, sort_keys=True))
+            argv += ["--territories-upstream", str(tf)]
         ap_id = inp.get("approve_shorten")
         if isinstance(ap_id, str) and ap_id.startswith("apv_"):   # an approval id bound to the shortenable words' hash, never a bare yes
             argv += ["--approve-shorten", ap_id]

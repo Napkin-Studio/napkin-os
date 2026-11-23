@@ -127,6 +127,30 @@ def with_production(data: dict, pu) -> dict:
     return {**data, "upstream": {**up, pu["id"]: pu["data"]}}
 
 
+def is_territories(v) -> bool:
+    """A Territories document's data: routes, the greenlit list and the crew (the contract's required members; the host and the engine test the same)."""
+    return isinstance(v, dict) and all(isinstance(v.get(k), list) for k in ("territories", "greenlit", "crew"))
+
+
+def with_territories(data: dict, tu) -> dict:
+    """``data`` with the carried Territories document put back whole under ``upstream.<id>``. The host sends ``clan.data.upstream`` as an index
+    (middleware-api.md §1) and the document beside it as ``clan.territories_upstream {id, data}``; the marks and the engine read it from
+    ``data.upstream`` as it is in the document. A ``tu`` that is not ``{id, data}`` of a Territories document changes nothing."""
+    if not (isinstance(tu, dict) and isinstance(tu.get("id"), str) and tu["id"] and is_territories(tu.get("data"))):
+        return data
+    up = data.get("upstream") if isinstance(data.get("upstream"), dict) else {}
+    return {**data, "upstream": {**up, tu["id"]: tu["data"]}}
+
+
+def territories_upstream_of(data: dict) -> dict | None:
+    """``{id, data}``: the Territories document the Deck carries under ``data.upstream`` (the first one), as the engine reads it: its sent routes are
+    gate 2's territories. The pictures are not in it: a picture is a link (its sha256) there."""
+    for k, v in (data.get("upstream") or {}).items():
+        if is_territories(v):
+            return {"id": str(k), "data": v}
+    return None
+
+
 def production_upstream_of(data: dict) -> dict | None:
     """``{id, data}``: the Production project (``app: production-tool``) the Deck carries under ``data.upstream`` (the first one), as the engine
     reads it (finals, assets, sizes, briefs). The pictures are not in it: they are held by the relay under their sha256."""
@@ -162,7 +186,7 @@ def members_of(clan) -> dict | None:
 
 def start(req, caps, settings, jid):
     """Validate now (a 400 before any job, a 503 with no engine); build the job (the caller starts it)."""
-    data = with_production(ctx_data(req.clan), (req.clan or {}).get("production_upstream"))
+    data = with_territories(with_production(ctx_data(req.clan), (req.clan or {}).get("production_upstream")), (req.clan or {}).get("territories_upstream"))
     inputs = data.get("inputs") if isinstance(data.get("inputs"), dict) else {}
     prompt = inputs.get("prompt") if isinstance(inputs.get("prompt"), dict) else {}
     if not str(prompt.get("text") or "").strip():
@@ -190,6 +214,9 @@ def start(req, caps, settings, jid):
         pa = assets_of(getattr(req, "production_assets", None), bool(getattr(settings, "deck_relay_loopback", False)))
         if pa:   # napkin-web's read-only pass for this person's pictures: to the engine's picture step only, never into the document
             body["production_assets"] = pa
+    tu = territories_upstream_of(data)
+    if tu:   # spun off from Territories: the routes the person sent are gate 2's territories and the idea's start (no model call for them)
+        body["territories_upstream"] = tu
     dt = deck_type_of(inputs)
     if dt:   # deck-types: the person's pick on the type picker (and any new writing they confirmed): the engine builds that type, not the kind's default
         body["inputs"]["deck_type"] = dt

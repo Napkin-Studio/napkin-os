@@ -103,6 +103,8 @@ def send_routes(doc, inp, findings, *, doc_id: str, data: dict):
     if deliver is not None:
         try:
             got = deliver(doc_id, data, send) or {}
+        except delivery.Refused as e:
+            return doc, [str(e)], ""
         except Exception:   # noqa: BLE001 - the contract is plain words, never a trace
             return doc, [f"{name} did not take it. Nothing was sent; try again."], ""
         if got.get("status") in ("sent", "asked"):

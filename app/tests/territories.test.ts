@@ -689,8 +689,10 @@ test('Send opens the choice: Deck Maker sends the greenlit ids and the rest as n
   const a = L.act(d, {}, { a: 'send', to: 'deck-maker' }, ENV)!
   eq(a.writes, [])
   // the gate is open at greenlight, so the approval goes first and the send follows it
-  eq(a.request, { key: 'send:deck-maker', what: 'The approval', input: { step: 'approve', gate: 'greenlight', by: 'Shrey' }, then: { key: 'send:deck-maker', what: 'The send', input: { step: 'send_routes', to: 'deck-maker', territory_ids: ['t_started', 't_passenger'], not_chosen: ['t_sitdown', 't_sunday', 't_small', 't_lonely', 't_mixtape', 't_lounge'], by: 'Shrey' } } })
+  eq(a.request, { key: 'send:deck-maker', what: 'The approval', input: { step: 'approve', gate: 'greenlight', by: 'Shrey' }, then: { key: 'send:deck-maker', what: 'The send', input: { step: 'send_routes', to: 'deck-maker', territory_ids: ['t_started', 't_passenger'], not_chosen: ['t_sitdown', 't_sunday', 't_small', 't_lonely', 't_mixtape', 't_lounge'], by: 'Shrey' }, continueIn: 'ie.napkin.deck-maker' } })
   const done = JSON.parse(JSON.stringify(d)) as Doc; done.run.gate = null; done.run.stage = 'send'
+  // the send is written first; the shell is then asked for the spin-off (Deck Maker only: Production is not built)
+  assert.equal(L.act(done, {}, { a: 'send', to: 'deck-maker' }, ENV)!.request!.continueIn, 'ie.napkin.deck-maker')
   eq(L.act(done, {}, { a: 'send', to: 'deck-maker' }, ENV)!.request!.input, { step: 'send_routes', to: 'deck-maker', territory_ids: ['t_started', 't_passenger'], not_chosen: ['t_sitdown', 't_sunday', 't_small', 't_lonely', 't_mixtape', 't_lounge'], by: 'Shrey' })
   const p = L.act(d, {}, { a: 'send', to: 'production-tool' }, ENV)!
   assert.equal(p.request, undefined); assert.match(p.toast!, /not built yet, so nothing was sent/)
@@ -841,4 +843,18 @@ test('an ask card and the picture rights card sit in the same answer-first list'
   const page = L.view(d, {})
   assert.ok(page.includes('data-ask-card="ask_passenger"')); assert.match(text(page), /A picture on Already Started has no rights chosen|rights/i)
   assert.match(text(page), /Answer the 2 questions first/); assert.match(page, /class="big" data-send disabled>Send 2 →/)
+})
+
+test('a written send to Deck Maker asks the shell to continue in it, and the shell hears only the app it names (territories-spinoff-out-deck)', () => {
+  // the page: after the send is written (state done) it posts clan:continue-in once, naming the Deck's app
+  assert.match(html, /r\.state === 'done' && r\.continueIn\)/)
+  assert.match(html, /type: 'clan:continue-in', app_id: app/)
+  assert.match(html, /id: 'deck-maker'[^}]*built: true, continueIn: 'ie\.napkin\.deck-maker'/)
+  assert.doesNotMatch(html, /id: 'production-tool'[^}]*continueIn/)
+  // the shell: the message reaches the same spin-off the bar's Continue in uses, for a well-formed app id only
+  const rt = readFileSync(new URL('src/shell/AppRuntime.tsx', root), 'utf8')
+  assert.match(rt, /m\?\.type === 'clan:continue-in'/)
+  assert.match(rt, /\^ie\\\.napkin\\\.\[a-z0-9-\]\{1,40\}\$/)
+  const host = readFileSync(new URL('src/shell/AppHost.tsx', root), 'utf8')
+  assert.match(host, /onContinueIn=\{onSpinoff\}/)
 })

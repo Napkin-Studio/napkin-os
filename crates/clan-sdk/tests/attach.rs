@@ -675,7 +675,7 @@ fn the_packed_style_pack_attaches_into_the_packed_deck() {
     );
     assert!(app_block.spinoff.is_none() && app_block.attach.is_none());
     let deck_app_block = deck_tpl.manifest().app.as_ref().unwrap();
-    assert_eq!(deck_app_block.version, "0.5.0");
+    assert_eq!(deck_app_block.version, "0.6.0");
     assert!(deck_app_block
         .attach
         .as_ref()
