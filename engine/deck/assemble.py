@@ -708,7 +708,7 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
     qs = list(dict.fromkeys(q["question"] for q in inp.open_questions if q.get("question")))
     S.append(_slide("questions", "Questions we would settle in the first fortnight",
                     [{"kind": "bullets", "items": [{"text": q, "basis": "meta"} for q in qs[:LIST_ITEMS]]}], status="from_source",
-                    notes=_questions_notes(qs)))
+                    notes=f"{len(qs)} open questions from the brief; {max(0, len(qs) - LIST_ITEMS)} more in the brief itself." + (f"\n{_more_questions(qs)}" if len(qs) > LIST_ITEMS else "")))
 
     _fill_human_only(S, inp)   # what the person supplied (answers to supply cards, their own documents) fills what a model never invents
     meta = {"client": client, "project": project, "agency": agency, "kind": "agency", "format": fmt,
@@ -856,7 +856,7 @@ def build_investor(inp, st: dict, *, client: str, project: str, agency: str = "[
     qs = list(dict.fromkeys([q for q in i.get("open_questions") or [] if q] + [q["question"] for q in inp.open_questions if q.get("question")] + gaps))
     if qs:
         S.append(_slide("questions", "Questions only the founders can answer", [{"kind": "bullets", "items": [{"text": q, "basis": "meta"} for q in qs[:LIST_ITEMS]]}], status="from_source",
-                        notes=_questions_notes(qs)))
+                        notes=_more_questions(qs)))
     meta = {"client": client, "project": project, "agency": agency, "kind": "investor", "format": fmt,
             "stages": {k: (v or {}).get("produced_by") for k, v in st.items()}}
     return _complete(S, reqs, R, inp, meta, fmt, fit, profile=profile)
@@ -1446,11 +1446,10 @@ TABLE_DATA_ROWS = 7
 LIST_ITEMS = 8
 
 
-def _questions_notes(qs: list[str]) -> str:
-    """The slide's notes for a questions list: how many there are and, word for word, the ones past the slide's eight."""
+def _more_questions(qs: list[str]) -> str:
+    """The questions past the slide's eight, word for word, for its notes (empty when they all fit)."""
     more = qs[LIST_ITEMS:]
-    head = f"{len(qs)} open questions from the brief."
-    return head + ("" if not more else f" The other {len(more)}:\n" + "\n".join(f"- {q}" for q in more))
+    return "" if not more else f"The other {len(more)}:\n" + "\n".join(f"- {q}" for q in more)
 
 
 def _sources_slides(deck, R):
