@@ -7,7 +7,7 @@
 #
 # Open http://127.0.0.1:8099/ , start a Deck Maker document, type a prompt and press Build deck. The run stops at the storyline,
 # territories and idea gates; approve each to go on. Ctrl-C stops everything. Ports: web 8099, middleware 8795, engine 8793
-# (override DECK_WEB_PORT, DECK_ENGINE_PORT, DECK_MW_PORT); it never touches 8787 or 8788. Env it reads: NAPKIN_DECK_LIVE, NAPKIN_DECK_MAX_USD (default 2.00),
+# (override DECK_WEB_PORT, DECK_ENGINE_PORT, DECK_MW_PORT; DECK_ENGINE_RENDER=web makes the exports clean, as the cloud's are); it never touches 8787 or 8788. Env it reads: NAPKIN_DECK_LIVE, NAPKIN_DECK_MAX_USD (default 2.00),
 # NAPKIN_DECK_REPLAY (a folder of recorded stages), NAPKIN_DECK_RENDER (0 skips the pptx, web and pdf files: no LibreOffice needed;
 # default 0 here unless soffice and pdftoppm are installed), NAPKIN_WEB_BIN (a built napkin-web binary, else cargo run).
 # Live runs use the engine's own model access: ANTHROPIC_API_KEY, or the Claude Code login through scripts/model-local
@@ -45,7 +45,7 @@ pids=()
 stop() { for p in "${pids[@]:-}"; do kill "$p" 2>/dev/null || true; done; }
 trap stop EXIT INT TERM
 
-( cd "$ROOT/engine" && NAPKIN_DECK_DATA="$RUN/engine" NAPKIN_DECK_PORT="$ENGINE_PORT" NAPKIN_DECK_REPLAY="$REPLAY" PYTHONPATH=. \
+( cd "$ROOT/engine" && NAPKIN_DECK_DATA="$RUN/engine" NAPKIN_DECK_PORT="$ENGINE_PORT" NAPKIN_DECK_REPLAY="$REPLAY" NAPKIN_DECK_RENDER="${DECK_ENGINE_RENDER:-}" PYTHONPATH=. \
   exec uv run --quiet --no-project --python 3.12 --with pdfplumber --with python-docx --with PyYAML --with python-pptx --with lxml --with jsonschema --with anthropic --with pillow \
   python -m deck.server ) > "$RUN/logs/engine.log" 2>&1 &
 pids+=($!)
