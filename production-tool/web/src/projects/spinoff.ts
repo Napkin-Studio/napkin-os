@@ -1,11 +1,9 @@
-// Continue in › New deck from this project (features/production-spinoff.clan): the saved project becomes a Deck
-// Maker document in Napkin OS, carried whole, and the shell opens it. The OS does it: its server reads the
-// project from the relay through this person's signed identity, drops the canvas checkpoint and spins it off
-// with the host's own spin-off (napkin-web src/spinoff.rs). The Production Tool runs at /production on the OS's
-// own origin and session, so it calls the shell API directly, as brief/os.ts does; outside the OS (the tool's own
-// dev server, the local relay) there is no shell, and this is not offered.
+// Continue in › New deck from this project: the project, a document of the library, becomes a Deck Maker
+// document, carried whole, and the shell opens it. This is the OS's one plain spin-off (the same call every tool
+// makes), on the page's own origin and session; outside the OS (the tool's own dev server, the local relay) there
+// is no shell, and this is not offered.
 //
-//   POST /api/t/{tenant}/production/{project}/spinoff  {target_app_id, title?}  ->  {ok, path: <doc id>, source_uri}
+//   POST /api/t/{tenant}/d/{doc}/spinoff  {app_id, title?}  ->  OpenView {path: <new doc id>, ...}
 
 import { pageBriefSource, type BriefSource } from '../brief/os'
 
@@ -21,8 +19,6 @@ export interface DeckFromProject {
   docId: string
   /** Where the shell opens it (a full page load, outside the tool). */
   url: string
-  /** The source the deck records. */
-  sourceUri: string
 }
 
 /** Whether this page is served by an OS that can make a deck: its shell API answers who is signed in. */
@@ -31,32 +27,33 @@ export function deckOffered(src: BriefSource = pageBriefSource()): Promise<boole
 }
 
 /**
- * Spin the project (the relay's project id, which is the project's id in this browser too) off into a Deck Maker
- * document. The project must be saved: the caller saves first, and the OS reads the relay's copy.
+ * Spin the project (its library document id) off into a Deck Maker document. The project must be saved: the
+ * caller saves first, and the OS reads the library's copy.
  */
-export async function newDeckFromProject(projectId: string, opts: { title?: string; base?: string; fetcher?: Fetch; src?: BriefSource } = {}): Promise<DeckFromProject> {
+export async function newDeckFromProject(docId: string, opts: { title?: string; base?: string; fetcher?: Fetch; src?: BriefSource } = {}): Promise<DeckFromProject> {
   const base = opts.base ?? ''
   const fetcher: Fetch = opts.fetcher ?? ((i, init) => fetch(i, init))
   const src = opts.src ?? pageBriefSource()
   const session = await fetcher(`${base}/api/session`, { credentials: 'same-origin', headers: { accept: 'application/json' } })
   const tenant = session.ok ? ((await session.json()) as { tenant?: unknown }).tenant : null
   if (typeof tenant !== 'string') throw new SpinoffError('A deck is made in Napkin, and this page is not signed in to it.')
-  const r = await fetcher(`${base}/api/t/${encodeURIComponent(tenant)}/production/${encodeURIComponent(projectId)}/spinoff`, {
+  const r = await fetcher(`${base}/api/t/${encodeURIComponent(tenant)}/d/${encodeURIComponent(docId)}/spinoff`, {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'content-type': 'application/json', accept: 'application/json' },
-    body: JSON.stringify({ target_app_id: DECK_APP_ID, ...(opts.title ? { title: opts.title } : {}) }),
+    body: JSON.stringify({ app_id: DECK_APP_ID, ...(opts.title ? { title: opts.title } : {}) }),
   })
   if (!r.ok) {
     let why = ''
     try {
-      why = String(((await r.json()) as { error?: unknown }).error ?? '')
+      const e = ((await r.json()) as { error?: unknown }).error
+      why = typeof e === 'string' ? e : String((e as { message?: unknown } | null)?.message ?? '')
     } catch { /* not JSON */ }
-    // The same 404 says the app is not installed (the target tool is missing here) or the project is not found.
-    if (r.status === 404 && /not installed/i.test(why)) throw new SpinoffError('Deck Maker is not installed here, so a deck cannot be made from this project.')
-    throw new SpinoffError(r.status === 404 ? 'Napkin could not find the saved project. Save it, then try again.' : why || `Napkin answered ${r.status}.`)
+    // A missing app is named as the missing app, whatever status says so.
+    if (/not installed/i.test(why)) throw new SpinoffError('Deck Maker is not installed here, so a deck cannot be made from this project.')
+    throw new SpinoffError(r.status === 404 ? 'Napkin could not find this project in your library.' : why || `Napkin answered ${r.status}.`)
   }
-  const v = (await r.json()) as { path?: unknown; source_uri?: unknown }
+  const v = (await r.json()) as { path?: unknown }
   if (typeof v.path !== 'string' || !v.path) throw new SpinoffError('Napkin made the deck but did not say where it is.')
-  return { docId: v.path, url: src.openUrl(v.path), sourceUri: typeof v.source_uri === 'string' ? v.source_uri : '' }
+  return { docId: v.path, url: src.openUrl(v.path) }
 }
