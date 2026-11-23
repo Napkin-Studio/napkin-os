@@ -9,7 +9,6 @@ import { systemUpdate } from '../doc/store'
 import type { JobPurpose } from '../model/purpose'
 import { currentTake, cutItemFor, mainVideo, shotSegment, shotsOf, storyboardOfVideo, videoOfShot } from '../model/selectors'
 import { clipText } from '../lib/guard'
-import { trimScaleInside } from '../rooms/cardInside'
 import { assetRef } from './assets'
 import type { FrameDeps } from './frames'
 import { selectedFrame } from './frames'
@@ -323,10 +322,6 @@ export async function stitchInput(deps: Pick<FrameDeps, 'relay' | 'doc'>, videoI
     })
     parents.push(t.job_id)
   }
-  // The studio card sits inside the length (UAT 2026-11-22: a 15 s ad rendered 17.3 s): shots cut to the target are shortened to
-  // leave the card its 2.5 s. (The Edit room's render does the same by playing its clips faster: rooms/cardInside.ts.)
-  const k = trimScaleInside(clips.map((c) => c.trimS ?? 0), sb?.target_s ?? video?.target_s)
-  if (k) for (const c of clips) if (c.trimS) c.trimS = Math.round(c.trimS * k * 1000) / 1000
   const ratio = ratioOf(d, video?.id)
   return { input: { clips, ...(ratio ? { ratio } : {}) }, parents }
 }
