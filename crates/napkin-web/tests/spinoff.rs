@@ -518,9 +518,10 @@ const FRAME: &[u8] = b"\x89PNG a generated frame the route holds, stored once pe
 /// A Territories document as the example holds it (greenlit routes, worlds, checks, sources), plus one picture by link: a
 /// frame with the hash of `FRAME` and its stated rights, and one whose rights nobody stated.
 fn territories_with_frames() -> String {
-    let mut d: Value =
-        serde_json::from_str(include_str!("../../../app/templates/territories/example/data.json"))
-            .unwrap();
+    let mut d: Value = serde_json::from_str(include_str!(
+        "../../../app/templates/territories/example/data.json"
+    ))
+    .unwrap();
     let want = clan_sdk::hash::sha256_prefixed(FRAME);
     let hex = want.trim_start_matches("sha256:");
     let t = d["territories"]
@@ -571,12 +572,25 @@ async fn greenlit_routes_continue_in_production_whole_under_their_client_with_pi
 
     // The whole document, every route with its world, words, checks, sources and rights, and who greenlit which.
     let clan = stored(&s, &me, &prod);
-    let carried = serde_json::to_value(&yaml(&clan, "shared/data.yaml")["upstream"][source.document_id()]).unwrap();
+    let carried =
+        serde_json::to_value(&yaml(&clan, "shared/data.yaml")["upstream"][source.document_id()])
+            .unwrap();
     let ids = |v: &Value, key: &str, field: &str| -> Vec<String> {
-        v[key].as_array().unwrap().iter().map(|r| r[field].as_str().unwrap().to_string()).collect()
+        v[key]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r[field].as_str().unwrap().to_string())
+            .collect()
     };
-    assert_eq!(ids(&carried, "territories", "id"), ids(&want, "territories", "id"));
-    assert_eq!(ids(&carried, "greenlit", "territory_id"), ids(&want, "greenlit", "territory_id"));
+    assert_eq!(
+        ids(&carried, "territories", "id"),
+        ids(&want, "territories", "id")
+    );
+    assert_eq!(
+        ids(&carried, "greenlit", "territory_id"),
+        ids(&want, "greenlit", "territory_id")
+    );
     assert!(!ids(&carried, "greenlit", "by").is_empty());
     for key in ["territories", "greenlit", "crew", "sends", "run", "review"] {
         assert_eq!(carried[key], want[key], "{key} arrived whole");
@@ -586,20 +600,40 @@ async fn greenlit_routes_continue_in_production_whole_under_their_client_with_pi
     for (id, held) in want["upstream"].as_object().unwrap() {
         assert_eq!(&all[id], held, "{id} stays in the project's upstream");
     }
-    let t = carried["territories"].as_array().unwrap().iter().find(|t| t["id"] == "t_started").unwrap();
+    let t = carried["territories"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["id"] == "t_started")
+        .unwrap();
     assert!(t["world"]["palette"]["bg"].is_string() && !t["checks"].as_array().unwrap().is_empty());
     assert_eq!(t["pictures"][0]["rights"], "generated");
 
     // Pictures are links: the project holds the hash, the file is not in its archive, and nothing was stored twice.
-    assert_eq!(t["pictures"][0]["sha256"], clan_sdk::hash::sha256_prefixed(FRAME).trim_start_matches("sha256:"));
+    assert_eq!(
+        t["pictures"][0]["sha256"],
+        clan_sdk::hash::sha256_prefixed(FRAME).trim_start_matches("sha256:")
+    );
     assert!(!clan.has_entry("human/assets/frame-started.png"));
-    let f = clan.manifest().file_by_path("human/assets/frame-started.png").unwrap();
+    let f = clan
+        .manifest()
+        .file_by_path("human/assets/frame-started.png")
+        .unwrap();
     assert!(f.linked);
-    assert_eq!(f.sha256.as_deref(), Some(clan_sdk::hash::sha256_prefixed(FRAME).as_str()));
+    assert_eq!(
+        f.sha256.as_deref(),
+        Some(clan_sdk::hash::sha256_prefixed(FRAME).as_str())
+    );
     assert_eq!(blob_files(&s, &me), 1, "one stored file");
     // The source is named by id and version.
     let uri = &clan.manifest().lineage.as_ref().unwrap().parent_uri;
-    assert_eq!(uri, &format!("doc:{terr}@{}", clan_sdk::hash::sha256_prefixed(source.raw_bytes())));
+    assert_eq!(
+        uri,
+        &format!(
+            "doc:{terr}@{}",
+            clan_sdk::hash::sha256_prefixed(source.raw_bytes())
+        )
+    );
 }
 
 #[tokio::test]
