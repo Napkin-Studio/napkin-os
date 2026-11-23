@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import type { ProductionDocument, Size } from '../contracts/types'
 import { asset, id, MAYA, modelStore, SHA } from '../test/model'
 import { roots } from './gc'
-import { asksRights, finalsOf, isFinal, landingRights, setFinal, setSizeFinal, sizeFinalAsset } from './finals'
+import { asksRights, defaultRights, finalsOf, isFinal, isFinalAsset, landingRights, markFinalWithRights, rightsWord, setFinal, setSizeFinal, sizeFinalAsset } from './finals'
 import { emptyDocument, updateDoc } from './store'
 
 const BY = `human:${MAYA.id}`
@@ -96,5 +96,64 @@ describe('rights a picture lands with', () => {
     expect(landingRights('uploaded')).toBe('unknown')
     expect(landingRights('edited')).toBeUndefined()
     expect(landingRights('mock')).toBeUndefined()
+  })
+})
+
+describe('un-marking a picture that has versions (UAT 2026-11-22)', () => {
+  const NODE = { kind: 'picture' as const, id: 'pic_still_01' }
+  const FRAME = { kind: 'frame' as const, id: 'frame_01K7C00000000000000000FR01' }
+  const FRAME2 = { kind: 'frame' as const, id: 'frame_01K7C00000000000000000FR02' }
+
+  it('Final switched off on a frame removes the final marked on the picture node of the same asset', () => {
+    const d = emptyDocument(MAYA, 'Frames')
+    setFinal(d, NODE, SHA('a'), true, BY) // marked on the canvas before it had versions
+    expect(isFinal(d, FRAME, SHA('a'))).toBe(false) // the editor, on the frame, does not see it by its own name alone
+    expect(isFinal(d, FRAME, SHA('a'), [NODE, FRAME])).toBe(true)
+    setFinal(d, FRAME, SHA('a'), false, BY, {}, undefined, [NODE, FRAME])
+    expect(Object.values(d.finals ?? {})).toEqual([])
+  })
+  it('without the other names the node final stays (the bug)', () => {
+    const d = emptyDocument(MAYA, 'Frames')
+    setFinal(d, NODE, SHA('a'), true, BY)
+    setFinal(d, FRAME, SHA('a'), false, BY)
+    expect(Object.values(d.finals ?? {})).toHaveLength(1)
+  })
+  it('only this asset goes: another version stays final', () => {
+    const d = emptyDocument(MAYA, 'Frames')
+    setFinal(d, FRAME2, SHA('b'), true, BY, { version: 2 })
+    setFinal(d, NODE, SHA('a'), true, BY)
+    setFinal(d, FRAME, SHA('a'), false, BY, {}, undefined, [NODE, FRAME, FRAME2])
+    expect(Object.values(d.finals ?? {}).map((f) => f.asset)).toEqual([SHA('b')])
+  })
+  it('marking a frame final retires the picture node\'s own final, so one picture is not final twice', () => {
+    const d = emptyDocument(MAYA, 'Frames')
+    setFinal(d, NODE, SHA('a'), true, BY)
+    setFinal(d, FRAME, SHA('a'), true, BY, { version: 1 }, undefined, [NODE, FRAME])
+    expect(Object.values(d.finals ?? {}).map((f) => f.of)).toEqual([FRAME])
+  })
+})
+
+describe('final by picture and the rights it states', () => {
+  it('finalOfAsset finds the final by hash alone, whatever it is final of', () => {
+    const d = emptyDocument(MAYA, 'Frames')
+    setFinal(d, { kind: 'frame', id: 'frame_01K7C00000000000000000FR01' }, SHA('a'), true, BY)
+    expect(isFinalAsset(d, SHA('a'))).toBe(true)
+    expect(isFinalAsset(d, SHA('b'))).toBe(false)
+    expect(isFinalAsset(d, undefined)).toBe(false)
+  })
+  it('rights default from what is said, else the origin: generated here is generated, an upload is unknown', () => {
+    expect(defaultRights(asset(SHA('a'), 'image', { origin: 'generated' }))).toBe('generated')
+    expect(defaultRights(asset(SHA('a'), 'image', { origin: 'uploaded', rights: 'unknown' }))).toBe('unknown')
+    expect(defaultRights(asset(SHA('a'), 'image', { origin: 'uploaded', rights: 'licensed' }))).toBe('licensed')
+    expect(defaultRights(undefined)).toBe('unknown')
+  })
+  it('marking final states the rights on the picture the Deck reads', () => {
+    const d = emptyDocument(MAYA, 'Frames')
+    d.assets[SHA('a')] = asset(SHA('a'), 'image', { origin: 'uploaded', rights: 'unknown' })
+    markFinalWithRights(d, { kind: 'picture', id: 'pic_still_01' }, SHA('a'), 'licensed', BY)
+    expect(d.assets[SHA('a')].rights).toBe('licensed')
+    expect(isFinalAsset(d, SHA('a'))).toBe(true)
+    expect(rightsWord('unknown')).toBe('Rights?')
+    expect(rightsWord('generated')).toBe('Generated')
   })
 })

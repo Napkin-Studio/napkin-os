@@ -2319,12 +2319,29 @@ class Relay:
             # (features/resize-selection.clan); extend and crop send the picture only.
             views = [r for r in inp.get("refs") or [] if (r.get("asset") or {}).get("sha256") != inp["image"]["sha256"]]
             views = views[:formats.REGENERATE_REFS_MAX]
+            # The protected product's own pixels as a hard reference (features/pt-final-and-fit.clan).
+            product = None
+            boxes = [] if rz.get("source") == "sketch" else formats.product_boxes(rz.get("protect"))
+            if boxes:
+                try:
+                    cut = formats.product_crop(self.blobs.fetch(inp["image"]["url"]), rz["masterSize"], boxes[0])
+                    product = self._put_made(f"{self._scratch(job)}/product.png", cut, "image/png")
+                    made.append(product)
+                except Exception:
+                    log.exception("job %s: could not cut the product from the master", job["jobId"])
             look = rz.get("look")  # another size of this ad, already made: the look to match
             if look:
                 refs.append({"sha256": look["sha256"], "name": "sibling", "role": "object"})
                 prompt += formats.REGENERATE_LOOK
+            if product:
+                ptag = names.wire_tags([{"id": "master", "name": "master"}, *([{"id": "sibling", "name": "sibling"}] if look else []),
+                                        {"id": "product", "name": "product"}, *views])["product"]
+                refs.append({"sha256": product["sha256"], "name": ptag, "role": "object"})
+                label = " ".join(str(boxes[0].get("label") or "").replace("@", "").split())[:40]
+                prompt += formats.REGENERATE_PRODUCT.format(tag=ptag, thing=label or "product")
             if views:
-                tags = names.wire_tags([{"id": "master", "name": "master"}, *([{"id": "sibling", "name": "sibling"}] if look else []), *views])
+                tags = names.wire_tags([{"id": "master", "name": "master"}, *([{"id": "sibling", "name": "sibling"}] if look else []),
+                                        *([{"id": "product", "name": "product"}] if product else []), *views])
                 human = any(r.get("role") == "character" for r in views)
                 refs += [{"sha256": r["asset"]["sha256"], "name": tags[r["id"]],
                           "role": "character" if r.get("role") == "character" else "object"} for r in views]
@@ -2392,6 +2409,14 @@ class Relay:
         rz = inp["resize"]
         try:
             data = self.blobs.fetch(raw["url"])
+            product = None
+            if rz["method"] == "regenerate" and rz.get("source") != "sketch" and formats.product_boxes(rz.get("protect")):
+                # The protected product is checked in the new picture and, drawn wrong, laid back (features/pt-final-and-fit.clan).
+                try:
+                    data, product = formats.keep_product(data, self.blobs.fetch(inp["image"]["url"]), rz["masterSize"], rz.get("protect"))
+                except Exception:
+                    log.exception("job %s: could not check the product", job["jobId"])
+                    product = {"state": "changed", "score": None}
             if rz["method"] == "extend":  # each step laid back over the picture it grew from, on a ramp (IMG-9)
                 master = self.blobs.fetch(inp["image"]["url"])
                 steps = self._extend_steps(inp, master)
@@ -2416,6 +2441,8 @@ class Relay:
         result = {"method": rz["method"], "crop": {"x": 0, "y": 0, "w": ms["w"], "h": ms["h"]},
                   "previewPx": {"width": out_w, "height": out_h}, "layers": drawn,
                   "plate": self._keep_png(job, plate, out_w, out_h)}
+        if product:
+            result["product"] = {k: v for k, v in product.items() if v is not None}
         kind = "mock" if job["provider"] == "mock" else "generated"
         return self._finish(job, "completed", outputs=[out], kind=kind, confirmed=cost_usd, resize=result)
 

@@ -1830,6 +1830,16 @@
             "plate": {
               "$ref": "common.schema.json#/$defs/output",
               "description": "The size's picture before its type layers, at the preview size: Edit type draws on it again for free, and Export at full size upscales it. Added 2026-10-16 (additive)."
+            },
+            "product": {
+              "type": "object",
+              "description": "regenerate with a protected product (resize.protect, role product): what the relay found when the picture landed. kept: the product is in it as drawn. restored: it was drawn wrong and the master's own pixels were laid back over it. changed: it could not be found, nothing was pasted, and the size should be flagged. score is the mean absolute difference (0-255) against the best place for it. Added 2026-11-23 (pt-final-and-fit, additive).",
+              "properties": {
+                "state": { "enum": ["kept", "restored", "changed"] },
+                "score": { "type": "number", "minimum": 0, "maximum": 255 }
+              },
+              "required": ["state"],
+              "additionalProperties": false
             }
           },
           "required": [

@@ -382,3 +382,111 @@ def test_long_words_shrink_to_their_box():
     # Nothing was drawn outside the box.
     outside = img.crop((0, 0, 300, 55)).getbbox()
     assert outside is None
+
+
+# ── the protected product through a regenerate (features/pt-final-and-fit.clan) ──
+
+def can_master(w=400, h=500) -> bytes:
+    """A 4:5 master with a labelled can (a striped, lettered rectangle) in the middle."""
+    img = Image.new("RGB", (w, h), (200, 190, 170))
+    d = ImageDraw.Draw(img)
+    d.rectangle((150, 150, 250, 350), fill=(20, 90, 60))
+    for i in range(6):  # the label: stripes and blocks, so it is not a flat colour
+        d.rectangle((158, 170 + i * 28, 242 - (i % 3) * 30, 184 + i * 28), fill=(240, 235, 210) if i % 2 else (230, 90, 40))
+    out = io.BytesIO()
+    img.save(out, format="PNG")
+    return out.getvalue()
+
+
+CAN = [{"role": "product", "label": "can", "x": 150, "y": 150, "w": 100, "h": 200}]
+
+
+def wide_result(label: bool) -> bytes:
+    """What a model made for 4:1: the can drawn smaller and further right; with its label, or blank."""
+    img = Image.new("RGB", (1600, 400), (180, 200, 215))
+    if label:  # the master's own can, at half its size
+        can = Image.open(io.BytesIO(formats.product_crop(can_master(), {"w": 400, "h": 500}, CAN[0]))).resize((50, 100))
+        img.paste(can, (1000, 120))
+    else:
+        ImageDraw.Draw(img).rectangle((1000, 120, 1049, 219), fill=(20, 90, 60))
+    out = io.BytesIO()
+    img.save(out, format="PNG")
+    return out.getvalue()
+
+
+def test_only_product_boxes_count_and_the_crop_is_the_masters_pixels():
+    protect = [{"role": "subject", "x": 0, "y": 0, "w": 50, "h": 50}, *CAN, {"role": "product", "x": 0, "y": 0, "w": 0, "h": 9}]
+    assert formats.product_boxes(protect) == CAN
+    crop = Image.open(io.BytesIO(formats.product_crop(can_master(), {"w": 400, "h": 500}, CAN[0])))
+    assert crop.size == (100, 200) and crop.getpixel((50, 100)) != (200, 190, 170)
+
+
+def test_a_product_that_came_back_as_drawn_is_left_alone():
+    data = wide_result(label=True)
+    out, report = formats.keep_product(data, can_master(), {"w": 400, "h": 500}, CAN)
+    assert report["state"] == "kept" and report["score"] <= formats.PRODUCT_KEPT
+    assert Image.open(io.BytesIO(out)).tobytes() == Image.open(io.BytesIO(data)).tobytes()
+
+
+def test_a_product_drawn_blank_has_the_masters_pixels_laid_back_where_it_was_found():
+    out, report = formats.keep_product(wide_result(label=False), can_master(), {"w": 400, "h": 500}, CAN)
+    assert report["state"] == "restored", report
+    got = Image.open(io.BytesIO(out)).convert("RGB")
+    # The can is back as the master drew it (the same as a result that kept it), and the picture round it is the model's.
+    from PIL import ImageChops, ImageStat
+    window = (990, 110, 1060, 230)
+
+    def gap(a, b):
+        return ImageStat.Stat(ImageChops.difference(a.crop(window), b.crop(window).convert("RGB"))).mean[0]
+    kept = Image.open(io.BytesIO(wide_result(label=True))).convert("RGB")
+    blank = Image.open(io.BytesIO(wide_result(label=False))).convert("RGB")
+    assert gap(got, kept) < gap(blank, kept) / 2  # the label is back; the edge is only as exact as the search
+    assert got.getpixel((300, 200)) == (180, 200, 215)
+    assert formats.keep_product(out, can_master(), {"w": 400, "h": 500}, CAN)[1]["state"] == "kept"
+
+
+def test_a_product_that_is_gone_is_flagged_and_nothing_is_pasted():
+    data = Image.new("RGB", (1600, 400), (180, 200, 215))
+    buf = io.BytesIO()
+    data.save(buf, format="PNG")
+    out, report = formats.keep_product(buf.getvalue(), can_master(), {"w": 400, "h": 500}, CAN)
+    assert report["state"] == "changed"
+    assert Image.open(io.BytesIO(out)).tobytes() == data.tobytes()
+
+
+def test_no_product_marked_means_no_check():
+    data = wide_result(label=False)
+    assert formats.keep_product(data, can_master(), {"w": 400, "h": 500}, [{"role": "subject", "x": 0, "y": 0, "w": 90, "h": 90}]) == (data, None)
+
+
+def product_job(h, token):
+    inp = size_input(h, "regenerate", protect=CAN)
+    inp["image"] = stored(h, 7, can_master())  # after size_input, which stores its own small picture under the same key
+    inp["resize"]["masterSize"] = {"w": 400, "h": 500}
+    inp.update(aspect={"w": 4, "h": 1}, delivery={"width": 14400, "height": 3600})
+    return h.post_job(token, op="resize", expect=200, **inp)[1]
+
+
+def test_regenerate_sends_the_product_as_a_hard_reference_and_the_landing_checks_it():
+    h = paid_harness()
+    token = h.as_person()
+    job = product_job(h, token)
+    (sent,) = h.providers["runway"].submits
+    assert [r["name"] for r in sent["refs"]] == ["master", "product"]
+    assert "@product is the can itself" in sent["prompt"] and "every word on it" in sent["prompt"]
+    done = finish_job(h, token, job, wide_result(label=False))
+    assert done["state"] == "completed" and done["resize"]["product"]["state"] == "restored"
+    h2 = paid_harness()
+    t2 = h2.as_person()
+    done2 = finish_job(h2, t2, product_job(h2, t2), wide_result(label=True))
+    assert done2["resize"]["product"]["state"] == "kept"
+
+
+def test_a_regenerate_with_no_product_marked_carries_no_product_report_or_reference():
+    h = paid_harness()
+    token = h.as_person()
+    _, job = h.post_job(token, op="resize", expect=200, **size_input(h, "regenerate", protect=[{"role": "subject", "x": 0, "y": 0, "w": 60, "h": 50}]))
+    (sent,) = h.providers["runway"].submits
+    assert [r["name"] for r in sent["refs"]] == ["master"]
+    done = finish_job(h, token, job, png(1536, 2780))
+    assert "product" not in done["resize"]

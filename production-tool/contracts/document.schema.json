@@ -2775,7 +2775,8 @@
           "description": "Facts measured when the size's picture landed, read by Jude's checks: drawn is how many type layers the relay drew on it (a logo it could not read is not drawn); look is how far its colour and tone are from the master's, 0 (the same) to 1, measured for extend and regenerate. Added 2026-11-03 (art-director, additive).",
           "properties": {
             "drawn": { "type": "integer", "minimum": 0 },
-            "look": { "type": "number", "minimum": 0, "maximum": 1 }
+            "look": { "type": "number", "minimum": 0, "maximum": 1 },
+            "product": { "enum": ["kept", "restored", "changed"], "description": "A regenerate with a protected product: kept (it came back as drawn), restored (the master's pixels were laid back over it) or changed (the relay could not find it: the size is flagged). Added 2026-11-23 (pt-final-and-fit, additive)." }
           },
           "additionalProperties": false
         },
