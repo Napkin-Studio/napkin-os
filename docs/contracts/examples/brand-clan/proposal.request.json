@@ -1,0 +1,24 @@
+{
+  "from": {
+    "kind": "upload",
+    "file": "Tidewell-brand-book-2026.pdf"
+  },
+  "source": {
+    "file": "Tidewell-brand-book-2026.pdf",
+    "kind": "pdf",
+    "pages": 48
+  },
+  "candidate": {
+    "name": "Original",
+    "visual": {
+      "colours": [
+        {
+          "id": "tide",
+          "name": "Tide blue",
+          "hex": "#0A6BA0",
+          "role": "accent"
+        }
+      ]
+    }
+  }
+}

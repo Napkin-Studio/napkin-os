@@ -1,379 +1,172 @@
-# Contract 6 — the Brand Clan: one brand kit per brand, carried into every document
+# Contract 6: the Brand Clan, the Brand Bible of one look of one client's brand
 
-Status: **approved** by the owner on 2026-10-19 (feature `brand-clan`). Owner: Shrey.
-The thing is called the **Brand Clan** everywhere it is named: the chip, the
-shelf item, the Bring in card and the document. The canvas board that
-projects it keeps the UI spec's node name, Brand board, with the header
-"Brand Clan · <brand>".
-Reads with: `docs/contracts/os-layer.md` (addresses, decisions, spin-off §5,
-client review §7.5), `campaign-clan.md` (the field envelope, pins, roster),
-`peripherals.md` §4 (the layers port), `production-tool/contracts` (v3, the
-Brand board) and `docs/production-tool/ui-behaviour.md` §3.18.
+Status: **approved for build** by the owner on 2026-11-23 ("Approved. Build."), after the redesign
+(owner workflow of 2026-11-23, mocks a1 to f4b, the 12 answers of DESIGN.md section 8).
+Feature `brand-clan` (branch `feat/brand-clan-v2`). Owner: Shrey. Replaces the design-time contract of
+2026-10-19, which described a different mechanism (its own attach, roster seeding, `project.brand`); none of that is built.
 
-Owner decisions this implements (2026-10-19):
+Reads with: `docs/contracts/os-layer.md` (documents, decisions, attach 5.7, spin-off 5.2),
+`docs/contracts/deck-visuals.md` (the deck's look order), `app/templates/brand-clan/schema.json` (the machine-checkable half of section 2)
+and the vectors in `docs/contracts/examples/brand-clan/` (each one is checked by a test; they are the shapes to build against).
 
-1. **One Brand Clan per brand per agency.** It is the shelf's "Brand kit".
-   A project holds a **frozen copy** with a version and an Update chip, the
-   way a spin-off holds its source.
-2. **Naming a brand the agency has no kit for seeds it from the roster and
-   the brand layer only.** Nothing is read from the public web.
-3. **Write-back goes through the approved document.** When a document with a
-   brand attached is recorded as client-accepted (os-layer §7.5), what it
-   made and settled is offered to the brand kit; a person confirms, and the
-   kit publishes a new version. Nothing enters the kit silently.
-4. **Strictly per agency.** No house seed, nothing crosses tenants.
+**Names.** The thing is a **Brand Clan**. Its content is the **Brand Bible**. Several per client (Original, Zero, Summer 26), one of them
+the client's **default**. Everything is per agency (tenant): nothing is shared, and Napkin has no house Brand Clan.
 
-Foundation rules kept: the document owns no facts (D1: every figure is a pin
-into the brand layer); a carried upstream is frozen and read-only (D6);
-confidential means kept out of RAG and the corpus; client material never
-enters the repo.
+**Not here (built elsewhere, never rebuilt):** attach (`crates/clan-sdk/src/attach.rs`, `/attach*` routes, os-layer 5.7), roster seeding,
+`project.brand`, a standalone Brand Clan app screen (the client window shows it).
 
 ---
 
 ## 1. What it is
 
-A Brand Clan is a CLAN document of the app `ie.napkin.brand`, stored in the
-tenant's document store like every other document, one per `brand/<slug>`
-per agency. It holds everything the agency knows and keeps about a brand
-that is **not** a measured fact: identity, design language, assets, voice,
-rules, channel specs, people, and the approved work made for it. The facts
-(awareness, share, launch dates, roster categories, client org) stay in the
-brand layer and are **pinned** into the kit's `shared/facts.yaml`, so they
-merge into every document the brand is attached to, exactly as a campaign's
-pins merge into a brief.
+One Brand Clan is **one CLAN document** of the app `ie.napkin.brand` ("Brand Clan"), with the client on its manifest
+(`manifest.client {id, name}`, as every document has). It lives in the agency's tenant like any other document. It has its own version
+line and its own decision chain. It is an attach **source**: Brief Maker, Research, Deck and Production declare
+`app.attach.accepts: [ie.napkin.brand]` (Production also `many`), and a work document that takes one holds a frozen copy at
+`data.upstream.<brand clan document id>` with `lineage.attached[] {document_id, version, ...}`. The Update chip is `/attach/update`.
 
-Three verbs, all on the OS layer, none app-specific:
+## 2. The document
 
-| Verb | Means | Mechanism |
-|---|---|---|
-| **attach** | Put this brand into this document | §4. The spin-off carry (os-layer §5.2) applied to an existing document: frozen under `data.upstream.<brand document_id>`, members merged, chain carried, `lineage.attached[]` records the hop. One brand per document. |
-| **seed** | Make a kit for a brand the agency has none for | §5. Roster row plus the brand layer's facts, through the middleware. An ask when the name is ambiguous. |
-| **harvest** | Take what an approved document made back into the kit | §6. Offered on a `client_review` of `accepted`; a person ticks; one `publish`. |
+### 2.1 `shared/data.yaml`: the published Brand Bible
 
-Carry is uniform with the brief: a brief that has a brand attached and is
-spun into the Production Tool hoists the brand (os-layer §5.2 item 2), so the
-project holds `upstream.<brief>` and `upstream.<brand>` with no extra step.
-A project that starts with no brief attaches the same brand directly and
-ends up with the same `upstream.<brand>`.
+Schema: `app/templates/brand-clan/schema.json`. **This file changes only when a person publishes or accepts a version.** That is what
+makes the frozen copies in work, and `linked_status`, change only then (attach compares the hash of `shared/data.yaml`).
 
----
-
-## 2. Members
-
-| Member | Role | Holds | Written by |
-|---|---|---|---|
-| `shared/data.yaml` | canonical-data | §3 | people in the brand view, Ellis (reading a brand book), lifts and harvests |
-| `shared/facts.yaml` | pinned-facts | pins into the brand layer (`fact://brand/<slug>/<key>@v`), the roster pins included | seed, Research, a person |
-| `shared/sources.yaml` | sources | the source record frozen beside each pin | seed, Research |
-| `human/assets/**` | assets | logos (svg, png), fonts (woff2, ttf, otf, with licence), imagery examples, sonic logo, the brand book PDF and its `.extracted/` text | uploads, harvests |
-| `agent/decision-chain.yaml` | agent-chain | every change, publish, harvest and backref | the OS layer |
-
-No `findings` member: a brand kit synthesises nothing. Findings a Research
-document carried stay in that document.
-
----
-
-## 3. `shared/data.yaml`
-
-### 3.1 Every item carries its provenance
-
-Each leaf item below is an object with the item's own keys **plus** the
-campaign contract's envelope keys (`campaign-clan.md` §2.1): `origin`
-(`extracted` from a brand book page, `proposed` from a roster or layer pin,
-`stated` by a person, `confirmed` by a person), `source` `{material_id,
-locator, quote?}` for `extracted`, `fact_ids` for `proposed`, `by` for
-`stated` and `confirmed`, and `decision`. Maps are keyed by id, never
-positional (addresses, os-layer §3). The view renders envelopes with
-`app/templates/shared/clan-fields.html`, as the brief and the campaign do.
-
-Absent means not filled. No empty strings, no placeholders. The empty kit
-`{brand: {ref, name}}` validates.
-
-### 3.2 The keys
-
-```yaml
-brand:                                  # identity: who this is
-  ref: brand/lumen-water                #   the brand layer entity; the key everywhere
-  name: Lumen Water
-  client_org: org/lumen                 #   from the roster (a pin)
-  categories: [drinks.water]            #   from the roster (pins); closed taxonomy
-  markets: [IE, GB]
-  parent: brand/<slug>                  #   brand architecture, when there is one
-  products:                             #   ranges and SKUs the agency works on
-    <id>: { name, description?, asset? }
-  sites: [https://…]
-  handles: { instagram: …, tiktok: … }
-
-kit:                                    # the kit's own state (not brand knowledge)
-  version: 5                            #   bumped by publish (§7)
-  published: { by: human:<id>, at: <datetime>, revision: sha256:… }
-  changelog: [ { version, at, by, summary } ]
-
-strategy:                               # what the brand stands for; seeded from approved briefs
-  purpose, positioning, proposition, personality (traits[]), values[],
-  audience (summary), proof_points[]
-
-voice:                                  # verbal identity
-  principles:  { <id>: { name, text, do[], dont[] } }
-  tagline:     { text, since? }
-  vocabulary:  { preferred: [ { use, not } ], banned: [] }
-  pronunciation: { <term>: { respell, ipa?, audio? } }    # for voices and TTS
-  claims:      { <id>: { text, substantiation: fact_ids, markets, expires? } }
-  legal_lines: { <id>: { text, markets, channels, mandatory: bool } }
-  languages:   [en-IE]
-
-visual:                                 # design language
-  logos:
-    <id>: { name, kind: primary|secondary|mark|wordmark|lockup,
-            variants: { <variant>: { asset, colour: full|mono|reverse, on: light|dark|any } },
-            clear_space: { text, ratio? }, min_size: { px?, mm? }, misuse: [text] }
-  colours:
-    <id>: { name, hex, rgb?, cmyk?, pantone?,
-            role: primary|secondary|accent|neutral|background|text,
-            usage?, pairs_with: [<id>] }                   # pairs that meet contrast
-  typography:
-    <id>: { family, role: heading|body|display|caption|mono, weights: [],
-            fallbacks: [], file?: asset,                   # never taken from a PDF
-            licence: { holder, kind: desktop|web|app|broadcast, note? }, source: google|adobe|custom }
-  imagery:     { style, principles: { <id>: { name, text, do[], dont[], examples: [asset] } },
-                 photography?: { light, grade, subjects }, illustration?: { style }, iconography?: { style, set?: asset } }
-  devices:     { <id>: { name, text, asset? } }           # graphic devices (the wave, the frame)
-  layout:      { grid?, margins?, logo_placement?: corner|centre|…, safe_areas?: { <channel>: text } }
-  motion:      { principles?, logo_animation?: asset, durations?, easing? }
-
-sound:
-  sonic_logo?: { asset, duration_s }
-  music:       { direction, do[], dont[], tracks: [ { title, licence } ] }
-  voices:      { <id>: { name, text, provider_ref?, consent: on_file|none, used_for: vo|character|all } }
-
-rules:                                  # the flat do/don't list agents read; one line each
-  <id>: { kind: do|dont|must, area: logo|colour|type|imagery|voice|legal|layout|sound,
-          text, severity: warn,                             # never block (owner, 2026-10-13)
-          checkable: bool }                                 # Jude can test it on a result
-
-formats:                                # channel specs for this client
-  packs: [ <pack_id> ]                                      # from production-tool/contracts/format-packs.json
-  custom: { <id>: { name, width, height, unit, bleed?, safe_area? } }
-  channels: { tv?: { durations, end_card }, social?: {…}, ooh?: {…}, print?: {…} }
-
-people:
-  <id>: { name, role: approver|guardian|agency_lead|other, email? }
-
-work:                                   # approved exemplars (the harvested documents, §6)
-  <id>: { document_id, app_id, title, kind: brief|research|ad|key_visual|other,
-          version: sha256:…, client_review: d_…, accepted_at, summary?, assets: [sha256] }
-
-materials:  { <material_id>: … }        # the index of supplied material (brand book, decks), as the brief's
-projection: …                           # host-written from the members (os-layer §5)
-upstream:   …                           # host-written; a kit attaches nothing today, kept for the schema's sake
-```
-
-`rules` is the one table every agent reads (Dex writes them into prompts,
-Jude flags breaks, Make all sizes keeps safe areas, Skye keeps vocabulary).
-The structured sections above are where people edit; a rule may cite the
-item it came from (`cites`) so "Why this rule?" opens it.
-
-### 3.3 What a brand book becomes
-
-Dropping a brand book (PDF) on a kit, or on a Production Tool project with
-a brand attached, runs Ellis's reading as `ui-behaviour.md` §3.18 says. Each
-thing read lands as an `extracted` item with `source {material_id, locator:
-"p.14", quote}`: logos as `visual.logos` (the page's images as assets),
-colours as `visual.colours`, type as `visual.typography` with no file,
-tone as `voice.principles`, do/don't as `rules`. Font files are never taken
-from a PDF; `typography[].file` arrives only by upload, with `licence`.
-
----
-
-## 4. Attach
-
-### 4.1 The app declares it
-
-As an app declares `spinoff`, it declares what it attaches:
-
-```yaml
-app:
-  attach:
-    accepts: [ie.napkin.brand]          # today only the brand; the mechanism is general
-    lift:                               # seeds of the target's own fields (os-layer §5.4)
-      brand.name: client
-      visual.colours[primary].hex: theme.accent
-    harvest:                            # §6: what an approved document offers back
-      - { from: single_minded_proposition, to: strategy.proposition }
-```
-
-`accepts` empty means the app attaches nothing and the shell shows no chip.
-One document of a given app id can be attached at a time: attaching another
-brand replaces the first (recorded, Update semantics, §4.4).
-
-### 4.2 What travels
-
-Exactly os-layer §5.2, applied to an existing document: data frozen at
-`data.upstream.<brand document_id>` (less its `projection` and `upstream`),
-`pinned-facts` and `sources` merged by id, assets copied (the target's own
-win a path collision), the chain carried whole below an **attach marker**.
-`pin_source_decisions` defaults to **false** for an attach (a kit's chain
-grows for years; the kit keeps it whole, the project keeps it compressed),
-unlike a spin-off. Lifts copy with one `seed` decision each (§5.4 shape,
-`agent: napkin-attach`, `actor: process:attach`).
-
-### 4.3 What the hop records
-
-```yaml
-lineage:
-  attached:                              # one record per attached document, the carried shape
-    - document_id: <brand document_id>
-      app_id: ie.napkin.brand
-      version: 5                         # kit.version at attach
-      data_sha256: sha256:…
-      facts_sha256: sha256:…
-      sources_sha256: sha256:…
-      last_decision: d_…
-      at: <datetime>
-```
-
-`carried` keeps naming the spin-off's direct parent only. `GET /upstream`
-reports both: what changed in the parent, and what changed in each attached
-document, by comparing these hashes with the source's current entries.
-
-### 4.4 Update, replace, detach
-
-- **Update** re-runs the attach against the current kit: the frozen copy is
-  replaced whole, merged members take the kit's newer pins (by id, the
-  target's own first), the record is rewritten, and one decision
-  `update_from_brand` names the versions. The app re-runs its lifts only
-  where the target field still holds the seeded value (a person's edit is
-  never overwritten; the chip says "Kept yours").
-- **Replace** (another brand): detach, then attach.
-- **Detach** removes the frozen copy, the record and the seeds' values where
-  still unedited, and leaves the merged pins (they are the document's own
-  copies now, as after a spin-off). One decision.
-- All three refuse on a locked document (`409`) and need the lease.
-
-### 4.5 Routes
-
-Host (`clan://` for apps, `/t/{tenant}/d/{doc}/…` on napkin-web):
-
-| Route | Body → reply |
+| Key | Meaning |
 |---|---|
-| `GET /attach-targets` | `[{app_id, documents: [{document_id, title, version}]}]` — the tenant's documents of each accepted app |
-| `POST /attach {document_id}` | `{ok, attached: <record>, seeded: [addresses]}`; `403` cross-tenant, `409` locked or already attached, `422` app not accepted |
-| `POST /attach/update {document_id}` | same reply; `409` when nothing changed |
-| `POST /attach/detach {document_id}` | `{ok}` |
-| `GET /upstream` | gains `attached: [{document_id, changed: {data, facts, sources, decisions}}]` |
+| `name` | Which look: "Original", "Zero". The client's name is on the manifest, not repeated. A first Brand Clan is "Original", editable. |
+| `note` | One line under the name in the list: "The core look". |
+| `kit.version` | The **published version**, an integer from 1. Attach reads it. |
+| `kit.published {by, at}` | Who published the current version, and when. |
+| `kit.changelog[]` | One entry per published version, newest last: `{version, at, by, from, summary, changes?}`. `from.kind` is `create` (made by hand), `build` (built from a brand book), `upload` (a newer file, taken as a new version), `edit` (a person's edit) or `restore` (an old version brought back as a new one); `from.file` names the file. |
+| `visual.logos[]` | `{id, label, variant light/dark/mark/other, asset, note?}`. `dark` is the logo for a dark ground (the Deck's dark-ground logo). `asset` is `human/assets/<name>`. |
+| `visual.logo_note` | The clear-space / placement rule shown under the logos. |
+| `visual.colours[]` | `{id, name, hex, role}`. `role` is one of the deck's tokens (`accent paper ink panel accent_ink`), `chart` or `other`. |
+| `visual.typography[]` | `{id, family, weight, use, role head/body/other}`. `weight` is text: "700", "400 / 600". Naming a family never licenses or embeds it. |
+| `voice.tone` | The tone line. |
+| `voice.rules[]` | `{id, text, kind do/dont}`. Feeds the **words** (Brief, Script). |
+| `imagery.style`, `imagery.bans[]`, `imagery.examples[]` | Style words, banned imagery (strings), example pictures `{id, asset, note?}`. Feeds the **pictures**. |
+| `source` | The uploaded brand book of this version's origin: `{file, asset?, kind, pages?, by?, at?}`. |
+| `gaps[]` | `{area, note}`: a section a build could not find. Empty beats wrong; nothing is invented. |
+| `previous_work[]`, `categories_explored[]`, `likes_dislikes[]`, `preferences{}` | **Provisions**: in the shape from day one, empty, no UI. Harvest (parked) fills them later. |
 
-The SDK gains `attach(target, source, AttachOptions)` beside `spinoff()`
-(`crates/clan-sdk`), returning a `Change`; the host applies it as one write.
-wasm gets it through `handle()`.
+Every list item has a stable `id` (`^[a-z0-9][a-z0-9_-]{0,39}$`); diffs match by id, never by position. `$schema` is allowed on disk and
+ignored by the validator. An empty Brand Clan (`data.empty-v1.json`) validates.
 
-### 4.6 The shell: one Brand chip everywhere
+**Confidential** (owner, 2026-11-13): the bible is the client's material in the agency's tenant. It goes to a model only through the path every
+document takes; it is never written to the shared knowledge layers, RAG, evals or run-log bodies; the harvest path stays off.
 
-The chip sits in the OS bar on every document whose app accepts the brand
-(brief, research, production project; the Production Tool at `/production`
-shares the component). Empty: "Set the brand". Click: a picker listing the
-agency's kits (from `/attach-targets`), with a search box "or name a brand".
-Set: the brand's name and "v5"; "v6 in the kit · Update" when behind. Naming
-a brand that has no kit runs **seed** (§5), then attaches.
+### 2.2 `app/brand/`: everything that is not the published version
 
-The Production Tool's "a project picks its client and sees that shelf first"
-(os-sign-in decision, 2026-10-13) is this chip: `project.brand {document_id,
-version}` in contract v3 (in place of `project.client_id`), and the team
-library opens on that client's shelf.
+None of these is read by attach. They are registered members (`brand-state`, `brand-version`) of the archive.
 
----
+* `app/brand/state.yaml`: `{draft: <Draft>|null, pending: <Pending>|null}`.
+  * **Draft** (a person's unpublished edit): `{based_on, from {kind edit|restore, version?}, started_by, started_at, edited_by[], edited_at, candidate}`.
+    `candidate` is the **complete** next Brand Bible: the shape of `shared/data.yaml` without `kit`. Open work keeps using the published version.
+  * **Pending** (a new version waiting for a person): `{from_version, at, by, from {kind build|upload, file}, source, candidate}`.
+    `candidate` is the **complete** next Brand Bible, merged against the published one (section 4); its `changes[]` are computed on read.
+* `app/brand/versions/v<N>.yaml`: the exact `shared/data.yaml` of published version N, written at each publish. **Old versions are read from these and are
+  read-only**: nothing writes a version file twice.
 
-## 5. Seed: a kit from the roster and the brand layer
+### 2.3 Decisions (who changed what)
 
-Owner: roster and brand layer only; no web.
+Every write is recorded in `agent/decision-chain.yaml` with the actor from the request context (never from the body), and `fields_changed`. Actions:
+`brand_clan.create`, `brand_clan.draft` (a save), `brand_clan.draft_start`, `brand_clan.discard`, `brand_clan.publish` (**pinned**),
+`brand_clan.proposal`, `brand_clan.accept` (**pinned**), `brand_clan.keep`. "Edited by Aoife, just now" reads `draft.edited_by` and `edited_at`;
+the history reads `kit.changelog` and the draft. A published version freezes the chain up to it (the chain is carried by attach like any other).
 
-1. `POST /brand/identify {text}` (middleware): `find_brands(text)` on the
-   agency's layers (`server/napkin/layers`, `peripherals.md` §4). Reply:
-   `{candidates: [{ref, name, client_org?, categories}]}`. None: the kit is
-   created with the typed name only, `note_brand` records the name, and the
-   kit asks "Which category is it in?" (taxonomy `find`) so `set_roster`
-   can write the roster row. Several: an ask with the candidates (the
-   Research tool's Ask shape, `campaign-research/schema.json` `question`).
-2. `POST /brand/seed {ref}`: the roster row and `facts(layer=brand,
-   entity=ref)` as pins with their source records, plus the roster's
-   proposals (`extract.py roster_proposals`): `brand.client_org`,
-   `brand.categories` as `proposed` with `fact_ids`.
-3. The host creates the document from the `ie.napkin.brand` template,
-   writes the pins into `shared/facts.yaml` and `shared/sources.yaml`, patches
-   `brand.*`, and records one `seed` decision citing the pins.
+Who may do what (owner Q4): **any person in the agency who can open the client**; every write below is refused for a context that is not a
+person (403), except that `create` with a candidate and `proposal.set` also accept a `process:` actor (the build job).
 
-No model call. One middleware round trip. The mock middleware answers from
-the mock layers (`mock-backend`).
+## 3. The default
 
----
+`default_brand_clan: <document id>` is **one field on the client record** (the registry in `napkin_host::clients`): one write, no document revision, cannot
+be on two documents. It is set to the first Brand Clan a client gets (by `create`), and moved by `default.set`. A document that is not an `ie.napkin.brand` of that
+client is refused (422). `list` answers `default` as that id or null. New work starts on the default.
 
-## 6. Harvest: the approved document comes back
+## 4. Changes (the diff)
 
-Trigger: a `client_review` with `answer: accepted` **or
-`accepted_with_changes`** (os-layer §7.5, §8.2; owner, 2026-10-19) on a
-document with `lineage.attached[]` naming a brand. The review saves as
-today; the shell's client-review band then offers **"Add to Lumen Water's
-Brand Clan"**. Nothing happens until a person opens it and confirms. On
-`accepted_with_changes`, a candidate that comes from a part the client
-marked for change is listed with "the client asked for a change here" and
-is unticked by default; the exemplar's `version` is the reviewed one.
+`changes[]` is computed by the host, deterministically, from two Brand Bibles. Item shape (`#/definitions/change` in the schema):
+`{id, area, kind added|changed|removed, label, old, new, text}`. `id` is `<area>:<item id>` (`colour:mint`), or the bare area for a scalar (`tone`).
 
-`GET /harvest` (host) computes the candidates, no model (`409` unless the
-newest `client_review` is `accepted` or `accepted_with_changes`):
-
-1. **The document itself** as `work.<id>`: `document_id`, `app_id`, title,
-   kind by app, `version` = the review's `seen.version`, the review's
-   decision id, `accepted_at`, the app's cover assets by hash.
-2. **Declared fields** from the app's `attach.harvest` map, each with its
-   current value and the kit's current value side by side (new, changed,
-   same).
-3. **Production Tool only:** the project's Brand board items that differ
-   from `upstream.<brand>` (a new logo variant, a corrected colour, a rule
-   added, a pronunciation confirmed, a voice designed on the project), and
-   the final renders as `work[].assets`.
-
-The person ticks. `POST /harvest {items}` writes, in one change on the
-**brand** document: the items (`origin: confirmed`, `by`, `cites` the
-approved document's addresses and the review decision), a `publish` (§7),
-and on the **approved** document a `backref used` (os-layer §7.4: "Used in
-Lumen Water Brand Clan v6"). Harvest needs the brand's lease and refuses on
-a locked kit (`409`). A rejected review offers nothing (owner, 2026-10-19).
-
----
-
-## 7. Publish and versions
-
-`kit.version` is a stamp, not a seal. **Publish** is a pinned decision
-(`action: publish`, `fields_changed: [kit]`) that bumps `kit.version`,
-writes `kit.published` and a `changelog` line. Attach and Update take the
-kit's **current head**; the chip shows the version it took. The kit's view
-shows "v5 · 3 changes since" so people publish on purpose. An
-`accepted` harvest always publishes. Server revisions are append-only rows
-already, so "attach at the published revision" is a later addition that
-needs no change to `lineage.attached` (`data_sha256` names the revision).
-
----
-
-## 8. Who reads the brand, and how
-
-| Reader | Takes | From |
+| area | matched by | `text` |
 |---|---|---|
-| Brief Maker (view) | `client`, `tone_and_world`, `mandatories` seeded; `theme.accent`, `theme.font` **proposed** (Apply / Keep mine), never applied silently | lifts; `upstream.<brand>` |
-| Middleware drafters | the frozen kit as part of the upstream index (`middleware-api.md` §1, §10.13); pins through `clan.facts` | the document |
-| Research (identify) | `campaign.brand`, `client_org`, `categories` as `proposed` | lifts and pins |
-| Production Tool | a **Bring in** card ("From the brand kit: Lumen Water · 3 logos, 5 colours, 2 fonts, 6 rules"), which makes the Brand board: refs with roles logo, palette, typography, brand_rule, each `library {document_id, version, item_id}`; `formats.packs` and `custom`; `sound.voices` on the shelf; `voice.pronunciation` to the ElevenLabs dictionary | `upstream.<brand>` |
-| Dex, Jude, Make all sizes, Skye | `rules`, safe areas, vocabulary | the Brand board (one brand link per node, contract v3) |
-| Retrieval | approved `work[]` briefs as exemplars in the agency pack, scope `brand:<slug>` (`peripherals.md` §3.3) | a later feature |
+| `name`, `note` | scalar | `Name becomes “Zero”` |
+| `logo` | `visual.logos[].id` | `Logo <label> added` / `replaced` (asset differs) / `changed` / `removed` |
+| `logo_note` | scalar | `Logo note becomes “…”` |
+| `colour` | `visual.colours[].id` | `<name> <old hex> becomes <new hex>`; `Colour <name> <hex> added`; `Colour <name> removed`; a role or name change: `<name> role <old> becomes <new>`, `<old name> renamed <new name>` |
+| `typography` | `visual.typography[].id` | `<family>: <old weight use> becomes <new weight use>`; `Typeface <family> added` / `removed` |
+| `tone` | scalar | `Tone becomes “…”` |
+| `rule` | `voice.rules[].id` | `Rule added: “…”`; `Rule changed: “old” becomes “new”`; `Rule removed: “…”` |
+| `imagery_style` | scalar | `Imagery style becomes “…”` |
+| `imagery_ban` | the string | `Imagery ban added: “…”` / `removed` |
+| `example` | `imagery.examples[].id` | `Example picture added` / `replaced` / `removed` |
+| `source` | scalar | `Source is now <file>` |
 
----
+Order: logos, colours, typography, tone, rules, imagery, source (stable, see `changes.*.json`). A **proposal** (a newer file) compares a list section only when the
+candidate **has that section non-empty**; a section it leaves out is kept, never deleted by a build that did not find it. A **draft** is the person's whole bible: a missing item is `removed`.
 
-## 9. Decided by the owner, 2026-10-19
+## 5. Routes
 
-1. The kit's chain is carried into each project **whole and unpinned** (D6).
-2. Harvest is offered on `accepted` **and** `accepted_with_changes` (§6).
-3. The brief's theme from the brand is a **proposal**, never applied at
-   attach.
-4. The name is **Brand Clan** wherever the kit is named; the canvas node
-   stays the Brand board.
-5. Contract v3 renames `project.client_id` to `project.brand {document_id,
-   version}` **now**, before v3 is built (recorded in
-   `features/contract-v3.clan`).
+Tenant routes under `/api/t/{tenant}` on napkin-web. The same operations are one function, `napkin_host::brand_clan::call(store, ctx, op, input)`, which the wasm and desktop hosts
+call by op name (the **op** is in brackets). JSON in and out. Errors are the host's: 400 bad input, 403 not a person (or another tenant's document), 404, 409 conflict (a stale
+`expect_version`, no draft, nothing to publish), 422 not a Brand Clan.
+
+| Route [op] | Body | Reply |
+|---|---|---|
+| `GET /clients/{client}/brand-clans` [`list`] | | `{default, items[Summary], behind[Behind]}` (`list.reply.json`) |
+| `POST /clients/{client}/brand-clans` [`create`] | `{name, note?, candidate?, source?, from?}` | the `View` |
+| `PUT /clients/{client}/default-brand-clan` [`default.set`] | `{document_id}` | the client record, with `default_brand_clan` |
+| `GET /brand-clans/{doc}` [`get`] (`?version=N`) | | the `View` (`view.reply.json`); with `version`, that version, `readonly: true` |
+| `GET /brand-clans/{doc}/history` [`history`] | | `[HistoryEntry]` (`history.reply.json`) |
+| `PUT /brand-clans/{doc}/draft` [`draft.save`] | `{candidate, expect_version?}` | the `View` |
+| `POST /brand-clans/{doc}/draft/start` [`draft.start`] | `{from_version?}` | the `View` (a draft from the published, or from that old version: "Start a draft from this") |
+| `DELETE /brand-clans/{doc}/draft` [`draft.discard`] | | the `View` |
+| `POST /brand-clans/{doc}/publish` [`publish`] | `{summary?, expect_version}` | the `View`, at version + 1 |
+| `POST /brand-clans/{doc}/proposal` [`proposal.set`] | `{candidate, source, from}` (`proposal.request.json`) | the `View` with `pending` |
+| `POST /brand-clans/{doc}/proposal/accept` [`proposal.accept`] | `{take: "all" \| [change id], expect_version}` | the `View`, at version + 1 |
+| `POST /brand-clans/{doc}/proposal/keep` [`proposal.keep`] | | the `View`, pending cleared, version unchanged |
+| `POST /brand-clans/{doc}/update-work` [`work.update`] | `{document_id}` (a work document) | the attach reply of `/attach/update` |
+| `POST /brand-clans/{doc}/assets?name=` [`asset.put`] | the file's bytes | `{name, path}` (`path` is `human/assets/<name>`; the name is made unique by a content prefix) |
+| `GET /brand-clans/{doc}/assets/{name}` [`asset.get`] | | the bytes (SVG served as an image only) |
+
+**Summary** (`list`): `{document_id, path, name, note, version, default, updated_at, palette[<=5 hex], logo (asset path|null), source {file}|null, pending {from_version, changes, at, by, file}|null, draft {based_on, changes, by, at}|null}`.
+**Behind** (`list`): a work document whose frozen Brand Clan is older than the Brand Clan's published version: `{path, title, app_id, brand_clan, brand_name, held, current}`. This is what the **Update chip** reads.
+**View**: `{document_id, path, client, name, note, version, default, readonly, shown {version, state published|draft|pending}, data, draft, pending, used_by[{path, title, app_id, held, behind}]}`.
+`data` is the shown Brand Bible (published; or version N when `?version`). `draft` and `pending` are as in 2.2, each with `changes[]` computed against the published version.
+**HistoryEntry**: `{version, state published|draft, at, by, from, summary, changes[]}`, newest first, the open draft on top as the next version.
+
+Rules: `draft.save` of a candidate equal to the published bible clears the draft. `publish` needs a draft (409), writes `versions/v<N+1>.yaml` and `kit.changelog`, bumps `kit.version`,
+clears the draft, and its summary defaults to the changes' texts. `expect_version` is the published version the person saw; a stale one is 409 ("changed while you were editing").
+`proposal.accept` with `take` publishes the published bible with only the taken changes applied (added, changed and removed by id; scalar areas by area); the pending is then
+cleared. The new version's `from` is the pending's. `proposal.keep` clears pending and records `brand_clan.keep`.
+`create` with a `candidate` (a build's result) writes v1 published; without it, v1 is the empty bible plus any `source`. It creates the document in the client's name, and sets the default when the client has none.
+`work.update` is attach's `update` for one work document with this Brand Clan, written as the person, plus the `linked` backref: nothing in the work changes until this is called.
+
+## 6. The client window (the only place it shows)
+
+The client page's **Brand Clans** section lists the client's Brand Clans (the default marked, "New version to review" when pending, a draft mark), opens one as the rendered Brand Bible (logos, colour board, type board,
+rules and tone, imagery style, the source file, and no UI for the provisions), edits it in place, and holds History. **Make default** is one click. After a publish, the work that uses an older version shows
+**"Brand Clan updated · Update"** (from `behind`); pressing it opens what changed (the changelog entries after the held version) and **Update** calls `work.update`. Never a silent change.
+
+## 7. Build jobs (lane B, phase 1; the contract the jobs write against)
+
+* **Detection** (step 1 free rules over the host's extracted text; step 2 one Haiku call, `{brand_bible, brand_name, confidence}`) and the question (mock a1) decide only whether to ask.
+* **Build** (`brand_build` job, a stronger model reading the whole file in pieces) produces a **complete candidate** (section 2.2) and a `source`, then writes it through the host:
+  a first build: `create {name: "Original", candidate, source, from {kind build, file}}` as `process:brand_build`; an update to an existing one: `proposal.set {candidate, source, from {kind upload, file}}`.
+  The job writes the document **only when it has content**; a failed build creates nothing half-made. A section it cannot find is omitted and listed in `candidate.gaps`.
+* Assets (a logo cut from a page, the source file) go up first by `asset.put`, and the candidate names them by `human/assets/<name>`.
+
+## 8. What reads it (phase 2, lane B; frozen shapes)
+
+| Reader | Reads | From |
+|---|---|---|
+| Brief Maker chip, Deck Update look, Production node, Territories frames | `data.upstream.<id>` (the frozen copy), `lineage.attached[].version`, `kit.version`, `visual.*`, `voice.*`, `imagery.*` | the work document |
+| Deck `look.brand_tokens` | `visual.colours[].role/hex`, `visual.typography[].role/family`, `visual.logos[variant dark/light]`, `imagery.bans[]`, `kit.version` | frozen copy |
+| Production jobs | `voice` for words; `visual`, `imagery` for pictures; the nearest Brand Clan node up the link graph | the document's `lineage.attached[]` and each node's link |
+
+A frozen copy never holds `app/brand/` (draft, pending, versions): attach takes `shared/data.yaml` only.
+
+## 9. Compatibility
+
+None kept. No Brand Clan documents exist outside the old branch; the shape is built clean. `kit.version` is the only key attach reads, and it is the same key the Style Pack uses.
