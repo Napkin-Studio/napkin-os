@@ -236,7 +236,7 @@ function linkItems(d: Doc, l: Link, via: ScopeVia, opts: ScopeOptions, through?:
     case 'brief': {
       // A Brief node (features/brief-node.clan): "Brief · First Light brief · v2".
       const b = d.briefs?.[e.id]
-      return b ? [{ ...base, kind: 'brief', id: e.id, label: `Brief · ${b.title} · v${b.source.taken}` }] : []
+      return b ? [{ ...base, kind: 'brief', id: e.id, label: b.route ? `Territories · ${b.route.name} · v${b.source.taken}` : `Brief · ${b.title} · v${b.source.taken}` }] : []
     }
     case 'text': {
       // A text on the canvas (features/canvas-text.clan): its words are the node's input words.

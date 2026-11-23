@@ -32,7 +32,7 @@ export function briefOfElement(e: CanvasElement | undefined): Id | null {
  * Place a Brief node's card (the person's one undo step), centred on `at` or the middle of the view,
  * clear of what is there, selected. The brief must be in the document already (addBrief).
  */
-export function placeBrief(env: NodeEnv, briefId: Id, at?: Pt): CanvasElement {
+export function placeBrief(env: NodeEnv, briefId: Id, at?: Pt, size: { w: number; h: number } = BRIEF_CARD): CanvasElement {
   const { canvas } = env
   const there = briefElement(env, briefId)
   if (there) {
@@ -41,7 +41,7 @@ export function placeBrief(env: NodeEnv, briefId: Id, at?: Pt): CanvasElement {
   }
   const v = canvas.visibleBounds()
   const c = at ?? { x: (v.minX + v.maxX) / 2, y: (v.minY + v.maxY) / 2 }
-  let box = { x: Math.round(c.x - BRIEF_CARD.w / 2), y: Math.round(c.y - BRIEF_CARD.h / 2), w: BRIEF_CARD.w, h: BRIEF_CARD.h }
+  let box = { x: Math.round(c.x - size.w / 2), y: Math.round(c.y - size.h / 2), w: size.w, h: size.h }
   const { dx, dy } = clearOffset(canvas.elements(), [box])
   box = { ...box, x: Math.round(box.x + dx), y: Math.round(box.y + dy) }
   const el = canvas.node({ x: box.x, y: box.y, width: box.w, height: box.h, customData: { kind: 'brief', id: briefId } })

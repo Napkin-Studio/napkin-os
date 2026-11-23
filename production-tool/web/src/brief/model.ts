@@ -20,6 +20,7 @@ import { landUpdate, systemUpdate, updateDoc, type DocumentStore } from '../doc/
 import { scopeOf, type ScopeItem } from '../model/scope'
 import { projectSpine, spineSummary, BRIEF_APP_ID } from './spine'
 import type { OsBriefRead } from './os'
+import { jobRoute } from './routes'
 
 type Doc = ProductionDocument
 
@@ -194,7 +195,7 @@ export function legalOf(spine: BriefSpine | undefined): string | undefined {
 }
 
 /** JobInput.brief: the title and the spine, nothing else of the brief. */
-export const jobBrief = (b: BriefNode): JobBrief => ({ title: b.title.slice(0, 200) || 'Brief', spine: { ...b.spine } })
+export const jobBrief = (b: BriefNode): JobBrief => ({ title: b.title.slice(0, 200) || 'Brief', spine: { ...b.spine }, ...(b.route ? { route: jobRoute(b.route) } : {}) })
 
 /**
  * The job's input with the node's brief added (on the director-backed ops), and its inputs row. No brief, or

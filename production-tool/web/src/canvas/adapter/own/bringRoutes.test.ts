@@ -11,7 +11,11 @@ import type { ProductionDocument } from '../../../contracts/types'
 import { modelStore } from '../../../test/model'
 import { OwnAdapter } from './adapter'
 import { bringCarriedBrief } from '../../../brief/start'
-import { bringCarriedRoutes, carriedRoutes, isTerritories, picturesLine, RIGHTS_TO_SUPPLY, routeWords } from '../../../brief/routes'
+import { carriedRoutes, isTerritories, picturesLine, RIGHTS_TO_SUPPLY } from '../../../brief/routes'
+import { bringCarriedRoutes } from '../../../brief/routeNode'
+import { briefForJob, withBrief } from '../../../brief/model'
+import { linkBrief } from '../../../brief/canvas'
+import { createNode } from '../../nodes/nodes'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const fixture = () => new Uint8Array(readFileSync(join(here, '../../../../../clan-store/test/fixtures/brief-spun-off.clan')))
@@ -97,7 +101,6 @@ describe('reading a carried Territories document', () => {
     expect(pics.mockups).toBe(1)
     const line = picturesLine(pics)
     expect(line).toBe('Pictures: 1 mock-up sketch, not finished pictures; 2 pictures by link (rights: Generated, Rights to supply); a Final needs its rights.')
-    expect(routeWords(got.routes[0])).toContain(line)
   })
 
   it('a document with no route greenlit brings nothing', async () => {
@@ -128,29 +131,82 @@ describe('reading a carried Territories document', () => {
 })
 
 describe('a project spun off from Territories opens on its routes', () => {
-  it('puts one Text per greenlit route on the blank canvas, nothing selected, and records what came from where', async () => {
+  it('puts one Territories node per route sent on the blank canvas, nothing selected, and records what came from where', async () => {
     const d = withFrames()
     const { s, a, env, doc } = await born(d)
     const from = (await s.clan.spunOffFrom())!
     const out = await bringCarriedRoutes(env, from)
     expect(out!.made).toBe((d.greenlit as unknown[]).length)
+    const briefs = Object.values(doc().briefs!)
+    expect(briefs.map((b) => b.route!.name).sort()).toEqual(greenNames(d).sort())
+    // each is a frozen copy on the canvas: a node card of kind brief, no loose Text
     const els = a.elements().filter((e) => !e.isDeleted)
-    expect(els.map((e) => e.type)).toEqual(Array(out!.made).fill('text'))
-    const words = els.map((e) => (e as unknown as { text: string }).text)
-    for (const name of greenNames(d)) expect(words.some((w) => w.startsWith(name.toUpperCase()))).toBe(true)
-    expect(words.join('\n')).toContain('Pictures: 1 mock-up sketch')
+    expect(els.map((e) => (e.customData as { kind?: string }).kind)).toEqual(Array(out!.made).fill('brief'))
+    expect(els.map((e) => e.type)).not.toContain('text')
     expect(a.view().selectedIds).toHaveLength(0)
-    // the canvas sync records each text; the page's own record says where they came from
+    expect(briefs.every((b) => b.source.app_id === 'ie.napkin.territories' && b.source.document_id === from.document_id && b.source.how === 'spinoff')).toBe(true)
+    // the page's own record says where they came from
     const spin = Object.values(doc().spin_ins!)
     expect(spin).toHaveLength(1)
     expect(spin[0]).toMatchObject({ state: 'brought_in', source: { document_id: from.document_id, app: 'ie.napkin.territories', title: 'Rail territories' } })
     expect(spin[0].plan.map((p) => p.title)).toEqual(expect.arrayContaining(greenNames(d)))
-    // no Script, Brief or link was made for the person
+    // no Script, no separate Brief Maker node, no link was made for the person
     expect(Object.keys(doc().scripts)).toHaveLength(0)
-    expect(Object.keys(doc().briefs ?? {})).toHaveLength(0)
+    expect(briefs.every((b) => b.route)).toBe(true)
     expect(Object.values(doc().links)).toHaveLength(0)
-    // pictures stay links: the project holds hashes only, no asset bytes were made for them
+  })
+
+  it('one node per route sent, not everything greenlit', async () => {
+    const d = withFrames() as { greenlit: { territory_id: string }[]; sends: unknown[] }
+    const [one, two] = d.greenlit.map((g) => g.territory_id)
+    d.sends = [{ id: 'send_x', to: 'production-tool', territory_ids: [two], not_chosen: [one], by: 'Aoife', at: '2026-11-23T10:00:00Z', status: 'sent' }]
+    const { s, env, doc } = await born(d as never)
+    const out = await bringCarriedRoutes(env, await s.clan.spunOffFrom())
+    expect(out!.made).toBe(1)
+    expect(Object.values(doc().briefs!).map((b) => b.route!.id)).toEqual([two])
+  })
+
+  it('carries the brief and research: the brief is the spine, the research is named, no copy of either', async () => {
+    const { s, env, doc } = await born(withFrames())
+    await bringCarriedRoutes(env, await s.clan.spunOffFrom())
+    for (const b of Object.values(doc().briefs!)) {
+      expect(b.carries).toEqual({ brief: { title: expect.any(String), v: 1 }, research: { title: 'Linea: Weekend by Rail' } })
+      expect(b.spine.proposition).toBe('The weekend starts when you sit down.')
+      expect(b.spine.audience).toContain('Couples and young families')
+      expect(b.spine.mandatories!.join(' ')).toContain('Weekend return fare')
+      expect(b.spine.donts!.join(' ')).toContain('No anti-car tone')
+    }
+  })
+
+  it('pictures are links by hash with their rights: unstated reads "Rights to supply", never bytes', async () => {
+    const { s, env, doc } = await born(withFrames())
+    await bringCarriedRoutes(env, await s.clan.spunOffFrom())
+    const first = Object.values(doc().briefs!).find((b) => b.route!.pictures?.length)!
+    expect(first.route!.pictures!.map((p) => [p.sha256, p.rights, !!p.final])).toEqual([[`sha256:${SHA}`, 'generated', false], [`sha256:${'b'.repeat(64)}`, undefined, true]])
+    expect(first.route!.mockups).toBe(1)
     expect(Object.keys(doc().assets ?? {})).toHaveLength(0)
+    expect(JSON.stringify(first)).not.toMatch(/data:image|base64/)
+  })
+
+  it('links to a Script like any node: the job input gets the route and the brief spine, only when linked', async () => {
+    const { s, a, env, doc } = await born(withFrames())
+    await bringCarriedRoutes(env, await s.clan.spunOffFrom())
+    const node = Object.values(doc().briefs!).find((b) => b.route!.pictures?.length)!
+    const script = (await createNode(env as never, 'script', { x: 900, y: 100 }))!
+    const sid = (script.customData as { id: string }).id
+    expect(briefForJob(doc(), { kind: 'script', id: sid })).toBeUndefined()
+    expect(withBrief(doc(), 'write', { kind: 'script', id: sid }, { text: 'x' }).input.brief).toBeUndefined()
+    const linked = await linkBrief(env as never, node.id, { kind: 'script', id: sid })
+    expect(linked.ok).toBe(true)
+    const { input, rows } = withBrief(doc(), 'write', { kind: 'script', id: sid }, { text: 'x' })
+    expect(input.brief!.spine.proposition).toBe('The weekend starts when you sit down.')
+    expect(input.brief!.route).toMatchObject({ name: node.route!.name, thought: node.route!.thought })
+    expect(input.brief!.route!.pictures).toEqual([{ sha256: `sha256:${SHA}`, rights: 'Generated' }, { sha256: `sha256:${'b'.repeat(64)}`, rights: RIGHTS_TO_SUPPLY }])
+    expect(rows[0]).toMatchObject({ kind: 'brief', ref: node.id, used_as: 'brief' })
+    // the same route node is the other routes' neighbour, not theirs: a second Script has none
+    const other = (await createNode(env as never, 'script', { x: 900, y: 600 }))!
+    expect(withBrief(doc(), 'write', { kind: 'script', id: (other.customData as { id: string }).id }, { text: 'x' }).input.brief).toBeUndefined()
+    expect(a.elements().filter((e) => (e.customData as { kind?: string }).kind === 'brief')).toHaveLength(Object.keys(doc().briefs!).length)
   })
 
   it('once: the second time, and after a reload, adds nothing', async () => {
@@ -158,8 +214,10 @@ describe('a project spun off from Territories opens on its routes', () => {
     const from = await s.clan.spunOffFrom()
     await bringCarriedRoutes(env, from)
     const n = a.elements().length
+    const k = Object.keys(doc().briefs!).length
     expect(await bringCarriedRoutes(env, from)).toBeNull()
     expect(a.elements()).toHaveLength(n)
+    expect(Object.keys(doc().briefs!)).toHaveLength(k)
     expect(Object.keys(doc().spin_ins!)).toHaveLength(1)
   })
 

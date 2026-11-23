@@ -5,14 +5,16 @@
 
 import type { ProductionDocument } from '../contracts/types'
 import { spineLines } from './spine'
+import { RouteCard } from './RouteCard'
 import './brief.css'
 
 /** The two lines the card shows: the proposition and the tone (what the film must say, and how). */
 const CARD_PARTS = ['proposition', 'tone'] as const
 
-export function BriefCard({ doc, id, openUrl, needs = false }: { doc: ProductionDocument; id: string; openUrl?: string; needs?: boolean }) {
+export function BriefCard({ doc, id, openUrl, needs = false, compact = false }: { doc: ProductionDocument; id: string; openUrl?: string; needs?: boolean; compact?: boolean }) {
   const b = doc.briefs?.[id]
   if (!b) return null
+  if (b.route) return <RouteCard node={b} openUrl={openUrl} needs={needs} compact={compact} />
   const v = b.source.taken
   const rows = spineLines(b.spine, b.confidential).filter((l) => (CARD_PARTS as readonly string[]).includes(l.part))
   return (

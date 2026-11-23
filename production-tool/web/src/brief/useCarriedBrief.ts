@@ -8,7 +8,7 @@ import type { ClanStoreApi } from '../../../clan-store/src'
 import type { NodeEnv } from '../canvas/nodes/nodes'
 import { fitClear } from '../canvas/boards/boards'
 import { bringCarriedBrief } from './start'
-import { bringCarriedRoutes } from './routes'
+import { bringCarriedRoutes } from './routeNode'
 
 export function useCarriedBrief(env: NodeEnv | null, clan: Pick<ClanStoreApi, 'spunOffFrom'> | null): void {
   // Once per project's store, whatever number of times the canvas environment is rebuilt.

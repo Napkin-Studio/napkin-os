@@ -40,6 +40,7 @@ import { keyViews } from '../../lib/names'
 import { liveGet } from '../../model/live'
 import { BriefCard } from '../../brief/BriefCard'
 import { briefOpenUrl } from '../../brief/feedWords'
+import { ROUTE_CARD } from '../../brief/routeNode'
 import { briefOfElement } from '../../brief/canvas'
 import { chipLook } from '../../ui/finals/chipLook'
 
@@ -630,7 +631,7 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
         return (
           <div key={e.id} className={`bl-cardbox ${selected.has(e.id) ? 'selected' : ''} ${state} ${focus && !docLinks.some((l) => l.from.kind === 'brief' && l.from.id === id && l.to.kind === focus.kind && l.to.id === focus.id) ? 'ctxdim' : ''}`} data-node="brief" data-id={id}
             style={{ left: p.x, top: p.y, width: e.width, height: e.height, transform: `scale(${view.zoom})` }}>
-            <BriefCard doc={live} id={id} openUrl={briefOpenUrl(live, id)} />
+            <BriefCard doc={live} id={id} openUrl={briefOpenUrl(live, id)} compact={e.height < ROUTE_CARD.h - 40} />
           </div>
         )
       })}

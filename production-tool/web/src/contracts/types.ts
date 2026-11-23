@@ -841,8 +841,8 @@ export const BRIEF_SPINE_PARTS: readonly BriefSpinePart[] = ['insight', 'proposi
 /** Where a Brief node was taken from (as the OS keeps a link: clan_sdk Attached). */
 export interface BriefSource {
   document_id: string
-  app_id: 'ie.napkin.brief-maker'
-  /** sha256 of the brief's shared/data.yaml as taken. */
+  app_id: 'ie.napkin.brief-maker' | 'ie.napkin.territories'
+  /** sha256 of the brief's shared/data.yaml as taken (a route node: of the Territories document). */
   data_sha256: Sha256
   /** The version shown: 1 when linked, one more on each update taken. */
   taken: number
@@ -851,6 +851,27 @@ export interface BriefSource {
   /** A newer version the person chose not to take. */
   kept?: Sha256
 }
+/** One picture of a route, held by link: its hash and the rights the Territories document stated (absent: unstated, read "Rights to supply"). Never bytes. */
+export interface RoutePicture { sha256: Sha256; caption?: string; rights?: 'generated' | 'own' | 'licensed'; final?: boolean }
+/** The route a Territories node holds (features/territories-spinoff-out-production.clan): frozen words, never edited here. */
+export interface RouteCopy {
+  /** The route's id in the Territories document. */
+  id: string
+  name: string
+  thought: string
+  why?: string
+  words?: string[]
+  /** Hex colours, in the order the route gives them. */
+  palette?: string[]
+  /** What the route must not be (its risks). */
+  not?: string[]
+  pictures?: RoutePicture[]
+  /** Sketches the route holds (palette drawings, not pictures) and touchpoints with no picture yet. */
+  mockups?: number
+  gaps?: number
+}
+/** A Territories node is a Brief node that also holds a route: it carries the brief and research it was made from. */
+export interface RouteCarries { brief?: { title: string; v: number }; research?: { title: string } }
 /** A Brief node: a Brief Maker brief's spine, frozen at the version taken. Read-only in Production. */
 export interface BriefNode extends EntityBase {
   title: string
@@ -858,6 +879,9 @@ export interface BriefNode extends EntityBase {
   spine: BriefSpine
   /** Spine parts made from brief parts marked Confidential: never in Napkin's own records. */
   confidential?: BriefSpinePart[]
+  /** Territories node: the route this node is (a frozen copy), its spine the brief it carries. Absent: a Brief Maker brief. */
+  route?: RouteCopy
+  carries?: RouteCarries
 }
 export interface FormatSet extends EntityBase {
   /** picture: a canvas picture node (its id is the node's). asset, w, h: the master's picture when the set was made. */
@@ -1124,7 +1148,9 @@ export interface JobShot {
 
 export interface JobContext { kind: 'note' | 'document' | 'brand_rule' | 'palette' | 'typography'; title?: string; text: string }
 
-export interface JobBrief { title: string; spine: BriefSpine }
+export interface JobBrief { title: string; spine: BriefSpine; route?: JobRoute }
+/** The route a job on a Territories node reads: words and palette, its pictures by hash with their rights. */
+export interface JobRoute { name: string; thought: string; why?: string; words?: string[]; palette?: string[]; not?: string[]; pictures?: { sha256: Sha256; rights: string }[] }
 
 export interface JobInput {
   text?: string
