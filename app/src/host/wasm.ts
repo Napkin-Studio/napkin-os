@@ -17,6 +17,7 @@
 
 import init, { NapkinHost } from '../wasm/napkin_wasm'
 import { frameQuery } from './frame'
+import { brandApi, type BrandApi } from './brandClans'
 import type {
   Adopted,
   LegacyName,
@@ -38,6 +39,7 @@ import type {
   UpstreamView,
   AttachTarget,
   AttachReply,
+  BrandOp,
   RelatedView,
   SourceCard,
 } from './types'
@@ -334,6 +336,14 @@ export const wasmHost: Host = {
 
   listLibrary: async filter =>
     (await boot()).listLibrary(filter?.client ?? undefined, filter?.app ?? undefined) as LibraryListing,
+  get brandClans() { return (this as unknown as { _bc?: BrandApi })._bc ??= brandApi(this) },
+  brandClan: async <T,>(op: BrandOp, input: Record<string, unknown>, bytes?: Uint8Array) =>
+    (await boot()).brandClan(op, JSON.stringify(input), bytes) as T,
+  brandClanAsset: async (path, name) => {
+    const r = (await boot()).brandClan('asset.get', JSON.stringify({ path, name })) as { content_type: string; base64: string }
+    const raw = Uint8Array.from(atob(r.base64), c => c.charCodeAt(0))
+    return URL.createObjectURL(new Blob([raw], { type: r.content_type }))
+  },
   clients: {
     list: async (includeArchived = false) => (await boot()).listClients(includeArchived) as ClientRecord[],
     create: async (name, material) => (await boot()).createClient(name, material ?? undefined) as ClientRecord,

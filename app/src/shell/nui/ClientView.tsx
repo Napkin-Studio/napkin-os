@@ -14,11 +14,24 @@ import type { ClientRecord, LibraryItem } from '../../host'
 import { activityOfItem, needsYou, strongest } from '../landing/model'
 import { toolById, toolOfApp, type Tool } from '../landing/tools'
 import { isTyping } from '../landing/keys'
-import { BRAND_APP } from '../landing/BrandClanCard'
+import { BRAND_APP } from '../landing/brandApp'
+import type { BrandApi } from '../../host/brandClans'
+import { BrandClans, UpdateChip } from './brandClans/BrandClans'
+import { useBrandClans, useBrandState } from './brandClans/hooks'
 import { clientLine, clientLook, clientName, monogramOf, stateWords, callsIn, type Facts } from './deskData'
 import { ToolIcon } from './icons'
 import { Pop } from './Pop'
 import { usePop } from './popKit'
+
+/** Where the shell gives no Brand Clan operations (a test, a host without them): an empty list, and every write refused in words. */
+const NO_BRAND: BrandApi = (() => {
+  const no = () => Promise.reject(new Error('Brand Clans are not available here.'))
+  return {
+    list: async () => ({ default: null, items: [], behind: [] }),
+    create: no, get: no, history: no, saveDraft: no, startDraft: no, discardDraft: no, publish: no, accept: no, keep: no,
+    setDefault: no, updateWork: no, putAsset: no, assetUrl: no,
+  }
+})()
 
 const GROUPS = [
   { tool: 'brief', label: 'Briefs', kind: 'Brief', icon: 'brief' },
@@ -54,16 +67,19 @@ interface Props {
   /** Rename and archive, when the host lets this screen look after the registry. */
   onRename?: (name: string) => Promise<string | null>
   onArchive?: () => Promise<string | null>
+  /** The Brand Clan operations; the shell's host by default. */
+  brand?: BrandApi
 }
 
-export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, onOpenTool, onSoon, onDecisions, onRename, onArchive }: Props) {
+export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, onOpenTool, onSoon, onDecisions, onRename, onArchive, brand }: Props) {
+  const brands = useBrandClans(brand ?? NO_BRAND, c.id)
+  const behind = new Map(useBrandState(brands).list?.behind.map(b => [b.path, b]) ?? [])
   const pop = usePop<'more' | 'deck'>()
   const [mode, setMode] = useState<'idle' | 'rename' | 'archive'>('idle')
   const look = clientLook(c.id, c.name)
   // The registry's display name where it shows; Rename still edits the stored name.
   const name = clientName(c)
   const work = items.filter(i => i.app_id !== BRAND_APP)
-  const brand = items.filter(i => i.app_id === BRAND_APP)
   const needing = work.filter(needsYou)
   const calls = work.reduce((n, i) => n + callsIn(i), 0)
   const since = new Date(c.created_at)
@@ -102,7 +118,7 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
     return (
       <button key={i.path} type="button" className="cp-row" data-testid="work-item" onClick={() => onOpenItem(i.path)}>
         <span className={`cp-ico k-${g?.icon ?? 'production'}`}><ToolIcon tool={g?.icon ?? 'production'} /></span>
-        <span className="cp-t"><b>{i.title || 'Untitled'}</b><small>{g?.kind ?? 'Other'}</small></span>
+        <span className="cp-t"><b>{i.title || 'Untitled'}</b><small>{g?.kind ?? 'Other'}{behind.has(i.path) && <UpdateChip controller={brands} behind={behind.get(i.path)!} />}</small></span>
         <span className={`cp-st ${st.needs ? 'needs' : st.working ? 'working' : ''}`}>{st.text}</span>
         <span className="cp-d">{short(i.updated_at)}</span>
       </button>
@@ -204,23 +220,7 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
             </section>
           )}
 
-          <section className="cp-sec" aria-label={`Brand Clan for ${name}`} data-testid="brand-clan">
-            <h2 className="cp-h">Brand Clan</h2>
-            {brand.length > 0 ? <div className="cp-box">{brand.map(row)}</div> : (
-              <div className="cp-box cp-clan">
-                <div>
-                  <b>Brand Clan · not started</b>
-                  <p>Its logos, colours and voice will live here, and every document for {name} can use them.</p>
-                  <p className="mono">voice 0 · rules 0 · assets 0 · approved work 0</p>
-                </div>
-                <div>
-                  <span className="cp-sw" aria-hidden><i style={{ background: look.cl }} /><i style={{ background: look.ink }} /><i style={{ background: '#141413' }} /><i style={{ background: '#FFFDF8' }} /></span>
-                  <p id="cp-clan-why">Brand Clan is not in this studio yet; it arrives with the Brand Clan app.</p>
-                  <button type="button" className="side-link" id="cp-kit" aria-disabled aria-describedby="cp-clan-why" data-testid="brand-start">Open kit</button>
-                </div>
-              </div>
-            )}
-          </section>
+          <BrandClans controller={brands} name={name} />
 
           {read > 0 && (
             <p className="cp-record">
