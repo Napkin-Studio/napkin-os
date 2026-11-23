@@ -30,7 +30,7 @@ Also returns `ETag: "V"` and `X-Saved-At`. The version is also in `GET .../data`
 
 ## 5. Page and open path
 
-Stage 1: `/production/?doc=<doc>`; the page reads the tenant from `/api/session`. No `doc`: the project list is `GET /api/t/{t}/library` filtered to `app_id == "ie.napkin.production"`. New project: `POST /api/t/{t}/documents {"app_id":"ie.napkin.production","title":"<name>","client_id":"<id>"?}` answering the OpenView (`path` is the doc id), then navigate to `?doc=<path>`. No Delete in stage 1. Stage 2 moves the path to `/production/d/<doc>` (alias kept one release).
+Stage 1: `/production/?doc=<doc>`; the page reads the tenant from `/api/session`. No `doc`: the project list is `GET /api/t/{t}/library` filtered to `app_id == "ie.napkin.production"`. New project: `POST /api/t/{t}/documents {"app_id":"ie.napkin.production","title":"<name>","client_id":"<id>"?}` answering the OpenView (`path` is the doc id), then navigate to `?doc=<path>`. No Delete in stage 1. Stage 2 (built): the page lives at `/production/d/<doc>`; `/production/?doc=<doc>` redirects there for one release (a bad id is never echoed into Location), and `/production/` alone is the project list. The page sends a `Content-Security-Policy-Report-Only` header; reports go to `POST /production/csp-report`.
 
 ## 6. Spin-off: `POST /api/t/{t}/d/{doc}/spinoff`
 
