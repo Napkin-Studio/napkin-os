@@ -1,0 +1,347 @@
+{
+  "vector": "trash",
+  "tenant": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+  "now": "2026-11-23T10:00:00Z",
+  "session_cookie": "napkin_session=vector-session",
+  "covers": [
+    "S1-8"
+  ],
+  "description": "Delete goes to the agency's Trash, restorable for 30 days; trashed documents leave the library. Purge is admin only and dry by default.",
+  "admin_cookie": "napkin_session=vector-admin",
+  "documents": [
+    {
+      "tenant": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+      "id": "doc-hollow-oak-still",
+      "app_id": "ie.napkin.production",
+      "identity": "11111111-2222-4333-8444-555555555555",
+      "template": false,
+      "title": "Hollow Oak Still",
+      "bytes_base64": "UEsDBBQAAAAIAABQd12c+qpyXAAAAIMAAAANAAAAbWFuaWZlc3QueWFtbEvOScyLL0stKs7Mz7NSMOTKTLFSMIACXTBhAiIsYFwY4ErJTy7NTc0riQfpMIQCXSMjIyNdE2NjY10LExMTXVMkwFWSWZKTaqXgkZ+Tk1+u4J+YrRBckpmTwwUAUEsBAhQDFAAAAAgAAFB3XZz6qnJcAAAAgwAAAA0AAAAAAAAAAAAAAIABAAAAAG1hbmlmZXN0LnlhbWxQSwUGAAAAAAEAAQA7AAAAhwAAAAAA",
+      "version": "sha256:7f57f22ea9ed8d2e539243bdb72015faf6326159aa285954a9d71bda15eef7fa",
+      "saved_at": "2026-11-23T09:00:00Z"
+    },
+    {
+      "tenant": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+      "id": "doc-dup",
+      "app_id": "ie.napkin.production",
+      "identity": "11111111-2222-4333-8444-555555555555",
+      "template": false,
+      "title": "Hollow Oak Still",
+      "bytes_base64": "UEsDBBQAAAAIAABQd12c+qpyXAAAAIMAAAANAAAAbWFuaWZlc3QueWFtbEvOScyLL0stKs7Mz7NSMOTKTLFSMIACXTBhAiIsYFwY4ErJTy7NTc0riQfpMIQCXSMjIyNdE2NjY10LExMTXVMkwFWSWZKTaqXgkZ+Tk1+u4J+YrRBckpmTwwUAUEsBAhQDFAAAAAgAAFB3XZz6qnJcAAAAgwAAAA0AAAAAAAAAAAAAAIABAAAAAG1hbmlmZXN0LnlhbWxQSwUGAAAAAAEAAQA7AAAAhwAAAAAA",
+      "version": "sha256:7f57f22ea9ed8d2e539243bdb72015faf6326159aa285954a9d71bda15eef7fa",
+      "saved_at": "2026-11-23T09:00:00Z"
+    }
+  ],
+  "trashed": [
+    {
+      "tenant": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+      "id": "doc-old",
+      "app_id": "ie.napkin.production",
+      "identity": "11111111-2222-4333-8444-555555555555",
+      "template": false,
+      "title": "Hollow Oak Still",
+      "bytes_base64": "UEsDBBQAAAAIAABQd12c+qpyXAAAAIMAAAANAAAAbWFuaWZlc3QueWFtbEvOScyLL0stKs7Mz7NSMOTKTLFSMIACXTBhAiIsYFwY4ErJTy7NTc0riQfpMIQCXSMjIyNdE2NjY10LExMTXVMkwFWSWZKTaqXgkZ+Tk1+u4J+YrRBckpmTwwUAUEsBAhQDFAAAAAgAAFB3XZz6qnJcAAAAgwAAAA0AAAAAAAAAAAAAAIABAAAAAG1hbmlmZXN0LnlhbWxQSwUGAAAAAAEAAQA7AAAAhwAAAAAA",
+      "version": "sha256:7f57f22ea9ed8d2e539243bdb72015faf6326159aa285954a9d71bda15eef7fa",
+      "saved_at": "2026-11-23T09:00:00Z",
+      "trashed_at": "2026-10-01T08:00:00Z",
+      "restorable_until": "2026-10-31T08:00:00Z"
+    },
+    {
+      "tenant": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+      "id": "doc-dup",
+      "app_id": "ie.napkin.production",
+      "identity": "11111111-2222-4333-8444-555555555555",
+      "template": false,
+      "title": "Hollow Oak Still",
+      "bytes_base64": "UEsDBBQAAAAIAABQd12c+qpyXAAAAIMAAAANAAAAbWFuaWZlc3QueWFtbEvOScyLL0stKs7Mz7NSMOTKTLFSMIACXTBhAiIsYFwY4ErJTy7NTc0riQfpMIQCXSMjIyNdE2NjY10LExMTXVMkwFWSWZKTaqXgkZ+Tk1+u4J+YrRBckpmTwwUAUEsBAhQDFAAAAAgAAFB3XZz6qnJcAAAAgwAAAA0AAAAAAAAAAAAAAIABAAAAAG1hbmlmZXN0LnlhbWxQSwUGAAAAAAEAAQA7AAAAhwAAAAAA",
+      "version": "sha256:7f57f22ea9ed8d2e539243bdb72015faf6326159aa285954a9d71bda15eef7fa",
+      "saved_at": "2026-11-23T09:00:00Z",
+      "trashed_at": "2026-11-01T08:00:00Z",
+      "restorable_until": "2026-12-01T08:00:00Z"
+    }
+  ],
+  "steps": [
+    {
+      "name": "delete",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/t/5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f/d/doc-hollow-oak-still",
+        "headers": {
+          "Cookie": "napkin_session=vector-session"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {},
+        "body": {
+          "trashed": true,
+          "restorable_until": "2026-12-23T10:00:00Z"
+        }
+      }
+    },
+    {
+      "name": "delete again",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/t/5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f/d/doc-hollow-oak-still",
+        "headers": {
+          "Cookie": "napkin_session=vector-session"
+        }
+      },
+      "response": {
+        "status": 404,
+        "headers": {},
+        "body": {
+          "error": "not found"
+        }
+      }
+    },
+    {
+      "name": "a template is never deleted",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/t/5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f/d/app-production",
+        "headers": {
+          "Cookie": "napkin_session=vector-session"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {},
+        "body": {
+          "error": "not a document id"
+        }
+      }
+    },
+    {
+      "name": "trash lists newest first",
+      "request": {
+        "method": "GET",
+        "path": "/api/t/5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f/trash",
+        "headers": {
+          "Cookie": "napkin_session=vector-session"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {},
+        "body": [
+          {
+            "path": "doc-hollow-oak-still",
+            "trashed_at": "2026-11-23T10:00:00Z",
+            "restorable_until": "2026-12-23T10:00:00Z"
+          },
+          {
+            "path": "doc-dup",
+            "trashed_at": "2026-11-01T08:00:00Z",
+            "restorable_until": "2026-12-01T08:00:00Z"
+          },
+          {
+            "path": "doc-old",
+            "trashed_at": "2026-10-01T08:00:00Z",
+            "restorable_until": "2026-10-31T08:00:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "name": "library no longer lists it",
+      "request": {
+        "method": "GET",
+        "path": "/api/t/5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f/library",
+        "headers": {
+          "Cookie": "napkin_session=vector-session"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {},
+        "body_subset": {
+          "items": [
+            {
+              "path": "doc-dup"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "restore",
+      "request": {
+        "method": "POST",
+        "path": "/api/t/5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f/d/doc-hollow-oak-still/restore",
+        "headers": {
+          "Cookie": "napkin_session=vector-session"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {},
+        "body": {
+          "restored": true,
+          "path": "doc-hollow-oak-still"
+        }
+      }
+    },
+    {
+      "name": "restore again",
+      "request": {
+        "method": "POST",
+        "path": "/api/t/5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f/d/doc-hollow-oak-still/restore",
+        "headers": {
+          "Cookie": "napkin_session=vector-session"
+        }
+      },
+      "response": {
+        "status": 404,
+        "headers": {},
+        "body": {
+          "error": "not found"
+        }
+      }
+    },
+    {
+      "name": "restore over an id already in the library",
+      "request": {
+        "method": "POST",
+        "path": "/api/t/5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f/d/doc-dup/restore",
+        "headers": {
+          "Cookie": "napkin_session=vector-session"
+        }
+      },
+      "response": {
+        "status": 409,
+        "headers": {},
+        "body": {
+          "error": "already in the library"
+        }
+      }
+    },
+    {
+      "name": "another agency's path",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/t/7a1d2c3b-4e5f-5a6b-9c8d-0e1f2a3b4c5d/d/doc-hollow-oak-still",
+        "headers": {
+          "Cookie": "napkin_session=vector-session"
+        }
+      },
+      "response": {
+        "status": 404,
+        "headers": {},
+        "body": {
+          "error": "not found"
+        }
+      }
+    },
+    {
+      "name": "purge needs an admin",
+      "request": {
+        "method": "POST",
+        "path": "/api/t/5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f/trash/purge",
+        "headers": {
+          "Cookie": "napkin_session=vector-session",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "dry_run": false
+        }
+      },
+      "response": {
+        "status": 403,
+        "headers": {},
+        "body": {
+          "error": "admins only"
+        }
+      }
+    },
+    {
+      "name": "dry run lists and removes nothing",
+      "request": {
+        "method": "POST",
+        "path": "/api/t/5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f/trash/purge",
+        "headers": {
+          "Cookie": "napkin_session=vector-admin",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "dry_run": true
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {},
+        "body": {
+          "dry_run": true,
+          "older_than_days": 30,
+          "purged": [
+            "doc-old"
+          ]
+        }
+      }
+    },
+    {
+      "name": "an empty body is a dry run",
+      "request": {
+        "method": "POST",
+        "path": "/api/t/5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f/trash/purge",
+        "headers": {
+          "Cookie": "napkin_session=vector-admin"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {},
+        "body": {
+          "dry_run": true,
+          "older_than_days": 30,
+          "purged": [
+            "doc-old"
+          ]
+        }
+      }
+    },
+    {
+      "name": "purge",
+      "request": {
+        "method": "POST",
+        "path": "/api/t/5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f/trash/purge",
+        "headers": {
+          "Cookie": "napkin_session=vector-admin",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "dry_run": false
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {},
+        "body": {
+          "dry_run": false,
+          "older_than_days": 30,
+          "purged": [
+            "doc-old"
+          ]
+        }
+      }
+    },
+    {
+      "name": "purged is gone",
+      "request": {
+        "method": "POST",
+        "path": "/api/t/5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f/d/doc-old/restore",
+        "headers": {
+          "Cookie": "napkin_session=vector-session"
+        }
+      },
+      "response": {
+        "status": 404,
+        "headers": {},
+        "body": {
+          "error": "not found"
+        }
+      }
+    }
+  ]
+}
