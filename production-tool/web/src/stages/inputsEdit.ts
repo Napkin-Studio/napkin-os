@@ -54,7 +54,7 @@ export function linkChoices(d: Doc, nodeId: Id): LinkChoice[] {
   }
   // A Brief node already in the film (features/brief-node.clan): linkRule says where it may feed.
   for (const b of Object.values(d.briefs ?? {}).sort((a, z) => (a.title < z.title ? -1 : 1))) {
-    out.push(choice({ kind: 'brief', id: b.id }, `${b.title} · v${b.source.taken}`, 'brief'))
+    out.push(choice({ kind: 'brief', id: b.id }, b.route ? `Territories · ${b.route.name} · v${b.route.version ?? 1}` : `${b.title} · v${b.source.taken}`, 'brief'))
   }
   return out
 }

@@ -7,7 +7,7 @@
 //
 // Pictures are links by hash ('sha256:<hex>', the Production form; Territories writes the bare hex) with the rights the document stated, never bytes; unstated rights read "Rights to supply".
 
-import type { SpunOffFrom } from '../../../clan-store/src'
+import type { ChainEntry, SpunOffFrom } from '../../../clan-store/src'
 import type { BriefNode, Id, RouteCopy, RoutePicture, Sha256 } from '../contracts/types'
 import type { NodeEnv } from '../canvas/nodes/nodes'
 import { fitClear } from '../canvas/boards/boards'
@@ -64,19 +64,29 @@ function briefAsBriefMaker(d: Rec): Rec {
 const rightsKey = (label: string): RoutePicture['rights'] => (label === 'Generated' ? 'generated' : label === 'Own' ? 'own' : label === 'Licensed' ? 'licensed' : undefined)
 const HEX64 = /^[0-9a-f]{64}$/
 
-function routeCopy(r: CarriedRoute): RouteCopy {
+function routeCopy(r: CarriedRoute, version: number): RouteCopy {
   const pictures = r.pictures.frames.filter((f) => HEX64.test(f.sha256)).slice(0, 12)
     .map((f): RoutePicture => ({ sha256: `sha256:${f.sha256}` as Sha256, ...(f.caption ? { caption: f.caption.slice(0, 120) } : {}), ...(rightsKey(f.rights) ? { rights: rightsKey(f.rights) } : {}), ...(f.final ? { final: true } : {}) }))
   return {
-    id: r.id.slice(0, 128), name: r.name.slice(0, 200), thought: r.thought.slice(0, 600),
+    id: r.id.slice(0, 128), version, name: r.name.slice(0, 200), thought: r.thought.slice(0, 600),
     ...(r.why ? { why: r.why.slice(0, 600) } : {}), ...(r.words.length ? { words: r.words.map((w) => w.slice(0, 200)) } : {}),
     ...(r.palette.length ? { palette: r.palette.slice(0, 8) } : {}), ...(r.risks.length ? { not: r.risks.map((w) => w.slice(0, 300)) } : {}),
     ...(pictures.length ? { pictures } : {}), ...(r.pictures.mockups ? { mockups: r.pictures.mockups } : {}), ...(r.pictures.gaps ? { gaps: r.pictures.gaps } : {}),
   }
 }
 
-/** One Territories node: the route frozen, the brief it carries as its spine. Not yet in the document. */
-export function newRouteNode(from: SpunOffFrom, r: CarriedRoute, upstream: Record<string, Record<string, unknown>> | undefined, now = new Date()): BriefNode {
+/**
+ * A carried brief's version as Brief Maker says it ("v2"): the approve decisions in the project's chain aimed at that document
+ * (its address is `<id>#…`), at least 1. The same count the Brief node's spin-off makes (store.ts approvalsCarried), kept here so
+ * the two do not depend on one another's branch.
+ */
+export function briefApprovals(chain: ChainEntry[], documentId: string): number {
+  const mine = `${documentId}#`
+  return Math.max(1, chain.filter((d) => d.kind === 'approve' && (d.targets ?? []).some((t) => typeof t === 'string' && t.startsWith(mine))).length)
+}
+
+/** One Territories node: the route frozen at the document's version, the brief it carries (at its version) as its spine. Not yet in the document. */
+export function newRouteNode(from: SpunOffFrom, r: CarriedRoute, upstream: Record<string, Record<string, unknown>> | undefined, version: number, chain: ChainEntry[] = [], now = new Date()): BriefNode {
   const beside = carriedBeside(upstream, from.document_id)
   const { spine, confidential } = projectSpine(beside.brief ? briefAsBriefMaker(beside.brief.data) : {})
   return {
@@ -84,9 +94,9 @@ export function newRouteNode(from: SpunOffFrom, r: CarriedRoute, upstream: Recor
     title: from.title.trim().slice(0, 200) || 'Territories',
     source: { document_id: from.document_id, app_id: TERRITORIES_APP_ID, data_sha256: from.data_sha256 as BriefNode['source']['data_sha256'], taken: 1, at: now.toISOString(), how: 'spinoff' },
     spine, ...(confidential.length ? { confidential } : {}),
-    route: routeCopy(r),
+    route: routeCopy(r, version),
     carries: {
-      ...(beside.brief ? { brief: { title: text(beside.brief.data.title) || text(isRec(beside.brief.data.campaign) ? beside.brief.data.campaign.name : '') || 'Brief', v: 1 } } : {}),
+      ...(beside.brief ? { brief: { title: text(beside.brief.data.title) || text(isRec(beside.brief.data.campaign) ? beside.brief.data.campaign.name : '') || 'Brief', v: briefApprovals(chain, beside.brief.id) } } : {}),
       ...(beside.research ? { research: { title: beside.research.title } } : {}),
     },
   }
@@ -112,13 +122,13 @@ const broughtIn = (env: NodeEnv, documentId: string): boolean =>
  * Script, no link, nothing asked), and a spin-in record saying what came and from where. Once per source: a project that recorded
  * it is left alone. Null when there is nothing to bring: no Territories parent, no route sent or greenlit and live, already brought.
  */
-export async function bringCarriedRoutes(env: NodeEnv, from: SpunOffFrom | null): Promise<{ made: number; ids: Id[]; els: string[] } | null> {
+export async function bringCarriedRoutes(env: NodeEnv, from: SpunOffFrom | null, chain: ChainEntry[] = []): Promise<{ made: number; ids: Id[]; els: string[] } | null> {
   if (!from) return null
   const doc = env.doc.get()
   if (broughtIn(env, from.document_id)) return null
   const got = carriedRoutes(from, doc.upstream)
   if (!got || !got.routes.length) return null
-  const nodes = got.routes.filter((r) => !routeNodeFor(doc, from.document_id, r.id)).map((r) => newRouteNode(from, r, doc.upstream))
+  const nodes = got.routes.filter((r) => !routeNodeFor(doc, from.document_id, r.id)).map((r) => newRouteNode(from, r, doc.upstream, got.version, chain))
   await systemUpdate(env.doc, (d) => {
     d.briefs ??= {}
     for (const n of nodes) d.briefs[n.id] = n

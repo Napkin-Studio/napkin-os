@@ -47,7 +47,7 @@ export function BriefBooth({ briefId, onClose, src = OS }: { briefId: string; on
       <div className="sp-crumb"><button type="button" onClick={onClose}>← Canvas</button><span>›</span><b>{route ? 'Territories' : 'Brief'}</b>{notice && <><span>›</span><b>v{v} → v{v + 1}</b></>}
         <button type="button" className="x" onClick={onClose} title="Back (Esc)" aria-label="Close the brief">×</button></div>
       <div className="bb-src"><span className="tab" aria-hidden="true">{route ? 'TERRITORIES' : 'BRIEF'}</span>
-        <span className="t"><b>{route ? `${route.name}` : b.title || 'Brief'}</b><small>{route ? `Territories · ${b.title} · v${v} · frozen here` : `Brief Maker · v${v} · frozen here`}</small></span>
+        <span className="t"><b>{route ? `${route.name}` : b.title || 'Brief'}</b><small>{route ? `Territories · ${b.title} · v${route.version ?? 1} · frozen here` : `Brief Maker · v${v} · frozen here`}</small></span>
         <a className="sp-btn" href={src.openUrl(b.source.document_id)} target="_blank" rel="noreferrer">{route ? 'Open in Territories ↗' : 'Open in Brief Maker ↗'}</a></div>
       {notice && after ? (
         <div className="bb-sec">

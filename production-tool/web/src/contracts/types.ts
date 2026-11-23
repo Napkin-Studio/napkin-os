@@ -857,6 +857,8 @@ export interface RoutePicture { sha256: Sha256; caption?: string; rights?: 'gene
 export interface RouteCopy {
   /** The route's id in the Territories document. */
   id: string
+  /** The Territories document's version when the route was sent (its Greenlight approvals, at least 1). */
+  version?: number
   name: string
   thought: string
   why?: string

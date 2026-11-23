@@ -4,19 +4,22 @@
 // must-not-be, the route's pictures with rights chips; "Carries: Brief v1 · Research" and Open in Territories. Compact (the
 // node sized down, as when it is linked to its Script) keeps the line, palette and pictures.
 
-import { useBlobUrl } from '../ui/hooks'
+import { useState } from 'react'
 import type { BriefNode, RoutePicture } from '../contracts/types'
 import { carriesWords } from './routeNode'
 import { rightsWords } from './routes'
+import { useRoutePicture } from './useRoutePicture'
 
 const chipClass = (r: RoutePicture['rights']) => (!r ? 'q' : r === 'licensed' ? 'l' : '')
 
 function Tile({ p }: { p: RoutePicture }) {
-  // The picture is a link by hash: this browser's copy when it has one, else a quiet tile (never bytes in the document).
-  const url = useBlobUrl(p.sha256)
+  // The picture is a link by hash: this browser's copy, else the media base's (by sha256). The quiet tile is only for while it
+  // loads, or a picture that truly cannot be found (never bytes in the document).
+  const { url, state } = useRoutePicture(p)
+  const [broken, setBroken] = useState(false)
   return (
-    <div className="tn-pic">
-      {url ? <img src={url} alt="" draggable={false} /> : <span className="tn-img" aria-hidden="true" />}
+    <div className="tn-pic" data-picture={url && !broken ? 'found' : state === 'loading' ? 'loading' : 'missing'}>
+      {url && !broken ? <img src={url} alt="" draggable={false} onError={() => setBroken(true)} /> : <span className="tn-img" aria-hidden="true" />}
       <small title={p.caption}>{p.caption || 'Picture'}</small>
       <span className={`tn-ch ${chipClass(p.rights)}`}>{rightsWords(p.rights)}</span>
     </div>
@@ -26,7 +29,7 @@ function Tile({ p }: { p: RoutePicture }) {
 export function RouteCard({ node, openUrl, needs = false, compact = false }: { node: BriefNode; openUrl?: string; needs?: boolean; compact?: boolean }) {
   const r = node.route
   if (!r) return null
-  const v = node.source.taken
+  const v = r.version ?? 1
   const pics = r.pictures ?? []
   return (
     <div className="tn-card" data-brief={node.id} data-route={r.id}>
