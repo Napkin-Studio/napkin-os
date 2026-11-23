@@ -129,8 +129,11 @@ fn dogfood(data_root: &std::path::Path) -> Option<Arc<napkin_web::dogfood::Dogfo
 
 /// The Production Tool at `/production` (features/os-sign-in.clan):
 ///   NAPKIN_PRODUCTION_RELAY_URL     the relay (unset: no /production, no card)
-///   NAPKIN_PRODUCTION_RELAY_SECRET  32+ bytes; signs X-Napkin-Identity (the
-///                                   first of `new,old` during a rotation)
+///   NAPKIN_PRODUCTION_RELAY_SECRET  32+ bytes; signs the read-only assets pass a deck
+///                                   build is given (the first of `new,old` in a rotation)
+///   NAPKIN_PRODUCTION_SERVICE_KEY   32+ bytes; napkin-web's credential for every other
+///                                   relay call (Authorization: Bearer, plus a signed user
+///                                   claim; the first of `new,old`)
 ///   NAPKIN_PRODUCTION_STATIC        the tool's build (default /srv/napkin/production)
 ///   NAPKIN_PRODUCTION_MEDIA_BASE    https base of Production's pictures; told to the
 ///                                   tool in /api/session as `media_base` (unset: null)
@@ -141,6 +144,7 @@ fn production(identity: &Identity) -> Option<Arc<napkin_web::production::Relay>>
         accounts,
         env_string("NAPKIN_PRODUCTION_RELAY_URL").as_deref(),
         env_string("NAPKIN_PRODUCTION_RELAY_SECRET").as_deref(),
+        env_string("NAPKIN_PRODUCTION_SERVICE_KEY").as_deref(),
         env_string("NAPKIN_PRODUCTION_STATIC").as_deref(),
     )
     .unwrap_or_else(|e| panic!("{e}"))

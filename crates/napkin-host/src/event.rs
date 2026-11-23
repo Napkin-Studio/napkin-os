@@ -36,6 +36,9 @@ pub enum HostEvent {
     Notify { title: String, body: String },
     /// A trusted app recolored the shell chrome.
     ThemeChanged(Value),
+    /// A job of a document finished while the host was settling it: its outcome
+    /// waits in the document's inbox for the tool to land (`{doc, job, state}`).
+    JobSettled(Value),
 }
 
 impl HostEvent {
@@ -51,12 +54,16 @@ impl HostEvent {
             Self::ExportRequest { .. } => "clan-export-request",
             Self::Notify { .. } => "napkin-notify",
             Self::ThemeChanged(_) => "clan-theme-changed",
+            Self::JobSettled(_) => "napkin-job-settled",
         }
     }
 
     pub fn payload(&self) -> Value {
         match self {
-            Self::PatchSaved(v) | Self::DataChanged(v) | Self::ThemeChanged(v) => v.clone(),
+            Self::PatchSaved(v)
+            | Self::DataChanged(v)
+            | Self::ThemeChanged(v)
+            | Self::JobSettled(v) => v.clone(),
             Self::OpenDocument(s) | Self::TitleChanged(s) => Value::String(s.clone()),
             Self::RequestSave | Self::OpenFileRequest => Value::Null,
             Self::ExportRequest {

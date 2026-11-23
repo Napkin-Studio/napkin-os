@@ -94,6 +94,8 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/events", get(events))
         // The People page: who signs in, and their agencies (admin only; admin.rs)
         .merge(crate::admin::router())
+        // Production's calls to the relay, and its landing inbox (production.rs)
+        .merge(crate::production::api_router())
         .merge(crate::blobs::router())
         .merge(crate::save::router())
         .merge(crate::trash::router())
@@ -548,7 +550,7 @@ async fn home(
 // ── One document ─────────────────────────────────────────────────────────────
 
 /// Resolve `{doc}` for this tenant, giving back its workspace and session.
-fn doc_session(
+pub(crate) fn doc_session(
     ctx: &AppCtx,
     tenant: &TenantId,
     doc: &str,
@@ -690,6 +692,8 @@ async fn settle_job(
     State(ctx): Ctx,
     Tenant(tenant): Tenant,
     Extension(Person(person)): Extension<Person>,
+    account: Option<Extension<crate::auth::Account>>,
+    relay: Option<Extension<Arc<crate::production::Relay>>>,
     Path((_t, doc, job)): Path<(String, String, String)>,
 ) -> ApiResult<Response> {
     if job.is_empty()
@@ -701,6 +705,16 @@ async fn settle_job(
         return Err(ApiError::new(400, "not a job id"));
     }
     let (ws, session, id) = doc_session(&ctx, &tenant, &doc)?;
+    // A Production document's jobs run in the relay, not the middleware: the host reads
+    // the job there and keeps a finished one's outcome in the document's inbox.
+    if session.app_id().as_deref() == Some(crate::save::PRODUCTION_APP_ID) {
+        return Ok(match (relay, account) {
+            (Some(Extension(relay)), Some(Extension(account))) => {
+                crate::production::settle(&ctx, &tenant, &relay, &account, &doc, &job).await
+            }
+            _ => ApiError::new(404, "Production is not set up on this server.").into_response(),
+        });
+    }
     let body = serde_json::json!({
         "request_kind": "middleware",
         "payload": { "task": "job_status", "input": { "job_id": job } },
