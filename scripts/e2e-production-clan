@@ -1,0 +1,169 @@
+#!/usr/bin/env bash
+# The local stack for the "Production as a CLAN app" checks (features/production-as-clan-app.clan,
+# TEST-PLAN S0-8, S1-6 ... S3-1): napkin-web in front of the local relay in MOCK mode, on lane T's ports.
+# Nothing here costs money or touches the owner's live stack (8091/8788).
+#
+#   scripts/e2e-production-clan up        start the stack (builds what is missing) and print the base URL
+#   scripts/e2e-production-clan down      stop it
+#   scripts/e2e-production-clan status
+#   scripts/e2e-production-clan crash     S0-8 / S1-14 at the API: save, kill -9 napkin-web right after the 200,
+#                                         start again, check the saved version is what download returns
+#   scripts/e2e-production-clan kill9     kill -9 napkin-web and the relay (the Playwright crash spec calls this,
+#                                         then `up`)
+#   scripts/e2e-production-clan walk      the TEST-PLAN section 7 walk in mock mode: up, the API steps (create,
+#                                         save, conflict, download, crash), then the Playwright specs of
+#                                         production-tool/web/e2e/clan-app for E2E_STAGE (default 1), then down
+#
+# Settings: PC_WEB_PORT (20420), PC_RELAY_PORT (20421), PC_STATE (state dir, default
+# /tmp/claude-1000/pc-t-state), PC_USER (dev@napkin), E2E_STAGE (which stage's specs run; later ones stay
+# fixme), E2E_CHROMIUM (a system Chromium). The save route is the one in docs/contracts/production-clan-app.md.
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export PRODUCTION_WEB_PORT="${PC_WEB_PORT:-20420}"
+export PRODUCTION_RELAY_PORT="${PC_RELAY_PORT:-20421}"
+export PRODUCTION_STATE="${PC_STATE:-/tmp/claude-1000/pc-t-state}"
+export PRODUCTION_SIGN_IN="${PC_USER:-dev@napkin}"
+base="http://127.0.0.1:$PRODUCTION_WEB_PORT"
+state="$PRODUCTION_STATE"
+jar="$state/e2e.cookies"
+
+say() { echo "e2e-production-clan: $*"; }
+die() { echo "e2e-production-clan: $*" >&2; exit 1; }
+guard() { # never the owner's stack or another lane's ports
+  for p in "$PRODUCTION_WEB_PORT" "$PRODUCTION_RELAY_PORT"; do
+    case "$p" in 8091|8788|8797|8191|8888|8897|18*|19*) die "port $p is not ours" ;; esac
+  done
+}
+listening() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+
+up() {
+  guard
+  if listening "$PRODUCTION_WEB_PORT" && [[ -f "$state/web.pid" ]]; then say "already up at $base"; return 0; fi
+  PRODUCTION_STATE="$state" "$root/scripts/run-production-local" start >/dev/null
+  mkdir -p "$state"
+  echo "E2E_BASE_URL=$base" >"$state/harness.env"
+  say "up at $base (mock mode, sign in as $PRODUCTION_SIGN_IN, state $state)"
+}
+
+down() {
+  guard
+  "$root/scripts/run-production-local" stop --force >/dev/null 2>&1 || true
+  say "down"
+}
+
+kill9() {
+  guard
+  local name p
+  for name in web relay; do
+    if [[ -f "$state/$name.pid" ]] && p="$(cat "$state/$name.pid")" && kill -0 "$p" 2>/dev/null; then
+      kill -9 -- -"$p" 2>/dev/null || kill -9 "$p" 2>/dev/null || true
+    fi
+    rm -f "$state/$name.pid"
+  done
+  say "killed -9 web and relay"
+}
+
+# -- API helpers (curl + python3; no jq needed) --
+signin() {
+  mkdir -p "$state"; rm -f "$jar"
+  curl -fsS -c "$jar" -H 'Content-Type: application/json' -d "{\"username\":\"$PRODUCTION_SIGN_IN\"}" "$base/api/auth/sign-in" >/dev/null \
+    || die "sign-in failed (is $PRODUCTION_SIGN_IN on the roster?)"
+}
+jget() { python3 -c 'import json,sys; d=json.load(sys.stdin)
+for k in sys.argv[1].split("."): d=d[k]
+print(d)' "$1"; }
+tenant() { curl -fsS -b "$jar" "$base/api/session" | jget tenant; }
+new_doc() { # title -> doc id
+  curl -fsS -b "$jar" -H 'Content-Type: application/json' \
+    -d "{\"app_id\":\"ie.napkin.production\",\"title\":\"$1\"}" "$base/api/t/$2/documents" | jget path
+}
+sha() { sha256sum "$1" | cut -d' ' -f1; }
+
+retitle() { # in.clan out.clan title: same document identity, new bytes (manifest.yaml's title only)
+  python3 - "$1" "$2" "$3" <<'PY'
+import re, sys, zipfile
+src, dst, title = sys.argv[1:4]
+with zipfile.ZipFile(src) as zi, zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as zo:
+    for it in zi.infolist():
+        data = zi.read(it.filename)
+        if it.filename == "manifest.yaml":
+            data = re.sub(rb"(?m)^title:.*$", b"title: " + title.encode(), data, count=1)
+        zo.writestr(it, data)
+PY
+}
+
+save() { # file tenant doc version -> prints new version (or dies on non-200)
+  local out code
+  out="$(curl -sS -b "$jar" -o "$state/save.out" -w '%{http_code} %header{etag}' -X PUT \
+    -H 'Content-Type: application/vnd.clan+zip' -H "If-Match: \"$4\"" -H 'X-Clan-Reason: manual' \
+    --data-binary "@$1" "$base/api/t/$2/d/$3/save")"
+  code="${out%% *}"
+  [[ "$code" == 200 ]] || die "save answered $code: $(cat "$state/save.out")"
+  jget version <"$state/save.out"
+}
+
+download() { # tenant doc out -> prints the ETag version
+  curl -fsS -b "$jar" -D "$state/dl.headers" -o "$3" "$base/api/t/$1/d/$2/download"
+  tr -d '\r' <"$state/dl.headers" | awk -F': ' 'tolower($1)=="etag"{gsub(/"/,"",$2); print $2}'
+}
+
+api_steps() { # create, save, conflict, download: the contract, live
+  signin
+  local t d v0 v1 f
+  t="$(tenant)"; d="$(new_doc "Harness $(date +%s)" "$t")"
+  f="$state/work"; mkdir -p "$f"
+  v0="$(download "$t" "$d" "$f/v0.clan")"
+  [[ "$v0" == "sha256:$(sha "$f/v0.clan")" ]] || die "download ETag $v0 is not the sha256 of the bytes"
+  retitle "$f/v0.clan" "$f/v1.clan" "Harness edit one"
+  v1="$(save "$f/v1.clan" "$t" "$d" "$v0")"
+  [[ "$v1" == "sha256:$(sha "$f/v1.clan")" ]] || die "save version $v1 is not the sha256 of the bytes sent"
+  retitle "$f/v0.clan" "$f/v2.clan" "Harness edit two"
+  local code
+  code="$(curl -sS -b "$jar" -o "$state/save.out" -w '%{http_code}' -X PUT -H 'Content-Type: application/vnd.clan+zip' \
+    -H "If-Match: \"$v0\"" --data-binary "@$f/v2.clan" "$base/api/t/$t/d/$d/save")"
+  [[ "$code" == 409 && "$(jget latest <"$state/save.out")" == "$v1" ]] || die "the stale save answered $code, wanted 409 latest=$v1"
+  [[ "$(download "$t" "$d" "$f/now.clan")" == "$v1" ]] || die "the stale save changed the document"
+  say "api: create, save (version = sha256), stale save 409 with latest, download is the winner: ok"
+  echo "$t $d $v1" >"$state/last-doc"
+}
+
+crash() { # S0-8, S1-14 at the API
+  up
+  signin
+  local t d v0 v1 f="$state/work"
+  t="$(tenant)"; d="$(new_doc "Crash $(date +%s)" "$t")"; mkdir -p "$f"
+  v0="$(download "$t" "$d" "$f/c0.clan")"
+  retitle "$f/c0.clan" "$f/c1.clan" "Saved before the crash"
+  v1="$(save "$f/c1.clan" "$t" "$d" "$v0")"
+  kill9
+  up
+  signin
+  [[ "$(download "$t" "$d" "$f/c2.clan")" == "$v1" ]] || die "after kill -9 the document is not the version that was answered 200"
+  cmp -s "$f/c1.clan" "$f/c2.clan" || die "after kill -9 the bytes differ"
+  say "crash: a save answered 200 survived kill -9 (S0-8)"
+}
+
+walk() {
+  local stage="${E2E_STAGE:-1}"
+  trap 'down' EXIT
+  up
+  api_steps
+  crash
+  say "playwright specs for stage $stage"
+  (cd "$root/production-tool/web" && E2E_STAGE="$stage" E2E_BASE_URL="$base" PC_STATE="$state" \
+    npx playwright test -c playwright.clan-app.config.ts)
+  say "walk done (mock mode; the paid walk is the lead's)"
+}
+
+cmd="${1:-}"; shift || true
+case "$cmd" in
+  up) up ;;
+  down) down ;;
+  status) "$root/scripts/run-production-local" status ;;
+  crash) crash ;;
+  kill9) kill9 ;;
+  api) up; api_steps ;;
+  walk) walk ;;
+  *) sed -n '2,22p' "${BASH_SOURCE[0]}"; exit 2 ;;
+esac
