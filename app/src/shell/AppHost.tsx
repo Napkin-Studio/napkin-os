@@ -404,6 +404,9 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           onRename: host.setTitle && !open.is_template ? (t: string) => { void host.setTitle!(t).then(() => refreshApp()).catch(e => setLinkError({ docPath, message: String(e instanceof Error ? e.message : e) })) } : undefined,
           onStartFresh,
           onToolPage,
+          onTrash: open.is_template || !host.trash ? undefined : () => {
+            void host.trash!.move(docPath).then(() => (client?.onOpen ?? onHome)(), e => setLinkError({ docPath, message: String(e instanceof Error ? e.message : e) }))
+          },
           onSave,
           onCopyLink: open.is_template ? undefined : onCopyLink,
           locked: !!decisions.view?.lock.locked && !decisions.view.lock.reopened?.length,

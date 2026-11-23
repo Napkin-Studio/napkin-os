@@ -523,6 +523,7 @@ export default function App() {
       onOpenFile={handleOpenFile}
       onOffline={hasServer && !device ? () => setOfflineOpen(true) : undefined}
       onDecisions={() => setDeskDecisions(true)}
+      trash={host.trash}
     />
   ) : landing.state === 'loading' ? (
     <LogoSpinnerFill label="Opening the studio…" />
