@@ -127,7 +127,8 @@ impl Ring {
     ) -> std::io::Result<bool> {
         let existing = self.list(slug);
         let newest = existing.last().map(|(ms, _)| *ms);
-        let due = reason.always() || newest.is_none_or(|n| now_ms.saturating_sub(n) >= MIN_GAP_MS);
+        let due =
+            reason.always() || newest.map_or(true, |n| now_ms.saturating_sub(n) >= MIN_GAP_MS);
         if !due {
             return Ok(false);
         }

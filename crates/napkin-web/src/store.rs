@@ -115,7 +115,7 @@ impl TenantStore {
                 Some((doc_id(slug), ms.parse().ok()?))
             })
             .collect();
-        out.sort_by(|a, b| b.1.cmp(&a.1));
+        out.sort_by_key(|(_, ms)| std::cmp::Reverse(*ms));
         out
     }
 
