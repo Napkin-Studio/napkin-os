@@ -12,16 +12,12 @@ from director import new_id
 from identity import tenant_id
 from scripts import tenants as tenants_script
 
-A = "prj_01J9Z8Y7X6W5V4T3S2R1Q0P9N8"
 NOT_ON = "The Production Tool is not on for your agency yet."
 
 ROUTES = [
     ("GET", "/me", None),
     ("POST", "/jobs", "job"),
     ("GET", "/jobs/job_x", None),
-    ("GET", "/projects", None),
-    ("POST", "/clan", "clan"),
-    ("GET", f"/clan/{A}", None),
     ("GET", "/library", None),
     ("POST", "/library/maya", {"role": "character", "baseVer": 0, "refs": []}),
     ("POST", "/uploads", {"sha256": "sha256:" + "a" * 64, "mime": "image/png", "bytes": 1}),
@@ -29,8 +25,6 @@ ROUTES = [
 
 
 def send(h, token, method, path, body):
-    if body == "clan":
-        return h.relay.http(method, path, {"Authorization": f"Bearer {token}", "X-Project-Id": A}, b"PK\x03\x04x")[:2]
     if body == "job":
         body = job_request("generate", new_id("job"))
     return h.call(method, path, body, token)
@@ -66,29 +60,6 @@ def test_jobs_carry_their_tenant_and_logs_name_it(h):
     assert status == 200 and "_tenant" not in out  # internal: public() strips it
     assert h.store.get_job(job_id)["_tenant"] == tenant_id("blue")
     assert ctx["tenant"] == tenant_id("blue")
-
-
-def test_two_people_in_one_agency_share_projects_and_a_stale_save_is_refused(h):
-    ann, bob = h.as_person("ann"), h.as_person("bob")
-    head = {"X-Project-Id": A, "Content-Type": "application/vnd.clan+zip"}
-    status, saved, _ = h.relay.http("POST", "/clan", {**head, "Authorization": f"Bearer {ann}"}, b"PK\x03\x04one")
-    assert status == 200
-    assert [p["id"] for p in h.call("GET", "/projects", None, bob, expect=200)[1]["projects"]] == [A]
-    etag = saved["project"]["etag"]
-    assert h.relay.http("POST", "/clan", {**head, "Authorization": f"Bearer {bob}", "If-Match": etag},
-                        b"PK\x03\x04bob")[0] == 200
-    status, out, _ = h.relay.http("POST", "/clan", {**head, "Authorization": f"Bearer {ann}", "If-Match": etag},
-                                  b"PK\x03\x04ann")
-    assert status == 409 and out["error"]["code"] == "conflict"
-    tid = tenant_id("blue")
-    assert all(k.startswith(f"tenants/{tid}/projects/") for k in h.blobs.objects)
-
-
-def test_old_per_person_saves_are_not_listed(h):
-    ann = h.as_person("ann")
-    pid = h.call("GET", "/me", None, ann, expect=200)[1]["participantId"]
-    h.blobs.put(f"clan/{pid}/projects.json", json.dumps({"projects": [{"id": A}]}).encode(), "application/json")
-    assert h.call("GET", "/projects", None, ann, expect=200)[1] == {"projects": []}
 
 
 def test_config_has_no_tenant_data(h):

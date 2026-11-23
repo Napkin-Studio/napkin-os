@@ -171,7 +171,7 @@ def test_an_assets_pass_names_the_tenant_for_any_picture():
 
 @pytest.mark.parametrize("method,pq,body", [
     ("POST", f"/api/assets/{SHA}", None), ("DELETE", f"/api/assets/{SHA}", None),
-    ("GET", "/api/clan/p1", None), ("GET", "/api/projects", None), ("GET", "/api/uploads", None),
+    ("GET", "/api/uploads", None),
     ("GET", "/api/jobs/job_1", None), ("GET", "/api/me", None), ("GET", "/api/library/x/y", None),
     ("GET", "/api/assets/", None), ("GET", f"/api/assets/{SHA}/more", None), ("GET", f"/api/x/assets/{SHA}", None),
     ("GET", f"/api/assets/{SHA}", b"x"),

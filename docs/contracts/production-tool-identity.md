@@ -63,7 +63,7 @@ The person is `{pid, h, t, name, tenant: {id, agency}}`, with
 ## The assets pass: `aud: "assets"`
 
 The Deck Maker's engine builds a deck in a middleware job that holds no relay key and does not know who is
-asking, yet a deck spun off from a Production project (features/production-spinoff.clan) names its pictures by
+asking, yet a deck spun off from a Production document (features/production-spinoff.clan; since 2026-11-23 a library document, `os-layer.md` 5.8) names its pictures by
 sha256, and the relay holds them. So napkin-web, which knows who is asking, signs one **read-only pass** per
 deck build and hands it to the build; the engine reads each picture with `GET /assets/{sha256}?w=2400`.
 
