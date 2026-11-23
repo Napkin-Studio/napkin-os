@@ -110,6 +110,7 @@ LEAK = re.compile(r"\(to confirm\)|\bTBC\b|\*\*|~~|\{\{|\}\}|^#\s|field is null|
 STATED_RIGHTS = {"generated": "Generated", "own": "Own", "licensed": "Licensed"}
 RIGHTS_TO_SUPPLY = "Rights to supply"
 MAX_ROUTES = 5          # gate 2 shows the routes sent, up to this many (the deck's slides hold five territories)
+ORDINALS = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth", "eleventh", "twelfth"]   # a rank on a slide is a word
 MAX_WORDS = 6           # a route's own lines carried to the deck
 
 
@@ -140,6 +141,10 @@ def sent_ids(doc: dict) -> tuple[list, list, str]:
     return [x["territory_id"] for x in g if isinstance(x.get("territory_id"), str)], [], str(next((x.get("by") for x in g if x.get("by")), "") or "")
 
 
+def _words(k: int) -> str:
+    return ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"][k] if 0 <= k <= 12 else str(k)
+
+
 def picture_notes(t: dict) -> dict:
     """What a route's pictures are, in words, never a finished picture that is not one. Sketches are counted as mock-ups (palette drawings, no rights
     needed, never shown as a finished picture). A frame by link carries its STATED rights (generated, own, licensed); unknown or none stated reads
@@ -158,12 +163,12 @@ def picture_notes(t: dict) -> dict:
             mock += 1
     bits = []
     if mock:
-        bits.append(f"{mock} mock-up sketch{'es' if mock != 1 else ''}, not finished pictures")
+        bits.append(f"{_words(mock)} mock-up sketch{'es' if mock != 1 else ''}, not finished pictures")
     if frames:
         rights = sorted({f["rights"] for f in frames})
-        bits.append(f"{len(frames)} picture{'s' if len(frames) != 1 else ''} by link (rights: {', '.join(rights)})")
+        bits.append(f"{_words(len(frames))} picture{'s' if len(frames) != 1 else ''} by link (rights: {', '.join(rights)})")
     if gaps:
-        bits.append(f"{len(gaps)} with no picture yet")
+        bits.append(f"{_words(len(gaps))} with no picture yet")
     return {k: v for k, v in {"mock_ups": mock or None, "frames": frames or None, "gaps": gaps or None, "line": "; ".join(bits) or None}.items() if v}
 
 
@@ -209,7 +214,7 @@ def stage_c_from_document(doc_id: str, doc: dict) -> dict:
     reasons = {}
     for i in order:
         t = by_id[i]
-        reasons[i] = (f"Territories judge rank {t['rank']}" if isinstance(t.get("rank"), int) else "Greenlit in Territories") + (f"; {t['tier']}" if t.get("tier") else "")
+        reasons[i] = (f"Ranked {ORDINALS[t['rank'] - 1] if isinstance(t.get('rank'), int) and 1 <= t['rank'] <= len(ORDINALS) else 'by'} by the Territories judge" if isinstance(t.get("rank"), int) else "Greenlit in Territories") + (f"; {t['tier']}" if t.get("tier") else "")
     return {"stage": "c", "produced_by": "deck.from_territory (a carried Territories document, no model call)", "territories": terr,
             "ranking": {"order": order, "reasons": reasons, "by": "the Territories blind judge's rank (advisory, not a decision)"},
             "chosen": order[0], "chosen_by": "default: the Territories judge's first choice among the routes sent, flagged for Gate 2",

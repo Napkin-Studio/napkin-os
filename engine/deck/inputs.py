@@ -50,6 +50,7 @@ class Inputs:
     built_from: dict = field(default_factory=dict)   # intake.tier(): {tier, documents, brief, research}
     intake: dict = field(default_factory=dict)       # the a0 gaps/questions as the runner wrote them
     verified: dict = field(default_factory=dict)     # confirm ref -> {by, at}: the person's verify decisions (intake.verified.<ref>)
+    carried_text: str = ""                           # the words of routes carried from Territories: an input, so a figure in a route's own line (Platform 4) is traced
     marks: list | None = None                        # parts a person marked Confidential: [{path, text, kind}]; None = never checked (picture generation is refused)
 
     def has_brief(self) -> bool:

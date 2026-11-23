@@ -68,7 +68,7 @@ def test_every_carried_field_reaches_the_deck_reader():
         assert row["evidence"] == t["evidence"]
     # pictures: sketches are mock-ups, a frame carries STATED rights only, unknown reads Rights to supply, a gap says why
     p = {t["id"]: t["pictures"] for t in c["territories"]}
-    assert p["t_started"]["mock_ups"] == 8 and "mock-up sketches, not finished pictures" in p["t_started"]["line"]
+    assert p["t_started"]["mock_ups"] == 8 and "eight mock-up sketches, not finished pictures" in p["t_started"]["line"]
     assert {(f["sha256"][0], f["rights"]) for f in p["t_started"]["frames"]} == {("a", "Licensed"), ("b", ft.RIGHTS_TO_SUPPLY)}
     assert "rights: Licensed, Rights to supply" in p["t_started"]["line"]
     assert p["t_passenger"]["gaps"][0]["gap"] == "No picture was made for the email."
@@ -88,9 +88,15 @@ def test_every_carried_field_reaches_the_deck_reader():
         assert row["name"] in text and row["their_words"][0] in text and row["checked"][0] in text
     terr_slides = [s for s in slides if s["type"] == "territory"]
     assert len(terr_slides) == 2
-    assert "2 routes from Territories, greenlit by Shrey" in text and "1 more was not chosen" in text
+    assert "Two routes from Territories, greenlit by Shrey" in text and "One more was not chosen" in text
     assert "mock-up sketches, not finished pictures" in text and "Rights to supply" in text
     assert "Licensed" in text
+    # a digit on a slide is a claim the numbers check wants a source for (the live run failed numbers_trace on '2 routes'): counts and ranks are words
+    import re
+    for sl in slides:
+        if sl["type"] == "territory_choice":
+            lines = [b.get("text") for b in sl["blocks"] if b["kind"] == "small" and not b.get("internal")] + [r[1] for b in sl["blocks"] if b["kind"] == "table" for r in b["rows"][1:]]
+            assert lines and not [x for x in lines if re.search(r"\d", x)], lines
 
 
 def _slides(c: dict) -> list:

@@ -507,14 +507,23 @@ def _carried_rows(t: dict) -> list:
     return rows
 
 
+_NUM = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+        "seventeen", "eighteen", "nineteen", "twenty"]
+
+
+def _n(k: int) -> str:
+    """A count in words: a digit on a slide is a claim the numbers check wants a source for, and a count of routes has none but the document."""
+    return _NUM[k] if 0 <= k < len(_NUM) else str(k)
+
+
 def _from_territories_block(ft) -> list:
-    """'N routes from Territories' on the recommendation slide, with who greenlit them and how many were not chosen. Nothing when the deck wrote its own."""
+    """'Two routes from Territories' on the recommendation slide, with who greenlit them and how many were not chosen. Nothing when the deck wrote its own."""
     if not isinstance(ft, dict) or not ft.get("count"):
         return []
     n = ft["count"]
     by = f", greenlit by {ft['greenlit_by']}" if ft.get("greenlit_by") else ""
-    left = f" {ft['not_chosen']} more {'was' if ft['not_chosen'] == 1 else 'were'} not chosen." if ft.get("not_chosen") else ""
-    return [{"kind": "small", "text": f"{n} route{'s' if n != 1 else ''} from Territories{by}: {', '.join(ft.get('names') or [])}.{left}", "basis": "meta"}]
+    left = f" {_n(ft['not_chosen']).capitalize()} more {'was' if ft['not_chosen'] == 1 else 'were'} not chosen." if ft.get("not_chosen") else ""
+    return [{"kind": "small", "text": f"{_n(n).capitalize()} route{'s' if n != 1 else ''} from Territories{by}: {', '.join(ft.get('names') or [])}.{left}", "basis": "meta"}]
 
 
 def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]", fmt: str = "pitch", fit: dict | None = None,

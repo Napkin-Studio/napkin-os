@@ -1157,6 +1157,8 @@ def main(argv=None):
         if a.until == k:
             return _stopped(a, rep, t0, k)
 
+    if (st.get("c") or {}).get("from_territories"):   # the routes' own words are inputs: a figure in a line is the person's, not invented
+        inp.carried_text = json.dumps(st["c"].get("territories"), ensure_ascii=False)
     _criterion_answers(a, inp, st, profile, rep)
 
     t = time.time()
