@@ -282,6 +282,7 @@ module "services" {
   # until a person sets them (the design's rollout step 4).
   production_relay_url        = var.production_relay_url
   production_relay_secret_arn = var.production_relay_secret_arn
+  production_service_key_arn  = var.production_service_key_arn
   production_media_base       = var.production_media_base
   # Daily AWS Backup of web's EFS, 35 days (features/production-in-library)
   backup_enabled = true

@@ -86,20 +86,40 @@ run "serves_the_production_tool_when_set" {
   variables {
     production_relay_url        = "https://relay.lambda-url.eu-west-1.on.aws"
     production_relay_secret_arn = "arn:aws:secretsmanager:eu-west-1:111111111111:secret:napkin-hackathon/TOKEN_SECRET-abc123"
+    production_service_key_arn  = "arn:aws:secretsmanager:eu-west-1:111111111111:secret:napkin-hackathon/SERVICE_KEY-def456"
   }
 
   assert {
     condition     = module.services.web_environment["NAPKIN_PRODUCTION_RELAY_URL"] == "https://relay.lambda-url.eu-west-1.on.aws"
-    error_message = "napkin-web proxies /production/api to the relay"
+    error_message = "napkin-web calls the relay at this address"
   }
   assert {
     condition     = module.services.web_secrets["NAPKIN_PRODUCTION_RELAY_SECRET"] == "arn:aws:secretsmanager:eu-west-1:111111111111:secret:napkin-hackathon/TOKEN_SECRET-abc123"
-    error_message = "napkin-web signs X-Napkin-Identity with the relay's TOKEN_SECRET, read as a task secret"
+    error_message = "napkin-web signs the Deck's picture pass with the relay's TOKEN_SECRET, read as a task secret"
+  }
+  assert {
+    condition     = module.services.web_secrets["NAPKIN_PRODUCTION_SERVICE_KEY"] == "arn:aws:secretsmanager:eu-west-1:111111111111:secret:napkin-hackathon/SERVICE_KEY-def456"
+    error_message = "napkin-web calls the relay with SERVICE_KEY, read as a task secret"
+  }
+  assert {
+    condition     = contains(module.services.execution_secret_arns, "arn:aws:secretsmanager:eu-west-1:111111111111:secret:napkin-hackathon/SERVICE_KEY-def456")
+    error_message = "the execution role may read the service key to start the web task"
   }
   assert {
     condition     = contains(module.services.execution_secret_arns, "arn:aws:secretsmanager:eu-west-1:111111111111:secret:napkin-hackathon/TOKEN_SECRET-abc123")
     error_message = "the execution role may read the relay key to start the web task"
   }
+}
+
+run "refuses_a_production_relay_without_its_service_key" {
+  command = plan
+
+  variables {
+    production_relay_url        = "https://relay.lambda-url.eu-west-1.on.aws"
+    production_relay_secret_arn = "arn:aws:secretsmanager:eu-west-1:111111111111:secret:napkin-hackathon/TOKEN_SECRET-abc123"
+  }
+
+  expect_failures = [var.production_service_key_arn]
 }
 
 run "refuses_half_a_production_relay" {
@@ -109,7 +129,7 @@ run "refuses_half_a_production_relay" {
     production_relay_url = "https://relay.lambda-url.eu-west-1.on.aws"
   }
 
-  expect_failures = [var.production_relay_secret_arn]
+  expect_failures = [var.production_relay_secret_arn, var.production_service_key_arn]
 }
 
 # features/deck-cloud.clan: staging stays as it was until the owner switches the deck engine on.
