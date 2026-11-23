@@ -168,6 +168,7 @@ AUDIENCES = ("review", "client")
 #: Text that must never reach a client: pipeline ids, stand-in and gate labels, open items.
 INTERNAL_PATTERNS = (
     (r"\b(?:t|r|fi|f|d|src)_[A-Za-z0-9_]{3,}\b", "an internal id"),
+    (r"\b(?:brief|req|doc|prompt|answer|calc):[A-Za-z0-9_][A-Za-z0-9_.#\-]*", "an evidence id"),
     (r"STAND-IN", "a stand-in label"),
     (r"\bGate \d\b", "a pipeline gate"),
     (r"(?i)\bto confirm\b", "an open 'to confirm'"),

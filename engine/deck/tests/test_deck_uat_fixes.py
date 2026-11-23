@@ -109,7 +109,7 @@ def test_a_presented_slide_hands_its_supply_cards_and_parentheticals_to_the_list
     export_clean.scrub(deck)
     assert [b["text"] for b in deck["slides"]["s01"]["blocks"]] == ["Hello"]
     assert deck["slides"]["s02"]["blocks"][0]["items"] == [{"text": "Cider is fizzy."}]
-    assert "To confirm: name" in str(deck["slides"]["s04"]["blocks"])   # behind the divider the card stays: it is the To supply list
+    assert "To settle: name" in str(deck["slides"]["s04"]["blocks"]) and "To confirm" not in str(deck["slides"]["s04"]["blocks"])   # behind the divider the card stays (it is the To supply list), without the build's label
     listed = str(deck["slides"][deck["order"][-1]]["blocks"])
     assert "presenter" in listed and "draft insight, to confirm" in listed and "Fee split" in listed
 
