@@ -96,7 +96,7 @@ from pptx.dml.color import RGBColor
 from pptx.enum.chart import XL_CHART_TYPE, XL_LABEL_POSITION
 from pptx.enum.dml import MSO_LINE
 from pptx.enum.shapes import MSO_SHAPE, MSO_SHAPE_TYPE
-from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
+from pptx.enum.text import MSO_ANCHOR, MSO_AUTO_SIZE, PP_ALIGN
 from pptx.oxml.ns import nsdecls, qn
 from pptx.util import Emu, Inches, Pt
 
@@ -561,6 +561,8 @@ class Renderer:
             tb.name = name
         tf = tb.text_frame
         tf.word_wrap = True
+        if name == "Title":   # as in ptext: shrink inside the box, never over the text below
+            tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
         tf.margin_left = tf.margin_right = Inches(0.02)
         tf.margin_top = tf.margin_bottom = Inches(0.02)
         tf.vertical_anchor = anchor
@@ -753,6 +755,8 @@ class Renderer:
             tb.name = "Caption"   # a label: stage h holds it to the caption floor, not the body floor
         tf = tb.text_frame
         tf.word_wrap = True
+        if name == "Title":   # a title shrinks inside its box rather than run over the text under it, on a machine that draws it wider than the fit
+            tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
         tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
         tf.vertical_anchor = {"top": MSO_ANCHOR.TOP, "middle": MSO_ANCHOR.MIDDLE, "bottom": MSO_ANCHOR.BOTTOM}[anchor]
         for i, d in enumerate(paras):
@@ -2092,7 +2096,7 @@ class Renderer:
         pw = self._unk(0.24 + 0.085 * len(spec.MOCKUP_LABEL))
         self.rect(sl, x, y, pw, self.PILL_H, fill=self.th.ink, name="MockupPill")
         self.text(sl, x, y, pw, self.PILL_H, spec.MOCKUP_LABEL, size=10, color="FFFFFF", bold=True, align=PP_ALIGN.CENTER,
-                  anchor=MSO_ANCHOR.MIDDLE, name="MockupLabel")
+                  anchor=MSO_ANCHOR.MIDDLE, name="MockupLabel", cap=True)   # cap: the caption floor (10 pt) the pill's width is measured at, not the 12 pt body floor that wrapped it
         return pw
 
     def _pills(self, sl, x, y, im):
@@ -2169,7 +2173,7 @@ class Renderer:
         if not all(frs):
             return None
         top = 3.2
-        h = g.body_end - self.OOH_NAME_H - 0.1 - top
+        h = g.body_end - self.OOH_NAME_H - 0.1 - top - self.PILL_H - 0.12   # the labels take the foot, under the frames: never over the words above
         gap = 0.45
         want = [fr["ratio"] * h + 0.6 for fr in frs]
         avail = (self.x1 - self.x0) - gap * (len(cells) - 1)
@@ -2180,7 +2184,7 @@ class Renderer:
         for (f, im), fr, w in zip(cells, frs, ws):
             out.append((f, im, fr, x, top, w, h))
             x += w + gap
-        return {"body_end": top - self.PILL_H - 0.3, "cells": out}
+        return {"body_end": top - 0.3, "cells": out}
 
     def _ooh_draw(self, sl, plan):
         """The frames, each named under it, and the labels (the picture's own, then 'Mock-up') above the row at its right end."""
@@ -2194,7 +2198,7 @@ class Renderer:
         f0, im0, fr0, *_ = plan["cells"][0]
         x_end = plan["cells"][-1][3] + plan["cells"][-1][5]
         lab = (self._label_w(im0, 3.0) + 0.1) if im0.get("status") != "approved" else 0.0
-        py = plan["cells"][0][4] - self.PILL_H - 0.12
+        py = self.th.grid.body_end - self.PILL_H
         self._pills(sl, x_end - lab - self._unk(0.24 + 0.085 * len(spec.MOCKUP_LABEL)), py, im0)
 
     def _strip_draw(self, sl, plan):
@@ -2207,7 +2211,7 @@ class Renderer:
         x_end = boxes[-1][1] + boxes[-1][3]
         im0 = boxes[0][5]
         lab = (self._label_w(im0, 3.0) + 0.1) if im0.get("status") != "approved" else 0.0
-        py = boxes[0][2] - self.PILL_H - 0.12
+        py = self.th.grid.body_end - self.PILL_H
         self._pills(sl, x_end - lab - self._unk(0.24 + 0.085 * len(spec.MOCKUP_LABEL)), py, im0)
         self._strip_note(sl, boxes[0][1] - 0.12, py, note)
         self._build(sl, m)
@@ -4108,6 +4112,9 @@ class Renderer:
         tz = self._tz(s)
         if not tz:
             raise NoFit("no zone of the picture reads at AA: the words go beside it")
+        band = images.subject_band(self._pics.get("picture"), self.deck.get("assets"))   # a zone an earlier build recorded is held to the same rule
+        if not images.zone_clear_of(tz["zone"], band, images.zone_block(self._cv)):
+            raise NoFit("the words would cover the picture's subject: they go beside it")
         if cover and self._logo_file():
             raise NoFit("a logo is not set over a picture: the cover keeps the picture column")
         blocks = [b for b in s["blocks"] if self._text_of(b)]
@@ -4578,13 +4585,13 @@ class Renderer:
                 caps = (self._strip_info()[2] or [])
                 cap_h = self.STRIP_CAP_H if any(caps) else 0.0
                 h = min(w / max(rs), (g.body_end - self.EXEC_TOP - cap_h) * 0.42)
-                y = g.body_end - 0.36 - cap_h - h
+                y = g.body_end - 0.36 - cap_h - h - self.PILL_H - 0.12   # the labels take the foot, under the strip
                 boxes, cx = [], x0
                 for k, im, r in zip(shots, ims, rs):
                     bw = min(w, h * r)
                     boxes.append((k, cx + (w - bw) / 2, y, bw, h, im))
                     cx += w + gx
-                return {"x1": x1, "body_end": y - self.PILL_H - 0.35, "boxes": boxes, "strip": True, "also": ["picture"], "caps": caps}
+                return {"x1": x1, "body_end": y - 0.23, "boxes": boxes, "strip": True, "also": ["picture"], "caps": caps}
             if self._frame_for(im):   # the frame takes the whole right half and contains itself in it
                 half = (x1 - x0 - gap) / 2
                 return {"x1": x1 - half - gap, "body_end": g.body_end, "framed": True,
@@ -4662,7 +4669,7 @@ class Renderer:
         flagged = im.get("status") == "flagged"
         self.rect(sl, lx, ly, pw, 0.28, fill="B03225" if flagged else "1B2430", name="PictureLabel")
         self.text(sl, lx, ly, pw, 0.28, self._label_text(im), size=10, color="FFFFFF", bold=True, align=PP_ALIGN.CENTER,
-                  anchor=MSO_ANCHOR.MIDDLE, name="Caption")
+                  anchor=MSO_ANCHOR.MIDDLE, name="Caption", cap=True)
 
     def _draw_pictures(self, sl, plan):
         if plan.get("strip"):
@@ -5049,6 +5056,8 @@ def render(deck, inp, out: Path, master: Path | None = None, findings: list | No
     """
     r = Renderer(deck, inp, master, findings, animate, theme, pictures)
     r.notes, r.no_plan, r.protect, r.clean = notes, no_plan, dict(protect or {}), clean
+    if clean:   # an export shows no internal status mark (Flagged, the red outline): the status stays in the app's review
+        r.drawn = images.unflag(r.drawn)
     r.render(out, layouts_out)
     if picture_findings is not None:
         picture_findings.extend(r.picture_findings)
