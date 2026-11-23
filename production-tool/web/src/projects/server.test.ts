@@ -491,7 +491,8 @@ describe('opening a project checks the relay for a newer version (re-test R2)', 
     expect(keys(laptop.shell)).toEqual(expect.arrayContaining(['kite', 'lamp']))
     await vi.waitFor(() => expect(fake.saves.length).toBe(saves + 1))
     expect(fake.saves.at(-1)).toMatchObject({ id: p.id, ifMatch: mine.etag })
-    expect(fake.projects.get(p.id)!.row.etag).not.toBe(mine.etag)
+    // The fake counts a save when it arrives and stores it after an async hash, so wait for it to land.
+    await vi.waitFor(() => expect(fake.projects.get(p.id)!.row.etag).not.toBe(mine.etag))
     expect(copy.get()).toBeNull()
   })
 
