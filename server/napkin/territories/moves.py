@@ -124,7 +124,7 @@ def send_routes(doc, inp, findings, *, doc_id: str, data: dict):
 # model step of the document is running they wait inside that job and are applied to the document it returns, so both survive
 # (``TerritoriesJob.defer``, the request path in app.py). Each is ``fn(doc) -> (doc, refusals)`` built by ``live_move``.
 
-LIVE_STEPS = ("set_lead", "star_line", "keep_feel")
+LIVE_STEPS = ("set_lead", "star_line", "keep_feel", "set_final", "set_rights")
 MAX_STARS, DIALS = 16, ("tone", "energy", "register", "brand")
 
 
@@ -136,8 +136,10 @@ def _lines_of(w: dict) -> list:
     return [*(w.get("lines") or []), *((w.get("headlines") or {}).values())]
 
 
-def live_move(step: str, inp: dict):
+def live_move(step: str, inp: dict, findings=None):
     """The move ``step`` asks for as ``fn(doc) -> (doc, refusals)``; a 400 for a missing or malformed input."""
+    if step == "set_rights":
+        return _picture_move(step, "", inp, findings)
     tid = need(inp, "territory_id", "the route")
     if step == "set_lead":
         line = inp.get("line")
@@ -160,6 +162,8 @@ def live_move(step: str, inp: dict):
                 st.append(line)
             return _set(w, "starred", st)
         return lambda d: _edit(d, tid, star)
+    if step == "set_final":
+        return _picture_move(step, tid, inp, findings)
     dial = inp.get("dial_set")
     if dial is not None and not (isinstance(dial, dict) and set(dial) == set(DIALS) and all(isinstance(dial[k], int) and not isinstance(dial[k], bool) and 0 <= dial[k] <= 10 for k in DIALS)):
         raise bad("input.dial_set must be four whole numbers from 0 to 10 (tone, energy, register, brand), or null for the natural feel")
@@ -189,3 +193,45 @@ def _edit(doc: dict, tid: str, fn):
     if ps:
         return doc, [ps[0].words]
     return d, []
+
+
+def _picture_move(step: str, tid: str, inp: dict, findings=None):
+    """``set_final`` (``territory_id``, ``slot_id`` or ``sha256``, ``final`` true/false) and ``set_rights`` (``sha256``, ``rights``): the Pictures
+    view's choices, through ``territory.pictures``. A picture is found by its slot id or its hash; ``set_rights`` needs only the hash (it is on one
+    route). The open gate is refreshed, since a Final with no stated rights holds the greenlight."""
+    from territory import pictures
+    ref = _s(inp, "slot_id", 80) or _s(inp, "sha256", 80)
+    if not ref:
+        raise bad("input.slot_id or input.sha256 is required: which picture")
+    if step == "set_final":
+        on = inp.get("final")
+        if not isinstance(on, bool):
+            raise bad("input.final must be true or false")
+        act = lambda t: pictures.set_final(t, ref, on)      # noqa: E731
+    else:
+        rights = _s(inp, "rights", 20)
+        if rights not in ("generated", "own", "licensed", "unknown"):
+            raise bad("input.rights must be generated, own, licensed or unknown")
+        act = lambda t: pictures.set_rights(t, ref, rights)     # noqa: E731
+
+    def move(doc):
+        from territory import contract
+        d = copy.deepcopy(doc)
+        ts = [t for t in d.get("territories") or [] if (not tid or t.get("id") == tid) and t.get("pictures")]
+        if step == "set_rights":
+            try:
+                sha = pictures.bare(ref)
+            except pictures.PictureError as e:
+                return doc, [str(e)]
+            ts = [t for t in ts if any(s.get("sha256") == sha for s in t["pictures"])]
+        if not ts:
+            return doc, ["That picture is not on any route of this document."]
+        try:
+            act(ts[0])
+        except pictures.PictureError as e:
+            return doc, [str(e)]
+        ps = contract.problems(d)
+        if ps:
+            return doc, [ps[0].words]
+        return _refresh(d, findings), []
+    return move

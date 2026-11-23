@@ -9,7 +9,7 @@ One task with a ``step`` (the app's own seam, TASKS in app/templates/territories
     rerank_routes        the blind judge orders the routes again                         long: runner.rerank
     undo                 take one of the Review agent's fixes back                       quick, no model
     greenlight_route, remove_route, answer_ask, record_review, approve, send_routes      quick, no model (territory/gates.py's rules)
-    set_lead, star_line, keep_feel   a person's choices about a world (small moves; while a model step runs they wait in it and both survive)
+    set_lead, star_line, keep_feel, set_final, set_rights   a person's choices about a world and its pictures (small moves; while a model step runs they wait in it and both survive)
     place_pictures       arrived pictures into route slots by link (pictures.fill / attach)      quick, no model
 
 A document that arrives with pictures (``assets``) has every one put on the workspace store before a run reads it (pictures.rehome, require_all):
@@ -125,7 +125,7 @@ def start(req, caps, settings, jid):
         return TerritoriesJob(jid, TASK, req.handler, req, caps, step=step, call=lambda job: runner.rerank(data, by, **common(job)))
     # the quick moves: no model, no store, answered in the request
     if step in moves.LIVE_STEPS:
-        mv = moves.live_move(step, inp)
+        mv = moves.live_move(step, inp, findings)
         job = TerritoriesJob(jid, TASK, req.handler, req, caps, step=step, quick=True, owns_person_keys=True, call=lambda job: _Done(*mv(data), note="Saved."))
         job.move = mv
         return job

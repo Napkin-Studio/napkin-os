@@ -1918,6 +1918,9 @@ is the only state (a run's stage, gates and answers live in `data.run`), so a st
   step's own lock, in the same change, so both survive; a cancelled step writes the held moves as a change of their own. Any other step on a document
   that has one running is still `409`. `push` takes `instruction` as the World view's four names (`braver`, `safer`, `more ownable`, `more proof`) or
   the person's own words.
+- **The Pictures view's choices.** `set_final` (`territory_id`, `slot_id` or `sha256`, `final` true/false) and `set_rights` (`sha256`, `rights` one of
+  `generated`, `own`, `licensed`, `unknown`) are small moves of the same kind (`territory.pictures.set_final` / `set_rights`; a held-inside-a-running-step,
+  same lock). The open gate is refreshed: a Final with no stated rights holds the greenlight (`picture_rights`) until the rights move.
 - **What goes to the runner.** The document (`data`), the carried `facts`, `findings` and `sources` as the request holds them, the Confidential
   marks (`build_deck.marks_of`: the same reading as the deck, always a list), a per-document store (`NAPKIN_TERRITORY_DATA/<doc id>/`: the resume
   cache, so a retry never repays a finished call) and the job's cancel Event. The model is the engine's `LiveLLM` over `engine/brief_llm.py`

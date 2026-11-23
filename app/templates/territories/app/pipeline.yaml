@@ -15,7 +15,7 @@ tasks:
     job: long
     stages: [run]
     reads:
-      - step (run, steer, more, push, rerank_routes: long, call the model; undo, place_pictures, set_lead, star_line, keep_feel (a person's choices about a world: held inside a running step so both writes survive), greenlight_route, remove_route, answer_ask, record_review, approve, send_routes: answered at once)
+      - step (run, steer, more, push, rerank_routes: long, call the model; undo, place_pictures, set_lead, star_line, keep_feel, set_final, set_rights (a person's choices about a world and its pictures: held inside a running step so both writes survive), greenlight_route, remove_route, answer_ask, record_review, approve, send_routes: answered at once)
       - the document's upstream brief and research, the carried pins, findings and sources, and the Confidential marks (the deck's reading of them)
       - the pictures an arriving document names (assets): all put on the workspace store before a run, or the run is refused in words
       - run.approvals, which the person wrote (a gate goes on only when its approval was given for the choices as they stand)
