@@ -4593,7 +4593,8 @@ class Renderer:
                     h = min(w / max(rs), (g.body_end - self.EXEC_TOP - cap_h) * 0.42)
                 else:   # two rows: the words above (title and role) keep their room; each frame's number and caption share one line under it
                     row_x = 0.38 if any(caps) else 0.3
-                    room = foot - 2.55 - 0.2 * (len(rows) - 1)
+                    top_min = 2.55 if any(b.get("kind") != "copy" and (b.get("text") or b.get("items")) for b in s.get("blocks") or []) else 1.95   # no words above the frames (the planning text is not on a client slide): they take the room
+                    room = foot - top_min - 0.2 * (len(rows) - 1)
                     h = min(w / max(rs), room / len(rows) - row_x)
                 y = foot - cap_h - h if len(rows) == 1 else foot - len(rows) * (h + row_x) - 0.2 * (len(rows) - 1) + 0.04
                 boxes, i = [], 0
@@ -4947,33 +4948,16 @@ class Renderer:
         bottom = plan["body_end"]
         cps = [b for b in s["blocks"] if b["kind"] == "copy"]
         self._fit_flow(sl, [b for b in s["blocks"] if b["kind"] != "copy"], self.x0, y, 5.6, bottom=bottom)
-        if cps:
-            lines = "\n".join(str(x) for b in cps for x in b.get("lines") or [])
+        if cps:   # the lines left beside the frames (an allergen line, a super) are one quiet footnote under them, never a panel; the answer is a planning note and goes to the notes
+            lines = " \u00b7 ".join(str(x).strip() for b in cps for x in b.get("lines") or [] if str(x).strip())
             answers = " ".join(str(b.get("answer") or "") for b in cps if not spec.production_made(s)).strip()
-            fx, fw = 6.7, self.x1 - 6.7
-            m = self._mark(sl)
-            avail = max(0.4, bottom - y)
-            # The lines and the answer must fit above the frames' band: the largest size at which both do; else the answer goes to the notes
-            # (it says which half of the insight the work dramatises, not what the work says) and the lines take the band alone.
-            size, h_ans, h_lines = 10, 0.0, 0.0
-            for size in (13, 12, 11, 10):
-                h_lines = self._eh(lines, fw, size, 1.15) if lines else 0.0
-                h_ans = self._eh(answers, fw, size - 1, 1.1) if answers else 0.0
-                if h_lines + h_ans + (0.1 if lines and answers else 0.0) <= avail:
-                    break
-            else:
-                if answers:
-                    self._answer_to_notes[self._sid] = answers
-                    answers, h_ans = "", 0.0
-                for size in (13, 12, 11, 10):
-                    h_lines = self._eh(lines, fw, size, 1.15) if lines else 0.0
-                    if h_lines <= avail:
-                        break
-            if lines:
-                self.text(sl, fx, y, fw, max(0.4, min(avail - h_ans - 0.1, h_lines + 0.05)) if answers else avail, lines, size=size, color=self.p.fg, name="StoryboardLines")
             if answers:
-                self.text(sl, fx, bottom - h_ans, fw, h_ans, answers, size=size - 1, bold=True, color=self.p.acc_t, name="StoryboardAnswer")
-            self._build(sl, m)
+                self._answer_to_notes[self._sid] = answers
+            if lines:
+                m = self._mark(sl)
+                py = self.th.grid.body_end - self.PILL_H - 0.04
+                self.text(sl, self.x0, py, min(7.2, (self.x1 - self.x0) - 3.4), self.PILL_H + 0.1, lines, size=10, color=self.p.mute, anchor=MSO_ANCHOR.MIDDLE, name="StoryboardLines")
+                self._build(sl, m)
 
     def _execution(self, sl, s):
         """Role and notes left; the copy in a frame shaped by the channel right."""

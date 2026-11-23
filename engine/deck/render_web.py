@@ -321,6 +321,9 @@ def _body(s, b: _Slide, blocks: list, pictured: bool = False) -> str:
         if vis.get("kind") == "image_prompt" and not pictured:   # a drawn picture takes the place of the 'Image prompt' note
             b.f += 1
             left += b.rv("b-prompt", _e(f"Image prompt ({vis.get('status', 'illustrative')}): {vis.get('prompt', '')}"), "p")
+        if (s.get("ooh") or s.get("strip")) and copy.get("lines"):   # lines beside frames (an allergen line) are one quiet footnote under them, not a dark panel; the answer stays in the notes
+            left += b.rv("sb-foot", _e(" \u00b7 ".join(str(x).strip() for x in copy["lines"] if str(x).strip())), "p", 100)
+            copy = {**copy, "lines": [], "answer": ""}
         if not copy.get("lines") and not copy.get("answer"):   # nothing of the copy is left to show (its lines are the strip's captions, its answer is in the notes): no empty panel
             return f'<div class="body col">{left}</div>'
         return f'<div class="body split exec{" framed" if copy["frame"] else ""}"><div class="col">{left}</div><div class="col">{b.blocks([copy])}</div></div>'
@@ -789,6 +792,7 @@ FRAME_CSS = """
 .sb-n{display:flex;align-items:center;gap:14px;margin-top:8px}.sb-note{font-size:20px;color:var(--muted);align-self:center}
 .sb-n b{font:700 30px/1 var(--head)}.sb-n i{flex:1;height:1.5px;background:var(--ink)}
 .sb-strip .pic .plabel{display:none}.sb-strip{align-items:start}.sb-strip .pic{aspect-ratio:auto;height:auto}.sb-cap{margin:8px 0 0;font-size:22px;line-height:1.3;color:var(--ink)}
+.sb-foot{margin:18px 0 0;font-size:22px;line-height:1.3;color:var(--muted)}.pic-sb .sb-foot{position:absolute;left:112px;bottom:58px;max-width:980px;margin:0;font-size:20px}
 .sb-pills{display:flex;gap:12px;right:112px;bottom:auto;top:560px;left:auto}
 .ooh-row{left:112px;right:112px;bottom:70px;display:flex;justify-content:center;align-items:flex-end;gap:56px}
 .ooh-cell{display:flex;flex-direction:column;align-items:stretch}.ooh-cell .pic.framed{box-sizing:border-box}

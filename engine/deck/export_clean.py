@@ -38,6 +38,24 @@ OPEN_MAX = 48          # six appendix slides of LIST_ITEMS; any more go word for
 _NOTE = 220
 
 
+#: Text the build writes for itself about a slide: what an execution is FOR ('Role: ...') and what the engine added a slide to show. It is planning, not
+#: copy: a client slide never carries it (round 3: "Role: Six stills that show the making step by step" sat under the storyboard's title). It moves to the notes.
+_PLANNING = re.compile(r"^\s*(?:role\s*:|the storyboard frames made in production|the out-of-home sizes made in production)", re.I)
+
+
+def take_planning_text(slide: dict) -> list:
+    """Remove the slide's planning-text blocks (a ``text`` or ``small`` block that begins 'Role:' or says what an added slide shows) and return their words,
+    for the notes. Only whole blocks of that kind go; every other block stays."""
+    kept, taken = [], []
+    for b in slide.get("blocks") or []:
+        if isinstance(b, dict) and b.get("kind") in ("text", "small") and _PLANNING.match(str(b.get("text") or "")):
+            taken.append(str(b["text"]).strip())
+        else:
+            kept.append(b)
+    slide["blocks"] = kept
+    return taken
+
+
 def strip_ids(text):
     """``text`` without the build's evidence ids: a parenthesised or bracketed citation group goes whole ('... risk (f_AB12CD, req:r6).' reads
     '... risk.'), and a bare id left in a sentence goes alone. Text that holds none comes back unchanged (never reworded otherwise)."""
@@ -141,6 +159,9 @@ def scrub(deck: dict) -> dict:
         if lab.strip():
             s["label"] = lab[:80]
         presented = pos < divider
+        planning = take_planning_text(s)
+        if planning:
+            s["notes"] = "\n".join(planning) + ("\n\n" + str(s.get("notes") or "") if str(s.get("notes") or "").strip() else "")
         s["blocks"] = [b for b in (_walk(b, found, presented) for b in s.get("blocks") or [] if not (isinstance(b, dict) and b.get("internal"))) if b]
         if found:
             touched += 1

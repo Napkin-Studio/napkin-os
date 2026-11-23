@@ -258,3 +258,65 @@ def test_the_tender_scope_note_belongs_to_the_tender_profile_only():
     assert "Scope check" not in next(s for s in default["slides"].values() if s["type"] == "channel_roles")["notes"]
     tender = _lumen_build(inp, profile=profiles.load("tender_response"))
     assert any("Scope check" in s.get("notes", "") for s in tender["slides"].values() if s["type"] == "channel_roles")
+
+
+# ================================================================================================ client polish after round 3: no planning text, a quiet footnote
+def _clean_storyboard(tmp_path, extra_line="Contains wheat. See pack for allergens."):
+    deck, prod, _ = _storyboard_deck(tmp_path)
+    s = _slide(deck, "s12")
+    copy = next(b for b in s["blocks"] if b["kind"] == "copy")
+    copy["lines"] = [ln for ln in copy["lines"]] + [extra_line]
+    export_clean.scrub(deck)
+    return deck
+
+
+def test_planning_text_never_reaches_a_client_slide_and_moves_to_the_notes():
+    real = _real()
+    deck = {"meta": real["meta"], "order": list(real["order"]), "slides": copy.deepcopy(real["slides"])}
+    before = [k for k in deck["order"] if any(str(b.get("text", "")).startswith("Role:") for b in deck["slides"][k]["blocks"])]
+    assert len(before) >= 3   # the key visual, out of home and storyboard slides of the real deck all carried "Role: ..."
+    export_clean.scrub(deck)
+    for k in deck["order"]:
+        s = deck["slides"][k]
+        assert not [b for b in s["blocks"] if str(b.get("text", "")).lstrip().lower().startswith(("role:", "the storyboard frames made in production"))], k
+    kept = deck["slides"][before[0]]["notes"]
+    assert kept.startswith("Role:") and "Role:" in export_clean.notes_of(kept)   # the words stay for the speaker
+    only = {"blocks": [{"kind": "text", "text": "Role: x"}, {"kind": "text", "text": "A real sentence."}, {"kind": "copy", "lines": ["Role: a line of the work"]}]}
+    assert export_clean.take_planning_text(only) == ["Role: x"] and len(only["blocks"]) == 2   # a copy line that starts with the word is the work itself
+
+
+def test_a_clean_storyboard_slide_has_no_role_text_in_the_pptx_the_web_deck_or_the_pdf_words(tmp_path):
+    deck = _clean_storyboard(tmp_path)
+    pics = images.copy_assets(deck, tmp_path / "out", "review", [tmp_path], None)
+    placed = set()
+    pp = render_pptx.render(deck, inputs.Inputs(brief={}), tmp_path / "d.pptx", None, [], pictures=pics, placed=placed, clean=True)
+    sl = Presentation(str(pp)).slides[1]
+    texts = " ".join(sh.text_frame.text for sh in sl.shapes if sh.has_text_frame)
+    assert "Role:" not in texts and "Six stills that show" not in texts
+    assert "Role:" in sl.notes_slide.notes_text_frame.text
+    render_web.render(deck, inputs.Inputs(brief={}), tmp_path / "d.html", [], pictures=pics, placed=placed, look=True, clean=True)
+    html = (tmp_path / "d.html").read_text()
+    section = html[html.index('id="s12"'):]
+    section = section[:section.index("</section>")]
+    assert "Role:" not in section and "Six stills that show" not in re.sub(r'<div class="notes".*', "", section, flags=re.S)
+
+
+def test_a_line_beside_the_frames_is_one_small_footnote_under_them_not_a_panel(tmp_path):
+    deck = _clean_storyboard(tmp_path)
+    pics = images.copy_assets(deck, tmp_path / "out", "review", [tmp_path], None)
+    placed = set()
+    pp = render_pptx.render(deck, inputs.Inputs(brief={}), tmp_path / "d.pptx", None, [], pictures=pics, placed=placed, clean=True)
+    prs = Presentation(str(pp))
+    sl = prs.slides[1]
+    strip = [sh for sh in sl.shapes if sh.name == "Strip picture"]
+    foot = [sh for sh in sl.shapes if sh.name == "StoryboardLines"]
+    assert len(foot) == 1 and "Contains wheat" in foot[0].text_frame.text
+    assert foot[0].top >= max(sh.top + sh.height for sh in strip)   # under the frames
+    assert foot[0].height < 0.5 * 914400 and foot[0].text_frame.paragraphs[0].runs[0].font.size.pt <= 12   # the 12 pt caption floor
+    assert not [sh for sh in sl.shapes if sh.shape_type == 1 and sh.width > 3 * 914400 and sh.height > 1.2 * 914400 and sh.top < strip[0].top]   # no big filled panel above the frames
+    render_web.render(deck, inputs.Inputs(brief={}), tmp_path / "d.html", [], pictures=pics, placed=placed, look=True, clean=True)
+    html = (tmp_path / "d.html").read_text()
+    section = html[html.index('id="s12"'):]
+    section = section[:section.index("</section>")]
+    assert re.search(r'class="[^"]*\bsb-foot\b', section) and "Contains wheat. See pack for allergens." in section
+    assert 'class="body split exec' not in section   # not the dark copy panel

@@ -284,7 +284,10 @@ def test_on_the_web_deck_no_text_meets_a_picture_or_a_frame_and_none_is_cut_off(
         title = deck["slides"][sid]["title"]
         boxes = rows[sid]
         pics = [b[2:6] for b in boxes if b[0] == "FIGURE" or "frame-wrap" in b[1] or b[1].strip() in ("poster", "phone") or "sb-strip" in b[1] or "ooh-row" in b[1]]
-        texts = [(b[0], b[2:6] + b[6:]) for b in boxes if b[0] in ("H1", "P", "LI") and b[5] > 0 and "ooh-name" not in b[1] and "sb-cap" not in b[1] and "mockup" not in b[1]]
+        texts = [(b[0], b[2:6] + b[6:]) for b in boxes if b[0] in ("H1", "P", "LI") and b[5] > 0 and "ooh-name" not in b[1] and "sb-cap" not in b[1] and "sb-foot" not in b[1] and "mockup" not in b[1]]
+        for b in boxes:   # round 3: the footnote line under the frames sits on the slide's foot, outside the body like the labels: inside the slide, clear of every picture
+            if "sb-foot" in b[1]:
+                assert b[2] >= -1 and b[2] + b[4] <= 1921 and b[3] >= -1 and b[3] + b[5] <= 1081 and not any(_hit(b[2:6], pg[:4], 4) for pg in pics), f"{title}: the footnote {b[2:6]}"
         assert pics and texts, sid
         for tag, g in texts:
             assert g[0] >= -1 and g[1] >= -1 and g[0] + g[2] <= 1921 and g[1] + g[3] <= 1081, f"{title}: {tag} {g} leaves the slide"
