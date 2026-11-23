@@ -41,7 +41,8 @@ const L = vm.runInNewContext(`${logicRun}; DeckLogic`) as {
   summaryOf(inputs: unknown, deck: unknown): { title: string; note: string }
   agencyShown(inputs: unknown): string
   productionSummary(doc: unknown): { name: string; finals: number; to_supply: number; brief: unknown } | null
-  upstreamSummary(data: unknown): { brief: { name: string; fields_filled: number; fields_total: number; mandatories: number } | null; research: { name: string; findings: number | null; rejected: number | null } | null; production: { name: string; finals: number; to_supply: number; brief: unknown } | null; any: boolean }
+  upstreamSummary(data: unknown): { brief: { name: string; fields_filled: number; fields_total: number; mandatories: number } | null; research: { name: string; findings: number | null; rejected: number | null } | null; production: { name: string; finals: number; to_supply: number; brief: unknown } | null; territories: { sent: number } | null; any: boolean }
+  territoriesSummary(doc: unknown): { name: string; sent: number; held_back: number; not_chosen: number; by: string; names: string[] } | null
   documentsOf(data: unknown): { name: string }[]
   builtFrom(inputs: unknown, upstream: unknown, documents: unknown): { tier: string; documents: string[]; brief: boolean; research: boolean }
   describeBuiltFrom(bf: unknown, hasPrompt?: boolean): { line: string; missing: string[] }
@@ -244,7 +245,7 @@ const briefDoc = {
 const researchDoc = { title: 'Lumen research', projection: { findings: { f1: { status: 'verified' }, f2: { status: 'rejected' } } } }
 
 test('upstreamSummary: none, brief only, brief and research, research only', () => {
-  assert.deepEqual(plain(L.upstreamSummary({})), { brief: null, research: null, production: null, any: false })
+  assert.deepEqual(plain(L.upstreamSummary({})), { brief: null, research: null, production: null, territories: null, any: false })
   assert.equal(L.upstreamSummary({ upstream: 'junk' }).any, false)
   const b = L.upstreamSummary({ upstream: { d1: briefDoc } })
   assert.equal(b.brief?.name, 'First Light brief')
@@ -316,6 +317,27 @@ test('the finals count reads rights as the engine does: stated is trusted, an ed
   assert.equal(p?.finals, 2)
   assert.equal(p?.to_supply, 1) // the edit of a generated frame is placed; the size made from an uncleared upload waits
   assert.equal(L.productionSummary({ app: 'brief-maker' }), null)
+})
+
+test('a carried Territories document is the routes sent, never the brief or the research (territories-spinoff-out-deck)', () => {
+  const terr = (over: Record<string, unknown> = {}) => ({
+    title: 'Linea: territories', crew: [], projection: { findings: { f1: { status: 'verified' } } },
+    territories: [{ id: 't_a', name: 'Already Started', rank: 1, status: 'live' }, { id: 't_b', name: 'Passenger Seat', rank: 2, status: 'live' }, { id: 't_c', name: 'Sunday', rank: 3, status: 'live' },
+      { id: 't_k', name: 'Gone', rank: 4, status: 'killed' }],
+    greenlit: [{ territory_id: 't_a', by: 'Shrey' }, { territory_id: 't_b', by: 'Shrey' }, { territory_id: 't_c', by: 'Shrey' }],
+    sends: [{ id: 'snd_deck', to: 'deck-maker', territory_ids: ['t_b', 't_a', 't_k'], not_chosen: ['t_c'], by: 'Shrey', at: 'x', status: 'sent' }], ...over,
+  })
+  const t = L.territoriesSummary(terr())
+  assert.deepEqual(plain(t), { name: 'Linea: territories', sent: 2, held_back: 0, not_chosen: 1, by: 'Shrey', names: ['Already Started', 'Passenger Seat'] })   // ranked, the killed one never travels
+  assert.deepEqual(L.territoriesSummary(terr({ sends: [] }))?.names, ['Already Started', 'Passenger Seat', 'Sunday'])   // no send: the greenlit routes go
+  assert.equal(L.territoriesSummary({ app: 'production-tool' }), null)
+  // its projection (findings the host built) must not make it the research, and the brief beside it is still the brief
+  const u = L.upstreamSummary({ upstream: { d_t: terr(), d_b: briefDoc } })
+  assert.equal(u.research, null)
+  assert.equal(u.brief?.name, 'First Light brief')
+  assert.equal(u.territories?.sent, 2)
+  assert.equal(L.upstreamSummary({ upstream: { d_t: terr() } }).any, true)   // a deck of routes alone can be built
+  assert.equal(L.builtFrom({}, { d_t: terr() }, []).research, false)
 })
 
 test('builtFrom gives each tier of the shared contract', () => {

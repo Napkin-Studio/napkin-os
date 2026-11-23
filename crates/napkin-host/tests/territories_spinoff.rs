@@ -560,3 +560,121 @@ fn a_brief_alone_or_research_alone_or_neither_all_work() {
     let data = json_of(&blank_doc, DATA);
     assert!(data.get("upstream").is_none() && data.get("run").is_none());
 }
+
+// ── Territories to Deck Maker (feature territories-spinoff-out-deck) ──────────────────────────────────────────────────────────
+
+const DECK: &str = "ie.napkin.deck-maker";
+
+/// The Deck Maker template as the packer writes it (the packer asserts its own contract, accepts included).
+fn packed_deck() -> Vec<u8> {
+    static PACKED: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
+    PACKED
+        .get_or_init(|| {
+            let out = std::env::temp_dir().join(format!("deck-pack-{}", std::process::id()));
+            std::fs::create_dir_all(&out).unwrap();
+            let (app, ex) = (out.join("d.app.clan"), out.join("d.example.clan"));
+            let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+            let run = std::process::Command::new(cargo)
+                .args([
+                    "run",
+                    "-q",
+                    "--locked",
+                    "-p",
+                    "clan-sdk",
+                    "--example",
+                    "make_deck_maker",
+                    "--",
+                ])
+                .arg(&app)
+                .arg(&ex)
+                .current_dir(root())
+                .output()
+                .unwrap();
+            assert!(
+                run.status.success(),
+                "make_deck_maker failed: {}",
+                String::from_utf8_lossy(&run.stderr)
+            );
+            std::fs::read(&app).unwrap()
+        })
+        .clone()
+}
+
+/// A Territories document as the person left it at Send: the greenlight fixture's routes and worlds, two routes sent to Deck Maker,
+/// on top of what the spin-off from the brief carried (the brief and the research under `upstream`).
+fn sent_territories(store: &MemStore) -> (DocId, Value) {
+    install_app(store, packed_territories()).unwrap();
+    let brief_id = put(store, "brief", &brief(&research()));
+    let made = spinoff_document(store, &brief_id, TERRITORIES, None, None).unwrap();
+    let mut state: Value = serde_json::from_str(
+        &std::fs::read_to_string(
+            root().join("app/templates/territories/example/states/greenlight_open.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    state["greenlit"] = json!([
+        { "territory_id": "t_started", "by": "Shrey", "at": "2026-11-18T10:05:00Z", "rests_on_derived": [], "derived_resolution": "verified" },
+        { "territory_id": "t_passenger", "by": "Shrey", "at": "2026-11-18T10:05:00Z", "rests_on_derived": [], "derived_resolution": "verified" }
+    ]);
+    state["sends"] = json!([{ "id": "snd_deck", "to": "deck-maker", "territory_ids": ["t_started", "t_passenger"],
+        "not_chosen": ["t_sunday"], "by": "Shrey", "at": "2026-11-18T10:20:00Z", "status": "sent" }]);
+    let mut data = json_of(&open(store, &made), DATA);
+    for (k, v) in state.as_object().unwrap() {
+        if k != "upstream" {
+            data[k] = v.clone();
+        }
+    }
+    let yaml = serde_yaml::to_string(&data).unwrap().into_bytes();
+    let doc = with(&open(store, &made), None, None, &[(DATA, yaml, None)]);
+    store
+        .apply(&Change::create(made.clone(), doc.raw_bytes().to_vec()))
+        .unwrap();
+    (made, state)
+}
+
+#[test]
+fn deck_maker_takes_a_territories_document_whole_with_the_send_and_the_brief_beside_it() {
+    let store = MemStore::default();
+    assert!(
+        spinoff_targets(&store, Some(TERRITORIES)).is_empty(),
+        "nothing installed: nothing offered"
+    );
+    let (terr_id, state) = sent_territories(&store);
+    install_app(&store, packed_deck()).unwrap();
+    let t = spinoff_targets(&store, Some(TERRITORIES));
+    assert_eq!(t.len(), 1);
+    assert_eq!(
+        (t[0].app_id.as_str(), t[0].name.as_str()),
+        (DECK, "Deck Maker")
+    );
+    assert!(
+        t[0].upstream && t[0].map.is_none(),
+        "carried whole, nothing mapped"
+    );
+
+    let made = spinoff_document(&store, &terr_id, DECK, None, None).unwrap();
+    let deck = open(&store, &made);
+    let data = json_of(&deck, DATA);
+    let up = data["upstream"].as_object().unwrap();
+    let terr_key = deck
+        .manifest()
+        .carried()
+        .expect("lineage.carried")
+        .document_id
+        .clone();
+    // the Territories document is carried whole: routes, worlds, lines, checks, pictures, the greenlit list and the send the Deck reads
+    let carried = &up[&terr_key];
+    for key in ["territories", "greenlit", "sends", "crew", "review"] {
+        assert_eq!(carried[key], state[key], "{key} did not arrive whole");
+    }
+    // and the brief and research it was made from sit beside it (hoisted), so the Deck can read the whole upstream
+    assert!(
+        up.contains_key(BRIEF_DOC) && up.contains_key(RESEARCH_DOC),
+        "{:?}",
+        up.keys()
+    );
+    assert_eq!(up.len(), 3);
+    // no gate is pre-passed in the Deck
+    assert!(data.get("run").is_none(), "a spin-off carries no run state");
+}

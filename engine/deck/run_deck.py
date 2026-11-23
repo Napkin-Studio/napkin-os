@@ -34,7 +34,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from . import assemble, imagegen, images, inputs, intake, look, profiles, qa_render, render_hyperframes, render_pptx, render_web, repair, spec, validate
+from . import assemble, from_territory, imagegen, images, inputs, intake, look, profiles, qa_render, render_hyperframes, render_pptx, render_web, repair, spec, validate
 from . import theme as themes
 
 #: Stage a0 (intake) comes first: it fills the brief fields the brief does not supply.
@@ -765,6 +765,22 @@ def _production_upstream(a, inp, deck_ctx) -> tuple | None:
     return None if a.production else got
 
 
+def _territories_upstream(a, deck_ctx) -> tuple | None:
+    """``(source document id, data)`` of the Territories document this deck was spun off from, or None: from ``--territories-upstream FILE`` (the engine
+    server's way: the middleware sends the carried data) or from the Deck document's own ``data.upstream`` (``--deck``). Its sent routes are stage c
+    (territories-spinoff-out-deck); a stage c already recorded is never overwritten (the stage loop reads the file first)."""
+    if a.territories_upstream:
+        try:
+            raw = json.loads(a.territories_upstream.read_text())
+            got = (str(raw["id"]), raw["data"]) if isinstance(raw, dict) and from_territory.is_territories(raw.get("data")) and raw.get("id") else None
+        except (OSError, ValueError, KeyError):
+            got = None
+        if got is None:
+            raise SystemExit("refused: --territories-upstream must be a JSON file {id, data}: the Territories document's id and its data (routes, greenlit, crew)")
+        return got
+    return (deck_ctx or {}).get("territories")
+
+
 def _add_marks(a, inp) -> None:
     """``--marks FILE`` adds to the marks the document carried (an empty list is a real answer: the marks are known). Applied once, at load, so the picture step and
     the paid shorten request both see them."""
@@ -935,6 +951,10 @@ def main(argv=None):
                     help="the Production project this deck was spun off from, carried whole (JSON {id, data}: the source document id and its shared/data.yaml): "
                          "its finals fill the slots first, then the rules for the empty ones; its pictures are fetched by link from the relay. A --deck document "
                          "that carries one under data.upstream needs no flag. An explicit --production beats it")
+    ap.add_argument("--territories-upstream", type=Path, metavar="FILE",
+                    help="the Territories document this deck was spun off from, carried whole (JSON {id, data}): the routes the person sent are gate 2's "
+                         "territories (the judge's first pre-picked) and the route picked is the one the idea is written from, with its own lines. No model "
+                         "is called for stage c. A --deck document that carries one under data.upstream needs no flag. A stage c already recorded stands")
     ap.add_argument("--production-fetch", action="store_true",
                     help="with --production FILE: download picked pictures from their https:// locations (hosts on policy/production_fetch.yaml only; "
                          "empty by default, so it refuses until the hosts are named). Off: nothing is downloaded")
@@ -1045,6 +1065,7 @@ def main(argv=None):
     _add_marks(a, inp)
     _master_size(a, _explicit_size(a, deck_ctx, answers))   # deck-slide-size: a master/size conflict is refused here, before any paid stage
     prod_up = _production_upstream(a, inp, deck_ctx)   # production-spinoff: the Production project carried whole, unless a --production file was given
+    terr_up = _territories_upstream(a, deck_ctx)   # territories-spinoff-out-deck: the routes sent from Territories, carried whole
     if prod_up and a.pictures is None:
         a.pictures = "creative_cover"
     rep["stages"]["inputs"] = {"secs": round(time.time() - t, 2), "model": None, "tokens_in": 0, "tokens_out": 0, "usd": 0}
@@ -1103,6 +1124,14 @@ def main(argv=None):
                     raise SystemExit(f"{p} is not a valid a0 intake: " + "; ".join(errs[:5]))
             rep["stages"][k] = {"source": "recorded", "produced_by": st[k].get("produced_by"),
                                 **(st[k].get("usage") or {"tokens_in": 0, "tokens_out": 0, "usd": 0, "secs": 0})}
+        elif a.live and k == "c" and terr_up:   # the routes the person sent are the territories: no model call, no invented ones
+            try:
+                st[k], usage = from_territory.stage_c_from_document(*terr_up), {"tokens_in": 0, "tokens_out": 0, "usd": 0, "secs": 0, "model": None}
+            except from_territory.FromTerritoryError as e:
+                raise SystemExit(f"refused: {e}")
+            st[k]["usage"] = usage
+            p.write_text(json.dumps(st[k], indent=1, ensure_ascii=False))
+            rep["stages"][k] = {"source": "territories", **usage}
         elif a.live:
             from . import stages
             st[k], usage = stages.run_stage(k, inp, st, profile)

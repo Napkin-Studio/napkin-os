@@ -11,7 +11,7 @@ where the last segment stopped and recorded stages replay for free.
 Routes (JSON; failures are non-2xx with ``{"error": {"type", "message"}}``, never a 200 with an error in it)::
 
     GET  /status                 what is on and what is busy
-    POST /run                    {doc, inputs, approvals, mode, render?, production_upstream?}: start the next segment of this document's run
+    POST /run                    {doc, inputs, approvals, mode, render?, production_upstream?, territories_upstream?}: start the next segment of this document's run
                                  (production_upstream {id, data}: the Production project the deck was spun off from, carried whole;
                                  production_assets {base, pass}: the relay's address and napkin-web's read-only assets pass for it, a secret)
     GET  /run/<doc>              the run so far: state, the run object the screens read, and once built the payload
@@ -221,7 +221,8 @@ def validate_request(body: dict, settings: Settings) -> dict:
             "type": prof["id"], "picked": bool(picked_type(inp)), "type_stages": list(prof["stages"]), "confirmed": confirmed_stages(body, inp),
             "approvals": approvals, "render": body.get("render", True) is not False, "marks": marks,
             "review": body.get("review") if isinstance(body.get("review"), dict) else {}, "approver": str(body.get("approver") or ""),
-            "production_upstream": production_upstream(body), "production_assets": production_assets(body)}
+            "production_upstream": production_upstream(body), "production_assets": production_assets(body),
+            "territories_upstream": territories_upstream(body)}
 
 
 def production_assets(body: dict) -> dict | None:
@@ -248,6 +249,18 @@ def production_upstream(body: dict) -> dict | None:
             and pu["data"].get("app") == "production-tool"):
         raise Refused(400, "bad_request", "production_upstream must be {id, data}: the Production project's document id and its data (app production-tool)")
     return {"id": pu["id"].strip(), "data": pu["data"]}
+
+
+def territories_upstream(body: dict) -> dict | None:
+    """``{id, data}``: the Territories document the deck was spun off from, carried whole (the middleware reads it from the deck's ``data.upstream``);
+    None when the deck has none. Its sent routes are stage c (territories-spinoff-out-deck)."""
+    tu = body.get("territories_upstream")
+    if tu is None:
+        return None
+    from . import from_territory
+    if not (isinstance(tu, dict) and isinstance(tu.get("id"), str) and tu["id"].strip() and from_territory.is_territories(tu.get("data"))):
+        raise Refused(400, "bad_request", "territories_upstream must be {id, data}: the Territories document's id and its data (routes, greenlit, crew)")
+    return {"id": tu["id"].strip(), "data": tu["data"]}
 
 
 def plan_for(kind: str, stages: list | None = None) -> list:
@@ -592,6 +605,12 @@ class Server:
             pf_up = d.root / "production_upstream.json"
             pf_up.write_text(json.dumps(pu, ensure_ascii=False, sort_keys=True))
             argv += ["--production-upstream", str(pf_up)]
+        tu = req.get("territories_upstream")
+        if tu and req["kind"] != "investor":   # spun off from Territories: the routes sent are gate 2's territories (a recorded stage c stands)
+            d.root.mkdir(parents=True, exist_ok=True)
+            tf = d.root / "territories_upstream.json"
+            tf.write_text(json.dumps(tu, ensure_ascii=False, sort_keys=True))
+            argv += ["--territories-upstream", str(tf)]
         ap_id = inp.get("approve_shorten")
         if isinstance(ap_id, str) and ap_id.startswith("apv_"):   # an approval id bound to the shortenable words' hash, never a bare yes
             argv += ["--approve-shorten", ap_id]

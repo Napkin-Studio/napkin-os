@@ -25,6 +25,7 @@ from ..doc import ctx_data
 from ..territories import arrival
 from ..territories import job as J
 from ..territories import moves
+from ..territories import to_deck  # noqa: F401  (registers the deck-maker destination of send_routes)
 from ..territories.job import TerritoriesJob
 from ..util import TaskError, bad
 from .build_deck import marks_of

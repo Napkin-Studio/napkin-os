@@ -926,6 +926,31 @@ var DeckLogic = (function () {
     return 'supply';
   }
 
+  /** A Territories document spun off into this deck (carried whole and frozen): routes, the greenlit list and the crew (the engine's test, engine/deck/inputs.py). */
+  function isTerritories(doc) {
+    return isObj(doc) && Array.isArray(doc.territories) && Array.isArray(doc.greenlit) && Array.isArray(doc.crew);
+  }
+
+  /**
+   * What the Territories card shows, read from the carried document: { name, sent, not_chosen, by, names } or null. The routes it sent to Deck Maker
+   * (its newest send) are the deck's territories; with no send the greenlit ones go. The same reading as engine/deck/from_territory.py sent_ids.
+   */
+  function territoriesSummary(doc) {
+    if (!isTerritories(doc)) return null;
+    var byId = {};
+    doc.territories.forEach(function (t) { if (isObj(t) && t.id) byId[t.id] = t; });
+    var sends = (Array.isArray(doc.sends) ? doc.sends : []).filter(function (x) { return isObj(x) && x.to === 'deck-maker' && (x.status === 'sent' || x.status === 'asked'); });
+    var last = sends.length ? sends[sends.length - 1] : null;
+    var ids = last ? (last.territory_ids || []) : doc.greenlit.map(function (g) { return isObj(g) ? g.territory_id : null; });
+    var by = last ? last.by : (doc.greenlit.filter(function (g) { return isObj(g) && g.by; })[0] || {}).by;
+    var live = ids.filter(function (id, i) { return typeof id === 'string' && ids.indexOf(id) === i && byId[id] && byId[id].status !== 'killed'; });
+    var rank = function (id) { return typeof byId[id].rank === 'number' ? byId[id].rank : 1e9; };
+    var shown = live.map(function (id, i) { return { id: id, i: i }; }).sort(function (a, b) { return rank(a.id) - rank(b.id) || a.i - b.i; }).slice(0, 5)
+      .map(function (x) { return byId[x.id].name || x.id; });
+    var name = nameOf(doc, 'Territories');
+    return { name: name, sent: shown.length, held_back: live.length - shown.length, not_chosen: last && Array.isArray(last.not_chosen) ? last.not_chosen.length : 0, by: by || '', names: shown };
+  }
+
   /**
    * What the Production card shows, read from the carried project: { name, finals, to_supply, brief } or null when the deck carries none.
    * `finals` counts the pictures a person marked final that the deck can use (an image, never mock output); `to_supply` those of them whose
@@ -963,9 +988,10 @@ var DeckLogic = (function () {
    */
   function upstreamSummary(data) {
     var up = data && isObj(data.upstream) ? data.upstream : {};
-    var brief = null, research = null, production = null;
+    var brief = null, research = null, production = null, territories = null;
     Object.keys(up).forEach(function (id) {
       if (isProduction(up[id])) { if (!production) production = productionSummary(up[id]); return; } // a project is neither the brief nor the research
+      if (isTerritories(up[id])) { if (!territories) territories = territoriesSummary(up[id]); return; } // routes are the deck's territories: neither the brief nor the research
       if (isKit(up[id])) return; // a Style Pack or Brand Clan says how the deck looks: it is never the brief or the research
       var c = classifyUpstream(up[id]);
       if (c.brief && !brief) brief = c.brief;
@@ -980,7 +1006,7 @@ var DeckLogic = (function () {
     if (!brief && production && production.brief) {
       brief = { name: production.brief.name, fields_filled: production.brief.fields_filled, fields_total: BRIEF_KEYS.length, mandatories: production.brief.mandatories, from: 'production' };
     }
-    return { brief: brief, research: research, production: production, any: !!(brief || research || production) };
+    return { brief: brief, research: research, production: production, territories: territories, any: !!(brief || research || production || territories) };
   }
 
   /** The documents a person attached, as a name list: inputs.documents, else the document's materials. */
@@ -1690,7 +1716,7 @@ var DeckLogic = (function () {
   return {
     appendixOf: appendixOf, deckApproval: deckApproval, approveDeck: approveDeck, exportRows: exportRows, reportLine: reportLine,
     AGENTS: AGENTS, ACTIVITY_WORD: ACTIVITY_WORD, circleSvg: circleSvg, agentState: agentState, circleSizeFor: circleSizeFor, circleCentreSize: circleCentreSize, circleSays: circleSays, arcPath: arcPath, runView: runView, ENGINE_STATE: ENGINE_STATE,
-    upstreamSummary: upstreamSummary, productionSummary: productionSummary, documentsOf: documentsOf, builtFrom: builtFrom, describeBuiltFrom: describeBuiltFrom,
+    upstreamSummary: upstreamSummary, productionSummary: productionSummary, territoriesSummary: territoriesSummary, isTerritories: isTerritories, documentsOf: documentsOf, builtFrom: builtFrom, describeBuiltFrom: describeBuiltFrom,
     canBuild: canBuild, gapView: gapView, questionState: questionState, answerPatch: answerPatch,
     DECK_TYPES: DECK_TYPES, deckTypeOf: deckTypeOf, typeHints: typeHints, kindOfType: kindOfType, typePatch: typePatch,
     DECK_TYPE_CARDS: DECK_TYPE_CARDS, cardOf: cardOf, typeCaption: typeCaption, SIZES: SIZES, defaultSize: defaultSize, sizeOf: sizeOf, recipesOn: recipesOn, sizePatch: sizePatch, pickPatch: pickPatch, builtTypeOf: builtTypeOf, offeredCards: offeredCards,
@@ -2217,7 +2243,7 @@ var DeckProd = (function () {
   function upstreamCards(s) {
     var u = L.upstreamSummary({ upstream: s.upstream });
     var attached = '<span class="pill ok">Brought in</span>', opt = '<span class="pill plain">Optional</span>';
-    var r = u.research, b = u.brief, pr = u.production;
+    var r = u.research, b = u.brief, pr = u.production, tr = u.territories;
     var kitNote = kitChanged.map(function (n) {
       return '<div class="upnote" role="status" data-kit-notice="' + esc(n.kind) + '">' + esc(n.text) +
         (n.canUpdate ? ' <button class="btn sm" data-kit-update="' + esc(n.document_id) + '">Update</button>' : '') + '</div>';
@@ -2234,7 +2260,17 @@ var DeckProd = (function () {
           '<p class="note" style="margin-top:10px">Mandatories become requirements the deck must answer.' + (b.from === 'production' ? ' This one came with the Production project.' : '') + '</p>' : '<p class="note">No brief brought in. The deck builds from your prompt and documents.</p>') + '</section>' +
       '<section class="card sec" data-production-card><div class="sec-h"><span class="mono eyebrow">04</span><b>Production</b><div class="spacer"></div>' + (pr ? attached : opt) + '</div>' +
         (pr ? '<div class="doc"><span class="ico">.clan</span><div><div style="font-size:14px;font-weight:600">' + esc(pr.name) + '</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + esc(pr.finals) + (pr.finals === 1 ? ' final' : ' finals') + ' brought in' + (pr.to_supply ? ' · ' + esc(pr.to_supply) + ' rights to supply' : '') + '</div></div></div>' +
-          '<p class="note" style="margin-top:10px">The pictures marked final go on the cover, the idea and the executions first. The pictures stay in Production and are fetched when you build.' + (pr.to_supply ? ' A picture whose rights are not stated waits as Rights to supply.' : '') + '</p>' : '<p class="note">No Production project brought in. Start one from a Production project with New deck from this project.</p>') + '</section></div>';
+          '<p class="note" style="margin-top:10px">The pictures marked final go on the cover, the idea and the executions first. The pictures stay in Production and are fetched when you build.' + (pr.to_supply ? ' A picture whose rights are not stated waits as Rights to supply.' : '') + '</p>' : '<p class="note">No Production project brought in. Start one from a Production project with New deck from this project.</p>') + '</section></div>' +
+      (tr ? territoriesCard(tr, attached) : '');
+  }
+
+  /** The Territories card: how many routes came through and which, shown only when the deck was spun off from a Territories document. */
+  function territoriesCard(tr, attached) {
+    var n = tr.sent, what = n + (n === 1 ? ' route' : ' routes') + ' from Territories' + (tr.by ? ', greenlit by ' + tr.by : '');
+    return '<div class="three"><section class="card sec" data-territories-card><div class="sec-h"><span class="mono eyebrow">04</span><b>Territories</b><div class="spacer"></div>' + attached + '</div>' +
+      '<div class="doc"><span class="ico">.clan</span><div><div style="font-size:14px;font-weight:600">' + esc(tr.name) + '</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + esc(what) + '</div></div></div>' +
+      '<p class="note" style="margin-top:10px">' + esc(tr.names.join(', ')) + '. These are the territories you choose from at gate 2; the strongest by the blind judge is picked for you and you can change it.' +
+      (tr.not_chosen ? ' ' + esc(tr.not_chosen) + (tr.not_chosen === 1 ? ' route was' : ' routes were') + ' not chosen and stay in Territories.' : '') + '</p></section></div>';
   }
 
   /** Start's "Look" card: the per-deck opt-out of the agency look, and (with the library on) the attached Style Pack and brand kit. */

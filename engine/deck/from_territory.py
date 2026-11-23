@@ -24,7 +24,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from . import images
+from . import images, inputs
 
 SHOTS = images.SHOTS
 ASSUMED_RISK = "Rests on an assumed brief: to confirm"
@@ -95,6 +95,126 @@ def stage_c(run: dict, chosen: str | None = None) -> dict:
             raise FromTerritoryError(f"--chosen {chosen}: the run has no such territory ({', '.join(t['id'] for t in terr)})")
         c.update(chosen=chosen, chosen_by="--chosen on from_territory")
     return c
+
+
+# ── a carried Territories document (territories-spinoff-out-deck) ─────────────────────────────────────────────────────────────
+#
+# A Deck spun off from a Territories document holds it whole, frozen, at ``data.upstream.<id>`` (the host sends it to the middleware beside
+# the index as ``clan.territories_upstream {id, data}``, which sends it to the engine). ``stage_c_from_document`` is the one reader: the
+# routes the person sent become stage c (gate 2's territories, the first by judge rank pre-picked) and the route the person picks is the
+# territory stage d writes from, with the route's own words beside it. No model is called for stage c. The older ``stage_c`` above reads a run
+# FILE (the CLI hand-off); both write the deck's own names and a test holds them to the same shape.
+
+#: text a person must never see on a slide (LESSONS 15): the Territories engine refuses it, and the deck does not draw it if one slips through
+LEAK = re.compile(r"\(to confirm\)|\bTBC\b|\*\*|~~|\{\{|\}\}|^#\s|field is null|^(none|null|undefined)$", re.I)
+STATED_RIGHTS = {"generated": "Generated", "own": "Own", "licensed": "Licensed"}
+RIGHTS_TO_SUPPLY = "Rights to supply"
+MAX_ROUTES = 5          # gate 2 shows the routes sent, up to this many (the deck's slides hold five territories)
+MAX_WORDS = 6           # a route's own lines carried to the deck
+
+
+def _clean(v) -> str:
+    s = re.sub(r"\s+", " ", v).strip() if isinstance(v, str) else ""
+    return "" if not s or LEAK.search(s) else s
+
+
+is_territories = inputs.is_territories   # the one test of "this upstream entry is a Territories document" (inputs.py)
+
+
+def carried(data: dict) -> tuple | None:
+    """``(source document id, data)`` of the first Territories document a Deck's ``data.upstream`` holds, or None."""
+    for k, v in ((data or {}).get("upstream") or {}).items():
+        if is_territories(v):
+            return str(k), v
+    return None
+
+
+def sent_ids(doc: dict) -> tuple[list, list, str]:
+    """``(ids, not_chosen, by)``: the routes the person sent to Deck Maker, in the order they were sent. The newest send to ``deck-maker``
+    that is ``sent`` or ``asked`` decides; with none (the document was continued in without sending) the greenlit routes are what goes."""
+    sends = [s for s in doc.get("sends") or [] if isinstance(s, dict) and s.get("to") == "deck-maker" and s.get("status") in ("sent", "asked")]
+    if sends:
+        s = sends[-1]
+        return [i for i in s.get("territory_ids") or [] if isinstance(i, str)], [i for i in s.get("not_chosen") or [] if isinstance(i, str)], str(s.get("by") or "")
+    g = [x for x in doc.get("greenlit") or [] if isinstance(x, dict)]
+    return [x["territory_id"] for x in g if isinstance(x.get("territory_id"), str)], [], str(next((x.get("by") for x in g if x.get("by")), "") or "")
+
+
+def picture_notes(t: dict) -> dict:
+    """What a route's pictures are, in words, never a finished picture that is not one. Sketches are counted as mock-ups (palette drawings, no rights
+    needed, never shown as a finished picture). A frame by link carries its STATED rights (generated, own, licensed); unknown or none stated reads
+    'Rights to supply'. A gap says why. The bytes are not carried: a frame is a link (``sha256``) until the deck can read it, so none is drawn from
+    here. ``line`` is the one sentence a slide may say."""
+    mock, frames, gaps = 0, [], []
+    for p in t.get("pictures") or []:
+        if not isinstance(p, dict):
+            continue
+        if p.get("kind") == "frame":
+            frames.append({k: v for k, v in {"id": p.get("id"), "touchpoint": p.get("touchpoint"), "sha256": p.get("sha256"),
+                                             "rights": STATED_RIGHTS.get(p.get("rights"), RIGHTS_TO_SUPPLY), "final": bool(p.get("final"))}.items() if v is not None})
+        elif p.get("kind") == "gap":
+            gaps.append({"touchpoint": p.get("touchpoint"), "gap": _clean(p.get("gap_reason")) or "No picture yet."})
+        else:
+            mock += 1
+    bits = []
+    if mock:
+        bits.append(f"{mock} mock-up sketch{'es' if mock != 1 else ''}, not finished pictures")
+    if frames:
+        rights = sorted({f["rights"] for f in frames})
+        bits.append(f"{len(frames)} picture{'s' if len(frames) != 1 else ''} by link (rights: {', '.join(rights)})")
+    if gaps:
+        bits.append(f"{len(gaps)} with no picture yet")
+    return {k: v for k, v in {"mock_ups": mock or None, "frames": frames or None, "gaps": gaps or None, "line": "; ".join(bits) or None}.items() if v}
+
+
+def route_words(t: dict) -> list:
+    """A route's own lines for the deck: the person's lead line first, then the four headlines and the world's lines; no leaks, no repeats."""
+    w = t.get("world") if isinstance(t.get("world"), dict) else {}
+    lead = w.get("lead") if isinstance(w.get("lead"), str) else None
+    raw = [lead, *[x for x in (w.get("headlines") or {}).values() if isinstance(x, str)], *[x for x in w.get("lines") or [] if isinstance(x, str)]]
+    out = []
+    for x in raw:
+        x = _clean(x)
+        if x and x not in out:
+            out.append(x)
+    return out[:MAX_WORDS]
+
+
+def route_row(t: dict) -> dict:
+    """One route in stage c's names, with what travelled with it kept beside them (the Deck's slides and stage d read it)."""
+    risks = "; ".join(r for r in (_clean(x) for x in t.get("risks") or []) if r)
+    checks = [c for c in t.get("checks") or [] if isinstance(c, dict)]
+    row = {"id": t["id"], "name": _clean(t.get("name")) or t["id"], "thought": _clean(t.get("thought")) or _clean(t.get("sketch")) or _clean(t.get("name")),
+           "why": _clean(t.get("why")) or _clean(t.get("tension")), "mood": _clean(t.get("mood")), "risks": risks,
+           "sketch": _clean(t.get("sketch")) or _clean(t.get("thought")), "tier": t.get("tier"), "band": t.get("band"), "rank": t.get("rank"),
+           "their_words": route_words(t),
+           "checked": [_clean(c.get("text")) for c in checks if c.get("status") == "ok" and _clean(c.get("text"))][:4],
+           "to_check": [_clean(c.get("text")) for c in checks if c.get("status") in ("warn", "fail", "unchecked") and _clean(c.get("text"))][:3],
+           "evidence": [e for e in t.get("evidence") or [] if isinstance(e, str)][:8], "pictures": picture_notes(t),
+           "from_territories": True}
+    return {k: v for k, v in row.items() if v not in (None, "", [])}
+
+
+def stage_c_from_document(doc_id: str, doc: dict) -> dict:
+    """Stage c from a carried Territories document: the routes sent (up to ``MAX_ROUTES``), ordered by the blind judge's rank (unranked last, then in
+    the order they were sent), the first one chosen by default and flagged for Gate 2. ``from_territories`` says where they came from, how many
+    and who sent them, for the slides ("N routes from Territories"). Refuses a document that sent no route the document still holds live."""
+    ids, not_chosen, by = sent_ids(doc)
+    by_id = {t.get("id"): t for t in doc.get("territories") or [] if isinstance(t, dict)}
+    live = [i for i in dict.fromkeys(ids) if i in by_id and by_id[i].get("status") != "killed"]
+    if not live:
+        raise FromTerritoryError("the Territories document carried no greenlit route to use: nothing was sent from it")
+    order = sorted(live, key=lambda i: (by_id[i].get("rank") if isinstance(by_id[i].get("rank"), (int, float)) else 1e9, live.index(i)))[:MAX_ROUTES]
+    terr = [route_row(by_id[i]) for i in order]
+    reasons = {}
+    for i in order:
+        t = by_id[i]
+        reasons[i] = (f"Territories judge rank {t['rank']}" if isinstance(t.get("rank"), int) else "Greenlit in Territories") + (f"; {t['tier']}" if t.get("tier") else "")
+    return {"stage": "c", "produced_by": "deck.from_territory (a carried Territories document, no model call)", "territories": terr,
+            "ranking": {"order": order, "reasons": reasons, "by": "the Territories blind judge's rank (advisory, not a decision)"},
+            "chosen": order[0], "chosen_by": "default: the Territories judge's first choice among the routes sent, flagged for Gate 2",
+            "from_territories": {k: v for k, v in {"document": doc_id, "count": len(terr), "greenlit_by": by or None, "not_chosen": len(not_chosen),
+                                                   "held_back": len(live) - len(order), "names": [r["name"] for r in terr]}.items() if v is not None}}
 
 
 def from_run(run: dict, manifest: dict, plan: dict, run_hash: str, plan_hash: str, vdir: Path, run_name: str, version: str,

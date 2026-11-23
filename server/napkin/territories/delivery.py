@@ -12,6 +12,10 @@ from __future__ import annotations
 
 from typing import Callable
 
+class Refused(Exception):
+    """A destination that will not take this send, with the reason in words for the person. Nothing is written."""
+
+
 #: name -> (media type, make(doc_id, data) -> bytes)
 FILES: dict[str, tuple[str, Callable[[str, dict], bytes]]] = {}
 #: destination id (``deck-maker``, ``production-tool``) -> deliver(doc_id, data, send) -> {"status": "sent" | "asked"}

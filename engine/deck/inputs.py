@@ -382,6 +382,12 @@ def load(brief: Path | None, research: Path | None = None, doc_facts: Path | Non
     return inp
 
 
+def is_territories(d) -> bool:
+    """True when an upstream entry is a Territories document (routes, greenlit, crew). It is neither the brief nor the research: its routes are stage c
+    (deck.from_territory); the brief and research it was made from sit beside it in ``data.upstream``, hoisted by the spin-off."""
+    return isinstance(d, dict) and isinstance(d.get("territories"), list) and isinstance(d.get("greenlit"), list) and isinstance(d.get("crew"), list)
+
+
 def _is_brief_data(d: dict) -> bool:
     """True when an upstream entry is a Brief Maker's data (it holds brief fields or a capture)."""
     return isinstance(d, dict) and d.get("app") != "production-tool" and (any(k in d for k in CLAN_FIELDS.values()) or "capture" in d)
@@ -516,7 +522,8 @@ def from_upstream(data: dict, members: dict | None = None, docs: dict | None = N
     up = data.get("upstream") or {}
     kits = [k for k, v in up.items() if _is_kit(k, v, apps)]
     prod_ids = [k for k, v in up.items() if k not in kits and (v.get("app") == "production-tool" if isinstance(v, dict) else False)]
-    up = {k: v for k, v in up.items() if k not in kits and k not in prod_ids}   # a Production project is neither the brief nor the research
+    terr_ids = [k for k, v in up.items() if k not in kits and is_territories(v)]
+    up = {k: v for k, v in up.items() if k not in kits and k not in prod_ids and k not in terr_ids}   # a Production project or a Territories document is neither the brief nor the research
     brief_id, brief_data = next(((k, v) for k, v in up.items() if _is_brief_data(v)), (None, None))
     research_id = next((k for k, v in up.items() if k != brief_id and isinstance(v, dict) and v), None)
     dropped: list = []
@@ -602,7 +609,8 @@ def from_deck_document(path: Path) -> tuple[Inputs, dict]:
     if lib is False and any(app in KIT_APPS for app in apps.values()):
         inp.coverage["kits_gated_off"] = True
     prod = next(((k, v) for k, v in up.items() if isinstance(v, dict) and v.get("app") == "production-tool"), None)   # carried whole (production-spinoff)
-    return inp, {"apps": apps, "look": data.get("look") or {}, "library": lib, "pack": pack, "brand": brand, "production": prod,
+    terr = next(((k, v) for k, v in up.items() if is_territories(v)), None)   # carried whole (territories-spinoff-out-deck)
+    return inp, {"apps": apps, "look": data.get("look") or {}, "library": lib, "pack": pack, "brand": brand, "production": prod, "territories": terr,
                  "text_mode": (data.get("inputs") or {}).get("text_mode"), "review": data.get("review") or {},
                  "deck_type": _deck_type_pick((data.get("inputs") or {}).get("deck_type"))}
 
