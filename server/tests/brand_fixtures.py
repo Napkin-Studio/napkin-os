@@ -84,10 +84,10 @@ def make_zip(files: dict) -> bytes:
 
 
 class FakeWriter:
-    """What the job sends the host, recorded. `refuse` makes a call fail the way the host does."""
+    """What the job sends the host, recorded; shaped by docs/contracts/brand-clan.md section 5 and 7. `refuse` makes a call fail the way the host does."""
 
-    def __init__(self, refuse=None):
-        self.calls, self.refuse = [], refuse
+    def __init__(self, refuse=None, rename=False):
+        self.calls, self.refuse, self.rename = [], refuse, rename
 
     def _go(self, op, *a):
         from napkin.brand.writer import HostWriteError
@@ -95,13 +95,14 @@ class FakeWriter:
         if self.refuse == op:
             raise HostWriteError(409, "changed while you were editing")
 
-    def put_asset(self, client, doc, name, data, media_type):
-        self._go("asset.put", client, doc, name, media_type, len(data))
-        return f"human/assets/ab12-{name}"
-
     def create(self, client, body):
         self._go("create", client, body)
         return {"document_id": "bc-doc-1", "path": "agency/tidewell/brand-original.clan", "version": 1, "name": body["name"]}
+
+    def put_asset(self, doc, name, data, media_type):
+        from napkin.brand.writer import asset_path
+        self._go("asset.put", doc, name, media_type, len(data))
+        return asset_path(name, data) + ("x" if self.rename else "")
 
     def proposal_set(self, doc, body):
         self._go("proposal.set", doc, body)

@@ -26,13 +26,22 @@ export async function call(task: string, input: Record<string, unknown>, doFetch
 
 const attachment = (f: FileRef) => ({ attachments: [{ name: f.name, label: f.label }] })
 
-/** lane A's `host.brandClans.list(client)` (contract 5, `list`): the Summary rows reduced to what the question needs. Absent until the host has it. */
-type ListReply = { default: string | null; items: { document_id: string; path: string; name: string }[] }
+/** `host.brandClans.list(client)` (contract 5, `list`): the Summary rows reduced to what the question needs. */
 async function listClans(clientId: string): Promise<ClanRef[]> {
-  const api = (host as unknown as { brandClans?: { list(client: string): Promise<ListReply> } }).brandClans
-  if (!api) return []
-  const r = await api.list(clientId)
+  const r = await host.brandClans.list(clientId)
   return r.items.map(i => ({ document_id: i.document_id, path: i.path, name: i.name, default: i.document_id === r.default }))
+}
+
+/** The workspace the host's routes name (`/api/t/{tenant}`): what the build job writes into. */
+let workspaceOnce: Promise<string> | null = null
+function workspace(): Promise<string> {
+  workspaceOnce ??= fetch('/api/session', { credentials: 'same-origin' }).then(async r => {
+    const t = r.ok ? ((await r.json()) as { tenant?: unknown }).tenant : null
+    if (typeof t !== 'string' || !t) throw new BrandError('host_unavailable', 'no workspace')
+    return t
+  })
+  workspaceOnce.catch(() => { workspaceOnce = null })
+  return workspaceOnce
 }
 
 export const ports: Ports = {
@@ -44,7 +53,7 @@ export const ports: Ports = {
   },
   async build(file, client, a: BuildAnswer) {
     const env = await call('brand_build', {
-      ...attachment(file), client: { id: client.id }, mode: a.mode, confirmed_over_cap: a.confirmed,
+      ...attachment(file), client: { id: client.id }, workspace: await workspace(), mode: a.mode, confirmed_over_cap: a.confirmed,
       ...(a.mode === 'new' ? { name: a.name } : { brand_clan: a.clan }),
     })
     const job = env.job?.id

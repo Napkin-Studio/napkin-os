@@ -29,7 +29,7 @@ def model(piece="piece-1.json", pictures="pictures-logos.json", gate=None):
 @pytest.fixture
 def writer(monkeypatch):
     w = FakeWriter()
-    monkeypatch.setattr("napkin.handlers.brand_build.writer_for", lambda settings: w)
+    monkeypatch.setattr("napkin.handlers.brand_build.writer_for", lambda settings, workspace: w)
     return w
 
 
@@ -56,7 +56,7 @@ def kit_zip():
 
 
 def build_input(data, **kw):
-    return {"file": {"name": "Tidewell-brand-book-2026.pdf", "data_b64": b64(data)}, "client": CLIENT, "mode": "new", **kw}
+    return {"file": {"name": "Tidewell-brand-book-2026.pdf", "data_b64": b64(data)}, "client": CLIENT, "workspace": "ws1", "mode": "new", **kw}
 
 
 @pytest.fixture
@@ -99,15 +99,17 @@ def test_the_first_build_puts_the_files_up_then_creates_Original(srv, writer):
     done = finish(srv, r["job"]["id"])
     assert done["job"]["state"] == "done", done["job"]
     ops = writer.ops()
-    assert ops[-1] == "create" and set(ops[:-1]) == {"asset.put"} and len(ops) == 5     # 2 logos + 1 example + the source, then create
-    client_arg = {c[1] for c in writer.calls}
-    assert client_arg == {"tidewell"} or "tidewell" in client_arg
-    body = writer.calls[-1][2]
+    assert ops[0] == "create" and set(ops[1:]) == {"asset.put"} and len(ops) == 5     # create first; then 2 logos + 1 example + the source go into the new document
+    body = writer.calls[0][2]
     assert body["name"] == "Original" and body["from"] == {"kind": "build", "file": "Tidewell-kit.zip"}
-    assert body["source"] == {"file": "Tidewell-kit.zip", "kind": "other", "pages": len(BIBLE_PAGES), "asset": "human/assets/ab12-Tidewell-kit.zip"}
+    from napkin.brand.writer import asset_path
+    zipped = kit_zip()
+    assert body["source"] == {"file": "Tidewell-kit.zip", "kind": "other", "pages": len(BIBLE_PAGES), "asset": asset_path("Tidewell-kit.zip", zipped)} or body["source"]["asset"].endswith("-Tidewell-kit.zip")
     logo = body["candidate"]["visual"]["logos"][0]
-    assert logo["asset"].startswith("human/assets/ab12-logo-")      # the host's path, not our name
-    assert "upload:" not in str(body)
+    assert logo["asset"].startswith("human/assets/") and "-logo-" in logo["asset"] and "upload:" not in str(body)
+    puts = [c for c in writer.calls if c[0] == "asset.put"]
+    assert {c[1] for c in puts} == {"agency/tidewell/brand-original.clan"}              # into the document create returned
+    assert all(not c[2].startswith("human/") for c in puts)
     res = done["result"]
     assert res["mode"] == "new" and res["pending"] is False and res["document_id"] == "bc-doc-1" and res["actor"] == "process:brand_build"
     assert "Tidewell" not in res["summary"] or "Original" in res["summary"]
@@ -121,7 +123,8 @@ def test_an_update_is_a_proposal_never_a_create(srv, writer):
     op, doc, body = writer.calls[-1]
     assert doc == "agency/tidewell/original.clan" and body["from"] == {"kind": "upload", "file": "Tidewell-brand-book-2026.pdf"}
     assert body["candidate"]["name"] == "Original" and body["source"]["kind"] == "pdf" and body["source"]["pages"] == len(BIBLE_PAGES)
-    assert all(c[1] == "tidewell" and c[2] == "agency/tidewell/original.clan" for c in writer.calls if c[0] == "asset.put")
+    assert all(c[1] == "agency/tidewell/original.clan" for c in writer.calls if c[0] == "asset.put")
+    assert writer.ops().index("proposal.set") == len(writer.ops()) - 1                  # an update puts its files first
     assert done["result"]["pending"] is True
 
 
@@ -137,7 +140,7 @@ def test_nothing_is_written_unless_the_build_has_content(tmp_path, writer):
 
 def test_a_refused_write_fails_the_job_with_the_hosts_reason(srv, monkeypatch):
     w = FakeWriter(refuse="create")
-    monkeypatch.setattr("napkin.handlers.brand_build.writer_for", lambda settings: w)
+    monkeypatch.setattr("napkin.handlers.brand_build.writer_for", lambda settings, workspace: w)
     done = finish(srv, post(srv, "brand_build", build_input(make_pdf(BIBLE_PAGES))).json()["job"]["id"])
     assert done["job"]["state"] == "failed" and done["job"]["error"]["type"] == "host_write_failed"
     assert "409" in done["job"]["error"]["message"] and "changed while you were editing" in done["job"]["error"]["message"]
@@ -160,14 +163,51 @@ def test_over_120_pages_asks_before_spending_then_reads_when_told(tmp_path, writ
         s.stop()
 
 
+def test_a_host_that_names_a_file_differently_fails_the_job(srv, monkeypatch):
+    w = FakeWriter(rename=True)
+    monkeypatch.setattr("napkin.handlers.brand_build.writer_for", lambda settings, workspace: w)
+    done = finish(srv, post(srv, "brand_build", build_input(make_pdf(BIBLE_PAGES))).json()["job"]["id"])
+    assert done["job"]["state"] == "failed" and "named a file differently" in done["job"]["error"]["message"]
+
+
+def test_the_writer_sends_the_service_credential_to_the_workspace_and_no_cookie():
+    import httpx
+    from napkin.brand.writer import HttpWriter, asset_path
+    seen = []
+
+    def handler(req):
+        seen.append(req)
+        return httpx.Response(200, json={"path": asset_path("a.png", b"abc"), "document_id": "d", "version": 1})
+    w = HttpWriter("http://host.test/", "ws1", "t" * 32, transport=httpx.MockTransport(handler))
+    w.create("tidewell", {"name": "Original"})
+    w.put_asset("agency/doc.clan", "a.png", b"abc", "image/png")
+    w.proposal_set("agency/doc.clan", {"candidate": {}})
+    assert [(r.method, r.url.path) for r in seen] == [("POST", "/api/t/ws1/clients/tidewell/brand-clans"), ("POST", "/api/t/ws1/brand-clans/agency/doc.clan/assets"), ("POST", "/api/t/ws1/brand-clans/agency/doc.clan/proposal")]
+    assert all(r.headers["authorization"] == "Bearer " + "t" * 32 and r.headers["x-napkin-actor"] == "process:brand_build" and "cookie" not in r.headers for r in seen)
+    assert seen[1].url.params["name"] == "a.png"
+
+
+def test_asset_names_follow_the_hosts_rule():
+    import hashlib
+    from napkin.brand.writer import asset_path
+    assert asset_path("logo.png", b"abc") == "human/assets/" + hashlib.sha256(b"abc").hexdigest()[:10] + "-logo.png"
+
+
+def test_a_short_token_is_no_host():
+    from napkin.brand.writer import writer_for
+    from types import SimpleNamespace as S
+    assert writer_for(S(brand_host_url="http://h", brand_host_token="short"), "ws") is None
+    assert writer_for(S(brand_host_url="http://h", brand_host_token="x" * 32), "ws") is not None
+
+
 def test_no_host_configured_is_a_503_before_any_spend(srv, monkeypatch):
-    monkeypatch.setattr("napkin.handlers.brand_build.writer_for", lambda settings: None)
+    monkeypatch.setattr("napkin.handlers.brand_build.writer_for", lambda settings, workspace: None)
     r = post(srv, "brand_build", build_input(make_pdf(BIBLE_PAGES)))
     assert r.status_code == 503 and r.json()["error"]["type"] == "host_unavailable" and srv.model.calls == []
 
 
 @pytest.mark.parametrize("patch,etype", [
-    ({"mode": "x"}, "invalid_input"), ({"client": {}}, "invalid_input"), ({"mode": "update"}, "invalid_input"),
+    ({"workspace": "a/b"}, "invalid_input"), ({"mode": "x"}, "invalid_input"), ({"client": {}}, "invalid_input"), ({"mode": "update"}, "invalid_input"),
     ({"name": ""}, "invalid_input"), ({"confirmed_over_cap": "yes"}, "invalid_input"),
 ])
 def test_build_input_errors_are_400s(srv, writer, patch, etype):
@@ -176,7 +216,7 @@ def test_build_input_errors_are_400s(srv, writer, patch, etype):
 
 
 def test_an_unreadable_file_fails_the_job_and_creates_nothing(srv, writer):
-    r = post(srv, "brand_build", {"file": {"name": "a.zip", "data_b64": b64(b"PK\x03\x04junk")}, "client": CLIENT, "mode": "new"})
+    r = post(srv, "brand_build", {"file": {"name": "a.zip", "data_b64": b64(b"PK\x03\x04junk")}, "client": CLIENT, "workspace": "ws1", "mode": "new"})
     done = finish(srv, r.json()["job"]["id"])
     assert done["job"]["state"] == "failed" and done["job"]["error"]["type"] == "unreadable_file" and writer.calls == []
 
@@ -256,21 +296,21 @@ def test_identify_takes_the_attachment_the_host_read_and_names_it_by_the_persons
 
 
 def test_build_takes_the_attachment_the_host_read(srv, writer):
-    done = finish(srv, post(srv, "brand_build", {**spliced(make_pdf(BIBLE_PAGES)), "client": CLIENT, "mode": "new"}).json()["job"]["id"])
+    done = finish(srv, post(srv, "brand_build", {**spliced(make_pdf(BIBLE_PAGES)), "client": CLIENT, "workspace": "ws1", "mode": "new"}).json()["job"]["id"])
     assert done["job"]["state"] == "done", done["job"]
-    assert writer.calls[-1][2]["source"]["file"] == "Tidewell-brand-book-2026.pdf" and writer.calls[-1][2]["from"]["file"] == "Tidewell-brand-book-2026.pdf"
+    assert writer.calls[0][2]["source"]["file"] == "Tidewell-brand-book-2026.pdf" and writer.calls[0][2]["from"]["file"] == "Tidewell-brand-book-2026.pdf"
 
 
 def test_a_word_file_the_host_only_read_builds_from_its_text_and_pictures(srv, writer):
     inp = {**spliced(text="\n".join(BIBLE_PAGES), images=[fake_png(seed=1), fake_png(seed=2)], name="document-1-0.docx", label="Tidewell-brand-book.docx"),
-           "client": CLIENT, "mode": "new"}
+           "client": CLIENT, "workspace": "ws1", "mode": "new"}
     done = finish(srv, post(srv, "brand_build", inp).json()["job"]["id"])
     assert done["job"]["state"] == "done", done["job"]
-    body = writer.calls[-1][2]
+    body = writer.calls[0][2]
     assert body["source"] == {"file": "Tidewell-brand-book.docx", "kind": "docx", "pages": 1}     # no asset: the host keeps the file it already holds
     assert body["candidate"]["visual"]["colours"]
 
 
 def test_build_with_nothing_to_read_is_a_400(srv, writer):
-    r = post(srv, "brand_build", {"attachments": [{"name": "x.pdf"}], "client": CLIENT, "mode": "new"})
+    r = post(srv, "brand_build", {"attachments": [{"name": "x.pdf"}], "client": CLIENT, "workspace": "ws1", "mode": "new"})
     assert r.status_code == 400
