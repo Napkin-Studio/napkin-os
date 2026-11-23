@@ -104,7 +104,9 @@ test('the Booth card for a Final with no rights offers Choose rights and Take it
   const b = L.greenlightBooth(d, {}) as string
   assert.match(b, /class="bc ask"/); assert.match(plain(b), /Final picture with no rights chosen/); assert.match(plain(b), /Choose rights/); assert.match(plain(b), /Take it off Final/)
   assert.match(b, /data-pic-rights="t_started\|pic_/); assert.match(b, /data-pic-off="1"/)
-  assert.match(b, /data-send disabled>Send →<\/button>/, 'held while a Final has no rights')
+  // territories-redesign: Send is the step's primary, in the Greenlight header, not in the Booth
+  assert.doesNotMatch(b, /data-send/)
+  assert.match(L.view(d, {}), /data-send disabled>Send →<\/button>/, 'held while a Final has no rights')
   assert.doesNotMatch(b, /to production →/)
 })
 

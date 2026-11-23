@@ -235,7 +235,7 @@ test('Explore with nothing ticked is refused in words and writes nothing', () =>
   const d = doc(); d.focus.insights.forEach((i: Doc) => { i.ticked = false })
   const r = L.act(d, {}, { a: 'explore' }, ENV)!
   eq(r.writes, []); assert.match(r.toast!, /Tick at least one/)
-  assert.match(L.view(d, {}), /<button type="button" class="btn-pill primary" data-act="explore" disabled>/)
+  assert.match(L.view(d, {}), /<button type="button" class="b pri lg" data-act="explore" disabled>Explore →<\/button><span class="why lock">Tick at least one insight/)
 })
 
 test('a failed start is said in words with a way to try again; the pick stays saved', () => {
@@ -301,7 +301,7 @@ test('after Pick the run has moved on: the insights are read-only and the later 
   const page = L.view(d, { view: 0 })
   assert.match(page, /data-tick="in_arrive" checked disabled/)
   assert.ok(!/data-form="add"/.test(page) && !/data-act="explore"/.test(page))
-  assert.match(page, /Step 1 · Pick what to work on/)
+  assert.match(page, /Step 1 of 3 · Pick/)
   const later = L.view(d, {})
   assert.match(later, /data-step="explore" aria-current="step"/); assert.match(later, /Step 2 of 3/); assert.match(later, /The crew has not set off yet/)
 })
@@ -378,11 +378,11 @@ test('a brief alone, research alone, and nothing at all each say so plainly', ()
 
 test('before the engine has written, the page offers only the first run, and nothing to pick', () => {
   const { root } = screen(SDATA)
-  assert.match(root, /Nothing has been sent out yet/)
+  assert.match(root, /class="b pri lg" data-act="first">Find the insights<\/button><span class="why">About 40 seconds\. Nothing is sent until you approve a pick/)
   // The one control is the first run (owner local test 2026-11-23: the page used to offer nothing, a dead end).
   assert.deepEqual([...root.matchAll(/data-act="([^"]+)"/g)].map(m => m[1]), ['first'])
   assert.ok(!/data-tick=|data-form=|data-play=/.test(root), 'no pick control on a page with nothing to pick')
-  assert.match(root, /<textarea rows="2" disabled/)
+  assert.ok(!/data-lq-draft|Look something up/.test(root), 'no look-up box before the engine has read anything (territories-redesign)')
 })
 
 test('the name, the contract and the seed: the app block is the contract\'s', () => {
@@ -412,7 +412,9 @@ const text = (html: string) => html.replace(/<svg[\s\S]*?<\/svg>/g, ' ').replace
 test('the Explore fixtures are valid documents, and Explore is the step the run is on', () => {
   for (const d of [back(), running()]) { eq(errs(d).filter(e => !/upstream/.test(e)), []); assert.equal(L.pickState(d.run), 'past') }
   const page = L.view(back(), {})
-  assert.match(page, /data-step="explore" aria-current="step"/); assert.match(page, /Send the crew different ways/)
+  assert.match(page, /data-step="explore" aria-current="step"/); assert.match(page, /The crew is back with \d+ routes/)
+  // the crew is back: Explore's one primary goes on to Greenlight (territories-redesign, owner decision 3)
+  assert.match(page, /class="b pri lg" data-step="greenlight">Review and greenlight →/)
   assert.ok(!/not built in this version/.test(page))
 })
 
@@ -436,7 +438,7 @@ test('the crew is empty before the engine writes it, and the page says it is wai
   const d = doc(); d.run = { ...d.run, state: 'building', stage: 'explore', gate: null, approvals: { pick: { by: 'Shrey', at: '2026-11-23T10:00:00Z', decision: 'approve' } } }
   const page = L.view(d, {})
   assert.match(page, /The crew has not set off yet/); assert.match(page, /Waiting for the engine to start the crew/); assert.ok(!/id="compass"/.test(page))
-  assert.match(L.view(d, { job: { state: 'failed', error: 'Nope.' } }), /data-act="retry"[\s\S]*Nope\. Your pick is saved/)
+  assert.match(L.view(d, { job: { state: 'failed', error: 'Nope.' } }), /Nope\. Your pick is saved[\s\S]*data-act="retry"/)
   assert.match(L.view(d, { mw: false }), /not connected in this workspace/)
 })
 
@@ -600,7 +602,7 @@ const greenlit = (d: Doc, ids: string[]): Doc => {
   o.greenlit = ids.map(id => ({ territory_id: id, by: 'Shrey', at: '2026-11-23T10:00:00Z', rests_on_derived: [], derived_resolution: 'verified' }))
   return o
 }
-const cards = (page: string) => page.match(/class="gcard[ "]/g) ?? []
+const cards = (page: string) => page.match(/class="rrow[ "]/g) ?? []
 
 test('step 3 opens on the run: the gallery has one card per live developed route, grouped by agent, with Greenlight on each', () => {
   for (const n of ['greenlight_open', 'greenlight_derived_pending', 'greenlight_sensitive_missing'] as const) {
@@ -611,22 +613,24 @@ test('step 3 opens on the run: the gallery has one card per live developed route
     assert.equal(cards(page).length, dev.length)
     for (const t of dev) { assert.ok(page.includes(`data-gcard="${t.id}"`) && page.includes(`data-green="${t.id}"`) && page.includes(`data-open="${t.id}"`)); assert.ok(text(page).includes(t.name)) }
     assert.ok(!page.includes('data-gcard="t_anon"') && !page.includes('data-gcard="t_breakfast"'))
-    for (const m of L.crewOf(d).filter(c => dev.some(t => t.crew === c.id))) assert.ok(page.includes(`aria-label="${m.name}"`), `a group for ${m.name}`)
+    // ranked rows (territories-redesign, owner decision 4): the judge's order, each row naming the agent that found it
+    eq([...page.matchAll(/data-gcard="([^"]+)"/g)].map(x => x[1]), dev.slice().sort((a: Doc, b: Doc) => (a.rank ?? 1e9) - (b.rank ?? 1e9)).map((t: Doc) => t.id))
+    for (const t of dev) { const m = L.crewOf(d).find(c => c.id === t.crew); if (m) assert.ok(page.split('data-gcard="' + t.id + '"')[1].split('</article>')[0].includes(m.short), `${t.id} names ${m.short}`) }
     eq(errs(d).filter(e => !/upstream/.test(e)), [])
   }
 })
 
 test('a card shows the judge rank, where it sits, its sources and the idea chip, and never the tier, the band score or the /35', () => {
   const d = gl('greenlight_derived_pending'), page = L.view(d, {}), t = text(page)
-  assert.match(t, /Judge #1/); assert.match(t, /Core · close to the brief/); assert.match(t, /the weekend starts early/i)
+  assert.match(t, /Judge #1/); assert.match(t, /Core · Core/); assert.match(t, /the weekend starts early/i)
   assert.ok(page.includes('class="theme"'), 'the idea chip is the Explore chip')
-  assert.ok(page.includes('data-src="f_TIRED0418"'), 'sources are the same chips as everywhere')
+  assert.ok(L.dialogFor('route:' + L.developed(d).sort((a: Doc, b: Doc) => a.rank - b.rank)[0].id, d)!.html.includes('data-src="'), 'sources are the same chips as everywhere, in the route\'s window')
   assert.ok(!/\/\s?35|\bscore\b|\btier\b|\bbrave\b|\bsafe\b|blind\b[^.]*\d{2}/i.test(t.replace(/ranked by the blind judge/g, '')), 'no tier, band score or /35')
   for (const tt of d.territories as Doc[]) if (tt.blind) assert.ok(!t.includes(`${tt.blind.total}/`), 'the stored total is never shown')
   // the derived mark sits on a route that rests on a derived finding
   // the derived mark: the engine recorded t_passenger as resting on an unverified finding (greenlit.rests_on_derived, and its open ask)
   assert.equal((page.match(/class="dmark"/g) ?? []).length, 1)
-  assert.match(page.split('<article class="gcard').find(c => c.includes('data-gcard="t_passenger"'))!, /class="dmark"/)
+  assert.match(page.split('<article class="rrow').find(c => c.includes('data-gcard="t_passenger"'))!, /class="dmark"/)
   assert.ok(!/<form/.test(page))
 })
 
@@ -654,23 +658,23 @@ test('after a greenlight or a remove, the card, the count and the tray follow th
   const d = gl('greenlight_open')
   let page = L.view(d, {}), t = text(page)
   assert.match(t, /0 greenlit/); assert.match(t, /Greenlit · 0/); assert.match(t, /None yet\. Open a route to see it as a world/)
-  assert.match(page, /<button type="button" class="big" data-send disabled>/)
+  assert.match(page, /<button type="button" class="b pri lg" data-send disabled>/)
   const two = greenlit(d, ['t_started', 't_sunday'])
   page = L.view(two, {}); t = text(page)
   assert.match(t, /2 greenlit/); assert.match(t, /Greenlit · 2/); assert.equal((page.match(/class="glrow"/g) ?? []).length, 2)
-  assert.equal((page.match(/class="gcard green"/g) ?? []).length, 2); assert.match(t, /Send 2 →/)
-  assert.ok(!/<button type="button" class="big" data-send disabled>/.test(page))
+  assert.equal((page.match(/class="rrow on"/g) ?? []).length, 2); assert.match(t, /Send 2 routes →/)
+  assert.ok(!/<button type="button" class="b pri lg" data-send disabled>/.test(page))
   assert.match(page, /data-green="t_started"[^>]*aria-pressed="true"[^>]*>✓ Greenlit/)
   const one = greenlit(d, ['t_sunday']); page = L.view(one, {})
   assert.match(text(page), /Greenlit · 1/); assert.ok(!/class="glrow"[^>]*>(?:(?!<\/div>)[\s\S])*Already Started/.test(page))
-  assert.match(text(page), /Send 1 →/)
+  assert.match(text(page), /Send 1 route →/)
 })
 
 test('the engine\'s own holds disable Send and are said in its words; nothing is re-derived in the page', () => {
   const d = gl('greenlight_derived_pending')
   eq(L.holds(d).map(h => h.kind), ['derived_evidence'])
   const page = L.view(d, {})
-  assert.match(page, /<button type="button" class="big" data-send disabled>/)
+  assert.match(page, /<button type="button" class="b pri lg" data-send disabled>/)
   assert.match(text(page), /Review · before sending[\s\S]*Passenger Seat rests on a finding nobody has verified/)
   assert.match(L.act(d, {}, { a: 'send', to: 'deck-maker' }, ENV)!.toast!, /Passenger Seat rests on a finding/)
   eq(L.holds(gl('greenlight_open')), [], 'nothing_picked is cleared by a click, so it is not a hold')
@@ -775,14 +779,14 @@ test('a derived finding asks first: Verify it, Send it flagged or Take it off th
   assert.match(t, /Review · before sending Needs you Passenger Seat rests on a finding nobody has verified\./)
   assert.ok(page.includes('data-ask="ask_passenger" data-answer="verify"') && page.includes('data-answer="send_flagged"') && page.includes('data-answer="change"'))
   assert.match(t, /Families describe the drive as the part where nobody talks/)
-  assert.match(page, /<button type="button" class="big" data-send disabled>Send 2 →/); assert.match(t, /Answer the question first/)
+  assert.match(page, /<button type="button" class="b pri lg" data-send disabled>Send 2 routes →/); assert.match(t, /Answer the question first/)
   eq(L.act(d, {}, { a: 'answer', id: 'ask_passenger', answer: 'verify' }, ENV)!.request, { key: 'ask:ask_passenger', what: 'Your answer', input: { step: 'answer_ask', ask_id: 'ask_passenger', answer: 'verify', by: 'Shrey' } })
   eq(L.act(d, {}, { a: 'answer', id: 'ask_passenger', answer: 'change' }, ENV)!.request!.input, { step: 'answer_ask', ask_id: 'ask_passenger', answer: 'change', by: 'Shrey' })
   assert.equal(L.act(d, {}, { a: 'answer', id: 'ask_passenger', answer: 'ok' }, ENV), null, 'ok is not an answer to a derived finding')
   // as the engine writes it back once answered (gates.answer_ask): the card goes, Send opens
   const after = JSON.parse(JSON.stringify(d)) as Doc
   after.asks[0].status = 'answered'; after.greenlit[1].derived_resolution = 'sent_flagged'; after.run.gate.blocked_by = []
-  const p2 = L.view(after, {}); assert.ok(!p2.includes('data-ask-card')); assert.ok(!/class="big" data-send disabled/.test(p2))
+  const p2 = L.view(after, {}); assert.ok(!p2.includes('data-ask-card')); assert.ok(!/class="b pri lg" data-send disabled/.test(p2))
 })
 
 test('a failed mandatory needs a reason before Go ahead; a close one does not', () => {
@@ -808,7 +812,7 @@ test('the sensitive review is a named person\'s: Mark as reviewed by them, never
   eq(L.act(d, { me: { name: 'Shrey' } }, { a: 'review' }, ENV)!.request, { key: 'review', what: 'The review', input: { step: 'record_review', by: 'Shrey' } })
   assert.match(L.act(d, {}, { a: 'review' }, { me: null, now: ENV.now })!.toast!, /Sign in first/)
   assert.equal(L.act(d, {}, { a: 'answer', id: 'ask_sensitive', answer: 'ok' }, ENV), null)
-  assert.match(L.view(d, {}), /class="big" data-send disabled/)
+  assert.match(L.view(d, {}), /class="b pri lg" data-send disabled/)
 })
 
 test('an ask for a route that is not greenlit is not shown, and an answered ask is never asked again', () => {
@@ -841,7 +845,7 @@ test('an ask card and the picture rights card sit in the same answer-first list'
   d.run.gate.blocked_by.push({ kind: 'picture_rights', text: 'A picture on Already Started has no rights chosen.' })
   const page = L.view(d, {})
   assert.ok(page.includes('data-ask-card="ask_passenger"')); assert.match(text(page), /A picture on Already Started has no rights chosen|rights/i)
-  assert.match(text(page), /Answer the 2 questions first/); assert.match(page, /class="big" data-send disabled>Send 2 →/)
+  assert.match(text(page), /Answer the 2 questions first/); assert.match(page, /class="b pri lg" data-send disabled>Send 2 routes →/)
 })
 
 test('a written send to Deck Maker asks the shell to continue in it, and the shell hears only the app it names (territories-spinoff-out-deck)', () => {
@@ -865,7 +869,8 @@ test('a document nothing has run on yet offers Find the insights, and it starts 
   assert.match(page, /data-act="first"/); assert.match(page, /Find the insights/)
   assert.equal(L.act(d, {}, { a: 'first' }, ENV)!.start, true)
   assert.equal(L.act(doc(), {}, { a: 'first' }, ENV), null, 'once insights exist, the pick takes over')
-  assert.match(L.view(d, { job: { state: 'running' } }), /data-act="first" disabled/)
+  // while it reads, the page is the stage (territories-redesign): the agent big, nothing to press twice
+  const busy = L.view(d, { job: { state: 'running' } }); assert.match(busy, /Finding the insights/); assert.match(busy, /class="bigorb"/); assert.doesNotMatch(busy, /data-act="first"/)
 })
 
 test('a failed first run says why in the engine\'s words, offers the action at the top and names the step honestly (owner walk 2026-11-23)', () => {
@@ -877,7 +882,7 @@ test('a failed first run says why in the engine\'s words, offers the action at t
   assert.match(page, /data-act="first"[^>]*>Try again/)
   assert.ok(page.indexOf('data-act="first"') < page.indexOf('From the brief'), 'the action sits above the long brief, not below it')
   assert.doesNotMatch(page, /Tick the insights the crew should work on\.[^<]*<\/p><ol/, 'nothing to tick yet')
-  assert.match(page, /Find the insights, then tick/)
+  assert.match(page, /Step 1 of 3 · What arrived/)
 })
 
 test('the eyebrow is one clamped line and its full text is the title', () => {
@@ -896,6 +901,6 @@ test('"To confirm:" is a quiet mark on the brief field, not a prefix in its word
 
 test('the line under the title names the step on screen, not the run\'s furthest step (live walk 2026-11-23)', () => {
   const d = doc(); d.run = { ...d.run, state: 'gate', stage: 'greenlight', gate: { id: 'greenlight', n: 0, of: 1 } }
-  assert.match(L.view(d, { view: 1 }), /Step 2 of 3\. The crew explores/)
-  assert.match(L.view(d, { view: 2 }), /Step 3 of 3\./)
+  assert.match(L.view(d, { view: 1 }), /Step 2 of 3 · Explore/)
+  assert.match(L.view(d, { view: 2 }), /Step 3 of 3 · Greenlight/)
 })

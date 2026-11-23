@@ -48,17 +48,25 @@ test('1. on Pick with the crew out, the Booth says what is happening, not "Tick 
 })
 
 test('3. the page moves to Explore while the crew is out, and shows its progress there', () => {
+  // territories-redesign: while the crew is out the page is the stage (Brief's pattern), the agent big, one lane per member from job.crew
   const page = L.view(approved(), { job: { state: 'running', progress: { done: 2, total: 5 } } })
-  assert.match(plain(page), /Step 2 · The crew explores/)
   assert.match(page, /aria-current="step"[^>]*><i>2<\/i>/)
-  assert.match(plain(page), /The crew is out: 2 of 5 agents back/)
-  assert.match(plain(page), /crew out 2 of 5 agents back/, 'the stats line says it too, not "not set off yet"')
-  assert.match(plain(L.view(approved(), { job: { state: 'running', progress: { done: 5, total: 5 } } })), /The crew is back\. The engine is developing their routes/)
-  assert.match(page, /class="spin"/, 'the spinner is on Explore')
+  assert.match(page, /class="bigorb"/); assert.match(page, /class="apill now"><i><\/i>1\. Explore/)
+  assert.match(plain(page), /2 of 5 agents back · usually 2 to 3 minutes/, 'the job\'s progress, while the job has no lanes yet')
+  assert.doesNotMatch(page, /class="booth-col/, 'no Booth on the stage')
+  const crew = [{ id: 'cr_core', name: 'Close to the core', short: 'Core', role: 'strategy', colour: '#8C8577', heading: 'Stay on the proposition.', state: 'back', routes: 3 },
+    { id: 'cr_feel', name: 'Towards a feeling', short: 'Feeling', role: 'idea', colour: '#E07A5F', heading: 'Go towards the feeling.', state: 'out', routes: 0 },
+    { id: 'cr_opposite', name: 'The opposite pole', short: 'Opposite', role: 'copy', colour: '#3D5AFE', heading: 'Go the other way.', state: 'stopped', routes: 0 }]
+  const lanes = L.view(approved(), { job: { state: 'running', crew } })
+  assert.equal((lanes.match(/class="lc /g) ?? []).length, 3)
+  assert.match(plain(lanes), /Core Strategy Back · 3 routes/); assert.match(plain(lanes), /Feeling Idea Exploring…/); assert.match(plain(lanes), /Opposite Copy Stopped/)
+  assert.match(plain(lanes), /2 of 3 agents back/); assert.match(plain(lanes), /Idea agent · Towards a feeling/, 'the agent still out is the one on stage')
   const early = plain(L.view(approved(), { job: { state: 'sending' } }))
-  assert.match(early, /Step 2 · The crew explores/)
   assert.match(early, /The crew is setting off/)
-  assert.match(plain(L.view(approved(), {})), /Step 1 · /, 'with no job running it stays on Pick')
+  const failed = L.view(approved(), { job: { state: 'failed', error: 'The model took too long.', crewRun: true } })
+  assert.match(plain(failed), /The crew stopped before it was back/); assert.match(plain(failed), /The model took too long\. Your pick is saved/); assert.match(failed, /data-act="retry"/)
+  assert.match(plain(L.view(approved(), { job: { state: 'failed', crewRun: true }, view: 0 })), /Step 1 of 3 · Pick/, 'Back to your pick shows the sheet; the job is left as it is')
+  assert.match(plain(L.view(approved(), {})), /Step 1 of 3 · /, 'with no job running it stays on Pick')
 })
 
 test('2. a trail node from the brief shows "to confirm" as a small tag, not the prefix', () => {

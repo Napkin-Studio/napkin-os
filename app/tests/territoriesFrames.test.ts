@@ -42,7 +42,9 @@ const PRICE = /\$|€|£|usd|eur|price|cost|credit|cap\b/i
 test('the button is on the Pictures line of a greenlit developed route with sketches, and nowhere else', () => {
   const d = doc(), t = route(d)
   const on = W.worldBody(d, {}, t) as string
-  assert.match(on, /<div class="pic-head"><span class="psec-t">Pictures · 8 places<\/span><button type="button" class="btn-rect pic-make" data-pic-make="t_started">Make pictures<\/button>/)
+  // territories-redesign (owner decision 7): while every place is a sketch the pictures are one line, with Make pictures on it
+  assert.match(on, /<section class="pline" aria-label="Pictures"><span class="psec-t">Pictures · 8 places · sketches, marked Mock-up<\/span><span class="spacer"><\/span><button type="button" class="btn-rect pic-make" data-pic-make="t_started">Make pictures<\/button>/)
+  assert.doesNotMatch(on, /class="pgrid"/, 'no grid of eight sketches before the journey')
   const ungreen = W.worldBody(d, {}, route(d, 't_small')) as string
   assert.doesNotMatch(ungreen, /Make pictures/, 'small is developed but not greenlit')
   assert.doesNotMatch(L.dialogFor('route:t_started', d).html, /Make pictures/, 'the route window has no button')

@@ -242,9 +242,9 @@ test('Present shows one route at a time with no score, tier, rank or source, and
 test('the page: a route opens from the gallery as a world, with its own palette, panel, dock and a way back; nothing else changes', () => {
   const d = doc(), ui: Ui = { world: 't_started' }, page = L.view(d, ui)
   assert.match(page, /id="wsheet"/); assert.match(page, /--t-bg:#F4B942/); assert.match(page, /data-wdock="present"/); assert.match(page, /data-w-back/)
-  assert.doesNotMatch(page, /class="gcard/); assert.doesNotMatch(page, /data-dock="compare"/)
+  assert.doesNotMatch(page, /class="rrow/); assert.doesNotMatch(page, /data-dock="compare"/)
   assert.match(text(page), /1 of 8/); assert.match(page, /data-green="t_started"/)
-  const gallery = L.view(d, {}); assert.match(gallery, /class="gcard/); assert.doesNotMatch(gallery, /id="wsheet"/)
+  const gallery = L.view(d, {}); assert.match(gallery, /class="rrow/); assert.doesNotMatch(gallery, /id="wsheet"/)
   assert.doesNotMatch(L.view(d, { world: 't_anon' }), /id="wsheet"/, 'a route with no world falls back to the gallery')
   assert.doesNotMatch(L.view(d, { world: 't_started', view: 1 }), /id="wsheet"/, 'only step 3 draws it')
   for (const tab of ['feel', 'lines', 'why', 'test']) assert.match(L.view(d, { world: 't_started', wtab: tab }), new RegExp(`data-wtab="${tab}" aria-pressed="true"`))
