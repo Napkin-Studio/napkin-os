@@ -32,10 +32,14 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let status =
             StatusCode::from_u16(self.0.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-        (
-            status,
-            Json(serde_json::json!({ "ok": false, "error": self.0.message })),
-        )
-            .into_response()
+        // A refused version check names the winner (contract 2.1).
+        let body = match &self.0.latest {
+            Some(latest) => serde_json::json!({
+                "error": { "code": "conflict", "message": self.0.message },
+                "latest": latest,
+            }),
+            None => serde_json::json!({ "ok": false, "error": self.0.message }),
+        };
+        (status, Json(body)).into_response()
     }
 }
