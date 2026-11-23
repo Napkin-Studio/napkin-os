@@ -111,7 +111,7 @@ def test_a_presented_slide_hands_its_supply_cards_and_parentheticals_to_the_list
     assert deck["slides"]["s02"]["blocks"][0]["items"] == [{"text": "Cider is fizzy."}]
     assert "To settle: name" in str(deck["slides"]["s04"]["blocks"]) and "To confirm" not in str(deck["slides"]["s04"]["blocks"])   # behind the divider the card stays (it is the To supply list), without the build's label
     listed = str(deck["slides"][deck["order"][-1]]["blocks"])
-    assert "presenter" in listed and "draft insight, to confirm" in listed and "Fee split" in listed
+    assert "presenter" in listed and "Cider is fizzy (draft insight, to settle)." in listed and "Fee split" in listed
 
 
 def test_the_exported_notes_carry_no_evidence_ids_and_the_cover_no_agency_line():

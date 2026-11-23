@@ -244,6 +244,10 @@ def _framed_markup(s: dict, got: list, deck: dict, fig, label: str) -> tuple | N
         cells = "".join(f'<div class="sb-cell">{fig(slot, im, "width:100%;aspect-ratio:" + ratio(im))}<div class="sb-n"><b>{n}</b><i></i></div>'
                         f'<p class="sb-cap">{_e(c)}</p></div>' for n, c, (slot, im) in zip(nums, caps, shots))
         note = f'<span class="sb-note">{_e(st["note"])}</span>' if st.get("note") else ""
+        rows = spec.strip_rows(len(shots))
+        if len(rows) > 1:   # five or six frames: two rows of at most four, every frame drawn (round 3: six were cut to four)
+            return (f'<div class="pics strip sb-strip sb2" style="--per:{rows[0]}">{cells}</div>'
+                    f'<div class="pics sb-pills f-pills">{_mockup(shots[0][1], label)}{note}</div>', "pic-sb pic-sb2")
         return (f'<div class="pics strip sb-strip" style="grid-template-columns:repeat({len(shots)},1fr)">{cells}</div>'
                 f'<div class="pics sb-pills f-pills">{_mockup(shots[0][1], label)}{note}</div>', "pic-sb")
     pic = next(((slot, im) for slot, im in got if slot == "picture"), None)
@@ -695,7 +699,7 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
         lay = s.get("layout") or {}
         planned = bool(lay.get("blocks_sha") and lay["blocks_sha"] == blocks_sha(s, audience))
         v3lid = lay["id"] if (v3 and planned and lay.get("id") in _web_ids()) else None
-        if pic_cls in ("pic-ooh", "pic-sb"):   # frames of its own (out of home, a storyboard strip) take the slide's foot: a layout that sets its own picture column cannot share it
+        if pic_cls.split(" ")[0] in ("pic-ooh", "pic-sb"):   # frames of its own (out of home, a storyboard strip) take the slide's foot: a layout that sets its own picture column cannot share it
             v3lid = None
         if v3lid in GRAPHICS_WEB and spec.GRAPHICS:   # a chart or diagram the slide cannot hold here: the blocks as before
             probe = _Slide(inp)
@@ -740,7 +744,7 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
             notes += "\n\n" + spec.answer_notes(s)
         if planned and spec.moved_map(s, audience):   # the points the plan moved off the slide: verbatim, with their refs, as in the pptx notes
             from . import layouts
-            notes += "\n\nMoved from the slide:\n" + "\n".join(layouts.moved_line(t_, r_) for t_, r_ in layouts.moved_texts(s) if not (clean and spec.unresolved_line(t_)))
+            notes += "\n\nMoved from the slide:\n" + "\n".join(layouts.moved_line(t_, r_, clean) for t_, r_ in layouts.moved_texts(s) if not (clean and spec.unresolved_line(t_)))
         pt = (deck["meta"].get("layout_title_pt") or {}).get(lay.get("id")) if planned else None
         out.append({"layout": lay["id"] if planned else None, "tpt": f' style="--tpt:{pt * 2}px"' if (spec.LOOK_V2 and pt) else "", "id": sid, "n": n, "type": s["type"], "section": s["section"], "dark": dark, "cls": pic_cls,
                     "title": s["title"], "html": inner, "notes": notes, "steps": b.f, "status": s["status"],
@@ -790,7 +794,9 @@ FRAME_CSS = """
 .ooh-cell{display:flex;flex-direction:column;align-items:stretch}.ooh-cell .pic.framed{box-sizing:border-box}
 .ooh-name{margin:14px 0 0;text-align:center;font:700 26px/1.2 var(--head);color:var(--ink)}
 .pic-ooh .sb-pills{top:440px}.pic-ooh .body{padding-bottom:600px}.pic-ooh .body.exec{grid-template-columns:5fr 6fr}
-.pic-sb .body{padding-bottom:470px}.pic-sb .body.exec{grid-template-columns:5fr 6fr}
+.sb-strip.sb2{grid-template-columns:repeat(var(--per),372px);justify-content:center;row-gap:22px}.sb-strip.sb2 .sb-cap{font-size:19px;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pic-sb .body{padding-bottom:470px}
+.pic-sb.pic-sb2 .body{padding-bottom:600px}.pic-sb2 .sb-pills{top:auto;bottom:30px}.pic-sb .body.exec{grid-template-columns:5fr 6fr}
 """
 
 #: Picture styles: added to the stylesheet ONLY when a picture is drawn, so a deck with none keeps its exact bytes.
