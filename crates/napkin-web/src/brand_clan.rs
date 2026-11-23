@@ -217,6 +217,20 @@ async fn asset_put(
     Query(q): Query<NameQuery>,
     body: Bytes,
 ) -> ApiResult<Json<Value>> {
+    // A picture is shown, never run: an SVG with script, a handler, a foreign
+    // object or an outside link is refused here, as an agency logo is.
+    if q.name.to_ascii_lowercase().ends_with(".svg") {
+        let found = crate::svg_sanitise::active_content(&String::from_utf8_lossy(&body));
+        if let Some(f) = found.first() {
+            return Err(ApiError::new(
+                422,
+                format!(
+                    "that SVG has a {} on line {}; a logo cannot carry anything that runs",
+                    f.what, f.line
+                ),
+            ));
+        }
+    }
     let input = json!({ "path": doc, "name": q.name });
     Ok(Json(
         run(&ctx, &t, &a, "asset.put", input, body.to_vec())
@@ -237,16 +251,8 @@ async fn asset_get(
             content_type,
             bytes,
         } => {
-            // A logo is shown as a picture, never as a page: an SVG is cleaned
-            // and sent as an image, and nothing here may run script.
-            let bytes = if content_type == "image/svg+xml" {
-                let text = String::from_utf8_lossy(&bytes);
-                crate::svg_sanitise::sanitise_svg(&text)
-                    .map_err(|_| ApiError::new(422, "that picture cannot be shown safely"))?
-                    .into_bytes()
-            } else {
-                bytes
-            };
+            // Shown as a picture only: an image type, no sniffing, and a policy that
+            // lets nothing in it run even when the address is opened on its own.
             Ok((
                 [
                     (header::CONTENT_TYPE, content_type),

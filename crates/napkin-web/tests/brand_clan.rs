@@ -11,12 +11,16 @@ use clan_sdk::{AppInfo, ClanFile, CreateOptions, MakeTemplateOptions};
 use serde_json::{json, Value};
 use support::server::*;
 
+const SERVICE_TOKEN: &str = "a-service-token-of-at-least-32-bytes-xx";
+
 fn root() -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
 /// A server whose seed also holds the real Brand Clan schema.
 fn brand_server() -> Server {
+    static TOKEN: std::sync::Once = std::sync::Once::new();
+    TOKEN.call_once(|| std::env::set_var("NAPKIN_BRAND_HOST_TOKEN", SERVICE_TOKEN));
     let dir = tempfile::tempdir().unwrap();
     let seed = dir.path().join("seed");
     std::fs::create_dir_all(&seed).unwrap();
@@ -155,7 +159,7 @@ async fn make_edit_publish_default_and_history_over_http() {
 }
 
 #[tokio::test]
-async fn a_logo_is_served_as_a_cleaned_image_and_nothing_crosses_agencies() {
+async fn a_logo_is_served_as_an_image_that_cannot_run_and_nothing_crosses_agencies() {
     let s = brand_server();
     let me = sign_in(&s, "visionary", "napkin").await;
     let other = sign_in(&s, "planner", "javelin").await;
@@ -174,7 +178,20 @@ async fn a_logo_is_served_as_a_cleaned_image_and_nothing_crosses_agencies() {
         )
         .await);
     let path = made["path"].as_str().unwrap();
-    let svg = b"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'><script>alert(1)</script><circle r='4'/></svg>";
+    let evil =
+        b"<svg xmlns='http://www.w3.org/2000/svg'><script>alert(1)</script><circle r='4'/></svg>";
+    let refused = call(
+        &s,
+        Some(&me),
+        &me.tenant,
+        "POST",
+        &format!("/brand-clans/{path}/assets?name=evil.svg"),
+        &[],
+        evil.to_vec(),
+    )
+    .await;
+    assert_eq!(refused.status, StatusCode::UNPROCESSABLE_ENTITY);
+    let svg = b"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'><text x='1' y='5'>Tidewell</text><circle r='4' stroke='red'/></svg>";
     let put = call(
         &s,
         Some(&me),
@@ -192,11 +209,18 @@ async fn a_logo_is_served_as_a_cleaned_image_and_nothing_crosses_agencies() {
         .await;
     assert_eq!(got.status, StatusCode::OK);
     assert_eq!(got.header("content-type").as_deref(), Some("image/svg+xml"));
-    assert!(!String::from_utf8_lossy(&got.body).contains("script"));
+    assert!(
+        String::from_utf8_lossy(&got.body).contains("Tidewell"),
+        "a brand logo keeps its text and strokes"
+    );
     assert!(got
         .header("content-security-policy")
         .unwrap()
         .contains("sandbox"));
+    assert_eq!(
+        got.header("x-content-type-options").as_deref(),
+        Some("nosniff")
+    );
     // Another agency's tenant has no such document.
     let theirs = other.get(&s, &format!("/brand-clans/{path}")).await;
     assert_eq!(theirs.status, StatusCode::NOT_FOUND);
@@ -204,4 +228,129 @@ async fn a_logo_is_served_as_a_cleaned_image_and_nothing_crosses_agencies() {
         .get(&s, &format!("/clients/{client}/brand-clans"))
         .await;
     assert_eq!(list.status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn the_build_job_may_make_propose_and_put_with_its_token_and_nothing_more() {
+    let s = brand_server();
+    let me = sign_in(&s, "visionary", "napkin").await;
+    let client = ok(&me
+        .json(&s, "POST", "/clients", json!({"name": "Tidewell"}))
+        .await)["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let svc = |method: &str, path: &str, token: &str, actor: &str, body: Value| {
+        let h = vec![
+            ("authorization", format!("Bearer {token}")),
+            ("x-napkin-actor", actor.to_string()),
+            ("content-type", "application/json".to_string()),
+        ];
+        let (s, tenant) = (&s, me.tenant.clone());
+        let (method, path) = (method.to_string(), path.to_string());
+        async move {
+            call(
+                s,
+                None,
+                &tenant,
+                &method,
+                &path,
+                &h,
+                body.to_string().into_bytes(),
+            )
+            .await
+        }
+    };
+    let job = "process:brand_build";
+    // No cookie, the token and the job's name: a first build is made, with who acted on record.
+    let made = svc("POST", &format!("/clients/{client}/brand-clans"), SERVICE_TOKEN, job,
+        json!({"name": "Original", "candidate": bible(), "source": {"file": "book.pdf", "kind": "pdf"}, "from": {"kind": "build", "file": "book.pdf"}})).await;
+    assert_eq!(
+        made.status,
+        StatusCode::CREATED,
+        "{}",
+        String::from_utf8_lossy(&made.body)
+    );
+    let made = made.json();
+    assert_eq!(made["data"]["kit"]["changelog"][0]["by"], job);
+    assert_eq!(made["default"], true);
+    let path = made["path"].as_str().unwrap().to_string();
+    // It puts a file into the document it made, and proposes a newer version.
+    let put = call(
+        &s,
+        None,
+        &me.tenant,
+        "POST",
+        &format!("/brand-clans/{path}/assets?name=l.svg"),
+        &[
+            ("authorization", format!("Bearer {SERVICE_TOKEN}")),
+            ("x-napkin-actor", job.into()),
+        ],
+        b"<svg xmlns='http://www.w3.org/2000/svg'/>".to_vec(),
+    )
+    .await;
+    assert!(
+        put.status.is_success(),
+        "{}",
+        String::from_utf8_lossy(&put.body)
+    );
+    let mut cand = bible();
+    cand["voice"]["tone"] = json!("Dry.");
+    let p = svc(
+        "POST",
+        &format!("/brand-clans/{path}/proposal"),
+        SERVICE_TOKEN,
+        job,
+        json!({"candidate": cand, "from": {"kind": "upload", "file": "b2.pdf"}}),
+    )
+    .await;
+    assert!(
+        p.status.is_success(),
+        "{}",
+        String::from_utf8_lossy(&p.body)
+    );
+    assert_eq!(p.json()["pending"]["by"], job);
+    // Nothing else: not a publish, not a draft, not another job's name, not a wrong token.
+    for (m, route, token, actor) in [
+        (
+            "POST",
+            format!("/brand-clans/{path}/publish"),
+            SERVICE_TOKEN,
+            job,
+        ),
+        (
+            "PUT",
+            format!("/brand-clans/{path}/draft"),
+            SERVICE_TOKEN,
+            job,
+        ),
+        (
+            "POST",
+            format!("/brand-clans/{path}/proposal/accept"),
+            SERVICE_TOKEN,
+            job,
+        ),
+        (
+            "POST",
+            format!("/brand-clans/{path}/proposal"),
+            SERVICE_TOKEN,
+            "process:other",
+        ),
+        (
+            "POST",
+            format!("/brand-clans/{path}/proposal"),
+            "a-wrong-token-a-wrong-token-a-wrong-token",
+            job,
+        ),
+    ] {
+        let r = svc(
+            m,
+            &route,
+            token,
+            actor,
+            json!({"take": "all", "expect_version": 1, "candidate": bible()}),
+        )
+        .await;
+        assert_eq!(r.status, StatusCode::UNAUTHORIZED, "{m} {route} as {actor}");
+    }
 }

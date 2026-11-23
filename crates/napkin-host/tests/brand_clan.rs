@@ -285,6 +285,25 @@ fn the_list_shape_is_the_vectors() {
     assert_eq!(keys(g), keys(w));
     assert_eq!(keys(&l), keys(&want));
     assert_eq!(g["palette"], w["palette"]);
+    // The view and the history have the vectors' shapes, draft and pending included.
+    let z = &l["items"][0];
+    let path = z["path"].as_str().unwrap();
+    let mut cand = vector("data.zero-v2.json");
+    cand.as_object_mut().unwrap().remove("kit");
+    cand["voice"]["tone"] = json!("Dry.");
+    let v = ok(
+        &s,
+        &me(),
+        "draft.save",
+        json!({"path": path, "candidate": cand}),
+    );
+    let wv = vector("view.reply.json");
+    assert_eq!(keys(&v), keys(&wv));
+    assert_eq!(keys(&v["draft"]), keys(&wv["draft"]));
+    assert_eq!(keys(&v["client"]), keys(&wv["client"]));
+    let h = ok(&s, &me(), "history", json!({"path": path}));
+    assert_eq!(keys(&h[0]), keys(&vector("history.reply.json")[0]));
+    assert_eq!(keys(&v["data"]["kit"]), keys(&wv["data"]["kit"]));
 }
 
 #[test]
