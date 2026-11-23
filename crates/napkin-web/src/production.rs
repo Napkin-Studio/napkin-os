@@ -54,13 +54,7 @@ pub const DEFAULT_STATIC: &str = "/srv/napkin/production";
 
 /// Request headers the relay is given, and nothing else (projects/server.ts,
 /// relay service.py).
-const FORWARD: [&str; 5] = [
-    "content-type",
-    "if-match",
-    "x-clan-reason",
-    "x-project-id",
-    "x-project-name",
-];
+const FORWARD: [&str; 3] = ["content-type", "if-match", "x-clan-reason"];
 /// Response headers passed back to the tool. `location`: GET /assets/{sha}
 /// answers 302 to the picture's URL, which the browser follows (the client
 /// below never does; features/prod-assets-route.clan).
@@ -373,6 +367,15 @@ fn foreign_origin(headers: &HeaderMap) -> bool {
     }
 }
 
+/// The relay's retired document routes (features/production-in-library.clan):
+/// projects live in the library of napkin-web now, so a stale page asking the
+/// relay for them gets a 404 here and never reaches it.
+fn retired(rest: &str) -> bool {
+    ["/clan", "/projects"]
+        .iter()
+        .any(|p| rest == *p || rest.strip_prefix(p).is_some_and(|r| r.starts_with('/')))
+}
+
 async fn proxy(State(relay): State<Arc<Relay>>, request: Request) -> Response {
     let (parts, body) = request.into_parts();
     let identity = parts.extensions.get::<Arc<Identity>>().cloned();
@@ -390,6 +393,14 @@ async fn proxy(State(relay): State<Arc<Relay>>, request: Request) -> Response {
             StatusCode::FORBIDDEN,
             "unauthorised",
             "This request came from another site.",
+            false,
+        );
+    }
+    if retired(parts.uri.path()) {
+        return relay_error(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            "Reload the page: projects now live in the library.",
             false,
         );
     }
