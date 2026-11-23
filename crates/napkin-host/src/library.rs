@@ -745,8 +745,8 @@ pub fn find_upstream(
         .carried()
         .filter(|c| c.document_id == document_id)
         .and(m.lineage.as_ref())
-        .and_then(|l| parent_doc(&l.parent_uri))
-        .map(DocId::new);
+        .and_then(|l| parse_source_uri(&l.parent_uri).ok())
+        .map(|(id, _)| id);
     recorded
         .into_iter()
         .chain(store.documents())
@@ -762,13 +762,22 @@ pub fn find_upstream(
         })
 }
 
-/// The document id a `lineage.parent_uri` names: `doc:<id>@<version>`, or the
-/// `clan-store:<id>` that documents spun off before the version was recorded hold.
-fn parent_doc(uri: &str) -> Option<&str> {
-    match uri.strip_prefix("doc:") {
-        Some(rest) => rest.rsplit_once('@').map(|(id, _)| id),
-        None => uri.strip_prefix("clan-store:"),
-    }
+/// The document and version a `lineage.parent_uri` names: only `doc:<id>@<version>`.
+/// A document spun off before the library held every project (`clan-store:<id>`,
+/// the relay-project form, `file:///...`) is refused, in words a person can use.
+pub fn parse_source_uri(uri: &str) -> HostResult<(DocId, String)> {
+    uri.strip_prefix("doc:")
+        .and_then(|rest| rest.rsplit_once('@'))
+        .filter(|(id, v)| !id.is_empty() && v.starts_with("sha256:"))
+        .map(|(id, v)| (DocId::new(id), v.to_string()))
+        .ok_or_else(|| {
+            HostError::new(
+                422,
+                format!(
+                    "This document was made before projects lived in the library (it names its source as \"{uri}\"), so its source cannot be followed. Start again from the original."
+                ),
+            )
+        })
 }
 
 /// What a child decided about something it carried, as its parents are told
@@ -2464,6 +2473,32 @@ mod tests {
             Some("people forget")
         );
         assert!(clan_sdk::validate(&out).is_valid());
+    }
+
+    #[test]
+    fn only_the_doc_form_of_a_source_is_read() {
+        let (id, v) = parse_source_uri("doc:doc-1a2b@sha256:abc123").unwrap();
+        assert_eq!(
+            (id.to_string().as_str(), v.as_str()),
+            ("doc-1a2b", "sha256:abc123")
+        );
+        for old in [
+            "clan-store:doc-1a2b",
+            "production:prj_X@abc",
+            "file:///unknown/x.clan",
+            "doc:doc-1a2b",
+            "doc:doc-1a2b@abc",
+        ] {
+            let e = parse_source_uri(old).unwrap_err();
+            assert_eq!(e.status, 422, "{old}");
+            assert!(
+                e.message
+                    .contains("made before projects lived in the library")
+                    && e.message.contains("Start again from the original"),
+                "{old}: {}",
+                e.message
+            );
+        }
     }
 
     #[test]
