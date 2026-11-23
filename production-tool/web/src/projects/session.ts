@@ -46,6 +46,8 @@ export const LOCAL_PERSON: Person = { id: 'p_local', handle: 'guest', tenant_id:
 /** Save moments (features/pt-film-r1.clan, B7): a landed generation is posted this long after it lands (several in a
  *  row make one post), a project the server has never had this long after its first change. */
 export const LANDING_SAVE_MS = 10_000
+/** Closing a project waits this long, at most, for its last save to the library. */
+export const CLOSE_SAVE_WAIT_MS = 4_000
 export const CREATED_SAVE_MS = 1_500
 
 /** The person the app UI's `me` names, as the document records them. */
@@ -70,6 +72,8 @@ export interface SessionDeps {
   makeClan: MakeClan
   /** The person's projects on the relay (projects/server.ts); absent on the in-browser mock. */
   server?: ProjectServer
+  /** The client a new project belongs to: the page was opened from that client's dial (/production/?client=). */
+  clientId?: string
   /** How long the summary waits after a change before it goes into the index. */
   summaryDelayMs?: number
 }
@@ -206,7 +210,16 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
     await doc.flush()
     await record(pending)
     // The server's copy, once more, as it is now (when it changed, and only when it is being copied at all).
-    if (changedSinceOpen && clan && serverCopy) void clan.clan.mirrorNow('manual').catch(() => {})
+    // It is waited for (a few seconds at most): closing freed the host under a post still on its way, so a rename made
+    // just before leaving never reached the relay (Tidewell UAT: restored from Trash as "Untitled project").
+    if (changedSinceOpen && clan && serverCopy) {
+      let giveUp: ReturnType<typeof setTimeout> | undefined
+      await Promise.race([
+        clan.clan.mirrorNow('manual').catch(() => {}),
+        new Promise<void>((r) => { giveUp = setTimeout(r, CLOSE_SAVE_WAIT_MS) }),
+      ])
+      clearTimeout(giveUp)
+    }
     if (clan) await clan.close()
     await ui.close()
   })())

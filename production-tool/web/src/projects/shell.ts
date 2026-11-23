@@ -125,7 +125,7 @@ export class Shell {
       const { server, relay } = this.deps
       // With the host: the project is a library document first (its id is the library's), brought down and started.
       if (server?.signedIn && relay.kind === 'http') {
-        const id = await server.create(UNTITLED_TITLE)
+        const id = await server.create(UNTITLED_TITLE, this.deps.clientId)
         const got = await server.open(id)
         return this.importUnpacked(
           { clan: got.bytes, assets: [], mismatched: 0, fileName: '' },
@@ -150,6 +150,8 @@ export class Shell {
     await updateDoc(doc, (d) => { d.project.title = n || UNTITLED_TITLE }, n ? `rename the film to ${n}` : 'let the film name itself')
     // The library lists the manifest's title, so the name reaches it too.
     await session.services.clan?.setTitle(n || UNTITLED_TITLE).catch((e) => console.warn('could not name the library document', e))
+    // A name is a save moment: a tab closed straight after it cannot wait for the minute's save.
+    if (session.services.serverCopy) void session.services.clan?.clan.mirrorNow('manual').catch(() => {})
   }
 
   /** A copy with its own document, canvas and UI; the pictures are shared, as all of them are. */

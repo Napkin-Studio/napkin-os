@@ -92,7 +92,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
   // A tool with a page here: live, and not one that opens outside the shell (Prod).
   const routable = useCallback((id: string) => live.has(id) && toolHref({ id }) === null, [live])
   const openTool = (clientId: string, t: Tool) => {
-    const href = toolHref(t)
+    const href = toolHref(t, clientId)
     if (href) window.location.assign(href)
     else go({ level: 'tool', client: clientId, tool: t.id })
   }
