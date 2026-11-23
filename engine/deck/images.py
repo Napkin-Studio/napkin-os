@@ -861,6 +861,41 @@ def take_frame_captions(slide: dict, shots: list) -> list:
     return caps
 
 
+_COUNT_WORDS = {n: w for n, w in enumerate("zero one two three four five six seven eight nine ten eleven twelve".split())}
+_STILLS = re.compile(r"\b(" + "|".join(w for n, w in _COUNT_WORDS.items() if n) + r"|\d{1,2})(\s+)(stills|frames|shots)\b", re.I)
+
+
+def fit_storyboard_copy(slide: dict, shots: list) -> list:
+    """The storyboard slide's copy counts the frames the strip draws, not the ones the idea stage planned: 'Six stills' becomes 'Four stills'
+    when four are drawn, and a 'Frame 5: ...' line for a frame that is not drawn leaves the slide (word for word, into the notes, never lost).
+    Returns the moved lines."""
+    n = len(shots)
+    if n not in _COUNT_WORDS or not n:
+        return []
+
+    def count(m):
+        w = _COUNT_WORDS[n] if not m.group(1).isdigit() else str(n)
+        return (w.capitalize() if m.group(1)[:1].isupper() else w) + m.group(2) + m.group(3)
+    moved = []
+    for b in slide.get("blocks") or []:
+        if b.get("kind") in ("text", "small", "statement") and isinstance(b.get("text"), str):
+            b["text"] = _STILLS.sub(count, b["text"])
+        elif b.get("kind") == "copy":
+            keep = []
+            for ln in b.get("lines") or []:
+                m = _FRAME_LINE.match(str(ln))
+                if m and int(m.group(1)) not in shots:
+                    moved.append(str(ln))
+                else:
+                    keep.append(ln)
+            b["lines"] = keep
+    if "blocks" in slide:
+        slide["blocks"] = [b for b in slide["blocks"] if not (b.get("kind") == "copy" and not b.get("lines") and not b.get("answer"))]
+    if moved:
+        slide["notes"] = (str(slide.get("notes") or "").rstrip() + "\n\nNot drawn (no frame for them in Production): " + " / ".join(moved)).strip()
+    return moved
+
+
 def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", names=(), brief_document_id: str | None = None) -> dict:
     """Fill picture slots from production.json (deck-prod-assets slice 2), by slide type and channel, after the supplied pictures and before
     the empty slots and the image step, so a filled slot (or one waiting for its rights) never reaches the generation plan. Cover (only with
@@ -914,6 +949,7 @@ def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", na
                             if len(picks) < len(shots):   # fewer drawn than the storyboard has: say so on the slide ('4 of 9 shots')
                                 note = f"{len(picks)} of {len(shots)} shots"
                             s["strip"] = {"shots": [number[k] for k in picks], "of": len(shots), **({"note": note} if note else {})}
+                            fit_storyboard_copy(s, s["strip"]["shots"])
                             caps = take_frame_captions(s, s["strip"]["shots"])
                             if caps:
                                 s["strip"]["captions"] = caps
@@ -1239,6 +1275,12 @@ def drawn(deck: dict, audience: str) -> dict:
     return out
 
 
+def unflag(drawn: dict) -> dict:
+    """``drawn`` as an export shows it: a picture Production or the guard flagged is drawn as any made picture, with no red outline and no word
+    Flagged. The status is the person's to review in the app; a file that is sent carries no internal status mark (the picture's own label stays)."""
+    return {k: ({**im, "status": "made"} if im.get("status") == "flagged" else im) for k, im in drawn.items()}
+
+
 def picture_label(im: dict, default: str) -> str:
     """The label a review render draws on a picture not yet approved: the fixed ``Production`` for a Production Tool picture (deck-prod-assets Q2),
     else the deck's own label (``Illustrative`` unless the person set another). The renderers place it by deck-look's rule, whatever the word."""
@@ -1448,8 +1490,39 @@ def _zone_cells(thumb, box: tuple, W: float, H: float, grid: tuple = SHAPE_GRID)
     return out
 
 
+#: The words never cover the product. A Production picture's focal point is its subject (the can of a key visual); the subject is taken as
+#: SUBJECT_HALF of the picture's width each side of it, and a text block whose columns reach into that band is refused (the slide then
+#: sets its words beside the picture, where the whole product shows). One rule for every key visual: columns, never pixels.
+SUBJECT_HALF = 0.11
+
+
+def subject_band(im: dict, assets: dict | None, box: tuple = (BLEED_W, BLEED_H)) -> tuple | None:
+    """``(x0, x1)`` in inches across a bleed box of the columns the picture's subject takes (its focal point as the box crops the picture, plus or
+    minus SUBJECT_HALF of the width), or None when the picture has no known subject (not from Production, no focal point): then nothing is held clear."""
+    foc = (im or {}).get("focal")
+    if not foc or ((im.get("from") or {}).get("kind") != "production"):
+        return None
+    W, H = box
+    rec = (assets or {}).get(im.get("asset")) or {}
+    if rec.get("width") and rec.get("height"):
+        x0, _, x1, _ = crop_box(int(rec["width"]), int(rec["height"]), W / H, foc)
+        fx = (float(foc["x"]) * int(rec["width"]) - x0) / max(1.0, x1 - x0)
+    else:
+        fx = float(foc["x"])
+    return ((fx - SUBJECT_HALF) * W, (fx + SUBJECT_HALF) * W)
+
+
+def zone_clear_of(zone: str, band: tuple | None, block: tuple = ZONE_BLOCK, W: float = BLEED_W, H: float = BLEED_H) -> bool:
+    """Whether the text block of ``zone`` stays out of the subject's columns."""
+    if not band:
+        return True
+    x, _, w, _ = zone_box(zone, block, W, H)
+    return x + w <= band[0] or x >= band[1]
+
+
 def text_zone(src, box: tuple = (BLEED_W, BLEED_H), focal: dict | None = None, block: tuple = ZONE_BLOCK, zones=ZONES,
-              ink: str = "1B2430", paper: str = "FAF7F1", target: float = TEXT_ON_PICTURE_TARGET, shapes: bool = False) -> dict:
+              ink: str = "1B2430", paper: str = "FAF7F1", target: float = TEXT_ON_PICTURE_TARGET, shapes: bool = False,
+              subject: tuple | None = None) -> dict:
     """The calm-zone finder and scrim solver (design.pictures.zone_finder), pure Pillow on a 160 px thumbnail, deterministic.
 
     For each candidate zone of the picture as cropped to ``box`` (inches): the words take the colour the zone already favours (ink on a
@@ -1460,8 +1533,11 @@ def text_zone(src, box: tuple = (BLEED_W, BLEED_H), focal: dict | None = None, b
     W, H = box
     thumb = _thumb(src, W, H, focal)
     ink_rgb, paper_rgb = _hex_rgb(ink), _hex_rgb(paper)
-    best, tried = None, []
+    best, tried, covered = None, [], 0
     for z in zones:
+        if not zone_clear_of(z, subject, block, W, H):   # the words would cover the product
+            covered += 1
+            continue
         pix = _zone_pixels(thumb, zone_box(z, block, W, H), W, H)
         if not pix:
             continue
@@ -1498,7 +1574,8 @@ def text_zone(src, box: tuple = (BLEED_W, BLEED_H), focal: dict | None = None, b
     if best:
         return best[1]
     top = max(tried, key=lambda r: r["p10"]) if tried else {}
-    why = ("every zone is too busy under the words" if tried and all(t["why"] == "too busy" for t in tried)
+    why = ("every zone would cover the product" if covered and not tried
+           else "every zone is too busy under the words" if tried and all(t["why"] == "too busy" for t in tried)
            else "every zone has a shape or an edge under the words" if tried and all(t["why"] in ("shapes", "too busy") for t in tried)
            else f"no zone reaches {target:g}:1 at the {SCRIM_CAP:.0%} cap")
     return {"none": True, "reason": why, "best": {k: top[k] for k in ("zone", "text", "p10", "busy_sd") if k in top}, "by": "finder"}
@@ -1535,7 +1612,8 @@ def solve_text_zones(deck: dict, paths: dict, ink: str = "1B2430", paper: str = 
         if s["type"] not in TEXT_OVER_TYPES or not isinstance(im, dict) or im.get("asset") not in paths:
             continue
         if not im.get("text_zone") or (kw and (im["text_zone"].get("by") in (None, "finder"))):   # at 4:3 / A4 a zone measured at 16:9 is never kept
-            im["text_zone"] = text_zone(paths[im["asset"]], focal=im.get("focal"), ink=ink, paper=paper, **kw)
+            im["text_zone"] = text_zone(paths[im["asset"]], focal=im.get("focal"), ink=ink, paper=paper,
+                                        subject=subject_band(im, deck.get("assets"), kw.get("box", (BLEED_W, BLEED_H))), **kw)
         out.append((sid, im["text_zone"]))
     return out
 

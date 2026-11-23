@@ -672,7 +672,10 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
     audience = deck["meta"].get("audience", "review")
     out = []
     # Pictures (deck-frames-in): the same slots the pptx draws; with pictures None nothing is drawn and the markup is as it was.
-    drawn = {k: v for k, v in images.drawn(deck, audience).items() if placed is None or k in placed} if pictures else {}   # only what the pptx drew: one content in every format
+    drawn = {k: v for k, v in images.drawn(deck, audience).items() if placed is None or k in placed} if pictures else {}
+    # (only what the pptx drew: one content in every format)
+    if clean:   # as the pptx: an export carries no Flagged mark or red outline
+        drawn = images.unflag(drawn)
     plabel = ((deck["meta"].get("preferences") or {}).get("picture_approval") or {}).get("label") or "Illustrative"
     src = src or data_uri
     for n, sid in enumerate(deck["order"], 1):

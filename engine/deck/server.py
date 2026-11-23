@@ -508,7 +508,7 @@ class Server:
         try:
             self.seed(d, req, until)
             inp = self.load_inputs(d, req)
-            d.summary = {**rs.inputs_summary(inp), "needs_intake": run_deck._needs_intake(inp)}
+            d.summary = {**rs.inputs_summary(inp), "needs_intake": run_deck._needs_intake(inp), "production": bool(req.get("production_upstream"))}
             rep = self.call_engine(d, req, until)
             with self.lock:
                 if until:
