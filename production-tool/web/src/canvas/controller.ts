@@ -24,6 +24,7 @@ import { brandRows, type BrandChoice, type BrandRow } from '../jobs/context'
 import type { BrandPayload } from './swatches'
 import { countRefs, kindOfRole, type RefKind, type RefLimits } from './refBudget'
 import { landingWhy } from '../jobs/landing'
+import { ratioInWords } from '../jobs/ratioInWords'
 import { boardFrame, fitInto, holdFields, tellFull, withFields } from './boards/fitting'
 import { bringIntoView } from './boards/boards'
 import { boardForRole, placeOnBoard, roleOfElement } from './boards/arrange'
@@ -497,9 +498,10 @@ export class CanvasController {
       ...plan.notes.map((n, k) => ({ el: this.els().find((e) => e.id === n.elId)!, id: noteIds[k] })),
     ]
     const jobId = newId('job')
-    // The shape: the first picture or drawing's, snapped to the nearest of the four; words only, the storyboard's.
+    // The shape: a ratio the person wrote ("4:5 poster") wins (UAT round 3: a plain picture with the bag linked came out 16:9, the
+    // bag's own shape); else the first picture or drawing's, snapped to the nearest of the four; words only, the storyboard's.
     const first = plan.images[0]
-    const ratio: Ratio = first ? ratioFor(this.aspectOfImage(first.elId, first.asset)) : mainStoryboard(doc)?.ratio ?? '16:9'
+    const ratio: Ratio = ratioInWords(typed) ?? (first ? ratioFor(this.aspectOfImage(first.elId, first.asset)) : mainStoryboard(doc)?.ratio ?? '16:9')
     const size = nodeSize(ratio === '16:9' ? { w: 16, h: 9 } : ratio === '9:16' ? { w: 9, h: 16 } : ratio === '1:1' ? { w: 1, h: 1 } : { w: 4, h: 5 })
     const slot = opts.at ? { ...opts.at, ...size } : slotFrom(this.els(), sources.map((s) => s.el), size)
     this.placeGen(jobId, 'generate', sources.map((s) => s.id), sources, slot)
