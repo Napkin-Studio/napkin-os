@@ -70,6 +70,7 @@ import { keptCaption } from '../canvas/fit'
 import { isBrandRole, payloadFor, payloadMissing, type BrandPayload } from '../canvas/swatches'
 import { REF_ROLES, type Ask, type CustomData, type ModelChoice, type NamedRef, type RefRole } from '../contracts/types'
 import { REF_ROLE_TABLE } from '../contracts/load'
+import { LinkNotice } from '../LinkNotice'
 import { currentPictureFrame, keyNamed, keysList, mainScript, mainStoryboard, pictureVersions, refsList, videoOfStoryboard } from '../model/selectors'
 import { choiceToSend, modelChoicesFor, modelWhere } from '../capabilities'
 import { lastWorkedModel } from '../jobs/follow'
@@ -862,6 +863,13 @@ export function Character({ initial, active, onPictureEditor }: {
                 },
               }} />
             )
+          })()}
+          {ctrl && canvas && ownSel && !selBrief && !resizing && !confirming && !placing && !which && ownSel.els.length === 1 && (() => {
+            const c = cardOf(ownSel.els[0])
+            if (!c || (c.kind !== 'script' && c.kind !== 'storyboard' && c.kind !== 'video')) return null
+            const b = bounds(ownSel.els)
+            const tl = toView({ x: b.minX, y: b.minY })
+            return <LinkNotice kind={c.kind} id={c.id} style={{ left: tl.x + 8, top: tl.y + 10 }} />
           })()}
           {ctrl && selected.length > 0 && !ownSel && !selBrief && !confirming && !placing && (
             <FloatingToolbar ctrl={ctrl} selected={selected} toView={toView} onDelete={requestDelete} onEdit={setEditing} gather={gather} onGather={onGather}

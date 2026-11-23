@@ -390,6 +390,26 @@ describe('Start from a brief: the data path', () => {
   })
 })
 
+describe('the legal line when a mandatory only mentions legal (UAT 2026-11-23: the Tidewell card read "Cornish")', () => {
+  const LINE = 'Contains naturally occurring sea minerals. Enjoy as part of a balanced diet.'
+  // As the run locked it (brief-final), and as the first draft put it, with the Cornish note ahead of the Include.
+  const LOCKED = [
+    'The can is the hero, with the logo bottom left.', 'No real, recognisable faces (lookalike issue last year).', 'Never show the product with alcohol in shot.',
+    `Include: "${LINE}"`, "Use 'Cornish' only once legal has cleared it.", 'Health and environmental wording must meet the CAP Code, the GB register and substantiation rules.',
+  ]
+  const DRAFT = [
+    'the can must be the hero, logo bottom left.', 'Never show it with alcohol in shot.', 'Minerals from the Cornish coast (legal is checking the word "Cornish")', `Include "${LINE}"`,
+  ]
+  it('takes the Include sentence, never the stray quoted word', () => {
+    expect(legalOf({ mandatories: LOCKED })).toBe(LINE)
+    expect(legalOf({ mandatories: DRAFT })).toBe(LINE)
+    expect(legalOf({ mandatories: [...DRAFT].reverse() })).toBe(LINE)
+  })
+  it('a quoted word near "legal" alone is no legal line', () => {
+    expect(legalOf({ mandatories: ['Minerals from the Cornish coast (legal is checking the word "Cornish")', "Use 'Cornish' only once legal has cleared it."] })).toBeUndefined()
+  })
+})
+
 describe('the legal line a brief carries (UAT 2026-11-24: the Ferncliff caffeine line was missed)', () => {
   const CAFFEINE = 'Contains caffeine. Not recommended for children or pregnant women.'
   // The real Ferncliff mandatory, with its tail: the quoted words only go on the card.

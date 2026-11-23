@@ -8,6 +8,7 @@ import { useDoc, useServices } from '../app/context'
 import { shotNumber } from '../model/selectors'
 import { clipLen, MAX_SPEED, MIN_SPEED, type Cut, type CutClip, type TextStyle } from './cut'
 import { editCut } from './editOps'
+import { briefLegal } from './timeline'
 import { coversShot, genTitle, sharesBox, shotTitle, type Gen } from './model'
 import { tc } from './media'
 import type { RoomData } from './Rooms'
@@ -141,18 +142,21 @@ export function Inspector({ data, cut, picked, onPick, onChange, onFeel, onSwap,
   if (picked?.kind === 'card') {
     const e = cut.endCard
     if (!e) return null
+    const fromBrief = briefLegal(doc, v)
     return (
       <div className="rm-tab">
         <div className="rm-tabhead"><span className="rm-kicker pt-mono">End card · locked last</span><b className="rm-clamp2" title={e.headline || e.line}>{e.headline || e.line}</b></div>
         <CardField label="Headline" value={e.headline} max={120} onSet={(x) => void editCut.endCard(docStore, v, { headline: x })} />
         <CardField label="Line" value={e.line} max={200} onSet={(x) => void editCut.endCard(docStore, v, { line: x || e.headline || 'Your brand' })} />
         <CardField label="Call to action" value={e.cta ?? ''} max={80} onSet={(x) => void editCut.endCard(docStore, v, { cta: x })} />
+        <CardField label="Legal" value={e.legal ?? ''} max={200} onSet={(x) => void editCut.endCard(docStore, v, { legal: x })}
+          mark={fromBrief && e.legal === fromBrief ? 'from the brief' : undefined} hint={!fromBrief && !e.legal ? 'Link the Brief to this film to fill it in.' : undefined} />
         <label className="rm-num"><span className="rm-rowname">Colour</span>
           <input type="color" className="rm-colour" value={e.bg} aria-label="Card colour" onChange={(ev) => void editCut.endCard(docStore, v, { bg: ev.target.value.toUpperCase() })} />
           <span className="pt-mono rm-faint">{e.bg}</span>
         </label>
         <Seconds label="Length" value={e.durS} min={0.5} max={10} onSet={(x) => void editCut.endCard(docStore, v, { durS: x })} />
-        <p className="rm-note">The logo comes from the Brand board when it has one. The studio's own card follows yours.</p>
+        <p className="rm-note">The logo comes from the Brand board when it has one.</p>
         <button type="button" className="btn ghost rm-wide" onClick={() => { void editCut.removeEndCard(docStore, v); onPick(null) }}>Remove the end card</button>
       </div>
     )
@@ -169,7 +173,7 @@ function TextWords({ words, onSet }: { words: string; onSet: (w: string) => void
   )
 }
 
-function CardField({ label, value, max, onSet }: { label: string; value: string; max: number; onSet: (v: string) => void }) {
+function CardField({ label, value, max, onSet, mark, hint }: { label: string; value: string; max: number; onSet: (v: string) => void; mark?: string; hint?: string }) {
   const [v, setV] = useState(value)
   const [was, setWas] = useState(value)
   if (was !== value) {
@@ -177,8 +181,9 @@ function CardField({ label, value, max, onSet }: { label: string; value: string;
     setV(value)
   }
   return (
-    <label className="rm-fieldlabel">{label}
+    <label className="rm-fieldlabel">{mark || hint ? <span>{label}{mark ? <span className="rm-faint rm-frombrief">{mark}</span> : null}</span> : label}
       <input className="rm-input" maxLength={max} value={v} onChange={(e) => setV(e.target.value)} onBlur={() => { if (v !== value) onSet(v.trim()) }} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} />
+      {hint ? <span className="rm-faint rm-legalhint">{hint}</span> : null}
     </label>
   )
 }
