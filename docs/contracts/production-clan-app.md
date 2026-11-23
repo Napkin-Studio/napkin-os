@@ -14,6 +14,8 @@ Notation: `{t}` the tenant id (`GET /api/session` `tenant`); `{doc}` the library
 - The manifest's `client` and `title` in the saved bytes are taken as sent.
 - Error bodies other than 409 are `{"error":"<text>"}`; the status is the contract, the text is not.
 
+Download of a Production document returns the stored bytes exactly (not the view-swapped archive), so `If-Match` is the sha256 of what the tool downloaded. `X-Saved-At` is RFC 3339 with milliseconds. A template id (`app-...`) is 422 on save.
+
 ## 2. Read: `GET /api/t/{t}/d/{doc}/download`
 
 Also returns `ETag: "V"` and `X-Saved-At`. The version is also in `GET .../data`.
@@ -41,6 +43,16 @@ Stage 1: `/production/?doc=<doc>`; the page reads the tenant from `/api/session`
 ## 8. Session
 
 `GET /api/session` gains `"media_base": "<https base>"|null`, never a secret. A picture with sha `h` is `${media_base}/<prefix>/<hex>`, prefix by origin (`in` uploads, `out` generated, `ads` renders), the keys `production-tool/relay/blobs.py` writes. No address is stored in the document.
+
+## 8a. Delete, Trash, restore, purge (owner decision: restorable for 30 days)
+
+All under `/api/t/{t}`, session required. Each agency has its own trash: another agency gets 404 on its own path and 4xx on the owner's.
+- `DELETE /d/{doc}`: 200 `{"trashed":true,"restorable_until":"<RFC 3339, +30 days>"}`; 404 missing or already trashed; 400 if the id is not a `doc-` id (a template or home is never deleted).
+- `GET /trash`: 200 `[{"path","trashed_at","restorable_until"}]`, newest first.
+- `POST /d/{doc}/restore`: 200 `{"restored":true,"path":"<doc>"}`; 404 not in the trash; 409 that id is already in the library.
+- `POST /trash/purge` body `{"dry_run":true}`: `dry_run` defaults to true (an empty body is a dry run); Napkin admins only, else 403; 200 `{"dry_run":bool,"older_than_days":30,"purged":["<doc>",...]}`; a dry run removes nothing.
+- Trashed documents are not in `GET /library` or the client listings. Storage: `<tenant>/trash/<unix-ms>-<slug>.clan`.
+- Stage 1 "no Delete" in section 5 is superseded: the tool may offer Delete (a new screen still needs an approved mock).
 
 ## 9. Document (contract 3)
 

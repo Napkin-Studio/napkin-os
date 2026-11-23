@@ -91,7 +91,7 @@ vectors["save-conflict"] = dict(covers=["S0-3", "S1-10"], description="Two saves
         step("download is the winner", get(DOWN), 200, {"ETag": f'"{V1}"'}, body_base64=b64(B1)),
     ])
 OTHER_ID = "99999999-8888-4777-8666-555555555555"
-TMPL = "template-production"
+TMPL = "app-production"
 vectors["save-refusals"] = dict(covers=["S0-4"], description="Everything the save route refuses; the store is untouched by every step.",
     documents=[doc(), doc(app="ie.napkin.research", did="doc-research", ident=IDENT), doc(template=True, did=TMPL), doc(tenant=OTHER_TENANT, did="doc-elsewhere")], steps=[
         step("no If-Match", put(B1, None), 428, body=err("If-Match is required")),
@@ -125,6 +125,38 @@ vectors["spinoff-not-installed"] = dict(covers=["S1-3"], description="Target app
     documents=[brief], installed_apps=[], steps=[
         {"name": "spin off", "request": {"method": "POST", "path": SP, "headers": {"Content-Type": "application/json", "Cookie": COOKIE}, "body": {"app_id": "ie.napkin.deck", "title": "x"}},
          "response": {"status": 422, "headers": {}, "body": {"error": "app not installed: ie.napkin.deck"}}},
+    ])
+
+ADMIN = "napkin_session=vector-admin"
+TR = f"/api/t/{TENANT}"
+def req(method, path, body=None, cookie=COOKIE):
+    r = {"method": method, "path": path, "headers": {"Cookie": cookie} if cookie else {}}
+    if body is not None:
+        r["headers"]["Content-Type"] = "application/json"
+        r["body"] = body
+    return r
+UNTIL = "2026-12-23T10:00:00Z"
+old = dict(doc(did="doc-old"), trashed_at="2026-10-01T08:00:00Z", restorable_until="2026-10-31T08:00:00Z")
+dup = dict(doc(did="doc-dup"), trashed_at="2026-11-01T08:00:00Z", restorable_until="2026-12-01T08:00:00Z")
+vectors["trash"] = dict(covers=["S1-8"], description="Delete goes to the agency's Trash, restorable for 30 days; trashed documents leave the library. Purge is admin only and dry by default.",
+    admin_cookie=ADMIN, documents=[doc(), doc(did="doc-dup")], trashed=[old, dup], steps=[
+        step("delete", req("DELETE", f"{TR}/d/{DOC}"), 200, body={"trashed": True, "restorable_until": UNTIL}),
+        step("delete again", req("DELETE", f"{TR}/d/{DOC}"), 404, body=err("not found")),
+        step("a template is never deleted", req("DELETE", f"{TR}/d/{TMPL}"), 400, body=err("not a document id")),
+        step("trash lists newest first", req("GET", f"{TR}/trash"), 200, body=[
+            {"path": DOC, "trashed_at": NOW, "restorable_until": UNTIL},
+            {"path": "doc-dup", "trashed_at": "2026-11-01T08:00:00Z", "restorable_until": "2026-12-01T08:00:00Z"},
+            {"path": "doc-old", "trashed_at": "2026-10-01T08:00:00Z", "restorable_until": "2026-10-31T08:00:00Z"}]),
+        step("library no longer lists it", req("GET", f"{TR}/library"), 200, body_subset={"items": [{"path": "doc-dup"}]}),
+        step("restore", req("POST", f"{TR}/d/{DOC}/restore"), 200, body={"restored": True, "path": DOC}),
+        step("restore again", req("POST", f"{TR}/d/{DOC}/restore"), 404, body=err("not found")),
+        step("restore over an id already in the library", req("POST", f"{TR}/d/doc-dup/restore"), 409, body=err("already in the library")),
+        step("another agency's path", req("DELETE", f"/api/t/{OTHER_TENANT}/d/{DOC}"), 404, body=err("not found")),
+        step("purge needs an admin", req("POST", f"{TR}/trash/purge", {"dry_run": False}), 403, body=err("admins only")),
+        step("dry run lists and removes nothing", req("POST", f"{TR}/trash/purge", {"dry_run": True}, ADMIN), 200, body={"dry_run": True, "older_than_days": 30, "purged": ["doc-old"]}),
+        step("an empty body is a dry run", req("POST", f"{TR}/trash/purge", None, ADMIN), 200, body={"dry_run": True, "older_than_days": 30, "purged": ["doc-old"]}),
+        step("purge", req("POST", f"{TR}/trash/purge", {"dry_run": False}, ADMIN), 200, body={"dry_run": False, "older_than_days": 30, "purged": ["doc-old"]}),
+        step("purged is gone", req("POST", f"{TR}/d/doc-old/restore"), 404, body=err("not found")),
     ])
 
 for name, v in vectors.items():

@@ -9,7 +9,7 @@ const dir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..'
 const b64 = (s: string) => new Uint8Array(Buffer.from(s, 'base64'))
 
 interface Step { name: string; request: { method: string; path: string; headers: Record<string, string>; body_base64?: string; body_size?: number; body?: unknown }; response: { status: number; headers: Record<string, string>; body?: unknown; body_base64?: string; body_subset?: unknown; new_document?: Record<string, unknown> } }
-interface Vector { vector: string; tenant: string; now: string; session_cookie: string; documents: Array<Record<string, unknown>>; installed_apps?: string[]; steps?: Step[]; variants?: Array<{ media_base: string | null; steps: Step[] }> }
+interface Vector { admin_cookie?: string; trashed?: Array<Record<string, unknown>>; vector: string; tenant: string; now: string; session_cookie: string; documents: Array<Record<string, unknown>>; installed_apps?: string[]; steps?: Step[]; variants?: Array<{ media_base: string | null; steps: Step[] }> }
 
 const subset = (got: unknown, want: unknown, at = ''): void => {
   if (Array.isArray(want)) {
@@ -24,7 +24,7 @@ const toDoc = (d: Record<string, unknown>): StubDoc => ({ ...(d as unknown as St
 
 describe('vectors', () => {
   const files = readdirSync(dir).filter((f) => f.endsWith('.json'))
-  it('has the seven vectors', () => expect(files.sort()).toEqual(['library-item.json', 'save-conflict.json', 'save-ok.json', 'save-refusals.json', 'session.json', 'spinoff-not-installed.json', 'spinoff-ok.json']))
+  it('has the eight vectors', () => expect(files.sort()).toEqual(['library-item.json', 'save-conflict.json', 'save-ok.json', 'save-refusals.json', 'session.json', 'spinoff-not-installed.json', 'spinoff-ok.json', 'trash.json']))
 
   for (const f of files) {
     const v = JSON.parse(readFileSync(join(dir, f), 'utf8')) as Vector
@@ -40,7 +40,7 @@ describe('vectors', () => {
     const runs = v.variants ? v.variants.map((x) => ({ label: String(x.media_base), mediaBase: x.media_base, steps: x.steps })) : [{ label: '', mediaBase: null, steps: v.steps ?? [] }]
     for (const r of runs) {
       it(`${v.vector} ${r.label}: the stub answers like the vector`, async () => {
-        const stub = createHostStub({ tenant: v.tenant, sessionCookie: v.session_cookie, now: () => v.now, mediaBase: r.mediaBase, installedApps: v.installed_apps, documents: v.documents.map(toDoc) })
+        const stub = createHostStub({ tenant: v.tenant, sessionCookie: v.session_cookie, adminCookie: v.admin_cookie, now: () => v.now, mediaBase: r.mediaBase, installedApps: v.installed_apps, documents: v.documents.map(toDoc), trashed: (v.trashed ?? []).map(toDoc) })
         for (const s of r.steps) {
           const q = s.request
           const body = q.body_base64 ? b64(q.body_base64) : q.body_size ? new Uint8Array(q.body_size) : q.body !== undefined ? JSON.stringify(q.body) : undefined

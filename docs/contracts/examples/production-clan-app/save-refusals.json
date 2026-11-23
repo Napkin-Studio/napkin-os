@@ -32,7 +32,7 @@
     },
     {
       "tenant": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
-      "id": "template-production",
+      "id": "app-production",
       "app_id": "ie.napkin.production",
       "identity": "11111111-2222-4333-8444-555555555555",
       "template": true,
@@ -97,7 +97,7 @@
       "name": "a template, not an instance",
       "request": {
         "method": "PUT",
-        "path": "/api/t/5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f/d/template-production/save",
+        "path": "/api/t/5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f/d/app-production/save",
         "headers": {
           "Content-Type": "application/vnd.clan+zip",
           "If-Match": "\"sha256:7f57f22ea9ed8d2e539243bdb72015faf6326159aa285954a9d71bda15eef7fa\"",
