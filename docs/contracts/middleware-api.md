@@ -1900,8 +1900,11 @@ deck engine (`engine/deck/server.py`) and writes what the engine reports into th
 (owner, 2026-11-13): the bible goes to the model and nowhere else. No purpose here (`brand_identify`, `brand_build_piece`, `brand_build_pictures`) is ever logged with a request or
 reply body, whatever `NAPKIN_RUNLOG_BODIES` says; no error message carries what the file said; nothing reaches the shared layers, RAG or evals.
 
-- **`brand_identify@1`** (short, writes nothing). `input {file {name, pages?, text?, data_b64?}, client {id, name}, brand_clans [{document_id, path, name, default}]}`. The host's
-  text and page count are used as sent; with only `data_b64` the middleware reads the file itself (PDF, Word, PowerPoint, zip, picture, text). Step 1 is free rules over the file name and text
+- **The file** (both tasks) is `input.file {name, pages?, text?, data_b64?}`, or, for a file already stored in the document, **exactly one `input.attachments[]` entry `{name: <stored name>, label: <the person's name for it>}`**,
+  which the host fills as it does for every task (`ops/read.rs`: `text`, a PDF as `document {media_type, data}` up to 32 MB, a Word or PowerPoint file's `images`). A zip goes as `data_b64`. The file's name in the
+  Brand Clan is `label`, never the stored name.
+- **`brand_identify@1`** (short, writes nothing). `input {file | attachments, client {id, name}, brand_clans [{document_id, path, name, default}]}`. The host's
+  text and page count are used as sent; with only the bytes the middleware reads the file itself (PDF, Word, PowerPoint, zip, picture, text). Step 1 is free rules over the file name and text
   (`brand/signals.py`: name words, "logo clear space", "colour palette", "typography", "tone of voice", hex or Pantone codes, more than 8 pages, a zip's logo or font files): `no` stops there, **no
   model call, no question**. Otherwise step 2 is **one** Claude Haiku call (purpose `brand_identify`, Bedrock id from `model_routes.ALIASES["haiku-4.5"]`, built-in route, a routes file overrides it;
   at most 6,000 characters of text, 200 tokens out; about a cent), counted in `trace.usage` like every model call. Result: `{ask, reason, pages, signals {score, verdict, found}, model_called,
@@ -1909,7 +1912,7 @@ reply body, whatever `NAPKIN_RUNLOG_BODIES` says; no error message carries what 
   `{mode new|choose, options, update {document_id, name}|null, pages, over_cap, page_cap: 120}`; with no Brand Clan `options` is `[build, not_bible]`, otherwise `[update, new, not_bible]`
   with `update` the Brand Clan whose name is in the file's name (a non-default one is preselected, still asked), else the default. A detection that fails or times out is **not an error**:
   `ask: false, reason: detection_failed`; the file chip keeps its "Build a Brand Clan from this" action. `brand_name` is matched to `client.name` (`matches_client`), never typed by the person.
-- **`brand_build@1`** (long). `input {file {name, data_b64}, client {id}, mode new|update, name? (new, default "Original"), brand_clan {document_id, path, name} (update), confirmed_over_cap?}`.
+- **`brand_build@1`** (long). `input {file | attachments, client {id}, mode new|update, name? (new, default "Original"), brand_clan {document_id, path, name} (update), confirmed_over_cap?}`.
   `400` for bad input, `503 host_unavailable` when no host is configured to write to (`NAPKIN_BRAND_HOST_URL`, `NAPKIN_BRAND_HOST_TOKEN`, `NAPKIN_BRAND_TENANT`), `409 over_cap` for a file over
   **120 pages** until `confirmed_over_cap: true` (the middleware never reads more than 400), `409 job_state` while another `brand_build` runs on the document. The job reads the file in runs of 15 pages, each
   sent as its own PDF so the model sees logos and colour chips as pictures (`brand_build_piece`, Sonnet 5.5), then the pictures the file holds (embedded JPEGs and 8-bit images of a PDF, a zip's picture

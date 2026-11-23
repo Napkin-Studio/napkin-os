@@ -15,33 +15,53 @@ NAME, TASK, VERSION, KIND, CAPABILITY_MAJOR = "brand_identify", "brand_identify"
 MAX_BYTES = 64_000_000
 
 
-def file_of(inp: dict, need_bytes: bool):
-    """(name, data|None, pages|None, text|None, media_type) from input.file, or a 400. Text the host already read is used as sent."""
+class FileIn:
+    """The file a task is about: its display name, the bytes when it has them, the host-read text, a page count, the pictures the host cut out of it."""
+
+    def __init__(self, name, data=None, pages=None, text=None, media="", images=None):
+        self.name, self.data, self.pages, self.text, self.media, self.images = name, data, pages, text, media, images or []
+
+
+def decode(d) -> bytes:
+    if not isinstance(d, str) or not d:
+        raise bad("the file's bytes must be base64")
+    if len(d) > MAX_BYTES * 4 // 3 + 4:
+        raise TaskError(413, "too_large", f"the file is over {MAX_BYTES // 1_000_000} MB")
+    try:
+        return base64.b64decode(d, validate=True)
+    except (binascii.Error, ValueError):
+        raise bad("the file's bytes are not valid base64") from None
+
+
+def file_of(inp: dict) -> FileIn:
+    """The file, from `input.file {name, data_b64?, text?, pages?}` or from the one attachment the host has read for us
+    (`input.attachments[0] {name, label?}`: the host splices `text`, a PDF as `document {media_type, data}`, a Word or PowerPoint file's
+    pictures as `images`; see napkin-host ops/read.rs). A 400 when neither is there."""
     f = inp.get("file")
-    if not isinstance(f, dict):
-        raise bad("input.file must be an object: {name, and data_b64 or text}")
+    if f is None:
+        atts = inp.get("attachments")
+        if not isinstance(atts, list) or len(atts) != 1 or not isinstance(atts[0], dict):
+            raise bad("input.file {name, ...} or exactly one input.attachments entry is required")
+        a = atts[0]
+        name = a.get("label") or a.get("name")
+        doc = a.get("document") if isinstance(a.get("document"), dict) else None
+        data = decode(doc.get("data")) if doc else None
+        images = [{"media_type": i.get("media_type"), "data": decode(i.get("data"))} for i in a.get("images") or [] if isinstance(i, dict)]
+        f = {"name": name, "text": a.get("text"), "media_type": (doc or {}).get("media_type"), "pages": a.get("pages")}
+    else:
+        if not isinstance(f, dict):
+            raise bad("input.file must be an object: {name, and data_b64 or text}")
+        data = decode(f["data_b64"]) if f.get("data_b64") is not None else None
+        images = []
     name = f.get("name")
     if not isinstance(name, str) or not name.strip() or len(name) > 300 or "/" in name or "\\" in name:
-        raise bad("input.file.name must be the file's name")
-    data = None
-    if f.get("data_b64") is not None:
-        d = f["data_b64"]
-        if not isinstance(d, str) or not d:
-            raise bad("input.file.data_b64 must be the file's bytes as base64")
-        if len(d) > MAX_BYTES * 4 // 3 + 4:
-            raise TaskError(413, "too_large", f"the file is over {MAX_BYTES // 1_000_000} MB")
-        try:
-            data = base64.b64decode(d, validate=True)
-        except (binascii.Error, ValueError):
-            raise bad("input.file.data_b64 is not valid base64") from None
-    if need_bytes and not data:
-        raise bad("input.file.data_b64 is required")
+        raise bad("the file's name must be given, without a path")
     text, pages = f.get("text"), f.get("pages")
     if text is not None and not isinstance(text, str):
         raise bad("input.file.text must be text")
     if pages is not None and (not isinstance(pages, int) or isinstance(pages, bool) or pages < 0):
         raise bad("input.file.pages must be a page count")
-    return name.strip(), data, pages, text, str(f.get("media_type") or "")
+    return FileIn(name.strip(), data, pages, text, str(f.get("media_type") or ""), images)
 
 
 def clans_of(inp: dict) -> list:
@@ -55,11 +75,11 @@ def clans_of(inp: dict) -> list:
 
 def run(req, caps):
     inp = req.inp
-    name, data, pages, text, _ = file_of(inp, need_bytes=False)
-    members = None
-    if (text is None or pages is None) and data:
+    f = file_of(inp)
+    name, text, pages, members = f.name, f.text, f.pages, None
+    if (text is None or pages is None) and f.data:
         try:
-            m = material.load(name, data)
+            m = material.load(name, f.data)
         except TaskError:
             m = None   # a file Napkin cannot read is not asked about
         if m is not None:

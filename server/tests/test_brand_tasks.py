@@ -235,3 +235,42 @@ def test_the_tasks_resolve_for_a_document_whose_pipeline_predates_them():
     from napkin import registry
     clan = {"pipeline": {"tasks": {"extract_ask": {"handler": "extract_ask@1"}}}}
     assert registry.resolve("brand_identify", clan)[1] == "brand_identify@1.0" and registry.resolve("brand_build", clan)[1] == "brand_build@1.0"
+
+
+def spliced(data=None, text=None, images=None, name="document-173-0.pdf", label="Tidewell-brand-book-2026.pdf"):
+    """An attachment as the host hands it to a task (napkin-host ops/read.rs): the stored name, the person's name for it, the text, the PDF itself."""
+    a = {"name": name, "label": label}
+    if text is not None:
+        a["text"] = text
+    if data is not None:
+        a["document"] = {"media_type": "application/pdf", "data": b64(data)}
+    if images:
+        a["images"] = [{"media_type": "image/png", "data": b64(i)} for i in images]
+    return {"attachments": [a]}
+
+
+def test_identify_takes_the_attachment_the_host_read_and_names_it_by_the_persons_name(srv):
+    r = post(srv, "brand_identify", {**spliced(make_pdf(BIBLE_PAGES), text="\n".join(BIBLE_PAGES)), "client": CLIENT}).json()
+    assert r["result"]["ask"] and r["result"]["pages"] == len(BIBLE_PAGES)
+    assert srv.model.calls[0][1]["file_name"] == "Tidewell-brand-book-2026.pdf"      # the label, not document-173-0.pdf
+
+
+def test_build_takes_the_attachment_the_host_read(srv, writer):
+    done = finish(srv, post(srv, "brand_build", {**spliced(make_pdf(BIBLE_PAGES)), "client": CLIENT, "mode": "new"}).json()["job"]["id"])
+    assert done["job"]["state"] == "done", done["job"]
+    assert writer.calls[-1][2]["source"]["file"] == "Tidewell-brand-book-2026.pdf" and writer.calls[-1][2]["from"]["file"] == "Tidewell-brand-book-2026.pdf"
+
+
+def test_a_word_file_the_host_only_read_builds_from_its_text_and_pictures(srv, writer):
+    inp = {**spliced(text="\n".join(BIBLE_PAGES), images=[fake_png(seed=1), fake_png(seed=2)], name="document-1-0.docx", label="Tidewell-brand-book.docx"),
+           "client": CLIENT, "mode": "new"}
+    done = finish(srv, post(srv, "brand_build", inp).json()["job"]["id"])
+    assert done["job"]["state"] == "done", done["job"]
+    body = writer.calls[-1][2]
+    assert body["source"] == {"file": "Tidewell-brand-book.docx", "kind": "docx", "pages": 1}     # no asset: the host keeps the file it already holds
+    assert body["candidate"]["visual"]["colours"]
+
+
+def test_build_with_nothing_to_read_is_a_400(srv, writer):
+    r = post(srv, "brand_build", {"attachments": [{"name": "x.pdf"}], "client": CLIENT, "mode": "new"})
+    assert r.status_code == 400

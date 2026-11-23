@@ -19,6 +19,7 @@ MAX_IMAGE = 5 * 1024 * 1024
 MIN_IMAGE = 1500            # smaller is a rule line or a bullet, never a logo
 MAX_IMAGES = 80             # kept from one file
 ZIP_MEMBERS, ZIP_BYTES = 600, 300 * 1024 * 1024
+EXT_OF = {"image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp"}
 IMAGE_EXT = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp"}
 SVG = "image/svg+xml"
 
@@ -96,6 +97,16 @@ def load(name: str, data: bytes) -> Material:
     if ext in ("txt", "md", "markdown", "text"):
         return Material(name, "text", pages=[data.decode("utf-8", "replace")])
     raise TaskError(415, "unsupported_file", "Napkin reads a PDF, Word or PowerPoint file, a picture, a text file or a zip of them")
+
+
+def from_text(name: str, text: str | None, images: list | None = None) -> Material:
+    """A file the host already read for us (a Word or PowerPoint file: its text and the pictures inside): one page of text, the pictures as they are."""
+    ims = [Image(f"m{i}", f"picture-{i}.{EXT_OF.get(x['media_type'], 'bin')}", x["media_type"], x["data"]) for i, x in enumerate(images or [], 1)
+           if x.get("media_type") in EXT_OF and MIN_IMAGE <= len(x["data"]) <= MAX_IMAGE][:MAX_IMAGES]
+    kind = ext_of(name) if ext_of(name) in ("docx", "pptx") else "text"
+    if not (text or "").strip() and not ims:
+        raise unreadable("the host could read nothing from the file")
+    return Material(name, kind, pages=[text.strip()] if (text or "").strip() else [], images=ims)
 
 
 def pdf_pages(data: bytes) -> int:

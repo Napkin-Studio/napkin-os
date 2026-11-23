@@ -22,7 +22,9 @@ SOURCE_MEDIA = {"pdf": "application/pdf", "zip": "application/zip", "docx": "app
 
 
 def check(inp: dict) -> dict:
-    name, data, _, _, media = file_of(inp, need_bytes=True)
+    f = file_of(inp)
+    if not f.data and not f.text and not f.images:
+        raise bad("the file's bytes are required (input.file.data_b64, or an attachment the host could read)")
     client = inp.get("client")
     if not isinstance(client, dict) or not isinstance(client.get("id"), str) or not client["id"]:
         raise bad("input.client.id is required: a Brand Clan belongs to a client")
@@ -42,7 +44,7 @@ def check(inp: dict) -> dict:
     over = inp.get("confirmed_over_cap", False)
     if not isinstance(over, bool):
         raise bad("input.confirmed_over_cap must be true or false")
-    return {"file": name, "data": data, "media": media, "client": client["id"], "mode": mode, "label": label, "clan": clan, "confirmed": over}
+    return {"file": f.name, "data": f.data, "media": f.media, "text": f.text, "images": f.images, "client": client["id"], "mode": mode, "label": label, "clan": clan, "confirmed": over}
 
 
 def over_cap(pages: int, confirmed: bool):
@@ -57,7 +59,7 @@ def prepare(req, caps, settings):
     writer = writer_for(settings)
     if writer is None:
         raise TaskError(503, "host_unavailable", "no host is configured to write a Brand Clan to (NAPKIN_BRAND_HOST_URL)")
-    if c["data"][:4] == b"%PDF":
+    if (c["data"] or b"")[:4] == b"%PDF":
         over_cap(material.pdf_pages(c["data"]), c["confirmed"])   # a 409 before any job: the person is asked first
 
     def work():
@@ -66,7 +68,7 @@ def prepare(req, caps, settings):
 
 
 def run(c: dict, caps, writer):
-    m = material.load(c["file"], c["data"])
+    m = material.load(c["file"], c["data"]) if c["data"] else material.from_text(c["file"], c["text"], c["images"])
     over_cap(m.page_count, c["confirmed"])
     build = Build(caps.model, m, c["label"])
     caps.jobs.progress(0, build.units() + 1)
@@ -82,7 +84,8 @@ def run(c: dict, caps, writer):
         if m.page_count:
             src["pages"] = m.page_count
         src_name = safe_name(c["file"])
-        src["asset"] = writer.put_asset(c["client"], doc, src_name, c["data"], c["media"] or SOURCE_MEDIA.get(m.kind, "application/octet-stream"))
+        if c["data"]:     # the file itself is kept as the source; a Word or PowerPoint file the host only read for us is not re-sent
+            src["asset"] = writer.put_asset(c["client"], doc, src_name, c["data"], c["media"] or SOURCE_MEDIA.get(m.kind, "application/octet-stream"))
         cand = resolve_assets(bundle.candidate, paths)
         if c["mode"] == "new":
             view = writer.create(c["client"], {"name": c["label"], "candidate": cand, "source": src, "from": {"kind": "build", "file": c["file"][:200]}})
