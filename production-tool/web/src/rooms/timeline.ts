@@ -7,6 +7,7 @@ import { newUlidId } from '../../../clan-store/src'
 import { compileTimeline, type PlanClip as StorePlanClip, type PlanEndCard as StorePlanEndCard, type PlanText as StorePlanText, type TimelineItem as StoreTimelineItem } from '../../../clan-store/src'
 import type { AssetRef, EndCard, Id, ProductionDocument, TimelineItem, TimelinePlan, TransitionIn } from '../contracts/types'
 import { updateDoc } from '../doc/store'
+import { briefForJob, legalOf, onlyBrief } from '../brief/model'
 import { quoted } from '../lib/quotes'
 import type { DocumentStore } from '../doc/types'
 import { beatsOf, shotsOf, storyboardOfVideo } from '../model/selectors'
@@ -160,7 +161,23 @@ const bare = (t: string) => t.replace(/[.!?]$/, '').trim()
  * without the brand again.
  */
 export function endCardFrom(d: ProductionDocument, videoId: Id): CutEndCard | undefined {
-  return endCardOf(d, storyboardOfVideo(d, videoId)?.id)
+  const card = endCardOf(d, storyboardOfVideo(d, videoId)?.id)
+  return card && withLegal(d, videoId, card)
+}
+
+/** A new end card for a film with no end-card shot: the brand name set in type (the project's name; there is no logo without a
+ *  brand book) and the brief's legal line, so no slot is left blank. */
+export function newEndCard(d: ProductionDocument, videoId: Id): CutEndCard {
+  const named = d.project.title && !/^untitled/i.test(d.project.title) ? d.project.title : 'Your brand'
+  return withLegal(d, videoId, { headline: '', line: named, bg: '#14161B', durS: 1.5 })
+}
+
+/** The card with the brief's legal line as its small line when it has none of its own: the film never loses the legal ask
+ *  (UAT 2026-11-22: no legal line on the end card, and an empty call to action). */
+export function withLegal(d: ProductionDocument, videoId: Id, card: CutEndCard): CutEndCard {
+  if (card.cta?.trim()) return card
+  const legal = legalOf((onlyBrief(d) ?? briefForJob(d, { kind: 'video', id: videoId })?.brief)?.spine)
+  return legal ? { ...card, cta: legal } : card
 }
 
 /** The end card a storyboard's end card shot makes (endCardFrom), for the Film's cut or the storyboard's cell. */
