@@ -1016,11 +1016,18 @@ async fn a_forwarded_run_territories_carries_the_brief_whole_beside_the_upstream
     let doc = napkin_host::DocId::new(doc);
     let token = s.ctx.tokens.mint(&me.tenant, "visionary@napkin", &doc);
     let r = proxy(&s, &token, "run_territories", serde_json::json!({})).await;
-    assert_eq!(r.status, StatusCode::OK, "{}", String::from_utf8_lossy(&r.body));
+    assert_eq!(
+        r.status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&r.body)
+    );
     let body = seen.lock().unwrap()[0].clone();
     let clan = &body["clan"];
     // `data.upstream` is the index (keys only) and the brief rides beside it, in full.
-    assert!(clan["data"]["upstream"]["doc-brief"].get("background").is_none());
+    assert!(clan["data"]["upstream"]["doc-brief"]
+        .get("background")
+        .is_none());
     assert_eq!(
         clan["carried_upstream"]["doc-brief"]["background"],
         "Sales have been flat since a supermarket opened."

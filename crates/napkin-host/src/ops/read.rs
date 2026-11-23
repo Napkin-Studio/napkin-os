@@ -1556,10 +1556,17 @@ mod tests {
         ));
         let ctx = clan_context_for_agent(&t);
         // the index is all `data.upstream` holds; the brief itself rides beside it
-        assert!(ctx["data"]["upstream"]["doc-brief"].get("background").is_none());
-        assert_eq!(ctx["carried_upstream"]["doc-brief"]["background"], "Sales are flat.");
+        assert!(ctx["data"]["upstream"]["doc-brief"]
+            .get("background")
+            .is_none());
+        assert_eq!(
+            ctx["carried_upstream"]["doc-brief"]["background"],
+            "Sales are flat."
+        );
         assert!(ctx["carried_upstream"].get("doc-kit").is_none());
-        assert!(clan_context_for_agent(&brief()).get("carried_upstream").is_none());
+        assert!(clan_context_for_agent(&brief())
+            .get("carried_upstream")
+            .is_none());
     }
 
     #[test]
