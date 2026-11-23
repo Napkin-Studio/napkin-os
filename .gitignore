@@ -76,3 +76,5 @@ engine/deck-runs/
 
 # scripts/deck-local.sh: the local Deck Maker stack's runtime files
 .deck-local/
+# scripts/territories-local.sh: the local Territories stack runtime files
+.territories-local/

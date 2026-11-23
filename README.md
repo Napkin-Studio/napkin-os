@@ -131,6 +131,16 @@ clan read chain doc.clan           # full attributed decision history
 clan validate doc.clan             # check output contract at any point
 ```
 
+### Try Territories locally
+
+One command runs the whole Territories flow on your machine (Brief Maker, Research Tool, Territories, Deck Maker, Production), with Claude answered by your own Claude Code login through `scripts/model-local`, so there is no per-call API cost:
+
+```bash
+scripts/territories-local.sh      # then open http://127.0.0.1:8399/ (no sign-in locally)
+```
+
+Make a brief, Continue in, Territories, then Pick, Explore, Greenlight, World. Needs `claude` on PATH and signed in. Runway pictures are off; `TERRITORIES_IMAGES=1 RUNWAY_API_KEY=... scripts/territories-local.sh` turns them on and costs Runway money (capped by `NAPKIN_TERRITORY_IMAGES_MAX_USD`, default 2.00). Ports and the other settings are in the script's header. Ctrl-C stops it.
+
 ### Parallel agents
 
 ```bash
