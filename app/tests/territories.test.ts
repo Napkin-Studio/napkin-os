@@ -832,3 +832,11 @@ test('the ask cards keep to the house words: no price, no raw keys', () => {
     assert.ok(!/€|£|\$\d|\bUSD\b/.test(text(page)))
   }
 })
+
+test('an ask card and the picture rights card sit in the same answer-first list', () => {
+  const d = asked('greenlight_derived_pending')
+  d.run.gate.blocked_by.push({ kind: 'picture_rights', text: 'A picture on Already Started has no rights chosen.' })
+  const page = L.view(d, {})
+  assert.ok(page.includes('data-ask-card="ask_passenger"')); assert.match(text(page), /A picture on Already Started has no rights chosen|rights/i)
+  assert.match(text(page), /Answer the 2 questions first/); assert.match(page, /class="big" data-send disabled>Send 2 →/)
+})
