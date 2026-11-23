@@ -16,6 +16,7 @@ import { briefApprovals, bringCarriedRoutes, carriedBeside } from '../../../brie
 import { briefForJob, withBrief } from '../../../brief/model'
 import { linkBrief } from '../../../brief/canvas'
 import { createNode } from '../../nodes/nodes'
+import { scopeOf } from '../../../model/scope'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const fixture = () => new Uint8Array(readFileSync(join(here, '../../../../../clan-store/test/fixtures/brief-spun-off.clan')))
@@ -203,6 +204,8 @@ describe('a project spun off from Territories opens on its routes', () => {
     expect(input.brief!.route).toMatchObject({ name: node.route!.name, thought: node.route!.thought })
     expect(input.brief!.route!.pictures).toEqual([{ sha256: `sha256:${SHA}`, rights: 'Generated' }, { sha256: `sha256:${'b'.repeat(64)}`, rights: RIGHTS_TO_SUPPLY }])
     expect(rows[0]).toMatchObject({ kind: 'brief', ref: node.id, used_as: 'brief' })
+    // the Script's chip for the linked route names the route's version, not the copy counter
+    expect(scopeOf(doc(), sid).find((i) => i.kind === 'brief')!.label).toBe(`Territories · ${node.route!.name} · v${node.route!.version}`)
     // the same route node is the other routes' neighbour, not theirs: a second Script has none
     const other = (await createNode(env as never, 'script', { x: 900, y: 600 }))!
     expect(withBrief(doc(), 'write', { kind: 'script', id: (other.customData as { id: string }).id }, { text: 'x' }).input.brief).toBeUndefined()
