@@ -11,7 +11,7 @@ store. It has no dependency on the middleware (it imports only this package), so
     res.decisions    ask / spend / outcome entries for the document's decision history (the only place a price is written)
     res.busy         True when another run of this document is going: nothing was run and res.error says so in words
 
-    steer / undo / more / push                        the person's moves on the same store, spend and lock
+    steer / undo / more / push / rerank               the person's moves on the same store, spend and lock
 
 What it guarantees (LESSONS 11, 12, 13):
 
@@ -381,3 +381,9 @@ def push(doc, territory_id, by, *, llm, store, instruction=None, facts=None, fin
                                           marks=marks, cancel=cancel, **kw)
         return out, refusals
     return _move(doc, store, llm, cancel, cap_usd, doc_id, on_line, go)
+
+
+def rerank(doc, by, *, llm, store, facts=None, findings=None, sources=None, marks=None, cancel=None, cap_usd=None, doc_id="", on_line=None) -> Result:
+    """``world.rerank``: the blind judge orders the live developed routes again (one call)."""
+    return _move(doc, store, llm, cancel, cap_usd, doc_id, on_line, lambda d, m: world.rerank(
+        d, m, by, facts=facts, findings=findings, sources=sources, marks=marks))

@@ -1885,3 +1885,68 @@ deck engine (`engine/deck/server.py`) and writes what the engine reports into th
   `--production FILE`, and `--production-fetch` / `--production-look` only when the person turned them on. The payload gains
   `production` (the picker's view, never a location). Nothing is fetched by the middleware.
 - **Deck files (deck-cloud).** `fetch_deck_file@1` (short, writes nothing) takes `input {name}`, `deck.html` or `deck.pptx`, and answers `result {name, media_type, bytes, data_b64}` from the deck engine's `GET /file/<doc>/<name>`; any other name is a 400, a file not built yet a 404 `no_file`, no engine a 503. The PDF is not served: the app sends `deck.html` to the host's Chromium export.
+
+## 13. Territories: `run_territories`, `fetch_territories_file`
+
+*Added 2026-11-23* (`features/territories-handlers.clan`). Territories runs **inside the middleware**, like Brief and Research (owner,
+2026-11-23): the handlers call `engine/territory` in this process. There is no engine URL, no sidecar and no second container. The document
+is the only state (a run's stage, gates and answers live in `data.run`), so a step that dies resumes from the document. The Territories
+`app/pipeline.yaml` declares `request_kind: middleware`.
+
+- **One task, many steps.** `run_territories@1` takes `input.step` (absent = `run`), the seam the app already uses:
+  - **Model steps** (long, one stage `run`; a job thread calls `engine/territory/runner.py`):
+    `run` (explore: the insights, then the gates, to the next stop; `runner.run`), `steer` (`crew_id`, `kind` one of `further`, `pull`,
+    `cross` with `with`, `stop`, `by`), `more` (`territory_id`, `steer?`, `n?`, `by`), `push` (`territory_id`, `instruction?`, `by`),
+    `rerank_routes` (`by`; one blind-judge call).
+  - **Quick moves** (no model; answered in the request: the first reply is already `done` with its change, or `failed` with the refusal in words):
+    `undo` (`action_id`, `by`), `greenlight_route` / `remove_route` (`territory_id`, `by`), `answer_ask` (`ask_id`, `answer`, `note?`, `by`),
+    `record_review` (`by`), `approve` (`gate`, default `greenlight`, `note?`, `by`), `send_routes` (`to` one of `deck-maker`,
+    `production-tool`, `territory_ids`, `not_chosen`, `by`). The rules are `engine/territory/gates.py`'s; an open gate is refreshed after a move so
+    `run.gate.blocked_by` and `asks` match the document.
+- **Pictures that arrive.** A document with pictures (an `assets` map, its own or its frozen source's at `upstream.<id>.assets`) has every one put on the
+  workspace store (`NAPKIN_TERRITORY_BLOBS`, else the territory data root; `blobs/<aa>/<sha256>`) by `territory.pictures.rehome` before `run` reads it,
+  and `require_all` refuses a partial arrival in words (`job.error.type: refused`, "19 of 23 pictures arrived ...", nothing runs). The bytes come from a
+  reader the source's feature registers (`delivery.register_asset_reader`, the signed assets pass); with none, a picture not already on the store is
+  named missing. The quick step `place_pictures` (`territory_id?`, and `slot_id` + `sha256` to name one) puts arrived pictures into slots by link:
+  `pictures.fill` (once each, never one hash in two slots or on two routes) or `pictures.attach`; a refusal is words. A greenlit Final with no stated
+  rights holds the gate (`picture_rights`, gates.blockers).
+- **A person's choices about a world, and the write race.** `set_lead` (`territory_id`, `line` or null), `star_line` (`territory_id`, `line`, `on`) and
+  `keep_feel` (`territory_id`, `dial_set` of `tone`, `energy`, `register`, `brand` as whole numbers 0 to 10, or null) are small moves, not a patch of
+  the whole `territories` array (RFC 7396 replaces arrays, so an engine write and a choice at the same moment lost one of the two). With no step of the
+  document running a move applies to the current document and the reply carries its change. While a step runs (a `push`, a `more`) the move is checked
+  against the document now (a refusal is a failed job in words) and **held inside that step**: it is applied to the document the step returns, under the
+  step's own lock, in the same change, so both survive; a cancelled step writes the held moves as a change of their own. Any other step on a document
+  that has one running is still `409`. `push` takes `instruction` as the World view's four names (`braver`, `safer`, `more ownable`, `more proof`) or
+  the person's own words.
+- **The Pictures view's choices.** `set_final` (`territory_id`, `picture_id` (the slot id; `slot_id` or `sha256` also name it), `on` true/false) and `set_rights` (`territory_id?`, `picture_id` or `sha256`, `rights` one of
+  `generated`, `own`, `licensed`, `unknown`) are small moves of the same kind (`territory.pictures.set_final` / `set_rights`; a held-inside-a-running-step,
+  same lock). The open gate is refreshed: a Final with no stated rights holds the greenlight (`picture_rights`) until the rights move.
+- **What goes to the runner.** The document (`data`), the carried `facts`, `findings` and `sources` as the request holds them, the Confidential
+  marks (`build_deck.marks_of`: the same reading as the deck, always a list), a per-document store (`NAPKIN_TERRITORY_DATA/<doc id>/`: the resume
+  cache, so a retry never repays a finished call) and the job's cancel Event. The model is the engine's `LiveLLM` over `engine/brief_llm.py`
+  (the Anthropic API, the local model backend, or Bedrock with the task role under `NAPKIN_MODEL_API=bedrock`); the runner's cap is
+  `NAPKIN_TERRITORY_MAX_USD` (default 3.00).
+- **The change.** One staged change per step: the merge patch from the document the job read to the document the runner returned (arrays whole,
+  a key that went `null`). A model step never writes `run.approvals`, `run.decisions` or `run.gate_requests` (the person's): the read-set names
+  `run.<key>`, never the whole `run`. `approve`, `answer_ask`, `record_review` and a send that went write the person's own move, as the person asked.
+  One `edit` decision by `run_territories@1.x/engine` carries the reasoning; its `targets` are the paths it writes. The runner's ledger entries
+  (`ask`, one `spend` per paid call, `outcome`) become `edit` decisions by `run_territories@1.x/ledger` whose `action` is the entry's kind and whose
+  rationale says the figures in words: **the only place a price is written**, never the document (`contract.lint` holds that). An entry already in
+  the chain is not sent again.
+- **Failure is shown as failure.** A run the engine could not finish is a change that writes `run.state: failed` and `run.error` (words,
+  `retryable`) and a job that is `done`. A move the engine refuses (a steer with nobody named, a second undo, a route not greenlit) is a job
+  `failed` with `error {type: refused, message}` (the engine's words) and no change. A runner that is busy with another run of the document is a
+  job `failed` with `error.type: job_state`.
+- **Errors at the call.** `400 invalid_input` for an unknown `step` or a missing id; `503 engine_unavailable` when the engine package is not in the
+  middleware; `409 job_state` when a `run_territories` step on this document is still running (one step at a time per document).
+- **Cancel.** `cancel_job` stops the job at once: no further model call is made, what was already paid for is in the store (the next run reads it,
+  never pays twice), and nothing the job computed is written.
+- **`send_routes` and a destination that is not built.** `sends[].status` is `sent` only when a destination was registered
+  (`napkin/territories/delivery.py register_destination`) and returned; otherwise the send is written `not_built`, the run stays at its
+  gate and the words say "<Destination> is not built yet, so nothing was sent. The choice is saved."
+- **`fetch_territories_file@1`** (short, writes nothing): `input.name` names a file a feature registered with
+  `delivery.register_file(name, media_type, make)` (territories-exports); the reply's `result` is
+  `{name, media_type, bytes, data_b64}`. `503 not_built` with words when nothing is registered, `400 unknown_file` for a name nobody registered,
+  `502 file_failed` (words, never a trace) when it could not be made, `413` over 24 MB. The PDF of a board is the exports feature's to register.
+- **Not yet.** `look_up@1` (territories-lookups), the picture steps, a poll that survives a restart of the middleware (an in-memory job store, as
+  everywhere here: the next step resumes from the document and the store).

@@ -224,6 +224,32 @@ def test_answered_asks_are_not_asked_again_after_a_refresh():
     assert [a["status"] for a in d["asks"] if a["kind"] == "derived_evidence"] == ["answered"]
 
 
+def test_remove_route_takes_it_off_with_its_asks_and_refreshes_the_gate():
+    d = at_greenlight(("t_started", "t_passenger"))
+    assert kinds(d, "greenlight") == ["derived_evidence"]
+    d = ok(gates.remove_route(d, "t_passenger", "Shrey", AT, findings=FINDINGS))
+    assert [g["territory_id"] for g in d["greenlit"]] == ["t_started"]
+    assert not [a for a in d.get("asks") or [] if a.get("territory_id") == "t_passenger"]
+    assert d["run"]["gate"]["blocked_by"] == [] and kinds(d, "greenlight") == []      # the gate on screen matches the document
+
+
+def test_remove_route_voids_an_approval_given_for_the_old_list():
+    d = at_greenlight()
+    d = ok(gates.approve(d, "greenlight", "Shrey", AT, findings=FINDINGS))
+    assert gates.approval_state(d, "greenlight")["valid"]
+    d = ok(gates.remove_route(d, "t_sitdown", "Shrey", AT, findings=FINDINGS))
+    assert gates.approval_state(d, "greenlight")["stale"]
+
+
+def test_remove_route_refuses_in_words_and_changes_nothing():
+    d = at_greenlight(("t_started",))
+    before = copy.deepcopy(d)
+    for who, tid in (("Shrey", "t_sitdown"), ("", "t_started"), ("engine", "t_started")):
+        out, refusals = gates.remove_route(d, tid, who, AT, findings=FINDINGS)
+        assert out == before and len(refusals) == 1
+        plain(*refusals)
+
+
 def test_a_failed_mandatory_is_refused_unless_the_person_says_why():
     d = set_check(at_greenlight(), "t_sitdown", "mandatory", "fail")
     d = gates.open_gate(d, "greenlight", findings=FINDINGS)

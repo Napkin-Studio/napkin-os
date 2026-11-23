@@ -27,7 +27,7 @@ const helper = /<script>([\s\S]*?var NapkinSource[\s\S]*?)<\/script>/.exec(readF
 
 type Doc = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 type Ui = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
-type Act = { writes: { patch: Doc; action: string; rationale: string }[]; toast?: string; clearDial?: string; request?: { key: string; what: string; input: Doc } } | null
+type Act = { writes: { patch: Doc; action: string; rationale: string }[]; toast?: string; clearDial?: string; move?: { what: string; input: Doc }; request?: { key: string; what: string; input: Doc } } | null
 type Dial = { tone: number; energy: number; register: number; brand: number }
 const both = vm.runInNewContext(`${engine}${helper}\n${logicSrc};\n${worldSrc}; ({ L: TerritoriesLogic, W: TerritoriesWorld })`) as { L: unknown; W: unknown }
 const W = both.W as {
@@ -52,6 +52,7 @@ const W = both.W as {
   act(d: Doc, ui: Ui, e: Record<string, unknown>, env?: Doc): Act
   handles(a: string): boolean
   clean(v: unknown): string
+  worldPatch(d: Doc, id: string, change: Doc): Doc | null
 }
 const L = both.L as {
   view(d: Doc, ui?: Ui): string
@@ -81,7 +82,14 @@ function deref(schema: Doc): Schema {
 }
 const schema = deref(json('schema.json'))
 const merge = (d: Doc, patch: Doc): Doc => ({ ...JSON.parse(JSON.stringify(d)), ...JSON.parse(JSON.stringify(patch)) })
-const apply = (d: Doc, a: Act): Doc => { assert.ok(a); return a.writes.reduce((x, w) => merge(x, w.patch), d) }
+// What the middleware does with a world choice (server/napkin/territories/moves.py), applied here so the page's later screens can be read from it.
+const landed = (d: Doc, m: { input: Doc }): Doc => {
+  const i = m.input, t = routeOf(d, i.territory_id as string), w = t.world
+  const change: Doc = i.step === 'set_lead' ? { lead: i.line } : i.step === 'keep_feel' ? { dial_set: i.dial_set }
+    : { starred: i.on ? [...(w.starred ?? []), i.line] : (w.starred ?? []).filter((x: string) => x !== i.line) }
+  return merge(d, W.worldPatch(d, i.territory_id as string, change)!)
+}
+const apply = (d: Doc, a: Act): Doc => { assert.ok(a); return a.move ? landed(d, a.move) : a.writes.reduce((x, w) => merge(x, w.patch), d) }
 const routeOf = (d: Doc, id = 't_started') => W.route(d, id)!
 
 test('the routes walk in the gallery order, and a route that is not developed has no world', () => {
@@ -123,7 +131,7 @@ test('moving a dial writes nothing and makes no call: it is view state (LESSONS 
 test('Keep this feel writes dial_set (valid), Back to its natural feel clears it, and the kept feel is where the next visit starts', () => {
   const d = doc(), t = routeOf(d), ui: Ui = { dials: { [t.id]: { ...W.naturalDial(t), tone: 5, energy: 95 } } }
   const k = W.act(d, ui, { a: 'keep', id: t.id }, ENV)!
-  assert.equal(k.writes.length, 1); assert.equal(k.clearDial, t.id); assert.match(k.writes[0].action, /set the feel of Already Started/)
+  eq(k.writes, []); assert.equal(k.clearDial, t.id); assert.equal(k.move!.input.step, 'keep_feel'); eq(k.move!.input.dial_set, { ...W.naturalDial(t), tone: 5, energy: 95 }); assert.equal(k.move!.input.by, 'Shrey')
   const d2 = apply(d, k); eq(validate(d2, schema), [])
   eq(routeOf(d2).world.dial_set, { ...W.naturalDial(t), tone: 5, energy: 95 }); eq(routeOf(d2).world.dial, t.world.dial, 'the natural feel stays')
   eq(W.dialOf(routeOf(d2), {}), { ...W.naturalDial(t), tone: 5, energy: 95 })
@@ -270,8 +278,11 @@ test('the contract\'s requests have the engine\'s step names, and every write th
   const d = doc(), t = routeOf(d), line = t.world.lines[2]
   for (const e of [{ a: 'lead', line }, { a: 'star', line }, { a: 'keep' }, { a: 'dreset' }]) {
     const ui: Ui = e.a === 'keep' ? { dials: { [t.id]: { ...W.naturalDial(t), brand: 99 } } } : {}
-    const r = W.act(d, ui, { ...e, id: t.id }, ENV)!
-    for (const w of r.writes) { eq(validate(merge(d, w.patch), schema), [], `${e.a} is valid`); assert.ok(w.action && w.rationale) }
+    const base = e.a === 'dreset' ? landed(d, { input: { step: 'keep_feel', territory_id: t.id, dial_set: W.naturalDial(t) } }) : d
+    const r = W.act(base, ui, { ...e, id: t.id }, ENV)!
+    eq(r.writes, [], `${e.a} writes no array: it is a move`)
+    assert.ok(r.move && ['set_lead', 'star_line', 'keep_feel'].includes(r.move.input.step as string) && r.move.input.territory_id === t.id && r.move.what, `${e.a} is a move`)
+    eq(validate(landed(base, r.move!), schema), [], `${e.a} lands valid`)
   }
   assert.equal(W.act(d, {}, { a: 'lead', id: 'nope', line }, ENV), null)
 })

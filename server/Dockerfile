@@ -14,6 +14,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY server/napkin ./napkin
 COPY app/templates/campaign-research/app/pipeline.yaml ../app/templates/campaign-research/app/pipeline.yaml
 COPY app/templates/brief-maker/app/pipeline.yaml ../app/templates/brief-maker/app/pipeline.yaml
+COPY app/templates/territories/app/pipeline.yaml ../app/templates/territories/app/pipeline.yaml
 COPY layers-service/data/measures.json ../layers-service/data/measures.json
 # The one price table every tool reads (engine/prices.json; napkin/runlog.py prices model calls from it).
 COPY engine/prices.json ../engine/prices.json

@@ -182,7 +182,7 @@ class Middleware:
                     log.info("%s %s cancelled", job.task, job.id)
             if job.task == "start_campaign":
                 return self.campaign_envelope(job, job.reply_change(clan))
-            if getattr(job, "kind", None) in ("brief", "deck"):
+            if getattr(job, "kind", None) in ("brief", "deck", "territories"):
                 return self.brief_envelope(job, job.reply_change(clan))
             done = job.state == "done"
             return self.envelope(job.task, job.handler, job.view(),
@@ -238,7 +238,29 @@ class Middleware:
             job.start()
             first = {**job.view(), "state": "queued", "progress": {"done": 0, "total": 1}, "stage": "build", "finished_at": None, "error": None}
             return self.envelope(job.task, job.handler, first, {**job.result(), "summary": "queued"}, None, job.caps)
-        if mod.KIND == "deck_file":   # attach_production: hand the deck engine the person's Production file; no change to the document
+        if mod.KIND == "territories":
+            # Territories (§13): a step of a run, in this process. A model step is a job thread; a quick move is finished when it replies.
+            caps = self.caps(handler)
+            jid = self.jobs.new_id()
+            caps.bind_job(jid)
+            job = mod.start(req, caps, self.settings, jid)  # validates: a 400 or 503 before a 409
+            running = self.jobs.unfinished(scope, doc, ("run_territories",))
+            if running and getattr(job, "move", None) is not None:
+                # a person's choice about a world while a step runs: it waits inside that step and is applied to the document the step returns
+                from .doc import ctx_data
+                _, ref = job.move(ctx_data(clan))          # a move the document refuses is refused now, in words, not lost later
+                if ref:
+                    first = {**job.view(), "state": "failed", "finished_at": iso(), "error": {"type": "refused", "message": " ".join(ref)}}
+                    return self.envelope(job.task, job.handler, first, {"summary": "Failed: " + " ".join(ref), "step": job.step}, None, job.caps)
+                if running[0].defer(job.move):
+                    first = {**job.view(), "state": "done", "progress": {"done": 1, "total": 1}, "finished_at": iso(), "error": None}
+                    return self.envelope(job.task, job.handler, first, {"summary": "Saved. It is kept with the step that is running.", "step": job.step}, None, job.caps)
+            elif running:
+                raise TaskError(409, "job_state", "a run_territories step on this document is still running; one step at a time")
+            self.jobs.add(job)
+            job.start()
+            return self.brief_envelope(job, job.reply_change(clan))
+        if mod.KIND in ("deck_file", "territories_file"):   # attach_production: hand the deck engine the person's Production file; no change to the document
             caps = self.caps(handler)
             jid = self.jobs.new_id()
             t0 = iso()

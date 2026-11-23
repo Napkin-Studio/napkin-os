@@ -634,6 +634,29 @@ def test_push_that_cannot_be_written_leaves_the_route_as_it_was():
     assert world.push(parked, fake(), t["id"], "Shrey")[1]
 
 
+def test_rerank_asks_the_judge_once_and_changes_only_the_order():
+    d = developed_doc()
+    llm = fake()
+    d2, ref = world.rerank(d, llm, "Shrey", facts=FACTS, findings=FINDINGS)
+    assert ref == [] and llm.calls == ["judge"]
+    strip = lambda ds: [{k: v for k, v in t.items() if k not in ("rank", "checks", "marks", "blind")} for t in ds["territories"]]
+    assert strip(d2) == strip(d)
+    dev = [x for x in d2["territories"] if x["state"] == "developed" and x["status"] == "live"]
+    assert sorted(x["rank"] for x in dev) == list(range(1, len(dev) + 1))
+    assert contract.check(d2, facts=FACTS, findings=FINDINGS) == []
+
+
+def test_rerank_refuses_in_words_with_nothing_to_order_or_nobody_named():
+    d = developed_doc()
+    one = copy.deepcopy(d)
+    for t in one["territories"][1:]:
+        t["status"] = "parked"
+    llm = fake()
+    d2, ref = world.rerank(one, llm, "Shrey")
+    assert d2 == one and ref and "two" in ref[0] and llm.calls == []
+    assert world.rerank(d, llm, " ")[1] and llm.calls == []
+
+
 def test_dials_need_no_model_the_four_corners_are_data():
     d = developed_doc()
     for t in (t for t in d["territories"] if t["state"] == "developed"):
