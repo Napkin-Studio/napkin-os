@@ -66,6 +66,7 @@ import { canJoin } from '../jobs/runs'
 import { videoOfStoryboard } from '../model/selectors'
 import { FrontButtons } from './FrontsNeeded'
 import { keepCharacter, keptFromFirst, suggestKey } from '../jobs/cast'
+import { RemakeBar } from '../ui/Follow'
 
 const RATIOS: Ratio[] = ['9:16', '1:1', '16:9']
 
@@ -267,6 +268,8 @@ export function Storyboard() {
           {shots.length > 0 && <button className="sp-btn" disabled={drawnCount(shots) >= MAX_SHOTS} title={drawnCount(shots) >= MAX_SHOTS ? `A film has at most ${MAX_SHOTS} drawn shots` : undefined} onClick={() => void attempt(() => updateDoc(docStore, (d) => { addShot(d) }, 'add shot'))}>+ Add shot</button>}
         </>}
         primary={primary} />
+      {/* Under the band, not floating over the sheet: the floating bar covered a frame's editor button (Tidewell UAT). */}
+      <div className="sb-remake"><RemakeBar dock="inline" /></div>
       <div className="booth-row">
       <div className="panel sb-body sb-desk">
       <article className="sb-sheet" aria-label="Storyboard">

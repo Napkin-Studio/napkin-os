@@ -219,7 +219,8 @@
 .ov-lock { position: absolute; right: 6px; top: 6px; font-size: 11px; }
 .ov-cap { margin-top: 6px; font-size: 11.5px; }
 .ov-cap b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ov-cap span { color: var(--ink3); font-size: 11px; white-space: nowrap; }
+/* The second line wraps inside its tile: nowrap ran it under the next tile's caption (Tidewell UAT, S4). */
+.ov-cap span { display: block; color: var(--ink3); font-size: 11px; white-space: normal; overflow-wrap: anywhere; }
 
 /* Change method: what cannot run is greyed with its reason; the product that will not fit is said plainly (features/pt-final-and-fit.clan). */
 .cb-menu .pt-menurow { flex-wrap: wrap; }

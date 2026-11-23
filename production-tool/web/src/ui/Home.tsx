@@ -269,6 +269,8 @@ function ProjectCard({ p, server, newerThere, menu, onMenu, onError }: {
   )
 }
 
-function Placeholder({ stage }: { stage: ProjectSummary['stage'] }) {
-  return <span className={`pp-ph ${stage}`}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 9h18M7 5l2 4M12 5l2 4M17 5l2 4" /></svg></span>
+// The stage rides as data, never as a class: `.character` is the canvas page's own (position: absolute; inset: 0), and as a
+// class on this span it covered the whole card, Delete included (Tidewell UAT).
+export function Placeholder({ stage }: { stage: ProjectSummary['stage'] }) {
+  return <span className="pp-ph" data-stage={stage}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 9h18M7 5l2 4M12 5l2 4M17 5l2 4" /></svg></span>
 }
