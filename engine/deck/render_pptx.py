@@ -360,6 +360,7 @@ class Renderer:
         self.drawn = {k: v for k, v in images.drawn(deck, deck["meta"].get("audience", "review")).items() if v["asset"] in (pictures or {})} if pictures else {}
         self.pic_label = ((deck["meta"].get("preferences") or {}).get("picture_approval") or {}).get("label") or spec.PICTURE_LABEL
         self.picture_findings = []   # [{check, level, slide, message}]: a picture dropped because its slide would not fit it
+        self._answer_to_notes = {}   # slide id -> the answer a frames slide had no room for
         self.placed = set()          # (slide id, slot) of every picture this renderer really drew: the web outputs draw exactly these
         self.th = themes.get_theme(theme, (deck["meta"].get("brand") or {}))
         self.theme_problems = themes.check_palette(self.th)
@@ -4496,6 +4497,8 @@ class Renderer:
             sl.notes_slide.notes_text_frame.text = (export_clean.notes_of(s.get("notes")) if self.clean else (s.get("notes") or "")) + ("" if self.clean else f"\n\nSlide id {sid} · status {s['status']} · requirements {', '.join(s.get('requirements') or []) or 'none'}")
             if t.layouts and s.get("claims"):   # the claims stay in the file, in the notes, word for word
                 sl.notes_slide.notes_text_frame.text += "\n\nClaims:\n" + "\n".join("- " + c["text"] for c in s["claims"])
+            if self._answer_to_notes.get(sid):   # an answer that did not fit above the frames: kept, in the notes
+                sl.notes_slide.notes_text_frame.text += "\n\nWhat it dramatises:\n" + self._answer_to_notes[sid]
             if planned and spec.moved_map(s_full, audience):   # points the plan moved off the slide: verbatim, each with its refs, labelled
                 sl.notes_slide.notes_text_frame.text += "\n\nMoved from the slide:\n" + "\n".join(layouts.moved_line(t_, r_) for t_, r_ in layouts.moved_texts(s_full) if not (self.clean and spec.unresolved_line(t_)))
         if s["type"] == "appendix":
@@ -4928,11 +4931,27 @@ class Renderer:
             answers = " ".join(str(b.get("answer") or "") for b in cps).strip()
             fx, fw = 6.7, self.x1 - 6.7
             m = self._mark(sl)
-            h_ans = self._eh(answers, fw, 12, 1.1) if answers else 0.0
+            avail = max(0.4, bottom - y)
+            # The lines and the answer must fit above the frames' band: the largest size at which both do; else the answer goes to the notes
+            # (it says which half of the insight the work dramatises, not what the work says) and the lines take the band alone.
+            size, h_ans, h_lines = 10, 0.0, 0.0
+            for size in (13, 12, 11, 10):
+                h_lines = self._eh(lines, fw, size, 1.15) if lines else 0.0
+                h_ans = self._eh(answers, fw, size - 1, 1.1) if answers else 0.0
+                if h_lines + h_ans + (0.1 if lines and answers else 0.0) <= avail:
+                    break
+            else:
+                if answers:
+                    self._answer_to_notes[self._sid] = answers
+                    answers, h_ans = "", 0.0
+                for size in (13, 12, 11, 10):
+                    h_lines = self._eh(lines, fw, size, 1.15) if lines else 0.0
+                    if h_lines <= avail:
+                        break
             if lines:
-                self.text(sl, fx, y, fw, max(0.4, bottom - y - h_ans - 0.1), lines, size=13, color=self.p.fg, name="StoryboardLines")
+                self.text(sl, fx, y, fw, max(0.4, min(avail - h_ans - 0.1, h_lines + 0.05)) if answers else avail, lines, size=size, color=self.p.fg, name="StoryboardLines")
             if answers:
-                self.text(sl, fx, bottom - h_ans, fw, h_ans, answers, size=12, bold=True, color=self.p.acc_t, name="StoryboardAnswer")
+                self.text(sl, fx, bottom - h_ans, fw, h_ans, answers, size=size - 1, bold=True, color=self.p.acc_t, name="StoryboardAnswer")
             self._build(sl, m)
 
     def _execution(self, sl, s):

@@ -505,7 +505,7 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
     st = _normalize(st)
     a, b, c, d = st.get("a") or {}, st.get("b") or {}, st.get("c") or {}, st.get("d") or {}
     if production:   # pictures only: no film execution, whatever the brief's channels or a recorded idea say
-        d = drop_film(d)
+        d = dedupe_executions(drop_film(d))
     if not d.get("how_it_answers") and isinstance(d.get("answers_objection"), dict):   # a live stage d's shape
         d = {**d, "how_it_answers": d["answers_objection"].get("how", "")}
     reqs = [r for r in a.get("requirements") or [] if not spec.internal_wording(r.get("text"))]   # a stage that copied 'field is null' into a requirement
@@ -943,6 +943,33 @@ def drop_film(d: dict) -> dict:
         out["executions"] = [x for x in d["executions"] if not (isinstance(x, dict) and is_film_channel(x.get("channel")))]
     if isinstance(d.get("channel_roles"), list):
         out["channel_roles"] = [r for r in d["channel_roles"] if not (isinstance(r, dict) and is_film_channel(r.get("channel")))]
+    return out
+
+
+def dedupe_executions(d: dict) -> dict:
+    """``d`` (stage d) for a deck made from a Production project, without the executions that would show the same finals again: one out-of-home
+    execution (every OOH size Production made is drawn on it) and one storyboard (all its frames). A second one, and a repeated channel role,
+    goes. Copy of the top level; ``d`` is not changed."""
+    out, seen = dict(d), set()
+    if isinstance(d.get("executions"), list):
+        keep = []
+        for x in d["executions"]:
+            kind = _production_kind({"title": str(x.get("channel") or "")}) if isinstance(x, dict) else None
+            if kind in ("ooh", "storyboard"):
+                if kind in seen:
+                    continue
+                seen.add(kind)
+            keep.append(x)
+        out["executions"] = keep
+    if isinstance(d.get("channel_roles"), list):
+        rows, got = [], set()
+        for r in d["channel_roles"]:
+            key = str(r.get("channel") or "").strip().lower() if isinstance(r, dict) else None
+            if key is not None and key in got:
+                continue
+            got.add(key)
+            rows.append(r)
+        out["channel_roles"] = rows
     return out
 
 

@@ -312,7 +312,7 @@ def _body(s, b: _Slide, blocks: list, pictured: bool = False) -> str:
         return f'<div class="body split side"><div class="col">{left}</div><div class="col">{b.blocks([pick("sketch")])}</div></div>'
     if typ == "execution" and pick("copy"):
         left = b.blocks(rest("copy"))
-        copy = {**pick("copy"), "frame": frame_for(s["title"])}
+        copy = {**pick("copy"), "frame": None if (s.get("ooh") or s.get("strip")) else frame_for(s["title"])}   # a slide with its own frames (out of home, a strip) sets its copy as plain text: a poster or phone beside them took the frames' ground
         vis = s.get("visual") or {}
         if vis.get("kind") == "image_prompt" and not pictured:   # a drawn picture takes the place of the 'Image prompt' note
             b.f += 1
@@ -619,8 +619,8 @@ LOOK_V3_LAYOUT_CSS = """
 .v3sl .cols{display:grid;grid-template-columns:1fr 1fr}.v3sl .cols>div+div{border-left:1.5px solid var(--ink);padding-left:36px}
 .v3sl .val{font:700 76px/.95 var(--head)}.v3sl .val.from{color:var(--muted)}.v3sl .sup{font-size:32px;line-height:1.3;margin-top:20px}
 .v3sl .rtb{margin-top:auto;border-top:1.5px solid var(--ink);padding-top:30px}.v3sl .rtb p{font-size:38px;line-height:1.25}
-.v3pc{display:flex;flex-direction:column}.v3pc.nopts{justify-content:center;padding-bottom:120px}
-.v3pc .lead{font-size:44px;line-height:1.25;margin-top:48px}.v3pc .copyline{font:700 52px/1.05 var(--head);margin-top:36px}
+.v3pc{display:flex;flex-direction:column}.v3pc.nopts{justify-content:safe center;padding-bottom:120px}
+.v3pc .lead{font-size:calc(var(--s)*44px);line-height:1.25;margin-top:calc(var(--s)*48px)}.v3pc .copyline{font:700 calc(var(--s)*52px)/1.05 var(--head);margin-top:calc(var(--s)*36px)}
 .v3pc .pt{border-top:1.5px solid var(--ink);padding-top:28px;margin-top:auto}.v3pc .pt+.pt{margin-top:36px}.v3pc .pt p{font-size:36px;line-height:1.25}
 .dark .v3pc .pt{border-color:var(--dark-text)}
 .v3cv{display:flex;flex-direction:column;justify-content:center;padding-bottom:80px}.v3cv .hero{font-size:100px;margin:24px 0 44px}
@@ -969,7 +969,9 @@ if(qs.has('audience'))document.body.classList.add('audience');
 function scale(box,el){const r=box.getBoundingClientRect(),k=Math.min(r.width/1920,r.height/1080);
   el.style.transform=box===view?`translate(-50%,-50%) scale(${k})`:`scale(${r.width/1920})`;}
 function fit(s){const b=s.querySelector('.body');if(!b)return;const was=s.style.visibility;s.style.visibility='hidden';s.style.opacity='0';
-  for(const k of [1.16,1.08,1,.93,.86,.8,.74,.68,.62]){s.style.setProperty('--s',k);if(b.scrollHeight<=b.clientHeight+2&&b.scrollWidth<=b.clientWidth+2)break;}
+  const inside=()=>{const r=b.getBoundingClientRect(),pb=parseFloat(getComputedStyle(b).paddingBottom)||0;   // content never above the body, nor below its padding (a frame's ground is reserved there)
+    return [...b.children].every(c=>{const q=c.getBoundingClientRect();return q.top>=r.top-2&&q.bottom<=r.bottom-pb+2;});};
+  for(const k of [1.16,1.08,1,.93,.86,.8,.74,.68,.62,.56,.5,.45]){s.style.setProperty('--s',k);if(b.scrollHeight<=b.clientHeight+2&&b.scrollWidth<=b.clientWidth+2&&inside())break;}
   s.style.visibility=was;s.style.opacity='';}
 function count(el,delay){const v=parseFloat(el.dataset.v),sfx=el.dataset.sfx||'',dec=(el.dataset.v.split('.')[1]||'').length;
   if(reduce||isNaN(v))return;const t0=performance.now()+delay+120,dur=1100;el.textContent=(0).toFixed(dec)+sfx;

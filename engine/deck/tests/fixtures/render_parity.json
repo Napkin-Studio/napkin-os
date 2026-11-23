@@ -1,6 +1,6 @@
 {
  "agency_pitch": {
-  "html_sha256": "b78681acb297db68faa68352f645606234a0cbc3c9cdcd5cd622b76a84dd3120",
+  "html_sha256": "5f6748a867e2924ed101d461f8d0f022665cbae93e3a0c3634962609e2639395",
   "layouts_sha256": "c2e87324a2b1c892b9c4cc44ec85bf61cacfd80934b876164fc47abe7a6691e6",
   "pptx": [
    [
@@ -3453,7 +3453,7 @@
   ]
  },
  "credentials": {
-  "html_sha256": "e43d2614a603022d771c899ae64b9ccd3b79dfcf1e4d6bfe1f0327446a231847",
+  "html_sha256": "acc5fc5526b9bf79eb19f99ac7a0ce861ae4fb2542003c2f7bdbc9946a8d49bf",
   "layouts_sha256": "b65cca947a07263827bf31b93614bcc6b5277535de31aae281e11f2610e9829e",
   "pptx": [
    [
@@ -5500,7 +5500,7 @@
   ]
  },
  "investor_seed": {
-  "html_sha256": "ba9824465f3d9d7cffbb064827480b17eea7d0aab9ead8455c386c82afc18baf",
+  "html_sha256": "12383a053a51e3a08e12d6483bb712c80680cfef1b01ec0c317c78828529b30b",
   "layouts_sha256": "fe6601440aa09f6a68c64bd0b669fae5165e4396540e69ee2439cc2787bf93bd",
   "pptx": [
    [
@@ -6191,7 +6191,7 @@
   ]
  },
  "lumen_water": {
-  "html_sha256": "8271d25c8860fd34cdbf72b830acdbe88dc93a71180687ea9237626e780fd371",
+  "html_sha256": "7aa0c9ab1dda7ae9a536ede81f20184fe3d30e90426ea51347d112bf629ef642",
   "layouts_sha256": "8273b1a0c4af069e1cbafb5107a090605da82c5b84e14d7e615adc570460e5ff",
   "pptx": [
    [
@@ -9666,7 +9666,7 @@
   ]
  },
  "lumen_water_prompt": {
-  "html_sha256": "1a17a22cd533a1db539b1211f5d38690ca6ef727519dfb42e24e241fa9a8b94f",
+  "html_sha256": "b1ee67113506b1612030083998b560c08f2ef999e02549cbf3bfdb56a84e8ca9",
   "layouts_sha256": "35020ad03fe4e5aca4525476031177f701a410d0e635b30abfb523d9948076ab",
   "pptx": [
    [
@@ -12337,7 +12337,7 @@
   ]
  },
  "tender_response": {
-  "html_sha256": "fe3d4a070612b5f13a58ae1acb8751a2c24ad468a0a8a7031e11e8f0c96a8fe8",
+  "html_sha256": "b9f8a849f564621b94841917fee4d980c5d84af620ebd2ae68935bf71e8b17c0",
   "layouts_sha256": "a8252f579c4820195341aa91b4ed9b47594e0428c8e0986071dfaafaff0d7cfa",
   "pptx": [
    [

@@ -170,3 +170,115 @@ def test_variety_never_moves_a_slide_whose_picture_is_made_onto_a_layout_that_dr
         if s["type"] == "execution" and not s.get("ooh") and not s.get("strip") and made and lid and not any(sl.get("kind") == "image" for sl in (lib[lid].get("slots") or {}).values()):
             lost.append((sid, lid))
     assert not lost, lost
+
+
+# ---------------------------------------------------------------------------------------------------------- frames slides: nothing overlaps
+def _frames_deck(tmp_path, monkeypatch):
+    """The real UAT deck's presented story (fixtures/production_deck_story.json.gz: key visual, out of home, storyboard, packshot), planned and
+    rendered to a pptx and an html with grey stand-in pictures at each asset's own aspect."""
+    import gzip
+    import json
+    pytest.importorskip("pptx")
+    from PIL import Image
+    from deck import layouts, render_pptx, render_web
+    for name in ("LOOK_V2", "LOOK_V3", "GRAPHICS"):
+        monkeypatch.setattr(spec, name, True)
+    deck = json.loads(gzip.open(HERE / "fixtures" / "production_deck_story.json.gz", "rt").read())
+    deck, _issues, _pending = layouts.plan(deck, prefs={"density": "lean"})
+    pics = {}
+    for aid, a in deck["assets"].items():
+        k = 240 / max(a["width"], a["height"])
+        p = tmp_path / f"{aid}.jpg"
+        Image.new("RGB", (max(1, int(a["width"] * k)), max(1, int(a["height"] * k))), (120, 130, 140)).save(p)
+        pics[aid] = p
+    inp = inputs.Inputs(brief={})
+    placed = set()
+    out = tmp_path / "d.pptx"
+    render_pptx.render(deck, inp, out, None, [], pictures=pics, placed=placed)
+    render_web.render(deck, inp, tmp_path / "d.html", [], pictures=pics, placed=placed, look=True)
+    return deck, out, tmp_path / "d.html"
+
+
+def _hit(a, b, tol=0.02):
+    return a[0] < b[0] + b[2] - tol and b[0] < a[0] + a[2] - tol and a[1] < b[1] + b[3] - tol and b[1] < a[1] + a[3] - tol
+
+
+FRAME_SLIDES = ("Key visual", "Out of home", "Storyboard frames", "Packshot")
+
+
+def test_in_the_pptx_no_text_box_meets_a_picture_or_a_frame_and_none_leaves_the_slide(tmp_path, monkeypatch):
+    deck, out, _html = _frames_deck(tmp_path, monkeypatch)
+    from pptx import Presentation
+    from pptx.util import Emu
+    prs = Presentation(str(out))
+    W, H = Emu(prs.slide_width).inches, Emu(prs.slide_height).inches
+    ids = [sid for sid in deck["order"] if deck["slides"][sid]["title"] in FRAME_SLIDES and deck["slides"][sid]["type"] == "execution"]
+    assert len(ids) == 4, ids
+    for sid in ids:
+        sl = prs.slides[deck["order"].index(sid)]
+        geo = lambda sh: [Emu(v).inches for v in (sh.left, sh.top, sh.width, sh.height)]   # noqa: E731
+        pics = [(sh.name, geo(sh)) for sh in sl.shapes if sh.shape_type == 13 or sh.name.startswith("Frame:")]
+        texts = [(sh.name, geo(sh), sh.text_frame.text) for sh in sl.shapes if sh.has_text_frame and sh.text_frame.text.strip()
+                 and sh.name not in ("Watermark", "Caption", "MockupLabel", "SlideNumber", "FormatName", "StripNumber", "StripCaption", "Section", "Band")]
+        assert pics, sid
+        for name, g, t in texts:
+            assert g[0] >= -0.01 and g[1] >= -0.01 and g[0] + g[2] <= W + 0.01 and g[1] + g[3] <= H + 0.01, (sid, name, g)
+            for pn, pg in pics:
+                assert not _hit(g, pg), f"{deck['slides'][sid]['title']}: text '{name}' {g} meets {pn} {pg}"
+        for i, (n1, g1, _t1) in enumerate(texts):   # the text boxes keep apart too
+            for n2, g2, _t2 in texts[i + 1:]:
+                assert not _hit(g1, g2), f"{deck['slides'][sid]['title']}: {n1} {g1} meets {n2} {g2}"
+
+
+MEASURE_JS = """<script>addEventListener('load',()=>setTimeout(()=>{const out={};%s.forEach(id=>{const sl=document.getElementById(id);
+sl.style.opacity=1;sl.style.visibility='visible';sl.style.transform='none';const r0=sl.getBoundingClientRect(),rows=[];
+sl.querySelectorAll('h1,p,li,figure,.frame-wrap,.poster,.phone,.sb-strip,.ooh-row').forEach(e=>{const r=e.getBoundingClientRect();
+const bd=e.closest('.body'),q=bd?bd.getBoundingClientRect():null;
+rows.push([e.tagName,e.className&&e.className.baseVal===undefined?e.className:'',r.left-r0.left,r.top-r0.top,r.width,r.height,q?q.top-r0.top:null,q?q.bottom-r0.top:null]);});out[id]=rows;});
+document.body.setAttribute('data-m',JSON.stringify(out));},600));</script>"""
+
+
+def test_on_the_web_deck_no_text_meets_a_picture_or_a_frame_and_none_is_cut_off(tmp_path, monkeypatch):
+    import html as H
+    import json
+    import os
+    import re
+    import shutil
+    import subprocess
+    chrome = shutil.which("chromium") or shutil.which("google-chrome") or shutil.which("chromium-browser")
+    if not chrome:
+        pytest.skip("no headless browser to measure the web deck with")
+    deck, _out, page = _frames_deck(tmp_path, monkeypatch)
+    ids = [sid for sid in deck["order"] if deck["slides"][sid]["title"] in FRAME_SLIDES and deck["slides"][sid]["type"] == "execution"]
+    src = page.read_text().replace("</body>", MEASURE_JS % json.dumps(ids) + "</body>")
+    measured = tmp_path / "m.html"
+    measured.write_text(src)
+    home = tmp_path / "home"
+    home.mkdir()
+    r = subprocess.run([chrome, "--headless", "--no-sandbox", "--disable-gpu", "--virtual-time-budget=4000", "--window-size=1920,1080", "--dump-dom", f"file://{measured}"],
+                       capture_output=True, text=True, timeout=90, env={**os.environ, "HOME": str(home)})
+    m = re.search(r'data-m="([^"]*)"', r.stdout)
+    assert m, r.stderr[-300:]
+    rows = json.loads(H.unescape(m.group(1)))
+    for sid in ids:
+        title = deck["slides"][sid]["title"]
+        boxes = rows[sid]
+        pics = [b[2:6] for b in boxes if b[0] == "FIGURE" or "frame-wrap" in b[1] or b[1].strip() in ("poster", "phone") or "sb-strip" in b[1] or "ooh-row" in b[1]]
+        texts = [(b[0], b[2:6] + b[6:]) for b in boxes if b[0] in ("H1", "P", "LI") and b[5] > 0 and "ooh-name" not in b[1] and "sb-cap" not in b[1] and "mockup" not in b[1]]
+        assert pics and texts, sid
+        for tag, g in texts:
+            assert g[0] >= -1 and g[1] >= -1 and g[0] + g[2] <= 1921 and g[1] + g[3] <= 1081, f"{title}: {tag} {g} leaves the slide"
+            if g[4] is not None:   # inside the slide's body: the top of a title is never cut off by it, nor a line's foot
+                assert g[1] >= g[4] - 2 and g[1] + g[3] <= g[5] + 2, f"{title}: {tag} {g[:4]} is cut off by its body {g[4:]}"
+            for pg in pics:
+                assert not _hit(g[:4], pg[:4], 4), f"{title}: text {tag} {g} meets a picture or frame {pg}"
+
+
+def test_a_second_out_of_home_or_storyboard_execution_never_repeats_the_same_finals():
+    ex = lambda ch: {"channel": ch, "role": "r", "copy": ["a"], "answer": "b"}   # noqa: E731
+    d = {"executions": [ex("Key visual"), ex("Out of home"), ex("Out-of-home"), ex("Packshot"), ex("Storyboard frames"), ex("storyboard frames"), ex("Key visual")],
+         "channel_roles": [{"channel": "Out of home", "role": "x"}, {"channel": "out of home", "role": "y"}, {"channel": "Packshot", "role": "z"}]}
+    out = assemble.dedupe_executions(d)
+    assert [x["channel"] for x in out["executions"]] == ["Key visual", "Out of home", "Packshot", "Storyboard frames", "Key visual"]   # kinds that draw the same frames once; a key visual may show another final
+    assert [r["channel"] for r in out["channel_roles"]] == ["Out of home", "Packshot"]
+    assert len(d["executions"]) == 7
