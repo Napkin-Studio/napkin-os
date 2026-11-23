@@ -1,0 +1,60 @@
+{
+  "vector": "session",
+  "tenant": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+  "now": "2026-11-23T10:00:00Z",
+  "session_cookie": "napkin_session=vector-session",
+  "covers": [
+    "S0-9",
+    "S1-16"
+  ],
+  "description": "/api/session carries media_base (a string when configured, null when not) and never a secret. Only the listed fields are asserted (body_subset).",
+  "documents": [],
+  "variants": [
+    {
+      "media_base": "https://media.example.test/napkin",
+      "steps": [
+        {
+          "name": "session",
+          "request": {
+            "method": "GET",
+            "path": "/api/session",
+            "headers": {
+              "Cookie": "napkin_session=vector-session"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {},
+            "body_subset": {
+              "tenant": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+              "media_base": "https://media.example.test/napkin"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "media_base": null,
+      "steps": [
+        {
+          "name": "session",
+          "request": {
+            "method": "GET",
+            "path": "/api/session",
+            "headers": {
+              "Cookie": "napkin_session=vector-session"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {},
+            "body_subset": {
+              "tenant": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+              "media_base": null
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
