@@ -2649,6 +2649,7 @@ test('Review draws the slide\'s pictures and the picker shows thumbnails, once t
   assert.match(m.app.innerHTML, /data-pics><img src="data:image\/png;base64,iVBORw0KGgo="/)
   assert.match(m.app.innerHTML, /data-prod-thumb/)
   assert.doesNotMatch(m.app.innerHTML, /evil\.example/)
+})
 
 test('the Start form names the client and the project from what the deck carries', () => {
   const up = {
