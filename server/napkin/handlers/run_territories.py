@@ -56,8 +56,11 @@ def make_transport():
 
 
 def make_guard_post():
-    """The guard's vision call (None: the local Ollama one, which the cloud does not have, so frames come back 'not checked' and are held for a person)."""
-    return None
+    """The guard's vision check, picked by config (``territory/cloud_guard.choose``): in the cloud (NAPKIN_MODEL_API=bedrock, or NAPKIN_TERRITORY_GUARD=bedrock)
+    one Claude Haiku call per frame through Bedrock, under the Claude cap and in the spend ledger; otherwise None, the local Ollama guard. A failed or
+    capped check holds the frame either way. A test replaces this function with a fake."""
+    from territory import cloud_guard
+    return cloud_guard.choose()
 
 
 class _Done:

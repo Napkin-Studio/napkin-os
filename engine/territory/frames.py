@@ -21,7 +21,7 @@ Every move returns ``(doc, refusals, note, info, decisions)`` or raises ``Refuse
 * a frame the guard flags (readable text, a logo or brand, banned imagery) or could not check is HELD, never placed, until a person approves it or
   asks for a retry. The words a picture shows are compared with the exact on-screen line the plan meant for it, and both are said;
 * a place is offered only to a picture that can hold it: a wide frame is not offered to a tall Story, and the reason is on the card;
-* frames land by hash on the workspace's blob store and as ``frame`` members by link, labelled Illustrative; their rights start as not chosen.
+* frames land by hash on the workspace's blob store and as ``frame`` members by link, labelled Illustrative; their rights start as Generated (the picture tool made them), which a person may change.
 
 The only prices in the output are the ``ask`` and ``spend`` entries of the decision history (``Spend.decisions``). It runs in the middleware
 image. Every brand and run in the tests is invented.
@@ -34,6 +34,7 @@ import json
 import os
 import re
 import time
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -129,6 +130,26 @@ def _brand_of(doc: dict) -> str | None:
     return (title.split(":")[0].strip() or None) if ":" in title else None
 
 
+def client_of(doc: dict) -> str | None:
+    """The client the document is for: the Brief's ``client`` field carried in ``upstream``, else the brand the title names. Never the agency."""
+    for u in (doc.get("upstream") or {}).values():
+        if isinstance(u, dict) and isinstance(u.get("client"), str) and u["client"].strip():
+            return u["client"].strip()
+    return _brand_of(doc)
+
+
+def client_slug(client: str | None) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", unicodedata.normalize("NFKD", client or "").encode("ascii", "ignore").decode().lower()).strip("-")[:60]
+
+
+def style_folder(frames_dir: Path, client: str | None) -> Path | None:
+    """The style pack of THIS client at ``<frames>/style/<client-slug>/``, or ``None`` (the built-in default). Each client has its own style; there is
+    no agency-wide one. A stand-in until Brand Clan holds the client's style (decision, features/territories-pictures-frames.clan)."""
+    slug = client_slug(client)
+    folder = Path(frames_dir) / "style" / slug if slug else None
+    return folder if folder is not None and folder.is_dir() else None
+
+
 def run_view(doc: dict, routes: list[dict], marks: list, origin: str) -> dict:
     """The routes as the library's run shape (what the safety gate, the frame plan and the material gate read)."""
     brief = {}
@@ -200,9 +221,9 @@ class Frames:
         mat = material.gate(run, None, environ=self.environ)
         if not mat["ok"]:
             raise Refuse("Pictures are not made for this document: " + mat["why"] + " A named person can say the material is invented or a demo.")
-        folder = self.dir / "style"
+        folder = style_folder(self.dir, client_of(self.doc))
         try:
-            sty = style_mod.load(folder if folder.is_dir() else None, forbid=[x for x in [mat.get("brand")] if x])
+            sty = style_mod.load(folder, forbid=[x for x in [mat.get("brand")] if x])
             refs = style_mod.reference_images(sty)
         except style_mod.StyleError as e:
             raise Refuse(f"The style pack has a problem: {e}") from e
@@ -282,7 +303,9 @@ class Frames:
         last = next((e for e in reversed(self.spend.events) if e.get("kind") == "ask" and e.get("what") == "frames"), None)
         if not (last and last.get("card_id") == card["id"]):
             est = card["usd"] + (plan_mod.estimate()["est_usd"] if P["need"] else 0)
-            self.spend.ask({"est_usd": round(est, 2), "calls": card["frames"] + (1 if P["need"] else 0), "what": "frames", "card_id": card["id"],
+            if hasattr(self.guard_post, "estimate"):      # the cloud check: one Claude vision call per frame, under the Claude cap
+                est += card["frames"] * self.guard_post.estimate()
+            self.spend.ask({"est_usd": round(est, 2), "calls": card["frames"] * (2 if hasattr(self.guard_post, "estimate") else 1) + (1 if P["need"] else 0), "what": "frames", "card_id": card["id"],
                             "frames": card["frames"], "routes": card["routes"]}, by=by)
         return self.doc, [], "Costed: read the card, then say yes.", {"card": self.public(card)}, self.spend.decisions()
 
@@ -377,7 +400,8 @@ class Frames:
 
     # -------- the guard: readable text, brands, banned imagery; fail closed
     def _guard(self, P) -> None:
-        kw = {"post": self.guard_post} if self.guard_post else {}
+        gp = self.guard_post
+        kw = {"post": gp.bind(self.spend) if hasattr(gp, "bind") else gp, "name": getattr(gp, "name", "Ollama")} if gp else {}
         down = None
         for e in (P["manifest"].get("frames") or {}).values():
             g = e.get("guard") or {}
@@ -448,7 +472,7 @@ class Frames:
                     continue
                 if sha in used or not open_slots:
                     continue
-                pictures.attach(t, open_slots.pop(0)["id"], {"sha256": sha, "rights": None, "source": SOURCE})
+                pictures.attach(t, open_slots.pop(0)["id"], {"sha256": sha, "rights": "generated", "source": SOURCE})
                 used.add(sha)
                 placed += 1
         return d, placed, held

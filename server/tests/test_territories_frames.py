@@ -94,7 +94,7 @@ def test_ask_then_yes_makes_the_frames_and_the_price_is_only_in_the_history(fr, 
     assert r[-1]["result"]["info"]["frames"]["placed"] == 8
     for tid in ("t_started", "t_sunday"):
         got = [s for s in next(t for t in h.data["territories"] if t["id"] == tid)["pictures"] if s["kind"] == "frame"]
-        assert len(got) == 4 and all(s["rights"] == "unknown" and s["image"] == "sha256:" + s["sha256"] for s in got)
+        assert len(got) == 4 and all(s["rights"] == "generated" and s["image"] == "sha256:" + s["sha256"] for s in got)
         assert all(pictures.DirStore(os.environ["NAPKIN_TERRITORY_DATA"]).has(s["sha256"]) for s in got), "on the workspace blob store, by hash"
     valid(h)
     assert not PRICE.search(json.dumps(h.data)), "no price in the document"
@@ -143,3 +143,14 @@ def test_held_frames_are_not_placed_and_a_named_person_accepts_them(fr, monkeypa
     r = step(fr, h, "frames_approve", keys=[x["key"] for x in st], by="Shrey")
     assert r[-1]["job"]["state"] == "done" and len([s for s in next(t for t in h.data["territories"] if t["id"] == "t_started")["pictures"] if s["kind"] == "frame"]) == 4
     valid(h)
+
+
+def test_the_guard_is_the_cloud_check_in_bedrock_and_the_local_one_otherwise(monkeypatch):
+    from territory import cloud_guard
+    monkeypatch.delenv("NAPKIN_TERRITORY_GUARD", raising=False)
+    monkeypatch.delenv("NAPKIN_MODEL_API", raising=False)
+    assert rt.make_guard_post() is None
+    monkeypatch.setenv("NAPKIN_MODEL_API", "bedrock")
+    assert isinstance(rt.make_guard_post(), cloud_guard.CloudGuard)
+    monkeypatch.setenv("NAPKIN_TERRITORY_GUARD", "local")
+    assert rt.make_guard_post() is None

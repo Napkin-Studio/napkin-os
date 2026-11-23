@@ -11,7 +11,7 @@ import urllib.error
 
 import pytest
 
-from territory import contract, frames, pictures, runner, spend as sp
+from territory import cloud_guard, contract, frames, pictures, runner, spend as sp
 from territory.llm import FakeLLM
 from visuals import jobs as vjobs, runway
 from test_visuals import FakeRunway, KEY, PNG, clean_ollama, ollama_down
@@ -145,7 +145,7 @@ def test_make_runs_the_plan_once_places_frames_by_hash_and_keeps_the_contract(ri
         assert [s["touchpoint"] for s in fr] == ["tv"] * 4 and len({s["sha256"] for s in fr}) == 4
         for s in fr:
             contract.validate_shape("picture", s)
-            assert s["image"] == "sha256:" + s["sha256"] and s["rights"] == "unknown" and pictures.label_of(s) == "Illustrative" and rig.blobs.has(s["sha256"])
+            assert s["image"] == "sha256:" + s["sha256"] and s["rights"] == "generated" and pictures.label_of(s) == "Illustrative" and rig.blobs.has(s["sha256"])
             assert pictures.hash_of(rig.blobs.get(s["sha256"])) == s["sha256"]
         assert all(s["kind"] != "frame" for s in slots(doc, tid) if s["touchpoint"] != "tv"), "nothing is offered to the places a wide frame cannot hold"
     assert slots(doc, "t_passenger") == next(t for t in contract.example("data")["territories"] if t["id"] == "t_passenger")["pictures"], "a greenlit route not asked for is untouched"
@@ -321,3 +321,124 @@ def test_retrying_a_flagged_frame_costs_a_new_card_and_keeps_its_history(tmp_pat
     e = runway.load_manifest(next((r.store.dir / "frames").glob("v-*")))["frames"][key]
     assert len(e["history"]) == 1 and e["attempts"] == 2
     assert vjobs.spent_usd({"jobs": {}}, r.make().ledger) == pytest.approx(0.35), "both attempts count"
+
+
+# ---------------------------------------------------------------- the cloud check (Claude Haiku in Bedrock), rights, and the client's style
+
+
+class FakeBedrock:
+    """The Bedrock client the middleware uses, with no network: ``messages.create`` answers from ``reply(kw)`` and counts calls."""
+
+    def __init__(self, reply=None, boom=None):
+        self.calls, self.boom = [], boom
+        self.reply = reply or (lambda kw: {"readable_text": [], "logos_or_brands": [], "banned_imagery": []})
+        outer = self
+
+        class _M:
+            def create(self, **kw):
+                outer.calls.append(kw)
+                if outer.boom:
+                    raise outer.boom
+                from types import SimpleNamespace as N
+                return N(content=[N(type="text", text=json.dumps(outer.reply(kw)))], usage=N(input_tokens=1500, output_tokens=60))
+        self.messages = _M()
+
+
+def test_the_cloud_check_is_one_haiku_call_per_frame_recorded_under_the_claude_cap(tmp_path, monkeypatch):
+    fb = FakeBedrock()
+    r = Rig(tmp_path, monkeypatch, guard=cloud_guard.CloudGuard(client=fb))
+    r.declare()
+    out = r.run(["t_started"])
+    assert out[3]["frames"]["placed"] == 4 and out[3]["frames"]["held"] == 0
+    assert len(fb.calls) == 4, "one call per frame"
+    kw = fb.calls[0]
+    assert kw["model"] == "claude-haiku-4-5" and kw["messages"][0]["content"][0]["type"] == "image" and "readable text" in kw["messages"][0]["content"][1]["text"]
+    s = r.make().spend
+    lines = [l for l in s.lines if l["stage"] == "frame_check"]
+    assert len(lines) == 4 and all(l["provider"] == sp.CLAUDE and l["model"] == "claude-haiku-4-5" and l["usd"] > 0 for l in lines)
+    assert s.total(sp.CLAUDE) >= sum(l["usd"] for l in lines) and s.total(sp.PICTURES) > 0, "Claude and picture spend stay separate lines"
+
+
+def test_the_cloud_check_reads_text_brands_and_banned_imagery_like_the_local_one(tmp_path, monkeypatch):
+    n = {"i": 0}
+
+    def reply(kw):
+        n["i"] += 1
+        return [{"readable_text": [], "logos_or_brands": ["ACMELOGO"], "banned_imagery": []},
+                {"readable_text": ["PREMIUM JAM"], "logos_or_brands": [], "banned_imagery": []},
+                {"readable_text": ["line 3"], "logos_or_brands": [], "banned_imagery": []},
+                {"readable_text": [], "logos_or_brands": [], "banned_imagery": []}][(n["i"] - 1) % 4]
+    r = Rig(tmp_path, monkeypatch, guard=cloud_guard.CloudGuard(client=FakeBedrock(reply)))
+    r.declare()
+    out = r.run(["t_started"])
+    assert out[3]["frames"]["held"] == 3 and out[3]["frames"]["placed"] == 1
+    why = " ".join(x["why"] for x in r.make().status()[3]["frames"]["frames"] if x["held"])
+    assert "ACMELOGO" in why and "PREMIUM JAM" in why and "line 2" in why, "the exact words, beside what the picture shows"
+
+
+def test_a_failed_or_capped_cloud_check_holds_the_frame(tmp_path, monkeypatch):
+    r = Rig(tmp_path, monkeypatch, guard=cloud_guard.CloudGuard(client=FakeBedrock(boom=RuntimeError("throttled"))))
+    r.declare()
+    out = r.run(["t_started"])
+    assert out[3]["frames"]["placed"] == 0 and out[3]["frames"]["held"] == 4
+    assert all("Nobody could check" in x["why"] and "failed" in x["why"] for x in r.make().status()[3]["frames"]["frames"])
+    # a call the Claude cap refuses is not made, and the frame is held with the cap's own words
+    from visuals import guard as guard_mod
+    fb = FakeBedrock()
+    tiny = sp.Spend(cap_usd=0.0001, images_cap_usd=1.0)
+    g = guard_mod.check_image(PNG, [], post=cloud_guard.CloudGuard(client=fb).bind(tiny), name="x")
+    assert g["checked"] is False and "limit" in g["reason"] and fb.calls == []
+
+
+def test_a_cloud_check_of_the_same_picture_is_never_paid_twice():
+    from visuals import guard as guard_mod
+    fb, s = FakeBedrock(), sp.Spend(cap_usd=1.0, images_cap_usd=1.0)
+    post = cloud_guard.CloudGuard(client=fb).bind(s)
+    a, b = guard_mod.check_image(PNG, ["x"], post=post), guard_mod.check_image(PNG, ["x"], post=post)
+    assert a == b and a["checked"] and len(fb.calls) == 1 and s.count(sp.CLAUDE) == 1
+
+
+def test_the_guard_is_picked_by_config():
+    assert cloud_guard.choose({}) is None and cloud_guard.choose({"NAPKIN_TERRITORY_GUARD": "local", "NAPKIN_MODEL_API": "bedrock"}) is None
+    assert isinstance(cloud_guard.choose({"NAPKIN_MODEL_API": "bedrock"}), cloud_guard.CloudGuard)
+    assert isinstance(cloud_guard.choose({"NAPKIN_TERRITORY_GUARD": "bedrock"}), cloud_guard.CloudGuard)
+    with pytest.raises(ValueError):
+        cloud_guard.choose({"NAPKIN_TERRITORY_GUARD": "other"})
+
+
+def test_the_cloud_check_without_bedrock_configured_fails_closed(monkeypatch):
+    from visuals import guard as guard_mod
+    monkeypatch.delenv("NAPKIN_MODEL_API", raising=False)
+    g = guard_mod.check_image(PNG, [], post=cloud_guard.CloudGuard().bind(sp.Spend(cap_usd=1.0, images_cap_usd=1.0)), name="x")
+    assert g["checked"] is False and "Bedrock" in g["reason"]
+
+
+def test_frames_start_as_generated(rig):
+    out = rig.run(["t_started"])
+    got = [s for s in slots(out[0], "t_started") if s["kind"] == "frame"]
+    assert got and all(s["rights"] == "generated" and pictures.rights_word(s["rights"]) == "Generated" for s in got)
+
+
+def test_each_client_has_its_own_style_and_never_the_agency(tmp_path, monkeypatch):
+    r = Rig(tmp_path, monkeypatch)
+    r.declare()
+    assert frames.client_of(r.doc) == "Linea"
+    base = r.make()._prepare(None)["sty"]
+    assert base.source.startswith("default")
+    sd = r.store.dir / "frames" / "style"
+
+    def pack(name, look):
+        (sd / name).mkdir(parents=True)
+        (sd / name / "style.yaml").write_text(f"look: [{look}]\nfinish: rough\n")
+    pack("linea", "chalk and soft paper")
+    pack("napkin-studio", "agency look that must never be used")        # an agency-keyed folder is never read
+    mine = r.make()._prepare(None)["sty"]
+    assert mine.look == ["chalk and soft paper"] and mine.hash != base.hash
+    other = copy.deepcopy(r.doc)
+    other["title"] = "Orchard Co: summer"
+    other["upstream"] = {}
+    assert frames.client_of(other) == "Orchard Co"
+    r2 = Rig(tmp_path, monkeypatch, doc=other)
+    r2.declare()
+    assert r2.make()._prepare(None)["sty"].hash == base.hash, "a client with no pack gets the built-in default, not another client's"
+    assert frames.client_slug("../Évil/Co") == "evil-co" and frames.style_folder(sd, "") is None
