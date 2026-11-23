@@ -240,23 +240,29 @@ def _segment(session: _Session, stage: str, fn):
     """A stage function that records its segment: started, then finished or failed. The record is progress for the job's log; the resume
     itself is the spend store (a finished call is never made again)."""
     def go(doc):
+        t = time.monotonic()
         session.store.note_segment(stage, "started")
-        out = fn(doc)
+        try:
+            out = fn(doc)
+        except BaseException:
+            session.store.note_segment(stage, "failed", calls=session.counts.get(stage, 0), secs=round(time.monotonic() - t, 2))
+            raise
         err = (out.get("run") or {}).get("error")
-        session.store.note_segment(stage, "failed" if err else "finished", calls=session.counts.get(stage, 0))
+        session.store.note_segment(stage, "failed" if err else "finished", calls=session.counts.get(stage, 0), secs=round(time.monotonic() - t, 2))
         return out
     return go
 
 
 def _insights_stage(session: _Session, doc: dict, facts, findings, sources, category, market, prompt_text) -> dict:
+    t0 = time.monotonic()
     session.store.note_segment("insights", "started")
     res = insights.run(doc, session.llm, facts=facts, findings=findings, sources=sources, category=category, market=market, prompt_text=prompt_text)
     if res.get("error"):
         e = res["error"]
-        session.store.note_segment("insights", "failed")
+        session.store.note_segment("insights", "failed", calls=session.counts.get("insights", 0), secs=round(time.monotonic() - t0, 2))
         return _fail(doc, "pick", e["message"], e.get("retryable", True), e.get("refused"))
     if res.get("gate") or not res.get("insights"):
-        session.store.note_segment("insights", "failed")
+        session.store.note_segment("insights", "failed", calls=session.counts.get("insights", 0), secs=round(time.monotonic() - t0, 2))
         return _fail(doc, "pick", res.get("words") or "There is not enough to work from, so no insights were made.", retryable=False)
     d = copy.deepcopy(doc)
     inp = carried.engine_input(d, facts, findings, sources)
@@ -264,7 +270,7 @@ def _insights_stage(session: _Session, doc: dict, facts, findings, sources, cate
     d["focus"] = {"sources": [{"id": i, "in_play": True} for i in ids], "insights": res["insights"]}
     d["run"].pop("error", None)
     d["run"]["state"] = "draft"
-    session.store.note_segment("insights", "finished", calls=session.counts.get("insights", 0))
+    session.store.note_segment("insights", "finished", calls=session.counts.get("insights", 0), secs=round(time.monotonic() - t0, 2))
     return d
 
 
@@ -283,7 +289,13 @@ def _check_final(doc: dict, facts, findings) -> dict:
 def _result(session: _Session, doc: dict, **info) -> Result:
     session.spend.outcome("run", routes=len([t for t in doc.get("territories") or [] if t.get("status") == "live"]),
                           developed=len([t for t in doc.get("territories") or [] if t.get("state") == "developed"]))
-    return Result(doc, session.spend.decisions(), {"calls": dict(session.counts), "segments": session.store.segments(), **info}, stopped=session.stopped)
+    return Result(doc, session.spend.decisions(), {"calls": dict(session.counts), "segments": session.store.segments(), **_telemetry(session), **info},
+                  stopped=session.stopped)
+
+
+def _telemetry(session: _Session) -> dict:
+    """What this session saw that the ledger does not keep: the paid calls the cap refused and the calls that paid nothing (read or joined)."""
+    return {"cap_stops": list(session.spend.stops), "reused": session.spend.reused}
 
 
 # ---------------------------------------------------------------- the entry
@@ -344,10 +356,11 @@ def _move(doc, store, llm, cancel, cap_usd, doc_id, on_line, fn):
         try:
             out, refusals = fn(prepare(doc), session.llm)
         except sp.CapReached as e:
-            return Result(doc, session.spend.decisions(), refusals=[str(e)])
+            return Result(doc, session.spend.decisions(), _telemetry(session), refusals=[str(e)])
         except Exception:     # noqa: BLE001
-            return Result(doc, session.spend.decisions(), refusals=[STOPPED_WORDS if session.stopped else UNEXPECTED_WORDS], stopped=session.stopped)
-        res = Result(out, session.spend.decisions(), {"calls": dict(session.counts)}, refusals=list(refusals), stopped=session.stopped)
+            return Result(doc, session.spend.decisions(), {"calls": dict(session.counts), **_telemetry(session)},
+                          refusals=[STOPPED_WORDS if session.stopped else UNEXPECTED_WORDS], stopped=session.stopped)
+        res = Result(out, session.spend.decisions(), {"calls": dict(session.counts), **_telemetry(session)}, refusals=list(refusals), stopped=session.stopped)
         return res
     finally:
         lock.release()

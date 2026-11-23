@@ -398,3 +398,15 @@ def test_live_llm_still_needs_the_yes():
     from territory.llm import LiveLLM
     with pytest.raises(PermissionError):
         LiveLLM()
+
+
+def test_the_result_carries_what_the_run_log_needs(tmp_path):
+    """Segment seconds, the calls the cap refused and the calls that paid nothing (features/territories-telemetry)."""
+    store = store_in(tmp_path, "tele")
+    res = go(Counting(), store)
+    assert res.info["cap_stops"] == [] and res.info["reused"] == 0
+    assert all(isinstance(r.get("secs"), float) for r in store.segments() if r["state"] != "started")
+    again = go(Counting(), store)                                    # the same document again: every call is read from the record
+    assert again.info["reused"] >= 1 and again.spent_usd == res.spent_usd
+    capped = go(Counting(), store_in(tmp_path, "tele2"), cap_usd=0.0001)
+    assert capped.info["cap_stops"] == ["claude"]

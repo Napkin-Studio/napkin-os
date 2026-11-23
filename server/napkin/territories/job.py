@@ -15,6 +15,7 @@ from __future__ import annotations
 import copy
 import logging
 import threading
+import time
 import traceback
 
 from .. import reasoning as rsn
@@ -22,6 +23,7 @@ from ..brief.job import Chunk, combine
 from ..doc import apply_patch, ctx_data, decision, get_dotted
 from ..jobs import Abandoned
 from ..util import TaskError, iso, uid
+from . import telemetry
 
 log = logging.getLogger("napkin.territories")
 
@@ -95,6 +97,9 @@ class TerritoriesJob:
         self.pending: list = []                 # a person's small moves that came while the step ran: applied to the document it returns
         self.done_n, self.total_n = 0, max(1, total)
         self.info: dict = {}
+        self.res = None                         # what the runner returned, for the run log's record
+        self.store, self.seg_base, self.t0 = None, 0, None    # set when the step starts: the run's store, its segments before it, its start (the ledger's clock)
+        self.tele = telemetry.Collector()
         self.thread = threading.Thread(target=self._run, name=f"{task}-{jid}", daemon=True)
 
     # -- the worker ----------------------------------------------------------------
@@ -149,6 +154,7 @@ class TerritoriesJob:
             if self._cancelled():
                 return
             self.state = "running"
+            self.t0 = time.time()
         rl = getattr(self.caps, "runlog", None)
         if rl is not None:
             rl.start(self.task, self.doc, ["run"], step=self.step)
@@ -170,10 +176,11 @@ class TerritoriesJob:
             self._fail("internal", "The step stopped before it finished. What was made is saved; try again.")
         finally:
             if rl is not None:
+                telemetry.write(rl, self, self.res)
                 rl.end(self.state, error=self.error)
 
     def _work(self):
-        res = self.call(self)
+        res = self.res = self.call(self)
         with self.lock:
             if self._cancelled():
                 return

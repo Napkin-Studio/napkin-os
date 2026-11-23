@@ -83,15 +83,19 @@ def start(req, caps, settings, jid):
     by = moves._s(inp, "by", 80)
     rl = caps.runlog
 
-    def on_line(kw):
+    def on_line(kw, job=None):
         try:
             rl.model(**kw)
         except Exception:   # noqa: BLE001 - the run log never stops a run
             pass
+        if job is not None:
+            job.tele.line(kw)
 
     def common(job):
-        return dict(llm=J.make_llm(), store=runner.Store.for_doc(req.doc), facts=facts, findings=findings, sources=sources, marks=marks,
-                    cancel=job.cancel_event, doc_id=req.doc, on_line=on_line)
+        store = runner.Store.for_doc(req.doc)
+        job.store, job.seg_base = store, len(store.segments())      # the run log's record counts only what this step does
+        return dict(llm=J.make_llm(), store=store, facts=facts, findings=findings, sources=sources, marks=marks,
+                    cancel=job.cancel_event, doc_id=req.doc, on_line=lambda kw: on_line(kw, job))
 
     if step == "run":
         total = max(1, len(data.get("crew") or routes.CREW))

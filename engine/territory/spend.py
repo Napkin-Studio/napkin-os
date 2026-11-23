@@ -102,6 +102,8 @@ class Spend:
         self.outputs: dict[str, dict] = {}   # call key -> finished output, kept for a resume
         self.inflight: dict[str, Future] = {}
         self.events: list[dict] = []         # ask / outcome entries
+        self.stops: list[str] = []           # this session only (never stored): the provider of each paid call the cap refused
+        self.reused = 0                      # this session only: calls answered from the record or joined in flight, which paid nothing
         self._load()
 
     # ---------------------------------------------------------------- persistence (a resumed run reads what was paid for)
@@ -125,6 +127,7 @@ class Spend:
         """The cap check, for every paid call of either kind. Raises ``CapReached`` when spent plus the estimate passes the cap."""
         with self.lock:
             if self.total(provider) + est_usd > self.cap[provider]:
+                self.stops.append(provider)
                 raise CapReached(provider)
 
     def _record(self, provider, stage, model, usage, usd, estimated, key):
@@ -188,10 +191,14 @@ class Spend:
         with self.lock:
             done = self.outputs.get(key)
             if done is not None:
+                self.reused += 1
                 return done["result"] if picture else (done["obj"], done["usage"])
             fut = self.inflight.get(key)
+            if fut is not None:
+                self.reused += 1
             if fut is None:
                 if self.total(provider) + est > self.cap[provider]:
+                    self.stops.append(provider)
                     raise CapReached(provider)
                 fut = self.inflight[key] = Future()
                 threading.Thread(target=self._work, args=(fut, key, provider, stage, model, run, picture), daemon=True).start()
