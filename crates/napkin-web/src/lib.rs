@@ -18,6 +18,7 @@
 pub mod admin;
 pub mod api;
 pub mod auth;
+pub mod blobs;
 pub mod dogfood;
 pub mod error;
 pub mod etag;

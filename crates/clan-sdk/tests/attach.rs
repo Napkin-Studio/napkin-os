@@ -102,6 +102,7 @@ fn written(clan: &ClanFile, data: &str, decisions: &[(&str, &str)], facts: &[&st
             content_type: "application/yaml".into(),
             priority: None,
             sha256: None,
+            linked: false,
         });
     }
     let mut b = ClanBuilder::new(manifest);

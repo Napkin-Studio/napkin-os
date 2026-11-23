@@ -123,6 +123,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 content_type: ctype.into(),
                 priority: None,
                 sha256: None,
+                linked: false,
             });
         }
     }

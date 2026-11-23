@@ -215,6 +215,7 @@ mod tests {
                 content_type: ct.into(),
                 priority: None,
                 sha256: None,
+                linked: false,
             }
         }
         let manifest = Manifest {

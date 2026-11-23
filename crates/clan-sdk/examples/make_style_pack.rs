@@ -75,6 +75,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             content_type: "image/svg+xml".into(),
             priority: None,
             sha256: None,
+            linked: false,
         });
     }
     let clan = ClanFile::from_bytes(builder.build()?)?;

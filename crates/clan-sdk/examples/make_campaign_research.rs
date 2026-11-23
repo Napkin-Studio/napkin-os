@@ -115,6 +115,7 @@ fn register(builder: &mut ClanBuilder, id: &str, path: &str, role: &str, bytes: 
             content_type: content_type(path).into(),
             priority: None,
             sha256: None,
+            linked: false,
         });
     }
 }

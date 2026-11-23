@@ -289,7 +289,17 @@ impl Session {
     /// ([`view::served_archive`]). The stored document is not touched; see
     /// [`Self::stored_bytes`] for it exactly as stored.
     pub fn raw_bytes(&self) -> HostResult<Vec<u8>> {
-        self.read(|d| Ok(view::served_archive(d)?.into_owned()))
+        let store = self.store.clone();
+        self.read(|d| {
+            let served = view::served_archive(d)?;
+            // What leaves the workspace carries its files: a link is turned
+            // back into bytes so the download opens on its own.
+            if !d.clan().manifest().files.iter().any(|f| f.linked) {
+                return Ok(served.into_owned());
+            }
+            let clan = clan_sdk::ClanFile::from_bytes(served.into_owned())?;
+            crate::blobs::materialise(&clan, store.blobs())
+        })
     }
 
     /// The packed archive of the open snapshot exactly as stored.
@@ -373,7 +383,8 @@ impl Session {
     /// `GET /assets/<rel>` — serve a binary asset from inside the artifact ZIP.
     pub fn serve_asset(&self, rel: &str) -> HostResult<(String, Vec<u8>)> {
         read::check_asset_path(rel)?;
-        self.read(|d| read::serve_asset(d, rel))
+        let store = self.store.clone();
+        self.read(|d| read::serve_asset(d, rel, store.blobs()))
     }
 
     /// `GET /chain` — the decision chain as JSON (lazy fetch for the view).
@@ -384,14 +395,24 @@ impl Session {
     /// Compose a standalone document from the open `.clan`. Returns
     /// `(html, filename_stem)`.
     pub fn compose_export(&self, provenance: bool, no_brand: bool) -> HostResult<(String, String)> {
-        self.read(|d| read::compose_export(d, provenance, no_brand))
+        let store = self.store.clone();
+        self.read(|d| {
+            if !d.clan().manifest().files.iter().any(|f| f.linked) {
+                return read::compose_export(d, provenance, no_brand);
+            }
+            // The export inlines pictures from the archive: give it one
+            // that holds them.
+            let whole = crate::blobs::materialise(d.clan(), store.blobs())?;
+            let d = Document::from_bytes(d.id().clone(), whole)?;
+            read::compose_export(&d, provenance, no_brand)
+        })
     }
 
     /// Splice each attachment's cached extracted text into `payload`. A no-op
     /// with nothing open.
     pub fn attach_extracted_text(&self, payload: &mut Value) {
         if let Some(d) = self.view.lock().unwrap().open.as_ref() {
-            read::attach_extracted_text(d, payload);
+            read::attach_extracted_text(d, self.store.blobs(), payload);
         }
     }
 
@@ -542,7 +563,10 @@ impl Session {
         body: Vec<u8>,
     ) -> HostResult<Applied> {
         let name = edit::parse_asset_name(name)?;
-        self.perform(ctx, |c, d| edit::upload_asset(c, d, &name, agent, body))
+        let store = self.store.clone();
+        self.perform(ctx, |c, d| {
+            edit::upload_asset(c, d, store.blobs(), &name, agent, body)
+        })
     }
 
     /// Update the open document's title (e.g. to the AI-set brief name).

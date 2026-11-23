@@ -80,6 +80,43 @@ pub trait PartStore: Send + Sync {
     /// The only write path in the host. Every operation returns a [`Change`]
     /// and a shell (or a library helper acting for one) hands it here.
     fn apply(&self, change: &Change) -> HostResult<Version>;
+
+    /// The workspace's content-addressed file store, for a store that has one
+    /// (the hosted web's tenant store). `None` — the default — means assets
+    /// stay inside the documents: the desktop and browser stores keep their
+    /// files self-contained because the person moves and emails them.
+    fn blobs(&self) -> Option<&dyn BlobStore> {
+        None
+    }
+}
+
+/// One stored file, as the sweep sees it.
+#[derive(Debug, Clone)]
+pub struct BlobInfo {
+    /// `sha256:<64 hex>`.
+    pub sha256: String,
+    /// Seconds since the epoch the file was written.
+    pub written_at: u64,
+}
+
+/// A workspace's files, each stored once under the sha256 of its bytes
+/// (features/spinoff-asset-links). A document links to a file by that hash;
+/// the store is the workspace's own, so a hash another workspace holds does
+/// not resolve here. Writes never replace a stored file.
+pub trait BlobStore: Send + Sync {
+    /// Store `bytes` and return their `sha256:<hex>`. Storing what is already
+    /// there changes nothing.
+    fn put(&self, bytes: &[u8]) -> HostResult<String>;
+    /// The bytes under `sha256`, or a 404 naming the hash.
+    fn get(&self, sha256: &str) -> HostResult<Vec<u8>>;
+    fn has(&self, sha256: &str) -> bool;
+    /// Every stored file.
+    fn list(&self) -> Vec<BlobInfo>;
+    fn remove(&self, sha256: &str) -> HostResult<()>;
+    /// Mark `sha256` as referenced by a document this workspace's library does
+    /// not hold (a Production project in the relay), so a sweep keeps it.
+    fn pin(&self, sha256: &str) -> HostResult<()>;
+    fn pinned(&self) -> Vec<String>;
 }
 
 /// The app library's layout. Names documents; never writes them.

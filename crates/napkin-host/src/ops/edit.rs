@@ -678,9 +678,14 @@ pub fn parse_asset_name(name: &str) -> HostResult<String> {
 
 /// `POST /upload-asset?name=&agent=` — store a binary asset inside the archive,
 /// with its extracted text cached beside it.
+///
+/// With a workspace file store the bytes go there, once, and the document
+/// holds a link to them (features/spinoff-asset-links); the extracted text
+/// stays in the document.
 pub fn upload_asset(
     ctx: &Ctx,
     doc: &Document,
+    blobs: Option<&dyn crate::store::BlobStore>,
     name: &str,
     claimed: Option<&str>,
     body: Vec<u8>,
@@ -710,6 +715,13 @@ pub fn upload_asset(
         if let Ok(nb) = patch_asset_with(&with_asset, &sidecar, text.into_bytes(), None) {
             bytes = nb;
         }
+    }
+    if let Some(blobs) = blobs {
+        bytes = crate::blobs::link_embedded(
+            blobs,
+            &clan_sdk::ClanFile::from_bytes(bytes)?,
+            Some(&format!("human/assets/{name}")),
+        )?;
     }
     let reply = serde_json::json!({
         "ok": true,

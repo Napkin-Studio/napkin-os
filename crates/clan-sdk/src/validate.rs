@@ -93,6 +93,16 @@ pub fn validate(clan: &ClanFile) -> ValidationReport {
 
     // --- All manifest-listed files must exist ---
     for entry in &m.files {
+        if entry.linked {
+            // A link names bytes held elsewhere by their hash; with no hash
+            // it names nothing (spec §5).
+            if !entry.sha256.as_deref().is_some_and(hash::is_valid_prefixed) {
+                report
+                    .structural
+                    .push(format!("linked file has no valid sha256: {}", entry.path));
+            }
+            continue;
+        }
         if !clan.has_entry(&entry.path) {
             report.structural.push(format!(
                 "manifest file registry references missing entry: {}",
@@ -102,7 +112,7 @@ pub fn validate(clan: &ClanFile) -> ValidationReport {
     }
 
     // --- Integrity: SHA-256 verification ---
-    for entry in &m.files {
+    for entry in m.files.iter().filter(|f| !f.linked) {
         if let Some(expected) = &entry.sha256 {
             match clan.read_entry(&entry.path) {
                 Ok(bytes) => {

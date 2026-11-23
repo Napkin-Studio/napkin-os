@@ -233,6 +233,34 @@ r = clan(['create', '--title', 'AgentOnly', '--brief', 'b', '--no-render', '--ou
   record('T22', 'export-static keys complete', e.json && need.length === 0, e.err || `missing=${need} have=${keys}`)
 }
 
+// ---------- T23 linked file entries (features/spinoff-asset-links) ----------
+{
+  // A link: a file entry with linked: true and a sha256, no archive entry.
+  const py = `
+import sys, zipfile
+src, dst, sha = sys.argv[1], sys.argv[2], sys.argv[3]
+zin = zipfile.ZipFile(src)
+with zipfile.ZipFile(dst, 'w', zipfile.ZIP_DEFLATED) as zout:
+    for i in zin.infolist():
+        data = zin.read(i.filename)
+        if i.filename == 'manifest.yaml':
+            entry = '- id: human-asset-brief-pdf\\n  path: human/assets/brief.pdf\\n  role: human-asset\\n  type: application/pdf\\n'
+            if sha != '-':
+                entry += '  sha256: ' + sha + '\\n'
+            entry += '  linked: true\\n'
+            data = data.decode().replace('\\nfiles:\\n', '\\nfiles:\\n' + entry, 1).encode()
+        zout.writestr(i.filename, data)
+`
+  const mk = (dst, sha) => spawnSync('python3', ['-I', '-c', py, join(work, 'doc.clan'), join(work, dst), sha], { encoding: 'utf8' })
+  const good = 'sha256:' + 'ab'.repeat(32)
+  const a = mk('linked.clan', good)
+  r = clan(['validate', 'linked.clan'])
+  record('T23a', 'validate accepts a linked file with a sha256 and no entry', a.status === 0 && r.code === 0, a.stderr || r.out)
+  const b = mk('badlink.clan', '-')
+  r = clan(['validate', 'badlink.clan'])
+  record('T23b', 'validate refuses a linked file with no sha256', b.status === 0 && r.code !== 0 && /linked file/.test(r.out), b.stderr || r.out)
+}
+
 // ---------- write results ----------
 const hardFails = results.filter(x => !x.pass && !x.expect_red).length
 const summary = {
