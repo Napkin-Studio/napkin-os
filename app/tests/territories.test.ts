@@ -381,10 +381,12 @@ test('a brief alone, research alone, and nothing at all each say so plainly', ()
   assert.ok(!/undefined|null/.test(none))
 })
 
-test('before the engine has written, the page says what is not built and offers nothing that does nothing', () => {
+test('before the engine has written, the page offers only the first run, and nothing to pick', () => {
   const { root } = screen(SDATA)
-  assert.match(root, /not been sent out/)
-  assert.ok(!/data-act=|data-tick=|data-form=|data-play=/.test(root), 'no pick control on a page with nothing to pick')
+  assert.match(root, /Nothing has been sent out yet/)
+  // The one control is the first run (owner local test 2026-11-23: the page used to offer nothing, a dead end).
+  assert.deepEqual([...root.matchAll(/data-act="([^"]+)"/g)].map(m => m[1]), ['first'])
+  assert.ok(!/data-tick=|data-form=|data-play=/.test(root), 'no pick control on a page with nothing to pick')
   assert.match(root, /<textarea rows="2" disabled/)
 })
 
@@ -859,4 +861,14 @@ test('a written send to Deck Maker asks the shell to continue in it, and the she
   assert.match(rt, /\^ie\\\.napkin\\\.\[a-z0-9-\]\{1,40\}\$/)
   const host = readFileSync(new URL('src/shell/AppHost.tsx', root), 'utf8')
   assert.match(host, /onContinueIn=\{onSpinoff\}/)
+})
+
+
+test('a document nothing has run on yet offers Find the insights, and it starts the first run (owner local test 2026-11-23)', () => {
+  const d = doc(); d.focus.insights = []; d.run = {}
+  const page = L.view(d, {})
+  assert.match(page, /data-act="first"/); assert.match(page, /Find the insights/)
+  assert.equal(L.act(d, {}, { a: 'first' }, ENV)!.start, true)
+  assert.equal(L.act(doc(), {}, { a: 'first' }, ENV), null, 'once insights exist, the pick takes over')
+  assert.match(L.view(d, { job: { state: 'running' } }), /data-act="first" disabled/)
 })

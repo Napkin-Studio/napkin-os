@@ -921,6 +921,16 @@ var TerritoriesLogic = (function () {
     return out;
   }
 
+  /** The first run: the crew reads what arrived and brings back the insights to pick from (the engine's `run` with no pick stops at Pick). */
+  function firstRunLine(ui) {
+    var job = ui && ui.job, busy = !!(job && (job.state === 'sending' || job.state === 'queued' || job.state === 'running'));
+    var note = busy ? 'The crew is reading the brief and the research. The insights to pick from appear here.' :
+      job && job.state === 'failed' ? (job.error || 'The engine stopped.') + ' Nothing was lost.' :
+      'Nothing has been sent out yet. The crew reads the brief and the research and brings back the insights you pick from.';
+    return '<p class="rest' + (job && job.state === 'failed' ? ' bad' : '') + '" role="status">' + esc(note) + '</p>' +
+      '<div class="row"><button type="button" class="btn-pill primary" data-act="first"' + (busy ? ' disabled' : '') + '>' + (job && job.state === 'failed' ? 'Try again' : 'Find the insights') + '</button></div>';
+  }
+
   /** The first screen of a document the engine has not written to yet: what came in, read before anything else happens. */
   function arrivedSheet(data, ui) {
     var sn = seen(data);
@@ -941,7 +951,7 @@ var TerritoriesLogic = (function () {
       '<p>Made ' + esc(fromWords(sn)) + '. Read in full, in the words the brief and the research use. Nothing is copied: the crew will quote it by name.</p></header>' +
       '<div class="stats">' + statsOf(sn).map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + '</div>' +
       '<div class="sheet-body">' + sourceCards(data) + keyf +
-      '<p class="rest">The crew has not been sent out. The insights to pick from arrive with the engine’s first run; until then nothing here can be ticked.</p></div></article>';
+      firstRunLine(ui) + '</div></article>';
   }
 
   function everything(data) {
@@ -1660,6 +1670,9 @@ var TerritoriesLogic = (function () {
       var c = counts(data), ap = approvePatch(run, c.ticked, by, at);
       if (!ap) return { writes: [], toast: c.ticked ? 'Explore is already approved for these ticks.' : 'Tick at least one insight first.' };
       return { writes: [{ patch: { run: ap }, action: 'approve pick', rationale: 'gate 1 of 2 approved: ' + plural(c.ticked, 'insight') + ' ticked' }], start: true, toast: 'Approved.' };
+    }
+    if (e.a === 'first') {
+      return pickState(run) === 'none' && !focusOf(data).insights.length ? { writes: [], start: true } : null;
     }
     if (e.a === 'retry') {
       return pickState(run) === 'approved' || (run.state === 'failed' && run.stage === 'explore') ? { writes: [], start: true } : null;
