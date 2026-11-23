@@ -78,24 +78,29 @@ async function boot() {
   // Blank films nothing was added to are not kept (owner 2026-11-18): those an earlier visit left go first.
   if (app.get().me) await shell.pruneDrafts().catch((e) => console.warn('could not tidy blank films', e))
   if (app.get().me) {
-    // Entry is the blank canvas, never All projects and never a question (owner 2026-11-18); a link or a reload
-    // that names a film opens that film.
+    // A link or a reload that names a film opens that film. With none the page shows the library's Production
+    // list (contract section 2.5): the page never makes a project the person did not ask for (the owner's blank
+    // canvas entry of 2026-11-18 is a New project away, from the list).
     const opened = await openRouteProject(shell, router).catch((e) => {
       console.error('could not open the linked project', e)
       return false
     })
-    if (!opened) await shell.newProject().catch((e) => console.error('could not open a blank canvas', e))
+    if (!opened) await shell.goHome()
   }
 
-  window.addEventListener('pagehide', () => {
+  // What is waiting is written down as the page goes, and as it is hidden (a reload, a tab switch, a mobile close):
+  // pagehide alone came too late for an edit followed at once by a reload (UAT round 6, S1-12).
+  const writeDown = (leaving = true) => {
     const s = shell.get().session?.services
     if (s) {
-      for (const fn of s.project.beforeClose) void fn()
+      if (leaving) for (const fn of s.project.beforeClose) void fn()
       void (s.doc as { flush?: () => Promise<void> }).flush?.()
       void s.ui.flush()
     }
     void app.flush()
-  })
+  }
+  window.addEventListener('pagehide', () => writeDown())
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') writeDown(false) })
 
   // For poking at in the dev server's console (and the e2e checks); not in a build.
   if (import.meta.env.DEV) {

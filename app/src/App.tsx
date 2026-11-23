@@ -19,7 +19,7 @@ import Launcher from './shell/Launcher'
 import { LandingHome } from './shell/landing/LandingHome'
 import { useLanding } from './shell/landing/useLanding'
 import { initialsOf, jobOf, routeOfDocument, whoIs } from './shell/landing/model'
-import { PRODUCTION_APP_ID, toolById, toolOfApp } from './shell/landing/tools'
+import { PRODUCTION_APP_ID, productionDocUrl, toolById, toolOfApp } from './shell/landing/tools'
 import Toolbar from './components/Toolbar'
 import { productionOn, signedInUser } from './host/http'
 import { signOut } from './shell/signOut'
@@ -173,7 +173,7 @@ export default function App() {
   const isLatest = (n: number) => n === openSeq.current
 
   const refreshApps = useCallback(async () => {
-    // Production is installed for its spin-offs, not to launch: its projects open at /production.
+    // Production is installed for its spin-offs, not to launch: its projects open in the Production Tool (/production/?doc=<id>).
     try { setInstalled((await host.listApps()).filter(a => a.app_id !== PRODUCTION_APP_ID)) } catch (e) { console.error(e) }
   }, [])
   // Once at start too: a document opened straight from a link (or a reload)
@@ -218,6 +218,12 @@ export default function App() {
 
   const runArtifact = useCallback(async (n: number, open: OpenResult, source?: DeviceSource) => {
     if (!isLatest(n)) return
+    // A Production project is a library document like any other, but the Production Tool is what edits it:
+    // the shell hands it over by its id, wherever the open came from (library, spin-off, a link).
+    if (!source && !open.is_template && open.manifest.app?.app_id === PRODUCTION_APP_ID && hasServer && !onDevice()) {
+      window.location.assign(productionDocUrl(open.path))
+      return
+    }
     resetTheme() // clear any prior app's theme before this one (re)applies its own
     setRunning({ artifactPath: open.path, open, editMode: false, source })
     setScreen('app')
@@ -324,13 +330,6 @@ export default function App() {
     setLoading(true); setError(null)
     try {
       const src = runningRef.current?.open.manifest
-      if (appId === PRODUCTION_APP_ID) {
-        // A Production project is kept in the relay, not the library: the server makes it, then the tool opens it.
-        if (!host.spinoffToProduction) throw new Error('Production is not available here.')
-        const made = await host.spinoffToProduction(null)
-        window.location.assign(made.path)
-        return
-      }
       const result = await host.spinoffDocument(appId, spinoffTitle(src?.title, src?.app?.app_id, appId), null)
       await runArtifact(n, result)
     } catch (e) { setError(String(e)) } finally { setLoading(false) }

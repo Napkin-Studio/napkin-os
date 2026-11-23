@@ -10,20 +10,20 @@ import { fakeIndexedDb } from '../test/fakeIndexedDb'
 const X = 'prj_X'
 const Y = 'prj_Y'
 
-/** The relay's project routes as far as saving goes (relay/projects.py): a stale If-Match is a 409. */
+/** The host's save route as far as saving goes: a stale If-Match is a 409 with `latest`. */
 function relay() {
   let n = 0
   const rows = new Map<string, SavedProject>()
   const saves: { tab: string; id: string; ifMatch: string | null; status: number }[] = []
   /** The ProjectServer one tab sees: its own SaveConflict class (each tab has its own modules). */
-  const serverFor = (tab: string, SaveConflict: new (m: string) => Error) => ({
+  const serverFor = (tab: string, SaveConflict: new (m: string, latest?: string) => Error) => ({
     signedIn: true,
-    list: async () => [...rows.values()],
+    version: async (id: string) => rows.get(id) ?? null,
     save: async (id: string, _bytes: Uint8Array, opts: { ifMatch?: string }) => {
       const old = rows.get(id)
       if (old && opts.ifMatch !== old.etag) {
         saves.push({ tab, id, ifMatch: opts.ifMatch ?? null, status: 409 })
-        throw new SaveConflict(`This project was saved from somewhere else at ${old.savedAt} since you opened it.`)
+        throw new SaveConflict(`This project was saved from somewhere else at ${old.savedAt} since you opened it.`, old.etag)
       }
       n++
       const row: SavedProject = { id, etag: `${id.slice(-1).toLowerCase()}${n}`, savedAt: new Date(Date.parse('2026-11-18T10:00:00Z') + n * 60_000).toISOString(), bytes: 1 }
@@ -31,7 +31,6 @@ function relay() {
       saves.push({ tab, id, ifMatch: opts.ifMatch ?? null, status: 200 })
       return row
     },
-    putCanvas: async () => {},
   })
   return { rows, saves, serverFor }
 }
@@ -47,7 +46,7 @@ async function open(name: string, id: string, r: Relay) {
   const index = new ProjectIndex(storage)
   await index.load()
   const copy = new ServerCopy({
-    id, server: r.serverFor(name, SaveConflict) as never, index, storage, canvasKey: `canvas:${id}`,
+    id, server: r.serverFor(name, SaveConflict) as never, index, storage,
     doc: () => ({ assets: {} }) as unknown as ProductionDocument, upload: async () => undefined,
     base: await readBase(storage, index, id),
   })
@@ -137,7 +136,7 @@ describe('tabs of one browser save one project', () => {
     await after.load()
     expect(after.get(X)?.server?.etag).toBe(x3)
     expect(await readBase(browserStorage, after, Y)).toMatchObject({ mark: { etag: r.rows.get(Y)!.etag }, unsaved: false })
-  })
+  }, 60_000) // five tabs each load every module again (vi.resetModules)
 
   it('a change after the save leaves this browser’s copy unsaved on top of it', async () => {
     const r = relay()

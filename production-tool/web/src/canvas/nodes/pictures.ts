@@ -9,7 +9,7 @@
 import type { Mime } from '../../contracts/types'
 import { systemUpdate } from '../../doc/store'
 import type { DocumentStore } from '../../doc/types'
-import { idbLocation, putBlob } from '../../lib/blobs'
+import { putBlob } from '../../lib/blobs'
 import { downscale } from '../../lib/fitImage'
 import { newId } from '../../lib/ulid'
 import type { CanvasAdapter, CanvasElement, Pt } from '../core/canvasAdapter'
@@ -84,7 +84,7 @@ export async function placePictures(canvas: CanvasAdapter, doc: DocumentStore, f
   await systemUpdate(doc, (d) => {
     for (const g of got) {
       if (d.assets[g.sha]) continue
-      d.assets[g.sha] = { sha256: g.sha, kind: 'image', mime: (g.blob.type || 'image/png') as Mime, bytes: g.blob.size, w: g.w, h: g.h, origin: 'uploaded', rights: 'unknown', locations: [idbLocation(g.sha)] }
+      d.assets[g.sha] = { sha256: g.sha, kind: 'image', mime: (g.blob.type || 'image/png') as Mime, bytes: g.blob.size, w: g.w, h: g.h, origin: 'uploaded', rights: 'unknown' }
     }
   }, 'add picture')
   const v = canvas.visibleBounds()

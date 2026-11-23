@@ -95,7 +95,7 @@ def handler(event, context):
     ctx["kind"] = "request"
     print(json.dumps({k: v for k, v in ctx.items() if v is not None}, default=str))
     resp = {"statusCode": status, "headers": {"Content-Type": "application/json", "Cache-Control": "no-store"}}
-    if isinstance(out, Raw):  # the .clan bytes of GET /clan/{project}
+    if isinstance(out, Raw):  # a raw answer, e.g. the 302 of GET /assets/{sha}
         resp["headers"] = {**resp["headers"], **out.headers, "Content-Type": out.mime}
         resp["body"] = base64.b64encode(out.data).decode()
         resp["isBase64Encoded"] = True

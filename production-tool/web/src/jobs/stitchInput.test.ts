@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { forgetMedia, setMediaBase } from '../lib/media'
 import type { ProductionDocument, Shot } from '../contracts/types'
 import { cutItemFor, cutOf, mainVideo, shotsOf } from '../model/selectors'
 import type { Relay } from '../relay/types'
@@ -12,7 +13,14 @@ import { stitchInput } from './clips'
 
 const CDN = 'https://cdn.test/out'
 
-/** Three shots of 3, 2 and 4 s, each with a picked take the relay made (an https location: no upload). */
+// The relay's files are found by their hash at the media base (lib/media.ts); out/ answers for what it made.
+beforeEach(() => {
+  setMediaBase('https://cdn.test')
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => ({ ok: String(url).startsWith('https://cdn.test/out/') }) as Response))
+})
+afterEach(() => { vi.unstubAllGlobals(); forgetMedia() })
+
+/** Three shots of 3, 2 and 4 s, each with a picked take the relay made (found at the media base by its hash: no upload). */
 function made(order: number[] = [0, 1, 2]) {
   const store = snapshotDoc(MAYA)
   const d = structuredClone(store.get()) as ProductionDocument
@@ -22,7 +30,6 @@ function made(order: number[] = [0, 1, 2]) {
   for (const i of order) {
     const sha = SHA('abc'[i])
     addTake(d, shots[i], sha, job(d, 'clip', [], sha), { pick: true })
-    d.assets[sha] = { ...d.assets[sha], locations: [`${CDN}/${sha}`] }
   }
   return { d, shots, deps: { relay: null as unknown as Relay, doc: { get: () => d } } as unknown as Parameters<typeof stitchInput>[0] }
 }

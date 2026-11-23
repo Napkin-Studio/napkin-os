@@ -89,6 +89,8 @@ export interface ClanStoreApi {
   setPerson(person: Person): void
   personClaim(): string
   patch(mergePatchBody: object, why: Why): Promise<Doc>
+  /** The document's name in the library (manifest.title): the library lists this one, so a rename must reach it. */
+  setTitle(title: string): Promise<void>
   record(entry: { action: string; rationale?: string; agent?: string; pinned?: boolean; targets?: string[]; cites?: string[] }, opts?: { once?: boolean }): Promise<boolean>
   exportClan(): Promise<Uint8Array>
   /** What this project was spun off from (the manifest's lineage.carried), or null when it was not. */
@@ -276,6 +278,12 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
     return !!d && typeof d === 'object' && d.contract_version === undefined && d.project === undefined && !!d.upstream && typeof d.upstream === 'object'
   }
 
+  /** A document the host made from the app's template (POST /documents): no contract, no project, nothing carried. */
+  static isBlankInstance(data: unknown): boolean {
+    const d = data as { contract_version?: unknown; project?: unknown; upstream?: unknown } | null
+    return !!d && typeof d === 'object' && d.contract_version === undefined && d.project === undefined && d.upstream === undefined
+  }
+
   /** The one write that starts a spun-off project: a blank project beside the carried upstream, by the person opening it. */
   private startSpunOff(h: NapkinHost, data: Doc): Doc {
     if (!this.person) throw new Error('no person: setPerson() before opening a spun-off project')
@@ -380,6 +388,17 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
       this.changed()
       this.scheduleSave()
       return this.doc
+    })
+  }
+
+  setTitle(title: string): Promise<void> {
+    return this.serial(async () => {
+      const h = this.need()
+      const t = title.trim()
+      if (!t) throw new TypeError('a title is required')
+      route(h, '/set-title', { title: t })
+      this.revision++
+      this.scheduleSave()
     })
   }
 
@@ -572,6 +591,16 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
     }
     // Contract 3 reads contract 3 only. Nothing is written to a document made
     // under another contract: not the schema move below, not a save.
+    // A document the library made from the app's template is blank: the tool starts the project, keeping the
+    // manifest as the host wrote it (its id is the library's document id, and a save is refused for any other).
+    if (ClanDocumentStore.isBlankInstance(data)) {
+      try {
+        data = this.startSpunOff(h, data)
+      } catch (e) {
+        h.free()
+        throw e
+      }
+    }
     const found = ClanDocumentStore.contractOf(data)
     if (found !== CONTRACT) {
       h.free()

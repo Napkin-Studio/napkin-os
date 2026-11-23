@@ -12,7 +12,7 @@ import { systemUpdate } from '../doc/store'
 import { applyFrame, applyTake } from '../jobs/handlers'
 import { splitHere } from '../jobs/runView'
 import { selectedFrame } from '../jobs/frames'
-import { idbLocation, putBlob } from '../lib/blobs'
+import { putBlob } from '../lib/blobs'
 import { mainScript, mainStoryboard, mainVideo, shotsOf } from '../model/selectors'
 import { seedNodes, type NodeEnv } from '../canvas/nodes/nodes'
 import { addBrief, newBrief } from '../brief/model'
@@ -90,7 +90,7 @@ export async function seedFrame(shell: Shell, opts: SeedFrameOpts = {}): Promise
       d.shots[s.id] = s
       return s.id
     })
-    d.assets[sha] = { sha256: sha, kind: 'image', mime: (blob.type || 'image/png') as Mime, bytes: blob.size, w, h, origin: 'generated', locations: [idbLocation(sha)] }
+    d.assets[sha] = { sha256: sha, kind: 'image', mime: (blob.type || 'image/png') as Mime, bytes: blob.size, w, h, origin: 'generated' }
     // As a finished frame job lands (jobs/handlers applyFrame): a new version, picked now.
     const job = { jobId: newUlidId('job'), op: 'frame', kind: 'mock', outputs: [{ sha256: sha, w, h }] } as unknown as Job
     frameId = applyFrame(d, job, { shotId: shotIds[on] })?.id ?? ''
@@ -150,7 +150,7 @@ export function installSeed(shell: Shell) {
         o.shots.forEach((x, i) => {
           const s: Shot = { id: newUlidId('shot'), v: 1, field_v: {}, storyboard_id: sb.id, rank: ranks[i], kind: 'shot', duration_s: x.s, action: x.action, camera: { size: i === 2 ? 'close' : i === 0 ? 'wide' : 'medium' }, status: 'locked' } as Shot
           d.shots[s.id] = s
-          d.assets[shas[i]] = { sha256: shas[i], kind: 'image', mime: 'image/jpeg' as Mime, bytes: blobs[i].size, w: 1344, h: 756, origin: 'generated', locations: [idbLocation(shas[i])] }
+          d.assets[shas[i]] = { sha256: shas[i], kind: 'image', mime: 'image/jpeg' as Mime, bytes: blobs[i].size, w: 1344, h: 756, origin: 'generated' }
           const job = { jobId: newUlidId('job'), op: 'frame', kind: 'mock', outputs: [{ sha256: shas[i], w: 1344, h: 756 }] } as unknown as Job
           applyFrame(d, job, { shotId: s.id })
         })

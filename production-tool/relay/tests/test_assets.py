@@ -175,9 +175,8 @@ def test_the_assets_pass_reads_pictures_its_agency_holds_and_nothing_else(h, mon
     assert pass_call(h, token, "GET", f"/api/assets/{sha}?w=2400")[0] == 302
     assert pass_call(h, token, "GET", f"/api/assets/{sha}")[0] == 302
     # every other route and method refuses the pass (401, as with no identity)
-    for method, path, body in [("GET", "/api/me", None), ("GET", "/api/projects", None), ("GET", "/api/clan/p1", None),
-                               ("GET", "/api/library", None), ("GET", "/api/jobs/job_1", None),
-                               ("POST", "/api/clan", b"x"), ("POST", "/api/uploads", b"{}"), ("POST", "/api/jobs", b"{}"),
+    for method, path, body in [("GET", "/api/me", None), ("GET", "/api/library", None), ("GET", "/api/jobs/job_1", None),
+                               ("POST", "/api/uploads", b"{}"), ("POST", "/api/jobs", b"{}"),
                                ("DELETE", f"/api/assets/{sha}", None), ("POST", f"/api/assets/{sha}", None)]:
         assert pass_call(h, token, method, path, body)[0] == 401, (method, path)
 

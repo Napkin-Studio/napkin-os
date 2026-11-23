@@ -59,3 +59,8 @@ output "middleware_task" {
     containers = concat(["middleware"], [for c in local.deck_container : c.name])
   }
 }
+
+output "backup_plan_id" {
+  description = "The AWS Backup plan for web's EFS, or null when backup_enabled is false"
+  value       = one(aws_backup_plan.web[*].id)
+}

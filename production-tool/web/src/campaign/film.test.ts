@@ -3,7 +3,8 @@
 // render request (windows, crops, a reframed shot's own clip, type timed in the film, captions on the
 // social shapes only), and the free and paid jobs' purposes.
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { forgetMedia, setMediaBase } from '../lib/media'
 import cases from '../../../contracts/examples/cutdown-cases.json'
 import type { CutdownPlan, FormatSet, ProductionDocument, PxBox, Size } from '../contracts/types'
 import { isFreeRequest } from '../jobs/runner'
@@ -50,6 +51,13 @@ describe('the relay\'s maths, from one case table', () => {
 
 const CDN = 'https://cdn.test/out'
 
+// The relay's files are found by their hash at the media base (lib/media.ts); out/ answers for what it made.
+beforeEach(() => {
+  setMediaBase('https://cdn.test')
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => ({ ok: String(url).startsWith('https://cdn.test/out/') }) as Response))
+})
+afterEach(() => { vi.unstubAllGlobals(); forgetMedia() })
+
 /** A 30 s master of ten 3 s shots, each with its take (4 s, 1920x1080, on the relay), shot 3 with a spoken line. */
 function master() {
   const store = snapshotDoc(MAYA)
@@ -59,7 +67,7 @@ function master() {
   for (const [i, s] of shots.entries()) {
     const sha = SHA(String.fromCharCode(97 + i))
     addTake(d, s, sha, job(d, 'clip', [], sha), { pick: true })
-    d.assets[sha] = { ...d.assets[sha], kind: 'video', mime: 'video/mp4', w: 1920, h: 1080, duration_s: 4, locations: [`${CDN}/${sha}`] }
+    d.assets[sha] = { ...d.assets[sha], kind: 'video', mime: 'video/mp4', w: 1920, h: 1080, duration_s: 4 }
   }
   const beat = Object.values(d.beats ?? {}).find((b) => b.shot_id === shots[2].id)
   d.beats = { ...d.beats, beat_01K7C00000000000000000BT01: { ...(beat ?? {}), id: 'beat_01K7C00000000000000000BT01', v: 1, field_v: {}, shot_id: shots[2].id, rank: 'm', at_s: 0.5, kind: 'line', speaker: 'MAYA', text: 'I never miss the first light.' } as never }
@@ -119,7 +127,7 @@ describe('a 15 s at 9:16', () => {
     set.reframes = { [key]: { generation_id: ms[4].takeId!, shot_id: ms[4].shotId, aspect: { w: 1080, h: 1920 }, method: 'outpaint', job_id: 'job_01K7C00000000000000000JB01' } }
     expect(reframesOf(set, size)).toEqual([{ key, done: false }])
     const out = SHA('z')
-    d.assets[out] = { sha256: out, kind: 'video', mime: 'video/mp4', origin: 'mock', locations: [`${CDN}/${out}`] } as never
+    d.assets[out] = { sha256: out, kind: 'video', mime: 'video/mp4', origin: 'mock' } as never
     set.reframes[key].asset = out
     set.reframes[key].size = { w: 612, h: 1088 }
     expect(reframesOf(set, size)).toEqual([{ key, done: true }])

@@ -11,7 +11,7 @@ import {
   type ProductionDocument, type Ratio, type RefRole, type Variant, type View, type ModelChoice,
 } from '../contracts/types'
 import type { Services } from '../app/context'
-import { getBlob, idbLocation, putBlob, putBlobAs } from '../lib/blobs'
+import { getBlob, putBlob, putBlobAs } from '../lib/blobs'
 import { idbPut } from '../lib/idb'
 import { mentions, nameOf, nameProblem, refByName } from '../lib/names'
 import { newId } from '../lib/ulid'
@@ -302,7 +302,7 @@ export class CanvasController {
   private addAsset(sha: string, blob: Blob, origin: 'uploaded' | 'drawn', size?: { w: number; h: number }) {
     systemUpdate(this.s.doc, (d) => {
       if (!d.assets[sha]) {
-        d.assets[sha] = { sha256: sha, kind: 'image', mime: (blob.type || 'image/png') as Mime, bytes: blob.size, ...(size ?? {}), origin, rights: landingRights(origin), locations: [idbLocation(sha)] }
+        d.assets[sha] = { sha256: sha, kind: 'image', mime: (blob.type || 'image/png') as Mime, bytes: blob.size, ...(size ?? {}), origin, rights: landingRights(origin) }
       }
     }, 'add picture')
   }

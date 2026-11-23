@@ -15,8 +15,8 @@ import { isBoard, boardsByRank } from '../canvas/boards/boards'
 import { landUpdate, systemUpdate, updateDoc } from '../doc/store'
 import type { DocumentStore } from '../doc/types'
 import type { JobCtx } from '../doc/ui'
-import { assetRef, remoteUrl } from '../jobs/assets'
-import { outputLocations } from '../jobs/runner'
+import { assetRef } from '../jobs/assets'
+import { resolveMediaUrl } from '../lib/media'
 import { getBlob, putBlobAs } from '../lib/blobs'
 import { landingWhy } from '../jobs/landing'
 import type { JobRunner } from '../jobs/runner'
@@ -158,11 +158,12 @@ export async function makeAllSizes(deps: CampaignDeps, req: MakeRequest, by: Per
   return { setId, el }
 }
 
-/** A picture the relay made (a size's plate), named as it is: never fitted or padded for sending. Its relay
- *  location when the document has one, else the bytes in this browser (the relay knows them: no upload). */
+/** A picture the relay made (a size's plate), named as it is: never fitted or padded for sending. Its address at the media
+ *  base when the relay has it, else the bytes in this browser (the relay knows them: no upload). */
 export async function plainRef(relay: CampaignDeps['relay'], sha: string, d: Pick<ProductionDocument, 'assets'>): Promise<AssetRef> {
   const mime = (d.assets[sha]?.mime ?? 'image/png') as InputMime
-  const at = remoteUrl(d, sha)
+  const known = d.assets[sha]
+  const at = (known?.origin === 'generated' || known?.origin === 'mock') ? await resolveMediaUrl(known) : null
   if (at) return { sha256: sha, url: at, mime }
   const blob = await getBlob(sha)
   if (!blob) return assetRef(relay, sha, d)
@@ -270,7 +271,7 @@ export function applySize(d: ProductionDocument, job: Job, sizeId: string, plate
   if (job.op === 'cutdown' && typeof out.durationS === 'number') {
     const had = d.assets[out.sha256]
     d.assets[out.sha256] = had ? { ...had, duration_s: out.durationS }
-      : { sha256: out.sha256, kind: 'video', mime: 'video/mp4', origin: job.kind === 'mock' ? 'mock' : 'generated', job_id: job.jobId, locations: outputLocations(out.sha256, out.url), duration_s: out.durationS,
+      : { sha256: out.sha256, kind: 'video', mime: 'video/mp4', origin: job.kind === 'mock' ? 'mock' : 'generated', job_id: job.jobId, duration_s: out.durationS,
         ...(out.w ? { w: out.w } : {}), ...(out.h ? { h: out.h } : {}), ...(job.kind !== 'mock' ? { rights: 'generated' as const } : {}) }
   }
   if (plate) {
@@ -301,7 +302,7 @@ async function keepPlate(relay: CampaignDeps['relay'] | undefined, job: Job): Pr
       console.warn('the size\'s plate did not download', e)
     }
   }
-  const a: DocAsset = { sha256: p.sha256, kind: 'image', mime: 'image/png', origin: job.kind === 'mock' ? 'mock' : 'generated', job_id: job.jobId, locations: outputLocations(p.sha256, p.url) }
+  const a: DocAsset = { sha256: p.sha256, kind: 'image', mime: 'image/png', origin: job.kind === 'mock' ? 'mock' : 'generated', job_id: job.jobId }
   if (job.kind !== 'mock') a.rights = 'generated'
   if (p.w) a.w = p.w
   if (p.h) a.h = p.h

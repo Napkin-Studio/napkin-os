@@ -619,49 +619,45 @@ names and shapes below are that branch's, so it merges onto them.
    `campaign.client_org.value → project.client` (owner, 2026-11-09: research
    to production is upstream + lift). Each `by_source` key is accepted.
 
-### 5.8 Production: a spin-off app whose documents stay in the relay
+### 5.8 Production: an app whose documents are library documents
 
-Production (`ie.napkin.production`, packed by `clan-sdk/examples/make_production.rs`, installed with the
-other apps by the Dockerfile) declares `spinoff { accepts: [ie.napkin.brief-maker], upstream: true }`, so a
-brief is offered Production in Continue in like any app. Its documents are not library documents: they live in
-the relay (S3) and open at `/production/p/<project>`. Two napkin-web routes bridge the two (`src/spinoff.rs`).
-They need sign-in and a relay (`NAPKIN_PRODUCTION_RELAY_URL`); without one they answer 404. The host does
-the spin-off in both: `library::spinoff_change_as` and `library::spinoff_change_from`; napkin-web only moves
-bytes, through the caller's signed identity (`X-Napkin-Identity`, `production.rs`), so napkin-host stays free
-of HTTP.
+*Replaced 2026-11-23 (features/production-in-library.clan; contract `docs/contracts/production-clan-app.md`
+section 6).* Production (`ie.napkin.production`, packed by `clan-sdk/examples/make_production.rs`, installed
+with the other apps by the Dockerfile) is an ordinary app: its documents are library documents, listed in the
+library like any other (`app_id == "ie.napkin.production"`), opened at `/production/?doc=<doc>`, and kept by
+the host's store like every document. They are no longer kept in the relay's S3 (`tenants/<t>/projects/`), and
+the relay's `/clan*` and `/projects*` routes answer 410 `gone` for one release. The old routes
+`POST /api/t/{tenant}/spinoff/production` and `POST /api/t/{tenant}/production/{project}/spinoff` are removed
+(404).
 
-| Route | Body | Answer |
-|---|---|---|
-| `POST /api/t/{tenant}/spinoff/production` | `{doc, title?}`: a library document (a brief) | `{ok, project, title, path: "/production/p/<project>", etag}` |
-| `POST /api/t/{tenant}/production/{project}/spinoff` | `{target_app_id, title?}` | `{ok, path: <library doc id>, source_uri}` |
+**Into Production.** The generic `POST /api/t/{t}/d/{doc}/spinoff {"app_id":"ie.napkin.production"}` is used
+for a brief, research or territory source. Production declares which sources it accepts and sets
+`spinoff.upstream: true`, so the source's whole data and decisions arrive under `data.upstream.<source doc id>`
+(§5.1 to 5.3) and its pictures as links by sha256. The new document's `source_uri` is
+`doc:<source doc id>@<source version>`, the client of the source is the client of the new document, and a
+Production app that is not installed is 422 `app not installed: <app id>`. The generic route no longer refuses
+Production as a target. The first time the tool opens such a document its store adds the project (`contract_version`,
+`project`, empty maps) beside `upstream` in one attributed write ("start the project"); nothing else of the
+manifest, the carried source or the decisions changes, and later saves keep them. The tool makes the Brief
+node from the carried brief (`data.upstream.<lineage.carried.document_id>`, hash `lineage.carried.data_sha256`).
 
-**Into Production.** The new `.clan` is built from the Production template and the brief (carried whole under
-`data.upstream.<brief document id>`, its decisions pinned, `lineage.carried` set) and is **not** written to the
-library. Its bytes are posted to the relay's `POST /clan` with a fresh `X-Project-Id` (`prj_` and a ULID, the
-relay's `PROJECT_ID`) and `X-Clan-Reason: manual`. The spin-off's own decision (newest in the chain) is stamped
-with the caller's workspace (`library::stamp_tenant`), so the document says whose it is. The generic
-`/d/{doc}/spinoff` refuses Production as a target (422). The first time the Production Tool opens such a
-project, its store adds the project (`contract_version`, `project`, empty maps) beside `upstream` in one
-attributed write ("start the project"); nothing else of the manifest, the carried brief or the decisions
-changes, and later saves keep them (clan-store `test/spinoff.test.ts`). The tool makes the Brief node from the
-carried brief (`data.upstream.<lineage.carried.document_id>`, hash `lineage.carried.data_sha256`).
+**Out of Production.** Production is a source for the Deck through the same generic route. The canvas
+checkpoint `human/assets/canvas.ybin.zst` is not carried (it is an internal member and the SDK leaves it
+behind); everything else follows §5.2. A document whose own chain names another workspace is refused 403, as
+for any library document.
 
-**Out of Production.** The saved project is read with `GET /clan/{project}` as the caller (the relay keeps
-workspaces apart by where it stores a project, so another agency's project is 404 there), its canvas
-checkpoint `human/assets/canvas.ybin.zst` is removed (and its manifest entry), and the result is spun off into
-`target_app_id` (not Production) and written to the caller's library. A project whose own chain names another
-workspace is refused 403 by the host, as for library documents. Nothing else is written to the relay.
+**`source_uri`.** Every source is `doc:<doc id>@<version>` (the version is the sha256 of the archive bytes the
+host stores, section 8.5). The older `clan-store:<doc id>` and `production:<project id>@<etag>` forms are read
+as before but no longer written; a later write to the document moves `lineage.parent_uri` on to its previous
+revision (the SDK does this for every document), so the parent is found by `lineage.carried.document_id` (§7.4),
+which every write keeps.
 
-**`source_uri`.** A document of the library is recorded as `clan-store:<doc id>`. A Production project is
-recorded as `production:<project id>@<etag>` (the relay's ETag of the bytes read, quotes removed) in the new
-document's `lineage.parent_uri`. That is the spin-off's own first revision: a later write to the document moves
-`lineage.parent_uri` on to its previous revision (the SDK does this for every document), so afterwards the
-parent is found by `lineage.carried.document_id` (§7.4), which every write keeps.
-
-**The Deck's carry.** For a Production source the Deck document holds `data.upstream.<project document id>`
-(the project's data less its own `projection`/`upstream`: the finals, assets and briefs of contract 3), the
-project's carried brief hoisted beside it under `data.upstream.<brief document id>`, and `lineage.carried` naming
-the project. The source app id is `ie.napkin.production`; the Deck declares that it accepts it.
+**The Deck's carry.** For a Production source the Deck document holds `data.upstream.<production doc id>` (the
+document's data less its own `projection`/`upstream`: the finals, assets and briefs of contract 3), the carried
+brief hoisted beside it under `data.upstream.<brief document id>`, and `lineage.carried` naming the Production
+document. The source app id is `ie.napkin.production`; the Deck declares that it accepts it. The Deck reads the
+document through the host, not the relay; pictures are fetched by sha256 with the assets pass
+(`docs/contracts/production-tool-identity.md`), which is unchanged.
 
 ---
 
@@ -1834,6 +1830,38 @@ the Tauri commands `update_preview_html` and `get_human_html`; the wasm
 exports `setPreviewHtml` and `humanHtml`. `POST /api/t/{t}/d/{doc}/preview-html`
 answers `410` with the reason for one release, then goes.
 `GET /api/t/{t}/d/{doc}/human-html` stays (the view as stored, for tools).
+
+### 8.5 Saving a document: `PUT /d/{doc}/save`, the Base check, snapshots
+
+*Added 2026-11-23 (features/production-in-library.clan; normative text and vectors in
+`docs/contracts/production-clan-app.md` sections 1 to 4 and `docs/contracts/examples/production-clan-app/`).*
+
+- **Save.** `PUT /api/t/{t}/d/{doc}/save` takes the whole `.clan` (`Content-Type: application/vnd.clan+zip`,
+  at most 32 MiB) with `If-Match: "V"` (required; 428 without) and `X-Clan-Reason: interval|accept|manual|handoff|export|landing`.
+  200 answers `{"version","saved_at","snapshot"}` and `ETag`; 409 `{"error":{"code":"conflict",...},"latest":"V3"}`
+  leaves the store untouched; 422 when the document is not an instance of `ie.napkin.production` or the archive's
+  document identity (`manifest.document_id`, else `manifest.id`) is not this document's; 413 over 32 MiB; 404 for a
+  missing document or another tenant's. A download of a Production document returns the stored bytes exactly and
+  carries `ETag` and `X-Saved-At`, so `If-Match` is the sha256 of what the tool downloaded.
+- **Version.** `V` is `sha256:<64 hex>` of the archive bytes, the host's own Version (also in `GET .../data`).
+- **Base enforcement (every writer).** `PartStore::apply(Change{doc, bytes, base})`: `Base::At(V)` with a different
+  stored version is `HostError::conflict` (HTTP 409); `Base::Absent` over an existing document is 409. The check and
+  the write are one critical section per document, and a write is a temp file in the same directory, fsync, rename,
+  fsync of the directory (a leftover `*.tmp` is ignored). It is implemented only in
+  `crates/napkin-web/src/store.rs`; `napkin-host` stays wasm32-clean (no `std::fs` outside `native`). Every writer,
+  not only `save`, passes through it.
+- **Snapshots (host-internal, never a route).** `<store root>/<tenant>/snapshots/<doc-slug>/<unix-ms>-<reason>-<hex12>.clan`.
+  Taken for `accept`, `handoff`, `export`; and for `interval`, `manual`, `landing` when the newest is 10 minutes or
+  older. The newest 50 are kept, the newest is never deleted, they are not listed in the library, and each tenant's
+  ring is inside the tenant's directory. **Restore** is a documented copy, never a route: a person with access to the store takes the wanted snapshot file and uploads it as a new document (`POST /api/t/{t}/documents/upload`, the same call the tool's "open a file" uses), or copies it over the document's file in the tenant's directory while the server is stopped. The snapshot ring is read, never overwritten.
+- **Trash.** `DELETE /d/{doc}` moves a document to `<tenant>/trash/` for 30 days (`production-clan-app.md` 8a).
+- **Decision: whole-document save is a stepping stone.** The approved design (owner: Shrey) saves the whole file and
+  check its Version, over per-field patch writes (live collaboration), which cost 30 to 40 agent days. The save
+  uses the host's Version and goes through `PartStore::apply` with `Base::At`, the same funnel a later patch route
+  (`/patch-data` with `base_version`) will use, so live sync replaces the transport, not the check. Until then two
+  people saving one project get a 409 and choose; nothing is merged silently.
+
+---
 
 ## 9. Retrieval scope
 

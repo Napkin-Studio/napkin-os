@@ -1,0 +1,52 @@
+{
+  "vector": "spinoff-not-installed",
+  "tenant": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+  "now": "2026-11-23T10:00:00Z",
+  "session_cookie": "napkin_session=vector-session",
+  "covers": [
+    "S1-3"
+  ],
+  "description": "Target app not installed: 422 with the app id, nothing created.",
+  "documents": [
+    {
+      "tenant": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+      "id": "doc-brief",
+      "app_id": "ie.napkin.brief-maker",
+      "identity": "11111111-2222-4333-8444-555555555555",
+      "template": false,
+      "title": "Hollow Oak Still",
+      "bytes_base64": "UEsDBBQAAAAIAABQd12c+qpyXAAAAIMAAAANAAAAbWFuaWZlc3QueWFtbEvOScyLL0stKs7Mz7NSMOTKTLFSMIACXTBhAiIsYFwY4ErJTy7NTc0riQfpMIQCXSMjIyNdE2NjY10LExMTXVMkwFWSWZKTaqXgkZ+Tk1+u4J+YrRBckpmTwwUAUEsBAhQDFAAAAAgAAFB3XZz6qnJcAAAAgwAAAA0AAAAAAAAAAAAAAIABAAAAAG1hbmlmZXN0LnlhbWxQSwUGAAAAAAEAAQA7AAAAhwAAAAAA",
+      "version": "sha256:7f57f22ea9ed8d2e539243bdb72015faf6326159aa285954a9d71bda15eef7fa",
+      "saved_at": "2026-11-23T09:00:00Z",
+      "client": {
+        "id": "client-hollow-oak",
+        "name": "Hollow Oak"
+      }
+    }
+  ],
+  "installed_apps": [],
+  "steps": [
+    {
+      "name": "spin off",
+      "request": {
+        "method": "POST",
+        "path": "/api/t/5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f/d/doc-brief/spinoff",
+        "headers": {
+          "Content-Type": "application/json",
+          "Cookie": "napkin_session=vector-session"
+        },
+        "body": {
+          "app_id": "ie.napkin.deck",
+          "title": "x"
+        }
+      },
+      "response": {
+        "status": 422,
+        "headers": {},
+        "body": {
+          "error": "app not installed: ie.napkin.deck"
+        }
+      }
+    }
+  ]
+}

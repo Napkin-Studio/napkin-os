@@ -1,5 +1,5 @@
-// The local blob store: bytes by content address. Documents hold only hashes
-// and locations (idb://sha256/<hex> first); the bytes live here.
+// The local blob store: bytes by content address. Documents hold only hashes; the bytes live here
+// (and, for other browsers, at the media base: lib/media.ts).
 
 import { idbDelete, idbGet, idbPut } from './idb'
 import { hexOf, sha256Of } from './hash'
@@ -58,6 +58,3 @@ export async function deleteBlob(sha: string): Promise<void> {
   await idbDelete('blobs', hexOf(sha))
 }
 
-export function idbLocation(sha: string): string {
-  return `idb://sha256/${hexOf(sha)}`
-}

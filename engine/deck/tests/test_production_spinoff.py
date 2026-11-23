@@ -680,3 +680,50 @@ def test_a_relay_rendition_is_recorded_by_the_hash_of_the_file_the_deck_holds(tm
         assert hashlib.sha256((st / rec["file"]).read_bytes()).hexdigest() == rec["sha256"]
     out = tmp_path / "out"
     assert images.copy_assets(d, out, "review", src_dirs=[st])   # the renderers' own check
+
+
+# ---------------------------------------------------------------- a project kept in the library (production-in-library, S1-19)
+
+def _no_addresses(doc):
+    """The project as the library keeps it: saved by the tool through PUT .../save, so no asset carries a web address."""
+    for a in (doc.get("assets") or {}).values():
+        a.pop("locations", None)
+
+
+def _with_addresses(doc):
+    """The project as the relay once held it: every asset names a web address."""
+    for a in (doc.get("assets") or {}).values():
+        a["locations"] = ["https://cdn.old.example/x.png"]
+
+
+FINALS = [("picture", "pic_up_0002", "upload_master", {}), ("picture", "pic_up_0001", "master", {})]
+
+
+def test_a_library_project_gives_the_same_picks_as_one_with_addresses_and_takes_no_host_from_the_document(tmp_path, pics):
+    """Same finals, same placements: from the relay by hash alone, at the slide's size, with no host taken from the document."""
+    _, res_old, _, _ = build(tmp_path, pics, FINALS, mutate=_with_addresses, name="old")
+    _, res_lib, _, relay = build(tmp_path, pics, FINALS, mutate=_no_addresses, name="lib")
+    picks = lambda r: [(p["key"], p["from"]) for p in r["picker"]["picks"]]   # noqa: E731
+    assert picks(res_lib) == picks(res_old) and picks(res_lib)
+    assert {p["from"] for p in res_lib["picker"]["picks"] if p["from"] not in ("rights", "not reachable")} == {"relay"}
+    assert relay.calls and {w for _, w in relay.calls} == {2400}
+    src = pp.CarriedSource(SOURCE_ID, carried_doc(pics, FINALS, _with_addresses))
+    rows = [r for r in pp.Plan(src).rows if r["reach"] == "relay"]
+    assert rows and all("hosts" not in r and r["sources"] == ["relay"] for r in rows)
+
+
+def test_a_deck_carrying_a_library_project_reads_it_whole_and_every_final_reaches_the_deck(tmp_path, pics):
+    """A Deck spun off from a library Production document carries the project beside its hoisted brief and research under ``data.upstream``
+    (keyed by library document ids): the project is found, named by its library address, and every final is placed."""
+    lib_id = "doc-8f1c2a4e-library-production"
+    data = {"upstream": {"doc-brief": {"insight": "x", "objectives": {"commercial": "Sell more"}}, "doc-research": {"findings": []},
+                         lib_id: carried_doc(pics, FINALS, _no_addresses)}}
+    found = fp.carried(data)
+    assert found[0] == lib_id and found[1]["app"] == "production-tool"
+    src = pp.CarriedSource(*found)
+    assert src.name == f"doc:{lib_id}"
+    d, st = deck(), tmp_path / "lib"
+    res = pp.run(d, src, st, relay=pp.RelayAssets(FakeRelay(pics), st / "relay_cache"))
+    assert res["picker"]["source"]["name"] == f"doc:{lib_id}"
+    got = [p["from"] for p in res["picker"]["picks"]]
+    assert len(got) >= len(FINALS) and set(got) == {"relay"} and not res["picker"]["not_reachable"]   # nothing is held back or not reachable

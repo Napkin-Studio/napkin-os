@@ -1,4 +1,4 @@
-// New deck from this project (features/production-spinoff.clan): the OS call, and the menu row that makes it.
+// New deck from this project (features/production-in-library.clan): the plain spin-off call, and the menu row that makes it.
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { DECK_APP_ID, SpinoffError, newDeckFromProject } from './spinoff'
@@ -19,21 +19,23 @@ function os(reply: Response | (() => Response)) {
 
 describe('a deck from the project', () => {
   it('asks the OS to spin the project off into Deck Maker, and says where the shell opens the new deck', async () => {
-    const { calls, fetcher } = os(json(200, { ok: true, path: 'ie-napkin-deck-maker-1a2b3c4d', source_uri: 'production:prj_X@abc' }))
-    const made = await newDeckFromProject('prj_01K7A000000000000000000012', { fetcher, src: osBriefSource('', fetcher) })
+    const { calls, fetcher } = os(json(200, { path: 'ie-napkin-deck-maker-1a2b3c4d' }))
+    const made = await newDeckFromProject('doc-1a2b3c4d', { fetcher, src: osBriefSource('', fetcher) })
     expect(calls.map((c) => [c.init?.method ?? 'GET', c.url])).toEqual([
       ['GET', '/api/session'],
-      ['POST', '/api/t/ten-1/production/prj_01K7A000000000000000000012/spinoff'],
+      ['POST', '/api/t/ten-1/d/doc-1a2b3c4d/spinoff'],
     ])
-    expect(JSON.parse(String(calls[1].init?.body))).toEqual({ target_app_id: DECK_APP_ID })
+    expect(JSON.parse(String(calls[1].init?.body))).toEqual({ app_id: DECK_APP_ID })
     expect(DECK_APP_ID).toBe('ie.napkin.deck-maker')
-    expect(made).toEqual({ docId: 'ie-napkin-deck-maker-1a2b3c4d', url: '/?open=ie-napkin-deck-maker-1a2b3c4d', sourceUri: 'production:prj_X@abc' })
+    expect(made).toEqual({ docId: 'ie-napkin-deck-maker-1a2b3c4d', url: '/?open=ie-napkin-deck-maker-1a2b3c4d' })
   })
 
   it('says why it could not, in the OS’s words or ours', async () => {
-    await expect(newDeckFromProject('prj_x', { ...os(json(404, { error: 'x' })) })).rejects.toThrow(/Save it, then try again/)
+    const e404 = await newDeckFromProject('prj_x', { ...os(json(404, { error: 'x' })) }).catch((e: Error) => e)
+    expect((e404 as Error).message).toBe('Napkin could not find this project in your library.')
+    expect((e404 as Error).message).not.toMatch(/saved project/)
     await expect(newDeckFromProject('prj_x', { ...os(json(404, { error: 'app not installed: ie.napkin.deck-maker' })) })).rejects.toThrow('Deck Maker is not installed here')
-    await expect(newDeckFromProject('prj_x', { ...os(json(422, { ok: false, error: 'Deck Maker is not installed' })) })).rejects.toThrow('Deck Maker is not installed')
+    await expect(newDeckFromProject('prj_x', { ...os(json(422, { error: 'app not installed: ie.napkin.deck-maker' })) })).rejects.toThrow('Deck Maker is not installed here')
     await expect(newDeckFromProject('prj_x', { ...os(json(200, { ok: true })) })).rejects.toBeInstanceOf(SpinoffError)
     const signedOut = async () => json(401, { signin: true })
     await expect(newDeckFromProject('prj_x', { fetcher: signedOut })).rejects.toThrow(/not signed in/)
