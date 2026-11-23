@@ -10,14 +10,14 @@ import { fitClear } from '../canvas/boards/boards'
 import { bringCarriedBrief } from './start'
 import { bringCarriedRoutes } from './routeNode'
 
-export function useCarriedBrief(env: NodeEnv | null, clan: Pick<ClanStoreApi, 'spunOffFrom'> | null): void {
+export function useCarriedBrief(env: NodeEnv | null, clan: Pick<ClanStoreApi, 'spunOffFrom' | 'chain'> | null): void {
   // Once per project's store, whatever number of times the canvas environment is rebuilt.
   const taken = useRef<unknown>(null)
   useEffect(() => {
     if (!env || !clan || taken.current === clan) return
     taken.current = clan
     clan.spunOffFrom()
-      .then(async (from) => ({ made: await bringCarriedBrief(env, from), routes: await bringCarriedRoutes(env, from) }))
+      .then(async (from) => ({ made: await bringCarriedBrief(env, from), routes: await bringCarriedRoutes(env, from, from ? await clan.chain().catch(() => []) : []) }))
       .then(({ made, routes }) => {
         if (routes) return // the routes were fitted into view as they came in
         if (!made) return

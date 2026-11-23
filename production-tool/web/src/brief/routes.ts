@@ -51,6 +51,19 @@ export interface CarriedRoutes {
   /** Routes the person did not choose to send. */
   notChosen: number
   by?: string
+  /** The Territories document's version at send (territoriesVersion). */
+  version: number
+}
+
+/**
+ * The Territories document's version, the way it versions itself. A pass has two gates, Pick and Greenlight, and the routes that
+ * go out are the ones greenlit; so a version is a person's approval at the Greenlight gate (run.decisions, kind approve), and the
+ * first send is v1, not v2. Reopened and greenlit again: v2. Counting both gates would call a first send v2. Never below 1.
+ * (The Territories page shows no number of its own; this is the Brief's rule, approve decisions, applied to Territories' record.)
+ */
+export function territoriesVersion(doc: Rec): number {
+  const run = isRec(doc.run) ? doc.run : {}
+  return Math.max(1, arr(run.decisions).filter(isRec).filter((d) => d.kind === 'approve' && d.gate === 'greenlight').length)
 }
 
 /** The routes the person sent to Production, in the order sent; with no send (continued in without sending) the greenlit ones. */
@@ -105,7 +118,7 @@ export function carriedRoutes(from: SpunOffFrom, upstream: Record<string, Record
   const { ids, notChosen, by } = sentIds(doc)
   const byId = new Map(arr(doc.territories).filter(isRec).map((t) => [str(t.id), t]))
   const live = [...new Set(ids)].map((i) => byId.get(i)).filter((t): t is Rec => !!t && t.status !== 'killed')
-  return { documentId: from.document_id, title: from.title.trim() || 'Territories', routes: live.map(routeOf), notChosen, ...(by ? { by } : {}) }
+  return { documentId: from.document_id, title: from.title.trim() || 'Territories', routes: live.map(routeOf), notChosen, version: territoriesVersion(doc), ...(by ? { by } : {}) }
 }
 
 /** Pictures in words, never a finished picture that is not one: sketches are mock-ups; a frame is a link with its stated rights. */

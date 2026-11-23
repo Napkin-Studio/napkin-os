@@ -11,8 +11,8 @@ import type { ProductionDocument } from '../../../contracts/types'
 import { modelStore } from '../../../test/model'
 import { OwnAdapter } from './adapter'
 import { bringCarriedBrief } from '../../../brief/start'
-import { carriedRoutes, isTerritories, picturesLine, RIGHTS_TO_SUPPLY } from '../../../brief/routes'
-import { bringCarriedRoutes } from '../../../brief/routeNode'
+import { carriedRoutes, isTerritories, picturesLine, RIGHTS_TO_SUPPLY, territoriesVersion } from '../../../brief/routes'
+import { briefApprovals, bringCarriedRoutes, carriedBeside } from '../../../brief/routeNode'
 import { briefForJob, withBrief } from '../../../brief/model'
 import { linkBrief } from '../../../brief/canvas'
 import { createNode } from '../../nodes/nodes'
@@ -224,5 +224,46 @@ describe('a project spun off from Territories opens on its routes', () => {
   it('a project that was not spun off brings nothing', async () => {
     const { env } = await born(example())
     expect(await bringCarriedRoutes(env, null)).toBeNull()
+  })
+})
+
+describe('the versions a Territories node names', () => {
+  const greenlights = (n: number) => Array.from({ length: n }, (_, i) => ({ gate: 'greenlight', kind: 'approve', by: 'Shrey', at: `2026-11-18T1${i}:05:00Z` }))
+  const pick = { gate: 'pick', kind: 'approve', by: 'Shrey', at: '2026-11-18T09:12:00Z' }
+  const withDecisions = (decisions: unknown[]) => { const d = example() as { run: { decisions: unknown[] } }; d.run.decisions = decisions; return d as unknown as Record<string, unknown> }
+
+  it('counts the Greenlight approvals, at least 1: a first send is v1 (Pick is a step of the same pass), none at all is v1', () => {
+    expect(territoriesVersion(example())).toBe(1) // the example: Pick then Greenlight, once each
+    expect(territoriesVersion(withDecisions([]))).toBe(1)
+    expect(territoriesVersion(withDecisions([pick]))).toBe(1)
+    expect(territoriesVersion(withDecisions([pick, ...greenlights(1), pick, ...greenlights(1)]))).toBe(2)
+    expect(territoriesVersion(withDecisions([{ gate: 'greenlight', kind: 'edit', by: 'Shrey', at: '2026-11-18T09:12:00Z' }]))).toBe(1)
+    expect(territoriesVersion({})).toBe(1)
+  })
+
+  it('the route node takes the version at the spin-off, and a later spin-off of a changed document takes the new one', async () => {
+    const first = await born(example())
+    await bringCarriedRoutes(first.env, await first.s.clan.spunOffFrom())
+    const versions = (x: typeof first) => Object.values(x.doc().briefs!).map((b) => b.route!.version)
+    expect(new Set(versions(first))).toEqual(new Set([1]))
+    // the document was reopened, changed and greenlit again, twice more: a new project spun off from it says v3
+    const changed = await born(withDecisions([pick, ...greenlights(3)]))
+    await bringCarriedRoutes(changed.env, await changed.s.clan.spunOffFrom())
+    expect(new Set(versions(changed))).toEqual(new Set([3]))
+    // the first project's nodes are frozen: they still say v1
+    expect(new Set(versions(first))).toEqual(new Set([1]))
+  })
+
+  it('the brief it carries is named at its own approves in the carried chain, not 1', async () => {
+    const d = example()
+    const { s, env, doc } = await born(d)
+    const from = (await s.clan.spunOffFrom())!
+    const briefId = carriedBeside(doc().upstream, from.document_id).brief!.id
+    const approve = (t: string) => ({ agent: 'brief-maker', action: 'approve', timestamp: '2026-11-17T10:00:00Z', kind: 'approve', targets: [t] })
+    const chain = [approve(`${briefId}#insight`), approve(`${briefId}#audience`), approve(`${briefId}#insight`), approve(`other-doc#insight`), { agent: 'x', action: 'edit', timestamp: '2026-11-17T10:00:00Z', kind: 'edit', targets: [`${briefId}#insight`] }]
+    expect(briefApprovals(chain, briefId)).toBe(3)
+    expect(briefApprovals([], briefId)).toBe(1)
+    await bringCarriedRoutes(env, from, chain)
+    for (const b of Object.values(doc().briefs!)) expect(b.carries!.brief!.v).toBe(3)
   })
 })

@@ -2295,6 +2295,7 @@
           "description": "A Territories node (features/territories-spinoff-out-production.clan; owner 2026-11-23: Territories is just another node): the route this node is, frozen at the version taken. Pictures are links by hash with the rights the document stated, never bytes. Its spine is the brief it carries.",
           "properties": {
             "id": { "type": "string", "minLength": 1, "maxLength": 128 },
+            "version": { "type": "integer", "minimum": 1, "description": "The Territories document's version when the route was sent: its approvals at the Greenlight gate, at least 1." },
             "name": { "type": "string", "minLength": 1, "maxLength": 200 },
             "thought": { "type": "string", "maxLength": 600 },
             "why": { "type": "string", "maxLength": 600 },
