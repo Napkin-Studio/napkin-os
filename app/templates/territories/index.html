@@ -1482,9 +1482,11 @@ var TerritoriesLogic = (function () {
     if (!developed(data).length) return '';
     var ic = { present: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="7 5 19 12 7 19 7 5"/></svg>',
       compare: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="7" height="16" rx="1.5"/><rect x="14" y="4" width="7" height="16" rx="1.5"/></svg>',
-      rank: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M4 12h7M4 17h4M18 5v14M15 16l3 3 3-3"/></svg>' };
-    return '<div class="dock"><div class="dock-acts" role="toolbar" aria-label="Gallery tools">' + [['present', 'Present'], ['compare', 'Compare'], ['rank', 'Re-rank']].map(function (a) {
-      return '<button type="button" class="dock-act" data-dock="' + a[0] + '" aria-pressed="' + (a[0] === 'compare' && ui.cmp ? 'true' : 'false') + '"><span class="dock-ring">' + ic[a[0]] + '</span><span class="dock-lbl">' + a[1] + '</span></button>'; }).join('') + '</div></div>';
+      rank: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M4 12h7M4 17h4M18 5v14M15 16l3 3 3-3"/></svg>',
+      export: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19h14"/></svg>' };
+    return '<div class="dock"><div class="dock-acts" role="toolbar" aria-label="Gallery tools">' + [['present', 'Present'], ['compare', 'Compare'], ['rank', 'Re-rank'], ['export', 'Export']].map(function (a) {
+      var xw = a[0] === 'export' && typeof TerritoriesExports !== 'undefined' ? TerritoriesExports.can(data) : { ok: true };
+      return '<button type="button" class="dock-act" data-dock="' + a[0] + '"' + (xw.ok ? '' : ' aria-disabled="true" title="' + esc(xw.why) + '" style="opacity:.55"') + ' aria-pressed="' + (a[0] === 'compare' && ui.cmp ? 'true' : 'false') + '"><span class="dock-ring">' + ic[a[0]] + '</span><span class="dock-lbl">' + a[1] + '</span></button>'; }).join('') + '</div></div>';
   }
   /** The window for one route: its poster, the thought, every check in words, what it rests on, and the toggle. */
   function routeDialog(id, data) {
@@ -2176,6 +2178,108 @@ var TerritoriesPictures = (function () {
 })();
 </script>
 
+<script id="territories-exports-logic">
+// Exports (territories-exports): what the Export window offers and how a file reaches the person. The middleware makes the files
+// (fetch_territories_file@1: the board and the one-pagers as HTML, the routes as JSON); the host's export prints the HTML to a PDF with
+// Chromium and delivers every file through the shell's own download, because this frame is sandboxed without allow-downloads, so no blob link
+// would save anything. Nothing here is a rule about content: the middleware's exports.py keeps those (rank only, Rights to supply).
+var TerritoriesExports = (function () {
+  'use strict';
+  function isObj(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+  function arr(v) { return Array.isArray(v) ? v : []; }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  var TASK = 'fetch_territories_file';
+
+  /** The greenlit routes that are still live, in the judge's order (unranked last): the order the files use. */
+  function routes(data) {
+    var by = {}; arr(data && data.territories).forEach(function (t) { if (isObj(t) && t.id) by[t.id] = t; });
+    var seen = {}, out = [];
+    arr(data && data.greenlit).forEach(function (g) { var t = isObj(g) ? by[g.territory_id] : null; if (t && !seen[t.id] && t.status !== 'killed') { seen[t.id] = 1; out.push(t); } });
+    return out.map(function (t, i) { return [t, i]; }).sort(function (a, b) {
+      var x = typeof a[0].rank === 'number' ? a[0].rank : 1e9, y = typeof b[0].rank === 'number' ? b[0].rank : 1e9; return x - y || a[1] - b[1];
+    }).map(function (p) { return p[0]; });
+  }
+  /** { ok, why }: Export waits for a route to be greenlit, and says so. */
+  function can(data) {
+    return routes(data).length ? { ok: true, why: '' } : { ok: false, why: 'Greenlight a route first: the files hold the routes you greenlit.' };
+  }
+  function slug(s, max) { return String(s || '').replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, max || 60); }
+  function base(data) { return slug(data && data.title, 60) || 'territories'; }
+  /** What the window lists: key, the file the middleware makes, what the host does with it, the name the person gets, and the words. */
+  function files(data) {
+    var b = base(data), rs = routes(data), out = [
+      { key: 'board', file: 'territories-board.html', kind: 'pdf', name: b + '-board', label: 'Territory board', does: 'PDF. Every greenlit route, in the judge’s order, two to a page.' },
+      { key: 'board-client', file: 'territories-board-client.html', kind: 'pdf', name: b + '-board-client', label: 'Board for the client', does: 'PDF. The same board without sources or derived marks.' }];
+    rs.forEach(function (t) {
+      var n = slug(t.name, 40) || 'route';
+      out.push({ key: 'route:' + t.id, file: 'territories-route-' + t.id + '.html', kind: 'pdf', name: b + '-' + n, label: t.name, does: 'One-pager, PDF.', group: 'route' });
+      out.push({ key: 'route-client:' + t.id, file: 'territories-client-route-' + t.id + '.html', kind: 'pdf', name: b + '-' + n + '-client', label: t.name, does: 'Client copy, PDF.', group: 'route', client: true });
+    });
+    out.push({ key: 'json', file: 'territories.json', kind: 'json', name: b + '-routes', label: 'Routes as JSON', does: 'The greenlit routes as data, in the document’s own shape.' });
+    return out;
+  }
+  function fileOf(data, key) { return files(data).filter(function (f) { return f.key === key; })[0] || null; }
+  /** A short mark of what the files were made from (the greenlit routes and everything a route says), so a file made before a change reads stale. */
+  function sign(data) {
+    var s = JSON.stringify([arr(data && data.greenlit), routes(data)]), h = 5381;
+    for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+    return String(h);
+  }
+
+  function reply(res) {
+    if (!res) return { error: 'The engine sent nothing back.' };
+    var b = isObj(res) && 'ok' in res && 'data' in res ? res.data : res, e = res.error || (isObj(b) ? b.error : null);
+    if (e) return { error: typeof e === 'string' ? e : (e.message || 'The engine did not accept the request.') };
+    if (res.ok === false) return { error: 'The host could not complete the call' + (res.status ? ' (status ' + res.status + ')' : '') + '.' };
+    var r = isObj(b) && isObj(b.result) ? b.result : null;
+    return r && r.data_b64 ? { result: r } : { error: 'The engine did not hand the file over.' };
+  }
+  function decode(b64) {
+    var bin = atob(b64), bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder('utf-8').decode(bytes);
+  }
+  /** One file to the person: ask the middleware for it, give it to the host's export, which prints it (PDF) and saves it through the shell.
+   *  Resolves { ok: true, name } or { ok: false, why } in words; never throws. */
+  function run(data, key, host) {
+    var f = fileOf(data, key), c = can(data);
+    if (!f) return Promise.resolve({ ok: false, why: 'That file is not on offer for this document.' });
+    if (!c.ok) return Promise.resolve({ ok: false, why: c.why });
+    if (!(host && host.apiProxy && host.exportDoc)) return Promise.resolve({ ok: false, why: 'Exports go through the Napkin host and the engine, and they are not here.' });
+    return Promise.resolve().then(function () { return host.apiProxy('middleware', { task: TASK, input: { name: f.file } }); }).then(function (res) {
+      var r = reply(res); if (r.error) return { ok: false, why: r.error };
+      return host.exportDoc(f.kind, f.name, decode(r.result.data_b64)).then(function (x) {
+        return x && x.ok === false ? { ok: false, why: 'The host could not start the download.' } : { ok: true, name: f.name + '.' + f.kind, sign: sign(data) };
+      });
+    }).catch(function (e) { return { ok: false, why: 'The export did not finish: ' + ((e && e.message) || e) }; });
+  }
+
+  /** The Export window. ui.exp = { made: { key: sign }, busy: key, note, bad } . */
+  function dialog(data, ui) {
+    var c = can(data), st = (ui && ui.exp) || {}, made = st.made || {}, cur = sign(data);
+    if (!c.ok) return { title: 'Export', closeInside: true, sans: true, html: '<p class="meta" style="margin:0">' + esc(c.why) + '</p><div class="row"><button type="button" class="btn-rect" data-close>Close</button></div>' };
+    function row(f) {
+      var stale = made[f.key] && made[f.key] !== cur, busy = st.busy === f.key;
+      return '<button type="button" class="wsrow" data-export="' + esc(f.key) + '"' + (st.busy ? ' disabled aria-disabled="true"' : '') + '><span class="wsdot" style="background:var(--ag-acc)"></span><span><b>' + esc(f.label) + '</b>' +
+        (busy ? ' <span class="mark-undone">making it</span>' : stale ? ' <span class="mark-undone">made before your last change</span>' : made[f.key] ? ' <span class="mark-undone">saved</span>' : '') + '<br><span class="meta">' + esc(f.does) + '</span></span></button>';
+    }
+    function pair(t) {
+      var two = files(data).filter(function (f) { return f.group && f.key.slice(-t.id.length) === t.id; });
+      return '<div class="wsrow" style="grid-template-columns:minmax(0,1fr) auto auto;align-items:center"><span><b>' + esc(t.name) + '</b><br><span class="meta">' + esc(rank(t)) + '</span></span>' + two.map(function (f) {
+        var stale = made[f.key] && made[f.key] !== cur, busy = st.busy === f.key;
+        return '<button type="button" class="btn-rect" data-export="' + esc(f.key) + '"' + (st.busy ? ' disabled aria-disabled="true"' : '') + '>' + (busy ? 'Making it' : f.client ? 'Client copy' : 'One-pager') + (stale ? ' (changed since)' : made[f.key] ? ' \u2713' : '') + '</button>'; }).join('') + '</div>';
+    }
+    function rank(t) { return typeof t.rank === 'number' ? 'Judge #' + t.rank : 'Not ranked'; }
+    var all = files(data), top = all.filter(function (f) { return !f.group && f.kind === 'pdf'; }), js = all.filter(function (f) { return f.kind === 'json'; });
+    return { title: 'Export', closeInside: true, sans: true, html: '<p class="meta" style="margin:0">PDFs are printed from the page and saved to your downloads. Pictures drawn from a palette are marked Mock-up, and a picture with no rights chosen reads Rights to supply.</p>' +
+      top.map(row).join('') + '<span class="psec-t">One-pager per route</span>' + routes(data).map(pair).join('') + '<span class="psec-t">Data</span>' + js.map(row).join('') +
+      (st.note ? '<p class="runnote' + (st.bad ? ' bad' : '') + '" role="status">' + esc(st.note) + '</p>' : '') +
+      '<div class="row"><button type="button" class="btn-rect" data-close>Close</button></div>' };
+  }
+  return { TASK: TASK, routes: routes, can: can, files: files, fileOf: fileOf, sign: sign, reply: reply, run: run, dialog: dialog, base: base };
+})();
+</script>
+
 <script>
 (function () {
   'use strict';
@@ -2338,8 +2442,27 @@ var TerritoriesPictures = (function () {
   }
 
   // ── source windows ──
+  // ── Export (territories-exports: the files themselves are TerritoriesExports'; these three only open the window and move its state) ──
+  function exportOpen(from) {
+    var c = TerritoriesExports.can(data());
+    if (!c.ok) { toast(c.why); return; }
+    openDialog('export', from);
+  }
+  function exportGo(key) {
+    var X = TerritoriesExports, st = ui.exp = ui.exp || { made: {} };
+    if (st.busy) return;
+    st.busy = key; st.note = 'Making the file. A PDF takes a few seconds.'; st.bad = false; openDialog('export', dialogFrom);
+    X.run(data(), key, window.clan).then(function (r) {
+      st.busy = null;
+      if (r.ok) { st.made[key] = r.sign; st.note = r.name + ' is on its way to your downloads.'; st.bad = false; }
+      else { st.note = 'That did not work. ' + r.why + ' Nothing was changed.'; st.bad = true; }
+      if (dialogEl) openDialog('export', dialogFrom); else toast(st.note);
+    });
+  }
+  // ── end Export ──
+
   function openDialog(what, from) {
-    var d = L.dialogFor(what, data()); if (!d) { toast('That source is not in this document.'); return; }
+    var d = what === 'export' && typeof TerritoriesExports !== 'undefined' ? TerritoriesExports.dialog(data(), ui) : L.dialogFor(what, data()); if (!d) { toast('That source is not in this document.'); return; }
     closeDialog(true);
     dialogFrom = from || document.activeElement;
     var ov = document.createElement('div'); ov.className = 'overlay';
@@ -2517,13 +2640,14 @@ var TerritoriesPictures = (function () {
     if ((b = t.closest('[data-pic-rights]'))) { ev.stopPropagation(); var pr = b.getAttribute('data-pic-rights').split('|'); openDialog('rights:' + pr[0] + ':' + pr[1], b); return; }
     if ((b = t.closest('[data-pic-set]'))) { var ps = { tid: b.getAttribute('data-pic-t'), id: b.getAttribute('data-pic-s'), rights: b.getAttribute('data-pic-set') }; closeDialog(true); run({ a: 'pic_rights', tid: ps.tid, id: ps.id, rights: ps.rights }); return; }
     if ((b = t.closest('[data-green]'))) { ev.preventDefault(); ev.stopPropagation(); closeDialog(true); run({ a: 'green', id: b.getAttribute('data-green') }); return; }
+    if ((b = t.closest('[data-export]'))) { if (!b.disabled) exportGo(b.getAttribute('data-export')); return; }
     if ((b = t.closest('[data-send]'))) { if (!b.disabled) openDialog('send', b); return; }
     if ((b = t.closest('[data-dest]'))) { if (b.disabled) return; var to = b.getAttribute('data-dest'); closeDialog(true); run({ a: 'send', to: to }); return; }
     if ((b = t.closest('[data-rank-go]'))) { closeDialog(true); run({ a: 'rerank' }); return; }
     if ((b = t.closest('[data-tp]'))) { ui.tp = b.getAttribute('data-tp'); render(); return; }
     if ((b = t.closest('[data-dock]'))) {
       var dk = b.getAttribute('data-dock');
-      if (dk === 'compare') { ui.cmp = !ui.cmp; render(); } else if (dk === 'rank') openDialog('rank', b); else run({ a: 'present' });
+      if (dk === 'export') { exportOpen(b); } else if (dk === 'compare') { ui.cmp = !ui.cmp; render(); } else if (dk === 'rank') openDialog('rank', b); else run({ a: 'present' });
       return;
     }
     if ((b = t.closest('[data-undo]'))) { run({ a: 'undo', id: b.getAttribute('data-undo') }); return; }

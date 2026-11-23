@@ -14,6 +14,8 @@ from typing import Callable
 
 #: name -> (media type, make(doc_id, data) -> bytes)
 FILES: dict[str, tuple[str, Callable[[str, dict], bytes]]] = {}
+#: file-name prefix -> (suffix, media type, for_name(name) -> make): files named by what they are of (a one-pager is ``territories-route-<route id>.html``)
+FAMILIES: dict[str, tuple[str, str, Callable[[str], Callable[[str, dict], bytes]]]] = {}
 #: destination id (``deck-maker``, ``production-tool``) -> deliver(doc_id, data, send) -> {"status": "sent" | "asked"}
 DESTINATIONS: dict[str, Callable[[str, dict, dict], dict]] = {}
 
@@ -27,6 +29,25 @@ MAX_FILE_BYTES = 24 * 1024 * 1024
 
 def register_file(name: str, media_type: str, make: Callable[[str, dict], bytes]) -> None:
     FILES[name] = (media_type, make)
+
+
+def register_family(prefix: str, suffix: str, media_type: str, for_name: Callable[[str], Callable[[str, dict], bytes]]) -> None:
+    FAMILIES[prefix] = (suffix, media_type, for_name)
+
+
+def resolve(name: str) -> tuple[str, Callable[[str, dict], bytes]] | None:
+    """(media type, make) of a file by its name: a registered file, else the family whose prefix and suffix it carries (with something between)."""
+    if name in FILES:
+        return FILES[name]
+    for prefix, (suffix, media, for_name) in FAMILIES.items():
+        if name.startswith(prefix) and name.endswith(suffix) and len(name) > len(prefix) + len(suffix):
+            return media, for_name(name)
+    return None
+
+
+def names() -> list[str]:
+    """What can be asked for, in words for an error: the files, and each family as ``<prefix>…<suffix>``."""
+    return sorted(FILES) + [f"{p}<route>{v[0]}" for p, v in sorted(FAMILIES.items())]
 
 
 def register_destination(name: str, deliver: Callable[[str, dict, dict], dict]) -> None:
