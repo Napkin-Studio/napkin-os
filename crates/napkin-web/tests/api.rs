@@ -347,6 +347,9 @@ async fn a_documents_data_reads_as_json_with_the_hash_links_compare() {
     assert_eq!(v["title"], "First Light brief");
     assert_eq!(v["path"], doc.as_str());
     assert!(v["data"].is_object(), "{v}");
+    // Not approved yet: no approvals, and the version a person says is v1.
+    assert_eq!(v["approvals"], 0, "{v}");
+    assert_eq!(v["version"], 1, "{v}");
     let yaml = get(
         &s,
         &format!("/api/t/{}/d/{}/entry/data", b.tenant, doc),

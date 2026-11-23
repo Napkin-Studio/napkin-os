@@ -56,7 +56,7 @@ describe('which start an empty node shows', () => {
     await systemUpdate(s, (d) => {
       d.storyboards[sb] = { id: sb, v: 1, field_v: {}, title: 'Storyboard 2', ratio: '16:9', target_s: 15 }
       d.briefs ??= {}
-      d.briefs[brief] = { id: brief, v: 1, field_v: {}, title: 'Let Them Sleep', source: { how: 'link', document_id: 'doc-q', app_id: 'ie.napkin.brief-maker', taken: 1, data_sha256: SHA('b'), at: '2026-11-21T05:00:00Z' }, spine: { proposition: 'The kettle that lets the house sleep.' } } as never
+      d.briefs[brief] = { id: brief, v: 1, field_v: {}, title: 'Let Them Sleep', source: { how: 'link', document_id: 'doc-q', app_id: 'ie.napkin.brief-maker', taken: 1, version: 1, data_sha256: SHA('b'), at: '2026-11-21T05:00:00Z' }, spine: { proposition: 'The kettle that lets the house sleep.' } } as never
       const l = id('link')
       d.links[l] = { id: l, v: 1, field_v: {}, from: { kind: 'brief', id: brief }, to: { kind: 'storyboard', id: sb }, role: 'brief' }
     }, 'seed')
