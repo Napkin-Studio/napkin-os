@@ -2,7 +2,7 @@
 // library: the edit is there. Uses scripts/e2e-production-clan kill9 and up (the lane's own stack).
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
-import { at, here, createProject, expect, renameProject, signIn, toolUrl, waitSavedTitle } from './support'
+import { addNode, at, createProject, dataOf, expect, here, nodeKinds, signIn, toolUrl, waitSavedKind } from './support'
 
 const script = join(here, '../../../../scripts/e2e-production-clan')
 
@@ -11,12 +11,13 @@ at(1)('S1-14 a save answered 200 survives kill -9 of the host', async ({ page })
   const doc = await createProject(page.request, tenant, 'Crash walk')
   await page.goto(toolUrl(doc))
   await expect(page.locator('canvas').first()).toBeVisible({ timeout: 60_000 })
-  await renameProject(page, 'Survives the crash')
+  await addNode(page, 'Script')
   await page.keyboard.press('Control+s')
-  await waitSavedTitle(page.request, tenant, doc, 'Survives the crash')
+  await waitSavedKind(page.request, tenant, doc, 'scripts')
   execFileSync(script, ['kill9'], { stdio: 'inherit' })
   execFileSync(script, ['up'], { stdio: 'inherit' })
   await signIn(page.request)
+  expect(nodeKinds(await dataOf(page.request, tenant, doc)), 'the saved edit is on the host after the restart').toContain('scripts')
   await page.goto(toolUrl(doc))
-  await expect(page.getByText('Survives the crash').first()).toBeVisible({ timeout: 60_000 })
+  await expect(page.locator('canvas').first()).toBeVisible({ timeout: 60_000 })
 })

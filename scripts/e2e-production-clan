@@ -37,10 +37,22 @@ guard() { # never the owner's stack or another lane's ports
 }
 listening() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 
+seed() { # the apps a fresh tenant needs: Production, plus Brief Maker and Deck Maker for the spin-offs
+  local d="$state/seed" e tmp="$state/work/seed-example"
+  [[ -s "$d/production.app.clan" && -s "$d/brief-maker.app.clan" && -s "$d/deck-maker.app.clan" ]] && return 0
+  mkdir -p "$d" "$tmp"
+  for e in production brief_maker deck_maker; do
+    (cd "$root" && CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$root/target}" cargo run -q -p clan-sdk --example "make_$e" -- \
+      "$d/${e//_/-}.app.clan" "$tmp/$e.example.clan" >/dev/null) || die "could not package the $e app"
+  done
+  say "seeded $d"
+}
+
 up() {
   guard
+  seed
   if listening "$PRODUCTION_WEB_PORT" && [[ -f "$state/web.pid" ]]; then say "already up at $base"; return 0; fi
-  PRODUCTION_STATE="$state" "$root/scripts/run-production-local" start >/dev/null
+  NAPKIN_WEB_SEED="$state/seed" PRODUCTION_STATE="$state" "$root/scripts/run-production-local" start >/dev/null
   mkdir -p "$state"
   echo "E2E_BASE_URL=$base" >"$state/harness.env"
   say "up at $base (mock mode, sign in as $PRODUCTION_SIGN_IN, state $state)"
