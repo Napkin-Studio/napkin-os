@@ -659,12 +659,12 @@ test('after a greenlight or a remove, the card, the count and the tray follow th
   const two = greenlit(d, ['t_started', 't_sunday'])
   page = L.view(two, {}); t = text(page)
   assert.match(t, /2 greenlit/); assert.match(t, /Greenlit · 2/); assert.equal((page.match(/class="glrow"/g) ?? []).length, 2)
-  assert.equal((page.match(/class="gcard green"/g) ?? []).length, 2); assert.match(t, /Send 2 to production/)
+  assert.equal((page.match(/class="gcard green"/g) ?? []).length, 2); assert.match(t, /Send 2 →/)
   assert.ok(!/<button type="button" class="big" data-send disabled>/.test(page))
   assert.match(page, /data-green="t_started"[^>]*aria-pressed="true"[^>]*>✓ Greenlit/)
   const one = greenlit(d, ['t_sunday']); page = L.view(one, {})
   assert.match(text(page), /Greenlit · 1/); assert.ok(!/class="glrow"[^>]*>(?:(?!<\/div>)[\s\S])*Already Started/.test(page))
-  assert.match(text(page), /Send 1 to production/)
+  assert.match(text(page), /Send 1 →/)
 })
 
 test('the engine\'s own holds disable Send and are said in its words; nothing is re-derived in the page', () => {
