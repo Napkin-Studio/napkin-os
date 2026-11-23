@@ -10,7 +10,7 @@ import {
 } from './cut'
 import { boxName, inBox, shotWindow, type Box, type Gen } from './model'
 import type { RoomData } from './Rooms'
-import { assemble, endCardFrom, newItemId, placedWords, placeTakeInCut, putCut, readCut, writeCut } from './timeline'
+import { assemble, endCardFrom, newEndCard, newItemId, placedWords, placeTakeInCut, putCut, readCut, writeCut } from './timeline'
 import { updateDoc } from '../doc/store'
 import type { UiStore } from '../projects/uiStore'
 
@@ -82,7 +82,7 @@ export const editCut = {
     writeCut(store, videoId, 'edit text', (cut) => updateText(cut, id, patch)),
   removeText: (store: DocumentStore, videoId: string, id: string) => writeCut(store, videoId, 'remove text', (cut) => removeText(cut, id)),
   endCard: (store: DocumentStore, videoId: string, patch: Partial<CutEndCard>) =>
-    writeCut(store, videoId, 'edit the end card', (cut) => (cut.endCard ? setEndCard(cut, patch) : { ...cut, endCard: { ...(endCardFrom(store.get(), videoId) ?? { headline: '', line: 'Your brand', bg: '#14161B', durS: 1.5 }), ...patch } })),
+    writeCut(store, videoId, 'edit the end card', (cut) => (cut.endCard ? setEndCard(cut, patch) : { ...cut, endCard: { ...(endCardFrom(store.get(), videoId) ?? newEndCard(store.get(), videoId)), ...patch } })),
   removeEndCard: (store: DocumentStore, videoId: string) => writeCut(store, videoId, 'remove the end card', (cut) => {
     const next = { ...cut }
     delete next.endCard

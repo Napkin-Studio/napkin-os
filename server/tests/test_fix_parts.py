@@ -106,7 +106,9 @@ def test_the_crew_fixes_the_parts_a_note_names_and_nothing_else(tmp_path):
         "The Review agent still notes the objectives: no pass"
     assert all(any("#objectives" in t for t in d["targets"]) for d in mine), "no note on a part the fix left alone"
     got = standing_problem(DOC, host.chain, note["id"])
-    assert got is not None and got[0] == ["objectives.behavioural"]
+    # the page's rule: the held part waits for the person, and the written one for the Review agent's pass
+    # (here it still notes the objectives), so the note still stands on both
+    assert got is not None and sorted(got[0]) == OBJ
     check_change_rules(host)
 
 
@@ -196,3 +198,22 @@ def test_with_jev_the_check_reads_only_the_named_parts_and_a_mended_argument_lea
     assert len(passed) == 1 and sorted(t.split("#", 1)[1] for t in passed[0]["targets"]) == OBJ
     assert passed[0]["reasoning"]["decided"].startswith("Checked the fix")
     check_change_rules(host)
+
+
+def test_a_note_still_stands_after_an_agent_rewrote_the_part():
+    """UAT 2026-11-22: "Fix this with the agents" did nothing on Review-rejected parts. The page keeps a bad
+    note open until a person writes the part or the Review agent passes it with a reason; an agent's rewrite
+    (a redraft the Review agent still flagged) does not answer it, so the fix must still run."""
+    parts = ["insight", "single_minded_proposition", "reasons_to_believe", "barrier"]
+    note = {"id": "d_note", "kind": "verdict", "polarity": "bad", "actor": "agent:judge",
+            "targets": [f"{DOC}#{k}" for k in parts], "rationale": "The parts do not make one argument."}
+    redraft = {"id": "d_redraft", "kind": "edit", "action": "draft", "actor": "agent:drafter",
+               "targets": [f"{DOC}#{k}" for k in parts]}
+    got = standing_problem(DOC, [redraft, note], "d_note")
+    assert got is not None and got[0] == parts
+    # a person's write answers it; so does the Review agent's pass with a reason
+    person = {"id": "d_p", "kind": "edit", "action": "edit", "actor": "human:local", "targets": [f"{DOC}#insight"]}
+    assert standing_problem(DOC, [person, redraft, note], "d_note")[0] == parts[1:]
+    passed = {"id": "d_ok", "kind": "verdict", "polarity": "good", "actor": "agent:judge",
+              "targets": [f"{DOC}#barrier"], "rationale": "Checked the fix."}
+    assert "barrier" not in standing_problem(DOC, [passed, redraft, note], "d_note")[0]
