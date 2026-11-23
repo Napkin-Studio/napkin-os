@@ -685,17 +685,19 @@ test('Send opens the choice: Deck Maker sends the greenlit ids and the rest as n
   const dlg = L.dialogFor('send', d)!
   assert.equal(dlg.title, 'Send to production')
   assert.match(text(dlg.html), /Already Started and Passenger Seat go with their worlds, lines, checks and sources\. The other 6 routes travel as routes not chosen/)
-  assert.match(dlg.html, /data-dest="deck-maker"/); assert.match(dlg.html, /data-dest="production-tool"[^>]*disabled/); assert.match(text(dlg.html), /Production tool not built yet/)
+  assert.match(dlg.html, /data-dest="deck-maker"/); assert.doesNotMatch(dlg.html, /data-dest="production-tool"[^>]*disabled/); assert.doesNotMatch(text(dlg.html), /not built yet/)
   const a = L.act(d, {}, { a: 'send', to: 'deck-maker' }, ENV)!
   eq(a.writes, [])
   // the gate is open at greenlight, so the approval goes first and the send follows it
   eq(a.request, { key: 'send:deck-maker', what: 'The approval', input: { step: 'approve', gate: 'greenlight', by: 'Shrey' }, then: { key: 'send:deck-maker', what: 'The send', input: { step: 'send_routes', to: 'deck-maker', territory_ids: ['t_started', 't_passenger'], not_chosen: ['t_sitdown', 't_sunday', 't_small', 't_lonely', 't_mixtape', 't_lounge'], by: 'Shrey' }, continueIn: 'ie.napkin.deck-maker' } })
   const done = JSON.parse(JSON.stringify(d)) as Doc; done.run.gate = null; done.run.stage = 'send'
-  // the send is written first; the shell is then asked for the spin-off (Deck Maker only: Production is not built)
+  // the send is written first; the shell is then asked for the spin-off 
   assert.equal(L.act(done, {}, { a: 'send', to: 'deck-maker' }, ENV)!.request!.continueIn, 'ie.napkin.deck-maker')
   eq(L.act(done, {}, { a: 'send', to: 'deck-maker' }, ENV)!.request!.input, { step: 'send_routes', to: 'deck-maker', territory_ids: ['t_started', 't_passenger'], not_chosen: ['t_sitdown', 't_sunday', 't_small', 't_lonely', 't_mixtape', 't_lounge'], by: 'Shrey' })
-  const p = L.act(d, {}, { a: 'send', to: 'production-tool' }, ENV)!
-  assert.equal(p.request, undefined); assert.match(p.toast!, /not built yet, so nothing was sent/)
+  // Production is built (territories-spinoff-out-production): the same send, then the shell is asked for the Production spin-off
+  const p = L.act(done, {}, { a: 'send', to: 'production-tool' }, ENV)!
+  assert.equal(p.request!.continueIn, 'ie.napkin.production')
+  eq(p.request!.input, { step: 'send_routes', to: 'production-tool', territory_ids: ['t_started', 't_passenger'], not_chosen: ['t_sitdown', 't_sunday', 't_small', 't_lonely', 't_mixtape', 't_lounge'], by: 'Shrey' })
   assert.match(L.act(gl('greenlight_open'), {}, { a: 'send', to: 'deck-maker' }, ENV)!.toast!, /Greenlight at least one route first/)
   assert.equal(L.act(d, {}, { a: 'send', to: 'nowhere' }, ENV), null)
 })
@@ -850,7 +852,7 @@ test('a written send to Deck Maker asks the shell to continue in it, and the she
   assert.match(html, /r\.state === 'done' && r\.continueIn\)/)
   assert.match(html, /type: 'clan:continue-in', app_id: app/)
   assert.match(html, /id: 'deck-maker'[^}]*built: true, continueIn: 'ie\.napkin\.deck-maker'/)
-  assert.doesNotMatch(html, /id: 'production-tool'[^}]*continueIn/)
+  assert.match(html, /id: 'production-tool'[^}]*built: true, continueIn: 'ie\.napkin\.production'/)
   // the shell: the message reaches the same spin-off the bar's Continue in uses, for a well-formed app id only
   const rt = readFileSync(new URL('src/shell/AppRuntime.tsx', root), 'utf8')
   assert.match(rt, /m\?\.type === 'clan:continue-in'/)
