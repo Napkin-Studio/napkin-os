@@ -1,1 +1,23 @@
 /* The one Trash: a ⋯ on each document row, the Trash page, its confirm and toast (features/library-trash). */
+.cp-rw { position: relative; }
+.cp-rw + .cp-rw { border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+.cp-rw > .cp-row { padding-right: 52px !important; padding-left: 18px; }
+.cp-rw > .cp-row + .cp-row { border-top: 0; }
+.cp-dots { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 30px; height: 30px; border: 0; border-radius: 8px; background: none; color: var(--muted); font: 600 18px/1 var(--font-ui); letter-spacing: 1px; cursor: pointer; opacity: .55; }
+.cp-rw:hover .cp-dots, .cp-dots:focus-visible, .cp-dots[aria-expanded="true"] { opacity: 1; }
+.cp-dots:hover, .cp-dots[aria-expanded="true"] { background: color-mix(in srgb, var(--line) 55%, transparent); color: var(--ink); }
+.cp-trash { margin-top: 22px; }
+.cp-trash .side-link { font: 12px var(--font-mono); color: var(--muted); }
+.cp-trashlist .cp-row { cursor: default; grid-template-columns: 28px 1fr auto; padding-left: 18px; }
+.cp-trashlist .cp-row .cp-ico { display: grid; }
+.cp-trashlist .cp-t small { font-size: 12px; }
+.cp-trashhead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.cp-back { font: 12px var(--font-mono); color: var(--muted); }
+.cp-trashnote { margin: 0; padding: 22px 18px; color: var(--muted); font: 14px var(--font-ui); }
+.tc-scrim { position: fixed; inset: 0; z-index: 400; background: rgba(20, 20, 19, .32); display: grid; place-items: center; padding: 16px; }
+.tc-card { width: min(420px, 100%); background: var(--card, #fff); border: 1px solid var(--line-strong); border-radius: var(--r-md, 12px); padding: 22px 22px 18px; box-shadow: 0 18px 50px rgba(20, 20, 19, .22); }
+.tc-q { margin: 0; font: 600 16px/1.35 var(--font-ui); color: var(--ink); }
+.tc-s { margin: 6px 0 0; font: 14px/1.4 var(--font-ui); color: var(--muted); }
+.tc-act { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+.tc-toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 420; display: flex; align-items: center; gap: 16px; padding: 11px 14px 11px 18px; background: var(--ink); color: #fff; border-radius: 999px; font: 14px var(--font-ui); box-shadow: 0 10px 30px rgba(20, 20, 19, .25); }
+.tc-toast button { background: none; border: 0; color: #fff; font: 600 14px var(--font-ui); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; padding: 2px 4px; }

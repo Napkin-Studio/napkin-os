@@ -623,6 +623,7 @@ export default function App() {
           onOpenDocument={openPath}
           // The medallion and the agency pill both go to the desk (owner, 2026-11-11).
           onHome={() => leaveTo({ level: 'agency' })}
+          onTrashed={landing.reload}
           client={docChip}
           account={account}
           toolKey={toolOfApp(running.open.manifest.app?.app_id)?.id ?? null}
