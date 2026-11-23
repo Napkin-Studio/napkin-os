@@ -10,7 +10,7 @@ import { useConfig, useDoc } from '../app/context'
 import { modelChoicesFor } from '../capabilities'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
-import { CARD_S, DEFAULT_FILM_LENGTHS, FILM_LENGTHS, FILM_SHAPES, REMAKE_MODELS, beatsFor, briefShapes, filmSeconds, fitWindows, lastLineOf, masterShots, sameShape, versionsWord } from './film'
+import { DEFAULT_FILM_LENGTHS, FILM_LENGTHS, FILM_SHAPES, REMAKE_MODELS, beatsFor, briefShapes, filmSeconds, fitWindows, lastLineOf, masterShots, sameShape, versionsWord } from './film'
 import { endLineOf, sizesBrief } from '../brief/model'
 import { makeFilmSizes, planFilm, type FilmPlan, type FilmRow, type ShotMethod } from './filmJobs'
 import type { CampaignDeps } from './make'
@@ -43,7 +43,7 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
     const cut = videoId ? readCut(doc, videoId) : undefined
     return cut?.v1.length ? cutLength(cut) : filmSeconds(shots, master.length_s)
   }, [doc, master, shots])
-  const masterS = Math.round(filmS + CARD_S)
+  const masterS = Math.round(filmS)
   // Only lengths shorter than the film start picked (Playwright live test 2026-11-18: 15 s picked for an 8 s film).
   const [lengths, setLengths] = useState<number[]>(() => DEFAULT_FILM_LENGTHS.filter((l) => l < masterS))
   const [extra, setExtra] = useState('')
@@ -163,7 +163,7 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
       <section className="cf-sheet pt-panel" role="dialog" aria-modal="true" aria-label="Make all sizes" data-film-sheet>
         <header className="cf-sheethead">
           <b>Make all sizes</b>
-          <span className="cf-from" title={`${secs(filmS)} s of film and the ${secs(CARD_S)} s end card stitch adds`}>from {master.label} · {secs(filmS)} s + end card</span>
+          <span className="cf-from" title={`${secs(filmS)} s of film`}>from {master.label} · {secs(filmS)} s</span>
           <span className="pt-grow" />
           <button type="button" className="btn sm ghost" onClick={onClose}>Cancel</button>
         </header>

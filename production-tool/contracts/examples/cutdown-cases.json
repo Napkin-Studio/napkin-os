@@ -3,7 +3,7 @@
   "cases": {
     "fit": [
       {
-        "name": "a 30 s master to 15 s: five 3 s windows trimmed from their tails",
+        "name": "a 30 s master to 15 s: five 3 s windows fill it exactly",
         "shots": [
           {
             "shotId": "shot_0",
@@ -78,27 +78,27 @@
           {
             "shotId": "shot_0",
             "inS": 0.0,
-            "outS": 2.5
+            "outS": 3.0
           },
           {
             "shotId": "shot_2",
             "inS": 0.0,
-            "outS": 2.5
+            "outS": 3.0
           },
           {
             "shotId": "shot_4",
             "inS": 0.0,
-            "outS": 2.5
+            "outS": 3.0
           },
           {
             "shotId": "shot_7",
             "inS": 0.0,
-            "outS": 2.5
+            "outS": 3.0
           },
           {
             "shotId": "shot_9",
             "inS": 0.0,
-            "outS": 2.5
+            "outS": 3.0
           }
         ],
         "over": 0.0
@@ -139,7 +139,7 @@
           {
             "shotId": "shot_3",
             "inS": 0.0,
-            "outS": 3.5
+            "outS": 6.0
           }
         ],
         "over": 0.0
@@ -181,18 +181,18 @@
           {
             "shotId": "shot_1",
             "inS": 0.5,
-            "outS": 3.064
+            "outS": 4.427
           },
           {
             "shotId": "shot_2",
             "inS": 0.0,
-            "outS": 2.136
+            "outS": 3.273
           }
         ],
         "over": 0.0
       },
       {
-        "name": "the end card shot is never a window, and the film's own card comes off the length (a third of what the studio card leaves, 1-2 s); a 6 s size keeps 3.5 s of picture, the studio card shortened to 1.333 s (R3-F12)",
+        "name": "the end card shot is never a window, and the film's own card comes off the length (a third of it, 1-2 s); a client ad carries no studio card, so a 6 s size keeps 4 s of picture (owner 2026-11-23)",
         "shots": [
           {
             "shotId": "shot_0",
@@ -224,12 +224,12 @@
           {
             "shotId": "shot_0",
             "inS": 0.0,
-            "outS": 1.75
+            "outS": 2.0
           },
           {
             "shotId": "shot_1",
             "inS": 0.0,
-            "outS": 1.75
+            "outS": 2.0
           }
         ],
         "over": 0.0
@@ -339,7 +339,7 @@
             "outS": 1.0
           }
         ],
-        "over": 4.5
+        "over": 2.0
       },
       {
         "name": "a take with no handle cannot grow: the cut is short",
@@ -362,7 +362,7 @@
             "outS": 3.0
           }
         ],
-        "over": -5.5
+        "over": -8.0
       }
     ],
     "crop": [

@@ -100,7 +100,7 @@ def test_the_film_is_the_plans_length_then_the_roll_up(media):
     res, out = render(media, PLAN)
     assert res["ok"], res
     assert res["lengthS"] == 8
-    assert abs(res["durationS"] - (8 + stitch.CARD_S)) <= 0.05, res
+    assert abs(res["durationS"] - 8) <= 0.05, res
 
 
 @needs_ffmpeg
@@ -137,7 +137,7 @@ def test_a_retimed_clip_and_a_dip_to_white(media):
                       {"key": "blue.mp4", "startS": 2, "inS": 0, "outS": 1, "transitionIn": {"kind": "dip_white", "s": 0.5}}],
             "lengthS": 3}
     res, out = render(media, plan)
-    assert res["ok"] and abs(res["durationS"] - (3 + stitch.CARD_S)) <= 0.05, res
+    assert res["ok"] and abs(res["durationS"] - 3) <= 0.05, res
     assert near(pixel(out, 1.0), RED)
     assert sum(pixel(out, 2.25)) > 600  # the middle of the dip is white
     assert near(pixel(out, 2.8), BLUE)
@@ -171,11 +171,10 @@ def test_pieces_place_gaps_and_lend_handles():
 def test_an_event_with_no_mode_still_builds_the_ads_command():
     """Old stitch requests stay byte-identical with the timeline mode beside them (snapshots/ad_command.json)."""
     want = json.loads((HERE / "snapshots" / "ad_command.json").read_text())
-    assets = stitch.load_assets("roll-up")
     clips = [{"path": "/tmp/c0.mp4", "trimS": 4.5, "inS": 0}, {"path": "/tmp/c1.mp4", "transition": {"kind": "cut"}},
              {"path": "/tmp/c2.png", "still": True, "trimS": 3, "transition": {"kind": "cut", "s": 1}}]
-    cmd = stitch.build_command("ffmpeg", clips, (1280, 720), "roll-up", assets, "/tmp/ad.mp4")
-    assert [c.replace(str(stitch.ENDCARD_DIR), "<endcard>") for c in cmd] == want["two_clips_and_a_still/roll-up"]
+    cmd = stitch.build_command("ffmpeg", clips, (1280, 720), "/tmp/ad.mp4")
+    assert cmd == want["two_clips_and_a_still"]
 
 
 def loudness(path: Path, start: float, seconds: float) -> float:
@@ -198,8 +197,20 @@ def test_the_ad_keeps_each_clips_own_sound_until_sound_mixes_one(media):
                       {"key": "blue.mp4", "startS": 2, "inS": 0, "outS": 1, "transitionIn": {"kind": "dissolve", "s": 0.5}}],
             "endCard": {"key": "card.png", "s": 1}, "lengthS": 4}
     res, out = render(media, plan)
-    assert res["ok"] and abs(res["durationS"] - (4 + stitch.CARD_S)) <= 0.1, res
+    assert res["ok"] and abs(res["durationS"] - 4) <= 0.1, res
     assert loudness(out, 0.2, 1.0) > -40          # the tone
     assert loudness(out, 2.6, 0.3) < -60          # the silent clip after the crossfade
     assert loudness(out, 4.2, 1.5) < -60          # the roll-up
     assert near(pixel(out, 1.0), RED)
+
+
+def test_a_timeline_ad_carries_no_studio_card_in_its_command():
+    """A client ad never carries the studio card (owner 2026-11-23): no card pieces, no 2.5 s of silence after the
+    film, and the film's own end card is the last piece."""
+    clips = [{"path": "/tmp/c0.mp4", "startS": 0, "inS": 0, "outS": 3}]
+    card = {"path": "/tmp/card.png", "s": 1}
+    cmd = timeline.build_command("ffmpeg", clips, [], card, (1280, 720), "/tmp/o.mp4")
+    g = cmd[cmd.index("-filter_complex") + 1]
+    assert "[card]" not in g and "[acard]" not in g and "[film]null[out]" in g
+    assert not any(a.startswith("color=c=") and "2.5" in a for a in cmd)
+    assert timeline.film_length(clips, card) == 4

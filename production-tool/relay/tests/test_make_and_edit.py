@@ -317,5 +317,5 @@ def test_the_relays_event_renders_on_the_real_stitch(tmp_path):
     res = stitch.run(event, get=get, put=lambda key, src, mime: h.blobs.put(key, Path(src).read_bytes(), mime),
                      put_json=lambda k, d: results.update(d), ffmpeg="ffmpeg", ffprobe="ffprobe")
     assert res["ok"], res
-    assert res["lengthS"] == 4.2 and abs(res["durationS"] - (4.2 + stitch.CARD_S)) <= 0.05
+    assert res["lengthS"] == 4.2 and abs(res["durationS"] - 4.2) <= 0.05
     assert h.blobs.get(f"ads/{job['jobId']}.mp4")

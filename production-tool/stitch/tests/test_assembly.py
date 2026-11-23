@@ -17,11 +17,10 @@ import stitch
 HAVE_FFMPEG = bool(shutil.which("ffmpeg") and shutil.which("ffprobe"))
 needs_ffmpeg = pytest.mark.skipif(not HAVE_FFMPEG, reason="needs ffmpeg and ffprobe")
 HERE = Path(__file__).resolve().parent
-ASSETS = stitch.load_assets("roll-up")
 
 
 def cmd_for(clips):
-    return stitch.build_command("ffmpeg", clips, (1280, 720), "roll-up", ASSETS, "/t/o.mp4")
+    return stitch.build_command("ffmpeg", clips, (1280, 720), "/t/o.mp4")
 
 
 def graph(cmd):
@@ -36,8 +35,8 @@ def test_no_in_points_and_cuts_build_the_command_as_before():
     want = json.loads((HERE / "snapshots" / "ad_command.json").read_text())
     clips = [{"path": "/tmp/c0.mp4", "trimS": 4.5, "inS": 0}, {"path": "/tmp/c1.mp4", "transition": {"kind": "cut"}},
              {"path": "/tmp/c2.png", "still": True, "trimS": 3, "transition": {"kind": "cut", "s": 1}}]
-    cmd = stitch.build_command("ffmpeg", clips, (1280, 720), "roll-up", ASSETS, "/tmp/ad.mp4")
-    assert [c.replace(str(stitch.ENDCARD_DIR), "<endcard>") for c in cmd] == want["two_clips_and_a_still/roll-up"]
+    cmd = stitch.build_command("ffmpeg", clips, (1280, 720), "/tmp/ad.mp4")
+    assert cmd == want["two_clips_and_a_still"]
 
 
 def test_an_in_point_seeks_the_input_and_reads_the_slot():
@@ -70,7 +69,7 @@ def test_a_transition_borrows_the_outgoing_clips_handle(kind, name):
     g = graph(cmd)
     assert "stop_duration=3,trim=duration=3,setpts=PTS-STARTPTS,fps=24[v0]" in g
     assert f"[v0][v1]xfade=transition={name}:duration=0.5:offset=2.5[x1]" in g
-    assert "[x1][v2][card]concat=n=3:v=1:a=0[out]" in g
+    assert "[x1][v2]concat=n=2:v=1:a=0[out]" in g
 
 
 def test_transitions_chain_and_cuts_split_the_pieces():
@@ -81,7 +80,7 @@ def test_transitions_chain_and_cuts_split_the_pieces():
     # a (2 + 0.5 handle), b (2 + 1 handle): b starts at 2, c at 4
     assert "[v0][v1]xfade=transition=fade:duration=0.5:offset=2[x1]" in g
     assert "[x1][v2]xfade=transition=fadeblack:duration=1:offset=4[x2]" in g
-    assert "[x2][v3][card]concat=n=3:v=1:a=0[out]" in g
+    assert "[x2][v3]concat=n=2:v=1:a=0[out]" in g
 
 
 def test_a_transition_is_whole_frames_and_no_longer_than_the_incoming_slot():
@@ -147,7 +146,7 @@ def test_every_transition_keeps_the_ad_as_long_as_its_shots(media, kind):
              {"key": "short.mp4", "trimS": SHOTS[2], "transition": {"kind": kind, "s": 0.5}}]
     res, store = render(media, clips)
     assert res["ok"], res
-    want = sum(SHOTS) + stitch.CARD_S
+    want = sum(SHOTS)  # no studio card
     assert abs(res["durationS"] - want) <= 1 / stitch.FPS + 1e-6, (res["durationS"], want)
     assert frames_of(store["ads/x.mp4"], media) == round(want * stitch.FPS)
     assert [s["kind"] for s in res["seams"]] == [kind, kind]
@@ -159,7 +158,7 @@ def test_in_and_out_windows_pick_the_frames(media, tmp_path):
     # testsrc's counter: the frame at 3 s of a.mp4 shows "3". Cut a 1 s window from 3 s and compare it
     # with the source's own frame there.
     res, store = render(media, [{"key": "a.mp4", "trimS": 1, "inS": 3, "outS": 5}])
-    assert res["ok"] and abs(res["durationS"] - (1 + stitch.CARD_S)) <= 0.05, res
+    assert res["ok"] and abs(res["durationS"] - 1) <= 0.05, res
     ad = tmp_path / "ad.mp4"
     ad.write_bytes(store["ads/x.mp4"])
 
@@ -175,7 +174,7 @@ def test_in_and_out_windows_pick_the_frames(media, tmp_path):
     assert diff(first, grab(media / "a.mp4", 3)) < diff(first, grab(media / "a.mp4", 0))
     # An out point before the slot's end holds its last frame: the slot is kept, nothing past outS shows.
     res, _ = render(media, [{"key": "a.mp4", "trimS": 2, "inS": 1, "outS": 1.5}, {"key": "b.mp4", "trimS": 1}])
-    assert res["ok"] and abs(res["durationS"] - (3 + stitch.CARD_S)) <= 0.05, res
+    assert res["ok"] and abs(res["durationS"] - 3) <= 0.05, res
 
 
 @needs_ffmpeg
@@ -185,7 +184,7 @@ def test_png_clips_join_like_videos(media, kind):
              {"key": "still.png", "trimS": 1.5, "transition": {"kind": kind}}]
     res, _ = render(media, clips)
     assert res["ok"], res
-    assert abs(res["durationS"] - (5.5 + stitch.CARD_S)) <= 1 / stitch.FPS + 1e-6
+    assert abs(res["durationS"] - 5.5) <= 1 / stitch.FPS + 1e-6
 
 
 @needs_ffmpeg

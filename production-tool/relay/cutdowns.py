@@ -8,7 +8,7 @@ plan     Dex's beat plan for each length, and a crop of each shot for each shape
          the rest, so the plan is the same shape whoever made it:
            windows  fit_windows: the kept shots' windows of their takes, trimmed from their tails
                     (the action's start stays) or grown into their handles, to the length less the
-                    end card (stitch adds CARD_S itself), no window under MIN_WINDOW_S;
+                    end card (a client ad carries no studio card), no window under MIN_WINDOW_S;
            crops    crop_keys: the largest box of the shape inside the take, centred on the subject;
                     a slow pan (keys at in, middle and out) only when the subject moves more than
                     PAN_MOVE of the take's width, else one box on all of it; `cuts` when the subject
@@ -34,7 +34,6 @@ from pathlib import Path
 
 import brief as briefs
 
-CARD_S = 2.5          # stitch.py CARD_S: the studio card stitch adds after the clips (and the client's card)
 MIN_WINDOW_S = 1.0    # no shot shorter than this in a cutdown
 SHOT_S = 2.5          # the passthrough keeps about one shot for each 2.5 s
 PAN_MOVE = 0.10       # a subject that moves more than this share of the take's width gets a pan
@@ -79,36 +78,31 @@ def same_shape(a: dict, b: dict, tol: float = 0.01) -> bool:
 CLIENT_CARD_MAX_S = 2.0  # the film's own end card in a size: at most this, at least 1 s, a third of the picture
 
 
-def client_card_s(card_len: float, length_s: float, card_s: float = CARD_S) -> float:
+def client_card_s(card_len: float, length_s: float) -> float:
     """How long the film's own end card (the client's) holds in a size of length_s: its own length, at most
-    CLIENT_CARD_MAX_S and a third of what the studio card leaves, never under 1 s (features/pt-film-r1.clan;
+    CLIENT_CARD_MAX_S and a third of the length, never under 1 s (features/pt-film-r1.clan;
     web/src/campaign/film.ts clientCardS, the same rule)."""
-    return _r(min(card_len, CLIENT_CARD_MAX_S, max(1.0, (length_s - card_s) / 3)))
+    return _r(min(card_len, CLIENT_CARD_MAX_S, max(1.0, length_s / 3)))
 
 
-MIN_PICTURE_S = 3.5   # the picture a size keeps at least: its cards shorten for it (UAT round 3, R3-F12)
-STUDIO_MIN_S = 1.2    # the shortest studio card, its roll sped up (stitch card_graph, cutdown cardS)
+MIN_PICTURE_S = 3.5   # the picture a size keeps at least: the film's card shortens for it (UAT round 3, R3-F12)
 CLIENT_MIN_S = 1.0    # the film's own card at its shortest
 
 
-def card_lengths(length_s: float | None, card_len: float | None, has_client: bool | None = None) -> tuple[float, float]:
-    """(client_s, studio_s): how long a size's two cards hold, the film's own (0 when it has none; card_len its own
-    length) and the studio card. When they would leave under MIN_PICTURE_S of picture, the studio card shortens
-    first (to STUDIO_MIN_S), then the film's card (to CLIENT_MIN_S); both stay (UAT round 3, R3-F12: the 6 s 9:16
-    had 2.25 s of picture). web/src/campaign/film.ts cardLengths, the same rule."""
+def card_length(length_s: float | None, card_len: float | None, has_client: bool | None = None) -> float:
+    """How long a size's end card (the film's own, the client's) holds: 0 when it has none; card_len its own length.
+    When it would leave under MIN_PICTURE_S of picture, it shortens (to CLIENT_MIN_S at the least). A client ad
+    carries no studio card (owner 2026-11-23). web/src/campaign/film.ts cardLength, the same rule."""
     client = card_len is not None if has_client is None else has_client
-    studio = CARD_S
-    client_s = client_card_s(CLIENT_CARD_MAX_S if card_len is None else card_len, length_s if length_s is not None else math.inf) if client else 0.0
+    if not client:
+        return 0.0
+    client_s = client_card_s(CLIENT_CARD_MAX_S if card_len is None else card_len, length_s if length_s is not None else math.inf)
     if length_s is None:
-        return client_s, studio
-    short = MIN_PICTURE_S - (length_s - studio - client_s)
+        return client_s
+    short = MIN_PICTURE_S - (length_s - client_s)
     if short > 1e-6:
-        cut = min(short, studio - STUDIO_MIN_S)
-        studio -= cut
-        short -= cut
-    if short > 1e-6 and client:
         client_s -= min(short, max(0.0, client_s - CLIENT_MIN_S))
-    return _r(client_s), _r(studio)
+    return _r(client_s)
 
 
 def fit_windows(shots: list[dict], keep: set[str], length_s: float) -> tuple[list[dict], float]:
@@ -117,13 +111,13 @@ def fit_windows(shots: list[dict], keep: set[str], length_s: float) -> tuple[lis
 
     shots: [{shotId, inS, outS, takeS?, endCard?}] (the master's windows). The end card shot is the film's
     own card (the client's), never a window: the render draws it (input clientCard) and its length (outS - inS)
-    comes off the length too, before the studio card stitch adds (features/pt-film-r1.clan); on a short size both
-    cards shorten so the picture keeps MIN_PICTURE_S (card_lengths). Too long: every window is trimmed from its tail by the same share,
+    comes off the length too (features/pt-film-r1.clan); on a short size it shortens so the picture keeps
+    MIN_PICTURE_S (card_length). Too long: every window is trimmed from its tail by the same share,
     none under MIN_WINDOW_S (or its own length, when shorter). Too short: windows grow into their
     handles (the take after outS) by the same share."""
     client = next((s for s in shots if s.get("endCard")), None)
-    client_s, studio_s = card_lengths(length_s, float(client["outS"]) - float(client.get("inS") or 0) if client else None)
-    target = max(MIN_WINDOW_S, length_s - studio_s - client_s)
+    client_s = card_length(length_s, float(client["outS"]) - float(client.get("inS") or 0) if client else None)
+    target = max(MIN_WINDOW_S, length_s - client_s)
     kept = [s for s in shots if s["shotId"] in keep and not s.get("endCard")]
     if not kept:
         return [], -target
@@ -161,7 +155,7 @@ def fit_windows(shots: list[dict], keep: set[str], length_s: float) -> tuple[lis
     return out, _r(over)
 
 
-def passthrough_keep(shots: list[dict], length_s: float, card_s: float = CARD_S) -> dict[str, str]:
+def passthrough_keep(shots: list[dict], length_s: float) -> dict[str, str]:
     """Which shots a length keeps with no model, and why: about one shot each SHOT_S. One shot: the
     payoff (the last before the end card). More: the opening and the payoff, then evenly between."""
     body = [s for s in shots if not s.get("endCard")]
@@ -169,7 +163,7 @@ def passthrough_keep(shots: list[dict], length_s: float, card_s: float = CARD_S)
         return {}
     # The opening and the payoff always, when there are two shots or more (UAT round 4, R4-F4: a 6 s kept the payoff
     # alone, 2.0 s of picture, while saying it kept the opening and the payoff); fit_windows trims them to the length.
-    n = max(1 if len(body) == 1 else 2, min(len(body), round((length_s - card_s) / SHOT_S)))
+    n = max(1 if len(body) == 1 else 2, min(len(body), round(length_s / SHOT_S)))
     if n >= len(body):
         return {s["shotId"]: "Kept: the whole film fits this length." for s in body}
     if n == 1:
@@ -405,7 +399,7 @@ class ModelCutter:
                 images.append({"media_type": media_type, "data": data})
                 seen.append({"picture": len(images), "at": ("in", "middle", "out")[min(i, 2)]})
             payload_shots.append({**{k: v for k, v in s.items() if k != "stills"}, "pictures": seen})
-        payload = {"shots": payload_shots, "lengths": cut["lengths"], "cardS": CARD_S,
+        payload = {"shots": payload_shots, "lengths": cut["lengths"],
                    "aspects": [f"{a['w']}:{a['h']}" for a in cut.get("aspects") or []]}
         # A linked brief, cut to the cutdown's budget (features/brief-node.clan): its mandatories first.
         briefed = briefs.for_op("cutdown", {"brief": req["input"].get("brief")} if req["input"].get("brief") else {})

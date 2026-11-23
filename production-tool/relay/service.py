@@ -2237,8 +2237,8 @@ class Relay:
                 key = f"ads/cuts/{job['jobId']}/layer{i}.png"
                 self.blobs.put(key, png, "image/png")
                 layers.append({"key": key, **({"fromS": a} if a is not None else {}), **({"toS": b} if b is not None else {})})
-            # The film's own end card (the client's), drawn at the size and held as the last picture, before the
-            # studio card stitch adds (features/pt-film-r1.clan, B4: the sizes ended on the studio card alone).
+            # The film's own end card (the client's), drawn at the size and held as the last picture
+            # (features/pt-film-r1.clan, B4; a client ad carries no studio card, owner 2026-11-23).
             if cut.get("clientCard"):
                 key = f"ads/cuts/{job['jobId']}/client-card.png"
                 self.blobs.put(key, timeline_layers.end_card_png(cut["clientCard"], size, self.blobs.fetch), "image/png")
@@ -2254,8 +2254,6 @@ class Relay:
             return self._reload(job)
         event = {"jobId": job["jobId"], "mode": "cutdown", "size": list(size), "clips": clips, "layers": layers,
                  "endCard": cut.get("endCard", True), "fadeOutS": cut.get("fadeOutS", 0.5),
-                 # a short size's shorter studio card (cutdowns.card_lengths; UAT round 3, R3-F12)
-                 **({"cardS": float(cut["studioS"])} if cut.get("studioS") else {}),
                  "outKey": f"ads/cuts/{job['jobId']}.mp4", "resultKey": f"ads/cuts/{job['jobId']}.json"}
         try:
             self.stitch(event)
