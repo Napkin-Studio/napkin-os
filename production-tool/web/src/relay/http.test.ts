@@ -188,6 +188,22 @@ describe('HttpRelay talks to napkin-web only (S3-1)', () => {
     ]))
   })
 
+  it('new bytes go straight to S3 on the presigned link: the one call that leaves this origin (owner, 2026-11-23)', async () => {
+    const put = 'https://bucket.s3.eu-west-1.amazonaws.com/in/sha256:abc?X-Amz-Expires=900&X-Amz-Signature=s'
+    const fetchFn = vi.fn(async (url: string, _init?: RequestInit) => url.startsWith('/api/')
+      ? new Response(JSON.stringify({ exists: false, putUrl: put, putHeaders: { 'x-amz-checksum-sha256': 'q83vEj==' }, url: 'https://cdn.test/in/sha256:abc' }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      : new Response(null, { status: 200 }))
+    vi.stubGlobal('fetch', fetchFn)
+    await make().upload(new Blob(['x'], { type: 'image/png' }), 'image/png')
+    const calls = fetchFn.mock.calls.map(([url, init]) => `${init?.method ?? 'GET'} ${url}`)
+    expect(calls).toEqual(['POST /api/t/t1/d/doc-1/production/uploads', `PUT ${put}`])
+    // the PUT carries the bytes and the hash binding the relay named, and no credential of napkin-web's
+    const h = new Headers(fetchFn.mock.calls[1][1]?.headers)
+    expect(h.get('x-amz-checksum-sha256')).toBe('q83vEj==')
+    expect(h.get('content-type')).toBe('image/png')
+    for (const name of ['authorization', 'x-napkin-user', 'x-napkin-identity']) expect(h.has(name)).toBe(false)
+  })
+
   it('sends no credential and no identity of its own', async () => {
     const fetchFn = answer(200, { entries: [] })
     vi.stubGlobal('fetch', fetchFn)

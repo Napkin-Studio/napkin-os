@@ -444,6 +444,8 @@ locals {
     var.web_dogfood ? [{ name = "NAPKIN_DOGFOOD", value = "1" }] : [],
     # The Production Tool at /production, proxied to its relay (features/os-sign-in.clan)
     local.production ? [{ name = "NAPKIN_PRODUCTION_RELAY_URL", value = var.production_relay_url }] : [],
+    # the browser PUTs upload bytes straight to S3 on the relay's presigned links (owner, 2026-11-23)
+    var.production_upload_origin != "" ? [{ name = "NAPKIN_PRODUCTION_UPLOAD_ORIGIN", value = var.production_upload_origin }] : [],
     var.production_media_base != "" ? [{ name = "NAPKIN_PRODUCTION_MEDIA_BASE", value = var.production_media_base }] : [],
   )
   production             = var.production_relay_url != ""

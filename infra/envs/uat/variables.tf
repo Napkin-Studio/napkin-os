@@ -152,6 +152,12 @@ variable "production_service_key_arn" {
   }
 }
 
+variable "production_upload_origin" {
+  description = "The S3 origin the relay's presigned upload links point at: the hackathon bucket on its regional endpoint. The Production page's CSP connect-src names it."
+  type        = string
+  default     = "https://napkin-hackathon-741448934623.s3.eu-west-1.amazonaws.com"
+}
+
 variable "production_media_base" {
   description = "The https base Production's pictures are served from: the hackathon stack's CloudFront address (its url output). napkin-web tells the tool in /api/session as media_base."
   type        = string

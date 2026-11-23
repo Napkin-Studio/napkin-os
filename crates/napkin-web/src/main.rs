@@ -137,6 +137,8 @@ fn dogfood(data_root: &std::path::Path) -> Option<Arc<napkin_web::dogfood::Dogfo
 ///   NAPKIN_PRODUCTION_STATIC        the tool's build (default /srv/napkin/production)
 ///   NAPKIN_PRODUCTION_MEDIA_BASE    https base of Production's pictures; told to the
 ///                                   tool in /api/session as `media_base` (unset: null)
+///   NAPKIN_PRODUCTION_UPLOAD_ORIGIN the S3 origin the relay's presigned upload links point at;
+///                                   the page's CSP connect-src names it (unset: not named)
 /// Refuses to start with a relay and no sign-in, or with a short secret.
 fn production(identity: &Identity) -> Option<Arc<napkin_web::production::Relay>> {
     let accounts = matches!(identity.mode, Mode::Accounts { .. });
@@ -150,7 +152,9 @@ fn production(identity: &Identity) -> Option<Arc<napkin_web::production::Relay>>
     .unwrap_or_else(|e| panic!("{e}"))
     .map(|c| {
         Arc::new(
-            napkin_web::production::Relay::new(c).with_media_base(napkin_web::media::from_env()),
+            napkin_web::production::Relay::new(c)
+                .with_media_base(napkin_web::media::from_env())
+                .with_upload_origin(napkin_web::media::upload_origin_from_env()),
         )
     })
 }

@@ -195,6 +195,16 @@ variable "backup_enabled" {
   default     = false
 }
 
+variable "production_upload_origin" {
+  description = "The S3 origin the relay's presigned upload links point at (NAPKIN_PRODUCTION_UPLOAD_ORIGIN; the hackathon bucket on its regional endpoint). The browser PUTs upload bytes there; the Production page's CSP connect-src names it. Empty: not named."
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.production_upload_origin == "" || startswith(var.production_upload_origin, "https://")
+    error_message = "production_upload_origin is empty or an https:// address"
+  }
+}
+
 variable "production_media_base" {
   description = "The https base Production's pictures are served from (NAPKIN_PRODUCTION_MEDIA_BASE; the hackathon stack's CloudFront url). napkin-web tells the tool in /api/session as media_base. Empty: media_base is null."
   type        = string

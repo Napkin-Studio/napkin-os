@@ -147,6 +147,9 @@ pub struct Relay {
     pub timeout: Duration,
     /// The https base pictures come from (NAPKIN_PRODUCTION_MEDIA_BASE): the CSP names its origin.
     pub media_base: Option<String>,
+    /// Where the browser PUTs upload bytes (NAPKIN_PRODUCTION_UPLOAD_ORIGIN): the S3 origin of the
+    /// relay's presigned links. The CSP's connect-src names it beside the media base.
+    pub upload_origin: Option<String>,
     /// How napkin-web calls the relay (service credential and user claim).
     pub client: RelayClient,
 }
@@ -163,6 +166,7 @@ impl Relay {
             config,
             timeout,
             media_base: None,
+            upload_origin: None,
             client,
         }
     }
@@ -170,6 +174,12 @@ impl Relay {
     /// The same proxy, told where pictures live (for the CSP).
     pub fn with_media_base(mut self, base: Option<String>) -> Self {
         self.media_base = base;
+        self
+    }
+
+    /// The same proxy, told where uploads go (for the CSP's connect-src).
+    pub fn with_upload_origin(mut self, origin: Option<String>) -> Self {
+        self.upload_origin = origin;
         self
     }
 }
@@ -243,7 +253,10 @@ pub fn sign(key: &[u8], claims: &Claims) -> String {
 pub fn router<S: Clone + Send + Sync + 'static>(relay: Arc<Relay>) -> Router<S> {
     let dir = &relay.config.static_dir;
     let index = dir.join("index.html");
-    let policy = Arc::new(csp(relay.media_base.as_deref()));
+    let policy = Arc::new(csp(
+        relay.media_base.as_deref(),
+        relay.upload_origin.as_deref(),
+    ));
     let tool = Router::new()
         // the tool's calls are the shell API's now (api_router); an old page asking here is told so
         .route("/api", any(gone))
@@ -293,12 +306,19 @@ fn valid_doc(d: &str) -> bool {
 /// The one policy for the tool's pages (features/production-app-page.clan, folding in production-csp):
 /// its own build and API on this origin, the pictures' CDN, the fonts the page links, and the store
 /// Worker and wasm it starts. Reported only, until the walk and UAT show no violation.
-pub fn csp(media_base: Option<&str>) -> String {
-    let media = media_base
-        .and_then(|b| {
-            let (scheme, rest) = b.split_once("://")?;
-            Some(format!("{scheme}://{}", rest.split('/').next()?))
-        })
+/// connect-src also names the upload origin: the browser PUTs bytes straight to S3 on the
+/// relay's presigned link (owner, 2026-11-23), and nothing else leaves this origin.
+pub fn csp(media_base: Option<&str>, upload_origin: Option<&str>) -> String {
+    let media_origin = media_base.and_then(|b| {
+        let (scheme, rest) = b.split_once("://")?;
+        Some(format!("{scheme}://{}", rest.split('/').next()?))
+    });
+    let media = media_origin
+        .as_deref()
+        .map(|o| format!(" {o}"))
+        .unwrap_or_default();
+    let upload = upload_origin
+        .filter(|u| Some(*u) != media_origin.as_deref())
         .map(|o| format!(" {o}"))
         .unwrap_or_default();
     format!(
@@ -308,7 +328,7 @@ pub fn csp(media_base: Option<&str>) -> String {
          font-src 'self' data: https://fonts.gstatic.com; \
          img-src 'self' data: blob:{media}; \
          media-src 'self' blob:{media}; \
-         connect-src 'self'{media}; \
+         connect-src 'self'{media}{upload}; \
          worker-src 'self' blob:; \
          object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; \
          report-uri /production/csp-report"
@@ -1092,5 +1112,34 @@ mod tests {
         assert!(foreign_origin(&h(Some(
             "https://studio.napkin.ie.evil.example"
         ))));
+    }
+
+    #[test]
+    fn connect_src_names_the_upload_origin_beside_the_media_base() {
+        let p = csp(
+            Some("https://cdn.example.com/m"),
+            Some("https://napkin-hackathon-1.s3.eu-west-1.amazonaws.com"),
+        );
+        assert!(
+            p.contains("connect-src 'self' https://cdn.example.com https://napkin-hackathon-1.s3.eu-west-1.amazonaws.com;"),
+            "{p}"
+        );
+        // only connect-src: pictures still come from the media base alone
+        assert!(
+            p.contains("img-src 'self' data: blob: https://cdn.example.com;"),
+            "{p}"
+        );
+        // one origin serving both (the local relay) is named once
+        let local = csp(
+            Some("http://localhost:20431"),
+            Some("http://localhost:20431"),
+        );
+        assert!(
+            local.contains("connect-src 'self' http://localhost:20431;"),
+            "{local}"
+        );
+        // no upload origin: as before
+        assert!(csp(Some("https://cdn.example.com"), None)
+            .contains("connect-src 'self' https://cdn.example.com;"));
     }
 }
