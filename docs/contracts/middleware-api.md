@@ -1923,7 +1923,8 @@ reply body, whatever `NAPKIN_RUNLOG_BODIES` says; no error message carries what 
   (a new version waiting for a person: nothing changes until they take it). A write the host refuses ends the job `failed` (`502 host_write_failed`, the host's status and reason); an unreadable file
   `422 unreadable_file`, `415 unsupported_file`. Result: `{summary, mode, document_id, path, name, pending, counts, gaps (areas), actor}`, no bible text. `change` is always null. `cancel_job`
   stops the spend and the write.
-- **Not yet.** PDF logos drawn as vectors (no renderer is installed, so only embedded pictures can be cut); CMYK, masked and JPX pictures; a file over 64 MB (the middleware's request cap).
+- **Vector logos.** A logo a PDF draws as paths is rendered with pypdfium2 (`==5.14.0`, licence reviewed in `licences/policy.toml`): on the cover pages and each page whose text speaks of a logo, the regions the drawing occupies (not a page-sized background, not a page of more than 300 paths) are rendered at 2x, cropped to the region, and join the embedded pictures for the model to classify.
+- **Not yet.** CMYK, masked and JPX embedded pictures; a file over 64 MB (the middleware's request cap).
 - **The shell's side** (`app/src/shell/brand/`). An app that stored a file in its document says so to the shell with `window.parent.postMessage({type: 'clan:file-added', name: <stored name>, label: <the person's name>}, '*')`
   (Brief Maker and Research after `upload-asset`, Production after its own upload). The shell hears only its own frame, and only in Brief Maker, Research and Production. It calls `brand_identify` with that one
   attachment through the document's `/api-proxy` (each `brand_identify` and `brand_build` is a charged call; `job_status` is not), asks the one question when `ask` is true, and starts `brand_build` on the answer. A job

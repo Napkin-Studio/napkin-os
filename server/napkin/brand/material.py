@@ -139,6 +139,7 @@ def _pdf(name: str, data: bytes, prefix: str = "") -> Material:
                 break
             if MIN_IMAGE <= len(raw) <= MAX_IMAGE:
                 images.append(Image(f"{prefix}p{i}-{j}", iname or f"page-{i}-{j}", m, raw, i))
+    images.extend(vector_logos(data, texts, prefix, len(images)))
     return Material(name, "pdf", pages=texts, pdf=data, pdf_pages=len(texts), images=images)
 
 
@@ -176,6 +177,82 @@ def _embedded(page):
                     yield str(key).lstrip("/"), _png(w, h, ch, px), "image/png"
         except Exception:  # noqa: BLE001 - a picture it cannot read is skipped, the page text stands
             continue
+
+
+LOGO_PAGE = re.compile(r"\blogo(type)?s?\b|\bwordmark\b|\bbrandmark\b|\bsymbol\b", re.I)
+VECTOR_PAGES = 3            # the cover and the next pages are always looked at; others only when their text speaks of a logo
+VECTOR_PER_PAGE = 3
+VECTOR_SCALE = 2.0
+MAX_PATHS = 300             # a page with more drawing than this is an illustration or a chart, not a logo page
+
+
+def _clusters(boxes: list, gap: float = 10.0) -> list:
+    """Boxes (l, b, r, t) merged while they lie within `gap` of each other: the parts of one drawn logo become one region."""
+    boxes = [list(b) for b in boxes]
+    merged = True
+    while merged:
+        merged = False
+        for i in range(len(boxes)):
+            for j in range(i + 1, len(boxes)):
+                a, b = boxes[i], boxes[j]
+                if a[0] - gap <= b[2] and b[0] - gap <= a[2] and a[1] - gap <= b[3] and b[1] - gap <= a[3]:
+                    boxes[i] = [min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3])]
+                    del boxes[j]
+                    merged = True
+                    break
+            if merged:
+                break
+    return boxes
+
+
+def vector_logos(data: bytes, texts: list, prefix: str = "", have: int = 0) -> list:
+    """Logos and marks drawn as vectors, which a PDF holds as paths and not as pictures: for the cover and each page that speaks of a logo, the
+    regions its drawing occupies (not the page-sized background, not hairlines) rendered to PNG at VECTOR_SCALE and cropped to the region. Needs
+    pypdfium2; a page it cannot render is skipped, and the model decides afterwards which regions are logos."""
+    import pypdfium2 as pdfium
+    import pypdfium2.raw as raw
+    out = []
+    try:
+        pdf = pdfium.PdfDocument(data)
+    except Exception:  # noqa: BLE001
+        return out
+    try:
+        for i in range(len(pdf)):
+            if have + len(out) >= MAX_IMAGES:
+                break
+            if i >= VECTOR_PAGES and not LOGO_PAGE.search(texts[i] if i < len(texts) else ""):
+                continue
+            try:
+                page = pdf[i]
+                w, h = page.get_size()
+                boxes, n = [], 0
+                for o in page.get_objects():
+                    if o.type not in (raw.FPDF_PAGEOBJ_PATH, raw.FPDF_PAGEOBJ_SHADING):
+                        continue
+                    n += 1
+                    l, b, r, t = o.get_bounds()
+                    bw, bh = r - l, t - b
+                    if bw * bh >= 0.5 * w * h or (bw < 2 and bh < 2) or bw <= 0 or bh <= 0:
+                        continue          # the background, or a speck; a long hairline is kept only inside a cluster
+                    boxes.append((l, b, r, t))
+                if not boxes or n > MAX_PATHS:
+                    continue
+                regions = [c for c in _clusters(boxes) if c[2] - c[0] >= 15 and c[3] - c[1] >= 8 and (c[2] - c[0]) * (c[3] - c[1]) < 0.5 * w * h]
+                regions.sort(key=lambda c: -(c[2] - c[0]) * (c[3] - c[1]))
+                for k, (l, b, r, t) in enumerate(regions[:VECTOR_PER_PAGE], 1):
+                    pad = 4
+                    l, b, r, t = max(0, l - pad), max(0, b - pad), min(w, r + pad), min(h, t + pad)
+                    bm = page.render(scale=VECTOR_SCALE, crop=(l, b, w - r, h - t), rev_byteorder=True)
+                    row = bm.width * bm.n_channels
+                    px = b"".join(bytes(bm.buffer[y * bm.stride:y * bm.stride + row]) for y in range(bm.height))
+                    png = _png(bm.width, bm.height, bm.n_channels, px) if bm.n_channels in (1, 3) else None
+                    if png and len(png) <= MAX_IMAGE:
+                        out.append(Image(f"{prefix}v{i + 1}-{k}", f"page-{i + 1}-drawing-{k}.png", "image/png", png, i + 1))
+            except Exception:  # noqa: BLE001 - a page that will not render is skipped
+                continue
+    finally:
+        pdf.close()
+    return out
 
 
 def _office(name: str, data: bytes, kind: str) -> Material:

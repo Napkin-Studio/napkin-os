@@ -65,3 +65,18 @@ def test_a_zip_bomb_is_refused_before_it_is_expanded(monkeypatch):
 def test_a_zip_with_nothing_readable_is_refused():
     with pytest.raises(TaskError):
         material.load("k.zip", make_zip({"fonts/a.otf": "x"}))
+
+
+def test_a_logo_drawn_as_vectors_is_rendered_and_cropped_to_its_region():
+    import struct
+    m = material.load("book.pdf", make_pdf(BIBLE_PAGES, vector=True))
+    vec = [i for i in m.images if i.id.startswith("v1-")]
+    assert len(vec) == 1 and vec[0].media_type == "image/png" and vec[0].page == 1      # the page-sized background is not a region
+    w, h = struct.unpack(">II", vec[0].data[16:24])
+    assert (w, h) == (2 * (130 + 8), 2 * (60 + 8))                                     # the two blocks are one region, padded 4 points, at 2x
+
+
+def test_pages_without_a_logo_word_are_not_rendered_beyond_the_cover_pages():
+    pages = [f"Page {i}" for i in range(1, 8)]
+    m = material.load("book.pdf", make_pdf(pages, vector=True))
+    assert [i.page for i in m.images] == [1]

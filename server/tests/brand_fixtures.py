@@ -24,8 +24,9 @@ def recorded(name: str):
     return json.loads((RECORDED / name).read_text())
 
 
-def make_pdf(pages: list[str], jpeg: bytes | None = None, rgb: bytes | None = None) -> bytes:
-    """A PDF with one text line per page (Helvetica) and, when `jpeg` is given, that JPEG as a DCT image on page 2; `rgb` is 40x40 raw RGB pixels (4800 bytes) as a Flate image on page 3."""
+def make_pdf(pages: list[str], jpeg: bytes | None = None, rgb: bytes | None = None, vector: bool = False) -> bytes:
+    """A PDF with one text line per page (Helvetica) and, when `jpeg` is given, that JPEG as a DCT image on page 2; `rgb` is 40x40 raw RGB pixels (4800 bytes) as a Flate image on page 3;
+    `vector` draws an invented logo as paths on page 1: a blue block with a smaller orange block beside it, 130 x 60 points at (100, 500), and a page-sized pale background."""
     objs = []   # object bodies, 1-based
 
     def add(body: bytes) -> int:
@@ -43,6 +44,8 @@ def make_pdf(pages: list[str], jpeg: bytes | None = None, rgb: bytes | None = No
     for i, text in enumerate(pages):
         safe = text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
         stream = f"BT /F1 12 Tf 40 700 Td ({safe}) Tj ET"
+        if vector and i == 0:
+            stream = "0.95 0.95 0.9 rg 0 0 595 842 re f 0.1 0.3 0.8 rg 100 500 80 60 re f 1 0.5 0 rg 190 500 40 30 re f " + stream
         if jpeg and i == 1:
             stream += " q 100 0 0 100 40 500 cm /Im1 Do Q"
         if rgb and i == 2:
