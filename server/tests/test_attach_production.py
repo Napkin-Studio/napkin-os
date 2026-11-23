@@ -109,3 +109,39 @@ def test_fetch_deck_file_names_only_the_decks_files_and_says_when_one_is_missing
     assert fake.gets == []
     st, body = post(deck, "fetch_deck_file", {"name": "deck.pptx"}, clan)
     assert st == 404 and body["error"]["type"] == "no_file"
+
+
+# ── a Production project kept in the library (production-in-library, S1-19) ──
+
+LIB = "doc-8f1c2a4e-library-production"
+
+
+class LibraryHost(Host):
+    """What napkin-host sends for a Deck spun off from a library Production document: ``data.upstream`` as an index (one small entry per
+    ancestor) and the project whole beside it as ``clan.production_upstream``."""
+
+    def __init__(self, prod, **kw):
+        super().__init__(**kw)
+        self.prod = prod
+
+    def clan(self):
+        c = super().clan()
+        c["production_upstream"] = {"id": LIB, "data": self.prod}
+        return c
+
+
+def test_a_deck_spun_off_from_a_library_project_sends_the_project_whole_by_its_library_id(deck, monkeypatch):
+    fake = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    prod = {"app": "production-tool", "contract_version": "3", "project": {"id": "proj_01KB0000000000000000000001", "title": "Lumen"},
+            "assets": {"sha256:" + HEX: {"sha256": "sha256:" + HEX, "mime": "image/png", "kind": "image"}},   # no locations: the library keeps none
+            "finals": {f"final_01KB00000000000000000000{n:02d}": {"of": {"kind": "picture", "id": f"pic_{n}"}, "asset": "sha256:" + HEX} for n in range(1, 13)},
+            "upstream": {"doc-brief-1": {"insight": "SECRET", "confidential_fields": ["insight"]}}}
+    data = deck_data()
+    data["upstream"] = {"doc-brief-1": {"summary": "index entry"}, LIB: {"summary": "index entry"}}
+    build(deck, LibraryHost(prod, data=data, schema=SCHEMA))
+    sent = fake.posts[0]
+    assert sent["production_upstream"] == {"id": LIB, "data": prod}
+    assert len(sent["production_upstream"]["data"]["finals"]) == 12                      # every final goes to the engine, not one of twelve
+    assert not any("locations" in a for a in sent["production_upstream"]["data"]["assets"].values())
+    marks = {m["path"]: m for m in sent["marks"]}
+    assert "SECRET" in marks[f"upstream.{LIB}.upstream.doc-brief-1.insight"]["text"]    # the full brief the project carried is marked too

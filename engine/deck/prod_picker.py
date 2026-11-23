@@ -118,7 +118,8 @@ class Source:
 class CarriedSource:
     """A Production project carried whole in the Deck document (``data.upstream.<id>``, production-spinoff): the same surface as Source
     (``doc``, ``name``, ``kind``, ``clan_sha256``), but the pictures are not in the document: they are held by Production's relay under their
-    sha256 and fetched at build (``relay``: the only source). ``clan_sha256`` is the hash of the carried data, so a run and a swap are tied to
+    sha256 and fetched at build through the relay's by-hash route (``relay``: the only source; the project's ``assets[].locations`` are never
+    read: the tool no longer writes them and an old document's are not trusted). ``clan_sha256`` is the hash of the carried data, so a run and a swap are tied to
     the version the deck froze. Refuses what deck.from_production refuses (another contract or app, no project id)."""
     kind = "upstream"
     relay = True
@@ -126,7 +127,7 @@ class CarriedSource:
     def __init__(self, doc_id: str, doc: dict):
         self.doc = fp.check_document(doc)
         self.doc_id = str(doc_id)
-        self.name = f"production:{self.doc_id}"
+        self.name = f"doc:{self.doc_id}"   # the library document the project was kept in (never a relay project address)
         self.clan_sha256 = hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str).encode()).hexdigest()
         self.outer = self.inner = None
         self.fixture, self.embedded, self.zipped = False, set(), set()
@@ -260,7 +261,7 @@ def _row(src: Source, key: str, role: str, c: dict, asset: dict, eligible: bool,
            "format": c.get("format") or None, "origin": asset.get("origin") or c.get("origin"), "rights": c.get("rights"),
            "rights_why": c.get("rights_why"), "brief": brief, "version": c.get("version"), "status": c.get("status"), "sha256": hx or None,
            "mime": asset.get("mime"), "kind": asset.get("kind"), "width": asset.get("w"), "height": asset.get("h"),
-           "reach": reach, "sources": sources, "hosts": https_hosts(asset.get("locations")), "eligible": eligible}
+           "reach": reach, "sources": sources, "hosts": [] if getattr(src, "relay", False) else https_hosts(asset.get("locations")), "eligible": eligible}
     if reason:
         row["reason"] = clean(reason, 300)
     if reach in REACH_NOTE and eligible:
