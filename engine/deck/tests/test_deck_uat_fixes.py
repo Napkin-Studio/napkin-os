@@ -152,6 +152,20 @@ def test_the_carried_research_is_the_decks_evidence():
     assert inputs.apply_research(inputs.Inputs(brief={}), {"facts": [], "findings": []}) is False
 
 
+def test_the_fit_ladder_never_switches_a_made_picture_to_a_layout_that_draws_none(monkeypatch):
+    """The key visual slide of the second local build: 'picture_column too full', so the ladder switched to the flow layout, which has no picture box."""
+    from deck import layouts
+    for name in ("LOOK_V2", "LOOK_V3", "GRAPHICS"):
+        monkeypatch.setattr(spec, name, True)
+    lib = layouts.load(force=True)
+    pc = lib["picture_column"]
+    s = {"type": "execution", "title": "Key visual", "blocks": [{"kind": "text", "text": "Role: x"}, {"kind": "copy", "lines": ["a"], "answer": "b", "basis": "creative"}]}
+    got = layouts._alternatives(lib, "picture_column", s, "review", frozenset({"picture"}), [])
+    assert all(layouts._draws_image(lib[a]) for a in got), got
+    assert any(not layouts._draws_image(lib[a]) for a in layouts._alternatives(lib, "picture_column", s, "review", frozenset(), []))   # with no picture ready the menu is as before
+    assert layouts._draws_image(pc) and got
+
+
 def test_variety_never_moves_a_slide_whose_picture_is_made_onto_a_layout_that_draws_none(monkeypatch):
     """The UAT packshot slide held its picture but was swapped to the flow layout ('too few families in ten slides'), which has no picture box."""
     import gzip
@@ -173,7 +187,7 @@ def test_variety_never_moves_a_slide_whose_picture_is_made_onto_a_layout_that_dr
 
 
 # ---------------------------------------------------------------------------------------------------------- frames slides: nothing overlaps
-def _frames_deck(tmp_path, monkeypatch):
+def _frames_deck(tmp_path, monkeypatch, column=False):
     """The real UAT deck's presented story (fixtures/production_deck_story.json.gz: key visual, out of home, storyboard, packshot), planned and
     rendered to a pptx and an html with grey stand-in pictures at each asset's own aspect."""
     import gzip
@@ -185,6 +199,10 @@ def _frames_deck(tmp_path, monkeypatch):
         monkeypatch.setattr(spec, name, True)
     deck = json.loads(gzip.open(HERE / "fixtures" / "production_deck_story.json.gz", "rt").read())
     deck, _issues, _pending = layouts.plan(deck, prefs={"density": "lean"})
+    if column:   # the plan may pick a picture-column layout for a frames slide (the UAT deck's did): the web deck must still give the frames the foot
+        for sl in deck["slides"].values():
+            if sl.get("ooh") or sl.get("strip"):
+                sl["layout"] = {**sl["layout"], "id": "picture_column"}
     pics = {}
     for aid, a in deck["assets"].items():
         k = 240 / max(a["width"], a["height"])
@@ -204,6 +222,7 @@ def _hit(a, b, tol=0.02):
 
 
 FRAME_SLIDES = ("Key visual", "Out of home", "Storyboard frames", "Packshot")
+is_frame = lambda sl: sl["type"] == "execution" and sl["title"].startswith(FRAME_SLIDES)   # noqa: E731
 
 
 def test_in_the_pptx_no_text_box_meets_a_picture_or_a_frame_and_none_leaves_the_slide(tmp_path, monkeypatch):
@@ -212,7 +231,7 @@ def test_in_the_pptx_no_text_box_meets_a_picture_or_a_frame_and_none_leaves_the_
     from pptx.util import Emu
     prs = Presentation(str(out))
     W, H = Emu(prs.slide_width).inches, Emu(prs.slide_height).inches
-    ids = [sid for sid in deck["order"] if deck["slides"][sid]["title"] in FRAME_SLIDES and deck["slides"][sid]["type"] == "execution"]
+    ids = [sid for sid in deck["order"] if is_frame(deck["slides"][sid])]
     assert len(ids) == 4, ids
     for sid in ids:
         sl = prs.slides[deck["order"].index(sid)]
@@ -238,7 +257,8 @@ rows.push([e.tagName,e.className&&e.className.baseVal===undefined?e.className:''
 document.body.setAttribute('data-m',JSON.stringify(out));},600));</script>"""
 
 
-def test_on_the_web_deck_no_text_meets_a_picture_or_a_frame_and_none_is_cut_off(tmp_path, monkeypatch):
+@pytest.mark.parametrize("column", [False, True])
+def test_on_the_web_deck_no_text_meets_a_picture_or_a_frame_and_none_is_cut_off(tmp_path, monkeypatch, column):
     import html as H
     import json
     import os
@@ -248,8 +268,8 @@ def test_on_the_web_deck_no_text_meets_a_picture_or_a_frame_and_none_is_cut_off(
     chrome = shutil.which("chromium") or shutil.which("google-chrome") or shutil.which("chromium-browser")
     if not chrome:
         pytest.skip("no headless browser to measure the web deck with")
-    deck, _out, page = _frames_deck(tmp_path, monkeypatch)
-    ids = [sid for sid in deck["order"] if deck["slides"][sid]["title"] in FRAME_SLIDES and deck["slides"][sid]["type"] == "execution"]
+    deck, _out, page = _frames_deck(tmp_path, monkeypatch, column)
+    ids = [sid for sid in deck["order"] if is_frame(deck["slides"][sid])]
     src = page.read_text().replace("</body>", MEASURE_JS % json.dumps(ids) + "</body>")
     measured = tmp_path / "m.html"
     measured.write_text(src)

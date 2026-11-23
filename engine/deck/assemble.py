@@ -630,11 +630,15 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
                         claims=[{"text": d["idea"], "refs": [], "basis": "creative"}], status="drafted", slots=pictures.get("idea")))
     # 11. Executions
     for x in d.get("executions", []):
+        # A deck made from a Production project is the pictures: the line saying which half of the insight an execution dramatises is the
+        # agency's reasoning, not the room's, and it kept the picture column too full to hold its picture. It stays, in the notes.
+        ans = "" if production else x["answer"]
         S.append(_slide("execution", x["channel"][:1].upper() + x["channel"][1:],
                         [{"kind": "text", "text": "Role: " + x["role"]},
-                         {"kind": "copy", "lines": x["copy"], "answer": x["answer"], "basis": "creative"}],
+                         {"kind": "copy", "lines": x["copy"], "answer": ans, "basis": "creative"}],
                         claims=[{"text": " / ".join(x["copy"]), "refs": [], "basis": "creative"}], status="drafted",
-                        visual=x.get("visual"), label=f"Execution {x['channel'][:60]}"))
+                        visual=x.get("visual"), label=f"Execution {x['channel'][:60]}",
+                        notes=f"What it dramatises: {x['answer']}" if production and x.get("answer") else ""))
     # 12. Channel roles
     if d.get("channel_roles"):
         rows = [["Channel", "Its one job"]] + [[r["channel"], r["role"]] for r in d["channel_roles"]]

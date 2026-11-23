@@ -690,6 +690,8 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
         lay = s.get("layout") or {}
         planned = bool(lay.get("blocks_sha") and lay["blocks_sha"] == blocks_sha(s, audience))
         v3lid = lay["id"] if (v3 and planned and lay.get("id") in _web_ids()) else None
+        if pic_cls in ("pic-ooh", "pic-sb"):   # frames of its own (out of home, a storyboard strip) take the slide's foot: a layout that sets its own picture column cannot share it
+            v3lid = None
         if v3lid in GRAPHICS_WEB and spec.GRAPHICS:   # a chart or diagram the slide cannot hold here: the blocks as before
             probe = _Slide(inp)
             probe.icons = b.icons
@@ -780,8 +782,8 @@ FRAME_CSS = """
 .ooh-row{left:112px;right:112px;bottom:70px;display:flex;justify-content:center;align-items:flex-end;gap:56px}
 .ooh-cell{display:flex;flex-direction:column;align-items:stretch}.ooh-cell .pic.framed{box-sizing:border-box}
 .ooh-name{margin:14px 0 0;text-align:center;font:700 26px/1.2 var(--head);color:var(--ink)}
-.pic-ooh .sb-pills{top:440px}.pic-ooh .body{padding-bottom:600px}.pic-ooh .body.exec{grid-template-columns:5fr 6fr}.pic-ooh .body.exec .copy{max-height:180px;overflow:hidden}
-.pic-sb .body{padding-bottom:470px}.pic-sb .body.exec{grid-template-columns:5fr 6fr}.pic-sb .body.exec .copy{max-height:230px;overflow:hidden}
+.pic-ooh .sb-pills{top:440px}.pic-ooh .body{padding-bottom:600px}.pic-ooh .body.exec{grid-template-columns:5fr 6fr}
+.pic-sb .body{padding-bottom:470px}.pic-sb .body.exec{grid-template-columns:5fr 6fr}
 """
 
 #: Picture styles: added to the stylesheet ONLY when a picture is drawn, so a deck with none keeps its exact bytes.

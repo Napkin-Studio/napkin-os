@@ -1162,7 +1162,9 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
             switched = None
             if lid != "flow" and look and not (sid in swaps and by[sid] == "person"):
                 rule_text = pick(base, aud, lib, frozenset())   # a picture layout that does not fit gives way to what the rules choose without the picture
-                cands = ([rule_text] if rule_text != lid and rule_text in lib and image_slots(lib[lid]) else []) + _alternatives(lib, lid, base, aud, ready.get(sid, frozenset()), f.get("avoid", []))
+                made = any(isinstance(v, dict) and (v.get("image") or {}).get("status") in ("made", "flagged") and ((v.get("image") or {}).get("from") or {}).get("kind") == "production"
+                           for v in (s.get("slots") or {}).values())   # a finished picture from Production is never given up for the rules' pick without one
+                cands = ([rule_text] if rule_text != lid and rule_text in lib and image_slots(lib[lid]) and not made else []) + _alternatives(lib, lid, base, aud, ready.get(sid, frozenset()), f.get("avoid", []))
                 for a in cands:
                     ra = probe({**sl_, "blocks": shown}, a, cap=sc_cap, stamped=pt.get(a))
                     if ra["ok"] and not ra["relaxed"] and (pt.get(a) is None or R.title_fits(s["title"], pt.get(a))):
@@ -1375,6 +1377,11 @@ def _bind(lib, lid, sl_, aud):
     return bind(lay, sl_, spec.shown_blocks(sl_, aud))
 
 
+def _draws_image(lay: dict) -> bool:
+    """True when the layout has a picture slot."""
+    return any(sl.get("kind") == "image" for sl in (lay.get("slots") or {}).values())
+
+
 def _alternatives(lib, lid, s, aud, ready, avoid, probe=None) -> list:
     """The layout's own alternatives first, then the others that accept the slide (same purpose first, then priority); with
     ``probe``, only those that fit at as_is or shrink; at most 4. This is the swap menu."""
@@ -1390,6 +1397,8 @@ def _alternatives(lib, lid, s, aud, ready, avoid, probe=None) -> list:
             continue
         if not accepts(lib[a], s, bl, ready):
             continue
+        if ready and _draws_image(lay) and not _draws_image(lib[a]):
+            continue   # a made picture is never swapped out for a layout with no picture box
         if probe is not None and not probe(a):
             continue
         out.append(a)
