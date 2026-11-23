@@ -36,10 +36,6 @@ export const TOOLS: readonly Tool[] = [
 
 export const toolById = (id: string): Tool | undefined => TOOLS.find(t => t.id === id)
 
-/** The tool an app id belongs to. */
-export const toolOfApp = (appId: string | null | undefined): Tool | undefined =>
-  appId ? TOOLS.find(t => t.appId === appId) ?? (appId === PRODUCTION_APP_ID ? TOOLS.find(t => t.id === 'prod') : undefined) : undefined
-
 /** A tool is live when it has an app and that app is installed; otherwise it is "Soon". */
 export function isLive(tool: Tool, installed: readonly Pick<InstalledApp, 'app_id'>[]): boolean {
   return tool.appId !== null && installed.some(a => a.app_id === tool.appId)
@@ -55,6 +51,11 @@ export const productionDocUrl = (docId: string): string => `${PRODUCTION_PATH}?d
  *  but the Production Tool edits them: they open at /production/?doc=<id>, never in the shell. It is not a tile to
  *  launch, and Continue in offers it only where the server serves the tool. */
 export const PRODUCTION_APP_ID = 'ie.napkin.production'
+
+/** The tool an app id belongs to. Production has no tile (it is not an app the shell launches), but its projects
+ *  are Production documents: they file under Production, never under Other. */
+export const toolOfApp = (appId: string | null | undefined): Tool | undefined =>
+  appId === PRODUCTION_APP_ID ? toolById('prod') : appId ? TOOLS.find(t => t.appId === appId) : undefined
 
 /** Where a tool opens with a full page load, outside the shell (Prod: the Production Tool), or null
  *  when it opens as the shell's own tool page. From a client's dial it carries that client (`?client=`), so the
