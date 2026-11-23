@@ -9,6 +9,7 @@
 // Brand Clan card and the decisions on record. No tool wheel: 1 to 4 open a
 // tool's own page, as the wheel's number keys did.
 
+import { readableInk } from '../agency/palette'
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKey } from 'react'
 import type { ClientRecord, LibraryItem } from '../../host'
 import { activityOfItem, needsYou, strongest } from '../landing/model'
@@ -139,7 +140,7 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
       <div className="studio-shell">
         <main id="view-client">
           <header className="cp-head">
-            <span className="cl-disc cp-disc" style={{ ['--cl' as string]: look.cl, ['--cl-ink' as string]: look.ink }}>
+            <span className="cl-disc cp-disc" style={{ ['--cl' as string]: look.cl, ['--cl-ink' as string]: readableInk(look.cl, look.ink) }}>
               {/* the mock's flat disc: the client's colour and monogram (the desk keeps its circles) */}
               <b>{monogramOf(c)}</b>
             </span>

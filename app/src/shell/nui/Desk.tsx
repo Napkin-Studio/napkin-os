@@ -13,6 +13,7 @@
 // Keyboard: the circles are one tab stop (arrows, Home and End rove them),
 // Enter opens a circle's dial, 1 to 4 pick a quadrant, Escape closes it.
 
+import { readableInk } from '../agency/palette'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import type { ClientRecord, LegacyName } from '../../host'
 import { ACTIVITY_WORD, adoptLabel, agencySummary, countsLine, matches, pageOf } from '../landing/model'
@@ -337,7 +338,7 @@ function ClientCircle({ c, tab, open, onFocus, onClick }: {
   return (
     <button type="button" className={`cl-circle${open ? ' is-open' : ''}`} data-client={c.id} aria-pressed={open} tabIndex={tab ? 0 : -1}
       aria-label={said} data-testid="client-circle" data-activity={c.summary.activity} onFocus={onFocus} onClick={e => onClick(e.currentTarget, e.detail === 0)}>
-      <span className="cl-disc" style={{ ['--cl' as string]: c.look.cl, ['--cl-ink' as string]: c.look.ink }}>
+      <span className="cl-disc" style={{ ['--cl' as string]: c.look.cl, ['--cl-ink' as string]: readableInk(c.look.cl, c.look.ink) }}>
         <svg viewBox="0 0 116 116" aria-hidden><circle cx="58" cy="58" r="52" className="cl-track" /></svg>
         <b>{c.mono}</b>
         {c.badge > 0 && <span className="cl-badge" data-testid="needs-badge">{c.badge}</span>}
