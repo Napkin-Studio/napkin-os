@@ -13,7 +13,7 @@ export { expect }
  *  console message about one, appended to $PC_STATE/csp-violations.jsonl with the test's title. Nothing fails on it
  *  here: the walk lists them (report-only exists to show what an enforced policy would break). */
 export const test = base.extend({
-  page: async ({ page }, use, info) => {
+  page: async ({ page }, run, info) => {
     const file = `${process.env.PC_STATE || '/tmp/claude-1000/pc-t-state'}/csp-violations.jsonl`
     const note = (kind: string, v: unknown) => {
       try {
@@ -30,7 +30,7 @@ export const test = base.extend({
       })
     })
     page.on('console', (m) => { if (/content security policy/i.test(m.text())) note('console', { text: m.text().slice(0, 300) }) })
-    await use(page)
+    await run(page)
   },
 })
 export const here = dirname(fileURLToPath(import.meta.url))
