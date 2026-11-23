@@ -48,6 +48,23 @@ describe('stitchInput', () => {
     expect(input.clips![2]).toMatchObject({ asset: { sha256: SHA('c') }, trimS: 4 })
   })
 
+  it('leaves the studio card its 2.5 s inside the length when the shots were cut to the target (UAT 2026-11-22: 15 s rendered 17.3 s)', async () => {
+    const { d, shots, deps } = made()
+    const sb = Object.values(d.storyboards)[0]
+    sb.target_s = 9 // the shots add to 9 s
+    const { input } = await stitchInput(deps)
+    const slots = input.clips!.map((c) => c.trimS!)
+    expect(slots.reduce((a, b) => a + b, 0) + 2.5).toBeCloseTo(9, 2)
+    expect(slots[0] / shots[0].duration_s).toBeCloseTo(slots[2] / shots[2].duration_s, 2) // every shot shrinks by the same share
+  })
+
+  it('does not touch shots that were cut well away from the target', async () => {
+    const { d, deps } = made()
+    Object.values(d.storyboards)[0].target_s = 30
+    const { input } = await stitchInput(deps)
+    expect(input.clips!.map((c) => c.trimS)).toEqual([3, 2, 4])
+  })
+
   it('sends each clip\'s in and out points as inS and outS', async () => {
     const { d, shots, deps } = made()
     Object.assign(itemOf(d, shots[0]), { in_s: 1.5, out_s: 4 })

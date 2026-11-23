@@ -27,6 +27,7 @@ import { isStill, loadPreviewMuted, savePreviewMuted, useAssetUrl } from './medi
 import type { RoomData, Selection } from './Rooms'
 import { Timeline, type Picked } from './Timeline'
 import { dismissedTakes, newerTake, readCut, renderPlan, whereWords } from './timeline'
+import { END_CARD_S, fitCardInside } from './cardInside'
 import { compileWithEndLine } from './endLine'
 import { Viewer } from './Viewer'
 import { DownloadButton } from '../ui/Download'
@@ -348,10 +349,20 @@ export function RenderAd({ data }: { data: RoomData }) {
     else if (c.transition) checks.push({ text: `The ${c.transition.kind === 'dissolve' ? 'dissolve' : 'dip'} into ${n ? `shot ${n}` : 'a clip'} has enough footage`, ok: true })
   }
   if (!cut.endCard) checks.push({ text: 'No end card of your own: the film ends on the studio card', ok: true })
+  else if (!cut.endCard.cta?.trim()) checks.push({ text: 'The end card has no legal line or call to action. Add one in the card\u2019s settings if the client needs it', ok: false })
   // The cut against the length it is for (live test 2026-11-18: a 9.8 s cut of a 15 s film went unmentioned).
   const target = storyboardOfVideo(doc, data.videoId)?.target_s ?? doc.videos[data.videoId]?.target_s
   const off = target && plan.lengthS ? Math.round((plan.lengthS - target) * 10) / 10 : 0
   if (Math.abs(off) >= 0.5) checks.push({ text: `The cut is ${Math.round(plan.lengthS * 10) / 10} s: ${Math.abs(off)} s ${off < 0 ? 'short of' : 'over'} the ${target} s it is for`, ok: false })
+  // The studio card sits inside the length (UAT 2026-11-22: a 15 s ad rendered 17.3 s): a film cut to its target is played a little
+  // faster so the film and the studio card last the target.
+  const fitted = fitCardInside(plan, target)
+  if (fitted) {
+    const pct = Math.round((1 / fitted.scale - 1) * 100)
+    checks.push(fitted.shortOfS > 0.05
+      ? { text: `The studio card takes ${END_CARD_S} s of the ${target} s: the clips play ${pct}% faster, as fast as the render allows, and the ad is still ${fitted.shortOfS.toFixed(1)} s over`, ok: false }
+      : { text: `The studio card sits inside the ${target} s: the clips play ${pct}% faster so the ad lasts ${Math.round(fitted.renderS * 10) / 10} s`, ok: true })
+  }
   // The render keeps each clip's own sound (stitch/timeline.py, owner 2026-11-18) until Sound mixes one.
   checks.push({ text: 'The render keeps each clip\u2019s own sound; music and voice come with Sound', ok: true })
   // A line or voice-over no clip voices is said before the render, not found after it (UAT 2026-11-21, F8: the
@@ -365,7 +376,7 @@ export function RenderAd({ data }: { data: RoomData }) {
   const go = () => send(async () => {
     setError(null)
     try {
-      const timeline = await renderPlan(plan, (sha) => assetRef(relay, sha, doc))
+      const timeline = await renderPlan(fitted?.plan ?? plan, (sha) => assetRef(relay, sha, doc))
       const parents = [...new Set(plan.clips.map((c) => (c.generation_id ? doc.generations[c.generation_id]?.job_id : undefined)).filter((x): x is string => !!x))]
       await runner.submit('stitch', { timeline, ratio: data.ratio as never }, parents, { for: 'stitch', videoId: data.videoId })
       setOpen(false)
@@ -384,7 +395,7 @@ export function RenderAd({ data }: { data: RoomData }) {
         <ul className="rm-checklist">
           {checks.map((c) => <li key={c.text} className={c.ok ? 'ok' : 'warn'}><span aria-hidden="true">{c.ok ? '✓' : '!'}</span><span className="rm-clamp2" title={c.text}>{c.text}</span></li>)}
         </ul>
-        <p className="rm-faint">The film is {plan.lengthS.toFixed(1)} s, then the studio card.</p>
+        <p className="rm-faint">{fitted && fitted.shortOfS <= 0.05 ? `The ad lasts ${(Math.round(fitted.renderS * 10) / 10).toFixed(1)} s, the studio card included.` : `The film is ${plan.lengthS.toFixed(1)} s, then the studio card.`}</p>
         {error && <div role="alert" className="rm-error">{error}</div>}
         <div className="rm-row end">
           <button type="button" className="btn" onClick={close}>Back to the cut</button>
