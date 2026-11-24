@@ -143,8 +143,18 @@ export class Shell {
   async rename(id: string, name: string): Promise<void> {
     await this.index.rename(id, name)
     const session = this.state.session
-    if (session?.id !== id) return
     const n = name.trim().replace(/\s+/g, ' ').slice(0, 80)
+    if (session?.id !== id) {
+      // Not open here: the host renames its copy, so the library and the Trash say the same name as this list
+      // (UAT round 4: "Copperell Refill 2" in the trash dialog, "Copperell Refill" in the Trash). Blank goes back to
+      // naming itself, which the film does again when it next opens.
+      const { server, relay } = this.deps
+      const entry = this.index.get(id)
+      if (n && entry?.server && server?.signedIn && relay.kind === 'http') {
+        await server.rename(id, n).catch((e) => console.warn('could not name the library document', e))
+      }
+      return
+    }
     const doc = session.services.doc
     if (doc.get().project.title === (n || UNTITLED_TITLE)) return
     await updateDoc(doc, (d) => { d.project.title = n || UNTITLED_TITLE }, n ? `rename the film to ${n}` : 'let the film name itself')

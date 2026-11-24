@@ -24,7 +24,7 @@ import type { ProjectIndex } from './projectIndex'
 import type { ProjectServer } from './server'
 import { readBase, ServerCopy } from './serverCopy'
 import { canvasKeyFor, clanDbFor, uiKeyFor, type ProjectStorage } from './storage'
-import { autoName, summarise } from './summary'
+import { UNTITLED, autoName, summarise } from './summary'
 import { ProjectUiStore } from './uiStore'
 
 /** How often the project is sent to the server when it changed. */
@@ -163,9 +163,17 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
   const initialCanvas = (await storage.get<CanvasSnapshot>(canvasKey)) ?? null
 
   // Home's card follows the project: its stage, counts, picture and (until renamed) its name.
+  // The library's title follows the same name as Home's list, numbering included ("Copperell Refill 2" when another
+  // film named itself the same): UAT round 4, the trash dialog read the list and the Trash read the library.
+  let titled = index.serverName(id)
   const record = async (changed = true) => {
     const d = doc.get()
     await index.touch(id, summarise(d, ui.get()), { name: autoName(d), changed })
+    const name = index.get(id)?.name?.trim()
+    if (clan && name && name !== UNTITLED && name !== titled && (titled !== undefined || index.get(id)?.server)) {
+      titled = name
+      await clan.setTitle(name).catch((e) => console.warn('could not name the library document', e))
+    }
   }
   let timer: ReturnType<typeof setTimeout> | null = null
   let changedSinceOpen = false
