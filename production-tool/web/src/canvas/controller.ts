@@ -8,7 +8,7 @@
 import type { CanvasAdapter, CanvasAsset } from './core/canvasAdapter'
 import {
   AGENCY_SHELF, type Ask, type Aspect, type CustomData, type Job, type JobInput, type JobInputRef, type Key, type LibraryEntry, type Mime, type NamedRef,
-  type ProductionDocument, type Ratio, type RefRole, type Variant, type View, type ModelChoice,
+  type BoardPurpose, type ProductionDocument, type Ratio, type RefRole, type Variant, type View, type ModelChoice,
 } from '../contracts/types'
 import type { Services } from '../app/context'
 import { getBlob, putBlob, putBlobAs } from '../lib/blobs'
@@ -149,6 +149,14 @@ export class CanvasController {
   private doc(): ProductionDocument {
     this.reportLife()
     return liveGet(this.s.doc)
+  }
+
+  /** The purpose of the board a node sits on (Brand, Products…), if it sits on one. */
+  boardPurposeOf(nodeId: string): BoardPurpose | undefined {
+    const els = this.els()
+    const frame = boardFrame(els, byOwnId(els, nodeId)?.frameId)
+    const id = (frame?.customData as { id?: string } | undefined)?.id
+    return id ? this.doc().boards?.[id]?.purpose : undefined
   }
 
   /** The element of a node (pic, drawn, note or gen) by its node id. */

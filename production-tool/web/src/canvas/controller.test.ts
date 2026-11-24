@@ -351,6 +351,22 @@ describe('"Deleted · Undo" lands clear of what is still there (UAT round 4 F16)
   })
 })
 
+describe('the board a picture sits on (UAT round 4 F19)', () => {
+  it('says the board’s purpose, so naming on the Brand board starts from logo', async () => {
+    const bid = 'board_01K7A00000000000000000BRD1'
+    await systemUpdate(t.doc, (d) => {
+      d.boards = { ...(d.boards ?? {}), [bid]: { id: bid, v: 1, field_v: {}, title: 'Brand', purpose: 'brand', rank: 'a0' } }
+    }, 'sync')
+    t.canvas.els = [
+      { id: 'BF', type: 'frame', x: 0, y: 0, width: 600, height: 400, isDeleted: false, frameId: null, customData: { kind: 'board', id: bid } } as unknown as El,
+      { id: 'L', type: 'image', x: 40, y: 40, width: 200, height: 80, isDeleted: false, frameId: 'BF', customData: { kind: 'pic', id: 'node_logo', asset: SHA('l') } } as unknown as El,
+      { id: 'X', type: 'image', x: 900, y: 0, width: 200, height: 80, isDeleted: false, frameId: null, customData: { kind: 'pic', id: 'node_free', asset: SHA('x') } } as unknown as El,
+    ]
+    expect(t.ctrl.boardPurposeOf('node_logo')).toBe('brand')
+    expect(t.ctrl.boardPurposeOf('node_free')).toBeUndefined()
+  })
+})
+
 /** Maya's front (896×1120), named, on the canvas as node_f. */
 async function mayaFront(t: ReturnType<typeof setup>) {
   await systemUpdate(t.doc, (d: ProductionDocument) => {
