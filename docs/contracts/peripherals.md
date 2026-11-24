@@ -480,7 +480,7 @@ accepted and trimmed (as `ResearchPort` does today).
 |---|---|
 | `query` | required, 1–500 characters after whitespace is collapsed. A research **question**: brand, comparator and category names, the lens's question. Never material text — the middleware does not send the client's words to a web search |
 | `lens` | required, one of the eight lenses (`campaign-clan.md` §7) |
-| `market` | required, ISO 3166-1 alpha-2; uppercased by the service; `UK` is refused (the UK is `GB`) |
+| `market` | required, ISO 3166-1 alpha-2; uppercased by the service; `UK` is refused (the UK is `GB`). Required, but `""` is accepted for an open look-up that names no market (a Territories look-up on a brief that has none): the service then searches on the question alone |
 | `entity` | optional, `^(brand\|org\|category)/[a-z0-9][a-z0-9._-]*$` — steers the search only |
 | `category` | optional, a leaf code `<vertical>.<leaf>` — steers the search only |
 | `max_sources` | optional, 1–20; the service default is 8. **The middleware always sends it** (today 6), so no behaviour depends on a default |
