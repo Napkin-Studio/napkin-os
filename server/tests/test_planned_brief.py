@@ -795,6 +795,26 @@ def test_a_redraft_keeps_the_open_questions_the_planner_answered(tmp_path):
     assert not [q for q in now[2:] if q.split(" — ")[0] == asked[0].split(" — ")[0]], "the answered question is not asked again"
 
 
+def test_a_redraft_carries_the_line_the_planner_fixed_into_mandatories(tmp_path):
+    """UAT round 4 (Copperell): the board's line, answered "use it word for word everywhere", stayed in the answer only,
+    so Production's end card and the deck had no field to read it from. A redraft puts it in mandatories as the end line."""
+    s = Server(tmp_path, model=planned_model({}), retrieval=retrieval(), settings_kw={"brief_flow": "planned"})
+    try:
+        host = Host()
+        run(s, host, inp={"prompt": THIN, "attachments": []})
+        host.data["open_questions"] = ["Which line does the board prefer, 'Clean, without the plastic' or 'Refill. Not landfill'? — "
+                                       "Answer: Refill. Not landfill. Use it word for word everywhere."] + list(host.data["open_questions"])
+        host.chain.insert(0, {"id": "d_HUMAN00011", "kind": "edit", "actor": "human:shrey", "agent": "human:shrey",
+                              "action": "answer an open question", "targets": [f"{DOC}#open_questions"],
+                              "timestamp": "2026-11-12T10:00:00Z"})
+        replies = run(s, host, inp={"prompt": THIN, "attachments": [], "intake": False, "redraft": True})
+    finally:
+        s.stop()
+    props = {p["field"]: p["value"] for p in replies[-1]["result"]["proposals"]}
+    mands = props.get("mandatories") or host.data["mandatories"]
+    assert "End line: 'Refill. Not landfill.' (word for word)" in mands
+
+
 def test_input_redraft_must_be_a_boolean(tmp_path):
     s = Server(tmp_path, model=planned_model({}), retrieval=retrieval(), settings_kw={"brief_flow": "planned"})
     try:
