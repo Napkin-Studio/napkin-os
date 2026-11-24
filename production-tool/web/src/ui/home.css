@@ -83,3 +83,7 @@
   .pp-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 600px) { .film-cards { grid-template-columns: 1fr; } }
+
+/* "Moved to Trash · Undo" (UAT round 4 F13), as the shell's Trash toast: bottom centre, ink pill, white words. */
+.pp-toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 420; display: flex; align-items: center; gap: 16px; padding: 11px 14px 11px 18px; background: var(--ink); color: var(--paper); border-radius: 999px; font: 14px var(--font-ui, inherit); box-shadow: var(--shadow-pop); }
+.pp-toast button { background: none; border: 0; color: inherit; font: 600 14px var(--font-ui, inherit); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; padding: 2px 4px; }

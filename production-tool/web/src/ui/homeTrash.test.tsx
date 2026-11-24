@@ -24,14 +24,52 @@ const entry: ProjectEntry = {
   summary: { stage: 'storyboard', pictures: 0, shots: 3, behind: 0, adSeconds: null, active: 0, shas: [] },
 }
 
-function card(menu = true) {
+function card(menu = true, extra: Partial<Parameters<typeof ProjectCard>[0]> = {}, p: ProjectEntry = entry) {
   const remove = vi.fn(async () => {})
   const shell = { remove, open: vi.fn(), duplicate: vi.fn(), rename: vi.fn(), exportProject: vi.fn() } as unknown as Shell
   const el = document.body.appendChild(document.createElement('div'))
   root = createRoot(el)
-  act(() => root!.render(createElement(ShellContext.Provider, { value: shell }, createElement(ProjectCard, { p: entry, newerThere: false, menu, onMenu: () => {}, onError: () => {} }))))
+  act(() => root!.render(createElement(ShellContext.Provider, { value: shell }, createElement(ProjectCard, { p, newerThere: false, menu, onMenu: () => {}, onError: () => {}, ...extra }))))
   return { el, remove }
 }
+
+const trashIt = async (el: HTMLElement) => {
+  act(() => ([...el.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent === TRASH_LABEL) as HTMLElement).click())
+  await act(async () => { (el.querySelector('[role="alertdialog"]')!.querySelectorAll('button')[1] as HTMLElement).click() })
+}
+
+describe('after the move (UAT round 4 F13)', () => {
+  const saved: ProjectEntry = { ...entry, server: { etag: 'e', savedAt: '2026-11-22T10:00:00Z' } }
+  it('tells Home it went, restorable when the host has a copy, so Home drops the card and offers Undo', async () => {
+    const onTrashed = vi.fn()
+    const { el } = card(true, { restorable: true, onTrashed }, saved)
+    await trashIt(el)
+    expect(onTrashed).toHaveBeenCalledWith('p1', 'Hollow Oak', true)
+  })
+  it('a film never saved to the host is not restorable: no Undo to offer', async () => {
+    const onTrashed = vi.fn()
+    const { el } = card(true, { restorable: true, onTrashed })
+    await trashIt(el)
+    expect(onTrashed).toHaveBeenCalledWith('p1', 'Hollow Oak', false)
+  })
+})
+
+describe('where the card says it is kept (UAT round 4 F17)', () => {
+  const rowOf = (el: HTMLElement) => [...el.querySelectorAll('.kv span')].map((x) => x.textContent).join(' | ')
+  it('saved to the server, from this browser’s own record when the list was asked before the save', () => {
+    const { el } = card(false, { restorable: true }, { ...entry, server: { etag: 'e', savedAt: new Date(Date.now() - 60_000).toISOString() } })
+    expect(rowOf(el)).toMatch(/Server \| saved /)
+    expect(rowOf(el)).not.toContain('in this browser')
+  })
+  it('signed in but not saved yet says so, never "Kept · in this browser"', () => {
+    const { el } = card(false, { restorable: true })
+    expect(rowOf(el)).toContain('Server | not saved there yet')
+  })
+  it('with no server at all it is kept in this browser', () => {
+    const { el } = card(false)
+    expect(rowOf(el)).toContain('Kept | in this browser')
+  })
+})
 
 describe('the words', () => {
   it('say Trash and 30 days, never "from this browser"', () => {

@@ -6,6 +6,7 @@
 // tool, its title, who deleted it and for how long it can still come back. There is no permanent delete here.
 
 import type { ClientRecord, TrashItem } from '../../host/types'
+import { docTitle } from '../docTitle'
 import { clientLook, clientName, monogramOf } from './deskData'
 import { ToolIcon } from './icons'
 import { TrashToastView } from './TrashToast'
@@ -39,7 +40,8 @@ export function TrashPage({ client, agency, desk, state, onBack, now }: {
             <div className="cp-box">
               {state.loaded && state.rows.length === 0 && <p className="cp-trashnote" data-testid="trash-empty">Trash is empty. A document you move here waits for 30 days.</p>}
               {state.rows.map((r: TrashItem) => {
-                const title = r.title || 'Untitled'
+                // A new document still carries its tool's name as its title ("Brief Maker"): say what it is instead (UAT4 F14).
+                const title = docTitle(r.title, r.app_id).text
                 return (
                   <div key={`${r.path}@${r.trashed_at}`} className="cp-row" data-testid="trash-item">
                     <span className={`cp-ico k-${trashIcon(r.app_id)}`}><ToolIcon tool={trashIcon(r.app_id)} /></span>
