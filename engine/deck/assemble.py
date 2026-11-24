@@ -306,11 +306,46 @@ _LINE_WORDS = 10
 _PROMPT_LINE = re.compile(r"\b(?:one line|the line|campaign line|tagline|our line)\s*(?:is|:)\s*[\"'\u201c\u2018]?([^\n\"'\u201d\u2019]{3,80}?)[\"'\u201d\u2019]?\s*(?:$|\n|(?<=[.!?])\s)", re.I)
 
 
+# The brief's end line among its mandatories, read as Production's end card reads it (production-tool/web/src/brief/model.ts endLineOf
+# and lib/quotes.ts quoted): Brief Maker writes the board's chosen line there as "End line: '<line>' (word for word)" (UAT round 4, F4).
+_END_LINE = re.compile(r"\b(?:end(?:s|ing)?\s+(?:on|with)\s+(?:the\s+)?(?:line|words|super)|end[\s-]?line|sign[\s-]?off(?:\s+line)?|tag[\s-]?line|brand\s+line)\b"
+                       r"\s*(?:[:\-\u2013\u2014]\s*)?(.+)$", re.I)
+_LINE_VERB = re.compile(r"^(?:(?:must|should|will|shall)\s+(?:be|read|say)|reads?|says?|is|to\s+be|as|of)\b\s*[:\-\u2013\u2014]?\s*", re.I)
+_DOUBLE_Q = re.compile(r"[\"\u201c\u201e\u00ab]([^\"\u201c\u201d\u201e\u00ab\u00bb]+)(?:[\"\u201d\u00bb]|$)")
+_SINGLE_Q = re.compile(r"(?:^|[\s:(\u2013\u2014-])['\u2018](.+?)['\u2019](?=$|[\s.,;:!?)\u2013\u2014-])")
+
+
+def _quoted(text: str):
+    """The words inside the first pair of quotes (lib/quotes.ts quoted): double first, then single; None when nothing is quoted."""
+    t = str(text or "").strip()
+    hit = _DOUBLE_Q.search(t) or _SINGLE_Q.search(t)
+    words = hit.group(1).strip() if hit else ""
+    return words or None
+
+
+def end_line_of(mandatories) -> str:
+    """The line the brief says the work ends on, from its mandatories ("End line: 'Refill. Not landfill.' (word for word)", "Sign-off: ...",
+    "Tagline: ..."): the quoted words when quoted, else what follows the label and its verb. '' when it names none."""
+    items = mandatories if isinstance(mandatories, list) else ([mandatories] if mandatories else [])
+    for m in items:
+        hit = _END_LINE.search(str(m).strip())
+        if not hit:
+            continue
+        line = _quoted(hit.group(1)) or re.sub(r"^[\"'\u201c\u2018]+|[\"'\u201d\u2019]+$", "", _LINE_VERB.sub("", hit.group(1).strip())).strip()
+        if line:
+            return line[:200]
+    return ""
+
+
 def stated_line(inp) -> tuple:
-    """``(line, explicit)``: the campaign line the inputs state as a short line of its own. ``explicit`` is True for the prompt's 'One line: ...' (the
+    """``(line, explicit)``: the campaign line the inputs state as a short line of its own. ``explicit`` is True for the brief's end-line mandatory
+    ("End line: '...' (word for word)", read first) and the prompt's 'One line: ...' (the
     person said it: it is the line, whatever the idea stage wrote); False for the brief's single-minded proposition when it is one short line (a
     proposition is not always the creative line, so it only corrects a line that is that proposition grown or reworded). ('', False) when none.
     Round 3: a model wrote 'Proper crunch. Not sorry.' over the brief's 'Proper crunch.' and the founder had said to use only that line."""
+    end = end_line_of(((getattr(inp, "brief", None) or {}).get("mandatories") or {}).get("value"))
+    if end and len(end.split()) <= _LINE_WORDS:   # the brief's own end line, word for word (the board chose it): it is the line
+        return " ".join(end.split()), True
     m = _PROMPT_LINE.search(str(getattr(inp, "prompt_text", "") or ""))
     if m and len(m.group(1).split()) <= _LINE_WORDS:
         return " ".join(m.group(1).split()), True

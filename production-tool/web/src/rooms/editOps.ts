@@ -5,7 +5,7 @@ import type { ProductionDocument } from '../contracts/types'
 import type { DocumentStore } from '../doc/types'
 import { shotNumber } from '../model/selectors'
 import {
-  addText, applySwap, cutLength, moveV1, pack, planSwap, removeClip, removeText, setEndCard, setFades, setTransition, sortV1, split,
+  addText, applySwap, cutLength, fitToTarget, moveV1, pack, planSwap, removeClip, removeText, setEndCard, setFades, setTransition, sortV1, split,
   trimHead, trimTail, updateText, type Cut, type CutClip, type CutEndCard, type CutText, type SwapChoice, type Transition,
 } from './cut'
 import { boxName, inBox, shotWindow, type Box, type Gen } from './model'
@@ -45,13 +45,14 @@ export function appendTake(store: DocumentStore, d: ProductionDocument, data: Ro
 export function assembleFirstCut(store: DocumentStore, data: RoomData) {
   return writeCut(store, data.videoId, 'assemble the first cut', (_cut) => {
     const d = store.get()
-    const next = assemble(d, data.videoId, data.boxes, data.gens)
+    const made = assemble(d, data.videoId, data.boxes, data.gens)
     // The box a clip stands for is the run its take was made for, when there is one.
-    for (const c of next.v1) {
+    for (const c of made.v1) {
       const boxId = d.generations[c.genId]?.box_id
       c.follows = { ...(boxId ? { boxId } : {}), ...(c.follows?.shotId ? { shotId: c.follows.shotId } : {}) }
     }
-    return next
+    // The first cut fits the film's length, the end card included (UAT round 4 F22).
+    return fitToTarget(made, data.targetS)
   })
 }
 
@@ -81,8 +82,9 @@ export const editCut = {
   text: (store: DocumentStore, videoId: string, id: string, patch: Partial<Omit<CutText, 'id'>>) =>
     writeCut(store, videoId, 'edit text', (cut) => updateText(cut, id, patch)),
   removeText: (store: DocumentStore, videoId: string, id: string) => writeCut(store, videoId, 'remove text', (cut) => removeText(cut, id)),
-  endCard: (store: DocumentStore, videoId: string, patch: Partial<CutEndCard>) =>
-    writeCut(store, videoId, 'edit the end card', (cut) => (cut.endCard ? setEndCard(cut, patch) : { ...cut, endCard: { ...(endCardFrom(store.get(), videoId) ?? newEndCard(store.get(), videoId)), ...patch } })),
+  /** A new end card makes room for itself inside the target length (UAT round 4 F22); editing one changes only the card. */
+  endCard: (store: DocumentStore, videoId: string, patch: Partial<CutEndCard>, targetS?: number) =>
+    writeCut(store, videoId, 'edit the end card', (cut) => (cut.endCard ? setEndCard(cut, patch) : fitToTarget({ ...cut, endCard: { ...(endCardFrom(store.get(), videoId) ?? newEndCard(store.get(), videoId)), ...patch } }, targetS))),
   removeEndCard: (store: DocumentStore, videoId: string) => writeCut(store, videoId, 'remove the end card', (cut) => {
     const next = { ...cut }
     delete next.endCard

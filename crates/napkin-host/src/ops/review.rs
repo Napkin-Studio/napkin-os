@@ -876,6 +876,19 @@ pub fn verify(ctx: &Ctx, doc: &Document, finding: &str, rationale: &str) -> Host
     let mut m = Members::of(clan)?;
     let i = finding_index(&m.findings, finding)?;
     let mut f = to_json(&m.findings[i]);
+    // Verifying what is already verified is what the person asked for: it holds,
+    // nothing is written, and the reply names the decision that verified it
+    // (UAT round 4, F8: Keep on all findings then Lock said "Not saved").
+    if f.get("status").and_then(Value::as_str) == Some("verified") {
+        let decision = f
+            .pointer("/verification/decision")
+            .cloned()
+            .unwrap_or(Value::Null);
+        return Ok(Outcome::unchanged(serde_json::json!({
+            "ok": true, "decision": decision, "kind": "verify", "unchanged": true,
+            "targets": [address(&doc_id, &format!("findings[{finding}]"))],
+        })));
+    }
     still_proposed(&f, finding)?;
     let cites: Vec<String> = f
         .get("cites")

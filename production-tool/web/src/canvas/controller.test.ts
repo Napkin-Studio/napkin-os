@@ -33,7 +33,7 @@ import { describeWrite } from '../doc/describe'
 import { lineage } from '../model/lineage'
 import { purposeNode, purposeOf, purposeWords } from '../model/purpose'
 import { mockImageSize } from '../relay/mockRender'
-import { CanvasController, nodeSize } from './controller'
+import { CanvasController, nodeSize, undoSpot } from './controller'
 import type { CanvasAdapter, CanvasAsset, FrameIntent, ImageNodeIntent, RegionExport } from './core/canvasAdapter'
 import type { El } from './scene'
 
@@ -220,6 +220,26 @@ describe('Generate on a sketch area', () => {
     expect([t.canvas.exports[0].outW, t.canvas.exports[0].outH]).toEqual([1536, 804])
   })
 
+  it('a ratio named in the words wins over the area’s shape (UAT round 4 F15: "portrait 4:5" in a 16:9 area went 16:9)', async () => {
+    withFrame(t)
+    await t.ctrl.generate(['F'], 'Key visual, portrait 4:5: the bottle on a worktop')
+    const [s] = t.sent
+    expect(s.input.ratio).toBe('4:5')
+    expect(s.input.aspect).toBeUndefined()
+    // The area's drawing still goes as the layout, at the area's own shape.
+    expect(s.input.refs![0]).toMatchObject({ role: 'layout', kind: 'drawing' })
+    expect([t.canvas.exports[0].outW, t.canvas.exports[0].outH]).toEqual([1536, 864])
+    // The new node is placed at the asked shape.
+    const gen = t.canvas.els.find((e) => e.id === s.jobId)!
+    expect(gen.height / gen.width).toBeCloseTo(5 / 4, 2)
+  })
+
+  it('words naming the area’s own ratio change nothing', async () => {
+    withFrame(t)
+    await t.ctrl.generate(['F'], 'a 16:9 banner')
+    expect(t.sent[0].input.ratio).toBe('16:9')
+  })
+
   it('words typed inside the area go as words', async () => {
     withFrame(t)
     t.canvas.els.push(text('label', 40, 120, 'golden hour'))
@@ -294,6 +314,56 @@ describe('landing a sketch’s frame', () => {
     expect(frames[0].shot_id).toBeUndefined()
     const gen = t.canvas.els.find((e) => e.id === jobId)!
     expect(gen.height).toBe(Math.round((gen.width * 756) / 1344))
+  })
+})
+
+describe('landing a sketch’s frame at the ratio the words asked for (UAT round 4 F15)', () => {
+  it('cropped_to names the job’s 4:5, not the 16:9 area', async () => {
+    withFrame(t)
+    await t.ctrl.generate(['F'], 'Key visual, portrait 4:5')
+    const { jobId, purpose } = t.sent[0]
+    const sketchId = purpose.sketchId as string
+    await systemUpdate(t.doc, (d) => {
+      d.jobs[jobId] = { ...docJob(d, 'generate', [], SHA('e')), id: jobId, purpose: 'sketch', node: { kind: 'sketch', id: sketchId } }
+      d.assets[SHA('e')] = asset(SHA('e'), 'image', { w: 896, h: 1120 })
+    }, 'sync')
+    await putBlobAs(SHA('e'), new Blob(['png'], { type: 'image/png' }))
+    const out = { sha256: SHA('e'), url: 'https://cdn.test/out', mime: 'image/png', w: 896, h: 1120, croppedFrom: { w: 896, h: 1152 } }
+    await t.ctrl.land({ jobId, op: 'generate', state: 'completed', outputs: [out], kind: 'generated', crew: 'wren' } as unknown as Job)
+    const [frame] = Object.values(t.doc.get().frames)
+    expect(frame.cropped_to).toEqual({ from: { w: 896, h: 1152 }, to: { w: 4, h: 5 } })
+  })
+})
+
+describe('"Deleted · Undo" lands clear of what is still there (UAT round 4 F16)', () => {
+  it('the middle of what went, or just below a card that covers that spot', () => {
+    const b = { minX: 0, minY: 0, w: 200, h: 100 }
+    expect(undoSpot(b, [])).toEqual({ x: 100, y: 50 })
+    expect(undoSpot(b, [{ x: 400, y: 0, width: 100, height: 100 }])).toEqual({ x: 100, y: 50 })
+    expect(undoSpot(b, [{ x: 50, y: 20, width: 300, height: 140 }])).toEqual({ x: 100, y: 184 })
+  })
+  it('deleting an area under the Brief card puts the chip under the card', () => {
+    const area = { id: 'A', type: 'rectangle', x: 0, y: 0, width: 320, height: 180, isDeleted: false, frameId: null, customData: { kind: 'sketch', id: 'sketch_1' } } as unknown as El
+    const card = { id: 'B', type: 'rectangle', x: 40, y: 20, width: 240, height: 120, isDeleted: false, frameId: null, customData: { kind: 'brief', id: 'brief_1' } } as unknown as El
+    t.canvas.els = [area, card]
+    const out = t.ctrl.deleteElements(['A'])!
+    expect(out.at).toEqual({ x: 160, y: 164 })
+  })
+})
+
+describe('the board a picture sits on (UAT round 4 F19)', () => {
+  it('says the board’s purpose, so naming on the Brand board starts from logo', async () => {
+    const bid = 'board_01K7A00000000000000000BRD1'
+    await systemUpdate(t.doc, (d) => {
+      d.boards = { ...(d.boards ?? {}), [bid]: { id: bid, v: 1, field_v: {}, title: 'Brand', purpose: 'brand', rank: 'a0' } }
+    }, 'sync')
+    t.canvas.els = [
+      { id: 'BF', type: 'frame', x: 0, y: 0, width: 600, height: 400, isDeleted: false, frameId: null, customData: { kind: 'board', id: bid } } as unknown as El,
+      { id: 'L', type: 'image', x: 40, y: 40, width: 200, height: 80, isDeleted: false, frameId: 'BF', customData: { kind: 'pic', id: 'node_logo', asset: SHA('l') } } as unknown as El,
+      { id: 'X', type: 'image', x: 900, y: 0, width: 200, height: 80, isDeleted: false, frameId: null, customData: { kind: 'pic', id: 'node_free', asset: SHA('x') } } as unknown as El,
+    ]
+    expect(t.ctrl.boardPurposeOf('node_logo')).toBe('brand')
+    expect(t.ctrl.boardPurposeOf('node_free')).toBeUndefined()
   })
 })
 
