@@ -41,7 +41,6 @@ test('every step has its one primary as the Booth\'s first control, with what it
     [arrived, 'Find the insights', /About 40 seconds/],
     [pick, 'Explore \\d+ insights? →', /Usually 2 to 3 minutes/],
     [json('example/states/explore_back.json'), 'Review and greenlight →', /optional/],
-    [json('example/states/greenlight_open.json'), 'Send →', /Greenlight at least one route\./],
   ] as [Doc, string, RegExp][]) {
     const page = L.view(d, {}), h = slot(page)
     assert.equal(primaries(page), 1, `${label}: one primary on the page`)
@@ -50,6 +49,9 @@ test('every step has its one primary as the Booth\'s first control, with what it
     assert.doesNotMatch(head(page), /class="b pri/, 'the step header carries no button')
     assert.match(plain(h), words)
   }
+  // Greenlight has no button of its own: Continue in (the shell's, in the top bar) takes the greenlit routes on (owner, 2026-11-24)
+  const gp = L.view(json('example/states/greenlight_open.json'), {})
+  assert.equal(primaries(gp), 0); assert.match(plain(slot(gp)), /Greenlight at least one route\. Continue in, in the top bar, takes the greenlit ones on/); assert.ok(firstInBooth(gp))
   // disabled keeps its place and says why
   const none = json('example/states/pick.json'); none.focus.insights.forEach((i: Doc) => { i.ticked = false })
   assert.match(slot(L.view(none, {})), /disabled>Explore →<\/button><span class="why lock">Tick at least one insight/)
@@ -110,7 +112,7 @@ test('a route\'s World: its primary first in its Booth, the toggle as a link, an
   assert.doesNotMatch(off, /class="big" data-green/, 'no second toggle in the Booth')
   const on = JSON.parse(JSON.stringify(d)); on.greenlit = [{ territory_id: id, by: 'Shrey', at: '2026-11-24T10:00:00Z' }]
   const wh = slot(L.view(on, { world: id }))
-  assert.match(wh, /data-send>Send 1 greenlit →/); assert.match(wh, /class="lnk" data-green="t_started" aria-pressed="true">Take it off the list/)
+  assert.match(plain(wh), /This route is greenlit\. Continue in, in the top bar, takes it on\./); assert.doesNotMatch(wh, /data-send/); assert.match(wh, /class="lnk" data-green="t_started" aria-pressed="true">Take it off the list/)
   assert.match(off, /--t-bg-d:#[0-9a-f]{6};--t-ink-d:#[0-9a-f]{6}/)
   const dk = L.palDark({ bg: '#F4B942', ink: '#141413', soft: '#C9C0AE' })
   const lum = (h: string) => { const n = parseInt(h.slice(1), 16); return (0.299 * (n >> 16 & 255) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) / 255 }

@@ -1820,14 +1820,31 @@ var TerritoriesLogic = (function () {
       '<button type="button" class="b sm" data-dock="compare" aria-pressed="' + (ui.cmp ? 'true' : 'false') + '">Compare</button><button type="button" class="b sm" data-dock="rank" aria-pressed="false">Re-rank</button><span class="sp"></span>' +
       '<button type="button" class="b sm" data-dock="export" aria-pressed="false"' + (xw.ok ? '' : ' aria-disabled="true" title="' + esc(xw.why) + '"') + '>Export…</button></div>';
   }
-  /** Send, for the Greenlight header and the World header: on while a route is greenlit and nothing holds it, with why beside it. */
-  function sendAct(data, ui, label, quiet) {
-    var n = greenIds(data).length, asks = openAsks(data), covered = {}; asks.forEach(function (a) { covered[a.kind] = 1; });
-    var open = holds(data).filter(function (b) { return !covered[b.kind]; }), q = asks.length + open.length, can = n > 0 && !holds(data).length && !asks.length;
-    var w = glWords(ui.req), sending = w && /^send:/.test((ui.req && ui.req.key) || '');
-    var words = q ? 'Answer ' + (q === 1 ? 'the question' : 'the ' + q + ' questions') + ' first.' : !n ? 'Greenlight at least one route.' : can && !quiet ? 'Choose Production or Deck Maker next.' : '';
-    return '<button type="button" class="b pri lg" data-send' + (can ? '' : ' disabled') + '>' + esc(label || (n ? 'Send ' + plural(n, 'route') + ' →' : 'Send →')) + '</button>' +
-      why(sending ? w : words, sending && ui.req.state === 'failed' ? 'bad' : can ? '' : 'lock');
+  /** Continue in (owner, 2026-11-24: "Why a whole dialogue box for continue/send forward to and not just normal continue in just like
+   *  before in brief and research"). The shell's own Continue in, in the top bar, carries this document whole to Production or Deck Maker;
+   *  the greenlit routes are what they use. As in Research, Continue in is never blocked: what is not ready yet is said first (the bar's gate). */
+  function continueGate(data) {
+    var n = greenIds(data).length, asks = openAsks(data), hs = holds(data);
+    if (!developed(data).length) return '';
+    if (!n) return 'No route greenlit yet: Production and Deck Maker use the greenlit routes. You can still continue; they will say there is nothing to use.';
+    var first = hs.length ? text(hs[0].text) : asks.length ? text(asks[0].text) || 'A greenlit route has a question open in the Booth.' : '';
+    if (!first) return '';
+    var t = 'Not ready to go on yet: ' + first + ' You can still continue; it flags what is open.';
+    return t.length > 200 ? t.slice(0, 199) + '…' : t;
+  }
+  /** The words beside the step for Continue in (no button: the bar has it). */
+  function continueWhy(data) {
+    var n = greenIds(data).length, g = continueGate(data);
+    if (!n) return why('Greenlight at least one route. Continue in, in the top bar, takes the greenlit ones on to Production or Deck Maker.', 'lock');
+    return why(g ? g : 'Continue in, in the top bar, takes ' + (n === 1 ? 'it' : 'the ' + n + ' greenlit routes') + ' on to Production or Deck Maker.', g ? 'lock' : '');
+  }
+  /** What the shell's bar shows for Territories (clan:bar, app/src/shell/appBar.ts), as Brief and Research send it: the step while the engine
+   *  works, and the gate line Continue in begins with. */
+  function barItems(data, ui) {
+    var st = stageOf(data, ui || {}), job = ui && ui.job, busy = !!(job && BUSY_STATES[job.state]), out = [{ kind: 'run', working: busy }];
+    if (busy) out.push({ kind: 'mode', mode: 'working', label: /^explor/.test(st || '') ? 'Working · Explore' : 'Working · Pick' });
+    var g = continueGate(data); if (g && !busy) out.push({ kind: 'gate', label: g, tone: 'warn' });
+    return out;
   }
   /** Compare feel: every route's one touchpoint side by side, with its Greenlight toggle. */
   function compareGrid(data, ui) {
@@ -1855,7 +1872,7 @@ var TerritoriesLogic = (function () {
     var words = /^(ask:|review)/.test((ui.req && ui.req.key) || '') ? '' : glWords(ui.req), body;
     if (!all.length) body = '<div class="crew-empty" role="status">No route has been developed yet. They appear here, ranked, as the engine finishes them.</div>';
     else body = glTools(data, ui) + (ui.cmp ? compareGrid(data, ui) : rankedRows(data));
-    return '<article class="sheet">' + sheetHead('Step 3 of 3 · Greenlight', 'Developed, then chosen', 'Ranked by the blind judge. Open a route to see it as a world, or greenlight it from its row.', sendAct(data, ui)) +
+    return '<article class="sheet">' + sheetHead('Step 3 of 3 · Greenlight', 'Developed, then chosen', 'Ranked by the blind judge. Open a route to see it as a world, or greenlight it from its row.', continueWhy(data)) +
       '<div class="stats"><span>' + esc(plural(all.length, 'route')) + '</span><span>' + n + ' greenlit</span><span>' + esc(ranked + ' ranked by the blind judge') + '</span></div>' +
       '<div class="sheet-body">' + err + (words ? '<p class="runnote' + (ui.req && ui.req.state === 'failed' ? ' bad' : '') + '" role="status">' + esc(words) + '</p>' : '') + body + '</div></article>';
   }
@@ -1945,16 +1962,6 @@ var TerritoriesLogic = (function () {
       '<span class="psec-t">Rests on</span><div class="row">' + (arr(t.evidence).length ? arr(t.evidence).map(function (c) { return refChip(c, data); }).join('') : '<span class="meta">No evidence yet</span>') + '</div>' +
       (typeof TerritoriesPictures !== 'undefined' ? TerritoriesPictures.panel(t, {}) : '') +
       '<div class="row">' + glButton(t, on) + '<span class="meta">' + esc((m ? m.name + ' · ' : '') + (typeof t.rank === 'number' ? 'Judge #' + t.rank : 'Not ranked')) + '</span><span class="spacer"></span><button type="button" class="btn-rect" data-close>Close</button></div>' };
-  }
-  /** Send onward (the mock's send screens): choose where, then Send. Choosing alone sends nothing; the Send button names the place. */
-  function sendDialog(data, pick) {
-    var all = developed(data), ids = greenIds(data), names = ids.map(function (id) { var t = all.filter(function (x) { return x.id === id; })[0]; return t ? t.name : ''; }).filter(Boolean);
-    var rest = all.length - names.length, d0 = DESTS.filter(function (d) { return d.id === pick && d.built; })[0] || null;
-    return { title: 'Send ' + plural(names.length, 'route') + ' onward', closeInside: true, sans: true, html: '<p class="meta" style="margin:0">' + esc(_list(names)) + (names.length === 1 ? ' goes with its world, lines, checks and sources.' : ' go with their worlds, lines, checks and sources.') + '</p>' +
-      DESTS.map(function (d) {
-        return '<button type="button" class="wsrow opt' + (d0 && d0.id === d.id ? ' on' : '') + '" data-dest-pick="' + d.id + '" aria-pressed="' + (d0 && d0.id === d.id ? 'true' : 'false') + '"' + (d.built ? '' : ' disabled aria-disabled="true"') + '><span class="rd" aria-hidden="true"></span><span><b>' + esc(d.name) + '</b>' + (d.built ? '' : ' <span class="mark-undone">not built yet</span>') + '<br><span class="meta">' + esc(d.does) + '</span></span></button>'; }).join('') +
-      '<div class="row sendfoot">' + why(d0 ? (rest ? 'The other ' + plural(rest, 'route') + ' travel as routes not chosen.' : 'It opens ' + d0.name + ' when the send is through.') : 'Choose where it goes.', d0 ? '' : 'lock') + '<span class="spacer"></span><button type="button" class="b" data-close>Cancel</button>' +
-      (d0 ? priBtn('Send to ' + d0.name, 'data-dest="' + d0.id + '"') : priBtn('Send', '', { disabled: true })) + '</div>' };
   }
   function _list(a) { return a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]; }
   function rankDialog() {
@@ -2097,7 +2104,6 @@ var TerritoriesLogic = (function () {
 
   /** The window onto one source (a cite) or onto what arrived (brief, research, finds). Returns { title, html } or null. */
   function dialogFor(what, data) {
-    if (what === 'send' || /^send:/.test(what)) return sendDialog(data, what.split(':')[1] || '');
     if (what === 'rank') return rankDialog();
     if (/^(more|push):/.test(what) && typeof TerritoriesWorld !== 'undefined') return TerritoriesWorld.dialog(what, data);
     if (/^rights:/.test(what) && typeof TerritoriesPictures !== 'undefined') return TerritoriesPictures.dialog(what, data);
@@ -2228,27 +2234,12 @@ var TerritoriesLogic = (function () {
     }
     if (e.a === 'recheck') return { writes: [], toast: 'Checking the engine…', recheck: true };
     if (e.a === 'present') return developed(data).length ? { writes: [], present: 0 } : null;
-    if (e.a === 'send') {
-      var dest = DESTS.filter(function (d) { return d.id === e.to; })[0], ids = greenIds(data);
-      if (!dest) return null;
-      if (!dest.built) return { writes: [], toast: dest.name + ' is not built yet, so nothing was sent.' };
-      if (!ids.length) return { writes: [], toast: 'Greenlight at least one route first.' };
-      if (holds(data).length || openAsks(data).length) return { writes: [], toast: holds(data).length ? holds(data)[0].text : 'Answer the questions in the Booth first.' };
-      if (reqBusy(ui.req)) return { writes: [], toast: 'The last change is still going through.' };
-      var not = developed(data).map(function (x) { return x.id; }).filter(function (id) { return ids.indexOf(id) === -1; });
-      var sendRq = { key: 'send:' + dest.id, what: 'The send', input: { step: MOVES.send, to: dest.id, territory_ids: ids, not_chosen: not, by: by } };
-      // Deck Maker: the send is written into this document first; the host's spin-off (which only the shell can ask for) then carries it whole.
-      if (dest.continueIn) sendRq.continueIn = dest.continueIn;
-      // The gate is approved first when it is still open at greenlight (gates.approve replaces an older approval); the send follows once that is done.
-      if (isObj(run.gate) && run.gate.id === 'greenlight') return { writes: [], request: { key: sendRq.key, what: 'The approval', input: { step: MOVES.approve, gate: 'greenlight', by: by }, then: sendRq } };
-      return { writes: [], request: sendRq };
-    }
     return null;
   }
 
   return {
     putAct: putAct, takeAct: takeAct, actSlot: actSlot,
-    sendAct: sendAct, priBtn: priBtn, why: why, agentBlock: agentBlock, citeWords: citeWords, stageOf: stageOf, palDark: palDark,
+    continueGate: continueGate, barItems: barItems, priBtn: priBtn, why: why, agentBlock: agentBlock, citeWords: citeWords, stageOf: stageOf, palDark: palDark,
     MOVES: MOVES, DESTS: DESTS, developed: developed, greenIds: greenIds, greenGroups: greenGroups, gCard: gCard, touch: touch, scene: scene, greenlightSheet: greenlightSheet, greenlightBooth: greenlightBooth, holds: holds, openAsks: openAsks, askCard: askCard, glWords: glWords, brandOf: brandOf, headline: headline,
     // for the World view (territories-world-logic), which reads the same helpers
     esc: esc, text: text, plural: plural, pal: pal, tvars: tvars, refChip: refChip, crewOf: crewOf, byRank: byRank, sphere: sphere, roleName: roleName, derivedOf: derivedOf, reqBusy: reqBusy, CHECK_WORDS: CHECK_WORDS, CHECK_STATE: CHECK_STATE,
@@ -2376,7 +2367,7 @@ var TerritoriesWorld = (function () {
     var ft = feel(t, dialOf(t, ui)), all = order(data), i = all.indexOf(t), m = L.crewOf(data).filter(function (c) { return c.id === t.crew; })[0], wv = ui && ui.wview === 'wall' ? 'wall' : 'journey';
     var on = L.greenIds(data).indexOf(t.id) !== -1, n = L.greenIds(data).length;
     var act;
-    L.putAct(act = on ? L.sendAct(data, ui || {}, 'Send ' + n + ' greenlit →', true) + L.why('This route is greenlit.', 'ok') + '<button type="button" class="lnk" data-green="' + esc(t.id) + '" aria-pressed="true">Take it off the list</button>' :
+    L.putAct(act = on ? L.why('This route is greenlit. Continue in, in the top bar, takes it on.', 'ok') + '<button type="button" class="lnk" data-green="' + esc(t.id) + '" aria-pressed="true">Take it off the list</button>' :
       L.priBtn('Greenlight this route', 'data-green="' + esc(t.id) + '" aria-pressed="false"') + L.why('Then send it onward from here.'));
     return '<article class="sheet world' + ffOf(ft) + '" id="wsheet" style="' + L.tvars(ft) + '"><header class="whead2"><div><span class="weyebrow">Route ' + String(i + 1).padStart(2, '0') + (m ? ' · found by ' + esc(m.name) : '') +
       (typeof t.rank === 'number' ? ' · Judge #' + t.rank : '') + '</span>' +
@@ -3197,8 +3188,6 @@ var TerritoriesLookups = (function () {
     if (r.state === 'done' && r.after === 'frames') { r.after = null; refreshFrames(); }
     if (r.state === 'done' && r.startAfter) { r.startAfter = false; render(); startRun(); return; }
     if (r.state === 'done' && r.then) { var nx = r.then; r.then = null; render(); startRequest(nx); return; }
-    // A written send asks the shell to make the spin-off (clan:continue-in); the shell says in its own words when the target is not installed.
-    if (r.state === 'done' && r.continueIn) { var app = r.continueIn; r.continueIn = null; try { window.parent.postMessage({ type: 'clan:continue-in', app_id: app }, '*'); } catch (x) { /* no shell */ } }
     if (r.state === 'queued' || r.state === 'running') {
       clearTimeout(r.t);
       r.t = setTimeout(function () { if (ui.req === r && r.id) window.clan.apiProxy('middleware', { task: L.TASKS.status, input: { job_id: r.id } }).then(function (x) { onRequest(r, x); }, function (e) { reqFailed(r, 'The middleware could not be reached: ' + (e && e.message || e)); }); }, r.delay);
@@ -3237,6 +3226,7 @@ var TerritoriesLookups = (function () {
     Array.prototype.forEach.call(app.querySelectorAll('.nk-still'), function (v) { v.style.visibility = ''; });
     boothApply(true);
     stageSphere();
+    sendBar();
     if (focusId) { var el = app.querySelector('[data-tick="' + focusId + '"]'); if (el) el.focus({ preventScroll: true }); }
     else if (hadAdd) { var inp = app.querySelector('input[name="own"]'); if (inp) { inp.focus({ preventScroll: true }); try { inp.setSelectionRange(pos, pos); } catch (e) { /* not selectable */ } } }
     window.scrollTo(0, keepY);
@@ -3275,6 +3265,14 @@ var TerritoriesLookups = (function () {
     if (key === SPH.key) return;
     SPH.key = key;
     v.setEnvelope({ agentKey: env.agent, nextAgentKey: env.next, phase: 'run', steps: env.steps, step: { index: env.at }, stepStartedAt: Date.now(), streaming: !env.ended, errorRetrying: !!env.failed });
+  }
+  // The OS bar (clan:bar), as Brief and Research send it: Continue in is the shell's; the page says only the step and the gate line.
+  var BAR_LAST = '';
+  function sendBar(force) {
+    if (window.parent === window) return;
+    var items = L.barItems(data(), ui), k = JSON.stringify(items);
+    if (!force && k === BAR_LAST) return; BAR_LAST = k;
+    try { window.parent.postMessage({ type: 'clan:bar', v: 1, items: items }, '*'); } catch (x) { /* no shell */ }
   }
   function run(e) {
     var r = L.act(data(), ui, e, env());
@@ -3496,9 +3494,6 @@ var TerritoriesLookups = (function () {
     if ((b = t.closest('[data-pic-set]'))) { var ps = { tid: b.getAttribute('data-pic-t'), id: b.getAttribute('data-pic-s'), rights: b.getAttribute('data-pic-set') }; closeDialog(true); run({ a: 'pic_rights', tid: ps.tid, id: ps.id, rights: ps.rights }); return; }
     if ((b = t.closest('[data-green]'))) { ev.preventDefault(); ev.stopPropagation(); closeDialog(true); run({ a: 'green', id: b.getAttribute('data-green') }); return; }
     if ((b = t.closest('[data-export]'))) { if (!b.disabled) exportGo(b.getAttribute('data-export')); return; }
-    if ((b = t.closest('[data-send]'))) { if (!b.disabled) openDialog('send', b); return; }
-    if ((b = t.closest('[data-dest-pick]'))) { if (b.disabled) return; openDialog('send:' + b.getAttribute('data-dest-pick'), dialogFrom); return; }
-    if ((b = t.closest('[data-dest]'))) { if (b.disabled) return; var to = b.getAttribute('data-dest'); closeDialog(true); run({ a: 'send', to: to }); return; }
     if ((b = t.closest('[data-rank-go]'))) { closeDialog(true); run({ a: 'rerank' }); return; }
     if ((b = t.closest('[data-tp]'))) { ui.tp = b.getAttribute('data-tp'); render(); return; }
     if ((b = t.closest('[data-dock]'))) {
@@ -3569,6 +3564,7 @@ var TerritoriesLookups = (function () {
   window.addEventListener('message', function (e) {
     var m = e.data; if (!inShell || e.source !== window.parent || !m) return;
     if (m.type === 'clan:booth') boothSet(m.open !== false, true);
+    if (m.type === 'clan:bar?') sendBar(true);
   });
   // The bridge fires these when the document's data changes or loads.
   window.addEventListener('clan:dataupdated', function () { render(); });

@@ -46,6 +46,7 @@ const L = vm.runInNewContext(`${engine}${helper}\n${logicSrc};\n${lookupsSrc}; T
   resolve(c: string, d: Doc): { carried: boolean; kind: string | null; text: string; status: string }
   pickState(run: unknown): string
   view(d: Doc, ui?: Ui): string
+  barItems(d: Doc, ui?: Ui): Doc[]
   dialogFor(w: string, d: Doc): { title: string; html: string } | null
   act(d: Doc, ui: Ui, e: Record<string, unknown>, env?: Record<string, unknown>): Act
   boothNotes(d: Doc): { role: string; body: string; cites: string[] }[]
@@ -655,58 +656,45 @@ test('Greenlight is a request to the engine under its own move name; the page wr
 test('after a greenlight or a remove, the card, the count and the tray follow the document with no reload (LESSONS 18)', () => {
   const d = gl('greenlight_open')
   let page = L.view(d, {}), t = text(page)
-  // nothing greenlit: no tray in the Booth (the mock's), the header's Send off with its reason
+  // nothing greenlit: no tray in the Booth (the mock's); Continue in (the shell's) begins with why (the bar's gate)
   assert.match(t, /0 greenlit/); assert.doesNotMatch(t, /Greenlit · 0/); assert.match(t, /Greenlight at least one route\./)
-  assert.match(page, /<button type="button" class="b pri lg" data-send disabled>/)
+  assert.match(L.barItems(d, {}).find((i: Doc) => i.kind === 'gate')!.label, /^No route greenlit yet: Production and Deck Maker use the greenlit routes\. You can still continue/)
+  assert.match(t, /Greenlight at least one route\. Continue in, in the top bar, takes the greenlit ones on/)
   const two = greenlit(d, ['t_started', 't_sunday'])
   page = L.view(two, {}); t = text(page)
   assert.match(t, /2 greenlit/); assert.match(t, /Greenlit · 2/); assert.equal((page.match(/class="glrow"/g) ?? []).length, 2)
-  assert.equal((page.match(/class="rrow on"/g) ?? []).length, 2); assert.match(t, /Send 2 routes →/)
-  assert.ok(!/<button type="button" class="b pri lg" data-send disabled>/.test(page))
+  assert.equal((page.match(/class="rrow on"/g) ?? []).length, 2); assert.match(t, /Continue in, in the top bar, takes the 2 greenlit routes on to Production or Deck Maker/)
+  assert.ok(!L.barItems(two, {}).some((i: Doc) => i.kind === 'gate'), 'nothing to say first once routes are greenlit and nothing holds them')
   assert.match(page, /data-green="t_started"[^>]*aria-pressed="true"[^>]*>✓ Greenlit/)
   const one = greenlit(d, ['t_sunday']); page = L.view(one, {})
   assert.match(text(page), /Greenlit · 1/); assert.ok(!/class="glrow"[^>]*>(?:(?!<\/div>)[\s\S])*Already Started/.test(page))
-  assert.match(text(page), /Send 1 route →/)
+  assert.match(text(page), /takes it on to Production or Deck Maker/)
 })
 
-test('the engine\'s own holds disable Send and are said in its words; nothing is re-derived in the page', () => {
+test('the engine\'s own holds are said first by Continue in, in its words; nothing is re-derived in the page', () => {
   const d = gl('greenlight_derived_pending')
   eq(L.holds(d).map(h => h.kind), ['derived_evidence'])
   const page = L.view(d, {})
-  assert.match(page, /<button type="button" class="b pri lg" data-send disabled>/)
+  assert.match(L.barItems(d, {}).find((i: Doc) => i.kind === 'gate')!.label, /^Not ready to go on yet: Passenger Seat rests on a finding nobody has verified[\s\S]*You can still continue/)
   assert.match(text(page), /Review · before sending[\s\S]*Passenger Seat rests on a finding nobody has verified/)
-  assert.match(L.act(d, {}, { a: 'send', to: 'deck-maker' }, ENV)!.toast!, /Passenger Seat rests on a finding/)
+  assert.equal(L.act(d, {}, { a: 'send', to: 'deck-maker' }, ENV), null, 'the page sends nothing itself: Continue in is the shell\'s')
   eq(L.holds(gl('greenlight_open')), [], 'nothing_picked is cleared by a click, so it is not a hold')
   eq(L.holds(gl('greenlight_sensitive_missing')).map(h => h.kind), ['sensitive_review'])
 })
 
-test('Send opens the choice: Deck Maker sends the greenlit ids and the rest as not chosen; the Production tool says it is not built yet', () => {
-  const d = greenlit(gl('greenlight_open'), ['t_started', 't_passenger'])
-  const dlg = L.dialogFor('send', d)!
-  assert.equal(dlg.title, 'Send 2 routes onward')
-  assert.match(text(dlg.html), /Already Started and Passenger Seat go with their worlds, lines, checks and sources\./)
-  assert.match(text(L.dialogFor('send:deck-maker', d)!.html), /The other 6 routes travel as routes not chosen/, 'said once a place is chosen (the mock)')
-  assert.ok(dlg.html.indexOf('data-dest-pick="production-tool"') < dlg.html.indexOf('data-dest-pick="deck-maker"'), 'Production first, as the mock')
-  assert.match(dlg.html, /data-dest-pick="deck-maker"/); assert.doesNotMatch(dlg.html, /data-dest-pick="production-tool"[^>]*disabled/); assert.doesNotMatch(text(dlg.html), /not built yet/)
-  // choosing alone sends nothing: the Send button is off until a place is chosen, then names it (territories-redesign, the mock's send screens)
-  assert.match(dlg.html, /class="b pri lg" disabled>Send<\/button>/); assert.doesNotMatch(dlg.html, /data-dest="/)
-  const picked = L.dialogFor('send:production-tool', d)!
-  assert.match(picked.html, /data-dest-pick="production-tool" aria-pressed="true"/); assert.match(picked.html, /class="b pri lg" data-dest="production-tool">Send to Production/)
-  assert.match(text(L.dialogFor('send', greenlit(gl('greenlight_open'), ['t_started']))!.html), /Already Started goes with its world/)
-  const a = L.act(d, {}, { a: 'send', to: 'deck-maker' }, ENV)!
-  eq(a.writes, [])
-  // the gate is open at greenlight, so the approval goes first and the send follows it
-  eq(a.request, { key: 'send:deck-maker', what: 'The approval', input: { step: 'approve', gate: 'greenlight', by: 'Shrey' }, then: { key: 'send:deck-maker', what: 'The send', input: { step: 'send_routes', to: 'deck-maker', territory_ids: ['t_started', 't_passenger'], not_chosen: ['t_sitdown', 't_sunday', 't_small', 't_lonely', 't_mixtape', 't_lounge'], by: 'Shrey' }, continueIn: 'ie.napkin.deck-maker' } })
-  const done = JSON.parse(JSON.stringify(d)) as Doc; done.run.gate = null; done.run.stage = 'send'
-  // the send is written first; the shell is then asked for the spin-off 
-  assert.equal(L.act(done, {}, { a: 'send', to: 'deck-maker' }, ENV)!.request!.continueIn, 'ie.napkin.deck-maker')
-  eq(L.act(done, {}, { a: 'send', to: 'deck-maker' }, ENV)!.request!.input, { step: 'send_routes', to: 'deck-maker', territory_ids: ['t_started', 't_passenger'], not_chosen: ['t_sitdown', 't_sunday', 't_small', 't_lonely', 't_mixtape', 't_lounge'], by: 'Shrey' })
-  // Production is built (territories-spinoff-out-production): the same send, then the shell is asked for the Production spin-off
-  const p = L.act(done, {}, { a: 'send', to: 'production-tool' }, ENV)!
-  assert.equal(p.request!.continueIn, 'ie.napkin.production')
-  eq(p.request!.input, { step: 'send_routes', to: 'production-tool', territory_ids: ['t_started', 't_passenger'], not_chosen: ['t_sitdown', 't_sunday', 't_small', 't_lonely', 't_mixtape', 't_lounge'], by: 'Shrey' })
-  assert.match(L.act(gl('greenlight_open'), {}, { a: 'send', to: 'deck-maker' }, ENV)!.toast!, /Greenlight at least one route first/)
-  assert.equal(L.act(d, {}, { a: 'send', to: 'nowhere' }, ENV), null)
+test('Continue in is the shell\'s, as in Brief and Research: no Send dialog, no Send button; the bar says what is not ready first (owner, 2026-11-24)', () => {
+  // owner: "Why a whole dialogue box for continue/send forward to and not just normal continue in just like before in brief and research"
+  const d = greenlit(gl('greenlight_open'), ['t_started', 't_passenger']), page = L.view(d, {})
+  assert.equal(L.dialogFor('send', d), null); assert.doesNotMatch(page, /data-send|data-dest/)
+  assert.equal(L.act(d, {}, { a: 'send', to: 'deck-maker' }, ENV), null)
+  // the bar: the step while the engine works, the gate line otherwise (Research's "Not brief-ready yet …" pattern); Continue in is never blocked
+  eq(L.barItems(d, {}), [{ kind: 'run', working: false }])
+  eq(L.barItems(d, { job: { state: 'running', id: 'j', crewRun: true } }).map((i: Doc) => i.kind), ['run', 'mode'])
+  for (const it of L.barItems(gl('greenlight_open'), {})) if (it.kind === 'gate') assert.ok(it.label.length <= 200 && it.tone === 'warn')
+  // what goes: the host's spin-off carries the document whole; Deck and Production read the greenlit routes when nothing was sent
+  // (engine/deck/from_territory.py, production-tool/web/src/canvas/adapter/own/bringRoutes.test.ts), so both payloads stand as they were
+  const deck = readFileSync(new URL('../engine/deck/from_territory.py', root), 'utf8')
+  assert.match(deck, /with none \(the document was continued in without sending\) the greenlit routes are what goes/)
 })
 
 test('a request that fails says why in plain words and leaves the page as it was', () => {
@@ -761,7 +749,7 @@ test('step 3 keeps to the house words and the two faces; no price anywhere, no t
     for (const bad of ['(to confirm)', '~~', '**', '{{', '[object', 'undefined', 'NaN', '>null<', '>None<', 'derived_evidence', 'near_mandatory']) assert.ok(!page.includes(bad), `page has ${bad}`)
     assert.ok(!/€|£|\$\d|\d\s?(euro|EUR|USD)\b|\bUSD\b|¢/i.test(text(page)), 'no price on the page')
   }
-  const dlg = [L.dialogFor('send', greenlit(gl('greenlight_open'), ['t_started'])), L.dialogFor('rank', gl('greenlight_open')), L.dialogFor('route:t_started', gl('greenlight_open'))]
+  const dlg = [L.dialogFor('rank', gl('greenlight_open')), L.dialogFor('route:t_started', gl('greenlight_open'))]
   for (const x of dlg) assert.ok(!/€|£|\$\d|\d\s?(euro|EUR|USD)\b|\bUSD\b/i.test(text(x!.html)))
 })
 
@@ -785,14 +773,14 @@ test('a derived finding asks first: Verify it, Send it flagged or Take it off th
   assert.match(t, /Review · before sending Needs you Passenger Seat rests on a finding nobody has verified\./)
   assert.ok(page.includes('data-ask="ask_passenger" data-answer="verify"') && page.includes('data-answer="send_flagged"') && page.includes('data-answer="change"'))
   assert.match(t, /Families describe the drive as the part where nobody talks/)
-  assert.match(page, /<button type="button" class="b pri lg" data-send disabled>Send 2 routes →/); assert.match(t, /Answer the question first/)
+  assert.match(L.barItems(d, {}).find((i: Doc) => i.kind === 'gate')!.label, /^Not ready to go on yet: /); assert.match(t, /Not ready to go on yet: /)
   eq(L.act(d, {}, { a: 'answer', id: 'ask_passenger', answer: 'verify' }, ENV)!.request, { key: 'ask:ask_passenger', what: 'Your answer', input: { step: 'answer_ask', ask_id: 'ask_passenger', answer: 'verify', by: 'Shrey' } })
   eq(L.act(d, {}, { a: 'answer', id: 'ask_passenger', answer: 'change' }, ENV)!.request!.input, { step: 'answer_ask', ask_id: 'ask_passenger', answer: 'change', by: 'Shrey' })
   assert.equal(L.act(d, {}, { a: 'answer', id: 'ask_passenger', answer: 'ok' }, ENV), null, 'ok is not an answer to a derived finding')
   // as the engine writes it back once answered (gates.answer_ask): the card goes, Send opens
   const after = JSON.parse(JSON.stringify(d)) as Doc
   after.asks[0].status = 'answered'; after.greenlit[1].derived_resolution = 'sent_flagged'; after.run.gate.blocked_by = []
-  const p2 = L.view(after, {}); assert.ok(!p2.includes('data-ask-card')); assert.ok(!/class="b pri lg" data-send disabled/.test(p2))
+  const p2 = L.view(after, {}); assert.ok(!p2.includes('data-ask-card')); assert.ok(!L.barItems(after, {}).some((i: Doc) => i.kind === 'gate'), 'answered: nothing said first')
 })
 
 test('a failed mandatory needs a reason before Go ahead; a close one does not', () => {
@@ -818,7 +806,7 @@ test('the sensitive review is a named person\'s: Mark as reviewed by them, never
   eq(L.act(d, { me: { name: 'Shrey' } }, { a: 'review' }, ENV)!.request, { key: 'review', what: 'The review', input: { step: 'record_review', by: 'Shrey' } })
   assert.match(L.act(d, {}, { a: 'review' }, { me: null, now: ENV.now })!.toast!, /Sign in first/)
   assert.equal(L.act(d, {}, { a: 'answer', id: 'ask_sensitive', answer: 'ok' }, ENV), null)
-  assert.match(L.view(d, {}), /class="b pri lg" data-send disabled/)
+  assert.ok(L.barItems(d, {}).some((i: Doc) => i.kind === 'gate'), 'Continue in says it first')
 })
 
 test('an ask for a route that is not greenlit is not shown, and an answered ask is never asked again', () => {
@@ -851,19 +839,14 @@ test('an ask card and the picture rights card sit in the same answer-first list'
   d.run.gate.blocked_by.push({ kind: 'picture_rights', text: 'A picture on Already Started has no rights chosen.' })
   const page = L.view(d, {})
   assert.ok(page.includes('data-ask-card="ask_passenger"')); assert.match(text(page), /A picture on Already Started has no rights chosen|rights/i)
-  assert.match(text(page), /Answer the 2 questions first/); assert.match(page, /class="b pri lg" data-send disabled>Send 2 routes →/)
+  assert.match(text(page), /Not ready to go on yet: /); assert.ok(L.barItems(d, {}).some((i: Doc) => i.kind === 'gate'))
 })
 
-test('a written send to Deck Maker asks the shell to continue in it, and the shell hears only the app it names (territories-spinoff-out-deck)', () => {
-  // the page: after the send is written (state done) it posts clan:continue-in once, naming the Deck's app
-  assert.match(html, /r\.state === 'done' && r\.continueIn\)/)
-  assert.match(html, /type: 'clan:continue-in', app_id: app/)
-  assert.match(html, /id: 'deck-maker'[^}]*built: true, continueIn: 'ie\.napkin\.deck-maker'/)
-  assert.match(html, /id: 'production-tool'[^}]*built: true, continueIn: 'ie\.napkin\.production'/)
-  // the shell: the message reaches the same spin-off the bar's Continue in uses, for a well-formed app id only
-  const rt = readFileSync(new URL('src/shell/AppRuntime.tsx', root), 'utf8')
-  assert.match(rt, /m\?\.type === 'clan:continue-in'/)
-  assert.match(rt, /\^ie\\\.napkin\\\.\[a-z0-9-\]\{1,40\}\$/)
+test('the page tells the shell its bar as Brief and Research do, and asks for no spin-off itself: Continue in is the shell\'s (territories-spinoff-out-deck)', () => {
+  const rt = html.slice(html.lastIndexOf('<script>'))
+  assert.match(rt, /postMessage\(\{ type: 'clan:bar', v: 1, items: items \}, '\*'\)/); assert.match(rt, /m\.type === 'clan:bar\?'\) sendBar\(true\)/)
+  assert.doesNotMatch(html, /type: 'clan:continue-in'/)
+  // the shell: its Continue in reaches the host's spin-off, for the apps that take a Territories document (Deck Maker, Production)
   const host = readFileSync(new URL('src/shell/AppHost.tsx', root), 'utf8')
   assert.match(host, /onContinueIn=\{onSpinoff\}/)
 })
