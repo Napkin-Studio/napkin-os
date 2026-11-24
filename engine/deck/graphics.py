@@ -405,8 +405,8 @@ def frame_geometry(kind: str, ratio: float, x: float, y: float, w: float, h: flo
 # ================================================================================================ the storyboard strip (slice 3)
 
 def strip_picks(frames: list) -> tuple:
-    """``(picked, note)`` from a storyboard's placeable frames in shot order: all of them when 3 or 4; the first, the last and evenly
-    spaced ones between when more (the note says '4 of 9 shots'); ``([], why)`` when fewer than spec.STRIP_MIN."""
+    """``(picked, note)`` from a storyboard's placeable frames in shot order: all of them when 3 to spec.STRIP_MAX (6); the first, the last and
+    evenly spaced ones between when more (the note says '6 of 9 shots'); ``([], why)`` when fewer than spec.STRIP_MIN."""
     n = len(frames)
     if n < spec.STRIP_MIN:
         return [], f"{n} placeable storyboard frame(s): a strip needs {spec.STRIP_MIN}"

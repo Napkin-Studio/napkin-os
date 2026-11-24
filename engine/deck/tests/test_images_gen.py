@@ -391,7 +391,7 @@ def test_a_sensitive_deck_makes_nothing_until_a_person_reviews_and_one_edited_wo
         if r["status"] == "planned":
             assert "bridge" in " ".join(plan["banned_imagery"]) and "Never show:" in r["prompt"]
     dj = json.loads((stages / "d_idea.json").read_text())      # edit one word of the deck's words (the campaign line)
-    dj["campaign_line"] = dj["campaign_line"] + " Today."
+    dj["campaign_line"] = "Today. " + dj["campaign_line"]   # another line, not the brief's line grown (a grown line is put back: assemble.keep_stated_line)
     (stages / "d_idea.json").write_text(json.dumps(dj))
     go(stages, tmp_path / "o", "--images", "plan", "--review", str(rv))
     plan = json.loads((stages / "images" / "plan.json").read_text())
