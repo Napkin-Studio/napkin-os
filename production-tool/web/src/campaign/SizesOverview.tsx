@@ -12,12 +12,15 @@ import { createPortal } from 'react-dom'
 import type { FormatSet, PersonRef, Size, SizeMethod } from '../contracts/types'
 import { useBlobUrl } from '../ui/hooks'
 import { formatById, shortName, sizeWords } from './formats'
-import { changeMethod, redoSize, sizeSeconds, type CampaignDeps } from './make'
+import { changeMethod, channelOfSize, redoSize, sizeSeconds, type CampaignDeps } from './make'
 import { groupSizes, statusWord, type GroupBy, type SizeGroup } from './overview'
 import { methodWords, PAID, type MethodModel } from './rules'
 import { MethodMenu } from './MethodMenu'
 import { isFinalAsset, sizeFinalAsset } from '../doc/finals'
 import { FinalBadge } from '../ui/finals/FinalBadge'
+import { FinalToggle } from '../ui/finals/FinalToggle'
+import { lookReasons } from './checks'
+import { sizeFileName } from './sizeWords'
 import { TileFloat } from './TileFloat'
 import './campaign.css'
 
@@ -56,6 +59,11 @@ export function SizesOverview({ set, sizes, staleIds, models, deps, by, title, o
     look: sizes.filter((s) => s.status === 'look').length,
   }
   const picked = sel ? sizes.find((s) => s.id === sel) : undefined
+  const pickedUrl = useBlobUrl(picked?.status === 'making' ? undefined : picked?.asset)
+  // The preview belongs to the size it was opened for: another size picked shows none.
+  const [showingFor, setShowingFor] = useState<string | null>(null)
+  const showing = !!sel && showingFor === sel
+  const setShowing = (on: boolean) => setShowingFor(on ? sel : null)
   const allClosed = groups.length > 0 && groups.every((g) => closed.has(g.key))
 
   useEffect(() => {
@@ -176,7 +184,20 @@ export function SizesOverview({ set, sizes, staleIds, models, deps, by, title, o
                 onClick={() => paidTray(picked, picked.method, 'Redo', () => redoSize(deps, picked.id, by))}>Redo</button>
             )}
             <button type="button" className="btn sm" onClick={() => onLock(picked.id, !picked.locked)}>{picked.locked ? 'Unlock' : 'Lock'}</button>
+            {/* Final here as on the board's tile (UAT round 4 F33: sizes could be marked Final nowhere but the board). */}
+            {(picked.status === 'ready' || picked.status === 'look') && (
+              <FinalToggle of={{ kind: 'size', id: picked.id }} asset={sizeFinalAsset(picked)} extra={{ set_id: picked.set_id, format: picked.format, channel: channelOfSize(picked) }} />
+            )}
+            {/* What was made, to look at and to keep, as the main render offers (UAT round 4 F36). */}
+            {pickedUrl && <button type="button" className="btn sm" aria-pressed={showing} onClick={() => setShowing(!showing)}>{showing ? 'Hide preview' : 'Preview'}</button>}
+            {pickedUrl && <a className="btn sm" href={pickedUrl} download={sizeFileName(picked)}>Download</a>}
           </div>
+          {statusWord(picked, staleIds.has(picked.id)) === 'Needs a look' && (
+            <div className="ov-why" role="note">Needs a look: {lookReasons(picked).join(' · ') || 'nothing is flagged now; Redo or Lock it to settle it.'}</div>
+          )}
+          {showing && pickedUrl && (
+            <div className="ov-preview">{picked.media === 'video' ? <video src={pickedUrl} controls autoPlay playsInline /> : <img src={pickedUrl} alt="" />}</div>
+          )}
         </TileFloat>
       )}
     </div>,

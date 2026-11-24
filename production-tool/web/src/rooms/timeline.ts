@@ -169,7 +169,19 @@ const bare = (t: string) => t.replace(/[.!?]$/, '').trim()
  */
 export function endCardFrom(d: ProductionDocument, videoId: Id): CutEndCard | undefined {
   const card = endCardOf(d, storyboardOfVideo(d, videoId)?.id)
-  return card && withBriefLegal(d, videoId, withCampaignLine(d, videoId, card))
+  return card && withBriefLegal(d, videoId, withBriefEndLine(d, videoId, withCampaignLine(d, videoId, card)))
+}
+
+const plainWords = (x: string | undefined) => (x ?? '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+
+/** A card that does not say the linked Brief's end line leads with it, the name it had going underneath (UAT round 4
+ *  F34: the card read "Copperell Refill", the project's name, and the agreed "Refill. Not landfill." was only a voice-over
+ *  no clip said). A card that says the line already, or a film with no Brief end line, is left as it is. */
+function withBriefEndLine(d: ProductionDocument, videoId: Id, card: CutEndCard): CutEndCard {
+  const line = endLineOf(briefForJob(d, { kind: 'video', id: videoId })?.brief.spine)
+  if (!line || plainWords(`${card.headline} ${card.line}`).includes(plainWords(line))) return card
+  const under = card.headline.trim() || card.line
+  return { ...card, headline: line.slice(0, 120), line: plainWords(under) === plainWords(line) ? card.line : under }
 }
 
 /** A new end card for a film with no end-card shot: the brand name set in type (the project's name; there is no logo without a

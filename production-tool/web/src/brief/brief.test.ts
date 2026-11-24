@@ -106,6 +106,12 @@ describe('scope', () => {
   const b1 = { ...newBrief(read(), 'link'), id: 'brief_01K7A0000000000000000000B1' }
   const b2 = { ...newBrief(read(BRIEF_DATA, SHA('c'), 'First Light DE'), 'link'), id: 'brief_01K7A0000000000000000000B2' }
 
+  it('the chip says the brief\'s own version, as the Brief node does, not Production\'s copy counter (UAT round 4)', () => {
+    const v2 = { ...b1, source: { ...b1.source, taken: 1, version: 2 } }
+    const d = withBrief_(ex, v2, link(v2.id, { kind: 'script', id: SCRIPT }))
+    expect(inputChips(scopeOf(d, SCRIPT))[0].label).toBe('Brief · First Light brief · v2')
+  })
+
   it('a brief linked into the Script is in its scope, and carries on to the Storyboard and Video it drives', () => {
     const d = withBrief_(ex, b1, link(b1.id, { kind: 'script', id: SCRIPT }))
     expect(briefOf(d, SCRIPT)).toMatchObject({ via: 'link', brief: { id: b1.id } })

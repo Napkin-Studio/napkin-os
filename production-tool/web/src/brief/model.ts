@@ -388,7 +388,7 @@ export async function recordBriefFlags(store: DocumentStore, job: Pick<Job, 'job
   await landUpdate(store, (x) => {
     for (const c of made) x.checks[c.id] = c
   }, {
-    action: `flag ${made.length === 1 ? 'a line' : `${made.length} lines`} of the brief ${named(d.briefs[briefId].title, d.briefs[briefId].source.taken)}`,
+    action: `flag ${made.length === 1 ? 'a line' : `${made.length} lines`} of the brief ${named(d.briefs[briefId].title, d.briefs[briefId].source.version)}`,
     rationale: flags.map((f) => `${f.kind === 'dont' ? 'don\u2019t' : 'mandatory'} \u201c${f.line}\u201d: ${f.note}`).join(' \u00b7 ').slice(0, 1000),
     agent: 'jude', ...(docId ? { cites: [`${docId}#jobs[${job.jobId}]`] } : {}),
   })

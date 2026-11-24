@@ -532,6 +532,16 @@ def test_shot_list_names_only_refs_it_was_given():
     refuses("not an input ref", "shot_list", lambda r: r["shots"][0].update(refs=["hero_sad"]))
 
 
+def test_a_bare_key_needs_a_front_only_for_a_character_or_a_product():
+    # UAT round 4 F32: "@logo" on the end card stopped Plan shots; a logo stands for its pictures, no front.
+    logo = {"id": "ref_01K6XA6Z0000000000000010LG", "name": "logo_copperell", "role": "logo", "kind": "picture",
+            "asset": {"sha256": "sha256:" + "8" * 64, "url": "https://hack.napkin.ie/in/sha256:" + "8" * 64, "mime": "image/png"}}
+    res = attempt("shot_list", lambda r: r["shots"][0].update(refs=["hero_front", "logo"]), lambda i: i["refs"].append(logo))
+    assert res.output["shots"][0]["refs"] == ["hero_front", "logo"]
+    hero_side = {**logo, "id": "ref_01K6XA6Z0000000000000010SD", "name": "villain_side", "role": "character"}
+    refuses("not an input ref", "shot_list", lambda r: r["shots"][0].update(refs=["villain"]), lambda i: i["refs"].append(hero_side))
+
+
 def test_a_view_angle_the_model_left_out_is_filled_from_the_view():
     res = attempt("view_mock", lambda r: r["providerJob"].pop("angle"))
     assert res.output["providerJob"]["angle"] == {"horizontal": 90.0, "vertical": 0.0}
