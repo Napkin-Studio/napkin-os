@@ -101,6 +101,34 @@ export function watchOrigins(page: Page): { foreign: string[] } {
 
 
 
+/** Serves the tool's own policy as an ENFORCED Content-Security-Policy (the header napkin-web sends is report-only
+ *  until UAT shows no violation): what the page does under the enforced policy, in this test only. Returns the
+ *  violations the page and its Workers raise, and the page errors that name eval. */
+export async function enforceCsp(page: Page): Promise<{ violations: string[]; evalErrors: string[]; enforced: string[] }> {
+  const out = { violations: [] as string[], evalErrors: [] as string[], enforced: [] as string[] }
+  await page.context().route('**/production/**', async (route) => {
+    const res = await route.fetch()
+    const headers = res.headers()
+    const policy = headers['content-security-policy-report-only']
+    if (policy) {
+      headers['content-security-policy'] = policy
+      out.enforced.push(new URL(route.request().url()).pathname)
+    }
+    await route.fulfill({ response: res, headers })
+  })
+  await page.exposeFunction('__enforcedViolation', (v: string) => { out.violations.push(v) })
+  await page.addInitScript(() => {
+    document.addEventListener('securitypolicyviolation', (e) => {
+      void (window as unknown as { __enforcedViolation: (v: string) => void }).__enforcedViolation(`${e.disposition} ${e.effectiveDirective} ${e.blockedURI} ${e.sourceFile}:${e.lineNumber}`)
+    })
+  })
+  const evalish = /unsafe-eval|EvalError|Content Security Policy/i
+  page.on('pageerror', (err) => { if (evalish.test(String(err))) out.evalErrors.push(String(err)) })
+  page.on('console', (m) => { if (m.type() === 'error' && evalish.test(m.text())) out.evalErrors.push(m.text()) })
+  page.on('worker', (w) => w.on('console', (m) => { if (evalish.test(m.text())) out.evalErrors.push(`worker: ${m.text()}`) }))
+  return out
+}
+
 /** A real document edit: + Node, then Script / Storyboard / Film (lands in `data.scripts` etc.). The project name
  *  in the bar is only the tool's own index, so Rename is not a document edit. */
 export async function addNode(page: Page, kind: 'Script' | 'Storyboard' | 'Film') {

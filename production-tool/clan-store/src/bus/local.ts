@@ -3,14 +3,11 @@
 // versions), applied to a copy, written as one merge patch through the store
 // (which validates the whole document and records one decision with the
 // targets this bus derives), and handed to LocalUndo as one step.
-import Ajv2020 from 'ajv/dist/2020.js'
-import addFormats from 'ajv-formats'
-import common from '../../../contracts/common.schema.json'
-import patchSchema from '../../../contracts/patch.schema.json'
 import { deepEqual, diffMergePatch } from '../merge-patch'
 import type { ClanStoreApi } from '../store'
 import type { Doc, Entity } from '../types'
 import { InvalidDocument } from '../validate'
+import { validatePatchBatch } from '../validators.gen.js'
 import { entityAddress, leafAddress, leafProblem, newestFieldV, readPath, textOwned, writePath } from './leaf'
 import type { ApplyOptions, EntityName, Patch, PatchBatch, PatchBus, PatchConflict, PatchResult } from './types'
 import type { LocalUndo } from './undo'
@@ -21,19 +18,10 @@ export interface Expect { entity: EntityName; id: string; path?: string; value?:
 /** At most this many leaves get their own target; past it, one target per entity (collab.md §8). */
 export const LEAF_TARGETS_MAX = 8
 
-let batchCheck: ((d: unknown) => boolean) & { errors?: { instancePath: string; message?: string }[] | null } | null = null
+/** A batch's problems against patch.schema.json#/$defs/PatchBatch (precompiled: no eval at runtime). */
 function checkBatch(batch: unknown): string[] {
-  if (!batchCheck) {
-    const Ajv = ((Ajv2020 as unknown as { default?: typeof Ajv2020 }).default ?? Ajv2020)
-    const formats = ((addFormats as unknown as { default?: typeof addFormats }).default ?? addFormats)
-    const ajv = new Ajv({ allErrors: true, strict: false })
-    formats(ajv)
-    ajv.addSchema(common)
-    ajv.addSchema(patchSchema)
-    batchCheck = ajv.getSchema('https://napkin.ie/production-tool/contracts/patch.schema.json#/$defs/PatchBatch') as unknown as typeof batchCheck
-  }
-  if (batchCheck!(batch)) return []
-  return (batchCheck!.errors ?? []).map((e) => `${e.instancePath || '/'} ${e.message ?? 'is invalid'}`)
+  if (validatePatchBatch(batch)) return []
+  return (validatePatchBatch.errors ?? []).map((e) => `${e.instancePath || '/'} ${e.message ?? 'is invalid'}`)
 }
 
 type Bag = Record<string, Record<string, unknown>>
