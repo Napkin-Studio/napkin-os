@@ -23,6 +23,7 @@ import { useTheme } from '../shell/lookContext'
 import { usePanels } from './panels'
 import { NodeIcon } from './Bar'
 import { LinkIcon } from './MoreMenu'
+import { TRASH_GO, TRASH_HINT, TRASH_LABEL, TRASH_SUB, trashQuestion } from '../../projects/deleteWords'
 
 type View = 'main' | 'export' | 'continue' | 'share'
 
@@ -131,14 +132,14 @@ export function DocMenu({ close, page }: { close: () => void; page?: { title: st
       {allow && <MenuItem icon="⇄" hint="Who receives what your agency puts in" onSelect={() => setSharing(true)}>Data sharing</MenuItem>}
       <ThemeRow />
       {deleting ? (
-        <div className="pt-menuhead" role="alertdialog" aria-label="Delete this project">
-          Delete “{name ?? 'this project'}” from this browser? The server's copy is kept.
+        <div className="pt-menuhead" role="alertdialog" aria-label={trashQuestion(name ?? 'this project')}>
+          <b>{trashQuestion(name ?? 'this project')}</b> {TRASH_SUB}
           <span className="pt-menuacts">
-            <button type="button" className="btn sm danger" autoFocus onClick={() => { close(); void shell.remove(project.id).catch(() => undefined) }}>Delete</button>
+            <button type="button" className="btn sm danger" autoFocus onClick={() => { close(); void shell.remove(project.id).catch(() => undefined) }}>{TRASH_GO}</button>
             <button type="button" className="btn sm ghost" onClick={() => setDeleting(false)}>Cancel</button>
           </span>
         </div>
-      ) : <MenuItem icon="×" danger hint="From this browser; the server’s copy is kept" onSelect={() => setDeleting(true)}>Delete…</MenuItem>}
+      ) : <MenuItem icon="×" danger hint={TRASH_HINT} onSelect={() => setDeleting(true)}>{TRASH_LABEL}</MenuItem>}
       {status}
       {picker}
       {sharing && allow && <DataSharing allow={allow} onClose={() => { setSharing(false); close() }} />}

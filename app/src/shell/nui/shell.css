@@ -20,7 +20,22 @@
 .nui .tb-locked > .tb-app { flex: 1 1 auto !important; min-width: 0; overflow: hidden !important; }
 .nui .tb-locked > .tb-spacer { flex: 1 1 0; min-width: 0; }
 .nui .tb-app > * { flex-shrink: 0; }
-.nui .tb-app > .tba-name { flex-shrink: 1; min-width: 72px; }
+.nui .tb-app > .tba-name { flex-shrink: 1; min-width: min(196px, 100%); }
+/* The name keeps its room: a title that ends in an ellipsis at "P…" is no name (owner, 2026-11-23). */
+/* Continue in never clips: when the bar is tight Toolbar.tsx moves things out of the way (chip, second button, Share). */
+.nui .tb-status-compact { margin-left: 4px; padding: 4px 8px; gap: 5px; letter-spacing: 0; }
+.nui .tb-locked[data-fit="4"] .tb-cname, .nui .tb-locked[data-fit="5"] .tb-cname { display: none; }
+.nui .tb-locked[data-fit="4"] .tb-client, .nui .tb-locked[data-fit="5"] .tb-client { padding-right: 8px; }
+.nui .tb-locked[data-fit="4"], .nui .tb-locked[data-fit="5"] { gap: 8px !important; padding-left: 16px; padding-right: 16px; }
+.nui .tb-locked[data-fit="5"] .stacked-lockup .sl-mono { display: none; }
+.nui .tb-locked[data-fit="5"] .stacked-lockup .sl-big { font-size: 12.5px; max-width: 84px; overflow: hidden; text-overflow: ellipsis; }
+.nui .tb-locked[data-fit="5"] .tb-tools { gap: 4px; }
+.nui .tb-locked[data-fit="5"] .tb-vsep { display: none; }
+.nui .tb-locked[data-fit="5"] .tb-app > .tba-name { min-width: min(184px, 100%); }
+.nui .tb-locked[data-fit="5"] .tba-acts { margin-left: 2px; gap: 4px; }
+.nui .tb-locked[data-fit="5"] .tba-acts .tba-btn { padding-left: 9px; padding-right: 9px; }
+.nui .tb-locked[data-fit="5"] .tb-status-compact { margin-left: 0; }
+.nui .tba-more { padding: 0 10px; font-weight: 700; letter-spacing: .08em; }
 /* The name's column shrinks with it: its title and saved line end in an
    ellipsis inside the column, so neither runs under the caret, and the caret
    keeps its own room before Continue in. */

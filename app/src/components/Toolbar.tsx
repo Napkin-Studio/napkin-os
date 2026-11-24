@@ -19,12 +19,13 @@
 // Pure: everything it shows comes in as props, so a test can draw every state
 // with no host.
 
-import { Fragment, useCallback, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { Fragment, useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { LogoSpinner } from '../brand/LogoSpinner'
+import { TrashConfirm } from '../shell/nui/TrashConfirm'
 import { accountItems, continueItems, docMenuItems, linkList, linkedChip, linkedRows, plural, pressContinue, shareItems, type Account, type BarPlace, type ClientChip, type Crew, type DocBar, type LinkRow, type LinkedRow, type MenuItem } from './barMenus'
 import { DeepOMark } from '../brand/DeepOMark'
 import type { MarkTarget } from './medallionMotion'
-import { modeOf } from '../shell/appBar'
+import { modeOf, secondButton, shortStep } from '../shell/appBar'
 import { useEngaged } from './markStore'
 import { markOf, type AgencyLogo } from '../shell/agency/palette'
 import ThemeToggle from './ThemeToggle'
@@ -81,7 +82,7 @@ interface Props {
   place?: BarPlace | null
 }
 
-type PopKey = 'account' | 'client' | 'doc' | 'cont' | 'share' | 'linked' | 'link'
+type PopKey = 'account' | 'client' | 'doc' | 'cont' | 'share' | 'linked' | 'link' | 'more'
 
 /** A popover's rows: a button per item, with its hint; a rule above `apart`; disabled ones say why. */
 function Rows({ items, close }: { items: MenuItem[]; close: (refocus: boolean) => void }) {
@@ -338,12 +339,12 @@ function AccountButton({ account, open, onMenu }: { account: Account; open: bool
 
 /** A job runs on the open document while you're on its sheet: the mock's status
  * chip, with the step while the run says it. The agent itself is in the side panel. */
-function JobChip({ crew }: { crew: Crew }) {
+function JobChip({ crew, compact }: { crew: Crew; compact?: boolean }) {
   const p = crew.progress
   const word = crew.working ? crew.working.charAt(0).toUpperCase() + crew.working.slice(1) : 'Working'
   const label = p ? `${word} · step ${p[0]}/${p[1]}` : word
   const who = crew.agent ? roles.name(crew.agent) : 'An agent'
-  return <span className="tb-status" data-testid="agent-working" data-st="working" title={`${who} is ${crew.working}`}><i className="sdot" aria-hidden />{label}</span>
+  return <span className={compact ? 'tb-status tb-status-compact' : 'tb-status'} data-testid="agent-working" data-st="working" title={`${who} is ${crew.working}: ${label}`} aria-label={label}><i className="sdot" aria-hidden />{compact ? shortStep(label) : label}</span>
 }
 
 /** Decisions, with the needs-your-call count. */
@@ -426,6 +427,28 @@ export default function Toolbar({
   const appRef = useRef<HTMLDivElement>(null)
   // Renaming the document in place: the name's double-click, or Rename in its menu.
   const [renaming, setRenaming] = useState(false)
+  // A tight bar gives way in a fixed order, so the title (196px), Continue in and the primary button always stay:
+  // 1 the Working chip shrinks to a dot and its step, 2 the second button moves into the ⋯ menu, 3 so does Share,
+  // 4 the client chip keeps its monogram and the gaps close, 5 the agency pill drops its second line (CSS, on data-fit).
+  const [fit, setFit] = useState(0)
+  const [vw, setVw] = useState(() => (typeof window === 'undefined' ? 0 : window.innerWidth))
+  useLayoutEffect(() => {
+    const on = () => setVw(window.innerWidth)
+    window.addEventListener('resize', on)
+    return () => window.removeEventListener('resize', on)
+  }, [])
+  const fitSig = useRef('')
+  const barSig = (doc?.bar ?? []).map(i => `${i.kind}:${'label' in i ? i.label : ''}`).join('|')
+  const sig = [vw, doc?.title, doc?.saved, doc?.crew?.working, doc?.crew?.progress?.join('/'), barSig, !!doc?.loading].join('~')
+  useLayoutEffect(() => {
+    const el = appRef.current
+    if (!el) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (fitSig.current !== sig) { fitSig.current = sig; if (fit !== 0) { setFit(0); return } }
+    // Measuring the laid-out bar, then stepping one level: a layout effect's own job, settled before paint.
+    if (el.scrollWidth > el.clientWidth + 1 && fit < 5) setFit(f => f + 1)
+  }, [sig, fit])
+  const [askTrash, setAskTrash] = useState(false)
   // The tba-menu sits 40px under the app slot, at the button's own left (the mock's .tba-menu).
   const underSlot = useCallback((r: DOMRect) => {
     const slot = appRef.current?.getBoundingClientRect()
@@ -572,7 +595,7 @@ export default function Toolbar({
   return (
     <div className="nui ch-bar-os" data-testid="os-bar" data-where="document">
       <div className="topbar-outer">
-        <header className="tb-locked" aria-label="Napkin Studio Top Bar">
+        <header className="tb-locked" aria-label="Napkin Studio Top Bar" data-fit={fit}>
           {lead}
           <div className="tb-app" id="tb-app" aria-label="App" ref={appRef}>
             <DocName doc={doc} open={pop.open?.key === 'doc'} onMenu={el => pop.toggle('doc', el)} renaming={renaming} setRenaming={setRenaming} />
@@ -580,15 +603,15 @@ export default function Toolbar({
             {!mode && <span className="tba-acts">
               <button type="button" className="tba-btn tba-cont" data-tba="b-cont" aria-haspopup="menu" aria-expanded={pop.open?.key === 'cont'}
                 onClick={e => { const el = e.currentTarget; pressContinue(doc, pop.open?.key === 'cont', () => pop.toggle('cont', el)) }}>Continue in ▾</button>
-              <button type="button" className="tba-btn tba-share" data-p36-share aria-haspopup="menu" aria-expanded={pop.open?.key === 'share'}
-                onClick={e => pop.toggle('share', e.currentTarget)}>Share</button>
+              {fit < 3 && <button type="button" className="tba-btn tba-share" data-p36-share aria-haspopup="menu" aria-expanded={pop.open?.key === 'share'}
+                onClick={e => pop.toggle('share', e.currentTarget)}>Share</button>}
             </span>}
           </div>
           <span className="tb-spacer" />
           <span className="tb-tools">
             {mode?.mode === 'working'
-              ? <span className="tb-status" data-testid="working-chip" data-st="working" title={`Agents: ${mode.label || 'Working'}`}><i className="sdot" aria-hidden />{mode.label || 'Working'}</span>
-              : doc.crew?.working ? <JobChip crew={doc.crew} /> : null}
+              ? <span className={fit >= 1 ? 'tb-status tb-status-compact' : 'tb-status'} data-testid="working-chip" data-st="working" title={`Agents: ${mode.label || 'Working'}`} aria-label={mode.label || 'Working'}><i className="sdot" aria-hidden />{fit >= 1 ? shortStep(mode.label || 'Working') : mode.label || 'Working'}</span>
+              : doc.crew?.working ? <JobChip crew={doc.crew} compact={fit >= 1} /> : null}
             {doc.isTemplate && <span className="ch-chip ch-chip-accent">Template</span>}
             {doc.trusted && (
               <span className="ch-chip ch-chip-ok" title="Signed by Napkin — scoped host capabilities enabled">Trusted</span>
@@ -599,7 +622,11 @@ export default function Toolbar({
               </span>
             )}
             <BarChips bar={doc.bar ?? []} />
-            <BarButtons bar={doc.bar ?? []} onAction={doc.onBarAction} />
+            <BarButtons bar={doc.bar ?? []} onAction={doc.onBarAction} hideSecond={fit >= 2 && !!secondButton(doc.bar ?? [])} />
+            {fit >= 2 && !mode && (secondButton(doc.bar ?? []) || fit >= 3) && (
+              <button type="button" className="tba-btn tba-more" data-testid="bar-more" aria-label="More actions" aria-haspopup="menu" aria-expanded={pop.open?.key === 'more'}
+                onClick={e => pop.toggle('more', e.currentTarget)}>⋯</button>
+            )}
             {doc.onClientReview && !doc.editMode && (
               <button
                 type="button"
@@ -623,10 +650,11 @@ export default function Toolbar({
         </header>
       </div>
       {popovers}
+      {askTrash && doc.onTrash && <TrashConfirm title={doc.title ?? 'This document'} onCancel={() => setAskTrash(false)} onConfirm={() => { setAskTrash(false); doc.onTrash?.() }} />}
       {pop.open?.key === 'doc' && (
         <Pop anchor={pop.open.anchor} onClose={pop.close} label="Document" testid="doc-menu">
           <div className="pp-h">{doc.title ?? 'This document'}</div>
-          <Rows items={docMenuItems(doc, () => setRenaming(true))} close={pop.close} />
+          <Rows items={docMenuItems({ ...doc, onTrash: doc.onTrash && (() => setAskTrash(true)) }, () => setRenaming(true))} close={pop.close} />
         </Pop>
       )}
       {pop.open?.key === 'cont' && (
@@ -659,6 +687,16 @@ export default function Toolbar({
           <LinkPicker doc={doc} close={pop.close} />
         </Pop>
       )}
+      {pop.open?.key === 'more' && (() => {
+        const second = fit >= 2 ? secondButton(doc.bar ?? []) : null
+        const anchor = pop.open.anchor
+        return (
+          <Pop anchor={anchor} align="right" onClose={pop.close} label="More actions" testid="more-menu">
+            {second && !second.disabled && <button type="button" role="menuitem" onClick={() => { pop.close(false); doc.onBarAction?.(second.id) }}>{second.label}{second.title && <small>{second.title}</small>}</button>}
+            {fit >= 3 && <button type="button" role="menuitem" onClick={() => pop.setOpen({ key: 'share', anchor })}>Share<small>Send it to someone</small></button>}
+          </Pop>
+        )
+      })()}
       {pop.open?.key === 'share' && (
         <Pop anchor={pop.open.anchor} onClose={pop.close} label="Share" className="tba-menu" at={underSlot} testid="share-menu">
           <div className="pp-h">Share</div>

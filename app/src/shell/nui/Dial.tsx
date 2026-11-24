@@ -8,6 +8,7 @@
 // yet"), a rim arc for what needs you or runs, and the client's own colour in
 // the hub, which opens the client. 1 to 4 pick a quadrant, Escape closes it.
 
+import { readableInk } from '../agency/palette'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { LibraryItem } from '../../host'
 import { activityOfItem, needsYou, strongest } from '../landing/model'
@@ -148,7 +149,7 @@ export function Dial({ client, items, live, place, onOpenTool, onSoon, onOpenCli
       onClick={e => e.stopPropagation()}>
       {/* The hub comes first in the tab order: Shift+Tab from the first quadrant reaches it. */}
       <button type="button" className="dial-hub" id="dial-hub" data-testid="dial-hub"
-        style={{ ['--cl' as string]: client.look.cl, ['--cl-ink' as string]: client.look.ink }}
+        style={{ ['--cl' as string]: client.look.cl, ['--cl-ink' as string]: readableInk(client.look.cl, client.look.ink) }}
         title={`Open ${client.name}`} aria-label={`Open ${client.name}`} onClick={e => { e.stopPropagation(); onOpenClient() }}>
         <b>{hub.big}</b><small>{hub.small}</small>
       </button>

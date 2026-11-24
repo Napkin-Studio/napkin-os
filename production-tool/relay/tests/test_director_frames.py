@@ -4,6 +4,7 @@ frame before as @previous (continuity), and a frame always shows its setting."""
 
 import copy
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -53,7 +54,7 @@ def test_the_newest_prompt_is_the_default_and_the_configs_name_none():
     # Contract 3 runs director.v6 or later (features/contract-v3.clan), per click on Sonnet. Since
     # features/config-defaults.clan the bundle's default is the newest prompt (director.v17) and the
     # example configs name no director block: config.json pins a prompt only to roll back.
-    assert PROMPT_VERSION == "director.v17"
+    assert PROMPT_VERSION == "director.v18"
     for name in ("config.testing.json", "config.live.json", "config.pathway.runway.json"):
         assert "director" not in json.loads((EXAMPLES / name).read_text()), name
 
@@ -317,3 +318,33 @@ def test_a_clip_the_passthrough_made_says_it_too_the_tidewell_uat_take_had_no_su
     say_unrecognisable(plain, "clip", _brief("Include the can."), sheet)
     say_unrecognisable(plain, "resize", brief, sheet)
     assert UNRECOGNISABLE not in plain["providerJob"]["prompt"]
+
+
+def test_the_no_faces_line_is_the_first_sentence_and_the_shots_smiles_are_dropped_harrowgate_uat_round_3():
+    """UAT round 3 (Harrowgate): the line was in frame 2's prompt, mid-way, and the picture still showed two men smiling in
+    profile. It goes FIRST, and the shot's own expression words are gone, whoever wrote them (the director or the passthrough)."""
+    from director.director import UNRECOGNISABLE, say_unrecognisable
+
+    sheet = load_sheet("runway")
+    brief = _brief("No real, recognisable faces.")
+    prompt = ("Medium-wide shot: two office workers sit, smiling at each other, chatting low, @bag between them, looking at the camera. "
+              "No other brands. Full-bleed cinematic image; no text, captions, borders or panels.")
+    out = {"providerJob": {"provider": "runway", "model": "gemini_image3_pro", "prompt": prompt}}
+    say_unrecognisable(out, "frame", brief, sheet)
+    said = out["providerJob"]["prompt"]
+    assert said.startswith(UNRECOGNISABLE) and said.count(UNRECOGNISABLE) == 1
+    assert not re.search(r"smil|laugh|grin|looking at the camera", said, re.I)
+    assert "two office workers sit" in said and said.endswith("no text, captions, borders or panels.")
+    plain = {"providerJob": {"provider": "runway", "model": "gemini_image3_pro", "prompt": prompt}}
+    say_unrecognisable(plain, "frame", _brief("Include the can."), sheet)
+    assert plain["providerJob"]["prompt"] == prompt  # no rule, nothing touched
+
+
+def test_director_v18_tells_dex_to_write_people_shots_as_hands_backs_silhouettes_or_far_away():
+    v17 = (PROMPTS / "director.v17.md").read_text().splitlines()
+    v18 = (PROMPTS / "director.v18.md").read_text().splitlines()
+    added = [b for b in v18 if b not in v17]
+    assert len(v18) == len(v17) + 3 and len(added) == 3 and all("no-faces rule" in b for b in added)
+    text = " ".join(added)
+    for word in ("hands", "silhouette", "far away", "smiling", "looking at the camera", "rule wins over the action"):
+        assert word in text, word
