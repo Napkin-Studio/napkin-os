@@ -60,7 +60,7 @@ test('3. the page moves to Explore while the crew is out, and shows its progress
   const lanes = L.view(approved(), { job: { state: 'running', crew } })
   assert.equal((lanes.match(/class="lc /g) ?? []).length, 3)
   assert.match(plain(lanes), /Core Strategy Back · 3 routes/); assert.match(plain(lanes), /Feeling Idea Exploring…/); assert.match(plain(lanes), /Opposite Copy Stopped/)
-  assert.match(plain(lanes), /2 of 3 agents back/); assert.match(plain(lanes), /Idea agent · Towards a feeling/, 'the agent still out is the one on stage')
+  assert.match(plain(lanes), /2 of 3 agents back/); assert.match(plain(lanes), /Idea agent is going towards a feeling/, 'the agent still out is the one on stage')
   const early = plain(L.view(approved(), { job: { state: 'sending' } }))
   assert.match(early, /The crew is setting off/)
   const failed = L.view(approved(), { job: { state: 'failed', error: 'The model took too long.', crewRun: true } })
@@ -128,7 +128,7 @@ test('8. look-up box: off with its reason when empty; typing enables it (primary
   const doc = json('example/states/explore_back.json')
   const empty = L.K.box(doc, { me: ME })
   assert.match(btnOf(empty, 'data-act="lookup"'), /class="btn dark"[^>]*disabled/)
-  assert.match(empty, /data-lq-why>Type a question to look it up\./)
+  assert.match(empty, /data-lq-why>Type a question first\./)
   const typed = L.K.box(doc, { me: ME, lq: 'Do families book table seats?' })
   assert.doesNotMatch(btnOf(typed, 'data-act="lookup"'), /disabled/)
   assert.match(btnOf(typed, 'data-act="lookup"'), /class="btn dark"/)
@@ -143,7 +143,7 @@ test('8. look-up box: off with its reason when empty; typing enables it (primary
 test('9. the own-insight box: Add is off until something is typed, and says why', () => {
   const d = approved(); d.run = { ...d.run, approvals: {}, decisions: [], gate: { id: 'pick', n: 1, of: 2 }, state: 'gate', stage: 'pick' }
   const empty = L.view(d, {})
-  assert.match(btnOf(empty, 'data-act="add"'), /disabled/); assert.match(plain(empty), /Type an insight, tension or what-if to add it/)
+  assert.match(btnOf(empty, 'data-act="add"'), /disabled/); assert.match(plain(empty), /Type something to add it\. It joins the list ticked, labelled as yours\./)
   const typed = L.view(d, { draft: 'A new tension' })
   assert.doesNotMatch(btnOf(typed, 'data-act="add"'), /disabled/); assert.match(btnOf(typed, 'data-act="add"'), /btn-rect primary/)
   assert.match(html, /ab\.disabled = !ui\.draft\.trim\(\)[^\n]*TerritoriesLogic\.ownWhy/, 'typing and clearing toggle it live, with its words')
@@ -154,7 +154,7 @@ test('10. steer buttons say why they are off; Send and Keep this feel say what t
   const live = run.expeditions.find((e: Doc) => e.state === 'running' || e.state === 'ready')
   assert.match(plain(L.view(run, { sel: live.crew })), /You can steer it once it is back/)
   assert.match(plain(L.view(json('example/states/explore_back.json'), { sel: json('example/states/explore_back.json').crew[0].id, req: { key: 'x', state: 'running' } })), /Waiting for the last change to finish/)
-  assert.match(html, /Greenlight at least one route to send it/)
+  assert.match(html, /Greenlight at least one route\./)
   assert.match(html, /keep\.classList\.toggle\('primary', kd\)/)
 })
 

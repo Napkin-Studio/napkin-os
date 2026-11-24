@@ -41,7 +41,7 @@ test('every step has its one primary as the Booth\'s first control, with what it
     [arrived, 'Find the insights', /About 40 seconds/],
     [pick, 'Explore \\d+ insights? →', /Usually 2 to 3 minutes/],
     [json('example/states/explore_back.json'), 'Review and greenlight →', /optional/],
-    [json('example/states/greenlight_open.json'), 'Send →', /Greenlight at least one route to send it/],
+    [json('example/states/greenlight_open.json'), 'Send →', /Greenlight at least one route\./],
   ] as [Doc, string, RegExp][]) {
     const page = L.view(d, {}), h = slot(page)
     assert.equal(primaries(page), 1, `${label}: one primary on the page`)

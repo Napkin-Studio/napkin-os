@@ -380,7 +380,8 @@ test('before the engine has written, the page offers only the first run, and not
   // The one control is the first run (owner local test 2026-11-23: the page used to offer nothing, a dead end).
   assert.deepEqual([...root.matchAll(/data-act="([^"]+)"/g)].map(m => m[1]), ['first'])
   assert.ok(!/data-tick=|data-form=|data-play=/.test(root), 'no pick control on a page with nothing to pick')
-  assert.ok(!/data-lq-draft|Look something up/.test(root), 'no look-up box before the engine has read anything (territories-redesign)')
+  // the look-up fold is there (the mock), its box off with its reason until the engine has read what arrived
+  assert.match(root, /<details class="fold lqfold"><summary>/); assert.match(root, /<textarea rows="2" disabled/); assert.match(root, /use Find the insights first/)
 })
 
 test('the name, the contract and the seed: the app block is the contract\'s', () => {
@@ -654,7 +655,8 @@ test('Greenlight is a request to the engine under its own move name; the page wr
 test('after a greenlight or a remove, the card, the count and the tray follow the document with no reload (LESSONS 18)', () => {
   const d = gl('greenlight_open')
   let page = L.view(d, {}), t = text(page)
-  assert.match(t, /0 greenlit/); assert.match(t, /Greenlit · 0/); assert.match(t, /None yet\. Open a route to see it as a world/)
+  // nothing greenlit: no tray in the Booth (the mock's), the header's Send off with its reason
+  assert.match(t, /0 greenlit/); assert.doesNotMatch(t, /Greenlit · 0/); assert.match(t, /Greenlight at least one route\./)
   assert.match(page, /<button type="button" class="b pri lg" data-send disabled>/)
   const two = greenlit(d, ['t_started', 't_sunday'])
   page = L.view(two, {}); t = text(page)
@@ -681,8 +683,10 @@ test('the engine\'s own holds disable Send and are said in its words; nothing is
 test('Send opens the choice: Deck Maker sends the greenlit ids and the rest as not chosen; the Production tool says it is not built yet', () => {
   const d = greenlit(gl('greenlight_open'), ['t_started', 't_passenger'])
   const dlg = L.dialogFor('send', d)!
-  assert.equal(dlg.title, 'Send to production')
-  assert.match(text(dlg.html), /Already Started and Passenger Seat go with their worlds, lines, checks and sources\. The other 6 routes travel as routes not chosen/)
+  assert.equal(dlg.title, 'Send 2 routes onward')
+  assert.match(text(dlg.html), /Already Started and Passenger Seat go with their worlds, lines, checks and sources\./)
+  assert.match(text(L.dialogFor('send:deck-maker', d)!.html), /The other 6 routes travel as routes not chosen/, 'said once a place is chosen (the mock)')
+  assert.ok(dlg.html.indexOf('data-dest-pick="production-tool"') < dlg.html.indexOf('data-dest-pick="deck-maker"'), 'Production first, as the mock')
   assert.match(dlg.html, /data-dest-pick="deck-maker"/); assert.doesNotMatch(dlg.html, /data-dest-pick="production-tool"[^>]*disabled/); assert.doesNotMatch(text(dlg.html), /not built yet/)
   // choosing alone sends nothing: the Send button is off until a place is chosen, then names it (territories-redesign, the mock's send screens)
   assert.match(dlg.html, /class="b pri lg" disabled>Send<\/button>/); assert.doesNotMatch(dlg.html, /data-dest="/)
@@ -764,7 +768,7 @@ test('step 3 keeps to the house words and the two faces; no price anywhere, no t
 test('the finished run reads the same way: three greenlit, the Deck send listed, the Production send said to be not built', () => {
   const d = json('example/data.json'), page = L.view(d, {}), t = text(page)
   assert.match(t, /3 greenlit/); assert.match(t, /Greenlit · 3/)
-  assert.match(t, /Deck Maker: 3 routes went, with the other 5 as routes not chosen/); assert.match(t, /Production tool: not built yet, so nothing went/)
+  assert.match(t, /Deck Maker: 3 routes went, with the other 5 as routes not chosen/); assert.match(t, /Production: not built yet, so nothing went/)
 })
 
 

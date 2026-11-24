@@ -824,6 +824,18 @@ details.fold>.fold-b{padding:0 12px 12px;display:grid;gap:10px}
 .why.lock::before{content:none}
 .toast{top:auto;bottom:calc(22px + var(--clan-bottom,0px));transform:translateX(-50%) translateY(20px);background:#141413;color:#fff;border-radius:6px;font:500 13px var(--font-ui);padding:12px 18px;box-shadow:0 8px 24px -8px rgba(0,0,0,.4);z-index:50}
 .toast.on{transform:translateX(-50%) translateY(0)}
+
+/* the mock's blocks: What arrived's flags, the empty start, the World's "more moments", a crew row's Steer */
+.flags{display:grid;gap:8px}
+.bt-notes{margin:0}
+.flag{display:flex;gap:10px;align-items:flex-start;padding:10px 14px;border-radius:8px;background:var(--paper-2);font:15px/1.4 var(--font-serif)}
+.flag b{font:500 10px var(--font-mono);letter-spacing:.08em;text-transform:uppercase;border-radius:4px;padding:2px 7px;margin-top:2px;white-space:nowrap}
+.flag.w b{color:var(--warn);border:1px solid var(--warn)}.flag.n b{color:var(--muted);border:1px solid var(--muted)}
+.sheet-body > .empty{padding:34px 20px;text-align:center;border:1px dashed var(--line-strong);border-radius:10px;display:grid;gap:8px;justify-items:center;color:var(--muted)}
+.sheet-body > .empty h3{margin:0;font:500 22px var(--font-serif);color:var(--ink)}
+.jmore{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0;border-top:1px solid color-mix(in srgb,var(--t-ink) 20%,transparent);font:15px var(--font-serif);opacity:.9}
+.crewc .crew-st.steer{justify-self:end;font:600 12px var(--font-ui)!important;text-decoration:underline;text-underline-offset:3px;color:var(--ink-soft)}
+.exgrid .crewc{grid-template-columns:minmax(0,1fr) auto;align-items:center}
 </style>
 </head>
 <body>
@@ -1142,6 +1154,13 @@ var TerritoriesLogic = (function () {
   }
 
   // ── the Booth's words, from the document ───────────────────────────────
+  /** The Booth's line on What arrived: what the Knowledge agent read, or that nothing came in. */
+  function arrivedLine(data) {
+    var sn = seen(data), r = sn.research;
+    if (sn.from === 'none') return 'I have nothing to read yet.';
+    var parts = [sn.brief ? 'the brief' : '', r ? 'the research' + (r.pins != null && r.findings != null ? ' (' + plural(r.pins, 'pin') + ', ' + plural(r.findings, 'finding') + ')' : '') : ''].filter(Boolean);
+    return 'I read ' + parts.join(' and ') + '. Nothing copied: everything is quoted by name.';
+  }
   function boothNotes(data) {
     var out = [], ids = derivedFindings(data);
     var sn = seen(data), read = [], rb = [];
@@ -1151,10 +1170,10 @@ var TerritoriesLogic = (function () {
       if (sn.research.findings != null) rb.push(plural(sn.research.findings, 'finding'));
     }
     read.push(sn.research ? 'the research' + (rb.length ? ' (' + rb.join(', ') + ')' : '') : 'no research');
-    out.push({ role: 'knowledge', label: 'read', time: '', body: (read.filter(function (x) { return !/^no /.test(x); }).length ? 'Read ' + read.filter(function (x) { return !/^no /.test(x); }).join(' and ') + '. Nothing copied: everything is quoted by name.' : 'Nothing came in to read.'), cites: [] });
+    out.push({ role: 'knowledge', label: 'read', time: '', body: (read.filter(function (x) { return !/^no /.test(x); }).length ? 'Read ' + read.filter(function (x) { return !/^no /.test(x); }).join(' and ') + '. Nothing copied.' : 'Nothing came in to read.'), cites: [] });
     if (ids.length) {
       out.push({ role: 'review', label: 'flagged', time: '', cites: ids,
-        body: 'are derived. Anything built on ' + (ids.length === 1 ? 'it' : 'them') + ' will say so, and I will only ask if ' + (ids.length === 1 ? 'it reaches' : 'one of them reaches') + ' a greenlight.' });
+        body: (ids.length === 1 ? 'is' : 'are') + ' derived. I will only ask if ' + (ids.length === 1 ? 'it reaches' : 'one of them reaches') + ' a greenlight.' });
     }
     arr(data && data.notes).filter(isObj).slice().reverse().forEach(function (n) {
       if (typeof TerritoriesLookups !== 'undefined' && TerritoriesLookups.isLookupNote(n, data)) return;      // the look-up box draws its own notes
@@ -1225,7 +1244,7 @@ var TerritoriesLogic = (function () {
     if (!chips && i.kind !== 'yours') chips = '<span class="meta">No evidence yet</span>';
     return '<label class="ins' + (i.ticked ? ' on' : '') + '" data-ins="' + esc(i.id) + '">' +
       '<input type="checkbox" data-tick="' + esc(i.id) + '"' + (i.ticked ? ' checked' : '') + (editable ? '' : ' disabled') + ' aria-label="Work on this insight">' +
-      '<span class="ins-b"><span class="dcard-top"><span>' + esc(kind) + ' · ' + esc(originOf(i, data)) + '</span>' +
+      '<span class="ins-b"><span class="dcard-top"><span>' + esc(kind) + (i.kind === 'yours' ? ' · ' + esc(originOf(i, data)) : i.derived ? ' · derived' : '') + '</span>' +
       '<span class="dots" title="Evidence strength: ' + why + (i.derived ? ', counted half where it rests on a derived finding' : '') + '" role="img" aria-label="Evidence strength: ' + why + '">' +
       dots.map(function (d) { return '<i class="' + d + '"></i>'; }).join('') + '</span></span>' +
       '<span class="sbtext">' + esc(i.text) + '</span>' +
@@ -1241,7 +1260,11 @@ var TerritoriesLogic = (function () {
         sources: r.sources, verified: r.verified || null, locked: (upd[r.id] || {}).locked === true, status: '' }));
     }
     var out = NS && list.length ? NS.listHtml(list) : '';
-    var finds = arr(data && data.finds).filter(isObj);
+    return out + findsRow(data);
+  }
+  /** What Territories found by its own look-ups, as one source card (on What arrived, and on Pick while there are any). */
+  function findsRow(data) {
+    var finds = arr(data && data.finds).filter(isObj), out = '';
     if (finds.length) {
       out += '<div class="srcrow"><button type="button" class="tsrc" data-arrived="finds" aria-label="What Territories found"><span class="tsrc-band te">Found by Territories</span><span class="tsrc-body"><span class="tsrc-t">Its own look-ups</span>' +
         '<span class="tsrc-row"><span>' + esc(plural(finds.length, 'find')) + ' kept</span></span></span></button></div>';
@@ -1267,7 +1290,7 @@ var TerritoriesLogic = (function () {
     if (sn.from === 'none') {
       return '<article class="sheet">' + sheetHead('Step 1 of 3 · What arrived', 'Nothing came in with this one', 'No brief and no research were carried in, so there is nothing for the crew to read.',
         priBtn('Find the insights', 'data-act="first"', { disabled: true }) + why('Needs a brief or research. Start from Brief Maker or Research, then Continue in → Territories.', 'lock')) +
-        '<div class="sheet-body"><div class="nothing">Territories reads what you already made. It does not start from a blank page.</div></div></article>';
+        '<div class="sheet-body"><div class="empty"><h3>Start from your brief or research</h3><span>Territories reads what you already made. It does not start from a blank page.</span></div></div></article>';
     }
     var keyf = '';
     if (sn.brief) {
@@ -1279,7 +1302,15 @@ var TerritoriesLogic = (function () {
     }
     return '<article class="sheet">' + sheetHead('Step 1 of 3 · What arrived', 'What arrived', 'Made ' + fromWords(sn) + '. The crew reads it in full and quotes it by name; nothing is copied.', firstRunAct(ui, data)) +
       '<div class="stats">' + statsOf(sn).map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + '</div>' +
-      '<div class="sheet-body">' + sourceCards(data) + keyf + '</div></article>';
+      '<div class="sheet-body">' + sourceCards(data) + flagsOf(sn) + keyf + '</div></article>';
+  }
+  /** What the research leaves out and what is only derived, said once on What arrived (the mock's two flags). */
+  function flagsOf(sn) {
+    var r = sn.research; if (!r) return '';
+    var out = '';
+    if (+r.rejected > 0) out += '<div class="flag n"><b>Left out</b><span>' + esc(plural(+r.rejected, 'finding was', 'findings were')) + ' rejected in Research. The crew never uses ' + (+r.rejected === 1 ? 'it' : 'them') + '.</span></div>';
+    if (+r.proposed > 0) out += '<div class="flag w"><b>Derived</b><span>' + esc(plural(+r.proposed, 'finding was', 'findings were')) + ' worked out by an agent and nobody has verified ' + (+r.proposed === 1 ? 'it' : 'them') + ' yet. Anything built on ' + (+r.proposed === 1 ? 'it' : 'them') + ' says so.</span></div>';
+    return out ? '<div class="flags">' + out + '</div>' : '';
   }
 
   function everything(data) {
@@ -1290,14 +1321,16 @@ var TerritoriesLogic = (function () {
         refChip(s.id, data) + '<div class="grow">' + (r.kind === 'brief' ? '<b style="font-weight:600">' + esc(r.label) + '.</b> ' : '') +
         (r.carried ? esc(r.text) : '<span class="meta">Not carried in this document.</span>') + '</div>' + stateChip(r) + '</div>';
     }).join('');
-    return '<details class="evd"' + '><summary>Everything the crew may quote · ' + esc(on) + ' in play</summary><div class="evlist">' + (rows || '<p class="meta">Nothing yet.</p>') + '</div></details>';
+    var up = upstreamOf(data), nf = up.research ? Object.keys(up.research.pins).length : 0, nfi = up.research ? Object.keys(up.research.findings).length : 0;
+    var lead = up.research ? '<p class="meta" style="margin:0 0 8px">' + esc(plural(nf, 'fact') + ' and ' + plural(nfi, 'finding') + ' from Research.') + ' Switch any off to keep it out of the run.</p>' : '';
+    return '<details class="evd"' + '><summary>Everything the crew may quote · ' + esc(on) + ' in play</summary><div class="evlist">' + lead + (rows || '<p class="meta">Nothing yet.</p>') + '</div></details>';
   }
 
   /** Pick's primary and its words, by the pick's state (the engine's run.approvals.pick and the job). */
   function pickAct(data, ui, st, c) {
     var job = ui.job, mw = ui.mw, busy = job && BUSY_STATES[job.state];
     if (st === 'open') return c.ticked ? priBtn('Explore ' + plural(c.ticked, 'insight') + ' →', 'data-act="explore"') + why('Usually 2 to 3 minutes. The crew sets off on its own.') :
-      priBtn('Explore →', 'data-act="explore"', { disabled: true }) + why('Tick at least one insight, then explore.', 'lock');
+      priBtn('Explore →', 'data-act="explore"', { disabled: true }) + why('Tick at least one insight.', 'lock');
     if (st === 'approved') {
       if (busy) return priBtn('Approved ✓', '', { disabled: true }) + why('The crew is setting off.');
       if (job && job.state === 'failed') return priBtn('Send the crew out again', 'data-act="retry"') + why((job.error || 'The engine stopped.') + ' Your pick is saved.', 'bad');
@@ -1309,13 +1342,13 @@ var TerritoriesLogic = (function () {
   }
 
   /** What sits beside Add: why it is off, or what it will do. */
-  function ownWhy(d) { return (d || '').trim() ? 'It joins the list ticked, labelled as yours.' : 'Type an insight, tension or what-if to add it.'; }
+  function ownWhy(d) { return (d || '').trim() ? 'It joins the list ticked, labelled as yours.' : 'Type something to add it. It joins the list ticked, labelled as yours.'; }
   function pickSheet(data, ui) {
     var run = isObj(data && data.run) ? data.run : {}, st = pickState(run), c = counts(data), f = focusOf(data);
     if (st === 'none' && !f.insights.length) return arrivedSheet(data, ui);
     var editable = st === 'open' || st === 'approved';
     var cards = sorted(f.insights).map(function (i) { return insightCard(i, data, editable); }).join('');
-    var stats = statsOf(seen(data)).concat([plural(c.insights, 'insight'), c.ticked + ' ticked']);
+    var stats = statsOf(seen(data)).filter(function (x) { return !/rejected|derived/.test(x); }).concat([plural(c.insights, 'insight'), c.ticked + ' ticked']);
     var add = editable ? '<div class="addsb" data-form="add"><input name="own" value="' + esc(ui.draft || '') + '" placeholder="Add your own insight, tension or what-if…" autocomplete="off" maxlength="' + MAX_TEXT + '" aria-label="Add your own insight">' +
       '<div class="row"><span class="muted" data-add-why>' + esc(ownWhy(ui.draft)) + '</span><span class="spacer"></span><button class="btn-rect primary" type="button" data-act="add"' + ((ui.draft || '').trim() ? '' : ' disabled') + '>Add</button></div></div>' : '';
     var err = isObj(run.error) && run.error.stage === 'pick' ? '<p class="runnote bad" role="alert">' + esc(run.error.message) + (arr(run.error.refused).length ? ' ' + esc(arr(run.error.refused).join(' ')) : '') + '</p>' : '';
@@ -1324,7 +1357,7 @@ var TerritoriesLogic = (function () {
       '<div class="stats">' + stats.map(function (s) { return '<span>' + esc(s) + '</span>'; }).join('') + '</div>' +
       '<div class="sheet-body">' + (seen(data).from === 'none' ? '<div class="nothing">Nothing came in with this one: no brief and no research were carried in.</div>' : '') + err +
       (cards ? '<div class="inslist">' + cards + '</div>' : '<p class="meta">' + (st === 'working' ? 'The insights are on their way.' : 'No insights yet.') + '</p>') +
-      add + everything(data) + (src ? '<details class="fold"><summary>What arrived</summary><div class="fold-b">' + src + '</div></details>' : '') + '</div></article>';
+      add + everything(data) + findsRow(data) + '</div></article>';
   }
 
   // ── step 2: the crew explores ──────────────────────────────────────────
@@ -1474,8 +1507,8 @@ var TerritoriesLogic = (function () {
     return '<div class="crew">' + crew.map(function (m) {
       var busy = m.state === 'running' || m.state === 'ready';
       return '<button type="button" class="crewc' + (ui.sel === m.id ? ' sel' : '') + (busy ? ' run' : '') + '" data-crew="' + esc(m.id) + '" style="--ec:' + m.colour + '" aria-pressed="' + (ui.sel === m.id ? 'true' : 'false') + '">' +
-        '<span class="crew-top">' + sphere(m.role, 30) + '<span><span class="crew-k">' + esc(m.letter) + ' · ' + esc(roleName(m.role)) + '</span><span class="crew-n">' + esc(m.name) + '</span></span></span>' +
-        '<span class="crew-st">' + esc(statusOf(m)) + '</span></button>';
+        '<span class="crew-top">' + sphere(m.role, 30) + '<span><span class="crew-n">' + esc(m.name) + '</span><span class="crew-k">' + esc(m.short) + ' · ' + esc(busy ? statusOf(m) : m.routes.length ? plural(m.routes.length, 'route') : 'found nothing') + '</span></span></span>' +
+        (busy ? '' : '<span class="crew-st steer">' + (ui.sel === m.id ? 'Steering' : 'Steer') + '</span>') + '</button>';
     }).join('') + '</div>';
   }
   function routeCard(t, m, ui) {
@@ -1511,8 +1544,9 @@ var TerritoriesLogic = (function () {
     else note = '';
     var nRoutes = crew.reduce(function (a, m) { return a + m.routes.length; }, 0), act, h2, p;
     if (crew.length && back && !retry) {
-      h2 = 'The crew is back with ' + plural(nRoutes, 'route'); p = plural(crew.length, 'agent') + ' explored on their own. Every route is already developed and ranked.';
-      act = priBtn('Review and greenlight →', 'data-step="greenlight"') + why('Steering an agent first is optional.');
+      var srcN = {}, asideN = 0; crew.forEach(function (m) { asideN += m.set_aside.length; m.way.forEach(function (w) { if (w.cite) srcN[w.cite] = 1; }); });
+      h2 = 'The crew is back with ' + plural(nRoutes, 'route'); p = plural(crew.length, 'agent') + ' explored on their own. ' + plural(Object.keys(srcN).length, 'source') + ' picked up' + (asideN ? ', ' + plural(asideN, 'route') + ' set aside as weak.' : '.');
+      act = priBtn('Review and greenlight →', 'data-step="greenlight"') + why('Every route is already developed and ranked. Steering is optional.');
       note = '';
     } else {
       h2 = 'Send the crew different ways'; p = 'Every agent starts from the same brief and evidence, then takes its own heading. Some stay close; some go as far as they can.';
@@ -1520,9 +1554,9 @@ var TerritoriesLogic = (function () {
       note = '';
     }
     return '<article class="sheet">' + sheetHead('Step 2 of 3 · Explore', h2, p, act) +
-      '<div class="stats">' + exploreStats(data, ui).map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + '</div>' +
+      '<div class="stats">' + (function (st) { if (st[1] === 'all back') st.splice(0, 2, st[0] + ' · all back'); return st; })(exploreStats(data, ui)).map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + '</div>' +
       '<div class="sheet-body">' + err +
-      (crew.length ? '<div class="exgrid"><section class="compass-wrap" aria-label="The compass">' + compassSvg(data, ui) + compassKey(data) + '</section>' + crewCards(data, ui) + '</div>' + routeGroups(data, ui) : crewCards(data, ui)) +
+      (crew.length ? '<div class="exgrid"><section class="compass-wrap" aria-label="The compass">' + compassSvg(data, ui) + compassKey(data) + '</section>' + crewCards(data, ui) + '</div>' + (back ? '' : routeGroups(data, ui)) : crewCards(data, ui)) +
       '</div></article>';
   }
 
@@ -1610,8 +1644,8 @@ var TerritoriesLogic = (function () {
   // move (engine/territory/gates.py: greenlight_route, answer_ask, record_review, approve), and the document it writes back is what the
   // gallery and the tray show. The page keeps no second copy of the gate's rules (run.gate.blocked_by and asks[] are the engine's words).
   var MOVES = { greenlight: 'greenlight_route', remove: 'remove_route', rerank: 'rerank_routes', send: 'send_routes', approve: 'approve', answer: 'answer_ask', review: 'record_review' };
-  var DESTS = [{ id: 'deck-maker', name: 'Deck Maker', dot: 'var(--muted)', does: 'Pitch it: the deck opens with the greenlit routes as the recommendation.', built: true, continueIn: 'ie.napkin.deck-maker' },
-    { id: 'production-tool', name: 'Production tool', dot: '#FF6A55', does: 'Make it: scripts, boards and films start from each route’s world.', built: true, continueIn: 'ie.napkin.production' }];
+  var DESTS = [{ id: 'production-tool', name: 'Production', dot: '#FF6A55', does: 'A Territories node on the canvas. Scripts, boards and films start from each route’s world.', built: true, continueIn: 'ie.napkin.production' },
+    { id: 'deck-maker', name: 'Deck Maker', dot: 'var(--muted)', does: 'Pitch it: the deck opens with the greenlit route as the recommendation.', built: true, continueIn: 'ie.napkin.deck-maker' }];
   var BAND_PHRASE = { core: 'close to the brief', stretch: 'a stretch', far_out: 'far out' };
   var TOUCH = [['poster', 'Poster'], ['story', 'Instagram story'], ['seat', 'Table card'], ['email', 'Email']];
   var HEX6 = /^#[0-9a-fA-F]{6}$/;
@@ -1791,7 +1825,7 @@ var TerritoriesLogic = (function () {
     var n = greenIds(data).length, asks = openAsks(data), covered = {}; asks.forEach(function (a) { covered[a.kind] = 1; });
     var open = holds(data).filter(function (b) { return !covered[b.kind]; }), q = asks.length + open.length, can = n > 0 && !holds(data).length && !asks.length;
     var w = glWords(ui.req), sending = w && /^send:/.test((ui.req && ui.req.key) || '');
-    var words = q ? 'Answer ' + (q === 1 ? 'the question' : 'the ' + q + ' questions') + ' first.' : !n ? 'Greenlight at least one route to send it.' : can && !quiet ? 'Choose Production or Deck Maker next.' : '';
+    var words = q ? 'Answer ' + (q === 1 ? 'the question' : 'the ' + q + ' questions') + ' first.' : !n ? 'Greenlight at least one route.' : can && !quiet ? 'Choose Production or Deck Maker next.' : '';
     return '<button type="button" class="b pri lg" data-send' + (can ? '' : ' disabled') + '>' + esc(label || (n ? 'Send ' + plural(n, 'route') + ' →' : 'Send →')) + '</button>' +
       why(sending ? w : words, sending && ui.req.state === 'failed' ? 'bad' : can ? '' : 'lock');
   }
@@ -1871,7 +1905,7 @@ var TerritoriesLogic = (function () {
   function greenlightBooth(data, ui) {
     var all = developed(data), ids = greenIds(data), byId = {}; all.forEach(function (t) { byId[t.id] = t; });
     var rows = ids.map(function (id) { return byId[id]; }).filter(Boolean);
-    var tray = '<div class="tray" aria-label="Greenlit routes"><span class="psec-t" style="margin:0">Greenlit · ' + rows.length + '</span>' + (rows.length ? rows.map(function (t) {
+    var tray = !rows.length ? '' : '<div class="tray" aria-label="Greenlit routes"><span class="psec-t" style="margin:0">Greenlit · ' + rows.length + '</span>' + (rows.length ? rows.map(function (t) {
       var p = pal(t);
       return '<div class="glrow"><span class="sw" style="background:' + p.bg + ';border-color:' + p.ink + '"></span><b>' + esc(t.name) + '</b><button type="button" class="linkbtn" data-green="' + esc(t.id) + '" aria-label="Take ' + esc(t.name) + ' off the greenlit list">remove</button></div>'; }).join('') :
       '<p class="bt-hint">None yet. Open a route to see it as a world, or greenlight straight from its card.</p>') + '</div>';
@@ -1885,8 +1919,7 @@ var TerritoriesLogic = (function () {
       return card('strategy', 'sent', (d ? d.name : 'Elsewhere') + (s.status === 'sent' ? ': ' + plural(arr(s.territory_ids).length, 'route') + ' went, with the other ' + arr(s.not_chosen).length + ' as routes not chosen.' : ': not built yet, so nothing went.'));
     }).join('');
     return tray + asks.map(function (a) { return askCard(a, data, ui); }).join('') + hold +
-      card('research', 'so far', 'This exploration so far: ' + plural(crewN, 'agent') + (lk ? ', ' + plural(lk, 'look-up') : '') + '. The running totals are in Decisions, next to what got greenlit.') +
-      card('review', 'checked', 'Every route was tested against the brief, the mandatories and the rival lines. ' + ranked + ' ' + (ranked === 1 ? 'is' : 'are') + ' ranked by the blind judge.') + sends +
+      card('review', 'checked', 'Every route was tested against the brief and the rival lines. ' + ranked + ' ' + (ranked === 1 ? 'is' : 'are') + ' ranked by the blind judge.') + sends +
       (ui.mw === false ? engineOffCard() : '');
   }
   function dock(data, ui) {
@@ -1917,11 +1950,10 @@ var TerritoriesLogic = (function () {
   function sendDialog(data, pick) {
     var all = developed(data), ids = greenIds(data), names = ids.map(function (id) { var t = all.filter(function (x) { return x.id === id; })[0]; return t ? t.name : ''; }).filter(Boolean);
     var rest = all.length - names.length, d0 = DESTS.filter(function (d) { return d.id === pick && d.built; })[0] || null;
-    return { title: 'Send to production', closeInside: true, sans: true, html: '<p class="meta" style="margin:0">' + esc(_list(names)) + (names.length === 1 ? ' goes with its world, lines, checks and sources.' : ' go with their worlds, lines, checks and sources.') +
-      (rest ? ' The other ' + esc(plural(rest, 'route')) + ' travel as routes not chosen.' : '') + '</p>' +
+    return { title: 'Send ' + plural(names.length, 'route') + ' onward', closeInside: true, sans: true, html: '<p class="meta" style="margin:0">' + esc(_list(names)) + (names.length === 1 ? ' goes with its world, lines, checks and sources.' : ' go with their worlds, lines, checks and sources.') + '</p>' +
       DESTS.map(function (d) {
         return '<button type="button" class="wsrow opt' + (d0 && d0.id === d.id ? ' on' : '') + '" data-dest-pick="' + d.id + '" aria-pressed="' + (d0 && d0.id === d.id ? 'true' : 'false') + '"' + (d.built ? '' : ' disabled aria-disabled="true"') + '><span class="rd" aria-hidden="true"></span><span><b>' + esc(d.name) + '</b>' + (d.built ? '' : ' <span class="mark-undone">not built yet</span>') + '<br><span class="meta">' + esc(d.does) + '</span></span></button>'; }).join('') +
-      '<div class="row sendfoot">' + why(d0 ? 'It opens ' + d0.name + ' when the send is through.' : 'Choose where it goes.', d0 ? '' : 'lock') + '<span class="spacer"></span><button type="button" class="b" data-close>Cancel</button>' +
+      '<div class="row sendfoot">' + why(d0 ? (rest ? 'The other ' + plural(rest, 'route') + ' travel as routes not chosen.' : 'It opens ' + d0.name + ' when the send is through.') : 'Choose where it goes.', d0 ? '' : 'lock') + '<span class="spacer"></span><button type="button" class="b" data-close>Cancel</button>' +
       (d0 ? priBtn('Send to ' + d0.name, 'data-dest="' + d0.id + '"') : priBtn('Send', '', { disabled: true })) + '</div>' };
   }
   function _list(a) { return a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]; }
@@ -1944,16 +1976,18 @@ var TerritoriesLogic = (function () {
     var crewNow = crewOf(data), line = at === 2 ? 'I tested every route. Greenlight as many as you like; I will ask only if one needs proof.' : at === 1 ? (!crewNow.length ? crewWords(ui) : allBack(crewNow) ? 'The crew is back. Steer any agent if you want to; you do not have to.' : 'I lead the crew. Each agent takes its own heading, and I keep them apart.') :
       pickState(run) === 'approved' && !crewNow.length ? (crewOut(run, ui) ? crewWords(ui) : 'You picked. Waiting for the engine to send the crew out.') :
       pickState(run) === 'working' ? 'I am reading what came in and writing the insights.' :
-      gate && gate.dex ? gate.dex : pickState(run) === 'none' && !focusOf(data).insights.length ? 'I read what came in. The crew has not started yet.' : 'I read the brief and the research. Tick what the crew should work on.';
-    var notes = at === 2 ? greenlightBooth(data, ui) : at === 1 ? exploreBooth(data, ui) : boothNotes(data).map(function (n) {
+      gate && gate.dex ? gate.dex : pickState(run) === 'none' && !focusOf(data).insights.length ? arrivedLine(data) :
+      counts(data).ticked ? 'Tick the insights the crew should explore. The strongest ' + numWord(counts(data).ticked) + ' are ticked for you.' : 'Nothing is ticked yet. Tick at least one insight and the Explore button wakes up.';
+    if (typeof TerritoriesLookups !== 'undefined' && at !== 2 && TerritoriesLookups.asking(ui)) { line = 'Ask me to look something up. I search the open web and pin only quotes that check against their page.'; role = 'research'; }
+    var notes = at === 2 ? greenlightBooth(data, ui) : at === 1 ? exploreBooth(data, ui) : boothNotes(data).filter(function (n) { return focusOf(data).insights.length || n.role !== 'knowledge'; }).map(function (n) {
       return '<article class="bc"><header class="bc-hd">' + sphere(n.role, 20) + '<span class="bc-who">' + esc(roleName(n.role)) + ' · ' + esc(n.label) + '</span><span class="bc-t">' + esc(n.time || 'now') + '</span></header>' +
         '<div class="bc-note">' + (n.cites.length ? n.cites.map(function (c) { return refChip(c, data); }).join(' ') + ' ' : '') + esc(n.body) + '</div></article>';
     }).join('');
-    if (at === 1) role = 'strategy'; if (at === 2) role = 'review';
+    if (at === 1 && role !== 'research') role = 'strategy'; if (at === 2) role = 'review';
     var me = ui.me && ui.me.name ? '<div class="pfoot">Checks signed as <b>' + esc(ui.me.name) + '</b></div>' : '';
     return '<aside class="booth-col' + (open ? '' : ' booth-off') + '" id="stab" aria-label="Booth"><div class="booth"><div class="booth-hd"><span class="booth-nm">Booth</span><span class="booth-sp"></span>' +
       '<button type="button" class="booth-hide" data-booth="hide" aria-label="Hide the Booth" aria-expanded="' + (open ? 'true' : 'false') + '" aria-controls="stab" aria-keyshortcuts="]">Hide<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5"/></svg></button></div>' +
-      '<div class="booth-body">' + agentBlock(role, line, '', !!(ui.job && BUSY_STATES[ui.job.state])) + actSlot() + notes +
+      '<div class="booth-body">' + agentBlock(role, line, '', !!(ui.job && BUSY_STATES[ui.job.state])) + actSlot() + (notes ? '<span class="psec-t bt-notes">Notes</span>' + notes : '') +
       (at === 2 || typeof TerritoriesLookups === 'undefined' ? '' : TerritoriesLookups.section(data, ui)) +
       me + '</div></div></aside>';
   }
@@ -1969,7 +2003,7 @@ var TerritoriesLogic = (function () {
     return '<header class="ahead"><div class="ahead-text"><div class="ahead-eye" title="' + esc(eyebrow) + '">' + esc(eyebrow) + '</div><h1 class="ahead-title">Territories<span class="pdot" aria-hidden="true"></span></h1></div>' +
       '<div class="ahead-right"><ol class="flow" aria-label="Steps">' + STEPS.map(function (p, i) {
         var live = i <= s.reached;
-        return '<li><button type="button" data-step="' + p[0] + '"' + (i === (st.view != null ? st.view : s.at) ? ' aria-current="step"' : '') + (i < s.at ? ' class="done"' : '') + (live ? '' : ' disabled aria-disabled="true" title="Opens when the step before it is done"') + '><i>' + (i < s.at ? '✓' : i + 1) + '</i><span>' + p[1] + '</span></button></li>';
+        return '<li><button type="button" data-step="' + p[0] + '"' + (i === (st.view != null ? st.view : s.at) ? ' aria-current="step"' : '') + (i < (st.view != null ? st.view : s.at) ? ' class="done"' : '') + (live ? '' : ' disabled aria-disabled="true" title="Opens when the step before it is done"') + '><i>' + (i < (st.view != null ? st.view : s.at) ? '✓' : i + 1) + '</i><span>' + p[1] + '</span></button></li>';
       }).join('') + '</ol></div></header>';
   }
 
@@ -1999,16 +2033,20 @@ var TerritoriesLogic = (function () {
   function orb(role, bad) {
     return Roles ? Roles.tag(role, { size: 150, state: bad ? 'idle' : 'working', label: roleName(role) + ' agent' + (bad ? ', stopped' : ', working') }) : sphere(role, 150);
   }
+  /** What each crew member is doing, in plain words, for the stage's headline (the mock: "Copy agent is going the other way"). */
+  var NUM_WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
+  function numWord(n) { return NUM_WORDS[n] || String(n); }
+  var HEADING_WORDS = { cr_core: 'staying close to the core', cr_feel: 'going towards a feeling', cr_opposite: 'going the other way', cr_adjacent: 'looking next door', cr_outside: 'going far outside the category' };
   function stageHtml(kind, data, ui) {
     var job = ui.job || {}, bad = /failed$/.test(kind), stopped = /stopped$/.test(kind), ended = bad || stopped, sn = seen(data), crew = arr(job.crew).filter(isObj), o;
     // Stop, on the right of the run bar while the engine works (Brief's Stop): the middleware's cancel_job for this job
     var stopBtn = '<span class="procActs"><button type="button" class="sp-btn" data-act="stop"' + (!job.id || job.stopping ? ' disabled' : '') + (!job.id ? ' title="Starting: Stop is ready once the engine has the job"' : '') + '>' + (job.stopping ? 'Stopping…' : 'Stop') + '</button></span>';
     if (/^finding/.test(kind)) {
       var desk = [];
-      if (sn.brief) desk.push(slip('Brief', (sn.brief.title || 'The brief') + ': ' + plural(sn.brief.filled, 'field'), 'ok'));
-      if (sn.research) desk.push(slip('Research', (sn.research.title || 'The research') + ': ' + [sn.research.pins != null ? plural(sn.research.pins, 'pin') : '', sn.research.findings != null ? plural(sn.research.findings, 'finding') : ''].filter(Boolean).join(', '), 'ok'));
-      if (sn.research && +sn.research.rejected > 0) desk.push(slip('Left out', plural(+sn.research.rejected, 'rejected finding') + ', never used', 'ok'));
-      var der = derivedFindings(data).length; if (der) desk.push(slip('Flagged', plural(der, 'derived finding') + ', marked as derived', 'ok'));
+      if (sn.brief) desk.push(slip('Brief · .clan', (sn.brief.title || 'The brief') + ': ' + plural(sn.brief.filled, 'field'), 'ok'));
+      if (sn.research) desk.push(slip('Research · .clan', (sn.research.title || 'The research') + ': ' + [sn.research.pins != null ? plural(sn.research.pins, 'pin') : '', sn.research.findings != null ? plural(sn.research.findings, 'finding') : ''].filter(Boolean).join(', '), 'ok'));
+      if (!bad && sn.research && +sn.research.rejected > 0) desk.push(slip('Left out', plural(+sn.research.rejected, 'rejected finding') + ', never used', 'ok'));
+      var der = derivedFindings(data).length; if (der && !bad) desk.push(slip('Flagged', plural(der, 'derived finding') + ', marked as derived', 'ok'));
       var reading = [sn.brief ? 'the brief' : '', sn.research ? ([sn.research.pins != null ? plural(sn.research.pins, 'pin') : '', sn.research.findings != null ? plural(sn.research.findings, 'finding') : ''].filter(Boolean).join(' and ').replace(/^./, function (c) { return 'the ' + c; }) || 'the research') : ''].filter(Boolean).join(' and ') || 'what arrived';
       o = { role: 'strategy', next: 'review', at: 1, steps: [['Knowledge (read)', 'read'], ['Strategy (find the insights)', 'think'], ['Review (check)', 'check']], l1: bad ? 'The crew could not finish' : stopped ? 'You stopped it' : 'Finding the insights', l2: bad ? (job.error || 'The engine stopped.') + ' Nothing was lost.' : stopped ? 'You stopped it at strategy. Nothing was lost.' : 'Reading ' + reading + ' for tensions and truths.',
         pills: pills([{ t: '1. Knowledge (read)', s: 'done' }, { t: '2. Strategy (find the insights)', s: bad ? 'bad' : stopped ? '' : 'now' }, { t: '3. Review (check)' }], ended ? '' : ['Usually about 40 seconds', secs(job)].filter(Boolean).join(' · ')),
@@ -2026,13 +2064,13 @@ var TerritoriesLogic = (function () {
       var eta = ended ? (crew.length ? nBack + ' of ' + crew.length + ' were back before it stopped' : '') :
         [crew.length ? nBack + ' of ' + plural(crew.length, 'agent') + ' back' : job.progress && job.progress.total > 0 ? job.progress.done + ' of ' + plural(job.progress.total, 'agent') + ' back' : 'Setting off', 'usually 2 to 3 minutes', secs(job)].filter(Boolean).join(' · ');
       o = { at: 0, steps: [['Explore', 'think'], ['Develop', 'write'], ['Judge', 'check']], next: out[1] ? out[1].role : 'review', role: bad ? 'strategy' : lead ? lead.role || 'strategy' : 'strategy',
-        l1: bad ? 'The crew stopped before it was back' : stopped ? 'You stopped the crew' : lead ? roleName(lead.role || 'strategy') + ' agent · ' + (lead.name || '') : 'The crew is setting off',
-        l2: bad ? (job.error || 'The engine stopped.') + ' Your pick is saved, nothing was lost.' : stopped ? 'You stopped it while exploring. Your pick is saved; nothing was lost.' : 'Each agent takes its own heading. Routes appear on the next screen when ' + (crew.length ? 'all ' + crew.length : 'they all') + ' are back.',
+        l1: bad ? 'The crew stopped before it was back' : stopped ? 'You stopped the crew' : lead ? roleName(lead.role || 'strategy') + ' agent is ' + (HEADING_WORDS[lead.id] || 'taking its own heading') : 'The crew is setting off',
+        l2: bad ? (job.error || 'The engine stopped.') + ' Your pick is saved, nothing was lost.' : stopped ? 'You stopped it while exploring. Your pick is saved; nothing was lost.' : 'Each agent takes its own heading. Routes appear on the next screen when ' + (crew.length ? 'all ' + numWord(crew.length) : 'they all') + ' are back.',
         pills: pills([{ t: '1. Explore' + (crew.length ? ' (' + plural(crew.length, 'agent') + ')' : ''), s: bad ? 'bad' : stopped ? '' : 'now' }, { t: '2. Develop' }, { t: '3. Judge' }], eta), lane: lane,
         left: wsec('Picked for them · ' + ticked.length, ticked.slice(0, 4).map(function (i) { return slip(text(i.theme) || KIND_WORDS[i.kind] || 'Insight', i.text, 'ok'); })),
         right: wsec('Their headings', crew.slice(0, 4).map(function (m) { return slip(roleName(m.role || 'strategy') + ' · ' + (m.short || ''), m.heading || '', m.state === 'out' ? '' : 'ok', false, m.colour); })),
         run: ended ? '<button type="button" class="side-link" data-step="pick">← Back to your pick</button>' + (bad ? '<span class="bad">Failed while exploring.</span>' : '<span>Stopped while exploring.</span>') + '<span class="sp"></span>' + '<span class="procActs"><button type="button" class="go" data-act="retry">Send the crew out again</button></span>' :
-          '<button type="button" class="side-link" data-step="pick">← Back to your pick</button><span class="sp"></span>' + stopBtn };
+          '<button type="button" class="side-link" data-step="pick">← Back to your pick</button><span class="sp">Nothing needed from you.</span>' + stopBtn.replace('>Stop<', '>Stop the crew<') };
     }
     var env = { agent: Roles && Roles.of ? Roles.of(o.role) || 'strategy' : o.role, next: Roles && Roles.of ? Roles.of(o.next || o.role) || 'strategy' : o.role, at: o.at, failed: bad, ended: ended,
       steps: o.steps.map(function (x) { return { label: x[0], kind: x[1] }; }) };
@@ -2253,12 +2291,8 @@ var TerritoriesWorld = (function () {
 
   // ── what a route says ──
   /** The routes in the order the gallery shows them (agent by agent, ranked inside each), so Next walks the page the person came from. */
-  function order(data) {
-    var crew = L.crewOf(data), all = L.developed(data), out = [], known = {};
-    crew.forEach(function (m) { known[m.id] = 1; all.filter(function (t) { return t.crew === m.id; }).sort(L.byRank).forEach(function (t) { out.push(t); }); });
-    all.filter(function (t) { return !known[t.crew]; }).sort(L.byRank).forEach(function (t) { out.push(t); });
-    return out;
-  }
+  /** The routes in the judge's order, as Greenlight lists them (the World's Route NN and its arrows follow it). */
+  function order(data) { return L.developed(data).slice().sort(L.byRank); }
   function route(data, id) { return order(data).filter(function (t) { return t.id === id; })[0] || null; }
   function n100(v, d) { v = Math.round(+v); return isFinite(v) ? Math.max(0, Math.min(100, v)) : d; }
   function norm(d) { d = isObj(d) ? d : {}; return { tone: n100(d.tone, 50), energy: n100(d.energy, 50), register: n100(d.register, 50), brand: n100(d.brand, 50) }; }
@@ -2330,9 +2364,10 @@ var TerritoriesWorld = (function () {
     var dial = dialOf(t, ui), ft = feel(t, dial);
     var pp = typeof TerritoriesPictures !== 'undefined' ? TerritoriesPictures.panel(t, ui, { green: L.greenIds(data).indexOf(t.id) !== -1 }) : '';
     if (ui && ui.wview === 'wall') return pp + '<div class="wall">' + WALL.map(function (k) { return '<div class="wcell w-' + k + '"><span class="weyebrow">' + esc(TP_NAMES[k]) + '</span>' + touchpoint(ft, k, data, ui, dial) + '</div>'; }).join('') + '</div>';
-    return pp + '<ol class="journey">' + journeyOf(data).map(function (j) {
+    var jn = journeyOf(data), all = !!(ui && ui.wmore), shown = all ? jn : jn.slice(0, 2), more = jn.slice(2);
+    return pp + '<ol class="journey">' + shown.map(function (j) {
       return '<li class="jstep j-' + esc(j.key) + '"><div class="jwhen"><b>' + esc(j.day) + '</b><span>' + esc(j.where) + '</span></div>' + touchpoint(ft, j.key, data, ui, dial) + '</li>';
-    }).join('') + '</ol>';
+    }).join('') + '</ol>' + (!all && more.length ? '<div class="jmore"><span>' + esc(more.length + ' more moment' + (more.length === 1 ? '' : 's')) + ': ' + esc(more.map(function (j) { return (TP_NAMES[j.key] || j.key).replace(/ · .*$/, ''); }).join(', ')) + '.</span><button type="button" class="b sm" data-wmore>Show the whole weekend</button></div>' : '');
   }
   /** What a dial move redraws, without a page render (a slider being dragged must stay in the hand): the sheet's variables and its body. */
   function refresh(data, ui, t) { var ft = feel(t, dialOf(t, ui)); return { style: L.tvars(ft), cls: 'sheet world' + ffOf(ft), body: worldBody(data, ui, t) }; }
@@ -2347,7 +2382,7 @@ var TerritoriesWorld = (function () {
       (typeof t.rank === 'number' ? ' · Judge #' + t.rank : '') + '</span>' +
       '<h2>' + esc(t.name) + '</h2><p>' + esc(t.thought) + '</p></div></header><div class="wtools"><div class="wseg" role="group" aria-label="How to see it">' +
       [['journey', 'A weekend with it'], ['wall', 'All on one wall']].map(function (x) { return '<button type="button" data-wv="' + x[0] + '" aria-pressed="' + (wv === x[0] ? 'true' : 'false') + '">' + x[1] + '</button>'; }).join('') +
-      '</div><span class="spacer" style="flex:1"></span><button type="button" class="b sm" data-wdock="anim">▶ Play animatic</button><button type="button" class="b sm" data-wdock="present">▶ Present</button></div><div class="wbody2" id="wbody">' + worldBody(data, ui, t) + '</div><div class="wnote">Sketches to show the feel, not finished work. Pictures come later.</div></article>';
+      '</div><span class="spacer" style="flex:1"></span><button type="button" class="b sm" data-wdock="anim">▶ Play animatic</button>' + (ui && ui.speech === false ? '' : '<button type="button" class="b sm" data-speak="' + esc(t.id) + '">▶ Read it aloud</button>') + '<button type="button" class="b sm" data-dock="export">Export…</button></div><div class="wbody2" id="wbody">' + worldBody(data, ui, t) + '</div></article>';
   }
 
   // ── the Booth column: the panel for this route ──
@@ -2412,7 +2447,7 @@ var TerritoriesWorld = (function () {
     var gl = L.glWords(ui.req), body = tab === 'feel' ? tabFeel(t, ui) : tab === 'lines' ? tabLines(t, ui) : tab === 'why' ? tabWhy(t, data, ui) : tabTest(t);
     return '<aside class="booth-col' + (open ? '' : ' booth-off') + '" id="stab" aria-label="Booth"><div class="booth"><div class="booth-hd"><span class="booth-nm">Booth</span><span class="booth-sp"></span>' +
       '<button type="button" class="booth-hide" data-booth="hide" aria-label="Hide the Booth" aria-expanded="' + (open ? 'true' : 'false') + '" aria-controls="stab" aria-keyshortcuts="]">Hide<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5"/></svg></button></div>' +
-      '<div class="booth-body">' + L.agentBlock('strategy', t.name + ' as a campaign across one weekend. Move a dial and the words move with it.', 'a developed route', false) + L.actSlot() +
+      '<div class="booth-body">' + L.agentBlock('strategy', 'This route as a campaign across one weekend. Move a dial and the words move with it.', 'a developed route', false) + L.actSlot() +
       '<div class="navrow"><button type="button" class="linkbtn" data-w-back>← All routes</button><span class="spacer"></span><button type="button" class="btn-rect sq" data-w-nav="-1" aria-label="Previous route"' + (i > 0 ? '' : ' disabled') + '>←</button>' +
       '<span class="meta">' + (i + 1) + ' of ' + all.length + '</span><button type="button" class="btn-rect sq" data-w-nav="1" aria-label="Next route"' + (i < all.length - 1 ? '' : ' disabled') + '>→</button></div>' +
       (gl ? '<p class="runnote' + (ui.req && ui.req.state === 'failed' ? ' bad' : '') + '" role="status">' + esc(gl) + '</p>' : '') +
@@ -2904,8 +2939,8 @@ var TerritoriesLookups = (function () {
     if (!named(ui)) return NEEDS_NAME;
     if (lookingUp(ui)) return 'Looking it up. The result appears here when it is back.';
     if (busy(ui)) return 'Waiting for the last change to finish.';
-    if (!norm(ui && ui.lq)) return 'Type a question to look it up.';
-    return 'Searches the open web. Only quotes that check against their page can be pinned.';
+    if (!norm(ui && ui.lq)) return 'Type a question first.';
+    return 'Enter to look it up. Only quotes that check against their page can be pinned.';
   }
   /** The box. The question is only asked here: nothing is searched until the card it makes is OK'd. */
   function box(data, ui) {
@@ -2958,7 +2993,10 @@ var TerritoriesLookups = (function () {
 
   /** What the Booth carries for look-ups: the box, the cards waiting for an OK, and what the newest look-ups found. */
   function section(data, ui) {
-    if (!isObj(data && data.run) || !Object.keys(data.run).length) return '';      // nothing for a request to name until the engine has written the document (redesign: not shown)
+    if (!isObj(data && data.run) || !Object.keys(data.run).length) {      // nothing for a request to name until the engine has written the document: the fold, its box off, and why
+      return '<details class="fold lqfold"><summary>' + L.sphere('research', 18) + 'Look something up</summary><div class="fold-b"><div class="bt-box"><textarea rows="2" disabled placeholder="Ask the Research agent to look something up…" aria-label="Ask the Research agent to look something up"></textarea>' +
+        '<div class="bt-hint">Look-ups open once the crew has read what arrived: use Find the insights first.</div><div class="row"><span class="bt-scope">Whole exploration</span><span class="spacer"></span><button type="button" class="btn dark" disabled>Look it up</button></div></div></div></details>';
+    }
     var qs = lookups(data), wait = qs.filter(function (q) { return q.status === 'ask'; });
     var done = qs.filter(function (q) { return q.status === 'done'; }).slice(-SHOWN).reverse();
     var open = !!norm(ui && ui.lq) || lookingUp(ui) || !!(ui && ui.lqOpen);
@@ -2968,6 +3006,8 @@ var TerritoriesLookups = (function () {
 
   // ── the person's moves: requests, never writes ──
   function handles(a) { return a === 'lookup' || a === 'lq_ok' || a === 'lq_no' || a === 'pin'; }
+  /** Whether the person is asking the Research agent something now (the Booth then speaks as Research, as the mock). */
+  function asking(ui) { return !!(ui && (norm(ui.lq) || lookingUp(ui) || ui.lqOpen)); }
   function act(data, ui, e, env) {
     var who = by(env);
     if (!who) return { writes: [], toast: NEEDS_NAME };
@@ -2988,7 +3028,7 @@ var TerritoriesLookups = (function () {
     return { writes: [], request: { key: 'lq:' + lq.id, what: 'The look-up', input: { step: 'lookup', lookup_id: lq.id, ok: e.a === 'lq_ok', by: who } } };
   }
 
-  return { box: box, okCard: okCard, resultCards: resultCards, findCard: findCard, section: section, why: why, link: link, isLookupNote: isLookupNote, handles: handles, act: act, words: words };
+  return { asking: asking,  box: box, okCard: okCard, resultCards: resultCards, findCard: findCard, section: section, why: why, link: link, isLookupNote: isLookupNote, handles: handles, act: act, words: words };
 })();
 </script>
 
@@ -3314,7 +3354,7 @@ var TerritoriesLookups = (function () {
   var W = TerritoriesWorld, animEl = null, presEl = null, anim = null, pres = null;
   ui.wview = 'journey'; ui.wtab = 'feel'; ui.dials = {}; ui.react = {};
   ui.speech = !!(window.speechSynthesis && window.SpeechSynthesisUtterance);
-  function openWorld(id) { ui.world = id; ui.wview = 'journey'; ui.wtab = 'feel'; render(); window.scrollTo(0, 0); }
+  function openWorld(id) { ui.wmore = false; ui.world = id; ui.wview = 'journey'; ui.wtab = 'feel'; render(); window.scrollTo(0, 0); }
   function worldRoute() { return ui.world ? W.route(data(), ui.world) : null; }
   /** A dial moved: redraw the sheet in place (the slider stays in the hand) and the buttons that depend on it. */
   function dialMoved(key, v) {
@@ -3479,6 +3519,7 @@ var TerritoriesLookups = (function () {
     if ((b = t.closest('[data-lq-ok]'))) { if (!b.disabled) run({ a: 'lq_ok', id: b.getAttribute('data-lq-ok') }); return; }
     if ((b = t.closest('[data-lq-no]'))) { if (!b.disabled) run({ a: 'lq_no', id: b.getAttribute('data-lq-no') }); return; }
     if ((b = t.closest('[data-pin]'))) { if (!b.disabled) run({ a: 'pin', id: b.getAttribute('data-pin'), on: b.getAttribute('data-on') === '1' }); return; }
+    if ((b = t.closest('[data-wmore]'))) { ui.wmore = true; render(); return; }
     if ((b = t.closest('[data-act="stop"]'))) { if (!b.disabled) stopRun(); return; }
     if ((b = t.closest('[data-act="add"]'))) { addOwn(); return; }
     if ((b = t.closest('[data-act]'))) { run({ a: b.getAttribute('data-act') }); return; }
