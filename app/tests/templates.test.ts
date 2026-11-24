@@ -874,7 +874,7 @@ test('a note on a brief can be fixed by the crew, and the worker shows in the si
   const said: string[] = []
   let locked = false
   const env = {
-    FIX: null, DRAFT: null, FIX_SAY, walker, renderSideStop: () => {}, boothAsk: () => {}, STRAT_: 'The Strategy agent', WRITER: 'the Brief agent', REV: 'the Review agent', NO_MW: 'no middleware', phase: 'doc', reduce: false,
+    FIX: null, DRAFT: null, FIX_SAY, walker, renderSideStop: () => {}, boothAsk: () => {}, boothWaiting: () => 0, STRAT_: 'The Strategy agent', WRITER: 'the Brief agent', REV: 'the Review agent', NO_MW: 'no middleware', phase: 'doc', reduce: false,
     $: (id: string) => (id === 'walker' ? walker : id === 'sideAgent' ? side : null),
     REGEN: {}, fieldOf: () => null, roleOf: (k: string) => k,
     ROLES: { of: (k: string) => k, name: (k: string) => ({ synthesis: 'Strategy agent' } as Record<string, string>)[k] || 'An agent', auto: () => {},
@@ -2886,7 +2886,7 @@ test('brief: Lock waits until Needs you is empty, open questions included', () =
   const run = (rows: unknown[], canLock = true) => {
     const env = { $: el, arr, lockState: () => ({ can_lock: canLock, reopened: [] }), approveLocked: () => false, get: () => false,
       draftLive: () => false, needsRows: () => rows, renderStateLine() {}, docVersion: () => 'v1', SEL: null, NEEDS_N: null, READY_NUDGE: false,
-      lockListHtml: () => '', bindLkItems() {} }
+      lockListHtml: () => '', bindLkItems() {}, boothAsk() {}, boothWaiting: () => 0 }
     lift<{ renderLockBtn(): void }>(BM, ['lockWhy', 'renderLockBtn'], env).renderLockBtn()
     return { disabled: el('lockBtn').disabled, why: el('lockWhy').textContent }
   }
@@ -2906,7 +2906,7 @@ test('brief: Lock waits until Needs you is empty, open questions included', () =
   const el2 = (id: string) => els2[id] ||= { hidden: false, disabled: false, textContent: '', title: '', innerHTML: '', classList: { toggle() {} } }
   lift<{ renderLockBtn(): void }>(BM, ['lockWhy', 'renderLockBtn'], { $: el2, arr, lockState: () => null, approveLocked: () => false, get: () => false,
     draftLive: () => false, needsRows: () => [], renderStateLine() {}, docVersion: () => 'v1', SEL: null, NEEDS_N: null, READY_NUDGE: false,
-    lockListHtml: () => '', bindLkItems() {} }).renderLockBtn()
+    lockListHtml: () => '', bindLkItems() {}, boothAsk() {}, boothWaiting: () => 0 }).renderLockBtn()
   assert.equal(el2('lockBtn').disabled, true, 'the lock list not loaded yet: Lock waits')
 })
 
@@ -5120,7 +5120,7 @@ function redraftPage(o: { locked?: string[] } = {}) {
     pollJob: () => {},
     window: { scrollTo: () => {} }, setTimeout: () => 0,
     runJob: (j: J, input: Record<string, unknown>) => { j.state = 'sending'; runs.push({ j, input }) },
-    boothAsk: () => {},
+    boothAsk: () => {}, boothWaiting: () => 0,
   }
   const f = lift<{ startDraft(p: string, a: unknown[], id?: string | null, inPlace?: boolean): void; sweepKeys(j: unknown): string[] }>(BM,
     ['startDraft', 'draftLive', 'sweepKeys', 'markSweep', 'draftSide', 'renderSideStop', 'draftInPlace', 'sideAgent'], env)
@@ -5496,4 +5496,50 @@ test('brief: a working name that carries a caveat gives a short document title',
   // The sheet's head, its tab and the export read the short name too, and the engine writes one.
   assert.match(BM, /shortName\(get\('project_name'\)\)/)
   assert.match(BM, /\$\('hProj'\)\.textContent=pn\|\|dt/)
+})
+
+// ── T10 (2026-11-24): a Booth the shell restored hidden kept Lock out of reach, so the brief stayed a v1 draft ──
+for (const [name, src] of [['Brief Maker', BM], ['Research', RT]] as const) {
+  test(`${name}: hidden on load with something waiting, the Booth comes in, whichever arrives first`, () => {
+    // the count first, then the shell's stored "hidden"
+    const b = booth(src, 1440)
+    b.boothAsk(5)
+    b.boothSet({ t: 'shell', open: false })
+    assert.equal(b.BOOTH.open, false, 'the stored choice lands first')
+    assert.equal(b.timers.at(-1)?.ms, 1000)
+    b.timers.at(-1)!.f()
+    assert.equal(b.BOOTH.open, true, 'then it comes in on what waits')
+    // the shell's "hidden" first, then the count
+    const c = booth(src, 1440)
+    c.boothSet({ t: 'shell', open: false }); c.boothAsk(5); c.timers.at(-1)!.f()
+    assert.equal(c.BOOTH.open, true)
+    // nothing waiting: the stored choice stands
+    const d = booth(src, 1440)
+    d.boothSet({ t: 'shell', open: false })
+    assert.equal(d.timers.length, 0)
+    assert.equal(d.BOOTH.open, false)
+  })
+}
+
+test('Brief Maker: what waits in the Booth counts the Needs you items and a ready Lock, not a locked brief', () => {
+  const lockOf = (l: unknown) => {
+    const env = {
+      phase: 'doc', DRAFT: null as unknown, draftLive: () => false, lockState: () => l, arr: (x: unknown) => (Array.isArray(x) ? x : []),
+      approveLocked: () => false, get: () => undefined, hasContent: () => true, needsRows: () => [] as unknown[],
+    }
+    return { env, f: () => lift<{ boothWaiting(): number }>(BM, ['boothWaiting'], env).boothWaiting() }
+  }
+  const five = lockOf({ can_lock: false, reopened: [] }); five.env.needsRows = () => [1, 2, 3, 4, 5]
+  assert.equal(five.f(), 5, 'the five flagged items the lock waits on')
+  const ready = lockOf({ can_lock: true, reopened: [] })
+  assert.equal(ready.f(), 1, 'Lock is ready: one thing waits')
+  const locked = lockOf({ can_lock: true, reopened: [] }); locked.env.approveLocked = () => true
+  assert.equal(locked.f(), 0, 'locked: nothing waits')
+  const unknown = lockOf(null)
+  assert.equal(unknown.f(), 0, 'not known yet: nothing counted')
+  const drafting = lockOf({ can_lock: false, reopened: [] }); drafting.env.draftLive = () => true; drafting.env.needsRows = () => [1]
+  assert.equal(drafting.f(), 0, 'the agents are drafting: Lock waits on them, not the person')
+  const asking = lockOf({ can_lock: false, reopened: [] }); asking.env.DRAFT = { inPlace: true, state: 'needs_input' }
+  assert.equal(asking.f(), 1, 'an agent question still counts')
+  assert.match(fn(BM, 'renderLockBtn'), /boothAsk\(boothWaiting\(\)\)/, 'the count follows the lock list as it loads')
 })
