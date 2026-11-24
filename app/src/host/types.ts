@@ -745,6 +745,8 @@ export interface AttachTarget {
   held_version?: number | null
   /** Its client's default Brand Clan: what new work of that client starts on. */
   default?: boolean
+  /** A Brand Clan's first colours (at most three, #RRGGBB), for a picker; empty for anything else. */
+  swatches?: string[]
   /** Who it is for, as the library names it (the registry's id and name); null when it has no client. */
   client: { id: string; name: string } | null
 }

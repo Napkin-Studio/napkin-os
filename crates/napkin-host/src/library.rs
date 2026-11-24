@@ -1179,9 +1179,36 @@ pub struct AttachTarget {
     /// It is its client's default Brand Clan (`default_brand_clan` on the
     /// client record): what new work of that client starts on.
     pub default: bool,
+    /// For a Brand Clan: its first colours (`visual.colours[].hex`, at most
+    /// three, in its own order), so a picker can show each look (mock e2).
+    /// Empty for anything else.
+    pub swatches: Vec<String>,
     /// Who the target is for, as the library names it: the registry's id and
     /// name, else the name its own manifest carries. `null` when it has none.
     pub client: Option<clan_sdk::ClientRef>,
+}
+
+/// A Brand Clan's first colours, at most three, as `#RRGGBB`.
+fn brand_swatches(clan: &ClanFile) -> Vec<String> {
+    let Some(data) = clan
+        .read_entry(DATA)
+        .ok()
+        .and_then(|b| serde_yaml::from_slice::<serde_yaml::Value>(&b).ok())
+    else {
+        return Vec::new();
+    };
+    data.get("visual")
+        .and_then(|v| v.get("colours"))
+        .and_then(|c| c.as_sequence())
+        .map(|cs| {
+            cs.iter()
+                .filter_map(|c| c.get("hex").and_then(|h| h.as_str()))
+                .filter(|h| h.len() == 7 && h.starts_with('#'))
+                .take(3)
+                .map(|h| h.to_uppercase())
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 pub(crate) fn kit_version(clan: &ClanFile) -> Option<u64> {
@@ -1261,6 +1288,11 @@ pub fn attach_targets(store: &dyn DocStore, ctx: &Ctx, doc: &Document) -> Vec<At
                 app_name: app.name.clone(),
                 held_version: held.get(&document_id).copied().flatten(),
                 default,
+                swatches: if app.app_id == BRAND_APP_ID {
+                    brand_swatches(d.clan())
+                } else {
+                    Vec::new()
+                },
                 attached: attached.contains(&document_id),
                 many: spec.many.contains(&app.app_id),
                 locked,

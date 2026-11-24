@@ -622,11 +622,12 @@ def from_deck_document(path: Path) -> tuple[Inputs, dict]:
     lib = bool(((data.get("inputs") or {}).get("library") or {}).get("enabled") is True)
     pack = brand = None
     for did, app in apps.items():
-        if did in up and lib:
-            if app == STYLE_PACK_APP and pack is None:
-                pack = (up[did], lambda p: z.read(p) if p in names else None)
-            elif app == BRAND_APP and brand is None:
-                brand = up[did]
+        # The client's Brand Clan dresses the deck whether or not the team library is on (Brand Clan phase 2, mock e1: the library
+        # is Off and the deck still wears Tidewell's look); the library gate keeps a kit's pins and pictures out of the content.
+        if did in up and app == BRAND_APP and brand is None:
+            brand = {**up[did], "_document_id": did} if isinstance(up[did], dict) else up[did]
+        elif did in up and lib and app == STYLE_PACK_APP and pack is None:
+            pack = (up[did], lambda p: z.read(p) if p in names else None)
     if lib is False and any(app in KIT_APPS for app in apps.values()):
         inp.coverage["kits_gated_off"] = True
     prod = next(((k, v) for k, v in up.items() if isinstance(v, dict) and v.get("app") == "production-tool"), None)   # carried whole (production-spinoff)

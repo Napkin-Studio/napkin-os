@@ -411,6 +411,10 @@ def _stamp_look(a, deck: dict, brand: dict | None, rep: dict, ctx: dict | None =
     agency, use = _replay_agency(a, ctx, look_rep)
     lp = ctx.get("look") or {}
     wears = (lp.get("brand") or {}).get("wears") or a.wears if ctx else a.wears
+    # The client's Brand Clan wins over the agency look (Brand Clan phase 2; owner 2026-11-23): with one attached and no wears chosen in the
+    # document or on the command line, the deck wears the client. A person's own choice (look.brand.wears, --wears) still stands.
+    if ctx and not (lp.get("brand") or {}).get("wears") and a.wears == "agency" and look._present(look.brand_tokens(ctx.get("brand"))):
+        wears = "client"
     wears_problem = None
     if wears not in look.WEARS:   # an unknown value never crashes a build: the default stands and the problem is said
         wears_problem = f"look.brand.wears {wears!r} is not one of {', '.join(look.WEARS)}: the deck wears the agency"
