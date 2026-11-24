@@ -312,8 +312,10 @@ def run(doc: dict, *, llm, store: Store, facts=None, findings=None, sources=None
     ``on_progress`` receives ``{crew, state, routes}`` as headings come back; ``on_line`` receives each paid call as ``RunLog.model`` kwargs.
     Never raises: a failure is the returned document's ``run.error`` in words."""
     lock = _lock_of(store)
-    if not lock.acquire(blocking=False):
+    key = str(store.dir.resolve())
+    if not _acquire_after_stop(lock, cancel, lambda: _stopped_holder(key)):
         return _busy(doc)
+    _HOLDERS[key] = cancel
     try:
         doc = prepare(doc)
         try:
@@ -337,7 +339,36 @@ def run(doc: dict, *, llm, store: Store, facts=None, findings=None, sources=None
             doc = _fail(doc, (doc.get("run") or {}).get("stage") or "pick", STOPPED_WORDS if session.stopped else UNEXPECTED_WORDS)
         return _result(session, doc)
     finally:
+        _HOLDERS.pop(key, None)
         lock.release()
+
+
+# A run asked for right after a person stopped one (Stop, then Try again) meets the stopped run's thread still finishing the model call it was
+# in: the middleware refuses a second run while a job is unfinished, so the only holder a new run can meet is a stopped one. It waits for that
+# thread to let go (it stops at its next call) instead of answering "already going" (Territories live test T2, 2026-11-24).
+WAIT_FOR_STOPPED_SECS = 180
+
+
+_HOLDERS: dict[str, threading.Event | None] = {}     # the run holding each document's lock: its cancel event
+
+
+def _stopped_holder(key: str) -> bool:
+    ev = _HOLDERS.get(key)
+    return ev is not None and ev.is_set()
+
+
+def _acquire_after_stop(lock: threading.Lock, cancel: threading.Event | None, holder_stopped=lambda: True, wait: float | None = None) -> bool:
+    """Take the document's lock. Free: at once. Held by a run a person stopped: wait for it to let go (up to the wait, unless this run is
+    stopped too). Held by a live run: no wait, the caller says busy (one run per document)."""
+    if lock.acquire(blocking=False):
+        return True
+    deadline = time.monotonic() + (WAIT_FOR_STOPPED_SECS if wait is None else wait)
+    while holder_stopped():
+        if lock.acquire(timeout=1.0):
+            return True
+        if (cancel is not None and cancel.is_set()) or time.monotonic() >= deadline:
+            return False
+    return lock.acquire(blocking=False)
 
 
 def _busy(doc: dict) -> Result:

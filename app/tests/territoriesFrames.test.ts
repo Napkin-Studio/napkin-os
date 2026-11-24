@@ -45,6 +45,9 @@ test('the button is on the Pictures line of a greenlit developed route with sket
   // territories-redesign (owner decision 7): while every place is a sketch the pictures are one line, with Make pictures on it
   assert.match(on, /<section class="pline" aria-label="Pictures"><span class="psec-t">Pictures · 8 places · sketches, marked Mock-up<\/span><span class="spacer"><\/span><button type="button" class="btn-rect pic-make" data-pic-make="t_started">Make pictures<\/button>/)
   assert.doesNotMatch(on, /class="pgrid"/, 'no grid of eight sketches before the journey')
+  // pictures off in this workspace (frames_status says so): Make pictures is off, with why beside it, before anyone presses it (live test T6)
+  const off = W.worldBody(d, { picsOff: true }, t) as string
+  assert.match(off, /<button type="button" class="btn-rect pic-make" disabled>Make pictures<\/button><span class="why lock">Pictures are not switched on in this workspace\.<\/span>/)
   const ungreen = W.worldBody(d, {}, route(d, 't_small')) as string
   assert.doesNotMatch(ungreen, /Make pictures/, 'small is developed but not greenlit')
   assert.doesNotMatch(L.dialogFor('route:t_started', d).html, /Make pictures/, 'the route window has no button')

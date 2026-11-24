@@ -410,3 +410,20 @@ def test_the_result_carries_what_the_run_log_needs(tmp_path):
     assert again.info["reused"] >= 1 and again.spent_usd == res.spent_usd
     capped = go(Counting(), store_in(tmp_path, "tele2"), cap_usd=0.0001)
     assert capped.info["cap_stops"] == ["claude"]
+
+
+def test_a_run_right_after_a_stopped_one_waits_for_it_to_let_go_instead_of_saying_busy():
+    """Stop, then Try again (live test T2): the stopped run's thread is still in its last model call, holding the document. The new run waits for
+    it to let go rather than answering "already going"; a run that is itself stopped while waiting gives up at once, and the wait has an end."""
+    lock = threading.Lock()
+    lock.acquire()
+    threading.Timer(0.3, lock.release).start()
+    t0 = time.monotonic()
+    assert runner._acquire_after_stop(lock, None, lambda: True, wait=5) is True and time.monotonic() - t0 < 3
+    lock.release()
+    held = threading.Lock(); held.acquire()
+    stop = threading.Event(); stop.set()
+    assert runner._acquire_after_stop(held, stop, lambda: True, wait=5) is False, "a run stopped while it waits does not start"
+    assert runner._acquire_after_stop(held, None, lambda: True, wait=0) is False, "and the wait ends"
+    t0 = time.monotonic()
+    assert runner._acquire_after_stop(held, None, lambda: False, wait=5) is False and time.monotonic() - t0 < 0.5, "a live holder: busy at once"

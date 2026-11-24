@@ -276,7 +276,7 @@ button.tsrc:hover{border-color:color-mix(in srgb,var(--ink) 35%,var(--line))}
 #compass .cl{font:800 10.5px var(--font-ui);letter-spacing:.12em;text-transform:uppercase;fill:var(--muted)}
 #compass .cbt{font:800 10px var(--font-ui);fill:var(--muted)}
 #compass .cb{font:500 14px var(--font-serif);fill:var(--ink)}
-#compass .tn{font:800 12px var(--font-ui);fill:var(--ink);paint-order:stroke;stroke:var(--paper);stroke-width:4px;stroke-linejoin:round}
+#compass .tn{font:800 15px var(--font-ui);fill:var(--ink);paint-order:stroke;stroke:var(--paper);stroke-width:4px;stroke-linejoin:round}
 #compass .trail,#compass .tdot{cursor:pointer}
 #compass .hit{fill:none;stroke:transparent;stroke-width:16;cursor:pointer}
 #compass .tdot:focus-visible{outline:none}
@@ -648,7 +648,7 @@ details.fold>.fold-b{padding:0 12px 12px;display:grid;gap:10px}
 .exgrid .compass-wrap{margin:0}
 .exgrid .crew{grid-template-columns:minmax(0,1fr);gap:8px}
 .exgrid .crewc{border-top-width:1px;border-left:3px solid var(--ec);padding:8px 10px}
-@media (max-width:900px){.exgrid{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:1180px){.exgrid{grid-template-columns:minmax(0,1fr)}}
 .bt-box .btn[data-act="lookup"]:not(:disabled){background:var(--ag-act);border-color:var(--ag-act);color:var(--ag-act-ink)}
 .bt-box .btn[data-act="lookup"]:disabled{background:transparent;border:1px dashed var(--muted);color:var(--muted)}
 /* the World: its primary in the header; the pictures one line while they are sketches */
@@ -797,7 +797,10 @@ details.fold>.fold-b{padding:0 12px 12px;display:grid;gap:10px}
 /* Brief's caption and run bar inherit Brief's sans body; Territories' body is the serif, so the face is said here */
 .scap .l2,.runbar{font-family:var(--font-ui)}
 .runbar .bad{color:var(--nd-alert)}
-/* the crew's lanes (new to Territories, house rules: Brief's slips, mono labels) */
+/* the crew's lanes (new to Territories, house rules: Brief's slips, mono labels). With them under the stage, the stage gives up their
+   height so the run bar (Stop the crew) stays in view at 1280 x 800, as Brief's does (live test T11) */
+.pwrap:has(.lane) .sstage{height:clamp(300px,calc(100vh - 340px),560px)}
+.pwrap:has(.lane) .aglbox{height:min(300px,34vh)}
 .lane{border-top:1px solid var(--nd-line)}
 .lc .lh span,.lc .lw{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.04em}
 .lc .lh b{font:600 13px var(--font-ui)}
@@ -836,6 +839,17 @@ details.fold>.fold-b{padding:0 12px 12px;display:grid;gap:10px}
 .jmore{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0;border-top:1px solid color-mix(in srgb,var(--t-ink) 20%,transparent);font:15px var(--font-serif);opacity:.9}
 .crewc .crew-st.steer{justify-self:end;font:600 12px var(--font-ui)!important;text-decoration:underline;text-underline-offset:3px;color:var(--ink-soft)}
 .exgrid .crewc{grid-template-columns:minmax(0,1fr) auto;align-items:center}
+
+/* the World's journey as the mock draws it (live test T5): day and place, the line, a small sketch */
+.journey.jny{list-style:none;margin:0;padding:0;display:grid;gap:0}
+.journey.jny .jmom{display:grid;grid-template-columns:150px minmax(0,1fr) 170px;gap:16px;align-items:start;padding:14px 0;border-top:1px solid color-mix(in srgb,var(--t-ink) 20%,transparent)}
+.journey.jny .jmom .d{display:grid;gap:2px;border-top:2px solid var(--t-ink);padding-top:6px}
+.journey.jny .jmom .d b{font:600 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase}
+.journey.jny .jmom .d span{font:400 13px var(--font-serif);opacity:.75}
+.journey.jny .jmom .q{font:600 20px/1.3 var(--font-serif);text-wrap:pretty}
+.journey.jny .jmom .th{border-radius:5px;overflow:hidden;border:1px solid color-mix(in srgb,var(--t-ink) 25%,transparent);max-height:120px}
+.journey.jny .jmom .th .cq{transform-origin:0 0}
+@media (max-width:760px){.journey.jny .jmom{grid-template-columns:minmax(0,1fr)}}
 </style>
 </head>
 <body>
@@ -1472,10 +1486,10 @@ var TerritoriesLogic = (function () {
     }); });
     // A label is nudged down until it clears every label already placed (a box about 6.6 px a letter wide and 14 high), so none overlap.
     function labelY(x, y, name, right) {
-      var w = name.length * 6.8 + 4, x0 = right ? x : x - w, x1 = x0 + w, moved = true, guard = 0;
+      var w = name.length * 8.4 + 4, x0 = right ? x : x - w, x1 = x0 + w, moved = true, guard = 0;
       while (moved && guard++ < 40) {
         moved = false;
-        for (var k = 0; k < placed.length; k++) { var q = placed[k]; if (x0 < q.x1 && x1 > q.x0 && Math.abs(y - q.y) < 14) { y = q.y + 14; moved = true; } }
+        for (var k = 0; k < placed.length; k++) { var q = placed[k]; if (x0 < q.x1 && x1 > q.x0 && Math.abs(y - q.y) < 18) { y = q.y + 18; moved = true; } }
       }
       placed.push({ x0: x0, x1: x1, y: y });
       return y;
@@ -1818,7 +1832,7 @@ var TerritoriesLogic = (function () {
     var xw = typeof TerritoriesExports !== 'undefined' ? TerritoriesExports.can(data) : { ok: true };
     return '<div class="toolrow" role="toolbar" aria-label="Gallery tools"><button type="button" class="b sm" data-dock="present" aria-pressed="false">▶ Present</button>' +
       '<button type="button" class="b sm" data-dock="compare" aria-pressed="' + (ui.cmp ? 'true' : 'false') + '">Compare</button><button type="button" class="b sm" data-dock="rank" aria-pressed="false">Re-rank</button><span class="sp"></span>' +
-      '<button type="button" class="b sm" data-dock="export" aria-pressed="false"' + (xw.ok ? '' : ' aria-disabled="true" title="' + esc(xw.why) + '"') + '>Export…</button></div>';
+      '<button type="button" class="b sm" data-dock="export" aria-pressed="false"' + (xw.ok ? '' : ' aria-disabled="true" title="' + esc(xw.why) + '"') + '>Export…</button>' + (xw.ok ? '' : '<span class="why lock">' + esc(xw.why) + '</span>') + '</div>';
   }
   /** Continue in (owner, 2026-11-24: "Why a whole dialogue box for continue/send forward to and not just normal continue in just like
    *  before in brief and research"). The shell's own Continue in, in the top bar, carries this document whole to Production or Deck Maker;
@@ -2356,8 +2370,19 @@ var TerritoriesWorld = (function () {
     var pp = typeof TerritoriesPictures !== 'undefined' ? TerritoriesPictures.panel(t, ui, { green: L.greenIds(data).indexOf(t.id) !== -1 }) : '';
     if (ui && ui.wview === 'wall') return pp + '<div class="wall">' + WALL.map(function (k) { return '<div class="wcell w-' + k + '"><span class="weyebrow">' + esc(TP_NAMES[k]) + '</span>' + touchpoint(ft, k, data, ui, dial) + '</div>'; }).join('') + '</div>';
     var jn = journeyOf(data), all = !!(ui && ui.wmore), shown = all ? jn : jn.slice(0, 2), more = jn.slice(2);
-    return pp + '<ol class="journey">' + shown.map(function (j) {
-      return '<li class="jstep j-' + esc(j.key) + '"><div class="jwhen"><b>' + esc(j.day) + '</b><span>' + esc(j.where) + '</span></div>' + touchpoint(ft, j.key, data, ui, dial) + '</li>';
+    // The mock's journey (live test T5): one row a moment, the day and the place, its line, a small sketch. The full drawings (TV frames, the
+    // radio script, every card) are the Wall's, so the weekend reads as an idea, not a grid of the same placeholder.
+    var brand = L.brandOf(data), w = ft.world || {}, lines = linesOf(ft);
+    var lineOf = function (k) {
+      var radio = arr(w.radio).filter(function (r) { return r && r.voice !== 'SFX' && clean(r.text); });
+      var c = arr(w.crm);
+      var v = k === 'story' ? clean(w.social) : k === 'seat' ? clean(w.seat) : k === 'email' ? clean(c[0]) : k === 'radio' ? (radio[radio.length - 1] ? clean(radio[radio.length - 1].text) : '') : k === 'poster' ? lines[1] || '' : '';
+      return v || L.headline(ft);
+    };
+    return pp + '<ol class="journey jny">' + shown.map(function (j) {
+      var thumbKey = j.key === 'story' || j.key === 'seat' || j.key === 'email' ? j.key : 'poster';
+      return '<li class="jstep jmom j-' + esc(j.key) + '"><div class="jwhen d"><b>' + esc(j.day) + '</b><span>' + esc(j.where) + '</span></div><div class="q">“' + esc(lineOf(j.key)) + '”</div>' +
+        '<div class="th">' + cq(L.touch(ft, thumbKey, brand)) + '</div></li>';
     }).join('') + '</ol>' + (!all && more.length ? '<div class="jmore"><span>' + esc(more.length + ' more moment' + (more.length === 1 ? '' : 's')) + ': ' + esc(more.map(function (j) { return (TP_NAMES[j.key] || j.key).replace(/ · .*$/, ''); }).join(', ')) + '.</span><button type="button" class="b sm" data-wmore>Show the whole weekend</button></div>' : '');
   }
   /** What a dial move redraws, without a page render (a slider being dragged must stay in the hand): the sheet's variables and its body. */
@@ -2685,6 +2710,7 @@ var TerritoriesPictures = (function () {
     var r = ui && ui.req; return !(r && L.reqBusy(r) && r.key === 'pic:make:' + t.id);
   }
   function makeButton(t, ui) {
+    if (ui && ui.picsOff) return '<button type="button" class="btn-rect pic-make" disabled>Make pictures</button><span class="why lock">Pictures are not switched on in this workspace.</span>';
     var asking = ui && ui.mk && ui.mk.tid === t.id && ui.mk.state === 'asking';
     return '<button type="button" class="btn-rect pic-make" data-pic-make="' + esc(t.id) + '"' + (asking ? ' disabled' : '') + '>' + (asking ? '<span class="spin-s" aria-hidden="true"></span>Asking…' : 'Make pictures') + '</button>';
   }
@@ -2959,7 +2985,7 @@ var TerritoriesLookups = (function () {
       '<div class="quote">' + esc(norm(q.q)) + '</div><div class="bc-note" style="font-size:14px;color:var(--muted)">' +
       (mine ? 'Asked by ' + esc(norm(q.by)) + '.' : esc(norm(q.by).replace(/^Napkin,?\s*/i, 'Napkin would like this, ').replace(/^Napkin would like this, $/, 'Napkin would like this.')) + '.') +
       ' Nothing is searched until you say OK.</div>' +
-      '<div class="acts">' + btn('OK, look it up', 'data-lq-ok="' + esc(q.id) + '"', true, dis) + btn('Not now', 'data-lq-no="' + esc(q.id) + '"', false, dis) + '</div>' +
+      '<div class="acts">' + btn('OK, look it up', 'data-lq-ok="' + esc(q.id) + '"', false, dis) + btn('Not now', 'data-lq-no="' + esc(q.id) + '"', false, dis) + '</div>' +
       (w ? '<div class="runnote" role="status">' + esc(w) + '</div>' : '') + (named(ui) ? '' : '<div class="hint">' + esc(NEEDS_NAME) + '</div>') + '</article>';
   }
 
@@ -3096,6 +3122,7 @@ var TerritoriesLookups = (function () {
   function refreshFrames() {
     if (!(data().greenlit || []).length || typeof TerritoriesPictures === 'undefined') return;
     stepCall({ step: TerritoriesPictures.STEPS_MAKE.status }).then(function (r) {
+      if (r.ok && r.info && r.info.frames && r.info.frames.pictures === 'off') { ui.picsOff = true; render(); return; }
       var f = r.ok ? TerritoriesPictures.framesFrom(r.info) : null;
       if (f) { ui.frames = f; render(); }
     });
@@ -3120,6 +3147,24 @@ var TerritoriesLookups = (function () {
     window.clan.apiProxy('middleware', { task: L.TASKS.run, input: {} }).then(onReply, unreachable);
   }
   /** Stop (Brief's): the middleware's cancel_job for the running job. It is cancelled at once and writes nothing; what was paid for is kept. */
+  /** On open: the runs still going on this document (the shell's clan:jobs, ids only, as Brief reads them). A live run_territories job that
+   *  is not this page's own becomes the current job, polled from here; a finished or cancelled one is left alone. */
+  var SEEN_JOBS = {};
+  function resumeJobs(ids) {
+    if (!(window.clan && window.clan.apiProxy)) return;
+    (Array.isArray(ids) ? ids : []).forEach(function (id) {
+      if (typeof id !== 'string' || !id || SEEN_JOBS[id] || (ui.job && ui.job.id === id)) return;
+      SEEN_JOBS[id] = 1;
+      window.clan.apiProxy('middleware', { task: L.TASKS.status, input: { job_id: id } }).then(function (res) {
+        if (hostErr(res)) return;
+        var b = mwBody(res), j = b && b.job;
+        if (!j || !BUSY[j.state] || (b.task && b.task !== L.TASKS.run) || (ui.job && BUSY[ui.job.state])) return;
+        if (j.stage && j.stage !== 'run') return;       // a quick move or a step of its own: not the crew's run
+        ui.job = { id: id, state: j.state, delay: 900, t: 0, error: null, started: Date.now(), crewRun: L.pickState(data().run) !== 'none', crew: [] };
+        ui.view = null; onReply(res);
+      }, function () { delete SEEN_JOBS[id]; });
+    });
+  }
   function stopRun() {
     var j = ui.job; if (!j || !j.id || !BUSY[j.state] || j.stopping) return;
     if (!(window.clan && window.clan.apiProxy)) { toast('Stopping runs through the host, and the host is not here.'); return; }
@@ -3242,7 +3287,10 @@ var TerritoriesLookups = (function () {
   function lumOf(h) { var c = String(h).replace('#', ''); return (0.299 * parseInt(c.slice(0, 2), 16) + 0.587 * parseInt(c.slice(2, 4), 16) + 0.114 * parseInt(c.slice(4, 6), 16)) / 255; }
   function isDark() { return document.documentElement.getAttribute('data-color-scheme') === 'dark' || (!document.documentElement.getAttribute('data-color-scheme') && matchMedia('(prefers-color-scheme: dark)').matches); }
   function stageSphere() {
-    var box = $('aglBox'); if (!box) return;
+    var box = $('aglBox');
+    // No stage on screen: the scene has dropped (or will drop) the view with its element, so the next stage makes a new one
+    // (Territories live test T1, 2026-11-24: Explore's stage came up empty after Find the insights had used the view).
+    if (!box) { if (SPH.view && SPH.view.destroy) { try { SPH.view.destroy(); } catch (e) { /* already dropped by the scene */ } } SPH = { view: null, tried: false, key: '', host: null, box: null }; return; }
     var S = window.NapkinScene, A = window.NapkinSpheres;
     if (!S || !A || !S.gl) return;
     // Brief mounts its view on #aglBox itself: keep that one element across redraws (its envelope comes from the fresh one)
@@ -3352,7 +3400,7 @@ var TerritoriesLookups = (function () {
   var W = TerritoriesWorld, animEl = null, presEl = null, anim = null, pres = null;
   ui.wview = 'journey'; ui.wtab = 'feel'; ui.dials = {}; ui.react = {};
   ui.speech = !!(window.speechSynthesis && window.SpeechSynthesisUtterance);
-  function openWorld(id) { ui.wmore = false; ui.world = id; ui.wview = 'journey'; ui.wtab = 'feel'; render(); window.scrollTo(0, 0); }
+  function openWorld(id) { ui.wmore = false; ui.world = id; ui.wview = 'journey'; ui.wtab = 'feel'; render(); window.scrollTo(0, 0); refreshFrames(); }
   function worldRoute() { return ui.world ? W.route(data(), ui.world) : null; }
   /** A dial moved: redraw the sheet in place (the slider stays in the hand) and the buttons that depend on it. */
   function dialMoved(key, v) {
@@ -3565,6 +3613,7 @@ var TerritoriesLookups = (function () {
     var m = e.data; if (!inShell || e.source !== window.parent || !m) return;
     if (m.type === 'clan:booth') boothSet(m.open !== false, true);
     if (m.type === 'clan:bar?') sendBar(true);
+    if (m.type === 'clan:jobs') resumeJobs(m.jobs);
   });
   // The bridge fires these when the document's data changes or loads.
   window.addEventListener('clan:dataupdated', function () { render(); });

@@ -1095,7 +1095,8 @@ var DeckLogic = (function () {
    * { client, project, text }, each '' when nothing carried names it. Never throws.
    */
   function startDefaults(data) {
-    var up = data && isObj(data.upstream) ? data.upstream : {}, client = '', project = '';
+    var up = data && isObj(data.upstream) ? data.upstream : {}, client = '', project = '', briefProject = '', terrTitle = '', otherTitle = '';
+    var str = function (v) { return (typeof v === 'string' ? v : isObj(v) && typeof v.value === 'string' ? v.value : '').replace(/^To confirm:\s*/i, '').trim(); };
     Object.keys(up).forEach(function (id) {
       var u = up[id];
       if (!isObj(u)) return;
@@ -1104,10 +1105,16 @@ var DeckLogic = (function () {
         return;
       }
       if (isKit(u)) return;
+      // a deck made from Territories (live test T9): the brief's short name, else the Territories document's own title
+      var named = function (t) { return t && t.length <= 80 && !/^territories$/i.test(t) ? t.replace(/\s*·\s*Territories$/i, '') : ''; };
+      if (isTerritories(u)) { if (!terrTitle) terrTitle = named(str(u.title)); return; }
+      var pn = str(u.project_name); if (!briefProject && pn && pn.length <= 80) briefProject = pn;
+      if (!otherTitle) otherTitle = named(str(u.title)) || named(str(isObj(u.campaign) ? u.campaign.name : ''));      // a research names itself in campaign.name
       var c = typeof u.client === 'string' ? u.client : (isObj(u.client) && typeof u.client.value === 'string' ? u.client.value : '');
       c = c.split(/[,;\n]/)[0].replace(/^To confirm:\s*/i, '').trim();
       if (!client && c && c.length <= 80) client = c;
     });
+    if (!project) project = briefProject || terrTitle || otherTitle;
     // A starting prompt too, so the form is not half empty: only what the carried project and brief name, nothing added.
     var text = (client || project) ? 'A pitch deck for ' + (client || 'the client') + (project ? ': ' + project : '') + '.' : '';
     return { client: client, project: project, text: text };

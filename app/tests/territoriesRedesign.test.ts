@@ -172,4 +172,23 @@ test('Stop reaches the middleware: the page sends cancel_job for the running job
   assert.match(rt, /closest\('\[data-act="stop"\]'\)\)\) \{ if \(!b\.disabled\) stopRun\(\); return; \}/)
 })
 
+test('the live test\'s findings stay fixed (territories-live, 2026-11-24)', () => {
+  const rt = html.slice(html.lastIndexOf('<script>'))
+  // T2: a reload picks up the live run from the shell's clan:jobs; a stopped job is never the current one again
+  assert.match(rt, /if \(m\.type === 'clan:jobs'\) resumeJobs\(m\.jobs\)/)
+  assert.match(rt, /function resumeJobs\(ids\) \{[\s\S]*?task: L\.TASKS\.status[\s\S]*?if \(!j \|\| !BUSY\[j\.state\]/)
+  // T1: with no stage on screen the sphere's view is let go, so the next stage (Explore after Find) makes a new one
+  assert.match(rt, /if \(!box\) \{[^\n]*SPH = \{ view: null, tried: false/)
+  // T11: with the crew's lanes the stage gives up their height, so the run bar stays in view at 1280 x 800
+  assert.match(html, /\.pwrap:has\(\.lane\) \.sstage\{height:clamp\(300px,calc\(100vh - 340px\),560px\)\}/)
+  // T4: Export off says why beside it
+  const gl = json('example/states/greenlight_open.json'); gl.greenlit = []
+  const page = L.view(gl, {}), tools = /<div class="toolrow" role="toolbar"[\s\S]*?<\/div>/.exec(page)![0]
+  if (/data-dock="export"[^>]*aria-disabled="true"/.test(tools)) assert.match(tools, /Export…<\/button><span class="why lock">[^<]+<\/span>/)
+  // T8: the look-up's OK is a plain button, so the step keeps its one primary
+  assert.match(html, /btn\('OK, look it up', 'data-lq-ok="' \+ esc\(q\.id\) \+ '"', false, dis\)/)
+  // T3: the compass labels are big enough to read at a laptop width, and the compass stacks above the crew below 1180 px
+  assert.match(html, /#compass \.tn\{font:800 15px/); assert.match(html, /@media \(max-width:1180px\)\{\.exgrid\{grid-template-columns:minmax\(0,1fr\)\}\}/)
+})
+
 function eq(a: unknown, b: unknown) { assert.deepEqual(JSON.parse(JSON.stringify(a)), b) }

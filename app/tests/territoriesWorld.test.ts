@@ -109,7 +109,7 @@ test('the dials pick the copy corner and the layout from the world block alone (
   assert.match(corner(90, 90), new RegExp(h.sl.slice(0, 20)))
   const lay = (energy: number) => W.worldBody(d, { wmore: true, dials: { [t.id]: { ...W.naturalDial(t), energy } } }, t)
   assert.match(lay(10), /lay-quiet/); assert.match(lay(50), /lay-mid/); assert.match(lay(90), /lay-loud/)
-  const reg = (register: number) => W.worldBody(d, { wmore: true, dials: { [t.id]: { ...W.naturalDial(t), register } } }, t)
+  const reg = (register: number) => W.worldBody(d, { wview: 'wall', dials: { [t.id]: { ...W.naturalDial(t), register } } }, t)
   assert.match(reg(80), /class="frames cine"/); assert.doesNotMatch(reg(20), /class="frames cine"/)
   const br = (brand: number) => W.worldBody(d, { wmore: true, dials: { [t.id]: { ...W.naturalDial(t), brand } } }, t)
   assert.match(br(10), /bm-sm/); assert.match(br(50), /bm-md/); assert.match(br(90), /bm-lg/)
@@ -120,7 +120,7 @@ test('moving a dial writes nothing and makes no call: it is view state (LESSONS 
   const before = JSON.stringify(d)
   ui.dials[t.id] = { ...W.naturalDial(t), tone: 5 }
   const r = W.refresh(d, ui, t)
-  assert.ok(r.body.includes('class="journey"') && r.style.includes('--t-bg'))
+  assert.ok(r.body.includes('class="journey') && r.style.includes('--t-bg'))
   assert.equal(JSON.stringify(d), before, 'the document is the same')
   assert.equal(W.handles('dial'), false, 'there is no dial event to write or send')
   eq(W.dialOf(t, ui), { ...W.naturalDial(t), tone: 5 })
@@ -193,19 +193,22 @@ test('the journey is the weekend\'s six stops from the document, each drawn by o
   const d = doc(), t = routeOf(d), j = W.journeyOf(d)
   eq(j.map(s => s.key), ['tv', 'story', 'poster', 'radio', 'seat', 'email'])
   const body = W.worldBody(d, { wmore: true }, t)
-  assert.equal((body.match(/class="jstep j-/g) ?? []).length, 6)
+  assert.equal((body.match(/class="jstep jmom j-/g) ?? []).length, 6)
   // the page shows the first two moments and names the rest, with Show the whole weekend (the mock); wmore shows all six
   const two = W.worldBody(d, {}, t)
-  assert.equal((two.match(/class="jstep j-/g) ?? []).length, 2)
+  assert.equal((two.match(/class="jstep jmom j-/g) ?? []).length, 2)
   assert.match(text(two), /4 more moments: Poster, Radio, Table card, Email\./); assert.match(two, /data-wmore>Show the whole weekend/)
   for (const s of j) assert.ok(text(body).includes(s.day) && text(body).includes(s.where))
-  assert.equal((body.match(/class="fr"/g) ?? []).length, t.world.tv.length)
-  for (const r of t.world.radio.filter((x: Doc) => x.voice !== 'SFX')) assert.ok(text(body).includes(r.text.slice(0, 20)))
+  // the journey is one row a moment (the mock, live test T5): day and place, its line, a small sketch; the full drawings are the Wall's
+  assert.equal((body.match(/class="jstep jmom j-/g) ?? []).length, 6); assert.doesNotMatch(body, /class="fr"/)
+  const wall = W.worldBody(d, { wview: 'wall' }, t)
+  assert.equal((wall.match(/class="fr"/g) ?? []).length, t.world.tv.length)
+  for (const r of t.world.radio.filter((x: Doc) => x.voice !== 'SFX')) assert.ok(text(wall).includes(r.text.slice(0, 20)))
   eq(W.journeyOf({}).length, 6, 'a document with none gets the six stops')
   const odd = { ...d, journey: [{ key: 'tv', day: 'Mon', where: 'x' }, { key: 'billboard', day: 'Tue', where: 'y' }] }
   eq(W.journeyOf(odd).map(s => s.key), ['tv'], 'an unknown touchpoint is left out')
   // no per-route markup: a different route comes out of the same templates
-  for (const id of ['t_passenger', 'small'.replace('small', 't_small')]) assert.equal((W.worldBody(d, { wmore: true, wmore: true }, routeOf(d, id)).match(/class="jstep j-/g) ?? []).length, 6)
+  for (const id of ['t_passenger', 'small'.replace('small', 't_small')]) assert.equal((W.worldBody(d, { wmore: true }, routeOf(d, id)).match(/class="jstep jmom j-/g) ?? []).length, 6)
 })
 
 test('the wall shows all six touchpoints at once, and the page toggles between the two views', () => {
