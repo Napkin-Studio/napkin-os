@@ -67,7 +67,7 @@ DIMS = ["objectives_quality", "audience_vividness", "single_minded_message", "ev
         "budget_interlock", "strategic_clarity", "language"]
 BASES = ["client", "research", "library", "assumption"]
 WHAT = {
-    "project_name": "a short working name", "client": "the client and brand",
+    "project_name": "a short working name, one to four words, no brackets or caveats (a doubt about it is an open question)", "client": "the client and brand",
     "job": "the job in one plain sentence: the problem reframed as the change in what one person thinks, feels or does (not the task)",
     "background": "the business situation and why now",
     "barrier": "what stands in their way: the belief, habit, fear or rival in their head or routine, in plain words",

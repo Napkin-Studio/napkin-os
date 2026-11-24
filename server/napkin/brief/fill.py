@@ -23,7 +23,7 @@ from ..util import join_list
 
 # The parts the context fill may write, and what each is for the planner.
 PARTS = {
-    "project_name": "a short working name for the project",
+    "project_name": "a short working name for the project: one to four words, no brackets or caveats (a doubt about the name goes in an open question)",
     "background": "the business situation and why now, in two or three sentences",
     "objectives.commercial": "the business result wanted",
     "objectives.behavioural": "what the audience should do differently",

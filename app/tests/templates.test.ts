@@ -2473,25 +2473,26 @@ test('each OS bar button runs the same handler as its side-tab control; the docu
     phase: o.phase ?? 'doc', DRAFT: o.phase === 'proc' ? { stage: 'context', state: 'running' } : null, STAGES: ['extract', 'context', 'draft', 'judge'], PLAN: [1, 2, 3, 4], draftLive: () => o.phase === 'proc', approveLocked: () => !!o.A, docLocked: () => !!(o.A || o.L), lockState: () => ({ reopened: o.reopened ?? [] }), arr,
     REDRAFT_ARMED: o.armed ? 1 : null,
   }).barItems()
-  assert.deepEqual(items({ phase: 'intake' }), [{ kind: 'mode', mode: 'ask' }, { kind: 'status', label: 'Draft', tone: null, locked: false }], 'before there is a brief: the name alone (mode ask), no buttons, and the state is Draft (never the host’s guess)')
-  assert.deepEqual(items({ phase: 'proc' }), [{ kind: 'mode', mode: 'working', label: 'Working · Step 2/4' }, { kind: 'status', label: 'Draft', tone: null, locked: false }], 'the crew at work: the run’s step for the bar, still a draft')
+  assert.deepEqual(items({ phase: 'intake' }), [{ kind: 'mode', mode: 'ask' }, { kind: 'status', label: 'Draft', tone: null, locked: false }, { kind: 'run', working: false }], 'before there is a brief: the name alone (mode ask), no buttons, and the state is Draft (never the host’s guess)')
+  assert.deepEqual(items({ phase: 'proc' }), [{ kind: 'mode', mode: 'working', label: 'Working · Step 2/4' }, { kind: 'status', label: 'Draft', tone: null, locked: false }, { kind: 'run', working: true }], 'the crew at work: the run’s step for the bar, still a draft')
   const SAVES = ['client', 'html', 'gridPdf', 'gridHtml', 'plainPdf', 'plainHtml']
   const draft = items({})
   // No lock and no status item: Lock and the state pill are the side tab's brief view (no duplicates).
-  assert.deepEqual(draft.map(i => i.id ?? i.kind), ['pdf', 'redraft', ...SAVES])
+  assert.deepEqual(draft.map(i => i.id ?? i.kind), ['run', 'pdf', 'redraft', ...SAVES])
+  assert.deepEqual(draft[0], { kind: 'run', working: false }, 'the sheet is on screen and no agents run: the page says so, so the bar drops a stale working chip')
   assert.ok(!draft.some(i => i.kind === 'status' || i.id === 'lock'), 'the bar repeats neither the lock nor the state')
   assert.equal(draft.find(i => i.id === 'client')!.disabled, true, 'the client copy waits for the lock')
   assert.equal(items({ armed: true }).find(i => i.id === 'redraft')!.label, 'Click again to redraft')
   const locked = items({ A: true })
-  assert.deepEqual(locked.map(i => i.id ?? i.kind), ['pdf', 'unlock', 'reopen', ...SAVES], 'a locked brief offers Unlock (POST /unapprove) and Reopen a part…, not a redraft')
+  assert.deepEqual(locked.map(i => i.id ?? i.kind), ['run', 'pdf', 'unlock', 'reopen', ...SAVES], 'a locked brief offers Unlock (POST /unapprove) and Reopen a part…, not a redraft')
   assert.equal(locked.find(i => i.id === 'client')!.disabled, false)
   assert.match(fn(BM, 'unlockClick'), /hostPost\('\/unapprove',\{rationale:/, 'Unlock calls /unapprove as Lock calls /approve')
   assert.match(fn(BM, 'lockClick'), /unlockClick\(\)/, 'a lock pressed while locked still unlocks')
   assert.equal(locked.find(i => i.id === 'reopen')!.label, 'Reopen a part…')
-  assert.deepEqual(items({ A: true, reopened: ['x'] }).map(i => i.id ?? i.kind), ['pdf', ...SAVES], 'reopened: Lock the brief again is the side tab’s')
+  assert.deepEqual(items({ A: true, reopened: ['x'] }).map(i => i.id ?? i.kind), ['run', 'pdf', ...SAVES], 'reopened: Lock the brief again is the side tab’s')
   for (const list of [draft, locked]) {
     assert.ok(list.filter(i => i.kind === 'button').length <= 10, 'at most the ten buttons a bar takes')
-    for (const i of list) {
+    for (const i of list.filter(x => x.kind !== 'run')) {
       assert.ok(i.label.length <= 28, i.label)
       if (i.kind === 'button') assert.ok(actionIds.includes(i.id!), `bar button ${i.id} has a handler`)
     }
@@ -2838,9 +2839,16 @@ test('brief: Lock waits until Needs you is empty, open questions included', () =
     return { disabled: el('lockBtn').disabled, why: el('lockWhy').textContent }
   }
   const q = { code: 'open_question', tag: '6 open questions' }
-  assert.deepEqual(run([q]), { disabled: true, why: 'Settle 1 first' }, 'the host may lock, an open question is left: Lock waits')
+  assert.deepEqual(run([q]), { disabled: true, why: 'To lock the brief, answer or accept the flagged item above.' }, 'the host may lock, an open question is left: Lock waits')
   assert.deepEqual(run([]), { disabled: false, why: '' }, 'nothing left: Lock is on')
   assert.equal(run([], false).disabled, true, 'the host says not yet: Lock waits')
+  // Lock the brief "Settle 6 first" never said what settling meant (owner, 2026-11-23): it says what to do, and offers the first one.
+  const rows6 = Array.from({ length: 6 }, () => q)
+  run(rows6)
+  assert.equal(el('lockWhy').textContent, 'To lock the brief, answer or accept each of the 6 flagged items above.')
+  assert.equal(el('lockFirst').hidden, false, 'a way to the first flagged item shows while Lock waits on items')
+  run([])
+  assert.equal(el('lockFirst').hidden, true, 'nothing flagged: no jump')
   // Round 11: before the host's lock list has loaded, what blocks the lock is unknown, so Lock waits.
   const els2: Record<string, Record<string, unknown>> = {}
   const el2 = (id: string) => els2[id] ||= { hidden: false, disabled: false, textContent: '', title: '', innerHTML: '', classList: { toggle() {} } }
@@ -3351,8 +3359,9 @@ test('a new version re-reads the brief’s lock view with its chain, so the lock
 test('the lock carries no count badge of its own: Decisions holds the one count, the lock says why in words', () => {
   for (const src of [BM, RT]) assert.doesNotMatch(src, /class="n"/, 'no badge on a lock button')
   const w = lift<{ lockWhy(n: number): string }>(BM, ['lockWhy'], {})
-  assert.equal(w.lockWhy(2), 'Settle 2 first')
-  assert.equal(w.lockWhy(1), 'Settle 1 first')
+  assert.equal(w.lockWhy(2), 'To lock the brief, answer or accept each of the 2 flagged items above.')
+  assert.equal(w.lockWhy(1), 'To lock the brief, answer or accept the flagged item above.')
+  assert.doesNotMatch(w.lockWhy(6), /settle/i, 'no jargon: it says what to do')
   assert.doesNotMatch(fn(BM, 'renderLockBtn'), /need you|lb\.innerHTML/)
 })
 
@@ -5390,4 +5399,23 @@ test('the Booth comes back at the size of what is selected', () => {
   assert.equal(cr.boothWidth('map', 1500), 744, 'the evidence map')
   assert.equal(cr.boothWidth('map', 1000), 640, 'the map leaves the report 360')
   assert.equal(cr.boothWidth('map', 700), 440, 'never under 440')
+})
+
+// Owner, 2026-11-23: Brief Maker titled the document with the whole working name, caveat and all, and the top bar
+// ellipsised it to "P…". The name is the words before the caveat; the engine writes the same rule (fields.py short_name).
+test('brief: a working name that carries a caveat gives a short document title', () => {
+  const long = 'Proper Crunch (working name, taken from the founder’s preferred line; needs a trademark check against Propercorn and Proper)'
+  const set: string[] = []
+  const mk = (name: string, title: string) => lift<{ workingTitle(): string; syncTitle(): void }>(BM, ['shortName', 'workingTitle', 'syncTitle'], {
+    get: (k: string) => (k === 'project_name' ? name : ''), derivedTitle: () => '', window: { __CLAN__: { manifest: { title } }, clan: { setTitle: (t: string) => { set.push(t); return Promise.resolve({ ok: true }) } } },
+    document: { title: '' }, TITLE: { done: '', last: '' }, isResearchFed: () => false, upTitle: () => '', upStoreTitle: () => '' })
+  assert.equal(mk(long, 'Untitled').workingTitle(), 'Proper Crunch')
+  mk(long, 'Untitled brief').syncTitle()
+  assert.deepEqual(set, ['Proper Crunch'], 'the document is titled by the short name')
+  assert.equal(mk('Moving People', '').workingTitle(), 'Moving People')
+  assert.equal(mk('Glenmore 12 relaunch - phase two', '').workingTitle(), 'Glenmore 12 relaunch')
+  assert.ok(mk('A'.repeat(30) + ' ' + 'B'.repeat(30), '').workingTitle().length <= 40, 'capped')
+  // The sheet's head, its tab and the export read the short name too, and the engine writes one.
+  assert.match(BM, /shortName\(get\('project_name'\)\)/)
+  assert.match(BM, /\$\('hProj'\)\.textContent=pn\|\|dt/)
 })
