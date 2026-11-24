@@ -38,6 +38,13 @@ export function Home() {
   const [saved, setSaved] = useState<SavedProject[]>([])
   const [savedNote, setSavedNote] = useState<string | null>(null)
   const signedIn = ui.me?.participantId
+  // Films moved to the Trash from here: off the list at once, even from a server list asked before the move landed
+  // (UAT round 4 F13: the trashed film stayed as an "On the server · not in this browser yet" card until a reload).
+  const [trashed, setTrashed] = useState<ReadonlySet<string>>(() => new Set())
+  const [toast, setToast] = useState<{ id: string; name: string } | null>(null)
+  // Asked again when a film first saves to the server, so its card says so (UAT round 4 F17).
+  const [ask, setAsk] = useState(0)
+  const marks = projects.map((p) => (p.server ? p.id : '')).join(',')
   useEffect(() => {
     let live = true
     shell.serverProjects().then((rows) => {
@@ -48,11 +55,28 @@ export function Home() {
       if (live) setSavedNote('Could not list the projects you saved on the server. Those in this browser are below.')
     })
     return () => { live = false }
-  }, [shell, signedIn])
+  }, [shell, signedIn, marks, ask])
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 8000)
+    return () => clearTimeout(t)
+  }, [toast])
   // A blank film that never got anything is not a project (owner 2026-11-18): drafts are not listed.
-  const own = projects.filter((p) => !p.draft)
-  const all = homeItems(own, saved)
-  const shown = homeItems(own, saved, ui.homeSort, query)
+  const own = projects.filter((p) => !p.draft && !trashed.has(p.id))
+  const there = saved.filter((r) => !trashed.has(r.id))
+  const all = homeItems(own, there)
+  const shown = homeItems(own, there, ui.homeSort, query)
+  const onTrashed = (id: string, name: string, restorable: boolean) => {
+    setTrashed((t) => new Set(t).add(id))
+    if (restorable) setToast({ id, name })
+  }
+  const undoTrash = (id: string) => {
+    setToast(null)
+    shell.restore(id).then(() => {
+      setTrashed((t) => { const n = new Set(t); n.delete(id); return n })
+      setAsk((n) => n + 1)
+    }, (e) => setError(`Could not restore it: ${e instanceof Error ? e.message : String(e)}`))
+  }
 
   const act = (what: string, p: Promise<unknown>) => {
     setError(null)
@@ -116,7 +140,8 @@ export function Home() {
               <div className="film-cards">
                 {shown.map((i) => i.kind === 'local' ? (
                   <ProjectCard key={i.p.id} p={i.p} server={i.server} newerThere={i.newerThere} menu={menuFor === i.p.id}
-                    onMenu={(open) => setMenuFor(open ? i.p.id : null)} onError={setError} />
+                    onMenu={(open) => setMenuFor(open ? i.p.id : null)} onError={setError}
+                    restorable={relay.kind === 'http' && !!signedIn} onTrashed={onTrashed} />
                 ) : (
                   <ServerCard key={itemId(i)} row={i.row} name={i.name} onError={setError} />
                 ))}
@@ -148,6 +173,12 @@ export function Home() {
           </div>
         </div>
       </main>
+      {toast && (
+        <div className="pp-toast" role="status" data-testid="toast">
+          <span>Moved to Trash</span>
+          <button type="button" onClick={() => undoTrash(toast.id)} aria-label={`Undo: bring “${toast.name}” back`}>Undo</button>
+        </div>
+      )}
     </div>
   )
 }
@@ -196,8 +227,11 @@ function ServerCard({ row, name, onError }: { row: SavedProject; name: string; o
   )
 }
 
-export function ProjectCard({ p, server, newerThere, menu, onMenu, onError }: {
+export function ProjectCard({ p, server, newerThere, menu, onMenu, onError, restorable = false, onTrashed }: {
   p: ProjectEntry; server?: SavedProject; newerThere: boolean; menu: boolean; onMenu: (open: boolean) => void; onError: (m: string) => void
+  /** The host keeps it in its Trash, so Undo can bring it back. */
+  restorable?: boolean
+  onTrashed?: (id: string, name: string, restorable: boolean) => void
 }) {
   const shell = useShell()
   const thumb = useBlobUrl(p.summary.thumb)
@@ -227,6 +261,7 @@ export function ProjectCard({ p, server, newerThere, menu, onMenu, onError }: {
   )
 
   const chip = stageChip(p.summary)
+  const savedThere = server?.savedAt ?? p.server?.savedAt
   return (
     <div ref={box} className={`film-card ${menu ? 'menu-open' : ''}`} role="button" tabIndex={0} aria-label={`Open ${p.name}`} onClick={open}
       onKeyDown={(e) => e.target === e.currentTarget && e.key === 'Enter' && open()}>
@@ -259,15 +294,18 @@ export function ProjectCard({ p, server, newerThere, menu, onMenu, onError }: {
       </div>
       <div className="kv">
         <span>Updated</span><span>{edited(p.updated)}</span>
-        {server && <><span>Server</span><span title={`Saved to the server ${new Date(server.savedAt).toLocaleString()}`}>saved {edited(server.savedAt).replace(/^edited /, '')}{newerThere ? ' · a newer save from elsewhere' : ''}</span></>}
-        {!server && <><span>Kept</span><span>in this browser</span></>}
+        {/* The server's list, else this browser's own record of its last save there (UAT round 4 F17: a film the footer
+            said was saved to the server read "Kept · in this browser" because the list was asked before it saved). */}
+        {savedThere && <><span>Server</span><span title={`Saved to the server ${new Date(savedThere).toLocaleString()}`}>saved {edited(savedThere).replace(/^edited /, '')}{newerThere ? ' · a newer save from elsewhere' : ''}</span></>}
+        {!savedThere && restorable && <><span>Server</span><span>not saved there yet</span></>}
+        {!savedThere && !restorable && <><span>Kept</span><span>in this browser</span></>}
       </div>
       {deleting && (
         <div className="pp-confirm" role="alertdialog" aria-label={trashQuestion(p.name)} onClick={(e) => e.stopPropagation()}>
           <span><b>{trashQuestion(p.name)}</b> {TRASH_SUB}</span>
           <div className="pp-acts">
             <button type="button" className="btn-rect" onClick={() => setDeleting(false)}>Cancel</button>
-            <button type="button" className="btn-rect danger" autoFocus onClick={() => { setDeleting(false); shell.remove(p.id).catch(fail('Could not move it to the Trash')) }}>{TRASH_GO}</button>
+            <button type="button" className="btn-rect danger" autoFocus onClick={() => { setDeleting(false); shell.remove(p.id).then(() => onTrashed?.(p.id, p.name, restorable && !!savedThere), fail('Could not move it to the Trash')) }}>{TRASH_GO}</button>
           </div>
         </div>
       )}
