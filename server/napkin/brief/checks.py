@@ -315,7 +315,26 @@ def _answer_line(question: str, answer: str) -> str:
                     break
             tail = re.match(r"[.!?…]+", answer[end:])
             return (answer[:end] + (tail.group(0) if tail else "")).strip()
-    return ""
+    return _stated_line(answer)
+
+
+# a sentence that tells how to use the line rather than being it ("Use it word for word everywhere.")
+_INSTRUCTION = re.compile(r"^(?:use|keep|run|put|always|please|make\s+sure|say|write|it|this|that|go\s+with|apply)\b|"
+                          r"\b(?:word\s+for\s+word|verbatim|everywhere|exactly\s+as)\b", re.I)
+LINE_WORDS = 15
+
+
+def _stated_line(answer: str) -> str:
+    """A new line an answer states unquoted: its leading sentence(s) before an instruction sentence ("Refill. Not
+    landfill. Use it word for word everywhere." -> "Refill. Not landfill."). Only with that instruction after it: an
+    answer that is all statement ("The board hasn't decided.") fixes nothing. UAT round 4, third re-test: the question
+    offered only 'Clean, without the plastic.' and the board chose a line that was not among its options."""
+    sents = [s.strip() for s in re.findall(r"[^.!?…]+[.!?…]*", answer) if s.strip()]
+    first = next((i for i, s in enumerate(sents) if _INSTRUCTION.search(s)), None)
+    if not first:  # None (no instruction) or 0 (the answer opens with one): no line stated before it
+        return ""
+    line = " ".join(sents[:first]).strip()
+    return line if len(line.split()) <= LINE_WORDS else ""
 
 
 def fixed_line(answered: list[str]) -> str:

@@ -136,6 +136,23 @@ def production_upstream_of(data: dict) -> dict | None:
     return None
 
 
+#: The fields a Brief Maker document's data holds (the deck engine's inputs.CLAN_FIELDS values): an upstream entry with any of them is a brief.
+BRIEF_KEYS = ("objectives", "audience", "single_minded_proposition", "reasons_to_believe", "desired_response", "tone_and_world", "mandatories",
+              "background", "insight", "competitor_context", "budget_and_scope", "capture")
+
+
+def brief_upstream_of(data: dict) -> dict | None:
+    """``{id, data}``: the brief (a Brief Maker's data) the Deck carries under ``data.upstream`` (the first one; never a Production project or a
+    Style Pack / Brand Clan kit), for the engine's intake and evidence. UAT round 4 L2: it was never sent, so a brief-only deck built from an
+    empty brief and the intake abstained on every field."""
+    for k, v in (data.get("upstream") or {}).items():
+        if not isinstance(v, dict) or v.get("app") == "production-tool" or isinstance(v.get("kit"), dict):
+            continue
+        if any(f in v for f in BRIEF_KEYS):
+            return {"id": str(k), "data": v}
+    return None
+
+
 def assets_of(v, loopback: bool = False) -> dict | None:
     """``{base, pass}`` from napkin-web's ``payload.production_assets`` (an https relay base and the signed assets pass), else None: a pass
     that is not exactly that shape is dropped, never forwarded. It is a bearer token for one agency's pictures: it goes in the engine
@@ -184,6 +201,9 @@ def start(req, caps, settings, jid):
     members = members_of(req.clan)
     if members:   # the research this deck carries: the engine's evidence (and its panel) knows it, not only the prompt
         body["members"] = members
+    bu = brief_upstream_of(data)
+    if bu:   # spun off a brief: the engine builds from its fields (and a Production project's brief yields to it)
+        body["brief_upstream"] = bu
     pu = production_upstream_of(data)
     if pu:   # spun off from a Production project: carried whole, frozen; finals fill the slots first, pictures are fetched by link at build
         body["production_upstream"] = pu
