@@ -21,7 +21,7 @@ export function BriefBooth({ briefId, onClose, src = OS }: { briefId: string; on
   const [busy, setBusy] = useState(false)
   const b = doc.briefs?.[briefId]
   if (!b) return null
-  const v = b.source.taken
+  const v = b.source.version
   const lines = spineLines(b.spine, b.confidential)
   const feeds = briefFeeds(doc, briefId)
   const after = notice ? projectSpine(notice.read.data).spine : null
@@ -43,7 +43,7 @@ export function BriefBooth({ briefId, onClose, src = OS }: { briefId: string; on
     items ? <ul>{items.map((x, i) => <li key={i}>{x}</li>)}</ul> : <span>{text}</span>
   return (
     <div className="bb" data-brief-booth={briefId}>
-      <div className="sp-crumb"><button type="button" onClick={onClose}>← Canvas</button><span>›</span><b>Brief</b>{notice && <><span>›</span><b>v{v} → v{v + 1}</b></>}
+      <div className="sp-crumb"><button type="button" onClick={onClose}>← Canvas</button><span>›</span><b>Brief</b>{notice && <><span>›</span><b>v{v} → v{notice.read.version}</b></>}
         <button type="button" className="x" onClick={onClose} title="Back (Esc)" aria-label="Close the brief">×</button></div>
       <div className="bb-src"><span className="tab" aria-hidden="true">BRIEF</span>
         <span className="t"><b>{b.title || 'Brief'}</b><small>Brief Maker · v{v} · frozen here</small></span>
@@ -62,7 +62,7 @@ export function BriefBooth({ briefId, onClose, src = OS }: { briefId: string; on
           })}
           <p className="bb-hint">If you update, what this brief feeds is marked to update; the Director agent proposes the changes. Nothing re-runs by itself.</p>
           <div className="bb-acts">
-            <button type="button" className="btn primary" disabled={busy} onClick={() => void run(async () => { await takeNewer(store, briefId, notice.read); setNotice(null); setSaid(`Updated to v${v + 1}. What it feeds is marked to update.`) })}>Update to v{v + 1}</button>
+            <button type="button" className="btn primary" disabled={busy} onClick={() => void run(async () => { await takeNewer(store, briefId, notice.read); setNotice(null); setSaid(`Updated to v${notice.read.version}. What it feeds is marked to update.`) })}>Update to v{notice.read.version}</button>
             <button type="button" className="btn" disabled={busy} onClick={() => void run(async () => { await keepVersion(store, briefId, notice.read); setNotice(null); setSaid(`Kept v${v}; recorded in Decisions.`) })}>Keep v{v}</button>
           </div>
         </div>

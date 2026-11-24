@@ -258,7 +258,7 @@ describe('a project from before generations (the owner\'s samurai copy), moved w
 })
 
 describe('the end card\'s Legal line (owner 2026-11-23: its own key, from the LINKED Brief; the call to action is only that)', () => {
-  const brief = (mandatories: string[]) => ({ id: id('brief'), v: 1, field_v: {}, title: 'Brief', source: { document_id: 'doc_1', app_id: 'ie.napkin.brief-maker', data_sha256: SHA('b'), taken: 1, at: T, how: 'link' }, spine: { mandatories } }) as unknown as NonNullable<ProductionDocument['briefs']>[string]
+  const brief = (mandatories: string[]) => ({ id: id('brief'), v: 1, field_v: {}, title: 'Brief', source: { document_id: 'doc_1', app_id: 'ie.napkin.brief-maker', data_sha256: SHA('b'), taken: 1, version: 1, at: T, how: 'link' }, spine: { mandatories } }) as unknown as NonNullable<ProductionDocument['briefs']>[string]
   /** A Brief in the project; linked to the film when `linked`. */
   async function withBrief(store: ModelStore, videoId: string, mandatories: string[], linked = true) {
     const b = brief(mandatories)
