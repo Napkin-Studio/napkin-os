@@ -22,18 +22,51 @@ def test_other_quoted_words_are_not_candidate_lines():
     assert checks.candidate_lines("The board can't decide between \"Lumo. Dein Licht.\" or \"Licht an.\"") == ["Lumo. Dein Licht.", "Licht an."]
 
 
-def test_a_draft_that_settles_nothing_gets_the_question_and_one_that_settles_it_does_not():
-    c = checks.candidate_lines(COPPERELL)
-    q = checks.line_question(c)
-    assert q.startswith("Which line does the board prefer, 'Clean, without the plastic.' or 'Refill. Not landfill.'?")
-    assert not checks.line_settled(c, ["Bottle is the hero, logo top right"], ["What is the budget?"])
-    assert not checks.line_settled(c, ["Avoid 'Clean, without the plastic.' as a plastic-free claim"], []), "a mention is not an end line"
-    assert checks.line_settled(c, ["End line: 'Refill. Not landfill.' (word for word)"], [])
-    assert checks.line_settled(c, [], ["Which message does the board prefer, A or B?"])
-    assert checks.line_settled(c, [], ["Which line does the board prefer? — Answer: Refill. Not landfill. Use it word for word everywhere."])
-    assert not checks.line_settled(c, [], ["What legal line must every piece carry?"])
-    # the code's own question is a line question the fixed-line step reads
-    assert checks.fixed_line([q.split(" — ")[0] + " — Answer: Refill. Not landfill."]) == "Refill. Not landfill."
+C = ["Clean, without the plastic.", "Refill. Not landfill."]
+MODEL_Q = "Which line does the board prefer, given we recommend 'The last spray bottle you'll ever need to buy'?"  # local run, 2026-11-24
+REWRITTEN = ("Which line does the board prefer: the client's 'Clean, without the plastic.' or 'Refill. Not landfill.', "
+             "or our suggestion 'The last spray bottle you'll ever need to buy'?")
+
+
+def test_with_no_line_question_code_asks_one_after_the_answers():
+    qs = ["What is the budget? — Answer: £200k excluding VAT.", "How will the board judge success?"]
+    got = checks.settle_line_question(C, ["Bottle is the hero, logo top right"], qs, answered=1)
+    assert got[0] == qs[0] and got[2] == qs[1]
+    assert got[1].startswith("Which line does the board prefer: the client's 'Clean, without the plastic.' or 'Refill. Not landfill.'?")
+
+
+def test_a_model_line_question_without_the_options_is_rewritten_once_naming_both_and_keeping_ours():
+    qs = ["What is the budget?", MODEL_Q, "How will the board judge success?"]
+    got = checks.settle_line_question(C, [], qs)
+    assert got == [qs[0], REWRITTEN, qs[2]], "rewritten in place, never a second question"
+    assert sum(1 for q in got if q.startswith("Which line")) == 1
+    assert checks.settle_line_question(C, [], got) is None, "once rewritten it names both: unchanged after"
+
+
+def test_a_model_line_question_that_already_names_both_is_unchanged():
+    q = "Which line does the board prefer, 'Clean, without the plastic.' or 'Refill. Not landfill.'?"
+    assert checks.settle_line_question(C, [], ["What is the budget?", q]) is None
+
+
+def test_no_candidate_lines_an_end_line_or_an_answered_line_question_change_nothing():
+    assert checks.settle_line_question([], [], [MODEL_Q]) is None
+    assert checks.settle_line_question(checks.candidate_lines("Just a brief, no lines."), [], [MODEL_Q]) is None
+    assert checks.settle_line_question(C, ["End line: 'Refill. Not landfill.' (word for word)"], [MODEL_Q]) is None
+    assert checks.settle_line_question(C, [], [MODEL_Q + " — Answer: Refill. Not landfill. Use it word for word everywhere."]) is None
+    legal = ["What legal line must every piece carry?"]
+    got = checks.settle_line_question(C, [], legal)
+    assert got[0].startswith("Which line") and got[1] == legal[0], "a legal question is not the line question: code asks its own"
+    assert checks.settle_line_question(C, ["Avoid 'Clean, without the plastic.' as a plastic-free claim"], [])[0].startswith("Which line"), \
+        "a mention in mandatories is not an end line"
+
+
+def test_answering_the_rewritten_question_with_any_option_sets_the_end_line():
+    for answer, line in (("Refill. Not landfill.", "Refill. Not landfill."),
+                         ("Clean, without the plastic. We like it.", "Clean, without the plastic."),
+                         ("The last spray bottle you'll ever need to buy.", "The last spray bottle you'll ever need to buy.")):
+        assert checks.fixed_line([f"{REWRITTEN} — Answer: {answer}"]) == line, answer
+    # a new line + "word for word" (#310's stated line) needs only that the question reads as a line question
+    assert checks._LINE_Q.search(REWRITTEN) and not checks._LEGAL_Q.search(REWRITTEN)
 
 
 def test_a_first_draft_of_the_copperell_brief_asks_which_line_when_the_model_did_not(tmp_path):
@@ -47,7 +80,7 @@ def test_a_first_draft_of_the_copperell_brief_asks_which_line_when_the_model_did
     oq = host.data["open_questions"]
     asked = [q for q in oq if q.startswith("Which line does the board prefer")]
     assert len(asked) == 1, oq
-    assert "'Clean, without the plastic.'" in asked[0] and "'Refill. Not landfill.'" in asked[0]
+    assert "'Clean, without the plastic.'" in asked[0] and "'Refill. Not landfill.'" in asked[0] and "the client's" in asked[0]
     assert not any(str(m).startswith("End line:") for m in host.data["mandatories"]), "nothing chosen yet, so no end line"
 
 
@@ -59,3 +92,18 @@ def test_a_brief_without_candidate_lines_gets_no_line_question(tmp_path):
     finally:
         s.stop()
     assert not [q for q in host.data["open_questions"] if q.startswith("Which line does the board prefer")]
+
+
+def test_a_first_draft_whose_model_asks_its_own_line_rewrites_that_question_once(tmp_path):
+    m = planned_model({})
+    for k in ("review_brief", "review_brief_again"):
+        orig = m.overrides[k]
+        m.overrides[k] = lambda p, orig=orig: {**orig(p), "questions": ["What is the launch budget?", MODEL_Q]}
+    s = Server(tmp_path, model=m, retrieval=retrieval(), settings_kw={"brief_flow": "planned"})
+    try:
+        host = Host()
+        run(s, host, inp={"prompt": COPPERELL, "attachments": []})
+    finally:
+        s.stop()
+    lines = [q for q in host.data["open_questions"] if q.startswith("Which line")]
+    assert lines == [REWRITTEN], host.data["open_questions"]

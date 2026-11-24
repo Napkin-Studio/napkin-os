@@ -1036,17 +1036,22 @@ class PlannedBriefJob(BriefJob):
         """Whether the Review agent's chain issue from the check loop is placed as a note."""
         return True
 
-    def _line_question(self, questions) -> str | None:
+    def _line_question(self, questions) -> list:
         """The client named candidate lines and could not choose ("MESSAGE: "Clean, without the plastic." or "Refill. Not
-        landfill." Board can't decide."): when the draft neither carries an end line nor asks which line, code asks it,
-        so the fixed-line step has an answer to act on whatever the model wrote (UAT round 4, L1). None otherwise."""
+        landfill." Board can't decide."). The questions then ask about them whatever the model wrote: a line question that
+        leaves them out is asked again naming them, the agency's suggestion kept as an option (owner, 2026-11-24); with no
+        line question at all, code's own goes in right after the answers, so the cap of twelve never cuts it (UAT round
+        4, L1). Unchanged when the draft carries an end line or the line question is answered."""
         said = "\n".join(t for t in (str(get(self.W, "brief_input") or ""), self._said()) if t)
         cands = checks.candidate_lines(said)
         mands = (self.whole.get("mandatories") or {}).get("value") if "mandatories" in self.whole else get(self.W, "mandatories")
-        if not cands or checks.line_settled(cands, mands, list(questions) + list(get(self.W, "open_questions") or [])):
-            return None
-        self.caps.runlog.note("line_question_added", candidates=cands[:4])
-        return checks.line_question(cands)
+        n = len(answered_items(get(self.W, "open_questions")))
+        got = checks.settle_line_question(cands, mands, list(questions), answered=n)
+        if got is None:
+            return list(questions)
+        self.caps.runlog.note("line_question_settled", candidates=cands[:4],
+                              rewrote=len(got) == len(questions))
+        return got
 
     def _carry_fixed_line(self):
         """The line the planner fixed in an answered open question goes into mandatories as the end line, word for
@@ -1125,10 +1130,7 @@ class PlannedBriefJob(BriefJob):
         qs += list((self.whole.get("open_questions") or {}).get("value") or [])
         qs += list(rv.get("questions") or [])
         qs += checks.figure_questions(self.whole, lambda k: LABELS.get(k, k))  # a figure left unmarked is still to confirm
-        lq = self._line_question(qs)
-        if lq:  # right after the answers, so the cap of twelve never cuts it
-            n = len(answered_items(get(self.W, "open_questions")))
-            qs = qs[:n] + [lq] + qs[n:]
+        qs = self._line_question(qs)
         oq, merged = dedupe(without_answered(qs, self.intake_answered))
         if merged:
             self.caps.runlog.note("questions_merged", detail="; ".join(f"{d!r} into {k!r}" for k, d in merged)[:600])
