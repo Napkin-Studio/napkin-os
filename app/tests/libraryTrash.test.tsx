@@ -128,6 +128,16 @@ const trashPage = (rows: TrashItem[], c: ClientRecord | null = client) => {
   }))
 }
 
+test('a new document still titled with its tool\'s name is listed as what it is, not as the tool (UAT round 4 F14)', () => {
+  const html = trashPage([
+    row('doc-1', 'Brief Maker', BRIEF, 'Aoife', 0),
+    row('doc-2', 'Research Tool', 'ie.napkin.campaign-research', 'Aoife', 0),
+  ])
+  assert.match(html, /<b>New brief<\/b>/)
+  assert.match(html, /<b>New question<\/b>/)
+  assert.doesNotMatch(html, /<b>(Brief Maker|Research Tool)<\/b>/)
+})
+
 test('the Trash page lists any tool\'s documents: icon, title, who and when, and Restore; no permanent delete', () => {
   const html = trashPage([
     row('doc-1', 'Zero Sugar: first-pass brief', BRIEF, 'Aoife', 3),
