@@ -19,7 +19,7 @@ import { createRelay } from './relay'
 import { AccessStore, type Access } from './relay/access'
 import { Root } from './Root'
 import { Router } from './app/route'
-import { openRouteProject } from './app/routeOpen'
+import { startUp } from './app/startup'
 
 async function boot() {
   const relay = createRelay()
@@ -70,23 +70,14 @@ async function boot() {
   // on Home and opened from any browser under the same name. Not on the in-browser mock relay.
   const relayUrl = import.meta.env.VITE_RELAY_URL as string | undefined
   const server = relay.kind === 'http' && relayUrl ? new ProjectServer({ base: relayUrl, signedIn: () => !!app.get().me, onUnauthorised: refused }) : undefined
-  const shell = new Shell({ relay, app, index, storage, remoteConfig, makeClan: browserClan, server })
+  const clientId = new URLSearchParams(window.location.search).get('client') || undefined
+  const shell = new Shell({ relay, app, index, storage, remoteConfig, makeClan: browserClan, server, clientId })
   // A deep link (/production/d/:doc/script/:scriptId) opens its project; else back where the person was.
   const router = new Router()
   // The names the relay already lists, so a film naming itself never takes one (re-test N-D). Not waited for.
   if (app.get().me) void shell.serverProjects().catch(() => [])
-  // Blank films nothing was added to are not kept (owner 2026-11-18): those an earlier visit left go first.
-  if (app.get().me) await shell.pruneDrafts().catch((e) => console.warn('could not tidy blank films', e))
-  if (app.get().me) {
-    // A link or a reload that names a film opens that film. With none the page shows the library's Production
-    // list (contract section 2.5): the page never makes a project the person did not ask for (the owner's blank
-    // canvas entry of 2026-11-18 is a New project away, from the list).
-    const opened = await openRouteProject(shell, router).catch((e) => {
-      console.error('could not open the linked project', e)
-      return false
-    })
-    if (!opened) await shell.goHome()
-  }
+  // Blank films nothing was added to are not kept, and a film a link names is opened: both wait for the first render
+  // (app/startup.ts), so the page shows at once and says "Opening…" instead of sitting on the boot screen.
 
   // What is waiting is written down as the page goes, and as it is hidden (a reload, a tab switch, a mobile close):
   // pagehide alone came too late for an edit followed at once by a reload (UAT round 6, S1-12).
@@ -114,6 +105,7 @@ async function boot() {
       <Root shell={shell} access={access} router={router} />
     </StrictMode>,
   )
+  if (app.get().me) void startUp(shell, router)
 }
 
 void boot()

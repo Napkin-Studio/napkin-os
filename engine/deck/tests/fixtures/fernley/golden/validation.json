@@ -42,6 +42,13 @@
   "slide_no": 13
  },
  {
+  "check": "empty_slot",
+  "level": "warn",
+  "slide": "s14",
+  "message": "empty text block (dropped at render)",
+  "slide_no": 14
+ },
+ {
   "check": "numbers_uncited",
   "level": "warn",
   "slide": "s19",

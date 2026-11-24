@@ -1854,7 +1854,7 @@ answers `410` with the reason for one release, then goes.
   Taken for `accept`, `handoff`, `export`; and for `interval`, `manual`, `landing` when the newest is 10 minutes or
   older. The newest 50 are kept, the newest is never deleted, they are not listed in the library, and each tenant's
   ring is inside the tenant's directory. **Restore** is a documented copy, never a route: a person with access to the store takes the wanted snapshot file and uploads it as a new document (`POST /api/t/{t}/documents/upload`, the same call the tool's "open a file" uses), or copies it over the document's file in the tenant's directory while the server is stopped. The snapshot ring is read, never overwritten.
-- **Trash.** `DELETE /d/{doc}` moves a document to `<tenant>/trash/` for 30 days (`production-clan-app.md` 8a).
+- **Trash.** `DELETE /d/{doc}` moves a document to `<tenant>/trash/` for 30 days and keeps its title, tool, client and who deleted it; `GET /trash[?client=]` lists them (`production-clan-app.md` 8a). Every tool shares this one Trash.
 - **Decision: whole-document save is a stepping stone.** The approved design (owner: Shrey) saves the whole file and
   check its Version, over per-field patch writes (live collaboration), which cost 30 to 40 agent days. The save
   uses the host's Version and goes through `PartStore::apply` with `Base::At`, the same funnel a later patch route

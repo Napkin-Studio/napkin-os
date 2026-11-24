@@ -147,3 +147,9 @@ export function keepIgnores(before: Checks | undefined, after: Checks): Checks {
 export function flagged(size: Pick<Size, 'checks'>): boolean {
   return Object.values(size.checks ?? {}).some((c) => c && c.result === 'flag' && !c.ignored)
 }
+
+/** Why a size needs a look, in the checks' own words: each flag no one has ignored (UAT round 4 F36: the 9:16 cutdown
+ *  said "Needs a look" with no reason anywhere in the overview). None when nothing is flagged now. */
+export function lookReasons(size: Pick<Size, 'checks'>): string[] {
+  return Object.values(size.checks ?? {}).filter((c): c is FormatCheck => !!c && c.result === 'flag' && !c.ignored).map((c) => c.note).filter(Boolean)
+}

@@ -281,6 +281,11 @@ export function inkOn(bg: string): string {
   return contrast(bg, INK) >= contrast(bg, WHITE) ? INK : WHITE
 }
 
+/** The client's own ink on its colour when that reads (WCAG AA, 4.5:1), else near-black or white by the colour's luminance. */
+export function readableInk(bg: string, ink: string): string {
+  return contrast(bg, ink) >= 4.5 ? ink : inkOn(bg)
+}
+
 /** `a` mixed into `b` by `t` (0 to 1), as #rrggbb. */
 function mix(a: string, b: string, t: number): string {
   const ca = rgb(a)!, cb = rgb(b)!

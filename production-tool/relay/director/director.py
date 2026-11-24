@@ -97,8 +97,11 @@ NO_PEOPLE = "No people in this shot."
 _PEOPLE_SAID = re.compile(r"\bno (?:people|person|one|figures?|humans?)\b|\bnobody\b|\bempty of people\b", re.I)
 # The brief says "no real faces" (UAT 2026-11-24: the tram frames showed real, clear faces): that means unrecognisable only
 # (owner 2026-11-23), so people may appear but no one identifiable, even when the shot's text shows people.
-UNRECOGNISABLE = ("People may appear, but no one is recognisable: seen from behind, at a distance, blurred, or cropped "
-                  "to hands; no clear face of any real person.")
+# UAT 2026-11-23 (Tidewell): the old line ("no clear face of any real person") was in frame 5's prompt and the picture still
+# showed laughing faces; an image model does not read a generated face as a "real person". So the line is a composition:
+# nobody shows a face, and nobody looks at the camera.
+UNRECOGNISABLE = ("People may appear, but no one is recognisable: seen only from behind, in silhouette, at a distance or "
+                  "cropped to hands and shoulders; no face is visible, sharp or in close-up, and no one looks at the camera.")
 _UNRECOGNISABLE_SAID = re.compile(r"\bunrecogni[sz]able\b|\bno one (?:is )?recogni[sz]able\b|\bnot recogni[sz]able\b", re.I)
 FACES_OPS = ("frame", "clip")
 # UAT round 4: frame 2 nearly copied frame 1's framing. A frame says its shot's own size and angle from the shot list,
@@ -321,6 +324,41 @@ def _add_line(job: dict, line: str, sheet: dict) -> None:
         job["prompt"] = said
 
 
+def _add_first(job: dict, line: str, sheet: dict) -> None:
+    """One of the relay's own lines as the prompt's FIRST sentence, when the prompt has room (else where _add_line puts it).
+    UAT round 3 (Harrowgate): the no-faces line sat mid-prompt, after the shot's own words, and the picture still showed two
+    men smiling in profile; an image model weighs what it reads first."""
+    prompt = (job.get("prompt") or "").strip()
+    said = f"{line} {prompt}".strip()
+    limit = prompt_max(sheet, job.get("model") or "")
+    if limit is None or utf16_units(said) <= limit:
+        job["prompt"] = said
+    else:
+        _add_line(job, line, sheet)
+
+
+# Words that draw a face: a smile, a laugh, a look toward the camera. Under a no-faces rule the shot's text drops them
+# (the director is told to as well, director.v18); what is left is the moment, as hands, backs and distance.
+_EXPRESSION = re.compile(
+    r"[,;]?\s*\b(?:smil(?:e|es|ed|ing)|laugh(?:s|ed|ing)?|grin(?:s|ned|ning)?|beam(?:s|ed|ing)|"
+    r"(?:looks?|looking|stares?|staring|gazes?|gazing|turns?|turning)\s+(?:directly\s+)?(?:at|to|toward|towards)\s+(?:the\s+)?"
+    r"(?:camera|lens|us|viewer))\b(?:\s+(?:broadly|warmly|widely|happily))?", re.I)
+
+
+def _drop_expressions(job: dict) -> None:
+    prompt = job.get("prompt") or ""
+    # The relay's own line says "no one looks at the camera": it stays as it is.
+    head, line, tail = prompt.partition(UNRECOGNISABLE)
+    said = f"{_tidy(_EXPRESSION.sub('', head))}{line}{_tidy(_EXPRESSION.sub('', tail))}" if line else _tidy(_EXPRESSION.sub("", prompt))
+    if said.strip() != prompt.strip():
+        job["prompt"] = said.strip()
+
+
+def _tidy(text: str) -> str:
+    text = re.sub(r"\s+([,.;!?])", r"\1", text)
+    return re.sub(r"[ \t]{2,}", " ", text)
+
+
 def _no_other_brands(job: dict, op: str, sheet: dict) -> None:
     """A generate or a frame paints no brand the job did not ask for (R2-13). Not an edit of a picture (a frame_edit,
     a region_edit), which keeps what it has."""
@@ -352,8 +390,19 @@ def _unrecognisable_people(job: dict, op: str, faces: bool, sheet: dict) -> None
     """A frame or a clip of a project whose linked brief says no real faces says, as its own line, that people may
     appear but no one is recognisable, even when the shot's text shows people (the brief is read whole, not as cut
     to the op's budget, which drops a mandatory from a clip)."""
-    if faces and op in FACES_OPS and not _UNRECOGNISABLE_SAID.search(job.get("prompt") or ""):
-        _add_line(job, UNRECOGNISABLE, sheet)
+    if not (faces and op in FACES_OPS):
+        return
+    _drop_expressions(job)
+    if not _UNRECOGNISABLE_SAID.search(job.get("prompt") or ""):
+        _add_first(job, UNRECOGNISABLE, sheet)
+
+
+def say_unrecognisable(out: dict, op: str, brief: dict | None, sheet: dict | None) -> None:
+    """The same line on an answer that did not come from the director's own check (the passthrough: a one-video take, a
+    director fault), which the Tidewell UAT clip never had. In place; a no-op unless the brief says no real faces."""
+    job = out.get("providerJob")
+    if job and sheet and op in FACES_OPS and briefs.no_real_faces(brief):
+        _unrecognisable_people(job, op, True, sheet)
 
 
 def _shot_framing(job: dict, op: str, payload: dict, sheet: dict) -> None:
@@ -1298,9 +1347,12 @@ class Director:
         ids = [s["id"] for s in shots if s.get("id")]
         if len(set(ids)) != len(ids):
             raise DirectorError("shot ids must be unique")
-        known = {r["name"] for r in payload.get("refs") or [] if r.get("name")}
-        # A bare key names the whole character, and only a key with a front can be named bare.
+        refs = [r for r in payload.get("refs") or [] if r.get("name")]
+        known = {r["name"] for r in refs}
+        # A bare key names the whole character, and only a key with a front can be named bare. A key that is not a
+        # character or a product (a logo, a location…) needs no front: its bare key is its pictures (UAT round 4 F32).
         known |= {n.split("_", 1)[0] for n in known if n.endswith("_front")}
+        known |= {r["name"].split("_", 1)[0] for r in refs if r.get("role") not in ("character", "product")}
         for i, s in enumerate(shots, 1):
             unknown = [n for n in s.get("refs") or [] if n not in known]
             if unknown:

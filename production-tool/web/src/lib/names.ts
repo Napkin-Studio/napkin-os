@@ -23,10 +23,22 @@ export class NoFrontError extends Error {
   }
 }
 
-/** The pictures a bare @key sends: its front, then three-quarter, side, back, then the rest as named. */
+/** The roles a bare @key stands for the whole of, led by its front: a character and a product. A logo, a location, a
+ *  palette… is its pictures as they are, and needs no front (UAT round 4 F32: "@logo" in the script stopped Plan shots
+ *  with "Set a front for @logo first"). */
+const LED_BY_FRONT = new Set(['character', 'product'])
+
+/** Whether a bare @key needs a front: its key's role (else its pictures') is a character or a product. */
+export function needsFront(doc: ProductionDocument, key: Key): boolean {
+  const role = Object.values(doc.keys ?? {}).find((k) => k.key === key)?.role ?? refsList(doc).find((r) => r.key === key)?.role
+  return !role || LED_BY_FRONT.has(role)
+}
+
+/** The pictures a bare @key sends: its front, then three-quarter, side, back, then the rest as named. A key that needs no
+ *  front (a logo…) leads with its first view. */
 export function keyRefs(doc: ProductionDocument, key: Key): NamedRef[] {
   const mine = refsList(doc).filter((r) => r.key === key)
-  const front = mine.find((r) => r.variant === 'front')
+  const front = mine.find((r) => r.variant === 'front') ?? (needsFront(doc, key) ? undefined : keyViews(doc, key).views[0])
   if (!front) throw new NoFrontError(key)
   const rank = (r: NamedRef) => (VIEW_ORDER.includes(r.variant) ? VIEW_ORDER.indexOf(r.variant) : VIEW_ORDER.length + mine.indexOf(r))
   return [front, ...mine.filter((r) => r !== front).sort((a, b) => rank(a) - rank(b)).slice(0, KEY_EXTRAS)]
@@ -135,7 +147,7 @@ export function keysWithoutFront(live: ProductionDocument, stored: ProductionDoc
     const k = m[1]
     if (k.includes('_') || out.includes(k)) continue
     const known = Object.values(stored.keys ?? {}).some((x) => x.key === k) || Object.values(stored.refs ?? {}).some((r) => r.key === k)
-    if (!known) continue
+    if (!known || !needsFront(stored, k)) continue
     if (!refsList(live).some((r) => r.key === k && r.variant === 'front' && r.asset)) out.push(k)
   }
   return out

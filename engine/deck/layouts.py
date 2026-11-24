@@ -592,6 +592,54 @@ def _bound_value(kind: str, b: dict):
     return {}
 
 
+#: The host's cap on each slot kind (app/templates/deck-maker/schema.json, slide slots oneOf): a value past it is refused at Check, so
+#: the writer never writes one (UAT round 4 F25: a nine-item list from one bullets block; 08202be3 had capped only merged items).
+#: test_deck_uat_round4.py reads the schema and fails when these drift from it.
+SLOT_ITEMS = {"list": 8, "group": 8, "stat": 4}
+TABLE_ROWS, TABLE_CELLS = 8, 5
+
+
+def _join(a, b, sep="; ") -> str:
+    a, b = str(a or "").strip(), str(b or "").strip()
+    return f"{a}{sep}{b}" if a and b else (a or b)
+
+
+def _fold_item(keep: dict, more: dict, kind: str) -> dict:
+    """``more`` folded into ``keep``: its words join keep's text (a heading or a stat's value leads them), its refs join keep's."""
+    if kind == "stat":
+        words = _join(more.get("value"), more.get("text"), " ")
+    else:
+        words = _join(more.get("heading"), more.get("text"), ": ")
+    out = {**keep, "text": _join(keep.get("text"), words)}
+    refs = list(dict.fromkeys([*(keep.get("refs") or []), *(more.get("refs") or [])]))
+    if refs:
+        out["refs"] = refs
+    return out
+
+
+def fit_caps(v: dict) -> dict:
+    """``v`` (a bound slot value) inside the host's caps (SLOT_ITEMS, TABLE_ROWS, TABLE_CELLS): what is past a cap is folded, word for
+    word, into the last item, row or cell the cap allows, so nothing is lost and nothing is refused. In place; returns ``v``."""
+    cap = SLOT_ITEMS.get(v.get("kind"))
+    items = v.get("items")
+    if cap and isinstance(items, list) and len(items) > cap:
+        last = items[cap - 1]
+        for more in items[cap:]:
+            last = _fold_item(last, more, v["kind"])
+        v["items"] = [*items[: cap - 1], last]
+    rows = v.get("rows")
+    if v.get("kind") == "table" and isinstance(rows, list):
+        rows = [[*r[: TABLE_CELLS - 1], " · ".join(str(c) for c in r[TABLE_CELLS - 1:] if str(c).strip())] if len(r) > TABLE_CELLS else list(r)
+                for r in rows]
+        if len(rows) > TABLE_ROWS:
+            last = rows[TABLE_ROWS - 1]
+            for more in rows[TABLE_ROWS:]:
+                last = [_join(last[c] if c < len(last) else "", more[c] if c < len(more) else "") for c in range(max(len(last), len(more)))]
+            rows = [*rows[: TABLE_ROWS - 1], last]
+        v["rows"] = rows
+    return v
+
+
 def bind(lay: dict, s: dict, bl: list) -> tuple:
     """Bind each shown block to one slot of the layout, in the order of the layout's ``from_blocks``: ``(slots, unbound)``. A text
     slot takes one block, then the next block of its kind goes to the next slot that takes it (or joins the last); a list, group,
@@ -622,7 +670,7 @@ def bind(lay: dict, s: dict, bl: list) -> tuple:
             if sl["kind"] == "text":
                 cur["text"] = (cur["text"] + "\n" + val["text"]).strip()
             elif sl["kind"] in ("list", "group", "stat"):
-                cur["items"] = (cur["items"] + val["items"])[:8]
+                cur["items"] = cur["items"] + val["items"]   # capped once, below (fit_caps), with nothing lost
             elif sl["kind"] == "table":
                 cur["rows"] += val["rows"]
             cur["blocks"].append(i)
@@ -632,6 +680,7 @@ def bind(lay: dict, s: dict, bl: list) -> tuple:
         if b.get("basis") and "basis" not in slots[n]:
             slots[n]["basis"] = b["basis"]
     for n, v in slots.items():
+        fit_caps(v)
         v["chars"], v["words"] = _chars_words(v)
     return slots, unbound
 
@@ -828,9 +877,13 @@ def _fmt_refs(refs) -> str:
     return ",".join(str(r) for r in refs)
 
 
-def moved_line(m_text: str, refs) -> str:
-    """The notes line for one moved point: ``- <verbatim> [refs: a,b]`` (no refs: no bracket)."""
+def moved_line(m_text: str, refs, clean: bool = False) -> str:
+    """The notes line for one moved point: ``- <verbatim> [refs: a,b]`` (no refs: no bracket). ``clean`` (a client export): the build's ids never
+    reach the room, so the point stands without its refs and without its open-item marks (round 3: ``[refs: req:R14,brief:...]`` was in the notes)."""
     one = " / ".join(x.strip() for x in str(m_text).splitlines() if x.strip())   # a note line is one line: a newline in a point becomes " / "
+    if clean:
+        from .export_clean import client_text   # noqa: PLC0415
+        return f"- {client_text(one)}"
     return f"- {one}" + (f" [refs: {_fmt_refs(refs)}]" if refs else "")
 
 
@@ -1165,6 +1218,8 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
                 made = any(isinstance(v, dict) and (v.get("image") or {}).get("status") in ("made", "flagged") and ((v.get("image") or {}).get("from") or {}).get("kind") == "production"
                            for v in (s.get("slots") or {}).values())   # a finished picture from Production is never given up for the rules' pick without one
                 cands = ([rule_text] if rule_text != lid and rule_text in lib and image_slots(lib[lid]) and not made else []) + _alternatives(lib, lid, base, aud, ready.get(sid, frozenset()), f.get("avoid", []))
+                if made:   # UAT round 4 F27: a cover holding the Final key visual switched to 'cards' (no picture slot) when its title ran long
+                    cands = [a for a in cands if a in lib and image_slots(lib[a])]
                 for a in cands:
                     ra = probe({**sl_, "blocks": shown}, a, cap=sc_cap, stamped=pt.get(a))
                     if ra["ok"] and not ra["relaxed"] and (pt.get(a) is None or R.title_fits(s["title"], pt.get(a))):

@@ -30,13 +30,13 @@ export function firstClause(text: string): string {
   return text
 }
 
-/** The first words of the action, with its @names and any aside in brackets left out: "@mira (30s, short
- *  silver hair…) steps off a green tram" is "Steps off a green tram", not "(30s" (live test 2026-11-16). */
+/** The first words of the action, with any aside in brackets left out and each @name read as its plain name:
+ *  "@mira (30s, short silver hair…) steps off a green tram" is "Mira steps off a green…", not "(30s" (live test
+ *  2026-11-16), and "Hands hold @bottle under a running tap" keeps "bottle" (UAT round 4 F20: it read "Hands hold
+ *  under a…"). The name's view (_front) is left off. */
 export function titleOf(s: Pick<Shot, 'action' | 'camera'>): string {
   const plain = withoutAsides(s.action ?? '')
-    // "@maya's trembling finger" keeps its name: "Maya's trembling finger", not "'s trembling finger" (UAT 2026-11-21).
-    .replace(/@([a-z][a-z0-9]*)(?:_\w+)?(?=['\u2019]s\b)/gi, (_, k: string) => cap(k))
-    .replace(/@\w+/g, '')
+    .replace(/@([a-z][a-z0-9]*)(?:_\w+)?/gi, (_, k: string) => k)
     .replace(/\s+/g, ' ')
     .trim()
   const words = firstClause(plain).trim()

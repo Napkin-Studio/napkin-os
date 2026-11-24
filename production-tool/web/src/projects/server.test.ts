@@ -46,6 +46,8 @@ class FakeRelay {
   uploads = new Map<string, Uint8Array>()
   saves: { id: string; ifMatch: string | null; reason: string | null }[] = []
   failUploads = false
+  /** The client each new document was made for (the body's client_id). */
+  createdFor: (string | undefined)[] = []
   /** A save lands, and its answer never reaches the browser (the page was closed as it went: UAT U7). */
   loseAnswers = false
   /** Nothing reaches the host. */
@@ -89,7 +91,8 @@ class FakeRelay {
     }
     if (method === 'POST' && path === '/t/t1/documents') {
       const id = `doc-${++this.n}`
-      const title = (JSON.parse(String(init.body)) as { title: string }).title
+      const { title, client_id: clientId } = JSON.parse(String(init.body)) as { title: string; client_id?: string }
+      this.createdFor.push(clientId)
       await this.make(await blankProject(title), id, title)
       return this.json(200, { path: id })
     }
@@ -97,6 +100,13 @@ class FakeRelay {
       const id = `upload-${++this.n}`
       await this.make(new Uint8Array(init.body as Uint8Array), id)
       return this.json(200, { path: id })
+    }
+    const back = /^\/t\/t1\/d\/([^/]+)\/restore$/.exec(path)
+    if (back && method === 'POST') {
+      const q = this.projects.get(back[1])
+      if (!q?.trashed) return this.json(404, { error: 'not in the Trash' })
+      delete q.trashed
+      return this.json(200, { restored: true, path: back[1] })
     }
     const m = /^\/t\/t1\/d\/([^/]+)(\/download|\/save)?$/.exec(path)
     const p = m && this.projects.get(m[1])
@@ -148,7 +158,7 @@ async function blankProject(title: string): Promise<Uint8Array> {
 }
 
 /** One browser: its own storage and index, signed in as Maya, with the relay behind it. */
-function browser(fake: FakeRelay) {
+function browser(fake: FakeRelay, clientId?: string) {
   const storage = memoryStorage()
   let t = Date.parse('2026-10-10T09:00:00Z')
   const index = new ProjectIndex(storage, () => new Date((t += 1000)))
@@ -158,7 +168,7 @@ function browser(fake: FakeRelay) {
   // The real relay over HTTP, as far as saving is concerned.
   const relay = Object.assign(Object.create(mock) as Relay, { kind: 'http' as const, upload: fake.upload })
   const server = new ProjectServer({ base: '/relay', host: '/api', signedIn: () => !!app.get().me, fetchFn: fake.fetch as typeof fetch })
-  const shell = new Shell({ relay, app, index, storage, remoteConfig: null, makeClan, summaryDelayMs: 1, server })
+  const shell = new Shell({ relay, app, index, storage, remoteConfig: null, makeClan, summaryDelayMs: 1, server, clientId })
   return { storage, index, shell, app }
 }
 
@@ -195,6 +205,16 @@ async function made(fake: FakeRelay) {
   return { laptop, p, front, frame }
 }
 
+describe('a project started from a client\'s dial belongs to that client (Tidewell UAT: the dial said "Nothing yet")', () => {
+  it('the library document is made for the client the page was opened for', async () => {
+    forgetSent()
+    const fake = new FakeRelay()
+    await browser(fake, 'client-tidewell').shell.newProject()
+    await browser(fake).shell.newProject()
+    expect(fake.createdFor).toEqual(['client-tidewell', undefined])
+  })
+})
+
 describe('Home lists the relay\'s projects with this browser\'s', () => {
   const entry = (id: string, updated: string, server?: ProjectEntry['server']): ProjectEntry =>
     ({ id, name: id, naming: 'person', created: updated, updated, summary: emptySummary(), ...(server ? { server } : {}) })
@@ -211,6 +231,21 @@ describe('Home lists the relay\'s projects with this browser\'s', () => {
     expect(a.kind === 'local' && !a.newerThere && a.server?.id).toBe('prj_a')
     expect(homeItems(local, server, 'name').map((i) => (i.kind === 'local' ? i.p.name : i.name))).toEqual(['prj_a', 'prj_b', 'prj_c there'])
     expect(homeItems(local, server, 'recent', 'there').map((i) => i.kind)).toEqual(['server'])
+  })
+})
+
+describe('Move to Trash and its Undo (UAT round 4 F13)', () => {
+  it('the film leaves the library at once; Undo brings it back to the library', async () => {
+    forgetSent()
+    const fake = new FakeRelay()
+    const { laptop, p } = await made(fake)
+    expect((await laptop.shell.serverProjects()).map((r) => r.id)).toContain(p.id)
+    await laptop.shell.remove(p.id)
+    expect((await laptop.shell.serverProjects()).map((r) => r.id)).not.toContain(p.id)
+    expect(await laptop.shell.restore(p.id)).toBe(true)
+    expect((await laptop.shell.serverProjects()).map((r) => r.id)).toContain(p.id)
+    // A second Undo has nothing to bring back: the host says so.
+    await expect(laptop.shell.restore(p.id)).rejects.toThrow()
   })
 })
 
@@ -514,6 +549,17 @@ describe('opening a project checks the relay for a newer version (re-test R2)', 
     // The fake counts a save when it arrives and stores it after an async hash, so wait for it to land.
     await vi.waitFor(() => expect(fake.projects.get(p.id)!.row.etag).not.toBe(mine.etag))
     expect(copy.get()).toBeNull()
+  })
+
+  it('a rename made just before leaving the page is on the relay when the page has gone (Tidewell UAT: restored as "Untitled project")', async () => {
+    forgetSent()
+    const fake = new FakeRelay()
+    const { laptop, p } = await made(fake)
+    const before = fake.saves.length
+    await laptop.shell.rename(p.id, 'Tidewell Tides In')
+    await laptop.shell.goHome() // leaving at once: no minute tick, no waiting
+    expect(fake.saves.length).toBeGreaterThan(before)
+    await vi.waitFor(() => expect(fake.projects.get(p.id)!.row.name).toBe('Tidewell Tides In'))
   })
 
   it('the same version as here: it opens with no question and no download', async () => {

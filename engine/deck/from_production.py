@@ -125,11 +125,20 @@ def open_bundle(path: Path) -> tuple:
     return zf, inner, clans[0], raw
 
 
+class _PlainLoader(yaml.SafeLoader):
+    """SafeLoader that keeps a timestamp as the text it was written as: a Production document saved with bare ISO times must not turn them into
+    datetime objects that the json written to production.json cannot hold (found building from the UAT round-3 Harrowgate export)."""
+
+
+_PlainLoader.yaml_implicit_resolvers = {k: [(tag, rx) for tag, rx in v if tag != "tag:yaml.org,2002:timestamp"]
+                                        for k, v in yaml.SafeLoader.yaml_implicit_resolvers.items()}
+
+
 def read_document(inner: zipfile.ZipFile) -> dict:
     """The contract-3 document: ``shared/data.yaml`` of the inner .clan, by exact name. Refuses any other contract version by name."""
     if "shared/data.yaml" not in inner.namelist():
         raise FromProductionError("the .clan has no shared/data.yaml: it is not a Production Tool document")
-    doc = yaml.safe_load(_read(inner, "shared/data.yaml", DATA_MAX).decode("utf-8"))
+    doc = yaml.load(_read(inner, "shared/data.yaml", DATA_MAX).decode("utf-8"), Loader=_PlainLoader)   # noqa: S506 (SafeLoader subclass)
     if not isinstance(doc, dict):
         raise FromProductionError("shared/data.yaml is not a document")
     return check_document(doc)
@@ -613,7 +622,7 @@ def _made_pictures(doc: dict) -> tuple:
         return out
     packs, crops = set(), set()
     for j in jobs:
-        text = json.dumps({k: v for k, v in j.items() if k not in ("cost", "director")}, ensure_ascii=False) + " " + str(((j.get("director") or {}).get("input") or {}).get("text") or "")
+        text = json.dumps({k: v for k, v in j.items() if k not in ("cost", "director")}, ensure_ascii=False, default=str) + " " + str(((j.get("director") or {}).get("input") or {}).get("text") or "")
         if _PACKSHOT.search(text):
             packs |= set(shas(j.get("outputs")))
         if j.get("op") == "resize":

@@ -347,6 +347,9 @@ async fn a_documents_data_reads_as_json_with_the_hash_links_compare() {
     assert_eq!(v["title"], "First Light brief");
     assert_eq!(v["path"], doc.as_str());
     assert!(v["data"].is_object(), "{v}");
+    // Not approved yet: no approvals, and the version a person says is v1.
+    assert_eq!(v["approvals"], 0, "{v}");
+    assert_eq!(v["version"], 1, "{v}");
     let yaml = get(
         &s,
         &format!("/api/t/{}/d/{}/entry/data", b.tenant, doc),
@@ -1344,6 +1347,85 @@ async fn upstream_names_the_tenants_parent_and_what_changed_in_it() {
     assert_eq!(v["upstream"][0]["status"], "changed");
     assert_eq!(v["upstream"][0]["changed"]["data"], true);
     assert_eq!(v["upstream"][0]["decisions_since"], 1);
+}
+
+/// UAT round 4 F24: a brief locked twice is v2 in `/data`, and a project spun off from it carries both locks in its
+/// chain as the host writes them, with the brief's bare document id as the target (not `<id>#…`). Production's
+/// clan-store counts these for the Brief node's version (`approvalsCarried`), so this pins the shape it must read.
+#[tokio::test]
+async fn a_brief_locked_twice_is_v2_and_its_spinoff_carries_both_locks_on_the_bare_id() {
+    let s = server(40);
+    let b = browser(&s).await;
+    let t = |p: &str| format!("/api/t/{}{p}", b.tenant);
+    let spec = clan_sdk::SpinoffSpec {
+        upstream: true,
+        ..Default::default()
+    };
+    let up = post(
+        &s,
+        &t("/documents/upload"),
+        &b.cookie,
+        a_template_with("ie.napkin.child", "Child", Some(spec)),
+    )
+    .await;
+    let template = up.json()["path"].as_str().unwrap().to_string();
+    let installed = post(
+        &s,
+        &t(&format!("/apps/from/{template}")),
+        &b.cookie,
+        Body::empty(),
+    )
+    .await;
+    assert_eq!(installed.status, StatusCode::OK);
+
+    let (brief, token) = a_locked_brief(&s, &b).await;
+    clan_ok(
+        &s,
+        &token,
+        "/unapprove",
+        serde_json::json!({ "rationale": "One more change." }),
+    )
+    .await;
+    clan_ok(&s, &token, "/approve", serde_json::json!({})).await;
+
+    let v = get(&s, &t(&format!("/d/{brief}/data")), Some(&b.cookie))
+        .await
+        .json();
+    assert_eq!(v["approvals"], 2, "{v}");
+    assert_eq!(v["version"], 2, "{v}");
+    let brief_id = v["document_id"].as_str().unwrap().to_string();
+
+    let child = post_json(
+        &s,
+        &t(&format!("/d/{brief}/spinoff")),
+        &b.cookie,
+        serde_json::json!({ "app_id": "ie.napkin.child" }),
+    )
+    .await;
+    assert_eq!(
+        child.status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&child.body)
+    );
+    let child_token = child.json()["token"].as_str().unwrap().to_string();
+    let chain = get(&s, &format!("/s/{child_token}/chain"), None)
+        .await
+        .json();
+    let approves: Vec<&Value> = chain["decisions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|d| d["kind"] == "approve")
+        .collect();
+    assert_eq!(approves.len(), 2, "{chain}");
+    for d in approves {
+        assert_eq!(
+            d["targets"],
+            serde_json::json!([brief_id.clone()]),
+            "the lock targets the bare id"
+        );
+    }
 }
 
 // ── Accounts (NAPKIN_AUTH=local) ─────────────────────────────────────────────

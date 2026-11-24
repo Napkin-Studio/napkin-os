@@ -24,7 +24,7 @@ export interface TimelineItem extends TimelineItemLike {
   words?: string
   style?: 'caption' | 'title' | 'super'
 }
-export interface EndCard { headline?: string; line: string; cta?: string; bg: string; logo_asset?: string; s: number; transition_in?: TimelineItem['transition_in'] }
+export interface EndCard { headline?: string; line: string; cta?: string; legal?: string; bg: string; logo_asset?: string; s: number; transition_in?: TimelineItem['transition_in'] }
 export interface TimelineVideo { timeline: Record<string, TimelineItem>; end_card?: EndCard }
 
 export interface SourceMoment {
@@ -84,7 +84,7 @@ export interface PlanClip {
   transitionIn?: { kind: 'dissolve' | 'dip_black' | 'dip_white'; s: number }
 }
 export interface PlanText { item_id: string; words: string; style: 'caption' | 'title' | 'super'; fromS: number; toS: number; fadeInS?: number; fadeOutS?: number }
-export interface PlanEndCard { headline?: string; line: string; cta?: string; bg: string; logo_sha256?: string; s: number; transitionIn?: PlanClip['transitionIn'] }
+export interface PlanEndCard { headline?: string; line: string; cta?: string; legal?: string; bg: string; logo_sha256?: string; s: number; transitionIn?: PlanClip['transitionIn'] }
 export interface CompiledTimeline {
   clips: PlanClip[]
   texts: PlanText[]
@@ -160,6 +160,7 @@ export function compileTimeline(
       ...(card.headline ? { headline: card.headline } : {}),
       line: card.line,
       ...(card.cta ? { cta: card.cta } : {}),
+      ...(card.legal ? { legal: card.legal } : {}),
       bg: card.bg,
       ...(card.logo_asset ? { logo_sha256: card.logo_asset } : {}),
       s: card.s,

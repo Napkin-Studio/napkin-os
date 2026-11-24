@@ -133,8 +133,25 @@ def filled(v) -> bool:
     return True
 
 
+def short_name(v: str, limit: int = 40) -> str:
+    """A project name as a short name: the words before any caveat.
+
+    "Proper Crunch (working name; needs a trademark check)" is "Proper Crunch": the
+    caveat belongs in an open question, never in the name the document is titled by.
+    """
+    import re
+    s = re.sub(r"\s+", " ", v or "").strip()
+    head = re.split(r"\s*[(\[]|\s+[-\u2013\u2014]\s+|\s*[:;]\s+|,\s+", s, maxsplit=1)[0].strip()
+    s = head or re.sub(r"[()\[\]]", "", s).strip()
+    if len(s) > limit:
+        s = s[:limit].rsplit(" ", 1)[0] if " " in s[:limit] else s[:limit]
+    return s.strip(" \t\"'\u201c\u201d\u2018\u2019.,;:-")
+
+
 def clean(key: str, v):
     """A value in the field's bare shape, or None (never blank: omitted, not blank)."""
+    if key == "project_name" and isinstance(v, str) and v.strip():
+        return short_name(v) or None
     if key in ARRAY_KEYS:
         items = v if isinstance(v, list) else [v]
         items = [str(x).strip() for x in items if isinstance(x, str) and x.strip()]

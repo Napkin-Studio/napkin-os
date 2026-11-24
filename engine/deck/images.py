@@ -471,6 +471,8 @@ PRODUCTION_ACCEPTS = {"social": ("social",), "ooh": ("ooh", "print"), "print": (
 #: Every size, of the slot's channel or of a format the pinned packs do not know (fix 7), must sit within this ratio of the slot's aspect:
 #: a 7.8:1 OOH banner never lands in a 4:5 poster slot, nor a 2:7 skyscraper in a 16:9 one. Nothing fits: the slot stays empty, with why.
 ASPECT_TOL = 1.25
+#: The cover's picture column (render_pptx PIC_COL: 3/8 of the slide wide, the slide's full height) is about 2:3 portrait at 16:9, 0.57 at A4.
+COVER_COLUMN_RATIO = 0.62
 NEAREST_ASPECT_TOL = ASPECT_TOL
 PRODUCTION_ALT = {"master": "The campaign's key visual", "size": "The campaign picture made for this channel", "frame": "A storyboard frame from the film"}
 _FILM_WORDS = ("film", "tv", "television", "cinema", "broadcast", "bvod", "video", "youtube", "storyboard", "storyboards")
@@ -492,6 +494,8 @@ def load_production(stages: Path) -> dict | None:
 def execution_channel(title: str) -> str | None:
     """The Production channel an execution's title names: social (a phone frame), ooh (a poster frame), film, print or display; None for
     a channel Production has no picture for (search, audio) or a title that names none."""
+    if re.search(r"(?<!\w)storyboards?(?!\w)", (title or "").lower()):   # 'Storyboard frames: six stills as an Instagram carousel' is the storyboard (film channel), not a phone-frame social size
+        return "film"
     fr = spec.frame_for(title or "")
     if fr == "phone":
         return "social"
@@ -862,7 +866,7 @@ def take_frame_captions(slide: dict, shots: list) -> list:
 
 
 _COUNT_WORDS = {n: w for n, w in enumerate("zero one two three four five six seven eight nine ten eleven twelve".split())}
-_STILLS = re.compile(r"\b(" + "|".join(w for n, w in _COUNT_WORDS.items() if n) + r"|\d{1,2})(\s+)(stills|frames|shots)\b", re.I)
+_STILLS = re.compile(r"\b(" + "|".join(w for n, w in _COUNT_WORDS.items() if n) + r"|\d{1,2})(\s+)(still pictures|stills|frames|shots)\b", re.I)
 
 
 def fit_storyboard_copy(slide: dict, shots: list) -> list:
@@ -877,6 +881,9 @@ def fit_storyboard_copy(slide: dict, shots: list) -> list:
         w = _COUNT_WORDS[n] if not m.group(1).isdigit() else str(n)
         return (w.capitalize() if m.group(1)[:1].isupper() else w) + m.group(2) + m.group(3)
     moved = []
+    for k in ("title", "label"):   # the heading too: 'Storyboard frames (5 stills)' over a strip of four (full-flow UAT 2026-11-23: only the body was fitted)
+        if isinstance(slide.get(k), str):
+            slide[k] = _STILLS.sub(count, slide[k])
     for b in slide.get("blocks") or []:
         if b.get("kind") in ("text", "small", "statement") and isinstance(b.get("text"), str):
             b["text"] = _STILLS.sub(count, b["text"])
@@ -918,6 +925,7 @@ def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", na
     if spec.GRAPHICS and pictures != "none" and len(production_shots(prod)) >= 3 and not any(is_slide_executing_film(deck, k) for k in deck["order"]):
         got["added_storyboard"] = add_storyboard_slide(deck)   # a storyboard's frames exist and no execution shows them: one slide, a strip of stills
     placed_keys = set()   # the finals earlier slots hold: a size or packshot slide takes another picture when there is one
+    column_only = set()   # cover slides whose picture fits the picture column only, never the full-bleed 16:9
     for sid in deck["order"]:
         s = deck["slides"][sid]
         t, title = spec.picture_of(s)
@@ -926,8 +934,11 @@ def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", na
             if (t == "title" and pictures == "creative_cover") or t == "idea":
                 key = master if slot == "picture" else None
                 if key and not keeps_protected(prod["items"][key], aspect):
-                    key, why = None, (f"The key visual would lose part of its protected area in a {aspect} crop. Make a {aspect} size of it in "
-                                      f"Production, or supply a picture")
+                    if t == "title" and keeps_protected(prod["items"][key], COVER_COLUMN_RATIO):
+                        column_only.add(sid)   # a portrait key visual: the cover's own picture column holds it whole (round 3: the cover had no picture)
+                    else:
+                        key, why = None, (f"The key visual would lose part of its protected area in a {aspect} crop. Make a {aspect} size of it in "
+                                          f"Production, or supply a picture")
             elif t == "execution" and slot == "picture":
                 ch = execution_channel(title)
                 if ch == "film":
@@ -1000,6 +1011,8 @@ def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", na
                 got["placed"] += 1
             else:
                 got["held"].append({"slide": sid, "slot": slot, "message": val["image"]["reason"]})
+            if sid in column_only and val["image"].get("asset"):   # never the full bleed (cover_bleed): its 16:9 crop would cut the key visual's protected area
+                val["image"]["text_zone"] = {"none": True, "by": "repair", "reason": "The key visual is portrait: it sits whole in the cover's picture column, never full bleed"}
             _slots(s)[slot] = val
     deck["meta"]["production"] = {"project_id": (prod.get("project") or {}).get("id"), "title": (prod.get("project") or {}).get("title"),
                                   "data_sha256": (prod.get("bundle") or {}).get("clan_sha256"), "offer_sha256": prod.get("offer_sha256"),

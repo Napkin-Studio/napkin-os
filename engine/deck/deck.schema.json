@@ -146,6 +146,10 @@
       "research": {
        "type": "boolean"
       },
+      "production": {
+       "type": "boolean",
+       "$comment": "the deck was spun off a Production project: its finals and its frozen brief are inputs too"
+      },
       "type": {
        "type": "string",
        "$comment": "the deck type's profile id (profiles/<id>.yaml)"

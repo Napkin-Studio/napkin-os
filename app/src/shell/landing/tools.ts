@@ -36,10 +36,6 @@ export const TOOLS: readonly Tool[] = [
 
 export const toolById = (id: string): Tool | undefined => TOOLS.find(t => t.id === id)
 
-/** The tool an app id belongs to. */
-export const toolOfApp = (appId: string | null | undefined): Tool | undefined =>
-  appId ? TOOLS.find(t => t.appId === appId) : undefined
-
 /** A tool is live when it has an app and that app is installed; otherwise it is "Soon". */
 export function isLive(tool: Tool, installed: readonly Pick<InstalledApp, 'app_id'>[]): boolean {
   return tool.appId !== null && installed.some(a => a.app_id === tool.appId)
@@ -56,9 +52,16 @@ export const productionDocUrl = (docId: string): string => `${PRODUCTION_PATH}d/
  *  launch, and Continue in offers it only where the server serves the tool. */
 export const PRODUCTION_APP_ID = 'ie.napkin.production'
 
+/** The tool an app id belongs to. Production has no tile (it is not an app the shell launches), but its projects
+ *  are Production documents: they file under Production, never under Other. */
+export const toolOfApp = (appId: string | null | undefined): Tool | undefined =>
+  appId === PRODUCTION_APP_ID ? toolById('prod') : appId ? TOOLS.find(t => t.appId === appId) : undefined
+
 /** Where a tool opens with a full page load, outside the shell (Prod: the Production Tool), or null
- *  when it opens as the shell's own tool page. */
-export const toolHref = (tool: { id: string }): string | null => (tool.id === 'prod' ? PRODUCTION_PATH : null)
+ *  when it opens as the shell's own tool page. From a client's dial it carries that client (`?client=`), so the
+ *  film the Production Tool starts belongs to the client (Tidewell UAT: the dial said "Nothing yet"). */
+export const toolHref = (tool: { id: string }, clientId?: string): string | null =>
+  tool.id === 'prod' ? (clientId ? `${PRODUCTION_PATH}?client=${encodeURIComponent(clientId)}` : PRODUCTION_PATH) : null
 
 /** The tools a person can open now: each whose app is installed, and Prod when this server serves
  *  the Production Tool to this person (/api/session `production`). */

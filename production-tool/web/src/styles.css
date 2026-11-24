@@ -532,6 +532,8 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 /* The remake bar (ui/Follow.tsx RemakeBar): floats at the bottom of the stage while anything is behind;
    inline in the Video editor's timeline head (.inline). */
 .remakebar { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 30; display: flex; align-items: center; gap: 12px; max-width: calc(100% - 32px); padding: 7px 7px 7px 14px; border-radius: var(--r-pill); background: var(--card); border: 1px solid var(--line-soft); box-shadow: var(--shadow-pop); white-space: nowrap; }
+.sb-remake { display: flex; justify-content: center; padding: 8px 16px 0; flex-shrink: 0; }
+.sb-remake:empty { display: none; }
 .remakebar.inline { position: static; transform: none; box-shadow: none; max-width: 100%; min-width: 0; padding: 3px 3px 3px 12px; gap: 8px; }
 .remakebar .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--status-amber); flex-shrink: 0; }
 .remakebar b { font-size: 13px; }
@@ -648,3 +650,7 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 
 /* A drag on the canvas selects no page text while the button is down (UAT round 4 S3-1). */
 body.pt-nosel, body.pt-nosel * { user-select: none !important; -webkit-user-select: none !important; }
+.linknote { position: absolute; z-index: 9; width: 296px; padding: 12px 14px; border-radius: 14px; background: var(--card); border: 1px solid var(--line-soft); box-shadow: var(--shadow-pop); font-size: 13px; line-height: 1.45; color: var(--ink); }
+.linknote-row { display: flex; justify-content: flex-end; gap: 6px; margin-top: 10px; }
+.ln-anchor { position: relative; display: inline-flex; }
+.ln-anchor .linknote { right: 0; top: calc(100% + 10px); }
