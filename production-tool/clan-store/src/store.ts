@@ -645,7 +645,9 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
     // A Brief node made before `source.version` (owner, 2026-11-23: "Migrate once on open"): the version is filled once,
     // from the linked brief as Napkin has it now, or from the approves carried in a spun-off project's chain, else 1.
     // Same way as the move above: through a schema that holds both, then the app's. Once filled the field is required.
-    if (needsBriefVersion(data)) {
+    // A spun-off Brief node filled before UAT round 4 F24 was fixed holds v1 though its chain carries more locks: put right
+    // once the same way (only one that never took a newer brief, whose version is still the one it was born with).
+    if (needsBriefVersion(data) || spunOffBelow(data, route<{ decisions?: ChainEntry[] }>(h, '/chain')?.decisions ?? [])) {
       try {
         const next = await this.withBriefVersions(h, data)
         assertValid(next, 'the document got its Brief node versions')
@@ -686,9 +688,12 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
   private async withBriefVersions(h: NapkinHost, data: Doc): Promise<Doc> {
     const next = structuredClone(data) as Doc & { briefs?: Record<string, { source: { document_id: string; how?: string; version?: number } }> }
     const chain = route<{ decisions?: ChainEntry[] }>(h, '/chain')?.decisions ?? []
-    for (const b of Object.values(next.briefs ?? {})) {
-      if (typeof b.source.version === 'number') continue
+    for (const b of Object.values(next.briefs ?? {}) as { source: { document_id: string; how?: string; version?: number; taken?: number } }[]) {
       const carried = approvalsCarried(chain, b.source.document_id)
+      if (typeof b.source.version === 'number') {
+        if (bornBelow(b.source, carried)) b.source.version = carried
+        continue
+      }
       let v: number | null = null
       if (b.source.how === 'spinoff' || carried > 0) v = Math.max(1, carried)
       else if (this.briefVersion) v = await this.briefVersion(b.source.document_id).catch(() => null)
@@ -778,10 +783,23 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
   }
 }
 
-/** The approve decisions in `chain` aimed at the document `id` (its address is `<id>#…`): a brief's version, as Brief Maker counts. */
+/** The approve decisions in `chain` aimed at the document `id`: a brief's version, as Brief Maker counts. The host's lock
+ *  (napkin-host ops/review.rs `approve`) targets the bare document id, which the decisions view qualifies as `<id>#`; a
+ *  target may also be written `<id>#…`. Both count (UAT round 4 F24: only `<id>#…` counted, so every spun-off brief was v1). */
 function approvalsCarried(chain: ChainEntry[], id: string): number {
   const mine = `${id}#`
-  return chain.filter((d) => d.kind === 'approve' && (d.targets ?? []).some((t) => typeof t === 'string' && t.startsWith(mine))).length
+  return chain.filter((d) => d.kind === 'approve' && (d.targets ?? []).some((t) => typeof t === 'string' && (t === id || t.startsWith(mine)))).length
+}
+
+/** A spun-off Brief node that never took a newer brief, holding a version below the locks its chain carries. */
+function bornBelow(src: { how?: string; version?: number; taken?: number }, carried: number): boolean {
+  return src.how === 'spinoff' && (src.taken ?? 1) === 1 && typeof src.version === 'number' && carried > src.version
+}
+
+/** Whether any Brief node is a spun-off one filled too low (UAT round 4 F24). */
+function spunOffBelow(data: Doc, chain: ChainEntry[]): boolean {
+  const briefs = (data as { briefs?: Record<string, { source?: { document_id?: string; how?: string; version?: number; taken?: number } }> }).briefs
+  return Object.values(briefs ?? {}).some((b) => !!b?.source?.document_id && bornBelow(b.source, approvalsCarried(chain, b.source.document_id)))
 }
 
 /** Whether a Brief node still lacks `source.version` (a document made before it). */
