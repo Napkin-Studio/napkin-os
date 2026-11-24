@@ -19,6 +19,7 @@ import { BRAND_APP } from '../landing/brandApp'
 import type { BrandApi } from '../../host/brandClans'
 import { BrandClans, UpdateChip } from './brandClans/BrandClans'
 import { useBrandClans, useBrandState } from './brandClans/hooks'
+import { researchFound, type ResearchFound } from './brandClans/model'
 import { clientLine, clientLook, clientName, monogramOf, stateWords, callsIn, type Facts } from './deskData'
 import { ToolIcon } from './icons'
 import { Pop } from './Pop'
@@ -90,6 +91,7 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
   // The registry's display name where it shows; Rename still edits the stored name.
   const name = clientName(c)
   const work = items.filter(i => i.app_id !== BRAND_APP)
+  const found = useResearchFound(brand ?? NO_BRAND, work, useBrandState(brands).list?.items ?? [])
   const needing = work.filter(needsYou)
   const calls = work.reduce((n, i) => n + callsIn(i), 0)
   const since = new Date(c.created_at)
@@ -239,7 +241,7 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
             </section>
           )}
 
-          <BrandClans controller={brands} name={name} />
+          <BrandClans controller={brands} name={name} found={found} />
 
           {trash && onOpenTrash && trash.state.rows.length > 0 && (
             <p className="cp-record cp-trash"><button type="button" className="side-link" data-testid="trash-link" onClick={onOpenTrash}>Trash ({trash.state.rows.length})</button></p>
@@ -320,4 +322,32 @@ function ArchiveConfirm({ name, onArchive, onClose }: { name: string; onArchive:
       {error && <p className="cl-add-err" role="alert">{error}</p>}
     </div>
   )
+}
+
+/**
+ * What this client's research found (Brand Clan phase 2): each Research document's proposed category players that the default
+ * Brand Clan does not hold yet. Read through the host's document data; nothing is written here.
+ */
+function useResearchFound(api: BrandApi, work: LibraryItem[], clans: { path: string; default: boolean }[]): ResearchFound[] {
+  const [found, setFound] = useState<ResearchFound[]>([])
+  const research = work.filter(i => i.app_id === 'ie.napkin.campaign-research').map(i => `${i.path}|${i.title ?? ''}`).join(',')
+  const target = (clans.find(c => c.default) ?? clans[0])?.path ?? ''
+  useEffect(() => {
+    let live = true
+    const read = api.documentData
+    if (!read || !research || !target) return
+    void (async () => {
+      const bible = await api.get(target).then(v => (v.draft ? v.draft.candidate : v.data), () => null)
+      const out: ResearchFound[] = []
+      for (const r of research.split(',')) {
+        const [path, title] = r.split('|')
+        const d = await read(path).catch(() => null)
+        const f = d ? researchFound({ document_id: path, title: d.title || title || 'Research', data: d.data }, bible) : null
+        if (f) out.push(f)
+      }
+      if (live) setFound(out)
+    })()
+    return () => { live = false }
+  }, [api, research, target])
+  return research && target ? found : []
 }

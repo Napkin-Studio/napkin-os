@@ -8,6 +8,7 @@
 // edited, and the one thing it never does on its own: it never updates a work
 // document. `updateWork` is called only by the press of an Update chip.
 
+import * as M from './model'
 import type { BrandBible, BrandBehind, BrandClanList, BrandClanView, BrandHistoryEntry } from '../../../host/types'
 import type { BrandApi } from '../../../host/brandClans'
 import { bibleOf, changesSince } from './model'
@@ -110,6 +111,14 @@ export class BrandClansController {
   }
   confirm() { if (this.state.view?.draft) this.set({ screen: 'confirm', error: null }) }
   unconfirm() { this.set({ screen: 'draft', error: null }) }
+  /** Research found the category's players: add them to this Brand Clan's draft (a new draft if none), for a person to publish. */
+  async addFound(path: string, found: M.ResearchFound) {
+    const v = await this.run(() => this.api.get(path))
+    if (!v) return
+    const base = v.draft ? v.draft.candidate : M.bibleOf(v.data)
+    const saved = await this.run(() => this.api.saveDraft(path, M.withCompetitors(base, found), v.version))
+    if (saved) { this.show(saved, saved.draft ? 'draft' : 'bible'); await this.refresh() }
+  }
   async publish() {
     const view = this.state.view
     if (!view?.draft) return

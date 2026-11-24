@@ -22,16 +22,17 @@ const SCALARS: [(&str, &[&str], &str); 6] = [
 ];
 
 /// A list of objects with an `id`: `(area, path)`.
-const LISTS: [(&str, &[&str]); 5] = [
+const LISTS: [(&str, &[&str]); 6] = [
     ("logo", &["visual", "logos"]),
     ("colour", &["visual", "colours"]),
     ("typography", &["visual", "typography"]),
     ("rule", &["voice", "rules"]),
     ("example", &["imagery", "examples"]),
+    ("competitor", &["competitors"]),
 ];
 
 /// The order changes are listed in (stable, see the vectors).
-const ORDER: [&str; 12] = [
+const ORDER: [&str; 13] = [
     "name",
     "note",
     "logo",
@@ -43,6 +44,7 @@ const ORDER: [&str; 12] = [
     "imagery_style",
     "imagery_ban",
     "example",
+    "competitor",
     "source",
 ];
 
@@ -115,6 +117,7 @@ fn label_of(area: &str, item: &Value) -> String {
         "colour" => pick("name"),
         "typography" => pick("family"),
         "rule" => pick("text"),
+        "competitor" => pick("name"),
         "example" => {
             let n = s(item, "note");
             if n.is_empty() {
@@ -139,6 +142,9 @@ fn list_text(area: &str, kind: &str, old: Option<&Value>, new: Option<&Value>) -
                 format!("Logo {label} changed")
             }
         }
+        ("competitor", "added") => format!("Competitor {label} added"),
+        ("competitor", "removed") => format!("Competitor {label} removed"),
+        ("competitor", _) => format!("Competitor {label} changed"),
         ("colour", "added") => format!("Colour {label} {} added", s(new.unwrap(), "hex")),
         ("colour", "removed") => format!("Colour {label} removed"),
         ("colour", _) => {

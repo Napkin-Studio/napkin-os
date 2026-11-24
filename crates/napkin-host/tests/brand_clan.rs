@@ -908,3 +908,62 @@ fn the_chip_offers_only_this_clients_brand_clans_with_default_and_held_version()
     );
     assert_eq!(behind[0].version, Some(2), "the chip offers Update to v2");
 }
+
+/// Phase 2 (f): competitors found by research reach a Brand Clan only as a person's draft, and the diff names them.
+#[test]
+fn competitors_found_by_research_are_a_draft_a_person_publishes() {
+    let s = store();
+    let t = client(&s, "Tidewell");
+    let z = zero(&s, &t);
+    let path = z["path"].as_str().unwrap();
+    let mut cand = z["data"].clone();
+    cand.as_object_mut().unwrap().remove("kit");
+    cand["competitors"] = json!([
+        {"id": "ariel", "name": "Ariel", "from": {"kind": "research", "document_id": "doc-research-1", "title": "Zero research", "fact_ids": ["fa_01"]}},
+        {"id": "method", "name": "Method", "from": {"kind": "research", "document_id": "doc-research-1"}}
+    ]);
+    let before = data_bytes(&s, path);
+    let d = ok(
+        &s,
+        &me(),
+        "draft.save",
+        json!({"path": path, "candidate": cand}),
+    );
+    let texts: Vec<&str> = d["draft"]["changes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["text"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        texts,
+        vec!["Competitor Ariel added", "Competitor Method added"]
+    );
+    assert_eq!(
+        data_bytes(&s, path),
+        before,
+        "a draft changes nothing published"
+    );
+    let p = ok(
+        &s,
+        &me(),
+        "publish",
+        json!({"path": path, "expect_version": 1}),
+    );
+    assert_eq!(p["data"]["competitors"][0]["name"], "Ariel");
+    assert_eq!(p["version"], 2);
+    // a competitor without a name is refused by the schema
+    let mut bad = p["data"].clone();
+    bad.as_object_mut().unwrap().remove("kit");
+    bad["competitors"] = json!([{"id": "x"}]);
+    assert_eq!(
+        status(run(
+            &s,
+            &me(),
+            "draft.save",
+            json!({"path": path, "candidate": bad})
+        )),
+        400,
+        "the schema refuses a competitor with no name"
+    );
+}

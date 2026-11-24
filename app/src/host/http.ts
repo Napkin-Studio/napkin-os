@@ -405,6 +405,7 @@ export const httpHost: Host = {
   listRecent: () => json<RecentDoc[]>('/recent'),
 
   listLibrary: (filter?: LibraryFilter) => json<LibraryListing>(`/library${libraryQuery(filter)}`),
+  documentData: (path: string) => json<{ data: unknown; title?: string }>(`/d/${encodeURIComponent(path)}/data`),
   settleJob: (path: string, jobId: string) =>
     json<unknown>(`/d/${encodeURIComponent(path)}/jobs/${encodeURIComponent(jobId)}/settle`, { method: 'POST' }),
   docOps: async (path: string) => {

@@ -58,3 +58,8 @@
 .bcm-chg .bcm-sw{display:inline-block;width:14px;height:14px;border-radius:4px;vertical-align:-2px;margin-right:6px;border:1px solid rgba(0,0,0,.15)}
 .bcm-hrow{display:flex;justify-content:space-between;align-items:center}
 
+/* Research found the category's players (phase 2): an offer, never a write. */
+.bcm-found { border: 1px solid var(--line); border-left: 3px solid var(--accent, var(--ag-act)); border-radius: 8px; padding: 10px 12px; margin: 0 0 10px; background: var(--card); }
+.bcm-found p { margin: 0 0 4px; font-size: 13px; }
+.bcm-found .bcm-acts { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.bcm-comp { margin: 6px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.6; }

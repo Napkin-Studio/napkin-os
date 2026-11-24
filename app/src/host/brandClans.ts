@@ -24,10 +24,12 @@ export interface BrandApi {
   updateWork(brandPath: string, workPath: string): Promise<unknown>
   putAsset(path: string, name: string, bytes: Uint8Array): Promise<{ name: string; path: string }>
   assetUrl(path: string, name: string): Promise<string>
+  /** Another document's data as JSON (the host's /d/{doc}/data), where the host has it: research found competitors. */
+  documentData?(path: string): Promise<{ data: unknown; title?: string }>
 }
 
 /** The typed operations over a host's generic `brandClan` call. */
-export function brandApi(h: Pick<Host, 'brandClan' | 'brandClanAsset'>): BrandApi {
+export function brandApi(h: Pick<Host, 'brandClan' | 'brandClanAsset'> & Partial<Pick<Host, 'documentData'>>): BrandApi {
   const c = h.brandClan.bind(h)
   return {
     list: client_id => c('list', { client_id }),
@@ -44,5 +46,6 @@ export function brandApi(h: Pick<Host, 'brandClan' | 'brandClanAsset'>): BrandAp
     updateWork: (path, work) => c('work.update', { path, work }),
     putAsset: (path, name, bytes) => c('asset.put', { path, name }, bytes),
     assetUrl: (path, name) => h.brandClanAsset(path, name),
+    ...(h.documentData ? { documentData: (path: string) => h.documentData!(path) } : {})
   }
 }

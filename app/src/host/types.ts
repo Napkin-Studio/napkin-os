@@ -168,6 +168,14 @@ export interface BrandSource { file: string; asset?: string; kind?: string; page
 export interface BrandFrom { kind: 'create' | 'build' | 'upload' | 'edit' | 'restore'; file?: string; version?: number }
 
 /** A Brand Bible: `shared/data.yaml` without `kit`. */
+/** A competitor of the client (Brand Clan phase 2): added by a person, or found by research and taken into a draft by one. */
+export interface BrandCompetitor {
+  id: string
+  name: string
+  note?: string
+  from?: { kind: 'person' | 'research'; document_id?: string; title?: string; fact_ids?: string[] }
+}
+
 export interface BrandBible {
   name: string
   note?: string
@@ -176,6 +184,7 @@ export interface BrandBible {
   imagery?: { style?: string; bans?: string[]; examples?: BrandExample[] }
   source?: BrandSource
   gaps?: { area: string; note: string }[]
+  competitors?: BrandCompetitor[]
   previous_work?: unknown[]
   categories_explored?: unknown[]
   likes_dislikes?: unknown[]
@@ -1002,6 +1011,8 @@ export interface Host {
    * its Worth a look read and settle calls across documents with it). Absent
    * on a host with one document at a time.
    */
+  /** A document's data as JSON (napkin-web GET /d/{doc}/data): the Brand Clans section reads research found competitors from it. Absent where the host has no such route. */
+  documentData?(path: string): Promise<{ data: unknown; title?: string }>
   docOps?(path: string): Promise<DocOps>
 
   // ── Branching one document into another app ───────────────────────────────

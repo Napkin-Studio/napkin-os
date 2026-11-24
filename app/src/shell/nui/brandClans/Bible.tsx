@@ -183,6 +183,16 @@ export function Bible({ bible, data, mode, changes = [], src, edits }: Props) {
         )}
       </div>
 
+      {!!(bible.competitors ?? []).length && (
+        <div className="bcm-card" data-testid="brand-competitors"><h3>Competitors <em>{(bible.competitors ?? []).length}</em></h3>
+          <ul className="bcm-comp">
+            {(bible.competitors ?? []).map(cp => (
+              <li key={cp.id}>{cp.name}{cp.from?.kind === 'research' && <span className="bcm-hint"> · found by research{cp.from.title ? ` (“${cp.from.title}”)` : ''}</span>}{changes.some(ch => ch.id === `competitor:${cp.id}`) && <Mark kind="new" />}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="bcm-card"><h3>Source</h3>
         {source ? (
           <>

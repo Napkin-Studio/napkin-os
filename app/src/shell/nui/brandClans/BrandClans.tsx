@@ -44,9 +44,11 @@ interface Props {
   name: string
   /** Server-rendered tests hand in the state; the page reads it from the controller. */
   state?: BrandState
+  /** The category's players this client's research found and no Brand Clan holds yet (phase 2): offered, never written. */
+  found?: M.ResearchFound[]
 }
 
-export function BrandClans({ controller: c, name, state }: Props) {
+export function BrandClans({ controller: c, name, state, found = [] }: Props) {
   const live = useBrandState(c)
   const s = state ?? live
   const count = s.list?.items.length ?? 0
@@ -67,6 +69,7 @@ export function BrandClans({ controller: c, name, state }: Props) {
           ? <span className="cp-new"><button type="button" className="cp-plus" title="New Brand Clan" aria-label="New Brand Clan" data-testid="brand-new" onClick={() => c.startAdding()}>+</button></span>
           : <button type="button" className="side-link" data-testid="brand-all" onClick={() => void c.back()}>All Brand Clans</button>}
       </div>
+      {s.screen === 'list' && <Found s={s} c={c} found={found} />}
       {s.screen === 'list' && <List s={s} c={c} name={name} src={listSrc} />}
       {view && s.screen !== 'list' && s.screen !== 'history' && s.screen !== 'changes' && <Screen s={s} c={c} view={view} name={name} src={src} />}
       {view && s.screen === 'history' && <History s={s} c={c} view={view} name={name} />}
@@ -91,6 +94,26 @@ function useListLogos(c: BrandClansController, items: BrandClanSummary[]) {
 }
 
 // ── b1: the list ─────────────────────────────────────────────────────────────
+
+/** "Research found the category's players": take them into the default Brand Clan's draft, or not now (Brand Clan phase 2). */
+function Found({ s, c, found }: { s: BrandState; c: BrandClansController; found: M.ResearchFound[] }) {
+  const [gone, setGone] = useState<string[]>([])
+  const items = s.list?.items ?? []
+  const target = items.find(i => i.default) ?? items[0]
+  const f = found.find(x => !gone.includes(x.document_id))
+  if (!f || !target) return null
+  const names = f.items.map(i => i.name)
+  return (
+    <div className="bcm-found" role="note" data-testid="brand-found">
+      <p><b>Research found the category’s players:</b> {names.join(', ')} <span className="bcm-hint">in “{f.title}”</span></p>
+      <p className="bcm-hint">Add them to {target.name}’s draft: nothing changes for work until someone publishes it.</p>
+      <div className="bcm-acts">
+        <button type="button" className="bcm-sm on" disabled={s.busy} data-testid="brand-found-add" onClick={() => void c.addFound(target.path, f)}>Add to the draft of {target.name}</button>
+        <button type="button" className="bcm-sm" disabled={s.busy} onClick={() => setGone(g => [...g, f.document_id])}>Not now</button>
+      </div>
+    </div>
+  )
+}
 
 function List({ s, c, name, src }: { s: BrandState; c: BrandClansController; name: string; src: Record<string, string> }) {
   const items = s.list?.items ?? []

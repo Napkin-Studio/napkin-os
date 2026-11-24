@@ -133,3 +133,38 @@ export function sourceVersion(data: BrandClanData): number {
   const file = data.source?.file
   return data.kit.changelog?.find(e => e.from?.file === file)?.version ?? 1
 }
+
+// ── Competitors found by research (Brand Clan phase 2; owner 2026-11-24: "Research can discover players in the same category
+// right? And update the brand clan accordingly") ─────────────────────────────────────────────────────────────────────────────
+
+/** What one Research document found: the category's players it proposed (campaign.competitor_set, origin proposed). */
+export interface ResearchFound {
+  document_id: string
+  title: string
+  items: { id: string; name: string; fact_ids: string[] }[]
+}
+
+/** The players a research document proposed, not yet in the Brand Clan (by name). Empty: nothing new to offer. */
+export function researchFound(doc: { document_id: string; title: string; data: unknown }, bible: BrandBible | null): ResearchFound | null {
+  const d = doc.data as { campaign?: { competitor_set?: { origin?: string; value?: { ref?: string; name?: string }[]; item_provenance?: Record<string, { fact_ids?: string[] }> } } } | null
+  const cs = d?.campaign?.competitor_set
+  if (!cs || cs.origin !== 'proposed' || !Array.isArray(cs.value)) return null
+  const have = new Set((bible?.competitors ?? []).map(c => c.name.trim().toLowerCase()))
+  const items = cs.value
+    .filter((v): v is { ref?: string; name: string } => !!v && typeof v.name === 'string' && !!v.name.trim())
+    .filter(v => !have.has(v.name.trim().toLowerCase()))
+    .map(v => ({ id: (v.ref ?? v.name).replace(/^brand\//, ''), name: v.name.trim(), fact_ids: (v.ref && cs.item_provenance?.[v.ref]?.fact_ids) || [] }))
+  return items.length ? { document_id: doc.document_id, title: doc.title, items } : null
+}
+
+/** The bible with these found players added (a new list item each, keyed clear of the others). */
+export function withCompetitors(bible: BrandBible, found: ResearchFound): BrandBible {
+  const out = structuredClone(bible)
+  const list = out.competitors ?? []
+  for (const it of found.items) {
+    if (list.some(c => c.name.trim().toLowerCase() === it.name.toLowerCase())) continue
+    list.push({ id: newId(it.id || it.name, list.map(c => c.id)), name: it.name, from: { kind: 'research', document_id: found.document_id, title: found.title, ...(it.fact_ids.length ? { fact_ids: it.fact_ids.slice(0, 24) } : {}) } })
+  }
+  out.competitors = list
+  return out
+}

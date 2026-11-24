@@ -56,6 +56,8 @@ ignored by the validator. An empty Brand Clan (`data.empty-v1.json`) validates.
 **Confidential** (owner, 2026-11-13): the bible is the client's material in the agency's tenant. It goes to a model only through the path every
 document takes; it is never written to the shared knowledge layers, RAG, evals or run-log bodies; the harvest path stays off.
 
+* `competitors` (optional, phase 2): the client's competitors, `{id, name, note?, from: {kind: person|research, document_id?, title?, fact_ids?}}`. A Research document that found the category's players (`campaign.competitor_set`, origin `proposed`) is offered in the client window as "Add to the draft"; a person takes it into a draft and publishes it. Nothing writes it silently. The diff names it `competitor` ("Competitor Ariel added").
+
 ### 2.2 `app/brand/`: everything that is not the published version
 
 None of these is read by attach. They are registered members (`brand-state`, `brand-version`) of the archive.
