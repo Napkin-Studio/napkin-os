@@ -126,4 +126,48 @@ test('Greenlight has no floating dock over the cards: its tools are a row above 
   assert.ok(page.indexOf('class="toolrow"') < page.indexOf('class="rrows"'))
 })
 
+test('the stage keeps to the mock: agent-and-verb pills, what was left out, the real counts, and Stop on the right (owner, 2026-11-24)', () => {
+  const d = json('example/states/pick.json'); d.focus.insights = []; d.run = {}
+  const up = d.upstream[Object.keys(d.upstream).find((k: string) => d.upstream[k].projection) ?? Object.keys(d.upstream)[0]]
+  const page = L.view(d, { job: { state: 'running', id: 'j1', started: Date.now() } }), t = plain(page)
+  assert.match(t, /1\. Knowledge \(read\) 2\. Strategy \(find the insights\) 3\. Review \(check\)/)
+  // the counts are the document's own, as the mock reads them
+  const sn = (L as unknown as { seen(d: Doc): Doc }).seen(d)
+  const counted = sn.research && sn.research.pins != null ? `the ${sn.research.pins} pin${sn.research.pins === 1 ? '' : 's'} and ${sn.research.findings} finding${sn.research.findings === 1 ? '' : 's'}` : 'the research'
+  assert.ok(t.includes(`Reading ${sn.brief ? 'the brief and ' : ''}${counted} for tensions and truths.`), 'the caption reads the real counts: ' + (/Reading [^.]*\./.exec(t) ?? [''])[0])
+  const withCounts = JSON.parse(JSON.stringify(d)); const rk = Object.keys(withCounts.upstream).find((k: string) => k === sn.research?.id)
+  if (rk) { const pr = withCounts.upstream[rk]; pr.pins = pr.pins ?? {}; }
+  assert.doesNotMatch(t, /the and|the for|and the for/, 'never an empty count')
+  const left = () => { const x = JSON.parse(JSON.stringify(d)); (L as unknown as { seen(d: Doc): Doc }).seen(x); return plain(L.view(x, { job: { state: 'running', id: 'j1' } })) }
+  if (sn.research && sn.research.rejected > 0) assert.match(left(), new RegExp(`Left out ${sn.research.rejected} rejected finding`))
+  else assert.doesNotMatch(left(), /Left out/, 'nothing left out, no slip')
+  void up
+  // Stop: on the right of the run bar, live once the engine has the job, off (with why) before it does, "Stopping…" while it goes
+  assert.match(page, /<span class="sp"><\/span><span class="procActs"><button type="button" class="sp-btn" data-act="stop">Stop<\/button>/)
+  assert.match(L.view(d, { job: { state: 'sending' } }), /data-act="stop" disabled title="Starting/)
+  assert.match(L.view(d, { job: { state: 'running', id: 'j1', stopping: true } }), /data-act="stop" disabled>Stopping…/)
+  // stopped: Brief's stopped stage (not red), what happened, nothing lost, Try again
+  const st = L.view(d, { job: { state: 'cancelled', id: 'j1' } })
+  assert.equal(L.stageOf(d, { job: { state: 'cancelled' } }), 'finding-stopped')
+  assert.match(plain(st), /You stopped it at strategy\. Nothing was lost\./); assert.match(st, /data-act="first">Try again/); assert.doesNotMatch(st, /data-act="stop"/)
+  assert.doesNotMatch(st, /class="l2 err"/)
+  const failed = L.view(d, { job: { state: 'failed', error: 'The model took too long to answer.' } })
+  assert.match(plain(failed), /Failed at step 2 of 3\./)
+  // the crew: the same Stop, and its own stopped words
+  const ap = json('example/states/pick.json'); ap.run = { ...ap.run, approvals: { pick: { by: 'Shrey', at: '2026-11-24T10:00:00Z', decision: 'approve' } } }
+  assert.match(L.view(ap, { job: { state: 'running', id: 'j2', crewRun: true } }), /data-act="stop">Stop/)
+  const xs = plain(L.view(ap, { job: { state: 'cancelled', id: 'j2', crewRun: true } }))
+  assert.match(xs, /You stopped the crew/); assert.match(xs, /Stopped while exploring\./); assert.match(xs, /Send the crew out again/)
+  assert.match(plain(L.view(ap, { job: { state: 'failed', crewRun: true } })), /Failed while exploring\./)
+})
+
+test('Stop reaches the middleware: the page sends cancel_job for the running job, and a late poll does not undo the stop', () => {
+  // the runtime (the page's last script) is not loaded here; its two pieces are checked in its source, and the middleware side is
+  // server/tests/test_territories.py (cancel stops before the next call, writes nothing)
+  const rt = html.slice(html.lastIndexOf('<script>'))
+  assert.match(rt, /function stopRun\(\) \{[\s\S]*?window\.clan\.apiProxy\('middleware', \{ task: 'cancel_job', input: \{ job_id: j\.id \} \}\)/)
+  assert.match(rt, /if \(!j \|\| j\.state === 'cancelled'\) return;/)
+  assert.match(rt, /closest\('\[data-act="stop"\]'\)\)\) \{ if \(!b\.disabled\) stopRun\(\); return; \}/)
+})
+
 function eq(a: unknown, b: unknown) { assert.deepEqual(JSON.parse(JSON.stringify(a)), b) }

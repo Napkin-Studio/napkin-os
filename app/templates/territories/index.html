@@ -1981,6 +1981,7 @@ var TerritoriesLogic = (function () {
     var ps = pickState(run), crewRun = ps === 'approved' || ps === 'past' || !!job.crewRun;
     if (BUSY_STATES[job.state]) return crewRun ? 'exploring' : 'finding';
     if (job.state === 'failed') return crewRun ? 'explore-failed' : 'finding-failed';
+    if (job.state === 'cancelled') return crewRun ? 'explore-stopped' : 'finding-stopped';
     return null;
   }
   function pills(list, eta) {
@@ -1999,39 +2000,43 @@ var TerritoriesLogic = (function () {
     return Roles ? Roles.tag(role, { size: 150, state: bad ? 'idle' : 'working', label: roleName(role) + ' agent' + (bad ? ', stopped' : ', working') }) : sphere(role, 150);
   }
   function stageHtml(kind, data, ui) {
-    var job = ui.job || {}, bad = /failed$/.test(kind), sn = seen(data), crew = arr(job.crew).filter(isObj), o;
-    if (kind === 'finding' || kind === 'finding-failed') {
+    var job = ui.job || {}, bad = /failed$/.test(kind), stopped = /stopped$/.test(kind), ended = bad || stopped, sn = seen(data), crew = arr(job.crew).filter(isObj), o;
+    // Stop, on the right of the run bar while the engine works (Brief's Stop): the middleware's cancel_job for this job
+    var stopBtn = '<span class="procActs"><button type="button" class="sp-btn" data-act="stop"' + (!job.id || job.stopping ? ' disabled' : '') + (!job.id ? ' title="Starting: Stop is ready once the engine has the job"' : '') + '>' + (job.stopping ? 'Stopping…' : 'Stop') + '</button></span>';
+    if (/^finding/.test(kind)) {
       var desk = [];
       if (sn.brief) desk.push(slip('Brief', (sn.brief.title || 'The brief') + ': ' + plural(sn.brief.filled, 'field'), 'ok'));
       if (sn.research) desk.push(slip('Research', (sn.research.title || 'The research') + ': ' + [sn.research.pins != null ? plural(sn.research.pins, 'pin') : '', sn.research.findings != null ? plural(sn.research.findings, 'finding') : ''].filter(Boolean).join(', '), 'ok'));
+      if (sn.research && +sn.research.rejected > 0) desk.push(slip('Left out', plural(+sn.research.rejected, 'rejected finding') + ', never used', 'ok'));
       var der = derivedFindings(data).length; if (der) desk.push(slip('Flagged', plural(der, 'derived finding') + ', marked as derived', 'ok'));
-      o = { role: 'strategy', next: 'review', at: 1, steps: [['Read what arrived', 'read'], ['Find the insights', 'think'], ['Check them', 'check']], l1: bad ? 'The crew could not finish' : 'Finding the insights', l2: bad ? (job.error || 'The engine stopped.') + ' Nothing was lost.' : 'Reading ' + fromWords(sn).replace(/^from /, '') + ' for tensions and truths.',
-        pills: pills([{ t: '1. Read what arrived', s: 'done' }, { t: '2. Find the insights', s: bad ? 'bad' : 'now' }, { t: '3. Check them' }], bad ? '' : ['Usually about 40 seconds', secs(job)].filter(Boolean).join(' · ')),
-        left: wsec('On the desk', desk), right: wsec('Insights', bad ? [slip('Insight', 'None written', 'bad', true)] : [slip('Insight', 'Waiting for the Strategy agent', 'now', true), slip('Insight', 'They appear together when the run lands', '', true), slip('Insight', 'Nothing is invented while you wait', '', true)]),
-        run: bad ? '<button type="button" class="side-link" data-step="pick">← Back to what arrived</button><span class="bad">Stopped before the insights were written.</span><span class="sp"></span>' + '<span class="procActs"><button type="button" class="go" data-act="first">Try again</button></span>' :
-          '<button type="button" class="side-link" data-step="pick">← Back to what arrived</button><span class="sp"></span>' };
+      var reading = [sn.brief ? 'the brief' : '', sn.research ? ([sn.research.pins != null ? plural(sn.research.pins, 'pin') : '', sn.research.findings != null ? plural(sn.research.findings, 'finding') : ''].filter(Boolean).join(' and ').replace(/^./, function (c) { return 'the ' + c; }) || 'the research') : ''].filter(Boolean).join(' and ') || 'what arrived';
+      o = { role: 'strategy', next: 'review', at: 1, steps: [['Knowledge (read)', 'read'], ['Strategy (find the insights)', 'think'], ['Review (check)', 'check']], l1: bad ? 'The crew could not finish' : stopped ? 'You stopped it' : 'Finding the insights', l2: bad ? (job.error || 'The engine stopped.') + ' Nothing was lost.' : stopped ? 'You stopped it at strategy. Nothing was lost.' : 'Reading ' + reading + ' for tensions and truths.',
+        pills: pills([{ t: '1. Knowledge (read)', s: 'done' }, { t: '2. Strategy (find the insights)', s: bad ? 'bad' : stopped ? '' : 'now' }, { t: '3. Review (check)' }], ended ? '' : ['Usually about 40 seconds', secs(job)].filter(Boolean).join(' · ')),
+        left: wsec('On the desk', desk), right: wsec('Insights', ended ? [slip('Insight', 'None written', bad ? 'bad' : '', true)] : [slip('Insight', 'Waiting for the Strategy agent', 'now', true), slip('Insight', 'They appear together when the run lands', '', true), slip('Insight', 'Nothing is invented while you wait', '', true)]),
+        run: ended ? '<button type="button" class="side-link" data-step="pick">← Back to what arrived</button>' + (bad ? '<span class="bad">Failed at step 2 of 3.</span>' : '<span>Stopped at step 2 of 3.</span>') + '<span class="sp"></span>' + '<span class="procActs"><button type="button" class="go" data-act="first">Try again</button></span>' :
+          '<button type="button" class="side-link" data-step="pick">← Back to what arrived</button><span class="sp"></span>' + stopBtn };
     } else {
       var nBack = crew.filter(function (m) { return m.state !== 'out'; }).length, out = crew.filter(function (m) { return m.state === 'out'; });
       var lead = out[0] || crew[0] || null, ticked = focusOf(data).insights.filter(function (i) { return i.ticked; });
       var lane = crew.length ? '<div class="lane">' + crew.map(function (m) {
-        var k = m.state === 'out' ? (bad ? 'stopped' : 'run') : m.state === 'stopped' ? 'stopped' : 'back';
+        var k = m.state === 'out' ? (ended ? 'stopped' : 'run') : m.state === 'stopped' ? 'stopped' : 'back';
         var word = k === 'back' ? 'Back · ' + plural(+m.routes || 0, 'route') : k === 'run' ? 'Exploring…' : 'Stopped';
         return '<div class="lc ' + k + '" style="--cc:' + esc(m.colour || 'var(--muted)') + '"><div class="lh">' + sphere(m.role || 'strategy', 26) + '<div><b>' + esc(m.short || m.name || '') + '</b><span>' + esc(roleName(m.role || 'strategy')) + '</span></div></div>' +
           '<div class="lbar"><i' + (k === 'back' || k === 'stopped' ? ' style="width:100%"' : '') + '></i></div><div class="lw">' + esc(word) + '</div></div>'; }).join('') + '</div>' : '';
-      var eta = bad ? (crew.length ? nBack + ' of ' + crew.length + ' were back before it stopped' : '') :
+      var eta = ended ? (crew.length ? nBack + ' of ' + crew.length + ' were back before it stopped' : '') :
         [crew.length ? nBack + ' of ' + plural(crew.length, 'agent') + ' back' : job.progress && job.progress.total > 0 ? job.progress.done + ' of ' + plural(job.progress.total, 'agent') + ' back' : 'Setting off', 'usually 2 to 3 minutes', secs(job)].filter(Boolean).join(' · ');
       o = { at: 0, steps: [['Explore', 'think'], ['Develop', 'write'], ['Judge', 'check']], next: out[1] ? out[1].role : 'review', role: bad ? 'strategy' : lead ? lead.role || 'strategy' : 'strategy',
-        l1: bad ? 'The crew stopped before it was back' : lead ? roleName(lead.role || 'strategy') + ' agent · ' + (lead.name || '') : 'The crew is setting off',
-        l2: bad ? (job.error || 'The engine stopped.') + ' Your pick is saved, nothing was lost.' : 'Each agent takes its own heading. Routes appear on the next screen when ' + (crew.length ? 'all ' + crew.length : 'they all') + ' are back.',
-        pills: pills([{ t: '1. Explore' + (crew.length ? ' (' + plural(crew.length, 'agent') + ')' : ''), s: bad ? 'bad' : 'now' }, { t: '2. Develop' }, { t: '3. Judge' }], eta), lane: lane,
+        l1: bad ? 'The crew stopped before it was back' : stopped ? 'You stopped the crew' : lead ? roleName(lead.role || 'strategy') + ' agent · ' + (lead.name || '') : 'The crew is setting off',
+        l2: bad ? (job.error || 'The engine stopped.') + ' Your pick is saved, nothing was lost.' : stopped ? 'You stopped it while exploring. Your pick is saved; nothing was lost.' : 'Each agent takes its own heading. Routes appear on the next screen when ' + (crew.length ? 'all ' + crew.length : 'they all') + ' are back.',
+        pills: pills([{ t: '1. Explore' + (crew.length ? ' (' + plural(crew.length, 'agent') + ')' : ''), s: bad ? 'bad' : stopped ? '' : 'now' }, { t: '2. Develop' }, { t: '3. Judge' }], eta), lane: lane,
         left: wsec('Picked for them · ' + ticked.length, ticked.slice(0, 4).map(function (i) { return slip(text(i.theme) || KIND_WORDS[i.kind] || 'Insight', i.text, 'ok'); })),
         right: wsec('Their headings', crew.slice(0, 4).map(function (m) { return slip(roleName(m.role || 'strategy') + ' · ' + (m.short || ''), m.heading || '', m.state === 'out' ? '' : 'ok', false, m.colour); })),
-        run: bad ? '<button type="button" class="side-link" data-step="pick">← Back to your pick</button><span class="bad">Stopped while exploring.</span><span class="sp"></span>' + '<span class="procActs"><button type="button" class="go" data-act="retry">Send the crew out again</button></span>' :
-          '<button type="button" class="side-link" data-step="pick">← Back to your pick</button><span class="sp"></span>' };
+        run: ended ? '<button type="button" class="side-link" data-step="pick">← Back to your pick</button>' + (bad ? '<span class="bad">Failed while exploring.</span>' : '<span>Stopped while exploring.</span>') + '<span class="sp"></span>' + '<span class="procActs"><button type="button" class="go" data-act="retry">Send the crew out again</button></span>' :
+          '<button type="button" class="side-link" data-step="pick">← Back to your pick</button><span class="sp"></span>' + stopBtn };
     }
-    var env = { agent: Roles && Roles.of ? Roles.of(o.role) || 'strategy' : o.role, next: Roles && Roles.of ? Roles.of(o.next || o.role) || 'strategy' : o.role, at: o.at, failed: bad,
+    var env = { agent: Roles && Roles.of ? Roles.of(o.role) || 'strategy' : o.role, next: Roles && Roles.of ? Roles.of(o.next || o.role) || 'strategy' : o.role, at: o.at, failed: bad, ended: ended,
       steps: o.steps.map(function (x) { return { label: x[0], kind: x[1] }; }) };
-    if (!bad && o.at != null) o.l2 = 'Step ' + (o.at + 1) + ' of ' + o.steps.length + ' · ' + o.l2;
+    if (!ended && o.at != null) o.l2 = 'Step ' + (o.at + 1) + ' of ' + o.steps.length + ' · ' + o.l2;
     return '<section class="proc stagewrap" aria-label="The crew at work"><div class="pwrap">' + o.pills + '<div class="sstage' + (bad ? ' fail' : '') + '" data-nk-stage><div class="rail">' + o.left + '</div><div class="score"><div class="aglbox" id="aglBox" data-env="' + esc(JSON.stringify(env)) + '">' + orb(o.role, bad) + '</div>' +
       '<div class="scap" aria-live="polite"><span class="abadge">' + esc(roleName(o.role)) + ' agent</span><span class="l1">' + esc(o.l1) + '</span><span class="l2' + (bad ? ' err' : '') + '">' + esc(o.l2) + '</span></div></div>' +
       '<div class="rail">' + o.right + '</div></div>' + (o.lane || '') + '</div><div class="runbar">' + o.run + '</div></section>';
@@ -3083,9 +3088,21 @@ var TerritoriesLookups = (function () {
     render();
     window.clan.apiProxy('middleware', { task: L.TASKS.run, input: {} }).then(onReply, unreachable);
   }
+  /** Stop (Brief's): the middleware's cancel_job for the running job. It is cancelled at once and writes nothing; what was paid for is kept. */
+  function stopRun() {
+    var j = ui.job; if (!j || !j.id || !BUSY[j.state] || j.stopping) return;
+    if (!(window.clan && window.clan.apiProxy)) { toast('Stopping runs through the host, and the host is not here.'); return; }
+    j.stopping = true; render();
+    window.clan.apiProxy('middleware', { task: 'cancel_job', input: { job_id: j.id } }).then(function (res) {
+      var err = hostErr(res), b = err ? null : mwBody(res);
+      if (b && b.job && b.job.state === 'cancelled') { clearTimeout(j.t); j.state = 'cancelled'; j.stopping = false; }
+      else { j.stopping = false; toast(err || 'It could not be stopped: the step had already finished.'); }
+      render();
+    }, function (e) { j.stopping = false; toast('The middleware could not be reached: ' + (e && e.message || e)); render(); });
+  }
   function onReply(res) {
     var j = ui.job, err = hostErr(res);
-    if (!j) return;
+    if (!j || j.state === 'cancelled') return;
     if (err) { j.state = 'failed'; j.error = err; render(); return; }
     var b = mwBody(res);
     if (b.job && typeof b.job === 'object') {
@@ -3214,10 +3231,10 @@ var TerritoriesLookups = (function () {
     }
     var v = SPH.view; if (!v) return;
     var env; try { env = JSON.parse(box.getAttribute('data-env') || '{}'); } catch (e) { return; }
-    var key = env.agent + ':' + env.at + ':' + (env.failed ? 'e' : '');
+    var key = env.agent + ':' + env.at + ':' + (env.failed ? 'e' : '') + (env.ended ? 's' : '');
     if (key === SPH.key) return;
     SPH.key = key;
-    v.setEnvelope({ agentKey: env.agent, nextAgentKey: env.next, phase: 'run', steps: env.steps, step: { index: env.at }, stepStartedAt: Date.now(), streaming: !env.failed, errorRetrying: !!env.failed });
+    v.setEnvelope({ agentKey: env.agent, nextAgentKey: env.next, phase: 'run', steps: env.steps, step: { index: env.at }, stepStartedAt: Date.now(), streaming: !env.ended, errorRetrying: !!env.failed });
   }
   function run(e) {
     var r = L.act(data(), ui, e, env());
@@ -3462,6 +3479,7 @@ var TerritoriesLookups = (function () {
     if ((b = t.closest('[data-lq-ok]'))) { if (!b.disabled) run({ a: 'lq_ok', id: b.getAttribute('data-lq-ok') }); return; }
     if ((b = t.closest('[data-lq-no]'))) { if (!b.disabled) run({ a: 'lq_no', id: b.getAttribute('data-lq-no') }); return; }
     if ((b = t.closest('[data-pin]'))) { if (!b.disabled) run({ a: 'pin', id: b.getAttribute('data-pin'), on: b.getAttribute('data-on') === '1' }); return; }
+    if ((b = t.closest('[data-act="stop"]'))) { if (!b.disabled) stopRun(); return; }
     if ((b = t.closest('[data-act="add"]'))) { addOwn(); return; }
     if ((b = t.closest('[data-act]'))) { run({ a: b.getAttribute('data-act') }); return; }
     if ((b = t.closest('[data-step]'))) { if (b.disabled) return; ui.view = ['pick', 'explore', 'greenlight'].indexOf(b.getAttribute('data-step')); render(); return; }
