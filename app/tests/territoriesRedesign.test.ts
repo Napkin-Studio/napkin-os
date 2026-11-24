@@ -29,9 +29,12 @@ const L = vm.runInNewContext(`${engine}${helper}\n${block('territories-logic')};
 const json = (rel: string) => JSON.parse(readFileSync(new URL(rel, dir), 'utf8')) as Doc
 const plain = (h: string) => h.replace(/<svg[\s\S]*?<\/svg>/g, ' ').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ')
 const head = (h: string) => /<header class="sheet-head act">[\s\S]*?<\/header>/.exec(h)?.[0] ?? ''
+// the step's primary is the Booth's first control (owner, 2026-11-24: "Into booth"; Brief's Lock the brief)
+const slot = (h: string) => h.split('<div class="b-lockslot bt-act">')[1]?.split('</div>')[0] ?? ''
+const firstInBooth = (h: string) => { const b = /<aside class="booth-col[\s\S]*?<\/aside>/.exec(h)![0]; const i = b.indexOf('b-lockslot'); return i > b.indexOf('side-agent') && (b.indexOf('class="bc"') < 0 || i < b.indexOf('class="bc"')) && (b.indexOf('lqfold') < 0 || i < b.indexOf('lqfold')) }
 const primaries = (h: string) => (h.match(/class="b pri lg[^"]*"/g) ?? []).length
 
-test('every step has its one primary in the step header, with what it does or why it cannot beside it', () => {
+test('every step has its one primary as the Booth\'s first control, with what it does or why it cannot under it', () => {
   const pick = json('example/states/pick.json')
   const arrived = { ...pick, focus: { ...pick.focus, insights: [] }, run: {} }
   for (const [d, label, words] of [
@@ -40,14 +43,16 @@ test('every step has its one primary in the step header, with what it does or wh
     [json('example/states/explore_back.json'), 'Review and greenlight →', /optional/],
     [json('example/states/greenlight_open.json'), 'Send →', /Greenlight at least one route to send it/],
   ] as [Doc, string, RegExp][]) {
-    const page = L.view(d, {}), h = head(page)
+    const page = L.view(d, {}), h = slot(page)
     assert.equal(primaries(page), 1, `${label}: one primary on the page`)
-    assert.match(h, new RegExp(`class="b pri lg"[^>]*>${label}</button>`), `${label} sits in the step header`)
+    assert.match(h, new RegExp(`class="b pri lg"[^>]*>${label}</button>`), `${label} is in the Booth`)
+    assert.ok(firstInBooth(page), `${label}: first in the Booth, right under its agent`)
+    assert.doesNotMatch(head(page), /class="b pri/, 'the step header carries no button')
     assert.match(plain(h), words)
   }
   // disabled keeps its place and says why
   const none = json('example/states/pick.json'); none.focus.insights.forEach((i: Doc) => { i.ticked = false })
-  assert.match(head(L.view(none, {})), /disabled>Explore →<\/button><span class="why lock">Tick at least one insight/)
+  assert.match(slot(L.view(none, {})), /disabled>Explore →<\/button><span class="why lock">Tick at least one insight/)
 })
 
 test('the stage while the engine works: no Booth, the agent big, the step honest, and Back leaves the job running', () => {
@@ -92,13 +97,14 @@ test('the look-up box is a closed fold on Pick and Explore, not on Greenlight; n
   assert.match(html, /\.bt-box \.btn\[data-act="lookup"\]:not\(:disabled\)\{background:var\(--ag-act\)/)
 })
 
-test('a route\'s World: its primary in its header, the toggle as a link, and a dark palette for the dark theme', () => {
+test('a route\'s World: its primary first in its Booth, the toggle as a link, and a dark palette for the dark theme', () => {
   const d = json('example/states/greenlight_open.json'), id = 't_started'
   const off = L.view(d, { world: id })
-  assert.match(/<header class="whead2">[\s\S]*?<\/header>/.exec(off)![0], /class="b pri lg" data-green="t_started" aria-pressed="false">Greenlight this route/)
+  assert.match(slot(off), /class="b pri lg" data-green="t_started" aria-pressed="false">Greenlight this route/); assert.ok(firstInBooth(off))
+  assert.doesNotMatch(/<header class="whead2">[\s\S]*?<\/header>/.exec(off)![0], /<button/)
   assert.doesNotMatch(off, /class="big" data-green/, 'no second toggle in the Booth')
   const on = JSON.parse(JSON.stringify(d)); on.greenlit = [{ territory_id: id, by: 'Shrey', at: '2026-11-24T10:00:00Z' }]
-  const wh = /<header class="whead2">[\s\S]*?<\/header>/.exec(L.view(on, { world: id }))![0]
+  const wh = slot(L.view(on, { world: id }))
   assert.match(wh, /data-send>Send 1 greenlit →/); assert.match(wh, /class="lnk" data-green="t_started" aria-pressed="true">Take it off the list/)
   assert.match(off, /--t-bg-d:#[0-9a-f]{6};--t-ink-d:#[0-9a-f]{6}/)
   const dk = L.palDark({ bg: '#F4B942', ink: '#141413', soft: '#C9C0AE' })

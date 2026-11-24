@@ -809,6 +809,13 @@ details.fold>.fold-b{padding:0 12px 12px;display:grid;gap:10px}
 .b.pri.lg{height:38px;padding:0 16px;font:600 13.5px var(--font-ui)}
 .gl{font-weight:600}
 
+/* the step's primary, first in the Booth (Brief's .b-lockslot: the Lock full width, its reason centred under it) */
+.sheet-head.act{grid-template-columns:minmax(0,1fr)}
+.b-lockslot{display:grid;gap:8px}
+.bt-act .b.pri{width:100%}
+.bt-act .why{text-align:center;justify-self:center;max-width:none}
+.bt-act .lnk{justify-self:center}
+.bt-act .b.sm{justify-self:center}
 /* ── Brief's controls and words, reused (brief-maker ~L1148 .btn-primary:disabled, ~L1153 .b-lockwhy, ~L500/1129 .toast) ── */
 .b:disabled,.b[aria-disabled="true"],.b.pri:disabled{opacity:.5;cursor:not-allowed;border-style:solid;filter:none}
 .b.pri:disabled{background:var(--ag-act);border-color:var(--ag-act);color:var(--ag-act-ink)}
@@ -1173,9 +1180,15 @@ var TerritoriesLogic = (function () {
       (o.busy ? '<span class="spin" aria-hidden="true"></span>' : '') + esc(label) + '</button>';
   }
   /** A step header: kicker, heading, one line, and the step's primary with its words, top right. */
+  // The step's primary and its words, handed from the sheet to the Booth, which draws it as its first control (owner, 2026-11-24:
+  // "Into booth"; Brief's Lock the brief). While agents work there is no Booth: the stage's run bar carries the action, as in Brief.
+  var ACT = '';
+  function putAct(a) { ACT = a || ''; }
+  function takeAct() { var a = ACT; ACT = ''; return a; }
+  function actSlot() { var a = takeAct(); return a ? '<div class="b-lockslot bt-act">' + a + '</div>' : ''; }
   function sheetHead(kicker, h2, p, act) {
-    return '<header class="sheet-head act"><div><div class="sheet-eyebrow">' + esc(kicker) + '</div><h2>' + esc(h2) + '</h2>' + (p ? '<p>' + esc(p) + '</p>' : '') + '</div>' +
-      '<div class="sh-act">' + (act || '') + '</div></header>';
+    putAct(act);
+    return '<header class="sheet-head act"><div><div class="sheet-eyebrow">' + esc(kicker) + '</div><h2>' + esc(h2) + '</h2>' + (p ? '<p>' + esc(p) + '</p>' : '') + '</div></header>';
   }
   /** The Booth's agent, Brief's size: NapkinRoles.side (an 88 px sphere in its well, the role, the line, a status). Still when nothing runs. */
   function agentBlock(role, line, status, working) {
@@ -1940,7 +1953,7 @@ var TerritoriesLogic = (function () {
     var me = ui.me && ui.me.name ? '<div class="pfoot">Checks signed as <b>' + esc(ui.me.name) + '</b></div>' : '';
     return '<aside class="booth-col' + (open ? '' : ' booth-off') + '" id="stab" aria-label="Booth"><div class="booth"><div class="booth-hd"><span class="booth-nm">Booth</span><span class="booth-sp"></span>' +
       '<button type="button" class="booth-hide" data-booth="hide" aria-label="Hide the Booth" aria-expanded="' + (open ? 'true' : 'false') + '" aria-controls="stab" aria-keyshortcuts="]">Hide<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5"/></svg></button></div>' +
-      '<div class="booth-body">' + agentBlock(role, line, '', !!(ui.job && BUSY_STATES[ui.job.state])) + notes +
+      '<div class="booth-body">' + agentBlock(role, line, '', !!(ui.job && BUSY_STATES[ui.job.state])) + actSlot() + notes +
       (at === 2 || typeof TerritoriesLookups === 'undefined' ? '' : TerritoriesLookups.section(data, ui)) +
       me + '</div></div></aside>';
   }
@@ -2023,7 +2036,7 @@ var TerritoriesLogic = (function () {
 
   /** The whole page: the head, the step's sheet and the Booth. ui: { view (step index or null), draft, job, mw, me, booth }. */
   function view(data, ui) {
-    data = isObj(data) ? data : {}; ui = isObj(ui) ? ui : {};
+    data = isObj(data) ? data : {}; ui = isObj(ui) ? ui : {}; ACT = '';
     var s = stepsNow(data.run, ui), at = ui.view != null && ui.view <= s.reached ? ui.view : s.at;
     // A developed route opened as a world (the World view, territories-world-logic) takes the sheet, the Booth and the dock of step 3.
     var W = typeof TerritoriesWorld !== 'undefined' ? TerritoriesWorld : null, wt = at === 2 && W && ui.world ? W.route(data, ui.world) : null;
@@ -2188,6 +2201,7 @@ var TerritoriesLogic = (function () {
   }
 
   return {
+    putAct: putAct, takeAct: takeAct, actSlot: actSlot,
     sendAct: sendAct, priBtn: priBtn, why: why, agentBlock: agentBlock, citeWords: citeWords, stageOf: stageOf, palDark: palDark,
     MOVES: MOVES, DESTS: DESTS, developed: developed, greenIds: greenIds, greenGroups: greenGroups, gCard: gCard, touch: touch, scene: scene, greenlightSheet: greenlightSheet, greenlightBooth: greenlightBooth, holds: holds, openAsks: openAsks, askCard: askCard, glWords: glWords, brandOf: brandOf, headline: headline,
     // for the World view (territories-world-logic), which reads the same helpers
@@ -2318,11 +2332,12 @@ var TerritoriesWorld = (function () {
   function worldSheet(data, ui, t) {
     var ft = feel(t, dialOf(t, ui)), all = order(data), i = all.indexOf(t), m = L.crewOf(data).filter(function (c) { return c.id === t.crew; })[0], wv = ui && ui.wview === 'wall' ? 'wall' : 'journey';
     var on = L.greenIds(data).indexOf(t.id) !== -1, n = L.greenIds(data).length;
-    var act = on ? L.sendAct(data, ui || {}, 'Send ' + n + ' greenlit →', true) + L.why('This route is greenlit.', 'ok') + '<button type="button" class="lnk" data-green="' + esc(t.id) + '" aria-pressed="true">Take it off the list</button>' :
-      L.priBtn('Greenlight this route', 'data-green="' + esc(t.id) + '" aria-pressed="false"') + L.why('Then send it onward from here.');
+    var act;
+    L.putAct(act = on ? L.sendAct(data, ui || {}, 'Send ' + n + ' greenlit →', true) + L.why('This route is greenlit.', 'ok') + '<button type="button" class="lnk" data-green="' + esc(t.id) + '" aria-pressed="true">Take it off the list</button>' :
+      L.priBtn('Greenlight this route', 'data-green="' + esc(t.id) + '" aria-pressed="false"') + L.why('Then send it onward from here.'));
     return '<article class="sheet world' + ffOf(ft) + '" id="wsheet" style="' + L.tvars(ft) + '"><header class="whead2"><div><span class="weyebrow">Route ' + String(i + 1).padStart(2, '0') + (m ? ' · found by ' + esc(m.name) : '') +
       (typeof t.rank === 'number' ? ' · Judge #' + t.rank : '') + '</span>' +
-      '<h2>' + esc(t.name) + '</h2><p>' + esc(t.thought) + '</p></div><div class="wact">' + act + '</div></header><div class="wtools"><div class="wseg" role="group" aria-label="How to see it">' +
+      '<h2>' + esc(t.name) + '</h2><p>' + esc(t.thought) + '</p></div></header><div class="wtools"><div class="wseg" role="group" aria-label="How to see it">' +
       [['journey', 'A weekend with it'], ['wall', 'All on one wall']].map(function (x) { return '<button type="button" data-wv="' + x[0] + '" aria-pressed="' + (wv === x[0] ? 'true' : 'false') + '">' + x[1] + '</button>'; }).join('') +
       '</div><span class="spacer" style="flex:1"></span><button type="button" class="b sm" data-wdock="anim">▶ Play animatic</button><button type="button" class="b sm" data-wdock="present">▶ Present</button></div><div class="wbody2" id="wbody">' + worldBody(data, ui, t) + '</div><div class="wnote">Sketches to show the feel, not finished work. Pictures come later.</div></article>';
   }
@@ -2389,7 +2404,7 @@ var TerritoriesWorld = (function () {
     var gl = L.glWords(ui.req), body = tab === 'feel' ? tabFeel(t, ui) : tab === 'lines' ? tabLines(t, ui) : tab === 'why' ? tabWhy(t, data, ui) : tabTest(t);
     return '<aside class="booth-col' + (open ? '' : ' booth-off') + '" id="stab" aria-label="Booth"><div class="booth"><div class="booth-hd"><span class="booth-nm">Booth</span><span class="booth-sp"></span>' +
       '<button type="button" class="booth-hide" data-booth="hide" aria-label="Hide the Booth" aria-expanded="' + (open ? 'true' : 'false') + '" aria-controls="stab" aria-keyshortcuts="]">Hide<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5"/></svg></button></div>' +
-      '<div class="booth-body">' + L.agentBlock('strategy', t.name + ' as a campaign across one weekend. Move a dial and the words move with it.', 'a developed route', false) +
+      '<div class="booth-body">' + L.agentBlock('strategy', t.name + ' as a campaign across one weekend. Move a dial and the words move with it.', 'a developed route', false) + L.actSlot() +
       '<div class="navrow"><button type="button" class="linkbtn" data-w-back>← All routes</button><span class="spacer"></span><button type="button" class="btn-rect sq" data-w-nav="-1" aria-label="Previous route"' + (i > 0 ? '' : ' disabled') + '>←</button>' +
       '<span class="meta">' + (i + 1) + ' of ' + all.length + '</span><button type="button" class="btn-rect sq" data-w-nav="1" aria-label="Next route"' + (i < all.length - 1 ? '' : ' disabled') + '>→</button></div>' +
       (gl ? '<p class="runnote' + (ui.req && ui.req.state === 'failed' ? ' bad' : '') + '" role="status">' + esc(gl) + '</p>' : '') +

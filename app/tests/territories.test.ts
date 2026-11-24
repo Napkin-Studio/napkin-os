@@ -882,7 +882,10 @@ test('a failed first run says why in the engine\'s words, offers the action at t
   assert.match(page, /To start I need the category and the market\./, 'the document\'s run.error is on the page')
   assert.doesNotMatch(page, /Nothing has been sent out yet/)
   assert.match(page, /data-act="first"[^>]*>Try again/)
-  assert.ok(page.indexOf('data-act="first"') < page.indexOf('From the brief'), 'the action sits above the long brief, not below it')
+  // the action is the Booth's first control (owner, 2026-11-24: "Into booth"), so it is in view however long the brief is
+  const bo = /<aside class="booth-col[\s\S]*?<\/aside>/.exec(page)![0]
+  assert.match(bo, /<div class="b-lockslot bt-act"><button type="button" class="b pri lg" data-act="first">Try again/)
+  assert.ok(bo.indexOf('b-lockslot') < bo.indexOf('class="bc"'), 'before the notes')
   assert.doesNotMatch(page, /Tick the insights the crew should work on\.[^<]*<\/p><ol/, 'nothing to tick yet')
   assert.match(page, /Step 1 of 3 · What arrived/)
 })
