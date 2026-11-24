@@ -12,7 +12,7 @@ const SHA = `sha256:${'a'.repeat(64)}`
 describe('the registry', () => {
   it('has every kind of 3.3 and 3.4, the two system entries and the shot', () => {
     expect(NODE_REGISTRY.map((e) => e.kind).sort()).toEqual([
-      'board', 'brief', 'document', 'drawing', 'format_set', 'generated', 'group', 'ink_group', 'note', 'picture',
+      'board', 'brand_clan', 'brief', 'document', 'drawing', 'format_set', 'generated', 'group', 'ink_group', 'note', 'picture',
       'pin', 'provenance', 'script', 'shot', 'sketch', 'storyboard', 'video',
     ])
     // 3.3's card labels.
@@ -28,7 +28,7 @@ describe('the registry', () => {
   })
 
   it('the v3 tags are contract-v3’s; document, format set and ink group are unassigned', () => {
-    expect(NODE_REGISTRY.filter((e) => e.tagStatus === 'v3' && e.tag).map((e) => e.tag).sort()).toEqual(['board', 'brief', 'script', 'sketch', 'storyboard', 'video'])
+    expect(NODE_REGISTRY.filter((e) => e.tagStatus === 'v3' && e.tag).map((e) => e.tag).sort()).toEqual(['board', 'brand_clan', 'brief', 'script', 'sketch', 'storyboard', 'video'])
     for (const k of ['document', 'format_set', 'ink_group'] as const) expect(nodeEntry(k).tagStatus).toBe('unassigned')
   })
 

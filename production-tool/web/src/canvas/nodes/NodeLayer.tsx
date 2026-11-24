@@ -39,6 +39,9 @@ import './nodes.css'
 import { keyViews } from '../../lib/names'
 import { liveGet } from '../../model/live'
 import { BriefCard } from '../../brief/BriefCard'
+import { BrandClanCard, BrandClanTip } from '../../brandClan/BrandClanCard'
+import { brandClanOfElement } from '../../brandClan/canvas'
+import { linkedLabel } from '../../brandClan/model'
 import { briefOpenUrl } from '../../brief/feedWords'
 import { briefOfElement } from '../../brief/canvas'
 import { chipLook } from '../../ui/finals/chipLook'
@@ -631,6 +634,21 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
           <div key={e.id} className={`bl-cardbox ${selected.has(e.id) ? 'selected' : ''} ${state} ${focus && !docLinks.some((l) => l.from.kind === 'brief' && l.from.id === id && l.to.kind === focus.kind && l.to.id === focus.id) ? 'ctxdim' : ''}`} data-node="brief" data-id={id}
             style={{ left: p.x, top: p.y, width: e.width, height: e.height, transform: `scale(${view.zoom})` }}>
             <BriefCard doc={live} id={id} openUrl={briefOpenUrl(live, id)} />
+          </div>
+        )
+      })}
+      {/* The Brand Clan node's card (Brand Clan phase 2; mocks d1-d3), and the tip beside a default one not linked yet. */}
+      {els.filter((e) => brandClanOfElement(e)).map((e) => {
+        const id = brandClanOfElement(e)!
+        const p = toLocal(e.x + (moving?.ids.has(e.id) ? moving.dx : 0), e.y + (moving?.ids.has(e.id) ? moving.dy : 0))
+        const state = !source ? '' : e.id === source.id ? 'source' : 'dim'
+        const n = live.brand_clans?.[id]
+        const tip = n?.source.how === 'default' && !linkedLabel(live, id)
+        return (
+          <div key={e.id} className={`bl-cardbox ${selected.has(e.id) ? 'selected' : ''} ${state}`} data-node="brand_clan" data-id={id}
+            style={{ left: p.x, top: p.y, width: e.width, height: e.height, transform: `scale(${view.zoom})` }}>
+            <BrandClanCard doc={live} id={id} env={{ canvas, doc: services.doc }} />
+            {tip && <div style={{ position: 'absolute', left: 0, top: e.height + 10 }}><BrandClanTip /></div>}
           </div>
         )
       })}

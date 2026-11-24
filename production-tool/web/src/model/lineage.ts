@@ -137,6 +137,9 @@ export function lineage(chain: ChainEntry[], doc: ProductionDocument, docId: str
   }
   for (const e of oldestFirst) {
     if (!e.id) continue
+    // The template's own decisions (its summary view, written when the app was packed) change no part of the project: they
+    // are not in the project's tree. Older CLIs wrote them with no id; the CLI now gives every decision one.
+    if (!(e.targets ?? []).length && !(e.cites ?? []).length && (e.fields_changed ?? []).length > 0 && (e.fields_changed ?? []).every((f) => f.startsWith('human/'))) continue
     const verb = e.action.split(' ')[0]
     const targets = e.targets ?? []
     const cites = e.cites ?? []

@@ -30,7 +30,7 @@ export function besideBox(els: readonly CanvasElement[], src: Pick<CanvasElement
   const size = CARD_SIZE[kind]
   // Every card in the way: the stage nodes, and the Brief card and pictures too (UAT 2026-11-21, F18: after Plan
   // shots the Brief card sat on top of the new Storyboard node).
-  const inWay = (e: CanvasElement) => !!cardOf(e) || (e.customData as { kind?: string } | undefined)?.kind === 'brief' || e.type === 'image'
+  const inWay = (e: CanvasElement) => !!cardOf(e) || ['brief', 'brand_clan'].includes((e.customData as { kind?: string } | undefined)?.kind ?? '') || e.type === 'image'
   const nodes = els.filter((e) => !e.isDeleted && inWay(e)).map((e) => ({ x: e.x, y: e.y, w: e.width, h: e.height }))
   let box: Box = { x: Math.round(src.x + src.width + BESIDE_GAP), y: Math.round(src.y), ...size }
   for (let i = 0; i < 40; i++) {

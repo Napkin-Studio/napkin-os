@@ -220,6 +220,17 @@
       },
       "maxProperties": 64
     },
+    "brand_clans": {
+      "type": "object",
+      "description": "Brand Clan nodes (Brand Clan phase 2, DESIGN 4a, owner 2026-11-23): each a frozen, read-only copy of one of the client's Brand Clans at the version taken. Placed for the client's default (not linked), or picked by a person; a second beside it compares two looks. Linked into a Script, Storyboard, Video or Format set (role brand), it carries downstream and the nearest link up the canvas wins for each step. Optional: a document made before it has none. Until Production is a CLAN app (Stage 2/3) the copy lives here, as a Brief node's does.",
+      "propertyNames": {
+        "pattern": "^bclan_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/brand_clan"
+      },
+      "maxProperties": 8
+    },
     "briefs": {
       "type": "object",
       "description": "Brief nodes (features/brief-node.clan, owner 2026-11-17): each a frozen, read-only copy of a Brief Maker brief's spine, made only by linking a brief or spinning one off into Production, never typed here. Several per canvas (a main film and a cut-down for another market). Optional: a document made before it has none.",
@@ -2216,6 +2227,43 @@
         "pages",
         "read"
       ],
+      "additionalProperties": false
+    },
+    "brand_clan": {
+      "type": "object",
+      "description": "A Brand Clan node: one of the client's Brand Clans (ie.napkin.brand), its published Brand Bible frozen at the version taken (docs/contracts/brand-clan.md section 8 shapes). Read-only here: the client window edits it. A newer published version shows 'Brand Clan updated · Update'; taking it is the person's decision, never automatic.",
+      "properties": {
+        "id": { "type": "string", "pattern": "^bclan_[0-9A-HJKMNP-TV-Z]{26}$" },
+        "v": { "$ref": "#/$defs/v" },
+        "field_v": { "$ref": "#/$defs/field_v" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200, "description": "The Brand Clan's name as the client window shows it (\"Zero\")." },
+        "client": { "type": "object", "properties": { "id": { "type": "string", "maxLength": 128 }, "name": { "type": "string", "maxLength": 200 } }, "required": ["id"], "additionalProperties": false },
+        "source": {
+          "type": "object",
+          "properties": {
+            "document_id": { "type": "string", "minLength": 1, "maxLength": 128, "description": "The Brand Clan's OS document id." },
+            "path": { "type": "string", "minLength": 1, "maxLength": 200, "description": "Its library path: what GET /api/t/{tenant}/brand-clans/{path} reads." },
+            "app_id": { "const": "ie.napkin.brand" },
+            "version": { "type": "integer", "minimum": 1, "description": "kit.version as taken." },
+            "at": { "type": "string", "format": "date-time" },
+            "how": { "enum": ["default", "pick"], "description": "Placed for the client's default, or picked by a person." },
+            "kept": { "type": "integer", "minimum": 1, "description": "A newer version the person chose not to take." }
+          },
+          "required": ["document_id", "path", "app_id", "version", "at", "how"],
+          "additionalProperties": false
+        },
+        "bible": {
+          "type": "object",
+          "description": "The published Brand Bible as taken: visual (logos, colours, typography), voice (tone, rules), imagery (style, bans). Asset names point into the Brand Clan document.",
+          "properties": {
+            "visual": { "type": "object" },
+            "voice": { "type": "object" },
+            "imagery": { "type": "object" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "v", "field_v", "title", "source", "bible"],
       "additionalProperties": false
     },
     "brief": {
