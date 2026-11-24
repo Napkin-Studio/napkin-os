@@ -606,6 +606,19 @@ async fn purge_is_a_dry_run_by_default_admin_only_and_keeps_the_last_30_days() {
         .unwrap();
     let aged = ms - 31 * 24 * 3600 * 1000;
     std::fs::rename(&file, trash.join(format!("{aged}-{slug}.clan"))).unwrap();
+    // its note carries the same time
+    std::fs::rename(
+        file.with_extension("json"),
+        trash.join(format!("{aged}-{slug}.json")),
+    )
+    .unwrap();
+    let clans = || {
+        std::fs::read_dir(&trash)
+            .unwrap()
+            .flatten()
+            .filter(|e| e.file_name().to_string_lossy().ends_with(".clan"))
+            .count()
+    };
 
     // not for a person who is not an admin
     let r = me
@@ -630,7 +643,7 @@ async fn purge_is_a_dry_run_by_default_admin_only_and_keeps_the_last_30_days() {
     );
     assert_eq!(r.json()["dry_run"], true);
     assert_eq!(r.json()["purged"], serde_json::json!([old]));
-    assert_eq!(std::fs::read_dir(&trash).unwrap().count(), 2);
+    assert_eq!(clans(), 2);
 
     let r = admin
         .json(
@@ -641,6 +654,10 @@ async fn purge_is_a_dry_run_by_default_admin_only_and_keeps_the_last_30_days() {
         )
         .await;
     assert_eq!(r.json()["purged"], serde_json::json!([old]));
+    assert!(
+        !trash.join(format!("{aged}-{slug}.json")).exists(),
+        "a purged document's note goes with it"
+    );
     let left: Vec<String> = me
         .get(&s, "/trash")
         .await
@@ -884,4 +901,145 @@ async fn head_on_download_names_the_version_and_time_with_no_body() {
     )
     .await;
     assert_eq!(r.status, StatusCode::UNAUTHORIZED);
+}
+
+// ── Library trash: what the Trash page needs (features/library-trash) ───────
+
+async fn make_client(s: &Server, p: &Person, name: &str) -> String {
+    let r = p
+        .json(s, "POST", "/clients", serde_json::json!({ "name": name }))
+        .await;
+    assert_eq!(r.status, StatusCode::CREATED);
+    r.json()["id"].as_str().unwrap().to_string()
+}
+
+async fn make_doc(s: &Server, p: &Person, app: &str, title: &str, client: Option<&str>) -> String {
+    let r = p
+        .json(
+            s,
+            "POST",
+            "/documents",
+            serde_json::json!({ "app_id": app, "title": title, "client_id": client }),
+        )
+        .await;
+    assert!(
+        r.status.is_success(),
+        "{}",
+        String::from_utf8_lossy(&r.body)
+    );
+    r.json()["path"].as_str().unwrap().to_string()
+}
+
+async fn trash_it(s: &Server, p: &Person, doc: &str) {
+    let r = call(
+        s,
+        Some(p),
+        &p.tenant,
+        "DELETE",
+        &format!("/d/{doc}"),
+        &[],
+        vec![],
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn trash_keeps_title_tool_client_and_who_and_filters_by_client() {
+    let s = server();
+    let me = sign_in(&s, "visionary", "napkin").await;
+    let a = make_client(&s, &me, "Hollow Oak Cider").await;
+    let b = make_client(&s, &me, "Stena").await;
+    let d1 = make_doc(&s, &me, PRODUCTION, "Still life", Some(&a)).await;
+    let d2 = make_doc(&s, &me, "ie.napkin.brief-maker", "Autumn brief", Some(&b)).await;
+    let d3 = make_doc(&s, &me, "ie.napkin.deck-maker", "Loose deck", None).await;
+    for d in [&d1, &d2, &d3] {
+        trash_it(&s, &me, d).await;
+    }
+
+    let all = me.get(&s, "/trash").await.json();
+    assert_eq!(all.as_array().unwrap().len(), 3);
+    let row = |j: &serde_json::Value, d: &str| {
+        j.as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["path"] == d)
+            .unwrap()
+            .clone()
+    };
+    let r1 = row(&all, &d1);
+    assert_eq!(r1["title"], "Still life");
+    assert_eq!(r1["app_id"], PRODUCTION);
+    assert_eq!(r1["client_id"], a);
+    assert_eq!(
+        r1["by"], "Laurance",
+        "the signed-in person, by display name"
+    );
+    assert!(r1["restorable_until"].is_string() && r1["trashed_at"].is_string());
+    assert!(row(&all, &d3)["client_id"].is_null());
+
+    let only_a = me.get(&s, &format!("/trash?client={a}")).await.json();
+    let paths: Vec<_> = only_a
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["path"].clone())
+        .collect();
+    assert_eq!(paths, vec![serde_json::json!(d1)]);
+    let none = me.get(&s, "/trash?client=cl-nobody").await.json();
+    assert!(none.as_array().unwrap().is_empty());
+
+    // restore: back in the library, gone from the trash, its note with it
+    let r = call(
+        &s,
+        Some(&me),
+        &me.tenant,
+        "POST",
+        &format!("/d/{d2}/restore"),
+        &[],
+        vec![],
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::OK);
+    let left = me.get(&s, "/trash").await.json();
+    assert_eq!(left.as_array().unwrap().len(), 2);
+    let dir = s
+        .dir
+        .path()
+        .join("data")
+        .join(me.tenant.as_str())
+        .join("trash");
+    let notes = std::fs::read_dir(&dir)
+        .unwrap()
+        .flatten()
+        .filter(|e| e.file_name().to_string_lossy().ends_with(".json"))
+        .count();
+    assert_eq!(notes, 2, "a restored document leaves no note behind");
+    // trash it again: listed with its details once more
+    trash_it(&s, &me, &d2).await;
+    let again = row(&me.get(&s, "/trash").await.json(), &d2);
+    assert_eq!(again["title"], "Autumn brief");
+    assert_eq!(again["client_id"], b);
+}
+
+#[tokio::test]
+async fn trash_of_a_document_trashed_before_notes_still_lists() {
+    let s = server();
+    let me = sign_in(&s, "visionary", "napkin").await;
+    let d = make_doc(&s, &me, "ie.napkin.brief-maker", "Old", None).await;
+    trash_it(&s, &me, &d).await;
+    let dir = s
+        .dir
+        .path()
+        .join("data")
+        .join(me.tenant.as_str())
+        .join("trash");
+    for e in std::fs::read_dir(&dir).unwrap().flatten() {
+        if e.file_name().to_string_lossy().ends_with(".json") {
+            std::fs::remove_file(e.path()).unwrap();
+        }
+    }
+    let t = me.get(&s, "/trash").await.json();
+    assert_eq!(t[0]["path"], d);
+    assert!(t[0]["title"].is_null() && t[0]["by"].is_null());
 }

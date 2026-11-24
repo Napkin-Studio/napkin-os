@@ -15,6 +15,8 @@ export interface ProjectSummary {
   stage: StageName
   /** Named pictures (refs) and every other image the project holds. */
   pictures: number
+  /** The nodes and notes the project holds besides pictures (scripts, storyboards, films, briefs, texts, sketches, boards): "Canvas · empty" is only for a project with none. */
+  items?: number
   shots: number
   /** Things marked out of date (stale), waiting for "Update what follows". */
   behind: number
@@ -31,6 +33,8 @@ export interface ProjectSummary {
 }
 
 export const UNTITLED = 'Untitled project'
+/** What counts as something on the canvas besides pictures. */
+const ITEM_MAPS = ['scripts', 'storyboards', 'videos', 'briefs', 'texts', 'sketches', 'boards', 'documents'] as const
 
 export function summarise(d: ProductionDocument, ui: Partial<Pick<ProjectUi, 'stage' | 'jobs'>> = {}): ProjectSummary {
   const shots = shotsOf(d)
@@ -49,6 +53,7 @@ export function summarise(d: ProductionDocument, ui: Partial<Pick<ProjectUi, 'st
   return {
     stage: ui.stage ?? 'character',
     pictures: assetsList(d).filter((a) => a.kind === 'image').length,
+    items: ITEM_MAPS.reduce((n, m) => n + Object.keys(d[m] ?? {}).length, 0),
     shots: shots.length,
     behind,
     adSeconds: ad ? Math.round(adAsset?.duration_s ?? storyboardSeconds(d)) : null,

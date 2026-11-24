@@ -34,6 +34,7 @@ import type {
   OpenResult,
   RecentDoc,
   SpinoffTarget,
+  TrashItem,
   Unlisten,
   UploadedAsset,
   UpstreamUpdateReply,
@@ -442,6 +443,11 @@ export const httpHost: Host = {
   get brandClans() { return (this as unknown as { _bc?: BrandApi })._bc ??= brandApi(this) },
   brandClan: <T,>(op: BrandOp, i: Record<string, unknown>, bytes?: Uint8Array) => brandRoute<T>(op, i, bytes),
   brandClanAsset: async (path, name) => `${await base()}/brand-clans/${encodeURIComponent(path)}/assets/${encodeURIComponent(name)}`,
+  trash: {
+    list: client => json<TrashItem[]>(`/trash${client ? `?client=${encodeURIComponent(client)}` : ''}`),
+    move: async path => { await json<unknown>(`/d/${encodeURIComponent(path)}`, { method: 'DELETE' }) },
+    restore: async path => { await json<unknown>(`/d/${encodeURIComponent(path)}/restore`, { method: 'POST' }) },
+  },
 
   spinoffTargets: () => json<SpinoffTarget[]>(`/d/${requireDoc()}/spinoff-targets`),
   spinoffDocument: (appId, title, map) =>

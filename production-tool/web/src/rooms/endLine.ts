@@ -7,7 +7,7 @@
 import type { Id, ProductionDocument } from '../contracts/types'
 import { briefForJob, endLineOf } from '../brief/model'
 import { shotsOf, storyboardOfVideo } from '../model/selectors'
-import { lineFacts } from '../stages/soundFacts'
+import { lineFacts, type LineFact } from '../stages/soundFacts'
 import { compileFor, type Plan } from './timeline'
 
 /** How long the super holds over the last shot, at most. */
@@ -51,4 +51,31 @@ export function compileWithEndLine(d: ProductionDocument, videoId: Id): Plan & {
   const plan = compileFor(d, videoId)
   const end = endLineOfVideo(d, videoId, plan)
   return { ...withEndLineSuper(plan, end), ...(end ? { endLine: end } : {}) }
+}
+
+const WHERE: Record<Exclude<EndLine['how'], 'voiced'>, string> = { card: 'the end card shows it', text: 'a text on the film shows it', super: 'it shows as a super over the last shot' }
+const clip40 = (t: string) => (t.length > 40 ? `${t.slice(0, 39)}\u2026` : t)
+
+/**
+ * The Review agent's lines about what is not heard, before a render. The brief's end line that is only a voice-over no
+ * clip says is said plainly, once, with where the film shows it instead (UAT round 4 F34: it read "Not heard … (shot 5)"
+ * as if the line were lost, while the end card was meant to carry it). Every other unvoiced line stays a "Not heard".
+ */
+export function heardChecks(end: EndLine | undefined, unvoiced: readonly LineFact[]): { text: string; ok: boolean }[] {
+  const out: { text: string; ok: boolean }[] = []
+  const l = end ? words(end.line) : ''
+  const said = end && end.how !== 'voiced' ? unvoiced.find((x) => words(x.text).includes(l)) : undefined
+  if (end && end.how !== 'voiced') {
+    out.push({
+      text: said
+        ? `The brief\u2019s end line \u201c${end.line}\u201d is only ${said.who ? `${said.who}\u2019s` : 'a'} voice-over on shot ${said.n}, which no clip says yet: ${WHERE[end.how]}`
+        : `The brief\u2019s end line \u201c${end.line}\u201d is not voiced: ${WHERE[end.how]}`,
+      ok: true,
+    })
+  }
+  for (const x of unvoiced) {
+    if (x === said) continue
+    out.push({ text: `Not heard: ${x.who ? `${x.who}\u2019s ` : ''}\u201c${clip40(x.text)}\u201d (shot ${x.n}). ${x.why.split(':')[0]}.`, ok: false })
+  }
+  return out
 }

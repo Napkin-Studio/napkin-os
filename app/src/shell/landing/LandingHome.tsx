@@ -21,6 +21,9 @@ import { correctRoute, formatRoute, sameRoute, up, type Route } from '../route'
 import { Desk } from '../nui/Desk'
 import { ClientView } from '../nui/ClientView'
 import type { BrandApi } from '../../host/brandClans'
+import { TrashPage } from '../nui/TrashPage'
+import { useTrashDesk } from '../nui/trashDesk'
+import type { TrashApi } from '../../host/types'
 import type { Facts } from '../nui/deskData'
 import { useLensDots } from '../nui/lenses'
 import './landing.css'
@@ -48,9 +51,11 @@ interface Props {
   onDecisions?: () => void
   /** The Brand Clan operations of the shell's host (the client page's Brand Clans). */
   brand?: BrandApi
+  /** The library's Trash (the host's); the ⋯ on documents, the Trash link and the Trash page need it. */
+  trash?: TrashApi
 }
 
-export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDocument, onRefresh, facts = {}, onOpenFile, onOffline, onDecisions, brand }: Props) {
+export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDocument, onRefresh, facts = {}, onOpenFile, onOffline, onDecisions, brand, trash }: Props) {
   const top = useRef<HTMLDivElement>(null)
   const [registryNote, setRegistryNote] = useState<string | null>(null)
 
@@ -62,7 +67,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
     const onEsc = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || isTyping(e.target)) return
       const r = routeRef.current
-      if (r.level === 'agency' || r.level === 'clients') return
+      if ((r.level === 'agency' && !r.trash) || r.level === 'clients') return
       e.preventDefault()
       const u = up(r)
       goRef.current(u.level === 'clients' ? { level: 'agency' } : u)
@@ -95,13 +100,21 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
   // A tool with a page here: live, and not one that opens outside the shell (Prod).
   const routable = useCallback((id: string) => live.has(id) && toolHref({ id }) === null, [live])
   const openTool = (clientId: string, t: Tool) => {
-    const href = toolHref(t)
+    const href = toolHref(t, clientId)
     if (href) window.location.assign(href)
     else go({ level: 'tool', client: clientId, tool: t.id })
   }
 
   const clientId = route.level === 'client' || route.level === 'tool' ? route.client : null
   const client = clientId ? data.clients.find(c => c.id === clientId) : undefined
+
+  // The Trash, for the page that shows it: a client's page (its link and its ⋯) or the Trash page, a client's or the agency's.
+  const refreshRef = useRef(onRefresh)
+  useEffect(() => { refreshRef.current = onRefresh })
+  const refreshed = useCallback(() => refreshRef.current(), [])
+  const onTrashPage = (route.level === 'client' || route.level === 'agency') && route.trash === true
+  const trashScope = route.level === 'client' ? (client ? client.id : undefined) : onTrashPage ? null : undefined
+  const trashing = useTrashDesk(trashScope === undefined ? undefined : trash, trashScope ?? null, refreshed)
 
   // A client route must name a client that is here. One that is not (archived,
   // another studio's, mistyped) is corrected to the desk, and a tool that is not
@@ -139,7 +152,10 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
   })
 
   let body
-  if (clientId && client && route.level === 'tool' && tool && routable(tool.id)) {
+  if (onTrashPage && trashing && (route.level === 'agency' || client)) {
+    const back: Route = route.level === 'client' ? { level: 'client', client: route.client } : { level: 'agency' }
+    body = <TrashPage client={route.level === 'client' ? client ?? null : null} agency={who.agency} desk={trashing.desk} state={trashing.state} onBack={() => go(back)} />
+  } else if (clientId && client && route.level === 'tool' && tool && routable(tool.id)) {
     body = (
       <ToolPage
         client={client}
@@ -164,6 +180,8 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         onSoon={sayingSoon}
         onDecisions={onDecisions}
         brand={brand}
+        trash={trashing ?? undefined}
+        onOpenTrash={() => go({ level: 'client', client: client.id, trash: true })}
         onRename={manage ? name => manage.rename(client.id, name) : undefined}
         onArchive={manage ? async () => {
           const refused = await manage.archive(client.id)

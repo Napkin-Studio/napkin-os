@@ -34,7 +34,7 @@ export async function briefChoices(src: BriefSource): Promise<{ items: OsBriefIt
 export function carriedBrief(from: SpunOffFrom, upstream: Record<string, Record<string, unknown>> | undefined): OsBriefRead | null {
   const data = upstream?.[from.document_id]
   if (!data || typeof data !== 'object') return null
-  return { documentId: from.document_id, title: from.title.trim() || 'Brief', appId: BRIEF_APP_ID, dataSha256: from.data_sha256, data }
+  return { documentId: from.document_id, title: from.title.trim() || 'Brief', appId: BRIEF_APP_ID, dataSha256: from.data_sha256, version: from.version, data }
 }
 
 /** Bring the brief this project was born with: its Brief node alone (brief/canvas.ts bringBrief), made from the carried

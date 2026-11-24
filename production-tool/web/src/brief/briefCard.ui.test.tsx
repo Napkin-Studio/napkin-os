@@ -27,16 +27,16 @@ const DATA = {
   tone_and_world: ['Warm, busy, generous'],
   mandatories: ['Kora logo on the end card', 'No price talk'],
 }
-const read = (data: unknown = DATA, sha = SHA('b')): OsBriefRead => ({ documentId: 'doc-market', title: 'Colour of the market', appId: 'ie.napkin.brief-maker', dataSha256: sha, data })
+const read = (data: unknown = DATA, sha = SHA('b'), version = 1): OsBriefRead => ({ documentId: 'doc-market', title: 'Colour of the market', appId: 'ie.napkin.brief-maker', dataSha256: sha, version, data })
 const src = (now: OsBriefRead): BriefSource => ({ available: async () => true, list: async () => [], read: async () => now, openUrl: (id) => `/app/brief-maker?doc=${id}` })
 
 let root: Root | null = null
 afterEach(() => { act(() => root?.unmount()); root = null; document.body.innerHTML = '' })
 
-async function project() {
+async function project(version = 1) {
   const store = modelStore()
   await store.create(MAYA, 'Market day')
-  const b = newBrief(read(), 'link')
+  const b = newBrief(read(DATA, SHA('b'), version), 'link')
   await systemUpdate(store, (d) => { d.briefs = { ...(d.briefs ?? {}), [b.id]: b } }, 'seed')
   return { store, id: b.id }
 }
@@ -52,6 +52,18 @@ describe('the Brief node card', () => {
     expect(html).not.toContain('Market cloth is bought slowly.') // the insight is the Booth's
     expect(html).toContain('Frozen at v1')
     expect(html).toContain('Open in Brief Maker')
+  })
+})
+
+describe('the version a Brief node shows', () => {
+  it('is the brief’s own (Brief Maker’s v2), not Production’s copy counter', async () => {
+    const { store, id } = await project(2)
+    const doc = store.get() as ProductionDocument
+    expect(doc.briefs![id].source.taken).toBe(1)
+    const html = renderToStaticMarkup(createElement(BriefCard, { doc, id, openUrl: '/x' }))
+    expect(html).toContain('v2 · frozen copy')
+    expect(html).toContain('Frozen at v2')
+    expect(html).not.toContain('v1')
   })
 })
 
@@ -74,13 +86,14 @@ describe('the Booth on a selected Brief node', () => {
     expect(el.querySelectorAll('.src-mini').length).toBeGreaterThan(3)
     expect(el.textContent).toContain('Not linked yet')
   })
-  it('a newer version in Brief Maker: what changed, then Update to v2 takes it', async () => {
-    const { el, store, id } = await mount(read({ ...DATA, audience: 'Women and men 25–45.' }, SHA('c')))
+  it('a newer version in Brief Maker: what changed, then Update to v4 takes it', async () => {
+    const { el, store, id } = await mount(read({ ...DATA, audience: 'Women and men 25–45.' }, SHA('c'), 4))
     const btn = (t: string) => [...el.querySelectorAll('button')].find((b) => b.textContent?.startsWith(t)) as HTMLButtonElement
     await act(async () => { btn('Check for a newer version').click(); await new Promise((r) => setTimeout(r, 10)) })
     expect(el.textContent).toContain('Brief changed: update?')
     expect(el.querySelector('ins')?.textContent).toContain('Women and men')
-    await act(async () => { btn('Update to v2').click(); await new Promise((r) => setTimeout(r, 20)) })
+    await act(async () => { btn('Update to v4').click(); await new Promise((r) => setTimeout(r, 20)) })
     expect(store.get().briefs![id].source.taken).toBe(2)
+    expect(store.get().briefs![id].source.version).toBe(4)
   })
 })

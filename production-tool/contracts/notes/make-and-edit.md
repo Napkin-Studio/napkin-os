@@ -77,7 +77,7 @@ interface TextItem {
   fade_in_s?: number; fade_out_s?: number
 }                                       // a text item may NOT carry start_s, source, follows, transition_in, speed, hold_s, opacity
 interface EndCard {
-  headline?: string /* ≤120 */; line: string /* 1-200 */; cta?: string /* ≤80 */
+  headline?: string /* ≤120 */; line: string /* 1-200 */; cta?: string /* ≤80, the call to action only */; legal?: string /* ≤200, its own small line at the bottom */
   bg: string /* '#RRGGBB' */; logo_asset?: Sha256; s: number /* 0.5-10 */; transition_in?: TransitionIn
 }
 // videos[v].end_card?: EndCard   (absent: no card of the person's; the studio roll-up always ends the ad)
@@ -180,7 +180,7 @@ interface TimelinePlan {
   clips: { asset: AssetRef; startS: number; inS: number; outS: number; speed?: number; holdS?: number;
            fadeInS?: number; fadeOutS?: number; transitionIn?: { kind: 'cut' | 'dissolve' | 'dip_black' | 'dip_white'; s?: number } }[]  // 1-300, V1 in start order
   texts?: { words: string; style: 'caption' | 'title' | 'super'; fromS: number; toS: number; fadeInS?: number; fadeOutS?: number }[]
-  endCard?: { headline?: string; line: string; cta?: string; bg: string; logo?: AssetRef; s: number; transitionIn?: TransitionIn }
+  endCard?: { headline?: string; line: string; cta?: string; legal?: string; bg: string; logo?: AssetRef; s: number; transitionIn?: TransitionIn }
   lengthS: number   // the last clip's end + the end card; the render is exactly this, then the roll-up
 }
 ```

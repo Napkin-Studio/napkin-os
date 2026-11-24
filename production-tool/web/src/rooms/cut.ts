@@ -48,7 +48,10 @@ export interface CutText {
 export interface CutEndCard {
   headline: string
   line: string
+  /** The call to action, only that. */
   cta?: string
+  /** Its legal line, small at the bottom: saved with the card (prefilled from the linked Brief when the card is made); '' once cleared. */
+  legal?: string
   /** Its colour, #rrggbb. */
   bg: string
   logo?: string
@@ -109,6 +112,38 @@ export function cutLength(cut: Cut): number {
     cut.endCard ? r3(endCardStart(cut) + cut.endCard.durS) : 0,
   ]
   return r3(Math.max(0, ...ends))
+}
+
+/**
+ * The cut brought down to its target length, the end card included (UAT round 4 F22: a 15 s film rendered at 16.5 s,
+ * the joined clip filling 15 s and the 1.5 s end card added after it). The over-run comes off the tail of the last
+ * V1 clips, a hold first, each clip kept at least `minS` long; the clips after a trimmed one move up by what it lost,
+ * so gaps the person left stay. V2 and text stay where they are. A cut at or under the target is returned as it is.
+ */
+export function fitToTarget(cut: Cut, targetS: number | undefined, minS = 1): Cut {
+  if (!targetS || targetS <= 0) return cut
+  let over = r3(cutLength(cut) - targetS)
+  if (over < 0.05) return cut
+  const v1 = sortV1(cut.v1).map((c) => ({ ...c }))
+  const lost = new Map<string, number>()
+  for (let i = v1.length - 1; i >= 0 && over > 0.0005; i--) {
+    const c = v1[i]
+    const room = r3(clipLen(c) - minS)
+    if (room <= 0) continue
+    const take = Math.min(room, over)
+    const hold = Math.min(c.holdS || 0, take)
+    c.holdS = r3((c.holdS || 0) - hold)
+    c.outS = r3(c.outS - (take - hold) * (c.speed || 1))
+    lost.set(c.id, take)
+    over = r3(over - take)
+  }
+  if (!lost.size) return cut
+  let shift = 0
+  for (const c of v1) {
+    c.startS = r3(c.startS - shift)
+    shift = r3(shift + (lost.get(c.id) ?? 0))
+  }
+  return { ...cut, v1 }
 }
 
 /** The fit badge: "Fits 10 s", "Over by 0.4 s" or "2 s short", against the film's target length. */

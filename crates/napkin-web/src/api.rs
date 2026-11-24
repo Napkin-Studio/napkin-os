@@ -621,8 +621,16 @@ async fn document_data(
         .document_now()
         .ok_or_else(|| ApiError::new(404, "no such document"))?;
     let yaml = session.entry_string("shared/data.yaml")?;
+    // The approvals count, as Brief Maker counts them for its "v2" (a person's
+    // version of the brief); `revision` is not that.
+    let approvals = session
+        .read(napkin_host::ops::decisions::decisions)
+        .map(|v| v.approvals())
+        .unwrap_or(0);
     Ok(Json(serde_json::json!({
         "document_id": now["id"],
+        "approvals": approvals,
+        "version": approvals.max(1),
         "path": doc,
         "app_id": session.app_id(),
         "title": session.title()?,

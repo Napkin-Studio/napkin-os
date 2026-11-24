@@ -176,7 +176,7 @@ export const LINE_MIN_S = 1.5
 /** The film layers of a size: the line and legal over the last 2.5 s of the clips, the logo over the first
  *  3 (the brand early), and the captions of the spoken lines on the social shapes (CF9) unless hidden;
  *  on the TV shapes only when a person turned them on. The line is never on screen with a caption (linesApart). */
-export async function filmLayers(deps: Pick<CampaignDeps, 'relay' | 'doc'>, set: FormatSet, size: Size, card?: { headline?: string; line: string; cta?: string }): Promise<TypeLayer[]> {
+export async function filmLayers(deps: Pick<CampaignDeps, 'relay' | 'doc'>, set: FormatSet, size: Size, card?: { headline?: string; line: string; cta?: string; legal?: string }): Promise<TypeLayer[]> {
   const d = liveGet(deps.doc)
   const body = (size.edl ?? []).reduce((a, w) => a + (w.out_s - w.in_s), 0)
   // The end card says its own words last, so they are not also laid over the picture. Taken out here, before the
@@ -369,9 +369,9 @@ const words = (x?: string) => (x ?? '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu
 /** A size's type without the words its end card says (its line, its headline and line together, or its call to
  *  action): the card says them last, so the picture does not say them too (UAT round 3, R3-F12: the 6 s 9:16 had
  *  "Quietboil. Let them sleep." burnt in as a super, then on the card). Logos and captions of what is spoken stay. */
-export function withoutCardWords(layers: TypeLayer[], card?: { headline?: string; line: string; cta?: string }): TypeLayer[] {
+export function withoutCardWords(layers: TypeLayer[], card?: { headline?: string; line: string; cta?: string; legal?: string }): TypeLayer[] {
   if (!card) return layers
-  const said = [card.line, card.headline, card.cta, `${card.headline ?? ''} ${card.line}`, `${card.headline ?? ''} ${card.line} ${card.cta ?? ''}`].map(words).filter(Boolean)
+  const said = [card.line, card.headline, card.cta, card.legal, `${card.headline ?? ''} ${card.line}`, `${card.headline ?? ''} ${card.line} ${card.cta ?? ''}`].map(words).filter(Boolean)
   return layers.filter((l) => l.kind === 'logo' || l.kind === 'captions' || !said.includes(words(l.text)))
 }
 
@@ -395,7 +395,7 @@ export async function clientCardOf(deps: Pick<CampaignDeps, 'relay' | 'doc'>, se
   const logo = card.logo ? await assetRef(deps.relay, card.logo, d).catch(() => undefined) : undefined
   return {
     ...(card.headline.trim() ? { headline: card.headline.trim().slice(0, 120) } : {}), line: (card.line.trim() || card.headline.trim()).slice(0, 200),
-    ...(card.cta?.trim() ? { cta: card.cta.trim().slice(0, 80) } : {}), bg: /^#[0-9a-f]{6}$/i.test(card.bg) ? card.bg : '#14161B',
+    ...(card.cta?.trim() ? { cta: card.cta.trim().slice(0, 80) } : {}), ...(card.legal?.trim() ? { legal: card.legal.trim().slice(0, 200) } : {}), bg: /^#[0-9a-f]{6}$/i.test(card.bg) ? card.bg : '#14161B',
     ...(logo ? { logo } : {}), s: cardLength(lengthS, clientCardLen(d, set), true),
   }
 }

@@ -40,8 +40,10 @@ export function arrival(route: Route, names: { agency: string; client?: string; 
   switch (route.level) {
     case 'agency':
     case 'clients':
+      if (route.level === 'agency' && route.trash) return `${names.agency}: Trash. Documents of any tool wait here for 30 days. Escape goes back to the desk.`
       return `${names.agency}: your desk. Arrow keys move between clients, Enter opens one's dial, 1 to ${names.tools} pick a tool on it, Escape closes it.`
     case 'client':
+      if (route.trash) return `${names.client ?? 'Client'}: Trash. Documents of any tool wait here for 30 days. Escape goes back to the client.`
       return `${names.client ?? 'Client'} opened with ${names.tools} tools. 1 to ${names.tools} open a tool, Escape goes back to the desk.`
     case 'tool': {
       const n = names.open ?? 0

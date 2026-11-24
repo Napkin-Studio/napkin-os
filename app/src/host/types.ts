@@ -318,6 +318,26 @@ export interface LibraryItem {
   jobs?: string[]
 }
 
+/** One deleted document, as the client's Trash lists it (`GET /trash`; production-clan-app.md 8a). The details are what it said when it was deleted, and are null for one deleted before they were kept. */
+export interface TrashItem {
+  path: string
+  title: string | null
+  app_id: string | null
+  client_id: string | null
+  /** Who deleted it: the signed-in person's name. */
+  by: string | null
+  trashed_at: string
+  restorable_until: string
+}
+
+/** The one Trash for every tool: delete is a move, restore is a move back, for 30 days. There is no permanent delete here. */
+export interface TrashApi {
+  /** Deleted documents, newest first; `client` narrows to one client's. */
+  list(client?: string | null): Promise<TrashItem[]>
+  move(path: string): Promise<void>
+  restore(path: string): Promise<void>
+}
+
 export interface LibraryListing {
   /** Newest first, uncapped, after the filter. */
   items: LibraryItem[]
@@ -958,6 +978,8 @@ export interface Host {
   settleJob?(path: string, jobId: string): Promise<unknown>
   /** The client registry. */
   readonly clients: ClientsApi
+  /** Delete and restore any document (the library's Trash). Absent on a host with no server-side library. */
+  readonly trash?: TrashApi
   /**
    * One Brand Clan operation (docs/contracts/brand-clan.md section 5). `input`
    * carries the route's own keys (`client_id`, `path`, `name`, `version`) and

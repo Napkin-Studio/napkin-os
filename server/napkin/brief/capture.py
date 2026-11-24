@@ -81,8 +81,8 @@ open_questions = what the materials FAIL to answer, each {question, why_it_matte
 anything the materials already state.
 
 client: the advertiser (client company) ONLY if the materials name it, with the verbatim quote that names it;
-otherwise null. project_name: ONLY if the materials name the project or campaign, with its quote; otherwise
-null. Never invent either."""
+otherwise null. project_name: ONLY if the materials name the project or campaign, with its quote, as a short name of one to four
+words with no brackets or caveats (put a doubt about it in open_questions); otherwise null. Never invent either."""
 
 SCORECARD_SYSTEM = """You are a brief-quality judge applying the BetterBriefs rubric (the global study on
 briefing) to a CLIENT brief. Judge ONLY what the materials say — quote evidence verbatim (with its material_id),

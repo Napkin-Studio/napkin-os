@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ProductionDocument, RefRole } from '../contracts/types'
 import { emptyDocument } from '../doc/store'
 import { MAYA } from '../test/model'
-import { cleanKey, cleanVariant, keyRefs, mentions, nameOf, nameProblem, NoFrontError, parseName, subjectRefs, wholeKeys } from './names'
+import { cleanKey, cleanVariant, keyRefs, keysWithoutFront, mentions, nameOf, nameProblem, needsFront, NoFrontError, parseName, subjectRefs, wholeKeys } from './names'
 
 const SHA = (c: string) => `sha256:${c.repeat(64)}`
 let n = 0
@@ -75,5 +75,19 @@ describe('a bare key is the whole character', () => {
     expect(unknown).toEqual(['nobody'])
     expect(subjectRefs(doc(), 'goremon_angry').map((r) => r.variant)).toEqual(['angry'])
     expect(subjectRefs(doc(), 'lamp')).toEqual([])
+  })
+})
+
+describe('a front is for a character or a product (UAT round 4 F32: "@logo" stopped Plan shots)', () => {
+  it('a bare @logo needs no front: Plan shots is not stopped, and it sends its first picture', () => {
+    const d = emptyDocument(MAYA)
+    addRef(d, 'logo', 'copperell', SHA('l'), 'logo')
+    addRef(d, 'bottle', 'side', SHA('b'), 'product')
+    addRef(d, 'maya', 'side', SHA('m'))
+    expect(needsFront(d, 'logo')).toBe(false)
+    expect(needsFront(d, 'bottle')).toBe(true)
+    expect(keysWithoutFront(d, d, 'End card: @logo over @bottle, with @maya')).toEqual(['bottle', 'maya'])
+    expect(keyRefs(d, 'logo').map(nameOf)).toEqual(['logo_copperell'])
+    expect(() => keyRefs(d, 'maya')).toThrow(NoFrontError)
   })
 })

@@ -8,12 +8,14 @@
 //   #clients                the clients page: one circle per client
 //   #client-<id>            one client, with its tools around it
 //   #tool-<id>-<tool>       one tool, for that client
+//   #trash                  the agency's Trash: deleted documents of any tool
+//   #client-<id>-trash      one client's Trash
 //
 // `<id>` is a client id (`cli_` and eight lowercase hex digits) and `<tool>`
 // one of `brief research idea deck prod ads`. Both are ASCII by construction:
 // a client's name never goes in a URL, so non-ASCII names, renames and hostile
 // hashes cannot make a link that points somewhere else. Anything that is not
-// exactly one of these four shapes is `#agency`.
+// exactly one of these shapes is `#agency`.
 //
 // The shell (App.tsx) owns the screen and writes the hash from it; a hashchange
 // only reads. This module is pure, so it is table-tested without a browser.
@@ -22,9 +24,9 @@ export const TOOL_IDS = ['brief', 'research', 'idea', 'deck', 'prod', 'ads'] as 
 export type ToolId = (typeof TOOL_IDS)[number]
 
 export type Route =
-  | { level: 'agency' }
+  | { level: 'agency'; trash?: true }
   | { level: 'clients' }
-  | { level: 'client'; client: string }
+  | { level: 'client'; client: string; trash?: true }
   | { level: 'tool'; client: string; tool: ToolId }
 
 export const AGENCY: Route = { level: 'agency' }
@@ -38,9 +40,11 @@ export const isToolId = (s: string): s is ToolId => (TOOL_IDS as readonly string
 export function parseRoute(hash: string): Route {
   const h = hash.startsWith('#') ? hash.slice(1) : hash
   if (h === 'agency') return AGENCY
+  if (h === 'trash') return { level: 'agency', trash: true }
   if (h === 'clients') return { level: 'clients' }
   if (h.startsWith('client-')) {
     const client = h.slice('client-'.length)
+    if (client.endsWith('-trash') && isClientId(client.slice(0, -'-trash'.length))) return { level: 'client', client: client.slice(0, -'-trash'.length), trash: true }
     return isClientId(client) ? { level: 'client', client } : AGENCY
   }
   if (h.startsWith('tool-')) {
@@ -57,9 +61,9 @@ export function parseRoute(hash: string): Route {
 /** The hash for a route. `parseRoute(formatRoute(r))` is `r`. */
 export function formatRoute(r: Route): string {
   switch (r.level) {
-    case 'agency': return '#agency'
+    case 'agency': return r.trash ? '#trash' : '#agency'
     case 'clients': return '#clients'
-    case 'client': return `#client-${r.client}`
+    case 'client': return `#client-${r.client}${r.trash ? '-trash' : ''}`
     case 'tool': return `#tool-${r.client}-${r.tool}`
   }
 }
@@ -69,9 +73,9 @@ export const sameRoute = (a: Route, b: Route): boolean => formatRoute(a) === for
 /** The levels above `r`, nearest last: what the trail of circles shows. */
 export function ancestry(r: Route): Route[] {
   switch (r.level) {
-    case 'agency': return []
+    case 'agency': return r.trash ? [AGENCY] : []
     case 'clients': return [AGENCY]
-    case 'client': return [AGENCY, { level: 'clients' }]
+    case 'client': return r.trash ? [AGENCY, { level: 'clients' }, { level: 'client', client: r.client }] : [AGENCY, { level: 'clients' }]
     case 'tool': return [AGENCY, { level: 'clients' }, { level: 'client', client: r.client }]
   }
 }
@@ -81,7 +85,7 @@ export function up(r: Route): Route {
   switch (r.level) {
     case 'agency': return AGENCY
     case 'clients': return AGENCY
-    case 'client': return { level: 'clients' }
+    case 'client': return r.trash ? { level: 'client', client: r.client } : { level: 'clients' }
     case 'tool': return { level: 'client', client: r.client }
   }
 }

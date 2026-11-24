@@ -385,7 +385,7 @@
  ],
  "validation": {
   "errors": 1,
-  "warnings": 18,
+  "warnings": 19,
   "by_check": {
    "numbers_uncited": {
     "error": 0,
@@ -401,7 +401,7 @@
    },
    "empty_slot": {
     "error": 0,
-    "warn": 1
+    "warn": 2
    },
    "objective_quant": {
     "error": 0,

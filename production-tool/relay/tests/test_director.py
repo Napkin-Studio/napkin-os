@@ -186,7 +186,7 @@ def test_only_the_v6_and_later_prompts_are_bundled():
     continuity only (pt-canvas-r2); v17 makes a palette accents and keeps @anchor's setting only in its place
     (pt-canvas-r3). The older ones stay, so a rollback is a config change."""
     assert sorted(p.name for p in PROMPTS.glob("director.v*.md")) == [
-        "director.v10.md", "director.v11.md", "director.v12.md", "director.v13.md", "director.v14.md", "director.v15.md", "director.v16.md", "director.v17.md", "director.v6.1.md", "director.v6.md", "director.v7.md", "director.v8.md", "director.v9.1.md", "director.v9.md"]
+        "director.v10.md", "director.v11.md", "director.v12.md", "director.v13.md", "director.v14.md", "director.v15.md", "director.v16.md", "director.v17.md", "director.v18.md", "director.v6.1.md", "director.v6.md", "director.v7.md", "director.v8.md", "director.v9.1.md", "director.v9.md"]
 
 
 def test_v7_is_v6_1_with_the_words_first_no_prices_and_a_frame_edit_section():
@@ -530,6 +530,16 @@ def test_a_ratio_the_model_left_out_is_taken_from_the_request():
 def test_shot_list_names_only_refs_it_was_given():
     assert run("shot_list", make(fixture("shot_list")["reply"])[0]).output["shots"][0]["refs"] == ["hero_front"]
     refuses("not an input ref", "shot_list", lambda r: r["shots"][0].update(refs=["hero_sad"]))
+
+
+def test_a_bare_key_needs_a_front_only_for_a_character_or_a_product():
+    # UAT round 4 F32: "@logo" on the end card stopped Plan shots; a logo stands for its pictures, no front.
+    logo = {"id": "ref_01K6XA6Z0000000000000010LG", "name": "logo_copperell", "role": "logo", "kind": "picture",
+            "asset": {"sha256": "sha256:" + "8" * 64, "url": "https://hack.napkin.ie/in/sha256:" + "8" * 64, "mime": "image/png"}}
+    res = attempt("shot_list", lambda r: r["shots"][0].update(refs=["hero_front", "logo"]), lambda i: i["refs"].append(logo))
+    assert res.output["shots"][0]["refs"] == ["hero_front", "logo"]
+    hero_side = {**logo, "id": "ref_01K6XA6Z0000000000000010SD", "name": "villain_side", "role": "character"}
+    refuses("not an input ref", "shot_list", lambda r: r["shots"][0].update(refs=["villain"]), lambda i: i["refs"].append(hero_side))
 
 
 def test_a_view_angle_the_model_left_out_is_filled_from_the_view():

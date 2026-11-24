@@ -136,11 +136,25 @@ fn store_with_apps() -> MemStore {
 }
 
 /// Rewrite `doc`'s data layer, as a tool would have by working in it.
+/// A write's time: a minute ago, plus a second per id character, so documents sort by it and a deck run written here is
+/// fresh (the listing says a document-recorded build nobody has written for 30 minutes is stopped).
+fn stamp(doc: &DocId) -> String {
+    static BASE: std::sync::OnceLock<chrono::DateTime<chrono::Utc>> = std::sync::OnceLock::new();
+    let base = BASE.get_or_init(|| {
+        use chrono::Timelike;
+        let t = chrono::Utc::now() - chrono::Duration::minutes(2);
+        t.with_second(0).and_then(|t| t.with_nanosecond(0)).unwrap()
+    });
+    (*base + chrono::Duration::seconds((doc.as_str().len() % 60) as i64))
+        .format("%Y-%m-%dT%H:%M:%SZ")
+        .to_string()
+}
+
 fn set_data(s: &MemStore, doc: &DocId, yaml: &str) {
     let clan = ClanFile::from_bytes(s.read(doc).unwrap()).unwrap();
     let mut m = clan.manifest().clone();
     m.next_revision();
-    m.updated_at = format!("2026-11-04T10:00:{:02}Z", doc.as_str().len() % 60);
+    m.updated_at = stamp(doc);
     let mut b = ClanBuilder::new(m);
     for (p, by) in clan.read_all_entries().unwrap() {
         if p != "manifest.yaml" && p != "shared/data.yaml" {
@@ -524,7 +538,7 @@ fn adopt_makes_clients_from_chosen_names_and_links_only_their_documents() {
     assert!(clan_sdk::validate(&linked).is_valid());
     assert_eq!(
         linked.manifest().updated_at,
-        "2026-11-04T10:00:".to_string() + &format!("{:02}Z", one.as_str().len() % 60),
+        stamp(&one),
         "linking is not work: updated_at does not move"
     );
 }
