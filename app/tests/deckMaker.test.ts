@@ -48,9 +48,9 @@ const L = vm.runInNewContext(`${logicRun}; DeckLogic`) as {
   startDefaults(data: unknown): { client: string; project: string; text?: string }
   upstreamSummary(data: unknown): { brief: { name: string; fields_filled: number; fields_total: number; mandatories: number } | null; research: { name: string; findings: number | null; rejected: number | null } | null; production: { name: string; finals: number; to_supply: number; brief: unknown } | null; any: boolean }
   documentsOf(data: unknown): { name: string }[]
-  builtFrom(inputs: unknown, upstream: unknown, documents: unknown): { tier: string; documents: string[]; brief: boolean; research: boolean }
+  builtFrom(inputs: unknown, upstream: unknown, documents: unknown, type?: string | null, projection?: unknown): { tier: string; documents: string[]; brief: boolean; research: boolean }
   describeBuiltFrom(bf: unknown, hasPrompt?: boolean): { line: string; missing: string[] }
-  canBuild(inputs: unknown, upstream: unknown, documents: unknown): { ok: boolean; message: string }
+  canBuild(inputs: unknown, upstream: unknown, documents: unknown, projection?: unknown): { ok: boolean; message: string }
   gapView(intake: unknown): { brief_fields: unknown[]; slide_types: unknown[]; questions: { id: string; state: string; options: { id: string }[] }[]; hasGaps: boolean }
   answerPatch(qid: string, answer: unknown, at: string): unknown
   researchRequest(at: string): unknown
@@ -627,11 +627,11 @@ test('answering and skipping write at intake.answers and nothing else', () => {
 })
 
 test('the upstream-changed notice shows when the host says so, escaped, and nothing when the call fails', async () => {
-  const ok = mount(intakeData, () => Promise.resolve({ ok: true, json: () => Promise.resolve({ upstream: [{ status: 'changed', title: hostile }] }) }))
+  const ok = mount(intakeData, () => Promise.resolve({ ok: true, json: () => Promise.resolve({ upstream: [{ status: 'changed', title: hostile }] }) }), {}, { timers: true })
   await new Promise(r => setTimeout(r, 10))
   assert.ok(ok.app.innerHTML.includes('data-up-changed'))
   assert.equal(ok.app.innerHTML.includes('<img'), false)
-  const bad = mount(intakeData, () => Promise.reject(new Error('no host')))
+  const bad = mount(intakeData, () => Promise.reject(new Error('no host')), {}, { timers: true })   // the engine check retries: its timers wait here
   await new Promise(r => setTimeout(r, 10))
   assert.equal(bad.app.innerHTML.includes('data-up-changed'), false)
   const absent = mount(intakeData)
@@ -2807,4 +2807,137 @@ test('Review: a slide with more than four pictures lays them out in a grid so si
   assert.equal((m.app.innerHTML.match(/data-pic="shot_\d"/g) ?? []).length, 6)
   assert.match(html, /\.pimgs\.many\{display:grid/)
   assert.match(html, /function fitSlideText\(\)/) // the words step down until they sit above the foot of the slide (slides 11 and 12 ran off it)
+})
+
+// ── UAT round 4 (a01c5e33): the engine check answering late, failing, or a Build pressed before it answered ──
+/** A host whose clan://middleware answers only when the test says (resolve) or fails (reject); each call is a new pending answer. */
+function lateMiddleware() {
+  const pending: { resolve: (v: unknown) => void; reject: (e: unknown) => void }[] = []
+  const fetchImpl = (url: string) => String(url).endsWith('/middleware')
+    ? new Promise((resolve, reject) => pending.push({ resolve, reject }))
+    : Promise.resolve({ ok: false, json: () => Promise.resolve(null) })
+  const answer = (configured: boolean) => pending.shift()!.resolve({ ok: true, json: () => Promise.resolve({ configured }) })
+  const fail = () => pending.shift()!.reject(new Error('host not ready'))
+  return { fetchImpl, answer, fail, pending }
+}
+const startData = () => ({ inputs: { prompt: { client: 'C', project: 'P', text: 'A deck for Copperell.' }, kind: 'agency', format: 'pitch' } })
+const startForm = { client: { value: 'C' }, project: { value: 'P' }, agency: { value: '' }, ptext: { value: 'A deck for Copperell.' } }
+
+test('while the engine has not answered, Build deck is disabled and says it is connecting', async () => {
+  const h = lateMiddleware()
+  const m = mount(startData(), h.fetchImpl, startForm, { timers: true })
+  await settle()
+  assert.match(m.app.innerHTML, /id="build"[^>]*disabled[^>]*>Build deck/)
+  assert.match(m.app.innerHTML, /Connecting to the engine…/)
+  assert.doesNotMatch(m.app.innerHTML, /Live building needs the engine server/)
+  h.answer(true); await settle()   // applied the moment it comes (round 4: the footer kept 'needs the engine server' ~12 s)
+  assert.doesNotMatch(m.app.innerHTML, /id="build"[^>]*disabled/)
+  assert.match(m.app.innerHTML, /Builds with the engine/)
+})
+
+test('a Build pressed before the engine answered starts the moment it is on, never skipped', async () => {
+  const h = lateMiddleware()
+  const p = proxy(reply('queued'))
+  const m = mount(startData(), h.fetchImpl, startForm, { apiProxy: p.apiProxy, timers: true })
+  await settle()
+  m.click({}, 'build')
+  await settle()
+  assert.deepEqual(m.writes.map(w => w.action), ['start deck'])
+  assert.equal(p.calls.length, 0)
+  assert.match(m.toastEl.textContent, /build starts as soon as it answers/)
+  assert.match(m.app.innerHTML, /Connecting to the engine…/)   // round 4: "Not connected to this document yet", for 26 minutes
+  h.answer(true); await settle()
+  assert.deepEqual(p.calls.map(c => c.task), ['build_deck'])
+})
+
+test('a failed engine check is tried again with backoff, and the page says so', async () => {
+  const h = lateMiddleware()
+  const m = mount(startData(), h.fetchImpl, startForm, { timers: true })
+  await settle()
+  h.fail(); await settle()
+  assert.match(m.app.innerHTML, /Cannot reach the engine yet\. Trying again in 1 s\./)
+  const retry = m.timers.find(t => t.ms === 1000)
+  assert.ok(retry, 'a retry is waiting')
+  retry!.fn(); await settle()
+  assert.equal(h.pending.length, 1, 'asked again')
+  h.answer(true); await settle()
+  assert.match(m.app.innerHTML, /Builds with the engine/)
+})
+
+test('UAT round 4 F37: Approve before the engine answered keeps the decision and starts the next step once it is on', async () => {
+  const h = lateMiddleware()
+  const p = proxy(reply('queued'))
+  const m = mount(buildData(gateRun()), h.fetchImpl, {}, { apiProxy: p.apiProxy, timers: true })
+  await settle()
+  m.click({}, 'approve')
+  await settle()
+  assert.equal(m.writes.length, 1)
+  assert.deepEqual(Object.keys(m.writes[0].obj.run as object).sort(), ['approvals', 'decisions'], 'only the decision: the engine writes the rest')
+  assert.equal(p.calls.length, 0)
+  assert.match(m.toastEl.textContent, /next step starts as soon as it answers/)
+  h.answer(true); await settle()
+  assert.deepEqual(p.calls.map(c => c.task), ['build_deck'])
+})
+
+test('UAT round 4 F37: after a reload, a gate approved but never picked up starts once the engine is on', async () => {
+  const first = mount(buildData(gateRun()), middleware(true), {}, { apiProxy: () => new Promise(() => {}), timers: true })   // approved; the engine never answers
+  await settle()
+  first.click({}, 'approve')
+  await settle()
+  const approved = gateRun() as Record<string, unknown>
+  Object.assign(approved, first.writes[0].obj.run as object)   // the document as the reload reads it: the gate still open, its approval kept
+  const h = lateMiddleware()
+  const p = proxy(reply('queued'))
+  mount(buildData(approved), h.fetchImpl, {}, { apiProxy: p.apiProxy, timers: true })
+  await settle()
+  assert.equal(p.calls.length, 0)
+  h.answer(true); await settle()
+  assert.deepEqual(p.calls.map(c => c.task), ['build_deck'], 'round 4: "Waiting for the engine · Not connected", across reloads')
+  const q = proxy(reply('queued'))
+  mount(buildData(gateRun()), middleware(true), {}, { apiProxy: q.apiProxy, timers: true })   // a gate not yet approved: nothing starts
+  await settle()
+  assert.equal(q.calls.length, 0)
+})
+
+test('with no host to ask, the page keeps its honest "needs the engine server"', () => {
+  const m = mount(startData())
+  assert.match(m.app.innerHTML, /Live building needs the engine server/)
+  assert.doesNotMatch(m.app.innerHTML, /id="build"[^>]*disabled/)
+})
+
+// ── UAT round 4 F26 (again): research the BRIEF had linked reaches the deck as the deck's own members, in data.projection ──
+// Real-shaped from the UAT documents (Copperell, fictional): doc-ie-napkin-deck-maker-77976b58 (a brief-only deck) and the deck made from
+// the Production project. Each carries the brief upstream with no research of its own, and the research as projection.pins (221 and 96).
+const uatBrief = { project_name: 'Copperell Refill', client: 'Copperell Home Ltd', objectives: 'Sell the starter bottle', audience: 'Renters 22 to 35',
+  single_minded_proposition: 'Watch one tablet fizz.', mandatories: ["Include 'Keep out of reach of children. Read the label before use.'"], insight: 'She suspects she pays for the scent.' }
+const uatProjection = { built_from: { built_at: '2026-11-24 11:30:04+00:00' }, findings: {},
+  pins: { f_00A9B1FB70AB47229F2E1658: { as_of: '2026-08-11', confidence: 'low', entity: 'brand/smol', key: 'positioning.claim' },
+          f_0889402DA05DC7323D6461A9: { as_of: '2026-03-03', confidence: 'medium', entity: 'category/household.laundry_cleaning', key: 'regulation.restriction' } } }
+
+test('UAT round 4 F26: a brief-only deck counts the research the brief linked (the deck\'s projection), as the engine does', () => {
+  const data = { upstream: { 'f45380aa': uatBrief }, projection: uatProjection }
+  const u = L.upstreamSummary(data)
+  assert.ok(u.research, 'round 4: "No research brought in" while CHECKED said brief+research')
+  const bf = L.builtFrom({}, data.upstream, [], null, data.projection)
+  assert.equal(bf.tier, 'brief+research')
+  const d = L.describeBuiltFrom(bf, false)
+  assert.equal(d.line, 'Built from: the brief, the research')
+  assert.ok(!d.missing.includes('No research brought in'))
+  const m = mount({ inputs: { prompt: { client: 'Copperell', project: 'Copperell Refill', text: '' } }, ...data })
+  assert.doesNotMatch(m.app.innerHTML, /No research brought in/)
+  assert.match(m.app.innerHTML, /Built from: [^<]*the research/)
+})
+
+test('UAT round 4 F26: a deck made from a Production project counts it too, with every place saying the same', () => {
+  const data = { upstream: { 'doc-prod': prodDoc({ upstream: { 'doc-brief': uatBrief } }) }, projection: uatProjection }
+  const bf = L.builtFrom({}, data.upstream, [], null, data.projection)
+  assert.equal(bf.tier, 'brief+research')
+  assert.equal(L.describeBuiltFrom(bf, false).line, 'Built from: the brief, the research, the Production project')
+  const m = mount({ inputs: { prompt: { client: 'Copperell', project: 'Copperell Refill', text: '' } }, ...data })
+  assert.doesNotMatch(m.app.innerHTML, /No research brought in/)
+})
+
+test('a projection with no pins and no usable findings is not research', () => {
+  assert.equal(L.upstreamSummary({ upstream: { b: uatBrief }, projection: { findings: {}, pins: {} } }).research, null)
+  assert.equal(L.upstreamSummary({ upstream: { b: uatBrief }, projection: { findings: { f1: { status: 'rejected' } }, pins: {} } }).research, null)
 })

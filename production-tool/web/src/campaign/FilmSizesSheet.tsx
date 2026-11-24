@@ -10,6 +10,7 @@ import { useConfig, useDoc } from '../app/context'
 import { modelChoicesFor } from '../capabilities'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
+import { pickWords } from './sizeWords'
 import { DEFAULT_FILM_LENGTHS, FILM_LENGTHS, FILM_SHAPES, REMAKE_MODELS, beatsFor, briefShapes, filmSeconds, fitWindows, lastLineOf, masterShots, sameShape, versionsWord } from './film'
 import { endLineOf, sizesBrief } from '../brief/model'
 import { makeFilmSizes, planFilm, type FilmPlan, type FilmRow, type ShotMethod } from './filmJobs'
@@ -224,7 +225,14 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
             <div className="cf-tray">
               {lengths.filter((l) => rows.some((r) => r.lengthS === l)).map((l) => {
                 const { windows, over } = fitWindows(shots, kept(l), l)
-                const reasons = new Map((plan.lengths.find((x) => Math.abs(x.lengthS - l) < 0.5)?.beats ?? []).map((b) => [b.shotId, b.why]))
+                // The Director agent's reason only beside the pick it was for: a beat the person turned the other way says so
+                // (UAT round 4 F35: a reason for keeping a shot stood beside it unticked).
+                const said = new Map((plan.lengths.find((x) => Math.abs(x.lengthS - l) < 0.5)?.beats ?? []).map((b) => [b.shotId, b]))
+                const reasons = new Map(body.map((s) => {
+                  const b = said.get(s.shotId)
+                  const on = kept(l).has(s.shotId)
+                  return [s.shotId, b && b.keep === on ? pickWords(on, b.why) : on ? 'Kept by you' : 'Dropped by you'] as const
+                }))
                 const why = plan.lengths.find((x) => Math.abs(x.lengthS - l) < 0.5)?.why
                 return (
                   <div key={l} className="cf-lane" role="group" aria-label={`The ${l} s cut`}>
