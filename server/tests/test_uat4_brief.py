@@ -113,3 +113,54 @@ def test_without_answers_or_with_another_figure_the_first_item_is_marked_as_befo
     checks.mark_assumptions({"measurement": f}, answers=checks.answers_text(ANSWERED))
     assert f["value"][0].startswith("To confirm:"), "a figure the planner never gave is still to confirm"
     assert not checks.answer_backed("A tracker wave, if budgeted.", checks.answers_text(ANSWERED)), "no figure, no backing"
+
+
+# ── re-test on UAT (develop 1701c768): the real document's words ───────────────────────────────────────────────────
+# doc-ie-napkin-brief-maker-adfbb3d3, open_questions as the planner answered them (the driver typed one answer into
+# three questions; only the line question offers the line)
+R2_ANSWERED = [
+    "Is the foil-lined sachet recyclable, and what bottle does the 95% less packaging weight compare against? — Answer: Refill. Not landfill. Use it word for word everywhere.",
+    "Which message does the board prefer: 'Clean, without the plastic' or 'Refill. Not landfill'? — Answer: Refill. Not landfill. Use it word for word everywhere.",
+    "What exactly is the foil-lined sachet made of, and is it recyclable or plastic-free in real conditions? — Answer: Refill. Not landfill. Use it word for word everywhere.",
+    "What is the sachet made of, and can you share the packaging spec so we can check the 'plastic-free' wording? — Answer: The sachet is foil-lined, so drop \"plastic-free\" entirely.",
+]
+R2_MANDATORIES = ["Bottle is hero, logo top right", "No real, recognisable faces", "No children near the product",
+                  "Include 'Keep out of reach of children. Read the label before use.'"]
+
+
+def test_a_message_question_answered_word_for_word_fixes_the_line():
+    assert checks.fixed_line(R2_ANSWERED) == "Refill. Not landfill."
+    got = checks.carry_fixed_line(R2_MANDATORIES, checks.fixed_line(R2_ANSWERED))
+    assert got[0] == "End line: 'Refill. Not landfill.' (word for word)" and got[1:] == R2_MANDATORIES
+
+
+def test_a_wording_or_legal_question_never_becomes_the_line():
+    assert checks.fixed_line([R2_ANSWERED[3]]) == "", "'plastic-free' wording is not the campaign's line"
+    assert checks.fixed_line(["What legal line must every piece carry? — Answer: 'Keep out of reach of children.'"]) == ""
+    assert checks.fixed_line(["Which warning goes on the label, 'A b' or 'C d'? — Answer: C d, word for word."]) == ""
+
+
+def test_an_answer_that_says_word_for_word_fixes_the_option_it_repeats_whatever_the_question_calls_it():
+    q = "Which of the two does the board want, 'Clean, without the plastic' or 'Refill. Not landfill'? — Answer: Clean, without the plastic. Word for word, please."
+    assert checks.fixed_line([q]) == "Clean, without the plastic."
+
+
+def test_a_name_with_an_age_range_or_a_lead_label_is_an_invented_person():
+    assert checks.invented_person("Lead: Hannah, 25-45, renting or newly owning.") == "Hannah, 25-45"
+    assert checks.invented_person("Hannah (25 to 45) rents.") == "Hannah, 25 to 45"
+    assert checks.invented_person("Lead: Hannah, renting or newly owning.") == "Hannah"
+    assert checks.invented_person("Persona: Priya rents a flat.") == "Priya"
+    assert checks.invented_person("Priya, aged 28, rents.") == "Priya, aged 28"
+
+
+def test_groups_with_age_ranges_and_lead_labels_are_not_people():
+    for t in ("Lead: renters aged 22 to 35 who already spend a little extra on one nice household item.",
+              "Lead: Renters, 22-35, who hide ugly sprays. Secondary: Families, 30 to 45.",
+              "Lead: Busy (working) mothers. Secondary: Students, 18-24.", "Homeowners, 25-45, in the South East.",
+              "Parents, 30-45, with young children.", "Spring, 40% start cleaning in March."):
+        assert checks.invented_person(t) == "", t
+
+
+def test_code_sends_the_first_drafts_lead_persona_back():
+    back = checks.revisions({"audience": {"value": "Lead: Hannah, 25-45, renting or newly owning.", "basis": "research"}})
+    assert back and back[0]["part"] == "audience" and "Hannah, 25-45" in back[0]["instruction"]

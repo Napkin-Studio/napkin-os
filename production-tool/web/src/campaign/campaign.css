@@ -232,3 +232,8 @@
 .cb-wont p { margin: 0; color: var(--ink2); }
 .rs-wont { color: var(--ink); background: var(--warn-bg); border: 1px solid var(--warn-border); border-radius: 6px; padding: 6px 8px; }
 .cb-mrow b { font-weight: 600; font-size: 13px; }
+
+/* The Sizes overview's toolbar: why a size needs a look, and its preview (UAT round 4 F36). */
+.ov-why { margin-top: 6px; padding: 6px 10px; border-radius: 8px; background: var(--paper); color: var(--ink); border: 1px solid var(--line); font-size: 12.5px; max-width: 420px; }
+.ov-preview { margin-top: 6px; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 6px; max-width: 420px; }
+.ov-preview video, .ov-preview img { display: block; max-width: 100%; max-height: 60vh; border-radius: 4px; }

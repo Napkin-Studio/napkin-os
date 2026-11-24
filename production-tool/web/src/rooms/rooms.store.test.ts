@@ -278,6 +278,20 @@ describe('the end card\'s Legal line (owner 2026-11-23: its own key, from the LI
     return b
   }
 
+  it('the card from the storyboard\'s end card shot leads with the Brief\'s end line, never the project\'s name (UAT round 4 F34)', async () => {
+    const { store, shots, videoId } = await film()
+    // The end card shot only labels the card, so it would read the project's name; the Brief has the agreed line,
+    // written as Brief Maker writes it (PR #306).
+    await systemUpdate(store, (d) => { d.project.title = 'Copperell Refill'; d.shots[shots[3].id].action = 'End card.' }, 'sync')
+    await withBrief(store, videoId, ["End line: 'Refill. Not landfill.' (word for word)", 'Legal: Recycle the glass.'])
+    const card = endCardFrom(store.get(), videoId)!
+    expect(card.headline).toBe('Refill. Not landfill.')
+    expect(card.line).not.toBe('Refill. Not landfill.')
+    // A card that already says the line (the shot quotes it: "Refill" over "Not landfill.") is left as the shot has it.
+    await systemUpdate(store, (d) => { d.shots[shots[3].id].action = 'End card: "Refill. Not landfill."' }, 'sync')
+    expect(endCardFrom(store.get(), videoId)).toMatchObject({ headline: 'Refill', line: 'Not landfill.' })
+  })
+
   it('a new card starts with the linked Brief\'s legal mandatory as its legal, and the call to action stays empty', async () => {
     const { store, videoId } = await film()
     await withBrief(store, videoId, ['No apples anywhere', 'Legal: Please drink responsibly. 18+ only.'])

@@ -274,7 +274,14 @@ function CampaignBoard({ el, set, canvas, style, selected, els, zoom }: { el: Ca
       {overview && (
         <SizesOverview set={set} sizes={sizes} staleIds={staleIds} models={models} deps={deps} by={by} title={(title ?? 'Campaign').replace(/^Campaign · /, '')}
           onClose={() => setOverview(false)} onTray={setTray} onLock={(id, on) => void setLocked(services.doc, id, on)}
-          onEditOnBoard={(id) => { setOverview(false); tilePick.pick(set.id, id); canvas.select([]) }} />
+          onEditOnBoard={(id) => {
+            // The board in view first, then the tile picked once it is drawn there: picked off screen, its bar closed at
+            // once (UAT round 4 F33: back on the canvas at 37% with no tile bar).
+            setOverview(false)
+            canvas.select([])
+            canvas.fit([el], { zoomFactor: 0.9, animate: false })
+            requestAnimationFrame(() => tilePick.pick(set.id, id))
+          }} />
       )}
       {protectOpen && (
         <ProtectSheet set={set} onClose={() => setProtectOpen(false)} onSave={(p) => {
