@@ -334,8 +334,9 @@ export function compileFor(d: ProductionDocument, videoId: Id): Plan {
   return { clips, texts: plan.texts, ...(endCard ? { endCard } : {}), lengthS: plan.lengthS, missing: plan.missing }
 }
 
-/** Render ad's request: the plan with each file named for the relay (relay-api TimelinePlan). */
-export async function renderPlan(plan: Plan, ref: (sha: string) => Promise<AssetRef>): Promise<TimelinePlan> {
+/** Render ad's request: the plan with each file named for the relay (relay-api TimelinePlan). `logo`: how the end card's logo is
+ *  named (as it is, not fitted for a provider: jobs/assets logoRef). */
+export async function renderPlan(plan: Plan, ref: (sha: string) => Promise<AssetRef>, logo: (sha: string) => Promise<AssetRef> = ref): Promise<TimelinePlan> {
   const clips = []
   for (const c of plan.clips) {
     clips.push({
@@ -349,7 +350,7 @@ export async function renderPlan(plan: Plan, ref: (sha: string) => Promise<Asset
   const e = plan.endCard
   const endCard = e ? {
     ...(e.headline ? { headline: e.headline } : {}), line: e.line, ...(e.cta ? { cta: e.cta } : {}), ...(e.legal ? { legal: e.legal } : {}), bg: e.bg,
-    ...(e.logo_sha256 ? { logo: await ref(e.logo_sha256) } : {}), s: e.s, ...(e.transitionIn ? { transitionIn: e.transitionIn } : {}),
+    ...(e.logo_sha256 ? { logo: await logo(e.logo_sha256) } : {}), s: e.s, ...(e.transitionIn ? { transitionIn: e.transitionIn } : {}),
   } : undefined
   return { clips, ...(texts.length ? { texts } : {}), ...(endCard ? { endCard } : {}), lengthS: plan.lengthS }
 }

@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { adTimeToSource } from '../../../clan-store/src'
 import { useDoc, useJobsTick, useServices, useUi } from '../app/context'
-import { assetRef } from '../jobs/assets'
+import { assetRef, logoRef } from '../jobs/assets'
 import { isMoving, jobAt } from '../jobs/select'
 import { spokenOf } from '../campaign/film'
 import { currentRender, rendersOf, shotNumber, shotsOf, storyboardOfVideo } from '../model/selectors'
@@ -364,7 +364,7 @@ export function RenderAd({ data }: { data: RoomData }) {
   const go = () => send(async () => {
     setError(null)
     try {
-      const timeline = await renderPlan(plan, (sha) => assetRef(relay, sha, doc))
+      const timeline = await renderPlan(plan, (sha) => assetRef(relay, sha, doc), (sha) => logoRef(relay, sha, doc))
       const parents = [...new Set(plan.clips.map((c) => (c.generation_id ? doc.generations[c.generation_id]?.job_id : undefined)).filter((x): x is string => !!x))]
       await runner.submit('stitch', { timeline, ratio: data.ratio as never }, parents, { for: 'stitch', videoId: data.videoId })
       setOpen(false)

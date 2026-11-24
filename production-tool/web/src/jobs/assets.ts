@@ -41,3 +41,21 @@ async function upload(relay: Relay, sha: string, doc?: Pick<ProductionDocument, 
   uploaded.set(sha, ref)
   return ref
 }
+
+const logos = new Map<string, Promise<AssetRef>>()
+/** A logo for the end card or a size: sent as it is, never fitted for a provider (fitImage pads a picture wider than 2.5:1
+ *  with white, which put a wide wordmark on a white box on the end card). Its bytes from this browser, uploaded once. */
+export function logoRef(relay: Relay, sha: string, doc?: Pick<ProductionDocument, 'assets'>): Promise<AssetRef> {
+  const going = logos.get(sha)
+  if (going) return going
+  const p = (async () => {
+    const blob = await getBlob(sha)
+    if (!blob) throw new RelayError({ code: 'invalid_input', message: 'The logo is missing from this browser. Add it again.', retryable: false })
+    const mime = (blob.type || doc?.assets[sha]?.mime || 'image/png') as InputMime
+    const res = await relay.upload(blob, mime)
+    return { sha256: res.sha256, url: res.url, mime }
+  })()
+  logos.set(sha, p)
+  p.catch(() => logos.delete(sha))
+  return p
+}

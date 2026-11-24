@@ -14,7 +14,7 @@ import { boardsByRank } from '../canvas/boards/boards'
 import type { CanvasElement } from '../canvas/core/canvasAdapter'
 import { landUpdate, systemUpdate, updateDoc } from '../doc/store'
 import type { JobCtx } from '../doc/ui'
-import { assetRef } from '../jobs/assets'
+import { assetRef, logoRef } from '../jobs/assets'
 import { landingWhy } from '../jobs/landing'
 import { jobShot, refsFor } from '../jobs/select'
 import { getBlob } from '../lib/blobs'
@@ -394,7 +394,7 @@ export async function clientCardOf(deps: Pick<CampaignDeps, 'relay' | 'doc'>, se
   if (!card || !(card.line.trim() || card.headline.trim())) return undefined
   // The card's own logo, else the Brand board's, else the linked Brand Clan's (as the Edit room's render: rooms/timeline compileFor).
   const logoSha = card.logo ?? brandKit(d, videoId).logo?.sha256
-  const logo = logoSha ? await assetRef(deps.relay, logoSha, d).catch(() => undefined) : undefined
+  const logo = logoSha ? await logoRef(deps.relay, logoSha, d).catch(() => undefined) : undefined
   return {
     ...(card.headline.trim() ? { headline: card.headline.trim().slice(0, 120) } : {}), line: (card.line.trim() || card.headline.trim()).slice(0, 200),
     ...(card.cta?.trim() ? { cta: card.cta.trim().slice(0, 80) } : {}), ...(card.legal?.trim() ? { legal: card.legal.trim().slice(0, 200) } : {}), bg: /^#[0-9a-f]{6}$/i.test(card.bg) ? card.bg : '#14161B',

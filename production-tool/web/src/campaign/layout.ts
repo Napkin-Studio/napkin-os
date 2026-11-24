@@ -16,7 +16,7 @@
 
 import type { Aspect, AssetRef, FormatChannel, FormatSet, Id, NamedRef, ProductionDocument, ProtectBox, PxBox, Region, Size, TypeLayer, TypeLayerKind, TypeLayerOverride } from '../contracts/types'
 import type { DocumentStore } from '../doc/types'
-import { assetRef } from '../jobs/assets'
+import { logoRef } from '../jobs/assets'
 import { brandClanOf } from '../brandClan/model'
 import type { Relay } from '../relay'
 import { cropBox, type Fracs } from './crop'
@@ -239,7 +239,7 @@ export async function layersFor(deps: { relay: Relay; doc: DocumentStore }, set:
     if (!logo) continue
     let image: AssetRef
     try {
-      image = await assetRef(deps.relay, logo, d)
+      image = await logoRef(deps.relay, logo, d)
     } catch {
       continue // the logo is not in this browser: the size is made without it, and Jude says so
     }
