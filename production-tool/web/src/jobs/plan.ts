@@ -264,8 +264,16 @@ function mentionedIds(d: ProductionDocument, words: string): string[] {
   return ids
 }
 
+/** Questions from earlier plans of this storyboard that are still open: a plan that lands answers them (UAT round 4 L4:
+ *  "The script is empty. What should happen…" stayed "Waiting for you" after 5 shots were planned). */
+export function earlierPlanAsks(d: ProductionDocument, sbId: string | undefined, jobId: string | undefined): string[] {
+  if (!sbId) return []
+  return Object.values(d.asks ?? {}).filter((a) => a.state === 'open' && !!a.job_id && a.job_id !== jobId
+    && d.jobs[a.job_id]?.op === 'shot_list' && (d.jobs[a.job_id]?.node?.id === sbId || a.node?.id === sbId)).map((a) => a.id)
+}
+
 /** The plan written into a draft with its words as flat text (the snapshot store, and tests). */
-export function applyShotList(d: ProductionDocument, job: Pick<Job, 'shots'>, ctx?: { storyboardId?: string }): ShotListPlan {
+export function applyShotList(d: ProductionDocument, job: Pick<Job, 'shots'>, ctx?: { storyboardId?: string; jobId?: string }): ShotListPlan {
   const sbId = boardToPlan(d, ctx?.storyboardId)?.id
   const plan = planOf(d, job, sbId)
   for (const id of plan.dropBeats) delete d.beats[id]
@@ -284,6 +292,7 @@ export function applyShotList(d: ProductionDocument, job: Pick<Job, 'shots'>, ct
   }
   for (const b of plan.beats) d.beats[b.id] = { id: b.id, v: 1, field_v: {}, ...b.fields, text: b.text, last_writer: 'dex' }
   for (const m of plan.stale) d.stale[m.id] = m
+  for (const id of earlierPlanAsks(d, sbId, ctx?.jobId)) d.asks[id].state = 'withdrawn'
   for (const a of plan.asks) d.asks[a.id] = a
   // The words moved into the shots: nothing stays in the scenes (one owner per span).
   for (const sc of scenesOf(d, scriptOfStoryboard(d, sbId)?.id)) if (sc.text) sc.text = ''
@@ -311,7 +320,7 @@ export async function landShotList(store: DocumentStore, job: Job, ctx?: Extract
   if (!(store instanceof ModelStore)) {
     const n = job.shots?.length ?? 0
     let plan: ShotListPlan = { shots: [], beats: [], dropShots: [], dropBeats: [], stale: [], asks: [] }
-    await landUpdate(store, (x) => { plan = applyShotList(x, job, ctx) }, landingWhy(store, job.jobId, `${n} ${n === 1 ? 'shot' : 'shots'} for the storyboard`, cards))
+    await landUpdate(store, (x) => { plan = applyShotList(x, job, { ...ctx, jobId: job.jobId }) }, landingWhy(store, job.jobId, `${n} ${n === 1 ? 'shot' : 'shots'} for the storyboard`, cards))
     return plan
   }
   await store.flush()
@@ -331,6 +340,7 @@ export async function landShotList(store: DocumentStore, job: Job, ctx?: Extract
   // The marks and the questions are part of the same step: undo takes the plan back with them.
   for (const m of plan.stale) patches.push({ op: 'create', entity: 'stale', id: m.id, value: m, base_version: 0 })
   for (const a of plan.asks) patches.push({ op: 'create', entity: 'asks', id: a.id, value: a, base_version: 0 })
+  for (const id of earlierPlanAsks(d, sbId, job.jobId)) patches.push({ op: 'set', entity: 'asks', id, path: 'state', value: 'withdrawn', base_version: d.asks[id].v })
   const landing: PlanLanding = {
     scenes: scenesOf(d, scriptOfStoryboard(d, sbId)?.id).map((s) => ({ id: s.id, remainder: EMPTY_PROSE })),
     shots: plan.shots.filter((r) => !r.existing).map((r) => ({ id: r.id, value: r.fields, prose: shotProse(d, r) })),

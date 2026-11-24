@@ -351,5 +351,13 @@ export function storyboardSeconds(d: Doc, storyboardId = mainStoryboard(d)?.id):
 
 /** Open asks, oldest first (ui-behaviour 3.17's questions pill). */
 export function openAsks(d: Doc) {
-  return values(d.asks).filter((a) => a.state === 'open').sort(byId)
+  return values(d.asks).filter((a) => a.state === 'open' && !supersededAsk(d, a)).sort(byId)
+}
+
+/** A plan's question that a later plan of the same node, now done, has answered by itself (UAT round 4 L4: "The script is
+ *  empty…" stayed open after the storyboard was planned). */
+export function supersededAsk(d: Doc, a: Doc['asks'][string]): boolean {
+  const j = a.job_id ? d.jobs[a.job_id] : undefined
+  if (!j || j.op !== 'shot_list') return false
+  return values(d.jobs).some((o) => o.id !== j.id && o.op === 'shot_list' && o.node?.id === j.node?.id && o.state === 'completed' && o.created_at > j.created_at)
 }
