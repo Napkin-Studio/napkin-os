@@ -40,6 +40,7 @@ import { sayer } from '../ui/agents/cast'
 import { CanvasController, OTHER_VIEWS, viewLabel, type CanvasSnapshot, type GenerateResult } from '../canvas/controller'
 import { countLine, countRefs, kindOfRole, refLimits, type RefKind, type RefLimits } from '../canvas/refBudget'
 import { croppedCaption } from '../canvas/core/sketch'
+import { sketchShapeLine } from '../jobs/ratioInWords'
 import { framesFromSketch, sketchDeleteText } from '../doc/remove'
 import { AskCard } from '../ui/AskCard'
 import { ASK_REVEAL_EVENT } from '../ui/askPlaces'
@@ -1624,7 +1625,7 @@ function GeneratePopover({ ctrl, ids, at, onClose, onPlace }: {
         <button className="btn xs ghost" disabled={busy || !oneArea || blocked} title="Click on the canvas where it should land" onClick={() => { onClose(); onPlace({ ids: sent(ids), text, more, modelChoice, limits, people: [...people] }) }}>Place…</button>
       </div>
       <div className="tray-foot nowrap" title="Nothing is sent until you press Generate.">
-        <span className="pt-mono tray-model">{model ?? 'The default model'}{preview.sketch ? <><br />{preview.sketch.label}</> : null}</span>
+        <span className="pt-mono tray-model">{model ?? 'The default model'}{preview.sketch ? <><br />{sketchShapeLine(preview.sketch.aspect, preview.sketch.label, text)}</> : null}</span>
         <button className="btn sm" onClick={onClose}>Cancel</button>
         <button className="btn sm primary" disabled={busy || !oneArea || blocked} title={counted.problem} onClick={() => void submit()}>{busy ? 'Sending…' : 'Generate'}</button>
       </div>
@@ -1712,5 +1713,3 @@ function NamePopover({ ctrl, nodeId, current, presetVariant, at, onClose }: {
     </Floating>
   )
 }
-
-

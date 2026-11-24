@@ -210,6 +210,15 @@ export class Shell {
     })
   }
 
+  /** Undo of a Move to Trash, from Home's toast: the host's copy comes back to the library (this browser's copy went
+   *  with the move; opening it brings it down again). False when there is no host to restore from. */
+  async restore(id: string): Promise<boolean> {
+    const { server, relay } = this.deps
+    if (!server?.signedIn || relay.kind !== 'http') return false
+    await server.restore(id)
+    return true
+  }
+
   /** The project's Export zip, from Home's card. */
   exportProject(id: string): Promise<{ blob: Blob; name: string; missing: number }> {
     return this.serial('Packing…', async () => {

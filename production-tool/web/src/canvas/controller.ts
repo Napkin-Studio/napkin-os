@@ -33,7 +33,7 @@ import { LOCAL_PERSON } from '../jobs/runner'
 import { purposeOf } from '../model/purpose'
 import { currentPictureFrame, keyNamed, mainStoryboard, refsList } from '../model/selectors'
 import { cropLoss } from '../lib/runwaySizes'
-import { BIG_CROP, BIG_CROP_LINE, aspectLabel, boxOf, exactRatio, exportPlan, intersects, lockAspect, membersOf, ratioFor, type Boxed, type Rect } from './core/sketch'
+import { BIG_CROP, BIG_CROP_LINE, aspectLabel, aspectOfRatio, boxOf, exactRatio, exportPlan, intersects, lockAspect, membersOf, ratioFor, type Boxed, type Rect } from './core/sketch'
 import { SKETCH_ASK, sketchAsk } from '../ui/asks'
 import {
   alive, assetData, bounds, byOwnId, cd, childrenOf, dataURLToBlob, downscale, exportElements, idOf,
@@ -273,7 +273,7 @@ export class CanvasController {
     this.setEls(els.map((e) => (gone.includes(e.id) ? this.canvas.patch(e, { isDeleted: true }) : e)))
     this.canvas.select([])
     this.syncNow()
-    return { ids: gone, at: { x: b.minX + b.w / 2, y: b.minY + b.h / 2 }, label }
+    return { ids: gone, at: undoSpot(b, alive(els).filter((e) => !gone.includes(e.id) && e.type !== 'frame' && !boardFrame(els, e.id))), label }
   }
 
   /** Undo a delete from the inline Undo (Ctrl+Z does the same through Excalidraw). */
@@ -740,10 +740,14 @@ export class CanvasController {
     ]
     const jobId = newId('job')
     // The new frame sits to the right of the area, at its true shape.
-    const size = nodeSize(aspect)
+    // A ratio named in the words wins over the area's shape (UAT round 4 F15: "Key visual, portrait 4:5" in a 16:9 area
+    // came back 16:9 with the bottle's top cut off). The area's drawing still goes as the layout.
+    const asked = ratioInWords(text)
+    const shape = asked ? aspectOfRatio(asked) : aspect
+    const size = nodeSize(shape)
     const slot = opts.at ? { ...opts.at, ...size } : nextSlot(this.els(), bounds([areaEl]), size)
     this.placeGen(jobId, 'generate', sources.map((x) => x.id), sources, slot)
-    const ratio = exactRatio(aspect)
+    const ratio = asked ?? exactRatio(aspect)
     const input: JobInput = { refs, ...(ratio ? { ratio } : { aspect }), ...(text ? { text } : {}), ...(opts.more ? { chips: ['more_options'] } : {}) }
     await this.s.runner.submit('generate', input, plan.images.filter((i) => i.kind === 'gen').map((i) => i.nodeId), { for: 'sketch', sketchId: s.sketchId }, jobId, opts.modelChoice,
       { brand: this.brandChoice(plan, opts.brand) })
@@ -1278,4 +1282,13 @@ export function nodeSize(aspect: Aspect): { w: number; h: number } {
 
 export function viewLabel(v: View): string {
   return { front: 'Front', 'three-quarter': '3/4', side: 'Side', back: 'Back' }[v]
+}
+
+/** Where "Deleted · Undo" goes: the middle of what went, unless something still there covers that spot (UAT round 4
+ *  F16: a sketch area under the Brief card put the chip on the card). Then just below the lowest thing covering it. */
+export function undoSpot(b: { minX: number; minY: number; w: number; h: number }, live: readonly { x: number; y: number; width: number; height: number }[]): { x: number; y: number } {
+  const at = { x: b.minX + b.w / 2, y: b.minY + b.h / 2 }
+  const over = live.filter((e) => at.x >= e.x && at.x <= e.x + e.width && at.y >= e.y && at.y <= e.y + e.height)
+  if (!over.length) return at
+  return { x: at.x, y: Math.max(...over.map((e) => e.y + e.height)) + 24 }
 }
