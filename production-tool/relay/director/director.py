@@ -1347,9 +1347,12 @@ class Director:
         ids = [s["id"] for s in shots if s.get("id")]
         if len(set(ids)) != len(ids):
             raise DirectorError("shot ids must be unique")
-        known = {r["name"] for r in payload.get("refs") or [] if r.get("name")}
-        # A bare key names the whole character, and only a key with a front can be named bare.
+        refs = [r for r in payload.get("refs") or [] if r.get("name")]
+        known = {r["name"] for r in refs}
+        # A bare key names the whole character, and only a key with a front can be named bare. A key that is not a
+        # character or a product (a logo, a location…) needs no front: its bare key is its pictures (UAT round 4 F32).
         known |= {n.split("_", 1)[0] for n in known if n.endswith("_front")}
+        known |= {r["name"].split("_", 1)[0] for r in refs if r.get("role") not in ("character", "product")}
         for i, s in enumerate(shots, 1):
             unknown = [n for n in s.get("refs") or [] if n not in known]
             if unknown:
