@@ -131,7 +131,7 @@ function sideTab(o: { sel?: string | null; locked?: boolean; reopened?: Record<s
     hostPost: (...a: unknown[]) => { posts.push(a); return Promise.resolve({ ok: true }) }, hostErrText: () => '',
     select: (k: string | null) => { calls.push(`select:${k}`) },
   }
-  const names = ['renderSelPart', 'keepBtn', 'confBtn', 'chipsHtml', 'regenHtml', 'lineCrumb', 'hintShown', 'isLine', 'canType', 'draftKey', 'draftGet', 'draftPut', 'editText', 'editValue', 'startEdit', 'editKeys', 'endEdit', 'cancelEdit', 'commitEdit', 'savedTick']
+  const names = ['renderSelPart', 'closedQ', 'keepBtn', 'confBtn', 'chipsHtml', 'regenHtml', 'lineCrumb', 'hintShown', 'isLine', 'canType', 'draftKey', 'draftGet', 'draftPut', 'editText', 'editValue', 'startEdit', 'editKeys', 'endEdit', 'cancelEdit', 'commitEdit', 'savedTick']
   const body = `${names.map(n => fn(BM, n)).join('\n')}
     return { ${names.join(',')}, edit: function(){ return EDIT; }, setSel: function(k){ SEL=k; } };`
   const T = new Function(...Object.keys(env), body)(...Object.values(env)) as Record<string, (...a: unknown[]) => unknown> & { edit(): null | { el: El; reason: string; err: string; saving: boolean } }
