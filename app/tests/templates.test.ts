@@ -5497,3 +5497,40 @@ test('brief: a working name that carries a caveat gives a short document title',
   assert.match(BM, /shortName\(get\('project_name'\)\)/)
   assert.match(BM, /\$\('hProj'\)\.textContent=pn\|\|dt/)
 })
+
+// ── a Research Booth the shell restored hidden kept Lock the report out of reach (follow-up to T10, 2026-11-24) ──
+test('Research: hidden on load with something waiting, the Booth comes in, whichever arrives first', () => {
+  const b = booth(RT, 1440)
+  b.boothAsk(3); b.boothSet({ t: 'shell', open: false })
+  assert.equal(b.BOOTH.open, false, 'the stored choice lands first')
+  b.timers.at(-1)!.f()
+  assert.equal(b.BOOTH.open, true, 'then it comes in on what waits')
+  const c = booth(RT, 1440)
+  c.boothSet({ t: 'shell', open: false }); c.boothAsk(3); c.timers.at(-1)!.f()
+  assert.equal(c.BOOTH.open, true)
+  const d = booth(RT, 1440)
+  d.boothSet({ t: 'shell', open: false })
+  assert.equal(d.timers.length, 0, 'nothing waiting: the stored choice stands')
+  // re-hidden in the session: it stays hidden until more arrives
+  const e = booth(RT, 1440)
+  e.boothAsk(3); e.boothSet({ t: 'hide' }); const n = e.timers.length; e.boothAsk(3)
+  assert.equal(e.timers.length, n, 'the same count does not bring it back')
+  assert.equal(e.BOOTH.open, false)
+})
+
+test('Research: what waits in the Booth counts the calls Lock the report waits on, not a locked report', () => {
+  const env = (o: Record<string, unknown> = {}) => ({
+    liveQuestion: () => null, jobActive: () => false, isObj: (x: unknown) => !!x && typeof x === 'object', D: () => ({ report: {} }),
+    reportLocked: () => false, arr: (x: unknown) => (Array.isArray(x) ? x : []), window: { ClanFields: null },
+    checks: () => [{ open: true }, { open: true }, { open: false }], ...o })
+  const w = (o?: Record<string, unknown>) => lift<{ boothWaiting(): number }>(RT, ['boothWaiting'], env(o)).boothWaiting()
+  assert.equal(w(), 2, 'two open calls')
+  assert.equal(w({ checks: () => [{ open: false }] }), 1, 'every call settled: Lock is ready')
+  assert.equal(w({ reportLocked: () => true }), 0, 'locked')
+  assert.equal(w({ reportLocked: () => true, checks: () => [], window: { ClanFields: { view: () => ({ lock: { reopened: [{ address: 'x' }] } }) } } }), 1,
+    'reopened for the client: Lock the report again waits')
+  assert.equal(w({ D: () => ({}) }), 0, 'no report yet')
+  assert.equal(w({ jobActive: () => true }), 0, 'the agents are working')
+  assert.equal(w({ liveQuestion: () => ({ id: 'q' }) }), 1, 'an agent question counts')
+  for (const name of ['renderChecks']) assert.match(fn(RT, name), /boothAsk\(boothWaiting\(\)\)/, `${name} keeps the count current`)
+})
