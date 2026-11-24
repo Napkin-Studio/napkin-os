@@ -24,7 +24,7 @@ import ClientReviewBand from './clientReview/ClientReviewBand'
 import { assetNameOf, bodyOf, canReview, emptyDraft, knownClients, markedOf, nounOf, problemOf } from './clientReview/review'
 import type { Draft, Mark } from './clientReview/review'
 import { barAction, refreshApp } from './appExport'
-import { modeOf, statusOf, type BarItem } from './appBar'
+import { believePage, modeOf, statusOf, type BarItem } from './appBar'
 import { host } from '../host'
 import type { ClientPartRef, ClientWho, InstalledApp, LibraryItem, RunInfo } from '../host'
 import { useEngaged } from '../components/markStore'
@@ -328,7 +328,9 @@ export default function AppHost({ running, onHome, onTrashed, onOpenFile, onSave
   // The page says its agents are at work (the bar's working chip) before the host's run catches up:
   // the medallion follows the same signal as the chip, with the step it names (owner, 2026-11-10).
   const pageRun = pageRunOf(modeOf(barItems))
-  const mark_ = markTarget({ inDoc: product, needs, run: run?.state === 'working' || !pageRun ? run : pageRun, finished: runSeen.finished, engaged })
+  // A page that says it runs no agents is believed over the host's last-heard run (appBar.ts, `run`).
+  const { run: runNow, crew: crewNow } = believePage(barItems, run, crew)
+  const mark_ = markTarget({ inDoc: product, needs, run: runNow?.state === 'working' || !pageRun ? runNow : pageRun, finished: runSeen.finished, engaged })
   const asked = chrome.doc === docPath
   const glass = asked && chrome.mode === 'glass' && !clientOn
   const glassTint = asked ? chrome.tint : null
@@ -413,7 +415,7 @@ export default function AppHost({ running, onHome, onTrashed, onOpenFile, onSave
           onCopyLink: open.is_template ? undefined : onCopyLink,
           locked: !!decisions.view?.lock.locked && !decisions.view.lock.reopened?.length,
           onOpenDocument,
-          crew,
+          crew: crewNow,
           onKeepOffline,
           onExport,
           targets,

@@ -274,6 +274,25 @@ describe('the end card\'s Legal line (owner 2026-11-23: its own key, from the LI
     expect(newEndCard(store.get(), videoId).cta).toBeUndefined()
   })
 
+  it('a new card\'s headline starts as the linked Brief\'s end line, and the person can overwrite it (UAT round 3: it was empty)', async () => {
+    const { store, videoId } = await film()
+    await withBrief(store, videoId, ['End line must be "Proper crunch."', 'Legal: Contains wheat.'])
+    expect(newEndCard(store.get(), videoId)).toMatchObject({ headline: 'Proper crunch.', legal: 'Contains wheat.' })
+    await editCut.endCard(store, videoId, { headline: 'Mine' })
+    expect(readCut(store.get(), videoId).endCard?.headline).toBe('Mine')
+  })
+
+  it('with no Brief line the headline is the script\'s end line, the last thing it says', async () => {
+    const { store, shots, videoId } = await film()
+    await systemUpdate(store, (d) => {
+      d.project.title = 'Hollow Oak'
+      d.beats = { ...(d.beats ?? {}), beat_end: { id: 'beat_end', shot_id: shots[shots.length - 1].id, kind: 'vo', at_s: 0, text: 'Slow down. Warm up.' } as never }
+    }, 'sync')
+    const card = newEndCard(store.get(), videoId)
+    expect(card.headline).toBe('Slow down. Warm up.')
+    expect(card.line).toBe('Hollow Oak')
+  })
+
   it('the card made from the storyboard\'s end card shot has it too, and it is saved in the document with the card', async () => {
     const { store, shots, videoId } = await film()
     await systemUpdate(store, (d) => { d.shots[shots[3].id].action = 'SuperSamurai end card.' }, 'sync')

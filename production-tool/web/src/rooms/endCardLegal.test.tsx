@@ -123,3 +123,32 @@ describe('the end card\'s Legal field', () => {
     expect(el.textContent).not.toContain("studio's own card")
   })
 })
+
+describe('the end card\'s Headline field (UAT round 3, Harrowgate: it was empty and had to be typed)', () => {
+  const headlineInput = (el: Element) => [...el.querySelectorAll('label.rm-fieldlabel')].find((l) => l.textContent?.startsWith('Headline'))!.querySelector('input') as HTMLInputElement
+
+  async function addedCard(mandatories: string[]) {
+    const p = await project()
+    const store = p.services.doc
+    const videoId = mainVideo(store.get())!.id
+    const b = briefNode(mandatories)
+    await updateDoc(store, (d) => { d.briefs = { [b.id]: b } }, 'brief')
+    await linkInput(store, store.get(), { kind: 'brief', id: b.id }, { kind: 'video', id: videoId })
+    await editCut.endCard(store, videoId, {}) // what "Add an end card" does
+    const data = { videoId, title: 'F', ratio: '16:9', targetS: 15, lengthS: 2, boxes: [], gens: [] } as RoomData
+    await p.render(createElement(Inspector, { data, cut: readCut(store.get(), videoId), picked: { kind: 'card' as const }, onPick: () => {}, onChange: () => {}, onFeel: () => {}, onSwap: () => {}, handleShort: () => 1 }))
+    await settle()
+    return p
+  }
+
+  it('starts as the linked Brief\'s end line, and is saved with the card', async () => {
+    const { el, services, } = await addedCard(['End line must be "Proper crunch."', 'Legal: Contains wheat.'])
+    expect(headlineInput(el).value).toBe('Proper crunch.')
+    expect(services.doc.get().videos[mainVideo(services.doc.get())!.id].end_card).toMatchObject({ headline: 'Proper crunch.' })
+  })
+
+  it('stays empty when neither the Brief nor the script has a line', async () => {
+    const { el } = await addedCard(['No apples'])
+    expect(headlineInput(el).value).toBe('')
+  })
+})

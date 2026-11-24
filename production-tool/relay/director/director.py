@@ -324,6 +324,41 @@ def _add_line(job: dict, line: str, sheet: dict) -> None:
         job["prompt"] = said
 
 
+def _add_first(job: dict, line: str, sheet: dict) -> None:
+    """One of the relay's own lines as the prompt's FIRST sentence, when the prompt has room (else where _add_line puts it).
+    UAT round 3 (Harrowgate): the no-faces line sat mid-prompt, after the shot's own words, and the picture still showed two
+    men smiling in profile; an image model weighs what it reads first."""
+    prompt = (job.get("prompt") or "").strip()
+    said = f"{line} {prompt}".strip()
+    limit = prompt_max(sheet, job.get("model") or "")
+    if limit is None or utf16_units(said) <= limit:
+        job["prompt"] = said
+    else:
+        _add_line(job, line, sheet)
+
+
+# Words that draw a face: a smile, a laugh, a look toward the camera. Under a no-faces rule the shot's text drops them
+# (the director is told to as well, director.v18); what is left is the moment, as hands, backs and distance.
+_EXPRESSION = re.compile(
+    r"[,;]?\s*\b(?:smil(?:e|es|ed|ing)|laugh(?:s|ed|ing)?|grin(?:s|ned|ning)?|beam(?:s|ed|ing)|"
+    r"(?:looks?|looking|stares?|staring|gazes?|gazing|turns?|turning)\s+(?:directly\s+)?(?:at|to|toward|towards)\s+(?:the\s+)?"
+    r"(?:camera|lens|us|viewer))\b(?:\s+(?:broadly|warmly|widely|happily))?", re.I)
+
+
+def _drop_expressions(job: dict) -> None:
+    prompt = job.get("prompt") or ""
+    # The relay's own line says "no one looks at the camera": it stays as it is.
+    head, line, tail = prompt.partition(UNRECOGNISABLE)
+    said = f"{_tidy(_EXPRESSION.sub('', head))}{line}{_tidy(_EXPRESSION.sub('', tail))}" if line else _tidy(_EXPRESSION.sub("", prompt))
+    if said.strip() != prompt.strip():
+        job["prompt"] = said.strip()
+
+
+def _tidy(text: str) -> str:
+    text = re.sub(r"\s+([,.;!?])", r"\1", text)
+    return re.sub(r"[ \t]{2,}", " ", text)
+
+
 def _no_other_brands(job: dict, op: str, sheet: dict) -> None:
     """A generate or a frame paints no brand the job did not ask for (R2-13). Not an edit of a picture (a frame_edit,
     a region_edit), which keeps what it has."""
@@ -355,8 +390,11 @@ def _unrecognisable_people(job: dict, op: str, faces: bool, sheet: dict) -> None
     """A frame or a clip of a project whose linked brief says no real faces says, as its own line, that people may
     appear but no one is recognisable, even when the shot's text shows people (the brief is read whole, not as cut
     to the op's budget, which drops a mandatory from a clip)."""
-    if faces and op in FACES_OPS and not _UNRECOGNISABLE_SAID.search(job.get("prompt") or ""):
-        _add_line(job, UNRECOGNISABLE, sheet)
+    if not (faces and op in FACES_OPS):
+        return
+    _drop_expressions(job)
+    if not _UNRECOGNISABLE_SAID.search(job.get("prompt") or ""):
+        _add_first(job, UNRECOGNISABLE, sheet)
 
 
 def say_unrecognisable(out: dict, op: str, brief: dict | None, sheet: dict | None) -> None:
