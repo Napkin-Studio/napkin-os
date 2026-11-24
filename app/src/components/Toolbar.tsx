@@ -444,7 +444,9 @@ export default function Toolbar({
     return () => window.removeEventListener('resize', on)
   }, [])
   const fitSig = useRef('')
-  const barSig = (doc?.bar ?? []).map(i => `${i.kind}:${'label' in i ? i.label : ''}`).join('|')
+  // A button is keyed by its id, not its words: a button that arms ("Draft it again" → "Click again to redraft") must not
+  // re-fit the bar and move itself into ⋯ under the second click (UAT round 4 F9). Chips and the rest keep their words.
+  const barSig = (doc?.bar ?? []).map(i => `${i.kind}:${i.kind === 'button' ? `${i.id}${i.disabled ? '-' : ''}` : 'label' in i ? i.label : ''}`).join('|')
   const sig = [vw, doc?.title, doc?.saved, doc?.crew?.working, doc?.crew?.progress?.join('/'), barSig, !!doc?.loading].join('~')
   useLayoutEffect(() => {
     const el = appRef.current

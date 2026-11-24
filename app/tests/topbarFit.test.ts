@@ -80,7 +80,7 @@ test('the bar keeps the title, Continue in and Save at 1024, 1280 and 1440, with
 
 // UAT round 4 F1: a locked brief adds Save · PDF, ⋯ and the shell's Client review, and at 1024 Continue in still ran
 // under Save · PDF at the last level. Two more levels: Decisions keeps its count, then one primary is left in the bar.
-test('a locked brief keeps the title, Continue in and its primary at 1024, 1280 and 1440, light and dark', async t => {
+test('a locked brief or research report keeps the title, Continue in and its primary at 1024, 1280 and 1440, light and dark', async t => {
   const { build } = await import('esbuild')
   const { chromium } = await import('playwright')
   let browser
@@ -94,13 +94,13 @@ test('a locked brief keeps the title, Continue in and its primary at 1024, 1280 
     })
     for (const theme of ['light', 'dark']) {
       writeFileSync(join(dir, `${theme}.html`), `<!doctype html><html data-theme="${theme}"><head><meta charset="utf-8"><link rel="stylesheet" href="topbarHarness.css"></head><body><div id="root"></div><script src="topbarHarness.js"></script></body></html>`)
-      for (const width of [1024, 1280, 1440]) {
+      for (const width of [1024, 1280, 1440]) for (const kind of ['1', 'research']) {
         for (const answered of [false, true]) {
           const page = await browser.newPage({ viewport: { width, height: 700 } })
-          await page.goto(`file://${join(dir, `${theme}.html`)}?locked=1&answered=${answered ? 1 : 0}&title=${encodeURIComponent(LONG)}`)
+          await page.goto(`file://${join(dir, `${theme}.html`)}?locked=${kind}&answered=${answered ? 1 : 0}&title=${encodeURIComponent(LONG)}`)
           await page.waitForSelector('[data-testid="doc-name"]')
           await page.waitForTimeout(200)
-          const at = `${width}px, ${theme}, ${answered ? 'answered' : 'not answered'}`
+          const at = `${width}px, ${theme}, ${kind === '1' ? 'brief' : 'research'}, ${answered ? 'answered' : 'not answered'}`
           const slot = (await page.locator('#tb-app').boundingBox())!
           const cont = page.getByRole('button', { name: /^Continue in/ })
           const box = (await cont.boundingBox())!
@@ -126,7 +126,7 @@ test('a locked brief keeps the title, Continue in and its primary at 1024, 1280 
           if (!saveIn || !reviewIn) {
             await page.getByTestId('bar-more').click()
             const items = await page.getByTestId('more-menu').getByRole('menuitem').allInnerTexts()
-            if (!saveIn) assert.ok(items.some(i => i.startsWith('Save · PDF')), `Save · PDF is in ⋯ once it left the bar at ${at} (${items.join(' | ')})`)
+            if (!saveIn) assert.ok(items.some(i => i.startsWith(kind === '1' ? 'Save · PDF' : 'PDF')), `Save · PDF (or its choices) is in ⋯ once it left the bar at ${at} (${items.join(' | ')})`)
             if (!reviewIn) assert.ok(items.some(i => i.startsWith('New client answer')), `New client answer is in ⋯ once it left the bar at ${at}`)
             await page.keyboard.press('Escape')
           }
@@ -141,3 +141,46 @@ test('a locked brief keeps the title, Continue in and its primary at 1024, 1280 
   }
 })
 
+
+// UAT round 4 F9: Draft it again arms on the first press ("Click again to redraft", wider). The bar re-fitted on the new
+// words and moved the button into ⋯, so the second press landed on Save · PDF. A button's words must not re-fit the bar.
+test('arming Draft it again does not re-fit the bar: the second press lands on it, at every width from 1000 to 1500', async t => {
+  const { build } = await import('esbuild')
+  const { chromium } = await import('playwright')
+  let browser
+  try { browser = await chromium.launch() } catch (e) { t.skip(`no Chromium here: ${(e as Error).message.split('\n')[0]}`); return }
+  const dir = mkdtempSync(join(tmpdir(), 'topbar-armed-'))
+  try {
+    await build({
+      entryPoints: [join(app, 'tests/fixtures/topbarHarness.tsx')], outdir: dir, bundle: true, format: 'iife', platform: 'browser',
+      jsx: 'automatic', logLevel: 'silent', define: { 'process.env.NODE_ENV': '"development"', 'import.meta.env': '{}', 'import.meta.env.DEV': 'true', 'import.meta.env.BASE_URL': '"/"' },
+      loader: { '.svg': 'dataurl', '.png': 'dataurl', '.woff': 'dataurl', '.woff2': 'dataurl', '.ttf': 'dataurl', '.jpg': 'dataurl' },
+    })
+    writeFileSync(join(dir, 'index.html'), `<!doctype html><html data-theme="dark"><head><meta charset="utf-8"><link rel="stylesheet" href="topbarHarness.css"></head><body><div id="root"></div><script src="topbarHarness.js"></script></body></html>`)
+    const page = await browser.newPage({ viewport: { width: 1000, height: 700 } })
+    let pressed = 0
+    for (let width = 1000; width <= 1500; width += 10) {
+      await page.setViewportSize({ width, height: 700 })
+      await page.goto(`file://${join(dir, 'index.html')}?title=${encodeURIComponent(LONG)}`)
+      await page.waitForSelector('[data-testid="doc-name"]')
+      await page.waitForTimeout(80)
+      const draft = page.locator('.tb-tools').getByRole('button', { name: 'Draft it again', exact: true })
+      if (!(await draft.count())) continue
+      const fit = await page.locator('header.tb-locked').getAttribute('data-fit')
+      await draft.click()
+      await page.waitForTimeout(80)
+      assert.equal(await page.locator('header.tb-locked').getAttribute('data-fit'), fit, `arming does not re-fit the bar at ${width}px`)
+      const slot = (await page.locator('#tb-app').boundingBox())!
+      const cont = (await page.getByRole('button', { name: /^Continue in/ }).boundingBox())!
+      assert.ok(cont.x + cont.width <= slot.x + slot.width + 1, `Continue in is not clipped while it is armed at ${width}px`)
+      await page.locator('.tb-tools').getByRole('button', { name: 'Click again to redraft' }).click({ timeout: 1000 })
+      const acted = await page.evaluate(() => (window as unknown as { __acted?: string[] }).__acted ?? [])
+      assert.deepEqual(acted.slice(-2), ['redraft', 'redraft'], `both presses reach Draft it again at ${width}px (${acted.join(', ')})`)
+      pressed += 1
+    }
+    assert.ok(pressed > 10, `Draft it again was in the bar at enough widths to mean something (${pressed})`)
+  } finally {
+    await browser.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
