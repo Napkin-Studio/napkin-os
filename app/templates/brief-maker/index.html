@@ -1984,7 +1984,10 @@
     var fix=i>=0?a.slice(i+5).replace(ANSWER_TAIL,'').trim():'';
     var pre=(i>=0?a.slice(0,i):a.replace(ANSWER_TAIL,'')).trim();
     var bs=r?arr(r.because):[], rule=bs.filter(function(b){ return /^The rule: /.test(String(b.point||'')); })[0];
-    var reason=pre?pre.replace(/^[a-z_ ]+:\s*/,''):(bs[0]?String(bs[0].point||''):(d.rationale||''));
+    // "The Review agent suggests a change." says who, not what: the note's own words are the reason, so two notes on
+    // the same parts never read as one card twice (UAT round 4, The barrier).
+    if(/^The Review agent suggests a change\.?$/i.test(pre)) pre='';
+    var reason=pre?pre.replace(/^[a-z_ ]+:\s*/,''):(bs[0]?String(bs[0].point||''):(r&&r.decided?String(r.decided):(d.rationale||'')));
     // an older verdict's reason was cut mid-sentence: say so
     if(pre&&reason&&!/[.!?…)'"’”]$/.test(reason)) reason+='…';
     return {reason:reason, fix:fix, rule:rule?String(rule.point).replace(/^The rule: /,''):''};
@@ -3810,6 +3813,13 @@
   var QA_RE=/^([\s\S]*?)\s+—\s+(Answer|Left open):\s*([\s\S]*)$/;
   function openQs(){ return arr(get('open_questions')).map(function(t,i){ var x=String(t==null?'':t), m=QA_RE.exec(x); return {i:i, raw:x, q:m?m[1]:x, kind:m?(m[2]==='Answer'?'answer':'left'):null, a:m?m[3]:''}; }).filter(function(o){ return o.q.trim(); }); }
   function openQsLeft(){ return openQs().filter(function(o){ return !o.kind; }); }
+  // Yes / No only fits a closed question ("Is the budget fixed?"). A what/which/when question, or one that offers
+  // alternatives ("…switch, or is the aim new buyers?"), is answered in words (UAT round 4: Yes/No on "What is the budget…?").
+  function closedQ(q){
+    var s=String(q||'').replace(/^\s*\[[^\]]*\]\s*/,'').split(' — ')[0].trim();
+    if(!/^(is|are|was|were|do|does|did|can|could|will|would|should|shall|has|have|had|may|must|might)\b/i.test(s)) return false;
+    return !/(,\s*or\b|\bor\s+(is|are|do|does|should|would|will|can|has|have)\b|\bwhich\b|\bwhat\b|\bwhen\b|\bwho\b|\bhow\b|\bwhere\b|\bwhy\b)/i.test(s);
+  }
   function answerQ(i, kind, words){
     var list=arr(get('open_questions')).slice(), cur=String(list[i]==null?'':list[i]), m=QA_RE.exec(cur), q=m?m[1]:cur;
     list[i]=q+' — '+(kind==='left'?'Left open':'Answer')+': '+String(words).trim();
@@ -5355,7 +5365,7 @@
       +((qs.length||notes)?'<div class="needs-box sp-call" data-needs="'+esc(f.key)+'"><div class="nb-h">Your call · '+nOpen+' open</div>'
         +qs.map(function(o){ return '<div class="nb-q'+(o.kind?' done':'')+'" data-q="'+o.i+'"><span class="nb-t">'+esc(o.q)+'</span>'
           +(o.kind?'<span class="nb-a'+(o.kind==='left'?' left':'')+'">'+esc((o.kind==='left'?'Left open: ':'')+o.a)+'</span>'
-            :(A&&!wr?'':'<span class="nb-act"><button type="button" data-ans="'+o.i+'" data-v="Yes">Yes</button><button type="button" data-ans="'+o.i+'" data-v="No">No</button><button type="button" data-ans="'+o.i+'" data-v="?">Answer…</button><button type="button" class="nb-why" data-why="'+o.i+'">Leave it, say why</button></span>'))
+            :(A&&!wr?'':'<span class="nb-act">'+(closedQ(o.q)?'<button type="button" data-ans="'+o.i+'" data-v="Yes">Yes</button><button type="button" data-ans="'+o.i+'" data-v="No">No</button>':'')+'<button type="button" data-ans="'+o.i+'" data-v="?">Answer…</button><button type="button" class="nb-why" data-why="'+o.i+'">Leave it, say why</button></span>'))
           +'</div>'; }).join('')
         +'<div class="notes">'+notes+'</div></div>':'')
       +'<div class="sp-prov" id="spProv"></div>'

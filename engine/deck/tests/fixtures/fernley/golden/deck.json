@@ -1672,7 +1672,7 @@
     "kind": "layout",
     "hint": "channel_roles"
    },
-   "notes": "Scope check: the tender lists paid social, search, programmatic, broadcast radio and video, outdoor and print.\n\nEvidence:\n[prompt:1] prompt: Fernley Drinks, a Cork sparkling iced tea brand, wants an agency pitch for a spring-to-summer 2027 Irish campaign that makes it known among \n[brief:desired_response] brief field (intake): Try Fernley sparkling iced tea. (rests on prompt:1)\n[brief:audience] brief field (intake): 18 to 34 year olds in Ireland. (rests on prompt:1)\n[brief:background] brief field (intake): Fernley Drinks is a Cork-based sparkling iced tea brand seeking an agency pitch for a spring-to-summer 2027 campaign in Ireland. (rests on prompt:1)",
+   "notes": "Evidence:\n[prompt:1] prompt: Fernley Drinks, a Cork sparkling iced tea brand, wants an agency pitch for a spring-to-summer 2027 Irish campaign that makes it known among \n[brief:desired_response] brief field (intake): Try Fernley sparkling iced tea. (rests on prompt:1)\n[brief:audience] brief field (intake): 18 to 34 year olds in Ireland. (rests on prompt:1)\n[brief:background] brief field (intake): Fernley Drinks is a Cork-based sparkling iced tea brand seeking an agency pitch for a spring-to-summer 2027 campaign in Ireland. (rests on prompt:1)",
    "status": "drafted",
    "requirements": [
     "R4"

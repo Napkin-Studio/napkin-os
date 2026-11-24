@@ -175,8 +175,9 @@ def test_shot_order_is_productions_rank_and_end_cards_are_left_out(prod):
 def test_strip_picks():
     assert graphics.strip_picks([1, 2]) == ([], "2 placeable storyboard frame(s): a strip needs 3")
     assert graphics.strip_picks([1, 2, 3]) == ([1, 2, 3], "") and graphics.strip_picks([1, 2, 3, 4]) == ([1, 2, 3, 4], "")
+    assert graphics.strip_picks([1, 2, 3, 4, 5, 6]) == ([1, 2, 3, 4, 5, 6], "")   # UAT round 3: a storyboard of six is drawn whole (was cut to four)
     picks, note = graphics.strip_picks(list(range(1, 10)))
-    assert picks[0] == 1 and picks[-1] == 9 and len(picks) == 4 and picks == sorted(picks) and note == "4 of 9 shots"
+    assert picks[0] == 1 and picks[-1] == 9 and len(picks) == 6 and picks == sorted(picks) and note == "6 of 9 shots"
 
 
 def test_a_film_with_three_production_frames_gets_a_strip(gr, prod):
@@ -197,8 +198,8 @@ def test_a_long_storyboard_shows_first_last_and_spaced_shots_with_its_note(gr, p
     d = _deck()
     images.bind_production(d, p)
     st = d["slides"]["s3"]["strip"]
-    assert st == {"shots": [1, 4, 6, 9], "of": 9, "note": "4 of 9 shots"}
-    assert [k for k in d["slides"]["s3"]["slots"] if k.startswith("shot_")] == ["shot_1", "shot_2", "shot_3", "shot_4"]
+    assert st == {"shots": [1, 3, 4, 6, 7, 9], "of": 9, "note": "6 of 9 shots"}
+    assert [k for k in d["slides"]["s3"]["slots"] if k.startswith("shot_")] == [f"shot_{i}" for i in range(1, 7)]
 
 
 def test_the_mockups_switch_turns_frames_off(gr):
