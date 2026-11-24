@@ -128,8 +128,25 @@ class ResearchServer(unittest.TestCase):
         self.assertEqual(self.post(b, "?fresh=1")[0], 200)
         self.assertEqual(self.calls(), n0 + 2)          # fresh bypasses
 
+    def test_an_open_look_up_names_no_market(self):
+        st, r = self.post({"query": "how many 16-24s? MODE:ok", "lens": "consumer_culture", "market": "", "max_sources": 2},
+                          "?fresh=1")
+        self.assertEqual(st, 200, r)
+        self.assertEqual(len(r["sources"]), 2)
+        for b in ({"query": "q", "lens": "consumer_culture"}, {"query": "q", "lens": "consumer_culture", "market": "UK"}):
+            self.assertEqual(self.post(b)[0], 400)             # absent is still refused, and so is UK
+
     def test_honest_empty(self):
         st, r = self.post(body("empty"))
+        self.assertEqual((st, r["sources"]), (200, []))
+
+    def test_a_url_the_search_never_returned_is_dropped(self):
+        st, r = self.post(body("invented"))
+        self.assertEqual(st, 200, r)
+        self.assertEqual([x["url"] for x in r["sources"]], ["https://www.cso.ie/en/real"])
+
+    def test_if_every_url_is_invented_it_returns_none(self):
+        st, r = self.post(body("invented-all"))
         self.assertEqual((st, r["sources"]), (200, []))
 
     def test_an_empty_answer_is_not_cached(self):
