@@ -56,7 +56,8 @@ async function project() {
 const briefNode = (mandatories: string[]) => ({ id: id('brief'), v: 1, field_v: {}, title: 'Ferncliff brief', source: { document_id: 'doc_1', app_id: 'ie.napkin.brief-maker', data_sha256: SHA('b'), taken: 1, version: 1, at: T, how: 'link' }, spine: { mandatories } }) as unknown as NonNullable<ProductionDocument['briefs']>[string]
 
 import { LinkNotice } from './LinkNotice'
-import { noticeWords, resetLinkNotices, unlinkedFor } from './model/unlinked'
+import { noticeWords, resetLinkNotices, unlinkedFor, workingFrom } from './model/unlinked'
+import { job } from './test/model'
 import { linkInput } from './canvas/nodes/nodes'
 import { mainScript, mainStoryboard, mainVideo } from './model/selectors'
 import type { Services } from './app/context'
@@ -101,6 +102,23 @@ describe('the link notice', () => {
     await linkInput(store, store.get(), { kind: 'brief', id: briefId }, { kind: 'script', id: scriptId })
     await settle()
     expect(notice()).toBeNull()
+  })
+
+  it('steps aside while the action runs on the node, and comes back when it is done (UAT round 4 F21)', async () => {
+    const { services, render } = await project()
+    const { store, sbId } = await seed(services, { refs: ['ferncan'], brief: true })
+    await render(createElement(LinkNotice, { kind: 'storyboard', id: sbId, style: { left: 0, top: 0 } }))
+    await settle()
+    expect(notice()).not.toBeNull()
+    const jobId = id('job')
+    await updateDoc(store, (d) => { d.jobs[jobId] = { ...job(d, 'shot_list', [], null, { state: 'submitted' }), id: jobId, purpose: 'shot_list' } }, 'Plan shots')
+    await settle()
+    expect(workingFrom(store.get(), sbId)).toBe(true)
+    expect(notice()).toBeNull()
+    await updateDoc(store, (d) => { d.jobs[jobId].state = 'completed' }, 'planned')
+    await settle()
+    expect(workingFrom(store.get(), sbId)).toBe(false)
+    expect(notice()).not.toBeNull()
   })
 
   it('a project with no named picture and no Brief shows nothing', async () => {

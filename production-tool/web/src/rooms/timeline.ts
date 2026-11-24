@@ -3,6 +3,7 @@
 // step per edit. compileTimeline is the single plan both the preview (rooms/preview.ts) and Render ad read,
 // so what plays is what renders. Edit never spends: nothing here starts a paid job.
 
+import { brandKit } from '../campaign/layout'
 import { newUlidId } from '../../../clan-store/src'
 import { compileTimeline, type PlanClip as StorePlanClip, type PlanEndCard as StorePlanEndCard, type PlanText as StorePlanText, type TimelineItem as StoreTimelineItem } from '../../../clan-store/src'
 import type { AssetRef, EndCard, Id, ProductionDocument, TimelineItem, TimelinePlan, TransitionIn } from '../contracts/types'
@@ -306,7 +307,10 @@ export function compileFor(d: ProductionDocument, videoId: Id): Plan {
   const v = d.videos[videoId]
   if (!v) return { clips: [], texts: [], lengthS: 0, missing: [] }
   const legal = v.end_card ? cardLegal(d, videoId, v.end_card.legal) : undefined
-  const plan = compileTimeline({ timeline: v.timeline as Record<string, StoreTimelineItem>, ...(v.end_card ? { end_card: legal === undefined ? v.end_card : { ...v.end_card, legal } } : {}) }, d.generations)
+  // The card's own logo, else the Brand board's (UAT round 4 F23: the card said so, but the render had none).
+  const logo = v.end_card ? v.end_card.logo_asset ?? brandKit(d).logo?.sha256 : undefined
+  const card = v.end_card ? { ...v.end_card, ...(legal === undefined ? {} : { legal }), ...(logo ? { logo_asset: logo } : {}) } : undefined
+  const plan = compileTimeline({ timeline: v.timeline as Record<string, StoreTimelineItem>, ...(card ? { end_card: card } : {}) }, d.generations)
   const clips = plan.clips.map((c) => {
     const g = c.generation_id ? d.generations[c.generation_id] : undefined
     const speed = c.speed ?? 1

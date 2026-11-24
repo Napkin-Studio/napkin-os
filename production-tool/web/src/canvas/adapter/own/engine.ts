@@ -463,7 +463,7 @@ export const ownEngine: CanvasEngine = {
       over.remove()
     }, caps)
     if (opened.readOnly) console.warn(opened.readOnly)
-    if (adapter.elements().length) adapter.fit(adapter.elements(), { zoomFactor: 0.9, animate: false })
+    if (adapter.elements().length) adapter.fit(adapter.elements(), { zoomFactor: 0.9, animate: false, maxZoom: 1 })
     draw()
     return adapter
   },

@@ -74,3 +74,22 @@ export function adLayout(els: readonly CanvasElement[], doc: ProductionDocument)
   }
   return { boards, nodes: { script: inside('script'), storyboard: inside('storyboard'), video: inside('video') }, pictures }
 }
+
+const LOGO_WORDS = new Set(['logo', 'logos', 'logotype', 'wordmark', 'monogram', 'badge', 'emblem'])
+const PRODUCT_WORDS = new Set(['product', 'products', 'bottle', 'pack', 'packshot', 'packaging', 'can', 'jar', 'box', 'bag', 'tub', 'tube', 'sachet', 'tablet', 'refill', 'carton', 'pouch', 'spray'])
+
+/**
+ * The role a new name starts on, before the person picks one (UAT round 4 F19: @logo on the Brand board became a
+ * character, so "No logo on the Brand board" stayed until the role was set by hand). The name's own words first
+ * (logo → logo; product, bottle, pack… → product), then the board it sits on (Brand → logo, Products → product,
+ * Locations → location), else a character as before. The pills still show it, so the person can change it.
+ */
+export function guessRole(key: string, purpose: BoardPurpose | undefined): RefRole {
+  const words = key.toLowerCase().split(/[^a-z]+/).filter(Boolean)
+  if (words.some((w) => LOGO_WORDS.has(w))) return 'logo'
+  if (words.some((w) => PRODUCT_WORDS.has(w))) return 'product'
+  if (purpose === 'brand') return 'logo'
+  if (purpose === 'product') return 'product'
+  if (purpose === 'location') return 'location'
+  return 'character'
+}

@@ -343,7 +343,9 @@ PITCH_MERGES_V3 = (("channel_roles", "execution", None),
                    ("measurement", "guardrails", None))
 #: deck-look step 5 (``LOOK_V3`` only): a pitch with no stated limit aims at PITCH_TARGET presented slides (Sai: "the sweet slide size
 #: is 10"). A SOFT target: only the cheap moves run to reach it (assemble._to_target: unfilled placeholders to the 'To supply' part,
-#: then thin slides), nothing is trimmed, reworded or dropped. PITCH_CAP is ADVISORY only (validate: pitch_cap, a warning): asked-for
+#: then thin slides), nothing is trimmed, reworded or dropped. PITCH_CAP (and a type's length.cap) now holds since UAT round 4 F29
+#: (assemble._to_cap: folds, then moves behind the divider; the spine, asked-for routes and presented executions never move, so a
+#: story of only those may still run past it and validate's pitch_cap warns). Before that it was ADVISORY only: asked-for
 #: routes and PITCH_EXECUTIONS executions may rightly give 13-14, and no gate withholds a deck for its length. Agency pitches that
 #: run longer: set DECK_PITCH_TARGET (and DECK_PITCH_CAP) for a run, or change these two numbers. A stated limit always wins.
 def _env_count(name: str, default: int, lo: int = 3, hi: int = 60, warn: bool = True) -> int:
