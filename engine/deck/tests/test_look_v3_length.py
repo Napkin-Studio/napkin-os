@@ -26,7 +26,8 @@ AFTER_10 = ["title", "objective", "real_question", "insight", "audience", "propo
 #: below prove no word was lost. The flag-off words_sha of every fixture is unchanged (bench/baseline/checklist.json, the goldens).
 #: RE-RECORDED AGAIN at step 7 (fix 2, said once): the idea leads with its own stage text and the campaign line it repeated, and the poster's
 #: copy that repeated it, go to the notes after spec.SAID_ONCE_NOTE (92bc3896298c -> 54ab781d7dc5); the multiset tests still pass.
-V3_WORDS_SHA = "54ab781d7dc5"
+#: RE-RECORDED AGAIN in UAT round 3 (54ab781d7dc5 -> 53330a0298a4): an agency pitch no longer carries the tender's "Scope check" note on its channel-roles slide.
+V3_WORDS_SHA = "53330a0298a4"
 
 
 @pytest.fixture

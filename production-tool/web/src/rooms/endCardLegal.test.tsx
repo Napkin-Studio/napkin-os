@@ -54,7 +54,7 @@ async function project() {
 }
 
 /** A valid Brief node; legal mandatory included. */
-const briefNode = (mandatories: string[]) => ({ id: id('brief'), v: 1, field_v: {}, title: 'Ferncliff brief', source: { document_id: 'doc_1', app_id: 'ie.napkin.brief-maker', data_sha256: SHA('b'), taken: 1, at: T, how: 'link' }, spine: { mandatories } }) as unknown as NonNullable<ProductionDocument['briefs']>[string]
+const briefNode = (mandatories: string[]) => ({ id: id('brief'), v: 1, field_v: {}, title: 'Ferncliff brief', source: { document_id: 'doc_1', app_id: 'ie.napkin.brief-maker', data_sha256: SHA('b'), taken: 1, version: 1, at: T, how: 'link' }, spine: { mandatories } }) as unknown as NonNullable<ProductionDocument['briefs']>[string]
 
 import { Inspector } from './Inspector'
 import { editCut } from './editOps'

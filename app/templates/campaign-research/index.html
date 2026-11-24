@@ -2149,7 +2149,7 @@ body.fresh .booth-edge{display:none}
     return fetch(clanScheme+'/chain').then(function(r){ if(!r.ok) throw new Error('status '+r.status); return r.json(); })
       .then(function(c){ CHAIN={state:'ok', decisions:arr(c&&c.decisions)}; })
       .catch(function(e){ CHAIN={state:'unavailable', decisions:[], err:String(e&&e.message||e)}; })
-      .then(function(){ render(); reconsider(); askFromBrief(); });
+      .then(function(){ seedFromBrief(); render(); reconsider(); askFromBrief(); });
   }
   // ── a research started from a brief, or with one linked ────────────────
   // With no prompt and no material, the brief's ask is all there is to read:
@@ -2159,6 +2159,32 @@ body.fresh .booth-edge{display:none}
   // anything of the ask is filled, a run of the ask is recorded, or the
   // intake has begun.
   var ASK_FIELDS=['client','audience','background','objectives'];
+  // The brief this research was started from (Continue in -> "A follow-up question from its open questions"):
+  // its data, frozen under upstream. Its short name titles the research; its open questions are the question.
+  function briefData(){ var id=briefUpstream(), up=isObj(D().upstream)?D().upstream:{}; return id&&isObj(up[id])?up[id]:null; }
+  // The brief's short name, by the rule Brief Maker and the engine use (server/napkin/brief/fields.py short_name).
+  function briefShortName(){
+    var b=briefData(), v=b&&b.project_name; v=isObj(v)?v.value:v;
+    var s=String(v||'').split(/\s+/).join(' ').trim(), cut=new RegExp('\\s*[(\\[]|\\s+[-\u2013\u2014]\\s+|\\s*[:;]\\s+|,\\s+');
+    s=s.split(cut)[0].trim()||s.split('(').join('').split(')').join('').trim();
+    if(s.length>40){ var c=s.slice(0,40); s=c.indexOf(' ')>=0?c.slice(0,c.lastIndexOf(' ')):c; }
+    var EDGE=' \t"\'\u201c\u201d\u2018\u2019.,;:-';
+    while(s&&EDGE.indexOf(s.charAt(0))>=0) s=s.slice(1);
+    while(s&&EDGE.indexOf(s.charAt(s.length-1))>=0) s=s.slice(0,-1);
+    return s;
+  }
+  function briefOpenQuestions(){
+    var b=briefData(), v=b&&b.open_questions; v=isObj(v)?v.value:v;
+    return (Array.isArray(v)?v:typeof v==='string'?v.split(/\n+/):[]).map(function(q){ return String(isObj(q)?(q.text||q.question||''):q||'').trim(); }).filter(Boolean);
+  }
+  // Once, into an empty question box, before anything has started (UAT round 4, F12): the person edits it or asks.
+  function seedFromBrief(){
+    if(seedFromBrief.done) return; seedFromBrief.done=true;
+    if(CHAT.draft||Object.keys(mats()).length||thread().length||JOBS.length) return;
+    var qs=briefOpenQuestions(); if(!qs.length) return;
+    var name=briefShortName();
+    CHAT.draft=(name?name+': ':'')+(qs.length===1?qs[0]:'the brief\u2019s open questions.\n'+qs.map(function(q){ return '- '+q; }).join('\n'));
+  }
   function briefUpstream(){
     var up=isObj(D().upstream)?D().upstream:{};
     return Object.keys(up).filter(function(id){ var c=up[id];
@@ -3078,8 +3104,8 @@ body.fresh .booth-edge{display:none}
     window.clan.patchData('campaign.'+k, next, {actor:'human', action:'confirm', pinned:true, rationale:rationale}).then(function(res){
       ui.busy=false;
       if(res&&res.ok){ delete CONF.ui[k]; toast(f.label+' confirmed.'); loadChain(); VIEW.sel=null; VIEW.trail=[]; renderSel(); }
-      else { ui.err='Not saved: '+((res&&(res.error||res.message))||'the host refused it'); renderSel(); }
-    }).catch(function(err){ ui.busy=false; ui.err='Not saved: '+err; renderSel(); });
+      else { ui.err='Not saved: '+plainErr((res&&(res.error||res.message))||'the host refused it'); renderSel(); }
+    }).catch(function(err){ ui.busy=false; ui.err='Not saved: '+plainErr(err); renderSel(); });
   }
 
   function hostDecide(route, body){
@@ -3096,8 +3122,8 @@ body.fresh .booth-edge{display:none}
   function submitDecision(route, body, done){
     hostDecide(route, body).then(function(res){
       if(res&&res.ok){ closeDialog(); toast(done); }
-      else { var e=$('dlg-err'); var m=(res&&(typeof res.error==='string'?res.error:res.error&&res.error.message))||'the host refused'; if(e) e.textContent='Not recorded: '+m; else toast('Not recorded: '+m); }
-    }).catch(function(err){ toast('Not recorded: '+err); });
+      else { var e=$('dlg-err'); var m=(res&&(typeof res.error==='string'?res.error:res.error&&res.error.message))||'the host refused'; if(e) e.textContent='Not recorded: '+plainErr(m); else toast('Not recorded: '+plainErr(m)); }
+    }).catch(function(err){ toast('Not recorded: '+plainErr(err)); });
   }
   function doFinding(id){ inspect(id, false); }
   // ── LOCK (Contract 3 §11): lists what blocks it; one approve decision locks it.
@@ -3203,7 +3229,7 @@ body.fresh .booth-edge{display:none}
         +(j.handler?'<span class="pill">'+esc(j.handler)+'</span>':'')+'<span class="sp" style="flex:1"></span>'+''+'</div>'
         +(pg?'<div class="prog" role="progressbar" aria-valuemin="0" aria-valuemax="'+pg.total+'" aria-valuenow="'+pg.done+'" aria-label="'+esc(j.task)+' progress"><i style="width:'+pct+'%"></i></div><div class="srcline">'+pg.done+' of '+pg.total+(j.task==='research_lens'?' runs':' steps')+'</div>':'')
         +(jobLine(j)?'<div style="font-size:14px;margin-top:6px">'+jobLine(j)+'</div>':'')
-        +(j.error?'<div class="flag" style="margin-top:8px"><div>'+esc(j.error)+'</div></div>':'')
+        +(j.error?'<div class="flag" style="margin-top:8px"><div>'+esc(plainErr(j.error))+'</div></div>':'')
         +(j.jobId&&/^(queued|running)$/.test(j.state||'')&&!j.error?'<div class="no-print" style="margin-top:8px"><button type="button" class="btn sm" data-act="job-cancel" data-i="'+JOBS.indexOf(j)+'"'+(j.cancelling?' disabled':'')+'>'+(j.cancelling?'Stopping…':'Stop')+'</button></div>':'')
         +'<dl class="kv" style="margin-top:8px">'
         +(sc?'<dt>Scope</dt><dd class="mono" style="font-size:12px">'+esc(sc)+'</dd>':'')
@@ -5558,9 +5584,9 @@ body.fresh .booth-edge{display:none}
     var ui=PINACT[ref]||(PINACT[ref]={}); ui.busy=true; renderSel();
     hostDecide('/verdict', body).then(function(res){
       ui.busy=false;
-      if(res&&res.ok){ delete PINACT[ref]; toast(done); } else toast('Not saved: '+((res&&(typeof res.error==='string'?res.error:res.error&&res.error.message))||'the host refused'));
+      if(res&&res.ok){ delete PINACT[ref]; toast(done); } else toast('Not saved: '+plainErr((res&&(typeof res.error==='string'?res.error:res.error&&res.error.message))||'the host refused'));
       renderSel();
-    }).catch(function(e){ ui.busy=false; toast('Not saved: '+(e&&e.message||e)); renderSel(); });
+    }).catch(function(e){ ui.busy=false; toast('Not saved: '+plainErr(e&&e.message||e)); renderSel(); });
   }
   // A source, in full, in the inspector (the mock's selected source): what it
   // is, the pins it gave with their source lines, and what they reach.
@@ -5976,8 +6002,10 @@ body.fresh .booth-edge{display:none}
     // Where the walk goes once this one is settled: the next open check.
     var c0=checks().filter(function(c){ return c.ref===ref; })[0], id0=c0?chkId(c0):'', nx=chkAfter(id0);
     var ui=CHK.ui[ref]||(CHK.ui[ref]={}); ui.fail=''; ui.where=ui.where||where||'box';
+    // Already kept (a second Keep, or the walk landing on it again): it holds, nothing to ask the host.
+    if(route==='/verify'&&(fnds()[ref]||{}).status==='verified'){ delete CHK.ui[ref]; toast(done); pvAdvance(); CHK.at=nx; CHK.picked=!!nx; renderChecks(); return; }
     CHK.busy[ref]=true; renderChecks();
-    function failed(m){ CHK.busy[ref]=false; var u=CHK.ui[ref]||(CHK.ui[ref]={}); u.fail='Not saved: '+m; u.where=u.where||where||'box'; toast(u.fail); renderChecks(); }
+    function failed(m){ CHK.busy[ref]=false; var u=CHK.ui[ref]||(CHK.ui[ref]={}); u.fail='Not saved: '+plainErr(m); u.where=u.where||where||'box'; toast(u.fail); renderChecks(); }
     hostDecide(route, body).then(function(res){
       if(!(res&&res.ok)) return failed((res&&(typeof res.error==='string'?res.error:res.error&&res.error.message))||'the host refused');
       CHK.busy[ref]=false; delete CHK.ui[ref]; delete PV.cut[ref]; toast(done); pvAdvance();
@@ -6100,7 +6128,7 @@ body.fresh .booth-edge{display:none}
   function askPendingHtml(j){
     var i=ASK.jobs.indexOf(j);
     return '<div class="rq-a busy no-print" role="status"><p class="rq-q">'+esc(askedQ(j))+'</p>'
-      +(j.error?'<p class="rq-how"><span class="rq-warn">Not answered: '+esc(j.error)+'</span></p><div class="answers sm">'+(j.question?'<button type="button" class="ans" data-act="rq-retry" data-i="'+i+'">Ask again</button>':'')+'<button type="button" class="ans" data-act="rq-drop" data-i="'+i+'">Dismiss</button></div>'
+      +(j.error?'<p class="rq-how"><span class="rq-warn">Not answered: '+esc(plainErr(j.error))+'</span></p><div class="answers sm">'+(j.question?'<button type="button" class="ans" data-act="rq-retry" data-i="'+i+'">Ask again</button>':'')+'<button type="button" class="ans" data-act="rq-drop" data-i="'+i+'">Dismiss</button></div>'
         :'<p class="rq-how">Looking into it… the Research agent searches only if what’s here doesn’t answer it.</p>'
           +(j.jobId?'<div class="answers sm"><button type="button" class="ans" data-act="rq-stop" data-i="'+i+'"'+(j.stopping?' disabled':'')+'>'+(j.stopping?'Stopping…':'Stop')+'</button></div>':''))+'</div>';
   }
@@ -6198,7 +6226,7 @@ body.fresh .booth-edge{display:none}
   function factPendingHtml(j){
     var i=ASK.jobs.indexOf(j);
     if(j.error) return '<div class="rq-a pv-fa"><div class="pv-fa-who">'+esc(agentName('research'))+' · about this '+aboutWord(j.about)+'</div><p class="rq-q">'+esc(j.question)+'</p>'
-      +'<p class="rq-how"><span class="rq-warn">Not answered: '+esc(j.error)+'</span></p><div class="pv-acts"><button type="button" class="pv-btn" data-act="rq-retry" data-i="'+i+'">Ask again</button><button type="button" class="pv-link muted" data-act="rq-drop" data-i="'+i+'">Dismiss</button></div></div>';
+      +'<p class="rq-how"><span class="rq-warn">Not answered: '+esc(plainErr(j.error))+'</span></p><div class="pv-acts"><button type="button" class="pv-btn" data-act="rq-retry" data-i="'+i+'">Ask again</button><button type="button" class="pv-link muted" data-act="rq-drop" data-i="'+i+'">Dismiss</button></div></div>';
     return '<div class="rq-a pv-fa busy" role="status"><span class="pv-fa-dot" aria-hidden="true"></span><span>'+esc(TheAgent('research'))+' is answering “'+esc(clipT(j.question, 80))+'”, from this '+aboutWord(j.about)+' first…</span></div>';
   }
   // Under the Ask box of a fact or finding: what is being asked about it now, then its answers, newest first.
@@ -6225,7 +6253,7 @@ body.fresh .booth-edge{display:none}
       ASK.writing=null;
       if(!(res&&res.ok)) throw new Error((res&&(res.error||res.message))||'the host refused the write');
       renderAsks(); toast(on?'In the report '+inRepWhere(a)+'.':'Taken out of the report.');
-    }).catch(function(e){ ASK.writing=null; renderAsks(); toast('Not saved: '+(e&&e.message||e)); });
+    }).catch(function(e){ ASK.writing=null; renderAsks(); toast('Not saved: '+plainErr(e&&e.message||e)); });
   }
   function showInReport(id){
     if(VIEW.v!=='report') setView('report');
@@ -6369,7 +6397,8 @@ body.fresh .booth-edge{display:none}
   function brandName(){ var b=camp().brand&&camp().brand.value; b=isObj(b)?b.name:b; return typeof b==='string'?b.trim():''; }
   function workName(){ var n=camp().name&&camp().name.value; return typeof n==='string'?n.trim():''; }
   function researchTitle(){
-    var b=brandName(), ms=marketNames(), n=workName();
+    // From a brief, its short name leads ("Copperell Refill · Great Britain"), not the client company (UAT round 4, F12).
+    var b=briefShortName()||brandName(), ms=marketNames(), n=workName();
     if(b&&ms.length) return b+' · '+listJoin(ms);
     return n||b;
   }
@@ -6389,10 +6418,11 @@ body.fresh .booth-edge{display:none}
   // Ours: generic, the working name, the brand, or brand · markets exactly as
   // the rule writes it — never "Lunasa · Summer push", which a person chose.
   function titleIsOurs(t){
-    t=String(t||'').trim(); var b=brandName();
+    t=String(t||'').trim(); var b=briefShortName()||brandName(), b0=brandName();
     // "<source> · Research" is the shell's first name for a spin-off, not a person's.
     return !t||/^(untitled.*|new .*|campaign[ -]research.*|research( tool)?|x)$/i.test(t)||/ · Research$/.test(t)||t===TITLE.last||t===workName()
-      ||(!!b&&(t===b||(t.indexOf(b+' · ')===0&&isMarketList(t.slice(b.length+3)))));
+      ||(!!b&&(t===b||(t.indexOf(b+' · ')===0&&isMarketList(t.slice(b.length+3)))))
+      ||(!!b0&&b0!==b&&(t===b0||(t.indexOf(b0+' · ')===0&&isMarketList(t.slice(b0.length+3)))));
   }
   function syncTitle(){
     var t=researchTitle(), m=(window.__CLAN__||{}).manifest||{};
@@ -6512,6 +6542,13 @@ body.fresh .booth-edge{display:none}
   function pinLvOf(p){ return LVN[String(p&&p.confidence||'')]||2; }
   function fndLvOf(f){ var c=LVN[String(f&&f.confidence||'')]||(f&&f.status==='verified'?3:2); return f&&f.status==='proposed'?Math.min(c,1):/rejected|superseded/.test(f&&f.status||'')?1:c; }
   function fnum(id){ return Object.keys(fnds()).indexOf(id)+1; }
+  // What the host says goes to a person in plain words: no raw ids (UAT round 4, F8: "finding fi_… is already verified").
+  function plainErr(m){
+    return String(m==null?'':m)
+      .replace(/\bfinding (fi_[A-Za-z0-9]+)/gi, function(_, id){ var n=fnum(id); return n?'Finding '+n:'this finding'; })
+      .replace(/\bfi_[A-Za-z0-9]+/g, function(id){ var n=fnum(id); return n?'Finding '+n:'a finding'; })
+      .replace(/\bf_[A-Za-z0-9]{6,}/g, 'a fact').replace(/\bd_[A-Za-z0-9]{6,}/g, 'a decision');
+  }
   function secByLens(l){ return arr(evm().sections).filter(function(s){ return s.lens===l; })[0]||null; }
   function secOfFinding(fid){ var E=evm(); return arr(E.sections).filter(function(s){ return s.findings.indexOf(fid)!==-1; })[0]||secByLens(refLens(fid))||null; }
   function secOfPin(id){ return secByLens(lensOfPin(id)); }
