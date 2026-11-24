@@ -1033,20 +1033,30 @@ var DeckLogic = (function () {
    */
   function upstreamSummary(data) {
     var up = data && isObj(data.upstream) ? data.upstream : {};
-    var brief = null, research = null, production = null;
-    Object.keys(up).forEach(function (id) {
-      if (isProduction(up[id])) { if (!production) production = productionSummary(up[id]); return; } // a project is neither the brief nor the research
-      if (isKit(up[id])) return; // a Style Pack or Brand Clan says how the deck looks: it is never the brief or the research
-      var c = classifyUpstream(up[id]);
+    var brief = null, research = null, production = null, carried = [];
+    var take = function (doc) {
+      if (isProduction(doc) || isKit(doc)) return; // a project or a kit is neither the brief nor the research
+      var c = classifyUpstream(doc);
       if (c.brief && !brief) brief = c.brief;
       if (c.research && !research) research = c.research;
       // A document that carries its own upstream (research hoisted into a brief) counts too.
-      var inner = isObj(up[id]) && isObj(up[id].upstream) ? up[id].upstream : null;
+      var inner = isObj(doc) && isObj(doc.upstream) ? doc.upstream : null;
       if (inner) Object.keys(inner).forEach(function (k) {
         var ic = classifyUpstream(inner[k]);
         if (ic.research && !research) research = ic.research;
       });
+    };
+    Object.keys(up).forEach(function (id) {
+      if (isProduction(up[id])) {
+        if (!production) production = productionSummary(up[id]);
+        // A spin-off carries everything (owner rule): the project holds the full brief it was made from, and that brief its research.
+        // The deck's engine reads them (engine/deck/inputs.py carried_brief), so every place here says so too (UAT round 4 F26).
+        if (isObj(up[id].upstream)) Object.keys(up[id].upstream).forEach(function (k) { carried.push(up[id].upstream[k]); });
+        return;
+      }
+      take(up[id]); // the deck's own brief and research come first
     });
+    carried.forEach(take);
     if (!brief && production && production.brief) {
       brief = { name: production.brief.name, fields_filled: production.brief.fields_filled, fields_total: BRIEF_KEYS.length, mandatories: production.brief.mandatories, from: 'production' };
     }
@@ -1288,8 +1298,23 @@ var DeckLogic = (function () {
   /** The upstream sources the host says have changed since this deck: GET /upstream's `upstream` entries (kits have their own notice). */
   function upstreamChanged(res) {
     var list = isObj(res) && Array.isArray(res.upstream) ? res.upstream : [];
-    return list.filter(function (e) { return isObj(e) && e.status === 'changed' && !KIT_APPS[e.app_id]; })
+    return list.filter(function (e) { return isObj(e) && e.status === 'changed' && !KIT_APPS[e.app_id] && e.app_id !== PRODUCTION_APP; })
       .map(function (e) { return { title: String(e.title || (e.direct ? 'the brief' : 'a source')) }; });
+  }
+
+  var PRODUCTION_APP = 'ie.napkin.production';
+
+  /**
+   * The notice for the Production project this deck was made from when it changed since (GET /upstream): new or changed finals, a newer
+   * brief. A deck is a frozen snapshot, so nothing is taken on its own (UAT round 4 F26: "0 finals brought in" after a key visual was
+   * marked Final): Update re-carries the project (POST /attach/update), and the slides change only at the next build. Never throws.
+   * [{ document_id, text }]
+   */
+  function productionNotices(res) {
+    var list = isObj(res) && Array.isArray(res.upstream) ? res.upstream : [];
+    return list.filter(function (e) { return isObj(e) && e.status === 'changed' && e.app_id === PRODUCTION_APP && e.document_id; }).map(function (e) {
+      return { document_id: String(e.document_id), text: 'The Production project "' + String(e.title || 'Production project') + '" changed since this deck: new finals or a newer brief are not in it yet. Update brings them in; the slides change only when you build again.' };
+    });
   }
 
   /**
@@ -1822,7 +1847,7 @@ var DeckLogic = (function () {
     DECK_TYPES: DECK_TYPES, deckTypeOf: deckTypeOf, typeHints: typeHints, kindOfType: kindOfType, typePatch: typePatch,
     DECK_TYPE_CARDS: DECK_TYPE_CARDS, cardOf: cardOf, typeCaption: typeCaption, SIZES: SIZES, defaultSize: defaultSize, sizeOf: sizeOf, recipesOn: recipesOn, sizePatch: sizePatch, pickPatch: pickPatch, builtTypeOf: builtTypeOf, offeredCards: offeredCards,
     recordedStages: recordedStages, changeSheet: changeSheet,
-    researchRequest: researchRequest, upstreamChanged: upstreamChanged, kitNotices: kitNotices, agencyLookNotice: agencyLookNotice, agencyUpdatePatch: agencyUpdatePatch, lookPanel: lookPanel, agencyPatch: agencyPatch, isKit: isKit,
+    researchRequest: researchRequest, upstreamChanged: upstreamChanged, productionNotices: productionNotices, kitNotices: kitNotices, agencyLookNotice: agencyLookNotice, agencyUpdatePatch: agencyUpdatePatch, lookPanel: lookPanel, agencyPatch: agencyPatch, isKit: isKit,
     supplyCards: supplyCards, toSupply: toSupply, confirmList: confirmList, verifyPatch: verifyPatch, sourcedCounts: sourcedCounts,
     isPlaceholder: isPlaceholder, blockLines: blockLines, plainNotes: plainNotes, presented: presented, refsOf: refsOf, evidenceFor: evidenceFor, plainEvidence: plainEvidence, sourcesFor: sourcesFor,
     statusOf: statusOf, STATUS: STATUS, checksFor: checksFor, approveGate: approveGate, humanApproval: humanApproval, gateRequest: gateRequest,
@@ -1994,6 +2019,7 @@ var DeckProd = (function () {
   var qdraft = {}; // free-text answers typed but not saved, by question id
   var pending = {}; // inputs picked on the Start screen, written when Build is pressed
   var kitChanged = []; // Style Pack / Brand Clan notices (L.kitNotices); empty when the call fails or nothing moved
+  var prodChanged = []; // the Production project this deck was made from, changed since (L.productionNotices)
   var upChanged = []; // sources the host says changed since this deck; empty when the call fails or is absent
   var upLoaded = false;
   var clanScheme = navigator.userAgent.indexOf('Windows') !== -1 ? 'http://clan.localhost' : 'clan://localhost';
@@ -2359,6 +2385,9 @@ var DeckProd = (function () {
     var kitNote = kitChanged.map(function (n) {
       return '<div class="upnote" role="status" data-kit-notice="' + esc(n.kind) + '">' + esc(n.text) +
         (n.canUpdate ? ' <button class="btn sm" data-kit-update="' + esc(n.document_id) + '">Update</button>' : '') + '</div>';
+    }).join('');
+    kitNote += prodChanged.map(function (n) {
+      return '<div class="upnote" role="status" data-prod-notice>' + esc(n.text) + ' <button class="btn sm" data-prod-update="' + esc(n.document_id) + '">Update from Production</button></div>';
     }).join('');
     var an = L.agencyLookNotice(s.raw);
     if (an) kitNote += '<div class="upnote" role="status" data-agency-look-notice>' + esc(an.text) +
@@ -2948,8 +2977,8 @@ var DeckProd = (function () {
       if (typeof fetch !== 'function') return;
       Promise.resolve(fetch(clanScheme + '/upstream')).then(function (r) { return r && r.ok ? r.json() : null; })
         .then(function (v) {
-          var next = L.upstreamChanged(v), kits = L.kitNotices(v, s.raw);
-          if (next.length || kits.length) { upChanged = next; kitChanged = kits; render(); }
+          var next = L.upstreamChanged(v), kits = L.kitNotices(v, s.raw), prods = L.productionNotices(v);
+          if (next.length || kits.length || prods.length) { upChanged = next; kitChanged = kits; prodChanged = prods; render(); }
         }, function () { /* no host: no notice */ }).catch(function () { /* never throw */ });
     } catch (e) { /* no host: no notice */ }
   }
@@ -3176,6 +3205,15 @@ var DeckProd = (function () {
       put(L.agencyUpdatePatch(now()), 'update to current agency look', 'look');
       toast('Asked. The next build takes your agency\'s current look; the words stay the same.');
       return render();
+    }
+    if (a.prodUpdate) {
+      // The person chose to take the Production project as it is now (its finals, its brief): the host's attach update. Slides wait for a build.
+      try {
+        Promise.resolve(fetch(clanScheme + '/attach/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ document_id: a.prodUpdate }) }))
+          .then(function (r) { if (r && r.ok) { prodChanged = []; upLoaded = false; toast('Updated from Production. Build again to put the new finals on the slides.'); render(); } else toast('Could not update.'); },
+            function () { toast('Could not update.'); });
+      } catch (err) { toast('Could not update.'); }
+      return;
     }
     if (a.kitUpdate) {
       // The person chose to take the newer kit: the host's attach update. Pictures are not remade by it.

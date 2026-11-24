@@ -55,6 +55,7 @@ const L = vm.runInNewContext(`${logicRun}; DeckLogic`) as {
   answerPatch(qid: string, answer: unknown, at: string): unknown
   researchRequest(at: string): unknown
   upstreamChanged(res: unknown): { title: string }[]
+  productionNotices(res: unknown): { document_id: string; text: string }[]
   kitNotices(res: unknown, data: unknown): { kind: string; document_id: string; published: boolean; canUpdate: boolean; text: string }[]
   lookPanel(data: unknown): { agency: { use: boolean; shown: boolean }; kits: { shown: boolean; pack: { name: string; version: number } | null; brand: { name: string; version: number } | null } }
   agencyPatch(use: boolean, by: string | null, at: string): unknown
@@ -333,6 +334,39 @@ test('upstreamSummary: a Production project is its own card, never the brief or 
   assert.deepEqual(plain(p.production), { name: 'Lumen Water launch', finals: 4, to_supply: 2, brief: { name: 'Lumen awareness', fields_filled: 3, mandatories: 1 } })
   assert.equal(p.any, true)
   assert.equal(L.upstreamSummary({ upstream: { 'doc-prod': prodDoc({ finals: {}, briefs: {} }) } }).production?.finals, 0)
+})
+
+test('UAT round 4 F26: a deck made from a Production project counts the brief and research the project carries, as the engine does', () => {
+  const carried = prodDoc({ upstream: { 'doc-brief': { ...briefDoc, title: 'Copperell Refill', upstream: { 'doc-res': researchDoc } } } })
+  const u = L.upstreamSummary({ upstream: { 'doc-prod': carried } })
+  assert.equal(u.research?.name, 'Lumen research')   // round 4: "No research brought in" while the engine said brief+research
+  assert.equal(u.brief?.name, 'Copperell Refill')
+  assert.equal(u.production?.name, 'Lumen Water launch')
+  const bf = L.builtFrom({}, { 'doc-prod': carried }, [])
+  assert.equal(bf.tier, 'brief+research')
+  assert.equal(bf.production, true)
+  const d = L.describeBuiltFrom(bf, false)
+  assert.equal(d.line, 'Built from: the brief, the research, the Production project')
+  assert.ok(!d.missing.includes('No research brought in'))
+  // the deck's own brief still wins over the one the project carries
+  assert.equal(L.upstreamSummary({ upstream: { 'doc-prod': carried, d1: briefDoc } }).brief?.name, 'First Light brief')
+  // research the brief holds as its own findings counts too
+  const own = prodDoc({ upstream: { b: { ...briefDoc, findings: { f1: { status: 'verified' } } } } })
+  assert.ok(L.upstreamSummary({ upstream: { p: own } }).research)
+})
+
+test('UAT round 4 F26: a Production project changed since the deck offers Update, and never changes the deck on its own', () => {
+  const res = { upstream: [
+    { app_id: 'ie.napkin.production', document_id: 'doc-prod', title: 'Copperell Refill', status: 'changed' },
+    { app_id: 'ie.napkin.brief-maker', document_id: 'doc-brief', title: 'the brief', status: 'changed' },
+    { app_id: 'ie.napkin.production', document_id: 'doc-p2', title: 'Other', status: 'current' },
+  ] }
+  const n = L.productionNotices(res)
+  assert.equal(n.length, 1)
+  assert.equal(n[0].document_id, 'doc-prod')
+  assert.match(n[0].text, /Copperell Refill.*changed since this deck.*slides change only when you build again/)
+  assert.deepEqual(plain(L.upstreamChanged(res)), [{ title: 'the brief' }], 'the project has its own notice, not the generic one')
+  assert.deepEqual(plain(L.productionNotices(null)), [])
 })
 
 test('upstreamSummary: the Brief card shows the one a Production project froze only when the deck has none of its own', () => {
