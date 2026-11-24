@@ -260,8 +260,7 @@ test('rules on the page: the two faces only, no prices, rank only (never tier, s
   }
   const fonts = new Set([...html.matchAll(/font(?:-family)?:[^;{}]*?(?:var\(--font-(?:ui|serif)\)|"Geist"|"Newsreader"|-apple-system|Georgia|serif)/g)].map(m => m[0]))
   assert.ok(fonts.size > 0)
-  assert.ok(!/font-family:[^;}]*(mono|Courier|Inter|Fraunces|Helvetica Neue"?,\s*Arial)/i.test(html.replace(/--font-ui:[^;]*;/, '')), 'no third face')
-  assert.ok(!/font:\s*[1-7]00[^;{}]*var\(--font-ui\)/.test(html), 'Geist only at 800')
+  assert.ok(!/font-family:[^;}]*(Courier|Inter|Fraunces|Helvetica Neue"?,\s*Arial)/i.test(html.replace(/--font-(ui|mono):[^;]*;/g, '')), 'only Brief\'s faces (Newsreader, Geist, Geist Mono)')
   assert.ok(!/<form/.test(L.view(d, { world: 't_started' })))
 })
 

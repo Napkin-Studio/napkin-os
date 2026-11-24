@@ -160,17 +160,15 @@ test('it keeps to the house words: no leaks, no prices, no keys', () => {
   for (const w of ['brief:smp', 'schema_version', 'in_play']) assert.ok(!page.replace(/data-[a-z-]+="[^"]*"/g, '').includes(w) || w === 'brief:smp', `no key ${w}`)
 })
 
-test('the file uses Newsreader and Geist ExtraBold only', () => {
-  const families = new Set([...html.matchAll(/font-family:\s*([^;}]+)/g)].map(m => m[1].split(',')[0].replace(/["'\s]/g, '').replace(/var\(--font-(ui|serif)\)/, 'var')))
-  for (const f of families) assert.ok(/^(var|var\(--font-ui\)|var\(--font-serif\)|inherit)$/.test(f) || f === 'var', `font-family ${f}`)
-  const fontVars = [...html.matchAll(/--font-(ui|serif):\s*([^;]+);/g)].map(m => m[2].split(',')[0].replace(/["'\s]/g, ''))
-  eq([...new Set(fontVars)].sort(), ['Geist', 'Newsreader'])
-  const link = /fonts\.googleapis\.com\/css2\?([^"]+)"/.exec(html)![1]
-  eq([...link.matchAll(/family=([A-Za-z]+)/g)].map(m => m[1]).sort(), ['Geist', 'Newsreader'])
-  assert.match(link, /Geist:wght@800(&|$)/)
-  assert.ok(!/Geist Mono|font-weight:\s*(100|200|300|400|500|600|700)\b[^;]*var\(--font-ui\)/.test(html))
-  // every Geist shorthand is weight 800
-  for (const m of html.matchAll(/font:\s*(\d{3})[^;{}]*var\(--font-ui\)/g)) assert.equal(m[1], '800', `Geist at ${m[1]}: ${m[0]}`)
+test('the file uses Brief Maker\'s faces and nothing else: Newsreader, Geist and Geist Mono, from the same link (territories-redesign)', () => {
+  // owner, 2026-11-24: the screens Brief has are built Brief's way, and new screens keep the same rules, so Territories' type is Brief's
+  const brief = readFileSync(new URL('templates/brief-maker/index.html', root), 'utf8')
+  const linkOf = (h: string) => /<link href="(https:\/\/fonts\.googleapis\.com\/css2\?family=Geist:[^"]+)"/.exec(h)?.[1]
+  assert.ok(linkOf(html), 'Territories loads Brief\'s font link'); assert.equal(linkOf(html), linkOf(brief))
+  const fontVars = [...html.matchAll(/--font-(ui|serif|mono):\s*([^;]+);/g)].map(m => m[2].split(',')[0].replace(/["'\s]/g, ''))
+  eq([...new Set(fontVars)].sort(), ['Geist', 'GeistMono', 'Newsreader'])
+  const families = new Set([...html.matchAll(/font-family:\s*([^;}!]+)/g)].map(m => m[1].trim().split(',')[0].replace(/["']/g, '')))
+  for (const f of families) assert.ok(/^(var\(--font-(ui|serif|mono)\)|inherit)$/.test(f), `font-family ${f}`)
 })
 
 test('ticking works by id, whatever the order, and writes a valid document', () => {
@@ -590,7 +588,6 @@ test('step 2 keeps to the house words and the two faces; no price anywhere', () 
     assert.ok(!/€|£|\$\d|\bEUR\b|\bUSD\b|¢|\bprice\b|\bcost\b|\bspend\b/i.test(text(page)), 'no price on the page')
     assert.ok(!/<form/.test(page))
   }
-  assert.ok(!/font:\s*[1-7]00[^;{}]*var\(--font-ui\)/.test(html), 'Geist only at 800')
 })
 
 
@@ -875,7 +872,7 @@ test('a document nothing has run on yet offers Find the insights, and it starts 
   assert.equal(L.act(d, {}, { a: 'first' }, ENV)!.start, true)
   assert.equal(L.act(doc(), {}, { a: 'first' }, ENV), null, 'once insights exist, the pick takes over')
   // while it reads, the page is the stage (territories-redesign): the agent big, nothing to press twice
-  const busy = L.view(d, { job: { state: 'running' } }); assert.match(busy, /Finding the insights/); assert.match(busy, /class="bigorb"/); assert.doesNotMatch(busy, /data-act="first"/)
+  const busy = L.view(d, { job: { state: 'running' } }); assert.match(busy, /Finding the insights/); assert.match(busy, /class="aglbox"/); assert.doesNotMatch(busy, /data-act="first"/)
 })
 
 test('a failed first run says why in the engine\'s words, offers the action at the top and names the step honestly (owner walk 2026-11-23)', () => {
@@ -893,7 +890,7 @@ test('a failed first run says why in the engine\'s words, offers the action at t
 test('the eyebrow is one clamped line and its full text is the title', () => {
   const d = doc(); d.title = 'A very long working title: ' + 'x'.repeat(200)
   const page = L.view(d, {})
-  assert.match(page, /<div class="eyebrow" title="[^"]*"><span>/)
+  assert.match(page, /<div class="ahead-eye" title="[^"]*">/); assert.match(html, /\.ahead-eye\{[^}]*text-overflow:ellipsis/)
 })
 
 test('"To confirm:" is a quiet mark on the brief field, not a prefix in its words (owner walk 2026-11-23)', () => {

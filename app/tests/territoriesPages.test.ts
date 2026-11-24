@@ -51,7 +51,7 @@ test('3. the page moves to Explore while the crew is out, and shows its progress
   // territories-redesign: while the crew is out the page is the stage (Brief's pattern), the agent big, one lane per member from job.crew
   const page = L.view(approved(), { job: { state: 'running', progress: { done: 2, total: 5 } } })
   assert.match(page, /aria-current="step"[^>]*><i>2<\/i>/)
-  assert.match(page, /class="bigorb"/); assert.match(page, /class="apill now"><i><\/i>1\. Explore/)
+  assert.match(page, /class="aglbox"/); assert.match(page, /class="apill" role="listitem" aria-current="step"><span class="mdot"><\/span>1\. Explore/)
   assert.match(plain(page), /2 of 5 agents back · usually 2 to 3 minutes/, 'the job\'s progress, while the job has no lanes yet')
   assert.doesNotMatch(page, /class="booth-col/, 'no Booth on the stage')
   const crew = [{ id: 'cr_core', name: 'Close to the core', short: 'Core', role: 'strategy', colour: '#8C8577', heading: 'Stay on the proposition.', state: 'back', routes: 3 },

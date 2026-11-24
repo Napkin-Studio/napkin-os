@@ -58,7 +58,7 @@ test('the stage while the engine works: no Booth, the agent big, the step honest
   const page = L.view(d, { job: { state: 'running', started: Date.now() - 12000 } })
   assert.doesNotMatch(page, /class="booth-col/); assert.match(page, /data-nk-size="230"/); assert.match(plain(page), /Finding the insights/)
   assert.match(plain(page), /Usually about 40 seconds · 1[12] s so far/)
-  assert.match(page, /class="lnk" data-step="pick">← Back to what arrived/)
+  assert.match(page, /class="side-link" data-step="pick">← Back to what arrived/)
 })
 
 test('the Booth\'s agent is Brief\'s size, still when nothing runs, and the Booth no longer repeats the crew list', () => {
