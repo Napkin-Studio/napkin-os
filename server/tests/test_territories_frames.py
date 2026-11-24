@@ -64,6 +64,8 @@ def test_the_status_read_with_the_switch_off_is_not_a_failed_job(fr):
     h = host()
     r = step(fr, h, "frames_status")
     assert r[-1]["job"]["state"] == "done" and fr.rw.posts == []
+    # and it says pictures are off, so the page shows Make pictures off with why before anyone presses it (live test T6)
+    assert r[-1]["result"]["info"]["frames"]["pictures"] == "off"
 
 
 def test_the_switch_is_off_by_default_and_says_so(fr):
