@@ -1614,3 +1614,47 @@ intake:
         labels[2]
     );
 }
+
+#[test]
+fn approvals_count_only_approve_decisions_on_this_document() {
+    let chain = format!(
+        "decisions:
+- id: d_up_lock
+  kind: approve
+  agent: human
+  actor: human:u_a
+  action: lock
+  targets: ['{UP}']
+  rationale: Accepted upstream.
+  timestamp: 2026-09-24T12:00:00Z
+- id: d_lock2
+  kind: approve
+  agent: human
+  actor: human:u_a
+  action: lock
+  targets: ['{DOC}#']
+  rationale: Locked again.
+  timestamp: 2026-09-24T11:30:00Z
+- id: d_lock1
+  kind: approve
+  agent: human
+  actor: human:u_a
+  action: lock
+  targets: ['{DOC}#']
+  rationale: Locked.
+  timestamp: 2026-09-24T11:00:00Z
+- id: d_con
+  kind: contest
+  agent: research_lens@1
+  action: open_contest
+  targets: ['{DOC}#']
+  rationale: Not an approval.
+  timestamp: 2026-09-24T10:00:00Z
+"
+    );
+    let data = carried_data();
+    let doc = doc_with(&[(CHAIN_PATH, &chain), ("shared/data.yaml", &data)]);
+    assert_eq!(decisions(&doc).unwrap().approvals(), 2);
+    let none = doc_with(&[]);
+    assert_eq!(decisions(&none).unwrap().approvals(), 0);
+}

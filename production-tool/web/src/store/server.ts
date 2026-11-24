@@ -14,6 +14,7 @@ import {
   ClanDocumentStore, HostRefused, InvalidDocument, UnsupportedContract, type Persistence, type Person, type Why,
 } from '../../../clan-store/src'
 import { CHECKPOINT_NAME, checkpointOf, CheckpointTooNew, decodeCheckpoint, type Codec } from '../../../canvas-engine/src/checkpoint/checkpoint'
+import { osBriefSource } from '../brief/os'
 import { COMPACT_AT, type LiveLog } from './liveLog'
 import { PROTOCOL, type Endpoint, type FromWorker, type InitArgs, type SceneOpened, type ToWorker, type WireError } from './protocol'
 
@@ -145,6 +146,7 @@ export class StoreServer {
     this.store = new ClanDocumentStore({
       person: a.person ?? undefined,
       persistence: this.deps.persistence(a.idbName),
+      briefVersion: async (id) => { try { return (await osBriefSource().read(id)).version } catch { return null } },
       ...(a.saveDebounceMs !== undefined ? { saveDebounceMs: a.saveDebounceMs } : {}),
       ...(this.deps.wasm ? { wasm: this.deps.wasm } : {}),
     })

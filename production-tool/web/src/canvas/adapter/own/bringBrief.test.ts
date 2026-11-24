@@ -15,7 +15,7 @@ import type { OsBriefRead } from '../../../brief/os'
 import { OwnAdapter } from './adapter'
 
 const read = (): OsBriefRead => ({
-  documentId: 'doc-first-light', title: 'First Light brief', appId: 'ie.napkin.brief-maker', dataSha256: `sha256:${'b'.repeat(64)}`,
+  documentId: 'doc-first-light', title: 'First Light brief', appId: 'ie.napkin.brief-maker', dataSha256: `sha256:${'b'.repeat(64)}`, version: 1,
   data: { single_minded_proposition: 'Lumen is what the day starts with.', audience: 'Adults 25 to 40.', tone_and_world: ['Quiet'], confidential_fields: ['audience'] },
 })
 

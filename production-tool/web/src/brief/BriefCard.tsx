@@ -13,7 +13,7 @@ const CARD_PARTS = ['proposition', 'tone'] as const
 export function BriefCard({ doc, id, openUrl, needs = false }: { doc: ProductionDocument; id: string; openUrl?: string; needs?: boolean }) {
   const b = doc.briefs?.[id]
   if (!b) return null
-  const v = b.source.taken
+  const v = b.source.version
   const rows = spineLines(b.spine, b.confidential).filter((l) => (CARD_PARTS as readonly string[]).includes(l.part))
   return (
     <div className="bn-card" data-brief={id}>

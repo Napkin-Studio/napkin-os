@@ -844,8 +844,10 @@ export interface BriefSource {
   app_id: 'ie.napkin.brief-maker'
   /** sha256 of the brief's shared/data.yaml as taken. */
   data_sha256: Sha256
-  /** The version shown: 1 when linked, one more on each update taken. */
+  /** Production's own copy counter: 1 when linked, one more on each update taken. Not the brief's version. */
   taken: number
+  /** The brief's version as Brief Maker says it: the approvals count (at least 1), as of the copy taken. */
+  version: number
   at: string
   how: 'link' | 'spinoff'
   /** A newer version the person chose not to take. */
