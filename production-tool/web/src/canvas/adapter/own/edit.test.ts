@@ -63,3 +63,23 @@ describe('the own engine’s edit tools', () => {
     expect(a.selectionKind()).toMatchObject({ kind: 'group', count: 2 })
   })
 })
+
+describe('fit everything never zooms past 100% (UAT round 4 F18)', () => {
+  it('one small card fits at 100%, not 432%, centred; a big canvas still zooms out to fit', () => {
+    const a = new OwnAdapter()
+    ownChrome(a).setTool('sketch')
+    a.press(at(0, 0))
+    a.drag(at(160, 90))
+    a.release(at(160, 90))
+    ownChrome(a).fitAll()
+    expect(a.view().zoom).toBe(1)
+    a.fit(a.elements(), { zoomFactor: 0.9, animate: false })
+    expect(a.view().zoom).toBeGreaterThan(1) // the cap is the chrome's, not the adapter's default
+    ownChrome(a).setTool('sketch')
+    a.press(at(0, 0))
+    a.drag(at(4000, 2250))
+    a.release(at(4000, 2250))
+    ownChrome(a).fitAll()
+    expect(a.view().zoom).toBeLessThan(1)
+  })
+})

@@ -101,6 +101,13 @@ class FakeRelay {
       await this.make(new Uint8Array(init.body as Uint8Array), id)
       return this.json(200, { path: id })
     }
+    const back = /^\/t\/t1\/d\/([^/]+)\/restore$/.exec(path)
+    if (back && method === 'POST') {
+      const q = this.projects.get(back[1])
+      if (!q?.trashed) return this.json(404, { error: 'not in the Trash' })
+      delete q.trashed
+      return this.json(200, { restored: true, path: back[1] })
+    }
     const m = /^\/t\/t1\/d\/([^/]+)(\/download|\/save)?$/.exec(path)
     const p = m && this.projects.get(m[1])
     if (!m || !p || p.trashed) return this.json(404, { error: 'not found' })
@@ -224,6 +231,21 @@ describe('Home lists the relay\'s projects with this browser\'s', () => {
     expect(a.kind === 'local' && !a.newerThere && a.server?.id).toBe('prj_a')
     expect(homeItems(local, server, 'name').map((i) => (i.kind === 'local' ? i.p.name : i.name))).toEqual(['prj_a', 'prj_b', 'prj_c there'])
     expect(homeItems(local, server, 'recent', 'there').map((i) => i.kind)).toEqual(['server'])
+  })
+})
+
+describe('Move to Trash and its Undo (UAT round 4 F13)', () => {
+  it('the film leaves the library at once; Undo brings it back to the library', async () => {
+    forgetSent()
+    const fake = new FakeRelay()
+    const { laptop, p } = await made(fake)
+    expect((await laptop.shell.serverProjects()).map((r) => r.id)).toContain(p.id)
+    await laptop.shell.remove(p.id)
+    expect((await laptop.shell.serverProjects()).map((r) => r.id)).not.toContain(p.id)
+    expect(await laptop.shell.restore(p.id)).toBe(true)
+    expect((await laptop.shell.serverProjects()).map((r) => r.id)).toContain(p.id)
+    // A second Undo has nothing to bring back: the host says so.
+    await expect(laptop.shell.restore(p.id)).rejects.toThrow()
   })
 })
 

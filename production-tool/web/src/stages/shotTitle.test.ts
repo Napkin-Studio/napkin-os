@@ -6,11 +6,11 @@ const shot = (action: string) => ({ action, camera: { size: 'wide' as const } })
 
 describe('a storyboard card title', () => {
   it('skips the description in brackets after a name (live test: "(30s")', () => {
-    expect(titleOf(shot('@mira (30s, short silver hair, bright red raincoat) steps off a green tram into the rain.'))).toBe('Steps off a green tram…')
-    expect(titleOf(shot('@mira (30s, short silver hair'))).toBe('Wide')
+    expect(titleOf(shot('@mira (30s, short silver hair, bright red raincoat) steps off a green tram into the rain.'))).toBe('Mira steps off a green…')
+    expect(titleOf(shot('@mira (30s, short silver hair'))).toBe('Mira')
   })
   it('still takes the first words, and the size with none', () => {
-    expect(titleOf(shot('@mira opens a small yellow umbrella and smiles'))).toBe('Opens a small yellow…')
+    expect(titleOf(shot('@mira opens a small yellow umbrella and smiles'))).toBe('Mira opens a small…')
     expect(titleOf(shot('Rain, then sun'))).toBe('Rain')
     expect(titleOf(shot(''))).toBe('Wide')
   })
@@ -51,5 +51,13 @@ describe('a title with an abbreviation (UAT round 3)', () => {
     expect(titleOf({ action: 'At 6 p.m. she leaves.', camera: { size: 'wide' } })).toBe('At 6 p.m. she leaves')
     expect(titleOf({ action: 'Dr. Okafor waits. Then goes.', camera: { size: 'wide' } })).toBe('Dr. Okafor waits')
     expect(titleOf({ action: 'Plan B. Then more.', camera: { size: 'wide' } })).toBe('Plan B')
+  })
+})
+
+describe('a title keeps the @names it mentions (UAT round 4 F20)', () => {
+  it('reads each name as its plain name, without its view', () => {
+    expect(titleOf(shot('Hands hold @bottle under a running tap. Tap water fills it.'))).toBe('Hands hold bottle under…')
+    expect(titleOf(shot('@bottle_front on the worktop.'))).toBe('Bottle on the worktop')
+    expect(titleOf(shot('The tablet fizzes in @bottle'))).toBe('The tablet fizzes in…')
   })
 })
