@@ -741,6 +741,10 @@ export interface AttachTarget {
   many: boolean
   /** The open document is locked, so a link would be refused. */
   locked: boolean
+  /** The version the open document holds of it, when linked; a newer `version` is what Update takes. */
+  held_version?: number | null
+  /** Its client's default Brand Clan: what new work of that client starts on. */
+  default?: boolean
   /** Who it is for, as the library names it (the registry's id and name); null when it has no client. */
   client: { id: string; name: string } | null
 }

@@ -1173,6 +1173,12 @@ pub struct AttachTarget {
     /// The open document is locked: a link would be refused, and the shell
     /// says why rather than offer it.
     pub locked: bool,
+    /// The version the open document holds of it (`lineage.attached[].version`)
+    /// when it is linked; a newer `version` than this is what Update takes.
+    pub held_version: Option<u64>,
+    /// It is its client's default Brand Clan (`default_brand_clan` on the
+    /// client record): what new work of that client starts on.
+    pub default: bool,
     /// Who the target is for, as the library names it: the registry's id and
     /// name, else the name its own manifest carries. `null` when it has none.
     pub client: Option<clan_sdk::ClientRef>,
@@ -1187,6 +1193,9 @@ pub(crate) fn kit_version(clan: &ClanFile) -> Option<u64> {
 /// (`app.attach.accepts`), by title. Empty when the app declares none. A fork
 /// branch, a template, another tenant's document, the document itself and
 /// what it was made from are never offered.
+/// The Brand Clan app (`ie.napkin.brand`).
+const BRAND_APP_ID: &str = "ie.napkin.brand";
+
 pub fn attach_targets(store: &dyn DocStore, ctx: &Ctx, doc: &Document) -> Vec<AttachTarget> {
     let manifest = doc.clan().manifest();
     let spec = manifest
@@ -1198,11 +1207,17 @@ pub fn attach_targets(store: &dyn DocStore, ctx: &Ctx, doc: &Document) -> Vec<At
         return Vec::new();
     }
     let here = manifest.document_id().to_string();
+    let here_client = manifest.client.as_ref().map(|c| c.id.clone());
     let made_from = manifest.carried().map(|c| c.document_id.clone());
     let attached: Vec<String> = manifest
         .attached()
         .iter()
         .map(|a| a.carried.document_id.clone())
+        .collect();
+    let held: std::collections::HashMap<String, Option<u64>> = manifest
+        .attached()
+        .iter()
+        .map(|a| (a.carried.document_id.clone(), a.version))
         .collect();
     let locked = locked_error(doc.clan()).is_some();
     // Client names are resolved from the registry, as the library does, so a
@@ -1226,12 +1241,26 @@ pub fn attach_targets(store: &dyn DocStore, ctx: &Ctx, doc: &Document) -> Vec<At
                 || document_id == here
                 || Some(&document_id) == made_from.as_ref()
                 || foreign(ctx, d.clan())
+                // A Brand Clan belongs to one client: a document of a client
+                // is offered only that client's Brand Clans.
+                || (app.app_id == BRAND_APP_ID
+                    && here_client.is_some()
+                    && m.client.as_ref().map(|c| &c.id) != here_client.as_ref())
             {
                 return None;
             }
+            let d_path = d.id().to_string();
+            let default = m
+                .client
+                .as_ref()
+                .and_then(|r| registry.get(&r.id))
+                .and_then(|rec| rec.default_brand_clan.as_deref())
+                .is_some_and(|d| d == document_id || d == d_path.as_str());
             Some(AttachTarget {
                 app_id: app.app_id.clone(),
                 app_name: app.name.clone(),
+                held_version: held.get(&document_id).copied().flatten(),
+                default,
                 attached: attached.contains(&document_id),
                 many: spec.many.contains(&app.app_id),
                 locked,

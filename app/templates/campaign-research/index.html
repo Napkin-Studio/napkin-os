@@ -1887,6 +1887,7 @@ body.fresh .booth-edge{display:none}
 <div class="ws" id="ws">
 <main id="doc">
   <div id="notices"></div>
+  <div class="bcchip-wrap" id="bcChip" hidden data-bc-noun="research" data-bc-drafted="report,asks"></div>
   <div class="hero band" id="hero"></div>
   <section class="report" id="report" aria-labelledby="h-report" hidden></section>
   <section class="start" id="start" aria-label="How this campaign started: your request, its progress and your answers" hidden></section>
@@ -7475,5 +7476,129 @@ body.fresh .booth-edge{display:none}
   else setTimeout(function(){ readShellWho(); resumeJobs(); resumeJob(); render(); askFromBrief(); }, 0);
 })();
 </script>
+<!-- BRAND CLAN CHIP (Brand Clan phase 2, mocks c1 and c2; the same block in Brief Maker and Research).
+     Shows the Brand Clan this document holds, picks another (attach replaces), offers Update when the
+     Brand Clan published a newer version, and starts new work on the client's default. Reads only
+     /attach-targets; writes only /attach and /attach/update, as a person. -->
+<style>
+  .bcchip-wrap{position:relative;margin:0 0 10px}
+  .bcchip{display:inline-flex;align-items:center;gap:8px;font:600 12.5px/1 var(--font-ui,var(--font-sans,var(--sans,system-ui)));color:var(--text,var(--ink,#1a1a1a));background:var(--paper,var(--bg,#fff));border:1px solid var(--line,var(--border,#d8d3cc));border-radius:999px;padding:6px 12px 6px 10px;cursor:pointer}
+  .bcchip:disabled{cursor:default;opacity:.7}
+  .bcchip .dot{width:7px;height:7px;border-radius:50%;background:#2E9E6B;flex:none}
+  .bcchip .dot.off{background:var(--muted,#9a948c)}
+  .bcchip-upd{display:inline-flex;align-items:center;gap:6px;margin-left:8px;font:500 12px/1 var(--font-ui,var(--font-sans,var(--sans,system-ui)));color:var(--amber-ink,#7a5200);background:var(--amber-soft,#fff2d6);border:1px solid color-mix(in srgb,var(--amber-ink,#7a5200) 30%,transparent);border-radius:999px;padding:5px 6px 5px 10px}
+  .bcchip-upd button{font:600 12px/1 var(--font-ui,var(--font-sans,var(--sans,system-ui)));border:0;border-radius:999px;padding:4px 9px;background:var(--ag-act,#5865F2);color:var(--ag-act-ink,#fff);cursor:pointer}
+  .bcchip-upd button:disabled{opacity:.6;cursor:default}
+  .bcchip-menu{position:absolute;z-index:40;top:calc(100% + 6px);left:0;width:250px;background:var(--paper,var(--bg,#fff));color:var(--text,var(--ink,#1a1a1a));border:1px solid var(--line,var(--border,#d8d3cc));border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.18);padding:8px 0;font-family:var(--font-ui,var(--font-sans,var(--sans,system-ui)));text-align:left}
+  .bcchip-menu[hidden]{display:none}
+  .bcchip-menu h4{margin:6px 20px 8px;font-family:inherit;font-size:11.5px;font-weight:400;line-height:1.3;letter-spacing:0;text-transform:none;color:var(--muted,#6f6a63)}
+  .bcchip-menu button.it{display:grid;grid-template-columns:18px 1fr;gap:0 6px;width:100%;text-align:left;background:none;border:0;padding:8px 20px;cursor:pointer;color:inherit}
+  .bcchip-menu button.it:hover,.bcchip-menu button.it:focus-visible{background:color-mix(in srgb,var(--text,#1a1a1a) 6%,transparent)}
+  .bcchip-menu button.it:disabled{cursor:default}
+  .bcchip-menu .ck{color:var(--ag-act,#5865F2);font-weight:700}
+  .bcchip-menu .nm{font-family:inherit;font-size:13px;font-weight:600;line-height:1.3}
+  .bcchip-menu .nm small{font-weight:400;color:var(--muted,#6f6a63)}
+  .bcchip-menu .sub{grid-column:2;font-family:inherit;font-size:11px;font-weight:400;line-height:1.4;color:var(--muted,#6f6a63);margin-top:2px}
+  .bcchip-menu .foot{margin:6px 8px 0;padding:10px 12px 4px;border-top:1px solid var(--line,var(--border,#d8d3cc));font-family:inherit;font-size:11px;font-weight:400;line-height:1.6;letter-spacing:0;text-align:left;color:var(--muted,#6f6a63)}
+  .bcchip-menu .why{margin:4px 20px 6px;font-family:inherit;font-size:11px;font-weight:400;line-height:1.5;color:var(--amber-ink,#7a5200)}
+  .bcchip-say{display:block;font:400 11.5px/1.5 var(--font-ui,var(--font-sans,var(--sans,system-ui)));color:var(--muted,#6f6a63);margin-top:6px}
+  .bcchip-say.err{color:var(--red,#b3261e)}
+</style>
+<script>
+(function(){
+  var NOUN = (document.getElementById('bcChip') || { getAttribute: function(){ return null; } }).getAttribute('data-bc-noun') || 'document';
+  var SCHEME = navigator.userAgent.indexOf('Windows') !== -1 ? 'http://clan.localhost' : 'clan://localhost';
+  var BRAND = 'ie.napkin.brand';
+  var S = { list: [], open: false, busy: false, say: '', err: false, triedDefault: false };
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function day(iso){ var d = new Date(iso); return isNaN(d) ? '' : d.getDate() + ' ' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]; }
+  function mount(){ return document.getElementById('bcChip'); }
+  function held(){ for (var i = 0; i < S.list.length; i++) if (S.list[i].attached) return S.list[i]; return null; }
+  function dflt(){ for (var i = 0; i < S.list.length; i++) if (S.list[i]['default']) return S.list[i]; return null; }
+  function client(){ var h = held() || dflt() || S.list[0]; return h && h.client ? h.client.name : ''; }
+  // A Brand Clan's title carries its client ("Tidewell · Zero"); the chip already says the client, so it shows the name.
+  function nameOf(t){ var c = t && t.client && t.client.name, n = (t && t.title) || ''; return c && n.indexOf(c + ' · ') === 0 ? n.slice(c.length + 3) : n; }
+  function newer(h){ return !!(h && h.version != null && h.held_version != null && h.version > h.held_version); }
+  function hostErr(r, fallback){ return (r && (r.error && (r.error.message || r.error)) || r && r.message) || fallback; }
+  function post(route, id){
+    return fetch(SCHEME + route, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ document_id: id }) })
+      .then(function(r){ return r.json().catch(function(){ return { error: 'the studio answered ' + r.status }; }).then(function(j){ if (!r.ok || (j && j.error)) throw new Error(hostErr(j, 'the studio answered ' + r.status)); return j; }); });
+  }
+  function load(){
+    if (typeof fetch !== 'function') return Promise.resolve();
+    return fetch(SCHEME + '/attach-targets').then(function(r){ return r.ok ? r.json() : []; })
+      .then(function(all){ S.list = (Array.isArray(all) ? all : []).filter(function(t){ return t.app_id === BRAND; }); render(); startOnDefault(); })
+      .catch(function(){ S.list = []; render(); });
+  }
+  // New work starts on the client's default (BUILD-PLAN phase 2, C1): only while the document holds no
+  // Brand Clan and is still at its start (none of the keys the app names in data-bc-drafted holds anything yet), once per page.
+  function startOnDefault(){
+    var m = mount(); if (!m || S.triedDefault || held()) return;
+    var d = dflt(); if (!d || d.locked || !fresh(m)) return;
+    S.triedDefault = true; S.busy = true; S.say = 'Starting on ' + nameOf(d) + ', ' + client() + '’s default…'; S.err = false; render();
+    post('/attach', d.document_id).then(function(){ S.say = 'Started on ' + nameOf(d) + ', ' + client() + '’s default.'; S.err = false; S.busy = false; return load(); })
+      .catch(function(){ S.say = ''; /* a refusal leaves the chip offering it; nothing to say */ })
+      .then(function(){ S.busy = false; render(); });
+  }
+  function empty(v){ return v == null || v === '' || (Array.isArray(v) && !v.length) || (typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).length); }
+  function fresh(m){
+    var keys = (m.getAttribute('data-bc-drafted') || '').split(',').filter(Boolean); if (!keys.length) return false;
+    var d = (window.__CLAN__ && window.__CLAN__.data) || {};
+    return keys.every(function(k){ return empty(d[k]); });
+  }
+  function pick(id){
+    var h = held(); if (S.busy || (h && h.document_id === id)) { S.open = false; render(); return; }
+    var t = S.list.filter(function(x){ return x.document_id === id; })[0]; if (!t) return;
+    S.busy = true; S.open = false; S.say = 'Taking ' + nameOf(t) + '…'; S.err = false; render();
+    post('/attach', id).then(function(){ S.say = 'This ' + NOUN + ' now uses ' + nameOf(t) + (t.version ? ' v' + t.version : '') + '.'; })
+      .catch(function(e){ S.say = 'Could not take ' + nameOf(t) + ': ' + (e && e.message || e) + '. Nothing changed.'; S.err = true; })
+      .then(function(){ S.busy = false; return load(); });
+  }
+  function update(){
+    var h = held(); if (!newer(h) || S.busy) return;
+    S.busy = true; S.say = 'Taking ' + nameOf(h) + ' v' + h.version + '…'; S.err = false; render();
+    post('/attach/update', h.document_id).then(function(){ S.say = 'Updated to ' + nameOf(h) + ' v' + h.version + '.'; })
+      .catch(function(e){ S.say = 'Could not update: ' + (e && e.message || e) + '. This ' + NOUN + ' keeps v' + h.held_version + '.'; S.err = true; })
+      .then(function(){ S.busy = false; return load(); });
+  }
+  function render(){
+    var m = mount(); if (!m) return;
+    if (!S.list.length) { m.hidden = true; m.innerHTML = ''; return; }
+    m.hidden = false;
+    var h = held(), locked = S.list.some(function(t){ return t.locked; });
+    var label = (client() ? client() + ' · ' : '') + (h ? nameOf(h) : 'No Brand Clan');
+    var html = '<button type="button" class="bcchip" data-bc="toggle" aria-haspopup="true" aria-expanded="' + (S.open ? 'true' : 'false') + '"' + (S.busy ? ' disabled' : '') + '>' +
+      '<span class="dot' + (h ? '' : ' off') + '"></span><span>' + esc(label) + '</span><span aria-hidden="true">▾</span></button>';
+    if (newer(h)) html += '<span class="bcchip-upd" data-bc-upd>Brand Clan updated <button type="button" data-bc="update"' + (S.busy || locked ? ' disabled title="' + (locked ? 'The ' + NOUN + ' is locked' : 'Working') + '"' : '') + '>Update</button></span>';
+    html += '<div class="bcchip-menu" role="menu"' + (S.open ? '' : ' hidden') + '><h4>Brand Clan for this ' + esc(NOUN) + '</h4>';
+    if (locked) html += '<p class="why">The ' + esc(NOUN) + ' is locked, so its Brand Clan stays as it is.</p>';
+    S.list.forEach(function(t){
+      var on = h && h.document_id === t.document_id;
+      html += '<button type="button" class="it" role="menuitemradio" aria-checked="' + (on ? 'true' : 'false') + '" data-bc-pick="' + esc(t.document_id) + '"' + (locked ? ' disabled' : '') + '>' +
+        '<span class="ck">' + (on ? '✓' : '') + '</span><span class="nm">' + esc(nameOf(t)) + (t['default'] ? ' <small>· default</small>' : '') + '</span>' +
+        '<span class="sub">' + (t.version ? 'v' + t.version : 'v1') + (t.updated_at ? ' · Updated ' + esc(day(t.updated_at)) + '.' : '') + '</span></button>';
+    });
+    html += '<p class="foot">This ' + esc(NOUN) + ' keeps the version it has. A newer one shows an Update chip.</p></div>';
+    if (S.say) html += '<span class="bcchip-say' + (S.err ? ' err' : '') + '" role="status">' + esc(S.say) + '</span>';
+    m.innerHTML = html;
+  }
+  document.addEventListener('click', function(e){
+    var m = mount(); if (!m) return;
+    var t = e.target.closest ? e.target.closest('[data-bc],[data-bc-pick]') : null;
+    if (t && m.contains(t)) {
+      if (t.getAttribute('data-bc') === 'toggle') { S.open = !S.open; render(); }
+      else if (t.getAttribute('data-bc') === 'update') update();
+      else if (t.hasAttribute('data-bc-pick')) pick(t.getAttribute('data-bc-pick'));
+      return;
+    }
+    if (S.open && !m.contains(e.target)) { S.open = false; render(); }
+  });
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && S.open) { S.open = false; render(); } });
+  window.addEventListener('focus', function(){ if (!S.busy) load(); });
+  window.__bcChip = { reload: load, state: S };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', load); else load();
+})();
+</script>
+
 </body>
 </html>

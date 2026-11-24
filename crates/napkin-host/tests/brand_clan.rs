@@ -854,3 +854,57 @@ fn only_a_brand_clan_is_one() {
     );
     assert_eq!(status(run(&s, &me(), "frobnicate", json!({}))), 400);
 }
+
+/// The Brand Clan chip in Brief Maker and Research (phase 2, mocks c1 and c2) reads
+/// `/attach-targets`: only the document's own client's Brand Clans, which is the
+/// default, the version the work holds, and a newer version after a publish.
+#[test]
+fn the_chip_offers_only_this_clients_brand_clans_with_default_and_held_version() {
+    let s = store();
+    let t = client(&s, "Tidewell");
+    let other = client(&s, "Harbour Bakes");
+    let z = zero(&s, &t);
+    let path = z["path"].as_str().unwrap();
+    let brand_id = z["document_id"].as_str().unwrap().to_string();
+    let _theirs = zero(&s, &other);
+    let brief = create_instance_for(&s, BRIEF, Some("Summer brief".into()), Some(&t)).unwrap();
+    let targets = |s: &MemStore| {
+        let doc = Document::load(s, brief.clone()).unwrap();
+        napkin_host::library::attach_targets(s, &me(), &doc)
+    };
+    let before = targets(&s);
+    assert_eq!(before.len(), 1, "only Tidewell's Brand Clan is offered");
+    assert_eq!(before[0].document_id, brand_id);
+    assert!(
+        before[0].default,
+        "the first Brand Clan is the client's default"
+    );
+    assert!(!before[0].attached);
+    assert_eq!(before[0].held_version, None);
+    let doc = Document::load(&s, brief.clone()).unwrap();
+    let (change, _) = attach_change(&s, &me(), &doc, &brand_id, AttachMode::Attach).unwrap();
+    s.apply(&change).unwrap();
+    let held = targets(&s);
+    assert!(held[0].attached);
+    assert_eq!(held[0].held_version, Some(1));
+    assert_eq!(held[0].version, Some(1));
+    ok(
+        &s,
+        &me(),
+        "draft.save",
+        json!({"path": path, "candidate": draft_with_mint(&z, "#3FC9A0")}),
+    );
+    ok(
+        &s,
+        &me(),
+        "publish",
+        json!({"path": path, "expect_version": 1}),
+    );
+    let behind = targets(&s);
+    assert_eq!(
+        behind[0].held_version,
+        Some(1),
+        "the work keeps its version"
+    );
+    assert_eq!(behind[0].version, Some(2), "the chip offers Update to v2");
+}
