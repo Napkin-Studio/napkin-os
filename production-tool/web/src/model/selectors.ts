@@ -351,5 +351,28 @@ export function storyboardSeconds(d: Doc, storyboardId = mainStoryboard(d)?.id):
 
 /** Open asks, oldest first (ui-behaviour 3.17's questions pill). */
 export function openAsks(d: Doc) {
-  return values(d.asks).filter((a) => a.state === 'open').sort(byId)
+  return values(d.asks).filter((a) => a.state === 'open' && !supersededAsk(d, a)).sort(byId)
+}
+
+/** A plan's question that a later plan of the same node, now done, has answered by itself (UAT round 4 L4: "The script is
+ *  empty…" stayed open after the storyboard was planned). */
+export function supersededAsk(d: Doc, a: Doc['asks'][string]): boolean {
+  const j = a.job_id ? d.jobs[a.job_id] : undefined
+  if (!j || j.op !== 'shot_list') return false
+  const later = values(d.jobs).filter((o) => o.id !== j.id && o.op === 'shot_list' && o.state === 'completed' && o.created_at > j.created_at)
+  return later.some((o) => o.node?.id === j.node?.id) || answeredElsewhere(d, j.node?.id, later.map((o) => o.node?.id))
+}
+
+/** A job waiting on a question a later plan has answered (supersededAsk): no longer waiting for anyone. */
+export function supersededJob(d: Doc, j: Doc['jobs'][string]): boolean {
+  if (j.state !== 'needs_input') return false
+  const ask = values(d.asks).find((a) => a.job_id === j.id)
+  return !!ask && (ask.state !== 'open' || supersededAsk(d, ask))
+}
+
+/** A storyboard no script drives (planned before there was a script: "The script is empty…") is answered once a storyboard
+ *  a script drives has been planned since (UAT round 4 L4, local run: the question stayed on the first, empty Film). */
+export function answeredElsewhere(d: Doc, sbId: string | undefined, plannedSince: readonly (string | undefined)[]): boolean {
+  const driven = (id: string | undefined) => !!id && values(d.links).some((l) => l.role === 'drives' && l.to.kind === 'storyboard' && l.to.id === id)
+  return !!sbId && !driven(sbId) && plannedSince.some((id) => id !== sbId && driven(id))
 }

@@ -3592,7 +3592,7 @@ body.fresh .booth-edge{display:none}
       +arr(earlier).map(function(t){ return '<span class="asked">Before that, in your own words: <q>'+esc(t)+'</q></span>'; }).join('')+'</dd></div>';
   }
   function sheetHtml(T){
-    var first=firstPrompt(), c=camp();
+    var first=latestPrompt(), c=camp();
     var name=isObj(c.name)&&typeof c.name.value==='string'?c.name.value:'';
     var h='<div class="fcard sheet" id="sheet"><div class="fc-h"><span class="eyebrow">Your request</span><span class="sp"></span>'
       +(first?'<span class="srcline">submitted by <b>'+esc(whoLabel(first.by))+'</b>'+(first.at?' · <time datetime="'+esc(first.at)+'">'+esc(fmtDate(first.at))+'</time>':'')+'</span>':'')+'</div><dl class="sheet-rows">';
@@ -3668,6 +3668,17 @@ body.fresh .booth-edge{display:none}
       +(nf?' What we couldn’t find is under Selection ('+n(nf)+').':'');
   }
   // What the agent at work says, in first person, from the job as it stands.
+  var TRY_AGAIN='<button type="button" class="rs-go" data-act="chat-retry">Try again</button>';
+  // A run that has stopped for good (it failed, or the person stopped it) and wrote no report: its ask can be
+  // changed and sent again. Back to the ask goes there; while a run is live it only shows what was asked.
+  function runStopped(){ var j=CHAT.job; return !!(j&&/^(failed|cancelled)$/.test(j.state||'')&&!isObj(D().report)); }
+  function backToAsk(){ return !!CHAT.back&&runStopped(); }
+  // What the person asked last, as they wrote it: without the lenses, markets and window the page adds
+  // on sending (they are still picked on the ask, and are added again).
+  function lastAskText(){
+    var m=latestPrompt(), t=m?String(m.text||''):'';
+    return t.replace(/\n\n(?:(?:Lenses|Markets): [^\n]*?\.|Window: [^\n]*?\.)(?: (?:(?:Lenses|Markets): [^\n]*?\.|Window: [^\n]*?\.))*$/, '');
+  }
   function speech(T){
     var j=CHAT.job, lq=liveQuestion(), active=jobActive(), rep=isObj(D().report);
     var stage=(j&&STAGE[j.stage])?j.stage:'extract', k=runRole(stage);
@@ -3677,7 +3688,7 @@ body.fresh .booth-edge{display:none}
     if(j&&j.state==='checking'){ sp.text='Let me see where we got to.'; return sp; }
     if(j&&active){
       if(stage==='research'){ sp.k='research'; return sp; }
-      var fp=firstPrompt(), n=fp?arr(fp.attachments).length:0, b=camp().brand, np=Object.keys(pins()).length;
+      var fp=latestPrompt(), n=fp?arr(fp.attachments).length:0, b=camp().brand, np=Object.keys(pins()).length;
       sp.text={
         extract:'I’m reading what you sent'+(n?': your note and '+n+' file'+(n===1?'':'s')+'.':'.'),
         identify:'I’m working out which brand this is about, and its category.'+(isObj(b)&&b.value&&b.value.name?' So far: '+b.value.name+'.':''),
@@ -3690,17 +3701,19 @@ body.fresh .booth-edge{display:none}
     if(lq){ sp.mood='needs'; sp.text='I need you for a moment.'; return sp; }
     sp.mood='idle';
     if(j&&j.state==='cancelled'){
-      sp.text='You stopped the research'+(STAGE[j.stage]?' at the '+j.stage+' step':'')+'. What we’d already found stays in the document.';
-      if(started) sp.acts='<button type="button" class="rs-go" data-act="chat-retry">Start it again</button>';
+      sp.text='You stopped the research'+(STAGE[j.stage]?' at the '+j.stage+' step':'')+'. Nothing was lost: what we’d already found stays in the document.';
+      if(started) sp.acts=TRY_AGAIN;
       return sp;
     }
     if(j&&(j.state==='failed'||j.error)){
       sp.mood='needs';
-      sp.text=j.state==='failed'?'I had to stop. What we already found stays in the document.':'I can’t reach the agents right now.';
+      sp.text=j.state==='failed'?'I had to stop. Nothing was lost: what we already found stays in the document.':'I can’t reach the agents right now.';
       sp.err=j.error||'';
-      if(j.interrupted&&started) sp.acts='<button type="button" class="rs-go" data-act="chat-retry">Run it again</button>';
-      else if(j.id&&j.error&&j.state!=='failed') sp.acts='<button type="button" class="ans" data-act="chat-poll">Check again</button>';
-      else if(!j.id&&started) sp.acts='<button type="button" class="rs-go" data-act="chat-retry">Try again</button>';
+      // A run that stopped is run again from its ask (UAT round 4, L3: a failed run offered nothing, so the only
+      // way on was a new document). Lost touch with one still running: look again first, or start it again.
+      if(j.state==='failed'&&started) sp.acts=j.interrupted?'<button type="button" class="rs-go" data-act="chat-retry">Run it again</button>':TRY_AGAIN;
+      else if(j.id&&j.error&&j.state!=='failed') sp.acts='<button type="button" class="ans" data-act="chat-poll">Check again</button>'+(started?TRY_AGAIN:'');
+      else if(started) sp.acts=TRY_AGAIN;
       return sp;
     }
     if(rep||(j&&j.state==='done')){
@@ -4023,12 +4036,14 @@ body.fresh .booth-edge{display:none}
     // The Knowledge agent speaks here only when there is something to say: starting, asking your
     // name, or starting from a brief. The greeting and the agents are on the working screen.
     var hi=CHAT.sending?CHAT.sendStep:CHAT.askWho&&!me()?'Before I start: what’s your name? It goes on everything you send.'
+      :backToAsk()?'Change the ask if you like, then start again. Nothing was lost: what we found before stays in the document.'
       :briefUpstream()?'Hi, I’m '+theAgent('knowledge')+'! I’ll start from the brief this came from: its client, audience and background. Add the market or anything else, or just start.':'';
     var off=CHAT.sending?' disabled':'', nm=myName();
     var named=CHAT.showName||CHAT.name;
     return '<div class="rs-start rt-prompt">'
       +toolHeadHtml(1)
       +'<div class="rs-stage">'
+      +(backToAsk()?'<p class="rt-unback no-print"><button type="button" class="linkbtn" data-act="rt-unback">Back to where it stopped →</button></p>':'')
       +'<h2 class="rt-q" id="rt-q">What do you need to find out?</h2>'
       +'<div class="rs-box rt-box" id="composer">'
         +'<label class="sr" for="cmp-prompt">What do you need to find out?</label>'
@@ -4055,11 +4070,11 @@ body.fresh .booth-edge{display:none}
     if(ae&&ae.id&&el.contains(ae)) keep={id:ae.id, s:ae.selectionStart, e:ae.selectionEnd};
     var T=thread(), fresh=!T.length&&!Object.keys(camp()).length;
     $('nav-start-a').hidden=!T.length;
-    document.body.classList.toggle('fresh', fresh&&!CHAT.job);
+    document.body.classList.toggle('fresh', (fresh&&!CHAT.job)||backToAsk());
     if(!T.length && !fresh && !CHAT.job){ el.hidden=true; el.innerHTML=''; return; }
     el.hidden=false;
     var lq=null;
-    if(fresh && !CHAT.job){
+    if((fresh && !CHAT.job)||backToAsk()){
       el.innerHTML=startHtml(); ASKING=false;
     } else {
       lq=liveQuestion();
@@ -4187,12 +4202,19 @@ body.fresh .booth-edge{display:none}
     for(var i=0;i<T.length;i++){ var m=T[i].m; if(m.role==='user'&&m.material_id) return m; }
     return null;
   }
+  // The ask the last run started from: a run stopped and its ask changed (Back to the ask) is tried again as changed.
+  function latestPrompt(){
+    var T=thread();
+    for(var i=T.length-1;i>=0;i--){ var m=T[i].m; if(m.role==='user'&&m.material_id) return m; }
+    return null;
+  }
   function doRetry(){
-    var m=firstPrompt(); if(!m) return;
+    var m=latestPrompt(); if(!m) return;
     startCampaign(m.text, arr(m.attachments).map(function(id){ var x=material(id)||{};
       return {material_id:id, name:String(x.asset||x.name||id).replace(/^(human\/)?assets\//,''), sha256:x.sha256}; }));
   }
   function startCampaign(prompt, atts){
+    CHAT.back=false;
     CHAT.job={state:'sending', stage:'extract'}; POLL.delay=1000; renderChat();
     var el=$('start'); if(el&&el.scrollIntoView) el.scrollIntoView({block:'start', behavior:'smooth'});
     window.clan.apiProxy('middleware', {task:'start_campaign', input:{prompt:prompt, attachments:atts}}).then(function(r){ onJobReply(r); }, unreachable);
@@ -7204,7 +7226,11 @@ body.fresh .booth-edge{display:none}
       case 'rt-skip': if(isObj(D().report)&&!jobActive()&&!liveQuestion()){ document.body.classList.remove('show-run'); var rp=$('report'); if(rp&&!rp.hidden) rp.scrollIntoView({block:'start', behavior:calm()?'auto':'smooth'}); }
         else toast(isObj(D().report)?'The report opens here as soon as this run ends.':'The report isn’t written yet. It opens here by itself as soon as it is.'); break;
       case 'rt-tiles': var td=b.closest('details'); CHAT.tilesOpen=!(td&&td.open); break;
-      case 'rt-back': var ak=$('asked'); if(ak){ ak.open=true; CHAT.sheetOpen=true; ak.scrollIntoView({block:'start', behavior:calm()?'auto':'smooth'}); } break;
+      case 'rt-back':
+        // A stopped run: back to the ask, as it was asked, to change it or start again (UAT round 4, L3).
+        if(runStopped()){ CHAT.back=true; if(!CHAT.draft) CHAT.draft=lastAskText(); renderChat(); var cp=$('cmp-prompt'); if(cp){ try{ cp.focus(); }catch(x){} } var st=$('start'); if(st&&st.scrollIntoView) st.scrollIntoView({block:'start', behavior:calm()?'auto':'smooth'}); break; }
+        var ak=$('asked'); if(ak){ ak.open=true; CHAT.sheetOpen=true; ak.scrollIntoView({block:'start', behavior:calm()?'auto':'smooth'}); } break;
+      case 'rt-unback': CHAT.back=false; renderChat(); break;
       case 'show-run': document.body.classList.toggle('show-run'); var st=$('start'); if(st&&document.body.classList.contains('show-run')) st.scrollIntoView({block:'start',behavior:'smooth'}); break;
       case 'goto-confirm': doConfirm(b.getAttribute('data-field')); break;
       case 'chk-yes': case 'chk-no': case 'chk-reject': case 'chk-pick': case 'chk-reason': case 'chk-use': case 'chk-cancel': case 'chk-why': case 'chk-open': case 'chk-sel': case 'chk-go':

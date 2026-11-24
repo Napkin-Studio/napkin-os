@@ -4819,12 +4819,66 @@ test('Research: a run lost to a restart ends as stopped, says it was interrupted
   const sp = lift<{ speech(T: unknown[]): Record<string, string> }>(RT, ['speech'], {
     CHAT, liveQuestion: () => null, jobActive: () => false, isObj, arr, D: () => ({}), STAGE: { research: {} }, runRole: () => 'research',
     firstPrompt: () => ({ text: 'go' }), theAgent: () => 'the Research agent', camp: () => ({}), pins: () => ({}), LENSES: [],
+    TRY_AGAIN: '<button type="button" class="rs-go" data-act="chat-retry">Try again</button>',
   }).speech([])
-  assert.equal(sp.text, 'I had to stop. What we already found stays in the document.')
+  assert.equal(sp.text, 'I had to stop. Nothing was lost: what we already found stays in the document.')
   assert.equal(sp.err, INTERRUPTED_WORDS)
   assert.match(sp.acts, /data-act="chat-retry">Run it again</)
   // other jobs (research runs, asks) say the same words
   assert.equal(lift<{ mwError(r: unknown): string }>(RT, ['mwError', 'interrupted'], { INTERRUPTED: INTERRUPTED_WORDS }).mwError(UNKNOWN_JOB), INTERRUPTED_WORDS)
+})
+
+// UAT round 4, L3: a Research run that stopped could not be tried again, and Back to the ask stayed on the stopped view.
+const TRY_AGAIN_BTN = '<button type="button" class="rs-go" data-act="chat-retry">Try again</button>'
+const stoppedSpeech = (job: Record<string, unknown>, started = true) => lift<{ speech(T: unknown[]): Record<string, string> }>(RT, ['speech'], {
+  CHAT: { job }, liveQuestion: () => null, jobActive: () => false, isObj, arr, D: () => ({}), STAGE: { extract: {}, research: {} }, runRole: () => 'knowledge',
+  firstPrompt: () => (started ? { text: 'go' } : null), theAgent: () => 'the Strategy agent', camp: () => ({}), pins: () => ({}), LENSES: [], TRY_AGAIN: TRY_AGAIN_BTN,
+}).speech([])
+
+test('Research: a run that fails stays on the stage, says what happened and that nothing was lost, with Try again as the primary', () => {
+  const sp = stoppedSpeech({ id: 'job_1', state: 'failed', stage: 'extract', error: 'extract failed: LayersError: layers unreachable (ConnectError)' })
+  assert.equal(sp.text, 'I had to stop. Nothing was lost: what we already found stays in the document.')
+  assert.equal(sp.err, 'extract failed: LayersError: layers unreachable (ConnectError)', 'it says what happened')
+  assert.equal(sp.acts, TRY_AGAIN_BTN, 'Try again, the primary (rs-go): it was offered nothing before')
+  const stopped = stoppedSpeech({ id: 'job_1', state: 'cancelled', stage: 'research' })
+  assert.match(stopped.text, /^You stopped the research at the research step\. Nothing was lost/)
+  assert.equal(stopped.acts, TRY_AGAIN_BTN)
+  // Lost touch with a run that may still be going: look again first, or start it again.
+  const stalled = stoppedSpeech({ id: 'job_1', state: 'stalled', stage: 'research', error: 'timeout' })
+  assert.match(stalled.acts, /data-act="chat-poll">Check again<\/button>/)
+  assert.ok(stalled.acts.endsWith(TRY_AGAIN_BTN))
+  // Nothing was ever asked: nothing to try again.
+  assert.equal(stoppedSpeech({ id: 'job_1', state: 'failed', stage: 'extract', error: 'x' }, false).acts, '')
+})
+
+test('Research: Back to the ask on a stopped run goes back to the ask, as asked, and Try again re-runs it', () => {
+  // The stopped view's way back and the ask's way back to the stage.
+  const back = RT.slice(RT.indexOf("case 'rt-back':"), RT.indexOf("case 'rt-unback':"))
+  assert.match(back, /if\(runStopped\(\)\)\{ CHAT\.back=true; if\(!CHAT\.draft\) CHAT\.draft=lastAskText\(\); renderChat\(\);/)
+  assert.match(RT, /if\(\(fresh && !CHAT\.job\)\|\|backToAsk\(\)\)\{\n\s*el\.innerHTML=startHtml\(\);/)
+  assert.match(fn(RT, 'startHtml'), /backToAsk\(\)\?'<p class="rt-unback no-print"><button type="button" class="linkbtn" data-act="rt-unback">Back to where it stopped →<\/button><\/p>'/)
+  assert.match(fn(RT, 'startCampaign'), /CHAT\.back=false;/, 'starting again leaves the ask')
+  // Only a run that stopped for good, with no report, goes back to the ask.
+  const CHAT: { job: Record<string, unknown> | null; back?: boolean } = { job: { state: 'failed' }, back: true }
+  let report: unknown = null
+  const THREAD = [
+    { m: { role: 'user', material_id: 'mat_1', text: 'First ask\n\nMarkets: GB.' } },
+    { m: { role: 'agent', text: 'hi' } },
+    { m: { role: 'user', material_id: 'mat_2', text: 'Copperell Refill: the brief’s open questions.\n- What is the budget figure?\n\nLenses: Market, Regulation. Markets: GB. Window: 2024–2026.' } },
+    { m: { role: 'agent', text: 'on it' } },
+  ]
+  const f = lift<{ runStopped(): boolean; backToAsk(): boolean; lastAskText(): string }>(RT, ['latestPrompt', 'runStopped', 'backToAsk', 'lastAskText'], {
+    CHAT, isObj, D: () => ({ report }), thread: () => THREAD,
+  })
+  assert.equal(f.backToAsk(), true)
+  assert.equal(f.lastAskText(), 'Copperell Refill: the brief’s open questions.\n- What is the budget figure?', 'the last ask, without the picks the page adds again')
+  for (const state of ['running', 'queued', 'stalled', 'done']) { CHAT.job = { state }; assert.equal(f.runStopped(), false, state) }
+  CHAT.job = { state: 'cancelled' }; assert.equal(f.runStopped(), true)
+  report = { headline: 'x' }; assert.equal(f.runStopped(), false, 'a report: Back shows what was asked, as before')
+  // Try again re-runs the ask the last run started from, with its files: the changed one after Back to the ask.
+  assert.match(RT, /function doRetry\(\)\{\n\s*var m=latestPrompt\(\); if\(!m\) return;\n\s*startCampaign\(m\.text,/)
+  assert.equal(lift<{ latestPrompt(): { material_id: string } }>(RT, ['latestPrompt'], { thread: () => THREAD }).latestPrompt().material_id, 'mat_2')
+  assert.match(fn(RT, 'sheetHtml'), /var first=latestPrompt\(\)/, 'What you asked for shows the ask the run used')
 })
 
 test('Brief Maker: a draft lost to a restart stops with "We had to stop", the words, and Run it again', () => {
