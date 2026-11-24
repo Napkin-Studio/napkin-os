@@ -260,7 +260,7 @@ export function EditRoom({ data, sel, onSel, onChange, onSound, register, ready:
             seek: (s) => { setPlaying(false); setT(Math.min(Math.max(0, s), Math.max(plan.lengthS, 0))) },
             pick,
             assemble: () => run(assembleFirstCut(docStore, data)),
-            endCard: () => run(editCut.endCard(docStore, data.videoId, {}).then(() => setPicked({ kind: 'card' }))),
+            endCard: () => run(editCut.endCard(docStore, data.videoId, {}, data.targetS).then(() => setPicked({ kind: 'card' }))),
             trimHead: (c, inS) => run(editCut.trimHead(docStore, data.videoId, c, inS, ripple)),
             trimTail: (c, outS) => {
               if (outS > takeS(c.genId) + 1e-3) setError('Not enough footage after this clip. Making it longer comes soon; for now trim it shorter or use another take.')
@@ -347,7 +347,8 @@ export function RenderAd({ data }: { data: RoomData }) {
     if (short > 0) checks.push({ text: `The ${c.transition?.kind === 'dissolve' ? 'dissolve' : 'dip'} into ${n ? `shot ${n}` : 'a clip'} holds a last frame for ${short.toFixed(1)} s`, ok: false })
     else if (c.transition) checks.push({ text: `The ${c.transition.kind === 'dissolve' ? 'dissolve' : 'dip'} into ${n ? `shot ${n}` : 'a clip'} has enough footage`, ok: true })
   }
-  if (!cut.endCard) checks.push({ text: 'No end card of your own: the film ends on the studio card', ok: true })
+  // No studio card is ever added to a client's film (owner 2026-11-23); UAT round 4 F23: these lines said there was one.
+  if (!cut.endCard) checks.push({ text: 'No end card: the film ends on its last shot', ok: true })
   // The cut against the length it is for (live test 2026-11-18: a 9.8 s cut of a 15 s film went unmentioned).
   const target = storyboardOfVideo(doc, data.videoId)?.target_s ?? doc.videos[data.videoId]?.target_s
   const off = target && plan.lengthS ? Math.round((plan.lengthS - target) * 10) / 10 : 0
@@ -384,7 +385,7 @@ export function RenderAd({ data }: { data: RoomData }) {
         <ul className="rm-checklist">
           {checks.map((c) => <li key={c.text} className={c.ok ? 'ok' : 'warn'}><span aria-hidden="true">{c.ok ? '✓' : '!'}</span><span className="rm-clamp2" title={c.text}>{c.text}</span></li>)}
         </ul>
-        <p className="rm-faint">The film is {plan.lengthS.toFixed(1)} s, then the studio card.</p>
+        <p className="rm-faint">The film is {plan.lengthS.toFixed(1)} s{plan.endCard ? ', the end card included' : ''}.</p>
         {error && <div role="alert" className="rm-error">{error}</div>}
         <div className="rm-row end">
           <button type="button" className="btn" onClick={close}>Back to the cut</button>

@@ -11,11 +11,11 @@ import { remakeOp, remakeProblem, remakeWith } from '../jobs/remake'
 import { cutOf, currentTake, mainVideo, shotsOf } from '../model/selectors'
 import type { ModelStore } from '../model/store'
 import { addShots, id, job, MAYA, modelStore, SHA, T } from '../test/model'
-import { clipLen } from './cut'
+import { clipLen, cutLength } from './cut'
 import { appendTake, assembleFirstCut, editCut } from './editOps'
 import { boxKeyOf, roomGens, type Box } from './model'
 import type { RoomData } from './Rooms'
-import { compileFor, endCardFrom, newEndCard, readCut, readyTakes, renderPlan } from './timeline'
+import { compileFor, endCardFrom, newEndCard, readCut, readyTakes, renderPlan, writeCut } from './timeline'
 import { linkInput } from '../canvas/nodes/nodes'
 
 
@@ -93,6 +93,17 @@ describe('the Edit room on the real store', () => {
     expect(sent).toMatchObject({ lengthS: 8.5, endCard: { line: 'Clean like a samurai', bg: '#14161B', s: 2 } })
     // The legacy reader agrees: shot 1's clip is the together take.
     expect(currentTake(store.get(), shots[0].id)?.id).toBe(together.id)
+  })
+
+  it('Assemble first cut over the film\'s length takes the over-run off the last clip, the end card kept whole (UAT round 4 F22)', async () => {
+    const { store, shots, videoId } = await film()
+    // 6.5 s of clips and a 2 s card against a 7 s target: 1.5 s over.
+    await assembleFirstCut(store, { ...data(store, shots, videoId), targetS: 7 })
+    await ok(store)
+    const plan = compileFor(store.get(), videoId)
+    expect(plan.lengthS).toBe(7)
+    expect(plan.endCard).toMatchObject({ startS: 5, s: 2 })
+    expect(plan.clips.map((c) => [c.startS, c.inS, c.outS])).toEqual([[0, 0, 2], [2, 2, 3.5], [3.5, 0, 1.5]])
   })
 
   it('trims, fades, a dissolve, a text and the end card are each one undo step, and undo takes them back', async () => {
@@ -301,6 +312,33 @@ describe('the end card\'s Legal line (owner 2026-11-23: its own key, from the LI
     await editCut.endCard(store, videoId, { cta: 'Find it' })
     expect(store.get().videos[videoId].end_card).toMatchObject({ cta: 'Find it', legal: 'Terms apply. See hollowoak.example' })
     expect(compileFor(store.get(), videoId).endCard).toMatchObject({ cta: 'Find it', legal: 'Terms apply. See hollowoak.example' })
+  })
+
+  it('the render takes the Brand board\'s logo for a card without its own (UAT round 4 F23)', async () => {
+    const { store, videoId } = await film()
+    await editCut.endCard(store, videoId, {})
+    expect(compileFor(store.get(), videoId).endCard?.logo_sha256).toBeUndefined()
+    await systemUpdate(store, (d) => {
+      d.assets[SHA('l')] = { sha256: SHA('l'), kind: 'image', mime: 'image/png', origin: 'uploaded', bytes: 10, locations: [], w: 400, h: 160 } as never
+      d.refs.ref_logo = { id: 'ref_logo', v: 1, field_v: {}, key: 'logo', variant: 'copperell', role: 'logo', asset: SHA('l') } as never
+    }, 'sync')
+    expect(compileFor(store.get(), videoId).endCard?.logo_sha256).toBe(SHA('l'))
+    const sent = await renderPlan(compileFor(store.get(), videoId), async (sha) => ({ sha256: sha, url: `https://cdn.test/${sha}`, mime: 'image/png' }))
+    expect(sent.endCard?.logo).toMatchObject({ sha256: SHA('l') })
+    // The card's own logo, when it has one, wins.
+    await systemUpdate(store, (d) => { d.videos[videoId].end_card!.logo_asset = SHA('m') }, 'sync')
+    expect(compileFor(store.get(), videoId).endCard?.logo_sha256).toBe(SHA('m'))
+  })
+
+  it('a new end card makes room for itself inside the film\'s length (UAT round 4 F22)', async () => {
+    const { store, videoId } = await film()
+    // One take filling the 15 s, as UAT round 4 had it.
+    await writeCut(store, videoId, 'seed the cut', () => ({ v1: [{ id: 'c1', genId: 'gen_x', inS: 0, outS: 15, startS: 0, speed: 1, holdS: 0, fadeInS: 0, fadeOutS: 0 }], v2: [], text: [] }))
+    await editCut.endCard(store, videoId, {}, 15)
+    const cut = readCut(store.get(), videoId)
+    expect(cut.endCard).toBeDefined()
+    expect(cutLength(cut)).toBe(15)
+    expect(cut.v1[0].outS).toBe(15 - cut.endCard!.durS)
   })
 
   it('a Brief that is only in the project, not linked to the film, fills nothing', async () => {

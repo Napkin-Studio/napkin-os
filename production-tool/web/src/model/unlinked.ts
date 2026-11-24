@@ -4,6 +4,7 @@ import type { Id, NamedRef, ProductionDocument } from '../contracts/types'
 import { briefsList, briefOf } from '../brief/model'
 import { scopeOf } from './scope'
 import { refsList } from './selectors'
+import { isActive } from '../jobs/runner'
 
 export interface Unlinked {
   /** One picture per @key, the first of its views: what "Link it" links. A key with any view in scope is not listed. */
@@ -34,6 +35,13 @@ export function unlinkedFor(d: ProductionDocument, nodeId: Id): Unlinked {
   }
   const first = briefsList(d)[0]
   return { refs, ...(first && !briefOf(d, nodeId) ? { brief: { id: first.id } } : {}) }
+}
+
+/** Whether an action is already running on this node or from it (a job on it, or one that takes it as an input): its link
+ *  notice has had its say then (UAT round 4 F21: "not linked … Plan shots won’t use them" stayed up while the Director
+ *  agent was planning the shots). */
+export function workingFrom(d: ProductionDocument, nodeId: Id): boolean {
+  return Object.values(d.jobs ?? {}).some((j) => isActive(j.state) && (j.node?.id === nodeId || (j.inputs ?? []).some((r) => r.ref === nodeId)))
 }
 
 /** "Run without it": the nodes (and what they lacked) whose notice the person hid, until the page is reloaded. */
