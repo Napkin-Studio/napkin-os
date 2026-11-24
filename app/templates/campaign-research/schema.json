@@ -14,7 +14,7 @@
         "confirmed",
         "stated"
       ],
-      "description": "extracted: read from supplied material, cites a span. proposed: derived, to confirm: from layer facts (fact_ids), the brief a research started from (upstream_refs) or the client the document belongs to (workspace_ref, client_org only). confirmed: a human accepted or corrected it; re-extraction never overwrites it without asking. stated: a human supplied it directly."
+      "description": "extracted: read from supplied material, cites a span. proposed: derived, to confirm: from layer facts (fact_ids), the brief a research started from (upstream_refs) or the client the document belongs to (workspace_ref, client_org and brand only). confirmed: a human accepted or corrected it; re-extraction never overwrites it without asking. stated: a human supplied it directly."
     },
     "gate": {
       "type": "string",
@@ -418,7 +418,7 @@
         "workspace_ref": {
           "type": "string",
           "pattern": "^cli_[0-9a-z]+$",
-          "description": "origin proposed, client_org only: the client this document belongs to (its manifest.client id), when nothing else names one. identify proposes it from clan.workspace_client (middleware-api.md §1)."
+          "description": "origin proposed, client_org and brand only: the client this document belongs to (its manifest.client id), when nothing else names one. identify proposes it from clan.workspace_client (middleware-api.md §1)."
         }
       },
       "allOf": [
@@ -1086,7 +1086,7 @@
           }
         },
         "brand": {
-          "description": "[gate: created] The SUBJECT brand. Never a comparator. Ambiguity blocks; it never defaults.",
+          "description": "[gate: created] The SUBJECT brand. Never a comparator. Ambiguity blocks; it never defaults. A research started from a client's page proposes that client (workspace_ref) when the material does not settle it: proposed, to confirm.",
           "x-gate": "created",
           "allOf": [
             {
@@ -1109,6 +1109,7 @@
               "source",
               "fact_ids",
               "upstream_refs",
+              "workspace_ref",
               "finding_ids",
               "by",
               "confirmed_from",
