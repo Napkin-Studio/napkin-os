@@ -156,6 +156,62 @@ def facts_schema(categories: list[str], competitors: list[str]) -> dict:
     })
 
 
+DISCOVER_SYSTEM = """You find the main brands that compete in a category, for an advertising agency's research.
+You are given the category, ONE market, the client's own brand (never list it) and web sources with
+verbatim excerpts. List the brands the excerpts name as players in this category in this market: leaders,
+challengers and new entrants. Each brand: its name as the source writes it (a brand, not a retailer, a
+parent company or a product line), and the evidence: the source_id and the exact quote from that source's
+excerpts (character for character) that names it. Never use outside knowledge: a brand no excerpt names is
+not listed. At most eight, the most prominent first."""
+
+# How many players research brings in when nobody named the comparators (F11, UAT round 4).
+DISCOVER_MAX = 5
+
+
+def players_schema() -> dict:
+    return _obj({"players": {"type": "array", "items": _obj({
+        "name": {"type": "string"},
+        "evidence": {"type": "array", "items": _obj({"source_id": {"type": "string"}, "quote": {"type": "string"}})},
+    })}})
+
+
+def brand_ref_of(name: str) -> str | None:
+    """brand/<slug> for a discovered player, in the document's ref shape (letters, digits, hyphens)."""
+    s = slug(name)
+    return f"brand/{s}" if s and re.fullmatch(r"[a-z0-9][a-z0-9-]*", s) else None
+
+
+def checked_players(raw: dict, by_sid: dict, subject_name: str | None, limit: int = DISCOVER_MAX) -> list[dict]:
+    """The players a discovery answer may name: each quoted verbatim from a source this run read, the
+    name in its quote, never the client's own brand, one per brand, at most `limit`. Every rejected
+    answer is simply left out: discovery only proposes, a planner confirms."""
+    own = slug(subject_name or "")
+    out, seen = [], set()
+    for p in raw.get("players") or []:
+        name = re.sub(r"\s+", " ", str(p.get("name") or "")).strip()
+        ref = brand_ref_of(name)
+        if not name or len(name) > 60 or not ref or ref in seen:
+            continue
+        if own and (slug(name) == own or own in slug(name) or slug(name) in own):
+            continue
+        quotes = {}
+        for ev in p.get("evidence") or []:
+            s = by_sid.get(ev.get("source_id"))
+            if not s:
+                continue
+            q = next((verbatim(x, ev.get("quote", "")) for x in s["excerpts"] if verbatim(x, ev.get("quote", ""))),
+                     None)
+            if q and name.lower() in q.lower():
+                quotes.setdefault(s["sid"], q)
+        if not quotes:
+            continue
+        seen.add(ref)
+        out.append({"ref": ref, "name": name, "sources": list(quotes), "quotes": quotes})
+        if len(out) >= limit:
+            break
+    return out
+
+
 def validate_research(clan: dict, inp: dict):
     """The synchronous checks (400s) before any job is started."""
     data = ctx_data(clan)
@@ -212,7 +268,8 @@ class Researcher:
     """One research_lens run (or start_campaign's research stage)."""
 
     def __init__(self, doc, base, clan, handler, caps, lenses, markets, cats, pairs=None, reuse_days=30,
-                 concurrency=4, seed=None, competitors=None, subject=None, materials=None, question_first=False):
+                 concurrency=4, seed=None, competitors=None, subject=None, materials=None, question_first=False,
+                 discover=False):
         self.doc, self.base, self.clan, self.handler, self.caps = doc, base, clan, handler, caps
         # the client's documents with readable text (the person's prompt is not a source)
         self.materials = [m for m in materials or [] if getattr(m, "kind", "") != "prompt"
@@ -237,6 +294,11 @@ class Researcher:
             if isinstance(c, dict) and c.get("ref") and c["ref"] not in {x["ref"] for x in self.comps}:
                 self.comps.append(c)
         self.leaf_names = {l["code"]: l["name"] for l in caps.layers.leaves()}
+        # Nobody named the comparators: research finds the category's main players itself (owner, 2026-11-24,
+        # UAT round 4 F11), before the units run, so every lens searches and extracts with them. They are
+        # proposed in campaign.competitor_set, never confirmed: a planner removes any that does not compete.
+        self.discover = bool(discover) and not self.comps and "brands_positioning" in lenses
+        self.discovered: list[dict] = []
         self.done = 0
         self.hits = []
         self._rows: dict = {}
@@ -288,6 +350,100 @@ class Researcher:
                 self.hits.append({"id": sid, "scope": "brand", "source": uri})
             self._mat_srcs = out
             return out
+
+    # -- the category's players, when nobody named them -----------------------------
+    def _record_sources(self, res: dict, scope: str = "category") -> list[dict]:
+        """The research port's sources, recorded in the layer, with what the run needs of each."""
+        srcs = []
+        for s in res["sources"]:
+            if not _date_ok(s["retrieved_at"]) or s["retrieved_at"] > today():
+                s = dict(s, retrieved_at=today())
+            if s["published_at"] and not _date_ok(s["published_at"]):
+                s = dict(s, published_at=None)
+            tier = tier_for(s["url"])
+            sid = self.caps.layers.add_source({"uri": s["url"], "publisher": s["publisher"], "title": s["title"],
+                                               "tier": tier, "domain": registrable(s["url"]), "licence": "open",
+                                               "retrieved_at": s["retrieved_at"],
+                                               "published_at": s["published_at"]})
+            srcs.append(dict(s, sid=sid, tier=tier, domain=registrable(s["url"]), licence="open"))
+            self.hits.append({"id": sid, "scope": scope, "source": s["url"]})
+        return srcs
+
+    def discover_players(self) -> list[dict]:
+        """Find the category's main brands in the first market and add them as comparators (refs
+        brand/<slug>). Only names a source this run read states are kept (`checked_players`). A failed
+        search or answer leaves the run as it was, said in the run log: it never stops the research."""
+        market = self.markets[0]
+        cat_names = [self.leaf_names.get(c, c) for c in self.cats]
+        query = (f"Leading brands in {', '.join(cat_names)} in {market_list([market])} ({market}): who competes, "
+                 f"the leaders and challengers, and what each brand claims.")
+        if len(query) > QUERY_LIMIT:
+            query = query[:QUERY_LIMIT].rsplit(" ", 1)[0]
+        brand = self.subject["name"] if self.subject else None
+        try:
+            res = self.caps.research.search(query, "brands_positioning", market, entity=None, category=self.cats[0])
+            srcs = self._record_sources(res)
+            if not srcs:
+                found = []
+            else:
+                payload = {"categories": cat_names, "market": market, "client_brand": brand,
+                           "sources": [{"source_id": s["sid"], "url": s["url"], "publisher": s["publisher"],
+                                        "title": s["title"], "excerpts": s["excerpts"]} for s in srcs]}
+                raw = self.caps.model.structured("discover_players", DISCOVER_SYSTEM, payload, players_schema(),
+                                                 max_tokens=2000)
+                found = checked_players(raw, {s["sid"]: s for s in srcs}, brand)
+        except Exception as e:  # noqa: BLE001 - discovery only adds comparators; the lenses still run without
+            log.warning("research: finding the category's players failed: %s", e)
+            self.caps.runlog.note("discover_players_failed", error=str(e)[:200])
+            return []
+        emit("discover_players", market=market, found=len(found), job=self.caps.attribution.get("job"))
+        for p in found:
+            self.comps.append({"ref": p["ref"], "name": p["name"]})
+        self.discovered = found
+        return found
+
+    def competitor_patch(self, facts_append: list[dict], t_now: str) -> tuple[dict, list[dict]]:
+        """campaign.competitor_set proposed from the players research found ({} when it found none, or the
+        document already names comparators). A player stays only when this run pinned a fact about it, so
+        the proposal rests on facts (origin proposed needs fact_ids); the decision says what was left out."""
+        if not self.discovered or (self.data.get("campaign") or {}).get("competitor_set"):
+            return {}, []
+        pinned = facts_append + [f for f in ctx_facts(self.clan) if f.get("id")]
+        kept, prov, dropped = [], {}, []
+        for p in self.discovered:
+            ids = list(dict.fromkeys(f["id"] for f in pinned if f.get("entity") == p["ref"]))
+            if ids:
+                kept.append({"ref": p["ref"], "name": p["name"]})
+                prov[p["ref"]] = {"origin": "proposed", "fact_ids": ids}
+            else:
+                dropped.append(p["name"])
+        if not kept:
+            return {}, []
+        did = uid("d_", self.doc, self.seed, "discover-players", [p["ref"] for p in kept])
+        all_ids = list(dict.fromkeys(i for v in prov.values() for i in v["fact_ids"]))
+        env = {"value": kept, "origin": "proposed", "gate": "none", "fact_ids": all_ids, "decision": did}
+        if len(kept) > 1:
+            env["item_provenance"] = prov
+        names = ", ".join(p["name"] for p in kept)
+        rationale = (f"Found by research: nobody named the comparators, so research looked up the category's main "
+                     f"players and proposes {names}, each resting on facts pinned this run. A planner removes any "
+                     f"that does not compete."
+                     + (f" Left out, with no fact found about them: {', '.join(dropped)}." if dropped else ""))
+        d = decision(self.doc, did, "edit", self.handler, "discover_players", rationale,
+                     ["campaign.competitor_set"], all_ids, timestamp=t_now, fields_changed=["campaign.competitor_set"],
+                     reasoning=rsn.make(
+                         f"Found by research: proposed {names} as the comparators, to confirm.",
+                         [rsn.point(f"{p['name']} is named as a player in the category", prov[p['ref']]["fact_ids"])
+                          for p in kept]
+                         + ([rsn.point(f"Left out, with no fact found about them: {', '.join(dropped)}")]
+                            if dropped else []),
+                         rsn.certainty("medium", "found by research, not named by anyone; to confirm"),
+                         "a planner removes or confirms them",
+                         rejected=[rsn.rej("leave the comparators empty",
+                                           "the brands lens then searches only the client's own brand, and a new "
+                                           "brand has nothing written about it yet (UAT round 4 F11)")],
+                         attention="Found by research: check these are the brands the client competes with."))
+        return {"competitor_set": env}, [d]
 
     # -- one unit ----------------------------------------------------------------
     def unit(self, lens: str, market: str, focus: str | None = None) -> dict:
@@ -361,20 +517,7 @@ class Researcher:
             u["gaps"].append(self._gap(lens, market, wanted[0], note=f"research failed: {e}"))
             return [] if mats else None  # the client's material is still read
         u["queries"] = res["trace"]["queries"] or [query]
-        srcs = []
-        for s in res["sources"]:
-            if not _date_ok(s["retrieved_at"]) or s["retrieved_at"] > today():
-                s = dict(s, retrieved_at=today())
-            if s["published_at"] and not _date_ok(s["published_at"]):
-                s = dict(s, published_at=None)
-            tier = tier_for(s["url"])
-            sid = self.caps.layers.add_source({"uri": s["url"], "publisher": s["publisher"], "title": s["title"],
-                                               "tier": tier, "domain": registrable(s["url"]), "licence": "open",
-                                               "retrieved_at": s["retrieved_at"],
-                                               "published_at": s["published_at"]})
-            srcs.append(dict(s, sid=sid, tier=tier, domain=registrable(s["url"]), licence="open"))
-            self.hits.append({"id": sid, "scope": "category", "source": s["url"]})
-        return srcs
+        return self._record_sources(res)
 
     def _extract(self, u, lens, market, focus, brand, question, wanted, srcs):
         # 3. the model extracts; the rules check
@@ -522,6 +665,8 @@ class Researcher:
         """`deadline` (time.monotonic()): a unit not finished by then is a gap marked out of time, and the
         run merges what finished (a person's question waits on it; features/fact-ask-time-budget.clan).
         Its thread is left to end on its own timeouts; what it finds is not used."""
+        if self.discover:
+            self.discover_players()
         units = []
         ex = ThreadPoolExecutor(max_workers=max(1, self.concurrency))
         try:
@@ -683,14 +828,19 @@ class Researcher:
             (["selection.gaps"] if notes else [])
         rsn.give(merge_dec, merge_reasoning(facts_append, contests, gaps, len(units), n_reused, notes))
         srcs = {s["sid"]: s for u in units for s in u["sources"]}
-        change = {"doc": doc, "base_version": self.base, "data_patch": {"selection": sel_patch},
-                  "read": read_of(self.data, {"selection": sel_patch}),
+        camp_patch, comp_decs = self.competitor_patch(facts_append, t_now)
+        data_patch = {"selection": sel_patch, **({"campaign": camp_patch} if camp_patch else {})}
+        change = {"doc": doc, "base_version": self.base, "data_patch": data_patch,
+                  "read": read_of(self.data, data_patch),
                   "facts_append": facts_append, "findings_append": [],
                   "sources_append": self._source_records(facts_append, contests, srcs, cands),
-                  "decisions": run_decs + [merge_dec] + contest_decs}
+                  "decisions": run_decs + [merge_dec] + contest_decs + comp_decs}
         result = {"summary": f"{len(units)} lens x market run(s): {len(facts_append)} fact(s) pinned, "
                              f"{len(contests)} contest(s) open, {len(gaps)} gap(s)"
-                             + (f", {n_reused} reused from the layers" if n_reused else "") + ".",
+                             + (f", {n_reused} reused from the layers" if n_reused else "")
+                             + (f"; comparators found by research: "
+                                f"{', '.join(c['name'] for c in camp_patch['competitor_set']['value'])}"
+                                if camp_patch else "") + ".",
                   "coverage": coverage, "reused": n_reused,
                   "sources": {sid: {"uri": s["url"], "tier": s["tier"], "licence": "open", "title": s["title"],
                                     "publisher": s["publisher"]} for sid, s in srcs.items()}}

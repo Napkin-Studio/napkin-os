@@ -379,6 +379,69 @@ def keep_stated_line(d: dict, line: str, explicit: bool = False) -> dict:
     return out
 
 
+_TO_CONFIRM = re.compile(r"^\s*to (?:confirm|settle|agree)\s*:\s*", re.I)
+
+
+def _brief_lines(inp) -> list:
+    """The brief's own words a campaign line may repeat: its proposition (and job) without a leading 'To confirm:' label."""
+    out = []
+    for fid in ("smp", "proposition", "job"):
+        v = _brief_text(inp, fid, "")
+        if isinstance(v, str) and v.strip():
+            out.append(_TO_CONFIRM.sub("", v).strip())
+    return out
+
+
+def line_case(line: str, inp) -> str:
+    """``line`` with the brief's own case: when it is the brief's proposition (or job) word for word but for case, the brief's words
+    stand; else a line that starts with a lower-case word gains a capital, unless that word is cased on purpose ('iPhone'). UAT round 4
+    F30: the idea slide read 'watch one tablet fizz ...' where the brief says 'Watch one tablet fizz ...'."""
+    t = str(line or "")
+    if not t.strip():
+        return t
+    norm = lambda x: re.sub(r"\s+", " ", x).strip().rstrip(".!?").lower()   # noqa: E731
+    for b in _brief_lines(inp):
+        if norm(b) == norm(t):   # the brief's line, word for word: its own case
+            return b
+    lead = t.lstrip()
+    if lead[:1].islower() and not (len(lead) > 1 and lead[1:2].isupper()):
+        return t[: len(t) - len(lead)] + lead[:1].upper() + lead[1:]
+    return t
+
+
+#: A mandatory that names words the work must carry by law or rule ("Include 'Keep out of reach of children.'", "Legal: ...", "Must carry
+#: ..."), as Production's end card reads it (production-tool/web/src/brief/model.ts legalOf): those words are small print on the work,
+#: never a headline on a slide (UAT round 4 F28: the key visual slide printed the legal line as its copy).
+_CARRY = re.compile(r"\b(?:must\s+(?:carry|include)|carr(?:y|ies)|include|legal(?:\s+line)?|disclaimer|small print)\b", re.I)
+_QUOTED = re.compile(r"[\"\u201c']([^\"\u201d']{6,})[\"\u201d']")
+
+
+def legal_lines(inp) -> list:
+    """The words the brief's mandatories say the work must carry (quoted after an include/carry/legal word), in the brief's order."""
+    v = ((getattr(inp, "brief", None) or {}).get("mandatories") or {}).get("value")
+    items = v if isinstance(v, list) else ([v] if v else [])
+    out = []
+    for m in items:
+        m = str(m)
+        if _CARRY.search(m):
+            out += [q.strip() for q in _QUOTED.findall(m) if q.strip()]
+            if not _QUOTED.search(m):
+                lab = re.match(r"^\s*(?:legal(?:\s+line)?|disclaimer|small print|carry)\s*[:\-\u2013\u2014]\s*(.+)$", m, re.I)
+                if lab:
+                    out.append(lab.group(1).strip())
+    return out
+
+
+def take_legal_lines(lines: list, legal: list) -> tuple:
+    """``(copy lines without the legal ones, the legal lines taken)``: a line that is a legal mandatory's words (case and end stop aside)."""
+    norm = lambda x: re.sub(r"[^\w]+", " ", str(x)).strip().lower()   # noqa: E731
+    want = {norm(x) for x in legal if norm(x)}
+    keep, took = [], []
+    for ln in lines or []:
+        (took if norm(ln) in want else keep).append(ln)
+    return keep, took
+
+
 #: The chain stage d writes (DECK-CRAFT-PLAN 3.5): quoted phrases that tie the insight to the idea and the idea to its proof.
 CHAIN_PHRASES = ("insight_phrase", "strategy_phrase", "idea_phrase", "proof_phrase")
 
@@ -628,6 +691,10 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
     line_, explicit_ = stated_line(inp)
     if line_ and d:   # the line the brief or the prompt states, word for word, over any longer or reworded one
         d = keep_stated_line(d, line_, explicit_)
+    if d and d.get("campaign_line"):   # the brief's own case, never a lower-cased first word (UAT round 4 F30)
+        cased = line_case(d["campaign_line"], inp)
+        if cased != d["campaign_line"]:
+            d = keep_stated_line(d, cased, True) if d["campaign_line"].lower() == cased.lower() else {**d, "campaign_line": cased}
     if not d.get("how_it_answers") and isinstance(d.get("answers_objection"), dict):   # a live stage d's shape
         d = {**d, "how_it_answers": d["answers_objection"].get("how", "")}
     reqs = [r for r in a.get("requirements") or [] if not spec.internal_wording(r.get("text"))]   # a stage that copied 'field is null' into a requirement
@@ -637,6 +704,8 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
     # 1. Title
     line = str(d.get("campaign_line") or "").strip()
     named_by_project = production and line and working_title.strip() and project.strip() == working_title.strip()   # Start prefilled the Production project's name and nobody changed it
+    if named_by_project and len(line.split()) > _LINE_WORDS:   # UAT round 4 F27: a proposition-length 'line' filled the cover until it lost its picture
+        named_by_project = False
     S.append(_slide("title", f"{client}: {line}" if named_by_project else f"{client}: {project}",   # then the cover names the client and its line, not a working name
                     [{"kind": "text", "text": f"A response from {agency}"},
                      {"kind": "text", "text": _placeholder("presenter and date", "presented by the account lead and planner", "who presents, and the date"), "human": True}],
@@ -755,12 +824,15 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
                         [{"kind": "statement", "text": d["idea"]}, {"kind": "text", "text": d.get("how_it_answers", "")}],
                         claims=[{"text": d["idea"], "refs": [], "basis": "creative"}], status="drafted", slots=pictures.get("idea")))
     # 11. Executions
+    legal = legal_lines(inp)
     for x in d.get("executions", []):
+        copy, took = take_legal_lines(x["copy"], legal)   # the legal line is small print on the work, never the slide's copy (UAT round 4 F28)
         S.append(_slide("execution", x["channel"][:1].upper() + x["channel"][1:],
                         [{"kind": "text", "text": "Role: " + x["role"]},
-                         {"kind": "copy", "lines": x["copy"], "answer": x["answer"], "basis": "creative"}],
-                        claims=[{"text": " / ".join(x["copy"]), "refs": [], "basis": "creative"}], status="drafted",
-                        visual=x.get("visual"), label=f"Execution {x['channel'][:60]}"))
+                         {"kind": "copy", "lines": copy, "answer": x["answer"], "basis": "creative"}],
+                        claims=[{"text": " / ".join(copy), "refs": [], "basis": "creative"}], status="drafted",
+                        visual=x.get("visual"), label=f"Execution {x['channel'][:60]}",
+                        notes=("The work carries the brief's legal line as small print: " + " ".join(took)) if took else ""))
     # 12. Channel roles
     if d.get("channel_roles"):
         rows = [["Channel", "Its one job"]] + [[r["channel"], r["role"]] for r in d["channel_roles"]]
@@ -919,7 +991,7 @@ def _complete(S, reqs, R, inp, meta, fmt, fit, scoring=None, messages=None, terr
     elif fmt == "pitch":   # after mapping, so merged slides carry both slides' requirements
         rec = profiles.recipe(profile, fmt) if profile and profiles.recipes_on() else None   # deck-types: the type's target (flag off: spec.PITCH_TARGET)
         S = _arrange_pitch(S, {v["title"] for v in (fit or {}).get("verdicts", []) if v["verdict"] == "supported"}, routes_asked(reqs), messages or [], cap,
-                           production=production, **({"target": rec["length"]["target"]} if rec else {}))
+                           production=production, **({"target": rec["length"]["target"], "cap": rec["length"].get("cap")} if rec else {}))
     if spec.LOOK_V3:   # deck-look (fix 2): a sentence is said once on the presented slides
         _say_once(S)
     if sketch:   # the cover says so, with a fixed label (like the DRAFT mark: no input words)
@@ -1175,7 +1247,7 @@ _SPEC_TARGET = object()
 
 
 def _arrange_pitch(S: list, supported: set | None = None, routes: int = 1, messages: list | None = None, limit: int | None = None,
-                   target=_SPEC_TARGET, production: bool = False) -> list:
+                   target=_SPEC_TARGET, production: bool = False, cap=_SPEC_TARGET) -> list:
     """The agency pitch: the presented story (merges applied, team before the ask), an Appendix
     divider, then the backup in story order. Numbering, the trace and footnotes follow this order.
     One recommended idea by default; as many routes as the brief asks for when it asks (routes);
@@ -1207,6 +1279,9 @@ def _arrange_pitch(S: list, supported: set | None = None, routes: int = 1, messa
     target = spec.PITCH_TARGET if target is _SPEC_TARGET else target
     if spec.LOOK_V3 and not limit and target is not None:   # deck-look step 5: a soft target by cheap moves only (a stated limit keeps _trim, above)
         story, backup, supply = _to_target(S, story, backup, target, keep)
+    cap = spec.PITCH_CAP if cap is _SPEC_TARGET else cap
+    if spec.LOOK_V3 and not limit and cap is not None and len(story) > cap:   # UAT round 4 F29: the type's cap holds (folds first, then moves)
+        story, backup = _to_cap(S, story, backup, cap, keep)
     if not backup and not supply:
         return story
     divider = _slide("appendix", "Appendix", [{"kind": "text", "text": "Backup for questions: everything this presentation rests on."}], status="from_source")
@@ -1373,6 +1448,39 @@ def _to_target(S: list, story: list, backup: list, target: int, keep: set) -> tu
             dest.append(x)
     at = {id(x): i for i, x in enumerate(S)}
     return story, sorted(backup, key=lambda x: at.get(id(x), len(S))), supply
+
+
+#: UAT round 4 F29: what a pitch over its type's cap folds first (kept slide, absorbed slide), in order and only while it is over: each pair
+#: says one thing twice over two slides. The absorbed slide's words, requirements and notes join the kept one (_merge, title None).
+CAP_FOLDS = (("measurement", "measurement_plan"), ("investment", "timeline"), ("channel_roles", "innovation"))
+#: Then, while still over, the least needed slide of these types moves behind the divider (the backup keeps the built order).
+CAP_TRIM_ORDER = ("process", "guardrails", "competition", "risks", "channel_roles", "innovation", "timeline", "upside", "gtm", "product",
+                  "credentials", "measurement_plan", "measurement")
+
+
+def _to_cap(S: list, story: list, backup: list, cap: int, keep: set) -> tuple:
+    """Hold a pitch with no stated limit to its type's cap (UAT round 4 F29: 19 presented slides where Start promised 'about 10, usually at
+    most 12'): fold the CAP_FOLDS pairs, then move the CAP_TRIM_ORDER types behind the divider, one slide at a time and only while the story
+    is longer than ``cap``. The story's spine (spec.TARGET_KEEPS), the routes the client asked to see and the presented executions and charts
+    (``keep``) never move, so a story of only those stays over the cap (validate: pitch_cap still warns). Nothing is reworded or dropped."""
+    story, backup = list(story), list(backup)
+    for k_t, m_t in CAP_FOLDS:
+        if len(story) <= cap:
+            break
+        k = next((x for x in story if x["type"] == k_t), None)
+        m = next((x for x in story if x["type"] == m_t and x is not k and id(x) not in keep), None)
+        if k is not None and m is not None:
+            _merge(k, m, None)
+            story = [x for x in story if x is not m]
+    movable = lambda x: x["type"] not in spec.TARGET_KEEPS and id(x) not in keep   # noqa: E731
+    for t in CAP_TRIM_ORDER:
+        for x in [y for y in reversed(story) if y["type"] == t and movable(y)]:
+            if len(story) <= cap:
+                break
+            story.remove(x)
+            backup.append(x)
+    at = {id(x): i for i, x in enumerate(S)}
+    return story, sorted(backup, key=lambda x: at.get(id(x), len(S)))
 
 
 def _trim(S: list, story: list, backup: list, limit: int | None) -> tuple:

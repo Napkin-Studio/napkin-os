@@ -4071,6 +4071,32 @@ test('the agent stage: the caption says who asks above the card, and the rails s
   }
 })
 
+// UAT round 4 F11 (owner, 2026-11-24): with no comparators named, research finds the category's players and
+// proposes them; the planner reads that they were found by research, and can remove any.
+test('research: comparators research found are labelled found by research, in the confirm panel and the field', () => {
+  const camp: Record<string, unknown> = { competitor_set: { origin: 'proposed', gate: 'none', value: [{ ref: 'brand/smol', name: 'Smol' }, { ref: 'brand/method', name: 'Method' }], fact_ids: ['f_1', 'f_2'], decision: 'd_X' } }
+  const pins = { f_1: { key: 'positioning.claim.smol', value: 'refill tablets' }, f_2: { key: 'positioning.claim.method', value: 'plant-based' } }
+  const env = {
+    FIELD: { competitor_set: { k: 'competitor_set', label: 'Comparators', type: 'refs' } }, BANDS: {}, MARKET: {}, camp: () => camp, pins: () => pins, arr, isObj, esc, listJoin,
+    clipT: (t: string, n: number) => (t.length > n ? t.slice(0, n - 1) + '…' : t), plural: (n: number, w: string) => `${n} ${n === 1 ? w : w + 's'}`,
+    pinLabel: (p: { key: string }) => p.key.split('.').pop(), fmtAny: (p: { value: string }) => p.value, verdictState: () => ({ unanswered: [] }),
+    reportLocked: () => false, WHO: { shell: { id: 'tia@tbwa', name: 'Tia' } }, reviewer: () => '', human: (x: string) => x, renderValue: () => '',
+    $: () => null, byOf: () => 'tia@tbwa', setReviewer: () => {}, hasHost: () => true, mintDecisionId: () => 'd_NEW',
+    renderSel: () => {}, toast: () => {}, loadChain: () => {}, VIEW: { sel: 'ask:competitor_set', trail: [] }, CONF: { ui: {} as Record<string, unknown> },
+    pinChips: (ids: string[]) => ids.join(','), spanHtml: () => '', findingChip: () => '', ICON: { check: '<svg></svg>' },
+    window: { ClanFields: null, clan: { patchData: () => Promise.resolve({ ok: true }) } },
+  }
+  const f = lift<{ confirmViewHtml(k: string): string; provenance(env: unknown, f: unknown): string }>(RT, ['confirmViewHtml', 'provenance', 'plainValue', 'askQuestion', 'codeText'], env)
+  const h = f.confirmViewHtml('competitor_set')
+  assert.match(h, /Found by research: the main brands in the category, from 2 facts\. Remove any the client does not compete with/)
+  assert.doesNotMatch(h, /We worked this out/)
+  const p = f.provenance(camp.competitor_set, { k: 'competitor_set' })
+  assert.match(p, /found-by-research/)
+  assert.match(p, /Found by research: the main brands in the category\. Remove any the client does not compete with, then confirm\./)
+  // any other proposed field keeps its wording
+  assert.match(f.provenance({ origin: 'proposed', fact_ids: ['f_1'] }, { k: 'categories' }), /We worked this out from 1 fact; no one said it\./)
+})
+
 // Confirming a part of the ask (owner, 2026-11-11): in the side panel, never a modal, in plain words,
 // and the yes is written with the person's note.
 test('research: Confirm opens in the side panel in plain words, and writes the value with the note', () => {

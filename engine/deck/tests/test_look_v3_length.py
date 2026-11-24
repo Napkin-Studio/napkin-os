@@ -123,6 +123,7 @@ def test_the_close_counts_what_is_to_supply_in_review_only(v3):
 
 def test_a_story_already_at_the_target_moves_nothing(v3, monkeypatch):
     monkeypatch.setattr(spec, "PITCH_TARGET", 16)
+    monkeypatch.setattr(spec, "PITCH_CAP", 16)   # UAT round 4 F29: the cap now holds too; this test is about the target alone
     d = _build()
     assert len(validate.presented(d)) == 14 and spec.TO_SUPPLY_TITLE not in [d["slides"][x]["title"] for x in d["order"]]
 
@@ -229,6 +230,7 @@ def test_every_word_before_is_in_a_slide_the_appendix_or_the_notes(v3, monkeypat
     after = _deck_words(_build())
     monkeypatch.setattr(spec, "PITCH_MERGES_V3", ())
     monkeypatch.setattr(spec, "PITCH_TARGET", 99)
+    monkeypatch.setattr(spec, "PITCH_CAP", 99)   # 'before' is the deck before any length move: no cap either (UAT round 4 F29)
     before = _deck_words(_build())
     lost = before - after
     assert not lost, dict(lost)
@@ -261,6 +263,7 @@ def test_every_rendered_word_survives_the_merges(tmp_path, monkeypatch):
     after = render("after.pptx")
     monkeypatch.setattr(spec, "PITCH_MERGES_V3", ())
     monkeypatch.setattr(spec, "PITCH_TARGET", 99)
+    monkeypatch.setattr(spec, "PITCH_CAP", 99)   # 'before' is the deck before any length move: no cap either (UAT round 4 F29)
     before = render("before.pptx")
     lost = before - after
     assert not lost, dict(lost)
