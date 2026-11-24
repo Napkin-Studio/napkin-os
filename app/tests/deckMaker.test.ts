@@ -2761,6 +2761,16 @@ test('the Start form names the client and the project from what the deck carries
   assert.deepEqual(plain(L.startDefaults({ upstream: 'junk' })), { client: '', project: '', text: '' })
 })
 
+test('a deck made from Territories names the project too: the brief\'s short name, else the Territories title (live test T9)', () => {
+  const brief = { client: 'Copperell Home Ltd, a household brand', project_name: 'Copperell Refill' }
+  const terr = { title: 'Copperell Refill: routes', territories: [{ id: 't1' }], greenlit: [{ territory_id: 't1' }], crew: [{ id: 'cr_core' }] }
+  assert.deepEqual(plain(L.startDefaults({ upstream: { t: terr, b: brief } })), { client: 'Copperell Home Ltd', project: 'Copperell Refill', text: 'A pitch deck for Copperell Home Ltd: Copperell Refill.' })
+  assert.equal((plain(L.startDefaults({ upstream: { t: terr } })) as { project: string }).project, 'Copperell Refill: routes')
+  // research only, the Territories document still under its app's name: the research's own name (campaign.name), never "Territories"
+  const plainTerr = { ...terr, title: 'Territories' }, research = { campaign: { name: { value: 'Lúnasa 0.0 launch' } }, report: {} }
+  assert.equal((plain(L.startDefaults({ upstream: { t: plainTerr, r: research } })) as { project: string }).project, 'Lúnasa 0.0 launch')
+})
+
 test('the PowerPoint leaves the app frame through the host export, not a blob link the sandbox would not save', () => {
   assert.ok(!/a\.download\s*=\s*base\s*\+\s*'\.pptx'/.test(html), 'no blob download of the pptx in the frame')
   assert.ok(/exportDoc\('pptx', base, btoa\(bin\)\)/.test(html), 'the pptx goes to clan.exportDoc')
