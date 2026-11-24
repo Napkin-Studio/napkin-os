@@ -15,7 +15,7 @@ export function BriefCard({ doc, id, openUrl, needs = false, compact = false }: 
   const b = doc.briefs?.[id]
   if (!b) return null
   if (b.route) return <RouteCard node={b} openUrl={openUrl} needs={needs} compact={compact} />
-  const v = b.source.taken
+  const v = b.source.version
   const rows = spineLines(b.spine, b.confidential).filter((l) => (CARD_PARTS as readonly string[]).includes(l.part))
   return (
     <div className="bn-card" data-brief={id}>

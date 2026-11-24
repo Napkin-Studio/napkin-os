@@ -123,7 +123,7 @@ export function installSeed(shell: Shell) {
       const services = shell.get().session?.services
       if (!env || !services) throw new Error('open a project on the canvas first')
       services.ui.update((u) => { u.configChoice = 'allon' }, 'e2e seed')
-      const b = await addBrief(services.doc, newBrief({ documentId: 'doc-seed', title, appId: 'ie.napkin.brief-maker', dataSha256: `sha256:${'b'.repeat(64)}`, data }, 'link'))
+      const b = await addBrief(services.doc, newBrief({ documentId: 'doc-seed', title, appId: 'ie.napkin.brief-maker', dataSha256: `sha256:${'b'.repeat(64)}`, version: 1, data }, 'link'))
       const el = placeBrief(env, b.id)
       const script = mainScript(services.doc.get())
       if (script) await linkBrief(env, b.id, { kind: 'script', id: script.id }).catch(() => undefined)
@@ -131,7 +131,7 @@ export function installSeed(shell: Shell) {
     },
     /** The paired screenshots' project (features/production-new-ui.clan; the mock's "Market day"): a title, and
      *  one shot per picture with its words, length and a drawn frame. `pics` are data URLs. */
-    market: async (o: { title?: string; shots: { pic: string; action: string; s: number }[] }) => {
+    market: async (o: { title?: string; noFrames?: boolean; shots: { pic: string; action: string; s: number }[] }) => {
       await seedTarget(shell)
       const services: Services = shell.get().session!.services
       const blobs = await Promise.all(o.shots.map(async (x) => (await fetch(x.pic)).blob()))
@@ -151,12 +151,37 @@ export function installSeed(shell: Shell) {
           const s: Shot = { id: newUlidId('shot'), v: 1, field_v: {}, storyboard_id: sb.id, rank: ranks[i], kind: 'shot', duration_s: x.s, action: x.action, camera: { size: i === 2 ? 'close' : i === 0 ? 'wide' : 'medium' }, status: 'locked' } as Shot
           d.shots[s.id] = s
           d.assets[shas[i]] = { sha256: shas[i], kind: 'image', mime: 'image/jpeg' as Mime, bytes: blobs[i].size, w: 1344, h: 756, origin: 'generated' }
+          if (o.noFrames) return
           const job = { jobId: newUlidId('job'), op: 'frame', kind: 'mock', outputs: [{ sha256: shas[i], w: 1344, h: 756 }] } as unknown as Job
           applyFrame(d, job, { shotId: s.id })
         })
       }, 'e2e seed')
       await (services.doc as { flush?: () => Promise<void> }).flush?.()
       services.ui.update((u) => { u.stage = 'character' }, 'e2e seed')
+    },
+    /** Mock: the script's own words (a scene), so Plan shots has something to read. */
+    scene: async () => {
+      const services: Services = shell.get().session!.services
+      await systemUpdate(services.doc, (d: ProductionDocument) => {
+        const sc = mainScript(d)!
+        sc.target_s = 22
+        const sbd = mainStoryboard(d)
+        if (sbd) sbd.target_s = 22
+        const id = newUlidId('scene')
+        d.scenes[id] = { id, v: 1, field_v: {}, script_id: sc.id, rank: ranksBetween(null, null, 1)[0], heading: 'EXT. FERNCLIFF STREAM - DAY', text: 'A walker stops by a stream in the sun and opens a cold can of Ferncliff.' } as never
+      }, 'e2e seed')
+      await (services.doc as { flush?: () => Promise<void> }).flush?.()
+    },
+    /** Mock: an end card shot last on the storyboard. */
+    endcard: async () => {
+      const services: Services = shell.get().session!.services
+      await systemUpdate(services.doc, (d: ProductionDocument) => {
+        const sb = mainStoryboard(d)!
+        const rank = ranksBetween(shotsOf(d, sb.id).at(-1)?.rank ?? null, null, 1)[0]
+        const s: Shot = { id: newUlidId('shot'), v: 1, field_v: {}, storyboard_id: sb.id, rank, kind: 'end_card', duration_s: 2, action: 'End card: "Ferncliff. Cool, lightly."', camera: { size: 'insert' }, status: 'locked' } as Shot
+        d.shots[s.id] = s
+      }, 'e2e seed')
+      await (services.doc as { flush?: () => Promise<void> }).flush?.()
     },
     /** The Film's rooms with footage (the paired screenshots' make/edit states): after market(), each shot its
      *  own box with one ready mock take (its frame as a still), each in the Edit room's cut. */

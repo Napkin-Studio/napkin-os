@@ -81,8 +81,9 @@ function routeCopy(r: CarriedRoute, version: number): RouteCopy {
  * the two do not depend on one another's branch.
  */
 export function briefApprovals(chain: ChainEntry[], documentId: string): number {
+  // The host records a brief's lock against the bare document id; older chains used `<id>#…`. Both count (UAT round 4 F24).
   const mine = `${documentId}#`
-  return Math.max(1, chain.filter((d) => d.kind === 'approve' && (d.targets ?? []).some((t) => typeof t === 'string' && t.startsWith(mine))).length)
+  return Math.max(1, chain.filter((d) => d.kind === 'approve' && (d.targets ?? []).some((t) => typeof t === 'string' && (t === documentId || t.startsWith(mine)))).length)
 }
 
 /** One Territories node: the route frozen at the document's version, the brief it carries (at its version) as its spine. Not yet in the document. */
@@ -92,7 +93,7 @@ export function newRouteNode(from: SpunOffFrom, r: CarriedRoute, upstream: Recor
   return {
     id: newId('brief'), v: 1, field_v: {},
     title: from.title.trim().slice(0, 200) || 'Territories',
-    source: { document_id: from.document_id, app_id: TERRITORIES_APP_ID, data_sha256: from.data_sha256 as BriefNode['source']['data_sha256'], taken: 1, at: now.toISOString(), how: 'spinoff' },
+    source: { document_id: from.document_id, app_id: TERRITORIES_APP_ID, data_sha256: from.data_sha256 as BriefNode['source']['data_sha256'], taken: 1, version: Math.max(1, version), at: now.toISOString(), how: 'spinoff' },
     spine, ...(confidential.length ? { confidential } : {}),
     route: routeCopy(r, version),
     carries: {

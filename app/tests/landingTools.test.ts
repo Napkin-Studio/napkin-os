@@ -72,3 +72,8 @@ test('Territories with no documents goes to the Brief; with some it opens as its
     assert.equal(startsFromBrief(o), false)
   }
 })
+
+test('Prod from a client\'s dial carries the client, so the film it starts belongs to them', () => {
+  assert.equal(toolHref({ id: 'prod' }, 'cl_tide well'), '/production/?client=cl_tide%20well')
+  assert.equal(toolHref({ id: 'brief' }, 'cl_1'), null)
+})

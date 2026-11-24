@@ -471,6 +471,8 @@ PRODUCTION_ACCEPTS = {"social": ("social",), "ooh": ("ooh", "print"), "print": (
 #: Every size, of the slot's channel or of a format the pinned packs do not know (fix 7), must sit within this ratio of the slot's aspect:
 #: a 7.8:1 OOH banner never lands in a 4:5 poster slot, nor a 2:7 skyscraper in a 16:9 one. Nothing fits: the slot stays empty, with why.
 ASPECT_TOL = 1.25
+#: The cover's picture column (render_pptx PIC_COL: 3/8 of the slide wide, the slide's full height) is about 2:3 portrait at 16:9, 0.57 at A4.
+COVER_COLUMN_RATIO = 0.62
 NEAREST_ASPECT_TOL = ASPECT_TOL
 PRODUCTION_ALT = {"master": "The campaign's key visual", "size": "The campaign picture made for this channel", "frame": "A storyboard frame from the film"}
 _FILM_WORDS = ("film", "tv", "television", "cinema", "broadcast", "bvod", "video", "youtube", "storyboard", "storyboards")
@@ -492,6 +494,8 @@ def load_production(stages: Path) -> dict | None:
 def execution_channel(title: str) -> str | None:
     """The Production channel an execution's title names: social (a phone frame), ooh (a poster frame), film, print or display; None for
     a channel Production has no picture for (search, audio) or a title that names none."""
+    if re.search(r"(?<!\w)storyboards?(?!\w)", (title or "").lower()):   # 'Storyboard frames: six stills as an Instagram carousel' is the storyboard (film channel), not a phone-frame social size
+        return "film"
     fr = spec.frame_for(title or "")
     if fr == "phone":
         return "social"
@@ -861,6 +865,44 @@ def take_frame_captions(slide: dict, shots: list) -> list:
     return caps
 
 
+_COUNT_WORDS = {n: w for n, w in enumerate("zero one two three four five six seven eight nine ten eleven twelve".split())}
+_STILLS = re.compile(r"\b(" + "|".join(w for n, w in _COUNT_WORDS.items() if n) + r"|\d{1,2})(\s+)(still pictures|stills|frames|shots)\b", re.I)
+
+
+def fit_storyboard_copy(slide: dict, shots: list) -> list:
+    """The storyboard slide's copy counts the frames the strip draws, not the ones the idea stage planned: 'Six stills' becomes 'Four stills'
+    when four are drawn, and a 'Frame 5: ...' line for a frame that is not drawn leaves the slide (word for word, into the notes, never lost).
+    Returns the moved lines."""
+    n = len(shots)
+    if n not in _COUNT_WORDS or not n:
+        return []
+
+    def count(m):
+        w = _COUNT_WORDS[n] if not m.group(1).isdigit() else str(n)
+        return (w.capitalize() if m.group(1)[:1].isupper() else w) + m.group(2) + m.group(3)
+    moved = []
+    for k in ("title", "label"):   # the heading too: 'Storyboard frames (5 stills)' over a strip of four (full-flow UAT 2026-11-23: only the body was fitted)
+        if isinstance(slide.get(k), str):
+            slide[k] = _STILLS.sub(count, slide[k])
+    for b in slide.get("blocks") or []:
+        if b.get("kind") in ("text", "small", "statement") and isinstance(b.get("text"), str):
+            b["text"] = _STILLS.sub(count, b["text"])
+        elif b.get("kind") == "copy":
+            keep = []
+            for ln in b.get("lines") or []:
+                m = _FRAME_LINE.match(str(ln))
+                if m and int(m.group(1)) not in shots:
+                    moved.append(str(ln))
+                else:
+                    keep.append(ln)
+            b["lines"] = keep
+    if "blocks" in slide:
+        slide["blocks"] = [b for b in slide["blocks"] if not (b.get("kind") == "copy" and not b.get("lines") and not b.get("answer"))]
+    if moved:
+        slide["notes"] = (str(slide.get("notes") or "").rstrip() + "\n\nNot drawn (no frame for them in Production): " + " / ".join(moved)).strip()
+    return moved
+
+
 def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", names=(), brief_document_id: str | None = None) -> dict:
     """Fill picture slots from production.json (deck-prod-assets slice 2), by slide type and channel, after the supplied pictures and before
     the empty slots and the image step, so a filled slot (or one waiting for its rights) never reaches the generation plan. Cover (only with
@@ -883,6 +925,7 @@ def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", na
     if spec.GRAPHICS and pictures != "none" and len(production_shots(prod)) >= 3 and not any(is_slide_executing_film(deck, k) for k in deck["order"]):
         got["added_storyboard"] = add_storyboard_slide(deck)   # a storyboard's frames exist and no execution shows them: one slide, a strip of stills
     placed_keys = set()   # the finals earlier slots hold: a size or packshot slide takes another picture when there is one
+    column_only = set()   # cover slides whose picture fits the picture column only, never the full-bleed 16:9
     for sid in deck["order"]:
         s = deck["slides"][sid]
         t, title = spec.picture_of(s)
@@ -891,8 +934,11 @@ def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", na
             if (t == "title" and pictures == "creative_cover") or t == "idea":
                 key = master if slot == "picture" else None
                 if key and not keeps_protected(prod["items"][key], aspect):
-                    key, why = None, (f"The key visual would lose part of its protected area in a {aspect} crop. Make a {aspect} size of it in "
-                                      f"Production, or supply a picture")
+                    if t == "title" and keeps_protected(prod["items"][key], COVER_COLUMN_RATIO):
+                        column_only.add(sid)   # a portrait key visual: the cover's own picture column holds it whole (round 3: the cover had no picture)
+                    else:
+                        key, why = None, (f"The key visual would lose part of its protected area in a {aspect} crop. Make a {aspect} size of it in "
+                                          f"Production, or supply a picture")
             elif t == "execution" and slot == "picture":
                 ch = execution_channel(title)
                 if ch == "film":
@@ -914,6 +960,7 @@ def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", na
                             if len(picks) < len(shots):   # fewer drawn than the storyboard has: say so on the slide ('4 of 9 shots')
                                 note = f"{len(picks)} of {len(shots)} shots"
                             s["strip"] = {"shots": [number[k] for k in picks], "of": len(shots), **({"note": note} if note else {})}
+                            fit_storyboard_copy(s, s["strip"]["shots"])
                             caps = take_frame_captions(s, s["strip"]["shots"])
                             if caps:
                                 s["strip"]["captions"] = caps
@@ -964,6 +1011,8 @@ def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", na
                 got["placed"] += 1
             else:
                 got["held"].append({"slide": sid, "slot": slot, "message": val["image"]["reason"]})
+            if sid in column_only and val["image"].get("asset"):   # never the full bleed (cover_bleed): its 16:9 crop would cut the key visual's protected area
+                val["image"]["text_zone"] = {"none": True, "by": "repair", "reason": "The key visual is portrait: it sits whole in the cover's picture column, never full bleed"}
             _slots(s)[slot] = val
     deck["meta"]["production"] = {"project_id": (prod.get("project") or {}).get("id"), "title": (prod.get("project") or {}).get("title"),
                                   "data_sha256": (prod.get("bundle") or {}).get("clan_sha256"), "offer_sha256": prod.get("offer_sha256"),
@@ -1239,6 +1288,12 @@ def drawn(deck: dict, audience: str) -> dict:
     return out
 
 
+def unflag(drawn: dict) -> dict:
+    """``drawn`` as an export shows it: a picture Production or the guard flagged is drawn as any made picture, with no red outline and no word
+    Flagged. The status is the person's to review in the app; a file that is sent carries no internal status mark (the picture's own label stays)."""
+    return {k: ({**im, "status": "made"} if im.get("status") == "flagged" else im) for k, im in drawn.items()}
+
+
 def picture_label(im: dict, default: str) -> str:
     """The label a review render draws on a picture not yet approved: the fixed ``Production`` for a Production Tool picture (deck-prod-assets Q2),
     else the deck's own label (``Illustrative`` unless the person set another). The renderers place it by deck-look's rule, whatever the word."""
@@ -1448,8 +1503,39 @@ def _zone_cells(thumb, box: tuple, W: float, H: float, grid: tuple = SHAPE_GRID)
     return out
 
 
+#: The words never cover the product. A Production picture's focal point is its subject (the can of a key visual); the subject is taken as
+#: SUBJECT_HALF of the picture's width each side of it, and a text block whose columns reach into that band is refused (the slide then
+#: sets its words beside the picture, where the whole product shows). One rule for every key visual: columns, never pixels.
+SUBJECT_HALF = 0.11
+
+
+def subject_band(im: dict, assets: dict | None, box: tuple = (BLEED_W, BLEED_H)) -> tuple | None:
+    """``(x0, x1)`` in inches across a bleed box of the columns the picture's subject takes (its focal point as the box crops the picture, plus or
+    minus SUBJECT_HALF of the width), or None when the picture has no known subject (not from Production, no focal point): then nothing is held clear."""
+    foc = (im or {}).get("focal")
+    if not foc or ((im.get("from") or {}).get("kind") != "production"):
+        return None
+    W, H = box
+    rec = (assets or {}).get(im.get("asset")) or {}
+    if rec.get("width") and rec.get("height"):
+        x0, _, x1, _ = crop_box(int(rec["width"]), int(rec["height"]), W / H, foc)
+        fx = (float(foc["x"]) * int(rec["width"]) - x0) / max(1.0, x1 - x0)
+    else:
+        fx = float(foc["x"])
+    return ((fx - SUBJECT_HALF) * W, (fx + SUBJECT_HALF) * W)
+
+
+def zone_clear_of(zone: str, band: tuple | None, block: tuple = ZONE_BLOCK, W: float = BLEED_W, H: float = BLEED_H) -> bool:
+    """Whether the text block of ``zone`` stays out of the subject's columns."""
+    if not band:
+        return True
+    x, _, w, _ = zone_box(zone, block, W, H)
+    return x + w <= band[0] or x >= band[1]
+
+
 def text_zone(src, box: tuple = (BLEED_W, BLEED_H), focal: dict | None = None, block: tuple = ZONE_BLOCK, zones=ZONES,
-              ink: str = "1B2430", paper: str = "FAF7F1", target: float = TEXT_ON_PICTURE_TARGET, shapes: bool = False) -> dict:
+              ink: str = "1B2430", paper: str = "FAF7F1", target: float = TEXT_ON_PICTURE_TARGET, shapes: bool = False,
+              subject: tuple | None = None) -> dict:
     """The calm-zone finder and scrim solver (design.pictures.zone_finder), pure Pillow on a 160 px thumbnail, deterministic.
 
     For each candidate zone of the picture as cropped to ``box`` (inches): the words take the colour the zone already favours (ink on a
@@ -1460,8 +1546,11 @@ def text_zone(src, box: tuple = (BLEED_W, BLEED_H), focal: dict | None = None, b
     W, H = box
     thumb = _thumb(src, W, H, focal)
     ink_rgb, paper_rgb = _hex_rgb(ink), _hex_rgb(paper)
-    best, tried = None, []
+    best, tried, covered = None, [], 0
     for z in zones:
+        if not zone_clear_of(z, subject, block, W, H):   # the words would cover the product
+            covered += 1
+            continue
         pix = _zone_pixels(thumb, zone_box(z, block, W, H), W, H)
         if not pix:
             continue
@@ -1498,7 +1587,8 @@ def text_zone(src, box: tuple = (BLEED_W, BLEED_H), focal: dict | None = None, b
     if best:
         return best[1]
     top = max(tried, key=lambda r: r["p10"]) if tried else {}
-    why = ("every zone is too busy under the words" if tried and all(t["why"] == "too busy" for t in tried)
+    why = ("every zone would cover the product" if covered and not tried
+           else "every zone is too busy under the words" if tried and all(t["why"] == "too busy" for t in tried)
            else "every zone has a shape or an edge under the words" if tried and all(t["why"] in ("shapes", "too busy") for t in tried)
            else f"no zone reaches {target:g}:1 at the {SCRIM_CAP:.0%} cap")
     return {"none": True, "reason": why, "best": {k: top[k] for k in ("zone", "text", "p10", "busy_sd") if k in top}, "by": "finder"}
@@ -1535,7 +1625,8 @@ def solve_text_zones(deck: dict, paths: dict, ink: str = "1B2430", paper: str = 
         if s["type"] not in TEXT_OVER_TYPES or not isinstance(im, dict) or im.get("asset") not in paths:
             continue
         if not im.get("text_zone") or (kw and (im["text_zone"].get("by") in (None, "finder"))):   # at 4:3 / A4 a zone measured at 16:9 is never kept
-            im["text_zone"] = text_zone(paths[im["asset"]], focal=im.get("focal"), ink=ink, paper=paper, **kw)
+            im["text_zone"] = text_zone(paths[im["asset"]], focal=im.get("focal"), ink=ink, paper=paper,
+                                        subject=subject_band(im, deck.get("assets"), kw.get("box", (BLEED_W, BLEED_H))), **kw)
         out.append((sid, im["text_zone"]))
     return out
 

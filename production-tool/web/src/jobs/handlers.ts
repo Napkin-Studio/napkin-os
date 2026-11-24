@@ -59,7 +59,11 @@ export function applySketchFrame(d: ProductionDocument, job: Job, sketchId: stri
   if (Object.values(d.frames).some((f) => f.job_id === job.jobId)) return undefined
   const sketch = d.sketches[sketchId]
   // "cropped to 16:9": the sketch's ratio, else its exact shape in lowest terms.
-  const crop = croppedTo(out, sketch ? (sketch.ratio ? aspectOfRatio(sketch.ratio) : reducedAspect(sketch.aspect)) : undefined)
+  // A ratio named in the words (UAT round 4 F15) is the job's shape, not the area's: the relay cropped to it, so the
+  // output's own ratio, when it is one of the four and not the area's, is what it was cropped to.
+  const own = out.w && out.h ? exactRatio({ w: out.w, h: out.h }) : undefined
+  const asked = own && sketch && own !== (sketch.ratio ?? exactRatio(sketch.aspect)) ? own : undefined
+  const crop = croppedTo(out, asked ? aspectOfRatio(asked) : sketch ? (sketch.ratio ? aspectOfRatio(sketch.ratio) : reducedAspect(sketch.aspect)) : undefined)
   const frame: Frame = {
     id: newUlidId('frame'),
     v: 1,

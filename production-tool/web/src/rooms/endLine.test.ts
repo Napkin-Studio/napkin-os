@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { endLineOf } from '../brief/model'
-import { END_LINE_ID, endLineIn, withEndLineSuper } from './endLine'
+import { END_LINE_ID, endLineIn, heardChecks, withEndLineSuper } from './endLine'
 import type { Plan } from './timeline'
 
 // UAT round 4, R4-F6: the brief's mandatory end line was a voice-over on shot 5 that no model voiced, with no card and
@@ -25,5 +25,22 @@ describe("the brief's end line in the film (R4-F6)", () => {
     expect(endLineIn({ ...round4, endCard: { line: 'Quietboil. Let them sleep.', bg: '#000', s: 2.5, startS: 10 } }, line, []).how).toBe('card')
     expect(endLineIn({ ...round4, texts: [{ item_id: 't', words: 'Quietboil — let them sleep', style: 'title', fromS: 8, toS: 10 }] }, line, []).how).toBe('text')
     expect(withEndLineSuper(round4, endLineIn(round4, line, [line])).texts).toEqual([])
+  })
+})
+
+describe('the brief\'s end line as Brief Maker writes it (PR #306), and what Review says (UAT round 4 F34)', () => {
+  it('reads the line word for word from "End line: \'…\' (word for word)"', () => {
+    expect(endLineOf({ mandatories: ["End line: 'Refill. Not landfill.' (word for word)", 'Legal: Recycle the glass.'] })).toBe('Refill. Not landfill.')
+  })
+  const vo = { shotId: 's5', n: 5, who: 'NARRATOR', text: 'Refill. Not landfill.', voiced: false, why: 'Not in any clip: no clip voices it' }
+  const other = { shotId: 's2', n: 2, who: 'MUM', text: 'Is that it?', voiced: false, why: 'Not in any clip: no clip voices it' }
+  it('the end line only in an unvoiced voice-over is said plainly, with where the film shows it, and is no "Not heard"', () => {
+    const lines = heardChecks({ line: 'Refill. Not landfill.', how: 'card' }, [vo, other])
+    expect(lines[0]).toEqual({ text: 'The brief\u2019s end line \u201cRefill. Not landfill.\u201d is only NARRATOR\u2019s voice-over on shot 5, which no clip says yet: the end card shows it', ok: true })
+    expect(lines.slice(1).map((l) => l.text)).toEqual(['Not heard: MUM\u2019s \u201cIs that it?\u201d (shot 2). Not in any clip.'])
+    expect(heardChecks({ line: 'Refill. Not landfill.', how: 'super' }, [])[0].text).toBe('The brief\u2019s end line \u201cRefill. Not landfill.\u201d is not voiced: it shows as a super over the last shot')
+  })
+  it('without a brief end line, every unvoiced line is a "Not heard"', () => {
+    expect(heardChecks(undefined, [vo]).map((l) => l.ok)).toEqual([false])
   })
 })

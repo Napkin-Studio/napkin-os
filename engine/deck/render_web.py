@@ -244,6 +244,10 @@ def _framed_markup(s: dict, got: list, deck: dict, fig, label: str) -> tuple | N
         cells = "".join(f'<div class="sb-cell">{fig(slot, im, "width:100%;aspect-ratio:" + ratio(im))}<div class="sb-n"><b>{n}</b><i></i></div>'
                         f'<p class="sb-cap">{_e(c)}</p></div>' for n, c, (slot, im) in zip(nums, caps, shots))
         note = f'<span class="sb-note">{_e(st["note"])}</span>' if st.get("note") else ""
+        rows = spec.strip_rows(len(shots))
+        if len(rows) > 1:   # five or six frames: two rows of at most four, every frame drawn (round 3: six were cut to four)
+            return (f'<div class="pics strip sb-strip sb2" style="--per:{rows[0]}">{cells}</div>'
+                    f'<div class="pics sb-pills f-pills">{_mockup(shots[0][1], label)}{note}</div>', "pic-sb pic-sb2")
         return (f'<div class="pics strip sb-strip" style="grid-template-columns:repeat({len(shots)},1fr)">{cells}</div>'
                 f'<div class="pics sb-pills f-pills">{_mockup(shots[0][1], label)}{note}</div>', "pic-sb")
     pic = next(((slot, im) for slot, im in got if slot == "picture"), None)
@@ -317,6 +321,9 @@ def _body(s, b: _Slide, blocks: list, pictured: bool = False) -> str:
         if vis.get("kind") == "image_prompt" and not pictured:   # a drawn picture takes the place of the 'Image prompt' note
             b.f += 1
             left += b.rv("b-prompt", _e(f"Image prompt ({vis.get('status', 'illustrative')}): {vis.get('prompt', '')}"), "p")
+        if (s.get("ooh") or s.get("strip")) and copy.get("lines"):   # lines beside frames (an allergen line) are one quiet footnote under them, not a dark panel; the answer stays in the notes
+            left += b.rv("sb-foot", _e(" \u00b7 ".join(str(x).strip() for x in copy["lines"] if str(x).strip())), "p", 100)
+            copy = {**copy, "lines": [], "answer": ""}
         if not copy.get("lines") and not copy.get("answer"):   # nothing of the copy is left to show (its lines are the strip's captions, its answer is in the notes): no empty panel
             return f'<div class="body col">{left}</div>'
         return f'<div class="body split exec{" framed" if copy["frame"] else ""}"><div class="col">{left}</div><div class="col">{b.blocks([copy])}</div></div>'
@@ -672,7 +679,10 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
     audience = deck["meta"].get("audience", "review")
     out = []
     # Pictures (deck-frames-in): the same slots the pptx draws; with pictures None nothing is drawn and the markup is as it was.
-    drawn = {k: v for k, v in images.drawn(deck, audience).items() if placed is None or k in placed} if pictures else {}   # only what the pptx drew: one content in every format
+    drawn = {k: v for k, v in images.drawn(deck, audience).items() if placed is None or k in placed} if pictures else {}
+    # (only what the pptx drew: one content in every format)
+    if clean:   # as the pptx: an export carries no Flagged mark or red outline
+        drawn = images.unflag(drawn)
     plabel = ((deck["meta"].get("preferences") or {}).get("picture_approval") or {}).get("label") or "Illustrative"
     src = src or data_uri
     for n, sid in enumerate(deck["order"], 1):
@@ -692,7 +702,7 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
         lay = s.get("layout") or {}
         planned = bool(lay.get("blocks_sha") and lay["blocks_sha"] == blocks_sha(s, audience))
         v3lid = lay["id"] if (v3 and planned and lay.get("id") in _web_ids()) else None
-        if pic_cls in ("pic-ooh", "pic-sb"):   # frames of its own (out of home, a storyboard strip) take the slide's foot: a layout that sets its own picture column cannot share it
+        if pic_cls.split(" ")[0] in ("pic-ooh", "pic-sb"):   # frames of its own (out of home, a storyboard strip) take the slide's foot: a layout that sets its own picture column cannot share it
             v3lid = None
         if v3lid in GRAPHICS_WEB and spec.GRAPHICS:   # a chart or diagram the slide cannot hold here: the blocks as before
             probe = _Slide(inp)
@@ -737,7 +747,7 @@ def slide_views(deck, inp, findings: list | None = None, assets_dir=None, pictur
             notes += "\n\n" + spec.answer_notes(s)
         if planned and spec.moved_map(s, audience):   # the points the plan moved off the slide: verbatim, with their refs, as in the pptx notes
             from . import layouts
-            notes += "\n\nMoved from the slide:\n" + "\n".join(layouts.moved_line(t_, r_) for t_, r_ in layouts.moved_texts(s) if not (clean and spec.unresolved_line(t_)))
+            notes += "\n\nMoved from the slide:\n" + "\n".join(layouts.moved_line(t_, r_, clean) for t_, r_ in layouts.moved_texts(s) if not (clean and spec.unresolved_line(t_)))
         pt = (deck["meta"].get("layout_title_pt") or {}).get(lay.get("id")) if planned else None
         out.append({"layout": lay["id"] if planned else None, "tpt": f' style="--tpt:{pt * 2}px"' if (spec.LOOK_V2 and pt) else "", "id": sid, "n": n, "type": s["type"], "section": s["section"], "dark": dark, "cls": pic_cls,
                     "title": s["title"], "html": inner, "notes": notes, "steps": b.f, "status": s["status"],
@@ -782,12 +792,15 @@ FRAME_CSS = """
 .sb-n{display:flex;align-items:center;gap:14px;margin-top:8px}.sb-note{font-size:20px;color:var(--muted);align-self:center}
 .sb-n b{font:700 30px/1 var(--head)}.sb-n i{flex:1;height:1.5px;background:var(--ink)}
 .sb-strip .pic .plabel{display:none}.sb-strip{align-items:start}.sb-strip .pic{aspect-ratio:auto;height:auto}.sb-cap{margin:8px 0 0;font-size:22px;line-height:1.3;color:var(--ink)}
+.sb-foot{margin:18px 0 0;font-size:22px;line-height:1.3;color:var(--muted)}.pic-sb .sb-foot{position:absolute;left:112px;bottom:58px;max-width:980px;margin:0;font-size:20px}
 .sb-pills{display:flex;gap:12px;right:112px;bottom:auto;top:560px;left:auto}
 .ooh-row{left:112px;right:112px;bottom:70px;display:flex;justify-content:center;align-items:flex-end;gap:56px}
 .ooh-cell{display:flex;flex-direction:column;align-items:stretch}.ooh-cell .pic.framed{box-sizing:border-box}
 .ooh-name{margin:14px 0 0;text-align:center;font:700 26px/1.2 var(--head);color:var(--ink)}
 .pic-ooh .sb-pills{top:440px}.pic-ooh .body{padding-bottom:600px}.pic-ooh .body.exec{grid-template-columns:5fr 6fr}
-.pic-sb .body{padding-bottom:470px}.pic-sb .body.exec{grid-template-columns:5fr 6fr}
+.sb-strip.sb2{grid-template-columns:repeat(var(--per),372px);justify-content:center;row-gap:22px}.sb-strip.sb2 .sb-cap{font-size:19px;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pic-sb .body{padding-bottom:470px}
+.pic-sb.pic-sb2 .body{padding-bottom:600px}.pic-sb2 .sb-pills{top:auto;bottom:30px}.pic-sb .body.exec{grid-template-columns:5fr 6fr}
 """
 
 #: Picture styles: added to the stylesheet ONLY when a picture is drawn, so a deck with none keeps its exact bytes.

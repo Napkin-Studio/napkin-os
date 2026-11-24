@@ -271,6 +271,7 @@ def brief_from_data(data: dict, chain: list | None = None, doc_id: str | None = 
     for h in (data.get("capture") or {}).get("how_to_win") or []:
         htw.setdefault(h.get("kind") or "points", []).append({"point": h.get("point"), "evidence": h.get("evidence", "")})
     oq = [{"question": q if isinstance(q, str) else q.get("question"), "why": "", "priority": "normal"} for q in data.get("open_questions") or []]
+    oq = [q for q in oq if not answered_question(q["question"])]   # a question the brief already answers is not open
     cov = {"brief_fields": len(fields), "brief_fields_filled": sum(1 for f in fields.values() if f["value"]),
            "how_to_win_points": sum(len(v) for v in htw.values()), "open_questions": len(oq), "brief_source": "brief-maker clan",
            "marks": marks_from_data(data, chain, doc_id, docs)}   # popped into Inputs.marks by the loaders: marked texts never stay in the coverage that reaches a report
@@ -409,6 +410,15 @@ def carried_brief(doc: dict) -> tuple | None:
             return src, up[src]
     k = next(iter(up))
     return k, up[k]
+
+
+_ANSWERED = re.compile(r"[\u2014\u2013-]\s*answers?\s*:|\banswered\s*:|\(answered\b|\bresolved\s*:", re.I)
+
+
+def answered_question(q) -> bool:
+    """True when a brief's question carries its own answer ('What is the budget? — Answer: £150,000 including VAT'): it is settled, not open.
+    The questions slide lists only open ones (full-flow UAT 2026-11-23: all seven answered questions were listed, each with its answer)."""
+    return bool(_ANSWERED.search(str(q or "")))
 
 
 def production_brief(data: dict) -> tuple | None:

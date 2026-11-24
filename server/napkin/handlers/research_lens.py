@@ -12,7 +12,8 @@ def prepare(req, caps, settings):
     # the documents attached to the campaign are read as sources (the host adds their text)
     mats, _ = build_materials({"attachments": req.inp.get("attachments") or []}, ctx_data(req.clan))
     r = Researcher(req.doc, req.base, req.clan, req.handler, caps, lenses, markets, cats,
-                   reuse_days=settings.reuse_days, concurrency=settings.research_concurrency, materials=mats)
+                   reuse_days=settings.reuse_days, concurrency=settings.research_concurrency, materials=mats,
+                   discover=True)
 
     def work():
         return r.run(progress=lambda done: caps.jobs.progress(done))

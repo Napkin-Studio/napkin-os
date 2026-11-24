@@ -44,6 +44,8 @@ interface Props {
   tool?: InstalledApp | null
   running: RunningApp
   onHome: () => void
+  /** After a document moved to the Trash from its menu: read the library again, before the page it leaves for shows. */
+  onTrashed?: () => Promise<void>
   onOpenFile: () => void
   onSave: () => void
   onKeepOffline?: () => void
@@ -88,7 +90,7 @@ interface Props {
 }
 
 /** Chrome for one running app: toolbar + (collapsible) sidebar + render surface + panels. */
-export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, client, account, toolKey, onStartFresh, productionTarget, onToolPage, agency, agencyLogo, onAgency, user, onSignOut, mark, onCopyLink, crew, library, run }: Props) {
+export default function AppHost({ running, onHome, onTrashed, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, client, account, toolKey, onStartFresh, productionTarget, onToolPage, agency, agencyLogo, onAgency, user, onSignOut, mark, onCopyLink, crew, library, run }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false) // collapsed by default
   const { open } = running
   const docPath = open.path
@@ -406,6 +408,9 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           onRename: host.setTitle && !open.is_template ? (t: string) => { void host.setTitle!(t).then(() => refreshApp()).catch(e => setLinkError({ docPath, message: String(e instanceof Error ? e.message : e) })) } : undefined,
           onStartFresh,
           onToolPage,
+          onTrash: open.is_template || !host.trash ? undefined : () => {
+            void host.trash!.move(docPath).then(() => onTrashed?.()).then(() => (client?.onOpen ?? onHome)(), e => setLinkError({ docPath, message: String(e instanceof Error ? e.message : e) }))
+          },
           onSave,
           onCopyLink: open.is_template ? undefined : onCopyLink,
           locked: !!decisions.view?.lock.locked && !decisions.view.lock.reopened?.length,

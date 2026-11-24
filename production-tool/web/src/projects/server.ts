@@ -179,6 +179,12 @@ export class ProjectServer {
     return { restorableUntil: ((await res.json()) as { restorable_until: string }).restorable_until }
   }
 
+  /** Back from the Trash to the library (the host's restore: 404 when it is not in the Trash). */
+  async restore(id: string): Promise<void> {
+    const res = await this.req(this.host, 'POST', await this.doc(id, '/restore'))
+    if (!res.ok) return this.fail(res)
+  }
+
   /** The bytes at one of our public URLs (in/, out/); null when they cannot be had. */
   async download(url: string): Promise<Uint8Array | null> {
     try {

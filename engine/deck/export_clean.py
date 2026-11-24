@@ -20,19 +20,64 @@ import re
 _SENT = re.compile(r"(?<=[.!?])\s+")
 _LEAD = re.compile(r"^\s*to confirm\b\s*(:)?\s*", re.I)
 _PAREN = re.compile(r"\s*\([^()]*\bto confirm\b[^()]*\)", re.I)   # '(to confirm)', '(draft insight, to confirm)'
+_CLAUSE = re.compile(r"\s*[;,]\s*to confirm\b\s*:?\s*([^.;]*)", re.I)   # '... same quantity of food; to confirm: cleared under CAP Code Section 15': a clause of its own, mid-sentence
 _BLANK = re.compile(r"\s*\[(?:[^\]\n]*\s[^\]\n]*|Agency|Client|Project)\]")   # a bracket holding at least two words ('[presenter and date]'); '[1]' and '[req:R3]' stay
 _NO_AGENCY = re.compile(r"^\s*a response from \[(?:agency|[^\]]*)\]\.?\s*$", re.I)
 _TEXT_KEYS = ("text", "title", "answer", "kicker", "caption", "from", "to", "label", "quote", "attribution")
 _SKIP_KEYS = {"refs", "basis", "kind", "id", "ref", "src", "source", "layout", "hint"}
-OPEN_TITLE = "Open items to confirm"
+# The build's evidence ids: research pins and findings (f_..., fi_...), the brief's fields and requirements (brief:audience, req:r6), a prompt
+# sentence or answer (prompt:2, answer:q3), a document passage (doc:key#p3) and a candidate insight (c2). They belong to the build, never to the room.
+_ID = r"(?:\b(?:f|fi|t|d|src)_[A-Za-z0-9_]{4,}|\b(?:brief|req|doc|prompt|answer|calc|fact|finding):[A-Za-z0-9_](?:[A-Za-z0-9_.#\-]*[A-Za-z0-9_])?)"
+_WEAK = r"(?:\bIC\d{1,2}\b|\bc\d{1,2}\b)"   # a candidate insight's id: only ever removed in a group beside a strong id, or alone as '(c2)'
+_SEP = r"\s*[,;]\s*"
+_CITE = re.compile(rf"\s*[\(\[]\s*(?:{_WEAK}{_SEP})*{_ID}(?:{_SEP}(?:{_ID}|{_WEAK}))*\s*[\)\]]"   # '(f_AB12CD, brief:audience, req:r6)', '(IC5, brief:insight)', '[brief:insight, f_x]'
+                   rf"|\s*\(\s*\bc\d{{1,2}}\b\s*\)")   # '(c2)'
+_BARE_ID = re.compile(rf"\s*{_ID}")
+OPEN_TITLE = "Open points to settle"   # a client export never says "to confirm", the build's word (round 3: the appendix slides' own title did)
 OPEN_MAX = 48          # six appendix slides of LIST_ITEMS; any more go word for word into the last one's notes
 _NOTE = 220
+
+
+#: Text the build writes for itself about a slide: what an execution is FOR ('Role: ...') and what the engine added a slide to show. It is planning, not
+#: copy: a client slide never carries it (round 3: "Role: Six stills that show the making step by step" sat under the storyboard's title). It moves to the notes.
+_PLANNING = re.compile(r"^\s*(?:role\s*:|the storyboard frames made in production|the out-of-home sizes made in production)", re.I)
+
+
+def take_planning_text(slide: dict) -> list:
+    """Remove the slide's planning-text blocks (a ``text`` or ``small`` block that begins 'Role:' or says what an added slide shows) and return their words,
+    for the notes. Only whole blocks of that kind go; every other block stays."""
+    kept, taken = [], []
+    for b in slide.get("blocks") or []:
+        if isinstance(b, dict) and b.get("kind") in ("text", "small") and _PLANNING.match(str(b.get("text") or "")):
+            taken.append(str(b["text"]).strip())
+        else:
+            kept.append(b)
+    slide["blocks"] = kept
+    return taken
+
+
+def strip_ids(text):
+    """``text`` without the build's evidence ids: a parenthesised or bracketed citation group goes whole ('... risk (f_AB12CD, req:r6).' reads
+    '... risk.'), and a bare id left in a sentence goes alone. Text that holds none comes back unchanged (never reworded otherwise)."""
+    if not isinstance(text, str) or not text:
+        return text
+    out = _CITE.sub("", text)
+    out = _BARE_ID.sub("", out)
+    out = re.sub(r"[ \t]+([.,;:!?])", r"\1", out)
+    out = re.sub(r"[ \t]{2,}", " ", out)
+    return out.strip() if out != text else text
+
+
+def unlabel(text: str) -> str:
+    """An open item as a plain ask: 'To confirm: the date' reads 'To settle: the date' (the label is the build's word, not the room's)."""
+    return re.sub(r"(?i)\bto confirm\b", lambda m: "To settle" if m.group(0)[:1].isupper() else "to settle", str(text))
 
 
 def clean_text(text: str) -> tuple[str, list]:
     """``(text without its open items, [the open items, word for word])``."""
     if not isinstance(text, str) or not text.strip():
         return text, []
+    text = strip_ids(text)
     found, kept = [], []
     for sent in _SENT.split(text.strip()):
         if _NO_AGENCY.match(sent):   # 'A response from [Agency]': no agency named, so no line (never a placeholder, never 'Napkin Studio' twice)
@@ -40,23 +85,28 @@ def clean_text(text: str) -> tuple[str, list]:
         m = _LEAD.match(sent)
         if m:
             rest = sent[m.end():].strip()
-            found.append(sent.strip())
+            found.append(unlabel(sent.strip()))
             if m.group(1) and rest:   # 'To confirm: <proposal>.': the proposal stays, the label goes
                 kept.append(rest)
             continue
         kept.append(sent)
     out = " ".join(kept)
-    parens = [p.strip() for p in _PAREN.findall(out)]
-    if parens:
-        found += parens
+    if _PAREN.search(out):   # '... option (to confirm).': the open item is the sentence it hangs on, bracket and all, never the bare '(to confirm)'
+        for sent in _SENT.split(out):
+            if _PAREN.search(sent):
+                found.append(unlabel(sent.strip()))
         out = _PAREN.sub("", out)
+    for m in _CLAUSE.finditer(out):   # the clause is an open item (listed in its own words), the sentence keeps what came before it
+        if m.group(1).strip():
+            found.append(unlabel(f"To confirm: {m.group(1).strip()}"))
+    out = _CLAUSE.sub("", out)
     blanks = [b.strip() for b in _BLANK.findall(out)]
     if blanks:
         found += blanks
         out = _BLANK.sub("", out)
     out = re.sub(r"\s+([.,;:!?])", r"\1", out).strip()
     out = re.sub(r"^[\s.,;:]+(?=\w)", "", out) if not out.startswith(("...", "…")) else out
-    return out, found
+    return unlabel(out), found   # anything of the build's word still standing reads 'to settle': a client file never says 'to confirm'
 
 
 def _walk(node, found: list, drop_human: bool = False):
@@ -71,9 +121,9 @@ def _walk(node, found: list, drop_human: bool = False):
         return out
     if isinstance(node, dict):
         if node.get("human"):   # a card a person fills: it is the list itself (kept in the appendix)
-            if not drop_human:
-                return node
-            found.extend(str(node[k]) for k in ("text",) if isinstance(node.get(k), str) and node[k].strip())
+            if not drop_human:   # the card stays (it is the list), without the build's 'To confirm' label
+                return {k: (unlabel(strip_ids(v)) if k in _TEXT_KEYS and isinstance(v, str) else v) for k, v in node.items()}
+            found.extend(unlabel(str(node[k])) for k in ("text",) if isinstance(node.get(k), str) and node[k].strip())
             return None
         out = {}
         for k, v in node.items():
@@ -109,6 +159,9 @@ def scrub(deck: dict) -> dict:
         if lab.strip():
             s["label"] = lab[:80]
         presented = pos < divider
+        planning = take_planning_text(s)
+        if planning:
+            s["notes"] = "\n".join(planning) + ("\n\n" + str(s.get("notes") or "") if str(s.get("notes") or "").strip() else "")
         s["blocks"] = [b for b in (_walk(b, found, presented) for b in s.get("blocks") or [] if not (isinstance(b, dict) and b.get("internal"))) if b]
         if found:
             touched += 1
@@ -140,10 +193,19 @@ def has_marks(text: str) -> bool:
 _EVID = re.compile(r"^\s*\[(?:req|f|fi|doc|prompt|brief|answer|src)[:_][^\]]*\]")
 
 
+def client_text(text) -> str:
+    """One line of a client-facing note (a claim, a moved point, a note line) without the build's marks: no evidence id, no open item (a
+    sentence led by 'To confirm' keeps its proposal, a '(to confirm)' bracket goes) and no leftover 'to confirm' (it reads 'to settle')."""
+    if not isinstance(text, str) or not text:
+        return text
+    out, _ = clean_text(text)
+    return unlabel(strip_ids(out))
+
+
 def notes_of(notes) -> str:
     """A slide's notes for an export: without the evidence lines (``Evidence:`` and its ``[req:R3]`` / ``[brief:insight] brief field: ...`` lines, which
     carry the build's ids and the brief's own open words), which are the build's, not the room's."""
-    lines = [ln for ln in str(notes or "").splitlines() if not _EVID.match(ln)]
+    lines = [client_text(ln) for ln in str(notes or "").splitlines() if not _EVID.match(ln)]
     while lines and lines[-1].strip().lower() in ("evidence:", ""):
         lines.pop()
     out = "\n".join(lines).strip()

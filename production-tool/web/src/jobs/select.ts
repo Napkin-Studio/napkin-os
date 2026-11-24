@@ -3,7 +3,7 @@
 
 import type { AssetRef, Id, JobInputRef, JobShot, NamedRef, ProductionDocument, Ratio, RefRole, Shot } from '../contracts/types'
 import type { JobCtx, UiState } from '../doc/ui'
-import { KEY_EXTRAS, MENTION, NoFrontError } from '../lib/names'
+import { KEY_EXTRAS, MENTION, needsFront, NoFrontError } from '../lib/names'
 import { scopeOf, type ScopeItem } from '../model/scope'
 import { beatsOf, jobsList, refName, refNamed, refsList, shotName, shotSubjects } from '../model/selectors'
 import type { Relay } from '../relay'
@@ -43,7 +43,8 @@ const VIEW_ORDER = ['three-quarter', 'side', 'back']
  *  (up to KEY_EXTRAS more). Throws NoFrontError when the key has no front. */
 function keyPictures(doc: ProductionDocument, key: string): NamedRef[] {
   const mine = refsList(doc).filter((r) => r.key === key && r.asset)
-  const front = mine.find((r) => r.variant === 'front')
+  // A key that needs no front (a logo: UAT round 4 F32) leads with its first picture.
+  const front = mine.find((r) => r.variant === 'front') ?? (needsFront(doc, key) ? undefined : mine[0])
   if (!front) throw new NoFrontError(key)
   const rank = (r: NamedRef) => (VIEW_ORDER.includes(r.variant) ? VIEW_ORDER.indexOf(r.variant) : VIEW_ORDER.length + mine.indexOf(r))
   return [front, ...mine.filter((r) => r !== front).sort((a, b) => rank(a) - rank(b)).slice(0, KEY_EXTRAS)]

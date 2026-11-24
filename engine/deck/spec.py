@@ -168,6 +168,7 @@ AUDIENCES = ("review", "client")
 #: Text that must never reach a client: pipeline ids, stand-in and gate labels, open items.
 INTERNAL_PATTERNS = (
     (r"\b(?:t|r|fi|f|d|src)_[A-Za-z0-9_]{3,}\b", "an internal id"),
+    (r"\b(?:brief|req|doc|prompt|answer|calc):[A-Za-z0-9_][A-Za-z0-9_.#\-]*", "an evidence id"),
     (r"STAND-IN", "a stand-in label"),
     (r"\bGate \d\b", "a pipeline gate"),
     (r"(?i)\bto confirm\b", "an open 'to confirm'"),
@@ -342,7 +343,9 @@ PITCH_MERGES_V3 = (("channel_roles", "execution", None),
                    ("measurement", "guardrails", None))
 #: deck-look step 5 (``LOOK_V3`` only): a pitch with no stated limit aims at PITCH_TARGET presented slides (Sai: "the sweet slide size
 #: is 10"). A SOFT target: only the cheap moves run to reach it (assemble._to_target: unfilled placeholders to the 'To supply' part,
-#: then thin slides), nothing is trimmed, reworded or dropped. PITCH_CAP is ADVISORY only (validate: pitch_cap, a warning): asked-for
+#: then thin slides), nothing is trimmed, reworded or dropped. PITCH_CAP (and a type's length.cap) now holds since UAT round 4 F29
+#: (assemble._to_cap: folds, then moves behind the divider; the spine, asked-for routes and presented executions never move, so a
+#: story of only those may still run past it and validate's pitch_cap warns). Before that it was ADVISORY only: asked-for
 #: routes and PITCH_EXECUTIONS executions may rightly give 13-14, and no gate withholds a deck for its length. Agency pitches that
 #: run longer: set DECK_PITCH_TARGET (and DECK_PITCH_CAP) for a run, or change these two numbers. A stated limit always wins.
 def _env_count(name: str, default: int, lo: int = 3, hi: int = 60, warn: bool = True) -> int:
@@ -626,8 +629,14 @@ FRAME_FORMATS = {"poster_portrait": "uk-6-sheet", "billboard": "uk-48-sheet", "p
                  "spread": "mag-a4-dps", "strip": "uk-bus-tside"}
 #: The frame a channel's generated picture is shown in (graphics.frame_of): film in a screen, social on a phone, OOH and print on a poster.
 FRAME_OF_CHANNEL = {"ooh": "poster_portrait", "social": "phone", "film": "screen", "print": "poster_portrait", "display": "strip"}
-#: deck-graphics slice 3: a film execution's storyboard strip takes 3 to 4 Production frames in shot order, all Production or none.
-STRIP_MIN, STRIP_MAX = 3, 4
+#: deck-graphics slice 3: a film execution's storyboard strip takes 3 to 6 Production frames in shot order, all Production or none. Up to STRIP_ROW
+#: frames make one row; more make two (round 3: a storyboard of six was cut to four and the slide said six). More than STRIP_MAX are sampled.
+STRIP_MIN, STRIP_MAX, STRIP_ROW = 3, 6, 4
+
+
+def strip_rows(n: int) -> list:
+    """The frames per row of a strip of ``n`` frames: one row up to STRIP_ROW, else two rows, the first holding the extra ((5) -> [3, 2], (6) -> [3, 3])."""
+    return [n] if n <= STRIP_ROW else [(n + 1) // 2, n // 2]
 #: deck-prod-picker (deck-graphics part 5): what a picked Production picture none of its sources yielded says, in production.json, report.json
 #: and the slot's reason. Never skipped silently and never replaced by a generated picture without the person choosing.
 PRODUCTION_NOT_REACHABLE = "not reachable — re-save or export in Production"

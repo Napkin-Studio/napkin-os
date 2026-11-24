@@ -269,4 +269,22 @@ describe('the versions a Territories node names', () => {
     await bringCarriedRoutes(env, from, chain)
     for (const b of Object.values(doc().briefs!)) expect(b.carries!.brief!.v).toBe(3)
   })
+
+  it('a lock the host records against the bare brief id counts too, and every route node says its version (UAT round 4 F24, schema source.version)', async () => {
+    const d = example()
+    const { s, env, doc } = await born(d)
+    const from = (await s.clan.spunOffFrom())!
+    const briefId = carriedBeside(doc().upstream, from.document_id).brief!.id
+    const approve = (t: string) => ({ agent: 'brief-maker', action: 'approve', timestamp: '2026-11-17T10:00:00Z', kind: 'approve', targets: [t] })
+    expect(briefApprovals([approve(briefId), approve(briefId)], briefId)).toBe(2)
+    expect(briefApprovals([approve(briefId), approve(`${briefId}#insight`)], briefId)).toBe(2)
+    expect(briefApprovals([approve(`${briefId}x`)], briefId)).toBe(1)
+    await bringCarriedRoutes(env, from, [approve(briefId), approve(briefId)])
+    const nodes = Object.values(doc().briefs!).filter((b) => b.route)
+    expect(nodes.length).toBeGreaterThan(0)
+    for (const b of nodes) {
+      expect(b.carries!.brief!.v).toBe(2)
+      expect(b.source.version).toBeGreaterThanOrEqual(1)
+    }
+  })
 })

@@ -2258,7 +2258,12 @@
             "taken": {
               "type": "integer",
               "minimum": 1,
-              "description": "The version shown ('from Brief Maker v2'): 1 when linked, one more on each update taken."
+              "description": "Production's own copy counter: 1 when linked, one more on each update taken. Not the brief's version (see version)."
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "The brief's version as Brief Maker says it ('v2'): its approvals count, at least 1, as of the copy taken (napkin-web GET /d/{doc}/data, version)."
             },
             "at": {
               "type": "string",
@@ -2282,6 +2287,7 @@
             "app_id",
             "data_sha256",
             "taken",
+            "version",
             "at",
             "how"
           ],
@@ -4016,7 +4022,7 @@
     },
     "endCard": {
       "type": "object",
-      "description": "The person's own end card (features/make-and-edit.clan): drawn by the relay (no model) as the locked last piece of V1, s seconds after the last clip, then the studio's roll-up card. headline and line are its words, cta a short call to action, bg its colour, logo_asset the Brand board's logo. Absent: no card of the person's; the roll-up still ends the ad.",
+      "description": "The person's own end card (features/make-and-edit.clan): drawn by the relay (no model) as the locked last piece of V1, s seconds after the last clip, then the studio's roll-up card. headline and line are its words, cta a short call to action (only that), legal its small legal line, bg its colour, logo_asset the Brand board's logo. Absent: no card of the person's; the roll-up still ends the ad.",
       "properties": {
         "headline": {
           "type": "string",
@@ -4030,6 +4036,11 @@
         "cta": {
           "type": "string",
           "maxLength": 80
+        },
+        "legal": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "The card's legal line, small at the bottom, its own key apart from cta (2026-11-23). Prefilled from the linked Brief's legal mandatory when the card is made; the person's words after. Empty: the person cleared it, none is drawn."
         },
         "bg": {
           "type": "string",

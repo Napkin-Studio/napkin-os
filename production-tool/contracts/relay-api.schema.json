@@ -1454,6 +1454,7 @@
                 "headline": { "type": "string", "maxLength": 120 },
                 "line": { "type": "string", "minLength": 1, "maxLength": 200 },
                 "cta": { "type": "string", "maxLength": 80 },
+                "legal": { "type": "string", "maxLength": 200, "description": "The card's legal line, drawn small at the bottom (its own key; never the cta)." },
                 "bg": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
                 "logo": { "$ref": "common.schema.json#/$defs/assetRef" },
                 "s": { "type": "number", "minimum": 0.5, "maximum": 10 }
@@ -2898,6 +2899,11 @@
             "cta": {
               "type": "string",
               "maxLength": 80
+            },
+            "legal": {
+              "type": "string",
+              "maxLength": 200,
+              "description": "The card's legal line, drawn small at the bottom (its own key; never the cta)."
             },
             "bg": {
               "type": "string",

@@ -63,7 +63,7 @@ export function newBrief(read: OsBriefRead, how: 'link' | 'spinoff', now = new D
   return {
     id: newId('brief'), v: 1, field_v: {},
     title: read.title.slice(0, 200) || 'Brief',
-    source: { document_id: read.documentId, app_id: BRIEF_APP_ID, data_sha256: read.dataSha256 as BriefNode['source']['data_sha256'], taken: 1, at: now.toISOString(), how },
+    source: { document_id: read.documentId, app_id: BRIEF_APP_ID, data_sha256: read.dataSha256 as BriefNode['source']['data_sha256'], taken: 1, version: read.version, at: now.toISOString(), how },
     spine,
     ...(confidential.length ? { confidential } : {}),
   }
@@ -80,7 +80,7 @@ export async function addBrief(store: DocumentStore, brief: BriefNode): Promise<
   await systemUpdate(store, (d) => {
     d.briefs ??= {}
     d.briefs[brief.id] = brief
-  }, `${brief.source.how === 'spinoff' ? 'spin off' : 'link'} the brief ${named(brief.title, brief.source.taken)}`, `from Brief Maker (${brief.source.document_id}): ${spineSummary(brief.spine) || 'no spine parts filled in'}`)
+  }, `${brief.source.how === 'spinoff' ? 'spin off' : 'link'} the brief ${named(brief.title, brief.source.version)}`, `from Brief Maker (${brief.source.document_id}): ${spineSummary(brief.spine) || 'no spine parts filled in'}`)
   return brief
 }
 
@@ -182,13 +182,20 @@ const CARRY_LABEL = /^(?:the\s+(?:film|ad|card|end card)\s+)?(?:must\s+|should\s
  *  confirm: …" tail. Undefined: it names none. The film's end card carries it (UAT 2026-11-22: the end card had no
  *  legal line; 2026-11-24: a quoted caffeine warning was missed). */
 export function legalOf(spine: BriefSpine | undefined): string | undefined {
-  for (const m of spine?.mandatories ?? []) {
+  const mandatories = spine?.mandatories ?? []
+  // The "Include '…'" / "must carry …" / "Carry: …" forms win over any other mandatory that merely mentions legal.
+  const forms = (m: string) => /\b(?:must\s+)?(?:carry|carries|include)\b\s*[:\-\u2013\u2014]?\s*['"\u2018\u201c]/i.test(m)
+  for (const m of [...mandatories.filter(forms), ...mandatories.filter((x) => !forms(x))]) {
     const text = m.trim().replace(/\s*\bTo confirm\s*:[\s\S]*$/i, '').trim()
     const keyword = /\b(legal|disclaimer|small print|drink(?:\s+\w+)?\s+responsibl[ey]|responsibl[ey]|18\+|over[\s-]18|t&cs?|terms\s+(?:and|&)\s+conditions|terms apply|age[\s-]?(?:gate|verif)\w*)\b/i.test(text)
     const warned = WARNING.test(text) && (CARRY.test(text) || /\bwarning\b/i.test(text) || !!quoted(text))
     const carried = /\b(?:must\s+)?carry\b\s*[:\-\u2013\u2014'"\u2018\u201c]/i.test(text)
-    if (!keyword && !warned && !carried) continue
-    const line = (quoted(text) ?? text.replace(LEGAL_LABEL, '').replace(WARNING_LABEL, '').replace(CARRY_LABEL, '').replace(LINE_VERB, '')).replace(/^["'\u201c\u2018]+|["'\u201d\u2019]+$/g, '').trim()
+    if (!keyword && !warned && !carried && !(forms(m) && !/\b(?:end(?:s|ing)?\s+(?:on|with|line)|end[\s-]?line|sign[\s-]?off|tag[\s-]?line|brand\s+line)\b/i.test(m))) continue
+    const q = quoted(text)
+    // Only a quoted sentence-like line counts (words and a full stop, or a warning phrase): a stray quoted word
+    // near "legal" ('Cornish') is never the legal line, and the mandatory is skipped, not read whole.
+    if (q !== undefined && !(/\S\s+\S/.test(q) && (/[.!?]/.test(q) || WARNING.test(q)))) continue
+    const line = (q ?? text.replace(LEGAL_LABEL, '').replace(WARNING_LABEL, '').replace(CARRY_LABEL, '').replace(LINE_VERB, '')).replace(/^["'\u201c\u2018]+|["'\u201d\u2019]+$/g, '').trim()
     if (line) return line.slice(0, 200)
   }
   return undefined
@@ -208,13 +215,13 @@ export function withBrief(d: Doc, op: Op, node: LinkEndpoint, input: JobInput): 
   // brief when the project has exactly one (features/pt-dex-context.clan). Two or more: none, rather than a guess.
   const only = !b && op === 'generate' ? onlyBrief(d) : undefined
   if (only) {
-    const row: JobInputRow = { kind: 'brief', ref: only.id, used_as: "brief (the project's)", included: true, text: `${only.title} v${only.source.taken}`.slice(0, 200) }
+    const row: JobInputRow = { kind: 'brief', ref: only.id, used_as: "brief (the project's)", included: true, text: `${only.title} v${only.source.version}`.slice(0, 200) }
     return { input: { ...input, brief: jobBrief(only) }, rows: [row] }
   }
   if (!b) return { input, rows: [] }
   const row: JobInputRow = {
     kind: 'brief', ref: b.brief.id, ...(b.linkId ? { link_id: b.linkId } : {}), used_as: b.via === 'link' ? 'brief' : 'brief (from its script)', included: true,
-    text: `${b.brief.title} v${b.brief.source.taken}`.slice(0, 200),
+    text: `${b.brief.title} v${b.brief.source.version}`.slice(0, 200),
   }
   return { input: { ...input, brief: jobBrief(b.brief) }, rows: [row] }
 }
@@ -287,7 +294,7 @@ export function briefNotice(b: BriefNode, now: OsBriefRead): BriefNotice | null 
   const what = !words.length
     ? 'The brief changed in Brief Maker, but not its spine'
     : `${words.length === 1 ? words[0] : `${words.slice(0, -1).join(', ')} and ${words.at(-1)}`} changed in Brief Maker`
-  return { briefId: b.id, text: 'Brief changed: update?', detail: `${what.charAt(0).toUpperCase()}${what.slice(1)} (would be v${b.source.taken + 1}).`, changes, read: now }
+  return { briefId: b.id, text: 'Brief changed: update?', detail: `${what.charAt(0).toUpperCase()}${what.slice(1)}${now.version === b.source.version ? '.' : ` (now v${now.version}).`}`, changes, read: now }
 }
 
 /** The nodes taking a brief update makes out of date: what it feeds, and what those drive (scope's reach). */
@@ -313,6 +320,7 @@ export async function takeNewer(store: DocumentStore, briefId: Id, now: OsBriefR
   const { spine, confidential } = projectSpine(now.data)
   const changes = spineChanges(before.spine, spine)
   const taken = before.source.taken + 1
+  const version = now.version
   const title = now.title.slice(0, 200) || before.title
   await updateDoc(store, (d) => {
     const b = d.briefs?.[briefId]
@@ -321,16 +329,16 @@ export async function takeNewer(store: DocumentStore, briefId: Id, now: OsBriefR
     b.spine = spine
     if (confidential.length) b.confidential = confidential
     else delete b.confidential
-    b.source = { ...b.source, data_sha256: now.dataSha256 as BriefNode['source']['data_sha256'], taken, at: at.toISOString() }
+    b.source = { ...b.source, data_sha256: now.dataSha256 as BriefNode['source']['data_sha256'], taken, version, at: at.toISOString() }
     delete b.source.kept
     for (const target of briefReach(d, briefId)) {
       const id = newId('stale')
       d.stale[id] = {
         id, v: 1, field_v: {}, target: { kind: target.kind as StaleMark['target']['kind'], id: target.id }, caused_by: { kind: 'brief', id: briefId },
-        reason: `The brief changed (v${before.source.taken} → v${taken})${changes.length ? `: ${changes.join(', ')}` : ''}.`.slice(0, 200), marked_at: at.toISOString(),
+        reason: `The brief changed (v${before.source.version} → v${version})${changes.length ? `: ${changes.join(', ')}` : ''}.`.slice(0, 200), marked_at: at.toISOString(),
       }
     }
-  }, `update_from_brief ${named(title, taken)}`, changes.length ? `took the newer brief: ${changes.join(', ')} changed` : 'took the newer brief; its spine is the same')
+  }, `update_from_brief ${named(title, version)}`, changes.length ? `took the newer brief: ${changes.join(', ')} changed` : 'took the newer brief; its spine is the same')
   return store.get().briefs?.[briefId]
 }
 
@@ -341,7 +349,7 @@ export async function keepVersion(store: DocumentStore, briefId: Id, now: Pick<O
   await updateDoc(store, (d) => {
     const x = d.briefs?.[briefId]
     if (x) x.source = { ...x.source, kept: now.dataSha256 as BriefNode['source']['data_sha256'] }
-  }, `keep the brief ${named(b.title, b.source.taken)}`, 'Brief Maker has a newer version; it was not taken')
+  }, `keep the brief ${named(b.title, b.source.version)}`, 'Brief Maker has a newer version; it was not taken')
 }
 
 /** Whether a stale mark came from a brief update (the amber "brief changed" mark, not a frame's). */
@@ -381,7 +389,7 @@ export async function recordBriefFlags(store: DocumentStore, job: Pick<Job, 'job
   await landUpdate(store, (x) => {
     for (const c of made) x.checks[c.id] = c
   }, {
-    action: `flag ${made.length === 1 ? 'a line' : `${made.length} lines`} of the brief ${named(d.briefs[briefId].title, d.briefs[briefId].source.taken)}`,
+    action: `flag ${made.length === 1 ? 'a line' : `${made.length} lines`} of the brief ${named(d.briefs[briefId].title, d.briefs[briefId].source.version)}`,
     rationale: flags.map((f) => `${f.kind === 'dont' ? 'don\u2019t' : 'mandatory'} \u201c${f.line}\u201d: ${f.note}`).join(' \u00b7 ').slice(0, 1000),
     agent: 'jude', ...(docId ? { cites: [`${docId}#jobs[${job.jobId}]`] } : {}),
   })

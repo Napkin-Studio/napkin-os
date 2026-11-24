@@ -96,7 +96,7 @@ from pptx.dml.color import RGBColor
 from pptx.enum.chart import XL_CHART_TYPE, XL_LABEL_POSITION
 from pptx.enum.dml import MSO_LINE
 from pptx.enum.shapes import MSO_SHAPE, MSO_SHAPE_TYPE
-from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
+from pptx.enum.text import MSO_ANCHOR, MSO_AUTO_SIZE, PP_ALIGN
 from pptx.oxml.ns import nsdecls, qn
 from pptx.util import Emu, Inches, Pt
 
@@ -561,6 +561,8 @@ class Renderer:
             tb.name = name
         tf = tb.text_frame
         tf.word_wrap = True
+        if name == "Title":   # as in ptext: shrink inside the box, never over the text below
+            tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
         tf.margin_left = tf.margin_right = Inches(0.02)
         tf.margin_top = tf.margin_bottom = Inches(0.02)
         tf.vertical_anchor = anchor
@@ -753,6 +755,8 @@ class Renderer:
             tb.name = "Caption"   # a label: stage h holds it to the caption floor, not the body floor
         tf = tb.text_frame
         tf.word_wrap = True
+        if name == "Title":   # a title shrinks inside its box rather than run over the text under it, on a machine that draws it wider than the fit
+            tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
         tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
         tf.vertical_anchor = {"top": MSO_ANCHOR.TOP, "middle": MSO_ANCHOR.MIDDLE, "bottom": MSO_ANCHOR.BOTTOM}[anchor]
         for i, d in enumerate(paras):
@@ -2092,7 +2096,7 @@ class Renderer:
         pw = self._unk(0.24 + 0.085 * len(spec.MOCKUP_LABEL))
         self.rect(sl, x, y, pw, self.PILL_H, fill=self.th.ink, name="MockupPill")
         self.text(sl, x, y, pw, self.PILL_H, spec.MOCKUP_LABEL, size=10, color="FFFFFF", bold=True, align=PP_ALIGN.CENTER,
-                  anchor=MSO_ANCHOR.MIDDLE, name="MockupLabel")
+                  anchor=MSO_ANCHOR.MIDDLE, name="MockupLabel", cap=True)   # cap: the caption floor (10 pt) the pill's width is measured at, not the 12 pt body floor that wrapped it
         return pw
 
     def _pills(self, sl, x, y, im):
@@ -2169,7 +2173,7 @@ class Renderer:
         if not all(frs):
             return None
         top = 3.2
-        h = g.body_end - self.OOH_NAME_H - 0.1 - top
+        h = g.body_end - self.OOH_NAME_H - 0.1 - top - self.PILL_H - 0.12   # the labels take the foot, under the frames: never over the words above
         gap = 0.45
         want = [fr["ratio"] * h + 0.6 for fr in frs]
         avail = (self.x1 - self.x0) - gap * (len(cells) - 1)
@@ -2180,7 +2184,7 @@ class Renderer:
         for (f, im), fr, w in zip(cells, frs, ws):
             out.append((f, im, fr, x, top, w, h))
             x += w + gap
-        return {"body_end": top - self.PILL_H - 0.3, "cells": out}
+        return {"body_end": top - 0.3, "cells": out}
 
     def _ooh_draw(self, sl, plan):
         """The frames, each named under it, and the labels (the picture's own, then 'Mock-up') above the row at its right end."""
@@ -2194,7 +2198,7 @@ class Renderer:
         f0, im0, fr0, *_ = plan["cells"][0]
         x_end = plan["cells"][-1][3] + plan["cells"][-1][5]
         lab = (self._label_w(im0, 3.0) + 0.1) if im0.get("status") != "approved" else 0.0
-        py = plan["cells"][0][4] - self.PILL_H - 0.12
+        py = self.th.grid.body_end - self.PILL_H
         self._pills(sl, x_end - lab - self._unk(0.24 + 0.085 * len(spec.MOCKUP_LABEL)), py, im0)
 
     def _strip_draw(self, sl, plan):
@@ -2203,27 +2207,30 @@ class Renderer:
         boxes = plan["boxes"]
         m = self._mark(sl)
         numbers, note, caps = self._strip_info()
-        self._strip_cells(sl, boxes, numbers, caps)
-        x_end = boxes[-1][1] + boxes[-1][3]
+        self._strip_cells(sl, boxes, numbers, caps, compact=bool(plan.get("compact")))
+        x_end = max(b[1] + b[3] for b in boxes)
         im0 = boxes[0][5]
         lab = (self._label_w(im0, 3.0) + 0.1) if im0.get("status") != "approved" else 0.0
-        py = boxes[0][2] - self.PILL_H - 0.12
+        py = self.th.grid.body_end - self.PILL_H
         self._pills(sl, x_end - lab - self._unk(0.24 + 0.085 * len(spec.MOCKUP_LABEL)), py, im0)
         self._strip_note(sl, boxes[0][1] - 0.12, py, note)
         self._build(sl, m)
 
-    def _strip_cells(self, sl, boxes, numbers=None, caps=None):
+    def _strip_cells(self, sl, boxes, numbers=None, caps=None, compact=False):
         """Each storyboard frame in a hairline window at its own aspect, numbered under it beside a hairline with its shot number in the
-        storyboard (numbers only: no caption is carried or written)."""
+        storyboard. ``compact`` (two rows of frames): the number and the frame's own line share one line under it, no hairline."""
         numbers = numbers if numbers and len(numbers) == len(boxes) else list(range(1, len(boxes) + 1))
         for n, (slot, x, y, w, h, im) in zip(numbers, boxes):
             self.picture(sl, x, y, w, h, im, name="Strip picture", label=False)
             self.rect(sl, x, y, w, h, line=self.p.fg, lw=0.75, name="Frame: storyboard")
             self.text(sl, x, y + h + 0.04, 0.3, 0.3, str(n), size=14, bold=True, font=self.th.head, name="StripNumber")
-            self.hairline(sl, x + 0.32, y + h + 0.19, x + w, y + h + 0.19)
+            if not compact:
+                self.hairline(sl, x + 0.32, y + h + 0.19, x + w, y + h + 0.19)
         if caps and len(caps) == len(boxes):   # the frame's own line from the idea stage, under its number
             for c, (slot, x, y, w, h, im) in zip(caps, boxes):
-                if c:
+                if c and compact:
+                    self.text(sl, x + 0.3, y + h + 0.03, w - 0.3, 0.38, c, size=10, color=self.p.fg, name="StripCaption")
+                elif c:
                     self.text(sl, x, y + h + 0.26, w, self.STRIP_CAP_H - 0.06, c, size=11, color=self.p.fg, name="StripCaption")
 
     def _strip_shots(self) -> list:
@@ -4108,6 +4115,9 @@ class Renderer:
         tz = self._tz(s)
         if not tz:
             raise NoFit("no zone of the picture reads at AA: the words go beside it")
+        band = images.subject_band(self._pics.get("picture"), self.deck.get("assets"))   # a zone an earlier build recorded is held to the same rule
+        if not images.zone_clear_of(tz["zone"], band, images.zone_block(self._cv)):
+            raise NoFit("the words would cover the picture's subject: they go beside it")
         if cover and self._logo_file():
             raise NoFit("a logo is not set over a picture: the cover keeps the picture column")
         blocks = [b for b in s["blocks"] if self._text_of(b)]
@@ -4496,11 +4506,11 @@ class Renderer:
         if self.notes:
             sl.notes_slide.notes_text_frame.text = (export_clean.notes_of(s.get("notes")) if self.clean else (s.get("notes") or "")) + ("" if self.clean else f"\n\nSlide id {sid} · status {s['status']} · requirements {', '.join(s.get('requirements') or []) or 'none'}")
             if t.layouts and s.get("claims"):   # the claims stay in the file, in the notes, word for word
-                sl.notes_slide.notes_text_frame.text += "\n\nClaims:\n" + "\n".join("- " + c["text"] for c in s["claims"])
+                sl.notes_slide.notes_text_frame.text += "\n\nClaims:\n" + "\n".join("- " + (export_clean.client_text(c["text"]) if self.clean else c["text"]) for c in s["claims"])
             if self._answer_to_notes.get(sid) or spec.answer_notes(s):   # the answer kept off the slide (it did not fit above the frames, or the picture is the slide): in the notes
                 sl.notes_slide.notes_text_frame.text += "\n\n" + (spec.answer_notes(s) or "What it dramatises:\n" + self._answer_to_notes[sid])
             if planned and spec.moved_map(s_full, audience):   # points the plan moved off the slide: verbatim, each with its refs, labelled
-                sl.notes_slide.notes_text_frame.text += "\n\nMoved from the slide:\n" + "\n".join(layouts.moved_line(t_, r_) for t_, r_ in layouts.moved_texts(s_full) if not (self.clean and spec.unresolved_line(t_)))
+                sl.notes_slide.notes_text_frame.text += "\n\nMoved from the slide:\n" + "\n".join(layouts.moved_line(t_, r_, self.clean) for t_, r_ in layouts.moved_texts(s_full) if not (self.clean and spec.unresolved_line(t_)))
         if s["type"] == "appendix":
             self.hiding = True
         if getattr(self, "hiding", False):   # the appendix stays in the file, hidden from the slideshow
@@ -4574,17 +4584,29 @@ class Renderer:
                 gx = 0.25
                 ims = [got[k] for k in shots]
                 rs = [self._asset_ratio(im) for im in ims]
-                w = (x1 - x0 - gx * (len(shots) - 1)) / len(shots)
+                rows = spec.strip_rows(len(shots))   # up to four frames in one row, five or six in two (round 3: six were cut to four)
+                w = (x1 - x0 - gx * (rows[0] - 1)) / rows[0]
                 caps = (self._strip_info()[2] or [])
                 cap_h = self.STRIP_CAP_H if any(caps) else 0.0
-                h = min(w / max(rs), (g.body_end - self.EXEC_TOP - cap_h) * 0.42)
-                y = g.body_end - 0.36 - cap_h - h
-                boxes, cx = [], x0
-                for k, im, r in zip(shots, ims, rs):
-                    bw = min(w, h * r)
-                    boxes.append((k, cx + (w - bw) / 2, y, bw, h, im))
-                    cx += w + gx
-                return {"x1": x1, "body_end": y - self.PILL_H - 0.35, "boxes": boxes, "strip": True, "also": ["picture"], "caps": caps}
+                foot = g.body_end - 0.36 - self.PILL_H - 0.12   # the labels take the foot, under the strip
+                if len(rows) == 1:
+                    h = min(w / max(rs), (g.body_end - self.EXEC_TOP - cap_h) * 0.42)
+                else:   # two rows: the words above (title and role) keep their room; each frame's number and caption share one line under it
+                    row_x = 0.38 if any(caps) else 0.3
+                    top_min = 2.55 if any(b.get("kind") != "copy" and (b.get("text") or b.get("items")) for b in s.get("blocks") or []) else 1.95   # no words above the frames (the planning text is not on a client slide): they take the room
+                    room = foot - top_min - 0.2 * (len(rows) - 1)
+                    h = min(w / max(rs), room / len(rows) - row_x)
+                y = foot - cap_h - h if len(rows) == 1 else foot - len(rows) * (h + row_x) - 0.2 * (len(rows) - 1) + 0.04
+                boxes, i = [], 0
+                for ri, per in enumerate(rows):
+                    cw = (x1 - x0 - gx * (per - 1)) / per if len(rows) == 1 else w
+                    cx = x0 + ((x1 - x0) - (per * w + gx * (per - 1))) / 2 if len(rows) > 1 else x0
+                    for _ in range(per):
+                        bw = min(cw, h * rs[i])
+                        boxes.append((shots[i], cx + (cw - bw) / 2, y + ri * ((h + 0.3 + cap_h + 0.25) if len(rows) == 1 else (h + row_x + 0.2)), bw, h, ims[i]))
+                        cx += cw + gx
+                        i += 1
+                return {"x1": x1, "body_end": y - 0.23, "boxes": boxes, "strip": True, "also": ["picture"], "caps": caps, "rows": rows, "compact": len(rows) > 1}
             if self._frame_for(im):   # the frame takes the whole right half and contains itself in it
                 half = (x1 - x0 - gap) / 2
                 return {"x1": x1 - half - gap, "body_end": g.body_end, "framed": True,
@@ -4662,7 +4684,7 @@ class Renderer:
         flagged = im.get("status") == "flagged"
         self.rect(sl, lx, ly, pw, 0.28, fill="B03225" if flagged else "1B2430", name="PictureLabel")
         self.text(sl, lx, ly, pw, 0.28, self._label_text(im), size=10, color="FFFFFF", bold=True, align=PP_ALIGN.CENTER,
-                  anchor=MSO_ANCHOR.MIDDLE, name="Caption")
+                  anchor=MSO_ANCHOR.MIDDLE, name="Caption", cap=True)
 
     def _draw_pictures(self, sl, plan):
         if plan.get("strip"):
@@ -4926,33 +4948,16 @@ class Renderer:
         bottom = plan["body_end"]
         cps = [b for b in s["blocks"] if b["kind"] == "copy"]
         self._fit_flow(sl, [b for b in s["blocks"] if b["kind"] != "copy"], self.x0, y, 5.6, bottom=bottom)
-        if cps:
-            lines = "\n".join(str(x) for b in cps for x in b.get("lines") or [])
+        if cps:   # the lines left beside the frames (an allergen line, a super) are one quiet footnote under them, never a panel; the answer is a planning note and goes to the notes
+            lines = " \u00b7 ".join(str(x).strip() for b in cps for x in b.get("lines") or [] if str(x).strip())
             answers = " ".join(str(b.get("answer") or "") for b in cps if not spec.production_made(s)).strip()
-            fx, fw = 6.7, self.x1 - 6.7
-            m = self._mark(sl)
-            avail = max(0.4, bottom - y)
-            # The lines and the answer must fit above the frames' band: the largest size at which both do; else the answer goes to the notes
-            # (it says which half of the insight the work dramatises, not what the work says) and the lines take the band alone.
-            size, h_ans, h_lines = 10, 0.0, 0.0
-            for size in (13, 12, 11, 10):
-                h_lines = self._eh(lines, fw, size, 1.15) if lines else 0.0
-                h_ans = self._eh(answers, fw, size - 1, 1.1) if answers else 0.0
-                if h_lines + h_ans + (0.1 if lines and answers else 0.0) <= avail:
-                    break
-            else:
-                if answers:
-                    self._answer_to_notes[self._sid] = answers
-                    answers, h_ans = "", 0.0
-                for size in (13, 12, 11, 10):
-                    h_lines = self._eh(lines, fw, size, 1.15) if lines else 0.0
-                    if h_lines <= avail:
-                        break
-            if lines:
-                self.text(sl, fx, y, fw, max(0.4, min(avail - h_ans - 0.1, h_lines + 0.05)) if answers else avail, lines, size=size, color=self.p.fg, name="StoryboardLines")
             if answers:
-                self.text(sl, fx, bottom - h_ans, fw, h_ans, answers, size=size - 1, bold=True, color=self.p.acc_t, name="StoryboardAnswer")
-            self._build(sl, m)
+                self._answer_to_notes[self._sid] = answers
+            if lines:
+                m = self._mark(sl)
+                py = self.th.grid.body_end - self.PILL_H - 0.04
+                self.text(sl, self.x0, py, min(7.2, (self.x1 - self.x0) - 3.4), self.PILL_H + 0.1, lines, size=10, color=self.p.mute, anchor=MSO_ANCHOR.MIDDLE, name="StoryboardLines")
+                self._build(sl, m)
 
     def _execution(self, sl, s):
         """Role and notes left; the copy in a frame shaped by the channel right."""
@@ -5049,6 +5054,8 @@ def render(deck, inp, out: Path, master: Path | None = None, findings: list | No
     """
     r = Renderer(deck, inp, master, findings, animate, theme, pictures)
     r.notes, r.no_plan, r.protect, r.clean = notes, no_plan, dict(protect or {}), clean
+    if clean:   # an export shows no internal status mark (Flagged, the red outline): the status stays in the app's review
+        r.drawn = images.unflag(r.drawn)
     r.render(out, layouts_out)
     if picture_findings is not None:
         picture_findings.extend(r.picture_findings)

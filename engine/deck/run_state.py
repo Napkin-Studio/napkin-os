@@ -93,7 +93,7 @@ def checks_list(summary: dict | None, stages: Path, validation: dict | None = No
     a0 = stage_file(stages, "a0_intake.json")
     gaps = (a0 or {}).get("gaps") or s.get("gaps") or {}
     if s.get("tier"):
-        out.append({"ok": True, "text": f"Built from: {s['tier']}"})
+        out.append({"ok": True, "text": f"Built from: {s['tier']}" + ("+production" if s.get("production") else "")})   # a deck spun off a Production project says so
     left = gaps.get("brief_fields") or []
     if a0:
         out.append({"ok": not left, "text": (f"After the intake, {len(left)} brief fields are still empty or only proposed: {_names(left, 'field', 6)}")

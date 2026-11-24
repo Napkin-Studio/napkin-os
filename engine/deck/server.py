@@ -530,7 +530,7 @@ class Server:
         try:
             self.seed(d, req, until)
             inp = self.load_inputs(d, req)
-            d.summary = {**rs.inputs_summary(inp), "needs_intake": run_deck._needs_intake(inp)}
+            d.summary = {**rs.inputs_summary(inp), "needs_intake": run_deck._needs_intake(inp), "production": bool(req.get("production_upstream"))}
             rep = self.call_engine(d, req, until)
             if until == "c" and "territories" in auto_gates(d.stages):   # one route from Territories: no gate 2, the idea starts from it
                 until = "d"

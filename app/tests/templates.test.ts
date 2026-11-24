@@ -243,17 +243,20 @@ test('report wording is keyed per top-level part, as the middleware splits and h
 const RT = page('campaign-research/index.html')
 const MARKET = { IE: 'Ireland', GB: 'Great Britain' }
 
-function researchEnv(campaign: Record<string, unknown>, manifest: Record<string, unknown>) {
+function researchEnv(campaign: Record<string, unknown>, manifest: Record<string, unknown>, upstream: Record<string, unknown> = {}) {
   const calls: string[] = []
   const TITLE = { done: '', last: '' }
   const window = { __CLAN__: { manifest }, clan: { setTitle: (t: string) => { calls.push(t); return Promise.resolve({ ok: true }) } } }
   const document = { title: '' }
   const camp = () => campaign
   const marketNames = () => arr((campaign.markets as { value?: unknown })?.value).map(m => MARKET[m as keyof typeof MARKET] ?? m)
-  return { calls, document, env: { camp, marketNames, listJoin, isObj, TITLE, window, document, MARKET } }
+  const D = () => ({ upstream })
+  const ASK_FIELDS = ['client', 'audience', 'background', 'objectives']
+  return { calls, document, env: { camp, marketNames, listJoin, isObj, TITLE, window, document, MARKET, D, ASK_FIELDS } }
 }
 type TitleFns = { researchTitle(): string; titleIsOurs(t: string): boolean; syncTitle(): void }
-const TITLE_FNS = ['brandName', 'workName', 'isMarketList', 'researchTitle', 'titleIsOurs', 'syncTitle']
+const BRIEF_FNS = ['briefUpstream', 'briefData', 'briefShortName']
+const TITLE_FNS = [...BRIEF_FNS, 'brandName', 'workName', 'isMarketList', 'researchTitle', 'titleIsOurs', 'syncTitle']
 
 test('the research is titled by its brand and markets, else its working name', () => {
   const t = (c: Record<string, unknown>) => lift<TitleFns>(RT, TITLE_FNS, researchEnv(c, {}).env).researchTitle()
@@ -280,6 +283,55 @@ test('the title is set over the tool’s name, never over one a person chose', a
     assert.deepEqual(r.calls, set ? ['Lunasa · Ireland'] : [], `over ${JSON.stringify(title)}`)
     assert.equal(r.document.title, 'Lunasa · Ireland · Research')
   }
+})
+
+// UAT round 4, F12: Continue in -> Research from a brief ("A follow-up question from its open questions").
+const COPPERELL = { b1: { client: 'Copperell Home Ltd', project_name: 'Copperell Refill (working name; needs a trademark check)',
+  open_questions: ['Which refill brands lead in the UK, and what do they claim?', 'What may we say about germ-kill?'] } }
+
+test('a research started from a brief is titled by the brief’s short name, not the client company', () => {
+  const c = { brand: { value: { name: 'Copperell Home' } }, markets: { value: ['GB'] } }
+  const r = researchEnv(c, { title: 'Copperell Refill · Research' }, COPPERELL)
+  const f = lift<TitleFns>(RT, TITLE_FNS, r.env)
+  assert.equal(f.researchTitle(), 'Copperell Refill · Great Britain')
+  f.syncTitle()
+  assert.deepEqual(r.calls, ['Copperell Refill · Great Britain'], 'the shell’s spin-off name is ours to replace')
+  // The brand-and-market title the old rule wrote is ours too, so it moves to the short name.
+  assert.equal(f.titleIsOurs('Copperell Home · Great Britain'), true)
+  assert.equal(f.titleIsOurs('Copperell Home · Summer push'), false)
+  // No brief upstream: the brand leads, as before.
+  assert.equal(lift<TitleFns>(RT, TITLE_FNS, researchEnv(c, {}).env).researchTitle(), 'Copperell Home · Great Britain')
+})
+
+test('a research started from a brief opens with the brief’s open questions in the question box, once', () => {
+  const run = (upstream: Record<string, unknown>, chat: { draft: string }, started = false) => {
+    const env = { ...researchEnv({}, {}, upstream).env, CHAT: chat, mats: () => ({}), thread: () => (started ? [{}] : []), JOBS: [] }
+    lift<{ seedFromBrief(): void }>(RT, [...BRIEF_FNS, 'briefOpenQuestions', 'seedFromBrief'], env).seedFromBrief()
+    return chat.draft
+  }
+  assert.equal(run(COPPERELL, { draft: '' }),
+    'Copperell Refill: the brief’s open questions.\n- Which refill brands lead in the UK, and what do they claim?\n- What may we say about germ-kill?')
+  const one = { b1: { ...COPPERELL.b1, open_questions: ['What may we say about germ-kill?'] } }
+  assert.equal(run(one, { draft: '' }), 'Copperell Refill: What may we say about germ-kill?')
+  assert.equal(run(COPPERELL, { draft: 'my own words' }), 'my own words', 'a draft is never replaced')
+  assert.equal(run(COPPERELL, { draft: '' }, true), '', 'not once the work has started')
+  assert.equal(run({ b1: { ...COPPERELL.b1, open_questions: [] } }, { draft: '' }), '', 'no questions, nothing written')
+})
+
+test('host refusals reach a person in plain words: no raw finding, fact or decision ids (UAT round 4, F8)', () => {
+  const f = lift<{ plainErr(m: unknown): string }>(RT, ['fnum', 'plainErr'], { fnds: () => ({ fi_AAA111: {}, fi_KRMQLHFGJ2ID: {} }) })
+  assert.equal(f.plainErr('finding fi_KRMQLHFGJ2ID is already verified'), 'Finding 2 is already verified')
+  assert.equal(f.plainErr('finding fi_ZZZ999 is not in this document'), 'this finding is not in this document')
+  assert.equal(f.plainErr('cites f_01JA0B3P4Q and d_01JABCDEF9'), 'cites a fact and a decision')
+  assert.doesNotMatch(f.plainErr('see fi_AAA111'), /fi_/)
+  // Every place the page says "Not saved" or "Not recorded" goes through it.
+  for (const m of RT.matchAll(/'Not (?:saved|recorded): '\+([a-zA-Z]+)/g)) assert.equal(m[1], 'plainErr', m[0])
+})
+
+test('Keep on a finding that is already kept holds: nothing is asked of the host', () => {
+  const body = fn(RT, 'chkDecide')
+  assert.match(body, /route==='\/verify'&&\(fnds\(\)\[ref\]\|\|\{\}\)\.status==='verified'\)\{[^}]*toast\(done\)[^}]*return; \}/)
+  assert.ok(body.indexOf("status==='verified'") < body.indexOf('hostDecide('), 'checked before the host is asked')
 })
 
 test('a research that finished with nothing to cite says there is no report, never that it is ready', () => {
@@ -4019,6 +4071,32 @@ test('the agent stage: the caption says who asks above the card, and the rails s
   }
 })
 
+// UAT round 4 F11 (owner, 2026-11-24): with no comparators named, research finds the category's players and
+// proposes them; the planner reads that they were found by research, and can remove any.
+test('research: comparators research found are labelled found by research, in the confirm panel and the field', () => {
+  const camp: Record<string, unknown> = { competitor_set: { origin: 'proposed', gate: 'none', value: [{ ref: 'brand/smol', name: 'Smol' }, { ref: 'brand/method', name: 'Method' }], fact_ids: ['f_1', 'f_2'], decision: 'd_X' } }
+  const pins = { f_1: { key: 'positioning.claim.smol', value: 'refill tablets' }, f_2: { key: 'positioning.claim.method', value: 'plant-based' } }
+  const env = {
+    FIELD: { competitor_set: { k: 'competitor_set', label: 'Comparators', type: 'refs' } }, BANDS: {}, MARKET: {}, camp: () => camp, pins: () => pins, arr, isObj, esc, listJoin,
+    clipT: (t: string, n: number) => (t.length > n ? t.slice(0, n - 1) + '…' : t), plural: (n: number, w: string) => `${n} ${n === 1 ? w : w + 's'}`,
+    pinLabel: (p: { key: string }) => p.key.split('.').pop(), fmtAny: (p: { value: string }) => p.value, verdictState: () => ({ unanswered: [] }),
+    reportLocked: () => false, WHO: { shell: { id: 'tia@tbwa', name: 'Tia' } }, reviewer: () => '', human: (x: string) => x, renderValue: () => '',
+    $: () => null, byOf: () => 'tia@tbwa', setReviewer: () => {}, hasHost: () => true, mintDecisionId: () => 'd_NEW',
+    renderSel: () => {}, toast: () => {}, loadChain: () => {}, VIEW: { sel: 'ask:competitor_set', trail: [] }, CONF: { ui: {} as Record<string, unknown> },
+    pinChips: (ids: string[]) => ids.join(','), spanHtml: () => '', findingChip: () => '', ICON: { check: '<svg></svg>' },
+    window: { ClanFields: null, clan: { patchData: () => Promise.resolve({ ok: true }) } },
+  }
+  const f = lift<{ confirmViewHtml(k: string): string; provenance(env: unknown, f: unknown): string }>(RT, ['confirmViewHtml', 'provenance', 'plainValue', 'askQuestion', 'codeText'], env)
+  const h = f.confirmViewHtml('competitor_set')
+  assert.match(h, /Found by research: the main brands in the category, from 2 facts\. Remove any the client does not compete with/)
+  assert.doesNotMatch(h, /We worked this out/)
+  const p = f.provenance(camp.competitor_set, { k: 'competitor_set' })
+  assert.match(p, /found-by-research/)
+  assert.match(p, /Found by research: the main brands in the category\. Remove any the client does not compete with, then confirm\./)
+  // any other proposed field keeps its wording
+  assert.match(f.provenance({ origin: 'proposed', fact_ids: ['f_1'] }, { k: 'categories' }), /We worked this out from 1 fact; no one said it\./)
+})
+
 // Confirming a part of the ask (owner, 2026-11-11): in the side panel, never a modal, in plain words,
 // and the yes is written with the person's note.
 test('research: Confirm opens in the side panel in plain words, and writes the value with the note', () => {
@@ -4804,13 +4882,13 @@ function factEnv(asksData: Record<string, Ask>, extra: Record<string, unknown> =
       selLabel: (r: string) => (r === FACT ? 'Advertising standards ruling, 2023' : r), citeName: () => 'Press', pins: () => ({}), fmtAny: () => '',
       findChip: (id: string) => `<chip ${id}>`, secByLens: (l: string) => (l === 'regulation_clearance' ? { n: 7, title: 'Clearance' } : null),
       secWords: (s: { n: number; title: string }) => `§${s.n} ${s.title}`, plainDay: (s: string) => s, slug: (s: string) => s,
-      askCite: (ids: string[]) => ` [${ids.join(' ')}]`,
+      askCite: (ids: string[]) => ` [${ids.join(' ')}]`, fnds: () => ({}),
       asks: () => Object.values(data.asks).sort((x, y) => (String(x.asked_at) < String(y.asked_at) ? -1 : 1)),
       ...extra,
     },
   }
 }
-const FACT_FNS = ['inReport', 'aboutWord', 'askAddedHtml', 'whenWords', 'nameOf', 'faCite', 'inRepWhere', 'factAnswerHtml', 'factPendingHtml', 'factAsksHtml']
+const FACT_FNS = ['fnum', 'plainErr', 'inReport', 'aboutWord', 'askAddedHtml', 'whenWords', 'nameOf', 'faCite', 'inRepWhere', 'factAnswerHtml', 'factPendingHtml', 'factAsksHtml']
 type FactFns = { inReport(a: Ask): boolean; factAsksHtml(r: string): string; askAddedHtml(a: Ask): string }
 const answered = (more: Ask = {}): Ask => ({
   id: 'ask_1', question: 'When was the ruling?', about: FACT, in_report: false, lens: 'regulation_clearance', in_section: true, asked_at: '2026-11-12T10:00:00Z',

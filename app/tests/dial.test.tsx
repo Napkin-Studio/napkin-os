@@ -148,3 +148,11 @@ test('the hub’s text reads on the client’s colour (AA, 4.5:1): its own ink w
   }
   assert.match(dial([]), /--cl:#DA291C;--cl-ink:#FFFFFF/, 'the hub is drawn with the readable ink')
 })
+
+test('a Production project of the client counts on its dial, whatever made it (UAT round 3: "Nothing yet" for Harrowgate)', () => {
+  const live = new Set(['brief', 'research', 'deck', 'prod'])
+  const html = dial([item('ie.napkin.production'), item('ie.napkin.production')], live)
+  // checked through the button's name, which holds in the 5-quadrant dial (the buttons follow the picture)
+  assert.match(html, /aria-label="Production, 2 films"[^>]*data-testid="quadrant-prod"/)
+  assert.doesNotMatch(html, /aria-label="Production, (nothing yet|coming soon)"/)
+})

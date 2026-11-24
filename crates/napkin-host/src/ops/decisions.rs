@@ -83,6 +83,22 @@ pub struct DecisionsView {
     pub problem: Option<String>,
 }
 
+impl DecisionsView {
+    /// How many times the document was approved (locked): the `approve`
+    /// decisions with a target on this document (`here != false`; a parent's
+    /// approve carried in is history, not a version of this one). Brief Maker
+    /// says "v<max(1, this)>" the same way (`docVersion`), so the version a
+    /// person sees and the one other tools read agree.
+    pub fn approvals(&self) -> usize {
+        self.decisions
+            .iter()
+            .filter(|b| {
+                b.decision.kind.as_deref() == Some("approve") && b.targets.iter().any(|t| t.here)
+            })
+            .count()
+    }
+}
+
 #[derive(Debug, Serialize)]
 pub struct DecisionBlock {
     pub decision: Decision,
