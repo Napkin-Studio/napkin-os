@@ -12,6 +12,7 @@
 #   model-local: model AND research port    MODEL_LOCAL_PORT       8797   (one process: mock-backend; a copy already up is
 #                                                                           reused and left running)
 #   the Production relay                    TERRITORIES_RELAY_PORT 8393
+#   the Deck Maker engine (live, claude -p) TERRITORIES_DECK_PORT  8397   (Continue in -> Deck builds for real)
 # Open http://127.0.0.1:8399/ and sign in as dev@napkin (a roster name, no password; TERRITORIES_SIGN_IN changes it).
 # Production needs a sign-in, so that is the one thing that differs from before. TERRITORIES_PRODUCTION=0 leaves
 # Production out and goes back to no sign-in (NAPKIN_AUTH=none).
@@ -46,12 +47,13 @@ WEB_PORT="${TERRITORIES_WEB_PORT:-8399}"
 MW_PORT="${TERRITORIES_MW_PORT:-8395}"
 export MODEL_LOCAL_PORT="${MODEL_LOCAL_PORT:-8797}"
 RELAY_PORT="${TERRITORIES_RELAY_PORT:-8393}"
+DECK_PORT="${TERRITORIES_DECK_PORT:-8397}"
 PROD="${TERRITORIES_PRODUCTION:-1}"
 SIGN_IN="${TERRITORIES_SIGN_IN:-dev@napkin}"
 MAX_USD="${PRODUCTION_LOCAL_MAX_USD:-10}"
-mkdir -p "$RUN/web" "$RUN/config" "$RUN/seed" "$RUN/logs" "$RUN/territory"
+mkdir -p "$RUN/web" "$RUN/config" "$RUN/seed" "$RUN/logs" "$RUN/territory" "$RUN/deck-engine"
 
-PORTS=("$WEB_PORT" "$MW_PORT"); [ "$PROD" = 1 ] && PORTS+=("$RELAY_PORT")
+PORTS=("$WEB_PORT" "$MW_PORT" "$DECK_PORT"); [ "$PROD" = 1 ] && PORTS+=("$RELAY_PORT")
 for p in "${PORTS[@]}"; do
   if (exec 3<>"/dev/tcp/127.0.0.1/$p") 2>/dev/null; then echo "port $p is already in use: set TERRITORIES_WEB_PORT / TERRITORIES_MW_PORT / TERRITORIES_RELAY_PORT"; exit 1; fi
 done
@@ -95,8 +97,14 @@ fi
 # (claude -p with WebSearch/WebFetch on your login). Nothing in the middleware knows it is local.
 RESEARCH_URL="http://127.0.0.1:$MODEL_LOCAL_PORT"
 
-( cd "$ROOT/server" && eval "$MODEL_ENV" && exec env "${IMG[@]}" NAPKIN_RESEARCH_URL="$RESEARCH_URL" PYTHONPATH="$ROOT/engine" NAPKIN_TERRITORY_DATA="$RUN/territory" \
-  NAPKIN_PORT="$MW_PORT" NAPKIN_LAYERS_URL=http://127.0.0.1:9 uv run --quiet python -m napkin.app ) > "$RUN/logs/middleware.log" 2>&1 &
+# The Deck Maker engine, live through model-local (claude -p): without it Continue in -> Deck opens but never builds.
+( cd "$ROOT/engine" && eval "$MODEL_ENV" && export BRIEF_CLAUDE_TRANSPORT=auto && NAPKIN_DECK_DATA="$RUN/deck-engine" NAPKIN_DECK_PORT="$DECK_PORT" NAPKIN_DECK_LIVE=1 NAPKIN_DECK_REPLAY="" NAPKIN_DECK_RENDER=web PYTHONPATH=. \
+  exec uv run --quiet --no-project --python 3.12 --with pdfplumber --with python-docx --with PyYAML --with python-pptx --with lxml --with jsonschema --with anthropic --with pillow \
+  python -m deck.server ) > "$RUN/logs/deck-engine.log" 2>&1 &
+pids+=($!)
+# The knowledge layers are model-local's (its mock layers family): pointed anywhere else, Research stops with "layers unreachable".
+( cd "$ROOT/server" && eval "$MODEL_ENV" && exec env "${IMG[@]}" NAPKIN_DECK_ENGINE_URL="http://127.0.0.1:$DECK_PORT" NAPKIN_DECK_RENDER=1 NAPKIN_RESEARCH_URL="$RESEARCH_URL" PYTHONPATH="$ROOT/engine" NAPKIN_TERRITORY_DATA="$RUN/territory" \
+  NAPKIN_PORT="$MW_PORT" NAPKIN_LAYERS_URL="http://127.0.0.1:$MODEL_LOCAL_PORT" uv run --quiet python -m napkin.app ) > "$RUN/logs/middleware.log" 2>&1 &
 pids+=($!)
 
 
@@ -137,7 +145,7 @@ PY
   for _ in $(seq 1 50); do [ -s "$PS/relay.pid" ] && break; sleep 0.1; done
   groups+=("$(cat "$PS/relay.pid" 2>/dev/null || true)")
   AUTH_ENV=(NAPKIN_AUTH=roster NAPKIN_AUTH_ROSTER="$PS/roster.tsv" NAPKIN_SESSION_SECRET="$(secret session)")
-  PROD_ENV=(NAPKIN_PRODUCTION_RELAY_URL="http://127.0.0.1:$RELAY_PORT" NAPKIN_PRODUCTION_MEDIA_BASE="http://127.0.0.1:$RELAY_PORT"
+  PROD_ENV=(NAPKIN_PRODUCTION_RELAY_URL="http://127.0.0.1:$RELAY_PORT" NAPKIN_PRODUCTION_MEDIA_BASE="http://localhost:$RELAY_PORT"
             NAPKIN_PRODUCTION_RELAY_SECRET="$TOKEN" NAPKIN_PRODUCTION_STATIC="$PS/production-dist")
 fi
 
