@@ -105,9 +105,16 @@ def facts(whole: dict) -> dict:
 
 # the parts that describe people: a group, never a named person the brief does not give (schema: audience prompt)
 PERSON_PARTS = ("audience",)
-# "Meet Priya", "Priya, 28,", "Priya (28)": a first name with an age, or a pen portrait's introduction
-_MEET = re.compile(r"\b(?:Meet|meet|This is|Say hello to)\s+([A-Z][a-z]{2,})\b")
-_NAME_AGE = re.compile(r"\b([A-Z][a-z]{2,})(?:,\s*|\s+\()(\d{2})(?:\)|\b)(?!\s*(?:%|per\s?cent|percent|years? of|-?\d))")
+# "Meet Priya", "Priya, 28,", "Hannah, 25-45", "Priya (28)", "Persona: Priya", "Lead: Hannah, renting…": a first name
+# with an age or an age range, or a label that introduces a person (UAT round 4: "Meet Priya, 28" and, on the re-test,
+# "Lead: Hannah, 25-45, renting or newly owning")
+_AGE = r"(?:aged\s+)?\d{2}(?:\s*(?:-|–|—|to)\s*\d{2})?(?:\s*(?:years?\s+old|yo|y/o))?"
+_NOT_FIGURE = r"(?!\s*(?:%|per\s?cent|percent|years?\s+of)|\d|[.,]\d)"
+_MEET = re.compile(r"\b(?:Meet|meet|This is|Say hello to|Persona|persona|Pen portrait|pen portrait)\s*:?\s+([A-Z][a-z]{2,})\b")
+_NAME_AGE = re.compile(rf"\b([A-Z][a-z]{{2,}})(?:,\s*({_AGE})\b|\s+\(({_AGE})\)){_NOT_FIGURE}")
+_LABEL_NAME = re.compile(r"\b(?:Lead|Primary|Secondary|Core|Target|Hero)\s*:\s*([A-Z][a-z]{2,})(?=,|\s+(?:is|who|was)\b)")
+# plural group nouns ("Renters, 22-35", "Families, 30 to 45") are a group, not a person
+_GROUP_END = re.compile(r"(?:ers|ies|ents|ants|ists|ors|ees|ians|ons|ves|men|ren|ple|les|als|ics)$")
 # words that look like a name before a number but are not a person ("April, 25", "London, 30")
 _NOT_NAMES = set("""January February March April May June July August September October November December
 Monday Tuesday Wednesday Thursday Friday Saturday Sunday Spring Summer Autumn Winter Christmas Easter
@@ -120,12 +127,18 @@ def invented_person(text: str) -> str:
     group drawn from the brief's data; a name with an age is a persona the brief never gave (UAT round 4: "Meet Priya,
     28, who rents a one-bed flat")."""
     t = _LEAD_MARK.sub("", text or "")
-    m = _NAME_AGE.search(t)
-    if m and m.group(1) not in _NOT_NAMES:
-        return f"{m.group(1)}, {m.group(2)}"
-    m = _MEET.search(t)
-    if m and m.group(1) not in _NOT_NAMES:
-        return m.group(1)
+
+    def person(name: str) -> bool:
+        return name not in _NOT_NAMES and not _GROUP_END.search(name.lower())
+
+    for m in _NAME_AGE.finditer(t):
+        if person(m.group(1)):
+            age = (m.group(2) or m.group(3) or "").strip()
+            return f"{m.group(1)}, {age}"
+    for rx in (_MEET, _LABEL_NAME):
+        for m in rx.finditer(t):
+            if person(m.group(1)):
+                return m.group(1)
     return ""
 
 
@@ -263,7 +276,14 @@ def figure_questions(entries: dict, label=lambda k: k) -> list[str]:
 # the plastic' or 'Refill. Not landfill'? — Answer: Refill. Not landfill. Use it word for word everywhere." The line then
 # belongs in mandatories, as the end line Production's end card and the deck read (production-tool brief/model.ts
 # endLineOf: "End line: '…'"), not only in the answered question.
-_LINE_Q = re.compile(r"\b(?:line|tag[\s-]?line|strap[\s-]?line|end[\s-]?line|sign[\s-]?off|slogan|endline)s?\b", re.I)
+# what the question offers a choice of: a line in any of its names, or the message / phrase / words to run (UAT round 4
+# re-test: "Which message does the board prefer: 'Clean, without the plastic' or 'Refill. Not landfill'?")
+_LINE_Q = re.compile(r"\b(?:line|tag[\s-]?line|strap[\s-]?line|end[\s-]?line|sign[\s-]?off|slogan|endline|message|phrase|"
+                     r"headline|platform)s?\b", re.I)
+# a question about the legal or safety wording is never about the campaign's line
+_LEGAL_Q = re.compile(r"\b(?:legal|disclaimer|warning|small\s+print|label|mandatory\s+copy|biocid\w*|terms)\b", re.I)
+# an answer that says to keep the words exactly: the line it repeats is fixed, whatever the question called it
+_VERBATIM = re.compile(r"\b(?:word\s+for\s+word|verbatim|exactly\s+as\s+(?:written|it\s+is)|as\s+written)\b", re.I)
 _QUOTED = re.compile(r"(?<!\w)[\"'‘“]([^\"'‘’“”]{2,120}?)[\"'’”](?!\w)")
 _QA_SPLIT = re.compile(r"\s+—\s+Answer:\s*", re.I)
 _END_LINE_ITEM = re.compile(r"^\s*(?:end[\s-]?line|sign[\s-]?off|tag[\s-]?line|brand\s+line)\b", re.I)
@@ -303,7 +323,7 @@ def fixed_line(answered: list[str]) -> str:
     line = ""
     for item in answered or []:
         parts = _QA_SPLIT.split(str(item), maxsplit=1)
-        if len(parts) == 2 and _LINE_Q.search(parts[0]):
+        if len(parts) == 2 and (_LINE_Q.search(parts[0]) or _VERBATIM.search(parts[1])) and not _LEGAL_Q.search(parts[0]):
             got = _answer_line(parts[0], parts[1])
             if got:
                 line = got

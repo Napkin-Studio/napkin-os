@@ -815,6 +815,26 @@ def test_a_redraft_carries_the_line_the_planner_fixed_into_mandatories(tmp_path)
     assert "End line: 'Refill. Not landfill.' (word for word)" in mands
 
 
+def test_a_redraft_carries_a_message_question_answered_word_for_word(tmp_path):
+    """UAT round 4 re-test (develop 1701c768): the question said "message", not "line", so the line stayed in the answer.
+    The exact question and answer from the UAT document."""
+    s = Server(tmp_path, model=planned_model({}), retrieval=retrieval(), settings_kw={"brief_flow": "planned"})
+    try:
+        host = Host()
+        run(s, host, inp={"prompt": THIN, "attachments": []})
+        host.data["open_questions"] = ["Which message does the board prefer: 'Clean, without the plastic' or 'Refill. Not landfill'? — "
+                                       "Answer: Refill. Not landfill. Use it word for word everywhere."] + list(host.data["open_questions"])
+        host.chain.insert(0, {"id": "d_HUMAN00012", "kind": "edit", "actor": "human:shrey", "agent": "human:shrey",
+                              "action": "answer an open question", "targets": [f"{DOC}#open_questions"],
+                              "timestamp": "2026-11-12T10:00:00Z"})
+        replies = run(s, host, inp={"prompt": THIN, "attachments": [], "intake": False, "redraft": True})
+    finally:
+        s.stop()
+    props = {p["field"]: p["value"] for p in replies[-1]["result"]["proposals"]}
+    mands = props.get("mandatories") or host.data["mandatories"]
+    assert mands[0] == "End line: 'Refill. Not landfill.' (word for word)"
+
+
 def test_input_redraft_must_be_a_boolean(tmp_path):
     s = Server(tmp_path, model=planned_model({}), retrieval=retrieval(), settings_kw={"brief_flow": "planned"})
     try:
