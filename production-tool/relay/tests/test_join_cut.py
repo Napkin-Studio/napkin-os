@@ -44,7 +44,7 @@ def test_v11_is_v10_with_the_take_tied_to_its_frames():
     assert changed[0].startswith("  - `take_refs`:") and "follows image k" in changed[0] and "No frame is pinned" in changed[0]
 
 
-def test_the_configs_run_v17_and_the_check_allows_v11_to_v16():
+def test_the_configs_run_v18_and_the_check_allows_v11_to_v17():
     """v12 is v11 plus frame-edit-or-redraw's lines, v13 is v12 plus the brief (features/brief-node.clan), v14 is
     v13 plus a redraw's object placement (owner 2026-11-18), v15 is v14 plus the images' places and unnamed
     pictures as objects (features/pt-dex-context.clan), v16 is v15 plus no other brands and @previous for continuity
@@ -52,11 +52,11 @@ def test_the_configs_run_v17_and_the_check_allows_v11_to_v16():
     (features/pt-canvas-r3.clan); v11 to v16 stay allowed for a rollback. The configs
     name no prompt, so they run the bundle's default (features/config-defaults.clan)."""
     from director.claude import PROMPT_VERSION
-    assert PROMPT_VERSION == "director.v17"
+    assert PROMPT_VERSION == "director.v18"
     for name in ("config.live.json", "config.testing.json", "config.pathway.runway.json"):
         assert "promptVersion" not in json.loads((CONTRACTS / "examples" / name).read_text()).get("director", {}), name
     check = (CONTRACTS / "check.py").read_text()
-    assert all(f'"director.v{n}"' in check for n in (11, 12, 13, 14, 15, 16, 17))
+    assert all(f'"director.v{n}"' in check for n in (11, 12, 13, 14, 15, 16, 17, 18))
 
 
 def test_the_passthrough_ties_each_shot_to_its_frame_and_sends_no_first_frame():

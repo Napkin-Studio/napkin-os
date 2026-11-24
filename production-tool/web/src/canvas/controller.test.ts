@@ -320,6 +320,17 @@ describe('the shape of a Generate without an area, and of the views', () => {
     expect(JSON.stringify(t.sent.map((s) => s.input))).not.toContain("'4:5' as const")
   })
 
+  it('a ratio the person wrote wins over the linked picture’s shape and the storyboard’s (UAT round 3: "4:5" came out 16:9)', async () => {
+    await systemUpdate(t.doc, (d) => { d.assets[SHA('w')] = asset(SHA('w'), 'image', { w: 1600, h: 900, origin: 'uploaded' }) }, 'sync')
+    t.canvas.els = [{ id: 'W', type: 'image', x: 0, y: 0, width: 320, height: 180, isDeleted: false, frameId: null, customData: { kind: 'pic', id: 'node_w', asset: SHA('w') } } as unknown as El]
+    await t.ctrl.generate(['W'], 'Key visual, 4:5 portrait poster: the bag on a table')
+    expect(t.sent[0].input.ratio).toBe('4:5')
+    await t.ctrl.generate([], 'a square 1:1 sticker of a lighthouse')
+    expect(t.sent[1].input.ratio).toBe('1:1')
+    await t.ctrl.generate(['W'], 'at 3:45 pm, in red')
+    expect(t.sent[2].input.ratio).toBe('16:9')
+  })
+
   it('the views send the front’s own aspect', async () => {
     await systemUpdate(t.doc, (d: ProductionDocument) => {
       d.assets[SHA('f')] = asset(SHA('f'), 'image', { w: 896, h: 1120, origin: 'generated' })
