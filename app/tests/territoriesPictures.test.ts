@@ -98,13 +98,15 @@ test('the rights menu lists the four choices with the current one checked, and o
   assert.equal(L.dialogFor('rights:t_started:' + route(d).pictures[4].id, d), null)
 })
 
-test('the Booth card for a Final with no rights offers Choose rights and Take it off Final, and Send reads Send N →', () => {
+test('the Booth card for a Final with no rights offers Choose rights and Take it off Final; the page has no Send of its own', () => {
   const d = doc(); route(d).pictures[0].rights = 'unknown'
   d.run.gate = { id: 'greenlight', blocked_by: [{ kind: 'picture_rights', ids: ['t_started'], text: 'Already Started has a Final picture with no rights chosen. Say whose it is, or take it off Final.' }] }
   const b = L.greenlightBooth(d, {}) as string
   assert.match(b, /class="bc ask"/); assert.match(plain(b), /Final picture with no rights chosen/); assert.match(plain(b), /Choose rights/); assert.match(plain(b), /Take it off Final/)
   assert.match(b, /data-pic-rights="t_started\|pic_/); assert.match(b, /data-pic-off="1"/)
-  assert.match(b, /data-send disabled>Send →<\/button>/, 'held while a Final has no rights')
+  // territories-redesign: Send is the step's primary, in the Greenlight header, not in the Booth
+  assert.doesNotMatch(b, /data-send/)
+  assert.ok((L.view(d, {}) as string).indexOf('data-send') < 0, 'no Send of its own: Continue in is the shell\'s')
   assert.doesNotMatch(b, /to production →/)
 })
 

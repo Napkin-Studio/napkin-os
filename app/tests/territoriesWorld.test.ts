@@ -102,16 +102,16 @@ test('the routes walk in the gallery order, and a route that is not developed ha
 
 test('the dials pick the copy corner and the layout from the world block alone (stills 16 and 17)', () => {
   const d = doc(), t = routeOf(d), h = t.world.headlines
-  const corner = (tone: number, energy: number) => text(W.worldBody(d, { dials: { [t.id]: { ...W.naturalDial(t), tone, energy } } }, t))
+  const corner = (tone: number, energy: number) => text(W.worldBody(d, { wmore: true, dials: { [t.id]: { ...W.naturalDial(t), tone, energy } } }, t))
   assert.match(corner(10, 10), new RegExp(h.wq.replace(/[.]/g, '\\.')))
   assert.match(corner(10, 90), new RegExp(h.wl.slice(0, 20)))
   assert.match(corner(90, 10), new RegExp(h.sq.slice(0, 20)))
   assert.match(corner(90, 90), new RegExp(h.sl.slice(0, 20)))
-  const lay = (energy: number) => W.worldBody(d, { dials: { [t.id]: { ...W.naturalDial(t), energy } } }, t)
+  const lay = (energy: number) => W.worldBody(d, { wmore: true, dials: { [t.id]: { ...W.naturalDial(t), energy } } }, t)
   assert.match(lay(10), /lay-quiet/); assert.match(lay(50), /lay-mid/); assert.match(lay(90), /lay-loud/)
-  const reg = (register: number) => W.worldBody(d, { dials: { [t.id]: { ...W.naturalDial(t), register } } }, t)
+  const reg = (register: number) => W.worldBody(d, { wmore: true, dials: { [t.id]: { ...W.naturalDial(t), register } } }, t)
   assert.match(reg(80), /class="frames cine"/); assert.doesNotMatch(reg(20), /class="frames cine"/)
-  const br = (brand: number) => W.worldBody(d, { dials: { [t.id]: { ...W.naturalDial(t), brand } } }, t)
+  const br = (brand: number) => W.worldBody(d, { wmore: true, dials: { [t.id]: { ...W.naturalDial(t), brand } } }, t)
   assert.match(br(10), /bm-sm/); assert.match(br(50), /bm-md/); assert.match(br(90), /bm-lg/)
 })
 
@@ -135,7 +135,7 @@ test('Keep this feel writes dial_set (valid), Back to its natural feel clears it
   const d2 = apply(d, k); eq(validate(d2, schema), [])
   eq(routeOf(d2).world.dial_set, { ...W.naturalDial(t), tone: 5, energy: 95 }); eq(routeOf(d2).world.dial, t.world.dial, 'the natural feel stays')
   eq(W.dialOf(routeOf(d2), {}), { ...W.naturalDial(t), tone: 5, energy: 95 })
-  assert.match(W.worldBody(d2, {}, routeOf(d2)), /lay-loud/)
+  assert.match(W.worldBody(d2, { wmore: true }, routeOf(d2)), /lay-loud/)
   assert.match(W.act(d2, {}, { a: 'keep', id: t.id }, ENV)!.toast!, /already the feel/, 'nothing to keep when nothing moved')
   const r = W.act(d2, {}, { a: 'dreset', id: t.id }, ENV)!, d3 = apply(d2, r)
   assert.ok(!('dial_set' in routeOf(d3).world)); eq(validate(d3, schema), []); eq(W.dialOf(routeOf(d3), {}), W.naturalDial(t))
@@ -192,8 +192,12 @@ test('Push it asks first (three calls) and sends the instruction; both requests 
 test('the journey is the weekend\'s six stops from the document, each drawn by one template from the world block', () => {
   const d = doc(), t = routeOf(d), j = W.journeyOf(d)
   eq(j.map(s => s.key), ['tv', 'story', 'poster', 'radio', 'seat', 'email'])
-  const body = W.worldBody(d, {}, t)
+  const body = W.worldBody(d, { wmore: true }, t)
   assert.equal((body.match(/class="jstep j-/g) ?? []).length, 6)
+  // the page shows the first two moments and names the rest, with Show the whole weekend (the mock); wmore shows all six
+  const two = W.worldBody(d, {}, t)
+  assert.equal((two.match(/class="jstep j-/g) ?? []).length, 2)
+  assert.match(text(two), /4 more moments: Poster, Radio, Table card, Email\./); assert.match(two, /data-wmore>Show the whole weekend/)
   for (const s of j) assert.ok(text(body).includes(s.day) && text(body).includes(s.where))
   assert.equal((body.match(/class="fr"/g) ?? []).length, t.world.tv.length)
   for (const r of t.world.radio.filter((x: Doc) => x.voice !== 'SFX')) assert.ok(text(body).includes(r.text.slice(0, 20)))
@@ -201,7 +205,7 @@ test('the journey is the weekend\'s six stops from the document, each drawn by o
   const odd = { ...d, journey: [{ key: 'tv', day: 'Mon', where: 'x' }, { key: 'billboard', day: 'Tue', where: 'y' }] }
   eq(W.journeyOf(odd).map(s => s.key), ['tv'], 'an unknown touchpoint is left out')
   // no per-route markup: a different route comes out of the same templates
-  for (const id of ['t_passenger', 'small'.replace('small', 't_small')]) assert.equal((W.worldBody(d, {}, routeOf(d, id)).match(/class="jstep j-/g) ?? []).length, 6)
+  for (const id of ['t_passenger', 'small'.replace('small', 't_small')]) assert.equal((W.worldBody(d, { wmore: true, wmore: true }, routeOf(d, id)).match(/class="jstep j-/g) ?? []).length, 6)
 })
 
 test('the wall shows all six touchpoints at once, and the page toggles between the two views', () => {
@@ -226,7 +230,7 @@ test('the animatic plays the TV frames with captions, then the supered line; spe
   assert.ok(!/station ambience|doors close/i.test(sp.text), 'the SFX lines are written, not spoken'); assert.match(sp.text, /Aoife/)
   assert.ok(sp.pitch === 0.95 && sp.rate > 0.85, 'sincere and quiet')
   assert.equal(W.speech(d, { dials: { [t.id]: { ...W.naturalDial(t), tone: 10 } } }, t).pitch, 1.1)
-  assert.doesNotMatch(W.worldBody(d, { speech: false }, t), /data-speak/); assert.match(W.worldBody(d, { speech: true }, t), /data-speak/)
+  assert.doesNotMatch(L.view(d, { world: t.id, speech: false }), /data-speak/); assert.match(L.view(d, { world: t.id, speech: true }), /data-speak="[^"]+">▶ Read it aloud/)
   assert.equal(W.animHtml(d, {}, { ...t, world: { ...t.world, tv: [] } }, 0), '')
 })
 
@@ -241,10 +245,10 @@ test('Present shows one route at a time with no score, tier, rank or source, and
 
 test('the page: a route opens from the gallery as a world, with its own palette, panel, dock and a way back; nothing else changes', () => {
   const d = doc(), ui: Ui = { world: 't_started' }, page = L.view(d, ui)
-  assert.match(page, /id="wsheet"/); assert.match(page, /--t-bg:#F4B942/); assert.match(page, /data-wdock="present"/); assert.match(page, /data-w-back/)
-  assert.doesNotMatch(page, /class="gcard/); assert.doesNotMatch(page, /data-dock="compare"/)
+  assert.match(page, /id="wsheet"/); assert.match(page, /--t-bg:#F4B942/); assert.match(page, /data-wdock="anim">▶ Play animatic/); assert.match(page, /data-dock="export">Export…/); assert.match(page, /data-w-back/)
+  assert.doesNotMatch(page, /class="rrow/); assert.doesNotMatch(page, /data-dock="compare"/)
   assert.match(text(page), /1 of 8/); assert.match(page, /data-green="t_started"/)
-  const gallery = L.view(d, {}); assert.match(gallery, /class="gcard/); assert.doesNotMatch(gallery, /id="wsheet"/)
+  const gallery = L.view(d, {}); assert.match(gallery, /class="rrow/); assert.doesNotMatch(gallery, /id="wsheet"/)
   assert.doesNotMatch(L.view(d, { world: 't_anon' }), /id="wsheet"/, 'a route with no world falls back to the gallery')
   assert.doesNotMatch(L.view(d, { world: 't_started', view: 1 }), /id="wsheet"/, 'only step 3 draws it')
   for (const tab of ['feel', 'lines', 'why', 'test']) assert.match(L.view(d, { world: 't_started', wtab: tab }), new RegExp(`data-wtab="${tab}" aria-pressed="true"`))
@@ -260,8 +264,7 @@ test('rules on the page: the two faces only, no prices, rank only (never tier, s
   }
   const fonts = new Set([...html.matchAll(/font(?:-family)?:[^;{}]*?(?:var\(--font-(?:ui|serif)\)|"Geist"|"Newsreader"|-apple-system|Georgia|serif)/g)].map(m => m[0]))
   assert.ok(fonts.size > 0)
-  assert.ok(!/font-family:[^;}]*(mono|Courier|Inter|Fraunces|Helvetica Neue"?,\s*Arial)/i.test(html.replace(/--font-ui:[^;]*;/, '')), 'no third face')
-  assert.ok(!/font:\s*[1-7]00[^;{}]*var\(--font-ui\)/.test(html), 'Geist only at 800')
+  assert.ok(!/font-family:[^;}]*(Courier|Inter|Fraunces|Helvetica Neue"?,\s*Arial)/i.test(html.replace(/--font-(ui|mono):[^;]*;/g, '')), 'only Brief\'s faces (Newsreader, Geist, Geist Mono)')
   assert.ok(!/<form/.test(L.view(d, { world: 't_started' })))
 })
 

@@ -1910,6 +1910,10 @@ is the only state (a run's stage, gates and answers live in `data.run`), so a st
     `run` (explore: the insights, then the gates, to the next stop; `runner.run`), `steer` (`crew_id`, `kind` one of `further`, `pull`,
     `cross` with `with`, `stop`, `by`), `more` (`territory_id`, `steer?`, `n?`, `by`), `push` (`territory_id`, `instruction?`, `by`),
     `rerank_routes` (`by`; one blind-judge call).
+  - **The crew in the job status** (2026-11-24, `features/territories-redesign.clan`). `job_status` for `run_territories` adds `job.crew`: `[]`
+    until explore sets off, then one entry per member `{id, name, short, role, colour, heading, state, routes}` with `state` `out` until that
+    member is back (`back` or `stopped`, `routes` its count). It lives only in the job (lost when the job is), never in the document, which
+    still gets `crew`, `expeditions` and `territories` only at the end. `progress.done` counts members back.
   - **Quick moves** (no model; answered in the request: the first reply is already `done` with its change, or `failed` with the refusal in words):
     `undo` (`action_id`, `by`), `greenlight_route` / `remove_route` (`territory_id`, `by`), `answer_ask` (`ask_id`, `answer`, `note?`, `by`),
     `record_review` (`by`), `approve` (`gate`, default `greenlight`, `note?`, `by`), `send_routes` (`to` one of `deck-maker`,

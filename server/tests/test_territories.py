@@ -772,3 +772,18 @@ def test_the_pictures_view_names_the_slot_by_picture_id(terr, blobs, monkeypatch
     assert step(terr, host, "set_final", territory_id=tid, picture_id=slot["id"], on=True, by="Shrey")[0]["job"]["state"] == "done"
     s2 = next(s for s in next(x for x in host.data["territories"] if x["id"] == tid)["pictures"] if s["id"] == slot["id"])
     assert s2["rights"] == "own" and s2["final"] is True
+
+
+def test_the_job_status_names_the_crew_out_and_back_while_explore_runs(terr):
+    """Engine progress option A (territories-redesign): the status of the run that sends the crew out carries one lane per member, its
+    name and colour from the runner, and how it ended; the document itself still gets the crew only at the end."""
+    host = at_pick(srv=terr)
+    approve_pick(host)
+    replies = step(terr, host)
+    first = replies[0]["job"]
+    assert first.get("crew") is not None, "the status always has a crew list (empty before the crew sets off)"
+    last = replies[-1]["job"]
+    ids = [m["id"] for m in host.data["crew"]]
+    assert [m["id"] for m in last["crew"]] == ids
+    assert all(m["state"] in ("back", "stopped") and isinstance(m["routes"], int) and m["name"] and m["colour"] for m in last["crew"])
+    assert last["progress"]["done"] == last["progress"]["total"] == len(ids)
