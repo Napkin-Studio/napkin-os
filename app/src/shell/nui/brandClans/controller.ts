@@ -8,6 +8,7 @@
 // edited, and the one thing it never does on its own: it never updates a work
 // document. `updateWork` is called only by the press of an Update chip.
 
+import { logoForUpload, type Draw } from './rasterise'
 import * as M from './model'
 import type { BrandBible, BrandBehind, BrandClanList, BrandClanView, BrandHistoryEntry } from '../../../host/types'
 import type { BrandApi } from '../../../host/brandClans'
@@ -187,6 +188,16 @@ export class BrandClansController {
     if (!view) return null
     const r = await this.run(() => this.api.putAsset(view.path, file.name, file.bytes))
     return r ? r.path : null
+  }
+  /** A logo: an SVG is turned into a PNG in this browser first (owner 2026-11-24), so every tool takes the PNG. */
+  async putLogo(file: { name: string; type?: string; bytes: Uint8Array }, draw?: Draw): Promise<{ path: string; name: string } | null> {
+    const view = this.state.view
+    if (!view) return null
+    const r = await this.run(async () => {
+      const png = await logoForUpload(file, draw)
+      return { ...(await this.api.putAsset(view.path, png.name, png.bytes)), name: png.name }
+    })
+    return r ? { path: r.path, name: r.name } : null
   }
 
   // ── The Update chip ───────────────────────────────────────────────────────

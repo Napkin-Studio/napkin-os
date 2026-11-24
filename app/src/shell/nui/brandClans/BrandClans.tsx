@@ -187,9 +187,14 @@ function Screen({ s, c, view, name, src }: { s: BrandState; c: BrandClansControl
     removeExample: id => c.edit(b => M.removeExample(b, id)),
     pick: (kind, file, id) => {
       void file.arrayBuffer().then(async buf => {
-        const path = await c.putAsset({ name: file.name, bytes: new Uint8Array(buf) })
-        if (!path) return
-        c.edit(b => (kind === 'logo' ? M.putLogo(b, path, file.name.replace(/\.[^.]+$/, ''), id) : M.addExample(b, path)))
+        const bytes = new Uint8Array(buf)
+        if (kind === 'logo') {
+          const put = await c.putLogo({ name: file.name, type: file.type, bytes })
+          if (put) c.edit(b => M.putLogo(b, put.path, file.name.replace(/\.[^.]+$/, ''), id))
+          return
+        }
+        const path = await c.putAsset({ name: file.name, bytes })
+        if (path) c.edit(b => M.addExample(b, path))
       })
     },
   }
