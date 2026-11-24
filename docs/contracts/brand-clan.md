@@ -39,7 +39,7 @@ makes the frozen copies in work, and `linked_status`, change only then (attach c
 | `kit.version` | The **published version**, an integer from 1. Attach reads it. |
 | `kit.published {by, at}` | Who published the current version, and when. |
 | `kit.changelog[]` | One entry per published version, newest last: `{version, at, by, from, summary, changes?}`. `from.kind` is `create` (made by hand), `build` (built from a brand book), `upload` (a newer file, taken as a new version), `edit` (a person's edit) or `restore` (an old version brought back as a new one); `from.file` names the file. |
-| `visual.logos[]` | `{id, label, variant light/dark/mark/other, asset, note?}`. `dark` is the logo for a dark ground (the Deck's dark-ground logo). `asset` is `human/assets/<name>`. |
+| `visual.logos[]` | `{id, label, variant light/dark/mark/other, asset, note?}`. `dark` is the logo for a dark ground (the Deck's dark-ground logo). `asset` is `human/assets/<name>`. An SVG uploaded in the client window is turned into a PNG in the browser first (480 px high, at most 2400 wide; owner 2026-11-24), so `asset` is a PNG, JPEG or WebP the tools take as it is; the original SVG is not kept (one file per logo). |
 | `visual.logo_note` | The clear-space / placement rule shown under the logos. |
 | `visual.colours[]` | `{id, name, hex, role}`. `role` is one of the deck's tokens (`accent paper ink panel accent_ink`), `chart` or `other`. |
 | `visual.typography[]` | `{id, family, weight, use, role head/body/other}`. `weight` is text: "700", "400 / 600". Naming a family never licenses or embeds it. |
@@ -170,6 +170,7 @@ rules and tone, imagery style, the source file, and no UI for the provisions), e
 | Brief Maker chip, Deck Update look, Production node, Territories frames | `data.upstream.<id>` (the frozen copy), `lineage.attached[].version`, `kit.version`, `visual.*`, `voice.*`, `imagery.*` | the work document |
 | Deck `look.brand_tokens` | `visual.colours[].role/hex`, `visual.typography[].role/family`, `visual.logos[variant dark/light/mark]` and their files, `imagery.bans[]`, `kit.version` | frozen copy, `human/assets/brand/<id>/` |
 | Production jobs | `voice` for words; `visual`, `imagery` for pictures; the nearest Brand Clan node up the link graph | the document's `lineage.attached[]` and each node's link |
+| Production end card and sizes | the logo (`dark`, else `mark`, else `light`, else any), copied into the project as a picture when the node is placed, swapped or updated (`brand_clans[id].logo`); used when the node is linked and the project has no Brand board logo, which still wins (owner 2026-11-24) | the Brand Clan's asset route |
 
 A frozen copy never holds `app/brand/` (draft, pending, versions): attach takes `shared/data.yaml`, plus the logo files.
 

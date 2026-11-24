@@ -319,8 +319,9 @@ export function compileFor(d: ProductionDocument, videoId: Id): Plan {
   const v = d.videos[videoId]
   if (!v) return { clips: [], texts: [], lengthS: 0, missing: [] }
   const legal = v.end_card ? cardLegal(d, videoId, v.end_card.legal) : undefined
-  // The card's own logo, else the Brand board's (UAT round 4 F23: the card said so, but the render had none).
-  const logo = v.end_card ? v.end_card.logo_asset ?? brandKit(d).logo?.sha256 : undefined
+  // The card's own logo, else the Brand board's (UAT round 4 F23: the card said so, but the render had none), else the linked
+  // Brand Clan's (owner 2026-11-24).
+  const logo = v.end_card ? v.end_card.logo_asset ?? brandKit(d, videoId).logo?.sha256 : undefined
   const card = v.end_card ? { ...v.end_card, ...(legal === undefined ? {} : { legal }), ...(logo ? { logo_asset: logo } : {}) } : undefined
   const plan = compileTimeline({ timeline: v.timeline as Record<string, StoreTimelineItem>, ...(card ? { end_card: card } : {}) }, d.generations)
   const clips = plan.clips.map((c) => {

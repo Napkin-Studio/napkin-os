@@ -11,7 +11,10 @@ import { linkRuleFor } from '../../../clan-store/src/integrity'
 import { removeBrandClan } from '../doc/remove'
 import { brandRows } from '../jobs/context'
 import { scopeOf } from '../model/scope'
-import { addBrandClan, brandClanForJob, brandClanOf, brandClanWords, freshness, keepBrandClan, linkedLabel, newBrandClan, takeBrandClan } from './model'
+import { addBrandClan, brandClanForJob, brandClanOf, brandClanWords, fetchLogo, freshness, keepBrandClan, linkedLabel, logoAssetOf, newBrandClan, takeBrandClan, type LogoIn } from './model'
+import { brandKit } from '../campaign/layout'
+import { compileFor } from '../rooms/timeline'
+import { roots } from '../doc/gc'
 import { osBrandClanSource, type OsBrandClanRead } from './os'
 
 const ex = loadJson<ProductionDocument>('examples/document.ad.json')
@@ -190,7 +193,7 @@ describe('the client’s default, placed once for the person', () => {
     expect(chainHadBrandClan(['add the Brand Clan “Summer 26” v1'])).toBe(true)
     expect(chainHadBrandClan(['start the project', 'link the brief'])).toBe(false)
     let asked = 0
-    const src = { available: async () => { asked++; return true }, list: async () => [], read: async () => read(), assetUrl: async () => null, projectClient: async () => 'cli_tidewell' }
+    const src = { available: async () => { asked++; return true }, list: async () => [], read: async () => read(), assetUrl: async () => null, assetFile: async () => null, projectClient: async () => 'cli_tidewell' }
     const env = { doc: { get: () => structuredClone(ex) }, canvas: {} } as never
     expect(await placeDefaultBrandClan(env, true, src)).toBeNull()
     expect(asked).toBe(0)
@@ -199,9 +202,77 @@ describe('the client’s default, placed once for the person', () => {
   it('no client, or a client with no default: nothing is placed', async () => {
     const { placeDefaultBrandClan } = await import('./canvas')
     const env = { doc: { get: () => structuredClone(ex) }, canvas: {} } as never
-    const none = { available: async () => true, list: async () => [], read: async () => read(), assetUrl: async () => null, projectClient: async () => null }
+    const none = { available: async () => true, list: async () => [], read: async () => read(), assetUrl: async () => null, assetFile: async () => null, projectClient: async () => null }
     expect(await placeDefaultBrandClan(env, false, none)).toBeNull()
     const noDefault = { ...none, projectClient: async () => 'cli_tidewell', list: async () => [{ documentId: 'doc-zero', path: 'doc-zero', name: 'Zero', version: 2, default: false, palette: [] }] }
     expect(await placeDefaultBrandClan(env, false, noDefault, 'doc-ie-napkin-production-1')).toBeNull()
+  })
+})
+
+describe('its logo reaches the end card and the sizes (owner 2026-11-24): linked, and only when the Brand board has none', () => {
+  const PNG_SHA = 'sha256:' + 'ab'.repeat(32)
+  const LOGO: LogoIn = { sha256: PNG_SHA, w: 960, h: 240, mime: 'image/png', bytes: 1234 }
+  const FSET = 'fset_01K7A00000000000000000002K'
+  const noBoardLogo = (d: ProductionDocument) => {
+    for (const [k, r] of Object.entries(d.refs)) if (r.role === 'logo') delete d.refs[k]
+    return d
+  }
+
+  it('takes the dark-ground logo, else the mark, else any', () => {
+    const b = (logos: { variant: string; asset: string }[]) => ({ visual: { logos } }) as never
+    expect(logoAssetOf(b([{ variant: 'light', asset: 'l.png' }, { variant: 'dark', asset: 'd.png' }]))).toBe('d.png')
+    expect(logoAssetOf(b([{ variant: 'light', asset: 'l.png' }, { variant: 'mark', asset: 'm.png' }]))).toBe('m.png')
+    expect(logoAssetOf(b([{ variant: 'other', asset: 'o.png' }]))).toBe('o.png')
+    expect(logoAssetOf({})).toBeUndefined()
+  })
+
+  it('fetches a PNG, JPEG or WebP logo into this browser; an SVG, a missing file or no logo gives none', async () => {
+    const withLogo = (asset: string) => read('Zero', 2, { ...ZERO, visual: { ...ZERO.visual, logos: [{ id: 'd', variant: 'dark', asset }] } })
+    const src = (type: string | null) => ({ assetFile: async () => (type ? new Blob([new Uint8Array([1, 2, 3])], { type }) : null) })
+    const measure = async () => ({ w: 960, h: 240 })
+    const keep = async () => PNG_SHA
+    expect(await fetchLogo(src('image/png'), withLogo('human/assets/a-logo.png'), measure, keep)).toEqual({ ...LOGO, bytes: 3 })
+    expect(await fetchLogo(src('image/svg+xml'), withLogo('human/assets/a-logo.svg'), measure, keep)).toBeUndefined()
+    expect(await fetchLogo(src(null), withLogo('human/assets/a-logo.png'), measure, keep)).toBeUndefined()
+    expect(await fetchLogo({ assetFile: async () => { throw new Error('offline') } }, withLogo('human/assets/a-logo.png'), measure, keep)).toBeUndefined()
+    expect(await fetchLogo(src('image/png'), read('Zero', 2, { ...ZERO, visual: { colours: [] } }), measure, keep)).toBeUndefined()
+  })
+
+  it('placing, swapping and updating write the logo as a project picture; a look with none clears it', async () => {
+    const s = modelStore()
+    await s.create(MAYA, 'Brand Clan project')
+    const node = await addBrandClan(s, newBrandClan(read('Zero', 2), 'default'), LOGO)
+    const doc = () => s.get() as unknown as ProductionDocument
+    expect(doc().brand_clans![node.id].logo).toEqual({ sha256: PNG_SHA, w: 960, h: 240 })
+    expect(doc().assets[PNG_SHA]).toMatchObject({ kind: 'image', mime: 'image/png', w: 960, h: 240 })
+    await takeBrandClan(s, node.id, read('Summer 26', 1, { visual: { colours: [] } }))
+    expect(doc().brand_clans![node.id].logo).toBeUndefined()
+  })
+
+  it('the end card and the sizes use it when linked and there is no Brand board logo; the Brand board logo still wins', () => {
+    const zero = { ...newBrandClan(read(), 'pick'), id: 'bclan_01K7A0000000000000000000ZE', logo: { sha256: PNG_SHA, w: 960, h: 240 } }
+    const withAsset = (d: ProductionDocument) => { d.assets[PNG_SHA] = { sha256: PNG_SHA, kind: 'image', mime: 'image/png', bytes: 1234, w: 960, h: 240, origin: 'uploaded', rights: 'unknown' }; return d }
+    const linked = withAsset(noBoardLogo(withClans(ex, [zero], link(zero.id, { kind: 'script', id: SCRIPT }))))
+    // carried from the Script down to the Film and the Film's sizes
+    expect(brandKit(linked, VIDEO).logo).toEqual({ sha256: PNG_SHA, w: 960, h: 240 })
+    expect(brandKit(linked, FSET).logo?.sha256).toBe(PNG_SHA)
+    expect(compileFor(linked, VIDEO).endCard?.logo_sha256).toBe(PNG_SHA)
+    // placed but not linked: not used
+    const placed = withAsset(noBoardLogo(withClans(ex, [zero])))
+    expect(brandKit(placed, VIDEO).logo).toBeUndefined()
+    expect(compileFor(placed, VIDEO).endCard?.logo_sha256).toBeUndefined()
+    // the Brand board's logo wins
+    const board = withAsset(withClans(ex, [zero], link(zero.id, { kind: 'script', id: SCRIPT })))
+    expect(brandKit(board, VIDEO).logo?.sha256).toBe('sha256:c2b3a5f0b9e8a918bb5d240127759b0ec6f359ba4354e793d0e35778c9d51a3d')
+    // the clean-up keeps it
+    expect(roots(linked, []).has(PNG_SHA)).toBe(true)
+  })
+
+  it('a node with its logo validates against the document contract', () => {
+    const zero = { ...newBrandClan(read(), 'default'), id: 'bclan_01K7A0000000000000000000ZE', logo: { sha256: PNG_SHA, w: 960, h: 240 } }
+    const d = withClans(ex, [zero])
+    const ajv = makeAjv()
+    expect(ajv.validate(SCHEMA('document'), d)).toBe(true)
+    expect(ajv.validate(SCHEMA('document'), withClans(ex, [{ ...zero, logo: { sha256: PNG_SHA } as never }]))).toBe(false)
   })
 })

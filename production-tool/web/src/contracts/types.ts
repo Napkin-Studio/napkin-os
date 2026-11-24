@@ -866,6 +866,8 @@ export interface BrandClanNode extends EntityBase {
   client?: { id: string; name?: string }
   source: { document_id: string; path: string; app_id: 'ie.napkin.brand'; version: number; at: string; how: 'default' | 'pick'; kept?: number }
   bible: BrandBible
+  /** The Brand Clan's logo as a project picture (assets[sha256]): the end card's and the sizes' when linked and there is no Brand board logo. */
+  logo?: { sha256: Sha256; w: number; h: number }
 }
 export interface BriefNode extends EntityBase {
   title: string

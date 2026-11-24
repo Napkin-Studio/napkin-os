@@ -156,7 +156,7 @@ export function Inspector({ data, cut, picked, onPick, onChange, onFeel, onSwap,
           <span className="pt-mono rm-faint">{e.bg}</span>
         </label>
         <Seconds label="Length" value={e.durS} min={0.5} max={10} onSet={(x) => void editCut.endCard(docStore, v, { durS: x })} />
-        <p className="rm-note">The logo comes from the Brand board when it has one.</p>
+        <p className="rm-note">The logo comes from the Brand board when it has one, else from the linked Brand Clan.</p>
         <button type="button" className="btn ghost rm-wide" onClick={() => { void editCut.removeEndCard(docStore, v); onPick(null) }}>Remove the end card</button>
       </div>
     )

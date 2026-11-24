@@ -33,6 +33,8 @@ export interface BrandClanSource {
   read(path: string): Promise<OsBrandClanRead>
   /** Where a Brand Clan's asset (a logo) is served, for the card's picture. */
   assetUrl(path: string, asset: string): Promise<string | null>
+  /** A Brand Clan's asset's bytes (its logo), or null when Napkin does not have it. */
+  assetFile(path: string, asset: string): Promise<Blob | null>
   /** The client a Production project (its library path) belongs to, as the library says: what its default comes from. */
   projectClient(projectPath: string): Promise<string | null>
 }
@@ -91,6 +93,12 @@ export function osBrandClanSource(base = '', fetcher: Fetch = (i, init) => fetch
       if (!t) return null
       const v = (await getJson(`/api/t/${encodeURIComponent(t)}/library?app=ie.napkin.production`).catch(() => null)) as { items?: { path?: string; client?: { id?: string } | null }[] } | null
       return v?.items?.find((i) => i.path === projectPath)?.client?.id ?? null
+    },
+    async assetFile(path, asset) {
+      const url = await this.assetUrl(path, asset)
+      if (!url) return null
+      const r = await fetcher(url, { credentials: 'same-origin' }).catch(() => null)
+      return r && r.ok ? r.blob() : null
     },
     async assetUrl(path, asset) {
       const t = await who()

@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react'
 import type { ProductionDocument } from '../contracts/types'
 import type { NodeEnv } from '../canvas/nodes/nodes'
-import { freshness, keepBrandClan, linkedLabel, takeBrandClan } from './model'
+import { fetchLogo, freshness, keepBrandClan, linkedLabel, takeBrandClan } from './model'
 import { addBrandClanBeside } from './canvas'
 import { pageBrandClanSource, type OsBrandClanItem } from './os'
 import './brandClan.css'
@@ -47,9 +47,10 @@ export function BrandClanCard({ doc, id, env }: { doc: ProductionDocument; id: s
     try { await fn() } catch (e) { setSay(`${label} did not work: ${e instanceof Error ? e.message : String(e)}. Nothing changed.`) }
     setBusy(false)
   }
-  const pick = (it: OsBrandClanItem) => act('Changing the Brand Clan', async () => { if (env) await takeBrandClan(env.doc, id, await src.read(it.path)) })
+  const take = async (path: string) => { if (!env) return; const read = await src.read(path); await takeBrandClan(env.doc, id, read, new Date(), await fetchLogo(src, read)) }
+  const pick = (it: OsBrandClanItem) => act('Changing the Brand Clan', () => take(it.path))
   const beside = (it: OsBrandClanItem) => act('Adding a Brand Clan', async () => { if (env) await addBrandClanBeside(env, id, it.path) })
-  const update = () => now && act('Updating', async () => { if (env) await takeBrandClan(env.doc, id, await src.read(now.path)) })
+  const update = () => now && act('Updating', () => take(now.path))
   const keep = () => now && act('Keeping this version', async () => { if (env) await keepBrandClan(env.doc, id, now.version) })
   return (
     <div className="bc-card" data-brand-clan={id}>

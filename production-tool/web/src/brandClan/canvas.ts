@@ -7,7 +7,7 @@ import type { Id, LinkEndpoint, Link } from '../contracts/types'
 import type { CanvasElement, Pt } from '../canvas/core/canvasAdapter'
 import { elementOfEnd, linkInput, type NodeEnv } from '../canvas/nodes/nodes'
 import { clearOffset } from '../canvas/boards/fitting'
-import { addBrandClan, brandClansList, clientOf, newBrandClan } from './model'
+import { addBrandClan, brandClansList, clientOf, fetchLogo, newBrandClan } from './model'
 import { pageBrandClanSource, type BrandClanSource } from './os'
 
 /** The card's box (mock d1: header with the picker, the logo, four swatches, the type line, the status line). */
@@ -61,7 +61,10 @@ export async function placeDefaultBrandClan(env: NodeEnv, everHad: boolean, src:
   if (!client) return null
   const dflt = (await src.list(client)).find((i) => i.default)
   if (!dflt || Object.keys(env.doc.get().brand_clans ?? {}).length) return null
-  const node = await addBrandClan(env.doc, newBrandClan(await src.read(dflt.path), 'default'))
+  const read = await src.read(dflt.path)
+  const logo = await fetchLogo(src, read)
+  if (Object.keys(env.doc.get().brand_clans ?? {}).length) return null
+  const node = await addBrandClan(env.doc, newBrandClan(read, 'default'), logo)
   return { id: node.id, el: placeBrandClan(env, node.id) }
 }
 
@@ -71,7 +74,7 @@ export const chainHadBrandClan = (actions: readonly string[]): boolean => action
 /** A second Brand Clan beside an existing node, to compare two looks (mock d3). */
 export async function addBrandClanBeside(env: NodeEnv, besideId: Id, path: string, src: BrandClanSource = pageBrandClanSource()): Promise<Id> {
   const read = await src.read(path)
-  const node = await addBrandClan(env.doc, newBrandClan(read, 'pick'))
+  const node = await addBrandClan(env.doc, newBrandClan(read, 'pick'), await fetchLogo(src, read))
   const by = brandClanElement(env, besideId)
   placeBrandClan(env, node.id, by ? { x: by.x + by.width / 2, y: by.y + by.height + 40 + BRAND_CLAN_CARD.h / 2 } : undefined, true)
   return node.id

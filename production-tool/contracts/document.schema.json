@@ -2261,6 +2261,17 @@
             "imagery": { "type": "object" }
           },
           "additionalProperties": false
+        },
+        "logo": {
+          "type": "object",
+          "description": "The Brand Clan's logo as a project picture (assets[sha256]), copied from the Brand Clan when the node is placed, swapped or updated (owner 2026-11-24). The end card and the sizes use it when the node is linked and the project has no Brand board logo; a Brand board logo still wins.",
+          "properties": {
+            "sha256": { "$ref": "common.schema.json#/$defs/sha256" },
+            "w": { "type": "integer", "minimum": 1 },
+            "h": { "type": "integer", "minimum": 1 }
+          },
+          "required": ["sha256", "w", "h"],
+          "additionalProperties": false
         }
       },
       "required": ["id", "v", "field_v", "title", "source", "bible"],

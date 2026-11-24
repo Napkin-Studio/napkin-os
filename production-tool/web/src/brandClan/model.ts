@@ -13,7 +13,8 @@
 import type { BrandBible, BrandClanNode, Id, Link, LinkEndpoint, ProductionDocument } from '../contracts/types'
 import { newId } from '../lib/ulid'
 import { systemUpdate, updateDoc, type DocumentStore } from '../doc/store'
-import type { OsBrandClanItem, OsBrandClanRead } from './os'
+import { putBlob } from '../lib/blobs'
+import type { BrandClanSource, OsBrandClanItem, OsBrandClanRead } from './os'
 
 type Doc = ProductionDocument
 
@@ -43,16 +44,62 @@ export function newBrandClan(read: OsBrandClanRead, how: 'default' | 'pick', now
   }
 }
 
+// ── Its logo, as a project picture (owner 2026-11-24, "Go with your recommendations") ─────────────────────────────
+// When a node is placed, swapped or updated, the Brand Clan's logo comes in as a picture of the project, so the end card and
+// the sizes can use it (brandKit in campaign/layout.ts) when the node is linked and the project has no Brand board logo.
+
+/** A logo ready to go into the document: its bytes kept in this browser under its hash, and its size. */
+export interface LogoIn { sha256: string; w: number; h: number; mime: 'image/png' | 'image/jpeg' | 'image/webp'; bytes: number }
+
+const LOGO_ORDER = ['dark', 'mark', 'light', 'other'] as const
+const RASTER = /^image\/(png|jpeg|webp)$/
+
+/** The logo a node takes: the one for a dark ground (the end card's), else the mark, else any. */
+export function logoAssetOf(b: BrandBible): string | undefined {
+  const logos = ((b.visual as { logos?: { variant?: string; asset?: string }[] } | undefined)?.logos ?? []).filter((l) => l.asset)
+  for (const v of LOGO_ORDER) {
+    const hit = logos.find((l) => l.variant === v)
+    if (hit) return hit.asset
+  }
+  return logos[0]?.asset
+}
+
+/** Fetch a Brand Clan's logo into this browser. Undefined when it has none, Napkin does not have it, or it is not a
+ *  picture the tools take (a PNG, JPEG or WebP: the client window turns an SVG into a PNG at upload). Never throws. */
+export async function fetchLogo(src: Pick<BrandClanSource, 'assetFile'>, read: OsBrandClanRead,
+  measure: (b: Blob) => Promise<{ w: number; h: number }> = async (b) => { const m = await createImageBitmap(b); const out = { w: m.width, h: m.height }; m.close(); return out },
+  keep: (b: Blob) => Promise<string> = putBlob): Promise<LogoIn | undefined> {
+  const asset = logoAssetOf(bibleOf(read.data))
+  if (!asset) return undefined
+  try {
+    const blob = await src.assetFile(read.path, asset)
+    if (!blob || !RASTER.test(blob.type)) return undefined
+    const { w, h } = await measure(blob)
+    if (!(w >= 1 && h >= 1)) return undefined
+    return { sha256: await keep(blob), w, h, mime: blob.type as LogoIn['mime'], bytes: blob.size }
+  } catch {
+    return undefined
+  }
+}
+
+/** Put a logo into the document as a picture and onto the node (inside a document write). */
+function setLogo(d: Doc, n: BrandClanNode, logo: LogoIn | undefined) {
+  if (!logo) { delete n.logo; return }
+  d.assets[logo.sha256] ??= { sha256: logo.sha256, kind: 'image', mime: logo.mime, bytes: logo.bytes, w: logo.w, h: logo.h, origin: 'uploaded', rights: 'unknown' }
+  n.logo = { sha256: logo.sha256, w: logo.w, h: logo.h }
+}
+
 /** The Brand Clan nodes, oldest first. */
 export const brandClansList = (d: Doc): BrandClanNode[] => Object.values(d.brand_clans ?? {}).sort((a, b) => (a.id < b.id ? -1 : 1))
 
 const named = (n: Pick<BrandClanNode, 'title' | 'source'>) => `“${n.title}” v${n.source.version}`
 
 /** Put a Brand Clan node in the document (a system write: the person's undo step is its card on the canvas). One decision. */
-export async function addBrandClan(store: DocumentStore, node: BrandClanNode): Promise<BrandClanNode> {
+export async function addBrandClan(store: DocumentStore, node: BrandClanNode, logo?: LogoIn): Promise<BrandClanNode> {
   await systemUpdate(store, (d) => {
     d.brand_clans ??= {}
     d.brand_clans[node.id] = node
+    setLogo(d, d.brand_clans[node.id], logo)
   }, `${node.source.how === 'default' ? 'place' : 'add'} the Brand Clan ${named(node)}`,
   node.source.how === 'default' ? 'the client’s default Brand Clan, placed for you and not linked: jobs do not use it until it is linked' : `picked from the client’s Brand Clans (${node.source.document_id})`)
   return node
@@ -138,7 +185,7 @@ export function freshness(n: BrandClanNode, now: Pick<OsBrandClanItem, 'version'
 }
 
 /** Take the newer version, or swap for another of the client's Brand Clans (the person's decision): one decision, the bible replaced. */
-export async function takeBrandClan(store: DocumentStore, id: Id, read: OsBrandClanRead, at = new Date()): Promise<BrandClanNode | undefined> {
+export async function takeBrandClan(store: DocumentStore, id: Id, read: OsBrandClanRead, at = new Date(), logo?: LogoIn): Promise<BrandClanNode | undefined> {
   const before = store.get().brand_clans?.[id]
   if (!before) return undefined
   const swap = before.source.document_id !== read.documentId
@@ -149,6 +196,7 @@ export async function takeBrandClan(store: DocumentStore, id: Id, read: OsBrandC
     n.title = read.name.slice(0, 200) || n.title
     n.bible = bibleOf(read.data)
     n.source = { document_id: read.documentId, path: read.path, app_id: BRAND_APP_ID, version: read.version, at: at.toISOString(), how: swap ? 'pick' : n.source.how }
+    setLogo(d, n, logo)
   }, swap ? `swap_brand_clan ${named(before)} → “${read.name}” v${read.version}` : `update_from_brand_clan “${read.name}” v${before.source.version} → v${read.version}`,
   swap ? 'the person picked another of the client’s Brand Clans for this node; what it is linked to reads the new one on its next job' : 'took the newer published version; what it is linked to reads it on its next job')
   return store.get().brand_clans?.[id]
