@@ -1225,6 +1225,8 @@ def _arrange_pitch(S: list, supported: set | None = None, routes: int = 1, messa
             continue
         k = by_type(keep)
         m = (_shown_executions(S, messages)[:1] or [None])[0] if into == "execution" else by_type(into)   # the first PRESENTED execution
+        if k and m and keep == "measurement" and into == "guardrails" and _measure_lines(k) + _measure_lines(m) > MEASURE_GUARD_MAX:
+            continue   # UAT round 4 F30 (owner: split, never shrink or move to notes): a full table and a long list are two slides
         if k and m:
             _merge(k, m, title)
             S = [x for x in S if x is not m]
@@ -1413,6 +1415,23 @@ def _to_target(S: list, story: list, backup: list, target: int, keep: set) -> tu
             dest.append(x)
     at = {id(x): i for i, x in enumerate(S)}
     return story, sorted(backup, key=lambda x: at.get(id(x), len(S))), supply
+
+
+#: UAT round 4 F30, owner 2026-11-24 ("Go with your recommendation"): measurement takes the guardrails list only while the two hold at most
+#: this many lines together (table data rows plus list items). The UAT slide held 6 rows beside 8 items, drew at no_fit and small: past
+#: this they stay two slides, each counted toward the cap (and the cap's folds and moves still apply).
+MEASURE_GUARD_MAX = 8
+
+
+def _measure_lines(sl: dict) -> int:
+    """The lines a slide's tables (data rows, header aside) and lists (items) hold."""
+    n = 0
+    for b in sl.get("blocks") or []:
+        if b.get("kind") == "table":
+            n += max(0, len(b.get("rows") or []) - 1)
+        elif isinstance(b.get("items"), list):
+            n += len(b["items"])
+    return n
 
 
 #: UAT round 4 F29: what a pitch over its type's cap folds first (kept slide, absorbed slide), in order and only while it is over: each pair
