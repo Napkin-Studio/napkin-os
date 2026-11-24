@@ -55,7 +55,8 @@ export function ownChrome(a: OwnAdapter): CanvasChrome {
     },
     fitAll: () => {
       const els = a.elements()
-      if (els.length) a.fit(els, { zoomFactor: 0.9, animate: false })
+      // Never past 100% (UAT round 4 F18: one Brief card filled the view at 432%, and the next sketch area landed under it).
+      if (els.length) a.fit(els, { zoomFactor: 0.9, animate: false, maxZoom: 1 })
     },
     fitRect: (r) => {
       const { w, h } = size()

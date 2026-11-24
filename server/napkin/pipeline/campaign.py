@@ -1584,7 +1584,8 @@ class CampaignJob:
             return True
         r = Researcher(self.doc, self.W_version, self.wclan(), self.handler, self.caps, lenses, markets, cats,
                        pairs=set(pairs), reuse_days=self.settings.reuse_days,
-                       concurrency=self.settings.research_concurrency, seed=self.id, materials=self.materials())
+                       concurrency=self.settings.research_concurrency, seed=self.id, materials=self.materials(),
+                       discover=True)
         result, change, hits = r.run()
         self.hits += hits
         decs = change["decisions"]

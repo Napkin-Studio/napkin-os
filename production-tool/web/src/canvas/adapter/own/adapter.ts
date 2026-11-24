@@ -469,12 +469,12 @@ export class OwnAdapter implements CanvasAdapter {
     return elementBounds(els)
   }
 
-  /** Centre the elements and zoom so they cover `zoomFactor` of the viewport (no animation yet). */
-  fit(els: readonly CanvasElement[], opts: { zoomFactor: number; animate: boolean }) {
+  /** Centre the elements and zoom so they cover `zoomFactor` of the viewport (no animation yet), never past `maxZoom`. */
+  fit(els: readonly CanvasElement[], opts: { zoomFactor: number; animate: boolean; maxZoom?: number }) {
     if (!els.length) return
     const b = this.bounds(els)
     const { width, height } = this.vp
-    const zoom = Math.min(30, Math.max(0.1, Math.min(width / Math.max(1, b.w), height / Math.max(1, b.h)) * opts.zoomFactor))
+    const zoom = Math.min(opts.maxZoom ?? 30, Math.max(0.1, Math.min(width / Math.max(1, b.w), height / Math.max(1, b.h)) * opts.zoomFactor))
     this.setViewport({ zoom, scrollX: width / (2 * zoom) - (b.minX + b.w / 2), scrollY: height / (2 * zoom) - (b.minY + b.h / 2) })
   }
 

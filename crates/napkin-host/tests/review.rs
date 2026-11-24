@@ -220,7 +220,11 @@ fn a_bad_verdict_on_a_finding_rejects_it_with_the_reason() {
     let report = clan_sdk::validate(&on_disk(&f));
     assert!(report.is_valid(), "{}", report.display());
 
-    // Once decided, it is decided.
+    // Once decided, it is decided: a rejected finding is not verified.
+    assert_eq!(
+        run(&f, |c, d| review::verify(c, d, "fi_01JA0F2B", "")),
+        Err(409)
+    );
     assert_eq!(
         run(&f, |c, d| review::verdict(
             c,
@@ -418,10 +422,17 @@ fn verifying_records_who_checked_it_in_the_document_only() {
         facts_before,
         "nothing is pinned for it"
     );
-    // A verified finding is not verified again.
+    // Verifying a verified finding again holds (UAT round 4, F8): nothing is
+    // written, no second decision, and the reply names the first decision.
+    let file_before = std::fs::read(f.id.as_str()).unwrap();
+    let again = run(&f, |c, d| review::verify(c, d, "fi_01JA0F2B", "")).unwrap();
+    assert_eq!(again["ok"], true);
+    assert_eq!(again["unchanged"], true);
+    assert_eq!(again["decision"], json!(did));
     assert_eq!(
-        run(&f, |c, d| review::verify(c, d, "fi_01JA0F2B", "")),
-        Err(409)
+        std::fs::read(f.id.as_str()).unwrap(),
+        file_before,
+        "nothing written, so no second verify decision"
     );
     assert_eq!(
         run(&f, |c, d| review::verify(c, d, "fi_nope00", "")),

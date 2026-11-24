@@ -2,7 +2,7 @@
 // swap rule (Use this take keeps the slot; a shorter take holds its last frame up to 0.5 s, else asks).
 import { describe, expect, it } from 'vitest'
 import {
-  applySwap, clipEnd, clipLen, cutLength, fitWords, handleShort, mapWindow, moveV1, pack, planSwap, removeClip, setFades, setTransition, split, trimHead, trimTail,
+  applySwap, clipEnd, clipLen, cutLength, fitToTarget, fitWords, handleShort, mapWindow, moveV1, pack, planSwap, removeClip, setFades, setTransition, split, trimHead, trimTail,
   type Cut, type CutClip,
 } from './cut'
 
@@ -129,5 +129,34 @@ describe('captions from the spoken lines (UAT 2026-11-21, F9)', () => {
     // Over the whole of it: left out. Twice: once.
     expect(captionTimes([line], [{ words: 'x', startS: 5, durS: 4 }])).toEqual([])
     expect(captionTimes([line], [{ words: 'Good boy.', startS: 6.4, durS: 1.2 }])).toEqual([])
+  })
+})
+
+describe('the cut fits its target, the end card included (UAT round 4 F22: a 15 s film rendered 16.5 s)', () => {
+  const card = { headline: 'Copperell', line: 'Refill. Not landfill.', bg: '#14161B', durS: 1.5 }
+  it('one joined take filling 15 s with a 1.5 s card after it comes back to 15 s, the card kept whole', () => {
+    const cut: Cut = { v1: [clip('a', 0, 0, 3), clip('b', 3, 3, 8), clip('c', 8, 8, 15)], v2: [], text: [], endCard: card }
+    expect(cutLength(cut)).toBe(16.5)
+    const fit = fitToTarget(cut, 15)
+    expect(cutLength(fit)).toBe(15)
+    expect(fit.endCard).toEqual(card)
+    expect(starts(fit)).toEqual([['a', 0, 3], ['b', 3, 5], ['c', 8, 5.5]])
+    expect(fit.v1[2].outS).toBe(13.5)
+  })
+  it('a short last clip gives what it can (at least 1 s stays), then the one before it; later clips move up', () => {
+    const cut: Cut = { v1: [clip('a', 0, 0, 10), clip('b', 10, 0, 1.5), clip('c', 11.5, 0, 2)], v2: [], text: [], endCard: { ...card, durS: 3 } }
+    const fit = fitToTarget(cut, 15)
+    expect(cutLength(fit)).toBe(15)
+    expect(starts(fit)).toEqual([['a', 0, 10], ['b', 10, 1], ['c', 11, 1]]) // c gives 1 s, b the other 0.5 s, a nothing
+  })
+  it('a hold goes before footage', () => {
+    const cut: Cut = { v1: [clip('a', 0, 0, 14, { holdS: 1 })], v2: [], text: [], endCard: card }
+    const fit = fitToTarget(cut, 15)
+    expect([fit.v1[0].holdS, fit.v1[0].outS]).toEqual([0, 13.5])
+  })
+  it('a cut that fits, or has no target, is left as it is', () => {
+    const cut: Cut = { v1: [clip('a', 0, 0, 13.5)], v2: [], text: [], endCard: card }
+    expect(fitToTarget(cut, 15)).toBe(cut)
+    expect(fitToTarget({ ...cut, endCard: { ...card, durS: 3 } }, undefined).v1[0].outS).toBe(13.5)
   })
 })

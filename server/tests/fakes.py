@@ -73,6 +73,10 @@ class FakeModel:
 
     # -- responders -------------------------------------------------------------
     @staticmethod
+    def r_discover_players(p):
+        return {"players": []}  # research finds no players unless a test says otherwise (UAT round 4 F11)
+
+    @staticmethod
     def r_tie_claims(p):
         return {"ties": []}  # the tie call names nothing unless a test says otherwise
 

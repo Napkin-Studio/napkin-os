@@ -67,6 +67,21 @@ describe('a project born as a spin-off', () => {
     expect((await s.spunOffFrom())?.version).toBe(2)
   })
 
+  it('counts the locks as the host writes them, on the bare brief id (UAT round 4 F24: a v2 brief spun off said v1)', async () => {
+    // napkin-host's approve targets the document id itself (ops/review.rs); napkin-web's test
+    // a_brief_locked_twice_is_v2_and_its_spinoff_carries_both_locks_on_the_bare_id pins that shape in a real spin-off.
+    const z = unzipSync(fixture())
+    const briefId = parseYaml(new TextDecoder().decode(z['manifest.yaml'])).lineage.carried.document_id
+    const chain = parseYaml(new TextDecoder().decode(z['agent/decision-chain.yaml'])) as { decisions: Record<string, any>[] }
+    const approve = (n: number) => ({ id: `d_lock${n}`, kind: 'approve', agent: 'human', actor: 'human:u_a', action: 'lock', targets: [briefId], rationale: 'Locked.', timestamp: `2026-11-1${n}T12:00:00Z` })
+    const elsewhere = { id: 'd_other', kind: 'approve', agent: 'human', actor: 'human:u_a', action: 'lock', targets: [`${briefId}x`], rationale: 'Another document.', timestamp: '2026-11-09T12:00:00Z' }
+    chain.decisions = [approve(2), approve(1), elsewhere, ...chain.decisions]
+    z['agent/decision-chain.yaml'] = new TextEncoder().encode(stringifyYaml(chain))
+    const s = store()
+    await s.open(zipSync(z))
+    expect((await s.spunOffFrom())?.version).toBe(2)
+  })
+
   it('a project that was not spun off says so', async () => {
     const s = store()
     await s.create({ person: MAYA, title: 'Plain', blank: true })
@@ -171,11 +186,36 @@ describe('a Brief node from before source.version', () => {
     const bytes = await older('spinoff')
     const z = unzipSync(bytes)
     const chain = parseYaml(new TextDecoder().decode(z['agent/decision-chain.yaml'])) as { decisions: Record<string, any>[] }
-    const approve = (n: number) => ({ id: `d_lock${n}`, kind: 'approve', agent: 'human', actor: 'human:u_a', action: 'lock', targets: ['doc-first-light#'], rationale: 'Locked.', timestamp: `2026-11-1${n}T12:00:00Z` })
+    // One lock as the host writes it (the bare id: UAT round 4 F24), one as `<id>#`: both count.
+    const approve = (n: number) => ({ id: `d_lock${n}`, kind: 'approve', agent: 'human', actor: 'human:u_a', action: 'lock', targets: [n === 1 ? 'doc-first-light' : 'doc-first-light#'], rationale: 'Locked.', timestamp: `2026-11-1${n}T12:00:00Z` })
     chain.decisions = [approve(2), approve(1), ...chain.decisions]
     z['agent/decision-chain.yaml'] = new TextEncoder().encode(stringifyYaml(chain))
     const { opened } = open(zipSync(z), async () => { throw new Error('asked') })
     expect(((await opened) as any).briefs[BRIEF].source.version).toBe(2)
+  })
+
+  /** `bytes` with `n` locks of the brief in its chain, as the host writes them (the bare id). */
+  const locked = (bytes: Uint8Array, n: number) => {
+    const z = unzipSync(bytes)
+    const chain = parseYaml(new TextDecoder().decode(z['agent/decision-chain.yaml'])) as { decisions: Record<string, any>[] }
+    const approve = (k: number) => ({ id: `d_lock${k}`, kind: 'approve', agent: 'human', actor: 'human:u_a', action: 'lock', targets: ['doc-first-light'], rationale: 'Locked.', timestamp: `2026-11-1${k}T12:00:00Z` })
+    chain.decisions = [...Array.from({ length: n }, (_, k) => approve(n - k)), ...chain.decisions]
+    z['agent/decision-chain.yaml'] = new TextEncoder().encode(stringifyYaml(chain))
+    return zipSync(z)
+  }
+
+  it('a spun-off one filled v1 before the fix, with two locks carried, is put right once (UAT round 4 F24)', async () => {
+    const { s, opened } = open(locked(await older('spinoff', 1), 2), async () => { throw new Error('asked') })
+    expect(((await opened) as any).briefs[BRIEF].source.version).toBe(2)
+    expect((await s.chain()).some((d) => d.action === BRIEF_VERSION_ACTION)).toBe(true)
+  })
+
+  it('a spun-off one at its carried version, or a linked one (Napkin’s own version), is left as it is', async () => {
+    const same = open(locked(await older('spinoff', 2), 2), async () => { throw new Error('asked') })
+    expect(((await same.opened) as any).briefs[BRIEF].source.version).toBe(2)
+    expect((await same.s.chain()).some((d) => d.action === BRIEF_VERSION_ACTION)).toBe(false)
+    const linked = open(locked(await older('link', 1), 2), async () => { throw new Error('asked') })
+    expect(((await linked.opened) as any).briefs[BRIEF].source.version).toBe(1)
   })
 
   it('a document that already has a version is left untouched', async () => {

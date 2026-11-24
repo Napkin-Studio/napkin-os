@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useDoc, useServices } from './app/context'
-import { dismissed, noticeWords, unlinkedFor } from './model/unlinked'
+import { dismissed, noticeWords, unlinkedFor, workingFrom } from './model/unlinked'
 import { linkInput } from './canvas/nodes/nodes'
 import type { LinkEndpoint } from './contracts/types'
 
@@ -19,10 +19,11 @@ export function LinkNotice({ kind, id, style }: { kind: 'script' | 'storyboard' 
   const miss = unlinkedFor(doc, id)
   const names = [...miss.refs.map((r) => `@${r.key}`), ...(miss.brief ? ['The Brief'] : [])]
   const key = `${id}|${names.join(',')}`
+  const busy = workingFrom(doc, id)
   // On the canvas it hangs from the selection bar: beside it, lined up with its left edge. On a page it hangs under the action's button.
   // eslint-disable-next-line react-hooks/exhaustive-deps -- measured after every render; it sets state only when the place moved
   useLayoutEffect(() => {
-    if (!names.length || dismissed.has(key)) return
+    if (!names.length || dismissed.has(key) || busy) return
     if (!style) {
       const r = mark.current?.closest('.ln-anchor')?.getBoundingClientRect()
       if (r && (!at || at.left !== Math.round(r.right - 296) || at.top !== Math.round(r.bottom + 10))) setAt({ left: Math.round(r.right - 296), top: Math.round(r.bottom + 10) })
@@ -38,7 +39,7 @@ export function LinkNotice({ kind, id, style }: { kind: 'script' | 'storyboard' 
     const top = Math.round(above ? bar.top - host.top - ref.current.offsetHeight - 8 : bar.bottom - host.top + 8)
     if (!at || at.left !== left || at.top !== top) setAt({ left, top })
   })
-  if (!names.length || dismissed.has(key)) return null
+  if (!names.length || dismissed.has(key) || busy) return null
   const link = async () => {
     const to: LinkEndpoint = { kind, id }
     for (const r of miss.refs) await linkInput(store, store.get(), { kind: 'ref', id: r.id }, to)
