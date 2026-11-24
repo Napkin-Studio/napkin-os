@@ -77,3 +77,67 @@ test('the bar keeps the title, Continue in and Save at 1024, 1280 and 1440, with
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+// UAT round 4 F1: a locked brief adds Save · PDF, ⋯ and the shell's Client review, and at 1024 Continue in still ran
+// under Save · PDF at the last level. Two more levels: Decisions keeps its count, then one primary is left in the bar.
+test('a locked brief keeps the title, Continue in and its primary at 1024, 1280 and 1440, light and dark', async t => {
+  const { build } = await import('esbuild')
+  const { chromium } = await import('playwright')
+  let browser
+  try { browser = await chromium.launch() } catch (e) { t.skip(`no Chromium here: ${(e as Error).message.split('\n')[0]}`); return }
+  const dir = mkdtempSync(join(tmpdir(), 'topbar-locked-'))
+  try {
+    await build({
+      entryPoints: [join(app, 'tests/fixtures/topbarHarness.tsx')], outdir: dir, bundle: true, format: 'iife', platform: 'browser',
+      jsx: 'automatic', logLevel: 'silent', define: { 'process.env.NODE_ENV': '"development"', 'import.meta.env': '{}', 'import.meta.env.DEV': 'true', 'import.meta.env.BASE_URL': '"/"' },
+      loader: { '.svg': 'dataurl', '.png': 'dataurl', '.woff': 'dataurl', '.woff2': 'dataurl', '.ttf': 'dataurl', '.jpg': 'dataurl' },
+    })
+    for (const theme of ['light', 'dark']) {
+      writeFileSync(join(dir, `${theme}.html`), `<!doctype html><html data-theme="${theme}"><head><meta charset="utf-8"><link rel="stylesheet" href="topbarHarness.css"></head><body><div id="root"></div><script src="topbarHarness.js"></script></body></html>`)
+      for (const width of [1024, 1280, 1440]) {
+        for (const answered of [false, true]) {
+          const page = await browser.newPage({ viewport: { width, height: 700 } })
+          await page.goto(`file://${join(dir, `${theme}.html`)}?locked=1&answered=${answered ? 1 : 0}&title=${encodeURIComponent(LONG)}`)
+          await page.waitForSelector('[data-testid="doc-name"]')
+          await page.waitForTimeout(200)
+          const at = `${width}px, ${theme}, ${answered ? 'answered' : 'not answered'}`
+          const slot = (await page.locator('#tb-app').boundingBox())!
+          const cont = page.getByRole('button', { name: /^Continue in/ })
+          const box = (await cont.boundingBox())!
+          assert.ok(box.x >= slot.x - 1 && box.x + box.width <= slot.x + slot.width + 1, `Continue in is not clipped at ${at}`)
+          // nothing in the tools sits over it: the next control starts after it ends
+          const tools = (await page.locator('.tb-tools').boundingBox())
+          if (tools && tools.width > 0) assert.ok(tools.x >= box.x + box.width - 1, `the bar's buttons start after Continue in at ${at} (${Math.round(tools.x)} < ${Math.round(box.x + box.width)})`)
+          await cont.click({ timeout: 2000 })
+          assert.equal(await page.locator('[data-testid="continue-menu"]').count(), 1, `Continue in opens its menu at ${at}`)
+          await page.keyboard.press('Escape')
+          const name = (await page.locator('[data-testid="doc-name"] b').boundingBox())!
+          assert.ok(name.width >= 150, `the title keeps room at ${at} (${Math.round(name.width)}px)`)
+          // every primary left in the bar is wholly on screen; at the last level only one is left
+          const primaries = page.locator('.tb-tools .ch-btn-primary, .tb-tools .tba-primary')
+          for (const p of await primaries.all()) { const b = (await p.boundingBox())!; assert.ok(b.x + b.width <= width, `a primary is on screen at ${at}`) }
+          const fit = Number(await page.locator('header.tb-locked').getAttribute('data-fit'))
+          if (fit >= 7) assert.equal(await primaries.count(), 1, `one primary at the last level at ${at}`)
+          console.log(`# fit ${fit} at ${at}`)
+          // whatever left the bar is in ⋯ and still acts
+          const inBar = async (name: string | RegExp) => (await page.locator('.tb-tools').getByRole('button', { name, exact: typeof name === 'string' }).count()) > 0
+          const saveIn = await inBar('Save · PDF')
+          const reviewIn = await inBar(answered ? 'New client answer' : 'Client review')
+          if (!saveIn || !reviewIn) {
+            await page.getByTestId('bar-more').click()
+            const items = await page.getByTestId('more-menu').getByRole('menuitem').allInnerTexts()
+            if (!saveIn) assert.ok(items.some(i => i.startsWith('Save · PDF')), `Save · PDF is in ⋯ once it left the bar at ${at} (${items.join(' | ')})`)
+            if (!reviewIn) assert.ok(items.some(i => i.startsWith('New client answer')), `New client answer is in ⋯ once it left the bar at ${at}`)
+            await page.keyboard.press('Escape')
+          }
+          if (!answered) assert.ok(reviewIn, `Client review, the step's primary, stays in the bar at ${at}`)
+          await page.close()
+        }
+      }
+    }
+  } finally {
+    await browser.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+

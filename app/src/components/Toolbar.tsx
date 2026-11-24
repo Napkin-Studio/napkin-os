@@ -25,7 +25,10 @@ import { TrashConfirm } from '../shell/nui/TrashConfirm'
 import { accountItems, continueItems, docMenuItems, linkList, linkedChip, linkedRows, plural, pressContinue, shareItems, type Account, type BarPlace, type ClientChip, type Crew, type DocBar, type LinkRow, type LinkedRow, type MenuItem } from './barMenus'
 import { DeepOMark } from '../brand/DeepOMark'
 import type { MarkTarget } from './medallionMotion'
-import { modeOf, secondButton, shortStep } from '../shell/appBar'
+import { modeOf, secondButton, shortStep, type BarItem } from '../shell/appBar'
+
+/** The tightest the document bar goes (the levels are listed where `fit` is kept). */
+const FIT_MAX = 7
 import { useEngaged } from './markStore'
 import { markOf, type AgencyLogo } from '../shell/agency/palette'
 import ThemeToggle from './ThemeToggle'
@@ -429,7 +432,10 @@ export default function Toolbar({
   const [renaming, setRenaming] = useState(false)
   // A tight bar gives way in a fixed order, so the title (196px), Continue in and the primary button always stay:
   // 1 the Working chip shrinks to a dot and its step, 2 the second button moves into the ⋯ menu, 3 so does Share,
-  // 4 the client chip keeps its monogram and the gaps close, 5 the agency pill drops its second line (CSS, on data-fit).
+  // 4 the client chip keeps its monogram and the gaps close, 5 the agency pill drops its second line (CSS, on data-fit),
+  // 6 Decisions keeps its count alone (its name stays on its label), 7 one primary is left: with the shell's own primary
+  // shown (Client review, Done editing) the app's buttons go into ⋯, else the shell's other button does (UAT round 4 F1:
+  // a locked brief at 1024 still clipped Continue in at level 5).
   const [fit, setFit] = useState(0)
   const [vw, setVw] = useState(() => (typeof window === 'undefined' ? 0 : window.innerWidth))
   useLayoutEffect(() => {
@@ -446,7 +452,7 @@ export default function Toolbar({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (fitSig.current !== sig) { fitSig.current = sig; if (fit !== 0) { setFit(0); return } }
     // Measuring the laid-out bar, then stepping one level: a layout effect's own job, settled before paint.
-    if (el.scrollWidth > el.clientWidth + 1 && fit < 5) setFit(f => f + 1)
+    if (el.scrollWidth > el.clientWidth + 1 && fit < FIT_MAX) setFit(f => f + 1)
   }, [sig, fit])
   const [askTrash, setAskTrash] = useState(false)
   // The tba-menu sits 40px under the app slot, at the button's own left (the mock's .tba-menu).
@@ -592,6 +598,12 @@ export default function Toolbar({
     return <ToolIcon tool={/research/.test(l) ? 'research' : /deck/.test(l) ? 'deck' : /brief/.test(l) ? 'brief' : 'production'} />
   }
   const mode = modeOf(doc.bar ?? [])
+  // Level 7 leaves one primary in the bar: the shell's own when it shows one, else the app's.
+  const reviewShown = !!doc.onClientReview && !doc.editMode
+  const shellPrimary = (reviewShown && !doc.clientAnswered) || (!!doc.onToggleEdit && !!doc.editMode)
+  const appButtonsOut = fit >= 7 && shellPrimary
+  const reviewOut = fit >= 7 && !shellPrimary && reviewShown
+  const firstOut = appButtonsOut ? (doc.bar ?? []).find((i): i is Extract<BarItem, { kind: 'button' }> => i.kind === 'button') ?? null : null
   return (
     <div className="nui ch-bar-os" data-testid="os-bar" data-where="document">
       <div className="topbar-outer">
@@ -622,12 +634,12 @@ export default function Toolbar({
               </span>
             )}
             <BarChips bar={doc.bar ?? []} />
-            <BarButtons bar={doc.bar ?? []} onAction={doc.onBarAction} hideSecond={fit >= 2 && !!secondButton(doc.bar ?? [])} />
-            {fit >= 2 && !mode && (secondButton(doc.bar ?? []) || fit >= 3) && (
+            <BarButtons bar={doc.bar ?? []} onAction={doc.onBarAction} hideSecond={fit >= 2 && !!secondButton(doc.bar ?? [])} hideAll={appButtonsOut} />
+            {fit >= 2 && !mode && (secondButton(doc.bar ?? []) || fit >= 3 || !!firstOut || reviewOut) && (
               <button type="button" className="tba-btn tba-more" data-testid="bar-more" aria-label="More actions" aria-haspopup="menu" aria-expanded={pop.open?.key === 'more'}
                 onClick={e => pop.toggle('more', e.currentTarget)}>⋯</button>
             )}
-            {doc.onClientReview && !doc.editMode && (
+            {reviewShown && !reviewOut && (
               <button
                 type="button"
                 className={doc.clientAnswered ? 'tba-btn tba-cont' : 'tba-btn tba-cont tba-primary'}
@@ -692,7 +704,11 @@ export default function Toolbar({
         const anchor = pop.open.anchor
         return (
           <Pop anchor={anchor} align="right" onClose={pop.close} label="More actions" testid="more-menu">
+            {firstOut && !firstOut.disabled && (firstOut.menu
+              ? firstOut.menu.map(m => <button key={m.id} type="button" role="menuitem" onClick={() => { pop.close(false); doc.onBarAction?.(m.id) }}>{m.label}{m.title && <small>{m.title}</small>}</button>)
+              : <button type="button" role="menuitem" onClick={() => { pop.close(false); doc.onBarAction?.(firstOut.id) }}>{firstOut.label}{firstOut.title && <small>{firstOut.title}</small>}</button>)}
             {second && !second.disabled && <button type="button" role="menuitem" onClick={() => { pop.close(false); doc.onBarAction?.(second.id) }}>{second.label}{second.title && <small>{second.title}</small>}</button>}
+            {reviewOut && <button type="button" role="menuitem" onClick={() => { pop.close(false); doc.onClientReview?.() }}>New client answer<small>Record another answer from the client about the locked version</small></button>}
             {fit >= 3 && <button type="button" role="menuitem" onClick={() => pop.setOpen({ key: 'share', anchor })}>Share<small>Send it to someone</small></button>}
           </Pop>
         )
