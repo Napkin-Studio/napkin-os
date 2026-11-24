@@ -791,11 +791,11 @@ details.fold>.fold-b{padding:0 12px 12px;display:grid;gap:10px}
 .flow button:disabled{cursor:default}
 .flow button:disabled:not([aria-current]){opacity:.45}
 .proc.stagewrap{padding-bottom:24px}
-.aglbox .nk-ag{width:min(230px,34vh)!important;height:min(230px,34vh)!important}
-.aglbox.bad .nk-ag{filter:saturate(.6)}
 .apill .mdot{background:var(--nd-faint)}.apill[aria-current="step"] .mdot{background:var(--ag-acc)}.apill.done .mdot{background:var(--nd-ok)}
 .apill.bad{border-color:var(--nd-alert);color:var(--nd-alert)}.apill.bad .mdot{background:var(--nd-alert)}
-.ptop .eta{font-size:13px;color:var(--nd-muted)}
+.ptop .eta{font-size:13px;color:var(--nd-muted);font-family:var(--font-ui)}
+/* Brief's caption and run bar inherit Brief's sans body; Territories' body is the serif, so the face is said here */
+.scap .l2,.runbar{font-family:var(--font-ui)}
 .runbar .bad{color:var(--nd-alert)}
 /* the crew's lanes (new to Territories, house rules: Brief's slips, mono labels) */
 .lane{border-top:1px solid var(--nd-line)}
@@ -1994,9 +1994,9 @@ var TerritoriesLogic = (function () {
   }
   function wsec(h, cards) { return cards.length ? '<div class="wsec"><div class="wsec-h">' + esc(h) + '</div>' + cards.join('') + '</div>' : ''; }
   function secs(job) { var t = job && job.started ? Math.max(0, Math.round((Date.now() - job.started) / 1000)) : 0; return t ? (t < 60 ? t + ' s' : Math.floor(t / 60) + ' min ' + (t % 60) + ' s') + ' so far' : ''; }
+  /** Brief's still frame for the stage when there is no WebGL (tellSphere's fig at size 150); the runtime mounts Brief's live view over it. */
   function orb(role, bad) {
-    var w = typeof window !== 'undefined' && window.innerWidth ? window.innerWidth : 1280;
-    return Roles ? Roles.tag(role, { size: w <= 1100 ? 150 : 230, state: bad ? 'idle' : 'working', label: roleName(role) + ' agent' + (bad ? ', stopped' : ', working') }) : sphere(role, 230);
+    return Roles ? Roles.tag(role, { size: 150, state: bad ? 'idle' : 'working', label: roleName(role) + ' agent' + (bad ? ', stopped' : ', working') }) : sphere(role, 150);
   }
   function stageHtml(kind, data, ui) {
     var job = ui.job || {}, bad = /failed$/.test(kind), sn = seen(data), crew = arr(job.crew).filter(isObj), o;
@@ -2005,11 +2005,11 @@ var TerritoriesLogic = (function () {
       if (sn.brief) desk.push(slip('Brief', (sn.brief.title || 'The brief') + ': ' + plural(sn.brief.filled, 'field'), 'ok'));
       if (sn.research) desk.push(slip('Research', (sn.research.title || 'The research') + ': ' + [sn.research.pins != null ? plural(sn.research.pins, 'pin') : '', sn.research.findings != null ? plural(sn.research.findings, 'finding') : ''].filter(Boolean).join(', '), 'ok'));
       var der = derivedFindings(data).length; if (der) desk.push(slip('Flagged', plural(der, 'derived finding') + ', marked as derived', 'ok'));
-      o = { role: 'strategy', l1: bad ? 'The crew could not finish' : 'Finding the insights', l2: bad ? (job.error || 'The engine stopped.') + ' Nothing was lost.' : 'Reading ' + fromWords(sn).replace(/^from /, '') + ' for tensions and truths.',
+      o = { role: 'strategy', next: 'review', at: 1, steps: [['Read what arrived', 'read'], ['Find the insights', 'think'], ['Check them', 'check']], l1: bad ? 'The crew could not finish' : 'Finding the insights', l2: bad ? (job.error || 'The engine stopped.') + ' Nothing was lost.' : 'Reading ' + fromWords(sn).replace(/^from /, '') + ' for tensions and truths.',
         pills: pills([{ t: '1. Read what arrived', s: 'done' }, { t: '2. Find the insights', s: bad ? 'bad' : 'now' }, { t: '3. Check them' }], bad ? '' : ['Usually about 40 seconds', secs(job)].filter(Boolean).join(' · ')),
         left: wsec('On the desk', desk), right: wsec('Insights', bad ? [slip('Insight', 'None written', 'bad', true)] : [slip('Insight', 'Waiting for the Strategy agent', 'now', true), slip('Insight', 'They appear together when the run lands', '', true), slip('Insight', 'Nothing is invented while you wait', '', true)]),
         run: bad ? '<button type="button" class="side-link" data-step="pick">← Back to what arrived</button><span class="bad">Stopped before the insights were written.</span><span class="sp"></span>' + '<span class="procActs"><button type="button" class="go" data-act="first">Try again</button></span>' :
-          '<button type="button" class="side-link" data-step="pick">← Back to what arrived</button><span class="sp">Nothing needed from you.</span>' };
+          '<button type="button" class="side-link" data-step="pick">← Back to what arrived</button><span class="sp"></span>' };
     } else {
       var nBack = crew.filter(function (m) { return m.state !== 'out'; }).length, out = crew.filter(function (m) { return m.state === 'out'; });
       var lead = out[0] || crew[0] || null, ticked = focusOf(data).insights.filter(function (i) { return i.ticked; });
@@ -2020,16 +2020,19 @@ var TerritoriesLogic = (function () {
           '<div class="lbar"><i' + (k === 'back' || k === 'stopped' ? ' style="width:100%"' : '') + '></i></div><div class="lw">' + esc(word) + '</div></div>'; }).join('') + '</div>' : '';
       var eta = bad ? (crew.length ? nBack + ' of ' + crew.length + ' were back before it stopped' : '') :
         [crew.length ? nBack + ' of ' + plural(crew.length, 'agent') + ' back' : job.progress && job.progress.total > 0 ? job.progress.done + ' of ' + plural(job.progress.total, 'agent') + ' back' : 'Setting off', 'usually 2 to 3 minutes', secs(job)].filter(Boolean).join(' · ');
-      o = { role: bad ? 'strategy' : lead ? lead.role || 'strategy' : 'strategy',
+      o = { at: 0, steps: [['Explore', 'think'], ['Develop', 'write'], ['Judge', 'check']], next: out[1] ? out[1].role : 'review', role: bad ? 'strategy' : lead ? lead.role || 'strategy' : 'strategy',
         l1: bad ? 'The crew stopped before it was back' : lead ? roleName(lead.role || 'strategy') + ' agent · ' + (lead.name || '') : 'The crew is setting off',
         l2: bad ? (job.error || 'The engine stopped.') + ' Your pick is saved, nothing was lost.' : 'Each agent takes its own heading. Routes appear on the next screen when ' + (crew.length ? 'all ' + crew.length : 'they all') + ' are back.',
         pills: pills([{ t: '1. Explore' + (crew.length ? ' (' + plural(crew.length, 'agent') + ')' : ''), s: bad ? 'bad' : 'now' }, { t: '2. Develop' }, { t: '3. Judge' }], eta), lane: lane,
         left: wsec('Picked for them · ' + ticked.length, ticked.slice(0, 4).map(function (i) { return slip(text(i.theme) || KIND_WORDS[i.kind] || 'Insight', i.text, 'ok'); })),
         right: wsec('Their headings', crew.slice(0, 4).map(function (m) { return slip(roleName(m.role || 'strategy') + ' · ' + (m.short || ''), m.heading || '', m.state === 'out' ? '' : 'ok', false, m.colour); })),
         run: bad ? '<button type="button" class="side-link" data-step="pick">← Back to your pick</button><span class="bad">Stopped while exploring.</span><span class="sp"></span>' + '<span class="procActs"><button type="button" class="go" data-act="retry">Send the crew out again</button></span>' :
-          '<button type="button" class="side-link" data-step="pick">← Back to your pick</button><span class="sp">Nothing needed from you.</span>' };
+          '<button type="button" class="side-link" data-step="pick">← Back to your pick</button><span class="sp"></span>' };
     }
-    return '<section class="proc stagewrap" aria-label="The crew at work"><div class="pwrap">' + o.pills + '<div class="sstage' + (bad ? ' fail' : '') + '" data-nk-stage><div class="rail">' + o.left + '</div><div class="score"><div class="aglbox' + (bad ? ' bad' : '') + '">' + orb(o.role, bad) + '</div>' +
+    var env = { agent: Roles && Roles.of ? Roles.of(o.role) || 'strategy' : o.role, next: Roles && Roles.of ? Roles.of(o.next || o.role) || 'strategy' : o.role, at: o.at, failed: bad,
+      steps: o.steps.map(function (x) { return { label: x[0], kind: x[1] }; }) };
+    if (!bad && o.at != null) o.l2 = 'Step ' + (o.at + 1) + ' of ' + o.steps.length + ' · ' + o.l2;
+    return '<section class="proc stagewrap" aria-label="The crew at work"><div class="pwrap">' + o.pills + '<div class="sstage' + (bad ? ' fail' : '') + '" data-nk-stage><div class="rail">' + o.left + '</div><div class="score"><div class="aglbox" id="aglBox" data-env="' + esc(JSON.stringify(env)) + '">' + orb(o.role, bad) + '</div>' +
       '<div class="scap" aria-live="polite"><span class="abadge">' + esc(roleName(o.role)) + ' agent</span><span class="l1">' + esc(o.l1) + '</span><span class="l2' + (bad ? ' err' : '') + '">' + esc(o.l2) + '</span></div></div>' +
       '<div class="rail">' + o.right + '</div></div>' + (o.lane || '') + '</div><div class="runbar">' + o.run + '</div></section>';
   }
@@ -3176,9 +3179,45 @@ var TerritoriesLookups = (function () {
     // same picture, so it stays shown beneath the live view.
     Array.prototype.forEach.call(app.querySelectorAll('.nk-still'), function (v) { v.style.visibility = ''; });
     boothApply(true);
+    stageSphere();
     if (focusId) { var el = app.querySelector('[data-tick="' + focusId + '"]'); if (el) el.focus({ preventScroll: true }); }
     else if (hadAdd) { var inp = app.querySelector('input[name="own"]'); if (inp) { inp.focus({ preventScroll: true }); try { inp.setSelectionRange(pos, pos); } catch (e) { /* not selectable */ } } }
     window.scrollTo(0, keepY);
+  }
+
+  // ── The stage's sphere: Brief Maker's own (brief-maker/index.html sphere() and tellSphere(), ~L3177-3210), verbatim but for where the
+  // envelope comes from (the stage's data-env). One live view (NapkinSpheres over NapkinScene) made on the first stage and moved into each
+  // redrawn #aglBox, so a redraw while the crew is out never restarts it. Without WebGL the still frame the page drew stays.
+  var SPH = { view: null, tried: false, key: '', host: null, box: null };
+  function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function hexMix(a, b, t) { var p = function (h) { h = String(h).replace('#', ''); return [0, 2, 4].map(function (i) { return parseInt(h.slice(i, i + 2), 16) || 0; }); }, x = p(a), y = p(b);
+    return '#' + x.map(function (v, i) { return ('0' + Math.round(v + (y[i] - v) * t).toString(16)).slice(-2); }).join(''); }
+  function lumOf(h) { var c = String(h).replace('#', ''); return (0.299 * parseInt(c.slice(0, 2), 16) + 0.587 * parseInt(c.slice(2, 4), 16) + 0.114 * parseInt(c.slice(4, 6), 16)) / 255; }
+  function isDark() { return document.documentElement.getAttribute('data-color-scheme') === 'dark' || (!document.documentElement.getAttribute('data-color-scheme') && matchMedia('(prefers-color-scheme: dark)').matches); }
+  function stageSphere() {
+    var box = $('aglBox'); if (!box) return;
+    var S = window.NapkinScene, A = window.NapkinSpheres;
+    if (!S || !A || !S.gl) return;
+    // Brief mounts its view on #aglBox itself: keep that one element across redraws (its envelope comes from the fresh one)
+    if (SPH.box && SPH.box !== box) { SPH.box.setAttribute('data-env', box.getAttribute('data-env') || '{}'); box.parentNode.replaceChild(SPH.box, box); box = SPH.box; }
+    if (!SPH.box) { SPH.box = box; box.innerHTML = ''; }
+    SPH.host = box;
+    if (!SPH.view && !SPH.tried) {
+      SPH.tried = true;
+      try {
+        var base = cssVar('--ag-base') || '#515BFF', acc = cssVar('--ag-acc') || '#C8CBFF', dark = isDark();
+        // the ring is the agency's base; a near-black base rings in its accent, deepened (the mock's TBWA ring)
+        var ring = lumOf(base) < 0.15 ? hexMix(acc, '#000000', 0.23) : base;
+        SPH.view = A.create(S, SPH.host, { level: 4, accent: ring, inkAccent: base, bg: dark ? '#16181D' : '#F6F1E7', dark: dark, rFrac: [0.27, 0.24], cyFrac: 0.45 });
+        window.addEventListener('clan:colorscheme', function () { setTimeout(function () { var dk = isDark(); if (SPH.view && SPH.view.setBg) SPH.view.setBg(dk ? '#16181D' : '#F6F1E7', dk); }, 0); });
+      } catch (e) { SPH.view = null; }
+    }
+    var v = SPH.view; if (!v) return;
+    var env; try { env = JSON.parse(box.getAttribute('data-env') || '{}'); } catch (e) { return; }
+    var key = env.agent + ':' + env.at + ':' + (env.failed ? 'e' : '');
+    if (key === SPH.key) return;
+    SPH.key = key;
+    v.setEnvelope({ agentKey: env.agent, nextAgentKey: env.next, phase: 'run', steps: env.steps, step: { index: env.at }, stepStartedAt: Date.now(), streaming: !env.failed, errorRetrying: !!env.failed });
   }
   function run(e) {
     var r = L.act(data(), ui, e, env());

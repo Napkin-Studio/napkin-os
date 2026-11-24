@@ -61,7 +61,12 @@ test('the stage while the engine works: no Booth, the agent big, the step honest
   assert.equal(L.stageOf(d, { job: { state: 'running' }, view: 0 }), null)
   assert.equal(L.stageOf(d, { job: { state: 'done' } }), null)
   const page = L.view(d, { job: { state: 'running', started: Date.now() - 12000 } })
-  assert.doesNotMatch(page, /class="booth-col/); assert.match(page, /data-nk-size="230"/); assert.match(plain(page), /Finding the insights/)
+  assert.doesNotMatch(page, /class="booth-col/); assert.match(plain(page), /Finding the insights/)
+  // Brief's stage sphere: the live view is mounted over #aglBox (runtime, as Brief's tellSphere), told this envelope; the still is Brief's 150
+  const env = JSON.parse(/id="aglBox" data-env="([^"]+)"/.exec(page)![1].replace(/&quot;/g, '"'))
+  assert.equal(env.agent, 'strategy'); assert.equal(env.at, 1); assert.equal(env.steps.length, 3); assert.equal(env.failed, false)
+  assert.match(page, /id="aglBox"[^>]*><span class="nk-ag"[^>]*data-nk-size="150"/)
+  assert.match(plain(page), /Step 2 of 3 · Reading [^.]+ for tensions and truths/, 'Brief\'s caption: Step N of M · what it is doing')
   assert.match(plain(page), /Usually about 40 seconds · 1[12] s so far/)
   assert.match(page, /class="side-link" data-step="pick">← Back to what arrived/)
 })
