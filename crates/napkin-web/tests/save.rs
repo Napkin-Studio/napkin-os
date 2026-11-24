@@ -1042,3 +1042,67 @@ async fn trash_of_a_document_trashed_before_notes_still_lists() {
     assert_eq!(t[0]["path"], d);
     assert!(t[0]["title"].is_null() && t[0]["by"].is_null());
 }
+
+// ── Rename a document that is not open (UAT round 4: the trash dialog and the Trash row disagreed) ──
+
+#[tokio::test]
+async fn a_rename_by_id_reaches_the_library_the_download_and_the_trash() {
+    let s = server();
+    let me = sign_in(&s, "visionary", "napkin").await;
+    let doc = make_doc(&s, &me, PRODUCTION, "Copperell Refill", None).await;
+
+    let r = me
+        .json(
+            &s,
+            "POST",
+            &format!("/d/{doc}/title"),
+            serde_json::json!({ "title": "  Copperell Refill 2 " }),
+        )
+        .await;
+    assert_eq!(
+        r.status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&r.body)
+    );
+
+    let lib = me.get(&s, "/library").await.json();
+    let row = lib["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|i| i["path"] == doc)
+        .unwrap()
+        .clone();
+    assert_eq!(
+        row["title"], "Copperell Refill 2",
+        "the library lists the new name"
+    );
+
+    let bytes = prod_bytes(&s, &me, &doc);
+    let clan = clan_sdk::ClanFile::from_bytes(bytes).unwrap();
+    assert_eq!(
+        clan.manifest().title,
+        "Copperell Refill 2",
+        "the document itself carries it, so an export keeps it"
+    );
+
+    trash_it(&s, &me, &doc).await;
+    let t = me.get(&s, "/trash").await.json();
+    assert_eq!(
+        t[0]["title"], "Copperell Refill 2",
+        "the Trash row says what the dialog said"
+    );
+
+    // an empty name is refused (another agency reaches doc_session only for its own tenant)
+    let other = make_doc(&s, &me, PRODUCTION, "Keep me", None).await;
+    let r = me
+        .json(
+            &s,
+            "POST",
+            &format!("/d/{other}/title"),
+            serde_json::json!({ "title": "   " }),
+        )
+        .await;
+    assert_eq!(r.status, StatusCode::BAD_REQUEST);
+}
