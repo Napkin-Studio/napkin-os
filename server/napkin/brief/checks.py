@@ -344,3 +344,55 @@ def carry_fixed_line(mandatories, line: str):
     item = f"End line: '{line}' (word for word)"
     kept = [x for x in items if not _END_LINE_ITEM.match(text_of(x))]
     return [item] + kept
+
+
+# ── candidate lines the client could not choose between (UAT round 4, L1) ─────────────────────────────────────────
+# "MESSAGE: "Clean, without the plastic." or "Refill. Not landfill." Board can't decide." A first draft that keeps neither
+# line and asks nothing about them leaves the fixed-line step nothing to act on, so code asks the question itself.
+_LINE_LABEL = re.compile(r"^\s*[-*•]?\s*(?:the\s+)?(?:message|line|tag[\s-]?line|strap[\s-]?line|slogan|end[\s-]?line|"
+                         r"sign[\s-]?off|endline|campaign\s+line|headline|platform)s?\s*[:\-–—]", re.I)
+_UNDECIDED = re.compile(r"\b(?:can'?t|cannot|can\s+not|couldn'?t)\s+(?:decide|choose|agree|pick)|\bundecided\b|"
+                        r"\b(?:choose|choosing|deciding|torn)\s+between\b|\bnot\s+sure\s+which\b|\beither\b", re.I)
+_DQUOTED = re.compile(r"[\"“]([^\"“”]{2,120}?)[\"”]|(?<!\w)[‘']([^‘’']{2,120}?)[’'](?!\w)")
+
+
+CANDIDATE_WORDS = 15
+
+
+def candidate_lines(text: str) -> list[str]:
+    """The lines the client's words offer as a choice: two or more quoted options on a MESSAGE / LINE / TAGLINE line, or
+    two or more quoted options joined by 'or' where the client says they cannot decide. [] when it offers none."""
+    out: list[str] = []
+    for row in re.split(r"\n+", text or ""):
+        opts = [(a or b).strip() for a, b in _DQUOTED.findall(row)]
+        opts = [o for o in opts if 1 <= len(o.split()) <= CANDIDATE_WORDS]
+        if len(opts) < 2:
+            continue
+        joined = re.search(r"[\"”’']\s*,?\s*or\s+[\"“‘']", row, re.I)
+        if _LINE_LABEL.search(row) or (joined and _UNDECIDED.search(row)):
+            out += [o for o in opts if o not in out]
+    return out
+
+
+def line_question(candidates: list[str]) -> str:
+    """The question code asks when the client named candidate lines and the draft settled none."""
+    opts = [f"'{c}'" for c in candidates]
+    return f"Which line does the board prefer, {', '.join(opts[:-1])} or {opts[-1]}? — It is the end line every piece carries, word for word."
+
+
+def line_settled(candidates: list[str], mandatories, open_questions) -> bool:
+    """Whether the brief already deals with the candidate lines: an end line in mandatories (a line merely mentioned there,
+    "Avoid 'Clean, without the plastic'", is not one), or an open question that already asks which line, answered or
+    not (an answered one is carried by carry_fixed_line)."""
+    if not candidates:
+        return True
+    items = [text_of(x) for x in (mandatories if isinstance(mandatories, list) else [mandatories or ""])]
+    if any(_END_LINE_ITEM.match(t) for t in items):
+        return True
+    for q in open_questions or []:
+        ask = _QA_SPLIT.split(str(q), maxsplit=1)[0]
+        if _LINE_Q.search(ask) and not _LEGAL_Q.search(ask):
+            return True
+        if any(" ".join(_norm_words(c)) in " ".join(_norm_words(ask)) for c in candidates):
+            return True
+    return False
