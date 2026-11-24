@@ -363,6 +363,13 @@ export function supersededAsk(d: Doc, a: Doc['asks'][string]): boolean {
   return later.some((o) => o.node?.id === j.node?.id) || answeredElsewhere(d, j.node?.id, later.map((o) => o.node?.id))
 }
 
+/** A job waiting on a question a later plan has answered (supersededAsk): no longer waiting for anyone. */
+export function supersededJob(d: Doc, j: Doc['jobs'][string]): boolean {
+  if (j.state !== 'needs_input') return false
+  const ask = values(d.asks).find((a) => a.job_id === j.id)
+  return !!ask && (ask.state !== 'open' || supersededAsk(d, ask))
+}
+
 /** A storyboard no script drives (planned before there was a script: "The script is empty…") is answered once a storyboard
  *  a script drives has been planned since (UAT round 4 L4, local run: the question stayed on the first, empty Film). */
 export function answeredElsewhere(d: Doc, sbId: string | undefined, plannedSince: readonly (string | undefined)[]): boolean {

@@ -2,7 +2,7 @@
 // shown (L4), and "making" counts only what is being made (L6).
 import { describe, expect, it } from 'vitest'
 import type { Ask, ProductionDocument } from '../contracts/types'
-import { openAsks, supersededAsk } from '../model/selectors'
+import { openAsks, supersededAsk, supersededJob } from '../model/selectors'
 import { id, job, MAYA, modelStore, seedStages } from '../test/model'
 import { earlierPlanAsks } from './plan'
 import { isMaking } from './runner'
@@ -46,6 +46,7 @@ describe('a plan question that a later plan answered (L4)', () => {
     const planned = { ...job(d, 'shot_list', [], null, { state: 'completed', created_at: '2026-11-24T13:05:00Z', node: { kind: 'storyboard', id: driven } }), id: id('job') }
     d.jobs[planned.id] = planned
     expect(supersededAsk(d, q)).toBe(true)
+    expect(supersededJob(d, d.jobs[first.id])).toBe(true) // the job tray and the bar no longer say "Waiting for you"
     expect(earlierPlanAsks(d, driven, planned.id)).toEqual([q.id])
   })
 
