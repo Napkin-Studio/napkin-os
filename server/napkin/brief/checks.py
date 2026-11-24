@@ -163,12 +163,31 @@ def tests(keys) -> dict:
     return out
 
 
-def _mark(k: str, e: dict) -> bool:
-    """Put the mark on the part's text (idempotent): the value, or for MARKED_LISTS its first item. -> whether it marked."""
+_FIGURE = re.compile(r"\d[\d,.]*\d%?|\d%?")
+
+
+def _figures_of(text: str) -> set:
+    return {f.replace(",", "").rstrip(".") for f in _FIGURE.findall(text or "")}
+
+
+def answer_backed(item: str, answers: str) -> bool:
+    """An item whose every figure is one a planner gave in an answered open question ("Judged by: 1,500 stockists, 60,000
+    starter bottles, 35% repeat refill" from "Answer: … 1,500 stockists and 60,000 starter bottles …; 35% …"): the
+    planner's own words, not an assumption (UAT round 4, F10). An item with no figure is never backed this way."""
+    figs = _figures_of(item)
+    return bool(figs) and bool(answers) and figs <= _figures_of(answers)
+
+
+def _mark(k: str, e: dict, answers: str = "") -> bool:
+    """Put the mark on the part's text (idempotent): the value, or for MARKED_LISTS its first item that a planner's
+    answer does not already back. -> whether it marked."""
     v = e.get("value")
     if k in MARKED_LISTS and isinstance(v, list):
-        first = next((i for i, x in enumerate(v) if isinstance(x, str) and x.strip()), None)
-        if first is not None and not v[first].strip().lower().startswith("to confirm"):
+        items = [i for i, x in enumerate(v) if isinstance(x, str) and x.strip()]
+        if any(v[i].strip().lower().startswith("to confirm") for i in items):
+            return False
+        first = next((i for i in items if not answer_backed(v[i], answers)), None)
+        if first is not None:
             v[first] = f"{MARK} {v[first].strip()}"
             return True
     elif isinstance(v, str) and v.strip() and not v.strip().lower().startswith("to confirm"):
@@ -177,15 +196,26 @@ def _mark(k: str, e: dict) -> bool:
     return False
 
 
-def mark_assumptions(entries: dict, insight: dict | None = None) -> list[str]:
+def answers_text(open_questions) -> str:
+    """The planner's answers in answered open questions ("Q? — Answer: …"), joined, for answer_backed."""
+    out = []
+    for x in open_questions or []:
+        parts = _QA_SPLIT.split(str(x), maxsplit=1)
+        if len(parts) == 2:
+            out.append(parts[1])
+    return " ".join(out)
+
+
+def mark_assumptions(entries: dict, insight: dict | None = None, answers: str = "") -> list[str]:
     """Mark each assumption 'To confirm:' (idempotent), and the proposition and objection when the insight they
     rest on is one. Run on the Brief agent's raw output, before provenance reads the sentences, so a claim and its sentence
-    stay the same text. Lists (but for MARKED_LISTS, which mark their first item), client words and research stay
-    as they are. `insight`: the insight already held, when this output does not carry one. -> the parts marked now."""
+    stay the same text. Lists (but for MARKED_LISTS, which mark their first item a planner's answer does not back),
+    client words and research stay as they are. `insight`: the insight already held, when this output does not carry
+    one. `answers`: the planner's answers (answers_text). -> the parts marked now."""
     marked = []
 
     def put(k, e):
-        if _mark(k, e):
+        if _mark(k, e, answers):
             marked.append(k)
 
     for k, e in entries.items():

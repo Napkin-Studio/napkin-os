@@ -346,7 +346,8 @@ class PlannedBriefJob(BriefJob):
         """The Brief agent's parts with what each rests on (provenance.clean_parts): the one cleaner of every path.
         An assumption says it is one first, so every sentence and the claim read from it are the same text."""
         if isinstance(out, dict):
-            marked = checks.mark_assumptions(out, self.whole.get("insight"))
+            marked = checks.mark_assumptions(out, self.whole.get("insight"),
+                                             answers=checks.answers_text(get(self.W, "open_questions")))
             if marked:
                 self.caps.runlog.note("assumptions_marked", stage=stage, parts=marked)
         got = prov.clean_parts(out, self._prov(ev), stage=stage, keys=keys, prior=prior)

@@ -88,3 +88,28 @@ def test_a_leaning_leftover_about_another_figure_still_stays():
     other = "When is the lab report due, and does it cover the 95% packaging figure?"
     kept, _ = dedupe([first, other])
     assert other in kept, "a different figure is a different ask"
+
+
+# ── F10: an item the planner's answer gives is not marked 'To confirm' ────────────────────────────────────────────
+ANSWERED = ["What sales, distribution or share target should the launch hit, and by when? — Answer: Launch target: 1,500 "
+            "stockists and 60,000 starter bottles sold by end of May; repeat-refill rate of 35% within 8 weeks."]
+
+
+def test_the_mark_skips_a_measurement_item_the_planners_answer_gives():
+    answers = checks.answers_text(ANSWERED)
+    e = {"basis": "assumption", "value": ["Judged by: 1,500 stockists, 60,000 starter bottles, 35% repeat refill within 8 weeks.",
+                                          "Also: a pre-launch tracker wave on premium perception, if budgeted."]}
+    assert checks.mark_assumptions({"measurement": e}, answers=answers) == ["measurement"]
+    assert e["value"][0].startswith("Judged by"), "the planner's own figures are not an assumption"
+    assert e["value"][1].startswith("To confirm: Also")
+    assert checks.mark_assumptions({"measurement": e}, answers=answers) == [], "idempotent"
+
+
+def test_without_answers_or_with_another_figure_the_first_item_is_marked_as_before():
+    e = {"basis": "assumption", "value": ["Judged by: 1,500 stockists.", "A tracker."]}
+    checks.mark_assumptions({"measurement": e})
+    assert e["value"][0].startswith("To confirm: Judged by")
+    f = {"basis": "assumption", "value": ["Judged by: 2,000 stockists.", "A tracker."]}
+    checks.mark_assumptions({"measurement": f}, answers=checks.answers_text(ANSWERED))
+    assert f["value"][0].startswith("To confirm:"), "a figure the planner never gave is still to confirm"
+    assert not checks.answer_backed("A tracker wave, if budgeted.", checks.answers_text(ANSWERED)), "no figure, no backing"
