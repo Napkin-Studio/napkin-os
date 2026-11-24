@@ -33,6 +33,9 @@ export interface ClanStoreOptions {
   newId?: (prefix: string) => string
   /** The time, as ISO 8601. */
   now?: () => string
+  /** The version a linked brief has now in Napkin (Brief Maker's "v2"), or null when it cannot be read. Used once, when a
+   *  document made before `source.version` opens, to fill it for a Brief node that was linked (not spun off). */
+  briefVersion?: (documentId: string) => Promise<number | null>
 }
 
 /** One entry of agent/decision-chain.yaml, as `/chain` gives it. */
@@ -73,6 +76,9 @@ export interface SpunOffFrom {
   document_id: string
   data_sha256: string
   title: string
+  /** The parent's version as its app says it: its approve decisions carried in this project's chain, at least 1
+   *  (Brief Maker's "v2": the same count its docVersion() makes, the parent's own address being `<id>#…`). */
+  version: number
 }
 
 /**
@@ -127,6 +133,7 @@ export class UnsupportedContract extends Error {
 /** Who records the move to generations, and its decision (features/make-and-edit.clan). */
 export const MIGRATION_AGENT = 'clan-store'
 export const MIGRATION_ACTION = 'move takes and the edl to generations and the timeline'
+export const BRIEF_VERSION_ACTION = 'fill the version of each Brief node'
 /** The schema a document holds for the one write that moves it: any object (the data is checked by ajv first). */
 const MOVING_SCHEMA = { $schema: 'https://json-schema.org/draft/2020-12/schema', type: 'object' }
 
@@ -236,6 +243,7 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
     this.person = opts.person ?? null
     this.newId = opts.newId ?? ((p) => newUlidId(p))
     this.now = opts.now ?? (() => new Date().toISOString())
+    this.briefVersion = opts.briefVersion ?? null
   }
 
   // ── DocumentStore ─────────────────────────────────────────────────────────
@@ -437,7 +445,9 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
     const m = (parseYaml(this.need().entry('manifest.yaml')) ?? {}) as { title?: string; lineage?: { carried?: { document_id?: string; data_sha256?: string } } }
     const c = m.lineage?.carried
     if (!c?.document_id || !c.data_sha256) return null
-    return { document_id: c.document_id, data_sha256: c.data_sha256, title: m.title ?? '' }
+    const chain = (parseYaml(this.need().entry('agent/decision-chain.yaml')) ?? {}) as { decisions?: ChainEntry[] }
+    const approvals = approvalsCarried(chain.decisions ?? [], c.document_id)
+    return { document_id: c.document_id, data_sha256: c.data_sha256, title: m.title ?? '', version: Math.max(1, approvals) }
   }
 
   async exportClan(): Promise<Uint8Array> {
@@ -632,6 +642,29 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
         throw e
       }
     }
+    // A Brief node made before `source.version` (owner, 2026-11-23: "Migrate once on open"): the version is filled once,
+    // from the linked brief as Napkin has it now, or from the approves carried in a spun-off project's chain, else 1.
+    // Same way as the move above: through a schema that holds both, then the app's. Once filled the field is required.
+    if (needsBriefVersion(data)) {
+      try {
+        const next = await this.withBriefVersions(h, data)
+        assertValid(next, 'the document got its Brief node versions')
+        assertIntegrity(data, next, 'the document got its Brief node versions')
+        route(h, '/patch-schema', MOVING_SCHEMA)
+        route(h, '/patch-data', {
+          patch: diffMergePatch(data, next),
+          agent: MIGRATION_AGENT,
+          action: BRIEF_VERSION_ACTION,
+          rationale: 'Each Brief node now keeps the brief\'s own version (Brief Maker\'s v2), not only Production\'s copy counter.',
+        })
+        route(h, '/patch-schema', APP_SCHEMA)
+        data = readData(h)
+        moved = true
+      } catch (e) {
+        h.free()
+        throw e
+      }
+    }
     // A document keeps the schema it was made with; one made under an older
     // contract-3 schema moves to the app's when it opens (loosening only).
     let upgraded = moved
@@ -645,6 +678,23 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
     this.changed()
     if (upgraded) this.scheduleSave()
     return data
+  }
+
+  private briefVersion: ((documentId: string) => Promise<number | null>) | null
+
+  /** The document with `source.version` on every Brief node that lacks it. */
+  private async withBriefVersions(h: NapkinHost, data: Doc): Promise<Doc> {
+    const next = structuredClone(data) as Doc & { briefs?: Record<string, { source: { document_id: string; how?: string; version?: number } }> }
+    const chain = route<{ decisions?: ChainEntry[] }>(h, '/chain')?.decisions ?? []
+    for (const b of Object.values(next.briefs ?? {})) {
+      if (typeof b.source.version === 'number') continue
+      const carried = approvalsCarried(chain, b.source.document_id)
+      let v: number | null = null
+      if (b.source.how === 'spinoff' || carried > 0) v = Math.max(1, carried)
+      else if (this.briefVersion) v = await this.briefVersion(b.source.document_id).catch(() => null)
+      b.source.version = typeof v === 'number' && v >= 1 ? Math.floor(v) : 1
+    }
+    return next
   }
 
   /** shared/data.yaml of the open document, as the SDK wrote it. */
@@ -726,6 +776,18 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
       if (reason === 'manual') throw e
     }
   }
+}
+
+/** The approve decisions in `chain` aimed at the document `id` (its address is `<id>#…`): a brief's version, as Brief Maker counts. */
+function approvalsCarried(chain: ChainEntry[], id: string): number {
+  const mine = `${id}#`
+  return chain.filter((d) => d.kind === 'approve' && (d.targets ?? []).some((t) => typeof t === 'string' && t.startsWith(mine))).length
+}
+
+/** Whether a Brief node still lacks `source.version` (a document made before it). */
+function needsBriefVersion(data: Doc): boolean {
+  const briefs = (data as { briefs?: Record<string, { source?: { version?: unknown } }> }).briefs
+  return Object.values(briefs ?? {}).some((b) => typeof b?.source?.version !== 'number')
 }
 
 function readData(h: NapkinHost): Doc {

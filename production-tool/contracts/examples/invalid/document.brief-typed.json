@@ -173,6 +173,7 @@
         "app_id": "ie.napkin.brief-maker",
         "data_sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "taken": 2,
+        "version": 2,
         "at": "2026-11-17T10:00:00Z",
         "how": "link",
         "kept": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
