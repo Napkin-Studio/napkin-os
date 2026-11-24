@@ -393,6 +393,23 @@ def test_a_deck_spun_off_from_production_sends_the_carried_project_and_its_confi
     assert "production_upstream" not in fake2.posts[0]
 
 
+def test_a_deck_spun_off_a_brief_sends_the_brief_to_the_engine(deck, monkeypatch):
+    """UAT round 4 L2: a brief-only deck built from an empty brief, because the brief it carries was never sent."""
+    fake = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    host = Host(data=deck_data(), schema=SCHEMA)
+    brief = {"objectives": "Sell the starter bottle", "single_minded_proposition": "Cleans as well as your usual spray.", "mandatories": ["Logo top right"]}
+    kit = {"kit": {"version": 2}, "objectives": "a kit is never the brief"}
+    prod = {"app": "production-tool", "contract_version": "3", "project": {"id": "proj_x", "title": "P"}, "finals": {}, "briefs": {}}
+    host.data["upstream"] = {"doc-kit": kit, "doc-prod-1": prod, "doc-brief-1": brief}
+    build(deck, host)
+    sent = fake.posts[0]
+    assert sent["brief_upstream"] == {"id": "doc-brief-1", "data": brief}   # carried whole, as the engine reads it
+    assert sent["production_upstream"]["id"] == "doc-prod-1"
+    fake2 = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    build(deck, Host(data=deck_data(), schema=SCHEMA))
+    assert "brief_upstream" not in fake2.posts[0]
+
+
 PASS = "v1." + "e30" + "." + "c2ln"
 
 
