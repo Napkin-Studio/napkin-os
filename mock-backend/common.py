@@ -67,15 +67,10 @@ def env_flag(name: str) -> bool:
     return os.environ.get(name, "").strip().lower() not in ("", "0", "false", "no", "off")
 
 
-_SCRATCH = Path("/tmp/claude-1000/-home-batunii-Documents-Code-napkin-os/"
-                "8548b27c-f3fd-4056-9479-bb6b716c6517/scratchpad")
-
-
 def _default_data() -> Path:
-    # The documented default is the session scratchpad; elsewhere (CI, another
-    # machine) fall back to the system temp directory.
-    if _SCRATCH.is_dir():
-        return _SCRATCH / "mock-backend"
+    # MOCK_DATA wins; otherwise the system temp directory. (It used to prefer one
+    # laptop's session scratchpad by its absolute path, which on another machine
+    # can belong to a different user and make the server crash on start.)
     return Path(tempfile.gettempdir()) / "napkin-mock-backend"
 
 
