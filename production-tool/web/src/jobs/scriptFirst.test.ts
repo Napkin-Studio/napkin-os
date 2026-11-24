@@ -30,7 +30,7 @@ async function project() {
   const main = mainScript(doc(store))!.id
   const scene = await addScene(store, main)
   await updateDoc(store, (d) => { d.scenes[scene].text = 'Leo cycles to work.' }, 'edit')
-  const brief = newBrief({ documentId: 'doc-quietboil', title: 'Let Them Sleep (Quietboil launch film)', appId: 'ie.napkin.brief-maker', dataSha256: SHA('b'),
+  const brief = newBrief({ documentId: 'doc-quietboil', title: 'Let Them Sleep (Quietboil launch film)', appId: 'ie.napkin.brief-maker', dataSha256: SHA('b'), version: 1,
     data: { title: 'Let Them Sleep', proposition: 'The kettle that lets the house sleep.' } } as never, 'link')
   const sb = newId('storyboard')
   const planJob = newId('job')

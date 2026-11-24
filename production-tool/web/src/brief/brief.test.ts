@@ -40,7 +40,7 @@ const BRIEF_DATA = {
   budget_and_scope: '£200k',
   confidential_fields: ['audience'],
 }
-const read = (data: unknown = BRIEF_DATA, sha = SHA('b'), title = 'First Light brief'): OsBriefRead => ({ documentId: 'doc-first-light', title, appId: 'ie.napkin.brief-maker', dataSha256: sha, data })
+const read = (data: unknown = BRIEF_DATA, sha = SHA('b'), title = 'First Light brief', version = 1): OsBriefRead => ({ documentId: 'doc-first-light', title, appId: 'ie.napkin.brief-maker', dataSha256: sha, version, data })
 
 const withBrief_ = (d: ProductionDocument, b: BriefNode, ...links: Link[]) => {
   const x = structuredClone(d)
@@ -105,6 +105,12 @@ describe('canLink: brief → script, storyboard, video or format set only', () =
 describe('scope', () => {
   const b1 = { ...newBrief(read(), 'link'), id: 'brief_01K7A0000000000000000000B1' }
   const b2 = { ...newBrief(read(BRIEF_DATA, SHA('c'), 'First Light DE'), 'link'), id: 'brief_01K7A0000000000000000000B2' }
+
+  it('the chip says the brief\'s own version, as the Brief node does, not Production\'s copy counter (UAT round 4)', () => {
+    const v2 = { ...b1, source: { ...b1.source, taken: 1, version: 2 } }
+    const d = withBrief_(ex, v2, link(v2.id, { kind: 'script', id: SCRIPT }))
+    expect(inputChips(scopeOf(d, SCRIPT))[0].label).toBe('Brief · First Light brief · v2')
+  })
 
   it('a brief linked into the Script is in its scope, and carries on to the Storyboard and Video it drives', () => {
     const d = withBrief_(ex, b1, link(b1.id, { kind: 'script', id: SCRIPT }))
@@ -251,8 +257,8 @@ describe('Brief changed: update?', () => {
     const b = newBrief(read(), 'link')
     expect(freshness(b, read())).toBe('same')
     expect(briefNotice(b, read())).toBeNull()
-    const notice = briefNotice(b, read(newer, SHA('e')))!
-    expect(notice).toMatchObject({ text: 'Brief changed: update?', changes: ['proposition', 'tone'], detail: 'Proposition and tone changed in Brief Maker (would be v2).' })
+    const notice = briefNotice(b, read(newer, SHA('e'), 'First Light brief', 2))!
+    expect(notice).toMatchObject({ text: 'Brief changed: update?', changes: ['proposition', 'tone'], detail: 'Proposition and tone changed in Brief Maker (now v2).' })
     expect(freshness({ ...b, source: { ...b.source, kept: SHA('e') as never } }, read(newer, SHA('e')))).toBe('kept')
   })
 
@@ -273,18 +279,18 @@ describe('Brief changed: update?', () => {
     expect((s.get() as unknown as ProductionDocument).briefs![b.id].source.kept).toBe(SHA('e'))
     expect(briefNotice((s.get() as unknown as ProductionDocument).briefs![b.id], read(newer, SHA('e')))).toBeNull()
     // It changes again: offered again; take it.
-    const again = read(newer, SHA('f'), 'First Light brief (2)')
+    const again = read(newer, SHA('f'), 'First Light brief (2)', 3)
     expect(briefNotice((s.get() as unknown as ProductionDocument).briefs![b.id], again)).not.toBeNull()
     await takeNewer(s, b.id, again)
     const d = s.get() as unknown as ProductionDocument
-    expect(d.briefs![b.id]).toMatchObject({ title: 'First Light brief (2)', source: { taken: 2, data_sha256: SHA('f') }, spine: { proposition: 'Lumen is the first thing you reach for.', tone: 'Bright, brisk' } })
+    expect(d.briefs![b.id]).toMatchObject({ title: 'First Light brief (2)', source: { taken: 2, version: 3, data_sha256: SHA('f') }, spine: { proposition: 'Lumen is the first thing you reach for.', tone: 'Bright, brisk' } })
     expect(d.briefs![b.id].source.kept).toBeUndefined()
     const marks = Object.values(d.stale).filter((m) => m.caused_by.kind === 'brief')
     expect(marks.map((m) => m.target.id).sort()).toEqual([script, ...Object.keys(d.storyboards), ...Object.keys(d.videos)].sort())
-    expect(marks[0].reason).toBe('The brief changed (v1 → v2): proposition, tone.')
+    expect(marks[0].reason).toBe('The brief changed (v1 → v3): proposition, tone.')
     const chain = (await s.chain()).map((e) => e.action)
     expect(chain).toContain('keep the brief “First Light brief” v1')
-    expect(chain).toContain('update_from_brief “First Light brief (2)” v2')
+    expect(chain).toContain('update_from_brief “First Light brief (2)” v3')
     // Nothing was made again by itself.
     expect(Object.keys(d.jobs)).toHaveLength(0)
   })
@@ -330,13 +336,13 @@ describe('the OS source', () => {
       calls.push(url)
       const body = url.endsWith('/api/session') ? { tenant: 't1' }
         : url.includes('/library?') ? { items: [{ path: 'doc-a', app_id: 'ie.napkin.brief-maker', title: 'A', updated_at: '2026-11-17T10:00:00Z', client: { name: 'Lumen' } }, { path: 'doc-b', app_id: 'ie.napkin.deck-maker', title: 'B', updated_at: 'x', client: null }] }
-          : { path: 'doc-a', title: 'A', app_id: 'ie.napkin.brief-maker', data_sha256: SHA('a'), data: BRIEF_DATA }
+          : { path: 'doc-a', title: 'A', app_id: 'ie.napkin.brief-maker', data_sha256: SHA('a'), version: 2, data: BRIEF_DATA }
       return new Response(JSON.stringify(body), { status: 200 })
     }
     const src = osBriefSource('', fake)
     expect(await src.available()).toBe(true)
     expect(await src.list()).toEqual([{ documentId: 'doc-a', title: 'A', updatedAt: '2026-11-17T10:00:00Z', client: { name: 'Lumen' } }])
-    expect(await src.read('doc-a')).toMatchObject({ documentId: 'doc-a', dataSha256: SHA('a') })
+    expect(await src.read('doc-a')).toMatchObject({ documentId: 'doc-a', dataSha256: SHA('a'), version: 2 })
     expect(calls).toContain('/api/t/t1/library?app=ie.napkin.brief-maker')
     expect(calls).toContain('/api/t/t1/d/doc-a/data')
     expect(src.openUrl('doc-a')).toBe('/?open=doc-a')
@@ -374,9 +380,9 @@ describe('Start from a brief: the data path', () => {
     expect((await briefChoices(src(true))).empty).toMatch(/Brief Maker/)
   })
   it('a project spun off from Brief Maker makes its Brief node from the brief it carries, not from the OS', () => {
-    const from = { document_id: 'doc-first-light', data_sha256: SHA('b'), title: ' First Light ' }
+    const from = { document_id: 'doc-first-light', data_sha256: SHA('b'), title: ' First Light ', version: 2 }
     expect(carriedBrief(from, { 'doc-first-light': BRIEF_DATA })).toEqual({
-      documentId: 'doc-first-light', title: 'First Light', appId: 'ie.napkin.brief-maker', dataSha256: SHA('b'), data: BRIEF_DATA,
+      documentId: 'doc-first-light', title: 'First Light', appId: 'ie.napkin.brief-maker', dataSha256: SHA('b'), version: 2, data: BRIEF_DATA,
     })
     // nothing carried under the parent's id: nothing to bring (the hoisted research of the brief is not the brief)
     expect(carriedBrief(from, { 'doc-research': BRIEF_DATA })).toBeNull()
@@ -387,6 +393,26 @@ describe('Start from a brief: the data path', () => {
     const files = ['../main.tsx', './start.ts', '../stages/Character.tsx']
     for (const f of files) expect(readFileSync(new URL(f, import.meta.url), 'utf8'), f).not.toMatch(/briefSpinoffOf|holdBriefSpinoff|withoutBriefSpinoff|useBriefSpinoff|\?brief=/)
     expect(existsSync(new URL('./useBriefSpinoff.ts', import.meta.url))).toBe(false)
+  })
+})
+
+describe('the legal line when a mandatory only mentions legal (UAT 2026-11-23: the Tidewell card read "Cornish")', () => {
+  const LINE = 'Contains naturally occurring sea minerals. Enjoy as part of a balanced diet.'
+  // As the run locked it (brief-final), and as the first draft put it, with the Cornish note ahead of the Include.
+  const LOCKED = [
+    'The can is the hero, with the logo bottom left.', 'No real, recognisable faces (lookalike issue last year).', 'Never show the product with alcohol in shot.',
+    `Include: "${LINE}"`, "Use 'Cornish' only once legal has cleared it.", 'Health and environmental wording must meet the CAP Code, the GB register and substantiation rules.',
+  ]
+  const DRAFT = [
+    'the can must be the hero, logo bottom left.', 'Never show it with alcohol in shot.', 'Minerals from the Cornish coast (legal is checking the word "Cornish")', `Include "${LINE}"`,
+  ]
+  it('takes the Include sentence, never the stray quoted word', () => {
+    expect(legalOf({ mandatories: LOCKED })).toBe(LINE)
+    expect(legalOf({ mandatories: DRAFT })).toBe(LINE)
+    expect(legalOf({ mandatories: [...DRAFT].reverse() })).toBe(LINE)
+  })
+  it('a quoted word near "legal" alone is no legal line', () => {
+    expect(legalOf({ mandatories: ['Minerals from the Cornish coast (legal is checking the word "Cornish")', "Use 'Cornish' only once legal has cleared it."] })).toBeUndefined()
   })
 })
 

@@ -303,13 +303,13 @@ def test_a_size_ends_on_the_films_own_end_card_and_no_studio_card():
     h = Harness(base_config())
     token = h.as_person()
     inp = render_input(h)
-    inp["cutdown"]["clientCard"] = {"headline": "Quietboil", "line": "Let them sleep.", "bg": "#14161B", "s": 2}
+    inp["cutdown"]["clientCard"] = {"headline": "Quietboil", "line": "Let them sleep.", "legal": "Please recycle.", "bg": "#14161B", "s": 2}
     _, job = h.post_job(token, op="cutdown", expect=200, **inp)
     [event] = h.stitched
     last = event["clips"][-1]
     assert last["key"] == f"ads/cuts/{job['jobId']}/client-card.png" and (last["inS"], last["outS"]) == (0, 2.0)
     assert h.blobs.get(last["key"])[:8] == b"\x89PNG\r\n\x1a\n" and event["endCard"] is True
-    assert "Let them sleep" not in json.dumps(event)  # drawn, never sent as words
+    assert "Let them sleep" not in json.dumps(event) and "recycle" not in json.dumps(event)  # drawn, never sent as words
 
 
 def test_the_film_card_comes_off_a_sizes_length_and_no_studio_card_follows():

@@ -27,6 +27,8 @@ export interface OsBriefRead {
   appId: string | null
   /** sha256 of its shared/data.yaml: a different hash later means the brief changed. */
   dataSha256: string
+  /** The brief's version as Brief Maker says it ("v2"): its approvals count, at least 1. */
+  version: number
   data: unknown
 }
 
@@ -75,10 +77,10 @@ export function osBriefSource(base = '', fetcher: Fetch = (i, init) => fetch(i, 
     },
     async read(documentId) {
       const t = await need()
-      const v = (await getJson(`/api/t/${t}/d/${encodeURIComponent(documentId)}/data`)) as { path?: string; title?: string; app_id?: string | null; data_sha256?: string; data?: unknown }
+      const v = (await getJson(`/api/t/${t}/d/${encodeURIComponent(documentId)}/data`)) as { path?: string; title?: string; app_id?: string | null; data_sha256?: string; version?: number; data?: unknown }
       if (!v.data_sha256 || !/^sha256:[0-9a-f]{64}$/.test(v.data_sha256)) throw new BriefReadError('Napkin sent the brief without its version.')
       if (v.app_id && v.app_id !== BRIEF_APP_ID) throw new BriefReadError('That document is not a brief.')
-      return { documentId: v.path ?? documentId, title: (v.title ?? '').trim() || 'Brief', appId: v.app_id ?? null, dataSha256: v.data_sha256, data: v.data }
+      return { documentId: v.path ?? documentId, title: (v.title ?? '').trim() || 'Brief', appId: v.app_id ?? null, dataSha256: v.data_sha256, version: typeof v.version === 'number' && v.version >= 1 ? Math.floor(v.version) : 1, data: v.data }
     },
     openUrl(documentId) {
       return `${base}/?open=${encodeURIComponent(documentId)}`

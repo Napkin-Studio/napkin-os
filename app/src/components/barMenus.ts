@@ -94,6 +94,8 @@ export interface DocBar {
   onLineage: () => void
   /** Its tool's own page for its client (the old trail's last crumb): its other documents, and New. */
   onToolPage?: { label: string; run: () => void } | null
+  /** Move it to the Trash (restorable for 30 days), after the bar's confirm. */
+  onTrash?: () => void
 }
 
 /** The account menu on the person's avatar, at the bar's right (owner, 2026-11-11). */
@@ -349,6 +351,7 @@ export function docMenuItems(doc: DocBar, startRename?: () => void): MenuItem[] 
       : []),
     { label: 'Export', hint: 'Make a PDF of it', run: () => doc.onExport('pdf') },
     { label: 'Where it came from', hint: 'Its parent, what it was made from, what it fed', run: doc.onLineage, apart: true },
+    ...(doc.onTrash && !doc.isTemplate ? [{ label: 'Move to Trash', hint: 'Restorable for 30 days', run: doc.onTrash, apart: true }] : []),
   ]
 }
 

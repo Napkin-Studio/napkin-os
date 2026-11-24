@@ -509,7 +509,7 @@ def _repair(a, inp, profile: dict, deck: dict, findings: list, qa: dict, pics, p
         if p.parent == a.stages or got.get("stages") == str(a.stages.resolve()):   # out/'s record is used only when it was written for these --stages
             record = got
             break
-    ctx = {"inp": inp, "audience": a.audience, "policy": policy, "library": layouts.load(), "prefs": {"density": level, "text_mode": tm, "notes": not a.no_notes, **_recipe_prefs(profile, a.format)}, "swaps": swaps, "base_deck": base_deck,
+    ctx = {"inp": inp, "audience": a.audience, "clean": a.clean_export, "policy": policy, "library": layouts.load(), "prefs": {"density": level, "text_mode": tm, "notes": not a.no_notes, **_recipe_prefs(profile, a.format)}, "swaps": swaps, "base_deck": base_deck,
            "pinned": pinned, "out": out, "stages": a.stages, "live": a.live, "approve_shorten": a.approve_shorten, "call_fn": call_fn, "spent": spent,
            "run_cap": repair.run_cap(), "shorten_ledger": _shorten_ledger(a, inp, deck), "record": record, "render_fn": render_fn, "pdf_fn": pdf_fn, "qa_fn": qa_fn}
     iss0 = repair.I.derive(findings, qa, deck, policy, 0)
@@ -746,6 +746,29 @@ def _picture_style(a, deck_ctx, client: str):
     return vstyle.load(None)
 
 
+def _brief_upstream(a, inp) -> bool:
+    """``--brief-upstream FILE`` (JSON ``{id, data}``, the engine server's way: the middleware sends the brief the deck was spun off from): the
+    deck builds from its fields (inputs.apply_upstream_brief), with the carried decision chain's marks. A ``--brief`` or ``--deck`` wins. UAT
+    round 4 L2: never sent before, so a brief-only deck built from an empty brief. Returns whether the brief was taken."""
+    if not getattr(a, "brief_upstream", None) or getattr(a, "brief", None) or getattr(a, "deck", None):
+        return False
+    try:
+        raw = json.loads(a.brief_upstream.read_text())
+        got = (str(raw["id"]), raw["data"]) if isinstance(raw, dict) and isinstance(raw.get("data"), dict) and raw.get("id") else None
+    except (OSError, ValueError, KeyError):
+        got = None
+    if got is None:
+        raise SystemExit("refused: --brief-upstream must be a JSON file {id, data}: the brief's document id and its data")
+    chain = None
+    if getattr(a, "members", None):
+        try:
+            m = json.loads(a.members.read_text())
+            chain = m.get("decisions") if isinstance(m, dict) else None
+        except (OSError, ValueError):
+            chain = None
+    return inputs.apply_upstream_brief(inp, got[0], got[1], chain if isinstance(chain, list) else None)
+
+
 def _production_upstream(a, inp, deck_ctx) -> tuple | None:
     """``(source document id, data)`` of the Production project this deck was spun off from, or None: from ``--production-upstream FILE`` (the
     engine server's way: the middleware sends the carried data) or from the Deck document's own ``data.upstream`` (``--deck``). With no brief
@@ -948,6 +971,9 @@ def main(argv=None):
     ap.add_argument("--clean-export", action="store_true",
                     help="the exported files carry no internal check banner (DRAFT, CHECK FAILED), no bracket placeholder and no open 'to confirm' on a slide: "
                          "open items go to the appendix, and the page numbers and notes carry no ids (the cloud's web render)")
+    ap.add_argument("--brief-upstream", type=Path, metavar="FILE",
+                    help="the brief this deck was spun off from, carried whole (JSON {id, data}: the source document id and its shared/data.yaml): the deck "
+                         "builds from its fields (the engine server's way: the middleware sends it). A --brief or --deck wins")
     ap.add_argument("--production-upstream", type=Path, metavar="FILE",
                     help="the Production project this deck was spun off from, carried whole (JSON {id, data}: the source document id and its shared/data.yaml): "
                          "its finals fill the slots first, then the rules for the empty ones; its pictures are fetched by link from the relay. A --deck document "
@@ -1064,6 +1090,7 @@ def main(argv=None):
             inputs.apply_research(inp, json.loads(a.members.read_text()))
         except (OSError, ValueError) as e:
             raise SystemExit(f"refused: --members must be a JSON file of the carried research ({e})")
+    _brief_upstream(a, inp)   # spun off a brief: its fields (before a Production project's, which yields to it)
     _add_marks(a, inp)
     _master_size(a, _explicit_size(a, deck_ctx, answers))   # deck-slide-size: a master/size conflict is refused here, before any paid stage
     prod_up = _production_upstream(a, inp, deck_ctx)   # production-spinoff: the Production project carried whole, unless a --production file was given
@@ -1192,6 +1219,8 @@ def main(argv=None):
     extra = {"pictures": bound} if bound else {}
     if (picker_src or prod) and kind != "investor":   # a deck whose pictures are Production's finals: its executions keep their own slides
         extra["production"] = True
+        _doc = (prod_up[1] if prod_up else getattr(picker_src, "doc", None)) or {}
+        extra["working_title"] = str(((_doc.get("project") or {}) if isinstance(_doc, dict) else {}).get("title") or "")   # the name Start prefilled: not a cover title
     build = lambda f: builder(inp, st, client=a.client, project=a.project, agency=a.agency, fmt=a.format, fit=f, profile=profile, **extra)
     deck = build(fit)
     if fit:

@@ -40,17 +40,22 @@ const L = vm.runInNewContext(`${logicRun}; DeckLogic`) as {
   gateHolds(run: unknown): boolean
   summaryOf(inputs: unknown, deck: unknown): { title: string; note: string }
   agencyShown(inputs: unknown): string
+  footLabel(agency: unknown, client: unknown): string
+  blockLines(b: unknown): string[]
+  plainError(message: unknown, retry: boolean): string
+  plainNotes(notes: unknown): string
   productionSummary(doc: unknown): { name: string; finals: number; to_supply: number; brief: unknown } | null
-  startDefaults(data: unknown): { client: string; project: string }
+  startDefaults(data: unknown): { client: string; project: string; text?: string }
   upstreamSummary(data: unknown): { brief: { name: string; fields_filled: number; fields_total: number; mandatories: number } | null; research: { name: string; findings: number | null; rejected: number | null } | null; production: { name: string; finals: number; to_supply: number; brief: unknown } | null; any: boolean }
   documentsOf(data: unknown): { name: string }[]
-  builtFrom(inputs: unknown, upstream: unknown, documents: unknown): { tier: string; documents: string[]; brief: boolean; research: boolean }
+  builtFrom(inputs: unknown, upstream: unknown, documents: unknown, type?: string | null, projection?: unknown): { tier: string; documents: string[]; brief: boolean; research: boolean }
   describeBuiltFrom(bf: unknown, hasPrompt?: boolean): { line: string; missing: string[] }
-  canBuild(inputs: unknown, upstream: unknown, documents: unknown): { ok: boolean; message: string }
+  canBuild(inputs: unknown, upstream: unknown, documents: unknown, projection?: unknown): { ok: boolean; message: string }
   gapView(intake: unknown): { brief_fields: unknown[]; slide_types: unknown[]; questions: { id: string; state: string; options: { id: string }[] }[]; hasGaps: boolean }
   answerPatch(qid: string, answer: unknown, at: string): unknown
   researchRequest(at: string): unknown
   upstreamChanged(res: unknown): { title: string }[]
+  productionNotices(res: unknown): { document_id: string; text: string }[]
   kitNotices(res: unknown, data: unknown): { kind: string; document_id: string; published: boolean; canUpdate: boolean; text: string }[]
   lookPanel(data: unknown): { agency: { use: boolean; shown: boolean }; kits: { shown: boolean; pack: { name: string; version: number } | null; brand: { name: string; version: number } | null } }
   agencyPatch(use: boolean, by: string | null, at: string): unknown
@@ -171,9 +176,48 @@ test('an unsourced line is labelled, not flagged as a missing source', () => {
   assert.ok(checks.some((c: Check) => /opinion/.test(c.text)))
 })
 
-test('the agency shows as a placeholder until the user gives one', () => {
-  assert.equal(L.agencyShown({ prompt: { agency: '' } }), '[Agency]')
+test('no agency named shows nothing, never the placeholder', () => {
+  assert.equal(L.agencyShown({ prompt: { agency: '' } }), '')
+  assert.equal(L.agencyShown({ prompt: { agency: '[Agency]' } }), '')
   assert.equal(L.agencyShown({ prompt: { agency: ' Acme ' } }), 'Acme')
+  // the foot of a slide in the review and present views (UAT 2026-11-23: "[Agency]" sat in every footer)
+  assert.equal(L.footLabel('', 'Tidewell'), 'Tidewell')
+  assert.equal(L.footLabel('[Agency]', 'Tidewell'), 'Tidewell')
+  assert.equal(L.footLabel('Acme', 'Tidewell'), 'Acme · Tidewell')
+  assert.equal(L.footLabel('', undefined), '')
+})
+
+test('the Start summary never says [Client], and a carried project starts a prompt too', () => {
+  assert.equal(L.summaryOf({ prompt: {}, kind: 'agency', format: 'pitch' }, { order: [], slides: {} }).title, 'An agency pitch')
+  const up = { p: { app: 'production-tool', project: { title: 'Tidewell Tides In launch' } }, b: { client: 'Tidewell Sparkling Water, a brand' } }
+  const d = plain(L.startDefaults({ upstream: up })) as { text: string }
+  assert.equal(d.text, 'A pitch deck for Tidewell Sparkling Water: Tidewell Tides In launch.')
+  assert.equal((plain(L.startDefaults({})) as { text: string }).text, '')
+})
+
+test('Built from names the Production project, and an empty block draws no bullet', () => {
+  const prod = { p: { app: 'production-tool', project: { title: 'P' }, assets: {}, finals: {}, sizes: {} }, b: briefDoc, r: researchDoc }
+  const bf = L.builtFrom({}, { d1: briefDoc, d2: researchDoc, p: prod.p }, [])
+  assert.equal(L.describeBuiltFrom(bf, false).line, 'Built from: the brief, the research, the Production project')
+  assert.equal(L.describeBuiltFrom({ tier: 'brief+research', documents: [], brief: true, research: true, production: true }, false).line, 'Built from: the brief, the research, the Production project')
+  assert.deepEqual(plain(L.blockLines({ kind: 'bullets', items: [{ text: 'a' }, { text: ' ' }, 'b'] })), ['a', 'b'])
+  assert.deepEqual(plain(L.blockLines({ kind: 'sketch', text: '' })), [])
+  assert.deepEqual(plain(L.blockLines({ kind: 'kv', items: [['Why it fits', 'x'], ['Mood', '']] })), ['Why it fits: x', 'Mood'])
+})
+
+test('the notes a person reads carry no evidence block and no id', () => {
+  assert.equal(L.plainNotes('Say it slowly (brief:audience, req:r6).\n\nEvidence:\n[brief:audience] brief field: x\n[f_ab12cdef] y'), 'Say it slowly.')
+  assert.equal(L.plainNotes('Evidence:'), '')
+  assert.equal(L.plainNotes(undefined), '')
+})
+
+test('a program error is never shown to a person as the reason a step failed', () => {
+  const raw = 'TypeError: can only concatenate str (not "float") to str'
+  assert.doesNotMatch(L.plainError(raw, true), /TypeError|concatenate/)
+  assert.match(L.plainError(raw, true), /trying again by itself/)
+  assert.match(L.plainError(raw, false), /Try it again/)
+  assert.equal(L.plainError('The cost cap for this deck is reached.', false), 'The cost cap for this deck is reached.')
+  assert.match(L.plainError('', true), /did not finish/)
 })
 
 test('the summary comes from the inputs, never fixed numbers', () => {
@@ -290,6 +334,39 @@ test('upstreamSummary: a Production project is its own card, never the brief or 
   assert.deepEqual(plain(p.production), { name: 'Lumen Water launch', finals: 4, to_supply: 2, brief: { name: 'Lumen awareness', fields_filled: 3, mandatories: 1 } })
   assert.equal(p.any, true)
   assert.equal(L.upstreamSummary({ upstream: { 'doc-prod': prodDoc({ finals: {}, briefs: {} }) } }).production?.finals, 0)
+})
+
+test('UAT round 4 F26: a deck made from a Production project counts the brief and research the project carries, as the engine does', () => {
+  const carried = prodDoc({ upstream: { 'doc-brief': { ...briefDoc, title: 'Copperell Refill', upstream: { 'doc-res': researchDoc } } } })
+  const u = L.upstreamSummary({ upstream: { 'doc-prod': carried } })
+  assert.equal(u.research?.name, 'Lumen research')   // round 4: "No research brought in" while the engine said brief+research
+  assert.equal(u.brief?.name, 'Copperell Refill')
+  assert.equal(u.production?.name, 'Lumen Water launch')
+  const bf = L.builtFrom({}, { 'doc-prod': carried }, [])
+  assert.equal(bf.tier, 'brief+research')
+  assert.equal(bf.production, true)
+  const d = L.describeBuiltFrom(bf, false)
+  assert.equal(d.line, 'Built from: the brief, the research, the Production project')
+  assert.ok(!d.missing.includes('No research brought in'))
+  // the deck's own brief still wins over the one the project carries
+  assert.equal(L.upstreamSummary({ upstream: { 'doc-prod': carried, d1: briefDoc } }).brief?.name, 'First Light brief')
+  // research the brief holds as its own findings counts too
+  const own = prodDoc({ upstream: { b: { ...briefDoc, findings: { f1: { status: 'verified' } } } } })
+  assert.ok(L.upstreamSummary({ upstream: { p: own } }).research)
+})
+
+test('UAT round 4 F26: a Production project changed since the deck offers Update, and never changes the deck on its own', () => {
+  const res = { upstream: [
+    { app_id: 'ie.napkin.production', document_id: 'doc-prod', title: 'Copperell Refill', status: 'changed' },
+    { app_id: 'ie.napkin.brief-maker', document_id: 'doc-brief', title: 'the brief', status: 'changed' },
+    { app_id: 'ie.napkin.production', document_id: 'doc-p2', title: 'Other', status: 'current' },
+  ] }
+  const n = L.productionNotices(res)
+  assert.equal(n.length, 1)
+  assert.equal(n[0].document_id, 'doc-prod')
+  assert.match(n[0].text, /Copperell Refill.*changed since this deck.*slides change only when you build again/)
+  assert.deepEqual(plain(L.upstreamChanged(res)), [{ title: 'the brief' }], 'the project has its own notice, not the generic one')
+  assert.deepEqual(plain(L.productionNotices(null)), [])
 })
 
 test('upstreamSummary: the Brief card shows the one a Production project froze only when the deck has none of its own', () => {
@@ -550,11 +627,11 @@ test('answering and skipping write at intake.answers and nothing else', () => {
 })
 
 test('the upstream-changed notice shows when the host says so, escaped, and nothing when the call fails', async () => {
-  const ok = mount(intakeData, () => Promise.resolve({ ok: true, json: () => Promise.resolve({ upstream: [{ status: 'changed', title: hostile }] }) }))
+  const ok = mount(intakeData, () => Promise.resolve({ ok: true, json: () => Promise.resolve({ upstream: [{ status: 'changed', title: hostile }] }) }), {}, { timers: true })
   await new Promise(r => setTimeout(r, 10))
   assert.ok(ok.app.innerHTML.includes('data-up-changed'))
   assert.equal(ok.app.innerHTML.includes('<img'), false)
-  const bad = mount(intakeData, () => Promise.reject(new Error('no host')))
+  const bad = mount(intakeData, () => Promise.reject(new Error('no host')), {}, { timers: true })   // the engine check retries: its timers wait here
   await new Promise(r => setTimeout(r, 10))
   assert.equal(bad.app.innerHTML.includes('data-up-changed'), false)
   const absent = mount(intakeData)
@@ -2657,12 +2734,210 @@ test('the Start form names the client and the project from what the deck carries
     b: { client: 'Hollow Oak Cider, a 140-year-old, orchard-grown brand', project_name: 'x' },
     k: { client: 'A Kit Name', kit: { version: 1 } },
   }
-  assert.deepEqual(plain(L.startDefaults({ upstream: up })), { client: 'Hollow Oak Cider', project: "Hollow Oak 'Still'" })
-  assert.deepEqual(plain(L.startDefaults({})), { client: '', project: '' })
-  assert.deepEqual(plain(L.startDefaults({ upstream: 'junk' })), { client: '', project: '' })
+  assert.deepEqual(plain(L.startDefaults({ upstream: up })), { client: 'Hollow Oak Cider', project: "Hollow Oak 'Still'", text: "A pitch deck for Hollow Oak Cider: Hollow Oak 'Still'." })
+  assert.deepEqual(plain(L.startDefaults({})), { client: '', project: '', text: '' })
+  assert.deepEqual(plain(L.startDefaults({ upstream: 'junk' })), { client: '', project: '', text: '' })
 })
 
 test('the PowerPoint leaves the app frame through the host export, not a blob link the sandbox would not save', () => {
   assert.ok(!/a\.download\s*=\s*base\s*\+\s*'\.pptx'/.test(html), 'no blob download of the pptx in the frame')
   assert.ok(/exportDoc\('pptx', base, btoa\(bin\)\)/.test(html), 'the pptx goes to clan.exportDoc')
+})
+
+// ── UAT round 3 (Harrowgate): the real deck's 19 pitch slides, as the engine wrote them ──────────────────────────────
+// The fixture is the downloaded Deck document's presented slides and the evidence they cite (a fictional client).
+const harrowgate = () => {
+  const real = JSON.parse(readFileSync(new URL('../engine/deck/tests/fixtures/harrowgate/deck_pitch.json', root), 'utf8')) as Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
+  const f = fixture('done') as Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
+  return { ...f, deck: { ...f.deck, slides: real.slides, order: real.order, appendix_ids: [], appendix_count: 0, meta: { ...f.deck.meta, ...real.meta } }, evidence: real.evidence }
+}
+const ID = /\b(?:f|fi)_[A-Za-z0-9]{6,}|\b(?:brief|req):[A-Za-z0-9_.]+/
+
+test('Review: every one of the 19 pitch slides is named by its own title in the rail; the repeated section is a small line, not the name', () => {
+  const f = harrowgate()
+  const m = mount(f)
+  m.click({ go: 'review' })
+  const rail = [...m.app.innerHTML.matchAll(/<button class="thumb" data-slide="(s\d+)"[^>]*><span class="n">[^<]*<\/span><span><span class="t">([^<]*)<\/span>(?:<span class="sec">([^<]*)<\/span>)?/g)]
+  assert.equal(rail.length, 19)
+  const names = rail.map(r => r[2].replace(/&#39;/g, "'"))
+  assert.equal(new Set(names).size, 19, 'a name appears twice: ' + names.join(' | ')) // was: The real question x2, Insight x2, The work x4, How it runs x2, Timeline and investment x2
+  assert.ok(rail.every(r => f.deck.slides[r[1]].title === r[2].replace(/&#39;/g, "'")), 'the name is the slide title')
+  assert.equal(rail.filter(r => r[3]).length, 19)
+  assert.ok(rail.some(r => r[3] === 'The work'), 'the section stays as the small line')
+})
+
+test('Present and Review show no evidence id: the sources are plain words', () => {
+  const f = harrowgate()
+  const m = mount(f)
+  for (const id of f.deck.order as string[]) {
+    m.click({ go: 'review' })
+    m.click({ slide: id })
+    m.click({ tab: 'evidence' })
+    const rv = m.app.innerHTML.replace(/<[^>]*>/g, ' ') // the words a person reads, not the attributes
+    assert.ok(!ID.test(rv), `${id}: an id on Review: ${rv.slice(Math.max(0, rv.search(ID) - 150), rv.search(ID) + 60)}`)
+    m.click({ go: 'present' })
+    const pr = m.app.innerHTML.replace(/<[^>]*>/g, ' ')
+    assert.ok(!ID.test(pr), `${id}: an id on Present: ${ID.exec(pr)?.[0]}`)
+  }
+  m.click({ go: 'review' })
+  m.click({ slide: 's05' })
+  m.click({ tab: 'evidence' })
+  assert.match(m.app.innerHTML, /<div class="id">The research<\/div>/)
+  assert.match(m.app.innerHTML, /<div class="id">The brief, [a-z ]+<\/div>/)
+  m.click({ go: 'present' })
+  for (let i = 0; i < 4; i++) m.click({ pres: '1' }) // to slide 5
+  assert.match(m.app.innerHTML, /data-source>The (?:brief|research)/)
+  const e = L.plainEvidence('f_X', { kind: 'research', text: 'positioning.claim.better_for_you.all_our_snacks_are_better_for_yo_33803a = All our snacks are better for you (as of 2026-11-23, confidence low)' })
+  assert.deepEqual(plain(e), { where: 'The research', text: 'All our snacks are better for you' })
+})
+
+test('Review: a slide with more than four pictures lays them out in a grid so six storyboard frames all show', async () => {
+  const f = harrowgate()
+  const first = f.deck.order[0] as string
+  const figs = [1, 2, 3, 4, 5, 6].map(i => `<figure class="pic" data-slot="shot_${i}"><img src="${PNG}" alt="a"></figure>`).join('')
+  const html6 = `<html><body><section class="slide" id="${first}">${figs}</section></body></html>`
+  const apiProxy = (_k: string, p: { task: string; input: { name?: string } }) =>
+    Promise.resolve({ ok: true, data: { api: 'napkin.middleware/1', result: { name: p.input.name, media_type: 'text/html', data_b64: Buffer.from(html6).toString('base64') } } })
+  const m = mount(f, () => Promise.resolve({ ok: true, json: () => Promise.resolve({ configured: true }) }), {}, { apiProxy })
+  await new Promise(r => setTimeout(r, 0))
+  m.click({ go: 'review' })
+  m.click({ slide: first })
+  await new Promise(r => setTimeout(r, 10))
+  assert.match(m.app.innerHTML, /<div class="pimgs many" data-pics>/)
+  assert.equal((m.app.innerHTML.match(/data-pic="shot_\d"/g) ?? []).length, 6)
+  assert.match(html, /\.pimgs\.many\{display:grid/)
+  assert.match(html, /function fitSlideText\(\)/) // the words step down until they sit above the foot of the slide (slides 11 and 12 ran off it)
+})
+
+// ── UAT round 4 (a01c5e33): the engine check answering late, failing, or a Build pressed before it answered ──
+/** A host whose clan://middleware answers only when the test says (resolve) or fails (reject); each call is a new pending answer. */
+function lateMiddleware() {
+  const pending: { resolve: (v: unknown) => void; reject: (e: unknown) => void }[] = []
+  const fetchImpl = (url: string) => String(url).endsWith('/middleware')
+    ? new Promise((resolve, reject) => pending.push({ resolve, reject }))
+    : Promise.resolve({ ok: false, json: () => Promise.resolve(null) })
+  const answer = (configured: boolean) => pending.shift()!.resolve({ ok: true, json: () => Promise.resolve({ configured }) })
+  const fail = () => pending.shift()!.reject(new Error('host not ready'))
+  return { fetchImpl, answer, fail, pending }
+}
+const startData = () => ({ inputs: { prompt: { client: 'C', project: 'P', text: 'A deck for Copperell.' }, kind: 'agency', format: 'pitch' } })
+const startForm = { client: { value: 'C' }, project: { value: 'P' }, agency: { value: '' }, ptext: { value: 'A deck for Copperell.' } }
+
+test('while the engine has not answered, Build deck is disabled and says it is connecting', async () => {
+  const h = lateMiddleware()
+  const m = mount(startData(), h.fetchImpl, startForm, { timers: true })
+  await settle()
+  assert.match(m.app.innerHTML, /id="build"[^>]*disabled[^>]*>Build deck/)
+  assert.match(m.app.innerHTML, /Connecting to the engine…/)
+  assert.doesNotMatch(m.app.innerHTML, /Live building needs the engine server/)
+  h.answer(true); await settle()   // applied the moment it comes (round 4: the footer kept 'needs the engine server' ~12 s)
+  assert.doesNotMatch(m.app.innerHTML, /id="build"[^>]*disabled/)
+  assert.match(m.app.innerHTML, /Builds with the engine/)
+})
+
+test('a Build pressed before the engine answered starts the moment it is on, never skipped', async () => {
+  const h = lateMiddleware()
+  const p = proxy(reply('queued'))
+  const m = mount(startData(), h.fetchImpl, startForm, { apiProxy: p.apiProxy, timers: true })
+  await settle()
+  m.click({}, 'build')
+  await settle()
+  assert.deepEqual(m.writes.map(w => w.action), ['start deck'])
+  assert.equal(p.calls.length, 0)
+  assert.match(m.toastEl.textContent, /build starts as soon as it answers/)
+  assert.match(m.app.innerHTML, /Connecting to the engine…/)   // round 4: "Not connected to this document yet", for 26 minutes
+  h.answer(true); await settle()
+  assert.deepEqual(p.calls.map(c => c.task), ['build_deck'])
+})
+
+test('a failed engine check is tried again with backoff, and the page says so', async () => {
+  const h = lateMiddleware()
+  const m = mount(startData(), h.fetchImpl, startForm, { timers: true })
+  await settle()
+  h.fail(); await settle()
+  assert.match(m.app.innerHTML, /Cannot reach the engine yet\. Trying again in 1 s\./)
+  const retry = m.timers.find(t => t.ms === 1000)
+  assert.ok(retry, 'a retry is waiting')
+  retry!.fn(); await settle()
+  assert.equal(h.pending.length, 1, 'asked again')
+  h.answer(true); await settle()
+  assert.match(m.app.innerHTML, /Builds with the engine/)
+})
+
+test('UAT round 4 F37: Approve before the engine answered keeps the decision and starts the next step once it is on', async () => {
+  const h = lateMiddleware()
+  const p = proxy(reply('queued'))
+  const m = mount(buildData(gateRun()), h.fetchImpl, {}, { apiProxy: p.apiProxy, timers: true })
+  await settle()
+  m.click({}, 'approve')
+  await settle()
+  assert.equal(m.writes.length, 1)
+  assert.deepEqual(Object.keys(m.writes[0].obj.run as object).sort(), ['approvals', 'decisions'], 'only the decision: the engine writes the rest')
+  assert.equal(p.calls.length, 0)
+  assert.match(m.toastEl.textContent, /next step starts as soon as it answers/)
+  h.answer(true); await settle()
+  assert.deepEqual(p.calls.map(c => c.task), ['build_deck'])
+})
+
+test('UAT round 4 F37: after a reload, a gate approved but never picked up starts once the engine is on', async () => {
+  const first = mount(buildData(gateRun()), middleware(true), {}, { apiProxy: () => new Promise(() => {}), timers: true })   // approved; the engine never answers
+  await settle()
+  first.click({}, 'approve')
+  await settle()
+  const approved = gateRun() as Record<string, unknown>
+  Object.assign(approved, first.writes[0].obj.run as object)   // the document as the reload reads it: the gate still open, its approval kept
+  const h = lateMiddleware()
+  const p = proxy(reply('queued'))
+  mount(buildData(approved), h.fetchImpl, {}, { apiProxy: p.apiProxy, timers: true })
+  await settle()
+  assert.equal(p.calls.length, 0)
+  h.answer(true); await settle()
+  assert.deepEqual(p.calls.map(c => c.task), ['build_deck'], 'round 4: "Waiting for the engine · Not connected", across reloads')
+  const q = proxy(reply('queued'))
+  mount(buildData(gateRun()), middleware(true), {}, { apiProxy: q.apiProxy, timers: true })   // a gate not yet approved: nothing starts
+  await settle()
+  assert.equal(q.calls.length, 0)
+})
+
+test('with no host to ask, the page keeps its honest "needs the engine server"', () => {
+  const m = mount(startData())
+  assert.match(m.app.innerHTML, /Live building needs the engine server/)
+  assert.doesNotMatch(m.app.innerHTML, /id="build"[^>]*disabled/)
+})
+
+// ── UAT round 4 F26 (again): research the BRIEF had linked reaches the deck as the deck's own members, in data.projection ──
+// Real-shaped from the UAT documents (Copperell, fictional): doc-ie-napkin-deck-maker-77976b58 (a brief-only deck) and the deck made from
+// the Production project. Each carries the brief upstream with no research of its own, and the research as projection.pins (221 and 96).
+const uatBrief = { project_name: 'Copperell Refill', client: 'Copperell Home Ltd', objectives: 'Sell the starter bottle', audience: 'Renters 22 to 35',
+  single_minded_proposition: 'Watch one tablet fizz.', mandatories: ["Include 'Keep out of reach of children. Read the label before use.'"], insight: 'She suspects she pays for the scent.' }
+const uatProjection = { built_from: { built_at: '2026-11-24 11:30:04+00:00' }, findings: {},
+  pins: { f_00A9B1FB70AB47229F2E1658: { as_of: '2026-08-11', confidence: 'low', entity: 'brand/smol', key: 'positioning.claim' },
+          f_0889402DA05DC7323D6461A9: { as_of: '2026-03-03', confidence: 'medium', entity: 'category/household.laundry_cleaning', key: 'regulation.restriction' } } }
+
+test('UAT round 4 F26: a brief-only deck counts the research the brief linked (the deck\'s projection), as the engine does', () => {
+  const data = { upstream: { 'f45380aa': uatBrief }, projection: uatProjection }
+  const u = L.upstreamSummary(data)
+  assert.ok(u.research, 'round 4: "No research brought in" while CHECKED said brief+research')
+  const bf = L.builtFrom({}, data.upstream, [], null, data.projection)
+  assert.equal(bf.tier, 'brief+research')
+  const d = L.describeBuiltFrom(bf, false)
+  assert.equal(d.line, 'Built from: the brief, the research')
+  assert.ok(!d.missing.includes('No research brought in'))
+  const m = mount({ inputs: { prompt: { client: 'Copperell', project: 'Copperell Refill', text: '' } }, ...data })
+  assert.doesNotMatch(m.app.innerHTML, /No research brought in/)
+  assert.match(m.app.innerHTML, /Built from: [^<]*the research/)
+})
+
+test('UAT round 4 F26: a deck made from a Production project counts it too, with every place saying the same', () => {
+  const data = { upstream: { 'doc-prod': prodDoc({ upstream: { 'doc-brief': uatBrief } }) }, projection: uatProjection }
+  const bf = L.builtFrom({}, data.upstream, [], null, data.projection)
+  assert.equal(bf.tier, 'brief+research')
+  assert.equal(L.describeBuiltFrom(bf, false).line, 'Built from: the brief, the research, the Production project')
+  const m = mount({ inputs: { prompt: { client: 'Copperell', project: 'Copperell Refill', text: '' } }, ...data })
+  assert.doesNotMatch(m.app.innerHTML, /No research brought in/)
+})
+
+test('a projection with no pins and no usable findings is not research', () => {
+  assert.equal(L.upstreamSummary({ upstream: { b: uatBrief }, projection: { findings: {}, pins: {} } }).research, null)
+  assert.equal(L.upstreamSummary({ upstream: { b: uatBrief }, projection: { findings: { f1: { status: 'rejected' } }, pins: {} } }).research, null)
 })

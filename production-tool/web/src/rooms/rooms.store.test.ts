@@ -11,11 +11,13 @@ import { remakeOp, remakeProblem, remakeWith } from '../jobs/remake'
 import { cutOf, currentTake, mainVideo, shotsOf } from '../model/selectors'
 import type { ModelStore } from '../model/store'
 import { addShots, id, job, MAYA, modelStore, SHA, T } from '../test/model'
-import { clipLen } from './cut'
+import { clipLen, cutLength } from './cut'
 import { appendTake, assembleFirstCut, editCut } from './editOps'
 import { boxKeyOf, roomGens, type Box } from './model'
 import type { RoomData } from './Rooms'
-import { compileFor, endCardFrom, newEndCard, readCut, readyTakes, renderPlan, withLegal } from './timeline'
+import { compileFor, endCardFrom, newEndCard, readCut, readyTakes, renderPlan, writeCut } from './timeline'
+import { linkInput } from '../canvas/nodes/nodes'
+
 
 const BY = `human:${MAYA.id}`
 
@@ -91,6 +93,17 @@ describe('the Edit room on the real store', () => {
     expect(sent).toMatchObject({ lengthS: 8.5, endCard: { line: 'Clean like a samurai', bg: '#14161B', s: 2 } })
     // The legacy reader agrees: shot 1's clip is the together take.
     expect(currentTake(store.get(), shots[0].id)?.id).toBe(together.id)
+  })
+
+  it('Assemble first cut over the film\'s length takes the over-run off the last clip, the end card kept whole (UAT round 4 F22)', async () => {
+    const { store, shots, videoId } = await film()
+    // 6.5 s of clips and a 2 s card against a 7 s target: 1.5 s over.
+    await assembleFirstCut(store, { ...data(store, shots, videoId), targetS: 7 })
+    await ok(store)
+    const plan = compileFor(store.get(), videoId)
+    expect(plan.lengthS).toBe(7)
+    expect(plan.endCard).toMatchObject({ startS: 5, s: 2 })
+    expect(plan.clips.map((c) => [c.startS, c.inS, c.outS])).toEqual([[0, 0, 2], [2, 2, 3.5], [3.5, 0, 1.5]])
   })
 
   it('trims, fades, a dissolve, a text and the end card are each one undo step, and undo takes them back', async () => {
@@ -255,36 +268,139 @@ describe('a project from before generations (the owner\'s samurai copy), moved w
   })
 })
 
-describe('the end card carries the brief\'s legal line (UAT 2026-11-22: no legal line, an empty call to action)', () => {
-  const brief = (mandatories: string[]) => ({ id: id('brief'), title: 'Brief', source: { taken: 1 }, spine: { mandatories } }) as unknown as NonNullable<ProductionDocument['briefs']>[string]
+describe('the end card\'s Legal line (owner 2026-11-23: its own key, from the LINKED Brief; the call to action is only that)', () => {
+  const brief = (mandatories: string[]) => ({ id: id('brief'), v: 1, field_v: {}, title: 'Brief', source: { document_id: 'doc_1', app_id: 'ie.napkin.brief-maker', data_sha256: SHA('b'), taken: 1, version: 1, at: T, how: 'link' }, spine: { mandatories } }) as unknown as NonNullable<ProductionDocument['briefs']>[string]
+  /** A Brief in the project; linked to the film when `linked`. */
+  async function withBrief(store: ModelStore, videoId: string, mandatories: string[], linked = true) {
+    const b = brief(mandatories)
+    await systemUpdate(store, (d) => { d.briefs = { [b.id]: b } }, 'sync')
+    if (linked) expect((await linkInput(store, store.get(), { kind: 'brief', id: b.id }, { kind: 'video', id: videoId })).ok).toBe(true)
+    return b
+  }
 
-  it('the legal mandatory becomes the card\'s small line, and a card that has its own keeps it', async () => {
+  it('the card from the storyboard\'s end card shot leads with the Brief\'s end line, never the project\'s name (UAT round 4 F34)', async () => {
     const { store, shots, videoId } = await film()
-    await systemUpdate(store, (d) => {
-      d.shots[shots[3].id].action = 'SuperSamurai end card.'
-      const b = brief(['No apples anywhere', 'Legal: Please drink responsibly. 18+ only.'])
-      d.briefs = { [b.id]: b }
-    }, 'sync')
-    expect(endCardFrom(store.get(), videoId)).toMatchObject({ cta: 'Please drink responsibly. 18+ only.' })
-    expect(withLegal(store.get(), videoId, { headline: 'A', line: 'B', cta: 'Own words', bg: '#000000', durS: 1.5 }).cta).toBe('Own words')
+    // The end card shot only labels the card, so it would read the project's name; the Brief has the agreed line,
+    // written as Brief Maker writes it (PR #306).
+    await systemUpdate(store, (d) => { d.project.title = 'Copperell Refill'; d.shots[shots[3].id].action = 'End card.' }, 'sync')
+    await withBrief(store, videoId, ["End line: 'Refill. Not landfill.' (word for word)", 'Legal: Recycle the glass.'])
+    const card = endCardFrom(store.get(), videoId)!
+    expect(card.headline).toBe('Refill. Not landfill.')
+    expect(card.line).not.toBe('Refill. Not landfill.')
+    // A card that already says the line (the shot quotes it: "Refill" over "Not landfill.") is left as the shot has it.
+    await systemUpdate(store, (d) => { d.shots[shots[3].id].action = 'End card: "Refill. Not landfill."' }, 'sync')
+    expect(endCardFrom(store.get(), videoId)).toMatchObject({ headline: 'Refill', line: 'Not landfill.' })
   })
 
-  it('with no legal ask in the brief the card has none, and a new card is the brand name set in type', async () => {
+  it('a new card starts with the linked Brief\'s legal mandatory as its legal, and the call to action stays empty', async () => {
+    const { store, videoId } = await film()
+    await withBrief(store, videoId, ['No apples anywhere', 'Legal: Please drink responsibly. 18+ only.'])
+    expect(newEndCard(store.get(), videoId)).toMatchObject({ legal: 'Please drink responsibly. 18+ only.' })
+    expect(newEndCard(store.get(), videoId).cta).toBeUndefined()
+  })
+
+  it('a new card\'s headline starts as the linked Brief\'s end line, and the person can overwrite it (UAT round 3: it was empty)', async () => {
+    const { store, videoId } = await film()
+    await withBrief(store, videoId, ['End line must be "Proper crunch."', 'Legal: Contains wheat.'])
+    expect(newEndCard(store.get(), videoId)).toMatchObject({ headline: 'Proper crunch.', legal: 'Contains wheat.' })
+    await editCut.endCard(store, videoId, { headline: 'Mine' })
+    expect(readCut(store.get(), videoId).endCard?.headline).toBe('Mine')
+  })
+
+  it('with no Brief line the headline is the script\'s end line, the last thing it says', async () => {
+    const { store, shots, videoId } = await film()
+    await systemUpdate(store, (d) => {
+      d.project.title = 'Hollow Oak'
+      d.beats = { ...(d.beats ?? {}), beat_end: { id: 'beat_end', shot_id: shots[shots.length - 1].id, kind: 'vo', at_s: 0, text: 'Slow down. Warm up.' } as never }
+    }, 'sync')
+    const card = newEndCard(store.get(), videoId)
+    expect(card.headline).toBe('Slow down. Warm up.')
+    expect(card.line).toBe('Hollow Oak')
+  })
+
+  it('the card made from the storyboard\'s end card shot has it too, and it is saved in the document with the card', async () => {
+    const { store, shots, videoId } = await film()
+    await systemUpdate(store, (d) => { d.shots[shots[3].id].action = 'SuperSamurai end card.' }, 'sync')
+    await withBrief(store, videoId, ['Terms apply. See hollowoak.example'])
+    expect(endCardFrom(store.get(), videoId)).toMatchObject({ legal: 'Terms apply. See hollowoak.example' })
+    await editCut.endCard(store, videoId, { cta: 'Find it' })
+    expect(store.get().videos[videoId].end_card).toMatchObject({ cta: 'Find it', legal: 'Terms apply. See hollowoak.example' })
+    expect(compileFor(store.get(), videoId).endCard).toMatchObject({ cta: 'Find it', legal: 'Terms apply. See hollowoak.example' })
+  })
+
+  it('the render takes the Brand board\'s logo for a card without its own (UAT round 4 F23)', async () => {
+    const { store, videoId } = await film()
+    await editCut.endCard(store, videoId, {})
+    expect(compileFor(store.get(), videoId).endCard?.logo_sha256).toBeUndefined()
+    await systemUpdate(store, (d) => {
+      d.assets[SHA('l')] = { sha256: SHA('l'), kind: 'image', mime: 'image/png', origin: 'uploaded', bytes: 10, locations: [], w: 400, h: 160 } as never
+      d.refs.ref_logo = { id: 'ref_logo', v: 1, field_v: {}, key: 'logo', variant: 'copperell', role: 'logo', asset: SHA('l') } as never
+    }, 'sync')
+    expect(compileFor(store.get(), videoId).endCard?.logo_sha256).toBe(SHA('l'))
+    const sent = await renderPlan(compileFor(store.get(), videoId), async (sha) => ({ sha256: sha, url: `https://cdn.test/${sha}`, mime: 'image/png' }))
+    expect(sent.endCard?.logo).toMatchObject({ sha256: SHA('l') })
+    // The card's own logo, when it has one, wins.
+    await systemUpdate(store, (d) => { d.videos[videoId].end_card!.logo_asset = SHA('m') }, 'sync')
+    expect(compileFor(store.get(), videoId).endCard?.logo_sha256).toBe(SHA('m'))
+  })
+
+  it('a new end card makes room for itself inside the film\'s length (UAT round 4 F22)', async () => {
+    const { store, videoId } = await film()
+    // One take filling the 15 s, as UAT round 4 had it.
+    await writeCut(store, videoId, 'seed the cut', () => ({ v1: [{ id: 'c1', genId: 'gen_x', inS: 0, outS: 15, startS: 0, speed: 1, holdS: 0, fadeInS: 0, fadeOutS: 0 }], v2: [], text: [] }))
+    await editCut.endCard(store, videoId, {}, 15)
+    const cut = readCut(store.get(), videoId)
+    expect(cut.endCard).toBeDefined()
+    expect(cutLength(cut)).toBe(15)
+    expect(cut.v1[0].outS).toBe(15 - cut.endCard!.durS)
+  })
+
+  it('a Brief that is only in the project, not linked to the film, fills nothing', async () => {
+    const { store, videoId } = await film()
+    await withBrief(store, videoId, ['Legal: Please drink responsibly.'], false)
+    expect(newEndCard(store.get(), videoId).legal).toBeUndefined()
+  })
+
+  it('the person\'s own words overwrite it and stay (saved under legal, 200 characters at most); clearing it keeps it empty', async () => {
+    const { store, videoId } = await film()
+    await withBrief(store, videoId, ['Legal: Please drink responsibly.'])
+    await editCut.endCard(store, videoId, { headline: 'A', line: 'B' })
+    expect(readCut(store.get(), videoId).endCard?.legal).toBe('Please drink responsibly.')
+    await editCut.endCard(store, videoId, { legal: 'Ask a grown-up first.' })
+    expect(store.get().videos[videoId].end_card?.legal).toBe('Ask a grown-up first.')
+    expect(readCut(store.get(), videoId).endCard?.legal).toBe('Ask a grown-up first.')
+    await editCut.endCard(store, videoId, { legal: '' })
+    expect(readCut(store.get(), videoId).endCard?.legal).toBe('')
+    expect(compileFor(store.get(), videoId).endCard?.legal).toBeUndefined()
+  })
+
+  it('a saved card with no legal of its own follows the Brief when it is linked later, in the Edit room and in the plan', async () => {
+    const { store, videoId } = await film()
+    await editCut.endCard(store, videoId, { headline: 'A', line: 'B' })
+    expect(readCut(store.get(), videoId).endCard?.legal).toBeUndefined()
+    await withBrief(store, videoId, ['Legal: Please recycle.'])
+    expect(readCut(store.get(), videoId).endCard?.legal).toBe('Please recycle.')
+    expect(compileFor(store.get(), videoId).endCard?.legal).toBe('Please recycle.')
+  })
+
+  it('with no legal ask in the Brief the card has none, and a new card is the brand name set in type', async () => {
     const { store, shots, videoId } = await film()
     await systemUpdate(store, (d) => {
       d.shots[shots[3].id].action = 'SuperSamurai end card.'
       d.project.title = 'Hollow Oak'
-      const b = brief(['No apples anywhere'])
-      d.briefs = { [b.id]: b }
     }, 'sync')
-    expect(endCardFrom(store.get(), videoId)?.cta).toBeUndefined()
+    await withBrief(store, videoId, ['No apples anywhere'])
+    expect(endCardFrom(store.get(), videoId)?.legal).toBeUndefined()
     expect(newEndCard(store.get(), videoId)).toMatchObject({ headline: '', line: 'Hollow Oak' })
   })
 
-  it('a new card for a film with a legal ask carries it', async () => {
+  it('the cutdowns carry it to the relay as legal, apart from the call to action', async () => {
     const { store, videoId } = await film()
-    await systemUpdate(store, (d) => { const b = brief(['Terms apply. See hollowoak.example']); d.briefs = { [b.id]: b } }, 'sync')
-    expect(newEndCard(store.get(), videoId).cta).toBe('Terms apply. See hollowoak.example')
+    await withBrief(store, videoId, ['Legal: Please recycle.'])
+    await editCut.endCard(store, videoId, { headline: 'A', line: 'B', cta: 'Find it' })
+    const { clientCardOf } = await import('../campaign/filmJobs')
+    const card = await clientCardOf({ relay: {} as never, doc: store as never }, { master: { kind: 'video', id: videoId } } as never)
+    expect(card).toMatchObject({ cta: 'Find it', legal: 'Please recycle.' })
   })
 })
 
@@ -340,13 +456,16 @@ describe('the end card from a planner\'s staged shot (UAT 2026-11-24: "appears, 
     expect(await said('Flat out good. The can sits centred on clean colour.')).toMatchObject({ headline: 'Flat out good.' })
   })
 
-  it('writes the brief\'s quoted legal line where the renderer draws it today (cta), only the quoted words', async () => {
+  it('puts the linked brief\'s quoted legal line in the card\'s legal (not its call to action), only the quoted words', async () => {
     const { store, shots, videoId } = await film()
     await systemUpdate(store, (d) => {
       d.shots[shots[3].id].action = FERNCLIFF
       const b = { id: id('brief'), title: 'Brief', source: { taken: 1 }, spine: { mandatories: [`Include '${CAFFEINE}' To confirm: the wording against GB rules.`] } } as unknown as NonNullable<ProductionDocument['briefs']>[string]
       d.briefs = { [b.id]: b }
     }, 'sync')
-    expect(endCardFrom(store.get(), videoId)).toMatchObject({ headline: 'Flat out good.', cta: CAFFEINE })
+    await linkInput(store, store.get(), { kind: 'brief', id: Object.keys(store.get().briefs!)[0] }, { kind: 'video', id: videoId })
+    const card = endCardFrom(store.get(), videoId)
+    expect(card).toMatchObject({ headline: 'Flat out good.', legal: CAFFEINE })
+    expect(card?.cta).toBeUndefined()
   })
 })

@@ -228,6 +228,11 @@ pub fn scan_library(
             Some(rec) => rec.as_ref(),
             None => r,
         });
+        // What the host heard of a job first, else what the document records (while it is fresh).
+        let run = cache
+            .runs
+            .run_for(&id)
+            .or_else(|| recorded_run_at(core.run.clone(), &core.updated_at, chrono::Utc::now()));
         items.push(LibraryItem {
             path: id.to_string(),
             app_id: core.app_id,
@@ -235,8 +240,7 @@ pub fn scan_library(
             updated_at: core.updated_at,
             client,
             state: core.state,
-            // What the host heard of a job first, else what the document records.
-            run: cache.runs.run_for(&id).or(core.run),
+            run,
             jobs: cache.runs.unsettled(&id),
             last_editor: core.last_editor,
         });
@@ -286,6 +290,37 @@ fn last_editor(clan: &ClanFile) -> Option<String> {
         .find_map(|d| d.actor.as_deref()?.strip_prefix("human:").map(String::from))
 }
 
+/// A document-recorded build is believed this long after the document's last write. Deck Maker's engine writes the
+/// document at every stage, so a build nobody has written for this long is not running: its middleware job died
+/// (a restart, a redeploy) without writing `done` (UAT round 4 F7: "Ferncliff · agents working" two days on).
+pub const RECORDED_RUN_STALE_SECS: i64 = 30 * 60;
+
+/// What the document records about its run, as of `now`: a `working` run whose document was last written more than
+/// [`RECORDED_RUN_STALE_SECS`] ago is said as `idle`, "Stopped", so the desk neither counts it running nor shows agents
+/// at work. Waiting at a gate (a person's turn) and failed stay as recorded; they are not live work.
+pub(crate) fn recorded_run_at(
+    run: Option<RunInfo>,
+    updated_at: &str,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Option<RunInfo> {
+    let run = run?;
+    if run.state != "working" {
+        return Some(run);
+    }
+    let Ok(at) = chrono::DateTime::parse_from_rfc3339(updated_at) else {
+        return Some(run);
+    };
+    if now.signed_duration_since(at) <= chrono::Duration::seconds(RECORDED_RUN_STALE_SECS) {
+        return Some(run);
+    }
+    Some(RunInfo {
+        state: "idle".into(),
+        label: "Stopped".into(),
+        progress: None,
+        ..run
+    })
+}
+
 /// A run the document itself records: Deck Maker's `data.run` (schema
 /// `run.state` draft|building|gate|done|failed, `run.stage`, `run.since`).
 /// Anything else is not a run: `None`.
@@ -315,4 +350,76 @@ fn run_of(clan: &ClanFile) -> Option<RunInfo> {
             .map(String::from),
         progress: None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn building() -> Option<RunInfo> {
+        Some(RunInfo {
+            state: "working".into(),
+            label: "Building: Layout".into(),
+            stage: Some("Layout".into()),
+            since: Some("2026-11-22T09:00:00Z".into()),
+            progress: None,
+        })
+    }
+
+    fn at(s: &str) -> chrono::DateTime<chrono::Utc> {
+        chrono::DateTime::parse_from_rfc3339(s).unwrap().into()
+    }
+
+    #[test]
+    fn a_recorded_build_written_lately_is_working() {
+        let r = recorded_run_at(
+            building(),
+            "2026-11-24T05:00:00Z",
+            at("2026-11-24T05:20:00Z"),
+        )
+        .unwrap();
+        assert_eq!(
+            (r.state.as_str(), r.label.as_str()),
+            ("working", "Building: Layout")
+        );
+    }
+
+    #[test]
+    fn a_recorded_build_not_written_for_long_is_stopped_not_running() {
+        let r = recorded_run_at(
+            building(),
+            "2026-11-22T09:05:00Z",
+            at("2026-11-24T05:20:00Z"),
+        )
+        .unwrap();
+        assert_eq!((r.state.as_str(), r.label.as_str()), ("idle", "Stopped"));
+        assert_eq!(
+            r.stage.as_deref(),
+            Some("Layout"),
+            "it still says where it stopped"
+        );
+    }
+
+    #[test]
+    fn a_gate_or_a_failure_is_kept_however_old_and_nothing_stays_nothing() {
+        let old = "2026-11-01T00:00:00Z";
+        let now = at("2026-11-24T05:20:00Z");
+        for state in ["waiting", "failed", "done", "idle"] {
+            let r = RunInfo {
+                state: state.into(),
+                label: "x".into(),
+                stage: None,
+                since: None,
+                progress: None,
+            };
+            assert_eq!(recorded_run_at(Some(r), old, now).unwrap().state, state);
+        }
+        assert!(recorded_run_at(None, old, now).is_none());
+        assert_eq!(
+            recorded_run_at(building(), "not a date", now)
+                .unwrap()
+                .state,
+            "working"
+        );
+    }
 }

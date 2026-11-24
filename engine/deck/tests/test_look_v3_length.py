@@ -26,7 +26,8 @@ AFTER_10 = ["title", "objective", "real_question", "insight", "audience", "propo
 #: below prove no word was lost. The flag-off words_sha of every fixture is unchanged (bench/baseline/checklist.json, the goldens).
 #: RE-RECORDED AGAIN at step 7 (fix 2, said once): the idea leads with its own stage text and the campaign line it repeated, and the poster's
 #: copy that repeated it, go to the notes after spec.SAID_ONCE_NOTE (92bc3896298c -> 54ab781d7dc5); the multiset tests still pass.
-V3_WORDS_SHA = "54ab781d7dc5"
+#: RE-RECORDED AGAIN in UAT round 3 (54ab781d7dc5 -> 53330a0298a4): an agency pitch no longer carries the tender's "Scope check" note on its channel-roles slide.
+V3_WORDS_SHA = "53330a0298a4"
 
 
 @pytest.fixture
@@ -122,6 +123,7 @@ def test_the_close_counts_what_is_to_supply_in_review_only(v3):
 
 def test_a_story_already_at_the_target_moves_nothing(v3, monkeypatch):
     monkeypatch.setattr(spec, "PITCH_TARGET", 16)
+    monkeypatch.setattr(spec, "PITCH_CAP", 16)   # UAT round 4 F29: the cap now holds too; this test is about the target alone
     d = _build()
     assert len(validate.presented(d)) == 14 and spec.TO_SUPPLY_TITLE not in [d["slides"][x]["title"] for x in d["order"]]
 
@@ -228,6 +230,7 @@ def test_every_word_before_is_in_a_slide_the_appendix_or_the_notes(v3, monkeypat
     after = _deck_words(_build())
     monkeypatch.setattr(spec, "PITCH_MERGES_V3", ())
     monkeypatch.setattr(spec, "PITCH_TARGET", 99)
+    monkeypatch.setattr(spec, "PITCH_CAP", 99)   # 'before' is the deck before any length move: no cap either (UAT round 4 F29)
     before = _deck_words(_build())
     lost = before - after
     assert not lost, dict(lost)
@@ -260,6 +263,7 @@ def test_every_rendered_word_survives_the_merges(tmp_path, monkeypatch):
     after = render("after.pptx")
     monkeypatch.setattr(spec, "PITCH_MERGES_V3", ())
     monkeypatch.setattr(spec, "PITCH_TARGET", 99)
+    monkeypatch.setattr(spec, "PITCH_CAP", 99)   # 'before' is the deck before any length move: no cap either (UAT round 4 F29)
     before = render("before.pptx")
     lost = before - after
     assert not lost, dict(lost)

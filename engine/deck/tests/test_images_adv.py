@@ -184,7 +184,7 @@ def test_pictures_made_for_other_words_are_not_bound(monkeypatch, stages, tmp_pa
     f, d = made(monkeypatch, stages, tmp_path)
     assert any((im.get("from") or {}).get("kind") == "generated" for _, _, im in images.image_slots(d))
     dj = json.loads((stages / "d_idea.json").read_text())
-    dj["campaign_line"] += " Today."
+    dj["campaign_line"] = "Today. " + dj["campaign_line"]   # another line, not the brief's line grown (a grown line is put back: assemble.keep_stated_line)
     (stages / "d_idea.json").write_text(json.dumps(dj))
     d2, _ = go(stages, tmp_path / "o", "--pictures", "creative_cover")
     assert not any((im.get("from") or {}).get("kind") == "generated" for _, _, im in images.image_slots(d2))

@@ -84,7 +84,7 @@ def _ink(bg: str) -> str:
 
 def end_card_png(card: dict, size: tuple[int, int], fetch: Optional[Callable[[str], bytes]] = None) -> bytes:
     """The person's end card at the film's size: its colour, the logo, the headline, the line and the call
-    to action, stacked in the middle."""
+    to action stacked in the middle, and its legal line small at the bottom (its own key, not the call to action)."""
     from PIL import Image
 
     import typeset
@@ -103,7 +103,10 @@ def end_card_png(card: dict, size: tuple[int, int], fetch: Optional[Callable[[st
         layers.append({"kind": "line", "box": {"x": 0.08, "y": 0.54, "w": 0.84, "h": 0.14}, "text": card["line"],
                        "sizeFrac": 0.05, "align": "centre", "weight": "regular", "colour": ink})
     if card.get("cta"):
-        layers.append({"kind": "legal", "box": {"x": 0.08, "y": 0.72, "w": 0.84, "h": 0.08}, "text": card["cta"],
-                       "sizeFrac": 0.03, "align": "centre", "weight": "regular", "colour": ink})
+        layers.append({"kind": "line", "box": {"x": 0.08, "y": 0.70, "w": 0.84, "h": 0.1}, "text": card["cta"],
+                       "sizeFrac": 0.04, "align": "centre", "weight": "bold", "colour": ink})
+    if (card.get("legal") or "").strip():
+        layers.append({"kind": "legal", "box": {"x": 0.08, "y": 0.88, "w": 0.84, "h": 0.08}, "text": card["legal"].strip(),
+                       "sizeFrac": 0.026, "align": "centre", "weight": "regular", "colour": ink})
     typeset.draw(img, layers, fetch)
     return _png(img.convert("RGB"))
