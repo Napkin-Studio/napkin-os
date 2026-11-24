@@ -16,6 +16,7 @@ import { appendTake, assembleFirstCut, editCut } from './editOps'
 import { boxKeyOf, roomGens, type Box } from './model'
 import type { RoomData } from './Rooms'
 import { compileFor, endCardFrom, newEndCard, readCut, readyTakes, renderPlan, writeCut } from './timeline'
+import { compileWithEndLine } from './endLine'
 import { linkInput } from '../canvas/nodes/nodes'
 
 
@@ -287,9 +288,44 @@ describe('the end card\'s Legal line (owner 2026-11-23: its own key, from the LI
     const card = endCardFrom(store.get(), videoId)!
     expect(card.headline).toBe('Refill. Not landfill.')
     expect(card.line).not.toBe('Refill. Not landfill.')
-    // A card that already says the line (the shot quotes it: "Refill" over "Not landfill.") is left as the shot has it.
+    // A shot that quotes the line is never split at its full stop: the headline is the line word for word (UAT round 4
+    // F34, local run: "Refill" over "Not landfill.").
     await systemUpdate(store, (d) => { d.shots[shots[3].id].action = 'End card: "Refill. Not landfill."' }, 'sync')
-    expect(endCardFrom(store.get(), videoId)).toMatchObject({ headline: 'Refill', line: 'Not landfill.' })
+    expect(endCardFrom(store.get(), videoId)).toMatchObject({ headline: 'Refill. Not landfill.', line: 'Copperell Refill' })
+  })
+
+  it('the Director\'s graphic card: the End line whole, no placement words, the legal line once (UAT round 4 F34, local run)', async () => {
+    const { store, shots, videoId } = await film()
+    await systemUpdate(store, (d) => {
+      d.project.title = 'Copperell Refill'
+      d.shots[shots[3].id].action = 'End card: Refill. Not landfill. Logo top right. Small line below: Keep out of reach of children. Read the label before use.'
+    }, 'sync')
+    await withBrief(store, videoId, ["End line: 'Refill. Not landfill.' (word for word)", "Legal: 'Keep out of reach of children. Read the label before use.'"])
+    const card = endCardFrom(store.get(), videoId)!
+    expect(card.headline).toBe('Refill. Not landfill.')
+    expect(card.line).toBe('Copperell Refill')
+    expect(card.legal).toBe('Keep out of reach of children. Read the label before use.')
+    const all = `${card.headline} ${card.line}`
+    expect(all).not.toMatch(/Logo|top right|Small line|Keep out of reach/)
+    // Review reads the card as it is: this one says the line.
+    await editCut.endCard(store, videoId, {}, 15)
+    expect(compileWithEndLine(store.get(), videoId).endLine).toMatchObject({ how: 'card' })
+  })
+
+  it('a card that only splits the line across its fields does not count as saying it (UAT round 4 F34: a false pass)', async () => {
+    const { store, videoId } = await film()
+    await withBrief(store, videoId, ["End line: 'Refill. Not landfill.' (word for word)"])
+    await editCut.endCard(store, videoId, { headline: 'Refill', line: 'Not landfill. Logo top right.' }, 15)
+    expect(compileWithEndLine(store.get(), videoId).endLine).toMatchObject({ how: 'super' })
+  })
+
+  it('without a Brief end line, placement words still never become copy and the legal line is said once', async () => {
+    const { store, shots, videoId } = await film()
+    await systemUpdate(store, (d) => { d.project.title = 'Copperell Refill'; d.shots[shots[3].id].action = 'End card: Copperell. Clean, refilled. Logo top right. Small line below: Recycle the glass.' }, 'sync')
+    await withBrief(store, videoId, ['Legal: Recycle the glass.'])
+    const card = endCardFrom(store.get(), videoId)!
+    expect(`${card.headline} ${card.line}`).not.toMatch(/Logo|top right|Small line|Recycle/)
+    expect(card.legal).toBe('Recycle the glass.')
   })
 
   it('a new card starts with the linked Brief\'s legal mandatory as its legal, and the call to action stays empty', async () => {
