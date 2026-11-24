@@ -24,7 +24,7 @@ import type { DocumentStore } from '../doc/types'
 import type { JobCtx } from '../doc/ui'
 import { proseFromText } from '../model/diff'
 import { ModelStore } from '../model/store'
-import { beatsOf, currentFrame, framesOf, keyNamed, mainStoryboard, openAsks, refNamed, scenesOf, scriptOfStoryboard, scriptText, shotNumber, shotsOf, staleList, takesOf } from '../model/selectors'
+import { answeredElsewhere, beatsOf, currentFrame, framesOf, keyNamed, mainStoryboard, openAsks, refNamed, scenesOf, scriptOfStoryboard, scriptText, shotNumber, shotsOf, staleList, takesOf } from '../model/selectors'
 import type { Relay } from '../relay'
 import type { FrameDeps } from './frames'
 import { SCRIPT_MAX } from './frames'
@@ -268,8 +268,11 @@ function mentionedIds(d: ProductionDocument, words: string): string[] {
  *  "The script is empty. What should happen…" stayed "Waiting for you" after 5 shots were planned). */
 export function earlierPlanAsks(d: ProductionDocument, sbId: string | undefined, jobId: string | undefined): string[] {
   if (!sbId) return []
-  return Object.values(d.asks ?? {}).filter((a) => a.state === 'open' && !!a.job_id && a.job_id !== jobId
-    && d.jobs[a.job_id]?.op === 'shot_list' && (d.jobs[a.job_id]?.node?.id === sbId || a.node?.id === sbId)).map((a) => a.id)
+  return Object.values(d.asks ?? {}).filter((a) => {
+    if (a.state !== 'open' || !a.job_id || a.job_id === jobId || d.jobs[a.job_id]?.op !== 'shot_list') return false
+    const asked = d.jobs[a.job_id]?.node?.id ?? a.node?.id
+    return asked === sbId || answeredElsewhere(d, asked, [sbId])
+  }).map((a) => a.id)
 }
 
 /** The plan written into a draft with its words as flat text (the snapshot store, and tests). */

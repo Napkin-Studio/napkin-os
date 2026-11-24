@@ -359,5 +359,13 @@ export function openAsks(d: Doc) {
 export function supersededAsk(d: Doc, a: Doc['asks'][string]): boolean {
   const j = a.job_id ? d.jobs[a.job_id] : undefined
   if (!j || j.op !== 'shot_list') return false
-  return values(d.jobs).some((o) => o.id !== j.id && o.op === 'shot_list' && o.node?.id === j.node?.id && o.state === 'completed' && o.created_at > j.created_at)
+  const later = values(d.jobs).filter((o) => o.id !== j.id && o.op === 'shot_list' && o.state === 'completed' && o.created_at > j.created_at)
+  return later.some((o) => o.node?.id === j.node?.id) || answeredElsewhere(d, j.node?.id, later.map((o) => o.node?.id))
+}
+
+/** A storyboard no script drives (planned before there was a script: "The script is empty…") is answered once a storyboard
+ *  a script drives has been planned since (UAT round 4 L4, local run: the question stayed on the first, empty Film). */
+export function answeredElsewhere(d: Doc, sbId: string | undefined, plannedSince: readonly (string | undefined)[]): boolean {
+  const driven = (id: string | undefined) => !!id && values(d.links).some((l) => l.role === 'drives' && l.to.kind === 'storyboard' && l.to.id === id)
+  return !!sbId && !driven(sbId) && plannedSince.some((id) => id !== sbId && driven(id))
 }

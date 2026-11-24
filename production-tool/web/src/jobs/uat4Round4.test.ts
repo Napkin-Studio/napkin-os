@@ -30,6 +30,25 @@ describe('a plan question that a later plan answered (L4)', () => {
     expect(earlierPlanAsks(d, first.node.id, second.id)).toEqual([q.id])
     expect(earlierPlanAsks(d, first.node.id, first.id)).toEqual([])
   })
+  it('an empty storyboard\'s "The script is empty" is answered once a script-driven storyboard is planned (local run)', async () => {
+    const s = modelStore()
+    await s.create(MAYA, 'Copperell')
+    await seedStages(s)
+    const d = structuredClone(s.get()) as ProductionDocument
+    const driven = Object.values(d.links).find((l) => l.role === 'drives' && l.to.kind === 'storyboard')!.to.id
+    const empty = id('storyboard')
+    d.storyboards[empty] = { ...d.storyboards[driven], id: empty, title: 'Film' }
+    const first = { ...job(d, 'shot_list', [], null, { state: 'needs_input', created_at: '2026-11-24T12:58:00Z', node: { kind: 'storyboard', id: empty } }), id: id('job') }
+    d.jobs[first.id] = first
+    const q = ask(first.id, empty)
+    d.asks[q.id] = q
+    expect(supersededAsk(d, q)).toBe(false)
+    const planned = { ...job(d, 'shot_list', [], null, { state: 'completed', created_at: '2026-11-24T13:05:00Z', node: { kind: 'storyboard', id: driven } }), id: id('job') }
+    d.jobs[planned.id] = planned
+    expect(supersededAsk(d, q)).toBe(true)
+    expect(earlierPlanAsks(d, driven, planned.id)).toEqual([q.id])
+  })
+
   it('a question of the latest plan stands', async () => {
     const s = modelStore()
     await s.create(MAYA, 'Copperell')
