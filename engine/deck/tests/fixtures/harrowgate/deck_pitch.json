@@ -1,0 +1,2905 @@
+{
+ "slides": {
+  "s01": {
+   "blocks": [],
+   "claims": [],
+   "footnotes": [],
+   "label": "Harrowgate Bakery Co.: Proper Crunch",
+   "layout": {
+    "alternatives": [],
+    "blocks_sha": "a5e69b9bc30c",
+    "chosen_by": "rule",
+    "fit": {
+     "moved": [],
+     "relaxed": false,
+     "rung": "as_is",
+     "scale": 1.0
+    },
+    "id": "cover",
+    "version": 1,
+    "why": "rule table"
+   },
+   "notes": "Evidence:",
+   "requirements": [],
+   "section": "Opening",
+   "slots": {
+    "picture": {
+     "image": {
+      "aspect": "16:9",
+      "basis": "creative",
+      "from": {
+       "kind": "production",
+       "run": "e82df5e1d816"
+      },
+      "kind": "illustration",
+      "reason": "The key visual would lose part of its protected area in a 16:9 crop. Make a 16:9 size of it in Production, or supply a picture",
+      "status": "empty"
+     },
+     "kind": "image"
+    },
+    "title": {
+     "blocks": [],
+     "chars": 36,
+     "kind": "text",
+     "text": "Harrowgate Bakery Co.: Proper Crunch",
+     "words": 5
+    }
+   },
+   "status": "needs_human",
+   "title": "Harrowgate Bakery Co.: Proper Crunch",
+   "type": "title",
+   "visual": {
+    "hint": "title",
+    "kind": "layout"
+   }
+  },
+  "s02": {
+   "blocks": [
+    {
+     "items": [
+      {
+       "refs": [
+        "brief:objectives.attitudinal",
+        "req:R1"
+       ],
+       "text": "Attitudinal: people believe a baked sourdough crisp can be properly crunchy, and feel it is a tasty, slightly special everyday treat, not a worthy compromise."
+      },
+      {
+       "refs": [
+        "brief:objectives.behavioural",
+        "req:R2"
+       ],
+       "text": "Behavioural: shoppers choose Oven Crisps in the meal-deal snack slot instead of a big-brand fried crisp, and try the bag."
+      }
+     ],
+     "kind": "bullets"
+    }
+   ],
+   "claims": [],
+   "footnotes": [
+    1,
+    2
+   ],
+   "label": "What has to change",
+   "layout": {
+    "alternatives": [],
+    "blocks_sha": "4b1d0a693916",
+    "chosen_by": "rule",
+    "fit": {
+     "moved": [],
+     "relaxed": false,
+     "rung": "as_is",
+     "scale": 1.0
+    },
+    "id": "statement_points",
+    "version": 2,
+    "why": "rule table"
+   },
+   "notes": "Evidence:\n[brief:objectives.attitudinal] brief field (brief-maker): To confirm: People believe a baked sourdough crisp can be properly crunchy, and feel it is a tasty, slightly special everyday treat, not a w\n[req:R1]\n[brief:objectives.behavioural] brief field (brief-maker): Shoppers choose Oven Crisps in the meal-deal snack slot instead of a big-brand fried crisp, and try the bag. Do not frame the work as a swap\n[req:R2]",
+   "requirements": [
+    "R1",
+    "R2",
+    "R4",
+    "R5",
+    "R16",
+    "R17",
+    "R18"
+   ],
+   "section": "Objective",
+   "slots": {
+    "points": {
+     "blocks": [
+      0
+     ],
+     "chars": 280,
+     "items": [
+      {
+       "text": "Attitudinal: people believe a baked sourdough crisp can be properly crunchy, and feel it is a tasty, slightly special everyday treat, not a worthy compromise."
+      },
+      {
+       "text": "Behavioural: shoppers choose Oven Crisps in the meal-deal snack slot instead of a big-brand fried crisp, and try the bag."
+      }
+     ],
+     "kind": "group",
+     "words": 45
+    },
+    "title": {
+     "blocks": [],
+     "chars": 18,
+     "kind": "text",
+     "text": "What has to change",
+     "words": 4
+    }
+   },
+   "status": "from_source",
+   "title": "What has to change",
+   "type": "objective",
+   "visual": {
+    "hint": "objective",
+    "kind": "layout"
+   }
+  },
+  "s03": {
+   "blocks": [
+    {
+     "kind": "statement",
+     "text": "Proper crunch from a real bakery, picked in the meal-deal slot because it tastes like a treat."
+    },
+    {
+     "items": [
+      [
+       "Background",
+       "A bread maker launches baked sourdough crisps (120 g, sea salt & cider vinegar first) in March, wanting buzz before Easter on 5 April. Two meal-deal listings are confirmed, a third is in talks. Price promotion drives brand choice for 43% of buyers; only 11% buy a 'less guilty' option."
+      ]
+     ],
+     "kind": "kv",
+     "refs": [
+      "brief:background"
+     ]
+    }
+   ],
+   "claims": [
+    {
+     "refs": [
+      "fi_TOML6NKCS4F4",
+      "brief:background"
+     ],
+     "text": "The meal deal is the route to trial: promotion decides the brand far more often than virtue does."
+    },
+    {
+     "refs": [
+      "f_3C509E66A5EF15C54D43494C",
+      "brief:insight"
+     ],
+     "text": "Taste is the number one purchase driver, so the work sells crunch, not fat."
+    },
+    {
+     "refs": [
+      "brief:competitor_context",
+      "req:R11",
+      "f_3AE2771F78A694EC6F9EA77B"
+     ],
+     "text": "The open space is a baked crisp with bakery credentials and audible crunch that never flees into health cues."
+    },
+    {
+     "refs": [
+      "req:R3",
+      "req:R33"
+     ],
+     "text": "The bakery is the proof of craft, never the thing to swap away from: no bread on screen."
+    }
+   ],
+   "footnotes": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "label": "Oven Crisps win as the meal deal's most satisfying treat, not its most forgivabl",
+   "layout": {
+    "alternatives": [
+     "cards_split"
+    ],
+    "blocks_sha": "e87b602015a9",
+    "chosen_by": "fit_ladder",
+    "fit": {
+     "moved": [],
+     "relaxed": false,
+     "rung": "switched",
+     "scale": 1.0
+    },
+    "id": "cards",
+    "version": 1,
+    "why": "fit ladder: reframe too full"
+   },
+   "notes": "Evidence:\n[fi_TOML6NKCS4F4] finding, verified: Price promotion drives brand choice for far more buyers than the 'less guilty' option does, so the meal deal is the main route to trial. Gui\n[brief:background] brief field (brief-maker): A bread maker launches baked sourdough crisps (120 g, sea salt & cider vinegar first) on shelf in March, wanting buzz before Easter on 5 Apr\n[f_3C509E66A5EF15C54D43494C] codes.dominant_code.taste_as_the_number_one_purchase_b366cb = Taste as the number one purchase driver – 59% of shoppers say health isn't even a consideration when buying snacks (as of 2026-01-05, confidence low)\n[brief:insight] brief field (brief-maker): The meal-deal crisp is the small treat that makes the lunch, and the crunch is the point. People want satisfaction without the greasy afterm\n[brief:competitor_context] brief field (brief-maker): Walkers leads, with 25.6% volume share of potato chips, and uses celebrity-led humour. Kettle owns 'hand-cooked, small batch' craft, Tyrrell\n[req:R11]\n[f_3AE2771F78A694EC6F9EA77B] codes.worn_out_code.fleeing_into_health_cues_apologi_5101dc = Fleeing into health cues – apologising for being a treat (as of 2026-07-22, confidence low)\n[req:R3]\n[req:R33]",
+   "requirements": [],
+   "section": "The real question",
+   "slots": {
+    "lead": {
+     "blocks": [
+      0
+     ],
+     "chars": 94,
+     "kind": "text",
+     "text": "Proper crunch from a real bakery, picked in the meal-deal slot because it tastes like a treat.",
+     "words": 17
+    },
+    "pairs": {
+     "blocks": [
+      1
+     ],
+     "chars": 296,
+     "items": [
+      {
+       "heading": "Background",
+       "text": "A bread maker launches baked sourdough crisps (120 g, sea salt & cider vinegar first) in March, wanting buzz before Easter on 5 April. Two meal-deal listings are confirmed, a third is in talks. Price promotion drives brand choice for 43% of buyers; only 11% buy a 'less guilty' option."
+      }
+     ],
+     "kind": "group",
+     "refs": [
+      "brief:background"
+     ],
+     "words": 51
+    },
+    "title": {
+     "blocks": [],
+     "chars": 88,
+     "kind": "text",
+     "text": "Oven Crisps win as the meal deal's most satisfying treat, not its most forgivable crisp.",
+     "words": 15
+    }
+   },
+   "status": "drafted",
+   "title": "Oven Crisps win as the meal deal's most satisfying treat, not its most forgivable crisp.",
+   "type": "real_question",
+   "visual": {
+    "hint": "real_question",
+    "kind": "layout"
+   }
+  },
+  "s04": {
+   "blocks": [
+    {
+     "basis": "sourced",
+     "items": [
+      {
+       "label": "Price promotion drives brand choice",
+       "refs": [
+        "f_D0796CFD7FBDB50A85CA61DA"
+       ],
+       "value": "43%"
+      },
+      {
+       "label": "Buy the 'less guilty' option",
+       "refs": [
+        "f_168F4A9CC572A88B352FD8C3"
+       ],
+       "value": "11%"
+      },
+      {
+       "label": "16-34s snacking instead of a proper meal weekly",
+       "refs": [
+        "f_2744F177F1B057CF4B6F8657"
+       ],
+       "value": "62%"
+      },
+      {
+       "label": "Like generous portions without too many calories",
+       "refs": [
+        "f_59D61D95CC4AB4CF710981DE"
+       ],
+       "value": "81%"
+      }
+     ],
+     "kind": "stats",
+     "refs": [
+      "f_D0796CFD7FBDB50A85CA61DA",
+      "f_168F4A9CC572A88B352FD8C3",
+      "f_2744F177F1B057CF4B6F8657",
+      "f_59D61D95CC4AB4CF710981DE"
+     ]
+    },
+    {
+     "kind": "text",
+     "refs": [
+      "f_D0796CFD7FBDB50A85CA61DA",
+      "f_168F4A9CC572A88B352FD8C3",
+      "fi_TOML6NKCS4F4"
+     ],
+     "text": "43% choose on promotion while 11% buy the less guilty option. Trial comes through the deal, and the treat must not apologise."
+    }
+   ],
+   "claims": [
+    {
+     "basis": "sourced",
+     "refs": [
+      "f_D0796CFD7FBDB50A85CA61DA",
+      "f_168F4A9CC572A88B352FD8C3",
+      "fi_TOML6NKCS4F4"
+     ],
+     "text": "43% choose on promotion while 11% buy the less guilty option (to confirm). Trial comes through the deal, and the treat must not apologise."
+    }
+   ],
+   "footnotes": [
+    3,
+    5,
+    6
+   ],
+   "label": "Deals, not virtue, decide which crisp goes in the meal deal.",
+   "layout": {
+    "alternatives": [
+     "cards_split",
+     "big_number"
+    ],
+    "blocks_sha": "3f5be6cc42c5",
+    "chosen_by": "fit_ladder",
+    "fit": {
+     "moved": [],
+     "relaxed": false,
+     "rung": "switched",
+     "scale": 1.0
+    },
+    "id": "cards",
+    "version": 1,
+    "why": "fit ladder: kpi_row too full"
+   },
+   "notes": "Evidence:\n[f_D0796CFD7FBDB50A85CA61DA] consumer.attitude_share.price_promotion_drives_brand_choice = 43% (as of 2026-11-23, confidence low)\n[f_168F4A9CC572A88B352FD8C3] consumer.attitude_share.buy_less_guilty_option = 11% (as of 2026-11-23, confidence low)\n[fi_TOML6NKCS4F4] finding, verified: Price promotion drives brand choice for far more buyers than the 'less guilty' option does, so the meal deal is the main route to trial. Gui\n[f_2744F177F1B057CF4B6F8657] consumer.attitude_share.snack_instead_of_proper_meal_weekly_16_34 = 62% (as of 2026-11-23, confidence low)\n[f_59D61D95CC4AB4CF710981DE] consumer.attitude_share.like_generous_portions_without_too_many_calories = 81% (as of 2026-11-23, confidence low)",
+   "requirements": [],
+   "section": "The real question",
+   "slots": {
+    "figures": {
+     "basis": "sourced",
+     "blocks": [
+      0
+     ],
+     "chars": 177,
+     "items": [
+      {
+       "text": "Price promotion drives brand choice",
+       "value": "43%"
+      },
+      {
+       "text": "Buy the 'less guilty' option",
+       "value": "11%"
+      },
+      {
+       "text": "16-34s snacking instead of a proper meal weekly",
+       "value": "62%"
+      },
+      {
+       "text": "Like generous portions without too many calories",
+       "value": "81%"
+      }
+     ],
+     "kind": "stat",
+     "refs": [
+      "f_D0796CFD7FBDB50A85CA61DA",
+      "f_168F4A9CC572A88B352FD8C3",
+      "f_2744F177F1B057CF4B6F8657",
+      "f_59D61D95CC4AB4CF710981DE"
+     ],
+     "words": 29
+    },
+    "lead": {
+     "blocks": [
+      1
+     ],
+     "chars": 125,
+     "kind": "text",
+     "refs": [
+      "f_D0796CFD7FBDB50A85CA61DA",
+      "f_168F4A9CC572A88B352FD8C3",
+      "fi_TOML6NKCS4F4"
+     ],
+     "text": "43% choose on promotion while 11% buy the less guilty option. Trial comes through the deal, and the treat must not apologise.",
+     "words": 22
+    },
+    "title": {
+     "blocks": [],
+     "chars": 60,
+     "kind": "text",
+     "text": "Deals, not virtue, decide which crisp goes in the meal deal.",
+     "words": 11
+    }
+   },
+   "status": "from_source",
+   "title": "Deals, not virtue, decide which crisp goes in the meal deal.",
+   "type": "chart",
+   "visual": {
+    "kind": "chart"
+   }
+  },
+  "s05": {
+   "blocks": [
+    {
+     "kind": "statement",
+     "refs": [
+      "f_0A35ABB7FCC9CD3D8EC44964",
+      "f_AFE76E93F85B553362D7B622",
+      "f_168F4A9CC572A88B352FD8C3",
+      "f_3AE2771F78A694EC6F9EA77B"
+     ],
+     "text": "The lighter end of snacks leads with virtue, such as 'better for you' claims and healthier ranges, yet few shoppers buy the less guilty option. Shoppers still want a crisp that feels like a treat, while the lighter options keep apologising for being one. So Oven Crisps should be the baked crisp that never apologises, leading with bakery craft and crunch as its treat credentials."
+    },
+    {
+     "basis": "meta",
+     "kind": "small",
+     "text": "Our insight, drawn from the evidence below."
+    },
+    {
+     "kind": "small",
+     "refs": [
+      "f_168F4A9CC572A88B352FD8C3",
+      "fi_TOML6NKCS4F4"
+     ],
+     "text": "Only 11% buy the 'less guilty' option."
+    },
+    {
+     "kind": "small",
+     "refs": [
+      "f_3AE2771F78A694EC6F9EA77B"
+     ],
+     "text": "Apologising for being a treat is a worn-out category code."
+    },
+    {
+     "kind": "small",
+     "refs": [
+      "f_3C509E66A5EF15C54D43494C"
+     ],
+     "text": "Taste is the number one driver: 59% say health isn't a consideration."
+    },
+    {
+     "kind": "small",
+     "refs": [
+      "f_0A35ABB7FCC9CD3D8EC44964",
+      "brief:competitor_context"
+     ],
+     "text": "Propercorn already claims 'better for you', so virtue is taken and the unapologetic baked crisp is open."
+    }
+   ],
+   "claims": [
+    {
+     "basis": "sourced",
+     "refs": [
+      "f_0A35ABB7FCC9CD3D8EC44964",
+      "f_AFE76E93F85B553362D7B622",
+      "f_168F4A9CC572A88B352FD8C3",
+      "f_3AE2771F78A694EC6F9EA77B"
+     ],
+     "text": "The lighter end of snacks leads with virtue, such as 'better for you' claims and healthier ranges, yet few shoppers buy the less guilty option. Shoppers still want a crisp that feels like a treat, while the lighter options keep apologising for being one. So Oven Crisps should be the baked crisp that never apologises, leading with bakery craft and crunch as its treat credentials."
+    },
+    {
+     "basis": "sourced",
+     "refs": [
+      "f_168F4A9CC572A88B352FD8C3",
+      "fi_TOML6NKCS4F4"
+     ],
+     "text": "Only 11% buy the 'less guilty' option (to confirm)."
+    },
+    {
+     "basis": "sourced",
+     "refs": [
+      "f_3AE2771F78A694EC6F9EA77B"
+     ],
+     "text": "Apologising for being a treat is a worn-out category code."
+    },
+    {
+     "basis": "sourced",
+     "refs": [
+      "f_3C509E66A5EF15C54D43494C"
+     ],
+     "text": "Taste is the number one driver: 59% say health isn't a consideration (to confirm)."
+    },
+    {
+     "basis": "sourced",
+     "refs": [
+      "f_0A35ABB7FCC9CD3D8EC44964",
+      "brief:competitor_context"
+     ],
+     "text": "Propercorn already claims 'better for you', so virtue is taken and the unapologetic baked crisp is open."
+    }
+   ],
+   "footnotes": [
+    1,
+    3,
+    4,
+    5,
+    7,
+    8
+   ],
+   "label": "Shoppers rarely act on the category's virtue promise, so a baked crisp should ar",
+   "layout": {
+    "alternatives": [],
+    "blocks_sha": "92de9e5d04cd",
+    "chosen_by": "fit_ladder",
+    "fit": {
+     "moved": [
+      {
+       "block": 3,
+       "item": null,
+       "refs": [
+        "f_3AE2771F78A694EC6F9EA77B"
+       ],
+       "sha": "6cf7d052f099"
+      },
+      {
+       "block": 1,
+       "item": null,
+       "refs": [],
+       "sha": "8fab6dd2172d"
+      }
+     ],
+     "relaxed": false,
+     "rung": "switched",
+     "scale": 1.0
+    },
+    "id": "text_columns",
+    "version": 1,
+    "why": "fit ladder: cards too full"
+   },
+   "notes": "Insight C of 3, chosen by writer and judge agree. Why: It turns the brief's open space into a reason grounded in evidence, ties it to a baked crisp, and keeps the work on treat, not health. Judge: Lighter crisps keep apologising for being healthy, so Oven Crisps can win by being a baked treat that leads with craft and crunch.\n\nEvidence:\n[f_0A35ABB7FCC9CD3D8EC44964] positioning.claim.better_for_you.all_our_snacks_are_better_for_yo_33803a = All our snacks are better for you, vegan, gluten free and use natural seasoning (as of 2026-11-23, confidence low)\n[f_AFE76E93F85B553362D7B622] positioning.launch.sunbites.sunbites_a_healthier_range_of_lo_dcc2aa = Sunbites, a healthier range of lower/better fat crisps made using whole grains (as of 2007-09-01, confidence low)\n[f_168F4A9CC572A88B352FD8C3] consumer.attitude_share.buy_less_guilty_option = 11% (as of 2026-11-23, confidence low)\n[f_3AE2771F78A694EC6F9EA77B] codes.worn_out_code.fleeing_into_health_cues_apologi_5101dc = Fleeing into health cues – apologising for being a treat (as of 2026-07-22, confidence low)\n[fi_TOML6NKCS4F4] finding, verified: Price promotion drives brand choice for far more buyers than the 'less guilty' option does, so the meal deal is the main route to trial. Gui\n[f_3C509E66A5EF15C54D43494C] codes.dominant_code.taste_as_the_number_one_purchase_b366cb = Taste as the number one purchase driver – 59% of shoppers say health isn't even a consideration when buying snacks (as of 2026-01-05, confidence low)\n[brief:competitor_context] brief field (brief-maker): Walkers leads, with 25.6% volume share of potato chips, and uses celebrity-led humour. Kettle owns 'hand-cooked, small batch' craft, Tyrrell",
+   "requirements": [],
+   "section": "Insight",
+   "slots": {
+    "columns": {
+     "blocks": [
+      0,
+      1,
+      2,
+      3
+     ],
+     "chars": 595,
+     "items": [
+      {
+       "text": "The lighter end of snacks leads with virtue, such as 'better for you' claims and healthier ranges, yet few shoppers buy the less guilty option. Shoppers still want a crisp that feels like a treat, while the lighter options keep apologising for being one. So Oven Crisps should be the baked crisp that never apologises, leading with bakery craft and crunch as its treat credentials."
+      },
+      {
+       "text": "Only 11% buy the 'less guilty' option."
+      },
+      {
+       "text": "Taste is the number one driver: 59% say health isn't a consideration."
+      },
+      {
+       "text": "Propercorn already claims 'better for you', so virtue is taken and the unapologetic baked crisp is open."
+      }
+     ],
+     "kind": "group",
+     "refs": [
+      "f_0A35ABB7FCC9CD3D8EC44964",
+      "f_AFE76E93F85B553362D7B622",
+      "f_168F4A9CC572A88B352FD8C3",
+      "f_3AE2771F78A694EC6F9EA77B"
+     ],
+     "words": 101
+    },
+    "title": {
+     "blocks": [],
+     "chars": 119,
+     "kind": "text",
+     "text": "Shoppers rarely act on the category's virtue promise, so a baked crisp should arrive as a proper treat, not an apology.",
+     "words": 21
+    }
+   },
+   "status": "drafted",
+   "title": "Shoppers rarely act on the category's virtue promise, so a baked crisp should arrive as a proper treat, not an apology.",
+   "type": "insight",
+   "visual": {
+    "hint": "insight",
+    "kind": "layout"
+   }
+  },
+  "s06": {
+   "blocks": [
+    {
+     "kind": "text",
+     "refs": [
+      "brief:audience",
+      "req:R6",
+      "req:R7",
+      "req:R8",
+      "f_2744F177F1B057CF4B6F8657"
+     ],
+     "text": "18-35 office lunchers and students choosing a meal-deal crisp in seconds, often on promotion."
+    },
+    {
+     "kind": "text",
+     "text": "Office lunchers making a quick deal choice, and students for whom the snack often stands in for a meal."
+    },
+    {
+     "kind": "small",
+     "text": "Parents buying for lunchboxes, and food-curious shoppers. Not diet-first shoppers or loyal fried-crisp heavy users."
+    }
+   ],
+   "claims": [],
+   "footnotes": [
+    1,
+    2,
+    6
+   ],
+   "label": "We are talking to young lunchers who pick a crisp in seconds, often as the lunch",
+   "layout": {
+    "alternatives": [],
+    "blocks_sha": "bbf0cdefb309",
+    "chosen_by": "fit_ladder",
+    "fit": {
+     "moved": [],
+     "relaxed": false,
+     "rung": "switched",
+     "scale": 1.0
+    },
+    "id": "cards",
+    "version": 1,
+    "why": "fit ladder: statement_points too full"
+   },
+   "notes": "Evidence:\n[brief:audience] brief field (brief-maker): Core: 18-35 office lunchers and students choosing a meal-deal crisp in seconds, often on promotion, and often snacking in place of a meal (6\n[req:R6]\n[req:R7]\n[req:R8]\n[f_2744F177F1B057CF4B6F8657] consumer.attitude_share.snack_instead_of_proper_meal_weekly_16_34 = 62% (as of 2026-11-23, confidence low)",
+   "requirements": [
+    "R6",
+    "R7",
+    "R8"
+   ],
+   "section": "Insight",
+   "slots": {
+    "lead": {
+     "blocks": [
+      0,
+      1
+     ],
+     "chars": 197,
+     "kind": "text",
+     "refs": [
+      "brief:audience",
+      "req:R6",
+      "req:R7",
+      "req:R8",
+      "f_2744F177F1B057CF4B6F8657"
+     ],
+     "text": "18-35 office lunchers and students choosing a meal-deal crisp in seconds, often on promotion.\nOffice lunchers making a quick deal choice, and students for whom the snack often stands in for a meal.",
+     "words": 33
+    },
+    "note": {
+     "blocks": [
+      2
+     ],
+     "chars": 115,
+     "kind": "text",
+     "text": "Parents buying for lunchboxes, and food-curious shoppers. Not diet-first shoppers or loyal fried-crisp heavy users.",
+     "words": 15
+    },
+    "picture": {
+     "image": {
+      "aspect": "4:3",
+      "basis": "creative",
+      "kind": "illustration",
+      "reason": "no picture yet: the territory run has none for this slide and none was supplied",
+      "status": "empty"
+     },
+     "kind": "image"
+    },
+    "title": {
+     "blocks": [],
+     "chars": 88,
+     "kind": "text",
+     "text": "We are talking to young lunchers who pick a crisp in seconds, often as the lunch itself.",
+     "words": 17
+    }
+   },
+   "status": "drafted",
+   "title": "We are talking to young lunchers who pick a crisp in seconds, often as the lunch itself.",
+   "type": "audience",
+   "visual": {
+    "hint": "audience",
+    "kind": "layout"
+   }
+  },
+  "s07": {
+   "blocks": [
+    {
+     "from": "A lighter crisp asking to be forgiven.",
+     "kind": "fromto",
+     "refs": [
+      "f_3AE2771F78A694EC6F9EA77B",
+      "brief:smp",
+      "brief:tone_world_assets",
+      "req:R19"
+     ],
+     "to": "The proper-crunch treat in the meal deal, made by a real bakery."
+    },
+    {
+     "items": [
+      {
+       "refs": [
+        "brief:reasons_to_believe",
+        "req:R12"
+       ],
+       "text": "Made with the 80-year sourdough starter, so a real bakery makes the crisp."
+      },
+      {
+       "refs": [
+        "req:R13",
+        "req:R32",
+        "fi_GO5HIW2AOWAV",
+        "f_59E9707D0CC765E0DAD24A59"
+       ],
+       "text": "40% less fat than the leading ready-salted fried crisps, lab tested. comparator range, same-quantity wording and CAP Section 15 clearance."
+      },
+      {
+       "refs": [
+        "req:R14",
+        "brief:reasons_to_believe"
+       ],
+       "text": "No palm oil."
+      },
+      {
+       "refs": [
+        "req:R15"
+       ],
+       "text": "a texture or blind taste test against a fried crisp to prove the crunch."
+      }
+     ],
+     "kind": "bullets",
+     "title": "Why they will believe it"
+    },
+    {
+     "kind": "small",
+     "text": "The objection it must beat: Can a bakery crisp feel special while sitting in every supermarket meal deal? Yes. The sourdough starter makes it special and the meal deal makes it everyday, which is exactly 'premium but everyday'."
+    }
+   ],
+   "claims": [
+    {
+     "refs": [
+      "brief:reasons_to_believe",
+      "req:R12"
+     ],
+     "text": "Made with the 80-year sourdough starter, so a real bakery makes the crisp."
+    },
+    {
+     "refs": [
+      "req:R13",
+      "req:R32",
+      "fi_GO5HIW2AOWAV",
+      "f_59E9707D0CC765E0DAD24A59"
+     ],
+     "text": "40% less fat than the leading ready-salted fried crisps, lab tested. To confirm: comparator range, same-quantity wording and CAP Section 15 clearance."
+    },
+    {
+     "refs": [
+      "req:R14",
+      "brief:reasons_to_believe"
+     ],
+     "text": "No palm oil."
+    },
+    {
+     "refs": [
+      "req:R15"
+     ],
+     "text": "To confirm: a texture or blind taste test against a fried crisp to prove the crunch."
+    }
+   ],
+   "footnotes": [
+    1,
+    2,
+    3,
+    4,
+    9
+   ],
+   "label": "Proper crunch.",
+   "layout": {
+    "alternatives": [
+     "cards"
+    ],
+    "blocks_sha": "64b931a7db28",
+    "chosen_by": "fit_ladder",
+    "fit": {
+     "moved": [
+      {
+       "block": 1,
+       "item": 2,
+       "refs": [
+        "req:R14",
+        "brief:reasons_to_believe"
+       ],
+       "sha": "3e7848fe26e9"
+      }
+     ],
+     "relaxed": false,
+     "rung": "switched",
+     "scale": 0.78
+    },
+    "id": "comparison",
+    "version": 1,
+    "why": "fit ladder: shift_line too full"
+   },
+   "notes": "Evidence:\n[brief:reasons_to_believe] brief field (brief-maker): Made with the 80-year sourdough starter, so a real bakery makes the crisp.; 40% less fat than the leading ready-salted fried crisps, lab tes\n[req:R12]\n[req:R13]\n[req:R32]\n[fi_GO5HIW2AOWAV] finding, verified: Any 'baked' or 'less fat' wording falls under CAP Code Section 15. Comparative claims must use a registered claim, state the nutrient differ\n[f_59E9707D0CC765E0DAD24A59] regulation.substantiation.for_less_fat_comparative_claims_a17012 = For 'less fat' comparative claims, the difference in nutrient quantity must be stated and must relate to the same quantity of food, compared against a range of same-category foods that do not bear a nutrition claim. (as of 2026-11-23, confidence medium)\n[req:R14]\n[req:R15]\n[f_3AE2771F78A694EC6F9EA77B] codes.worn_out_code.fleeing_into_health_cues_apologi_5101dc = Fleeing into health cues – apologising for being a treat (as of 2026-07-22, confidence low)\n[brief:smp] brief field (brief-maker): Proper crunch.\n[brief:tone_world_assets] brief field (brief-maker): Warm but cheeky; Premium but everyday; Not like the big crisp brands; Sound-led and bakery-real; A treat, not health: no apologising\n[req:R19]",
+   "requirements": [
+    "R9",
+    "R10",
+    "R11",
+    "R12",
+    "R13",
+    "R14",
+    "R15"
+   ],
+   "section": "Proposition",
+   "slots": {
+    "pair": {
+     "blocks": [
+      0
+     ],
+     "chars": 103,
+     "items": [
+      {
+       "text": "A lighter crisp asking to be forgiven."
+      },
+      {
+       "text": "The proper-crunch treat in the meal deal, made by a real bakery."
+      }
+     ],
+     "kind": "group",
+     "refs": [
+      "f_3AE2771F78A694EC6F9EA77B",
+      "brief:smp",
+      "brief:tone_world_assets",
+      "req:R19"
+     ],
+     "words": 19
+    },
+    "points": {
+     "blocks": [
+      1,
+      2
+     ],
+     "chars": 514,
+     "items": [
+      {
+       "refs": [
+        "brief:reasons_to_believe",
+        "req:R12"
+       ],
+       "text": "Made with the 80-year sourdough starter, so a real bakery makes the crisp."
+      },
+      {
+       "refs": [
+        "req:R13",
+        "req:R32",
+        "fi_GO5HIW2AOWAV",
+        "f_59E9707D0CC765E0DAD24A59"
+       ],
+       "text": "40% less fat than the leading ready-salted fried crisps, lab tested. comparator range, same-quantity wording and CAP Section 15 clearance."
+      },
+      {
+       "refs": [
+        "req:R15"
+       ],
+       "text": "a texture or blind taste test against a fried crisp to prove the crunch."
+      },
+      {
+       "text": "The objection it must beat: Can a bakery crisp feel special while sitting in every supermarket meal deal? Yes. The sourdough starter makes it special and the meal deal makes it everyday, which is exactly 'premium but everyday'."
+      }
+     ],
+     "kind": "list",
+     "words": 85
+    },
+    "title": {
+     "blocks": [],
+     "chars": 14,
+     "kind": "text",
+     "text": "Proper crunch.",
+     "words": 2
+    }
+   },
+   "status": "drafted",
+   "title": "Proper crunch.",
+   "type": "proposition",
+   "visual": {
+    "hint": "proposition",
+    "kind": "layout"
+   }
+  },
+  "s08": {
+   "blocks": [
+    {
+     "compare": true,
+     "kind": "table",
+     "refs": [
+      "f_168F4A9CC572A88B352FD8C3",
+      "f_3AE2771F78A694EC6F9EA77B",
+      "f_3C509E66A5EF15C54D43494C",
+      "req:R13",
+      "req:R32"
+     ],
+     "rows": [
+      [
+       "The alternative",
+       "Why you might pick it",
+       "How we win"
+      ],
+      [
+       "Lead with the '40% less fat' reason to believe",
+       "It is a concrete, lab-tested number and feels like the safest point of difference.",
+       "Few shoppers act on the less guilty option, and health cues are a worn-out code. The claim also needs clearance before it can run. We keep it as a supporting line and lead with treat and crunch."
+      ]
+     ]
+    }
+   ],
+   "claims": [
+    {
+     "basis": "sourced",
+     "refs": [
+      "req:R13",
+      "req:R32",
+      "f_168F4A9CC572A88B352FD8C3",
+      "f_3AE2771F78A694EC6F9EA77B",
+      "f_3C509E66A5EF15C54D43494C"
+     ],
+     "text": "Lead with the '40% less fat' reason to believe: It is a concrete, lab-tested number and feels like the safest point of difference."
+    },
+    {
+     "basis": "proposal",
+     "refs": [],
+     "text": "Few shoppers act on the less guilty option, and health cues are a worn-out code. The claim also needs clearance before it can run. We keep it as a supporting line and lead with treat and crunch."
+    }
+   ],
+   "footnotes": [
+    2,
+    4,
+    5
+   ],
+   "label": "The route the client could pick instead",
+   "layout": {
+    "alternatives": [
+     "native_table",
+     "cards"
+    ],
+    "blocks_sha": "e7b5e96b2316",
+    "chosen_by": "rule",
+    "fit": {
+     "moved": [],
+     "relaxed": false,
+     "rung": "as_is",
+     "scale": 1.0
+    },
+    "id": "comparison_grid",
+    "version": 1,
+    "why": "rule table"
+   },
+   "notes": "Evidence:\n[req:R13]\n[req:R32]\n[f_168F4A9CC572A88B352FD8C3] consumer.attitude_share.buy_less_guilty_option = 11% (as of 2026-11-23, confidence low)\n[f_3AE2771F78A694EC6F9EA77B] codes.worn_out_code.fleeing_into_health_cues_apologi_5101dc = Fleeing into health cues – apologising for being a treat (as of 2026-07-22, confidence low)\n[f_3C509E66A5EF15C54D43494C] codes.dominant_code.taste_as_the_number_one_purchase_b366cb = Taste as the number one purchase driver – 59% of shoppers say health isn't even a consideration when buying snacks (as of 2026-01-05, confidence low)",
+   "requirements": [],
+   "section": "Competition",
+   "slots": {
+    "grid": {
+     "blocks": [
+      0
+     ],
+     "chars": 373,
+     "kind": "table",
+     "refs": [
+      "f_168F4A9CC572A88B352FD8C3",
+      "f_3AE2771F78A694EC6F9EA77B",
+      "f_3C509E66A5EF15C54D43494C",
+      "req:R13",
+      "req:R32"
+     ],
+     "rows": [
+      [
+       "The alternative",
+       "Why you might pick it",
+       "How we win"
+      ],
+      [
+       "Lead with the '40% less fat' reason to believe",
+       "It is a concrete, lab-tested number and feels like the safest point of difference.",
+       "Few shoppers act on the less guilty option, and health cues are a worn-out code. The claim also needs clearance before it can run. We keep it as a supporting line and lead with treat and crunch."
+      ]
+     ],
+     "words": 70
+    },
+    "title": {
+     "blocks": [],
+     "chars": 39,
+     "kind": "text",
+     "text": "The route the client could pick instead",
+     "words": 7
+    }
+   },
+   "status": "drafted",
+   "title": "The route the client could pick instead",
+   "type": "competition",
+   "visual": {
+    "hint": "competition",
+    "kind": "layout"
+   }
+  },
+  "s09": {
+   "blocks": [
+    {
+     "kind": "statement",
+     "text": "While the lighter end of the fixture keeps saying sorry for being a treat, Oven Crisps, made by a real bakery with its 80-year sourdough starter, stops apologising and just says crunch."
+    }
+   ],
+   "claims": [
+    {
+     "basis": "creative",
+     "refs": [],
+     "text": "While the lighter end of the fixture keeps saying sorry for being a treat, Oven Crisps, made by a real bakery with its 80-year sourdough starter, stops apologising and just says crunch."
+    }
+   ],
+   "footnotes": [],
+   "label": "Proper crunch. Not sorry.",
+   "layout": {
+    "alternatives": [
+     "big_statement"
+    ],
+    "blocks_sha": "02599a9fa6ea",
+    "chosen_by": "rule",
+    "fit": {
+     "moved": [],
+     "relaxed": false,
+     "rung": "as_is",
+     "scale": 1.0
+    },
+    "id": "emphasis_bar",
+    "version": 1,
+    "why": "rule table"
+   },
+   "notes": "Evidence:",
+   "requirements": [
+    "R9",
+    "R10",
+    "R11",
+    "R12",
+    "R13",
+    "R14",
+    "R15"
+   ],
+   "section": "The idea",
+   "slots": {
+    "picture": {
+     "image": {
+      "aspect": "4:3",
+      "basis": "creative",
+      "from": {
+       "kind": "production",
+       "run": "e82df5e1d816"
+      },
+      "kind": "illustration",
+      "reason": "The key visual would lose part of its protected area in a 4:3 crop. Make a 4:3 size of it in Production, or supply a picture",
+      "status": "empty"
+     },
+     "kind": "image"
+    },
+    "statement": {
+     "blocks": [
+      0
+     ],
+     "chars": 185,
+     "kind": "text",
+     "text": "While the lighter end of the fixture keeps saying sorry for being a treat, Oven Crisps, made by a real bakery with its 80-year sourdough starter, stops apologising and just says crunch.",
+     "words": 32
+    },
+    "title": {
+     "blocks": [],
+     "chars": 25,
+     "kind": "text",
+     "text": "Proper crunch. Not sorry.",
+     "words": 4
+    }
+   },
+   "status": "drafted",
+   "title": "Proper crunch. Not sorry.",
+   "type": "idea",
+   "visual": {
+    "hint": "idea",
+    "kind": "layout"
+   }
+  },
+  "s10": {
+   "blocks": [
+    {
+     "kind": "text",
+     "text": "Role: The anchor picture that every size and still is cut from. The bag is the hero, with the logo top left, and the type is loud enough to almost hear the crunch."
+    },
+    {
+     "answer": "Dramatises the first half, that shoppers still want a crisp that feels like a treat. The bag is lit like a dessert. It stops apologising and just says crunch.",
+     "basis": "creative",
+     "kind": "copy",
+     "lines": [
+      "Proper crunch. Not sorry.",
+      "Baked by a real bakery, with our 80-year sourdough starter.",
+      "No palm oil.",
+      "Contains wheat. See pack for allergens."
+     ]
+    }
+   ],
+   "claims": [
+    {
+     "basis": "creative",
+     "refs": [],
+     "text": "Proper crunch. Not sorry. / Baked by a real bakery, with our 80-year sourdough starter. / No palm oil. / Contains wheat. See pack for allergens."
+    }
+   ],
+   "footnotes": [],
+   "label": "Execution Key visual",
+   "layout": {
+    "alternatives": [],
+    "blocks_sha": "379ac1d92fad",
+    "chosen_by": "rule",
+    "fit": {
+     "moved": [],
+     "relaxed": false,
+     "rung": "as_is",
+     "scale": 1.0
+    },
+    "id": "picture_column",
+    "version": 2,
+    "why": "rule table"
+   },
+   "notes": "Evidence:",
+   "requirements": [],
+   "section": "The work",
+   "slots": {
+    "copy": {
+     "basis": "creative",
+     "blocks": [
+      1
+     ],
+     "chars": 138,
+     "kind": "copy",
+     "lines": [
+      "Proper crunch. Not sorry.",
+      "Baked by a real bakery, with our 80-year sourdough starter.",
+      "No palm oil.",
+      "Contains wheat. See pack for allergens."
+     ],
+     "words": 23
+    },
+    "lead": {
+     "blocks": [
+      0
+     ],
+     "chars": 163,
+     "kind": "text",
+     "text": "Role: The anchor picture that every size and still is cut from. The bag is the hero, with the logo top left, and the type is loud enough to almost hear the crunch.",
+     "words": 33
+    },
+    "picture": {
+     "image": {
+      "alt": "The campaign's key visual",
+      "aspect": "16:9",
+      "asset": "img_1f46c37ae2bf",
+      "basis": "creative",
+      "focal": {
+       "x": 0.5,
+       "y": 0.5065
+      },
+      "from": {
+       "key": "fset_01M84RTZPQNZE5FDP036TC3VSD#master",
+       "kind": "production",
+       "run": "e82df5e1d816"
+      },
+      "kind": "illustration",
+      "status": "made"
+     },
+     "kind": "image"
+    },
+    "title": {
+     "blocks": [],
+     "chars": 10,
+     "kind": "text",
+     "text": "Key visual",
+     "words": 2
+    }
+   },
+   "status": "drafted",
+   "title": "Key visual",
+   "type": "execution",
+   "visual": {
+    "kind": "image_prompt",
+    "prompt": "Studio shot of a single upright crisp bag as the hero, with clear space for a logo top left. Warm saturated golden-orange backdrop. A few baked crisps break mid-air with crumbs flying, under indulgent dessert-style lighting. Large blank area for bold type. No people, no faces, no bread, no drinks, no greenery, leaves, scales or health icons.",
+    "status": "illustrative, not final"
+   }
+  },
+  "s11": {
+   "blocks": [
+    {
+     "kind": "text",
+     "text": "Role: The national burst on the commute. It names the category's habit of saying sorry and walks away from it."
+    },
+    {
+     "answer": "Dramatises the second half, that the lighter options keep apologising for being a treat. The poster shows a baked crisp that stops apologising and just says crunch.",
+     "basis": "creative",
+     "kind": "copy",
+     "lines": [
+      "Baked crisps have spent years saying sorry.",
+      "This one's just saying crunch.",
+      "Proper crunch. Harrowgate Oven Crisps.",
+      "Contains wheat."
+     ]
+    }
+   ],
+   "claims": [
+    {
+     "basis": "creative",
+     "refs": [],
+     "text": "Baked crisps have spent years saying sorry. / This one's just saying crunch. / Proper crunch. Harrowgate Oven Crisps. / Contains wheat. See pack for allergens."
+    }
+   ],
+   "footnotes": [],
+   "label": "Execution Out of home: uk 48 sheet and uk 96 sheet, near stations",
+   "layout": {
+    "alternatives": [],
+    "blocks_sha": "8bca5d0f4faf",
+    "chosen_by": "rule",
+    "fit": {
+     "moved": [],
+     "relaxed": false,
+     "rung": "as_is",
+     "scale": 1.0
+    },
+    "id": "picture_column",
+    "version": 2,
+    "why": "rule table"
+   },
+   "notes": "Said once, on slide 10: See pack for allergens.\n\nEvidence:",
+   "ooh": {
+    "formats": [
+     {
+      "format_id": "uk-96-sheet",
+      "name": "96-sheet roadside",
+      "slot": "ooh_1"
+     },
+     {
+      "format_id": "uk-48-sheet",
+      "name": "48-sheet roadside",
+      "slot": "ooh_2"
+     },
+     {
+      "format_id": "uk-d6",
+      "name": "Digital 6-sheet",
+      "slot": "ooh_3"
+     }
+    ]
+   },
+   "requirements": [],
+   "section": "The work",
+   "slots": {
+    "copy": {
+     "basis": "creative",
+     "blocks": [
+      1
+     ],
+     "chars": 129,
+     "kind": "copy",
+     "lines": [
+      "Baked crisps have spent years saying sorry.",
+      "This one's just saying crunch.",
+      "Proper crunch. Harrowgate Oven Crisps.",
+      "Contains wheat."
+     ],
+     "words": 19
+    },
+    "lead": {
+     "blocks": [
+      0
+     ],
+     "chars": 110,
+     "kind": "text",
+     "text": "Role: The national burst on the commute. It names the category's habit of saying sorry and walks away from it.",
+     "words": 20
+    },
+    "ooh_1": {
+     "image": {
+      "alt": "The campaign picture made for this channel",
+      "aspect": "16:9",
+      "asset": "img_fb85276f6d17",
+      "basis": "creative",
+      "focal": {
+       "x": 0.5,
+       "y": 0.5
+      },
+      "from": {
+       "key": "size_01M84RTZPR85MDT1N8GJ4WR52H",
+       "kind": "production",
+       "run": "e82df5e1d816"
+      },
+      "kind": "illustration",
+      "status": "made"
+     },
+     "kind": "image"
+    },
+    "ooh_2": {
+     "image": {
+      "alt": "The campaign picture made for this channel",
+      "aspect": "16:9",
+      "asset": "img_36fe1e2b0c16",
+      "basis": "creative",
+      "focal": {
+       "x": 0.5,
+       "y": 0.5
+      },
+      "from": {
+       "key": "size_01M84RTZPR85MDT1N8GJ4WR52G",
+       "kind": "production",
+       "run": "e82df5e1d816"
+      },
+      "kind": "illustration",
+      "status": "made"
+     },
+     "kind": "image"
+    },
+    "ooh_3": {
+     "image": {
+      "alt": "The campaign picture made for this channel",
+      "aspect": "9:16",
+      "asset": "img_ae3d6339a9b4",
+      "basis": "creative",
+      "focal": {
+       "x": 0.5,
+       "y": 0.5065
+      },
+      "from": {
+       "key": "size_01M84RTZPR85MDT1N8GJ4WR52K",
+       "kind": "production",
+       "run": "e82df5e1d816"
+      },
+      "kind": "illustration",
+      "reason": "Flagged by review in Production: needs a look",
+      "status": "flagged"
+     },
+     "kind": "image"
+    },
+    "picture": {
+     "image": {
+      "alt": "The campaign picture made for this channel",
+      "aspect": "4:5",
+      "asset": "img_fb85276f6d17",
+      "basis": "creative",
+      "focal": {
+       "x": 0.5,
+       "y": 0.5
+      },
+      "from": {
+       "key": "size_01M84RTZPR85MDT1N8GJ4WR52H",
+       "kind": "production",
+       "run": "e82df5e1d816"
+      },
+      "kind": "illustration",
+      "status": "made"
+     },
+     "kind": "image"
+    },
+    "title": {
+     "blocks": [],
+     "chars": 55,
+     "kind": "text",
+     "text": "Out of home: uk 48 sheet and uk 96 sheet, near stations",
+     "words": 12
+    }
+   },
+   "status": "drafted",
+   "title": "Out of home: uk 48 sheet and uk 96 sheet, near stations",
+   "type": "execution",
+   "visual": {
+    "hint": "Use the held key visual adapted to the 48 sheet and 96 sheet. The bag is hero with the logo top left. The first line is set small and hushed and the second line is huge and golden. The allergen line runs along the base.",
+    "kind": "layout_hint",
+    "status": "illustrative, not final"
+   }
+  },
+  "s12": {
+   "blocks": [
+    {
+     "kind": "text",
+     "text": "Role: A swipeable sequence of stills that carries the line into social and asks people to share the crunch."
+    },
+    {
+     "answer": "Dramatises the second half, that the lighter options keep apologising for being a treat. The sequence turns on the swipe into the first half, a crisp that feels like a treat, and stops apologising and just says crunch.",
+     "basis": "creative",
+     "kind": "copy",
+     "lines": [
+      "Frame 1: Baked crisps, always apologising.",
+      "Frame 2: Sorry for being tasty?",
+      "Frame 3: Not this one.",
+      "Frame 4: CRUNCH.",
+      "Frame 5: Made with our 80-year sourdough starter. No palm oil.",
+      "Frame 6: Proper crunch. Not sorry. Share your crunch. Contains wheat."
+     ]
+    }
+   ],
+   "claims": [
+    {
+     "basis": "creative",
+     "refs": [],
+     "text": "Frame 1: Baked crisps, always apologising. / Frame 2: Sorry for being tasty? / Frame 3: Not this one. / Frame 4: CRUNCH. / Frame 5: Made with our 80-year sourdough starter. No palm oil. / Frame 6: Proper crunch. Not sorry. Share your crunch. Contains wheat. See pack for allergens."
+    }
+   ],
+   "footnotes": [],
+   "label": "Execution Storyboard frames: six stills as an Instagram and TikTok car",
+   "layout": {
+    "alternatives": [],
+    "blocks_sha": "655925bf1f5d",
+    "chosen_by": "rule",
+    "fit": {
+     "moved": [],
+     "relaxed": false,
+     "rung": "no_fit",
+     "scale": 1.0
+    },
+    "id": "picture_column",
+    "version": 2,
+    "why": "rule table"
+   },
+   "notes": "Said once, on slide 10: See pack for allergens.\n\nEvidence:",
+   "requirements": [],
+   "section": "The work",
+   "slots": {
+    "copy": {
+     "basis": "creative",
+     "blocks": [
+      1
+     ],
+     "chars": 247,
+     "kind": "copy",
+     "lines": [
+      "Frame 1: Baked crisps, always apologising.",
+      "Frame 2: Sorry for being tasty?",
+      "Frame 3: Not this one.",
+      "Frame 4: CRUNCH.",
+      "Frame 5: Made with our 80-year sourdough starter. No palm oil.",
+      "Frame 6: Proper crunch. Not sorry. Share your crunch. Contains wheat."
+     ],
+     "words": 42
+    },
+    "lead": {
+     "blocks": [
+      0
+     ],
+     "chars": 107,
+     "kind": "text",
+     "text": "Role: A swipeable sequence of stills that carries the line into social and asks people to share the crunch.",
+     "words": 19
+    },
+    "picture": {
+     "image": {
+      "alt": "The campaign picture made for this channel",
+      "aspect": "9:16",
+      "asset": "img_2ac439c76384",
+      "basis": "creative",
+      "focal": {
+       "x": 0.5,
+       "y": 0.5
+      },
+      "from": {
+       "key": "size_01M84RTZPQNZE5FDP036TC3VSE",
+       "kind": "production",
+       "run": "e82df5e1d816"
+      },
+      "kind": "illustration",
+      "status": "made"
+     },
+     "kind": "image"
+    },
+    "title": {
+     "blocks": [],
+     "chars": 65,
+     "kind": "text",
+     "text": "Storyboard frames: six stills as an Instagram and TikTok carousel",
+     "words": 10
+    }
+   },
+   "status": "drafted",
+   "title": "Storyboard frames: six stills as an Instagram and TikTok carousel",
+   "type": "execution",
+   "visual": {
+    "hint": "Use the six held storyboard stills in order as a carousel, with one line overlaid per frame. The last frame shows the bag as hero with the logo top left. No faces.",
+    "kind": "layout_hint",
+    "status": "illustrative, not final"
+   }
+  },
+  "s39": {
+   "blocks": [
+    {
+     "kind": "text",
+     "text": "The storyboard frames made in Production, in shot order."
+    }
+   ],
+   "claims": [],
+   "footnotes": [],
+   "label": "Execution storyboard frames",
+   "layout": {
+    "alternatives": [],
+    "blocks_sha": "a409988ede63",
+    "chosen_by": "rule",
+    "fit": {
+     "moved": [],
+     "relaxed": false,
+     "rung": "as_is",
+     "scale": 1.0
+    },
+    "id": "picture_column",
+    "version": 2,
+    "why": "rule table"
+   },
+   "notes": "",
+   "requirements": [],
+   "section": "The work",
+   "slots": {
+    "lead": {
+     "blocks": [
+      0
+     ],
+     "chars": 56,
+     "kind": "text",
+     "text": "The storyboard frames made in Production, in shot order.",
+     "words": 9
+    },
+    "picture": {
+     "image": {
+      "alt": "A storyboard frame from the film",
+      "aspect": "16:9",
+      "asset": "img_e416542b855a",
+      "basis": "creative",
+      "focal": {
+       "x": 0.5,
+       "y": 0.5
+      },
+      "from": {
+       "key": "frame_01M84SMA5QAQR00RXH8XS29X8E",
+       "kind": "production",
+       "run": "e82df5e1d816"
+      },
+      "kind": "frame",
+      "status": "made"
+     },
+     "kind": "image"
+    },
+    "shot_1": {
+     "image": {
+      "alt": "A storyboard frame from the film",
+      "aspect": "16:9",
+      "asset": "img_e416542b855a",
+      "basis": "creative",
+      "focal": {
+       "x": 0.5,
+       "y": 0.5
+      },
+      "from": {
+       "key": "frame_01M84SMA5QAQR00RXH8XS29X8E",
+       "kind": "production",
+       "run": "e82df5e1d816"
+      },
+      "kind": "frame",
+      "status": "made"
+     },
+     "kind": "image"
+    },
+    "shot_2": {
+     "image": {
+      "alt": "A storyboard frame from the film",
+      "aspect": "16:9",
+      "asset": "img_46d91ca1d69b",
+      "basis": "creative",
+      "focal": {
+       "x": 0.5,
+       "y": 0.5
+      },
+      "from": {
+       "key": "frame_01M84SR5HJRSTAYKBG5EZARCG8",
+       "kind": "production",
+       "run": "e82df5e1d816"
+      },
+      "kind": "frame",
+      "status": "made"
+     },
+     "kind": "image"
+    },
+    "shot_3": {
+     "image": {
+      "alt": "A storyboard frame from the film",
+      "aspect": "16:9",
+      "asset": "img_6c7f2c9ff73d",
+      "basis": "creative",
+      "focal": {
+       "x": 0.5,
+       "y": 0.5
+      },
+      "from": {
+       "key": "frame_01M84SS50RJNWVJNCCYMP4SAZA",
+       "kind": "production",
+       "run": "e82df5e1d816"
+      },
+      "kind": "frame",
+      "status": "made"
+     },
+     "kind": "image"
+    },
+    "shot_4": {
+     "image": {
+      "alt": "A storyboard frame from the film",
+      "aspect": "16:9",
+      "asset": "img_32d27bdc3b0e",
+      "basis": "creative",
+      "focal": {
+       "x": 0.5,
+       "y": 0.5
+      },
+      "from": {
+       "key": "frame_01M84SV64GQS12S9ZFS0W0ZS4Q",
+       "kind": "production",
+       "run": "e82df5e1d816"
+      },
+      "kind": "frame",
+      "status": "made"
+     },
+     "kind": "image"
+    },
+    "title": {
+     "blocks": [],
+     "chars": 17,
+     "kind": "text",
+     "text": "Storyboard frames",
+     "words": 2
+    }
+   },
+   "status": "drafted",
+   "strip": {
+    "note": "4 of 6 shots",
+    "of": 6,
+    "shots": [
+     1,
+     3,
+     4,
+     6
+    ]
+   },
+   "title": "Storyboard frames",
+   "type": "execution",
+   "visual": {
+    "hint": "execution",
+    "kind": "layout"
+   }
+  },
+  "s13": {
+   "blocks": [
+    {
+     "kind": "table",
+     "refs": [
+      "brief:objectives.attitudinal",
+      "brief:objectives.behavioural",
+      "brief:objectives.commercial",
+      "brief:objectives.commercial",
+      "brief:audience",
+      "brief:audience",
+      "brief:audience",
+      "brief:desired_response",
+      "brief:desired_response",
+      "brief:desired_response",
+      "brief:budget_scope",
+      "brief:budget_scope",
+      "brief:budget_scope",
+      "brief:budget_scope",
+      "brief:budget_scope"
+     ],
+     "rows": [
+      [
+       "Channel",
+       "Its one job"
+      ],
+      [
+       "Key visual",
+       "Sets the bold, warm, unapologetic look that every other piece is cut from."
+      ],
+      [
+       "National poster burst near stations",
+       "Builds fame for the line on the commute, before the lunchtime choice."
+      ],
+      [
+       "Posters near supermarkets",
+       "Meets shoppers seconds before the meal-deal choice and signposts the treat in the slot."
+      ],
+      [
+       "Sampling in about 200 stores",
+       "Lets the mouth prove the crunch while no texture or blind taste test exists."
+      ]
+     ]
+    }
+   ],
+   "claims": [],
+   "footnotes": [
+    1
+   ],
+   "label": "Each channel has one job",
+   "layout": {
+    "alternatives": [
+     "native_table",
+     "cards"
+    ],
+    "blocks_sha": "a1acbdd05ff5",
+    "chosen_by": "rule",
+    "fit": {
+     "moved": [],
+     "relaxed": false,
+     "rung": "as_is",
+     "scale": 1.0
+    },
+    "id": "role_grid",
+    "version": 1,
+    "why": "rule table"
+   },
+   "notes": "Scope check: the tender lists paid social, search, programmatic, broadcast radio and video, outdoor and print.\n\nEvidence:\n[brief:objectives.attitudinal] brief field (brief-maker): To confirm: People believe a baked sourdough crisp can be properly crunchy, and feel it is a tasty, slightly special everyday treat, not a w\n[brief:objectives.behavioural] brief field (brief-maker): Shoppers choose Oven Crisps in the meal-deal snack slot instead of a big-brand fried crisp, and try the bag. Do not frame the work as a swap\n[brief:objectives.commercial] brief field (brief-maker): Be listed in 3 of the big 5 supermarket meal deals by March and sell 2 million bags in the first 12 weeks. The after-Easter repeat target is\n[brief:audience] brief field (brief-maker): Core: 18-35 office lunchers and students choosing a meal-deal crisp in seconds, often on promotion, and often snacking in place of a meal (6\n[brief:desired_response] brief field (brief-maker): do: To confirm: Pick up the bag in the meal-deal slot instead of a familiar fried one, and share the crunch. feel: To confirm: Delighted and\n[brief:budget_scope] brief field (brief-maker): £180,000 ex VAT, media included: one national poster burst near stations and supermarkets, Instagram and TikTok content, one 15-second film",
+   "requirements": [
+    "R21",
+    "R22",
+    "R23",
+    "R24",
+    "R26"
+   ],
+   "section": "How it runs",
+   "slots": {
+    "roles": {
+     "blocks": [
+      0
+     ],
+     "chars": 0,
+     "items": [
+      {
+       "text": ""
+      }
+     ],
+     "kind": "group",
+     "refs": [
+      "brief:objectives.attitudinal",
+      "brief:objectives.behavioural",
+      "brief:objectives.commercial",
+      "brief:objectives.commercial",
+      "brief:audience",
+      "brief:audience",
+      "brief:audience",
+      "brief:desired_response",
+      "brief:desired_response",
+      "brief:desired_response",
+      "brief:budget_scope",
+      "brief:budget_scope",
+      "brief:budget_scope",
+      "brief:budget_scope",
+      "brief:budget_scope"
+     ],
+     "words": 0
+    },
+    "title": {
+     "blocks": [],
+     "chars": 24,
+     "kind": "text",
+     "text": "Each channel has one job",
+     "words": 5
+    }
+   },
+   "status": "drafted",
+   "title": "Each channel has one job",
+   "type": "channel_roles",
+   "visual": {
+    "hint": "channel_roles",
+    "kind": "layout"
+   }
+  },
+  "s14": {
+   "blocks": [
+    {
+     "items": [
+      {
+       "basis": "evidence",
+       "refs": [
+        "req:R19",
+        "f_B941227EB197698FF0A17DC8"
+       ],
+       "text": "Silent media made to sound. Huge type and crumbs in the air make the crunch almost audible on posters and stills, which keeps the brief's sound-led world."
+      },
+      {
+       "basis": "evidence",
+       "refs": [
+        "req:R15",
+        "req:R24",
+        "f_67099AB24A206C5229F893C2",
+        "f_ED72E5D4E826331090566636"
+       ],
+       "text": "Sampling stands in for proof. Until a texture or blind test arrives, tasting in about 200 stores proves the crunch. In-store tasting raises purchase intent for new snack brands."
+      },
+      {
+       "basis": "evidence",
+       "refs": [
+        "req:R21",
+        "fi_TOML6NKCS4F4",
+        "f_19A59E1EB3B9760F5D2E5658"
+       ],
+       "text": "Posters on the lunchtime walk. Station and supermarket sites meet shoppers seconds before a meal-deal choice, which is the main route to trial."
+      },
+      {
+       "basis": "evidence",
+       "refs": [
+        "f_3AE2771F78A694EC6F9EA77B",
+        "f_0A35ABB7FCC9CD3D8EC44964",
+        "req:R11"
+       ],
+       "text": "The category's own code becomes the creative. Sending up the apologetic 'better for you' look makes every lighter rival's pastel bag a reminder of our line."
+      }
+     ],
+     "kind": "bullets"
+    }
+   ],
+   "claims": [
+    {
+     "basis": "evidence",
+     "refs": [
+      "req:R19",
+      "f_B941227EB197698FF0A17DC8"
+     ],
+     "text": "Silent media made to sound. Huge type and crumbs in the air make the crunch almost audible on posters and stills, which keeps the brief's sound-led world."
+    },
+    {
+     "basis": "evidence",
+     "refs": [
+      "req:R15",
+      "req:R24",
+      "f_67099AB24A206C5229F893C2",
+      "f_ED72E5D4E826331090566636"
+     ],
+     "text": "Sampling stands in for proof. Until a texture or blind test arrives, tasting in about 200 stores proves the crunch. In-store tasting raises purchase intent for new snack brands."
+    },
+    {
+     "basis": "evidence",
+     "refs": [
+      "req:R21",
+      "fi_TOML6NKCS4F4",
+      "f_19A59E1EB3B9760F5D2E5658"
+     ],
+     "text": "Posters on the lunchtime walk. Station and supermarket sites meet shoppers seconds before a meal-deal choice, which is the main route to trial."
+    },
+    {
+     "basis": "evidence",
+     "refs": [
+      "f_3AE2771F78A694EC6F9EA77B",
+      "f_0A35ABB7FCC9CD3D8EC44964",
+      "req:R11"
+     ],
+     "text": "The category's own code becomes the creative. Sending up the apologetic 'better for you' look makes every lighter rival's pastel bag a reminder of our line."
+    }
+   ],
+   "footnotes": [
+    2,
+    3,
+    4,
+    7,
+    10,
+    11,
+    12
+   ],
+   "label": "Four ways the plan works harder than its media list",
+   "layout": {
+    "alternatives": [],
+    "blocks_sha": "881ca60cf743",
+    "chosen_by": "rule",
+    "fit": {
+     "moved": [
+      {
+       "block": 0,
+       "item": 2,
+       "refs": [
+        "req:R21",
+        "fi_TOML6NKCS4F4",
+        "f_19A59E1EB3B9760F5D2E5658"
+       ],
+       "sha": "e07c4df917ef"
+      }
+     ],
+     "relaxed": false,
+     "rung": "as_is",
+     "scale": 1.0
+    },
+    "id": "cards",
+    "version": 1,
+    "why": "rule table"
+   },
+   "notes": "Evidence:\n[req:R19]\n[f_B941227EB197698FF0A17DC8] effectiveness.evidence.sound_crunch_is_a_distinctive_an_4bfc81 = Sound/crunch is a distinctive and emotionally resonant creative territory for snack brands that can drive earned media and sales (as of 2025-04-07, confidence low)\n[req:R15]\n[req:R24]\n[f_67099AB24A206C5229F893C2] effectiveness.evidence.taste_testing_in_store_sampling_1426b1 = Taste testing (in-store sampling) leads to higher purchase propensity for new snack brands (as of 2026-11-23, confidence low)\n[f_ED72E5D4E826331090566636] effectiveness.case.yushoi_product_sampling.yushoi_used_intelligent_targetin_3bc2b9 = Yushoi used intelligent targeting with in-store product sampling and advertising to launch a new snack brand; taste testing led to higher purchase propensity and significant sales uplift at target stores. (as of 2026-11-23, confidence low)\n[req:R21]\n[fi_TOML6NKCS4F4] finding, verified: Price promotion drives brand choice for far more buyers than the 'less guilty' option does, so the meal deal is the main route to trial. Gui\n[f_19A59E1EB3B9760F5D2E5658] consumer.occasion.weekday_lunchtime_meal_deal_8d3a10 = weekday lunchtime meal deal (as of 2025-07-17, confidence low)\n[f_3AE2771F78A694EC6F9EA77B] codes.worn_out_code.fleeing_into_health_cues_apologi_5101dc = Fleeing into health cues – apologising for being a treat (as of 2026-07-22, confidence low)\n[f_0A35ABB7FCC9CD3D8EC44964] positioning.claim.better_for_you.all_our_snacks_are_better_for_yo_33803a = All our snacks are better for you, vegan, gluten free and use natural seasoning (as of 2026-11-23, confidence low)\n[req:R11]",
+   "requirements": [],
+   "section": "How it runs",
+   "slots": {
+    "points": {
+     "blocks": [
+      0
+     ],
+     "chars": 489,
+     "items": [
+      {
+       "refs": [
+        "req:R19",
+        "f_B941227EB197698FF0A17DC8"
+       ],
+       "text": "Silent media made to sound. Huge type and crumbs in the air make the crunch almost audible on posters and stills, which keeps the brief's sound-led world."
+      },
+      {
+       "refs": [
+        "req:R15",
+        "req:R24",
+        "f_67099AB24A206C5229F893C2",
+        "f_ED72E5D4E826331090566636"
+       ],
+       "text": "Sampling stands in for proof. Until a texture or blind test arrives, tasting in about 200 stores proves the crunch. In-store tasting raises purchase intent for new snack brands."
+      },
+      {
+       "refs": [
+        "f_3AE2771F78A694EC6F9EA77B",
+        "f_0A35ABB7FCC9CD3D8EC44964",
+        "req:R11"
+       ],
+       "text": "The category's own code becomes the creative. Sending up the apologetic 'better for you' look makes every lighter rival's pastel bag a reminder of our line."
+      }
+     ],
+     "kind": "list",
+     "words": 82
+    },
+    "title": {
+     "blocks": [],
+     "chars": 51,
+     "kind": "text",
+     "text": "Four ways the plan works harder than its media list",
+     "words": 10
+    }
+   },
+   "status": "drafted",
+   "title": "Four ways the plan works harder than its media list",
+   "type": "innovation",
+   "visual": {
+    "hint": "innovation",
+    "kind": "layout"
+   }
+  },
+  "s15": {
+   "blocks": [
+    {
+     "kind": "table",
+     "refs": [
+      "f_67099AB24A206C5229F893C2",
+      "f_ED72E5D4E826331090566636",
+      "req:R1",
+      "req:R16",
+      "req:R18",
+      "req:R22",
+      "req:R24",
+      "req:R4",
+      "req:R5",
+      "req:R6",
+      "brief:objectives.attitudinal",
+      "brief:objectives.behavioural",
+      "brief:objectives.commercial",
+      "brief:objectives.commercial",
+      "brief:desired_response",
+      "brief:desired_response",
+      "brief:desired_response"
+     ],
+     "rows": [
+      [
+       "What we measure",
+       "Baseline",
+       "How"
+      ],
+      [
+       "Number of big-5 supermarket meal deals listing Oven Crisps",
+       "None in the brief: set before launch",
+       "Count confirmed meal-deal listings by March."
+      ],
+      [
+       "Bags sold in the first 12 weeks",
+       "None in the brief: set before launch",
+       "Use the client's sales data for the first 12 weeks on shelf."
+      ],
+      [
+       "Belief that a baked sourdough crisp can be properly crunchy and feels like a treat",
+       "None in the brief: set before launch",
+       "Survey 18-35 office lunchers and students before and after the burst. Ask whether the crisp feels like a treat that stops apologising and just says crunch, and whether they believe it is properly crunchy."
+      ],
+      [
+       "Sales in sampling stores against comparable stores without sampling",
+       "None in the brief: set before launch",
+       "Compare rate of sale in the sampling stores with matched non-sampling stores over the same weeks."
+      ],
+      [
+       "Shares of the crunch on Instagram and TikTok",
+       "None in the brief: set before launch",
+       "Track shares and saves of the carousel, and posts that answer 'Share your crunch'."
+      ]
+     ]
+    },
+    {
+     "items": [
+      {
+       "basis": "sourced",
+       "refs": [
+        "brief:objectives.behavioural",
+        "req:R3"
+       ],
+       "text": "Do not frame the work as a swap away from the loaves; the client has said this is a risk to avoid."
+      },
+      {
+       "basis": "sourced",
+       "refs": [
+        "brief:mandatories",
+        "req:R27"
+       ],
+       "text": "Bag as hero, logo top left."
+      },
+      {
+       "basis": "sourced",
+       "refs": [
+        "brief:mandatories",
+        "req:R28"
+       ],
+       "text": "No real, recognisable faces."
+      },
+      {
+       "basis": "sourced",
+       "refs": [
+        "brief:mandatories",
+        "req:R29"
+       ],
+       "text": "Never show the product with alcohol."
+      },
+      {
+       "basis": "sourced",
+       "refs": [
+        "brief:mandatories",
+        "req:R30"
+       ],
+       "text": "Include 'Contains wheat. See pack for allergens.'"
+      },
+      {
+       "basis": "sourced",
+       "refs": [
+        "brief:mandatories",
+        "req:R31"
+       ],
+       "text": "No compostable claim at launch."
+      },
+      {
+       "basis": "sourced",
+       "refs": [
+        "brief:mandatories",
+        "req:R32"
+       ],
+       "text": "The fat claim names its comparator and states the difference per the same quantity of food; to confirm: cleared under CAP Code Section 15 before it runs."
+      },
+      {
+       "basis": "sourced",
+       "refs": [
+        "brief:mandatories",
+        "req:R33"
+       ],
+       "text": "No bread or pub."
+      },
+      {
+       "basis": "sourced",
+       "refs": [
+        "fi_GO5HIW2AOWAV"
+       ],
+       "text": "Any 'baked' or 'less fat' wording falls under CAP Code Section 15. Comparative claims must use a registered claim, state the nutrient difference for the same quantity of food, and compare against a range of same-category foods."
+      }
+     ],
+     "kind": "bullets",
+     "title": "What the work must always carry, and never do"
+    },
+    {
+     "kind": "small",
+     "refs": [
+      "brief:tone_world_assets",
+      "req:R19"
+     ],
+     "text": "Tone and world: warm but cheeky; premium but everyday; not like the big crisp brands; sound-led and bakery-real; a treat, not health, with no apologising."
+    }
+   ],
+   "claims": [
+    {
+     "basis": "brief",
+     "refs": [
+      "req:R4"
+     ],
+     "text": "Number of big-5 supermarket meal deals listing Oven Crisps baseline None in the brief: set before launch"
+    },
+    {
+     "basis": "brief",
+     "refs": [
+      "req:R5"
+     ],
+     "text": "Bags sold in the first 12 weeks baseline None in the brief: set before launch"
+    },
+    {
+     "basis": "brief",
+     "refs": [
+      "req:R1",
+      "req:R18",
+      "req:R6"
+     ],
+     "text": "Belief that a baked sourdough crisp can be properly crunchy and feels like a treat baseline None in the brief: set before launch"
+    },
+    {
+     "basis": "evidence",
+     "refs": [
+      "req:R24",
+      "f_67099AB24A206C5229F893C2",
+      "f_ED72E5D4E826331090566636"
+     ],
+     "text": "Sales in sampling stores against comparable stores without sampling baseline None in the brief: set before launch"
+    },
+    {
+     "basis": "brief",
+     "refs": [
+      "req:R16",
+      "req:R22"
+     ],
+     "text": "Shares of the crunch on Instagram and TikTok baseline None in the brief: set before launch"
+    }
+   ],
+   "footnotes": [
+    1,
+    2,
+    3,
+    11
+   ],
+   "label": "We will know it worked when the bag is listed, bought and believed to be properl",
+   "layout": {
+    "alternatives": [],
+    "blocks_sha": "55f726004c5a",
+    "chosen_by": "rule",
+    "fit": {
+     "moved": [],
+     "relaxed": false,
+     "rung": "no_fit",
+     "scale": 1.0
+    },
+    "id": "native_table",
+    "version": 1,
+    "why": "rule table"
+   },
+   "merged": [
+    {
+     "title": "What the work must never do",
+     "type": "guardrails"
+    }
+   ],
+   "notes": "Merged here from the slide 'What the work must never do'.\n\nEvidence:\n[req:R4]\n[req:R5]\n[req:R1]\n[req:R18]\n[req:R6]\n[req:R24]\n[f_67099AB24A206C5229F893C2] effectiveness.evidence.taste_testing_in_store_sampling_1426b1 = Taste testing (in-store sampling) leads to higher purchase propensity for new snack brands (as of 2026-11-23, confidence low)\n[f_ED72E5D4E826331090566636] effectiveness.case.yushoi_product_sampling.yushoi_used_intelligent_targetin_3bc2b9 = Yushoi used intelligent targeting with in-store product sampling and advertising to launch a new snack brand; taste testing led to higher purchase propensity and significant sales uplift at target stores. (as of 2026-11-23, confidence low)\n[req:R16]\n[req:R22]\n[brief:objectives.attitudinal] brief field (brief-maker): To confirm: People believe a baked sourdough crisp can be properly crunchy, and feel it is a tasty, slightly special everyday treat, not a w\n[brief:objectives.behavioural] brief field (brief-maker): Shoppers choose Oven Crisps in the meal-deal snack slot instead of a big-brand fried crisp, and try the bag. Do not frame the work as a swap\n[brief:objectives.commercial] brief field (brief-maker): Be listed in 3 of the big 5 supermarket meal deals by March and sell 2 million bags in the first 12 weeks. The after-Easter repeat target is\n[brief:desired_response] brief field (brief-maker): do: To confirm: Pick up the bag in the meal-deal slot instead of a familiar fried one, and share the crunch. feel: To confirm: Delighted and\n[req:R3]\n[brief:mandatories] brief field (brief-maker): Bag as hero, logo top left.; No real, recognisable faces.; Never show the product with alcohol.; Include 'Contains wheat. See pack for aller\n[req:R27]\n[req:R28]\n[req:R29]\n[req:R30]\n[req:R31]\n[req:R32]\n[req:R33]\n[fi_GO5HIW2AOWAV] finding, verified: Any 'baked' or 'less fat' wording falls under CAP Code Section 15. Comparative claims must use a registered claim, state the nutrient differ\n[brief:tone_world_assets] brief field (brief-maker): Warm but cheeky; Premium but everyday; Not like the big crisp brands; Sound-led and bakery-real; A treat, not health: no apologising\n[req:R19]",
+   "requirements": [
+    "R1",
+    "R2",
+    "R4",
+    "R5",
+    "R16",
+    "R17",
+    "R18",
+    "R3",
+    "R19",
+    "R27",
+    "R28",
+    "R29",
+    "R30",
+    "R31",
+    "R32",
+    "R33"
+   ],
+   "section": "Measurement",
+   "slots": {
+    "note": {
+     "blocks": [
+      2
+     ],
+     "chars": 154,
+     "kind": "text",
+     "refs": [
+      "brief:tone_world_assets",
+      "req:R19"
+     ],
+     "text": "Tone and world: warm but cheeky; premium but everyday; not like the big crisp brands; sound-led and bakery-real; a treat, not health, with no apologising.",
+     "words": 25
+    },
+    "table": {
+     "blocks": [
+      0
+     ],
+     "chars": 992,
+     "kind": "table",
+     "refs": [
+      "f_67099AB24A206C5229F893C2",
+      "f_ED72E5D4E826331090566636",
+      "req:R1",
+      "req:R16",
+      "req:R18",
+      "req:R22",
+      "req:R24",
+      "req:R4",
+      "req:R5",
+      "req:R6",
+      "brief:objectives.attitudinal",
+      "brief:objectives.behavioural",
+      "brief:objectives.commercial",
+      "brief:objectives.commercial",
+      "brief:desired_response",
+      "brief:desired_response",
+      "brief:desired_response"
+     ],
+     "rows": [
+      [
+       "What we measure",
+       "Baseline",
+       "How"
+      ],
+      [
+       "Number of big-5 supermarket meal deals listing Oven Crisps",
+       "None in the brief: set before launch",
+       "Count confirmed meal-deal listings by March."
+      ],
+      [
+       "Bags sold in the first 12 weeks",
+       "None in the brief: set before launch",
+       "Use the client's sales data for the first 12 weeks on shelf."
+      ],
+      [
+       "Belief that a baked sourdough crisp can be properly crunchy and feels like a treat",
+       "None in the brief: set before launch",
+       "Survey 18-35 office lunchers and students before and after the burst. Ask whether the crisp feels like a treat that stops apologising and just says crunch, and whether they believe it is properly crunchy."
+      ],
+      [
+       "Sales in sampling stores against comparable stores without sampling",
+       "None in the brief: set before launch",
+       "Compare rate of sale in the sampling stores with matched non-sampling stores over the same weeks."
+      ],
+      [
+       "Shares of the crunch on Instagram and TikTok",
+       "None in the brief: set before launch",
+       "Track shares and saves of the carousel, and posts that answer 'Share your crunch'."
+      ]
+     ],
+     "words": 170
+    },
+    "title": {
+     "blocks": [],
+     "chars": 90,
+     "kind": "text",
+     "text": "We will know it worked when the bag is listed, bought and believed to be properly crunchy.",
+     "words": 17
+    }
+   },
+   "status": "drafted",
+   "title": "We will know it worked when the bag is listed, bought and believed to be properly crunchy.",
+   "type": "measurement",
+   "visual": {
+    "hint": "measurement",
+    "kind": "layout"
+   }
+  },
+  "s16": {
+   "blocks": [
+    {
+     "items": [
+      [
+       "Ideas presented",
+       "Thursday, per the brief"
+      ],
+      [
+       "Fat claim wording and CAP Section 15 clearance; crunch test sought",
+       "Before any fat line runs; date to agree"
+      ],
+      [
+       "On shelf and meal-deal listings",
+       "March"
+      ],
+      [
+       "Poster burst, social stills and sampling build buzz",
+       "Before Easter on 5 April; exact dates to agree"
+      ],
+      [
+       "Read against the sales objective",
+       "First 12 weeks on shelf"
+      ]
+     ],
+     "kind": "steps",
+     "refs": [
+      "f_693EB1C5C658422CA335DD2F",
+      "fi_GO5HIW2AOWAV",
+      "req:R15",
+      "req:R21",
+      "req:R22",
+      "req:R24",
+      "req:R25",
+      "req:R32",
+      "req:R4",
+      "req:R5"
+     ]
+    }
+   ],
+   "claims": [
+    {
+     "basis": "brief",
+     "refs": [
+      "req:R25"
+     ],
+     "text": "Thursday, per the brief"
+    },
+    {
+     "basis": "brief",
+     "refs": [
+      "req:R32",
+      "req:R15",
+      "fi_GO5HIW2AOWAV"
+     ],
+     "text": "Before any fat line runs; date to agree"
+    },
+    {
+     "basis": "brief",
+     "refs": [
+      "req:R4",
+      "req:R25"
+     ],
+     "text": "March"
+    },
+    {
+     "basis": "brief",
+     "refs": [
+      "req:R21",
+      "req:R22",
+      "req:R24",
+      "req:R25",
+      "f_693EB1C5C658422CA335DD2F"
+     ],
+     "text": "Before Easter on 5 April; exact dates to agree"
+    },
+    {
+     "basis": "brief",
+     "refs": [
+      "req:R5"
+     ],
+     "text": "First 12 weeks on shelf"
+    }
+   ],
+   "footnotes": [
+    2,
+    3,
+    13
+   ],
+   "label": "From appointment to evaluation",
+   "layout": {
+    "alternatives": [
+     "timeline_rows",
+     "cards"
+    ],
+    "blocks_sha": "2c740a3444f8",
+    "chosen_by": "rule",
+    "fit": {
+     "moved": [],
+     "relaxed": false,
+     "rung": "as_is",
+     "scale": 1.0
+    },
+    "id": "timeline_strip",
+    "version": 2,
+    "why": "rule table"
+   },
+   "notes": "Evidence:\n[req:R25]\n[req:R32]\n[req:R15]\n[fi_GO5HIW2AOWAV] finding, verified: Any 'baked' or 'less fat' wording falls under CAP Code Section 15. Comparative claims must use a registered claim, state the nutrient differ\n[req:R4]\n[req:R21]\n[req:R22]\n[req:R24]\n[f_693EB1C5C658422CA335DD2F] rhythm.cycle.earlier_easter_shifts_spending_f_4f9ec5 = Earlier Easter shifts spending forward from April into March (as of 2026-04-28, confidence low)\n[req:R5]",
+   "requirements": [
+    "R25"
+   ],
+   "section": "Timeline and investment",
+   "slots": {
+    "steps": {
+     "blocks": [
+      0
+     ],
+     "chars": 340,
+     "items": [
+      {
+       "heading": "Ideas presented",
+       "text": "Thursday, per the brief"
+      },
+      {
+       "heading": "Fat claim wording and CAP Section 15 clearance; crunch test sought",
+       "text": "Before any fat line runs; date to agree"
+      },
+      {
+       "heading": "On shelf and meal-deal listings",
+       "text": "March"
+      },
+      {
+       "heading": "Poster burst, social stills and sampling build buzz",
+       "text": "Before Easter on 5 April; exact dates to agree"
+      },
+      {
+       "heading": "Read against the sales objective",
+       "text": "First 12 weeks on shelf"
+      }
+     ],
+     "kind": "list",
+     "refs": [
+      "f_693EB1C5C658422CA335DD2F",
+      "fi_GO5HIW2AOWAV",
+      "req:R15",
+      "req:R21",
+      "req:R22",
+      "req:R24",
+      "req:R25",
+      "req:R32",
+      "req:R4",
+      "req:R5"
+     ],
+     "words": 58
+    },
+    "title": {
+     "blocks": [],
+     "chars": 30,
+     "kind": "text",
+     "text": "From appointment to evaluation",
+     "words": 4
+    }
+   },
+   "status": "drafted",
+   "title": "From appointment to evaluation",
+   "type": "timeline",
+   "visual": {
+    "hint": "timeline",
+    "kind": "layout"
+   }
+  },
+  "s17": {
+   "blocks": [
+    {
+     "items": [
+      [
+       "Rejecting guilt reminds people of guilt, or seems to mock those who choose lighter snacks.",
+       "Never say guilt. Joke only at the category's apology and keep the crunch the loudest thing."
+      ],
+      [
+       "The fat claim runs without the right comparator or clearance.",
+       "Keep the fat line off all copy until the comparator, same-quantity wording and Section 15 clearance are confirmed."
+      ],
+      [
+       "'Proper crunch' is unproven because no texture or taste test exists.",
+       "Treat it as a promise and let sampling carry the proof. Add a test result if one is supplied."
+      ]
+     ],
+     "kind": "kv",
+     "refs": [
+      "brief:reasons_to_believe",
+      "f_3AE2771F78A694EC6F9EA77B",
+      "f_59E9707D0CC765E0DAD24A59",
+      "f_6DB73F0B4A2278CCA41E951E",
+      "fi_GO5HIW2AOWAV",
+      "req:R15",
+      "req:R32"
+     ]
+    }
+   ],
+   "claims": [
+    {
+     "basis": "evidence",
+     "refs": [
+      "f_6DB73F0B4A2278CCA41E951E",
+      "f_3AE2771F78A694EC6F9EA77B"
+     ],
+     "text": "Rejecting guilt reminds people of guilt, or seems to mock those who choose lighter snacks."
+    },
+    {
+     "basis": "evidence",
+     "refs": [
+      "req:R32",
+      "fi_GO5HIW2AOWAV",
+      "f_59E9707D0CC765E0DAD24A59"
+     ],
+     "text": "The fat claim runs without the right comparator or clearance."
+    },
+    {
+     "basis": "brief",
+     "refs": [
+      "req:R15",
+      "brief:reasons_to_believe"
+     ],
+     "text": "'Proper crunch' is unproven because no texture or taste test exists."
+    }
+   ],
+   "footnotes": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    9
+   ],
+   "label": "What could go wrong, and what we would do about it",
+   "layout": {
+    "alternatives": [],
+    "blocks_sha": "4d1fe0b728ec",
+    "chosen_by": "rule",
+    "fit": {
+     "moved": [],
+     "relaxed": false,
+     "rung": "as_is",
+     "scale": 1.0
+    },
+    "id": "risk_cards",
+    "version": 1,
+    "why": "rule table"
+   },
+   "notes": "Evidence:\n[f_6DB73F0B4A2278CCA41E951E] consumer.barrier.guilt_about_unhealthy_snacking_b_d12f05 = guilt about unhealthy snacking — but only 11% act on it (as of 2026-11-23, confidence low)\n[f_3AE2771F78A694EC6F9EA77B] codes.worn_out_code.fleeing_into_health_cues_apologi_5101dc = Fleeing into health cues – apologising for being a treat (as of 2026-07-22, confidence low)\n[req:R32]\n[fi_GO5HIW2AOWAV] finding, verified: Any 'baked' or 'less fat' wording falls under CAP Code Section 15. Comparative claims must use a registered claim, state the nutrient differ\n[f_59E9707D0CC765E0DAD24A59] regulation.substantiation.for_less_fat_comparative_claims_a17012 = For 'less fat' comparative claims, the difference in nutrient quantity must be stated and must relate to the same quantity of food, compared against a range of same-category foods that do not bear a nutrition claim. (as of 2026-11-23, confidence medium)\n[req:R15]\n[brief:reasons_to_believe] brief field (brief-maker): Made with the 80-year sourdough starter, so a real bakery makes the crisp.; 40% less fat than the leading ready-salted fried crisps, lab tes",
+   "requirements": [],
+   "section": "Risks",
+   "slots": {
+    "risks": {
+     "blocks": [
+      0
+     ],
+     "chars": 522,
+     "items": [
+      {
+       "heading": "Rejecting guilt reminds people of guilt, or seems to mock those who choose lighter snacks.",
+       "text": "Never say guilt. Joke only at the category's apology and keep the crunch the loudest thing."
+      },
+      {
+       "heading": "The fat claim runs without the right comparator or clearance.",
+       "text": "Keep the fat line off all copy until the comparator, same-quantity wording and Section 15 clearance are confirmed."
+      },
+      {
+       "heading": "'Proper crunch' is unproven because no texture or taste test exists.",
+       "text": "Treat it as a promise and let sampling carry the proof. Add a test result if one is supplied."
+      }
+     ],
+     "kind": "group",
+     "refs": [
+      "brief:reasons_to_believe",
+      "f_3AE2771F78A694EC6F9EA77B",
+      "f_59E9707D0CC765E0DAD24A59",
+      "f_6DB73F0B4A2278CCA41E951E",
+      "fi_GO5HIW2AOWAV",
+      "req:R15",
+      "req:R32"
+     ],
+     "words": 89
+    },
+    "title": {
+     "blocks": [],
+     "chars": 50,
+     "kind": "text",
+     "text": "What could go wrong, and what we would do about it",
+     "words": 11
+    }
+   },
+   "status": "drafted",
+   "title": "What could go wrong, and what we would do about it",
+   "type": "risks",
+   "visual": {
+    "hint": "risks",
+    "kind": "layout"
+   }
+  },
+  "s18": {
+   "blocks": [
+    {
+     "kind": "text",
+     "refs": [
+      "brief:budget_scope"
+     ],
+     "text": "Budget given: £180,000 ex VAT, media included: one national poster burst near stations and supermarkets, Instagram and TikTok content, one 15-second film for YouTube and cinema, and sampling in about 200 stores. On shelf in March, buzz before Easter, ideas due Thursday. The pub and bread are out of scope."
+    },
+    {
+     "items": [],
+     "kind": "bullets"
+    },
+    {
+     "items": [
+      {
+       "basis": "proposal",
+       "text": "Agree 'Proper crunch. Not sorry' as the campaign platform"
+      }
+     ],
+     "kind": "bullets",
+     "title": "What we would like to agree today"
+    }
+   ],
+   "claims": [],
+   "footnotes": [
+    1
+   ],
+   "label": "Investment, and what we would like to agree today",
+   "layout": {
+    "alternatives": [],
+    "blocks_sha": "f4651094412b",
+    "chosen_by": "fit_ladder",
+    "fit": {
+     "moved": [],
+     "relaxed": false,
+     "rung": "switched",
+     "scale": 1.0
+    },
+    "id": "placeholder_card",
+    "version": 1,
+    "why": "fit ladder: close too full"
+   },
+   "notes": "Evidence:\n[brief:budget_scope] brief field (brief-maker): £180,000 ex VAT, media included: one national poster burst near stations and supermarkets, Instagram and TikTok content, one 15-second film",
+   "requirements": [
+    "R20"
+   ],
+   "section": "Timeline and investment",
+   "slots": {
+    "given": {
+     "blocks": [
+      0,
+      2
+     ],
+     "chars": 364,
+     "items": [
+      {
+       "text": "Budget given: £180,000 ex VAT, media included: one national poster burst near stations and supermarkets, Instagram and TikTok content, one 15-second film for YouTube and cinema, and sampling in about 200 stores. On shelf in March, buzz before Easter, ideas due Thursday. The pub and bread are out of scope."
+      },
+      {
+       "text": "Agree 'Proper crunch. Not sorry' as the campaign platform"
+      }
+     ],
+     "kind": "list",
+     "refs": [
+      "brief:budget_scope"
+     ],
+     "words": 59
+    },
+    "title": {
+     "blocks": [],
+     "chars": 49,
+     "kind": "text",
+     "text": "Investment, and what we would like to agree today",
+     "words": 9
+    },
+    "to_supply": {
+     "blocks": [
+      1
+     ],
+     "chars": 0,
+     "items": [],
+     "kind": "list",
+     "words": 0
+    }
+   },
+   "status": "needs_human",
+   "title": "Investment, and what we would like to agree today",
+   "type": "investment",
+   "visual": {
+    "hint": "investment",
+    "kind": "layout"
+   }
+  }
+ },
+ "order": [
+  "s01",
+  "s02",
+  "s03",
+  "s04",
+  "s05",
+  "s06",
+  "s07",
+  "s08",
+  "s09",
+  "s10",
+  "s11",
+  "s12",
+  "s39",
+  "s13",
+  "s14",
+  "s15",
+  "s16",
+  "s17",
+  "s18"
+ ],
+ "meta": {
+  "client": "Harrowgate Bakery Co.",
+  "project": "Proper Crunch",
+  "agency": "[Agency]",
+  "kind": "agency",
+  "format": "pitch"
+ },
+ "evidence": {
+  "f_59D61D95CC4AB4CF710981DE": {
+   "kind": "research",
+   "text": "consumer.attitude_share.like_generous_portions_without_too_many_calories = 81% (as of 2026-11-23, confidence low)"
+  },
+  "req:R31": {
+   "kind": "requirement",
+   "text": "No compostable claim at launch."
+  },
+  "req:R4": {
+   "kind": "requirement",
+   "text": "Commercial: be listed in 3 of the big 5 supermarket meal deals by March."
+  },
+  "f_AFE76E93F85B553362D7B622": {
+   "kind": "research",
+   "text": "positioning.launch.sunbites.sunbites_a_healthier_range_of_lo_dcc2aa = Sunbites, a healthier range of lower/better fat crisps made using whole grains (as of 2007-09-01, confidence low)"
+  },
+  "f_2744F177F1B057CF4B6F8657": {
+   "kind": "research",
+   "text": "consumer.attitude_share.snack_instead_of_proper_meal_weekly_16_34 = 62% (as of 2026-11-23, confidence low)"
+  },
+  "req:R1": {
+   "kind": "requirement",
+   "text": "Attitudinal (to confirm): people believe a baked sourdough crisp can be properly crunchy, and feel it is a tasty, slightly special everyday treat, not a worthy compromise."
+  },
+  "fi_TOML6NKCS4F4": {
+   "kind": "research finding",
+   "text": "finding, verified: Price promotion drives brand choice for far more buyers than the 'less guilty' option does, so the meal deal is the main route to trial. Gui"
+  },
+  "brief:tone_world_assets": {
+   "kind": "brief",
+   "text": "Warm but cheeky; Premium but everyday; Not like the big crisp brands; Sound-led and bakery-real; A treat, not health: no apologising"
+  },
+  "req:R16": {
+   "kind": "requirement",
+   "text": "Desired response, do (to confirm): pick up the bag in the meal-deal slot instead of a familiar fried one, and share the crunch."
+  },
+  "brief:smp": {
+   "kind": "brief",
+   "text": "Proper crunch."
+  },
+  "req:R8": {
+   "kind": "requirement",
+   "text": "Not for diet-first shoppers or loyal fried-crisp heavy users."
+  },
+  "req:R19": {
+   "kind": "requirement",
+   "text": "Tone and world: warm but cheeky; premium but everyday; not like the big crisp brands; sound-led and bakery-real; a treat, not health, with no apologising."
+  },
+  "req:R21": {
+   "kind": "requirement",
+   "text": "One national poster burst near stations and supermarkets."
+  },
+  "brief:reasons_to_believe": {
+   "kind": "brief",
+   "text": "Made with the 80-year sourdough starter, so a real bakery makes the crisp.; 40% less fat than the leading ready-salted fried crisps, lab tested, naming that comparator and stated per the same quantity of food. To confirm: cleared under CAP Code Section 15 before it runs.; No palm oil.; To confirm: proof of the crunch itself, such as a texture test or blind taste test against a fried crisp. None has been supplied, so the crunch stays a promise until it is."
+  },
+  "req:R3": {
+   "kind": "requirement",
+   "text": "Do not frame the work as a swap away from the loaves; the client has said this is a risk to avoid."
+  },
+  "req:R32": {
+   "kind": "requirement",
+   "text": "The fat claim names its comparator and states the difference per the same quantity of food; to confirm: cleared under CAP Code Section 15 before it runs."
+  },
+  "req:R13": {
+   "kind": "requirement",
+   "text": "Reason to believe: 40% less fat than the leading ready-salted fried crisps, lab tested."
+  },
+  "brief:objectives.commercial": {
+   "kind": "brief",
+   "text": "Be listed in 3 of the big 5 supermarket meal deals by March and sell 2 million bags in the first 12 weeks. The after-Easter repeat target is still to be confirmed."
+  },
+  "req:R7": {
+   "kind": "requirement",
+   "text": "Secondary audience: parents buying for lunchboxes, plus food-curious shoppers."
+  },
+  "f_3C509E66A5EF15C54D43494C": {
+   "kind": "research",
+   "text": "codes.dominant_code.taste_as_the_number_one_purchase_b366cb = Taste as the number one purchase driver – 59% of shoppers say health isn't even a consideration when buying snacks (as of 2026-01-05, confidence low)"
+  },
+  "req:R22": {
+   "kind": "requirement",
+   "text": "Instagram and TikTok content."
+  },
+  "fi_GO5HIW2AOWAV": {
+   "kind": "research finding",
+   "text": "finding, verified: Any 'baked' or 'less fat' wording falls under CAP Code Section 15. Comparative claims must use a registered claim, state the nutrient differ"
+  },
+  "brief:audience": {
+   "kind": "brief",
+   "text": "Core: 18-35 office lunchers and students choosing a meal-deal crisp in seconds, often on promotion, and often snacking in place of a meal (62% of 16-34s). Secondary: parents buying for lunchboxes, plus food-curious shoppers. Not for diet-first shoppers or loyal fried-crisp heavy users. The client agreed to narrow 18-55 to this core."
+  },
+  "f_3AE2771F78A694EC6F9EA77B": {
+   "kind": "research",
+   "text": "codes.worn_out_code.fleeing_into_health_cues_apologi_5101dc = Fleeing into health cues – apologising for being a treat (as of 2026-07-22, confidence low)"
+  },
+  "f_168F4A9CC572A88B352FD8C3": {
+   "kind": "research",
+   "text": "consumer.attitude_share.buy_less_guilty_option = 11% (as of 2026-11-23, confidence low)"
+  },
+  "brief:objectives.attitudinal": {
+   "kind": "brief",
+   "text": "To confirm: People believe a baked sourdough crisp can be properly crunchy, and feel it is a tasty, slightly special everyday treat, not a worthy compromise."
+  },
+  "req:R15": {
+   "kind": "requirement",
+   "text": "Proof of the crunch (such as a texture or blind taste test against a fried crisp) is to confirm; none has been supplied, so the crunch stays a promise until it is."
+  },
+  "f_693EB1C5C658422CA335DD2F": {
+   "kind": "research",
+   "text": "rhythm.cycle.earlier_easter_shifts_spending_f_4f9ec5 = Earlier Easter shifts spending forward from April into March (as of 2026-04-28, confidence low)"
+  },
+  "f_6DB73F0B4A2278CCA41E951E": {
+   "kind": "research",
+   "text": "consumer.barrier.guilt_about_unhealthy_snacking_b_d12f05 = guilt about unhealthy snacking — but only 11% act on it (as of 2026-11-23, confidence low)"
+  },
+  "f_ED72E5D4E826331090566636": {
+   "kind": "research",
+   "text": "effectiveness.case.yushoi_product_sampling.yushoi_used_intelligent_targetin_3bc2b9 = Yushoi used intelligent targeting with in-store product sampling and advertising to launch a new snack brand; taste testing led to higher purchase propensity and significant sales uplift at target stores. (as of 2026-11-23, confidence low)"
+  },
+  "brief:insight": {
+   "kind": "brief",
+   "text": "The meal-deal crisp is the small treat that makes the lunch, and the crunch is the point. People want satisfaction without the greasy aftermath but will not trade taste for virtue: taste is the number one purchase driver."
+  },
+  "req:R12": {
+   "kind": "requirement",
+   "text": "Reason to believe: made with the 80-year sourdough starter, so a real bakery makes the crisp."
+  },
+  "f_D0796CFD7FBDB50A85CA61DA": {
+   "kind": "research",
+   "text": "consumer.attitude_share.price_promotion_drives_brand_choice = 43% (as of 2026-11-23, confidence low)"
+  },
+  "f_0A35ABB7FCC9CD3D8EC44964": {
+   "kind": "research",
+   "text": "positioning.claim.better_for_you.all_our_snacks_are_better_for_yo_33803a = All our snacks are better for you, vegan, gluten free and use natural seasoning (as of 2026-11-23, confidence low)"
+  },
+  "req:R6": {
+   "kind": "requirement",
+   "text": "Core audience: 18-35 office lunchers and students choosing a meal-deal crisp in seconds, often on promotion, often snacking in place of a meal. The client agreed to narrow 18-55 to this core."
+  },
+  "req:R18": {
+   "kind": "requirement",
+   "text": "Desired response, think (to confirm): baked sourdough crisps can be properly crunchy, and a bakery knows what it is doing."
+  },
+  "req:R24": {
+   "kind": "requirement",
+   "text": "Sampling in about 200 stores."
+  },
+  "f_19A59E1EB3B9760F5D2E5658": {
+   "kind": "research",
+   "text": "consumer.occasion.weekday_lunchtime_meal_deal_8d3a10 = weekday lunchtime meal deal (as of 2025-07-17, confidence low)"
+  },
+  "f_B941227EB197698FF0A17DC8": {
+   "kind": "research",
+   "text": "effectiveness.evidence.sound_crunch_is_a_distinctive_an_4bfc81 = Sound/crunch is a distinctive and emotionally resonant creative territory for snack brands that can drive earned media and sales (as of 2025-04-07, confidence low)"
+  },
+  "brief:competitor_context": {
+   "kind": "brief",
+   "text": "Walkers leads, with 25.6% volume share of potato chips, and uses celebrity-led humour. Kettle owns 'hand-cooked, small batch' craft, Tyrrells sit in the same crafted space, Pringles own the familiar tube, Propercorn claims 'better for you', and popcorn is the alternative snack. The open space is a baked crisp with real bakery credentials and audible crunch that does not flee into health cues."
+  },
+  "req:R25": {
+   "kind": "requirement",
+   "text": "On shelf in March, buzz before Easter on 5 April; ideas due Thursday."
+  },
+  "req:R33": {
+   "kind": "requirement",
+   "text": "No bread or pub."
+  },
+  "f_59E9707D0CC765E0DAD24A59": {
+   "kind": "research",
+   "text": "regulation.substantiation.for_less_fat_comparative_claims_a17012 = For 'less fat' comparative claims, the difference in nutrient quantity must be stated and must relate to the same quantity of food, compared against a range of same-category foods that do not bear a nutrition claim. (as of 2026-11-23, confidence medium)"
+  },
+  "brief:objectives.behavioural": {
+   "kind": "brief",
+   "text": "Shoppers choose Oven Crisps in the meal-deal snack slot instead of a big-brand fried crisp, and try the bag. Do not frame the work as a swap away from the loaves, which the client has said is a risk to avoid."
+  },
+  "req:R11": {
+   "kind": "requirement",
+   "text": "Occupy the open space: a baked crisp with real bakery credentials and audible crunch that does not flee into health cues."
+  },
+  "req:R14": {
+   "kind": "requirement",
+   "text": "Reason to believe: no palm oil."
+  },
+  "brief:desired_response": {
+   "kind": "brief",
+   "text": "do: To confirm: Pick up the bag in the meal-deal slot instead of a familiar fried one, and share the crunch.; feel: To confirm: Delighted and a little cheeky, as if they have found a better snack that still feels like a treat.; think: To confirm: Baked sourdough crisps can be properly crunchy, and a bakery knows what it is doing."
+  },
+  "brief:background": {
+   "kind": "brief",
+   "text": "A bread maker launches baked sourdough crisps (120 g, sea salt & cider vinegar first) on shelf in March, wanting buzz before Easter on 5 April, so the window is short. Two meal-deal listings are confirmed and a third is in talks. Price promotion drives brand choice for 43% of buyers and only 11% buy a 'less guilty' option, so the meal deal is the route to trial."
+  },
+  "f_67099AB24A206C5229F893C2": {
+   "kind": "research",
+   "text": "effectiveness.evidence.taste_testing_in_store_sampling_1426b1 = Taste testing (in-store sampling) leads to higher purchase propensity for new snack brands (as of 2026-11-23, confidence low)"
+  },
+  "brief:budget_scope": {
+   "kind": "brief",
+   "text": "£180,000 ex VAT, media included: one national poster burst near stations and supermarkets, Instagram and TikTok content, one 15-second film for YouTube and cinema, and sampling in about 200 stores. On shelf in March, buzz before Easter, ideas due Thursday. The pub and bread are out of scope."
+  },
+  "req:R5": {
+   "kind": "requirement",
+   "text": "Commercial: sell 2 million bags in the first 12 weeks."
+  }
+ }
+}

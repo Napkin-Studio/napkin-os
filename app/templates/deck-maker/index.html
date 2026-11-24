@@ -261,7 +261,7 @@ main.build:has(.dkstage.nk-asking){padding-bottom:16px}
 .thumb{width:100%;text-align:left;display:flex;gap:10px;align-items:center;padding:8px;border-radius:12px;border:1.5px solid transparent;background:transparent;margin-bottom:8px}
 .thumb[aria-current="true"]{border-color:var(--tool);background:var(--tool-soft)}
 .thumb .n{font-family:var(--f-mono);font-size:11px;color:var(--ink3);width:16px}
-.thumb .t{font-size:12px;font-weight:600;line-height:1.25} .thumb .st{display:block;font-size:10px;font-weight:600}
+.thumb .t{font-size:12px;font-weight:600;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden} .thumb .st{display:block;font-size:10px;font-weight:600} .thumb .sec{display:block;font-family:var(--f-mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-top:2px}
 .st.ok{color:var(--ok-fg)} .st.plain{color:var(--ink2)} .st.warn{color:var(--warn-fg)}
 .slide{aspect-ratio:16/9;width:100%;background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow-lift);padding:5.5% 6.5%;position:relative;overflow:hidden}
 .slide .kick{font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--create)}
@@ -272,6 +272,7 @@ main.build:has(.dkstage.nk-asking){padding-bottom:16px}
 .pslide.has-pics h2{max-width:52%;font-size:clamp(24px,3.4vw,46px)}
 .pslide .pimgs img{width:100%;min-height:0;flex:1 1 0;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
 .slide .pimgs img{width:100%;min-height:0;flex:1 1 0;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
+.pimgs.many{display:grid;grid-template-columns:1fr 1fr;align-content:center;gap:6px}.pimgs.many img{flex:none;height:auto;aspect-ratio:16/9;min-height:0}
 .doc .thumb-img{width:64px;height:44px;border-radius:6px;object-fit:cover;border:1px solid var(--line);flex-shrink:0}
 .slide ul{list-style:none;margin-top:22px;display:flex;flex-direction:column;gap:12px;max-width:62%}
 .slide li{display:flex;gap:12px;align-items:flex-start;font-size:clamp(14px,1.5vw,17px);line-height:1.45}
@@ -397,6 +398,28 @@ var DeckLogic = (function () {
     ((slide && slide.blocks) || []).forEach(function (b) { add(b.refs); });
     ((slide && slide.claims) || []).forEach(function (c) { add(c.refs); });
     return out;
+  }
+
+  /**
+   * A cited ref in plain words for a person: where it comes from and what it says, never the build's id (f_..., fi_..., brief:..., req:...).
+   * A research fact reads without its internal key and its "(as of ..., confidence ...)" tail. { where, text }.
+   */
+  var WHERE = { brief: 'The brief', requirement: 'A requirement', research: 'The research', 'research finding': 'A research finding' };
+  function plainEvidence(ref, e) {
+    if (!e) return { where: 'A source', text: 'This run holds nothing under that name.' };
+    var text = String(e.text == null ? '' : e.text);
+    if (e.kind === 'research') { var eq = text.indexOf(' = '); if (eq > 0 && /^[a-z0-9_.]+$/.test(text.slice(0, eq))) text = text.slice(eq + 3); text = text.replace(/\s*\(as of [^)]*\)\s*$/, ''); }
+    if (e.kind === 'research finding') text = text.replace(/^finding(, [a-z ]+)?:\s*/i, '');
+    if (e.kind === 'brief') { var m = /^brief:([a-z_.]+)$/.exec(String(ref)); if (m) return { where: 'The brief, ' + m[1].replace(/[_.]/g, ' '), text: text }; }
+    return { where: WHERE[e.kind] || 'A source', text: text };
+  }
+  /** The slide's sources as short plain labels for the Present screen: 'The brief, audience: Core: 18-35...' (no ids). */
+  function sourcesFor(slide, evidence) {
+    return refsOf(slide).map(function (ref) {
+      var p = plainEvidence(ref, evidence && evidence[ref]);
+      var s = p.text.length > 56 ? p.text.slice(0, 55).replace(/\s+\S*$/, '') + '...' : p.text;
+      return p.where + (s ? ': ' + s : '');
+    });
   }
 
   /** What each cited ref says. A ref the run does not hold is shown as missing, never skipped. */
@@ -1801,7 +1824,7 @@ var DeckLogic = (function () {
     recordedStages: recordedStages, changeSheet: changeSheet,
     researchRequest: researchRequest, upstreamChanged: upstreamChanged, kitNotices: kitNotices, agencyLookNotice: agencyLookNotice, agencyUpdatePatch: agencyUpdatePatch, lookPanel: lookPanel, agencyPatch: agencyPatch, isKit: isKit,
     supplyCards: supplyCards, toSupply: toSupply, confirmList: confirmList, verifyPatch: verifyPatch, sourcedCounts: sourcedCounts,
-    isPlaceholder: isPlaceholder, blockLines: blockLines, plainNotes: plainNotes, presented: presented, refsOf: refsOf, evidenceFor: evidenceFor,
+    isPlaceholder: isPlaceholder, blockLines: blockLines, plainNotes: plainNotes, presented: presented, refsOf: refsOf, evidenceFor: evidenceFor, plainEvidence: plainEvidence, sourcesFor: sourcesFor,
     statusOf: statusOf, STATUS: STATUS, checksFor: checksFor, approveGate: approveGate, humanApproval: humanApproval, gateRequest: gateRequest,
     GATES: GATES, gateView: gateView, gateHolds: gateHolds, summaryOf: summaryOf, agencyShown: agencyShown, footLabel: footLabel,
     isObj: isObj, own: own
@@ -2654,7 +2677,8 @@ var DeckProd = (function () {
       if (!lines.length) return '';
       return lines.map(function (t) { return '<li><span class="dot"></span><span>' + esc(t) + '</span></li>'; }).join('');
     }).join('');
-    return { items: items, sl: sl, pics: slidePics(id) };
+    var pics = slidePics(id);
+    return { items: items, sl: sl, pics: pics, n: (pics.match(/<img /g) || []).length };
   }
 
   // ── the deck's pictures, read from the built deck.html (see DeckLogic.picturesFromHtml) ──
@@ -2699,13 +2723,13 @@ var DeckProd = (function () {
     if (inAx) view.appendix = true;
     var st = L.STATUS[L.statusOf(sl)];
     var agency = L.agencyShown({ prompt: { agency: s.deck.meta && s.deck.meta.agency } });
-    // A pitch slide goes by its section; every appendix slide shares the section Appendix, so it goes by its title.
-    var thumb = function (sid, label, name) {
+    var thumb = function (sid, label, name, sub) {
       var x = s.deck.slides[sid], t = L.STATUS[L.statusOf(x)];
       return '<button class="thumb" data-slide="' + sid + '"' + (sid === id ? ' aria-current="true"' : '') + '><span class="n">' + label + '</span>' +
-        '<span><span class="t">' + esc(name) + '</span><span class="st ' + t.tone + '">' + t.label + '</span></span></button>';
+        '<span><span class="t">' + esc(name) + '</span>' + (sub ? '<span class="sec">' + esc(sub) + '</span>' : '') + '<span class="st ' + t.tone + '">' + t.label + '</span></span></button>';
     };
-    var rail = ids.map(function (sid, i) { return thumb(sid, String(i + 1).padStart(2, '0'), s.deck.slides[sid].section); }).join('') +
+    // Each pitch slide goes by its own title, the section a small line over the status: sections repeat (two slides of The real question, four of The work), titles do not.
+    var rail = ids.map(function (sid, i) { var x = s.deck.slides[sid]; return thumb(sid, String(i + 1).padStart(2, '0'), x.title || x.section, x.title && x.section !== x.title ? x.section : ''); }).join('') +
       (ax.selectable && view.appendix ? '<div class="eyebrow rail-div">Appendix</div>' + ax.ids.map(function (sid, i) {
         var x = s.deck.slides[sid];
         return thumb(sid, 'A' + (i + 1), x.title || x.section);
@@ -2722,7 +2746,7 @@ var DeckProd = (function () {
     var panel = '';
     if (view.tab === 'evidence') {
       var ev = L.evidenceFor(sl, s.evidence);
-      panel = ev.length ? ev.map(function (e) { return '<div class="ev"><div class="id">' + esc(e.ref) + ' · ' + esc(e.kind) + '</div><div style="font-size:13px;line-height:1.45">' + esc(e.text) + '</div></div>'; }).join('')
+      panel = ev.length ? ev.map(function (e) { var pe = L.plainEvidence(e.ref, s.evidence && s.evidence[e.ref]); return '<div class="ev"><div class="id">' + esc(pe.where) + '</div><div style="font-size:13px;line-height:1.45">' + esc(pe.text) + '</div></div>'; }).join('')
         : '<p class="note">This slide cites nothing: its lines are labelled creative, opinion or proposal.</p>';
     } else if (view.tab === 'checks') {
       panel = '<div class="stack" style="gap:10px">' + L.checksFor(id, sl, s.validation).map(function (c) {
@@ -2740,7 +2764,7 @@ var DeckProd = (function () {
         (inAx ? '' : '<button class="btn sm" data-act="appendix">Move to appendix</button>') + '<button class="btn sm" data-tab="evidence">Why this slide</button>' + approve + '</div>' +
       (ds ? approveNote(ds) : '') + (upChanged.length ? '<div style="margin-bottom:12px">' + changedNote() + '</div>' : '') +
       '<div style="margin-bottom:12px">' + builtLine(builtOf(s), null, typeChip(s)) + '</div>' +
-      '<div class="slide' + (s1.pics ? ' has-pics' : '') + '"><div class="kick">' + esc(sl.section) + '</div><h2>' + esc(sl.title) + '</h2><ul>' + s1.items + '</ul>' + (s1.pics ? '<div class="pimgs" data-pics>' + s1.pics + '</div>' : '') +
+      '<div id="rslide" class="slide' + (s1.pics ? ' has-pics' : '') + '"><div class="kick">' + esc(sl.section) + '</div><h2>' + esc(sl.title) + '</h2><ul>' + s1.items + '</ul>' + (s1.pics ? '<div class="pimgs' + (s1.n > 4 ? ' many' : '') + '" data-pics>' + s1.pics + '</div>' : '') +
         '<div class="foot"><span>' + esc(L.footLabel(agency, s.deck.meta && s.deck.meta.client)) + '</span><div class="spacer"></div><span>' + (inAx ? 'A' + n : String(n).padStart(2, '0')) + '</span></div></div>' +
       '<div class="card" style="margin-top:14px;padding:14px 18px;border-radius:16px;box-shadow:none"><div class="eyebrow" style="margin-bottom:6px">Speaker notes</div><div style="font-size:14px;line-height:1.5;color:var(--ink2)">' + esc(L.plainNotes(sl.notes) || 'No notes for this slide.') + '</div></div></section>' +
       '<aside class="side"><div class="frost" style="padding:16px"><div class="tabs" role="tablist">' + tabs + '</div>' + panel + '</div>' + supplyPanel(s) + confirmPanel(s) + prodPanel(s, id) +
@@ -2756,11 +2780,11 @@ var DeckProd = (function () {
     var i = Math.max(0, Math.min(view.present, ids.length - 1)), sl = s.deck.slides[ids[i]], nx = s.deck.slides[ids[i + 1]];
     var agency = L.agencyShown({ prompt: { agency: s.deck.meta && s.deck.meta.agency } }), pp = slidePics(ids[i]);
     var supply = L.toSupply(s.raw).ids.length, counts = L.sourcedCounts(s.raw);
-    var refs = L.refsOf(sl).map(function (r) { return '<span class="mono" style="font-size:11px;color:var(--tool-ink);background:var(--tool-soft);border-radius:999px;padding:4px 10px">' + esc(r) + '</span>'; }).join('');
+    var refs = L.sourcesFor(sl, s.evidence).map(function (r) { return '<span style="font-size:12px;color:var(--tool-ink);background:var(--tool-soft);border-radius:999px;padding:4px 10px" data-source>' + esc(r) + '</span>'; }).join('');
     var ds = L.deckApproval(s.raw), rep = L.reportLine(s.raw), ax = L.appendixOf(s.deck);
     var head = ds ? deckStat(ds) : '<span class="chip ' + ((s.validation.errors || 0) ? 'warn' : 'ok') + '">' + ((s.validation.errors || 0) ? 'Has errors' : 'Checked') + '</span>';
     var unapproved = ds && ds.state === 'open' ? '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-6px 0 14px" data-approve-hint><span class="note" style="flex:1;min-width:160px">The deck is not approved yet.</span><button class="btn tall" data-go="review">Approve it on Review</button></div>' : '';
-    return '<main class="present"><section><div class="pslide' + (pp ? ' has-pics' : '') + '"><div class="kick">' + esc(sl.section) + '</div><h2>' + esc(sl.title) + '</h2>' + (pp ? '<div class="pimgs" data-pics>' + pp + '</div>' : '') +
+    return '<main class="present"><section><div class="pslide' + (pp ? ' has-pics' : '') + '"><div class="kick">' + esc(sl.section) + '</div><h2>' + esc(sl.title) + '</h2>' + (pp ? '<div class="pimgs' + ((pp.match(/<img /g) || []).length > 4 ? ' many' : '') + '" data-pics>' + pp + '</div>' : '') +
       '<div class="foot"><span>' + esc(L.footLabel(agency, s.deck.meta && s.deck.meta.client)) + '</span><div class="spacer"></div><span>' + (i + 1) + ' / ' + ids.length + '</span></div></div>' +
       '<div class="controls"><button class="circ" aria-label="Previous slide" data-pres="-1"' + (i === 0 ? ' disabled' : '') + '>←</button><button class="circ" style="background:var(--ink);color:var(--paper);border:0" aria-label="Next slide" data-pres="1"' + (i === ids.length - 1 ? ' disabled' : '') + '>→</button>' +
       '<span class="mono" style="font-size:13px;padding:0 10px">' + (i + 1) + ' / ' + ids.length + '</span><div class="prog"><span style="width:' + Math.round(((i + 1) / ids.length) * 100) + '%"></span></div></div>' +
@@ -2878,6 +2902,22 @@ var DeckProd = (function () {
     }
     loadUpstream(s);
     if (scr === 'review' || scr === 'present') loadPictures(s);
+    if (scr === 'review') fitSlideText();
+  }
+
+  /**
+   * The Review slide is a fixed 16:9 page: a slide with many lines (a storyboard with a line per frame) ran off its foot (UAT round 3, slides 11 and 12).
+   * The words step down in size until they sit above the footer, never under 9 px; the same words stay, nothing is cut.
+   */
+  function fitSlideText() {
+    try {
+      var sl = document.getElementById('rslide'), ul = sl && sl.querySelector('ul'), foot = sl && sl.querySelector('.foot');
+      if (!ul || !foot) return;
+      var size = 17, limit = foot.getBoundingClientRect().top - 6;
+      var over = function () { return ul.getBoundingClientRect().bottom > limit; };
+      ul.style.fontSize = '';
+      for (var i = 0; i < 12 && over() && size > 9; i++) { size -= 1; ul.style.fontSize = size + 'px'; ul.style.gap = Math.max(4, size - 5) + 'px'; ul.querySelectorAll('li').forEach(function (li) { li.style.fontSize = size + 'px'; }); }
+    } catch (e) { /* no layout engine: the words stay as drawn */ }
   }
 
   /**

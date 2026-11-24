@@ -627,8 +627,14 @@ FRAME_FORMATS = {"poster_portrait": "uk-6-sheet", "billboard": "uk-48-sheet", "p
                  "spread": "mag-a4-dps", "strip": "uk-bus-tside"}
 #: The frame a channel's generated picture is shown in (graphics.frame_of): film in a screen, social on a phone, OOH and print on a poster.
 FRAME_OF_CHANNEL = {"ooh": "poster_portrait", "social": "phone", "film": "screen", "print": "poster_portrait", "display": "strip"}
-#: deck-graphics slice 3: a film execution's storyboard strip takes 3 to 4 Production frames in shot order, all Production or none.
-STRIP_MIN, STRIP_MAX = 3, 4
+#: deck-graphics slice 3: a film execution's storyboard strip takes 3 to 6 Production frames in shot order, all Production or none. Up to STRIP_ROW
+#: frames make one row; more make two (round 3: a storyboard of six was cut to four and the slide said six). More than STRIP_MAX are sampled.
+STRIP_MIN, STRIP_MAX, STRIP_ROW = 3, 6, 4
+
+
+def strip_rows(n: int) -> list:
+    """The frames per row of a strip of ``n`` frames: one row up to STRIP_ROW, else two rows, the first holding the extra ((5) -> [3, 2], (6) -> [3, 3])."""
+    return [n] if n <= STRIP_ROW else [(n + 1) // 2, n // 2]
 #: deck-prod-picker (deck-graphics part 5): what a picked Production picture none of its sources yielded says, in production.json, report.json
 #: and the slot's reason. Never skipped silently and never replaced by a generated picture without the person choosing.
 PRODUCTION_NOT_REACHABLE = "not reachable — re-save or export in Production"

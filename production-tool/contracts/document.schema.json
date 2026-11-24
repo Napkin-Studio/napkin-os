@@ -2258,7 +2258,12 @@
             "taken": {
               "type": "integer",
               "minimum": 1,
-              "description": "The version shown ('from Brief Maker v2'): 1 when linked, one more on each update taken."
+              "description": "Production's own copy counter: 1 when linked, one more on each update taken. Not the brief's version (see version)."
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "The brief's version as Brief Maker says it ('v2'): its approvals count, at least 1, as of the copy taken (napkin-web GET /d/{doc}/data, version)."
             },
             "at": {
               "type": "string",
@@ -2282,6 +2287,7 @@
             "app_id",
             "data_sha256",
             "taken",
+            "version",
             "at",
             "how"
           ],

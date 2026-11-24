@@ -828,9 +828,13 @@ def _fmt_refs(refs) -> str:
     return ",".join(str(r) for r in refs)
 
 
-def moved_line(m_text: str, refs) -> str:
-    """The notes line for one moved point: ``- <verbatim> [refs: a,b]`` (no refs: no bracket)."""
+def moved_line(m_text: str, refs, clean: bool = False) -> str:
+    """The notes line for one moved point: ``- <verbatim> [refs: a,b]`` (no refs: no bracket). ``clean`` (a client export): the build's ids never
+    reach the room, so the point stands without its refs and without its open-item marks (round 3: ``[refs: req:R14,brief:...]`` was in the notes)."""
     one = " / ".join(x.strip() for x in str(m_text).splitlines() if x.strip())   # a note line is one line: a newline in a point becomes " / "
+    if clean:
+        from .export_clean import client_text   # noqa: PLC0415
+        return f"- {client_text(one)}"
     return f"- {one}" + (f" [refs: {_fmt_refs(refs)}]" if refs else "")
 
 

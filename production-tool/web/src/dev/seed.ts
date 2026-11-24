@@ -123,7 +123,7 @@ export function installSeed(shell: Shell) {
       const services = shell.get().session?.services
       if (!env || !services) throw new Error('open a project on the canvas first')
       services.ui.update((u) => { u.configChoice = 'allon' }, 'e2e seed')
-      const b = await addBrief(services.doc, newBrief({ documentId: 'doc-seed', title, appId: 'ie.napkin.brief-maker', dataSha256: `sha256:${'b'.repeat(64)}`, data }, 'link'))
+      const b = await addBrief(services.doc, newBrief({ documentId: 'doc-seed', title, appId: 'ie.napkin.brief-maker', dataSha256: `sha256:${'b'.repeat(64)}`, version: 1, data }, 'link'))
       const el = placeBrief(env, b.id)
       const script = mainScript(services.doc.get())
       if (script) await linkBrief(env, b.id, { kind: 'script', id: script.id }).catch(() => undefined)

@@ -62,7 +62,7 @@ export function newBrief(read: OsBriefRead, how: 'link' | 'spinoff', now = new D
   return {
     id: newId('brief'), v: 1, field_v: {},
     title: read.title.slice(0, 200) || 'Brief',
-    source: { document_id: read.documentId, app_id: BRIEF_APP_ID, data_sha256: read.dataSha256 as BriefNode['source']['data_sha256'], taken: 1, at: now.toISOString(), how },
+    source: { document_id: read.documentId, app_id: BRIEF_APP_ID, data_sha256: read.dataSha256 as BriefNode['source']['data_sha256'], taken: 1, version: read.version, at: now.toISOString(), how },
     spine,
     ...(confidential.length ? { confidential } : {}),
   }
@@ -79,7 +79,7 @@ export async function addBrief(store: DocumentStore, brief: BriefNode): Promise<
   await systemUpdate(store, (d) => {
     d.briefs ??= {}
     d.briefs[brief.id] = brief
-  }, `${brief.source.how === 'spinoff' ? 'spin off' : 'link'} the brief ${named(brief.title, brief.source.taken)}`, `from Brief Maker (${brief.source.document_id}): ${spineSummary(brief.spine) || 'no spine parts filled in'}`)
+  }, `${brief.source.how === 'spinoff' ? 'spin off' : 'link'} the brief ${named(brief.title, brief.source.version)}`, `from Brief Maker (${brief.source.document_id}): ${spineSummary(brief.spine) || 'no spine parts filled in'}`)
   return brief
 }
 
@@ -214,13 +214,13 @@ export function withBrief(d: Doc, op: Op, node: LinkEndpoint, input: JobInput): 
   // brief when the project has exactly one (features/pt-dex-context.clan). Two or more: none, rather than a guess.
   const only = !b && op === 'generate' ? onlyBrief(d) : undefined
   if (only) {
-    const row: JobInputRow = { kind: 'brief', ref: only.id, used_as: "brief (the project's)", included: true, text: `${only.title} v${only.source.taken}`.slice(0, 200) }
+    const row: JobInputRow = { kind: 'brief', ref: only.id, used_as: "brief (the project's)", included: true, text: `${only.title} v${only.source.version}`.slice(0, 200) }
     return { input: { ...input, brief: jobBrief(only) }, rows: [row] }
   }
   if (!b) return { input, rows: [] }
   const row: JobInputRow = {
     kind: 'brief', ref: b.brief.id, ...(b.linkId ? { link_id: b.linkId } : {}), used_as: b.via === 'link' ? 'brief' : 'brief (from its script)', included: true,
-    text: `${b.brief.title} v${b.brief.source.taken}`.slice(0, 200),
+    text: `${b.brief.title} v${b.brief.source.version}`.slice(0, 200),
   }
   return { input: { ...input, brief: jobBrief(b.brief) }, rows: [row] }
 }
@@ -293,7 +293,7 @@ export function briefNotice(b: BriefNode, now: OsBriefRead): BriefNotice | null 
   const what = !words.length
     ? 'The brief changed in Brief Maker, but not its spine'
     : `${words.length === 1 ? words[0] : `${words.slice(0, -1).join(', ')} and ${words.at(-1)}`} changed in Brief Maker`
-  return { briefId: b.id, text: 'Brief changed: update?', detail: `${what.charAt(0).toUpperCase()}${what.slice(1)} (would be v${b.source.taken + 1}).`, changes, read: now }
+  return { briefId: b.id, text: 'Brief changed: update?', detail: `${what.charAt(0).toUpperCase()}${what.slice(1)}${now.version === b.source.version ? '.' : ` (now v${now.version}).`}`, changes, read: now }
 }
 
 /** The nodes taking a brief update makes out of date: what it feeds, and what those drive (scope's reach). */
@@ -319,6 +319,7 @@ export async function takeNewer(store: DocumentStore, briefId: Id, now: OsBriefR
   const { spine, confidential } = projectSpine(now.data)
   const changes = spineChanges(before.spine, spine)
   const taken = before.source.taken + 1
+  const version = now.version
   const title = now.title.slice(0, 200) || before.title
   await updateDoc(store, (d) => {
     const b = d.briefs?.[briefId]
@@ -327,16 +328,16 @@ export async function takeNewer(store: DocumentStore, briefId: Id, now: OsBriefR
     b.spine = spine
     if (confidential.length) b.confidential = confidential
     else delete b.confidential
-    b.source = { ...b.source, data_sha256: now.dataSha256 as BriefNode['source']['data_sha256'], taken, at: at.toISOString() }
+    b.source = { ...b.source, data_sha256: now.dataSha256 as BriefNode['source']['data_sha256'], taken, version, at: at.toISOString() }
     delete b.source.kept
     for (const target of briefReach(d, briefId)) {
       const id = newId('stale')
       d.stale[id] = {
         id, v: 1, field_v: {}, target: { kind: target.kind as StaleMark['target']['kind'], id: target.id }, caused_by: { kind: 'brief', id: briefId },
-        reason: `The brief changed (v${before.source.taken} → v${taken})${changes.length ? `: ${changes.join(', ')}` : ''}.`.slice(0, 200), marked_at: at.toISOString(),
+        reason: `The brief changed (v${before.source.version} → v${version})${changes.length ? `: ${changes.join(', ')}` : ''}.`.slice(0, 200), marked_at: at.toISOString(),
       }
     }
-  }, `update_from_brief ${named(title, taken)}`, changes.length ? `took the newer brief: ${changes.join(', ')} changed` : 'took the newer brief; its spine is the same')
+  }, `update_from_brief ${named(title, version)}`, changes.length ? `took the newer brief: ${changes.join(', ')} changed` : 'took the newer brief; its spine is the same')
   return store.get().briefs?.[briefId]
 }
 
@@ -347,7 +348,7 @@ export async function keepVersion(store: DocumentStore, briefId: Id, now: Pick<O
   await updateDoc(store, (d) => {
     const x = d.briefs?.[briefId]
     if (x) x.source = { ...x.source, kept: now.dataSha256 as BriefNode['source']['data_sha256'] }
-  }, `keep the brief ${named(b.title, b.source.taken)}`, 'Brief Maker has a newer version; it was not taken')
+  }, `keep the brief ${named(b.title, b.source.version)}`, 'Brief Maker has a newer version; it was not taken')
 }
 
 /** Whether a stale mark came from a brief update (the amber "brief changed" mark, not a frame's). */
