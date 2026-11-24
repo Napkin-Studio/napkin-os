@@ -258,10 +258,12 @@ type TitleFns = { researchTitle(): string; titleIsOurs(t: string): boolean; sync
 const BRIEF_FNS = ['briefUpstream', 'briefData', 'briefShortName']
 const TITLE_FNS = [...BRIEF_FNS, 'brandName', 'workName', 'isMarketList', 'researchTitle', 'titleIsOurs', 'syncTitle']
 
-test('the research is titled by its brand and markets, else its working name', () => {
+test('the research is titled by the working name a person gave it, else its brand and markets', () => {
   const t = (c: Record<string, unknown>) => lift<TitleFns>(RT, TITLE_FNS, researchEnv(c, {}).env).researchTitle()
   const brand = { value: { name: 'Lunasa', ref: 'b_1' } }
-  assert.equal(t({ brand, markets: { value: ['IE', 'GB'] }, name: { value: 'Summer' } }), 'Lunasa · Ireland and Great Britain')
+  // Acceptance A4: the working name wins over the derived title (it used to lose to brand and markets).
+  assert.equal(t({ brand, markets: { value: ['IE', 'GB'] }, name: { value: 'Summer' } }), 'Summer')
+  assert.equal(t({ brand, markets: { value: ['IE', 'GB'] } }), 'Lunasa · Ireland and Great Britain')
   assert.equal(t({ brand, markets: { value: ['IE'] } }), 'Lunasa · Ireland')
   assert.equal(t({ brand, name: { value: ' Summer push ' } }), 'Summer push')
   assert.equal(t({ brand }), 'Lunasa')
@@ -270,9 +272,9 @@ test('the research is titled by its brand and markets, else its working name', (
 })
 
 test('the title is set over the tool’s name, never over one a person chose', async () => {
-  const c = { brand: { value: { name: 'Lunasa' } }, markets: { value: ['IE'] }, name: { value: 'Summer push' } }
+  const c = { brand: { value: { name: 'Lunasa' } }, markets: { value: ['IE'] } }
   for (const [title, set] of [
-    ['Research Tool', true], ['Untitled research', true], ['', true], ['Summer push', true],
+    ['Research Tool', true], ['Untitled research', true], ['', true], ['Summer push', false],
     ['Lunasa · Great Britain', true], ['Lunasa', true], ['Our pitch for Lunasa', false],
     ['Lunasa · Ireland and Great Britain', true], ['Lunasa · Great Britain, PL and Ireland', true],
     // A person's title that only starts like ours is theirs.
@@ -283,6 +285,42 @@ test('the title is set over the tool’s name, never over one a person chose', a
     assert.deepEqual(r.calls, set ? ['Lunasa · Ireland'] : [], `over ${JSON.stringify(title)}`)
     assert.equal(r.document.title, 'Lunasa · Ireland · Research')
   }
+})
+
+test('a working name moves the title off the derived one, and never off a person’s own (acceptance A4)', () => {
+  const c = { brand: { value: { name: 'Copperell' } }, markets: { value: ['GB'] }, name: { value: 'Copperell Refill · GB refill sprays' } }
+  for (const [title, set] of [['Copperell · Great Britain', true], ['Copperell Refill · Research', true], ['Research Tool', true], ['Our pitch', false]] as const) {
+    const r = researchEnv(c, { title })
+    lift<TitleFns>(RT, TITLE_FNS, r.env).syncTitle()
+    assert.deepEqual(r.calls, set ? ['Copperell Refill · GB refill sprays'] : [], `over ${JSON.stringify(title)}`)
+  }
+})
+
+test('a toast that has faded leaves the page, and a new run clears it (acceptance A3)', () => {
+  const cls = new Set<string>(); const t = { textContent: '', classList: { add: (c: string) => cls.add(c), remove: (c: string) => cls.delete(c), contains: (c: string) => cls.has(c), toggle: (c: string, on: boolean) => (on ? cls.add(c) : cls.delete(c)) }, appendChild: () => {} }
+  const timers: (() => void)[] = []
+  const f = lift<{ toast(m: string): void; hideToast(): void }>(RT, ['toast', 'hideToast'], {
+    $: () => t, document: {}, setTimeout: (fn: () => void) => { timers.push(fn); return timers.length }, clearTimeout: () => {},
+  })
+  f.toast('Stopped. What was found so far stays.')
+  assert.equal(t.textContent, 'Stopped. What was found so far stays.')
+  assert.ok(cls.has('on'))
+  timers.shift()!()  // the toast's time is up
+  assert.ok(!cls.has('on'))
+  timers.shift()!()  // faded
+  assert.equal(t.textContent, '', 'its words are not left in the live region')
+  assert.match(fn(RT, 'startCampaign'), /CHAT\.back=false; CHAT\.cancelAsk=false; hideToast\(\);/, 'a new run starts clean')
+})
+
+test('"Stop the research?" stays the same row across polls until it changes (acceptance A2)', () => {
+  const body = fn(RT, 'renderChat')
+  assert.match(body, /var csig=CHAT\.cancelAsk\?cancelHtml\(\):'';\n\s*if\(csig&&csig===CHAT\.cancelSig&&el\.querySelector\('\.rs-cancel \[data-act=chat-cancel-yes\]'\)\) return;\n\s*CHAT\.cancelSig=csig;/)
+  assert.ok(body.indexOf('CHAT.cancelSig=csig;') < body.indexOf('el.innerHTML=workHtml(T, Q);'), 'checked before the view is drawn again')
+  // Stopping… is a change of the row itself: it is drawn.
+  const CHAT = { job: { id: 'j', state: 'running' }, cancelAsk: true, cancelling: false }
+  const c = lift<{ cancelHtml(): string }>(RT, ['cancelHtml'], { CHAT, jobActive: () => true, liveQuestion: () => null })
+  const asking = c.cancelHtml(); CHAT.cancelling = true
+  assert.notEqual(c.cancelHtml(), asking)
 })
 
 // UAT round 4, F12: Continue in -> Research from a brief ("A follow-up question from its open questions").
