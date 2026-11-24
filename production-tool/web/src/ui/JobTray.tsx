@@ -13,7 +13,7 @@ import { modelLabel } from '../capabilities'
 import type { StageName } from '../doc/ui'
 import type { UiStore } from '../projects/uiStore'
 import { askOf, ctxReader } from '../jobs/runner'
-import { jobsList, shotNumber } from '../model/selectors'
+import { jobsList, shotNumber, supersededJob } from '../model/selectors'
 import { AgentFigure } from './agents/AgentFigure'
 import { AskDock } from './AskDock'
 import { hereOf, homeOf, sameHome, showAsk } from './askPlaces'
@@ -34,7 +34,8 @@ export function JobTray({ phone = false }: {
   const ref = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
   const close = useCallback(() => setOpen(false), [])
-  const g = trayGroups(jobsList(doc), ctxReader(doc, ui), (id) => runner.liveInfo(id))
+  // A question a later plan answered waits for no one (UAT round 4 L4: "Waiting for you" stayed in the bar).
+  const g = trayGroups(jobsList(doc).filter((j) => !supersededJob(doc, j)), ctxReader(doc, ui), (id) => runner.liveInfo(id))
   const busy = g.working.length > 0
   const empty = !busy && !g.needsYou.length && !g.waiting.length
   // The bar's status dot: its words live in the tooltip, the label, a separate live region and the

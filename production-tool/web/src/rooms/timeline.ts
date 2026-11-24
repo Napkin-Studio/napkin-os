@@ -169,19 +169,52 @@ const bare = (t: string) => t.replace(/[.!?]$/, '').trim()
  */
 export function endCardFrom(d: ProductionDocument, videoId: Id): CutEndCard | undefined {
   const card = endCardOf(d, storyboardOfVideo(d, videoId)?.id)
-  return card && withBriefLegal(d, videoId, withBriefEndLine(d, videoId, withCampaignLine(d, videoId, card)))
+  if (!card) return undefined
+  const named = d.project.title && !/^untitled/i.test(d.project.title) ? d.project.title : 'Your brand'
+  return withBriefLegal(d, videoId, withCampaignLine(d, videoId, cardCopy(card, endLineOf(briefForJob(d, { kind: 'video', id: videoId })?.brief.spine), briefLegal(d, videoId), named)))
+}
+
+/** The end card a storyboard's cell shows: the one its film will carry (endCardFrom: the Brief's end line, no placement
+ *  words, the legal line apart), else the shot's own words cleaned (UAT round 4 F34: the cell read "Logo top right…"). */
+export function storyboardEndCard(d: ProductionDocument, storyboardId: Id | undefined): CutEndCard | undefined {
+  const videoId = storyboardId ? Object.keys(d.videos ?? {}).find((v) => storyboardOfVideo(d, v)?.id === storyboardId) : undefined
+  if (videoId) return endCardFrom(d, videoId)
+  const card = endCardOf(d, storyboardId)
+  const named = d.project.title && !/^untitled/i.test(d.project.title) ? d.project.title : 'Your brand'
+  return card && cardCopy(card, undefined, undefined, named)
 }
 
 const plainWords = (x: string | undefined) => (x ?? '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+const within = (part: string, whole: string) => { const p = plainWords(part); return !!p && plainWords(whole).includes(p) }
 
-/** A card that does not say the linked Brief's end line leads with it, the name it had going underneath (UAT round 4
- *  F34: the card read "Copperell Refill", the project's name, and the agreed "Refill. Not landfill." was only a voice-over
- *  no clip said). A card that says the line already, or a film with no Brief end line, is left as it is. */
-function withBriefEndLine(d: ProductionDocument, videoId: Id, card: CutEndCard): CutEndCard {
-  const line = endLineOf(briefForJob(d, { kind: 'video', id: videoId })?.brief.spine)
-  if (!line || plainWords(`${card.headline} ${card.line}`).includes(plainWords(line))) return card
-  const under = card.headline.trim() || card.line
-  return { ...card, headline: line.slice(0, 120), line: plainWords(under) === plainWords(line) ? card.line : under }
+/** Words that place things on the card ("Logo top right.", "centred", "lower third"): layout, never copy (UAT round 4
+ *  F34: the Director's "Logo top right. Small line below: …" was printed on the ad). */
+const PLACE = /\b(?:top|bottom|upper|lower)[\s-]+(?:left|right|centre|center|corner|third)\b|\b(?:logo|lock-?up|pack ?shot)\s+(?:at\s+the\s+)?(?:top|bottom|left|right|centred|centered|corner|in the corner)\b|\b(?:placed|placement|positioned|layout|typeface|font size|point size)\b/i
+/** A label that says where words go ("Small line below:", "Text under:"): the label is layout, what follows may be copy. */
+const WHERE_LABEL = /^(?:(?:a|the)\s+)?(?:small(?:er)?\s+|fine\s+)?(?:line|text|copy|type|print|words?)\s+(?:below|above|under(?:neath)?|beneath|at the (?:bottom|top))\s*[:\-\u2013\u2014]\s*/i
+
+/**
+ * A card made from the end card shot, as copy only (UAT round 4 F34, local run: the card read "Refill" over "Not landfill.
+ * Logo top right. Small line below: Keep out of reach of children…", with the legal line again under it).
+ * - Placement sentences are dropped, and a "Small line below:" label leaves only what follows it.
+ * - What the Brief's legal line says stays in the legal field alone: never in the headline or the line too.
+ * - With a Brief end line, the headline is that line word for word (never split at a full stop), and the line is what
+ *   copy is left once the end line's own words are out, else the brand's name.
+ * - A card with no Brief end line keeps its own headline and line, cleaned the same way.
+ */
+export function cardCopy(card: CutEndCard, end: string | undefined, legal: string | undefined, named: string): CutEndCard {
+  const keep = (text: string) => sentences(text).map((x) => x.replace(WHERE_LABEL, '').trim())
+    .filter((x) => !!plainWords(x) && !PLACE.test(x) && !(legal && (within(x, legal) || within(legal, x))))
+  if (end) {
+    const left = keep([card.headline, card.line].filter(Boolean).map((x) => (/[.!?]$/.test(x.trim()) ? x.trim() : `${x.trim()}.`)).join(' '))
+      .filter((x) => !within(x, end))
+    const line = left.join(' ').trim()
+    return { ...card, headline: end.slice(0, 120), line: (line && !within(line, end) ? line : plainWords(named) === plainWords(end) ? '' : named).slice(0, 200) }
+  }
+  const headline = keep(card.headline).join(' ')
+  const line = keep(card.line).join(' ')
+  if (plainWords(headline) === plainWords(card.headline) && plainWords(line) === plainWords(card.line)) return card
+  return { ...card, headline: bare(headline) || named, line: line || bare(headline) || named }
 }
 
 /** A new end card for a film with no end-card shot: the brand name set in type (the project's name; there is no logo without a
