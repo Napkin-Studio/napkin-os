@@ -284,7 +284,7 @@ _LINE_Q = re.compile(r"\b(?:line|tag[\s-]?line|strap[\s-]?line|end[\s-]?line|sig
 _LEGAL_Q = re.compile(r"\b(?:legal|disclaimer|warning|small\s+print|label|mandatory\s+copy|biocid\w*|terms)\b", re.I)
 # an answer that says to keep the words exactly: the line it repeats is fixed, whatever the question called it
 _VERBATIM = re.compile(r"\b(?:word\s+for\s+word|verbatim|exactly\s+as\s+(?:written|it\s+is)|as\s+written)\b", re.I)
-_QUOTED = re.compile(r"(?<!\w)[\"'‘“]([^\"'‘’“”]{2,120}?)[\"'’”](?!\w)")
+_QUOTED = re.compile(r"(?<!\w)[\"'‘“]((?:[^\"'‘’“”]|(?<=\w)['’](?=\w)){2,120}?)[\"'’”](?!\w)")
 _QA_SPLIT = re.compile(r"\s+—\s+Answer:\s*", re.I)
 _END_LINE_ITEM = re.compile(r"^\s*(?:end[\s-]?line|sign[\s-]?off|tag[\s-]?line|brand\s+line)\b", re.I)
 _NO = re.compile(r"^\s*(?:no|none|n/a|not yet|tbc|to be confirmed|neither)\b", re.I)
@@ -363,3 +363,89 @@ def carry_fixed_line(mandatories, line: str):
     item = f"End line: '{line}' (word for word)"
     kept = [x for x in items if not _END_LINE_ITEM.match(text_of(x))]
     return [item] + kept
+
+
+# ── candidate lines the client could not choose between (UAT round 4, L1) ─────────────────────────────────────────
+# "MESSAGE: "Clean, without the plastic." or "Refill. Not landfill." Board can't decide." A first draft that keeps neither
+# line and asks nothing about them leaves the fixed-line step nothing to act on, so code asks the question itself.
+_LINE_LABEL = re.compile(r"^\s*[-*•]?\s*(?:the\s+)?(?:message|line|tag[\s-]?line|strap[\s-]?line|slogan|end[\s-]?line|"
+                         r"sign[\s-]?off|endline|campaign\s+line|headline|platform)s?\s*[:\-–—]", re.I)
+_UNDECIDED = re.compile(r"\b(?:can'?t|cannot|can\s+not|couldn'?t)\s+(?:decide|choose|agree|pick)|\bundecided\b|"
+                        r"\b(?:choose|choosing|deciding|torn)\s+between\b|\bnot\s+sure\s+which\b|\beither\b", re.I)
+_DQUOTED = re.compile(r"[\"“]([^\"“”]{2,120}?)[\"”]|(?<!\w)[‘']((?:[^‘’']|(?<=\w)['’](?=\w)){2,120}?)[’'](?!\w)")
+
+
+CANDIDATE_WORDS = 15
+
+
+def candidate_lines(text: str) -> list[str]:
+    """The lines the client's words offer as a choice: two or more quoted options on a MESSAGE / LINE / TAGLINE line, or
+    two or more quoted options joined by 'or' where the client says they cannot decide. [] when it offers none."""
+    out: list[str] = []
+    for row in re.split(r"\n+", text or ""):
+        opts = [(a or b).strip() for a, b in _DQUOTED.findall(row)]
+        opts = [o for o in opts if 1 <= len(o.split()) <= CANDIDATE_WORDS]
+        if len(opts) < 2:
+            continue
+        joined = re.search(r"[\"”’']\s*,?\s*or\s+[\"“‘']", row, re.I)
+        if _LINE_LABEL.search(row) or (joined and _UNDECIDED.search(row)):
+            out += [o for o in opts if o not in out]
+    return out
+
+
+def line_question(candidates: list[str]) -> str:
+    """The question code asks when the client named candidate lines and the draft settled none."""
+    return f"Which line does the board prefer: the client's {_quote_list(candidates)}? — It is the end line every piece carries, word for word."
+
+
+def _names(ask: str, line: str) -> bool:
+    return " ".join(_norm_words(line)) in " ".join(_norm_words(ask))
+
+
+def _quote_list(xs: list[str]) -> str:
+    q = [f"'{x}'" for x in xs]
+    return q[0] if len(q) == 1 else f"{', '.join(q[:-1])} or {q[-1]}"
+
+
+def rewrite_line_question(question: str, candidates: list[str]) -> str:
+    """A line question the agents asked without the client's own candidate lines, asked again so it names them, with the
+    agency's own suggestion(s) kept as an extra option (owner, 2026-11-24: "Go for it"). "Which line does the board prefer,
+    given we recommend 'The last spray bottle you'll ever need to buy'?" -> "Which line does the board prefer: the client's
+    'Clean, without the plastic.' or 'Refill. Not landfill.', or our suggestion 'The last spray bottle you'll ever need to
+    buy'?". Its "— why" clause, if any, stays."""
+    ask, _, why = question.partition(" — ")
+    ours = [(a or b).strip() for a, b in _DQUOTED.findall(ask)]
+    ours = [o for o in dict.fromkeys(ours) if not any(_norm_words(o) == _norm_words(c) for c in candidates)
+            and 1 <= len(o.split()) <= CANDIDATE_WORDS]
+    head = f"Which line does the board prefer: the client's {_quote_list(candidates)}"
+    if ours:
+        head += f", or our suggestion{'s' if len(ours) > 1 else ''} {_quote_list(ours)}"
+    return head + "?" + (f" — {why}" if why else "")
+
+
+def settle_line_question(candidates: list[str], mandatories, questions: list[str], answered: int = 0) -> list[str] | None:
+    """The questions with the client's candidate lines asked about, or None when nothing changes. No candidates, an end
+    line already in mandatories, or a line question already answered: unchanged. A line question that names every
+    candidate: unchanged. One that does not: rewritten in place to name them (rewrite_line_question), never a second
+    question. None at all: the code's own question goes in after the first `answered` items (the planner's answers)."""
+    if not candidates:
+        return None
+    items = [text_of(x) for x in (mandatories if isinstance(mandatories, list) else [mandatories or ""])]
+    if any(_END_LINE_ITEM.match(t) for t in items):
+        return None
+    for i, q in enumerate(questions or []):
+        ask, sep, _ = str(q).partition(" — Answer:")
+        ask = ask.split(" — Left open:")[0]
+        is_line = (_LINE_Q.search(ask) or any(_names(ask, c) for c in candidates)) and not _LEGAL_Q.search(ask)
+        if not is_line:
+            continue
+        if sep or " — Left open:" in str(q):
+            return None  # answered (or left open with why): the fixed-line step reads it
+        if all(_names(ask, c) for c in candidates):
+            return None
+        out = list(questions)
+        out[i] = rewrite_line_question(str(q), candidates)
+        return out
+    out = list(questions or [])
+    out.insert(min(answered, len(out)), line_question(candidates))
+    return out
