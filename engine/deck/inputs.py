@@ -613,7 +613,8 @@ def from_deck_document(path: Path) -> tuple[Inputs, dict]:
     rd = lambda n: yaml.safe_load(z.read(n)) if n in names else None  # noqa: E731
     man, data = rd("manifest.yaml") or {}, rd("shared/data.yaml") or {}
     attached = (man.get("lineage") or {}).get("attached") or []
-    apps = {(a.get("carried") or {}).get("document_id"): a.get("app_id") for a in attached if (a.get("carried") or {}).get("document_id")}
+    # clan-sdk flattens Attached.carried into the entry, so each one names its document_id itself (manifest.rs, `#[serde(flatten)]`).
+    apps = {a.get("document_id"): a.get("app_id") for a in attached if isinstance(a, dict) and a.get("document_id")}
     members = {"facts": rd("shared/facts.yaml"), "findings": rd("shared/findings.yaml"), "sources": rd("shared/sources.yaml"),
                "decisions": rd("agent/decision-chain.yaml")}
     inp = from_upstream(data, {k: v for k, v in members.items() if v is not None}, apps=apps,

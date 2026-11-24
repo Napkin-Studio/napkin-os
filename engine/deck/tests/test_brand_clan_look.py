@@ -80,7 +80,7 @@ def test_inputs_carry_the_brand_clan_with_the_library_off(tmp_path):
 
     from deck import inputs
     did = "doc-ie-napkin-brand-zero"
-    man = {"document_id": "doc-deck-1", "lineage": {"attached": [{"app_id": "ie.napkin.brand", "carried": {"document_id": did}, "version": 2}]}}
+    man = {"document_id": "doc-deck-1", "lineage": {"attached": [{"app_id": "ie.napkin.brand", "document_id": did, "version": 2}]}}
     data = {"upstream": {did: ZERO}, "inputs": {"library": {"enabled": False}}}
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as z:
@@ -103,7 +103,7 @@ def test_inputs_read_the_logo_files_the_host_carried(tmp_path):
 
     from deck import inputs
     did = "doc-ie-napkin-brand-zero"
-    man = {"document_id": "doc-deck-1", "lineage": {"attached": [{"app_id": "ie.napkin.brand", "carried": {"document_id": did}, "version": 2}]}}
+    man = {"document_id": "doc-deck-1", "lineage": {"attached": [{"app_id": "ie.napkin.brand", "document_id": did, "version": 2}]}}
     data = {"upstream": {did: ZERO}}
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as z:

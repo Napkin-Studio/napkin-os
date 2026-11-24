@@ -454,9 +454,9 @@ def _deck_clan(path: Path, *, brand_version=5, library=True, look=None) -> Path:
             "inputs": {"prompt": {"client": "Lumen Water", "project": "Awareness", "text": "Lumen Water wants a summer campaign."},
                        "library": {"enabled": library}},
             "look": look or {}}
-    attached = [{"app_id": "ie.napkin.campaign-research", "carried": {"document_id": "res-1"}},
-                {"app_id": "ie.napkin.brand", "carried": {"document_id": "brand-1"}},
-                {"app_id": "ie.napkin.style-pack", "carried": {"document_id": "pack-1"}}]
+    attached = [{"app_id": "ie.napkin.campaign-research", "document_id": "res-1"},
+                {"app_id": "ie.napkin.brand", "document_id": "brand-1"},
+                {"app_id": "ie.napkin.style-pack", "document_id": "pack-1"}]
     with zipfile.ZipFile(path, "w") as z:
         z.writestr("manifest.yaml", yaml.safe_dump({"document_id": "deck-1", "app": {"app_id": "ie.napkin.deck-maker"}, "lineage": {"attached": attached}}))
         z.writestr("shared/data.yaml", yaml.safe_dump(data))
