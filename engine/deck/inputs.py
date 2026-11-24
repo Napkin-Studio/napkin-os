@@ -626,6 +626,17 @@ def from_deck_document(path: Path) -> tuple[Inputs, dict]:
         # is Off and the deck still wears Tidewell's look); the library gate keeps a kit's pins and pictures out of the content.
         if did in up and app == BRAND_APP and brand is None:
             brand = {**up[did], "_document_id": did} if isinstance(up[did], dict) else up[did]
+            # Its logo files travel with it (owner 2026-11-24, "Yes it reaches deck"): the host copies each published logo to
+            # human/assets/brand/<brand document id>/<file> on attach and Update (napkin-host library::brand_logo_entry).
+            if isinstance(brand, dict):
+                files = {}
+                for lg in ((brand.get("visual") or {}).get("logos") or []):
+                    a = str((lg or {}).get("asset") or "")
+                    entry = f"human/assets/brand/{did}/{a.rsplit('/', 1)[-1]}" if a else ""
+                    if entry in names and (lg or {}).get("variant") in ("dark", "light", "mark") and lg["variant"] not in files:
+                        files[lg["variant"]] = {"name": a.rsplit("/", 1)[-1], "bytes": z.read(entry)}
+                if files:
+                    brand["_logo_files"] = files
         elif did in up and lib and app == STYLE_PACK_APP and pack is None:
             pack = (up[did], lambda p: z.read(p) if p in names else None)
     if lib is False and any(app in KIT_APPS for app in apps.values()):

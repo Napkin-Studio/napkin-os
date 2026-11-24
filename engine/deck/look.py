@@ -98,9 +98,33 @@ def brand_tokens(frozen_brand: dict | None = None, document_id: str | None = Non
     kit = fb.get("kit") if isinstance(fb.get("kit"), dict) else {}
     if isinstance(kit.get("version"), int):
         out["kit"] = {"document_id": document_id or fb.get("_document_id"), "version": kit["version"]}
-    if any(isinstance(lg, dict) and lg.get("asset") for lg in visual.get("logos") or []):
-        out["held"].append(f"{out['name'] or 'The Brand Clan'}'s logo is not placed: a deck carries the Brand Clan's words and colours, not its "
-                           "logo file. The logo stays in the Brand Clan.")
+    # The logo FILES travel with the Brand Clan (owner 2026-11-24, "Yes it reaches deck"): inputs.from_deck_document reads them from
+    # human/assets/brand/<id>/ into ``_logo_files``. An SVG is placed as its text, a PNG or JPEG as bytes. A Brand Clan is the client's own
+    # by construction (only the client's Brand Clans can be attached), so its logo is placed for the deck's client.
+    files = fb.get("_logo_files") if isinstance(fb.get("_logo_files"), dict) else {}
+    for variant in ("dark", "light"):
+        f = files.get(variant) or (files.get("mark") if variant == "dark" else None)
+        if isinstance(f, dict) and isinstance(f.get("bytes"), (bytes, bytearray)):
+            data = bytes(f["bytes"])
+            if str(f.get("name", "")).lower().endswith(".svg"):
+                out["logos"][variant] = data.decode("utf-8", "replace")
+            elif data.startswith(b"\x89PNG"):
+                out["logos"][variant] = data
+            else:   # a JPEG or WebP logo becomes a PNG, the one raster the deck's logo asset takes
+                try:
+                    from io import BytesIO   # noqa: PLC0415
+                    from PIL import Image   # noqa: PLC0415
+                    buf = BytesIO()
+                    Image.open(BytesIO(data)).convert("RGBA").save(buf, "PNG")
+                    out["logos"][variant] = buf.getvalue()
+                except Exception:   # noqa: BLE001 - an unreadable picture is held and said, never placed broken
+                    out["held"].append(f"{out['name'] or 'The Brand Clan'}'s {variant} logo could not be read, so it is not placed.")
+    if out["logos"]:
+        out["logo_placement"] = "cover_only"
+        out["for_client"] = True
+    elif any(isinstance(lg, dict) and lg.get("asset") for lg in visual.get("logos") or []):
+        out["held"].append(f"{out['name'] or 'The Brand Clan'}'s logo is not placed: its file did not reach this deck. Update the Brand Clan "
+                           "on the deck to bring it.")
     return out
 
 
@@ -257,7 +281,7 @@ def resolve(*, theme: str = themes.DEFAULT, wears: str = "agency", strict_brand:
     logo, held = None, list((kit or {}).get("held") or [])
     if logos.get("dark"):
         bname = str((kit or {}).get("name") or "")
-        if same_name(bname, client):
+        if (kit or {}).get("for_client") or same_name(bname, client):
             logo = {"data": logos["dark"], "name": bname, "placement": (kit or {}).get("logo_placement") or "cover_only"}
         else:
             held.append(f"The brand kit's logo is held: the kit is for \"{bname or 'an unnamed brand'}\" and the brief's client is "

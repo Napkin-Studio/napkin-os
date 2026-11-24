@@ -168,10 +168,12 @@ rules and tone, imagery style, the source file, and no UI for the provisions), e
 | Reader | Reads | From |
 |---|---|---|
 | Brief Maker chip, Deck Update look, Production node, Territories frames | `data.upstream.<id>` (the frozen copy), `lineage.attached[].version`, `kit.version`, `visual.*`, `voice.*`, `imagery.*` | the work document |
-| Deck `look.brand_tokens` | `visual.colours[].role/hex`, `visual.typography[].role/family`, `visual.logos[variant dark/light]`, `imagery.bans[]`, `kit.version` | frozen copy |
+| Deck `look.brand_tokens` | `visual.colours[].role/hex`, `visual.typography[].role/family`, `visual.logos[variant dark/light/mark]` and their files, `imagery.bans[]`, `kit.version` | frozen copy, `human/assets/brand/<id>/` |
 | Production jobs | `voice` for words; `visual`, `imagery` for pictures; the nearest Brand Clan node up the link graph | the document's `lineage.attached[]` and each node's link |
 
-A frozen copy never holds `app/brand/` (draft, pending, versions): attach takes `shared/data.yaml` only.
+A frozen copy never holds `app/brand/` (draft, pending, versions): attach takes `shared/data.yaml`, plus the logo files.
+
+**Logo files travel with the copy** (owner, 2026-11-24: "Yes it reaches deck"). When attach, Update or `work.update` carries a Brand Clan, the host also copies each `visual.logos[].asset` file into the work document at `human/assets/brand/<brand document_id>/<file name>` (`napkin_host::library::brand_logo_entry`), so the work holds the logo of the version it holds; a newer logo arrives only with Update. The Deck reads them there (`engine/deck/inputs.py`, `_logo_files`) and places the `dark` logo (the `mark` when there is no `dark`; SVG, PNG, or a JPEG/WebP turned PNG) on the cover and the closing slide, as the client's own (`for_client`), whatever the Brand Clan is named. A logo whose file is not in the work is held and said ("its file did not reach this deck. Update the Brand Clan on the deck to bring it."), never dropped silently.
 
 ## 9. Compatibility
 

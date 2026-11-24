@@ -22,12 +22,38 @@ def test_brand_tokens_read_the_brand_clan_by_role_and_id():
     assert "1C2630" not in t["chart"] and "7FD6BD" in t["chart"]
 
 
-def test_the_logo_is_held_and_said_never_dropped_silently():
+def test_a_logo_whose_file_did_not_reach_the_deck_is_held_and_said():
     t = look.brand_tokens(ZERO)
     assert t["logos"] == {}
-    assert t["held"] and "logo" in t["held"][0]
+    assert t["held"] and "did not reach this deck" in t["held"][0]
     got = look.resolve(brand=t, wears="client", agency=AGENCY)
-    assert any("logo" in h for h in got.held)
+    assert any("did not reach this deck" in h for h in got.held)
+
+
+SVG = b"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 10'><rect width='40' height='10' fill='#F4F6F7'/></svg>"
+
+
+def test_the_logo_file_reaches_the_deck_and_is_placed_for_the_client():
+    # owner 2026-11-24, "Yes it reaches deck": the file travels with the Brand Clan (inputs reads it into _logo_files)
+    fb = {**ZERO, "_document_id": "doc-zero", "_logo_files": {"dark": {"name": "logo-zero-dark.svg", "bytes": SVG}}}
+    t = look.brand_tokens(fb)
+    assert t["logos"]["dark"].startswith("<svg") and t["held"] == [] and t["for_client"] is True
+    # the Brand Clan is named for a look ("Zero"), not the client: it is still placed for the deck's client
+    got = look.resolve(brand=t, wears="client", agency=AGENCY, client="Tidewell")
+    assert got.logo and got.logo["placement"] == "cover_only" and got.logo["data"].startswith("<svg")
+    assert not any("logo" in h for h in got.held)
+
+
+def test_a_png_or_jpeg_logo_is_placed_as_a_png():
+    from io import BytesIO
+
+    from PIL import Image
+    buf = BytesIO()
+    Image.new("RGB", (40, 10), (28, 38, 48)).save(buf, "JPEG")
+    t = look.brand_tokens({**ZERO, "_logo_files": {"dark": {"name": "logo.jpg", "bytes": buf.getvalue()}}})
+    assert t["logos"]["dark"].startswith(b"\x89PNG")
+    bad = look.brand_tokens({**ZERO, "_logo_files": {"dark": {"name": "logo.jpg", "bytes": b"not a picture"}}})
+    assert bad["logos"] == {} and any("could not be read" in h for h in bad["held"])
 
 
 def test_the_client_brand_clan_wins_over_the_agency_look():
@@ -64,5 +90,28 @@ def test_inputs_carry_the_brand_clan_with_the_library_off(tmp_path):
     p.write_bytes(buf.getvalue())
     _inp, ctx = inputs.from_deck_document(p)
     assert ctx["library"] is False
+    assert "_logo_files" not in ctx["brand"], "no logo file was carried into this deck"
     assert ctx["brand"]["name"] == "Zero" and ctx["brand"]["_document_id"] == did
     assert look.brand_tokens(ctx["brand"])["kit"] == {"document_id": did, "version": 2}
+
+
+def test_inputs_read_the_logo_files_the_host_carried(tmp_path):
+    import io
+    import zipfile
+
+    import yaml
+
+    from deck import inputs
+    did = "doc-ie-napkin-brand-zero"
+    man = {"document_id": "doc-deck-1", "lineage": {"attached": [{"app_id": "ie.napkin.brand", "carried": {"document_id": did}, "version": 2}]}}
+    data = {"upstream": {did: ZERO}}
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("manifest.yaml", yaml.safe_dump(man))
+        z.writestr("shared/data.yaml", yaml.safe_dump(data))
+        z.writestr(f"human/assets/brand/{did}/logo-zero-dark.svg", SVG)
+    p = tmp_path / "deck.clan"
+    p.write_bytes(buf.getvalue())
+    _inp, ctx = inputs.from_deck_document(p)
+    assert ctx["brand"]["_logo_files"] == {"dark": {"name": "logo-zero-dark.svg", "bytes": SVG}}
+    assert look.brand_tokens(ctx["brand"])["logos"]["dark"].startswith("<svg")

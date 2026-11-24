@@ -967,3 +967,94 @@ fn competitors_found_by_research_are_a_draft_a_person_publishes() {
         "the schema refuses a competitor with no name"
     );
 }
+
+/// Owner 2026-11-24, "Yes it reaches deck": a Brand Clan's logo FILES travel with its frozen copy, under
+/// human/assets/brand/<brand document id>/<file>, on attach and on Update, so the deck can place the logo.
+#[test]
+fn the_logo_files_travel_with_the_brand_clan_into_work() {
+    let s = store();
+    let t = client(&s, "Tidewell");
+    let z = zero(&s, &t);
+    let path = z["path"].as_str().unwrap();
+    let brand_id = z["document_id"].as_str().unwrap().to_string();
+    let svg = b"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'><rect width='10' height='10' fill='#1C2630'/></svg>".to_vec();
+    let put = call_json_bytes(
+        &s,
+        &me(),
+        "asset.put",
+        json!({"path": path, "name": "logo-dark.svg"}),
+        svg.clone(),
+    )
+    .unwrap();
+    let asset = put["path"].as_str().unwrap().to_string();
+    let mut cand = z["data"].clone();
+    cand.as_object_mut().unwrap().remove("kit");
+    cand["visual"]["logos"] = json!([{"id": "wordmark-dark", "label": "Wordmark, dark ground", "variant": "dark", "asset": asset}]);
+    ok(
+        &s,
+        &me(),
+        "draft.save",
+        json!({"path": path, "candidate": cand}),
+    );
+    ok(
+        &s,
+        &me(),
+        "publish",
+        json!({"path": path, "expect_version": 1}),
+    );
+    let brief = create_instance_for(&s, BRIEF, Some("Summer brief".into()), Some(&t)).unwrap();
+    let doc = Document::load(&s, brief.clone()).unwrap();
+    let (change, _) = attach_change(&s, &me(), &doc, &brand_id, AttachMode::Attach).unwrap();
+    s.apply(&change).unwrap();
+    let logo_at = napkin_host::library::brand_logo_entry(&brand_id, &asset);
+    assert!(logo_at.starts_with(&format!("human/assets/brand/{brand_id}/")));
+    assert_eq!(
+        entry(&s, brief.as_str(), &logo_at).as_deref(),
+        Some(&svg[..]),
+        "the logo file is in the work document"
+    );
+    // a new logo published later reaches work only when a person presses Update
+    let svg2 = b"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'><circle r='5' cx='5' cy='5'/></svg>".to_vec();
+    let put2 = call_json_bytes(
+        &s,
+        &me(),
+        "asset.put",
+        json!({"path": path, "name": "logo-dark-2.svg"}),
+        svg2.clone(),
+    )
+    .unwrap();
+    let asset2 = put2["path"].as_str().unwrap().to_string();
+    let v2 = ok(&s, &me(), "get", json!({"path": path}));
+    let mut cand2 = v2["data"].clone();
+    cand2.as_object_mut().unwrap().remove("kit");
+    cand2["visual"]["logos"][0]["asset"] = json!(asset2);
+    ok(
+        &s,
+        &me(),
+        "draft.save",
+        json!({"path": path, "candidate": cand2}),
+    );
+    ok(
+        &s,
+        &me(),
+        "publish",
+        json!({"path": path, "expect_version": 2}),
+    );
+    let logo_at2 = napkin_host::library::brand_logo_entry(&brand_id, &asset2);
+    assert_eq!(
+        entry(&s, brief.as_str(), &logo_at2),
+        None,
+        "not before Update"
+    );
+    ok(
+        &s,
+        &me(),
+        "work.update",
+        json!({"path": path, "work": brief.as_str()}),
+    );
+    assert_eq!(
+        entry(&s, brief.as_str(), &logo_at2).as_deref(),
+        Some(&svg2[..]),
+        "Update brings the new file"
+    );
+}

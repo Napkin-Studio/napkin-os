@@ -1475,6 +1475,9 @@ pub fn attach_change(
     }
     let out = clan_sdk::attach(doc.clan(), source.clan())?;
     let bytes = with_projection(out.bytes)?;
+    // A Brand Clan's logo files travel with its frozen copy (owner 2026-11-24, "Yes it reaches deck"): attach takes
+    // shared/data.yaml only, so the files its logos name are copied too, for the deck to place.
+    let bytes = with_brand_logos(store, source.clan(), source_document_id, bytes)?;
     let bytes = attribute_attach(bytes, doc.clan(), ctx)?;
     let after = ClanFile::from_bytes(bytes.clone())?;
     let mut change = doc.change(bytes)?;
@@ -1500,6 +1503,63 @@ pub fn attach_change(
         "carried_decisions": out.carried_decisions,
     });
     Ok((change, reply))
+}
+
+/// Where a Brand Clan's logo file sits in a work document that holds it: `human/assets/brand/<brand document id>/<file name>`.
+/// The deck reads the logo from here (contract brand-clan.md section 8).
+pub fn brand_logo_entry(brand_document_id: &str, asset: &str) -> String {
+    let name = asset.rsplit('/').next().unwrap_or(asset);
+    format!("human/assets/brand/{brand_document_id}/{name}")
+}
+
+/// Copy the files a Brand Clan's published logos name (`visual.logos[].asset`) into `bytes` (the work document after
+/// attach), under [`brand_logo_entry`]. Anything that is not a Brand Clan, or a logo whose file cannot be read, is left
+/// as it is: the copy never blocks a link. A linked file is read from the store's blobs.
+fn with_brand_logos(
+    store: &dyn DocStore,
+    source: &ClanFile,
+    source_id: &str,
+    bytes: Vec<u8>,
+) -> HostResult<Vec<u8>> {
+    let is_brand = source
+        .manifest()
+        .app
+        .as_ref()
+        .is_some_and(|a| a.app_id == BRAND_APP_ID);
+    if !is_brand {
+        return Ok(bytes);
+    }
+    let Some(data) = source
+        .read_entry(DATA)
+        .ok()
+        .and_then(|b| serde_yaml::from_slice::<serde_yaml::Value>(&b).ok())
+    else {
+        return Ok(bytes);
+    };
+    let assets: Vec<String> = data
+        .get("visual")
+        .and_then(|v| v.get("logos"))
+        .and_then(|l| l.as_sequence())
+        .map(|ls| {
+            ls.iter()
+                .filter_map(|l| l.get("asset").and_then(|a| a.as_str()).map(String::from))
+                .filter(|a| a.starts_with("human/assets/") && !a.contains(".."))
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut out = bytes;
+    for asset in assets {
+        let file = match source.manifest().file_by_path(&asset) {
+            Some(f) if f.linked => store.blobs().and_then(|b| {
+                crate::blobs::linked_bytes(b, &asset, f.sha256.as_deref().unwrap_or("")).ok()
+            }),
+            _ => source.read_entry(&asset).ok(),
+        };
+        let Some(file) = file else { continue };
+        let now = ClanFile::from_bytes(out.clone())?;
+        out = clan_sdk::patch_asset(&now, &brand_logo_entry(source_id, &asset), file)?;
+    }
+    Ok(out)
 }
 
 /// The change that unlinks `which` (a source's `document_id`, or the
