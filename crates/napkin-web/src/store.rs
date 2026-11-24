@@ -30,6 +30,19 @@ use napkin_host::{
     Base, BlobInfo, BlobStore, Change, DocId, HostError, HostResult, Library, PartStore, Version,
 };
 
+/// What a trashed document said about itself, and who trashed it.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct TrashNote {
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub app_id: Option<String>,
+    #[serde(default)]
+    pub client_id: Option<String>,
+    #[serde(default)]
+    pub by: Option<String>,
+}
+
 pub struct TenantStore {
     root: PathBuf,
     /// One lock per document path: the version check and the write are one
@@ -75,7 +88,9 @@ impl TenantStore {
 
     /// Move a document to the trash and say when (ms since the epoch).
     /// Only `doc-` documents: an app template or the home page is never trashed.
-    pub fn trash(&self, id: &DocId, now_ms: u128) -> HostResult<()> {
+    /// What the Trash page shows (title, tool, client, who) is read from the
+    /// document and kept beside it in `<ms>-<slug>.json`.
+    pub fn trash(&self, id: &DocId, now_ms: u128, by: Option<&str>) -> HostResult<()> {
         if !id.as_str().starts_with("doc-") {
             return Err(HostError::bad_request("only a document can be deleted"));
         }
@@ -92,6 +107,28 @@ impl TenantStore {
         let dir = self.trash_dir();
         let io = |e: std::io::Error| HostError::internal(e.to_string());
         std::fs::create_dir_all(&dir).map_err(io)?;
+        let note = std::fs::read(&path)
+            .ok()
+            .and_then(|b| clan_sdk::ClanFile::from_bytes(b).ok())
+            .map(|c| {
+                let m = c.manifest();
+                TrashNote {
+                    title: Some(m.title.clone()),
+                    app_id: m.app.as_ref().map(|a| a.app_id.clone()),
+                    client_id: m.client.as_ref().map(|r| r.id.clone()),
+                    by: by.map(String::from),
+                }
+            })
+            .unwrap_or(TrashNote {
+                by: by.map(String::from),
+                ..TrashNote::default()
+            });
+        // The note first: a trashed document without one still lists (as
+        // untitled), a note without a document is never read.
+        if let Ok(json) = serde_json::to_vec(&note) {
+            let stem = name.strip_suffix(".clan").unwrap_or(name);
+            let _ = std::fs::write(dir.join(format!("{now_ms}-{stem}.json")), json);
+        }
         std::fs::rename(&path, dir.join(format!("{now_ms}-{name}"))).map_err(io)?;
         sync_dir(&dir);
         if let Some(d) = path.parent() {
@@ -119,6 +156,15 @@ impl TenantStore {
         out
     }
 
+    /// What was kept about the copy of `id` trashed at `ms`, if anything.
+    pub fn trash_note(&self, id: &DocId, ms: u128) -> TrashNote {
+        let slug = id.as_str().trim_start_matches("doc-");
+        std::fs::read(self.trash_dir().join(format!("{ms}-{slug}.json")))
+            .ok()
+            .and_then(|b| serde_json::from_slice(&b).ok())
+            .unwrap_or_default()
+    }
+
     /// Put the newest trashed copy of `id` back. A 409 when a document of that
     /// id is in the library already, a 404 when nothing of it is in the trash.
     pub fn restore(&self, id: &DocId) -> HostResult<()> {
@@ -143,6 +189,10 @@ impl TenantStore {
         let dir = path.parent().expect("a document path has a parent");
         std::fs::create_dir_all(dir).map_err(io)?;
         std::fs::rename(self.trash_dir().join(format!("{ms}-{name}")), &path).map_err(io)?;
+        let _ = std::fs::remove_file(self.trash_dir().join(format!(
+            "{ms}-{}.json",
+            name.strip_suffix(".clan").unwrap_or(name)
+        )));
         sync_dir(dir);
         sync_dir(&self.trash_dir());
         Ok(())
@@ -158,8 +208,9 @@ impl TenantStore {
             }
             if !dry_run {
                 let name = format!("{ms}-{}.clan", id.as_str().trim_start_matches("doc-"));
-                std::fs::remove_file(self.trash_dir().join(name))
+                std::fs::remove_file(self.trash_dir().join(&name))
                     .map_err(|e| HostError::internal(e.to_string()))?;
+                let _ = std::fs::remove_file(self.trash_dir().join(name.replace(".clan", ".json")));
             }
             out.push(id);
         }

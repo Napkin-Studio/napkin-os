@@ -237,7 +237,7 @@
     },
     "w_words_sha": {
      "answer": "value",
-     "value": "d62d948a67a9"
+     "value": "822fd293aaaa"
     },
     "w_notes_kept": {
      "answer": "yes"
@@ -263,7 +263,7 @@
      "p_all_approved": 0.0,
      "m_usd": 0,
      "m_seconds": 6.7,
-     "w_words_sha": "d62d948a67a9"
+     "w_words_sha": "822fd293aaaa"
     }
    }
   },
@@ -386,12 +386,7 @@
      "answer": "yes"
     },
     "w_line_length": {
-     "answer": "no",
-     "slides": [
-      "s09"
-     ],
-     "measured": 76,
-     "limit": 75
+     "answer": "yes"
     },
     "m_share_le_30": {
      "answer": "value",
@@ -530,7 +525,7 @@
     },
     "w_words_sha": {
      "answer": "value",
-     "value": "54ab781d7dc5"
+     "value": "53330a0298a4"
     },
     "w_notes_kept": {
      "answer": "yes"
@@ -545,8 +540,8 @@
     }
    },
    "summary": {
-    "yes": 34,
-    "no": 8,
+    "yes": 35,
+    "no": 7,
     "na": 3,
     "metrics": {
      "m_share_le_30": 0.778,
@@ -556,7 +551,7 @@
      "p_all_approved": 0.0,
      "m_usd": 0,
      "m_seconds": 15.0,
-     "w_words_sha": "54ab781d7dc5"
+     "w_words_sha": "53330a0298a4"
     }
    }
   }

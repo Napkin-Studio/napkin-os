@@ -745,3 +745,5 @@ html[data-theme='dark'] .jc-box.sel { box-shadow: 0 0 0 2px var(--ag-acc, var(--
 
 /* The Rendered view's note with Download the ad beside it (pt-film-r2 F19). */
 .rm-renderbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.rm-frombrief { font-size: 11px; margin-left: 8px; padding: 1px 7px; border-radius: 999px; background: var(--paper2, rgba(0,0,0,.06)); }
+.rm-legalhint { font-size: 11.5px; }

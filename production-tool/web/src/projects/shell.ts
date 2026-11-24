@@ -125,7 +125,7 @@ export class Shell {
       const { server, relay } = this.deps
       // With the host: the project is a library document first (its id is the library's), brought down and started.
       if (server?.signedIn && relay.kind === 'http') {
-        const id = await server.create(UNTITLED_TITLE)
+        const id = await server.create(UNTITLED_TITLE, this.deps.clientId)
         const got = await server.open(id)
         return this.importUnpacked(
           { clan: got.bytes, assets: [], mismatched: 0, fileName: '' },
@@ -150,6 +150,8 @@ export class Shell {
     await updateDoc(doc, (d) => { d.project.title = n || UNTITLED_TITLE }, n ? `rename the film to ${n}` : 'let the film name itself')
     // The library lists the manifest's title, so the name reaches it too.
     await session.services.clan?.setTitle(n || UNTITLED_TITLE).catch((e) => console.warn('could not name the library document', e))
+    // A name is a save moment: a tab closed straight after it cannot wait for the minute's save.
+    if (session.services.serverCopy) void session.services.clan?.clan.mirrorNow('manual').catch(() => {})
   }
 
   /** A copy with its own document, canvas and UI; the pictures are shared, as all of them are. */
@@ -206,6 +208,15 @@ export class Shell {
       await storage.dropClan(clanDbFor(id))
       await Promise.all([storage.del(canvasKeyFor(id)), storage.del(uiKeyFor(id)), storage.del(docKeyFor(id)), storage.del(baseKeyFor(id))])
     })
+  }
+
+  /** Undo of a Move to Trash, from Home's toast: the host's copy comes back to the library (this browser's copy went
+   *  with the move; opening it brings it down again). False when there is no host to restore from. */
+  async restore(id: string): Promise<boolean> {
+    const { server, relay } = this.deps
+    if (!server?.signedIn || relay.kind !== 'http') return false
+    await server.restore(id)
+    return true
   }
 
   /** The project's Export zip, from Home's card. */

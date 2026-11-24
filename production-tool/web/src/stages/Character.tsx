@@ -40,6 +40,8 @@ import { sayer } from '../ui/agents/cast'
 import { CanvasController, OTHER_VIEWS, viewLabel, type CanvasSnapshot, type GenerateResult } from '../canvas/controller'
 import { countLine, countRefs, kindOfRole, refLimits, type RefKind, type RefLimits } from '../canvas/refBudget'
 import { croppedCaption } from '../canvas/core/sketch'
+import { sketchShapeLine } from '../jobs/ratioInWords'
+import { guessRole } from '../canvas/boards/layout'
 import { framesFromSketch, sketchDeleteText } from '../doc/remove'
 import { AskCard } from '../ui/AskCard'
 import { ASK_REVEAL_EVENT } from '../ui/askPlaces'
@@ -70,6 +72,7 @@ import { keptCaption } from '../canvas/fit'
 import { isBrandRole, payloadFor, payloadMissing, type BrandPayload } from '../canvas/swatches'
 import { REF_ROLES, type Ask, type CustomData, type ModelChoice, type NamedRef, type RefRole } from '../contracts/types'
 import { REF_ROLE_TABLE } from '../contracts/load'
+import { LinkNotice } from '../LinkNotice'
 import { currentPictureFrame, keyNamed, keysList, mainScript, mainStoryboard, pictureVersions, refsList, videoOfStoryboard } from '../model/selectors'
 import { choiceToSend, modelChoicesFor, modelWhere } from '../capabilities'
 import { lastWorkedModel } from '../jobs/follow'
@@ -863,6 +866,13 @@ export function Character({ initial, active, onPictureEditor }: {
               }} />
             )
           })()}
+          {ctrl && canvas && ownSel && !selBrief && !resizing && !confirming && !placing && !which && ownSel.els.length === 1 && (() => {
+            const c = cardOf(ownSel.els[0])
+            if (!c || (c.kind !== 'script' && c.kind !== 'storyboard' && c.kind !== 'video')) return null
+            const b = bounds(ownSel.els)
+            const tl = toView({ x: b.minX, y: b.minY })
+            return <LinkNotice kind={c.kind} id={c.id} style={{ left: tl.x + 8, top: tl.y + 10 }} />
+          })()}
           {ctrl && selected.length > 0 && !ownSel && !selBrief && !confirming && !placing && (
             <FloatingToolbar ctrl={ctrl} selected={selected} toView={toView} onDelete={requestDelete} onEdit={setEditing} gather={gather} onGather={onGather}
               onSizes={own ? (el) => {
@@ -1616,7 +1626,7 @@ function GeneratePopover({ ctrl, ids, at, onClose, onPlace }: {
         <button className="btn xs ghost" disabled={busy || !oneArea || blocked} title="Click on the canvas where it should land" onClick={() => { onClose(); onPlace({ ids: sent(ids), text, more, modelChoice, limits, people: [...people] }) }}>Place…</button>
       </div>
       <div className="tray-foot nowrap" title="Nothing is sent until you press Generate.">
-        <span className="pt-mono tray-model">{model ?? 'The default model'}{preview.sketch ? <><br />{preview.sketch.label}</> : null}</span>
+        <span className="pt-mono tray-model">{model ?? 'The default model'}{preview.sketch ? <><br />{sketchShapeLine(preview.sketch.aspect, preview.sketch.label, text)}</> : null}</span>
         <button className="btn sm" onClick={onClose}>Cancel</button>
         <button className="btn sm primary" disabled={busy || !oneArea || blocked} title={counted.problem} onClick={() => void submit()}>{busy ? 'Sending…' : 'Generate'}</button>
       </div>
@@ -1635,12 +1645,15 @@ function NamePopover({ ctrl, nodeId, current, presetVariant, at, onClose }: {
   const doc = useDoc()
   const [key, setKey] = useState(current?.key ?? keysList(doc)[0]?.key ?? '')
   const [variant, setVariant] = useState(presetVariant ?? current?.variant ?? '')
-  const [role, setRole] = useState<RefRole>('character')
+  // The role starts from the name and the board it sits on until the person picks one (UAT round 4 F19).
+  const [picked, setRole] = useState<RefRole | null>(null)
+  const purpose = ctrl.boardPurposeOf(nodeId)
   const [moreRoles, setMoreRoles] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [brand, setBrand] = useState<BrandPayload>({ swatches: current?.swatches, font: current?.font, rule: current?.rule })
   const ck = cleanKey(key)
   const cv = cleanVariant(variant)
+  const role: RefRole = picked ?? guessRole(ck, purpose)
   const isNewKey = !!ck && !keyNamed(doc, ck)
   // The role the ref will hold: the one picked for a new key, else its key's (UAT round 2 R2-1: a brand role needs its payload).
   const holds = (isNewKey ? role : (keyNamed(doc, ck)?.role as RefRole | undefined)) ?? role
@@ -1679,10 +1692,10 @@ function NamePopover({ ctrl, nodeId, current, presetVariant, at, onClose }: {
         <div style={{ marginTop: 8 }}>
           <div className="row rolepills" role="radiogroup" aria-label={`What ${ck} is`}>
             <span className="faint" style={{ fontSize: 12 }}>{ck} is</span>
-            {(moreRoles ? REF_ROLES : MAIN_ROLES).map((r) => (
+            {(moreRoles || !MAIN_ROLES.includes(role) ? REF_ROLES : MAIN_ROLES).map((r) => (
               <button key={r} role="radio" aria-checked={role === r} className={`btn xs ${role === r ? 'on' : ''}`} onClick={() => setRole(r)}>{roleWord(r)}</button>
             ))}
-            {!moreRoles && <button className="btn xs ghost" onClick={() => setMoreRoles(true)}>More…</button>}
+            {!moreRoles && MAIN_ROLES.includes(role) && <button className="btn xs ghost" onClick={() => setMoreRoles(true)}>More…</button>}
           </div>
           <div className="faint roleline">{roleLine(role)}</div>
         </div>
@@ -1704,5 +1717,3 @@ function NamePopover({ ctrl, nodeId, current, presetVariant, at, onClose }: {
     </Floating>
   )
 }
-
-

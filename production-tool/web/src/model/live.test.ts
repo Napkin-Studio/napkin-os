@@ -151,9 +151,10 @@ describe('a bare @key with no front stops a plan before anything is sent', () =>
       const a = ref('kapi', 'ref', 'n_kref', SHA('1'), 'character')
       const b = ref('kapi', 'side', 'n_kside', SHA('2'), 'character')
       for (const r of [a, b]) { d.refs[r.id] = r; d.assets[r.asset!] = asset(r.asset!, 'image', { origin: 'uploaded' }) }
+      // A product needs a front as a character does; a location does not (UAT round 4 F32).
       const h = id('key')
-      d.keys[h] = { id: h, v: 1, field_v: {}, key: 'home', role: 'location' }
-      const hf = ref('home', 'front', 'n_hfront', SHA('3'))
+      d.keys[h] = { id: h, v: 1, field_v: {}, key: 'ball', role: 'product' }
+      const hf = ref('ball', 'front', 'n_hfront', SHA('3'), 'product')
       d.refs[hf.id] = hf
       d.assets[hf.asset!] = asset(hf.asset!, 'image', { origin: 'uploaded' })
       Object.assign(ids, { ref: a.id, side: b.id, homeFront: hf.id })
@@ -165,7 +166,7 @@ describe('a bare @key with no front stops a plan before anything is sent', () =>
   }
 
   it('says which key and sends nothing', async () => {
-    const { s, deps, sent } = await kapi('EXT. PARK - DAY\n@kapi chases a ball to @home.')
+    const { s, deps, sent } = await kapi('EXT. PARK - DAY\n@kapi chases @ball home.')
     const err = await planShots(deps).catch((e) => e)
     expect(err).toBeInstanceOf(FrontsMissingError)
     expect(err.keys).toEqual(['kapi'])
@@ -178,12 +179,12 @@ describe('a bare @key with no front stops a plan before anything is sent', () =>
   })
 
   it('names every key that lacks one; a deleted front does not count', async () => {
-    const { s, deps, sent } = await kapi('EXT. PARK - DAY\n@kapi chases a ball to @home.')
-    lifeOf(s).set(new Set(['n_kref', 'n_kside'])) // @home's front was deleted on the canvas
+    const { s, deps, sent } = await kapi('EXT. PARK - DAY\n@kapi chases @ball home.')
+    lifeOf(s).set(new Set(['n_kref', 'n_kside'])) // @ball's front was deleted on the canvas
     const err = await planShots(deps).catch((e) => e)
-    expect(err.keys).toEqual(['kapi', 'home'])
-    expect(err.message).toBe('Set a front for @kapi and @home first: each stands for the whole character, led by its front.')
-    expect(frontKeysIn(err.message)).toEqual(['kapi', 'home'])
+    expect(err.keys).toEqual(['kapi', 'ball'])
+    expect(err.message).toBe('Set a front for @kapi and @ball first: each stands for the whole character, led by its front.')
+    expect(frontKeysIn(err.message)).toEqual(['kapi', 'ball'])
     expect(sent).toEqual([])
     deps.runner.stop?.()
     await s.close()

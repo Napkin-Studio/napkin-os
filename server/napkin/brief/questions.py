@@ -61,8 +61,15 @@ def same_ask(a: str, b: str) -> bool:
     if len(small) < 2:
         return False
     inter = len(ta & tb)
-    # a longer ask needs less of its words to match: five shared words are not a coincidence
-    return inter / len(small) >= (0.6 if len(small) >= 5 else 0.75) or inter / len(ta | tb) >= 0.6
+    # a longer ask needs less of its words to match: five shared words are not a coincidence, and four shared words
+    # carry most of a seven-word ask ("existing liquid customers switch", UAT round 4: asked twice)
+    return (inter / len(small) >= (0.6 if len(small) >= 5 else 0.75) or inter / len(ta | tb) >= 0.6
+            or (inter >= 4 and inter / len(small) >= 0.55))
+
+
+def _figures(question: str) -> frozenset[str]:
+    """The figures a question is about ("99.9%", "€70k"): a shared figure ties two asks to one subject."""
+    return frozenset(t for t in terms(question) if any(c.isdigit() for c in t))
 
 
 def _asks(question: str) -> list[str]:
@@ -82,6 +89,7 @@ def dedupe(questions: list[str]) -> tuple[list[str], list[tuple[str, str]]]:
     them already asked, keeps only the new one."""
     kept: list[str] = []
     asked: list[str] = []  # every single ask kept so far
+    parent: dict[str, str] = {}  # each ask -> the kept question it came from
     merged: list[tuple[str, str]] = []
     for q in questions:
         q = (q or "").strip()
@@ -93,19 +101,28 @@ def dedupe(questions: list[str]) -> tuple[list[str], list[tuple[str, str]]]:
                 merged.append((twin, q))
             continue
         asks = _asks(q)
-        fresh = []
+        fresh, hits = [], []
         for a in asks:
             hit = next((k for k in asked if same_ask(k, a)), None)
             if hit is None:
                 fresh.append(a)
             else:
                 merged.append((hit, a))
+                hits.append(parent.get(hit, hit))
         if not fresh:
             continue
-        if len(fresh) == len(asks) or any(_LEANS.search(f) for f in fresh):
+        leaning = [f for f in fresh if _LEANS.search(f)]
+        # A leftover ask that leans on the dropped half ("does it support 99.9%…?") and names the same figure as the
+        # question that half came from is that question again (UAT round 4: the lab-report question asked twice).
+        if hits and leaning and len(leaning) == len(fresh) and all(_figures(f) and any(_figures(f) & _figures(h) for h in hits) for f in fresh):
+            merged.extend((hits[0], f) for f in fresh)
+            continue
+        if len(fresh) == len(asks) or leaning:
             kept.append(q)
         else:
             kept.append(" and ".join(f[0].lower() + f[1:] if i else f for i, f in enumerate(f.rstrip("?") for f in fresh)) + "?")
+        for f in fresh:
+            parent[f] = kept[-1]
         asked.extend(fresh)
     return kept, merged
 

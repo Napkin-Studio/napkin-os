@@ -7,7 +7,6 @@ import { Character } from './stages/Character'
 import { Storyboard } from './stages/Storyboard'
 import './stages/video.css'
 import { DecisionsDrawer } from './ui/History'
-import { RemakeBar } from './ui/Follow'
 import { CanvasBar } from './ui/chrome/TopBars'
 import { UndoKeys } from './ui/UndoButtons'
 import { SaveKeys } from './ui/SaveButton'
@@ -82,7 +81,6 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
           {/* The Film editor is the two rooms, Make and Edit (features/make-and-edit.clan; owner 2026-11-18). */}
           <Suspense fallback={<div className="editor" role="status" aria-busy="true" />}><Rooms /></Suspense>
         </div>}
-        {stage === 'storyboard' && <RemakeBar />}
         {panel === 'history' && <DecisionsDrawer store={clan} onClose={() => setPanel(null)} />}
       </div>
       {script && <Suspense fallback={<div className="se" role="status" aria-busy="true" />}><ScriptEditor key={script} scriptId={script} /></Suspense>}

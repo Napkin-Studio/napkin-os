@@ -12,6 +12,7 @@
 // Every start sends the node's scope (model/scope.ts scopeOf: what is linked into it) and the
 // @names typed in its box; an unknown @name stops it before anything is sent.
 
+import { ratioInWords } from './ratioInWords'
 import { canLink, type LinkKind } from '../canvas/core/links'
 import type { Id, JobInput, JobInputRef, Link, LinkEndpoint, LinkRole, NamedRef, ProductionDocument, Ratio, RefRole, Storyboard } from '../contracts/types'
 import { updateDoc } from '../doc/store'
@@ -277,7 +278,7 @@ export async function pictureFromWords(deps: FrameDeps, nodeId: Id, words: strin
   const running = pictureJob(d, nodeId)
   if (running && isActive(running.state)) return running.id
   const refs = await promptRefs(deps.relay, d, nodeId, words)
-  const input: JobInput = { text: words.trim().slice(0, 1000), ratio: ratio ?? mainStoryboard(d)?.ratio ?? '16:9', ...(refs.length ? { refs } : {}) }
+  const input: JobInput = { text: words.trim().slice(0, 1000), ratio: ratioInWords(words) ?? ratio ?? mainStoryboard(d)?.ratio ?? '16:9', ...(refs.length ? { refs } : {}) }
   return deps.runner.submit('generate', input, [], { for: 'canvas' }, undefined, undefined, { node: { kind: 'group', id: nodeId } })
 }
 
@@ -336,3 +337,5 @@ export async function nameAsset(store: DocumentStore, asset: string, name: { key
   }, `name refs[${id}]`)
   return id
 }
+
+export { ratioInWords }

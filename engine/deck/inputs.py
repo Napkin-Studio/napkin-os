@@ -270,6 +270,7 @@ def brief_from_data(data: dict, chain: list | None = None, doc_id: str | None = 
     for h in (data.get("capture") or {}).get("how_to_win") or []:
         htw.setdefault(h.get("kind") or "points", []).append({"point": h.get("point"), "evidence": h.get("evidence", "")})
     oq = [{"question": q if isinstance(q, str) else q.get("question"), "why": "", "priority": "normal"} for q in data.get("open_questions") or []]
+    oq = [q for q in oq if not answered_question(q["question"])]   # a question the brief already answers is not open
     cov = {"brief_fields": len(fields), "brief_fields_filled": sum(1 for f in fields.values() if f["value"]),
            "how_to_win_points": sum(len(v) for v in htw.values()), "open_questions": len(oq), "brief_source": "brief-maker clan",
            "marks": marks_from_data(data, chain, doc_id, docs)}   # popped into Inputs.marks by the loaders: marked texts never stay in the coverage that reaches a report
@@ -404,6 +405,15 @@ def carried_brief(doc: dict) -> tuple | None:
     return k, up[k]
 
 
+_ANSWERED = re.compile(r"[\u2014\u2013-]\s*answers?\s*:|\banswered\s*:|\(answered\b|\bresolved\s*:", re.I)
+
+
+def answered_question(q) -> bool:
+    """True when a brief's question carries its own answer ('What is the budget? — Answer: £150,000 including VAT'): it is settled, not open.
+    The questions slide lists only open ones (full-flow UAT 2026-11-23: all seven answered questions were listed, each with its answer)."""
+    return bool(_ANSWERED.search(str(q or "")))
+
+
 def production_brief(data: dict) -> tuple | None:
     """The brief a carried Production project holds, as ``brief_from_data`` reads it: ``(brief id, fields, how_to_win, open_questions, coverage)``;
     None when the deck carries no Production project or it holds no brief. The FULL brief it carries under its ``upstream`` is read (objectives,
@@ -449,6 +459,20 @@ def apply_research(inp: "Inputs", members: dict | None) -> bool:
     inp.rejected_pins, inp.research_doc_id, inp.research_title = r["rejected_pins"], r["doc_id"], r["title"]
     inp.coverage.update(_research_coverage(inp, r["chain_len"]))
     return inp.has_research()
+
+
+def apply_upstream_brief(inp: "Inputs", doc_id: str, doc: dict, chain: list | None = None) -> bool:
+    """A deck spun off a brief (Continue in -> Deck) takes that brief, carried whole under ``data.upstream``, through the one field mapping
+    (``brief_from_data``): its fields, how to win, open questions and Confidential marks. The engine server is sent it as ``brief_upstream``.
+    UAT round 4 L2: it was never sent, so a brief-only deck built from an empty brief (the intake abstained on every field) and called its
+    tier 'research'. Returns whether it took it. A brief of the deck's own (or one an intake stage wrote) is never replaced."""
+    if inp.has_brief() or inp.coverage.get("brief_source", "none") not in ("none", None) or not _is_brief_data(doc):
+        return False
+    fields, htw, oq, cov = brief_from_data(doc, chain or [], doc_id, {})
+    inp.brief, inp.how_to_win, inp.open_questions = fields, htw, oq
+    inp.marks = (inp.marks or []) + (cov.pop("marks", None) or [])
+    inp.coverage.update(cov)
+    return True
 
 
 def apply_production_brief(inp: "Inputs", doc_id: str, doc: dict) -> bool:

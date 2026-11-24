@@ -189,6 +189,14 @@ describe('video from words', () => {
 })
 
 describe('a picture from words', () => {
+  it('is made at the ratio the words ask for, whatever the storyboard\'s (Tidewell UAT: a 4:5 key visual came out 16:9)', async () => {
+    const { deps, sent } = await project()
+    await pictureFromWords(deps, 'pic_node_1', 'Key visual, 4:5 poster: the can on wet sand.', '16:9')
+    expect(sent[0].input).toMatchObject({ ratio: '4:5' })
+    await pictureFromWords(deps, 'pic_node_2', 'A can on sand at 3:45 pm.', '16:9')
+    expect(sent[1].input).toMatchObject({ ratio: '16:9' })
+  })
+
   it('is the Camera agent\'s generate with the words and the node\'s scope, on the node; naming it makes one reference', async () => {
     const { store, deps, sent } = await project()
     const node = 'pic_node_1'

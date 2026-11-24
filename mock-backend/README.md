@@ -391,7 +391,7 @@ over a transport that calls `app.handle` instead of a socket.
 | `MOCK_PACKS_DIR` | `engine/packs_dist` | house packs |
 | `BRIEF_CORPUS` | unset | the full corpus; replaces `MOCK_PACKS_DIR` |
 | `MOCK_AGENCY_PACKS_DIR` | unset | `<org slug>/<pack>/` agency packs |
-| `MOCK_DATA` | the session scratchpad `…/mock-backend` if it exists, else `$TMPDIR/napkin-mock-backend` | `cache/`, `work/`, `layers.sqlite` |
+| `MOCK_DATA` | `$TMPDIR/napkin-mock-backend` | `cache/`, `work/`, `layers.sqlite` |
 | `MOCK_LAYERS_DB` | `<MOCK_DATA>/layers.sqlite` | |
 | `MOCK_NO_CACHE` | unset | `1` = never read the research/retrieval cache |
 | `MOCK_MAX_BUDGET_USD` | unset | `--max-budget-usd` per call |

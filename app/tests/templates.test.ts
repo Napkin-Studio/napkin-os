@@ -243,17 +243,20 @@ test('report wording is keyed per top-level part, as the middleware splits and h
 const RT = page('campaign-research/index.html')
 const MARKET = { IE: 'Ireland', GB: 'Great Britain' }
 
-function researchEnv(campaign: Record<string, unknown>, manifest: Record<string, unknown>) {
+function researchEnv(campaign: Record<string, unknown>, manifest: Record<string, unknown>, upstream: Record<string, unknown> = {}) {
   const calls: string[] = []
   const TITLE = { done: '', last: '' }
   const window = { __CLAN__: { manifest }, clan: { setTitle: (t: string) => { calls.push(t); return Promise.resolve({ ok: true }) } } }
   const document = { title: '' }
   const camp = () => campaign
   const marketNames = () => arr((campaign.markets as { value?: unknown })?.value).map(m => MARKET[m as keyof typeof MARKET] ?? m)
-  return { calls, document, env: { camp, marketNames, listJoin, isObj, TITLE, window, document, MARKET } }
+  const D = () => ({ upstream })
+  const ASK_FIELDS = ['client', 'audience', 'background', 'objectives']
+  return { calls, document, env: { camp, marketNames, listJoin, isObj, TITLE, window, document, MARKET, D, ASK_FIELDS } }
 }
 type TitleFns = { researchTitle(): string; titleIsOurs(t: string): boolean; syncTitle(): void }
-const TITLE_FNS = ['brandName', 'workName', 'isMarketList', 'researchTitle', 'titleIsOurs', 'syncTitle']
+const BRIEF_FNS = ['briefUpstream', 'briefData', 'briefShortName']
+const TITLE_FNS = [...BRIEF_FNS, 'brandName', 'workName', 'isMarketList', 'researchTitle', 'titleIsOurs', 'syncTitle']
 
 test('the research is titled by its brand and markets, else its working name', () => {
   const t = (c: Record<string, unknown>) => lift<TitleFns>(RT, TITLE_FNS, researchEnv(c, {}).env).researchTitle()
@@ -280,6 +283,55 @@ test('the title is set over the tool’s name, never over one a person chose', a
     assert.deepEqual(r.calls, set ? ['Lunasa · Ireland'] : [], `over ${JSON.stringify(title)}`)
     assert.equal(r.document.title, 'Lunasa · Ireland · Research')
   }
+})
+
+// UAT round 4, F12: Continue in -> Research from a brief ("A follow-up question from its open questions").
+const COPPERELL = { b1: { client: 'Copperell Home Ltd', project_name: 'Copperell Refill (working name; needs a trademark check)',
+  open_questions: ['Which refill brands lead in the UK, and what do they claim?', 'What may we say about germ-kill?'] } }
+
+test('a research started from a brief is titled by the brief’s short name, not the client company', () => {
+  const c = { brand: { value: { name: 'Copperell Home' } }, markets: { value: ['GB'] } }
+  const r = researchEnv(c, { title: 'Copperell Refill · Research' }, COPPERELL)
+  const f = lift<TitleFns>(RT, TITLE_FNS, r.env)
+  assert.equal(f.researchTitle(), 'Copperell Refill · Great Britain')
+  f.syncTitle()
+  assert.deepEqual(r.calls, ['Copperell Refill · Great Britain'], 'the shell’s spin-off name is ours to replace')
+  // The brand-and-market title the old rule wrote is ours too, so it moves to the short name.
+  assert.equal(f.titleIsOurs('Copperell Home · Great Britain'), true)
+  assert.equal(f.titleIsOurs('Copperell Home · Summer push'), false)
+  // No brief upstream: the brand leads, as before.
+  assert.equal(lift<TitleFns>(RT, TITLE_FNS, researchEnv(c, {}).env).researchTitle(), 'Copperell Home · Great Britain')
+})
+
+test('a research started from a brief opens with the brief’s open questions in the question box, once', () => {
+  const run = (upstream: Record<string, unknown>, chat: { draft: string }, started = false) => {
+    const env = { ...researchEnv({}, {}, upstream).env, CHAT: chat, mats: () => ({}), thread: () => (started ? [{}] : []), JOBS: [] }
+    lift<{ seedFromBrief(): void }>(RT, [...BRIEF_FNS, 'briefOpenQuestions', 'seedFromBrief'], env).seedFromBrief()
+    return chat.draft
+  }
+  assert.equal(run(COPPERELL, { draft: '' }),
+    'Copperell Refill: the brief’s open questions.\n- Which refill brands lead in the UK, and what do they claim?\n- What may we say about germ-kill?')
+  const one = { b1: { ...COPPERELL.b1, open_questions: ['What may we say about germ-kill?'] } }
+  assert.equal(run(one, { draft: '' }), 'Copperell Refill: What may we say about germ-kill?')
+  assert.equal(run(COPPERELL, { draft: 'my own words' }), 'my own words', 'a draft is never replaced')
+  assert.equal(run(COPPERELL, { draft: '' }, true), '', 'not once the work has started')
+  assert.equal(run({ b1: { ...COPPERELL.b1, open_questions: [] } }, { draft: '' }), '', 'no questions, nothing written')
+})
+
+test('host refusals reach a person in plain words: no raw finding, fact or decision ids (UAT round 4, F8)', () => {
+  const f = lift<{ plainErr(m: unknown): string }>(RT, ['fnum', 'plainErr'], { fnds: () => ({ fi_AAA111: {}, fi_KRMQLHFGJ2ID: {} }) })
+  assert.equal(f.plainErr('finding fi_KRMQLHFGJ2ID is already verified'), 'Finding 2 is already verified')
+  assert.equal(f.plainErr('finding fi_ZZZ999 is not in this document'), 'this finding is not in this document')
+  assert.equal(f.plainErr('cites f_01JA0B3P4Q and d_01JABCDEF9'), 'cites a fact and a decision')
+  assert.doesNotMatch(f.plainErr('see fi_AAA111'), /fi_/)
+  // Every place the page says "Not saved" or "Not recorded" goes through it.
+  for (const m of RT.matchAll(/'Not (?:saved|recorded): '\+([a-zA-Z]+)/g)) assert.equal(m[1], 'plainErr', m[0])
+})
+
+test('Keep on a finding that is already kept holds: nothing is asked of the host', () => {
+  const body = fn(RT, 'chkDecide')
+  assert.match(body, /route==='\/verify'&&\(fnds\(\)\[ref\]\|\|\{\}\)\.status==='verified'\)\{[^}]*toast\(done\)[^}]*return; \}/)
+  assert.ok(body.indexOf("status==='verified'") < body.indexOf('hostDecide('), 'checked before the host is asked')
 })
 
 test('a research that finished with nothing to cite says there is no report, never that it is ready', () => {
@@ -2473,25 +2525,26 @@ test('each OS bar button runs the same handler as its side-tab control; the docu
     phase: o.phase ?? 'doc', DRAFT: o.phase === 'proc' ? { stage: 'context', state: 'running' } : null, STAGES: ['extract', 'context', 'draft', 'judge'], PLAN: [1, 2, 3, 4], draftLive: () => o.phase === 'proc', approveLocked: () => !!o.A, docLocked: () => !!(o.A || o.L), lockState: () => ({ reopened: o.reopened ?? [] }), arr,
     REDRAFT_ARMED: o.armed ? 1 : null,
   }).barItems()
-  assert.deepEqual(items({ phase: 'intake' }), [{ kind: 'mode', mode: 'ask' }, { kind: 'status', label: 'Draft', tone: null, locked: false }], 'before there is a brief: the name alone (mode ask), no buttons, and the state is Draft (never the host’s guess)')
-  assert.deepEqual(items({ phase: 'proc' }), [{ kind: 'mode', mode: 'working', label: 'Working · Step 2/4' }, { kind: 'status', label: 'Draft', tone: null, locked: false }], 'the crew at work: the run’s step for the bar, still a draft')
+  assert.deepEqual(items({ phase: 'intake' }), [{ kind: 'mode', mode: 'ask' }, { kind: 'status', label: 'Draft', tone: null, locked: false }, { kind: 'run', working: false }], 'before there is a brief: the name alone (mode ask), no buttons, and the state is Draft (never the host’s guess)')
+  assert.deepEqual(items({ phase: 'proc' }), [{ kind: 'mode', mode: 'working', label: 'Working · Step 2/4' }, { kind: 'status', label: 'Draft', tone: null, locked: false }, { kind: 'run', working: true }], 'the crew at work: the run’s step for the bar, still a draft')
   const SAVES = ['client', 'html', 'gridPdf', 'gridHtml', 'plainPdf', 'plainHtml']
   const draft = items({})
   // No lock and no status item: Lock and the state pill are the side tab's brief view (no duplicates).
-  assert.deepEqual(draft.map(i => i.id ?? i.kind), ['pdf', 'redraft', ...SAVES])
+  assert.deepEqual(draft.map(i => i.id ?? i.kind), ['run', 'pdf', 'redraft', ...SAVES])
+  assert.deepEqual(draft[0], { kind: 'run', working: false }, 'the sheet is on screen and no agents run: the page says so, so the bar drops a stale working chip')
   assert.ok(!draft.some(i => i.kind === 'status' || i.id === 'lock'), 'the bar repeats neither the lock nor the state')
   assert.equal(draft.find(i => i.id === 'client')!.disabled, true, 'the client copy waits for the lock')
   assert.equal(items({ armed: true }).find(i => i.id === 'redraft')!.label, 'Click again to redraft')
   const locked = items({ A: true })
-  assert.deepEqual(locked.map(i => i.id ?? i.kind), ['pdf', 'unlock', 'reopen', ...SAVES], 'a locked brief offers Unlock (POST /unapprove) and Reopen a part…, not a redraft')
+  assert.deepEqual(locked.map(i => i.id ?? i.kind), ['run', 'pdf', 'unlock', 'reopen', ...SAVES], 'a locked brief offers Unlock (POST /unapprove) and Reopen a part…, not a redraft')
   assert.equal(locked.find(i => i.id === 'client')!.disabled, false)
   assert.match(fn(BM, 'unlockClick'), /hostPost\('\/unapprove',\{rationale:/, 'Unlock calls /unapprove as Lock calls /approve')
   assert.match(fn(BM, 'lockClick'), /unlockClick\(\)/, 'a lock pressed while locked still unlocks')
   assert.equal(locked.find(i => i.id === 'reopen')!.label, 'Reopen a part…')
-  assert.deepEqual(items({ A: true, reopened: ['x'] }).map(i => i.id ?? i.kind), ['pdf', ...SAVES], 'reopened: Lock the brief again is the side tab’s')
+  assert.deepEqual(items({ A: true, reopened: ['x'] }).map(i => i.id ?? i.kind), ['run', 'pdf', ...SAVES], 'reopened: Lock the brief again is the side tab’s')
   for (const list of [draft, locked]) {
     assert.ok(list.filter(i => i.kind === 'button').length <= 10, 'at most the ten buttons a bar takes')
-    for (const i of list) {
+    for (const i of list.filter(x => x.kind !== 'run')) {
       assert.ok(i.label.length <= 28, i.label)
       if (i.kind === 'button') assert.ok(actionIds.includes(i.id!), `bar button ${i.id} has a handler`)
     }
@@ -2838,9 +2891,16 @@ test('brief: Lock waits until Needs you is empty, open questions included', () =
     return { disabled: el('lockBtn').disabled, why: el('lockWhy').textContent }
   }
   const q = { code: 'open_question', tag: '6 open questions' }
-  assert.deepEqual(run([q]), { disabled: true, why: 'Settle 1 first' }, 'the host may lock, an open question is left: Lock waits')
+  assert.deepEqual(run([q]), { disabled: true, why: 'To lock the brief, answer or accept the flagged item above.' }, 'the host may lock, an open question is left: Lock waits')
   assert.deepEqual(run([]), { disabled: false, why: '' }, 'nothing left: Lock is on')
   assert.equal(run([], false).disabled, true, 'the host says not yet: Lock waits')
+  // Lock the brief "Settle 6 first" never said what settling meant (owner, 2026-11-23): it says what to do, and offers the first one.
+  const rows6 = Array.from({ length: 6 }, () => q)
+  run(rows6)
+  assert.equal(el('lockWhy').textContent, 'To lock the brief, answer or accept each of the 6 flagged items above.')
+  assert.equal(el('lockFirst').hidden, false, 'a way to the first flagged item shows while Lock waits on items')
+  run([])
+  assert.equal(el('lockFirst').hidden, true, 'nothing flagged: no jump')
   // Round 11: before the host's lock list has loaded, what blocks the lock is unknown, so Lock waits.
   const els2: Record<string, Record<string, unknown>> = {}
   const el2 = (id: string) => els2[id] ||= { hidden: false, disabled: false, textContent: '', title: '', innerHTML: '', classList: { toggle() {} } }
@@ -3351,8 +3411,9 @@ test('a new version re-reads the brief’s lock view with its chain, so the lock
 test('the lock carries no count badge of its own: Decisions holds the one count, the lock says why in words', () => {
   for (const src of [BM, RT]) assert.doesNotMatch(src, /class="n"/, 'no badge on a lock button')
   const w = lift<{ lockWhy(n: number): string }>(BM, ['lockWhy'], {})
-  assert.equal(w.lockWhy(2), 'Settle 2 first')
-  assert.equal(w.lockWhy(1), 'Settle 1 first')
+  assert.equal(w.lockWhy(2), 'To lock the brief, answer or accept each of the 2 flagged items above.')
+  assert.equal(w.lockWhy(1), 'To lock the brief, answer or accept the flagged item above.')
+  assert.doesNotMatch(w.lockWhy(6), /settle/i, 'no jargon: it says what to do')
   assert.doesNotMatch(fn(BM, 'renderLockBtn'), /need you|lb\.innerHTML/)
 })
 
@@ -4008,6 +4069,32 @@ test('the agent stage: the caption says who asks above the card, and the rails s
     assert.match(src, new RegExp(`${p}\\.sstage\\.nk-asking\\{height:auto;min-height:clamp\\(`), `${name}: asking, the stage grows with the card`)
     assert.doesNotMatch(src, /@media \(max-width:980px\)\{ (\.rt-work )?\.sstage/, `${name}: the old one-column switch is gone`)
   }
+})
+
+// UAT round 4 F11 (owner, 2026-11-24): with no comparators named, research finds the category's players and
+// proposes them; the planner reads that they were found by research, and can remove any.
+test('research: comparators research found are labelled found by research, in the confirm panel and the field', () => {
+  const camp: Record<string, unknown> = { competitor_set: { origin: 'proposed', gate: 'none', value: [{ ref: 'brand/smol', name: 'Smol' }, { ref: 'brand/method', name: 'Method' }], fact_ids: ['f_1', 'f_2'], decision: 'd_X' } }
+  const pins = { f_1: { key: 'positioning.claim.smol', value: 'refill tablets' }, f_2: { key: 'positioning.claim.method', value: 'plant-based' } }
+  const env = {
+    FIELD: { competitor_set: { k: 'competitor_set', label: 'Comparators', type: 'refs' } }, BANDS: {}, MARKET: {}, camp: () => camp, pins: () => pins, arr, isObj, esc, listJoin,
+    clipT: (t: string, n: number) => (t.length > n ? t.slice(0, n - 1) + '…' : t), plural: (n: number, w: string) => `${n} ${n === 1 ? w : w + 's'}`,
+    pinLabel: (p: { key: string }) => p.key.split('.').pop(), fmtAny: (p: { value: string }) => p.value, verdictState: () => ({ unanswered: [] }),
+    reportLocked: () => false, WHO: { shell: { id: 'tia@tbwa', name: 'Tia' } }, reviewer: () => '', human: (x: string) => x, renderValue: () => '',
+    $: () => null, byOf: () => 'tia@tbwa', setReviewer: () => {}, hasHost: () => true, mintDecisionId: () => 'd_NEW',
+    renderSel: () => {}, toast: () => {}, loadChain: () => {}, VIEW: { sel: 'ask:competitor_set', trail: [] }, CONF: { ui: {} as Record<string, unknown> },
+    pinChips: (ids: string[]) => ids.join(','), spanHtml: () => '', findingChip: () => '', ICON: { check: '<svg></svg>' },
+    window: { ClanFields: null, clan: { patchData: () => Promise.resolve({ ok: true }) } },
+  }
+  const f = lift<{ confirmViewHtml(k: string): string; provenance(env: unknown, f: unknown): string }>(RT, ['confirmViewHtml', 'provenance', 'plainValue', 'askQuestion', 'codeText'], env)
+  const h = f.confirmViewHtml('competitor_set')
+  assert.match(h, /Found by research: the main brands in the category, from 2 facts\. Remove any the client does not compete with/)
+  assert.doesNotMatch(h, /We worked this out/)
+  const p = f.provenance(camp.competitor_set, { k: 'competitor_set' })
+  assert.match(p, /found-by-research/)
+  assert.match(p, /Found by research: the main brands in the category\. Remove any the client does not compete with, then confirm\./)
+  // any other proposed field keeps its wording
+  assert.match(f.provenance({ origin: 'proposed', fact_ids: ['f_1'] }, { k: 'categories' }), /We worked this out from 1 fact; no one said it\./)
 })
 
 // Confirming a part of the ask (owner, 2026-11-11): in the side panel, never a modal, in plain words,
@@ -4795,13 +4882,13 @@ function factEnv(asksData: Record<string, Ask>, extra: Record<string, unknown> =
       selLabel: (r: string) => (r === FACT ? 'Advertising standards ruling, 2023' : r), citeName: () => 'Press', pins: () => ({}), fmtAny: () => '',
       findChip: (id: string) => `<chip ${id}>`, secByLens: (l: string) => (l === 'regulation_clearance' ? { n: 7, title: 'Clearance' } : null),
       secWords: (s: { n: number; title: string }) => `§${s.n} ${s.title}`, plainDay: (s: string) => s, slug: (s: string) => s,
-      askCite: (ids: string[]) => ` [${ids.join(' ')}]`,
+      askCite: (ids: string[]) => ` [${ids.join(' ')}]`, fnds: () => ({}),
       asks: () => Object.values(data.asks).sort((x, y) => (String(x.asked_at) < String(y.asked_at) ? -1 : 1)),
       ...extra,
     },
   }
 }
-const FACT_FNS = ['inReport', 'aboutWord', 'askAddedHtml', 'whenWords', 'nameOf', 'faCite', 'inRepWhere', 'factAnswerHtml', 'factPendingHtml', 'factAsksHtml']
+const FACT_FNS = ['fnum', 'plainErr', 'inReport', 'aboutWord', 'askAddedHtml', 'whenWords', 'nameOf', 'faCite', 'inRepWhere', 'factAnswerHtml', 'factPendingHtml', 'factAsksHtml']
 type FactFns = { inReport(a: Ask): boolean; factAsksHtml(r: string): string; askAddedHtml(a: Ask): string }
 const answered = (more: Ask = {}): Ask => ({
   id: 'ask_1', question: 'When was the ruling?', about: FACT, in_report: false, lens: 'regulation_clearance', in_section: true, asked_at: '2026-11-12T10:00:00Z',
@@ -5390,4 +5477,23 @@ test('the Booth comes back at the size of what is selected', () => {
   assert.equal(cr.boothWidth('map', 1500), 744, 'the evidence map')
   assert.equal(cr.boothWidth('map', 1000), 640, 'the map leaves the report 360')
   assert.equal(cr.boothWidth('map', 700), 440, 'never under 440')
+})
+
+// Owner, 2026-11-23: Brief Maker titled the document with the whole working name, caveat and all, and the top bar
+// ellipsised it to "P…". The name is the words before the caveat; the engine writes the same rule (fields.py short_name).
+test('brief: a working name that carries a caveat gives a short document title', () => {
+  const long = 'Proper Crunch (working name, taken from the founder’s preferred line; needs a trademark check against Propercorn and Proper)'
+  const set: string[] = []
+  const mk = (name: string, title: string) => lift<{ workingTitle(): string; syncTitle(): void }>(BM, ['shortName', 'workingTitle', 'syncTitle'], {
+    get: (k: string) => (k === 'project_name' ? name : ''), derivedTitle: () => '', window: { __CLAN__: { manifest: { title } }, clan: { setTitle: (t: string) => { set.push(t); return Promise.resolve({ ok: true }) } } },
+    document: { title: '' }, TITLE: { done: '', last: '' }, isResearchFed: () => false, upTitle: () => '', upStoreTitle: () => '' })
+  assert.equal(mk(long, 'Untitled').workingTitle(), 'Proper Crunch')
+  mk(long, 'Untitled brief').syncTitle()
+  assert.deepEqual(set, ['Proper Crunch'], 'the document is titled by the short name')
+  assert.equal(mk('Moving People', '').workingTitle(), 'Moving People')
+  assert.equal(mk('Glenmore 12 relaunch - phase two', '').workingTitle(), 'Glenmore 12 relaunch')
+  assert.ok(mk('A'.repeat(30) + ' ' + 'B'.repeat(30), '').workingTitle().length <= 40, 'capped')
+  // The sheet's head, its tab and the export read the short name too, and the engine writes one.
+  assert.match(BM, /shortName\(get\('project_name'\)\)/)
+  assert.match(BM, /\$\('hProj'\)\.textContent=pn\|\|dt/)
 })

@@ -67,7 +67,7 @@ DIMS = ["objectives_quality", "audience_vividness", "single_minded_message", "ev
         "budget_interlock", "strategic_clarity", "language"]
 BASES = ["client", "research", "library", "assumption"]
 WHAT = {
-    "project_name": "a short working name", "client": "the client and brand",
+    "project_name": "a short working name, one to four words, no brackets or caveats (a doubt about it is an open question)", "client": "the client and brand",
     "job": "the job in one plain sentence: the problem reframed as the change in what one person thinks, feels or does (not the task)",
     "background": "the business situation and why now",
     "barrier": "what stands in their way: the belief, habit, fear or rival in their head or routine, in plain words",
@@ -346,7 +346,8 @@ class PlannedBriefJob(BriefJob):
         """The Brief agent's parts with what each rests on (provenance.clean_parts): the one cleaner of every path.
         An assumption says it is one first, so every sentence and the claim read from it are the same text."""
         if isinstance(out, dict):
-            marked = checks.mark_assumptions(out, self.whole.get("insight"))
+            marked = checks.mark_assumptions(out, self.whole.get("insight"),
+                                             answers=checks.answers_text(get(self.W, "open_questions")))
             if marked:
                 self.caps.runlog.note("assumptions_marked", stage=stage, parts=marked)
         got = prov.clean_parts(out, self._prov(ev), stage=stage, keys=keys, prior=prior)
@@ -1035,6 +1036,19 @@ class PlannedBriefJob(BriefJob):
         """Whether the Review agent's chain issue from the check loop is placed as a note."""
         return True
 
+    def _carry_fixed_line(self):
+        """The line the planner fixed in an answered open question goes into mandatories as the end line, word for
+        word, so Production's end card and the deck read it from the brief (UAT round 4: "Refill. Not landfill." was
+        only in the answer). Only where this job writes mandatories: a part a person holds is left as it is."""
+        e = self.whole.get("mandatories")
+        if not isinstance(e, dict):
+            return
+        line = checks.fixed_line(answered_items(get(self.W, "open_questions")))
+        new = checks.carry_fixed_line(e.get("value"), line)
+        if new is not None:
+            e["value"] = new
+            self.caps.runlog.note("fixed_line_carried", line=line[:120])
+
     def _place(self, rv, ev):
         patch, decisions = {}, []
         mat_ids = [m.id for m in self.mats if m.readable]
@@ -1047,6 +1061,7 @@ class PlannedBriefJob(BriefJob):
                 claim_bad.setdefault(c["part"], []).append(c)
         assumed = []
         client = self._client()
+        self._carry_fixed_line()
         for k, v in self.whole.items():
             if k == "open_questions":
                 continue
