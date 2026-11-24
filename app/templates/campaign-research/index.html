@@ -5460,7 +5460,7 @@ body.fresh .booth-edge{display:none}
   function boothStep(s, ev, w){
     var n={open:s.open, ask:s.ask, later:0};
     if(ev.t==='ask'){ n.ask=Math.max(0, ev.n|0); if(!s.open&&n.ask>s.ask&&boothCanHide(w)) n.later=BOOTH_ASK_MS; return n; }
-    if(ev.t==='shell'){ n.open=ev.open!==false; return n; }
+    if(ev.t==='shell'){ n.open=ev.open!==false; if(!n.open&&s.ask>0&&boothCanHide(w)) n.later=BOOTH_ASK_MS; return n; }   // hidden on load with something waiting: it comes in
     if(ev.t==='show'||ev.t==='pick'||(ev.t==='arrive'&&s.ask>0)){ n.open=true; return n; }
     if(!boothCanHide(w)) return n;
     if(ev.t==='hide') n.open=false;
