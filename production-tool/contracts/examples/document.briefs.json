@@ -217,7 +217,8 @@
         "data_sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
         "taken": 1,
         "at": "2026-11-23T10:00:00Z",
-        "how": "spinoff"
+        "how": "spinoff",
+        "version": 2
       },
       "spine": {
         "proposition": "The weekend starts when you sit down.",
