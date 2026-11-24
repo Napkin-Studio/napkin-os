@@ -45,11 +45,15 @@ const base = {
   onClientReview: locked ? () => { (window as unknown as { __review: number }).__review = 1 } : undefined,
   clientAnswered: q.get('answered') === '1',
 }
-function Harness() {
+/** What the bar's buttons told the app, in order, for the test to read. */
+function record(id: string) {
+  const w = window as unknown as { __acted?: string[] }
+  w.__acted = [...(w.__acted ?? []), id]
+}
+export function Harness() {
   const [armed, setArmed] = useState(false)
   const acted = (id: string) => {
-    const w = window as unknown as { __acted?: string[] }
-    w.__acted = [...(w.__acted ?? []), id]
+    record(id)
     if (id === 'redraft') setArmed(a => !a)
   }
   const doc = { ...base, bar: barFrom({ v: 1, items: items(armed) } as never), onBarAction: acted }
