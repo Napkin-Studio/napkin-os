@@ -2497,6 +2497,9 @@ body.fresh .booth-edge{display:none}
       h+='<div class="inferbox"><div class="h">From the brief this research started from — confirm it.</div></div>';
     } else if(o==='proposed'&&!arr(env.fact_ids).length&&env.workspace_ref){
       h+='<div class="inferbox"><div class="h">The client this research was started for — confirm it.</div></div>';
+    } else if(o==='proposed'&&f.k==='competitor_set'){
+      // Nobody named the comparators, so research found the category's main players (UAT round 4 F11).
+      h+='<div class="inferbox found-by-research"><div class="h">Found by research: the main brands in the category. Remove any the client does not compete with, then confirm.</div>'+pinChips(env.fact_ids)+'</div>';
     } else if(o==='proposed'){
       h+='<div class="inferbox"><div class="h">We worked this out from '+arr(env.fact_ids).length+' fact'+(arr(env.fact_ids).length===1?'':'s')+'; no one said it.</div>'+pinChips(env.fact_ids)+'</div>';
     } else if(o==='confirmed'){
@@ -3072,7 +3075,7 @@ body.fresh .booth-edge{display:none}
     var f=FIELD[k], env=camp()[k]; if(!f||!isObj(env)) return '<p class="insp-hint">This part of the ask is no longer here.</p>';
     var v=plainValue(env), ids=arr(env.fact_ids).filter(function(id){ return pins()[id]; }), ui=CONF.ui[k]||{}, busy=!!ui.busy;
     var can=env.origin==='extracted'||env.origin==='proposed', bad=verdictState('campaign.'+k).unanswered;
-    var from=env.origin==='extracted'?'Read from your notes':env.origin==='stated'?'Read from your message':ids.length?'We worked this out from '+plural(ids.length, 'fact'):arr(env.upstream_refs).length?'From the brief this research started from':env.workspace_ref?'The client this research was started for':env.origin==='confirmed'?'Confirmed'+(env.by?' by '+human(env.by):''):'Worked out by the agents';
+    var from=env.origin==='extracted'?'Read from your notes':env.origin==='stated'?'Read from your message':env.origin==='proposed'&&k==='competitor_set'&&ids.length?'Found by research: the main brands in the category, from '+plural(ids.length, 'fact')+'. Remove any the client does not compete with':ids.length?'We worked this out from '+plural(ids.length, 'fact'):arr(env.upstream_refs).length?'From the brief this research started from':env.workspace_ref?'The client this research was started for':env.origin==='confirmed'?'Confirmed'+(env.by?' by '+human(env.by):''):'Worked out by the agents';
     var h='<div class="cf"><h3 class="cf-q">'+esc(askQuestion(f, env))+'</h3>'
       +(v&&v.length>40?'<p class="cf-v">'+esc(clipT(v, 400))+'</p>':(!v?'<div class="cf-v">'+renderValue(f, env)+'</div>':''))
       +'<p class="cf-from">'+esc(from)+(ids.length&&env.origin!=='extracted'?':':'')+'</p>';

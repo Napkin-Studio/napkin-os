@@ -1218,6 +1218,8 @@ def plan(base_deck: dict, library: dict | None = None, prefs: dict | None = None
                 made = any(isinstance(v, dict) and (v.get("image") or {}).get("status") in ("made", "flagged") and ((v.get("image") or {}).get("from") or {}).get("kind") == "production"
                            for v in (s.get("slots") or {}).values())   # a finished picture from Production is never given up for the rules' pick without one
                 cands = ([rule_text] if rule_text != lid and rule_text in lib and image_slots(lib[lid]) and not made else []) + _alternatives(lib, lid, base, aud, ready.get(sid, frozenset()), f.get("avoid", []))
+                if made:   # UAT round 4 F27: a cover holding the Final key visual switched to 'cards' (no picture slot) when its title ran long
+                    cands = [a for a in cands if a in lib and image_slots(lib[a])]
                 for a in cands:
                     ra = probe({**sl_, "blocks": shown}, a, cap=sc_cap, stamped=pt.get(a))
                     if ra["ok"] and not ra["relaxed"] and (pt.get(a) is None or R.title_fits(s["title"], pt.get(a))):
