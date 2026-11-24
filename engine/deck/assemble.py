@@ -302,6 +302,83 @@ def _brief_text(inp, fid, default=""):
     return v or default
 
 
+_LINE_WORDS = 10
+_PROMPT_LINE = re.compile(r"\b(?:one line|the line|campaign line|tagline|our line)\s*(?:is|:)\s*[\"'\u201c\u2018]?([^\n\"'\u201d\u2019]{3,80}?)[\"'\u201d\u2019]?\s*(?:$|\n|(?<=[.!?])\s)", re.I)
+
+
+# The brief's end line among its mandatories, read as Production's end card reads it (production-tool/web/src/brief/model.ts endLineOf
+# and lib/quotes.ts quoted): Brief Maker writes the board's chosen line there as "End line: '<line>' (word for word)" (UAT round 4, F4).
+_END_LINE = re.compile(r"\b(?:end(?:s|ing)?\s+(?:on|with)\s+(?:the\s+)?(?:line|words|super)|end[\s-]?line|sign[\s-]?off(?:\s+line)?|tag[\s-]?line|brand\s+line)\b"
+                       r"\s*(?:[:\-\u2013\u2014]\s*)?(.+)$", re.I)
+_LINE_VERB = re.compile(r"^(?:(?:must|should|will|shall)\s+(?:be|read|say)|reads?|says?|is|to\s+be|as|of)\b\s*[:\-\u2013\u2014]?\s*", re.I)
+_DOUBLE_Q = re.compile(r"[\"\u201c\u201e\u00ab]([^\"\u201c\u201d\u201e\u00ab\u00bb]+)(?:[\"\u201d\u00bb]|$)")
+_SINGLE_Q = re.compile(r"(?:^|[\s:(\u2013\u2014-])['\u2018](.+?)['\u2019](?=$|[\s.,;:!?)\u2013\u2014-])")
+
+
+def _quoted(text: str):
+    """The words inside the first pair of quotes (lib/quotes.ts quoted): double first, then single; None when nothing is quoted."""
+    t = str(text or "").strip()
+    hit = _DOUBLE_Q.search(t) or _SINGLE_Q.search(t)
+    words = hit.group(1).strip() if hit else ""
+    return words or None
+
+
+def end_line_of(mandatories) -> str:
+    """The line the brief says the work ends on, from its mandatories ("End line: 'Refill. Not landfill.' (word for word)", "Sign-off: ...",
+    "Tagline: ..."): the quoted words when quoted, else what follows the label and its verb. '' when it names none."""
+    items = mandatories if isinstance(mandatories, list) else ([mandatories] if mandatories else [])
+    for m in items:
+        hit = _END_LINE.search(str(m).strip())
+        if not hit:
+            continue
+        line = _quoted(hit.group(1)) or re.sub(r"^[\"'\u201c\u2018]+|[\"'\u201d\u2019]+$", "", _LINE_VERB.sub("", hit.group(1).strip())).strip()
+        if line:
+            return line[:200]
+    return ""
+
+
+def stated_line(inp) -> tuple:
+    """``(line, explicit)``: the campaign line the inputs state as a short line of its own. ``explicit`` is True for the brief's end-line mandatory
+    ("End line: '...' (word for word)", read first) and the prompt's 'One line: ...' (the
+    person said it: it is the line, whatever the idea stage wrote); False for the brief's single-minded proposition when it is one short line (a
+    proposition is not always the creative line, so it only corrects a line that is that proposition grown or reworded). ('', False) when none.
+    Round 3: a model wrote 'Proper crunch. Not sorry.' over the brief's 'Proper crunch.' and the founder had said to use only that line."""
+    end = end_line_of(((getattr(inp, "brief", None) or {}).get("mandatories") or {}).get("value"))
+    if end and len(end.split()) <= _LINE_WORDS:   # the brief's own end line, word for word (the board chose it): it is the line
+        return " ".join(end.split()), True
+    m = _PROMPT_LINE.search(str(getattr(inp, "prompt_text", "") or ""))
+    if m and len(m.group(1).split()) <= _LINE_WORDS:
+        return " ".join(m.group(1).split()), True
+    smp = " ".join(str(_brief_text(inp, "smp", "") or "").split())
+    if smp and smp.lower() != "to agree." and len(smp.split()) <= _LINE_WORDS and len(re.findall(r"[.!?](?:\s|$)", smp)) <= 1:
+        return smp, False
+    return "", False
+
+
+def keep_stated_line(d: dict, line: str, explicit: bool = False) -> dict:
+    """``d`` (stage d) with the stated campaign line in place of a longer or reworded one: the campaign_line is the line, and where the model's line
+    ('Proper crunch. Not sorry.') is written out in a sentence, the stated line stands there. An unrelated line is replaced only when the person
+    stated the line (``explicit``). A copy."""
+    old = str(d.get("campaign_line") or "").strip()
+    if not line or not old or old == line:
+        return d
+    same = lambda s: re.sub(r"\W+", " ", s).strip().lower()   # noqa: E731
+    if not same(old).startswith(same(line)):
+        return {**d, "campaign_line": line} if explicit else d
+
+    def fix(node):
+        if isinstance(node, str):
+            return node.replace(old, line).replace(old.rstrip(".!?"), line.rstrip(".!?"))
+        if isinstance(node, list):
+            return [fix(x) for x in node]
+        if isinstance(node, dict):
+            return {k: (fix(v) if k not in ("refs", "id") else v) for k, v in node.items()}
+        return node
+    out = fix(d)
+    out["campaign_line"] = line
+    return out
+
+
 #: The chain stage d writes (DECK-CRAFT-PLAN 3.5): quoted phrases that tie the insight to the idea and the idea to its proof.
 CHAIN_PHRASES = ("insight_phrase", "strategy_phrase", "idea_phrase", "proof_phrase")
 
@@ -548,6 +625,9 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
     a, b, c, d = st.get("a") or {}, st.get("b") or {}, st.get("c") or {}, st.get("d") or {}
     if production:   # pictures only: no film execution, whatever the brief's channels or a recorded idea say
         d = dedupe_executions(drop_film(d))
+    line_, explicit_ = stated_line(inp)
+    if line_ and d:   # the line the brief or the prompt states, word for word, over any longer or reworded one
+        d = keep_stated_line(d, line_, explicit_)
     if not d.get("how_it_answers") and isinstance(d.get("answers_objection"), dict):   # a live stage d's shape
         d = {**d, "how_it_answers": d["answers_objection"].get("how", "")}
     reqs = [r for r in a.get("requirements") or [] if not spec.internal_wording(r.get("text"))]   # a stage that copied 'field is null' into a requirement
@@ -685,7 +765,8 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
     if d.get("channel_roles"):
         rows = [["Channel", "Its one job"]] + [[r["channel"], r["role"]] for r in d["channel_roles"]]
         S.append(_slide("channel_roles", "Each channel has one job", [{"kind": "table", "rows": rows, "refs": [r["ref"] for r in reqs if r["kind"] in ("scope", "objective", "audience")]}], status="drafted",
-                        notes="Scope check: the tender lists paid social, search, programmatic, broadcast radio and video, outdoor and print."))
+                        notes="Scope check: the tender lists paid social, search, programmatic, broadcast radio and video, outdoor and print."
+                        if (profile or {}).get("buyer_order") else ""))   # a tender's own note: an agency pitch has no tender (round 3: it said so on slide 14)
 
     # 12b. Innovation and impact: what makes the plan work harder than its media list
     inn = d.get("innovation") or {}
@@ -753,9 +834,10 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
                     status="needs_human"))
     # 21. Questions
     qs = list(dict.fromkeys(q["question"] for q in inp.open_questions if q.get("question") and not answered_question(q["question"])))   # only open ones: an answered question is settled
-    S.append(_slide("questions", "Questions we would settle in the first fortnight",
-                    [{"kind": "bullets", "items": [{"text": q, "basis": "meta"} for q in qs[:LIST_ITEMS]]}], status="from_source",
-                    notes=f"{len(qs)} open questions from the brief; {max(0, len(qs) - LIST_ITEMS)} more in the brief itself." + (f"\n{_more_questions(qs)}" if len(qs) > LIST_ITEMS else "")))
+    if qs:   # no open question, no slide: an empty list is not a slide (round 3: "Questions we would settle" came out with nothing under it)
+        S.append(_slide("questions", "Questions we would settle in the first fortnight",
+                        [{"kind": "bullets", "items": [{"text": q, "basis": "meta"} for q in qs[:LIST_ITEMS]]}], status="from_source",
+                        notes=f"{len(qs)} open questions from the brief; {max(0, len(qs) - LIST_ITEMS)} more in the brief itself." + (f"\n{_more_questions(qs)}" if len(qs) > LIST_ITEMS else "")))
 
     _fill_human_only(S, inp)   # what the person supplied (answers to supply cards, their own documents) fills what a model never invents
     meta = {"client": client, "project": project, "agency": agency, "kind": "agency", "format": fmt,

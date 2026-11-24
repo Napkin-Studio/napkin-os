@@ -26,9 +26,9 @@ export function BarChips({ bar }: { bar: BarItem[] }) {
 
 /** The first two buttons; the app decides what pressing one does. A button with a menu ("Save · PDF ▾")
  *  opens it, and a choice tells the app its own id. */
-export function BarButtons({ bar, onAction, hideSecond }: { bar: BarItem[]; onAction?: (id: string) => void; hideSecond?: boolean }) {
+export function BarButtons({ bar, onAction, hideSecond, hideAll }: { bar: BarItem[]; onAction?: (id: string) => void; hideSecond?: boolean; hideAll?: boolean }) {
   const [open, setOpen] = useState<{ id: string; anchor: HTMLElement } | null>(null)
-  return <>{buttonsOf(bar).slice(0, hideSecond ? 1 : BAR_BUTTONS_SHOWN).map(b => (
+  return <>{buttonsOf(bar).slice(0, hideAll ? 0 : hideSecond ? 1 : BAR_BUTTONS_SHOWN).map(b => (
     <span key={b.id} className={b.menu ? 'ch-menu-anchor' : undefined}>
       <button
         className={b.primary ? 'ch-btn ch-btn-primary' : 'ch-btn'}

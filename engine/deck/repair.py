@@ -343,7 +343,7 @@ def content_set(findings: list):
             and f.get("check") not in I.IMAGE_GUARD_CHECKS and f.get("check") not in spec.QA_RENDER_CHECKS)
 
 
-def read_ledger(base_deck: dict, deck: dict, folder: Path, audience: str, prs=None) -> list:
+def read_ledger(base_deck: dict, deck: dict, folder: Path, audience: str, prs=None, clean: bool = False) -> list:
     """K3: the differences between the BASE deck's ledger and what the round's .pptx shows, ``[{slide, block, kind, expected, got}]`` (empty when the
     ledger is kept). Read from ``folder/deck.pptx`` (every ``slot:<name>`` shape through layouts.json, plus the ``Moved from the slide:`` notes
     lines against the verbatim base text of each moved point). A round with no readable .pptx has one ``unreadable`` difference."""
@@ -380,7 +380,7 @@ def read_ledger(base_deck: dict, deck: dict, folder: Path, audience: str, prs=No
             idxs = sorted(mv) if isinstance(mv, set) else [None]
             for m in (s1.get("layout") or {}).get("fit", {}).get("moved", []):
                 if m["block"] == bi and (m["item"] is None or m["item"] in idxs):
-                    want.append((m["block"], m["item"], layouts.moved_line(layouts.item_verbatim(b0, m["item"]), m.get("refs") or [])))
+                    want.append((m["block"], m["item"], layouts.moved_line(layouts.item_verbatim(b0, m["item"]), m.get("refs") or [], clean)))
         want = [w[2][2:] for w in sorted(want, key=lambda w: (w[0], -1 if w[1] is None else w[1]))]   # the notes line without its "- "
         have = got[sid]["moved"]
         if sorted(have) != sorted(want):
@@ -414,7 +414,7 @@ def measure(deck: dict, plan_issues: list, folder: Path, ctx: dict, round_: int,
     ok = bool(pptx) and not (list(qa.get("slides", {})) == ["deck"] and all(f.get("check") == "unreadable" for f in qa["slides"]["deck"]))
     iss = I.derive(findings, qa, deck, ctx["policy"], round_)
     (folder / "issues.json").write_text(json.dumps(iss, indent=1, ensure_ascii=False))
-    diffs = read_ledger(ctx["base_deck"], deck, folder, ctx["audience"]) if pptx else [{"slide": I.DECK_KEY, "block": None, "kind": "unreadable", "expected": None, "got": "no .pptx"}]
+    diffs = read_ledger(ctx["base_deck"], deck, folder, ctx["audience"], clean=bool(ctx.get("clean"))) if pptx else [{"slide": I.DECK_KEY, "block": None, "kind": "unreadable", "expected": None, "got": "no .pptx"}]
     cl = checklist.run_checklist(folder, deck_id="deck") if (folder / "layouts.json").exists() else None
     return {"folder": folder, "deck": deck, "findings": findings, "qa": qa, "issues": iss, "ok": ok, "counts": counts(iss, deck), "pairs": pairs(iss, deck),
             "content": content_set(findings), "ledger": diffs, "checklist": cl, "placed": res.get("placed"), "icons": res.get("icons"), "pptx": pptx, "pdf": pdf,
@@ -813,7 +813,7 @@ def existing(deck: dict, findings: list, qa: dict | None, folder: Path, ctx: dic
     iss = I.derive(findings, qa, deck, ctx["policy"], 0)
     ok = bool(qa) and not (list((qa or {}).get("slides", {})) == ["deck"] and all(f.get("check") == "unreadable" for f in qa["slides"]["deck"]))
     pptx = folder / "deck.pptx" if (folder / "deck.pptx").exists() else None
-    diffs = read_ledger(ctx["base_deck"], deck, folder, ctx["audience"]) if pptx else [{"slide": I.DECK_KEY, "block": None, "kind": "unreadable", "expected": None, "got": "no .pptx"}]
+    diffs = read_ledger(ctx["base_deck"], deck, folder, ctx["audience"], clean=bool(ctx.get("clean"))) if pptx else [{"slide": I.DECK_KEY, "block": None, "kind": "unreadable", "expected": None, "got": "no .pptx"}]
     cl = checklist.run_checklist(folder, deck_id="deck") if (folder / "layouts.json").exists() and qa else None
     return {"folder": folder, "deck": deck, "findings": findings, "qa": qa, "issues": iss, "ok": ok, "counts": counts(iss, deck), "pairs": pairs(iss, deck),
             "content": content_set(findings), "ledger": diffs, "checklist": cl, "pptx": pptx, "pdf": folder / "deck.pdf" if (folder / "deck.pdf").exists() else None,

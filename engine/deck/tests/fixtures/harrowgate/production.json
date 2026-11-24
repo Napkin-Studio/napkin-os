@@ -1,0 +1,984 @@
+{
+ "stage": "production",
+ "produced_by": "deck.from_production (a Production Tool export, no model call, no network)",
+ "contract_version": "3",
+ "app": "ie.napkin.production-tool",
+ "project": {
+  "id": "proj_01M84R1CJC00QS7V5R65X81FAD",
+  "title": "Crisps A second"
+ },
+ "bundle": {
+  "clan": "harrowgate.clan",
+  "clan_sha256": "3565e249b6f0c9469a722d49f1e1f074d7e02c6e5046799ed37547da56f3d28f",
+  "assets_from": "clan"
+ },
+ "taken_at": "2026-11-23T19:08:10+00:00",
+ "format_packs": {
+  "version": "2026-10-13",
+  "commit": "b2064bc2d4ca1fc4abcdece24a386bf56f0efa87",
+  "sha256": "e20201b64d573badef8f81668e237334c75adba35e32e052bd2d06a586a55b41"
+ },
+ "format_sets": {
+  "fset_01M84RTZPQNZE5FDP036TC3VSD": {
+   "v": 1,
+   "master": "fset_01M84RTZPQNZE5FDP036TC3VSD#master"
+  }
+ },
+ "items": {
+  "fset_01M84RTZPQNZE5FDP036TC3VSD#master": {
+   "entity": "fset_01M84RTZPQNZE5FDP036TC3VSD",
+   "role": "master",
+   "version": 1,
+   "origin": "generated",
+   "rights": "generated",
+   "status": "ready",
+   "sha256": "475ecfafa684667874e8a98791cd4df21a686824bd72928e53e0657ee7b588de",
+   "bundle_sha256": "3565e249b6f0c9469a722d49f1e1f074d7e02c6e5046799ed37547da56f3d28f",
+   "file": "assets/475ecfafa684667874e8a98791cd4df21a686824bd72928e53e0657ee7b588de.png",
+   "mime": "image/png",
+   "width": 922,
+   "height": 1152,
+   "bytes": 869724,
+   "focal": {
+    "x": 0.5,
+    "y": 0.5065
+   },
+   "focal_by": "protect",
+   "final": true,
+   "set": "fset_01M84RTZPQNZE5FDP036TC3VSD",
+   "job_id": "job_01M84RPS5S2CT6MWDRG724Q4FM",
+   "keep": {
+    "x0": 0.2061,
+    "y0": 0.1684,
+    "x1": 0.7939,
+    "y1": 0.8446
+   },
+   "aspect": {
+    "w": 922,
+    "h": 1152
+   }
+  },
+  "size_01M84RTZPQNZE5FDP036TC3VSE": {
+   "entity": "size_01M84RTZPQNZE5FDP036TC3VSE",
+   "role": "size",
+   "version": 3,
+   "origin": "generated",
+   "rights": "generated",
+   "status": "ready",
+   "sha256": "b60161d73788fc0bf375d1d624aef8db5684bcae8f3cb75526646f58b0644df2",
+   "bundle_sha256": "3565e249b6f0c9469a722d49f1e1f074d7e02c6e5046799ed37547da56f3d28f",
+   "file": "assets/b60161d73788fc0bf375d1d624aef8db5684bcae8f3cb75526646f58b0644df2.png",
+   "mime": "image/png",
+   "width": 900,
+   "height": 1600,
+   "bytes": 1153960,
+   "focal": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "focal_by": "centre",
+   "final": true,
+   "set": "fset_01M84RTZPQNZE5FDP036TC3VSD",
+   "job_id": "job_01M84RV02M60B1B87BXAT33WET",
+   "channel": "social",
+   "channel_by": "format_packs",
+   "format": {
+    "format_id": "meta-reels-9x16",
+    "pack_id": "social",
+    "pack_version": "2026-10-13"
+   },
+   "aspect": {
+    "w": 1440,
+    "h": 2560
+   },
+   "delivery": {
+    "width": 1440,
+    "height": 2560
+   },
+   "method": "extend",
+   "subject": "crop"
+  },
+  "size_01M84RTZPR85MDT1N8GJ4WR52D": {
+   "entity": "size_01M84RTZPR85MDT1N8GJ4WR52D",
+   "role": "size",
+   "version": 3,
+   "origin": "generated",
+   "rights": "generated",
+   "status": "look",
+   "sha256": "e4a42e3988e3a38926e2301d907fea3df4c398c1fc44a81058322232258023c4",
+   "bundle_sha256": "3565e249b6f0c9469a722d49f1e1f074d7e02c6e5046799ed37547da56f3d28f",
+   "file": "assets/e4a42e3988e3a38926e2301d907fea3df4c398c1fc44a81058322232258023c4.png",
+   "mime": "image/png",
+   "width": 1280,
+   "height": 1600,
+   "bytes": 1545561,
+   "focal": {
+    "x": 0.5,
+    "y": 0.5065
+   },
+   "focal_by": "protect",
+   "final": true,
+   "set": "fset_01M84RTZPQNZE5FDP036TC3VSD",
+   "job_id": "job_01M84RV02RGX254KZA30MM5BZN",
+   "channel": "social",
+   "channel_by": "format_packs",
+   "format": {
+    "format_id": "meta-feed-image-4x5",
+    "pack_id": "social",
+    "pack_version": "2026-10-13"
+   },
+   "aspect": {
+    "w": 1440,
+    "h": 1800
+   },
+   "delivery": {
+    "width": 1440,
+    "height": 1800
+   },
+   "method": "crop",
+   "reason": "Flagged by review in Production: needs a look",
+   "keep": {
+    "x0": 0.2061,
+    "y0": 0.1684,
+    "x1": 0.7939,
+    "y1": 0.8446
+   },
+   "subject": "crop"
+  },
+  "size_01M84RTZPR85MDT1N8GJ4WR52E": {
+   "entity": "size_01M84RTZPR85MDT1N8GJ4WR52E",
+   "role": "size",
+   "version": 3,
+   "origin": "generated",
+   "rights": "generated",
+   "status": "look",
+   "sha256": "e3c4d4eaa09b1ab6e276af3f91165bc7228f238487c26ea89aea3a37fe02f5a6",
+   "bundle_sha256": "3565e249b6f0c9469a722d49f1e1f074d7e02c6e5046799ed37547da56f3d28f",
+   "file": "assets/e3c4d4eaa09b1ab6e276af3f91165bc7228f238487c26ea89aea3a37fe02f5a6.png",
+   "mime": "image/png",
+   "width": 1440,
+   "height": 1440,
+   "bytes": 1648614,
+   "focal": {
+    "x": 0.5,
+    "y": 0.4995
+   },
+   "focal_by": "protect",
+   "set": "fset_01M84RTZPQNZE5FDP036TC3VSD",
+   "job_id": "job_01M84RV02XSH5X27JXQABYR4N5",
+   "channel": "social",
+   "channel_by": "format_packs",
+   "format": {
+    "format_id": "meta-feed-image-1x1",
+    "pack_id": "social",
+    "pack_version": "2026-10-13"
+   },
+   "aspect": {
+    "w": 1440,
+    "h": 1440
+   },
+   "delivery": {
+    "width": 1440,
+    "height": 1440
+   },
+   "method": "crop",
+   "reason": "Flagged by review in Production: needs a look",
+   "keep": {
+    "x0": 0.2061,
+    "y0": 0.077,
+    "x1": 0.7939,
+    "y1": 0.9219
+   },
+   "subject": "crop"
+  },
+  "size_01M84RTZPR85MDT1N8GJ4WR52F": {
+   "entity": "size_01M84RTZPR85MDT1N8GJ4WR52F",
+   "role": "size",
+   "version": 3,
+   "origin": "generated",
+   "rights": "generated",
+   "status": "ready",
+   "sha256": "03c3d6136d7aef3e34347c80c31270f44c98285e2412d8ee66bd284c20cb9366",
+   "bundle_sha256": "3565e249b6f0c9469a722d49f1e1f074d7e02c6e5046799ed37547da56f3d28f",
+   "file": "assets/03c3d6136d7aef3e34347c80c31270f44c98285e2412d8ee66bd284c20cb9366.png",
+   "mime": "image/png",
+   "width": 1200,
+   "height": 628,
+   "bytes": 768621,
+   "focal": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "focal_by": "centre",
+   "set": "fset_01M84RTZPQNZE5FDP036TC3VSD",
+   "job_id": "job_01M84RV030QWE55S342H32C13M",
+   "channel": "social",
+   "channel_by": "format_packs",
+   "format": {
+    "format_id": "linkedin-image-1.91x1",
+    "pack_id": "social",
+    "pack_version": "2026-10-13"
+   },
+   "aspect": {
+    "w": 1200,
+    "h": 628
+   },
+   "delivery": {
+    "width": 1200,
+    "height": 628
+   },
+   "method": "extend",
+   "subject": "crop"
+  },
+  "size_01M84RTZPR85MDT1N8GJ4WR52G": {
+   "entity": "size_01M84RTZPR85MDT1N8GJ4WR52G",
+   "role": "size",
+   "version": 3,
+   "origin": "generated",
+   "rights": "generated",
+   "status": "ready",
+   "sha256": "0fc86c2cf2ec0080645118e583b9f60c779de3412339c43612698f2e42218826",
+   "bundle_sha256": "3565e249b6f0c9469a722d49f1e1f074d7e02c6e5046799ed37547da56f3d28f",
+   "file": "assets/0fc86c2cf2ec0080645118e583b9f60c779de3412339c43612698f2e42218826.png",
+   "mime": "image/png",
+   "width": 1600,
+   "height": 800,
+   "bytes": 1017652,
+   "focal": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "focal_by": "centre",
+   "final": true,
+   "set": "fset_01M84RTZPQNZE5FDP036TC3VSD",
+   "job_id": "job_01M84RV0337YD4X70QGCCZQ9YT",
+   "channel": "ooh",
+   "channel_by": "format_packs",
+   "format": {
+    "format_id": "uk-48-sheet",
+    "pack_id": "ooh-uk-ie",
+    "pack_version": "2026-10-13"
+   },
+   "aspect": {
+    "w": 7200,
+    "h": 3600
+   },
+   "delivery": {
+    "width": 7200,
+    "height": 3600
+   },
+   "method": "regenerate",
+   "subject": "crop"
+  },
+  "size_01M84RTZPR85MDT1N8GJ4WR52H": {
+   "entity": "size_01M84RTZPR85MDT1N8GJ4WR52H",
+   "role": "size",
+   "version": 3,
+   "origin": "generated",
+   "rights": "generated",
+   "status": "ready",
+   "sha256": "788c2b0369b14eea058a129fff2ff17c42981b600bece6e567ce163e8dff8563",
+   "bundle_sha256": "3565e249b6f0c9469a722d49f1e1f074d7e02c6e5046799ed37547da56f3d28f",
+   "file": "assets/788c2b0369b14eea058a129fff2ff17c42981b600bece6e567ce163e8dff8563.png",
+   "mime": "image/png",
+   "width": 1600,
+   "height": 400,
+   "bytes": 652295,
+   "focal": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "focal_by": "centre",
+   "final": true,
+   "set": "fset_01M84RTZPQNZE5FDP036TC3VSD",
+   "job_id": "job_01M84RV036V5816XBGSPAJ5H1J",
+   "channel": "ooh",
+   "channel_by": "format_packs",
+   "format": {
+    "format_id": "uk-96-sheet",
+    "pack_id": "ooh-uk-ie",
+    "pack_version": "2026-10-13"
+   },
+   "aspect": {
+    "w": 14400,
+    "h": 3600
+   },
+   "delivery": {
+    "width": 14400,
+    "height": 3600
+   },
+   "method": "regenerate",
+   "subject": "crop"
+  },
+  "size_01M84RTZPR85MDT1N8GJ4WR52J": {
+   "entity": "size_01M84RTZPR85MDT1N8GJ4WR52J",
+   "role": "size",
+   "version": 3,
+   "origin": "generated",
+   "rights": "generated",
+   "status": "look",
+   "sha256": "542da5b340e73b98be51294fba38098e4d7e559e621ab33b93f2c57244c029cd",
+   "bundle_sha256": "3565e249b6f0c9469a722d49f1e1f074d7e02c6e5046799ed37547da56f3d28f",
+   "file": "assets/542da5b340e73b98be51294fba38098e4d7e559e621ab33b93f2c57244c029cd.png",
+   "mime": "image/png",
+   "width": 1067,
+   "height": 1600,
+   "bytes": 1328193,
+   "focal": {
+    "x": 0.5,
+    "y": 0.5065
+   },
+   "focal_by": "protect",
+   "final": true,
+   "set": "fset_01M84RTZPQNZE5FDP036TC3VSD",
+   "job_id": "job_01M84RV0387ZEG21D04V0GRDAW",
+   "channel": "ooh",
+   "channel_by": "format_packs",
+   "format": {
+    "format_id": "uk-6-sheet",
+    "pack_id": "ooh-uk-ie",
+    "pack_version": "2026-10-13"
+   },
+   "aspect": {
+    "w": 3543,
+    "h": 5315
+   },
+   "delivery": {
+    "width": 3543,
+    "height": 5315
+   },
+   "method": "crop",
+   "reason": "Flagged by review in Production: needs a look",
+   "keep": {
+    "x0": 0.1471,
+    "y0": 0.1684,
+    "x1": 0.8529,
+    "y1": 0.8446
+   },
+   "subject": "crop"
+  },
+  "size_01M84RTZPR85MDT1N8GJ4WR52K": {
+   "entity": "size_01M84RTZPR85MDT1N8GJ4WR52K",
+   "role": "size",
+   "version": 3,
+   "origin": "generated",
+   "rights": "generated",
+   "status": "look",
+   "sha256": "e93f2c38c5387199e6106ecabb24c09f19c34dbe524f8dc3242f7529981a28c4",
+   "bundle_sha256": "3565e249b6f0c9469a722d49f1e1f074d7e02c6e5046799ed37547da56f3d28f",
+   "file": "assets/e93f2c38c5387199e6106ecabb24c09f19c34dbe524f8dc3242f7529981a28c4.png",
+   "mime": "image/png",
+   "width": 900,
+   "height": 1600,
+   "bytes": 1153959,
+   "focal": {
+    "x": 0.5,
+    "y": 0.5065
+   },
+   "focal_by": "protect",
+   "final": true,
+   "set": "fset_01M84RTZPQNZE5FDP036TC3VSD",
+   "job_id": "job_01M84RV03A0X0Z30B2AE8H7ZMJ",
+   "channel": "ooh",
+   "channel_by": "format_packs",
+   "format": {
+    "format_id": "uk-d6",
+    "pack_id": "ooh-uk-ie",
+    "pack_version": "2026-10-13"
+   },
+   "aspect": {
+    "w": 1080,
+    "h": 1920
+   },
+   "delivery": {
+    "width": 1080,
+    "height": 1920
+   },
+   "method": "crop",
+   "reason": "Flagged by review in Production: needs a look",
+   "keep": {
+    "x0": 0.0818,
+    "y0": 0.1684,
+    "x1": 0.9182,
+    "y1": 0.8446
+   },
+   "subject": "crop"
+  },
+  "size_01M84RTZPR85MDT1N8GJ4WR52M": {
+   "entity": "size_01M84RTZPR85MDT1N8GJ4WR52M",
+   "role": "size",
+   "version": 4,
+   "origin": "generated",
+   "rights": "generated",
+   "status": "ready",
+   "sha256": "0a2d4653c4fa215eff360935e9666f3586c3dfb52a30d712dbfa5a4b6be19453",
+   "bundle_sha256": "3565e249b6f0c9469a722d49f1e1f074d7e02c6e5046799ed37547da56f3d28f",
+   "file": "assets/0a2d4653c4fa215eff360935e9666f3586c3dfb52a30d712dbfa5a4b6be19453.png",
+   "mime": "image/png",
+   "width": 612,
+   "height": 306,
+   "bytes": 233043,
+   "focal": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "focal_by": "centre",
+   "set": "fset_01M84RTZPQNZE5FDP036TC3VSD",
+   "job_id": "job_01M84RV03DRK0WA7SV2H3GK0JY",
+   "channel": "ooh",
+   "channel_by": "format_packs",
+   "format": {
+    "format_id": "uk-d48-jcdecaux",
+    "pack_id": "ooh-uk-ie",
+    "pack_version": "2026-10-13"
+   },
+   "aspect": {
+    "w": 612,
+    "h": 306
+   },
+   "delivery": {
+    "width": 612,
+    "height": 306
+   },
+   "method": "regenerate",
+   "subject": "crop"
+  },
+  "size_01M84RTZPR85MDT1N8GJ4WR52N": {
+   "entity": "size_01M84RTZPR85MDT1N8GJ4WR52N",
+   "role": "size",
+   "version": 3,
+   "origin": "generated",
+   "rights": "generated",
+   "status": "look",
+   "sha256": "7e07d7f698e25fa6117e56eeea74a6c68cdd9e089c6cb6acef343a87a55bd223",
+   "bundle_sha256": "3565e249b6f0c9469a722d49f1e1f074d7e02c6e5046799ed37547da56f3d28f",
+   "file": "assets/7e07d7f698e25fa6117e56eeea74a6c68cdd9e089c6cb6acef343a87a55bd223.png",
+   "mime": "image/png",
+   "width": 1131,
+   "height": 1600,
+   "bytes": 1395558,
+   "focal": {
+    "x": 0.5,
+    "y": 0.5065
+   },
+   "focal_by": "protect",
+   "set": "fset_01M84RTZPQNZE5FDP036TC3VSD",
+   "job_id": "job_01M84RV03FANDPHBZ9AGRT7BZN",
+   "channel": "print",
+   "channel_by": "format_packs",
+   "format": {
+    "format_id": "mag-a4-full-page",
+    "pack_id": "print",
+    "pack_version": "2026-10-13"
+   },
+   "aspect": {
+    "w": 2480,
+    "h": 3508
+   },
+   "delivery": {
+    "width": 2480,
+    "height": 3508
+   },
+   "method": "crop",
+   "reason": "Flagged by review in Production: needs a look",
+   "keep": {
+    "x0": 0.1671,
+    "y0": 0.1684,
+    "x1": 0.8329,
+    "y1": 0.8446
+   },
+   "subject": "crop"
+  },
+  "size_01M84RTZPR85MDT1N8GJ4WR52P": {
+   "entity": "size_01M84RTZPR85MDT1N8GJ4WR52P",
+   "role": "size",
+   "version": 3,
+   "origin": "generated",
+   "rights": "generated",
+   "status": "ready",
+   "sha256": "db47884a5707a16c7550ce4eccd393be68e88fb932e2653028e5705240b76221",
+   "bundle_sha256": "3565e249b6f0c9469a722d49f1e1f074d7e02c6e5046799ed37547da56f3d28f",
+   "file": "assets/db47884a5707a16c7550ce4eccd393be68e88fb932e2653028e5705240b76221.png",
+   "mime": "image/png",
+   "width": 1600,
+   "height": 1131,
+   "bytes": 1399202,
+   "focal": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "focal_by": "centre",
+   "set": "fset_01M84RTZPQNZE5FDP036TC3VSD",
+   "job_id": "job_01M84RV03JCSHCQ4YDGEB7KWHZ",
+   "channel": "print",
+   "channel_by": "format_packs",
+   "format": {
+    "format_id": "mag-a4-dps",
+    "pack_id": "print",
+    "pack_version": "2026-10-13"
+   },
+   "aspect": {
+    "w": 4961,
+    "h": 3508
+   },
+   "delivery": {
+    "width": 4961,
+    "height": 3508
+   },
+   "method": "extend",
+   "subject": "crop"
+  },
+  "size_01M84RTZPR85MDT1N8GJ4WR52Q": {
+   "entity": "size_01M84RTZPR85MDT1N8GJ4WR52Q",
+   "role": "size",
+   "version": 3,
+   "origin": "generated",
+   "rights": "generated",
+   "status": "ready",
+   "sha256": "9b367625058d1bf3a81b482b79b54d05d4b2d9160ce8b86b60de6cefe087154b",
+   "bundle_sha256": "3565e249b6f0c9469a722d49f1e1f074d7e02c6e5046799ed37547da56f3d28f",
+   "file": "assets/9b367625058d1bf3a81b482b79b54d05d4b2d9160ce8b86b60de6cefe087154b.png",
+   "mime": "image/png",
+   "width": 300,
+   "height": 250,
+   "bytes": 107357,
+   "focal": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "focal_by": "centre",
+   "set": "fset_01M84RTZPQNZE5FDP036TC3VSD",
+   "job_id": "job_01M84RV03NMNT690K99XFQF249",
+   "channel": "display",
+   "channel_by": "format_packs",
+   "format": {
+    "format_id": "iab-300x250",
+    "pack_id": "display",
+    "pack_version": "2026-10-13"
+   },
+   "aspect": {
+    "w": 300,
+    "h": 250
+   },
+   "delivery": {
+    "width": 300,
+    "height": 250
+   },
+   "method": "extend",
+   "subject": "crop"
+  },
+  "size_01M84RTZPR85MDT1N8GJ4WR52R": {
+   "entity": "size_01M84RTZPR85MDT1N8GJ4WR52R",
+   "role": "size",
+   "version": 3,
+   "origin": "generated",
+   "rights": "generated",
+   "status": "ready",
+   "sha256": "6247d86b423711bb2984541febd4f2dc239b1d9a9e08a77566dde68902c6ca73",
+   "bundle_sha256": "3565e249b6f0c9469a722d49f1e1f074d7e02c6e5046799ed37547da56f3d28f",
+   "file": "assets/6247d86b423711bb2984541febd4f2dc239b1d9a9e08a77566dde68902c6ca73.png",
+   "mime": "image/png",
+   "width": 728,
+   "height": 90,
+   "bytes": 90787,
+   "focal": {
+    "x": 0.5,
+    "y": 0.4995
+   },
+   "focal_by": "protect",
+   "set": "fset_01M84RTZPQNZE5FDP036TC3VSD",
+   "job_id": "job_01M84RV03S70XQZGB6NXRBEEPT",
+   "channel": "display",
+   "channel_by": "format_packs",
+   "format": {
+    "format_id": "iab-728x90",
+    "pack_id": "display",
+    "pack_version": "2026-10-13"
+   },
+   "aspect": {
+    "w": 728,
+    "h": 90
+   },
+   "delivery": {
+    "width": 728,
+    "height": 90
+   },
+   "method": "layout",
+   "keep": {
+    "x0": 0.2061,
+    "y0": 0.077,
+    "x1": 0.7939,
+    "y1": 0.9219
+   },
+   "subject": "crop"
+  },
+  "size_01M84RTZPR85MDT1N8GJ4WR52S": {
+   "entity": "size_01M84RTZPR85MDT1N8GJ4WR52S",
+   "role": "size",
+   "version": 3,
+   "origin": "generated",
+   "rights": "generated",
+   "status": "ready",
+   "sha256": "8fa17118b369d17d59d27a2b6ff22cd38681cdde7e828d5fccc8a6739e855a97",
+   "bundle_sha256": "3565e249b6f0c9469a722d49f1e1f074d7e02c6e5046799ed37547da56f3d28f",
+   "file": "assets/8fa17118b369d17d59d27a2b6ff22cd38681cdde7e828d5fccc8a6739e855a97.png",
+   "mime": "image/png",
+   "width": 160,
+   "height": 600,
+   "bytes": 121325,
+   "focal": {
+    "x": 0.5,
+    "y": 0.5065
+   },
+   "focal_by": "protect",
+   "set": "fset_01M84RTZPQNZE5FDP036TC3VSD",
+   "job_id": "job_01M84RV03WK02N90RRJRDSZ9KV",
+   "channel": "display",
+   "channel_by": "format_packs",
+   "format": {
+    "format_id": "iab-160x600",
+    "pack_id": "display",
+    "pack_version": "2026-10-13"
+   },
+   "aspect": {
+    "w": 160,
+    "h": 600
+   },
+   "delivery": {
+    "width": 160,
+    "height": 600
+   },
+   "method": "layout",
+   "keep": {
+    "x0": 0.2061,
+    "y0": 0.1684,
+    "x1": 0.7939,
+    "y1": 0.8446
+   },
+   "subject": "crop"
+  },
+  "size_01M84RTZPR85MDT1N8GJ4WR52T": {
+   "entity": "size_01M84RTZPR85MDT1N8GJ4WR52T",
+   "role": "size",
+   "version": 3,
+   "origin": "generated",
+   "rights": "generated",
+   "status": "look",
+   "sha256": "2fb382a9e4cc3dcd17a219d8936cb7c5067ad2d2eb748ba9992e7a298a211991",
+   "bundle_sha256": "3565e249b6f0c9469a722d49f1e1f074d7e02c6e5046799ed37547da56f3d28f",
+   "file": "assets/2fb382a9e4cc3dcd17a219d8936cb7c5067ad2d2eb748ba9992e7a298a211991.png",
+   "mime": "image/png",
+   "width": 300,
+   "height": 600,
+   "bytes": 219263,
+   "focal": {
+    "x": 0.5,
+    "y": 0.5065
+   },
+   "focal_by": "protect",
+   "set": "fset_01M84RTZPQNZE5FDP036TC3VSD",
+   "job_id": "job_01M84RV03YR7JM04DWNH8D2APD",
+   "channel": "display",
+   "channel_by": "format_packs",
+   "format": {
+    "format_id": "iab-300x600",
+    "pack_id": "display",
+    "pack_version": "2026-10-13"
+   },
+   "aspect": {
+    "w": 300,
+    "h": 600
+   },
+   "delivery": {
+    "width": 300,
+    "height": 600
+   },
+   "method": "crop",
+   "reason": "Flagged by review in Production: needs a look",
+   "keep": {
+    "x0": 0.0295,
+    "y0": 0.1684,
+    "x1": 0.9705,
+    "y1": 0.8446
+   },
+   "subject": "crop"
+  },
+  "size_01M84RTZPR85MDT1N8GJ4WR52V": {
+   "entity": "size_01M84RTZPR85MDT1N8GJ4WR52V",
+   "role": "size",
+   "version": 3,
+   "origin": "generated",
+   "rights": "generated",
+   "status": "ready",
+   "sha256": "f1689adda94424ec53c9224f9588402cbfbd377e7cfd7644c5851f096301d903",
+   "bundle_sha256": "3565e249b6f0c9469a722d49f1e1f074d7e02c6e5046799ed37547da56f3d28f",
+   "file": "assets/f1689adda94424ec53c9224f9588402cbfbd377e7cfd7644c5851f096301d903.png",
+   "mime": "image/png",
+   "width": 320,
+   "height": 50,
+   "bytes": 30067,
+   "focal": {
+    "x": 0.5,
+    "y": 0.4995
+   },
+   "focal_by": "protect",
+   "set": "fset_01M84RTZPQNZE5FDP036TC3VSD",
+   "job_id": "job_01M84RV04069BS4HNY6YFVEG2X",
+   "channel": "display",
+   "channel_by": "format_packs",
+   "format": {
+    "format_id": "iab-320x50",
+    "pack_id": "display",
+    "pack_version": "2026-10-13"
+   },
+   "aspect": {
+    "w": 320,
+    "h": 50
+   },
+   "delivery": {
+    "width": 320,
+    "height": 50
+   },
+   "method": "layout",
+   "keep": {
+    "x0": 0.2061,
+    "y0": 0.077,
+    "x1": 0.7939,
+    "y1": 0.9219
+   },
+   "subject": "crop"
+  },
+  "size_01M84RTZPR85MDT1N8GJ4WR52W": {
+   "entity": "size_01M84RTZPR85MDT1N8GJ4WR52W",
+   "role": "size",
+   "version": 3,
+   "origin": "generated",
+   "rights": "generated",
+   "status": "ready",
+   "sha256": "9aaee9893fcf22039fb0fcbef4e574f1f49e0ed7b357eaf065277ac955e183d2",
+   "bundle_sha256": "3565e249b6f0c9469a722d49f1e1f074d7e02c6e5046799ed37547da56f3d28f",
+   "file": "assets/9aaee9893fcf22039fb0fcbef4e574f1f49e0ed7b357eaf065277ac955e183d2.png",
+   "mime": "image/png",
+   "width": 970,
+   "height": 250,
+   "bytes": 282706,
+   "focal": {
+    "x": 0.5,
+    "y": 0.4995
+   },
+   "focal_by": "protect",
+   "set": "fset_01M84RTZPQNZE5FDP036TC3VSD",
+   "job_id": "job_01M84RV0440Z1T8YPCAG9JVQR7",
+   "channel": "display",
+   "channel_by": "format_packs",
+   "format": {
+    "format_id": "iab-970x250",
+    "pack_id": "display",
+    "pack_version": "2026-10-13"
+   },
+   "aspect": {
+    "w": 970,
+    "h": 250
+   },
+   "delivery": {
+    "width": 970,
+    "height": 250
+   },
+   "method": "layout",
+   "keep": {
+    "x0": 0.2061,
+    "y0": 0.077,
+    "x1": 0.7939,
+    "y1": 0.9219
+   },
+   "subject": "crop"
+  },
+  "frame_01M84SMA5QAQR00RXH8XS29X8E": {
+   "entity": "frame_01M84SMA5QAQR00RXH8XS29X8E",
+   "role": "frame",
+   "version": 1,
+   "origin": "generated",
+   "rights": "generated",
+   "status": "ready",
+   "sha256": "ccb17006baae108c5e9513b2d888f8c0bee9489278ad978e85428316cdb5e481",
+   "bundle_sha256": "3565e249b6f0c9469a722d49f1e1f074d7e02c6e5046799ed37547da56f3d28f",
+   "file": "assets/ccb17006baae108c5e9513b2d888f8c0bee9489278ad978e85428316cdb5e481.png",
+   "mime": "image/png",
+   "width": 1365,
+   "height": 768,
+   "bytes": 1267022,
+   "focal": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "focal_by": "centre",
+   "final": true,
+   "job_id": "job_01M84SKB1VB5EFWKTQV7XN75CT",
+   "shot": "shot_01M84SK000WBG4W50830RBNQW6",
+   "storyboard": "storyboard_01M84SJHYJ5XXMNPNG8XXBXQAK",
+   "shot_rank": "a0",
+   "shot_kind": "shot",
+   "aspect": {
+    "w": 1365,
+    "h": 768
+   }
+  },
+  "frame_01M84SQ5TJ303ZKNQEBEMZKXNW": {
+   "entity": "frame_01M84SQ5TJ303ZKNQEBEMZKXNW",
+   "role": "frame",
+   "version": 1,
+   "origin": "generated",
+   "rights": "generated",
+   "status": "ready",
+   "sha256": "60b0f89b11166dfbfd705d3fd68443b647ac77654c59c1016270a0c47fe527db",
+   "bundle_sha256": "3565e249b6f0c9469a722d49f1e1f074d7e02c6e5046799ed37547da56f3d28f",
+   "file": "assets/60b0f89b11166dfbfd705d3fd68443b647ac77654c59c1016270a0c47fe527db.png",
+   "mime": "image/png",
+   "width": 1365,
+   "height": 768,
+   "bytes": 1098355,
+   "focal": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "focal_by": "centre",
+   "final": true,
+   "job_id": "job_01M84SP7C6BBD8QS02YMN8ZFN8",
+   "shot": "shot_01M84SK001YWKAKWZHF2MZGP9S",
+   "storyboard": "storyboard_01M84SJHYJ5XXMNPNG8XXBXQAK",
+   "shot_rank": "a1",
+   "shot_kind": "shot",
+   "aspect": {
+    "w": 1365,
+    "h": 768
+   }
+  },
+  "frame_01M84SR5HJRSTAYKBG5EZARCG8": {
+   "entity": "frame_01M84SR5HJRSTAYKBG5EZARCG8",
+   "role": "frame",
+   "version": 1,
+   "origin": "generated",
+   "rights": "generated",
+   "status": "ready",
+   "sha256": "dda21f1c25dba8e5010e967b89b3f3cb16c5bdcec0a75f394c25c16baa7106a7",
+   "bundle_sha256": "3565e249b6f0c9469a722d49f1e1f074d7e02c6e5046799ed37547da56f3d28f",
+   "file": "assets/dda21f1c25dba8e5010e967b89b3f3cb16c5bdcec0a75f394c25c16baa7106a7.png",
+   "mime": "image/png",
+   "width": 1365,
+   "height": 768,
+   "bytes": 1050141,
+   "focal": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "focal_by": "centre",
+   "final": true,
+   "job_id": "job_01M84SQ65ABJWTG5KZJ3FXKBPZ",
+   "shot": "shot_01M84SK001YWKAKWZHF2MZGP9V",
+   "storyboard": "storyboard_01M84SJHYJ5XXMNPNG8XXBXQAK",
+   "shot_rank": "a2",
+   "shot_kind": "shot",
+   "aspect": {
+    "w": 1365,
+    "h": 768
+   }
+  },
+  "frame_01M84SS50RJNWVJNCCYMP4SAZA": {
+   "entity": "frame_01M84SS50RJNWVJNCCYMP4SAZA",
+   "role": "frame",
+   "version": 1,
+   "origin": "generated",
+   "rights": "generated",
+   "status": "ready",
+   "sha256": "1d5bfd8ddddf076cd5a3a33c023663873cd41bee1b2ad8cf82c6b70c5689ee80",
+   "bundle_sha256": "3565e249b6f0c9469a722d49f1e1f074d7e02c6e5046799ed37547da56f3d28f",
+   "file": "assets/1d5bfd8ddddf076cd5a3a33c023663873cd41bee1b2ad8cf82c6b70c5689ee80.png",
+   "mime": "image/png",
+   "width": 1365,
+   "height": 768,
+   "bytes": 953216,
+   "focal": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "focal_by": "centre",
+   "final": true,
+   "job_id": "job_01M84SR5XDBRCRPGRZ0KAXESNQ",
+   "shot": "shot_01M84SK001YWKAKWZHF2MZGP9X",
+   "storyboard": "storyboard_01M84SJHYJ5XXMNPNG8XXBXQAK",
+   "shot_rank": "a3",
+   "shot_kind": "shot",
+   "aspect": {
+    "w": 1365,
+    "h": 768
+   }
+  },
+  "frame_01M84ST4F5W1QVNQXRAMF44B83": {
+   "entity": "frame_01M84ST4F5W1QVNQXRAMF44B83",
+   "role": "frame",
+   "version": 1,
+   "origin": "generated",
+   "rights": "generated",
+   "status": "ready",
+   "sha256": "e7592c013d2d4af8fe067ff0f6b251a7f9acf185c333e10d0ba69e2cf364f605",
+   "bundle_sha256": "3565e249b6f0c9469a722d49f1e1f074d7e02c6e5046799ed37547da56f3d28f",
+   "file": "assets/e7592c013d2d4af8fe067ff0f6b251a7f9acf185c333e10d0ba69e2cf364f605.png",
+   "mime": "image/png",
+   "width": 1365,
+   "height": 768,
+   "bytes": 1226335,
+   "focal": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "focal_by": "centre",
+   "final": true,
+   "job_id": "job_01M84SS5AJ3TEWD1NQXXPDRR2C",
+   "shot": "shot_01M84SK001YWKAKWZHF2MZGP9Y",
+   "storyboard": "storyboard_01M84SJHYJ5XXMNPNG8XXBXQAK",
+   "shot_rank": "a4",
+   "shot_kind": "shot",
+   "aspect": {
+    "w": 1365,
+    "h": 768
+   }
+  },
+  "frame_01M84SV64GQS12S9ZFS0W0ZS4Q": {
+   "entity": "frame_01M84SV64GQS12S9ZFS0W0ZS4Q",
+   "role": "frame",
+   "version": 1,
+   "origin": "generated",
+   "rights": "generated",
+   "status": "ready",
+   "sha256": "bd5dc838eed894563b2e7fc62fa379fd85dc4dafcbce14172d4c328c8af48546",
+   "bundle_sha256": "3565e249b6f0c9469a722d49f1e1f074d7e02c6e5046799ed37547da56f3d28f",
+   "file": "assets/bd5dc838eed894563b2e7fc62fa379fd85dc4dafcbce14172d4c328c8af48546.png",
+   "mime": "image/png",
+   "width": 1365,
+   "height": 768,
+   "bytes": 1055062,
+   "focal": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "focal_by": "centre",
+   "final": true,
+   "job_id": "job_01M84ST4RZ7HEVW0A86CX4ZYWQ",
+   "shot": "shot_01M84SK001YWKAKWZHF2MZGPA0",
+   "storyboard": "storyboard_01M84SJHYJ5XXMNPNG8XXBXQAK",
+   "shot_rank": "a5",
+   "shot_kind": "shot",
+   "aspect": {
+    "w": 1365,
+    "h": 768
+   }
+  }
+ },
+ "offer_sha256": "6fdce9b1594c3eb10afc14372cba15c8c466c2671f34238eca6194ae6209c02c",
+ "refused": [],
+ "not_carried": {
+  "renders": 1,
+  "video_sizes": 0,
+  "video_masters": 0
+ }
+}

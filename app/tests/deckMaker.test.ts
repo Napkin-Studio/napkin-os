@@ -2709,3 +2709,68 @@ test('the PowerPoint leaves the app frame through the host export, not a blob li
   assert.ok(!/a\.download\s*=\s*base\s*\+\s*'\.pptx'/.test(html), 'no blob download of the pptx in the frame')
   assert.ok(/exportDoc\('pptx', base, btoa\(bin\)\)/.test(html), 'the pptx goes to clan.exportDoc')
 })
+
+// ── UAT round 3 (Harrowgate): the real deck's 19 pitch slides, as the engine wrote them ──────────────────────────────
+// The fixture is the downloaded Deck document's presented slides and the evidence they cite (a fictional client).
+const harrowgate = () => {
+  const real = JSON.parse(readFileSync(new URL('../engine/deck/tests/fixtures/harrowgate/deck_pitch.json', root), 'utf8')) as Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
+  const f = fixture('done') as Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
+  return { ...f, deck: { ...f.deck, slides: real.slides, order: real.order, appendix_ids: [], appendix_count: 0, meta: { ...f.deck.meta, ...real.meta } }, evidence: real.evidence }
+}
+const ID = /\b(?:f|fi)_[A-Za-z0-9]{6,}|\b(?:brief|req):[A-Za-z0-9_.]+/
+
+test('Review: every one of the 19 pitch slides is named by its own title in the rail; the repeated section is a small line, not the name', () => {
+  const f = harrowgate()
+  const m = mount(f)
+  m.click({ go: 'review' })
+  const rail = [...m.app.innerHTML.matchAll(/<button class="thumb" data-slide="(s\d+)"[^>]*><span class="n">[^<]*<\/span><span><span class="t">([^<]*)<\/span>(?:<span class="sec">([^<]*)<\/span>)?/g)]
+  assert.equal(rail.length, 19)
+  const names = rail.map(r => r[2].replace(/&#39;/g, "'"))
+  assert.equal(new Set(names).size, 19, 'a name appears twice: ' + names.join(' | ')) // was: The real question x2, Insight x2, The work x4, How it runs x2, Timeline and investment x2
+  assert.ok(rail.every(r => f.deck.slides[r[1]].title === r[2].replace(/&#39;/g, "'")), 'the name is the slide title')
+  assert.equal(rail.filter(r => r[3]).length, 19)
+  assert.ok(rail.some(r => r[3] === 'The work'), 'the section stays as the small line')
+})
+
+test('Present and Review show no evidence id: the sources are plain words', () => {
+  const f = harrowgate()
+  const m = mount(f)
+  for (const id of f.deck.order as string[]) {
+    m.click({ go: 'review' })
+    m.click({ slide: id })
+    m.click({ tab: 'evidence' })
+    const rv = m.app.innerHTML.replace(/<[^>]*>/g, ' ') // the words a person reads, not the attributes
+    assert.ok(!ID.test(rv), `${id}: an id on Review: ${rv.slice(Math.max(0, rv.search(ID) - 150), rv.search(ID) + 60)}`)
+    m.click({ go: 'present' })
+    const pr = m.app.innerHTML.replace(/<[^>]*>/g, ' ')
+    assert.ok(!ID.test(pr), `${id}: an id on Present: ${ID.exec(pr)?.[0]}`)
+  }
+  m.click({ go: 'review' })
+  m.click({ slide: 's05' })
+  m.click({ tab: 'evidence' })
+  assert.match(m.app.innerHTML, /<div class="id">The research<\/div>/)
+  assert.match(m.app.innerHTML, /<div class="id">The brief, [a-z ]+<\/div>/)
+  m.click({ go: 'present' })
+  for (let i = 0; i < 4; i++) m.click({ pres: '1' }) // to slide 5
+  assert.match(m.app.innerHTML, /data-source>The (?:brief|research)/)
+  const e = L.plainEvidence('f_X', { kind: 'research', text: 'positioning.claim.better_for_you.all_our_snacks_are_better_for_yo_33803a = All our snacks are better for you (as of 2026-11-23, confidence low)' })
+  assert.deepEqual(plain(e), { where: 'The research', text: 'All our snacks are better for you' })
+})
+
+test('Review: a slide with more than four pictures lays them out in a grid so six storyboard frames all show', async () => {
+  const f = harrowgate()
+  const first = f.deck.order[0] as string
+  const figs = [1, 2, 3, 4, 5, 6].map(i => `<figure class="pic" data-slot="shot_${i}"><img src="${PNG}" alt="a"></figure>`).join('')
+  const html6 = `<html><body><section class="slide" id="${first}">${figs}</section></body></html>`
+  const apiProxy = (_k: string, p: { task: string; input: { name?: string } }) =>
+    Promise.resolve({ ok: true, data: { api: 'napkin.middleware/1', result: { name: p.input.name, media_type: 'text/html', data_b64: Buffer.from(html6).toString('base64') } } })
+  const m = mount(f, () => Promise.resolve({ ok: true, json: () => Promise.resolve({ configured: true }) }), {}, { apiProxy })
+  await new Promise(r => setTimeout(r, 0))
+  m.click({ go: 'review' })
+  m.click({ slide: first })
+  await new Promise(r => setTimeout(r, 10))
+  assert.match(m.app.innerHTML, /<div class="pimgs many" data-pics>/)
+  assert.equal((m.app.innerHTML.match(/data-pic="shot_\d"/g) ?? []).length, 6)
+  assert.match(html, /\.pimgs\.many\{display:grid/)
+  assert.match(html, /function fitSlideText\(\)/) // the words step down until they sit above the foot of the slide (slides 11 and 12 ran off it)
+})
