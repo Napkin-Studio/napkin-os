@@ -23,6 +23,14 @@ def test_the_models_own_mention_of_the_line_gives_way_to_the_canonical_end_line_
     assert checks.carry_fixed_line(got, LINE) is None, "idempotent"
 
 
+def test_the_second_briefs_wording_gives_way_too():
+    # acceptance run, second brief: the model wrote the line in double quotes with "word for word, everywhere"
+    said = '"Refill. Not landfill." word for word, everywhere'
+    got = checks.carry_fixed_line(["No faces", said, "No children near the product"], LINE)
+    assert got == [END, "No faces", "No children near the product"]
+    assert checks.carry_fixed_line(got, LINE) is None
+
+
 def test_other_restatements_go_and_an_item_that_says_more_stays():
     for said in ("Use 'Refill. Not landfill.' word for word everywhere", "The line 'Refill. Not landfill.' runs on every piece, verbatim",
                  "Always use the end line Refill. Not landfill. exactly"):

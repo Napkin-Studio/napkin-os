@@ -187,6 +187,8 @@ describe('scope', () => {
     // the model's own wording in the round-4 Copperell brief, and the other forms a brief writes
     expect(endLineOf({ mandatories: ['Bottle is the hero, logo top right', "'Refill. Not landfill.' used word for word"] })).toBe('Refill. Not landfill.')
     expect(endLineOf({ mandatories: ["Use 'Refill. Not landfill.' word for word everywhere"] })).toBe('Refill. Not landfill.')
+    // the second acceptance brief's wording
+    expect(endLineOf({ mandatories: ['"Refill. Not landfill." word for word, everywhere'] })).toBe('Refill. Not landfill.')
     expect(endLineOf({ mandatories: ['Run \u201cRefill. Not landfill.\u201d verbatim on every piece'] })).toBe('Refill. Not landfill.')
     // the labelled end line still wins, wherever it sits
     expect(endLineOf({ mandatories: ["'Clean, without the plastic.' used word for word", "End line: 'Refill. Not landfill.' (word for word)"] })).toBe('Refill. Not landfill.')
