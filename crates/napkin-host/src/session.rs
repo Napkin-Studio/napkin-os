@@ -222,6 +222,24 @@ impl Session {
         op: impl FnOnce(&Ctx, &Document) -> HostResult<Outcome>,
     ) -> HostResult<Applied> {
         let mut view = self.view.lock().unwrap();
+        // A document made before its app widened its schema moves to the newer schema before
+        // it writes, when that is safe, so the write is judged by the app's contract
+        // ([`crate::ops::upgrade`], owner decision 2026-11-25). Best effort: a failed upgrade
+        // leaves the copy, and the write is judged as before.
+        if let Some(doc) = view.open.as_ref() {
+            match crate::ops::upgrade::apply(ctx, doc) {
+                Ok(Some(upgrade)) => {
+                    for change in &upgrade.changes {
+                        if let Err(e) = self.commit(&mut view.open, change) {
+                            crate::log::log(&format!("schema upgrade not written: {}", e.message));
+                            break;
+                        }
+                    }
+                }
+                Ok(None) => {}
+                Err(e) => crate::log::log(&format!("schema upgrade not made: {}", e.message)),
+            }
+        }
         let doc = view.open.as_ref().ok_or_else(HostError::no_file_open)?;
         let outcome = op(ctx, doc)?;
         let events = outcome.events();
