@@ -212,6 +212,10 @@ test('the acceptance run\'s findings stay fixed (territories-accept, 2026-11-25)
   const locked = L.view(a, { upEntries: entries })
   assert.match(locked, /✓ Locked/); assert.doesNotMatch(locked, /nsrc-chip draft/)
   assert.match(L.view(a, {}), /nsrc-chip draft/, 'with no word from the host, a card stays honest: Draft')
+  // the research behind the brief is an ancestor, not the direct parent: its entry (direct: false) carries its own lock too
+  const sp = L.seen(a), mixed = [{ document_id: sp.brief.id, direct: true, locked: false, status: 'current' }, { document_id: sp.research.id, direct: false, locked: true, status: 'not_compared' }]
+  const mv = L.view(a, { upEntries: mixed })
+  assert.equal((mv.match(/✓ Locked/g) || []).length, 1, 'only the research reads Locked'); assert.match(mv, /nsrc-chip draft/)
   // the crew's whole quote list scrolls: hundreds of sources, the Pick stays usable
   assert.match(html, /\.evlist\{[^}]*max-height:min\(420px,50vh\);overflow-y:auto/)
 })
