@@ -184,3 +184,44 @@ test('arming Draft it again does not re-fit the bar: the second press lands on i
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+// Acceptance run A7 (2026-11-25): with Draft it again in ⋯, the first press armed it but also closed the menu, so nothing
+// visible happened and the second press needed ⋯ again within 4 s. A button that changes in place keeps the menu open.
+test('in ⋯, the first press on Draft it again keeps the menu open on "Click again to redraft"; the second redrafts', async t => {
+  const { build } = await import('esbuild')
+  const { chromium } = await import('playwright')
+  let browser
+  try { browser = await chromium.launch() } catch (e) { t.skip(`no Chromium here: ${(e as Error).message.split('\n')[0]}`); return }
+  const dir = mkdtempSync(join(tmpdir(), 'topbar-stays-'))
+  try {
+    await build({
+      entryPoints: [join(app, 'tests/fixtures/topbarHarness.tsx')], outdir: dir, bundle: true, format: 'iife', platform: 'browser',
+      jsx: 'automatic', logLevel: 'silent', define: { 'process.env.NODE_ENV': '"development"', 'import.meta.env': '{}', 'import.meta.env.DEV': 'true', 'import.meta.env.BASE_URL': '"/"' },
+      loader: { '.svg': 'dataurl', '.png': 'dataurl', '.woff': 'dataurl', '.woff2': 'dataurl', '.ttf': 'dataurl', '.jpg': 'dataurl' },
+    })
+    writeFileSync(join(dir, 'index.html'), `<!doctype html><html data-theme="dark"><head><meta charset="utf-8"><link rel="stylesheet" href="topbarHarness.css"></head><body><div id="root"></div><script src="topbarHarness.js"></script></body></html>`)
+    let exercised = 0
+    for (let width = 1000; width <= 1500; width += 50) {
+      const page = await browser.newPage({ viewport: { width, height: 700 } })
+      await page.goto(`file://${join(dir, 'index.html')}?chip=1&title=${encodeURIComponent(LONG)}`)
+      await page.waitForSelector('[data-testid="doc-name"]'); await page.waitForTimeout(150)
+      const inBar = await page.locator('.tb-tools').getByRole('button', { name: 'Draft it again', exact: true }).count()
+      if (inBar || !(await page.getByTestId('bar-more').count())) { await page.close(); continue }
+      exercised++
+      await page.getByTestId('bar-more').click()
+      const menu = page.getByTestId('more-menu')
+      await menu.getByRole('menuitem', { name: /^Draft it again/ }).click()
+      assert.equal(await menu.count(), 1, `the menu stays open after the first press at ${width}px`)
+      await menu.getByRole('menuitem', { name: /^Click again to redraft/ }).waitFor({ timeout: 2000 })
+      await menu.getByRole('menuitem', { name: /^Click again to redraft/ }).click()
+      assert.equal(await page.getByTestId('more-menu').count(), 0, `the second press closes it at ${width}px`)
+      assert.deepEqual(await page.evaluate(() => (window as unknown as { __acted?: string[] }).__acted), ['redraft', 'redraft'], `both presses reached the app at ${width}px`)
+      await page.close()
+    }
+    assert.ok(exercised > 0, 'at least one width puts Draft it again in ⋯')
+    console.log(`# Draft it again in ⋯ at ${exercised} widths`)
+  } finally {
+    await browser.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

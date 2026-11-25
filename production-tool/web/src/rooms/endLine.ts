@@ -8,7 +8,7 @@ import type { Id, ProductionDocument } from '../contracts/types'
 import { briefForJob, endLineOf } from '../brief/model'
 import { shotsOf, storyboardOfVideo } from '../model/selectors'
 import { lineFacts, type LineFact } from '../stages/soundFacts'
-import { compileFor, type Plan } from './timeline'
+import { compileFor, MENTION_NOTE, PLACE, type Plan } from './timeline'
 
 /** How long the super holds over the last shot, at most. */
 export const END_LINE_S = 2.5
@@ -79,5 +79,21 @@ export function heardChecks(end: EndLine | undefined, unvoiced: readonly LineFac
     if (x === said) continue
     out.push({ text: `Not heard: ${x.who ? `${x.who}\u2019s ` : ''}\u201c${clip40(x.text)}\u201d (shot ${x.n}). ${x.why.split(':')[0]}.`, ok: false })
   }
+  return out
+}
+
+/**
+ * The Review agent's look at what the end card will print (UAT round 4 gate: its line read "@logo on a clean, quiet
+ * field." twice, the shot's layout note, and nothing said so). A picture's @name or a placement direction in the headline
+ * or the line, and a line that only repeats the headline, are said before the render.
+ */
+export function cardWordsChecks(card: Pick<NonNullable<Plan['endCard']>, 'headline' | 'line'> | undefined): { text: string; ok: boolean }[] {
+  if (!card) return []
+  const out: { text: string; ok: boolean }[] = []
+  for (const [field, text] of [['headline', card.headline], ['line', card.line]] as const) {
+    if (!text) continue
+    if (MENTION_NOTE.test(text) || PLACE.test(text)) out.push({ text: `The end card\u2019s ${field} reads \u201c${clip40(text)}\u201d: that is a note on how the card looks, not words for it`, ok: false })
+  }
+  if (card.headline && card.line && words(card.line).includes(words(card.headline)) && words(card.line) !== '') out.push({ text: 'The end card says its headline again in its line', ok: false })
   return out
 }

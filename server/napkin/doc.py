@@ -316,7 +316,10 @@ def build_materials(inp: dict, data: dict):
         if not isinstance(text, str) or not text.strip():
             unread.append(mid)
             continue
-        mats.append(Material(mid, text, a["name"], "other", sha, mid in known))
+        # `label`: the file's own name as the person chose it ("copperell-brand-notes.txt"); `name` is the stored one
+        # the host reads it by ("document-1795538546841-0.txt"). The material is named for a person (acceptance run A9).
+        label = a.get("label") if isinstance(a.get("label"), str) and a.get("label").strip() else a["name"]
+        mats.append(Material(mid, text, label.strip()[:200], "other", sha, mid in known))
     return mats, unread
 
 

@@ -2941,3 +2941,28 @@ test('a projection with no pins and no usable findings is not research', () => {
   assert.equal(L.upstreamSummary({ upstream: { b: uatBrief }, projection: { findings: {}, pins: {} } }).research, null)
   assert.equal(L.upstreamSummary({ upstream: { b: uatBrief }, projection: { findings: { f1: { status: 'rejected' } }, pins: {} } }).research, null)
 })
+
+// ── UAT round 4 blocker 2: a brief-only deck named no project, so the cover read "Copperell Home Ltd:" and the exports "Project.pptx" ──
+test('Start takes the project name from the brief a deck was spun off from, and a Production project\'s title first', () => {
+  const brief = { client: 'Copperell Home Ltd, launching Copperell Refill.', project_name: 'Copperell Refill', objectives: 'Sell the starter bottle' }
+  const research = { campaign: { name: 'Copperell research' }, report: {}, selection: {} }
+  const d = plain(L.startDefaults({ upstream: { r: research, b: brief } })) as { client: string; project: string; text: string }
+  assert.equal(d.client, 'Copperell Home Ltd')
+  assert.equal(d.project, 'Copperell Refill')
+  assert.equal(d.text, 'A pitch deck for Copperell Home Ltd: Copperell Refill.')
+  assert.equal((plain(L.startDefaults({ upstream: { b: brief, p: prodDoc() } })) as { project: string }).project, 'Lumen Water launch')
+})
+
+test('an export never takes its file name from a placeholder project', async () => {
+  const deckHtml = '<!doctype html><html><body><section class="slide">Copperell</section></body></html>'
+  const file = { ok: true, status: 200, data: { api: 'napkin.middleware/1', task: 'fetch_deck_file', job: { id: 'j', state: 'done' }, change: null,
+    result: { name: 'deck.html', media_type: 'text/html', data_b64: Buffer.from(deckHtml).toString('base64') } } }
+  const p = proxy(file)
+  const sent: { kind: string; name: string }[] = []
+  const fx = fixture('export-ready') as Record<string, Record<string, Record<string, unknown>>>
+  fx.deck.meta = { ...fx.deck.meta, project: '[Project]', client: 'Copperell Home Ltd' }
+  const m = mount(fx, undefined, {}, { apiProxy: p.apiProxy, exportDoc: (kind, name) => { sent.push({ kind, name }); return Promise.resolve({ ok: true }) } })
+  m.click({ export: 'pdf' })
+  await new Promise(r => setTimeout(r, 20))
+  assert.equal(sent[0].name, 'Copperell-Home-Ltd')   // round 4: "Project.pdf"
+})
