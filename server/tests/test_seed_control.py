@@ -82,9 +82,14 @@ def test_the_stop_file_stops_cleanly_and_a_new_start_clears_it(tmp_path):
 
 def test_three_give_ups_in_a_row_make_the_run_wait(tmp_path):
     c = Control(tmp_path)
-    for _ in range(3):
+    for _ in range(2):
         c.unit_done({"gave_up": True, "left_for_next_run": True})
-    assert c._capacity_until > time.time() - 0.01
+    assert c._capacity_until == 0.0, "two give-ups in a row do not make the run wait"
+    # Measured against the time before the third give-up, not the clock after it: LONG_WAIT is
+    # 0.05 s here, and a slow runner can spend that long writing the status file (CI, 2026-11-24).
+    before = time.time()
+    c.unit_done({"gave_up": True, "left_for_next_run": True})
+    assert c._capacity_until >= before + ctl.LONG_WAIT
 
 
 def test_page_text_reads_metadata_dates_and_skips_scripts():
