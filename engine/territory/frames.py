@@ -159,7 +159,7 @@ def colour_words(hex_code) -> str | None:
     if light <= 0.08:
         return "black"
     if sat < 0.12 or chroma < 0.06:
-        return "charcoal" if light < 0.3 else "grey" if light < 0.65 else "light grey"
+        return "charcoal" if light < 0.3 else "grey" if light < 0.65 else "off white" if light >= 0.9 else "light grey"
     if r == hi:
         hue = ((g - b) / chroma) % 6
     elif g == hi:
@@ -173,6 +173,8 @@ def colour_words(hex_code) -> str | None:
         return "cream"
     if name in ("orange", "red") and light < 0.33:
         return "brown" if name == "orange" else "deep red"
+    if name == "red" and 0.6 <= light <= 0.78 and sat > 0.5:
+        return "coral"
     if name == "blue" and light < 0.3:
         return "navy"
     if light < 0.33:

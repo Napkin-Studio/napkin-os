@@ -470,7 +470,7 @@ def test_no_brand_clan_is_the_built_in_look_and_the_old_client_folder_is_never_r
 
 def test_colour_words_carry_no_figure_and_the_client_name_never_reaches_a_prompt():
     for h, w in {"#000000": "black", "#FFFFFF": "white", "#808080": "grey", "#E30613": "bright red", "#F6F0E1": "cream", "#14213D": "navy",
-                 "#2E7D32": "green", "fff": "white", "#6B3E1F": "brown"}.items():
+                 "#2E7D32": "green", "fff": "white", "#6B3E1F": "brown", "#F4F1EA": "off white", "#F26B5B": "coral", "#C8C8C8": "light grey"}.items():
         assert frames.colour_words(h) == w, (h, frames.colour_words(h))
     assert frames.colour_words("red") is None and frames.colour_words(None) is None
     b = {"document_id": "x", "data": {"name": "O", "imagery": {"style": "linea style street portraits, soft light", "bans": []}}}
