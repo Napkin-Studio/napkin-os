@@ -173,7 +173,8 @@ def test_shot_order_is_productions_rank_and_end_cards_are_left_out(prod):
 
 
 def test_strip_picks():
-    assert graphics.strip_picks([1, 2]) == ([], "2 placeable storyboard frame(s): a strip needs 3")
+    assert graphics.strip_picks([1]) == ([], "1 placeable storyboard frame(s): a strip needs 2")
+    assert graphics.strip_picks([1, 2]) == ([1, 2], "")   # UAT round 4: two frames are both shown (the slide showed one of two)
     assert graphics.strip_picks([1, 2, 3]) == ([1, 2, 3], "") and graphics.strip_picks([1, 2, 3, 4]) == ([1, 2, 3, 4], "")
     assert graphics.strip_picks([1, 2, 3, 4, 5, 6]) == ([1, 2, 3, 4, 5, 6], "")   # UAT round 3: a storyboard of six is drawn whole (was cut to four)
     picks, note = graphics.strip_picks(list(range(1, 10)))
@@ -214,7 +215,9 @@ def test_a_rights_pending_frame_is_not_counted_so_no_strip(gr, prod):
     p["items"][first]["rights"] = "reference_only"
     d = _deck()
     images.bind_production(d, p)
-    assert not any(k.startswith("shot_") for k in d["slides"]["s3"].get("slots") or {})   # 2 placeable: one frame in a screen, no strip
+    shots = {k: v for k, v in (d["slides"]["s3"].get("slots") or {}).items() if k.startswith("shot_")}
+    assert len(shots) == 2   # the 2 placeable frames make the strip (UAT round 4: was one frame in a screen); the pending one is never drawn
+    assert all(v["image"]["from"]["key"] != first for v in shots.values())
     assert _im(d, "s3")["from"]["kind"] == "production"
 
 
