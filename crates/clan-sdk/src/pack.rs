@@ -1272,6 +1272,33 @@ pub fn patch_schema(
     pack(parent, output, opts, compressor)
 }
 
+/// Replace the document's output schema at `schema_path` with `schema_json`, recording
+/// `decision`, without re-validating the document's data. For a host moving a document to its
+/// app's newer schema when the newer one only widens the older (`schema_compat::compare` says
+/// `Widens`): every document the old schema accepted, the new one accepts, so there is nothing to
+/// re-check, and a document whose data is still incomplete (its writes were refused under the
+/// old schema, which is why it needs the upgrade) must not be refused the upgrade for it
+/// (2026-11-25: a Territories document stuck on its 80-source cap). Unlike [`patch_schema`] this
+/// does not repack the data; callers must only use it for a widening.
+pub fn replace_schema_widened(
+    parent: &ClanFile,
+    schema_path: &str,
+    schema_json: &str,
+    delta: Option<String>,
+    decision: Option<DecisionEntry>,
+) -> Result<Vec<u8>> {
+    reject_if_forked(parent, "replacing the shared output schema")?;
+    serde_json::from_str::<Value>(schema_json)
+        .map_err(|e| Error::Schema(format!("the schema is not JSON: {e}")))?;
+    repack_with_entry_decision(
+        parent,
+        schema_path,
+        schema_json.as_bytes().to_vec(),
+        delta,
+        decision,
+    )
+}
+
 /// Helper to repack a `.clan` file with a single updated or added entry.
 fn repack_with_entry(
     parent: &ClanFile,
