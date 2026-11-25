@@ -18,6 +18,7 @@
 import type { InputMime, ProductionDocument } from '../contracts/types'
 import { sha256Hex } from '../lib/hash'
 import type { ProjectIndex, ServerMark } from './projectIndex'
+import { RelayError } from '../relay'
 import { SaveConflict, type ProjectServer } from './server'
 import { sendAssets } from './serverAssets'
 import { baseKeyFor, type ProjectStorage } from './storage'
@@ -92,6 +93,10 @@ export class ServerCopy {
   private readonly inherited: Set<string>
 
   get = (): Conflict | null => this.conflict
+  /** The last save the server refused, in its words, until a save lands (UAT acceptance A24: 37 saves were refused and
+   *  the bar kept "saved 03:57 AM"). Unlike a conflict it holds nothing back: the next save goes as usual. */
+  refused = (): string | null => this.refusal
+  private refusal: string | null = null
   /** The relay's version this tab's document is based on (null: none known). */
   basedOn = (): ServerMark | null => this.base
 
@@ -192,8 +197,18 @@ export class ServerCopy {
           return this.postNow(bytes, meta, true)
         }
         this.set({ message: e.message })
+      } else if (e instanceof RelayError && e.status >= 400 && e.status < 500) {
+        // Refused outright (not a conflict): it did not land, so the bar must not keep an older "saved".
+        this.unanswered = this.unanswered.filter((u) => u !== went)
+        this.note(true)
+        this.refusal = e.message
+        for (const fn of this.listeners) fn()
       }
       throw e
+    }
+    if (this.refusal) {
+      this.refusal = null
+      for (const fn of this.listeners) fn()
     }
     this.unanswered = []
     await this.based({ etag: saved.etag, savedAt: saved.savedAt }, this.edits !== edits)

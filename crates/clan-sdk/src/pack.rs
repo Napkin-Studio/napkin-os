@@ -961,18 +961,24 @@ fn strip_on_handlers(html: &str) -> String {
 }
 
 /// Perform an RFC 7396 JSON Merge Patch on `a` using `b`.
+/// RFC 7396: an object patch merges into an object, and into anything else as into `{}`, so a `null`
+/// inside it removes a key and is never stored. (A patch `{review: {production: null}}` on a document
+/// with no `review` stored `review.production: null` and the schema refused the whole write: the Deck's
+/// "Use for pictures" on a fresh deck, 2026-11-25.)
 fn merge_json(a: &mut Value, b: &Value) {
     if let Value::Object(b_map) = b {
-        if let Value::Object(a_map) = a {
-            for (k, v) in b_map {
-                if v.is_null() {
-                    a_map.remove(k);
-                } else {
-                    merge_json(a_map.entry(k.clone()).or_insert(Value::Null), v);
-                }
-            }
-            return;
+        if !a.is_object() {
+            *a = Value::Object(Default::default());
         }
+        let a_map = a.as_object_mut().expect("made an object above");
+        for (k, v) in b_map {
+            if v.is_null() {
+                a_map.remove(k);
+            } else {
+                merge_json(a_map.entry(k.clone()).or_insert(Value::Null), v);
+            }
+        }
+        return;
     }
     *a = b.clone();
 }
@@ -1485,6 +1491,33 @@ mod tests {
     use super::strip_scripts;
     use super::*;
     use crate::manifest::Manifest;
+
+    /// RFC 7396: a nested null in an object patch removes a key, also where the target has no such object yet; it is never stored.
+    #[test]
+    fn a_null_inside_a_patch_for_a_missing_object_is_never_stored() {
+        let mut data = serde_json::json!({"inputs": {"prompt": {"text": "x"}}});
+        merge_json(
+            &mut data,
+            &serde_json::json!({"inputs": {"production": {"name": "p.clan"}}, "review": {"production": null}}),
+        );
+        assert_eq!(
+            data,
+            serde_json::json!({"inputs": {"prompt": {"text": "x"}, "production": {"name": "p.clan"}}, "review": {}})
+        );
+        let mut scalar = serde_json::json!({"review": 3});
+        merge_json(
+            &mut scalar,
+            &serde_json::json!({"review": {"a": null, "b": 1}}),
+        );
+        assert_eq!(scalar, serde_json::json!({"review": {"b": 1}}));
+        let mut arr = serde_json::json!({"a": [1, 2]});
+        merge_json(&mut arr, &serde_json::json!({"a": [3]}));
+        assert_eq!(
+            arr,
+            serde_json::json!({"a": [3]}),
+            "an array still replaces"
+        );
+    }
 
     /// Build a minimal in-memory clan with the given data and schema.
     fn test_clan(data_yaml: &str, schema_json: &str) -> ClanFile {

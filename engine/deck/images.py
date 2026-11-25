@@ -526,6 +526,12 @@ def execution_group(title: str) -> str | None:
     return None
 
 
+#: The channels whose execution shows the key visual when Production made no size for them: a poster, a print ad or a display banner is
+#: the key visual in its format. Social takes a phone frame of its own and film a storyboard frame, so they never take it.
+KV_STANDS_IN = ("ooh", "print", "display")
+CHANNEL_WORDS = {"ooh": "out-of-home", "print": "print", "display": "display"}
+KV_STANDS_IN_NOTE = "The key visual stands in here: Production has no {channel} size of it yet. Make the size in Production and build again."
+
 #: The reason of a slot a group of finals cannot fill (shown as the gap; the person supplies the picture or makes one in Production).
 GROUP_GAP = {"keyvisual": "To supply from Production: a key visual. No key visual final in the export; make or mark one final, or supply a picture",
              "product": "To supply from Production: a packshot. No final in the export is a product packshot; make or mark one final, or supply a picture",
@@ -987,6 +993,15 @@ def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", na
                     if ch == "ooh" and spec.GRAPHICS and key and prod["items"][key].get("channel") == "ooh":   # one OOH format: its frame, named
                         fid = (prod["items"][key].get("format") or {}).get("format_id")
                         s["ooh"] = {"formats": [{"slot": slot, "format_id": fid, "name": ooh_name(fid)}]}
+                    if not key and not why and master and (execution_group(title) == "keyvisual" or ch in KV_STANDS_IN):
+                        # UAT round 4 (slide 9, "Key visual: station posters"): Production made the key visual and no size for this channel,
+                        # so the slot stayed empty and the slide printed its picture prompt. The key visual stands in, whole, until a size is made.
+                        if spec.GRAPHICS or keeps_protected(prod["items"][master], aspect):
+                            key = master
+                            s["notes"] = ((s.get("notes") or "").rstrip() + "\n\n" + KV_STANDS_IN_NOTE.format(channel=CHANNEL_WORDS.get(ch, ch))).strip()
+                        else:
+                            why = (f"The key visual would lose part of its protected area in a {aspect} crop, and Production has no {CHANNEL_WORDS.get(ch, ch)} "
+                                   f"size. Make one in Production, or supply a picture")
                 elif execution_group(title):   # "Size crops", "Packshot": the finals Production made, not a channel's sizes
                     grp = execution_group(title)
                     pool = group_pool(prod, aspect, placed_keys, any_shape=bool(spec.GRAPHICS), placeable_only=True, group=grp)
