@@ -631,7 +631,7 @@ FRAME_FORMATS = {"poster_portrait": "uk-6-sheet", "billboard": "uk-48-sheet", "p
 FRAME_OF_CHANNEL = {"ooh": "poster_portrait", "social": "phone", "film": "screen", "print": "poster_portrait", "display": "strip"}
 #: deck-graphics slice 3: a film execution's storyboard strip takes 3 to 6 Production frames in shot order, all Production or none. Up to STRIP_ROW
 #: frames make one row; more make two (round 3: a storyboard of six was cut to four and the slide said six). More than STRIP_MAX are sampled.
-STRIP_MIN, STRIP_MAX, STRIP_ROW = 3, 6, 4
+STRIP_MIN, STRIP_MAX, STRIP_ROW = 2, 6, 4   # UAT round 4: two placeable frames are a strip of two (was 3: the slide showed one of two)
 
 
 def strip_rows(n: int) -> list:

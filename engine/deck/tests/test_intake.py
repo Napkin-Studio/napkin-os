@@ -136,6 +136,7 @@ def test_from_upstream_matches_the_brief_clan_loader(tmp_path):
     inp = inputs.from_upstream({"upstream": {"brief-1": _brief_clan_data()}}, {})
     assert inp.brief == fields and inp.how_to_win == htw and inp.open_questions == oq
     cov.pop("marks", None)   # the loaders pop the marks into Inputs.marks
+    assert inp.answered == cov.pop("answered", [])   # and the brief's answered questions into Inputs.answered (UAT round 4)
     assert inp.coverage == cov
     assert inputs.CLAN_FIELDS and inp.has_brief() and not inp.has_research()
 

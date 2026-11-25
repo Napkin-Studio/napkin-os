@@ -120,6 +120,21 @@ describe('pictures on the own engine', () => {
     }
   })
 
+  it('a picture picked with a board selected goes on that board, wherever the view is (UAT round 4 gate: the logo landed beside the Brand board)', async () => {
+    const a = new OwnAdapter()
+    a.resize(1200, 800, 0, 0)
+    const v = a.visibleBounds()
+    const brand = a.board({ x: v.maxX + 400, y: v.minY, width: 420, height: 300, title: 'Brand', boardId: newId('board'), purpose: 'brand' })
+    a.transact((all) => [brand, ...all], { undoable: false })
+    a.select([brand.id])
+    const [logo] = await placePictures(a, snapshotDoc(), [png('logo')])
+    expect(logo.frameId).toBe(brand.id)
+    // With nothing selected, a picked picture still lands clear of the board, as before.
+    a.select([])
+    const [other] = await placePictures(a, snapshotDoc(), [png('other')])
+    expect(other.frameId ?? null).toBeNull()
+  })
+
   it('pasted pictures leave room for their names and a group label from the row below (UAT round 3, IMG-22)', async () => {
     const a = new OwnAdapter()
     a.resize(1200, 800, 0, 0)

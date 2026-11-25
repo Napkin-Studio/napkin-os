@@ -88,7 +88,10 @@ export async function placePictures(canvas: CanvasAdapter, doc: DocumentStore, f
     }
   }, 'add picture')
   const v = canvas.visibleBounds()
-  const centre = at ?? { x: (v.minX + v.maxX) / 2, y: (v.minY + v.maxY) / 2 }
+  // Picked (not dropped) with one board selected, the pictures go on that board (UAT round 4 gate: a logo picked for the
+  // Brand board landed next to it, and had to be dragged on).
+  const chosen = at ? undefined : selectedBoard(canvas)
+  const centre = at ?? (chosen ? { x: chosen.x + chosen.width / 2, y: chosen.y + chosen.height / 2 } : { x: (v.minX + v.maxX) / 2, y: (v.minY + v.maxY) / 2 })
   let row = pictureGrid(centre, got)
   // Pasted or picked (no point given) with no board under the middle of the view: clear of everything,
   // so pastes never pile on one spot or straddle a board's edge (board-autolayout).
@@ -150,4 +153,12 @@ export function pickPictureFiles(): Promise<File[]> {
     document.body.appendChild(input)
     input.click()
   })
+}
+
+/** The board that is the whole selection, if one is. */
+function selectedBoard(canvas: CanvasAdapter): CanvasElement | undefined {
+  const ids = canvas.view().selectedIds
+  if (ids.length !== 1) return undefined
+  const e = canvas.elements().find((x) => x.id === ids[0] && !x.isDeleted)
+  return e && (e.customData as { kind?: string } | undefined)?.kind === 'board' ? e : undefined
 }
