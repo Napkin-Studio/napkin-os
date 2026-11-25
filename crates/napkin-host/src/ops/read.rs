@@ -549,6 +549,9 @@ pub fn clan_context_for_agent(doc: &Document) -> Value {
     let carried = (doc.app_id() == Some(TERRITORIES_APP))
         .then(|| carried_upstream(&raw_data))
         .flatten();
+    let brand = (doc.app_id() == Some(TERRITORIES_APP))
+        .then(|| brand_clan(clan, &raw_data))
+        .flatten();
     let mut context = serde_json::json!({
         "document_type": m.document_type,
         "app": m.app.as_ref().map(|a| serde_json::json!({ "name": a.name, "app_id": a.app_id, "version": a.version })),
@@ -586,6 +589,12 @@ pub fn clan_context_for_agent(doc: &Document) -> Value {
     // index, or its run finds no brief (territories-live-walk).
     if let Some(c) = carried {
         context["carried_upstream"] = c;
+    }
+    // ... and the client's Brand Clan it holds, the look of its frames (Brand
+    // Clan phase 2 (d), docs/contracts/brand-clan.md section 8). A kit stays
+    // out of `carried_upstream`; this is the one it is attached to.
+    if let Some(b) = brand {
+        context["brand_clan"] = b;
     }
     // A research started from a brief is told the brief's ask, and only
     // that: extract_ask proposes from it (features/spinoff-and-links.clan).
@@ -627,6 +636,30 @@ fn carried_upstream(data: &Value) -> Option<Value> {
         .map(|(k, v)| (k.clone(), v.clone()))
         .collect();
     (!carried.is_empty()).then(|| Value::Object(carried))
+}
+
+/// The app id of a Brand Clan (docs/contracts/brand-clan.md).
+pub const BRAND_APP: &str = "ie.napkin.brand";
+
+/// `{document_id, version, title, data}` of the Brand Clan a document holds:
+/// its first `lineage.attached` record of [`BRAND_APP`] (attached here, or
+/// carried down by a spin-off) whose frozen copy is in `data.upstream`.
+/// `None` when it holds none.
+fn brand_clan(clan: &ClanFile, data: &Value) -> Option<Value> {
+    let up = data.get(UPSTREAM_KEY)?.as_object()?;
+    clan.manifest()
+        .attached()
+        .iter()
+        .filter(|a| a.app_id == BRAND_APP)
+        .find_map(|a| {
+            let copy = up.get(&a.carried.document_id).filter(|v| v.is_object())?;
+            Some(serde_json::json!({
+                "document_id": a.carried.document_id,
+                "version": a.version,
+                "title": a.title,
+                "data": copy,
+            }))
+        })
 }
 
 /// The app id a Production project's data carries (`app`, production-tool/contracts/document.schema.json).
