@@ -78,6 +78,11 @@ name the stand-in, its port, or branch on which implementation answered.
   brief (objectives, audience, mandatories, budget, timing; the spine `briefs` only when the project carries no brief) from it (no picture bytes: those are
   fetched from the relay by hash with the assets pass), puts it back under `data.upstream.<id>` for the Confidential marks, and sends it
   to the engine as `production_upstream`. Absent when the document carries no Production project.
+- **`brief_upstream`** (2026-11-25, UAT round 4 L2): on a Deck Maker document whose `data.upstream` holds a brief (the first entry with a
+  Brief Maker field such as `objectives` or `mandatories`; never a Production project or a kit), the host sends `{id, data}` with that brief
+  whole, beside the index. `build_deck@1` puts it back under `data.upstream.<id>` and sends it to the engine as `brief_upstream`, which
+  builds from its fields. Absent when the Deck carries no brief. (Before it, a Deck from a brief built from an empty brief: the middleware
+  saw only the index.)
 - **`upstream_ask`** (2026-11-09, features/spinoff-and-links): on a document
   whose pipeline declares `extract_ask`, the ask of the brief it carries:
   `{document_id, direct, fields: {<path>: text}}`, the paths drawn only from
