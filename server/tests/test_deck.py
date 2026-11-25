@@ -410,6 +410,45 @@ def test_a_deck_spun_off_a_brief_sends_the_brief_to_the_engine(deck, monkeypatch
     assert "brief_upstream" not in fake2.posts[0]
 
 
+class IndexHost(Host):
+    """The host as napkin-host sends a Deck (read.rs clan_context_for_agent): ``data.upstream`` as an INDEX (middleware-api.md §1), a
+    Production project whole as ``production_upstream`` and, with ``carry``, the Deck's brief whole as ``brief_upstream``."""
+
+    def __init__(self, *a, carry=True, **k):
+        super().__init__(*a, **k)
+        self.carry = carry
+
+    def clan(self):
+        c = super().clan()
+        up = c["data"].get("upstream") or {}
+        c["data"]["upstream"] = {k: {"direct": True, "keys": sorted(v)} for k, v in up.items()}
+        prod = next(((k, v) for k, v in up.items() if v.get("app") == "production-tool"), None)
+        if prod:
+            c["production_upstream"] = {"id": prod[0], "data": prod[1]}
+        brief = next(((k, v) for k, v in up.items() if v.get("app") != "production-tool" and "objectives" in v), None)
+        if brief and self.carry:
+            c["brief_upstream"] = {"id": brief[0], "data": brief[1]}
+        return c
+
+
+def test_through_the_hosts_index_a_deck_from_a_brief_still_sends_the_brief(deck, monkeypatch):
+    """UAT round 4 L2, the real cause: the host sends data.upstream as an index, so the brief must travel beside it (clan.brief_upstream);
+    #312's test fed whole upstream data and never saw this."""
+    research = {"campaign": {"name": "Copperell research"}, "report": {}, "selection": {}}
+    brief = {"objectives": "Sell the starter bottle", "single_minded_proposition": "Cleans as well as your usual spray.",
+             "mandatories": ["End line: 'Refill. Not landfill.' (word for word)"], "project_name": "Copperell Refill"}
+    fake = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    host = IndexHost(data=deck_data(), schema=SCHEMA)
+    host.data["upstream"] = {"doc-research": research, "doc-brief": brief}
+    build(deck, host)
+    assert fake.posts[0]["brief_upstream"] == {"id": "doc-brief", "data": brief}
+    fake2 = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    old = IndexHost(data=deck_data(), schema=SCHEMA, carry=False)   # a host without the carrier: the bug, as it was
+    old.data["upstream"] = {"doc-research": research, "doc-brief": brief}
+    build(deck, old)
+    assert "brief_upstream" not in fake2.posts[0]
+
+
 PASS = "v1." + "e30" + "." + "c2ln"
 
 
