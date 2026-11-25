@@ -4079,7 +4079,7 @@ body.fresh .booth-edge{display:none}
     } else {
       lq=liveQuestion();
       // an agent waiting on the person while the report is open: the hidden Booth shows it, then comes in
-      boothAsk(lq&&!fresh?1:0);
+      boothAsk(boothWaiting());
       var Q=lq?questions(T).filter(function(x){ return x.q.id===lq.id; })[0]:null;
       el.innerHTML=workHtml(T, Q);
       // The agent asks on the desk: the sphere rises and the card opens under the caption; answered,
@@ -5479,7 +5479,7 @@ body.fresh .booth-edge{display:none}
     if(e){
       var k=BOOTH.ask, ct=$('boothCt'); if(ct) ct.textContent=k?String(k):'';
       e.classList.toggle('has', !!k); e.tabIndex=hid?0:-1; e.setAttribute('aria-expanded', String(!hid));
-      e.setAttribute('aria-label', 'Open the Booth'+(k?', '+k+(k===1?' question':' questions')+' waiting':''));
+      e.setAttribute('aria-label', 'Open the Booth'+(k?', '+k+' waiting for you':''));
     }
     if(instant){ void d.offsetWidth; requestAnimationFrame(function(){ requestAnimationFrame(function(){ d.classList.remove('booth-instant'); if(e) e.classList.remove('booth-instant'); }); }); }
   }
@@ -5503,6 +5503,17 @@ body.fresh .booth-edge{display:none}
   // has: BOOTH is still undefined then.)
   function boothPick(){ if(BOOTH&&!BOOTH.open) boothSet({t:'pick'}); }
   function boothAsk(n){ if(BOOTH&&(n|0)!==BOOTH.ask) boothSet({t:'ask', n:n}); }
+  // What waits for the person in the Booth: an agent's question, or, on a written report not yet locked (or reopened
+  // for the client's change), the calls Lock the report waits on (1 when it is ready). The Booth is where both Locks
+  // live, so a Booth the shell restored hidden shows the count on its edge and comes in (T10, as in Brief Maker).
+  // 0 while the agents work, when locked, or with no report yet.
+  function boothWaiting(){
+    if(liveQuestion()) return 1;
+    if(jobActive()||!isObj(D().report)) return 0;
+    var L=reportLocked(), CF=window.ClanFields, LV=CF&&CF.view&&CF.view(), re=L?arr(LV&&LV.lock&&LV.lock.reopened):[];
+    if(L&&!re.length) return 0;
+    var n=checks().filter(function(c){ return c.open; }).length; return n>0?n:1;
+  }
   (function(){
     document.addEventListener('click', function(e){
       var t=e.target&&e.target.closest?e.target:null; if(!t) return;
@@ -5979,6 +5990,7 @@ body.fresh .booth-edge{display:none}
       root.appendChild(r);
     }
     bar.innerHTML=judgeBarHtml(all); bar.hidden=false; renderPanel();
+    boothAsk(boothWaiting());   // the calls the lock waits on moved
     bar.classList.toggle('needs-box', open.length>0&&!chkLocked());
     // The selected finding's card asks the same, with the same state.
     Array.prototype.forEach.call(document.querySelectorAll('#insp-sel [data-clf-needs]'), function(nd){ var nh=findingNeeds(nd.getAttribute('data-clf-needs')); nd.innerHTML=nh||''; nd.hidden=!nh; });
