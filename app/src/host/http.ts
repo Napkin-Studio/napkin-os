@@ -298,7 +298,10 @@ function brandRoute<T>(op: BrandOp, i: Record<string, unknown>, bytes?: Uint8Arr
   const e = (k: string) => encodeURIComponent(String(i[k] ?? ''))
   const doc = () => `/brand-clans/${e('path')}`
   const client = () => `/clients/${e('client_id')}/brand-clans`
-  const { client_id: _c, path: _p, name: _n, version: _v, ...body } = i
+  // Only what a route carries in its path (client_id, path) leaves the body. `name` goes in the query for asset.put
+  // alone and `version` for get alone (neither sends a body); create's `name` is its body (A29: it was stripped
+  // from every body, so napkin-web's create always answered "a Brand Clan needs a name").
+  const { client_id: _c, path: _p, ...body } = i
   const send = (method: string, path: string) =>
     json<T>(path, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
   switch (op) {

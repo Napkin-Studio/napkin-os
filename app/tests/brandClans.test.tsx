@@ -217,3 +217,45 @@ test('host.brandClans.list reaches napkin-web’s route for the client and retur
   assert.ok(seen.includes('/api/t/T/clients/cli_0badcafe/brand-clans'))
   assert.equal(got.default, 'doc-original')
 })
+
+test('every Brand Clan op reaches napkin-web’s route with the body and query the host reads (A29: create lost its name)', async () => {
+  const { httpHost } = await import('../src/host/http.ts')
+  const sent: { method: string; url: string; body: unknown }[] = []
+  ;(globalThis as { window?: unknown }).window = { location: { origin: 'https://studio.test' } }
+  globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
+    const url = String(input)
+    if (url === '/api/session') return new Response(JSON.stringify({ tenant: 'T', sandbox_origin: null, quota: { used: 0, cap: 40 } }), { status: 200, headers: { 'content-type': 'application/json' } })
+    const raw = init?.body
+    sent.push({ method: init?.method ?? 'GET', url, body: raw instanceof Uint8Array ? `bytes:${raw.length}` : typeof raw === 'string' ? JSON.parse(raw) : raw ?? null })
+    return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } })
+  }) as typeof fetch
+  const b = httpHost.brandClans
+  const D = 'doc-ie-napkin-brand-1'
+  await b.create('cli_1', 'Copperell Original')
+  await b.setDefault('cli_1', D)
+  await b.get(D, 2)
+  await b.history(D)
+  await b.saveDraft(D, { name: 'Copperell Original' } as never, 3)
+  await b.startDraft(D, 2)
+  await b.discardDraft(D)
+  await b.publish(D, 3)
+  await b.accept(D, ['logos'] as never, 3)
+  await b.keep(D)
+  await b.updateWork(D, 'doc-deck-1')
+  await b.putAsset(D, 'logo dark.png', new Uint8Array([1, 2, 3]))
+  const T = '/api/t/T'
+  assert.deepEqual(sent, [
+    { method: 'POST', url: `${T}/clients/cli_1/brand-clans`, body: { name: 'Copperell Original' } },
+    { method: 'PUT', url: `${T}/clients/cli_1/default-brand-clan`, body: { document_id: D } },
+    { method: 'GET', url: `${T}/brand-clans/${D}?version=2`, body: null },
+    { method: 'GET', url: `${T}/brand-clans/${D}/history`, body: null },
+    { method: 'PUT', url: `${T}/brand-clans/${D}/draft`, body: { candidate: { name: 'Copperell Original' }, expect_version: 3 } },
+    { method: 'POST', url: `${T}/brand-clans/${D}/draft/start`, body: { from_version: 2 } },
+    { method: 'DELETE', url: `${T}/brand-clans/${D}/draft`, body: null },
+    { method: 'POST', url: `${T}/brand-clans/${D}/publish`, body: { expect_version: 3 } },
+    { method: 'POST', url: `${T}/brand-clans/${D}/proposal/accept`, body: { take: ['logos'], expect_version: 3 } },
+    { method: 'POST', url: `${T}/brand-clans/${D}/proposal/keep`, body: null },
+    { method: 'POST', url: `${T}/brand-clans/${D}/update-work`, body: { work: 'doc-deck-1' } },
+    { method: 'POST', url: `${T}/brand-clans/${D}/assets?name=logo%20dark.png`, body: 'bytes:3' },
+  ])
+})
