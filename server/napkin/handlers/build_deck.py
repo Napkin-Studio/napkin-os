@@ -189,6 +189,32 @@ def members_of(clan) -> dict | None:
     return out if out.get("facts") or out.get("findings") else None
 
 
+#: The most logo bytes (base64) a Brand Clan carries to the engine (the host caps the files at 4 MB; base64 adds a third).
+BRAND_LOGOS_MAX = 6 * 1024 * 1024
+
+
+def brand_upstream_of(clan) -> dict | None:
+    """``{id, version, data, logos}``: the Brand Clan the Deck wears, as the host sends it beside the upstream index (``clan.brand_upstream``:
+    its frozen copy and its logo files, ``human/assets/brand/<id>/<file>`` to base64). Anything else is dropped, never forwarded. Acceptance
+    A60: only the index reached the engine, so a deck whose Start said it wore the client's Brand Clan was built in the default look."""
+    bc = (clan or {}).get("brand_upstream") if isinstance(clan, dict) else None
+    if not isinstance(bc, dict) or not isinstance(bc.get("id"), str) or not bc["id"] or not isinstance(bc.get("data"), dict):
+        return None
+    logos = bc.get("logos") if isinstance(bc.get("logos"), dict) else {}
+    prefix = f"human/assets/brand/{bc['id']}/"
+    kept, size = {}, 0
+    for k, v in logos.items():
+        if isinstance(k, str) and k.startswith(prefix) and ".." not in k and isinstance(v, str):
+            size += len(v)
+            if size > BRAND_LOGOS_MAX:
+                break
+            kept[k] = v
+    out = {"id": bc["id"], "data": bc["data"], "logos": kept}
+    if isinstance(bc.get("version"), int):
+        out["version"] = bc["version"]
+    return out
+
+
 def start(req, caps, settings, jid):
     """Validate now (a 400 before any job, a 503 with no engine); build the job (the caller starts it)."""
     data = with_brief(with_production(ctx_data(req.clan), (req.clan or {}).get("production_upstream")), (req.clan or {}).get("brief_upstream"))
@@ -216,6 +242,9 @@ def start(req, caps, settings, jid):
     bu = brief_upstream_of(data)
     if bu:   # spun off a brief: the engine builds from its fields (and a Production project's brief yields to it)
         body["brief_upstream"] = bu
+    bc = brand_upstream_of(req.clan)
+    if bc:   # the Brand Clan the deck wears, with its logo files (acceptance A60): the engine dresses the deck from it
+        body["brand_upstream"] = bc
     pu = production_upstream_of(data)
     if pu:   # spun off from a Production project: carried whole, frozen; finals fill the slots first, pictures are fetched by link at build
         body["production_upstream"] = pu

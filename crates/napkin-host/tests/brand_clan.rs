@@ -134,9 +134,16 @@ fn info(app_id: &str, name: &str, attach: Option<AttachSpec>) -> AppInfo {
 }
 
 fn brief_template() -> Vec<u8> {
+    work_template(BRIEF, "Brief")
+}
+
+/// The Deck Maker's app id: a Deck is sent the Brand Clan it wears beside the index (acceptance A60).
+const DECK: &str = "ie.napkin.deck-maker";
+
+fn work_template(app_id: &str, name: &str) -> Vec<u8> {
     let base = ClanFile::from_bytes(
         create(CreateOptions {
-            title: "Brief".into(),
+            title: name.into(),
             brief: "fixture".into(),
             document_type: None,
             no_render: false,
@@ -151,7 +158,7 @@ fn brief_template() -> Vec<u8> {
     };
     make_template(
         &base,
-        info(BRIEF, "Brief", Some(attach)),
+        info(app_id, name, Some(attach)),
         MakeTemplateOptions::default(),
     )
     .unwrap()
@@ -161,6 +168,7 @@ fn store() -> MemStore {
     let s = MemStore::default();
     install_app(&s, brand_template()).unwrap();
     install_app(&s, brief_template()).unwrap();
+    install_app(&s, work_template(DECK, "Deck Maker")).unwrap();
     s
 }
 
@@ -1056,5 +1064,76 @@ fn the_logo_files_travel_with_the_brand_clan_into_work() {
         entry(&s, brief.as_str(), &logo_at2).as_deref(),
         Some(&svg2[..]),
         "Update brings the new file"
+    );
+}
+
+#[test]
+fn a_deck_is_sent_the_brand_clan_it_wears_and_its_logo_beside_the_index() {
+    // Acceptance A60: the middleware saw only the upstream index, so the deck engine built in the default look although Start said the
+    // deck wore the client's Brand Clan. The Brand Clan goes whole, with its logo files, beside the index, as a carried brief does.
+    use base64::Engine as _;
+    let s = store();
+    let t = client(&s, "Copperell");
+    let z = zero(&s, &t);
+    let path = z["path"].as_str().unwrap();
+    let brand_id = z["document_id"].as_str().unwrap().to_string();
+    let png = b"\x89PNG\r\n\x1a\nwordmark".to_vec();
+    let put = call_json_bytes(
+        &s,
+        &me(),
+        "asset.put",
+        json!({"path": path, "name": "wordmark.png"}),
+        png.clone(),
+    )
+    .unwrap();
+    let asset = put["path"].as_str().unwrap().to_string();
+    let mut cand = z["data"].clone();
+    cand.as_object_mut().unwrap().remove("kit");
+    cand["visual"]["logos"] =
+        json!([{"id": "wordmark", "label": "Wordmark", "variant": "dark", "asset": asset}]);
+    ok(
+        &s,
+        &me(),
+        "draft.save",
+        json!({"path": path, "candidate": cand}),
+    );
+    ok(
+        &s,
+        &me(),
+        "publish",
+        json!({"path": path, "expect_version": 1}),
+    );
+    let deck = create_instance_for(&s, DECK, Some("Copperell pitch".into()), Some(&t)).unwrap();
+    let doc = Document::load(&s, deck.clone()).unwrap();
+    let (change, _) = attach_change(&s, &me(), &doc, &brand_id, AttachMode::Attach).unwrap();
+    s.apply(&change).unwrap();
+    let ctx =
+        napkin_host::ops::read::clan_context_for_agent(&Document::load(&s, deck.clone()).unwrap());
+    let carried = &ctx["brand_upstream"];
+    assert_eq!(carried["id"], brand_id.as_str(), "{ctx}");
+    assert_eq!(carried["version"], 2);
+    assert_eq!(carried["data"]["visual"]["logos"][0]["variant"], "dark");
+    assert!(carried["data"]["visual"]["colours"]
+        .as_array()
+        .is_some_and(|c| !c.is_empty()));
+    let entry = napkin_host::library::brand_logo_entry(&brand_id, &asset);
+    let b64 = carried["logos"][&entry]
+        .as_str()
+        .expect("the logo file goes with it");
+    assert_eq!(
+        base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .unwrap(),
+        png
+    );
+    // a Brief wearing the same Brand Clan is not sent it whole: only the Deck's build reads it
+    let brief = create_instance_for(&s, BRIEF, Some("Brief".into()), Some(&t)).unwrap();
+    let bdoc = Document::load(&s, brief.clone()).unwrap();
+    let (change, _) = attach_change(&s, &me(), &bdoc, &brand_id, AttachMode::Attach).unwrap();
+    s.apply(&change).unwrap();
+    assert!(
+        napkin_host::ops::read::clan_context_for_agent(&Document::load(&s, brief).unwrap())
+            .get("brand_upstream")
+            .is_none()
     );
 }

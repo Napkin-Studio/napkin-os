@@ -1221,7 +1221,7 @@ pub(crate) fn kit_version(clan: &ClanFile) -> Option<u64> {
 /// branch, a template, another tenant's document, the document itself and
 /// what it was made from are never offered.
 /// The Brand Clan app (`ie.napkin.brand`).
-const BRAND_APP_ID: &str = "ie.napkin.brand";
+pub const BRAND_APP_ID: &str = "ie.napkin.brand";
 
 pub fn attach_targets(store: &dyn DocStore, ctx: &Ctx, doc: &Document) -> Vec<AttachTarget> {
     let manifest = doc.clan().manifest();

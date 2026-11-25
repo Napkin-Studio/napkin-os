@@ -83,6 +83,12 @@ name the stand-in, its port, or branch on which implementation answered.
   whole, beside the index. `build_deck@1` puts it back under `data.upstream.<id>` and sends it to the engine as `brief_upstream`, which
   builds from its fields. Absent when the Deck carries no brief. (Before it, a Deck from a brief built from an empty brief: the middleware
   saw only the index.)
+- **`brand_upstream`** (2026-11-25, acceptance A60): on a Deck Maker document that wears a Brand Clan (its `lineage.attached[]` entry of app
+  `ie.napkin.brand`), the host sends `{id, version, data, logos}`: the frozen copy at `data.upstream.<id>` whole, the version held, and its
+  logo files as the host copied them in on attach or Update (`logos`: `human/assets/brand/<id>/<file>` to base64; at most 4 MB of files).
+  `build_deck@1` forwards it to the engine as `brand_upstream` (anything else is dropped), and the engine dresses the deck from it as from a
+  deck document (`run_deck --brand-upstream`): the Brand Clan's colours, type and logo. Absent when the Deck wears none. (Before it, a deck
+  whose Start said it wore the client's Brand Clan was built in the default look: the middleware saw only the index.)
 - **`upstream_ask`** (2026-11-09, features/spinoff-and-links): on a document
   whose pipeline declares `extract_ask`, the ask of the brief it carries:
   `{document_id, direct, fields: {<path>: text}}`, the paths drawn only from
