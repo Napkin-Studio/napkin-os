@@ -102,6 +102,11 @@ export function isFreeRequest(r: Pick<JobRequest, 'op' | 'input'>): boolean {
   return r.op === 'resize' && (r.input.resize?.method === 'crop' || r.input.resize?.method === 'layout')
 }
 
+/** Being made now: active, and not waiting on a person's answer or on its own outcome. */
+export function isMaking(state: JobState): boolean {
+  return isActive(state) && state !== 'needs_input' && state !== 'uncertain'
+}
+
 export function isActive(state: JobState): boolean {
   return !TERMINAL_STATES.includes(state)
 }

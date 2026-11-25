@@ -4217,7 +4217,7 @@
     }
     renderSideStop();
     // an agent waiting on the person while the sheet is open: the hidden Booth shows it, then comes in
-    boothAsk(phase==='doc'&&DRAFT&&DRAFT.inPlace&&DRAFT.state==='needs_input'?1:0);
+    boothAsk(boothWaiting());
     if(ROLES&&ROLES.sideSet){ ROLES.sideSet(el, job); return; }
     el.hidden=!job; el.innerHTML=job?'<span><b>'+esc(AGENT_NAME[job.role]||'An agent')+'</b> · '+esc(job.doing)+'</span>':'';
   }
@@ -4691,6 +4691,7 @@
     var w=$('lockWhy'); if(w){ w.hidden=!(why&&!lb.hidden); w.textContent=why; }
     // A way to the first flagged item: the same click as its row in the list above.
     var lf=$('lockFirst'); if(lf){ lf.hidden=!(wait&&!busy&&n>0&&!lb.hidden); lf.onclick=function(){ var b=document.querySelector('#lockList .lkitem'); if(b) b.click(); }; }
+    boothAsk(boothWaiting());
     var lk=$('lockedBadge'); if(lk){ lk.hidden=!(A&&!again); lk.textContent='Locked for handoff'+(docVersion()?' · '+docVersion():''); }
     renderStateLine();
     var acts=$('lockActs'); if(acts) acts.hidden=!(A&&!again);
@@ -5246,7 +5247,7 @@
   function boothStep(s, ev, w){
     var n={open:s.open, ask:s.ask, later:0};
     if(ev.t==='ask'){ n.ask=Math.max(0, ev.n|0); if(!s.open&&n.ask>s.ask&&boothCanHide(w)) n.later=BOOTH_ASK_MS; return n; }
-    if(ev.t==='shell'){ n.open=ev.open!==false; return n; }
+    if(ev.t==='shell'){ n.open=ev.open!==false; if(!n.open&&s.ask>0&&boothCanHide(w)) n.later=BOOTH_ASK_MS; return n; }   // hidden on load with something waiting: it comes in
     if(ev.t==='show'||ev.t==='pick'||(ev.t==='arrive'&&s.ask>0)){ n.open=true; return n; }
     if(!boothCanHide(w)) return n;
     if(ev.t==='hide') n.open=false;
@@ -5264,7 +5265,7 @@
     if(e){
       var k=BOOTH.ask, ct=$('boothCt'); if(ct) ct.textContent=k?String(k):'';
       e.classList.toggle('has', !!k); e.tabIndex=hid?0:-1; e.setAttribute('aria-expanded', String(!hid));
-      e.setAttribute('aria-label', 'Open the Booth'+(k?', '+k+(k===1?' question':' questions')+' waiting':''));
+      e.setAttribute('aria-label', 'Open the Booth'+(k?', '+k+' waiting for you':''));
     }
     if(instant){ void d.offsetWidth; requestAnimationFrame(function(){ requestAnimationFrame(function(){ d.classList.remove('booth-instant'); if(e) e.classList.remove('booth-instant'); }); }); }
   }
@@ -5288,6 +5289,18 @@
   // (Both may run before this block has: BOOTH is still undefined then, and the shell's word comes after.)
   function boothPick(){ if(BOOTH&&!BOOTH.open) boothSet({t:'pick'}); }
   function boothAsk(n){ if(BOOTH&&(n|0)!==BOOTH.ask) boothSet({t:'ask', n:n}); }
+  // What waits for the person in the Booth: an agent's question, or, on an unlocked brief, the Needs you items
+  // Lock waits on (1 when Lock is ready and nothing is). The Booth is the one place Lock lives, so a Booth the shell
+  // restored hidden shows the count on its edge and comes in (T10, 2026-11-24: hidden after a reload, the brief
+  // could not be locked and stayed a v1 draft). 0 when it is locked, drafting, or the lock is not known yet.
+  function boothWaiting(){
+    if(phase!=='doc') return 0;
+    var q=DRAFT&&DRAFT.inPlace&&DRAFT.state==='needs_input'?1:0;
+    if(q||draftLive()) return q;
+    var l=lockState(), A=approveLocked(), re=l?arr(l.reopened):[];
+    if(!l||(A&&!re.length)||get('locked')===true||!hasContent()) return 0;
+    var n=needsRows().length; return n>0?n:(l.can_lock?1:0);
+  }
   (function(){
     document.addEventListener('click', function(e){
       var t=e.target&&e.target.closest?e.target:null; if(!t) return;
