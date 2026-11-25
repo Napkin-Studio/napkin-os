@@ -594,6 +594,12 @@ class Server:
             pn = re.sub(r"^\s*to confirm:\s*", "", str(pn), flags=re.I).strip()
             if pn and len(pn) <= 80:
                 p["project"] = pn
+        if not str(p.get("client") or "").strip():   # acceptance A32: a deck from a brief named no client, so the cover and its open items said '[Client]'
+            cl = ((req.get("brief_upstream") or {}).get("data") or {}).get("client")
+            cl = (cl.get("value") if isinstance(cl, dict) else cl) or ""
+            cl = re.split(r"[,;\n]", re.sub(r"^\s*to confirm:\s*", "", str(cl), flags=re.I))[0].strip()
+            if cl and len(cl) <= 80:
+                p = {**p, "client": cl}
         argv = ["--prompt-text", str(p.get("text") or ""), "--stages", str(d.stages), "--client", str(p.get("client") or "[Client]"),
                 "--project", str(p.get("project") or "[Project]"), "--out", str(d.out), "--format", req["format"]]   # the QA runs: the repair loop reads it
         inp = req["inputs"]
