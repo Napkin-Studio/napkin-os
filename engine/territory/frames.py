@@ -198,7 +198,7 @@ def brand_clan_of(rec) -> dict | None:
 def _phrases(raw) -> list[str]:
     if isinstance(raw, list):
         raw = ", ".join(str(x) for x in raw if x)
-    return [p.strip(" .") for p in re.split(r"[,;\n]+", str(raw or "")) if p.strip(" .")]
+    return [p.strip(" .") for p in re.split(r"[,;\n]+|\.\s+", str(raw or "")) if p.strip(" .")]
 
 
 def brand_style(rec, forbid=()) -> tuple:

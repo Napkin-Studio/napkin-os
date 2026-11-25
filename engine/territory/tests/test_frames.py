@@ -476,6 +476,9 @@ def test_colour_words_carry_no_figure_and_the_client_name_never_reaches_a_prompt
     b = {"document_id": "x", "data": {"name": "O", "imagery": {"style": "linea style street portraits, soft light", "bans": []}}}
     sty, look = frames.brand_style(b, forbid=["Linea"])
     assert sty.look == ["soft light"] and look["left_out"][0]["what"] == "linea style street portraits"
+    # the contract example's words (docs/contracts/examples/brand-clan): sentences split as phrases too
+    sty, _ = frames.brand_style({"data": {"imagery": {"style": "Daylight, cold metal and water. No people drinking in cars.", "bans": ["people drinking in cars"]}}})
+    assert sty.look == ["daylight", "cold metal and water", "no people drinking in cars"] and sty.banned_imagery == ["people drinking in cars"]
 
 
 def test_a_left_out_frame_is_never_placed_is_gone_from_status_and_a_new_ask_may_fill_its_place_again(tmp_path, monkeypatch):
