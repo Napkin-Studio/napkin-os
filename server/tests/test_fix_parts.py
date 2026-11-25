@@ -75,7 +75,8 @@ def test_the_crew_fixes_the_parts_a_note_names_and_nothing_else(tmp_path):
     last = replies[-1]
     assert last["task"] == "fix_parts" and last["handler"] == "fix_parts@1.0"
     assert last["job"]["state"] == "done" and last["job"]["progress"] == {"done": 3, "total": 3}
-    assert last["result"]["summary"].startswith("Fixed 1 of 2 part(s), 1 proposed")
+    # the Review agent still notes the rewritten objective (below), so it is not counted as fixed (acceptance run A10)
+    assert last["result"]["summary"].startswith("Fixed 0 of 2 part(s); 1 rewritten but still needs you (commercial objective), 1 proposed")
     # The Strategy agent: the problem in the Review agent's words, then the person's; only the named parts; the research it lacks
     assert [p["by"] for p in seen["plan_fix"]["problem"]] == ["the Review agent", "a person"]
     assert "last year's" in seen["plan_fix"]["problem"][1]["said"]
