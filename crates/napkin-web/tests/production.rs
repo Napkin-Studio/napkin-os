@@ -826,6 +826,44 @@ async fn me_doc(s: &Server, p: &Me, title: &str) -> String {
 }
 
 #[tokio::test]
+async fn the_tool_opened_from_a_link_lands_a_closed_tab_job_with_no_desk_open() {
+    // Owner, 2026-11-25: no desk (no library watcher) since the tab closed. The tool's inbox read on open
+    // settles the document's unsettled jobs itself, by the same rules: one entry, once.
+    let (url, _log, ctl) = stub_relay().await;
+    let s = server(Some(url), Duration::from_secs(5));
+    let p = me(&s, "visionary@napkin").await;
+    let job = start_job(&s, &p).await;
+    // still running: the read settles nothing into the inbox, the registry keeps it
+    assert!(inbox(&s, &p).await.is_empty());
+    assert_eq!(unsettled(&s, &p).await, vec![job.clone()]);
+
+    ctl.jobs
+        .lock()
+        .unwrap()
+        .insert(job.clone(), "completed".into());
+    // no settle call: only the tool's read of its inbox
+    let entries = inbox(&s, &p).await;
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0]["job"], job.as_str());
+    assert_eq!(entries[0]["state"], "completed");
+    assert!(unsettled(&s, &p).await.is_empty(), "the registry let it go");
+    // reading again (a second tab, a reload) keeps the one entry; the desk's watcher finds it applied
+    assert_eq!(inbox(&s, &p).await.len(), 1);
+    assert_eq!(settle(&s, &p, &job).await["settled"], "already applied");
+    assert_eq!(inbox(&s, &p).await.len(), 1);
+    // landed and acknowledged: gone for good, by either path
+    let r = send(
+        &s,
+        p.req("POST", &p.bound(&format!("/inbox/{job}/ack")), Vec::new()),
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::OK);
+    assert!(inbox(&s, &p).await.is_empty());
+    assert_eq!(settle(&s, &p, &job).await["settled"], "already applied");
+    assert!(inbox(&s, &p).await.is_empty());
+}
+
+#[tokio::test]
 async fn a_job_that_finishes_with_the_tab_closed_waits_in_the_inbox_once() {
     let (url, _log, ctl) = stub_relay().await;
     let s = server(Some(url), Duration::from_secs(5));

@@ -459,7 +459,8 @@ const BOUND: [&str; 3] = ["/jobs", "/uploads", "/assets"];
 /// ```text
 /// ANY  /t/{t}/production/{me,config,health,library/..,log}          no document
 /// ANY  /t/{t}/d/{doc}/production/{jobs/..,uploads,assets/..}        the document's own calls
-/// GET  /t/{t}/d/{doc}/production/inbox                              outcomes waiting to land
+/// GET  /t/{t}/d/{doc}/production/inbox                              outcomes waiting to land (settles the
+///                                                                     document's unsettled jobs first)
 /// POST /t/{t}/d/{doc}/production/inbox/{job}/ack                    the tool has landed one
 /// ```
 ///
@@ -828,16 +829,28 @@ fn host_failed(e: napkin_host::HostError) -> Response {
     )
 }
 
-/// `GET .../production/inbox`: the outcomes waiting for this document's tool.
+/// `GET .../production/inbox`: the outcomes waiting for this document's tool, after settling the
+/// document's jobs no watcher has settled yet.
 async fn inbox_list(
     State(ctx): State<Arc<AppCtx>>,
     crate::tenant::Tenant(tenant): crate::tenant::Tenant,
+    account: Who,
+    relay: Tool,
     UrlPath((_t, doc)): UrlPath<(String, String)>,
 ) -> Response {
     let id = match production_doc(&ctx, &tenant, &doc) {
         Ok(i) => i,
         Err(r) => return r,
     };
+    // The tool reads this on open (owner, 2026-11-25): a job of this document the desk's watcher has not
+    // settled yet (no desk open since the tab closed) is settled here first, by the same `settle`, so
+    // it lands on open from a link too. Exactly once either way: the inbox keeps one entry per job,
+    // and one the tool landed is "already applied".
+    if let (Some(Extension(account)), Some(Extension(relay))) = (account, relay) {
+        for job in ctx.workspace(&tenant).library.runs().unsettled(&id) {
+            let _ = settle(&ctx, &tenant, &relay, &account, &doc, &job).await;
+        }
+    }
     let inbox = match inbox_of(&ctx, &tenant) {
         Ok(i) => i,
         Err(r) => return r,
