@@ -5609,3 +5609,16 @@ test('Brief Maker: "edited" is the latest write, in whichever order the chain co
   assert.equal(at([{ timestamp: 'not a date' }, {}]), null)
   assert.equal(at([]), null)
 })
+
+// Acceptance run A9 (2026-11-25): Built from cited "document-1795538546841-0.txt" for the uploaded "copperell-brand-notes.txt".
+test('Brief Maker: an attachment carries its own file name as label; the stored name stays for the host', async () => {
+  const assets = [{ name: 'document-1795538546841-0.txt', label: 'copperell-brand-notes.txt', path: 'human/assets/document-1795538546841-0.txt', sha256: 'a'.repeat(64), media_type: 'text/plain' },
+    { name: 'image-1-0.png', label: 'image-1-0.png', path: 'human/assets/image-1-0.png', sha256: 'b'.repeat(64), media_type: 'image/png' }]
+  const f = lift<{ attachmentsFor(): Promise<Record<string, string>[]> }>(BM, ['attachmentsFor'], {
+    arr: (x: unknown) => (Array.isArray(x) ? x : []), data: () => ({ reference_assets: assets }), upMaterials: () => [],
+    mediaTypeOf: (_n: string, t: string) => t, assetUrl: (n: string) => n, fetch: () => { throw new Error('no fetch: the sha is known') }, sha256Hex: () => '', Promise })
+  const got = await f.attachmentsFor()
+  assert.equal(got[0].name, 'document-1795538546841-0.txt', 'the stored name: the host reads the file by it')
+  assert.equal(got[0].label, 'copperell-brand-notes.txt')
+  assert.equal('label' in got[1], false, 'a label that is the name adds nothing')
+})

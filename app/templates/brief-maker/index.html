@@ -3465,7 +3465,8 @@
     upMaterials().forEach(function(m){ if(names.indexOf(m.name)===-1) list.push(m); });
     return Promise.all(list.map(function(a){
       var hash=/^[0-9a-f]{64}$/.test(a.sha256||'')?Promise.resolve(a.sha256):fetch(assetUrl(a.name)).then(function(r){ return r.arrayBuffer(); }).then(sha256Hex);
-      return hash.then(function(h){ return {name:a.name, sha256:h, media_type:mediaTypeOf(a.name, a.media_type), asset:a.path}; });
+      // label: the file's own name ("copperell-brand-notes.txt"); name stays the stored one the host reads it by (A9)
+      return hash.then(function(h){ var o={name:a.name, sha256:h, media_type:mediaTypeOf(a.name, a.media_type), asset:a.path}; if(a.label&&a.label!==a.name) o.label=String(a.label); return o; });
     }));
   }
 
