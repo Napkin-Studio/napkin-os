@@ -5198,7 +5198,7 @@ test('Draft it again runs in place: the sheet stays, intake is off, and the serv
   assert.match(fn(BM, 'draftNow'), /if\(draftLive\(\)\)\{ if\(!DRAFT\.inPlace\)\{ setPhase\('proc'\); renderProc\(\); \} return; \}/)
   assert.match(fn(BM, 'draftNow'), /startDraft\(ask, atts, null, !!inPlace&&phase==='doc'\)/)
   assert.match(fn(BM, 'redraftClick'), /if\(draftLive\(\)\) return;/)
-  assert.match(fn(BM, 'barItems'), /label:REDRAFT_ARMED\?'Click again to redraft':'Draft it again', disabled:draftLive\(\)/, 'off while it runs')
+  assert.match(fn(BM, 'barItems'), /label:REDRAFT_ARMED\?'Click again to redraft':'Draft it again', stays:!REDRAFT_ARMED, disabled:draftLive\(\)/, 'off while it runs; the first press keeps a menu open (A7)')
   assert.match(fn(BM, 'linkNoteHtml'), /if\(phase!=='doc'\|\|approveLocked\(\)\|\|draftLive\(\)\|\|LINK\.run\) return '';/, 'the notice is hidden while it runs')
 })
 
@@ -5596,4 +5596,16 @@ test('Brief Maker: what waits in the Booth counts the Needs you items and a read
   const asking = lockOf({ can_lock: false, reopened: [] }); asking.env.DRAFT = { inPlace: true, state: 'needs_input' }
   assert.equal(asking.f(), 1, 'an agent question still counts')
   assert.match(fn(BM, 'renderLockBtn'), /boothAsk\(boothWaiting\(\)\)/, 'the count follows the lock list as it loads')
+})
+
+// Acceptance run A5 (2026-11-25): "v1 · edited 48m ago" right after the first draft finished. clan://chain is newest
+// first, so its last decision was the oldest write.
+test('Brief Maker: "edited" is the latest write, in whichever order the chain comes', () => {
+  const at = (decisions: { timestamp?: string }[]) =>
+    lift<{ lastWhen(): Date | null }>(BM, ['lastWhen'], { CHAIN: { decisions }, arr: (x: unknown) => (Array.isArray(x) ? x : []) }).lastWhen()
+  const newestFirst = [{ timestamp: '2026-11-25T03:19:40Z' }, { timestamp: '2026-11-25T03:02:00Z' }, { timestamp: '2026-11-25T02:31:00Z' }]
+  assert.equal(at(newestFirst)?.toISOString(), '2026-11-25T03:19:40.000Z')
+  assert.equal(at([...newestFirst].reverse())?.toISOString(), '2026-11-25T03:19:40.000Z', 'oldest first too')
+  assert.equal(at([{ timestamp: 'not a date' }, {}]), null)
+  assert.equal(at([]), null)
 })
