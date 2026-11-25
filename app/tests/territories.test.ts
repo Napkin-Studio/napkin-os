@@ -865,7 +865,12 @@ test('a document nothing has run on yet offers Find the insights, and it starts 
 test('a failed first run says why in the engine\'s words, offers the action at the top and names the step honestly (owner walk 2026-11-23)', () => {
   const d = doc(); d.focus.insights = []
   d.run = { state: 'failed', stage: 'pick', error: { stage: 'pick', message: 'To start I need the category and the market.', retryable: false } }
-  const page = L.view(d, {})
+  // the page opens on Brief's failed stage, the engine's words, Nothing was lost and Try again (acceptance A13: it used to fall back to What
+  // arrived with nothing said); Back to what arrived shows the sheet, with Try again first in its Booth
+  const stage = L.view(d, {})
+  assert.match(stage, /class="aglbox"/); assert.match(text(stage), /To start I need the category and the market\. Nothing was lost\./)
+  assert.match(stage, /<span class="procActs"><button type="button" class="go" data-act="first">Try again/); assert.match(stage, /data-step="pick">← Back to what arrived/)
+  const page = L.view(d, { view: 0 })
   assert.match(page, /To start I need the category and the market\./, 'the document\'s run.error is on the page')
   assert.doesNotMatch(page, /Nothing has been sent out yet/)
   assert.match(page, /data-act="first"[^>]*>Try again/)

@@ -159,7 +159,7 @@ button.tsrc:hover{border-color:color-mix(in srgb,var(--ink) 35%,var(--line))}
 /* everything the crew may quote */
 .evd{border:1px solid var(--line);border-radius:8px;padding:10px 14px;background:var(--card)}
 .evd summary{cursor:pointer;font:800 11px var(--font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-.evlist{display:flex;flex-direction:column;margin-top:6px}
+.evlist{display:flex;flex-direction:column;margin-top:6px;max-height:min(420px,50vh);overflow-y:auto;overscroll-behavior:contain}
 .evrow{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line);font-size:15.5px;line-height:1.4}
 .evrow:last-child{border-bottom:0}
 .evrow.off{opacity:.5}.evrow .grow{flex:1;min-width:0}
@@ -1121,6 +1121,11 @@ var TerritoriesLogic = (function () {
    * 'open' (the Pick gate waits for a person), 'approved' (they approved and the ticks have not changed since),
    * 'working' (the engine is making the insights), 'past' (the crew has gone or the run moved on), 'none' (no run yet).
    */
+  /** A Pick run that failed before anyone approved it (acceptance A13): Try again starts the run once more. */
+  function pickFailed(run) {
+    run = isObj(run) ? run : {};
+    return run.state === 'failed' && (!run.stage || run.stage === 'pick') && !approvalOf(run);
+  }
   function pickState(run) {
     run = isObj(run) ? run : {};
     var ap = approvalOf(run), gate = isObj(run.gate) ? run.gate : null;
@@ -1265,13 +1270,22 @@ var TerritoriesLogic = (function () {
       '<span class="row">' + chips + themeChip(i) + (i.derived ? '<span class="dmark" title="Rests on a finding the agent worked out and nobody has verified yet">derived</span>' : '') + (i.kind === 'yours' ? '<span class="ymark">yours</span>' : '') + '</span></span></label>';
   }
 
-  function sourceCards(data) {
+  /** The host's word on a carried source (GET /upstream: its version, whether it is locked, whether it changed since), when it gave one. The
+   *  lock is an approve on that document, not a flag on the carried copy, so a carried copy alone would always read Draft (acceptance A11). */
+  function upEntry(ui, id, extra) {
+    var e = arr(ui && ui.upEntries).filter(function (x) { return isObj(x) && x.document_id === id; })[0] || null;
+    var out = { document_id: id }; Object.keys(extra || {}).forEach(function (k) { out[k] = extra[k]; });
+    if (e) Object.keys(e).forEach(function (k) { out[k] = e[k]; });
+    return out;
+  }
+  function lockedOf(ui, id, carried) { var e = upEntry(ui, id); return 'locked' in e ? e.locked === true : (carried || {}).locked === true; }
+  function sourceCards(data, ui) {
     var NS = typeof NapkinSource !== 'undefined' ? NapkinSource : null, sn = seen(data), upd = isObj(data && data.upstream) ? data.upstream : {}, list = [];
-    if (NS && sn.brief) list.push(NS.fromUpstream(upd[sn.brief.id], { document_id: sn.brief.id }, { kind: 'brief', title: sn.brief.title || text(data && data.title) || undefined, locked: (upd[sn.brief.id] || {}).locked === true }));
+    if (NS && sn.brief) list.push(NS.fromUpstream(upd[sn.brief.id], upEntry(ui, sn.brief.id), { kind: 'brief', title: sn.brief.title || text(data && data.title) || undefined, locked: lockedOf(ui, sn.brief.id, upd[sn.brief.id]) }));
     if (NS && sn.research) {
       var r = sn.research;
-      list.push(NS.fromUpstream(upd[r.id] || {}, { document_id: r.id, noun: 'research' }, { kind: 'research', title: r.title || 'The research this started from', facts: r.pins, findings: r.findings,
-        sources: r.sources, verified: r.verified || null, locked: (upd[r.id] || {}).locked === true, status: '' }));
+      list.push(NS.fromUpstream(upd[r.id] || {}, upEntry(ui, r.id, { noun: 'research' }), { kind: 'research', title: r.title || 'The research this started from', facts: r.pins, findings: r.findings,
+        sources: r.sources, verified: r.verified || null, locked: lockedOf(ui, r.id, upd[r.id]) }));
     }
     var out = NS && list.length ? NS.listHtml(list) : '';
     return out + findsRow(data);
@@ -1316,7 +1330,7 @@ var TerritoriesLogic = (function () {
     }
     return '<article class="sheet">' + sheetHead('Step 1 of 3 · What arrived', 'What arrived', 'Made ' + fromWords(sn) + '. The crew reads it in full and quotes it by name; nothing is copied.', firstRunAct(ui, data)) +
       '<div class="stats">' + statsOf(sn).map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + '</div>' +
-      '<div class="sheet-body">' + sourceCards(data) + flagsOf(sn) + keyf + '</div></article>';
+      '<div class="sheet-body">' + sourceCards(data, ui) + flagsOf(sn) + keyf + '</div></article>';
   }
   /** What the research leaves out and what is only derived, said once on What arrived (the mock's two flags). */
   function flagsOf(sn) {
@@ -1342,7 +1356,8 @@ var TerritoriesLogic = (function () {
 
   /** Pick's primary and its words, by the pick's state (the engine's run.approvals.pick and the job). */
   function pickAct(data, ui, st, c) {
-    var job = ui.job, mw = ui.mw, busy = job && BUSY_STATES[job.state];
+    var job = ui.job, mw = ui.mw, busy = job && BUSY_STATES[job.state], run = isObj(data && data.run) ? data.run : {};
+    if (!busy && pickFailed(run)) return priBtn('Try again', 'data-act="first"') + why('The pick was not saved. Try again rebuilds it from these insights; nothing is asked of the model again.', 'bad');
     if (st === 'open') return c.ticked ? priBtn('Explore ' + plural(c.ticked, 'insight') + ' →', 'data-act="explore"') + why('Usually 2 to 3 minutes. The crew sets off on its own.') :
       priBtn('Explore →', 'data-act="explore"', { disabled: true }) + why('Tick at least one insight.', 'lock');
     if (st === 'approved') {
@@ -1366,7 +1381,7 @@ var TerritoriesLogic = (function () {
     var add = editable ? '<div class="addsb" data-form="add"><input name="own" value="' + esc(ui.draft || '') + '" placeholder="Add your own insight, tension or what-if…" autocomplete="off" maxlength="' + MAX_TEXT + '" aria-label="Add your own insight">' +
       '<div class="row"><span class="muted" data-add-why>' + esc(ownWhy(ui.draft)) + '</span><span class="spacer"></span><button class="btn-rect primary" type="button" data-act="add"' + ((ui.draft || '').trim() ? '' : ' disabled') + '>Add</button></div></div>' : '';
     var err = isObj(run.error) && run.error.stage === 'pick' ? '<p class="runnote bad" role="alert">' + esc(run.error.message) + (arr(run.error.refused).length ? ' ' + esc(arr(run.error.refused).join(' ')) : '') + '</p>' : '';
-    var src = sourceCards(data);
+    var src = sourceCards(data, ui);
     return '<article class="sheet">' + sheetHead('Step 1 of 3 · Pick', 'Which insights should the crew explore?', 'Strongest first, with what each rests on. Tick or untick; add your own.', pickAct(data, ui, st, c)) +
       '<div class="stats">' + stats.map(function (s) { return '<span>' + esc(s) + '</span>'; }).join('') + '</div>' +
       '<div class="sheet-body">' + (seen(data).from === 'none' ? '<div class="nothing">Nothing came in with this one: no brief and no research were carried in.</div>' : '') + err +
@@ -1998,6 +2013,7 @@ var TerritoriesLogic = (function () {
       pickState(run) === 'approved' && !crewNow.length ? (crewOut(run, ui) ? crewWords(ui) : 'You picked. Waiting for the engine to send the crew out.') :
       pickState(run) === 'working' ? 'I am reading what came in and writing the insights.' :
       gate && gate.dex ? gate.dex : pickState(run) === 'none' && !focusOf(data).insights.length ? arrivedLine(data) :
+      pickFailed(run) ? 'I made ' + plural(focusOf(data).insights.length, 'insight') + ', but the pick could not be saved. They are kept here; Try again rebuilds the pick.' :
       counts(data).ticked ? 'Tick the insights the crew should explore. The strongest ' + numWord(counts(data).ticked) + ' are ticked for you.' : 'Nothing is ticked yet. Tick at least one insight and the Explore button wakes up.';
     if (typeof TerritoriesLookups !== 'undefined' && at !== 2 && TerritoriesLookups.asking(ui)) { line = 'Ask me to look something up. I search the open web and pin only quotes that check against their page.'; role = 'research'; }
     var notes = at === 2 ? greenlightBooth(data, ui) : at === 1 ? exploreBooth(data, ui) : boothNotes(data).filter(function (n) { return focusOf(data).insights.length || n.role !== 'knowledge'; }).map(function (n) {
@@ -2030,9 +2046,22 @@ var TerritoriesLogic = (function () {
 
   /** Which stage, if any, the page is while the engine works: finding the insights, the crew out, or either one stopped. Null: the sheet.
    *  A person who went back to a step (ui.view) sees its sheet instead; the job runs on. */
+  /** The engine's own words for a failed run, from the document: the message, then what it says to fix. */
+  function runErrWords(run) {
+    var e = isObj(run && run.error) ? run.error : null; if (!e || !text(e.message)) return '';
+    return text(e.message) + (arr(e.refused).length ? ' ' + arr(e.refused).map(text).filter(Boolean).join(' ') : '');
+  }
   function stageOf(data, ui) {
     var job = ui && ui.job, run = isObj(data && data.run) ? data.run : {};
-    if (!job || ui.view != null || ui.world) return null;
+    if (ui && (ui.view != null || ui.world)) return null;
+    // A run the document says failed (a refused save, a reload after a failure): Brief's failed stage, its words and Try again
+    // (acceptance A13: the page went back to What arrived with nothing said), while no job of this page's own is going.
+    if ((!job || job.state === 'done') && run.state === 'failed' && runErrWords(run)) {
+      var est = isObj(run.error) ? run.error.stage : '';
+      if (est === 'pick' && !focusOf(data).insights.length) return 'finding-failed';      // with insights kept, Pick shows them and the reason
+      if (est === 'explore' || est === 'develop') return 'explore-failed';
+    }
+    if (!job) return null;
     var ps = pickState(run), crewRun = ps === 'approved' || ps === 'past' || !!job.crewRun;
     if (BUSY_STATES[job.state]) return crewRun ? 'exploring' : 'finding';
     if (job.state === 'failed') return crewRun ? 'explore-failed' : 'finding-failed';
@@ -2060,6 +2089,7 @@ var TerritoriesLogic = (function () {
   var HEADING_WORDS = { cr_core: 'staying close to the core', cr_feel: 'going towards a feeling', cr_opposite: 'going the other way', cr_adjacent: 'looking next door', cr_outside: 'going far outside the category' };
   function stageHtml(kind, data, ui) {
     var job = ui.job || {}, bad = /failed$/.test(kind), stopped = /stopped$/.test(kind), ended = bad || stopped, sn = seen(data), crew = arr(job.crew).filter(isObj), o;
+    var errWords = job.state === 'failed' && job.error ? job.error : runErrWords(isObj(data && data.run) ? data.run : {}) || job.error || 'The engine stopped.';
     // Stop, on the right of the run bar while the engine works (Brief's Stop): the middleware's cancel_job for this job
     var stopBtn = '<span class="procActs"><button type="button" class="sp-btn" data-act="stop"' + (!job.id || job.stopping ? ' disabled' : '') + (!job.id ? ' title="Starting: Stop is ready once the engine has the job"' : '') + '>' + (job.stopping ? 'Stopping…' : 'Stop') + '</button></span>';
     if (/^finding/.test(kind)) {
@@ -2069,7 +2099,7 @@ var TerritoriesLogic = (function () {
       if (!bad && sn.research && +sn.research.rejected > 0) desk.push(slip('Left out', plural(+sn.research.rejected, 'rejected finding') + ', never used', 'ok'));
       var der = derivedFindings(data).length; if (der && !bad) desk.push(slip('Flagged', plural(der, 'derived finding') + ', marked as derived', 'ok'));
       var reading = [sn.brief ? 'the brief' : '', sn.research ? ([sn.research.pins != null ? plural(sn.research.pins, 'pin') : '', sn.research.findings != null ? plural(sn.research.findings, 'finding') : ''].filter(Boolean).join(' and ').replace(/^./, function (c) { return 'the ' + c; }) || 'the research') : ''].filter(Boolean).join(' and ') || 'what arrived';
-      o = { role: 'strategy', next: 'review', at: 1, steps: [['Knowledge (read)', 'read'], ['Strategy (find the insights)', 'think'], ['Review (check)', 'check']], l1: bad ? 'The crew could not finish' : stopped ? 'You stopped it' : 'Finding the insights', l2: bad ? (job.error || 'The engine stopped.') + ' Nothing was lost.' : stopped ? 'You stopped it at strategy. Nothing was lost.' : 'Reading ' + reading + ' for tensions and truths.',
+      o = { role: 'strategy', next: 'review', at: 1, steps: [['Knowledge (read)', 'read'], ['Strategy (find the insights)', 'think'], ['Review (check)', 'check']], l1: bad ? 'The crew could not finish' : stopped ? 'You stopped it' : 'Finding the insights', l2: bad ? errWords.replace(/\s*$/, '') + ' Nothing was lost.' : stopped ? 'You stopped it at strategy. Nothing was lost.' : 'Reading ' + reading + ' for tensions and truths.',
         pills: pills([{ t: '1. Knowledge (read)', s: 'done' }, { t: '2. Strategy (find the insights)', s: bad ? 'bad' : stopped ? '' : 'now' }, { t: '3. Review (check)' }], ended ? '' : ['Usually about 40 seconds', secs(job)].filter(Boolean).join(' · ')),
         left: wsec('On the desk', desk), right: wsec('Insights', ended ? [slip('Insight', 'None written', bad ? 'bad' : '', true)] : [slip('Insight', 'Waiting for the Strategy agent', 'now', true), slip('Insight', 'They appear together when the run lands', '', true), slip('Insight', 'Nothing is invented while you wait', '', true)]),
         run: ended ? '<button type="button" class="side-link" data-step="pick">← Back to what arrived</button>' + (bad ? '<span class="bad">Failed at step 2 of 3.</span>' : '<span>Stopped at step 2 of 3.</span>') + '<span class="sp"></span>' + '<span class="procActs"><button type="button" class="go" data-act="first">Try again</button></span>' :
@@ -2086,7 +2116,7 @@ var TerritoriesLogic = (function () {
         [crew.length ? nBack + ' of ' + plural(crew.length, 'agent') + ' back' : job.progress && job.progress.total > 0 ? job.progress.done + ' of ' + plural(job.progress.total, 'agent') + ' back' : 'Setting off', 'usually 2 to 3 minutes', secs(job)].filter(Boolean).join(' · ');
       o = { at: 0, steps: [['Explore', 'think'], ['Develop', 'write'], ['Judge', 'check']], next: out[1] ? out[1].role : 'review', role: bad ? 'strategy' : lead ? lead.role || 'strategy' : 'strategy',
         l1: bad ? 'The crew stopped before it was back' : stopped ? 'You stopped the crew' : lead ? roleName(lead.role || 'strategy') + ' agent is ' + (HEADING_WORDS[lead.id] || 'taking its own heading') : 'The crew is setting off',
-        l2: bad ? (job.error || 'The engine stopped.') + ' Your pick is saved, nothing was lost.' : stopped ? 'You stopped it while exploring. Your pick is saved; nothing was lost.' : 'Each agent takes its own heading. Routes appear on the next screen when ' + (crew.length ? 'all ' + numWord(crew.length) : 'they all') + ' are back.',
+        l2: bad ? errWords.replace(/\s*$/, '') + ' Your pick is saved, nothing was lost.' : stopped ? 'You stopped it while exploring. Your pick is saved; nothing was lost.' : 'Each agent takes its own heading. Routes appear on the next screen when ' + (crew.length ? 'all ' + numWord(crew.length) : 'they all') + ' are back.',
         pills: pills([{ t: '1. Explore' + (crew.length ? ' (' + plural(crew.length, 'agent') + ')' : ''), s: bad ? 'bad' : stopped ? '' : 'now' }, { t: '2. Develop' }, { t: '3. Judge' }], eta), lane: lane,
         left: wsec('Picked for them · ' + ticked.length, ticked.slice(0, 4).map(function (i) { return slip(text(i.theme) || KIND_WORDS[i.kind] || 'Insight', i.text, 'ok'); })),
         right: wsec('Their headings', crew.slice(0, 4).map(function (m) { return slip(roleName(m.role || 'strategy') + ' · ' + (m.short || ''), m.heading || '', m.state === 'out' ? '' : 'ok', false, m.colour); })),
@@ -2188,7 +2218,7 @@ var TerritoriesLogic = (function () {
       return { writes: [], request: { key: 'approve:pick', what: 'The approval', input: { step: MOVES.approve, gate: 'pick', by: by }, startAfter: true }, toast: 'Approved.' };
     }
     if (e.a === 'first') {
-      return pickState(run) === 'none' && !focusOf(data).insights.length ? { writes: [], start: true } : null;
+      return (pickState(run) === 'none' && !focusOf(data).insights.length) || pickFailed(run) ? { writes: [], start: true } : null;
     }
     if (e.a === 'retry') {
       return pickState(run) === 'approved' || (run.state === 'failed' && run.stage === 'explore') ? { writes: [], start: true } : null;
@@ -2252,6 +2282,7 @@ var TerritoriesLogic = (function () {
   }
 
   return {
+    upEntry: upEntry, sourceCards: sourceCards, runErrWords: runErrWords,
     putAct: putAct, takeAct: takeAct, actSlot: actSlot,
     continueGate: continueGate, barItems: barItems, priBtn: priBtn, why: why, agentBlock: agentBlock, citeWords: citeWords, stageOf: stageOf, palDark: palDark,
     MOVES: MOVES, DESTS: DESTS, developed: developed, greenIds: greenIds, greenGroups: greenGroups, gCard: gCard, touch: touch, scene: scene, greenlightSheet: greenlightSheet, greenlightBooth: greenlightBooth, holds: holds, openAsks: openAsks, askCard: askCard, glWords: glWords, brandOf: brandOf, headline: headline,
@@ -3637,6 +3668,11 @@ var TerritoriesLookups = (function () {
 
   render();
   checkMiddleware();
+  // The carried sources' own state (locked, version, changed since): GET /upstream, as Brief and Deck Maker ask it. No host: the cards say Draft.
+  try {
+    if (typeof fetch === 'function') fetch(clanScheme + '/upstream').then(function (r) { return r && r.ok ? r.json() : null; })
+      .then(function (v) { if (v && Array.isArray(v.upstream)) { ui.upEntries = v.upstream; render(); } }, function () { /* no host */ });
+  } catch (x) { /* no host */ }
   setTimeout(refreshFrames, 600);
 })();
 </script>

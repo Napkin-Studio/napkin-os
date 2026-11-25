@@ -191,4 +191,29 @@ test('the live test\'s findings stay fixed (territories-live, 2026-11-24)', () =
   assert.match(html, /#compass \.tn\{font:800 15px/); assert.match(html, /@media \(max-width:1180px\)\{\.exgrid\{grid-template-columns:minmax\(0,1fr\)\}\}/)
 })
 
+test('the acceptance run\'s findings stay fixed (territories-accept, 2026-11-25)', () => {
+  // A13: a refused save shows Brief's failed stage with the engine's words and Try again; with insights kept, Pick shows them and the reason
+  const d = json('example/states/pick.json'); d.focus.insights = []
+  d.run = { state: 'failed', stage: 'pick', error: { stage: 'pick', message: 'The result could not be saved because it did not fit what the app can show. 1 thing to fix.', retryable: true, refused: ['The pick has 103 sources; the most allowed is 80.'] } }
+  const st = L.view(d, {})
+  assert.match(plain(st), /did not fit what the app can show\. 1 thing to fix\. The pick has 103 sources; the most allowed is 80\. Nothing was lost\./)
+  assert.match(st, /data-act="first">Try again/); assert.doesNotMatch(plain(st), /a list/)
+  const kept = json('example/states/pick.json'); kept.run = { ...d.run }
+  const kv = L.view(kept, {})
+  assert.match(plain(kv), /Which insights should the crew explore\?[\s\S]*did not fit what the app can show/)
+  assert.match(kv, /data-act="first">Try again/, 'kept insights: the Booth offers Try again')
+  assert.doesNotMatch(plain(kv), /Your pick is in/, 'a pick that was not saved never reads as in')
+  assert.match(plain(kv), /but the pick could not be saved\. They are kept here/); assert.doesNotMatch(plain(kv), /are ticked for you/)
+  assert.ok(L.act(kept, {}, { a: 'first' }, {})?.start, 'Try again starts the run, which rebuilds the Pick from the kept insights')
+  // A11: the carried sources' state is the host's (GET /upstream): locked reads Locked, not Draft
+  const a = json('example/states/pick.json'); a.focus.insights = []; a.run = {}
+  const ids = Object.keys(a.upstream)
+  const entries = ids.map((id: string) => ({ document_id: id, locked: true, status: 'current', version: '1.2' }))
+  const locked = L.view(a, { upEntries: entries })
+  assert.match(locked, /✓ Locked/); assert.doesNotMatch(locked, /nsrc-chip draft/)
+  assert.match(L.view(a, {}), /nsrc-chip draft/, 'with no word from the host, a card stays honest: Draft')
+  // the crew's whole quote list scrolls: hundreds of sources, the Pick stays usable
+  assert.match(html, /\.evlist\{[^}]*max-height:min\(420px,50vh\);overflow-y:auto/)
+})
+
 function eq(a: unknown, b: unknown) { assert.deepEqual(JSON.parse(JSON.stringify(a)), b) }
