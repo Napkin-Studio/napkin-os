@@ -78,11 +78,17 @@ function DocSlot({ menu }: { menu?: (close: () => void) => ReactNode }) {
     <>
       <button ref={ref} type="button" className="tba-name" aria-haspopup="menu" aria-expanded={open} title={name} onClick={() => setOpen(!open)}>
         <Ic d={ICON.film} cls="ticon" />
-        <span className="tba-n2"><NameText name={name} /><span className={`tba-saved ${save.state.kind === 'failed' ? 'failed' : ''}`}>{savedLine(save)}</span></span>
+        <span className="tba-n2"><NameText name={name} /><span className={`tba-saved ${save.state.kind === 'failed' ? 'failed' : ''}`} title={save.state.kind === 'failed' ? save.state.why : undefined}>{savedLine(save)}</span></span>
         <span className="tba-caret" aria-hidden="true">▾</span>
       </button>
+      {/* A save that did not land says so, never an older "saved": Retry sends it again, its reason on hover and in the
+          menu (UAT acceptance A24). */}
+      {save.can && save.state.kind === 'failed' && (
+        <button type="button" className="btn xs tba-retry" title={save.state.why} aria-label={`Not saved: ${save.state.why}. Retry`} onClick={() => void save.save()}>Retry</button>
+      )}
       <Float anchor={ref} open={open} onClose={() => setOpen(false)} role="menu" label={name} className="pt-menu nui-pop">
         <div className="fhead">{name}</div>
+        {save.state.kind === 'failed' && <div className="tba-why" role="alert">Not saved: {save.state.why}</div>}
         {menu?.(() => setOpen(false))}
       </Float>
     </>

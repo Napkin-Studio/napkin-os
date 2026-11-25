@@ -754,10 +754,23 @@ var DeckLogic = (function () {
     creative_work: ['the routes you want to show', 'what the client should react to']
   };
 
-  /** What to bring to make a deck of this type stronger: { type, items, line }. An unknown type is the default. */
-  function typeHints(typeId) {
+  /** What to bring to make a deck of this type stronger: { type, items, line }. An unknown type is the default. With the document's ``data``,
+   *  what it already brings is left out (acceptance A30: "bring: the brief and the budget" with the brief, budget and all, brought in); ``line``
+   *  is '' when nothing is left to ask for. */
+  function typeHints(typeId, data) {
     var id = typeById(typeId) ? typeId : DEFAULT_TYPE, items = HINTS[id].slice();
-    return { type: id, items: items, line: 'To make this one stronger, bring: ' + items.join(' and ') };
+    if (data) {
+      var u = upstreamSummary(data), up = isObj(data.upstream) ? data.upstream : {};
+      var budget = Object.keys(up).some(function (k) {
+        var b = up[k];
+        if (!isObj(b)) return false;
+        if (filled(b.budget_and_scope)) return true;
+        var inner = isObj(b.upstream) ? b.upstream : {};   // a Production project carries its brief whole
+        return Object.keys(inner).some(function (j) { return isObj(inner[j]) && filled(inner[j].budget_and_scope); });
+      });
+      items = items.filter(function (it) { return !(it === 'the brief' && u.brief) && !(it === 'the budget' && budget); });
+    }
+    return { type: id, items: items, line: items.length ? 'To make this one stronger, bring: ' + items.join(' and ') : '' };
   }
 
   /** One generated card by id, or null. */
@@ -2335,7 +2348,7 @@ var DeckProd = (function () {
         '<div class="row" style="margin-top:10px"><button type="button" class="btn sm dark" data-dconfirm="' + esc(ask) + '">' + esc((cs.free ? 'Change to ' : 'Yes, write it: change to ') + lab.toLowerCase()) + '</button>' +
         '<button type="button" class="btn sm" data-dcancel="1">' + esc('Keep ' + (was ? was.label.toLowerCase() : 'this type')) + '</button></div></div>';
     }
-    var hints = L.typeHints(t.id);
+    var hints = L.typeHints(t.id, s.raw);
     var sz = L.sizeOf(s.raw, L.cardOf(shownType(t)), format);
     var pillTone = t.source === 'picked' || t.source === 'answered' ? 'ok' : 'plain';
     var pillWord = t.source === 'picked' ? 'Picked' : t.source === 'answered' ? 'Chosen' : t.source === 'inferred' ? 'Suggested' : 'Not picked yet';
@@ -2344,7 +2357,7 @@ var DeckProd = (function () {
       '<p class="note" style="margin:-6px 0 12px">Pick first: the type decides which slides there are, their order and their layouts.</p>' +
       '<div class="dtypes" role="radiogroup" aria-label="What kind of deck?">' + cards + '</div>' +
       '<p class="note" style="margin-top:12px" data-type-say>' + say + '</p>' + sheet +
-      '<div class="hint" data-type-hints>' + esc(hints.line) + '</div>' +
+      (hints.line ? '<div class="hint" data-type-hints>' + esc(hints.line) + '</div>' : '') +
       '<div class="rule"></div>' +
       '<div class="eyebrow dark" style="margin-bottom:8px" id="dfmt-h">How will it be used?</div>' +
       '<div class="row" role="group" aria-labelledby="dfmt-h" data-format-switch>' +
