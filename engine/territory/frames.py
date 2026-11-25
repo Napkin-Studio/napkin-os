@@ -2,7 +2,7 @@
 
 ``engine/territory/visuals`` makes frames from a saved run FILE (the CLI). In the middleware the document is the run, so this module drives the
 SAME reviewed library (``engine/visuals``: the Runway client and its double-pay rules, the picture-prompt lint, the Confidential deny-list, the
-client-to-Runway policy, the style pack, the safe-messaging gate, the guard) from a document, for the routes a person greenlit and no others.
+client-to-Runway policy, the style (the client's Brand Clan, else the built-in look), the safe-messaging gate, the guard) from a document, for the routes a person greenlit and no others.
 
     f = Frames(doc, store, blobs, doc_id=..., marks=[...], llm=..., transport=..., guard_post=...)
     f.ask(ids)                 the cost card: how many pictures, which places are not offered and why; the ask goes into the history
@@ -29,12 +29,12 @@ image. Every brand and run in the tests is invented.
 from __future__ import annotations
 
 import copy
+import dataclasses
 import hashlib
 import json
 import os
 import re
 import time
-import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -135,24 +135,119 @@ def _brand_of(doc: dict) -> str | None:
     return (title.split(":")[0].strip() or None) if ":" in title else None
 
 
-def client_of(doc: dict) -> str | None:
-    """The client the document is for: the Brief's ``client`` field carried in ``upstream``, else the brand the title names. Never the agency."""
-    for u in (doc.get("upstream") or {}).values():
-        if isinstance(u, dict) and isinstance(u.get("client"), str) and u["client"].strip():
-            return u["client"].strip()
-    return _brand_of(doc)
+#: The app id of a Brand Clan (docs/contracts/brand-clan.md): the client's Brand Bible a Territories document holds by attach or spin-off.
+BRAND_APP = "ie.napkin.brand"
+#: The order a Brand Clan's colours are said in (its deck token roles first, then chart, then the rest), and how many a prompt names.
+COLOUR_ORDER = ("accent", "paper", "ink", "panel", "accent_ink", "chart", "other")
+MAX_COLOURS = 6
 
 
-def client_slug(client: str | None) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", unicodedata.normalize("NFKD", client or "").encode("ascii", "ignore").decode().lower()).strip("-")[:60]
+def colour_words(hex_code) -> str | None:
+    """A colour as plain words a picture prompt may carry ("deep red", "pale cream"), from its hex. A prompt holds no figure and no name, so
+    neither the hex nor the Brand Clan's own colour name goes in (style.lint, visuals.lint). ``None`` for a value that is not a hex colour."""
+    h = str(hex_code or "").strip().lstrip("#")
+    if len(h) == 3:
+        h = "".join(c * 2 for c in h)
+    if not re.fullmatch(r"[0-9a-fA-F]{6}", h):
+        return None
+    r, g, b = (int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
+    hi, lo = max(r, g, b), min(r, g, b)
+    light, chroma = (hi + lo) / 2, hi - lo
+    sat = 0.0 if chroma == 0 else chroma / (1 - abs(2 * light - 1))
+    if light >= 0.94:
+        return "white" if sat < 0.25 else "off white"
+    if light <= 0.08:
+        return "black"
+    if sat < 0.12 or chroma < 0.06:
+        return "charcoal" if light < 0.3 else "grey" if light < 0.65 else "light grey"
+    if r == hi:
+        hue = ((g - b) / chroma) % 6
+    elif g == hi:
+        hue = (b - r) / chroma + 2
+    else:
+        hue = (r - g) / chroma + 4
+    hue *= 60
+    name = ("red" if hue < 15 or hue >= 345 else "orange" if hue < 40 else "yellow" if hue < 65 else "lime" if hue < 85 else "green" if hue < 160
+            else "teal" if hue < 190 else "blue" if hue < 250 else "purple" if hue < 290 else "magenta" if hue < 330 else "pink")
+    if name in ("orange", "yellow") and light >= 0.82:
+        return "cream"
+    if name in ("orange", "red") and light < 0.33:
+        return "brown" if name == "orange" else "deep red"
+    if name == "blue" and light < 0.3:
+        return "navy"
+    if light < 0.33:
+        return "deep " + name
+    if light > 0.78:
+        return "pale " + name
+    if sat > 0.7:
+        return "bright " + name
+    if sat < 0.35:
+        return "muted " + name
+    return name
 
 
-def style_folder(frames_dir: Path, client: str | None) -> Path | None:
-    """The style pack of THIS client at ``<frames>/style/<client-slug>/``, or ``None`` (the built-in default). Each client has its own style; there is
-    no agency-wide one. A stand-in until Brand Clan holds the client's style (decision, features/territories-pictures-frames.clan)."""
-    slug = client_slug(client)
-    folder = Path(frames_dir) / "style" / slug if slug else None
-    return folder if folder is not None and folder.is_dir() else None
+def brand_clan_of(rec) -> dict | None:
+    """The Brand Clan a Territories document holds, as the host tells it (``clan.brand_clan {document_id, version, title, data}``: the attached
+    ``ie.napkin.brand`` record and its frozen copy). ``None`` when it holds none, or what it holds is not a Brand Clan."""
+    if not isinstance(rec, dict) or not isinstance(rec.get("data"), dict):
+        return None
+    d = rec["data"]
+    return rec if isinstance(d.get("visual"), dict) or isinstance(d.get("imagery"), dict) else None
+
+
+def _phrases(raw) -> list[str]:
+    if isinstance(raw, list):
+        raw = ", ".join(str(x) for x in raw if x)
+    return [p.strip(" .") for p in re.split(r"[,;\n]+", str(raw or "")) if p.strip(" .")]
+
+
+def brand_style(rec, forbid=()) -> tuple:
+    """``(Style, look)`` for the frames: the Brand Clan's palette, imagery style and bans (docs/contracts/brand-clan.md section 8), or the built-in
+    default when the document holds none (owner 2026-11-23: style is per client, from its Brand Clan; the per-client folder stand-in is gone).
+    Logos and type stay out: a frame carries no logo and no words (the guard rails). A part that cannot go to a picture model (a figure, a
+    quotation, a name) is left out and said in ``look.left_out``, never sent and never a reason to refuse the rest."""
+    base = style_mod.load(None)
+    b = brand_clan_of(rec)
+    if b is None:
+        return base, {"from": "default"}
+    d, left = b["data"], []
+    names = [x for x in forbid if x]
+
+    def ok(text: str, key: str, allow=()) -> bool:
+        norm = {k: ([] if k != "notes" else "") for k in ("look", "palette", "this_not_that", "banned_imagery", "notes")}
+        norm[key] = [text]
+        try:
+            style_mod.lint(norm, names)
+        except style_mod.StyleError as e:
+            left.append({"what": text, "why": str(e).split(": ", 1)[-1]})
+            return False
+        bad = lint.lint_text(("Look: " if key == "look" else "") + text + ".", banned=[], allow=allow)
+        if bad:
+            left.append({"what": text, "why": bad})
+            return False
+        return True
+
+    imagery = d.get("imagery") if isinstance(d.get("imagery"), dict) else {}
+    look = [p.lower() for p in _phrases(imagery.get("style"))]
+    look = [p for p in dict.fromkeys(look) if ok(p, "look")]
+    bans = [p.lower() for p in _phrases(imagery.get("bans"))]
+    bans = [p for p in dict.fromkeys(bans) if ok(p, "banned_imagery", allow=[p])]
+    cols = [c for c in ((d.get("visual") or {}).get("colours") or []) if isinstance(c, dict)]
+    rank = {r: i for i, r in enumerate(COLOUR_ORDER)}
+    cols.sort(key=lambda c: rank.get(c.get("role"), len(COLOUR_ORDER)))
+    palette = [w for w in dict.fromkeys(colour_words(c.get("hex")) for c in cols) if w][:MAX_COLOURS]
+    name = str(d.get("name") or b.get("title") or "").strip()
+    version = (d.get("kit") or {}).get("version") or b.get("version")
+    try:
+        version = int(version) if version is not None else None
+    except (TypeError, ValueError):
+        version = None
+    st = dataclasses.replace(base, look=look or base.look, palette=palette, banned_imagery=bans, warnings=[],
+                             source=f"Brand Clan {name}" + (f" v{version}" if version else ""), name=name, version=version,
+                             document_id=str(b.get("document_id") or "") or None)
+    st.hash = style_mod.hash_of(st)
+    return st, {"from": "brand_clan", "name": name, "version": version, "document_id": st.document_id, "colours": len(palette),
+                "imagery": bool(look), "bans": len(bans), "left_out": left}
 
 
 def run_view(doc: dict, routes: list[dict], marks: list, origin: str) -> dict:
@@ -174,8 +269,9 @@ def run_view(doc: dict, routes: list[dict], marks: list, origin: str) -> dict:
 
 class Frames:
     def __init__(self, doc: dict, store, blobs, *, doc_id: str, marks=None, llm=None, transport=None, guard_post=None, environ=None, spend=None,
-                 sleep=time.sleep, poll_every: float = 4.0, on_line=None):
+                 sleep=time.sleep, poll_every: float = 4.0, on_line=None, brand=None):
         self.doc, self.store, self.blobs, self.doc_id = doc, store, blobs, str(doc_id)
+        self.brand = brand                                  # the Brand Clan it holds (host: clan.brand_clan), or None: the built-in look
         self.marks = marks                                  # None: the document was not checked for Confidential marks, and nothing is drawn
         self.llm, self.transport, self.guard_post, self.environ = llm, transport, guard_post, environ
         self.sleep, self.poll_every = sleep, poll_every
@@ -226,19 +322,18 @@ class Frames:
         mat = material.gate(run, None, environ=self.environ)
         if not mat["ok"]:
             raise Refuse("Pictures are not made for this document: " + mat["why"] + " A named person can say the material is invented or a demo.")
-        folder = style_folder(self.dir, client_of(self.doc))
         try:
-            sty = style_mod.load(folder, forbid=[x for x in [mat.get("brand")] if x])
+            sty, look = brand_style(self.brand, forbid=[x for x in [mat.get("brand")] if x])
             refs = style_mod.reference_images(sty)
         except style_mod.StyleError as e:
-            raise Refuse(f"The style pack has a problem: {e}") from e
+            raise Refuse(f"The look has a problem: {e}") from e
         if dict(sty.models) != dict(runway.TIER_MODEL):
-            raise Refuse("The style pack changes the picture models, which a pack cannot do. Nothing was sent.")
+            raise Refuse("The look changes the picture models, which it cannot do. Nothing was sent.")
         banned = list(safe["banned"])
         guard_banned = list(dict.fromkeys([*banned, *sty.banned_imagery]))
         bad = lint.lint_text(style_mod.style_block(sty, banned), banned=[], allow=guard_banned)
         if bad:
-            raise Refuse(f"The style pack's words cannot go to a picture model: {bad}. A person fixes the pack; nothing was sent.")
+            raise Refuse(f"The look's words cannot go to a picture model: {bad}. Nothing was sent.")
         if not runway.cap_ok(self.cap):
             raise Refuse("The picture limit set for this workspace is not a usable number. Nothing was sent.")
         vdir = self.dir / f"v-{sty.hash}"
@@ -266,7 +361,7 @@ class Frames:
                     refused.append({**row, "why": "the shot description cannot go to a picture model: " + badl})
                 else:
                     jobs.append({**row, "prompt": style_mod.frame_prompt(s, sty, banned)})
-        return {"routes": routes, "mat": mat, "sty": sty, "refs": refs, "banned": banned, "guard_banned": guard_banned, "vdir": vdir, "manifest": manifest,
+        return {"routes": routes, "mat": mat, "sty": sty, "look": look, "refs": refs, "banned": banned, "guard_banned": guard_banned, "vdir": vdir, "manifest": manifest,
                 "shots_of": shots_of, "need": need, "jobs": jobs, "refused": refused, "ids": [t["id"] for t in routes],
                 "retry_flagged": list(retry_flagged), "retry_unknown": bool(retry_unknown)}
 
@@ -287,12 +382,12 @@ class Frames:
                 off.setdefault(o["touchpoint"], o["why"])
         return {**card, "frames": sum(r["new"] for r in card["rows"]), "routes": len(P["routes"]), "plan_call": bool(P["need"]),
                 "not_offered": [{"touchpoint": k, "why": v} for k, v in off.items()], "refused": [{"key": r["key"], "why": r["why"]} for r in P["refused"]],
-                "policy": P["mat"]["policy_label"], "unknown": sum(r.get("unknown", 0) for r in card["rows"])}
+                "policy": P["mat"]["policy_label"], "unknown": sum(r.get("unknown", 0) for r in card["rows"]), "look": P["look"]}
 
     @staticmethod
     def public(card: dict) -> dict:
         """The card as the screen may show it: no price anywhere (the ask in the decision history carries it)."""
-        keep = ("id", "frames", "routes", "plan_call", "not_offered", "refused", "policy", "unknown", "over_cap", "reference_images")
+        keep = ("id", "frames", "routes", "plan_call", "not_offered", "refused", "policy", "unknown", "over_cap", "reference_images", "look")
         out = {k: card[k] for k in keep if k in card}
         out["rows"] = [{k: r[k] for k in ("kind", "new", "saved", "polling", "gave_up", "unknown")} for r in card["rows"]]
         return out
