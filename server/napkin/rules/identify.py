@@ -109,6 +109,19 @@ def decide_subject(brands: list[dict]) -> tuple[str, object]:
     return "ask_text", None
 
 
+# Leaves that name a topic an ask may cover rather than what a brand sells: "Green claims and sustainability"
+# sits under energy, but a cleaning refill's green claims are its own category's claims (the regulation lens
+# reads them), not an energy category (acceptance A44: Copperell came out as household + energy.green_claims).
+TOPIC_LEAVES = frozenset({"energy.green_claims"})
+
+
+def product_categories(leaves: list[str]) -> list[str]:
+    """The leaves a campaign's categories may hold, in order: a topic leaf only when nothing else is
+    named from another vertical (an energy ask's green claims stay; a cleaning brand's do not)."""
+    other = {str(l).split(".")[0] for l in leaves if l not in TOPIC_LEAVES}
+    return [l for l in leaves if l not in TOPIC_LEAVES or not (other - {str(l).split(".")[0]})]
+
+
 def category_options(cands: list[tuple[str, dict | None]], origin: str, labels: dict) -> list[dict]:
     """cands: ranked [(leaf, span|None)]. origin extracted needs a span each; a span carrying
     `upstream_ref` (read from the carried brief) makes that option proposed, citing it."""
