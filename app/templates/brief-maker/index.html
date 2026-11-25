@@ -6239,7 +6239,22 @@
   });
   document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && S.open) { S.open = false; render(); } });
   window.addEventListener('focus', function(){ if (!S.busy) load(); });
-  window.__bcChip = { reload: load, state: S };
+  // A Brand Clan published while this document is open shows its Update chip without a reload (acceptance A33): the
+  // targets are read again every POLL_MS while the page is shown; the chip redraws only when what the host says changed.
+  var POLL_MS = 20000;
+  function poll(){
+    if (document.hidden || S.busy || S.open || typeof fetch !== 'function') return Promise.resolve(false);
+    return fetch(SCHEME + '/attach-targets').then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; })
+      .then(function(all){
+        if (!Array.isArray(all)) return false;
+        var list = all.filter(function(t){ return t.app_id === BRAND; });
+        if (JSON.stringify(list) === JSON.stringify(S.list)) return false;
+        S.list = list; render(); return true;
+      });
+  }
+  document.addEventListener('visibilitychange', function(){ if (!document.hidden) poll(); });
+  if (typeof setInterval === 'function') { var timer = setInterval(poll, POLL_MS); if (timer && timer.unref) timer.unref(); }
+  window.__bcChip = { reload: load, poll: poll, state: S };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', load); else load();
 })();
 </script>

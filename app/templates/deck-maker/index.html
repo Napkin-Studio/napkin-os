@@ -2520,6 +2520,16 @@ var DeckProd = (function () {
     Promise.resolve(fetch(clanScheme + '/attach-targets')).then(function (r) { return r && r.ok ? r.json() : []; }, function () { return []; })
       .then(function (t) { BCL.targets = Array.isArray(t) ? t : []; BCL.loading = false; render(); }, function () { BCL.targets = []; BCL.loading = false; });
   }
+  // A Brand Clan published while this deck is open shows its notice without a reload (acceptance A33): the targets are read
+  // again every BC_POLL_MS while the page is shown, and the page re-renders only when what the host says has changed.
+  var BC_POLL_MS = 20000;
+  function pollBrandTargets() {
+    if ((typeof document !== 'undefined' && document.hidden) || BCL.loading || BCL.busy || BCL.open || BCL.targets === null || typeof fetch !== 'function') return Promise.resolve(false);
+    return Promise.resolve(fetch(clanScheme + '/attach-targets')).then(function (r) { return r && r.ok ? r.json() : null; }, function () { return null; })
+      .then(function (t) { if (!Array.isArray(t) || JSON.stringify(t) === JSON.stringify(BCL.targets)) return false; BCL.targets = t; render(); return true; });
+  }
+  if (typeof setInterval === 'function') { var bcPoll = setInterval(pollBrandTargets, BC_POLL_MS); if (bcPoll && bcPoll.unref) bcPoll.unref(); }
+  window.__deckBrandPoll = pollBrandTargets;
   function swatches(list) { return list && list.length ? '<span class="sw">' + list.map(function (h) { return '<i style="background:' + esc(h) + '"></i>'; }).join('') + '</span>' : ''; }
   function brandLookRow(s) {
     if (BCL.targets === null) { loadBrandTargets(); }

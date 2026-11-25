@@ -179,7 +179,7 @@ export function Bible({ bible, data, mode, changes = [], src, edits }: Props) {
               placeholder="Banned imagery, comma separated" onChange={e => edits.setBans(e.target.value.split(',').map(s => s.trim()).filter(Boolean))} />
           </>
         ) : (
-          <p className={mk('imagery_style') ? 'bbm-chg' : ''} style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>{style}{bans.length > 0 && ` Never: ${bans.join('; ')}.`}<Mark kind={mk('imagery_style')} /></p>
+          <p className={mk('imagery_style') ? 'bbm-chg' : ''} style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>{style}{style && bans.length > 0 && !/[.!?]\s*$/.test(style) ? '.' : ''}{bans.length > 0 && `${style ? ' ' : ''}Never: ${bans.join('; ')}.`}<Mark kind={mk('imagery_style')} /></p>
         )}
       </div>
 

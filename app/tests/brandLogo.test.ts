@@ -5,6 +5,7 @@
 // An SVG logo becomes a PNG in the browser at upload (owner 2026-11-24, "Go with your recommendations"): the tools take the PNG,
 // so no server needs an SVG rasteriser. The canvas drawing itself is proved in Chromium (scratchpad proof); here its seam.
 
+import './domFakes.ts'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -57,4 +58,24 @@ test('the client window puts the PNG, never the SVG, into the Brand Clan; a fail
   assert.deepEqual(puts, [[VIEW.path, 'Tidewell.png', PNG]])
   assert.equal(await c.putLogo({ name: 'bad.svg', bytes: enc('<svg/>') }, async () => PNG), null)
   assert.match(String(c.snapshot().error), /does not say its size/)
+})
+
+test('the publish confirm names a change’s area once (A34: "Logo Logo wordmark added")', async () => {
+  const M = await import('../src/shell/nui/brandClans/model.ts')
+  assert.deepEqual(M.changeLine({ area: 'logo', text: 'Logo copperell-wordmark added' }), { area: null, text: 'Logo copperell-wordmark added' })
+  assert.deepEqual(M.changeLine({ area: 'colour', text: 'Colour Copper #B8733A added' }), { area: null, text: 'Colour Copper #B8733A added' })
+  assert.deepEqual(M.changeLine({ area: 'imagery_ban', text: 'Imagery ban added: “sparkles”' }), { area: null, text: 'Imagery ban added: “sparkles”' })
+  assert.deepEqual(M.changeLine({ area: 'typography', text: 'Typeface Inter added' }), { area: null, text: 'Typeface Inter added' })
+  assert.deepEqual(M.changeLine({ area: 'colour', text: 'Silver #9AA7B1 becomes #A0ADB6' }), { area: 'Colour', text: 'Silver #9AA7B1 becomes #A0ADB6' })
+})
+
+test('the imagery card ends its style with a full stop before the bans (A34: "no lab coats Never: sparkles")', async () => {
+  const { createElement } = await import('react')
+  const { renderToStaticMarkup } = await import('react-dom/server')
+  const { Bible } = await import('../src/shell/nui/brandClans/Bible.tsx')
+  const one = (style: string, bans: string[]) => renderToStaticMarkup(createElement(Bible, { bible: { imagery: { style, bans } } as never, data: VIEW.data, mode: 'view', src: () => undefined }))
+  assert.match(one('no lab coats', ['sparkles']), /no lab coats\. Never: sparkles\./)
+  assert.match(one('Daylight.', ['sparkles']), /Daylight\. Never: sparkles\./)
+  assert.match(one('', ['sparkles']), />Never: sparkles\./)
+  assert.doesNotMatch(one('Daylight', []), /Never/)
 })

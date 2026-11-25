@@ -254,7 +254,7 @@ function Screen({ s, c, view, name, src }: { s: BrandState; c: BrandClansControl
         <div className="bbm-conf" data-testid="publish-confirm">
           <b>Publish {view.name} v{next}?</b>
           <ul style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 13 }}>
-            {view.draft.changes.map(ch => <li key={ch.id}><b>{M.AREA_WORD[ch.area] ?? ch.area}</b> {ch.text}</li>)}
+            {view.draft.changes.map(ch => { const l = M.changeLine(ch); return <li key={ch.id}>{l.area && <><b>{l.area}</b> </>}{l.text}</li> })}
           </ul>
           <p style={{ fontSize: 12, color: 'var(--muted)', margin: '8px 0 10px' }}>Work already made keeps v{view.version}. It gets an Update chip; nothing changes until someone presses it.</p>
           <div className="bcm-top">
@@ -264,7 +264,7 @@ function Screen({ s, c, view, name, src }: { s: BrandState; c: BrandClansControl
         </div>
       )}
       {justPublished && (
-        <div className="bbm-pub" data-testid="published"><span><b>{view.name} v{s.published!.version} · published.</b> Open work that uses {view.name} now shows “Brand Clan updated · Update”. Nothing in it changes until someone presses Update.</span></div>
+        <div className="bbm-pub" data-testid="published"><span><b>{view.name} v{s.published!.version} · published.</b> Open work that uses {view.name} shows “Brand Clan updated · Update” within 20 seconds. Nothing in it changes until someone presses Update.</span></div>
       )}
       {edit && <div className="bbm-pub" style={{ background: 'var(--paper-2)', color: 'var(--ink-soft)' }}><span>Change anything here. Edits stay in a draft that only you see, until you publish.</span></div>}
       <Bible bible={shown} data={view.data} mode={edit ? 'edit' : draft ? 'draft' : old ? 'old' : 'view'} changes={view.draft?.changes} src={src} edits={edit ? edits : undefined} />

@@ -48,7 +48,7 @@ function run(html: string, opts: { targets: Target[][]; data?: Record<string, un
   }
   const window: Record<string, unknown> = { __CLAN__: { data: opts.data ?? {} }, addEventListener: () => {} }
   vm.runInNewContext(chipScript(html), { document, window, navigator: { userAgent: 'Linux' }, fetch, Promise, JSON, Date, isNaN, Array, Object, String })
-  const chip = window.__bcChip as { reload: () => Promise<void>; state: { open: boolean } }
+  const chip = window.__bcChip as { reload: () => Promise<void>; poll: () => Promise<boolean>; state: { open: boolean } }
   const click = (sel: { attr: string; value?: string }) => {
     const target = { closest: () => ({ getAttribute: (k: string) => (k === sel.attr ? sel.value ?? '' : null), hasAttribute: (k: string) => k === sel.attr }) }
     mount.contains = () => true
@@ -138,3 +138,16 @@ test('the chip is the same block in Brief Maker and Research (one component, two
 test('Brief Maker tells the shell when it stored a file (clan:file-added, the brand flow\'s contract)', () => {
   assert.match(brief, /window\.parent\.postMessage\(\{type:'clan:file-added',name:name,label:file\.name\},'\*'\)/)
 })
+
+for (const [name, html] of [['Brief Maker', brief], ['Research', research]] as const) {
+  test(`${name}: a Brand Clan published while the document is open shows Update without a reload (A33)`, async () => {
+    const held = T({ attached: true, version: 2, held_version: 2 })
+    const { mount, chip } = run(html, { targets: [[held], [held], [{ ...held, version: 3 }]] })
+    await settle()
+    assert.doesNotMatch(mount.innerHTML, /data-bc-upd/)
+    assert.equal(await chip.poll(), false, 'nothing new: the chip is not redrawn')
+    assert.equal(await chip.poll(), true)
+    assert.match(mount.innerHTML, /Brand Clan updated/)
+    assert.match(mount.innerHTML, /data-bc="update"/)
+  })
+}

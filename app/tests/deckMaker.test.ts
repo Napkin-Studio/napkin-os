@@ -3054,3 +3054,18 @@ test('a projection with no pins and no usable findings is not research', () => {
   assert.equal(L.upstreamSummary({ upstream: { b: uatBrief }, projection: { findings: {}, pins: {} } }).research, null)
   assert.equal(L.upstreamSummary({ upstream: { b: uatBrief }, projection: { findings: { f1: { status: 'rejected' } }, pins: {} } }).research, null)
 })
+
+test('the Look card picks up a Brand Clan published while the deck is open, without a reload (A33)', async () => {
+  let current = bcTargets.map(t => (t.document_id === 'bc-zero' ? { ...t, version: 1 } : t))
+  const fetchImpl = (url: string) => String(url).endsWith('/attach-targets')
+    ? Promise.resolve({ ok: true, json: () => Promise.resolve(current) })
+    : Promise.resolve({ ok: false, json: () => Promise.resolve(null) })
+  const m = mount(lookData, fetchImpl)
+  await tick()
+  assert.doesNotMatch(m.app.innerHTML, /has a newer version/)
+  const poll = m.win.__deckBrandPoll as () => Promise<boolean>
+  assert.equal(await poll(), false, 'nothing new: the page is not re-rendered')
+  current = bcTargets
+  assert.equal(await poll(), true)
+  assert.match(m.app.innerHTML, /<b>Zero has a newer version, v2\.<\/b>/)
+})

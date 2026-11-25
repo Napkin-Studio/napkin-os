@@ -120,6 +120,15 @@ export const AREA_WORD: Record<string, string> = {
   rule: 'Rule', imagery_style: 'Imagery', imagery_ban: 'Imagery', example: 'Imagery', source: 'Source',
 }
 
+/** A change as the publish confirm lists it: its area word in bold, unless its text already starts with it ("Logo Wordmark added",
+ *  "Colour Copper #B8733A added", "Imagery ban added: …" name their area; "Silver #9AA7B1 becomes #A0ADB6" does not). A34. */
+export function changeLine(ch: Pick<BrandChange, 'area' | 'text'>): { area: string | null; text: string } {
+  const area = AREA_WORD[ch.area] ?? ch.area
+  const first = ch.text.trim().split(/\s+/)[0]?.toLowerCase() ?? ''
+  const says = first === area.toLowerCase() || (area === 'Typography' && first === 'typeface')
+  return { area: says ? null : area, text: ch.text }
+}
+
 /** What the Update chip's list shows: the changes of every published version after the one a work document holds. */
 export function changesSince(history: readonly BrandHistoryEntry[], held: number): { version: number; summary: string; changes: BrandChange[] }[] {
   return history
