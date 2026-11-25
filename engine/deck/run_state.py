@@ -46,6 +46,10 @@ STEP_AGENT = {"load": ("brief", "read"), "a0": ("brief", "read"), "a": ("brief",
               "fit": ("copy", "check"), "e": ("copy", "write"), "red_team": ("copy", "check"), "validate": ("review", "check"),
               "render_pptx": ("deck", "work"), "render_web": ("deck", "work"), "pdf": ("deck", "work"), "png": ("deck", "work"),
               "qa": ("review", "check"), "repair": ("review", "work")}
+#: The agent each Build row belongs to (STEP_AGENT's, by row): a failure names the agent of the row that failed, never a default (acceptance
+#: A45: the idea stage failed and the row read "Brief agent · Writes the brief · Failed, retrying").
+ROW_AGENT = {"inputs": "brief", "scans": "brief", "storyline": "strategy", "territories": "strategy", "idea": "idea", "copy": "copy",
+             "check": "review", "review": "review"}
 STEP_OF = {"brief": 1, "strategy": 2, "idea": 3, "copy": 4, "deck": 5, "review": 6, "approval": 7}
 STEP_TOTAL = 7
 DONE_SUB = {"inputs": "Read", "scans": "Read", "storyline": "Approved", "territories": "Picked", "idea": "Approved", "copy": "Done", "check": "Done"}
@@ -308,7 +312,9 @@ def run_object(*, state: str, stages: Path, summary: dict | None = None, current
     elif state == "done":
         agent = {"key": "review", "activity": "complete", "step_index": STEP_OF["review"], "step_total": STEP_TOTAL}
     elif state == "failed":
-        agent = {"key": STEP_AGENT.get(current or "load", ("deck", "work"))[0], "activity": "error"}
+        step = STEP_AGENT.get(current or "")
+        key = step[0] if step and STEP_ROW.get(current) == ROW_IDS[idx] else ROW_AGENT.get(ROW_IDS[idx], "deck")   # the agent of the row that failed
+        agent = {"key": key, "activity": "error"}
     run = {"state": state, "stage": ROW_IDS[idx], "stages": rows, "gate": gate_payload(held, stages) if state == "gate" and held else None,
            "agent": agent, "checks": checks_list(summary, stages, validation) or None, "error": error if state == "failed" else None,
            "done": done if state == "done" else None, "cost_usd": round(cost, 4) if cost is not None else None}
