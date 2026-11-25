@@ -72,7 +72,7 @@ export function pictureGrid(at: Pt, sizes: readonly { w: number; h: number }[]):
  * Put pictures on the canvas, centred on `at` (else the middle of the view), as one undoable step, and
  * select them. Their assets go into the document (a system write). Returns the new elements.
  */
-export async function placePictures(canvas: CanvasAdapter, doc: DocumentStore, files: readonly Blob[], at?: Pt): Promise<CanvasElement[]> {
+export async function placePictures(canvas: CanvasAdapter, doc: DocumentStore, files: readonly Blob[], at?: Pt, target?: string | null): Promise<CanvasElement[]> {
   const got: { sha: string; blob: Blob; w: number; h: number }[] = []
   for (const f of files) {
     const { blob, w, h } = await downscale(f)
@@ -88,7 +88,10 @@ export async function placePictures(canvas: CanvasAdapter, doc: DocumentStore, f
     }
   }, 'add picture')
   const v = canvas.visibleBounds()
-  const centre = at ?? { x: (v.minX + v.maxX) / 2, y: (v.minY + v.maxY) / 2 }
+  // Picked (not dropped) while a board is selected, or just made and still being named, the pictures go on it (UAT
+  // round 4 A19: added right after making a Brand board, the picture landed top left, over the Brief card).
+  const chosen = at ? undefined : targetBoard(canvas, target)
+  const centre = at ?? (chosen ? { x: chosen.x + chosen.width / 2, y: chosen.y + chosen.height / 2 } : { x: (v.minX + v.maxX) / 2, y: (v.minY + v.maxY) / 2 })
   let row = pictureGrid(centre, got)
   // Pasted or picked (no point given) with no board under the middle of the view: clear of everything,
   // so pastes never pile on one spot or straddle a board's edge (board-autolayout).
@@ -150,4 +153,16 @@ export function pickPictureFiles(): Promise<File[]> {
     document.body.appendChild(input)
     input.click()
   })
+}
+
+/** The board picked pictures go on: the one given (in hand when the Picture tool was pressed), else the board that is the
+ *  whole selection now. */
+function targetBoard(canvas: CanvasAdapter, target: string | null | undefined): CanvasElement | undefined {
+  const els = canvas.elements()
+  const isBoardEl = (e: CanvasElement | undefined) => !!e && !e.isDeleted && (e.customData as { kind?: string } | undefined)?.kind === 'board'
+  const given = target ? els.find((e) => e.id === target) : undefined
+  if (isBoardEl(given)) return given
+  const ids = canvas.view().selectedIds
+  const one = ids.length === 1 ? els.find((e) => e.id === ids[0]) : undefined
+  return isBoardEl(one) ? one : undefined
 }

@@ -136,8 +136,14 @@ export function Storyboard() {
   useEffect(() => {
     if (!selected) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || (e.target as Element | null)?.closest?.('input, textarea, select, [contenteditable="true"], .pt-menu, [role="dialog"]')) return
-      setSelected(null)
+      if ((e.target as Element | null)?.closest?.('input, textarea, select, [contenteditable="true"], .pt-menu, [role="dialog"]')) return
+      if (e.key === 'Escape') setSelected(null)
+      // Delete or Backspace deletes the selected shot wherever the focus is (UAT round 4 A23: with the Booth open it did
+      // nothing, as only the focused card listened). Undo is in the note it leaves.
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !e.defaultPrevented) {
+        e.preventDefault()
+        deleteRef.current(selected)
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -183,6 +189,8 @@ export function Storyboard() {
     if (shotNeedsConfirm(docStore.get(), shotId)) setConfirmShot(shotId)
     else void removeNow(shotId)
   }
+  const deleteRef = useRef(deleteShot)
+  useEffect(() => { deleteRef.current = deleteShot })
   // Drag reorder (ui-behaviour 3.11): one rank write with the drift marks, one undo step.
   const moveShot = (shotId: string, place: { beforeId: string | null; afterId: string | null }) => attempt(async () => {
     if (!clan) return
