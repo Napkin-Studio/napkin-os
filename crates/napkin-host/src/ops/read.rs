@@ -935,8 +935,12 @@ pub fn upstream_status(doc: &Document, parent: impl Fn(&str) -> Option<Document>
                     e["holds"] = holds(doc, &p);
                     e
                 }
+                // An ancestor further up (the research behind a brief) is not compared, but its
+                // own state is still told: locked by its own approve, and its version.
                 (false, None) => json!({
                     "document_id": id, "direct": false, "in_store": true, "status": "not_compared",
+                    "version": p.version().as_str(),
+                    "locked": review::lock_of(&chain_of(p.clan()), p.clan().document_id()).is_some(),
                 }),
             };
             entry["title"] = pm.title.clone().into();
