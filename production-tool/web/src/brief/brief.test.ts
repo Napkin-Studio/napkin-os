@@ -181,6 +181,20 @@ describe('scope', () => {
     expect(endLineOf({ mandatories: ['End line \u2013 \u201cLumo. Calm, on.\u201d'] })).toBe('Lumo. Calm, on.')
     expect(endLineOf({ mandatories: ["Sign-off: 'Hearth. Every morning.'"] })).toBe('Hearth. Every morning.')
     expect(endLineOf({ mandatories: ['Never show a phone screen'] })).toBeUndefined()
+  })
+
+  it('takes a line the brief keeps word for word without labelling it, never the legal line (acceptance run A8)', () => {
+    // the model's own wording in the round-4 Copperell brief, and the other forms a brief writes
+    expect(endLineOf({ mandatories: ['Bottle is the hero, logo top right', "'Refill. Not landfill.' used word for word"] })).toBe('Refill. Not landfill.')
+    expect(endLineOf({ mandatories: ["Use 'Refill. Not landfill.' word for word everywhere"] })).toBe('Refill. Not landfill.')
+    expect(endLineOf({ mandatories: ['Run \u201cRefill. Not landfill.\u201d verbatim on every piece'] })).toBe('Refill. Not landfill.')
+    // the labelled end line still wins, wherever it sits
+    expect(endLineOf({ mandatories: ["'Clean, without the plastic.' used word for word", "End line: 'Refill. Not landfill.' (word for word)"] })).toBe('Refill. Not landfill.')
+    // the legal or warning line is never the end line, however it is worded
+    expect(endLineOf({ mandatories: ["Include 'Keep out of reach of children. Read the label before use.' word for word"] })).toBeUndefined()
+    expect(endLineOf({ mandatories: ["Legal: 'Please drink responsibly' word for word"] })).toBeUndefined()
+    expect(endLineOf({ mandatories: ["Carry 'Contains caffeine.' verbatim"] })).toBeUndefined()
+    expect(endLineOf({ mandatories: ['Keep the logo word for word as supplied'] })).toBeUndefined()
     // UAT 2026-11-18, U6: it pre-filled 'must be "Quietboil. Let them sleep.'.
     expect(endLineOf({ mandatories: ['End line must be "Quietboil. Let them sleep."'] })).toBe('Quietboil. Let them sleep.')
     expect(endLineOf({ mandatories: ['The end line should read: Quietboil. Let them sleep.'] })).toBe('Quietboil. Let them sleep.')
