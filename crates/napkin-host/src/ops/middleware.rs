@@ -147,7 +147,14 @@ pub fn apply(outer: &Ctx, doc: &Document, reply: &Value) -> HostResult<Outcome> 
     let ctx = ctx_for(outer, reply)?;
     match plan(&ctx, doc, reply, change) {
         Ok(outcome) => Ok(outcome),
-        Err(e) => Ok(Outcome::unchanged(refused(e.message))),
+        // A document on an older contract than its app, where the difference is not a safe
+        // one (so it was not moved), says so beside the refusal.
+        Err(e) => Ok(Outcome::unchanged(refused(
+            match super::upgrade::older_contract_note(doc) {
+                Some(note) => format!("{} ({note})", e.message),
+                None => e.message,
+            },
+        ))),
     }
 }
 
