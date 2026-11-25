@@ -217,6 +217,8 @@ export interface MenuItem {
   run: () => void
   /** A rule above this item. */
   apart?: boolean
+  /** Pressing it changes it in place (a bar button's confirm step): the menu stays open. */
+  stays?: boolean
   /** Shown, but it cannot run yet; the hint says why. */
   disabled?: boolean
   /** The key that does the same anywhere (Feedback: F). */
@@ -306,7 +308,7 @@ function spinHint(t: { app_id: string; name: string; map?: string | null }, noun
 export function moreItems(doc: DocBar, user?: string | null, onSignOut?: () => void): MenuItem[] {
   return [
     // The app's own buttons past the two the bar has room for, at the top, in the app's order.
-    ...overflowButtons(doc.bar ?? []).map(b => ({ label: b.label, hint: b.title || undefined, run: () => doc.onBarAction?.(b.id) })),
+    ...overflowButtons(doc.bar ?? []).map(b => ({ label: b.label, hint: b.title || undefined, run: () => doc.onBarAction?.(b.id), ...(b.stays ? { stays: true } : {}) })),
     ...(doc.onToggleEdit && !doc.editMode
       ? [{ label: 'Edit', hint: 'Change it yourself. Every change is kept as yours.', run: doc.onToggleEdit }]
       : []),
@@ -333,7 +335,7 @@ export function moreItems(doc: DocBar, user?: string | null, onSignOut?: () => v
  */
 export function docMenuItems(doc: DocBar, startRename?: () => void): MenuItem[] {
   return [
-    ...overflowButtons(doc.bar ?? []).map(b => ({ label: b.label, hint: b.title || undefined, run: () => doc.onBarAction?.(b.id) })),
+    ...overflowButtons(doc.bar ?? []).map(b => ({ label: b.label, hint: b.title || undefined, run: () => doc.onBarAction?.(b.id), ...(b.stays ? { stays: true } : {}) })),
     ...(doc.onRename && startRename ? [{ label: 'Rename', hint: 'Or double-click the name', run: startRename }] : []),
     ...(doc.onToolPage ? [{ label: doc.onToolPage.label, hint: 'Its other documents for this client, and New', run: doc.onToolPage.run }] : []),
     { label: 'Open…', hint: 'A .clan, PDF or HTML file', run: doc.onOpenFile },

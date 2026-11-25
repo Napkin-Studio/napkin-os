@@ -1804,9 +1804,7 @@ class Renderer:
                 fh = g.body_end - y
                 note = []
                 nh = 0.0
-                if vis.get("kind") == "image_prompt":
-                    note = [self.para("Image prompt (" + vis.get("status", "illustrative") + "): " + vis.get("prompt", ""), S.caption, p.mute, italic=True, cap=True)]
-                    nh = self.ph(note, lw - 0.6) + 0.25
+                # a picture prompt is never drawn on the slide: it is the maker's brief and stays in the slide's visual (UAT round 4 slide 9)
                 ch, cy, fy, ffh = fh, y, y, fh   # the card's height and top, the frame's top and height
                 if stacked:
                     ch = None
@@ -4991,11 +4989,7 @@ class Renderer:
         y = self._title_text(sl, s, size=28)
         cp = next(b for b in s["blocks"] if b["kind"] == "copy")
         self._fit_flow(sl, [b for b in s["blocks"] if b["kind"] != "copy"], self.x0, y, 5.6)
-        vis = s.get("visual") or {}
-        if vis.get("kind") == "image_prompt":
-            m = self._mark(sl)
-            self.text(sl, self.x0, y + 1.2, 5.6, 1.5, "Image prompt (" + vis.get("status", "illustrative") + "): " + vis.get("prompt", ""), size=11, italic=True, color=t.mute)
-            self._build(sl, m)
+        # a picture prompt is never drawn on the slide: it is the maker's brief and stays in the slide's visual
         fx, fw = 6.7, 6.03
         m = self._mark(sl)
         self.box(sl, fx, y, fw, Y_END - y, t.ink)

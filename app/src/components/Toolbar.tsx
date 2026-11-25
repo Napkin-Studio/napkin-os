@@ -97,7 +97,7 @@ function Rows({ items, close }: { items: MenuItem[]; close: (refocus: boolean) =
         role="menuitem"
         aria-disabled={item.disabled || undefined}
         data-dogfood={`menu: ${item.label}`}
-        onClick={() => { if (item.disabled) return; close(true); item.run() }}
+        onClick={() => { if (item.disabled) return; if (!item.stays) close(true); item.run() }}
       >
         {item.label}{item.key && <kbd className="mi-key">{item.key}</kbd>}
         {item.hint && <small>{item.hint}</small>}
@@ -708,8 +708,9 @@ export default function Toolbar({
           <Pop anchor={anchor} align="right" onClose={pop.close} label="More actions" testid="more-menu">
             {firstOut && !firstOut.disabled && (firstOut.menu
               ? firstOut.menu.map(m => <button key={m.id} type="button" role="menuitem" onClick={() => { pop.close(false); doc.onBarAction?.(m.id) }}>{m.label}{m.title && <small>{m.title}</small>}</button>)
-              : <button type="button" role="menuitem" onClick={() => { pop.close(false); doc.onBarAction?.(firstOut.id) }}>{firstOut.label}{firstOut.title && <small>{firstOut.title}</small>}</button>)}
-            {second && !second.disabled && <button type="button" role="menuitem" onClick={() => { pop.close(false); doc.onBarAction?.(second.id) }}>{second.label}{second.title && <small>{second.title}</small>}</button>}
+              : <button type="button" role="menuitem" onClick={() => { if (!firstOut.stays) pop.close(false); doc.onBarAction?.(firstOut.id) }}>{firstOut.label}{firstOut.title && <small>{firstOut.title}</small>}</button>)}
+            {/* a button that changes in place (stays) keeps the menu open: its new words show and the second press lands (A7) */}
+            {second && !second.disabled && <button type="button" role="menuitem" data-testid="more-second" onClick={() => { if (!second.stays) pop.close(false); doc.onBarAction?.(second.id) }}>{second.label}{second.title && <small>{second.title}</small>}</button>}
             {reviewOut && <button type="button" role="menuitem" onClick={() => { pop.close(false); doc.onClientReview?.() }}>New client answer<small>Record another answer from the client about the locked version</small></button>}
             {fit >= 3 && <button type="button" role="menuitem" onClick={() => pop.setOpen({ key: 'share', anchor })}>Share<small>Send it to someone</small></button>}
           </Pop>

@@ -127,6 +127,18 @@ def with_production(data: dict, pu) -> dict:
     return {**data, "upstream": {**up, pu["id"]: pu["data"]}}
 
 
+def with_brief(data: dict, bu) -> dict:
+    """``data`` with the carried brief put back whole under ``upstream.<id>``. The host sends ``clan.data.upstream`` as an index (middleware-api.md
+    §1) and a Deck's brief beside it as ``clan.brief_upstream {id, data}``, as it sends a Production project (UAT round 4 L2: without it
+    ``brief_upstream_of`` found only index entries and the engine built from an empty brief). A ``bu`` that is not ``{id, data}`` of a brief
+    (never a Production project) changes nothing."""
+    if not (isinstance(bu, dict) and isinstance(bu.get("id"), str) and bu["id"] and isinstance(bu.get("data"), dict)
+            and bu["data"].get("app") != "production-tool" and any(k in bu["data"] for k in BRIEF_KEYS)):
+        return data
+    up = data.get("upstream") if isinstance(data.get("upstream"), dict) else {}
+    return {**data, "upstream": {**up, bu["id"]: bu["data"]}}
+
+
 def production_upstream_of(data: dict) -> dict | None:
     """``{id, data}``: the Production project (``app: production-tool``) the Deck carries under ``data.upstream`` (the first one), as the engine
     reads it (finals, assets, sizes, briefs). The pictures are not in it: they are held by the relay under their sha256."""
@@ -179,7 +191,7 @@ def members_of(clan) -> dict | None:
 
 def start(req, caps, settings, jid):
     """Validate now (a 400 before any job, a 503 with no engine); build the job (the caller starts it)."""
-    data = with_production(ctx_data(req.clan), (req.clan or {}).get("production_upstream"))
+    data = with_brief(with_production(ctx_data(req.clan), (req.clan or {}).get("production_upstream")), (req.clan or {}).get("brief_upstream"))
     inputs = data.get("inputs") if isinstance(data.get("inputs"), dict) else {}
     prompt = inputs.get("prompt") if isinstance(inputs.get("prompt"), dict) else {}
     if not str(prompt.get("text") or "").strip():

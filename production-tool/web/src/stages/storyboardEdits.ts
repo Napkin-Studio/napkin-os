@@ -3,10 +3,11 @@
 // words (the script, a shot's action and direction, its @names) are live text, written by the editors
 // and script/edits.ts, never here (features/script-editor.clan).
 
+import { setScriptTarget } from '../script/length'
 import { rankBetween } from '../../../clan-store/src'
 import type { Ratio, ProductionDocument } from '../contracts/types'
 import { newId } from '../lib/ulid'
-import { mainStoryboard, mainVideo, shotsOf } from '../model/selectors'
+import { mainStoryboard, mainVideo, scriptOfStoryboard, shotsOf } from '../model/selectors'
 
 type Doc = ProductionDocument
 
@@ -18,10 +19,14 @@ export function setRatio(d: Doc, ratio: Ratio) {
   if (v) d.videos[v.id].ratio = ratio
 }
 
-/** The storyboard's target length. */
+/** The film's target length, set from the storyboard: one value along the chain, as the Script editor sets it
+ *  (script/length.ts), so the script that drives it and its film say the same (UAT round 4 gate: 6 s vs 15 s). */
 export function setTarget(d: Doc, seconds: number) {
   const sb = mainStoryboard(d)
-  if (sb) d.storyboards[sb.id].target_s = seconds
+  if (!sb) return
+  const script = scriptOfStoryboard(d, sb.id)
+  if (script) setScriptTarget(d, script.id, sb.id, seconds)
+  else d.storyboards[sb.id].target_s = seconds
 }
 
 /** A new shot after the last one on `storyboardId` (absent: the main storyboard). Its id. */
