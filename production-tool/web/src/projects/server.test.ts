@@ -3,7 +3,8 @@
 // someone else got in before is never an overwrite, and the person chooses.
 // On the real .clan engine (napkin-wasm), against a fake relay that keeps the relay's rules.
 
-import { unzipSync } from 'fflate'
+import { readFileSync } from 'node:fs'
+import { unzipSync, zipSync } from 'fflate'
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('../canvas/adapter/excalidraw/serialize', () => ({ serializeScene: () => '{}' }))
@@ -15,7 +16,7 @@ import { initialAppUi, type AppUi } from '../doc/ui'
 import { deleteBlob, getBlob, putBlob } from '../lib/blobs'
 import { hexOf, sha256Hex } from '../lib/hash'
 import { forgetMedia, setMediaBase } from '../lib/media'
-import { mainStoryboard } from '../model/selectors'
+import { mainScript, mainStoryboard } from '../model/selectors'
 import { ModelStore } from '../model/store'
 import { MockRelay, type MockRenderer } from '../relay/mock'
 import type { Relay } from '../relay'
@@ -43,11 +44,14 @@ const CDN = 'https://cdn.test'
 class FakeRelay {
   t = Date.parse('2026-10-10T10:00:00Z')
   projects = new Map<string, { row: SavedProject; bytes: Uint8Array; trashed?: string }>()
+  refusedSaves = 0
   uploads = new Map<string, Uint8Array>()
   saves: { id: string; ifMatch: string | null; reason: string | null }[] = []
   failUploads = false
   /** The client each new document was made for (the body's client_id). */
   createdFor: (string | undefined)[] = []
+  /** Every `/title` the host was asked for. */
+  renamed: { id: string; title: string }[] = []
   /** A save lands, and its answer never reaches the browser (the page was closed as it went: UAT U7). */
   loseAnswers = false
   /** Nothing reaches the host. */
@@ -108,6 +112,16 @@ class FakeRelay {
       delete q.trashed
       return this.json(200, { restored: true, path: back[1] })
     }
+    const titled = /^\/t\/t1\/d\/([^/]+)\/title$/.exec(path)
+    if (titled && method === 'POST') {
+      const q = this.projects.get(titled[1])
+      if (!q || q.trashed) return this.json(404, { error: 'not found' })
+      const { title } = JSON.parse(String(init.body)) as { title: string }
+      if (!title.trim()) return this.json(400, { error: 'missing title' })
+      this.renamed.push({ id: titled[1], title })
+      q.row = { ...q.row, name: title.trim() } // the host writes the manifest's title (its version moves too)
+      return this.json(200, { ok: true, title: title.trim() })
+    }
     const m = /^\/t\/t1\/d\/([^/]+)(\/download|\/save)?$/.exec(path)
     const p = m && this.projects.get(m[1])
     if (!m || !p || p.trashed) return this.json(404, { error: 'not found' })
@@ -121,6 +135,9 @@ class FakeRelay {
     }
     if (m[2] === '/save' && method === 'PUT') {
       const bytes = new Uint8Array(init.body as Uint8Array)
+      // As napkin-web's check_instance (save.rs): only a Production instance is saved this way.
+      const appId = (() => { try { return /^\s+app_id:\s*['"]?([^\s'"]+)/m.exec(new TextDecoder().decode(unzipSync(bytes)['manifest.yaml']))?.[1] } catch { return undefined } })()
+      if (appId !== undefined && appId !== 'ie.napkin.production') { this.refusedSaves++; return this.json(422, { error: 'Only a Production project can be saved this way.' }) }
       const ifMatch = h.get('If-Match')?.replace(/"/g, '').replace(/^sha256:/, '') ?? null
       this.saves.push({ id: m[1], ifMatch, reason: h.get('X-Clan-Reason') })
       if (!ifMatch) return this.json(428, { error: 'If-Match is required' })
@@ -246,6 +263,48 @@ describe('Move to Trash and its Undo (UAT round 4 F13)', () => {
     expect((await laptop.shell.serverProjects()).map((r) => r.id)).toContain(p.id)
     // A second Undo has nothing to bring back: the host says so.
     await expect(laptop.shell.restore(p.id)).rejects.toThrow()
+  })
+})
+
+/** The project napkin-web's spin-off writes from a brief that carried an uploaded file: clan-store's fixture (made by
+ *  `make_production`, app ie.napkin.production) with that file held as a link, its bytes in the workspace. */
+function spunOffWithFile(): Uint8Array {
+  const z = unzipSync(new Uint8Array(readFileSync(new URL('../../../clan-store/test/fixtures/brief-spun-off.clan', import.meta.url))))
+  const manifest = new TextDecoder().decode(z['manifest.yaml'])
+  const entry = '- id: human-assets-document-1-0.txt\n  path: human/assets/document-1-0.txt\n  role: human-asset\n  type: application/octet-stream\n  sha256: sha256:' + 'a'.repeat(64) + '\n  linked: true\n'
+  z['manifest.yaml'] = new TextEncoder().encode(manifest.replace(/^files:\n/m, `files:\n${entry}`))
+  return zipSync(z)
+}
+
+describe('a project made by Continue in > Production saves (UAT acceptance A24: every save was refused, 422)', () => {
+  it('opens, saves as a Production project with its link kept, and still does when this browser kept nothing', async () => {
+    forgetSent()
+    const fake = new FakeRelay()
+    const id = 'doc-ie-napkin-production-a24'
+    await fake.make(spunOffWithFile(), id, 'Copperell Refill')
+    const laptop = browser(fake)
+    await laptop.shell.openFromServer({ id, name: 'Copperell Refill' })
+    const s = services(laptop.shell)
+    expect(await s.clan!.clan.spunOffFrom()).toBeTruthy()
+    await updateDoc(s.doc, (d) => { d.project.title = 'Copperell Refill' }, 'rename')
+    await s.clan!.flush()
+    await s.clan!.clan.mirrorNow('manual')
+    expect(fake.refusedSaves).toBe(0)
+    expect(fake.saves.filter((x) => x.id === id).length).toBeGreaterThan(0)
+    const there = new TextDecoder().decode(unzipSync(fake.projects.get(id)!.bytes)['manifest.yaml'])
+    expect(there).toMatch(/app_id: ie\.napkin\.production/)
+    expect(there).toMatch(/path: human\/assets\/document-1-0\.txt[\s\S]*?linked: true/)
+    // This browser loses its copy (what A15 left: nothing kept). The project opens from the workspace, not as a new
+    // blank document, and its next save is taken.
+    await laptop.shell.goHome()
+    await laptop.storage.dropClan(clanDbFor(id))
+    await laptop.shell.open(id)
+    const again = services(laptop.shell)
+    expect(await again.clan!.clan.spunOffFrom()).toBeTruthy()
+    await updateDoc(again.doc, (d) => { d.project.title = 'Copperell Refill again' }, 'rename')
+    await again.clan!.flush()
+    await again.clan!.clan.mirrorNow('manual')
+    expect(fake.refusedSaves).toBe(0)
   })
 })
 
@@ -553,6 +612,51 @@ describe('opening a project checks the relay for a newer version (re-test R2)', 
     expect(services(laptop.shell).serverCopy!.get()).toBeNull()
     expect(services(laptop.shell).serverCopy!.basedOn()?.etag).toBe(fake.projects.get(p.id)!.row.etag)
     expect(fake.saves.length).toBe(saves)
+  })
+})
+
+describe('one name on Home, in the library and in the Trash (UAT round 4: "Copperell Refill 2" vs "Copperell Refill")', () => {
+  const quiet = () => new Promise((r) => setTimeout(r, 30))
+  it('renaming a film that is not open here renames the host\'s copy too', async () => {
+    forgetSent()
+    const fake = new FakeRelay()
+    const { laptop, p } = await made(fake)
+    await laptop.shell.goHome()
+    await quiet()
+    await laptop.shell.rename(p.id, 'Copperell Refill 2')
+    expect(fake.renamed).toEqual([{ id: p.id, title: 'Copperell Refill 2' }])
+    expect(fake.projects.get(p.id)!.row.name).toBe('Copperell Refill 2')
+    // Blank goes back to naming itself: nothing is sent for it.
+    await laptop.shell.rename(p.id, '   ')
+    expect(fake.renamed).toHaveLength(1)
+  })
+
+  it('a film that numbers its own name ("… 2") gives the library the same name', async () => {
+    forgetSent()
+    const fake = new FakeRelay()
+    const laptop = browser(fake)
+    const line = 'Copperell Refill'
+    const named = async () => {
+      const p = await laptop.shell.newProject()
+      const s = services(laptop.shell)
+      await seedStages(s.doc)
+      await updateDoc(s.doc, (d) => {
+        const sid = id('scene')
+        d.scenes[sid] = { id: sid, v: 1, field_v: {}, script_id: mainScript(d)!.id, rank: 'a0', heading: 'INT. KITCHEN', text: line }
+      }, 'write the script')
+      await s.doc.flush()
+      await laptop.shell.get().session!.record()
+      await s.clan!.flush()
+      await s.clan!.clan.mirrorNow('manual')
+      await laptop.shell.goHome()
+      await quiet()
+      return p
+    }
+    const first = await named()
+    const second = await named()
+    expect(laptop.index.get(first.id)!.name).toBe(line)
+    expect(laptop.index.get(second.id)!.name).toBe(`${line} 2`)
+    expect(fake.projects.get(second.id)!.row.name).toBe(`${line} 2`)
   })
 })
 

@@ -165,8 +165,20 @@ export function endLineOf(spine: BriefSpine | undefined): string | undefined {
     const line = quoted(hit[1]) ?? hit[1].trim().replace(LINE_VERB, '').replace(/^["'\u201c\u2018]+|["'\u201d\u2019]+$/g, '').trim()
     if (line) return line.slice(0, 200)
   }
+  // A safety net for a brief that states the line without labelling it ("'Refill. Not landfill.' used word for word",
+  // "Use 'Refill. Not landfill.' word for word everywhere"): the quoted words of an item that says to keep them word
+  // for word. Never the legal or warning line ("Include 'Keep out of reach of children.' word for word"). Acceptance
+  // run, 2026-11-25 (A8): the end card got no line from such a mandatory.
+  for (const m of spine?.mandatories ?? []) {
+    if (!VERBATIM.test(m) || CARRY.test(m) || LEGAL_LABEL.test(m.trim()) || WARNING.test(m) || /\b(?:legal|disclaimer|small print|label)\b/i.test(m)) continue
+    const line = quoted(m)
+    if (line && /\S\s+\S|\S{3,}/.test(line)) return line.slice(0, 200)
+  }
   return undefined
 }
+
+/** "word for word", "verbatim", "exactly as written": a mandatory that says to keep its quoted words unchanged. */
+const VERBATIM = /\b(?:word\s+for\s+word|verbatim|exactly\s+as\s+written)\b/i
 
 /** A warning a drink carries by law or custom (caffeine, alcohol, pregnancy, health): its own mandatory is the legal line. */
 const WARNING = /\b(?:caffeine|alcohol|health warning|not recommended for|pregnan\w*|contains (?:caffeine|alcohol|nuts|sulphites|allergens?))\b/i

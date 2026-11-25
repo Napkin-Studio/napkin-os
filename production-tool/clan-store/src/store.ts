@@ -130,6 +130,9 @@ export class UnsupportedContract extends Error {
   }
 }
 
+/** What a build with an older napkin-wasm (no keptBytes) says on every save. */
+export const STALE_WASM = 'This build\'s napkin-wasm is older than its clan-store (no keptBytes), so nothing can be saved: run `npm run wasm` in production-tool/clan-store, then build the web app again.'
+
 /** Who records the move to generations, and its decision (features/make-and-edit.clan). */
 export const MIGRATION_AGENT = 'clan-store'
 export const MIGRATION_ACTION = 'move takes and the edl to generations and the timeline'
@@ -453,7 +456,7 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
   async exportClan(): Promise<Uint8Array> {
     await this.runBeforeBytes('export')
     await this.queue.catch(() => {})
-    return this.bytes()
+    return this.wholeBytes()
   }
 
   /**
@@ -707,7 +710,21 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
     return readData(this.host!)
   }
 
+  /** The document as it is kept, for this browser's store and for sending back to the workspace: its files that are
+   *  links stay links (UAT round 4 A15: a project spun off from a brief with an uploaded file could never be saved, as
+   *  `download` makes links whole and this host has no file store, so it reopened blank). */
   private bytes(): Uint8Array {
+    const h = this.need() as NapkinHost & { keptBytes?: () => Uint8Array | number[] }
+    // Never a quiet fallback to download(): with a link in the document it throws, and a build whose napkin-wasm is
+    // older than this store saved nothing while looking fine (UAT acceptance re-test: the web app was rebuilt, the wasm
+    // was not). Say what to rebuild instead.
+    if (typeof h.keptBytes !== 'function') throw new Error(STALE_WASM)
+    const b = h.keptBytes()
+    return b instanceof Uint8Array ? b : Uint8Array.from(b)
+  }
+
+  /** The document whole, for what leaves the workspace (an export): links made back into their files. */
+  private wholeBytes(): Uint8Array {
     const b = this.need().download() as Uint8Array | number[]
     return b instanceof Uint8Array ? b : Uint8Array.from(b)
   }

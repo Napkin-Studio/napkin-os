@@ -36,6 +36,7 @@ class Inputs:
     brief: dict                      # field id -> {value, kind, mark, fact_refs, reason?, rejected_attempt?}
     how_to_win: dict = field(default_factory=dict)   # stated_evaluation_criteria, unstated_needs, likely_landmines, ...
     open_questions: list = field(default_factory=list)   # [{question, why, priority}]
+    answered: list = field(default_factory=list)     # the brief's questions it answers itself: [{question, answer}] (UAT round 4: the budget's answer)
     facts: dict = field(default_factory=dict)        # f_ id -> fact row
     findings: dict = field(default_factory=dict)     # fi_ id -> finding row (status: verified|proposed|rejected)
     sources: dict = field(default_factory=dict)      # src_ id -> source row
@@ -271,9 +272,11 @@ def brief_from_data(data: dict, chain: list | None = None, doc_id: str | None = 
     for h in (data.get("capture") or {}).get("how_to_win") or []:
         htw.setdefault(h.get("kind") or "points", []).append({"point": h.get("point"), "evidence": h.get("evidence", "")})
     oq = [{"question": q if isinstance(q, str) else q.get("question"), "why": "", "priority": "normal"} for q in data.get("open_questions") or []]
+    answered = [split_answered(q["question"]) for q in oq if answered_question(q["question"])]   # kept: the deck reads them (the budget's answer)
     oq = [q for q in oq if not answered_question(q["question"])]   # a question the brief already answers is not open
     cov = {"brief_fields": len(fields), "brief_fields_filled": sum(1 for f in fields.values() if f["value"]),
            "how_to_win_points": sum(len(v) for v in htw.values()), "open_questions": len(oq), "brief_source": "brief-maker clan",
+           "answered": [a for a in answered if a],   # popped into Inputs.answered by the loaders, as the marks are
            "marks": marks_from_data(data, chain, doc_id, docs)}   # popped into Inputs.marks by the loaders: marked texts never stay in the coverage that reaches a report
     return fields, htw, oq, cov
 
@@ -364,8 +367,9 @@ def load(brief: Path | None, research: Path | None = None, doc_facts: Path | Non
         clan = is_clan(Path(brief))
         fields, htw, oq, cov = load_brief_clan(brief) if clan else load_brief(brief)
     marks = cov.pop("marks", None)
+    answered = cov.pop("answered", None) or []
     inp = Inputs(brief=fields, how_to_win=htw, open_questions=oq, prompt_text=prompt_text or "",
-                 answers=answers or {}, intake=intake or {}, verified=verified or {}, marks=marks)
+                 answers=answers or {}, intake=intake or {}, verified=verified or {}, marks=marks, answered=answered)
     research = research or (brief if clan else None)
     if research:
         r = load_research(research)
@@ -413,6 +417,15 @@ def carried_brief(doc: dict) -> tuple | None:
 
 
 _ANSWERED = re.compile(r"[\u2014\u2013-]\s*answers?\s*:|\banswered\s*:|\(answered\b|\bresolved\s*:", re.I)
+
+
+def split_answered(q) -> dict | None:
+    """``{question, answer}`` of a question that carries its own answer ('Is the budget inclusive of VAT? — Answer: £200k excluding VAT'), else None."""
+    m = _ANSWERED.search(str(q or ""))
+    if not m:
+        return None
+    a = str(q)[m.end():].strip().rstrip(")").strip()
+    return {"question": str(q)[:m.start()].strip(), "answer": a} if a else None
 
 
 def answered_question(q) -> bool:
@@ -468,6 +481,21 @@ def apply_research(inp: "Inputs", members: dict | None) -> bool:
     return inp.has_research()
 
 
+def apply_upstream_brief(inp: "Inputs", doc_id: str, doc: dict, chain: list | None = None) -> bool:
+    """A deck spun off a brief (Continue in -> Deck) takes that brief, carried whole under ``data.upstream``, through the one field mapping
+    (``brief_from_data``): its fields, how to win, open questions and Confidential marks. The engine server is sent it as ``brief_upstream``.
+    UAT round 4 L2: it was never sent, so a brief-only deck built from an empty brief (the intake abstained on every field) and called its
+    tier 'research'. Returns whether it took it. A brief of the deck's own (or one an intake stage wrote) is never replaced."""
+    if inp.has_brief() or inp.coverage.get("brief_source", "none") not in ("none", None) or not _is_brief_data(doc):
+        return False
+    fields, htw, oq, cov = brief_from_data(doc, chain or [], doc_id, {})
+    inp.brief, inp.how_to_win, inp.open_questions = fields, htw, oq
+    inp.marks = (inp.marks or []) + (cov.pop("marks", None) or [])
+    inp.answered = cov.pop("answered", None) or []
+    inp.coverage.update(cov)
+    return True
+
+
 def apply_production_brief(inp: "Inputs", doc_id: str, doc: dict) -> bool:
     """A deck with no brief of its own takes the brief its carried Production project holds (``briefs``, a frozen spine): the fields, and the
     parts it marked Confidential as marks. Returns whether it did. A brief of the deck's own (or one an intake stage wrote) is never replaced."""
@@ -479,6 +507,7 @@ def apply_production_brief(inp: "Inputs", doc_id: str, doc: dict) -> bool:
     cov = pb[4]
     inp.brief, inp.how_to_win, inp.open_questions = pb[1], pb[2], pb[3]
     inp.marks = (inp.marks or []) + (cov.pop("marks", None) or [])
+    inp.answered = cov.pop("answered", None) or []
     inp.coverage.update(cov)
     return True
 
@@ -583,11 +612,12 @@ def from_upstream(data: dict, members: dict | None = None, docs: dict | None = N
     prompt = ((data.get("inputs") or {}).get("prompt") or {})
     intake = data.get("intake") or {}
     marks = cov.pop("marks", None)
+    answered = cov.pop("answered", None) or []
     if "confidential_fields" in data:   # a Deck that carries its own marks, beside any the brief carried
         # The chain's marks were read with the brief's when there is one (each in its own document); otherwise here, upstream ones there.
         marks = (marks or []) + (marks_from_data(data) if brief_data is not None else marks_from_data(data, chain_list or [], docs=up))
     inp = Inputs(brief=fields, how_to_win=htw, open_questions=oq, prompt_text=str(prompt.get("text") or ""),
-                 answers=dict(intake.get("answers") or {}), intake={k: v for k, v in intake.items() if k != "answers"}, marks=marks)
+                 answers=dict(intake.get("answers") or {}), intake={k: v for k, v in intake.items() if k != "answers"}, marks=marks, answered=answered)
     chain = members.get("decisions") if "decisions" in members else members.get("chain")
     if members.get("facts") or members.get("findings") or research_id:
         title = ((up.get(research_id) or {}).get("campaign") or {}).get("name") if research_id else None

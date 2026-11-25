@@ -120,3 +120,12 @@ test('a page that says it runs no agents is believed over the host’s stale wor
   }
   assert.equal(barFrom({ v: 1, items: [{ kind: 'run', working: false }, { kind: 'run', working: true }] }).length, 1, 'one run item')
 })
+
+test('a button that changes in place says so (stays), and only a true stays counts (A7)', () => {
+  const got = barFrom({ v: 1, items: [btn('pdf'), btn('redraft', { label: 'Draft it again', stays: true }), btn('x', { stays: 'yes' })] })
+  assert.equal((got[1] as { stays?: boolean }).stays, true)
+  assert.equal('stays' in got[0], false)
+  assert.equal('stays' in got[2], false, 'a non-boolean is ignored')
+  assert.equal((overflowButtons([...got, btn('a'), btn('b')] as never).find(b => b.id === 'redraft') as { stays?: boolean } | undefined)?.stays, undefined,
+    'redraft is the second button, not past the two shown')
+})

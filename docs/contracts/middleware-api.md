@@ -83,6 +83,11 @@ name the stand-in, its port, or branch on which implementation answered.
   left out). `run_territories` reads the brief from them (`doc.ctx_data_carried` puts them back under `data.upstream`), because from the
   index alone the engine finds no brief and asks for a category and a market. The index still lists them. Absent when the document
   carries none, and on every other app.
+- **`brief_upstream`** (2026-11-25, UAT round 4 L2): on a Deck Maker document whose `data.upstream` holds a brief (the first entry with a
+  Brief Maker field such as `objectives` or `mandatories`; never a Production project or a kit), the host sends `{id, data}` with that brief
+  whole, beside the index. `build_deck@1` puts it back under `data.upstream.<id>` and sends it to the engine as `brief_upstream`, which
+  builds from its fields. Absent when the Deck carries no brief. (Before it, a Deck from a brief built from an empty brief: the middleware
+  saw only the index.)
 - **`upstream_ask`** (2026-11-09, features/spinoff-and-links): on a document
   whose pipeline declares `extract_ask`, the ask of the brief it carries:
   `{document_id, direct, fields: {<path>: text}}`, the paths drawn only from
@@ -109,7 +114,12 @@ name the stand-in, its port, or branch on which implementation answered.
   `start_campaign`'s identify proposes `campaign.client_org` from it when
   neither the roster, the material nor a carried brief names one: origin
   `proposed`, with `workspace_ref: "<id>"` in place of `fact_ids` /
-  `upstream_refs` (Contract 3, client_org only).
+  `upstream_refs` (Contract 3, client_org and brand only). From 2026-11-24 it
+  also settles `campaign.brand` when the material claims no brand as the
+  client's (it names only comparators, or none): a brand named like the
+  client (`same_house`), else the client's name without its legal suffix,
+  each `proposed` with `workspace_ref`. With two or more brands claimed as
+  the client's it still asks, the client as the first option.
 - **`upstream_payload`** (2026-09-30): the research a brief carries, as Sai's
   brief engine takes it — exactly the engine's `upstream` object,
   `{brand?, category?, competitors, facts, decisions}` — printed by the
@@ -174,7 +184,7 @@ name the stand-in, its port, or branch on which implementation answered.
 | `start_campaign` | `{ "prompt": "...", "attachments": [{ "material_id", "name", "sha256", "text"? }] }` | The chat intake (§8). Long. Each `material_id` must be a key of `clan.data.materials` with that `sha256` (the view indexes the file first). Nothing to read at all is `400 invalid_input`, as for `extract_ask` |
 | `answer_question` | `{ "job_id": "...", "question_id": "...", "option_id"?: "...", "text"?: "...", "skip"?: true }` | Exactly one of `option_id` / `text` / `skip` (§8.3; *`skip` added 2026-11-12*). For a `draft_brief` job waiting at intake it is `{ "job_id", "questions_id", "answers": { "<question id>": "<text>" \| null } }` instead (§10.3) |
 | `compose_report` | `{}` | Short. Re-composes `data.report` from the document as it stands (§8.5) |
-| `draft_brief` | `{ "prompt"?: "...", "attachments": [{ "name", "sha256", "media_type"?, "asset"?, "text"?, "image"?: { "media_type", "data" } }], "intake"?: true, "redraft"?: true }` | Brief Maker (§10). Long. `image` is base64 bytes of a picture attachment (§10.1). `intake: true` lets the job stop once for a few questions (§10.3). Nothing to read at all is `400 invalid_input` |
+| `draft_brief` | `{ "prompt"?: "...", "attachments": [{ "name", "label"?, "sha256", "media_type"?, "asset"?, "text"?, "image"?: { "media_type", "data" } }], "intake"?: true, "redraft"?: true }` | Brief Maker (§10). Long. `image` is base64 bytes of a picture attachment (§10.1). `label` is the file's own name as the person chose it; `name` is the stored one the host reads it by. The material is named by `label` when given (*`label` added 2026-11-25*). `intake: true` lets the job stop once for a few questions (§10.3). Nothing to read at all is `400 invalid_input` |
 | `regenerate_field` | `{ "field": "<dotted field key>", "guidance"?: "..." }` | Brief Maker (§10.10). Long. `field` one of the eighteen keys of §10.4 |
 | `fix_parts` | `{ "verdict": "<decision id>", "guidance"?: "..." }` | Brief Maker (§10.15). Long. `verdict` a bad verdict still standing on the brief |
 | `ask_research` | `{ "question": "...", "lens"?: "<lens id>", "about"?: "f_…" \| "fi_…", "attachments"?: [{ "name", "sha256", "text"? }] }` | Research Tool. Long. `question` up to 1000 characters. `lens` puts the answer after that lens's section; without it the answer gets a section of its own. `about` is the fact or finding the question was asked from: it must be in the document and in use (a fact not superseded, excluded or rejected; a finding `proposed` or `verified` that cites no fact out of use), else `400 invalid_input`. It leads the evidence, and the prompt says the question is about it. The answer is written to `data.asks[<id>]`, which records `about` (`null` when none was given) and `in_report`: `true` for a general question, `false` for one with `about`, whose answer the view shows under that item until a person adds it to the report (their attributed write of `in_report: true`, `in_report_by`, `in_report_at`; Take out writes `false`). Needs markets and categories, as `research_lens` does (*`about`, `in_report` added 2026-11-12*) |

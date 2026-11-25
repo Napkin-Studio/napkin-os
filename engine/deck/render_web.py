@@ -67,6 +67,25 @@ def chart_rows(series: list, inp) -> list:
     return rows
 
 
+#: The poster mock-up's text box (px): 440 wide less its 14 px border and 40 px padding a side, 660 high less border, padding and room for
+#: the answer line. Its lines take the largest of POSTER_PX that fits, at about 0.56 em a character, 1.05 em a line.
+POSTER_BOX = (332, 400)
+POSTER_PX = (64, 56, 48, 42, 36, 32, 28, 24)
+
+
+def poster_px(lines) -> int:
+    """The font size (px) the poster's copy lines fit at, every word kept: the largest of POSTER_PX whose wrapped height fits POSTER_BOX."""
+    import math
+    w, h = POSTER_BOX
+    for px in POSTER_PX:
+        per = max(1, int(w / (0.56 * px)))
+        rows = sum(max(1, math.ceil(sum(len(x) + 1 for x in str(ln).split()) / per)) for ln in lines if str(ln).strip())
+        longest = max((len(x) for ln in lines for x in str(ln).split()), default=0)
+        if rows * px * 1.05 <= h and longest * 0.56 * px <= w:
+            return px
+    return POSTER_PX[-1]
+
+
 class _Slide:
     """Builds one slide's markup, handing out reveal delays (ms) and build steps (one per block)."""
 
@@ -197,8 +216,9 @@ class _Slide:
             head = self.rv("wave", bars, gap=200) + self.rv("time", f"<span>0:00</span><span>{f'0:{secs:02d}' if secs else ''}</span>", gap=160)
             body = "".join(self.rv("", _e(x), "p", 200) for x in lines)
             return f'<div class="mock-wrap"><div class="audio">{head}<div class="script">{body}</div>{self.rv("answer", _e(ans), "p")}</div>{note}</div>'
-        if fr == "poster":
-            body = "".join(self.rv("line", _e(x), "p", 260) for x in lines) + self.rv("answer", _e(ans), "p")
+        if fr == "poster":   # the lines set at the largest size that fits the poster (UAT round 4: 64 px ran out of the frame)
+            px = poster_px(lines)
+            body = "".join(self.rv("line", _e(x), "p", 260).replace('style="--d:', f'style="font-size:{px}px;--d:', 1) for x in lines) + self.rv("answer", _e(ans), "p")
             return f'<div class="mock-wrap"><div class="poster">{body}</div>{note}</div>'
         body = "".join(self.rv("", _e(x), "p", 160) for x in lines)
         return f'<div class="frame copy">{body}{self.rv("answer", _e(ans), "p")}</div>'
@@ -317,10 +337,7 @@ def _body(s, b: _Slide, blocks: list, pictured: bool = False) -> str:
     if typ == "execution" and pick("copy"):
         left = b.blocks(rest("copy"))
         copy = {**pick("copy"), "frame": None if (s.get("ooh") or s.get("strip")) else frame_for(s["title"])}   # a slide with its own frames (out of home, a strip) sets its copy as plain text: a poster or phone beside them took the frames' ground
-        vis = s.get("visual") or {}
-        if vis.get("kind") == "image_prompt" and not pictured:   # a drawn picture takes the place of the 'Image prompt' note
-            b.f += 1
-            left += b.rv("b-prompt", _e(f"Image prompt ({vis.get('status', 'illustrative')}): {vis.get('prompt', '')}"), "p")
+        # a picture prompt is never drawn on the slide: it is the maker's brief and stays in the slide's visual (UAT round 4 slide 9)
         if (s.get("ooh") or s.get("strip")) and copy.get("lines"):   # lines beside frames (an allergen line) are one quiet footnote under them, not a dark panel; the answer stays in the notes
             left += b.rv("sb-foot", _e(" \u00b7 ".join(str(x).strip() for x in copy["lines"] if str(x).strip())), "p", 100)
             copy = {**copy, "lines": [], "answer": ""}
@@ -798,9 +815,9 @@ FRAME_CSS = """
 .ooh-cell{display:flex;flex-direction:column;align-items:stretch}.ooh-cell .pic.framed{box-sizing:border-box}
 .ooh-name{margin:14px 0 0;text-align:center;font:700 26px/1.2 var(--head);color:var(--ink)}
 .pic-ooh .sb-pills{top:440px}.pic-ooh .body{padding-bottom:600px}.pic-ooh .body.exec{grid-template-columns:5fr 6fr}
-.sb-strip.sb2{grid-template-columns:repeat(var(--per),372px);justify-content:center;row-gap:22px}.sb-strip.sb2 .sb-cap{font-size:19px;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-strip.sb2{grid-template-columns:repeat(var(--per),372px);justify-content:center;row-gap:22px}.sb-strip.sb2 .sb-cap{font-size:19px;line-height:1.25;margin-top:4px}
 .pic-sb .body{padding-bottom:470px}
-.pic-sb.pic-sb2 .body{padding-bottom:600px}.pic-sb2 .sb-pills{top:auto;bottom:30px}.pic-sb .body.exec{grid-template-columns:5fr 6fr}
+.pic-sb.pic-sb2 .body{padding-bottom:660px}.pic-sb2 .sb-pills{top:auto;bottom:30px}.pic-sb .body.exec{grid-template-columns:5fr 6fr}
 """
 
 #: Picture styles: added to the stylesheet ONLY when a picture is drawn, so a deck with none keeps its exact bytes.

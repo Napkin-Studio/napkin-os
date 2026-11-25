@@ -11,7 +11,7 @@ where the last segment stopped and recorded stages replay for free.
 Routes (JSON; failures are non-2xx with ``{"error": {"type", "message"}}``, never a 200 with an error in it)::
 
     GET  /status                 what is on and what is busy
-    POST /run                    {doc, inputs, approvals, mode, render?, production_upstream?, territories_upstream?}: start the next segment of this document's run
+    POST /run                    {doc, inputs, approvals, mode, render?, production_upstream?, territories_upstream?, brief_upstream?}: start the next segment of this document's run
                                  (production_upstream {id, data}: the Production project the deck was spun off from, carried whole;
                                  production_assets {base, pass}: the relay's address and napkin-web's read-only assets pass for it, a secret)
     GET  /run/<doc>              the run so far: state, the run object the screens read, and once built the payload
@@ -39,6 +39,7 @@ import contextlib
 import hashlib
 import io
 import json
+import re
 import os
 import shutil
 import sys
@@ -222,7 +223,19 @@ def validate_request(body: dict, settings: Settings) -> dict:
             "approvals": approvals, "render": body.get("render", True) is not False, "marks": marks,
             "review": body.get("review") if isinstance(body.get("review"), dict) else {}, "approver": str(body.get("approver") or ""),
             "production_upstream": production_upstream(body), "production_assets": production_assets(body), "members": members_of(body),
-            "territories_upstream": territories_upstream(body)}
+            "territories_upstream": territories_upstream(body), "brief_upstream": brief_upstream(body)}
+
+
+def brief_upstream(body: dict) -> dict | None:
+    """``{id, data}``: the brief the deck was spun off from, carried whole (the middleware reads it from the deck's ``data.upstream``); None when
+    it has none. UAT round 4 L2: without it a brief-only deck built from an empty brief."""
+    bu = body.get("brief_upstream")
+    if bu is None:
+        return None
+    if not (isinstance(bu, dict) and isinstance(bu.get("id"), str) and bu["id"].strip() and isinstance(bu.get("data"), dict)
+            and bu["data"].get("app") != "production-tool"):
+        raise Refused(400, "bad_request", "brief_upstream must be {id, data}: the brief's document id and its data")
+    return {"id": bu["id"].strip(), "data": bu["data"]}
 
 
 def members_of(body: dict) -> dict | None:
@@ -530,7 +543,8 @@ class Server:
         try:
             self.seed(d, req, until)
             inp = self.load_inputs(d, req)
-            d.summary = {**rs.inputs_summary(inp), "needs_intake": run_deck._needs_intake(inp), "production": bool(req.get("production_upstream"))}
+            d.summary = {**rs.inputs_summary(inp, brief_given=inp.has_brief()), "needs_intake": run_deck._needs_intake(inp),
+                         "production": bool(req.get("production_upstream"))}   # the Brief row shows when a brief came in (from upstream too)
             rep = self.call_engine(d, req, until)
             if until == "c" and "territories" in auto_gates(d.stages):   # one route from Territories: no gate 2, the idea starts from it
                 until = "d"
@@ -558,6 +572,9 @@ class Server:
         answers, verified = run_deck._read_answers(None)
         inp = inputs_mod.load(None, None, d.stages / "doc_facts.json", [], prompt_text=str(req["prompt"].get("text") or "").strip(),
                               answers=answers, verified=verified)
+        bu = req.get("brief_upstream")
+        if bu:   # the brief the deck was spun off from (UAT round 4 L2): the rows under 'Read the inputs' read it as the build does
+            inputs_mod.apply_upstream_brief(inp, bu["id"], bu["data"], ((req.get("members") or {}).get("decisions")))
         pu = req.get("production_upstream")
         if pu:   # the brief a carried Production project holds, and the research the deck carries: the evidence the build reads
             inputs_mod.apply_production_brief(inp, pu["id"], pu["data"])
@@ -595,7 +612,19 @@ class Server:
             d.notices.append(f"Replay: you picked '{name(pick)}'. The recorded idea was written from '{name(c.get('chosen'))}', so the next steps show that recording.")
 
     def call_engine(self, d: Doc, req: dict, until: str | None) -> dict:
-        p = req["prompt"]
+        p = dict(req["prompt"])
+        if not str(p.get("project") or "").strip():   # UAT round 4: a brief-only deck named no project, so the cover and the files said '[Project]'
+            pn = ((req.get("brief_upstream") or {}).get("data") or {}).get("project_name")
+            pn = (pn.get("value") if isinstance(pn, dict) else pn) or ""
+            pn = re.sub(r"^\s*to confirm:\s*", "", str(pn), flags=re.I).strip()
+            if pn and len(pn) <= 80:
+                p["project"] = pn
+        if not str(p.get("client") or "").strip():   # acceptance A32: a deck from a brief named no client, so the cover and its open items said '[Client]'
+            cl = ((req.get("brief_upstream") or {}).get("data") or {}).get("client")
+            cl = (cl.get("value") if isinstance(cl, dict) else cl) or ""
+            cl = re.split(r"[,;\n]", re.sub(r"^\s*to confirm:\s*", "", str(cl), flags=re.I))[0].strip()
+            if cl and len(cl) <= 80:
+                p = {**p, "client": cl}
         argv = ["--prompt-text", str(p.get("text") or ""), "--stages", str(d.stages), "--client", str(p.get("client") or "[Client]"),
                 "--project", str(p.get("project") or "[Project]"), "--out", str(d.out), "--format", req["format"]]   # the QA runs: the repair loop reads it
         inp = req["inputs"]
@@ -632,6 +661,11 @@ class Server:
             d.root.mkdir(parents=True, exist_ok=True)
             mf.write_text(json.dumps(req["members"], ensure_ascii=False))
             argv += ["--members", str(mf)]
+        if req.get("brief_upstream"):   # the brief the deck was spun off from: the build reads its fields (UAT round 4 L2)
+            bf = d.root / "brief_upstream.json"
+            d.root.mkdir(parents=True, exist_ok=True)
+            bf.write_text(json.dumps(req["brief_upstream"], ensure_ascii=False, sort_keys=True))
+            argv += ["--brief-upstream", str(bf)]
         if run_deck.web_render():   # the cloud's exports carry no internal banner, bracket or open 'to confirm'
             argv.append("--clean-export")
         pu = req.get("production_upstream")

@@ -1804,9 +1804,7 @@ class Renderer:
                 fh = g.body_end - y
                 note = []
                 nh = 0.0
-                if vis.get("kind") == "image_prompt":
-                    note = [self.para("Image prompt (" + vis.get("status", "illustrative") + "): " + vis.get("prompt", ""), S.caption, p.mute, italic=True, cap=True)]
-                    nh = self.ph(note, lw - 0.6) + 0.25
+                # a picture prompt is never drawn on the slide: it is the maker's brief and stays in the slide's visual (UAT round 4 slide 9)
                 ch, cy, fy, ffh = fh, y, y, fh   # the card's height and top, the frame's top and height
                 if stacked:
                     ch = None
@@ -2107,7 +2105,8 @@ class Renderer:
             x += pw + 0.1
         return x + self._mockup_pill(sl, x, y)
 
-    STRIP_CAP_H = 0.62   # the caption row under a strip's numbers (two lines of 11 pt)
+    STRIP_CAP_H = 0.62   # the caption row under a strip's numbers (two lines of 11 pt): the least it takes
+    STRIP_LINE_11, STRIP_LINE_10 = 0.19, 0.17   # one line of 11 pt and of 10 pt caption text, in inches (with leading)
 
     def _strip_info(self) -> tuple:
         """``(shot numbers, note, captions)`` of the slide's storyboard strip (images.bind_production: the storyboard's own shot numbers, when
@@ -2207,7 +2206,7 @@ class Renderer:
         boxes = plan["boxes"]
         m = self._mark(sl)
         numbers, note, caps = self._strip_info()
-        self._strip_cells(sl, boxes, numbers, caps, compact=bool(plan.get("compact")))
+        self._strip_cells(sl, boxes, numbers, caps, compact=bool(plan.get("compact")), cap_h=plan.get("cap_h"), cap_cells=plan.get("cap_cells"))
         x_end = max(b[1] + b[3] for b in boxes)
         im0 = boxes[0][5]
         lab = (self._label_w(im0, 3.0) + 0.1) if im0.get("status") != "approved" else 0.0
@@ -2216,7 +2215,7 @@ class Renderer:
         self._strip_note(sl, boxes[0][1] - 0.12, py, note)
         self._build(sl, m)
 
-    def _strip_cells(self, sl, boxes, numbers=None, caps=None, compact=False):
+    def _strip_cells(self, sl, boxes, numbers=None, caps=None, compact=False, cap_h=None, cap_cells=None):
         """Each storyboard frame in a hairline window at its own aspect, numbered under it beside a hairline with its shot number in the
         storyboard. ``compact`` (two rows of frames): the number and the frame's own line share one line under it, no hairline."""
         numbers = numbers if numbers and len(numbers) == len(boxes) else list(range(1, len(boxes) + 1))
@@ -2227,11 +2226,12 @@ class Renderer:
             if not compact:
                 self.hairline(sl, x + 0.32, y + h + 0.19, x + w, y + h + 0.19)
         if caps and len(caps) == len(boxes):   # the frame's own line from the idea stage, under its number
-            for c, (slot, x, y, w, h, im) in zip(caps, boxes):
-                if c and compact:
-                    self.text(sl, x + 0.3, y + h + 0.03, w - 0.3, 0.38, c, size=10, color=self.p.fg, name="StripCaption")
+            cells = cap_cells if cap_cells and len(cap_cells) == len(boxes) else [(b[1], b[3]) for b in boxes]
+            for c, (slot, x, y, w, h, im), (cx, cw) in zip(caps, boxes, cells):
+                if c and compact:   # beside the number, across the frame's cell (UAT round 4: never over the row under it)
+                    self.text(sl, x + 0.3, y + h + 0.03, cx + cw - x - 0.3, cap_h or 0.38, c, size=10, color=self.p.fg, name="StripCaption")
                 elif c:
-                    self.text(sl, x, y + h + 0.26, w, self.STRIP_CAP_H - 0.06, c, size=11, color=self.p.fg, name="StripCaption")
+                    self.text(sl, cx, y + h + 0.26, cw, cap_h or (self.STRIP_CAP_H - 0.06), c, size=11, color=self.p.fg, name="StripCaption")
 
     def _strip_shots(self) -> list:
         """``[(slot, image)]`` of the slide's drawn storyboard shots in order, when they make a strip (spec.STRIP_MIN or more), else []."""
@@ -4587,26 +4587,50 @@ class Renderer:
                 rows = spec.strip_rows(len(shots))   # up to four frames in one row, five or six in two (round 3: six were cut to four)
                 w = (x1 - x0 - gx * (rows[0] - 1)) / rows[0]
                 caps = (self._strip_info()[2] or [])
-                cap_h = self.STRIP_CAP_H if any(caps) else 0.0
+                # UAT round 4: a frame's line that wraps past its row's height ran over the frames under it. Each row takes the lines its
+                # longest caption needs at the width and size it is set in (compact: 10 pt beside the number; one row: 11 pt under it).
+                # Each caption is set at its own frame's width (beside the number when compact), and a frame's width follows its height,
+                # which gives way to the captions' room: a few passes settle the two.
+                def cap_need(h_, cell, size, line, inset, beside=False):
+                    # Set across the frame's cell (cap_cells). Beside the number (compact) it starts at the frame's left edge, so it is as wide as
+                    # the cell's right part from there: never under half the cell, so the passes settle instead of starving the frames.
+                    def width(r):
+                        return ((cell + min(cell, h_ * r)) / 2 if beside else cell) - inset
+                    return max([self.nlines(str(c), max(width(r), 0.5), size) for c, r in zip(caps, rs) if c] or [0]) * line
                 foot = g.body_end - 0.36 - self.PILL_H - 0.12   # the labels take the foot, under the strip
                 if len(rows) == 1:
-                    h = min(w / max(rs), (g.body_end - self.EXEC_TOP - cap_h) * 0.42)
+                    cw1 = (x1 - x0 - gx * (rows[0] - 1)) / rows[0]
+                    cap_h = self.STRIP_CAP_H if any(caps) else 0.0
+                    for _ in range(4):
+                        h = min(w / max(rs), (g.body_end - self.EXEC_TOP - cap_h) * 0.42)
+                        need = (0.12 + cap_need(h, cw1, 11, self.STRIP_LINE_11, 0.0)) if any(caps) else 0.0
+                        if need <= cap_h + 1e-6:
+                            break
+                        cap_h = need
                 else:   # two rows: the words above (title and role) keep their room; each frame's number and caption share one line under it
+                    cap_h = 0.0
                     row_x = 0.38 if any(caps) else 0.3
                     top_min = 2.55 if any(b.get("kind") != "copy" and (b.get("text") or b.get("items")) for b in s.get("blocks") or []) else 1.95   # no words above the frames (the planning text is not on a client slide): they take the room
                     room = foot - top_min - 0.2 * (len(rows) - 1)
-                    h = min(w / max(rs), room / len(rows) - row_x)
+                    for _ in range(6):
+                        h = min(w / max(rs), room / len(rows) - row_x)
+                        need = (0.06 + cap_need(h, w, 10, self.STRIP_LINE_10, 0.3, beside=True)) if any(caps) else 0.3
+                        if need <= row_x + 1e-6:
+                            break
+                        row_x = need
                 y = foot - cap_h - h if len(rows) == 1 else foot - len(rows) * (h + row_x) - 0.2 * (len(rows) - 1) + 0.04
-                boxes, i = [], 0
+                boxes, cells, i = [], [], 0
                 for ri, per in enumerate(rows):
                     cw = (x1 - x0 - gx * (per - 1)) / per if len(rows) == 1 else w
                     cx = x0 + ((x1 - x0) - (per * w + gx * (per - 1))) / 2 if len(rows) > 1 else x0
                     for _ in range(per):
                         bw = min(cw, h * rs[i])
                         boxes.append((shots[i], cx + (cw - bw) / 2, y + ri * ((h + 0.3 + cap_h + 0.25) if len(rows) == 1 else (h + row_x + 0.2)), bw, h, ims[i]))
+                        cells.append((cx, cw))
                         cx += cw + gx
                         i += 1
-                return {"x1": x1, "body_end": y - 0.23, "boxes": boxes, "strip": True, "also": ["picture"], "caps": caps, "rows": rows, "compact": len(rows) > 1}
+                return {"x1": x1, "body_end": y - 0.23, "boxes": boxes, "strip": True, "also": ["picture"], "caps": caps, "rows": rows, "compact": len(rows) > 1,
+                        "cap_h": (row_x - 0.02) if len(rows) > 1 else cap_h - 0.06, "cap_cells": cells}
             if self._frame_for(im):   # the frame takes the whole right half and contains itself in it
                 half = (x1 - x0 - gap) / 2
                 return {"x1": x1 - half - gap, "body_end": g.body_end, "framed": True,
@@ -4965,11 +4989,7 @@ class Renderer:
         y = self._title_text(sl, s, size=28)
         cp = next(b for b in s["blocks"] if b["kind"] == "copy")
         self._fit_flow(sl, [b for b in s["blocks"] if b["kind"] != "copy"], self.x0, y, 5.6)
-        vis = s.get("visual") or {}
-        if vis.get("kind") == "image_prompt":
-            m = self._mark(sl)
-            self.text(sl, self.x0, y + 1.2, 5.6, 1.5, "Image prompt (" + vis.get("status", "illustrative") + "): " + vis.get("prompt", ""), size=11, italic=True, color=t.mute)
-            self._build(sl, m)
+        # a picture prompt is never drawn on the slide: it is the maker's brief and stays in the slide's visual
         fx, fw = 6.7, 6.03
         m = self._mark(sl)
         self.box(sl, fx, y, fw, Y_END - y, t.ink)

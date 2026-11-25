@@ -905,6 +905,44 @@ mod upstream {
     }
 
     #[test]
+    fn a_deck_spun_off_a_brief_is_sent_the_brief_whole_beside_the_index() {
+        // UAT round 4 L2: Continue in -> Deck from a brief built from an empty brief, because the middleware only saw the index.
+        let (store, _research, brief) = setup();
+        brief.post(
+            "/patch-data",
+            r#"{"patch":{"objectives":"Sell the starter bottle","mandatories":["End line: 'Refill. Not landfill.' (word for word)"]},"agent":"human"}"#,
+        );
+        install(
+            &*store,
+            "Deck Maker",
+            "ie.napkin.deck-maker",
+            Some(carries(BRIEF)),
+        );
+        let deck = spin(&store, &brief, "ie.napkin.deck-maker");
+        let clan = deck.session.clan_context_for_agent();
+        let index = &clan["data"]["upstream"][&brief.doc];
+        assert!(
+            index.get("objectives").is_none(),
+            "the index stays an index: {index}"
+        );
+        let carried = &clan["brief_upstream"];
+        assert_eq!(carried["id"], brief.doc.as_str(), "{clan}");
+        assert_eq!(carried["data"]["objectives"], "Sell the starter bottle");
+        assert_eq!(
+            carried["data"]["mandatories"][0],
+            "End line: 'Refill. Not landfill.' (word for word)"
+        );
+        assert!(
+            brief
+                .session
+                .clan_context_for_agent()
+                .get("brief_upstream")
+                .is_none(),
+            "only a Deck is sent its brief whole"
+        );
+    }
+
+    #[test]
     fn the_agent_is_sent_an_index_of_upstream_not_the_frozen_copy() {
         let (_store, research, brief) = setup();
         let clan = brief.session.clan_context_for_agent();

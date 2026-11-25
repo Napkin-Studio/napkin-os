@@ -151,11 +151,40 @@ def territories_upstream_of(data: dict) -> dict | None:
     return None
 
 
+def with_brief(data: dict, bu) -> dict:
+    """``data`` with the carried brief put back whole under ``upstream.<id>``. The host sends ``clan.data.upstream`` as an index (middleware-api.md
+    §1) and a Deck's brief beside it as ``clan.brief_upstream {id, data}``, as it sends a Production project (UAT round 4 L2: without it
+    ``brief_upstream_of`` found only index entries and the engine built from an empty brief). A ``bu`` that is not ``{id, data}`` of a brief
+    (never a Production project) changes nothing."""
+    if not (isinstance(bu, dict) and isinstance(bu.get("id"), str) and bu["id"] and isinstance(bu.get("data"), dict)
+            and bu["data"].get("app") != "production-tool" and any(k in bu["data"] for k in BRIEF_KEYS)):
+        return data
+    up = data.get("upstream") if isinstance(data.get("upstream"), dict) else {}
+    return {**data, "upstream": {**up, bu["id"]: bu["data"]}}
+
+
 def production_upstream_of(data: dict) -> dict | None:
     """``{id, data}``: the Production project (``app: production-tool``) the Deck carries under ``data.upstream`` (the first one), as the engine
     reads it (finals, assets, sizes, briefs). The pictures are not in it: they are held by the relay under their sha256."""
     for k, v in (data.get("upstream") or {}).items():
         if isinstance(v, dict) and v.get("app") == "production-tool":
+            return {"id": str(k), "data": v}
+    return None
+
+
+#: The fields a Brief Maker document's data holds (the deck engine's inputs.CLAN_FIELDS values): an upstream entry with any of them is a brief.
+BRIEF_KEYS = ("objectives", "audience", "single_minded_proposition", "reasons_to_believe", "desired_response", "tone_and_world", "mandatories",
+              "background", "insight", "competitor_context", "budget_and_scope", "capture")
+
+
+def brief_upstream_of(data: dict) -> dict | None:
+    """``{id, data}``: the brief (a Brief Maker's data) the Deck carries under ``data.upstream`` (the first one; never a Production project or a
+    Style Pack / Brand Clan kit), for the engine's intake and evidence. UAT round 4 L2: it was never sent, so a brief-only deck built from an
+    empty brief and the intake abstained on every field."""
+    for k, v in (data.get("upstream") or {}).items():
+        if not isinstance(v, dict) or v.get("app") == "production-tool" or isinstance(v.get("kit"), dict):
+            continue
+        if any(f in v for f in BRIEF_KEYS):
             return {"id": str(k), "data": v}
     return None
 
@@ -186,7 +215,7 @@ def members_of(clan) -> dict | None:
 
 def start(req, caps, settings, jid):
     """Validate now (a 400 before any job, a 503 with no engine); build the job (the caller starts it)."""
-    data = with_territories(with_production(ctx_data(req.clan), (req.clan or {}).get("production_upstream")), (req.clan or {}).get("territories_upstream"))
+    data = with_brief(with_territories(with_production(ctx_data(req.clan), (req.clan or {}).get("production_upstream")), (req.clan or {}).get("territories_upstream")), (req.clan or {}).get("brief_upstream"))
     inputs = data.get("inputs") if isinstance(data.get("inputs"), dict) else {}
     prompt = inputs.get("prompt") if isinstance(inputs.get("prompt"), dict) else {}
     if not str(prompt.get("text") or "").strip():
@@ -208,6 +237,9 @@ def start(req, caps, settings, jid):
     members = members_of(req.clan)
     if members:   # the research this deck carries: the engine's evidence (and its panel) knows it, not only the prompt
         body["members"] = members
+    bu = brief_upstream_of(data)
+    if bu:   # spun off a brief: the engine builds from its fields (and a Production project's brief yields to it)
+        body["brief_upstream"] = bu
     pu = production_upstream_of(data)
     if pu:   # spun off from a Production project: carried whole, frozen; finals fill the slots first, pictures are fetched by link at build
         body["production_upstream"] = pu

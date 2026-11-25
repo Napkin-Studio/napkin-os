@@ -27,6 +27,7 @@ pub mod merge;
 pub mod pack;
 pub mod patch;
 pub mod render;
+pub mod schema_compat;
 pub mod sign;
 pub mod toon;
 pub mod validate;
