@@ -14,7 +14,7 @@ import type { Ask, ProductionDocument, Ratio, Shot } from '../contracts/types'
 import { isRunning, jobAt, ratioAspect } from '../jobs/select'
 import { croppedCaption } from '../canvas/core/sketch'
 import { drawFrame, drawTheRest, firstUndrawn, needsFrame } from '../jobs/frames'
-import { endCardOf } from '../rooms/timeline'
+import { storyboardEndCard } from '../rooms/timeline'
 import { planOrJoin, askedShot } from '../jobs/plan'
 import { checkDurations, drawnCount, MAX_SHOTS } from '../lib/shots'
 import { lengthChoices } from '../script/length'
@@ -579,7 +579,7 @@ function ShotCard({ shot, index, prev, selected, onSelect, onOpen, onDraw, onDel
         {frameJob && drawing && <div className="sb-framejob"><JobSlot jobId={frameJob} compact /></div>}
         {!current && !drawing && !frameFailed && !needsFrame(shot) && (() => {
           // The end card is typeset in the render from its words, so it needs no picture (jobs/frames.ts needsFrame).
-          const card = endCardOf(doc, shot.storyboard_id)
+          const card = storyboardEndCard(doc, shot.storyboard_id)
           return (
             <div className="sb-endcard" style={{ background: card?.bg }}>
               <b>{card?.headline}</b>{card?.line && card.line !== card.headline && <span>{card.line}</span>}

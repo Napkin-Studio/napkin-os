@@ -23,7 +23,9 @@ export function endLineIn(plan: Pick<Plan, 'texts' | 'endCard'>, line: string, v
   const l = words(line)
   if (voiced.some((t) => words(t).includes(l))) return { line, how: 'voiced' }
   const e = plan.endCard
-  if (e && [e.headline, e.line, e.cta, `${e.headline ?? ''} ${e.line}`].some((t) => words(t).includes(l))) return { line, how: 'card' }
+  // The card says it when one of its fields holds the whole line: "Refill" over "Not landfill. Logo top right…" does not
+  // (UAT round 4 F34, local run: Review ticked "the end card shows it" for that card).
+  if (e && [e.headline, e.line, e.cta].some((t) => !!t && words(t).includes(l))) return { line, how: 'card' }
   if (plan.texts.some((t) => t.item_id !== END_LINE_ID && words(t.words).includes(l))) return { line, how: 'text' }
   return { line, how: 'super' }
 }
