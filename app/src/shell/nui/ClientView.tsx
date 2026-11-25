@@ -65,6 +65,9 @@ interface Props {
   onOpenTrash?: () => void
 }
 
+/** 'a' or 'an' before a word, by its first letter: "an exploration", "a deck" (acceptance A34). */
+function an(word: string): string { return (/^[aeiou]/i.test(word) ? 'an ' : 'a ') + word }
+
 export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, onOpenTool, onSoon, onDecisions, onRename, onArchive, trash, onOpenTrash }: Props) {
   const pop = usePop<'more' | 'deck' | 'row'>()
   const [rowFor, setRowFor] = useState<LibraryItem | null>(null)
@@ -203,7 +206,7 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
                   </h2>
                   <span className="cp-new">
                     <button type="button" className="cp-plus" data-new={g.tool} data-testid={`new-${g.tool}`}
-                      title={on ? (startsFromBrief(t) ? 'Start from a brief' : `New ${t.noun[0]}`) : `${t.full} is coming soon`} aria-label={on ? (startsFromBrief(t) ? `Start a ${t.noun[0]} for ${name} from a brief` : `New ${t.noun[0]} for ${name}`) : `${t.full} is coming soon`}
+                      title={on ? (startsFromBrief(t) ? 'Start from a brief' : `New ${t.noun[0]}`) : `${t.full} is coming soon`} aria-label={on ? (startsFromBrief(t) ? `Start ${an(t.noun[0])} for ${name} from a brief` : `New ${t.noun[0]} for ${name}`) : `${t.full} is coming soon`}
                       aria-disabled={on ? undefined : true}
                       onClick={e => {
                         if (!on) { onSoon(t); return }

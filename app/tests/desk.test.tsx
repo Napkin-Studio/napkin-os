@@ -270,6 +270,9 @@ test('Territories with none: the group says Start from a brief, and its + starts
   assert.match(html, /data-testid="group-territories".*?Start from a brief\./s)
   assert.match(html, /data-testid="new-territories"[^>]*title="Start from a brief"/)
   assert.match(html, /aria-label="Territories for Client A, none open, start one \(3 of 5\)"/)
+  // its + says an exploration, not "a exploration" (acceptance A34)
+  assert.match(html, /data-testid="new-territories"[^>]*aria-label="Start an exploration for Client A from a brief"/)
+  assert.doesNotMatch(html, /\ba [aeiou]\w+ for Client A/i)
 })
 
 test('a new client: No work yet, Briefs and Research each say Nothing here yet', () => {
