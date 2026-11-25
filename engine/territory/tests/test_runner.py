@@ -427,3 +427,64 @@ def test_a_run_right_after_a_stopped_one_waits_for_it_to_let_go_instead_of_sayin
     assert runner._acquire_after_stop(held, None, lambda: True, wait=0) is False, "and the wait ends"
     t0 = time.monotonic()
     assert runner._acquire_after_stop(held, None, lambda: False, wait=5) is False and time.monotonic() - t0 < 0.5, "a live holder: busy at once"
+
+
+def _bulk(n):
+    """The carried pins plus ``n`` more, as a big research would carry them (acceptance A12: 89 pins broke the Pick at 80)."""
+    rows = FACTS["facts"]
+    return {**FACTS, "facts": rows + [{**rows[0], "id": f"f_BULK{i:05d}"} for i in range(n)]}
+
+
+@pytest.mark.parametrize("extra", [90, 300])
+def test_a_big_research_runs_to_the_pick_and_every_source_stays_in_play(tmp_path, extra):
+    """Every brief field, pin and finding the crew may quote is in the Pick's list, nothing dropped (owner rule: a hand-off carries the full
+    upstream), and the document passes the app's own schema and rules: through the full runner and the contract check, not a stub."""
+    facts = _bulk(extra)
+    res = runner.run(UPSTREAM, llm=Counting(), store=store_in(tmp_path), facts=facts, findings=FINDINGS)
+    assert res.doc["run"].get("error") is None, res.doc["run"].get("error")
+    srcs = res.doc["focus"]["sources"]
+    assert {f["id"] for f in facts["facts"]} <= {s["id"] for s in srcs} and all(s["in_play"] for s in srcs)
+    assert len(srcs) > 80 and len(srcs) <= contract.limit("focus", "sources")
+    assert contract.check(res.doc, facts=facts, findings=FINDINGS) == []
+
+
+def test_a_refused_result_still_lands_failed_in_words_with_what_it_made(tmp_path, monkeypatch):
+    """A result the app would refuse (acceptance A13) is not dropped: the run is failed in words, retryable, with what to fix, the part that
+    broke put back as the run found it and the insights kept; the failed document is itself one the app takes."""
+    real = contract.check
+
+    def capped(doc, **kw):      # the app refusing a Pick list over 5, as it refused 103 over 80
+        ps = real(doc, **kw)
+        n = len((doc.get("focus") or {}).get("sources") or [])
+        return ps + ([contract.Problem("focus.sources", "maxItems", f"The pick has {n} sources; the most allowed is 5.")] if n > 5 else [])
+    monkeypatch.setattr(contract, "check", capped)
+    res = runner.run(UPSTREAM, llm=Counting(), store=store_in(tmp_path), facts=FACTS, findings=FINDINGS)
+    run = res.doc["run"]
+    assert run["state"] == "failed" and run["error"]["stage"] == "pick" and run["error"]["retryable"] is True
+    assert "did not fit what the app can show" in run["error"]["message"]
+    assert any("sources; the most allowed is 5" in r for r in run["error"]["refused"]), run["error"]["refused"]
+    plain(run["error"]["message"], *run["error"]["refused"])
+    assert res.doc["focus"]["insights"], "the insights the engine made are kept"
+    assert capped(res.doc, facts=FACTS, findings=FINDINGS) == [], "the failed document is one the app takes"
+
+    # Try again, once the cause is gone: the Pick is rebuilt from the insights it kept, with no model call, and opens for the person.
+    monkeypatch.setattr(contract, "check", real)
+    llm = Counting()
+    again = runner.run(res.doc, llm=llm, store=store_in(tmp_path), facts=FACTS, findings=FINDINGS)
+    assert not llm.keys, llm.keys
+    assert again.doc["run"]["state"] != "failed" and (again.doc["run"].get("gate") or {}).get("id") == "pick", again.doc["run"]
+    assert again.doc["focus"]["insights"] == res.doc["focus"]["insights"]
+    assert len(again.doc["focus"]["sources"]) > 5 and all(s["in_play"] for s in again.doc["focus"]["sources"])
+    assert contract.check(again.doc, facts=FACTS, findings=FINDINGS) == []
+
+
+def test_the_refusal_names_a_list_in_words_never_a_list():
+    """'The pick has 103 a list' (acceptance A12): every list the schema caps has a name, and one without reads 'entries'."""
+    words = contract.LIST_NAME
+    for k in ("sources", "finds", "lookups", "asks", "sends", "decisions"):
+        assert k in words
+    class E:
+        absolute_path, validator, validator_value, instance = ["focus", "sources"], "maxItems", 80, list(range(103))
+    assert contract._words(E) == "The pick has 103 sources; the most allowed is 80."
+    E.absolute_path = ["something_new"]
+    assert "has 103 entries;" in contract._words(E)
