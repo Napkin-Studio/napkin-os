@@ -153,6 +153,9 @@ export class ProjectIndex {
     this.remote = rows.flatMap((r) => (r.name ? [{ id: r.id, name: r.name }] : []))
   }
 
+  /** The name the host's library gave `id` when it was last listed; undefined when it was not listed. */
+  serverName = (id: string): string | undefined => this.remote.find((r) => r.id === id)?.name
+
   all = (): ProjectEntry[] => this.list
   get = (id: string): ProjectEntry | undefined => this.list.find((p) => p.id === id)
 

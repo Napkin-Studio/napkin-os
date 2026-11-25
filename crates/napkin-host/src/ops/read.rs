@@ -545,6 +545,11 @@ pub fn clan_context_for_agent(doc: &Document) -> Value {
     let pipeline = yaml_to_json("app/pipeline.yaml");
     let raw_data = yaml_to_json("shared/data.yaml");
     let production = production_upstream(&raw_data);
+    let brief = if m.app.as_ref().is_some_and(|a| a.app_id == DECK_MAKER_APP) {
+        brief_upstream(&raw_data)
+    } else {
+        None
+    };
     let mut context = serde_json::json!({
         "document_type": m.document_type,
         "app": m.app.as_ref().map(|a| serde_json::json!({ "name": a.name, "app_id": a.app_id, "version": a.version })),
@@ -570,6 +575,13 @@ pub fn clan_context_for_agent(doc: &Document) -> Value {
     if let Some(p) = production {
         context["production_upstream"] = p;
     }
+    // A Deck spun off a brief is sent that brief whole beside the index, as a
+    // Production project is: the build reads the brief's fields and cannot
+    // from the index (UAT round 4 L2: a deck from a locked brief built from an
+    // empty brief, because the middleware only ever saw the index).
+    if let Some(b) = brief {
+        context["brief_upstream"] = b;
+    }
     // A research started from a brief is told the brief's ask, and only
     // that: extract_ask proposes from it (features/spinoff-and-links.clan).
     if let Some(ask) = upstream_ask(clan, &context["pipeline"]) {
@@ -594,6 +606,39 @@ pub fn clan_context_for_agent(doc: &Document) -> Value {
         }
     }
     context
+}
+
+/// Deck Maker's app id: its documents are sent the brief they carry ([`brief_upstream`]).
+pub const DECK_MAKER_APP: &str = "ie.napkin.deck-maker";
+
+/// The fields a Brief Maker's data holds (the deck engine's `inputs.CLAN_FIELDS`
+/// values): an upstream copy with any of them is a brief.
+const BRIEF_KEYS: &[&str] = &[
+    "objectives",
+    "audience",
+    "single_minded_proposition",
+    "reasons_to_believe",
+    "desired_response",
+    "tone_and_world",
+    "mandatories",
+    "background",
+    "insight",
+    "competitor_context",
+    "budget_and_scope",
+];
+
+/// `{id, data}` of the first entry of `data.upstream` that is a brief (a
+/// Brief Maker's data: never a Production project or a kit), whole, for a
+/// Deck's build. `None` when the document carries none.
+fn brief_upstream(data: &Value) -> Option<Value> {
+    let up = data.get(UPSTREAM_KEY)?.as_object()?;
+    let (id, copy) = up.iter().find(|(_, copy)| {
+        copy.as_object()
+            .is_some_and(|o| BRIEF_KEYS.iter().any(|k| o.contains_key(*k)))
+            && !is_production(copy)
+            && !is_kit(copy)
+    })?;
+    Some(json!({ "id": id, "data": copy }))
 }
 
 /// The app id a Production project's data carries (`app`, production-tool/contracts/document.schema.json).
@@ -1558,6 +1603,21 @@ mod tests {
             json!({ "doc-brief": data["upstream"]["doc-brief"] })
         );
         assert_eq!(production_upstream(&json!({})), None);
+        let both = json!({ "upstream": {
+            "doc-research": { "campaign": { "name": "R" }, "report": {} },
+            "doc-kit": { "kit": { "version": 1 }, "objectives": "a kit is never the brief" },
+            "doc-brief": { "objectives": "Sell the starter bottle", "mandatories": ["End line: 'Refill. Not landfill.'"] },
+        } });
+        let b = brief_upstream(&both).expect("a brief");
+        assert_eq!(b["id"], "doc-brief");
+        assert_eq!(b["data"]["objectives"], "Sell the starter bottle");
+        assert_eq!(
+            brief_upstream(
+                &json!({ "upstream": { "p": { "app": "production-tool", "objectives": "x" } } })
+            ),
+            None
+        );
+        assert_eq!(brief_upstream(&json!({})), None);
         assert_eq!(
             production_upstream(&json!({ "upstream": { "doc-brief": { "client": "x" } } })),
             None

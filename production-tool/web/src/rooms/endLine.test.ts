@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { endLineOf } from '../brief/model'
-import { END_LINE_ID, endLineIn, heardChecks, withEndLineSuper } from './endLine'
+import { cardWordsChecks, END_LINE_ID, endLineIn, heardChecks, withEndLineSuper } from './endLine'
 import type { Plan } from './timeline'
 
 // UAT round 4, R4-F6: the brief's mandatory end line was a voice-over on shot 5 that no model voiced, with no card and
@@ -42,5 +42,16 @@ describe('the brief\'s end line as Brief Maker writes it (PR #306), and what Rev
   })
   it('without a brief end line, every unvoiced line is a "Not heard"', () => {
     expect(heardChecks(undefined, [vo]).map((l) => l.ok)).toEqual([false])
+  })
+})
+
+describe('Review reads what the end card will print (UAT round 4 gate)', () => {
+  it('a note for a picture or a placement in a field, and a line that repeats the headline, are said', () => {
+    const bad = cardWordsChecks({ headline: 'Refill. Not landfill.', line: '@logo on a clean, quiet field. @logo on a clean, quiet field.' })
+    expect(bad.map((c) => c.ok)).toEqual([false])
+    expect(bad[0].text).toMatch(/line reads .*@logo.*a note on how the card looks/)
+    expect(cardWordsChecks({ headline: 'Flat out good.', line: 'Flat out good.' })).toEqual([{ text: 'The end card says its headline again in its line', ok: false }])
+    expect(cardWordsChecks({ headline: 'Refill. Not landfill.', line: 'Copperell Refill' })).toEqual([])
+    expect(cardWordsChecks({ headline: 'Copperell', line: 'Logo top right.' })[0].text).toMatch(/line reads/)
   })
 })

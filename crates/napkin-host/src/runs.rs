@@ -93,8 +93,10 @@ impl RunTracker {
             Some("queued" | "running") => Some(Phase::Working),
             Some("needs_input") => Some(Phase::Waiting),
             Some("failed") => Some(Phase::Failed),
-            // Finished: the document shows the result. Drop this job.
-            Some("done") => None,
+            // Finished: the document shows the result. Drop this job. A cancelled job is finished too: a person
+            // stopped it and it writes nothing more, so nobody may keep polling it (Territories live test T2,
+            // 2026-11-24: a Stop left the job "working" and the shell's watcher polled it for an hour).
+            Some("done" | "cancelled") => None,
             _ => return,
         };
         let mut docs = self.docs.lock().unwrap_or_else(|e| e.into_inner());
@@ -426,6 +428,34 @@ mod tests {
         r.record_at(&d, &json!({"job": {"state": "running"}}), t(0));
         r.record_at(&d, &json!({"job": {"id": "j", "state": "cancelled"}}), t(0));
         assert!(r.is_empty());
+    }
+
+    #[test]
+    fn a_cancelled_job_is_finished_it_is_neither_working_nor_unsettled() {
+        let r = RunTracker::new();
+        let d = doc("a.clan");
+        r.record_at(
+            &d,
+            &reply("job_1", "running", Some("run"), Some((0, 5))),
+            t(0),
+        );
+        assert_eq!(r.unsettled_at(&d, t(1)), vec!["job_1"]);
+        r.record_at(
+            &d,
+            &json!({"job": {"id": "job_1", "state": "cancelled"}}),
+            t(2),
+        );
+        assert!(
+            r.unsettled_at(&d, t(3)).is_empty(),
+            "nobody polls a stopped job"
+        );
+        assert!(
+            r.run_at(&d, t(3)).is_none(),
+            "the document is not working any more"
+        );
+        // the retry is a new job, and it alone is live
+        r.record_at(&d, &reply("job_2", "running", Some("run"), None), t(4));
+        assert_eq!(r.unsettled_at(&d, t(5)), vec!["job_2"]);
     }
 
     #[test]

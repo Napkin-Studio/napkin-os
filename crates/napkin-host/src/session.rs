@@ -222,6 +222,24 @@ impl Session {
         op: impl FnOnce(&Ctx, &Document) -> HostResult<Outcome>,
     ) -> HostResult<Applied> {
         let mut view = self.view.lock().unwrap();
+        // A document made before its app widened its schema moves to the newer schema before
+        // it writes, when that is safe, so the write is judged by the app's contract
+        // ([`crate::ops::upgrade`], owner decision 2026-11-25). Best effort: a failed upgrade
+        // leaves the copy, and the write is judged as before.
+        if let Some(doc) = view.open.as_ref() {
+            match crate::ops::upgrade::apply(ctx, doc) {
+                Ok(Some(upgrade)) => {
+                    for change in &upgrade.changes {
+                        if let Err(e) = self.commit(&mut view.open, change) {
+                            crate::log::log(&format!("schema upgrade not written: {}", e.message));
+                            break;
+                        }
+                    }
+                }
+                Ok(None) => {}
+                Err(e) => crate::log::log(&format!("schema upgrade not made: {}", e.message)),
+            }
+        }
         let doc = view.open.as_ref().ok_or_else(HostError::no_file_open)?;
         let outcome = op(ctx, doc)?;
         let events = outcome.events();
@@ -300,6 +318,15 @@ impl Session {
             let clan = clan_sdk::ClanFile::from_bytes(served.into_owned())?;
             crate::blobs::materialise(&clan, store.blobs())
         })
+    }
+
+    /// The packed archive as it is kept, links and all: what a store or the
+    /// workspace it came from holds (a browser saving its working copy, or
+    /// sending it back). Unlike [`Self::raw_bytes`] nothing is materialised,
+    /// so a host with no file store can still keep a document whose files
+    /// are links (UAT round 4 A15: every save of a spun-off project failed).
+    pub fn kept_bytes(&self) -> HostResult<Vec<u8>> {
+        self.read(|d| Ok(view::served_archive(d)?.into_owned()))
     }
 
     /// The packed archive of the open snapshot exactly as stored.

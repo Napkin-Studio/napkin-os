@@ -526,6 +526,12 @@ def execution_group(title: str) -> str | None:
     return None
 
 
+#: The channels whose execution shows the key visual when Production made no size for them: a poster, a print ad or a display banner is
+#: the key visual in its format. Social takes a phone frame of its own and film a storyboard frame, so they never take it.
+KV_STANDS_IN = ("ooh", "print", "display")
+CHANNEL_WORDS = {"ooh": "out-of-home", "print": "print", "display": "display"}
+KV_STANDS_IN_NOTE = "The key visual stands in here: Production has no {channel} size of it yet. Make the size in Production and build again."
+
 #: The reason of a slot a group of finals cannot fill (shown as the gap; the person supplies the picture or makes one in Production).
 GROUP_GAP = {"keyvisual": "To supply from Production: a key visual. No key visual final in the export; make or mark one final, or supply a picture",
              "product": "To supply from Production: a packshot. No final in the export is a product packshot; make or mark one final, or supply a picture",
@@ -922,7 +928,7 @@ def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", na
                                            "from": {"kind": "production", **({"run": run} if run else {})}}}
     if spec.GRAPHICS and pictures != "none" and ooh_sizes(prod, mset):
         got["added"] = add_ooh_slide(deck)   # OOH finals exist and the idea stage wrote no OOH execution: one slide for them
-    if spec.GRAPHICS and pictures != "none" and len(production_shots(prod)) >= 3 and not any(is_slide_executing_film(deck, k) for k in deck["order"]):
+    if spec.GRAPHICS and pictures != "none" and len(production_shots(prod)) >= spec.STRIP_MIN and not any(is_slide_executing_film(deck, k) for k in deck["order"]):
         got["added_storyboard"] = add_storyboard_slide(deck)   # a storyboard's frames exist and no execution shows them: one slide, a strip of stills
     placed_keys = set()   # the finals earlier slots hold: a size or packshot slide takes another picture when there is one
     column_only = set()   # cover slides whose picture fits the picture column only, never the full-bleed 16:9
@@ -987,6 +993,15 @@ def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", na
                     if ch == "ooh" and spec.GRAPHICS and key and prod["items"][key].get("channel") == "ooh":   # one OOH format: its frame, named
                         fid = (prod["items"][key].get("format") or {}).get("format_id")
                         s["ooh"] = {"formats": [{"slot": slot, "format_id": fid, "name": ooh_name(fid)}]}
+                    if not key and not why and master and (execution_group(title) == "keyvisual" or ch in KV_STANDS_IN):
+                        # UAT round 4 (slide 9, "Key visual: station posters"): Production made the key visual and no size for this channel,
+                        # so the slot stayed empty and the slide printed its picture prompt. The key visual stands in, whole, until a size is made.
+                        if spec.GRAPHICS or keeps_protected(prod["items"][master], aspect):
+                            key = master
+                            s["notes"] = ((s.get("notes") or "").rstrip() + "\n\n" + KV_STANDS_IN_NOTE.format(channel=CHANNEL_WORDS.get(ch, ch))).strip()
+                        else:
+                            why = (f"The key visual would lose part of its protected area in a {aspect} crop, and Production has no {CHANNEL_WORDS.get(ch, ch)} "
+                                   f"size. Make one in Production, or supply a picture")
                 elif execution_group(title):   # "Size crops", "Packshot": the finals Production made, not a channel's sizes
                     grp = execution_group(title)
                     pool = group_pool(prod, aspect, placed_keys, any_shape=bool(spec.GRAPHICS), placeable_only=True, group=grp)

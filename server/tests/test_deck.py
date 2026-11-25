@@ -233,6 +233,23 @@ def test_a_failure_after_a_stage_keeps_the_rows_and_marks_the_running_one_failed
     assert host.data["run"]["error"] == err and host.data["run"]["state"] == "failed"
 
 
+def test_a_failure_the_middleware_writes_names_the_agent_of_the_row_that_failed(deck, monkeypatch):
+    """Acceptance A45: after gate 2 the idea stage failed, and the row read "Brief agent · Writes the brief" (the fallback was 'brief')."""
+    use(monkeypatch, FakeEngine(view("building", stage="idea"), post_status=500, post_body={"error": {"type": "model_down", "message": "NoClaudeAvailable"}}))
+    host = Host(data=deck_data(), schema=SCHEMA)
+    host.data["run"].update(state="building", stage="idea", stages=[{"id": "idea", "name": "One idea and its work", "sub": "Writing", "status": "now"}])
+    build(deck, host)
+    assert host.data["run"]["state"] == "failed" and host.data["run"]["agent"] == {"key": "idea", "activity": "error"}
+
+
+def test_the_middlewares_row_agents_are_the_engines():
+    """The middleware cannot import the engine (its own image and dependencies): the engine's ROW_AGENT literal is read from its source."""
+    import ast
+    src = (Path(__file__).resolve().parents[2] / "engine" / "deck" / "run_state.py").read_text()
+    node = next(n for n in ast.parse(src).body if isinstance(n, ast.Assign) and any(getattr(t, "id", "") == "ROW_AGENT" for t in n.targets))
+    assert deck_job.ROW_AGENT == ast.literal_eval(node.value)
+
+
 def test_a_second_build_on_one_document_is_refused_while_one_runs(deck, monkeypatch):
     hold = threading.Event()
     use(monkeypatch, FakeEngine(view("gate", gate=GATE1), hold=hold))
@@ -407,6 +424,45 @@ def test_a_deck_spun_off_a_brief_sends_the_brief_to_the_engine(deck, monkeypatch
     assert sent["production_upstream"]["id"] == "doc-prod-1"
     fake2 = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
     build(deck, Host(data=deck_data(), schema=SCHEMA))
+    assert "brief_upstream" not in fake2.posts[0]
+
+
+class IndexHost(Host):
+    """The host as napkin-host sends a Deck (read.rs clan_context_for_agent): ``data.upstream`` as an INDEX (middleware-api.md §1), a
+    Production project whole as ``production_upstream`` and, with ``carry``, the Deck's brief whole as ``brief_upstream``."""
+
+    def __init__(self, *a, carry=True, **k):
+        super().__init__(*a, **k)
+        self.carry = carry
+
+    def clan(self):
+        c = super().clan()
+        up = c["data"].get("upstream") or {}
+        c["data"]["upstream"] = {k: {"direct": True, "keys": sorted(v)} for k, v in up.items()}
+        prod = next(((k, v) for k, v in up.items() if v.get("app") == "production-tool"), None)
+        if prod:
+            c["production_upstream"] = {"id": prod[0], "data": prod[1]}
+        brief = next(((k, v) for k, v in up.items() if v.get("app") != "production-tool" and "objectives" in v), None)
+        if brief and self.carry:
+            c["brief_upstream"] = {"id": brief[0], "data": brief[1]}
+        return c
+
+
+def test_through_the_hosts_index_a_deck_from_a_brief_still_sends_the_brief(deck, monkeypatch):
+    """UAT round 4 L2, the real cause: the host sends data.upstream as an index, so the brief must travel beside it (clan.brief_upstream);
+    #312's test fed whole upstream data and never saw this."""
+    research = {"campaign": {"name": "Copperell research"}, "report": {}, "selection": {}}
+    brief = {"objectives": "Sell the starter bottle", "single_minded_proposition": "Cleans as well as your usual spray.",
+             "mandatories": ["End line: 'Refill. Not landfill.' (word for word)"], "project_name": "Copperell Refill"}
+    fake = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    host = IndexHost(data=deck_data(), schema=SCHEMA)
+    host.data["upstream"] = {"doc-research": research, "doc-brief": brief}
+    build(deck, host)
+    assert fake.posts[0]["brief_upstream"] == {"id": "doc-brief", "data": brief}
+    fake2 = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    old = IndexHost(data=deck_data(), schema=SCHEMA, carry=False)   # a host without the carrier: the bug, as it was
+    old.data["upstream"] = {"doc-research": research, "doc-brief": brief}
+    build(deck, old)
     assert "brief_upstream" not in fake2.posts[0]
 
 

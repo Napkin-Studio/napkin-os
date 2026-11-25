@@ -11,7 +11,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useConfig, useDoc, useJobsTick, useRoute, useRouter, useServices, useUi } from '../app/context'
 import { projectRoute, routeRoom, type RoomRoute } from '../app/route'
-import { isActive } from '../jobs/runner'
+import { isMaking } from '../jobs/runner'
 import { takeShotOut } from '../jobs/runView'
 import { undo } from '../doc/undo'
 import { canvasActions } from '../canvas/chrome/actions'
@@ -236,7 +236,9 @@ function JobsPill({ data }: { data: RoomData }) {
   // crew status line reads, so the pill and that line always agree. The old pill counted only clip takes
   // in state 'making', so a queued clip (or a frame job, which the frame-first flow now makes) showed as
   // "Nothing is being made" while a clip was in fact starting (owner 2026-11-04).
-  const active = jobsList(doc).filter((j) => isActive(j.state))
+  // A job waiting on the person (needs_input) or on its own outcome (uncertain) is not being made (UAT round 4 L6: a stale
+  // Plan shots question showed "1 making" with nothing running).
+  const active = jobsList(doc).filter((j) => isMaking(j.state))
   const n = active.length
   const lineOf = (j: (typeof active)[number]) => {
     const shotId = j.node.kind === 'shot' ? j.node.id : undefined

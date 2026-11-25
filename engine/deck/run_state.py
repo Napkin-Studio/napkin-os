@@ -46,6 +46,10 @@ STEP_AGENT = {"load": ("brief", "read"), "a0": ("brief", "read"), "a": ("brief",
               "fit": ("copy", "check"), "e": ("copy", "write"), "red_team": ("copy", "check"), "validate": ("review", "check"),
               "render_pptx": ("deck", "work"), "render_web": ("deck", "work"), "pdf": ("deck", "work"), "png": ("deck", "work"),
               "qa": ("review", "check"), "repair": ("review", "work")}
+#: The agent each Build row belongs to (STEP_AGENT's, by row): a failure names the agent of the row that failed, never a default (acceptance
+#: A45: the idea stage failed and the row read "Brief agent · Writes the brief · Failed, retrying").
+ROW_AGENT = {"inputs": "brief", "scans": "brief", "storyline": "strategy", "territories": "strategy", "idea": "idea", "copy": "copy",
+             "check": "review", "review": "review"}
 STEP_OF = {"brief": 1, "strategy": 2, "idea": 3, "copy": 4, "deck": 5, "review": 6, "approval": 7}
 STEP_TOTAL = 7
 DONE_SUB = {"inputs": "Read", "scans": "Read", "storyline": "Approved", "territories": "Picked", "idea": "Approved", "copy": "Done", "check": "Done"}
@@ -128,6 +132,8 @@ def beats(b: dict | None) -> list[dict]:
                 for kk, vv in x.items():
                     if kk == "refs" and isinstance(vv, list):
                         refs.extend(r for r in vv if isinstance(r, str))
+                    elif kk == "ref" and isinstance(vv, str) and vv:   # a chart's series cite one ref each (acceptance A35: the gap chart read
+                        refs.append(vv)                               # "No source: our proposal" though every bar is a research fact)
                     elif kk != "basis":
                         walk(vv)
             elif isinstance(x, list):
@@ -188,7 +194,10 @@ def items_for(row: str, stages: Path, summary: dict | None, current: str | None,
         if s.get("brief_given"):
             out.append(_item(f"Brief · {s.get('brief_filled', 0)} of {s.get('brief_total', 0)} fields filled", "done"))
         if s.get("facts") or s.get("findings"):
-            out.append(_item(f"Research · {s.get('facts', 0)} pins, {s.get('findings', 0)} findings, {s.get('sources', 0)} sources", "done"))
+            # A brief carries its research and pins of its own: the deck counts both, the research page only its own (acceptance A36: "87 pins,
+            # 31 sources" beside a research page of 45 and 16). The row says so.
+            both = " (the research's and the brief's own together)" if s.get("brief_given") else ""
+            out.append(_item(f"Research · {s.get('facts', 0)} pins, {s.get('findings', 0)} findings, {s.get('sources', 0)} sources{both}", "done"))
         for d in s.get("docs") or []:
             out.append(_item(f"{d.get('name')} · {d.get('pages') or '?'} pages", "done"))
         a0 = stage_file(stages, "a0_intake.json")
@@ -308,7 +317,9 @@ def run_object(*, state: str, stages: Path, summary: dict | None = None, current
     elif state == "done":
         agent = {"key": "review", "activity": "complete", "step_index": STEP_OF["review"], "step_total": STEP_TOTAL}
     elif state == "failed":
-        agent = {"key": STEP_AGENT.get(current or "load", ("deck", "work"))[0], "activity": "error"}
+        step = STEP_AGENT.get(current or "")
+        key = step[0] if step and STEP_ROW.get(current) == ROW_IDS[idx] else ROW_AGENT.get(ROW_IDS[idx], "deck")   # the agent of the row that failed
+        agent = {"key": key, "activity": "error"}
     run = {"state": state, "stage": ROW_IDS[idx], "stages": rows, "gate": gate_payload(held, stages) if state == "gate" and held else None,
            "agent": agent, "checks": checks_list(summary, stages, validation) or None, "error": error if state == "failed" else None,
            "done": done if state == "done" else None, "cost_usd": round(cost, 4) if cost is not None else None}

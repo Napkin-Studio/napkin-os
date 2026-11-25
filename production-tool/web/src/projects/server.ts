@@ -170,6 +170,16 @@ export class ProjectServer {
     return { etag: bare(body.version), savedAt: body.saved_at }
   }
 
+  /** A new name for a project that may not be open here: the library title and the document's own (the host's
+   *  `/title`, the same operation as an open document's `/set-title`). UAT round 4: a rename only in this browser's
+   *  list left the library and the Trash on the old name. */
+  async rename(id: string, title: string): Promise<void> {
+    const res = await this.req(this.host, 'POST', await this.doc(id, '/title'), {
+      body: JSON.stringify({ title }), headers: { 'Content-Type': 'application/json' },
+    })
+    if (!res.ok) return this.fail(res)
+  }
+
   /** To the Trash (restorable for 30 days). */
   async remove(id: string): Promise<{ restorableUntil: string }> {
     const res = await this.req(this.host, 'DELETE', await this.doc(id))

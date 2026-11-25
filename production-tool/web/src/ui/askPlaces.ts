@@ -5,6 +5,7 @@
 // card shows, and the one the tray's Show asked for when it is nowhere else. Show then scrolls to the
 // card and puts the focus on its first answer.
 
+import { supersededAsk } from '../model/selectors'
 import { useSyncExternalStore } from 'react'
 import type { Route } from '../app/route'
 import type { Ask, DocJob, JobState, ProductionDocument } from '../contracts/types'
@@ -105,7 +106,7 @@ export function waitingAsks(d: ProductionDocument, liveState: (jobId: string) =>
   for (const job of Object.values(d.jobs)) {
     if ((liveState(job.id) ?? job.state) !== 'needs_input') continue
     const ask = askOf(d, job.id)
-    if (ask && ask.state === 'open') out.push({ ask, job })
+    if (ask && ask.state === 'open' && !supersededAsk(d, ask)) out.push({ ask, job })
   }
   return out.sort((a, b) => (a.job.created_at < b.job.created_at ? -1 : 1))
 }

@@ -3465,7 +3465,8 @@
     upMaterials().forEach(function(m){ if(names.indexOf(m.name)===-1) list.push(m); });
     return Promise.all(list.map(function(a){
       var hash=/^[0-9a-f]{64}$/.test(a.sha256||'')?Promise.resolve(a.sha256):fetch(assetUrl(a.name)).then(function(r){ return r.arrayBuffer(); }).then(sha256Hex);
-      return hash.then(function(h){ return {name:a.name, sha256:h, media_type:mediaTypeOf(a.name, a.media_type), asset:a.path}; });
+      // label: the file's own name ("copperell-brand-notes.txt"); name stays the stored one the host reads it by (A9)
+      return hash.then(function(h){ var o={name:a.name, sha256:h, media_type:mediaTypeOf(a.name, a.media_type), asset:a.path}; if(a.label&&a.label!==a.name) o.label=String(a.label); return o; });
     }));
   }
 
@@ -3870,7 +3871,9 @@
   // The version and the date the sheet carries: the host's version, the latest change.
   // The version a person would say: one more than the times it was locked (the host's version is a hash).
   function docVersion(){ var n=arr((osView()||{}).decisions).filter(function(b){ return b&&b.decision&&b.decision.kind==='approve'&&arr(b.targets).some(function(t){ return t&&t.here!==false; }); }).length; return 'v'+Math.max(1,n); }
-  function lastWhen(){ var ds=CHAIN.decisions||[], t=ds.length?ds[ds.length-1].timestamp:''; var d=t?new Date(t):null; return d&&!isNaN(d)?d:null; }
+  // The latest write, whatever order the chain comes in (clan://chain is newest first, so its last item was the oldest:
+  // "v1 · edited 48m ago" right after a first draft finished, acceptance run A5).
+  function lastWhen(){ var best=null; arr(CHAIN.decisions).forEach(function(x){ var d=x&&x.timestamp?new Date(x.timestamp):null; if(d&&!isNaN(d)&&(!best||d>best)) best=d; }); return best; }
   function fmtDay(d){ return d?d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}):''; }
   function agoWords(d){ if(!d) return ''; var m=Math.round((Date.now()-d.getTime())/60000); if(m<1) return 'just now'; if(m<60) return m+'m ago'; var h=Math.round(m/60); if(h<24) return h+'h ago'; var dd=Math.round(h/24); return dd===1?'yesterday':dd+' days ago'; }
   function renderSheetHead(){
@@ -4217,7 +4220,7 @@
     }
     renderSideStop();
     // an agent waiting on the person while the sheet is open: the hidden Booth shows it, then comes in
-    boothAsk(phase==='doc'&&DRAFT&&DRAFT.inPlace&&DRAFT.state==='needs_input'?1:0);
+    boothAsk(boothWaiting());
     if(ROLES&&ROLES.sideSet){ ROLES.sideSet(el, job); return; }
     el.hidden=!job; el.innerHTML=job?'<span><b>'+esc(AGENT_NAME[job.role]||'An agent')+'</b> · '+esc(job.doing)+'</span>':'';
   }
@@ -4691,6 +4694,7 @@
     var w=$('lockWhy'); if(w){ w.hidden=!(why&&!lb.hidden); w.textContent=why; }
     // A way to the first flagged item: the same click as its row in the list above.
     var lf=$('lockFirst'); if(lf){ lf.hidden=!(wait&&!busy&&n>0&&!lb.hidden); lf.onclick=function(){ var b=document.querySelector('#lockList .lkitem'); if(b) b.click(); }; }
+    boothAsk(boothWaiting());
     var lk=$('lockedBadge'); if(lk){ lk.hidden=!(A&&!again); lk.textContent='Locked for handoff'+(docVersion()?' · '+docVersion():''); }
     renderStateLine();
     var acts=$('lockActs'); if(acts) acts.hidden=!(A&&!again);
@@ -5246,7 +5250,7 @@
   function boothStep(s, ev, w){
     var n={open:s.open, ask:s.ask, later:0};
     if(ev.t==='ask'){ n.ask=Math.max(0, ev.n|0); if(!s.open&&n.ask>s.ask&&boothCanHide(w)) n.later=BOOTH_ASK_MS; return n; }
-    if(ev.t==='shell'){ n.open=ev.open!==false; return n; }
+    if(ev.t==='shell'){ n.open=ev.open!==false; if(!n.open&&s.ask>0&&boothCanHide(w)) n.later=BOOTH_ASK_MS; return n; }   // hidden on load with something waiting: it comes in
     if(ev.t==='show'||ev.t==='pick'||(ev.t==='arrive'&&s.ask>0)){ n.open=true; return n; }
     if(!boothCanHide(w)) return n;
     if(ev.t==='hide') n.open=false;
@@ -5264,7 +5268,7 @@
     if(e){
       var k=BOOTH.ask, ct=$('boothCt'); if(ct) ct.textContent=k?String(k):'';
       e.classList.toggle('has', !!k); e.tabIndex=hid?0:-1; e.setAttribute('aria-expanded', String(!hid));
-      e.setAttribute('aria-label', 'Open the Booth'+(k?', '+k+(k===1?' question':' questions')+' waiting':''));
+      e.setAttribute('aria-label', 'Open the Booth'+(k?', '+k+' waiting for you':''));
     }
     if(instant){ void d.offsetWidth; requestAnimationFrame(function(){ requestAnimationFrame(function(){ d.classList.remove('booth-instant'); if(e) e.classList.remove('booth-instant'); }); }); }
   }
@@ -5288,6 +5292,18 @@
   // (Both may run before this block has: BOOTH is still undefined then, and the shell's word comes after.)
   function boothPick(){ if(BOOTH&&!BOOTH.open) boothSet({t:'pick'}); }
   function boothAsk(n){ if(BOOTH&&(n|0)!==BOOTH.ask) boothSet({t:'ask', n:n}); }
+  // What waits for the person in the Booth: an agent's question, or, on an unlocked brief, the Needs you items
+  // Lock waits on (1 when Lock is ready and nothing is). The Booth is the one place Lock lives, so a Booth the shell
+  // restored hidden shows the count on its edge and comes in (T10, 2026-11-24: hidden after a reload, the brief
+  // could not be locked and stayed a v1 draft). 0 when it is locked, drafting, or the lock is not known yet.
+  function boothWaiting(){
+    if(phase!=='doc') return 0;
+    var q=DRAFT&&DRAFT.inPlace&&DRAFT.state==='needs_input'?1:0;
+    if(q||draftLive()) return q;
+    var l=lockState(), A=approveLocked(), re=l?arr(l.reopened):[];
+    if(!l||(A&&!re.length)||get('locked')===true||!hasContent()) return 0;
+    var n=needsRows().length; return n>0?n:(l.can_lock?1:0);
+  }
   (function(){
     document.addEventListener('click', function(e){
       var t=e.target&&e.target.closest?e.target:null; if(!t) return;
@@ -5601,7 +5617,8 @@
     var A=approveLocked(), l=lockState(), re=A&&arr(l&&l.reopened).length>0, L=docLocked();
     // The sheet is on screen: the agents are idle unless Draft it again is running (the bar drops a stale "working" chip).
     var items=[{kind:'run', working:draftLive()}, {kind:'button', id:'pdf', label:'Save · PDF', primary:true, title:'The page as it prints, on A4'}];
-    if(!A) items.push({kind:'button', id:'redraft', label:REDRAFT_ARMED?'Click again to redraft':'Draft it again', disabled:draftLive(), title:'Run every agent again on the same ask. Parts you wrote yourself are kept, with a suggestion beside them.'});
+    // stays: the first press only arms it, so a menu holding it stays open and shows 'Click again to redraft' (A7)
+    if(!A) items.push({kind:'button', id:'redraft', label:REDRAFT_ARMED?'Click again to redraft':'Draft it again', stays:!REDRAFT_ARMED, disabled:draftLive(), title:'Run every agent again on the same ask. Parts you wrote yourself are kept, with a suggestion beside them.'});
     if(A&&!re){ items.push({kind:'button', id:'unlock', label:'Unlock', title:'Unlock the brief to change it'}); items.push({kind:'button', id:'reopen', label:'Reopen a part…', title:'A part reopens for a change the client asked for'}); }
     items.push({kind:'button', id:'client', label:'Client copy · PDF', disabled:!L, title:L?'The locked sheet, every part in it, for the client':'Lock the brief first: the client sees the version you lock'});
     items.push({kind:'button', id:'html', label:'Save · HTML', title:'The sheet as a standalone web page'});

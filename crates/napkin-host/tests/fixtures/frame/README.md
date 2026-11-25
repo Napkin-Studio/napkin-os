@@ -31,3 +31,9 @@ stopped polling `clan://edit-mode` and took edit mode from the shell's
 `clan:edit-mode` message instead (features/edit-mode-pushed.clan). Each page
 grew by exactly its bridge's change: 1105 bytes for the authored pages, 212
 for the legacy ones; nothing else moved.
+
+Re-recorded the 60 authored pages on 2026-11-25, when the structured bridge's
+`patchData` began merging a patch into the page's data as the host merges it
+(a JSON merge patch; acceptance A31: "Edit beats" wiped the Deck's gate on the
+page). Each authored page grew by exactly 804 bytes, the bridge's change; the
+legacy pages did not move.

@@ -76,10 +76,101 @@ def _label_thin(S: list, inp) -> None:
             sl["status"] = "drafted"
 
 
+def _flat_text_blocks(blocks: list) -> list:
+    """A text-like block whose ``text`` is a list (a model's ["The half that wants it: …", "The half that doubts it: …"]) becomes one block of the
+    same kind per item: a client slide never shows a Python list (UAT round 4: slide 7 printed "['The half that wants it: …', …]")."""
+    out = []
+    for b in blocks or []:
+        t = b.get("text") if isinstance(b, dict) else None
+        if isinstance(t, (list, tuple)):
+            out += [{**b, "text": str(x).strip()} for x in t if str(x).strip()]
+        elif isinstance(b, dict) and b.get("kind") == "kv" and isinstance(b.get("items"), list):
+            # a kv value that is a list (a territory's risks: ['Category safety: …', …]) is its items as sentences, never a printed list
+            # (UAT round 4: the brief deck's territory slides and its PDF appendix printed "['Category safety: …', …]")
+            rows = []
+            for row in b["items"]:
+                if isinstance(row, (list, tuple)) and len(row) == 2 and isinstance(row[1], (list, tuple)):
+                    row = [row[0], " ".join(_sentence(x) for x in row[1] if str(x).strip())]
+                rows.append(row)
+            out.append({**b, "items": rows})
+        else:
+            out.append(b)
+    return out
+
+
+def _sentence(x) -> str:
+    """One item of a list as a sentence: trimmed, ending with a stop."""
+    t = str(x).strip()
+    return t if not t or t[-1] in ".!?" else t + "."
+
+
+#: A parenthetical that is a planner's working note, not a line for the room: '(Once a cleaning-performance test is held, move to the stronger
+#: "cleans as well as" version.)'. It leaves the slide for its notes (UAT round 4: slide 8's proposition carried one).
+_PLANNER_NOTE = re.compile(r"\s*\((?:once|when|until|after|before|if|note|nb|n\.b\.|planner|tbc|to confirm|to settle|move to|swap|switch to|replace|upgrade|"
+                           r"use the stronger|later|for now)\b[^()]{6,}\)", re.I)
+
+
+def take_planner_notes(text):
+    """``(text without its planner notes, [the notes, word for word])``."""
+    if not isinstance(text, str) or "(" not in text:
+        return text, []
+    notes = [m.group(0).strip()[1:-1].strip() for m in _PLANNER_NOTE.finditer(text)]
+    if not notes:
+        return text, []
+    return re.sub(r"\s+([.,;:!?])", r"\1", _PLANNER_NOTE.sub("", text)).strip(), notes
+
+
+def _scrub_planner_notes(S: list) -> None:
+    """Every slide's title, label and block words without planner notes; each note goes to that slide's notes, word for word."""
+    keys = ("text", "title", "from", "to", "statement")
+    for sl in S:
+        found = []
+        sl["title"], n = take_planner_notes(sl.get("title"))
+        found += n
+        if isinstance(sl.get("label"), str):
+            sl["label"] = take_planner_notes(sl["label"])[0]
+        for b in sl.get("blocks") or []:
+            for k in keys:
+                if isinstance(b.get(k), str):
+                    b[k], n = take_planner_notes(b[k])
+                    found += n
+            for it in b.get("items") or []:
+                if isinstance(it, dict) and isinstance(it.get("text"), str):
+                    it["text"], n = take_planner_notes(it["text"])
+                    found += n
+            if isinstance(b.get("lines"), list):
+                b["lines"] = [take_planner_notes(x)[0] if isinstance(x, str) else x for x in b["lines"]]
+        for c in sl.get("claims") or []:
+            if isinstance(c.get("text"), str):
+                c["text"] = take_planner_notes(c["text"])[0]
+        if found:
+            note = "Planner's note (not for the room): " + " ".join(dict.fromkeys(found))
+            sl["notes"] = "\n\n".join(x for x in [sl.get("notes") or "", note] if str(x).strip())
+
+
+def _drop_repeated_items(S: list) -> None:
+    """A bullet that only says again what two or more of its list's other bullets say, word for word (the brief's whole objective beside the
+    two requirements cut from it), leaves the list; its full words go to the notes (UAT round 4: slide 2 said one point twice)."""
+    norm = lambda t: re.sub(r"[^\w%£$€]+", " ", str(t or "")).strip().lower()   # noqa: E731
+    for sl in S:
+        for b in sl.get("blocks") or []:
+            items = b.get("items")
+            if b.get("kind") != "bullets" or not isinstance(items, list) or len(items) < 3:
+                continue
+            texts = [norm(i.get("text") if isinstance(i, dict) else i) for i in items]
+            drop = [k for k, t in enumerate(texts)
+                    if sum(1 for j, o in enumerate(texts) if j != k and o and len(o) < len(t) and o in t) >= 2]
+            if drop:
+                gone = [items[k].get("text") if isinstance(items[k], dict) else str(items[k]) for k in drop]
+                b["items"] = [it for k, it in enumerate(items) if k not in drop]
+                sl["notes"] = "\n\n".join(x for x in [sl.get("notes") or "", "Said in full in the brief: " + " ".join(gone)] if str(x).strip())
+
+
 def _slide(type_, title, blocks, claims=None, status="drafted", visual=None, notes="", reqs=None, label=None, slots=None):
     """One slide record in the deck contract (deck.schema.json). ``slots`` (image slots, bound by territory id when pictures are asked
     for) is written only when given: a deck built with no pictures has no ``slots`` key, so every golden is byte-identical."""
     claims = list(claims or [])
+    blocks = _flat_text_blocks(blocks)
     blocks = _dedupe_blocks(title, blocks, claims)
     sl = {"type": type_, "section": spec.SLIDE_TYPES[type_]["section"], "title": title,
           "label": label or title[:80], "blocks": blocks, "claims": claims,
@@ -88,6 +179,21 @@ def _slide(type_, title, blocks, claims=None, status="drafted", visual=None, not
     if slots:
         sl["slots"] = slots
     return sl
+
+
+_UNSETTLED = re.compile(r"^\s*(?:to confirm|to settle|to agree|tbc)\b", re.I)
+_BUDGET_Q = re.compile(r"\b(?:budget|fee|fees|spend|investment)\b", re.I)
+
+
+def _budget_given(inp) -> tuple:
+    """``(text, ref, notes)`` for 'Budget given'. The brief's budget field, unless it is still open ('To confirm: budget …') and the brief
+    answers its own budget question ('Is the budget inclusive of VAT? — Answer: £200k excluding VAT, media included'): then the answer, and the
+    field's words go to the notes. UAT round 4: the slide said "the earlier £200k figure is not theirs" beside the brief's answer of £200k."""
+    field = _for_the_room(_brief_text(inp, "budget_scope", ""))
+    ans = next((a["answer"] for a in getattr(inp, "answered", None) or [] if _BUDGET_Q.search(a.get("question", ""))), "")
+    if ans and (not field or _UNSETTLED.match(field)):
+        return _for_the_room(ans), "brief:open_questions", (f"The brief's budget field still reads: {field}" if field else "")
+    return field, "brief:budget_scope", ""
 
 
 def _objective_items(inp, reqs: list) -> list:
@@ -164,9 +270,11 @@ def _surface_brief_fields(S: list, inp) -> None:
         v = (inp.brief.get(top) or {}).get("value")
         v = v.get(sub) if (sub and isinstance(v, dict)) else (None if sub else v)
         text = str(v).strip() if isinstance(v, str) else ""
+        ref = f"brief:{field}"
         if not (home and text) or spec.norm_text(text) in _deck_texts(S):
             continue
-        ref = f"brief:{field}"
+        if ref in _refs_on(home):   # the field is already on its home slide, in a requirement's words that cite it (UAT round 4: slide 2 said
+            continue                # one objective twice, once as the requirement and once as the brief's own sentence)
         if kind == "bullets":
             bl = next((b for b in home["blocks"] if b["kind"] == "bullets"), None)
             if bl is None:
@@ -175,6 +283,17 @@ def _surface_brief_fields(S: list, inp) -> None:
         else:
             home["blocks"] = [b for b in home["blocks"] if not (b["kind"] in ("text", "small") and not str(b.get("text", "")).strip())] + \
                 [{"kind": kind, "items": [[label, text]], "refs": [ref]}]
+
+
+def _refs_on(slide: dict) -> set:
+    """Every ref a slide's blocks and their items cite."""
+    out = set()
+    for b in slide.get("blocks") or []:
+        out |= set(b.get("refs") or [])
+        for it in b.get("items") or []:
+            if isinstance(it, dict):
+                out |= set(it.get("refs") or [])
+    return out
 
 
 def _dedupe_blocks(title: str, blocks: list, claims: list) -> list:
@@ -706,7 +825,9 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
     named_by_project = production and line and working_title.strip() and project.strip() == working_title.strip()   # Start prefilled the Production project's name and nobody changed it
     if named_by_project and len(line.split()) > _LINE_WORDS:   # UAT round 4 F27: a proposition-length 'line' filled the cover until it lost its picture
         named_by_project = False
-    S.append(_slide("title", f"{client}: {line}" if named_by_project else f"{client}: {project}",   # then the cover names the client and its line, not a working name
+    proj = "" if re.fullmatch(r"\s*\[[^\]]*\]\s*", project or "") else str(project or "").strip()   # a '[Project]' placeholder is no name
+    cover = f"{client}: {line}" if named_by_project else (f"{client}: {proj}" if proj else (f"{client}: {line}" if line and len(line.split()) <= _LINE_WORDS else client))
+    S.append(_slide("title", cover,   # then the cover names the client and its line, not a working name; never a bare 'Client:' (UAT round 4)
                     [{"kind": "text", "text": f"A response from {agency}"},
                      {"kind": "text", "text": _placeholder("presenter and date", "presented by the account lead and planner", "who presents, and the date"), "human": True}],
                     status="needs_human", slots=pictures.get("title")))
@@ -886,12 +1007,12 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
     # 16b. Risks: presented, before the investment and the ask (the deck does not end on them)
     S.append(_risks_slide(d))
     # 17-20. Human-only
-    budget = _for_the_room(_brief_text(inp, "budget_scope", ""))
-    inv_blocks = [{"kind": "text", "text": "Budget given: " + (budget or "not given"), "refs": ["brief:budget_scope"] if budget else []}]
+    budget, bref, bnote = _budget_given(inp)
+    inv_blocks = [{"kind": "text", "text": "Budget given: " + (budget or "not given"), "refs": [bref] if budget else []}]
     inv_blocks.append({"kind": "bullets", "items": [
         {"text": _placeholder("option A", "a working split of fees, production and media", "the split, from the agency's rate card"), "human": True},
         {"text": _placeholder("option B", "a media-weighted version", "whether the client wants a lean or a heavier option"), "human": True}]})
-    S.append(_slide("investment", "Investment: options to agree", inv_blocks, status="needs_human"))
+    S.append(_slide("investment", "Investment: options to agree", inv_blocks, status="needs_human", notes=bnote))
     S.append(_slide("team", "The team you would work with",
                     [{"kind": "bullets", "items": [{"text": _placeholder(role, "a named person", "name and one-page CV"), "human": True}
                                                    for role in ["project lead", "strategic planner", "creative lead", "digital lead", "media planning and buying lead"]]}],
@@ -978,6 +1099,8 @@ def _complete(S, reqs, R, inp, meta, fmt, fit, scoring=None, messages=None, terr
 
     if spec.LOOK_V3:   # deck-look: three brief fields the deck never showed, each on its one home slide (said once)
         _surface_brief_fields(S, inp)
+    _scrub_planner_notes(S)   # UAT round 4: a planner's '(Once … move to …)' never on a client slide (after every slide's words are in)
+    _drop_repeated_items(S)
 
     # Requirement mapping, trace and sources slides go last (they read the slides above).
     for r in reqs:
@@ -1018,6 +1141,7 @@ def _complete(S, reqs, R, inp, meta, fmt, fit, scoring=None, messages=None, terr
             sl["title"] += ", continued"
         _add(deck, sl)
     _fill_scoring(deck)
+    _scrub_planner_notes(list(deck["slides"].values()))   # the appendix slides added above too (a requirement can quote the brief)
     return deck
 
 
@@ -1318,7 +1442,7 @@ def _merge(k: dict, m: dict, title) -> None:
             add.append(b)
         k["blocks"] = k["blocks"] + add
         vis = m.get("visual") or {}
-        shown = [f"Image prompt ({vis.get('status', 'illustrative')}): {vis.get('prompt', '')}"] if vis.get("kind") == "image_prompt" else []   # drawn on the absorbed slide
+        shown = [f"Image prompt ({vis.get('status', 'illustrative')}): {vis.get('prompt', '')}"] if vis.get("kind") == "image_prompt" else []   # the absorbed slide's picture brief, in the notes
         extra = [x for x in ([] if put else [f"Merged here from the slide '{m['title']}'."]) + shown + [m.get("notes") or ""] if str(x).strip()]
         if extra:
             k["notes"] = "\n\n".join([x for x in [k.get("notes") or ""] if x.strip()] + extra)

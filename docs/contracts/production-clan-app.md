@@ -54,6 +54,10 @@ All under `/api/t/{t}`, session required. Each agency has its own trash: another
 - Trashed documents are not in `GET /library` or the client listings. Storage: `<tenant>/trash/<unix-ms>-<slug>.clan`, with its details beside it in `<unix-ms>-<slug>.json` (removed on restore and on purge).
 - Stage 1 "no Delete" in section 5 is superseded: the tool may offer Delete (a new screen still needs an approved mock).
 
+## 8b. Rename a document that is not open
+
+`POST /api/t/{t}/d/{doc}/title` body `{"title":"<name>"}`, session required: the same host operation as an open document's `/set-title` (the manifest's title, recorded as a decision by the signed-in person), so `GET /library`, the download and a later Trash row all carry the new name. 200 `{"ok":true,"title":"<name>"}`; 400 for an empty title; 404 when the document is not in this agency's library. The document's version moves, so a copy open elsewhere meets the usual save conflict. Production's Home uses it to rename a film that is not open in this browser; an open film writes the same title through `/set-title`, and keeps it equal to Home's name, numbering included ("Name 2"). (UAT round 4: the trash dialog said "Copperell Refill 2" while the Trash said "Copperell Refill".)
+
 ## 9. Document (contract 3)
 
 `assets[].locations` is not written and never trusted when read; `client_id` unchanged; nothing else changes.
