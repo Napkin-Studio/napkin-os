@@ -69,6 +69,12 @@ def diff(old, new):
     return new
 
 
+
+#: The agent each Build row belongs to, as the deck engine's run_state.ROW_AGENT says: a failure the middleware writes names the agent of the row
+#: that failed. Before, it fell back to "brief", so an idea stage that failed after a gate read "Brief agent · Writes the brief" (acceptance A45).
+ROW_AGENT = {"inputs": "brief", "scans": "brief", "storyline": "strategy", "territories": "strategy", "idea": "idea", "copy": "copy",
+             "check": "review", "review": "review"}
+
 class DeckJob:
     kind = "deck"
     stages = ["build"]
@@ -156,8 +162,9 @@ class DeckJob:
                 if s.get("id") == row and s.get("status") == "now":
                     s["status"], s["sub"] = "failed", "Stopped"
                 stages.append(s)
+            key = ROW_AGENT.get(row) or (old.get("agent") or {}).get("key") or "deck"   # the agent of the row that failed (acceptance A45)
             run = {"state": "failed", "stage": row, "stages": stages or None, "gate": None, "error": {"stage": row, "message": message, "retryable": True},
-                   "agent": {"key": ((old.get("agent") or {}).get("key") or "brief"), "activity": "error"}}
+                   "agent": {"key": key, "activity": "error"}}
             self._add({k: v for k, v in run.items() if v is not None or k == "gate"}, {}, f"the engine failed: {message}")
             self.state, self.error, self.finished_at = "failed", {"type": etype, "message": message}, iso()
 

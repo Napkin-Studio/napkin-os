@@ -233,6 +233,23 @@ def test_a_failure_after_a_stage_keeps_the_rows_and_marks_the_running_one_failed
     assert host.data["run"]["error"] == err and host.data["run"]["state"] == "failed"
 
 
+def test_a_failure_the_middleware_writes_names_the_agent_of_the_row_that_failed(deck, monkeypatch):
+    """Acceptance A45: after gate 2 the idea stage failed, and the row read "Brief agent · Writes the brief" (the fallback was 'brief')."""
+    use(monkeypatch, FakeEngine(view("building", stage="idea"), post_status=500, post_body={"error": {"type": "model_down", "message": "NoClaudeAvailable"}}))
+    host = Host(data=deck_data(), schema=SCHEMA)
+    host.data["run"].update(state="building", stage="idea", stages=[{"id": "idea", "name": "One idea and its work", "sub": "Writing", "status": "now"}])
+    build(deck, host)
+    assert host.data["run"]["state"] == "failed" and host.data["run"]["agent"] == {"key": "idea", "activity": "error"}
+
+
+def test_the_middlewares_row_agents_are_the_engines():
+    """The middleware cannot import the engine (its own image and dependencies): the engine's ROW_AGENT literal is read from its source."""
+    import ast
+    src = (Path(__file__).resolve().parents[2] / "engine" / "deck" / "run_state.py").read_text()
+    node = next(n for n in ast.parse(src).body if isinstance(n, ast.Assign) and any(getattr(t, "id", "") == "ROW_AGENT" for t in n.targets))
+    assert deck_job.ROW_AGENT == ast.literal_eval(node.value)
+
+
 def test_a_second_build_on_one_document_is_refused_while_one_runs(deck, monkeypatch):
     hold = threading.Event()
     use(monkeypatch, FakeEngine(view("gate", gate=GATE1), hold=hold))
