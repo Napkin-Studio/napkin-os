@@ -126,3 +126,29 @@ test('the page asks, makes and approves only through the engine\'s steps and kee
   for (const w of words) assert.doesNotMatch(w, /\$|€|£|\busd\b|\bprice\b|credits?\b/i, w)
   assert.match(src, /ask: 'frames', approve: 'frames_approve', leave: 'frames_leave', status: 'frames_status'/)
 })
+
+test('the Make pictures ask says whose look the pictures wear, and a fresh document starts on the client default (Brand Clan phase 2 (d))', () => {
+  const d = doc()
+  const ask = (look?: Doc) => plain(P.makeDialog('make:t_started', d, { mk: { tid: 't_started', state: 'ready', card: { id: 'c_1', frames: 4, look } } }).html)
+  // the client's Brand Clan the document holds: named with its version; its logo and type stay out; what a picture tool cannot take is said
+  const bc = ask({ from: 'brand_clan', name: 'Original', version: 2, document_id: 'bc1', colours: 3, imagery: true, bans: 2, left_out: [{ what: 'the 2019 campaign', why: 'it holds a digit' }] })
+  assert.match(bc, /Look Original v2, the client’s Brand Clan The pictures take its colours, its imagery style and what it bans\. Its logo and type stay out/)
+  assert.match(bc, /Left out, as a picture tool cannot take them: the 2019 campaign\./)
+  assert.doesNotMatch(bc, PRICE)
+  // none: the built-in look, said plainly (the stand-in "brand notes" wording is gone)
+  for (const none of [undefined, { from: 'default' }]) {
+    const t = ask(none)
+    assert.match(t, /Look The built-in look This document holds no Brand Clan for the client/); assert.doesNotMatch(t, /stand-in|brand notes/)
+  }
+  assert.match(ask({ from: 'brand_clan', name: 'Zero', version: 1, colours: 0, imagery: false, bans: 0 }), /It holds nothing for pictures yet, so they use the built-in look\./)
+
+  // start on the client's default: only a fresh document that holds no Brand Clan, never a locked one or over one it holds
+  const fresh = json('seed.json'), T = (o: Doc) => ({ app_id: 'ie.napkin.brand', document_id: 'bc1', title: 'Tidewell · Original', ...o })
+  const targets = [T({ default: false, document_id: 'bc0' }), T({ default: true }), { app_id: 'ie.napkin.campaign-research', document_id: 'r1', default: true }]
+  assert.equal(L.brandToStart(fresh, targets).document_id, 'bc1')
+  assert.equal(L.brandToStart(fresh, [T({ default: true, attached: true })]), null, 'it holds one already')
+  assert.equal(L.brandToStart(fresh, [T({ default: true, locked: true })]), null)
+  assert.equal(L.brandToStart(fresh, [T({ default: false })]), null, 'no default: nothing is picked for the person')
+  assert.equal(L.brandToStart({ ...fresh, upstream: { bc9: { kit: { version: 1 }, visual: { colours: [] } } } }, targets), null, 'carried down from the brief')
+  assert.equal(L.brandToStart(d, targets), null, 'work under way keeps what it has')
+})

@@ -561,6 +561,11 @@ button.tsrc:hover{border-color:color-mix(in srgb,var(--ink) 35%,var(--line))}
 .pic-make{min-height:30px;padding:0 12px;font-size:12px}
 .pslot.held .pface img{opacity:.42;filter:saturate(.55)}
 .pface .pchip.need{cursor:pointer}
+.lookbox{display:grid;gap:3px;margin:12px 0 0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:13.5px;line-height:1.4;color:var(--ink)}
+.lookbox .lk-l{font:700 10.5px var(--font-mono,ui-monospace,monospace);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lookbox b{font-weight:600}
+.lookbox span:not(.lk-l){color:var(--ink-soft)}
+.lookbox .lk-left{font-size:12.5px}
 .pic-thumb{display:block;width:100%;max-height:220px;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
 .pstrip{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
 .pmenu{display:grid;gap:4px}
@@ -2047,6 +2052,19 @@ var TerritoriesLogic = (function () {
   /** Which stage, if any, the page is while the engine works: finding the insights, the crew out, or either one stopped. Null: the sheet.
    *  A person who went back to a step (ui.view) sees its sheet instead; the job runs on. */
   /** The engine's own words for a failed run, from the document: the message, then what it says to fix. */
+  /**
+   * The Brand Clan a fresh Territories document starts on (Brand Clan phase 2 (d), as Brief and Deck do): the client's default from the host's
+   * /attach-targets, only while the document holds none (attached here or carried down from the brief) and nothing has run yet. null otherwise.
+   */
+  function brandToStart(data, targets) {
+    var brands = arr(targets).filter(function (t) { return isObj(t) && t.app_id === 'ie.napkin.brand'; });
+    if (brands.some(function (t) { return t.attached; })) return null;
+    var up = isObj(data && data.upstream) ? data.upstream : {};
+    if (Object.keys(up).some(function (k) { var v = up[k]; return isObj(v) && (isObj(v.visual) || isObj(v.imagery)) && isObj(v.kit); })) return null;
+    var run = isObj(data && data.run) ? data.run : {};
+    if ((run.state && run.state !== 'draft') || run.stage || focusOf(data).insights.length || arr(data && data.territories).length) return null;
+    return brands.filter(function (t) { return t['default'] && !t.locked && t.document_id; })[0] || null;
+  }
   function runErrWords(run) {
     var e = isObj(run && run.error) ? run.error : null; if (!e || !text(e.message)) return '';
     return text(e.message) + (arr(e.refused).length ? ' ' + arr(e.refused).map(text).filter(Boolean).join(' ') : '');
@@ -2282,7 +2300,7 @@ var TerritoriesLogic = (function () {
   }
 
   return {
-    upEntry: upEntry, sourceCards: sourceCards, runErrWords: runErrWords,
+    upEntry: upEntry, sourceCards: sourceCards, runErrWords: runErrWords, brandToStart: brandToStart,
     putAct: putAct, takeAct: takeAct, actSlot: actSlot,
     continueGate: continueGate, barItems: barItems, priBtn: priBtn, why: why, agentBlock: agentBlock, citeWords: citeWords, stageOf: stageOf, palDark: palDark,
     MOVES: MOVES, DESTS: DESTS, developed: developed, greenIds: greenIds, greenGroups: greenGroups, gCard: gCard, touch: touch, scene: scene, greenlightSheet: greenlightSheet, greenlightBooth: greenlightBooth, holds: holds, openAsks: openAsks, askCard: askCard, glWords: glWords, brandOf: brandOf, headline: headline,
@@ -2757,7 +2775,7 @@ var TerritoriesPictures = (function () {
       if (!t || !mk || mk.tid !== t.id) return null;
       if (mk.refused) return { title: 'Make pictures for ' + t.name + '?', closeInside: true, sans: true, html: '<p class="meta" style="margin:0">' + esc(mk.refused) + '</p>' +
         '<div class="row"><span class="spacer" style="flex:1"></span><button type="button" class="btn-rect" data-close>Close</button></div>' };
-      return { title: 'Make ' + pluralPic(mk.card.frames) + ' for ' + t.name + '?', closeInside: true, sans: true, html: '<p class="meta" style="margin:0">Illustrative, made by an outside picture tool.</p>' +
+      return { title: 'Make ' + pluralPic(mk.card.frames) + ' for ' + t.name + '?', closeInside: true, sans: true, html: '<p class="meta" style="margin:0">Illustrative, made by an outside picture tool.</p>' + lookBox(mk.card.look) +
         '<div class="row"><span class="spacer" style="flex:1"></span><button type="button" class="btn-rect" data-close>Cancel</button><button type="button" class="btn-rect primary" data-pic-go="' + esc(t.id) + '">Make</button></div>' };
     }
     if (!h) return null;
@@ -2767,6 +2785,25 @@ var TerritoriesPictures = (function () {
     return { title: 'Needs you', closeInside: true, sans: true, html: '<img class="pic-thumb" src="' + esc(assetUrl(c.sha256)) + '" alt="The picture that needs you" onerror="this.remove()">' +
       '<p class="meta" style="margin:0">' + esc(c.why) + '</p>' +
       '<div class="row"><span class="spacer" style="flex:1"></span><button type="button" class="btn-rect" data-pic-leave="' + key + '">Leave it out</button><button type="button" class="btn-rect primary" data-pic-ok="' + key + '">Approve</button></div>' };
+  }
+  /**
+   * The Look box of the Make pictures ask (approved frames mock: "Look"): whose look the pictures wear. The client's Brand Clan the document holds
+   * (Brand Clan phase 2 (d): its colours, imagery style and banned imagery; never its logo or type), else the built-in look. What could not go to
+   * the picture tool is said, never sent.
+   */
+  function lookWords(look) {
+    look = isObj(look) ? look : {};
+    if (look.from !== 'brand_clan') return { head: 'The built-in look', body: 'This document holds no Brand Clan for the client, so the pictures use the built-in look: natural light, unstaged.' };
+    var name = String(look.name || 'the Brand Clan') + (look.version ? ' v' + look.version : ''), parts = [];
+    if (+look.colours > 0) parts.push('its colours'); if (look.imagery) parts.push('its imagery style'); if (+look.bans > 0) parts.push('what it bans');
+    var left = Array.isArray(look.left_out) ? look.left_out.filter(isObj) : [];
+    return { head: name + ', the client’s Brand Clan', body: (parts.length ? 'The pictures take ' + (parts.length > 1 ? parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1] : parts[0]) + '.' : 'It holds nothing for pictures yet, so they use the built-in look.') +
+      ' Its logo and type stay out: a frame carries no logo and no words.', left: left.map(function (x) { return String(x.what || ''); }).filter(Boolean) };
+  }
+  function lookBox(look) {
+    var w = lookWords(look);
+    return '<div class="lookbox"><span class="lk-l">Look</span><b>' + esc(w.head) + '</b><span>' + esc(w.body) + '</span>' +
+      (w.left && w.left.length ? '<span class="lk-left">Left out, as a picture tool cannot take them: ' + esc(w.left.join(' · ')) + '.</span>' : '') + '</div>';
   }
   /** The frames_status answer as the page keeps it: the held pictures and the places the engine said a picture cannot fill. */
   function framesFrom(info) {
@@ -2833,7 +2870,7 @@ var TerritoriesPictures = (function () {
   }
 
   return { STEPS: STEPS, CHOICES: CHOICES, view: view, chip: chip, rightsWord: rightsWord, rightsOf: rightsOf, labelOf: labelOf, panel: panel, strip: strip, slotHtml: slotHtml,
-    dialog: dialog, makeDialog: makeDialog, framesFrom: framesFrom, heldOf: heldOf, withHeld: withHeld, canMake: canMake, STEPS_MAKE: MAKE, boothCard: boothCard, firstOpen: firstOpen, handles: handles, act: act, reqWords: reqWords };
+    dialog: dialog, makeDialog: makeDialog, lookWords: lookWords, framesFrom: framesFrom, heldOf: heldOf, withHeld: withHeld, canMake: canMake, STEPS_MAKE: MAKE, boothCard: boothCard, firstOpen: firstOpen, handles: handles, act: act, reqWords: reqWords };
 })();
 </script>
 
@@ -3672,6 +3709,16 @@ var TerritoriesLookups = (function () {
   try {
     if (typeof fetch === 'function') fetch(clanScheme + '/upstream').then(function (r) { return r && r.ok ? r.json() : null; })
       .then(function (v) { if (v && Array.isArray(v.upstream)) { ui.upEntries = v.upstream; render(); } }, function () { /* no host */ });
+  } catch (x) { /* no host */ }
+  // New work starts on the client's default Brand Clan, the look of its pictures (Brand Clan phase 2 (d)); never over one it holds.
+  try {
+    if (typeof fetch === 'function') fetch(clanScheme + '/attach-targets').then(function (r) { return r && r.ok ? r.json() : []; })
+      .then(function (all) {
+        var d = L.brandToStart(data(), all); if (!d) return;
+        var name = String(d.title || 'its default'), c = d.client && d.client.name; if (c && name.indexOf(c + ' · ') === 0) name = name.slice(c.length + 3);
+        return fetch(clanScheme + '/attach', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ document_id: d.document_id }) })
+          .then(function (r) { if (r && r.ok) toast('Started on ' + name + ', ' + (c || 'the client') + '’s default look. Pictures wear it.'); });
+      }, function () { /* no host */ });
   } catch (x) { /* no host */ }
   setTimeout(refreshFrames, 600);
 })();
