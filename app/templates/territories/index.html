@@ -2047,6 +2047,26 @@ var TerritoriesLogic = (function () {
   /** Which stage, if any, the page is while the engine works: finding the insights, the crew out, or either one stopped. Null: the sheet.
    *  A person who went back to a step (ui.view) sees its sheet instead; the job runs on. */
   /** The engine's own words for a failed run, from the document: the message, then what it says to fix. */
+  /**
+   * The host's answer when it did not save what the engine sent back (middleware-api: change {applied: false, reason}), in plain words; null when
+   * it saved it or said nothing. Acceptance A25: a document made by an older Territories keeps that version's rules, and its host refused a
+   * result they did not allow, while the page sat on What arrived saying nothing.
+   */
+  var PART_WORDS = { 'focus.sources': 'the sources the crew may quote', 'focus.insights': 'the insights', territories: 'the routes', actions: 'the history of moves',
+    notes: 'the look-up notes', finds: 'what was found', lookups: 'the look-ups', decisions: 'the decisions', run: 'the run' };
+  function changeRefusal(change) {
+    if (!isObj(change) || change.applied !== false) return null;
+    var why = String(change.reason || ''), parts = [];
+    Object.keys(PART_WORDS).forEach(function (k) {
+      var re = new RegExp('(^|[^a-z_])' + k.replace('.', '[./]') + '([^a-z_]|$)', 'i');
+      if (re.test(why) && !parts.some(function (p) { return p.k.indexOf(k) === 0 || k.indexOf(p.k) === 0; })) parts.push({ k: k, w: PART_WORDS[k] });
+    });
+    // the host words a schema refusal by the value it refused, without its path: a source entry is the one with in_play
+    if (/"in_play"/.test(why) && !parts.some(function (p) { return p.k === 'focus.sources'; })) parts.unshift({ k: 'focus.sources', w: PART_WORDS['focus.sources'] });
+    var many = /maxItems|more than|too many|is too long|longer than/i.test(why);
+    return 'The result could not be saved: this document’s own rules refused it' + (parts.length ? ' (' + parts.map(function (p) { return p.w; }).join(', ') + (many ? ': more than it allows' : '') + ')' : '') +
+      '. A document made by an older Territories keeps that version’s rules.';
+  }
   function runErrWords(run) {
     var e = isObj(run && run.error) ? run.error : null; if (!e || !text(e.message)) return '';
     return text(e.message) + (arr(e.refused).length ? ' ' + arr(e.refused).map(text).filter(Boolean).join(' ') : '');
@@ -2282,7 +2302,7 @@ var TerritoriesLogic = (function () {
   }
 
   return {
-    upEntry: upEntry, sourceCards: sourceCards, runErrWords: runErrWords,
+    upEntry: upEntry, sourceCards: sourceCards, runErrWords: runErrWords, changeRefusal: changeRefusal,
     putAct: putAct, takeAct: takeAct, actSlot: actSlot,
     continueGate: continueGate, barItems: barItems, priBtn: priBtn, why: why, agentBlock: agentBlock, citeWords: citeWords, stageOf: stageOf, palDark: palDark,
     MOVES: MOVES, DESTS: DESTS, developed: developed, greenIds: greenIds, greenGroups: greenGroups, gCard: gCard, touch: touch, scene: scene, greenlightSheet: greenlightSheet, greenlightBooth: greenlightBooth, holds: holds, openAsks: openAsks, askCard: askCard, glWords: glWords, brandOf: brandOf, headline: headline,
@@ -3218,6 +3238,9 @@ var TerritoriesLookups = (function () {
       if (b.job.error) j.error = b.job.error.message || b.job.error.type || String(b.job.error);
       if (Array.isArray(b.job.crew)) j.crew = b.job.crew;
     }
+    // Done at the engine is not saved in the document: when the host refused the change, the run failed here, in words, with Try again (A25).
+    var refusedW = j.state === 'done' ? L.changeRefusal(b.change) : null;
+    if (refusedW) { j.state = 'failed'; j.error = refusedW; }
     // The crew is back: the page lands on Explore ("The crew is back with N routes"), never straight on Greenlight (owner decision 3).
     if (j.state === 'done' && j.crewRun && !j.landed) { j.landed = true; ui.view = 1; }
     if (j.state === 'queued' || j.state === 'running') {
@@ -3260,6 +3283,7 @@ var TerritoriesLookups = (function () {
     if (b.job && typeof b.job === 'object') {
       r.id = b.job.id || r.id; r.state = b.job.state || 'done';
       if (b.job.error) { reqFailed(r, r.what + ' did not go through. ' + (b.job.error.message || b.job.error.type || String(b.job.error))); return; }
+      if (r.state === 'done' && L.changeRefusal(b.change)) { reqFailed(r, r.what + ' did not go through. ' + L.changeRefusal(b.change)); return; }
     } else r.state = 'done';
     if (r.state === 'done' && r.after === 'frames') { r.after = null; refreshFrames(); }
     if (r.state === 'done' && r.startAfter) { r.startAfter = false; render(); startRun(); return; }

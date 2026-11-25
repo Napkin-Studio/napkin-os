@@ -220,4 +220,26 @@ test('the acceptance run\'s findings stay fixed (territories-accept, 2026-11-25)
   assert.match(html, /\.evlist\{[^}]*max-height:min\(420px,50vh\);overflow-y:auto/)
 })
 
+test('a result the host did not save fails in words with Try again, never sits on What arrived (A25, 2026-11-25)', () => {
+  // the host's answer to job_status when the document's own (older) schema refused the engine's change
+  const reason = 'agent output rejected: ["focus.sources: [{...}] has more than 80 items"]'
+  const words = L.changeRefusal({ applied: false, reason })
+  assert.match(words, /^The result could not be saved: this document’s own rules refused it \(the sources the crew may quote: more than it allows\)\./)
+  assert.doesNotMatch(words, /agent output|\[|maxItems|focus\.sources/, 'plain words, no machine text')
+  // as the host really words it (clan-sdk pack: the schema error names the refused value, not its path)
+  const real = 'agent output rejected: [{"id":"brief:background","in_play":true},{"id":"f_BULK00001","in_play":true}] has more than 5 items'
+  assert.match(L.changeRefusal({ applied: false, reason: real }), /\(the sources the crew may quote: more than it allows\)/)
+  assert.equal(L.changeRefusal({ applied: true }), null); assert.equal(L.changeRefusal(undefined), null)
+  assert.match(L.changeRefusal({ applied: false, reason: 'stale base' }), /^The result could not be saved: this document’s own rules refused it\. /)
+  // the page's job turns failed with those words: Brief's failed stage, the reason, Try again, and the step stays Pick
+  const d = json('example/states/pick.json'); d.focus.insights = []; d.run = {}
+  const st = L.view(d, { job: { state: 'failed', error: words, crewRun: false } })
+  assert.match(plain(st), /could not be saved: this document’s own rules refused it[\s\S]*Nothing was lost\./)
+  assert.match(st, /data-act="first">Try again/)
+  assert.ok(L.act(d, {}, { a: 'first' }, {})?.start, 'Try again starts the run again (the engine reuses the insights it already paid for)')
+  // the runtime reads the host's change on every job_status and on a step's answer
+  assert.match(html, /var refusedW = j\.state === 'done' \? L\.changeRefusal\(b\.change\) : null;\s*if \(refusedW\) \{ j\.state = 'failed'; j\.error = refusedW; \}/)
+  assert.match(html, /if \(r\.state === 'done' && L\.changeRefusal\(b\.change\)\) \{ reqFailed\(r,/)
+})
+
 function eq(a: unknown, b: unknown) { assert.deepEqual(JSON.parse(JSON.stringify(a)), b) }
