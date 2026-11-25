@@ -798,9 +798,9 @@ FRAME_CSS = """
 .ooh-cell{display:flex;flex-direction:column;align-items:stretch}.ooh-cell .pic.framed{box-sizing:border-box}
 .ooh-name{margin:14px 0 0;text-align:center;font:700 26px/1.2 var(--head);color:var(--ink)}
 .pic-ooh .sb-pills{top:440px}.pic-ooh .body{padding-bottom:600px}.pic-ooh .body.exec{grid-template-columns:5fr 6fr}
-.sb-strip.sb2{grid-template-columns:repeat(var(--per),372px);justify-content:center;row-gap:22px}.sb-strip.sb2 .sb-cap{font-size:19px;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-strip.sb2{grid-template-columns:repeat(var(--per),372px);justify-content:center;row-gap:22px}.sb-strip.sb2 .sb-cap{font-size:19px;line-height:1.25;margin-top:4px}
 .pic-sb .body{padding-bottom:470px}
-.pic-sb.pic-sb2 .body{padding-bottom:600px}.pic-sb2 .sb-pills{top:auto;bottom:30px}.pic-sb .body.exec{grid-template-columns:5fr 6fr}
+.pic-sb.pic-sb2 .body{padding-bottom:660px}.pic-sb2 .sb-pills{top:auto;bottom:30px}.pic-sb .body.exec{grid-template-columns:5fr 6fr}
 """
 
 #: Picture styles: added to the stylesheet ONLY when a picture is drawn, so a deck with none keeps its exact bytes.

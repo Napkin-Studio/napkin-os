@@ -32,6 +32,33 @@ def brand_ref(name: str) -> str:
     return "brand/" + slug(name)
 
 
+LEGAL_SUFFIX = re.compile(r"[\s,]+(?:ltd|limited|plc|inc|incorporated|llc|gmbh|ag|sa|bv|co|corp|corporation)\.?$", re.I)
+
+
+def client_brand_name(client: str) -> str:
+    """The brand a client's own name stands for, when nothing else names it: the client without its legal
+    suffix ("Copperell Home Ltd" -> "Copperell Home")."""
+    n = " ".join(str(client or "").split())
+    while LEGAL_SUFFIX.search(n):
+        n = LEGAL_SUFFIX.sub("", n).strip()
+    return n
+
+
+def same_house(brand: str, client: str) -> bool:
+    """`brand` is the client's own by its name: the same name, one inside the other, or the same leading
+    word of at least four letters ("Copperell Refill" and "Copperell Home"). Comparators named in the
+    question ("Smol", "Method") are not."""
+    def words(s):
+        return re.findall(r"[a-z0-9]+", str(s or "").lower())
+    b, c = words(brand), words(client_brand_name(client))
+    if not b or not c:
+        return False
+    jb, jc = " ".join(b), " ".join(c)
+    if jb == jc or f" {jb} " in f" {jc} " or f" {jc} " in f" {jb} ":
+        return True
+    return b[0] == c[0] and len(b[0]) >= 4
+
+
 def asks(quote: str, name: str) -> bool:
     """The brand `name` is the one doing the asking in `quote`: it is followed, within two words, by a client verb."""
     return re.search(rf"(?<!\w){re.escape(name)}(?:\W+\w+){{0,2}}?\W+(?:{CLIENT_VERB})\b", quote or "", re.I) is not None

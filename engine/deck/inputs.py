@@ -461,6 +461,20 @@ def apply_research(inp: "Inputs", members: dict | None) -> bool:
     return inp.has_research()
 
 
+def apply_upstream_brief(inp: "Inputs", doc_id: str, doc: dict, chain: list | None = None) -> bool:
+    """A deck spun off a brief (Continue in -> Deck) takes that brief, carried whole under ``data.upstream``, through the one field mapping
+    (``brief_from_data``): its fields, how to win, open questions and Confidential marks. The engine server is sent it as ``brief_upstream``.
+    UAT round 4 L2: it was never sent, so a brief-only deck built from an empty brief (the intake abstained on every field) and called its
+    tier 'research'. Returns whether it took it. A brief of the deck's own (or one an intake stage wrote) is never replaced."""
+    if inp.has_brief() or inp.coverage.get("brief_source", "none") not in ("none", None) or not _is_brief_data(doc):
+        return False
+    fields, htw, oq, cov = brief_from_data(doc, chain or [], doc_id, {})
+    inp.brief, inp.how_to_win, inp.open_questions = fields, htw, oq
+    inp.marks = (inp.marks or []) + (cov.pop("marks", None) or [])
+    inp.coverage.update(cov)
+    return True
+
+
 def apply_production_brief(inp: "Inputs", doc_id: str, doc: dict) -> bool:
     """A deck with no brief of its own takes the brief its carried Production project holds (``briefs``, a frozen spine): the fields, and the
     parts it marked Confidential as marks. Returns whether it did. A brief of the deck's own (or one an intake stage wrote) is never replaced."""

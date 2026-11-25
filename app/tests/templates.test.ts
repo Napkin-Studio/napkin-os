@@ -258,10 +258,12 @@ type TitleFns = { researchTitle(): string; titleIsOurs(t: string): boolean; sync
 const BRIEF_FNS = ['briefUpstream', 'briefData', 'briefShortName']
 const TITLE_FNS = [...BRIEF_FNS, 'brandName', 'workName', 'isMarketList', 'researchTitle', 'titleIsOurs', 'syncTitle']
 
-test('the research is titled by its brand and markets, else its working name', () => {
+test('the research is titled by the working name a person gave it, else its brand and markets', () => {
   const t = (c: Record<string, unknown>) => lift<TitleFns>(RT, TITLE_FNS, researchEnv(c, {}).env).researchTitle()
   const brand = { value: { name: 'Lunasa', ref: 'b_1' } }
-  assert.equal(t({ brand, markets: { value: ['IE', 'GB'] }, name: { value: 'Summer' } }), 'Lunasa · Ireland and Great Britain')
+  // Acceptance A4: the working name wins over the derived title (it used to lose to brand and markets).
+  assert.equal(t({ brand, markets: { value: ['IE', 'GB'] }, name: { value: 'Summer' } }), 'Summer')
+  assert.equal(t({ brand, markets: { value: ['IE', 'GB'] } }), 'Lunasa · Ireland and Great Britain')
   assert.equal(t({ brand, markets: { value: ['IE'] } }), 'Lunasa · Ireland')
   assert.equal(t({ brand, name: { value: ' Summer push ' } }), 'Summer push')
   assert.equal(t({ brand }), 'Lunasa')
@@ -270,9 +272,9 @@ test('the research is titled by its brand and markets, else its working name', (
 })
 
 test('the title is set over the tool’s name, never over one a person chose', async () => {
-  const c = { brand: { value: { name: 'Lunasa' } }, markets: { value: ['IE'] }, name: { value: 'Summer push' } }
+  const c = { brand: { value: { name: 'Lunasa' } }, markets: { value: ['IE'] } }
   for (const [title, set] of [
-    ['Research Tool', true], ['Untitled research', true], ['', true], ['Summer push', true],
+    ['Research Tool', true], ['Untitled research', true], ['', true], ['Summer push', false],
     ['Lunasa · Great Britain', true], ['Lunasa', true], ['Our pitch for Lunasa', false],
     ['Lunasa · Ireland and Great Britain', true], ['Lunasa · Great Britain, PL and Ireland', true],
     // A person's title that only starts like ours is theirs.
@@ -283,6 +285,42 @@ test('the title is set over the tool’s name, never over one a person chose', a
     assert.deepEqual(r.calls, set ? ['Lunasa · Ireland'] : [], `over ${JSON.stringify(title)}`)
     assert.equal(r.document.title, 'Lunasa · Ireland · Research')
   }
+})
+
+test('a working name moves the title off the derived one, and never off a person’s own (acceptance A4)', () => {
+  const c = { brand: { value: { name: 'Copperell' } }, markets: { value: ['GB'] }, name: { value: 'Copperell Refill · GB refill sprays' } }
+  for (const [title, set] of [['Copperell · Great Britain', true], ['Copperell Refill · Research', true], ['Research Tool', true], ['Our pitch', false]] as const) {
+    const r = researchEnv(c, { title })
+    lift<TitleFns>(RT, TITLE_FNS, r.env).syncTitle()
+    assert.deepEqual(r.calls, set ? ['Copperell Refill · GB refill sprays'] : [], `over ${JSON.stringify(title)}`)
+  }
+})
+
+test('a toast that has faded leaves the page, and a new run clears it (acceptance A3)', () => {
+  const cls = new Set<string>(); const t = { textContent: '', classList: { add: (c: string) => cls.add(c), remove: (c: string) => cls.delete(c), contains: (c: string) => cls.has(c), toggle: (c: string, on: boolean) => (on ? cls.add(c) : cls.delete(c)) }, appendChild: () => {} }
+  const timers: (() => void)[] = []
+  const f = lift<{ toast(m: string): void; hideToast(): void }>(RT, ['toast', 'hideToast'], {
+    $: () => t, document: {}, setTimeout: (fn: () => void) => { timers.push(fn); return timers.length }, clearTimeout: () => {},
+  })
+  f.toast('Stopped. What was found so far stays.')
+  assert.equal(t.textContent, 'Stopped. What was found so far stays.')
+  assert.ok(cls.has('on'))
+  timers.shift()!()  // the toast's time is up
+  assert.ok(!cls.has('on'))
+  timers.shift()!()  // faded
+  assert.equal(t.textContent, '', 'its words are not left in the live region')
+  assert.match(fn(RT, 'startCampaign'), /CHAT\.back=false; CHAT\.cancelAsk=false; hideToast\(\);/, 'a new run starts clean')
+})
+
+test('"Stop the research?" stays the same row across polls until it changes (acceptance A2)', () => {
+  const body = fn(RT, 'renderChat')
+  assert.match(body, /var csig=CHAT\.cancelAsk\?cancelHtml\(\):'';\n\s*if\(csig&&csig===CHAT\.cancelSig&&el\.querySelector\('\.rs-cancel \[data-act=chat-cancel-yes\]'\)\) return;\n\s*CHAT\.cancelSig=csig;/)
+  assert.ok(body.indexOf('CHAT.cancelSig=csig;') < body.indexOf('el.innerHTML=workHtml(T, Q);'), 'checked before the view is drawn again')
+  // Stopping… is a change of the row itself: it is drawn.
+  const CHAT = { job: { id: 'j', state: 'running' }, cancelAsk: true, cancelling: false }
+  const c = lift<{ cancelHtml(): string }>(RT, ['cancelHtml'], { CHAT, jobActive: () => true, liveQuestion: () => null })
+  const asking = c.cancelHtml(); CHAT.cancelling = true
+  assert.notEqual(c.cancelHtml(), asking)
 })
 
 // UAT round 4, F12: Continue in -> Research from a brief ("A follow-up question from its open questions").
@@ -874,7 +912,7 @@ test('a note on a brief can be fixed by the crew, and the worker shows in the si
   const said: string[] = []
   let locked = false
   const env = {
-    FIX: null, DRAFT: null, FIX_SAY, walker, renderSideStop: () => {}, boothAsk: () => {}, STRAT_: 'The Strategy agent', WRITER: 'the Brief agent', REV: 'the Review agent', NO_MW: 'no middleware', phase: 'doc', reduce: false,
+    FIX: null, DRAFT: null, FIX_SAY, walker, renderSideStop: () => {}, boothAsk: () => {}, boothWaiting: () => 0, STRAT_: 'The Strategy agent', WRITER: 'the Brief agent', REV: 'the Review agent', NO_MW: 'no middleware', phase: 'doc', reduce: false,
     $: (id: string) => (id === 'walker' ? walker : id === 'sideAgent' ? side : null),
     REGEN: {}, fieldOf: () => null, roleOf: (k: string) => k,
     ROLES: { of: (k: string) => k, name: (k: string) => ({ synthesis: 'Strategy agent' } as Record<string, string>)[k] || 'An agent', auto: () => {},
@@ -2886,7 +2924,7 @@ test('brief: Lock waits until Needs you is empty, open questions included', () =
   const run = (rows: unknown[], canLock = true) => {
     const env = { $: el, arr, lockState: () => ({ can_lock: canLock, reopened: [] }), approveLocked: () => false, get: () => false,
       draftLive: () => false, needsRows: () => rows, renderStateLine() {}, docVersion: () => 'v1', SEL: null, NEEDS_N: null, READY_NUDGE: false,
-      lockListHtml: () => '', bindLkItems() {} }
+      lockListHtml: () => '', bindLkItems() {}, boothAsk() {}, boothWaiting: () => 0 }
     lift<{ renderLockBtn(): void }>(BM, ['lockWhy', 'renderLockBtn'], env).renderLockBtn()
     return { disabled: el('lockBtn').disabled, why: el('lockWhy').textContent }
   }
@@ -2906,7 +2944,7 @@ test('brief: Lock waits until Needs you is empty, open questions included', () =
   const el2 = (id: string) => els2[id] ||= { hidden: false, disabled: false, textContent: '', title: '', innerHTML: '', classList: { toggle() {} } }
   lift<{ renderLockBtn(): void }>(BM, ['lockWhy', 'renderLockBtn'], { $: el2, arr, lockState: () => null, approveLocked: () => false, get: () => false,
     draftLive: () => false, needsRows: () => [], renderStateLine() {}, docVersion: () => 'v1', SEL: null, NEEDS_N: null, READY_NUDGE: false,
-    lockListHtml: () => '', bindLkItems() {} }).renderLockBtn()
+    lockListHtml: () => '', bindLkItems() {}, boothAsk() {}, boothWaiting: () => 0 }).renderLockBtn()
   assert.equal(el2('lockBtn').disabled, true, 'the lock list not loaded yet: Lock waits')
 })
 
@@ -4819,12 +4857,66 @@ test('Research: a run lost to a restart ends as stopped, says it was interrupted
   const sp = lift<{ speech(T: unknown[]): Record<string, string> }>(RT, ['speech'], {
     CHAT, liveQuestion: () => null, jobActive: () => false, isObj, arr, D: () => ({}), STAGE: { research: {} }, runRole: () => 'research',
     firstPrompt: () => ({ text: 'go' }), theAgent: () => 'the Research agent', camp: () => ({}), pins: () => ({}), LENSES: [],
+    TRY_AGAIN: '<button type="button" class="rs-go" data-act="chat-retry">Try again</button>',
   }).speech([])
-  assert.equal(sp.text, 'I had to stop. What we already found stays in the document.')
+  assert.equal(sp.text, 'I had to stop. Nothing was lost: what we already found stays in the document.')
   assert.equal(sp.err, INTERRUPTED_WORDS)
   assert.match(sp.acts, /data-act="chat-retry">Run it again</)
   // other jobs (research runs, asks) say the same words
   assert.equal(lift<{ mwError(r: unknown): string }>(RT, ['mwError', 'interrupted'], { INTERRUPTED: INTERRUPTED_WORDS }).mwError(UNKNOWN_JOB), INTERRUPTED_WORDS)
+})
+
+// UAT round 4, L3: a Research run that stopped could not be tried again, and Back to the ask stayed on the stopped view.
+const TRY_AGAIN_BTN = '<button type="button" class="rs-go" data-act="chat-retry">Try again</button>'
+const stoppedSpeech = (job: Record<string, unknown>, started = true) => lift<{ speech(T: unknown[]): Record<string, string> }>(RT, ['speech'], {
+  CHAT: { job }, liveQuestion: () => null, jobActive: () => false, isObj, arr, D: () => ({}), STAGE: { extract: {}, research: {} }, runRole: () => 'knowledge',
+  firstPrompt: () => (started ? { text: 'go' } : null), theAgent: () => 'the Strategy agent', camp: () => ({}), pins: () => ({}), LENSES: [], TRY_AGAIN: TRY_AGAIN_BTN,
+}).speech([])
+
+test('Research: a run that fails stays on the stage, says what happened and that nothing was lost, with Try again as the primary', () => {
+  const sp = stoppedSpeech({ id: 'job_1', state: 'failed', stage: 'extract', error: 'extract failed: LayersError: layers unreachable (ConnectError)' })
+  assert.equal(sp.text, 'I had to stop. Nothing was lost: what we already found stays in the document.')
+  assert.equal(sp.err, 'extract failed: LayersError: layers unreachable (ConnectError)', 'it says what happened')
+  assert.equal(sp.acts, TRY_AGAIN_BTN, 'Try again, the primary (rs-go): it was offered nothing before')
+  const stopped = stoppedSpeech({ id: 'job_1', state: 'cancelled', stage: 'research' })
+  assert.match(stopped.text, /^You stopped the research at the research step\. Nothing was lost/)
+  assert.equal(stopped.acts, TRY_AGAIN_BTN)
+  // Lost touch with a run that may still be going: look again first, or start it again.
+  const stalled = stoppedSpeech({ id: 'job_1', state: 'stalled', stage: 'research', error: 'timeout' })
+  assert.match(stalled.acts, /data-act="chat-poll">Check again<\/button>/)
+  assert.ok(stalled.acts.endsWith(TRY_AGAIN_BTN))
+  // Nothing was ever asked: nothing to try again.
+  assert.equal(stoppedSpeech({ id: 'job_1', state: 'failed', stage: 'extract', error: 'x' }, false).acts, '')
+})
+
+test('Research: Back to the ask on a stopped run goes back to the ask, as asked, and Try again re-runs it', () => {
+  // The stopped view's way back and the ask's way back to the stage.
+  const back = RT.slice(RT.indexOf("case 'rt-back':"), RT.indexOf("case 'rt-unback':"))
+  assert.match(back, /if\(runStopped\(\)\)\{ CHAT\.back=true; if\(!CHAT\.draft\) CHAT\.draft=lastAskText\(\); renderChat\(\);/)
+  assert.match(RT, /if\(\(fresh && !CHAT\.job\)\|\|backToAsk\(\)\)\{\n\s*el\.innerHTML=startHtml\(\);/)
+  assert.match(fn(RT, 'startHtml'), /backToAsk\(\)\?'<p class="rt-unback no-print"><button type="button" class="linkbtn" data-act="rt-unback">Back to where it stopped →<\/button><\/p>'/)
+  assert.match(fn(RT, 'startCampaign'), /CHAT\.back=false;/, 'starting again leaves the ask')
+  // Only a run that stopped for good, with no report, goes back to the ask.
+  const CHAT: { job: Record<string, unknown> | null; back?: boolean } = { job: { state: 'failed' }, back: true }
+  let report: unknown = null
+  const THREAD = [
+    { m: { role: 'user', material_id: 'mat_1', text: 'First ask\n\nMarkets: GB.' } },
+    { m: { role: 'agent', text: 'hi' } },
+    { m: { role: 'user', material_id: 'mat_2', text: 'Copperell Refill: the brief’s open questions.\n- What is the budget figure?\n\nLenses: Market, Regulation. Markets: GB. Window: 2024–2026.' } },
+    { m: { role: 'agent', text: 'on it' } },
+  ]
+  const f = lift<{ runStopped(): boolean; backToAsk(): boolean; lastAskText(): string }>(RT, ['latestPrompt', 'runStopped', 'backToAsk', 'lastAskText'], {
+    CHAT, isObj, D: () => ({ report }), thread: () => THREAD,
+  })
+  assert.equal(f.backToAsk(), true)
+  assert.equal(f.lastAskText(), 'Copperell Refill: the brief’s open questions.\n- What is the budget figure?', 'the last ask, without the picks the page adds again')
+  for (const state of ['running', 'queued', 'stalled', 'done']) { CHAT.job = { state }; assert.equal(f.runStopped(), false, state) }
+  CHAT.job = { state: 'cancelled' }; assert.equal(f.runStopped(), true)
+  report = { headline: 'x' }; assert.equal(f.runStopped(), false, 'a report: Back shows what was asked, as before')
+  // Try again re-runs the ask the last run started from, with its files: the changed one after Back to the ask.
+  assert.match(RT, /function doRetry\(\)\{\n\s*var m=latestPrompt\(\); if\(!m\) return;\n\s*startCampaign\(m\.text,/)
+  assert.equal(lift<{ latestPrompt(): { material_id: string } }>(RT, ['latestPrompt'], { thread: () => THREAD }).latestPrompt().material_id, 'mat_2')
+  assert.match(fn(RT, 'sheetHtml'), /var first=latestPrompt\(\)/, 'What you asked for shows the ask the run used')
 })
 
 test('Brief Maker: a draft lost to a restart stops with "We had to stop", the words, and Run it again', () => {
@@ -5120,7 +5212,7 @@ function redraftPage(o: { locked?: string[] } = {}) {
     pollJob: () => {},
     window: { scrollTo: () => {} }, setTimeout: () => 0,
     runJob: (j: J, input: Record<string, unknown>) => { j.state = 'sending'; runs.push({ j, input }) },
-    boothAsk: () => {},
+    boothAsk: () => {}, boothWaiting: () => 0,
   }
   const f = lift<{ startDraft(p: string, a: unknown[], id?: string | null, inPlace?: boolean): void; sweepKeys(j: unknown): string[] }>(BM,
     ['startDraft', 'draftLive', 'sweepKeys', 'markSweep', 'draftSide', 'renderSideStop', 'draftInPlace', 'sideAgent'], env)
@@ -5144,7 +5236,7 @@ test('Draft it again runs in place: the sheet stays, intake is off, and the serv
   assert.match(fn(BM, 'draftNow'), /if\(draftLive\(\)\)\{ if\(!DRAFT\.inPlace\)\{ setPhase\('proc'\); renderProc\(\); \} return; \}/)
   assert.match(fn(BM, 'draftNow'), /startDraft\(ask, atts, null, !!inPlace&&phase==='doc'\)/)
   assert.match(fn(BM, 'redraftClick'), /if\(draftLive\(\)\) return;/)
-  assert.match(fn(BM, 'barItems'), /label:REDRAFT_ARMED\?'Click again to redraft':'Draft it again', disabled:draftLive\(\)/, 'off while it runs')
+  assert.match(fn(BM, 'barItems'), /label:REDRAFT_ARMED\?'Click again to redraft':'Draft it again', stays:!REDRAFT_ARMED, disabled:draftLive\(\)/, 'off while it runs; the first press keeps a menu open (A7)')
   assert.match(fn(BM, 'linkNoteHtml'), /if\(phase!=='doc'\|\|approveLocked\(\)\|\|draftLive\(\)\|\|LINK\.run\) return '';/, 'the notice is hidden while it runs')
 })
 
@@ -5496,4 +5588,112 @@ test('brief: a working name that carries a caveat gives a short document title',
   // The sheet's head, its tab and the export read the short name too, and the engine writes one.
   assert.match(BM, /shortName\(get\('project_name'\)\)/)
   assert.match(BM, /\$\('hProj'\)\.textContent=pn\|\|dt/)
+})
+
+// ── a Research Booth the shell restored hidden kept Lock the report out of reach (follow-up to T10, 2026-11-24) ──
+test('Research: hidden on load with something waiting, the Booth comes in, whichever arrives first', () => {
+  const b = booth(RT, 1440)
+  b.boothAsk(3); b.boothSet({ t: 'shell', open: false })
+  assert.equal(b.BOOTH.open, false, 'the stored choice lands first')
+  b.timers.at(-1)!.f()
+  assert.equal(b.BOOTH.open, true, 'then it comes in on what waits')
+  const c = booth(RT, 1440)
+  c.boothSet({ t: 'shell', open: false }); c.boothAsk(3); c.timers.at(-1)!.f()
+  assert.equal(c.BOOTH.open, true)
+  const d = booth(RT, 1440)
+  d.boothSet({ t: 'shell', open: false })
+  assert.equal(d.timers.length, 0, 'nothing waiting: the stored choice stands')
+  // re-hidden in the session: it stays hidden until more arrives
+  const e = booth(RT, 1440)
+  e.boothAsk(3); e.boothSet({ t: 'hide' }); const n = e.timers.length; e.boothAsk(3)
+  assert.equal(e.timers.length, n, 'the same count does not bring it back')
+  assert.equal(e.BOOTH.open, false)
+})
+
+test('Research: what waits in the Booth counts the calls Lock the report waits on, not a locked report', () => {
+  const env = (o: Record<string, unknown> = {}) => ({
+    liveQuestion: () => null, jobActive: () => false, isObj: (x: unknown) => !!x && typeof x === 'object', D: () => ({ report: {} }),
+    reportLocked: () => false, arr: (x: unknown) => (Array.isArray(x) ? x : []), window: { ClanFields: null },
+    checks: () => [{ open: true }, { open: true }, { open: false }], ...o })
+  const w = (o?: Record<string, unknown>) => lift<{ boothWaiting(): number }>(RT, ['boothWaiting'], env(o)).boothWaiting()
+  assert.equal(w(), 2, 'two open calls')
+  assert.equal(w({ checks: () => [{ open: false }] }), 1, 'every call settled: Lock is ready')
+  assert.equal(w({ reportLocked: () => true }), 0, 'locked')
+  assert.equal(w({ reportLocked: () => true, checks: () => [], window: { ClanFields: { view: () => ({ lock: { reopened: [{ address: 'x' }] } }) } } }), 1,
+    'reopened for the client: Lock the report again waits')
+  assert.equal(w({ D: () => ({}) }), 0, 'no report yet')
+  assert.equal(w({ jobActive: () => true }), 0, 'the agents are working')
+  assert.equal(w({ liveQuestion: () => ({ id: 'q' }) }), 1, 'an agent question counts')
+  for (const name of ['renderChecks']) assert.match(fn(RT, name), /boothAsk\(boothWaiting\(\)\)/, `${name} keeps the count current`)
+})
+
+// ── T10 (2026-11-24): a Booth the shell restored hidden kept Lock out of reach, so the brief stayed a v1 draft ──
+for (const [name, src] of [['Brief Maker', BM], ['Research', RT]] as const) {
+  test(`${name}: hidden on load with something waiting, the Booth comes in, whichever arrives first`, () => {
+    // the count first, then the shell's stored "hidden"
+    const b = booth(src, 1440)
+    b.boothAsk(5)
+    b.boothSet({ t: 'shell', open: false })
+    assert.equal(b.BOOTH.open, false, 'the stored choice lands first')
+    assert.equal(b.timers.at(-1)?.ms, 1000)
+    b.timers.at(-1)!.f()
+    assert.equal(b.BOOTH.open, true, 'then it comes in on what waits')
+    // the shell's "hidden" first, then the count
+    const c = booth(src, 1440)
+    c.boothSet({ t: 'shell', open: false }); c.boothAsk(5); c.timers.at(-1)!.f()
+    assert.equal(c.BOOTH.open, true)
+    // nothing waiting: the stored choice stands
+    const d = booth(src, 1440)
+    d.boothSet({ t: 'shell', open: false })
+    assert.equal(d.timers.length, 0)
+    assert.equal(d.BOOTH.open, false)
+  })
+}
+
+test('Brief Maker: what waits in the Booth counts the Needs you items and a ready Lock, not a locked brief', () => {
+  const lockOf = (l: unknown) => {
+    const env = {
+      phase: 'doc', DRAFT: null as unknown, draftLive: () => false, lockState: () => l, arr: (x: unknown) => (Array.isArray(x) ? x : []),
+      approveLocked: () => false, get: () => undefined, hasContent: () => true, needsRows: () => [] as unknown[],
+    }
+    return { env, f: () => lift<{ boothWaiting(): number }>(BM, ['boothWaiting'], env).boothWaiting() }
+  }
+  const five = lockOf({ can_lock: false, reopened: [] }); five.env.needsRows = () => [1, 2, 3, 4, 5]
+  assert.equal(five.f(), 5, 'the five flagged items the lock waits on')
+  const ready = lockOf({ can_lock: true, reopened: [] })
+  assert.equal(ready.f(), 1, 'Lock is ready: one thing waits')
+  const locked = lockOf({ can_lock: true, reopened: [] }); locked.env.approveLocked = () => true
+  assert.equal(locked.f(), 0, 'locked: nothing waits')
+  const unknown = lockOf(null)
+  assert.equal(unknown.f(), 0, 'not known yet: nothing counted')
+  const drafting = lockOf({ can_lock: false, reopened: [] }); drafting.env.draftLive = () => true; drafting.env.needsRows = () => [1]
+  assert.equal(drafting.f(), 0, 'the agents are drafting: Lock waits on them, not the person')
+  const asking = lockOf({ can_lock: false, reopened: [] }); asking.env.DRAFT = { inPlace: true, state: 'needs_input' }
+  assert.equal(asking.f(), 1, 'an agent question still counts')
+  assert.match(fn(BM, 'renderLockBtn'), /boothAsk\(boothWaiting\(\)\)/, 'the count follows the lock list as it loads')
+})
+
+// Acceptance run A5 (2026-11-25): "v1 · edited 48m ago" right after the first draft finished. clan://chain is newest
+// first, so its last decision was the oldest write.
+test('Brief Maker: "edited" is the latest write, in whichever order the chain comes', () => {
+  const at = (decisions: { timestamp?: string }[]) =>
+    lift<{ lastWhen(): Date | null }>(BM, ['lastWhen'], { CHAIN: { decisions }, arr: (x: unknown) => (Array.isArray(x) ? x : []) }).lastWhen()
+  const newestFirst = [{ timestamp: '2026-11-25T03:19:40Z' }, { timestamp: '2026-11-25T03:02:00Z' }, { timestamp: '2026-11-25T02:31:00Z' }]
+  assert.equal(at(newestFirst)?.toISOString(), '2026-11-25T03:19:40.000Z')
+  assert.equal(at([...newestFirst].reverse())?.toISOString(), '2026-11-25T03:19:40.000Z', 'oldest first too')
+  assert.equal(at([{ timestamp: 'not a date' }, {}]), null)
+  assert.equal(at([]), null)
+})
+
+// Acceptance run A9 (2026-11-25): Built from cited "document-1795538546841-0.txt" for the uploaded "copperell-brand-notes.txt".
+test('Brief Maker: an attachment carries its own file name as label; the stored name stays for the host', async () => {
+  const assets = [{ name: 'document-1795538546841-0.txt', label: 'copperell-brand-notes.txt', path: 'human/assets/document-1795538546841-0.txt', sha256: 'a'.repeat(64), media_type: 'text/plain' },
+    { name: 'image-1-0.png', label: 'image-1-0.png', path: 'human/assets/image-1-0.png', sha256: 'b'.repeat(64), media_type: 'image/png' }]
+  const f = lift<{ attachmentsFor(): Promise<Record<string, string>[]> }>(BM, ['attachmentsFor'], {
+    arr: (x: unknown) => (Array.isArray(x) ? x : []), data: () => ({ reference_assets: assets }), upMaterials: () => [],
+    mediaTypeOf: (_n: string, t: string) => t, assetUrl: (n: string) => n, fetch: () => { throw new Error('no fetch: the sha is known') }, sha256Hex: () => '', Promise })
+  const got = await f.attachmentsFor()
+  assert.equal(got[0].name, 'document-1795538546841-0.txt', 'the stored name: the host reads the file by it')
+  assert.equal(got[0].label, 'copperell-brand-notes.txt')
+  assert.equal('label' in got[1], false, 'a label that is the name adds nothing')
 })

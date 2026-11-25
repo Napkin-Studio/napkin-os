@@ -137,8 +137,8 @@ export function lineage(chain: ChainEntry[], doc: ProductionDocument, docId: str
   }
   for (const e of oldestFirst) {
     if (!e.id) continue
-    // The template's own decisions (its summary view, written when the app was packed) change no part of the project: they
-    // are not in the project's tree. Older CLIs wrote them with no id; the CLI now gives every decision one.
+    // The template's own view packing (scripts/make-app.mjs, "… summary view") changes only human/ and names nothing in the
+    // project: not a decision anyone made about the film. Older clan builds gave it no id; current ones do.
     if (!(e.targets ?? []).length && !(e.cites ?? []).length && (e.fields_changed ?? []).length > 0 && (e.fields_changed ?? []).every((f) => f.startsWith('human/'))) continue
     const verb = e.action.split(' ')[0]
     const targets = e.targets ?? []

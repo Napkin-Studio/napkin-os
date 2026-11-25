@@ -1124,7 +1124,47 @@ class CampaignJob:
                     levels.append(("medium", f"{brand['name']} comes from the brief, not the client's material; "
                                              f"confirm it"))
                     kind = "brief"
-            if kind == "brief":
+            # The material does not settle it, but the research was started from a client's page: that client
+            # is who it is for (acceptance A1: "Which brand is the client's?" offered only the competitors the
+            # question named). A brand named like the client is theirs; with none, the client itself is the brand,
+            # proposed. Only when the material claims two or more brands as the client's does it still ask, and
+            # then the client comes first.
+            wc = extract_stage.workspace_client(self.clan)
+            if kind in ("ask", "ask_text") and wc:
+                cname = id_rules.client_brand_name(wc["name"])
+                ours = next((b for b in brands if id_rules.same_house(b["name"], cname)), None)
+                claimed = [b for b in brands if id_rules.checked_basis(b) != "none" and not b.get("comparator")]
+                if ours:
+                    brand = {"ref": ours["ref"], "name": ours["name"]}
+                    write("brand", {"value": brand, "origin": "proposed", "source": ours["span"],
+                                    "workspace_ref": wc["id"]})
+                    idec["cites"] += [ours["span"]["material_id"], wc["id"]]
+                    notes.append(f"{ours['name']} is the brand: the material names it, and the research was "
+                                 f"started from {wc['name']}'s client page (proposed, to confirm).")
+                    ev_material.append(rsn.point(f"The material names {ours['name']}", ours["span"]["material_id"]))
+                    ev_pins.append(rsn.point(f"The research was started from {wc['name']}'s client page", wc["id"]))
+                    levels.append(("medium", f"{ours['name']} is named like the client; confirm it"))
+                    kind = "settled"
+                elif len(claimed) < 2:
+                    brand = {"ref": id_rules.brand_ref(cname), "name": cname}
+                    write("brand", {"value": brand, "origin": "proposed", "workspace_ref": wc["id"]})
+                    idec["cites"].append(wc["id"])
+                    notes.append(f"{cname} is the brand: the research was started from {wc['name']}'s client page "
+                                 f"(proposed, to confirm).")
+                    ev_pins.append(rsn.point(f"The research was started from {wc['name']}'s client page", wc["id"]))
+                    levels.append(("medium", f"{cname} is the client this research is for; confirm the brand"))
+                    for b in brands:
+                        opt = f"{b['name']} as the client's brand"
+                        if opt not in [r["option"] for r in rejected]:
+                            rejected.append(rsn.rej(opt, f"the material names it, not as the client's; the research "
+                                                         f"is for {wc['name']}"))
+                    kind = "settled"
+                elif kind == "ask":
+                    first = {"id": id_rules.opt_id(cname), "label": cname,
+                             "value": {"ref": id_rules.brand_ref(cname), "name": cname},
+                             "origin": "proposed", "workspace_ref": wc["id"]}
+                    what = [first] + [o for o in what if o["id"] != first["id"]]
+            if kind in ("brief", "settled"):
                 pass
             elif kind == "subject":
                 brand = {"ref": what["ref"], "name": what["name"]}

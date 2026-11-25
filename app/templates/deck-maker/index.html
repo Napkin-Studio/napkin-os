@@ -1079,6 +1079,16 @@ var DeckLogic = (function () {
    * production: {name, finals, to_supply, brief} | null, any }. Nothing is ever stored back; all are null when there is no upstream. Never throws.
    * A deck with no brief of its own takes the one its Production project froze, so the Brief card then shows that.
    */
+  /** The research the deck carries as its own members (data.projection pins and findings), or null. */
+  function ownResearch(pr) {
+    if (!isObj(pr)) return null;
+    var pins = isObj(pr.pins) ? Object.keys(pr.pins).length : Array.isArray(pr.pins) ? pr.pins.length : 0;
+    var st = findingStats({ projection: pr });
+    var usableFindings = st.known ? st.findings - st.rejected : 0;
+    if (!pins && usableFindings <= 0) return null;
+    return { name: 'Research', findings: st.known && st.findings ? st.findings : null, rejected: st.known && st.findings ? st.rejected : null };
+  }
+
   function upstreamSummary(data) {
     var up = data && isObj(data.upstream) ? data.upstream : {};
     var brief = null, research = null, production = null, carried = [];
@@ -1105,6 +1115,10 @@ var DeckLogic = (function () {
       take(up[id]); // the deck's own brief and research come first
     });
     carried.forEach(take);
+    // The research a brief had linked reaches a deck as the deck's own members (shared/facts.yaml, findings.yaml), projected into its
+    // data.projection: the engine counts it (inputs.has_research: facts or findings), so the page does too (UAT round 4 F26: "No research
+    // brought in" while CHECKED said brief+research). Only when no carried document named research already.
+    if (!research) research = ownResearch(data && data.projection);
     if (!brief && production && production.brief) {
       brief = { name: production.brief.name, fields_filled: production.brief.fields_filled, fields_total: BRIEF_KEYS.length, mandatories: production.brief.mandatories, from: 'production' };
     }
@@ -1156,8 +1170,8 @@ var DeckLogic = (function () {
    * data.upstream (or nothing); `documents` the attached list (names or {name}). The tier is the
    * richest source present: brief+research, brief, research, prompt+documents, else prompt.
    */
-  function builtFrom(inputs, upstream, documents, type) {
-    var sum = upstreamSummary({ upstream: upstream });
+  function builtFrom(inputs, upstream, documents, type, projection) {
+    var sum = upstreamSummary({ upstream: upstream, projection: projection });
     var names = (documents || []).map(function (x) { return typeof x === 'string' ? x : x && x.name; }).filter(Boolean);
     var tier = sum.brief && sum.research ? 'brief+research' : sum.brief ? 'brief' : sum.research ? 'research'
       : names.length ? 'prompt+documents' : 'prompt';
@@ -1186,9 +1200,9 @@ var DeckLogic = (function () {
   }
 
   /** Build is refused only with no prompt text, no documents and no upstream. */
-  function canBuild(inputs, upstream, documents) {
+  function canBuild(inputs, upstream, documents, projection) {
     var text = String((inputs && inputs.prompt && inputs.prompt.text) || '').trim();
-    var has = !!text || (documents || []).length > 0 || upstreamSummary({ upstream: upstream }).any;
+    var has = !!text || (documents || []).length > 0 || upstreamSummary({ upstream: upstream, projection: projection }).any;
     return has ? { ok: true, message: '' }
       : { ok: false, message: 'Give the deck something to build from: a line about what you are pitching, a document, or a brief or research.' };
   }
@@ -2078,7 +2092,7 @@ var DeckProd = (function () {
   // The page never writes what the engine reports: only the person's decision. With no middleware the page keeps its old, honest
   // behaviour (it says live building needs the engine server).
   var MW_API = 'napkin.middleware/1';
-  var MW = { configured: null };
+  var MW = { configured: typeof fetch === 'function' ? null : false, tries: 0, retrying: false, retryIn: 0 };   // no host to ask: no engine
   var JOB = null; // the build_deck job in flight: { id, state, delay, t, error }
   var BUSY_JOB = { sending: 1, queued: 1, running: 1 };
   // The host refused the engine's payload (change.applied false): the deck is not in the document, and the person must be told why
@@ -2091,11 +2105,56 @@ var DeckProd = (function () {
     return 'The engine finished, but the document did not accept what it wrote' + (c.reason ? ': ' + c.reason : '.') + ' Build it again; if it fails the same way, tell Napkin.';
   }
   function mwOn() { return MW.configured === true; }
+  // UAT round 4 (a01c5e33): the one check at load could answer late or not at all, and a Build pressed meanwhile was skipped for good
+  // ("Waiting for the engine · Not connected", 26 min). Now: the answer is applied the moment it comes; an answer that never comes
+  // (MW_TIMEOUT) or fails is tried again with backoff and the page says so; a build asked for while it is unknown starts once it is on.
+  var MW_TIMEOUT = 8000, MW_RETRY_MAX = 30000;
+  var PENDING_BUILD = false;
+  function mwKnown() { return MW.configured === true || MW.configured === false; }
+  function mwSet(configured) {
+    MW.configured = configured; MW.retrying = false; MW.retryIn = 0;
+    render();
+    if (!configured) return;
+    if (stored()) { PENDING_BUILD = false; resumeBuild(); return; }   // a job this page started before a reload: follow it
+    if (PENDING_BUILD || approvedWaiting(d().run)) { PENDING_BUILD = false; startBuild(); }
+  }
+  /** A gate the person approved that the engine never picked up (UAT round 4 F37: approved before the page reached the engine, the
+   *  Territories gate stayed "Not connected" across reloads): the run still shows the gate, and its approval is there. */
+  function approvedWaiting(run) {
+    var g = run && run.gate, a = g && run.approvals && run.approvals[g.id];
+    return !!(a && (a.decision || 'approve') === 'approve' && run.state !== 'done' && run.state !== 'failed');
+  }
+  function mwRetry() {
+    MW.tries = (MW.tries || 0) + 1; MW.retrying = true;
+    MW.retryIn = Math.min(1000 * Math.pow(2, MW.tries - 1), MW_RETRY_MAX);
+    render();
+    setTimeout(checkMiddleware, MW.retryIn);
+  }
   function checkMiddleware() {
-    if (typeof fetch !== 'function') return;
-    fetch(clanScheme + '/middleware').then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (v) { if (v && typeof v.configured === 'boolean') { MW.configured = v.configured; render(); resumeBuild(); } })
-      .catch(function () {});
+    if (typeof fetch !== 'function') return;   // no host to ask: MW.configured is false from the start (the honest "needs the engine server")
+    var settled = false;
+    var give = setTimeout(function () { if (!settled) { settled = true; mwRetry(); } }, MW_TIMEOUT);
+    var RETRY = {};
+    var done = function (v) {
+      if (settled) return;
+      settled = true; clearTimeout(give);
+      if (v === RETRY) mwRetry();   // no answer, or the host failed: ask again, and say so
+      else mwSet(!!(v && v.configured === true));   // an answer: configured, or no middleware here (a 404, or a reply without it)
+    };
+    try {
+      Promise.resolve(fetch(clanScheme + '/middleware'))
+        .then(function (r) {
+          if (!r) return RETRY;
+          if (!r.ok) return r.status >= 500 ? RETRY : null;
+          return typeof r.json === 'function' ? Promise.resolve().then(function () { return r.json(); }).catch(function () { return null; }) : null;   // not JSON: no middleware here
+        })
+        .then(done, function () { done(RETRY); });
+    } catch (e) { done(RETRY); }
+  }
+  /** The Build button's state and the line under it while the engine's presence is unknown: disabled, with the reason. */
+  function mwWaitWords() {
+    if (MW.retrying) return 'Cannot reach the engine yet. Trying again in ' + Math.max(1, Math.round((MW.retryIn || 0) / 1000)) + ' s.';
+    return 'Connecting to the engine…';
   }
   function mwBody(res) { return (res && typeof res === 'object' && 'ok' in res && 'data' in res) ? res.data : res; }
   /** What went wrong with a reply, in words, or null when it is a good napkin.middleware/1 reply. */
@@ -2427,7 +2486,7 @@ var DeckProd = (function () {
 
   /** The Brief and Research cards: derived from data.upstream, never stored, Optional when absent. */
   function upstreamCards(s) {
-    var u = L.upstreamSummary({ upstream: s.upstream });
+    var u = L.upstreamSummary({ upstream: s.upstream, projection: s.raw.projection });
     var attached = '<span class="pill ok">Brought in</span>', opt = '<span class="pill plain">Optional</span>';
     var r = u.research, b = u.brief, pr = u.production;
     var kitNote = kitChanged.map(function (n) {
@@ -2520,7 +2579,7 @@ var DeckProd = (function () {
     var sd = L.startDefaults(s.raw);   // a deck of a Production project starts with its client and project named
     var sum = L.summaryOf({ prompt: Object.assign({}, p, { client: p.client || sd.client }), kind: kind, format: format, type: typed ? dt.id : null }, s.deck);
     var text = draft('text', p.text || sd.text);
-    var bf = L.builtFrom(inp, s.upstream, docs, typed ? dt.id : null);
+    var bf = L.builtFrom(inp, s.upstream, docs, typed ? dt.id : null, s.raw.projection);
     function field(id, lab, val, ph) {
       return '<div><label class="lab" for="' + id + '">' + lab + '</label><input class="inp" id="' + id + '" value="' + esc(draft(id, val)) + '"' + (ph ? ' placeholder="' + esc(ph) + '"' : '') + ' /></div>';
     }
@@ -2549,8 +2608,8 @@ var DeckProd = (function () {
         '<div class="li"><span class="dot"></span><span><b style="font-weight:600">PowerPoint</b> with notes and the appendix hidden</span></div>' +
         '<div class="li"><span class="dot"></span><span><b style="font-weight:600">Animated deck</b> you can present from HyperFrames</span></div>' +
         '<div class="rule"></div><p class="note">You approve the storyline and pick a territory on the way. Then you review the finished deck.</p>' +
-        '<button class="btn go big" id="build" style="width:100%;margin-top:18px;height:48px">Build deck</button>' +
-        '<p class="mono" style="margin-top:10px;text-align:center;font-size:11px;color:var(--ink3)">' + (mwOn() ? 'Builds with the engine and stops at the first gate. Nothing past a gate runs until you approve it.' : s.run.stages.length ? 'Opens the recorded run. Live building needs the engine server.' : 'Live building needs the engine server.') + '</p></div>' +
+        '<button class="btn go big" id="build" style="width:100%;margin-top:18px;height:48px"' + (mwKnown() ? '' : ' disabled aria-disabled="true" data-mw-wait') + '>Build deck</button>' +
+        '<p class="mono" style="margin-top:10px;text-align:center;font-size:11px;color:var(--ink3)">' + (!mwKnown() ? esc(mwWaitWords()) : mwOn() ? 'Builds with the engine and stops at the first gate. Nothing past a gate runs until you approve it.' : s.run.stages.length ? 'Opens the recorded run. Live building needs the engine server.' : 'Live building needs the engine server.') + '</p></div>' +
       library(s) + '</aside></main>';
   }
 
@@ -2581,7 +2640,7 @@ var DeckProd = (function () {
   /** The built_from the engine recorded on the deck, else what Start would compute from the document. */
   function builtOf(s) {
     var m = s.deck && s.deck.meta && s.deck.meta.built_from;
-    return m && m.tier ? m : L.builtFrom(s.inputs, s.upstream, L.documentsOf(s.raw), L.deckTypeOf(s.raw).source !== 'default' ? L.deckTypeOf(s.raw).id : null);
+    return m && m.tier ? m : L.builtFrom(s.inputs, s.upstream, L.documentsOf(s.raw), L.deckTypeOf(s.raw).source !== 'default' ? L.deckTypeOf(s.raw).id : null, s.raw.projection);
   }
 
   // ── 2 · Build, with gates ─────────────────────────────────────────────
@@ -2726,7 +2785,8 @@ var DeckProd = (function () {
 
   /** Under the stage's sphere while the engine is not connected: a short honest prompt, no time and no progress. */
   function waitingCard() {
-    return '<div class="card wait" style="padding:20px;margin-top:16px"><div style="font-size:16px;font-weight:700">Waiting for the engine</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0;margin-top:2px">Not connected to this document yet</div>' +
+    var line = !mwKnown() ? mwWaitWords() + (PENDING_BUILD ? ' Your build starts as soon as it answers.' : '') : 'Not connected to this document yet';
+    return '<div class="card wait" style="padding:20px;margin-top:16px"><div style="font-size:16px;font-weight:700">Waiting for the engine</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0;margin-top:2px">' + esc(line) + '</div>' +
       '<div class="rule"></div><p class="note">Once the engine is connected it runs to the next gate and stops there.</p></div>';
   }
 
@@ -3264,7 +3324,7 @@ var DeckProd = (function () {
       var sdb = L.startDefaults(s.raw), pb = s.inputs.prompt || {};
       var prompt = { client: draft('client', pb.client || sdb.client), project: draft('project', pb.project || sdb.project), agency: draft('agency', ''), text: draft('text', pb.text || sdb.text) };
       Object.keys(prompt).forEach(function (k) { prompt[k] = String(prompt[k]).trim(); });
-      var guard = L.canBuild({ prompt: prompt }, s.upstream, L.documentsOf(s.raw));
+      var guard = L.canBuild({ prompt: prompt }, s.upstream, L.documentsOf(s.raw), s.raw.projection);
       if (!guard.ok) { toast(guard.message); return; }
       // Only the person's own inputs are written. The brief and research are read from upstream, never stored.
       var dtb = L.deckTypeOf(s.raw), kindOut = dtb.source === 'picked' || dtb.source === 'answered' ? L.kindOfType(dtb.id) : (pending.kind || s.inputs.kind);
@@ -3274,6 +3334,13 @@ var DeckProd = (function () {
         // The inputs are in the document before the engine reads it; the engine is started once they are.
         toast('Saved. The engine is starting: it stops at the first gate and waits for you.');
         Promise.resolve(saved).then(startBuild);
+        return;
+      }
+      if (!mwKnown()) {   // asked before the engine answered (UAT round 4): it starts the moment the engine is on, never skipped
+        PENDING_BUILD = true;
+        Promise.resolve(saved).then(function () { if (mwOn() && PENDING_BUILD) { PENDING_BUILD = false; startBuild(); } });
+        toast('Saved. Connecting to the engine: the build starts as soon as it answers.');
+        render();
         return;
       }
       toast(s.run.stages.length ? 'Showing the recorded run. Live building needs the engine server.' : 'Saved. Live building needs the engine server.');
@@ -3366,7 +3433,7 @@ var DeckProd = (function () {
       var choice = gv.picked ? { picked: gv.picked } : null;
       var picked = gv.territories.filter(function (x) { return x.id === gv.picked; })[0];
       var why = 'gate ' + s.run.gate.n + ' of ' + s.run.gate.of + ' approved' + (picked ? ': picked ' + picked.name : '');
-      if (mwOn()) {
+      if (mwOn() || !mwKnown()) {
         // With an engine behind the document, approving writes only the person's decision. The engine's next stage is then asked for, and
         // what it reports lands as the middleware's change: the page never writes run.state, stages, gate or agent itself.
         if (JOB && BUSY_JOB[JOB.state]) { toast('The engine is still working on this step.'); return; }
@@ -3374,6 +3441,12 @@ var DeckProd = (function () {
         if (!human) { toast('That step cannot be approved from here. Reload the page and try again.'); return; }
         view.pick = null;
         var wrote = put({ run: human }, 'approve ' + s.run.gate.id, why);
+        if (!mwKnown()) {   // UAT round 4 F37: approved before the engine answered: the decision is kept and the next step starts once it is on
+          PENDING_BUILD = true;
+          Promise.resolve(wrote).then(function () { if (mwOn() && PENDING_BUILD) { PENDING_BUILD = false; startBuild(); } });
+          toast('Approved. Connecting to the engine: the next step starts as soon as it answers.');
+          return;
+        }
         toast('Approved. The engine is working on the next step.');
         Promise.resolve(wrote).then(startBuild);
         return;

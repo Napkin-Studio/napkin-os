@@ -15,7 +15,7 @@ import { initialAppUi, type AppUi } from '../doc/ui'
 import { deleteBlob, getBlob, putBlob } from '../lib/blobs'
 import { hexOf, sha256Hex } from '../lib/hash'
 import { forgetMedia, setMediaBase } from '../lib/media'
-import { mainStoryboard } from '../model/selectors'
+import { mainScript, mainStoryboard } from '../model/selectors'
 import { ModelStore } from '../model/store'
 import { MockRelay, type MockRenderer } from '../relay/mock'
 import type { Relay } from '../relay'
@@ -48,6 +48,8 @@ class FakeRelay {
   failUploads = false
   /** The client each new document was made for (the body's client_id). */
   createdFor: (string | undefined)[] = []
+  /** Every `/title` the host was asked for. */
+  renamed: { id: string; title: string }[] = []
   /** A save lands, and its answer never reaches the browser (the page was closed as it went: UAT U7). */
   loseAnswers = false
   /** Nothing reaches the host. */
@@ -107,6 +109,16 @@ class FakeRelay {
       if (!q?.trashed) return this.json(404, { error: 'not in the Trash' })
       delete q.trashed
       return this.json(200, { restored: true, path: back[1] })
+    }
+    const titled = /^\/t\/t1\/d\/([^/]+)\/title$/.exec(path)
+    if (titled && method === 'POST') {
+      const q = this.projects.get(titled[1])
+      if (!q || q.trashed) return this.json(404, { error: 'not found' })
+      const { title } = JSON.parse(String(init.body)) as { title: string }
+      if (!title.trim()) return this.json(400, { error: 'missing title' })
+      this.renamed.push({ id: titled[1], title })
+      q.row = { ...q.row, name: title.trim() } // the host writes the manifest's title (its version moves too)
+      return this.json(200, { ok: true, title: title.trim() })
     }
     const m = /^\/t\/t1\/d\/([^/]+)(\/download|\/save)?$/.exec(path)
     const p = m && this.projects.get(m[1])
@@ -553,6 +565,51 @@ describe('opening a project checks the relay for a newer version (re-test R2)', 
     expect(services(laptop.shell).serverCopy!.get()).toBeNull()
     expect(services(laptop.shell).serverCopy!.basedOn()?.etag).toBe(fake.projects.get(p.id)!.row.etag)
     expect(fake.saves.length).toBe(saves)
+  })
+})
+
+describe('one name on Home, in the library and in the Trash (UAT round 4: "Copperell Refill 2" vs "Copperell Refill")', () => {
+  const quiet = () => new Promise((r) => setTimeout(r, 30))
+  it('renaming a film that is not open here renames the host\'s copy too', async () => {
+    forgetSent()
+    const fake = new FakeRelay()
+    const { laptop, p } = await made(fake)
+    await laptop.shell.goHome()
+    await quiet()
+    await laptop.shell.rename(p.id, 'Copperell Refill 2')
+    expect(fake.renamed).toEqual([{ id: p.id, title: 'Copperell Refill 2' }])
+    expect(fake.projects.get(p.id)!.row.name).toBe('Copperell Refill 2')
+    // Blank goes back to naming itself: nothing is sent for it.
+    await laptop.shell.rename(p.id, '   ')
+    expect(fake.renamed).toHaveLength(1)
+  })
+
+  it('a film that numbers its own name ("… 2") gives the library the same name', async () => {
+    forgetSent()
+    const fake = new FakeRelay()
+    const laptop = browser(fake)
+    const line = 'Copperell Refill'
+    const named = async () => {
+      const p = await laptop.shell.newProject()
+      const s = services(laptop.shell)
+      await seedStages(s.doc)
+      await updateDoc(s.doc, (d) => {
+        const sid = id('scene')
+        d.scenes[sid] = { id: sid, v: 1, field_v: {}, script_id: mainScript(d)!.id, rank: 'a0', heading: 'INT. KITCHEN', text: line }
+      }, 'write the script')
+      await s.doc.flush()
+      await laptop.shell.get().session!.record()
+      await s.clan!.flush()
+      await s.clan!.clan.mirrorNow('manual')
+      await laptop.shell.goHome()
+      await quiet()
+      return p
+    }
+    const first = await named()
+    const second = await named()
+    expect(laptop.index.get(first.id)!.name).toBe(line)
+    expect(laptop.index.get(second.id)!.name).toBe(`${line} 2`)
+    expect(fake.projects.get(second.id)!.row.name).toBe(`${line} 2`)
   })
 })
 

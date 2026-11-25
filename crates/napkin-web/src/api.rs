@@ -83,6 +83,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/d/{doc}/edit-mode", post(edit_mode))
         .route("/t/{tenant}/d/{doc}/preview-html", post(preview_html_gone))
         .route("/t/{tenant}/d/{doc}/patch", post(patch))
+        .route("/t/{tenant}/d/{doc}/title", post(set_title))
         .route("/t/{tenant}/d/{doc}/spinoff-targets", get(spinoff_targets))
         .route("/t/{tenant}/d/{doc}/spinoff", post(spinoff_document))
         .route("/t/{tenant}/d/{doc}/jobs/{job}/settle", post(settle_job))
@@ -685,6 +686,30 @@ async fn patch(
     let (_ws, session, _) = doc_session(&ctx, &tenant, &doc)?;
     session.save_patch_as(&acting, &body.id, &body.content)?;
     Ok(Json(serde_json::json!({ "ok": true })))
+}
+
+#[derive(Deserialize)]
+struct TitleBody {
+    title: String,
+}
+
+/// Rename a document the person may not have open (UAT round 4: Production's Home renamed a film only in the
+/// browser's own list, so the library and the Trash kept the old name). The same host operation as an open
+/// document's `/set-title`: the manifest's title, a decision recorded as the person. 400 for an empty title.
+async fn set_title(
+    State(ctx): Ctx,
+    Tenant(tenant): Tenant,
+    Acting(acting): Acting,
+    Path((_t, doc)): Path<(String, String)>,
+    Json(body): Json<TitleBody>,
+) -> ApiResult<Json<Value>> {
+    let title = body.title.trim();
+    if title.is_empty() {
+        return Err(ApiError::new(400, "missing title"));
+    }
+    let (_ws, session, _) = doc_session(&ctx, &tenant, &doc)?;
+    let done = session.set_title_as(&acting, title)?;
+    Ok(Json(done.reply))
 }
 
 /// Poll one middleware job of a document the person may not have open, the

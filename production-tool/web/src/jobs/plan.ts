@@ -24,7 +24,7 @@ import type { DocumentStore } from '../doc/types'
 import type { JobCtx } from '../doc/ui'
 import { proseFromText } from '../model/diff'
 import { ModelStore } from '../model/store'
-import { beatsOf, currentFrame, framesOf, keyNamed, mainStoryboard, openAsks, refNamed, scenesOf, scriptOfStoryboard, scriptText, shotNumber, shotsOf, staleList, takesOf } from '../model/selectors'
+import { answeredElsewhere, videoOfStoryboard, beatsOf, currentFrame, framesOf, keyNamed, mainStoryboard, openAsks, refNamed, scenesOf, scriptOfStoryboard, scriptText, shotNumber, shotsOf, staleList, takesOf } from '../model/selectors'
 import type { Relay } from '../relay'
 import type { FrameDeps } from './frames'
 import { SCRIPT_MAX } from './frames'
@@ -37,6 +37,13 @@ import { isActive } from './runner'
 import { liveGet } from '../model/live'
 
 // ── the request ─────────────────────────────────────────────────────────────
+
+/** The film's length a plan is for: the length set on the script that drives the storyboard (one value along the chain,
+ *  script/length.ts), else the storyboard's own (UAT round 4 gate: the script said 6 s and the plan made 15 s, because the
+ *  length was set before the script drove a storyboard and the storyboard kept its default). */
+export function filmTarget(d: ProductionDocument, storyboardId: string): number {
+  return scriptOfStoryboard(d, storyboardId)?.target_s ?? d.storyboards[storyboardId]?.target_s ?? 15
+}
 
 /** The storyboard a plan is for: this one when it is in the document, else the main one. */
 const boardToPlan = (d: ProductionDocument, storyboardId?: string) => (storyboardId && d.storyboards[storyboardId]) || mainStoryboard(d)
@@ -55,7 +62,7 @@ export async function planInput(relay: Relay, d: ProductionDocument, text?: stri
   const shots = shotsOf(d, sb.id)
   return {
     script: words,
-    targetS: Math.min(600, Math.max(1, Math.round(sb.target_s))),
+    targetS: Math.min(600, Math.max(1, Math.round(filmTarget(d, sb.id)))),
     ...(refs.length ? { refs } : {}),
     ...(shots.length ? { shots: shots.map((s) => jobShot(d, s, false)) } : {}),
     ...(text?.trim() ? { text: text.trim().slice(0, 1000) } : {}),
@@ -264,8 +271,19 @@ function mentionedIds(d: ProductionDocument, words: string): string[] {
   return ids
 }
 
+/** Questions from earlier plans of this storyboard that are still open: a plan that lands answers them (UAT round 4 L4:
+ *  "The script is empty. What should happen…" stayed "Waiting for you" after 5 shots were planned). */
+export function earlierPlanAsks(d: ProductionDocument, sbId: string | undefined, jobId: string | undefined): string[] {
+  if (!sbId) return []
+  return Object.values(d.asks ?? {}).filter((a) => {
+    if (a.state !== 'open' || !a.job_id || a.job_id === jobId || d.jobs[a.job_id]?.op !== 'shot_list') return false
+    const asked = d.jobs[a.job_id]?.node?.id ?? a.node?.id
+    return asked === sbId || answeredElsewhere(d, asked, [sbId])
+  }).map((a) => a.id)
+}
+
 /** The plan written into a draft with its words as flat text (the snapshot store, and tests). */
-export function applyShotList(d: ProductionDocument, job: Pick<Job, 'shots'>, ctx?: { storyboardId?: string }): ShotListPlan {
+export function applyShotList(d: ProductionDocument, job: Pick<Job, 'shots'>, ctx?: { storyboardId?: string; jobId?: string }): ShotListPlan {
   const sbId = boardToPlan(d, ctx?.storyboardId)?.id
   const plan = planOf(d, job, sbId)
   for (const id of plan.dropBeats) delete d.beats[id]
@@ -284,6 +302,8 @@ export function applyShotList(d: ProductionDocument, job: Pick<Job, 'shots'>, ct
   }
   for (const b of plan.beats) d.beats[b.id] = { id: b.id, v: 1, field_v: {}, ...b.fields, text: b.text, last_writer: 'dex' }
   for (const m of plan.stale) d.stale[m.id] = m
+  for (const id of earlierPlanAsks(d, sbId, ctx?.jobId)) d.asks[id].state = 'withdrawn'
+  if (sbId) syncTarget(d, sbId)
   for (const a of plan.asks) d.asks[a.id] = a
   // The words moved into the shots: nothing stays in the scenes (one owner per span).
   for (const sc of scenesOf(d, scriptOfStoryboard(d, sbId)?.id)) if (sc.text) sc.text = ''
@@ -311,7 +331,7 @@ export async function landShotList(store: DocumentStore, job: Job, ctx?: Extract
   if (!(store instanceof ModelStore)) {
     const n = job.shots?.length ?? 0
     let plan: ShotListPlan = { shots: [], beats: [], dropShots: [], dropBeats: [], stale: [], asks: [] }
-    await landUpdate(store, (x) => { plan = applyShotList(x, job, ctx) }, landingWhy(store, job.jobId, `${n} ${n === 1 ? 'shot' : 'shots'} for the storyboard`, cards))
+    await landUpdate(store, (x) => { plan = applyShotList(x, job, { ...ctx, jobId: job.jobId }) }, landingWhy(store, job.jobId, `${n} ${n === 1 ? 'shot' : 'shots'} for the storyboard`, cards))
     return plan
   }
   await store.flush()
@@ -331,6 +351,14 @@ export async function landShotList(store: DocumentStore, job: Job, ctx?: Extract
   // The marks and the questions are part of the same step: undo takes the plan back with them.
   for (const m of plan.stale) patches.push({ op: 'create', entity: 'stale', id: m.id, value: m, base_version: 0 })
   for (const a of plan.asks) patches.push({ op: 'create', entity: 'asks', id: a.id, value: a, base_version: 0 })
+  for (const id of earlierPlanAsks(d, sbId, job.jobId)) patches.push({ op: 'set', entity: 'asks', id, path: 'state', value: 'withdrawn', base_version: d.asks[id].v })
+  // The storyboard and its film take the script's length with the plan (one source of truth for the film's length).
+  if (sbId) {
+    const want = filmTarget(d, sbId)
+    if (d.storyboards[sbId] && d.storyboards[sbId].target_s !== want) patches.push({ op: 'set', entity: 'storyboards', id: sbId, path: 'target_s', value: want, base_version: d.storyboards[sbId].v })
+    const v = videoOfStoryboard(d, sbId)
+    if (v && v.target_s !== want) patches.push({ op: 'set', entity: 'videos', id: v.id, path: 'target_s', value: want, base_version: v.v })
+  }
   const landing: PlanLanding = {
     scenes: scenesOf(d, scriptOfStoryboard(d, sbId)?.id).map((s) => ({ id: s.id, remainder: EMPTY_PROSE })),
     shots: plan.shots.filter((r) => !r.existing).map((r) => ({ id: r.id, value: r.fields, prose: shotProse(d, r) })),
@@ -349,4 +377,12 @@ export async function landShotList(store: DocumentStore, job: Job, ctx?: Extract
   }
   await store.flush() // the store shows what the buses hold now
   return plan
+}
+
+/** The storyboard and its film at the length of the script that drives them (a draft write). */
+function syncTarget(d: ProductionDocument, sbId: string) {
+  const want = filmTarget(d, sbId)
+  if (d.storyboards[sbId]) d.storyboards[sbId].target_s = want
+  const v = videoOfStoryboard(d, sbId)
+  if (v) d.videos[v.id].target_s = want
 }
