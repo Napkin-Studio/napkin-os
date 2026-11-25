@@ -14,6 +14,7 @@ import type { BrandBible, BrandClanNode, Id, Link, LinkEndpoint, ProductionDocum
 import { newId } from '../lib/ulid'
 import { systemUpdate, updateDoc, type DocumentStore } from '../doc/store'
 import { putBlob } from '../lib/blobs'
+import { scriptOfStoryboard, storyboardOfVideo } from '../model/selectors'
 import type { BrandClanSource, OsBrandClanItem, OsBrandClanRead } from './os'
 
 type Doc = ProductionDocument
@@ -89,6 +90,16 @@ function setLogo(d: Doc, n: BrandClanNode, logo: LogoIn | undefined) {
   n.logo = { sha256: logo.sha256, w: logo.w, h: logo.h }
 }
 
+/** The Brand Clan's colour for an end card's ground: its ink, else its darkest colour, when dark enough for the card's light
+ *  words (the stitch sets them light); undefined otherwise. */
+export function cardGroundOf(b: BrandBible): string | undefined {
+  const cols = ((b.visual as { colours?: { hex?: string; role?: string }[] } | undefined)?.colours ?? [])
+    .map((c) => ({ hex: (c.hex ?? '').replace(/^#?/, '#').toUpperCase(), role: c.role })).filter((c) => /^#[0-9A-F]{6}$/.test(c.hex))
+  const lum = (hex: string) => { const [r, g, bl] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255); return 0.2126 * r + 0.7152 * g + 0.0722 * bl }
+  const pick = cols.find((c) => c.role === 'ink') ?? [...cols].sort((a, b) => lum(a.hex) - lum(b.hex))[0]
+  return pick && lum(pick.hex) < 0.3 ? pick.hex : undefined
+}
+
 /** The Brand Clan nodes, oldest first. */
 export const brandClansList = (d: Doc): BrandClanNode[] => Object.values(d.brand_clans ?? {}).sort((a, b) => (a.id < b.id ? -1 : 1))
 
@@ -110,9 +121,24 @@ export const brandClanLink = (id: Id, to: LinkEndpoint): Link => ({ id: newId('l
 
 // ── Which Brand Clan a node reads: its own link, else the nearest one up the canvas ─────────────────────────────
 
-/** The nodes upstream of `id`, one step: what drives, renders or masters it. */
+/** The nodes upstream of `id`, one step: what drives, renders or masters it by link, and what it hangs off without one, as
+ *  the rest of the tool reads it (model/selectors): a Film's storyboard (its own shot list, or the main storyboard for the
+ *  main Film), a storyboard's script (the main script for the main storyboard), a Film's own shot list's Film, a set of
+ *  sizes' Film. A55: a Film made from a storyboard has no `renders` link, so a Brand Clan linked to the Script reached the
+ *  frames and clips but not the end card. */
 function upstream(d: Doc, id: Id): Id[] {
-  return Object.values(d.links ?? {}).filter((l) => l.to.id === id && (l.role === 'drives' || l.role === 'renders' || l.role === 'master')).map((l) => l.from.id)
+  const out = Object.values(d.links ?? {}).filter((l) => l.to.id === id && (l.role === 'drives' || l.role === 'renders' || l.role === 'master')).map((l) => l.from.id)
+  if (d.videos?.[id]) { const sb = storyboardOfVideo(d, id); if (sb) out.push(sb.id) }
+  const sb = d.storyboards?.[id]
+  if (sb) {
+    if (sb.implicit && sb.video_id) out.push(sb.video_id)
+    const sc = scriptOfStoryboard(d, id)
+    if (sc) out.push(sc.id)
+  }
+  const m = d.format_sets?.[id]?.master
+  if (m?.kind === 'video') out.push(m.id)
+  else if (m?.kind === 'render') { const v = d.renders?.[m.id]?.video_id; if (v) out.push(v) }
+  return out
 }
 
 /** The Brand Clan linked straight into `id`, if any. */
@@ -162,16 +188,30 @@ export function brandClanForJob(d: Doc, node: LinkEndpoint): BrandClanInScope | 
 
 /** What the node's card says about its links: "Linked to the Script", "Linked to Storyboard B", or not linked. */
 export function linkedLabel(d: Doc, id: Id): string {
-  const to = Object.values(d.links ?? {}).filter((l) => l.role === 'brand' && l.from.kind === 'brand_clan' && l.from.id === id).map((l) => l.to)
+  const seen = new Set<string>()
+  const to = Object.values(d.links ?? {})
+    .filter((l) => l.role === 'brand' && l.from.kind === 'brand_clan' && l.from.id === id)
+    .map((l) => l.to)
+    .filter((e) => (seen.has(`${e.kind}:${e.id}`) ? false : (seen.add(`${e.kind}:${e.id}`), true)))
   if (!to.length) return ''
+  // A node named only by its kind reads "the Script"; one with a name of its own reads "Script · Main" (A48: two Scripts
+  // read "the Script, the Script").
+  const KIND: Partial<Record<LinkEndpoint['kind'], string>> = { script: 'Script', storyboard: 'Storyboard', video: 'Film', format_set: 'sizes' }
+  const titleOf = (e: LinkEndpoint) => (e.kind === 'script' ? d.scripts?.[e.id]?.title : e.kind === 'storyboard' ? d.storyboards?.[e.id]?.title : e.kind === 'video' ? d.videos?.[e.id]?.title : undefined)?.trim()
   const name = (e: LinkEndpoint) => {
-    if (e.kind === 'script') return 'the Script'
-    if (e.kind === 'storyboard') return d.storyboards?.[e.id]?.title ? `Storyboard ${d.storyboards[e.id].title}` : 'the Storyboard'
-    if (e.kind === 'video') return d.videos?.[e.id]?.title ? `Film ${d.videos[e.id].title}` : 'the Film'
-    if (e.kind === 'format_set') return 'the sizes'
-    return e.kind
+    const kind = KIND[e.kind] ?? e.kind
+    const t = titleOf(e)
+    return t && t.toLowerCase() !== kind.toLowerCase() ? `${kind} · ${t}` : `the ${kind}`
   }
-  return `Linked to ${to.map(name).join(', ')}`
+  const names = to.map(name)
+  // Two with the same name are told apart by their place among their kind (Script 1, Script 2).
+  const out = names.map((n, i) => {
+    if (names.indexOf(n) === names.lastIndexOf(n)) return n
+    const kind = KIND[to[i].kind] ?? to[i].kind
+    const same = to.filter((_e, j) => names[j] === n).findIndex((e) => e === to[i]) + 1
+    return `${kind} ${same}${n.startsWith('the ') ? '' : n.slice(kind.length)}`
+  })
+  return `Linked to ${out.join(', ')}`
 }
 
 // ── The person's choices: take a newer version, keep this one, swap for another Brand Clan ────────────────────

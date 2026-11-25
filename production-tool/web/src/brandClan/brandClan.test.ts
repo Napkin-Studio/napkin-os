@@ -80,7 +80,7 @@ describe('the nearest link up the canvas wins (DESIGN 4a, mock d3)', () => {
     expect(brandClanOf(d, SB)).toMatchObject({ node: { id: original.id }, via: 'upstream', at: SCRIPT })
     expect(brandClanOf(d, VIDEO)).toMatchObject({ node: { id: original.id }, via: 'upstream' })
     expect(brandClanForJob(d, { kind: 'shot', id: S15 })?.node.id).toBe(original.id)
-    expect(linkedLabel(d, original.id)).toBe('Linked to the Script')
+    expect(linkedLabel(d, original.id)).toBe('Linked to Script · First Light')
   })
 
   it('a Storyboard linked to another look uses it, and so does its Film; the Script keeps the first', () => {
@@ -274,5 +274,95 @@ describe('its logo reaches the end card and the sizes (owner 2026-11-24): linked
     const ajv = makeAjv()
     expect(ajv.validate(SCHEMA('document'), d)).toBe(true)
     expect(ajv.validate(SCHEMA('document'), withClans(ex, [{ ...zero, logo: { sha256: PNG_SHA } as never }]))).toBe(false)
+  })
+})
+
+describe('acceptance A41, A48, A49, A50, A55', () => {
+  const PNG_SHA = 'sha256:' + 'cd'.repeat(32)
+  const COPPER = { ...ZERO, name: 'Copperell Original', visual: { ...ZERO.visual, colours: [{ id: 'copper', hex: '#B8733A', role: 'accent' }, { id: 'ink', hex: '#1F1A17', role: 'ink' }] } }
+  const clanNode = (over: Partial<BrandClanNode> = {}) => ({ ...newBrandClan(read('Copperell Original', 2, COPPER), 'pick'), id: 'bclan_01K7A0000000000000000000CO', logo: { sha256: PNG_SHA, w: 960, h: 240 }, ...over })
+  const asset = (d: ProductionDocument) => { d.assets[PNG_SHA] = { sha256: PNG_SHA, kind: 'image', mime: 'image/png', bytes: 1, w: 960, h: 240, origin: 'uploaded', rights: 'unknown' }; return d }
+  const noBoardLogo = (d: ProductionDocument) => { for (const [k, r] of Object.entries(d.refs)) if (r.role === 'logo') delete d.refs[k]; return d }
+  const withCard = (d: ProductionDocument, bg = '#14161B') => { d.videos[VIDEO].end_card = { line: 'Cool, lightly.', headline: 'Copperell', bg, s: 2 }; return d }
+
+  it('A55: a Brand Clan linked to the Script only gives the end card its logo and colour, with no renders link between Storyboard and Film', async () => {
+    const { compileFor, endCardLook } = await import('../rooms/timeline')
+    const c = clanNode()
+    const d = withCard(asset(noBoardLogo(withClans(ex, [c], link(c.id, { kind: 'script', id: SCRIPT })))))
+    // a Film made from a storyboard keeps no renders link: the tool reads its storyboard as the main one
+    for (const [k, l] of Object.entries(d.links)) if (l.role === 'renders' && l.to.id === VIDEO) delete d.links[k]
+    expect(brandClanOf(d, VIDEO)?.node.id).toBe(c.id)
+    const card = compileFor(d, VIDEO).endCard!
+    expect(card.logo_sha256).toBe(PNG_SHA)
+    expect(card.bg).toBe('#1F1A17')
+    expect(endCardLook(d, VIDEO, { bg: '#14161B' })).toMatchObject({ bg: '#1F1A17', logo: PNG_SHA, from: 'Copperell Original', bgFrom: 'Copperell Original' })
+    // a colour the person picked stays theirs; a Brand board logo still wins
+    expect(compileFor(withCard(structuredClone(d), '#336699'), VIDEO).endCard!.bg).toBe('#336699')
+    const board = withCard(asset(withClans(ex, [c], link(c.id, { kind: 'script', id: SCRIPT }))))
+    expect(compileFor(board, VIDEO).endCard!.logo_sha256).toBe('sha256:c2b3a5f0b9e8a918bb5d240127759b0ec6f359ba4354e793d0e35778c9d51a3d')
+    // placed but not linked: the card keeps the default
+    const placed = withCard(asset(noBoardLogo(withClans(ex, [c]))))
+    expect(compileFor(placed, VIDEO).endCard!.bg).toBe('#14161B')
+    expect(compileFor(placed, VIDEO).endCard!.logo_sha256).toBeUndefined()
+  })
+
+  it('A55: a Film’s own shot list and a set of sizes made from the Film reach the Script’s Brand Clan too', () => {
+    const c = clanNode()
+    const d = withClans(ex, [c], link(c.id, { kind: 'script', id: SCRIPT }))
+    expect(brandClanOf(d, 'fset_01K7A00000000000000000002K')?.node.id).toBe(c.id)
+    d.storyboards['storyboard_01K7A0000000000000000000OWN'] = { ...d.storyboards[SB], id: 'storyboard_01K7A0000000000000000000OWN', implicit: true, video_id: VIDEO } as never
+    expect(brandClanOf(d, 'storyboard_01K7A0000000000000000000OWN')?.node.id).toBe(c.id)
+  })
+
+  it('A48: linked to two Scripts, it names them', () => {
+    const c = clanNode()
+    const d = withClans(ex, [c], link(c.id, { kind: 'script', id: SCRIPT }))
+    const two = 'script_01K7A0000000000000000000S2'
+    d.scripts[two] = { ...d.scripts[SCRIPT], id: two, title: 'Bold cut' }
+    d.scripts[SCRIPT].title = 'Main'
+    const l2 = link(c.id, { kind: 'script', id: two })
+    d.links[l2.id] = l2
+    expect(linkedLabel(d, c.id)).toBe('Linked to Script · Main, Script · Bold cut')
+    d.scripts[SCRIPT].title = 'Script'
+    d.scripts[two].title = ''
+    expect(linkedLabel(d, c.id)).toBe('Linked to Script 1, Script 2')
+  })
+
+  it('A50: "What the agent will send" lists the Brand Clan a job sends, and where it comes from', async () => {
+    const { sendRows } = await import('../ui/sendRows')
+    const c = clanNode()
+    const d = withClans(ex, [c], link(c.id, { kind: 'script', id: SCRIPT }))
+    const rows = sendRows(d, SB, [], 'Redraw', 'frame')
+    const row = rows.find((r) => r.key === `brand_clan:${c.id}`)
+    expect(row).toMatchObject({ label: 'Brand Clan · Copperell Original v2' })
+    expect(row!.detail).toMatch(/^tone, 3 rules, colours, type · from (the Script|Script · .+)$/)
+    expect(rows.at(-1)!.key).toBe('promise')
+    // placed but not linked: nothing about it goes, and the list says nothing
+    expect(sendRows(withClans(ex, [c]), SB, [], 'Redraw', 'frame').some((r) => r.key.startsWith('brand_clan:'))).toBe(false)
+  })
+
+  it('A41, A49: a card is placed clear of other cards and of the tip under an unlinked default', async () => {
+    const { OwnAdapter } = await import('../canvas/adapter/own/adapter')
+    const { placeBrandClan, BRAND_CLAN_CARD, BRAND_CLAN_TIP_H } = await import('./canvas')
+    const s = modelStore()
+    await s.create(MAYA, 'Placement', true)
+    const a = new OwnAdapter()
+    a.resize(1600, 1000, 0, 0)
+    const env = { canvas: a, doc: s as never }
+    const v = a.visibleBounds()
+    // a card where the default lands (top right of the view), as a route card was (A41)
+    const block = a.node({ x: Math.round(v.maxX - 420), y: Math.round(v.minY + 40), width: 360, height: 260, customData: { kind: 'script', id: 'x' } })
+    a.transact((all) => [...all, block], { undoable: false })
+    const dflt = await addBrandClan(s, newBrandClan(read('Copperell Original', 2, COPPER), 'default'))
+    const e1 = placeBrandClan(env, dflt.id)
+    const box = (e: { x: number; y: number; width: number; height: number }, extra = 0) => ({ x: e.x, y: e.y, w: e.width, h: e.height + extra })
+    const meets = (p: { x: number; y: number; w: number; h: number }, q: { x: number; y: number; w: number; h: number }) => p.x < q.x + q.w && q.x < p.x + p.w && p.y < q.y + q.h && q.y < p.y + p.h
+    expect(meets(box(e1, BRAND_CLAN_TIP_H), box(block))).toBe(false)
+    expect(e1.height).toBe(BRAND_CLAN_CARD.h)
+    // compare: a second one beside it lands clear of the first card, its tip, and the other card (A49)
+    const second = await addBrandClan(s, newBrandClan(read('Copperell Bold', 1, COPPER, 'doc-bold'), 'pick'))
+    const e2 = placeBrandClan(env, second.id, { x: e1.x + e1.width + 40 + BRAND_CLAN_CARD.w / 2, y: e1.y + BRAND_CLAN_CARD.h / 2 })
+    expect(meets(box(e2), box(e1, BRAND_CLAN_TIP_H))).toBe(false)
+    expect(meets(box(e2), box(block))).toBe(false)
   })
 })

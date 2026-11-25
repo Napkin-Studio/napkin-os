@@ -7,7 +7,7 @@ import type { Id, LinkEndpoint, Link } from '../contracts/types'
 import type { CanvasElement, Pt } from '../canvas/core/canvasAdapter'
 import { elementOfEnd, linkInput, type NodeEnv } from '../canvas/nodes/nodes'
 import { clearOffset } from '../canvas/boards/fitting'
-import { addBrandClan, brandClansList, clientOf, fetchLogo, newBrandClan } from './model'
+import { addBrandClan, brandClansList, clientOf, fetchLogo, linkedLabel, newBrandClan } from './model'
 import { pageBrandClanSource, type BrandClanSource } from './os'
 
 /** The card's box (mock d1: header with the picker, the logo, four swatches, the type line, the status line). */
@@ -23,17 +23,37 @@ export function brandClanOfElement(e: CanvasElement | undefined): Id | null {
   return !e?.isDeleted && c?.kind === 'brand_clan' && typeof c.id === 'string' ? c.id : null
 }
 
-/** Place a Brand Clan node's card, at `at` or top right of the view, clear of what is there. The node must be in the document. */
+/** The tip under a default Brand Clan not linked yet (NodeLayer draws it 10 px under the card, BrandClanTip ~110 px). */
+export const BRAND_CLAN_TIP_H = 120
+
+/** Whether a Brand Clan node shows its "Placed for you, not linked" tip (NodeLayer's rule). */
+const showsTip = (env: NodeEnv, id: Id) => {
+  const d = env.doc.get()
+  return d.brand_clans?.[id]?.source.how === 'default' && !linkedLabel(d, id)
+}
+
+/** What a placement keeps clear of: every element, and the tip under each Brand Clan card that shows one (the tip is no
+ *  canvas element, so the canvas did not know it was there: A41, A49). */
+function avoiding(env: NodeEnv): CanvasElement[] {
+  const els = env.canvas.elements()
+  const tips = els.filter((e) => { const id = brandClanOfElement(e); return !!id && showsTip(env, id) })
+    .map((e) => ({ ...e, id: `${e.id}#tip`, y: e.y + e.height, height: BRAND_CLAN_TIP_H, customData: undefined, points: undefined, angle: 0 }) as CanvasElement)
+  return [...els, ...tips]
+}
+
+/** Place a Brand Clan node's card, at `at` or top right of the view, clear of what is there and of its own tip (the card
+ *  and the tip under it are kept clear together). The node must be in the document. */
 export function placeBrandClan(env: NodeEnv, id: Id, at?: Pt, select = false): CanvasElement {
   const { canvas } = env
   const there = brandClanElement(env, id)
   if (there) return there
   const v = canvas.visibleBounds()
   const c = at ?? { x: v.maxX - BRAND_CLAN_CARD.w / 2 - 80, y: v.minY + BRAND_CLAN_CARD.h / 2 + 60 }
-  let box = { x: Math.round(c.x - BRAND_CLAN_CARD.w / 2), y: Math.round(c.y - BRAND_CLAN_CARD.h / 2), w: BRAND_CLAN_CARD.w, h: BRAND_CLAN_CARD.h }
-  const { dx, dy } = clearOffset(canvas.elements(), [box])
+  const tall = BRAND_CLAN_CARD.h + (showsTip(env, id) ? BRAND_CLAN_TIP_H : 0)
+  let box = { x: Math.round(c.x - BRAND_CLAN_CARD.w / 2), y: Math.round(c.y - BRAND_CLAN_CARD.h / 2), w: BRAND_CLAN_CARD.w, h: tall }
+  const { dx, dy } = clearOffset(avoiding(env), [box])
   box = { ...box, x: Math.round(box.x + dx), y: Math.round(box.y + dy) }
-  const el = canvas.node({ x: box.x, y: box.y, width: box.w, height: box.h, customData: { kind: 'brand_clan', id } })
+  const el = canvas.node({ x: box.x, y: box.y, width: box.w, height: BRAND_CLAN_CARD.h, customData: { kind: 'brand_clan', id } })
   canvas.transact((all) => [...all, el], { undoable: true })
   const placed = canvas.elements().find((e) => e.id === el.id) ?? el
   if (select) canvas.select([placed.id])
@@ -76,7 +96,8 @@ export async function addBrandClanBeside(env: NodeEnv, besideId: Id, path: strin
   const read = await src.read(path)
   const node = await addBrandClan(env.doc, newBrandClan(read, 'pick'), await fetchLogo(src, read))
   const by = brandClanElement(env, besideId)
-  placeBrandClan(env, node.id, by ? { x: by.x + by.width / 2, y: by.y + by.height + 40 + BRAND_CLAN_CARD.h / 2 } : undefined, true)
+  // Beside it to compare (mock d3): to its right, clear of everything (A49: it landed on route and Script cards).
+  placeBrandClan(env, node.id, by ? { x: by.x + by.width + 40 + BRAND_CLAN_CARD.w / 2, y: by.y + BRAND_CLAN_CARD.h / 2 } : undefined, true)
   return node.id
 }
 

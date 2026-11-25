@@ -4,6 +4,7 @@
 // so what plays is what renders. Edit never spends: nothing here starts a paid job.
 
 import { brandKit } from '../campaign/layout'
+import { brandClanOf, cardGroundOf } from '../brandClan/model'
 import { newUlidId } from '../../../clan-store/src'
 import { compileTimeline, type PlanClip as StorePlanClip, type PlanEndCard as StorePlanEndCard, type PlanText as StorePlanText, type TimelineItem as StoreTimelineItem } from '../../../clan-store/src'
 import type { AssetRef, EndCard, Id, ProductionDocument, TimelineItem, TimelinePlan, TransitionIn } from '../contracts/types'
@@ -218,11 +219,25 @@ export function cardCopy(card: CutEndCard, end: string | undefined, legal: strin
   return { ...card, headline: headline || named, line }
 }
 
+/** The colour a new end card starts with; while a card keeps it, the linked Brand Clan's ground shows instead (A55). */
+export const DEFAULT_CARD_BG = '#14161B'
+
+/** An end card as it renders: its own logo, else the Brand board's, else the logo of the Brand Clan linked to the film (or up
+ *  the canvas: Film ← Storyboard ← Script, nearest link wins); its own colour, unless it is still the default and that Brand
+ *  Clan has a dark colour for it. `from`: the Brand Clan that gave anything ("Copperell Original"), for the Inspector. */
+export function endCardLook(d: ProductionDocument, videoId: Id, card: { bg: string; logo?: string }): { bg: string; logo?: string; from?: string; bgFrom?: string } {
+  const clan = brandClanOf(d, videoId)?.node
+  const logo = card.logo ?? brandKit(d, videoId).logo?.sha256
+  const ground = card.bg.toUpperCase() === DEFAULT_CARD_BG && clan ? cardGroundOf(clan.bible) : undefined
+  const logoFromClan = !card.logo && !!clan?.logo && logo === clan.logo.sha256
+  return { bg: ground ?? card.bg, ...(logo ? { logo } : {}), ...(clan && (ground || logoFromClan) ? { from: clan.title } : {}), ...(ground && clan ? { bgFrom: clan.title } : {}) }
+}
+
 /** A new end card for a film with no end-card shot: the brand name set in type (the project's name; there is no logo without a
  *  brand book) and the linked Brief's legal line as its legal. */
 export function newEndCard(d: ProductionDocument, videoId: Id): CutEndCard {
   const named = d.project.title && !/^untitled/i.test(d.project.title) ? d.project.title : 'Your brand'
-  return withBriefLegal(d, videoId, withCampaignLine(d, videoId, { headline: '', line: named, bg: '#14161B', durS: 1.5 }))
+  return withBriefLegal(d, videoId, withCampaignLine(d, videoId, { headline: '', line: named, bg: DEFAULT_CARD_BG, durS: 1.5 }))
 }
 
 /** The campaign's line for a film: the linked Brief's end line ("Proper crunch."), else the script's own last spoken line. */
@@ -263,7 +278,7 @@ export function endCardOf(d: ProductionDocument, storyboardId: Id | undefined): 
   if (!shot) return undefined
   const named = d.project.title && !/^untitled/i.test(d.project.title) ? d.project.title : 'Your brand'
   const words = (shot.action ?? '').trim()
-  const card = (headline: string, line: string) => ({ headline: headline || named, line: line || headline || named, bg: '#14161B', durS: shot.duration_s || 1.5 })
+  const card = (headline: string, line: string) => ({ headline: headline || named, line: line || headline || named, bg: DEFAULT_CARD_BG, durS: shot.duration_s || 1.5 })
   const label = END_PREFIX.exec(words)
   const after = label ? words.slice(label[0].length).trim() : ''
   const said = after ? spoken(after) : ''
@@ -354,9 +369,9 @@ export function compileFor(d: ProductionDocument, videoId: Id): Plan {
   if (!v) return { clips: [], texts: [], lengthS: 0, missing: [] }
   const legal = v.end_card ? cardLegal(d, videoId, v.end_card.legal) : undefined
   // The card's own logo, else the Brand board's (UAT round 4 F23: the card said so, but the render had none), else the linked
-  // Brand Clan's (owner 2026-11-24).
-  const logo = v.end_card ? v.end_card.logo_asset ?? brandKit(d, videoId).logo?.sha256 : undefined
-  const card = v.end_card ? { ...v.end_card, ...(legal === undefined ? {} : { legal }), ...(logo ? { logo_asset: logo } : {}) } : undefined
+  // Brand Clan's (owner 2026-11-24); its colour the Brand Clan's while it is the default (A55).
+  const look = v.end_card ? endCardLook(d, videoId, { bg: v.end_card.bg, ...(v.end_card.logo_asset ? { logo: v.end_card.logo_asset } : {}) }) : undefined
+  const card = v.end_card ? { ...v.end_card, ...(legal === undefined ? {} : { legal }), ...(look?.logo ? { logo_asset: look.logo } : {}), bg: look?.bg ?? v.end_card.bg } : undefined
   const plan = compileTimeline({ timeline: v.timeline as Record<string, StoreTimelineItem>, ...(card ? { end_card: card } : {}) }, d.generations)
   const clips = plan.clips.map((c) => {
     const g = c.generation_id ? d.generations[c.generation_id] : undefined

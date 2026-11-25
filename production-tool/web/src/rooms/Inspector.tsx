@@ -8,7 +8,7 @@ import { useDoc, useServices } from '../app/context'
 import { shotNumber } from '../model/selectors'
 import { clipLen, MAX_SPEED, MIN_SPEED, type Cut, type CutClip, type TextStyle } from './cut'
 import { editCut } from './editOps'
-import { briefLegal } from './timeline'
+import { briefLegal, endCardLook } from './timeline'
 import { coversShot, genTitle, sharesBox, shotTitle, type Gen } from './model'
 import { tc } from './media'
 import type { RoomData } from './Rooms'
@@ -143,6 +143,8 @@ export function Inspector({ data, cut, picked, onPick, onChange, onFeel, onSwap,
     const e = cut.endCard
     if (!e) return null
     const fromBrief = briefLegal(doc, v)
+    // What the render shows (A55): the logo and, while the colour is the default, the colour of the linked Brand Clan.
+    const look = endCardLook(doc, v, { bg: e.bg, ...(e.logo ? { logo: e.logo } : {}) })
     return (
       <div className="rm-tab">
         <div className="rm-tabhead"><span className="rm-kicker pt-mono">End card · locked last</span><b className="rm-clamp2" title={e.headline || e.line}>{e.headline || e.line}</b></div>
@@ -152,11 +154,11 @@ export function Inspector({ data, cut, picked, onPick, onChange, onFeel, onSwap,
         <CardField label="Legal" value={e.legal ?? ''} max={200} onSet={(x) => void editCut.endCard(docStore, v, { legal: x })}
           mark={fromBrief && e.legal === fromBrief ? 'from the brief' : undefined} hint={!fromBrief && !e.legal ? 'Link the Brief to this film to fill it in.' : undefined} />
         <label className="rm-num"><span className="rm-rowname">Colour</span>
-          <input type="color" className="rm-colour" value={e.bg} aria-label="Card colour" onChange={(ev) => void editCut.endCard(docStore, v, { bg: ev.target.value.toUpperCase() })} />
-          <span className="pt-mono rm-faint">{e.bg}</span>
+          <input type="color" className="rm-colour" value={look.bg} aria-label="Card colour" onChange={(ev) => void editCut.endCard(docStore, v, { bg: ev.target.value.toUpperCase() })} />
+          <span className="pt-mono rm-faint">{look.bg}{look.bgFrom ? ` · from ${look.bgFrom}` : ''}</span>
         </label>
         <Seconds label="Length" value={e.durS} min={0.5} max={10} onSet={(x) => void editCut.endCard(docStore, v, { durS: x })} />
-        <p className="rm-note">The logo comes from the Brand board when it has one, else from the linked Brand Clan.</p>
+        <p className="rm-note">The logo comes from the Brand board when it has one, else from the linked Brand Clan{look.from ? ` (${look.from}${look.logo ? '' : ', which has no logo'})` : ''}. Its colour follows the Brand Clan until you pick one.</p>
         <button type="button" className="btn ghost rm-wide" onClick={() => { void editCut.removeEndCard(docStore, v); onPick(null) }}>Remove the end card</button>
       </div>
     )
