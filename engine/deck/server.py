@@ -39,6 +39,7 @@ import contextlib
 import hashlib
 import io
 import json
+import re
 import os
 import shutil
 import sys
@@ -586,7 +587,13 @@ class Server:
             d.notices.append(f"Replay: you picked '{name(pick)}'. The recorded idea was written from '{name(c.get('chosen'))}', so the next steps show that recording.")
 
     def call_engine(self, d: Doc, req: dict, until: str | None) -> dict:
-        p = req["prompt"]
+        p = dict(req["prompt"])
+        if not str(p.get("project") or "").strip():   # UAT round 4: a brief-only deck named no project, so the cover and the files said '[Project]'
+            pn = ((req.get("brief_upstream") or {}).get("data") or {}).get("project_name")
+            pn = (pn.get("value") if isinstance(pn, dict) else pn) or ""
+            pn = re.sub(r"^\s*to confirm:\s*", "", str(pn), flags=re.I).strip()
+            if pn and len(pn) <= 80:
+                p["project"] = pn
         argv = ["--prompt-text", str(p.get("text") or ""), "--stages", str(d.stages), "--client", str(p.get("client") or "[Client]"),
                 "--project", str(p.get("project") or "[Project]"), "--out", str(d.out), "--format", req["format"]]   # the QA runs: the repair loop reads it
         inp = req["inputs"]

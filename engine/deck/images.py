@@ -922,7 +922,7 @@ def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", na
                                            "from": {"kind": "production", **({"run": run} if run else {})}}}
     if spec.GRAPHICS and pictures != "none" and ooh_sizes(prod, mset):
         got["added"] = add_ooh_slide(deck)   # OOH finals exist and the idea stage wrote no OOH execution: one slide for them
-    if spec.GRAPHICS and pictures != "none" and len(production_shots(prod)) >= 3 and not any(is_slide_executing_film(deck, k) for k in deck["order"]):
+    if spec.GRAPHICS and pictures != "none" and len(production_shots(prod)) >= spec.STRIP_MIN and not any(is_slide_executing_film(deck, k) for k in deck["order"]):
         got["added_storyboard"] = add_storyboard_slide(deck)   # a storyboard's frames exist and no execution shows them: one slide, a strip of stills
     placed_keys = set()   # the finals earlier slots hold: a size or packshot slide takes another picture when there is one
     column_only = set()   # cover slides whose picture fits the picture column only, never the full-bleed 16:9
