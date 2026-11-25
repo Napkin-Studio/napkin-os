@@ -110,6 +110,8 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
     undo,
     make: () => deps.makeClan(storage.clan(clanDbFor(id)), { person, undo, recover: { key: pendingKey(id) } }),
     storage,
+    // A project the workspace holds (it has a server mark) is opened from there when this browser kept nothing.
+    ...(deps.server && index.get(id)?.server ? { stored: () => deps.server!.open(id).then((g) => g.bytes, () => null) } : {}),
   })
   if (isRefused(opened)) {
     await ui.close()

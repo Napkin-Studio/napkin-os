@@ -2114,6 +2114,8 @@ body.fresh .booth-edge{display:none}
       return String(v)+(u&&u!=='count'?' '+u:'');
     }
     if(typeof v==='boolean') return v?'yes':'no';
+    // A code is said in words ("household.laundry_cleaning" is "Laundry and cleaning"; acceptance A44).
+    if(u==='code'&&typeof v==='string') return codeText(v);
     return String(v);
   }
   // What a person calls a pin: its key in words, never the key itself
@@ -3848,7 +3850,7 @@ body.fresh .booth-edge{display:none}
     return '<div class="wsec"><div class="wsec-h">'+esc(h+(cards.length>4&&!counted?' · '+cards.length:''))+'</div>'+(shown.length?shown.join(''):slip(none&&none[0]||'Nothing yet', none&&none[1]||'It fills as the agents work.', '', true))+'</div>'; }
   function srcSlip(sid, mark){ var s=srcRecs()[sid]||{}; return slip(s.domain||s.publisher||'Source', s.title||srcName(sid)||sid, mark); }
   function pinSlip(id, mark){ var p=pins()[id]||{}, src=pinSource(id);
-    return slip(id+(p.confidence?' · '+(p.confidence==='low'?'Thin':p.confidence.charAt(0).toUpperCase()+p.confidence.slice(1)):src?' · '+src:''), clipT(String(p.key||'').split(':').pop().replace(/@.*$/,'').replace(/[._]/g,' ')+': '+fmtPinValue(p), 110), mark, false, p.confidence==='low'?'thin sample':''); }
+    return slip(id+(p.confidence?' · '+(p.confidence==='low'?'Thin':p.confidence.charAt(0).toUpperCase()+p.confidence.slice(1)):src?' · '+src:''), clipT(pinLabel(p)+': '+fmtPinValue(p), 110), mark, false, p.confidence==='low'?'thin sample':''); }
   // What each step puts on the desk: the mock's rails for that step, filled from the record.
   function railsFor(at){
     var plan=lensPlan(), on=plan.filter(function(x){ return !x.off; }), st=stageStates(), j=CHAT.job, live=jobActive();

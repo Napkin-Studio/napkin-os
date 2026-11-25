@@ -320,6 +320,15 @@ impl Session {
         })
     }
 
+    /// The packed archive as it is kept, links and all: what a store or the
+    /// workspace it came from holds (a browser saving its working copy, or
+    /// sending it back). Unlike [`Self::raw_bytes`] nothing is materialised,
+    /// so a host with no file store can still keep a document whose files
+    /// are links (UAT round 4 A15: every save of a spun-off project failed).
+    pub fn kept_bytes(&self) -> HostResult<Vec<u8>> {
+        self.read(|d| Ok(view::served_archive(d)?.into_owned()))
+    }
+
     /// The packed archive of the open snapshot exactly as stored.
     pub fn stored_bytes(&self) -> HostResult<Vec<u8>> {
         self.read(|d| Ok(d.bytes().to_vec()))

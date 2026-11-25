@@ -116,7 +116,7 @@ def test_the_pictured_execution_drops_the_image_prompt_note_and_the_layout_is_un
     run = build_demo(demo_stages, tmp_path / "o", "--pictures", "creative", "--image", f"s12.picture={pic}", "--image-rights", "s12.picture=own")
     base = build_demo(demo_stages, tmp_path / "b")
     t = lambda r, n: " ".join(sh.text_frame.text for sh in Presentation(str(r / "deck.pptx")).slides[n - 1].shapes if sh.has_text_frame)
-    assert "Image prompt" in t(base, 12) and "Image prompt" not in t(run, 12)
+    assert "Image prompt" not in t(base, 12) and "Image prompt" not in t(run, 12)   # UAT round 4: a picture prompt is never drawn, pictured or not
     assert "Illustrative" in t(run, 12)
     lr, lb = (json.loads((r / "layouts.json").read_text())["slides"]["s12"] for r in (run, base))
     assert (lr["id"], lb["id"]) == ("execution_visual", "execution") and not lr["fallback"] and lr["relaxed"] == lb["relaxed"]   # the picture layout, drawn as the carve was
