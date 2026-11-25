@@ -11,7 +11,7 @@ import { resolve } from 'node:path'
 import { test } from 'node:test'
 
 import { formatRoute, parseRoute } from '../src/shell/route.ts'
-import { CLIENT_TOOL_ORDER, PRODUCTION_PATH, TOOLS, liveTools, sendsToBrief, startsFromBrief, toolHref } from '../src/shell/landing/tools.ts'
+import { CLIENT_TOOL_ORDER, PRODUCTION_PATH, TOOLS, liveTools, newDocHref, sendsToBrief, startsFromBrief, toolHref } from '../src/shell/landing/tools.ts'
 
 // `npm test` runs from app/, and the bundled test does not sit where its source does.
 const examples = resolve(process.cwd(), '..', 'crates', 'clan-sdk', 'examples')
@@ -76,4 +76,15 @@ test('Territories with no documents goes to the Brief; with some it opens as its
 test('Prod from a client\'s dial carries the client, so the film it starts belongs to them', () => {
   assert.equal(toolHref({ id: 'prod' }, 'cl_tide well'), '/production/?client=cl_tide%20well')
   assert.equal(toolHref({ id: 'brief' }, 'cl_1'), null)
+})
+
+test('Prod\'s "+" on a client\'s page starts a film for that client in the Production Tool (UAT acceptance A40: it did nothing)', () => {
+  assert.equal(newDocHref({ id: 'prod' }, 'cli_e8711bc5'), '/production/?client=cli_e8711bc5&new=1')
+  assert.equal(newDocHref({ id: 'prod' }, 'cl_tide well'), '/production/?client=cl_tide%20well&new=1')
+  // Every app the shell launches starts in the shell, as before.
+  for (const t of TOOLS.filter(t => t.id !== 'prod')) assert.equal(newDocHref(t, 'cl_1'), null, `${t.id} starts in the shell`)
+  // The LandingHome wiring: both "+" handlers go through newDocHref, never the app-only path that dropped Prod.
+  const home = readFileSync(resolve(process.cwd(), 'src', 'shell', 'landing', 'LandingHome.tsx'), 'utf8')
+  assert.match(home, /newDocHref\(t, clientId\)/)
+  assert.doesNotMatch(home, /onNew=\{t => \{ if \(t\.appId\)/)
 })

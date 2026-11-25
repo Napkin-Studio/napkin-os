@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ToolPage } from './ToolPage'
 import type { Manage } from './useLanding'
 import { agencySummary, newsOf, whoIs, type AgencySummary } from './model'
-import { liveTools, sendsToBrief, startsFromBrief, toolById, toolHref, toolOfApp, type Tool } from './tools'
+import { liveTools, newDocHref, sendsToBrief, startsFromBrief, toolById, toolHref, toolOfApp, type Tool } from './tools'
 import { productionOn } from '../../host/http'
 import { arrival, isTyping } from './keys'
 import type { LandingData } from './store'
@@ -107,6 +107,14 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
     setFromBrief(formatRoute(to))
     go(to)
   }
+  // A tool's "+": Territories starts from a brief (above), Production starts its film on its own page (a full load), an app starts in the shell.
+  const startNew = (t: Tool, clientId: string) => {
+    if (startsFromBrief(t)) { startFromBrief(clientId); return }
+    const href = newDocHref(t, clientId)
+    if (href) window.location.assign(href)
+    else if (t.appId) onStart(t.appId, clientId)
+  }
+
   const openTool = (clientId: string, t: Tool) => {
     const href = toolHref(t, clientId)
     if (href) window.location.assign(href)
@@ -171,7 +179,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         client={client}
         tool={tool}
         items={inTool}
-        onNew={() => { if (startsFromBrief(tool)) startFromBrief(client.id); else if (tool.appId) onStart(tool.appId, client.id) }}
+        onNew={() => startNew(tool, client.id)}
         onOpenItem={onOpenDocument}
         onBack={() => go({ level: 'client', client: client.id })}
         lenses={lenses}
@@ -187,7 +195,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         facts={facts}
         live={live}
         onOpenItem={onOpenDocument}
-        onNew={t => { if (startsFromBrief(t)) startFromBrief(client.id); else if (t.appId) onStart(t.appId, client.id) }}
+        onNew={t => startNew(t, client.id)}
         onOpenTool={t => openTool(client.id, t)}
         onSoon={sayingSoon}
         onDecisions={onDecisions}

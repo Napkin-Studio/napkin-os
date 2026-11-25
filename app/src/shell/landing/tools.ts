@@ -73,6 +73,12 @@ export const toolOfApp = (appId: string | null | undefined): Tool | undefined =>
 export const toolHref = (tool: { id: string }, clientId?: string): string | null =>
   tool.id === 'prod' ? (clientId ? `${PRODUCTION_PATH}?client=${encodeURIComponent(clientId)}` : PRODUCTION_PATH) : null
 
+/** Where a tool's "+" starts a new document outside the shell (Prod: a new film in the Production Tool, for this
+ *  client), or null when the shell starts it (an app the shell launches). The Production Tool reads `new=1` once and
+ *  drops it, so a reload makes no second film (UAT acceptance A40: the client page's Production "+" did nothing). */
+export const newDocHref = (tool: { id: string }, clientId: string): string | null =>
+  tool.id === 'prod' ? `${PRODUCTION_PATH}?client=${encodeURIComponent(clientId)}&new=1` : null
+
 /** The tools a person can open now: each whose app is installed, and Prod when this server serves
  *  the Production Tool to this person (/api/session `production`). */
 export function liveTools(installed: readonly Pick<InstalledApp, 'app_id'>[], production: boolean): Set<string> {

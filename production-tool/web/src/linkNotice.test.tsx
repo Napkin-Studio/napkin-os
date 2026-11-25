@@ -56,6 +56,7 @@ async function project() {
 const briefNode = (mandatories: string[]) => ({ id: id('brief'), v: 1, field_v: {}, title: 'Ferncliff brief', source: { document_id: 'doc_1', app_id: 'ie.napkin.brief-maker', data_sha256: SHA('b'), taken: 1, version: 1, at: T, how: 'link' }, spine: { mandatories } }) as unknown as NonNullable<ProductionDocument['briefs']>[string]
 
 import { LinkNotice } from './LinkNotice'
+import { noticePlace } from './linkNoticePlace'
 import { noticeWords, resetLinkNotices, unlinkedFor, workingFrom } from './model/unlinked'
 import { job } from './test/model'
 import { linkInput } from './canvas/nodes/nodes'
@@ -163,5 +164,25 @@ describe('the link notice', () => {
     await linkInput(store, store.get(), { kind: 'ref', id: refId }, { kind: 'script', id: scriptId })
     const linkedKey = store.get().refs[refId].key
     expect(unlinkedFor(store.get(), scriptId).refs.map((r) => r.key)).toEqual(['ferncan', 'maya'].filter((k) => k !== linkedKey))
+  })
+})
+
+describe('where the notice sits on the canvas (UAT acceptance A42: clipped under the header at fit-all)', () => {
+  const host = { left: 0, top: 62, right: 1440, bottom: 900, width: 1440 }
+  const size = { width: 296, height: 90 }
+  const bar = (top: number, left = 600, width = 300) => ({ left, top, right: left + width, bottom: top + 36, width })
+  it('above a bar that sits above the node, when there is room', () => {
+    expect(noticePlace(bar(400), host, 450, size)).toEqual({ left: 600, top: 400 - 62 - 90 - 8 })
+  })
+  it('with no room above (a node at the top), beside the bar, never under the top bar', () => {
+    const p = noticePlace(bar(80), host, 130, size)
+    expect(p).toEqual({ left: 908, top: 18 })
+    expect(p.top).toBeGreaterThanOrEqual(8)
+  })
+  it('under the bar when the right is full too', () => {
+    expect(noticePlace(bar(80, 1100), host, 130, size)).toEqual({ left: 1100, top: 80 + 36 - 62 + 8 })
+  })
+  it('under a bar that sits under the node', () => {
+    expect(noticePlace(bar(500), host, 300, size)).toEqual({ left: 600, top: 500 + 36 - 62 + 8 })
   })
 })
