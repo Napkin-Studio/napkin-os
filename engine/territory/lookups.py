@@ -166,6 +166,7 @@ def run(doc: dict, lookup_id: str, by: str, *, research, spend: sp.Spend, market
         text = f"Looked up: {mine['q']} Nothing usable came back, so nothing was added."
     nid = contract.mint("note", f"{lookup_id}:{len(d.get('notes') or [])}")
     d.setdefault("notes", []).append({"id": nid, "agent": "research", "text": text[:400], "at": at, "cite": [f["id"] for f in new][:6]})
+    d["notes"] = d["notes"][-contract.limit("notes"):]
     run_ = d.setdefault("run", {"state": "building"})
     calls = run_.setdefault("calls", {"model": 0, "lookups": 0})
     calls["lookups"] = int(calls.get("lookups") or 0) + 1

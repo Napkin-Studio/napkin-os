@@ -264,26 +264,64 @@ def _insights_stage(session: _Session, doc: dict, facts, findings, sources, cate
     if res.get("gate") or not res.get("insights"):
         session.store.note_segment("insights", "failed", calls=session.counts.get("insights", 0), secs=round(time.monotonic() - t0, 2))
         return _fail(doc, "pick", res.get("words") or "There is not enough to work from, so no insights were made.", retryable=False)
-    d = copy.deepcopy(doc)
-    inp = carried.engine_input(d, facts, findings, sources)
-    ids = [f"brief:{k}" for k in inp["brief"]] + [p["id"] for p in inp["facts"]] + [f["id"] for f in inp["findings"]]
-    d["focus"] = {"sources": [{"id": i, "in_play": True} for i in ids], "insights": res["insights"]}
-    d["run"].pop("error", None)
-    d["run"]["state"] = "draft"
+    d = _with_sources(doc, res["insights"], facts, findings, sources)
     session.store.note_segment("insights", "finished", calls=session.counts.get("insights", 0), secs=round(time.monotonic() - t0, 2))
     return d
 
 
-def _check_final(doc: dict, facts, findings) -> dict:
-    """The document the host would refuse is never returned as if it were fine: it becomes a retryable error naming what to fix."""
-    if (doc.get("run") or {}).get("state") == "failed":
-        return doc
+def _with_sources(doc: dict, insights: list, facts, findings, sources) -> dict:
+    """The document with these insights and one source, in play, per brief field, research pin and finding the crew may quote, as a fresh
+    draft. Try again after a Pick that could not be saved comes back here with the insights it kept: no model call, the same pick rebuilt."""
+    d = copy.deepcopy(doc)
+    inp = carried.engine_input(d, facts, findings, sources)
+    ids = [f"brief:{k}" for k in inp["brief"]] + [p["id"] for p in inp["facts"]] + [f["id"] for f in inp["findings"]]
+    d["focus"] = {"sources": [{"id": i, "in_play": True} for i in ids], "insights": insights}
+    d["run"].pop("error", None)
+    d["run"]["state"] = "draft"
+    return d
+
+
+def _check_final(doc: dict, facts, findings, start: dict | None = None) -> dict:
+    """The document the host would refuse is never returned as if it were fine: it becomes a retryable error naming what to fix. The failed
+    document must itself be one the host takes, or the person sees nothing at all (acceptance A13: a refused Pick left neither the run nor its
+    insights): the members that broke are put back as the run found them (the rest, the insights first, kept), and if that still does not fit,
+    the error is written onto the document the run started from."""
     ps = contract.check(doc, facts=facts or [], findings=findings or [])      # structure first, then the contract's own rules
-    if ps:
-        stage = (doc.get("run") or {}).get("stage") or "pick"
+    if not ps:
+        return doc
+    if (doc.get("run") or {}).get("state") == "failed" and start is None:
+        return doc
+    stage = (doc.get("run") or {}).get("stage") or "pick"
+    if (doc.get("run") or {}).get("state") == "failed":
+        e = (doc.get("run") or {}).get("error") or contract.refusal_error(ps, stage)
+    else:
         e = contract.refusal_error(ps, stage)
-        return _fail(doc, stage, e["message"], True, e["refused"])
-    return doc
+    out = _fail(_put_back(doc, start or {}, ps), stage, e["message"], True, e.get("refused"))
+    if not contract.check(out, facts=facts or [], findings=findings or []) or start is None:
+        return out
+    return _fail(start, stage, e["message"], True, e.get("refused"))
+
+
+def _put_back(doc: dict, start: dict, ps) -> dict:
+    """Each member a problem names (two levels deep: ``focus.sources``) as ``start`` had it; one it had not: an empty list, or gone."""
+    d = copy.deepcopy(doc)
+    for p in ps:
+        keys = [k for k in re.split(r"[.\[\]]", str(getattr(p, "path", "") or "")) if k and not k.isdigit()][:2]
+        if not keys or keys[0] == "run":
+            continue
+        src, dst = start, d
+        for k in keys[:-1]:
+            src = src.get(k) if isinstance(src, dict) else None
+            dst = dst.get(k) if isinstance(dst, dict) else None
+        if not isinstance(dst, dict):
+            continue
+        if isinstance(src, dict) and keys[-1] in src:
+            dst[keys[-1]] = copy.deepcopy(src[keys[-1]])
+        elif isinstance(dst.get(keys[-1]), list):
+            dst[keys[-1]] = []       # a list the run added: empty is its plain state (for the Pick's sources, everything in play)
+        else:
+            dst.pop(keys[-1], None)
+    return d
 
 
 def _result(session: _Session, doc: dict, **info) -> Result:
@@ -318,6 +356,7 @@ def run(doc: dict, *, llm, store: Store, facts=None, findings=None, sources=None
     _HOLDERS[key] = cancel
     try:
         doc = prepare(doc)
+        start = copy.deepcopy(doc)
         try:
             session = _Session(store, llm, cancel=cancel, cap_usd=cap_usd, doc_id=doc_id, on_line=on_line)
         except (ValueError, OSError):
@@ -325,8 +364,11 @@ def run(doc: dict, *, llm, store: Store, facts=None, findings=None, sources=None
         if not any(e["kind"] == "ask" for e in session.spend.events):
             session.spend.ask(card(doc))
         try:
-            if not (doc.get("focus") or {}).get("insights") and (doc.get("run") or {}).get("state") in (None, "draft", "failed"):
+            r0 = doc.get("run") or {}
+            if not (doc.get("focus") or {}).get("insights") and r0.get("state") in (None, "draft", "failed"):
                 doc = _insights_stage(session, doc, facts, findings, sources, category, market, prompt_text)
+            elif r0.get("state") == "failed" and (r0.get("stage") or "pick") == "pick" and not (r0.get("approvals") or {}).get("pick"):
+                doc = _with_sources(doc, doc["focus"]["insights"], facts, findings, sources)     # Try again on a Pick that was not saved
             if (doc.get("run") or {}).get("state") != "failed" or any(r.get("kind") == "retry" for r in (doc.get("run") or {}).get("gate_requests") or []):
                 kw = dict(facts=facts, findings=findings, sources=sources, marks=marks, cancel=cancel, on_progress=on_progress)
                 doc = gates.drive(doc, {"explore": _segment(session, "explore", routes.stage(session.llm, **kw)),
@@ -334,7 +376,7 @@ def run(doc: dict, *, llm, store: Store, facts=None, findings=None, sources=None
                                   findings=findings, max_steps=max_steps)
             if session.stopped and (doc.get("run") or {}).get("state") == "failed":
                 doc = _fail(doc, doc["run"]["error"]["stage"], STOPPED_WORDS)
-            doc = _check_final(doc, facts, findings)
+            doc = _check_final(doc, facts, findings, start)
         except Exception:     # noqa: BLE001 - the contract is plain words, never a trace
             doc = _fail(doc, (doc.get("run") or {}).get("stage") or "pick", STOPPED_WORDS if session.stopped else UNEXPECTED_WORDS)
         return _result(session, doc)

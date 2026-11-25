@@ -621,7 +621,7 @@ def _fail(doc: dict, members: dict, message: str, refused: list | None = None, r
 
 def _members(doc: dict, crew, expeditions, territories, actions, spread) -> dict:
     keep = [a for a in doc.get("actions") or [] if a.get("kind") not in ("spread_fix", "sent_agent")]
-    return {"crew": crew, "expeditions": expeditions, "territories": territories, "actions": [*keep, *actions], "spread": spread}
+    return {"crew": crew, "expeditions": expeditions, "territories": territories, "actions": [*keep, *actions][-contract.limit("actions"):], "spread": spread}
 
 
 def _finish(doc: dict, members: dict, calls: int) -> dict:
@@ -797,7 +797,7 @@ def steer(doc: dict, llm, crew_id: str, kind: str, by: str, *, with_: str | None
     groups = {k: v[1] for k, v in res["sort"].items()}
     rev = _review(counted, ctx, d, list(crew.values()), d["territories"], groups, only={n["id"] for n in new}, allow_gap=False)
     d["territories"], groups = themed(rev["routes"], rev["groups"]), rev["groups"]
-    d["actions"] = [*(d.get("actions") or []), *rev["actions"]]
+    d["actions"] = [*(d.get("actions") or []), *rev["actions"]][-contract.limit("actions"):]
     for x in d["expeditions"]:
         if x["crew"] == crew_id:
             x.update(_expedition(member, {**hd, "state": "back"}, _refs(d["territories"], crew_id), start or [i["id"] for i in ctx.ticked]))

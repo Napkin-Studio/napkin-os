@@ -146,7 +146,8 @@ LIST_NAME = {"lines": "lines", "tv": "TV frames", "radio": "radio lines", "crm":
              "risks": "risks", "references": "references", "territories": "routes", "insights": "insights", "crew": "crew members",
              "expeditions": "trails", "routes": "routes", "evidence": "sources", "checks": "checks", "pictures": "pictures",
              "greenlit": "greenlit routes", "notes": "notes", "actions": "actions", "way": "stops", "frames": "frames",
-             "proof_cases": "proof cases", "stages": "steps", "refused": "refusals", "close": "close pairs", "gaps": "gaps", "starred": "starred lines"}
+             "proof_cases": "proof cases", "stages": "steps", "refused": "refusals", "close": "close pairs", "gaps": "gaps", "starred": "starred lines",
+             "sources": "sources", "finds": "finds", "lookups": "look-ups", "asks": "questions", "sends": "sends", "decisions": "decisions"}
 VALUE_NAME = {"id": "an id", "band": "a distance band", "tier": "a risk tier", "kind": "a kind", "status": "a status", "font": "a typeface",
               "scene": "a scene", "touchpoint": "a touchpoint", "rights": "a rights choice", "crew": "a crew member", "state": "a state",
               "evidence": "a source", "cite": "a source", "direction": "a heading", "voice": "a voice", "strength": "an evidence strength"}
@@ -169,7 +170,7 @@ def _place(path) -> str:
 def _words(err) -> str:
     where = _place(err.absolute_path)
     last = next((p for p in reversed(list(err.absolute_path)) if isinstance(p, str)), "")
-    name = LIST_NAME.get(last, "a list")
+    name = LIST_NAME.get(last, "entries")
     value = VALUE_NAME.get(last, "a value")
     v = err.validator
     if v == "maxItems":
