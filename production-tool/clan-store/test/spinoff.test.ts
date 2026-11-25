@@ -5,6 +5,7 @@
 //
 // The fixture is `cargo run -p clan-sdk --example make_production -- /dev/null brief-spun-off.clan`:
 // a Brief Maker document spun off into the Production template with source_uri clan-store:doc-lumen-brief.
+import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -80,6 +81,32 @@ describe('a project born as a spin-off', () => {
     const s = store()
     await s.open(zipSync(z))
     expect((await s.spunOffFrom())?.version).toBe(2)
+  })
+
+  it('a spin-off whose brief carried an uploaded file (a link, its bytes in the workspace) saves and reopens with its brief (UAT round 4 A15)', async () => {
+    // napkin-web's spin-off links the brief's uploaded file (features/spinoff-asset-links): the manifest names it with
+    // linked: true and the bytes stay in the workspace. This browser's host has no file store, so a save that made the
+    // link whole failed, the project reopened blank, and the Brief node never came.
+    const z = unzipSync(fixture())
+    const manifest = parseYaml(new TextDecoder().decode(z['manifest.yaml']))
+    const bytes = new TextEncoder().encode('the brief an agency uploaded')
+    manifest.files.push({ id: 'human-assets-document-1-0.txt', path: 'human/assets/document-1-0.txt', role: 'human-asset', type: 'application/octet-stream', sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}`, linked: true })
+    z['manifest.yaml'] = new TextEncoder().encode(stringifyYaml(manifest))
+    const persistence = memoryPersistence()
+    const first = new ClanDocumentStore({ wasm: wasmBytes(), persistence, saveDebounceMs: 0, person: MAYA })
+    await first.open(zipSync(z))
+    const from = await first.spunOffFrom()
+    expect(from?.document_id).toBe(manifest.lineage.carried.document_id)
+    await first.flush()
+    // (the store keeps nothing else open)
+    // Reopened from what this browser kept: still the spin-off, the link kept as a link.
+    const again = new ClanDocumentStore({ wasm: wasmBytes(), persistence, saveDebounceMs: 0, person: MAYA })
+    const doc = (await again.load()) as any
+    expect(doc).toBeTruthy()
+    expect((await again.spunOffFrom())?.document_id).toBe(from!.document_id)
+    expect(doc.upstream[from!.document_id]).toBeTruthy()
+    const kept = parseYaml(new TextDecoder().decode(unzipSync(await persistedBytes(persistence))['manifest.yaml']))
+    expect(kept.files.find((f: any) => f.path === 'human/assets/document-1-0.txt')).toMatchObject({ linked: true })
   })
 
   it('a project that was not spun off says so', async () => {
@@ -225,3 +252,10 @@ describe('a Brief node from before source.version', () => {
     expect((await s.chain()).some((d) => d.action === BRIEF_VERSION_ACTION)).toBe(false)
   })
 })
+
+/** The bytes a persistence holds now. */
+async function persistedBytes(p: ReturnType<typeof memoryPersistence>): Promise<Uint8Array> {
+  const saved = await p.read()
+  if (!saved) throw new Error('nothing was saved')
+  return saved.bytes
+}

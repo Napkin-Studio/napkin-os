@@ -453,7 +453,7 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
   async exportClan(): Promise<Uint8Array> {
     await this.runBeforeBytes('export')
     await this.queue.catch(() => {})
-    return this.bytes()
+    return this.wholeBytes()
   }
 
   /**
@@ -707,7 +707,17 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
     return readData(this.host!)
   }
 
+  /** The document as it is kept, for this browser's store and for sending back to the workspace: its files that are
+   *  links stay links (UAT round 4 A15: a project spun off from a brief with an uploaded file could never be saved, as
+   *  `download` makes links whole and this host has no file store, so it reopened blank). */
   private bytes(): Uint8Array {
+    const h = this.need() as NapkinHost & { keptBytes?: () => Uint8Array | number[] }
+    const b = h.keptBytes ? h.keptBytes() : (h.download() as Uint8Array | number[])
+    return b instanceof Uint8Array ? b : Uint8Array.from(b)
+  }
+
+  /** The document whole, for what leaves the workspace (an export): links made back into their files. */
+  private wholeBytes(): Uint8Array {
     const b = this.need().download() as Uint8Array | number[]
     return b instanceof Uint8Array ? b : Uint8Array.from(b)
   }
