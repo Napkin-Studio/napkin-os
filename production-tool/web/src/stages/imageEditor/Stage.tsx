@@ -151,7 +151,12 @@ export function Stage({ src, beforeSrc, plan, image, w, h, session, tool, brush,
   // Marching ants: the edge's dashes move, unless motion is reduced (and they wait while a stroke is drawn).
   useEffect(() => {
     if (!motion) return
-    const t = setInterval(() => { if (!live.current) setAnts((a) => (a + 1) % 8) }, 140)
+    const t = setInterval(() => {
+      // A stage taken off the page without unmounting (a test DOM torn down under a second editor) stops here: a state
+      // set after that threw "window is not defined" in react-dom and failed the hook's production-tool suite.
+      if (typeof window === 'undefined' || (overlay.current && !overlay.current.isConnected)) { clearInterval(t); return }
+      if (!live.current) setAnts((a) => (a + 1) % 8)
+    }, 140)
     return () => clearInterval(t)
   }, [motion])
 
