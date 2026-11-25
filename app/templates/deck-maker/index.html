@@ -1095,6 +1095,14 @@ var DeckLogic = (function () {
    * client's name from the carried brief (its client line up to the first comma). Only ever a starting value: what the person typed wins.
    * { client, project, text }, each '' when nothing carried names it. Never throws.
    */
+  /** The client's name from a brief's client field: its first clause, before any "is launching…" or ":" that describes the work (acceptance
+   *  A32: "Copperell Home Ltd is launching Copperell Refill: a ribbed amber glass…" ran past 80 characters, so Client stayed empty). */
+  function clientName(text) {
+    var t = String(text || '').replace(/^\s*To confirm:\s*/i, '').split(/[,;\n]/)[0];
+    t = t.split(/\s+(?:is|are|was|were|has|have|will|wants|want|needs|need|launch(?:es|ing)?|makes|sells|plans)\b|\s*[:–—(]|\s+-\s+/i)[0].replace(/^[\s.]+|[\s.]+$/g, '');
+    return t && t.length <= 80 ? t : '';
+  }
+
   function startDefaults(data) {
     var up = data && isObj(data.upstream) ? data.upstream : {}, client = '', project = '', briefProject = '';
     Object.keys(up).forEach(function (id) {
@@ -1106,14 +1114,17 @@ var DeckLogic = (function () {
       }
       if (isKit(u)) return;
       var c = typeof u.client === 'string' ? u.client : (isObj(u.client) && typeof u.client.value === 'string' ? u.client.value : '');
-      c = c.split(/[,;\n]/)[0].replace(/^To confirm:\s*/i, '').trim();
-      if (!client && c && c.length <= 80) client = c;
+      c = clientName(c);
+      if (!client && c) client = c;
       // UAT round 4 (blocker 2): a brief-only deck left Project empty, so the cover read "Copperell Home Ltd:" and the exports "Project.pptx".
       var pn = typeof u.project_name === 'string' ? u.project_name : (isObj(u.project_name) && typeof u.project_name.value === 'string' ? u.project_name.value : '');
       pn = pn.replace(/^To confirm:\s*/i, '').trim();
       if (!briefProject && pn && pn.length <= 80) briefProject = pn;
     });
-    if (!project) project = briefProject;   // a carried Production project's title first, else the brief's own project name
+    // Acceptance A62: the brief's own project name first. A Production project's title is a working name ("Copperell Refill · Territories 3",
+    // as Territories names the projects it starts), so it comes second, without that suffix.
+    if (briefProject) project = briefProject;
+    else project = project.replace(/\s*·\s*Territories(?:\s+\d+)?\s*$/i, '').trim();
     // A starting prompt too, so the form is not half empty: only what the carried project and brief name, nothing added.
     var text = (client || project) ? 'A pitch deck for ' + (client || 'the client') + (project ? ': ' + project : '') + '.' : '';
     return { client: client, project: project, text: text };
@@ -1874,7 +1885,7 @@ var DeckLogic = (function () {
   return {
     picturesFromHtml: picturesFromHtml, appendixOf: appendixOf, deckApproval: deckApproval, approveDeck: approveDeck, exportRows: exportRows, reportLine: reportLine,
     AGENTS: AGENTS, ACTIVITY_WORD: ACTIVITY_WORD, circleSvg: circleSvg, agentState: agentState, circleSizeFor: circleSizeFor, circleCentreSize: circleCentreSize, circleSays: circleSays, arcPath: arcPath, runView: runView, plainError: plainError, ENGINE_STATE: ENGINE_STATE,
-    upstreamSummary: upstreamSummary, startDefaults: startDefaults, productionSummary: productionSummary, documentsOf: documentsOf, builtFrom: builtFrom, describeBuiltFrom: describeBuiltFrom,
+    upstreamSummary: upstreamSummary, startDefaults: startDefaults, clientName: clientName, productionSummary: productionSummary, documentsOf: documentsOf, builtFrom: builtFrom, describeBuiltFrom: describeBuiltFrom,
     canBuild: canBuild, gapView: gapView, questionState: questionState, answerPatch: answerPatch,
     DECK_TYPES: DECK_TYPES, deckTypeOf: deckTypeOf, typeHints: typeHints, kindOfType: kindOfType, typePatch: typePatch,
     DECK_TYPE_CARDS: DECK_TYPE_CARDS, cardOf: cardOf, typeCaption: typeCaption, SIZES: SIZES, defaultSize: defaultSize, sizeOf: sizeOf, recipesOn: recipesOn, sizePatch: sizePatch, pickPatch: pickPatch, builtTypeOf: builtTypeOf, offeredCards: offeredCards,
