@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Make together mock</title>
+<style>
+:root,:root[data-theme='light']{--desk:#F6F1E7;--paper:#FFFDF8;--paper-2:#F3ECDC;--card:#FFFFFF;--ink:#141413;--ink-soft:#2A2620;--muted:#6D655A;--faint:#9A9082;--line:#E2D9C8;--warn:#B45309;--warn-soft:#FEF3DC;--ok:#1D8A4E;--ok-soft:#E6F6EC;--alert:#C9462A;--alert-soft:#FFF1EE;--ag-act:#515BFF;--ag-act-ink:#FFFFFF;--r-md:8px;--r-lg:14px;--shadow-card:0 1px 2px rgba(20,20,19,.06),0 4px 12px -4px rgba(20,20,19,.08);--font-ui:"Geist",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;--font-mono:"Geist Mono",ui-monospace,Menlo,monospace}
+:root[data-theme='dark']{--desk:#121110;--paper:#1B1A18;--paper-2:#262320;--card:#201E1B;--ink:#EFE9DE;--ink-soft:#D6CEC0;--muted:#A49B8D;--faint:#7B7367;--line:#34302A;--warn:#E09A4B;--warn-soft:#3A2A18;--ok:#5DBB83;--ok-soft:#1C2E23;--alert:#E06A52;--alert-soft:#3A1E18;--ag-act:#C8CBFF;--ag-act-ink:#141413}
+*{box-sizing:border-box}body{margin:0;background:var(--desk);color:var(--ink);font:14px/1.4 var(--font-ui)}
+.top{display:flex;gap:8px;align-items:center;padding:10px 16px;background:var(--paper);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5;flex-wrap:wrap}
+.top b{font-size:15px}.top .sp{flex:1}
+.tabs{display:flex;gap:4px;flex-wrap:wrap}.tab{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:5px 12px;font:inherit;font-size:12.5px;cursor:pointer}.tab.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.btn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:var(--r-md);padding:7px 12px;font:inherit;font-size:13px;cursor:pointer}.btn.primary{background:var(--ag-act);color:var(--ag-act-ink);border-color:var(--ag-act);font-weight:600}.btn:disabled{opacity:.5;cursor:not-allowed}.btn.sm{padding:4px 9px;font-size:12px}
+.wrap{max-width:1240px;margin:0 auto;padding:18px 16px 60px}
+h1{font-size:20px;margin:4px 0 2px}.sub{color:var(--muted);margin:0 0 16px;font-size:13px}
+.mono{font:11px/1.3 var(--font-mono);letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.strip{display:flex;align-items:stretch;gap:0;overflow-x:auto;padding:12px;background:var(--paper);border:1px solid var(--line);border-radius:var(--r-lg)}
+.group{display:flex;gap:0;border-radius:12px;padding:8px;position:relative}
+.group.cont{background:color-mix(in srgb,var(--ag-act) 10%,transparent);outline:2px solid color-mix(in srgb,var(--ag-act) 55%,transparent)}
+.group .gl{position:absolute;top:-10px;left:12px;background:var(--ag-act);color:var(--ag-act-ink);font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px}
+.shot{width:150px;flex:0 0 auto;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.shot img{width:100%;height:84px;object-fit:cover;display:block}.shot .t{padding:6px 8px;font-size:12px}.shot .t b{display:block}
+.shot.end{display:flex;align-items:center;justify-content:center;height:auto;min-height:130px;font-weight:700;color:var(--muted)}
+.gap{width:46px;flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+.gap button{width:34px;height:34px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;font-size:12px}
+.gap.joined button{background:var(--ag-act);color:var(--ag-act-ink);border-color:var(--ag-act)}
+.gap.cut button{background:var(--card)}
+.gap .w{font-size:10.5px;color:var(--muted);text-align:center;line-height:1.1}
+.gap.warn button{background:var(--warn-soft);border-color:var(--warn);color:var(--warn)}
+.cols{display:grid;grid-template-columns:1fr 360px;gap:16px;margin-top:16px}
+@media(max-width:1100px){.cols{grid-template-columns:1fr}}
+.panel{background:var(--paper);border:1px solid var(--line);border-radius:var(--r-lg);padding:14px 16px;box-shadow:var(--shadow-card)}
+.panel h3{margin:0 0 6px;font-size:15px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chip{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:12px;background:var(--card)}
+.chip.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.note{font-size:12.5px;color:var(--muted);margin:6px 0}
+.why{font-size:12px;color:var(--muted)}
+.warnbox{background:var(--warn-soft);border:1px solid color-mix(in srgb,var(--warn) 45%,transparent);color:var(--ink);border-radius:10px;padding:10px 12px;font-size:13px;margin:10px 0}
+.okbox{background:var(--ok-soft);border:1px solid color-mix(in srgb,var(--ok) 40%,transparent);border-radius:10px;padding:10px 12px;font-size:13px;margin:10px 0}
+.seg{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line);font-size:13px}
+.seg:first-of-type{border-top:0}
+.dot{width:14px;height:14px;border-radius:999px;border:2px solid var(--faint)}.dot.done{background:var(--ok);border-color:var(--ok)}.dot.now{border-color:var(--ag-act);border-top-color:transparent;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.bar{height:6px;border-radius:999px;background:var(--paper-2);overflow:hidden;margin-top:6px}.bar i{display:block;height:100%;background:var(--ag-act)}
+.sb{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.sbf{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.sbf img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block}.sbf .t{padding:6px 8px;font-size:12px}
+.tag{display:inline-block;font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:999px;background:var(--ag-act);color:var(--ag-act-ink);margin-left:4px}
+.tl{display:flex;gap:2px;margin-top:8px}.tl .c{height:44px;border-radius:6px;background:color-mix(in srgb,var(--ag-act) 30%,var(--card));border:1px solid var(--ag-act);font-size:11px;display:flex;align-items:center;justify-content:center;position:relative}
+.tl .c.g{background:var(--card);border-color:var(--line)}.tl .win{position:absolute;top:0;bottom:0;border-left:1px dashed var(--ag-act)}
+video{width:100%;border-radius:10px;background:#000;display:block}
+.hide{display:none}
+</style>
+<div class="top">
+  <b>Copperell Refill · Film</b><span class="mono">Make room · mock</span><span class="sp"></span>
+  <div class="tabs" id="tabs">
+    <button class="tab on" data-s="plan">1 Groups</button>
+    <button class="tab" data-s="jump">2 A big jump</button>
+    <button class="tab" data-s="making">3 Making</button>
+    <button class="tab" data-s="made">4 Made</button>
+    <button class="tab" data-s="sb">5 Storyboard</button>
+    <button class="tab" data-s="edit">6 Edit</button>
+  </div>
+  <button class="btn sm" id="theme">Light / dark</button>
+</div>
+<div class="wrap">
+  <h1>Make together makes one continuous move</h1>
+  <p class="sub">Joined shots become one camera move, each frame drawn from where the film actually got to. Cuts only between groups.</p>
+
+  <div class="strip" id="strip">
+    <div class="group cont"><span class="gl">Continuous move · 3 shots · 10 s</span>
+      <div class="shot"><img src="img/S1_t.jpg" alt=""><div class="t"><b>1 Counter, wide</b>Morning light</div></div>
+      <div class="gap joined"><button title="Joined: one continuous move. Click to cut">⇢</button><span class="w">one move</span></div>
+      <div class="shot"><img src="img/S2_t.jpg" alt=""><div class="t"><b>2 Hand lifts bottle</b>Push in</div></div>
+      <div class="gap joined" id="g23"><button title="Joined">⇢</button><span class="w">one move</span></div>
+      <div class="shot"><img id="s3img" src="img/S3_t.jpg" alt=""><div class="t"><b>3 Close on bottle</b>Label</div></div>
+    </div>
+    <div class="gap cut"><button title="Cut here. Click to join (Production suggests a cut: a new setup)">✂</button><span class="w">cut</span></div>
+    <div class="group cont"><span class="gl">Continuous move · 2 shots · 6 s</span>
+      <div class="shot"><img src="img/S4_t.jpg" alt=""><div class="t"><b>4 Tablet drops</b>Water</div></div>
+      <div class="gap joined"><button>⇢</button><span class="w">one move</span></div>
+      <div class="shot"><img src="img/S5_t.jpg" alt=""><div class="t"><b>5 Fizz, refilled</b>Bottle full</div></div>
+    </div>
+    <div class="gap cut"><button disabled title="An end card always cuts">✂</button><span class="w">cut</span></div>
+    <div class="shot end">End card<br>Refill. Not landfill.</div>
+  </div>
+
+  <div class="cols">
+    <div>
+      <!-- 1 plan -->
+      <div class="panel" data-v="plan">
+        <h3>Box 1 · Continuous move · shots 1–3</h3>
+        <div class="row"><span class="chip on">Continuous move</span><span class="chip">One take with cuts</span><span class="chip">Each shot alone</span></div>
+        <p class="note">Production suggested this group: shots 1–3 are one moment and one setup (the same counter, the same light). Shot 4 is a new setup, so it starts a new group.</p>
+        <p class="note">How it is made: shot 1 → shot 2 is one clip. Its real last frame becomes the start of the next clip, and shot 3's frame is redrawn from that last frame ("the same camera, a moment later") so the move can reach it. The frames you drew stay one click away.</p>
+        <div class="row" style="margin-top:8px"><span class="why">WAN 3 · 2 segments · 2 redrawn frames</span></div>
+        <div class="okbox">About <b>$1.10</b> and <b>4–6 minutes</b>: 2 clips of 5 s ($0.50 each) and 2 frame redraws ($0.07 each). Segments run one after another, because each starts where the last ended.</div>
+        <div class="row"><button class="btn primary" id="makeBtn">Make box 1</button><button class="btn">Make both boxes</button></div>
+      </div>
+      <!-- 2 jump -->
+      <div class="panel hide" data-v="jump">
+        <h3>Box 1 · Continuous move · shots 1–3</h3>
+        <div class="warnbox"><b>Shot 3 is a big jump from shot 2.</b> The hand is gone and the spray mist has appeared. A continuous move can't get there smoothly: the model would paste the frame in at the end, which looks like a glitch.</div>
+        <div class="row"><button class="btn primary">Cut before shot 3</button><button class="btn">Redraw shot 3 as a moment later</button><button class="btn">Keep it joined anyway</button></div>
+        <p class="note">"Redraw shot 3 as a moment later" keeps your idea (the spray) but draws it from where shot 2 ends, so the move can reach it.</p>
+      </div>
+      <!-- 3 making -->
+      <div class="panel hide" data-v="making">
+        <h3>Making box 1 · continuous move</h3>
+        <div class="seg"><span class="dot done"></span><span>Segment 1 · shot 1 → shot 2 · 5 s</span><span class="why">done · 1 min 40 s</span></div>
+        <div class="seg"><span class="dot done"></span><span>Took the real last frame · trimmed 0 frames</span><span class="why">done</span></div>
+        <div class="seg"><span class="dot now"></span><span>Redrawing shot 3 from that frame</span><span class="why">about 20 s</span></div>
+        <div class="seg"><span class="dot"></span><span>Segment 2 · last frame → shot 3 · 5 s</span><span class="why">next · about 2 min</span></div>
+        <div class="seg"><span class="dot"></span><span>Join, check for snaps, trim</span><span class="why">free</span></div>
+        <div class="bar"><i style="width:46%"></i></div>
+        <p class="note">You can close this tab: the box finishes and lands when you come back. $0.57 of about $1.10 spent so far.</p>
+        <div class="row"><button class="btn" disabled title="Stopping keeps the finished segment">Stop</button></div>
+      </div>
+      <!-- 4 made -->
+      <div class="panel hide" data-v="made">
+        <h3>Box 1 · v1 · continuous move · 10 s</h3>
+        <video controls src="V4trim.mp4"></video>
+        <div class="okbox">No snaps: every join and the end are smooth. 2 frames trimmed at the end of segment 2.</div>
+        <div class="row"><button class="btn">Remake from segment 2</button><button class="btn">Make another take</button><button class="btn">Compare</button></div>
+        <p class="note">Shot 3's frame in the storyboard now shows what was filmed ("From the film"). Your drawing is kept.</p>
+      </div>
+      <!-- 5 storyboard -->
+      <div class="panel hide" data-v="sb">
+        <h3>Storyboard · box 1 updated to the film</h3>
+        <div class="sb">
+          <div class="sbf"><img src="img/S1_t.jpg" alt=""><div class="t">1 Counter, wide</div></div>
+          <div class="sbf"><img src="img/L1_t.jpg" alt=""><div class="t">2 Hand lifts bottle <span class="tag">From the film</span></div></div>
+          <div class="sbf"><img id="sb3" src="img/S3film_t.jpg" alt=""><div class="t">3 Close on bottle <span class="tag" id="sb3tag">From the film</span></div></div>
+          <div class="sbf"><img src="img/S4_t.jpg" alt=""><div class="t">4 Tablet drops</div></div>
+          <div class="sbf"><img src="img/S5_t.jpg" alt=""><div class="t">5 Fizz, refilled</div></div>
+        </div>
+        <div class="row" style="margin-top:10px"><button class="btn" id="showDrawn">Show my drawing for shot 3</button><button class="btn">Undo: back to my drawings</button></div>
+        <p class="note">The frames inside a continuous group follow what was filmed, so the storyboard matches the ad. Your drawings stay in each frame's history.</p>
+      </div>
+      <!-- 6 edit -->
+      <div class="panel hide" data-v="edit">
+        <h3>Edit · the film</h3>
+        <div class="tl">
+          <div class="c" style="flex:10">Box 1 · one move<span class="win" style="left:33%"></span><span class="win" style="left:66%"></span></div>
+          <div class="c" style="flex:6">Box 2 · one move<span class="win" style="left:50%"></span></div>
+          <div class="c g" style="flex:2.5">End card</div>
+        </div>
+        <p class="note">Each continuous box is one clip; the dashed lines are its shots' windows, so you can trim or select a shot without breaking the move. Cuts sit only between boxes. Sound: one bed over the whole film.</p>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>What changes</h3>
+      <p class="note"><b>Joined shots = one continuous move.</b> Today, joining makes one take with cuts that ignores the middle frames. Now each next frame is drawn from where the film got to, so the move reaches it with no glitch.</p>
+      <p class="note"><b>You pick the groups.</b> Production suggests them: shots in one moment and one setup join; a new place, a product shot, an end card or a spoken line cuts.</p>
+      <p class="note"><b>Before Make:</b> the cost and wait for the whole group. A big jump between two frames is flagged, with a cut or a redraw offered.</p>
+      <p class="note"><b>After Make:</b> the storyboard follows the film, with your drawings kept and Undo.</p>
+      <p class="note"><b>Models:</b> only models that take a first and last frame are offered for a continuous move (WAN 3, Veo 3.1).</p>
+      <p class="mono" style="margin-top:12px">Open questions for Shrey are in the feature record</p>
+    </div>
+  </div>
+</div>
+<script>
+const show=s=>{document.querySelectorAll('[data-v]').forEach(e=>e.classList.toggle('hide',e.dataset.v!==s));document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.s===s));const g=document.getElementById('g23');g.className='gap '+(s==='jump'?'warn':'joined');g.querySelector('.w').textContent=s==='jump'?'big jump':'one move';document.getElementById('s3img').src=(s==='sb'||s==='made'||s==='edit')?'img/S3film_t.jpg':'img/S3_t.jpg'};
+document.getElementById('tabs').onclick=e=>{const s=e.target.dataset.s;if(s)show(s)};
+document.getElementById('makeBtn').onclick=()=>show('making');
+document.getElementById('theme').onclick=()=>{const r=document.documentElement;r.dataset.theme=r.dataset.theme==='dark'?'light':'dark'};
+let drawn=false;document.getElementById('showDrawn').onclick=e=>{drawn=!drawn;document.getElementById('sb3').src=drawn?'img/S3_t.jpg':'img/S3film_t.jpg';document.getElementById('sb3tag').textContent=drawn?'Your drawing':'From the film';e.target.textContent=drawn?'Show the film for shot 3':'Show my drawing for shot 3'};
+const q=new URLSearchParams(location.search);if(q.get('s'))show(q.get('s'));if(q.get('t'))document.documentElement.dataset.theme=q.get('t');
+</script>
+</html>
