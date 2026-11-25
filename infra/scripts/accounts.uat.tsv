@@ -19,6 +19,7 @@ kris@boysandgirls	Kris Clarkin
 marktuthill@core	Mark Tuthill
 rory@boysandgirls	Rory Hamilton
 shaunagh@boysandgirls	Shaunagh
+connor@studios	Conor Marron
 # Mock sign-ins, one per agency look in the shell's registry (app/src/shell/agency/palette.ts), as the
 # local stack has them (owner, 2026-11-11): each opens the studio in that agency's look.
 tia@tbwa	Tia Test
