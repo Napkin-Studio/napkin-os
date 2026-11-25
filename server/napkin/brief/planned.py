@@ -1066,6 +1066,25 @@ class PlannedBriefJob(BriefJob):
             e["value"] = new
             self.caps.runlog.note("fixed_line_carried", line=line[:120])
 
+    def _propose_fixed_line(self):
+        """The board's line is settled, but this job does not write mandatories (a person kept it, "Keep as is"): the end
+        line is proposed, never written over the person's part. The person takes it with Use this (acceptance run A8:
+        a kept Mandatories held "'Refill. Not landfill.' used word for word" and no end line). -> the decision, or None."""
+        if "mandatories" in self.whole:
+            return None  # written, or proposed for a held part, with the draft (_carry_fixed_line)
+        line = checks.fixed_line(answered_items(get(self.W, "open_questions")))
+        new = checks.carry_fixed_line(get(self.W, "mandatories"), line)
+        if new is None:
+            return None
+        r = rsn.make(f"The board's line goes first in mandatories as the end line, word for word: '{line}'.",
+                     [rsn.point("The planner answered the line question and said to use it word for word", [])],
+                     rsn.certainty("high", "the planner chose the line in their own answer"),
+                     "the person keeps their own wording", only_option="the part is a person's, so it is suggested, not changed")
+        d = self.dec(("propose", "mandatories", "end_line"), "edit", "propose", ["mandatories"], [], r, "judge", proposed_value=new)
+        self.proposals.append({"field": "mandatories", "value": new, "decision": d["id"]})
+        self.caps.runlog.note("fixed_line_proposed", line=line[:120])
+        return d
+
     def _place(self, rv, ev):
         patch, decisions = {}, []
         mat_ids = [m.id for m in self.mats if m.readable]
@@ -1108,6 +1127,9 @@ class PlannedBriefJob(BriefJob):
             self.basis[k] = v["basis"]
             decisions.append(d)
         decisions += self._answered(rv)
+        proposed_line = self._propose_fixed_line()
+        if proposed_line:
+            decisions.append(proposed_line)
         # The Review agent: one note per issue, naming the parts it touches
         for i, n in enumerate(rv.get("notes") or []):
             parts = [p for p in n["parts"] if p in KEYS and p not in self.locked]

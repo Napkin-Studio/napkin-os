@@ -34,7 +34,7 @@ const items = (armed: boolean) => lockedAs === 'research' ? [
   { kind: 'run', working: false },
   { kind: 'button', id: 'pdf', label: 'Save · PDF', primary: true },
   // Brief Maker arms Draft it again on the first press and redrafts on the second (UAT round 4 F9)
-  { kind: 'button', id: 'redraft', label: armed ? armedLabel : 'Draft it again' },
+  { kind: 'button', id: 'redraft', label: armed ? armedLabel : 'Draft it again', stays: !armed },   // as the page sends it (A7)
 ]
 const base = {
   title: q.get('title') ?? 'Proper Crunch', tool: { name: 'Brief' }, toolKey: 'brief',

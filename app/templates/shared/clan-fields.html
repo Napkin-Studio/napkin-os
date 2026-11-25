@@ -988,10 +988,17 @@ var ClanFields=(function(){
     return /\s/.test(m)&&!/^(?:status|error|http)\s*\d+$/i.test(m)?m.charAt(0).toUpperCase()+m.slice(1):'Something went wrong. Please try again.'; }
   // Each read says so (`clan:viewloaded`), for an app that shows what needs a
   // person its own way.
+  // Several reads can be in flight at once (a settle, a fix's last write and the page's own reload land together), and
+  // their answers can arrive out of order. Only the newest read may set the view: an older answer, from before the
+  // last call was settled, put can_lock back to false for a moment, the Lock button went off under the person's
+  // click, and the first click did not take (final UAT gate, 2026-11-25).
+  var VIEW_SEQ=0;
   function loadView(){
+    var mine=++VIEW_SEQ;
     return fetch(SCHEME+'/decisions').then(function(r){ return r.ok?r.json():null; })
-      .then(function(v){ VIEW=v; }).catch(function(){ VIEW=null; })
-      .then(function(){ window.dispatchEvent(new CustomEvent('clan:viewloaded')); });
+      .then(function(v){ if(mine!==VIEW_SEQ) return false; VIEW=v; return true; })
+      .catch(function(){ if(mine!==VIEW_SEQ) return false; VIEW=null; return true; })
+      .then(function(set){ if(set) window.dispatchEvent(new CustomEvent('clan:viewloaded')); });
   }
 
   // ── rendering ───────────────────────────────────────────────────────

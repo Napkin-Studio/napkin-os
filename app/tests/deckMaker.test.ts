@@ -73,7 +73,7 @@ const L = vm.runInNewContext(`${logicRun}; DeckLogic`) as {
   recordedStages(data: unknown): string[]
   changeSheet(data: unknown, type: string): { free: boolean; needs: string[]; line: string; from: string | null; to: string } | null
   deckTypeOf(data: unknown): { id: string; kind: string; source: string; quote: string; skipped: boolean; hasQuestion: boolean }
-  typeHints(type: string): { type: string; items: string[]; line: string }
+  typeHints(type: string, data?: unknown): { type: string; items: string[]; line: string }
   kindOfType(type: string): string
   typePatch(data: unknown, type: string | null, at: string): unknown
   supplyCards(data: unknown): { id: string; fills: string; state: string; lines: string[] }[]
@@ -2940,4 +2940,42 @@ test('UAT round 4 F26: a deck made from a Production project counts it too, with
 test('a projection with no pins and no usable findings is not research', () => {
   assert.equal(L.upstreamSummary({ upstream: { b: uatBrief }, projection: { findings: {}, pins: {} } }).research, null)
   assert.equal(L.upstreamSummary({ upstream: { b: uatBrief }, projection: { findings: { f1: { status: 'rejected' } }, pins: {} } }).research, null)
+})
+
+// ── UAT round 4 blocker 2: a brief-only deck named no project, so the cover read "Copperell Home Ltd:" and the exports "Project.pptx" ──
+test('Start takes the project name from the brief a deck was spun off from, and a Production project\'s title first', () => {
+  const brief = { client: 'Copperell Home Ltd, launching Copperell Refill.', project_name: 'Copperell Refill', objectives: 'Sell the starter bottle' }
+  const research = { campaign: { name: 'Copperell research' }, report: {}, selection: {} }
+  const d = plain(L.startDefaults({ upstream: { r: research, b: brief } })) as { client: string; project: string; text: string }
+  assert.equal(d.client, 'Copperell Home Ltd')
+  assert.equal(d.project, 'Copperell Refill')
+  assert.equal(d.text, 'A pitch deck for Copperell Home Ltd: Copperell Refill.')
+  assert.equal((plain(L.startDefaults({ upstream: { b: brief, p: prodDoc() } })) as { project: string }).project, 'Lumen Water launch')
+})
+
+test('an export never takes its file name from a placeholder project', async () => {
+  const deckHtml = '<!doctype html><html><body><section class="slide">Copperell</section></body></html>'
+  const file = { ok: true, status: 200, data: { api: 'napkin.middleware/1', task: 'fetch_deck_file', job: { id: 'j', state: 'done' }, change: null,
+    result: { name: 'deck.html', media_type: 'text/html', data_b64: Buffer.from(deckHtml).toString('base64') } } }
+  const p = proxy(file)
+  const sent: { kind: string; name: string }[] = []
+  const fx = fixture('export-ready') as Record<string, Record<string, Record<string, unknown>>>
+  fx.deck.meta = { ...fx.deck.meta, project: '[Project]', client: 'Copperell Home Ltd' }
+  const m = mount(fx, undefined, {}, { apiProxy: p.apiProxy, exportDoc: (kind, name) => { sent.push({ kind, name }); return Promise.resolve({ ok: true }) } })
+  m.click({ export: 'pdf' })
+  await new Promise(r => setTimeout(r, 20))
+  assert.equal(sent[0].name, 'Copperell-Home-Ltd')   // round 4: "Project.pdf"
+})
+
+// ── acceptance A30 and A32 ──
+test('A30: the stronger-with line leaves out what the deck already brings', () => {
+  const brief = { objectives: 'Sell the starter bottle', budget_and_scope: '£200k excluding VAT, media included', mandatories: ['Logo top right'] }
+  assert.equal(L.typeHints('agency_pitch', { upstream: { b: brief } }).line, '')   // brief and budget brought in: nothing to ask for
+  const noBudget = { ...brief, budget_and_scope: '' }
+  assert.equal(L.typeHints('agency_pitch', { upstream: { b: noBudget } }).line, 'To make this one stronger, bring: the budget')
+  assert.equal(L.typeHints('agency_pitch', { upstream: {} }).line, 'To make this one stronger, bring: the brief and the budget')
+  const prodCarried = { upstream: { p: prodDoc({ upstream: { b: brief } }) } }
+  assert.equal(L.typeHints('agency_pitch', prodCarried).line, '')   // a Production project carries the brief whole
+  const m = mount({ inputs: { prompt: { client: 'Copperell', project: 'Copperell Refill', text: 'x' } }, upstream: { b: brief } })
+  assert.doesNotMatch(m.app.innerHTML, /To make this one stronger/)
 })

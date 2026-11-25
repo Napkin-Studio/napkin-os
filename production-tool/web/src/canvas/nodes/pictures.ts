@@ -89,7 +89,8 @@ export async function placePictures(canvas: CanvasAdapter, doc: DocumentStore, f
   }, 'add picture')
   const v = canvas.visibleBounds()
   // Picked (not dropped) while a board is selected, or just made and still being named, the pictures go on it (UAT
-  // round 4 A19: added right after making a Brand board, the picture landed top left, over the Brief card).
+  // round 4 gate: a logo picked for the Brand board landed next to it, and had to be dragged on; A19: added right after
+  // making a Brand board, the picture landed top left, over the Brief card).
   const chosen = at ? undefined : targetBoard(canvas, target)
   const centre = at ?? (chosen ? { x: chosen.x + chosen.width / 2, y: chosen.y + chosen.height / 2 } : { x: (v.minX + v.maxX) / 2, y: (v.minY + v.maxY) / 2 })
   let row = pictureGrid(centre, got)

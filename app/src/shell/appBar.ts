@@ -22,7 +22,10 @@ export type BarTone = 'ok' | 'warn' | null
 
 export type BarItem =
   /** Something to do. Pressing it only tells the app; the app acts. */
-  | { kind: 'button'; id: string; label: string; primary: boolean; disabled: boolean; title: string; menu?: BarMenuItem[] }
+  | { kind: 'button'; id: string; label: string; primary: boolean; disabled: boolean; title: string; menu?: BarMenuItem[]
+      /** Pressing it changes it in place (a confirm step: "Draft it again" -> "Click again to redraft"): a menu that holds it
+       *  stays open, so the new words are seen and the second press lands (acceptance run A7). */
+      stays?: boolean }
   /** A read-only fact: "0 errors · 2 to supply". */
   | { kind: 'chip'; label: string; tone: BarTone; title: string }
   /** The document's state in the app's words, for the slot's pill. At most one. */
@@ -115,7 +118,7 @@ export function barFrom(message: unknown): BarItem[] {
       ids.add(mid)
       menu.push({ id: mid, label: ml, title: text(mi.title, BAR_LIMITS.title) })
     }
-    out.push({ kind, id, label, primary: it.primary === true, disabled: it.disabled === true, title, ...(menu.length ? { menu } : {}) })
+    out.push({ kind, id, label, primary: it.primary === true, disabled: it.disabled === true, title, ...(menu.length ? { menu } : {}), ...(it.stays === true ? { stays: true } : {}) })
   }
   return out
 }
