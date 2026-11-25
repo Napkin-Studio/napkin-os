@@ -13,6 +13,7 @@ import { unzipSync, zipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { BRIEF_VERSION_ACTION, ClanDocumentStore, LocalPatchBus, memoryPersistence } from '../src/index'
+import { STALE_WASM } from '../src/store'
 import { MAYA, id, store, wasmBytes } from './fixtures'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -107,6 +108,20 @@ describe('a project born as a spin-off', () => {
     expect(doc.upstream[from!.document_id]).toBeTruthy()
     const kept = parseYaml(new TextDecoder().decode(unzipSync(await persistedBytes(persistence))['manifest.yaml']))
     expect(kept.files.find((f: any) => f.path === 'human/assets/document-1-0.txt')).toMatchObject({ linked: true })
+  })
+
+  it('a build whose napkin-wasm has no keptBytes says so on save, never a quiet download that fails', async () => {
+    const s = new ClanDocumentStore({ wasm: wasmBytes(), persistence: memoryPersistence(), saveDebounceMs: 0, person: MAYA })
+    await s.open(fixture())
+    const host = (s as unknown as { host: { keptBytes?: unknown } }).host
+    const proto = Object.getPrototypeOf(host) as { keptBytes?: unknown }
+    const kept = proto.keptBytes
+    proto.keptBytes = undefined
+    try {
+      await expect(s.exportClan().then(() => (s as unknown as { bytes: () => Uint8Array }).bytes())).rejects.toThrow(STALE_WASM)
+    } finally {
+      proto.keptBytes = kept
+    }
   })
 
   it('a project that was not spun off says so', async () => {

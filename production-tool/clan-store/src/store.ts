@@ -130,6 +130,9 @@ export class UnsupportedContract extends Error {
   }
 }
 
+/** What a build with an older napkin-wasm (no keptBytes) says on every save. */
+export const STALE_WASM = 'This build\'s napkin-wasm is older than its clan-store (no keptBytes), so nothing can be saved: run `npm run wasm` in production-tool/clan-store, then build the web app again.'
+
 /** Who records the move to generations, and its decision (features/make-and-edit.clan). */
 export const MIGRATION_AGENT = 'clan-store'
 export const MIGRATION_ACTION = 'move takes and the edl to generations and the timeline'
@@ -712,7 +715,11 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
    *  `download` makes links whole and this host has no file store, so it reopened blank). */
   private bytes(): Uint8Array {
     const h = this.need() as NapkinHost & { keptBytes?: () => Uint8Array | number[] }
-    const b = h.keptBytes ? h.keptBytes() : (h.download() as Uint8Array | number[])
+    // Never a quiet fallback to download(): with a link in the document it throws, and a build whose napkin-wasm is
+    // older than this store saved nothing while looking fine (UAT acceptance re-test: the web app was rebuilt, the wasm
+    // was not). Say what to rebuild instead.
+    if (typeof h.keptBytes !== 'function') throw new Error(STALE_WASM)
+    const b = h.keptBytes()
     return b instanceof Uint8Array ? b : Uint8Array.from(b)
   }
 
