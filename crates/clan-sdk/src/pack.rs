@@ -1469,14 +1469,27 @@ mod tests {
     #[test]
     fn a_null_inside_a_patch_for_a_missing_object_is_never_stored() {
         let mut data = serde_json::json!({"inputs": {"prompt": {"text": "x"}}});
-        merge_json(&mut data, &serde_json::json!({"inputs": {"production": {"name": "p.clan"}}, "review": {"production": null}}));
-        assert_eq!(data, serde_json::json!({"inputs": {"prompt": {"text": "x"}, "production": {"name": "p.clan"}}, "review": {}}));
+        merge_json(
+            &mut data,
+            &serde_json::json!({"inputs": {"production": {"name": "p.clan"}}, "review": {"production": null}}),
+        );
+        assert_eq!(
+            data,
+            serde_json::json!({"inputs": {"prompt": {"text": "x"}, "production": {"name": "p.clan"}}, "review": {}})
+        );
         let mut scalar = serde_json::json!({"review": 3});
-        merge_json(&mut scalar, &serde_json::json!({"review": {"a": null, "b": 1}}));
+        merge_json(
+            &mut scalar,
+            &serde_json::json!({"review": {"a": null, "b": 1}}),
+        );
         assert_eq!(scalar, serde_json::json!({"review": {"b": 1}}));
         let mut arr = serde_json::json!({"a": [1, 2]});
         merge_json(&mut arr, &serde_json::json!({"a": [3]}));
-        assert_eq!(arr, serde_json::json!({"a": [3]}), "an array still replaces");
+        assert_eq!(
+            arr,
+            serde_json::json!({"a": [3]}),
+            "an array still replaces"
+        );
     }
 
     /// Build a minimal in-memory clan with the given data and schema.
