@@ -104,7 +104,12 @@ name the stand-in, its port, or branch on which implementation answered.
   `start_campaign`'s identify proposes `campaign.client_org` from it when
   neither the roster, the material nor a carried brief names one: origin
   `proposed`, with `workspace_ref: "<id>"` in place of `fact_ids` /
-  `upstream_refs` (Contract 3, client_org only).
+  `upstream_refs` (Contract 3, client_org and brand only). From 2026-11-24 it
+  also settles `campaign.brand` when the material claims no brand as the
+  client's (it names only comparators, or none): a brand named like the
+  client (`same_house`), else the client's name without its legal suffix,
+  each `proposed` with `workspace_ref`. With two or more brands claimed as
+  the client's it still asks, the client as the first option.
 - **`upstream_payload`** (2026-09-30): the research a brief carries, as Sai's
   brief engine takes it — exactly the engine's `upstream` object,
   `{brand?, category?, competitors, facts, decisions}` — printed by the
