@@ -406,3 +406,44 @@ def test_director_v18_tells_dex_to_write_people_shots_as_hands_backs_silhouettes
     text = " ".join(added)
     for word in ("hands", "silhouette", "far away", "smiling", "looking at the camera", "rule wins over the action"):
         assert word in text, word
+
+
+# UAT acceptance A53: the Territories route's "COPPERELL wordmark, always top right" went into every shot's action, and the
+# frames and the clip painted the wordmark into the footage. It belongs to the end card only.
+WORDMARK_SHOTS = [
+    "Soft morning light on a bathroom shelf. Hand soap, candle, perfume: a neat line of nice things. COPPERELL wordmark top right.",
+    "The hand adds a small tin of tablets beside the amber bottle, COPPERELL wordmark top right.",
+]
+END_CARD = "Charcoal card. Super: A little nicer, every 500 ml. COPPERELL wordmark top right. Small line: Keep out of reach of children."
+
+
+def test_a53_a_plans_shots_lose_the_wordmark_and_small_print_but_the_end_card_keeps_them():
+    def reply(r):
+        shots = r["shots"]
+        shots[0]["action"], shots[1]["action"] = WORDMARK_SHOTS
+        shots[-1].update(kind="end_card", camera={"size": "graphic", "movement": "static"}, action=END_CARD)
+
+    res, _, _ = direct("shot_list", edit_reply=reply)
+    shots = res.output["shots"]
+    assert shots[0]["action"] == "Soft morning light on a bathroom shelf. Hand soap, candle, perfume: a neat line of nice things."
+    assert shots[1]["action"] == "The hand adds a small tin of tablets beside the amber bottle."
+    assert shots[-1]["action"] == END_CARD  # the end card is where they belong
+    assert not any(re.search(r"wordmark|reach of children", s["action"], re.I) for s in shots[:-1])
+
+
+def test_a53_a_frame_of_a_shot_paints_no_wordmark_and_sends_no_logo_it_no_longer_names():
+    from director.director import _no_overlays_in_picture, without_overlays
+
+    prompt = ("A medium close-up, eye level, static: one calm spray mists the air above the worktop. Mist catches the light. "
+              "The COPPERELL wordmark fixed top right, the logo of @logo_main reproduced exactly. Keep the light and style of @anchor.")
+    job = {"prompt": prompt, "refs": [{"name": "logo_main", "role": "object"}, {"name": "anchor", "role": "object"}]}
+    _no_overlays_in_picture(job, "frame", {"shot": {"kind": "shot", "action": "One calm spray."}})
+    assert job["prompt"] == ("A medium close-up, eye level, static: one calm spray mists the air above the worktop. "
+                             "Mist catches the light. Keep the light and style of @anchor.")
+    assert [r["name"] for r in job["refs"]] == ["anchor"]
+    # The end card's frame keeps its wordmark and its logo; a wordmark ON the product is the product, not an overlay.
+    card = {"prompt": prompt, "refs": [{"name": "logo_main", "role": "object"}]}
+    _no_overlays_in_picture(card, "frame", {"shot": {"kind": "end_card", "action": END_CARD}})
+    assert card["prompt"] == prompt and card["refs"]
+    label = "The amber bottle with the COPPERELL wordmark on its label catches the light."
+    assert without_overlays(label) == label
