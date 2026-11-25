@@ -189,8 +189,10 @@ const within = (part: string, whole: string) => { const p = plainWords(part); re
 
 /** Words that place things on the card ("Logo top right.", "centred", "lower third"): layout, never copy (UAT round 4
  *  F34: the Director's "Logo top right. Small line below: …" was printed on the ad). */
-const PLACE = /\b(?:top|bottom|upper|lower)[\s-]+(?:left|right|centre|center|corner|third)\b|\b(?:logo|lock-?up|pack ?shot)\s+(?:at\s+the\s+)?(?:top|bottom|left|right|centred|centered|corner|in the corner)\b|\b(?:placed|placement|positioned|layout|typeface|font size|point size)\b/i
+export const PLACE = /\b(?:top|bottom|upper|lower)[\s-]+(?:left|right|centre|center|corner|third)\b|\b(?:logo|lock-?up|pack ?shot)\s+(?:at\s+the\s+)?(?:top|bottom|left|right|centred|centered|corner|in the corner)\b|\b(?:placed|placement|positioned|layout|typeface|font size|point size)\b/i
 /** A label that says where words go ("Small line below:", "Text under:"): the label is layout, what follows may be copy. */
+/** A note that names a picture to put on the card ("@logo on a clean, quiet field"): a direction, never copy. */
+export const MENTION_NOTE = /(?<![\w@])@[a-z][a-z0-9]{1,23}(?:_[a-z0-9-]+)?\b/i
 const WHERE_LABEL = /^(?:(?:a|the)\s+)?(?:small(?:er)?\s+|fine\s+)?(?:line|text|copy|type|print|words?)\s+(?:below|above|under(?:neath)?|beneath|at the (?:bottom|top))\s*[:\-\u2013\u2014]\s*/i
 
 /**
@@ -204,17 +206,16 @@ const WHERE_LABEL = /^(?:(?:a|the)\s+)?(?:small(?:er)?\s+|fine\s+)?(?:line|text|
  */
 export function cardCopy(card: CutEndCard, end: string | undefined, legal: string | undefined, named: string): CutEndCard {
   const keep = (text: string) => sentences(text).map((x) => x.replace(WHERE_LABEL, '').trim())
-    .filter((x) => !!plainWords(x) && !PLACE.test(x) && !(legal && (within(x, legal) || within(legal, x))))
-  if (end) {
-    const left = keep([card.headline, card.line].filter(Boolean).map((x) => (/[.!?]$/.test(x.trim()) ? x.trim() : `${x.trim()}.`)).join(' '))
-      .filter((x) => !within(x, end))
-    const line = left.join(' ').trim()
-    return { ...card, headline: end.slice(0, 120), line: (line && !within(line, end) ? line : plainWords(named) === plainWords(end) ? '' : named).slice(0, 200) }
-  }
+    .filter((x) => !!plainWords(x) && !PLACE.test(x) && !MENTION_NOTE.test(x) && !(legal && (within(x, legal) || within(legal, x))))
+  // With a Brief end line the card says that line and the brand under it: never what is left of the shot's note (UAT
+  // round 4 gate: the line read "@logo on a clean, quiet field." twice, the end card shot's own layout note).
+  if (end) return { ...card, headline: end.slice(0, 120), line: plainWords(named) === plainWords(end) ? '' : named.slice(0, 200) }
   const headline = keep(card.headline).join(' ')
-  const line = keep(card.line).join(' ')
+  const own = keep(card.line).join(' ')
+  // The line never repeats the headline: a one-sentence card shows it once, the brand under it.
+  const line = own && plainWords(own) !== plainWords(headline) ? own : plainWords(named) === plainWords(headline) ? '' : named
   if (plainWords(headline) === plainWords(card.headline) && plainWords(line) === plainWords(card.line)) return card
-  return { ...card, headline: bare(headline) || named, line: line || bare(headline) || named }
+  return { ...card, headline: headline || named, line }
 }
 
 /** A new end card for a film with no end-card shot: the brand name set in type (the project's name; there is no logo without a
