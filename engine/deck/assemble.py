@@ -604,7 +604,7 @@ def _person_beats(person: dict) -> list:
                     [{"kind": "text", "text": _placeholder("what supports this", "the evidence, example or number that shows it", "what supports this point, or say it as our view"), "human": True}],
                     claims=[{"text": title, "refs": [], "basis": "opinion"}], status="needs_human",
                     notes="Your words at gate 1 (the storyline). No source yet: add what supports it, or present it as the agency's view.")
-        out.append({**sl, "beat": str(x.get("id")), "beat_kept": True})
+        out.append({**sl, "beat": str(x.get("id")), "beat_kept": True, "person_words": True})
     return out
 
 
@@ -869,7 +869,8 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
     person = storyline_edit.person_of(b)   # deck-beat-editor: the person's storyline at gate 1 (their order, their own beats, what they took out)
     gone = set(person.get("deleted") or [])
     kept = {"beat_kept": True} if person else {}   # with the person's storyline, each of its beats is presented (never moved behind the divider)
-    beat = lambda sl, key: {**sl, "beat": key, **kept} if key in storyline_edit.section_keys(b) else sl   # noqa: E731  a slide that tells a gate-1 beat
+    beat = lambda sl, key: ({**sl, "beat": key, **kept, **({"person_words": True} if b[key].get("person_words") and sl["title"] == b[key]["title"] else {})}   # noqa: E731
+                            if key in storyline_edit.section_keys(b) else sl)   # a slide that tells a gate-1 beat; person_words: its title is the person's
     if b.get("reframe"):
         rf = b["reframe"]
         S.append(beat(_slide("real_question", rf["title"], [{"kind": "statement", "text": rf["line"]}], claims=rf.get("claims"), status="drafted"), "reframe"))
@@ -1134,6 +1135,9 @@ def _complete(S, reqs, R, inp, meta, fmt, fit, scoring=None, messages=None, terr
         S = _arrange_pitch(S, {v["title"] for v in (fit or {}).get("verdicts", []) if v["verdict"] == "supported"}, routes_asked(reqs), messages or [], cap,
                            production=production, **({"target": rec["length"]["target"], "cap": rec["length"].get("cap")} if rec else {}))
     S = _beat_order(S, beat_order)   # deck-beat-editor: the person's order, within the beats' slots
+    if beat_order:   # the person's storyline, recorded: the titles that are their words, which no later step rewords, and the beats' order
+        deck["meta"]["storyline"] = {"by": "the person at gate 1", "yours": [x["title"] for x in S if x.get("beat") and x.get("person_words")],
+                                     "beats": [x["title"] for x in S if x.get("beat")]}
     if spec.LOOK_V3:   # deck-look (fix 2): a sentence is said once on the presented slides
         _say_once(S)
     if sketch:   # the cover says so, with a fixed label (like the DRAFT mark: no input words)
@@ -1142,7 +1146,7 @@ def _complete(S, reqs, R, inp, meta, fmt, fit, scoring=None, messages=None, terr
             cover["blocks"] = cover["blocks"] + [{"kind": "small", "text": spec.SKETCH_LABEL, "basis": "meta"}]
     for i, sl in enumerate(S, 1):
         sid = f"s{i:02d}"
-        sl.pop("beat", None), sl.pop("beat_kept", None)   # the gate-1 beat a slide told: arrangement only, not the deck contract
+        sl.pop("beat", None), sl.pop("beat_kept", None), sl.pop("person_words", None)   # the gate-1 beat a slide told: arrangement only, not the deck contract
         deck["slides"][sid] = sl
         deck["order"].append(sid)
     if reqs:
@@ -2139,6 +2143,17 @@ def shorten_problem(old_base: str, new, slide_base_text: str = "", known=frozens
     return ""
 
 
+def _persons_titles(deck: dict) -> set:
+    """The headlines that are the person's own words at gate 1 (deck-beat-editor): no later step rewords them."""
+    return set(((deck.get("meta") or {}).get("storyline") or {}).get("yours") or [])
+
+
+def _note(sl: dict, text: str) -> None:
+    """Add a line to a slide's speaker notes (once)."""
+    if text not in (sl.get("notes") or ""):
+        sl["notes"] = ((sl.get("notes") or "").rstrip() + "\n" + text).strip()
+
+
 def apply_narrowing(deck: dict, narrowed: list) -> dict:
     """Apply stage e's headline rewrites (``[{slide, headline, reason}]``, keyed by the current title). A rewrite is applied only
     to a presented slide of a judged type whose fit verdict is ``not`` or ``partly``, and only if it passes _headline_problem
@@ -2158,6 +2173,9 @@ def apply_narrowing(deck: dict, narrowed: list) -> dict:
         sid = ids.get(old)
         if not sid:
             problem = "no presented slide has this title (stale)"
+        elif old in _persons_titles(deck):
+            problem = "the person's own words at gate 1: kept as written; the narrower headline is in the slide's notes"
+            _note(deck["slides"][sid], f"Narrower headline suggested by the check (your words are kept): {new.rstrip('.')}. {str(n.get('reason', ''))}".strip())
         elif verdicts.get(old) not in ("not", "partly"):
             problem = "the fit verdict is not 'not' or 'partly'"
         else:
@@ -2181,6 +2199,9 @@ def _rt_wording(deck: dict, sid, ch: dict) -> tuple:
     from .stages import JUDGED
     sl = deck["slides"][sid]
     new = str(ch.get("text") or "").strip()
+    if sl["title"] in _persons_titles(deck):
+        _note(sl, f"The red team suggests this headline (your words are kept): {new}")
+        return False, "the person's own words at gate 1: kept as written", sl["title"], new
     if sl["status"] == "needs_human" or any(b.get("human") or b.get("kind") == "quote" for b in sl["blocks"]):
         return False, "the slide is a placeholder, human-written or a quote: left for the person", sl["title"], new
     bad = _headline_problem(sl["title"], new, sl["type"], JUDGED)
@@ -2199,6 +2220,8 @@ def _rt_order(deck: dict, sid, ch: dict, ids: dict) -> tuple:
     tgt = ids.get(str(ch.get("after") or ""))
     if deck["slides"][sid]["type"] in spec.RED_TEAM_FIXED:
         return False, "the cover and the objective stay where they are: left for the person", None, None
+    if deck["slides"][sid]["title"] in set(((deck.get("meta") or {}).get("storyline") or {}).get("beats") or []):
+        return False, "the person set the storyline's order at gate 1: left for the person", None, None
     if tgt is None or tgt not in pres or sid not in pres or tgt == sid:
         return False, "the slide to sit after is not a different presented slide: left for the person", None, None
     before = pres.index(sid) + 1

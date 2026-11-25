@@ -285,3 +285,25 @@ def test_an_edit_against_another_storyline_is_refused_before_anything_runs(engin
     assert not list(engine.dir.glob("d1/*/stages/c_territories.json"))
     status, body = _run(engine, {}, storyline_edit={"base": "f" * 64, "beats": []})
     assert status == 400 and "at least one beat" in body["error"]["message"]
+
+
+def test_no_later_step_rewords_the_persons_words_or_reorders_their_beats():
+    """Found on the local stack (2026-11-25): stage e narrowed the person's reworded headline ('may hold them back'). Their words
+    stay; the narrower headline goes to the slide's notes. The red team neither rewords nor moves the person's beats."""
+    st, raw = _st("agency_pitch"), _raw("agency_pitch")
+    mine = "Water is loved, and everyone already says so"
+    st["b"] = se.apply(st["b"], _edit(raw, [{"key": "insight", "title": mine}, {"key": "reframe", "title": st["b"]["reframe"]["title"]},
+                                            {"key": None, "title": "My own point"}]), se.sha_bytes(raw))
+    deck = _build("agency_pitch", st)
+    assert deck["meta"]["storyline"]["yours"] == [mine, "My own point"]
+    sid = next(s for s in deck["order"] if deck["slides"][s]["title"] == mine)
+    deck["fit"] = {"verdicts": [{"title": mine, "verdict": "not", "reason": "r"}]}
+    out = assemble.apply_narrowing(deck, [{"slide": mine, "headline": "Water may be loved", "reason": "softer"}])
+    assert out == {"applied": 0, "rejected": 1} and deck["slides"][sid]["title"] == mine
+    assert "Water may be loved" in deck["slides"][sid]["notes"]
+    ok, why, _, _ = assemble._rt_wording(deck, sid, {"text": "Water is loved"})
+    assert not ok and "own words" in why and deck["slides"][sid]["title"] == mine
+    pres = validate.presented(deck)
+    ids = {deck["slides"][s]["title"]: s for s in pres}
+    ok, why, _, _ = assemble._rt_order(deck, sid, {"after": deck["slides"][pres[-1]]["title"]}, ids)
+    assert not ok and "order" in why
