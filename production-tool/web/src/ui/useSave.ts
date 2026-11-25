@@ -68,7 +68,9 @@ export function useSave(): { can: boolean; state: SaveState; save: () => Promise
   const manual = useSyncExternalStore(store.subscribe, () => store.get(clan))
   const serverAt = useSyncExternalStore(index ? index.subscribe : noSubscribe, () => index?.get(project.id)?.server?.savedAt ?? null)
   const conflict = useSyncExternalStore(serverCopy ? serverCopy.subscribe : noSubscribe, () => serverCopy?.get()?.message ?? null)
-  const state = merged(manual, serverAt, conflict)
+  // A background save the server refused says so, with its reason (UAT acceptance A24), until a save lands.
+  const refused = useSyncExternalStore(serverCopy ? serverCopy.subscribe : noSubscribe, () => serverCopy?.refused?.() ?? null)
+  const state = merged(manual, serverAt, conflict ?? (refused ? `The server did not take the last save: ${refused}` : null))
   const can = !!clan && relay.kind === 'http'
   const save = useCallback(async () => {
     if (!clan || relay.kind !== 'http') return false

@@ -537,11 +537,29 @@ export class Shell {
       console.warn('kept a blank film whose storage could not be read', e)
       return index.keep(id)
     }
-    // A blank draft the host made a document for goes to the Trash (restorable), not left in the library.
-    if (entry.server && this.deps.server?.signedIn) await this.deps.server.remove(id).catch(() => {})
+    // A blank draft the host made a document for goes to the Trash (restorable), not left in the library. Only when
+    // the host's copy is still the one this browser knows: a draft filled in from another browser or tab is blank only
+    // here, and is kept (UAT acceptance A43: the tidy-up must never take anything with content).
+    if (entry.server && this.deps.server?.signedIn) {
+      if (await this.savedElsewhere(id, entry.server)) return index.keep(id)
+      await this.deps.server.remove(id).catch(() => {})
+    }
     await index.remove(id)
     await storage.dropClan(clanDbFor(id)).catch(() => {})
     await Promise.all([storage.del(canvasKeyFor(id)), storage.del(uiKeyFor(id)), storage.del(docKeyFor(id)), storage.del(baseKeyFor(id))]).catch(() => {})
+  }
+
+  /** Whether the host's copy of a draft moved on from the version this browser knows (saved from somewhere else), or
+   *  cannot be checked: either way it is not known to be blank. A copy the host no longer has is not. */
+  private async savedElsewhere(id: string, mark: ServerMark): Promise<boolean> {
+    try {
+      const there = await this.deps.server!.version(id)
+      if (!there) return false
+      const base = await this.deps.storage.get<{ mark?: ServerMark | null }>(baseKeyFor(id)).catch(() => undefined)
+      return there.etag !== (base?.mark?.etag ?? mark.etag)
+    } catch {
+      return true
+    }
   }
 
   /** Whether a closed film's stored document holds anything (its .clan, else the older JSON copy). Throws when the

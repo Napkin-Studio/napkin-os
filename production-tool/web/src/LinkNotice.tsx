@@ -4,6 +4,7 @@ import { useDoc, useServices } from './app/context'
 import { dismissed, noticeWords, unlinkedFor, workingFrom } from './model/unlinked'
 import { linkInput } from './canvas/nodes/nodes'
 import type { LinkEndpoint } from './contracts/types'
+import { noticePlace } from './linkNoticePlace'
 
 // A named picture or the Brief that is not linked into the scope of an action's node gets a short, non-blocking
 // notice by that action (owner 2026-11-23). Nothing is linked unless the person says Link it (refs and the Brief reach
@@ -34,9 +35,7 @@ export function LinkNotice({ kind, id, style }: { kind: 'script' | 'storyboard' 
     const host = ref.current.offsetParent?.getBoundingClientRect()
     if (!bar || !host) return
     const nodeTop = typeof style.top === 'number' ? style.top - 10 + host.top : bar.bottom
-    const above = bar.top < nodeTop
-    const left = Math.round(bar.left - host.left)
-    const top = Math.round(above ? bar.top - host.top - ref.current.offsetHeight - 8 : bar.bottom - host.top + 8)
+    const { left, top } = noticePlace(bar, host, nodeTop, { width: ref.current.offsetWidth, height: ref.current.offsetHeight })
     if (!at || at.left !== left || at.top !== top) setAt({ left, top })
   })
   if (!names.length || dismissed.has(key) || busy) return null
