@@ -196,7 +196,7 @@ label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:
 .gacts .why{font-size:12.5px;color:var(--ink3);flex-basis:100%;margin-top:2px}
 .bstatus{font-size:12.5px;margin-top:8px;color:var(--ink3);min-height:18px}
 .bstatus.ok{color:var(--ok-fg)} .bstatus.bad{color:var(--warn-fg)}
-.bmodal{position:fixed;inset:0;background:color-mix(in srgb,var(--ink) 45%,transparent);display:flex;align-items:center;justify-content:center;z-index:60;padding:16px}
+.bmodal{position:fixed;inset:0;background:rgba(10,12,16,.55);display:flex;align-items:center;justify-content:center;z-index:60;padding:16px}
 .bmodal .box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;max-width:420px;color:var(--ink)}
 .bmodal h3{margin:0 0 8px;font-size:17px}
 .bmodal p{margin:0 0 14px;color:var(--ink2);font-size:14px;line-height:1.5}
@@ -251,6 +251,7 @@ label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:
 .dkstage.nk-asking .gacts .btn.big{height:40px;padding:0 14px!important;font-size:13px!important}
 main.build:has(.dkstage.nk-asking){padding-bottom:16px}
 .dkstage.nk-asking .gbody{max-height:max(132px,calc(100vh - var(--barh) - var(--dk-sph,184px) * .45 - 330px));overflow:auto}
+.dkstage.nk-asking .gbody.story{max-height:max(330px,calc(100vh - var(--barh) - var(--dk-sph,184px) * .45 - 380px))}
 /* the status card's circle: 60px in a row, enlarged in place (the page script animates the change) while an agent works or the run waits */
 .status .srow{display:flex;align-items:center;gap:14px}
 .status .slot{display:block;position:relative;flex:none;width:60px;height:60px}
@@ -2737,11 +2738,15 @@ var DeckProd = (function () {
 
   /** The beats, the add row and the line about the cap, for an editable gate 1. */
   function storyBody(s, st) {
+    return st.beats.map(function (b, i) { return beatRow(st, b, i); }).join('') ||
+        '<div style="padding:18px 20px;color:var(--ink3);font-size:14px">No beats left. Add one, or reset to the agents’ version.</div>';
+  }
+
+  /** Under the beats, outside their scroll: add a beat, and the line about the cap. */
+  function storyFoot(s, st) {
     var card = L.cardOf(L.deckTypeOf(s.raw).id), cap = card && card.cap;
     var mine = st.beats.filter(function (b) { return b.key === null; }).length, full = st.beats.length >= L.BEATS_MAX;
-    return (st.beats.map(function (b, i) { return beatRow(st, b, i); }).join('') ||
-        '<div style="padding:18px 20px;color:var(--ink3);font-size:14px">No beats left. Add one, or reset to the agents’ version.</div>') +
-      '<button class="addrow" type="button" data-beat-add="1"' + (st.editing !== null || full ? ' disabled' : '') + '>＋ Add a beat of your own' + (full ? ' (a storyline holds at most ' + L.BEATS_MAX + ')' : '') + '</button>' +
+    return '<button class="addrow" type="button" data-beat-add="1"' + (st.editing !== null || full ? ' disabled' : '') + '>＋ Add a beat of your own' + (full ? ' (a storyline holds at most ' + L.BEATS_MAX + ')' : '') + '</button>' +
       '<div class="bcount" data-beat-count>Your storyline has <b>' + st.beats.length + ' beat' + (st.beats.length === 1 ? '' : 's') + '</b>' + (mine ? ', ' + mine + ' of them yours' : '') + '. ' +
       (cap ? 'Beats you add stay in the story: the ' + cap + '-slide cap never moves them to the appendix, even at ' + (cap + 1) + ' or ' + (cap + 2) + ' slides.'
         : 'Beats you add stay in the story: they are never moved to the appendix.') + '</div>';
@@ -2898,7 +2903,9 @@ var DeckProd = (function () {
     }).join('');
     var main, gv = gate ? L.gateView(run, view.pick) : null; // the gate registry: words and body for the open gate
     // An open gate: the agent asks. Its sphere rises and shrinks, and the gate card shows under it.
-    if (gate) main = askStage(who, true, gateHead(gv) + '<div class="card gcard" style="overflow:hidden">' + dexRow(gv) + '<div class="gbody">' + gateBody(gv, gate, s) + '</div></div>' + gateActions(gv, s));
+    var story = gate && gv.body === 'beats' ? storyNow(s) : null;   // gate 1 the person can edit (deck-beat-editor): its add row and cap line stay in view
+    if (gate) main = askStage(who, true, gateHead(gv) + '<div class="card gcard" style="overflow:hidden">' + dexRow(gv) + '<div class="gbody' + (story ? ' story' : '') + '">' + gateBody(gv, gate, s) + '</div>' +
+      (story ? storyFoot(s, story) : '') + '</div>' + gateActions(gv, s));
     else view.story = null;   // gate 1 closed: the working copy of the beats goes with it
     // With no gate open: running (a live feed), failed, done, or waiting for an engine that is not connected.
     var rv = gate ? null : L.runView(run, s.deck), live = rv && rv.kind !== 'waiting';
