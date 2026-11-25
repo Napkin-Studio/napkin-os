@@ -11,7 +11,7 @@ import datetime as _dt
 import json
 import re
 
-from . import intake, profiles, spec
+from . import intake, profiles, spec, storyline_edit
 from .inputs import answered_question
 from .refs import Resolver, answer_text, fmt
 
@@ -587,6 +587,43 @@ def passing_ids(b: dict, judge: dict | None) -> list:
     return [i for i in order if verdicts.get(i, {}).get("pass")]
 
 
+#: The slide types that tell a gate-1 beat (stage b's sections): a beat the person added sits after the last of them a type's spine holds.
+STORY_BEAT_TYPES = ("real_question", "chart", "insight", "audience", "proposition")
+
+
+def _person_beats(person: dict) -> list:
+    """The beats a person added to the storyline at gate 1 (deck-beat-editor), one ``person_beat`` slide each: titled with their words
+    verbatim, and one labelled placeholder for what supports it (nothing is invented under their words). The type is in
+    spec.TARGET_KEEPS: the cap never moves it (owner, 2026-11-25)."""
+    out = []
+    for x in person.get("beats") or []:
+        title = storyline_edit.clean_title((x or {}).get("title"))
+        if not title:
+            continue
+        sl = _slide("person_beat", title,
+                    [{"kind": "text", "text": _placeholder("what supports this", "the evidence, example or number that shows it", "what supports this point, or say it as our view"), "human": True}],
+                    claims=[{"text": title, "refs": [], "basis": "opinion"}], status="needs_human",
+                    notes="Your words at gate 1 (the storyline). No source yet: add what supports it, or present it as the agency's view.")
+        out.append({**sl, "beat": str(x.get("id")), "beat_kept": True})
+    return out
+
+
+def _beat_order(S: list, order: list) -> list:
+    """The presented story's beat slides put in the person's order (deck-beat-editor), each in a slot a beat slide already held, so
+    every other slide (the cover, the idea, the investment and the ask) stays where the arrangement put it. Slides behind the
+    Appendix divider keep their place."""
+    if not order:
+        return S
+    end = next((i for i, x in enumerate(S) if x["type"] == "appendix"), len(S))
+    rank = {k: i for i, k in enumerate(order)}
+    slots = [i for i in range(end) if S[i].get("beat") in rank]
+    moved = sorted((S[i] for i in slots), key=lambda x: rank[x["beat"]])   # stable: a section's two slides keep their order
+    S = list(S)
+    for i, x in zip(slots, moved):
+        S[i] = x
+    return S
+
+
 def _insight(b: dict, judge: dict | None, inp):
     """The insight slide and its record when stage b wrote candidates, else None (the old shape is built as it always was).
     The chosen candidate is the insight: the judge's first-ranked passing candidate (it may overrule the writer), else the
@@ -829,18 +866,22 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
                         notes="Minimum scores and page limits: " + "; ".join(f"{s['criterion']}: min {s['min']}, {s['page_limit']}" for s in a["scoring"])))
 
     # 4. Real question
+    person = storyline_edit.person_of(b)   # deck-beat-editor: the person's storyline at gate 1 (their order, their own beats, what they took out)
+    gone = set(person.get("deleted") or [])
+    kept = {"beat_kept": True} if person else {}   # with the person's storyline, each of its beats is presented (never moved behind the divider)
+    beat = lambda sl, key: {**sl, "beat": key, **kept} if key in storyline_edit.section_keys(b) else sl   # noqa: E731  a slide that tells a gate-1 beat
     if b.get("reframe"):
         rf = b["reframe"]
-        S.append(_slide("real_question", rf["title"], [{"kind": "statement", "text": rf["line"]}], claims=rf.get("claims"), status="drafted"))
+        S.append(beat(_slide("real_question", rf["title"], [{"kind": "statement", "text": rf["line"]}], claims=rf.get("claims"), status="drafted"), "reframe"))
 
     # 5. Gap chart (only with numeric evidence)
     gc = b.get("gap_chart")
     if gc and gc.get("series") and all(R.kind(s["ref"]) in ("docfig", "fact") for s in gc["series"]):
-        S.append(_slide("chart", gc["title"],
-                        [{"kind": "chart", "chart": {"type": "bar", "series": gc["series"], **({"hero": gc["hero"]} if gc.get("hero") else {})}},
-                         {"kind": "text", "text": gc["takeaway"], "refs": gc.get("takeaway_refs", [])}],
-                        claims=[{"text": gc["takeaway"], "refs": gc.get("takeaway_refs", []), "basis": "sourced"}],
-                        status="from_source", visual={"kind": "chart"}))
+        S.append(beat(_slide("chart", gc["title"],
+                             [{"kind": "chart", "chart": {"type": "bar", "series": gc["series"], **({"hero": gc["hero"]} if gc.get("hero") else {})}},
+                              {"kind": "text", "text": gc["takeaway"], "refs": gc.get("takeaway_refs", [])}],
+                             claims=[{"text": gc["takeaway"], "refs": gc.get("takeaway_refs", []), "basis": "sourced"}],
+                             status="from_source", visual={"kind": "chart"}), "gap_chart"))
 
     # 6. Barrier + insight
     if b.get("barrier"):
@@ -848,33 +889,33 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
         blocks = [{"kind": "bullets", "items": [{"text": p["text"], "refs": p["refs"]} for p in br["points"]]}]
         if br.get("chart") and br["chart"].get("series") and all(R.kind(s["ref"]) in ("docfig", "fact") for s in br["chart"]["series"]):
             blocks.insert(0, {"kind": "chart", "chart": {"type": "bar", "title": br["chart"]["title"], "series": br["chart"]["series"]}})
-        S.append(_slide("chart", br["title"], blocks, claims=br["points"], status="drafted", visual={"kind": "chart"}))
+        S.append(beat(_slide("chart", br["title"], blocks, claims=br["points"], status="drafted", visual={"kind": "chart"}), "barrier"))
     ins = b.get("insight") or {}
     built = _insight(b, st.get("insight_judge"), inp)
     insight_meta = {}
     if built:   # three candidates, the chosen one as the three-line truth (DECK-CRAFT-PLAN 3.3)
-        S.append(built[0])
+        S.append(beat(built[0], "insight"))
         insight_meta = {"insight": built[1], "insight_candidates": built[2]}   # candidates for Gate 1 (the person picks, edits or retries)
-    else:
-        S.append(_slide("insight", ins.get("title") or "The insight",
+    elif "insight" not in gone:   # the person took the insight beat out at gate 1: no slide stands in for it
+        S.append(beat(_slide("insight", ins.get("title") or "The insight",
                         [{"kind": "quote", "text": ins.get("human_truth") or _brief_text(inp, "insight"),
                           **({"refs": ins["human_truth_refs"]} if ins.get("human_truth_refs") else {"basis": "creative"})},
                          {"kind": "text", "text": _brief_text(inp, "insight", "To agree."), "refs": ["brief:insight"]},
                          {"kind": "bullets", "items": [{"text": e["text"], "refs": e["refs"]} for e in ins.get("evidence", [])]}],
                         claims=ins.get("evidence"), status="drafted",
-                        notes=ins.get("note", "")))
+                        notes=ins.get("note", "")), "insight"))
 
     # 7. Audience
     au = b.get("audience") or {}
     if au.get("persona") and not persona_grounded(inp, au["persona"]):
         au = {k: v for k, v in au.items() if k != "persona"}   # a person the inputs never named ('Maya, 31') is an invention: left out, never shown
-    S.append(_slide("audience", au.get("title") or "Who we are talking to",
+    S.extend([] if "audience" in gone else [beat(_slide("audience", au.get("title") or "Who we are talking to",
                     [{"kind": "text", "text": au.get("primary") or _brief_text(inp, "audience"), "refs": au.get("refs", ["brief:audience"])},
                      {"kind": "text", "text": au.get("two_halves", "")},
                      *[{"kind": "quote", "text": v["text"], "refs": v["refs"]} for v in au.get("voices", []) if v.get("refs")],
                      {"kind": "card", "title": "Who the work is written for", "text": f"{au['persona']['name']}. {au['persona']['line']}"} if au.get("persona") else {"kind": "text", "text": ""},
                      {"kind": "small", "text": au.get("also", "")}],
-                    status="drafted", slots=None))
+                    status="drafted", slots=None), "audience")])
 
     # 8. Proposition
     pr = b.get("proposition") or {}
@@ -888,7 +929,10 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
     blocks.append({"kind": "bullets", "title": "Why they will believe it", "items": rtb_items})
     if b.get("objection") and not d.get("how_it_answers"):   # else the idea slide answers it (said once)
         blocks.append({"kind": "small", "text": f"The objection it must beat: {b['objection']['text']} {b['objection']['answer']}"})
-    S.append(_slide("proposition", smp if smp != "To agree." else "The single thought", blocks, claims=rtb_items, status="drafted"))
+    prop_title = pr["title"] if pr.get("person_words") and str(pr.get("title") or "").strip() else smp if smp != "To agree." else "The single thought"
+    if "proposition" not in gone:   # its title: the brief's single thought, unless the person reworded the proposition beat at gate 1
+        S.append(beat(_slide("proposition", prop_title, blocks, claims=rtb_items, status="drafted"), "proposition"))
+    S += _person_beats(person)   # the beats the person added at gate 1: their words, after the proposition until their order places them
     S.append(_competition_slide(d))   # the alternatives the client could pick, and the plan to win (a placeholder when the inputs name none)
 
     # 9. Territories
@@ -1006,7 +1050,7 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
 
     _fill_human_only(S, inp)   # what the person supplied (answers to supply cards, their own documents) fills what a model never invents
     meta = {"client": client, "project": project, "agency": agency, "kind": "agency", "format": fmt,
-            "stages": {k: (v or {}).get("produced_by") for k, v in st.items()}, **insight_meta}
+            "stages": {k: (v or {}).get("produced_by") for k, v in st.items()}, **insight_meta, "storyline_order": list(person.get("order") or [])}
     if isinstance(d.get("chain"), dict) and any(str(d["chain"].get(k) or "").strip() for k in CHAIN_PHRASES):
         meta["chain"] = d["chain"]   # stage d's written chain: the phrases validate.chain_links finds on the slides they name
     return _complete(S, reqs, R, inp, meta, fmt, fit, scoring=a.get("scoring") or [], messages=d.get("messages") or [], territories=c,
@@ -1039,6 +1083,8 @@ def _complete(S, reqs, R, inp, meta, fmt, fit, scoring=None, messages=None, terr
     numbering, the requirement trace, the sources appendix and the scoring map. ``profile`` (a deck type)
     records ``built_from.type``; a spine profile also arranges the slides, records ``meta.profile``,
     ``meta.length`` (its limit, or the buyer's stated one) and ``meta.weights`` (the buyer's, or our default)."""
+    meta = dict(meta)
+    beat_order = meta.pop("storyline_order", None) or []   # deck-beat-editor: arrangement only, never written into the deck
     inp.built_from = intake.tier(inp)
     if production:   # the Production project is an input too: Start and Review say "the brief, the research, Production" (UAT 2026-11-23: only run_state did)
         inp.built_from = {**inp.built_from, "production": True}
@@ -1087,6 +1133,7 @@ def _complete(S, reqs, R, inp, meta, fmt, fit, scoring=None, messages=None, terr
         rec = profiles.recipe(profile, fmt) if profile and profiles.recipes_on() else None   # deck-types: the type's target (flag off: spec.PITCH_TARGET)
         S = _arrange_pitch(S, {v["title"] for v in (fit or {}).get("verdicts", []) if v["verdict"] == "supported"}, routes_asked(reqs), messages or [], cap,
                            production=production, **({"target": rec["length"]["target"], "cap": rec["length"].get("cap")} if rec else {}))
+    S = _beat_order(S, beat_order)   # deck-beat-editor: the person's order, within the beats' slots
     if spec.LOOK_V3:   # deck-look (fix 2): a sentence is said once on the presented slides
         _say_once(S)
     if sketch:   # the cover says so, with a fixed label (like the DRAFT mark: no input words)
@@ -1095,6 +1142,7 @@ def _complete(S, reqs, R, inp, meta, fmt, fit, scoring=None, messages=None, terr
             cover["blocks"] = cover["blocks"] + [{"kind": "small", "text": spec.SKETCH_LABEL, "basis": "meta"}]
     for i, sl in enumerate(S, 1):
         sid = f"s{i:02d}"
+        sl.pop("beat", None), sl.pop("beat_kept", None)   # the gate-1 beat a slide told: arrangement only, not the deck contract
         deck["slides"][sid] = sl
         deck["order"].append(sid)
     if reqs:
@@ -1364,6 +1412,7 @@ def _arrange_pitch(S: list, supported: set | None = None, routes: int = 1, messa
     shown = _shown_executions(S, messages, production)
     shown_charts = _shown_charts(S, supported)
     keep = {id(x) for x in shown_charts + shown}   # by identity: two slides can hold equal content
+    keep |= {id(x) for x in S if x.get("beat") and x.get("beat_kept")}   # deck-beat-editor: a beat in the person's storyline is presented
     if routes > 1:   # the client asked to see that many routes: present them, in the ranking's order
         keep |= {id(x) for x in [x for x in S if x["type"] == "territory"][:routes]}
     back = lambda x: ((x["type"] in spec.PITCH_APPENDIX_TYPES and id(x) not in keep) or (x["type"] in ("chart", "execution") and id(x) not in keep) or _is_gap(x))
@@ -1607,7 +1656,7 @@ def _trim(S: list, story: list, backup: list, limit: int | None) -> tuple:
     story, backup = list(story), list(backup)
     while len(story) > limit:
         for t in spec.TRIM_ORDER:
-            hit = [x for x in story if x["type"] == t]
+            hit = [x for x in story if x["type"] == t and not x.get("beat_kept")]   # a beat in the person's storyline stays (deck-beat-editor)
             if hit:
                 story.remove(hit[-1])
                 backup.append(hit[-1])
@@ -1736,9 +1785,10 @@ def _arrange_spine(S: list, profile: dict, supported: set | None, routes: int, m
     (a ``criterion_answer`` slide), the slides whose types answer that criterion (_criteria_rank) go behind the divider in a pitch (the answer is the
     criterion's presented slide; spec.ANSWER_KEEPS never move)."""
     spine, appx = profile["spine"], set(profile.get("appendix") or [])
-    S = [x for x in S if x["type"] in spine or x["type"] in appx]
+    S = [x for x in S if x["type"] in spine or x["type"] in appx or x["type"] == "person_beat"]   # a beat the person added is in every type's story
     pitch = fmt == "pitch"
     keep = {id(x) for x in _shown_charts(S, supported) + _shown_executions(S, messages, production)}
+    keep |= {id(x) for x in S if x.get("beat") and x.get("beat_kept")}   # deck-beat-editor: a beat in the person's storyline is presented
     if routes > 1:
         keep |= {id(x) for x in [x for x in S if x["type"] == "territory"][:routes]}
     answered = {x["criterion"] for x in S if x.get("criterion") and x.get("status") != "needs_human"}   # criteria with a written answer: the answer is their presented slide
@@ -1750,7 +1800,10 @@ def _arrange_spine(S: list, profile: dict, supported: set | None, routes: int, m
     order_appx = list(profile.get("appendix") or [])
     def pos(x):
         """Sort position: the spine slot; an appendix-only type in the full format goes after the spine, in appendix order;
-        in a pitch, a kept appendix-only type sits just after the proposition (or at the end)."""
+        in a pitch, a kept appendix-only type sits just after the proposition (or at the end). A beat the person added (deck-beat-editor) sits
+        after the type's last story beat; _beat_order then puts the beats in the person's order."""
+        if x["type"] == "person_beat":
+            return max([spine.index(t) for t in STORY_BEAT_TYPES if t in spine] or [len(spine) - 1]) + 0.6
         if x["type"] in spine:
             return spine.index(x["type"])
         if not pitch:

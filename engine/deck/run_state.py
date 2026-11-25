@@ -69,6 +69,15 @@ def stage_file(stages: Path, name: str) -> dict | None:
     return read_json(stages / name)
 
 
+def file_sha(path: Path) -> str | None:
+    """The sha256 of a stage file's bytes (deck-beat-editor: the storyline a person's edit was made against); None when missing."""
+    from .storyline_edit import sha_bytes
+    try:
+        return sha_bytes(path.read_bytes())
+    except OSError:
+        return None
+
+
 # ── what the run read ───────────────────────────────────────────────────────────────────────────────────────────────
 def inputs_summary(inp, brief_given: bool = False) -> dict:
     """What the run reads, from the engine's loaded Inputs: the rows under 'Read the inputs' and the first checks."""
@@ -115,27 +124,17 @@ def checks_list(summary: dict | None, stages: Path, validation: dict | None = No
 
 
 # ── the gates ───────────────────────────────────────────────────────────────────────────────────────────────────────
-def beats(b: dict | None) -> list[dict]:
-    """The storyline's beats for gate 1, from stage b: each titled section, with where its words came from."""
-    out = []
-    for key, v in (b or {}).items():
-        if not isinstance(v, dict) or not str(v.get("title") or "").strip():
-            continue
-        refs: list[str] = []
-
-        def walk(x):
-            if isinstance(x, dict):
-                for kk, vv in x.items():
-                    if kk == "refs" and isinstance(vv, list):
-                        refs.extend(r for r in vv if isinstance(r, str))
-                    elif kk == "ref" and isinstance(vv, str) and vv:   # a chart's series cite one ref each (acceptance A35: the gap chart read
-                        refs.append(vv)                               # "No source: our proposal" though every bar is a research fact)
-                    elif kk != "basis":
-                        walk(vv)
-            elif isinstance(x, list):
-                for vv in x:
-                    walk(vv)
-        walk(v)
+def beats(b: dict | None, requirements: list | None = None) -> list[dict]:
+    """The storyline's beats for gate 1, from stage b: each titled section, with where its words came from, in the story's order.
+    Each carries its section ``key`` (deck-beat-editor: the page edits beats by it; None for a beat the person added), ``words``
+    (agents, or yours once the person reworded or added it) and, with ``requirements``, the mandatories it cites (``carries``)."""
+    from . import storyline_edit as se
+    person = se.person_of(b)
+    reworded, mine = set(person.get("reworded") or []), {str(x.get("id")): x for x in person.get("beats") or [] if isinstance(x, dict)}
+    rows = {}
+    for key in se.section_keys(b):
+        v = b[key]
+        refs = se.section_refs(v)
         kinds = {r.split(":")[0] if ":" in r else r[:2] for r in refs}
         if not refs:
             basis, src = "proposal", "No source: our proposal"
@@ -145,7 +144,20 @@ def beats(b: dict | None) -> list[dict]:
             said = [w for w, hit in (("research", research), ("brief fields", "brief" in kinds), ("your prompt", "prompt" in kinds),
                                      ("requirements", "req" in kinds), ("your documents", "doc" in kinds), ("your answers", "answer" in kinds)) if hit]
             src = "Cites " + ", ".join(said) + f" · {len(set(refs))} ref{'s' if len(set(refs)) != 1 else ''}"
-        out.append({"n": f"{len(out) + 1:02d}", "title": str(v["title"]).strip(), "src": src, "basis": basis})
+        row = {"key": key, "title": str(v["title"]).strip(), "src": src, "basis": basis, "words": "agents"}
+        if key in reworded or v.get("person_words"):
+            row.update(words="yours", src="Your words · " + ("evidence kept: " + src.removeprefix("Cites ") if refs else "no source yet"))
+        if requirements is not None:
+            carries = se.mandatories(v, requirements)
+            if carries:
+                row["carries"] = carries
+        rows[key] = row
+    for pid, x in mine.items():
+        rows[pid] = {"key": None, "title": se.clean_title(x.get("title")), "src": "Your words · no source yet", "basis": "yours", "words": "yours"}
+    order = [k for k in person.get("order") or [] if k in rows] + [k for k in rows if k not in (person.get("order") or [])]
+    out = [rows[k] for k in order]
+    for i, row in enumerate(out, 1):
+        row["n"] = f"{i:02d}"
     return out
 
 
@@ -154,7 +166,11 @@ def gate_payload(gate: str, stages: Path) -> dict:
     g: dict = {"id": gate, "n": GATE_N[gate], "of": 3}
     if gate == "storyline":
         g["agent"] = "strategy"
-        g["beats"] = beats(stage_file(stages, "b_storyline.json") or stage_file(stages, "i_investor.json"))
+        b = stage_file(stages, "b_storyline.json")
+        reqs = (stage_file(stages, "a_requirements.json") or {}).get("requirements") or []
+        g["beats"] = beats(b, reqs) if b else beats(stage_file(stages, "i_investor.json"))
+        if b:   # deck-beat-editor: the beats can be edited, against this very file (an investor deck's story, stage i, cannot yet)
+            g["editable"], g["base"] = True, file_sha(stages / "b_storyline.json")
     elif gate == "territories":
         c = stage_file(stages, "c_territories.json") or {}
         g["agent"] = "strategy"

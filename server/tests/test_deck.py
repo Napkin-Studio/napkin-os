@@ -142,6 +142,21 @@ def test_the_approvals_in_the_document_go_to_the_engine(deck, monkeypatch):
     assert fake.posts[0]["approvals"] == approvals
 
 
+def test_the_persons_storyline_goes_to_the_engine_beside_the_approvals(deck, monkeypatch):
+    """deck-beat-editor: run.storyline_edit (the app's, like the approvals) reaches the engine as written; the middleware never writes it."""
+    fake = use(monkeypatch, FakeEngine(view("gate", stage="territories", gate=GATE2)))
+    edit = {"base": "a" * 64, "by": "You", "at": "t", "beats": [{"key": "audience", "title": "Ours first", "words": "yours"}, {"key": None, "title": "Mine", "words": "yours"}]}
+    host = Host(data=deck_data(approvals={"storyline": {"by": "Sai", "at": "t", "decision": "approve"}}), schema=SCHEMA)
+    host.data["run"]["storyline_edit"] = edit
+    build(deck, host)
+    assert fake.posts[0]["storyline_edit"] == {k: edit[k] for k in ("base", "beats", "by", "at")}
+    assert host.data["run"]["storyline_edit"] == edit
+    assert "storyline_edit" not in deck_job.RUN_OWNED
+    plain = use(monkeypatch, FakeEngine(view("gate", stage="territories", gate=GATE2)))
+    build(deck, Host(data=deck_data(), schema=SCHEMA))
+    assert "storyline_edit" not in plain.posts[0]
+
+
 def test_after_the_last_gate_the_document_gets_the_deck_validation_evidence_report_and_export_names(deck, monkeypatch):
     use(monkeypatch, FakeEngine(view("building", stage="check"), view("done", stage="review", payload=PAYLOAD, cost=0)))
     host = Host(data=deck_data(), schema=SCHEMA)
