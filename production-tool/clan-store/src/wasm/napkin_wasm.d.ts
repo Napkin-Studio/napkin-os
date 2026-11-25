@@ -53,6 +53,12 @@ export class NapkinHost {
      */
     installApp(bytes: Uint8Array): any;
     /**
+     * The packed archive as it is kept, links and all (Session::kept_bytes):
+     * what the browser saves and sends back to the workspace. `download`
+     * materialises links, which needs a file store this host does not have.
+     */
+    keptBytes(): Uint8Array;
+    /**
      * The free-text client names no client has yet, with their document counts.
      */
     legacyClientNames(): any;
@@ -115,6 +121,7 @@ export interface InitOutput {
     readonly napkinhost_framePage: (a: number, b: number, c: number) => [number, number, number, number];
     readonly napkinhost_handle: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => any;
     readonly napkinhost_installApp: (a: number, b: number, c: number) => [number, number, number];
+    readonly napkinhost_keptBytes: (a: number) => [number, number, number, number];
     readonly napkinhost_legacyClientNames: (a: number) => [number, number, number];
     readonly napkinhost_listApps: (a: number) => any;
     readonly napkinhost_listClients: (a: number, b: number) => [number, number, number];

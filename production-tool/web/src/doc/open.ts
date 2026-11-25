@@ -38,16 +38,23 @@ export interface OpenArgs {
   undo?: { saved: SerializedUndo | null | undefined; save: (s: SerializedUndo) => void }
   make?: () => ModelStore
   storage?: ProjectStorage
+  /** The project's document as the workspace stores it, when it has one. Read only when this browser kept nothing:
+   *  never a new, blank document under a stored project's id (UAT acceptance A24: a spun-off project this browser could
+   *  not keep came back blank, as an app the host would not take, and every save was refused). */
+  stored?: () => Promise<Uint8Array | null>
 }
 
-export async function openDocument({ project, person, title, undo, make, storage = browserStorage }: OpenArgs): Promise<OpenedDocument | RefusedDocument> {
+export async function openDocument({ project, person, title, undo, make, storage = browserStorage, stored }: OpenArgs): Promise<OpenedDocument | RefusedDocument> {
   const build = make ?? (() => ModelStore.inBrowser(person, { persistence: storage.clan(clanDbFor(project)), undo }))
   const tryClan = async () => {
     const clan = build()
     const loaded = await clan.load()
-    // A brand-new project opens on a blank canvas; the person adds nodes from the "+ Node" menu
-    // (owner 2026-11-03). An existing project loads whatever it was saved with.
-    if (!loaded) await clan.create(person, title, true)
+    if (loaded) return clan
+    // Nothing kept here: a project the workspace holds opens from there; only a brand-new one opens on a blank canvas,
+    // where the person adds nodes from the "+ Node" menu (owner 2026-11-03).
+    const bytes = stored ? await stored() : null
+    if (bytes) await clan.open(bytes)
+    else await clan.create(person, title, true)
     return clan
   }
   try {
