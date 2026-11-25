@@ -34,10 +34,28 @@ _WORD = re.compile(r"[a-z0-9€£$%]+")
 _CURRENCY = re.compile(r"^[€£$]")
 
 
+# Words that ask for the same thing in other words become one word first (acceptance run A6, 2026-11-25: "Is there budget
+# for a pre-launch tracker wave and a regional holdout?" came back as "Is there money for a tracker wave before April
+# and an area with no posters to compare against?"). Phrase first, then the word.
+_SAME = [
+    (re.compile(r"\b(?:an?\s+)?(?:area|region|market|city|town)s?\s+(?:with\s+)?(?:no|without)\s+(?:\w+\s+){0,3}?(?:to\s+)?(?:compare|comparison|control)(?:\s+(?:against|with))?\b"), " holdout "),
+    (re.compile(r"\b(?:hold[\s-]?outs?|control\s+(?:area|region|group|market)s?|test[\s-]and[\s-]control|geo[\s-]?(?:test|split|comparison)s?)\b"), " holdout "),
+    (re.compile(r"\b(?:pre[\s-]?launch|before\s+(?:the\s+)?(?:launch|go[\s-]?live|january|february|march|april|may|june|july|august|september|october|november|december|spring|summer|autumn|winter))\b"), " prelaunch "),
+    (re.compile(r"\b(?:money|funds?|funding|spend|budgets?)\b"), " budget "),
+    (re.compile(r"\b(?:brand\s+)?(?:tracker|tracking)(?:\s+(?:survey|study|wave)s?)?\b"), " tracker "),
+]
+
+
+def _same_words(text: str) -> str:
+    for rx, to in _SAME:
+        text = rx.sub(to, text)
+    return text
+
+
 def terms(question: str) -> frozenset[str]:
-    """What the question is about: its meaningful words, lower-cased and singular.
-    The `[priority]` prefix and the `— why it matters` clause are not part of the ask."""
-    text = _PRIORITY.sub("", question or "").split(" — ")[0].lower()
+    """What the question is about: its meaningful words, lower-cased and singular, with words that ask for the same
+    thing made one (_SAME). The `[priority]` prefix and the `— why it matters` clause are not part of the ask."""
+    text = _same_words(_PRIORITY.sub("", question or "").split(" — ")[0].lower())
     out = set()
     for w in _WORD.findall(text):
         if w in _GLUE:
