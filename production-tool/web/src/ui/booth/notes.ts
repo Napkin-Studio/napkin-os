@@ -7,6 +7,7 @@ import type { DocJob, JobState, ProductionDocument } from '../../contracts/types
 import type { JobCtx, StageName } from '../../doc/ui'
 import { askOf } from '../../jobs/runner'
 import { entityOf } from '../../model/lineage'
+import { supersededJob } from '../../model/selectors'
 import type { CastKey } from '../agents/cast'
 import { plainWords, projectEntries, type ChainLike } from '../historyItems'
 import { trayGroups, whereIs } from '../tray'
@@ -60,7 +61,7 @@ export interface Waiting {
 /** The needs-you items on a stage for these shots (or the node itself): questions waiting and failures not cleared. */
 export function stageWaiting(doc: Doc, stage: StageName, ctxOf: (id: string) => JobCtx | undefined,
   liveOf: (id: string) => { state?: JobState } | undefined, belongs: (job: DocJob, ctx: JobCtx | undefined) => boolean): Waiting {
-  const g = trayGroups(Object.values(doc.jobs), ctxOf, liveOf)
+  const g = trayGroups(Object.values(doc.jobs).filter((j) => !supersededJob(doc, j)), ctxOf, liveOf)
   const here = (job: DocJob, ctx: JobCtx | undefined) => whereIs(job, ctx).stage === stage && belongs(job, ctx)
   const asks = g.waiting.filter((r) => here(r.job, r.ctx)).flatMap((r) => {
     const ask = askOf(doc, r.job.id)

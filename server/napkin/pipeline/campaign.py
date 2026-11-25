@@ -120,7 +120,8 @@ material (each with a material_id) list:
   brands; a market, a country or a product category is not.
 - the client organisation, only if the material names it (e.g. a signature), with its quote;
 - at most two category leaves from the given tree that the ask is about, most likely first, each with
-  the quote that points at it. Choose from the tree only.
+  the quote that points at it. Choose from the tree only. A leaf is what the brand sells; a topic the ask
+  covers (green claims, sustainability, regulation) belongs to that product's own category, not another.
 Never guess what the material does not say.
 The grounds are for the client's brand: the quotes (by material_id) that make it the client's, and
 for each other brand named, what in the material makes it not the client's.""" + rsn.GUIDE
@@ -897,6 +898,8 @@ class CampaignJob:
                 sp = self._span(c.get("material_id"), c.get("quote"))
                 if c.get("leaf") in codes and sp and c["leaf"] not in [x[0] for x in cats]:
                     cats.append((c["leaf"], sp))
+            keep = id_rules.product_categories([leaf for leaf, _ in cats])
+            cats = [(leaf, sp) for leaf, sp in cats if leaf in keep]
             grounds = raw.get("grounds")
             if isinstance(grounds, dict):  # a point on the brief cites the brief's address
                 grounds = dict(grounds, because=[
@@ -1124,7 +1127,47 @@ class CampaignJob:
                     levels.append(("medium", f"{brand['name']} comes from the brief, not the client's material; "
                                              f"confirm it"))
                     kind = "brief"
-            if kind == "brief":
+            # The material does not settle it, but the research was started from a client's page: that client
+            # is who it is for (acceptance A1: "Which brand is the client's?" offered only the competitors the
+            # question named). A brand named like the client is theirs; with none, the client itself is the brand,
+            # proposed. Only when the material claims two or more brands as the client's does it still ask, and
+            # then the client comes first.
+            wc = extract_stage.workspace_client(self.clan)
+            if kind in ("ask", "ask_text") and wc:
+                cname = id_rules.client_brand_name(wc["name"])
+                ours = next((b for b in brands if id_rules.same_house(b["name"], cname)), None)
+                claimed = [b for b in brands if id_rules.checked_basis(b) != "none" and not b.get("comparator")]
+                if ours:
+                    brand = {"ref": ours["ref"], "name": ours["name"]}
+                    write("brand", {"value": brand, "origin": "proposed", "source": ours["span"],
+                                    "workspace_ref": wc["id"]})
+                    idec["cites"] += [ours["span"]["material_id"], wc["id"]]
+                    notes.append(f"{ours['name']} is the brand: the material names it, and the research was "
+                                 f"started from {wc['name']}'s client page (proposed, to confirm).")
+                    ev_material.append(rsn.point(f"The material names {ours['name']}", ours["span"]["material_id"]))
+                    ev_pins.append(rsn.point(f"The research was started from {wc['name']}'s client page", wc["id"]))
+                    levels.append(("medium", f"{ours['name']} is named like the client; confirm it"))
+                    kind = "settled"
+                elif len(claimed) < 2:
+                    brand = {"ref": id_rules.brand_ref(cname), "name": cname}
+                    write("brand", {"value": brand, "origin": "proposed", "workspace_ref": wc["id"]})
+                    idec["cites"].append(wc["id"])
+                    notes.append(f"{cname} is the brand: the research was started from {wc['name']}'s client page "
+                                 f"(proposed, to confirm).")
+                    ev_pins.append(rsn.point(f"The research was started from {wc['name']}'s client page", wc["id"]))
+                    levels.append(("medium", f"{cname} is the client this research is for; confirm the brand"))
+                    for b in brands:
+                        opt = f"{b['name']} as the client's brand"
+                        if opt not in [r["option"] for r in rejected]:
+                            rejected.append(rsn.rej(opt, f"the material names it, not as the client's; the research "
+                                                         f"is for {wc['name']}"))
+                    kind = "settled"
+                elif kind == "ask":
+                    first = {"id": id_rules.opt_id(cname), "label": cname,
+                             "value": {"ref": id_rules.brand_ref(cname), "name": cname},
+                             "origin": "proposed", "workspace_ref": wc["id"]}
+                    what = [first] + [o for o in what if o["id"] != first["id"]]
+            if kind in ("brief", "settled"):
                 pass
             elif kind == "subject":
                 brand = {"ref": what["ref"], "name": what["name"]}
@@ -1167,6 +1210,7 @@ class CampaignJob:
             layers.note_brand(subject_ref, bname)
 
         # 2. the roster row: pinned already, or looked up in the brand layer ---------
+        set_aside = []  # topic leaves in the roster row that are not this brand's category (A44)
         pinned = [f for f in self.W_facts if brand and f.get("entity") == subject_ref
                   and str(f.get("key", "")).startswith("roster.") and f.get("status", "active") == "active"]
         if brand and not any(f["key"].startswith("roster.categories") for f in pinned):
@@ -1174,7 +1218,13 @@ class CampaignJob:
             if row and row["categories"]:
                 pin_did = self.did("roster", subject_ref)
                 t = iso()
+                # A topic leaf in the row next to another vertical's category is not this brand's category
+                # (acceptance A44): it is not pinned, so nothing shows it as one.
+                keep = set(id_rules.product_categories(list(row["categories"])))
+                set_aside += [c for c in row["categories"] if c not in keep]
                 for r in row["facts"]:
+                    if r["key"].startswith("roster.categories") and r["value"] not in keep:
+                        continue
                     facts.append({"id": r["id"], "entity": r["entity"], "key": r["key"], "value": r["value"],
                                   "unit": r["unit"], "as_of": r["as_of"], "retrieved_at": r["retrieved_at"],
                                   "sources": r["sources"], "confidence": fact_confidence(r["source_records"]),
@@ -1218,17 +1268,26 @@ class CampaignJob:
         if not cats_env and "categories" not in self.skipped_fields:
             if cat_pins:
                 if not human_owned(self.W, ctx_decisions(self.clan), self.doc, "categories"):
-                    vals = list(dict.fromkeys(f["value"] for f in cat_pins))[:2]
-                    write("categories", {"value": vals, "origin": "proposed", "fact_ids": [f["id"] for f in cat_pins]})
-                    idec["cites"] += [f["id"] for f in cat_pins]
-                    notes.append(f"Categories from the roster row: {', '.join(vals)} (proposed, to confirm).")
+                    row_vals = list(dict.fromkeys(f["value"] for f in cat_pins))
+                    vals = id_rules.product_categories(row_vals)[:2]
+                    used = [f for f in cat_pins if f["value"] in vals]
+                    write("categories", {"value": vals, "origin": "proposed", "fact_ids": [f["id"] for f in used]})
+                    idec["cites"] += [f["id"] for f in used]
+                    # Words, not codes: the person reads this (acceptance A44 showed "household.laundry_cleaning").
+                    names = ", ".join(labels.get(v, v) for v in vals)
+                    notes.append(f"Categories from the roster row: {names} (proposed, to confirm).")
                     ev_pins.append(rsn.point(f"{brand['name']}'s roster row in the brand layer gives the categories "
-                                             f"{', '.join(vals)}", [f["id"] for f in cat_pins]))
-                    lv = rsn.lowest(f.get("confidence") for f in cat_pins)
+                                             f"{names}", [f["id"] for f in used]))
+                    for v in list(dict.fromkeys(row_vals + set_aside)):
+                        if v not in vals and v in id_rules.TOPIC_LEAVES:
+                            rejected.append(rsn.rej(f"the roster row's {labels.get(v, v)} as a category",
+                                                    "it is a topic the ask covers, not what the brand sells; its "
+                                                    "claims are read under the brand's own category"))
+                    lv = rsn.lowest(f.get("confidence") for f in used)
                     levels.append((lv, f"the roster pins are {lv} (derived from source tier and corroboration)"))
                     for leaf, _sp in (self._identify_raw or {}).get("categories") or []:
                         if leaf not in vals:
-                            rejected.append(rsn.rej(f"the material's reading, {leaf}",
+                            rejected.append(rsn.rej(f"the material's reading, {labels.get(leaf, leaf)}",
                                                     "the brand layer's roster row is the record for this brand"))
             else:
                 pt = self.pending_text if (self.pending_text or {}).get("field") == "categories" else None

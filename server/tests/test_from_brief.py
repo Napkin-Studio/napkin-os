@@ -146,3 +146,55 @@ def test_workspace_ref_is_only_for_client_org_in_the_schema():
            "decision": "d_TESTSTATED01", "workspace_ref": "cli_0b19a78d"}
     assert not list(v.iter_errors({"campaign": {"client_org": env}}))
     assert list(v.iter_errors({"campaign": {"problem": dict(env, value="x", gate="brief")}}))
+
+
+# Acceptance A1 (2026-11-24): a research started from Copperell's client page asked "Which brand is the
+# client's?" and offered only the competitors the question named. The client it was started for is the brand.
+COMPETITORS = "The brands in this brief: Smol Home and Method Spray. Who leads refill cleaning sprays in Ireland?"
+COPPERELL = {"id": "cli_c0ffee11", "name": "Copperell Home Ltd"}
+
+
+def test_a_research_from_the_client_page_takes_the_client_as_the_brand_not_a_competitor(store):
+    host = Host(COMPETITORS, workspace=COPPERELL, categories=TONIC)
+    job = start(store, host)
+    v = run_until_settled(job, host)
+    assert v["state"] != "needs_input", "no question: the client is known"
+    assert not any("Which brand is the client" in (m.get("text") or "")
+                   for m in host.data.get("intake", {}).get("messages", {}).values())
+    b = host.data["campaign"]["brand"]
+    assert b["value"] == {"ref": "brand/copperell-home", "name": "Copperell Home"}
+    assert b["origin"] == "proposed" and b["workspace_ref"] == "cli_c0ffee11"
+    _research_schema_validator().validate({"campaign": {"brand": b}})
+    d = next(d for d in host.chain if "brand" in " ".join(d.get("fields_changed") or []))
+    assert any(r["option"] == "Smol Home as the client's brand" for r in d["reasoning"]["rejected"])
+
+
+def test_a_brand_named_like_the_client_is_the_clients(store):
+    host = Host("The brands in this brief: Copperell Refill and Method Spray. Launch it in Ireland.",
+                workspace=COPPERELL, categories=TONIC)
+    job = start(store, host)
+    run_until_settled(job, host)
+    b = host.data["campaign"]["brand"]
+    assert b["value"]["name"] == "Copperell Refill"
+    assert b["origin"] == "proposed" and b["workspace_ref"] == "cli_c0ffee11" and b["source"]["material_id"]
+    _research_schema_validator().validate({"campaign": {"brand": b}})
+
+
+def test_without_a_client_page_two_named_brands_still_ask(store):
+    host = Host(COMPETITORS, categories=TONIC)
+    job = start(store, host)
+    v = run_until_settled(job, host)
+    assert v["state"] == "needs_input" and "brand" not in host.data["campaign"]
+
+
+def test_the_clients_brand_name_and_its_house():
+    from napkin.rules import identify as id_rules
+    assert id_rules.client_brand_name("Copperell Home Ltd") == "Copperell Home"
+    assert id_rules.client_brand_name("Acme Foods plc.") == "Acme Foods"
+    assert id_rules.client_brand_name("Guinness") == "Guinness"
+    assert id_rules.same_house("Copperell Refill", "Copperell Home Ltd")
+    assert id_rules.same_house("Copperell", "Copperell Home")
+    assert id_rules.same_house("Harbour", "Harbour Drinks")
+    assert not id_rules.same_house("Smol", "Copperell Home")
+    assert not id_rules.same_house("Method", "Methodist Press")
+    assert not id_rules.same_house("BMW", "BM Wines"), "a short shared word is not a house"

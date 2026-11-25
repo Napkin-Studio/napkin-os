@@ -32,6 +32,33 @@ def brand_ref(name: str) -> str:
     return "brand/" + slug(name)
 
 
+LEGAL_SUFFIX = re.compile(r"[\s,]+(?:ltd|limited|plc|inc|incorporated|llc|gmbh|ag|sa|bv|co|corp|corporation)\.?$", re.I)
+
+
+def client_brand_name(client: str) -> str:
+    """The brand a client's own name stands for, when nothing else names it: the client without its legal
+    suffix ("Copperell Home Ltd" -> "Copperell Home")."""
+    n = " ".join(str(client or "").split())
+    while LEGAL_SUFFIX.search(n):
+        n = LEGAL_SUFFIX.sub("", n).strip()
+    return n
+
+
+def same_house(brand: str, client: str) -> bool:
+    """`brand` is the client's own by its name: the same name, one inside the other, or the same leading
+    word of at least four letters ("Copperell Refill" and "Copperell Home"). Comparators named in the
+    question ("Smol", "Method") are not."""
+    def words(s):
+        return re.findall(r"[a-z0-9]+", str(s or "").lower())
+    b, c = words(brand), words(client_brand_name(client))
+    if not b or not c:
+        return False
+    jb, jc = " ".join(b), " ".join(c)
+    if jb == jc or f" {jb} " in f" {jc} " or f" {jc} " in f" {jb} ":
+        return True
+    return b[0] == c[0] and len(b[0]) >= 4
+
+
 def asks(quote: str, name: str) -> bool:
     """The brand `name` is the one doing the asking in `quote`: it is followed, within two words, by a client verb."""
     return re.search(rf"(?<!\w){re.escape(name)}(?:\W+\w+){{0,2}}?\W+(?:{CLIENT_VERB})\b", quote or "", re.I) is not None
@@ -80,6 +107,19 @@ def decide_subject(brands: list[dict]) -> tuple[str, object]:
         opts.append({"id": "none", "label": "None of these"})
         return "ask", opts
     return "ask_text", None
+
+
+# Leaves that name a topic an ask may cover rather than what a brand sells: "Green claims and sustainability"
+# sits under energy, but a cleaning refill's green claims are its own category's claims (the regulation lens
+# reads them), not an energy category (acceptance A44: Copperell came out as household + energy.green_claims).
+TOPIC_LEAVES = frozenset({"energy.green_claims"})
+
+
+def product_categories(leaves: list[str]) -> list[str]:
+    """The leaves a campaign's categories may hold, in order: a topic leaf only when nothing else is
+    named from another vertical (an energy ask's green claims stay; a cleaning brand's do not)."""
+    other = {str(l).split(".")[0] for l in leaves if l not in TOPIC_LEAVES}
+    return [l for l in leaves if l not in TOPIC_LEAVES or not (other - {str(l).split(".")[0]})]
 
 
 def category_options(cands: list[tuple[str, dict | None]], origin: str, labels: dict) -> list[dict]:

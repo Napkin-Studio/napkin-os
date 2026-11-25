@@ -262,7 +262,10 @@ def build_materials(inp: dict, data: dict) -> list[Material]:
             a["document"].get("media_type") == "application/pdf" and isinstance(a["document"].get("data"), str) else None
         pics = [x for x in (a.get("images") or []) if isinstance(x, dict) and x.get("media_type") in IMAGE_TYPES
                 and isinstance(x.get("data"), str)][:20]
-        mats.append(Material(mid, _kind(a["name"], mt, image is not None and not text), a["name"], sha, text=text,
+        # `label`: the file's own name ("copperell-brand-notes.txt"); `name` is the stored one the host reads it by
+        # ("document-1795538546841-0.txt"). The material, and Built from, carry the person's name (acceptance run A9).
+        label = a["label"].strip()[:200] if isinstance(a.get("label"), str) and a["label"].strip() else a["name"]
+        mats.append(Material(mid, _kind(a["name"], mt, image is not None and not text), label, sha, text=text,
                              media_type=mt, asset=a.get("asset") if isinstance(a.get("asset"), str) else None,
                              image=image if not text else None, known=mid in known, document=doc_, pictures=pics))
     if not any(m.readable or m.image or m.document or m.pictures for m in mats):
