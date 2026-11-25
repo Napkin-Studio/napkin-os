@@ -1114,6 +1114,38 @@ mod upstream {
     }
 
     #[test]
+    fn an_ancestor_further_up_tells_its_own_lock() {
+        // Research locked, then Brief, then Territories (or a deck) from the brief: the research is not
+        // the direct parent, and its lock must still read as locked (acceptance A11, 2026-11-25).
+        let store = Arc::new(MemStore::default());
+        let research = research(&store);
+        resolve(&research, "f_01JA0B3P4Q");
+        reject_findings(&research);
+        research.post("/approve", "{}");
+        install(&*store, "Brief Maker", BRIEF, Some(carries(RESEARCH)));
+        let brief = spin(&store, &research, BRIEF);
+        install(&*store, "Deck", DECK, Some(carries(BRIEF)));
+        let deck = spin(&store, &brief, DECK);
+        let up = deck.get("/upstream");
+        let entries = up["upstream"].as_array().unwrap();
+        assert_eq!(entries[0]["document_id"], brief.doc);
+        assert_eq!(
+            entries[0]["locked"], false,
+            "the brief was not locked: {up}"
+        );
+        assert_eq!(entries[1]["document_id"], research.doc);
+        assert_eq!(entries[1]["direct"], false);
+        assert_eq!(entries[1]["locked"], true, "{up}");
+        assert!(entries[1]["version"].is_string(), "{up}");
+
+        // Not locked, it says so (never missing, never guessed).
+        let (_store, _research, brief) = setup();
+        install(&*_store, "Deck", DECK, Some(carries(BRIEF)));
+        let deck = spin(&_store, &brief, DECK);
+        assert_eq!(deck.get("/upstream")["upstream"][1]["locked"], false);
+    }
+
+    #[test]
     fn a_deck_from_the_brief_tells_both_ancestors_and_compares_only_its_parent() {
         let (store, research, brief) = setup();
         install(&*store, "Deck", DECK, Some(carries(BRIEF)));
