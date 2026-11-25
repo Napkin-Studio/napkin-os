@@ -2061,6 +2061,8 @@ var TerritoriesLogic = (function () {
       var re = new RegExp('(^|[^a-z_])' + k.replace('.', '[./]') + '([^a-z_]|$)', 'i');
       if (re.test(why) && !parts.some(function (p) { return p.k.indexOf(k) === 0 || k.indexOf(p.k) === 0; })) parts.push({ k: k, w: PART_WORDS[k] });
     });
+    // the host words a schema refusal by the value it refused, without its path: a source entry is the one with in_play
+    if (/"in_play"/.test(why) && !parts.some(function (p) { return p.k === 'focus.sources'; })) parts.unshift({ k: 'focus.sources', w: PART_WORDS['focus.sources'] });
     var many = /maxItems|more than|too many|is too long|longer than/i.test(why);
     return 'The result could not be saved: this document’s own rules refused it' + (parts.length ? ' (' + parts.map(function (p) { return p.w; }).join(', ') + (many ? ': more than it allows' : '') + ')' : '') +
       '. A document made by an older Territories keeps that version’s rules.';

@@ -222,6 +222,9 @@ test('a result the host did not save fails in words with Try again, never sits o
   const words = L.changeRefusal({ applied: false, reason })
   assert.match(words, /^The result could not be saved: this document’s own rules refused it \(the sources the crew may quote: more than it allows\)\./)
   assert.doesNotMatch(words, /agent output|\[|maxItems|focus\.sources/, 'plain words, no machine text')
+  // as the host really words it (clan-sdk pack: the schema error names the refused value, not its path)
+  const real = 'agent output rejected: [{"id":"brief:background","in_play":true},{"id":"f_BULK00001","in_play":true}] has more than 5 items'
+  assert.match(L.changeRefusal({ applied: false, reason: real }), /\(the sources the crew may quote: more than it allows\)/)
   assert.equal(L.changeRefusal({ applied: true }), null); assert.equal(L.changeRefusal(undefined), null)
   assert.match(L.changeRefusal({ applied: false, reason: 'stale base' }), /^The result could not be saved: this document’s own rules refused it\. /)
   // the page's job turns failed with those words: Brief's failed stage, the reason, Try again, and the step stays Pick
