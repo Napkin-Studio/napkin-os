@@ -266,6 +266,14 @@ impl NapkinHost {
         self.session.raw_bytes().map_err(err)
     }
 
+    /// The packed archive as it is kept, links and all (Session::kept_bytes):
+    /// what the browser saves and sends back to the workspace. `download`
+    /// materialises links, which needs a file store this host does not have.
+    #[wasm_bindgen(js_name = keptBytes)]
+    pub fn kept_bytes(&self) -> Result<Vec<u8>, JsValue> {
+        self.session.kept_bytes().map_err(err)
+    }
+
     /// Compose a standalone document from the open `.clan` — bindings
     /// resolved, assets inlined, scripts stripped, brand chrome. The same SDK
     /// call every other shell makes; only the delivery differs, because there
