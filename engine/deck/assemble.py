@@ -706,7 +706,9 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
     named_by_project = production and line and working_title.strip() and project.strip() == working_title.strip()   # Start prefilled the Production project's name and nobody changed it
     if named_by_project and len(line.split()) > _LINE_WORDS:   # UAT round 4 F27: a proposition-length 'line' filled the cover until it lost its picture
         named_by_project = False
-    S.append(_slide("title", f"{client}: {line}" if named_by_project else f"{client}: {project}",   # then the cover names the client and its line, not a working name
+    proj = "" if re.fullmatch(r"\s*\[[^\]]*\]\s*", project or "") else str(project or "").strip()   # a '[Project]' placeholder is no name
+    cover = f"{client}: {line}" if named_by_project else (f"{client}: {proj}" if proj else (f"{client}: {line}" if line and len(line.split()) <= _LINE_WORDS else client))
+    S.append(_slide("title", cover,   # then the cover names the client and its line, not a working name; never a bare 'Client:' (UAT round 4)
                     [{"kind": "text", "text": f"A response from {agency}"},
                      {"kind": "text", "text": _placeholder("presenter and date", "presented by the account lead and planner", "who presents, and the date"), "human": True}],
                     status="needs_human", slots=pictures.get("title")))
