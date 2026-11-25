@@ -98,9 +98,27 @@ def facts(whole: dict) -> dict:
             who = invented_person(t)
             if who:
                 f["invented_person"] = who
+        if k in STATING_PARTS:
+            asks = asked_in(t)
+            if asks:
+                f["asks"] = asks[:2]
         if f:
             out[k] = f
     return out
+
+
+# the parts that state what is known: a question to the client there belongs in the open questions alone (acceptance run A6,
+# 2026-11-25: Budget & scope ended "Does it include VAT, and does media sit inside it?" while the same was an open
+# question). The audience's own voice (insight, barrier, objection, job) may quote a question, so those are not here.
+STATING_PARTS = ("background", "budget_and_scope", "mandatories", "media_roles", "measurement", "competitor_context",
+                 "tone_and_world", "reasons_to_believe", "audience")
+_QUOTED_SPAN = re.compile(r"[\"“‘'][^\"“”‘’']{0,200}[\"”’']")
+
+
+def asked_in(text: str) -> list[str]:
+    """The questions a part puts to the client: its sentences that end with '?', outside quoted words."""
+    t = _QUOTED_SPAN.sub(" ", _LEAD_MARK.sub("", text or ""))
+    return [x.strip() for x in re.findall(r"[^.!?;\n]+\?", t) if len(x.split()) >= 3]
 
 
 # the parts that describe people: a group, never a named person the brief does not give (schema: audience prompt)
@@ -157,6 +175,9 @@ def revisions(whole: dict) -> list[dict]:
             why.append(f"it is {f['sentences']} sentences: say it in one (a word or a phrase is fine)")
         if f.get("standalone_and"):
             why.append("it has a standalone 'and' or '&': the proposition is one thought, so keep the one that matters and say it without 'and'")
+        if f.get("asks"):
+            why.append(f"it asks the client a question ('{f['asks'][0]}'): a question goes only in the open questions, so say "
+                       "what is known here and leave the ask to the open questions")
         if f.get("invented_person"):
             why.append(f"it invents a named person ('{f['invented_person']}') the brief never gives: describe the group from the brief's "
                        "data instead, with no name, age, city or habits the brief does not state")
@@ -349,20 +370,36 @@ def fixed_line(answered: list[str]) -> str:
     return line
 
 
+# words that only say how to use a line ("'Refill. Not landfill.' used word for word", "Use 'X' word for word everywhere"):
+# an item made of the line and these restates it, and the canonical end line takes its place
+_RESTATE_WORDS = set("""use used using it its the a as line end endline tagline sign off signoff brand campaign must be is
+always exactly verbatim word for everywhere every piece all pieces on in run runs carry carries written same wording
+copy keep kept unchanged change don't do not""".split())
+
+
+def _restates(item: str, line: str) -> bool:
+    words, want = _norm_words(item), _norm_words(line)
+    j = " ".join(words).find(" ".join(want))
+    if not want or j < 0:
+        return False
+    rest = (" ".join(words)[:j] + " " + " ".join(words)[j + len(" ".join(want)):]).split()
+    return all(w in _RESTATE_WORDS for w in rest)
+
+
 def carry_fixed_line(mandatories, line: str):
-    """``mandatories`` (a list or a string) with "End line: '<line>' (word for word)" in it: an end-line item that names
-    another line is replaced, and nothing changes when the line is already there. -> the new value, or None when it
-    already held the line (or there is no line)."""
+    """``mandatories`` (a list or a string) with "End line: '<line>' (word for word)" FIRST: the form Production's end card
+    reads. Another end line is replaced, and so is an item that only restates this line in other words ("'Refill. Not
+    landfill.' used word for word", acceptance run A8: the model's own wording kept the canonical item out, because the
+    line's words were already there). An item that does more than restate it stays. -> the new value, or None when the
+    canonical item is already first and nothing restates it (or there is no line)."""
     if not line:
         return None
     items = [x for x in (mandatories if isinstance(mandatories, list) else
                          [s for s in re.split(r"\s*[;\n]\s*", mandatories or "") if s.strip()]) if text_of(x)]
-    want = _norm_words(line)
-    if any(" ".join(want) in " ".join(_norm_words(text_of(x))) for x in items):
-        return None
     item = f"End line: '{line}' (word for word)"
-    kept = [x for x in items if not _END_LINE_ITEM.match(text_of(x))]
-    return [item] + kept
+    kept = [x for x in items if not _END_LINE_ITEM.match(text_of(x)) and not _restates(text_of(x), line)]
+    new = [item] + kept
+    return None if new == items else new
 
 
 # ── candidate lines the client could not choose between (UAT round 4, L1) ─────────────────────────────────────────

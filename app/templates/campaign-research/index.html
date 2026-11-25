@@ -2079,8 +2079,12 @@ body.fresh .booth-edge{display:none}
     try{ return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+', '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); }catch(e){ return fmtDate(s); } }
   // `act` {label, run}: one action on the notice (an answer that landed while you were elsewhere: Open it).
   function toast(msg, act){ var t=$('toast'); t.textContent=msg; t.classList.toggle('act', !!act);
-    if(act){ var b=document.createElement('button'); b.type='button'; b.textContent=act.label; b.addEventListener('click', function(){ t.classList.remove('on'); act.run(); }); t.appendChild(b); }
-    t.classList.add('on'); clearTimeout(toast._t); toast._t=setTimeout(function(){t.classList.remove('on');}, act?6500:3800); }
+    if(act){ var b=document.createElement('button'); b.type='button'; b.textContent=act.label; b.addEventListener('click', function(){ hideToast(); act.run(); }); t.appendChild(b); }
+    t.classList.add('on'); clearTimeout(toast._t); toast._t=setTimeout(hideToast, act?6500:3800); }
+  // A toast gone is gone: its words leave the page (and its live region) once it has faded, so a passing
+  // "Stopped. What was found so far stays." is not still read after the next run's report (acceptance A3).
+  function hideToast(){ var t=$('toast'); if(!t) return; clearTimeout(toast._t); t.classList.remove('on');
+    clearTimeout(hideToast._t); hideToast._t=setTimeout(function(){ if(!t.classList.contains('on')){ t.textContent=''; t.classList.remove('act'); } }, 300); }
   function hasHost(){ return !!(window.clan && window.clan.patchData); }
 
   var ICON = {
@@ -4077,6 +4081,12 @@ body.fresh .booth-edge{display:none}
     if((fresh && !CHAT.job)||backToAsk()){
       el.innerHTML=startHtml(); ASKING=false;
     } else {
+      // "Stop the research?" is open: a poll that changes nothing in it leaves the view as it is, so the
+      // row under the pointer is the same node and the first "Yes, stop it" counts (acceptance A2: the
+      // view was drawn again on every poll and the first click was lost). Its own change redraws.
+      var csig=CHAT.cancelAsk?cancelHtml():'';
+      if(csig&&csig===CHAT.cancelSig&&el.querySelector('.rs-cancel [data-act=chat-cancel-yes]')) return;
+      CHAT.cancelSig=csig;
       lq=liveQuestion();
       // an agent waiting on the person while the report is open: the hidden Booth shows it, then comes in
       boothAsk(boothWaiting());
@@ -4214,7 +4224,7 @@ body.fresh .booth-edge{display:none}
       return {material_id:id, name:String(x.asset||x.name||id).replace(/^(human\/)?assets\//,''), sha256:x.sha256}; }));
   }
   function startCampaign(prompt, atts){
-    CHAT.back=false;
+    CHAT.back=false; CHAT.cancelAsk=false; hideToast();
     CHAT.job={state:'sending', stage:'extract'}; POLL.delay=1000; renderChat();
     var el=$('start'); if(el&&el.scrollIntoView) el.scrollIntoView({block:'start', behavior:'smooth'});
     window.clan.apiProxy('middleware', {task:'start_campaign', input:{prompt:prompt, attachments:atts}}).then(function(r){ onJobReply(r); }, unreachable);
@@ -6435,9 +6445,12 @@ body.fresh .booth-edge{display:none}
   function workName(){ var n=camp().name&&camp().name.value; return typeof n==='string'?n.trim():''; }
   function researchTitle(){
     // From a brief, its short name leads ("Copperell Refill · Great Britain"), not the client company (UAT round 4, F12).
+    // The working name a person gave it wins (acceptance A4: "Copperell Refill · GB refill sprays" was typed and the
+    // title still said "Copperell · Great Britain"); without one, the brief's short name or the brand, and the markets.
     var b=briefShortName()||brandName(), ms=marketNames(), n=workName();
+    if(n) return n;
     if(b&&ms.length) return b+' · '+listJoin(ms);
-    return n||b;
+    return b;
   }
   // "Ireland", "Ireland and Great Britain", "France, Spain and PL": a list
   // this rule could have made — each item a market name or a market code.
