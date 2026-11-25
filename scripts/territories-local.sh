@@ -97,13 +97,18 @@ fi
 # (claude -p with WebSearch/WebFetch on your login). Nothing in the middleware knows it is local.
 RESEARCH_URL="http://127.0.0.1:$MODEL_LOCAL_PORT"
 
+# A deck from a Production project fetches its pictures from the relay with napkin-web's signed assets pass. The local relay is plain
+# http on 127.0.0.1, which the engine and the middleware refuse unless this dev-only switch is on in their own environments
+# (docs/contracts/deck-visuals.md, "Local stack"). Without it every Production slot was "not reachable" (acceptance A61).
+LOOP=(DECK_RELAY_ALLOW_LOOPBACK=0); [ "$PROD" = 1 ] && LOOP=(DECK_RELAY_ALLOW_LOOPBACK=1)
+
 # The Deck Maker engine, live through model-local (claude -p): without it Continue in -> Deck opens but never builds.
-( cd "$ROOT/engine" && eval "$MODEL_ENV" && export BRIEF_CLAUDE_TRANSPORT=auto && NAPKIN_DECK_DATA="$RUN/deck-engine" NAPKIN_DECK_PORT="$DECK_PORT" NAPKIN_DECK_LIVE=1 NAPKIN_DECK_REPLAY="" NAPKIN_DECK_RENDER=web PYTHONPATH=. \
+( cd "$ROOT/engine" && eval "$MODEL_ENV" && export BRIEF_CLAUDE_TRANSPORT=auto "${LOOP[@]}" && NAPKIN_DECK_DATA="$RUN/deck-engine" NAPKIN_DECK_PORT="$DECK_PORT" NAPKIN_DECK_LIVE=1 NAPKIN_DECK_REPLAY="" NAPKIN_DECK_RENDER=web PYTHONPATH=. \
   exec uv run --quiet --no-project --python 3.12 --with pdfplumber --with python-docx --with PyYAML --with python-pptx --with lxml --with jsonschema --with anthropic --with pillow \
   python -m deck.server ) > "$RUN/logs/deck-engine.log" 2>&1 &
 pids+=($!)
 # The knowledge layers are model-local's (its mock layers family): pointed anywhere else, Research stops with "layers unreachable".
-( cd "$ROOT/server" && eval "$MODEL_ENV" && exec env "${IMG[@]}" NAPKIN_DECK_ENGINE_URL="http://127.0.0.1:$DECK_PORT" NAPKIN_DECK_RENDER=1 NAPKIN_RESEARCH_URL="$RESEARCH_URL" PYTHONPATH="$ROOT/engine" NAPKIN_TERRITORY_DATA="$RUN/territory" \
+( cd "$ROOT/server" && eval "$MODEL_ENV" && exec env "${IMG[@]}" "${LOOP[@]}" NAPKIN_DECK_ENGINE_URL="http://127.0.0.1:$DECK_PORT" NAPKIN_DECK_RENDER=1 NAPKIN_RESEARCH_URL="$RESEARCH_URL" PYTHONPATH="$ROOT/engine" NAPKIN_TERRITORY_DATA="$RUN/territory" \
   NAPKIN_PORT="$MW_PORT" NAPKIN_LAYERS_URL="http://127.0.0.1:$MODEL_LOCAL_PORT" uv run --quiet python -m napkin.app ) > "$RUN/logs/middleware.log" 2>&1 &
 pids+=($!)
 
