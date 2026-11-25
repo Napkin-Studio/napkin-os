@@ -26,7 +26,7 @@ import { addScene, importFountain } from '../script/edits'
 import { parseFountain } from '../script/fountain'
 import { draftFromBrief } from '../script/skye'
 import { drawFrame, type FrameDeps } from './frames'
-import { checkFronts, runningPlan } from './plan'
+import { checkFronts, filmTarget, runningPlan } from './plan'
 import { isActive } from './runner'
 import { assetInput, jobShot, namedInput, subjectPictures } from './select'
 import { liveGet } from '../model/live'
@@ -150,7 +150,7 @@ export async function ideaPlanInput(deps: FrameDeps, storyboardId: Id, idea: str
   const shots = shotsOf(d, storyboardId)
   return {
     script,
-    targetS: Math.min(600, Math.max(1, Math.round(sb.target_s))),
+    targetS: Math.min(600, Math.max(1, Math.round(filmTarget(d, storyboardId)))),
     ...(refs.length ? { refs } : {}),
     ...(shots.length ? { shots: shots.map((s) => jobShot(d, s, false)) } : {}),
   }
