@@ -1131,7 +1131,7 @@ var DeckLogic = (function () {
    * { client, project, text }, each '' when nothing carried names it. Never throws.
    */
   function startDefaults(data) {
-    var up = data && isObj(data.upstream) ? data.upstream : {}, client = '', project = '';
+    var up = data && isObj(data.upstream) ? data.upstream : {}, client = '', project = '', briefProject = '';
     Object.keys(up).forEach(function (id) {
       var u = up[id];
       if (!isObj(u)) return;
@@ -1143,7 +1143,12 @@ var DeckLogic = (function () {
       var c = typeof u.client === 'string' ? u.client : (isObj(u.client) && typeof u.client.value === 'string' ? u.client.value : '');
       c = c.split(/[,;\n]/)[0].replace(/^To confirm:\s*/i, '').trim();
       if (!client && c && c.length <= 80) client = c;
+      // UAT round 4 (blocker 2): a brief-only deck left Project empty, so the cover read "Copperell Home Ltd:" and the exports "Project.pptx".
+      var pn = typeof u.project_name === 'string' ? u.project_name : (isObj(u.project_name) && typeof u.project_name.value === 'string' ? u.project_name.value : '');
+      pn = pn.replace(/^To confirm:\s*/i, '').trim();
+      if (!briefProject && pn && pn.length <= 80) briefProject = pn;
     });
+    if (!project) project = briefProject;   // a carried Production project's title first, else the brief's own project name
     // A starting prompt too, so the form is not half empty: only what the carried project and brief name, nothing added.
     var text = (client || project) ? 'A pitch deck for ' + (client || 'the client') + (project ? ': ' + project : '') + '.' : '';
     return { client: client, project: project, text: text };
@@ -3494,7 +3499,8 @@ var DeckProd = (function () {
   var EXPORTING = false;
   function exportBase(s) {
     var m = (s && s.deck && s.deck.meta) || {};
-    return String(m.project || m.client || 'deck').replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'deck';
+    var named = function (v) { v = String(v || '').trim(); return /^\[.*\]$/.test(v) ? '' : v; };   // never a placeholder ("[Project]" made "Project.pptx")
+    return String(named(m.project) || named(m.client) || 'deck').replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'deck';
   }
   function fetchDeckFile(name) {
     return window.clan.apiProxy('middleware', { task: 'fetch_deck_file', input: { name: name } }).then(function (res) {
