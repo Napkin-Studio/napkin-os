@@ -132,6 +132,8 @@ def beats(b: dict | None) -> list[dict]:
                 for kk, vv in x.items():
                     if kk == "refs" and isinstance(vv, list):
                         refs.extend(r for r in vv if isinstance(r, str))
+                    elif kk == "ref" and isinstance(vv, str) and vv:   # a chart's series cite one ref each (acceptance A35: the gap chart read
+                        refs.append(vv)                               # "No source: our proposal" though every bar is a research fact)
                     elif kk != "basis":
                         walk(vv)
             elif isinstance(x, list):
@@ -192,7 +194,10 @@ def items_for(row: str, stages: Path, summary: dict | None, current: str | None,
         if s.get("brief_given"):
             out.append(_item(f"Brief · {s.get('brief_filled', 0)} of {s.get('brief_total', 0)} fields filled", "done"))
         if s.get("facts") or s.get("findings"):
-            out.append(_item(f"Research · {s.get('facts', 0)} pins, {s.get('findings', 0)} findings, {s.get('sources', 0)} sources", "done"))
+            # A brief carries its research and pins of its own: the deck counts both, the research page only its own (acceptance A36: "87 pins,
+            # 31 sources" beside a research page of 45 and 16). The row says so.
+            both = " (the research's and the brief's own together)" if s.get("brief_given") else ""
+            out.append(_item(f"Research · {s.get('facts', 0)} pins, {s.get('findings', 0)} findings, {s.get('sources', 0)} sources{both}", "done"))
         for d in s.get("docs") or []:
             out.append(_item(f"{d.get('name')} · {d.get('pages') or '?'} pages", "done"))
         a0 = stage_file(stages, "a0_intake.json")
