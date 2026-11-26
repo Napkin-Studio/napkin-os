@@ -82,7 +82,10 @@ name the stand-in, its port, or branch on which implementation answered.
   Brief Maker field such as `objectives` or `mandatories`; never a Production project or a kit), the host sends `{id, data}` with that brief
   whole, beside the index. `build_deck@1` puts it back under `data.upstream.<id>` and sends it to the engine as `brief_upstream`, which
   builds from its fields. Absent when the Deck carries no brief. (Before it, a Deck from a brief built from an empty brief: the middleware
-  saw only the index.)
+  saw only the index.) What the brief carried itself (its research, and any other document the spin-off hoisted beside it; never a
+  Production project or a kit) goes back under the brief's own `upstream`, whole (2026-11-26, 5-tool run): a Confidential mark the brief's
+  chain holds on its research names that document, and `marks_of` and the engine's marks check read it there. A mark naming a document
+  the Deck does not hold is still refused.
 - **`upstream_ask`** (2026-11-09, features/spinoff-and-links): on a document
   whose pipeline declares `extract_ask`, the ask of the brief it carries:
   `{document_id, direct, fields: {<path>: text}}`, the paths drawn only from
