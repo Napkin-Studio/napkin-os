@@ -8,8 +8,8 @@
 //   PUT    /t/{t}/d/{doc}/save             a save; If-Match is the version this copy is based on, 409 + `latest` when not
 //   DELETE /t/{t}/d/{doc}                  to the Trash, restorable for 30 days
 // A version is "sha256:<hex>" on the wire; here (ServerMark.etag) it is the bare hex, the sha256 of the bytes.
-// And on the relay, which only keeps the pictures:
-//   POST /uploads                          "do you have this picture?" (in/<sha256>), and the place to put it
+// And the relay, which only keeps the pictures, through napkin-web's own route for the document:
+//   POST /t/{t}/d/{doc}/production/uploads   "do you have this picture?" (in/<sha256>), and the place to put it
 // Only with the real relay and host: the in-browser mock keeps nothing on a server.
 
 import type { InputMime, SavedProject, UploadResponse } from '../contracts/types'
@@ -44,17 +44,15 @@ export interface ServerSession { tenant: string; media_base: string | null }
 
 export class ProjectServer {
   private readonly host: string
-  private readonly relay: string
   private readonly signedIn_: () => boolean
   private readonly fetchFn: typeof fetch
   private session_: Promise<ServerSession> | null = null
   /** Told when an answer says this person cannot use the tool (relay/access.ts), as HttpRelay does. */
   onUnauthorised?: (why: Access) => void
 
-  /** `host`: where Napkin OS's /api is (default the page's origin); `base`: the relay (the pictures). No token: who is asking is the session cookie. */
-  constructor(opts: { base: string; host?: string; signedIn: () => boolean; fetchFn?: typeof fetch; onUnauthorised?: (why: Access) => void }) {
+  /** `host`: where Napkin OS's /api is (default the page's origin). No token: who is asking is the session cookie. */
+  constructor(opts: { host?: string; signedIn: () => boolean; fetchFn?: typeof fetch; onUnauthorised?: (why: Access) => void }) {
     this.onUnauthorised = opts.onUnauthorised
-    this.relay = opts.base.replace(/\/+$/, '')
     this.host = (opts.host ?? '/api').replace(/\/+$/, '')
     this.signedIn_ = opts.signedIn
     this.fetchFn = opts.fetchFn ?? ((...a) => fetch(...a))
@@ -206,10 +204,10 @@ export class ProjectServer {
     }
   }
 
-  /** Where the relay keeps a picture or clip it has as an upload (in/<sha256>); null when it has none. */
-  async where(sha256: string, mime: string, bytes: number): Promise<string | null> {
+  /** Where the relay keeps a picture or clip of project `docId` it has as an upload (in/<sha256>); null when it has none. */
+  async where(docId: string, sha256: string, mime: string, bytes: number): Promise<string | null> {
     if (!SENDABLE.includes(mime as InputMime)) return null
-    const res = await this.req(this.relay, 'POST', '/uploads', {
+    const res = await this.req(this.host, 'POST', await this.doc(docId, '/production/uploads'), {
       body: JSON.stringify({ sha256, mime, bytes: Math.max(1, bytes) }), headers: { 'Content-Type': 'application/json' },
     })
     if (!res.ok) return null

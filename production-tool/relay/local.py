@@ -6,10 +6,12 @@ still lands (features/relay-durable-jobs.clan).
     cd production-tool/relay && uv run python -m local [--port 8787]
 
 Who is asking (identity.py, features/os-sign-in.clan):
-- Standalone (no TOKEN_SECRET): every request is the local person, NAPKIN_LOCAL_USER="handle@agency",
+- Standalone (no SERVICE_KEY and no TOKEN_SECRET): every request is the local person, NAPKIN_LOCAL_USER="handle@agency",
   else local@napkin. `npm run dev:relay` in production-tool/web uses this.
-- Behind napkin-web (TOKEN_SECRET set to the same dev value as NAPKIN_PRODUCTION_RELAY_SECRET):
-  every request must carry napkin-web's X-Napkin-Identity assertion, as on AWS.
+- Behind napkin-web (SERVICE_KEY, 32+ characters, set to the same dev value as napkin-web's
+  NAPKIN_PRODUCTION_RELAY_SERVICE_KEY): every request must carry napkin-web's service credential
+  (Authorization: Bearer + X-Napkin-User), as on AWS. TOKEN_SECRET (the Deck's assets pass) alone also
+  turns the local person off.
 Tenants on (in memory): NAPKIN_LOCAL_TENANTS="napkin,acme" (agencies), else napkin and the local
 person's agency. Any other agency gets "not on for your agency".
 
@@ -142,8 +144,8 @@ def local_tenants(store: MemoryStore, agencies: list[str], limits: dict | None =
 
 
 def build(port: int, data_dir: Path) -> tuple[Relay, LocalBlobs]:
-    signed = bool(identity.keys())
-    # Standalone, every request is the local person; behind napkin-web, its signed assertion says who.
+    signed = bool(identity.keys() or identity.service_keys())
+    # Standalone, every request is the local person; behind napkin-web, its signed claim says who.
     identity.use_local(None if signed else identity.local_person())
     agencies = [a.strip() for a in os.environ.get("NAPKIN_LOCAL_TENANTS", "").split(",") if a.strip()]
     if not agencies:
@@ -257,7 +259,7 @@ def serve(port: int, data_dir: Path) -> None:
     threading.Thread(target=sweeper, daemon=True).start()
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     me = identity.who("GET", "/me", {}, None)
-    who = f"as {me['h']}@{me['t']} ({me['pid']})" if me else "verifying napkin-web's X-Napkin-Identity (TOKEN_SECRET)"
+    who = f"as {me['h']}@{me['t']} ({me['pid']})" if me else "verifying napkin-web's service credential (SERVICE_KEY)"
     print(f"relay (local) on http://localhost:{port}  {who}  data: {data_dir}", flush=True)
     server.serve_forever()
 

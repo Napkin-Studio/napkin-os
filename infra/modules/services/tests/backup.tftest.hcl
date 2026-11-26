@@ -35,8 +35,9 @@ variables {
 run "backup_is_planned_daily_at_0300_utc_for_35_days_on_the_web_efs" {
   command = plan
   variables {
-    backup_enabled        = true
-    production_media_base = "https://media.example.com"
+    backup_enabled           = true
+    production_media_base    = "https://media.example.com"
+    production_upload_origin = "https://bucket.s3.eu-west-1.amazonaws.com"
   }
 
   assert {
@@ -59,6 +60,10 @@ run "backup_is_planned_daily_at_0300_utc_for_35_days_on_the_web_efs" {
     condition     = local.web_environment[length(local.web_environment) - 1].name == "NAPKIN_PRODUCTION_MEDIA_BASE"
     error_message = "napkin-web is told where pictures live"
   }
+  assert {
+    condition     = contains([for e in local.web_environment : "${e.name}=${e.value}"], "NAPKIN_PRODUCTION_UPLOAD_ORIGIN=https://bucket.s3.eu-west-1.amazonaws.com")
+    error_message = "napkin-web is told where uploads go (the CSP names it)"
+  }
 }
 
 run "backup_is_absent_when_not_enabled" {
@@ -74,5 +79,9 @@ run "backup_is_absent_when_not_enabled" {
   assert {
     condition     = !contains([for e in local.web_environment : e.name], "NAPKIN_PRODUCTION_MEDIA_BASE")
     error_message = "no media base unless given"
+  }
+  assert {
+    condition     = !contains([for e in local.web_environment : e.name], "NAPKIN_PRODUCTION_UPLOAD_ORIGIN")
+    error_message = "no upload origin unless given"
   }
 }

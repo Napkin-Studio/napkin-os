@@ -7,9 +7,10 @@ Environment (infra/envs/hackathon/relay.tf):
   BUCKET, PUBLIC_BASE_URL (or PUBLIC_BASE_URL_PARAM, an SSM name), JOBS_TABLE, QUOTAS_TABLE, BLOCKED_TABLE,
   TENANTS_TABLE, STITCH_FUNCTION, SECRET_ARNS, CONFIG_KEY (default config.json)
 
-SECRET_ARNS names TOKEN_SECRET too: the key napkin-web's X-Napkin-Identity assertions are signed
-with ("new,old" during a rotation). One EnvSecrets re-reads every secret at most every 5 minutes,
-called before each verification, so a rotation reaches warm instances (features/os-sign-in.clan).
+SECRET_ARNS names SERVICE_KEY too: the key napkin-web's service credential (Authorization: Bearer and
+X-Napkin-User) is signed with, and TOKEN_SECRET, the key of the Deck's read-only assets pass (both
+"new,old" during a rotation). One EnvSecrets re-reads every secret at most every 5 minutes, called before
+each verification, so a rotation reaches warm instances (features/production-jobs-via-host.clan).
 """
 
 from __future__ import annotations
@@ -55,7 +56,7 @@ def _build() -> Relay:
 
     secrets = EnvSecrets()
     secrets()  # keys into the environment before the adapters start
-    identity.use_secrets(secrets)  # and again (at most every 5 minutes) before each assertion check
+    identity.use_secrets(secrets)  # and again (at most every 5 minutes) before each credential check
     blobs = S3Blobs(bucket, public_base, client=s3)
     director = load_director()
     return Relay(

@@ -712,6 +712,7 @@ export class JobRunner {
     }
     if (job.error) patch.error = plainJobError(job.error, job.op)
     this.patchDocJob(job.jobId, patch)
+    if (job.state === 'failed' || job.state === 'cancelled') this.ack(job.jobId)
     // The Review flags against a linked brief: Jude's checks, never a block (features/brief-node.clan).
     if (done && flagsOf(job).length) void recordBriefFlags(this.doc, job).catch((e) => console.warn('could not record the brief flags', e))
     this.noteAsk(job)
@@ -764,6 +765,41 @@ export class JobRunner {
     }
   }
 
+  /** Tell the host this job is landed, so its inbox never offers it again. Best effort: a missed ack only means the
+   *  next open offers it once more, and landing is idempotent by job id. */
+  private ack(jobId: string) {
+    void this.relay.ackJob?.(jobId).catch(() => {})
+  }
+
+  /**
+   * Land what finished while this project was closed (features/production-jobs-via-host.clan): each outcome the host
+   * kept in the project's inbox goes through the same landing as a job this tab polled (`apply`), then is acknowledged
+   * when it is in the document. Run on open and when the host says one is waiting. Idempotent: a job already landed,
+   * or one this document never had, is only acknowledged.
+   */
+  async landInbox(): Promise<number> {
+    if (this.stopped || !this.relay.inbox) return 0
+    let entries: Awaited<ReturnType<NonNullable<Relay['inbox']>>>
+    try {
+      entries = await this.relay.inbox()
+    } catch {
+      return 0 // the next open (or the next event) tries again
+    }
+    let landed = 0
+    for (const e of entries) {
+      if (this.stopped) break
+      const mine = this.doc.get().jobs[e.job]
+      if (!mine || !isActive(mine.state)) {
+        this.ack(e.job) // not this document's, or landed before
+        continue
+      }
+      this.stopPolling(e.job)
+      this.apply(e.outcome)
+      landed++
+    }
+    return landed
+  }
+
   private async complete(job: Job) {
     if (this.completing.has(job.jobId)) return
     this.completing.add(job.jobId)
@@ -790,6 +826,7 @@ export class JobRunner {
           j.updated_at = new Date().toISOString()
         }
       }, `complete ${job.op}`)
+      this.ack(job.jobId)
       if (job.unchanged) this.ui.update((u) => { u.jobs[job.jobId] = { ...u.jobs[job.jobId], unchanged: true } })
       this.live.set(job.jobId, { state: 'completed' })
       jobState(job.jobId, 'completed', { op: job.op, provider: job.provider, model: job.model, outputs: assets.map((a) => a.sha256), ms: this.ageMs(job.jobId) })

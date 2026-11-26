@@ -142,6 +142,22 @@ variable "production_relay_secret_arn" {
   }
 }
 
+variable "production_service_key_arn" {
+  description = "The ARN of napkin-hackathon/SERVICE_KEY (the hackathon stack's secret_ids output), which napkin-web calls the relay with (bearer plus signed user claim)"
+  type        = string
+  default     = ""
+  validation {
+    condition     = (var.production_service_key_arn == "") == (var.production_relay_url == "")
+    error_message = "production_relay_url and production_service_key_arn are set together, or neither"
+  }
+}
+
+variable "production_upload_origin" {
+  description = "The S3 origin the relay's presigned upload links point at: the hackathon bucket on its regional endpoint. The Production page's CSP connect-src names it."
+  type        = string
+  default     = "https://napkin-hackathon-741448934623.s3.eu-west-1.amazonaws.com"
+}
+
 variable "production_media_base" {
   description = "The https base Production's pictures are served from: the hackathon stack's CloudFront address (its url output). napkin-web tells the tool in /api/session as media_base."
   type        = string

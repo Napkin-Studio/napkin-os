@@ -136,7 +136,10 @@ start() {
   [[ -s "$roster" ]] || printf '%s\t%s\n' "$sign_in" "$(git -C "$root" config user.name || echo Developer)" >"$roster"
   local token; token="$(secret relay-token)"
 
-  local relay_env=(TOKEN_SECRET="$token")
+  # napkin-web's credential for every relay call but the deck's picture pass (features/production-jobs-via-host.clan):
+  # the relay takes it as SERVICE_KEY, napkin-web as NAPKIN_PRODUCTION_SERVICE_KEY. 32+ bytes, kept in the state dir.
+  local service; service="$(secret relay-service)"
+  local relay_env=(TOKEN_SECRET="$token" SERVICE_KEY="$service")
   if [[ "$live" == 1 ]]; then
     local key="${RUNWAY_API_KEY:-}"
     if [[ -z "$key" && -f "$root/.env" ]]; then
@@ -157,7 +160,8 @@ start() {
 
   # cd, then exec: no shell is left behind waiting on the server (and holding the caller's stdout)
   publish_web
-  (cd "$root/production-tool/relay" || exit 1; exec env -u RUNWAY_API_KEY -u RUNWAYML_API_SECRET -u ANTHROPIC_API_KEY \
+  # PRODUCTION_RELAY_DIR: run the relay from another checkout (a lane's worktree), for the walk of a lane in flight
+  (cd "${PRODUCTION_RELAY_DIR:-$root/production-tool/relay}" || exit 1; exec env -u RUNWAY_API_KEY -u RUNWAYML_API_SECRET -u ANTHROPIC_API_KEY \
       -u NAPKIN_MODEL_API -u NAPKIN_MODEL_BASE_URL -u ANTHROPIC_BASE_URL -u AWS_PROFILE "${relay_env[@]}" \
       "${new_session[@]}" bash -c 'echo $$ >"$1"; shift; exec "$@"' _ "$state/relay.pid" \
       uv run -q --python 3.12 python -m local --port "$relay_port" --data "$state/relay-data" \
@@ -167,7 +171,7 @@ start() {
       NAPKIN_SESSION_SECRET="$(secret session)" \
       NAPKIN_PRODUCTION_RELAY_URL="http://127.0.0.1:$relay_port" \
       NAPKIN_PRODUCTION_MEDIA_BASE="http://127.0.0.1:$relay_port" \
-      NAPKIN_PRODUCTION_RELAY_SECRET="$token" \
+      NAPKIN_PRODUCTION_RELAY_SECRET="$token" NAPKIN_PRODUCTION_SERVICE_KEY="$service" \
       NAPKIN_PRODUCTION_STATIC="$state/production-dist" NAPKIN_WEB_STATIC="$root/app/dist" \
       NAPKIN_WEB_DATA="$state/webdata" NAPKIN_WEB_ADDR="127.0.0.1:$web_port" \
       "${new_session[@]}" bash -c 'echo $$ >"$1"; shift; exec "$@"' _ "$state/web.pid" \
