@@ -771,17 +771,15 @@ class Server:
                 restore()
 
     def image_args(self, d: Doc, req: dict, until: str | None) -> list[str]:
-        """The picture step's flags, only on the last segment, only when NAPKIN_DECK_IMAGES=1 and the request carries mark data (marks absent means
-        refuse: nothing is planned). A person's yes (run.approvals.images, naming a card) is passed as --yes-cost for the card it names; any other
+        """The picture step's flags, only on the last segment, only when NAPKIN_DECK_IMAGES=1. Marks do not gate pictures (owner, 26 Nov 2026:
+        Confidential keeps a part out of Napkin's own knowledge only). A person's yes (run.approvals.images, naming a card) is passed as --yes-cost for the card it names; any other
         run only plans (prints the open cards, makes nothing). The cache is keyed by document, never by the inputs; the key is the host's own."""
-        if not self.s.images or until or req.get("marks") is None:
+        if not self.s.images or until:
             return []
         root = d.root
         (root / "images").mkdir(parents=True, exist_ok=True)
-        marks = root / "marks.json"
-        marks.write_text(json.dumps(req["marks"], ensure_ascii=False))
         # The host owns the ledger and the deck id (the document id): --dev is how a caller that owns both says so.
-        argv = ["--images", "plan", "--marks", str(marks), "--images-cache", str(root / "images"), "--dev", "--ledger", str(self.s.data / "ledger.jsonl"), "--deck-id", d.name]
+        argv = ["--images", "plan", "--images-cache", str(root / "images"), "--dev", "--ledger", str(self.s.data / "ledger.jsonl"), "--deck-id", d.name]
         if req.get("review"):
             rv = root / "review.json"
             rv.write_text(json.dumps(req["review"], ensure_ascii=False))

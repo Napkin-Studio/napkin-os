@@ -25,13 +25,6 @@ def test_the_lint_refuses_anything_outside_printable_ascii(bad):
     assert why and "ascii" in why.lower()
 
 
-def test_marked_non_latin_text_is_denied_as_a_whole():
-    d = lint.deny_list([{"text": "東京 ネスレの新製品"}])
-    assert lint.lint_text("A quiet street with soft light.", deny=d) == "would draw on a Confidential part"
-    d2 = lint.deny_list([{"text": "ＮＥＳＬＥ launch"}])
-    assert lint.lint_text("A quiet street with soft light.", deny=d2) == "would draw on a Confidential part"
-
-
 # ---------------------------------------------------------------------------------------------- 2. every send counts
 
 class Fail:
@@ -151,7 +144,7 @@ def test_a_copied_stages_folder_shares_the_cap(monkeypatch, stages, tmp_path):
 
 # ---------------------------------------------------------------------------------------------- 4. marks
 
-def test_marks_given_on_the_command_line_only_add_and_are_type_checked(monkeypatch, stages, tmp_path):
+def test_marks_given_on_the_command_line_are_type_checked_and_never_hold_the_setting(monkeypatch, stages, tmp_path):
     wire(monkeypatch)
     clan = tmp_path / "b.clan"
     import zipfile, yaml
@@ -164,7 +157,7 @@ def test_marks_given_on_the_command_line_only_add_and_are_type_checked(monkeypat
     argv = _argv(stages, tmp_path / "o", "--images", "subjects", "--marks", str(tmp_path / "m.json"), "--dev", "--ledger", str(tmp_path / "l.jsonl"), "--deck-id", "d1", brief=clan)
     t = _run(argv)
     _run([*argv, "--yes-cost", card_id(t)])
-    assert rec and "Nightjar" not in json.dumps(rec[0])            # [] did not wipe the mark the document carried
+    assert rec and "Nightjar dawn" in json.dumps(rec[0])           # a marked setting still reaches stage g (owner, 26 Nov 2026)
     for bad in ('["a"]', '{"x": 1}', '[{"path": "p", "text": ""}]'):
         (tmp_path / "bad.json").write_text(bad)
         with pytest.raises(SystemExit):
@@ -254,3 +247,12 @@ def test_the_server_asks_for_the_hero_card_on_a_plain_run_too(tmp_path):
     assert "--hero" in plain and "s01.picture" in plain
     yes = s.image_args(d, {"marks": [], "approvals": {"images": {"card": "c_" + "a" * 16}}}, None)
     assert "--yes-cost" in yes and "live" in yes
+
+
+def test_the_server_plans_pictures_with_no_mark_data_too(tmp_path):
+    """Owner, 26 Nov 2026: Confidential keeps a part out of Napkin's own knowledge only, so a request without marks still gets the picture step."""
+    from deck import server as srv
+    s = srv.Server(srv.Settings({"NAPKIN_DECK_DATA": str(tmp_path / "runs"), "NAPKIN_DECK_IMAGES": "1"}))
+    d = srv.Doc(tmp_path / "runs" / "doc1", "doc1")
+    args = s.image_args(d, {"approvals": {}}, None)
+    assert args[:2] == ["--images", "plan"] and "--marks" not in args

@@ -438,7 +438,7 @@ Calibration (`deck/tests/test_layout_wrap_calibration.py`, local only): `Rendere
     python3 -m deck.run_deck ... --images live --yes-cost c_yyyyyyyy       # yes to the picture card: exactly its jobs, flash drafts
     python3 -m deck.run_deck ... --images live --hero s01.picture --yes-cost c_zzzzzzzz   # a final (pro) picture of an approved draft
 
-`--marks FILE` (the parts marked Confidential, `[]` when none; without it a deck built from files is refused), `--review FILE --approver
+`--marks FILE` (the parts marked Confidential, `[]` when none; they no longer hold a picture or a shorten request: owner, 26 Nov 2026), `--review FILE --approver
 human:<id>` (decisions per asset), `--images-reviewed --by human:<id>` (a sensitive brief), `--retry-unknown`, `--remake-style`, `--images-only`,
 `--images-cache DIR`, `--cap-usd N` (a lower cap; 2.50 is the most). The ledger id comes from the deck's content (the document id, or the brief and title), so a copied folder shares one cap; `--ledger FILE` and `--deck-id ID` need `--dev` and print a warning. The key is `RUNWAYML_API_SECRET` in the
 environment only. Code: `deck/imagegen.py` (plan, cards, ledger use, records), `visuals/{runway,jobs,lint,guard,safety}.py`. Tests never call

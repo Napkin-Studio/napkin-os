@@ -275,13 +275,16 @@ def test_territory_spend_is_shown_for_information_only(monkeypatch, stages, tmp_
 MARKS = [{"path": "budget_and_scope", "text": "Project Nightjar launches with oat milk in a blue kettle for 2027", "kind": "confidential_field"}]
 
 
-def test_with_no_mark_data_generation_is_refused_for_the_deck(monkeypatch, stages, tmp_path):
-    wire(monkeypatch)
+def test_with_no_mark_data_pictures_are_still_planned(monkeypatch, stages, tmp_path):
+    """Owner, 26 Nov 2026: Confidential only keeps a part out of Napkin's own knowledge, so no mark data is not a reason to refuse pictures."""
+    with_subjects(monkeypatch, stages, tmp_path)
     argv = ["--stages", str(stages), "--brief", str(stages / "brief_object.json"), "--client", "Lumen Water", "--project", "x", "--out", str(tmp_path / "o"),
-            "--no-qa", "--images", "plan", "--dev", "--ledger", str(tmp_path / "l.jsonl")]
-    with pytest.raises(SystemExit) as e:
+            "--no-qa", "--density", "detailed", "--images", "plan", "--dev", "--ledger", str(tmp_path / "l.jsonl"), "--deck-id", "d1"]
+    with contextlib.redirect_stdout(io.StringIO()) as buf:
         run_deck.main(argv)
-    assert "no mark data" in str(e.value)
+    assert "card" in buf.getvalue()
+    plan = json.loads((stages / "images" / "plan.json").read_text())
+    assert any(r["status"] == "planned" for r in plan["slots"].values())
 
 
 def test_the_picture_card_says_the_client_material_rule_plainly(monkeypatch, stages, tmp_path):
@@ -304,27 +307,35 @@ def test_a_yes_to_the_card_sends_a_client_deck_with_no_setting_needed(monkeypatc
     assert fake.posts
 
 
-def test_marked_text_is_not_in_the_stage_g_request_and_slots_that_would_draw_on_it_are_held(monkeypatch, stages, tmp_path):
-    rec = []
+def test_a_subject_drawn_from_marked_text_is_planned_not_held(monkeypatch, stages, tmp_path):
+    """A subject that shares words with a part marked Confidential goes on the card like any other: the content rules (names, digits,
+    the allowed words, banned imagery) still judge it, the mark does not."""
     marks = MARKS
-    wire(monkeypatch, subjects=fake_subjects(rec))
-    d, out = go(stages, tmp_path / "o", "--images", "subjects", marks=marks)
-    go(stages, tmp_path / "o", "--images", "subjects", "--yes-cost", card_id(out), marks=marks)
-    blob = json.dumps(rec[0])
-    for w in ("Nightjar", "oat milk", "2027"):
-        assert w not in blob
-    # a recording whose subjects carry a paraphrase, a codename word and a digit: each slot is held back, none goes to Runway
+    with_subjects(monkeypatch, stages, tmp_path)
     g = json.loads((stages / imagegen.STAGE_G_FILE).read_text())
-    keys = list(g["subjects"])
-    g["subjects"][keys[0]]["subject"] = "A kettle with milk, blue and oat."
-    g["subjects"][keys[1]]["subject"] = "A nightjar on a wall."
-    g["subjects"][keys[2]]["subject"] = "A wall with 2027 painted on it."
+    k = list(g["subjects"])[0]
+    g["subjects"][k]["subject"] = "Milk in a blue kettle on a table."   # a 3-word run of the marked text
     (stages / imagegen.STAGE_G_FILE).write_text(json.dumps(g))
-    d, text = go(stages, tmp_path / "o", "--images", "plan", marks=marks)
+    go(stages, tmp_path / "o", "--images", "plan", marks=marks)
     plan = json.loads((stages / "images" / "plan.json").read_text())
-    for k in keys[:3]:
-        assert plan["slots"][k]["status"] == "held" and plan["slots"][k]["reason"] == "would draw on a Confidential part"   # paraphrase, codename word, digit
-    assert all("Nightjar" not in r.get("prompt", "") for r in plan["slots"].values())
+    row = plan["slots"][k]
+    assert row["status"] == "planned" and "subject_refused" not in row, json.dumps({x: row.get(x) for x in ("status", "reason", "subject_refused", "source")})
+    assert "blue kettle" in json.dumps(row)
+    assert "confidential_parts" not in plan["client_to_runway"]
+
+
+def test_marked_text_reaches_the_stage_g_request():
+    """Stage g is sent the slide title, the creative blocks and the brief's setting even when a person marked them Confidential."""
+    from types import SimpleNamespace
+    deck = {"slides": {"s1": {"type": "idea", "title": "Project Nightjar launches", "blocks": [
+        {"basis": "creative", "text": "Oat milk in a blue kettle", "refs": []}]}}}
+    inp = SimpleNamespace(brief={"tone_world_assets": {"value": "A quiet kitchen at Nightjar dawn."}},
+                          marks=[{"path": "tone_and_world", "text": "A quiet kitchen at Nightjar dawn.", "kind": "confidential_field"},
+                                 {"path": "s1.title", "text": "Project Nightjar launches", "kind": "classify"}])
+    cands = [{"sid": "s1", "key": "k1", "aspect": "16:9", "anchor": {"ref": None}}]
+    req = imagegen.subject_request(deck, inp, [], cands, [])
+    blob = json.dumps(req)
+    assert "Nightjar dawn" in req["setting"] and "Project Nightjar launches" in blob and "blue kettle" in blob
 
 
 def test_a_subject_with_a_name_a_spelled_number_or_a_style_is_not_sent(monkeypatch, stages, tmp_path):
@@ -662,7 +673,8 @@ def test_the_server_passes_the_picture_cards_through_and_never_makes_a_picture_w
         httpd.shutdown()
 
 
-def test_the_server_with_images_off_or_no_mark_data_plans_nothing(monkeypatch, tmp_path):
+def test_the_server_with_images_off_plans_nothing_and_no_mark_data_still_plans(monkeypatch, tmp_path):
+    """Owner, 26 Nov 2026: marks no longer gate pictures; images off still plans nothing; a malformed marks value is still a bad request."""
     wire(monkeypatch)
     httpd, base = _server(tmp_path, images=False)
     try:
@@ -672,8 +684,8 @@ def test_the_server_with_images_off_or_no_mark_data_plans_nothing(monkeypatch, t
         httpd.shutdown()
     httpd, base = _server(tmp_path / "b", images=True)
     try:
-        v = _drive(base)                                    # marks absent: refuse (nothing is planned)
-        assert v["state"] == "done" and "images" not in v["run"]
+        v = _drive(base)                                    # marks absent: the picture step still plans
+        assert v["state"] == "done" and "images" in v["run"]
         from test_server import call
         s, body = call(base, "/run", {"doc": "x", "inputs": {"prompt": {"text": "t"}}, "marks": "nope", "mode": "replay"})
         assert s == 400

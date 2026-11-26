@@ -174,17 +174,20 @@ def test_the_demo_deck_validates_against_the_deck_schema(demo_stages, build_demo
     assert errs == [], errs[:3]
 
 
-def test_a_generated_source_with_no_mark_data_is_refused_with_the_plain_words(demo_stages, build_demo, tmp_path):
-    with pytest.raises(SystemExit) as e:   # deck-image-gen: generation is built; with no mark data it is refused, and nothing was sent
+def test_a_generated_source_with_no_mark_data_is_not_refused_for_it(demo_stages, build_demo, tmp_path):
+    """Owner, 26 Nov 2026: Confidential keeps a part out of Napkin's own knowledge only, so no mark data never refuses generated pictures."""
+    try:
         build_demo(demo_stages, tmp_path / "o", "--pictures", "creative", "--picture-source", "generated")
-    assert "no mark data" in str(e.value)
+    except SystemExit as e:
+        assert "mark" not in str(e.value) and "Confidential" not in str(e.value), str(e.value)
 
 
-def test_generated_is_refused_message(demo_stages, tmp_path, capsys):
+def test_a_generated_source_from_a_prompt_is_not_refused_for_confidential(demo_stages, tmp_path):
     from deck import run_deck
-    with pytest.raises(SystemExit) as e:
+    try:
         run_deck.main(["--stages", str(demo_stages), "--client", "x", "--project", "y", "--out", str(tmp_path), "--prompt-text", "p", "--picture-source", "generated"])
-    assert "Confidential" in str(e.value)
+    except SystemExit as e:
+        assert "Confidential" not in str(e.value) and "mark" not in str(e.value), str(e.value)
 
 
 # ---------------------------------------------------------------- supplied pictures
