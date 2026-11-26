@@ -151,6 +151,9 @@ export class StoreServer {
       ...(this.deps.wasm ? { wasm: this.deps.wasm } : {}),
     })
     this.store.onChange((doc) => this.post({ t: 'change', doc, documentId: safeId(this.store!) }))
+    // A save the Worker could not make reaches the page, which shows it (UAT acceptance A24 re-test: only the
+    // Worker's console knew, and the bar kept "saved 09:45 AM").
+    this.store.onSaveError((e, where) => this.post({ t: 'save-failed', where, error: toWire(e) }))
     this.store.setBeforeBytes((reason) => this.checkpoint(reason === 'export'))
     return null
   }

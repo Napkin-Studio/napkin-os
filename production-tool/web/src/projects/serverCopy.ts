@@ -93,8 +93,10 @@ export class ServerCopy {
   private readonly inherited: Set<string>
 
   get = (): Conflict | null => this.conflict
-  /** The last save the server refused, in its words, until a save lands (UAT acceptance A24: 37 saves were refused and
-   *  the bar kept "saved 03:57 AM"). Unlike a conflict it holds nothing back: the next save goes as usual. */
+  /** Why the last save did not land, in words for the bar, until a save lands: the server refused it (UAT acceptance
+   *  A24: 37 saves were refused and the bar kept "saved 03:57 AM"), or this browser could not make it (A24 re-test: the
+   *  store Worker could not, and the bar kept "saved 09:45 AM"). Unlike a conflict it holds nothing back: the next
+   *  save goes as usual. */
   refused = (): string | null => this.refusal
   private refusal: string | null = null
   /** The relay's version this tab's document is based on (null: none known). */
@@ -106,6 +108,13 @@ export class ServerCopy {
     this.edits++
     for (const u of this.unanswered) u.edited = true
     this.note(true)
+  }
+
+  /** A save this browser could not make (clan-store onSaveError): nothing reached the server, so the bar says
+   *  "not saved" with the reason until a save lands. */
+  unsaved(message: string, where: 'browser' | 'server') {
+    this.refusal = where === 'server' ? `This project could not be saved: ${message}` : `This browser could not keep the project: ${message}`
+    for (const fn of this.listeners) fn()
   }
 
   /** A newer version is on the relay and this browser's copy has work of its own (shell.ts `open`, re-test R2):
@@ -201,7 +210,7 @@ export class ServerCopy {
         // Refused outright (not a conflict): it did not land, so the bar must not keep an older "saved".
         this.unanswered = this.unanswered.filter((u) => u !== went)
         this.note(true)
-        this.refusal = e.message
+        this.refusal = `The server did not take the last save: ${e.message}`
         for (const fn of this.listeners) fn()
       }
       throw e
