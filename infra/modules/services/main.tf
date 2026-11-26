@@ -183,6 +183,19 @@ data "aws_iam_policy_document" "middleware" {
       }
     }
   }
+  # The Territories store: through its own access point only.
+  dynamic "statement" {
+    for_each = var.territory_enabled ? [1] : []
+    content {
+      actions   = ["elasticfilesystem:ClientMount", "elasticfilesystem:ClientWrite"]
+      resources = [aws_efs_file_system.web.arn]
+      condition {
+        test     = "StringEquals"
+        variable = "elasticfilesystem:AccessPointArn"
+        values   = [aws_efs_access_point.territory[0].arn]
+      }
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "middleware" {
@@ -287,7 +300,7 @@ resource "aws_security_group" "efs" {
     from_port       = 2049
     to_port         = 2049
     protocol        = "tcp"
-    security_groups = concat([aws_security_group.web.id], var.middleware_runlog || var.deck_enabled ? [aws_security_group.middleware.id] : [])
+    security_groups = concat([aws_security_group.web.id], var.middleware_runlog || var.deck_enabled || var.territory_enabled ? [aws_security_group.middleware.id] : [])
   }
 }
 
@@ -346,6 +359,27 @@ resource "aws_efs_access_point" "deck" {
   }
   root_directory {
     path = "/deck"
+    creation_info {
+      owner_uid   = 10001
+      owner_gid   = 10001
+      permissions = "750"
+    }
+  }
+}
+
+# The Territories store (NAPKIN_TERRITORY_DATA, features/territories-cloud.clan): per document, the spend ledger
+# and caps, the run's stages, look-up notes, the pictures ledger (the guard against paying twice) and held
+# pictures, so a deploy or restart neither loses them nor makes a person pay again. At the file system's own
+# /territory, outside web's /data. Same POSIX user as the middleware image's `napkin`.
+resource "aws_efs_access_point" "territory" {
+  count          = var.territory_enabled ? 1 : 0
+  file_system_id = aws_efs_file_system.web.id
+  posix_user {
+    uid = 10001
+    gid = 10001
+  }
+  root_directory {
+    path = "/territory"
     creation_info {
       owner_uid   = 10001
       owner_gid   = 10001
@@ -494,7 +528,8 @@ resource "aws_ecs_task_definition" "web" {
 }
 
 locals {
-  runlog_dir = "/runlog"
+  runlog_dir    = "/runlog"
+  territory_dir = "/territory"
   # The deck engine needs room beside the middleware: 2 vCPU and 4 GB when it runs (the middleware keeps its 1 vCPU / 2 GB share).
   middleware_cpu    = var.deck_enabled ? 2048 : 1024
   middleware_memory = var.deck_enabled ? 4096 : 2048
@@ -509,8 +544,12 @@ locals {
     var.middleware_runlog_bodies ? { NAPKIN_RUNLOG_BODIES = "1" } : {},
     # The deck engine is a second container of this task: the containers share one network namespace.
     var.deck_enabled ? { NAPKIN_DECK_ENGINE_URL = "http://127.0.0.1:${local.deck_port}" } : {},
+    var.territory_enabled ? { NAPKIN_TERRITORY_DATA = local.territory_dir } : {},
   var.middleware_env)
-  middleware_mounts = var.middleware_runlog ? [{ sourceVolume = "runlog", containerPath = local.runlog_dir }] : []
+  middleware_mounts = concat(
+    var.middleware_runlog ? [{ sourceVolume = "runlog", containerPath = local.runlog_dir }] : [],
+    var.territory_enabled ? [{ sourceVolume = "territory", containerPath = local.territory_dir }] : [],
+  )
 
   # The deck engine (engine/deck/Dockerfile): live (paid, capped), Claude on Bedrock with the task role, the PowerPoint
   # and web deck without LibreOffice (the PDF is printed by napkin-web from deck.html), no picture generation.
@@ -576,6 +615,20 @@ resource "aws_ecs_task_definition" "middleware" {
         transit_encryption = "ENABLED"
         authorization_config {
           access_point_id = aws_efs_access_point.deck[0].id
+          iam             = "ENABLED"
+        }
+      }
+    }
+  }
+  dynamic "volume" {
+    for_each = var.territory_enabled ? [1] : []
+    content {
+      name = "territory"
+      efs_volume_configuration {
+        file_system_id     = aws_efs_file_system.web.id
+        transit_encryption = "ENABLED"
+        authorization_config {
+          access_point_id = aws_efs_access_point.territory[0].id
           iam             = "ENABLED"
         }
       }
