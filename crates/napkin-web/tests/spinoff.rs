@@ -1004,6 +1004,51 @@ async fn the_sweep_is_for_admins_and_keeps_what_a_project_links() {
     assert_eq!(r.status, StatusCode::FORBIDDEN);
 }
 
+// A Territories frame the host stored is found by its hash alone, as Production's route nodes
+// draw it (owner, 2026-11-26): pictures only, this workspace's only.
+#[tokio::test]
+async fn a_stored_picture_is_served_by_its_hash_to_its_own_workspace_only() {
+    use napkin_host::BlobStore as _;
+    let s = server(None);
+    let me = sign_in(&s, "visionary", "napkin").await;
+    let store =
+        napkin_web::store::TenantStore::new(s._dir_path().join("data").join(me.tenant.as_str()));
+    let png = b"\x89PNG\r\n\x1a\na frame the picture tool made".to_vec();
+    let sha = store.put(&png).unwrap();
+    let r = get(&s, &me, &format!("/blobs/{sha}")).await;
+    assert_eq!(
+        r.status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&r.body)
+    );
+    assert_eq!(
+        r.headers.get("content-type").and_then(|v| v.to_str().ok()),
+        Some("image/png")
+    );
+    assert_eq!(&r.body[..], &png[..]);
+    let bare = sha.trim_start_matches("sha256:");
+    assert_eq!(
+        get(&s, &me, &format!("/blobs/{bare}")).await.status,
+        StatusCode::OK
+    );
+    // not a picture (the client's PDF), not a hash, not here: no answer
+    let pdf = store.put(PDF).unwrap();
+    assert_eq!(
+        get(&s, &me, &format!("/blobs/{pdf}")).await.status,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        get(&s, &me, "/blobs/not-a-hash").await.status,
+        StatusCode::BAD_REQUEST
+    );
+    let other = sign_in(&s, "planner", "javelin").await;
+    assert_eq!(
+        get(&s, &other, &format!("/blobs/{sha}")).await.status,
+        StatusCode::NOT_FOUND
+    );
+}
+
 // ── A Territories run is sent the brief it was made from (territories-live-walk) ──
 
 #[tokio::test]

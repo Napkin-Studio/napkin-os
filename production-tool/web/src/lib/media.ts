@@ -20,6 +20,17 @@ export function setMediaBase(b: string | null | undefined) {
 }
 export const mediaBase = () => base
 
+let workspace: string | null = null
+/** Set from GET /api/session (`tenant`): the workspace whose stored pictures this page may read by hash. */
+export function setWorkspace(t: string | null | undefined) {
+  workspace = t && /^[\w.-]+$/.test(t) ? t : null
+}
+/** A picture the OS host keeps in this workspace's store, by its hash (napkin-web GET /api/t/{tenant}/blobs/{sha256}): how a Territories
+ *  frame a route carries is drawn (owner, 2026-11-26: the host stores a frame's bytes when it applies the change). null without a workspace. */
+export function workspacePictureUrl(sha256: string): string | null {
+  return workspace ? `/api/t/${encodeURIComponent(workspace)}/blobs/sha256:${hexOf(sha256)}` : null
+}
+
 type Prefix = 'in' | 'out'
 
 /** The prefixes to try, the likelier first: made things are out/, brought things in/. */
@@ -55,4 +66,5 @@ export async function resolveMediaUrl(a: Pick<DocAsset, 'sha256' | 'origin'>, fe
 export function forgetMedia() {
   found.clear()
   base = null
+  workspace = null
 }

@@ -618,7 +618,8 @@ impl Session {
     /// Apply the `change` a `napkin.middleware/1` reply carries to the open
     /// document, as `process:middleware` (see [`middleware::apply`]).
     pub fn apply_middleware_as(&self, ctx: &Ctx, reply: &Value) -> HostResult<Applied> {
-        self.perform(ctx, |c, d| middleware::apply(c, d, reply))
+        let store = self.store.clone();
+        self.perform(ctx, |c, d| middleware::apply(c, d, reply, store.blobs()))
     }
 
     /// Settle what the proxy brought back for `request_kind: "middleware"`:

@@ -1929,6 +1929,12 @@ is the only state (a run's stage, gates and answers live in `data.run`), so a st
     `record_review` (`by`), `approve` (`gate`, default `greenlight`, `note?`, `by`), `send_routes` (`to` one of `deck-maker`,
     `production-tool`, `territory_ids`, `not_chosen`, `by`). The rules are `engine/territory/gates.py`'s; an open gate is refreshed after a move so
     `run.gate.blocked_by` and `asks` match the document.
+- **Pictures a step made** (2026-11-26, owner: the host stores the bytes; `features/territories-pictures-frames.clan`). A `frames` or `frames_approve`
+  step's change carries every picture it made, placed or held, as `assets_put: [{name, sha256, data_b64}]`, `name` = `frames/<sha256>.<png|jpg|webp>`.
+  The host checks each name against its bytes (at most 64, 25 MB each; anything else refuses the change whole) and keeps it at `human/assets/<name>`:
+  a link to the workspace's file store when it has one, embedded otherwise; one it already holds is not added again. The reply's `change` says
+  `assets_saved`. The page draws a frame at `/assets/frames/<sha256>.png`; a spin-off carries the link. A page that knows a picture only by its hash
+  (Production's route nodes) reads it from napkin-web's `GET /api/t/{tenant}/blobs/{sha256}` (pictures only, the caller's workspace only).
 - **Pictures that arrive.** A document with pictures (an `assets` map, its own or its frozen source's at `upstream.<id>.assets`) has every one put on the
   workspace store (`NAPKIN_TERRITORY_BLOBS`, else the territory data root; `blobs/<aa>/<sha256>`) by `territory.pictures.rehome` before `run` reads it,
   and `require_all` refuses a partial arrival in words (`job.error.type: refused`, "19 of 23 pictures arrived ...", nothing runs). The bytes come from a

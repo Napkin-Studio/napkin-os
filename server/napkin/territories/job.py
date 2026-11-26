@@ -12,6 +12,7 @@ written ``failed`` with its words in ``run.error`` (the runner's), and a move th
 """
 from __future__ import annotations
 
+import base64
 import copy
 import logging
 import threading
@@ -92,6 +93,10 @@ def diff(old, new):
     return new
 
 
+
+def _b64(data: bytes) -> str:
+    return base64.b64encode(data).decode("ascii")
+
 class TerritoriesJob:
     """One step. ``call(job) -> runner.Result``-shaped ``(doc, decisions, info, busy, stopped, refusals)``; ``quick`` runs it in the request."""
     kind = "territories"
@@ -113,6 +118,7 @@ class TerritoriesJob:
         self.pending: list = []                 # a person's small moves that came while the step ran: applied to the document it returns
         self.done_n, self.total_n = 0, max(1, total)
         self.info: dict = {}
+        self.assets: list = []
         self.crew: list[dict] = []              # the crew's lanes while explore runs (progress): who is out, who is back and with how many routes
         self.res = None                         # what the runner returned, for the run log's record
         self.store, self.seg_base, self.t0 = None, 0, None    # set when the step starts: the run's store, its segments before it, its start (the ledger's clock)
@@ -215,7 +221,11 @@ class TerritoriesJob:
             if getattr(res, "busy", False):
                 self._fail("job_state", BUSY_WORDS, locked=True)
                 return
-            self.info = dict(getattr(res, "info", {}) or {})
+            info = dict(getattr(res, "info", {}) or {})
+            # The pictures a frames step made, bytes and all: they go back with the change for the host to save as the document's own
+            # linked assets (owner, 2026-11-26), never in the job's info or result.
+            self.assets = [a for a in (info.pop("assets", None) or []) if isinstance(a, dict) and a.get("name") and a.get("data")]
+            self.info = info
             refusals = list(getattr(res, "refusals", []) or [])
             if refusals:                                  # the engine said no, in words: nothing is written, whatever it spent is recorded
                 self._fail("refused", " ".join(refusals), locked=True)
@@ -284,6 +294,12 @@ class TerritoriesJob:
             d = decision(self.doc, did, "edit", self.handler, str(e.get("kind")), _words(e), paths, [], reasoning=r)
             d["agent"] = f"{self.handler}/ledger"
             decs.append(d)
+        if not decs and not wrote and self.assets:      # held pictures only: still sent, so the person can look at them before deciding
+            r = rsn.make("Saved the pictures the step made, for a person to look at.", [rsn.point("The picture tool made them; the host keeps the bytes")],
+                         rsn.certainty("high", "the files came back from the picture tool"), "a person leaves one out", only_option="a picture is kept as made")
+            d = decision(self.doc, uid("d_", self.doc, self.id, "assets"), "edit", self.handler, self.step, "", ["territories"], [], reasoning=r)
+            d["agent"] = f"{self.handler}/engine"
+            decs.append(d)
         if not decs and not wrote:
             return
         read = {p: get_dotted(self.data, p) for p in paths} if wrote else {}
@@ -309,6 +325,8 @@ class TerritoriesJob:
             change = combine(self.doc, pending)
             if change is None and self.state in ("done", "failed", "cancelled"):
                 change = self.last_change
+            if change is not None and self.assets and "assets_put" not in change:
+                change = {**change, "assets_put": [{"name": a["name"], "sha256": a["sha256"], "data_b64": _b64(a["data"])} for a in self.assets]}
             if change is not None:
                 self.last_change = change
             return change
