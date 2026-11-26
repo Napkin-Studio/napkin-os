@@ -90,14 +90,21 @@ function setLogo(d: Doc, n: BrandClanNode, logo: LogoIn | undefined) {
   n.logo = { sha256: logo.sha256, w: logo.w, h: logo.h }
 }
 
-/** The Brand Clan's colour for an end card's ground: its ink, else its darkest colour, when dark enough for the card's light
- *  words (the stitch sets them light); undefined otherwise. */
+/** The deck's colour roles (docs/contracts/brand-clan.md 2.1); a colour with none of them is placed by order. */
+const DECK_ROLES = new Set(['accent', 'paper', 'ink', 'panel', 'accent_ink'])
+
+/** The Brand Clan's colour for an end card's ground, when dark enough for the card's light words (the stitch sets them light):
+ *  its ink; else, when no colour has a role (a Brand Clan made by hand files every colour as "other": brand-clan.md 2.1 "By order",
+ *  owner 2026-11-26), its first colour, the primary; else its darkest colour. Undefined when none is dark enough. */
 export function cardGroundOf(b: BrandBible): string | undefined {
   const cols = ((b.visual as { colours?: { hex?: string; role?: string }[] } | undefined)?.colours ?? [])
     .map((c) => ({ hex: (c.hex ?? '').replace(/^#?/, '#').toUpperCase(), role: c.role })).filter((c) => /^#[0-9A-F]{6}$/.test(c.hex))
   const lum = (hex: string) => { const [r, g, bl] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255); return 0.2126 * r + 0.7152 * g + 0.0722 * bl }
-  const pick = cols.find((c) => c.role === 'ink') ?? [...cols].sort((a, b) => lum(a.hex) - lum(b.hex))[0]
-  return pick && lum(pick.hex) < 0.3 ? pick.hex : undefined
+  const dark = (c: { hex: string } | undefined) => (c && lum(c.hex) < 0.3 ? c.hex : undefined)
+  const ink = cols.find((c) => c.role === 'ink')
+  if (ink) return dark(ink)
+  const primary = cols.some((c) => DECK_ROLES.has(c.role ?? '')) ? undefined : cols.find((c) => c.role !== 'chart')
+  return dark(primary) ?? dark([...cols].sort((a, b) => lum(a.hex) - lum(b.hex))[0])
 }
 
 /** The Brand Clan nodes, oldest first. */
