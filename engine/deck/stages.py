@@ -418,6 +418,8 @@ def fit(deck, inp, profile: dict | None = None) -> tuple[dict, dict]:
                "evidence": [R.describe(r) for r in slide_refs(s)]}
               for s in (deck["slides"][x] for x in deck["order"]) if s["type"] in JUDGED]
     obj, u = _call("fit", f"<slides>\n{json.dumps(slides, ensure_ascii=False)}\n</slides>", _sysmsg("fit_judge.md", "fit", profile))
+    from .assemble import clean_fit
+    obj = clean_fit(obj if isinstance(obj, dict) else {})   # recorded clean: every later reader keys verdicts by title (UAT round 4 KeyError)
     obj.update(stage="fit", produced_by=f"live {MODELS['fit']}")
     return obj, u
 

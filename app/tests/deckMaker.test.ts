@@ -45,7 +45,7 @@ const L = vm.runInNewContext(`${logicRun}; DeckLogic`) as {
   plainError(message: unknown, retry: boolean): string
   plainNotes(notes: unknown): string
   productionSummary(doc: unknown): { name: string; finals: number; to_supply: number; brief: unknown } | null
-  startDefaults(data: unknown): { client: string; project: string; text?: string }
+  startDefaults(data: unknown, manifest?: unknown): { client: string; project: string; text?: string }
   upstreamSummary(data: unknown): { brief: { name: string; fields_filled: number; fields_total: number; mandatories: number } | null; research: { name: string; findings: number | null; rejected: number | null } | null; production: { name: string; finals: number; to_supply: number; brief: unknown } | null; any: boolean }
   documentsOf(data: unknown): { name: string }[]
   builtFrom(inputs: unknown, upstream: unknown, documents: unknown, type?: string | null, projection?: unknown): { tier: string; documents: string[]; brief: boolean; research: boolean }
@@ -193,6 +193,28 @@ test('the Start summary never says [Client], and a carried project starts a prom
   const d = plain(L.startDefaults({ upstream: up })) as { text: string }
   assert.equal(d.text, 'A pitch deck for Tidewell Sparkling Water: Tidewell Tides In launch.')
   assert.equal((plain(L.startDefaults({})) as { text: string }).text, '')
+})
+
+test('a film that names itself (its own title still "Untitled project") starts the deck with the name it goes by, and the client it belongs to (pc live walk 2026-11-25)', () => {
+  const scene = { id: 'scene_1', rank: 'a0', text: '', heading: 'INT. KITCHEN' }
+  const shot = { id: 'shot_1', scene_id: 'scene_1', rank: 'a0', action: '  Warm sunlight   spills across a quiet kitchen counter.\nA hand reaches in.' }
+  const film = { app: 'production-tool', project: { title: 'Untitled project' }, scenes: { scene_1: scene }, shots: { shot_1: shot }, briefs: {} }
+  const m = { client: { id: 'cli_1', name: 'Copperell (pc test)' } }
+  assert.deepEqual(plain(L.startDefaults({ upstream: { p: film } }, m)), {
+    client: 'Copperell (pc test)', project: 'Warm sunlight spills across a quiet kitchen counter.',
+    text: 'A pitch deck for Copperell (pc test): Warm sunlight spills across a quiet kitchen counter.',
+  })
+  // Its linked brief's title before the script, as the film names itself in Production (summary.ts autoName).
+  const briefed = { ...film, briefs: { brief_1: { title: 'Copperell refill oil' } } }
+  assert.equal((plain(L.startDefaults({ upstream: { p: briefed } }, m)) as { project: string }).project, 'Copperell refill oil')
+  // A brief's client still wins over the document's own client; a name the person gave the film wins over all.
+  const named = { ...film, project: { title: 'Kitchen light' } }
+  assert.deepEqual(plain(L.startDefaults({ upstream: { p: named, b: { client: 'Copperell Home Ltd, a brand' } } }, m)), { client: 'Copperell Home Ltd', project: 'Kitchen light', text: 'A pitch deck for Copperell Home Ltd: Kitchen light.' })
+  // Nothing to go by: no project, never "Untitled project".
+  const blank = { app: 'production-tool', project: { title: 'Untitled project' } }
+  assert.deepEqual(plain(L.startDefaults({ upstream: { p: blank } })), { client: '', project: '', text: '' })
+  assert.equal(L.productionSummary(film)!.name, 'Warm sunlight spills across a quiet kitchen counter.')
+  assert.equal(L.productionSummary(blank)!.name, 'Production project')
 })
 
 test('Built from names the Production project, and an empty block draws no bullet', () => {
@@ -2733,7 +2755,7 @@ test('Review draws the slide\'s pictures and the picker shows thumbnails, once t
 test('the Start form names the client and the project from what the deck carries', () => {
   const up = {
     p: { app: 'production-tool', project: { title: "Hollow Oak 'Still'" } },
-    b: { client: 'Hollow Oak Cider, a 140-year-old, orchard-grown brand', project_name: 'x' },
+    b: { client: 'Hollow Oak Cider, a 140-year-old, orchard-grown brand' },   // no project name: the Production project's title is the project
     k: { client: 'A Kit Name', kit: { version: 1 } },
   }
   assert.deepEqual(plain(L.startDefaults({ upstream: up })), { client: 'Hollow Oak Cider', project: "Hollow Oak 'Still'", text: "A pitch deck for Hollow Oak Cider: Hollow Oak 'Still'." })
@@ -2945,14 +2967,14 @@ test('a projection with no pins and no usable findings is not research', () => {
 })
 
 // ── UAT round 4 blocker 2: a brief-only deck named no project, so the cover read "Copperell Home Ltd:" and the exports "Project.pptx" ──
-test('Start takes the project name from the brief a deck was spun off from, and a Production project\'s title first', () => {
+test('Start takes the project name from the brief a deck was spun off from, before a Production project\'s title (acceptance A62)', () => {
   const brief = { client: 'Copperell Home Ltd, launching Copperell Refill.', project_name: 'Copperell Refill', objectives: 'Sell the starter bottle' }
   const research = { campaign: { name: 'Copperell research' }, report: {}, selection: {} }
   const d = plain(L.startDefaults({ upstream: { r: research, b: brief } })) as { client: string; project: string; text: string }
   assert.equal(d.client, 'Copperell Home Ltd')
   assert.equal(d.project, 'Copperell Refill')
   assert.equal(d.text, 'A pitch deck for Copperell Home Ltd: Copperell Refill.')
-  assert.equal((plain(L.startDefaults({ upstream: { b: brief, p: prodDoc() } })) as { project: string }).project, 'Lumen Water launch')
+  assert.equal((plain(L.startDefaults({ upstream: { b: brief, p: prodDoc() } })) as { project: string }).project, 'Copperell Refill')
 })
 
 test('an export never takes its file name from a placeholder project', async () => {
@@ -2980,6 +3002,22 @@ test('A30: the stronger-with line leaves out what the deck already brings', () =
   assert.equal(L.typeHints('agency_pitch', prodCarried).line, '')   // a Production project carries the brief whole
   const m = mount({ inputs: { prompt: { client: 'Copperell', project: 'Copperell Refill', text: 'x' } }, upstream: { b: brief } })
   assert.doesNotMatch(m.app.innerHTML, /To make this one stronger/)
+})
+
+// ── acceptance A32 and A62: the deck from the Production project ──
+test('A32: a brief whose client field is a sentence still names the client', () => {
+  assert.equal(L.clientName('Copperell Home Ltd is launching Copperell Refill: a ribbed amber glass spray bottle with a copper cap, made to keep for life.'), 'Copperell Home Ltd')
+  assert.equal(L.clientName('To confirm: Lumen Water (the utility), Dublin'), 'Lumen Water')
+  assert.equal(L.clientName('x'.repeat(90)), '')
+  const brief = { client: 'Copperell Home Ltd is launching Copperell Refill: a ribbed amber glass spray bottle.', objectives: 'o', project_name: 'Copperell Refill' }
+  assert.equal(L.startDefaults({ upstream: { b: brief } }).client, 'Copperell Home Ltd')
+})
+
+test('A62: the brief\'s project name comes before a Production project\'s working title, which never keeps "· Territories N"', () => {
+  const prod = { app: 'production-tool', project: { title: 'Copperell Refill · Territories 3' } }
+  assert.equal(L.startDefaults({ upstream: { p: prod, b: { objectives: 'o', project_name: 'Copperell Refill' } } }).project, 'Copperell Refill')
+  assert.equal(L.startDefaults({ upstream: { p: prod } }).project, 'Copperell Refill')
+  assert.equal(L.startDefaults({ upstream: { p: { ...prod, project: { title: 'Lumen Water launch' } } } }).project, 'Lumen Water launch')
 })
 
 // ── deck-beat-editor: the person edits the storyline's beats at gate 1 (owner approved the mock, 2026-11-25) ──

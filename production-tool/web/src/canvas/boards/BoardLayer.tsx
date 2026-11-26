@@ -11,6 +11,7 @@
 // a resize let go of are said, with Undo. The engine draws the handles and does the sizing.
 // The engine draws the frames; the rail is the chrome's.
 
+import { boardInHand } from './inHand'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useDoc, useServices } from '../../app/context'
 import { systemUpdate } from '../../doc/store'
@@ -301,6 +302,13 @@ export function BoardLayer({ canvas, inset = 0, tick = 0 }: { canvas: CanvasAdap
     refocus()
   }
   const editFrame = editing ? frameById(editing.frameId) : undefined
+  // A board just made is in hand while its title and purpose are open: the next picture goes on it (UAT round 4 A19).
+  useEffect(() => {
+    if (!editing?.fresh) return
+    const id = editing.frameId
+    boardInHand.set(id)
+    return () => boardInHand.clear(id)
+  }, [editing])
   const editBoard = editFrame ? doc.boards?.[boardIdOf(editFrame) ?? ''] : undefined
   const askFrame = asking ? frameById(asking.frames[0]) : undefined
   return (

@@ -10,8 +10,9 @@
 //                  change {doc, documentId}       after every change, before the call's result
 //                  scene-ack {seq}                the update is in the replica and the live store
 //                  mirror-post {id, bytes, meta}  post these bytes to the relay (the main thread holds the auth)
+//                  save-failed {where, error}     a save could not be made (this browser's copy, or the server's bytes)
 
-import type { Doc, MirrorReason, Person } from '../../../clan-store/src'
+import type { Doc, MirrorReason, Person, SaveWhere } from '../../../clan-store/src'
 
 export const PROTOCOL = 1
 
@@ -55,6 +56,7 @@ export type FromWorker =
   | { t: 'change'; doc: Doc; documentId: string }
   | { t: 'scene-ack'; seq: number }
   | { t: 'mirror-post'; id: number; bytes: Uint8Array; meta: { handle: string; reason: MirrorReason } }
+  | { t: 'save-failed'; where: SaveWhere; error: WireError }
 
 /** What both ends talk over: a Worker on the main thread, the global scope in the Worker, a MessagePort in tests. */
 export interface Endpoint {

@@ -84,9 +84,24 @@ def _flat_text_blocks(blocks: list) -> list:
         t = b.get("text") if isinstance(b, dict) else None
         if isinstance(t, (list, tuple)):
             out += [{**b, "text": str(x).strip()} for x in t if str(x).strip()]
+        elif isinstance(b, dict) and b.get("kind") == "kv" and isinstance(b.get("items"), list):
+            # a kv value that is a list (a territory's risks: ['Category safety: …', …]) is its items as sentences, never a printed list
+            # (UAT round 4: the brief deck's territory slides and its PDF appendix printed "['Category safety: …', …]")
+            rows = []
+            for row in b["items"]:
+                if isinstance(row, (list, tuple)) and len(row) == 2 and isinstance(row[1], (list, tuple)):
+                    row = [row[0], " ".join(_sentence(x) for x in row[1] if str(x).strip())]
+                rows.append(row)
+            out.append({**b, "items": rows})
         else:
             out.append(b)
     return out
+
+
+def _sentence(x) -> str:
+    """One item of a list as a sentence: trimmed, ending with a stop."""
+    t = str(x).strip()
+    return t if not t or t[-1] in ".!?" else t + "."
 
 
 #: A parenthetical that is a planner's working note, not a line for the room: '(Once a cleaning-performance test is held, move to the stronger
@@ -255,9 +270,11 @@ def _surface_brief_fields(S: list, inp) -> None:
         v = (inp.brief.get(top) or {}).get("value")
         v = v.get(sub) if (sub and isinstance(v, dict)) else (None if sub else v)
         text = str(v).strip() if isinstance(v, str) else ""
+        ref = f"brief:{field}"
         if not (home and text) or spec.norm_text(text) in _deck_texts(S):
             continue
-        ref = f"brief:{field}"
+        if ref in _refs_on(home):   # the field is already on its home slide, in a requirement's words that cite it (UAT round 4: slide 2 said
+            continue                # one objective twice, once as the requirement and once as the brief's own sentence)
         if kind == "bullets":
             bl = next((b for b in home["blocks"] if b["kind"] == "bullets"), None)
             if bl is None:
@@ -266,6 +283,17 @@ def _surface_brief_fields(S: list, inp) -> None:
         else:
             home["blocks"] = [b for b in home["blocks"] if not (b["kind"] in ("text", "small") and not str(b.get("text", "")).strip())] + \
                 [{"kind": kind, "items": [[label, text]], "refs": [ref]}]
+
+
+def _refs_on(slide: dict) -> set:
+    """Every ref a slide's blocks and their items cite."""
+    out = set()
+    for b in slide.get("blocks") or []:
+        out |= set(b.get("refs") or [])
+        for it in b.get("items") or []:
+            if isinstance(it, dict):
+                out |= set(it.get("refs") or [])
+    return out
 
 
 def _dedupe_blocks(title: str, blocks: list, claims: list) -> list:
@@ -1110,6 +1138,7 @@ def _complete(S, reqs, R, inp, meta, fmt, fit, scoring=None, messages=None, terr
                      "research_doc_id": inp.research_doc_id, "coverage": inp.coverage, "built_from": inp.built_from},
             "requirements": {r["id"]: r for r in reqs}, "scoring": scoring or [], "messages": messages or [],
             "territories": territories or {}, "slides": {}, "order": []}
+    fit = clean_fit(fit)   # a recorded fit.json from before the clean, or a judge's verdict with no title, never stops the build
     if fit:
         deck["fit"] = fit
     if spec.GRAPHICS:   # deck-graphics slices 4-5: each chart block is drawn only from ledger values of one measure and unit, else a hero,
@@ -1467,7 +1496,7 @@ def _merge(k: dict, m: dict, title) -> None:
             add.append(b)
         k["blocks"] = k["blocks"] + add
         vis = m.get("visual") or {}
-        shown = [f"Image prompt ({vis.get('status', 'illustrative')}): {vis.get('prompt', '')}"] if vis.get("kind") == "image_prompt" else []   # drawn on the absorbed slide
+        shown = [f"Image prompt ({vis.get('status', 'illustrative')}): {vis.get('prompt', '')}"] if vis.get("kind") == "image_prompt" else []   # the absorbed slide's picture brief, in the notes
         extra = [x for x in ([] if put else [f"Merged here from the slide '{m['title']}'."]) + shown + [m.get("notes") or ""] if str(x).strip()]
         if extra:
             k["notes"] = "\n\n".join([x for x in [k.get("notes") or ""] if x.strip()] + extra)
@@ -1955,6 +1984,25 @@ def copy_fields(sl: dict) -> list:
         for ri, row in enumerate((b.get("rows") or [])[1:], 1):
             out += [(f"b{bi}.r{ri}.c{ci}", c) for ci, c in enumerate(row) if str(c).strip()]
     return out
+
+
+def clean_fit(fit: dict | None) -> dict | None:
+    """The fit judge's result with every verdict an object holding a text ``title``, ``verdict`` and ``reason``: the judge is a model, and a
+    verdict it returned under 'slide' or 'headline', with no title, or not as an object stopped the Copy step (UAT round 4,
+    doc-ie-napkin-deck-maker-07c26c27: 'The engine stopped: KeyError: 'title''). A title under another key is read by that key; a verdict
+    with no title at all is left out (it can key no slide); a missing verdict is '' (it neither presents nor flags a slide). None stays None."""
+    if not isinstance(fit, dict):
+        return fit
+    out = []
+    for v in fit.get("verdicts") or []:
+        if not isinstance(v, dict):
+            continue
+        t = next((v[k] for k in ("title", "slide", "headline") if isinstance(v.get(k), str) and v[k].strip()), None)
+        if t is None:
+            continue
+        rest = {k: x for k, x in v.items() if k not in ("slide", "headline")}
+        out.append({**rest, "title": t, "verdict": str(v.get("verdict") or ""), "reason": str(v.get("reason") or "")})
+    return {**fit, "verdicts": out}
 
 
 def apply_copy(deck: dict, edits: list) -> int:

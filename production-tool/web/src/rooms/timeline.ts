@@ -170,8 +170,7 @@ const bare = (t: string) => t.replace(/[.!?]$/, '').trim()
 export function endCardFrom(d: ProductionDocument, videoId: Id): CutEndCard | undefined {
   const card = endCardOf(d, storyboardOfVideo(d, videoId)?.id)
   if (!card) return undefined
-  const named = d.project.title && !/^untitled/i.test(d.project.title) ? d.project.title : 'Your brand'
-  return withBriefLegal(d, videoId, withCampaignLine(d, videoId, cardCopy(card, endLineOf(briefForJob(d, { kind: 'video', id: videoId })?.brief.spine), briefLegal(d, videoId), named)))
+  return withBriefLegal(d, videoId, withCampaignLine(d, videoId, cardCopy(card, endLineOf(briefForJob(d, { kind: 'video', id: videoId })?.brief.spine), briefLegal(d, videoId), cardName(d, videoId))))
 }
 
 /** The end card a storyboard's cell shows: the one its film will carry (endCardFrom: the Brief's end line, no placement
@@ -180,8 +179,7 @@ export function storyboardEndCard(d: ProductionDocument, storyboardId: Id | unde
   const videoId = storyboardId ? Object.keys(d.videos ?? {}).find((v) => storyboardOfVideo(d, v)?.id === storyboardId) : undefined
   if (videoId) return endCardFrom(d, videoId)
   const card = endCardOf(d, storyboardId)
-  const named = d.project.title && !/^untitled/i.test(d.project.title) ? d.project.title : 'Your brand'
-  return card && cardCopy(card, undefined, undefined, named)
+  return card && cardCopy(card, undefined, undefined, cardName(d))
 }
 
 const plainWords = (x: string | undefined) => (x ?? '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
@@ -221,8 +219,17 @@ export function cardCopy(card: CutEndCard, end: string | undefined, legal: strin
 /** A new end card for a film with no end-card shot: the brand name set in type (the project's name; there is no logo without a
  *  brand book) and the linked Brief's legal line as its legal. */
 export function newEndCard(d: ProductionDocument, videoId: Id): CutEndCard {
-  const named = d.project.title && !/^untitled/i.test(d.project.title) ? d.project.title : 'Your brand'
-  return withBriefLegal(d, videoId, withCampaignLine(d, videoId, { headline: '', line: named, bg: '#14161B', durS: 1.5 }))
+  return withBriefLegal(d, videoId, withCampaignLine(d, videoId, { headline: '', line: cardName(d, videoId), bg: '#14161B', durS: 1.5 }))
+}
+
+/** The name an end card's line starts as: the project's without the " · Territories" a spin-off adds ("Copperell Refill"),
+ *  else the linked Brief's own name, else "Your brand". Never the whole spin-off title (UAT acceptance A52: the card read
+ *  "Copperell Refill · Territories"). A route's Brief is titled "Territories · The Sunday Drop · v1": not a name. */
+export function cardName(d: ProductionDocument, videoId?: Id): string {
+  const plain = (x: string | undefined) => { const t = x?.trim(); return t && !t.includes(' · ') && !/^untitled/i.test(t) ? t : undefined }
+  return plain(d.project.title?.split(' · ')[0])
+    ?? (videoId ? plain(briefForJob(d, { kind: 'video', id: videoId })?.brief.title) : undefined)
+    ?? 'Your brand'
 }
 
 /** The campaign's line for a film: the linked Brief's end line ("Proper crunch."), else the script's own last spoken line. */
@@ -256,14 +263,44 @@ function withBriefLegal(d: ProductionDocument, videoId: Id, card: CutEndCard): C
   return legal ? { ...card, legal } : card
 }
 
+// The labels a planned end card shot writes its copy under (UAT acceptance A54: "Charcoal card. Super: A little nicer, every 500 ml.
+// Beneath it: Refill. Not landfill. COPPERELL wordmark top right. Small line: Keep out of reach of children."). What a label
+// introduces is copy, up to the next label; the rest (the card's colour, where the wordmark sits) is direction, never copy.
+const CARD_LABEL = /\b(super|headline|title|beneath it|under(?:neath)? it|below it|line|tagline|small (?:line|print)|legal(?: line)?|fine print)\s*:\s*/gi
+const HEAD_LABEL = /^(?:super|headline|title)$/i
+const LEGAL_LABEL = /^(?:small (?:line|print)|legal(?: line)?|fine print)$/i
+
+/** A planned end card's copy read from its labels: the headline (Super), the line (Beneath it), the legal line (Small line),
+ *  each without placement sentences; undefined when the action has no Super/Headline label. Pure. */
+export function labelledCard(action: string): { headline: string; line: string; legal: string } | undefined {
+  const marks = [...action.matchAll(CARD_LABEL)]
+  // A Super and at least one more label: one label alone ("End card, super: \"Quietboil. Let them sleep.\"") is read as before.
+  if (!marks.some((m) => HEAD_LABEL.test(m[1])) || marks.length < 2) return undefined
+  const parts = { headline: [] as string[], line: [] as string[], legal: [] as string[] }
+  marks.forEach((m, i) => {
+    const text = action.slice(m.index! + m[0].length, i + 1 < marks.length ? marks[i + 1].index : undefined)
+    const copy = sentences(text).filter((x) => !PLACE.test(x) && !MENTION_NOTE.test(x) && !/\b(?:word ?mark|logo)\b/i.test(x)).join(' ').trim()
+    if (!copy) return
+    const key = HEAD_LABEL.test(m[1]) ? 'headline' : LEGAL_LABEL.test(m[1]) ? 'legal' : 'line'
+    parts[key].push(copy)
+  })
+  return { headline: parts.headline.join(' '), line: parts.line.join(' '), legal: parts.legal.join(' ') }
+}
+
 /** The end card a storyboard's end card shot makes (endCardFrom), for the Film's cut or the storyboard's cell. */
 export function endCardOf(d: ProductionDocument, storyboardId: Id | undefined): CutEndCard | undefined {
   const shots = storyboardId ? shotsOf(d, storyboardId) : []
   const shot = shots.find((s) => s.kind === 'end_card')
   if (!shot) return undefined
-  const named = d.project.title && !/^untitled/i.test(d.project.title) ? d.project.title : 'Your brand'
+  const named = cardName(d)
   const words = (shot.action ?? '').trim()
   const card = (headline: string, line: string) => ({ headline: headline || named, line: line || headline || named, bg: '#14161B', durS: shot.duration_s || 1.5 })
+  // Labelled copy (A54): the Super is the headline, what is beneath it the line (else the brand), the small line the legal.
+  const labelled = labelledCard(words)
+  if (labelled?.headline) {
+    const own = { headline: labelled.headline.slice(0, 120), line: (labelled.line || named).slice(0, 200), bg: '#14161B', durS: shot.duration_s || 1.5 }
+    return labelled.legal ? { ...own, legal: labelled.legal.slice(0, 200) } : own
+  }
   const label = END_PREFIX.exec(words)
   const after = label ? words.slice(label[0].length).trim() : ''
   const said = after ? spoken(after) : ''

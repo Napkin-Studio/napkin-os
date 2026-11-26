@@ -61,6 +61,7 @@ async function open(session?: (frameId: string) => EditSession, makers = ['runwa
   const el = document.createElement('div')
   document.body.appendChild(el)
   act(() => {
+    root?.unmount() // a second editor in one test: the first goes, with its timers
     root = createRoot(el)
     root.render(createElement(ShellContext.Provider, { value: shell },
       createElement(ServicesContext.Provider, { value: services }, createElement(ImageEditor, { target: { kind: 'shot', shotId: ids.shots[1] }, onBack, onTarget: (t: EditTarget) => onShot(t.kind === 'shot' ? t.shotId : t.nodeId) }))))
@@ -73,6 +74,34 @@ const buttons = (el: HTMLElement) => [...el.querySelectorAll('button')]
 const byLabel = (el: HTMLElement, label: string | RegExp) => buttons(el).find((b) => (typeof label === 'string' ? b.getAttribute('aria-label') === label : label.test(b.getAttribute('aria-label') ?? '')))
 const byText = (el: HTMLElement, text: string) => buttons(el).find((b) => b.textContent?.trim() === text)
 const stroke = { t: 'brush' as const, mode: 'add' as const, r: 0.03, soft: 0.2, pts: [{ x: 0.5, y: 0.5 }] }
+
+describe('the marching ants stop when the editor goes (the hook suite failed on a state set after its test)', () => {
+  const antTimers = () => {
+    const set = vi.spyOn(globalThis, 'setInterval')
+    const cleared = vi.spyOn(globalThis, 'clearInterval')
+    return { set, cleared, ants: () => set.mock.results.filter((_, i) => set.mock.calls[i][1] === 140).map((r) => r.value) }
+  }
+  afterEach(() => vi.restoreAllMocks())
+
+  it('unmounted mid-animation: its timer is cleared and nothing is set after', async () => {
+    const t = antTimers()
+    await open()
+    expect(t.ants().length).toBeGreaterThan(0)
+    act(() => root?.unmount())
+    root = null
+    for (const id of t.ants()) expect(t.cleared).toHaveBeenCalledWith(id)
+  })
+
+  it('taken off the page without unmounting: the next tick finds its canvas gone and stops', async () => {
+    const t = antTimers()
+    const errors = vi.spyOn(console, 'error')
+    const { el } = await open()
+    el.remove() // the page under it torn down, the root never unmounted
+    await act(async () => { await new Promise((r) => setTimeout(r, 320)) })
+    for (const id of t.ants()) expect(t.cleared).toHaveBeenCalledWith(id)
+    expect(errors).not.toHaveBeenCalled()
+  })
+})
 
 describe('the tools (3.12)', () => {
   it('shows the six tools with their keys, the crop kept at the ratio (no click-select, no eraser)', async () => {
