@@ -1,4 +1,4 @@
-# Status, 2026-11-26 18:40 (read this before README.md)
+# Status, 2026-11-26 19:00 (FINAL from this session) (read this before README.md)
 
 ## Verdict
 
@@ -6,11 +6,17 @@
 - Track A: Brúach Kombucha, report in scratchpad uat5a/.
 - Track B: Sólás Lights, reports in uat5b/, uat5b2/ and uat5b3/.
 
-**One blocker is left:** a deck made with Continue in from a **Production** project has no Brand Clan logo on its cover (deck doc-ie-napkin-deck-maker-27cb410a). From a brief it works.
-- It's being fixed on `fix/deck-production-logo`. The agent also takes:
-  - the finals count needing a reload after Update;
-  - the PDF title falling back to DejaVu when the Brand Clan face is missing;
-  - a deck that dead-ends when its type changes after the first build.
+**One blocker is left, NOT fixed (Shrey: "Don't fix. Just send everything to Sai and push"):** a deck made with Continue in from a **Production** project has no Brand Clan logo on its cover (UAT deck doc-ie-napkin-deck-maker-27cb410a, from Production 0976acee). From a brief it works (Sólás 9ad51173).
+- **Investigated, host ruled out.** Both UAT docs hold Original's logo, and the deck carries `human/assets/brand/9527369c…/134d0c2fca-original-logo.png`.
+- The engine's Brand Clan reading places the logo when run locally on the downloaded deck (variant "dark", 1440×480 PNG).
+- **Look next:** the engine's Production build path. A deck with a Production project runs with `--pictures creative_cover`, which deletes the run's output files before copying pictures in. Check that the logo's asset record and file survive to cover drawing.
+- **Branch `fix/deck-production-logo` (9b171a9e)**, pushed, no PR: one guard test, `crates/napkin-host/tests/brand_clan.rs::a_deck_spun_off_a_production_project_carries_the_brand_clans_logo` (passes).
+- The UAT copies of both docs are in the session scratchpad on the GB10 machine (`dpl/`).
+
+**Not done either:**
+- (a) the deck's finals count stays "2" after Update until a reload;
+- (b) the PDF title falls back to DejaVu when the Brand Clan face (e.g. Georgia) isn't available to the PDF renderer; it should fall back to the embedded Archivo;
+- (c) a deck whose type changed after the first build dead-ends ("Confirm it on the type picker (Change)" with no Change control).
 
 ## Where things are
 
@@ -45,7 +51,7 @@ Shrey looked at the UAT decks and said the deck **"is too text heavy"** and has 
 
 ## Next steps
 
-1. When the `fix/deck-production-logo` PR is green:
+1. Fix the cover logo on `fix/deck-production-logo` (see above), open a PR, and when it is green:
    - merge it with scratchpad merge-queue2.sh (or `gh pr merge --squash`);
    - deploy UAT: `gh workflow run deploy.yml --ref develop -f environment=uat -f ref=<FULL 40-char develop sha>`;
    - check ECS for a new revision with rollout COMPLETED and the image tag equal to that sha;
