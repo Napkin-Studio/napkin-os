@@ -504,6 +504,21 @@ describe('the end card from a planner\'s staged shot (UAT 2026-11-24: "appears, 
     expect(await said('Flat out good. The can sits centred on clean colour.')).toMatchObject({ headline: 'Flat out good.' })
   })
 
+  it('a lone Super label is not on the card, nor what sits on the card (five-tool run 2026-11-26)', async () => {
+    const { store, shots, videoId } = await film()
+    const said = async (action: string) => {
+      await systemUpdate(store, (d) => { d.shots[shots[3].id].action = action }, 'sync')
+      return endCardFrom(store.get(), videoId)!
+    }
+    // It read headline "Super: Still cider", line "Even on a Tuesday. The Lúnasa sunburst and 0.0 badge sit on the card."
+    const card = await said('Super: Still cider. Even on a Tuesday. The L\u00fanasa sunburst and 0.0 badge sit on the card.')
+    expect(card).toMatchObject({ headline: 'Still cider', line: 'Even on a Tuesday.' })
+    expect(JSON.stringify(card)).not.toMatch(/Super:|on the card/)
+    expect(await said('SUPER: WEAR YOUR COLOURS MIDWEEK.')).toMatchObject({ headline: 'WEAR YOUR COLOURS MIDWEEK' })
+    // Two labels stay labelled copy (A54).
+    expect(await said('Super: A little nicer. Beneath it: Refill. Not landfill.')).toMatchObject({ headline: 'A little nicer.', line: 'Refill. Not landfill.' })
+  })
+
   it('puts the linked brief\'s quoted legal line in the card\'s legal (not its call to action), only the quoted words', async () => {
     const { store, shots, videoId } = await film()
     await systemUpdate(store, (d) => {
