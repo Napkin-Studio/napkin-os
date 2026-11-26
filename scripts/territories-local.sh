@@ -127,7 +127,8 @@ if [ "$PROD" = 1 ]; then
   rm -rf "$PS/production-dist" && cp -r "$DIST" "$PS/production-dist"
   [ -s "$PS/roster.tsv" ] || printf '%s\t%s\n' "$SIGN_IN" "$(git -C "$ROOT" config user.name || echo Developer)" > "$PS/roster.tsv"
   TOKEN="$(secret relay-token)"
-  RELAY_ENV=(TOKEN_SECRET="$TOKEN")
+  SERVICE="$(secret relay-service)"     # napkin-web's credential for relay calls (production-jobs-via-host): SERVICE_KEY / NAPKIN_PRODUCTION_SERVICE_KEY
+  RELAY_ENV=(TOKEN_SECRET="$TOKEN" SERVICE_KEY="$SERVICE")
   if [ -n "${RUNWAY_API_KEY:-}" ]; then
     PROD_MODE=runway
     python3 - "$ROOT/production-tool/contracts/examples/config.testing.json" "$PS/live-config.json" "$MAX_USD" <<'PY'
@@ -153,7 +154,8 @@ PY
   groups+=("$(cat "$PS/relay.pid" 2>/dev/null || true)")
   AUTH_ENV=(NAPKIN_AUTH=roster NAPKIN_AUTH_ROSTER="$PS/roster.tsv" NAPKIN_SESSION_SECRET="$(secret session)")
   PROD_ENV=(NAPKIN_PRODUCTION_RELAY_URL="http://127.0.0.1:$RELAY_PORT" NAPKIN_PRODUCTION_MEDIA_BASE="http://localhost:$RELAY_PORT"
-            NAPKIN_PRODUCTION_RELAY_SECRET="$TOKEN" NAPKIN_PRODUCTION_STATIC="$PS/production-dist")
+            NAPKIN_PRODUCTION_RELAY_SECRET="$TOKEN" NAPKIN_PRODUCTION_SERVICE_KEY="$SERVICE" NAPKIN_PRODUCTION_UPLOAD_ORIGIN="http://localhost:$RELAY_PORT"
+            NAPKIN_PRODUCTION_STATIC="$PS/production-dist")
 fi
 
 WEB=("${NAPKIN_WEB_BIN:-}")
