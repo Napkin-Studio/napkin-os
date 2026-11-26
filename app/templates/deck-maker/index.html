@@ -1028,7 +1028,7 @@ var DeckLogic = (function () {
       n++;
       if (r === 'supply') supply++;
     });
-    var title = isObj(doc.project) && typeof doc.project.title === 'string' && doc.project.title.trim() ? doc.project.title.trim() : 'Production project';
+    var title = filmName(doc) || 'Production project';
     var briefs = isObj(doc.briefs) ? doc.briefs : {}, bids = Object.keys(briefs).sort().reverse(), brief = null;
     for (var i = 0; i < bids.length && !brief; i++) {
       var sp = isObj(briefs[bids[i]]) && isObj(briefs[bids[i]].spine) ? briefs[bids[i]].spine : {};
@@ -1095,13 +1095,53 @@ var DeckLogic = (function () {
    * client's name from the carried brief (its client line up to the first comma). Only ever a starting value: what the person typed wins.
    * { client, project, text }, each '' when nothing carried names it. Never throws.
    */
-  function startDefaults(data) {
+  /**
+   * The name a Production project goes by, as Production names it (production-tool/web/src/projects/summary.ts autoName): its own
+   * title, unless it is still "Untitled…" (a film that names itself never writes one: pc live walk 2026-11-25, the deck said
+   * "A pitch deck for the client: Untitled project."), else its newest brief's title, else its script's first line. '' when none.
+   */
+  function filmName(doc) {
+    if (!isObj(doc)) return '';
+    function clip(t, n) {
+      if (t.length <= n) return t;
+      var cut = t.slice(0, n), sp = cut.lastIndexOf(' ');
+      return (sp > n * 0.6 ? cut.slice(0, sp) : cut).replace(/[\s,.;:\u2013\u2014-]+$/, '') + '\u2026';
+    }
+    var own = isObj(doc.project) && typeof doc.project.title === 'string' ? doc.project.title.trim() : '';
+    if (own && !/^untitled/i.test(own)) return clip(own, 80);
+    var briefs = isObj(doc.briefs) ? doc.briefs : {}, bids = Object.keys(briefs).sort().reverse();
+    for (var i = 0; i < bids.length; i++) {
+      var bt = isObj(briefs[bids[i]]) && typeof briefs[bids[i]].title === 'string' ? briefs[bids[i]].title.trim() : '';
+      if (bt) return clip(bt, 60);
+    }
+    var byRank = function (a, b) { return String(a.rank) < String(b.rank) ? -1 : String(a.rank) > String(b.rank) ? 1 : 0; };
+    var vals = function (o) { return isObj(o) ? Object.keys(o).map(function (k) { return o[k]; }).filter(isObj) : []; };
+    var shots = vals(doc.shots), lines = [];
+    vals(doc.scenes).sort(byRank).forEach(function (sc) {
+      lines.push.apply(lines, String(sc.text || '').split('\n'));
+      shots.filter(function (x) { return x.scene_id === sc.id; }).sort(byRank).forEach(function (x) { lines.push.apply(lines, String(x.action || '').split('\n')); });
+    });
+    for (var j = 0; j < lines.length; j++) {
+      var l = lines[j].trim();
+      if (l) return clip(l.replace(/\s+/g, ' '), 60);
+    }
+    return '';
+  }
+
+  /** The client a document belongs to in the OS (its manifest's), as a name: '' when it has none. */
+  function manifestClient(manifest) {
+    var c = isObj(manifest) && isObj(manifest.client) ? manifest.client : null;
+    var n = c && typeof c.name === 'string' ? c.name.trim() : '';
+    return n.length <= 80 ? n : '';
+  }
+
+  function startDefaults(data, manifest) {
     var up = data && isObj(data.upstream) ? data.upstream : {}, client = '', project = '', briefProject = '';
     Object.keys(up).forEach(function (id) {
       var u = up[id];
       if (!isObj(u)) return;
       if (isProduction(u)) {
-        if (!project && isObj(u.project) && typeof u.project.title === 'string') project = u.project.title.trim();
+        if (!project) project = filmName(u);
         return;
       }
       if (isKit(u)) return;
@@ -1114,8 +1154,11 @@ var DeckLogic = (function () {
       if (!briefProject && pn && pn.length <= 80) briefProject = pn;
     });
     if (!project) project = briefProject;   // a carried Production project's title first, else the brief's own project name
+    // A film with no brief carries no client: the deck takes the client it belongs to in the OS, as Continue in filed it (pc live walk 2026-11-25).
+    if (!client) client = manifestClient(manifest);
     // A starting prompt too, so the form is not half empty: only what the carried project and brief name, nothing added.
-    var text = (client || project) ? 'A pitch deck for ' + (client || 'the client') + (project ? ': ' + project : '') + '.' : '';
+    var line = 'A pitch deck for ' + (client || 'the client') + (project ? ': ' + project : '');
+    var text = (client || project) ? (/[.\u2026]$/.test(line) ? line : line + '.') : '';   // a name that ends a sentence itself is not given a second full stop
     return { client: client, project: project, text: text };
   }
 
@@ -2141,6 +2184,7 @@ var DeckProd = (function () {
     return null;
   }
   function docId() { var m = (window.__CLAN__ && window.__CLAN__.manifest) || {}; return m.document_id || m.id || ''; }
+  function clanManifest() { return (window.__CLAN__ && window.__CLAN__.manifest) || {}; }
   function jobKey() { return 'clan.deck.job.' + docId(); }
   function store(v) { try { if (v == null) sessionStorage.removeItem(jobKey()); else sessionStorage.setItem(jobKey(), v); } catch (e) { /* no session storage: a reload forgets the job */ } }
   function stored() { try { return sessionStorage.getItem(jobKey()); } catch (e) { return null; } }
@@ -2500,7 +2544,7 @@ var DeckProd = (function () {
     var dt = L.deckTypeOf(s.raw), typed = dt.source === 'picked' || dt.source === 'answered';
     var kind = typed ? L.kindOfType(dt.id) : (pending.kind || inp.kind), format = pending.format || inp.format;
     var docs = L.documentsOf(s.raw);
-    var sd = L.startDefaults(s.raw);   // a deck of a Production project starts with its client and project named
+    var sd = L.startDefaults(s.raw, clanManifest());   // a deck of a Production project starts with its client and project named
     var sum = L.summaryOf({ prompt: Object.assign({}, p, { client: p.client || sd.client }), kind: kind, format: format, type: typed ? dt.id : null }, s.deck);
     var text = draft('text', p.text || sd.text);
     var bf = L.builtFrom(inp, s.upstream, docs, typed ? dt.id : null, s.raw.projection);
@@ -3244,7 +3288,7 @@ var DeckProd = (function () {
     if (a.pres) { view.present += Number(a.pres); return render(); }
     if (t.id === 'build') {
       stashDraft();
-      var sdb = L.startDefaults(s.raw), pb = s.inputs.prompt || {};
+      var sdb = L.startDefaults(s.raw, clanManifest()), pb = s.inputs.prompt || {};
       var prompt = { client: draft('client', pb.client || sdb.client), project: draft('project', pb.project || sdb.project), agency: draft('agency', ''), text: draft('text', pb.text || sdb.text) };
       Object.keys(prompt).forEach(function (k) { prompt[k] = String(prompt[k]).trim(); });
       var guard = L.canBuild({ prompt: prompt }, s.upstream, L.documentsOf(s.raw), s.raw.projection);
