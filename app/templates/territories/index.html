@@ -2082,6 +2082,9 @@ var TerritoriesLogic = (function () {
   function changeRefusal(change) {
     if (!isObj(change) || change.applied !== false) return null;
     var why = String(change.reason || ''), parts = [];
+    // Another poll (the shell's job watcher, another tab) saved it first: the change is in the document, which rides back beside the
+    // reply for the page to redraw from. Not a refusal (UAT 5-tool run 2026-11-26: every run failed here while the insights had landed).
+    if (why === 'already applied') return null;
     Object.keys(PART_WORDS).forEach(function (k) {
       var re = new RegExp('(^|[^a-z_])' + k.replace('.', '[./]') + '([^a-z_]|$)', 'i');
       if (re.test(why) && !parts.some(function (p) { return p.k.indexOf(k) === 0 || k.indexOf(p.k) === 0; })) parts.push({ k: k, w: PART_WORDS[k] });
