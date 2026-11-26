@@ -24,6 +24,8 @@ use serde_json::{json, Value};
 #[derive(Default)]
 struct MemStore {
     files: Mutex<HashMap<String, Vec<u8>>>,
+    /// A workspace file store, as napkin-web's: a spin-off then carries assets as links (by hash).
+    blobs: Option<napkin_host::blobs::testing::MemBlobs>,
 }
 
 impl PartStore for MemStore {
@@ -44,6 +46,11 @@ impl PartStore for MemStore {
             .unwrap()
             .insert(change.doc.to_string(), change.bytes.clone());
         Ok(change.archive_version())
+    }
+    fn blobs(&self) -> Option<&dyn napkin_host::store::BlobStore> {
+        self.blobs
+            .as_ref()
+            .map(|b| b as &dyn napkin_host::store::BlobStore)
     }
 }
 
@@ -165,7 +172,18 @@ fn work_template(app_id: &str, name: &str) -> Vec<u8> {
 }
 
 fn store() -> MemStore {
-    let s = MemStore::default();
+    with_apps(MemStore::default())
+}
+
+/// A store with a file store, as UAT's napkin-web has.
+fn store_with_files() -> MemStore {
+    with_apps(MemStore {
+        blobs: Some(Default::default()),
+        ..Default::default()
+    })
+}
+
+fn with_apps(s: MemStore) -> MemStore {
     install_app(&s, brand_template()).unwrap();
     install_app(&s, brief_template()).unwrap();
     install_app(&s, work_template(DECK, "Deck Maker")).unwrap();
@@ -1135,5 +1153,100 @@ fn a_deck_is_sent_the_brand_clan_it_wears_and_its_logo_beside_the_index() {
         napkin_host::ops::read::clan_context_for_agent(&Document::load(&s, brief).unwrap())
             .get("brand_upstream")
             .is_none()
+    );
+}
+
+/// UAT 5-tool run (2026-11-26, track A): a deck made by Continue in wore the client's Brand Clan's colours but had no logo. The
+/// Brand Clan was attached on the brief and rode down Brief → Territories → Production → Deck with each spin-off's
+/// `lineage.attached`, but its logo files (human/assets/brand/<id>/<file>, copied at attach) stayed in the brief, so the
+/// deck's carrier found none. A spin-off that carries a Brand Clan down carries its logo files with it.
+#[test]
+fn a_spin_off_carries_the_brand_clans_logo_files_down() {
+    use clan_sdk::SpinoffSpec;
+    let s = store_with_files();
+    // a Deck that carries a brief whole (`upstream`), as Continue in makes it
+    let base = ClanFile::from_bytes(
+        create(CreateOptions {
+            title: "Deck".into(),
+            brief: "fixture".into(),
+            document_type: None,
+            no_render: false,
+            schema: None,
+        })
+        .unwrap(),
+    )
+    .unwrap();
+    let mut deck_info = info(
+        DECK,
+        "Deck Maker",
+        Some(AttachSpec {
+            accepts: vec![BRAND.into()],
+            ..Default::default()
+        }),
+    );
+    deck_info.spinoff = Some(SpinoffSpec {
+        accepts: vec![BRIEF.into()],
+        upstream: true,
+        ..Default::default()
+    });
+    install_app(
+        &s,
+        make_template(&base, deck_info, MakeTemplateOptions::default()).unwrap(),
+    )
+    .unwrap();
+
+    let t = client(&s, "Brúach");
+    let z = zero(&s, &t);
+    let path = z["path"].as_str().unwrap();
+    let brand_id = z["document_id"].as_str().unwrap().to_string();
+    let png = b"\x89PNG\r\n\x1a\nbruach-wordmark".to_vec();
+    let put = call_json_bytes(
+        &s,
+        &me(),
+        "asset.put",
+        json!({"path": path, "name": "bruach-logo.png"}),
+        png.clone(),
+    )
+    .unwrap();
+    let asset = put["path"].as_str().unwrap().to_string();
+    let mut cand = z["data"].clone();
+    cand.as_object_mut().unwrap().remove("kit");
+    cand["visual"]["logos"] =
+        json!([{"id": "bruach", "label": "Brúach", "variant": "other", "asset": asset}]);
+    ok(
+        &s,
+        &me(),
+        "draft.save",
+        json!({"path": path, "candidate": cand}),
+    );
+    ok(
+        &s,
+        &me(),
+        "publish",
+        json!({"path": path, "expect_version": 1}),
+    );
+
+    let brief = create_instance_for(&s, BRIEF, Some("Brúach Switch".into()), Some(&t)).unwrap();
+    let doc = Document::load(&s, brief.clone()).unwrap();
+    let (change, _) = attach_change(&s, &me(), &doc, &brand_id, AttachMode::Attach).unwrap();
+    s.apply(&change).unwrap();
+    let logo_at = napkin_host::library::brand_logo_entry(&brand_id, &asset);
+    assert!(
+        entry(&s, brief.as_str(), &logo_at).is_some(),
+        "attach put the file in the brief"
+    );
+
+    let deck = napkin_host::library::spinoff_document(&s, &brief, DECK, Some("Deck".into()), None)
+        .unwrap();
+    assert_eq!(
+        entry(&s, deck.as_str(), &logo_at).as_deref(),
+        Some(&png[..]),
+        "the logo file rode down with the Brand Clan"
+    );
+    let ctx = napkin_host::ops::read::clan_context_for_agent(&Document::load(&s, deck).unwrap());
+    assert!(
+        ctx["brand_upstream"]["logos"].get(&logo_at).is_some(),
+        "the deck's carrier sends it: {}",
+        ctx["brand_upstream"]
     );
 }

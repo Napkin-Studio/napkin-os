@@ -231,6 +231,20 @@ def test_web_band_and_fonts(v3, tmp_path):
     assert (tmp_path / "fonts" / "Archivo" / "OFL.txt").exists()
 
 
+def test_web_deck_carries_its_fonts_inline(v3, tmp_path):
+    """The host prints the PDF from deck.html sent as text (clan.exportDoc), so a fonts/ folder beside the page is never there:
+    the UAT 5-tool run's PDF came out in DejaVu. The page carries its OFL faces inline; nothing it needs is beside it."""
+    import base64
+    out = tmp_path / "deck.html"
+    render_web.render(_deck(), Inputs(brief={}), out)
+    html = out.read_text()
+    faces = re.findall(r"@font-face\{font-family:'([^']+)'[^}]*src:[^}]*url\(data:font/ttf;base64,([A-Za-z0-9+/=]+)\)", html)
+    assert sorted(f for f, _ in faces) == ["Archivo", "Source Sans 3"], [f for f, _ in faces]
+    for _, b64 in faces:
+        assert base64.b64decode(b64)[:4] in (b"\x00\x01\x00\x00", b"true"), "a TrueType face"
+    assert "url('fonts/" not in html, "no font is read from beside the page"
+
+
 def test_web_flag_off_is_unchanged(tmp_path):
     out = tmp_path / "deck.html"
     render_web.render(_deck(), Inputs(brief={}), out)

@@ -1609,6 +1609,10 @@ mod upstream {
         assert_eq!(b["document_id"], brand.doc, "{ctx}");
         assert_eq!(b["version"], 2);
         assert_eq!(b["data"]["imagery"]["bans"][0], "mascots");
+        // The linked chip says the version held (v2), not how many times it was taken (UAT 5-tool run, 2026-11-26).
+        let rel = terr.get("/related");
+        assert_eq!(rel["upstream"][0]["kit_version"], 2, "{rel}");
+        assert_eq!(rel["upstream"][0]["taken"], 1, "{rel}");
         assert!(
             ctx.get("carried_upstream")
                 .map_or(true, |c| c.get(&brand.doc).is_none()),

@@ -57,6 +57,7 @@ const L = vm.runInNewContext(`${logicRun}; DeckLogic`) as {
   researchRequest(at: string): unknown
   upstreamChanged(res: unknown): { title: string }[]
   productionNotices(res: unknown): { document_id: string; text: string }[]
+  exportName(meta: unknown): string
   kitNotices(res: unknown, data: unknown): { kind: string; document_id: string; published: boolean; canUpdate: boolean; text: string }[]
   lookPanel(data: unknown): { agency: { use: boolean; shown: boolean }; kits: { shown: boolean; pack: { name: string; version: number } | null; brand: { name: string; version: number } | null } }
   agencyPatch(use: boolean, by: string | null, at: string): unknown
@@ -394,6 +395,48 @@ test('UAT round 4 F26: a Production project changed since the deck offers Update
   assert.match(n[0].text, /Copperell Refill.*changed since this deck.*slides change only when you build again/)
   assert.deepEqual(plain(L.upstreamChanged(res)), [{ title: 'the brief' }], 'the project has its own notice, not the generic one')
   assert.deepEqual(plain(L.productionNotices(null)), [])
+})
+
+test('UAT 5-tool run: a Final marked in Production after the deck opened shows Update from Production when the person comes back', async () => {
+  let changed = false
+  const asked: string[] = []
+  const fetchImpl = (url: string, init?: { method?: string }) => {
+    asked.push(`${init?.method ?? 'GET'} ${url}`)
+    if (url.endsWith('/upstream')) {
+      const status = changed ? 'changed' : 'current'
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ upstream: [{ app_id: 'ie.napkin.production', document_id: 'doc-prod', title: 'Brúach Switch', status, how: 'made_from', direct: true }] }) })
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+  }
+  const m = mount({ upstream: { 'doc-prod': prodDoc() } }, fetchImpl)
+  await new Promise((r) => setTimeout(r, 10))
+  assert.equal(m.app.innerHTML.includes('data-prod-notice'), false, 'nothing changed yet')
+  changed = true   // the person marks a Final in Production and comes back to the deck
+  m.fire('focus', {})
+  await new Promise((r) => setTimeout(r, 10))
+  assert.equal(asked.filter((a) => a.endsWith('/upstream')).length, 2, 'asked again on coming back')
+  assert.ok(m.app.innerHTML.includes('data-prod-notice'))
+  assert.ok(m.app.innerHTML.includes('Update from Production'))
+})
+
+test('UAT 5-tool run: an export keeps the letters of its name ("Brúach Switch", not "Br-ach-Switch")', () => {
+  assert.equal(L.exportName({ project: 'Brúach Switch', client: 'Brúach Kombucha' }), 'Brúach-Switch')
+  assert.equal(L.exportName({ project: 'Lúnasa: Seán’s €5 cup' }), 'Lúnasa-Seán-s-5-cup')
+  assert.equal(L.exportName({ project: '[Project]', client: 'Café Ölmüller' }), 'Café-Ölmüller', 'never a placeholder')
+  assert.equal(L.exportName({ project: '../../etc/passwd' }), 'etc-passwd', 'no path in a file name')
+  assert.equal(L.exportName({}), 'deck')
+  assert.equal(L.exportName(null), 'deck')
+})
+
+test('Update from Production refused by the host says why in its words', async () => {
+  const fetchImpl = (url: string) => url.endsWith('/attach/update')
+    ? Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({ error: 'the document was locked by Shrey' }) })
+    : Promise.resolve({ ok: true, json: () => Promise.resolve({ upstream: [{ app_id: 'ie.napkin.production', document_id: 'doc-prod', title: 'P', status: 'changed' }] }) })
+  const m = mount({ upstream: { 'doc-prod': prodDoc() } }, fetchImpl)
+  await new Promise((r) => setTimeout(r, 10))
+  m.click({ prodUpdate: 'doc-prod' })
+  await new Promise((r) => setTimeout(r, 10))
+  assert.equal(m.toastEl.textContent, 'Could not update: the document was locked by Shrey')
 })
 
 test('upstreamSummary: the Brief card shows the one a Production project froze only when the deck has none of its own', () => {

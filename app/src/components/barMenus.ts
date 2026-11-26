@@ -151,6 +151,8 @@ export interface LinkedDoc {
   changed?: boolean
   /** Which version of it this one holds: 1 on link, one more on each update. */
   taken?: number | null
+  /** A linked kit's (Brand Clan, Style Pack) own version held: what its page says ("built with v2"), so the chip says it too. */
+  kitVersion?: number | null
   noun?: string | null
 }
 
@@ -165,6 +167,7 @@ export function linksOf(view: RelatedView | null): { linked: LinkedDoc[]; madeIn
       dir: 'in' as const,
       changed: u.status === 'changed',
       taken: u.taken ?? null,
+      kitVersion: u.kit_version ?? null,
       noun: u.noun ?? null,
     })),
     ...view.downstream.filter(d => d.how === 'linked_in').map(d => ({
@@ -447,7 +450,7 @@ function linkItems(
     if (l.changed && doc.onUpdateLinked) {
       out.push({
         label: `Update ${l.title}`,
-        hint: `It changed since this took it${l.taken ? ` (v${l.taken})` : ''}. Takes the newer version; your own work here stays.`,
+        hint: `It changed since this took it${l.kitVersion ? ` (v${l.kitVersion})` : l.taken ? ` (v${l.taken})` : ''}. Takes the newer version; your own work here stays.`,
         run: () => doc.onUpdateLinked!(l.documentId),
         ...(first ? { apart: true } : {}),
       })
@@ -479,6 +482,13 @@ export function plural(noun: string): string {
 
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
+/** Which version a linked document is held at: a kit's own version ("v2", as the deck says "built with v2"), else how
+ *  many times it was taken ("v1 taken"). A Brand Clan at v2 said "v1 taken" (UAT 5-tool run, 2026-11-26). */
+function heldWords(l: Pick<LinkedDoc, 'taken' | 'kitVersion'>): string {
+  if (l.kitVersion) return ` · v${l.kitVersion}`
+  return l.taken ? ` · v${l.taken} taken` : ''
+}
+
 /** The bar's one linked chip ("↔ N linked ▾"): how many, and whether one changed since it was taken. Null with none. */
 export function linkedChip(linked?: LinkedDoc[]): { count: number; changed: boolean } | null {
   const all = linked ?? []
@@ -504,7 +514,7 @@ export function linkedRows(doc: Pick<DocBar, 'linked' | 'onOpenDocument' | 'onUp
     if (l.dir === 'in') {
       into.push({
         doc: l,
-        sub: `${noun}${l.taken ? ` · v${l.taken} taken` : ''}${l.changed ? ' · changed since' : ''}`,
+        sub: `${noun}${heldWords(l)}${l.changed ? ' · changed since' : ''}`,
         actions: [
           ...(l.changed && doc.onUpdateLinked
             ? [{ label: 'Update', hint: 'Take its newer version; your own work here stays', run: () => doc.onUpdateLinked!(l.documentId) }]

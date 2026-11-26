@@ -778,6 +778,8 @@ export interface RelatedDoc {
   how: 'made_from' | 'linked' | 'made_into' | 'linked_in'
   noun?: string | null
   taken?: number | null
+  /** A linked kit's (Style Pack, Brand Clan) own published version held, its `kit.version`. */
+  kit_version?: number | null
   status?: UpstreamEntry['status'] | null
 }
 

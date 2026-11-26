@@ -1582,6 +1582,19 @@ var DeckLogic = (function () {
     return { toSupply: t.count, verified: c.verified, total: c.total, open: c.open, supplied: supplied, sourced: c.verified + supplied };
   }
 
+  /**
+   * The exported file's name: the deck's project, else its client, else "deck". Letters of any language stay ("Brúach Switch"
+   * came out "Br-ach-Switch": UAT 5-tool run, 2026-11-26); anything else, a path included, is one hyphen. Never a placeholder
+   * ("[Project]" made "Project.pptx"). At most 80 characters.
+   */
+  function exportName(meta) {
+    var m = isObj(meta) ? meta : {};
+    var named = function (v) { v = String(v || '').trim(); return /^\[.*\]$/.test(v) ? '' : v; };
+    var base = String(named(m.project) || named(m.client) || 'deck').normalize('NFC')
+      .replace(/[^\p{L}\p{N}_]+/gu, '-').replace(/^-+|-+$/g, '');
+    return Array.from(base).slice(0, 80).join('').replace(/-+$/, '') || 'deck';
+  }
+
   /** The strengthen request: recorded only, it launches nothing (launching needs the server feature). */
   function researchRequest(at) { return { research_request: { status: 'asked', at: at } }; }
 
@@ -2143,7 +2156,7 @@ var DeckLogic = (function () {
     DECK_TYPES: DECK_TYPES, deckTypeOf: deckTypeOf, typeHints: typeHints, kindOfType: kindOfType, typePatch: typePatch,
     DECK_TYPE_CARDS: DECK_TYPE_CARDS, cardOf: cardOf, typeCaption: typeCaption, SIZES: SIZES, defaultSize: defaultSize, sizeOf: sizeOf, recipesOn: recipesOn, sizePatch: sizePatch, pickPatch: pickPatch, builtTypeOf: builtTypeOf, offeredCards: offeredCards,
     recordedStages: recordedStages, changeSheet: changeSheet,
-    researchRequest: researchRequest, upstreamChanged: upstreamChanged, productionNotices: productionNotices, kitNotices: kitNotices, agencyLookNotice: agencyLookNotice, agencyUpdatePatch: agencyUpdatePatch, lookPanel: lookPanel, brandLook: brandLook, exportFailed: exportFailed, isBrandClan: isBrandClan, agencyPatch: agencyPatch, isKit: isKit,
+    researchRequest: researchRequest, exportName: exportName, upstreamChanged: upstreamChanged, productionNotices: productionNotices, kitNotices: kitNotices, agencyLookNotice: agencyLookNotice, agencyUpdatePatch: agencyUpdatePatch, lookPanel: lookPanel, brandLook: brandLook, exportFailed: exportFailed, isBrandClan: isBrandClan, agencyPatch: agencyPatch, isKit: isKit,
     supplyCards: supplyCards, toSupply: toSupply, confirmList: confirmList, verifyPatch: verifyPatch, sourcedCounts: sourcedCounts,
     isPlaceholder: isPlaceholder, blockLines: blockLines, plainNotes: plainNotes, presented: presented, refsOf: refsOf, evidenceFor: evidenceFor, plainEvidence: plainEvidence, sourcesFor: sourcesFor,
     statusOf: statusOf, STATUS: STATUS, checksFor: checksFor, approveGate: approveGate, humanApproval: humanApproval, gateRequest: gateRequest,
@@ -3535,7 +3548,12 @@ var DeckProd = (function () {
     return '';
   }
 
-  /** Ask the host whether the brief or research changed since this deck. Any failure shows nothing. */
+  /**
+   * Ask the host whether the brief, research, a kit or the Production project changed since this deck. Asked once per
+   * open, and again when the person comes back to this page (they marked a Final in Production and came back: UAT 5-tool
+   * run, track A, 2026-11-26 — the deck kept its first answer and never offered Update from Production). The answer
+   * replaces the last one, so a notice goes once its source is current. Any failure shows nothing.
+   */
   function loadUpstream(s) {
     if (upLoaded || !Object.keys(s.upstream || {}).length) return;
     upLoaded = true;
@@ -3543,11 +3561,28 @@ var DeckProd = (function () {
       if (typeof fetch !== 'function') return;
       Promise.resolve(fetch(clanScheme + '/upstream')).then(function (r) { return r && r.ok ? r.json() : null; })
         .then(function (v) {
+          if (!v) return;
           var next = L.upstreamChanged(v), kits = L.kitNotices(v, s.raw), prods = L.productionNotices(v);
-          if (next.length || kits.length || prods.length) { upChanged = next; kitChanged = kits; prodChanged = prods; render(); }
+          var was = JSON.stringify([upChanged, kitChanged, prodChanged]);
+          upChanged = next; kitChanged = kits; prodChanged = prods;
+          if (JSON.stringify([upChanged, kitChanged, prodChanged]) !== was) render();
         }, function () { /* no host: no notice */ }).catch(function () { /* never throw */ });
     } catch (e) { /* no host: no notice */ }
   }
+
+  /** Back on this page (another tab, another document in the OS): ask the host again, at most every 5 seconds. */
+  var upAskedAt = 0;
+  function askUpstreamAgain() {
+    var t = Date.now();
+    if (t - upAskedAt < 5000) return;
+    upAskedAt = t;
+    upLoaded = false;
+    try { loadUpstream(d()); } catch (e) { /* never throw */ }
+  }
+  if (typeof document !== 'undefined' && document.addEventListener) {
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') askUpstreamAgain(); });
+  }
+  if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('focus', askUpstreamAgain);
 
   /** Put typed-but-unsaved free-text answers back into the freshly drawn question inputs. */
   function restoreDrafts(s) {
@@ -3838,8 +3873,14 @@ var DeckProd = (function () {
       // The person chose to take the Production project as it is now (its finals, its brief): the host's attach update. Slides wait for a build.
       try {
         Promise.resolve(fetch(clanScheme + '/attach/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ document_id: a.prodUpdate }) }))
-          .then(function (r) { if (r && r.ok) { prodChanged = []; upLoaded = false; toast('Updated from Production. Build again to put the new finals on the slides.'); render(); } else toast('Could not update.'); },
-            function () { toast('Could not update.'); });
+          .then(function (r) {
+            if (r && r.ok) { prodChanged = []; upLoaded = false; toast('Updated from Production. Build again to put the new finals on the slides.'); render(); return; }
+            // The host says why in words (a locked deck keeps what it was made from; nothing changed since): say that.
+            Promise.resolve(r && r.json ? r.json() : null).then(function (b) {
+              var why = b && (b.message || b.error);
+              toast(why ? 'Could not update: ' + String(why) : 'Could not update.');
+            }, function () { toast('Could not update.'); });
+          }, function () { toast('Could not update.'); });
       } catch (err) { toast('Could not update.'); }
       return;
     }
@@ -3941,11 +3982,7 @@ var DeckProd = (function () {
   // The engine keeps the files; fetch_deck_file hands one over by name. The web deck and the PDF go to the host's export
   // (clan.exportDoc), which saves the HTML and prints the PDF from it with Chromium, as a Brief's PDF is printed. The PowerPoint goes the same way, as bytes.
   var EXPORTING = false;
-  function exportBase(s) {
-    var m = (s && s.deck && s.deck.meta) || {};
-    var named = function (v) { v = String(v || '').trim(); return /^\[.*\]$/.test(v) ? '' : v; };   // never a placeholder ("[Project]" made "Project.pptx")
-    return String(named(m.project) || named(m.client) || 'deck').replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'deck';
-  }
+  function exportBase(s) { return L.exportName((s && s.deck && s.deck.meta) || {}); }
   function fetchDeckFile(name) {
     return window.clan.apiProxy('middleware', { task: 'fetch_deck_file', input: { name: name } }).then(function (res) {
       var err = hostErr(res);

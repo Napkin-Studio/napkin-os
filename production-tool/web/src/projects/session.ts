@@ -26,6 +26,7 @@ import { readBase, ServerCopy } from './serverCopy'
 import { canvasKeyFor, clanDbFor, uiKeyFor, type ProjectStorage } from './storage'
 import { UNTITLED, autoName, summarise } from './summary'
 import { ProjectUiStore } from './uiStore'
+import { FINAL_SAVE_MS, finalsKey, soonTimer } from './saveMoments'
 
 /** How often the project is sent to the server when it changed. */
 export const MIRROR_EVERY_MS = 60_000
@@ -131,6 +132,7 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
   // The Film editor is the rooms (owner 2026-11-18): a new take lands beside the others, never in the cut.
   // A landed generation is a save moment (B7, below): the server's copy is posted soon after.
   let saveSoon: (ms: number) => void = () => {}
+  let saveTimer: ReturnType<typeof soonTimer> | null = null
   const frameDeps = { relay, doc, ui, runner, rooms: () => true, landed: () => saveSoon(LANDING_SAVE_MS) }
   wireJobs(frameDeps)
   runner.resume()
@@ -163,13 +165,11 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
     // Save moments besides the minute tick, a lock and Save (UAT 2026-11-21, B7: a film started from "Continue in"
     // was never on the server and closing the browser lost it): a project the server has never had, at its first
     // change; and every landed generation. One post per moment, the last change in it included.
+    // One post per moment, at the earliest one asked for: a Final marked after a landing goes in seconds.
     const mirror = clan.clan
-    saveSoon = (ms: number) => {
-      if (saveTimer) clearTimeout(saveTimer)
-      saveTimer = setTimeout(() => { saveTimer = null; void mirror.mirrorNow('landing').catch(() => {}) }, ms)
-    }
+    saveTimer = soonTimer(() => { void mirror.mirrorNow('landing').catch(() => {}) })
+    saveSoon = saveTimer
   }
-  let saveTimer: ReturnType<typeof setTimeout> | null = null
   const initialCanvas = (await storage.get<CanvasSnapshot>(canvasKey)) ?? null
 
   // Home's card follows the project: its stage, counts, picture and (until renamed) its name.
@@ -188,12 +188,17 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
   let timer: ReturnType<typeof setTimeout> | null = null
   let changedSinceOpen = false
   let savedOnce = false
+  let lastFinals = finalsKey(doc.get())
   const offChange = doc.onChange(() => {
     changedSinceOpen = true
     // Something was added to a blank film: it is a project now (owner 2026-11-18).
     if (index.get(id)?.draft) void index.keep(id)
     // A project the server has never had (a new film, one started from "Continue in") goes there at once.
     if (!index.get(id)?.server && !savedOnce) { savedOnce = true; saveSoon(CREATED_SAVE_MS) }
+    // A Final marked, unmarked or re-righted is what a deck made from this project reads: the library has it in
+    // seconds, so leaving at once (to the deck) still lets the deck offer "Update from Production" (UAT 5-tool run).
+    const finals = finalsKey(doc.get())
+    if (finals !== lastFinals) { lastFinals = finals; saveSoon(FINAL_SAVE_MS) }
     serverCopy?.edited()
     if (timer) clearTimeout(timer)
     timer = setTimeout(() => {
@@ -222,7 +227,7 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
     stopListening?.()
     runner.stop()
     offChange()
-    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; changedSinceOpen = true }
+    if (saveTimer?.cancel()) changedSinceOpen = true
     const pending = !!timer
     if (timer) clearTimeout(timer)
     timer = null
