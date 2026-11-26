@@ -1,0 +1,185 @@
+{
+  "name": "Zero",
+  "note": "Zero Sugar: silver and mint",
+  "kit": {
+    "version": 2,
+    "published": {
+      "by": "human:tom",
+      "at": "2026-11-12T10:00:00Z"
+    },
+    "changelog": [
+      {
+        "version": 1,
+        "at": "2026-11-10T09:00:00Z",
+        "by": "human:aoife",
+        "from": {
+          "kind": "build",
+          "file": "Tidewell-brand-book-2026.pdf"
+        },
+        "summary": "First version, built from Tidewell-brand-book-2026.pdf"
+      },
+      {
+        "version": 2,
+        "at": "2026-11-12T10:00:00Z",
+        "by": "human:tom",
+        "from": {
+          "kind": "upload",
+          "file": "Zero-pack-update.pdf"
+        },
+        "summary": "Mint and Foam colours, imagery examples",
+        "changes": [
+          {
+            "id": "colour:mint",
+            "area": "colour",
+            "kind": "changed",
+            "label": "Mint",
+            "old": {
+              "id": "mint",
+              "name": "Mint",
+              "hex": "#8FE0C8",
+              "role": "accent"
+            },
+            "new": {
+              "id": "mint",
+              "name": "Mint",
+              "hex": "#7FD6BD",
+              "role": "accent"
+            },
+            "text": "Mint #8FE0C8 becomes #7FD6BD"
+          },
+          {
+            "id": "colour:foam",
+            "area": "colour",
+            "kind": "added",
+            "label": "Foam",
+            "old": null,
+            "new": {
+              "id": "foam",
+              "name": "Foam",
+              "hex": "#F4F6F7",
+              "role": "paper"
+            },
+            "text": "Colour Foam #F4F6F7 added"
+          }
+        ]
+      }
+    ]
+  },
+  "visual": {
+    "logos": [
+      {
+        "id": "wordmark-light",
+        "label": "Wordmark, light ground",
+        "variant": "light",
+        "asset": "human/assets/logo-zero-light.svg"
+      },
+      {
+        "id": "wordmark-dark",
+        "label": "Wordmark, dark ground",
+        "variant": "dark",
+        "asset": "human/assets/logo-zero-dark.svg"
+      },
+      {
+        "id": "mark",
+        "label": "Mark",
+        "variant": "mark",
+        "asset": "human/assets/logo-zero-mark.svg"
+      }
+    ],
+    "logo_note": "Keep a clear space the height of the “T” on every side.",
+    "colours": [
+      {
+        "id": "silver",
+        "name": "Silver",
+        "hex": "#9AA7B1",
+        "role": "other"
+      },
+      {
+        "id": "mint",
+        "name": "Mint",
+        "hex": "#7FD6BD",
+        "role": "accent"
+      },
+      {
+        "id": "ink",
+        "name": "Ink",
+        "hex": "#1C2630",
+        "role": "ink"
+      },
+      {
+        "id": "foam",
+        "name": "Foam",
+        "hex": "#F4F6F7",
+        "role": "paper"
+      }
+    ],
+    "typography": [
+      {
+        "id": "serif",
+        "family": "Tidewell Serif",
+        "weight": "700",
+        "use": "headlines",
+        "role": "head"
+      },
+      {
+        "id": "sans",
+        "family": "Tidewell Sans",
+        "weight": "400 / 600",
+        "use": "body copy",
+        "role": "body"
+      }
+    ]
+  },
+  "voice": {
+    "tone": "Clear, cool, a little dry. Never shouty; one idea per line.",
+    "rules": [
+      {
+        "id": "mint-accent",
+        "text": "Mint only as an accent, never behind body text.",
+        "kind": "dont"
+      },
+      {
+        "id": "busy-picture",
+        "text": "Logo never on a busy picture.",
+        "kind": "dont"
+      },
+      {
+        "id": "no-diet",
+        "text": "No “diet” wording; say “zero sugar”.",
+        "kind": "dont"
+      }
+    ]
+  },
+  "imagery": {
+    "style": "Daylight, cold metal and water. No people drinking in cars.",
+    "bans": [
+      "people drinking in cars"
+    ],
+    "examples": [
+      {
+        "id": "ex1",
+        "asset": "human/assets/img-zero-1.svg"
+      },
+      {
+        "id": "ex2",
+        "asset": "human/assets/img-zero-2.svg"
+      },
+      {
+        "id": "ex3",
+        "asset": "human/assets/img-zero-3.svg"
+      }
+    ]
+  },
+  "source": {
+    "file": "Tidewell-brand-book-2026.pdf",
+    "kind": "pdf",
+    "pages": 48,
+    "by": "human:aoife",
+    "at": "2026-11-10T09:00:00Z"
+  },
+  "gaps": [],
+  "previous_work": [],
+  "categories_explored": [],
+  "likes_dislikes": [],
+  "preferences": {}
+}

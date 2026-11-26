@@ -35,8 +35,8 @@ When no tier above the default contributed anything and no Style Pack is attache
 and the deck is exactly today's: nothing is stamped, ``meta.brand`` is the ``--brand`` JSON untouched. That is what
 keeps every golden byte-identical. The result is handed to the renderers through ``meta.brand``, which they already read.
 
-The Brand Clan joins through one function, ``brand_tokens``, the only place that will know Contract 6's shape. It is
-a seam for now: Contract 6 is unmerged, so it returns nothing.
+The Brand Clan joins through one function, ``brand_tokens``, the only place that knows its shape
+(docs/contracts/brand-clan.md section 8): colours by deck token role, type by ``head``/``body``, imagery bans.
 
 Stdlib only.
 """
@@ -55,17 +55,77 @@ WEARS = ("agency", "client", "co_branded")
 TIERS = spec.THEME_TIERS
 
 
-def brand_tokens(frozen_brand: dict | None = None) -> dict:
-    """The seam: a frozen Brand Clan (``data.upstream.<brand document id>``) as the tokens the deck reads.
+def brand_tokens(frozen_brand: dict | None = None, document_id: str | None = None) -> dict:
+    """A frozen Brand Clan (``data.upstream.<brand document id>``, docs/contracts/brand-clan.md section 8) as the tokens the deck reads.
 
     Returns ``{name, colours: {role: hex}, colour_ids: {id: hex}, fonts: {head, body}, type_ids: {id: family}, logos: {light, dark},
-    logo_placement, imagery_bans: [], chart: [], kit: {document_id, version}}``. This is the one place that will know
-    Contract 6's shape (visual.colours roles, typography, logos, imagery, rules); until Contract 6 is merged and Shrey
-    has answered the asks in features/deck-look-kits.clan (design.shrey_asks) it is a stub and returns nothing, with
-    or without a kit attached. A deck works without it.
+    logo_placement, imagery_bans: [], chart: [], kit: {document_id, version}, held: []}``. Colours fill a deck token only by the role the
+    Brand Clan gives them (accent, paper, ink, panel, accent_ink); every colour is reachable by id for a Style Pack pointer. ``logos`` stays
+    empty: a frozen copy carries the logo's asset name, not its bytes (attach takes ``shared/data.yaml`` only), so the logo is held and the
+    reason is in ``held``. Anything that is not a Brand Clan (no ``visual`` and no ``imagery``) gives the empty tokens, so a deck works without one.
     """
-    return {"name": "", "colours": {}, "colour_ids": {}, "fonts": {}, "type_ids": {}, "logos": {}, "logo_placement": None,
-            "imagery_bans": [], "chart": [], "kit": {}}
+    out = {"name": "", "colours": {}, "colour_ids": {}, "fonts": {}, "type_ids": {}, "logos": {}, "logo_placement": None,
+           "imagery_bans": [], "chart": [], "kit": {}, "held": []}
+    fb = frozen_brand if isinstance(frozen_brand, dict) else None
+    if not fb or not (isinstance(fb.get("visual"), dict) or isinstance(fb.get("imagery"), dict)):
+        return out
+    visual = fb.get("visual") if isinstance(fb.get("visual"), dict) else {}
+    out["name"] = str(fb.get("name") or "").strip()
+    for c in visual.get("colours") or []:
+        if not isinstance(c, dict):
+            continue
+        h = _hex(c.get("hex"))
+        if not h:
+            continue
+        if c.get("id"):
+            out["colour_ids"][str(c["id"])] = h
+        role = str(c.get("role") or "")
+        if role in COLOUR_TOKENS and role not in out["colours"]:
+            out["colours"][role] = h
+        if role not in ("paper", "ink", "panel"):
+            out["chart"].append(h)
+    for t in visual.get("typography") or []:
+        if not isinstance(t, dict) or not str(t.get("family") or "").strip():
+            continue
+        fam = str(t["family"]).strip()
+        if t.get("id"):
+            out["type_ids"][str(t["id"])] = fam
+        role = str(t.get("role") or "")
+        if role in FONT_TOKENS and role not in out["fonts"]:
+            out["fonts"][role] = fam
+    imagery = fb.get("imagery") if isinstance(fb.get("imagery"), dict) else {}
+    out["imagery_bans"] = [str(b).strip() for b in imagery.get("bans") or [] if str(b).strip()]
+    kit = fb.get("kit") if isinstance(fb.get("kit"), dict) else {}
+    if isinstance(kit.get("version"), int):
+        out["kit"] = {"document_id": document_id or fb.get("_document_id"), "version": kit["version"]}
+    # The logo FILES travel with the Brand Clan (owner 2026-11-24, "Yes it reaches deck"): inputs.from_deck_document reads them from
+    # human/assets/brand/<id>/ into ``_logo_files``. An SVG is placed as its text, a PNG or JPEG as bytes. A Brand Clan is the client's own
+    # by construction (only the client's Brand Clans can be attached), so its logo is placed for the deck's client.
+    files = fb.get("_logo_files") if isinstance(fb.get("_logo_files"), dict) else {}
+    for variant in ("dark", "light"):
+        f = files.get(variant) or (files.get("mark") if variant == "dark" else None)
+        if isinstance(f, dict) and isinstance(f.get("bytes"), (bytes, bytearray)):
+            data = bytes(f["bytes"])
+            if str(f.get("name", "")).lower().endswith(".svg"):
+                out["logos"][variant] = data.decode("utf-8", "replace")
+            elif data.startswith(b"\x89PNG"):
+                out["logos"][variant] = data
+            else:   # a JPEG or WebP logo becomes a PNG, the one raster the deck's logo asset takes
+                try:
+                    from io import BytesIO   # noqa: PLC0415
+                    from PIL import Image   # noqa: PLC0415
+                    buf = BytesIO()
+                    Image.open(BytesIO(data)).convert("RGBA").save(buf, "PNG")
+                    out["logos"][variant] = buf.getvalue()
+                except Exception:   # noqa: BLE001 - an unreadable picture is held and said, never placed broken
+                    out["held"].append(f"{out['name'] or 'The Brand Clan'}'s {variant} logo could not be read, so it is not placed.")
+    if out["logos"]:
+        out["logo_placement"] = "cover_only"
+        out["for_client"] = True
+    elif any(isinstance(lg, dict) and lg.get("asset") for lg in visual.get("logos") or []):
+        out["held"].append(f"{out['name'] or 'The Brand Clan'}'s logo is not placed: its file did not reach this deck. Update the Brand Clan "
+                           "on the deck to bring it.")
+    return out
 
 
 @dataclass
@@ -218,10 +278,10 @@ def resolve(*, theme: str = themes.DEFAULT, wears: str = "agency", strict_brand:
 
     # The client's logo: placed only for a brand the information already names (ADR 0027), else held and said so.
     logos = dict((kit or {}).get("logos") or {})
-    logo, held = None, []
+    logo, held = None, list((kit or {}).get("held") or [])
     if logos.get("dark"):
         bname = str((kit or {}).get("name") or "")
-        if same_name(bname, client):
+        if (kit or {}).get("for_client") or same_name(bname, client):
             logo = {"data": logos["dark"], "name": bname, "placement": (kit or {}).get("logo_placement") or "cover_only"}
         else:
             held.append(f"The brand kit's logo is held: the kit is for \"{bname or 'an unnamed brand'}\" and the brief's client is "

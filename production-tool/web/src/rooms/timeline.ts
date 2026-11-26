@@ -4,6 +4,7 @@
 // so what plays is what renders. Edit never spends: nothing here starts a paid job.
 
 import { brandKit } from '../campaign/layout'
+import { brandClanOf, cardGroundOf } from '../brandClan/model'
 import { newUlidId } from '../../../clan-store/src'
 import { compileTimeline, type PlanClip as StorePlanClip, type PlanEndCard as StorePlanEndCard, type PlanText as StorePlanText, type TimelineItem as StoreTimelineItem } from '../../../clan-store/src'
 import type { AssetRef, EndCard, Id, ProductionDocument, TimelineItem, TimelinePlan, TransitionIn } from '../contracts/types'
@@ -170,8 +171,7 @@ const bare = (t: string) => t.replace(/[.!?]$/, '').trim()
 export function endCardFrom(d: ProductionDocument, videoId: Id): CutEndCard | undefined {
   const card = endCardOf(d, storyboardOfVideo(d, videoId)?.id)
   if (!card) return undefined
-  const named = d.project.title && !/^untitled/i.test(d.project.title) ? d.project.title : 'Your brand'
-  return withBriefLegal(d, videoId, withCampaignLine(d, videoId, cardCopy(card, endLineOf(briefForJob(d, { kind: 'video', id: videoId })?.brief.spine), briefLegal(d, videoId), named)))
+  return withBriefLegal(d, videoId, withCampaignLine(d, videoId, cardCopy(card, endLineOf(briefForJob(d, { kind: 'video', id: videoId })?.brief.spine), briefLegal(d, videoId), cardName(d, videoId))))
 }
 
 /** The end card a storyboard's cell shows: the one its film will carry (endCardFrom: the Brief's end line, no placement
@@ -180,8 +180,7 @@ export function storyboardEndCard(d: ProductionDocument, storyboardId: Id | unde
   const videoId = storyboardId ? Object.keys(d.videos ?? {}).find((v) => storyboardOfVideo(d, v)?.id === storyboardId) : undefined
   if (videoId) return endCardFrom(d, videoId)
   const card = endCardOf(d, storyboardId)
-  const named = d.project.title && !/^untitled/i.test(d.project.title) ? d.project.title : 'Your brand'
-  return card && cardCopy(card, undefined, undefined, named)
+  return card && cardCopy(card, undefined, undefined, cardName(d))
 }
 
 const plainWords = (x: string | undefined) => (x ?? '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
@@ -218,11 +217,34 @@ export function cardCopy(card: CutEndCard, end: string | undefined, legal: strin
   return { ...card, headline: headline || named, line }
 }
 
+/** The colour a new end card starts with; while a card keeps it, the linked Brand Clan's ground shows instead (A55). */
+export const DEFAULT_CARD_BG = '#14161B'
+
+/** An end card as it renders: its own logo, else the Brand board's, else the logo of the Brand Clan linked to the film (or up
+ *  the canvas: Film ← Storyboard ← Script, nearest link wins); its own colour, unless it is still the default and that Brand
+ *  Clan has a dark colour for it. `from`: the Brand Clan that gave anything ("Copperell Original"), for the Inspector. */
+export function endCardLook(d: ProductionDocument, videoId: Id, card: { bg: string; logo?: string }): { bg: string; logo?: string; from?: string; bgFrom?: string } {
+  const clan = brandClanOf(d, videoId)?.node
+  const logo = card.logo ?? brandKit(d, videoId).logo?.sha256
+  const ground = card.bg.toUpperCase() === DEFAULT_CARD_BG && clan ? cardGroundOf(clan.bible) : undefined
+  const logoFromClan = !card.logo && !!clan?.logo && logo === clan.logo.sha256
+  return { bg: ground ?? card.bg, ...(logo ? { logo } : {}), ...(clan && (ground || logoFromClan) ? { from: clan.title } : {}), ...(ground && clan ? { bgFrom: clan.title } : {}) }
+}
+
 /** A new end card for a film with no end-card shot: the brand name set in type (the project's name; there is no logo without a
  *  brand book) and the linked Brief's legal line as its legal. */
 export function newEndCard(d: ProductionDocument, videoId: Id): CutEndCard {
-  const named = d.project.title && !/^untitled/i.test(d.project.title) ? d.project.title : 'Your brand'
-  return withBriefLegal(d, videoId, withCampaignLine(d, videoId, { headline: '', line: named, bg: '#14161B', durS: 1.5 }))
+  return withBriefLegal(d, videoId, withCampaignLine(d, videoId, { headline: '', line: cardName(d, videoId), bg: DEFAULT_CARD_BG, durS: 1.5 }))
+}
+
+/** The name an end card's line starts as: the project's without the " · Territories" a spin-off adds ("Copperell Refill"),
+ *  else the linked Brief's own name, else "Your brand". Never the whole spin-off title (UAT acceptance A52: the card read
+ *  "Copperell Refill · Territories"). A route's Brief is titled "Territories · The Sunday Drop · v1": not a name. */
+export function cardName(d: ProductionDocument, videoId?: Id): string {
+  const plain = (x: string | undefined) => { const t = x?.trim(); return t && !t.includes(' · ') && !/^untitled/i.test(t) ? t : undefined }
+  return plain(d.project.title?.split(' · ')[0])
+    ?? (videoId ? plain(briefForJob(d, { kind: 'video', id: videoId })?.brief.title) : undefined)
+    ?? 'Your brand'
 }
 
 /** The campaign's line for a film: the linked Brief's end line ("Proper crunch."), else the script's own last spoken line. */
@@ -256,14 +278,44 @@ function withBriefLegal(d: ProductionDocument, videoId: Id, card: CutEndCard): C
   return legal ? { ...card, legal } : card
 }
 
+// The labels a planned end card shot writes its copy under (UAT acceptance A54: "Charcoal card. Super: A little nicer, every 500 ml.
+// Beneath it: Refill. Not landfill. COPPERELL wordmark top right. Small line: Keep out of reach of children."). What a label
+// introduces is copy, up to the next label; the rest (the card's colour, where the wordmark sits) is direction, never copy.
+const CARD_LABEL = /\b(super|headline|title|beneath it|under(?:neath)? it|below it|line|tagline|small (?:line|print)|legal(?: line)?|fine print)\s*:\s*/gi
+const HEAD_LABEL = /^(?:super|headline|title)$/i
+const LEGAL_LABEL = /^(?:small (?:line|print)|legal(?: line)?|fine print)$/i
+
+/** A planned end card's copy read from its labels: the headline (Super), the line (Beneath it), the legal line (Small line),
+ *  each without placement sentences; undefined when the action has no Super/Headline label. Pure. */
+export function labelledCard(action: string): { headline: string; line: string; legal: string } | undefined {
+  const marks = [...action.matchAll(CARD_LABEL)]
+  // A Super and at least one more label: one label alone ("End card, super: \"Quietboil. Let them sleep.\"") is read as before.
+  if (!marks.some((m) => HEAD_LABEL.test(m[1])) || marks.length < 2) return undefined
+  const parts = { headline: [] as string[], line: [] as string[], legal: [] as string[] }
+  marks.forEach((m, i) => {
+    const text = action.slice(m.index! + m[0].length, i + 1 < marks.length ? marks[i + 1].index : undefined)
+    const copy = sentences(text).filter((x) => !PLACE.test(x) && !MENTION_NOTE.test(x) && !/\b(?:word ?mark|logo)\b/i.test(x)).join(' ').trim()
+    if (!copy) return
+    const key = HEAD_LABEL.test(m[1]) ? 'headline' : LEGAL_LABEL.test(m[1]) ? 'legal' : 'line'
+    parts[key].push(copy)
+  })
+  return { headline: parts.headline.join(' '), line: parts.line.join(' '), legal: parts.legal.join(' ') }
+}
+
 /** The end card a storyboard's end card shot makes (endCardFrom), for the Film's cut or the storyboard's cell. */
 export function endCardOf(d: ProductionDocument, storyboardId: Id | undefined): CutEndCard | undefined {
   const shots = storyboardId ? shotsOf(d, storyboardId) : []
   const shot = shots.find((s) => s.kind === 'end_card')
   if (!shot) return undefined
-  const named = d.project.title && !/^untitled/i.test(d.project.title) ? d.project.title : 'Your brand'
+  const named = cardName(d)
   const words = (shot.action ?? '').trim()
-  const card = (headline: string, line: string) => ({ headline: headline || named, line: line || headline || named, bg: '#14161B', durS: shot.duration_s || 1.5 })
+  const card = (headline: string, line: string) => ({ headline: headline || named, line: line || headline || named, bg: DEFAULT_CARD_BG, durS: shot.duration_s || 1.5 })
+  // Labelled copy (A54): the Super is the headline, what is beneath it the line (else the brand), the small line the legal.
+  const labelled = labelledCard(words)
+  if (labelled?.headline) {
+    const own = { headline: labelled.headline.slice(0, 120), line: (labelled.line || named).slice(0, 200), bg: DEFAULT_CARD_BG, durS: shot.duration_s || 1.5 }
+    return labelled.legal ? { ...own, legal: labelled.legal.slice(0, 200) } : own
+  }
   const label = END_PREFIX.exec(words)
   const after = label ? words.slice(label[0].length).trim() : ''
   const said = after ? spoken(after) : ''
@@ -353,9 +405,10 @@ export function compileFor(d: ProductionDocument, videoId: Id): Plan {
   const v = d.videos[videoId]
   if (!v) return { clips: [], texts: [], lengthS: 0, missing: [] }
   const legal = v.end_card ? cardLegal(d, videoId, v.end_card.legal) : undefined
-  // The card's own logo, else the Brand board's (UAT round 4 F23: the card said so, but the render had none).
-  const logo = v.end_card ? v.end_card.logo_asset ?? brandKit(d).logo?.sha256 : undefined
-  const card = v.end_card ? { ...v.end_card, ...(legal === undefined ? {} : { legal }), ...(logo ? { logo_asset: logo } : {}) } : undefined
+  // The card's own logo, else the Brand board's (UAT round 4 F23: the card said so, but the render had none), else the linked
+  // Brand Clan's (owner 2026-11-24); its colour the Brand Clan's while it is the default (A55).
+  const look = v.end_card ? endCardLook(d, videoId, { bg: v.end_card.bg, ...(v.end_card.logo_asset ? { logo: v.end_card.logo_asset } : {}) }) : undefined
+  const card = v.end_card ? { ...v.end_card, ...(legal === undefined ? {} : { legal }), ...(look?.logo ? { logo_asset: look.logo } : {}), bg: look?.bg ?? v.end_card.bg } : undefined
   const plan = compileTimeline({ timeline: v.timeline as Record<string, StoreTimelineItem>, ...(card ? { end_card: card } : {}) }, d.generations)
   const clips = plan.clips.map((c) => {
     const g = c.generation_id ? d.generations[c.generation_id] : undefined
@@ -367,8 +420,9 @@ export function compileFor(d: ProductionDocument, videoId: Id): Plan {
   return { clips, texts: plan.texts, ...(endCard ? { endCard } : {}), lengthS: plan.lengthS, missing: plan.missing }
 }
 
-/** Render ad's request: the plan with each file named for the relay (relay-api TimelinePlan). */
-export async function renderPlan(plan: Plan, ref: (sha: string) => Promise<AssetRef>): Promise<TimelinePlan> {
+/** Render ad's request: the plan with each file named for the relay (relay-api TimelinePlan). `logo`: how the end card's logo is
+ *  named (as it is, not fitted for a provider: jobs/assets logoRef). */
+export async function renderPlan(plan: Plan, ref: (sha: string) => Promise<AssetRef>, logo: (sha: string) => Promise<AssetRef> = ref): Promise<TimelinePlan> {
   const clips = []
   for (const c of plan.clips) {
     clips.push({
@@ -382,7 +436,7 @@ export async function renderPlan(plan: Plan, ref: (sha: string) => Promise<Asset
   const e = plan.endCard
   const endCard = e ? {
     ...(e.headline ? { headline: e.headline } : {}), line: e.line, ...(e.cta ? { cta: e.cta } : {}), ...(e.legal ? { legal: e.legal } : {}), bg: e.bg,
-    ...(e.logo_sha256 ? { logo: await ref(e.logo_sha256) } : {}), s: e.s, ...(e.transitionIn ? { transitionIn: e.transitionIn } : {}),
+    ...(e.logo_sha256 ? { logo: await logo(e.logo_sha256) } : {}), s: e.s, ...(e.transitionIn ? { transitionIn: e.transitionIn } : {}),
   } : undefined
   return { clips, ...(texts.length ? { texts } : {}), ...(endCard ? { endCard } : {}), lengthS: plan.lengthS }
 }

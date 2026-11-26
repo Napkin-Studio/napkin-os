@@ -13,7 +13,7 @@
     "id": {
       "type": "string",
       "pattern": "^[a-z]+_[0-9A-HJKMNP-TV-Z]{26}$",
-      "description": "Prefixed ULID made by the client (or, for a job's question, the relay): job_, ref_, key_, shot_, beat_, scene_, script_, storyboard_, video_, frame_, gen_, render_, rev_, link_, board_, sketch_, doc_, brief_, fset_, size_, check_, q_, sug_, spin_, stale_, exp_, item_, run_, node_, proj_ …. Never holds '.', '[', ']' or '#', so it is always a safe map key and address segment."
+      "description": "Prefixed ULID made by the client (or, for a job's question, the relay): job_, ref_, key_, shot_, beat_, scene_, script_, storyboard_, video_, frame_, gen_, render_, rev_, link_, board_, sketch_, doc_, brief_, bclan_, fset_, size_, check_, q_, sug_, spin_, stale_, exp_, item_, run_, node_, proj_ …. Never holds '.', '[', ']' or '#', so it is always a safe map key and address segment."
     },
     "sceneId": {
       "type": "string",
@@ -345,7 +345,7 @@
       "additionalProperties": false
     },
     "linkEndpointKind": {
-      "enum": ["board", "group", "note", "ink", "script", "storyboard", "video", "ref", "key", "frame", "render", "sketch", "document", "format_set", "shot", "text", "brief"],
+      "enum": ["board", "group", "note", "ink", "script", "storyboard", "video", "ref", "key", "frame", "render", "sketch", "document", "format_set", "shot", "text", "brief", "brand_clan"],
       "description": "What a link joins. group, note and ink are canvas things: their id is a sceneId. Every other kind is a document entity: its id is the entity's id. key (2026-10-15, owner): a solid key (keys[id]), the whole character or thing; every named ref with that key, each of its views, is in a node's scope through the one link. text (2026-10-16, owner): a text written on the canvas (texts[id], which holds its words and its canvas element); linked into a node, its words are that node's input words. brief (2026-11-17, owner; features/brief-node.clan): a Brief node (briefs[id]), a frozen, read-only copy of a Brief Maker brief's spine; linked into a node, the spine goes with every job from it."
     },
     "linkEndpoint": {
@@ -385,7 +385,8 @@
           { "from": ["frame", "ref", "render", "video"], "to": ["format_set"], "roles": ["master"], "per_target": "one", "system": true },
           { "from": ["sketch"], "to": ["frame"], "roles": ["made_from"], "per_target": "one", "system": true },
           { "from": ["ink"], "to": ["shot"], "roles": ["note_on_shot"], "per_target": "many", "per_source": "one" },
-          { "from": ["brief"], "to": ["script", "storyboard", "video", "format_set"], "roles": ["brief"], "per_target": "one" }
+          { "from": ["brief"], "to": ["script", "storyboard", "video", "format_set"], "roles": ["brief"], "per_target": "one" },
+          { "from": ["brand_clan"], "to": ["script", "storyboard", "video", "format_set"], "roles": ["brand"], "per_target": "one" }
         ]
       }
     },

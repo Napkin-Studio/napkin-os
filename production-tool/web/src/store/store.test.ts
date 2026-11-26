@@ -115,6 +115,24 @@ describe('the proxy is the store, from the main thread', () => {
     b.client.dispose()
   })
 
+  it('a save the Worker cannot make reaches the main thread (UAT acceptance A24 re-test: only the Worker\'s console knew)', async () => {
+    const disk = browserDisk()
+    const persistence = disk.persistence
+    disk.persistence = (name) => {
+      const p = persistence(name)
+      return p && { ...p, write: async () => { throw new Error('this browser\'s storage is full') } }
+    }
+    const { client } = open(disk)
+    const seen: [string, string][] = []
+    client.onSaveError((e, where) => seen.push([where, e instanceof Error ? e.message : String(e)]))
+    await client.create({ person: MAYA, title: 'Rain' })
+    await client.setTitle('Snow')
+    await client.flush()
+    for (let i = 0; i < 20 && !seen.length; i++) await tick()
+    expect(seen).toContainEqual(['browser', 'this browser\'s storage is full'])
+    client.dispose()
+  })
+
   it('mirror posts leave from the main thread with their reason', async () => {
     const { client } = open()
     await client.create({ person: MAYA })

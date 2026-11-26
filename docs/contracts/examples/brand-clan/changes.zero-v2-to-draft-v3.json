@@ -1,0 +1,53 @@
+[
+  {
+    "id": "logo:wordmark-dark",
+    "area": "logo",
+    "kind": "changed",
+    "label": "Wordmark, dark ground",
+    "old": {
+      "id": "wordmark-dark",
+      "label": "Wordmark, dark ground",
+      "variant": "dark",
+      "asset": "human/assets/logo-zero-dark.svg"
+    },
+    "new": {
+      "id": "wordmark-dark",
+      "label": "Wordmark, dark ground",
+      "variant": "dark",
+      "asset": "human/assets/logo-zero-dark-2.svg"
+    },
+    "text": "Logo Wordmark, dark ground replaced"
+  },
+  {
+    "id": "colour:mint",
+    "area": "colour",
+    "kind": "changed",
+    "label": "Mint",
+    "old": {
+      "id": "mint",
+      "name": "Mint",
+      "hex": "#7FD6BD",
+      "role": "accent"
+    },
+    "new": {
+      "id": "mint",
+      "name": "Mint",
+      "hex": "#3FC9A0",
+      "role": "accent"
+    },
+    "text": "Mint #7FD6BD becomes #3FC9A0"
+  },
+  {
+    "id": "rule:can-upright",
+    "area": "rule",
+    "kind": "added",
+    "label": "Always show the can upright.",
+    "old": null,
+    "new": {
+      "id": "can-upright",
+      "text": "Always show the can upright.",
+      "kind": "do"
+    },
+    "text": "Rule added: “Always show the can upright.”"
+  }
+]

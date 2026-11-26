@@ -127,11 +127,19 @@ export const LINK_TABLE: readonly LinkRow[] = [
     sources: [{ kind: 'brief' }], targets: [{ kind: 'script' }, { kind: 'storyboard' }, { kind: 'video' }, { kind: 'format_set' }],
     roles: ['brief'], limit: 'one-per-target',
   },
+  // Brand Clan phase 2 (DESIGN 4a, owner 2026-11-23): a Brand Clan node links to any node that makes the film or the sizes.
+  // The link carries downstream (Script, then Storyboard, then Film) and the nearest link up the canvas wins (brandClan/model.ts).
+  {
+    fromTo: 'Brand Clan → Script, Storyboard, Video or Format set', roleLabel: '`brand`', allowed: 'One Brand Clan per node',
+    effect: 'Its words (tone, rules) and its look (colours, type, imagery bans) go with every job from that node and what it drives, unless a closer node has its own.',
+    sources: [{ kind: 'brand_clan' }], targets: [{ kind: 'script' }, { kind: 'storyboard' }, { kind: 'video' }, { kind: 'format_set' }],
+    roles: ['brand'], limit: 'one-per-target',
+  },
 ]
 
 /** The refusals of 3.4, as written. */
 export const REFUSALS = [
-  { fromTo: 'Anything → Reference, Product, Document, Brief or Brand board', allowed: 'Refused', effect: 'These are inputs only.' },
+  { fromTo: 'Anything → Reference, Product, Document, Brief, Brand Clan or Brand board', allowed: 'Refused', effect: 'These are inputs only.' },
   { fromTo: 'Video → anything but a Format set', allowed: 'Refused', effect: 'Video is an output; it can only be the master of a cut-down set.' },
   { fromTo: 'A link that would form a loop', allowed: 'Refused', effect: '"That would make a loop."' },
 ] as const
@@ -155,7 +163,7 @@ const matches = (m: Match | 'generating', e: LinkEnd) =>
     : m.kind === e.kind && (m.purpose === undefined || m.purpose === e.purpose) && (m.role === undefined || m.role === e.role)
 
 /** Inputs only: nothing links into a reference, a product, a document, a brief or a brand board. */
-const inputOnly = (e: LinkEnd) => e.kind === 'picture' || e.kind === 'document' || e.kind === 'brief' || (e.kind === 'board' && e.purpose === 'brand')
+const inputOnly = (e: LinkEnd) => e.kind === 'picture' || e.kind === 'document' || e.kind === 'brief' || e.kind === 'brand_clan' || (e.kind === 'board' && e.purpose === 'brand')
 
 const SYSTEM_REASON: Partial<Record<LinkRole, string>> = {
   master: 'Made only by Make all sizes.',

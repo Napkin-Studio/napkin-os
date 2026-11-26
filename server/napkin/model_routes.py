@@ -61,6 +61,11 @@ ALIASES = {
     "sonnet-5.5": {"anthropic": "claude-sonnet-5-5", "bedrock": "global.anthropic.claude-sonnet-5-5"},
     "haiku-4.5":  {"anthropic": "claude-haiku-4-5", "bedrock": "global.anthropic.claude-haiku-4-5-20251001-v1:0"},
 }
+# Where no routes file says otherwise (it always wins): the detection call is Haiku, about a cent a file (Brand Clan, owner 2026-11-23);
+# the build reads a whole brand book with a stronger model.
+BUILTIN_PURPOSES = {"brand_identify": {"model": "haiku-4.5", "schema": "prompt"},
+                    "brand_build_piece": {"model": "sonnet-5.5", "schema": "prompt"},
+                    "brand_build_pictures": {"model": "sonnet-5.5", "schema": "prompt"}}
 # Models that refuse output_config.effort (a 400 on every call if it were sent).
 NO_EFFORT = ("haiku-4-5",)
 
@@ -164,7 +169,8 @@ class Routes:
     def resolve(self, purpose: str, vision: bool = False) -> Route:
         self._maybe_reload()
         doc = self._doc
-        layers = [doc["purposes"].get(purpose, {})] + ([doc["vision"]] if vision else []) + [doc["default"]]
+        # a purpose route, then (for the built-in brand purposes) its built-in route, then vision, then the default
+        layers = [doc["purposes"].get(purpose, {}), BUILTIN_PURPOSES.get(purpose, {})] + ([doc["vision"]] if vision else []) + [doc["default"]]
 
         def pick(f):
             return next((spec[f] for spec in layers if f in spec), None)

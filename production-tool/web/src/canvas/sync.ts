@@ -9,7 +9,7 @@
 
 import type { CustomData, ProductionDocument } from '../contracts/types'
 import { TERMINAL_STATES } from '../contracts/types'
-import { bareRemoval, deleteFrom, removeBrief, removeGen, removeNode, removeSketch, removeText, restoreTo, type NodeRemovalKind, type Removal } from '../doc/remove'
+import { bareRemoval, deleteFrom, removeBrandClan, removeBrief, removeGen, removeNode, removeSketch, removeText, restoreTo, type NodeRemovalKind, type Removal } from '../doc/remove'
 import { newId } from '../lib/ulid'
 import type { DocumentStore } from '../doc/types'
 import { systemUpdate } from '../doc/store'
@@ -44,7 +44,7 @@ function sketchId(e: SceneEl): string | undefined {
   return c && typeof c === 'object' && c.kind === 'sketch' && e.type === 'rectangle' ? c.id : undefined
 }
 
-const NODE_KINDS: readonly string[] = ['script', 'storyboard', 'video', 'brief']
+const NODE_KINDS: readonly string[] = ['script', 'storyboard', 'video', 'brief', 'brand_clan']
 
 /** A node element's document entity (canvas-nodes' tag {kind, id}), as 'kind:id'. */
 function nodeKey(e: SceneEl): string | undefined {
@@ -170,13 +170,18 @@ export class CanvasDocSync {
     for (const k of now) this.nodesSeen.add(k)
     this.nodesAlive = now
     for (const k of gone) {
-      const [kind, id] = k.split(/:(.*)/s) as [NodeRemovalKind | 'brief', string]
+      const [kind, id] = k.split(/:(.*)/s) as [NodeRemovalKind | 'brief' | 'brand_clan', string]
       this.queue = this.queue.then(async () => {
         const store = this.deps.doc
         const d = store.get()
         // A Brief node (features/brief-node.clan): its frozen copy goes with its links; undo brings both back.
         if (kind === 'brief') {
           if (d.briefs?.[id]) this.removals.set(k, await deleteFrom(store, (doc) => removeBrief(doc, id), { system: true }))
+          return
+        }
+        // A Brand Clan node: its frozen copy goes with its links; undo brings both back. The Brand Clan itself is untouched.
+        if (kind === 'brand_clan') {
+          if (d.brand_clans?.[id]) this.removals.set(k, await deleteFrom(store, (doc) => removeBrandClan(doc, id), { system: true }))
           return
         }
         const map = kind === 'script' ? d.scripts : kind === 'storyboard' ? d.storyboards : d.videos

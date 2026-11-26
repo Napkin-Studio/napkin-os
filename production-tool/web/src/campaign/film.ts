@@ -62,6 +62,23 @@ export const versionsWord = (n: number) => `${n} ${n === 1 ? 'version' : 'versio
 /** Lengths offered from a 30 s master (CF5: 15 s and 6 s by default; any length typed). */
 export const FILM_LENGTHS = [30, 20, 15, 10, 6]
 export const DEFAULT_FILM_LENGTHS = [15, 6]
+
+/** The lengths Make all sizes starts with for a film of `masterS` seconds: the defaults shorter than it, else (a film of 6 s or
+ *  less, which has no shorter cut) its own length, which still makes the other shapes (UAT acceptance A57: nothing was
+ *  picked, and Plan the cuts sat disabled on "0 versions" with no reason). */
+export function startLengths(masterS: number): number[] {
+  const shorter = DEFAULT_FILM_LENGTHS.filter((l) => l < masterS)
+  return shorter.length ? shorter : [Math.max(1, Math.round(masterS))]
+}
+
+/** Why Plan the cuts cannot go yet, in the person's words; null when it can. */
+export function cutsBlocked(p: { shots: number; lengths: number; shapes: number; versions: number }): string | null {
+  if (!p.shots) return 'The ad has no shots to cut from.'
+  if (!p.lengths) return 'Pick a length.'
+  if (!p.shapes) return 'Pick a shape.'
+  if (!p.versions) return 'That is the ad itself: pick another shape or a shorter length.'
+  return null
+}
 /** Models that make a shot again at a new shape and carry its characters (Remake for vertical; owner CF6,
  *  features/runway-video-models.clan): Kling O3, Hailuo 3, WAN 3. */
 export const REMAKE_MODELS = ['klingO3_pro', 'klingO3_standard', 'hailuo3', 'wan3']

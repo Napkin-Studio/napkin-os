@@ -101,9 +101,12 @@ def test_with_no_comparators_research_finds_the_players_and_proposes_them_on_fac
     pinned = {f["id"] for f in change["facts_append"]}
     assert set(cs["fact_ids"]) <= pinned
     d = next(x for x in change["decisions"] if x["action"] == "discover_players")
-    assert cs["decision"] == d["id"] and d["targets"] == [f"{DOC}#campaign.competitor_set"]
+    # Method, with nothing pinned, is a named gap the decision also targets (#303 follow-up: never dropped silently)
+    method_gap = next(g for g in change["data_patch"]["selection"]["gaps"] if g["key"] == "brand/method:positioning.claim")
+    assert cs["decision"] == d["id"]
+    assert d["targets"] == [f"{DOC}#campaign.competitor_set", f"{DOC}#selection.gaps[{method_gap['id']}]"]
     assert d["rationale"].startswith("Found by research: proposed Smol")
-    assert any(p["point"] == "Left out, with no fact found about them: Method" for p in d["reasoning"]["because"])
+    assert any(p["point"] == "Found, with nothing pinned about them yet: Method" for p in d["reasoning"]["because"])
     assert "comparators found by research: Smol" in result["summary"]
     assert change["read"]["campaign.competitor_set"] is None
 

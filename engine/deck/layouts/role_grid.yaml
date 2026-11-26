@@ -49,6 +49,7 @@ for_types:
 - close
 - conflicts
 - questions
+- person_beat
 - requirement_trace
 - appendix_sources
 when:
