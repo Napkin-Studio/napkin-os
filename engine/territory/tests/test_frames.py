@@ -561,3 +561,75 @@ def test_a_hand_made_brand_clan_names_its_colours_in_its_own_order():
     sty, look = frames.brand_style(rec)
     assert look["from"] == "brand_clan" and look["colours"] == 2
     assert sty.palette == [frames.colour_words("#14233F"), frames.colour_words("#E0B040")]
+
+
+def counting_plan(user: str) -> dict:
+    """The UAT plan (2026-11-26, Sólás): shots the planner wrote with numbers in words and a word off the common list."""
+    ids = [t["id"] for t in json.loads(user)["territories"]]
+    return {"territories": [{"id": tid, "shots": [
+        {"shot": "f1", "framing": "A wide view of a kitchen with one lamp", "camera": "eye level", "action": "A person opens a cupboard", "on_screen_line": ""},
+        {"shot": "f2", "framing": "A close view of one hand on a glass", "camera": "close", "action": "A friend smiles", "on_screen_line": "x"},
+        {"shot": "f3", "framing": "A medium view of a table", "camera": "from above", "action": "An unhurried supper by the window", "on_screen_line": ""},
+        {"shot": "f4", "framing": "A wide view of three friends on a street", "camera": "low angle", "action": "A couple walk home", "on_screen_line": "y"}]}
+        for tid in ids]}
+
+
+def rewriting(user: str) -> dict:
+    """The rewrite call: each refused shot comes back in plain words, its meaning kept."""
+    asked = json.loads(user)
+    clean = {"f1": "A wide view of a kitchen with a lamp", "f2": "A close view of a hand on a glass", "f3": "A medium view of a table",
+             "f4": "A wide view of friends on a street"}
+    return {"shots": [{"territory": s["territory"], "shot": s["shot"], "framing": clean[s["shot"]], "camera": s.get("camera") or "eye level",
+                       "action": "A slow supper by the window" if s["shot"] == "f3" else s.get("action") or "A person waits", "on_screen_line": s.get("on_screen_line") or ""}
+                      for s in asked["shots"]]}
+
+
+def test_shots_the_check_refuses_are_rewritten_once_with_its_reasons_and_every_frame_is_made(tmp_path, monkeypatch):
+    seen = []
+    r = Rig(tmp_path, monkeypatch, llm=FakeLLM({"frames_plan": counting_plan, "frames_repair": lambda u: seen.append(json.loads(u)) or rewriting(u)}))
+    r.declare()
+    out = r.run(["t_started"])
+    assert out[3]["frames"]["placed"] == 4, out[2]
+    assert r.llm.calls.count("frames_plan") == 1 and r.llm.calls.count("frames_repair") == 1
+    asked = seen[0]
+    assert sorted(s["shot"] for s in asked["shots"]) == ["f1", "f2", "f3", "f4"]
+    why = {s["shot"]: s["refused_because"] for s in asked["shots"]}
+    assert "'one' is a number in words" in why["f1"] and "'three' is a number in words" in why["f4"] and "'unhurried'" in why["f3"]
+    assert "number" in asked["rules"].lower() and "quotation" in asked["rules"].lower()
+    P = r.make()._prepare(["t_started"])
+    assert not P["refused"] and not P["repair"] and len(P["jobs"]) == 4
+    # the next ask pays for nothing again and calls no model
+    with pytest.raises(frames.Refuse, match="Nothing new to make"):
+        r.make().ask(["t_started"])
+    assert r.llm.calls.count("frames_repair") == 1
+
+
+def test_a_shot_still_refused_after_its_rewrite_is_said_in_words_and_can_be_tried_again(tmp_path, monkeypatch):
+    stubborn = lambda u: {"shots": [{**s, "framing": "One more view of a table"} for s in json.loads(u)["shots"] if s["shot"] == "f1"]}   # noqa: E731
+    r = Rig(tmp_path, monkeypatch, llm=FakeLLM({"frames_plan": counting_plan, "frames_repair": stubborn}))
+    r.declare()
+    out = r.run(["t_started"])
+    assert out[3]["frames"]["placed"] == 0
+    refused = [e for e in r.make().status()[3]["frames"]["frames"] if e["status"] == "REFUSED"]
+    assert len(refused) == 4 and all(e["why"] and "picture model" in e["why"] for e in refused)
+    # a second press does not call the refused frames made or waiting: it says what was refused, and Try again is offered
+    with pytest.raises(frames.Refuse) as no:
+        r.make().ask(["t_started"])
+    assert "could not be made" in str(no.value) and "already made" not in str(no.value) and no.value.need == "retry_refused"
+    assert "'one' is a number in words" in str(no.value)
+    # Try again: a new card with the rewrite call on it, then the planner rewrites them once more
+    card = r.card(["t_started"], retry_refused=True)
+    assert card["plan_call"] and card["frames"] == 4
+    r.llm.outputs["frames_repair"] = rewriting
+    out = r.make().make(["t_started"], card["id"], retry_refused=True)
+    assert out[3]["frames"]["placed"] == 4 and r.llm.calls.count("frames_repair") == 2
+
+
+def test_the_plan_prompt_names_the_checks_rules():
+    from territory.llm import prompt
+    p = prompt("frames_plan").lower()
+    assert "number" in p and ("one" in p and "three" in p) and "common" in p
+    r = prompt("frames_repair").lower()
+    assert "refused_because" in r and "json" in r
+    from territory.llm import STAGE_MODEL
+    assert "frames_repair" in STAGE_MODEL, "a live rewrite call needs its model"

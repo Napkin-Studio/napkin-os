@@ -246,6 +246,9 @@ def _frames(step, inp, req, caps, jid, data, by, on_line):
     retry_unknown = inp.get("retry_unknown", False)
     if not isinstance(retry_unknown, bool):
         raise bad("input.retry_unknown must be true or false")
+    retry_refused = inp.get("retry_refused", False)      # Try again on frames the check refused: the planner rewrites them once more
+    if not isinstance(retry_refused, bool):
+        raise bad("input.retry_refused must be true or false")
     keys = keys_of() if step in ("frames_approve", "frames_leave") else None
     origin = moves._s(inp, "origin", 20)
 
@@ -270,7 +273,8 @@ def _frames(step, inp, req, caps, jid, data, by, on_line):
             if step == "frames":
                 if card_id and not ok:
                     return _Done(data, [], "Not made.")
-                got = (f.make(ids, card_id, retry, retry_unknown, by or "a person") if card_id else f.ask(ids, retry, retry_unknown, by or "a person"))
+                got = (f.make(ids, card_id, retry, retry_unknown, by or "a person", retry_refused) if card_id
+                       else f.ask(ids, retry, retry_unknown, by or "a person", retry_refused))
             elif step == "frames_approve":
                 got = f.approve(keys, by)
             elif step == "frames_leave":
