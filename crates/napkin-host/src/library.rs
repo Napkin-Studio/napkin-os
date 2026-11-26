@@ -629,8 +629,36 @@ fn spinoff_from(
         },
     )?;
     let bytes = with_projection(bytes)?;
+    let bytes = with_brand_logos_embedded(store, bytes)?;
     let out = allocate(store, target_app_id, &bytes)?;
     Ok(Change::create(out, bytes))
+}
+
+/// A spin-off carries the Brand Clan the source holds (`lineage.attached`) and the logo files its attach copied
+/// ([`brand_logo_entry`]); a workspace with a file store carries those files as links, which the deck's carrier
+/// (`ops::read::brand_upstream`, a read of the archive alone) cannot follow, so a deck made by Continue in wore the
+/// Brand Clan's colours with no logo (UAT 5-tool run, 2026-11-26). They are put back inside, as attach puts them.
+fn with_brand_logos_embedded(store: &dyn DocStore, bytes: Vec<u8>) -> HostResult<Vec<u8>> {
+    let Some(blobs) = store.blobs() else {
+        return Ok(bytes);
+    };
+    let clan = ClanFile::from_bytes(bytes.clone())?;
+    let linked: Vec<(String, String)> = clan
+        .manifest()
+        .files
+        .iter()
+        .filter(|f| f.linked && f.path.starts_with("human/assets/brand/") && !f.path.contains(".."))
+        .map(|f| (f.path.clone(), f.sha256.clone().unwrap_or_default()))
+        .collect();
+    let mut out = bytes;
+    for (path, sha) in linked {
+        let Ok(file) = crate::blobs::linked_bytes(blobs, &path, &sha) else {
+            continue;
+        };
+        let now = ClanFile::from_bytes(out.clone())?;
+        out = clan_sdk::patch_asset(&now, &path, file)?;
+    }
+    Ok(out)
 }
 
 /// A document spun off with `upstream` arrives with the source's pins and
@@ -1631,7 +1659,8 @@ pub fn linked_status(a: &clan_sdk::Attached, source: &Document) -> &'static str 
 
 /// `GET /related` for `doc`: what it was made from and what is linked into it
 /// (`upstream`), and what was made from it or links it (`downstream`), each
-/// `{document_id, title, app_id, path, how, version?, status?}`. `how` is
+/// `{document_id, title, app_id, path, how, version?, taken?, kit_version?, status?}`
+/// (`kit_version`: a linked kit's own `kit.version` held). `how` is
 /// `made_from`, `linked` (upstream) or `made_into`, `linked_in` (downstream).
 /// A read of manifests only: nothing is written, no data is parsed past the
 /// manifest for the downstream half.
@@ -1648,7 +1677,7 @@ pub fn related(store: &dyn DocStore, ctx: &Ctx, doc: &Document) -> Value {
             serde_json::json!({
                 "document_id": u["document_id"], "title": u["title"], "app_id": u["app_id"],
                 "path": u["path"], "how": u["how"], "version": u["version"], "noun": u["noun"],
-                "taken": u["taken"], "status": u["status"],
+                "taken": u["taken"], "kit_version": u["kit_version"], "status": u["status"],
             })
         })
         .collect();

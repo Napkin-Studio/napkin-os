@@ -1102,9 +1102,27 @@ LOOK_CSS = """
 #: accent edge stripes and tick, figures in ink. The fonts load from the machine, else from ``fonts/`` beside the page, else Arial.
 LOOK_V3_FONTS = "'Archivo', Arial, 'Helvetica Neue', sans-serif"
 LOOK_V3_BODY = "'Source Sans 3', Arial, 'Helvetica Neue', sans-serif"
+
+
+_FONT_FILES = {"FONT_ARCHIVO": "Archivo/Archivo[wdth,wght].ttf", "FONT_SOURCE_SANS": "SourceSans3/SourceSans3[wght].ttf"}
+_FONT_DATA: dict = {}
+
+
+def _font_css(css: str) -> str:
+    """The OFL faces inline (data: URLs): the host prints the PDF from deck.html sent as text (clan.exportDoc), where a fonts/ folder
+    beside the page is never there, so the UAT 5-tool run's PDF came out in DejaVu. Read once per process."""
+    if "FONT_" not in css:
+        return css
+    import base64
+    for key, rel in _FONT_FILES.items():
+        if key not in _FONT_DATA:
+            raw = (Path(__file__).resolve().parent / "fonts" / rel).read_bytes()
+            _FONT_DATA[key] = "data:font/ttf;base64," + base64.b64encode(raw).decode("ascii")
+        css = css.replace(key, _FONT_DATA[key])
+    return css
 LOOK_V3_CSS = """
-@font-face{font-family:'Archivo';font-weight:100 900;font-stretch:62% 125%;src:local('Archivo'),url('fonts/Archivo/Archivo%5Bwdth,wght%5D.ttf') format('truetype')}
-@font-face{font-family:'Source Sans 3';font-weight:200 900;src:local('Source Sans 3'),url('fonts/SourceSans3/SourceSans3%5Bwght%5D.ttf') format('truetype')}
+@font-face{font-family:'Archivo';font-weight:100 900;font-stretch:62% 125%;src:local('Archivo'),url(FONT_ARCHIVO) format('truetype')}
+@font-face{font-family:'Source Sans 3';font-weight:200 900;src:local('Source Sans 3'),url(FONT_SOURCE_SANS) format('truetype')}
 .band{border-top:1.5px solid var(--ink);border-bottom:1.5px solid var(--ink);padding:12px 0 10px;margin:-12px 0 36px;font:700 24px/1.2 var(--head)}
 .band.empty{height:16px;padding:0}
 .dark .band{border-color:var(--dark-text)}
@@ -1126,7 +1144,7 @@ def theme_css(css: str | None = None, head: str | None = None, body: str | None 
     v3 = bool(spec.LOOK_V3) and css is None
     head = head or (LOOK_V3_FONTS if v3 else HEAD_FONT)
     body = body or (LOOK_V3_BODY if v3 else BODY_FONT)
-    css = (css or CSS_LAYOUT + (LOOK_CSS if (spec.LOOK_V2 and look) else "") + CSS_UI + (LOOK_V3_CSS + LOOK_V3_LAYOUT_CSS if v3 else "")).replace("HEAD", head).replace("BODY", body)
+    css = _font_css((css or CSS_LAYOUT + (LOOK_CSS if (spec.LOOK_V2 and look) else "") + CSS_UI + (LOOK_V3_CSS + LOOK_V3_LAYOUT_CSS if v3 else "")).replace("HEAD", head).replace("BODY", body))
     T = {**THEME, **{k: v.lstrip("#") for k, v in (colors or {}).items()}}
     if T.get("panel"):   # a brand may name the card fill by its Theme field as well as by the legacy key
         T["tint"] = T["panel"]

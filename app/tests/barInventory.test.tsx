@@ -539,6 +539,19 @@ test('linksOf reads /related into the lineage chips, both ways, and what was mad
   assert.deepEqual(linkedRows({ linked }).out.map(r => [r.doc.title, r.sub]), [['Spring film', 'Production · holds this one']])
 })
 
+test('UAT 5-tool run: a linked Brand Clan says the version it holds (v2), not how many times it was taken', () => {
+  const view = {
+    document_id: 'deck1',
+    upstream: [
+      { document_id: 'bc1', title: 'Brúach Kombucha · Original', path: 'store/bc1', how: 'linked' as const, status: 'current' as const, taken: 1, kit_version: 2, noun: 'brand clan' },
+      { document_id: 'r1', title: 'Oat milk', path: 'store/r1', how: 'linked' as const, status: 'current' as const, taken: 3 },
+    ],
+    downstream: [],
+  }
+  const { linked } = linksOf(view)
+  assert.deepEqual(linkedRows({ linked }).into.map(r => r.sub), ['Brand clan · v2', 'Linked · v3 taken'])
+})
+
 test('the bar: who and where, then the document left-aligned (phase 36), then the tools after the spacer', () => {
   const html = bar({ doc: doc(), client: { name: 'Client A', mono: 'CA', look: { cl: '#111111', ink: '#FFFFFF' }, onOpen: noop } })
   const dock = html.indexOf('dock-connected'), chip = html.indexOf('data-testid="client-chip"'), app = html.indexOf('id="tb-app"'), sp = html.indexOf('tb-spacer')
