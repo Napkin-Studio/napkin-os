@@ -14,7 +14,7 @@ import { removeBrief } from '../doc/remove'
 import { BRIEF_SPINE, cutAtWord, isDont, projectSpine, spineLines, spineSummary } from './spine'
 import {
   BRIEF_OPS, briefFeeds, briefFlagsOn, briefForJob, briefNotice, briefOf, briefSendRow, freshness, ignoreBriefFlag, keepVersion, newBrief,
-  endLineOf, legalOf, recordBriefFlags, sizesBrief, sizesBriefOf, takeNewer, withBrief,
+  endLineOf, legalOf, recordBriefFlags, sizesBrief, sizesBriefOf, takeNewer, withBrief, wholeMandatories,
 } from './model'
 import { osBriefSource, type OsBriefRead } from './os'
 import { newId } from '../lib/ulid'
@@ -453,5 +453,19 @@ describe('the legal line a brief carries (UAT 2026-11-24: the Ferncliff caffeine
     expect(legalOf(spine('Terms apply. See hollowoak.example'))).toBe('Terms apply. See hollowoak.example')
     expect(legalOf(spine("Include 'Flat out good.' as the end line", 'Include the can on every poster', 'No caffeine hype in the tone'))).toBeUndefined()
     expect(legalOf(undefined)).toBeUndefined()
+  })
+})
+
+describe('a route\'s brief whose quoted lines were cut at their full stops (UAT acceptance A54)', () => {
+  // As the Territories route carried them: each quoted line split into two items.
+  const route = ['The bottle is the hero', 'COPPERELL wordmark, always top right', "'Keep out of reach of children.", "Read the label before use.'", "'Refill.", "Not landfill.' used word for word"]
+  it('puts each quoted line back together, and leaves the rest as it is', () => {
+    expect(wholeMandatories(route)).toEqual(['The bottle is the hero', 'COPPERELL wordmark, always top right', "'Keep out of reach of children. Read the label before use.'", "'Refill. Not landfill.' used word for word"])
+    expect(wholeMandatories(["Keep it out of children's reach", 'Show the can'])).toEqual(["Keep it out of children's reach", 'Show the can'])
+    expect(wholeMandatories(undefined)).toEqual([])
+  })
+  it('so the end line and the legal line are found', () => {
+    expect(endLineOf({ mandatories: route })).toBe('Refill. Not landfill.')
+    expect(legalOf({ mandatories: route })).toBe('Keep out of reach of children. Read the label before use.')
   })
 })
