@@ -93,8 +93,11 @@ PREVIOUS_IS_NOT_A_COPY = ("@previous is the moment before, for continuity only: 
 # UAT round 5 (R5-F3): the kettle insert, a shot with no one in it, came back with Maya beside the kettle. The web says so
 # in the shot's direction (web jobs/cast.ts NO_ONE_LINE); the relay says it in the frame's prompt, in its own words.
 NO_ONE_SEEN = "Cast: no one is seen in this shot"
-NO_PEOPLE = "No people in this shot."
-_PEOPLE_SAID = re.compile(r"\bno (?:people|person|one|figures?|humans?)\b|\bnobody\b|\bempty of people\b", re.I)
+# UAT acceptance A51 (Sunday Drop, frame 1): a shot with no one in it came back with a figure seen from behind. The brief's
+# no-faces line went FIRST ("People may appear … seen only from behind, in silhouette") and this one sat mid-prompt; an image
+# model weighs what it reads first. A shot that shows no one says so first, in full, and never gets the no-faces line: with no
+# one in it there is no face to hide (honour the shot).
+NO_PEOPLE = "No people in this shot: no person, figure, silhouette, hand or body anywhere in the frame."
 # The brief says "no real faces" (UAT 2026-11-24: the tram frames showed real, clear faces): that means unrecognisable only
 # (owner 2026-11-23), so people may appear but no one identifiable, even when the shot's text shows people.
 # UAT 2026-11-23 (Tidewell): the old line ("no clear face of any real person") was in frame 5's prompt and the picture still
@@ -375,34 +378,44 @@ def _previous_is_not_a_copy(job: dict, op: str, sheet: dict) -> None:
         _add_line(job, PREVIOUS_IS_NOT_A_COPY, sheet)
 
 
-def _no_people(job: dict, op: str, payload: dict, sheet: dict) -> None:
-    """A frame whose shot shows no one (its direction says so, R5-F3) says it in the prompt, unless Dex did; never when
-    a character picture goes with it."""
-    shot = payload.get("shot") if isinstance(payload.get("shot"), dict) else {}
+def shows_no_one(job: dict, op: str, payload: dict | None) -> bool:
+    """A frame whose shot shows no one: its direction says so (web jobs/cast.ts NO_ONE_LINE, R5-F3) and no character
+    picture goes with it."""
+    shot = (payload or {}).get("shot")
+    shot = shot if isinstance(shot, dict) else {}
     if op != "frame" or NO_ONE_SEEN not in (shot.get("direction") or ""):
-        return
-    if any(r.get("role") == "character" for r in job.get("refs") or []) or _PEOPLE_SAID.search(job.get("prompt") or ""):
-        return
-    _add_line(job, NO_PEOPLE, sheet)
+        return False
+    return not any(r.get("role") == "character" for r in job.get("refs") or [])
 
 
-def _unrecognisable_people(job: dict, op: str, faces: bool, sheet: dict) -> None:
+def _no_people(job: dict, op: str, payload: dict, sheet: dict) -> None:
+    """A frame whose shot shows no one says it as the prompt's first sentence, whatever Dex wrote after (UAT acceptance
+    A51: Dex's own "No people." mid-prompt did not hold)."""
+    if shows_no_one(job, op, payload) and NO_PEOPLE not in (job.get("prompt") or ""):
+        _add_first(job, NO_PEOPLE, sheet)
+
+
+def _unrecognisable_people(job: dict, op: str, faces: bool, sheet: dict, payload: dict | None = None) -> None:
     """A frame or a clip of a project whose linked brief says no real faces says, as its own line, that people may
     appear but no one is recognisable, even when the shot's text shows people (the brief is read whole, not as cut
     to the op's budget, which drops a mandatory from a clip)."""
-    if not (faces and op in FACES_OPS):
+    if not (faces and op in FACES_OPS) or shows_no_one(job, op, payload):
         return
     _drop_expressions(job)
     if not _UNRECOGNISABLE_SAID.search(job.get("prompt") or ""):
         _add_first(job, UNRECOGNISABLE, sheet)
 
 
-def say_unrecognisable(out: dict, op: str, brief: dict | None, sheet: dict | None) -> None:
-    """The same line on an answer that did not come from the director's own check (the passthrough: a one-video take, a
-    director fault), which the Tidewell UAT clip never had. In place; a no-op unless the brief says no real faces."""
+def say_unrecognisable(out: dict, op: str, brief: dict | None, sheet: dict | None, payload: dict | None = None) -> None:
+    """The same lines on an answer that did not come from the director's own check (the passthrough: a one-video take, a
+    director fault), which the Tidewell UAT clip never had: no one in a shot that shows no one (A51), else the no-faces
+    line when the brief says no real faces. In place."""
     job = out.get("providerJob")
-    if job and sheet and op in FACES_OPS and briefs.no_real_faces(brief):
-        _unrecognisable_people(job, op, True, sheet)
+    if not (job and sheet):
+        return
+    _no_people(job, op, payload or {}, sheet)
+    if op in FACES_OPS and briefs.no_real_faces(brief):
+        _unrecognisable_people(job, op, True, sheet, payload)
 
 
 def _shot_framing(job: dict, op: str, payload: dict, sheet: dict) -> None:
@@ -1096,8 +1109,8 @@ class Director:
             _within_budget(job, op, payload)
         _views_are_one(job, op, payload)  # the relay's own words: outside the director's budget
         _previous_is_not_a_copy(job, asked, sheet)
-        _no_people(job, asked, payload, sheet)
-        _unrecognisable_people(job, asked, faces, sheet)
+        _unrecognisable_people(job, asked, faces, sheet, payload)
+        _no_people(job, asked, payload, sheet)  # after: its line goes first
         _shot_framing(job, asked, payload, sheet)
         _layout_is_a_photo(job, asked, payload, sheet)
         _no_other_brands(job, asked, sheet)

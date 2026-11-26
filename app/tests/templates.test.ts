@@ -323,6 +323,17 @@ test('"Stop the research?" stays the same row across polls until it changes (acc
   assert.notEqual(c.cancelHtml(), asking)
 })
 
+test('a code a person reads is said in words: roster pins on the desk (acceptance A44)', () => {
+  const window = { ClanFields: { codeWords: (v: string) => ({ 'household.laundry_cleaning': 'Laundry and cleaning' } as Record<string, string>)[v] || v } }
+  const f = lift<{ fmtPinValue(p: unknown): string; codeText(v: string): string }>(RT, ['fmtPinValue', 'codeText'], { window, ClanFields: window.ClanFields })
+  assert.equal(f.fmtPinValue({ value: 'household.laundry_cleaning', unit: 'code' }), 'Laundry and cleaning')
+  assert.equal(f.fmtPinValue({ value: 'Copperell', unit: 'text' }), 'Copperell', 'text stays as it is')
+  // without the OS's fields loaded: the leaf's own words, never the code
+  const bare = lift<{ fmtPinValue(p: unknown): string }>(RT, ['fmtPinValue', 'codeText'], { window: {} })
+  assert.equal(bare.fmtPinValue({ value: 'energy.green_claims', unit: 'code' }), 'green claims')
+  assert.match(fn(RT, 'pinSlip'), /clipT\(pinLabel\(p\)\+': '\+fmtPinValue\(p\), 110\)/, 'the pin is named, not its key')
+})
+
 // UAT round 4, F12: Continue in -> Research from a brief ("A follow-up question from its open questions").
 const COPPERELL = { b1: { client: 'Copperell Home Ltd', project_name: 'Copperell Refill (working name; needs a trademark check)',
   open_questions: ['Which refill brands lead in the UK, and what do they claim?', 'What may we say about germ-kill?'] } }
