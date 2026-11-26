@@ -1995,6 +1995,17 @@ test('Present: with no files every row is Not built yet, and an unapproved deck 
   assert.ok(m.app.innerHTML.includes('id="approve-deck"'))
 })
 
+test('Present: a deck whose files the engine no longer holds says Build deck on Start, never a dead end (UAT 2026-11-26)', async () => {
+  const gone = { ok: false, status: 404, error: { type: 'no_file', message: 'the deck engine holds no deck.pptx for this document yet' } }
+  const p = proxy(gone)
+  const m = mount(fixture('export-ready'), undefined, {}, { apiProxy: p.apiProxy, exportDoc: () => Promise.resolve({ ok: true }) })
+  m.click({ export: 'pptx' })
+  await new Promise(r => setTimeout(r, 20))
+  assert.match(m.toastEl.textContent, /Export failed/)
+  assert.match(m.toastEl.textContent, /Build deck on Start/)
+  assert.match(m.toastEl.textContent, /nothing already paid for is paid again/)
+})
+
 test('Present: an export click fetches the file from the engine, the web deck and the PDF go to the host export; a run not yet done keeps the old Checked chip', async () => {
   const deckHtml = '<!doctype html><html><body><section class="slide">Fernley</section></body></html>'
   const file = { ok: true, status: 200, data: { api: 'napkin.middleware/1', task: 'fetch_deck_file', job: { id: 'j', state: 'done' }, change: null,
@@ -2959,6 +2970,8 @@ test('Cancel leaves the deck as it is; the same Brand Clan at its current versio
   await tick()
   assert.equal(posts.length, 0)
   assert.match(m.toastEl.textContent, /already wears Zero v2/)
+  // never a dead end: the person is told how to put it on the slides (UAT 2026-11-26)
+  assert.match(m.toastEl.textContent, /Build deck on Start/)
 })
 
 test('a new deck starts on the client\'s default Brand Clan; a deck with words in it is never re-linked', async () => {

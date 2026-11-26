@@ -481,18 +481,33 @@ export class JobRunner {
       this.emit()
       return 'unstarted'
     }
-    if (this.stopped || this.doc.get().jobs[jobId] || job.projectId !== this.doc.get().project.id) return 'unknown'
-    normalisePromptVersion(job)
-    await systemUpdate(this.doc, (d) => {
-      if (d.jobs[jobId]) return
-      d.jobs[jobId] = {
-        id: jobId, v: 1, field_v: {}, op: job.op, state: 'queued', node: job.node, ...(job.purpose ? { purpose: job.purpose } : {}),
-        started_by: job.startedBy, tenant_id: job.tenantId, nonce: job.nonce, crew: job.crew,
-        parent_ids: parentIds, input_hashes: job.inputHashes, created_at: job.createdAt || new Date().toISOString(),
-      }
-    }, `adopt ${job.op}`)
+    if (this.stopped || this.doc.get().jobs[jobId]) return 'unknown'
+    if (!(await this.writeBack(job, parentIds, false))) return 'unknown'
     this.apply(job)
     return 'adopted'
+  }
+
+  /**
+   * Write a job of this project the document has no record of back into it, from what the relay keeps of its
+   * request (project, purpose, node), so it lands like any other. False for another project's job, or (with
+   * `placeable`) one this build cannot place (no purpose it knows): nothing is written.
+   */
+  private async writeBack(job: Job, parentIds: string[], placeable: boolean): Promise<boolean> {
+    const jobId = job.jobId
+    if (job.projectId !== this.doc.get().project.id) return false
+    normalisePromptVersion(job)
+    const me = this.ui.get().me
+    const entry: DocJob = {
+      id: jobId, v: 1, field_v: {}, op: job.op, state: 'queued', node: job.node, ...(job.purpose ? { purpose: job.purpose } : {}),
+      started_by: job.startedBy ?? this.person(), tenant_id: job.tenantId ?? me?.tenant.id ?? LOCAL_TENANT,
+      nonce: job.nonce ?? ulid(), crew: job.crew ?? (crewFor(job.op) as CrewId),
+      parent_ids: parentIds, input_hashes: job.inputHashes ?? [], created_at: job.createdAt || new Date().toISOString(),
+    }
+    if (placeable && !purposeOf(entry)) return false
+    await systemUpdate(this.doc, (d) => {
+      if (!d.jobs[jobId]) d.jobs[jobId] = entry
+    }, `adopt ${job.op}`)
+    return !!this.doc.get().jobs[jobId]
   }
 
   /** Pick up every job that was still moving when the page was last open. */
@@ -788,7 +803,18 @@ export class JobRunner {
     let landed = 0
     for (const e of entries) {
       if (this.stopped) break
-      const mine = this.doc.get().jobs[e.job]
+      let mine = this.doc.get().jobs[e.job]
+      // A job of this project the copy opened here never recorded (the tab closed before the library's copy was
+      // next saved: UAT 2026-11-26, a paid take lost): written back from its outcome, which keeps the request's
+      // project, purpose and node, and landed. Another project's, or one this build cannot place, is left alone.
+      const ours = e.outcome?.jobId === e.job && e.outcome.projectId === this.doc.get().project.id
+      if (!mine && ours && (await this.writeBack(e.outcome, [], true))) mine = this.doc.get().jobs[e.job]
+      if (this.stopped) break
+      if (!mine && ours) {
+        // This project's, but nothing here can place it: kept in the inbox (never acknowledged away, it is paid for).
+        console.warn(`a finished job of this project could not be placed: ${e.job}`)
+        continue
+      }
       if (!mine || !isActive(mine.state)) {
         this.ack(e.job) // not this document's, or landed before
         continue

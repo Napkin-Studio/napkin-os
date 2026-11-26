@@ -112,7 +112,7 @@ def test_a_changed_prompt_starts_the_run_again(engine):
     other = {**INPUTS, "prompt": {**INPUTS["prompt"], "text": PROMPT + " And make it playful."}}
     call(engine.base, "/run", {"doc": "doc1", "inputs": other, "approvals": {"storyline": {"decision": "approve"}}, "mode": "replay", "render": False})
     v = wait(engine.base, "doc1")
-    assert v["run"]["gate"]["id"] == "storyline" and len(list((engine.dir / "doc1").iterdir())) == 2
+    assert v["run"]["gate"]["id"] == "storyline" and len([p for p in (engine.dir / "doc1").iterdir() if p.is_dir()]) == 2   # two run folders, beside current.json
 
 
 @pytest.mark.parametrize("body,status,kind", [
@@ -294,3 +294,45 @@ def test_call_engine_runs_the_qa_and_passes_the_text_mode_the_pins_and_the_perso
     plain = srv.validate_request({"doc": "doc", "inputs": INPUTS, "mode": "replay", "render": True}, cfg)
     s.call_engine(d, plain, None)
     assert not {"--text-mode", "--review", "--approve-shorten", "--no-qa"} & set(seen[1])
+
+
+def _built_web_deck(engine, monkeypatch, doc="doc1"):
+    done = {"storyline": {"decision": "approve"}, "territories": {"decision": "approve"}, "idea": {"decision": "approve"}}
+    start(engine, doc=doc); wait(engine.base, doc)
+    start(engine, doc=doc, approvals={"storyline": done["storyline"]}); wait(engine.base, doc)
+    start(engine, doc=doc, approvals={k: done[k] for k in ("storyline", "territories")}); wait(engine.base, doc)
+    monkeypatch.setattr(srv.shutil, "which", lambda name: None)
+    monkeypatch.setenv("NAPKIN_DECK_RENDER", "web")
+    call(engine.base, "/run", {"doc": doc, "inputs": INPUTS, "approvals": done, "mode": "replay"})
+    return wait(engine.base, doc)
+
+
+def test_a_built_deck_is_still_served_after_the_engine_restarts(engine, monkeypatch):
+    """UAT 2026-11-26: a deploy restarted the engine and a finished deck's Export said 'no deck.pptx' though its files were on the run
+    disk: the engine knew its documents only in memory. A new server on the same data folder finds the document's last run again."""
+    v = _built_web_deck(engine, monkeypatch)
+    assert v["state"] == "done"
+    fresh = srv.Server(engine.cfg)   # what a restarted engine is: nothing in memory, the same data folder
+    data, ctype = fresh.file("doc1", "deck.pptx")
+    assert data[:2] == b"PK" and "presentation" in ctype
+    again = fresh.get("doc1")
+    assert again["state"] == "done" and again["payload"]["exports"] == v["payload"]["exports"]
+    assert again["run"]["done"] == v["run"]["done"]
+
+
+def test_a_build_the_restart_cut_short_says_build_again(engine):
+    """A segment the restart killed was 'building' on disk: after the restart it is a failed step that may be run again, never a run
+    that looks under way forever."""
+    start(engine); v = wait(engine.base, "doc1")
+    snap = engine.dir / "doc1" / srv.CURRENT
+    rec = json.loads(snap.read_text())
+    snap.write_text(json.dumps({**rec, "state": "building", "held": None}))
+    again = srv.Server(engine.cfg).get("doc1")
+    assert again["state"] == "failed" and again["error"]["retryable"] is True
+    assert "restarted" in again["error"]["message"] and "Build" in again["error"]["message"]
+
+
+def test_a_document_the_engine_never_ran_is_still_no_run(engine):
+    with pytest.raises(srv.Refused) as e:
+        srv.Server(engine.cfg).get("never")
+    assert e.value.status == 404 and e.value.kind == "no_run"

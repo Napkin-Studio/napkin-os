@@ -1090,6 +1090,16 @@ var DeckLogic = (function () {
    * from /attach-targets. { held: {id, name, version, swatches}|null, newer: version|null, options: [{id, name, version, default, swatches}],
    * client } . The client's Brand Clan wins over the agency look; the deck re-themes only when a person presses Update look.
    */
+  /**
+   * What a failed export says. A deck whose files the engine no longer holds (a restart or a move lost them: no_file, no_run) is never a
+   * dead end: Build deck on Start makes them again from the finished steps, which the engine keeps (UAT 2026-11-26).
+   */
+  function exportFailed(msg) {
+    var m = String(msg || 'unknown error');
+    if (/\bno_file\b|\bno_run\b/.test(m)) return 'Export failed: the engine no longer holds this deck\u2019s files. Press Build deck on Start to make them again; nothing already paid for is paid again.';
+    return 'Export failed: ' + m;
+  }
+
   function brandLook(data, targets) {
     var x = isObj(data) ? data : {}, up = isObj(x.upstream) ? x.upstream : {}, held = null;
     var brands = (Array.isArray(targets) ? targets : []).filter(function (t) { return t && t.app_id === 'ie.napkin.brand'; });
@@ -2129,7 +2139,7 @@ var DeckLogic = (function () {
     DECK_TYPES: DECK_TYPES, deckTypeOf: deckTypeOf, typeHints: typeHints, kindOfType: kindOfType, typePatch: typePatch,
     DECK_TYPE_CARDS: DECK_TYPE_CARDS, cardOf: cardOf, typeCaption: typeCaption, SIZES: SIZES, defaultSize: defaultSize, sizeOf: sizeOf, recipesOn: recipesOn, sizePatch: sizePatch, pickPatch: pickPatch, builtTypeOf: builtTypeOf, offeredCards: offeredCards,
     recordedStages: recordedStages, changeSheet: changeSheet,
-    researchRequest: researchRequest, upstreamChanged: upstreamChanged, productionNotices: productionNotices, kitNotices: kitNotices, agencyLookNotice: agencyLookNotice, agencyUpdatePatch: agencyUpdatePatch, lookPanel: lookPanel, brandLook: brandLook, isBrandClan: isBrandClan, agencyPatch: agencyPatch, isKit: isKit,
+    researchRequest: researchRequest, upstreamChanged: upstreamChanged, productionNotices: productionNotices, kitNotices: kitNotices, agencyLookNotice: agencyLookNotice, agencyUpdatePatch: agencyUpdatePatch, lookPanel: lookPanel, brandLook: brandLook, exportFailed: exportFailed, isBrandClan: isBrandClan, agencyPatch: agencyPatch, isKit: isKit,
     supplyCards: supplyCards, toSupply: toSupply, confirmList: confirmList, verifyPatch: verifyPatch, sourcedCounts: sourcedCounts,
     isPlaceholder: isPlaceholder, blockLines: blockLines, plainNotes: plainNotes, presented: presented, refsOf: refsOf, evidenceFor: evidenceFor, plainEvidence: plainEvidence, sourcesFor: sourcesFor,
     statusOf: statusOf, STATUS: STATUS, checksFor: checksFor, approveGate: approveGate, humanApproval: humanApproval, gateRequest: gateRequest,
@@ -3801,7 +3811,7 @@ var DeckProd = (function () {
       if (a.bclook === 'apply' && !BCL.busy) {
         var want = BCL.pick || (bl.held && bl.held.id) || (bl.options[0] && bl.options[0].id), opt = bl.options.filter(function (o) { return o.id === want; })[0];
         var same = bl.held && bl.held.id === want;
-        if (!opt || (same && !bl.newer)) { BCL.open = false; toast(same ? 'This deck already wears ' + (opt ? opt.name : 'it') + ' v' + bl.held.version + '.' : 'Pick a Brand Clan first.'); return render(); }
+        if (!opt || (same && !bl.newer)) { BCL.open = false; toast(same ? 'This deck already wears ' + (opt ? opt.name : 'it') + ' v' + bl.held.version + '. If the slides do not show it yet, press Build deck on Start: the words stay the same.' : 'Pick a Brand Clan first.'); return render(); }
         // The person's press: take the newer version, or the other Brand Clan (attach replaces the one held). The words stay; the next build re-dresses.
         BCL.busy = true; render();
         Promise.resolve(fetch(clanScheme + (same ? '/attach/update' : '/attach'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ document_id: want }) }))
@@ -3960,7 +3970,7 @@ var DeckProd = (function () {
       }
       var html = new TextDecoder('utf-8').decode(f.bytes);
       return window.clan.exportDoc(key === 'pdf' ? 'pdf' : 'html', base, html).then(function (res) { if (res && res.ok === false) throw new Error('Could not start the export.'); });
-    }).catch(function (e) { toast('Export failed: ' + ((e && e.message) || e)); }).then(function () { EXPORTING = false; });
+    }).catch(function (e) { toast(L.exportFailed((e && e.message) || e)); }).then(function () { EXPORTING = false; });
   }
   // The shell's Export (the OS bar's Save, PDF) offers the job to the app first: claim it and print the deck, not this screen.
   window.addEventListener('clan:export', function (e) {

@@ -4,7 +4,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Job } from '../contracts/types'
-import { SnapshotStore } from '../doc/store'
+import { SnapshotDocumentStore, SnapshotStore } from '../doc/store'
 import { initialUi, type UiState } from '../doc/ui'
 import type { InboxEntry } from '../relay/types'
 import { snapshotDoc } from '../test/jobFixtures'
@@ -143,6 +143,37 @@ describe('a job that finished while the tab was closed', () => {
     await vi.advanceTimersByTimeAsync(6000)
     expect(landed).toEqual([id])
     expect(s.relay.ackJob).toHaveBeenCalledWith(id)
+    runner.stop()
+  })
+
+  // UAT 2026-11-26 (track B, job_01M8C56ZJQ1SAHA2H89119D9MB, a paid WAN 3 take): Make, then the tab closed before the
+  // project's copy in the library was next saved (once a minute). Reopened, the document had no record of the job, so
+  // its finished outcome was taken for another project's, acknowledged and lost. The outcome carries what the request
+  // said (project, purpose, node): a job of this project is written back from it and lands.
+  it('a job of this project the reopened copy never recorded is written back from its outcome and lands', async () => {
+    const s = setup()
+    const before = structuredClone(s.doc.get()) // the library's copy, saved before the Make
+    const first = s.open()
+    const id = await s.submit(first.runner)
+    const sent = s.relay.createJob.mock.calls[0][0] as unknown as { projectId: string; purpose: string; node: Job['node'] }
+    first.runner.stop() // the tab is closed before the copy is saved again
+    const server = new SnapshotDocumentStore(before, null, 0)
+    expect(server.get().jobs[id]).toBeUndefined()
+    s.waiting.push(entry(job(id, 'completed', {
+      kind: 'generated', projectId: sent.projectId, purpose: sent.purpose, node: sent.node,
+      outputs: [{ sha256: SHA, url: 'https://cdn.test/out/x', mime: 'video/mp4', bytes: 3 }],
+    } as Partial<Job>)))
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const runner = new JobRunner(s.relay as any, server, s.ui)
+    const landed: string[] = []
+    runner.onComplete('clip', (j) => landed.push(j.jobId))
+    expect(await runner.landInbox()).toBe(1)
+    await vi.advanceTimersByTimeAsync(50)
+    expect(server.get().jobs[id]?.state).toBe('completed')
+    expect(Object.keys(server.get().assets)).toEqual([SHA])
+    expect(landed).toEqual([id])
+    expect(s.acked).toContain(id)
     runner.stop()
   })
 
