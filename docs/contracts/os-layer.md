@@ -1559,7 +1559,12 @@ body or reply changes meaning.
      replaced, decision, action, document_id, attached: <record>, seeded,
      kept, carried_decisions, backrefs, clan}`.
    - `POST /attach/update {document_id}` — take its newer version; `verb:
-     updated`, `action: update_from_<noun>`.
+     updated`, `action: update_from_<noun>`. When `document_id` is what the
+     document was made from (Continue in, `how: made_from`) and not linked,
+     it takes the parent's newer version as `POST /upstream/update` does:
+     that route's reply, no `verb`, no `linked` backref (*owner 2026-11-26*,
+     "Update refreshes the parent": a deck made with Continue in from
+     Production answered `409 not linked` to Update from Production).
    - `POST /attach/detach {document_id}` (or `{app_id}` naming the one source
      of that app) — let go. Reply `{ok, decision, action: detach,
      document_id, detached, unseeded, backrefs, clan}`.

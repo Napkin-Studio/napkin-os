@@ -1011,6 +1011,18 @@ pub fn update_from_upstream(
     update_from_upstream_of(store, ctx, doc, None)
 }
 
+/// `document_id` is what `doc` was made from (`lineage.carried`, a Continue in
+/// or spin-off) and is not also linked to it: an Update on it takes the
+/// parent's newer version (owner 2026-11-26, "Update refreshes the parent").
+pub fn made_from_only(doc: &Document, document_id: &str) -> bool {
+    let m = doc.clan().manifest();
+    m.carried().is_some_and(|c| c.document_id == document_id)
+        && !m
+            .attached()
+            .iter()
+            .any(|a| a.carried.document_id == document_id)
+}
+
 /// [`update_from_upstream`], or, when `document_id` names a document linked
 /// to this one (`lineage.attached`), take that one's newer version: the same
 /// carry as `POST /attach/update`, one `update_from_<noun>` decision.
