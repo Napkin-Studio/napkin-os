@@ -59,7 +59,7 @@ describe('Back from the front chooser', () => {
     const shell = new Shell({ relay, app, index: new ProjectIndex(storage, () => new Date('2026-11-21T10:00:00Z')), storage, remoteConfig: null, makeClan, summaryDelayMs: 1 })
     await shell.newProject()
     const services: Services = shell.get().session!.services
-    const { router, back, urls } = stackRouter('/p/prj1')
+    const { router, back, urls } = stackRouter('/d/prj1')
     router.push(scriptRoute('prj1', 'scr1'))
     const el = document.createElement('div')
     document.body.appendChild(el)
@@ -74,7 +74,7 @@ describe('Back from the front chooser', () => {
     act(() => { choose.click() })
     // The canvas is a new entry after the script's.
     expect(router.get()).toEqual(projectRoute('prj1'))
-    expect(urls()).toEqual(['/p/prj1', '/p/prj1/script/scr1', '/p/prj1'])
+    expect(urls()).toEqual(['/d/prj1', '/d/prj1/script/scr1', '/d/prj1'])
     expect(services.ui.get().chooseFront).toBe('maya')
     expect(el.querySelector('.fronts-chooser')).not.toBeNull()
     // Back: the script again, and the chooser is done with.

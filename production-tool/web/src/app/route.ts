@@ -2,13 +2,13 @@
 // history API, under the build's base (import.meta.env.BASE_URL: '/' in dev and tests,
 // '/production/' behind napkin-web, which serves index.html for any /production/* path).
 //
-// The open project has its own route, /p/:project (the canvas), /p/:project/storyboard and
-// /p/:project/video (the editors over it), so a reload, a link or Share returns there (live test
+// The open project has its own route, /d/:doc (the canvas), /d/:doc/storyboard and
+// /d/:doc/video (the editors over it), so a reload, a link or Share returns there (live test
 // 2026-11-16: all of them stayed at the base). The Film editor's rooms each have one too,
-// /p/:project/video/make, /edit and /sound, so Back and a reload come back to the same room.
-// The Script editor is /p/:project/script/:script.
+// /d/:doc/video/make, /edit and /sound, so Back and a reload come back to the same room.
+// The Script editor is /d/:doc/script/:script.
 // Ids in URLs are document ids, never shot numbers; query parameters carry focus, never content
-// (?shot=<shotId>; the Image editor open on a storyboard shot's frame: /p/:project/storyboard?frame=<shotId>,
+// (?shot=<shotId>; the Image editor open on a storyboard shot's frame: /d/:doc/storyboard?frame=<shotId>,
 // so a reload reopens it).
 //
 // The project id in a route is the id Shell.open takes: the project's entry in this
@@ -56,7 +56,7 @@ export function parseRoute(url: { pathname: string; search?: string }, base: str
       return ''
     }
   })
-  if ((parts.length >= 2 && parts.length <= 4) && parts[0] === 'p' && ID.test(parts[1])) {
+  if ((parts.length >= 2 && parts.length <= 4) && parts[0] === 'd' && ID.test(parts[1])) {
     if (parts.length === 2) return { kind: 'project', projectId: parts[1] }
     if (parts.length === 3 && parts[2] === 'storyboard') {
       const frame = new URLSearchParams(url.search ?? '').get('frame')
@@ -79,10 +79,10 @@ export function formatRoute(r: Route, base: string = import.meta.env.BASE_URL): 
   if (r.kind === 'none') return b
   if (r.kind === 'project') {
     const frame = r.stage === 'storyboard' && r.frame ? `?frame=${encodeURIComponent(r.frame)}` : ''
-    return `${b}p/${encodeURIComponent(r.projectId)}${r.stage ? `/${r.stage}` : ''}${r.stage === 'video' && r.room ? `/${r.room}` : ''}${frame}`
+    return `${b}d/${encodeURIComponent(r.projectId)}${r.stage ? `/${r.stage}` : ''}${r.stage === 'video' && r.room ? `/${r.room}` : ''}${frame}`
   }
   const q = r.shot ? `?shot=${encodeURIComponent(r.shot)}` : ''
-  return `${b}p/${encodeURIComponent(r.projectId)}/script/${encodeURIComponent(r.scriptId)}${q}`
+  return `${b}d/${encodeURIComponent(r.projectId)}/script/${encodeURIComponent(r.scriptId)}${q}`
 }
 
 /** The Script editor's route: what 'Open script', canvas-nodes' NodeRegistry and 'Copy link to this' call. */

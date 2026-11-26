@@ -1,7 +1,7 @@
 // The clan-app e2e (features/production-as-clan-app.clan; TEST-PLAN S1-6, S1-10, S1-12, S1-17, S2-x, S3-1):
 // real browsers against a locally started napkin-web + local relay in mock mode, started by
 // `scripts/e2e-production-clan up` (lane ports 20420/20421). Nothing here starts a server; E2E_BASE_URL says
-// where it is. E2E_STAGE (default 1) says which stage's specs run: later ones stay fixme.
+// where it is. E2E_STAGE (default 2) says which stage's specs run: later ones stay fixme.
 //   scripts/e2e-production-clan up && cd production-tool/web && npx playwright test -c playwright.clan-app.config.ts
 import { defineConfig } from '@playwright/test'
 

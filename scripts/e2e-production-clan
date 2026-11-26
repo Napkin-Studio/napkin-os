@@ -12,7 +12,7 @@
 #                                         then `up`)
 #   scripts/e2e-production-clan walk      the TEST-PLAN section 7 walk in mock mode: up, the API steps (create,
 #                                         save, conflict, download, crash), then the Playwright specs of
-#                                         production-tool/web/e2e/clan-app for E2E_STAGE (default 1), then down
+#                                         production-tool/web/e2e/clan-app for E2E_STAGE (default 2), then down
 #
 # Settings: PC_WEB_PORT (20420), PC_RELAY_PORT (20421), PC_STATE (state dir, default
 # /tmp/claude-1000/pc-t-state), PC_USER (dev@napkin), E2E_STAGE (which stage's specs run; later ones stay
@@ -157,7 +157,7 @@ crash() { # S0-8, S1-14 at the API
 }
 
 walk() {
-  local stage="${E2E_STAGE:-1}"
+  local stage="${E2E_STAGE:-2}"
   trap 'down' EXIT
   up
   api_steps
