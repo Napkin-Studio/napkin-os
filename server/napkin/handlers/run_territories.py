@@ -251,7 +251,9 @@ def _frames(step, inp, req, caps, jid, data, by, on_line, marks):
 
     def engine(llm=None):
         store = runner.Store.for_doc(req.doc)
-        return fr.Frames(data, store, arrival.blob_store(), doc_id=req.doc, marks=marks, llm=llm, transport=make_transport(), guard_post=make_guard_post(), on_line=on_line), store
+        # the client's Brand Clan the document holds (host: clan.brand_clan), the look of its frames; none: the built-in look
+        return fr.Frames(data, store, arrival.blob_store(), doc_id=req.doc, marks=marks, llm=llm, transport=make_transport(), guard_post=make_guard_post(), on_line=on_line,
+                         brand=(req.clan or {}).get("brand_clan")), store
 
     def run(job):
         if not fr.enabled():

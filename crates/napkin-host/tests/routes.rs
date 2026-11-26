@@ -1478,6 +1478,108 @@ mod upstream {
         library::install_app(store, tpl).unwrap();
     }
 
+    /// An app that takes `accepts` by attach (and, with `spinoff`, by spin-off).
+    fn install_accepting(
+        store: &dyn DocStore,
+        name: &str,
+        app_id: &str,
+        spinoff: Option<SpinoffSpec>,
+        accepts: &[&str],
+    ) {
+        let base = ClanFile::from_bytes(
+            clan_sdk::create(clan_sdk::CreateOptions {
+                title: name.into(),
+                brief: "fixture".into(),
+                document_type: None,
+                no_render: false,
+                schema: None,
+            })
+            .unwrap(),
+        )
+        .unwrap();
+        let tpl = clan_sdk::make_template(
+            &base,
+            clan_sdk::AppInfo {
+                home: None,
+                name: name.into(),
+                app_id: app_id.into(),
+                version: "0.6.0".into(),
+                icon: None,
+                entry: "human/index.html".into(),
+                schema: Some("agent/output-schema.json".into()),
+                prompt_templates: vec![],
+                data_seed: None,
+                spinoff,
+                attach: Some(clan_sdk::AttachSpec {
+                    accepts: accepts.iter().map(|a| a.to_string()).collect(),
+                    ..Default::default()
+                }),
+            },
+            clan_sdk::MakeTemplateOptions::default(),
+        )
+        .unwrap();
+        library::install_app(store, tpl).unwrap();
+    }
+
+    // Brand Clan phase 2 (d): a Territories document's engine is sent the client's Brand Clan it
+    // holds, attached on the document or carried down from the brief by spin-off; none, nothing.
+    #[test]
+    fn a_territories_document_is_sent_the_brand_clan_it_holds() {
+        const BRAND: &str = "ie.napkin.brand";
+        const TERRITORIES: &str = "ie.napkin.territories";
+        let store = Arc::new(MemStore::default());
+        install(&*store, "Brand Clan", BRAND, None);
+        let id = library::create_instance(&*store, BRAND, Some("Original".into())).unwrap();
+        let brand = Doc::open(&store, id);
+        brand.post(
+            "/patch-data",
+            r##"{"patch":{"name":"Original","kit":{"version":2},"visual":{"colours":[{"id":"c1","name":"Red","hex":"#E30613","role":"accent"}]},"imagery":{"style":"warm daylight","bans":["mascots"]}},"agent":"human"}"##,
+        );
+
+        // attached on the Territories document itself (the client's default, started on)
+        install_accepting(&*store, "Territories", TERRITORIES, None, &[BRAND]);
+        let id = library::create_instance(&*store, TERRITORIES, Some("Routes".into())).unwrap();
+        let terr = Doc::open(&store, id);
+        assert!(terr
+            .session
+            .clan_context_for_agent()
+            .get("brand_clan")
+            .is_none());
+        terr.post("/attach", &json!({ "document_id": brand.doc }).to_string());
+        let ctx = terr.session.clan_context_for_agent();
+        let b = &ctx["brand_clan"];
+        assert_eq!(b["document_id"], brand.doc, "{ctx}");
+        assert_eq!(b["version"], 2);
+        assert_eq!(b["data"]["imagery"]["bans"][0], "mascots");
+        assert!(
+            ctx.get("carried_upstream")
+                .map_or(true, |c| c.get(&brand.doc).is_none()),
+            "a kit still stays out of carried_upstream"
+        );
+
+        // carried down from the brief that held it
+        install_accepting(&*store, "Brief Maker", BRIEF, None, &[BRAND]);
+        let id = library::create_instance(&*store, BRIEF, Some("Spring brief".into())).unwrap();
+        let brief = Doc::open(&store, id);
+        brief.post(
+            "/patch-data",
+            r#"{"patch":{"background":"Sales are flat."},"agent":"human"}"#,
+        );
+        brief.post("/attach", &json!({ "document_id": brand.doc }).to_string());
+        install_accepting(
+            &*store,
+            "Territories",
+            TERRITORIES,
+            Some(carries(BRIEF)),
+            &[BRAND],
+        );
+        let terr = spin(&store, &brief, TERRITORIES);
+        assert_eq!(
+            terr.session.clan_context_for_agent()["brand_clan"]["document_id"],
+            brand.doc
+        );
+    }
+
     fn post_err(d: &Doc, path: &str, body: &str) -> (u16, String) {
         let resp = d.call(d.session.ctx(), path, body);
         (

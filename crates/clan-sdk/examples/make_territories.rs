@@ -19,8 +19,8 @@
 
 use clan_sdk::{
     create, instantiate, make_template, pack_html, patch_context, patch_requirements, validate,
-    AppHome, AppInfo, ClanBuilder, ClanFile, CreateOptions, FileEntry, InstantiateOptions,
-    MakeTemplateOptions, SpinoffSpec,
+    AppHome, AppInfo, AttachSpec, ClanBuilder, ClanFile, CreateOptions, FileEntry,
+    InstantiateOptions, MakeTemplateOptions, SpinoffSpec,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -34,6 +34,8 @@ const VERSION: &str = "0.1.0";
 /// The apps a Territories document is spun off from, whole, under `upstream`.
 const BRIEF_APP_ID: &str = "ie.napkin.brief-maker";
 const RESEARCH_APP_ID: &str = "ie.napkin.campaign-research";
+/// A Brand Clan (docs/contracts/brand-clan.md): the client's look, the frames' style.
+const BRAND_APP_ID: &str = "ie.napkin.brand";
 const ICON_PATH: &str = "app/icon.svg";
 const DATA_PATH: &str = "shared/data.yaml";
 
@@ -132,7 +134,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 upstream: true,
                 ..Default::default()
             }),
-            attach: None,
+            // The client's Brand Clan (one): carried down from the brief by
+            // spin-off, or attached here (new work starts on the client's
+            // default, Brand Clan phase 2 (d)); its look dresses the frames.
+            attach: Some(AttachSpec {
+                accepts: vec![BRAND_APP_ID.into()],
+                ..Default::default()
+            }),
         },
         MakeTemplateOptions::default(),
     )?;

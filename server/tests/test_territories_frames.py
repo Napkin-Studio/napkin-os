@@ -189,6 +189,27 @@ def test_leaving_a_held_frame_out_needs_a_named_person_and_sticks(fr, monkeypatc
     valid(h)
 
 
+def test_the_frames_look_is_the_brand_clan_the_host_sends(fr, monkeypatch):
+    """Brand Clan phase 2 (d): the host sends the document's Brand Clan as ``clan.brand_clan``; the cost card names it, and without one the card
+    says the built-in look."""
+    from test_frames import BRAND
+    monkeypatch.setenv("NAPKIN_TERRITORY_IMAGES", "1")
+    h = host()
+    step(fr, h, "frames_material", origin="invented", by="Shrey")
+    r = step(fr, h, "frames", ids=["t_started"], by="Shrey")
+    assert r[-1]["result"]["info"]["card"]["look"] == {"from": "default"}
+
+    class WithBrand(TerritoriesHost):
+        def clan(self):
+            return {**super().clan(), "brand_clan": copy.deepcopy(BRAND)}
+    hb = WithBrand(data=copy.deepcopy(h.data), schema=SCHEMA)
+    hb.chain = h.chain
+    r = step(fr, hb, "frames", ids=["t_started"], by="Shrey")
+    look = r[-1]["result"]["info"]["card"]["look"]
+    assert look["from"] == "brand_clan" and look["name"] == "Original" and look["version"] == 2, look
+    assert fr.rw.posts == [], "an ask sends nothing"
+
+
 def test_the_frames_made_ride_back_with_the_change_as_the_documents_assets(fr, monkeypatch):
     """Owner 2026-11-26: the host stores the bytes. The paid step's change carries every picture it made as assets_put {name, sha256, data_b64}
     (frames/<sha256>.png), the bytes matching the hash; the job's result and info never carry bytes."""

@@ -430,29 +430,73 @@ def test_frames_start_as_generated(rig):
     assert got and all(s["rights"] == "generated" and pictures.rights_word(s["rights"]) == "Generated" for s in got)
 
 
-def test_each_client_has_its_own_style_and_never_the_agency(tmp_path, monkeypatch):
+BRAND = {"document_id": "bc-linea-original", "version": 2, "title": "Original", "data": {
+    "name": "Original", "kit": {"version": 2},
+    "visual": {"colours": [{"id": "c1", "name": "Linea Ink", "hex": "#14213D", "role": "ink"}, {"id": "c2", "name": "Linea Red 485", "hex": "#E30613", "role": "accent"},
+                           {"id": "c3", "name": "Paper", "hex": "#F6F0E1", "role": "paper"}, {"id": "c4", "name": "Bad", "hex": "not a colour", "role": "other"}],
+               "typography": [{"id": "t1", "family": "Linea Sans", "role": "head"}], "logos": [{"id": "l1", "variant": "dark", "asset": "human/assets/logo.png"}]},
+    "imagery": {"style": "Warm daylight, real kitchens; candid moments", "bans": ["cartoon mascots", "people drinking straight from the bottle", "the 2019 campaign"]},
+    "voice": {"tone": "Plain and warm", "rules": [{"id": "r1", "text": "Never say refreshing", "kind": "dont"}]}}}
+
+
+def test_the_frames_wear_the_documents_brand_clan_palette_imagery_and_bans(tmp_path, monkeypatch):
+    """Brand Clan phase 2 (d): the frames read the client's Brand Clan the document holds (colours, imagery style, bans); its logos, type and voice
+    never reach a picture prompt, and neither does a figure or a name (a hex, a colour's own name, the client)."""
     r = Rig(tmp_path, monkeypatch)
     r.declare()
-    assert frames.client_of(r.doc) == "Linea"
-    base = r.make()._prepare(None)["sty"]
-    assert base.source.startswith("default")
-    sd = r.store.dir / "frames" / "style"
+    base = r.make()._prepare(None)
+    assert base["sty"].source.startswith("default") and base["look"] == {"from": "default"}
+    got = r.make(brand=BRAND)._prepare(None)
+    sty, look = got["sty"], got["look"]
+    assert sty.palette == ["bright red", "cream", "navy"], sty.palette            # accent, paper, ink: in role order, as words
+    assert sty.look == ["warm daylight", "real kitchens", "candid moments"]
+    assert sty.banned_imagery == ["cartoon mascots", "people drinking straight from the bottle"]
+    assert look["from"] == "brand_clan" and look["name"] == "Original" and look["version"] == 2 and look["document_id"] == "bc-linea-original"
+    assert [x["what"] for x in look["left_out"]] == ["the 2019 campaign"] and "digit" in look["left_out"][0]["why"]
+    assert sty.hash != base["sty"].hash and sty.source == "Brand Clan Original v2"
+    prompt = got["jobs"][0]["prompt"]
+    assert "Palette: bright red, cream, navy." in prompt and "Never show: cartoon mascots" in prompt
+    for never in ("#", "485", "Linea", "Plain and warm", "refreshing", "logo.png", "Sans"):
+        assert never not in prompt, never
+    card = frames.Frames.public(r.make(brand=BRAND).ask(None)[3]["card"])
+    assert card["look"]["from"] == "brand_clan" and card["look"]["name"] == "Original"
 
-    def pack(name, look):
-        (sd / name).mkdir(parents=True)
-        (sd / name / "style.yaml").write_text(f"look: [{look}]\nfinish: rough\n")
-    pack("linea", "chalk and soft paper")
-    pack("napkin-studio", "agency look that must never be used")        # an agency-keyed folder is never read
-    mine = r.make()._prepare(None)["sty"]
-    assert mine.look == ["chalk and soft paper"] and mine.hash != base.hash
-    other = copy.deepcopy(r.doc)
-    other["title"] = "Orchard Co: summer"
-    other["upstream"] = {}
-    assert frames.client_of(other) == "Orchard Co"
-    r2 = Rig(tmp_path, monkeypatch, doc=other)
-    r2.declare()
-    assert r2.make()._prepare(None)["sty"].hash == base.hash, "a client with no pack gets the built-in default, not another client's"
-    assert frames.client_slug("../Évil/Co") == "evil-co" and frames.style_folder(sd, "") is None
+
+def test_no_brand_clan_is_the_built_in_look_and_the_old_client_folder_is_never_read(tmp_path, monkeypatch):
+    r = Rig(tmp_path, monkeypatch)
+    r.declare()
+    sd = r.store.dir / "frames" / "style" / "linea"
+    sd.mkdir(parents=True)
+    (sd / "style.yaml").write_text("look: [chalk and soft paper]\nfinish: rough\n")
+    sty = r.make()._prepare(None)["sty"]
+    assert sty.look == frames.style_mod.DEFAULT["look"] and sty.finish == "photo-real", "the stand-in folder is gone, no fallback kept"
+    assert not hasattr(frames, "client_of") and not hasattr(frames, "style_folder")
+    for not_a_brand in (None, {}, {"data": {"name": "x"}}, {"data": "nope"}):
+        assert r.make(brand=not_a_brand)._prepare(None)["look"] == {"from": "default"}
+    # a Brand Clan with nothing for pictures yet: the built-in look words, its own (empty) palette, named as the Brand Clan's
+    empty = {"document_id": "bc-e", "data": {"name": "Zero", "kit": {"version": 1}, "visual": {"colours": []}, "imagery": {}}}
+    sty, look = frames.brand_style(empty)
+    assert sty.look == frames.style_mod.DEFAULT["look"] and look["from"] == "brand_clan" and look["colours"] == 0
+
+
+def test_colour_words_carry_no_figure_and_the_client_name_never_reaches_a_prompt():
+    for h, w in {"#000000": "black", "#FFFFFF": "white", "#808080": "grey", "#E30613": "bright red", "#F6F0E1": "cream", "#14213D": "navy",
+                 "#2E7D32": "green", "fff": "white", "#6B3E1F": "brown", "#F4F1EA": "off white", "#F26B5B": "coral", "#C8C8C8": "light grey"}.items():
+        assert frames.colour_words(h) == w, (h, frames.colour_words(h))
+    assert frames.colour_words("red") is None and frames.colour_words(None) is None
+    # every word a colour can come out as passes the picture-prompt lint (live click-through 2026-11-26: "teal" did not, and the
+    # whole ask was refused for a Brand Clan with a mint accent)
+    from visuals import lint
+    assert frames.colour_words("#3FC9A0") == "blue green"
+    for h in ("#000000", "#FFFFFF", "#808080", "#C8C8C8", "#F4F1EA", "#F6F0E1", "#14213D", "#6B3E1F", "#F26B5B", *[f"#{r:02X}{g:02X}{b:02X}" for r in (0, 90, 200, 255) for g in (0, 90, 200, 255) for b in (0, 90, 200, 255)]):
+        w = frames.colour_words(h)
+        assert w and not lint.lint_text("Palette: " + w + ".", banned=[], allow=[]), (h, w)
+    b = {"document_id": "x", "data": {"name": "O", "imagery": {"style": "linea style street portraits, soft light", "bans": []}}}
+    sty, look = frames.brand_style(b, forbid=["Linea"])
+    assert sty.look == ["soft light"] and look["left_out"][0]["what"] == "linea style street portraits"
+    # the contract example's words (docs/contracts/examples/brand-clan): sentences split as phrases too
+    sty, _ = frames.brand_style({"data": {"imagery": {"style": "Daylight, cold metal and water. No people drinking in cars.", "bans": ["people drinking in cars"]}}})
+    assert sty.look == ["daylight", "cold metal and water", "no people drinking in cars"] and sty.banned_imagery == ["people drinking in cars"]
 
 
 def test_a_left_out_frame_is_never_placed_is_gone_from_status_and_a_new_ask_may_fill_its_place_again(tmp_path, monkeypatch):
