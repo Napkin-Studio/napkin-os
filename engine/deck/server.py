@@ -6,7 +6,8 @@
 The middleware's ``build_deck`` task calls it (features/deck-maker-server.clan); nothing else does. It holds no document: the
 caller sends the inputs and the person's approvals, and the server decides how far to run. The stage outputs are kept in a
 folder per document and inputs (a cache: a missing cache never invents output, it runs again or refuses), so a run resumes
-where the last segment stopped and recorded stages replay for free.
+where the last segment stopped and recorded stages replay for free. A document's last run is also written to ``<data>/<doc>/current.json``,
+so a restarted engine (a deploy) still serves a finished deck's files and run.
 
 Routes (JSON; failures are non-2xx with ``{"error": {"type", "message"}}``, never a 200 with an error in it)::
 
@@ -62,6 +63,13 @@ ORDER = {"agency": ["a0", "a", "b", "c", "d", "final"], "investor": ["a0", "i", 
 PLAN = {"agency": [("b", "storyline"), ("c", "territories"), ("d", "idea")], "investor": [("i", "storyline")]}
 KINDS = tuple(PLAN)
 SERVED = ("deck.html", "deck.pptx", "deck.pdf", "report.json")
+#: A document's last run, written beside its run folders after every segment (``<data>/<doc>/current.json``): which folder it ran in and
+#: what the screens read. A restarted engine (a deploy, a crash) holds nothing in memory; it reads this to find the document again, so a
+#: finished deck's files and run are still served (UAT 2026-11-26: a deploy made a built deck's Export say "no deck.pptx").
+CURRENT = "current.json"
+#: What a segment the restart cut short says: the stages written before it stay, so building again picks up from there.
+RESTARTED = ("The deck engine restarted while this deck was building. Build the deck again: it picks up from the last finished step, "
+             "and nothing already paid for is paid again.")
 CONTENT = {".html": "text/html; charset=utf-8", ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
            ".pdf": "application/pdf", ".json": "application/json"}
 
@@ -505,14 +513,45 @@ class Server:
         mark.parent.mkdir(parents=True, exist_ok=True)
         mark.write_text(json.dumps({"type": req["type"]}))
 
+    def doc(self, doc: str) -> Doc | None:
+        """The document's run: in memory, else as its last segment left it on disk (a restarted engine), else None."""
+        name = safe_name(doc)
+        with self.lock:
+            d = self.docs.get(name)
+            if d is None:
+                d = self.restore(name)
+                if d is not None:
+                    self.docs[name] = d
+            return d
+
+    def restore(self, name: str) -> Doc | None:
+        """A Doc from ``<data>/<doc>/current.json``: the folder its last segment ran in and what the screens read. A segment that was
+        building when the engine stopped is a failed step that may run again (its finished stages are on disk)."""
+        rec = rs.read_json(self.s.data / name / CURRENT)
+        if not isinstance(rec, dict) or not rec.get("folder"):
+            return None
+        d = Doc(self.s.data / name, name)
+        folder = d.root / str(rec["folder"])
+        if folder.parent != d.root or not folder.is_dir():   # only a folder of this document's own
+            return None
+        d.folder, d.out_tag = folder, str(rec.get("out_tag") or "")
+        d.state, d.held, d.error = rec.get("state") or "draft", rec.get("held"), rec.get("error")
+        d.notices, d.summary, d.pay, d.images = list(rec.get("notices") or []), rec.get("summary"), rec.get("pay"), rec.get("images")
+        d.cost = float(rec.get("cost") or 0.0)
+        d.req = {"mode": rec.get("mode") or "live", "kind": rec.get("kind") or "agency", "type_stages": rec.get("type_stages")}
+        if d.state == "building":
+            d.state, d.held, d.pay = "failed", None, None
+            d.error = {"stage": rs.STEP_ROW.get(rec.get("current") or "load", "inputs"), "message": RESTARTED, "retryable": True}
+        return d
+
     def get(self, doc: str) -> dict:
-        d = self.docs.get(safe_name(doc))
+        d = self.doc(doc)
         if d is None:
             raise Refused(404, "no_run", "no run for this document on this server")
         return self.view(d)
 
     def file(self, doc: str, name: str) -> tuple[bytes, str]:
-        d = self.docs.get(safe_name(doc))
+        d = self.doc(doc)
         if d is None or name not in SERVED:
             raise Refused(404, "no_file", "no such file")
         p = d.out / name
@@ -839,6 +878,24 @@ class Server:
         try:
             (d.folder or d.root).mkdir(parents=True, exist_ok=True)
             (d.folder / "status.json").write_text(json.dumps({"state": d.state, "held": d.held, "error": d.error, "notices": d.notices}, indent=1))
+        except OSError:
+            pass
+        self.write_current(d)
+
+    def write_current(self, d: Doc) -> None:
+        """``<data>/<doc>/current.json``: what a restarted engine needs to serve this document again (see CURRENT). Written whole, then
+        moved into place, so a restart mid-write never leaves half a record."""
+        if d.folder is None:
+            return
+        req = d.req or {}
+        rec = {"folder": d.folder.name, "out_tag": d.out_tag, "state": d.state, "held": d.held, "error": d.error, "notices": d.notices,
+               "summary": d.summary, "pay": d.pay, "images": d.images, "cost": d.cost, "current": d.current,
+               "mode": req.get("mode"), "kind": req.get("kind"), "type_stages": req.get("type_stages")}
+        try:
+            d.root.mkdir(parents=True, exist_ok=True)
+            tmp = d.root / (CURRENT + ".tmp")
+            tmp.write_text(json.dumps(rec, indent=1, default=str))
+            tmp.replace(d.root / CURRENT)
         except OSError:
             pass
 
