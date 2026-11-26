@@ -305,7 +305,7 @@ class Plan:
         return {"stage": "production_inventory",
                 "produced_by": "deck.prod_picker (a Production .clan read directly: metadata only, nothing downloaded, no model call)",
                 "contract_version": fp.CONTRACT, "app": fp.APP_ID,
-                "project": {"id": doc["project"]["id"], "title": clean(doc["project"].get("title"), 120)},
+                "project": {"id": doc["project"]["id"], "title": clean(fp.film_name(doc) or doc["project"].get("title"), 120)},
                 "source": {"kind": self.src.kind, "name": clean(self.src.name, 120), "clan_sha256": self.src.clan_sha256},
                 "taken_at": at or datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "counts": {"rows": len(self.rows), "eligible": sum(1 for r in self.rows if r["eligible"]), "by_reach": dict(sorted(by_reach.items()))},
@@ -322,7 +322,7 @@ class Plan:
             items[c["key"]] = fp.make_item(c, {"ext": fp.IMAGE_MIMES[a["mime"]], "mime": a["mime"], "width": int(w), "height": int(h),
                                                "bytes": int(a.get("bytes") or 0)}, self.src.clan_sha256)
         return {"stage": "production", "contract_version": fp.CONTRACT, "app": fp.APP_ID,
-                "project": {"id": self.src.doc["project"]["id"], "title": clean(self.src.doc["project"].get("title"), 120)},
+                "project": {"id": self.src.doc["project"]["id"], "title": clean(fp.film_name(self.src.doc) or self.src.doc["project"].get("title"), 120)},
                 "bundle": {"clan": self.src.name, "clan_sha256": self.src.clan_sha256},
                 "format_sets": fp.format_set_rows(self.src.doc, items), "items": items, "offer_sha256": fp.offer_sha(items)}
 

@@ -909,6 +909,36 @@ def fit_storyboard_copy(slide: dict, shots: list) -> list:
     return moved
 
 
+_FRAME_INDEX = re.compile(r"\s*[\(\[]\s*(?:frames?|shots?|stills?)\s*\d+(?:\s*(?:of|/)\s*\d+)?\s*[\)\]]"
+                          r"|\s*[,:;\u2013\u2014-]\s*(?:frames?|shots?|stills?)\s*\d+(?:\s*(?:of|/)\s*\d+)?\s*$", re.I)
+
+
+def name_storyboard_slide(slide: dict, prod: dict, key: str | None) -> None:
+    """A storyboard slide names the film it shows, never a frame index the idea stage put in its heading ('Storyboard frames (frame 1)',
+    'frame 1 of 3': pc live walk 2026-11-25): the index leaves, and the storyboard's own title (a route's, a film's) or else the name the
+    Production project goes by is added, 'Storyboard frames: The Tap Tells film'. Nothing is added when the film goes by no name."""
+    it = (prod.get("items") or {}).get(key or "") or {}
+    name = str(it.get("storyboard_title") or "").strip()
+    if not name:
+        pt = str((prod.get("project") or {}).get("title") or "").strip()
+        name = "" if re.match(r"untitled", pt, re.I) else pt
+    if len(name) > 40:
+        cut = name[:40]
+        sp = cut.rfind(" ")
+        name = re.sub(r"[\s,.;:\u2013\u2014-]+$", "", cut[:sp] if sp > 24 else cut) + "\u2026"
+    title = _FRAME_INDEX.sub("", str(slide.get("title") or "")).strip()
+    if name and name.lower() not in title.lower() and ":" not in title:   # a heading that already says what it shows keeps its words
+        title = f"{title}: {name}" if title else name
+    if not title or title == slide.get("title"):
+        return
+    slide["title"] = title
+    if isinstance(slide.get("label"), str):
+        slide["label"] = ("Execution " + title) if slide["label"].startswith("Execution ") else _FRAME_INDEX.sub("", slide["label"]).strip()
+    t = (slide.get("slots") or {}).get("title")
+    if isinstance(t, dict) and t.get("kind") == "text":
+        t["text"] = title
+
+
 def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", names=(), brief_document_id: str | None = None) -> dict:
     """Fill picture slots from production.json (deck-prod-assets slice 2), by slide type and channel, after the supplied pictures and before
     the empty slots and the image step, so a filled slot (or one waiting for its rights) never reaches the generation plan. Cover (only with
@@ -949,6 +979,8 @@ def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", na
                 ch = execution_channel(title)
                 if ch == "film":
                     key = production_frame(prod)
+                    if key:
+                        name_storyboard_slide(s, prod, key)
                     own = ((((s.get("slots") or {}).get(slot) or {}).get("image") or {}).get("from") or {}).get("kind") in ("upload", "brand")
                     if spec.GRAPHICS and not own:   # deck-graphics slice 3: 3 or 4 Production frames in shot order make a strip, all Production or none
                         from .graphics import strip_picks   # noqa: PLC0415
