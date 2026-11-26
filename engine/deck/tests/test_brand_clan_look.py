@@ -115,3 +115,32 @@ def test_inputs_read_the_logo_files_the_host_carried(tmp_path):
     _inp, ctx = inputs.from_deck_document(p)
     assert ctx["brand"]["_logo_files"] == {"dark": {"name": "logo-zero-dark.svg", "bytes": SVG}}
     assert look.brand_tokens(ctx["brand"])["logos"]["dark"].startswith("<svg")
+
+
+def test_a_logo_the_brand_clan_editor_uploaded_reaches_the_deck():
+    # UAT 2026-11-26: the Brand Clan editor files every uploaded logo as variant "other" (app/src/shell/nui/brandClans/model.ts),
+    # and the deck took only dark/light/mark, so a Brand Clan made in the OS never put its logo on the deck. "other" stands in
+    # when the Brand Clan names no logo for a dark ground, as Production's end card already does (brandClan/model.ts LOGO_ORDER).
+    from deck import inputs
+    did = "doc-ie-napkin-brand-solas"
+    clan = {**ZERO, "visual": {**ZERO["visual"], "logos": [{"id": "solas-logo", "label": "solas-logo", "variant": "other",
+                                                             "asset": "human/assets/230864de45-solas-logo.svg"}]}}
+    files = {f"human/assets/brand/{did}/230864de45-solas-logo.svg": SVG}
+    brand = inputs.brand_clan_copy(did, clan, files.get)
+    assert brand["_logo_files"] == {"other": {"name": "230864de45-solas-logo.svg", "bytes": SVG}}
+    t = look.brand_tokens(brand)
+    assert t["logos"]["dark"].startswith("<svg") and t["held"] == []
+    got = look.resolve(brand=t, wears="client", agency=AGENCY, client="Sólás Lights")
+    assert got.logo and got.logo["data"].startswith("<svg")
+
+
+def test_a_logo_for_a_dark_ground_still_wins_over_an_other():
+    from deck import inputs
+    did = "doc-b"
+    clan = {**ZERO, "visual": {**ZERO["visual"], "logos": [
+        {"id": "a", "label": "a", "variant": "other", "asset": "human/assets/a.svg"},
+        {"id": "b", "label": "b", "variant": "dark", "asset": "human/assets/b.svg"}]}}
+    dark = SVG.replace(b"F4F6F7", b"000000")
+    files = {f"human/assets/brand/{did}/a.svg": SVG, f"human/assets/brand/{did}/b.svg": dark}
+    t = look.brand_tokens(inputs.brand_clan_copy(did, clan, files.get))
+    assert "000000" in t["logos"]["dark"]

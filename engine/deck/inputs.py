@@ -656,7 +656,9 @@ def brand_clan_copy(did: str, data: dict, read) -> dict:
     files = {}
     for lg in ((brand.get("visual") or {}).get("logos") or []):
         a = str((lg or {}).get("asset") or "")
-        if not a or (lg or {}).get("variant") not in ("dark", "light", "mark") or lg["variant"] in files:
+        # "other" is what the Brand Clan editor files an uploaded logo as (app/src/shell/nui/brandClans/model.ts); look.brand_tokens
+        # takes it when the Brand Clan names no logo for a dark ground (UAT 2026-11-26).
+        if not a or (lg or {}).get("variant") not in ("dark", "light", "mark", "other") or lg["variant"] in files:
             continue
         got = read(f"human/assets/brand/{did}/{a.rsplit('/', 1)[-1]}")
         if got:
