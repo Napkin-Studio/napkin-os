@@ -18,6 +18,31 @@
 - **Infra:** hackathon and UAT are both applied; nothing is pending.
 - **HELD, do not merge: #370.** Shrey's rule: Confidential = kept out of Napkin RAG/layers/training only; Bedrock and Runway may take it. The Confidential mark still writes licence `{model:false, corpus:false}`, and the Brief engine, the deck and the middleware honour model:false. This needs ONE design record approved by Shrey: what the mark writes, whether "never to any model" stays as a separate option, every reader, and existing documents.
 
+## Deck quality: Shrey's feedback, 2026-11-26 18:50 (for Sai)
+
+Shrey looked at the UAT decks and said the deck **"is too text heavy"** and has almost no pictures. Evidence is in the session scratchpad on the GB10 machine:
+- `uat5b3/downloads/` holds Brúach-Switch.pdf/.pptx and Sólás-Beacon-launch.pdf/.pptx;
+- `deckpeek/bruach-sheet.png` is a contact sheet of pages 1–16.
+
+1. **Almost no pictures.**
+   - Brúach (35 slides): 1 image, the storyboard frame on "The work", and it's from the wrong route (route 3's Zero can, while the idea is route 1; see item 3).
+   - Sólás (38 slides): only the Brand Clan logo on its cover.
+   - No key visual, packshot, OOH mock-up or cover picture, although gate 3 listed key visual / OOH / packshot / storyboard frames as the executions.
+   - **First, investigate:** read the deck run report on UAT (deck engine report.json under the EFS deck data dir, or the CloudWatch /napkin/napkin-uat/deck logs) to see per slot whether it was held, why, and whether generated pictures are switched on for UAT. Likely causes:
+     - (a) the deck's Confidential hold, which is the held #370; both briefs are mostly Confidential;
+     - (b) generated pictures off on UAT;
+     - (c) only Production finals are placed and nothing new is drawn.
+   - Fix whatever doesn't depend on the Confidential decision.
+2. **Too text heavy.** Slides carry paragraphs: the idea slide has a full rationale block, and the insight, audience and "real question" slides are long.
+   - This is a **design change: per CLAUDE.md, write a design / mock first and get Shrey's approval before building.**
+   - Directions to explore:
+     - one idea per slide with a short headline plus a support line;
+     - rationale and evidence moved into speaker notes and the appendix;
+     - picture-led layouts for the idea and executions;
+     - word budgets per slide type, enforced by the Review checks.
+3. **Wrong route's finals on "The work".** This is parked by Shrey with the multi-route deck. Don't fix it separately unless he says.
+4. **#370 / Confidential design.** It unblocks deck pictures on Confidential briefs. It needs Shrey's approval of one design first (see "Where things are").
+
 ## Next steps
 
 1. When the `fix/deck-production-logo` PR is green:
