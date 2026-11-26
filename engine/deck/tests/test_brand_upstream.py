@@ -91,3 +91,25 @@ def test_a_build_through_the_middleware_path_wears_the_brand_clan_colours_type_a
     assert theme.get("logo", {}).get("placement") == "cover_only", theme
     rep = json.loads((out / "report.json").read_text())
     assert rep["look"]["source"] == "brand_clan" and not rep["look"]["held"]
+
+
+def test_a_hand_made_brand_clan_dresses_the_built_deck_by_order(tmp_path):
+    """UAT 2026-11-26 (Sólás Lights, a fictional brand): a Brand Clan made by hand (every colour, face and logo role "other") built a deck in
+    the default look. The order is the role now: the navy is the deck's ink, the brass its accent, Georgia its headline face, and the logo
+    (variant "other") is placed on the cover."""
+    solas = {"name": "Original", "kit": {"version": 2}, "visual": {
+        "colours": [{"id": "navy", "name": "Night navy", "hex": "#14233F", "role": "other"}, {"id": "brass", "name": "Brass", "hex": "#E0B040", "role": "other"}],
+        "typography": [{"id": "georgia", "family": "Georgia", "role": "other"}],
+        "logos": [{"id": "solas-logo", "label": "Logo", "variant": "other", "asset": "human/assets/230864de45-solas-logo.png"}]}}
+    f = tmp_path / "brand_upstream.json"
+    f.write_text(json.dumps({"id": BRAND_ID, "version": 2, "data": solas,
+                             "logos": {f"human/assets/brand/{BRAND_ID}/230864de45-solas-logo.png": base64.b64encode(_png()).decode()}}))
+    out = tmp_path / "run"
+    run_deck.main(["--prompt-text", "Sólás Lights wants a launch.", "--stages", str(HERE / "fixtures" / "types" / "agency_pitch"),
+                   "--client", "Sólás Lights", "--project", "Beacon", "--out", str(out), "--no-qa", "--until", "deck",
+                   "--brand-upstream", str(f)])
+    theme = json.loads((out / "deck.json").read_text())["meta"]["theme"]
+    assert theme["source"] == "brand_clan"
+    assert theme["colors"]["ink"] == "14233F" and theme["colors"]["accent"] == "E0B040"
+    assert theme["fonts"]["head"] == "Georgia"
+    assert theme.get("logo", {}).get("placement") == "cover_only", theme

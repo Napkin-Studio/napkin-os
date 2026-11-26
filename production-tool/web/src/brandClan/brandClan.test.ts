@@ -366,3 +366,23 @@ describe('acceptance A41, A48, A49, A50, A55', () => {
     expect(meets(box(e2), box(block))).toBe(false)
   })
 })
+
+// UAT 2026-11-26 (owner "Both"): a Brand Clan made by hand files every colour as role "other"; with no role the order is the role
+// (docs/contracts/brand-clan.md 2.1 "By order"): the first colour is the primary, the end card's ground when it is dark enough.
+describe('cardGroundOf by order', () => {
+  const bible = (colours: { hex: string; role?: string }[]) => ({ name: 'Original', kit: { version: 2 }, visual: { colours: colours.map((c, i) => ({ id: `c${i}`, ...c })) } }) as never
+  it('takes the first colour of a hand-made Brand Clan as the ground, not the darkest', async () => {
+    const { cardGroundOf } = await import('./model')
+    expect(cardGroundOf(bible([{ hex: '#2E3A59', role: 'other' }, { hex: '#14233F', role: 'other' }]))).toBe('#2E3A59')
+    expect(cardGroundOf(bible([{ hex: '#14233F', role: 'other' }, { hex: '#E0B040', role: 'other' }]))).toBe('#14233F')
+  })
+  it('a light first colour cannot carry the light words: the darkest dark one does', async () => {
+    const { cardGroundOf } = await import('./model')
+    expect(cardGroundOf(bible([{ hex: '#E0B040', role: 'other' }, { hex: '#14233F', role: 'other' }]))).toBe('#14233F')
+    expect(cardGroundOf(bible([{ hex: '#E0B040', role: 'other' }]))).toBeUndefined()
+  })
+  it('a roled ink wins over the order', async () => {
+    const { cardGroundOf } = await import('./model')
+    expect(cardGroundOf(bible([{ hex: '#2E3A59', role: 'other' }, { hex: '#14233F', role: 'ink' }]))).toBe('#14233F')
+  })
+})

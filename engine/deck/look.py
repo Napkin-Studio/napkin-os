@@ -59,18 +59,21 @@ def brand_tokens(frozen_brand: dict | None = None, document_id: str | None = Non
     """A frozen Brand Clan (``data.upstream.<brand document id>``, docs/contracts/brand-clan.md section 8) as the tokens the deck reads.
 
     Returns ``{name, colours: {role: hex}, colour_ids: {id: hex}, fonts: {head, body}, type_ids: {id: family}, logos: {light, dark},
-    logo_placement, imagery_bans: [], chart: [], kit: {document_id, version}, held: []}``. Colours fill a deck token only by the role the
-    Brand Clan gives them (accent, paper, ink, panel, accent_ink); every colour is reachable by id for a Style Pack pointer. ``logos`` stays
+    logo_placement, imagery_bans: [], chart: [], kit: {document_id, version}, held: [], by_order: []}``. Colours fill a deck token by the role
+    the Brand Clan gives them (accent, paper, ink, panel, accent_ink); when no colour has one (a Brand Clan made by hand files every colour as
+    ``other``), the order is the role (``_by_order``), and the same for faces (first head, second body). ``by_order`` names the tokens filled
+    that way. Every colour is reachable by id for a Style Pack pointer. ``logos`` stays
     empty: a frozen copy carries the logo's asset name, not its bytes (attach takes ``shared/data.yaml`` only), so the logo is held and the
     reason is in ``held``. Anything that is not a Brand Clan (no ``visual`` and no ``imagery``) gives the empty tokens, so a deck works without one.
     """
     out = {"name": "", "colours": {}, "colour_ids": {}, "fonts": {}, "type_ids": {}, "logos": {}, "logo_placement": None,
-           "imagery_bans": [], "chart": [], "kit": {}, "held": []}
+           "imagery_bans": [], "chart": [], "kit": {}, "held": [], "by_order": []}
     fb = frozen_brand if isinstance(frozen_brand, dict) else None
     if not fb or not (isinstance(fb.get("visual"), dict) or isinstance(fb.get("imagery"), dict)):
         return out
     visual = fb.get("visual") if isinstance(fb.get("visual"), dict) else {}
     out["name"] = str(fb.get("name") or "").strip()
+    cols = []   # (hex, role) in the Brand Clan's order
     for c in visual.get("colours") or []:
         if not isinstance(c, dict):
             continue
@@ -79,20 +82,32 @@ def brand_tokens(frozen_brand: dict | None = None, document_id: str | None = Non
             continue
         if c.get("id"):
             out["colour_ids"][str(c["id"])] = h
-        role = str(c.get("role") or "")
+        cols.append((h, str(c.get("role") or "")))
+    given = {h: r for h, r in cols if r in COLOUR_TOKENS}
+    for h, role in cols:
         if role in COLOUR_TOKENS and role not in out["colours"]:
             out["colours"][role] = h
-        if role not in ("paper", "ink", "panel"):
-            out["chart"].append(h)
+    if not given:   # no colour has a role (a Brand Clan made by hand): the order is the role (brand-clan.md 2.1, "By order")
+        for token, h in _by_order([h for h, r in cols if r != "chart"]):
+            out["colours"][token] = h
+            out["by_order"].append(token)
+    placed = {h: t for t, h in out["colours"].items()}
+    out["chart"] = [h for h, r in cols if placed.get(h, r) not in ("paper", "ink", "panel")]
+    faces = []
     for t in visual.get("typography") or []:
         if not isinstance(t, dict) or not str(t.get("family") or "").strip():
             continue
         fam = str(t["family"]).strip()
         if t.get("id"):
             out["type_ids"][str(t["id"])] = fam
-        role = str(t.get("role") or "")
+        faces.append((fam, str(t.get("role") or "")))
+    for fam, role in faces:
         if role in FONT_TOKENS and role not in out["fonts"]:
             out["fonts"][role] = fam
+    if not any(r in FONT_TOKENS for _, r in faces):   # no face has a role: the first is the headline face, the second the body face
+        for token, (fam, _) in zip(FONT_TOKENS, faces):
+            out["fonts"][token] = fam
+            out["by_order"].append(token)
     imagery = fb.get("imagery") if isinstance(fb.get("imagery"), dict) else {}
     out["imagery_bans"] = [str(b).strip() for b in imagery.get("bans") or [] if str(b).strip()]
     kit = fb.get("kit") if isinstance(fb.get("kit"), dict) else {}
@@ -126,6 +141,32 @@ def brand_tokens(frozen_brand: dict | None = None, document_id: str | None = Non
     elif any(isinstance(lg, dict) and lg.get("asset") for lg in visual.get("logos") or []):
         out["held"].append(f"{out['name'] or 'The Brand Clan'}'s logo is not placed: its file did not reach this deck. Update the Brand Clan "
                            "on the deck to bring it.")
+    return out
+
+
+#: The ground a primary must carry text on to be the deck's ink (dark slides, dark text); the ink a background must carry.
+_WHITE, _DEFAULT_INK = "FFFFFF", "1B2430"
+
+
+def _by_order(hexes: list) -> list:
+    """The deck tokens a Brand Clan's colours fill when none has a role (owner 2026-11-26, "Both": the readers fall back by order; a role
+    picker in the editor is designed later). The first is the brand's primary: the deck's ``ink`` when it is dark enough to carry text and
+    dark slides (4.5:1 on white), else its ``accent``. The second is the ``accent`` (or, when a light primary took the accent, the ``ink`` if
+    it is dark enough). The third is the background, the deck's ``paper``, when the ink still reads on it. Anything else stays a chart colour.
+    The derived tokens (``accent_ink`` and the rest) come from ``theme.Theme.with_brand`` as for any brand."""
+    out: list = []
+    taken: dict = {}
+    dark = lambda h: themes.contrast(h, _WHITE) >= themes.AA   # noqa: E731
+    if len(hexes) > 0:
+        taken["ink" if dark(hexes[0]) else "accent"] = hexes[0]
+    if len(hexes) > 1:
+        if "accent" not in taken:
+            taken["accent"] = hexes[1]
+        elif dark(hexes[1]):
+            taken["ink"] = hexes[1]
+    if len(hexes) > 2 and themes.contrast(taken.get("ink", _DEFAULT_INK), hexes[2]) >= themes.AA:
+        taken["paper"] = hexes[2]
+    out.extend(taken.items())
     return out
 
 

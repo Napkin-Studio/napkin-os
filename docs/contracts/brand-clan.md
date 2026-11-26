@@ -50,6 +50,18 @@ makes the frozen copies in work, and `linked_status`, change only then (attach c
 | `gaps[]` | `{area, note}`: a section a build could not find. Empty beats wrong; nothing is invented. |
 | `previous_work[]`, `categories_explored[]`, `likes_dislikes[]`, `preferences{}` | **Provisions**: in the shape from day one, empty, no UI. Harvest (parked) fills them later. |
 
+**By order** (owner 2026-11-26, "Both"): the client window's editor files every colour it adds as role `other` and every face as `other`,
+with no way yet to set one (a role picker is designed later, with a mock). So when **no colour has a deck role** (`accent paper ink panel
+accent_ink`), every reader takes the order as the role: the **first** colour is the brand's **primary**, the **second** its **accent**, the
+**third** its **background**; and when **no face has a role** (`head body`), the **first** face is the headline face and the **second** the
+body face. A role a person gave always wins, and the order never mixes in once any colour (or face) has one. Each reader maps it to its own
+tokens: the Deck (`engine/deck/look.py` `_by_order`) makes the primary its `ink` when it is dark enough to carry text and dark slides
+(4.5:1 on white), else its `accent`; the second fills `accent` (or `ink`, when a light primary took the accent and it is dark enough); the
+third becomes `paper` only when the ink still reads on it (4.5:1); `accent_ink` and the other derived tokens come from the theme as for any
+brand. Production's end card (`cardGroundOf`) takes the primary as its ground when it is dark enough for the card's light words, else the
+darkest dark colour. Territories says the colours in this order in a picture's palette. The Brief and Deck Maker pages show swatches in
+the order they are listed.
+
 Every list item has a stable `id` (`^[a-z0-9][a-z0-9_-]{0,39}$`); diffs match by id, never by position. `$schema` is allowed on disk and
 ignored by the validator. An empty Brand Clan (`data.empty-v1.json`) validates.
 

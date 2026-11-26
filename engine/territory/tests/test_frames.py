@@ -584,3 +584,13 @@ def test_quotation_marks_in_a_plan_are_taken_out_before_the_check_and_no_frame_i
     # the real rules still hold: a figure or a brand in a shot is still refused
     s = frames.unquoted({"shot": "f1", "framing": "A view of 3 jars", "action": "x", "on_screen_line": "“keep”"})
     assert lint.lint_text(s["framing"] + ".") and s["on_screen_line"] == "“keep”"
+
+
+def test_a_hand_made_brand_clan_names_its_colours_in_its_own_order():
+    # UAT 2026-11-26 (owner "Both"): a Brand Clan made by hand files every colour as role "other"; the order is the role
+    # (docs/contracts/brand-clan.md 2.1 "By order"), so its primary is said first.
+    rec = {"document_id": "bc-solas", "version": 2, "title": "Original", "data": {"name": "Original", "kit": {"version": 2}, "visual": {
+        "colours": [{"id": "navy", "hex": "#14233F", "role": "other"}, {"id": "brass", "hex": "#E0B040", "role": "other"}]}}}
+    sty, look = frames.brand_style(rec)
+    assert look["from"] == "brand_clan" and look["colours"] == 2
+    assert sty.palette == [frames.colour_words("#14233F"), frames.colour_words("#E0B040")]
