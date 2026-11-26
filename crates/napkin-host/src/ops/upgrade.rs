@@ -14,17 +14,13 @@
 //! Only the installed app of the same app id and major version is consulted (the library view
 //! [`crate::view::resolve`] already chose it); without one nothing changes.
 
-use clan_sdk::pack::{AgentOutput, DecisionEntry, PackOptions};
+use clan_sdk::pack::DecisionEntry;
 use clan_sdk::schema_compat::{compare, Compat};
 use clan_sdk::ClanFile;
 use serde_json::Value;
 
-use crate::ctx::Ctx;
 use crate::document::Document;
 use crate::error::HostResult;
-use crate::event::HostEvent;
-
-use super::Outcome;
 
 const DEFAULT_SCHEMA: &str = "agent/output-schema.json";
 
@@ -91,9 +87,13 @@ pub fn plan(doc: &Document) -> SchemaUpgrade {
     }
 }
 
-/// The write that moves `doc` to the safe newer schema, or `None` when there is none to make.
-/// Its decision says what loosened and from which app version, so the move is auditable.
-pub fn apply(_ctx: &Ctx, doc: &Document) -> HostResult<Option<Outcome>> {
+/// `doc` with its schema copy moved to the safe newer schema, at the SAME stored version, or
+/// `None` when there is nothing to move. The session runs the write on this document, so the
+/// upgrade and the write land as ONE change: a change computed against the stored version (a
+/// middleware job's `base_version`) is not made stale by a separate upgrade revision, and an
+/// operation that writes nothing leaves the document as it was. The decision says what loosened
+/// and from which app version, so the move is auditable.
+pub fn upgraded(doc: &Document) -> HostResult<Option<Document>> {
     let SchemaUpgrade::Safe {
         schema,
         changes,
@@ -103,39 +103,31 @@ pub fn apply(_ctx: &Ctx, doc: &Document) -> HostResult<Option<Outcome>> {
         return Ok(None);
     };
     let clan = doc.clan();
-    let structured = super::assemble::data_of(clan).unwrap_or(Value::Object(Default::default()));
     let rationale = format!(
         "The installed app (v{app_version}) widened its schema, and this document's copy was \
          moved to it: {}. The new schema accepts everything the old one did.",
         changes.join("; ")
     );
-    let output = AgentOutput {
-        mode: "data-update".to_string(),
-        structured,
-        design: None,
-        human: None,
-        decision: Some(DecisionEntry {
-            agent_name: "host".into(),
-            action: "schema upgraded".into(),
-            rationale,
-            pinned: false,
-            fields_changed: Some(Vec::new()),
-            typed: None,
-        }),
+    let decision = DecisionEntry {
+        agent_name: "host".into(),
+        action: "schema upgraded".into(),
+        rationale,
+        pinned: false,
+        fields_changed: Some(Vec::new()),
+        typed: None,
     };
-    let opts = PackOptions {
-        delta: Some(format!("schema upgraded to app v{app_version}")),
-        schema_override: Some(schema),
-        ..Default::default()
-    };
-    let bytes = clan_sdk::pack::pack(clan, output, opts, None)?;
-    let reply = serde_json::json!({
-        "ok": true, "upgraded": true, "app_version": app_version, "changes": changes,
-    });
-    let change = doc
-        .change(bytes)?
-        .with_event(HostEvent::DataChanged(reply.clone()));
-    Ok(Some(Outcome::changed(reply, change)))
+    // Only the schema entry changes. The data is not re-validated: a widening keeps every
+    // document the old schema accepted valid, and a document whose writes were refused under
+    // the old schema (so its data is still incomplete) is exactly the one that needs this.
+    let bytes = clan_sdk::pack::replace_schema_widened(
+        clan,
+        &schema_path(clan),
+        &schema,
+        Some(format!("schema upgraded to app v{app_version}")),
+        Some(decision),
+    )?;
+    let change = doc.change(bytes)?;
+    Ok(Some(doc.advance(&change, doc.version().clone())?))
 }
 
 /// What a refused write adds when the document's copy is older than its app's schema and the

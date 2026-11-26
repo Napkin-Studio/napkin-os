@@ -265,3 +265,7 @@
 .access-card p { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--ink-soft); }
 .access-card .btn-rect { align-self: flex-start; margin-top: 4px; text-decoration: none; }
 .make-tray-row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+
+/* A save that did not land (UAT acceptance A24): Retry beside the name, the reason at the top of its menu. */
+.tba-retry { margin-left: 6px; align-self: center; }
+.tba-why { padding: 6px 12px 8px; font-size: 12px; line-height: 1.4; color: var(--alert); max-width: 320px; }

@@ -102,6 +102,10 @@ export interface ClanStoreApi {
   /** What this project was spun off from (the manifest's lineage.carried), or null when it was not. */
   spunOffFrom(): Promise<SpunOffFrom | null>
   onChange(cb: (d: Doc) => void): () => void
+  /** A save that could not be made: this browser's copy, or the server's before anything was posted (its bytes could
+   *  not be made). A post the server answers goes to startMirror's post, not here. (UAT acceptance A24 re-test: the
+   *  store Worker logged "could not save the document" and the bar kept "saved 09:45 AM".) */
+  onSaveError(cb: (e: unknown, where: SaveWhere) => void): () => void
   chain(): Promise<ChainEntry[]>
   flush(): Promise<void>
   startMirror(post: MirrorPost, opts?: { everyMs?: number; onError?: (e: unknown) => void }): () => void
@@ -114,6 +118,9 @@ export interface ClanStoreApi {
   setBeforeBytes(fn: BeforeBytes | null): void
   dispose(): void
 }
+
+/** Which copy a save could not make: this browser's, or the one bound for the server. */
+export type SaveWhere = 'browser' | 'server'
 
 /** The contract this build reads. */
 export const CONTRACT = '3'
@@ -129,6 +136,9 @@ export class UnsupportedContract extends Error {
     this.found = found
   }
 }
+
+/** What a build with an older napkin-wasm (no keptBytes) says on every save. */
+export const STALE_WASM = 'This build\'s napkin-wasm is older than its clan-store (no keptBytes), so nothing can be saved: run `npm run wasm` in production-tool/clan-store, then build the web app again.'
 
 /** Who records the move to generations, and its decision (features/make-and-edit.clan). */
 export const MIGRATION_AGENT = 'clan-store'
@@ -235,6 +245,7 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
   /** `agent action` of every entry in the chain, built on first need. */
   private recorded: Set<string> | null = null
   private beforeBytes: BeforeBytes | null = null
+  private readonly saveErrors = new Set<(e: unknown, where: SaveWhere) => void>()
 
   constructor(opts: ClanStoreOptions = {}) {
     this.wasm = opts.wasm
@@ -453,7 +464,7 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
   async exportClan(): Promise<Uint8Array> {
     await this.runBeforeBytes('export')
     await this.queue.catch(() => {})
-    return this.bytes()
+    return this.wholeBytes()
   }
 
   /**
@@ -496,6 +507,22 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
   onChange(cb: (d: Doc) => void): () => void {
     this.listeners.add(cb)
     return () => this.listeners.delete(cb)
+  }
+
+  onSaveError(cb: (e: unknown, where: SaveWhere) => void): () => void {
+    this.saveErrors.add(cb)
+    return () => this.saveErrors.delete(cb)
+  }
+
+  private saveFailed(e: unknown, where: SaveWhere) {
+    console.warn(`could not save the document (${where})`, e)
+    for (const cb of this.saveErrors) {
+      try {
+        cb(e, where)
+      } catch (err) {
+        console.error('onSaveError listener failed', err)
+      }
+    }
   }
 
   // ── Beyond the interface ──────────────────────────────────────────────────
@@ -707,7 +734,21 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
     return readData(this.host!)
   }
 
+  /** The document as it is kept, for this browser's store and for sending back to the workspace: its files that are
+   *  links stay links (UAT round 4 A15: a project spun off from a brief with an uploaded file could never be saved, as
+   *  `download` makes links whole and this host has no file store, so it reopened blank). */
   private bytes(): Uint8Array {
+    const h = this.need() as NapkinHost & { keptBytes?: () => Uint8Array | number[] }
+    // Never a quiet fallback to download(): with a link in the document it throws, and a build whose napkin-wasm is
+    // older than this store saved nothing while looking fine (UAT acceptance re-test: the web app was rebuilt, the wasm
+    // was not). Say what to rebuild instead.
+    if (typeof h.keptBytes !== 'function') throw new Error(STALE_WASM)
+    const b = h.keptBytes()
+    return b instanceof Uint8Array ? b : Uint8Array.from(b)
+  }
+
+  /** The document whole, for what leaves the workspace (an export): links made back into their files. */
+  private wholeBytes(): Uint8Array {
     const b = this.need().download() as Uint8Array | number[]
     return b instanceof Uint8Array ? b : Uint8Array.from(b)
   }
@@ -746,7 +787,7 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
       })
     } catch (e) {
       this.dirty = true
-      console.warn('could not save the document', e)
+      this.saveFailed(e, 'browser')
     }
   }
 
@@ -773,8 +814,18 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
     if (reason === 'interval' && m?.lastPosted === rev) return
     const post = m?.post
     if (!post) throw new Error('no mirror: call startMirror() first')
+    let bytes: Uint8Array
     try {
-      await post(this.bytes(), { handle: this.person?.handle ?? this.doc.project.created_by, reason })
+      bytes = this.bytes()
+    } catch (e) {
+      // Nothing went: the server's copy is behind, and the person must see it (never an older "saved").
+      this.saveFailed(e, 'server')
+      m?.onError(e)
+      if (reason === 'manual') throw e
+      return
+    }
+    try {
+      await post(bytes, { handle: this.person?.handle ?? this.doc.project.created_by, reason })
       if (m) m.lastPosted = rev
     } catch (e) {
       m?.onError(e)
