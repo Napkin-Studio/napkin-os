@@ -561,6 +561,13 @@ button.tsrc:hover{border-color:color-mix(in srgb,var(--ink) 35%,var(--line))}
 .pic-make{min-height:30px;padding:0 12px;font-size:12px}
 .pslot.held .pface img{opacity:.42;filter:saturate(.55)}
 .pface .pchip.need{cursor:pointer}
+.matbox{display:grid;gap:8px;margin:12px 0 0;padding:12px;border:1px solid var(--alert,#d65b45);border-radius:10px}
+.matbox .lk-l,.matdone .lk-l{font:700 10.5px var(--font-mono,ui-monospace,monospace);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.matopt{display:flex;gap:10px;align-items:flex-start;cursor:pointer}
+.matopt input{margin-top:4px}
+.matopt b{display:block;font:700 13.5px var(--font-ui,system-ui)}
+.matby{font:inherit;padding:8px 10px;border:1px solid var(--line-strong);border-radius:8px;background:transparent;color:var(--ink)}
+.matdone{display:grid;gap:3px;margin:12px 0 0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:13.5px;line-height:1.4;color:var(--ink)}
 .pic-thumb{display:block;width:100%;max-height:220px;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
 .pstrip{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
 .pmenu{display:grid;gap:4px}
@@ -2782,9 +2789,11 @@ var TerritoriesPictures = (function () {
     if (m) {
       t = L.developed(data).filter(function (x) { return x.id === m[1]; })[0]; var mk = ui && ui.mk;
       if (!t || !mk || mk.tid !== t.id) return null;
+      if (mk.refused && mk.need === 'material') return { title: 'Make pictures for ' + t.name + '?', closeInside: true, sans: true, html: materialAsk(t, mk) };
       if (mk.refused) return { title: 'Make pictures for ' + t.name + '?', closeInside: true, sans: true, html: '<p class="meta" style="margin:0">' + esc(mk.refused) + '</p>' +
         '<div class="row"><span class="spacer" style="flex:1"></span><button type="button" class="btn-rect" data-close>Close</button></div>' };
       return { title: 'Make ' + pluralPic(mk.card.frames) + ' for ' + t.name + '?', closeInside: true, sans: true, html: '<p class="meta" style="margin:0">Illustrative, made by an outside picture tool.</p>' +
+        materialBox(mk.card.material) +
         '<div class="row"><span class="spacer" style="flex:1"></span><button type="button" class="btn-rect" data-close>Cancel</button><button type="button" class="btn-rect primary" data-pic-go="' + esc(t.id) + '">Make</button></div>' };
     }
     if (!h) return null;
@@ -2794,6 +2803,33 @@ var TerritoriesPictures = (function () {
     return { title: 'Needs you', closeInside: true, sans: true, html: picImg(c.sha256, c.asset, 'pic-thumb', 'The picture that needs you') +
       '<p class="meta" style="margin:0">' + esc(c.why) + '</p>' +
       '<div class="row"><span class="spacer" style="flex:1"></span><button type="button" class="btn-rect" data-pic-leave="' + key + '">Leave it out</button><button type="button" class="btn-rect primary" data-pic-ok="' + key + '">Approve</button></div>' };
+  }
+  /**
+   * The material question (approved frames mock, state 1a): words from a brief go to the outside picture tool only once a named person says the
+   * material is invented or a demo. Make stays off until it is answered; the answer is the engine's frames_material step, said as that person.
+   */
+  var MATERIAL = [['invented', 'Invented', 'Made up for this exercise. No real client.'], ['demo', 'A demo', 'Shown to people, but not a client’s.'],
+    ['client', 'The client’s', 'Real client material.']];
+  var MATERIAL_WORDS = 'Words from a brief go to the outside picture tool only if a named person says the material is invented or a demo. Client material is not sent.';
+  function confirmWords(by) { return 'Confirm as ' + (String(by || '').trim() || 'you'); }
+  function materialAsk(t, mk) {
+    var who = String(mk.by || ''), ready = !!(mk.origin && who.trim());
+    return '<div class="matbox" role="group" aria-label="What is this material?"><span class="lk-l">First, what is this material?</span>' +
+      '<p class="meta" style="margin:0">' + esc(MATERIAL_WORDS) + '</p>' +
+      MATERIAL.map(function (o) {
+        return '<label class="matopt"><input type="radio" name="mat-origin" data-mat-origin="' + o[0] + '"' + (mk.origin === o[0] ? ' checked' : '') + '><span><b>' + esc(o[1]) +
+          '</b><span class="meta">' + esc(o[2]) + '</span></span></label>';
+      }).join('') +
+      '<input class="matby" type="text" data-mat-by aria-label="Who is saying this" placeholder="Your name" value="' + esc(who) + '">' +
+      '<div class="row"><button type="button" class="btn-rect primary" data-mat-confirm="' + esc(t.id) + '"' + (ready ? '' : ' disabled') + '>' + esc(confirmWords(who)) + '</button></div></div>' +
+      '<div class="row"><span class="spacer" style="flex:1"></span><button type="button" class="btn-rect" data-close>Not now</button><button type="button" class="btn-rect primary" disabled>Make</button></div>' +
+      '<p class="meta" style="margin:0;text-align:right">Answer the question first.</p>';
+  }
+  /** Once it is answered, the card says so (mock state 1b: "Invented, confirmed by Shrey."). */
+  function materialBox(m) {
+    if (!isObj(m) || !m.origin) return '';
+    var o = MATERIAL.filter(function (x) { return x[0] === m.origin; })[0];
+    return '<div class="matdone"><span class="lk-l">Material</span><span><b>' + esc(o ? o[1] : m.origin) + (m.by ? '</b>, confirmed by ' + esc(m.by) : '</b>') + '.</span></div>';
   }
   /** The frames_status answer as the page keeps it: the held pictures and the places the engine said a picture cannot fill. */
   function framesFrom(info) {
@@ -2860,7 +2896,7 @@ var TerritoriesPictures = (function () {
   }
 
   return { STEPS: STEPS, CHOICES: CHOICES, view: view, chip: chip, rightsWord: rightsWord, rightsOf: rightsOf, labelOf: labelOf, panel: panel, strip: strip, slotHtml: slotHtml,
-    dialog: dialog, makeDialog: makeDialog, assetUrl: assetUrl, framesFrom: framesFrom, heldOf: heldOf, withHeld: withHeld, canMake: canMake, STEPS_MAKE: MAKE, boothCard: boothCard, firstOpen: firstOpen, handles: handles, act: act, reqWords: reqWords };
+    dialog: dialog, makeDialog: makeDialog, materialAsk: materialAsk, materialBox: materialBox, confirmWords: confirmWords, assetUrl: assetUrl, framesFrom: framesFrom, heldOf: heldOf, withHeld: withHeld, canMake: canMake, STEPS_MAKE: MAKE, boothCard: boothCard, firstOpen: firstOpen, handles: handles, act: act, reqWords: reqWords };
 })();
 </script>
 
@@ -3165,7 +3201,7 @@ var TerritoriesLookups = (function () {
       function done(res) {
         var err = hostErr(res); if (err) { resolve({ ok: false, why: err }); return; }
         var b = mwBody(res) || {}, j = b.job || {};
-        if (j.error) { resolve({ ok: false, why: j.error.message || j.error.type || 'The engine said no.' }); return; }
+        if (j.error) { resolve({ ok: false, why: j.error.message || j.error.type || 'The engine said no.', need: j.error.need || null }); return; }
         if (j.state === 'failed') { resolve({ ok: false, why: 'The engine stopped.' }); return; }
         if (j.state === 'queued' || j.state === 'running' || j.state === 'sending') {
           if (++tries > 60) { resolve({ ok: false, why: 'The engine is taking too long.' }); return; }
@@ -3192,7 +3228,8 @@ var TerritoriesLookups = (function () {
     ui.mk = { tid: tid, state: 'asking' }; render();
     stepCall({ step: TerritoriesPictures.STEPS_MAKE.ask, ids: [tid], by: by }).then(function (r) {
       var card = r.ok && r.info && r.info.card;
-      ui.mk = card && card.id ? { tid: tid, state: 'ready', card: card } : { tid: tid, state: 'refused', refused: r.ok ? 'The engine did not make an offer, so nothing was made.' : r.why.replace(/\s+$/, '') };
+      ui.mk = card && card.id ? { tid: tid, state: 'ready', card: card } : { tid: tid, state: 'refused', refused: r.ok ? 'The engine did not make an offer, so nothing was made.' : r.why.replace(/\s+$/, ''),
+        need: r.ok ? null : r.need || null, by: by === 'You' ? '' : by };
       render(); openDialog('make:' + tid, document.querySelector('[data-pic-make="' + tid + '"]'));
     });
   }
@@ -3595,6 +3632,7 @@ var TerritoriesLookups = (function () {
     if ((b = t.closest('[data-play-toggle]'))) { var id = b.getAttribute('data-play-toggle'), on = b.getAttribute('data-on') === '1'; closeDialog(true); run({ a: 'play', id: id, on: on }); return; }
     if ((b = t.closest('[data-play]'))) { run({ a: 'play', id: b.getAttribute('data-play'), on: b.getAttribute('aria-pressed') !== 'true' }); return; }
     if ((b = t.closest('[data-pic-make]'))) { ev.stopPropagation(); if (!b.disabled) makeAsk(b.getAttribute('data-pic-make')); return; }
+    if ((b = t.closest('[data-mat-confirm]'))) { if (!b.disabled) materialSay(b.getAttribute('data-mat-confirm')); return; }
     if ((b = t.closest('[data-pic-go]'))) { var gt = b.getAttribute('data-pic-go'); closeDialog(true); run({ a: 'pic_go', tid: gt }); return; }
     if ((b = t.closest('[data-pic-held]'))) { ev.stopPropagation(); var ph = b.getAttribute('data-pic-held').split('|'); openDialog('held:' + ph[0] + ':' + ph[1], b); return; }
     if ((b = t.closest('[data-pic-ok]'))) { var po = b.getAttribute('data-pic-ok').split('|'); closeDialog(true); run({ a: 'pic_ok', tid: po[0], id: po[1] }); return; }
@@ -3632,7 +3670,22 @@ var TerritoriesLookups = (function () {
     if (t.closest('[data-booth="hide"]')) { boothSet(false); return; }
     if (t.closest('#boothEdge')) boothSet(true);
   });
+  // The material question: the choice and the name enable Confirm as you go; Confirm says it through the engine and asks again.
+  function materialSync() {
+    var b = dialogEl && dialogEl.querySelector('[data-mat-confirm]'); if (!b || !ui.mk) return;
+    b.disabled = !(ui.mk.origin && String(ui.mk.by || '').trim()); b.textContent = TerritoriesPictures.confirmWords(ui.mk.by);
+  }
+  function materialSay(tid) {
+    var mk = ui.mk; if (!mk || !mk.origin || !String(mk.by || '').trim()) return;
+    var btn = dialogEl && dialogEl.querySelector('[data-mat-confirm]'); if (btn) { btn.disabled = true; btn.textContent = 'Saying it…'; }
+    stepCall({ step: 'frames_material', origin: mk.origin, by: String(mk.by).trim() }).then(function (r) {
+      if (!r.ok) { toast(r.why); materialSync(); return; }
+      closeDialog(true); ui.mk = null; makeAsk(tid);
+    });
+  }
   document.addEventListener('change', function (ev) {
+    var mo = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-mat-origin');
+    if (mo && ui.mk) { ui.mk.origin = mo; materialSync(); return; }
     var t = ev.target; if (!t || !t.getAttribute) return;
     var id = t.getAttribute('data-tick'); if (id) run({ a: 'tick', id: id, on: !!t.checked });
   });
@@ -3645,6 +3698,7 @@ var TerritoriesLookups = (function () {
   // No <form>: the page runs sandboxed, where a form cannot submit. Add is a button, and Enter in the box presses it.
   function addOwn() { var inp = document.querySelector('input[name="own"]'); ui.draft = inp ? inp.value : ui.draft; if (!(ui.draft || '').trim()) return; run({ a: 'add', text: ui.draft }); }
   document.addEventListener('input', function (ev) {
+    if (ev.target && ev.target.hasAttribute && ev.target.hasAttribute('data-mat-by') && ui.mk) { ui.mk.by = ev.target.value; materialSync(); return; }
     if (ev.target && ev.target.name === 'own') {
       ui.draft = ev.target.value;
       var ab = document.querySelector('[data-act="add"]'), aw = document.querySelector('[data-add-why]');
