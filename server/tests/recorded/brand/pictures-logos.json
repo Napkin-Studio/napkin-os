@@ -1,0 +1,39 @@
+{
+ "pictures": [
+  {
+   "image_id": "f1",
+   "use": "logo",
+   "label": "Wordmark, light ground",
+   "variant": "light",
+   "note": ""
+  },
+  {
+   "image_id": "f2",
+   "use": "logo",
+   "label": "Wordmark, dark ground",
+   "variant": "dark",
+   "note": "white on navy"
+  },
+  {
+   "image_id": "f3",
+   "use": "example",
+   "label": "",
+   "variant": "other",
+   "note": "People by the water"
+  },
+  {
+   "image_id": "f4",
+   "use": "other",
+   "label": "",
+   "variant": "other",
+   "note": ""
+  },
+  {
+   "image_id": "ghost",
+   "use": "logo",
+   "label": "A picture it never saw",
+   "variant": "light",
+   "note": ""
+  }
+ ]
+}

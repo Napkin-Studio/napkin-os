@@ -12,6 +12,11 @@ export class NapkinHost {
      */
     adoptClients(names: string): any;
     /**
+     * One Brand Clan operation (docs/contracts/brand-clan.md section 5): `op`
+     * by name, `input` JSON, `body` a file's bytes for `asset.put`.
+     */
+    brandClan(op: string, input: string, body?: Uint8Array | null): any;
+    /**
      * Compose a standalone document from the open `.clan` — bindings
      * resolved, assets inlined, scripts stripped, brand chrome. The same SDK
      * call every other shell makes; only the delivery differs, because there
@@ -108,6 +113,7 @@ export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly __wbg_napkinhost_free: (a: number, b: number) => void;
     readonly napkinhost_adoptClients: (a: number, b: number, c: number) => [number, number, number];
+    readonly napkinhost_brandClan: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
     readonly napkinhost_composeExport: (a: number, b: number, c: number) => [number, number, number];
     readonly napkinhost_createClient: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly napkinhost_download: (a: number) => [number, number, number, number];

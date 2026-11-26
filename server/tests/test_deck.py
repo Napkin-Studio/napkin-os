@@ -481,6 +481,36 @@ def test_through_the_hosts_index_a_deck_from_a_brief_still_sends_the_brief(deck,
     assert "brief_upstream" not in fake2.posts[0]
 
 
+class BrandHost(IndexHost):
+    """The host as napkin-host sends a Deck that wears a Brand Clan (read.rs brand_upstream): the copy and its logo files beside the index."""
+
+    def __init__(self, *a, brand=None, **k):
+        super().__init__(*a, **k)
+        self.brand = brand
+
+    def clan(self):
+        c = super().clan()
+        if self.brand is not None:
+            c["brand_upstream"] = self.brand
+        return c
+
+
+def test_a_deck_wearing_a_brand_clan_sends_it_and_its_logos_to_the_engine(deck, monkeypatch):
+    """Acceptance A60: Start said the deck wore Copperell Original and the build wore the default look: the Brand Clan never reached the
+    engine. The host's carrier goes through as it came; anything not shaped like it is dropped, never forwarded."""
+    copy = {"name": "Copperell Original", "kit": {"version": 2}, "visual": {"colours": [{"id": "amber", "hex": "#D99A2B", "role": "accent"}],
+            "typography": [{"id": "head", "family": "Libre Caslon", "role": "head"}], "logos": [{"id": "w", "variant": "dark", "asset": "human/assets/ab-w.png"}]}}
+    logos = {"human/assets/brand/doc-brand/ab-w.png": "iVBORw0KGgo=", "human/assets/other.png": "eA==", "human/assets/brand/doc-brand/../x": "eA=="}
+    fake = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    host = BrandHost(data=deck_data(), schema=SCHEMA, brand={"id": "doc-brand", "version": 2, "data": copy, "logos": logos})
+    build(deck, host)
+    assert fake.posts[0]["brand_upstream"] == {"id": "doc-brand", "version": 2, "data": copy, "logos": {"human/assets/brand/doc-brand/ab-w.png": "iVBORw0KGgo="}}
+    for bad in ({"id": "", "data": copy}, {"id": "doc-brand", "data": "x"}, "nope"):
+        fake2 = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+        build(deck, BrandHost(data=deck_data(), schema=SCHEMA, brand=bad))
+        assert "brand_upstream" not in fake2.posts[0]
+
+
 PASS = "v1." + "e30" + "." + "c2ln"
 
 

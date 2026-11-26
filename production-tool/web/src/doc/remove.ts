@@ -20,7 +20,7 @@ import type { DocumentStore } from './types'
 
 type Doc = ProductionDocument
 type Entity = { id: string } & Record<string, unknown>
-export type RemovalKind = 'gen' | 'shot' | 'frame' | 'generation' | 'note' | 'ref' | 'sketch' | 'scene' | 'beat' | 'text' | 'brief' | NodeRemovalKind
+export type RemovalKind = 'gen' | 'shot' | 'frame' | 'generation' | 'note' | 'ref' | 'sketch' | 'scene' | 'beat' | 'text' | 'brief' | 'brand_clan' | NodeRemovalKind
 /** The document's nodes on the canvas (features/canvas-edit-tools.clan). */
 export type NodeRemovalKind = 'script' | 'storyboard' | 'video'
 
@@ -317,6 +317,17 @@ export function removeText(d: Doc, textId: string): Removal {
   takeOut(d, r, 'texts', textId)
   for (const x of Object.values(d.links)) if ((x.from.kind === 'text' && x.from.id === textId) || (x.to.kind === 'text' && x.to.id === textId)) takeOut(d, r, 'links', x.id)
   r.ids = [textId]
+  return r
+}
+
+/** A Brand Clan node left the canvas (Brand Clan phase 2): its brand_clans[id] copy goes, with its links. The Brand Clan
+ *  itself, in the client window, is untouched. */
+export function removeBrandClan(d: Doc, id: string): Removal {
+  const r = blank('brand_clan', id, `Brand Clan ${id}`)
+  if (!d.brand_clans?.[id]) return r
+  takeOut(d, r, 'brand_clans', id)
+  for (const x of Object.values(d.links)) if ((x.from.kind === 'brand_clan' && x.from.id === id) || (x.to.kind === 'brand_clan' && x.to.id === id)) takeOut(d, r, 'links', x.id)
+  r.ids = [id]
   return r
 }
 

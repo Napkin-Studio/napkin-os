@@ -11,7 +11,7 @@ where the last segment stopped and recorded stages replay for free.
 Routes (JSON; failures are non-2xx with ``{"error": {"type", "message"}}``, never a 200 with an error in it)::
 
     GET  /status                 what is on and what is busy
-    POST /run                    {doc, inputs, approvals, mode, render?, production_upstream?}: start the next segment of this document's run
+    POST /run                    {doc, inputs, approvals, mode, render?, production_upstream?, brand_upstream?}: start the next segment of this document's run
                                  (production_upstream {id, data}: the Production project the deck was spun off from, carried whole;
                                  production_assets {base, pass}: the relay's address and napkin-web's read-only assets pass for it, a secret)
     GET  /run/<doc>              the run so far: state, the run object the screens read, and once built the payload
@@ -229,7 +229,7 @@ def validate_request(body: dict, settings: Settings) -> dict:
             "approvals": approvals, "render": body.get("render", True) is not False, "marks": marks,
             "review": body.get("review") if isinstance(body.get("review"), dict) else {}, "approver": str(body.get("approver") or ""),
             "production_upstream": production_upstream(body), "production_assets": production_assets(body), "members": members_of(body),
-            "brief_upstream": brief_upstream(body), "storyline_edit": se_edit}
+            "brief_upstream": brief_upstream(body), "brand_upstream": brand_upstream(body), "storyline_edit": se_edit}
 
 
 #: Where a brief's client field stops naming the client and starts describing the launch: "Copperell Home Ltd is launching Copperell
@@ -256,6 +256,18 @@ def brief_upstream(body: dict) -> dict | None:
             and bu["data"].get("app") != "production-tool"):
         raise Refused(400, "bad_request", "brief_upstream must be {id, data}: the brief's document id and its data")
     return {"id": bu["id"].strip(), "data": bu["data"]}
+
+
+def brand_upstream(body: dict) -> dict | None:
+    """``{id, version?, data, logos}``: the Brand Clan the deck wears and its logo files (base64, keyed ``human/assets/brand/<id>/<file>``), as
+    the middleware sends it (acceptance A60); None when the deck wears none."""
+    bc = body.get("brand_upstream")
+    if bc is None:
+        return None
+    if not (isinstance(bc, dict) and isinstance(bc.get("id"), str) and bc["id"] and isinstance(bc.get("data"), dict)
+            and isinstance(bc.get("logos", {}), dict)):
+        raise Refused(400, "bad_request", "brand_upstream must be {id, data, logos}: the Brand Clan's document id, its data and its logo files")
+    return bc
 
 
 def members_of(body: dict) -> dict | None:
@@ -692,6 +704,11 @@ class Server:
             d.root.mkdir(parents=True, exist_ok=True)
             bf.write_text(json.dumps(req["brief_upstream"], ensure_ascii=False, sort_keys=True))
             argv += ["--brief-upstream", str(bf)]
+        if req.get("brand_upstream"):   # the Brand Clan the deck wears: its colours, type and logo dress the deck (acceptance A60)
+            bcf = d.root / "brand_upstream.json"
+            d.root.mkdir(parents=True, exist_ok=True)
+            bcf.write_text(json.dumps(req["brand_upstream"], ensure_ascii=False, sort_keys=True))
+            argv += ["--brand-upstream", str(bcf)]
         if run_deck.web_render():   # the cloud's exports carry no internal banner, bracket or open 'to confirm'
             argv.append("--clean-export")
         pu = req.get("production_upstream")

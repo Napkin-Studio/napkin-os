@@ -168,7 +168,7 @@ export type View = (typeof VIEWS)[number]
 
 export interface Region { x: number; y: number; w: number; h: number }
 
-export const LINK_ENDPOINT_KINDS = ['board', 'group', 'note', 'ink', 'script', 'storyboard', 'video', 'ref', 'key', 'frame', 'render', 'sketch', 'document', 'format_set', 'shot', 'text', 'brief'] as const
+export const LINK_ENDPOINT_KINDS = ['board', 'group', 'note', 'ink', 'script', 'storyboard', 'video', 'ref', 'key', 'frame', 'render', 'sketch', 'document', 'format_set', 'shot', 'text', 'brief', 'brand_clan'] as const
 export type LinkEndpointKind = (typeof LINK_ENDPOINT_KINDS)[number]
 export interface LinkEndpoint { kind: LinkEndpointKind; id: string }
 export type StructuralLinkRole = 'drives' | 'renders' | 'input' | 'note' | 'context' | 'brand' | 'master' | 'frame' | 'made_from' | 'note_on_shot' | 'brief'
@@ -854,6 +854,21 @@ export interface BriefSource {
   kept?: Sha256
 }
 /** A Brief node: a Brief Maker brief's spine, frozen at the version taken. Read-only in Production. */
+/** A Brand Clan's published Brand Bible as a Brand Clan node takes it (docs/contracts/brand-clan.md section 8). */
+export interface BrandBible {
+  visual?: { logos?: { id: string; variant?: string; asset?: string; label?: string }[]; colours?: { id: string; name?: string; hex: string; role?: string }[]; typography?: { id: string; family: string; role?: string; use?: string; weight?: string }[] }
+  voice?: { tone?: string; rules?: { id: string; text: string; kind?: 'do' | 'dont' | 'tone' | string }[] }
+  imagery?: { style?: string; bans?: string[] }
+}
+/** A Brand Clan node (Brand Clan phase 2, DESIGN 4a): one of the client's Brand Clans, frozen at the version taken. */
+export interface BrandClanNode extends EntityBase {
+  title: string
+  client?: { id: string; name?: string }
+  source: { document_id: string; path: string; app_id: 'ie.napkin.brand'; version: number; at: string; how: 'default' | 'pick'; kept?: number }
+  bible: BrandBible
+  /** The Brand Clan's logo as a project picture (assets[sha256]): the end card's and the sizes' when linked and there is no Brand board logo. */
+  logo?: { sha256: Sha256; w: number; h: number }
+}
 export interface BriefNode extends EntityBase {
   title: string
   source: BriefSource
@@ -1016,6 +1031,7 @@ export interface EntityMaps {
   texts?: Record<Id, CanvasText>
   /** Optional: a document made before the Brief node has none (features/brief-node.clan). */
   briefs?: Record<Id, BriefNode>
+  brand_clans?: Record<Id, BrandClanNode>
   /** Optional: the pictures marked final (features/prod-assets-route.clan); a document made before it has none. */
   finals?: Record<Id, Final>
   format_sets: Record<Id, FormatSet>
@@ -1030,7 +1046,7 @@ export interface EntityMaps {
 }
 export type MapName = keyof EntityMaps
 export const MAP_NAMES: readonly MapName[] = ['boards', 'sketches', 'scripts', 'scenes', 'storyboards', 'shots', 'beats', 'frames', 'videos', 'generations', 'renders', 'reviews',
-  'links', 'keys', 'refs', 'documents', 'texts', 'briefs', 'finals', 'format_sets', 'sizes', 'checks', 'asks', 'suggestions', 'spin_ins', 'jobs', 'stale', 'exports']
+  'links', 'keys', 'refs', 'documents', 'texts', 'briefs', 'brand_clans', 'finals', 'format_sets', 'sizes', 'checks', 'asks', 'suggestions', 'spin_ins', 'jobs', 'stale', 'exports']
 
 export interface ProductionDocument extends EntityMaps {
   contract_version: ContractVersion

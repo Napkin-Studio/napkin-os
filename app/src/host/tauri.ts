@@ -13,6 +13,7 @@ import { listen } from '@tauri-apps/api/event'
 import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog'
 import { frameQuery } from './frame'
 
+import { brandApi, type BrandApi } from './brandClans'
 import type {
   Adopted,
   LegacyName,
@@ -113,6 +114,14 @@ export const tauriHost: Host = {
 
   listLibrary: filter =>
     invoke<LibraryListing>('list_library', { client: filter?.client ?? null, appId: filter?.app ?? null }),
+  get brandClans() { return (this as unknown as { _bc?: BrandApi })._bc ??= brandApi(this) },
+  brandClan: <T,>(op: string, input: Record<string, unknown>, bytes?: Uint8Array) =>
+    invoke<T>('brand_clan', { op, input, body: bytes ? Array.from(bytes) : null }),
+  brandClanAsset: async (path, name) => {
+    const r = await invoke<{ content_type: string; base64: string }>('brand_clan', { op: 'asset.get', input: { path, name }, body: null })
+    const raw = Uint8Array.from(atob(r.base64), c => c.charCodeAt(0))
+    return URL.createObjectURL(new Blob([raw], { type: r.content_type }))
+  },
   clients: {
     list: (includeArchived = false) => invoke<ClientRecord[]>('list_clients', { includeArchived }),
     create: (name, material) => invoke<ClientRecord>('create_client', { name, material: material ?? null }),

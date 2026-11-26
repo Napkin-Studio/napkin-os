@@ -639,6 +639,25 @@ def from_upstream(data: dict, members: dict | None = None, docs: dict | None = N
     return inp
 
 
+def brand_clan_copy(did: str, data: dict, read) -> dict:
+    """The Brand Clan a deck wears, as look.brand_tokens reads it: its frozen copy, its document id, and its logo files by variant
+    (``_logo_files``). Its logo files travel with it (owner 2026-11-24, "Yes it reaches deck"): the host copies each published logo to
+    human/assets/brand/<brand document id>/<file> on attach and Update (napkin-host library::brand_logo_entry). ``read(entry)`` gives a
+    file's bytes or None: from the deck document (--deck) or from what the middleware carried (--brand-upstream, acceptance A60)."""
+    brand = {**data, "_document_id": did}
+    files = {}
+    for lg in ((brand.get("visual") or {}).get("logos") or []):
+        a = str((lg or {}).get("asset") or "")
+        if not a or (lg or {}).get("variant") not in ("dark", "light", "mark") or lg["variant"] in files:
+            continue
+        got = read(f"human/assets/brand/{did}/{a.rsplit('/', 1)[-1]}")
+        if got:
+            files[lg["variant"]] = {"name": a.rsplit("/", 1)[-1], "bytes": got}
+    if files:
+        brand["_logo_files"] = files
+    return brand
+
+
 def from_deck_document(path: Path) -> tuple[Inputs, dict]:
     """The runner's one way into a Deck document (a ``.clan``): its Inputs through ``from_upstream`` with the app map read from
     ``lineage.attached`` (so an attached kit is never the brief or research and a Brand Clan's pins never reach the facts), and what
@@ -650,7 +669,8 @@ def from_deck_document(path: Path) -> tuple[Inputs, dict]:
     rd = lambda n: yaml.safe_load(z.read(n)) if n in names else None  # noqa: E731
     man, data = rd("manifest.yaml") or {}, rd("shared/data.yaml") or {}
     attached = (man.get("lineage") or {}).get("attached") or []
-    apps = {(a.get("carried") or {}).get("document_id"): a.get("app_id") for a in attached if (a.get("carried") or {}).get("document_id")}
+    # clan-sdk flattens Attached.carried into the entry, so each one names its document_id itself (manifest.rs, `#[serde(flatten)]`).
+    apps = {a.get("document_id"): a.get("app_id") for a in attached if isinstance(a, dict) and a.get("document_id")}
     members = {"facts": rd("shared/facts.yaml"), "findings": rd("shared/findings.yaml"), "sources": rd("shared/sources.yaml"),
                "decisions": rd("agent/decision-chain.yaml")}
     inp = from_upstream(data, {k: v for k, v in members.items() if v is not None}, apps=apps,
@@ -659,11 +679,12 @@ def from_deck_document(path: Path) -> tuple[Inputs, dict]:
     lib = bool(((data.get("inputs") or {}).get("library") or {}).get("enabled") is True)
     pack = brand = None
     for did, app in apps.items():
-        if did in up and lib:
-            if app == STYLE_PACK_APP and pack is None:
-                pack = (up[did], lambda p: z.read(p) if p in names else None)
-            elif app == BRAND_APP and brand is None:
-                brand = up[did]
+        # The client's Brand Clan dresses the deck whether or not the team library is on (Brand Clan phase 2, mock e1: the library
+        # is Off and the deck still wears Tidewell's look); the library gate keeps a kit's pins and pictures out of the content.
+        if did in up and app == BRAND_APP and brand is None:
+            brand = brand_clan_copy(did, up[did], lambda entry: z.read(entry) if entry in names else None) if isinstance(up[did], dict) else up[did]
+        elif did in up and lib and app == STYLE_PACK_APP and pack is None:
+            pack = (up[did], lambda p: z.read(p) if p in names else None)
     if lib is False and any(app in KIT_APPS for app in apps.values()):
         inp.coverage["kits_gated_off"] = True
     prod = next(((k, v) for k, v in up.items() if isinstance(v, dict) and v.get("app") == "production-tool"), None)   # carried whole (production-spinoff)

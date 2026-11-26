@@ -60,6 +60,8 @@ const L = vm.runInNewContext(`${logicRun}; DeckLogic`) as {
   lookPanel(data: unknown): { agency: { use: boolean; shown: boolean }; kits: { shown: boolean; pack: { name: string; version: number } | null; brand: { name: string; version: number } | null } }
   agencyPatch(use: boolean, by: string | null, at: string): unknown
   agencyLookNotice(data: unknown): { text: string; canUpdate: boolean; requested: boolean } | null
+  brandLook(data: unknown, targets: unknown): { held: { id: string; name: string; version: number; swatches: string[] } | null; newer: number | null; client: string
+    options: { id: string; name: string; version: number; default: boolean; swatches: string[] }[] }
   agencyUpdatePatch(at: string): unknown
   DECK_TYPES: { id: string; label: string; one_line: string; kind: string; looks: string; article: string }[]
   DECK_TYPE_CARDS: TypeCard[]
@@ -539,7 +541,9 @@ test('the Start look panel: the agency opt-out shows once the deck has met an ag
   const on = L.lookPanel({ ...base, inputs: { library: { enabled: true } }, look: { agency_look: { use: false } } })
   assert.equal(on.agency.use, false)
   assert.equal(on.agency.shown, true)
-  assert.deepEqual(plain(on.kits), { shown: true, pack: { name: 'Demo pack', version: 3 }, brand: { name: 'Demo brand', version: 5 } })
+  // Brand Clan phase 2 (approved 2026-11-23): a Brand Clan is the Look card's own row (brandLook), shown with the library on or off, so
+  // it is no longer also a library "Brand kit" line here.
+  assert.deepEqual(plain(on.kits), { shown: true, pack: { name: 'Demo pack', version: 3 }, brand: null })
   assert.equal(L.lookPanel(null).agency.use, true)
 })
 
@@ -590,7 +594,8 @@ function mount(data: Record<string, unknown>, fetchImpl?: unknown, extraEls: Rec
   const click = (attrs: Record<string, string>, id = '') =>
     handlers.click.forEach(h => h({ target: { closest: () => ({ dataset: attrs, id }) } }))
   const fire = (t: string, e: Record<string, unknown>) => (handlers['win:' + t] || []).forEach(h => h(e))
-  return { app, writes, click, toastEl, doc, timers, fire, win }
+  const change = (dataset: Record<string, string>, id = '') => (handlers.change || []).forEach(h => h({ target: { dataset, id } }))
+  return { app, writes, click, toastEl, doc, timers, fire, win, change }
 }
 
 const hostile = '<img src=x onerror=alert(1)>'
@@ -2833,6 +2838,114 @@ test('Review: a slide with more than four pictures lays them out in a grid so si
   assert.match(html, /function fitSlideText\(\)/) // the words step down until they sit above the foot of the slide (slides 11 and 12 ran off it)
 })
 
+// Brand Clan phase 2, lane C3 (mocks e1, e2): the Look card shows the Brand Clan the deck wears, says when it has a newer version, and
+// re-themes only when a person presses Update look (attach update, or attach of another Brand Clan). The words stay the same.
+const zeroFrozen = { name: 'Zero', kit: { version: 1 }, visual: { colours: [{ id: 'silver', hex: '#9AA7B1', role: 'other' }, { id: 'mint', hex: '#8FE0C8', role: 'accent' }, { id: 'ink', hex: '#1C2630', role: 'ink' }] } }
+const bcTargets = [
+  { app_id: 'ie.napkin.brand', document_id: 'bc-orig', title: 'Tidewell · Original', version: 3, held_version: null, attached: false, default: true, locked: false, swatches: ['#0B5E8A', '#EAF2F6', '#0F2433'], client: { id: 'c1', name: 'Tidewell' } },
+  { app_id: 'ie.napkin.brand', document_id: 'bc-zero', title: 'Tidewell · Zero', version: 2, held_version: 1, attached: true, default: false, locked: false, swatches: ['#9AA7B1', '#7FD6BD', '#1C2630'], client: { id: 'c1', name: 'Tidewell' } },
+  { app_id: 'ie.napkin.brief-maker', document_id: 'b1', title: 'A brief', version: null, attached: false, default: false, locked: false, swatches: [], client: null },
+]
+
+test('brandLook: the Brand Clan held, its newer version and the client\'s Brand Clans by name', () => {
+  const b = L.brandLook({ upstream: { 'bc-zero': zeroFrozen } }, bcTargets)
+  assert.deepEqual(plain(b.held), { id: 'bc-zero', name: 'Zero', version: 1, swatches: ['#9AA7B1', '#8FE0C8', '#1C2630'] })
+  assert.equal(b.newer, 2)
+  assert.equal(b.client, 'Tidewell')
+  assert.deepEqual(plain(b.options.map(o => [o.name, o.version, o.default])), [['Original', 3, true], ['Zero', 2, false]])
+  assert.equal(L.brandLook({ upstream: { 'bc-zero': { ...zeroFrozen, kit: { version: 2 } } } }, bcTargets).newer, null, 'held at the current version')
+  assert.equal(L.brandLook({}, []).held, null)
+  // just after an attach, before the page's data holds the frozen copy, the host's attached record says what is held
+  const justAttached = L.brandLook({}, bcTargets)
+  assert.deepEqual(plain(justAttached.held), { id: 'bc-zero', name: 'Zero', version: 1, swatches: ['#9AA7B1', '#7FD6BD', '#1C2630'] })
+  assert.equal(justAttached.newer, 2)
+  // a Brand Clan is the look row, never a library "Brand kit" line as well
+  assert.equal(L.lookPanel({ upstream: { 'bc-zero': zeroFrozen }, inputs: { library: { enabled: true } } }).kits.brand, null)
+})
+
+const lookData = { inputs: { prompt: { client: 'Tidewell', project: 'Summer Zero pitch', text: 'A pitch.' }, kind: 'agency', format: 'pitch' }, upstream: { 'bc-zero': zeroFrozen } }
+function bcFetch(posts: { url: string; body: string }[]) {
+  return (url: string, init?: { method?: string; body?: string }) => {
+    if (init?.method === 'POST') { posts.push({ url, body: init.body ?? '' }); return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) }) }
+    if (String(url).endsWith('/attach-targets')) return Promise.resolve({ ok: true, json: () => Promise.resolve(bcTargets) })
+    return Promise.resolve({ ok: false, json: () => Promise.resolve(null) })
+  }
+}
+const tick = () => new Promise(r => setTimeout(r, 15))
+
+test('the Look card: the Brand Clan the deck wears, the newer version notice, and the client\'s look winning (e1)', async () => {
+  const posts: { url: string; body: string }[] = []
+  const m = mount(lookData, bcFetch(posts))
+  await tick()
+  const h = m.app.innerHTML
+  assert.match(h, /data-brand-look/)
+  assert.match(h, /Tidewell · Zero<\/div>/)
+  assert.match(h, /Brand Clan · built with v1 ·<span class="sw"><i style="background:#9AA7B1"><\/i>/)
+  assert.match(h, /<b>Zero has a newer version, v2\.<\/b> This deck keeps its look until you press Update look\. The words stay the same\./)
+  assert.match(h, /Tidewell’s look wins over your agency’s\. A look never changes what a slide says\./)
+  assert.equal(posts.length, 0, 'nothing changes until a person presses')
+})
+
+test('Update look (e2): the menu lists each look with its swatches; the newer version is an attach update, another look an attach', async () => {
+  const posts: { url: string; body: string }[] = []
+  const m = mount(lookData, bcFetch(posts))
+  await tick()
+  m.click({ bclook: 'open' })
+  const h = m.app.innerHTML
+  assert.match(h, /Re-theme this deck with/)
+  assert.match(h, /Original <small>· default v3<\/small><\/span><span class="sw"><i style="background:#0B5E8A">/)
+  assert.match(h, /data-bcpick="bc-zero" checked/)
+  assert.match(h, /Same words, new colours, type and logo\./)
+  m.click({ bclook: 'apply' })
+  await tick()
+  assert.equal(posts.length, 1)
+  assert.match(posts[0].url, /\/attach\/update$/)
+  assert.deepEqual(JSON.parse(posts[0].body), { document_id: 'bc-zero' })
+  assert.match(m.toastEl.textContent, /Look updated to Zero v2\. The next build wears it; the words stay the same\./)
+  await tick()
+  // another look: attach replaces the one held
+  m.click({ bclook: 'open' })
+  m.change({ bcpick: 'bc-orig' })
+  assert.match(m.app.innerHTML, /data-bcpick="bc-orig" checked/)
+  m.click({ bclook: 'apply' })
+  await tick()
+  assert.equal(posts.length, 2)
+  assert.match(posts[1].url, /\/attach$/)
+  assert.deepEqual(JSON.parse(posts[1].body), { document_id: 'bc-orig' })
+})
+
+test('Cancel leaves the deck as it is; the same Brand Clan at its current version is not re-attached', async () => {
+  const posts: { url: string; body: string }[] = []
+  const m = mount({ ...lookData, upstream: { 'bc-zero': { ...zeroFrozen, kit: { version: 2 } } } }, bcFetch(posts))
+  await tick()
+  assert.doesNotMatch(m.app.innerHTML, /has a newer version/)
+  m.click({ bclook: 'open' })
+  m.click({ bclook: 'cancel' })
+  assert.doesNotMatch(m.app.innerHTML, /Re-theme this deck with/)
+  m.click({ bclook: 'open' })
+  m.click({ bclook: 'apply' })
+  await tick()
+  assert.equal(posts.length, 0)
+  assert.match(m.toastEl.textContent, /already wears Zero v2/)
+})
+
+test('a new deck starts on the client\'s default Brand Clan; a deck with words in it is never re-linked', async () => {
+  const none = bcTargets.map(t => ({ ...t, attached: false, held_version: null }))
+  const fetchWith = (posts: { url: string; body: string }[]) => (url: string, init?: { method?: string; body?: string }) => {
+    if (init?.method === 'POST') { posts.push({ url, body: init.body ?? '' }); return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) }) }
+    if (String(url).endsWith('/attach-targets')) return Promise.resolve({ ok: true, json: () => Promise.resolve(none) })
+    return Promise.resolve({ ok: false, json: () => Promise.resolve(null) })
+  }
+  const posts: { url: string; body: string }[] = []
+  mount({ inputs: { prompt: { client: 'Tidewell', project: 'P', text: '' }, kind: 'agency', format: 'pitch' } }, fetchWith(posts))
+  await tick(); await tick()
+  assert.deepEqual(posts.map(p => [p.url.replace(/^clan:\/\/localhost/, ''), JSON.parse(p.body).document_id]), [['/attach', 'bc-orig']])
+  const begun: { url: string; body: string }[] = []
+  mount({ inputs: { prompt: { client: 'Tidewell', project: 'P', text: 'A summer pitch for Zero.' }, kind: 'agency', format: 'pitch' } }, fetchWith(begun))
+  await tick(); await tick()
+  assert.equal(begun.length, 0)
+})
+
 // ── UAT round 4 (a01c5e33): the engine check answering late, failing, or a Build pressed before it answered ──
 /** A host whose clan://middleware answers only when the test says (resolve) or fails (reject); each call is a new pending answer. */
 function lateMiddleware() {
@@ -2964,6 +3077,21 @@ test('UAT round 4 F26: a deck made from a Production project counts it too, with
 test('a projection with no pins and no usable findings is not research', () => {
   assert.equal(L.upstreamSummary({ upstream: { b: uatBrief }, projection: { findings: {}, pins: {} } }).research, null)
   assert.equal(L.upstreamSummary({ upstream: { b: uatBrief }, projection: { findings: { f1: { status: 'rejected' } }, pins: {} } }).research, null)
+})
+
+test('the Look card picks up a Brand Clan published while the deck is open, without a reload (A33)', async () => {
+  let current = bcTargets.map(t => (t.document_id === 'bc-zero' ? { ...t, version: 1 } : t))
+  const fetchImpl = (url: string) => String(url).endsWith('/attach-targets')
+    ? Promise.resolve({ ok: true, json: () => Promise.resolve(current) })
+    : Promise.resolve({ ok: false, json: () => Promise.resolve(null) })
+  const m = mount(lookData, fetchImpl)
+  await tick()
+  assert.doesNotMatch(m.app.innerHTML, /has a newer version/)
+  const poll = m.win.__deckBrandPoll as () => Promise<boolean>
+  assert.equal(await poll(), false, 'nothing new: the page is not re-rendered')
+  current = bcTargets
+  assert.equal(await poll(), true)
+  assert.match(m.app.innerHTML, /<b>Zero has a newer version, v2\.<\/b>/)
 })
 
 // ── UAT round 4 blocker 2: a brief-only deck named no project, so the cover read "Copperell Home Ltd:" and the exports "Project.pptx" ──

@@ -62,6 +62,10 @@ pub struct ClientRecord {
     /// When it was archived; absent while it is live.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub archived_at: Option<String>,
+    /// The `document_id` of the client's default Brand Clan
+    /// (`docs/contracts/brand-clan.md` section 3); new work starts on it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_brand_clan: Option<String>,
 }
 
 impl ClientRecord {
@@ -332,6 +336,7 @@ fn new_record(reg: &Registry, ctx: &Ctx, name: &str, material: Option<&str>) -> 
         owner: ctx.actor.as_str().to_string(),
         created_at: chrono::Utc::now().to_rfc3339(),
         archived_at: None,
+        default_brand_clan: None,
     }
 }
 
@@ -536,4 +541,25 @@ pub fn legacy_offer(store: &dyn DocStore) -> HostResult<Vec<LegacyName>> {
         .into_iter()
         .map(|(name, documents)| LegacyName { name, documents })
         .collect())
+}
+
+/// Set (or clear) the client's default Brand Clan: one write to the registry.
+/// The caller has checked that the document is a Brand Clan of this client.
+pub fn set_default_brand_clan(
+    store: &dyn DocStore,
+    ctx: &Ctx,
+    id: &str,
+    document_id: Option<&str>,
+) -> HostResult<ClientRecord> {
+    let _guard = WRITE.lock().unwrap_or_else(|e| e.into_inner());
+    let (mut reg, base) = read_registry(store)?;
+    let c = reg
+        .clients
+        .iter_mut()
+        .find(|c| c.id == id)
+        .ok_or_else(|| HostError::not_found(format!("no such client: {id}")))?;
+    c.default_brand_clan = document_id.map(String::from);
+    let out = c.clone();
+    write_registry(store, &reg, base, ctx.actor.as_str())?;
+    Ok(out)
 }

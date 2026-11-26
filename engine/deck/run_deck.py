@@ -411,6 +411,10 @@ def _stamp_look(a, deck: dict, brand: dict | None, rep: dict, ctx: dict | None =
     agency, use = _replay_agency(a, ctx, look_rep)
     lp = ctx.get("look") or {}
     wears = (lp.get("brand") or {}).get("wears") or a.wears if ctx else a.wears
+    # The client's Brand Clan wins over the agency look (Brand Clan phase 2; owner 2026-11-23): with one attached and no wears chosen in the
+    # document or on the command line, the deck wears the client. A person's own choice (look.brand.wears, --wears) still stands.
+    if ctx and not (lp.get("brand") or {}).get("wears") and a.wears == "agency" and look._present(look.brand_tokens(ctx.get("brand"))):
+        wears = "client"
     wears_problem = None
     if wears not in look.WEARS:   # an unknown value never crashes a build: the default stands and the problem is said
         wears_problem = f"look.brand.wears {wears!r} is not one of {', '.join(look.WEARS)}: the deck wears the agency"
@@ -746,6 +750,30 @@ def _picture_style(a, deck_ctx, client: str):
     return vstyle.load(None)
 
 
+def _brand_upstream(a, deck_ctx: dict | None) -> dict | None:
+    """``--brand-upstream FILE`` (JSON ``{id, version?, data, logos}``, the engine server's way: the middleware sends the Brand Clan the deck
+    wears, with its logo files in base64): the deck context the look reads, as ``--deck`` gives it (inputs.brand_clan_copy). A ``--deck``
+    wins. Acceptance A60: never sent before, so a deck whose Start said it wore the client's Brand Clan was built in the default look."""
+    if not getattr(a, "brand_upstream", None) or getattr(a, "deck", None):
+        return deck_ctx
+    try:
+        raw = json.loads(a.brand_upstream.read_text())
+        ok = isinstance(raw, dict) and isinstance(raw.get("id"), str) and raw["id"] and isinstance(raw.get("data"), dict)
+    except (OSError, ValueError):
+        ok = False
+    if not ok:
+        raise SystemExit("refused: --brand-upstream must be a JSON file {id, data, logos}: the Brand Clan's document id, its data and its logo files")
+    import base64   # noqa: PLC0415
+    logos = raw.get("logos") if isinstance(raw.get("logos"), dict) else {}
+
+    def read(entry: str):
+        try:
+            return base64.b64decode(logos[entry], validate=True) if isinstance(logos.get(entry), str) else None
+        except ValueError:
+            return None
+    return {**(deck_ctx or {}), "brand": inputs.brand_clan_copy(raw["id"], raw["data"], read)}
+
+
 def _brief_upstream(a, inp) -> bool:
     """``--brief-upstream FILE`` (JSON ``{id, data}``, the engine server's way: the middleware sends the brief the deck was spun off from): the
     deck builds from its fields (inputs.apply_upstream_brief), with the carried decision chain's marks. A ``--brief`` or ``--deck`` wins. UAT
@@ -979,6 +1007,9 @@ def main(argv=None):
     ap.add_argument("--clean-export", action="store_true",
                     help="the exported files carry no internal check banner (DRAFT, CHECK FAILED), no bracket placeholder and no open 'to confirm' on a slide: "
                          "open items go to the appendix, and the page numbers and notes carry no ids (the cloud's web render)")
+    ap.add_argument("--brand-upstream", type=Path, metavar="FILE",
+                    help="the Brand Clan the deck wears, JSON {id, version?, data, logos} as the engine server writes it from the middleware's "
+                         "request (its logo files in base64, keyed human/assets/brand/<id>/<file>); a --deck wins")
     ap.add_argument("--brief-upstream", type=Path, metavar="FILE",
                     help="the brief this deck was spun off from, carried whole (JSON {id, data}: the source document id and its shared/data.yaml): the deck "
                          "builds from its fields (the engine server's way: the middleware sends it). A --brief or --deck wins")
@@ -1099,6 +1130,7 @@ def main(argv=None):
         except (OSError, ValueError) as e:
             raise SystemExit(f"refused: --members must be a JSON file of the carried research ({e})")
     _brief_upstream(a, inp)   # spun off a brief: its fields (before a Production project's, which yields to it)
+    deck_ctx = _brand_upstream(a, deck_ctx)   # the Brand Clan the deck wears, as the middleware carries it (acceptance A60)
     _add_marks(a, inp)
     _master_size(a, _explicit_size(a, deck_ctx, answers))   # deck-slide-size: a master/size conflict is refused here, before any paid stage
     prod_up = _production_upstream(a, inp, deck_ctx)   # production-spinoff: the Production project carried whole, unless a --production file was given
