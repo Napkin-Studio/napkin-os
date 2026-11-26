@@ -153,6 +153,7 @@ test('the material question of the frames mock (state 1a), and the card saying w
   // the runtime sends the answer as the engine's frames_material step, then asks again
   assert.match(html, /stepCall\(\{ step: 'frames_material', origin: mk\.origin, by: String\(mk\.by\)\.trim\(\) \}\)/)
   assert.match(html, /need: j\.error\.need \|\| null/)
+})
 
 test('the Make pictures ask says whose look the pictures wear, and a fresh document starts on the client default (Brand Clan phase 2 (d))', () => {
   const d = doc()
