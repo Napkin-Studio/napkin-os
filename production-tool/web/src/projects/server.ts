@@ -15,7 +15,7 @@
 import type { InputMime, SavedProject, UploadResponse } from '../contracts/types'
 import { RelayError } from '../relay'
 import { accessOf, type Access } from '../relay/access'
-import { setMediaBase } from '../lib/media'
+import { setMediaBase, setWorkspace } from '../lib/media'
 
 /** Someone saved the project (from another browser or tab) since this one last saved or opened it. */
 export class SaveConflict extends Error {
@@ -96,6 +96,7 @@ export class ProjectServer {
       if (!res.ok) return this.fail(res)
       const s = (await res.json()) as { tenant: string; media_base?: string | null }
       setMediaBase(s.media_base)
+      setWorkspace(s.tenant)
       return { tenant: s.tenant, media_base: s.media_base ?? null }
     })()
     this.session_.catch(() => { this.session_ = null })
