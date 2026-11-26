@@ -152,7 +152,9 @@ const END_LABEL = /\s*\bend[ -]?card\b[.!]?$/i
 const END_PREFIX = /^(.*?)\bend[ -]?card\b[^:\u2013\u2014"\u201c]*(?:[:\u2013\u2014]\s*|(?=["\u201c]))/i
 /** A planner's stage directions inside a card shot ("the can centred on clean colour", "appears, the legal line small
  *  beneath"): they say how the card looks, not what it says (UAT 2026-11-24: they became the card's words). */
-const STAGE = /\b(?:appears?|centred|centered|beneath|underneath|clean colou?r|legal line|small print)\b|^(?:the|a)\s+(?:can|pack|bottle|logo|product)\b/i
+const STAGE = /\b(?:appears?|centred|centered|beneath|underneath|clean colou?r|legal line|small print)\b|^(?:the|a)\s+(?:can|pack|bottle|logo|product)\b|\bon the (?:end[ -]?)?card\b/i
+/** A single copy label at the start of a card shot's words: "Super:", "Headline:", "Title:". */
+const ONE_LABEL = /^(?:super|headline|title)\s*:\s*/i
 /** The words a direction says: the quoted ones, else its sentences less the stage directions. */
 const spoken = (t: string) => quoted(t) ?? sentences(t).filter((x) => !STAGE.test(x)).join(' ')
 const sentences = (t: string) => t.trim().split(/(?<=[.!?])\s+/).filter(Boolean)
@@ -308,7 +310,10 @@ export function endCardOf(d: ProductionDocument, storyboardId: Id | undefined): 
   const shot = shots.find((s) => s.kind === 'end_card')
   if (!shot) return undefined
   const named = cardName(d)
-  const words = (shot.action ?? '').trim()
+  const action = (shot.action ?? '').trim()
+  // One label alone ("Super: Still cider. Even on a Tuesday.") is not labelled copy (labelledCard needs two): the label
+  // goes and the words are read as words (five-tool run 2026-11-26: the headline read "Super: Still cider").
+  const words = labelledCard(action) ? action : action.replace(ONE_LABEL, '')
   const card = (headline: string, line: string) => ({ headline: headline || named, line: line || headline || named, bg: DEFAULT_CARD_BG, durS: shot.duration_s || 1.5 })
   // Labelled copy (A54): the Super is the headline, what is beneath it the line (else the brand), the small line the legal.
   const labelled = labelledCard(words)
