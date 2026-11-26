@@ -144,3 +144,44 @@ def test_a_logo_for_a_dark_ground_still_wins_over_an_other():
     files = {f"human/assets/brand/{did}/a.svg": SVG, f"human/assets/brand/{did}/b.svg": dark}
     t = look.brand_tokens(inputs.brand_clan_copy(did, clan, files.get))
     assert "000000" in t["logos"]["dark"]
+
+
+# UAT 2026-11-26 (owner "Both"): a Brand Clan made by hand in the client window files every colour and face as role "other", so the deck
+# wore the default look. With no role given, the order is the role (docs/contracts/brand-clan.md 2.1, "By order"): the first colour is the
+# primary (the deck's ink when it is dark enough to carry text and dark slides, else its accent), the second the accent, the third the
+# background (the deck's paper, when ink still reads on it); the first face is the headline face, the second the body face.
+HANDMADE = {"name": "Original", "kit": {"version": 2}, "visual": {
+    "colours": [{"id": "navy", "name": "Night navy", "hex": "#14233F", "role": "other"}, {"id": "brass", "name": "Brass", "hex": "#E0B040", "role": "other"}],
+    "typography": [{"id": "georgia", "family": "Georgia", "role": "other"}],
+    "logos": [{"id": "solas-logo", "label": "Logo", "variant": "other", "asset": "human/assets/230864de45-solas-logo.png"}]}}
+
+
+def test_a_hand_made_brand_clan_dresses_the_deck_by_order():
+    t = look.brand_tokens(HANDMADE)
+    assert t["colours"] == {"ink": "14233F", "accent": "E0B040"}
+    assert t["fonts"] == {"head": "Georgia"}
+    assert t["by_order"] == ["ink", "accent", "head"]
+    got = look.resolve(brand=t, wears="client", agency=AGENCY)
+    assert got.brand["colors"]["accent"] == "E0B040" and got.brand["colors"]["ink"] == "14233F" and got.brand["head"] == "Georgia"
+    assert got.theme["from"]["accent"] == "brand_clan"
+
+
+def test_by_order_fills_the_background_and_keeps_contrast():
+    three = {**HANDMADE, "visual": {**HANDMADE["visual"], "colours": HANDMADE["visual"]["colours"] + [{"id": "chalk", "hex": "#F7F3EA", "role": "other"}],
+                                     "typography": [{"id": "g", "family": "Georgia"}, {"id": "i", "family": "Inter", "role": "other"}]}}
+    t = look.brand_tokens(three)
+    assert t["colours"] == {"ink": "14233F", "accent": "E0B040", "paper": "F7F3EA"} and t["fonts"] == {"head": "Georgia", "body": "Inter"}
+    # a light primary cannot carry text: it becomes the accent, and the second colour fills ink only if it is dark
+    light_first = {**HANDMADE, "visual": {**HANDMADE["visual"], "colours": [{"id": "b", "hex": "#E0B040"}, {"id": "n", "hex": "#14233F"}]}}
+    assert look.brand_tokens(light_first)["colours"] == {"accent": "E0B040", "ink": "14233F"}
+    # a dark third colour is not taken as the background (ink would not read on it)
+    dark_bg = {**HANDMADE, "visual": {**HANDMADE["visual"], "colours": HANDMADE["visual"]["colours"] + [{"id": "x", "hex": "#101010"}]}}
+    assert "paper" not in look.brand_tokens(dark_bg)["colours"]
+
+
+def test_roles_given_win_and_the_order_never_mixes_in():
+    t = look.brand_tokens(ZERO)
+    assert t["colours"] == {"accent": "7FD6BD", "ink": "1C2630", "paper": "F4F6F7"} and t["by_order"] == []
+    # one roled colour is enough: the rest are not placed by order (a person who set roles chose them)
+    part = {**HANDMADE, "visual": {**HANDMADE["visual"], "colours": [{"id": "n", "hex": "#14233F", "role": "other"}, {"id": "b", "hex": "#E0B040", "role": "accent"}]}}
+    assert look.brand_tokens(part)["colours"] == {"accent": "E0B040"}
