@@ -1919,7 +1919,7 @@ class Relay:
                 if images:
                     kw = {"images": images}
             out = dict(director.direct({**req, "input": wired}, sheet, **kw))
-            say_unrecognisable(out, req["op"], raw.get("brief"), sheet)  # a passthrough take had no such line (Tidewell UAT)
+            say_unrecognisable(out, req["op"], raw.get("brief"), sheet, wired)  # a passthrough take had no such line (Tidewell UAT)
             if unseen:
                 out["rationale"] = f"Dex could not look at the frame ({unseen}), so your words went as they are."[:300]
         except PromptTooOld as e:  # a config with director.v5 under contract 3: said plainly, never run

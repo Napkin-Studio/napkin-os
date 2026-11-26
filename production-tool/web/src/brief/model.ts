@@ -157,8 +157,28 @@ const LINE_VERB = /^(?:(?:must|should|will|shall)\s+(?:be|read|say)|reads?|says?
 /** The line a brief says the film ends on, from its mandatories ("End on the line: Lumo. Dein Licht.",
  *  "End line – …", "End line must be "…"", "Sign-off: …", "Tagline: …"): the quoted words when it quotes them
  *  (lib/quotes.ts), else what follows the label and its verb. Undefined: it names none. */
+const OPENS = /(?:^|[\s(])['"\u2018\u201c](?=[\p{L}\p{N}])/gu
+const CLOSES = /(?<=[\p{L}\p{N}.!?,])['"\u2019\u201d](?=$|[\s.,;:!?)])/gu
+
+/** A brief's mandatories with a quoted line that was cut into two items put back together ("'Keep out of reach of children."
+ *  and "Read the label before use.'"): a carrier that split the brief at its full stops (UAT acceptance A54, a Territories
+ *  route's brief), so neither the end line nor the legal line was found. An apostrophe ("children's") is not a quote. */
+export function wholeMandatories(list: readonly string[] | undefined): string[] {
+  const open = (t: string) => (t.match(OPENS)?.length ?? 0) > (t.match(CLOSES)?.length ?? 0)
+  const out: string[] = []
+  let held: string | null = null
+  for (const m of list ?? []) {
+    const t: string = held === null ? m : `${held} ${m.trim()}`
+    if (open(t)) held = t
+    else { out.push(t); held = null }
+  }
+  if (held !== null) out.push(held)
+  return out
+}
+
 export function endLineOf(spine: BriefSpine | undefined): string | undefined {
-  for (const m of spine?.mandatories ?? []) {
+  const mandatories = wholeMandatories(spine?.mandatories)
+  for (const m of mandatories) {
     const hit = /\b(?:end(?:s|ing)?\s+(?:on|with)\s+(?:the\s+)?(?:line|words|super)|end[\s-]?line|sign[\s-]?off(?:\s+line)?|tag[\s-]?line|brand\s+line)\b\s*(?:[:\-\u2013\u2014]\s*)?(.+)$/i.exec(m.trim())
     if (!hit) continue
     const line = quoted(hit[1]) ?? hit[1].trim().replace(LINE_VERB, '').replace(/^["'\u201c\u2018]+|["'\u201d\u2019]+$/g, '').trim()
@@ -168,7 +188,7 @@ export function endLineOf(spine: BriefSpine | undefined): string | undefined {
   // "Use 'Refill. Not landfill.' word for word everywhere"): the quoted words of an item that says to keep them word
   // for word. Never the legal or warning line ("Include 'Keep out of reach of children.' word for word"). Acceptance
   // run, 2026-11-25 (A8): the end card got no line from such a mandatory.
-  for (const m of spine?.mandatories ?? []) {
+  for (const m of mandatories) {
     if (!VERBATIM.test(m) || CARRY.test(m) || LEGAL_LABEL.test(m.trim()) || WARNING.test(m) || /\b(?:legal|disclaimer|small print|label)\b/i.test(m)) continue
     const line = quoted(m)
     if (line && /\S\s+\S|\S{3,}/.test(line)) return line.slice(0, 200)
@@ -180,7 +200,8 @@ export function endLineOf(spine: BriefSpine | undefined): string | undefined {
 const VERBATIM = /\b(?:word\s+for\s+word|verbatim|exactly\s+as\s+written)\b/i
 
 /** A warning a drink carries by law or custom (caffeine, alcohol, pregnancy, health): its own mandatory is the legal line. */
-const WARNING = /\b(?:caffeine|alcohol|health warning|not recommended for|pregnan\w*|contains (?:caffeine|alcohol|nuts|sulphites|allergens?))\b/i
+// A household product's warning is one too (UAT acceptance A54: "Keep out of reach of children. Read the label before use.").
+const WARNING = /\b(?:caffeine|alcohol|health warning|not recommended for|pregnan\w*|contains (?:caffeine|alcohol|nuts|sulphites|allergens?)|keep out of (?:the )?reach of children|read the label(?: before use)?)\b/i
 /** "Include '…'", "must carry '…'", "Carry: …": a mandatory that names the words to carry. */
 const CARRY = /\b(?:must\s+(?:carry|include)|carr(?:y|ies)|include)\b/i
 const LEGAL_LABEL = /^(?:legal(?:\s+line)?|disclaimer|small print)\s*[:\-\u2013\u2014]\s*/i
@@ -193,7 +214,7 @@ const CARRY_LABEL = /^(?:the\s+(?:film|ad|card|end card)\s+)?(?:must\s+|should\s
  *  confirm: …" tail. Undefined: it names none. The film's end card carries it (UAT 2026-11-22: the end card had no
  *  legal line; 2026-11-24: a quoted caffeine warning was missed). */
 export function legalOf(spine: BriefSpine | undefined): string | undefined {
-  const mandatories = spine?.mandatories ?? []
+  const mandatories = wholeMandatories(spine?.mandatories)
   // The "Include '…'" / "must carry …" / "Carry: …" forms win over any other mandatory that merely mentions legal.
   const forms = (m: string) => /\b(?:must\s+)?(?:carry|carries|include)\b\s*[:\-\u2013\u2014]?\s*['"\u2018\u201c]/i.test(m)
   for (const m of [...mandatories.filter(forms), ...mandatories.filter((x) => !forms(x))]) {

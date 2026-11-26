@@ -13,7 +13,7 @@ import { purposeOf, purposeWords } from '../model/purpose'
 import type { Relay } from '../relay/types'
 import { MAYA, snapshotDoc } from '../test/jobFixtures'
 import { SHA, addShots, addTake, job } from '../test/model'
-import { alephRatio, captionLayers, cropKeys, edlFor, filmLength, filmSeconds, fitWindows, isSocialShape, masterShots, reframeKey, reframesOf } from './film'
+import { alephRatio, captionLayers, cropKeys, cutsBlocked, edlFor, filmLength, filmSeconds, fitWindows, isSocialShape, masterShots, reframeKey, reframesOf, startLengths } from './film'
 import { cutdownInput, filmLayers, withoutRepeats } from './filmJobs'
 import { checksFor } from './checks'
 import { fileName } from './exportZip'
@@ -366,5 +366,21 @@ describe('the cut plan reads who speaks and what is voiced (UAT round 5, R5-F8)'
     expect(spokenWords(d, shots[4].id, { provider: 'runway', inputs: { model: 'wan3' } })).toBe('MAYA (whispering, to the kettle): Good boy.')
     expect(spokenWords(d, shots[6].id, { provider: 'runway', inputs: { model: 'gemini_omni_flash_1.1' } }))
       .toBe('NARRATOR (V.O.; not voiced in its take): Quietboil. Let them sleep.')
+  })
+})
+
+describe('Make all sizes for a short film (UAT acceptance A57: a 5 s film picked no length, "0 versions", no reason)', () => {
+  it('starts on the defaults shorter than the film, else on the film\'s own length', () => {
+    expect(startLengths(20)).toEqual([15, 6])
+    expect(startLengths(8)).toEqual([6])
+    expect(startLengths(6)).toEqual([6])
+    expect(startLengths(5)).toEqual([5])
+  })
+  it('says why Plan the cuts cannot go, and nothing when it can', () => {
+    expect(cutsBlocked({ shots: 0, lengths: 1, shapes: 1, versions: 1 })).toBe('The ad has no shots to cut from.')
+    expect(cutsBlocked({ shots: 3, lengths: 0, shapes: 1, versions: 0 })).toBe('Pick a length.')
+    expect(cutsBlocked({ shots: 3, lengths: 1, shapes: 0, versions: 0 })).toBe('Pick a shape.')
+    expect(cutsBlocked({ shots: 3, lengths: 1, shapes: 1, versions: 0 })).toBe('That is the ad itself: pick another shape or a shorter length.')
+    expect(cutsBlocked({ shots: 3, lengths: 1, shapes: 3, versions: 2 })).toBeNull()
   })
 })

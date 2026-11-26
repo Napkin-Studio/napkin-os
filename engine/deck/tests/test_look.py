@@ -201,7 +201,9 @@ def test_classic_stays_classic():
 def test_the_brand_seam_returns_nothing_without_a_brand_clan():
     empty = look.brand_tokens(None)
     assert not any(empty[k] for k in ("colours", "colour_ids", "fonts", "type_ids", "logos", "imagery_bans", "chart", "kit")) and empty["logo_placement"] is None
-    assert look.brand_tokens({"visual": {"colours": [{"id": "c1", "role": "accent", "hex": "0B7A75"}]}}) == empty     # a stub until Contract 6 lands
+    # Brand Clan phase 2: the seam reads a Brand Clan now (it was a stub until the contract landed); see test_brand_clan_look.py
+    assert look.brand_tokens({"visual": {"colours": [{"id": "c1", "role": "accent", "hex": "0B7A75"}]}})["colours"] == {"accent": "0B7A75"}
+    assert look.brand_tokens({"name": "not a Brand Clan"}) == empty
     assert look.resolve(brand=empty, agency=AGENCY, wears="client").theme["from"]["accent"] == "agency_look"
     assert look.resolve(brand=look.brand_tokens(None)).theme is None
 
@@ -452,9 +454,9 @@ def _deck_clan(path: Path, *, brand_version=5, library=True, look=None) -> Path:
             "inputs": {"prompt": {"client": "Lumen Water", "project": "Awareness", "text": "Lumen Water wants a summer campaign."},
                        "library": {"enabled": library}},
             "look": look or {}}
-    attached = [{"app_id": "ie.napkin.campaign-research", "carried": {"document_id": "res-1"}},
-                {"app_id": "ie.napkin.brand", "carried": {"document_id": "brand-1"}},
-                {"app_id": "ie.napkin.style-pack", "carried": {"document_id": "pack-1"}}]
+    attached = [{"app_id": "ie.napkin.campaign-research", "document_id": "res-1"},
+                {"app_id": "ie.napkin.brand", "document_id": "brand-1"},
+                {"app_id": "ie.napkin.style-pack", "document_id": "pack-1"}]
     with zipfile.ZipFile(path, "w") as z:
         z.writestr("manifest.yaml", yaml.safe_dump({"document_id": "deck-1", "app": {"app_id": "ie.napkin.deck-maker"}, "lineage": {"attached": attached}}))
         z.writestr("shared/data.yaml", yaml.safe_dump(data))
@@ -672,14 +674,19 @@ def _brand_deck(tmp_path, name="Lumen Water", wears=None):
     return out
 
 
-def test_runner_path_wears_agency_takes_the_clients_logo_and_bans_but_never_its_colours(monkeypatch, tmp_path):
+def test_runner_path_a_brand_clan_with_no_wears_chosen_wears_the_client_over_the_agency_look(monkeypatch, tmp_path):
+    # Owner 2026-11-23 (Brand Clan redesign, approved): the client's Brand Clan wins over the agency look; this reverses the
+    # 17 Nov rule this test used to pin (a deck with a kit and no wears chosen wore the agency, never the client's colours).
     monkeypatch.setattr(look, "brand_tokens", _minimal_brand)
     out = tmp_path / "run"
     deck, rep = _build_in(monkeypatch, tmp_path, out, "--deck", str(_brand_deck(tmp_path)), "--agency-look", _write(tmp_path, "ag.json", AGENCY), base=PROMPT_ARGS, real=True)
     th = deck["meta"]["theme"]
-    assert th["colors"]["accent"] == "7A3FF2" and th["from"]["accent"] == "agency_look" and th["fonts"]["head"] == "Cambria"
-    assert th["colors"]["paper"] == theme.NAPKIN.paper and len(_pptx_logo(out / "deck.pptx")) == 1
+    assert th["colors"]["accent"] == "0B7A75" and th["from"]["accent"] == "brand_clan" and th["fonts"]["head"] == "Brand Serif"
+    assert len(_pptx_logo(out / "deck.pptx")) == 1
     assert th["logo"]["placement"] == "cover_only" and rep["look"]["held"] == []
+    # a person who chose the agency keeps it (look.brand.wears)
+    deck2, _ = _build_in(monkeypatch, tmp_path, tmp_path / "run2", "--deck", str(_brand_deck(tmp_path, wears="agency")), "--agency-look", _write(tmp_path, "ag.json", AGENCY), base=PROMPT_ARGS)
+    assert deck2["meta"]["theme"]["from"]["accent"] == "agency_look" and deck2["meta"]["theme"]["colors"]["accent"] == "7A3FF2"
 
 
 def test_runner_path_wears_client_dresses_the_deck_in_the_clients_tokens(monkeypatch, tmp_path):

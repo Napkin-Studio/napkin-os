@@ -163,3 +163,21 @@ variable "production_media_base" {
   type        = string
   default     = "https://d1kyxuk8u2ulz5.cloudfront.net"
 }
+
+variable "territory_enabled" {
+  description = "Keep the Territories store (NAPKIN_TERRITORY_DATA) on EFS (features/territories-cloud.clan; owner, 2026-11-26). false: the task's scratch disk, wiped by every deploy."
+  type        = bool
+  default     = true
+}
+
+variable "territory_images" {
+  description = "Territories makes pictures (Runway frames for the greenlit routes) on UAT: NAPKIN_TERRITORY_IMAGES=1, a cap of USD 2.00 per document, and the Runway key as RUNWAYML_API_SECRET on the middleware (owner, 2026-11-26: on, $2 per document). Off until the frames reach the document's pictures in the browser (features/territories-cloud.clan open question)."
+  type        = bool
+  default     = false
+}
+
+variable "runway_secret_name" {
+  description = "The Secrets Manager secret holding the Runway key, read by name: the Production Tool relay's own (infra/envs/hackathon/secrets.tf), so UAT keeps one Runway key and no second copy. Read only when territory_images is on."
+  type        = string
+  default     = "napkin-hackathon/RUNWAY_API_KEY"
+}

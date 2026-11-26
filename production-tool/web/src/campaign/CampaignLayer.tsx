@@ -213,11 +213,11 @@ function CampaignBoard({ el, set, canvas, style, selected, els, zoom }: { el: Ca
             <button type="button" className="btn xs primary" onClick={update}>Update sizes</button>
           </span>
         )}
-        {sizes.some((z) => z.media === 'image') && !brandKit(doc).logo && (
-          <span className="cb-note" role="note" title="Add the logo on the Brand board; then Draw all again adds it to every size">No logo on the Brand board: no size has one</span>
+        {sizes.some((z) => z.media === 'image') && !brandKit(doc, set.id).logo && (
+          <span className="cb-note" role="note" title="Add the logo on the Brand board, or link a Brand Clan with a logo; then Draw all again adds it to every size">No logo on the Brand board or a linked Brand Clan: no size has one</span>
         )}
-        {noLogoYet.length > 0 && !!brandKit(doc).logo && (
-          <button type="button" className="btn xs" title="The Brand board has a logo now: draw it on every size that has none"
+        {noLogoYet.length > 0 && !!brandKit(doc, set.id).logo && (
+          <button type="button" className="btn xs" title="There is a logo now: draw it on every size that has none"
             onClick={() => { for (const z of noLogoYet) void sendSize(deps, set.id, z.id, by, { retype: true }); say(`Drawing the logo on ${noLogoYet.length} ${noLogoYet.length === 1 ? 'size' : 'sizes'}`) }}>
             Draw all again · {noLogoYet.length}</button>
         )}
@@ -502,7 +502,7 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, flagsOpen,
               {c!.result === 'flag' && !c!.ignored && code === 'look_match' && PAID.has(size.method) && !size.locked && (
                 <button type="button" className="btn xs" onClick={() => paidTray(size.method, 'Redo to match', () => redoSize(deps, size.id, by))}>Redo</button>
               )}
-              {c!.result === 'flag' && !c!.ignored && code === 'logo_present' && size.render?.drawn !== undefined && !!brandKit(doc).logo && (
+              {c!.result === 'flag' && !c!.ignored && code === 'logo_present' && size.render?.drawn !== undefined && !!brandKit(doc, set.id).logo && (
                 <button type="button" className="btn xs" onClick={() => void sendSize(deps, set.id, size.id, by, { retype: true })}>Draw again</button>
               )}
               {c!.result === 'unverified' ? null : c!.ignored ? <span className="faint">Ignored</span> : <button type="button" className="btn xs ghost" onClick={() => onIgnore(code as FormatCheckCode)}>Ignore</button>}

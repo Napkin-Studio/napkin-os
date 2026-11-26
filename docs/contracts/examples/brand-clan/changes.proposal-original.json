@@ -1,0 +1,64 @@
+[
+  {
+    "id": "colour:tide",
+    "area": "colour",
+    "kind": "changed",
+    "label": "Tide blue",
+    "old": {
+      "id": "tide",
+      "name": "Tide blue",
+      "hex": "#0B5D8A",
+      "role": "accent"
+    },
+    "new": {
+      "id": "tide",
+      "name": "Tide blue",
+      "hex": "#0A6BA0",
+      "role": "accent"
+    },
+    "text": "Tide blue #0B5D8A becomes #0A6BA0"
+  },
+  {
+    "id": "typography:serif",
+    "area": "typography",
+    "kind": "changed",
+    "label": "Tidewell Serif",
+    "old": {
+      "id": "serif",
+      "family": "Tidewell Serif",
+      "weight": "700",
+      "use": "headlines",
+      "role": "head"
+    },
+    "new": {
+      "id": "serif",
+      "family": "Tidewell Serif",
+      "weight": "800",
+      "use": "headlines",
+      "role": "head"
+    },
+    "text": "Tidewell Serif: 700 headlines becomes 800 headlines"
+  },
+  {
+    "id": "rule:clear-space",
+    "area": "rule",
+    "kind": "added",
+    "label": "Clear space the height of the “T”",
+    "old": null,
+    "new": {
+      "id": "clear-space",
+      "text": "Clear space the height of the “T”",
+      "kind": "do"
+    },
+    "text": "Rule added: “Clear space the height of the “T””"
+  },
+  {
+    "id": "tone",
+    "area": "tone",
+    "kind": "changed",
+    "label": "Tone",
+    "old": "Warm and chatty",
+    "new": "Clear, cool, a little dry",
+    "text": "Tone becomes “Clear, cool, a little dry”"
+  }
+]

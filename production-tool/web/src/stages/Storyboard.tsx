@@ -7,7 +7,7 @@
 // Contract 3: the script's words are the main script's scenes; the shots are the main storyboard's,
 // in rank order; the ratio and the target length are the storyboard's; the frame in a shot is its pick.
 
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from 'react'
 import { LinkNotice } from '../LinkNotice'
 import { useConfig, useDoc, useJobsTick, useRouter, useServices, useUi } from '../app/context'
 import type { Ask, ProductionDocument, Ratio, Shot } from '../contracts/types'
@@ -183,6 +183,20 @@ export function Storyboard() {
     if (shotNeedsConfirm(docStore.get(), shotId)) setConfirmShot(shotId)
     else void removeNow(shotId)
   }
+  // Delete or Backspace deletes the selected shot wherever the focus is, never while typing (UAT round 4 A23: with the
+  // Booth open it did nothing, as only the focused card listened). Undo is in the note it leaves.
+  const deleteSelected = useEffectEvent((shotId: string) => deleteShot(shotId))
+  useEffect(() => {
+    if (!selected) return
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.key !== 'Delete' && e.key !== 'Backspace') || e.defaultPrevented) return
+      if ((e.target as Element | null)?.closest?.('input, textarea, select, [contenteditable="true"], .pt-menu, [role="dialog"]')) return
+      e.preventDefault()
+      deleteSelected(selected)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selected])
   // Drag reorder (ui-behaviour 3.11): one rank write with the drift marks, one undo step.
   const moveShot = (shotId: string, place: { beforeId: string | null; afterId: string | null }) => attempt(async () => {
     if (!clan) return

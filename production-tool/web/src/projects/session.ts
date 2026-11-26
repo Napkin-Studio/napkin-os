@@ -157,6 +157,9 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
     // Every minute when something changed (clan-store startMirror posts nothing otherwise): every 5 minutes left
     // "saved hh:mm" up to 5 minutes behind the work, and people pressed Ctrl+S to be sure (UAT round 1 IMG-22).
     clan.clan.startMirror((bytes, meta) => serverCopy!.post(bytes, meta), { everyMs: MIRROR_EVERY_MS })
+    // A save the store could not make (this browser's copy, or the bytes for the server) shows as not saved, never
+    // an older "saved" (UAT acceptance A24 re-test: only the store Worker's console knew).
+    clan.clan.onSaveError((e, where) => serverCopy!.unsaved(e instanceof Error ? e.message : String(e), where))
     // Save moments besides the minute tick, a lock and Save (UAT 2026-11-21, B7: a film started from "Continue in"
     // was never on the server and closing the browser lost it): a project the server has never had, at its first
     // change; and every landed generation. One post per moment, the last change in it included.

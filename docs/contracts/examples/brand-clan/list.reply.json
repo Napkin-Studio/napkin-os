@@ -1,0 +1,69 @@
+{
+  "default": "doc-original",
+  "items": [
+    {
+      "document_id": "doc-original",
+      "path": "doc-original",
+      "name": "Original",
+      "note": "The core look",
+      "version": 3,
+      "default": true,
+      "updated_at": "2026-11-12T10:00:00Z",
+      "palette": [
+        "#0B5D8A",
+        "#E9F3F8",
+        "#102A3A",
+        "#F2B134"
+      ],
+      "logo": null,
+      "source": {
+        "file": "Tidewell-brand-book-2026.pdf"
+      },
+      "pending": {
+        "from_version": 3,
+        "changes": 4,
+        "at": "2026-11-22T09:00:00Z",
+        "by": "process:brand_build",
+        "file": "Tidewell-brand-book-2026.pdf"
+      },
+      "draft": null
+    },
+    {
+      "document_id": "doc-zero",
+      "path": "doc-zero",
+      "name": "Zero",
+      "note": "Zero Sugar: silver and mint",
+      "version": 2,
+      "default": false,
+      "updated_at": "2026-11-12T10:00:00Z",
+      "palette": [
+        "#9AA7B1",
+        "#7FD6BD",
+        "#1C2630",
+        "#F4F6F7"
+      ],
+      "logo": "human/assets/logo-zero-light.svg",
+      "source": {
+        "file": "Tidewell-brand-book-2026.pdf"
+      },
+      "pending": null,
+      "draft": {
+        "based_on": 2,
+        "changes": 3,
+        "by": "human:aoife",
+        "at": "2026-11-23T10:00:00Z"
+      }
+    }
+  ],
+  "behind": [
+    {
+      "path": "doc-brief-1",
+      "title": "Tidewell Zero: summer brief",
+      "app_id": "ie.napkin.brief-maker",
+      "brand_clan": "doc-zero",
+      "brand_name": "Zero",
+      "held": 2,
+      "current": 3
+    }
+  ]
+}

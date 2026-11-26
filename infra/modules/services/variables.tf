@@ -177,6 +177,12 @@ variable "deck_enabled" {
   default     = false
 }
 
+variable "territory_enabled" {
+  description = "Keep the Territories engine's per-document store (NAPKIN_TERRITORY_DATA: spend ledger and caps, run stages, look-up notes, the pictures ledger, held pictures) on EFS, through its own access point at the file system's /territory, mounted in the middleware container at /territory (features/territories-cloud.clan). Off: the store is the task's scratch disk, wiped by every deploy."
+  type        = bool
+  default     = false
+}
+
 variable "deck_memory" {
   description = "The deck container's hard memory limit in MiB (it is not essential: past it only the deck container is stopped). The rest of the task's 4096 is the middleware's."
   type        = number

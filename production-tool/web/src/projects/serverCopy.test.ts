@@ -122,11 +122,26 @@ describe('a save the server refuses (UAT acceptance A24: 37 refused saves, and t
     ;(copy as unknown as { base: unknown }).base = { etag: 'e0', savedAt: '2026-11-24T03:57:00Z' }
     server.save.mockImplementationOnce((async () => { throw new RelayError({ code: 'invalid_input', message: 'Only a Production project can be saved this way.', retryable: false }, 422) }) as never)
     await expect(copy.post(new Uint8Array([1]), { reason: 'interval' })).rejects.toThrow('Only a Production project')
-    expect(copy.refused()).toBe('Only a Production project can be saved this way.')
+    expect(copy.refused()).toBe('The server did not take the last save: Only a Production project can be saved this way.')
     expect(copy.get()).toBeNull() // not a conflict: the next save is not held back
     // The bar: not "saved 03:57", but not saved, with the reason.
-    expect(merged({ kind: 'idle' }, '2026-11-24T03:57:00Z', `The server did not take the last save: ${copy.refused()}`)).toEqual({ kind: 'failed', why: 'The server did not take the last save: Only a Production project can be saved this way.' })
+    expect(merged({ kind: 'idle' }, '2026-11-24T03:57:00Z', copy.refused())).toEqual({ kind: 'failed', why: 'The server did not take the last save: Only a Production project can be saved this way.' })
     await copy.post(new Uint8Array([2]), { reason: 'manual' })
+    expect(copy.refused()).toBeNull()
+  })
+
+  it('a save this browser could not make shows as not saved, with the reason, until a save lands (A24 re-test)', async () => {
+    const { copy } = setup()
+    const { merged } = await import('../ui/useSave')
+    ;(copy as unknown as { base: unknown }).base = { etag: 'e0', savedAt: '2026-11-25T09:45:00Z' }
+    let told = 0
+    copy.subscribe(() => told++)
+    copy.unsaved('human/assets/document-1795538546841-0.txt is a link and this host holds no file store', 'server')
+    expect(told).toBe(1)
+    expect(merged({ kind: 'idle' }, '2026-11-25T09:45:00Z', copy.refused())).toEqual({ kind: 'failed', why: 'This project could not be saved: human/assets/document-1795538546841-0.txt is a link and this host holds no file store' })
+    copy.unsaved('quota', 'browser')
+    expect(copy.refused()).toBe('This browser could not keep the project: quota')
+    await copy.post(new Uint8Array([3]), { reason: 'manual' })
     expect(copy.refused()).toBeNull()
   })
 })

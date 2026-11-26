@@ -1,0 +1,529 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Brand Clan",
+  "description": "One Brand Clan: the Brand Bible of one look of one client's brand, in one agency (docs/contracts/brand-clan.md). Several per client (Original, Zero, Summer 26). `kit.version` is the PUBLISHED version: this file changes only when a person publishes or accepts a new version, so work that carries a frozen copy sees a change only then. Drafts, a waiting new version and old versions live in app/brand/ beside it, never in this file. An empty section stays empty (never invented). The four provisions are in the shape from day one; no UI fills them yet.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "kit"
+  ],
+  "definitions": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$",
+      "description": "Stable key of a list item; a diff matches items by it, never by position."
+    },
+    "hex": {
+      "type": "string",
+      "pattern": "^#[0-9A-Fa-f]{6}$"
+    },
+    "asset": {
+      "type": "string",
+      "pattern": "^human/assets/[^/]+$",
+      "description": "A picture or file held in this document's assets."
+    },
+    "who": {
+      "type": "string",
+      "pattern": "^(human|process):.+$|^.+/.+$",
+      "description": "The actor, as the decision chain records it: human:<id>, process:<job> or <producer>/<version>."
+    },
+    "from": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "create",
+            "build",
+            "upload",
+            "edit",
+            "restore"
+          ],
+          "description": "create: made by hand; build: built from a brand book; upload: a newer file taken as a new version; edit: a person's edit; restore: an old version brought back as a new one."
+        },
+        "file": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "restore: the version it started from."
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file"
+      ],
+      "description": "The uploaded brand book, kept as the source.",
+      "properties": {
+        "file": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "asset": {
+          "$ref": "#/definitions/asset"
+        },
+        "kind": {
+          "enum": [
+            "pdf",
+            "docx",
+            "pptx",
+            "image",
+            "other"
+          ]
+        },
+        "pages": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "by": {
+          "$ref": "#/definitions/who"
+        },
+        "at": {
+          "type": "string"
+        }
+      }
+    },
+    "change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "area",
+        "kind",
+        "label"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "area": {
+          "enum": [
+            "name",
+            "note",
+            "logo",
+            "logo_note",
+            "colour",
+            "typography",
+            "tone",
+            "rule",
+            "imagery_style",
+            "imagery_ban",
+            "example",
+            "competitor",
+            "source"
+          ]
+        },
+        "kind": {
+          "enum": [
+            "added",
+            "changed",
+            "removed"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "old": {},
+        "new": {},
+        "text": {
+          "type": "string",
+          "maxLength": 400
+        }
+      }
+    }
+  },
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 60,
+      "description": "Which look this is: Original, Zero, Summer 26. The client's name is on the manifest, never repeated here."
+    },
+    "note": {
+      "type": "string",
+      "maxLength": 160,
+      "description": "One line the list shows under the name: 'The core look'."
+    },
+    "kit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version"
+      ],
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The published version. Attach reads it (`attach.version`)."
+        },
+        "published": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "by": {
+              "$ref": "#/definitions/who"
+            },
+            "at": {
+              "type": "string"
+            }
+          }
+        },
+        "changelog": {
+          "type": "array",
+          "description": "One entry per published version, newest last.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "version",
+              "at",
+              "by",
+              "from",
+              "summary"
+            ],
+            "properties": {
+              "version": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "at": {
+                "type": "string"
+              },
+              "by": {
+                "$ref": "#/definitions/who"
+              },
+              "from": {
+                "$ref": "#/definitions/from"
+              },
+              "summary": {
+                "type": "string",
+                "maxLength": 300
+              },
+              "changes": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/change"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "visual": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "logos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "label",
+              "variant"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/definitions/id"
+              },
+              "label": {
+                "type": "string",
+                "maxLength": 60
+              },
+              "variant": {
+                "enum": [
+                  "light",
+                  "dark",
+                  "mark",
+                  "other"
+                ],
+                "description": "light: for a light ground; dark: for a dark ground (the Deck's dark-ground logo); mark: the symbol alone."
+              },
+              "asset": {
+                "$ref": "#/definitions/asset"
+              },
+              "note": {
+                "type": "string",
+                "maxLength": 200
+              }
+            }
+          }
+        },
+        "logo_note": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "The clear-space and placement rule shown under the logos."
+        },
+        "colours": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "name",
+              "hex"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/definitions/id"
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 40
+              },
+              "hex": {
+                "$ref": "#/definitions/hex"
+              },
+              "role": {
+                "enum": [
+                  "accent",
+                  "paper",
+                  "ink",
+                  "panel",
+                  "accent_ink",
+                  "chart",
+                  "other"
+                ],
+                "description": "The deck's tokens (engine/deck/look.py COLOUR_TOKENS); `other` when the book names none."
+              }
+            }
+          }
+        },
+        "typography": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "family"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/definitions/id"
+              },
+              "family": {
+                "type": "string",
+                "maxLength": 80
+              },
+              "weight": {
+                "type": "string",
+                "maxLength": 40,
+                "description": "'700' or '400 / 600'."
+              },
+              "use": {
+                "type": "string",
+                "maxLength": 80,
+                "description": "headlines, body copy."
+              },
+              "role": {
+                "enum": [
+                  "head",
+                  "body",
+                  "other"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "voice": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tone": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "text"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/definitions/id"
+              },
+              "text": {
+                "type": "string",
+                "maxLength": 300
+              },
+              "kind": {
+                "enum": [
+                  "do",
+                  "dont"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "imagery": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "style": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "bans": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "examples": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/definitions/id"
+              },
+              "asset": {
+                "$ref": "#/definitions/asset"
+              },
+              "note": {
+                "type": "string",
+                "maxLength": 200
+              }
+            }
+          }
+        }
+      }
+    },
+    "source": {
+      "$ref": "#/definitions/source"
+    },
+    "gaps": {
+      "type": "array",
+      "description": "Sections a build could not find, each with a note. Empty beats wrong.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "area",
+          "note"
+        ],
+        "properties": {
+          "area": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 300
+          }
+        }
+      }
+    },
+    "previous_work": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Provision: earlier ads and campaigns. Empty until harvest exists."
+    },
+    "categories_explored": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Provision."
+    },
+    "likes_dislikes": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Provision."
+    },
+    "preferences": {
+      "type": "object",
+      "description": "Provision: preferences learnt over time."
+    },
+    "competitors": {
+      "type": "array",
+      "maxItems": 24,
+      "description": "The client's competitors: added by a person, or found by research and taken by a person into a draft (Brand Clan phase 2; never written silently). Each item names where it came from.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/definitions/id"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "from": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "person",
+                  "research"
+                ]
+              },
+              "document_id": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "title": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "fact_ids": {
+                "type": "array",
+                "maxItems": 24,
+                "items": {
+                  "type": "string",
+                  "maxLength": 64
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

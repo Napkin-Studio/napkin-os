@@ -429,6 +429,7 @@ fn an_id_the_registry_does_not_know_keeps_the_name_its_document_carries() {
         owner: "human:x".into(),
         created_at: "2026-01-01T00:00:00Z".into(),
         archived_at: None,
+        default_brand_clan: None,
     };
     work(&s, BRIEF, "Orphan", Some(&ghost));
     let lib = list(&s, &LibraryFilter::default());

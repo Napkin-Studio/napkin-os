@@ -1173,9 +1173,42 @@ pub struct AttachTarget {
     /// The open document is locked: a link would be refused, and the shell
     /// says why rather than offer it.
     pub locked: bool,
+    /// The version the open document holds of it (`lineage.attached[].version`)
+    /// when it is linked; a newer `version` than this is what Update takes.
+    pub held_version: Option<u64>,
+    /// It is its client's default Brand Clan (`default_brand_clan` on the
+    /// client record): what new work of that client starts on.
+    pub default: bool,
+    /// For a Brand Clan: its first colours (`visual.colours[].hex`, at most
+    /// three, in its own order), so a picker can show each look (mock e2).
+    /// Empty for anything else.
+    pub swatches: Vec<String>,
     /// Who the target is for, as the library names it: the registry's id and
     /// name, else the name its own manifest carries. `null` when it has none.
     pub client: Option<clan_sdk::ClientRef>,
+}
+
+/// A Brand Clan's first colours, at most three, as `#RRGGBB`.
+fn brand_swatches(clan: &ClanFile) -> Vec<String> {
+    let Some(data) = clan
+        .read_entry(DATA)
+        .ok()
+        .and_then(|b| serde_yaml::from_slice::<serde_yaml::Value>(&b).ok())
+    else {
+        return Vec::new();
+    };
+    data.get("visual")
+        .and_then(|v| v.get("colours"))
+        .and_then(|c| c.as_sequence())
+        .map(|cs| {
+            cs.iter()
+                .filter_map(|c| c.get("hex").and_then(|h| h.as_str()))
+                .filter(|h| h.len() == 7 && h.starts_with('#'))
+                .take(3)
+                .map(|h| h.to_uppercase())
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 pub(crate) fn kit_version(clan: &ClanFile) -> Option<u64> {
@@ -1187,6 +1220,9 @@ pub(crate) fn kit_version(clan: &ClanFile) -> Option<u64> {
 /// (`app.attach.accepts`), by title. Empty when the app declares none. A fork
 /// branch, a template, another tenant's document, the document itself and
 /// what it was made from are never offered.
+/// The Brand Clan app (`ie.napkin.brand`).
+pub const BRAND_APP_ID: &str = "ie.napkin.brand";
+
 pub fn attach_targets(store: &dyn DocStore, ctx: &Ctx, doc: &Document) -> Vec<AttachTarget> {
     let manifest = doc.clan().manifest();
     let spec = manifest
@@ -1198,11 +1234,17 @@ pub fn attach_targets(store: &dyn DocStore, ctx: &Ctx, doc: &Document) -> Vec<At
         return Vec::new();
     }
     let here = manifest.document_id().to_string();
+    let here_client = manifest.client.as_ref().map(|c| c.id.clone());
     let made_from = manifest.carried().map(|c| c.document_id.clone());
     let attached: Vec<String> = manifest
         .attached()
         .iter()
         .map(|a| a.carried.document_id.clone())
+        .collect();
+    let held: std::collections::HashMap<String, Option<u64>> = manifest
+        .attached()
+        .iter()
+        .map(|a| (a.carried.document_id.clone(), a.version))
         .collect();
     let locked = locked_error(doc.clan()).is_some();
     // Client names are resolved from the registry, as the library does, so a
@@ -1226,12 +1268,31 @@ pub fn attach_targets(store: &dyn DocStore, ctx: &Ctx, doc: &Document) -> Vec<At
                 || document_id == here
                 || Some(&document_id) == made_from.as_ref()
                 || foreign(ctx, d.clan())
+                // A Brand Clan belongs to one client: a document of a client
+                // is offered only that client's Brand Clans.
+                || (app.app_id == BRAND_APP_ID
+                    && here_client.is_some()
+                    && m.client.as_ref().map(|c| &c.id) != here_client.as_ref())
             {
                 return None;
             }
+            let d_path = d.id().to_string();
+            let default = m
+                .client
+                .as_ref()
+                .and_then(|r| registry.get(&r.id))
+                .and_then(|rec| rec.default_brand_clan.as_deref())
+                .is_some_and(|d| d == document_id || d == d_path.as_str());
             Some(AttachTarget {
                 app_id: app.app_id.clone(),
                 app_name: app.name.clone(),
+                held_version: held.get(&document_id).copied().flatten(),
+                default,
+                swatches: if app.app_id == BRAND_APP_ID {
+                    brand_swatches(d.clan())
+                } else {
+                    Vec::new()
+                },
                 attached: attached.contains(&document_id),
                 many: spec.many.contains(&app.app_id),
                 locked,
@@ -1414,6 +1475,9 @@ pub fn attach_change(
     }
     let out = clan_sdk::attach(doc.clan(), source.clan())?;
     let bytes = with_projection(out.bytes)?;
+    // A Brand Clan's logo files travel with its frozen copy (owner 2026-11-24, "Yes it reaches deck"): attach takes
+    // shared/data.yaml only, so the files its logos name are copied too, for the deck to place.
+    let bytes = with_brand_logos(store, source.clan(), source_document_id, bytes)?;
     let bytes = attribute_attach(bytes, doc.clan(), ctx)?;
     let after = ClanFile::from_bytes(bytes.clone())?;
     let mut change = doc.change(bytes)?;
@@ -1439,6 +1503,63 @@ pub fn attach_change(
         "carried_decisions": out.carried_decisions,
     });
     Ok((change, reply))
+}
+
+/// Where a Brand Clan's logo file sits in a work document that holds it: `human/assets/brand/<brand document id>/<file name>`.
+/// The deck reads the logo from here (contract brand-clan.md section 8).
+pub fn brand_logo_entry(brand_document_id: &str, asset: &str) -> String {
+    let name = asset.rsplit('/').next().unwrap_or(asset);
+    format!("human/assets/brand/{brand_document_id}/{name}")
+}
+
+/// Copy the files a Brand Clan's published logos name (`visual.logos[].asset`) into `bytes` (the work document after
+/// attach), under [`brand_logo_entry`]. Anything that is not a Brand Clan, or a logo whose file cannot be read, is left
+/// as it is: the copy never blocks a link. A linked file is read from the store's blobs.
+fn with_brand_logos(
+    store: &dyn DocStore,
+    source: &ClanFile,
+    source_id: &str,
+    bytes: Vec<u8>,
+) -> HostResult<Vec<u8>> {
+    let is_brand = source
+        .manifest()
+        .app
+        .as_ref()
+        .is_some_and(|a| a.app_id == BRAND_APP_ID);
+    if !is_brand {
+        return Ok(bytes);
+    }
+    let Some(data) = source
+        .read_entry(DATA)
+        .ok()
+        .and_then(|b| serde_yaml::from_slice::<serde_yaml::Value>(&b).ok())
+    else {
+        return Ok(bytes);
+    };
+    let assets: Vec<String> = data
+        .get("visual")
+        .and_then(|v| v.get("logos"))
+        .and_then(|l| l.as_sequence())
+        .map(|ls| {
+            ls.iter()
+                .filter_map(|l| l.get("asset").and_then(|a| a.as_str()).map(String::from))
+                .filter(|a| a.starts_with("human/assets/") && !a.contains(".."))
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut out = bytes;
+    for asset in assets {
+        let file = match source.manifest().file_by_path(&asset) {
+            Some(f) if f.linked => store.blobs().and_then(|b| {
+                crate::blobs::linked_bytes(b, &asset, f.sha256.as_deref().unwrap_or("")).ok()
+            }),
+            _ => source.read_entry(&asset).ok(),
+        };
+        let Some(file) = file else { continue };
+        let now = ClanFile::from_bytes(out.clone())?;
+        out = clan_sdk::patch_asset(&now, &brand_logo_entry(source_id, &asset), file)?;
+    }
+    Ok(out)
 }
 
 /// The change that unlinks `which` (a source's `document_id`, or the

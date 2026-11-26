@@ -162,7 +162,9 @@ verbatim excerpts. List the brands the excerpts name as players in this category
 challengers and new entrants. Each brand: its name as the source writes it (a brand, not a retailer, a
 parent company or a product line), and the evidence: the source_id and the exact quote from that source's
 excerpts (character for character) that names it. Never use outside knowledge: a brand no excerpt names is
-not listed. At most eight, the most prominent first."""
+not listed. When `question` is given, it is what the person asked: list the brands that compete in what it
+asks about (a product type, a format, a segment) ahead of the wider category's. At most eight, the most
+prominent first."""
 
 # How many players research brings in when nobody named the comparators (F11, UAT round 4).
 DISCOVER_MAX = 5
@@ -271,6 +273,9 @@ class Researcher:
                  concurrency=4, seed=None, competitors=None, subject=None, materials=None, question_first=False,
                  discover=False):
         self.doc, self.base, self.clan, self.handler, self.caps = doc, base, clan, handler, caps
+        # the person's own words: not a source, but what the players' search asks about (UAT round 4, #303)
+        self.prompt = next((m.text.strip() for m in materials or [] if getattr(m, "kind", "") == "prompt"
+                            and isinstance(getattr(m, "text", None), str) and m.text.strip()), None)
         # the client's documents with readable text (the person's prompt is not a source)
         self.materials = [m for m in materials or [] if getattr(m, "kind", "") != "prompt"
                           and isinstance(getattr(m, "text", None), str) and m.text.strip()]
@@ -299,6 +304,7 @@ class Researcher:
         # proposed in campaign.competitor_set, never confirmed: a planner removes any that does not compete.
         self.discover = bool(discover) and not self.comps and "brands_positioning" in lenses
         self.discovered: list[dict] = []
+        self.discovery_srcs: list[dict] = []  # the pages the players were found on, read again by the brands lens
         self.done = 0
         self.hits = []
         self._rows: dict = {}
@@ -369,81 +375,123 @@ class Researcher:
             self.hits.append({"id": sid, "scope": scope, "source": s["url"]})
         return srcs
 
+    def discovery_queries(self, market: str) -> list[str]:
+        """The players' searches, best first: the person's own question when there is one (what they asked
+        about: "surface-cleaning spray", "refill"), then the category's name. On UAT (2026-11-25) the category
+        alone ("Laundry and cleaning", from the client's roster row) found one fabric-care page and one fabric
+        softener, for a question about refill surface sprays."""
+        cat_names = [self.leaf_names.get(c, c) for c in self.cats]
+        tail = f" Leading brands in {market_list([market])} ({market}): the leaders and challengers, and what each claims."
+        out = []
+        if self.prompt:
+            ask = re.sub(r"\s+", " ", self.prompt)
+            room = QUERY_LIMIT - len(tail)
+            if len(ask) > room:
+                ask = ask[:room].rsplit(" ", 1)[0]
+            out.append(ask + tail)
+        q = (f"Leading brands in {', '.join(cat_names)} in {market_list([market])} ({market}): who competes, "
+             f"the leaders and challengers, and what each brand claims.")
+        out.append(q[:QUERY_LIMIT].rsplit(" ", 1)[0] if len(q) > QUERY_LIMIT else q)
+        return out
+
     def discover_players(self) -> list[dict]:
         """Find the category's main brands in the first market and add them as comparators (refs
-        brand/<slug>). Only names a source this run read states are kept (`checked_players`). A failed
+        brand/<slug>). The person's question is searched first; the category's name too when that found fewer
+        than two. Only names a source this run read states are kept (`checked_players`). The pages they were
+        found on are read again by the brands lens, so a fact about each can be pinned from them. A failed
         search or answer leaves the run as it was, said in the run log: it never stops the research."""
         market = self.markets[0]
         cat_names = [self.leaf_names.get(c, c) for c in self.cats]
-        query = (f"Leading brands in {', '.join(cat_names)} in {market_list([market])} ({market}): who competes, "
-                 f"the leaders and challengers, and what each brand claims.")
-        if len(query) > QUERY_LIMIT:
-            query = query[:QUERY_LIMIT].rsplit(" ", 1)[0]
         brand = self.subject["name"] if self.subject else None
-        try:
-            res = self.caps.research.search(query, "brands_positioning", market, entity=None, category=self.cats[0])
-            srcs = self._record_sources(res)
-            if not srcs:
-                found = []
-            else:
+        found: list[dict] = []
+        for query in self.discovery_queries(market):
+            if len(found) >= 2:
+                break
+            try:
+                res = self.caps.research.search(query, "brands_positioning", market, entity=None,
+                                                category=self.cats[0])
+                srcs = [s for s in self._record_sources(res)
+                        if s["sid"] not in {x["sid"] for x in self.discovery_srcs}]
+                if not srcs:
+                    continue
+                self.discovery_srcs += srcs
                 payload = {"categories": cat_names, "market": market, "client_brand": brand,
+                           "question": self.prompt,
                            "sources": [{"source_id": s["sid"], "url": s["url"], "publisher": s["publisher"],
                                         "title": s["title"], "excerpts": s["excerpts"]} for s in srcs]}
                 raw = self.caps.model.structured("discover_players", DISCOVER_SYSTEM, payload, players_schema(),
                                                  max_tokens=2000)
-                found = checked_players(raw, {s["sid"]: s for s in srcs}, brand)
-        except Exception as e:  # noqa: BLE001 - discovery only adds comparators; the lenses still run without
-            log.warning("research: finding the category's players failed: %s", e)
-            self.caps.runlog.note("discover_players_failed", error=str(e)[:200])
-            return []
+                have = {p["ref"] for p in found}
+                found += [p for p in checked_players(raw, {s["sid"]: s for s in srcs}, brand)
+                          if p["ref"] not in have][:DISCOVER_MAX - len(found)]
+            except Exception as e:  # noqa: BLE001 - discovery only adds comparators; the lenses still run without
+                log.warning("research: finding the category's players failed: %s", e)
+                self.caps.runlog.note("discover_players_failed", error=str(e)[:200])
         emit("discover_players", market=market, found=len(found), job=self.caps.attribution.get("job"))
+        self.caps.runlog.note("discover_players", found=[p["name"] for p in found],
+                              sources=[s["url"] for s in self.discovery_srcs])
         for p in found:
             self.comps.append({"ref": p["ref"], "name": p["name"]})
         self.discovered = found
         return found
 
-    def competitor_patch(self, facts_append: list[dict], t_now: str) -> tuple[dict, list[dict]]:
-        """campaign.competitor_set proposed from the players research found ({} when it found none, or the
-        document already names comparators). A player stays only when this run pinned a fact about it, so
-        the proposal rests on facts (origin proposed needs fact_ids); the decision says what was left out."""
+    def competitor_patch(self, facts_append: list[dict], t_now: str) -> tuple[dict, list[dict], list[dict]]:
+        """(campaign.competitor_set proposed from the players research found, its decisions, a gap for each
+        player found that nothing was pinned about). The proposal holds only players this run pinned a fact
+        about, so it rests on facts (origin proposed needs fact_ids). A player with none is never dropped
+        silently: it is a gap in the brands section naming it and where it was found, for a planner to add.
+        Nothing when research found no player, or the document already names comparators."""
         if not self.discovered or (self.data.get("campaign") or {}).get("competitor_set"):
-            return {}, []
+            return {}, [], []
         pinned = facts_append + [f for f in ctx_facts(self.clan) if f.get("id")]
-        kept, prov, dropped = [], {}, []
+        market = self.markets[0]
+        by_sid = {s["sid"]: s for s in self.discovery_srcs}
+        kept, prov, dropped, gaps = [], {}, [], []
         for p in self.discovered:
             ids = list(dict.fromkeys(f["id"] for f in pinned if f.get("entity") == p["ref"]))
             if ids:
                 kept.append({"ref": p["ref"], "name": p["name"]})
                 prov[p["ref"]] = {"origin": "proposed", "fact_ids": ids}
-            else:
-                dropped.append(p["name"])
-        if not kept:
-            return {}, []
-        did = uid("d_", self.doc, self.seed, "discover-players", [p["ref"] for p in kept])
+                continue
+            dropped.append(p["name"])
+            sid, quote = next(iter(p["quotes"].items()))
+            where = by_sid.get(sid, {})
+            gaps.append({"id": lid("gap_", self.doc, p["ref"], "found-by-research", market),
+                         "key": f"{p['ref']}:{LENS_NAMESPACE['brands_positioning']}.claim", "lens": "brands_positioning",
+                         "market": market, "searched": f"what {p['name']} claims in {market_list([market])}",
+                         "sources_tried": [where.get("url") or sid],
+                         "note": (f"Found by research as a player in the category ({where.get('publisher') or 'a source'}: "
+                                  f"\"{quote[:160]}\"), but no fact about it passed the checks yet. Add it as a "
+                                  f"comparator if the client competes with it.")[:300]})
+        did = uid("d_", self.doc, self.seed, "discover-players", [p["ref"] for p in self.discovered])
+        names = ", ".join(p["name"] for p in kept)
+        left = ", ".join(dropped)
+        found_pts = [rsn.point(f"{p['name']} is named as a player in the category", prov[p["ref"]]["fact_ids"])
+                     for p in kept]
+        left_pt = [rsn.point(f"Found, with nothing pinned about them yet: {left}",
+                             [f"{self.doc}#selection.gaps[{g['id']}]" for g in gaps])] if dropped else []
+        reasoning = rsn.make(
+            f"Found by research: proposed {names} as the comparators, to confirm." if kept else
+            f"Found by research: {left}, named in the category; nothing about them was pinned, so none is proposed "
+            f"yet.",
+            found_pts + left_pt,
+            rsn.certainty("medium" if kept else "low", "found by research, not named by anyone; to confirm"),
+            "a planner removes, adds or confirms them",
+            rejected=[rsn.rej("leave the comparators empty",
+                              "the brands lens then searches only the client's own brand, and a new "
+                              "brand has nothing written about it yet (UAT round 4 F11)")],
+            attention="Found by research: check these are the brands the client competes with.")
+        targets = (["campaign.competitor_set"] if kept else []) + [f"selection.gaps[{g['id']}]" for g in gaps]
         all_ids = list(dict.fromkeys(i for v in prov.values() for i in v["fact_ids"]))
+        d = decision(self.doc, did, "edit", self.handler, "discover_players", reasoning["decided"], targets, all_ids,
+                     timestamp=t_now, reasoning=reasoning,
+                     fields_changed=(["campaign.competitor_set"] if kept else []) + (["selection.gaps"] if gaps else []))
+        if not kept:
+            return {}, [d], gaps
         env = {"value": kept, "origin": "proposed", "gate": "none", "fact_ids": all_ids, "decision": did}
         if len(kept) > 1:
             env["item_provenance"] = prov
-        names = ", ".join(p["name"] for p in kept)
-        rationale = (f"Found by research: nobody named the comparators, so research looked up the category's main "
-                     f"players and proposes {names}, each resting on facts pinned this run. A planner removes any "
-                     f"that does not compete."
-                     + (f" Left out, with no fact found about them: {', '.join(dropped)}." if dropped else ""))
-        d = decision(self.doc, did, "edit", self.handler, "discover_players", rationale,
-                     ["campaign.competitor_set"], all_ids, timestamp=t_now, fields_changed=["campaign.competitor_set"],
-                     reasoning=rsn.make(
-                         f"Found by research: proposed {names} as the comparators, to confirm.",
-                         [rsn.point(f"{p['name']} is named as a player in the category", prov[p['ref']]["fact_ids"])
-                          for p in kept]
-                         + ([rsn.point(f"Left out, with no fact found about them: {', '.join(dropped)}")]
-                            if dropped else []),
-                         rsn.certainty("medium", "found by research, not named by anyone; to confirm"),
-                         "a planner removes or confirms them",
-                         rejected=[rsn.rej("leave the comparators empty",
-                                           "the brands lens then searches only the client's own brand, and a new "
-                                           "brand has nothing written about it yet (UAT round 4 F11)")],
-                         attention="Found by research: check these are the brands the client competes with."))
-        return {"competitor_set": env}, [d]
+        return {"competitor_set": env}, [d], gaps
 
     # -- one unit ----------------------------------------------------------------
     def unit(self, lens: str, market: str, focus: str | None = None) -> dict:
@@ -486,11 +534,14 @@ class Researcher:
         cat_names = [self.leaf_names.get(c, c) for c in self.cats]
         question, wanted = LENS_QUESTIONS[lens]
         srcs = []
+        # the pages the players were found on: the brands lens reads them too, so a fact about each player
+        # can be pinned even when its own search comes back empty (UAT 2026-11-25: 0 sources, nothing pinned)
+        found_on = [s for s in self.discovery_srcs if lens == "brands_positioning" and market == self.markets[0]]
         if not fresh:
-            srcs = self._search(u, lens, market, focus, brand, cat_names, question, wanted, mats)
+            srcs = self._search(u, lens, market, focus, brand, cat_names, question, wanted, mats or found_on)
             if srcs is None:
                 return u
-        srcs = srcs + mats
+        srcs = srcs + [s for s in found_on if s["sid"] not in {x["sid"] for x in srcs}] + mats
         u["sources"] = srcs
         if not srcs:
             for w in wanted[:2]:
@@ -796,6 +847,8 @@ class Researcher:
         run_keys = {(r["lens"], r["market"]) for r in runs}
         all_runs = [x for x in (sel.get("lenses_run") or []) if (x.get("lens"), x.get("market")) not in run_keys] + runs
         gaps += [n for n in notes if n["id"] not in {g["id"] for g in gaps}]
+        camp_patch, comp_decs, found_gaps = self.competitor_patch(facts_append, t_now)
+        gaps += [g for g in found_gaps if g["id"] not in {x["id"] for x in gaps}]
         gap_ids = {g["id"] for g in gaps}
         old_gaps = [g for g in (sel.get("gaps") or []) if g.get("id") not in gap_ids]
         ct_ids = {c["id"] for c in contests}
@@ -828,7 +881,6 @@ class Researcher:
             (["selection.gaps"] if notes else [])
         rsn.give(merge_dec, merge_reasoning(facts_append, contests, gaps, len(units), n_reused, notes))
         srcs = {s["sid"]: s for u in units for s in u["sources"]}
-        camp_patch, comp_decs = self.competitor_patch(facts_append, t_now)
         data_patch = {"selection": sel_patch, **({"campaign": camp_patch} if camp_patch else {})}
         change = {"doc": doc, "base_version": self.base, "data_patch": data_patch,
                   "read": read_of(self.data, data_patch),

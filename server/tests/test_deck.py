@@ -142,6 +142,21 @@ def test_the_approvals_in_the_document_go_to_the_engine(deck, monkeypatch):
     assert fake.posts[0]["approvals"] == approvals
 
 
+def test_the_persons_storyline_goes_to_the_engine_beside_the_approvals(deck, monkeypatch):
+    """deck-beat-editor: run.storyline_edit (the app's, like the approvals) reaches the engine as written; the middleware never writes it."""
+    fake = use(monkeypatch, FakeEngine(view("gate", stage="territories", gate=GATE2)))
+    edit = {"base": "a" * 64, "by": "You", "at": "t", "beats": [{"key": "audience", "title": "Ours first", "words": "yours"}, {"key": None, "title": "Mine", "words": "yours"}]}
+    host = Host(data=deck_data(approvals={"storyline": {"by": "Sai", "at": "t", "decision": "approve"}}), schema=SCHEMA)
+    host.data["run"]["storyline_edit"] = edit
+    build(deck, host)
+    assert fake.posts[0]["storyline_edit"] == {k: edit[k] for k in ("base", "beats", "by", "at")}
+    assert host.data["run"]["storyline_edit"] == edit
+    assert "storyline_edit" not in deck_job.RUN_OWNED
+    plain = use(monkeypatch, FakeEngine(view("gate", stage="territories", gate=GATE2)))
+    build(deck, Host(data=deck_data(), schema=SCHEMA))
+    assert "storyline_edit" not in plain.posts[0]
+
+
 def test_after_the_last_gate_the_document_gets_the_deck_validation_evidence_report_and_export_names(deck, monkeypatch):
     use(monkeypatch, FakeEngine(view("building", stage="check"), view("done", stage="review", payload=PAYLOAD, cost=0)))
     host = Host(data=deck_data(), schema=SCHEMA)
@@ -466,6 +481,36 @@ def test_through_the_hosts_index_a_deck_from_a_brief_still_sends_the_brief(deck,
     assert "brief_upstream" not in fake2.posts[0]
 
 
+class BrandHost(IndexHost):
+    """The host as napkin-host sends a Deck that wears a Brand Clan (read.rs brand_upstream): the copy and its logo files beside the index."""
+
+    def __init__(self, *a, brand=None, **k):
+        super().__init__(*a, **k)
+        self.brand = brand
+
+    def clan(self):
+        c = super().clan()
+        if self.brand is not None:
+            c["brand_upstream"] = self.brand
+        return c
+
+
+def test_a_deck_wearing_a_brand_clan_sends_it_and_its_logos_to_the_engine(deck, monkeypatch):
+    """Acceptance A60: Start said the deck wore Copperell Original and the build wore the default look: the Brand Clan never reached the
+    engine. The host's carrier goes through as it came; anything not shaped like it is dropped, never forwarded."""
+    copy = {"name": "Copperell Original", "kit": {"version": 2}, "visual": {"colours": [{"id": "amber", "hex": "#D99A2B", "role": "accent"}],
+            "typography": [{"id": "head", "family": "Libre Caslon", "role": "head"}], "logos": [{"id": "w", "variant": "dark", "asset": "human/assets/ab-w.png"}]}}
+    logos = {"human/assets/brand/doc-brand/ab-w.png": "iVBORw0KGgo=", "human/assets/other.png": "eA==", "human/assets/brand/doc-brand/../x": "eA=="}
+    fake = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    host = BrandHost(data=deck_data(), schema=SCHEMA, brand={"id": "doc-brand", "version": 2, "data": copy, "logos": logos})
+    build(deck, host)
+    assert fake.posts[0]["brand_upstream"] == {"id": "doc-brand", "version": 2, "data": copy, "logos": {"human/assets/brand/doc-brand/ab-w.png": "iVBORw0KGgo="}}
+    for bad in ({"id": "", "data": copy}, {"id": "doc-brand", "data": "x"}, "nope"):
+        fake2 = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+        build(deck, BrandHost(data=deck_data(), schema=SCHEMA, brand=bad))
+        assert "brand_upstream" not in fake2.posts[0]
+
+
 PASS = "v1." + "e30" + "." + "c2ln"
 
 
@@ -528,6 +573,21 @@ def test_marks_cover_the_full_brief_a_carried_production_project_carries():
     data = {"upstream": {"prod-1": {"app": "production-tool", "upstream": {"brief-1": {"insight": "SECRET-FULL", "confidential_fields": ["insight"]}}}}}
     marks = {m["path"]: m for m in marks_of(data, [])}
     assert "SECRET-FULL" in marks["upstream.prod-1.upstream.brief-1.insight"]["text"]
+
+
+def test_marks_cover_the_research_a_carried_brief_carries():
+    """5-tool run 2026-11-26: the host sends the brief's research under the brief's own upstream (read.rs brief_upstream); its marked parts
+    (a classify on the research, its own confidential_fields, client-confidential materials) reach the engine's picture step as marks."""
+    from napkin.handlers.build_deck import marks_of, with_brief
+    brief = {"objectives": "Win shelf space.", "upstream": {"res-1": {"report": {"summary": "SECRET-MARGIN"}, "confidential_fields": ["report.summary"],
+                                                                     "materials": {"m1": {"name": "Retailer deck", "text": "SECRET-DECK",
+                                                                                          "licence": "client-confidential"}}}}}
+    data = with_brief({"upstream": {"brief-1": {"title": "index entry"}, "res-1": {"title": "index entry"}}}, {"id": "brief-1", "data": brief})
+    chain = [{"kind": "classify", "targets": ["res-1#report.summary"], "licence": {"model": False}}]
+    marks = {(m["path"], m["kind"]): m["text"] for m in marks_of(data, chain)}
+    assert marks[("upstream.brief-1.upstream.res-1.report.summary", "confidential_field")] == "SECRET-MARGIN"
+    assert marks[("upstream.brief-1.upstream.res-1.report.summary", "classify")] == "SECRET-MARGIN"
+    assert "SECRET-DECK" in marks[("upstream.brief-1.upstream.res-1.materials[m1]", "licence")]
 
 
 def test_the_research_a_deck_carries_goes_to_the_engine_as_its_evidence(deck, monkeypatch):

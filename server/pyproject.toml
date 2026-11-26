@@ -14,6 +14,8 @@ dependencies = [
     # category seeding (napkin/seed): the layers database, and PDF sources
     "psycopg[binary]>=3.2",
     "pypdf>=5.0",
+    # brand_build: render a brand book page to cut a logo drawn as vectors out of it (licence reviewed: licences/policy.toml clarification)
+    "pypdfium2==5.14.0",
 ]
 
 [dependency-groups]

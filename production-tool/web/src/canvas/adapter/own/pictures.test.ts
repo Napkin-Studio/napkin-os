@@ -135,6 +135,21 @@ describe('pictures on the own engine', () => {
     expect(other.frameId ?? null).toBeNull()
   })
 
+  it('a picture picked right after making a board goes on it, though nothing is selected (UAT round 4 A19)', async () => {
+    const a = new OwnAdapter()
+    a.resize(1200, 800, 0, 0)
+    const v = a.visibleBounds()
+    const brand = a.board({ x: v.maxX + 400, y: v.minY, width: 420, height: 300, title: 'Brand', boardId: newId('board'), purpose: 'brand' })
+    a.transact((all) => [brand, ...all], { undoable: false })
+    a.select([])
+    // The board layer holds the new board while its title and purpose are open; the Picture tool passes it on.
+    const [logo] = await placePictures(a, snapshotDoc(), [png('logo')], undefined, brand.id)
+    expect(logo.frameId).toBe(brand.id)
+    // With no board in hand or selected, a picked picture still lands clear of the board.
+    const [other] = await placePictures(a, snapshotDoc(), [png('other')])
+    expect(other.frameId ?? null).toBeNull()
+  })
+
   it('pasted pictures leave room for their names and a group label from the row below (UAT round 3, IMG-22)', async () => {
     const a = new OwnAdapter()
     a.resize(1200, 800, 0, 0)
