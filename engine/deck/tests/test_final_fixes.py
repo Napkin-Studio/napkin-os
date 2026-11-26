@@ -189,9 +189,10 @@ def test_a_call_that_dies_before_it_settles_still_counts_at_its_upper_bound(tmp_
     assert repair.shorten_spent(led) == repair.estimate(TR.REQ)["usd_upper"] > 0
 
 
-# ---------------------------------------------------------------- 5: marked text never goes into a paid shorten request
+# ---------------------------------------------------------------- 5: Confidential text goes into a shorten request like any other words
+# Owner, 26 Nov 2026: Confidential keeps a part out of Napkin's own RAG, layers and training only; Bedrock may take it.
 
-def test_a_marked_phrase_never_appears_in_a_shorten_request(tmp_path, monkeypatch):
+def test_a_marked_phrase_is_shortened_like_any_other_words(tmp_path, monkeypatch):
     import shutil
     import test_repair as TR
     stages_dir = tmp_path / "stages"
@@ -201,23 +202,25 @@ def test_a_marked_phrase_never_appears_in_a_shorten_request(tmp_path, monkeypatc
     (stages_dir / "e_repair_1.json").write_text("{}")   # makes the rung available; get_reply is replaced below
     seen = TR.capture_request(monkeypatch, lambda r: [])
     TR.build(tmp_path / "o", TR.fake_qa({TR.S: TR.too_long(TR.SLOT, TR.CAP, TR.BLOCK)}, "word_budget"), "--text-mode", "condense", "--marks", str(marks), stages_dir=stages_dir)
-    assert not any("household sees its own water story" in json.dumps(r) for r in seen), "a marked phrase went into a shorten request"
-    # control: with no marks the same deck does send that slot
-    seen2 = TR.capture_request(monkeypatch, lambda r: [])
-    TR.build(tmp_path / "o2", TR.fake_qa({TR.S: TR.too_long(TR.SLOT, TR.CAP, TR.BLOCK)}, "word_budget"), "--text-mode", "condense", stages_dir=stages_dir)
-    assert any("household sees its own water story" in json.dumps(r) for r in seen2)
+    assert any("household sees its own water story" in json.dumps(r) for r in seen), "a marked phrase was held out of the shorten request"
 
 
-def test_with_no_mark_data_a_live_shorten_is_refused_and_nothing_is_sent(tmp_path):
+def test_a_block_from_a_confidential_brief_part_is_shortened_too():
+    """A block the engine flagged from a Confidential brief part (``confidential`` / ``model: false``) goes into the request with its slot."""
+    from deck import repair
+    w = {"blocks": [{"text": "x", "confidential": True, "model": False}]}
+    assert not hasattr(repair, "_confidential") and not hasattr(repair, "_marked") and not hasattr(repair, "_deny")
+    assert "deny" not in repair.build_request.__code__.co_varnames
+    assert w["blocks"][0]["confidential"]
+
+
+def test_with_no_mark_data_a_live_shorten_is_sent():
     import test_repair as TR
     from deck import repair
     called = []
     ctx = {**TR._ctx(lambda r: called.append(r) or ({"edits": []}, {"usd": 0.01})), "inp": __import__("types").SimpleNamespace(marks=None)}
     skipped = []
-    edits, row = repair.get_reply(ctx, 1, TR.REQ, skipped)
-    assert edits is None and called == [] and "no mark data" in skipped[0]["why"]
-    ctx["inp"] = __import__("types").SimpleNamespace(marks=[])   # an empty list is a real answer
-    assert repair.get_reply(ctx, 1, TR.REQ, [])[0] == [] and len(called) == 1
+    assert repair.get_reply(ctx, 1, TR.REQ, skipped)[0] == [] and len(called) == 1 and skipped == []
 
 
 # ---------------------------------------------------------------- minors

@@ -852,8 +852,8 @@ def _territories_upstream(a, deck_ctx) -> tuple | None:
 
 
 def _add_marks(a, inp) -> None:
-    """``--marks FILE`` adds to the marks the document carried (an empty list is a real answer: the marks are known). Applied once, at load, so the picture step and
-    the paid shorten request both see them."""
+    """``--marks FILE`` adds to the marks the document carried (an empty list is a real answer: the marks are known). Applied once, at load. Neither the picture
+    step nor the paid shorten request is held by a mark any more (owner, 26 Nov 2026: Confidential keeps a part out of Napkin's own knowledge only)."""
     if a.marks:   # marks given by hand only ADD to the ones the document carried, and must be well formed
         raw = json.loads(a.marks.read_text())
         raw = raw.get("marks", raw) if isinstance(raw, dict) and "marks" in raw else raw
@@ -1065,7 +1065,7 @@ def main(argv=None):
     ap.add_argument("--remake", action="append", default=[], metavar="SLIDE.SLOT",
                     help="a person asks to make this made picture again, from its recorded subject: it goes on the next card as a new attempt (never automatic; two pictures per slot at most)")
     ap.add_argument("--remake-style", action="store_true", help="put pictures made with another Style Pack on the card (a changed pack never remakes by itself)")
-    ap.add_argument("--marks", type=Path, help="the parts marked Confidential, JSON [{path, text, kind}] (an empty list is a real answer); needed with --images for a deck built from files")
+    ap.add_argument("--marks", type=Path, help="the parts marked Confidential, JSON [{path, text, kind}] (an empty list is a real answer); they no longer hold a picture or a shorten request (owner, 26 Nov 2026)")
     ap.add_argument("--images-cache", type=Path, help="where the picture jobs, plan and manifest live (default: <stages>/images)")
     ap.add_argument("--deck-id", help="DEV ONLY (needs --dev): the id the spend ledger counts this deck under. Normally it comes from the deck's content (the document id, "
                                       "or a hash of the brief and the deck title), so a copied folder shares one cap")

@@ -155,7 +155,7 @@ image: { kind, status, aspect, asset?, from?, subject?, prompt?, style?, referen
 | `guards` | `{no_text, no_logos, no_real_people, no_chart_as_image, banned_imagery[], safe_messaging{packs[], reviewed}}` | the rails in force. The four booleans are always `true` |
 | `alt` | up to 140 characters | written by code from `subject`. Never from a picture's metadata |
 | `attempts` | 0 to 2 | generations tried |
-| `reason` | up to 300 characters | why the slot is `empty`, `failed` or held back (a Confidential part, a safe-messaging gate) |
+| `reason` | up to 300 characters | why the slot is `empty`, `failed` or held back (a safe-messaging gate, a Style Pack that could not be read, two tries made) |
 | `approval` | `{asset, decision, by, at, note?}` or null | the runner's stamp of `review.images.<slide id>.<slot>`. `decision`: `approve` · `replace` · `remove`. `by` is `human:<id>`, `at` is not empty. The schema requires an approved slot to hold an approval with `decision: approve`, a `by`, an `at` and an `asset`; that `approval.asset` equals the slot's own `asset` is a rule JSON Schema cannot state, so it is checked in code (`approval_matches_asset` in `test_visual_contract.py`, and the validator that reads it, `deck-repair-loop`) |
 | `basis` | `creative` | constant: every picture is creative, never sourced. There is no stored label field: a renderer draws the picture label (`inputs.pictures.approval.label`, Illustrative by default) whenever `status != approved` |
 
@@ -265,10 +265,10 @@ code (`engine/deck/imagegen.py`, `engine/visuals/`):
   (`--hero <slide>.<slot>`), on a card of its own with the draft's exact prompt. At most 3 hero jobs per deck and 1 retry per slot. The
   result is `slot.image.candidate {asset, job}` beside the approved draft; only an approval of the candidate's own asset promotes it.
   A Style Pack whose `models` differ from this map is refused at plan time.
-- **Confidential.** The engine gets the document's marks (`[{path, text, kind}]`; the key absent means refuse, an empty list is an answer).
-  Marked text never enters stage g; every subject, Replace note and the assembled style block passes a fail-closed allow-list lint
-  (no capital in mid-sentence, digit, spelled number, quotation mark or "in the style of") and a deny-list of the marked texts (their
-  words, 3-word runs and paraphrases). A hit holds the slot with "would draw on a Confidential part".
+- **Confidential (owner, 26 Nov 2026).** Confidential keeps a part out of Napkin's own RAG, layers, training, evals and goldens only;
+  Bedrock and Runway may take it. So stage g reads marked text like any other, no slot is held for a mark, and marks do not gate the
+  picture step. Every subject, Replace note and the assembled style block still passes the fail-closed allow-list lint (no capital in
+  mid-sentence, digit, spelled number, quotation mark or "in the style of"; banned imagery).
 - **Safe messaging.** On a deck a pack with `banned_imagery` applies to, nothing is made until `review.safe_messaging {by, at, packs,
   words_sha, banned_sha}` matches the deck's current words and banned list; one edited word holds every slot again. An unreachable guard
   flags the picture, and an unchecked picture there cannot be approved.

@@ -7,10 +7,10 @@ why the generation lives here. Sai's rules of 17 Nov 2026 are enforced in code, 
 2. The picture card shows every prompt in full. A yes is ``--yes-cost <card id>``: the id covers exactly the jobs, models, ratios, cap and
    spend it was made from, so a changed plan has a new id and an old id is refused.
 3. Drafts use flash; pro runs only for an approved, guard-checked hero a person asked for. Both are pinned in ``visuals.runway.TIER_MODEL``.
-4. Nothing is made while a part marked Confidential could be drawn: with no mark data the deck is refused; marked text never enters stage g;
-   every subject, note and style block passes the allow-list lint (``visuals.lint``) and the deny-list of the marked texts.
+4. Every subject, note and style block passes the allow-list lint (``visuals.lint``: no names, digits, quotes, styles or banned imagery).
 5. Client material goes to Runway like it goes to Bedrock (``visuals.policy``, Shrey 26 Nov 2026: Confidential keeps a part out of
-   Napkin's own knowledge only). Every picture card prints that rule.
+   Napkin's own knowledge only), Confidential parts included: stage g reads them and no slot is held for one. Every picture card prints
+   that rule.
 6. Nothing is remade automatically: a failure, a flag or a Style Pack change reaches a card and waits for a person.
 
 The recorded outputs are ``<stages>/g_image_subjects.json`` (stage g) and ``<stages>/generated.json`` plus ``<stages>/assets/`` (what slice 3's
@@ -129,69 +129,41 @@ def candidate_slots(deck: dict, territories=None, generate: str = "all") -> list
     return out
 
 
-# ---------------------------------------------------------------------------------------------------------- confidential marks
+# ---------------------------------------------------------------------------------------------------------- the stage g request
 
 def askable(deck: dict, cands: list) -> list:
     """The candidates stage g is asked about: a slot that cannot be drawn (see TERRITORY_PICTURE_DRAWN) is not paid for."""
     return [c for c in cands if TERRITORY_PICTURE_DRAWN or deck["slides"][c["sid"]]["type"] != "territory"]
 
 
-def mark_paths(inp) -> list:
-    return [str(m.get("path", "")) for m in (inp.marks or [])]
-
-
-def _marked_ref(refs, paths) -> bool:
-    """Does a block's ``refs`` name a marked part? A ref ``brief:<field>`` names a brief field; the marks name data paths of the brief."""
-    from .inputs import CLAN_FIELDS
-    keys = []
-    for p in paths:
-        head = re.split(r"[.\[]", p)[0]
-        keys += [head] + [fid for fid, k in CLAN_FIELDS.items() if k == head]
-    for r in refs or []:
-        r = str(r)
-        if r.startswith("brief:") and any(r[6:].split(".")[0] == k for k in keys):
-            return True
-    return False
-
-
-def creative_blocks(slide: dict, inp, deny: dict) -> list:
-    """The words stage g may read from a slide: creative or proposal blocks only (no evidence, quote, figure or cited fact), and no block whose
-    refs name a marked part or whose text would draw on one."""
-    paths = mark_paths(inp)
+def creative_blocks(slide: dict) -> list:
+    """The words stage g may read from a slide: creative or proposal blocks only (no evidence, quote, figure or cited fact). A block from a part
+    marked Confidential is read like any other (owner, 26 Nov 2026)."""
     out = []
     for b in slide.get("blocks") or []:
         if b.get("basis") not in ("creative", "proposal") or b.get("refs") or b.get("kind") in ("quote", "stat", "table", "chart", "copy") or b.get("internal"):
             continue
-        if _marked_ref(b.get("refs"), paths):
-            continue
         txt = " ".join(x for x in (b.get("text"), " ".join(" ".join(map(str, r)) for r in b.get("items") or [] if isinstance(r, (list, tuple)))) if x).strip()
-        if txt and not lint.confidential_hit(txt, deny):
+        if txt:
             out.append(txt[:400])
     return out
 
 
-def subject_request(deck: dict, inp, territories, cands: list, banned: list, deny: dict) -> dict:
+def subject_request(deck: dict, inp, territories, cands: list, banned: list) -> dict:
     """What stage g is sent: per slot the slide type and title, its creative blocks, the territory's sketch and mood, the setting hint from
-    the brief's tone and world (dropped when marked), the aspect and the composition role; and the banned imagery. Never a marked field."""
-    from .inputs import CLAN_FIELDS
-    marked_heads = {re.split(r"[.\[]", p)[0] for p in mark_paths(inp)}
-    tone = ""
-    if CLAN_FIELDS["tone_world_assets"] not in marked_heads and "tone_world_assets" not in marked_heads:
-        v = (inp.brief.get("tone_world_assets") or {}).get("value")
-        tone = (v if isinstance(v, str) else " ".join(map(str, v)) if isinstance(v, list) else "")[:300]
-        if lint.confidential_hit(tone, deny):
-            tone = ""
+    the brief's tone and world, the aspect and the composition role; and the banned imagery."""
+    v = (inp.brief.get("tone_world_assets") or {}).get("value")
+    tone = (v if isinstance(v, str) else " ".join(map(str, v)) if isinstance(v, list) else "")[:300]
     tmap = {t.get("id"): t for t in territories or []}
     slots = []
     for c in cands:
         s = deck["slides"][c["sid"]]
-        title = s.get("title") or ""
-        row = {"key": c["key"], "slide_type": s["type"], "title": "" if lint.confidential_hit(title, deny) else title, "aspect": c["aspect"],
-               "role": COMPOSITION.get(s["type"], "Medium shot, one moment."), "blocks": creative_blocks(s, inp, deny)}
+        row = {"key": c["key"], "slide_type": s["type"], "title": s.get("title") or "", "aspect": c["aspect"],
+               "role": COMPOSITION.get(s["type"], "Medium shot, one moment."), "blocks": creative_blocks(s)}
         t = tmap.get(c["anchor"]["ref"]) if s["type"] == "territory" else None
         if t:
-            row["sketch"] = "" if lint.confidential_hit(t.get("sketch") or "", deny) else str(t.get("sketch") or "")[:400]
-            row["mood"] = "" if lint.confidential_hit(t.get("mood") or "", deny) else str(t.get("mood") or "")[:200]
+            row["sketch"] = str(t.get("sketch") or "")[:400]
+            row["mood"] = str(t.get("mood") or "")[:200]
         slots.append(row)
     return {"slots": slots, "setting": tone, "banned_imagery": banned}
 
@@ -331,15 +303,11 @@ def make_plan(ctx: Ctx, mode: str = "plan", hero: list | None = None, remake_sty
     Returns the plan (also what plan.json holds)."""
     deck, inp = ctx.deck, ctx.inp
     remake = {str(x) for x in (remake or ())}
-    if inp.marks is None:
-        raise GenError("picture generation is refused: this deck has no mark data, so it cannot be known whether a prompt would draw on a part marked "
-                       "Confidential. Give the marks (--marks FILE, or build from the document) even when none are marked: an empty list is a real answer")
     check_models(ctx.style)
     safe = safe_state(inp, deck, ctx.review)
     banned = list(dict.fromkeys([*safe["banned"], *ctx.style.banned_imagery, *ctx.banned_extra]))
-    deny = lint.deny_list(inp.marks)
     cands = candidate_slots(deck, ctx.territories, ctx.generate)
-    req = subject_request(deck, inp, ctx.territories, askable(deck, cands), banned, deny)
+    req = subject_request(deck, inp, ctx.territories, askable(deck, cands), banned)
     rec = ctx.subjects if ctx.subjects is not None else load_subjects(ctx.stages, req)
     style_text = style_text_for(ctx.style, banned)
     refs = [r.sha256 for r in vstyle.sendable(ctx.style)]
@@ -347,7 +315,7 @@ def make_plan(ctx: Ctx, mode: str = "plan", hero: list | None = None, remake_sty
     plan = {"version": 1, "deck_id": ctx.deck_id, "rails_version": RAILS_VERSION, "words_sha": words_sha(deck), "style": {"hash": ctx.style.hash, "source": ctx.style.source},
             "safe_messaging": {k: safe[k] for k in ("applies", "packs", "reviewed")}, "stage_g": {"recorded": rec is not None, "request_sha": request_sha(req)},
             "cap_usd": ctx.cap, "slots": {}, "banned_imagery": banned,
-            "client_to_runway": {"label": vpolicy.label(), "confidential_parts": len(inp.marks)}}
+            "client_to_runway": {"label": vpolicy.label()}}
     if mode == "subjects" or rec is None:   # before stage g exists the prompts are code templates, marked as a preview
         subj = {}
     else:
@@ -399,20 +367,17 @@ def make_plan(ctx: Ctx, mode: str = "plan", hero: list | None = None, remake_sty
         kind = got.get("kind") if got.get("kind") in ("photo", "illustration") else c["kind"]
         subject = str(got.get("subject") or "")[:SUBJECT_MAX]
         source = "stage_g"
-        why = lint.lint_text(subject, banned, deny) if subject else "no subject yet"
+        why = lint.lint_text(subject, banned) if subject else "no subject yet"
         if why:
             source = "template"
             if subj and subject:   # a subject was written and refused: never a silent fallback, the card and report.json say so
                 row.update(subject_refused=why)
             subject = TEMPLATES.get(s["type"], TEMPLATES["territory"])
-            if subj and why == "would draw on a Confidential part":
-                row.update(status="held", reason="would draw on a Confidential part")
-                continue
-            if lint.lint_text(subject, banned, deny):
+            if lint.lint_text(subject, banned):
                 row.update(status="held", reason="no safe subject could be written for this slot")
                 continue
         if note:
-            nwhy = lint.lint_text(note, banned, deny)
+            nwhy = lint.lint_text(note, banned)
             if nwhy:
                 row.update(status="held", reason=f"the Replace note was refused: {nwhy}")
                 continue
@@ -597,7 +562,7 @@ def run_subjects(ctx: Ctx, plan: dict, call=None, log=print) -> dict:
     call = call or stg.image_subjects
     cands = candidate_slots(ctx.deck, ctx.territories, ctx.generate)
     banned = plan["banned_imagery"]
-    req = subject_request(ctx.deck, ctx.inp, ctx.territories, askable(ctx.deck, cands), banned, lint.deny_list(ctx.inp.marks))
+    req = subject_request(ctx.deck, ctx.inp, ctx.territories, askable(ctx.deck, cands), banned)
     key = "g_" + request_sha(req)
     with ctx.ledger.locked():
         spent = jobs.spent_usd(ctx.manifest, ctx.ledger)

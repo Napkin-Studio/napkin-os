@@ -231,11 +231,11 @@ def slide_text(s: dict) -> str:
     return "\n".join([s.get("title", "")] + [t for b in s["blocks"] for t in ledger.block_texts(b)])
 
 
-def build_request(deck_kept: dict, work_base: dict, targets: list, library: dict, policy: dict, audience: str, deny: dict | None = None) -> list:
+def build_request(deck_kept: dict, work_base: dict, targets: list, library: dict, policy: dict, audience: str) -> list:
     """The shorten request, one entry per target slot (at most ``policy.shorten.max_slots_per_round``): ``{slide (title), slot, role, max_chars,
     max_words, fields: [{id, text}]}``. Fields are the slot's eligible fields only (``eligible_fields``), their text the CURRENT words. A slot
-    with nothing eligible, or whose blocks draw on a part marked Confidential with model false, or whose words or title name a marked text
-    (``deny`` is ``lint.deny_list(inp.marks)``), is not sent (the caller lists it).
+    with nothing eligible is not sent (the caller lists it). Words from a part marked Confidential are sent like any other: the shorten model
+    runs on Bedrock (owner, 26 Nov 2026: Confidential keeps a part out of Napkin's own RAG, layers and training only).
     ``targets`` is ``[(slide id, slot, measured, limit)]``."""
     out, cap = [], (policy.get("shorten") or {}).get("max_slots_per_round", 12)
     for sid, slot, measured, limit in targets:
@@ -257,9 +257,7 @@ def build_request(deck_kept: dict, work_base: dict, targets: list, library: dict
             if mv is None:
                 continue
             fields += [{"id": f, "text": _field_text(work_base, sid, f)} for f, _, _ in eligible_fields(w, bi, frozenset(mv) if isinstance(mv, set) else frozenset())]
-        if not fields or any(_confidential(w, int(f["id"].split(".")[0])) for f in fields):
-            continue
-        if deny and _marked(deny, [s.get("title", ""), *(f["text"] for f in fields)]):   # a marked phrase never goes into a paid request
+        if not fields:
             continue
         chars = sum(len(f["text"]) for f in fields)
         cap_chars = min(int(limit) if limit else chars, max(1, int(chars * 0.9)))
@@ -268,19 +266,6 @@ def build_request(deck_kept: dict, work_base: dict, targets: list, library: dict
         out.append({"slide": s["title"], "slot": slot, "role": lay["slots"][slot].get("role", "body"), "max_chars": cap_chars,
                     "max_words": max(1, int(words * cap_chars / max(chars, 1))), "fields": fields})
     return out
-
-
-def _marked(deny: dict, texts) -> bool:
-    """True when any of these texts carries a phrase the person marked Confidential (visuals.lint.confidential_hit against the deny list)."""
-    from visuals import lint   # noqa: PLC0415
-    return any(lint.confidential_hit(str(t), deny) for t in texts if t)
-
-
-def _confidential(s: dict, bi: int) -> bool:
-    """True when a block's refs point into a brief part marked Confidential with model false (the engine marks such a ref
-    ``confidential``; nothing of it ever goes into a request)."""
-    b = s["blocks"][bi]
-    return bool(b.get("confidential") or (b.get("model") is False))
 
 
 def estimate(request: list, system_chars: int = 3200, max_tokens: int = 16000) -> dict:
@@ -682,15 +667,6 @@ def choose(issue: dict, env: dict, skipped: list, defer_shorten: bool = True) ->
 
 
 # ---------------------------------------------------------------------------------------------------- the paid rung
-def _deny(ctx: dict):
-    """The deny list of the deck's marked texts, or None when there are no marks to apply."""
-    marks = getattr(ctx.get("inp"), "marks", None)
-    if not marks:
-        return None
-    from visuals import lint   # noqa: PLC0415
-    return lint.deny_list(marks)
-
-
 def shorten_spent(led) -> float:
     """What this deck's shorten calls have cost in its lifetime ledger: per send, the last row's USD (the card's upper bound until the call settles, then the
     measured figure). A call that died before it settled stays at its upper bound, so a crash never frees budget."""
@@ -709,7 +685,7 @@ def recording_path(stages, n: int, rsha: str) -> Path:
 def get_reply(ctx: dict, n: int, request: list, skipped: list) -> tuple:
     """The shorten reply for round ``n``: ``(edits [{slide, slot, field, text}], row for report.json)``. A recording of this request (its file is named by the
     request's hash and is never overwritten) is read; one made for another request is listed and never applied. With no recording the call is made only
-    with ``--live``, with the marks known, under the caps (policy.max_usd for the deck's whole life, counted in its ledger; NAPKIN_DECK_MAX_USD for the run),
+    with ``--live``, under the caps (policy.max_usd for the deck's whole life, counted in its ledger; NAPKIN_DECK_MAX_USD for the run),
     after printing its cost card. A call that raises (a refusal too) is caught, skipped and listed."""
     import contextlib
     import uuid
@@ -736,11 +712,6 @@ def get_reply(ctx: dict, n: int, request: list, skipped: list) -> tuple:
     if not ctx["live"]:
         skipped.append({"slide": None, "slot": None, "rung": "shorten", "why": "this build was not live and no recording matches"})
         row["why"] = "not live"
-        return None, row
-    if getattr(ctx.get("inp"), "marks", None) is None:   # fail closed, as pictures do: with no mark data it cannot be known whether a request carries a marked part
-        why = "no mark data, so a paid shorten request is refused (give the marks, even an empty list)"
-        skipped.append({"slide": None, "slot": None, "rung": "shorten", "why": why})
-        row["why"] = why
         return None, row
     led = ctx.get("shorten_ledger")
     send = uuid.uuid4().hex[:12]
@@ -1020,7 +991,7 @@ def run(ctx: dict, m0: dict) -> dict:
             cands = [a for a in actions if a["rung"] == "shorten"]
             if cands:
                 targets = [(a["issue"]["slide"], a["issue"]["slot"], (a["issue"].get("evidence") or {}).get("measured"), (a["issue"].get("evidence") or {}).get("limit")) for a in cands]
-                request = build_request(kept["deck"], work_kept, targets, ctx["library"], policy, ctx["audience"], deny=_deny(ctx))
+                request = build_request(kept["deck"], work_kept, targets, ctx["library"], policy, ctx["audience"])
                 request_sent = request
                 edits, row = (None, None)
                 if request:
