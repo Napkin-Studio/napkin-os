@@ -75,6 +75,14 @@ base = {"type": "result", "subtype": "success", "is_error": False, "num_turns": 
 def emit(env, code=0):
     if stream_out:
         print(json.dumps({"type": "system", "subtype": "init"}))
+        # what a WebSearch hands back: the pages it found (a mode can leave some out, to test an invented URL)
+        found = [s["url"] for s in (env.get("structured_output") or {}).get("sources", [])
+                 if isinstance(s, dict) and s.get("url") and "invented" not in s["url"]]
+        print(json.dumps({"type": "assistant", "message": {"content": [
+            {"type": "tool_use", "id": "t1", "name": "WebSearch", "input": {"query": "q"}}]}}))
+        print(json.dumps({"type": "user", "message": {"content": [
+            {"type": "tool_result", "tool_use_id": "t1", "content": "Links: " + json.dumps(
+                [{"title": "hit", "url": u} for u in found])}]}}))
         print(json.dumps({"type": "assistant", "message": {"content": [{"type": "text", "text": "..."}]}}))
     print(json.dumps(env))
     sys.exit(code)
@@ -106,6 +114,14 @@ if "WebSearch" in tools:
                                                                                         5, ""]}})
     if mode == "empty":
         emit({**base, "result": "x", "structured_output": {"sources": [], "queries": ["nothing here"]}})
+    if mode == "invented":   # one page the search found, one the model made up
+        emit({**base, "result": "x", "structured_output": {"queries": ["q"], "sources": [
+            {"url": "https://www.cso.ie/en/real", "publisher": "CSO", "title": "Real", "excerpts": [{"quote": "A real quote."}]},
+            {"url": "https://invented.example.com/page", "publisher": "X", "title": "Made up",
+             "excerpts": [{"quote": "A quote from a page nobody found."}]}]}})
+    if mode == "invented-all":
+        emit({**base, "result": "x", "structured_output": {"queries": ["q"], "sources": [
+            {"url": "https://invented.example.com/a", "publisher": "X", "title": "Made up", "excerpts": [{"quote": "q"}]}]}})
     if mode == "exit":
         print("boom", file=sys.stderr)
         sys.exit(1)

@@ -425,6 +425,29 @@ def test_a_deck_spun_off_from_production_sends_the_carried_project_and_its_confi
     assert "production_upstream" not in fake2.posts[0]
 
 
+def test_a_deck_spun_off_from_territories_sends_the_carried_document_whole(deck, monkeypatch):
+    """territories-spinoff-out-deck: the host sends the Territories document beside the upstream index (clan.territories_upstream, or in data.upstream);
+    the engine gets it whole as territories_upstream, and the Confidential marks read inside it. No other upstream entry is taken for it."""
+    from napkin.handlers import build_deck as bd
+    terr = {"title": "Linea", "crew": [], "territories": [{"id": "t_a", "name": "Already Started"}], "greenlit": [{"territory_id": "t_a", "by": "Shrey"}],
+            "sends": [{"id": "snd_deck", "to": "deck-maker", "territory_ids": ["t_a"], "not_chosen": [], "by": "Shrey", "at": "2026-11-18T10:20:00Z", "status": "sent"}]}
+    assert bd.is_territories(terr) and not bd.is_territories({"app": "production-tool"}) and not bd.is_territories({"territories": [], "crew": []})
+    fake = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    host = Host(data=deck_data(), schema=SCHEMA)
+    host.data["upstream"] = {"doc-brief-1": {"insight": "x"}, "doc-terr-1": terr}
+    build(deck, host)
+    assert fake.posts[0]["territories_upstream"] == {"id": "doc-terr-1", "data": terr} and "production_upstream" not in fake.posts[0]
+    fake2 = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    host2 = Host(data=deck_data(), schema=SCHEMA)
+    host2.data["upstream"] = {"doc-brief-1": {"insight": "x"}}
+    build(deck, host2)
+    assert "territories_upstream" not in fake2.posts[0]
+    # the host sends the index in data.upstream and the document beside it: the handler puts it back
+    data = bd.with_territories({"upstream": {"doc-terr-1": {"direct": True, "keys": ["crew"]}}}, {"id": "doc-terr-1", "data": terr})
+    assert bd.territories_upstream_of(data) == {"id": "doc-terr-1", "data": terr}
+    assert bd.with_territories({"upstream": {}}, {"id": "x", "data": {"app": "production-tool"}}) == {"upstream": {}}
+
+
 def test_a_deck_spun_off_a_brief_sends_the_brief_to_the_engine(deck, monkeypatch):
     """UAT round 4 L2: a brief-only deck built from an empty brief, because the brief it carries was never sent."""
     fake = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))

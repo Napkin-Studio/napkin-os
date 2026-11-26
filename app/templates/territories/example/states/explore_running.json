@@ -1,0 +1,845 @@
+{
+ "schema_version": 1,
+ "title": "Linea: Weekend by Rail",
+ "upstream": {
+  "5b0d3a7e-4c1f-4e2a-9a55-1d6c0f2b7e11": {
+   "background": "Linea runs weekend trains from Dublin to Galway and wants more couples and families to take them.",
+   "objectives": "Lift weekend return bookings by 12% over the summer.",
+   "audience": "Couples and young families in Dublin who drive west two or three weekends a year and arrive tired.",
+   "insight": "A drive is a job somebody has to do. A train journey is time somebody gives back to you.",
+   "smp": "The weekend starts when you sit down.",
+   "desired_response": "Think the train is quicker than I assumed. Feel the trip is part of the break. Book a weekend return.",
+   "tone_world_assets": "Warm, wry, never preachy.",
+   "mandatories": "Weekend return fare. No anti-car tone (shared regional partners)."
+  },
+  "a91c64f2-7d3b-4b8e-8f10-3e5d2c9a6b47": {
+   "campaign": {
+    "name": "Linea: Weekend by Rail"
+   }
+  }
+ },
+ "finds": [
+  {
+   "id": "x_FORUM0001",
+   "kind": "found",
+   "text": "In travel forum threads about weekends west, the train ride itself is named as a highlight.",
+   "source": "Public travel forums, 120 posts read",
+   "date": "2025-2026",
+   "quote_checked": true,
+   "lookup": "lq_forum",
+   "in_play": true
+  },
+  {
+   "id": "x_COMPAR0002",
+   "kind": "found",
+   "text": "54% of rail passengers in a comparator market count the journey as part of the trip.",
+   "source": "Passenger survey, comparator market",
+   "date": "2025",
+   "quote_checked": true,
+   "lookup": "lq_forum",
+   "in_play": true
+  },
+  {
+   "id": "x_LOUNGE0003",
+   "kind": "case",
+   "text": "Your holiday starts here, not at the gate.",
+   "source": "Case library (example), airport lounges",
+   "date": "2023",
+   "quote_checked": true,
+   "lookup": "lq_cases",
+   "in_play": true
+  },
+  {
+   "id": "x_MEALKIT004",
+   "kind": "case",
+   "text": "Dinner in 20 minutes. The rest of the evening is yours.",
+   "source": "Case library (example), meal kits",
+   "date": "2024",
+   "quote_checked": true,
+   "lookup": "lq_cases",
+   "in_play": true
+  },
+  {
+   "id": "x_AUDIOB0005",
+   "kind": "case",
+   "text": "Your commute is now your favourite part of the day.",
+   "source": "Case library (example), audiobooks",
+   "date": "2022",
+   "quote_checked": true,
+   "lookup": "lq_cases",
+   "in_play": true
+  },
+  {
+   "id": "x_THEMEPK009",
+   "kind": "case",
+   "text": "The story starts in the queue.",
+   "source": "Case library (example), theme parks",
+   "date": "2024",
+   "quote_checked": true,
+   "lookup": "lq_cases",
+   "in_play": true
+  }
+ ],
+ "focus": {
+  "sources": [
+   {
+    "id": "brief:smp",
+    "in_play": true
+   },
+   {
+    "id": "brief:insight",
+    "in_play": true
+   },
+   {
+    "id": "brief:audience",
+    "in_play": true
+   },
+   {
+    "id": "brief:desired_response",
+    "in_play": true
+   },
+   {
+    "id": "brief:mandatories",
+    "in_play": true
+   },
+   {
+    "id": "brief:tone_world_assets",
+    "in_play": true
+   },
+   {
+    "id": "f_ROUTE0412",
+    "in_play": true
+   },
+   {
+    "id": "f_TIRED0418",
+    "in_play": true
+   },
+   {
+    "id": "f_DRIVER0431",
+    "in_play": true
+   },
+   {
+    "id": "f_FARE00440",
+    "in_play": true
+   },
+   {
+    "id": "f_BOOK00447",
+    "in_play": true
+   },
+   {
+    "id": "f_CLIMATE450",
+    "in_play": true
+   },
+   {
+    "id": "fi_NOTALK003",
+    "in_play": true
+   },
+   {
+    "id": "fi_RIVALS005",
+    "in_play": true
+   },
+   {
+    "id": "fi_FARE00007",
+    "in_play": false
+   },
+   {
+    "id": "fi_SPONT0009",
+    "in_play": true
+   },
+   {
+    "id": "x_FORUM0001",
+    "in_play": true
+   },
+   {
+    "id": "x_COMPAR0002",
+    "in_play": true
+   },
+   {
+    "id": "x_LOUNGE0003",
+    "in_play": true
+   },
+   {
+    "id": "x_MEALKIT004",
+    "in_play": true
+   },
+   {
+    "id": "x_AUDIOB0005",
+    "in_play": true
+   },
+   {
+    "id": "x_THEMEPK009",
+    "in_play": true
+   }
+  ],
+  "insights": [
+   {
+    "id": "in_arrive",
+    "kind": "truth",
+    "text": "Arriving tired is the worst part of the weekend.",
+    "evidence": [
+     "f_TIRED0418"
+    ],
+    "strength": "strong",
+    "ticked": true,
+    "by": "engine",
+    "rank": 1,
+    "theme": "arriving rested"
+   },
+   {
+    "id": "in_timeback",
+    "kind": "truth",
+    "text": "A drive is a job somebody has to do; a train journey is time somebody gives back.",
+    "evidence": [
+     "brief:insight",
+     "f_ROUTE0412"
+    ],
+    "strength": "strong",
+    "ticked": true,
+    "by": "engine",
+    "rank": 2,
+    "theme": "time given back"
+   },
+   {
+    "id": "in_journey",
+    "kind": "tension",
+    "text": "Rivals sell the destination; nobody sells the journey.",
+    "evidence": [
+     "fi_RIVALS005"
+    ],
+    "strength": "strong",
+    "ticked": true,
+    "by": "engine",
+    "rank": 3,
+    "theme": "the journey as the treat"
+   },
+   {
+    "id": "in_driver",
+    "kind": "tension",
+    "text": "One person does every drive, and quietly resents it.",
+    "evidence": [
+     "f_DRIVER0431",
+     "fi_NOTALK003"
+    ],
+    "strength": "moderate",
+    "ticked": true,
+    "by": "engine",
+    "rank": 4,
+    "derived": true,
+    "theme": "car guilt"
+   },
+   {
+    "id": "in_friday",
+    "kind": "truth",
+    "text": "Most weekends are decided on a Friday.",
+    "evidence": [
+     "f_BOOK00447"
+    ],
+    "strength": "moderate",
+    "ticked": true,
+    "by": "engine",
+    "rank": 5,
+    "theme": "spontaneous weekends"
+   },
+   {
+    "id": "in_forum",
+    "kind": "truth",
+    "text": "People already call the train ride a highlight.",
+    "evidence": [
+     "x_FORUM0001",
+     "x_COMPAR0002"
+    ],
+    "strength": "moderate",
+    "ticked": true,
+    "by": "engine",
+    "rank": 6,
+    "theme": "the journey as the treat"
+   },
+   {
+    "id": "in_lounge",
+    "kind": "borrowed",
+    "text": "The holiday starts before you leave: lounges and queues sell the build-up.",
+    "evidence": [
+     "x_LOUNGE0003",
+     "x_THEMEPK009"
+    ],
+    "strength": "moderate",
+    "ticked": false,
+    "by": "engine",
+    "rank": 7,
+    "theme": "the build-up"
+   },
+   {
+    "id": "in_fare",
+    "kind": "provocation",
+    "text": "What if the fare were the surprise, not the catch?",
+    "evidence": [
+     "f_FARE00440",
+     "fi_FARE00007"
+    ],
+    "strength": "thin",
+    "ticked": false,
+    "by": "engine",
+    "rank": 8,
+    "derived": true,
+    "theme": "the fare"
+   },
+   {
+    "id": "in_mealkit",
+    "kind": "borrowed",
+    "text": "Meal kits sell the hour back.",
+    "evidence": [
+     "x_MEALKIT004"
+    ],
+    "strength": "thin",
+    "ticked": false,
+    "by": "engine",
+    "rank": 9,
+    "theme": "time given back"
+   },
+   {
+    "id": "in_nofight",
+    "kind": "yours",
+    "text": "Nobody wants to argue about the motorway.",
+    "evidence": [],
+    "strength": "thin",
+    "ticked": true,
+    "by": "Shrey",
+    "rank": 10
+   }
+  ]
+ },
+ "journey": [
+  {
+   "key": "tv",
+   "day": "Thursday 21:00",
+   "where": "TV, after the news"
+  },
+  {
+   "key": "story",
+   "day": "Thursday 22:40",
+   "where": "Instagram, scrolling in bed"
+  },
+  {
+   "key": "poster",
+   "day": "Friday 08:15",
+   "where": "48-sheet outside Heuston"
+  },
+  {
+   "key": "radio",
+   "day": "Friday 17:30",
+   "where": "Drive-time radio, stuck in traffic"
+  },
+  {
+   "key": "seat",
+   "day": "Saturday 09:20",
+   "where": "On board, the table seat"
+  },
+  {
+   "key": "email",
+   "day": "Sunday 16:00",
+   "where": "Inbox, before the trip home"
+  }
+ ],
+ "crew": [
+  {
+   "id": "cr_core",
+   "direction": "core",
+   "role": "strategy",
+   "name": "Close to the core",
+   "short": "Core",
+   "heading": "Stay on the proposition. Say it as plainly and truly as possible.",
+   "angle": 250,
+   "colour": "#8C8577"
+  },
+  {
+   "id": "cr_feel",
+   "direction": "feel",
+   "role": "idea",
+   "name": "Towards warmth",
+   "short": "Warmth",
+   "heading": "Go towards the feeling the brief points at: warm, sincere, family.",
+   "angle": 185,
+   "colour": "#E07A5F"
+  },
+  {
+   "id": "cr_opposite",
+   "direction": "opposite",
+   "role": "copy",
+   "name": "The opposite pole",
+   "short": "Opposite",
+   "heading": "Go the other way from warmth: wry, loud, comic. Never mock drivers.",
+   "angle": 5,
+   "colour": "#3D5AFE"
+  },
+  {
+   "id": "cr_adjacent",
+   "direction": "adjacent",
+   "role": "research",
+   "name": "Next door",
+   "short": "Next door",
+   "heading": "Look at neighbouring categories and bring back a device.",
+   "angle": 105,
+   "colour": "#E3A21A"
+  },
+  {
+   "id": "cr_outside",
+   "direction": "outside",
+   "role": "synthesis",
+   "name": "Far outside",
+   "short": "Outside",
+   "heading": "Leap out of travel entirely: lounges, theme parks, cruises. Then come back.",
+   "angle": 318,
+   "colour": "#8E5CF0"
+  }
+ ],
+ "expeditions": [
+  {
+   "id": "ex_core",
+   "crew": "cr_core",
+   "state": "back",
+   "insights": [
+    "in_arrive",
+    "in_timeback",
+    "in_journey",
+    "in_driver",
+    "in_friday",
+    "in_forum",
+    "in_nofight"
+   ],
+   "way": [
+    {
+     "at": 0.1,
+     "text": "Read the proposition",
+     "cite": "brief:smp"
+    },
+    {
+     "at": 0.2,
+     "text": "Kept: arriving tired is the worst part",
+     "cite": "f_TIRED0418"
+    },
+    {
+     "at": 0.34,
+     "text": "Checked the fare and the times",
+     "cite": "f_ROUTE0412"
+    }
+   ],
+   "turn": "Stayed on the proposition. Every turn away from it was a job for another agent.",
+   "routes": [
+    {
+     "territory_id": "t_started",
+     "distance": 0.22
+    },
+    {
+     "territory_id": "t_sitdown",
+     "distance": 0.3
+    }
+   ]
+  },
+  {
+   "id": "ex_feel",
+   "crew": "cr_feel",
+   "state": "running",
+   "insights": [
+    "in_arrive",
+    "in_timeback",
+    "in_journey",
+    "in_driver",
+    "in_friday",
+    "in_forum",
+    "in_nofight"
+   ],
+   "way": [
+    {
+     "at": 0.14,
+     "text": "Nobody talks in the car",
+     "cite": "fi_NOTALK003"
+    },
+    {
+     "at": 0.3,
+     "text": "Tone: warm, never preachy",
+     "cite": "brief:tone_world_assets"
+    },
+    {
+     "at": 0.5,
+     "text": "The trip itself is a highlight",
+     "cite": "x_FORUM0001"
+    }
+   ],
+   "turn": "",
+   "routes": [
+    {
+     "territory_id": "t_sunday",
+     "distance": 0.42
+    }
+   ]
+  },
+  {
+   "id": "ex_opposite",
+   "crew": "cr_opposite",
+   "state": "running",
+   "insights": [
+    "in_arrive",
+    "in_timeback",
+    "in_journey",
+    "in_driver",
+    "in_friday",
+    "in_forum",
+    "in_nofight"
+   ],
+   "way": [
+    {
+     "at": 0.12,
+     "text": "Mandatory: no anti-car tone",
+     "cite": "brief:mandatories"
+    },
+    {
+     "at": 0.3,
+     "text": "One person does every drive",
+     "cite": "f_DRIVER0431"
+    },
+    {
+     "at": 0.55,
+     "text": "Rivals all show the destination",
+     "cite": "fi_RIVALS005"
+    }
+   ],
+   "turn": "",
+   "routes": [
+    {
+     "territory_id": "t_passenger",
+     "distance": 0.46
+    }
+   ]
+  },
+  {
+   "id": "ex_adjacent",
+   "crew": "cr_adjacent",
+   "state": "running",
+   "insights": [
+    "in_arrive",
+    "in_timeback",
+    "in_journey",
+    "in_driver",
+    "in_friday",
+    "in_forum",
+    "in_nofight"
+   ],
+   "way": [
+    {
+     "at": 0.2,
+     "text": "Meal kits sell the hour back",
+     "cite": "x_MEALKIT004"
+    },
+    {
+     "at": 0.4,
+     "text": "Audiobooks make dead time the best",
+     "cite": "x_AUDIOB0005"
+    },
+    {
+     "at": 0.58,
+     "text": "Most trips are decided on a Friday",
+     "cite": "f_BOOK00447"
+    }
+   ],
+   "turn": "",
+   "routes": [
+    {
+     "territory_id": "t_mixtape",
+     "distance": 0.74
+    }
+   ]
+  },
+  {
+   "id": "ex_outside",
+   "crew": "cr_outside",
+   "state": "running",
+   "insights": [
+    "in_arrive",
+    "in_timeback",
+    "in_journey",
+    "in_driver",
+    "in_friday",
+    "in_forum",
+    "in_nofight"
+   ],
+   "way": [
+    {
+     "at": 0.26,
+     "text": "Lounges: the holiday starts here",
+     "cite": "x_LOUNGE0003"
+    },
+    {
+     "at": 0.5,
+     "text": "Theme parks: the queue is the ride",
+     "cite": "x_THEMEPK009"
+    },
+    {
+     "at": 0.66,
+     "text": "Cruise: you're there when you board"
+    }
+   ],
+   "turn": "",
+   "routes": []
+  }
+ ],
+ "territories": [
+  {
+   "id": "t_started",
+   "name": "Already Started",
+   "thought": "The weekend doesn't start at the hotel. It starts at Platform 4.",
+   "why": "The brief says the weekend starts when you sit down; this route makes that the whole story.",
+   "mood": "",
+   "references": [],
+   "risks": [
+    "SkyHop's 'The holiday starts at the gate' is close. Rail has to own the stronger version: two hours, not fifty minutes."
+   ],
+   "sketch": "The weekend doesn't start at the hotel. It starts at Platform 4.",
+   "tension": "The brief says the weekend starts when you sit down; this route makes that the whole story.",
+   "tier": "safe",
+   "band": "core",
+   "distance": 0.22,
+   "crew": "cr_core",
+   "origin": {
+    "kind": "crew",
+    "from": [
+     "cr_core"
+    ]
+   },
+   "state": "found",
+   "status": "live",
+   "evidence": [
+    "f_TIRED0418"
+   ],
+   "ready": false,
+   "theme": "the weekend starts early"
+  },
+  {
+   "id": "t_sitdown",
+   "name": "Sit Down, It's Saturday",
+   "thought": "The proposition, said as plainly as it can be said.",
+   "why": "The safest reading of the brief. It may feel expected.",
+   "mood": "",
+   "references": [],
+   "risks": [
+    "Close to the brief, so it may feel expected."
+   ],
+   "sketch": "The proposition, said as plainly as it can be said.",
+   "tension": "The safest reading of the brief. It may feel expected.",
+   "tier": "safe",
+   "band": "core",
+   "distance": 0.3,
+   "crew": "cr_core",
+   "origin": {
+    "kind": "crew",
+    "from": [
+     "cr_core"
+    ]
+   },
+   "state": "found",
+   "status": "live",
+   "evidence": [
+    "brief:smp"
+   ],
+   "ready": false,
+   "theme": "the proposition, plainly"
+  },
+  {
+   "id": "t_sunday",
+   "name": "Sunday Night, Sorted",
+   "thought": "The best part of the train is the trip home. Sunday evening, no traffic, no dread.",
+   "why": "Most campaigns sell the way out. Nobody sells the way home.",
+   "mood": "",
+   "references": [],
+   "risks": [
+    "The weekend-return fare has to be clear or it reads as a one-way message."
+   ],
+   "sketch": "The best part of the train is the trip home. Sunday evening, no traffic, no dread.",
+   "tension": "Most campaigns sell the way out. Nobody sells the way home.",
+   "tier": "stretch",
+   "band": "stretch",
+   "distance": 0.42,
+   "crew": "cr_feel",
+   "origin": {
+    "kind": "crew",
+    "from": [
+     "cr_feel"
+    ]
+   },
+   "state": "found",
+   "status": "live",
+   "evidence": [
+    "f_TIRED0418"
+   ],
+   "ready": false,
+   "theme": "the way home"
+  },
+  {
+   "id": "t_passenger",
+   "name": "Passenger Seat",
+   "thought": "For once, the person who always drives gets to be a passenger.",
+   "why": "One person does every drive; this gives them the weekend off.",
+   "mood": "",
+   "references": [],
+   "risks": [
+    "Rests partly on a finding the agent derived and nobody has verified yet.",
+    "Must not mock drivers (partners' no-anti-car rule)."
+   ],
+   "sketch": "For once, the person who always drives gets to be a passenger.",
+   "tension": "One person does every drive; this gives them the weekend off.",
+   "tier": "stretch",
+   "band": "stretch",
+   "distance": 0.46,
+   "crew": "cr_opposite",
+   "origin": {
+    "kind": "crew",
+    "from": [
+     "cr_opposite"
+    ]
+   },
+   "state": "found",
+   "status": "live",
+   "evidence": [
+    "f_DRIVER0431",
+    "fi_NOTALK003"
+   ],
+   "ready": false,
+   "theme": "car guilt"
+  },
+  {
+   "id": "t_mixtape",
+   "name": "Weekend Mixtape",
+   "thought": "Every route west gets its own playlist. The train is the opening track of the weekend.",
+   "why": "Borrows the mixtape's ritual: the journey is the first song.",
+   "mood": "",
+   "references": [],
+   "risks": [
+    "Music licensing for the playlists is an open question for the client."
+   ],
+   "sketch": "Every route west gets its own playlist. The train is the opening track of the weekend.",
+   "tension": "Borrows the mixtape's ritual: the journey is the first song.",
+   "tier": "stretch",
+   "band": "far_out",
+   "distance": 0.74,
+   "crew": "cr_adjacent",
+   "origin": {
+    "kind": "crew",
+    "from": [
+     "cr_adjacent"
+    ]
+   },
+   "state": "found",
+   "status": "live",
+   "evidence": [
+    "x_AUDIOB0005",
+    "f_BOOK00447"
+   ],
+   "ready": false,
+   "theme": "the journey as the treat"
+  }
+ ],
+ "spread": {
+  "threshold": 0.12,
+  "close": [],
+  "gaps": []
+ },
+ "greenlit": [],
+ "asks": [],
+ "actions": [],
+ "lookups": [
+  {
+   "id": "lq_forum",
+   "q": "Do people describe the train journey itself as part of the holiday?",
+   "status": "done",
+   "by": "Napkin, to back up a finding",
+   "found": [
+    "x_FORUM0001",
+    "x_COMPAR0002"
+   ],
+   "at": "2026-11-18T09:20:00Z"
+  },
+  {
+   "id": "lq_cases",
+   "q": "Which other categories sell time given back, or the journey as the treat?",
+   "status": "done",
+   "by": "Napkin, from the insights",
+   "found": [
+    "x_LOUNGE0003",
+    "x_MEALKIT004",
+    "x_AUDIOB0005",
+    "x_THEMEPK009"
+   ],
+   "at": "2026-11-18T09:24:00Z"
+  },
+  {
+   "id": "lq_table",
+   "q": "Can families book table seats on weekend trains?",
+   "status": "ask",
+   "by": "Napkin, for a route that promises a table"
+  }
+ ],
+ "notes": [],
+ "sends": [],
+ "review": {
+  "sensitive": {
+   "required": false,
+   "status": "not_needed"
+  }
+ },
+ "run": {
+  "state": "building",
+  "stage": "explore",
+  "gate": null,
+  "agent": {
+   "key": "strategy",
+   "activity": "work",
+   "step_index": 2,
+   "step_total": 5
+  },
+  "stages": [
+   {
+    "id": "pick",
+    "name": "Pick",
+    "status": "done"
+   },
+   {
+    "id": "explore",
+    "name": "Explore",
+    "status": "now"
+   },
+   {
+    "id": "develop",
+    "name": "Develop",
+    "status": "next"
+   },
+   {
+    "id": "greenlight",
+    "name": "Greenlight",
+    "status": "next"
+   },
+   {
+    "id": "send",
+    "name": "Send",
+    "status": "next"
+   }
+  ],
+  "approvals": {
+   "pick": {
+    "by": "Shrey",
+    "at": "2026-11-18T09:12:00Z",
+    "decision": "approve"
+   }
+  },
+  "decisions": [
+   {
+    "gate": "pick",
+    "kind": "approve",
+    "by": "Shrey",
+    "at": "2026-11-18T09:12:00Z"
+   }
+  ],
+  "calls": {
+   "model": 9,
+   "lookups": 4
+  }
+ }
+}

@@ -14,6 +14,15 @@ STAGES = {
 }
 
 
+#: develop (territories-engine-develop): estimated sizes of one call each (a batch of four routes is about 7k out), for the cap's pre-check
+DEVELOP = {
+    "world": (1, 6000, 7000, "claude-opus-5-5"),
+    "world_more": (1, 3000, 400, "claude-opus-5-5"),
+    "world_checks": (1, 9000, 3500, "claude-sonnet-5-5"),
+    "judge": (1, 8000, 3500, "claude-sonnet-5-5"),
+}
+
+
 def _price(model, tin, tout):
     """The card's dollars for one stage: the shared price table (engine/prices.json), the one every tool reads. There is no
     stand-in copy any more (it was one of three tables that disagreed)."""

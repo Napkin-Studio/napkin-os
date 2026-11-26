@@ -70,6 +70,7 @@
 /* States the mock does not draw. */
 .nui .nui-empty { padding: 10px 12px; font-size: 13px; color: var(--muted); }
 .nui .nui-more { margin-top: 14px; }
+.nui .nui-note { margin: 10px 0 0; padding: 8px 12px; font-size: 13px; border-left: 3px solid var(--accent, currentColor); background: color-mix(in srgb, currentColor 6%, transparent); max-width: 60ch; }
 .nui .nui-banner { margin: 18px 0 0; padding: 10px 14px; border-radius: var(--r-md); background: var(--warn-soft); color: var(--warn); font-size: 13px; }
 .nui .nui-panel { margin: 0 0 18px; padding: 16px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-md); }
 .nui .cl-add-err { flex-basis: 100%; font-size: 12.5px; color: var(--muted); }

@@ -118,12 +118,14 @@ def parse_request(raw: bytes) -> dict:
     if lens not in LENSES:
         raise bad(f"lens must be one of: {', '.join(LENSES)}")
     market = req.get("market")
-    if not isinstance(market, str) or not MARKET_RE.match(market.strip().upper()):
-        raise bad("market must be an ISO 3166-1 alpha-2 code, e.g. IE")
-    market = market.strip().upper()
-    if market == "UK":
-        raise bad("market UK is not ISO 3166-1 alpha-2: the United Kingdom is GB")
-    out = {"query": query, "lens": lens, "market": market}
+    out = {"query": query, "lens": lens}
+    if market != "":  # "" is an open look-up that names no market (a Territories look-up on a brief with none); absent is still a 400
+        if not isinstance(market, str) or not MARKET_RE.match(market.strip().upper()):
+            raise bad("market must be an ISO 3166-1 alpha-2 code, e.g. IE")
+        market = market.strip().upper()
+        if market == "UK":
+            raise bad("market UK is not ISO 3166-1 alpha-2: the United Kingdom is GB")
+        out["market"] = market
     if req.get("entity") is not None:
         if not isinstance(req["entity"], str) or not ENTITY_RE.match(req["entity"]):
             raise bad("entity must be an entity ref like brand/<slug>, org/<slug> or category/<slug>")
@@ -184,7 +186,8 @@ def build_prompt(req: dict) -> str:
         f"Today's date: {today()}",
         f"Research question: {req['query']}",
         f"Lens: {req['lens']} — {LENSES[req['lens']]}",
-        f"Market: {req['market']} (ISO 3166-1 alpha-2). Sources must bear on this market.",
+        (f"Market: {req['market']} (ISO 3166-1 alpha-2). Sources must bear on this market." if "market" in req
+         else "No market is given: take the market the question names, or the pages that answer it best."),
     ]
     if "entity" in req:
         lines.append(f"Entity in focus: {req['entity']}")
@@ -350,7 +353,8 @@ class Research:
         u = env.get("usage") if isinstance(env.get("usage"), dict) else {}
         usage = {k: int(u.get(k) or 0) for k in ("input_tokens", "output_tokens", "cache_read_input_tokens",
                                                    "cache_creation_input_tokens")}
-        return {"output": out, "cost_usd": env.get("total_cost_usd"), "usage": usage}
+        return {"output": out, "cost_usd": env.get("total_cost_usd"), "usage": usage,
+                "seen": {normalise_url(u) for u in env.get("_seen_urls") or []} - {None}}
 
     def research(self, req: dict, fresh: bool) -> dict:
         b = self.cfg.research_backend
@@ -359,7 +363,7 @@ class Research:
             if not fresh and not self.cfg.no_cache:
                 hit = self.cache.get(key)
                 if hit and isinstance(hit.get("response"), dict):
-                    log(f"research cache hit {key[:12]} {req['lens']}/{req['market']}")
+                    log(f"research cache hit {key[:12]} {req['lens']}/{req.get('market', '-')}")
                     record_cache_hit(self.cfg, req)
                     resp = dict(hit["response"])
                     resp["trace"] = {**(resp.get("trace") or {}), "cached": True, "cost_usd": 0.0}
@@ -367,13 +371,23 @@ class Research:
             t0 = time.monotonic()
             result = self._run(req)
             out = result["output"]
-            sources, drops = validate_sources(out.get("sources"), req["max_sources"], today())
+            raw = out.get("sources")
+            seen = result.get("seen")
+            if seen is not None and isinstance(raw, list):
+                # Only a URL the CLI's own search or fetch returned is a real one; the model's word is not enough.
+                kept = [r for r in raw if isinstance(r, dict) and normalise_url(r.get("url")) in seen]
+                unseen = len(raw) - len(kept)
+                raw = kept
+            else:
+                unseen = 0
+            sources, drops = validate_sources(raw, req["max_sources"], today())
+            drops["not_found_on_web"] = unseen
             queries = [_clean(q) for q in out.get("queries") or [] if isinstance(q, str) and _clean(q)]
             response = {"sources": sources,
                         "trace": {"backend": "search-jev" if b == "search-jev" else BACKEND, "queries": queries,
                                   "model": self.cfg.research_model, "cost_usd": result["cost_usd"],
                                   "cached": False}}
-            log(f"research {req['lens']}/{req['market']}: {len(sources)} sources in "
+            log(f"research {req['lens']}/{req.get('market', '-')}: {len(sources)} sources in "
                 f"{time.monotonic() - t0:.1f}s, dropped {drops}, cost {result['cost_usd']}, "
                 f"tokens {result.get('usage')}")
             # The query parameters (a public-web question) and public excerpts only. An empty answer is
@@ -392,7 +406,7 @@ class Research:
             body = parse_request(req.body)
             fresh = (req.q("fresh") or "0") not in ("", "0", "false")
             resp = self.research(body, fresh)
-            return Response(200, resp, note=f"lens={body['lens']} market={body['market']} "
+            return Response(200, resp, note=f"lens={body['lens']} market={body.get('market', '-')} "
                                             f"sources={len(resp['sources'])}")
         except PeripheralError as e:
             return e.response()

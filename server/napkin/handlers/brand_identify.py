@@ -1,4 +1,4 @@
-"""brand_identify@1 — is the file a person just added a brand bible? (Brand Clan lane B, middleware-api.md section 13).
+"""brand_identify@1 — is the file a person just added a brand bible? (Brand Clan lane B, middleware-api.md section 14).
 
 Free rules over the file's name and text first; one Claude Haiku call only when they are unsure or positive (about a cent,
 counted in `trace.usage`). The answer says whether to ask the one question and what it offers. It writes nothing: the document

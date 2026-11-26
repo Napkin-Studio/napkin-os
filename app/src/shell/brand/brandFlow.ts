@@ -3,7 +3,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 // A file added in Brief Maker, Research or Production: is it a brand bible, and what does the person want done with it?
-// (features/brand-clan.clan, lane B; docs/contracts/brand-clan.md section 7, middleware-api.md section 13; mocks a1 and a2.)
+// (features/brand-clan.clan, lane B; docs/contracts/brand-clan.md section 7, middleware-api.md section 14; mocks a1 and a2.)
 //
 //   fileAdded      -> brand_identify (rules, then one Haiku call: nothing at all when the rules say no)
 //   one question   -> Update "X" / Make a new Brand Clan (name it) / Not a brand bible      (no Brand Clan yet: Build / Not)

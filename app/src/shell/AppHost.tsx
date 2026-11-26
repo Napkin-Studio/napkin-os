@@ -492,6 +492,7 @@ export default function AppHost({ running, onHome, onTrashed, onOpenFile, onSave
             onEditRequest={onEditRequest}
             onChrome={onChrome}
             onBar={onBar}
+            onContinueIn={onSpinoff}
             insets={shown}
             jobs={openJobs}
             person={user}

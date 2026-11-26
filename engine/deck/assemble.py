@@ -830,6 +830,40 @@ def _criterion_slides(st: dict, scoring: list) -> list:
     return out
 
 
+def _carried_rows(t: dict) -> list:
+    """The rows a route carried from Territories adds to its slide (territories-spinoff-out-deck): its own lines, what was checked, and what its pictures
+    are (a sketch is said to be a mock-up, a frame by link carries its stated rights or 'Rights to supply'). Empty for a route the deck wrote itself."""
+    if not t.get("from_territories"):
+        return []
+    rows = []
+    if t.get("their_words"):
+        rows.append(["In their words", " / ".join(t["their_words"][:3])])
+    if t.get("checked"):
+        rows.append(["Checked", "; ".join(t["checked"][:2])])
+    if (t.get("pictures") or {}).get("line"):
+        rows.append(["Pictures", t["pictures"]["line"]])
+    return rows
+
+
+_NUM = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+        "seventeen", "eighteen", "nineteen", "twenty"]
+
+
+def _n(k: int) -> str:
+    """A count in words: a digit on a slide is a claim the numbers check wants a source for, and a count of routes has none but the document."""
+    return _NUM[k] if 0 <= k < len(_NUM) else str(k)
+
+
+def _from_territories_block(ft) -> list:
+    """'Two routes from Territories' on the recommendation slide, with who greenlit them and how many were not chosen. Nothing when the deck wrote its own."""
+    if not isinstance(ft, dict) or not ft.get("count"):
+        return []
+    n = ft["count"]
+    by = f", greenlit by {ft['greenlit_by']}" if ft.get("greenlit_by") else ""
+    left = f" {_n(ft['not_chosen']).capitalize()} more {'was' if ft['not_chosen'] == 1 else 'were'} not chosen." if ft.get("not_chosen") else ""
+    return [{"kind": "small", "text": f"{_n(n).capitalize()} route{'s' if n != 1 else ''} from Territories{by}: {', '.join(ft.get('names') or [])}.{left}", "basis": "meta"}]
+
+
 def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]", fmt: str = "pitch", fit: dict | None = None,
           profile: dict | None = None, pictures: dict | None = None, production: bool = False, working_title: str = "") -> dict:
     """Build the deck dict. ``st`` holds stage outputs keyed a, b, c, d (any may be absent);
@@ -968,7 +1002,8 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
     for t in c.get("territories", []):
         S.append(_slide("territory", f"Territory: {t['name']}",
                         [{"kind": "statement", "text": t["thought"], "basis": "creative"},
-                         {"kind": "kv", "items": [["Why it fits", t["why"]]] + [[k, t[f]] for k, f in (("Mood", "mood"), ("Risks", "risks")) if t.get(f)], "basis": "creative"},
+                         {"kind": "kv", "items": [["Why it fits", t["why"]]] + [[k, t[f]] for k, f in (("Mood", "mood"), ("Risks", "risks")) if t.get(f)] + _carried_rows(t),
+                          "basis": "creative"},
                          {"kind": "sketch", "text": t["sketch"], "basis": "creative"}],
                         claims=[{"text": t["thought"], "refs": [], "basis": "creative"}], status="drafted",
                         visual={"kind": "image_prompt", "prompt": f"Mood frame for '{t['name']}': {t.get('mood') or t['sketch']}", "status": "illustrative, not final"},
@@ -980,8 +1015,8 @@ def build(inp, st: dict, *, client: str, project: str, agency: str = "[Agency]",
         rows = [["Territory", "Why (or why not)"]] + [[names[tid], named(rk.get("reasons", {}).get(tid, ""))] for tid in rk.get("order", [])]
         chosen = next((t for t in c["territories"] if t["id"] == c.get("chosen")), c["territories"][0])
         S.append(_slide("territory_choice", f"We recommend '{chosen['name']}'",
-                        [{"kind": "table", "rows": rows},
-                         {"kind": "small", "text": f"Chosen by: {c.get('chosen_by', 'to confirm')}. Ranked by: {rk.get('by', 'to confirm')}.", "basis": "meta", "internal": True}],
+                        [{"kind": "table", "rows": rows}] + _from_territories_block(c.get("from_territories")) +
+                        [{"kind": "small", "text": f"Chosen by: {c.get('chosen_by', 'to confirm')}. Ranked by: {rk.get('by', 'to confirm')}.", "basis": "meta", "internal": True}],
                         claims=[{"text": "Recommendation", "refs": [], "basis": "opinion"}], status="drafted"))
 
     # 10. Idea

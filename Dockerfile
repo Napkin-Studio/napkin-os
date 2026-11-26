@@ -50,6 +50,8 @@ RUN mkdir -p /out/apps \
       /out/apps/campaign-research.app.clan /out/apps/campaign-research.example.clan \
  && cargo run --release -p clan-sdk --example make_deck_maker -- \
       /out/apps/deck-maker.app.clan /out/apps/deck-maker.example.clan \
+ && cargo run --release -p clan-sdk --example make_territories -- \
+      /out/apps/territories.app.clan /out/apps/territories.example.clan \
  && cargo run --release -p clan-sdk --example make_brand_clan -- \
       /out/apps/brand-clan.app.clan /tmp/brand-clan.example.clan
 # Production takes part in spin-offs as an app (features/production-spinoff.clan); its documents

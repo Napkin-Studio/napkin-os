@@ -279,8 +279,10 @@ def test_a_task_with_no_output_url_is_an_error_not_a_crash(tmp_path):
 
 
 def test_live_llm_stops_at_its_dollar_cap(monkeypatch):
-    from deck import stages
-    monkeypatch.setattr(stages, "_call", lambda stage, user, system: ({}, {"usd": 0.6, "model": "m"}))
+    import brief_llm
+    import price_table
+    monkeypatch.setattr(brief_llm, "_json_call", lambda *a, **k: {"ok": 1})
+    monkeypatch.setattr(price_table, "usd", lambda *a, **k: 0.6)
     live = LiveLLM(approved=True, max_usd=1.0)
     live("frames_plan", "s", "u")
     live("frames_plan", "s", "u")                                          # 1.2 spent: over the cap now

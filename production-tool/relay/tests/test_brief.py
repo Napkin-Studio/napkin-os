@@ -290,3 +290,15 @@ def test_the_web_send_preview_lists_the_parts_each_op_reads():
     block = re.search(r"export const BRIEF_PARTS[^{]*\{(.*?)\n\}", src, re.S).group(1)
     web = {m.group(1): re.findall(r"'([a-z]+)'", m.group(2)) for m in re.finditer(r"(\w+): \[([^\]]*)\]", block)}
     assert web == {op: list(briefs.parts_of(op)) for op in briefs.BUDGET}
+
+
+def test_a_territories_route_goes_to_the_director_with_the_spine_but_not_into_a_region_edit():
+    """A job on a Territories node reads its route as well as the brief it carries (features/territories-spinoff-out-production.clan):
+    the words, palette and pictures by hash, never bytes. A region_edit reads the don'ts only."""
+    route = {"name": "Tide's In", "thought": "The tide is in.", "palette": ["#0B5D8A"],
+             "pictures": [{"sha256": "sha256:" + "a" * 64, "rights": "Rights to supply"}]}
+    payload = {"text": "x", "brief": {"title": "Tidewell", "spine": {"donts": ["Don't show anyone driving"], "tone": "Calm"}, "route": route}}
+    assert briefs.for_op("write", payload)["brief"]["route"] == route
+    assert briefs.for_op("write", payload)["brief"]["spine"]["donts"] == ["Don't show anyone driving"]
+    assert "route" not in briefs.for_op("region_edit", payload)["brief"]
+    assert "brief" not in briefs.for_op("view", payload)

@@ -1,0 +1,107 @@
+{
+  "findings": [
+    {
+      "cites": [
+        "f_01JA0B6D6G",
+        "f_01JA0B6D7H",
+        "f_01JA0B3R5S"
+      ],
+      "confidence": "medium",
+      "decision": "d_01JA0D06SYN",
+      "derived_at": "2026-09-21T12:10:00Z",
+      "derived_by": "start_campaign@1.0",
+      "id": "fi_01JA0F1A",
+      "lens": "consumer_culture",
+      "markets": [
+        "IE"
+      ],
+      "method": "synthesis",
+      "statement": "For Irish moderators the 0.0 occasion is social: weeknights at home with friends, where being seen to drink cider still matters.",
+      "status": "verified",
+      "verification": {
+        "at": "2026-09-22T16:05:31Z",
+        "by": "human:u_aoife",
+        "decision": "d_01JA0D07VER"
+      }
+    },
+    {
+      "cites": [
+        "f_01JA0B2K7M",
+        "f_01JA0B2K8N"
+      ],
+      "confidence": "medium",
+      "decision": "d_01JA0D06SYN",
+      "derived_at": "2026-09-21T12:10:00Z",
+      "derived_by": "start_campaign@1.0",
+      "id": "fi_01JA0F2B",
+      "lens": "brands_positioning",
+      "markets": [
+        "IE",
+        "GB"
+      ],
+      "method": "synthesis",
+      "statement": "Lúnasa arrives in Ireland with permission and in GB as a stranger: the IE launch can lean on the parent brand, the GB launch has to introduce it.",
+      "status": "proposed"
+    },
+    {
+      "cites": [
+        "f_01JA0B4A1B",
+        "f_01JA0B4A2C"
+      ],
+      "confidence": "high",
+      "decision": "d_01JA0D06SYN",
+      "derived_at": "2026-09-21T12:10:00Z",
+      "derived_by": "start_campaign@1.0",
+      "id": "fi_01JA0F3C",
+      "lens": "market_structure",
+      "markets": [
+        "IE",
+        "GB"
+      ],
+      "method": "synthesis",
+      "statement": "No/low value is growing about twice as fast in Ireland as in GB, so Ireland should lead the spend.",
+      "status": "proposed"
+    },
+    {
+      "cites": [
+        "f_01JA0B6D6G",
+        "f_01JA0B3R5S"
+      ],
+      "confidence": "medium",
+      "decision": "d_01JA0D06SYN",
+      "derived_at": "2026-09-21T12:10:00Z",
+      "derived_by": "start_campaign@1.0",
+      "id": "fi_01JA0F4D",
+      "lens": "consumer_culture",
+      "markets": [
+        "IE"
+      ],
+      "method": "synthesis",
+      "statement": "Core audience: adults 25–44 who are cutting back midweek but still drink cider at weekends.",
+      "status": "proposed"
+    },
+    {
+      "cites": [
+        "f_01JA0B5C4E"
+      ],
+      "confidence": "low",
+      "decision": "d_01JA0D06SYN",
+      "derived_at": "2026-09-21T12:10:00Z",
+      "derived_by": "start_campaign@1.0",
+      "id": "fi_01JA0F5E",
+      "lens": "rhythm_moments",
+      "markets": [
+        "IE"
+      ],
+      "method": "synthesis",
+      "rejection": {
+        "at": "2026-09-22T16:09:12Z",
+        "by": "human:u_aoife",
+        "decision": "d_01JA0D07REJ",
+        "reason": "A launch date is not evidence the occasion was taken — nothing here measures Orchard Hill's sales."
+      },
+      "statement": "Orchard Hill's March launch has taken the spring occasion; a Lúnasa launch before May would be second in.",
+      "status": "rejected"
+    }
+  ]
+}
