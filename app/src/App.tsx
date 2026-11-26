@@ -22,6 +22,7 @@ import { initialsOf, jobOf, routeOfDocument, whoIs } from './shell/landing/model
 import { PRODUCTION_APP_ID, productionDocUrl, toolById, toolOfApp } from './shell/landing/tools'
 import Toolbar from './components/Toolbar'
 import { productionOn, signedInUser } from './host/http'
+import { brandApi } from './host/brandClans'
 import { signOut } from './shell/signOut'
 import { docEntry, isDocEntryState, isNotFound, launchIsMine } from './shell/lastOpen'
 import { spinoffTitle } from './shell/docTitle'
@@ -53,6 +54,9 @@ import { DOC_LOADED } from './shell/AppRuntime'
 // --border, --muted) alias onto them in index.css, so both follow. The accent
 // is --accent, not --create: an app may recolour the chrome's accent but not
 // the Create department.
+/** The Brand Clan operations of this shell's host. */
+const brands = brandApi(host)
+
 const THEME_VARS: Record<string, string> = {
   accent: '--accent', bg: '--paper', surface: '--card',
   text: '--ink', border: '--line', muted: '--ink2',
@@ -173,7 +177,7 @@ export default function App() {
   const isLatest = (n: number) => n === openSeq.current
 
   const refreshApps = useCallback(async () => {
-    // Production is installed for its spin-offs, not to launch: its projects open in the Production Tool (/production/?doc=<id>).
+    // Production is installed for its spin-offs, not to launch: its projects open in the Production Tool (/production/d/<id>).
     try { setInstalled((await host.listApps()).filter(a => a.app_id !== PRODUCTION_APP_ID)) } catch (e) { console.error(e) }
   }, [])
   // Once at start too: a document opened straight from a link (or a reload)
@@ -523,6 +527,7 @@ export default function App() {
       onOpenFile={handleOpenFile}
       onOffline={hasServer && !device ? () => setOfflineOpen(true) : undefined}
       onDecisions={() => setDeskDecisions(true)}
+      brand={brands}
       trash={host.trash}
     />
   ) : landing.state === 'loading' ? (

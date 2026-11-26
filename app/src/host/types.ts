@@ -136,9 +136,150 @@ export interface ClientRecord {
   created_at: string
   /** When it was archived; absent while it is live. */
   archived_at?: string | null
+  /** The `document_id` of its default Brand Clan (docs/contracts/brand-clan.md section 3). */
+  default_brand_clan?: string | null
 }
 
 export type ClientMaterial = 'pearl' | 'ceramic' | 'stone' | 'graphite'
+
+// ── Brand Clans (docs/contracts/brand-clan.md; `napkin_host::brand_clan`) ────
+
+export type BrandChangeArea =
+  | 'name' | 'note' | 'logo' | 'logo_note' | 'colour' | 'typography' | 'tone' | 'rule'
+  | 'imagery_style' | 'imagery_ban' | 'example' | 'source'
+
+/** One difference between two Brand Bibles. `id` is `<area>:<item id>`, or the bare area for a scalar. */
+export interface BrandChange {
+  id: string
+  area: BrandChangeArea
+  kind: 'added' | 'changed' | 'removed'
+  label: string
+  old: unknown
+  new: unknown
+  text: string
+}
+
+export interface BrandLogo { id: string; label: string; variant: 'light' | 'dark' | 'mark' | 'other'; asset?: string; note?: string }
+export interface BrandColour { id: string; name: string; hex: string; role?: string }
+export interface BrandFace { id: string; family: string; weight?: string; use?: string; role?: 'head' | 'body' | 'other' }
+export interface BrandRule { id: string; text: string; kind?: 'do' | 'dont' }
+export interface BrandExample { id: string; asset?: string; note?: string }
+export interface BrandSource { file: string; asset?: string; kind?: string; pages?: number; by?: string; at?: string }
+export interface BrandFrom { kind: 'create' | 'build' | 'upload' | 'edit' | 'restore'; file?: string; version?: number }
+
+/** A Brand Bible: `shared/data.yaml` without `kit`. */
+/** A competitor of the client (Brand Clan phase 2): added by a person, or found by research and taken into a draft by one. */
+export interface BrandCompetitor {
+  id: string
+  name: string
+  note?: string
+  from?: { kind: 'person' | 'research'; document_id?: string; title?: string; fact_ids?: string[] }
+}
+
+export interface BrandBible {
+  name: string
+  note?: string
+  visual?: { logos?: BrandLogo[]; logo_note?: string; colours?: BrandColour[]; typography?: BrandFace[] }
+  voice?: { tone?: string; rules?: BrandRule[] }
+  imagery?: { style?: string; bans?: string[]; examples?: BrandExample[] }
+  source?: BrandSource
+  gaps?: { area: string; note: string }[]
+  competitors?: BrandCompetitor[]
+  previous_work?: unknown[]
+  categories_explored?: unknown[]
+  likes_dislikes?: unknown[]
+  preferences?: Record<string, unknown>
+}
+
+export interface BrandClanData extends BrandBible {
+  kit: {
+    version: number
+    published?: { by?: string; at?: string }
+    changelog?: { version: number; at: string; by: string; from: BrandFrom; summary: string; changes?: BrandChange[] }[]
+  }
+}
+
+export interface BrandDraft {
+  based_on: number
+  from: BrandFrom
+  started_by: string
+  started_at: string
+  edited_by: string[]
+  edited_at: string
+  candidate: BrandBible
+  changes: BrandChange[]
+}
+
+export interface BrandPending {
+  from_version: number
+  at: string
+  by: string
+  from: BrandFrom
+  source: BrandSource | null
+  candidate: BrandBible
+  changes: BrandChange[]
+}
+
+/** One Brand Clan, opened (`get`; any other op that answers a Brand Clan). */
+export interface BrandClanView {
+  document_id: string
+  path: string
+  client: ClientRef | null
+  name: string
+  note: string | null
+  version: number
+  default: boolean
+  readonly: boolean
+  shown: { version: number; state: 'published' | 'draft' | 'pending' }
+  data: BrandClanData
+  draft: BrandDraft | null
+  pending: BrandPending | null
+  used_by: { path: string; title: string; app_id: string | null; held: number | null; behind: boolean }[]
+}
+
+export interface BrandClanSummary {
+  document_id: string
+  path: string
+  name: string
+  note: string | null
+  version: number
+  default: boolean
+  updated_at: string
+  palette: string[]
+  logo: string | null
+  source: { file: string } | null
+  pending: { from_version: number; changes: number; at: string; by: string; file: string | null } | null
+  draft: { based_on: number; changes: number; by: string | null; at: string } | null
+}
+
+/** Work whose frozen Brand Clan is older than the Brand Clan's published version: what the Update chip reads. */
+export interface BrandBehind {
+  path: string
+  title: string
+  app_id: string | null
+  brand_clan: string
+  brand_name: string
+  held: number
+  current: number
+}
+
+export interface BrandClanList { default: string | null; items: BrandClanSummary[]; behind: BrandBehind[] }
+
+export interface BrandHistoryEntry {
+  version: number
+  state: 'published' | 'draft'
+  at: string
+  by: string
+  from: BrandFrom
+  summary: string
+  changes: BrandChange[]
+}
+
+/** The operations of `napkin_host::brand_clan::call`, by the names the contract gives them. */
+export type BrandOp =
+  | 'list' | 'create' | 'default.set' | 'get' | 'history'
+  | 'draft.save' | 'draft.start' | 'draft.discard' | 'publish'
+  | 'proposal.set' | 'proposal.accept' | 'proposal.keep' | 'work.update' | 'asset.put'
 
 /** What a person may change on a client. */
 export interface ClientPatch {
@@ -609,6 +750,12 @@ export interface AttachTarget {
   many: boolean
   /** The open document is locked, so a link would be refused. */
   locked: boolean
+  /** The version the open document holds of it, when linked; a newer `version` is what Update takes. */
+  held_version?: number | null
+  /** Its client's default Brand Clan: what new work of that client starts on. */
+  default?: boolean
+  /** A Brand Clan's first colours (at most three, #RRGGBB), for a picker; empty for anything else. */
+  swatches?: string[]
   /** Who it is for, as the library names it (the registry's id and name); null when it has no client. */
   client: { id: string; name: string } | null
 }
@@ -849,10 +996,23 @@ export interface Host {
   /** Delete and restore any document (the library's Trash). Absent on a host with no server-side library. */
   readonly trash?: TrashApi
   /**
+   * One Brand Clan operation (docs/contracts/brand-clan.md section 5). `input`
+   * carries the route's own keys (`client_id`, `path`, `name`, `version`) and
+   * the body; `bytes` is a file for `asset.put`. A refusal rejects with the
+   * host's words.
+   */
+  /** The typed Brand Clan operations (`list`, `get`, `publish`…) over `brandClan`. */
+  readonly brandClans: import('./brandClans').BrandApi
+  brandClan<T>(op: BrandOp, input: Record<string, unknown>, bytes?: Uint8Array): Promise<T>
+  /** An address a picture of a Brand Clan can be shown from (`<img src>`). */
+  brandClanAsset(path: string, name: string): Promise<string>
+  /**
    * One stored document's own routes, open or not (the desk's Decisions and
    * its Worth a look read and settle calls across documents with it). Absent
    * on a host with one document at a time.
    */
+  /** A document's data as JSON (napkin-web GET /d/{doc}/data): the Brand Clans section reads research found competitors from it. Absent where the host has no such route. */
+  documentData?(path: string): Promise<{ data: unknown; title?: string }>
   docOps?(path: string): Promise<DocOps>
 
   // ── Branching one document into another app ───────────────────────────────

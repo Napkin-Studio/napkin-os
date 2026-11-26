@@ -16,13 +16,14 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { serverOwned, shellRoute } from '../pwa/routes.js'
 import { MakeAnAdCard } from '../src/shell/MakeAnAdCard.tsx'
 import { afterSignIn, nextFrom, nextWhenSignedIn, safeNext } from '../src/shell/next.ts'
+import { productionDocUrl } from '../src/shell/landing/tools.ts'
 
 const ORIGIN = 'https://studio.test'
 const scope = new URL(`${ORIGIN}/`)
 const at = (p: string) => new URL(p, ORIGIN)
 
 test('the service worker leaves /production to the server', () => {
-  for (const p of ['/production', '/production/', '/production/p/x', '/production/assets/a.js', '/production/p/x?shot=1']) {
+  for (const p of ['/production', '/production/', '/production/d/x', '/production/assets/a.js', '/production/d/x?shot=1']) {
     assert.ok(serverOwned(at(p), scope), p)
     assert.ok(!shellRoute(at(p), scope), p)
   }
@@ -100,4 +101,11 @@ test('the home offers Make an ad only when the server serves the tool', () => {
   assert.match(on, /href="\/production\/"/)
   assert.match(on, /Make an ad/)
   assert.equal(renderToStaticMarkup(createElement(MakeAnAdCard, { on: false })), '')
+})
+
+test('a Production project of the library opens as a page on this origin, by its document id (S2-1)', () => {
+  assert.equal(productionDocUrl('doc_01J-x'), '/production/d/doc_01J-x')
+  assert.equal(productionDocUrl('a b/c'), '/production/d/a%20b%2Fc')
+  // sign-in may send a person straight back to it
+  assert.equal(safeNext(productionDocUrl('doc_01J-x')), '/production/d/doc_01J-x')
 })

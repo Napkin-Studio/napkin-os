@@ -6,6 +6,11 @@
 //!
 //! * `/production` and `/production/*`: the tool's static build, with its
 //!   `index.html` for any path that has no file (the tool owns its routes).
+//!   A project is a page of its own, `/production/d/{doc}` (the library
+//!   document's id); `/production/?doc={doc}` redirects there for one release
+//!   (features/production-app-page.clan).
+//! * Every page of the tool carries one Content-Security-Policy, report-only
+//!   for now; violations come to `POST /production/csp-report` and the log.
 //! * `/production/api/*`: a proxy to the relay, `{relay}/api/<rest>?<query>`.
 //!   It answers only for a signed-in account and adds one signed, short-lived
 //!   statement of who is asking (`X-Napkin-Identity`, see
@@ -19,10 +24,11 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use axum::body::Body;
-use axum::extract::{Request, State};
+use axum::extract::{Query, Request, State};
 use axum::http::{header, HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
 use axum::middleware::Next;
-use axum::response::Response;
+use axum::response::{IntoResponse, Redirect, Response};
+use axum::routing::{get, post};
 use axum::Router;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64;
 use base64::Engine as _;
@@ -131,6 +137,8 @@ pub struct Enabled;
 pub struct Relay {
     pub config: Config,
     pub timeout: Duration,
+    /// The https base pictures come from (NAPKIN_PRODUCTION_MEDIA_BASE): the CSP names its origin.
+    pub media_base: Option<String>,
     client: reqwest::Client,
 }
 
@@ -149,8 +157,15 @@ impl Relay {
         Self {
             config,
             timeout,
+            media_base: None,
             client,
         }
+    }
+
+    /// The same proxy, told where pictures live (for the CSP).
+    pub fn with_media_base(mut self, base: Option<String>) -> Self {
+        self.media_base = base;
+        self
     }
 }
 
@@ -271,14 +286,98 @@ pub fn router<S: Clone + Send + Sync + 'static>(
         ))
         .layer(axum::Extension(identity));
     let dir = &relay.config.static_dir;
+    let index = dir.join("index.html");
+    let policy = Arc::new(csp(relay.media_base.as_deref()));
     let tool = Router::new()
         .nest("/api", api)
+        .route("/csp-report", post(csp_report))
+        // a project is a page: the library document's id; its sub-routes (/d/{doc}/video ...) fall through
+        .route_service("/d/{doc}", ServeFile::new(&index))
         .fallback_service(static_files(dir));
     Router::new()
-        // a nest does not match its own path with a trailing slash
-        .route_service("/production/", ServeFile::new(dir.join("index.html")))
+        // a nest does not match its own path with a trailing slash; `?doc=` is the old way in
+        .route(
+            "/production/",
+            get(move |Query(q): Query<RootQuery>| {
+                let index = index.clone();
+                async move {
+                    match q.doc.filter(|d| valid_doc(d)) {
+                        Some(d) => Redirect::to(&format!("/production/d/{d}")).into_response(),
+                        None => match tokio::fs::read(&index).await {
+                            Ok(bytes) => {
+                                ([(header::CONTENT_TYPE, "text/html; charset=utf-8")], bytes)
+                                    .into_response()
+                            }
+                            Err(_) => StatusCode::NOT_FOUND.into_response(),
+                        },
+                    }
+                }
+            }),
+        )
         .nest("/production", tool)
         .layer(axum::middleware::from_fn(cache_headers))
+        .layer(axum::middleware::from_fn_with_state(policy, csp_header))
+}
+
+#[derive(serde::Deserialize)]
+struct RootQuery {
+    doc: Option<String>,
+}
+
+/// A library document id as the tool's routes take it.
+fn valid_doc(d: &str) -> bool {
+    !d.is_empty()
+        && d.len() <= 80
+        && d.bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+}
+
+/// The one policy for the tool's pages (features/production-app-page.clan, folding in production-csp):
+/// its own build and API on this origin, the pictures' CDN, the fonts the page links, and the store
+/// Worker and wasm it starts. Reported only, until the walk and UAT show no violation.
+pub fn csp(media_base: Option<&str>) -> String {
+    let media = media_base
+        .and_then(|b| {
+            let (scheme, rest) = b.split_once("://")?;
+            Some(format!("{scheme}://{}", rest.split('/').next()?))
+        })
+        .map(|o| format!(" {o}"))
+        .unwrap_or_default();
+    format!(
+        "default-src 'self'; \
+         script-src 'self' 'wasm-unsafe-eval'; \
+         style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; \
+         font-src 'self' data: https://fonts.gstatic.com; \
+         img-src 'self' data: blob:{media}; \
+         media-src 'self' blob:{media}; \
+         connect-src 'self'{media}; \
+         worker-src 'self' blob:; \
+         object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; \
+         report-uri /production/csp-report"
+    )
+}
+
+const CSP_HEADER: &str = "content-security-policy-report-only";
+
+/// The policy on the tool's pages (not on the API's answers).
+async fn csp_header(State(policy): State<Arc<String>>, request: Request, next: Next) -> Response {
+    let path = request.uri().path().to_string();
+    let mut response = next.run(request).await;
+    if !(path.starts_with("/production/api/") || path == "/production/api") {
+        if let Ok(v) = HeaderValue::from_str(&policy) {
+            response
+                .headers_mut()
+                .insert(HeaderName::from_static(CSP_HEADER), v);
+        }
+    }
+    response
+}
+
+/// A browser's violation report: logged, nothing more. No session needed (browsers send it bare).
+async fn csp_report(body: axum::body::Bytes) -> StatusCode {
+    let text = String::from_utf8_lossy(&body[..body.len().min(4096)]).replace('\n', " ");
+    tracing::warn!(target: "napkin_web::csp", report = %text, "csp violation (report-only)");
+    StatusCode::NO_CONTENT
 }
 
 fn static_files(dir: &Path) -> ServeDir<ServeFile> {
@@ -367,6 +466,18 @@ fn foreign_origin(headers: &HeaderMap) -> bool {
     }
 }
 
+/// What the relay answers to the tool, and so the only paths napkin-web signs an identity for:
+/// jobs, uploads, pictures (assets), the person, config, the shelves, the log and the dogfood
+/// record. Documents, lists and saves are napkin-web's own (the library); they never reach the relay
+/// (features/production-app-page.clan, TEST-PLAN S2-2).
+fn relay_path(rest: &str) -> bool {
+    [
+        "/jobs", "/uploads", "/assets", "/me", "/config", "/health", "/library", "/log", "/dogfood",
+    ]
+    .iter()
+    .any(|p| rest == *p || rest.strip_prefix(p).is_some_and(|r| r.starts_with('/')))
+}
+
 /// The relay's retired document routes (features/production-in-library.clan):
 /// projects live in the library of napkin-web now, so a stale page asking the
 /// relay for them gets a 404 here and never reaches it.
@@ -401,6 +512,14 @@ async fn proxy(State(relay): State<Arc<Relay>>, request: Request) -> Response {
             StatusCode::NOT_FOUND,
             "not_found",
             "Reload the page: projects now live in the library.",
+            false,
+        );
+    }
+    if !relay_path(parts.uri.path()) {
+        return relay_error(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            "That is not a Production Tool route.",
             false,
         );
     }

@@ -144,7 +144,11 @@ fn production(identity: &Identity) -> Option<Arc<napkin_web::production::Relay>>
         env_string("NAPKIN_PRODUCTION_STATIC").as_deref(),
     )
     .unwrap_or_else(|e| panic!("{e}"))
-    .map(|c| Arc::new(napkin_web::production::Relay::new(c)))
+    .map(|c| {
+        Arc::new(
+            napkin_web::production::Relay::new(c).with_media_base(napkin_web::media::from_env()),
+        )
+    })
 }
 
 fn env_string(key: &str) -> Option<String> {

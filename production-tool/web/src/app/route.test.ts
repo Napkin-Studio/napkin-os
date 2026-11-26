@@ -11,9 +11,9 @@ describe('parseRoute and formatRoute', () => {
   it('the Image editor on a storyboard shot\u2019s frame is in the URL, so a reload reopens it (re-test 8d)', () => {
     const P = 'prj_01M7PQ2AQP857QJ78395QNZBXA'
     const r = frameRoute(P, 'shot_01M7PQ2AQP857QJ78395QNZBXB')
-    expect(formatRoute(r, '/production/')).toBe(`/production/p/${P}/storyboard?frame=shot_01M7PQ2AQP857QJ78395QNZBXB`)
-    expect(parseRoute({ pathname: `/production/p/${P}/storyboard`, search: '?frame=shot_01M7PQ2AQP857QJ78395QNZBXB' }, '/production/')).toEqual(r)
-    expect(formatRoute(frameRoute(P, null), '/production/')).toBe(`/production/p/${P}/storyboard`)
+    expect(formatRoute(r, '/production/')).toBe(`/production/d/${P}/storyboard?frame=shot_01M7PQ2AQP857QJ78395QNZBXB`)
+    expect(parseRoute({ pathname: `/production/d/${P}/storyboard`, search: '?frame=shot_01M7PQ2AQP857QJ78395QNZBXB' }, '/production/')).toEqual(r)
+    expect(formatRoute(frameRoute(P, null), '/production/')).toBe(`/production/d/${P}/storyboard`)
     // The App's sync keeps it while the Storyboard is the stage, and drops it when the stage changes.
     expect(routeFor(P, 'storyboard', r)).toBeNull()
     expect(routeFor(P, 'character', r)).toEqual(projectRoute(P))
@@ -22,7 +22,7 @@ describe('parseRoute and formatRoute', () => {
     it(`round-trip under ${base}`, () => {
       const r = scriptRoute(P, S, H)
       const url = formatRoute(r, base)
-      expect(url).toBe(`${base}p/${P}/script/${S}?shot=${H}`)
+      expect(url).toBe(`${base}d/${P}/script/${S}?shot=${H}`)
       const [pathname, search] = url.split('?')
       expect(parseRoute({ pathname, search: `?${search}` }, base)).toEqual(r)
       expect(parseRoute({ pathname }, base)).toEqual(scriptRoute(P, S))
@@ -34,11 +34,11 @@ describe('parseRoute and formatRoute', () => {
     it(`the project and its editors have routes under ${base} (reload, links and Share return there)`, () => {
       for (const [stage, path] of [['character', ''], ['storyboard', '/storyboard'], ['video', '/video']] as const) {
         const r = projectRoute(P, stage)
-        expect(formatRoute(r, base)).toBe(`${base}p/${P}${path}`)
+        expect(formatRoute(r, base)).toBe(`${base}d/${P}${path}`)
         expect(parseRoute({ pathname: formatRoute(r, base) }, base)).toEqual(r)
         expect(routeProject(r)).toBe(P)
       }
-      expect(parseRoute({ pathname: `${base}p/${P}/sound` }, base)).toEqual({ kind: 'none' })
+      expect(parseRoute({ pathname: `${base}d/${P}/sound` }, base)).toEqual({ kind: 'none' })
     })
   }
 
@@ -46,16 +46,16 @@ describe('parseRoute and formatRoute', () => {
     it(`each Film editor room has its own route under ${base} (reload, Back and Share return to the room)`, () => {
       for (const room of ['make', 'edit', 'sound'] as const) {
         const r = projectRoute(P, 'video', room)
-        expect(formatRoute(r, base)).toBe(`${base}p/${P}/video/${room}`)
+        expect(formatRoute(r, base)).toBe(`${base}d/${P}/video/${room}`)
         expect(parseRoute({ pathname: formatRoute(r, base) }, base)).toEqual(r)
         expect(routeRoom(r)).toBe(room)
         expect(routeProject(r)).toBe(P)
       }
       // The Film editor with no room is Make; a room is only a Film editor's.
       expect(routeRoom(projectRoute(P, 'video'))).toBe('make')
-      expect(formatRoute(projectRoute(P, 'storyboard', 'edit'), base)).toBe(`${base}p/${P}/storyboard`)
-      expect(parseRoute({ pathname: `${base}p/${P}/video/cut` }, base)).toEqual({ kind: 'none' })
-      expect(parseRoute({ pathname: `${base}p/${P}/storyboard/edit` }, base)).toEqual({ kind: 'none' })
+      expect(formatRoute(projectRoute(P, 'storyboard', 'edit'), base)).toBe(`${base}d/${P}/storyboard`)
+      expect(parseRoute({ pathname: `${base}d/${P}/video/cut` }, base)).toEqual({ kind: 'none' })
+      expect(parseRoute({ pathname: `${base}d/${P}/storyboard/edit` }, base)).toEqual({ kind: 'none' })
     })
   }
 
@@ -76,12 +76,20 @@ describe('parseRoute and formatRoute', () => {
     expect(routeProject({ kind: 'none' })).toBeUndefined()
   })
 
+  it('a project is a page at /d/<doc> (S2-1); the old /p/ address is no route', () => {
+    expect(formatRoute(projectRoute(P), '/production/')).toBe(`/production/d/${P}`)
+    expect(parseRoute({ pathname: `/production/d/${P}` }, '/production/')).toEqual(projectRoute(P))
+    expect(parseRoute({ pathname: `/production/p/${P}` }, '/production/')).toEqual({ kind: 'none' })
+    // the host redirects ?doc= to /d/<doc>; the page still reads it where nothing redirects (dev server)
+    expect(parseRoute({ pathname: '/production/', search: `?doc=${P}` }, '/production/')).toEqual(projectRoute(P))
+  })
+
   it('is none outside the base, for unknown paths and for bad ids', () => {
-    expect(parseRoute({ pathname: `/p/${P}/script/${S}` }, '/production/')).toEqual({ kind: 'none' })
+    expect(parseRoute({ pathname: `/d/${P}/script/${S}` }, '/production/')).toEqual({ kind: 'none' })
     expect(parseRoute({ pathname: '/production' }, '/production/')).toEqual({ kind: 'none' })
-    expect(parseRoute({ pathname: `/production/p/${P}/frame/x` }, '/production/')).toEqual({ kind: 'none' })
-    expect(parseRoute({ pathname: `/p/${P}/script/a%2Fb` }, '/')).toEqual({ kind: 'none' })
-    expect(parseRoute({ pathname: `/p/${P}/script/${S}`, search: '?shot=<x>' }, '/')).toEqual(scriptRoute(P, S))
+    expect(parseRoute({ pathname: `/production/d/${P}/frame/x` }, '/production/')).toEqual({ kind: 'none' })
+    expect(parseRoute({ pathname: `/d/${P}/script/a%2Fb` }, '/')).toEqual({ kind: 'none' })
+    expect(parseRoute({ pathname: `/d/${P}/script/${S}`, search: '?shot=<x>' }, '/')).toEqual(scriptRoute(P, S))
   })
 })
 
@@ -132,7 +140,7 @@ describe('Router', () => {
   })
 
   it('a deep link with no history leaves by replacing the route with the base', () => {
-    const h = fakeHistory(`/production/p/${P}/script/${S}`)
+    const h = fakeHistory(`/production/d/${P}/script/${S}`)
     const r = new Router({ base: '/production/', history: h.history, location: h.loc, win: h.win as never })
     expect(r.get()).toEqual(scriptRoute(P, S))
     r.leave()

@@ -624,7 +624,7 @@ names and shapes below are that branch's, so it merges onto them.
 *Replaced 2026-11-23 (features/production-in-library.clan; contract `docs/contracts/production-clan-app.md`
 section 6).* Production (`ie.napkin.production`, packed by `clan-sdk/examples/make_production.rs`, installed
 with the other apps by the Dockerfile) is an ordinary app: its documents are library documents, listed in the
-library like any other (`app_id == "ie.napkin.production"`), opened at `/production/?doc=<doc>`, and kept by
+library like any other (`app_id == "ie.napkin.production"`), opened at `/production/d/<doc>` (`?doc=<doc>` redirects there for one release), and kept by
 the host's store like every document. They are no longer kept in the relay's S3 (`tenants/<t>/projects/`), and
 the relay's `/clan*` and `/projects*` routes answer 410 `gone` for one release. The old routes
 `POST /api/t/{tenant}/spinoff/production` and `POST /api/t/{tenant}/production/{project}/spinoff` are removed

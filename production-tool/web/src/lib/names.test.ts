@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ProductionDocument, RefRole } from '../contracts/types'
 import { emptyDocument } from '../doc/store'
 import { MAYA } from '../test/model'
-import { cleanKey, cleanVariant, keyRefs, keysWithoutFront, mentions, nameOf, nameProblem, needsFront, NoFrontError, parseName, subjectRefs, wholeKeys } from './names'
+import { cleanKey, cleanVariant, viewFor, keyRefs, keysWithoutFront, mentions, nameOf, nameProblem, needsFront, NoFrontError, parseName, subjectRefs, wholeKeys } from './names'
 
 const SHA = (c: string) => `sha256:${c.repeat(64)}`
 let n = 0
@@ -89,5 +89,16 @@ describe('a front is for a character or a product (UAT round 4 F32: "@logo" stop
     expect(keysWithoutFront(d, d, 'End card: @logo over @bottle, with @maya')).toEqual(['bottle', 'maya'])
     expect(keyRefs(d, 'logo').map(nameOf)).toEqual(['logo_copperell'])
     expect(() => keyRefs(d, 'maya')).toThrow(NoFrontError)
+  })
+})
+
+describe('what a picture shows is asked only where it matters (UAT round 4 A20)', () => {
+  it('a logo, a place or a palette needs no view word: it is the main one; a character or a product needs one', () => {
+    expect(viewFor('logo', '')).toBe('main')
+    expect(viewFor('location', '  ')).toBe('main')
+    expect(viewFor('logo', 'Dark Version')).toBe('dark-version')
+    expect(viewFor('character', '')).toBe('')
+    expect(viewFor('product', '')).toBe('')
+    expect(viewFor('character', 'Front')).toBe('front')
   })
 })

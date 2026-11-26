@@ -19,6 +19,7 @@ SLIDE_TYPES = {
     "insight":          {"words": 70,  "section": "Insight"},
     "audience":         {"words": 90,  "section": "Insight"},
     "proposition":      {"words": 80,  "section": "Proposition"},
+    "person_beat":      {"words": 60,  "section": "Proposition"},   # deck-beat-editor: a beat the person added to the storyline at gate 1
     "territory":        {"words": 90,  "section": "Territories"},
     "territory_choice": {"words": 90,  "section": "Territories"},
     "idea":             {"words": 60,  "section": "The idea"},
@@ -371,7 +372,8 @@ def _env_count(name: str, default: int, lo: int = 3, hi: int = 60, warn: bool = 
 PITCH_TARGET = _env_count("DECK_PITCH_TARGET", 10)
 PITCH_CAP = _env_count("DECK_PITCH_CAP", 12)
 #: Slide types the length target never moves (design.length): the story's spine and the ask.
-TARGET_KEEPS = ("title", "objective", "real_question", "insight", "idea", "investment", "next_step", "ask", "close", "proposition", "audience")
+TARGET_KEEPS = ("title", "objective", "real_question", "insight", "idea", "investment", "next_step", "ask", "close", "proposition", "audience",
+                "person_beat")   # deck-beat-editor (owner 2026-11-25): a beat the person added is never moved, even past the cap
 #: deck-look (fix 2, said once): the notes line that keeps a sentence a presented slide would have said a second time (an idea titled
 #: with the line the proposition already said, a piece's copy that is that line). Engine words; the sentence itself is kept verbatim.
 SAID_ONCE_NOTE = "Said once, on slide {n}:"
@@ -382,7 +384,7 @@ TO_SUPPLY_TEXT = "Slides that wait for what only a person can give: fill them an
 #: thing (10-35 words), an argument slide makes its case (35-70). Never met by repeating a sentence or by words a layout asks for:
 #: a shortfall names the brief field that would fill it.
 ROLE_WINDOWS = {"statement": (10, 35), "argument": (35, 70)}
-ROLE_OF_TYPE = {"title": "statement", "real_question": "statement", "idea": "statement", "investment": "statement", "close": "statement",
+ROLE_OF_TYPE = {"title": "statement", "real_question": "statement", "person_beat": "statement", "idea": "statement", "investment": "statement", "close": "statement",
                 "objective": "argument", "insight": "argument", "audience": "argument", "proposition": "argument", "territory": "argument",
                 "channel_roles": "argument", "measurement": "argument"}
 

@@ -14,14 +14,14 @@ import { boardsByRank } from '../canvas/boards/boards'
 import type { CanvasElement } from '../canvas/core/canvasAdapter'
 import { landUpdate, systemUpdate, updateDoc } from '../doc/store'
 import type { JobCtx } from '../doc/ui'
-import { assetRef } from '../jobs/assets'
+import { assetRef, logoRef } from '../jobs/assets'
 import { landingWhy } from '../jobs/landing'
 import { jobShot, refsFor } from '../jobs/select'
 import { getBlob } from '../lib/blobs'
 import { boardLayout } from './board'
 import { checksFor } from './checks'
 import { alephRatio, captionBox, captionLayers, cardLength, cropKeys, edlFor, isSocialShape, masterShots, reframeKey, reframesOf, sameShape, shapeOf, type MasterShot } from './film'
-import { endCardFrom, readCut } from '../rooms/timeline'
+import { endCardFrom, endCardLook, readCut } from '../rooms/timeline'
 import { formatById, PACKS_VERSION } from './formats'
 import { brandKit, layersFor } from './layout'
 import { FRAME_PAD, FRAME_TOP, channelOfSize, placeBoard, sizesOf, type CampaignDeps } from './make'
@@ -392,10 +392,13 @@ export async function clientCardOf(deps: Pick<CampaignDeps, 'relay' | 'doc'>, se
   if (!videoId) return undefined
   const card = readCut(d, videoId).endCard ?? endCardFrom(d, videoId)
   if (!card || !(card.line.trim() || card.headline.trim())) return undefined
-  const logo = card.logo ? await assetRef(deps.relay, card.logo, d).catch(() => undefined) : undefined
+  // The card's own logo, else the Brand board's, else the linked Brand Clan's, and its colour the Brand Clan's while it is the
+  // default (as the Edit room's render: rooms/timeline compileFor, endCardLook).
+  const look = endCardLook(d, videoId, { bg: card.bg, ...(card.logo ? { logo: card.logo } : {}) })
+  const logo = look.logo ? await logoRef(deps.relay, look.logo, d).catch(() => undefined) : undefined
   return {
     ...(card.headline.trim() ? { headline: card.headline.trim().slice(0, 120) } : {}), line: (card.line.trim() || card.headline.trim()).slice(0, 200),
-    ...(card.cta?.trim() ? { cta: card.cta.trim().slice(0, 80) } : {}), ...(card.legal?.trim() ? { legal: card.legal.trim().slice(0, 200) } : {}), bg: /^#[0-9a-f]{6}$/i.test(card.bg) ? card.bg : '#14161B',
+    ...(card.cta?.trim() ? { cta: card.cta.trim().slice(0, 80) } : {}), ...(card.legal?.trim() ? { legal: card.legal.trim().slice(0, 200) } : {}), bg: /^#[0-9a-f]{6}$/i.test(look.bg) ? look.bg : '#14161B',
     ...(logo ? { logo } : {}), s: cardLength(lengthS, clientCardLen(d, set), true),
   }
 }

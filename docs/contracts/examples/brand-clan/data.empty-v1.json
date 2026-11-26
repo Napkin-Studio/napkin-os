@@ -1,0 +1,38 @@
+{
+  "name": "Original",
+  "kit": {
+    "version": 1,
+    "published": {
+      "by": "human:aoife",
+      "at": "2026-11-10T09:00:00Z"
+    },
+    "changelog": [
+      {
+        "version": 1,
+        "at": "2026-11-10T09:00:00Z",
+        "by": "human:aoife",
+        "from": {
+          "kind": "create"
+        },
+        "summary": "Made by hand, empty"
+      }
+    ]
+  },
+  "visual": {
+    "logos": [],
+    "colours": [],
+    "typography": []
+  },
+  "voice": {
+    "rules": []
+  },
+  "imagery": {
+    "bans": [],
+    "examples": []
+  },
+  "gaps": [],
+  "previous_work": [],
+  "categories_explored": [],
+  "likes_dislikes": [],
+  "preferences": {}
+}

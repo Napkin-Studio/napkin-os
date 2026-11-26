@@ -104,6 +104,8 @@ class Settings:
     retrieval_timeout: float = 120.0
     brief_engine_url: str | None = None
     deck_engine_url: str | None = None
+    brand_host_url: str | None = None   # napkin-web, where brand_build writes a Brand Clan (brand/writer.py)
+    brand_host_token: str | None = None
     deck_render: bool = True
     deck_relay_loopback: bool = False   # dev only: DECK_RELAY_ALLOW_LOOPBACK=1 lets an http relay base through (the engine checks the host)
     runlog_dir: str | None = None
@@ -170,6 +172,8 @@ class Settings:
                    retrieval_timeout=float(e("NAPKIN_RETRIEVAL_TIMEOUT") or 120),
                    brief_engine_url=e("NAPKIN_BRIEF_ENGINE_URL") or None,
                    deck_engine_url=e("NAPKIN_DECK_ENGINE_URL") or None,
+                   brand_host_url=e("NAPKIN_BRAND_HOST_URL") or None,
+                   brand_host_token=e("NAPKIN_BRAND_HOST_TOKEN") or None,
                    deck_render=(e("NAPKIN_DECK_RENDER") or "1").strip().lower() not in ("0", "false", "off", "no"),
                    deck_relay_loopback=(e("DECK_RELAY_ALLOW_LOOPBACK") or "").strip() == "1",
                    runlog_dir=e("NAPKIN_RUNLOG_DIR") or None,

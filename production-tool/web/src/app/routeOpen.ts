@@ -1,5 +1,5 @@
 // Opening the project a link names (features/script-editor.clan, production-tool-land.clan): a project
-// route (/p/:project[/storyboard|/video]) or the Script editor's. The project id in a route is
+// route (/d/:doc[/storyboard|/video]) or the Script editor's. The project id in a route is
 // the id Shell.open takes. A project of this browser opens as it is; one only on the relay comes
 // down first (Shell.openFromServer, under the same id). The editor then shows over the
 // Storyboard stage, which is where '← Storyboard' returns. A link this browser cannot open
