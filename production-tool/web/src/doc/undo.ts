@@ -7,9 +7,19 @@
 
 import type { DocumentStore, UndoResult } from './types'
 
-/** Plain words for a step, for the button ("Undo: delete clip v4"). */
+/** Plain words for a step, for the button ("Undo: delete clip v4"). A step's label is its decision's action, which can
+ *  name entities by id ("keep_suggestion scenes[scene_01M89…]"): the tooltip says the kind, never the id (UAT acceptance
+ *  A47), and an action written in snake_case reads as words. */
 export function stepWords(label: string): string {
-  return label.replace(/ (frame|gen|shot|ref|rev|job|item)_[0-9A-Z]{26}/g, '')
+  const words = label
+    .replace(/\s*\b[a-z]+_[0-9A-HJKMNP-TV-Z]{26}\b(?![\]])/g, '')
+    .replace(/\b([a-z]+)_(?=[a-z])/g, '$1 ')
+  const m = /^(.*?)\s*\b([a-z]+?)s?\[[^\]]*\](?:\.[a-z_.]+)?(.*)$/.exec(words)
+  if (!m) return words.replace(/\s{2,}/g, ' ').trim()
+  const [, before, kind, after] = m
+  const verb = before.trim() === 'set' ? 'change' : before.trim()
+  const said = verb.includes(' ') ? `${verb} (${kind})` : `${verb} ${kind}`
+  return `${said}${after}`.replace(/\s{2,}/g, ' ').trim()
 }
 
 /** What undo and redo would take back now. */

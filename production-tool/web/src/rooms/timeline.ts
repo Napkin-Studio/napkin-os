@@ -170,8 +170,7 @@ const bare = (t: string) => t.replace(/[.!?]$/, '').trim()
 export function endCardFrom(d: ProductionDocument, videoId: Id): CutEndCard | undefined {
   const card = endCardOf(d, storyboardOfVideo(d, videoId)?.id)
   if (!card) return undefined
-  const named = d.project.title && !/^untitled/i.test(d.project.title) ? d.project.title : 'Your brand'
-  return withBriefLegal(d, videoId, withCampaignLine(d, videoId, cardCopy(card, endLineOf(briefForJob(d, { kind: 'video', id: videoId })?.brief.spine), briefLegal(d, videoId), named)))
+  return withBriefLegal(d, videoId, withCampaignLine(d, videoId, cardCopy(card, endLineOf(briefForJob(d, { kind: 'video', id: videoId })?.brief.spine), briefLegal(d, videoId), cardName(d, videoId))))
 }
 
 /** The end card a storyboard's cell shows: the one its film will carry (endCardFrom: the Brief's end line, no placement
@@ -180,8 +179,7 @@ export function storyboardEndCard(d: ProductionDocument, storyboardId: Id | unde
   const videoId = storyboardId ? Object.keys(d.videos ?? {}).find((v) => storyboardOfVideo(d, v)?.id === storyboardId) : undefined
   if (videoId) return endCardFrom(d, videoId)
   const card = endCardOf(d, storyboardId)
-  const named = d.project.title && !/^untitled/i.test(d.project.title) ? d.project.title : 'Your brand'
-  return card && cardCopy(card, undefined, undefined, named)
+  return card && cardCopy(card, undefined, undefined, cardName(d))
 }
 
 const plainWords = (x: string | undefined) => (x ?? '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
@@ -221,8 +219,17 @@ export function cardCopy(card: CutEndCard, end: string | undefined, legal: strin
 /** A new end card for a film with no end-card shot: the brand name set in type (the project's name; there is no logo without a
  *  brand book) and the linked Brief's legal line as its legal. */
 export function newEndCard(d: ProductionDocument, videoId: Id): CutEndCard {
-  const named = d.project.title && !/^untitled/i.test(d.project.title) ? d.project.title : 'Your brand'
-  return withBriefLegal(d, videoId, withCampaignLine(d, videoId, { headline: '', line: named, bg: '#14161B', durS: 1.5 }))
+  return withBriefLegal(d, videoId, withCampaignLine(d, videoId, { headline: '', line: cardName(d, videoId), bg: '#14161B', durS: 1.5 }))
+}
+
+/** The name an end card's line starts as: the project's without the " · Territories" a spin-off adds ("Copperell Refill"),
+ *  else the linked Brief's own name, else "Your brand". Never the whole spin-off title (UAT acceptance A52: the card read
+ *  "Copperell Refill · Territories"). A route's Brief is titled "Territories · The Sunday Drop · v1": not a name. */
+export function cardName(d: ProductionDocument, videoId?: Id): string {
+  const plain = (x: string | undefined) => { const t = x?.trim(); return t && !t.includes(' · ') && !/^untitled/i.test(t) ? t : undefined }
+  return plain(d.project.title?.split(' · ')[0])
+    ?? (videoId ? plain(briefForJob(d, { kind: 'video', id: videoId })?.brief.title) : undefined)
+    ?? 'Your brand'
 }
 
 /** The campaign's line for a film: the linked Brief's end line ("Proper crunch."), else the script's own last spoken line. */
