@@ -12,7 +12,7 @@
 
 import * as Y from 'yjs'
 import {
-  HostRefused, InvalidDocument, UnsupportedContract, type BeforeBytes, type ChainEntry, type ClanStoreApi, type Doc, type MirrorPost, type SpunOffFrom,
+  HostRefused, InvalidDocument, UnsupportedContract, type BeforeBytes, type ChainEntry, type ClanStoreApi, type Doc, type MirrorPost, type SaveWhere, type SpunOffFrom,
   type MirrorReason, type Person, type Why,
 } from '../../../clan-store/src'
 import { PROTOCOL, type Endpoint, type FromWorker, type SceneOpened, type StoreMethod, type ToWorker, type WireError } from './protocol'
@@ -62,6 +62,7 @@ export class StoreClient implements ClanStoreApi {
   private docId = ''
   private person: Person | null
   private readonly listeners = new Set<(d: Doc) => void>()
+  private readonly saveErrors = new Set<(e: unknown, where: SaveWhere) => void>()
   private post: MirrorPost | null = null
   private mirrorOpts: { everyMs?: number; onError?: (e: unknown) => void } | null = null
   private ready: Promise<unknown>
@@ -141,6 +142,17 @@ export class StoreClient implements ClanStoreApi {
       case 'scene-ack':
         this.unacked.delete(msg.seq)
         return
+      case 'save-failed': {
+        const e = fromWire(msg.error)
+        for (const cb of this.saveErrors) {
+          try {
+            cb(e, msg.where)
+          } catch (err) {
+            console.error('onSaveError listener failed', err)
+          }
+        }
+        return
+      }
       case 'mirror-post': {
         const post = this.post
         const done = (error?: unknown) => this.send({ t: 'mirror-done', id: msg.id, ...(error ? { error: { name: 'MirrorFailed', message: error instanceof Error ? error.message : String(error) } } : {}) })
@@ -216,6 +228,11 @@ export class StoreClient implements ClanStoreApi {
     return () => void this.listeners.delete(cb)
   }
 
+  onSaveError(cb: (e: unknown, where: SaveWhere) => void): () => void {
+    this.saveErrors.add(cb)
+    return () => void this.saveErrors.delete(cb)
+  }
+
   chain(): Promise<ChainEntry[]> {
     return this.call<ChainEntry[]>('chain')
   }
@@ -262,6 +279,7 @@ export class StoreClient implements ClanStoreApi {
     void this.rpc('dispose', []).catch(() => {}).finally(() => w.terminate())
     this.disposed = true
     this.listeners.clear()
+    this.saveErrors.clear()
   }
 
   // ── the scene ──

@@ -1091,6 +1091,7 @@ def _complete(S, reqs, R, inp, meta, fmt, fit, scoring=None, messages=None, terr
                      "research_doc_id": inp.research_doc_id, "coverage": inp.coverage, "built_from": inp.built_from},
             "requirements": {r["id"]: r for r in reqs}, "scoring": scoring or [], "messages": messages or [],
             "territories": territories or {}, "slides": {}, "order": []}
+    fit = clean_fit(fit)   # a recorded fit.json from before the clean, or a judge's verdict with no title, never stops the build
     if fit:
         deck["fit"] = fit
     if spec.GRAPHICS:   # deck-graphics slices 4-5: each chart block is drawn only from ledger values of one measure and unit, else a hero,
@@ -1926,6 +1927,25 @@ def copy_fields(sl: dict) -> list:
         for ri, row in enumerate((b.get("rows") or [])[1:], 1):
             out += [(f"b{bi}.r{ri}.c{ci}", c) for ci, c in enumerate(row) if str(c).strip()]
     return out
+
+
+def clean_fit(fit: dict | None) -> dict | None:
+    """The fit judge's result with every verdict an object holding a text ``title``, ``verdict`` and ``reason``: the judge is a model, and a
+    verdict it returned under 'slide' or 'headline', with no title, or not as an object stopped the Copy step (UAT round 4,
+    doc-ie-napkin-deck-maker-07c26c27: 'The engine stopped: KeyError: 'title''). A title under another key is read by that key; a verdict
+    with no title at all is left out (it can key no slide); a missing verdict is '' (it neither presents nor flags a slide). None stays None."""
+    if not isinstance(fit, dict):
+        return fit
+    out = []
+    for v in fit.get("verdicts") or []:
+        if not isinstance(v, dict):
+            continue
+        t = next((v[k] for k in ("title", "slide", "headline") if isinstance(v.get(k), str) and v[k].strip()), None)
+        if t is None:
+            continue
+        rest = {k: x for k, x in v.items() if k not in ("slide", "headline")}
+        out.append({**rest, "title": t, "verdict": str(v.get("verdict") or ""), "reason": str(v.get("reason") or "")})
+    return {**fit, "verdicts": out}
 
 
 def apply_copy(deck: dict, edits: list) -> int:

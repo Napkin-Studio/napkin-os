@@ -10,7 +10,7 @@ import { cardOf, createNode, linkIdOf, seedNodes } from '../../nodes/nodes'
 import { madeFromNote, makeVideo, storyboardFor, storyboardFromShots } from '../../nodes/make'
 import { wordsOnPage } from '../../../script/edits'
 import { ownShotList, scriptOf } from '../../../jobs/prompt'
-import { updateDoc } from '../../../doc/store'
+import { systemUpdate, updateDoc } from '../../../doc/store'
 import { deleteFrom, removeNode } from '../../../doc/remove'
 import { CanvasDocSync } from '../../sync'
 import { waitsOnScriptAsk } from '../../../jobs/scriptVideo'
@@ -98,6 +98,16 @@ describe('the storyboard a script drives (3.10 Plan shots)', () => {
     expect((await storyboardFor({ canvas: a, doc: s }, sc)).storyboardId).toBe(r.storyboardId)
     a.undoScene('undo')
     expect(a.elements().some((e) => cardOf(e)?.id === r.storyboardId)).toBe(false)
+    await s.close()
+  })
+
+  it('a script\'s new storyboard is named after the script (UAT round 4 A18: "Copperell Refill" drove "Storyboard 2")', async () => {
+    const { a, s, doc } = await seeded()
+    const scEl = await createNode({ canvas: a, doc: s }, 'script')
+    const sc = cardOf(scEl)!.id
+    await systemUpdate(s, (d) => { d.scripts[sc].title = 'Copperell Refill' }, 'name the script')
+    const r = await storyboardFor({ canvas: a, doc: s }, sc)
+    expect(doc().storyboards[r.storyboardId].title).toBe('Copperell Refill')
     await s.close()
   })
 

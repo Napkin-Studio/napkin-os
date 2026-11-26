@@ -146,6 +146,7 @@ function ScriptStart({ scriptId, place, seed, onClose }: { scriptId: Id; place: 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
+  const [ready, setReady] = useState(false)
   const store = services.clan
   const submit = async (words: string) => {
     if (!store) { setError('The Script editor needs this browser to keep the project, and it could not load here.'); return }
@@ -154,8 +155,9 @@ function ScriptStart({ scriptId, place, seed, onClose }: { scriptId: Id; place: 
     try {
       const r = await scriptFromLine(services, store, scriptId, words)
       if ('pasted' in r) setNote(`Pasted ${r.pasted} ${r.pasted === 1 ? 'scene' : 'scenes'}.${r.dropped ? ` ${r.dropped}` : ''}`)
-      // On the canvas the draft is read and kept in the Script editor, where it lands.
-      if (place === 'card') router?.push(scriptRoute(services.project.id, scriptId))
+      // On the canvas the draft waits in the Script: the person stays where they are and opens it when they choose
+      // (UAT round 4 A16: a draft landing pulled them into the Script page mid-task).
+      if (place === 'card' && !('pasted' in r)) setReady(true)
       // Skye's draft lands as a suggestion in the editor; close the write panel so it is visible.
       else if (onClose && !('pasted' in r)) onClose()
     } catch (e) {
@@ -173,6 +175,11 @@ function ScriptStart({ scriptId, place, seed, onClose }: { scriptId: Id; place: 
         submit={submit} busy={busy} autoFocus={place === 'editor'} multiline={place === 'editor'} initial={seed} />
       {busy && <AtWork agent="skye" line={PROMPT_COPY.script.busy} />}
       {note && <div className="pstart-note" role="status">{note}</div>}
+      {ready && (
+        <div className="pstart-note" role="status">The Script agent&rsquo;s draft is in the Script, to keep or change.{' '}
+          <button type="button" className="linkbtn" onClick={() => router?.push(scriptRoute(services.project.id, scriptId))}>Open</button>
+        </div>
+      )}
       {error && <div className="pstart-error" role="alert">{error}<FrontButtons text={error} /></div>}
     </section>
   )

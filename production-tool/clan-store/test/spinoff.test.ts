@@ -124,6 +124,32 @@ describe('a project born as a spin-off', () => {
     }
   })
 
+  it('a save the host cannot make reaches onSaveError, for this browser\'s copy and the server\'s, and nothing is posted', async () => {
+    // UAT acceptance A24 re-test: the store Worker logged "could not save the document … is a link and this host holds
+    // no file store", no PUT went, and the bar kept "saved 09:45 AM". Whatever stops the bytes, the page is told.
+    const s = new ClanDocumentStore({ wasm: wasmBytes(), persistence: memoryPersistence(), saveDebounceMs: 0, person: MAYA })
+    await s.open(fixture())
+    const seen: [string, string][] = []
+    s.onSaveError((e, where) => seen.push([where, e instanceof Error ? e.message : String(e)]))
+    const posted: Uint8Array[] = []
+    s.startMirror(async (bytes) => { posted.push(bytes) })
+    const host = (s as unknown as { host: { keptBytes?: unknown } }).host
+    const proto = Object.getPrototypeOf(host) as { keptBytes?: unknown }
+    const kept = proto.keptBytes
+    proto.keptBytes = undefined
+    try {
+      await s.setTitle('Still here')
+      await s.flush()
+      await expect(s.mirrorNow('manual')).rejects.toThrow(STALE_WASM)
+    } finally {
+      proto.keptBytes = kept
+      s.stopMirror()
+    }
+    expect(seen.some(([w, m]) => w === 'browser' && m === STALE_WASM)).toBe(true)
+    expect(seen.some(([w, m]) => w === 'server' && m === STALE_WASM)).toBe(true)
+    expect(posted).toHaveLength(0)
+  })
+
   it('a project that was not spun off says so', async () => {
     const s = store()
     await s.create({ person: MAYA, title: 'Plain', blank: true })
