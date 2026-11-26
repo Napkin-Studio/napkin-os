@@ -28,8 +28,9 @@ def _items(v) -> list[str]:
     return [str(x) for x in (v if isinstance(v, list) else [v]) if str(x).strip() and str(x).strip().lower() not in ("none", "n/a")]
 
 
-def check_image(png: bytes, banned: list[str] | None = None, post=_post, url: str = OLLAMA, model: str = MODEL) -> dict:
-    """Returns {checked, flagged, found, reason}. ``post`` is injectable so tests run with a fake Ollama."""
+def check_image(png: bytes, banned: list[str] | None = None, post=_post, url: str = OLLAMA, model: str = MODEL, name: str = "Ollama") -> dict:
+    """Returns {checked, flagged, found, reason}. ``post`` is injectable so tests run with a fake Ollama. ``name`` is the checker the reason names;
+    an error that carries its own ``reason`` (the cloud check's) is quoted as it is."""
     q = QUESTION
     if banned:
         q = q.replace("{\"readable_text\"", "{\"banned_imagery\": [strings], \"readable_text\"") + " Also list any of these if shown: " + ", ".join(banned) + "."
@@ -38,9 +39,9 @@ def check_image(png: bytes, banned: list[str] | None = None, post=_post, url: st
     try:
         reply = post(url, body)
     except (urllib.error.URLError, ConnectionError, TimeoutError, OSError) as e:
-        return {"checked": False, "flagged": False, "found": {}, "reason": f"skipped: Ollama not reachable ({type(e).__name__})"}
-    except ValueError:                                  # Ollama answered with something that is not JSON
-        return {"checked": False, "flagged": False, "found": {}, "reason": "skipped: Ollama's answer was not JSON"}
+        return {"checked": False, "flagged": False, "found": {}, "reason": getattr(e, "reason", None) if isinstance(getattr(e, "reason", None), str) else f"skipped: {name} not reachable ({type(e).__name__})"}
+    except ValueError:                                  # the checker answered with something that is not JSON
+        return {"checked": False, "flagged": False, "found": {}, "reason": f"skipped: {name}'s answer was not JSON"}
     text = ((reply or {}).get("message") or {}).get("content") or ""
     unreadable = {"checked": True, "flagged": True, "found": {}, "reason": "the vision model's reply was not readable: needs a person"}
     try:

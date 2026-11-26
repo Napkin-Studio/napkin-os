@@ -1,0 +1,124 @@
+{
+ "facts": [
+  {
+   "id": "f_ROUTE0412",
+   "entity": "brand/linea",
+   "key": "route.time_gap",
+   "value": "By car 2h 35m on a Saturday morning; by train 2h 20m.",
+   "unit": "text",
+   "as_of": "2026-10-01",
+   "retrieved_at": "2026-11-10",
+   "sources": [
+    "src_linea01"
+   ],
+   "confidence": "high",
+   "licence": "open",
+   "status": "active",
+   "decision": "d_PIN00001",
+   "pinned_at": "2026-11-10T12:00:00Z",
+   "pin_reason": "Evidence for the weekend brief.",
+   "version": 1,
+   "origin": "fact://brand/linea/route.time_gap@1"
+  },
+  {
+   "id": "f_TIRED0418",
+   "entity": "brand/linea",
+   "key": "weekend.arriving_tired",
+   "value": "61% of weekend travellers name arriving tired as the worst part of the trip.",
+   "unit": "text",
+   "as_of": "2026-10-01",
+   "retrieved_at": "2026-11-10",
+   "sources": [
+    "src_linea02"
+   ],
+   "confidence": "high",
+   "licence": "open",
+   "status": "active",
+   "decision": "d_PIN00002",
+   "pinned_at": "2026-11-10T12:00:00Z",
+   "pin_reason": "Evidence for the weekend brief.",
+   "version": 1,
+   "origin": "fact://brand/linea/weekend.arriving_tired@1"
+  },
+  {
+   "id": "f_DRIVER0431",
+   "entity": "brand/linea",
+   "key": "household.one_driver",
+   "value": "In 4 of 5 households one person does every weekend drive.",
+   "unit": "text",
+   "as_of": "2026-10-01",
+   "retrieved_at": "2026-11-10",
+   "sources": [
+    "src_linea03"
+   ],
+   "confidence": "high",
+   "licence": "open",
+   "status": "active",
+   "decision": "d_PIN00003",
+   "pinned_at": "2026-11-10T12:00:00Z",
+   "pin_reason": "Evidence for the weekend brief.",
+   "version": 1,
+   "origin": "fact://brand/linea/household.one_driver@1"
+  },
+  {
+   "id": "f_FARE00440",
+   "entity": "brand/linea",
+   "key": "fare.two_or_more",
+   "value": "For two or more people a weekend return costs less than fuel and parking for the same trip.",
+   "unit": "text",
+   "as_of": "2026-10-01",
+   "retrieved_at": "2026-11-10",
+   "sources": [
+    "src_linea04"
+   ],
+   "confidence": "high",
+   "licence": "open",
+   "status": "active",
+   "decision": "d_PIN00004",
+   "pinned_at": "2026-11-10T12:00:00Z",
+   "pin_reason": "Evidence for the weekend brief.",
+   "version": 1,
+   "origin": "fact://brand/linea/fare.two_or_more@1"
+  },
+  {
+   "id": "f_BOOK00447",
+   "entity": "brand/linea",
+   "key": "booking.late",
+   "value": "38% of weekend trips are booked fewer than 48 hours ahead.",
+   "unit": "text",
+   "as_of": "2026-10-01",
+   "retrieved_at": "2026-11-10",
+   "sources": [
+    "src_linea05"
+   ],
+   "confidence": "high",
+   "licence": "open",
+   "status": "active",
+   "decision": "d_PIN00005",
+   "pinned_at": "2026-11-10T12:00:00Z",
+   "pin_reason": "Evidence for the weekend brief.",
+   "version": 1,
+   "origin": "fact://brand/linea/booking.late@1"
+  },
+  {
+   "id": "f_CLIMATE450",
+   "entity": "brand/linea",
+   "key": "climate.deciding",
+   "value": "Climate is a deciding factor for 11% of weekend travellers.",
+   "unit": "text",
+   "as_of": "2026-10-01",
+   "retrieved_at": "2026-11-10",
+   "sources": [
+    "src_linea06"
+   ],
+   "confidence": "high",
+   "licence": "open",
+   "status": "active",
+   "decision": "d_PIN00006",
+   "pinned_at": "2026-11-10T12:00:00Z",
+   "pin_reason": "Evidence for the weekend brief.",
+   "version": 1,
+   "origin": "fact://brand/linea/climate.deciding@1"
+  }
+ ]
+}

@@ -2308,7 +2308,7 @@
               "description": "The brief's OS document id (its library path, doc-…): what GET /api/t/{tenant}/d/{doc}/data reads and the shell opens (/?open=<id>)."
             },
             "app_id": {
-              "const": "ie.napkin.brief-maker"
+              "enum": ["ie.napkin.brief-maker", "ie.napkin.territories"]
             },
             "data_sha256": {
               "$ref": "common.schema.json#/$defs/sha256",
@@ -2354,6 +2354,48 @@
         },
         "spine": {
           "$ref": "common.schema.json#/$defs/briefSpine"
+        },
+        "route": {
+          "type": "object",
+          "description": "A Territories node (features/territories-spinoff-out-production.clan; owner 2026-11-23: Territories is just another node): the route this node is, frozen at the version taken. Pictures are links by hash with the rights the document stated, never bytes. Its spine is the brief it carries.",
+          "properties": {
+            "id": { "type": "string", "minLength": 1, "maxLength": 128 },
+            "version": { "type": "integer", "minimum": 1, "description": "The Territories document's version when the route was sent: its approvals at the Greenlight gate, at least 1." },
+            "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+            "thought": { "type": "string", "maxLength": 600 },
+            "why": { "type": "string", "maxLength": 600 },
+            "words": { "type": "array", "maxItems": 12, "items": { "type": "string", "maxLength": 200 } },
+            "palette": { "type": "array", "maxItems": 8, "items": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" } },
+            "not": { "type": "array", "maxItems": 6, "items": { "type": "string", "maxLength": 300 } },
+            "pictures": {
+              "type": "array",
+              "maxItems": 12,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "sha256": { "$ref": "common.schema.json#/$defs/sha256" },
+                  "caption": { "type": "string", "maxLength": 120 },
+                  "rights": { "enum": ["generated", "own", "licensed"], "description": "As the document stated; absent reads 'Rights to supply'." },
+                  "final": { "type": "boolean" }
+                },
+                "required": ["sha256"],
+                "additionalProperties": false
+              }
+            },
+            "mockups": { "type": "integer", "minimum": 0 },
+            "gaps": { "type": "integer", "minimum": 0 }
+          },
+          "required": ["id", "name", "thought"],
+          "additionalProperties": false
+        },
+        "carries": {
+          "type": "object",
+          "description": "What a Territories node carries from before it: the brief (title and version) and the research it was made from. The brief's spine is the node's spine.",
+          "properties": {
+            "brief": { "type": "object", "properties": { "title": { "type": "string", "maxLength": 200 }, "v": { "type": "integer", "minimum": 1 } }, "required": ["title", "v"], "additionalProperties": false },
+            "research": { "type": "object", "properties": { "title": { "type": "string", "maxLength": 200 } }, "required": ["title"], "additionalProperties": false }
+          },
+          "additionalProperties": false
         },
         "confidential": {
           "type": "array",

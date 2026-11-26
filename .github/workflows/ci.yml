@@ -479,6 +479,11 @@ jobs:
         run: |
           docker run --rm --entrypoint test napkin-web:ci -f /srv/napkin/seed/deck-maker.app.clan
           docker run --rm --entrypoint test napkin-web:ci ! -f /srv/napkin/seed/deck-maker.example.clan
+      - name: Territories is in the seed (territories-spinoff-in)
+        if: steps.changed.outputs.build == 'true'
+        run: |
+          docker run --rm --entrypoint test napkin-web:ci -f /srv/napkin/seed/territories.app.clan
+          docker run --rm --entrypoint test napkin-web:ci ! -f /srv/napkin/seed/territories.example.clan
       - name: Image size
         if: steps.changed.outputs.build == 'true'
         run: docker image ls napkin-web:ci

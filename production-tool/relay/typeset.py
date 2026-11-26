@@ -2,14 +2,18 @@
 supers and legal, laid out per format by the web's one layout function (web/src/campaign/layout.ts)
 and drawn here with Pillow. Words and the logo are never sent to a model.
 
-The font is Pillow's own scalable default (FreeType); the Brand board's font family is the web's to
-show on the tile, and a licensed font file joins once the Brand board carries one. Each line of words
+The font is Archivo (OFL-1.1, the deck's own files, licences/fonts.toml), Regular and Bold, from fonts/
+beside this file: Pillow's built-in default has no accented letters, so "Lúnasa" or "Seán" rendered with
+a box for the fada. The Brand board's font family is the web's to show on the tile, and a licensed font
+file joins once the Brand board carries one. Each line of words
 is wrapped to its box and shrunk until it fits, so a long OOH line never runs outside its box.
 """
 
 from __future__ import annotations
 
 import io
+from functools import lru_cache
+from pathlib import Path
 from typing import Callable, Optional
 
 from PIL import Image, ImageDraw, ImageFont
@@ -19,8 +23,21 @@ MIN_PX = 6        # never smaller than this
 LEADING = 1.18
 
 
-def _font(px: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    return ImageFont.load_default(size=max(MIN_PX, px))
+FONTS = Path(__file__).resolve().parent / "fonts"
+FACES = {False: "Archivo-Regular.ttf", True: "Archivo-Bold.ttf"}
+
+
+@lru_cache(maxsize=256)
+def _font(px: int, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    """Archivo at px; Pillow's default only if the file is missing (it has no accented letters)."""
+    try:
+        return ImageFont.truetype(str(FONTS / FACES[bold]), max(MIN_PX, px))
+    except OSError:
+        return ImageFont.load_default(size=max(MIN_PX, px))
+
+
+def _real_bold(font) -> bool:
+    return Path(getattr(font, "path", "") or "").name == FACES[True]
 
 
 def _hex(c: Optional[str], default: tuple[int, int, int]) -> tuple[int, int, int]:
@@ -50,8 +67,9 @@ def fit(text: str, box: tuple[int, int, int, int], want_px: int, draw: ImageDraw
     x0, y0, x1, y1 = box
     px = max(MIN_PX, want_px)
     while True:
-        font = _font(px)
-        stroke = max(0, round(px * 0.04)) if bold else 0
+        font = _font(px, bold)
+        # a stroke thickens the default font into bold; Archivo Bold is bold already
+        stroke = max(0, round(px * 0.04)) if bold and not _real_bold(font) else 0
         lines = wrap(text, font, x1 - x0, draw, stroke)
         widest = max(draw.textlength(ln, font=font) + 2 * stroke for ln in lines)
         tall = len(lines) * px * LEADING

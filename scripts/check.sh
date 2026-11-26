@@ -102,6 +102,8 @@ else
         want[rust]=1 ;;
       app/src-tauri/*)
         want[desktop]=1 ;;
+      app/templates/territories/*)  # the Territories schema, fixtures and page: the engine contract test, the CLI conformance case and the app tests read them
+        want[engine]=1; want[conformance]=1; want[frontend]=1 ;;
       app/src/shell/bridge/*)  # the frame scripts napkin-host compiles in (frame.rs)
         want[frontend]=1; want[rust]=1; want[wasm]=1; want[desktop]=1 ;;
       app/src/shell/agency/*|app/src/shell/agents/*|app/src/shell/nui/tokens.css|app/src/brand/*|app/src/components/medallion*|app/templates/shared/agent-sphere/*)
@@ -239,7 +241,8 @@ suite_image() {
   fi
   docker build -q --target runtime -t napkin-web:check . >/dev/null &&
   docker run --rm --entrypoint test napkin-web:check -f /srv/napkin/production/index.html &&
-  docker run --rm --entrypoint test napkin-web:check -f /srv/napkin/seed/deck-maker.app.clan
+  docker run --rm --entrypoint test napkin-web:check -f /srv/napkin/seed/deck-maker.app.clan &&
+  docker run --rm --entrypoint test napkin-web:check -f /srv/napkin/seed/territories.app.clan
 }
 suite_production-tool() {
   # Installs and the CLAN store build first (the web app builds on clan-store/src/wasm and the canvas

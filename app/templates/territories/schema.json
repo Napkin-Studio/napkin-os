@@ -1,0 +1,2596 @@
+{
+ "$schema": "http://json-schema.org/draft-07/schema#",
+ "$id": "https://napkin.ie/schemas/territories/schema.json",
+ "title": "Territories: shared/data.yaml",
+ "description": "The Territories document (ie.napkin.territories). One schema for the engine, the app and the host; docs/contracts/territories.md says who writes and reads each member. Additive only: a new member is optional, a member is never removed or retyped (schema.lock.json fails the test).",
+ "type": "object",
+ "additionalProperties": false,
+ "required": [
+  "schema_version",
+  "title",
+  "focus",
+  "crew",
+  "expeditions",
+  "territories",
+  "greenlit",
+  "run"
+ ],
+ "properties": {
+  "schema_version": {
+   "type": "integer",
+   "const": 1,
+   "description": "Bumped only for a breaking change, which the additive rule forbids until v2."
+  },
+  "title": {
+   "type": "string",
+   "maxLength": 120,
+   "minLength": 1,
+   "description": "Project title, e.g. the brief's."
+  },
+  "upstream": {
+   "type": "object",
+   "description": "Frozen sources keyed by source document id (a brief, a research). Written by the host's spin-off; read-only for the app and the engine.",
+   "additionalProperties": {
+    "type": "object"
+   }
+  },
+  "projection": {
+   "type": "object",
+   "description": "The pins, findings and sources the carried research brought, as the host reads them (built at spin-off from the merged members, like every document that carries research). Host-written and read-only: the app counts from it, the engine reads the members themselves."
+  },
+  "finds": {
+   "type": "array",
+   "items": {
+    "$ref": "#/definitions/find"
+   },
+   "maxItems": 40
+  },
+  "focus": {
+   "$ref": "#/definitions/focus"
+  },
+  "journey": {
+   "type": "array",
+   "items": {
+    "$ref": "#/definitions/journey"
+   },
+   "maxItems": 8
+  },
+  "crew": {
+   "type": "array",
+   "items": {
+    "$ref": "#/definitions/crew_member"
+   },
+   "maxItems": 8,
+   "description": "At most 8 headings (5 default, the planner's own, one added)."
+  },
+  "expeditions": {
+   "type": "array",
+   "items": {
+    "$ref": "#/definitions/expedition"
+   },
+   "maxItems": 8
+  },
+  "territories": {
+   "type": "array",
+   "items": {
+    "$ref": "#/definitions/territory"
+   },
+   "maxItems": 32,
+   "description": "At most 32 routes: 8 headings x 4 routes."
+  },
+  "spread": {
+   "$ref": "#/definitions/spread"
+  },
+  "greenlit": {
+   "type": "array",
+   "items": {
+    "$ref": "#/definitions/greenlit"
+   },
+   "maxItems": 32
+  },
+  "asks": {
+   "type": "array",
+   "items": {
+    "$ref": "#/definitions/ask"
+   },
+   "maxItems": 32
+  },
+  "actions": {
+   "type": "array",
+   "items": {
+    "$ref": "#/definitions/action"
+   },
+   "maxItems": 64
+  },
+  "lookups": {
+   "type": "array",
+   "items": {
+    "$ref": "#/definitions/lookup"
+   },
+   "maxItems": 40
+  },
+  "notes": {
+   "type": "array",
+   "items": {
+    "$ref": "#/definitions/note"
+   },
+   "maxItems": 128
+  },
+  "sends": {
+   "type": "array",
+   "items": {
+    "$ref": "#/definitions/send"
+   },
+   "maxItems": 16
+  },
+  "review": {
+   "$ref": "#/definitions/review"
+  },
+  "run": {
+   "$ref": "#/definitions/run"
+  }
+ },
+ "definitions": {
+  "id_insight": {
+   "type": "string",
+   "pattern": "^in_[a-z0-9]{2,12}$",
+   "description": "An insight on the Pick screen. Minted by the engine: in_ + 2-12 lowercase letters or digits."
+  },
+  "id_territory": {
+   "type": "string",
+   "pattern": "^t_[a-z0-9]{2,12}$",
+   "description": "A route (territory card)."
+  },
+  "id_crew": {
+   "type": "string",
+   "pattern": "^cr_[a-z0-9]{2,12}$",
+   "description": "A crew member (agent with a heading)."
+  },
+  "id_expedition": {
+   "type": "string",
+   "pattern": "^ex_[a-z0-9]{2,12}$",
+   "description": "One crew member's trail in one run."
+  },
+  "id_check": {
+   "type": "string",
+   "pattern": "^ck_[a-z0-9]{2,12}$",
+   "description": "One check on a developed route."
+  },
+  "id_ask": {
+   "type": "string",
+   "pattern": "^ask_[a-z0-9]{2,12}$",
+   "description": "A question the Booth puts to a person."
+  },
+  "id_action": {
+   "type": "string",
+   "pattern": "^act_[a-z0-9]{2,12}$",
+   "description": "An action the engine took by itself, which has Undo."
+  },
+  "id_lookup": {
+   "type": "string",
+   "pattern": "^lq_[a-z0-9]{2,12}$",
+   "description": "A look-up (query to the research port)."
+  },
+  "id_note": {
+   "type": "string",
+   "pattern": "^nt_[a-z0-9]{2,12}$",
+   "description": "A note on the record, from an agent."
+  },
+  "id_send": {
+   "type": "string",
+   "pattern": "^snd_[a-z0-9]{2,12}$",
+   "description": "One send to Deck Studio or the production tool."
+  },
+  "id_picture": {
+   "type": "string",
+   "pattern": "^pic_[a-z0-9_]{2,24}$",
+   "description": "A picture slot on a route."
+  },
+  "id_find": {
+   "type": "string",
+   "pattern": "^x_[0-9A-Z]{6,}$",
+   "description": "The tool's own find (a look-up result a person kept). Same shape as a pin id: x_ + 6 or more A-Z0-9."
+  },
+  "id_fact": {
+   "type": "string",
+   "pattern": "^f_[0-9A-Z]{6,}$",
+   "description": "A research pin (campaign-research facts.schema.json)."
+  },
+  "id_finding": {
+   "type": "string",
+   "pattern": "^fi_[0-9A-Z]{6,}$",
+   "description": "A research finding (campaign-research findings.schema.json)."
+  },
+  "brief_field": {
+   "type": "string",
+   "enum": [
+    "background",
+    "objectives",
+    "audience",
+    "competitor_context",
+    "insight",
+    "smp",
+    "reasons_to_believe",
+    "desired_response",
+    "tone_world_assets",
+    "budget_scope",
+    "mandatories"
+   ],
+   "description": "Brief Maker's field names (engine/deck/inputs.py BRIEF_FIELDS)."
+  },
+  "cite": {
+   "type": "string",
+   "pattern": "^(brief:(background|objectives|audience|competitor_context|insight|smp|reasons_to_believe|desired_response|tone_world_assets|budget_scope|mandatories)|f_[0-9A-Z]{6,}|fi_[0-9A-Z]{6,}|x_[0-9A-Z]{6,})$",
+   "description": "How a claim names its source. brief:<field> reads data.upstream.<brief doc id>.<field>; f_ and fi_ read the carried facts and findings members; x_ reads data.finds. Never copy a value; cite."
+  },
+  "agent_key": {
+   "type": "string",
+   "enum": [
+    "knowledge",
+    "strategy",
+    "research",
+    "synthesis",
+    "brief",
+    "review",
+    "deck",
+    "idea",
+    "copy",
+    "approval",
+    "orchestrator"
+   ],
+   "description": "The house roles (app/templates/shared/agent-sphere/roles.js)."
+  },
+  "insight_kind": {
+   "type": "string",
+   "enum": [
+    "tension",
+    "truth",
+    "provocation",
+    "borrowed",
+    "yours"
+   ]
+  },
+  "strength": {
+   "type": "string",
+   "enum": [
+    "strong",
+    "moderate",
+    "thin"
+   ],
+   "description": "Evidence strength shown on an insight; ranking is by this, then by number of cites."
+  },
+  "band": {
+   "type": "string",
+   "enum": [
+    "core",
+    "stretch",
+    "far_out"
+   ],
+   "description": "Measured distance from the brief (shown to people as Core / Stretch / Far out). A route's band must match its distance by x-edges: core below 0.35, stretch below 0.65, far_out from 0.65.",
+   "x-edges": {
+    "core": [
+     0,
+     0.35
+    ],
+    "stretch": [
+     0.35,
+     0.65
+    ],
+    "far_out": [
+     0.65,
+     1.0
+    ]
+   }
+  },
+  "tier": {
+   "type": "string",
+   "enum": [
+    "safe",
+    "stretch",
+    "brave"
+   ],
+   "description": "Judged risk (engine/territory/ladder.py TIERS). Stored, not shown by default."
+  },
+  "direction": {
+   "type": "string",
+   "enum": [
+    "core",
+    "feel",
+    "opposite",
+    "adjacent",
+    "outside",
+    "yours",
+    "custom"
+   ],
+   "description": "The crew's headings: close to the core, towards a feeling, the opposite pole, next door, far outside, the planner's own, one the planner added."
+  },
+  "territory_state": {
+   "type": "string",
+   "enum": [
+    "found",
+    "developed"
+   ],
+   "description": "found = a route with a thought; developed = it has its world, checks and marks."
+  },
+  "territory_status": {
+   "type": "string",
+   "enum": [
+    "live",
+    "parked",
+    "killed"
+   ]
+  },
+  "origin_kind": {
+   "type": "string",
+   "enum": [
+    "crew",
+    "further",
+    "pull",
+    "cross",
+    "person"
+   ],
+   "description": "Where a route came from: a crew member, a steer (go further / pull back), a cross of two, or the planner."
+  },
+  "vote": {
+   "type": "string",
+   "enum": [
+    "kill",
+    "keep",
+    "combine"
+   ]
+  },
+  "check_kind": {
+   "type": "string",
+   "enum": [
+    "proposition",
+    "mandatory",
+    "landscape",
+    "evidence",
+    "judge",
+    "contrast",
+    "rival"
+   ]
+  },
+  "check_status": {
+   "type": "string",
+   "enum": [
+    "ok",
+    "warn",
+    "fail",
+    "unchecked"
+   ]
+  },
+  "touchpoint": {
+   "type": "string",
+   "enum": [
+    "tv",
+    "story",
+    "poster",
+    "radio",
+    "seat",
+    "email"
+   ],
+   "description": "The weekend journey's touchpoint types (v1)."
+  },
+  "scene": {
+   "type": "string",
+   "enum": [
+    "platform",
+    "window",
+    "table",
+    "arrival",
+    "car",
+    "sleep",
+    "road",
+    "night",
+    "home",
+    "town"
+   ],
+   "description": "Palette-sketch scenes drawn in v1. New scenes are added here."
+  },
+  "font": {
+   "type": "string",
+   "enum": [
+    "newsreader",
+    "geist_extra_bold"
+   ],
+   "description": "Only the licensed faces (licences/fonts.toml) until the owner approves more."
+  },
+  "rights": {
+   "type": "string",
+   "enum": [
+    "generated",
+    "own",
+    "licensed",
+    "unknown"
+   ],
+   "description": "Production's and the Deck's words. generated, own and licensed are trusted only when stated; unknown, unstated, a mock and anything else read 'Rights to supply'."
+  },
+  "picture_kind": {
+   "type": "string",
+   "enum": [
+    "sketch",
+    "frame",
+    "gap"
+   ]
+  },
+  "gate_id": {
+   "type": "string",
+   "enum": [
+    "pick",
+    "greenlight"
+   ]
+  },
+  "stage_id": {
+   "type": "string",
+   "enum": [
+    "pick",
+    "explore",
+    "develop",
+    "greenlight",
+    "send"
+   ]
+  },
+  "gate_kind": {
+   "type": "string",
+   "enum": [
+    "approve",
+    "edit",
+    "retry"
+   ]
+  },
+  "blocked_kind": {
+   "type": "string",
+   "enum": [
+    "nothing_picked",
+    "no_routes",
+    "derived_evidence",
+    "near_mandatory",
+    "sensitive_review",
+    "picture_rights"
+   ]
+  },
+  "ask_kind": {
+   "type": "string",
+   "enum": [
+    "derived_evidence",
+    "near_mandatory",
+    "sensitive_review"
+   ]
+  },
+  "ask_answer": {
+   "type": "string",
+   "enum": [
+    "verify",
+    "send_flagged",
+    "change",
+    "ok"
+   ]
+  },
+  "derived_resolution": {
+   "type": "string",
+   "enum": [
+    "pending",
+    "verified",
+    "sent_flagged"
+   ]
+  },
+  "action_kind": {
+   "type": "string",
+   "enum": [
+    "spread_fix",
+    "sent_agent",
+    "merged",
+    "moved"
+   ]
+  },
+  "send_to": {
+   "type": "string",
+   "enum": [
+    "deck-maker",
+    "production-tool"
+   ]
+  },
+  "send_status": {
+   "type": "string",
+   "enum": [
+    "asked",
+    "sent",
+    "not_built"
+   ]
+  },
+  "expedition_state": {
+   "type": "string",
+   "enum": [
+    "ready",
+    "running",
+    "back",
+    "stopped"
+   ]
+  },
+  "steer_kind": {
+   "type": "string",
+   "enum": [
+    "further",
+    "pull",
+    "cross",
+    "stop"
+   ]
+  },
+  "lookup_status": {
+   "type": "string",
+   "enum": [
+    "ask",
+    "done",
+    "refused"
+   ]
+  },
+  "review_status": {
+   "type": "string",
+   "enum": [
+    "not_needed",
+    "missing",
+    "done"
+   ]
+  },
+  "decision_in_doc": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "gate": {
+     "$ref": "#/definitions/gate_id"
+    },
+    "kind": {
+     "$ref": "#/definitions/gate_kind"
+    },
+    "by": {
+     "type": "string",
+     "maxLength": 80,
+     "minLength": 1,
+     "description": "A person's name, or `engine` for work the engine did itself."
+    },
+    "at": {
+     "type": "string",
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$",
+     "description": "UTC time, ISO 8601."
+    },
+    "inputs": {
+     "type": "string",
+     "pattern": "^[0-9a-f]{12}$",
+     "description": "What the person was looking at when they said yes: a short hash of the inputs of this gate (engine/territory/gates.py inputs_hash). An approval or review counts only while it equals the current hash, so one given for other inputs never passes this gate."
+    }
+   },
+   "required": [
+    "gate",
+    "kind",
+    "by",
+    "at"
+   ],
+   "description": "A person's approve / edit / retry at a gate."
+  },
+  "colour": {
+   "type": "string",
+   "pattern": "^#[0-9A-Fa-f]{6}$"
+  },
+  "unit": {
+   "type": "number",
+   "minimum": 0,
+   "maximum": 1
+  },
+  "find": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "$ref": "#/definitions/id_find"
+    },
+    "kind": {
+     "type": "string",
+     "enum": [
+      "found",
+      "case"
+     ],
+     "description": "found = read by a look-up; case = from the case library"
+    },
+    "text": {
+     "type": "string",
+     "maxLength": 400,
+     "minLength": 1
+    },
+    "source": {
+     "type": "string",
+     "maxLength": 200,
+     "minLength": 1,
+     "description": "Who published it, in words."
+    },
+    "date": {
+     "type": "string",
+     "maxLength": 40,
+     "minLength": 1
+    },
+    "quote_checked": {
+     "type": "boolean",
+     "description": "True only when the quote was checked against the page. Only checked quotes can be pinned."
+    },
+    "lookup": {
+     "$ref": "#/definitions/id_lookup"
+    },
+    "in_play": {
+     "type": "boolean"
+    },
+    "url": {
+     "type": "string",
+     "maxLength": 500,
+     "pattern": "^https?://",
+     "description": "The page a found quote was read on (a look-up's source). Absent on a case from the library."
+    }
+   },
+   "required": [
+    "id",
+    "kind",
+    "text",
+    "source",
+    "date",
+    "in_play"
+   ],
+   "description": "The tool's own find, kept by a person. Separate from research pins; never written back to Research."
+  },
+  "source_play": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "$ref": "#/definitions/cite"
+    },
+    "in_play": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "id",
+    "in_play"
+   ],
+   "description": "Whether a brief field, pin, finding or find is in play. By id only: no value is copied."
+  },
+  "insight": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "$ref": "#/definitions/id_insight"
+    },
+    "kind": {
+     "$ref": "#/definitions/insight_kind"
+    },
+    "text": {
+     "type": "string",
+     "maxLength": 300,
+     "minLength": 1
+    },
+    "evidence": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/cite"
+     },
+     "maxItems": 8
+    },
+    "strength": {
+     "$ref": "#/definitions/strength"
+    },
+    "ticked": {
+     "type": "boolean"
+    },
+    "by": {
+     "type": "string",
+     "maxLength": 80,
+     "minLength": 1,
+     "description": "A person's name, or `engine` for work the engine did itself."
+    },
+    "rank": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 25
+    },
+    "derived": {
+     "type": "boolean",
+     "description": "True when it rests on a derived (unverified) finding."
+    },
+    "theme": {
+     "type": "string",
+     "maxLength": 40,
+     "minLength": 1,
+     "description": "The idea group in a few words (what the card is about), shown as a chip. Optional: absent when the engine had none."
+    }
+   },
+   "required": [
+    "id",
+    "kind",
+    "text",
+    "evidence",
+    "strength",
+    "ticked",
+    "by"
+   ],
+   "description": "One insight the crew may explore."
+  },
+  "waypoint": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "at": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": 1
+    },
+    "text": {
+     "type": "string",
+     "maxLength": 160,
+     "minLength": 1
+    },
+    "cite": {
+     "$ref": "#/definitions/cite"
+    }
+   },
+   "required": [
+    "at",
+    "text"
+   ],
+   "description": "What a crew member picked up, and how far along its trail."
+  },
+  "route_ref": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "territory_id": {
+     "$ref": "#/definitions/id_territory"
+    },
+    "distance": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": 1
+    }
+   },
+   "required": [
+    "territory_id",
+    "distance"
+   ],
+   "description": "A route a trail ended in, by distance from the brief."
+  },
+  "steer": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "kind": {
+     "$ref": "#/definitions/steer_kind"
+    },
+    "by": {
+     "type": "string",
+     "maxLength": 80,
+     "minLength": 1,
+     "description": "A person's name, or `engine` for work the engine did itself."
+    },
+    "at": {
+     "type": "string",
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$",
+     "description": "UTC time, ISO 8601."
+    },
+    "with": {
+     "$ref": "#/definitions/id_crew"
+    }
+   },
+   "required": [
+    "kind",
+    "by",
+    "at"
+   ],
+   "description": "A person's instruction to a crew member."
+  },
+  "crew_member": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "$ref": "#/definitions/id_crew"
+    },
+    "direction": {
+     "$ref": "#/definitions/direction"
+    },
+    "role": {
+     "$ref": "#/definitions/agent_key"
+    },
+    "name": {
+     "type": "string",
+     "maxLength": 60,
+     "minLength": 1
+    },
+    "short": {
+     "type": "string",
+     "maxLength": 30,
+     "minLength": 1
+    },
+    "heading": {
+     "type": "string",
+     "maxLength": 240,
+     "minLength": 1,
+     "description": "The brief this agent was sent out with, in words."
+    },
+    "angle": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": 360,
+     "description": "Compass bearing; the planner never sees the number."
+    },
+    "colour": {
+     "$ref": "#/definitions/colour"
+    }
+   },
+   "required": [
+    "id",
+    "direction",
+    "role",
+    "name",
+    "short",
+    "heading",
+    "angle"
+   ],
+   "description": "An agent sent out on a heading."
+  },
+  "expedition": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "$ref": "#/definitions/id_expedition"
+    },
+    "crew": {
+     "$ref": "#/definitions/id_crew"
+    },
+    "state": {
+     "$ref": "#/definitions/expedition_state"
+    },
+    "insights": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/id_insight"
+     },
+     "maxItems": 25
+    },
+    "way": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/waypoint"
+     },
+     "maxItems": 12
+    },
+    "turn": {
+     "type": "string",
+     "maxLength": 400
+    },
+    "routes": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/route_ref"
+     },
+     "maxItems": 4,
+     "description": "At most 4 routes per heading (v1)."
+    },
+    "steer": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/steer"
+     },
+     "maxItems": 12
+    }
+   },
+   "required": [
+    "id",
+    "crew",
+    "state",
+    "insights",
+    "way",
+    "turn",
+    "routes"
+   ],
+   "description": "One crew member's trail in this run."
+  },
+  "palette": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "bg": {
+     "$ref": "#/definitions/colour"
+    },
+    "ink": {
+     "$ref": "#/definitions/colour"
+    },
+    "acc": {
+     "$ref": "#/definitions/colour"
+    },
+    "soft": {
+     "$ref": "#/definitions/colour"
+    }
+   },
+   "required": [
+    "bg",
+    "ink",
+    "acc",
+    "soft"
+   ],
+   "description": "A territory's four colours. Ink on bg must be at least 4.5:1 (checked by territory.contract.check)."
+  },
+  "type_face": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "font": {
+     "$ref": "#/definitions/font"
+    },
+    "weight": {
+     "type": "integer",
+     "enum": [
+      400,
+      600,
+      800
+     ]
+    },
+    "italic": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "font",
+    "weight",
+    "italic"
+   ]
+  },
+  "headlines": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "wq": {
+     "type": "string",
+     "maxLength": 120,
+     "minLength": 1
+    },
+    "wl": {
+     "type": "string",
+     "maxLength": 120,
+     "minLength": 1
+    },
+    "sq": {
+     "type": "string",
+     "maxLength": 160,
+     "minLength": 1
+    },
+    "sl": {
+     "type": "string",
+     "maxLength": 120,
+     "minLength": 1
+    }
+   },
+   "required": [
+    "wq",
+    "wl",
+    "sq",
+    "sl"
+   ],
+   "description": "The headline for each corner of the tone x energy dial: wry-quiet, wry-loud, sincere-quiet, sincere-loud."
+  },
+  "dial": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "tone": {
+     "type": "integer",
+     "minimum": 0,
+     "maximum": 100
+    },
+    "energy": {
+     "type": "integer",
+     "minimum": 0,
+     "maximum": 100
+    },
+    "register": {
+     "type": "integer",
+     "minimum": 0,
+     "maximum": 100
+    },
+    "brand": {
+     "type": "integer",
+     "minimum": 0,
+     "maximum": 100
+    }
+   },
+   "required": [
+    "tone",
+    "energy",
+    "register",
+    "brand"
+   ],
+   "description": "wry-sincere, quiet-loud, everyday-cinematic, brand subtle-bold."
+  },
+  "tv_frame": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "scene": {
+     "$ref": "#/definitions/scene"
+    },
+    "text": {
+     "type": "string",
+     "maxLength": 240,
+     "minLength": 1
+    }
+   },
+   "required": [
+    "scene",
+    "text"
+   ]
+  },
+  "radio_line": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "voice": {
+     "type": "string",
+     "pattern": "^[A-Z]{2,8}$"
+    },
+    "text": {
+     "type": "string",
+     "maxLength": 240,
+     "minLength": 1
+    }
+   },
+   "required": [
+    "voice",
+    "text"
+   ]
+  },
+  "world": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "palette": {
+     "$ref": "#/definitions/palette"
+    },
+    "type": {
+     "$ref": "#/definitions/type_face"
+    },
+    "headlines": {
+     "$ref": "#/definitions/headlines"
+    },
+    "lines": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "maxLength": 160,
+      "minLength": 1
+     },
+     "maxItems": 16,
+     "description": "Every other line, at most 16."
+    },
+    "lead": {
+     "type": "string",
+     "maxLength": 160,
+     "minLength": 1,
+     "description": "A line a person led with; overrides the dial."
+    },
+    "starred": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "maxLength": 160,
+      "minLength": 1
+     },
+     "maxItems": 16
+    },
+    "tv": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/tv_frame"
+     },
+     "maxItems": 6
+    },
+    "radio": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/radio_line"
+     },
+     "maxItems": 10
+    },
+    "social": {
+     "type": "string",
+     "maxLength": 240,
+     "minLength": 1
+    },
+    "seat": {
+     "type": "string",
+     "maxLength": 160,
+     "minLength": 1
+    },
+    "crm": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "maxLength": 200,
+      "minLength": 1
+     },
+     "maxItems": 4,
+     "minItems": 1,
+     "description": "Email subject, then body lines."
+    },
+    "music": {
+     "type": "string",
+     "maxLength": 240,
+     "minLength": 1
+    },
+    "sonic": {
+     "type": "string",
+     "maxLength": 240,
+     "minLength": 1
+    },
+    "refs": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "maxLength": 120,
+      "minLength": 1
+     },
+     "maxItems": 6
+    },
+    "not": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "maxLength": 120,
+      "minLength": 1
+     },
+     "maxItems": 6
+    },
+    "scenes": {
+     "type": "object",
+     "additionalProperties": false,
+     "properties": {
+      "story": {
+       "$ref": "#/definitions/scene"
+      },
+      "poster": {
+       "$ref": "#/definitions/scene"
+      },
+      "seat": {
+       "$ref": "#/definitions/scene"
+      },
+      "email": {
+       "$ref": "#/definitions/scene"
+      }
+     },
+     "required": [
+      "story",
+      "poster",
+      "seat",
+      "email"
+     ]
+    },
+    "dial": {
+     "$ref": "#/definitions/dial"
+    },
+    "dial_set": {
+     "$ref": "#/definitions/dial"
+    }
+   },
+   "required": [
+    "palette",
+    "type",
+    "headlines",
+    "lines",
+    "tv",
+    "radio",
+    "social",
+    "seat",
+    "crm",
+    "music",
+    "sonic",
+    "refs",
+    "not",
+    "scenes",
+    "dial"
+   ],
+   "description": "The campaign world a route opens as. Only this block is read by the touchpoint templates."
+  },
+  "check": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "$ref": "#/definitions/id_check"
+    },
+    "kind": {
+     "$ref": "#/definitions/check_kind"
+    },
+    "status": {
+     "$ref": "#/definitions/check_status"
+    },
+    "text": {
+     "type": "string",
+     "maxLength": 300,
+     "minLength": 1
+    },
+    "cite": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/cite"
+     },
+     "maxItems": 6
+    }
+   },
+   "required": [
+    "id",
+    "kind",
+    "status",
+    "text"
+   ],
+   "description": "A check of a developed route against the brief, landscape, evidence and the blind judge."
+  },
+  "marks": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "fit": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 5
+    },
+    "ownable": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 5
+    },
+    "risk": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 5
+    }
+   },
+   "required": [
+    "fit",
+    "ownable",
+    "risk"
+   ],
+   "description": "The three chips shown at greenlight."
+  },
+  "blind": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "total": {
+     "type": "integer",
+     "minimum": 0,
+     "maximum": 35
+    },
+    "of": {
+     "type": "integer",
+     "const": 35
+    },
+    "by_dimension": {
+     "type": "object",
+     "additionalProperties": false,
+     "properties": {
+      "fit": {
+       "type": "integer",
+       "minimum": 0,
+       "maximum": 5
+      },
+      "truth": {
+       "type": "integer",
+       "minimum": 0,
+       "maximum": 5
+      },
+      "ownability": {
+       "type": "integer",
+       "minimum": 0,
+       "maximum": 5
+      },
+      "distinct": {
+       "type": "integer",
+       "minimum": 0,
+       "maximum": 5
+      },
+      "travel": {
+       "type": "integer",
+       "minimum": 0,
+       "maximum": 5
+      },
+      "fame": {
+       "type": "integer",
+       "minimum": 0,
+       "maximum": 5
+      },
+      "assets": {
+       "type": "integer",
+       "minimum": 0,
+       "maximum": 5
+      }
+     }
+    },
+    "advisory": {
+     "type": "boolean",
+     "const": true
+    }
+   },
+   "required": [
+    "total",
+    "of"
+   ],
+   "description": "develop's blind /35 score (engine/territory/ladder.py). Stored; the person sees only the rank."
+  },
+  "proof_case": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "type": "string",
+     "maxLength": 80
+    },
+    "brand": {
+     "type": "string",
+     "maxLength": 80
+    },
+    "title": {
+     "type": "string",
+     "maxLength": 160
+    },
+    "year": {
+     "type": [
+      "integer",
+      "string"
+     ]
+    },
+    "source_url": {
+     "type": "string",
+     "maxLength": 400
+    },
+    "evidence_level": {
+     "type": "string",
+     "maxLength": 120
+    },
+    "badge": {
+     "type": "string",
+     "enum": [
+      "VERIFIED",
+      "UNVERIFIED"
+     ]
+    },
+    "note": {
+     "type": "string",
+     "maxLength": 160
+    }
+   },
+   "required": [
+    "brand",
+    "title",
+    "badge"
+   ],
+   "description": "A precedent case (IPA only in v1)."
+  },
+  "picture": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "$ref": "#/definitions/id_picture"
+    },
+    "touchpoint": {
+     "$ref": "#/definitions/touchpoint"
+    },
+    "scene": {
+     "$ref": "#/definitions/scene"
+    },
+    "kind": {
+     "$ref": "#/definitions/picture_kind"
+    },
+    "image": {
+     "type": "string",
+     "maxLength": 300,
+     "minLength": 1,
+     "description": "Path or asset ref of a frame; a carried picture is the link 'sha256:<64 hex>'."
+    },
+    "sha256": {
+     "type": "string",
+     "pattern": "^[0-9a-f]{64}$",
+     "description": "Content hash of a frame: pick inputs by identity, never by eye."
+    },
+    "rights": {
+     "$ref": "#/definitions/rights"
+    },
+    "prompt": {
+     "type": "string",
+     "maxLength": 400
+    },
+    "gap_reason": {
+     "type": "string",
+     "maxLength": 200,
+     "minLength": 1,
+     "description": "Why there is no picture, in words."
+    },
+    "final": {
+     "type": "boolean",
+     "description": "The one picture a person marked Final for this route's touchpoint. Only a frame can be Final, and it must carry a stated rights choice before the route is sent."
+    },
+    "source": {
+     "type": "string",
+     "maxLength": 200,
+     "minLength": 1,
+     "description": "Where a carried picture came from, in words (the document it arrived from)."
+    }
+   },
+   "required": [
+    "id",
+    "touchpoint",
+    "kind"
+   ],
+   "description": "A picture slot. v1 draws palette sketches; a picture carried from Production or the Deck is a frame by link (image 'sha256:<hex>'), never copied bytes.",
+   "allOf": [
+    {
+     "if": {
+      "properties": {
+       "kind": {
+        "const": "frame"
+       }
+      },
+      "required": [
+       "kind"
+      ]
+     },
+     "then": {
+      "required": [
+       "image",
+       "sha256",
+       "rights"
+      ]
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "kind": {
+        "const": "gap"
+       }
+      },
+      "required": [
+       "kind"
+      ]
+     },
+     "then": {
+      "required": [
+       "gap_reason"
+      ]
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "kind": {
+        "const": "sketch"
+       }
+      },
+      "required": [
+       "kind"
+      ]
+     },
+     "then": {
+      "required": [
+       "scene"
+      ]
+     }
+    }
+   ]
+  },
+  "frame": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "path": {
+     "type": "string",
+     "maxLength": 300,
+     "minLength": 1
+    },
+    "shot": {
+     "type": "string",
+     "maxLength": 60
+    },
+    "model": {
+     "type": "string",
+     "maxLength": 80
+    },
+    "style_version": {
+     "type": "string",
+     "maxLength": 40
+    },
+    "flagged": {
+     "type": "boolean"
+    },
+    "guard_checked": {
+     "type": "boolean"
+    },
+    "approved": {
+     "type": "boolean"
+    },
+    "sha256": {
+     "type": "string",
+     "pattern": "^[0-9a-f]{64}$"
+    },
+    "rights": {
+     "$ref": "#/definitions/rights"
+    },
+    "prompt": {
+     "type": "string",
+     "maxLength": 400
+    }
+   },
+   "required": [
+    "path"
+   ],
+   "description": "Reserved for territories-pictures-frames: engine/territory/visuals/board.py frames_for()."
+  },
+  "visual": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "kind": {
+     "type": "string",
+     "const": "image_prompt"
+    },
+    "prompt": {
+     "type": "string",
+     "maxLength": 500
+    },
+    "status": {
+     "type": "string",
+     "maxLength": 60
+    },
+    "image": {
+     "type": "string",
+     "maxLength": 300
+    }
+   },
+   "required": [
+    "kind",
+    "prompt",
+    "status"
+   ],
+   "description": "Deck Maker's image slot (engine/territory/cards.py deck_visual)."
+  },
+  "origin": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "kind": {
+     "$ref": "#/definitions/origin_kind"
+    },
+    "from": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "pattern": "^(t|cr)_[a-z0-9]{2,12}$"
+     },
+     "maxItems": 2
+    }
+   },
+   "required": [
+    "kind"
+   ]
+  },
+  "territory": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "$ref": "#/definitions/id_territory"
+    },
+    "name": {
+     "type": "string",
+     "maxLength": 80,
+     "minLength": 1
+    },
+    "thought": {
+     "type": "string",
+     "maxLength": 240,
+     "minLength": 1
+    },
+    "why": {
+     "type": "string",
+     "maxLength": 400
+    },
+    "mood": {
+     "type": "string",
+     "maxLength": 200
+    },
+    "references": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "maxLength": 200
+     },
+     "maxItems": 6
+    },
+    "risks": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "maxLength": 300,
+      "minLength": 1
+     },
+     "maxItems": 8
+    },
+    "sketch": {
+     "type": "string",
+     "maxLength": 240,
+     "minLength": 1
+    },
+    "tension": {
+     "type": "string",
+     "maxLength": 400
+    },
+    "tier": {
+     "$ref": "#/definitions/tier"
+    },
+    "assumes": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "maxLength": 40
+     },
+     "maxItems": 12
+    },
+    "proof_cases": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/proof_case"
+     },
+     "maxItems": 2
+    },
+    "ready": {
+     "type": "boolean"
+    },
+    "vote": {
+     "$ref": "#/definitions/vote"
+    },
+    "frames": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/frame"
+     },
+     "maxItems": 8
+    },
+    "visual": {
+     "$ref": "#/definitions/visual"
+    },
+    "band": {
+     "$ref": "#/definitions/band"
+    },
+    "distance": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": 1
+    },
+    "crew": {
+     "$ref": "#/definitions/id_crew"
+    },
+    "origin": {
+     "$ref": "#/definitions/origin"
+    },
+    "state": {
+     "$ref": "#/definitions/territory_state"
+    },
+    "status": {
+     "$ref": "#/definitions/territory_status"
+    },
+    "kill_reason": {
+     "type": "string",
+     "maxLength": 300,
+     "minLength": 1
+    },
+    "evidence": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/cite"
+     },
+     "maxItems": 12
+    },
+    "marks": {
+     "$ref": "#/definitions/marks"
+    },
+    "blind": {
+     "$ref": "#/definitions/blind"
+    },
+    "rank": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 32,
+     "description": "The blind judge's order, shown instead of the /35 score."
+    },
+    "world": {
+     "$ref": "#/definitions/world"
+    },
+    "checks": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/check"
+     },
+     "maxItems": 8
+    },
+    "pictures": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/picture"
+     },
+     "maxItems": 12
+    },
+    "theme": {
+     "type": "string",
+     "maxLength": 40,
+     "minLength": 1,
+     "description": "The idea group in a few words (what the card is about), shown as a chip. Optional: absent when the engine had none."
+    }
+   },
+   "required": [
+    "id",
+    "name",
+    "thought",
+    "why",
+    "mood",
+    "references",
+    "risks",
+    "sketch",
+    "tier",
+    "band",
+    "distance",
+    "crew",
+    "state",
+    "status",
+    "evidence"
+   ],
+   "description": "A route. Superset of Deck Maker's stage-d card: id, name, thought, why, mood, references, risks, sketch.",
+   "allOf": [
+    {
+     "if": {
+      "properties": {
+       "state": {
+        "const": "developed"
+       }
+      },
+      "required": [
+       "state"
+      ]
+     },
+     "then": {
+      "required": [
+       "world",
+       "checks",
+       "marks",
+       "pictures"
+      ]
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "status": {
+        "const": "killed"
+       }
+      },
+      "required": [
+       "status"
+      ]
+     },
+     "then": {
+      "required": [
+       "kill_reason"
+      ]
+     }
+    }
+   ]
+  },
+  "greenlit": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "territory_id": {
+     "$ref": "#/definitions/id_territory"
+    },
+    "by": {
+     "type": "string",
+     "maxLength": 80,
+     "minLength": 1,
+     "description": "A person's name, or `engine` for work the engine did itself."
+    },
+    "at": {
+     "type": "string",
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$",
+     "description": "UTC time, ISO 8601."
+    },
+    "rests_on_derived": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/id_finding"
+     },
+     "maxItems": 8,
+     "description": "Derived findings this route rests on."
+    },
+    "derived_resolution": {
+     "$ref": "#/definitions/derived_resolution"
+    },
+    "note": {
+     "type": "string",
+     "maxLength": 300
+    },
+    "sensitive_review": {
+     "$ref": "#/definitions/review_status"
+    }
+   },
+   "required": [
+    "territory_id",
+    "by",
+    "at",
+    "rests_on_derived",
+    "derived_resolution"
+   ],
+   "description": "A route a person greenlit. Blocked while rests_on_derived is non-empty and derived_resolution is pending."
+  },
+  "ask": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "$ref": "#/definitions/id_ask"
+    },
+    "kind": {
+     "$ref": "#/definitions/ask_kind"
+    },
+    "territory_id": {
+     "$ref": "#/definitions/id_territory"
+    },
+    "text": {
+     "type": "string",
+     "maxLength": 300,
+     "minLength": 1
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "open",
+      "answered"
+     ]
+    },
+    "answer": {
+     "$ref": "#/definitions/ask_answer"
+    },
+    "by": {
+     "type": "string",
+     "maxLength": 80,
+     "minLength": 1,
+     "description": "A person's name, or `engine` for work the engine did itself."
+    },
+    "at": {
+     "type": "string",
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$",
+     "description": "UTC time, ISO 8601."
+    },
+    "ids": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/cite"
+     },
+     "maxItems": 8
+    }
+   },
+   "required": [
+    "id",
+    "kind",
+    "text",
+    "status"
+   ],
+   "description": "A question the Booth asks a person. Asked only for derived evidence at greenlight, near a mandatory, or a sensitive review."
+  },
+  "action": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "$ref": "#/definitions/id_action"
+    },
+    "agent": {
+     "$ref": "#/definitions/agent_key"
+    },
+    "kind": {
+     "$ref": "#/definitions/action_kind"
+    },
+    "text": {
+     "type": "string",
+     "maxLength": 300,
+     "minLength": 1
+    },
+    "at": {
+     "type": "string",
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$",
+     "description": "UTC time, ISO 8601."
+    },
+    "territory_ids": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/id_territory"
+     },
+     "maxItems": 8
+    },
+    "undone": {
+     "type": "boolean"
+    },
+    "undone_by": {
+     "type": "string",
+     "maxLength": 80,
+     "minLength": 1,
+     "description": "A person's name, or `engine` for work the engine did itself."
+    }
+   },
+   "required": [
+    "id",
+    "agent",
+    "kind",
+    "text",
+    "at",
+    "undone"
+   ],
+   "description": "Something the engine did by itself. Always has Undo."
+  },
+  "lookup": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "$ref": "#/definitions/id_lookup"
+    },
+    "q": {
+     "type": "string",
+     "maxLength": 240,
+     "minLength": 1
+    },
+    "status": {
+     "$ref": "#/definitions/lookup_status"
+    },
+    "by": {
+     "type": "string",
+     "maxLength": 160
+    },
+    "found": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/id_find"
+     },
+     "maxItems": 12
+    },
+    "at": {
+     "type": "string",
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$",
+     "description": "UTC time, ISO 8601."
+    },
+    "ok_by": {
+     "type": "string",
+     "maxLength": 160,
+     "minLength": 1,
+     "description": "The person who said OK to this look-up (the card is asked first; nothing is looked up without it)."
+    }
+   },
+   "required": [
+    "id",
+    "q",
+    "status",
+    "by"
+   ],
+   "description": "A look-up through the research port. No price here: counts only (run.calls)."
+  },
+  "note": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "$ref": "#/definitions/id_note"
+    },
+    "agent": {
+     "$ref": "#/definitions/agent_key"
+    },
+    "text": {
+     "type": "string",
+     "maxLength": 400,
+     "minLength": 1
+    },
+    "at": {
+     "type": "string",
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$",
+     "description": "UTC time, ISO 8601."
+    },
+    "cite": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/cite"
+     },
+     "maxItems": 6
+    }
+   },
+   "required": [
+    "id",
+    "agent",
+    "text",
+    "at"
+   ],
+   "description": "A note on the record, shown in the Booth."
+  },
+  "journey": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "key": {
+     "$ref": "#/definitions/touchpoint"
+    },
+    "day": {
+     "type": "string",
+     "maxLength": 40,
+     "minLength": 1
+    },
+    "where": {
+     "type": "string",
+     "maxLength": 80,
+     "minLength": 1
+    }
+   },
+   "required": [
+    "key",
+    "day",
+    "where"
+   ],
+   "description": "One stop on the weekend journey; project-level, later fed from the media plan."
+  },
+  "spread": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "threshold": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": 1
+    },
+    "close": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+       "a": {
+        "$ref": "#/definitions/id_territory"
+       },
+       "b": {
+        "$ref": "#/definitions/id_territory"
+       },
+       "distance": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+       }
+      },
+      "required": [
+       "a",
+       "b",
+       "distance"
+      ]
+     },
+     "maxItems": 16,
+     "description": "Pairs of routes closer than the threshold."
+    },
+    "gaps": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+       "angle": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 360
+       },
+       "text": {
+        "type": "string",
+        "maxLength": 200,
+        "minLength": 1
+       }
+      },
+      "required": [
+       "angle",
+       "text"
+      ]
+     },
+     "maxItems": 6,
+     "description": "Directions nobody explored."
+    }
+   },
+   "required": [
+    "threshold",
+    "close",
+    "gaps"
+   ],
+   "description": "The Review agent's spread check."
+  },
+  "send": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "$ref": "#/definitions/id_send"
+    },
+    "to": {
+     "$ref": "#/definitions/send_to"
+    },
+    "territory_ids": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/id_territory"
+     },
+     "maxItems": 32,
+     "minItems": 1
+    },
+    "not_chosen": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/id_territory"
+     },
+     "maxItems": 32
+    },
+    "by": {
+     "type": "string",
+     "maxLength": 80,
+     "minLength": 1,
+     "description": "A person's name, or `engine` for work the engine did itself."
+    },
+    "at": {
+     "type": "string",
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$",
+     "description": "UTC time, ISO 8601."
+    },
+    "status": {
+     "$ref": "#/definitions/send_status"
+    }
+   },
+   "required": [
+    "id",
+    "to",
+    "territory_ids",
+    "not_chosen",
+    "by",
+    "at",
+    "status"
+   ],
+   "description": "A hand-off. Routes not chosen travel too. production-tool reads `not_built` until production-spinoff merges."
+  },
+  "approval": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "by": {
+     "type": "string",
+     "maxLength": 80,
+     "minLength": 1,
+     "description": "A person's name, or `engine` for work the engine did itself."
+    },
+    "at": {
+     "type": "string",
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$",
+     "description": "UTC time, ISO 8601."
+    },
+    "decision": {
+     "$ref": "#/definitions/gate_kind"
+    },
+    "note": {
+     "type": "string",
+     "maxLength": 300
+    },
+    "inputs": {
+     "type": "string",
+     "pattern": "^[0-9a-f]{12}$",
+     "description": "What the person was looking at when they said yes: a short hash of the inputs of this gate (engine/territory/gates.py inputs_hash). An approval or review counts only while it equals the current hash, so one given for other inputs never passes this gate."
+    }
+   },
+   "required": [
+    "by",
+    "at"
+   ]
+  },
+  "blocked_by": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "kind": {
+     "$ref": "#/definitions/blocked_kind"
+    },
+    "ids": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/id_territory"
+     },
+     "maxItems": 32
+    },
+    "text": {
+     "type": "string",
+     "maxLength": 300,
+     "minLength": 1
+    }
+   },
+   "required": [
+    "kind",
+    "text"
+   ],
+   "description": "Why a gate cannot be passed yet, in words."
+  },
+  "gate": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "$ref": "#/definitions/gate_id"
+    },
+    "n": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 2
+    },
+    "of": {
+     "type": "integer",
+     "const": 2
+    },
+    "dex": {
+     "type": "string",
+     "maxLength": 400
+    },
+    "checks": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+       "ok": {
+        "type": "boolean"
+       },
+       "text": {
+        "type": "string",
+        "maxLength": 200,
+        "minLength": 1
+       }
+      },
+      "required": [
+       "ok",
+       "text"
+      ]
+     },
+     "maxItems": 8
+    },
+    "blocked_by": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/blocked_by"
+     },
+     "maxItems": 8
+    },
+    "agent": {
+     "$ref": "#/definitions/agent_key"
+    }
+   },
+   "required": [
+    "id",
+    "n",
+    "of"
+   ],
+   "description": "The open gate. Nothing past it runs until a person approves."
+  },
+  "run": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "state": {
+     "type": "string",
+     "enum": [
+      "draft",
+      "building",
+      "gate",
+      "done",
+      "failed"
+     ]
+    },
+    "stage": {
+     "$ref": "#/definitions/stage_id"
+    },
+    "stages": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+       "id": {
+        "$ref": "#/definitions/stage_id"
+       },
+       "name": {
+        "type": "string",
+        "maxLength": 60,
+        "minLength": 1
+       },
+       "sub": {
+        "type": "string",
+        "maxLength": 160
+       },
+       "status": {
+        "type": "string",
+        "enum": [
+         "done",
+         "now",
+         "next",
+         "failed"
+        ]
+       }
+      },
+      "required": [
+       "id",
+       "name",
+       "status"
+      ]
+     },
+     "maxItems": 6
+    },
+    "gate": {
+     "oneOf": [
+      {
+       "$ref": "#/definitions/gate"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    },
+    "approvals": {
+     "type": "object",
+     "additionalProperties": false,
+     "properties": {
+      "pick": {
+       "$ref": "#/definitions/approval"
+      },
+      "greenlight": {
+       "$ref": "#/definitions/approval"
+      }
+     }
+    },
+    "decisions": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/decision_in_doc"
+     },
+     "maxItems": 64
+    },
+    "gate_requests": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+       "gate": {
+        "$ref": "#/definitions/gate_id"
+       },
+       "kind": {
+        "type": "string",
+        "enum": [
+         "edit",
+         "retry"
+        ]
+       },
+       "at": {
+        "type": "string",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$",
+        "description": "UTC time, ISO 8601."
+       },
+       "status": {
+        "type": "string",
+        "enum": [
+         "waiting"
+        ]
+       }
+      },
+      "required": [
+       "gate",
+       "kind"
+      ]
+     },
+     "maxItems": 16
+    },
+    "agent": {
+     "type": "object",
+     "additionalProperties": false,
+     "properties": {
+      "key": {
+       "$ref": "#/definitions/agent_key"
+      },
+      "activity": {
+       "type": "string",
+       "enum": [
+        "work",
+        "write",
+        "think",
+        "read",
+        "check",
+        "human",
+        "error",
+        "complete",
+        "waiting"
+       ]
+      },
+      "step_index": {
+       "type": "integer",
+       "minimum": 0
+      },
+      "step_total": {
+       "type": "integer",
+       "minimum": 0
+      },
+      "to": {
+       "$ref": "#/definitions/agent_key"
+      },
+      "slow": {
+       "type": "boolean"
+      }
+     },
+     "required": [
+      "key",
+      "activity"
+     ]
+    },
+    "calls": {
+     "type": "object",
+     "additionalProperties": false,
+     "properties": {
+      "model": {
+       "type": "integer",
+       "minimum": 0
+      },
+      "lookups": {
+       "type": "integer",
+       "minimum": 0
+      }
+     },
+     "required": [
+      "model",
+      "lookups"
+     ],
+     "description": "Counts only. Prices live in the decision history, never here."
+    },
+    "error": {
+     "type": "object",
+     "additionalProperties": false,
+     "properties": {
+      "stage": {
+       "$ref": "#/definitions/stage_id"
+      },
+      "message": {
+       "type": "string",
+       "maxLength": 400,
+       "minLength": 1,
+       "description": "In words a person can read: never a field name or a raw status."
+      },
+      "retryable": {
+       "type": "boolean"
+      },
+      "refused": {
+       "type": "array",
+       "items": {
+        "type": "string",
+        "maxLength": 300,
+        "minLength": 1
+       },
+       "maxItems": 8,
+       "description": "What the host refused, in words."
+      }
+     },
+     "required": [
+      "stage",
+      "message"
+     ]
+    },
+    "done": {
+     "type": "object",
+     "additionalProperties": false,
+     "properties": {
+      "summary": {
+       "type": "string",
+       "maxLength": 300
+      },
+      "routes": {
+       "type": "integer",
+       "minimum": 0
+      },
+      "greenlit": {
+       "type": "integer",
+       "minimum": 0
+      },
+      "sent": {
+       "type": "integer",
+       "minimum": 0
+      }
+     }
+    }
+   },
+   "required": [
+    "state"
+   ],
+   "description": "Mirrors deck-maker's run block so gates behave the same. No cost member: costs are for the Napkin team only."
+  },
+  "review": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "sensitive": {
+     "type": "object",
+     "additionalProperties": false,
+     "properties": {
+      "required": {
+       "type": "boolean"
+      },
+      "status": {
+       "$ref": "#/definitions/review_status"
+      },
+      "by": {
+       "type": "string",
+       "maxLength": 80,
+       "minLength": 1,
+       "description": "A person's name, or `engine` for work the engine did itself."
+      },
+      "at": {
+       "type": "string",
+       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$",
+       "description": "UTC time, ISO 8601."
+      },
+      "inputs": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{12}$",
+       "description": "What the person was looking at when they said yes: a short hash of the inputs of this gate (engine/territory/gates.py inputs_hash). An approval or review counts only while it equals the current hash, so one given for other inputs never passes this gate."
+      }
+     },
+     "required": [
+      "required",
+      "status"
+     ],
+     "description": "Safe-messaging categories need a person's review before greenlit routes are sent."
+    }
+   },
+   "description": "Reviews that gate a send."
+  },
+  "focus": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "sources": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/source_play"
+     },
+     "maxItems": 1000,
+     "description": "One per brief field, research pin and finding the crew may quote. Generous on purpose (owner rule: a hand-off carries the full upstream; Research has no pin cap): nothing is dropped."
+    },
+    "insights": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/insight"
+     },
+     "maxItems": 25,
+     "description": "At most 25 insights (v1)."
+    }
+   },
+   "required": [
+    "sources",
+    "insights"
+   ],
+   "description": "Step 1: what the crew may use, and what it will explore."
+  }
+ }
+}

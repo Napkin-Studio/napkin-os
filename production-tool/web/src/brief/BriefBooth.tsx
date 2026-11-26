@@ -22,6 +22,7 @@ export function BriefBooth({ briefId, onClose, src = OS }: { briefId: string; on
   const b = doc.briefs?.[briefId]
   if (!b) return null
   const v = b.source.version
+  const route = b.route
   const lines = spineLines(b.spine, b.confidential)
   const feeds = briefFeeds(doc, briefId)
   const after = notice ? projectSpine(notice.read.data).spine : null
@@ -43,11 +44,11 @@ export function BriefBooth({ briefId, onClose, src = OS }: { briefId: string; on
     items ? <ul>{items.map((x, i) => <li key={i}>{x}</li>)}</ul> : <span>{text}</span>
   return (
     <div className="bb" data-brief-booth={briefId}>
-      <div className="sp-crumb"><button type="button" onClick={onClose}>← Canvas</button><span>›</span><b>Brief</b>{notice && <><span>›</span><b>v{v} → v{notice.read.version}</b></>}
+      <div className="sp-crumb"><button type="button" onClick={onClose}>← Canvas</button><span>›</span><b>{route ? 'Territories' : 'Brief'}</b>{notice && <><span>›</span><b>v{v} → v{notice.read.version}</b></>}
         <button type="button" className="x" onClick={onClose} title="Back (Esc)" aria-label="Close the brief">×</button></div>
-      <div className="bb-src"><span className="tab" aria-hidden="true">BRIEF</span>
-        <span className="t"><b>{b.title || 'Brief'}</b><small>Brief Maker · v{v} · frozen here</small></span>
-        <a className="sp-btn" href={src.openUrl(b.source.document_id)} target="_blank" rel="noreferrer">Open in Brief Maker ↗</a></div>
+      <div className="bb-src"><span className="tab" aria-hidden="true">{route ? 'TERRITORIES' : 'BRIEF'}</span>
+        <span className="t"><b>{route ? `${route.name}` : b.title || 'Brief'}</b><small>{route ? `Territories · ${b.title} · v${route.version ?? 1} · frozen here` : `Brief Maker · v${v} · frozen here`}</small></span>
+        <a className="sp-btn" href={src.openUrl(b.source.document_id)} target="_blank" rel="noreferrer">{route ? 'Open in Territories ↗' : 'Open in Brief Maker ↗'}</a></div>
       {notice && after ? (
         <div className="bb-sec">
           <div className="bb-changed" role="status"><b>{notice.text}</b><span className="bb-hint">{notice.detail}</span></div>
@@ -68,7 +69,7 @@ export function BriefBooth({ briefId, onClose, src = OS }: { briefId: string; on
         </div>
       ) : (
         <div className="bb-sec">
-          <h4>The spine <span className="r">read-only · ⓘ shows where a line came from</span></h4>
+          <h4>{route ? 'The brief it carries' : 'The spine'} <span className="r">read-only · ⓘ shows where a line came from</span></h4>
           {lines.map((l) => (
             <div key={l.part} className="spine-row"><span className="lbl">{l.label}</span>
               {l.confidential ? <span className="faint">Confidential: kept out of Napkin’s own records</span> : show(l.text, l.items)}
@@ -86,7 +87,7 @@ export function BriefBooth({ briefId, onClose, src = OS }: { briefId: string; on
       </div>
       {said && <p className="bb-hint" role="status">{said}</p>}
       <div className="bb-acts">
-        <button type="button" className="sp-btn" disabled={busy} onClick={() => void check()}>Check for a newer version</button>
+        {!route && <button type="button" className="sp-btn" disabled={busy} onClick={() => void check()}>Check for a newer version</button>}
         {feeds.length > 0 && <button type="button" className="sp-btn" disabled={busy} onClick={() => void unlink()}>Unlink</button>}
       </div>
     </div>
