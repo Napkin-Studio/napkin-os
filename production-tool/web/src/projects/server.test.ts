@@ -251,6 +251,33 @@ describe('Home lists the relay\'s projects with this browser\'s', () => {
   })
 })
 
+describe('the tidy-up of blank films (UAT acceptance A43: an untouched "Untitled project" left the library)', () => {
+  it('an untouched new film goes to the Trash; one filled in from another browser meanwhile is kept', async () => {
+    forgetSent()
+    const fake = new FakeRelay()
+    const laptop = browser(fake)
+    const blank = await laptop.shell.newProject()
+    await laptop.shell.goHome()
+    expect(fake.projects.get(blank.id)!.trashed).toBeTruthy() // intended (owner 2026-11-18), and restorable
+    expect(laptop.index.get(blank.id)).toBeUndefined()
+
+    // Open and untouched here, while the desktop fills it in and saves.
+    const filled = await laptop.shell.newProject()
+    const desktop = browser(fake)
+    const row = (await desktop.shell.serverProjects()).find((r) => r.id === filled.id)!
+    await desktop.shell.openFromServer(row)
+    const s = services(desktop.shell)
+    await seedStages(s.doc)
+    await s.clan!.flush()
+    await s.clan!.clan.mirrorNow('manual')
+    // Blank here only: leaving it keeps it, in the library and on this browser's list.
+    await laptop.shell.goHome()
+    await laptop.shell.pruneDrafts()
+    expect(fake.projects.get(filled.id)!.trashed).toBeUndefined()
+    expect(laptop.index.get(filled.id)).toBeDefined()
+  })
+})
+
 describe('Move to Trash and its Undo (UAT round 4 F13)', () => {
   it('the film leaves the library at once; Undo brings it back to the library', async () => {
     forgetSent()

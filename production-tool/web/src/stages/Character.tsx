@@ -78,7 +78,7 @@ import { choiceToSend, modelChoicesFor, modelWhere } from '../capabilities'
 import { lastWorkedModel } from '../jobs/follow'
 import { ModelPick } from '../ui/ModelPick'
 import { isActive } from '../jobs/runner'
-import { cleanKey, cleanVariant, mentions, nameOf, nameProblem, refByName, wholeKeys } from '../lib/names'
+import { cleanKey, DEFAULT_VIEW, mentions, nameOf, nameProblem, refByName, viewFor, VIEW_ROLES, wholeKeys } from '../lib/names'
 import { TOUCH_OR_PHONE, useColorScheme, useFloating, useMedia } from '../ui/hooks'
 import type { Anchor } from '../lib/place'
 import { JobNode } from '../ui/JobNode'
@@ -1652,11 +1652,15 @@ function NamePopover({ ctrl, nodeId, current, presetVariant, at, onClose }: {
   const [error, setError] = useState<string | null>(null)
   const [brand, setBrand] = useState<BrandPayload>({ swatches: current?.swatches, font: current?.font, rule: current?.rule })
   const ck = cleanKey(key)
-  const cv = cleanVariant(variant)
   const role: RefRole = picked ?? guessRole(ck, purpose)
   const isNewKey = !!ck && !keyNamed(doc, ck)
   // The role the ref will hold: the one picked for a new key, else its key's (UAT round 2 R2-1: a brand role needs its payload).
   const holds = (isNewKey ? role : (keyNamed(doc, ck)?.role as RefRole | undefined)) ?? role
+  // What this one shows matters where a name stands for the whole of something led by its front (a character, a
+  // product): there it is asked for, and why. Elsewhere (a logo, a place…) it is optional, "main" when left empty
+  // (UAT round 4 A20: Save stayed off for a logo until "front, laughing…" was filled, with no reason given).
+  const viewNeeded = VIEW_ROLES.has(holds)
+  const cv = viewFor(holds, variant)
   const brandRole = isBrandRole(holds) ? holds : undefined
   const needs = brandRole ? payloadMissing(brandRole, brand) : undefined
   const asset = imageOf(ctrl.nodeEl(nodeId))?.asset ?? undefined
@@ -1664,7 +1668,8 @@ function NamePopover({ ctrl, nodeId, current, presetVariant, at, onClose }: {
   const movesName = taken && taken.node !== nodeId
   // Naming into a key that is already there, other than this picture's own (R3-8).
   const joinsKey = !!ck && !isNewKey && current?.key !== ck
-  const problem = ck || cv ? nameProblem(ck, cv) : null
+  const problem = ck || variant.trim() ? nameProblem(ck, cv || 'x') : null
+  const waitsForView = !!ck && !cv && viewNeeded ? `Say what this picture of the ${roleWord(holds)} shows (front, side, laughing…): its views are named, and @${ck} leads with its front.` : undefined
   const save = () => {
     try {
       ctrl.name(nodeId, ck, cv, role, brandRole ? payloadFor(brandRole, brand) : undefined)
@@ -1680,7 +1685,7 @@ function NamePopover({ ctrl, nodeId, current, presetVariant, at, onClose }: {
       <div className="row" style={{ gap: 6, marginTop: 8 }}>
         <input className="input" list="napkin-keys" aria-label="Character or object" placeholder="maya" value={key} onChange={(e) => setKey(e.target.value)} onKeyDown={(e) => e.stopPropagation()} autoFocus />
         <span className="mono">_</span>
-        <input className="input" aria-label="What this one shows" placeholder="front, laughing…" value={variant} onChange={(e) => setVariant(e.target.value)}
+        <input className="input" aria-label={viewNeeded ? 'What this one shows' : 'What this one shows (optional)'} placeholder={viewNeeded ? 'front, laughing…' : `optional · ${DEFAULT_VIEW}`} value={variant} onChange={(e) => setVariant(e.target.value)}
           onKeyDown={(e) => {
             e.stopPropagation()
             if (e.key === 'Enter' && !problem && ck && cv) save()
@@ -1709,10 +1714,11 @@ function NamePopover({ ctrl, nodeId, current, presetVariant, at, onClose }: {
       {ck && cv && <div className="mono" style={{ marginTop: 8 }}>@{ck}_{cv}</div>}
       {movesName && <div className="faint" style={{ fontSize: 12, marginTop: 4 }}>Another image is @{ck}_{cv}. Saving moves the name here, and what was made from the other one is marked out of date.</div>}
       {(problem || error) && <div role="alert" style={{ color: 'var(--danger)', fontSize: 12.5, fontWeight: 600, marginTop: 6 }}>{problem ?? error}</div>}
+      {!problem && !error && waitsForView && <div className="faint" role="note" style={{ fontSize: 12.5, marginTop: 6 }}>{waitsForView}</div>}
       <div className="row" style={{ marginTop: 10 }}>
         <span className="spacer" />
         <button className="btn sm ghost" onClick={onClose}>Cancel</button>
-        <button className="btn sm primary" disabled={!ck || !cv || !!problem || !!needs} title={needs} onClick={save}>{movesName ? 'Move the name here' : joinsKey ? `Add to @${ck} as ${roleWord(holds)}` : 'Save'}</button>
+        <button className="btn sm primary" disabled={!ck || !cv || !!problem || !!needs} title={needs ?? waitsForView} onClick={save}>{movesName ? 'Move the name here' : joinsKey ? `Add to @${ck} as ${roleWord(holds)}` : 'Save'}</button>
       </div>
     </Floating>
   )
