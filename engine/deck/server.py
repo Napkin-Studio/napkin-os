@@ -51,7 +51,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 from . import inputs as inputs_mod
-from . import profiles, prod_picker, spec
+from . import profiles, prod_picker, spec, storyline_edit
 from . import run_deck, run_state as rs
 
 #: The stage files each gate's stage writes, and what a replay copies in for each step. Order is the pipeline's.
@@ -216,6 +216,12 @@ def validate_request(body: dict, settings: Settings) -> dict:
         d = (a or {}).get("decision", "approve")
         if d != "approve":
             raise Refused(400, "not_supported", f"a '{d}' decision at the {gate} gate is recorded but the engine cannot act on it yet: only approve goes on")
+    se_edit = body.get("storyline_edit")
+    if se_edit is not None:   # deck-beat-editor: the person's storyline, applied on the storyline's approval (apply_storyline)
+        try:
+            se_edit = storyline_edit.check(se_edit)
+        except storyline_edit.EditRefused as e:
+            raise Refused(400, "bad_request", f"storyline_edit: {e}") from None
     size = picked_size(body)
     prof = profiles.load(picked_type(inp)) if picked_type(inp) else profiles.default_for_kind(kind)
     return {"size": size, "doc": doc, "inputs": inp, "prompt": prompt, "kind": kind, "format": inp.get("format", "pitch"), "mode": mode,
@@ -223,7 +229,7 @@ def validate_request(body: dict, settings: Settings) -> dict:
             "approvals": approvals, "render": body.get("render", True) is not False, "marks": marks,
             "review": body.get("review") if isinstance(body.get("review"), dict) else {}, "approver": str(body.get("approver") or ""),
             "production_upstream": production_upstream(body), "production_assets": production_assets(body), "members": members_of(body),
-            "brief_upstream": brief_upstream(body)}
+            "brief_upstream": brief_upstream(body), "storyline_edit": se_edit}
 
 
 #: Where a brief's client field stops naming the client and starts describing the launch: "Copperell Home Ltd is launching Copperell
@@ -359,6 +365,7 @@ class Server:
             present = {p.name for p in d.stages.glob("*.json")}
             self.check_type_change(d, req, present)   # deck-types: before anything runs or spends
             until, held = plan_segment(req["kind"], present, req["approvals"], req.get("type_stages"))
+            self.apply_storyline(d, req, present)
             self.apply_pick(d, req, present)
             if held:
                 d.state, d.held, d.current = "gate", held, None
@@ -585,6 +592,35 @@ class Server:
                 src = self.s.replay / fn
                 if src.exists() and not (d.stages / fn).exists():
                     shutil.copyfile(src, d.stages / fn)
+
+    def apply_storyline(self, d: Doc, req: dict, present: set[str]) -> None:
+        """The person's storyline (deck-beat-editor) goes into stage b once they approve gate 1, before stage c runs: no model is called,
+        in a live run and a replay alike (a replay's territories and idea were recorded from the agents' storyline, and it says so). The
+        agents' file is kept once as b_storyline.agents.json. An edit made against another storyline is refused before anything runs."""
+        edit = req.get("storyline_edit")
+        yes = req["approvals"].get("storyline")
+        if not edit or not yes or yes.get("decision", "approve") != "approve" or "b_storyline.json" not in present:
+            return
+        path = d.stages / "b_storyline.json"
+        raw = path.read_bytes()
+        b = json.loads(raw)
+        if storyline_edit.applied(b, edit):
+            return
+        if "c_territories.json" in present:   # the run is past gate 1 on the agents' storyline: never rewritten under later stages
+            d.notices.append("Your storyline edit came after the territories were written, so it was not applied. Build again from Start to use it.")
+            return
+        try:
+            new = storyline_edit.apply(b, edit, storyline_edit.sha_bytes(raw))
+        except storyline_edit.StaleEdit as e:
+            raise Refused(409, "storyline_changed", f"The storyline changed since you edited it: {e}") from None
+        except storyline_edit.EditRefused as e:
+            raise Refused(400, "bad_request", f"storyline_edit: {e}") from None
+        keep = d.stages / "b_storyline.agents.json"
+        if not keep.exists():
+            keep.write_bytes(raw)
+        path.write_text(json.dumps(new, indent=1, ensure_ascii=False))
+        if req["mode"] != "live":
+            d.notices.append("Replay: your storyline shapes the deck's story slides. The recorded territories and idea were written from the agents' storyline.")
 
     def apply_pick(self, d: Doc, req: dict, present: set[str]) -> None:
         """A territory picked at gate 2 goes into stage c before stage d runs. A replay cannot rewrite stage d: it says so."""

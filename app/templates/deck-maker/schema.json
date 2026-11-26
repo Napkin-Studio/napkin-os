@@ -375,14 +375,60 @@
                       "brief",
                       "research",
                       "proposal",
-                      "placeholder"
+                      "placeholder",
+                      "yours"
                     ]
+                  },
+                  "key": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "deck-beat-editor: the storyline section this beat is (b_storyline.json); null for a beat the person added."
+                  },
+                  "words": {
+                    "enum": [
+                      "agents",
+                      "yours"
+                    ],
+                    "description": "Whose words the beat is in: the agents', or the person's once they reworded or added it."
+                  },
+                  "carries": {
+                    "type": "array",
+                    "description": "The mandatories this beat cites, and where each is still said if the beat is taken out.",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "text",
+                        "to"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "text": {
+                          "type": "string"
+                        },
+                        "to": {
+                          "type": "string"
+                        }
+                      }
+                    }
                   }
                 }
               }
             },
             "more_beats": {
               "type": "integer"
+            },
+            "editable": {
+              "type": "boolean",
+              "description": "deck-beat-editor: the beats can be reworded, reordered, taken out and added to before Approve (an investor deck's story cannot yet)."
+            },
+            "base": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$",
+              "description": "deck-beat-editor: the sha256 of the storyline the beats are from; a storyline_edit names it."
             },
             "checks": {
               "type": "array",
@@ -735,6 +781,60 @@
                   "waiting"
                 ]
               }
+            }
+          }
+        },
+        "storyline_edit": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "deck-beat-editor: the person's storyline at gate 1, written by the app as they edit (null: the agents' version). The engine applies it to stage b when gate 1 is approved, before the territories are written; no model is called.",
+          "required": [
+            "base",
+            "beats"
+          ],
+          "properties": {
+            "base": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "beats": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 20,
+              "items": {
+                "type": "object",
+                "required": [
+                  "key",
+                  "title"
+                ],
+                "properties": {
+                  "key": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  },
+                  "words": {
+                    "enum": [
+                      "agents",
+                      "yours"
+                    ]
+                  }
+                }
+              }
+            },
+            "by": {
+              "type": "string"
+            },
+            "at": {
+              "type": "string"
             }
           }
         },

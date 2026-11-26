@@ -166,6 +166,40 @@ label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:
 .beat{display:flex;gap:16px;padding:13px 20px;border-bottom:1px solid var(--line-soft);align-items:flex-start}
 .beat .n{font-family:var(--f-mono);font-size:12px;color:var(--ink3);width:22px;padding-top:2px}
 .dex .dexp{margin-left:auto;flex:none}
+/* gate 1: the person edits the storyline's beats (deck-beat-editor): words in place (Brief Maker's .ined), move, take out, add */
+.beat .bt{display:block;width:100%;text-align:left;border:0;background:none;padding:0;margin:0;color:var(--ink);font:inherit;font-size:15px;font-weight:600;line-height:1.35;cursor:text;border-radius:4px}
+.beat .bt:hover{background:var(--tool-soft)}
+.beat .src{font-family:var(--f-mono);font-size:11.5px;color:var(--ink3);margin-top:3px}
+.beat .src.mine{color:var(--tool-ink)}
+.beat.drag{opacity:.45}
+.beat.over{box-shadow:inset 0 2px 0 var(--tool)}
+.beat .tools{display:flex;gap:2px;align-items:center;flex:none;opacity:.55}
+.beat:hover .tools,.beat:focus-within .tools{opacity:1}
+.beat .ib{width:28px;height:28px;border-radius:6px;border:1px solid transparent;background:none;color:var(--ink2);font-size:14px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0}
+.beat .ib:hover:not(:disabled){border-color:var(--line);background:var(--soft)}
+.beat .ib:disabled{opacity:.3;cursor:not-allowed}
+.beat .grip{cursor:grab;color:var(--ink3);font-size:13px;letter-spacing:-2px;padding:0 4px}
+.ined{outline:1.5px solid color-mix(in srgb,var(--tool) 75%,transparent);outline-offset:4px;border-radius:1px;background:var(--tool-soft);white-space:pre-wrap;overflow-wrap:anywhere;min-height:1.5em;cursor:text;caret-color:var(--tool);font-size:15px;font-weight:600;line-height:1.35}
+.ined:focus{outline-width:2px}
+.ined:empty::before{content:attr(data-ph);color:var(--ink3)}
+.edbar{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.edbar .k{font-family:var(--f-mono);font-size:11px;color:var(--ink3)}
+.edbar .err{font-size:12px;color:var(--warn-fg)}
+.addrow{display:flex;align-items:center;gap:10px;padding:12px 20px;color:var(--ink2);font-size:14px;cursor:pointer;width:100%;border:0;border-top:1px solid var(--line-soft);background:none;text-align:left}
+.addrow:hover:not(:disabled){background:var(--soft)}
+.addrow:disabled{color:var(--ink3);cursor:not-allowed}
+.warnbox{margin:8px 0 0;padding:10px 12px;border-radius:10px;background:var(--warn-bg);color:var(--warn-fg);font-size:13px;line-height:1.45}
+.warnbox .row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.bcount{padding:11px 20px;font-size:13px;line-height:1.45;color:var(--ink2);border-top:1px solid var(--line-soft)}
+.bcount b{color:var(--ink)}
+.gacts .btn:disabled{background:var(--soft-2);color:var(--ink3);box-shadow:none;cursor:not-allowed}
+.gacts .why{font-size:12.5px;color:var(--ink3);flex-basis:100%;margin-top:2px}
+.bstatus{font-size:12.5px;margin-top:8px;color:var(--ink3);min-height:18px}
+.bstatus.ok{color:var(--ok-fg)} .bstatus.bad{color:var(--warn-fg)}
+.bmodal{position:fixed;inset:0;background:rgba(10,12,16,.55);display:flex;align-items:center;justify-content:center;z-index:60;padding:16px}
+.bmodal .box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;max-width:420px;color:var(--ink)}
+.bmodal h3{margin:0 0 8px;font-size:17px}
+.bmodal p{margin:0 0 14px;color:var(--ink2);font-size:14px;line-height:1.5}
 /* gate 2: each territory is a button that picks it; gate 3: the idea line, its work, what it rests on */
 .terr{width:100%;text-align:left;border:0;border-bottom:1px solid var(--line-soft);border-radius:0;background:transparent;color:var(--ink);align-items:center;min-height:44px}
 .terr:last-child{border-bottom:0}
@@ -217,6 +251,7 @@ label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:
 .dkstage.nk-asking .gacts .btn.big{height:40px;padding:0 14px!important;font-size:13px!important}
 main.build:has(.dkstage.nk-asking){padding-bottom:16px}
 .dkstage.nk-asking .gbody{max-height:max(132px,calc(100vh - var(--barh) - var(--dk-sph,184px) * .45 - 330px));overflow:auto}
+.dkstage.nk-asking .gbody.story{max-height:max(330px,calc(100vh - var(--barh) - var(--dk-sph,184px) * .45 - 380px))}
 /* the status card's circle: 60px in a row, enlarged in place (the page script animates the change) while an agent works or the run waits */
 .status .srow{display:flex;align-items:center;gap:14px}
 .status .slot{display:block;position:relative;flex:none;width:60px;height:60px}
@@ -523,6 +558,87 @@ var DeckLogic = (function () {
       decisions: decisionsOf(run).concat([{ gate: gateId, kind: kind, by: by, at: at }]),
       gate_requests: asked.concat([{ gate: gateId, kind: kind, at: at, status: 'waiting' }])
     };
+  }
+
+  // ── the storyline at gate 1, edited by the person (deck-beat-editor) ──
+  // The page keeps a working copy of the beats; every change writes run.storyline_edit {base, beats: [{key, title, words}], by, at}
+  // (null once it matches the agents' version again). The engine applies it to the storyline when gate 1 is approved, before the
+  // territories are written, with no model call. `base` names the storyline the edit was made against: one made against another is
+  // not shown as current (the engine refuses it in words).
+  var BEAT_MAX = 300, BEATS_MAX = 20;
+
+  /** One beat's words, as the page and the engine read them: whitespace folded, trimmed. */
+  function beatWords(t) { return str(t).replace(/\s+/g, ' ').trim(); }
+
+  /** Gate 1's beats, safe to edit: [{ key, title, orig, src, basis, words, carries }], or null when the gate cannot be edited. */
+  function gateBeats(gate) {
+    if (!isObj(gate) || gate.id !== 'storyline' || gate.editable !== true || !/^[0-9a-f]{64}$/.test(str(gate.base))) return null;
+    var seen = Object.create(null), out = [];
+    (Array.isArray(gate.beats) ? gate.beats : []).filter(isObj).forEach(function (b) {
+      var key = typeof b.key === 'string' && /^[a-z][a-z0-9_]{0,40}$/.test(b.key) ? b.key : null;
+      if (key === null || seen[key] || !beatWords(b.title)) return;
+      seen[key] = true;
+      out.push({ key: key, title: beatWords(b.title), orig: beatWords(b.title), src: str(b.src), basis: str(b.basis), words: 'agents',
+        carries: (Array.isArray(b.carries) ? b.carries : []).filter(function (c) { return isObj(c) && str(c.text).trim(); })
+          .map(function (c) { return { text: str(c.text), to: str(c.to) || 'the guardrails slide' }; }) });
+    });
+    return out.length ? out : null;
+  }
+
+  /**
+   * The storyline the person sees at gate 1: { base, beats, changed, mine, stale }. Their saved edit (run.storyline_edit) when it was
+   * made against this storyline, else the agents' beats; `stale` when an edit was saved against another one. Null when gate 1 is not
+   * open or cannot be edited.
+   */
+  function storyView(run) {
+    var g = isObj(run) ? run.gate : null, agents = gateBeats(g);
+    if (!agents) return null;
+    var byKey = Object.create(null);
+    agents.forEach(function (b) { byKey[b.key] = b; });
+    var ed = isObj(run.storyline_edit) ? run.storyline_edit : null, beats = agents;
+    var stale = !!ed && ed.base !== g.base;
+    if (ed && !stale && Array.isArray(ed.beats)) {
+      var used = Object.create(null), mine = [];
+      ed.beats.filter(isObj).forEach(function (x) {
+        var t = beatWords(x.title);
+        if (!t) return;
+        if (x.key == null) { mine.push({ key: null, title: t, orig: '', src: '', basis: 'yours', words: 'yours', carries: [] }); return; }
+        var a = byKey[x.key];
+        if (!a || used[x.key]) return;
+        used[x.key] = true;
+        mine.push({ key: a.key, title: t, orig: a.orig, src: a.src, basis: a.basis, words: t === a.orig ? 'agents' : 'yours', carries: a.carries });
+      });
+      if (mine.length) beats = mine;
+    }
+    return storyOf(g.base, beats, agents, stale);
+  }
+
+  /** { base, beats, changed, mine, stale } for a working list of beats against the agents' list. */
+  function storyOf(base, beats, agents, stale) {
+    var sig = function (l) { return JSON.stringify(l.map(function (b) { return [b.key, b.title]; })); };
+    return { base: base, beats: beats, agents: agents, changed: sig(beats) !== sig(agents), stale: !!stale,
+      mine: beats.filter(function (b) { return b.key === null; }).length };
+  }
+
+  /** Where a beat's words come from, for the line under it. */
+  function beatSource(b) {
+    if (!isObj(b)) return '';
+    if (b.key === null) return 'Your words · no source yet';
+    if (b.words === 'yours') return 'Your words · ' + (/ref/.test(b.src) ? 'evidence kept: ' + b.src.replace(/^Cites /, '') : 'no source yet');
+    return b.src;
+  }
+
+  /**
+   * The patch that saves the person's storyline (under `run`): { storyline_edit: {base, beats, by, at} }, or { storyline_edit: null }
+   * once it is the agents' version again. Null when it cannot be saved (no beats, an empty or over-long beat, too many beats).
+   */
+  function storyPatch(view, by, at) {
+    if (!isObj(view) || !Array.isArray(view.beats) || !view.beats.length || view.beats.length > BEATS_MAX) return null;
+    if (view.beats.some(function (b) { var t = beatWords(b.title); return !t || t.length > BEAT_MAX; })) return null;
+    if (!storyOf(view.base, view.beats, view.agents || [], false).changed) return { storyline_edit: null };
+    return { storyline_edit: { base: view.base, by: str(by), at: str(at), beats: view.beats.map(function (b) {
+      return { key: b.key, title: beatWords(b.title), words: b.key === null || beatWords(b.title) !== b.orig ? 'yours' : 'agents' };
+    }) } };
   }
 
   // ── the gate registry: what each gate asks for and what it shows (phase 3). Gate id = stage id. ──
@@ -1937,6 +2053,7 @@ var DeckLogic = (function () {
     supplyCards: supplyCards, toSupply: toSupply, confirmList: confirmList, verifyPatch: verifyPatch, sourcedCounts: sourcedCounts,
     isPlaceholder: isPlaceholder, blockLines: blockLines, plainNotes: plainNotes, presented: presented, refsOf: refsOf, evidenceFor: evidenceFor, plainEvidence: plainEvidence, sourcesFor: sourcesFor,
     statusOf: statusOf, STATUS: STATUS, checksFor: checksFor, approveGate: approveGate, humanApproval: humanApproval, gateRequest: gateRequest,
+    storyView: storyView, storyOf: storyOf, storyPatch: storyPatch, beatSource: beatSource, beatWords: beatWords, BEAT_MAX: BEAT_MAX, BEATS_MAX: BEATS_MAX,
     GATES: GATES, gateView: gateView, gateHolds: gateHolds, summaryOf: summaryOf, agencyShown: agencyShown, footLabel: footLabel,
     isObj: isObj, own: own
   };
@@ -2640,7 +2757,155 @@ var DeckProd = (function () {
 
   var BASES = { brief: ['From brief', 'ok'], research: ['From research', 'ok'], proposal: ['Our proposal', 'warn'], placeholder: ['Placeholder', 'warn'] };
 
-  function gateBody(gv, gate) {
+  // ── gate 1: the person's storyline (deck-beat-editor) ──
+  // view.story is the working copy of the beats while gate 1 is open: what is drawn, and what each change saves as run.storyline_edit.
+  // It is made again from the document only when the gate's storyline (its base) changes. Undo is this session's own history.
+  function storyNow(s) {
+    var sv = L.storyView(s.run);
+    if (!sv) { view.story = null; return null; }
+    if (!view.story || view.story.base !== sv.base) {
+      view.story = { base: sv.base, agents: sv.agents, beats: sv.beats.map(copyBeat), hist: [], editing: null, warn: null, ask: null, drag: null, draft: null,
+        status: sv.stale ? ['Your earlier edit was made against another storyline, so it is not shown here. Edit these beats again.', 'bad'] : null };
+    } else view.story.agents = sv.agents;
+    return view.story;
+  }
+  function copyBeat(b) { var o = {}; Object.keys(b).forEach(function (k) { o[k] = b[k]; }); return o; }
+  function snapBeats(st, what) { st.hist.push({ beats: st.beats.map(copyBeat), what: what }); }
+
+  function beatRow(st, b, i) {
+    var ed = st.editing === i, busy = st.editing !== null, last = st.beats.length - 1, n = (i < 9 ? '0' : '') + (i + 1);
+    var tag = b.key === null || b.words === 'yours' ? ['Your words', 'plain'] : L.own(BASES, b.basis) ? BASES[b.basis] : BASES.brief;
+    var src = L.beatSource(b), carry = b.carries && b.carries[0];
+    return '<div class="beat" draggable="' + (!busy) + '" data-beat-row="' + i + '"><span class="n">' + n + '</span><div style="flex:1;min-width:0">' +
+      (ed ? '<div class="ined" id="beatEd" role="textbox" aria-label="Write beat ' + (i + 1) + '" data-ph="Write the beat" contenteditable="plaintext-only" spellcheck="true">' + esc(b.title) + '</div>' +
+            '<div class="edbar"><button class="btn sm go" type="button" data-beat-done="' + i + '">Done</button><button class="btn sm" type="button" data-beat-cancel="' + i + '">Cancel</button>' +
+            '<span class="k">⌘↵ Done · Esc Cancel</span><span class="err" id="beatErr" role="alert">' + esc(st.err || '') + '</span></div>'
+          : '<button class="bt" type="button" data-beat-edit="' + i + '"' + (busy ? ' disabled' : '') + ' aria-label="Edit beat ' + (i + 1) + ': ' + esc(b.title) + '">' + esc(b.title) + '</button>' +
+            '<div class="src' + (b.key === null || b.words === 'yours' ? ' mine' : '') + '">' + esc(src) + '</div>') +
+      (st.warn === i && carry ? '<div class="warnbox" role="alert">This beat states a mandatory: “' + esc(carry.text) + '”. Taking it out moves it to ' + esc(carry.to) + '.' +
+        '<div class="row"><button class="btn sm dark" type="button" data-beat-delok="' + i + '">Take it out, move the mandatory</button><button class="btn sm" type="button" data-beat-delno="' + i + '">Keep the beat</button></div></div>' : '') +
+      '</div><span class="pill ' + tag[1] + '" style="align-self:flex-start">' + tag[0] + '</span>' +
+      '<div class="tools" role="group" aria-label="Beat ' + (i + 1) + '"><span class="grip" aria-hidden="true" title="Drag to move">⋮⋮</span>' +
+      '<button class="ib" type="button" data-beat-up="' + i + '" aria-label="Move beat ' + (i + 1) + ' up"' + (i === 0 || busy ? ' disabled' : '') + '>↑</button>' +
+      '<button class="ib" type="button" data-beat-down="' + i + '" aria-label="Move beat ' + (i + 1) + ' down"' + (i === last || busy ? ' disabled' : '') + '>↓</button>' +
+      '<button class="ib" type="button" data-beat-del="' + i + '" aria-label="Take beat ' + (i + 1) + ' out"' + (busy ? ' disabled' : '') + '>✕</button></div></div>';
+  }
+
+  /** The beats, the add row and the line about the cap, for an editable gate 1. */
+  function storyBody(s, st) {
+    return st.beats.map(function (b, i) { return beatRow(st, b, i); }).join('') ||
+        '<div style="padding:18px 20px;color:var(--ink3);font-size:14px">No beats left. Add one, or reset to the agents’ version.</div>';
+  }
+
+  /** Under the beats, outside their scroll: add a beat, and the line about the cap. */
+  function storyFoot(s, st) {
+    var card = L.cardOf(L.deckTypeOf(s.raw).id), cap = card && card.cap;
+    var mine = st.beats.filter(function (b) { return b.key === null; }).length, full = st.beats.length >= L.BEATS_MAX;
+    return '<button class="addrow" type="button" data-beat-add="1"' + (st.editing !== null || full ? ' disabled' : '') + '>＋ Add a beat of your own' + (full ? ' (a storyline holds at most ' + L.BEATS_MAX + ')' : '') + '</button>' +
+      '<div class="bcount" data-beat-count>Your storyline has <b>' + st.beats.length + ' beat' + (st.beats.length === 1 ? '' : 's') + '</b>' + (mine ? ', ' + mine + ' of them yours' : '') + '. ' +
+      (cap ? 'Beats you add stay in the story: the ' + cap + '-slide cap never moves them to the appendix, even at ' + (cap + 1) + ' or ' + (cap + 2) + ' slides.'
+        : 'Beats you add stay in the story: they are never moved to the appendix.') + '</div>';
+  }
+
+  /** Approve, Ask the agents, Undo and Reset for an editable gate 1, each disabled with its reason. */
+  function storyActions(st) {
+    var view_ = L.storyOf(st.base, st.beats, st.agents, false), busy = st.editing !== null;
+    var why = busy ? 'Finish the beat you are writing (⌘↵) before you approve.' : !st.beats.length ? 'The storyline needs at least one beat.' : '';
+    var dis = function (on) { return on ? ' disabled' : ''; };
+    return '<div class="gacts" style="margin-top:18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
+      '<button class="btn go big" id="approve"' + dis(!!why) + '>' + (view_.changed ? 'Approve my storyline and continue' : 'Approve and continue') + '</button>' +
+      '<button class="btn big" style="padding:0 20px;font-size:14px" data-edit="beats"' + dis(!view_.changed || busy) + '>Ask the agents to rewrite around my edits</button>' +
+      '<button class="btn big" style="padding:0 20px;font-size:14px" data-beat-undo="1"' + dis(!st.hist.length || busy) + '>Undo</button>' +
+      '<button class="btn big" style="padding:0 20px;font-size:14px" data-beat-reset="1"' + dis(!view_.changed || busy) + '>Reset to the agents’ version</button>' +
+      '<div class="why" data-beat-why>' + esc(why || (!view_.changed ? 'Ask the agents and Reset wake up once you change a beat.' : '')) + '</div></div>' +
+      '<p class="bstatus' + (st.status && st.status[1] ? ' ' + st.status[1] : '') + '" role="status" aria-live="polite" data-beat-status>' + esc(st.status ? st.status[0] : '') + '</p>' +
+      (st.ask === 'reset' ? '<div class="bmodal" role="dialog" aria-modal="true" aria-labelledby="bmh"><div class="box"><h3 id="bmh">Reset to the agents’ version?</h3>' +
+        '<p>Every beat goes back to how the agents wrote it: your rewording, order, added and taken-out beats are undone. Undo can bring them back.</p>' +
+        '<div style="display:flex;gap:8px"><button class="btn go" type="button" data-beat-resetok="1">Reset</button><button class="btn" type="button" data-beat-resetno="1">Keep it</button></div></div></div>' : '');
+  }
+
+  /** Save the working storyline (run.storyline_edit); the line under the buttons says Saving…, then Saved or why not. */
+  function saveStory(what) {
+    var st = view.story;
+    if (!st) return;
+    var sp = L.storyPatch(st, 'You', now());
+    if (!sp) { st.status = ['Not saved: every beat needs words, and a storyline holds at most ' + L.BEATS_MAX + ' beats.', 'bad']; render(); return; }
+    st.status = ['Saving…', ''];
+    render();
+    Promise.resolve(put({ run: sp }, 'edit storyline: ' + what, 'gate 1: the person\'s storyline, applied when gate 1 is approved')).then(function () {
+      if (view.story === st) { st.status = ['Saved: ' + what + '. Your storyline is in the document; Approve builds from it.', 'ok']; render(); }
+    }, function (e) {
+      if (view.story === st) { st.status = ['Not saved: ' + ((e && e.message) || 'the document did not take the change') + '. Your beats are still here; try again.', 'bad']; render(); }
+    });
+  }
+
+  function beatText() {
+    var el = document.getElementById('beatEd');
+    if (!el) return null;
+    return L.beatWords(typeof el.innerText === 'string' ? el.innerText : el.textContent);
+  }
+  function beatDone() {
+    var st = view.story;
+    if (!st || st.editing === null) return;
+    var i = st.editing, b = st.beats[i], t = beatText();
+    if (t === null) t = L.beatWords(st.draft != null ? st.draft : b.title);
+    if (!t) { st.err = 'A beat needs words. Esc puts back what was there.'; return render(); }
+    if (t.length > L.BEAT_MAX) { st.err = 'A beat is a slide’s title: at most ' + L.BEAT_MAX + ' characters (this one has ' + t.length + ').'; return render(); }
+    var added = b.key === null && !b.title;
+    st.editing = null; st.err = ''; st.draft = null;
+    if (t === b.title) return render();
+    if (!added) snapBeats(st, 'reword');
+    b.title = t;
+    b.words = b.key === null || t !== b.orig ? 'yours' : 'agents';
+    saveStory(added ? 'your beat added as beat ' + (i + 1) : 'beat ' + (i + 1) + ' reworded');
+  }
+  function beatCancel() {
+    var st = view.story;
+    if (!st || st.editing === null) return;
+    var b = st.beats[st.editing];
+    if (b && b.key === null && !b.title) { st.beats.splice(st.editing, 1); st.hist.pop(); }
+    st.editing = null; st.err = ''; st.draft = null;
+    st.status = ['Cancelled: the beat is as it was.', ''];
+    render();
+  }
+  function beatMove(from, to) {
+    var st = view.story;
+    if (!st || st.editing !== null || from === to || from < 0 || to < 0 || from >= st.beats.length || to >= st.beats.length) return;
+    snapBeats(st, 'move');
+    var b = st.beats.splice(from, 1)[0];
+    st.beats.splice(to, 0, b);
+    saveStory('beat moved to ' + (to + 1));
+  }
+  function beatDelete(i, sure) {
+    var st = view.story, b = st && st.beats[i];
+    if (!b || st.editing !== null) return;
+    if (b.carries && b.carries.length && !sure) { st.warn = i; return render(); }
+    st.warn = null;
+    snapBeats(st, 'delete');
+    st.beats.splice(i, 1);
+    toast(b.carries && b.carries.length ? 'Beat taken out; “' + b.carries[0].text.slice(0, 60) + '” moves to ' + b.carries[0].to + '.' : 'Beat taken out. Undo brings it back.');
+    saveStory('beat taken out');
+  }
+  /** Before a redraw: the words being written. After it: put them back, with the caret at the end. */
+  function stashBeat() {
+    if (view.story && view.story.editing !== null) { var t = document.getElementById('beatEd'); if (t) view.story.draft = typeof t.innerText === 'string' ? t.innerText : t.textContent; }
+  }
+  function restoreBeat() {
+    var st = view.story, el = st && st.editing !== null ? document.getElementById('beatEd') : null;
+    if (!el) return;
+    if (st.draft != null) { if ('innerText' in el) el.innerText = st.draft; else el.textContent = st.draft; }
+    try {
+      if (el.contentEditable !== 'plaintext-only') el.contentEditable = 'true';   // a browser without plaintext-only still writes in place
+      el.focus();
+      var r = document.createRange(); r.selectNodeContents(el); r.collapse(false);
+      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    } catch (e) { /* no selection API: the words are back, the caret is where the browser puts it */ }
+  }
+
+
+  function gateBody(gv, gate, s) {
+    var st = gv.body === 'beats' && s ? storyNow(s) : null;
+    if (st) return storyBody(s, st);
     if (gv.body === 'beats') {
       return (Array.isArray(gate.beats) ? gate.beats : []).filter(L.isObj).map(function (b) {
         var c = L.own(BASES, b.basis) ? BASES[b.basis] : BASES.brief;
@@ -2674,7 +2939,9 @@ var DeckProd = (function () {
   }
 
   /** Approve (or Pick), Edit and Ask the Deck agent. Edit and Ask record a request; once one waits, the gate says so. */
-  function gateActions(gv) {
+  function gateActions(gv, s) {
+    var st = gv.body === 'beats' && s ? storyNow(s) : null;
+    if (st) return storyActions(st) + (gv.asked.indexOf('edit') >= 0 ? '<p class="note asked" role="status" data-asked>You asked the agents to rewrite around your edits. Queued: it applies the next time the deck is built. Nothing has changed yet.</p>' : '');
     var none = gv.body === 'territories' && !gv.picked;
     var asked = gv.asked.length ? '<p class="note asked" role="status" data-asked>You asked ' + (gv.asked.indexOf('edit') >= 0 && gv.asked.indexOf('retry') >= 0 ? 'for an edit and a new try'
       : gv.asked.indexOf('edit') >= 0 ? 'for an edit' : 'the Deck agent to try again') + '. Queued: it applies the next time the deck is built. Nothing has changed yet.</p>' : '';
@@ -2691,7 +2958,10 @@ var DeckProd = (function () {
     }).join('');
     var main, gv = gate ? L.gateView(run, view.pick) : null; // the gate registry: words and body for the open gate
     // An open gate: the agent asks. Its sphere rises and shrinks, and the gate card shows under it.
-    if (gate) main = askStage(who, true, gateHead(gv) + '<div class="card gcard" style="overflow:hidden">' + dexRow(gv) + '<div class="gbody">' + gateBody(gv, gate) + '</div></div>' + gateActions(gv));
+    var story = gate && gv.body === 'beats' ? storyNow(s) : null;   // gate 1 the person can edit (deck-beat-editor): its add row and cap line stay in view
+    if (gate) main = askStage(who, true, gateHead(gv) + '<div class="card gcard" style="overflow:hidden">' + dexRow(gv) + '<div class="gbody' + (story ? ' story' : '') + '">' + gateBody(gv, gate, s) + '</div>' +
+      (story ? storyFoot(s, story) : '') + '</div>' + gateActions(gv, s));
+    else view.story = null;   // gate 1 closed: the working copy of the beats goes with it
     // With no gate open: running (a live feed), failed, done, or waiting for an engine that is not connected.
     var rv = gate ? null : L.runView(run, s.deck), live = rv && rv.kind !== 'waiting';
     if (rv && !live) {
@@ -2706,6 +2976,7 @@ var DeckProd = (function () {
       '<section>' + main + '</section><aside class="stack">' + (live ? statusCard(who) :
       (gate ? '<div class="card" style="padding:20px"><div style="display:flex;align-items:center;gap:12px">' +
         '<div><div style="font-size:14px;font-weight:600">Waiting for you</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + esc(gv.hold) + '</div></div></div><div class="rule"></div>' +
+        (view.story ? '<p class="note" style="margin-bottom:8px">Change any beat: click its words to write, drag or use ↑ ↓ to move it, ✕ to take it out. Approve builds from your storyline.</p>' : '') +
         '<p class="note">' + esc(gv.next) + '</p></div>' : '')) +
       (live ? checks + builtLine(builtOf(s)) : builtLine(builtOf(s)) + checks) + '<div class="note" style="background:var(--soft);border-radius:18px;padding:16px 20px">Things you must supply, like the presenter or the budget split, show as labelled placeholders. They are never made up.</div></aside></main>';
   }
@@ -3041,6 +3312,7 @@ var DeckProd = (function () {
     var selS = focusId ? ae.selectionStart : null, selE = focusId ? ae.selectionEnd : null;
     var focusSel = focusId ? '' : focusAgain(ae);
     stashDraft();
+    stashBeat();
     var before = cardBefore();
     askWant = null;
     var body = scr === 'start' ? start(s) : scr === 'build' ? build(s) : scr === 'review' ? review(s) : presentScreen(s);
@@ -3051,6 +3323,7 @@ var DeckProd = (function () {
     growCard(before); // the status card's circle grows or shrinks in place when the state changes its size
     document.title = 'Deck Maker';
     restoreDrafts(s);
+    restoreBeat();
     if (focusId) {
       var fe = document.getElementById(focusId);
       if (fe && fe.focus) {
@@ -3253,6 +3526,39 @@ var DeckProd = (function () {
     var t = e.target.closest('button'); if (!t) return;
     var s = d(), a = t.dataset;
     if (a.orb !== undefined) return pressOrb();
+    if (view.story && (a.beatEdit || a.beatDone || a.beatCancel || a.beatUp || a.beatDown || a.beatDel || a.beatDelok || a.beatDelno || a.beatAdd || a.beatUndo || a.beatReset || a.beatResetok || a.beatResetno)) {
+      var st = view.story;   // gate 1's storyline (deck-beat-editor): each change is saved as the person's run.storyline_edit
+      if (a.beatDone) return beatDone();
+      if (a.beatCancel) return beatCancel();
+      if (a.beatResetno) { st.ask = null; return render(); }
+      if (a.beatResetok) {
+        st.ask = null; snapBeats(st, 'reset'); st.beats = st.agents.map(copyBeat); st.warn = null;
+        return saveStory('reset to the agents’ version');
+      }
+      if (st.editing !== null) { toast('Finish the beat you are writing first: Done (⌘↵) or Cancel (Esc).'); return; }
+      if (a.beatEdit) { st.editing = Number(a.beatEdit); st.draft = null; st.err = ''; st.warn = null; return render(); }
+      if (a.beatUp) return beatMove(Number(a.beatUp), Number(a.beatUp) - 1);
+      if (a.beatDown) return beatMove(Number(a.beatDown), Number(a.beatDown) + 1);
+      if (a.beatDel) return beatDelete(Number(a.beatDel), false);
+      if (a.beatDelok) return beatDelete(Number(a.beatDelok), true);
+      if (a.beatDelno) { st.warn = null; return render(); }
+      if (a.beatAdd) {
+        if (st.beats.length >= L.BEATS_MAX) { toast('A storyline holds at most ' + L.BEATS_MAX + ' beats.'); return; }
+        snapBeats(st, 'add');
+        st.beats.push({ key: null, title: '', orig: '', src: '', basis: 'yours', words: 'yours', carries: [] });
+        st.editing = st.beats.length - 1; st.draft = ''; st.err = '';
+        return render();
+      }
+      if (a.beatUndo) {
+        var h = st.hist.pop();
+        if (!h) return;
+        st.beats = h.beats; st.warn = null;
+        toast('Undone.');
+        return saveStory('undone (' + h.what + ')');
+      }
+      if (a.beatReset) { st.ask = 'reset'; return render(); }
+      return;
+    }
     if (a.go) { view.screen = a.go; return render(); }
     if (a.dpick || a.dconfirm) {
       stashDraft();
@@ -3387,6 +3693,12 @@ var DeckProd = (function () {
       var gv = L.gateView(s.run, view.pick);
       if (!gv) { toast('There is no step waiting for you. Reload the page if one should be.'); return; }
       if (gv.body === 'territories' && !gv.picked) { toast('Pick a territory first.'); return; }
+      var story = gv.id === 'storyline' ? storyNow(s) : null, sp = null;   // deck-beat-editor: Approve carries the person's storyline with it
+      if (story) {
+        if (story.editing !== null) { toast('Finish the beat you are writing (⌘↵) before you approve.'); return; }
+        sp = L.storyPatch(story, 'You', now());
+        if (!sp) { toast('Every beat needs words before you approve.'); return; }
+      }
       var choice = gv.picked ? { picked: gv.picked } : null;
       var picked = gv.territories.filter(function (x) { return x.id === gv.picked; })[0];
       var why = 'gate ' + s.run.gate.n + ' of ' + s.run.gate.of + ' approved' + (picked ? ': picked ' + picked.name : '');
@@ -3397,6 +3709,7 @@ var DeckProd = (function () {
         var human = L.humanApproval(s.run, gv.id, 'You', now(), choice);
         if (!human) { toast('That step cannot be approved from here. Reload the page and try again.'); return; }
         view.pick = null;
+        if (sp) { human.storyline_edit = sp.storyline_edit; if (sp.storyline_edit) why += ': your storyline'; }
         var wrote = put({ run: human }, 'approve ' + s.run.gate.id, why);
         if (!mwKnown()) {   // UAT round 4 F37: approved before the engine answered: the decision is kept and the next step starts once it is on
           PENDING_BUILD = true;
@@ -3411,6 +3724,7 @@ var DeckProd = (function () {
       var next = L.approveGate(s.run, gv.id, 'You', now(), choice);
       if (!next) { toast('That step cannot be approved from here. Reload the page and try again.'); return; }
       view.pick = null;
+      if (sp) next.storyline_edit = sp.storyline_edit;
       put({ run: next }, 'approve ' + s.run.gate.id, why);
       return;
     }
@@ -3418,8 +3732,14 @@ var DeckProd = (function () {
     if (a.edit || a.retry) {
       // At the open gate an edit or a retry is recorded (run.decisions, run.gate_requests) and launches nothing.
       var kind = a.edit ? 'edit' : 'retry', req = s.run.gate ? L.gateRequest(s.run, s.run.gate.id, kind, 'You', now()) : null;
+      var asks = kind === 'edit' && s.run.gate && s.run.gate.id === 'storyline' ? storyNow(s) : null;   // deck-beat-editor: the person's beats are the agents' brief
+      if (asks) {
+        if (asks.editing !== null) { toast('Finish the beat you are writing first: Done (⌘↵) or Cancel (Esc).'); return; }
+        var asp = L.storyPatch(asks, 'You', now());
+        if (req && asp && asp.storyline_edit) req.storyline_edit = asp.storyline_edit;
+      }
       if (req) put({ run: req }, kind + ' ' + s.run.gate.id, 'gate ' + s.run.gate.n + ' of ' + s.run.gate.of + ': queued for the next build, launches nothing');
-      toast(QUEUED_GATE);
+      toast(asks ? 'Queued: the agents rewrite the storyline around your edits the next time the deck is built. Nothing has changed yet.' : QUEUED_GATE);
       return;
     }
     if (a.act === 'appendix') { toast('Moving a slide to the appendix is not built yet. It stays where it is.'); return; }
@@ -3508,6 +3828,41 @@ var DeckProd = (function () {
       return done;
     }).catch(function () { toast('The attached files could not be saved.'); });
   });
+
+  // Gate 1's beat being written: ⌘/Ctrl+Enter is Done, Esc is Cancel, Enter alone adds no line (a beat is one line).
+  document.addEventListener('keydown', function (e) {
+    var t = e.target;
+    if (!t || t.id !== 'beatEd' || !view.story) return;
+    if (e.key === 'Escape') { e.preventDefault(); beatCancel(); }
+    else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); beatDone(); }
+    else if (e.key === 'Enter') e.preventDefault();
+  });
+  // Gate 1's beats move by dragging a row onto another (↑ ↓ do the same from the keyboard).
+  function beatRowOf(e) { var t = e && e.target; return t && typeof t.closest === 'function' ? t.closest('[data-beat-row]') : null; }
+  function dragMarks(cls) { try { Array.prototype.forEach.call(document.querySelectorAll('.beat.' + cls), function (x) { x.classList.remove(cls); }); } catch (err) { /* nothing marked */ } }
+  document.addEventListener('dragstart', function (e) {
+    var r = beatRowOf(e);
+    if (!r || !view.story || view.story.editing !== null) return;
+    view.story.drag = Number(r.getAttribute('data-beat-row'));
+    r.classList.add('drag');
+    if (e.dataTransfer) { e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', 'beat'); } catch (err) { /* some browsers need data to drag */ } }
+  });
+  document.addEventListener('dragover', function (e) {
+    var r = beatRowOf(e);
+    if (!r || !view.story || view.story.drag == null) return;
+    e.preventDefault();
+    dragMarks('over');
+    r.classList.add('over');
+  });
+  document.addEventListener('drop', function (e) {
+    var r = beatRowOf(e);
+    if (!r || !view.story || view.story.drag == null) return;
+    e.preventDefault();
+    var from = view.story.drag;
+    view.story.drag = null;
+    beatMove(from, Number(r.getAttribute('data-beat-row')));
+  });
+  document.addEventListener('dragend', function () { if (view.story) view.story.drag = null; dragMarks('drag'); dragMarks('over'); });
 
   document.addEventListener('keydown', function (e) {
     if (screenOf(d()) !== 'present' || /INPUT|TEXTAREA/.test((e.target || {}).tagName || '')) return;

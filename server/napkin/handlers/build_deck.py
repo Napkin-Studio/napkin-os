@@ -225,6 +225,9 @@ def start(req, caps, settings, jid):
         pa = assets_of(getattr(req, "production_assets", None), bool(getattr(settings, "deck_relay_loopback", False)))
         if pa:   # napkin-web's read-only pass for this person's pictures: to the engine's picture step only, never into the document
             body["production_assets"] = pa
+    se = run.get("storyline_edit")
+    if isinstance(se, dict) and isinstance(se.get("beats"), list):   # deck-beat-editor: the person's storyline at gate 1; the engine applies it on approval
+        body["storyline_edit"] = {k: se.get(k) for k in ("base", "beats", "by", "at")}
     dt = deck_type_of(inputs)
     if dt:   # deck-types: the person's pick on the type picker (and any new writing they confirmed): the engine builds that type, not the kind's default
         body["inputs"]["deck_type"] = dt
