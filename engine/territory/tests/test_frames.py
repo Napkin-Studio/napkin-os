@@ -473,6 +473,13 @@ def test_colour_words_carry_no_figure_and_the_client_name_never_reaches_a_prompt
                  "#2E7D32": "green", "fff": "white", "#6B3E1F": "brown", "#F4F1EA": "off white", "#F26B5B": "coral", "#C8C8C8": "light grey"}.items():
         assert frames.colour_words(h) == w, (h, frames.colour_words(h))
     assert frames.colour_words("red") is None and frames.colour_words(None) is None
+    # every word a colour can come out as passes the picture-prompt lint (live click-through 2026-11-26: "teal" did not, and the
+    # whole ask was refused for a Brand Clan with a mint accent)
+    from visuals import lint
+    assert frames.colour_words("#3FC9A0") == "blue green"
+    for h in ("#000000", "#FFFFFF", "#808080", "#C8C8C8", "#F4F1EA", "#F6F0E1", "#14213D", "#6B3E1F", "#F26B5B", *[f"#{r:02X}{g:02X}{b:02X}" for r in (0, 90, 200, 255) for g in (0, 90, 200, 255) for b in (0, 90, 200, 255)]):
+        w = frames.colour_words(h)
+        assert w and not lint.lint_text("Palette: " + w + ".", banned=[], allow=[]), (h, w)
     b = {"document_id": "x", "data": {"name": "O", "imagery": {"style": "linea style street portraits, soft light", "bans": []}}}
     sty, look = frames.brand_style(b, forbid=["Linea"])
     assert sty.look == ["soft light"] and look["left_out"][0]["what"] == "linea style street portraits"

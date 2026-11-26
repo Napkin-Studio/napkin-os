@@ -168,7 +168,7 @@ def colour_words(hex_code) -> str | None:
         hue = (r - g) / chroma + 4
     hue *= 60
     name = ("red" if hue < 15 or hue >= 345 else "orange" if hue < 40 else "yellow" if hue < 65 else "lime" if hue < 85 else "green" if hue < 160
-            else "teal" if hue < 190 else "blue" if hue < 250 else "purple" if hue < 290 else "magenta" if hue < 330 else "pink")
+            else "blue green" if hue < 190 else "blue" if hue < 250 else "purple" if hue < 290 else "magenta" if hue < 330 else "pink")
     if name in ("orange", "yellow") and light >= 0.82:
         return "cream"
     if name in ("orange", "red") and light < 0.33:
@@ -223,7 +223,7 @@ def brand_style(rec, forbid=()) -> tuple:
         except style_mod.StyleError as e:
             left.append({"what": text, "why": str(e).split(": ", 1)[-1]})
             return False
-        bad = lint.lint_text(("Look: " if key == "look" else "") + text + ".", banned=[], allow=allow)
+        bad = lint.lint_text({"look": "Look: ", "palette": "Palette: "}.get(key, "") + text + ".", banned=[], allow=allow)
         if bad:
             left.append({"what": text, "why": bad})
             return False
@@ -237,7 +237,7 @@ def brand_style(rec, forbid=()) -> tuple:
     cols = [c for c in ((d.get("visual") or {}).get("colours") or []) if isinstance(c, dict)]
     rank = {r: i for i, r in enumerate(COLOUR_ORDER)}
     cols.sort(key=lambda c: rank.get(c.get("role"), len(COLOUR_ORDER)))
-    palette = [w for w in dict.fromkeys(colour_words(c.get("hex")) for c in cols) if w][:MAX_COLOURS]
+    palette = [w for w in dict.fromkeys(colour_words(c.get("hex")) for c in cols) if w and ok(w, "palette")][:MAX_COLOURS]
     name = str(d.get("name") or b.get("title") or "").strip()
     version = (d.get("kit") or {}).get("version") or b.get("version")
     try:
