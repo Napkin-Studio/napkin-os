@@ -196,3 +196,45 @@ def test_built_from_names_production_when_the_deck_came_from_a_production_projec
     rows = rs.checks_list({"tier": "brief+research", "production": True}, tmp_path)
     assert rows[0]["text"] == "Built from: brief+research+production"
     assert rs.checks_list({"tier": "brief+research"}, tmp_path)[0]["text"] == "Built from: brief+research"
+
+
+# -- the storyboard slide names the film, never a frame index (pc live walk 2026-11-25: 'Storyboard frames (frame 1)') --------
+@pytest.mark.parametrize("title", ["Storyboard frames (frame 1)", "Storyboard frames (frame 1 of 3)", "Storyboard frames, frame 1 of 3", "Storyboard frames: frame 1 of 3", "Storyboard frames"])
+def test_the_storyboard_slide_names_its_film_not_a_frame_index(prod, title):
+    d = {"meta": {"client": "Lumen Water"}, "order": ["s3"], "slides": {"s3": {
+        "type": "execution", "title": title, "label": f"Execution {title}", "notes": "", "blocks": [{"kind": "copy", "lines": ["In their own words."]}]}}}
+    images.bind_production(d, prod)
+    s = d["slides"]["s3"]
+    assert s["title"] == "Storyboard frames: The Tap Tells film"   # the storyboard's own title (Production's route or film), not 'frame 1'
+    assert s["label"] == "Execution Storyboard frames: The Tap Tells film"
+
+
+def test_a_storyboard_heading_that_says_what_it_shows_keeps_its_words(prod):
+    d = {"meta": {}, "order": ["s3"], "slides": {"s3": {"type": "execution", "title": "Storyboard frames: six stills as a carousel (frame 2 of 6)",
+                                                     "notes": "", "blocks": []}}}
+    images.bind_production(d, prod)
+    assert d["slides"]["s3"]["title"] == "Storyboard frames: six stills as a carousel"
+
+
+def test_a_storyboard_with_only_the_default_title_takes_the_name_the_film_goes_by(prod):
+    p = copy.deepcopy(prod)
+    for it in p["items"].values():
+        it.pop("storyboard_title", None)
+    p["project"]["title"] = "Warm sunlight spills across a quiet kitchen counter."
+    d = {"meta": {}, "order": ["s3"], "slides": {"s3": {"type": "execution", "title": "Storyboard frames (frame 1)", "notes": "", "blocks": []}}}
+    images.bind_production(d, p)
+    assert d["slides"]["s3"]["title"] == "Storyboard frames: Warm sunlight spills across a quiet…"
+    p["project"]["title"] = "Untitled project"   # nothing it goes by: only the frame index leaves
+    d["slides"]["s3"]["title"] = "Storyboard frames (frame 1)"
+    images.bind_production(d, p)
+    assert d["slides"]["s3"]["title"] == "Storyboard frames"
+
+
+def test_a_film_that_names_itself_goes_by_that_name_in_the_deck():
+    doc = {"project": {"id": "proj_x", "title": "Untitled project"}, "briefs": {},
+           "scenes": {"scene_1": {"id": "scene_1", "rank": "a0", "text": ""}},
+           "shots": {"shot_1": {"id": "shot_1", "scene_id": "scene_1", "rank": "a0", "action": "  Warm sunlight   spills across a quiet kitchen counter.\nA hand."}}}
+    assert fp.film_name(doc) == "Warm sunlight spills across a quiet kitchen counter."
+    assert fp.film_name({**doc, "briefs": {"brief_1": {"title": "Copperell refill oil"}}}) == "Copperell refill oil"
+    assert fp.film_name({**doc, "project": {"id": "proj_x", "title": "Kitchen light"}}) == "Kitchen light"
+    assert fp.film_name({"project": {"id": "proj_x", "title": "Untitled project"}}) == ""

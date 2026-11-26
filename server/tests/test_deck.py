@@ -530,6 +530,21 @@ def test_marks_cover_the_full_brief_a_carried_production_project_carries():
     assert "SECRET-FULL" in marks["upstream.prod-1.upstream.brief-1.insight"]["text"]
 
 
+def test_marks_cover_the_research_a_carried_brief_carries():
+    """5-tool run 2026-11-26: the host sends the brief's research under the brief's own upstream (read.rs brief_upstream); its marked parts
+    (a classify on the research, its own confidential_fields, client-confidential materials) reach the engine's picture step as marks."""
+    from napkin.handlers.build_deck import marks_of, with_brief
+    brief = {"objectives": "Win shelf space.", "upstream": {"res-1": {"report": {"summary": "SECRET-MARGIN"}, "confidential_fields": ["report.summary"],
+                                                                     "materials": {"m1": {"name": "Retailer deck", "text": "SECRET-DECK",
+                                                                                          "licence": "client-confidential"}}}}}
+    data = with_brief({"upstream": {"brief-1": {"title": "index entry"}, "res-1": {"title": "index entry"}}}, {"id": "brief-1", "data": brief})
+    chain = [{"kind": "classify", "targets": ["res-1#report.summary"], "licence": {"model": False}}]
+    marks = {(m["path"], m["kind"]): m["text"] for m in marks_of(data, chain)}
+    assert marks[("upstream.brief-1.upstream.res-1.report.summary", "confidential_field")] == "SECRET-MARGIN"
+    assert marks[("upstream.brief-1.upstream.res-1.report.summary", "classify")] == "SECRET-MARGIN"
+    assert "SECRET-DECK" in marks[("upstream.brief-1.upstream.res-1.materials[m1]", "licence")]
+
+
 def test_the_research_a_deck_carries_goes_to_the_engine_as_its_evidence(deck, monkeypatch):
     """The first UAT deck said 'Built from: prompt' and 'No research brought in': the engine was sent the prompt and nothing else of what the deck carries."""
     from napkin.handlers import build_deck as bd
