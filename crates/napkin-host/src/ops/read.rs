@@ -630,6 +630,15 @@ const BRIEF_KEYS: &[&str] = &[
 /// `{id, data}` of the first entry of `data.upstream` that is a brief (a
 /// Brief Maker's data: never a Production project or a kit), whole, for a
 /// Deck's build. `None` when the document carries none.
+///
+/// What the brief had carried itself (its research, and any other document
+/// the spin-off hoisted beside it; never a Production project, which travels
+/// as `production_upstream`, nor a kit) goes back under the brief's own
+/// `upstream`, as [`production_upstream`] does for a project: a Confidential
+/// mark the brief's chain holds on its research names that document, and the
+/// deck's marks check must find it there (5-tool run, 2026-11-26: every deck
+/// from a brief with marked research was refused, "names a document this deck
+/// does not hold").
 fn brief_upstream(data: &Value) -> Option<Value> {
     let up = data.get(UPSTREAM_KEY)?.as_object()?;
     let (id, copy) = up.iter().find(|(_, copy)| {
@@ -638,7 +647,16 @@ fn brief_upstream(data: &Value) -> Option<Value> {
             && !is_production(copy)
             && !is_kit(copy)
     })?;
-    Some(json!({ "id": id, "data": copy }))
+    let mut whole = copy.clone();
+    let carried: serde_json::Map<String, Value> = up
+        .iter()
+        .filter(|(k, v)| *k != id && v.is_object() && !is_production(v) && !is_kit(v))
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    if !carried.is_empty() {
+        whole[UPSTREAM_KEY] = Value::Object(carried);
+    }
+    Some(json!({ "id": id, "data": whole }))
 }
 
 /// The app id a Production project's data carries (`app`, production-tool/contracts/document.schema.json).
@@ -1611,6 +1629,12 @@ mod tests {
         let b = brief_upstream(&both).expect("a brief");
         assert_eq!(b["id"], "doc-brief");
         assert_eq!(b["data"]["objectives"], "Sell the starter bottle");
+        // the research the spin-off hoisted beside the brief goes back under the brief's own
+        // upstream, whole (its Confidential marks name it); the kit does not
+        assert_eq!(
+            b["data"]["upstream"],
+            json!({ "doc-research": both["upstream"]["doc-research"] })
+        );
         assert_eq!(
             brief_upstream(
                 &json!({ "upstream": { "p": { "app": "production-tool", "objectives": "x" } } })

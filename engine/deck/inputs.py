@@ -474,14 +474,21 @@ def apply_research(inp: "Inputs", members: dict | None) -> bool:
     return inp.has_research()
 
 
-def apply_upstream_brief(inp: "Inputs", doc_id: str, doc: dict, chain: list | None = None) -> bool:
+def apply_upstream_brief(inp: "Inputs", doc_id: str, doc: dict, chain: list | None = None, others: dict | None = None) -> bool:
     """A deck spun off a brief (Continue in -> Deck) takes that brief, carried whole under ``data.upstream``, through the one field mapping
     (``brief_from_data``): its fields, how to win, open questions and Confidential marks. The engine server is sent it as ``brief_upstream``.
     UAT round 4 L2: it was never sent, so a brief-only deck built from an empty brief (the intake abstained on every field) and called its
-    tier 'research'. Returns whether it took it. A brief of the deck's own (or one an intake stage wrote) is never replaced."""
+    tier 'research'. Returns whether it took it. A brief of the deck's own (or one an intake stage wrote) is never replaced.
+
+    The chain's marks are looked up in the documents they name: the brief, what the brief carried under its own ``upstream`` (its research:
+    the host sends it there, read.rs ``brief_upstream``) and ``others`` (the carried Production project). 5-tool run 2026-11-26: they were
+    looked up in the brief alone, so every deck from a brief with marked research was refused. A mark naming none of them is still refused."""
     if inp.has_brief() or inp.coverage.get("brief_source", "none") not in ("none", None) or not _is_brief_data(doc):
         return False
-    fields, htw, oq, cov = brief_from_data(doc, chain or [], doc_id, {})
+    carried = doc.get("upstream") if isinstance(doc.get("upstream"), dict) else {}
+    docs = {**{k: v for k, v in carried.items() if isinstance(v, dict) and k != doc_id},
+            **{k: v for k, v in (others or {}).items() if isinstance(v, dict) and k != doc_id}}
+    fields, htw, oq, cov = brief_from_data(doc, chain or [], doc_id, docs)
     inp.brief, inp.how_to_win, inp.open_questions = fields, htw, oq
     inp.marks = (inp.marks or []) + (cov.pop("marks", None) or [])
     inp.answered = cov.pop("answered", None) or []

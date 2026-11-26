@@ -226,6 +226,20 @@ def validate_request(body: dict, settings: Settings) -> dict:
             "brief_upstream": brief_upstream(body)}
 
 
+#: Where a brief's client field stops naming the client and starts describing the launch: "Copperell Home Ltd is launching Copperell
+#: Refill: a ribbed amber glass…" (acceptance A32: the whole sentence ran past 80 characters, so the deck said '[Client]').
+_CLIENT_STOP = re.compile(r"\s+(?:is|are|was|were|has|have|will|wants|want|needs|need|launch(?:es|ing)?|makes|sells|plans|\()\b|\s*[:–—(]|\s+-\s+", re.I)
+
+
+def client_name(text) -> str:
+    """The client's name from a brief's client field: its first clause, before any 'is launching…' or ':' that describes the work; '' when that
+    is not a name (empty, or longer than 80 characters)."""
+    t = re.sub(r"^\s*to confirm:\s*", "", str(text or ""), flags=re.I)
+    t = re.split(r"[,;\n]", t)[0]
+    t = _CLIENT_STOP.split(t, maxsplit=1)[0].strip(" .")
+    return t if t and len(t) <= 80 else ""
+
+
 def brief_upstream(body: dict) -> dict | None:
     """``{id, data}``: the brief the deck was spun off from, carried whole (the middleware reads it from the deck's ``data.upstream``); None when
     it has none. UAT round 4 L2: without it a brief-only deck built from an empty brief."""
@@ -548,10 +562,10 @@ class Server:
         answers, verified = run_deck._read_answers(None)
         inp = inputs_mod.load(None, None, d.stages / "doc_facts.json", [], prompt_text=str(req["prompt"].get("text") or "").strip(),
                               answers=answers, verified=verified)
-        bu = req.get("brief_upstream")
+        bu, pu = req.get("brief_upstream"), req.get("production_upstream")
         if bu:   # the brief the deck was spun off from (UAT round 4 L2): the rows under 'Read the inputs' read it as the build does
-            inputs_mod.apply_upstream_brief(inp, bu["id"], bu["data"], ((req.get("members") or {}).get("decisions")))
-        pu = req.get("production_upstream")
+            inputs_mod.apply_upstream_brief(inp, bu["id"], bu["data"], ((req.get("members") or {}).get("decisions")),
+                                            {pu["id"]: pu["data"]} if pu else None)   # its marks, in the research it carries and the project
         if pu:   # the brief a carried Production project holds, and the research the deck carries: the evidence the build reads
             inputs_mod.apply_production_brief(inp, pu["id"], pu["data"])
         inputs_mod.apply_research(inp, req.get("members"))
@@ -598,8 +612,8 @@ class Server:
         if not str(p.get("client") or "").strip():   # acceptance A32: a deck from a brief named no client, so the cover and its open items said '[Client]'
             cl = ((req.get("brief_upstream") or {}).get("data") or {}).get("client")
             cl = (cl.get("value") if isinstance(cl, dict) else cl) or ""
-            cl = re.split(r"[,;\n]", re.sub(r"^\s*to confirm:\s*", "", str(cl), flags=re.I))[0].strip()
-            if cl and len(cl) <= 80:
+            cl = client_name(cl)
+            if cl:
                 p = {**p, "client": cl}
         argv = ["--prompt-text", str(p.get("text") or ""), "--stages", str(d.stages), "--client", str(p.get("client") or "[Client]"),
                 "--project", str(p.get("project") or "[Project]"), "--out", str(d.out), "--format", req["format"]]   # the QA runs: the repair loop reads it

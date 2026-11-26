@@ -351,6 +351,46 @@ def size_focal(size: dict, fset: dict | None) -> tuple:
 
 # ------------------------------------------------------------------------------------------------ the offer
 
+def _clip_name(t: str, n: int) -> str:
+    if len(t) <= n:
+        return t
+    cut = t[:n]
+    sp = cut.rfind(" ")
+    return re.sub(r"[\s,.;:\u2013\u2014-]+$", "", cut[:sp] if sp > n * 0.6 else cut) + "\u2026"
+
+
+def film_name(doc: dict) -> str:
+    """The name a Production project goes by, as Production names it (production-tool/web/src/projects/summary.ts autoName): its own title
+    unless it is still 'Untitled...' (a film that names itself never writes one: pc live walk 2026-11-25), else its newest brief's title,
+    else its script's first line. '' when it goes by none."""
+    own = str(((doc or {}).get("project") or {}).get("title") or "").strip()
+    if own and not re.match(r"untitled", own, re.I):
+        return _clip_name(own, 80)
+    briefs = (doc or {}).get("briefs") or {}
+    for bid in sorted(briefs, reverse=True):
+        bt = str((briefs[bid] or {}).get("title") or "").strip() if isinstance(briefs[bid], dict) else ""
+        if bt:
+            return _clip_name(bt, 60)
+
+    def rank(x: dict) -> str:
+        return str(x.get("rank") or "")
+    shots = [x for x in ((doc or {}).get("shots") or {}).values() if isinstance(x, dict)]
+    for sc in sorted((x for x in ((doc or {}).get("scenes") or {}).values() if isinstance(x, dict)), key=rank):
+        lines = str(sc.get("text") or "").split("\n")
+        for sh in sorted((x for x in shots if x.get("scene_id") == sc.get("id")), key=rank):
+            lines += str(sh.get("action") or "").split("\n")
+        for ln in lines:
+            if ln.strip():
+                return _clip_name(re.sub(r"\s+", " ", ln.strip()), 60)
+    return ""
+
+
+def storyboard_name(doc: dict, sb_id: str | None) -> str:
+    """A storyboard's own title when a person or Production gave it one (a route's, a film's), '' for the default 'Storyboard' or none."""
+    t = str((((doc or {}).get("storyboards") or {}).get(sb_id or "") or {}).get("title") or "").strip()
+    return "" if not t or re.fullmatch(r"(?:storyboard|untitled.*)", t, re.I) else _clip_name(t, 60)
+
+
 def _brief_of(doc: dict, fset_id: str) -> dict | None:
     """The brief linked into a Format set (link role brief): only its source document id and data hash, never its spine."""
     briefs = doc.get("briefs") or {}
@@ -570,6 +610,7 @@ def plan_offer(doc: dict, packs: dict) -> tuple:
         if not rr:
             continue
         cands.append({"key": cur, "entity": cur, "role": "frame", "shot": shid, "storyboard": sh.get("storyboard_id"), "shot_rank": sh.get("rank"),
+                      "storyboard_title": storyboard_name(doc, sh.get("storyboard_id")),
                       "shot_kind": sh.get("kind") or "shot", "version": f.get("v"), "sha": sha, "origin": a.get("origin"), "rights": rr[0],
                       "rights_why": rr[1], "status": "ready", "focal": dict(CENTRE), "focal_by": "centre",
                       **({"final": True} if ff else {}),
@@ -687,7 +728,8 @@ def make_item(c: dict, info: dict, clan_hex: str) -> dict:
     if c["rights"] == "reference_only":
         it["to_supply"] = "rights"
         it["rights_why"] = c.get("rights_why", "")
-    for k in ("set", "job_id", "channel", "channel_by", "format", "aspect", "delivery", "method", "reason", "shot", "storyboard", "shot_rank", "shot_kind", "keep", "subject"):
+    for k in ("set", "job_id", "channel", "channel_by", "format", "aspect", "delivery", "method", "reason", "shot", "storyboard", "storyboard_title",
+              "shot_rank", "shot_kind", "keep", "subject"):
         if c.get(k) not in (None, "", {}):
             it[k] = c[k]
     if c["role"] != "size":
@@ -761,7 +803,7 @@ def build(bundle: Path, at: str | None = None, work: Path | None = None) -> tupl
     fsets = format_set_rows(doc, items)
     proj = doc["project"]
     prod = {"stage": "production", "produced_by": "deck.from_production (a Production Tool export, no model call, no network)",
-            "contract_version": CONTRACT, "app": APP_ID, "project": {"id": proj["id"], "title": str(proj.get("title") or "")[:120]},
+            "contract_version": CONTRACT, "app": APP_ID, "project": {"id": proj["id"], "title": film_name(doc) or str(proj.get("title") or "")[:120]},
             "bundle": {"clan": clan_name, "clan_sha256": clan_hex, "assets_from": "+".join(sorted(where)) or "none"},
             "taken_at": at or datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "format_packs": packs_record(), "format_sets": fsets, "items": items, "offer_sha256": offer_sha(items),

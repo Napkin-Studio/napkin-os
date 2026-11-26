@@ -1,6 +1,6 @@
 {
  "agency_pitch": {
-  "html_sha256": "9b7e309dec49d8c8c45441030f3de82d65b969fc4fd61119c604b87b84c36ae4",
+  "html_sha256": "6e0a42d0eb7873ce4ce3fe4091f8937da09a191729defb0c55ba8be54cf50f1c",
   "layouts_sha256": "f43329f26a242c340751866616fbcb22b9df63f5582deae032dae4ea0fb9f594",
   "pptx": [
    [
@@ -2593,25 +2593,14 @@
      "Shape",
      [
       0.95,
-      3.69,
+      3.93,
       5.28,
       0.43
      ],
      "Role: Make the line famous"
     ],
     [
-     "Caption",
-     "Shape",
-     [
-      0.95,
-      6.28,
-      5.28,
-      0.22
-     ],
-     "Image prompt (illustrative): A tap at dawn"
-    ],
-    [
-     "Rectangle 7",
+     "Rectangle 6",
      "Shape",
      [
       6.78,
@@ -2622,7 +2611,7 @@
      ""
     ],
     [
-     "Rectangle 8",
+     "Rectangle 7",
      "Shape",
      [
       6.78,
@@ -2633,7 +2622,7 @@
      ""
     ],
     [
-     "TextBox 9",
+     "TextBox 8",
      "Shape",
      [
       7.18,
@@ -2644,7 +2633,7 @@
      "Every drop has a story."
     ],
     [
-     "TextBox 10",
+     "TextBox 9",
      "Shape",
      [
       7.18,
@@ -2655,7 +2644,7 @@
      "Poster"
     ],
     [
-     "Rectangle 11",
+     "Rectangle 10",
      "Shape",
      [
       0.65,
@@ -6123,7 +6112,7 @@
   ]
  },
  "lumen_water": {
-  "html_sha256": "ef026099aa4c96bd165ca1785f3bfabdfb88f389d66cc3ab404055505f614b3e",
+  "html_sha256": "bb1a5b1baf8159a01bcc9c4c56897e5fbffbbaacff7da32ba28db4fa88f19cca",
   "layouts_sha256": "8273b1a0c4af069e1cbafb5107a090605da82c5b84e14d7e615adc570460e5ff",
   "pptx": [
    [
@@ -7193,25 +7182,14 @@
      "Shape",
      [
       0.95,
-      3.69,
+      3.93,
       5.28,
       0.43
      ],
      "Role: Make the line famous"
     ],
     [
-     "Caption",
-     "Shape",
-     [
-      0.95,
-      6.28,
-      5.28,
-      0.22
-     ],
-     "Image prompt (illustrative): A tap at dawn"
-    ],
-    [
-     "Rectangle 7",
+     "Rectangle 6",
      "Shape",
      [
       6.78,
@@ -7222,7 +7200,7 @@
      ""
     ],
     [
-     "Rectangle 8",
+     "Rectangle 7",
      "Shape",
      [
       6.78,
@@ -7233,7 +7211,7 @@
      ""
     ],
     [
-     "TextBox 9",
+     "TextBox 8",
      "Shape",
      [
       7.18,
@@ -7244,7 +7222,7 @@
      "Every drop has a story."
     ],
     [
-     "TextBox 10",
+     "TextBox 9",
      "Shape",
      [
       7.18,
@@ -7255,7 +7233,7 @@
      "Poster"
     ],
     [
-     "Rectangle 11",
+     "Rectangle 10",
      "Shape",
      [
       0.65,
@@ -12269,7 +12247,7 @@
   ]
  },
  "tender_response": {
-  "html_sha256": "5e1eaac3bf5b4e8b075b5ed600e8d6305a7e62566f79d12879747c2bd91a04de",
+  "html_sha256": "36070844a5bd9f0e9fd8c4b3cbb3ad8157e513994aaf223974366338fbfc9052",
   "layouts_sha256": "ed849329594a03fe30f368407c9de82f4968905668ecd38eb5ce61fc2cf7095a",
   "pptx": [
    [
@@ -14563,25 +14541,14 @@
      "Shape",
      [
       0.95,
-      3.69,
+      3.93,
       5.28,
       0.43
      ],
      "Role: Make the line famous"
     ],
     [
-     "Caption",
-     "Shape",
-     [
-      0.95,
-      6.28,
-      5.28,
-      0.22
-     ],
-     "Image prompt (illustrative): A bin by a front door"
-    ],
-    [
-     "Rectangle 7",
+     "Rectangle 6",
      "Shape",
      [
       6.78,
@@ -14592,7 +14559,7 @@
      ""
     ],
     [
-     "Rectangle 8",
+     "Rectangle 7",
      "Shape",
      [
       6.78,
@@ -14603,7 +14570,7 @@
      ""
     ],
     [
-     "TextBox 9",
+     "TextBox 8",
      "Shape",
      [
       7.18,
@@ -14614,7 +14581,7 @@
      "Ready for bin day."
     ],
     [
-     "TextBox 10",
+     "TextBox 9",
      "Shape",
      [
       7.18,
@@ -14625,7 +14592,7 @@
      "Poster"
     ],
     [
-     "Rectangle 11",
+     "Rectangle 10",
      "Shape",
      [
       0.65,

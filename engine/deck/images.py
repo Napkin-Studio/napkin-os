@@ -526,6 +526,12 @@ def execution_group(title: str) -> str | None:
     return None
 
 
+#: The channels whose execution shows the key visual when Production made no size for them: a poster, a print ad or a display banner is
+#: the key visual in its format. Social takes a phone frame of its own and film a storyboard frame, so they never take it.
+KV_STANDS_IN = ("ooh", "print", "display")
+CHANNEL_WORDS = {"ooh": "out-of-home", "print": "print", "display": "display"}
+KV_STANDS_IN_NOTE = "The key visual stands in here: Production has no {channel} size of it yet. Make the size in Production and build again."
+
 #: The reason of a slot a group of finals cannot fill (shown as the gap; the person supplies the picture or makes one in Production).
 GROUP_GAP = {"keyvisual": "To supply from Production: a key visual. No key visual final in the export; make or mark one final, or supply a picture",
              "product": "To supply from Production: a packshot. No final in the export is a product packshot; make or mark one final, or supply a picture",
@@ -903,6 +909,36 @@ def fit_storyboard_copy(slide: dict, shots: list) -> list:
     return moved
 
 
+_FRAME_INDEX = re.compile(r"\s*[\(\[]\s*(?:frames?|shots?|stills?)\s*\d+(?:\s*(?:of|/)\s*\d+)?\s*[\)\]]"
+                          r"|\s*[,:;\u2013\u2014-]\s*(?:frames?|shots?|stills?)\s*\d+(?:\s*(?:of|/)\s*\d+)?\s*$", re.I)
+
+
+def name_storyboard_slide(slide: dict, prod: dict, key: str | None) -> None:
+    """A storyboard slide names the film it shows, never a frame index the idea stage put in its heading ('Storyboard frames (frame 1)',
+    'frame 1 of 3': pc live walk 2026-11-25): the index leaves, and the storyboard's own title (a route's, a film's) or else the name the
+    Production project goes by is added, 'Storyboard frames: The Tap Tells film'. Nothing is added when the film goes by no name."""
+    it = (prod.get("items") or {}).get(key or "") or {}
+    name = str(it.get("storyboard_title") or "").strip()
+    if not name:
+        pt = str((prod.get("project") or {}).get("title") or "").strip()
+        name = "" if re.match(r"untitled", pt, re.I) else pt
+    if len(name) > 40:
+        cut = name[:40]
+        sp = cut.rfind(" ")
+        name = re.sub(r"[\s,.;:\u2013\u2014-]+$", "", cut[:sp] if sp > 24 else cut) + "\u2026"
+    title = _FRAME_INDEX.sub("", str(slide.get("title") or "")).strip()
+    if name and name.lower() not in title.lower() and ":" not in title:   # a heading that already says what it shows keeps its words
+        title = f"{title}: {name}" if title else name
+    if not title or title == slide.get("title"):
+        return
+    slide["title"] = title
+    if isinstance(slide.get("label"), str):
+        slide["label"] = ("Execution " + title) if slide["label"].startswith("Execution ") else _FRAME_INDEX.sub("", slide["label"]).strip()
+    t = (slide.get("slots") or {}).get("title")
+    if isinstance(t, dict) and t.get("kind") == "text":
+        t["text"] = title
+
+
 def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", names=(), brief_document_id: str | None = None) -> dict:
     """Fill picture slots from production.json (deck-prod-assets slice 2), by slide type and channel, after the supplied pictures and before
     the empty slots and the image step, so a filled slot (or one waiting for its rights) never reaches the generation plan. Cover (only with
@@ -943,6 +979,8 @@ def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", na
                 ch = execution_channel(title)
                 if ch == "film":
                     key = production_frame(prod)
+                    if key:
+                        name_storyboard_slide(s, prod, key)
                     own = ((((s.get("slots") or {}).get(slot) or {}).get("image") or {}).get("from") or {}).get("kind") in ("upload", "brand")
                     if spec.GRAPHICS and not own:   # deck-graphics slice 3: 3 or 4 Production frames in shot order make a strip, all Production or none
                         from .graphics import strip_picks   # noqa: PLC0415
@@ -987,6 +1025,15 @@ def bind_production(deck: dict, prod: dict, pictures: str = "creative_cover", na
                     if ch == "ooh" and spec.GRAPHICS and key and prod["items"][key].get("channel") == "ooh":   # one OOH format: its frame, named
                         fid = (prod["items"][key].get("format") or {}).get("format_id")
                         s["ooh"] = {"formats": [{"slot": slot, "format_id": fid, "name": ooh_name(fid)}]}
+                    if not key and not why and master and (execution_group(title) == "keyvisual" or ch in KV_STANDS_IN):
+                        # UAT round 4 (slide 9, "Key visual: station posters"): Production made the key visual and no size for this channel,
+                        # so the slot stayed empty and the slide printed its picture prompt. The key visual stands in, whole, until a size is made.
+                        if spec.GRAPHICS or keeps_protected(prod["items"][master], aspect):
+                            key = master
+                            s["notes"] = ((s.get("notes") or "").rstrip() + "\n\n" + KV_STANDS_IN_NOTE.format(channel=CHANNEL_WORDS.get(ch, ch))).strip()
+                        else:
+                            why = (f"The key visual would lose part of its protected area in a {aspect} crop, and Production has no {CHANNEL_WORDS.get(ch, ch)} "
+                                   f"size. Make one in Production, or supply a picture")
                 elif execution_group(title):   # "Size crops", "Packshot": the finals Production made, not a channel's sizes
                     grp = execution_group(title)
                     pool = group_pool(prod, aspect, placed_keys, any_shape=bool(spec.GRAPHICS), placeable_only=True, group=grp)
