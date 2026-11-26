@@ -39,7 +39,7 @@ def test_a_live_build_passes_all_three_gates_without_a_type_change(tmp_path, mon
     def go(approvals):
         v = s.run({"doc": "doc1", "inputs": INPUTS, "approvals": approvals, "mode": "live", "render": False})
         end = time.time() + 120
-        while s.busy and time.time() < end:
+        while s.docs["doc1"].running() and time.time() < end:
             time.sleep(0.05)
         return s.view(s.docs["doc1"]) if v else None
 

@@ -292,9 +292,13 @@ def items_for(row: str, stages: Path, summary: dict | None, current: str | None,
 
 
 # ── the run object ──────────────────────────────────────────────────────────────────────────────────────────────────
+#: The row under way while a run waits for a slot on the engine (it runs a few documents at once and starts this one by itself).
+WAITING_SUB = "Waiting for another deck to finish · starts automatically"
+
+
 def run_object(*, state: str, stages: Path, summary: dict | None = None, current: str | None = None, held: str | None = None,
                cost: float | None = None, error: dict | None = None, validation: dict | None = None, written: list[str] | None = None,
-               slow: bool = False, done: dict | None = None) -> dict:
+               slow: bool = False, done: dict | None = None, waiting: bool = False) -> dict:
     """The ``run`` the screens read. ``state`` is draft, building, gate, done or failed; ``current`` is the engine step under way
     (a0, a, b, insight_judge, c, d, fit, e, red_team, validate, render_pptx ...); ``held`` the gate that waits for the person.
     The keys the app writes (approvals, decisions, gate_requests) are never here."""
@@ -316,6 +320,8 @@ def run_object(*, state: str, stages: Path, summary: dict | None = None, current
                 row["status"], row["sub"] = "now", "Needs you · you pick" if held == "territories" else "Needs you · you approve it"
             elif state == "failed":
                 row["status"], row["sub"] = "failed", "Stopped"
+            elif waiting:   # nothing runs yet: no step is under way, so no items
+                row["status"], row["sub"] = "now", WAITING_SUB
             else:
                 row["status"], row["sub"] = "now", "Writing" if rid in ("storyline", "territories", "idea") else "Reading" if rid == "inputs" else "Checking"
                 items = items_for(rid, stages, summary, current, validation, written or [])
@@ -328,7 +334,9 @@ def run_object(*, state: str, stages: Path, summary: dict | None = None, current
     if state == "building":
         key, act = STEP_AGENT.get(current or "load", ("brief", "read"))
         agent = {"key": key, "activity": act, "step_index": STEP_OF[key], "step_total": STEP_TOTAL}
-        if slow:
+        if waiting:
+            agent["waiting"] = True
+        elif slow:
             agent["slow"] = True
     elif state == "done":
         agent = {"key": "review", "activity": "complete", "step_index": STEP_OF["review"], "step_total": STEP_TOTAL}

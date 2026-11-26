@@ -201,7 +201,7 @@ def _go(s, approvals, doc=DOC, tu=True, data=None):
         body["territories_upstream"] = {"id": "src-territories", "data": data or territories()}
     v = s.run(body)
     end = time.time() + 120
-    while s.busy and time.time() < end:
+    while s.docs[doc].running() and time.time() < end:
         time.sleep(0.05)
     return s.view(s.docs[doc]) if v else None
 

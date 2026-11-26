@@ -1306,6 +1306,14 @@ test('runView: slow says nothing is wrong, with no time; a hand-off names who ta
   assert.equal(ho.items.at(-1)!.pill, 'Passing on')
 })
 
+test('a deck waiting for a slot on the engine says so in plain words and that it starts by itself (UAT 2026-11-26)', () => {
+  const w = L.agentState({ state: 'building', stages: [], agent: { key: 'brief', activity: 'read', waiting: true, step_index: 1, step_total: 6 } })
+  assert.equal(w.word, 'Waiting for another deck to finish')
+  const v = L.runView({ state: 'building', stages: [{ id: 'inputs', name: 'Read the inputs', status: 'now', sub: 'Waiting for another deck to finish · starts automatically' }],
+    agent: { key: 'brief', activity: 'read', waiting: true } }, null)
+  assert.match(v.lede, /^Waiting for another deck to finish\. It starts automatically: nothing needs you\.$/)
+})
+
 test('runView: a failure shows the failed stage\'s items, the one running marked failed, and whether it retries', () => {
   const f = fixture('failed'), v = L.runView(f.run, f.deck)
   assert.deepEqual(plain([v.title, v.stage, v.retryable, v.lede]), ['Something failed', 'check', true, f.run.error.message])

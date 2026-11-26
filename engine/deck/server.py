@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""The Deck Maker engine server: run_deck behind a small HTTP port, one segment at a time, stopping at each gate.
+"""The Deck Maker engine server: run_deck behind a small HTTP port, stopping at each gate. One segment per document at a time, and up to
+NAPKIN_DECK_MAX_RUNS documents at once; a run past that waits for a slot (and says so) and starts by itself.
 
     python3 -m deck.server                      # from engine/; listens on 127.0.0.1:8793
 
@@ -11,7 +12,7 @@ so a restarted engine (a deploy) still serves a finished deck's files and run.
 
 Routes (JSON; failures are non-2xx with ``{"error": {"type", "message"}}``, never a 200 with an error in it)::
 
-    GET  /status                 what is on and what is busy
+    GET  /status                 what is on, which documents are building and which wait for a slot
     POST /run                    {doc, inputs, approvals, mode, render?, production_upstream?, territories_upstream?, brief_upstream?, brand_upstream?}: start the next segment of this document's run
                                  (production_upstream {id, data}: the Production project the deck was spun off from, carried whole;
                                  production_assets {base, pass}: the relay's address and napkin-web's read-only assets pass for it, a secret)
@@ -29,6 +30,8 @@ Env (all optional)::
     NAPKIN_DECK_MAX_USD    the most one run may spend live (default 2.00); the run stops, with its message, at the cap
     NAPKIN_DECK_IMAGES     1 to allow picture generation (deck-image-gen): off by default. A cost card and a person's yes come first, always
     NAPKIN_DECK_IMAGES_MAX_USD  the ceiling on one deck's picture spend over its whole life (default 2.50), failures and stage g included
+    NAPKIN_DECK_MAX_RUNS   how many documents build at once (default 3: a build waits on model calls far more than it computes, and the
+                           cloud's deck container has 2 GiB); a run past it waits for a slot, never refused
 
 The gates: storyline (after stage b), territories (after c), idea (after d); an investor deck has the storyline only (after i).
 A gate is held until the request carries the person's approval of it AND that gate's stage output already existed when the request
@@ -101,6 +104,59 @@ class Cap:
             pass
 
 
+#: How many documents build at once when NAPKIN_DECK_MAX_RUNS is not set (UAT 2026-11-26: one global run made one person's deck wait
+#: twenty minutes for another's). A build spends most of its time waiting on model calls; the cloud's deck container has 2 GiB.
+DEFAULT_MAX_RUNS = 3
+
+
+class _ThreadStream(io.TextIOBase):
+    """sys.stdout / sys.stderr while runs build side by side: a thread that set a buffer (``capture``) writes there, every other thread
+    to the stream underneath. contextlib.redirect_stderr swaps the one process-wide stream, so two runs at once took each other's lines
+    (and the refusal message is the last line a run printed) and put the wrong stream back."""
+
+    def __init__(self, real, slot: str):
+        self.real, self.slot = real, slot
+
+    def _target(self):
+        return getattr(_CAPTURE, self.slot, None) or self.real
+
+    def write(self, text):
+        return self._target().write(text)
+
+    def flush(self):
+        self._target().flush()
+
+    def __getattr__(self, name):   # fileno, encoding, isatty, buffer ...: the real stream's
+        return getattr(self.real, name)
+
+
+_CAPTURE = threading.local()
+_STREAM_LOCK = threading.Lock()
+
+
+@contextlib.contextmanager
+def capture():
+    """This thread's stdout and stderr go to their own buffers for the block; yields the stderr buffer. Other threads are untouched."""
+    with _STREAM_LOCK:
+        for slot in ("stdout", "stderr"):
+            cur = getattr(sys, slot)
+            if not isinstance(cur, _ThreadStream):
+                setattr(sys, slot, _ThreadStream(cur, slot))
+    err = io.StringIO()
+    prev = (getattr(_CAPTURE, "stdout", None), getattr(_CAPTURE, "stderr", None))
+    _CAPTURE.stdout, _CAPTURE.stderr = io.StringIO(), err
+    try:
+        yield err
+    finally:
+        _CAPTURE.stdout, _CAPTURE.stderr = prev
+
+
+#: The cost cap of the live run on this thread (guard_live): the one model-call wrapper consults it, so each run keeps its own sum.
+_RUN_CAP = threading.local()
+_GUARD_LOCK = threading.Lock()
+_GUARD = {"users": 0, "orig": None, "wrapper": None}
+
+
 class Settings:
     def __init__(self, env=None):
         e = os.environ if env is None else env
@@ -110,6 +166,10 @@ class Settings:
         self.live = (e.get("NAPKIN_DECK_LIVE") or "").strip() == "1"
         self.max_usd = float(e.get("NAPKIN_DECK_MAX_USD") or 2.0)
         self.images = (e.get("NAPKIN_DECK_IMAGES") or "").strip() == "1"
+        try:
+            self.max_runs = max(1, int(e.get("NAPKIN_DECK_MAX_RUNS") or DEFAULT_MAX_RUNS))
+        except ValueError:
+            self.max_runs = DEFAULT_MAX_RUNS
 
 
 #: A Production file sent for a document: a .clan or the export zip, at most the importer's .clan cap (64 MB; the middleware's own body cap
@@ -372,6 +432,10 @@ class Doc:
         self.cost = 0.0
         self.images: dict | None = None   # run.images: the picture cards the person reads (engine-owned)
 
+    def running(self) -> bool:
+        """A segment of this document is going (or waits for a slot)."""
+        return bool(self.thread and self.thread.is_alive())
+
     @property
     def stages(self) -> Path:
         return (self.folder or self.root) / "stages"
@@ -386,19 +450,23 @@ class Server:
         self.s = settings
         self.lock = threading.RLock()
         self.docs: dict[str, Doc] = {}
-        self.busy: str | None = None   # one segment at a time: run_deck keeps process-wide state (BRIEF_CLI_EFFORT, the model ledger)
+        self.slots = threading.BoundedSemaphore(settings.max_runs)   # documents building at once; a run past it waits in segment()
+        self.waiting: set[str] = set()   # documents whose run waits for a slot
 
     # -- routes --
     def status(self) -> dict:
-        return {"ok": True, "live": self.s.live, "replay": bool(self.s.replay and self.s.replay.is_dir()), "max_usd": self.s.max_usd, "busy": self.busy,
-                "types": type_offers()}
+        with self.lock:
+            building = sorted(n for n, d in self.docs.items() if d.running() and n not in self.waiting)
+            waiting = sorted(self.waiting)
+        return {"ok": True, "live": self.s.live, "replay": bool(self.s.replay and self.s.replay.is_dir()), "max_usd": self.s.max_usd,
+                "max_runs": self.s.max_runs, "building": building, "waiting": waiting, "types": type_offers()}
 
     def run(self, body: dict) -> dict:
         req = validate_request(body, self.s)
         with self.lock:
-            if self.busy:
-                raise Refused(409, "job_state", f"a run is already going ({self.busy}): the engine runs one segment at a time")
             d = self.docs.setdefault(req["doc"], Doc(self.s.data / req["doc"], req["doc"]))
+            if d.running():   # one segment per document: the next one starts from what this one writes
+                raise Refused(409, "job_state", "this deck is already building: wait for the step under way to finish")
             d.folder = self.s.data / req["doc"] / inputs_key(req["inputs"])
             d.out_tag = out_key(req["inputs"])
             d.stages.mkdir(parents=True, exist_ok=True)
@@ -420,7 +488,6 @@ class Server:
                                                   "poppler (pdftoppm) on this machine; ask for render false to stop at the deck without the files")
             d.state, d.held, d.current, d.started = "building", None, None, time.time()
             d.until = until
-            self.busy = d.name
             self.write_status(d)
             d.thread = threading.Thread(target=self.segment, args=(d, req, until), daemon=True, name=f"deck-{d.name}")
             d.thread.start()
@@ -569,6 +636,7 @@ class Server:
         elapsed = time.time() - d.started if d.state == "building" else 0.0
         cur = d.current or self.guess_step(d)
         run = rs.run_object(state=d.state, stages=d.stages, summary=d.summary, current=cur, held=d.held, cost=(rs.spent(d.stages) if live else None),
+                            waiting=d.name in self.waiting,
                             error=d.error, validation=(d.pay or {}).get("validation"), slow=rs.is_slow(cur, elapsed),
                             written=[f"{k}" for k in (d.pay or {}).get("exports", {})], done=(d.pay or {}).get("done"))
         if d.images and d.state == "done":
@@ -612,6 +680,14 @@ class Server:
 
     # -- one segment, in a thread --
     def segment(self, d: Doc, req: dict, until: str | None) -> None:
+        if not self.slots.acquire(blocking=False):   # at the limit: wait for another document's segment to end, then start by itself
+            with self.lock:
+                self.waiting.add(d.name)
+                self.write_status(d)
+            self.slots.acquire()
+            with self.lock:
+                self.waiting.discard(d.name)
+                d.started = time.time()
         try:
             self.seed(d, req, until)
             inp = self.load_inputs(d, req)
@@ -635,8 +711,8 @@ class Server:
             traceback.print_exc()
             self.fail(d, f"{type(e).__name__}: {e}"[:600] if not isinstance(e, SystemExit) else f"the engine refused the run: {e.code}"[:600], retryable=True)
         finally:
+            self.slots.release()
             with self.lock:
-                self.busy = None
                 self.write_status(d)
 
     def load_inputs(self, d: Doc, req: dict):
@@ -801,7 +877,7 @@ class Server:
         err = io.StringIO()
         restore = self.guard_live(d, req) if req["mode"] == "live" else None
         try:
-            with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()), prod_picker.use_relay(req.get("production_assets")):
+            with capture() as err, prod_picker.use_relay(req.get("production_assets")):
                 return run_deck.main(argv)
         except SystemExit as e:
             raise Refused(400, "engine_refused", (err.getvalue().strip().splitlines() or [str(e.code)])[-1]) from e
@@ -854,18 +930,36 @@ class Server:
         return {"state": "card" if cards else "idle", "cards": cards, "spent_usd": spent, "cap_usd": plan.get("cap_usd")}
 
     def guard_live(self, d: Doc, req: dict):
-        """Live only: every paid model call first asks the cap, and adds what it cost, so a run stops at NAPKIN_DECK_MAX_USD."""
+        """Live only: every paid model call first asks the cap, and adds what it cost, so a run stops at NAPKIN_DECK_MAX_USD. Runs build side
+        by side, so the model call is wrapped once while any live run is going, and the wrapper asks the cap of the run on the calling thread
+        (deck stages call the model on the segment's own thread). Returns the undo for this run."""
         from . import stages
-        cap = Cap(self.s.max_usd, rs.spent(d.stages))
-        orig = stages._call
+        _RUN_CAP.cap = Cap(self.s.max_usd, rs.spent(d.stages))
+        with _GUARD_LOCK:
+            if _GUARD["users"] == 0 or stages._call is not _GUARD["wrapper"]:
+                orig = stages._call
 
-        def call(stage, user, system):
-            cap.check()
-            obj, usage = orig(stage, user, system)
-            cap.add((usage or {}).get("usd"))
-            return obj, usage
-        stages._call = call
-        return lambda: setattr(stages, "_call", orig)
+                def call(stage, user, system):
+                    cap = getattr(_RUN_CAP, "cap", None)
+                    if cap:
+                        cap.check()
+                    obj, usage = orig(stage, user, system)
+                    if cap:
+                        cap.add((usage or {}).get("usd"))
+                    return obj, usage
+                _GUARD.update(orig=orig, wrapper=call)
+                stages._call = call
+            _GUARD["users"] += 1
+
+        def restore():
+            _RUN_CAP.cap = None
+            with _GUARD_LOCK:
+                _GUARD["users"] -= 1
+                if _GUARD["users"] == 0:
+                    if stages._call is _GUARD["wrapper"]:
+                        stages._call = _GUARD["orig"]
+                    _GUARD.update(orig=None, wrapper=None)
+        return restore
 
     def fail(self, d: Doc, message: str, retryable: bool) -> None:
         with self.lock:
