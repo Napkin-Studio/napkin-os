@@ -64,14 +64,16 @@ def lint_text(text: str, banned=(), deny: dict | None = None, allow=()) -> str |
         before = t[:m.start()].rstrip()
         if before and before[-1] not in ".!?:(\n":
             return f"{m.group(0)!r} is a capital in mid-sentence (a name)"
-    ok = allowed() | {w for a in allow for w in tokens(a)}
+    # Hard rules only (owner, 26 Nov 2026): there is no approved-word list any more. A describing word ('unhurried', 'tarmac', 'shopfronts')
+    # passes; a name, a number, a brand, a quotation mark, a style of someone and banned imagery are still refused. (``allowed()`` stays
+    # only for the Confidential deny-list below, which #370 removes.)
+    if re.search(r"\b[A-Z][a-z]+[- ]style\b", t):      # "Banksy style": a name before "style", even where a sentence starts (the list caught it)
+        return "it asks for the style of someone"
     for w in tokens(t):
         if w in BRAND_WORDS or (w.endswith("s") and w[:-1] in BRAND_WORDS):
             return f"{w!r} is a brand name"
         if w in NUMBER_WORDS:
             return f"{w!r} is a number in words"
-        if w not in ok and not (w.endswith("s") and w[:-1] in ok) and not (w.endswith("es") and w[:-2] in ok):   # a plural of a listed word passes
-            return f"{w!r} is not on the allowed word list"
     low = t.lower()
     for b in banned or ():
         if re.search(rf"\b{re.escape(str(b).lower())}s?\b", low):
