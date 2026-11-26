@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ToolPage } from './ToolPage'
 import type { Manage } from './useLanding'
 import { agencySummary, newsOf, whoIs, type AgencySummary } from './model'
-import { liveTools, toolById, toolHref, type Tool } from './tools'
+import { liveTools, newDocHref, toolById, toolHref, type Tool } from './tools'
 import { productionOn } from '../../host/http'
 import { arrival, isTyping } from './keys'
 import type { LandingData } from './store'
@@ -99,6 +99,13 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
   const live = useMemo(() => liveTools(installed, production), [installed, production])
   // A tool with a page here: live, and not one that opens outside the shell (Prod).
   const routable = useCallback((id: string) => live.has(id) && toolHref({ id }) === null, [live])
+  // A tool's "+": Production starts its film on its own page (a full load), an app starts in the shell.
+  const startNew = (t: Tool, clientId: string) => {
+    const href = newDocHref(t, clientId)
+    if (href) window.location.assign(href)
+    else if (t.appId) onStart(t.appId, clientId)
+  }
+
   const openTool = (clientId: string, t: Tool) => {
     const href = toolHref(t, clientId)
     if (href) window.location.assign(href)
@@ -161,7 +168,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         client={client}
         tool={tool}
         items={inTool}
-        onNew={() => { if (tool.appId) onStart(tool.appId, client.id) }}
+        onNew={() => startNew(tool, client.id)}
         onOpenItem={onOpenDocument}
         onBack={() => go({ level: 'client', client: client.id })}
         lenses={lenses}
@@ -175,7 +182,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         facts={facts}
         live={live}
         onOpenItem={onOpenDocument}
-        onNew={t => { if (t.appId) onStart(t.appId, client.id) }}
+        onNew={t => startNew(t, client.id)}
         onOpenTool={t => openTool(client.id, t)}
         onSoon={sayingSoon}
         onDecisions={onDecisions}

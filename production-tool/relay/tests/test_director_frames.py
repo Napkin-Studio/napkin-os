@@ -216,17 +216,18 @@ def test_a_frames_prompt_says_no_clock_time_unless_its_shot_asks_for_words_on_sc
     assert "1:04 a.m." in shown.output["providerJob"]["prompt"]
 
 
-def test_r5_a_frame_of_a_shot_with_no_one_says_no_people_in_its_prompt():
+def test_r5_a_frame_of_a_shot_with_no_one_says_no_people_first():
     """UAT round 5 (R5-F3): the kettle insert, which shows no one, was drawn with Maya beside it. The web's direction says
-    no one is seen (web jobs/cast.ts NO_ONE_LINE); the relay puts its own line in the frame's prompt."""
+    no one is seen (web jobs/cast.ts NO_ONE_LINE); the relay says it as the frame's FIRST sentence (A51: mid-prompt, it
+    did not hold), whatever Dex wrote."""
     from director.director import NO_PEOPLE, _no_people
 
     sheet = load_sheet("runway")
     shot = {"action": "The kettle glows soft blue.", "direction": "Cast: no one is seen in this shot; draw no people."}
-    job = {"model": "gemini_image3_pro", "prompt": "An insert of a kettle glowing soft blue. Full-bleed cinematic image; no text, captions, borders or panels.",
+    job = {"model": "gemini_image3_pro", "prompt": "An insert of a kettle glowing soft blue, no person in sight. Full-bleed cinematic image; no text, captions, borders or panels.",
            "refs": [{"name": "anchor", "role": "object"}]}
     _no_people(job, "frame", {"shot": shot}, sheet)
-    assert NO_PEOPLE in job["prompt"]
+    assert job["prompt"].startswith(NO_PEOPLE)
     assert job["prompt"].endswith("Full-bleed cinematic image; no text, captions, borders or panels.")
     # Said once; not on a frame with a character picture, not without the web's line, not on a clip.
     again = dict(job)
@@ -235,10 +236,67 @@ def test_r5_a_frame_of_a_shot_with_no_one_says_no_people_in_its_prompt():
     for j, op, payload in ((
         {"prompt": "A kettle.", "refs": [{"name": "maya_front", "role": "character"}]}, "frame", {"shot": shot}),
         ({"prompt": "A kettle.", "refs": []}, "frame", {"shot": {"action": "Maya whispers."}}),
-        ({"prompt": "A kettle.", "refs": []}, "clip", {"shot": shot}),
-        ({"prompt": "A kettle, no person in sight.", "refs": []}, "frame", {"shot": shot})):
+        ({"prompt": "A kettle.", "refs": []}, "clip", {"shot": shot})):
         _no_people(j, op, payload, sheet)
         assert NO_PEOPLE not in j["prompt"]
+
+
+# UAT acceptance A51: Sunday Drop frame 1, as Dex wrote it (job_01M89ENPBV1ACHRSGWK7XED7GM, without the relay's lines).
+SUNDAY_DROP_1 = ("A wide, eye-level, static shot. Warm evening light fills a quiet kitchen worktop. The ribbed amber glass bottle "
+                 "stands in the light, the hero of the frame, centred and clear of the edges. Calm, quietly satisfied mood, with "
+                 "copper amber and charcoal accents. No people.")
+COPPERELL_TONE = "Hands only, no recognisable faces"
+
+
+def _no_one_frame(i):
+    i["shot"].update(action="The amber bottle stands on the worktop in warm evening light.", refs=[],
+                     direction="Cast: no one is seen in this shot; draw no people.")
+    i["refs"] = []
+    i["brief"] = _brief(COPPERELL_TONE)
+
+
+def _sunday_drop(r):
+    r["providerJob"]["prompt"] = SUNDAY_DROP_1
+    r["providerJob"]["refs"] = []
+
+
+def test_a51_a_shot_with_no_one_gets_no_people_first_and_never_the_people_may_appear_line():
+    """UAT acceptance A51: the brief's no-faces line went first ("People may appear … seen only from behind, in silhouette"),
+    the shot's "No people." mid-prompt, and the picture showed a figure seen from behind. A shot that shows no one is
+    honoured: no one first, and no line that invites a person."""
+    from director.director import NO_PEOPLE, UNRECOGNISABLE
+
+    res, _, _ = direct("frame_runway_first", edit_reply=_sunday_drop, edit_input=_no_one_frame)
+    prompt = res.output["providerJob"]["prompt"]
+    assert prompt.startswith(NO_PEOPLE)
+    assert UNRECOGNISABLE not in prompt
+    assert not re.search(r"people may appear|seen only from behind|silhouette, at a distance", prompt, re.I)
+    assert "ribbed amber glass bottle" in prompt
+
+    # A shot with people in the same project still gets the no-faces line first, and no "No people" line.
+    def people(i):
+        i["refs"] = []
+        i["shot"].update(action=CROWDED_TRAM, refs=[])
+        i["brief"] = _brief(COPPERELL_TONE)
+
+    res, _, _ = direct("frame_runway_first", edit_reply=lambda r: r["providerJob"].update(prompt=CROWDED_TRAM, refs=[]), edit_input=people)
+    prompt = res.output["providerJob"]["prompt"]
+    assert prompt.startswith(UNRECOGNISABLE) and NO_PEOPLE not in prompt
+
+
+def test_a51_the_passthrough_honours_a_shot_with_no_one_too():
+    from director.director import NO_PEOPLE, UNRECOGNISABLE, say_unrecognisable
+
+    sheet = load_sheet("runway")
+    shot = {"action": "The amber bottle on the worktop.", "direction": "Cast: no one is seen in this shot; draw no people."}
+    out = {"providerJob": {"provider": "runway", "model": "gemini_image3_pro", "prompt": SUNDAY_DROP_1, "refs": []}}
+    say_unrecognisable(out, "frame", _brief(COPPERELL_TONE), sheet, {"shot": shot})
+    prompt = out["providerJob"]["prompt"]
+    assert prompt.startswith(NO_PEOPLE) and UNRECOGNISABLE not in prompt
+    # Without a shot that shows no one, the no-faces line as before.
+    out = {"providerJob": {"provider": "runway", "model": "gemini_image3_pro", "prompt": CROWDED_TRAM, "refs": []}}
+    say_unrecognisable(out, "frame", _brief(COPPERELL_TONE), sheet, {"shot": {"action": CROWDED_TRAM}})
+    assert out["providerJob"]["prompt"].startswith(UNRECOGNISABLE)
 
 
 FERNCLIFF_FACES = "No real people's faces on posters, in the film or on social."
@@ -348,3 +406,44 @@ def test_director_v18_tells_dex_to_write_people_shots_as_hands_backs_silhouettes
     text = " ".join(added)
     for word in ("hands", "silhouette", "far away", "smiling", "looking at the camera", "rule wins over the action"):
         assert word in text, word
+
+
+# UAT acceptance A53: the Territories route's "COPPERELL wordmark, always top right" went into every shot's action, and the
+# frames and the clip painted the wordmark into the footage. It belongs to the end card only.
+WORDMARK_SHOTS = [
+    "Soft morning light on a bathroom shelf. Hand soap, candle, perfume: a neat line of nice things. COPPERELL wordmark top right.",
+    "The hand adds a small tin of tablets beside the amber bottle, COPPERELL wordmark top right.",
+]
+END_CARD = "Charcoal card. Super: A little nicer, every 500 ml. COPPERELL wordmark top right. Small line: Keep out of reach of children."
+
+
+def test_a53_a_plans_shots_lose_the_wordmark_and_small_print_but_the_end_card_keeps_them():
+    def reply(r):
+        shots = r["shots"]
+        shots[0]["action"], shots[1]["action"] = WORDMARK_SHOTS
+        shots[-1].update(kind="end_card", camera={"size": "graphic", "movement": "static"}, action=END_CARD)
+
+    res, _, _ = direct("shot_list", edit_reply=reply)
+    shots = res.output["shots"]
+    assert shots[0]["action"] == "Soft morning light on a bathroom shelf. Hand soap, candle, perfume: a neat line of nice things."
+    assert shots[1]["action"] == "The hand adds a small tin of tablets beside the amber bottle."
+    assert shots[-1]["action"] == END_CARD  # the end card is where they belong
+    assert not any(re.search(r"wordmark|reach of children", s["action"], re.I) for s in shots[:-1])
+
+
+def test_a53_a_frame_of_a_shot_paints_no_wordmark_and_sends_no_logo_it_no_longer_names():
+    from director.director import _no_overlays_in_picture, without_overlays
+
+    prompt = ("A medium close-up, eye level, static: one calm spray mists the air above the worktop. Mist catches the light. "
+              "The COPPERELL wordmark fixed top right, the logo of @logo_main reproduced exactly. Keep the light and style of @anchor.")
+    job = {"prompt": prompt, "refs": [{"name": "logo_main", "role": "object"}, {"name": "anchor", "role": "object"}]}
+    _no_overlays_in_picture(job, "frame", {"shot": {"kind": "shot", "action": "One calm spray."}})
+    assert job["prompt"] == ("A medium close-up, eye level, static: one calm spray mists the air above the worktop. "
+                             "Mist catches the light. Keep the light and style of @anchor.")
+    assert [r["name"] for r in job["refs"]] == ["anchor"]
+    # The end card's frame keeps its wordmark and its logo; a wordmark ON the product is the product, not an overlay.
+    card = {"prompt": prompt, "refs": [{"name": "logo_main", "role": "object"}]}
+    _no_overlays_in_picture(card, "frame", {"shot": {"kind": "end_card", "action": END_CARD}})
+    assert card["prompt"] == prompt and card["refs"]
+    label = "The amber bottle with the COPPERELL wordmark on its label catches the light."
+    assert without_overlays(label) == label

@@ -56,6 +56,8 @@ The tier is the richest source present: `brief+research`, `brief`, `research`, `
 | `run.error` `{stage, message, retryable}` | the runner | with `state: failed`. Optional |
 | `run.done` `{summary, slides, appendix, to_supply}` | the runner | with `state: done`. Optional |
 | `run.gate.agent`, `run.gate.territories[]` `{id, n, name, thought, why}`, `first_pick`, `picked`, `run.gate.idea` `{line, basis, territory_id, territory_name?, executions[], rests_on[]}` | the runner | gates 2 and 3. Territories, the idea and its executions are proposals. Optional |
+| `run.storyline_edit` `{base, beats: [{key, title, words}], by, at}` | the app | the person's storyline at gate 1 (deck-beat-editor), saved as they edit; `null` is the agents' version. `base` is the sha256 of the `b_storyline.json` it was made against (`run.gate.base`); `key` a section key, `null` for a beat the person added; `words` `agents\|yours`. The middleware hands it to the engine beside the approvals; the engine applies it when gate 1 is approved, before stage c, with no model call. Optional |
+| `run.gate.editable`, `run.gate.base`, `run.gate.beats[].key\|words\|carries` | the runner | gate 1 from a stage b (not an investor deck's stage i): the beats can be edited; `carries` `[{id, text, to}]` the mandatories a beat cites and where each is still said once it is taken out. Optional |
 | `run.decisions[]` `{gate, kind, by, at}`, `run.gate_requests[]` `{gate, kind, at, status}` | the app | every approve, edit or retry; an edit or retry ask is recorded like `change_requests` and launches nothing. Optional |
 | `deck.appendix_ids[]`, `deck.slides.<id>.appendix` | the runner, or the app via `put` | the appendix; `appendix_count` stays the fallback. Optional |
 | `deck` | the runner | `deck.json` (+ `appendix_count`), with `meta.built_from` |
@@ -158,6 +160,20 @@ Approving writes one patch under `run`: the gate's stage `done`, the next stage 
 note?}` and `decisions[]` with `{gate, kind: "approve", by, at}` added, with the decision `approve <gate>`.
 At gate 2 the pick is view state until Pick this territory writes it as `approvals.territories.picked`;
 a pick that is not one of the territories is refused. Only the open gate can be approved.
+
+At an editable gate 1 (deck-beat-editor, owner approved 2026-11-25) the person rewords a beat in place (⌘/Ctrl+Enter Done, Esc
+Cancel; an empty beat is refused), moves it (drag, or ↑ ↓), takes it out (a beat that states a mandatory warns first and says where
+the mandatory moves: the guardrails slide), or adds their own; Undo and Reset to the agents' version (asked first) are there too.
+Each change writes only `run.storyline_edit` (`edit storyline: <what>`), so the open gate is never in the patch. Approve carries
+the storyline with the approval ("Approve my storyline and continue" once it changed) and is off, with its reason, while a beat
+is being written. "Ask the agents to rewrite around my edits" (the storyline gate's Edit) queues an edit request with the
+storyline attached, and launches nothing. On approval the engine (`deck/storyline_edit.py`, `Server.apply_storyline`) rewrites
+`b_storyline.json` once, keeping the agents' file as `b_storyline.agents.json`: a reworded section keeps its claims and refs, a
+section taken out has no slide, a beat the person added is a `person_beat` slide titled with their words (one labelled
+placeholder for what supports it; the cap never moves it), and the presented beat slides take the person's order within the
+slots beat slides held, so the investment and the ask stay last. An edit made against another storyline is refused (409
+`storyline_changed`) before anything runs. A replay applies it the same way and says its territories and idea were recorded
+from the agents' storyline.
 
 Edit and Ask the Deck agent to try again, at any gate, write `{gate, kind: edit|retry, by, at}` to `run.decisions`
 and `{gate, kind, at, status: "waiting"}` to `run.gate_requests`, with the decision `edit <gate>` or

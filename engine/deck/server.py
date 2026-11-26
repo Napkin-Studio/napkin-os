@@ -51,7 +51,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 from . import inputs as inputs_mod
-from . import profiles, prod_picker, spec
+from . import profiles, prod_picker, spec, storyline_edit
 from . import run_deck, run_state as rs
 
 #: The stage files each gate's stage writes, and what a replay copies in for each step. Order is the pipeline's.
@@ -216,6 +216,12 @@ def validate_request(body: dict, settings: Settings) -> dict:
         d = (a or {}).get("decision", "approve")
         if d != "approve":
             raise Refused(400, "not_supported", f"a '{d}' decision at the {gate} gate is recorded but the engine cannot act on it yet: only approve goes on")
+    se_edit = body.get("storyline_edit")
+    if se_edit is not None:   # deck-beat-editor: the person's storyline, applied on the storyline's approval (apply_storyline)
+        try:
+            se_edit = storyline_edit.check(se_edit)
+        except storyline_edit.EditRefused as e:
+            raise Refused(400, "bad_request", f"storyline_edit: {e}") from None
     size = picked_size(body)
     prof = profiles.load(picked_type(inp)) if picked_type(inp) else profiles.default_for_kind(kind)
     return {"size": size, "doc": doc, "inputs": inp, "prompt": prompt, "kind": kind, "format": inp.get("format", "pitch"), "mode": mode,
@@ -223,7 +229,21 @@ def validate_request(body: dict, settings: Settings) -> dict:
             "approvals": approvals, "render": body.get("render", True) is not False, "marks": marks,
             "review": body.get("review") if isinstance(body.get("review"), dict) else {}, "approver": str(body.get("approver") or ""),
             "production_upstream": production_upstream(body), "production_assets": production_assets(body), "members": members_of(body),
-            "brief_upstream": brief_upstream(body), "brand_upstream": brand_upstream(body)}
+            "brief_upstream": brief_upstream(body), "brand_upstream": brand_upstream(body), "storyline_edit": se_edit}
+
+
+#: Where a brief's client field stops naming the client and starts describing the launch: "Copperell Home Ltd is launching Copperell
+#: Refill: a ribbed amber glass…" (acceptance A32: the whole sentence ran past 80 characters, so the deck said '[Client]').
+_CLIENT_STOP = re.compile(r"\s+(?:is|are|was|were|has|have|will|wants|want|needs|need|launch(?:es|ing)?|makes|sells|plans|\()\b|\s*[:–—(]|\s+-\s+", re.I)
+
+
+def client_name(text) -> str:
+    """The client's name from a brief's client field: its first clause, before any 'is launching…' or ':' that describes the work; '' when that
+    is not a name (empty, or longer than 80 characters)."""
+    t = re.sub(r"^\s*to confirm:\s*", "", str(text or ""), flags=re.I)
+    t = re.split(r"[,;\n]", t)[0]
+    t = _CLIENT_STOP.split(t, maxsplit=1)[0].strip(" .")
+    return t if t and len(t) <= 80 else ""
 
 
 def brief_upstream(body: dict) -> dict | None:
@@ -357,6 +377,7 @@ class Server:
             present = {p.name for p in d.stages.glob("*.json")}
             self.check_type_change(d, req, present)   # deck-types: before anything runs or spends
             until, held = plan_segment(req["kind"], present, req["approvals"], req.get("type_stages"))
+            self.apply_storyline(d, req, present)
             self.apply_pick(d, req, present)
             if held:
                 d.state, d.held, d.current = "gate", held, None
@@ -560,10 +581,10 @@ class Server:
         answers, verified = run_deck._read_answers(None)
         inp = inputs_mod.load(None, None, d.stages / "doc_facts.json", [], prompt_text=str(req["prompt"].get("text") or "").strip(),
                               answers=answers, verified=verified)
-        bu = req.get("brief_upstream")
+        bu, pu = req.get("brief_upstream"), req.get("production_upstream")
         if bu:   # the brief the deck was spun off from (UAT round 4 L2): the rows under 'Read the inputs' read it as the build does
-            inputs_mod.apply_upstream_brief(inp, bu["id"], bu["data"], ((req.get("members") or {}).get("decisions")))
-        pu = req.get("production_upstream")
+            inputs_mod.apply_upstream_brief(inp, bu["id"], bu["data"], ((req.get("members") or {}).get("decisions")),
+                                            {pu["id"]: pu["data"]} if pu else None)   # its marks, in the research it carries and the project
         if pu:   # the brief a carried Production project holds, and the research the deck carries: the evidence the build reads
             inputs_mod.apply_production_brief(inp, pu["id"], pu["data"])
         inputs_mod.apply_research(inp, req.get("members"))
@@ -583,6 +604,35 @@ class Server:
                 src = self.s.replay / fn
                 if src.exists() and not (d.stages / fn).exists():
                     shutil.copyfile(src, d.stages / fn)
+
+    def apply_storyline(self, d: Doc, req: dict, present: set[str]) -> None:
+        """The person's storyline (deck-beat-editor) goes into stage b once they approve gate 1, before stage c runs: no model is called,
+        in a live run and a replay alike (a replay's territories and idea were recorded from the agents' storyline, and it says so). The
+        agents' file is kept once as b_storyline.agents.json. An edit made against another storyline is refused before anything runs."""
+        edit = req.get("storyline_edit")
+        yes = req["approvals"].get("storyline")
+        if not edit or not yes or yes.get("decision", "approve") != "approve" or "b_storyline.json" not in present:
+            return
+        path = d.stages / "b_storyline.json"
+        raw = path.read_bytes()
+        b = json.loads(raw)
+        if storyline_edit.applied(b, edit):
+            return
+        if "c_territories.json" in present:   # the run is past gate 1 on the agents' storyline: never rewritten under later stages
+            d.notices.append("Your storyline edit came after the territories were written, so it was not applied. Build again from Start to use it.")
+            return
+        try:
+            new = storyline_edit.apply(b, edit, storyline_edit.sha_bytes(raw))
+        except storyline_edit.StaleEdit as e:
+            raise Refused(409, "storyline_changed", f"The storyline changed since you edited it: {e}") from None
+        except storyline_edit.EditRefused as e:
+            raise Refused(400, "bad_request", f"storyline_edit: {e}") from None
+        keep = d.stages / "b_storyline.agents.json"
+        if not keep.exists():
+            keep.write_bytes(raw)
+        path.write_text(json.dumps(new, indent=1, ensure_ascii=False))
+        if req["mode"] != "live":
+            d.notices.append("Replay: your storyline shapes the deck's story slides. The recorded territories and idea were written from the agents' storyline.")
 
     def apply_pick(self, d: Doc, req: dict, present: set[str]) -> None:
         """A territory picked at gate 2 goes into stage c before stage d runs. A replay cannot rewrite stage d: it says so."""
@@ -610,8 +660,8 @@ class Server:
         if not str(p.get("client") or "").strip():   # acceptance A32: a deck from a brief named no client, so the cover and its open items said '[Client]'
             cl = ((req.get("brief_upstream") or {}).get("data") or {}).get("client")
             cl = (cl.get("value") if isinstance(cl, dict) else cl) or ""
-            cl = re.split(r"[,;\n]", re.sub(r"^\s*to confirm:\s*", "", str(cl), flags=re.I))[0].strip()
-            if cl and len(cl) <= 80:
+            cl = client_name(cl)
+            if cl:
                 p = {**p, "client": cl}
         argv = ["--prompt-text", str(p.get("text") or ""), "--stages", str(d.stages), "--client", str(p.get("client") or "[Client]"),
                 "--project", str(p.get("project") or "[Project]"), "--out", str(d.out), "--format", req["format"]]   # the QA runs: the repair loop reads it

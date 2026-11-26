@@ -43,8 +43,11 @@ def marks_of(data: dict, chain: list) -> list:
     an empty one says the document was checked and nothing is marked (the engine refuses pictures when the key is absent)."""
     out, seen = [], set()
     scopes = [("", data)] + [(f"upstream.{k}.", v) for k, v in (data.get("upstream") or {}).items() if isinstance(v, dict)]
-    for k, v in (data.get("upstream") or {}).items():   # what a carried Production project carried itself (its full brief): marked parts are marked there too
-        for k2, v2 in ((v.get("upstream") or {}) if isinstance(v, dict) and v.get("app") == "production-tool" else {}).items():
+    for k, v in (data.get("upstream") or {}).items():   # what a carried Production project or brief carried itself (its full brief; its research,
+        # 5-tool run 2026-11-26): the host sends those under the entry's own upstream, and marked parts are marked there too. Never a kit's.
+        if not isinstance(v, dict) or isinstance(v.get("kit"), dict):
+            continue
+        for k2, v2 in (v.get("upstream") if isinstance(v.get("upstream"), dict) else {}).items():
             if isinstance(v2, dict):
                 scopes.append((f"upstream.{k}.upstream.{k2}.", v2))
 
@@ -251,6 +254,9 @@ def start(req, caps, settings, jid):
         pa = assets_of(getattr(req, "production_assets", None), bool(getattr(settings, "deck_relay_loopback", False)))
         if pa:   # napkin-web's read-only pass for this person's pictures: to the engine's picture step only, never into the document
             body["production_assets"] = pa
+    se = run.get("storyline_edit")
+    if isinstance(se, dict) and isinstance(se.get("beats"), list):   # deck-beat-editor: the person's storyline at gate 1; the engine applies it on approval
+        body["storyline_edit"] = {k: se.get(k) for k in ("base", "beats", "by", "at")}
     dt = deck_type_of(inputs)
     if dt:   # deck-types: the person's pick on the type picker (and any new writing they confirmed): the engine builds that type, not the kind's default
         body["inputs"]["deck_type"] = dt

@@ -5,7 +5,7 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ServicesContext, type Services } from '../../app/context'
+import { RouterContext, ServicesContext, type Services } from '../../app/context'
 import type { JobInput, Op } from '../../contracts/types'
 import type { JobPurpose } from '../../model/purpose'
 import { SnapshotStore, systemUpdate, updateDoc } from '../../doc/store'
@@ -231,6 +231,26 @@ describe('PromptStart, rendered', () => {
     await type(area, 'A runner drinks Lumen water at dawn.')
     await enter(area)
     expect(sent.map((x) => [x.op, x.input.write?.intent])).toEqual([['write', 'draft']])
+  })
+
+  it('on the canvas the draft waits in the Script: no jump into its page, an Open instead (UAT round 4 A16)', async () => {
+    const store = await project()
+    const { s } = services(store)
+    const pushed: unknown[] = []
+    const router = { push: (r: unknown) => { pushed.push(r) }, replace: () => {} }
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(createElement(RouterContext.Provider, { value: router as never },
+      createElement(ServicesContext.Provider, { value: s }, createElement(PromptStart, { kind: 'script', nodeId: mainScript(store.get())!.id, place: 'card' })))))
+    const area = host.querySelector('textarea, input[type="text"]') as HTMLTextAreaElement
+    await type(area, 'A runner drinks Lumen water at dawn.')
+    await enter(area)
+    expect(pushed).toEqual([])
+    const open = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Open')
+    expect(open).toBeTruthy()
+    await act(async () => open!.click())
+    expect(pushed).toHaveLength(1)
   })
 
   it('an unlinked video: The Director agent\'s block, Describe it opens the box, "15 s · Make it" plans', async () => {

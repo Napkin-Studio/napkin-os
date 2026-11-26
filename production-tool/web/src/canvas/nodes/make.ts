@@ -102,7 +102,9 @@ export async function storyboardFor(env: NodeEnv, scriptId: string): Promise<{ s
 export async function newStoryboardFor(env: NodeEnv, scriptId: string): Promise<{ storyboardId: string; el: CanvasElement }> {
   const d = env.doc.get()
   const made = newEntity(d, 'storyboard')
-  const sb = { ...(made.entity as Storyboard), target_s: d.scripts[scriptId].target_s || (made.entity as Storyboard).target_s }
+  // Named after the script that drives it (UAT round 4 A18: Script "Copperell Refill" drove "Storyboard 2").
+  const named = d.scripts[scriptId].title?.trim()
+  const sb = { ...(made.entity as Storyboard), ...(named ? { title: named.slice(0, 200) } : {}), target_s: d.scripts[scriptId].target_s || (made.entity as Storyboard).target_s }
   const src = elementOfEnd(env.canvas.elements(), d, { kind: 'script', id: scriptId })
   const box = src ? besideBox(env.canvas.elements(), src, 'storyboard') : placeNode(env.canvas, d, 'storyboard').box
   const link = newLink({ kind: 'script', id: scriptId }, { kind: 'storyboard', id: sb.id }, 'drives')

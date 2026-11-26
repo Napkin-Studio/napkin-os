@@ -45,7 +45,7 @@ const L = vm.runInNewContext(`${logicRun}; DeckLogic`) as {
   plainError(message: unknown, retry: boolean): string
   plainNotes(notes: unknown): string
   productionSummary(doc: unknown): { name: string; finals: number; to_supply: number; brief: unknown } | null
-  startDefaults(data: unknown): { client: string; project: string; text?: string }
+  startDefaults(data: unknown, manifest?: unknown): { client: string; project: string; text?: string }
   upstreamSummary(data: unknown): { brief: { name: string; fields_filled: number; fields_total: number; mandatories: number } | null; research: { name: string; findings: number | null; rejected: number | null } | null; production: { name: string; finals: number; to_supply: number; brief: unknown } | null; any: boolean }
   documentsOf(data: unknown): { name: string }[]
   builtFrom(inputs: unknown, upstream: unknown, documents: unknown, type?: string | null, projection?: unknown): { tier: string; documents: string[]; brief: boolean; research: boolean }
@@ -197,6 +197,28 @@ test('the Start summary never says [Client], and a carried project starts a prom
   assert.equal((plain(L.startDefaults({})) as { text: string }).text, '')
 })
 
+test('a film that names itself (its own title still "Untitled project") starts the deck with the name it goes by, and the client it belongs to (pc live walk 2026-11-25)', () => {
+  const scene = { id: 'scene_1', rank: 'a0', text: '', heading: 'INT. KITCHEN' }
+  const shot = { id: 'shot_1', scene_id: 'scene_1', rank: 'a0', action: '  Warm sunlight   spills across a quiet kitchen counter.\nA hand reaches in.' }
+  const film = { app: 'production-tool', project: { title: 'Untitled project' }, scenes: { scene_1: scene }, shots: { shot_1: shot }, briefs: {} }
+  const m = { client: { id: 'cli_1', name: 'Copperell (pc test)' } }
+  assert.deepEqual(plain(L.startDefaults({ upstream: { p: film } }, m)), {
+    client: 'Copperell (pc test)', project: 'Warm sunlight spills across a quiet kitchen counter.',
+    text: 'A pitch deck for Copperell (pc test): Warm sunlight spills across a quiet kitchen counter.',
+  })
+  // Its linked brief's title before the script, as the film names itself in Production (summary.ts autoName).
+  const briefed = { ...film, briefs: { brief_1: { title: 'Copperell refill oil' } } }
+  assert.equal((plain(L.startDefaults({ upstream: { p: briefed } }, m)) as { project: string }).project, 'Copperell refill oil')
+  // A brief's client still wins over the document's own client; a name the person gave the film wins over all.
+  const named = { ...film, project: { title: 'Kitchen light' } }
+  assert.deepEqual(plain(L.startDefaults({ upstream: { p: named, b: { client: 'Copperell Home Ltd, a brand' } } }, m)), { client: 'Copperell Home Ltd', project: 'Kitchen light', text: 'A pitch deck for Copperell Home Ltd: Kitchen light.' })
+  // Nothing to go by: no project, never "Untitled project".
+  const blank = { app: 'production-tool', project: { title: 'Untitled project' } }
+  assert.deepEqual(plain(L.startDefaults({ upstream: { p: blank } })), { client: '', project: '', text: '' })
+  assert.equal(L.productionSummary(film)!.name, 'Warm sunlight spills across a quiet kitchen counter.')
+  assert.equal(L.productionSummary(blank)!.name, 'Production project')
+})
+
 test('Built from names the Production project, and an empty block draws no bullet', () => {
   const prod = { p: { app: 'production-tool', project: { title: 'P' }, assets: {}, finals: {}, sizes: {} }, b: briefDoc, r: researchDoc }
   const bf = L.builtFrom({}, { d1: briefDoc, d2: researchDoc, p: prod.p }, [])
@@ -274,10 +296,12 @@ test('the app draws no brand of its own: the OS bar above it already carries the
   assert.ok(!html.includes('rotate(-45 16 16)'))
 })
 
-test('the only inputs are the three prompt fields, the open prompt and the file picker', () => {
+test('the only inputs are the three prompt fields, the open prompt, the file picker and the gate-1 beat being written', () => {
   assert.deepEqual([...html.matchAll(/field\('(\w+)'/g)].map(m => m[1]), ['client', 'project', 'agency'])
   assert.equal(html.match(/<textarea/gi)?.length, 2) // the open prompt, and the free-text box of a supply card
-  assert.equal(html.match(/contenteditable/gi)?.length ?? 0, 0)
+  // deck-beat-editor (owner approved 2026-11-25): the one place written in place is the storyline beat being edited at gate 1
+  assert.deepEqual(html.match(/contenteditable="[^"]*"/gi), ['contenteditable="plaintext-only"'])
+  assert.match(html, /<div class="ined" id="beatEd" role="textbox"[^>]*contenteditable="plaintext-only"/)
 })
 
 test('the team-library shelf is off unless the document turns it on', () => {
@@ -2736,7 +2760,7 @@ test('Review draws the slide\'s pictures and the picker shows thumbnails, once t
 test('the Start form names the client and the project from what the deck carries', () => {
   const up = {
     p: { app: 'production-tool', project: { title: "Hollow Oak 'Still'" } },
-    b: { client: 'Hollow Oak Cider, a 140-year-old, orchard-grown brand', project_name: 'x' },
+    b: { client: 'Hollow Oak Cider, a 140-year-old, orchard-grown brand' },   // no project name: the Production project's title is the project
     k: { client: 'A Kit Name', kit: { version: 1 } },
   }
   assert.deepEqual(plain(L.startDefaults({ upstream: up })), { client: 'Hollow Oak Cider', project: "Hollow Oak 'Still'", text: "A pitch deck for Hollow Oak Cider: Hollow Oak 'Still'." })
@@ -3071,14 +3095,14 @@ test('the Look card picks up a Brand Clan published while the deck is open, with
 })
 
 // ── UAT round 4 blocker 2: a brief-only deck named no project, so the cover read "Copperell Home Ltd:" and the exports "Project.pptx" ──
-test('Start takes the project name from the brief a deck was spun off from, and a Production project\'s title first', () => {
+test('Start takes the project name from the brief a deck was spun off from, before a Production project\'s title (acceptance A62)', () => {
   const brief = { client: 'Copperell Home Ltd, launching Copperell Refill.', project_name: 'Copperell Refill', objectives: 'Sell the starter bottle' }
   const research = { campaign: { name: 'Copperell research' }, report: {}, selection: {} }
   const d = plain(L.startDefaults({ upstream: { r: research, b: brief } })) as { client: string; project: string; text: string }
   assert.equal(d.client, 'Copperell Home Ltd')
   assert.equal(d.project, 'Copperell Refill')
   assert.equal(d.text, 'A pitch deck for Copperell Home Ltd: Copperell Refill.')
-  assert.equal((plain(L.startDefaults({ upstream: { b: brief, p: prodDoc() } })) as { project: string }).project, 'Lumen Water launch')
+  assert.equal((plain(L.startDefaults({ upstream: { b: brief, p: prodDoc() } })) as { project: string }).project, 'Copperell Refill')
 })
 
 test('an export never takes its file name from a placeholder project', async () => {
@@ -3106,4 +3130,152 @@ test('A30: the stronger-with line leaves out what the deck already brings', () =
   assert.equal(L.typeHints('agency_pitch', prodCarried).line, '')   // a Production project carries the brief whole
   const m = mount({ inputs: { prompt: { client: 'Copperell', project: 'Copperell Refill', text: 'x' } }, upstream: { b: brief } })
   assert.doesNotMatch(m.app.innerHTML, /To make this one stronger/)
+})
+
+// ── acceptance A32 and A62: the deck from the Production project ──
+test('A32: a brief whose client field is a sentence still names the client', () => {
+  assert.equal(L.clientName('Copperell Home Ltd is launching Copperell Refill: a ribbed amber glass spray bottle with a copper cap, made to keep for life.'), 'Copperell Home Ltd')
+  assert.equal(L.clientName('To confirm: Lumen Water (the utility), Dublin'), 'Lumen Water')
+  assert.equal(L.clientName('x'.repeat(90)), '')
+  const brief = { client: 'Copperell Home Ltd is launching Copperell Refill: a ribbed amber glass spray bottle.', objectives: 'o', project_name: 'Copperell Refill' }
+  assert.equal(L.startDefaults({ upstream: { b: brief } }).client, 'Copperell Home Ltd')
+})
+
+test('A62: the brief\'s project name comes before a Production project\'s working title, which never keeps "· Territories N"', () => {
+  const prod = { app: 'production-tool', project: { title: 'Copperell Refill · Territories 3' } }
+  assert.equal(L.startDefaults({ upstream: { p: prod, b: { objectives: 'o', project_name: 'Copperell Refill' } } }).project, 'Copperell Refill')
+  assert.equal(L.startDefaults({ upstream: { p: prod } }).project, 'Copperell Refill')
+  assert.equal(L.startDefaults({ upstream: { p: { ...prod, project: { title: 'Lumen Water launch' } } } }).project, 'Lumen Water launch')
+})
+
+// ── deck-beat-editor: the person edits the storyline's beats at gate 1 (owner approved the mock, 2026-11-25) ──
+const BASE = 'a'.repeat(64)
+const storyRun = (extra: Record<string, unknown> = {}) => {
+  const r = gateRun() as Record<string, unknown> & { gate: Record<string, unknown> }
+  return { ...r, gate: { ...r.gate, more_beats: undefined, editable: true, base: BASE, beats: [
+    { n: '01', key: 'reframe', title: 'Refill wins by being wanted.', src: 'Cites research · 9 refs', basis: 'research', words: 'agents' },
+    { n: '02', key: 'barrier', title: 'Doubt holds refill back.', src: 'Cites research, requirements · 7 refs', basis: 'research', words: 'agents',
+      carries: [{ id: 'r3', text: 'No germ-kill claim until the lab report', to: 'the guardrails slide' }] },
+    { n: '03', key: 'proposition', title: 'One tablet, a shake.', src: 'No source: our proposal', basis: 'proposal', words: 'agents' },
+  ] }, ...extra }
+}
+type StoryWrite = { run: { storyline_edit: { base: string; beats: { key: string | null; title: string; words: string }[] } | null } & Record<string, unknown> }
+const storyOfWrite = (w: { obj: Record<string, unknown> }) => (w.obj as StoryWrite).run.storyline_edit
+
+test('beat editor: a gate the engine marks editable is the storyline to edit; any other gate 1 is drawn as before', () => {
+  assert.equal(L.storyView(gateRun()), null)   // no editable flag, no base: the read-only beats (the gate-1 golden holds them)
+  assert.equal(L.storyView({ ...storyRun(), gate: { ...storyRun().gate, base: 'nope' } }), null)
+  const v = L.storyView(storyRun())
+  assert.deepEqual(plain(v.beats.map((b: { key: string }) => b.key)), ['reframe', 'barrier', 'proposition'])
+  assert.deepEqual(plain([v.changed, v.stale, v.mine]), [false, false, 0])
+  assert.equal(v.beats[1].carries[0].to, 'the guardrails slide')
+})
+
+test('beat editor: the saved storyline is shown when it was made against this storyline, never when against another', () => {
+  const saved = { base: BASE, beats: [{ key: 'barrier', title: 'Doubt holds refill back.' }, { key: null, title: 'My own point.' }, { key: 'reframe', title: 'Refill is seen working.' }] }
+  const v = L.storyView(storyRun({ storyline_edit: saved }))
+  assert.deepEqual(plain(v.beats.map((b: { key: string | null; words: string }) => [b.key, b.words])), [['barrier', 'agents'], [null, 'yours'], ['reframe', 'yours']])
+  assert.deepEqual(plain([v.changed, v.mine, v.stale]), [true, 1, false])
+  assert.equal(L.beatSource(v.beats[2]), 'Your words · evidence kept: research · 9 refs')   // owner: a reworded beat keeps its evidence
+  assert.equal(L.beatSource(v.beats[1]), 'Your words · no source yet')
+  const stale = L.storyView(storyRun({ storyline_edit: { ...saved, base: 'b'.repeat(64) } }))
+  assert.deepEqual(plain([stale.changed, stale.stale]), [false, true])
+})
+
+test('beat editor: the patch is the person\'s beats with whose words they are, null once it is the agents\' again, refused when empty', () => {
+  const v = L.storyView(storyRun())
+  assert.deepEqual(plain(L.storyPatch(v, 'You', 't')), { storyline_edit: null })
+  const moved = { ...v, beats: [v.beats[2], { ...v.beats[0], title: 'Refill is  seen working. ' }] }
+  assert.deepEqual(plain(L.storyPatch(moved, 'You', 't')), { storyline_edit: { base: BASE, by: 'You', at: 't', beats: [
+    { key: 'proposition', title: 'One tablet, a shake.', words: 'agents' }, { key: 'reframe', title: 'Refill is seen working.', words: 'yours' }] } })
+  assert.equal(L.storyPatch({ ...v, beats: [] }, 'You', 't'), null)
+  assert.equal(L.storyPatch({ ...v, beats: [{ ...v.beats[0], title: '  ' }] }, 'You', 't'), null)
+  assert.equal(L.storyPatch({ ...v, beats: [{ ...v.beats[0], title: 'x'.repeat(L.BEAT_MAX + 1) }] }, 'You', 't'), null)
+})
+
+test('beat editor: reword in place; Approve is off with its reason while writing; each change writes only run.storyline_edit', async () => {
+  const ed = { textContent: '' }
+  const m = mount(buildData(storyRun()), undefined, { beatEd: ed })
+  let h = m.app.innerHTML
+  assert.ok(h.includes('data-beat-edit="0"') && h.includes('data-beat-add="1"') && h.includes('Your storyline has <b>3 beats</b>'))
+  assert.ok(h.includes('the 12-slide cap never moves them to the appendix, even at 13 or 14 slides'))   // owner answer 2
+  assert.match(h, /id="approve">Approve and continue</)
+  assert.match(h, /data-beat-reset="1" disabled>/)
+  assert.match(h, /data-edit="beats" disabled>Ask the agents to rewrite around my edits</)
+  m.click({ beatEdit: '0' })
+  h = m.app.innerHTML
+  assert.match(h, /<div class="ined" id="beatEd" role="textbox" aria-label="Write beat 1"/)
+  assert.match(h, /id="approve" disabled>/)
+  assert.ok(h.includes('Finish the beat you are writing (⌘↵) before you approve.'))
+  m.click({}, 'approve')
+  assert.equal(m.writes.length, 0, 'nothing is approved while a beat is being written')
+  ed.textContent = '   '
+  m.click({ beatDone: '0' })
+  assert.ok(m.app.innerHTML.includes('A beat needs words. Esc puts back what was there.'))
+  assert.equal(m.writes.length, 0)
+  ed.textContent = 'Refill wins by being seen   working.'
+  m.click({ beatDone: '0' })
+  assert.equal(m.writes.length, 1)
+  assert.equal(m.writes[0].action, 'edit storyline: beat 1 reworded')
+  assert.deepEqual(Object.keys(m.writes[0].obj), ['run'])
+  assert.deepEqual(Object.keys((m.writes[0].obj as StoryWrite).run), ['storyline_edit'])   // the gate is never in the patch (A31: it survives)
+  assert.deepEqual(plain(storyOfWrite(m.writes[0])!.beats[0]), { key: 'reframe', title: 'Refill wins by being seen working.', words: 'yours' })
+  assert.ok(m.app.innerHTML.includes('Saving…'))
+  await new Promise(r => setTimeout(r, 5))
+  h = m.app.innerHTML
+  assert.ok(h.includes('Saved: beat 1 reworded. Your storyline is in the document; Approve builds from it.'))
+  assert.ok(h.includes('Your words · evidence kept: research · 9 refs'))
+  assert.match(h, /id="approve">Approve my storyline and continue</)
+})
+
+test('beat editor: move, take out (a mandatory warns and says where it moves), add, undo and reset', () => {
+  const ed = { textContent: '' }
+  const m = mount(buildData(storyRun()), undefined, { beatEd: ed })
+  m.click({ beatDown: '0' })
+  assert.deepEqual(plain(storyOfWrite(m.writes[0])!.beats.map(b => b.key)), ['barrier', 'reframe', 'proposition'])
+  m.click({ beatDel: '0' })
+  assert.equal(m.writes.length, 1, 'a beat that states a mandatory asks first')
+  assert.ok(m.app.innerHTML.includes('This beat states a mandatory: “No germ-kill claim until the lab report”. Taking it out moves it to the guardrails slide.'))
+  m.click({ beatDelno: '0' })
+  assert.equal(m.app.innerHTML.includes('This beat states a mandatory'), false)
+  m.click({ beatDel: '0' })
+  m.click({ beatDelok: '0' })
+  assert.deepEqual(plain(storyOfWrite(m.writes[1])!.beats.map(b => b.key)), ['reframe', 'proposition'])
+  assert.match(m.toastEl.textContent, /moves to the guardrails slide/)
+  m.click({ beatAdd: '1' })
+  assert.match(m.app.innerHTML, /aria-label="Write beat 3"/)
+  m.click({ beatCancel: '2' })
+  assert.equal(m.writes.length, 2, 'an added beat cancelled empty is gone, and nothing is written')
+  assert.ok(m.app.innerHTML.includes('Your storyline has <b>2 beats</b>'))
+  m.click({ beatAdd: '1' })
+  ed.textContent = 'People keep the bottle on show.'
+  m.click({ beatDone: '2' })
+  assert.equal(m.writes[2].action, 'edit storyline: your beat added as beat 3')
+  assert.deepEqual(plain(storyOfWrite(m.writes[2])!.beats[2]), { key: null, title: 'People keep the bottle on show.', words: 'yours' })
+  assert.ok(m.app.innerHTML.includes('Your storyline has <b>3 beats</b>, 1 of them yours.'))
+  m.click({ beatUndo: '1' })
+  assert.deepEqual(plain(storyOfWrite(m.writes[3])!.beats.map(b => b.key)), ['reframe', 'proposition'])
+  m.click({ beatReset: '1' })
+  assert.ok(m.app.innerHTML.includes('Reset to the agents’ version?'))
+  assert.equal(m.writes.length, 4, 'Reset asks first')
+  m.click({ beatResetok: '1' })
+  assert.equal(storyOfWrite(m.writes[4]), null)   // the agents' version: the person's edit is cleared
+  assert.equal(m.writes[4].action, 'edit storyline: reset to the agents’ version')
+})
+
+test('beat editor: Approve carries the person\'s storyline with the approval; Ask the agents queues it with the edit request', () => {
+  const m = mount(buildData(storyRun()))
+  m.click({ beatUp: '2' })
+  m.click({}, 'approve')
+  const w = (m.writes.at(-1)!.obj as StoryWrite).run as Record<string, unknown> & StoryWrite['run']
+  assert.equal(m.writes.at(-1)!.action, 'approve storyline')
+  assert.equal((w.approvals as Record<string, { decision: string }>).storyline.decision, 'approve')
+  assert.deepEqual(plain(w.storyline_edit!.beats.map(b => b.key)), ['reframe', 'proposition', 'barrier'])
+  const a = mount(buildData(storyRun()))
+  a.click({ beatDown: '0' })
+  a.click({ edit: 'beats' })
+  const q = (a.writes.at(-1)!.obj as StoryWrite).run as Record<string, unknown> & StoryWrite['run']
+  assert.deepEqual(plain((q.gate_requests as { kind: string }[]).map(x => x.kind)), ['edit'])
+  assert.deepEqual(plain(q.storyline_edit!.beats.map(b => b.key)), ['barrier', 'reframe', 'proposition'])
+  assert.match(a.toastEl.textContent, /rewrite the storyline around your edits the next time the deck is built\. Nothing has changed yet\./)
 })
