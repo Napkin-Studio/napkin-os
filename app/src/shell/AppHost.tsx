@@ -21,6 +21,8 @@ import { splitAside } from './decisions/needs'
 import { useSetAside } from './decisions/useSetAside'
 import ClientReviewPanel from './clientReview/ClientReviewPanel'
 import ClientReviewBand from './clientReview/ClientReviewBand'
+import BrandAsk from './brand/BrandAsk'
+import { takesBrandFiles } from './brand/brandFlow'
 import { assetNameOf, bodyOf, canReview, emptyDraft, knownClients, markedOf, nounOf, problemOf } from './clientReview/review'
 import type { Draft, Mark } from './clientReview/review'
 import { barAction, refreshApp } from './appExport'
@@ -465,6 +467,7 @@ export default function AppHost({ running, onHome, onTrashed, onOpenFile, onSave
           <button type="button" className="ch-link" onClick={() => links.unlink(l.documentId)}>Unlink</button>
         </div>
       ))}
+      {!open.is_template && takesBrandFiles(open.manifest.app?.app_id) && <BrandAsk docPath={docPath} client={open.manifest.client ?? null} />}
       </div>
       <div className={`ch-work ${clientOn ? 'ch-work-review' : ''}`} ref={workRef}>
         {sidebarOpen && <Sidebar manifest={open.manifest} path={open.path} onOpenDocument={onOpenDocument} />}

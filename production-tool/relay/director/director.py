@@ -736,6 +736,60 @@ def load_prompt(path: Path, contracts: Path = CONTRACTS) -> str:
 MENTION = re.compile(r"(?<![\w@])@([a-z][a-z0-9]{1,23}(?:_[a-z0-9][a-z0-9-]{0,31})?)")
 
 
+# UAT acceptance A53: the brief's "COPPERELL wordmark, always top right" went into EVERY shot's action ("… line of nice
+# things. COPPERELL wordmark top right."), so the frames and the clip painted the wordmark into the footage. A logo or wordmark
+# placed on the picture, and the legal small print, belong to the end card (or a packshot the person asks for), never to a
+# shot's own action or its picture: the relay takes those clauses out of every other shot, whatever the prompt version.
+_OVERLAY = re.compile(
+    r"\b(?:word ?mark|logo(?:type)?|brand mark)\b.*\b(?:top|bottom)[ -](?:right|left)\b"
+    r"|\b(?:top|bottom)[ -](?:right|left)\b.*\b(?:word ?mark|logo(?:type)?|brand mark)\b"
+    r"|\b(?:word ?mark|logo(?:type)?)\b.*\b(?:in the corner|fixed|overlaid|overlay|on screen)\b", re.I)
+_LEGAL = re.compile(r"keep out of reach of children|read the label before use|\bsmall (?:print|line)\b|\blegal line\b", re.I)
+_SENTENCE = re.compile(r"[^.!?]+[.!?]*")
+_LOGO = re.compile(r"\b(?:word ?mark|logo(?:type)?|brand mark)\b", re.I)
+
+
+def without_overlays(text: str) -> str:
+    """`text` without the clauses that put a logo or wordmark on the picture or carry the legal small print (A53). A
+    sentence that is only that goes whole; one with a shot's own words in it keeps them."""
+    out = []
+    for sentence in _SENTENCE.findall(text or ""):
+        if not (_OVERLAY.search(sentence) or _LEGAL.search(sentence)):
+            out.append(sentence.strip())
+            continue
+        end = sentence.rstrip()[-1:] if sentence.rstrip()[-1:] in ".!?" else "."
+        placed = bool(_OVERLAY.search(sentence))  # a sentence that places a logo: every logo clause in it goes
+        kept = [c.strip() for c in re.split(r"[,;:]", sentence.rstrip().rstrip(".!?"))
+                if c.strip() and not (_OVERLAY.search(c) or _LEGAL.search(c) or (placed and _LOGO.search(c)))]
+        if kept:
+            said = ", ".join(kept)
+            out.append(said[:1].upper() + said[1:] + end)
+    return " ".join(x for x in out if x)
+
+
+def _no_overlays_in_shots(shots: list) -> None:
+    """Every planned shot but the end card loses its logo, wordmark and small-print clauses (A53). In place."""
+    for shot in shots or []:
+        if shot.get("kind") == "end_card":
+            continue
+        for field in ("action", "direction"):
+            if isinstance(shot.get(field), str) and (_OVERLAY.search(shot[field]) or _LEGAL.search(shot[field])):
+                shot[field] = without_overlays(shot[field])
+
+
+def _no_overlays_in_picture(job: dict, op: str, payload: dict) -> None:
+    """A frame or a clip of one shot that is not the end card paints no logo, wordmark or small print (A53). In place."""
+    shot = payload.get("shot") if isinstance(payload.get("shot"), dict) else None
+    if op not in ("frame", "clip") or not shot or shot.get("kind") == "end_card":
+        return
+    prompt = job.get("prompt") or ""
+    if _OVERLAY.search(prompt) or _LEGAL.search(prompt):
+        job["prompt"] = without_overlays(prompt)
+        # A logo picture the prompt no longer names is not sent either: it would be painted in all the same.
+        job["refs"] = [r for r in job.get("refs") or []
+                       if not (re.search(r"logo|word_?mark", r.get("name") or "", re.I) and f"@{r.get('name')}" not in job["prompt"])]
+
+
 def _keep_script_names(payload: dict, shots: list) -> None:
     """A plan keeps the script's @names (owner 2026-10-15): where the script says a bare @samurai, a
     shot that names one of its views the script never names (@samurai_back) goes back to @samurai,
@@ -990,6 +1044,7 @@ class Director:
         if op in ("clip", "frame") and "providerJob" in output:
             # No clock time in a frame's prompt either (UAT round 4, R4-F10: "1 a.m." reached frame 1's prompt).
             _onscreen(output["providerJob"], raw)
+            _no_overlays_in_picture(output["providerJob"], op, raw)
         if op == "clip" and "providerJob" in output:
             _sound(output["providerJob"], raw, sheet, sheet["ops"][op])
         # What Dex was given, after the relay's cuts, kept small on the job record (features/pt-canvas-r1.clan).
@@ -1016,6 +1071,7 @@ class Director:
                 return
             self._check_shots(payload, output["shots"])
             _keep_script_names(payload, output["shots"])
+            _no_overlays_in_shots(output["shots"])
             return
         if "shots" in output:
             raise DirectorError(f"shots belong to shot_list, not {op}")

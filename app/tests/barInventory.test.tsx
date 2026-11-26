@@ -210,7 +210,7 @@ test('Continue in on a brief: Production is a target like the others, and pickin
   assert.doesNotMatch(app, /spinoffToProduction/)
   assert.match(app, /open\.manifest\.app\?\.app_id === PRODUCTION_APP_ID/)
   assert.match(app, /window\.location\.assign\(productionDocUrl\(open\.path\)\)/)
-  assert.equal(productionDocUrl('doc-1a2b'), '/production/?doc=doc-1a2b')
+  assert.equal(productionDocUrl('doc-1a2b'), '/production/d/doc-1a2b')
   assert.match(app, /filter\(a => a\.app_id !== PRODUCTION_APP_ID\)/)
   // Production is offered only where the server serves the tool, never on the device (no relay there)
   assert.match(app, /productionTarget=\{production && !device\}/)

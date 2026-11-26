@@ -79,10 +79,13 @@ impl Library for MemStore {
 }
 
 /// The app's schema, its `focus.sources` list capped at `cap` (Territories' shape, trimmed).
+/// `title` is required, as Territories' top-level members are: a document made from a template
+/// with no seed has no title yet, so its data is incomplete until its first write lands.
 fn schema(cap: u32) -> String {
     serde_json::json!({
         "type": "object",
-        "properties": { "focus": { "$ref": "#/definitions/focus" } },
+        "required": ["title"],
+        "properties": { "title": { "type": "string" }, "focus": { "$ref": "#/definitions/focus" } },
         "definitions": { "focus": {
             "type": "object", "additionalProperties": false,
             "properties": { "sources": { "type": "array", "maxItems": cap, "items": { "type": "string" } } }
@@ -134,7 +137,7 @@ fn fixture(old: Vec<u8>, now: Vec<u8>) -> (Arc<MemStore>, Session, DocId) {
 fn sources(n: usize) -> String {
     let list: Vec<String> = (0..n).map(|i| format!("\"s{i}\"")).collect();
     format!(
-        r#"{{"patch":{{"focus":{{"sources":[{}]}}}},"agent":"human"}}"#,
+        r#"{{"patch":{{"title":"Acme","focus":{{"sources":[{}]}}}},"agent":"human"}}"#,
         list.join(",")
     )
 }
@@ -224,4 +227,41 @@ fn the_same_schema_changes_nothing() {
         .read_entry_string("agent/decision-chain.yaml")
         .unwrap();
     assert!(!chain.contains("schema upgraded"), "{chain}");
+}
+
+/// A25 (acceptance run, 2026-11-25): the first fix upgraded through a repack that re-validated
+/// the document's data, so a document whose writes had all been refused (data still incomplete)
+/// failed the upgrade silently; and the upgrade was its own revision, so a middleware change
+/// computed against the stored version looked stale. Now the upgrade rides inside the change.
+#[test]
+fn a_refused_old_document_takes_a_middleware_change_over_the_old_cap_in_one_write() {
+    let (store, session, doc) = fixture(template("0.1.0", 3), template("0.1.0", 10));
+    let clan = ClanFile::from_bytes(store.read(&doc).unwrap()).unwrap();
+    let document_id = clan.document_id().to_string();
+    let base = session.current_version().unwrap();
+    let before = store.read(&doc).unwrap();
+    let sources: Vec<String> = (0..7).map(|i| format!("s{i}")).collect();
+    let reply = serde_json::json!({
+        "api": "napkin.middleware/1",
+        "job": {"state": "needs_input"},
+        "change": {
+            "doc": document_id,
+            "base_version": base.as_str(),
+            "data_patch": {"title": "Acme", "focus": {"sources": sources}}
+        }
+    });
+    let ctx = napkin_host::Ctx::new(napkin_host::Actor::human("t").unwrap());
+    let applied = session.apply_middleware_as(&ctx, &reply).unwrap();
+    assert_eq!(applied.reply["applied"], true, "{}", applied.reply);
+    assert_eq!(
+        applied.reply["base_stale"], false,
+        "the upgrade did not make the base stale"
+    );
+    assert_eq!(stored_cap(&store, &doc), 10);
+    let after = ClanFile::from_bytes(store.read(&doc).unwrap()).unwrap();
+    let chain = after
+        .read_entry_string("agent/decision-chain.yaml")
+        .unwrap();
+    assert!(chain.contains("schema upgraded"), "{chain}");
+    assert_ne!(store.read(&doc).unwrap(), before);
 }

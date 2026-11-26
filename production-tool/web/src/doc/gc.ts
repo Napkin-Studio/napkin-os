@@ -4,7 +4,7 @@
 // is worked out at the moment of the clean-up, from roots: every asset an
 // entity of the document names (contract 3), and every image node still on the
 // canvas:
-//   - named references (refs: their picture, a typography ref's font file);
+//   - named references (refs: their picture, a typography ref's font file); a Brand Clan node's logo;
 //   - frames, generations (takes), ad renders, read documents, format sizes, a note's still,
 //     exports, finals;
 //   - jobs' outputs (the record of what was made and paid for).
@@ -23,6 +23,7 @@ export function roots(d: ProductionDocument, onCanvas: Iterable<Sha256>): Set<Sh
   for (const f of Object.values(d.frames)) add(f.asset)
   for (const g of Object.values(d.generations)) add(g.asset)
   for (const v of Object.values(d.videos)) add(v.end_card?.logo_asset)
+  for (const b of Object.values(d.brand_clans ?? {})) add(b.logo?.sha256) // a Brand Clan node's logo (the end card's and sizes' fallback)
   for (const r of Object.values(d.renders)) add(r.asset)
   for (const x of Object.values(d.documents)) add(x.asset)
   for (const s of Object.values(d.sizes)) add(s.asset)

@@ -222,25 +222,19 @@ impl Session {
         op: impl FnOnce(&Ctx, &Document) -> HostResult<Outcome>,
     ) -> HostResult<Applied> {
         let mut view = self.view.lock().unwrap();
-        // A document made before its app widened its schema moves to the newer schema before
-        // it writes, when that is safe, so the write is judged by the app's contract
-        // ([`crate::ops::upgrade`], owner decision 2026-11-25). Best effort: a failed upgrade
-        // leaves the copy, and the write is judged as before.
-        if let Some(doc) = view.open.as_ref() {
-            match crate::ops::upgrade::apply(ctx, doc) {
-                Ok(Some(upgrade)) => {
-                    for change in &upgrade.changes {
-                        if let Err(e) = self.commit(&mut view.open, change) {
-                            crate::log::log(&format!("schema upgrade not written: {}", e.message));
-                            break;
-                        }
-                    }
-                }
-                Ok(None) => {}
-                Err(e) => crate::log::log(&format!("schema upgrade not made: {}", e.message)),
+        let open = view.open.as_ref().ok_or_else(HostError::no_file_open)?;
+        // A document made before its app widened its schema is written under the app's newer
+        // schema when that only widens ([`crate::ops::upgrade`], owner decision 2026-11-25):
+        // the op runs on the upgraded archive at the stored version, so the upgrade and the
+        // write land as one change. Best effort: a failed upgrade leaves the copy as it was.
+        let upgraded = match crate::ops::upgrade::upgraded(open) {
+            Ok(d) => d,
+            Err(e) => {
+                crate::log::log(&format!("schema upgrade not made: {}", e.message));
+                None
             }
-        }
-        let doc = view.open.as_ref().ok_or_else(HostError::no_file_open)?;
+        };
+        let doc = upgraded.as_ref().unwrap_or(open);
         let outcome = op(ctx, doc)?;
         let events = outcome.events();
         let noop = outcome.is_noop();

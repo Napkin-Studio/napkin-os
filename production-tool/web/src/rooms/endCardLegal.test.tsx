@@ -119,7 +119,7 @@ describe('the end card\'s Legal field', () => {
   it('stops at 200 characters, and the stale studio-card sentence is gone', async () => {
     const { el } = await film(true)
     expect(legalInput(el).maxLength).toBe(200)
-    expect(el.textContent).toContain('The logo comes from the Brand board when it has one.')
+    expect(el.textContent).toContain('The logo comes from the Brand board when it has one, else from the linked Brand Clan')
     expect(el.textContent).not.toContain("studio's own card")
   })
 })

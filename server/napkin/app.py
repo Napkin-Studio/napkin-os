@@ -295,6 +295,8 @@ class Middleware:
             # one at a time per document: two would write the same parts of it over each other
             raise TaskError(409, "job_state", "a reconsider job on this document is still running; send these "
                                               "reviews with the next one")
+        if task == "brand_build" and self.jobs.unfinished(scope, doc, ("brand_build",)):
+            raise TaskError(409, "job_state", "a brand_build job on this document is still running; one file at a time")
         job = LongJob(jid, task, handler, doc, scope, caps, total, work)
         self.jobs.add(job)
         job.start()

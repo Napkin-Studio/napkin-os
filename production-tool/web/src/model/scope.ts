@@ -88,7 +88,7 @@ const titled = (kind: string, title: string | undefined) => (title && title.trim
 const values = <T>(m: Record<string, T> | undefined): T[] => Object.values(m ?? {})
 const MENTION = /(?<![\w@])@([a-z][a-z0-9]{1,23}(?:_[a-z0-9][a-z0-9-]{0,31})?)/g
 const UPSTREAM: LinkRole[] = ['drives', 'renders']
-const ORDER: ScopeKind[] = ['brief', 'script', 'storyboard', 'video', 'board', 'group', 'ref', 'key', 'sketch', 'ink', 'frame', 'render', 'shot', 'note', 'text', 'document', 'format_set', 'unknown']
+const ORDER: ScopeKind[] = ['brief', 'brand_clan', 'script', 'storyboard', 'video', 'board', 'group', 'ref', 'key', 'sketch', 'ink', 'frame', 'render', 'shot', 'note', 'text', 'document', 'format_set', 'unknown']
 const PURPOSE_ROLES: Partial<Record<BoardPurpose, RefRole[]>> = {
   character: ['character'], location: ['location'], product: ['product'],
   reference: ['lighting', 'composition', 'style', 'wardrobe', 'pose', 'prop', 'texture', 'colour', 'layout', 'other'],
@@ -100,7 +100,7 @@ export function nodeKindOf(d: Doc, id: Id): LinkEndpointKind | null {
   const maps: [LinkEndpointKind, Record<string, unknown> | undefined][] = [
     ['script', d.scripts], ['storyboard', d.storyboards], ['video', d.videos], ['sketch', d.sketches], ['format_set', d.format_sets],
     ['shot', d.shots], ['board', d.boards], ['ref', d.refs], ['frame', d.frames], ['render', d.renders], ['document', d.documents],
-    ['brief', d.briefs],
+    ['brief', d.briefs], ['brand_clan', d.brand_clans],
   ]
   for (const [k, m] of maps) if (m?.[id]) return k
   return null
@@ -237,6 +237,11 @@ function linkItems(d: Doc, l: Link, via: ScopeVia, opts: ScopeOptions, through?:
       // A Brief node (features/brief-node.clan): "Brief · First Light brief · v2".
       const b = d.briefs?.[e.id]
       return b ? [{ ...base, kind: 'brief', id: e.id, label: b.route ? `Territories · ${b.route.name} · v${b.route.version ?? 1}` : `Brief · ${b.title} · v${b.source.version}` }] : []
+    }
+    case 'brand_clan': {
+      // A Brand Clan node (Brand Clan phase 2): "Brand Clan · Zero · v2".
+      const b = d.brand_clans?.[e.id]
+      return b ? [{ ...base, kind: 'brand_clan', id: e.id, label: `Brand Clan · ${b.title} · v${b.source.version}` }] : []
     }
     case 'text': {
       // A text on the canvas (features/canvas-text.clan): its words are the node's input words.

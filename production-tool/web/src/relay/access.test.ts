@@ -31,8 +31,8 @@ describe('what a refusal means', () => {
 describe('Sign in and Sign out', () => {
   it('signs in through Napkin OS and comes back to the same page', () => {
     expect(signInHref({ pathname: '/production/', search: '' })).toBe('/?next=%2Fproduction%2F')
-    expect(signInHref({ pathname: '/production/p/prj_1', search: '?shot=s1&t=3' }))
-      .toBe('/?next=' + encodeURIComponent('/production/p/prj_1?shot=s1&t=3'))
+    expect(signInHref({ pathname: '/production/d/prj_1', search: '?shot=s1&t=3' }))
+      .toBe('/?next=' + encodeURIComponent('/production/d/prj_1?shot=s1&t=3'))
     // A Brief Maker spin-off opened signed out keeps its brief through sign-in (re-test N4).
     expect(signInHref({ pathname: '/production/', search: '?brief=doc-upload-b5274ebb' }))
       .toBe('/?next=' + encodeURIComponent('/production/?brief=doc-upload-b5274ebb'))

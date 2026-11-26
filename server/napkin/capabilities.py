@@ -29,6 +29,7 @@ import threading
 import time
 
 from . import runlog
+from .brand import confidential
 from .jobs import Cancelled
 from .metrics import emit
 from .model import ModelError, ModelPort, Usage
@@ -106,7 +107,7 @@ class ModelCap:
                         t[k] += u[k]
             log_ = self._log()
             if log_.on:
-                body = runlog.bodies()
+                body = runlog.bodies() and not confidential(purpose)   # a brand bible is the client's: never in a log body
                 pj = json.dumps(payload, ensure_ascii=False, default=str)
                 log_.model(purpose=purpose, model=next(iter(mine.by_model), None) or self._port.model, secs=time.monotonic() - t0,
                            tin=mine.input_tokens, tout=mine.output_tokens, cache_read=mine.cache_read,

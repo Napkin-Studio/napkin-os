@@ -14,9 +14,10 @@
 // A size made by layout (display banners, phase 4) is a brand colour field with the picture in a panel
 // (layoutPanel): the type is laid out on the field beside the panel, never over the picture.
 
-import type { Aspect, AssetRef, FormatChannel, FormatSet, NamedRef, ProductionDocument, ProtectBox, PxBox, Region, Size, TypeLayer, TypeLayerKind, TypeLayerOverride } from '../contracts/types'
+import type { Aspect, AssetRef, FormatChannel, FormatSet, Id, NamedRef, ProductionDocument, ProtectBox, PxBox, Region, Size, TypeLayer, TypeLayerKind, TypeLayerOverride } from '../contracts/types'
 import type { DocumentStore } from '../doc/types'
-import { assetRef } from '../jobs/assets'
+import { logoRef } from '../jobs/assets'
+import { brandClanOf } from '../brandClan/model'
 import type { Relay } from '../relay'
 import { cropBox, type Fracs } from './crop'
 import { formatById } from './formats'
@@ -71,18 +72,21 @@ function luminance(hex: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b
 }
 
-/** The brand kit from the Brand board's named references (logo, palette, typography). */
-export function brandKit(d: ProductionDocument): BrandKit {
+/** The brand kit from the Brand board's named references (logo, palette, typography). `at`: the node it is for (a film, a set
+ *  of sizes): with no Brand board logo, the logo of the Brand Clan linked to it (or up the canvas) is used (owner 2026-11-24);
+ *  a Brand board logo still wins. */
+export function brandKit(d: ProductionDocument, at?: Id): BrandKit {
   const refs = Object.values(d.refs ?? {}) as NamedRef[]
   const logoRef = refs.find((r) => r.role === 'logo' && r.asset)
   const a = logoRef?.asset ? d.assets[logoRef.asset] : undefined
+  const clan = !logoRef && at ? brandClanOf(d, at)?.node.logo : undefined
   const swatches = refs.filter((r) => r.role === 'palette').flatMap((r) => r.swatches ?? [])
   const light = swatches.map((s) => s.hex).find((hex) => luminance(hex) > 0.6)
   const dark = swatches.map((s) => s.hex).find((hex) => luminance(hex) < 0.25)
   const font = refs.find((r) => r.role === 'typography' && r.font?.family)?.font?.family
   const hex = (x: string) => (x.startsWith('#') ? x : `#${x}`).toUpperCase()
   return {
-    ...(logoRef?.asset ? { logo: { sha256: logoRef.asset, w: a?.w ?? 400, h: a?.h ?? 160 } } : {}),
+    ...(logoRef?.asset ? { logo: { sha256: logoRef.asset, w: a?.w ?? 400, h: a?.h ?? 160 } } : clan && d.assets[clan.sha256] ? { logo: { ...clan } } : {}),
     colour: light ? hex(light) : '#FFFFFF',
     field: dark ? hex(dark) : '#141414',
     ...(font ? { font } : {}),
@@ -218,7 +222,7 @@ export function layoutInput(d: ProductionDocument, set: FormatSet, size: Size): 
   return {
     w: size.delivery.width, h: size.delivery.height, channel: channelOfSize(size), kind: f?.format.kind,
     fracs: size.method === 'layout' ? besidePanel(fracs, layoutPanel({ w: size.delivery.width, h: size.delivery.height }, master)) : fracs,
-    copy: set.copy ?? {}, brand: brandKit(d), overrides: size.layers, keep: keepOf(set, size),
+    copy: set.copy ?? {}, brand: brandKit(d, set.id), overrides: size.layers, keep: keepOf(set, size),
   }
 }
 
@@ -235,7 +239,7 @@ export async function layersFor(deps: { relay: Relay; doc: DocumentStore }, set:
     if (!logo) continue
     let image: AssetRef
     try {
-      image = await assetRef(deps.relay, logo, d)
+      image = await logoRef(deps.relay, logo, d)
     } catch {
       continue // the logo is not in this browser: the size is made without it, and Jude says so
     }

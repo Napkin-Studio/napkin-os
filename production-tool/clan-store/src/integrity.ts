@@ -28,7 +28,7 @@ export const MAX_PROSE_BYTES = 64 * 1024
 /** The map each document-entity endpoint kind lives in. group, note and ink are canvas things; a text is in texts (README item 20). */
 export const ENDPOINT_MAP: Record<string, string | null> = {
   board: 'boards', script: 'scripts', storyboard: 'storyboards', video: 'videos', ref: 'refs', key: 'keys', frame: 'frames', render: 'renders',
-  sketch: 'sketches', document: 'documents', format_set: 'format_sets', shot: 'shots', text: 'texts', brief: 'briefs', group: null, note: null, ink: null,
+  sketch: 'sketches', document: 'documents', format_set: 'format_sets', shot: 'shots', text: 'texts', brief: 'briefs', brand_clan: 'brand_clans', group: null, note: null, ink: null,
 }
 
 /** The first rule that allows a link from `from` to `to` as `role`, or why none does (in the canvas's words). */
@@ -39,7 +39,7 @@ export function linkRuleFor(from: string, to: string, role: string, boardPurpose
     return { rule }
   }
   if (from === 'video' && to !== 'format_set') return { refused: 'A video is an output; it can only be the master of a cut-down set.' }
-  if (['ref', 'document', 'brief'].includes(to)) return { refused: `Nothing feeds a ${to}: it is an input only.` }
+  if (['ref', 'document', 'brief', 'brand_clan'].includes(to)) return { refused: `Nothing feeds a ${to}: it is an input only.` }
   if (!LINK_RULE.rules.some((r) => r.from.includes(from) && r.to.includes(to))) return { refused: `A ${from} cannot feed a ${to}.` }
   return { refused: `A ${from} does not feed a ${to} as ${role}.` }
 }

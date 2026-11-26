@@ -55,10 +55,10 @@ export function isLive(tool: Tool, installed: readonly Pick<InstalledApp, 'app_i
 export const PRODUCTION_PATH = '/production/'
 
 /** Where a Production project of the library opens: the tool's page, by the document's id. */
-export const productionDocUrl = (docId: string): string => `${PRODUCTION_PATH}?doc=${encodeURIComponent(docId)}`
+export const productionDocUrl = (docId: string): string => `${PRODUCTION_PATH}d/${encodeURIComponent(docId)}`
 
 /** Production is an installed app, and its projects are library documents like any other's (features/production-in-library.clan),
- *  but the Production Tool edits them: they open at /production/?doc=<id>, never in the shell. It is not a tile to
+ *  but the Production Tool edits them: they open at /production/d/<id>, never in the shell. It is not a tile to
  *  launch, and Continue in offers it only where the server serves the tool. */
 export const PRODUCTION_APP_ID = 'ie.napkin.production'
 

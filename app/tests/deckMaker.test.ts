@@ -45,8 +45,8 @@ const L = vm.runInNewContext(`${logicRun}; DeckLogic`) as {
   plainError(message: unknown, retry: boolean): string
   plainNotes(notes: unknown): string
   productionSummary(doc: unknown): { name: string; finals: number; to_supply: number; brief: unknown } | null
-  startDefaults(data: unknown): { client: string; project: string; text?: string }
-  upstreamSummary(data: unknown): { brief: { name: string; fields_filled: number; fields_total: number; mandatories: number } | null; research: { name: string; findings: number | null; rejected: number | null } | null; production: { name: string; finals: number; to_supply: number; brief: unknown } | null; territories: { sent: number } | null; any: boolean }
+  startDefaults(data: unknown, manifest?: unknown): { client: string; project: string; text?: string }
+  upstreamSummary(data: unknown): { brief: { name: string; fields_filled: number; fields_total: number; mandatories: number } | null; research: { name: string; findings: number | null; rejected: number | null } | null; production: { name: string; finals: number; to_supply: number; brief: unknown } | null; any: boolean }
   territoriesSummary(doc: unknown): { name: string; sent: number; held_back: number; not_chosen: number; by: string; names: string[] } | null
   documentsOf(data: unknown): { name: string }[]
   builtFrom(inputs: unknown, upstream: unknown, documents: unknown, type?: string | null, projection?: unknown): { tier: string; documents: string[]; brief: boolean; research: boolean }
@@ -61,6 +61,8 @@ const L = vm.runInNewContext(`${logicRun}; DeckLogic`) as {
   lookPanel(data: unknown): { agency: { use: boolean; shown: boolean }; kits: { shown: boolean; pack: { name: string; version: number } | null; brand: { name: string; version: number } | null } }
   agencyPatch(use: boolean, by: string | null, at: string): unknown
   agencyLookNotice(data: unknown): { text: string; canUpdate: boolean; requested: boolean } | null
+  brandLook(data: unknown, targets: unknown): { held: { id: string; name: string; version: number; swatches: string[] } | null; newer: number | null; client: string
+    options: { id: string; name: string; version: number; default: boolean; swatches: string[] }[] }
   agencyUpdatePatch(at: string): unknown
   DECK_TYPES: { id: string; label: string; one_line: string; kind: string; looks: string; article: string }[]
   DECK_TYPE_CARDS: TypeCard[]
@@ -196,6 +198,28 @@ test('the Start summary never says [Client], and a carried project starts a prom
   assert.equal((plain(L.startDefaults({})) as { text: string }).text, '')
 })
 
+test('a film that names itself (its own title still "Untitled project") starts the deck with the name it goes by, and the client it belongs to (pc live walk 2026-11-25)', () => {
+  const scene = { id: 'scene_1', rank: 'a0', text: '', heading: 'INT. KITCHEN' }
+  const shot = { id: 'shot_1', scene_id: 'scene_1', rank: 'a0', action: '  Warm sunlight   spills across a quiet kitchen counter.\nA hand reaches in.' }
+  const film = { app: 'production-tool', project: { title: 'Untitled project' }, scenes: { scene_1: scene }, shots: { shot_1: shot }, briefs: {} }
+  const m = { client: { id: 'cli_1', name: 'Copperell (pc test)' } }
+  assert.deepEqual(plain(L.startDefaults({ upstream: { p: film } }, m)), {
+    client: 'Copperell (pc test)', project: 'Warm sunlight spills across a quiet kitchen counter.',
+    text: 'A pitch deck for Copperell (pc test): Warm sunlight spills across a quiet kitchen counter.',
+  })
+  // Its linked brief's title before the script, as the film names itself in Production (summary.ts autoName).
+  const briefed = { ...film, briefs: { brief_1: { title: 'Copperell refill oil' } } }
+  assert.equal((plain(L.startDefaults({ upstream: { p: briefed } }, m)) as { project: string }).project, 'Copperell refill oil')
+  // A brief's client still wins over the document's own client; a name the person gave the film wins over all.
+  const named = { ...film, project: { title: 'Kitchen light' } }
+  assert.deepEqual(plain(L.startDefaults({ upstream: { p: named, b: { client: 'Copperell Home Ltd, a brand' } } }, m)), { client: 'Copperell Home Ltd', project: 'Kitchen light', text: 'A pitch deck for Copperell Home Ltd: Kitchen light.' })
+  // Nothing to go by: no project, never "Untitled project".
+  const blank = { app: 'production-tool', project: { title: 'Untitled project' } }
+  assert.deepEqual(plain(L.startDefaults({ upstream: { p: blank } })), { client: '', project: '', text: '' })
+  assert.equal(L.productionSummary(film)!.name, 'Warm sunlight spills across a quiet kitchen counter.')
+  assert.equal(L.productionSummary(blank)!.name, 'Production project')
+})
+
 test('Built from names the Production project, and an empty block draws no bullet', () => {
   const prod = { p: { app: 'production-tool', project: { title: 'P' }, assets: {}, finals: {}, sizes: {} }, b: briefDoc, r: researchDoc }
   const bf = L.builtFrom({}, { d1: briefDoc, d2: researchDoc, p: prod.p }, [])
@@ -273,10 +297,12 @@ test('the app draws no brand of its own: the OS bar above it already carries the
   assert.ok(!html.includes('rotate(-45 16 16)'))
 })
 
-test('the only inputs are the three prompt fields, the open prompt and the file picker', () => {
+test('the only inputs are the three prompt fields, the open prompt, the file picker and the gate-1 beat being written', () => {
   assert.deepEqual([...html.matchAll(/field\('(\w+)'/g)].map(m => m[1]), ['client', 'project', 'agency'])
   assert.equal(html.match(/<textarea/gi)?.length, 2) // the open prompt, and the free-text box of a supply card
-  assert.equal(html.match(/contenteditable/gi)?.length ?? 0, 0)
+  // deck-beat-editor (owner approved 2026-11-25): the one place written in place is the storyline beat being edited at gate 1
+  assert.deepEqual(html.match(/contenteditable="[^"]*"/gi), ['contenteditable="plaintext-only"'])
+  assert.match(html, /<div class="ined" id="beatEd" role="textbox"[^>]*contenteditable="plaintext-only"/)
 })
 
 test('the team-library shelf is off unless the document turns it on', () => {
@@ -537,7 +563,9 @@ test('the Start look panel: the agency opt-out shows once the deck has met an ag
   const on = L.lookPanel({ ...base, inputs: { library: { enabled: true } }, look: { agency_look: { use: false } } })
   assert.equal(on.agency.use, false)
   assert.equal(on.agency.shown, true)
-  assert.deepEqual(plain(on.kits), { shown: true, pack: { name: 'Demo pack', version: 3 }, brand: { name: 'Demo brand', version: 5 } })
+  // Brand Clan phase 2 (approved 2026-11-23): a Brand Clan is the Look card's own row (brandLook), shown with the library on or off, so
+  // it is no longer also a library "Brand kit" line here.
+  assert.deepEqual(plain(on.kits), { shown: true, pack: { name: 'Demo pack', version: 3 }, brand: null })
   assert.equal(L.lookPanel(null).agency.use, true)
 })
 
@@ -588,7 +616,8 @@ function mount(data: Record<string, unknown>, fetchImpl?: unknown, extraEls: Rec
   const click = (attrs: Record<string, string>, id = '') =>
     handlers.click.forEach(h => h({ target: { closest: () => ({ dataset: attrs, id }) } }))
   const fire = (t: string, e: Record<string, unknown>) => (handlers['win:' + t] || []).forEach(h => h(e))
-  return { app, writes, click, toastEl, doc, timers, fire, win }
+  const change = (dataset: Record<string, string>, id = '') => (handlers.change || []).forEach(h => h({ target: { dataset, id } }))
+  return { app, writes, click, toastEl, doc, timers, fire, win, change }
 }
 
 const hostile = '<img src=x onerror=alert(1)>'
@@ -2753,7 +2782,7 @@ test('Review draws the slide\'s pictures and the picker shows thumbnails, once t
 test('the Start form names the client and the project from what the deck carries', () => {
   const up = {
     p: { app: 'production-tool', project: { title: "Hollow Oak 'Still'" } },
-    b: { client: 'Hollow Oak Cider, a 140-year-old, orchard-grown brand', project_name: 'x' },
+    b: { client: 'Hollow Oak Cider, a 140-year-old, orchard-grown brand' },   // no project name: the Production project's title is the project
     k: { client: 'A Kit Name', kit: { version: 1 } },
   }
   assert.deepEqual(plain(L.startDefaults({ upstream: up })), { client: 'Hollow Oak Cider', project: "Hollow Oak 'Still'", text: "A pitch deck for Hollow Oak Cider: Hollow Oak 'Still'." })
@@ -2839,6 +2868,114 @@ test('Review: a slide with more than four pictures lays them out in a grid so si
   assert.equal((m.app.innerHTML.match(/data-pic="shot_\d"/g) ?? []).length, 6)
   assert.match(html, /\.pimgs\.many\{display:grid/)
   assert.match(html, /function fitSlideText\(\)/) // the words step down until they sit above the foot of the slide (slides 11 and 12 ran off it)
+})
+
+// Brand Clan phase 2, lane C3 (mocks e1, e2): the Look card shows the Brand Clan the deck wears, says when it has a newer version, and
+// re-themes only when a person presses Update look (attach update, or attach of another Brand Clan). The words stay the same.
+const zeroFrozen = { name: 'Zero', kit: { version: 1 }, visual: { colours: [{ id: 'silver', hex: '#9AA7B1', role: 'other' }, { id: 'mint', hex: '#8FE0C8', role: 'accent' }, { id: 'ink', hex: '#1C2630', role: 'ink' }] } }
+const bcTargets = [
+  { app_id: 'ie.napkin.brand', document_id: 'bc-orig', title: 'Tidewell · Original', version: 3, held_version: null, attached: false, default: true, locked: false, swatches: ['#0B5E8A', '#EAF2F6', '#0F2433'], client: { id: 'c1', name: 'Tidewell' } },
+  { app_id: 'ie.napkin.brand', document_id: 'bc-zero', title: 'Tidewell · Zero', version: 2, held_version: 1, attached: true, default: false, locked: false, swatches: ['#9AA7B1', '#7FD6BD', '#1C2630'], client: { id: 'c1', name: 'Tidewell' } },
+  { app_id: 'ie.napkin.brief-maker', document_id: 'b1', title: 'A brief', version: null, attached: false, default: false, locked: false, swatches: [], client: null },
+]
+
+test('brandLook: the Brand Clan held, its newer version and the client\'s Brand Clans by name', () => {
+  const b = L.brandLook({ upstream: { 'bc-zero': zeroFrozen } }, bcTargets)
+  assert.deepEqual(plain(b.held), { id: 'bc-zero', name: 'Zero', version: 1, swatches: ['#9AA7B1', '#8FE0C8', '#1C2630'] })
+  assert.equal(b.newer, 2)
+  assert.equal(b.client, 'Tidewell')
+  assert.deepEqual(plain(b.options.map(o => [o.name, o.version, o.default])), [['Original', 3, true], ['Zero', 2, false]])
+  assert.equal(L.brandLook({ upstream: { 'bc-zero': { ...zeroFrozen, kit: { version: 2 } } } }, bcTargets).newer, null, 'held at the current version')
+  assert.equal(L.brandLook({}, []).held, null)
+  // just after an attach, before the page's data holds the frozen copy, the host's attached record says what is held
+  const justAttached = L.brandLook({}, bcTargets)
+  assert.deepEqual(plain(justAttached.held), { id: 'bc-zero', name: 'Zero', version: 1, swatches: ['#9AA7B1', '#7FD6BD', '#1C2630'] })
+  assert.equal(justAttached.newer, 2)
+  // a Brand Clan is the look row, never a library "Brand kit" line as well
+  assert.equal(L.lookPanel({ upstream: { 'bc-zero': zeroFrozen }, inputs: { library: { enabled: true } } }).kits.brand, null)
+})
+
+const lookData = { inputs: { prompt: { client: 'Tidewell', project: 'Summer Zero pitch', text: 'A pitch.' }, kind: 'agency', format: 'pitch' }, upstream: { 'bc-zero': zeroFrozen } }
+function bcFetch(posts: { url: string; body: string }[]) {
+  return (url: string, init?: { method?: string; body?: string }) => {
+    if (init?.method === 'POST') { posts.push({ url, body: init.body ?? '' }); return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) }) }
+    if (String(url).endsWith('/attach-targets')) return Promise.resolve({ ok: true, json: () => Promise.resolve(bcTargets) })
+    return Promise.resolve({ ok: false, json: () => Promise.resolve(null) })
+  }
+}
+const tick = () => new Promise(r => setTimeout(r, 15))
+
+test('the Look card: the Brand Clan the deck wears, the newer version notice, and the client\'s look winning (e1)', async () => {
+  const posts: { url: string; body: string }[] = []
+  const m = mount(lookData, bcFetch(posts))
+  await tick()
+  const h = m.app.innerHTML
+  assert.match(h, /data-brand-look/)
+  assert.match(h, /Tidewell · Zero<\/div>/)
+  assert.match(h, /Brand Clan · built with v1 ·<span class="sw"><i style="background:#9AA7B1"><\/i>/)
+  assert.match(h, /<b>Zero has a newer version, v2\.<\/b> This deck keeps its look until you press Update look\. The words stay the same\./)
+  assert.match(h, /Tidewell’s look wins over your agency’s\. A look never changes what a slide says\./)
+  assert.equal(posts.length, 0, 'nothing changes until a person presses')
+})
+
+test('Update look (e2): the menu lists each look with its swatches; the newer version is an attach update, another look an attach', async () => {
+  const posts: { url: string; body: string }[] = []
+  const m = mount(lookData, bcFetch(posts))
+  await tick()
+  m.click({ bclook: 'open' })
+  const h = m.app.innerHTML
+  assert.match(h, /Re-theme this deck with/)
+  assert.match(h, /Original <small>· default v3<\/small><\/span><span class="sw"><i style="background:#0B5E8A">/)
+  assert.match(h, /data-bcpick="bc-zero" checked/)
+  assert.match(h, /Same words, new colours, type and logo\./)
+  m.click({ bclook: 'apply' })
+  await tick()
+  assert.equal(posts.length, 1)
+  assert.match(posts[0].url, /\/attach\/update$/)
+  assert.deepEqual(JSON.parse(posts[0].body), { document_id: 'bc-zero' })
+  assert.match(m.toastEl.textContent, /Look updated to Zero v2\. The next build wears it; the words stay the same\./)
+  await tick()
+  // another look: attach replaces the one held
+  m.click({ bclook: 'open' })
+  m.change({ bcpick: 'bc-orig' })
+  assert.match(m.app.innerHTML, /data-bcpick="bc-orig" checked/)
+  m.click({ bclook: 'apply' })
+  await tick()
+  assert.equal(posts.length, 2)
+  assert.match(posts[1].url, /\/attach$/)
+  assert.deepEqual(JSON.parse(posts[1].body), { document_id: 'bc-orig' })
+})
+
+test('Cancel leaves the deck as it is; the same Brand Clan at its current version is not re-attached', async () => {
+  const posts: { url: string; body: string }[] = []
+  const m = mount({ ...lookData, upstream: { 'bc-zero': { ...zeroFrozen, kit: { version: 2 } } } }, bcFetch(posts))
+  await tick()
+  assert.doesNotMatch(m.app.innerHTML, /has a newer version/)
+  m.click({ bclook: 'open' })
+  m.click({ bclook: 'cancel' })
+  assert.doesNotMatch(m.app.innerHTML, /Re-theme this deck with/)
+  m.click({ bclook: 'open' })
+  m.click({ bclook: 'apply' })
+  await tick()
+  assert.equal(posts.length, 0)
+  assert.match(m.toastEl.textContent, /already wears Zero v2/)
+})
+
+test('a new deck starts on the client\'s default Brand Clan; a deck with words in it is never re-linked', async () => {
+  const none = bcTargets.map(t => ({ ...t, attached: false, held_version: null }))
+  const fetchWith = (posts: { url: string; body: string }[]) => (url: string, init?: { method?: string; body?: string }) => {
+    if (init?.method === 'POST') { posts.push({ url, body: init.body ?? '' }); return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) }) }
+    if (String(url).endsWith('/attach-targets')) return Promise.resolve({ ok: true, json: () => Promise.resolve(none) })
+    return Promise.resolve({ ok: false, json: () => Promise.resolve(null) })
+  }
+  const posts: { url: string; body: string }[] = []
+  mount({ inputs: { prompt: { client: 'Tidewell', project: 'P', text: '' }, kind: 'agency', format: 'pitch' } }, fetchWith(posts))
+  await tick(); await tick()
+  assert.deepEqual(posts.map(p => [p.url.replace(/^clan:\/\/localhost/, ''), JSON.parse(p.body).document_id]), [['/attach', 'bc-orig']])
+  const begun: { url: string; body: string }[] = []
+  mount({ inputs: { prompt: { client: 'Tidewell', project: 'P', text: 'A summer pitch for Zero.' }, kind: 'agency', format: 'pitch' } }, fetchWith(begun))
+  await tick(); await tick()
+  assert.equal(begun.length, 0)
 })
 
 // ── UAT round 4 (a01c5e33): the engine check answering late, failing, or a Build pressed before it answered ──
@@ -2974,15 +3111,30 @@ test('a projection with no pins and no usable findings is not research', () => {
   assert.equal(L.upstreamSummary({ upstream: { b: uatBrief }, projection: { findings: { f1: { status: 'rejected' } }, pins: {} } }).research, null)
 })
 
+test('the Look card picks up a Brand Clan published while the deck is open, without a reload (A33)', async () => {
+  let current = bcTargets.map(t => (t.document_id === 'bc-zero' ? { ...t, version: 1 } : t))
+  const fetchImpl = (url: string) => String(url).endsWith('/attach-targets')
+    ? Promise.resolve({ ok: true, json: () => Promise.resolve(current) })
+    : Promise.resolve({ ok: false, json: () => Promise.resolve(null) })
+  const m = mount(lookData, fetchImpl)
+  await tick()
+  assert.doesNotMatch(m.app.innerHTML, /has a newer version/)
+  const poll = m.win.__deckBrandPoll as () => Promise<boolean>
+  assert.equal(await poll(), false, 'nothing new: the page is not re-rendered')
+  current = bcTargets
+  assert.equal(await poll(), true)
+  assert.match(m.app.innerHTML, /<b>Zero has a newer version, v2\.<\/b>/)
+})
+
 // ── UAT round 4 blocker 2: a brief-only deck named no project, so the cover read "Copperell Home Ltd:" and the exports "Project.pptx" ──
-test('Start takes the project name from the brief a deck was spun off from, and a Production project\'s title first', () => {
+test('Start takes the project name from the brief a deck was spun off from, before a Production project\'s title (acceptance A62)', () => {
   const brief = { client: 'Copperell Home Ltd, launching Copperell Refill.', project_name: 'Copperell Refill', objectives: 'Sell the starter bottle' }
   const research = { campaign: { name: 'Copperell research' }, report: {}, selection: {} }
   const d = plain(L.startDefaults({ upstream: { r: research, b: brief } })) as { client: string; project: string; text: string }
   assert.equal(d.client, 'Copperell Home Ltd')
   assert.equal(d.project, 'Copperell Refill')
   assert.equal(d.text, 'A pitch deck for Copperell Home Ltd: Copperell Refill.')
-  assert.equal((plain(L.startDefaults({ upstream: { b: brief, p: prodDoc() } })) as { project: string }).project, 'Lumen Water launch')
+  assert.equal((plain(L.startDefaults({ upstream: { b: brief, p: prodDoc() } })) as { project: string }).project, 'Copperell Refill')
 })
 
 test('an export never takes its file name from a placeholder project', async () => {
@@ -3010,4 +3162,152 @@ test('A30: the stronger-with line leaves out what the deck already brings', () =
   assert.equal(L.typeHints('agency_pitch', prodCarried).line, '')   // a Production project carries the brief whole
   const m = mount({ inputs: { prompt: { client: 'Copperell', project: 'Copperell Refill', text: 'x' } }, upstream: { b: brief } })
   assert.doesNotMatch(m.app.innerHTML, /To make this one stronger/)
+})
+
+// ── acceptance A32 and A62: the deck from the Production project ──
+test('A32: a brief whose client field is a sentence still names the client', () => {
+  assert.equal(L.clientName('Copperell Home Ltd is launching Copperell Refill: a ribbed amber glass spray bottle with a copper cap, made to keep for life.'), 'Copperell Home Ltd')
+  assert.equal(L.clientName('To confirm: Lumen Water (the utility), Dublin'), 'Lumen Water')
+  assert.equal(L.clientName('x'.repeat(90)), '')
+  const brief = { client: 'Copperell Home Ltd is launching Copperell Refill: a ribbed amber glass spray bottle.', objectives: 'o', project_name: 'Copperell Refill' }
+  assert.equal(L.startDefaults({ upstream: { b: brief } }).client, 'Copperell Home Ltd')
+})
+
+test('A62: the brief\'s project name comes before a Production project\'s working title, which never keeps "· Territories N"', () => {
+  const prod = { app: 'production-tool', project: { title: 'Copperell Refill · Territories 3' } }
+  assert.equal(L.startDefaults({ upstream: { p: prod, b: { objectives: 'o', project_name: 'Copperell Refill' } } }).project, 'Copperell Refill')
+  assert.equal(L.startDefaults({ upstream: { p: prod } }).project, 'Copperell Refill')
+  assert.equal(L.startDefaults({ upstream: { p: { ...prod, project: { title: 'Lumen Water launch' } } } }).project, 'Lumen Water launch')
+})
+
+// ── deck-beat-editor: the person edits the storyline's beats at gate 1 (owner approved the mock, 2026-11-25) ──
+const BASE = 'a'.repeat(64)
+const storyRun = (extra: Record<string, unknown> = {}) => {
+  const r = gateRun() as Record<string, unknown> & { gate: Record<string, unknown> }
+  return { ...r, gate: { ...r.gate, more_beats: undefined, editable: true, base: BASE, beats: [
+    { n: '01', key: 'reframe', title: 'Refill wins by being wanted.', src: 'Cites research · 9 refs', basis: 'research', words: 'agents' },
+    { n: '02', key: 'barrier', title: 'Doubt holds refill back.', src: 'Cites research, requirements · 7 refs', basis: 'research', words: 'agents',
+      carries: [{ id: 'r3', text: 'No germ-kill claim until the lab report', to: 'the guardrails slide' }] },
+    { n: '03', key: 'proposition', title: 'One tablet, a shake.', src: 'No source: our proposal', basis: 'proposal', words: 'agents' },
+  ] }, ...extra }
+}
+type StoryWrite = { run: { storyline_edit: { base: string; beats: { key: string | null; title: string; words: string }[] } | null } & Record<string, unknown> }
+const storyOfWrite = (w: { obj: Record<string, unknown> }) => (w.obj as StoryWrite).run.storyline_edit
+
+test('beat editor: a gate the engine marks editable is the storyline to edit; any other gate 1 is drawn as before', () => {
+  assert.equal(L.storyView(gateRun()), null)   // no editable flag, no base: the read-only beats (the gate-1 golden holds them)
+  assert.equal(L.storyView({ ...storyRun(), gate: { ...storyRun().gate, base: 'nope' } }), null)
+  const v = L.storyView(storyRun())
+  assert.deepEqual(plain(v.beats.map((b: { key: string }) => b.key)), ['reframe', 'barrier', 'proposition'])
+  assert.deepEqual(plain([v.changed, v.stale, v.mine]), [false, false, 0])
+  assert.equal(v.beats[1].carries[0].to, 'the guardrails slide')
+})
+
+test('beat editor: the saved storyline is shown when it was made against this storyline, never when against another', () => {
+  const saved = { base: BASE, beats: [{ key: 'barrier', title: 'Doubt holds refill back.' }, { key: null, title: 'My own point.' }, { key: 'reframe', title: 'Refill is seen working.' }] }
+  const v = L.storyView(storyRun({ storyline_edit: saved }))
+  assert.deepEqual(plain(v.beats.map((b: { key: string | null; words: string }) => [b.key, b.words])), [['barrier', 'agents'], [null, 'yours'], ['reframe', 'yours']])
+  assert.deepEqual(plain([v.changed, v.mine, v.stale]), [true, 1, false])
+  assert.equal(L.beatSource(v.beats[2]), 'Your words · evidence kept: research · 9 refs')   // owner: a reworded beat keeps its evidence
+  assert.equal(L.beatSource(v.beats[1]), 'Your words · no source yet')
+  const stale = L.storyView(storyRun({ storyline_edit: { ...saved, base: 'b'.repeat(64) } }))
+  assert.deepEqual(plain([stale.changed, stale.stale]), [false, true])
+})
+
+test('beat editor: the patch is the person\'s beats with whose words they are, null once it is the agents\' again, refused when empty', () => {
+  const v = L.storyView(storyRun())
+  assert.deepEqual(plain(L.storyPatch(v, 'You', 't')), { storyline_edit: null })
+  const moved = { ...v, beats: [v.beats[2], { ...v.beats[0], title: 'Refill is  seen working. ' }] }
+  assert.deepEqual(plain(L.storyPatch(moved, 'You', 't')), { storyline_edit: { base: BASE, by: 'You', at: 't', beats: [
+    { key: 'proposition', title: 'One tablet, a shake.', words: 'agents' }, { key: 'reframe', title: 'Refill is seen working.', words: 'yours' }] } })
+  assert.equal(L.storyPatch({ ...v, beats: [] }, 'You', 't'), null)
+  assert.equal(L.storyPatch({ ...v, beats: [{ ...v.beats[0], title: '  ' }] }, 'You', 't'), null)
+  assert.equal(L.storyPatch({ ...v, beats: [{ ...v.beats[0], title: 'x'.repeat(L.BEAT_MAX + 1) }] }, 'You', 't'), null)
+})
+
+test('beat editor: reword in place; Approve is off with its reason while writing; each change writes only run.storyline_edit', async () => {
+  const ed = { textContent: '' }
+  const m = mount(buildData(storyRun()), undefined, { beatEd: ed })
+  let h = m.app.innerHTML
+  assert.ok(h.includes('data-beat-edit="0"') && h.includes('data-beat-add="1"') && h.includes('Your storyline has <b>3 beats</b>'))
+  assert.ok(h.includes('the 12-slide cap never moves them to the appendix, even at 13 or 14 slides'))   // owner answer 2
+  assert.match(h, /id="approve">Approve and continue</)
+  assert.match(h, /data-beat-reset="1" disabled>/)
+  assert.match(h, /data-edit="beats" disabled>Ask the agents to rewrite around my edits</)
+  m.click({ beatEdit: '0' })
+  h = m.app.innerHTML
+  assert.match(h, /<div class="ined" id="beatEd" role="textbox" aria-label="Write beat 1"/)
+  assert.match(h, /id="approve" disabled>/)
+  assert.ok(h.includes('Finish the beat you are writing (⌘↵) before you approve.'))
+  m.click({}, 'approve')
+  assert.equal(m.writes.length, 0, 'nothing is approved while a beat is being written')
+  ed.textContent = '   '
+  m.click({ beatDone: '0' })
+  assert.ok(m.app.innerHTML.includes('A beat needs words. Esc puts back what was there.'))
+  assert.equal(m.writes.length, 0)
+  ed.textContent = 'Refill wins by being seen   working.'
+  m.click({ beatDone: '0' })
+  assert.equal(m.writes.length, 1)
+  assert.equal(m.writes[0].action, 'edit storyline: beat 1 reworded')
+  assert.deepEqual(Object.keys(m.writes[0].obj), ['run'])
+  assert.deepEqual(Object.keys((m.writes[0].obj as StoryWrite).run), ['storyline_edit'])   // the gate is never in the patch (A31: it survives)
+  assert.deepEqual(plain(storyOfWrite(m.writes[0])!.beats[0]), { key: 'reframe', title: 'Refill wins by being seen working.', words: 'yours' })
+  assert.ok(m.app.innerHTML.includes('Saving…'))
+  await new Promise(r => setTimeout(r, 5))
+  h = m.app.innerHTML
+  assert.ok(h.includes('Saved: beat 1 reworded. Your storyline is in the document; Approve builds from it.'))
+  assert.ok(h.includes('Your words · evidence kept: research · 9 refs'))
+  assert.match(h, /id="approve">Approve my storyline and continue</)
+})
+
+test('beat editor: move, take out (a mandatory warns and says where it moves), add, undo and reset', () => {
+  const ed = { textContent: '' }
+  const m = mount(buildData(storyRun()), undefined, { beatEd: ed })
+  m.click({ beatDown: '0' })
+  assert.deepEqual(plain(storyOfWrite(m.writes[0])!.beats.map(b => b.key)), ['barrier', 'reframe', 'proposition'])
+  m.click({ beatDel: '0' })
+  assert.equal(m.writes.length, 1, 'a beat that states a mandatory asks first')
+  assert.ok(m.app.innerHTML.includes('This beat states a mandatory: “No germ-kill claim until the lab report”. Taking it out moves it to the guardrails slide.'))
+  m.click({ beatDelno: '0' })
+  assert.equal(m.app.innerHTML.includes('This beat states a mandatory'), false)
+  m.click({ beatDel: '0' })
+  m.click({ beatDelok: '0' })
+  assert.deepEqual(plain(storyOfWrite(m.writes[1])!.beats.map(b => b.key)), ['reframe', 'proposition'])
+  assert.match(m.toastEl.textContent, /moves to the guardrails slide/)
+  m.click({ beatAdd: '1' })
+  assert.match(m.app.innerHTML, /aria-label="Write beat 3"/)
+  m.click({ beatCancel: '2' })
+  assert.equal(m.writes.length, 2, 'an added beat cancelled empty is gone, and nothing is written')
+  assert.ok(m.app.innerHTML.includes('Your storyline has <b>2 beats</b>'))
+  m.click({ beatAdd: '1' })
+  ed.textContent = 'People keep the bottle on show.'
+  m.click({ beatDone: '2' })
+  assert.equal(m.writes[2].action, 'edit storyline: your beat added as beat 3')
+  assert.deepEqual(plain(storyOfWrite(m.writes[2])!.beats[2]), { key: null, title: 'People keep the bottle on show.', words: 'yours' })
+  assert.ok(m.app.innerHTML.includes('Your storyline has <b>3 beats</b>, 1 of them yours.'))
+  m.click({ beatUndo: '1' })
+  assert.deepEqual(plain(storyOfWrite(m.writes[3])!.beats.map(b => b.key)), ['reframe', 'proposition'])
+  m.click({ beatReset: '1' })
+  assert.ok(m.app.innerHTML.includes('Reset to the agents’ version?'))
+  assert.equal(m.writes.length, 4, 'Reset asks first')
+  m.click({ beatResetok: '1' })
+  assert.equal(storyOfWrite(m.writes[4]), null)   // the agents' version: the person's edit is cleared
+  assert.equal(m.writes[4].action, 'edit storyline: reset to the agents’ version')
+})
+
+test('beat editor: Approve carries the person\'s storyline with the approval; Ask the agents queues it with the edit request', () => {
+  const m = mount(buildData(storyRun()))
+  m.click({ beatUp: '2' })
+  m.click({}, 'approve')
+  const w = (m.writes.at(-1)!.obj as StoryWrite).run as Record<string, unknown> & StoryWrite['run']
+  assert.equal(m.writes.at(-1)!.action, 'approve storyline')
+  assert.equal((w.approvals as Record<string, { decision: string }>).storyline.decision, 'approve')
+  assert.deepEqual(plain(w.storyline_edit!.beats.map(b => b.key)), ['reframe', 'proposition', 'barrier'])
+  const a = mount(buildData(storyRun()))
+  a.click({ beatDown: '0' })
+  a.click({ edit: 'beats' })
+  const q = (a.writes.at(-1)!.obj as StoryWrite).run as Record<string, unknown> & StoryWrite['run']
+  assert.deepEqual(plain((q.gate_requests as { kind: string }[]).map(x => x.kind)), ['edit'])
+  assert.deepEqual(plain(q.storyline_edit!.beats.map(b => b.key)), ['barrier', 'reframe', 'proposition'])
+  assert.match(a.toastEl.textContent, /rewrite the storyline around your edits the next time the deck is built\. Nothing has changed yet\./)
 })

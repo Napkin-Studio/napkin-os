@@ -62,6 +62,11 @@ const CASES: Case[] = [
   ['Brief → Frame (refused)', 'brief', 'generated', 'Not a target for a brief'],
   ['Brief → Brief (refused)', 'brief', 'brief', 'A brief cannot feed a brief'],
   ['Anything → Brief (refused)', 'script', 'brief', 'A script cannot feed a brief'],
+  // Brand Clan phase 2 (DESIGN 4a): a Brand Clan node feeds what makes the film or the sizes, never a sketch or a shot.
+  ['Brand Clan → Script', 'brand_clan', 'script', ['brand']],
+  ['Brand Clan → Storyboard', 'brand_clan', 'storyboard', ['brand']],
+  ['Brand Clan → Video', 'brand_clan', 'video', ['brand']],
+  ['Brand Clan → Format set', 'brand_clan', 'format_set', ['brand']],
 ]
 
 describe('canLink: every row of 3.4', () => {
@@ -71,14 +76,15 @@ describe('canLink: every row of 3.4', () => {
     else expect(got).toEqual({ ok: true, roles: want })
   })
 
-  it('the table is 3.4 as written, plus the owner’s Script → Video, Brief and Brand board → Note rows: thirteen rows, three refusals', () => {
+  it('the table is 3.4 as written, plus the owner’s Script → Video, Brief, Brand Clan and Brand board → Note rows: fourteen rows, three refusals', () => {
     expect(LINK_TABLE.map((r) => r.fromTo)).toEqual([
       'Script → Storyboard', 'Storyboard → Video', 'Script → Video', 'Reference → any generating node, or a Shot', 'Board or group → any generating node',
       'Note, ink group or Document → any generating node', 'Brand board → any generating node', 'Brand board → Note', 'Frame, key visual or Video → Format set',
       'Image, frame or generated picture → Shot', 'Sketch area → Frame', 'Ink group → Shot', 'Brief → Script, Storyboard, Video or Format set',
+      'Brand Clan → Script, Storyboard, Video or Format set',
     ])
     expect(REFUSALS.map((r) => r.fromTo)).toEqual([
-      'Anything → Reference, Product, Document, Brief or Brand board', 'Video → anything but a Format set', 'A link that would form a loop',
+      'Anything → Reference, Product, Document, Brief, Brand Clan or Brand board', 'Video → anything but a Format set', 'A link that would form a loop',
     ])
     expect(LINK_TABLE.find((r) => r.fromTo === 'Sketch area → Frame')!.allowed).toBe('Created by the system only')
   })

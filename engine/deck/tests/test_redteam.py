@@ -231,3 +231,28 @@ def test_evaluate_counts_a_narrowed_headline_by_its_old_verdict(tmp_path):
     (tmp_path / "validation.json").write_text("[]")
     r = evaluate.score(tmp_path)
     assert r["fit"]["not"] == 1 and r["fit_narrowed"] == 1 and r["fit_pct"] == 0
+
+
+# ---------------------------------------------------------------- a fit verdict with no title (UAT round 4: "KeyError: 'title'" in the Copy step)
+
+def test_a_fit_verdict_with_no_title_is_left_out_and_never_stops_the_build():
+    """The fit judge is a model: a verdict it returns without a title (or under 'slide'/'headline'), or not as an object, must not stop the
+    Copy step (UAT round 4, doc-ie-napkin-deck-maker-07c26c27: 'The engine stopped: KeyError: 'title''). A verdict under another key is read
+    by that key; one with no title at all is left out; the deck builds, checks and narrows as before."""
+    st = {k: json.loads((FIX / f).read_text()) for k, f in FILES.items()}
+    inp = inputs.load(FIX / "brief_object.json")
+    fit = {"verdicts": [{"verdict": "supported", "reason": "no title"}, "not a verdict", {"slide": REAL_Q, "verdict": "not", "reason": "other market"},
+                        {"title": "Nothing like it", "reason": "no verdict"}]}
+    deck = assemble.build(inp, st, client="Lumen Water", project="National awareness campaign", fit=fit)
+    assert [v["title"] for v in deck["fit"]["verdicts"]] == [REAL_Q, "Nothing like it"]
+    assert deck["fit"]["verdicts"][1]["verdict"] == ""   # kept, judged nothing: it neither presents nor flags a slide
+    checks = validate.run(deck, inp)
+    assert any(c["check"] == "claim_fit" and "other market" in c["message"] for c in checks)
+    assert stages._narrow_candidates(deck, inp)[0]["slide"] == REAL_Q
+
+
+def test_the_fit_stage_cleans_what_the_judge_returns(monkeypatch):
+    deck, inp = _deck()
+    monkeypatch.setattr(stages, "_call", lambda *a, **k: ({"verdicts": [{"headline": REAL_Q, "verdict": "partly"}, {"verdict": "supported"}]}, {"usd": 0}))
+    fit, _ = stages.fit(deck, inp)
+    assert fit["verdicts"] == [{"title": REAL_Q, "verdict": "partly", "reason": ""}]

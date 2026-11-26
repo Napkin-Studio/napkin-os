@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DocAsset } from '../contracts/types'
 import { putBlobAs } from '../lib/blobs'
 import { forgetMedia, setMediaBase } from '../lib/media'
-import { assetRef } from './assets'
+import { assetRef, logoRef } from './assets'
 
 // Render ad uploaded every clip again from the browser, and said "A picture is missing" when the
 // browser no longer had a clip the relay itself had made (2026-10-09).
@@ -67,5 +67,30 @@ describe('an asset the relay already has', () => {
     await assetRef(r as any, s, doc)
     expect(heads.every((h) => h.includes('cdn.test'))).toBe(true)
     expect(r.upload).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('a logo (the end card, a size) goes as it is', () => {
+  it('its own bytes and type, uploaded once, never fitted for a provider (a wide wordmark was padded onto a white box)', async () => {
+    const r = relay()
+    const s = sha('f')
+    const png = new Blob(['wide-logo-bytes'], { type: 'image/png' })
+    await putBlobAs(s, png)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const refs = await Promise.all([logoRef(r as any, s), logoRef(r as any, s)])
+    expect(r.upload).toHaveBeenCalledTimes(1)
+    const [sent, mime] = r.upload.mock.calls[0]
+    expect(mime).toBe('image/png')
+    expect(await (sent as Blob).text()).toBe('wide-logo-bytes')
+    expect(refs[0]).toEqual({ sha256: sha('9'), url: 'https://cdn.test/in/x', mime: 'image/png' })
+  })
+
+  it('a logo not in this browser is said, and asked for again next time', async () => {
+    const r = relay()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(logoRef(r as any, sha('0'))).rejects.toThrow(/logo is missing/)
+    await putBlobAs(sha('0'), new Blob(['x'], { type: 'image/png' }))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((await logoRef(r as any, sha('0'))).url).toBe('https://cdn.test/in/x')
   })
 })

@@ -55,6 +55,7 @@ example('make_brief_maker', join(seed, 'brief-maker.app.clan'), join(scratch, 'r
 example('make_deck_maker', join(seed, 'deck-maker.app.clan'), join(scratch, 'deck.example.clan'))
 example('make_territories', join(seed, 'territories.app.clan'), join(scratch, 'territories.example.clan'))
 example('make_production', join(seed, 'production.app.clan'), join(scratch, 'production.example.clan'))
+example('make_brand_clan', join(seed, 'brand-clan.app.clan'), join(scratch, 'brand-clan.example.clan'))
 run('cargo', ['build', '-q', '-p', 'napkin-web'])
 
 // A stand-in middleware, local and free: it answers every task as one job whose

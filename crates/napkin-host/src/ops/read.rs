@@ -549,8 +549,14 @@ pub fn clan_context_for_agent(doc: &Document) -> Value {
     let carried = (doc.app_id() == Some(TERRITORIES_APP))
         .then(|| carried_upstream(&raw_data))
         .flatten();
-    let brief = if m.app.as_ref().is_some_and(|a| a.app_id == DECK_MAKER_APP) {
+    let deck = m.app.as_ref().is_some_and(|a| a.app_id == DECK_MAKER_APP);
+    let brief = if deck {
         brief_upstream(&raw_data)
+    } else {
+        None
+    };
+    let brand = if deck {
+        brand_upstream(clan, &raw_data)
     } else {
         None
     };
@@ -598,6 +604,13 @@ pub fn clan_context_for_agent(doc: &Document) -> Value {
     // empty brief, because the middleware only ever saw the index).
     if let Some(b) = brief {
         context["brief_upstream"] = b;
+    }
+    // A Deck wearing a Brand Clan is sent it whole beside the index, with its
+    // logo files, as the brief is: the engine dresses the deck from it and
+    // cannot from the index (acceptance A60: Start said the deck wore
+    // Copperell Original, and the build wore the default look).
+    if let Some(b) = brand {
+        context["brand_upstream"] = b;
     }
     // A research started from a brief is told the brief's ask, and only
     // that: extract_ask proposes from it (features/spinoff-and-links.clan).
@@ -663,6 +676,15 @@ const BRIEF_KEYS: &[&str] = &[
 /// `{id, data}` of the first entry of `data.upstream` that is a brief (a
 /// Brief Maker's data: never a Production project or a kit), whole, for a
 /// Deck's build. `None` when the document carries none.
+///
+/// What the brief had carried itself (its research, and any other document
+/// the spin-off hoisted beside it; never a Production project, which travels
+/// as `production_upstream`, nor a kit) goes back under the brief's own
+/// `upstream`, as [`production_upstream`] does for a project: a Confidential
+/// mark the brief's chain holds on its research names that document, and the
+/// deck's marks check must find it there (5-tool run, 2026-11-26: every deck
+/// from a brief with marked research was refused, "names a document this deck
+/// does not hold").
 fn brief_upstream(data: &Value) -> Option<Value> {
     let up = data.get(UPSTREAM_KEY)?.as_object()?;
     let (id, copy) = up.iter().find(|(_, copy)| {
@@ -671,7 +693,66 @@ fn brief_upstream(data: &Value) -> Option<Value> {
             && !is_production(copy)
             && !is_kit(copy)
     })?;
-    Some(json!({ "id": id, "data": copy }))
+    let mut whole = copy.clone();
+    let carried: serde_json::Map<String, Value> = up
+        .iter()
+        .filter(|(k, v)| *k != id && v.is_object() && !is_production(v) && !is_kit(v))
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    if !carried.is_empty() {
+        whole[UPSTREAM_KEY] = Value::Object(carried);
+    }
+    Some(json!({ "id": id, "data": whole }))
+}
+
+/// The most logo bytes a Brand Clan carries to the deck engine in one
+/// context (base64 adds a third): its logos are small pictures.
+const BRAND_LOGOS_MAX: usize = 4 * 1024 * 1024;
+
+/// `{id, version, data, logos}` of the Brand Clan the document wears (its
+/// `lineage.attached[]` entry of app `ie.napkin.brand`, and the frozen copy
+/// at `data.upstream.<id>`), for a Deck's build. `logos` maps each logo
+/// file the host copied in on attach or Update
+/// (`human/assets/brand/<id>/<file>`, [`crate::library::brand_logo_entry`])
+/// to its bytes in base64. `None` when the document wears no Brand Clan.
+fn brand_upstream(clan: &ClanFile, data: &Value) -> Option<Value> {
+    use base64::Engine as _;
+    let att = clan
+        .manifest()
+        .attached()
+        .iter()
+        .find(|a| a.app_id == crate::library::BRAND_APP_ID)?;
+    let id = att.carried.document_id.as_str();
+    let copy = data.get(UPSTREAM_KEY)?.get(id)?;
+    if !copy.is_object() {
+        return None;
+    }
+    let mut logos = serde_json::Map::new();
+    let mut total = 0usize;
+    let assets = copy
+        .get("visual")
+        .and_then(|v| v.get("logos"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    for l in assets {
+        let Some(asset) = l.get("asset").and_then(Value::as_str) else {
+            continue;
+        };
+        let entry = crate::library::brand_logo_entry(id, asset);
+        let Ok(bytes) = clan.read_entry(&entry) else {
+            continue;
+        };
+        total += bytes.len();
+        if total > BRAND_LOGOS_MAX {
+            break;
+        }
+        logos.insert(
+            entry,
+            Value::from(base64::engine::general_purpose::STANDARD.encode(&bytes)),
+        );
+    }
+    Some(json!({ "id": id, "version": att.version, "data": copy, "logos": logos }))
 }
 
 /// The app id a Production project's data carries (`app`, production-tool/contracts/document.schema.json).
@@ -1690,6 +1771,12 @@ mod tests {
         let b = brief_upstream(&both).expect("a brief");
         assert_eq!(b["id"], "doc-brief");
         assert_eq!(b["data"]["objectives"], "Sell the starter bottle");
+        // the research the spin-off hoisted beside the brief goes back under the brief's own
+        // upstream, whole (its Confidential marks name it); the kit does not
+        assert_eq!(
+            b["data"]["upstream"],
+            json!({ "doc-research": both["upstream"]["doc-research"] })
+        );
         assert_eq!(
             brief_upstream(
                 &json!({ "upstream": { "p": { "app": "production-tool", "objectives": "x" } } })

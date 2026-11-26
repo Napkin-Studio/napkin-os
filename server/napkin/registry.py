@@ -14,8 +14,8 @@ import re
 from pathlib import Path
 
 from .capabilities import CAPABILITY_VERSION
-from .handlers import (answer_question, ask_research, attach_production, build_deck, compose_report, draft_brief, extract_ask, fetch_deck_file, fetch_territories_file,
-                       fix_parts, reconsider, regenerate_field, research_lens, run_territories, start_campaign, synthesise_findings)
+from .handlers import (answer_question, ask_research, attach_production, brand_build, brand_identify, build_deck, compose_report, draft_brief, extract_ask, fetch_deck_file,
+                       fetch_territories_file, fix_parts, reconsider, regenerate_field, research_lens, run_territories, start_campaign, synthesise_findings)
 from .util import bad
 
 REGISTRY = {
@@ -35,6 +35,8 @@ REGISTRY = {
     "fetch_deck_file": {1: fetch_deck_file},
     "run_territories": {1: run_territories},
     "fetch_territories_file": {1: fetch_territories_file},
+    "brand_identify": {1: brand_identify},
+    "brand_build": {1: brand_build},
 }
 # Used only when a document carries no pipeline: the declared built-in map.
 BUILTIN_PIPELINE = {
@@ -46,6 +48,7 @@ BUILTIN_PIPELINE = {
     "reconsider": "reconsider@2", "build_deck": "build_deck@1",
     "attach_production": "attach_production@1", "fetch_deck_file": "fetch_deck_file@1",
     "run_territories": "run_territories@1", "fetch_territories_file": "fetch_territories_file@1",
+    "brand_identify": "brand_identify@1", "brand_build": "brand_build@1",
 }
 TASKS = set(BUILTIN_PIPELINE) | {"job_status", "cancel_job"}
 
@@ -78,7 +81,7 @@ def lookup(declared: str, task: str):
 # built-in map. answer_question: a brief made before Brief Maker declared it could never answer its
 # intake questions (UAT round 4, 2026-11-12: every answer refused as unknown_task, the job waited 90 s).
 LATER_TASKS = {"ask_research", "reconsider", "fix_parts", "answer_question", "build_deck", "attach_production", "fetch_deck_file",
-               "run_territories", "fetch_territories_file"}
+               "run_territories", "fetch_territories_file", "brand_identify", "brand_build"}
 
 
 def resolve(task: str, clan: dict):

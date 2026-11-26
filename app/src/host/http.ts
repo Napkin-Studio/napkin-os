@@ -17,6 +17,7 @@
 import { isMyExport } from './exportEvents'
 import { fetchFile } from './fetchFile'
 import { frameQuery } from './frame'
+import { brandApi, type BrandApi } from './brandClans'
 import type {
   ClientConfirmReply,
   Adopted,
@@ -42,6 +43,7 @@ import type {
   AttachReply,
   RelatedView,
   SourceCard,
+  BrandOp,
 } from './types'
 
 interface SessionInfo {
@@ -291,6 +293,35 @@ export async function fetchOpenDocument(): Promise<{ manifest: OpenResult['manif
   return { manifest, bytes }
 }
 
+/** A Brand Clan operation as napkin-web's route (docs/contracts/brand-clan.md section 5). */
+function brandRoute<T>(op: BrandOp, i: Record<string, unknown>, bytes?: Uint8Array): Promise<T> {
+  const e = (k: string) => encodeURIComponent(String(i[k] ?? ''))
+  const doc = () => `/brand-clans/${e('path')}`
+  const client = () => `/clients/${e('client_id')}/brand-clans`
+  // Only what a route carries in its path (client_id, path) leaves the body. `name` goes in the query for asset.put
+  // alone and `version` for get alone (neither sends a body); create's `name` is its body (A29: it was stripped
+  // from every body, so napkin-web's create always answered "a Brand Clan needs a name").
+  const { client_id: _c, path: _p, ...body } = i
+  const send = (method: string, path: string) =>
+    json<T>(path, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+  switch (op) {
+    case 'list': return json<T>(client())
+    case 'create': return send('POST', client())
+    case 'default.set': return send('PUT', `/clients/${e('client_id')}/default-brand-clan`)
+    case 'get': return json<T>(`${doc()}${i.version ? `?version=${Number(i.version)}` : ''}`)
+    case 'history': return json<T>(`${doc()}/history`)
+    case 'draft.save': return send('PUT', `${doc()}/draft`)
+    case 'draft.start': return send('POST', `${doc()}/draft/start`)
+    case 'draft.discard': return json<T>(`${doc()}/draft`, { method: 'DELETE' })
+    case 'publish': return send('POST', `${doc()}/publish`)
+    case 'proposal.set': return send('POST', `${doc()}/proposal`)
+    case 'proposal.accept': return send('POST', `${doc()}/proposal/accept`)
+    case 'proposal.keep': return json<T>(`${doc()}/proposal/keep`, { method: 'POST' })
+    case 'work.update': return send('POST', `${doc()}/update-work`)
+    case 'asset.put': return json<T>(`${doc()}/assets?name=${e('name')}`, { method: 'POST', body: bytes as unknown as BodyInit })
+  }
+}
+
 export const httpHost: Host = {
   // Signed in, the person is their account (`human:engineer@napkin`, as
   // napkin-web's Acting records them); anonymous, the tenant is the person.
@@ -377,6 +408,7 @@ export const httpHost: Host = {
   listRecent: () => json<RecentDoc[]>('/recent'),
 
   listLibrary: (filter?: LibraryFilter) => json<LibraryListing>(`/library${libraryQuery(filter)}`),
+  documentData: (path: string) => json<{ data: unknown; title?: string }>(`/d/${encodeURIComponent(path)}/data`),
   settleJob: (path: string, jobId: string) =>
     json<unknown>(`/d/${encodeURIComponent(path)}/jobs/${encodeURIComponent(jobId)}/settle`, { method: 'POST' }),
   docOps: async (path: string) => {
@@ -412,6 +444,9 @@ export const httpHost: Host = {
     adopt: names => json<Adopted>('/clients/adopt', postJson({ names })),
   },
 
+  get brandClans() { return (this as unknown as { _bc?: BrandApi })._bc ??= brandApi(this) },
+  brandClan: <T,>(op: BrandOp, i: Record<string, unknown>, bytes?: Uint8Array) => brandRoute<T>(op, i, bytes),
+  brandClanAsset: async (path, name) => `${await base()}/brand-clans/${encodeURIComponent(path)}/assets/${encodeURIComponent(name)}`,
   trash: {
     list: client => json<TrashItem[]>(`/trash${client ? `?client=${encodeURIComponent(client)}` : ''}`),
     move: async path => { await json<unknown>(`/d/${encodeURIComponent(path)}`, { method: 'DELETE' }) },

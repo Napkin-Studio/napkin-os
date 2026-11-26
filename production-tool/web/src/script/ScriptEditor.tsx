@@ -1,6 +1,6 @@
 // The Script editor (ui-behaviour 3.10, artboards 6 and 7; features/script-editor.clan).
 //
-// Full screen at /production/p/:project/script/:scriptId?shot=<shotId>, over the stages: the
+// Full screen at /production/d/:doc/script/:scriptId?shot=<shotId>, over the stages: the
 // canvas stays mounted underneath, so jobs keep landing. '← Storyboard', browser Back and
 // ⌘[ return, and Esc when nothing else takes it (twice from the text). One row model (compose.ts) under both views; the current shot
 // and any focused fragment mount an editor bound to its own fragment, the rest render static.
