@@ -142,6 +142,18 @@ def ctx_data(clan: dict) -> dict:
     return d if isinstance(d, dict) else {}
 
 
+def ctx_data_carried(clan: dict) -> dict:
+    """``ctx_data`` with the frozen ancestors put back whole under ``upstream``. The host sends ``clan.data.upstream`` as an index (§1) and, to a
+    Territories document, the full carried brief and research beside it as ``clan.carried_upstream {<id>: frozen copy}``; the engine reads the
+    brief from ``data.upstream`` as it is in the document. Without ``carried_upstream`` the data is what ``ctx_data`` gives."""
+    data = ctx_data(clan)
+    carried = (clan or {}).get("carried_upstream")
+    if not isinstance(carried, dict) or not carried:
+        return data
+    up = data.get("upstream") if isinstance(data.get("upstream"), dict) else {}
+    return {**data, "upstream": {**up, **{k: v for k, v in carried.items() if isinstance(v, dict)}}}
+
+
 def field_env(data: dict, name: str) -> dict | None:
     env = (data.get("campaign") or {}).get(name)
     return env if isinstance(env, dict) else None

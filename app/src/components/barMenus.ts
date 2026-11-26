@@ -297,6 +297,7 @@ function shortTool(name: string): string {
 /** What the target makes from this one, in the mock's words. */
 function spinHint(t: { app_id: string; name: string; map?: string | null }, noun: string): string {
   const id = `${t.app_id} ${t.name}`
+  if (/territor/i.test(id)) return noun === 'report' ? 'Routes for a campaign, from these findings' : `Routes for a campaign, from this ${noun}`
   if (/deck/i.test(id)) return `A board deck from this ${noun}`
   if (/advertising|film|production/i.test(id)) return noun === 'report' ? 'A film treatment from the findings' : `Films and stills from this ${noun}`
   if (/research/i.test(id)) return noun === 'brief' ? 'A follow-up question from its open questions' : `Research from this ${noun}`

@@ -245,7 +245,7 @@ fn load_template(store: &dyn DocStore, app_id: &str) -> HostResult<ClanFile> {
     store
         .read(&tpl_id)
         .and_then(|b| Ok(ClanFile::from_bytes(b)?))
-        .map_err(|e| HostError::new(e.status, format!("app not installed: {e}")))
+        .map_err(|e| HostError::new(e.status, format!("app not installed: {app_id} ({e})")))
 }
 
 /// A new document's id: the library's name for it, from the first characters
@@ -2316,6 +2316,11 @@ mod tests {
         let err = spinoff_document(&store, &source, "ie.napkin.absent", None, None)
             .expect_err("an uninstalled target must be an error");
         assert!(err.message.contains("app not installed"), "{}", err.message);
+        assert!(
+            err.message.contains("ie.napkin.absent"),
+            "the refusal names the tool that is missing: {}",
+            err.message
+        );
     }
 
     #[test]

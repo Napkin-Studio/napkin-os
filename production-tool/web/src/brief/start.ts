@@ -13,6 +13,7 @@ import { bringBrief } from './canvas'
 import { briefFromDocument } from './model'
 import { BriefReadError, type BriefSource, type OsBriefItem, type OsBriefRead } from './os'
 import { BRIEF_APP_ID } from './spine'
+import { isTerritories } from './routes'
 
 /** Whether Assets › From Napkin lists briefs: this page can read Napkin's briefs. */
 export async function offersStartFromBrief(src: BriefSource): Promise<boolean> {
@@ -43,6 +44,8 @@ export async function bringCarriedBrief(env: NodeEnv, from: SpunOffFrom | null):
   if (!from) return null
   const doc = env.doc.get()
   if (briefFromDocument(doc, from.document_id)) return null
+  // A Territories parent is not a brief (its routes are brought by routes.ts): its data is no spine.
+  if (isTerritories(doc.upstream?.[from.document_id])) return null
   const read = carriedBrief(from, doc.upstream)
   return read ? bringBrief(env, read, 'spinoff') : null
 }

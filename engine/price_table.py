@@ -55,3 +55,9 @@ def usd(model: str | None, tokens_in: int, tokens_out: int, cache_read: int = 0,
     pin, pout, pread = max(rows, key=lambda r: r[1])
     w = float(table()["cache_write_mult"])
     return round(((tokens_in or 0) * pin + (tokens_out or 0) * pout + (cache_read or 0) * pread + (cache_write or 0) * pin * w) / 1e6, 6)
+
+
+def search_usd() -> float:
+    """What one web search costs (a Tavily advanced search: credits x the credit price), from the table, never a constant elsewhere."""
+    s = table().get("search") or {}
+    return round(float(s.get("tavily_credit_usd", 0.008)) * float(s.get("tavily_credits_per_search", 2)), 6)

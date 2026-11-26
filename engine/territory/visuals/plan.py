@@ -13,7 +13,7 @@ SHOTS = ("f1", "f2", "f3", "f4")
 CALLS = 1
 #: 2 (18 Nov 2026): ``camera`` is the angle and the distance only; lens, light and colour come from the style pack, the only visual driver.
 #: A plan saved before it (no ``prompt_version``) keeps its words; its camera phrase is left out of the picture prompt (cli.shot_for_prompt).
-PROMPT_VERSION = 2
+PROMPT_VERSION = 3
 
 
 class PlanError(ValueError):

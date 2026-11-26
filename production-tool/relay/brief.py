@@ -115,7 +115,12 @@ def for_op(op: str, payload: dict) -> dict:
     if op not in BUDGET:
         return rest
     cut = spine_for(op, brief.get("spine") or {})
-    return {**rest, "brief": {"title": brief.get("title", "Brief"), "spine": cut}} if cut else rest
+    block: dict = {"title": brief.get("title", "Brief"), "spine": cut}
+    # A job on a Territories node reads its route too (words, palette, pictures by hash: links, never bytes).
+    route = brief.get("route")
+    if op != "region_edit" and isinstance(route, dict) and route.get("name"):
+        block["route"] = route
+    return {**rest, "brief": block} if (cut or "route" in block) else rest
 
 
 # "No real people's faces", "no real faces", "no identifiable people", "no recognisable faces", "no faces": the brief's

@@ -10,7 +10,9 @@
 import { spawnSync } from 'node:child_process'
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { readdirSync } from 'node:fs'
 
 const args = process.argv.slice(2)
 function argOf(flag, dflt) { const i = args.indexOf(flag); return i >= 0 ? args[i + 1] : dflt }
@@ -233,6 +235,26 @@ r = clan(['create', '--title', 'AgentOnly', '--brief', 'b', '--no-render', '--ou
   record('T22', 'export-static keys complete', e.json && need.length === 0, e.err || `missing=${need} have=${keys}`)
 }
 
+// ---------- T25 Territories example packs and validates against its schema (territories-contract) ----------
+// The host validates a document against app/templates/territories/schema.json; so does the SDK on patch-data. The finished
+// Linea run and every gate state must be accepted, and tampered shapes (17 lines, an unknown id) refused.
+{
+  const tdir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'app', 'templates', 'territories')
+  const files = [join(tdir, 'example', 'data.json'), ...readdirSync(join(tdir, 'example', 'states')).map(f => join(tdir, 'example', 'states', f))]
+  clan(['create', '--title', 'Territories', '--brief', 'b', '--schema', join(tdir, 'schema.json'), '--output', 'terr.clan'])
+  const bad = []
+  for (const f of files) {
+    const p = clan(['patch-data', 'terr.clan', f, ...ATTR])
+    const v = clan(['validate', 'terr.clan'])
+    if (p.code !== 0 || v.code !== 0) bad.push(`${f.split('/').pop()}: ${p.out.slice(0, 80)}`)
+  }
+  record('T25a', 'Territories example and every gate state validate against schema.json', bad.length === 0, bad.join(' | '))
+  const base = JSON.parse(readFileSync(files[0], 'utf8'))
+  const longList = structuredClone(base); longList.territories[0].world.lines = Array.from({ length: 17 }, (_, i) => `Line ${i}`)
+  const badId = structuredClone(base); badId.territories[1].id = 'T-2'
+  const refused = [longList, badId].map(d => clan(['patch-data', 'terr.clan', tmpJson(d), ...ATTR]).code !== 0)
+  record('T25b', 'Territories: an over-long list and an unknown id are refused', refused.every(Boolean), `refused=${refused}`)
+}
 // ---------- T23 linked file entries (features/spinoff-asset-links) ----------
 {
   // A link: a file entry with linked: true and a sha256, no archive entry.

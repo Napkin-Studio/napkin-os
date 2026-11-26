@@ -222,6 +222,7 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
                 <span className="cl-name">{none ? 'Add your first client' : 'New client'}</span>
                 <span className="cl-line">Start a client desk</span>
               </button>
+              {open && place && <div className="dial-scrim" aria-hidden="true" data-testid="dial-scrim" />}
               {open && place && (
                 <Dial
                   client={{ id: open.id, name: open.name, sector: sectorOf(open.id), look: open.look }}
