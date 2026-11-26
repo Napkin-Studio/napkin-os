@@ -30,7 +30,9 @@ function projectFrom(doc: Record<string, unknown>): Uint8Array {
   const text = (p: string) => new TextDecoder().decode(z[p])
   const { upstream: older, ...own } = doc
   // YAML is a superset of JSON: the data is written as JSON, the manifest keeps its own text
-  z['manifest.yaml'] = new TextEncoder().encode(text('manifest.yaml').replace('title: Lumen Water', 'title: Rail territories').replaceAll('2accccdf-85fc-43a3-8e78-d35837370a77', TERR_ID))
+  // the fixture's own carried source, whatever id it was built with (the fixture is regenerated: #318 gave it a new one)
+  const carried = /carried:\s*\n\s*document_id:\s*([0-9a-f-]{36})/.exec(text('manifest.yaml'))![1]
+  z['manifest.yaml'] = new TextEncoder().encode(text('manifest.yaml').replace('title: Lumen Water', 'title: Rail territories').replaceAll(carried, TERR_ID))
   z['shared/data.yaml'] = new TextEncoder().encode(JSON.stringify({ upstream: { ...(older as object), [TERR_ID]: own } }))
   return zipSync(z)
 }
