@@ -220,6 +220,15 @@ test('the acceptance run\'s findings stay fixed (territories-accept, 2026-11-25)
   assert.match(html, /\.evlist\{[^}]*max-height:min\(420px,50vh\);overflow-y:auto/)
 })
 
+test('a change the shell\'s job watcher already saved is not a refusal (UAT 5-tool run, 2026-11-26)', () => {
+  // napkin-web settles a job for the desk too (production-jobs-via-host): when its poll lands the change first, the page's own poll is
+  // answered {applied: false, reason: 'already applied'} with the document as it now stands. The insights are in the document; the page
+  // said 'this document's own rules refused it' and failed the run every time on UAT.
+  assert.equal(L.changeRefusal({ applied: false, reason: 'already applied' }), null)
+  assert.equal(L.changeRefusal({ applied: true, noop: true }), null)
+  assert.match(L.changeRefusal({ applied: false, reason: 'stale base' }), /own rules refused it/, 'a real refusal still fails in words')
+})
+
 test('a result the host did not save fails in words with Try again, never sits on What arrived (A25, 2026-11-25)', () => {
   // the host's answer to job_status when the document's own (older) schema refused the engine's change
   const reason = 'agent output rejected: ["focus.sources: [{...}] has more than 80 items"]'
