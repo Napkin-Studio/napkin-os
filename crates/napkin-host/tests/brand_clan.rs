@@ -1250,3 +1250,137 @@ fn a_spin_off_carries_the_brand_clans_logo_files_down() {
         ctx["brand_upstream"]
     );
 }
+
+/// UAT 5-tool run, final round (2026-11-26): a deck made by Continue in from a PRODUCTION project wore the Brand Clan's colours
+/// but had no logo on its cover, while a deck made from a brief had it. The project, itself a spin-off, held the logo as a link
+/// and its canvas checkpoint; the deck it spins off must still carry the logo file to the engine.
+#[test]
+fn a_deck_spun_off_a_production_project_carries_the_brand_clans_logo() {
+    use clan_sdk::SpinoffSpec;
+    const PROD: &str = "ie.napkin.production";
+    let s = store_with_files();
+    let base = |t: &str| {
+        ClanFile::from_bytes(
+            create(CreateOptions {
+                title: t.into(),
+                brief: "fixture".into(),
+                document_type: None,
+                no_render: false,
+                schema: None,
+            })
+            .unwrap(),
+        )
+        .unwrap()
+    };
+    let mut prod_info = info(
+        PROD,
+        "Production",
+        Some(AttachSpec {
+            accepts: vec![BRAND.into()],
+            ..Default::default()
+        }),
+    );
+    prod_info.spinoff = Some(SpinoffSpec {
+        accepts: vec![BRIEF.into()],
+        upstream: true,
+        ..Default::default()
+    });
+    install_app(
+        &s,
+        make_template(
+            &base("Production"),
+            prod_info,
+            MakeTemplateOptions::default(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let mut deck_info = info(
+        DECK,
+        "Deck Maker",
+        Some(AttachSpec {
+            accepts: vec![BRAND.into()],
+            ..Default::default()
+        }),
+    );
+    deck_info.spinoff = Some(SpinoffSpec {
+        accepts: vec![PROD.into()],
+        upstream: true,
+        ..Default::default()
+    });
+    install_app(
+        &s,
+        make_template(&base("Deck"), deck_info, MakeTemplateOptions::default()).unwrap(),
+    )
+    .unwrap();
+
+    let t = client(&s, "Brúach");
+    let z = zero(&s, &t);
+    let path = z["path"].as_str().unwrap();
+    let brand_id = z["document_id"].as_str().unwrap().to_string();
+    let png = b"\x89PNG\r\n\x1a\nbruach-original".to_vec();
+    let put = call_json_bytes(
+        &s,
+        &me(),
+        "asset.put",
+        json!({"path": path, "name": "original-logo.png"}),
+        png.clone(),
+    )
+    .unwrap();
+    let asset = put["path"].as_str().unwrap().to_string();
+    let mut cand = z["data"].clone();
+    cand.as_object_mut().unwrap().remove("kit");
+    cand["visual"]["logos"] = json!([{"id": "original-logo", "label": "original-logo", "variant": "other", "asset": asset}]);
+    ok(
+        &s,
+        &me(),
+        "draft.save",
+        json!({"path": path, "candidate": cand}),
+    );
+    ok(
+        &s,
+        &me(),
+        "publish",
+        json!({"path": path, "expect_version": 1}),
+    );
+
+    let brief = create_instance_for(&s, BRIEF, Some("Brúach Switch".into()), Some(&t)).unwrap();
+    let doc = Document::load(&s, brief.clone()).unwrap();
+    let (change, _) = attach_change(&s, &me(), &doc, &brand_id, AttachMode::Attach).unwrap();
+    s.apply(&change).unwrap();
+
+    // Brief -> Production project (Continue in), and the project keeps a canvas checkpoint as the Production Tool saves it.
+    let prod = napkin_host::library::spinoff_document(
+        &s,
+        &brief,
+        PROD,
+        Some("Brúach Switch".into()),
+        None,
+    )
+    .unwrap();
+    let pdoc = Document::load(&s, prod.clone()).unwrap();
+    let with_ckpt = clan_sdk::patch_asset(
+        pdoc.clan(),
+        "human/assets/canvas.ybin.zst",
+        b"scene".to_vec(),
+    )
+    .unwrap();
+    s.apply(&pdoc.change(with_ckpt).unwrap()).unwrap();
+
+    // Production project -> Deck (Continue in).
+    let deck =
+        napkin_host::library::spinoff_document(&s, &prod, DECK, Some("Deck".into()), None).unwrap();
+    let logo_at = napkin_host::library::brand_logo_entry(&brand_id, &asset);
+    let ctx = napkin_host::ops::read::clan_context_for_agent(&Document::load(&s, deck).unwrap());
+    assert_eq!(
+        ctx["brand_upstream"]["id"],
+        json!(brand_id),
+        "the deck wears the Brand Clan: {}",
+        ctx["brand_upstream"]
+    );
+    assert!(
+        ctx["brand_upstream"]["logos"].get(&logo_at).is_some(),
+        "the deck's carrier sends the logo: {}",
+        ctx["brand_upstream"]["logos"]
+    );
+}
