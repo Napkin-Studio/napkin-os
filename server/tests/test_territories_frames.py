@@ -78,7 +78,9 @@ def test_client_material_is_refused_until_a_named_person_says_otherwise(fr, monk
     monkeypatch.setenv("NAPKIN_TERRITORY_IMAGES", "1")
     h = host()
     r = step(fr, h, "frames", ids=["t_started"], by="Shrey")
-    assert r[-1]["job"]["state"] == "failed" and "client-derived" in r[-1]["job"]["error"]["message"] and fr.rw.posts == []
+    err = r[-1]["job"]["error"]
+    assert r[-1]["job"]["state"] == "failed" and "nobody has said what its material is" in err["message"] and fr.rw.posts == []
+    assert err.get("need") == "material", err          # the page asks the material question (approved frames mock, state 1a)
     r = step(fr, h, "frames_material", origin="invented", by="")
     assert r[-1]["job"]["state"] == "failed" and "named person" in r[-1]["job"]["error"]["message"]
     r = step(fr, h, "frames_material", origin="invented", by="Shrey")

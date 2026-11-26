@@ -13,7 +13,7 @@ import pytest
 
 from territory import cloud_guard, contract, frames, pictures, runner, spend as sp
 from territory.llm import FakeLLM
-from visuals import jobs as vjobs, runway
+from visuals import jobs as vjobs, lint, runway
 from test_visuals import FakeRunway, KEY, PNG, clean_ollama, ollama_down
 
 PLACES = {1: "kitchen", 2: "garden", 3: "street", 4: "market"}
@@ -89,18 +89,29 @@ def test_only_greenlit_routes_and_the_words_when_not(rig):
 
 
 def test_client_material_is_refused_by_default_and_a_named_declaration_opens_it(tmp_path, monkeypatch):
+    """The refusals are plain words (live click-through 2026-11-26: they read as engine text); the material question is flagged as
+    something a person can answer (need: material), a Confidential part is not (declaring cannot open it)."""
+    engine_words = re.compile(r"CLIENT_TO_RUNWAY|visuals\.|part\(s\)|client-derived|policy refuses")
     r = Rig(tmp_path, monkeypatch)
-    with pytest.raises(frames.Refuse, match="client-derived"):
+    with pytest.raises(frames.Refuse, match="nobody has said what its material is") as e:
         r.make().ask(TWO)
+    assert e.value.need == "material" and frames.MATERIAL_WORDS in str(e.value) and not engine_words.search(str(e.value))
     with pytest.raises(frames.Refuse, match="named person"):
         r.make().declare("invented", " ")
     r.declare("client")
-    with pytest.raises(frames.Refuse, match="client-derived"):
+    with pytest.raises(frames.Refuse, match="it is the client's material") as e:
         r.make().ask(TWO)
+    assert e.value.need == "material" and not engine_words.search(str(e.value))
     r.declare("invented")
-    assert r.card(TWO)["frames"] == 8
-    r.marks = [{"path": "brief.mandatories", "text": "weekend return fare", "kind": "confidential_field"}]     # a Confidential part: client-derived again
-    with pytest.raises(frames.Refuse, match="client-derived"):
+    card = r.card(TWO)
+    assert card["frames"] == 8 and frames.Frames.public(card)["material"] == {"origin": "invented", "by": "Shrey"}
+    r.marks = [{"path": "brief.mandatories", "text": "weekend return fare", "kind": "confidential_field"}]     # a Confidential part: refused, whatever was said
+    with pytest.raises(frames.Refuse, match="one part of what it was made from is marked Confidential") as e:
+        r.make().ask(TWO)
+    assert e.value.need is None and not engine_words.search(str(e.value))
+    r.marks = r.marks * 5
+    r.marks = [dict(m, path=f"brief.p{i}") for i, m in enumerate(r.marks)]
+    with pytest.raises(frames.Refuse, match="5 parts of what it was made from are marked Confidential"):
         r.make().ask(TWO)
     assert r.rw.posts == []
 
@@ -500,3 +511,32 @@ def test_the_pictures_made_go_back_with_the_move_for_the_host_to_save(rig):
     status = rig.make().status()[3]["frames"]["frames"]
     assert status and all(e["asset"] == f"frames/{e['sha256']}.png" for e in status if e.get("sha256"))
     assert frames.asset_name("ab" * 32, b"\xff\xd8\xff\xe0") == "frames/" + "ab" * 32 + ".jpg"
+
+
+def quoting_plan(user: str) -> dict:
+    """The live click-through's plan (2026-11-26): shots with a possessive, a contraction and a quoted phrase."""
+    ids = [t["id"] for t in json.loads(user)["territories"]]
+    return {"territories": [{"id": tid, "shots": [
+        {"shot": "f1", "framing": "A wide view of a kitchen with a jar", "camera": "eye level", "action": "A person opens a cupboard", "on_screen_line": ""},
+        {"shot": "f2", "framing": "A close view of a friend’s hand on a glass", "camera": "close", "action": "She doesn't drink yet", "on_screen_line": "x"},
+        {"shot": "f3", "framing": "A medium view of a table", "camera": "from above", "action": "Someone mouths “not tonight” to a friend", "on_screen_line": ""},
+        {"shot": "f4", "framing": "A wide view of a 'quiet' street", "camera": "low angle", "action": "A couple walk home", "on_screen_line": "y"}]}
+        for tid in ids]}
+
+
+def test_quotation_marks_in_a_plan_are_taken_out_before_the_check_and_no_frame_is_lost(tmp_path, monkeypatch):
+    r = Rig(tmp_path, monkeypatch, llm=FakeLLM({"frames_plan": quoting_plan}))
+    r.declare()
+    out = r.run(["t_started"])
+    P = r.make()._prepare(["t_started"])
+    assert not P["refused"], P["refused"]
+    prompts = [j["prompt"] for j in P["jobs"]]
+    assert len(prompts) == 4
+    assert "A close view of a friends hand on a glass. close. She does not drink yet." in prompts[1]
+    assert "mouths not tonight to a friend" in prompts[2] and "a quiet street" in prompts[3]
+    for p in prompts:
+        assert not any(ch in lint.QUOTES for ch in p.split("Never show")[0]), p
+    assert out[3]["frames"]["placed"] == 4
+    # the real rules still hold: a figure or a brand in a shot is still refused
+    s = frames.unquoted({"shot": "f1", "framing": "A view of 3 jars", "action": "x", "on_screen_line": "“keep”"})
+    assert lint.lint_text(s["framing"] + ".") and s["on_screen_line"] == "“keep”"

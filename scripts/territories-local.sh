@@ -87,10 +87,12 @@ if ! "$ROOT/scripts/model-local" status >/dev/null 2>&1; then we_started_model=1
 "$ROOT/scripts/model-local" start
 MODEL_ENV="$("$ROOT/scripts/model-local" env)"
 
-IMG=(-u NAPKIN_TERRITORY_IMAGES -u RUNWAY_API_KEY)
+IMG=(-u NAPKIN_TERRITORY_IMAGES -u RUNWAY_API_KEY -u RUNWAYML_API_SECRET)
 if [ "${TERRITORIES_IMAGES:-}" = 1 ]; then
   [ -n "${RUNWAY_API_KEY:-}" ] || { echo "TERRITORIES_IMAGES=1 needs RUNWAY_API_KEY in the environment"; exit 1; }
-  IMG=(NAPKIN_TERRITORY_IMAGES=1)
+  # Territories' frames read the key as RUNWAYML_API_SECRET (engine/visuals/runway.py), the name the cloud's middleware task has: passed
+  # through the environment only, never printed (live click-through 2026-11-26: without it the frames said the picture service was not connected).
+  IMG=(NAPKIN_TERRITORY_IMAGES=1); IMG_KEY=1      # exported in the middleware's own subshell below: never on a command line (ps)
 fi
 
 # Look-ups and research: the same setting the cloud uses for its research service, here model-local's research port
@@ -108,7 +110,7 @@ LOOP=(DECK_RELAY_ALLOW_LOOPBACK=0); [ "$PROD" = 1 ] && LOOP=(DECK_RELAY_ALLOW_LO
   python -m deck.server ) > "$RUN/logs/deck-engine.log" 2>&1 &
 pids+=($!)
 # The knowledge layers are model-local's (its mock layers family): pointed anywhere else, Research stops with "layers unreachable".
-( cd "$ROOT/server" && eval "$MODEL_ENV" && exec env "${IMG[@]}" "${LOOP[@]}" NAPKIN_DECK_ENGINE_URL="http://127.0.0.1:$DECK_PORT" NAPKIN_DECK_RENDER=1 NAPKIN_RESEARCH_URL="$RESEARCH_URL" PYTHONPATH="$ROOT/engine" NAPKIN_TERRITORY_DATA="$RUN/territory" \
+( cd "$ROOT/server" && eval "$MODEL_ENV" && { [ "${IMG_KEY:-0}" = 1 ] && export RUNWAYML_API_SECRET="$RUNWAY_API_KEY" || true; } && exec env "${IMG[@]}" "${LOOP[@]}" NAPKIN_DECK_ENGINE_URL="http://127.0.0.1:$DECK_PORT" NAPKIN_DECK_RENDER=1 NAPKIN_RESEARCH_URL="$RESEARCH_URL" PYTHONPATH="$ROOT/engine" NAPKIN_TERRITORY_DATA="$RUN/territory" \
   NAPKIN_PORT="$MW_PORT" NAPKIN_LAYERS_URL="http://127.0.0.1:$MODEL_LOCAL_PORT" uv run --quiet python -m napkin.app ) > "$RUN/logs/middleware.log" 2>&1 &
 pids+=($!)
 

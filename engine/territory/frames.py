@@ -57,7 +57,30 @@ SOURCE = "Made for this route with the picture tool"
 
 
 class Refuse(Exception):
-    """A move the engine will not make, in words a person can read. Nothing was sent."""
+    """A move the engine will not make, in words a person can read. Nothing was sent. ``need`` names what a person can answer to unblock it
+    (``material``: say whether the material is invented, a demo or the client's), or is None."""
+
+    def __init__(self, words: str, need: str | None = None):
+        super().__init__(words)
+        self.need = need
+
+
+#: The material question, in the approved frames mock's words (state 1a).
+MATERIAL_WORDS = ("Words from a brief go to the outside picture tool only if a named person says the material is invented or a demo. "
+                  "Client material is not sent.")
+
+
+def material_refusal(mat: dict, declared: bool = True) -> Refuse:
+    """The material gate's no, in plain words (live click-through 2026-11-26: it read as engine text, the policy's name and 'part(s)')."""
+    n = len(mat.get("marks") or [])
+    if n:
+        return Refuse(f"Pictures are not made for this document: {'one part' if n == 1 else f'{n} parts'} of what it was made from "
+                      f"{'is' if n == 1 else 'are'} marked Confidential, and nothing marked Confidential goes to the outside picture tool. "
+                      "Pictures can be made from material that is not the client's.")
+    if mat.get("origin") in ("client", "unknown") and mat.get("client_derived"):
+        return Refuse(("Pictures are not made for this document yet: it is the client's material. " if declared and mat.get("origin") == "client" else
+                       "Pictures are not made for this document yet: nobody has said what its material is. ") + MATERIAL_WORDS, need="material")
+    return Refuse("Pictures are not made for this document: " + str(mat.get("why") or "its material cannot be checked.").rstrip(".") + ".")
 
 
 def enabled(environ=None) -> bool:
@@ -169,6 +192,31 @@ def asset_name(sha: str, data: bytes | None = None, file: str | None = None) -> 
     return f"{ASSET_DIR}/{sha}{'.jpg' if ext == '.jpeg' else ext}"
 
 
+_INNER_APOSTROPHE = re.compile(r"(?<=\w)['\u2019](?=\w)")
+#: Contractions said in full, so the words stay on the checker's list ("doesnt" is not a word it knows).
+_CONTRACTIONS = [(re.compile(r"\b(can)['\u2019]t\b", re.I), r"\1not"), (re.compile(r"\bwon['\u2019]t\b", re.I), "will not"),
+                 (re.compile(r"\b(\w+)n['\u2019]t\b", re.I), r"\1 not"), (re.compile(r"\b(\w+)['\u2019]re\b", re.I), r"\1 are"),
+                 (re.compile(r"\b(\w+)['\u2019]ll\b", re.I), r"\1 will"), (re.compile(r"\b(\w+)['\u2019]ve\b", re.I), r"\1 have"),
+                 (re.compile(r"\b(I)['\u2019]m\b"), r"\1 am")]
+
+
+def unquoted(shot: dict) -> dict:
+    """A planned shot's words with quotation marks taken out before the picture-prompt check (live click-through 2026-11-26: a plan that
+    wrote 'the friend's car' or a quoted phrase lost three of four frames). A contraction is said in full (does not); an apostrophe left
+    inside a word goes (friends); every other
+    quotation mark goes. Only the marks: the checker's other rules (figures, names, brands, banned imagery, Confidential parts) still judge
+    what is left, and the on-screen line, which never reaches a picture, is untouched."""
+    out = dict(shot)
+    for k in ("framing", "camera", "action"):
+        v = out.get(k)
+        if isinstance(v, str):
+            for pat, rep in _CONTRACTIONS:
+                v = pat.sub(rep, v)
+            v = _INNER_APOSTROPHE.sub("", v)
+            out[k] = re.sub(r"\s{2,}", " ", "".join(ch for ch in v if ch not in lint.QUOTES)).strip()
+    return out
+
+
 def run_view(doc: dict, routes: list[dict], marks: list, origin: str) -> dict:
     """The routes as the library's run shape (what the safety gate, the frame plan and the material gate read)."""
     brief = {}
@@ -240,7 +288,7 @@ class Frames:
             raise Refuse("This is a sensitive category. A named person reviews the routes before any picture is made. " + (sens["words"] if sens["required"] else ""))
         mat = material.gate(run, None, environ=self.environ)
         if not mat["ok"]:
-            raise Refuse("Pictures are not made for this document: " + mat["why"] + " A named person can say the material is invented or a demo.")
+            raise material_refusal(mat, declared=self.origin() is not None)
         folder = style_folder(self.dir, client_of(self.doc))
         try:
             sty = style_mod.load(folder, forbid=[x for x in [mat.get("brand")] if x])
@@ -271,6 +319,7 @@ class Frames:
         for t in routes:
             th = route_hash(t)
             for s in shots_of.get(t["id"]) or [{"shot": x, "framing": "[frame plan not made yet: this shot is a placeholder]"} for x in SHOTS]:
+                s = unquoted(s)
                 text = " ".join(str(x).rstrip(".") + "." for x in (s.get("framing"), s.get("camera"), s.get("action")) if x)
                 row = {"key": runway.job_key(f"{t['id']}-{th}", s["shot"], "quick"), "tid": t["id"], "shot": s["shot"], "kind": "quick"}
                 hit = safety.banned_in(text, banned)
@@ -302,12 +351,13 @@ class Frames:
                 off.setdefault(o["touchpoint"], o["why"])
         return {**card, "frames": sum(r["new"] for r in card["rows"]), "routes": len(P["routes"]), "plan_call": bool(P["need"]),
                 "not_offered": [{"touchpoint": k, "why": v} for k, v in off.items()], "refused": [{"key": r["key"], "why": r["why"]} for r in P["refused"]],
-                "policy": P["mat"]["policy_label"], "unknown": sum(r.get("unknown", 0) for r in card["rows"])}
+                "policy": P["mat"]["policy_label"], "unknown": sum(r.get("unknown", 0) for r in card["rows"]),
+                "material": {k: (self.origin() or {}).get(k) for k in ("origin", "by")} if self.origin() else None}
 
     @staticmethod
     def public(card: dict) -> dict:
         """The card as the screen may show it: no price anywhere (the ask in the decision history carries it)."""
-        keep = ("id", "frames", "routes", "plan_call", "not_offered", "refused", "policy", "unknown", "over_cap", "reference_images")
+        keep = ("id", "frames", "routes", "plan_call", "not_offered", "refused", "policy", "unknown", "over_cap", "reference_images", "material")
         out = {k: card[k] for k in keep if k in card}
         out["rows"] = [{k: r[k] for k in ("kind", "new", "saved", "polling", "gave_up", "unknown")} for r in card["rows"]]
         return out

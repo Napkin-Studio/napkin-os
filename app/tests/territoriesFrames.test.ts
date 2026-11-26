@@ -129,3 +129,28 @@ test('the page asks, makes and approves only through the engine\'s steps and kee
   for (const w of words) assert.doesNotMatch(w, /\$|€|£|\busd\b|\bprice\b|credits?\b/i, w)
   assert.match(src, /ask: 'frames', approve: 'frames_approve', leave: 'frames_leave', status: 'frames_status'/)
 })
+
+test('the material question of the frames mock (state 1a), and the card saying who answered it (1b)', () => {
+  const d = doc()
+  const words = 'Pictures are not made for this document yet: nobody has said what its material is. Words from a brief go to the outside picture tool only if a named person says the material is invented or a demo. Client material is not sent.'
+  const ask = P.makeDialog('make:t_started', d, { mk: { tid: 't_started', state: 'refused', refused: words, need: 'material', by: 'Shrey' } })
+  const h = plain(ask.html)
+  assert.match(h, /First, what is this material\? Words from a brief go to the outside picture tool only if a named person says the material is invented or a demo\. Client material is not sent\./)
+  assert.match(h, /Invented Made up for this exercise\. No real client\. A demo Shown to people, but not a client’s\. The client’s Real client material\./)
+  assert.equal((ask.html.match(/type="radio" name="mat-origin"/g) || []).length, 3)
+  assert.match(ask.html, /data-mat-confirm="t_started" disabled>Confirm as Shrey</, 'off until a choice is made')
+  assert.match(ask.html, /<button type="button" class="btn-rect primary" disabled>Make<\/button>/); assert.match(h, /Answer the question first\./)
+  const chosen = P.makeDialog('make:t_started', d, { mk: { tid: 't_started', state: 'refused', refused: words, need: 'material', by: 'Shrey', origin: 'invented' } })
+  assert.match(chosen.html, /data-mat-origin="invented" checked/); assert.match(chosen.html, /data-mat-confirm="t_started">Confirm as Shrey</)
+  assert.equal(P.confirmWords(''), 'Confirm as you')
+  // a refusal a person cannot answer here (a Confidential part) is the words alone, no question
+  const conf = P.makeDialog('make:t_started', d, { mk: { tid: 't_started', state: 'refused', refused: 'Pictures are not made for this document: 5 parts of what it was made from are marked Confidential, and nothing marked Confidential goes to the outside picture tool.', need: null } })
+  assert.doesNotMatch(conf.html, /mat-origin/); assert.doesNotMatch(plain(conf.html), /CLIENT_TO_RUNWAY|part\(s\)|client-derived/)
+  // answered: the card's Material box
+  const ready = P.makeDialog('make:t_started', d, { mk: { tid: 't_started', state: 'ready', card: { id: 'c_1', frames: 4, material: { origin: 'invented', by: 'Shrey' } } } })
+  assert.match(plain(ready.html), /Material Invented ?, confirmed by Shrey\./)
+  assert.equal(P.materialBox(null), '')
+  // the runtime sends the answer as the engine's frames_material step, then asks again
+  assert.match(html, /stepCall\(\{ step: 'frames_material', origin: mk\.origin, by: String\(mk\.by\)\.trim\(\) \}\)/)
+  assert.match(html, /need: j\.error\.need \|\| null/)
+})
