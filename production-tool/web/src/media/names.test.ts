@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { DocAsset, Mime, ProductionDocument } from '../contracts/types'
 import { emptyDocument } from '../doc/store'
+import { newId } from '../lib/ulid'
 import { mainStoryboard, mainVideo } from '../model/selectors'
 import { MAYA } from '../test/model'
 import { fileSafe, mediaItem, mediaItems, viewsOnCanvas, zipName } from './names'
@@ -170,5 +171,75 @@ describe('the film\'s sizes in Download all media (UAT round 3, R3-F12)', () => 
     expect(ad.map((m) => `${m.folder}/${m.name}`)).toEqual(['ad/P-ad.mp4', 'ad/P-ad-6s-9x16.mp4', 'ad/P-ad-6s-9x16-v2.mp4'])
     expect(ad.map((m) => m.kind)).toEqual(['ad', 'cutdown', 'cutdown'])
     expect(mediaItem(d, 'P', SHA('8'))?.which).toBe('size_2')
+  })
+})
+
+describe('every film\'s media, not only the first (live 3-route run, 2026-11-26)', () => {
+  /** The project, plus a second film made after it (a second route): its own storyboard, a frame, a take and a render. */
+  function twoFilms() {
+    const d = project()
+    for (const a of [asset('7'), asset('8', 'video/mp4'), asset('0', 'video/mp4')]) d.assets[a.sha256] = a
+    const sb = newId('storyboard')
+    const video = newId('video')
+    put(d.storyboards, { id: sb, title: 'Route 2', ratio: '9:16', target_s: 15 })
+    put(d.videos, { id: video, title: 'Route 2', ratio: '9:16', target_s: 15, timeline: {} })
+    put(d.links, { id: newId('link'), from: { kind: 'storyboard', id: sb }, to: { kind: 'video', id: video }, role: 'renders' })
+    put(d.shots, { id: 'shot_r2', storyboard_id: sb, rank: 'a0', kind: 'shot', duration_s: 3, camera: { size: 'wide' }, status: 'locked' })
+    put(d.frames, { id: 'frame_r2', shot_id: 'shot_r2', version: 1, kind: 'generated', asset: SHA('7'), crew: 'wren' })
+    put(d.generations, { id: 'take_r2', kind: 'clip', shot_ids: ['shot_r2'], asset: SHA('8'), duration_s: 3, state: 'ready', job_id: 'job_take_r2', crew: 'wren', provider: 'runway', inputs: { model: 'm' }, created_at: '2026-11-26T10:00:00Z', by: 'human:p_maya01' } as never)
+    put(d.renders, { id: 'render_r2', video_id: video, version: 1, asset: SHA('0'), job_id: 'job_rr2' })
+    return { d, video }
+  }
+
+  it('both films\' renders are ads with names of their own, the first film\'s unchanged', () => {
+    const { d } = twoFilms()
+    const items = mediaItems(d, 'P')
+    const ads = items.filter((m) => m.kind === 'ad')
+    expect(ads.map((m) => `${m.folder}/${m.name}`)).toEqual(['ad/P-ad-v1.mp4', 'ad/P-ad-v2.mp4', 'ad/P-film2-ad.mp4'])
+    expect(ads.map((m) => m.which)).toEqual(['render_1', 'render_2', 'render_r2'])
+    expect(new Set(items.map((m) => m.name)).size).toBe(items.length)
+    // The first film's frames and clips keep their names.
+    expect(items.filter((m) => m.kind === 'frame' && !m.name.includes('film2')).map((m) => m.name)).toEqual(['P-shot1-frame-v1.png', 'P-shot2-frame-v1.png', 'P-shot2-frame-v2.png'])
+    expect(items.filter((m) => m.kind === 'clip' && !m.name.includes('film2')).map((m) => m.name)).toEqual(['P-shot1-clip-v1.mp4', 'P-shot2-clip-v1.mp4', 'P-shot2-clip-v2.png'])
+  })
+
+  it('the second film\'s frame and clip are in Download all media', () => {
+    const { d } = twoFilms()
+    const items = mediaItems(d, 'P')
+    expect(items.find((m) => m.sha256 === SHA('7'))).toMatchObject({ kind: 'frame', name: 'P-film2-shot1-frame-v1.png', folder: 'storyboard', which: 'frame_r2' })
+    expect(items.find((m) => m.sha256 === SHA('8'))).toMatchObject({ kind: 'clip', name: 'P-film2-shot1-clip-v1.mp4', folder: 'clips', which: 'take_r2' })
+  })
+
+  it('the Edit room finds the second film\'s render, so it has Download', () => {
+    const { d } = twoFilms()
+    expect(mediaItem(d, 'P', SHA('0'), 'ad')).toMatchObject({ name: 'P-film2-ad.mp4', folder: 'ad', which: 'render_r2' })
+    expect(mediaItem(d, 'P', SHA('6'), 'ad')?.name).toBe('P-ad-v2.mp4')
+  })
+
+  it('a size made from the second film is named for it; one from the first is not', () => {
+    const { d, video } = twoFilms()
+    delete d.renders.render_2
+    for (const c of 'AB') d.assets[SHA(c)] = asset(c, 'video/mp4')
+    put(d.format_sets, { id: 'fset_1', master: { kind: 'video', id: mainVideo(d)!.id }, pack: { pack_id: 'film', pack_version: '1' } })
+    put(d.format_sets, { id: 'fset_2', master: { kind: 'video', id: video }, pack: { pack_id: 'film', pack_version: '1' } })
+    const size = (id: string, set: string, sha: string) => put(d.sizes, {
+      id, set_id: set, rank: 'm', format: { pack_id: 'film', pack_version: '1', format_id: 'film-9x16' }, aspect: { w: 9, h: 16 }, delivery: { width: 1080, height: 1920 },
+      method: 'reframe', media: 'video', length_s: 6, asset: SHA(sha), status: 'ready',
+    } as never)
+    size('size_1', 'fset_1', 'A')
+    size('size_2', 'fset_2', 'B')
+    expect(mediaItem(d, 'P', SHA('A'))?.name).toBe('P-ad-6s-9x16.mp4')
+    expect(mediaItem(d, 'P', SHA('B'))?.name).toBe('P-film2-ad-6s-9x16.mp4')
+  })
+
+  it('a storyboard no video renders still has its frames, once', () => {
+    const d = project()
+    d.assets[SHA('7')] = asset('7')
+    const sb = newId('storyboard')
+    put(d.storyboards, { id: sb, title: 'Loose', ratio: '9:16', target_s: 15 })
+    put(d.shots, { id: 'shot_l', storyboard_id: sb, rank: 'a0', kind: 'shot', duration_s: 3, camera: { size: 'wide' }, status: 'locked' })
+    put(d.frames, { id: 'frame_l', shot_id: 'shot_l', version: 1, kind: 'generated', asset: SHA('7'), crew: 'wren' })
+    const frames = mediaItems(d, 'P').filter((m) => m.kind === 'frame')
+    expect(frames.map((m) => m.name)).toEqual(['P-shot1-frame-v1.png', 'P-shot2-frame-v1.png', 'P-shot2-frame-v2.png', 'P-film2-shot1-frame-v1.png'])
   })
 })
