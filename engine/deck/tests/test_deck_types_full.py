@@ -502,11 +502,10 @@ def _server(tmp_path, monkeypatch):
     def segment(self, d, req, until):
         self.seed(d, req, until)   # what a replay segment writes into the shared stages folder
         ran.append({"type": req["type"], "until": until, "confirm": req.get("confirm"), "folder": d.folder})
-        with self.lock:
-            self.busy = None
     monkeypatch.setattr(server.Server, "segment", segment)
     import threading as _th
-    monkeypatch.setattr(server, "threading", SimpleNamespace(Thread=lambda target, args, **kw: SimpleNamespace(start=lambda: target(*args)), RLock=_th.RLock))
+    monkeypatch.setattr(server, "threading", SimpleNamespace(Thread=lambda target, args, **kw: SimpleNamespace(start=lambda: target(*args), is_alive=lambda: False),
+                                                             RLock=_th.RLock, BoundedSemaphore=_th.BoundedSemaphore))
     return s, ran
 
 

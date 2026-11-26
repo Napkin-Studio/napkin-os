@@ -1806,6 +1806,7 @@ var DeckLogic = (function () {
       // A failure the server will not retry by itself must not say "retrying".
       var word = act === 'error' && isObj(r.error) && r.error.retryable === false ? 'Failed' : ACTIVITY_WORD[act];
       out.word = word + (feed && feed.slow === true && act !== 'human' && act !== 'complete' && act !== 'error' ? ' · taking longer than usual' : '');
+      if (feed && feed.waiting === true) out.word = WAITING_WORD;   // the engine runs a few decks at once: this one starts by itself when a slot frees
       if (feed && Number.isInteger(feed.step_index) && Number.isInteger(feed.step_total) && feed.step_index > 0 && feed.step_index <= feed.step_total) {
         out.step_index = feed.step_index; out.step_total = feed.step_total;
       }
@@ -1869,6 +1870,8 @@ var DeckLogic = (function () {
   var DECK_COPY = { title: 'Building the slides', lede: 'The pitch slides first, then the appendix.', head: 'Slides, as they are built', pills: ['Built', 'Building now', 'Waiting'], grid: true };
   var OTHER_COPY = { title: '', lede: '', head: 'What it is doing', pills: ['Done', 'Doing now', 'Waiting'] };
   var SLOW_LEDE = 'Taking a little longer than usual. Nothing is wrong.';
+  var WAITING_WORD = 'Waiting for another deck to finish';
+  var WAITING_LEDE = 'Waiting for another deck to finish. It starts automatically: nothing needs you.';
 
   function pad2(n) { return (Number(n) < 10 ? '0' : '') + Number(n); }
 
@@ -1992,6 +1995,7 @@ var DeckLogic = (function () {
         view.items = view.items.map(function (x) { x.n = ''; x.pill = x.status === 'done' ? 'Done' : x.status === 'now' ? 'Passing on' : 'Waiting'; return x; });
       }
       if (feed && feed.slow === true) view.lede = SLOW_LEDE;
+      if (feed && feed.waiting === true) view.lede = WAITING_LEDE;
       return fill(view);
     } catch (e) {
       return { kind: 'waiting', title: '', lede: '', head: '', grid: false, items: [], tail: [], stage: '', retryable: false };

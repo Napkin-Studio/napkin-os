@@ -62,7 +62,8 @@ def stage_files(e, doc="doc1") -> set[str]:
 
 def test_status_says_what_is_on(engine):
     status, s = call(engine.base, "/status")
-    assert status == 200 and s == {"ok": True, "live": False, "replay": True, "max_usd": 2.0, "busy": None, "types": srv.type_offers()}   # deck-types: what the picker may offer
+    assert status == 200 and s == {"ok": True, "live": False, "replay": True, "max_usd": 2.0, "max_runs": srv.DEFAULT_MAX_RUNS, "building": [], "waiting": [],
+                                   "types": srv.type_offers()}   # deck-types: what the picker may offer
 
 
 def test_the_run_stops_at_the_storyline_gate_and_nothing_after_it_runs(engine):
@@ -138,7 +139,7 @@ def test_without_a_recording_or_live_the_server_says_so(tmp_path):
     assert e.value.status == 409 and e.value.kind == "no_recording"
 
 
-def test_one_run_at_a_time_a_second_is_refused(engine, monkeypatch):
+def test_one_run_per_document_a_second_of_the_same_is_refused_another_document_builds(engine, monkeypatch):
     gate, go = threading.Event(), threading.Event()
     real = srv.Server.call_engine
 
@@ -149,11 +150,12 @@ def test_one_run_at_a_time_a_second_is_refused(engine, monkeypatch):
     monkeypatch.setattr(srv.Server, "call_engine", slow)
     start(engine)
     assert gate.wait(10)
-    status, err = start(engine, doc="other")
+    status, err = start(engine)
     assert status == 409 and err["error"]["type"] == "job_state"
-    assert call(engine.base, "/status")[1]["busy"] == "doc1"
+    assert start(engine, doc="other")[0] == 202, "another person's deck is not held up (UAT 2026-11-26)"
+    assert "doc1" in call(engine.base, "/status")[1]["building"]
     go.set()
-    assert wait(engine.base, "doc1")["state"] == "gate"
+    assert wait(engine.base, "doc1")["state"] == "gate" and wait(engine.base, "other")["state"] == "gate"
 
 
 def test_an_engine_failure_is_a_failed_stage_with_its_message_and_no_payload(engine, monkeypatch):
@@ -164,7 +166,7 @@ def test_an_engine_failure_is_a_failed_stage_with_its_message_and_no_payload(eng
     v = wait(engine.base, "doc1")
     assert v["state"] == "failed" and "the model said no" in v["error"]["message"] and v["error"]["retryable"] is True
     assert v["run"]["state"] == "failed" and v["run"]["error"] == v["error"] and "payload" not in v
-    assert call(engine.base, "/status")[1]["busy"] is None, "a failed run frees the engine"
+    assert call(engine.base, "/status")[1]["building"] == [], "a failed run frees its slot"
 
 
 def test_the_last_step_without_a_renderer_is_refused_before_it_starts(engine, monkeypatch):
@@ -211,7 +213,7 @@ def test_live_stops_at_the_cap_before_it_spends_more(tmp_path):
     cfg = srv.Settings({"NAPKIN_DECK_DATA": str(tmp_path), "NAPKIN_DECK_REPLAY": str(FERN / "stages"), "NAPKIN_DECK_LIVE": "1", "NAPKIN_DECK_MAX_USD": "0.05"})
     s = srv.Server(cfg)
     s.run({"doc": "d", "inputs": INPUTS, "mode": "replay", "render": False})   # the recording's stages, which cost money when they were recorded
-    while s.busy:
+    while s.docs["d"].running():
         time.sleep(0.05)
     with pytest.raises(srv.Refused) as e:
         s.run({"doc": "d", "inputs": INPUTS, "mode": "live", "approvals": {"storyline": {"decision": "approve"}}, "render": False})
