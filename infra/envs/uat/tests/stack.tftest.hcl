@@ -84,7 +84,7 @@ run "plans_with_two_agencies" {
     error_message = "uat's run log holds what the models and searches saw (features/brief-fact-provenance.clan)"
   }
   assert {
-    condition     = length(module.services.middleware_mounts) == 1 && module.services.middleware_mounts[0].sourceVolume == "runlog" && module.services.middleware_mounts[0].containerPath == "/runlog"
+    condition     = module.services.middleware_mounts[0].sourceVolume == "runlog" && module.services.middleware_mounts[0].containerPath == "/runlog"
     error_message = "the run log is on EFS, so it outlives a task and napkin-web can read it"
   }
 }
@@ -136,6 +136,68 @@ run "uat_with_the_deck_engine_off_is_as_before" {
   assert {
     condition     = !contains(keys(module.services.middleware_environment), "NAPKIN_DECK_ENGINE_URL") && length(module.services.deck_container) == 0 && !contains(keys(module.services.ecr), "deck")
     error_message = "no engine URL, no container, no repository"
+  }
+}
+
+# features/territories-cloud.clan (owner, 2026-11-26): the Territories store is on EFS, so a deploy keeps each
+# document's ledger, caps, stages and the guard against paying twice for pictures.
+run "uat_keeps_the_territories_store_on_efs" {
+  command = plan
+
+  assert {
+    condition     = [for m in module.services.middleware_mounts : "${m.sourceVolume}:${m.containerPath}"] == ["runlog:/runlog", "territory:/territory"]
+    error_message = "the run log and the Territories store, each on its own EFS access point"
+  }
+  assert {
+    condition     = module.services.middleware_environment["NAPKIN_TERRITORY_DATA"] == "/territory"
+    error_message = "the engine's store is the mounted folder, not the image's scratch path"
+  }
+  assert {
+    condition     = module.services.middleware_task.containers == ["middleware", "deck"]
+    error_message = "the store adds no container"
+  }
+}
+
+run "uat_territories_pictures_are_off_until_switched_on" {
+  command = plan
+
+  assert {
+    condition     = !contains(keys(module.services.middleware_environment), "NAPKIN_TERRITORY_IMAGES") && !contains(keys(module.services.middleware_secret_arns), "RUNWAYML_API_SECRET") && length(data.aws_secretsmanager_secret.runway) == 0
+    error_message = "no picture flag, no Runway key, no lookup of the relay's secret"
+  }
+}
+
+run "uat_territories_pictures_on_use_the_relays_runway_key" {
+  command = plan
+
+  variables {
+    territory_images = true
+  }
+
+  assert {
+    condition     = module.services.middleware_environment["NAPKIN_TERRITORY_IMAGES"] == "1" && module.services.middleware_environment["NAPKIN_TERRITORY_IMAGES_MAX_USD"] == "2.00"
+    error_message = "pictures on, USD 2.00 per document (owner, 2026-11-26)"
+  }
+  assert {
+    condition     = !contains(keys(module.services.middleware_environment), "VISUALS_CLIENT_TO_RUNWAY")
+    error_message = "client material stays refused for Runway"
+  }
+  assert {
+    condition     = module.services.middleware_secret_arns["RUNWAYML_API_SECRET"] == data.aws_secretsmanager_secret.runway[0].arn && data.aws_secretsmanager_secret.runway[0].name == "napkin-hackathon/RUNWAY_API_KEY"
+    error_message = "the middleware reads the relay's own Runway secret, found by name"
+  }
+}
+
+run "uat_with_the_territories_store_off_is_as_before" {
+  command = plan
+
+  variables {
+    territory_enabled = false
+  }
+
+  assert {
+    condition     = [for m in module.services.middleware_mounts : "${m.sourceVolume}:${m.containerPath}"] == ["runlog:/runlog"] && !contains(keys(module.services.middleware_environment), "NAPKIN_TERRITORY_DATA")
+    error_message = "only the run log mount, and the image's own store path"
   }
 }
 
