@@ -3,8 +3,10 @@
 // no 'unsafe-eval'). The browser-side check stays: the same schemas, the same ajv options
 // (allErrors, strict false, ajv-formats), compiled here instead of at runtime.
 //
-// Writes src/validators.gen.js. Run after a contract change: `npm run validators`
-// (also part of `npm run build`); test/validators.test.ts fails while the file is stale.
+// Writes src/validators.gen.js, which is committed and shipped as is (the Dockerfile copies it). Run after a
+// contract change: `npm run validators`. It is deliberately NOT part of `npm run build`: CI and check.sh build
+// before they test, so a build that regenerated it hid a stale file (UAT 2026-11-26: brand_clans refused).
+// test/validators.test.ts fails while the committed file is stale.
 import { createRequire } from 'node:module'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'

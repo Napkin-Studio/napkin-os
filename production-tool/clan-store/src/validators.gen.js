@@ -288,7 +288,7 @@ var require_equal = __commonJS({
 
 // validators.js
 var validateDocument = validate20;
-var schema31 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://napkin.ie/production-tool/contracts/document.schema.json", "title": "Production Tool document (CLAN shared/data.yaml), contract 3", "description": "The source of truth for one project; the canvas, the editors and today's panels render it. snake_case. Every entity list is a map keyed by the entity's id (its `id` repeats the key), so a patch can name one leaf of one entity and two people never rewrite each other's work (contracts/collab.md). Every entity carries v and field_v. Order is rank, never position. Live text (shot action and direction, beat, scene and note words) lives in Yjs fragments, and checkpoint() alone writes its flat copies here. Bytes are never inline. A v2 document is refused, never read (features/contract-v3.clan).", "type": "object", "properties": { "contract_version": { "$ref": "common.schema.json#/$defs/contractVersion" }, "app": { "const": "production-tool" }, "project": { "type": "object", "description": "Who the project belongs to.", "properties": { "id": { "type": "string", "pattern": "^proj_[0-9A-HJKMNP-TV-Z]{26}$" }, "tenant_id": { "$ref": "common.schema.json#/$defs/tenantId" }, "client_id": { "type": "string", "maxLength": 64, "description": "The client (library shelf) the project is for." }, "title": { "type": "string", "maxLength": 120, "minLength": 1 }, "created_by": { "$ref": "common.schema.json#/$defs/personRef" }, "created_at": { "type": "string", "format": "date-time" } }, "required": ["id", "tenant_id", "title", "created_by", "created_at"], "additionalProperties": false }, "upstream": { "type": "object", "description": "What this project was spun off from (os-layer \xA75.2): data.upstream.<document_id>, written by the host and read-only (a patch under it is refused, napkin-host ops/edit.rs).", "additionalProperties": { "type": "object" } }, "projection": { "type": "object", "description": "HOST-WRITTEN, READ-ONLY (os-layer \xA75): the host's scalar projection of shared/facts.yaml, shared/findings.yaml and shared/sources.yaml, rebuilt after every change to a member. A spun-off project carries it (napkin-host library::with_projection); Production neither reads nor writes it, and keeps it on save. Not patched." }, "boards": { "type": "object", "propertyNames": { "pattern": "^board_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/board" }, "maxProperties": 64 }, "sketches": { "type": "object", "propertyNames": { "pattern": "^sketch_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/sketch" }, "maxProperties": 300 }, "scripts": { "type": "object", "propertyNames": { "pattern": "^script_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/script" }, "maxProperties": 16 }, "scenes": { "type": "object", "propertyNames": { "pattern": "^scene_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/scene" }, "maxProperties": 300 }, "storyboards": { "type": "object", "propertyNames": { "pattern": "^storyboard_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/storyboard" }, "maxProperties": 16 }, "shots": { "type": "object", "propertyNames": { "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/shot" }, "maxProperties": 300 }, "beats": { "type": "object", "propertyNames": { "pattern": "^beat_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/beat" }, "maxProperties": 2400 }, "frames": { "type": "object", "propertyNames": { "pattern": "^frame_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/frame" }, "maxProperties": 2e3 }, "videos": { "type": "object", "propertyNames": { "pattern": "^video_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/video" }, "maxProperties": 32 }, "generations": { "type": "object", "propertyNames": { "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/generation" }, "maxProperties": 2e3 }, "renders": { "type": "object", "propertyNames": { "pattern": "^render_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/render" }, "maxProperties": 200 }, "reviews": { "type": "object", "propertyNames": { "pattern": "^rev_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/review" }, "maxProperties": 1e3 }, "links": { "type": "object", "propertyNames": { "pattern": "^link_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/link" }, "maxProperties": 2e3 }, "keys": { "type": "object", "propertyNames": { "pattern": "^key_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/key" }, "maxProperties": 300 }, "refs": { "type": "object", "propertyNames": { "pattern": "^ref_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/ref" }, "maxProperties": 1e3 }, "documents": { "type": "object", "propertyNames": { "pattern": "^doc_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/document" }, "maxProperties": 64 }, "briefs": { "type": "object", "description": "Brief nodes (features/brief-node.clan, owner 2026-11-17): each a frozen, read-only copy of a Brief Maker brief's spine, made only by linking a brief or spinning one off into Production, never typed here. Several per canvas (a main film and a cut-down for another market). Optional: a document made before it has none.", "propertyNames": { "pattern": "^brief_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/brief" }, "maxProperties": 16 }, "finals": { "type": "object", "description": "The pictures a person marked final (features/prod-assets-route.clan, owner 2026-11-19): what the Deck Maker and later exports take as finished work. Each names the exact picture by hash; its bytes stay out of the document (the relay's GET /assets/{sha256} serves them). Optional: a document made before it has none.", "propertyNames": { "pattern": "^final_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/final" }, "maxProperties": 500 }, "texts": { "type": "object", "description": "Texts written on the canvas (features/canvas-text.clan, 2026-10-16): each holds its words and the canvas element it is, so a node a text is linked into reads its words without the canvas. Optional: a document made before it has none.", "propertyNames": { "pattern": "^text_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/text" }, "maxProperties": 1e3 }, "format_sets": { "type": "object", "propertyNames": { "pattern": "^fset_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/format_set" }, "maxProperties": 64 }, "sizes": { "type": "object", "propertyNames": { "pattern": "^size_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/size" }, "maxProperties": 1e3 }, "checks": { "type": "object", "propertyNames": { "pattern": "^check_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/check" }, "maxProperties": 2e3 }, "asks": { "type": "object", "propertyNames": { "pattern": "^q_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/ask" }, "maxProperties": 500 }, "suggestions": { "type": "object", "propertyNames": { "pattern": "^sug_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/suggestion" }, "maxProperties": 500 }, "spin_ins": { "type": "object", "propertyNames": { "pattern": "^spin_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/spin_in" }, "maxProperties": 32 }, "jobs": { "type": "object", "propertyNames": { "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/job" }, "maxProperties": 3e3 }, "stale": { "type": "object", "propertyNames": { "pattern": "^stale_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/stale" }, "maxProperties": 2e3 }, "exports": { "type": "object", "propertyNames": { "pattern": "^exp_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/export" }, "maxProperties": 200 }, "assets": { "type": "object", "description": "Files, keyed by their sha256.", "propertyNames": { "$ref": "common.schema.json#/$defs/sha256" }, "additionalProperties": { "$ref": "#/$defs/asset" }, "maxProperties": 5e3 } }, "required": ["contract_version", "app", "project", "assets", "boards", "sketches", "scripts", "scenes", "storyboards", "shots", "beats", "frames", "videos", "generations", "renders", "reviews", "links", "keys", "refs", "documents", "format_sets", "sizes", "checks", "asks", "suggestions", "spin_ins", "jobs", "stale", "exports"], "additionalProperties": false, "$defs": { "v": { "type": "integer", "minimum": 1, "description": "The entity's version: every applied patch batch that touches it adds one (PatchBus)." }, "field_v": { "type": "object", "description": "For each leaf written since the entity was created, the entity version that wrote it, keyed by the leaf's path inside the entity with '/' between parts (camera/size, edl/edl_X/pick/current). A set whose base_version is older than its leaf's field_v is a conflict.", "propertyNames": { "pattern": "^[a-z_0-9]+(/[A-Za-z_0-9]+)*$", "maxLength": 128 }, "additionalProperties": { "type": "integer", "minimum": 1 }, "maxProperties": 256 }, "prose": { "type": "object", "description": "A live-text fragment as ProseMirror JSON (clan-store/src/text/extensions.ts), at most 64 KB serialised. hydrate() rebuilds the fragment from it on another device. Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text).", "properties": { "type": { "const": "doc" }, "content": { "type": "array", "maxItems": 400, "items": { "type": "object" } } }, "required": ["type"], "additionalProperties": false }, "textProblem": { "type": "object", "description": "Set by checkpoint() when live text overflows its flat field: the field keeps its last valid value, and job starts for the entity refuse with these words.", "properties": { "field": { "type": "string", "maxLength": 40 }, "length": { "type": "integer", "minimum": 0 }, "limit": { "type": "integer", "minimum": 1 }, "message": { "type": "string", "maxLength": 200 } }, "required": ["field", "length", "limit", "message"], "additionalProperties": false }, "pick": { "type": "object", "description": "Which version is current, and which are kept beside it (Keep both: ui-behaviour 3.20). A restore is a new pick decision.", "properties": { "current": { "$ref": "common.schema.json#/$defs/id" }, "alternates": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/id" }, "maxItems": 8, "uniqueItems": true } }, "required": ["current"], "additionalProperties": false }, "libraryCopy": { "type": "object", "description": "Set when this came from, or was published to, the team library: the version this project holds. A copy, never a live link.", "properties": { "shelf": { "type": "string", "maxLength": 64, "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$" }, "key": { "$ref": "common.schema.json#/$defs/key" }, "ver": { "type": "integer", "minimum": 1 }, "by": { "$ref": "common.schema.json#/$defs/personRef" }, "at": { "type": "string", "format": "date-time" } }, "required": ["shelf", "key", "ver", "by", "at"], "additionalProperties": false }, "target": { "type": "object", "properties": { "kind": { "enum": ["ref", "frame", "generation", "render", "video", "shot", "scene", "beat", "script", "storyboard", "size", "format_set", "sketch", "document", "board", "key", "brief"] }, "id": { "$ref": "common.schema.json#/$defs/id" } }, "required": ["kind", "id"], "additionalProperties": false }, "handsOff": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/crewId" }, "maxItems": 7, "uniqueItems": true, "description": "Crew who leave this alone: a person pressed Keep mine on their suggestion, so later jobs of theirs skip it." }, "window": { "type": "object", "description": "A note's time window in whole seconds (ui-behaviour 3.13): default [floor(t)-1, ceil(t)+1], clamped, at least 2 s, never across a cut. noteWindow() in clan-store/src/time.ts and relay/time_rules.py (examples/windows.json). The time basis follows the note's target: take time for a note on a generation (target.kind generation, written from the take player), shot time otherwise; clan-store noteToTakeWindow maps either onto the generation (features/clip-moment-edit.clan).", "properties": { "from_s": { "type": "integer", "minimum": 0 }, "to_s": { "type": "integer", "minimum": 1 } }, "required": ["from_s", "to_s"], "additionalProperties": false }, "asset": { "type": "object", "description": "One file the project uses, keyed by its hash. Bytes are never inline.", "properties": { "sha256": { "$ref": "common.schema.json#/$defs/sha256" }, "kind": { "enum": ["image", "video", "audio", "document", "font", "vector"] }, "mime": { "$ref": "common.schema.json#/$defs/mime" }, "bytes": { "type": "integer", "minimum": 0 }, "w": { "type": "integer", "minimum": 1 }, "h": { "type": "integer", "minimum": 1 }, "duration_s": { "type": "number", "minimum": 0 }, "pages": { "type": "integer", "minimum": 1 }, "origin": { "enum": ["uploaded", "drawn", "generated", "mock", "edited", "extracted"] }, "rights": { "enum": ["generated", "own", "licensed", "unknown"], "description": "Whether the agency may show it to a client (features/prod-assets-route.clan, 2026-11-19): generated (a provider made it for the agency: Runway's outputs land with it), own (the agency's: a drawing, or a person said so), licensed (a person said it is licensed), unknown (an upload until a person says; the Deck treats it as rights to supply). Absent: not stated (made before it, an edit, a mock); readers infer from origin." }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "locations": { "type": "array", "items": { "type": "string", "pattern": "^(idb|s3|https)://" }, "maxItems": 8, "description": "Never written, ignored on read (features/production-in-library.clan): the bytes are found by sha256 alone, in this browser, then at the session's media base, then by the relay's by-hash route. Old documents may still carry it." }, "thumb": { "type": "string", "pattern": "^data:image/webp;base64,", "maxLength": 5500 } }, "required": ["sha256", "kind", "mime", "origin"], "additionalProperties": false }, "board": { "type": "object", "description": "An art board: an Excalidraw frame with a purpose (ui-behaviour 3.2).", "properties": { "id": { "type": "string", "pattern": "^board_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "title": { "type": "string", "maxLength": 80, "minLength": 1 }, "purpose": { "enum": ["script", "character", "location", "reference", "product", "storyboard", "video", "sketches", "brand", "formats", "none"] }, "rank": { "$ref": "common.schema.json#/$defs/rank" }, "name_prefix": { "$ref": "common.schema.json#/$defs/key" }, "source": { "type": "object", "description": "A Brand board made from a brand book: the Document it reads.", "properties": { "document_id": { "type": "string", "pattern": "^doc_[0-9A-HJKMNP-TV-Z]{26}$" } }, "required": ["document_id"], "additionalProperties": false }, "library": { "$ref": "#/$defs/libraryCopy" } }, "required": ["id", "v", "field_v", "title", "purpose", "rank"], "additionalProperties": false }, "sketch": { "type": "object", "description": "A ratio-locked sketch area (ui-behaviour 3.7). Its strokes stay on the canvas.", "properties": { "id": { "type": "string", "pattern": "^sketch_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "aspect": { "$ref": "common.schema.json#/$defs/aspect" }, "ratio": { "$ref": "common.schema.json#/$defs/ratio" }, "format": { "$ref": "common.schema.json#/$defs/formatRef" }, "board_id": { "type": "string", "pattern": "^board_[0-9A-HJKMNP-TV-Z]{26}$" }, "drawn_by": { "$ref": "common.schema.json#/$defs/personRef" } }, "required": ["id", "v", "field_v", "aspect", "drawn_by"], "additionalProperties": false }, "script": { "type": "object", "description": "A script. Its text lives in its scenes, shots and beats; its order in their ranks.", "properties": { "id": { "type": "string", "pattern": "^script_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "title": { "type": "string", "maxLength": 120, "minLength": 1 }, "target_s": { "type": "integer", "minimum": 1, "maximum": 600 } }, "required": ["id", "v", "field_v", "title", "target_s"], "additionalProperties": false }, "scene": { "type": "object", "description": "A scene of a script. Its fragment (scenes/<id>) holds only script text no shot owns yet.", "properties": { "id": { "type": "string", "pattern": "^scene_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "script_id": { "type": "string", "pattern": "^script_[0-9A-HJKMNP-TV-Z]{26}$" }, "rank": { "$ref": "common.schema.json#/$defs/rank" }, "heading": { "type": "string", "maxLength": 200 }, "hands_off": { "$ref": "#/$defs/handsOff" }, "prose": { "$ref": "#/$defs/prose" }, "text": { "type": "string", "maxLength": 2e4, "description": "The scene's unplanned text, flat. Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text)." }, "last_writer": { "$ref": "common.schema.json#/$defs/actorRef" } }, "required": ["id", "v", "field_v", "script_id", "rank", "heading"], "additionalProperties": false }, "storyboard": { "type": "object", "description": "A storyboard: shots in rank order. A script drives it through a link.", "properties": { "id": { "type": "string", "pattern": "^storyboard_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "title": { "type": "string", "maxLength": 120, "minLength": 1 }, "ratio": { "$ref": "common.schema.json#/$defs/ratio" }, "target_s": { "type": "integer", "minimum": 1, "maximum": 600 }, "implicit": { "type": "boolean", "description": "Planned straight from a script for a Video (ui-behaviour 3.5): owned by the Video, with no canvas node until it is shown. Its shots are that Video's timeline, shown and edited in the Video editor. Make a storyboard from these shots clears it and puts the node on the canvas." }, "video_id": { "type": "string", "pattern": "^video_[0-9A-HJKMNP-TV-Z]{26}$", "description": "The Video whose own shot list this is (decided 2026-10-15): set when the shots were planned straight from the script into that Video. With implicit it needs no renders link; shown as a node, deleting the node puts the shots back in the Video (implicit again) instead of deleting them." } }, "required": ["id", "v", "field_v", "title", "ratio", "target_s"], "additionalProperties": false }, "shot": { "type": "object", "description": "One shot of a storyboard. Camera, duration, rank and status are single-value fields; action, direction and the refs come from its live text (shots/<id>).", "properties": { "id": { "type": "string", "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "storyboard_id": { "type": "string", "pattern": "^storyboard_[0-9A-HJKMNP-TV-Z]{26}$" }, "rank": { "$ref": "common.schema.json#/$defs/rank" }, "kind": { "enum": ["shot", "end_card"], "description": "end_card: the last clip, edited like any shot (Graphic \xB7 Static)." }, "scene_id": { "type": "string", "pattern": "^scene_[0-9A-HJKMNP-TV-Z]{26}$" }, "duration_s": { "type": "number", "minimum": 0.5, "maximum": 30, "multipleOf": 0.1 }, "camera": { "$ref": "common.schema.json#/$defs/camera" }, "status": { "enum": ["planned", "needs_review", "locked"], "description": "Gates today's Video stage." }, "pick": { "$ref": "#/$defs/pick" }, "hands_off": { "$ref": "#/$defs/handsOff" }, "prose": { "$ref": "#/$defs/prose" }, "action": { "type": "string", "maxLength": 600, "description": "What happens. Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text)." }, "direction": { "type": "string", "maxLength": 4e3, "description": "Performance direction. Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text)." }, "refs": { "type": "array", "items": { "anyOf": [{ "type": "string", "pattern": "^ref_[0-9A-HJKMNP-TV-Z]{26}$" }, { "type": "string", "pattern": "^key_[0-9A-HJKMNP-TV-Z]{26}$" }] }, "maxItems": 14, "uniqueItems": true, "description": "What the shot's text mentions, by id: a ref (one look, @maya_laughing) or a key (the whole character, @maya: its front and up to 3 other views). Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text)." }, "text_problem": { "$ref": "#/$defs/textProblem" }, "last_writer": { "$ref": "common.schema.json#/$defs/actorRef" }, "direction_condensed": { "type": "object", "description": "Dex's condensed direction for models that read 1,000 characters (Veo 3.1). Written only by Dex's job; read-only to people.", "properties": { "text": { "type": "string", "maxLength": 1e3 }, "from_hash": { "$ref": "common.schema.json#/$defs/sha256" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" } }, "required": ["text", "from_hash", "job_id"], "additionalProperties": false } }, "required": ["id", "v", "field_v", "storyboard_id", "rank", "kind", "duration_s", "camera", "status"], "additionalProperties": false }, "beat": { "type": "object", "description": "A timed row inside a shot (ui-behaviour 3.10): a moment, a line, VO, music, a sound or a camera change. Its words live in beats/<id>.", "properties": { "id": { "type": "string", "pattern": "^beat_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "shot_id": { "type": "string", "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$" }, "rank": { "$ref": "common.schema.json#/$defs/rank" }, "at_s": { "type": "number", "minimum": 0, "maximum": 30, "multipleOf": 0.5 }, "kind": { "$ref": "common.schema.json#/$defs/beatKind" }, "speaker": { "type": "string", "maxLength": 60 }, "parenthetical": { "type": "string", "maxLength": 80 }, "moment_id": { "type": "string", "pattern": "^beat_[0-9A-HJKMNP-TV-Z]{26}$", "description": "A line tied to a moment: moving either writes both in one batch." }, "hands_off": { "$ref": "#/$defs/handsOff" }, "prose": { "$ref": "#/$defs/prose" }, "text": { "type": "string", "maxLength": 500, "description": "The beat's words. Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text)." }, "last_writer": { "$ref": "common.schema.json#/$defs/actorRef" } }, "required": ["id", "v", "field_v", "shot_id", "rank", "at_s", "kind"], "additionalProperties": false }, "frame": { "type": "object", "description": "A still version: a storyboard frame (shot_id), a frame made from a sketch area (sketch_id), a size of a format set (size_id), or a version of a picture on the canvas (node; features/edit-canvas-pictures.clan).", "properties": { "id": { "type": "string", "pattern": "^frame_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "shot_id": { "type": "string", "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$" }, "sketch_id": { "type": "string", "pattern": "^sketch_[0-9A-HJKMNP-TV-Z]{26}$" }, "size_id": { "type": "string", "pattern": "^size_[0-9A-HJKMNP-TV-Z]{26}$" }, "node": { "$ref": "common.schema.json#/$defs/sceneId", "description": "The canvas picture (its pic or gen node id) this is a version of. v1 is kind original: the picture as it was before its first edit." }, "picked_at": { "type": "string", "format": "date-time", "description": "A canvas picture's version: when it was made or picked. The picture shows its version with the latest picked_at (ties: the higher version)." }, "version": { "type": "integer", "minimum": 1 }, "parent_id": { "type": "string", "pattern": "^frame_[0-9A-HJKMNP-TV-Z]{26}$" }, "kind": { "enum": ["generated", "mock", "edited", "original"], "description": "original: v1 of a canvas picture (node), the picture as it was on the canvas; no crew made it." }, "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "crew": { "$ref": "common.schema.json#/$defs/crewId" }, "model": { "type": "string", "maxLength": 120 }, "provider": { "$ref": "common.schema.json#/$defs/madeBy" }, "edits": { "type": "array", "items": { "type": "object", "properties": { "op": { "type": "string", "maxLength": 40, "minLength": 1 }, "params": { "type": "object" } }, "required": ["op"], "additionalProperties": false }, "maxItems": 64, "description": "The image editor's non-destructive op list that made an edited frame." }, "cropped_to": { "type": "object", "description": "The model's output was not exactly the ratio, so it was centre-cropped ('1344\xD7756 \xB7 cropped to 16:9').", "properties": { "from": { "$ref": "common.schema.json#/$defs/aspect" }, "to": { "$ref": "common.schema.json#/$defs/aspect" } }, "required": ["from", "to"], "additionalProperties": false } }, "required": ["id", "v", "field_v", "version", "kind", "asset"], "additionalProperties": false, "not": { "anyOf": [{ "required": ["shot_id", "sketch_id"] }, { "required": ["shot_id", "size_id"] }, { "required": ["sketch_id", "size_id"] }, { "required": ["node", "shot_id"] }, { "required": ["node", "sketch_id"] }, { "required": ["node", "size_id"] }] }, "allOf": [{ "if": { "properties": { "kind": { "const": "original" } }, "required": ["kind"] }, "then": { "required": ["node"], "not": { "required": ["crew"] } }, "else": { "required": ["crew"] } }, { "if": { "required": ["picked_at"] }, "then": { "required": ["node"] } }] }, "generation": { "type": "object", "description": "One generation (a take): everything Make produced, uploaded or rendered, each once (features/make-and-edit.clan). A regeneration is a new generation beside its parent, never an overwrite: parent_id and delta say what changed. A box made together is one generation whose segments say where each shot is in it. The full request stays on the relay with its job (held server-side); the document keeps its summary (inputs). Never deleted to make room. No price is kept here: costs are in History (jobs).", "properties": { "id": { "type": "string", "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "kind": { "enum": ["clip", "together", "change", "patch", "feel", "combine", "extend", "upload", "render"], "description": "clip: one shot made (op clip). together: a box of shots made as one video (clip mode take or take_refs). change: a new take from a parent with its delta (camera, words), made whole again. patch: a parent with a moment made again (clip_patch), same length. feel: a parent restyled whole (clip_edit). combine: clips and pictures made into one (P4). extend: a parent made longer (P3). upload: footage a person brought. render: an ad render (P2: renders stay in renders until the Bin moves them)." }, "parent_id": { "type": "string", "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$", "description": "The generation it was made from (change, patch, feel, extend)." }, "delta": { "type": "array", "maxItems": 8, "items": { "$ref": "#/$defs/generationDelta" }, "description": "What changed from the parent, the parent's request otherwise kept. Empty or absent on a first take." }, "label": { "type": "string", "maxLength": 120, "description": "The one-line change label a take shows ('Camera: handheld (shot 3)', 'Shirt red 0:00-0:02'). Absent: the web derives it from kind and delta ('First take')." }, "inputs": { "type": "object", "description": "A summary of what the request carried, for the Keeps line and lineage; the request itself is on the relay (Job._req). Fields absent when unknown (a migrated take keeps only its model, quality, size and length).", "properties": { "frames": { "type": "array", "maxItems": 16, "items": { "type": "object", "properties": { "role": { "enum": ["start", "end", "still"] }, "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "shot_id": { "type": "string", "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$" } }, "required": ["role", "asset"], "additionalProperties": false } }, "refs": { "type": "array", "maxItems": 14, "items": { "type": "object", "properties": { "name": { "$ref": "common.schema.json#/$defs/refName" }, "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "role": { "$ref": "common.schema.json#/$defs/refRole" } }, "required": ["asset"], "additionalProperties": false } }, "words": { "type": "string", "maxLength": 4e3 }, "camera": { "type": "object", "description": "Each shot's camera as sent, by shot id.", "propertyNames": { "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "common.schema.json#/$defs/camera" }, "maxProperties": 100 }, "model": { "type": "string", "maxLength": 120 }, "quality": { "$ref": "common.schema.json#/$defs/clipQuality" }, "size": { "type": "string", "pattern": "^[0-9]+(p|K)$" }, "length_s": { "type": "number", "minimum": 0, "maximum": 600 }, "sources": { "type": "array", "maxItems": 8, "description": "combine: the clips used, each with its window.", "items": { "type": "object", "properties": { "generation_id": { "type": "string", "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$" }, "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "in_s": { "type": "number", "minimum": 0 }, "out_s": { "type": "number", "exclusiveMinimum": 0 } }, "required": ["asset"], "additionalProperties": false } } }, "additionalProperties": false }, "box_id": { "type": "string", "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$", "description": "The box (video.runs) it was made for: one box, one generation at a time. Absent: not in a box." }, "shot_ids": { "type": "array", "maxItems": 100, "items": { "type": "string", "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$" }, "description": "The shots it shows, in order. Empty: footage not tied to a shot (combine, upload)." }, "segments": { "type": "array", "maxItems": 100, "description": "Where each shot is in it (a box made together): in_s and out_s in its own time. by: prompt (the planned cut times), detected (the relay's take_cuts), human (a person moved it). Absent or empty: one shot, the whole of it.", "items": { "type": "object", "properties": { "shot_id": { "type": "string", "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$" }, "in_s": { "type": "number", "minimum": 0 }, "out_s": { "type": "number", "minimum": 0 }, "by": { "enum": ["prompt", "detected", "human"] } }, "required": ["shot_id", "in_s", "out_s"], "additionalProperties": false } }, "patched": { "type": "array", "maxItems": 16, "description": "The stretches made again by Fix this moment (a patch and the patches before it), in its own time: in_s, out_s, the clip_patch job and the generation that job made.", "items": { "type": "object", "properties": { "in_s": { "type": "number", "minimum": 0 }, "out_s": { "type": "number", "minimum": 0 }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "generation_id": { "type": "string", "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$" } }, "required": ["in_s", "out_s", "job_id"], "additionalProperties": false } }, "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "duration_s": { "type": "number", "minimum": 0, "maximum": 600 }, "state": { "enum": ["making", "ready", "failed"], "description": "making: its job runs (the Bin shows a placeholder). ready: asset is there. failed: nothing was made (kept so the stack shows what was tried)." }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "provider": { "$ref": "common.schema.json#/$defs/madeBy" }, "crew": { "$ref": "common.schema.json#/$defs/crewId" }, "mock": { "const": true, "description": "A mock take: labelled everywhere, never final." }, "end": { "type": "object", "description": "The frame the generation was made to land on (features/connected-video.clan): next_storyboard, the next shot's storyboard frame (frame_id), sent as the clip's last frame on a continue join; none, no last frame. An end-framed take is retimed whole into its slot (stitch fit speed), never cut from its head. Absent: none.", "properties": { "kind": { "enum": ["next_storyboard", "none"] }, "frame_id": { "type": "string", "pattern": "^frame_[0-9A-HJKMNP-TV-Z]{26}$" }, "at_s": { "type": "number", "minimum": 0, "description": "Where in it it reached that frame (the job's landS): the clip is used up to and including the frame at at_s, retimed into its slot, and what the model made after it is left out." }, "score": { "type": "number", "minimum": -1, "maximum": 1, "description": "How closely that frame matches the one given (the job's landScore, SSIM)." } }, "required": ["kind"], "additionalProperties": false }, "created_at": { "type": "string", "format": "date-time" }, "by": { "$ref": "common.schema.json#/$defs/personRef", "description": "Who asked for it." } }, "required": ["id", "v", "field_v", "kind", "shot_ids", "state", "created_at", "by"], "allOf": [{ "if": { "properties": { "state": { "const": "ready" } }, "required": ["state"] }, "then": { "required": ["asset", "duration_s"] } }, { "if": { "properties": { "kind": { "enum": ["change", "patch", "feel", "extend"] } }, "required": ["kind"] }, "then": { "required": ["parent_id"] } }], "additionalProperties": false }, "video": { "type": "object", "description": "A video: its timeline (the cut, the Edit room), its boxes (runs, the Make room) and its ad renders (features/make-and-edit.clan).", "properties": { "id": { "type": "string", "pattern": "^video_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "title": { "type": "string", "maxLength": 120, "minLength": 1 }, "ratio": { "$ref": "common.schema.json#/$defs/ratio" }, "target_s": { "type": "integer", "minimum": 1, "maximum": 600 }, "quality": { "$ref": "common.schema.json#/$defs/clipQuality", "description": "The project's default quality for this video's clips (features/clip-quality.clan); a send may pick another. Absent: standard." }, "pick": { "$ref": "#/$defs/pick" }, "timeline": { "type": "object", "description": "The cut (the Edit room): items keyed by id, each a clip on V1 or V2 or a text. Written item by item (timeline/<item>, timeline/<item>/<field>; contracts/collab.md \xA77). It replaced edl (features/make-and-edit.clan): clips point at generations, never at shots.", "propertyNames": { "pattern": "^item_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/timelineItem" }, "maxProperties": 300 }, "end_card": { "$ref": "#/$defs/endCard" }, "join": { "enum": ["film", "shots"], "description": "How shots join (features/connected-video.clan, behind flags.connectedVideo): film (As one film: Make clips plans runs of takes and landing frames) or shots (Shot by shot: each clip alone, as before). Absent: film where the flag is on." }, "runs": { "type": "object", "description": "The boxes (runs) the planner made: one box is one generation at a time (its generations name it as box_id) (features/connected-video.clan): the shots made together and how. shot_ids: the run's shots in order. mode: take (one generation of them all), take_refs (one generation from references, no frame), frames (a clip per shot, landing on the next frame on continue joins) or alone. model: the clip model it runs on. state: planned, running, done or failed. job_id: the take's job (take and take_refs). planned_by: crew (Dex's plan) or human (a person's join change re-planned it).", "propertyNames": { "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "type": "object", "properties": { "shot_ids": { "type": "array", "minItems": 1, "maxItems": 100, "items": { "type": "string", "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$" } }, "mode": { "enum": ["take", "take_refs", "frames", "alone"] }, "model": { "type": "string", "maxLength": 120 }, "state": { "enum": ["planned", "running", "done", "failed"] }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "planned_by": { "enum": ["crew", "human"] } }, "required": ["shot_ids", "mode", "model", "state", "planned_by"], "additionalProperties": false }, "maxProperties": 100 } }, "required": ["id", "v", "field_v", "title", "ratio", "timeline"], "additionalProperties": false }, "render": { "type": "object", "description": "An ad render of a video: a version Edie made.", "properties": { "id": { "type": "string", "pattern": "^render_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "video_id": { "type": "string", "pattern": "^video_[0-9A-HJKMNP-TV-Z]{26}$" }, "version": { "type": "integer", "minimum": 1 }, "parent_id": { "type": "string", "pattern": "^render_[0-9A-HJKMNP-TV-Z]{26}$" }, "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" } }, "required": ["id", "v", "field_v", "video_id", "version", "asset", "job_id"], "additionalProperties": false }, "review": { "type": "object", "description": "A note on a frame, generation, render, ref or video; with a region it is a box, with at_s it has a window. Its words live in reviews/<id>.", "properties": { "id": { "type": "string", "pattern": "^rev_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "target": { "type": "object", "properties": { "kind": { "enum": ["frame", "generation", "render", "ref", "video"] }, "id": { "$ref": "common.schema.json#/$defs/id" } }, "required": ["kind", "id"], "additionalProperties": false }, "video_id": { "type": "string", "pattern": "^video_[0-9A-HJKMNP-TV-Z]{26}$" }, "render_id": { "type": "string", "pattern": "^render_[0-9A-HJKMNP-TV-Z]{26}$" }, "shot_id": { "type": "string", "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$" }, "at_s": { "type": "number", "minimum": 0 }, "window": { "$ref": "#/$defs/window" }, "region": { "$ref": "common.schema.json#/$defs/region" }, "still": { "$ref": "common.schema.json#/$defs/sha256" }, "chips": { "type": "array", "items": { "type": "string", "maxLength": 40 }, "maxItems": 8 }, "by": { "$ref": "common.schema.json#/$defs/actorRef" }, "state": { "enum": ["open", "resolved"] }, "resolved_by_job": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "fixed_in_render": { "type": "string", "pattern": "^render_[0-9A-HJKMNP-TV-Z]{26}$" }, "prose": { "$ref": "#/$defs/prose" }, "text": { "type": "string", "maxLength": 1e3, "description": "The note's words. Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text)." }, "last_writer": { "$ref": "common.schema.json#/$defs/actorRef" }, "created_at": { "type": "string", "format": "date-time" } }, "required": ["id", "v", "field_v", "target", "by", "state", "created_at"], "additionalProperties": false, "dependentRequired": { "at_s": ["window"], "window": ["at_s"] } }, "link": { "type": "object", "description": "A link between two nodes (ui-behaviour 3.4): the only record of drives, renders, inputs, brand and master. Allowed by common linkRule.", "properties": { "id": { "type": "string", "pattern": "^link_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "from": { "$ref": "common.schema.json#/$defs/linkEndpoint" }, "to": { "$ref": "common.schema.json#/$defs/linkEndpoint" }, "role": { "$ref": "common.schema.json#/$defs/linkRole" }, "label": { "type": "string", "maxLength": 80 } }, "required": ["id", "v", "field_v", "from", "to", "role"], "additionalProperties": false }, "key": { "type": "object", "description": "A solid reference key: one character, place or object. Its refs are its variants.", "properties": { "id": { "type": "string", "pattern": "^key_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "key": { "$ref": "common.schema.json#/$defs/key" }, "role": { "$ref": "common.schema.json#/$defs/refRole" }, "library": { "$ref": "#/$defs/libraryCopy" } }, "required": ["id", "v", "field_v", "key", "role"], "additionalProperties": false }, "ref": { "type": "object", "description": "A named reference: key_variant and what it holds for its role (refRoleTable payload: image, swatches, font, rule or document).", "properties": { "id": { "type": "string", "pattern": "^ref_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "key": { "$ref": "common.schema.json#/$defs/key" }, "variant": { "$ref": "common.schema.json#/$defs/variant" }, "role": { "$ref": "common.schema.json#/$defs/refRole" }, "label": { "type": "string", "maxLength": 60 }, "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "swatches": { "type": "array", "items": { "type": "object", "properties": { "hex": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" }, "name": { "type": "string", "maxLength": 40 } }, "required": ["hex"], "additionalProperties": false }, "maxItems": 24 }, "font": { "type": "object", "properties": { "family": { "type": "string", "maxLength": 80, "minLength": 1 }, "use": { "type": "string", "maxLength": 80 }, "file": { "$ref": "common.schema.json#/$defs/sha256" } }, "required": ["family"], "additionalProperties": false }, "rule": { "type": "object", "properties": { "kind": { "enum": ["do", "dont", "tone"] }, "text": { "type": "string", "maxLength": 500, "minLength": 1 }, "page": { "type": "integer", "minimum": 1 } }, "required": ["kind", "text"], "additionalProperties": false }, "document_id": { "type": "string", "pattern": "^doc_[0-9A-HJKMNP-TV-Z]{26}$" }, "node": { "$ref": "common.schema.json#/$defs/sceneId" }, "library": { "$ref": "#/$defs/libraryCopy" }, "named_at": { "type": "string", "format": "date-time" } }, "required": ["id", "v", "field_v", "key", "variant", "role"], "additionalProperties": false }, "document": { "type": "object", "description": "A Document node: a file Nell reads, used as context once linked (ui-behaviour 3.18).", "properties": { "id": { "type": "string", "pattern": "^doc_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "title": { "type": "string", "maxLength": 120, "minLength": 1 }, "file_name": { "type": "string", "maxLength": 200, "minLength": 1 }, "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "pages": { "type": "integer", "minimum": 0 }, "excerpt": { "type": "string", "maxLength": 2e3 }, "read": { "type": "object", "properties": { "state": { "enum": ["unread", "reading", "read", "failed"] }, "pages_read": { "type": "integer", "minimum": 0 } }, "required": ["state", "pages_read"], "additionalProperties": false } }, "required": ["id", "v", "field_v", "title", "file_name", "asset", "pages", "read"], "additionalProperties": false }, "brief": { "type": "object", "description": "A Brief node (features/brief-node.clan): a Brief Maker brief's spine, frozen at the version taken. Read-only here: Open in Brief Maker to change it. When the brief changes there, the node says 'Brief changed: update?'; taking the newer version is the person's decision (one decision entry), never automatic. Linked into a Script, Storyboard, Video or Format set (role brief), the spine is in that node's scope and goes with its jobs; a brief linked into a Script carries on to the Storyboard and Video it drives unless they have one linked of their own.", "properties": { "id": { "type": "string", "pattern": "^brief_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "title": { "type": "string", "maxLength": 200, "minLength": 1, "description": "The brief's title when it was taken." }, "source": { "type": "object", "description": "Where it was taken from, as the OS's links keep it (clan_sdk Attached: document id, data hash, how many times taken).", "properties": { "document_id": { "type": "string", "maxLength": 128, "minLength": 1, "description": "The brief's OS document id (its library path, doc-\u2026): what GET /api/t/{tenant}/d/{doc}/data reads and the shell opens (/?open=<id>)." }, "app_id": { "const": "ie.napkin.brief-maker" }, "data_sha256": { "$ref": "common.schema.json#/$defs/sha256", "description": "sha256 of the brief's shared/data.yaml as taken: a brief whose data hashes otherwise has changed." }, "taken": { "type": "integer", "minimum": 1, "description": "Production's own copy counter: 1 when linked, one more on each update taken. Not the brief's version (see version)." }, "version": { "type": "integer", "minimum": 1, "description": "The brief's version as Brief Maker says it ('v2'): its approvals count, at least 1, as of the copy taken (napkin-web GET /d/{doc}/data, version)." }, "at": { "type": "string", "format": "date-time", "description": "When it was linked or last updated." }, "how": { "enum": ["link", "spinoff"], "description": "Linked from an existing brief, or spun off from Brief Maker into Production." }, "kept": { "$ref": "common.schema.json#/$defs/sha256", "description": "A newer version the person chose not to take (Keep this version): no notice again until the brief changes once more." } }, "required": ["document_id", "app_id", "data_sha256", "taken", "version", "at", "how"], "additionalProperties": false }, "spine": { "$ref": "common.schema.json#/$defs/briefSpine" }, "confidential": { "type": "array", "items": { "enum": ["insight", "proposition", "audience", "tone", "feel", "mandatories", "donts", "format"] }, "uniqueItems": true, "description": "Spine parts made from brief parts marked Confidential (owner 2026-11-13): shown in full to the agency and the client, never sent to Napkin's own records (run logs, layers, evals, training)." } }, "required": ["id", "v", "field_v", "title", "source", "spine"], "additionalProperties": false }, "final": { "type": "object", "description": "One picture a person marked final: the Final toggle on the version open in the image editor (a frame, or a canvas picture with no versions yet) or on a still size in Make all sizes. asset is the exact picture marked; a size or a picture keeps one final (marking another replaces it), and unmarking removes it. It stands until unmarked, even when what it was of is remade or removed. Added 2026-11-19 (features/prod-assets-route.clan, additive).", "properties": { "id": { "type": "string", "pattern": "^final_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "of": { "type": "object", "description": "What it is a final of. frame: a frame version (frames[id]: a storyboard frame or a canvas picture's version). size: a size of a format set (sizes[id]). picture: a picture on the canvas with no versions yet (its canvas node's id, as format_sets[].master kind picture).", "properties": { "kind": { "enum": ["frame", "size", "picture"] }, "id": { "type": "string", "pattern": "^[A-Za-z0-9_-]{6,64}$" } }, "required": ["kind", "id"], "additionalProperties": false, "allOf": [{ "if": { "properties": { "kind": { "const": "frame" } } }, "then": { "properties": { "id": { "pattern": "^frame_[0-9A-HJKMNP-TV-Z]{26}$" } } } }, { "if": { "properties": { "kind": { "const": "size" } } }, "then": { "properties": { "id": { "pattern": "^size_[0-9A-HJKMNP-TV-Z]{26}$" } } } }] }, "asset": { "$ref": "common.schema.json#/$defs/sha256", "description": "The picture marked final: a key of assets. For a size, its delivery-size file when one was made for its picture (full.asset), else its picture." }, "version": { "type": "integer", "minimum": 1, "description": "The version shown when it was marked (a frame's version, 'v3'); 1 for a picture with no versions." }, "set_id": { "type": "string", "pattern": "^fset_[0-9A-HJKMNP-TV-Z]{26}$", "description": "A size's format set." }, "format": { "$ref": "common.schema.json#/$defs/formatRef", "description": "A size's format, copied when it was marked." }, "channel": { "$ref": "common.schema.json#/$defs/formatChannel", "description": "A size's lane on the Campaign board (format-packs.json), copied when it was marked." }, "at": { "type": "string", "format": "date-time" }, "by": { "$ref": "common.schema.json#/$defs/personRef" } }, "required": ["id", "v", "field_v", "of", "asset", "at", "by"], "additionalProperties": false }, "text": { "type": "object", "description": "A text on the canvas (the Text tool's). Its words follow the canvas: an edit there rewrites them; a delete takes it out with its links. Linked into a node (role note), its words are that node's input words.", "properties": { "id": { "type": "string", "pattern": "^text_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "node": { "$ref": "common.schema.json#/$defs/sceneId", "description": "The canvas element that is this text." }, "words": { "type": "string", "maxLength": 4e3, "description": "What it says, as typed (lines joined by newlines)." } }, "required": ["id", "v", "field_v", "node", "words"], "additionalProperties": false }, "format_set": { "type": "object", "description": "A Format set: a master adapted to every format of a pack or a campaign plan (ui-behaviour 3.19; features/campaign-formats.clan). It shows on the canvas as a Campaign board. Its sizes are their own entities.", "properties": { "id": { "type": "string", "pattern": "^fset_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "master": { "type": "object", "properties": { "kind": { "enum": ["frame", "ref", "render", "video", "picture"] }, "id": { "type": "string", "pattern": "^[A-Za-z0-9_-]{6,64}$", "description": "The entity's id, or for a picture the canvas node's id (common id or sceneId)." }, "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "w": { "type": "integer", "minimum": 1 }, "h": { "type": "integer", "minimum": 1 } }, "required": ["kind", "id"], "additionalProperties": false, "description": "What every size is made from. picture: a picture on the canvas (its id is the canvas node's id). asset, w and h: the master's picture when the set was made (a video's: its render); protect and crop boxes are in these pixels, and a size made from another asset is out of date." }, "pack": { "type": "object", "properties": { "pack_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$" }, "pack_version": { "type": "string", "maxLength": 40, "minLength": 1 }, "client_id": { "type": "string", "maxLength": 64 } }, "required": ["pack_id", "pack_version"], "additionalProperties": false }, "plan": { "type": "object", "description": "What was asked for in Make all sizes: one pack (kind pack, its pack id) or a campaign plan (kind plan, format-packs.json plans), with the film lengths asked for (30 \u2192 15 and 6 by default).", "properties": { "kind": { "enum": ["pack", "plan"] }, "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$" }, "lengths_s": { "type": "array", "maxItems": 8, "items": { "type": "integer", "minimum": 1, "maximum": 600 } } }, "required": ["kind", "id"], "additionalProperties": false }, "protect": { "type": "object", "description": "What must stay in every size, asked once per master (Wren: 'What must stay in every size?'). boxes: a still master's, in its pixels. generations: a film's, per generation (keyed by its id), in its pixels. keep_middle: the person chose no box; crops keep the middle. Changing it puts the crop sizes out of date, nothing else.", "properties": { "boxes": { "type": "array", "maxItems": 8, "items": { "$ref": "common.schema.json#/$defs/protectBox" } }, "generations": { "type": "object", "propertyNames": { "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "type": "array", "maxItems": 8, "items": { "$ref": "common.schema.json#/$defs/protectBox" } } }, "keep_middle": { "type": "boolean" } }, "additionalProperties": false }, "copy": { "type": "object", "description": "The words every size lays out as type layers (Edit type): the brand line, legal and the supers. Drawn by the relay and stitch, never sent to a model. A size's own words are in its layers.", "properties": { "line": { "type": "string", "maxLength": 200 }, "legal": { "type": "string", "maxLength": 600 }, "supers": { "type": "array", "maxItems": 20, "items": { "type": "string", "minLength": 1, "maxLength": 200 } } }, "additionalProperties": false }, "reframes": { "type": "object", "description": "A film's shots made again for a shape (phase 6), keyed <generation id>@<w>x<h> (the size's shape): Aleph 2's outpaint of the generation (new edges, at the nearest of its ratios; 4:5 at 3:4), or Remake for vertical (the shot made again at the shape on a model that carries its characters). Each is its own paid job; every size of that shape that keeps the shot uses it. Added 2026-10-16 (additive).", "propertyNames": { "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}@[1-9][0-9]{0,4}x[1-9][0-9]{0,4}$" }, "maxProperties": 200, "additionalProperties": { "type": "object", "properties": { "generation_id": { "type": "string", "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$" }, "shot_id": { "type": "string", "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$" }, "aspect": { "$ref": "common.schema.json#/$defs/aspect" }, "method": { "enum": ["outpaint", "remake"] }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "model": { "type": "string", "maxLength": 64 }, "asset": { "$ref": "common.schema.json#/$defs/sha256", "description": "The clip it made, once landed." }, "size": { "$ref": "common.schema.json#/$defs/aspect", "description": "The clip's pixels." } }, "required": ["generation_id", "shot_id", "aspect", "method", "job_id"], "additionalProperties": false } } }, "required": ["id", "v", "field_v", "master", "pack"], "additionalProperties": false }, "size": { "type": "object", "description": "One size of a format set: the format's values copied at creation, how it is made and where it stands (features/campaign-formats.clan). A tile on the Campaign board.", "properties": { "id": { "type": "string", "pattern": "^size_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "set_id": { "type": "string", "pattern": "^fset_[0-9A-HJKMNP-TV-Z]{26}$" }, "rank": { "$ref": "common.schema.json#/$defs/rank" }, "format": { "$ref": "common.schema.json#/$defs/formatRef" }, "aspect": { "$ref": "common.schema.json#/$defs/aspect" }, "delivery": { "$ref": "common.schema.json#/$defs/deliveryPx" }, "bleed_mm": { "type": "number", "minimum": 0, "maximum": 50 }, "safe_area": { "$ref": "common.schema.json#/$defs/safeArea" }, "method": { "$ref": "common.schema.json#/$defs/sizeMethod" }, "media": { "enum": ["image", "video"] }, "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "status": { "enum": ["making", "ready", "look", "stale"], "description": "making: its job runs. ready. look: Jude flagged it (needs a look). stale: what it was made from changed (Update sizes). Absent: not made yet (its method waits for a later build)." }, "locked": { "type": "boolean", "description": "Locked: Update sizes, Redo and a new master never change it." }, "from_asset": { "$ref": "common.schema.json#/$defs/sha256", "description": "The master's asset it was made from: when the master's is another, the size is out of date ('Master changed \xB7 N out of date')." }, "crop": { "$ref": "common.schema.json#/$defs/pxBox", "description": "The part of the master it shows, in the master's pixels: the subject-aware crop, or the person's (Adjust crop)." }, "crop_by": { "enum": ["rule", "person"], "description": "person: Adjust crop set it, so Update sizes keeps it." }, "plate": { "$ref": "common.schema.json#/$defs/sha256", "description": "The size's picture before its type layers (the relay's resize result plate): Edit type draws on it again for free, without making the picture again, and Export at full size upscales it. Added 2026-10-16 (phase 4, additive)." }, "render": { "type": "object", "description": "Facts measured when the size's picture landed, read by Jude's checks: drawn is how many type layers the relay drew on it (a logo it could not read is not drawn); look is how far its colour and tone are from the master's, 0 (the same) to 1, measured for extend and regenerate. Added 2026-11-03 (art-director, additive).", "properties": { "drawn": { "type": "integer", "minimum": 0 }, "look": { "type": "number", "minimum": 0, "maximum": 1 }, "product": { "enum": ["kept", "restored", "changed"], "description": "A regenerate with a protected product: kept (it came back as drawn), restored (the master's pixels were laid back over it) or changed (the relay could not find it: the size is flagged). Added 2026-11-23 (pt-final-and-fit, additive)." } }, "additionalProperties": false }, "full": { "type": "object", "description": "The delivery-size file Export at full size made (Magnific's upscale of the plate, the type drawn again at full size), kept so a second export spends nothing. Out of date when the plate or the type changed since (from differs from plate). Added 2026-10-16 (phase 4, additive).", "properties": { "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "from": { "$ref": "common.schema.json#/$defs/sha256", "description": "The size's asset (the typed preview) it was made for." }, "scale": { "enum": [4, 8], "description": "Magnific's scale; absent when the plate was only scaled (Magnific cannot take a side under 300 px)." } }, "required": ["from"], "additionalProperties": false }, "layers": { "type": "object", "propertyNames": { "$ref": "common.schema.json#/$defs/typeLayerKind" }, "additionalProperties": { "$ref": "common.schema.json#/$defs/typeLayerOverride" }, "description": "This size's changes to the type layers (Edit type), by layer." }, "length_s": { "type": "number", "exclusiveMinimum": 0, "maximum": 600, "description": "A film size's length (a cutdown: 15, 6)." }, "edl": { "type": "array", "maxItems": 100, "description": "A cutdown's edit: windows of the master's V1 clips in cut order (each a generation's in/out), each with its crop for a re-aspect (features/make-and-edit.clan: size.edl reads V1).", "items": { "type": "object", "properties": { "shot_id": { "$ref": "common.schema.json#/$defs/id" }, "generation_id": { "type": "string", "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$" }, "in_s": { "type": "number", "minimum": 0 }, "out_s": { "type": "number", "exclusiveMinimum": 0 }, "crop": { "$ref": "common.schema.json#/$defs/pxBox" }, "crop_keys": { "type": "array", "minItems": 2, "maxItems": 3, "description": "A slow pan (phase 6): the crop at points through the window (at 0: in, 1: out), in the generation's pixels. Wins over crop. Added 2026-10-16 (additive).", "items": { "type": "object", "properties": { "at": { "type": "number", "minimum": 0, "maximum": 1 }, "box": { "$ref": "common.schema.json#/$defs/pxBox" } }, "required": ["at", "box"], "additionalProperties": false } }, "crop_by": { "enum": ["rule", "person"], "description": "person: Adjust crop on the clip tile set it (a still box). Added 2026-10-16 (additive)." }, "take_size": { "$ref": "common.schema.json#/$defs/aspect", "description": "The generation's pixels, which crop and crop_keys are in. Added 2026-10-16 (additive)." }, "end_card": { "type": "boolean" } }, "required": ["shot_id", "in_s", "out_s"], "additionalProperties": false } }, "beats": { "type": "array", "maxItems": 100, "description": "A cutdown's beat plan (Dex, phase 5), shown before it renders: every shot of the master in cut order, kept or dropped, with his reason. Keep or drop on the plan changes the edl. Added 2026-10-16 (additive).", "items": { "type": "object", "properties": { "shot_id": { "$ref": "common.schema.json#/$defs/id" }, "keep": { "type": "boolean" }, "why": { "type": "string", "maxLength": 300 }, "by": { "enum": ["dex", "person"], "description": "person: kept or dropped by a person against Dex's plan." } }, "required": ["shot_id", "keep"], "additionalProperties": false } }, "checks": { "type": "object", "propertyNames": { "$ref": "common.schema.json#/$defs/formatCheckCode" }, "description": "Jude's per-format checks, by check; they never block. Ignore is recorded on the check.", "additionalProperties": { "type": "object", "properties": { "result": { "enum": ["pass", "flag", "unverified"] }, "note": { "type": "string", "minLength": 1, "maxLength": 300 }, "ignored": { "type": "object", "properties": { "by": { "$ref": "common.schema.json#/$defs/personRef" }, "at": { "type": "string", "format": "date-time" } }, "required": ["by", "at"], "additionalProperties": false } }, "required": ["result", "note"], "additionalProperties": false } } }, "required": ["id", "v", "field_v", "set_id", "rank", "format", "aspect", "delivery", "method", "media"], "additionalProperties": false }, "check": { "type": "object", "description": "Jude's check of a result against the shot, the brand rules or a linked brief's mandatories and don'ts. Brand rules and brief flags never block; Ignore is recorded here.", "properties": { "id": { "type": "string", "pattern": "^check_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "target": { "$ref": "#/$defs/target" }, "crew": { "const": "jude" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "result": { "enum": ["pass", "flag"] }, "reason_code": { "type": "string", "pattern": "^[a-z][a-z0-9_]{1,63}$" }, "rule_ref": { "type": "string", "pattern": "^ref_[0-9A-HJKMNP-TV-Z]{26}$" }, "brief_id": { "type": "string", "pattern": "^brief_[0-9A-HJKMNP-TV-Z]{26}$", "description": "A flag against a linked brief (features/brief-node.clan): reason_code brief_mandatory or brief_dont, the note naming the line. It never blocks or asks: it shows in Decisions and as an amber mark on its target." }, "note": { "type": "string", "maxLength": 300 }, "ignored": { "type": "object", "properties": { "by": { "$ref": "common.schema.json#/$defs/personRef" }, "at": { "type": "string", "format": "date-time" } }, "required": ["by", "at"], "additionalProperties": false } }, "required": ["id", "v", "field_v", "target", "crew", "result", "reason_code", "note"], "additionalProperties": false }, "ask": { "type": "object", "description": "An agent's question on a node (ui-behaviour 3.17). Its key is question.id; a job's ask copies Job.question (minted by the relay), and the relay decides which answer won. kind is question.kind.", "properties": { "id": { "type": "string", "pattern": "^q_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "question": { "$ref": "common.schema.json#/$defs/question" }, "node": { "$ref": "common.schema.json#/$defs/linkEndpoint" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "crew": { "$ref": "common.schema.json#/$defs/crewId" }, "state": { "enum": ["open", "answered", "withdrawn"] }, "answers": { "type": "array", "items": { "type": "object", "description": "Every answer in order: the first settled it; a later one is a Change.", "properties": { "option_id": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$" }, "text": { "type": "string", "maxLength": 1e3, "minLength": 1 }, "by": { "$ref": "common.schema.json#/$defs/personRef" }, "at": { "type": "string", "format": "date-time" } }, "required": ["by", "at"], "additionalProperties": false, "oneOf": [{ "required": ["option_id"], "not": { "required": ["text"] } }, { "required": ["text"], "not": { "required": ["option_id"] } }] }, "maxItems": 16 } }, "required": ["id", "v", "field_v", "question", "node", "crew", "state", "answers"], "additionalProperties": false }, "suggestion": { "type": "object", "description": "Skye's proposed words on a scene, shot or beat, shown inline until Keep or Keep mine (ui-behaviour 3.10). Nothing changes until Keep.", "properties": { "id": { "type": "string", "pattern": "^sug_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "target": { "type": "object", "properties": { "kind": { "enum": ["scene", "shot", "beat"] }, "id": { "$ref": "common.schema.json#/$defs/id" } }, "required": ["kind", "id"], "additionalProperties": false }, "crew": { "const": "skye" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "for": { "$ref": "common.schema.json#/$defs/personRef" }, "base_hash": { "$ref": "common.schema.json#/$defs/sha256", "description": "The hash of the target's prose the suggestion was written against: a different hash makes it stale." }, "mode": { "enum": ["revise", "draft"], "description": "How the draft is meant to land: `draft` is a whole-block insertion (Keep / Discard, no word-diff); `revise` is a rewrite shown as a word-diff (Keep / Keep mine). Absent reads as `revise`." }, "proposed": { "type": "object", "properties": { "prose": { "$ref": "#/$defs/prose" }, "text": { "type": "string", "maxLength": 2e4 }, "duration_s": { "type": "number", "minimum": 0.5, "maximum": 30, "multipleOf": 0.1, "description": "A shot's new length, applied on Keep in the same step (features/script-editor.clan)." }, "new_beats": { "type": "array", "maxItems": 6, "description": "Beats Keep adds to the target shot in the same step.", "items": { "type": "object", "properties": { "kind": { "$ref": "common.schema.json#/$defs/beatKind" }, "at_s": { "type": "number", "minimum": 0, "maximum": 30, "multipleOf": 0.5 }, "speaker": { "type": "string", "maxLength": 60 }, "moment_id": { "type": "string", "pattern": "^beat_[0-9A-HJKMNP-TV-Z]{26}$" }, "prose": { "$ref": "#/$defs/prose" } }, "required": ["kind", "at_s", "prose"], "additionalProperties": false } } }, "required": ["prose", "text"], "additionalProperties": false }, "note": { "type": "string", "maxLength": 200 }, "state": { "enum": ["open", "kept", "dropped", "stale"] }, "decided_by": { "$ref": "common.schema.json#/$defs/personRef" } }, "required": ["id", "v", "field_v", "target", "crew", "job_id", "for", "base_hash", "proposed", "note", "state"], "additionalProperties": false }, "spin_in": { "type": "object", "description": "A spin-in from Brief Maker or Research waiting on Bring in (ui-behaviour 3.18).", "properties": { "id": { "type": "string", "pattern": "^spin_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "source": { "type": "object", "properties": { "document_id": { "type": "string", "maxLength": 128, "minLength": 1 }, "app": { "type": "string", "maxLength": 64, "minLength": 1 }, "title": { "type": "string", "maxLength": 200 } }, "required": ["document_id", "app"], "additionalProperties": false }, "plan": { "type": "array", "items": { "type": "object", "properties": { "kind": { "enum": ["script", "ref", "document", "brand"] }, "title": { "type": "string", "maxLength": 200, "minLength": 1 }, "note": { "type": "string", "maxLength": 300 } }, "required": ["kind", "title"], "additionalProperties": false }, "maxItems": 32 }, "state": { "enum": ["waiting", "brought_in", "dismissed"] }, "decided_by": { "$ref": "common.schema.json#/$defs/personRef" } }, "required": ["id", "v", "field_v", "source", "plan", "state"], "additionalProperties": false }, "job": { "type": "object", "description": "One job, written at submit and patched as it moves; mirrors the relay ledger.", "properties": { "id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "op": { "$ref": "common.schema.json#/$defs/op" }, "state": { "$ref": "common.schema.json#/$defs/jobState" }, "node": { "$ref": "common.schema.json#/$defs/linkEndpoint" }, "purpose": { "type": "string", "maxLength": 200, "description": "What the job is for, in the app's words (it was ProjectUi.jobCtx)." }, "started_by": { "$ref": "common.schema.json#/$defs/personRef" }, "tenant_id": { "$ref": "common.schema.json#/$defs/tenantId" }, "nonce": { "type": "string", "pattern": "^[A-Za-z0-9_-]{8,64}$" }, "crew": { "$ref": "common.schema.json#/$defs/crewId" }, "inputs": { "type": "array", "items": { "type": "object", "description": "One thing a job used (the send tray's rows): what it was, which link brought it, what it was used as, and whether it was ticked.", "properties": { "kind": { "enum": ["ref", "sketch", "text", "note", "ink", "document", "brand", "frame", "generation", "render", "board", "group", "brief"] }, "ref": { "$ref": "common.schema.json#/$defs/id" }, "link_id": { "type": "string", "pattern": "^link_[0-9A-HJKMNP-TV-Z]{26}$" }, "used_as": { "type": "string", "maxLength": 80, "minLength": 1 }, "included": { "type": "boolean" }, "confirmed": { "type": "boolean" }, "text": { "type": "string", "maxLength": 1e3 } }, "required": ["kind", "used_as", "included"], "additionalProperties": false }, "maxItems": 32 }, "region": { "$ref": "common.schema.json#/$defs/region" }, "text": { "type": "string", "maxLength": 1e3 }, "chips": { "type": "array", "items": { "type": "string", "maxLength": 40 }, "maxItems": 8 }, "ask_id": { "type": "string", "pattern": "^q_[0-9A-HJKMNP-TV-Z]{26}$" }, "parent_ids": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/id" }, "maxItems": 32 }, "input_hashes": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/sha256" }, "maxItems": 32 }, "outputs": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/sha256" }, "maxItems": 16 }, "director": { "$ref": "director.schema.json#/$defs/agentBlock" }, "cost": { "$ref": "common.schema.json#/$defs/cost" }, "error": { "$ref": "common.schema.json#/$defs/error" }, "stopped_by": { "$ref": "common.schema.json#/$defs/personRef" }, "provider": { "$ref": "common.schema.json#/$defs/madeBy" }, "model": { "type": "string", "maxLength": 120 }, "remote_id": { "type": "string", "maxLength": 200 }, "created_at": { "type": "string", "format": "date-time" }, "updated_at": { "type": "string", "format": "date-time" } }, "required": ["id", "v", "field_v", "op", "state", "node", "started_by", "tenant_id", "nonce", "crew", "parent_ids", "input_hashes", "created_at"], "additionalProperties": false }, "stale": { "type": "object", "description": "Something out of date because what it was made from changed.", "properties": { "id": { "type": "string", "pattern": "^stale_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "target": { "$ref": "#/$defs/target" }, "caused_by": { "$ref": "#/$defs/target" }, "reason": { "type": "string", "maxLength": 200 }, "marked_at": { "type": "string", "format": "date-time" } }, "required": ["id", "v", "field_v", "target", "caused_by", "reason"], "additionalProperties": false }, "export": { "type": "object", "description": "A download that was made.", "properties": { "id": { "type": "string", "pattern": "^exp_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "kind": { "enum": ["ad_mp4", "bundle_zip", "media_zip", "clan_bundle", "script_pdf", "script_fountain", "storyboard_pdf", "sizes_zip"] }, "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "created_at": { "type": "string", "format": "date-time" } }, "required": ["id", "v", "field_v", "kind", "asset", "created_at"], "additionalProperties": false }, "transitionIn": { "type": "object", "description": "The join into this clip from the one before on its track (features/make-and-edit.clan): cut, dissolve, or a dip through black or white, over s seconds. The overlap comes from the outgoing clip's out-handle (its footage after source.out_s; its last frame is held when it has none), so the clips keep their places and the film its length. Absent: a cut.", "properties": { "kind": { "enum": ["cut", "dissolve", "dip_black", "dip_white"] }, "s": { "type": "number", "minimum": 0, "maximum": 2 } }, "required": ["kind"], "additionalProperties": false }, "generationDelta": { "type": "object", "description": "One thing a generation changed from its parent's request (features/make-and-edit.clan): the field, what it was and what it became, and the shot of the box it applies to. The relay fills `from` from the parent's held request (Job.remake.delta), so it is what was really sent.", "properties": { "field": { "enum": ["camera.size", "camera.angle", "camera.movement", "camera.movement_speed", "camera.lens_mm", "words", "refs", "start_frame", "end_frame", "moment", "feel", "length", "model", "quality", "sources"] }, "shot_id": { "type": "string", "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$" }, "from": { "description": "The parent's value (absent: it had none)." }, "to": { "description": "The new value. moment: {in_s, out_s, window: {from_s, to_s}, note, region?} in the parent's time; feel: {words?, strength?}." } }, "required": ["field", "to"], "additionalProperties": false }, "timelineItem": { "type": "object", "description": "One clip or text on the timeline (features/make-and-edit.clan). V1 is the main track and magnetic: its clips abut in start_s order (a gap is black) and never overlap; V2 plays over V1 (P3); text lies over both. A clip shows source.in_s to source.out_s of a generation (or an asset) at speed, then holds its last frame for hold_s: it lasts (out_s - in_s) / speed + hold_s. follows names the slot it stands for, so a new take of that box or shot swaps into the same place keeping start, trims, fades and transition. A text item shows words in its style from from_s to to_s (ad time).", "properties": { "track": { "enum": ["V1", "V2", "text"] }, "start_s": { "type": "number", "minimum": 0, "maximum": 600 }, "source": { "type": "object", "properties": { "generation_id": { "type": "string", "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$" }, "asset": { "$ref": "common.schema.json#/$defs/sha256", "description": "Footage that is not a generation (rare: a render placed back on the timeline)." }, "in_s": { "type": "number", "minimum": 0 }, "out_s": { "type": "number", "exclusiveMinimum": 0 } }, "required": ["in_s", "out_s"], "oneOf": [{ "required": ["generation_id"] }, { "required": ["asset"] }], "additionalProperties": false }, "follows": { "type": "object", "properties": { "box_id": { "type": "string", "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$" }, "shot_id": { "type": "string", "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$" } }, "additionalProperties": false }, "fade_in_s": { "type": "number", "minimum": 0, "maximum": 10, "description": "From black (a clip) or from clear (text)." }, "fade_out_s": { "type": "number", "minimum": 0, "maximum": 10 }, "transition_in": { "$ref": "#/$defs/transitionIn" }, "speed": { "type": "number", "minimum": 0.75, "maximum": 1.33, "description": "How fast the source plays (Fit the speed). Absent: 1." }, "hold_s": { "type": "number", "exclusiveMinimum": 0, "maximum": 10, "description": "Its last frame held this long after out_s (Hold the last frame). Absent: none." }, "opacity": { "type": "number", "minimum": 0, "maximum": 1, "description": "V2 only. Absent: 1." }, "words": { "type": "string", "minLength": 1, "maxLength": 300 }, "style": { "enum": ["caption", "title", "super"], "description": "caption: bottom band; title: centred; super: lower third." }, "from_s": { "type": "number", "minimum": 0, "maximum": 600 }, "to_s": { "type": "number", "exclusiveMinimum": 0, "maximum": 600 } }, "required": ["track"], "allOf": [{ "if": { "properties": { "track": { "const": "text" } }, "required": ["track"] }, "then": { "required": ["words", "style", "from_s", "to_s"], "not": { "anyOf": [{ "required": ["start_s"] }, { "required": ["source"] }, { "required": ["follows"] }, { "required": ["transition_in"] }, { "required": ["speed"] }, { "required": ["hold_s"] }, { "required": ["opacity"] }] } }, "else": { "required": ["start_s", "source"], "not": { "anyOf": [{ "required": ["words"] }, { "required": ["style"] }, { "required": ["from_s"] }, { "required": ["to_s"] }] } } }, { "if": { "properties": { "track": { "const": "V1" } }, "required": ["track"] }, "then": { "not": { "required": ["opacity"] } } }], "additionalProperties": false }, "endCard": { "type": "object", "description": "The person's own end card (features/make-and-edit.clan): drawn by the relay (no model) as the locked last piece of V1, s seconds after the last clip, then the studio's roll-up card. headline and line are its words, cta a short call to action (only that), legal its small legal line, bg its colour, logo_asset the Brand board's logo. Absent: no card of the person's; the roll-up still ends the ad.", "properties": { "headline": { "type": "string", "maxLength": 120 }, "line": { "type": "string", "minLength": 1, "maxLength": 200 }, "cta": { "type": "string", "maxLength": 80 }, "legal": { "type": "string", "maxLength": 200, "description": "The card's legal line, small at the bottom, its own key apart from cta (2026-11-23). Prefilled from the linked Brief's legal mandatory when the card is made; the person's words after. Empty: the person cleared it, none is drawn." }, "bg": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" }, "logo_asset": { "$ref": "common.schema.json#/$defs/sha256" }, "s": { "type": "number", "minimum": 0.5, "maximum": 10 }, "transition_in": { "$ref": "#/$defs/transitionIn" } }, "required": ["line", "bg", "s"], "additionalProperties": false } } };
+var schema31 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://napkin.ie/production-tool/contracts/document.schema.json", "title": "Production Tool document (CLAN shared/data.yaml), contract 3", "description": "The source of truth for one project; the canvas, the editors and today's panels render it. snake_case. Every entity list is a map keyed by the entity's id (its `id` repeats the key), so a patch can name one leaf of one entity and two people never rewrite each other's work (contracts/collab.md). Every entity carries v and field_v. Order is rank, never position. Live text (shot action and direction, beat, scene and note words) lives in Yjs fragments, and checkpoint() alone writes its flat copies here. Bytes are never inline. A v2 document is refused, never read (features/contract-v3.clan).", "type": "object", "properties": { "contract_version": { "$ref": "common.schema.json#/$defs/contractVersion" }, "app": { "const": "production-tool" }, "project": { "type": "object", "description": "Who the project belongs to.", "properties": { "id": { "type": "string", "pattern": "^proj_[0-9A-HJKMNP-TV-Z]{26}$" }, "tenant_id": { "$ref": "common.schema.json#/$defs/tenantId" }, "client_id": { "type": "string", "maxLength": 64, "description": "The client (library shelf) the project is for." }, "title": { "type": "string", "maxLength": 120, "minLength": 1 }, "created_by": { "$ref": "common.schema.json#/$defs/personRef" }, "created_at": { "type": "string", "format": "date-time" } }, "required": ["id", "tenant_id", "title", "created_by", "created_at"], "additionalProperties": false }, "upstream": { "type": "object", "description": "What this project was spun off from (os-layer \xA75.2): data.upstream.<document_id>, written by the host and read-only (a patch under it is refused, napkin-host ops/edit.rs).", "additionalProperties": { "type": "object" } }, "projection": { "type": "object", "description": "HOST-WRITTEN, READ-ONLY (os-layer \xA75): the host's scalar projection of shared/facts.yaml, shared/findings.yaml and shared/sources.yaml, rebuilt after every change to a member. A spun-off project carries it (napkin-host library::with_projection); Production neither reads nor writes it, and keeps it on save. Not patched." }, "boards": { "type": "object", "propertyNames": { "pattern": "^board_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/board" }, "maxProperties": 64 }, "sketches": { "type": "object", "propertyNames": { "pattern": "^sketch_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/sketch" }, "maxProperties": 300 }, "scripts": { "type": "object", "propertyNames": { "pattern": "^script_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/script" }, "maxProperties": 16 }, "scenes": { "type": "object", "propertyNames": { "pattern": "^scene_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/scene" }, "maxProperties": 300 }, "storyboards": { "type": "object", "propertyNames": { "pattern": "^storyboard_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/storyboard" }, "maxProperties": 16 }, "shots": { "type": "object", "propertyNames": { "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/shot" }, "maxProperties": 300 }, "beats": { "type": "object", "propertyNames": { "pattern": "^beat_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/beat" }, "maxProperties": 2400 }, "frames": { "type": "object", "propertyNames": { "pattern": "^frame_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/frame" }, "maxProperties": 2e3 }, "videos": { "type": "object", "propertyNames": { "pattern": "^video_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/video" }, "maxProperties": 32 }, "generations": { "type": "object", "propertyNames": { "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/generation" }, "maxProperties": 2e3 }, "renders": { "type": "object", "propertyNames": { "pattern": "^render_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/render" }, "maxProperties": 200 }, "reviews": { "type": "object", "propertyNames": { "pattern": "^rev_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/review" }, "maxProperties": 1e3 }, "links": { "type": "object", "propertyNames": { "pattern": "^link_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/link" }, "maxProperties": 2e3 }, "keys": { "type": "object", "propertyNames": { "pattern": "^key_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/key" }, "maxProperties": 300 }, "refs": { "type": "object", "propertyNames": { "pattern": "^ref_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/ref" }, "maxProperties": 1e3 }, "documents": { "type": "object", "propertyNames": { "pattern": "^doc_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/document" }, "maxProperties": 64 }, "brand_clans": { "type": "object", "description": "Brand Clan nodes (Brand Clan phase 2, DESIGN 4a, owner 2026-11-23): each a frozen, read-only copy of one of the client's Brand Clans at the version taken. Placed for the client's default (not linked), or picked by a person; a second beside it compares two looks. Linked into a Script, Storyboard, Video or Format set (role brand), it carries downstream and the nearest link up the canvas wins for each step. Optional: a document made before it has none. Until Production is a CLAN app (Stage 2/3) the copy lives here, as a Brief node's does.", "propertyNames": { "pattern": "^bclan_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/brand_clan" }, "maxProperties": 8 }, "briefs": { "type": "object", "description": "Brief nodes (features/brief-node.clan, owner 2026-11-17): each a frozen, read-only copy of a Brief Maker brief's spine, made only by linking a brief or spinning one off into Production, never typed here. Several per canvas (a main film and a cut-down for another market). Optional: a document made before it has none.", "propertyNames": { "pattern": "^brief_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/brief" }, "maxProperties": 16 }, "finals": { "type": "object", "description": "The pictures a person marked final (features/prod-assets-route.clan, owner 2026-11-19): what the Deck Maker and later exports take as finished work. Each names the exact picture by hash; its bytes stay out of the document (the relay's GET /assets/{sha256} serves them). Optional: a document made before it has none.", "propertyNames": { "pattern": "^final_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/final" }, "maxProperties": 500 }, "texts": { "type": "object", "description": "Texts written on the canvas (features/canvas-text.clan, 2026-10-16): each holds its words and the canvas element it is, so a node a text is linked into reads its words without the canvas. Optional: a document made before it has none.", "propertyNames": { "pattern": "^text_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/text" }, "maxProperties": 1e3 }, "format_sets": { "type": "object", "propertyNames": { "pattern": "^fset_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/format_set" }, "maxProperties": 64 }, "sizes": { "type": "object", "propertyNames": { "pattern": "^size_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/size" }, "maxProperties": 1e3 }, "checks": { "type": "object", "propertyNames": { "pattern": "^check_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/check" }, "maxProperties": 2e3 }, "asks": { "type": "object", "propertyNames": { "pattern": "^q_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/ask" }, "maxProperties": 500 }, "suggestions": { "type": "object", "propertyNames": { "pattern": "^sug_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/suggestion" }, "maxProperties": 500 }, "spin_ins": { "type": "object", "propertyNames": { "pattern": "^spin_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/spin_in" }, "maxProperties": 32 }, "jobs": { "type": "object", "propertyNames": { "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/job" }, "maxProperties": 3e3 }, "stale": { "type": "object", "propertyNames": { "pattern": "^stale_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/stale" }, "maxProperties": 2e3 }, "exports": { "type": "object", "propertyNames": { "pattern": "^exp_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/export" }, "maxProperties": 200 }, "assets": { "type": "object", "description": "Files, keyed by their sha256.", "propertyNames": { "$ref": "common.schema.json#/$defs/sha256" }, "additionalProperties": { "$ref": "#/$defs/asset" }, "maxProperties": 5e3 } }, "required": ["contract_version", "app", "project", "assets", "boards", "sketches", "scripts", "scenes", "storyboards", "shots", "beats", "frames", "videos", "generations", "renders", "reviews", "links", "keys", "refs", "documents", "format_sets", "sizes", "checks", "asks", "suggestions", "spin_ins", "jobs", "stale", "exports"], "additionalProperties": false, "$defs": { "v": { "type": "integer", "minimum": 1, "description": "The entity's version: every applied patch batch that touches it adds one (PatchBus)." }, "field_v": { "type": "object", "description": "For each leaf written since the entity was created, the entity version that wrote it, keyed by the leaf's path inside the entity with '/' between parts (camera/size, edl/edl_X/pick/current). A set whose base_version is older than its leaf's field_v is a conflict.", "propertyNames": { "pattern": "^[a-z_0-9]+(/[A-Za-z_0-9]+)*$", "maxLength": 128 }, "additionalProperties": { "type": "integer", "minimum": 1 }, "maxProperties": 256 }, "prose": { "type": "object", "description": "A live-text fragment as ProseMirror JSON (clan-store/src/text/extensions.ts), at most 64 KB serialised. hydrate() rebuilds the fragment from it on another device. Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text).", "properties": { "type": { "const": "doc" }, "content": { "type": "array", "maxItems": 400, "items": { "type": "object" } } }, "required": ["type"], "additionalProperties": false }, "textProblem": { "type": "object", "description": "Set by checkpoint() when live text overflows its flat field: the field keeps its last valid value, and job starts for the entity refuse with these words.", "properties": { "field": { "type": "string", "maxLength": 40 }, "length": { "type": "integer", "minimum": 0 }, "limit": { "type": "integer", "minimum": 1 }, "message": { "type": "string", "maxLength": 200 } }, "required": ["field", "length", "limit", "message"], "additionalProperties": false }, "pick": { "type": "object", "description": "Which version is current, and which are kept beside it (Keep both: ui-behaviour 3.20). A restore is a new pick decision.", "properties": { "current": { "$ref": "common.schema.json#/$defs/id" }, "alternates": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/id" }, "maxItems": 8, "uniqueItems": true } }, "required": ["current"], "additionalProperties": false }, "libraryCopy": { "type": "object", "description": "Set when this came from, or was published to, the team library: the version this project holds. A copy, never a live link.", "properties": { "shelf": { "type": "string", "maxLength": 64, "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$" }, "key": { "$ref": "common.schema.json#/$defs/key" }, "ver": { "type": "integer", "minimum": 1 }, "by": { "$ref": "common.schema.json#/$defs/personRef" }, "at": { "type": "string", "format": "date-time" } }, "required": ["shelf", "key", "ver", "by", "at"], "additionalProperties": false }, "target": { "type": "object", "properties": { "kind": { "enum": ["ref", "frame", "generation", "render", "video", "shot", "scene", "beat", "script", "storyboard", "size", "format_set", "sketch", "document", "board", "key", "brief"] }, "id": { "$ref": "common.schema.json#/$defs/id" } }, "required": ["kind", "id"], "additionalProperties": false }, "handsOff": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/crewId" }, "maxItems": 7, "uniqueItems": true, "description": "Crew who leave this alone: a person pressed Keep mine on their suggestion, so later jobs of theirs skip it." }, "window": { "type": "object", "description": "A note's time window in whole seconds (ui-behaviour 3.13): default [floor(t)-1, ceil(t)+1], clamped, at least 2 s, never across a cut. noteWindow() in clan-store/src/time.ts and relay/time_rules.py (examples/windows.json). The time basis follows the note's target: take time for a note on a generation (target.kind generation, written from the take player), shot time otherwise; clan-store noteToTakeWindow maps either onto the generation (features/clip-moment-edit.clan).", "properties": { "from_s": { "type": "integer", "minimum": 0 }, "to_s": { "type": "integer", "minimum": 1 } }, "required": ["from_s", "to_s"], "additionalProperties": false }, "asset": { "type": "object", "description": "One file the project uses, keyed by its hash. Bytes are never inline.", "properties": { "sha256": { "$ref": "common.schema.json#/$defs/sha256" }, "kind": { "enum": ["image", "video", "audio", "document", "font", "vector"] }, "mime": { "$ref": "common.schema.json#/$defs/mime" }, "bytes": { "type": "integer", "minimum": 0 }, "w": { "type": "integer", "minimum": 1 }, "h": { "type": "integer", "minimum": 1 }, "duration_s": { "type": "number", "minimum": 0 }, "pages": { "type": "integer", "minimum": 1 }, "origin": { "enum": ["uploaded", "drawn", "generated", "mock", "edited", "extracted"] }, "rights": { "enum": ["generated", "own", "licensed", "unknown"], "description": "Whether the agency may show it to a client (features/prod-assets-route.clan, 2026-11-19): generated (a provider made it for the agency: Runway's outputs land with it), own (the agency's: a drawing, or a person said so), licensed (a person said it is licensed), unknown (an upload until a person says; the Deck treats it as rights to supply). Absent: not stated (made before it, an edit, a mock); readers infer from origin." }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "locations": { "type": "array", "items": { "type": "string", "pattern": "^(idb|s3|https)://" }, "maxItems": 8, "description": "Never written, ignored on read (features/production-in-library.clan): the bytes are found by sha256 alone, in this browser, then at the session's media base, then by the relay's by-hash route. Old documents may still carry it." }, "thumb": { "type": "string", "pattern": "^data:image/webp;base64,", "maxLength": 5500 } }, "required": ["sha256", "kind", "mime", "origin"], "additionalProperties": false }, "board": { "type": "object", "description": "An art board: an Excalidraw frame with a purpose (ui-behaviour 3.2).", "properties": { "id": { "type": "string", "pattern": "^board_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "title": { "type": "string", "maxLength": 80, "minLength": 1 }, "purpose": { "enum": ["script", "character", "location", "reference", "product", "storyboard", "video", "sketches", "brand", "formats", "none"] }, "rank": { "$ref": "common.schema.json#/$defs/rank" }, "name_prefix": { "$ref": "common.schema.json#/$defs/key" }, "source": { "type": "object", "description": "A Brand board made from a brand book: the Document it reads.", "properties": { "document_id": { "type": "string", "pattern": "^doc_[0-9A-HJKMNP-TV-Z]{26}$" } }, "required": ["document_id"], "additionalProperties": false }, "library": { "$ref": "#/$defs/libraryCopy" } }, "required": ["id", "v", "field_v", "title", "purpose", "rank"], "additionalProperties": false }, "sketch": { "type": "object", "description": "A ratio-locked sketch area (ui-behaviour 3.7). Its strokes stay on the canvas.", "properties": { "id": { "type": "string", "pattern": "^sketch_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "aspect": { "$ref": "common.schema.json#/$defs/aspect" }, "ratio": { "$ref": "common.schema.json#/$defs/ratio" }, "format": { "$ref": "common.schema.json#/$defs/formatRef" }, "board_id": { "type": "string", "pattern": "^board_[0-9A-HJKMNP-TV-Z]{26}$" }, "drawn_by": { "$ref": "common.schema.json#/$defs/personRef" } }, "required": ["id", "v", "field_v", "aspect", "drawn_by"], "additionalProperties": false }, "script": { "type": "object", "description": "A script. Its text lives in its scenes, shots and beats; its order in their ranks.", "properties": { "id": { "type": "string", "pattern": "^script_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "title": { "type": "string", "maxLength": 120, "minLength": 1 }, "target_s": { "type": "integer", "minimum": 1, "maximum": 600 } }, "required": ["id", "v", "field_v", "title", "target_s"], "additionalProperties": false }, "scene": { "type": "object", "description": "A scene of a script. Its fragment (scenes/<id>) holds only script text no shot owns yet.", "properties": { "id": { "type": "string", "pattern": "^scene_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "script_id": { "type": "string", "pattern": "^script_[0-9A-HJKMNP-TV-Z]{26}$" }, "rank": { "$ref": "common.schema.json#/$defs/rank" }, "heading": { "type": "string", "maxLength": 200 }, "hands_off": { "$ref": "#/$defs/handsOff" }, "prose": { "$ref": "#/$defs/prose" }, "text": { "type": "string", "maxLength": 2e4, "description": "The scene's unplanned text, flat. Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text)." }, "last_writer": { "$ref": "common.schema.json#/$defs/actorRef" } }, "required": ["id", "v", "field_v", "script_id", "rank", "heading"], "additionalProperties": false }, "storyboard": { "type": "object", "description": "A storyboard: shots in rank order. A script drives it through a link.", "properties": { "id": { "type": "string", "pattern": "^storyboard_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "title": { "type": "string", "maxLength": 120, "minLength": 1 }, "ratio": { "$ref": "common.schema.json#/$defs/ratio" }, "target_s": { "type": "integer", "minimum": 1, "maximum": 600 }, "implicit": { "type": "boolean", "description": "Planned straight from a script for a Video (ui-behaviour 3.5): owned by the Video, with no canvas node until it is shown. Its shots are that Video's timeline, shown and edited in the Video editor. Make a storyboard from these shots clears it and puts the node on the canvas." }, "video_id": { "type": "string", "pattern": "^video_[0-9A-HJKMNP-TV-Z]{26}$", "description": "The Video whose own shot list this is (decided 2026-10-15): set when the shots were planned straight from the script into that Video. With implicit it needs no renders link; shown as a node, deleting the node puts the shots back in the Video (implicit again) instead of deleting them." } }, "required": ["id", "v", "field_v", "title", "ratio", "target_s"], "additionalProperties": false }, "shot": { "type": "object", "description": "One shot of a storyboard. Camera, duration, rank and status are single-value fields; action, direction and the refs come from its live text (shots/<id>).", "properties": { "id": { "type": "string", "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "storyboard_id": { "type": "string", "pattern": "^storyboard_[0-9A-HJKMNP-TV-Z]{26}$" }, "rank": { "$ref": "common.schema.json#/$defs/rank" }, "kind": { "enum": ["shot", "end_card"], "description": "end_card: the last clip, edited like any shot (Graphic \xB7 Static)." }, "scene_id": { "type": "string", "pattern": "^scene_[0-9A-HJKMNP-TV-Z]{26}$" }, "duration_s": { "type": "number", "minimum": 0.5, "maximum": 30, "multipleOf": 0.1 }, "camera": { "$ref": "common.schema.json#/$defs/camera" }, "status": { "enum": ["planned", "needs_review", "locked"], "description": "Gates today's Video stage." }, "pick": { "$ref": "#/$defs/pick" }, "hands_off": { "$ref": "#/$defs/handsOff" }, "prose": { "$ref": "#/$defs/prose" }, "action": { "type": "string", "maxLength": 600, "description": "What happens. Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text)." }, "direction": { "type": "string", "maxLength": 4e3, "description": "Performance direction. Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text)." }, "refs": { "type": "array", "items": { "anyOf": [{ "type": "string", "pattern": "^ref_[0-9A-HJKMNP-TV-Z]{26}$" }, { "type": "string", "pattern": "^key_[0-9A-HJKMNP-TV-Z]{26}$" }] }, "maxItems": 14, "uniqueItems": true, "description": "What the shot's text mentions, by id: a ref (one look, @maya_laughing) or a key (the whole character, @maya: its front and up to 3 other views). Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text)." }, "text_problem": { "$ref": "#/$defs/textProblem" }, "last_writer": { "$ref": "common.schema.json#/$defs/actorRef" }, "direction_condensed": { "type": "object", "description": "Dex's condensed direction for models that read 1,000 characters (Veo 3.1). Written only by Dex's job; read-only to people.", "properties": { "text": { "type": "string", "maxLength": 1e3 }, "from_hash": { "$ref": "common.schema.json#/$defs/sha256" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" } }, "required": ["text", "from_hash", "job_id"], "additionalProperties": false } }, "required": ["id", "v", "field_v", "storyboard_id", "rank", "kind", "duration_s", "camera", "status"], "additionalProperties": false }, "beat": { "type": "object", "description": "A timed row inside a shot (ui-behaviour 3.10): a moment, a line, VO, music, a sound or a camera change. Its words live in beats/<id>.", "properties": { "id": { "type": "string", "pattern": "^beat_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "shot_id": { "type": "string", "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$" }, "rank": { "$ref": "common.schema.json#/$defs/rank" }, "at_s": { "type": "number", "minimum": 0, "maximum": 30, "multipleOf": 0.5 }, "kind": { "$ref": "common.schema.json#/$defs/beatKind" }, "speaker": { "type": "string", "maxLength": 60 }, "parenthetical": { "type": "string", "maxLength": 80 }, "moment_id": { "type": "string", "pattern": "^beat_[0-9A-HJKMNP-TV-Z]{26}$", "description": "A line tied to a moment: moving either writes both in one batch." }, "hands_off": { "$ref": "#/$defs/handsOff" }, "prose": { "$ref": "#/$defs/prose" }, "text": { "type": "string", "maxLength": 500, "description": "The beat's words. Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text)." }, "last_writer": { "$ref": "common.schema.json#/$defs/actorRef" } }, "required": ["id", "v", "field_v", "shot_id", "rank", "at_s", "kind"], "additionalProperties": false }, "frame": { "type": "object", "description": "A still version: a storyboard frame (shot_id), a frame made from a sketch area (sketch_id), a size of a format set (size_id), or a version of a picture on the canvas (node; features/edit-canvas-pictures.clan).", "properties": { "id": { "type": "string", "pattern": "^frame_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "shot_id": { "type": "string", "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$" }, "sketch_id": { "type": "string", "pattern": "^sketch_[0-9A-HJKMNP-TV-Z]{26}$" }, "size_id": { "type": "string", "pattern": "^size_[0-9A-HJKMNP-TV-Z]{26}$" }, "node": { "$ref": "common.schema.json#/$defs/sceneId", "description": "The canvas picture (its pic or gen node id) this is a version of. v1 is kind original: the picture as it was before its first edit." }, "picked_at": { "type": "string", "format": "date-time", "description": "A canvas picture's version: when it was made or picked. The picture shows its version with the latest picked_at (ties: the higher version)." }, "version": { "type": "integer", "minimum": 1 }, "parent_id": { "type": "string", "pattern": "^frame_[0-9A-HJKMNP-TV-Z]{26}$" }, "kind": { "enum": ["generated", "mock", "edited", "original"], "description": "original: v1 of a canvas picture (node), the picture as it was on the canvas; no crew made it." }, "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "crew": { "$ref": "common.schema.json#/$defs/crewId" }, "model": { "type": "string", "maxLength": 120 }, "provider": { "$ref": "common.schema.json#/$defs/madeBy" }, "edits": { "type": "array", "items": { "type": "object", "properties": { "op": { "type": "string", "maxLength": 40, "minLength": 1 }, "params": { "type": "object" } }, "required": ["op"], "additionalProperties": false }, "maxItems": 64, "description": "The image editor's non-destructive op list that made an edited frame." }, "cropped_to": { "type": "object", "description": "The model's output was not exactly the ratio, so it was centre-cropped ('1344\xD7756 \xB7 cropped to 16:9').", "properties": { "from": { "$ref": "common.schema.json#/$defs/aspect" }, "to": { "$ref": "common.schema.json#/$defs/aspect" } }, "required": ["from", "to"], "additionalProperties": false } }, "required": ["id", "v", "field_v", "version", "kind", "asset"], "additionalProperties": false, "not": { "anyOf": [{ "required": ["shot_id", "sketch_id"] }, { "required": ["shot_id", "size_id"] }, { "required": ["sketch_id", "size_id"] }, { "required": ["node", "shot_id"] }, { "required": ["node", "sketch_id"] }, { "required": ["node", "size_id"] }] }, "allOf": [{ "if": { "properties": { "kind": { "const": "original" } }, "required": ["kind"] }, "then": { "required": ["node"], "not": { "required": ["crew"] } }, "else": { "required": ["crew"] } }, { "if": { "required": ["picked_at"] }, "then": { "required": ["node"] } }] }, "generation": { "type": "object", "description": "One generation (a take): everything Make produced, uploaded or rendered, each once (features/make-and-edit.clan). A regeneration is a new generation beside its parent, never an overwrite: parent_id and delta say what changed. A box made together is one generation whose segments say where each shot is in it. The full request stays on the relay with its job (held server-side); the document keeps its summary (inputs). Never deleted to make room. No price is kept here: costs are in History (jobs).", "properties": { "id": { "type": "string", "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "kind": { "enum": ["clip", "together", "change", "patch", "feel", "combine", "extend", "upload", "render"], "description": "clip: one shot made (op clip). together: a box of shots made as one video (clip mode take or take_refs). change: a new take from a parent with its delta (camera, words), made whole again. patch: a parent with a moment made again (clip_patch), same length. feel: a parent restyled whole (clip_edit). combine: clips and pictures made into one (P4). extend: a parent made longer (P3). upload: footage a person brought. render: an ad render (P2: renders stay in renders until the Bin moves them)." }, "parent_id": { "type": "string", "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$", "description": "The generation it was made from (change, patch, feel, extend)." }, "delta": { "type": "array", "maxItems": 8, "items": { "$ref": "#/$defs/generationDelta" }, "description": "What changed from the parent, the parent's request otherwise kept. Empty or absent on a first take." }, "label": { "type": "string", "maxLength": 120, "description": "The one-line change label a take shows ('Camera: handheld (shot 3)', 'Shirt red 0:00-0:02'). Absent: the web derives it from kind and delta ('First take')." }, "inputs": { "type": "object", "description": "A summary of what the request carried, for the Keeps line and lineage; the request itself is on the relay (Job._req). Fields absent when unknown (a migrated take keeps only its model, quality, size and length).", "properties": { "frames": { "type": "array", "maxItems": 16, "items": { "type": "object", "properties": { "role": { "enum": ["start", "end", "still"] }, "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "shot_id": { "type": "string", "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$" } }, "required": ["role", "asset"], "additionalProperties": false } }, "refs": { "type": "array", "maxItems": 14, "items": { "type": "object", "properties": { "name": { "$ref": "common.schema.json#/$defs/refName" }, "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "role": { "$ref": "common.schema.json#/$defs/refRole" } }, "required": ["asset"], "additionalProperties": false } }, "words": { "type": "string", "maxLength": 4e3 }, "camera": { "type": "object", "description": "Each shot's camera as sent, by shot id.", "propertyNames": { "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "common.schema.json#/$defs/camera" }, "maxProperties": 100 }, "model": { "type": "string", "maxLength": 120 }, "quality": { "$ref": "common.schema.json#/$defs/clipQuality" }, "size": { "type": "string", "pattern": "^[0-9]+(p|K)$" }, "length_s": { "type": "number", "minimum": 0, "maximum": 600 }, "sources": { "type": "array", "maxItems": 8, "description": "combine: the clips used, each with its window.", "items": { "type": "object", "properties": { "generation_id": { "type": "string", "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$" }, "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "in_s": { "type": "number", "minimum": 0 }, "out_s": { "type": "number", "exclusiveMinimum": 0 } }, "required": ["asset"], "additionalProperties": false } } }, "additionalProperties": false }, "box_id": { "type": "string", "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$", "description": "The box (video.runs) it was made for: one box, one generation at a time. Absent: not in a box." }, "shot_ids": { "type": "array", "maxItems": 100, "items": { "type": "string", "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$" }, "description": "The shots it shows, in order. Empty: footage not tied to a shot (combine, upload)." }, "segments": { "type": "array", "maxItems": 100, "description": "Where each shot is in it (a box made together): in_s and out_s in its own time. by: prompt (the planned cut times), detected (the relay's take_cuts), human (a person moved it). Absent or empty: one shot, the whole of it.", "items": { "type": "object", "properties": { "shot_id": { "type": "string", "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$" }, "in_s": { "type": "number", "minimum": 0 }, "out_s": { "type": "number", "minimum": 0 }, "by": { "enum": ["prompt", "detected", "human"] } }, "required": ["shot_id", "in_s", "out_s"], "additionalProperties": false } }, "patched": { "type": "array", "maxItems": 16, "description": "The stretches made again by Fix this moment (a patch and the patches before it), in its own time: in_s, out_s, the clip_patch job and the generation that job made.", "items": { "type": "object", "properties": { "in_s": { "type": "number", "minimum": 0 }, "out_s": { "type": "number", "minimum": 0 }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "generation_id": { "type": "string", "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$" } }, "required": ["in_s", "out_s", "job_id"], "additionalProperties": false } }, "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "duration_s": { "type": "number", "minimum": 0, "maximum": 600 }, "state": { "enum": ["making", "ready", "failed"], "description": "making: its job runs (the Bin shows a placeholder). ready: asset is there. failed: nothing was made (kept so the stack shows what was tried)." }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "provider": { "$ref": "common.schema.json#/$defs/madeBy" }, "crew": { "$ref": "common.schema.json#/$defs/crewId" }, "mock": { "const": true, "description": "A mock take: labelled everywhere, never final." }, "end": { "type": "object", "description": "The frame the generation was made to land on (features/connected-video.clan): next_storyboard, the next shot's storyboard frame (frame_id), sent as the clip's last frame on a continue join; none, no last frame. An end-framed take is retimed whole into its slot (stitch fit speed), never cut from its head. Absent: none.", "properties": { "kind": { "enum": ["next_storyboard", "none"] }, "frame_id": { "type": "string", "pattern": "^frame_[0-9A-HJKMNP-TV-Z]{26}$" }, "at_s": { "type": "number", "minimum": 0, "description": "Where in it it reached that frame (the job's landS): the clip is used up to and including the frame at at_s, retimed into its slot, and what the model made after it is left out." }, "score": { "type": "number", "minimum": -1, "maximum": 1, "description": "How closely that frame matches the one given (the job's landScore, SSIM)." } }, "required": ["kind"], "additionalProperties": false }, "created_at": { "type": "string", "format": "date-time" }, "by": { "$ref": "common.schema.json#/$defs/personRef", "description": "Who asked for it." } }, "required": ["id", "v", "field_v", "kind", "shot_ids", "state", "created_at", "by"], "allOf": [{ "if": { "properties": { "state": { "const": "ready" } }, "required": ["state"] }, "then": { "required": ["asset", "duration_s"] } }, { "if": { "properties": { "kind": { "enum": ["change", "patch", "feel", "extend"] } }, "required": ["kind"] }, "then": { "required": ["parent_id"] } }], "additionalProperties": false }, "video": { "type": "object", "description": "A video: its timeline (the cut, the Edit room), its boxes (runs, the Make room) and its ad renders (features/make-and-edit.clan).", "properties": { "id": { "type": "string", "pattern": "^video_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "title": { "type": "string", "maxLength": 120, "minLength": 1 }, "ratio": { "$ref": "common.schema.json#/$defs/ratio" }, "target_s": { "type": "integer", "minimum": 1, "maximum": 600 }, "quality": { "$ref": "common.schema.json#/$defs/clipQuality", "description": "The project's default quality for this video's clips (features/clip-quality.clan); a send may pick another. Absent: standard." }, "pick": { "$ref": "#/$defs/pick" }, "timeline": { "type": "object", "description": "The cut (the Edit room): items keyed by id, each a clip on V1 or V2 or a text. Written item by item (timeline/<item>, timeline/<item>/<field>; contracts/collab.md \xA77). It replaced edl (features/make-and-edit.clan): clips point at generations, never at shots.", "propertyNames": { "pattern": "^item_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "$ref": "#/$defs/timelineItem" }, "maxProperties": 300 }, "end_card": { "$ref": "#/$defs/endCard" }, "join": { "enum": ["film", "shots"], "description": "How shots join (features/connected-video.clan, behind flags.connectedVideo): film (As one film: Make clips plans runs of takes and landing frames) or shots (Shot by shot: each clip alone, as before). Absent: film where the flag is on." }, "runs": { "type": "object", "description": "The boxes (runs) the planner made: one box is one generation at a time (its generations name it as box_id) (features/connected-video.clan): the shots made together and how. shot_ids: the run's shots in order. mode: take (one generation of them all), take_refs (one generation from references, no frame), frames (a clip per shot, landing on the next frame on continue joins) or alone. model: the clip model it runs on. state: planned, running, done or failed. job_id: the take's job (take and take_refs). planned_by: crew (Dex's plan) or human (a person's join change re-planned it).", "propertyNames": { "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "type": "object", "properties": { "shot_ids": { "type": "array", "minItems": 1, "maxItems": 100, "items": { "type": "string", "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$" } }, "mode": { "enum": ["take", "take_refs", "frames", "alone"] }, "model": { "type": "string", "maxLength": 120 }, "state": { "enum": ["planned", "running", "done", "failed"] }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "planned_by": { "enum": ["crew", "human"] } }, "required": ["shot_ids", "mode", "model", "state", "planned_by"], "additionalProperties": false }, "maxProperties": 100 } }, "required": ["id", "v", "field_v", "title", "ratio", "timeline"], "additionalProperties": false }, "render": { "type": "object", "description": "An ad render of a video: a version Edie made.", "properties": { "id": { "type": "string", "pattern": "^render_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "video_id": { "type": "string", "pattern": "^video_[0-9A-HJKMNP-TV-Z]{26}$" }, "version": { "type": "integer", "minimum": 1 }, "parent_id": { "type": "string", "pattern": "^render_[0-9A-HJKMNP-TV-Z]{26}$" }, "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" } }, "required": ["id", "v", "field_v", "video_id", "version", "asset", "job_id"], "additionalProperties": false }, "review": { "type": "object", "description": "A note on a frame, generation, render, ref or video; with a region it is a box, with at_s it has a window. Its words live in reviews/<id>.", "properties": { "id": { "type": "string", "pattern": "^rev_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "target": { "type": "object", "properties": { "kind": { "enum": ["frame", "generation", "render", "ref", "video"] }, "id": { "$ref": "common.schema.json#/$defs/id" } }, "required": ["kind", "id"], "additionalProperties": false }, "video_id": { "type": "string", "pattern": "^video_[0-9A-HJKMNP-TV-Z]{26}$" }, "render_id": { "type": "string", "pattern": "^render_[0-9A-HJKMNP-TV-Z]{26}$" }, "shot_id": { "type": "string", "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$" }, "at_s": { "type": "number", "minimum": 0 }, "window": { "$ref": "#/$defs/window" }, "region": { "$ref": "common.schema.json#/$defs/region" }, "still": { "$ref": "common.schema.json#/$defs/sha256" }, "chips": { "type": "array", "items": { "type": "string", "maxLength": 40 }, "maxItems": 8 }, "by": { "$ref": "common.schema.json#/$defs/actorRef" }, "state": { "enum": ["open", "resolved"] }, "resolved_by_job": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "fixed_in_render": { "type": "string", "pattern": "^render_[0-9A-HJKMNP-TV-Z]{26}$" }, "prose": { "$ref": "#/$defs/prose" }, "text": { "type": "string", "maxLength": 1e3, "description": "The note's words. Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text)." }, "last_writer": { "$ref": "common.schema.json#/$defs/actorRef" }, "created_at": { "type": "string", "format": "date-time" } }, "required": ["id", "v", "field_v", "target", "by", "state", "created_at"], "additionalProperties": false, "dependentRequired": { "at_s": ["window"], "window": ["at_s"] } }, "link": { "type": "object", "description": "A link between two nodes (ui-behaviour 3.4): the only record of drives, renders, inputs, brand and master. Allowed by common linkRule.", "properties": { "id": { "type": "string", "pattern": "^link_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "from": { "$ref": "common.schema.json#/$defs/linkEndpoint" }, "to": { "$ref": "common.schema.json#/$defs/linkEndpoint" }, "role": { "$ref": "common.schema.json#/$defs/linkRole" }, "label": { "type": "string", "maxLength": 80 } }, "required": ["id", "v", "field_v", "from", "to", "role"], "additionalProperties": false }, "key": { "type": "object", "description": "A solid reference key: one character, place or object. Its refs are its variants.", "properties": { "id": { "type": "string", "pattern": "^key_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "key": { "$ref": "common.schema.json#/$defs/key" }, "role": { "$ref": "common.schema.json#/$defs/refRole" }, "library": { "$ref": "#/$defs/libraryCopy" } }, "required": ["id", "v", "field_v", "key", "role"], "additionalProperties": false }, "ref": { "type": "object", "description": "A named reference: key_variant and what it holds for its role (refRoleTable payload: image, swatches, font, rule or document).", "properties": { "id": { "type": "string", "pattern": "^ref_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "key": { "$ref": "common.schema.json#/$defs/key" }, "variant": { "$ref": "common.schema.json#/$defs/variant" }, "role": { "$ref": "common.schema.json#/$defs/refRole" }, "label": { "type": "string", "maxLength": 60 }, "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "swatches": { "type": "array", "items": { "type": "object", "properties": { "hex": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" }, "name": { "type": "string", "maxLength": 40 } }, "required": ["hex"], "additionalProperties": false }, "maxItems": 24 }, "font": { "type": "object", "properties": { "family": { "type": "string", "maxLength": 80, "minLength": 1 }, "use": { "type": "string", "maxLength": 80 }, "file": { "$ref": "common.schema.json#/$defs/sha256" } }, "required": ["family"], "additionalProperties": false }, "rule": { "type": "object", "properties": { "kind": { "enum": ["do", "dont", "tone"] }, "text": { "type": "string", "maxLength": 500, "minLength": 1 }, "page": { "type": "integer", "minimum": 1 } }, "required": ["kind", "text"], "additionalProperties": false }, "document_id": { "type": "string", "pattern": "^doc_[0-9A-HJKMNP-TV-Z]{26}$" }, "node": { "$ref": "common.schema.json#/$defs/sceneId" }, "library": { "$ref": "#/$defs/libraryCopy" }, "named_at": { "type": "string", "format": "date-time" } }, "required": ["id", "v", "field_v", "key", "variant", "role"], "additionalProperties": false }, "document": { "type": "object", "description": "A Document node: a file Nell reads, used as context once linked (ui-behaviour 3.18).", "properties": { "id": { "type": "string", "pattern": "^doc_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "title": { "type": "string", "maxLength": 120, "minLength": 1 }, "file_name": { "type": "string", "maxLength": 200, "minLength": 1 }, "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "pages": { "type": "integer", "minimum": 0 }, "excerpt": { "type": "string", "maxLength": 2e3 }, "read": { "type": "object", "properties": { "state": { "enum": ["unread", "reading", "read", "failed"] }, "pages_read": { "type": "integer", "minimum": 0 } }, "required": ["state", "pages_read"], "additionalProperties": false } }, "required": ["id", "v", "field_v", "title", "file_name", "asset", "pages", "read"], "additionalProperties": false }, "brand_clan": { "type": "object", "description": "A Brand Clan node: one of the client's Brand Clans (ie.napkin.brand), its published Brand Bible frozen at the version taken (docs/contracts/brand-clan.md section 8 shapes). Read-only here: the client window edits it. A newer published version shows 'Brand Clan updated \xB7 Update'; taking it is the person's decision, never automatic.", "properties": { "id": { "type": "string", "pattern": "^bclan_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "title": { "type": "string", "minLength": 1, "maxLength": 200, "description": `The Brand Clan's name as the client window shows it ("Zero").` }, "client": { "type": "object", "properties": { "id": { "type": "string", "maxLength": 128 }, "name": { "type": "string", "maxLength": 200 } }, "required": ["id"], "additionalProperties": false }, "source": { "type": "object", "properties": { "document_id": { "type": "string", "minLength": 1, "maxLength": 128, "description": "The Brand Clan's OS document id." }, "path": { "type": "string", "minLength": 1, "maxLength": 200, "description": "Its library path: what GET /api/t/{tenant}/brand-clans/{path} reads." }, "app_id": { "const": "ie.napkin.brand" }, "version": { "type": "integer", "minimum": 1, "description": "kit.version as taken." }, "at": { "type": "string", "format": "date-time" }, "how": { "enum": ["default", "pick"], "description": "Placed for the client's default, or picked by a person." }, "kept": { "type": "integer", "minimum": 1, "description": "A newer version the person chose not to take." } }, "required": ["document_id", "path", "app_id", "version", "at", "how"], "additionalProperties": false }, "bible": { "type": "object", "description": "The published Brand Bible as taken: visual (logos, colours, typography), voice (tone, rules), imagery (style, bans). Asset names point into the Brand Clan document.", "properties": { "visual": { "type": "object" }, "voice": { "type": "object" }, "imagery": { "type": "object" } }, "additionalProperties": false }, "logo": { "type": "object", "description": "The Brand Clan's logo as a project picture (assets[sha256]), copied from the Brand Clan when the node is placed, swapped or updated (owner 2026-11-24). The end card and the sizes use it when the node is linked and the project has no Brand board logo; a Brand board logo still wins.", "properties": { "sha256": { "$ref": "common.schema.json#/$defs/sha256" }, "w": { "type": "integer", "minimum": 1 }, "h": { "type": "integer", "minimum": 1 } }, "required": ["sha256", "w", "h"], "additionalProperties": false } }, "required": ["id", "v", "field_v", "title", "source", "bible"], "additionalProperties": false }, "brief": { "type": "object", "description": "A Brief node (features/brief-node.clan): a Brief Maker brief's spine, frozen at the version taken. Read-only here: Open in Brief Maker to change it. When the brief changes there, the node says 'Brief changed: update?'; taking the newer version is the person's decision (one decision entry), never automatic. Linked into a Script, Storyboard, Video or Format set (role brief), the spine is in that node's scope and goes with its jobs; a brief linked into a Script carries on to the Storyboard and Video it drives unless they have one linked of their own.", "properties": { "id": { "type": "string", "pattern": "^brief_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "title": { "type": "string", "maxLength": 200, "minLength": 1, "description": "The brief's title when it was taken." }, "source": { "type": "object", "description": "Where it was taken from, as the OS's links keep it (clan_sdk Attached: document id, data hash, how many times taken).", "properties": { "document_id": { "type": "string", "maxLength": 128, "minLength": 1, "description": "The brief's OS document id (its library path, doc-\u2026): what GET /api/t/{tenant}/d/{doc}/data reads and the shell opens (/?open=<id>)." }, "app_id": { "enum": ["ie.napkin.brief-maker", "ie.napkin.territories"] }, "data_sha256": { "$ref": "common.schema.json#/$defs/sha256", "description": "sha256 of the brief's shared/data.yaml as taken: a brief whose data hashes otherwise has changed." }, "taken": { "type": "integer", "minimum": 1, "description": "Production's own copy counter: 1 when linked, one more on each update taken. Not the brief's version (see version)." }, "version": { "type": "integer", "minimum": 1, "description": "The brief's version as Brief Maker says it ('v2'): its approvals count, at least 1, as of the copy taken (napkin-web GET /d/{doc}/data, version)." }, "at": { "type": "string", "format": "date-time", "description": "When it was linked or last updated." }, "how": { "enum": ["link", "spinoff"], "description": "Linked from an existing brief, or spun off from Brief Maker into Production." }, "kept": { "$ref": "common.schema.json#/$defs/sha256", "description": "A newer version the person chose not to take (Keep this version): no notice again until the brief changes once more." } }, "required": ["document_id", "app_id", "data_sha256", "taken", "version", "at", "how"], "additionalProperties": false }, "spine": { "$ref": "common.schema.json#/$defs/briefSpine" }, "route": { "type": "object", "description": "A Territories node (features/territories-spinoff-out-production.clan; owner 2026-11-23: Territories is just another node): the route this node is, frozen at the version taken. Pictures are links by hash with the rights the document stated, never bytes. Its spine is the brief it carries.", "properties": { "id": { "type": "string", "minLength": 1, "maxLength": 128 }, "version": { "type": "integer", "minimum": 1, "description": "The Territories document's version when the route was sent: its approvals at the Greenlight gate, at least 1." }, "name": { "type": "string", "minLength": 1, "maxLength": 200 }, "thought": { "type": "string", "maxLength": 600 }, "why": { "type": "string", "maxLength": 600 }, "words": { "type": "array", "maxItems": 12, "items": { "type": "string", "maxLength": 200 } }, "palette": { "type": "array", "maxItems": 8, "items": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" } }, "not": { "type": "array", "maxItems": 6, "items": { "type": "string", "maxLength": 300 } }, "pictures": { "type": "array", "maxItems": 12, "items": { "type": "object", "properties": { "sha256": { "$ref": "common.schema.json#/$defs/sha256" }, "caption": { "type": "string", "maxLength": 120 }, "rights": { "enum": ["generated", "own", "licensed"], "description": "As the document stated; absent reads 'Rights to supply'." }, "final": { "type": "boolean" } }, "required": ["sha256"], "additionalProperties": false } }, "mockups": { "type": "integer", "minimum": 0 }, "gaps": { "type": "integer", "minimum": 0 } }, "required": ["id", "name", "thought"], "additionalProperties": false }, "carries": { "type": "object", "description": "What a Territories node carries from before it: the brief (title and version) and the research it was made from. The brief's spine is the node's spine.", "properties": { "brief": { "type": "object", "properties": { "title": { "type": "string", "maxLength": 200 }, "v": { "type": "integer", "minimum": 1 } }, "required": ["title", "v"], "additionalProperties": false }, "research": { "type": "object", "properties": { "title": { "type": "string", "maxLength": 200 } }, "required": ["title"], "additionalProperties": false } }, "additionalProperties": false }, "confidential": { "type": "array", "items": { "enum": ["insight", "proposition", "audience", "tone", "feel", "mandatories", "donts", "format"] }, "uniqueItems": true, "description": "Spine parts made from brief parts marked Confidential (owner 2026-11-13): shown in full to the agency and the client, never sent to Napkin's own records (run logs, layers, evals, training)." } }, "required": ["id", "v", "field_v", "title", "source", "spine"], "additionalProperties": false }, "final": { "type": "object", "description": "One picture a person marked final: the Final toggle on the version open in the image editor (a frame, or a canvas picture with no versions yet) or on a still size in Make all sizes. asset is the exact picture marked; a size or a picture keeps one final (marking another replaces it), and unmarking removes it. It stands until unmarked, even when what it was of is remade or removed. Added 2026-11-19 (features/prod-assets-route.clan, additive).", "properties": { "id": { "type": "string", "pattern": "^final_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "of": { "type": "object", "description": "What it is a final of. frame: a frame version (frames[id]: a storyboard frame or a canvas picture's version). size: a size of a format set (sizes[id]). picture: a picture on the canvas with no versions yet (its canvas node's id, as format_sets[].master kind picture).", "properties": { "kind": { "enum": ["frame", "size", "picture"] }, "id": { "type": "string", "pattern": "^[A-Za-z0-9_-]{6,64}$" } }, "required": ["kind", "id"], "additionalProperties": false, "allOf": [{ "if": { "properties": { "kind": { "const": "frame" } } }, "then": { "properties": { "id": { "pattern": "^frame_[0-9A-HJKMNP-TV-Z]{26}$" } } } }, { "if": { "properties": { "kind": { "const": "size" } } }, "then": { "properties": { "id": { "pattern": "^size_[0-9A-HJKMNP-TV-Z]{26}$" } } } }] }, "asset": { "$ref": "common.schema.json#/$defs/sha256", "description": "The picture marked final: a key of assets. For a size, its delivery-size file when one was made for its picture (full.asset), else its picture." }, "version": { "type": "integer", "minimum": 1, "description": "The version shown when it was marked (a frame's version, 'v3'); 1 for a picture with no versions." }, "set_id": { "type": "string", "pattern": "^fset_[0-9A-HJKMNP-TV-Z]{26}$", "description": "A size's format set." }, "format": { "$ref": "common.schema.json#/$defs/formatRef", "description": "A size's format, copied when it was marked." }, "channel": { "$ref": "common.schema.json#/$defs/formatChannel", "description": "A size's lane on the Campaign board (format-packs.json), copied when it was marked." }, "at": { "type": "string", "format": "date-time" }, "by": { "$ref": "common.schema.json#/$defs/personRef" } }, "required": ["id", "v", "field_v", "of", "asset", "at", "by"], "additionalProperties": false }, "text": { "type": "object", "description": "A text on the canvas (the Text tool's). Its words follow the canvas: an edit there rewrites them; a delete takes it out with its links. Linked into a node (role note), its words are that node's input words.", "properties": { "id": { "type": "string", "pattern": "^text_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "node": { "$ref": "common.schema.json#/$defs/sceneId", "description": "The canvas element that is this text." }, "words": { "type": "string", "maxLength": 4e3, "description": "What it says, as typed (lines joined by newlines)." } }, "required": ["id", "v", "field_v", "node", "words"], "additionalProperties": false }, "format_set": { "type": "object", "description": "A Format set: a master adapted to every format of a pack or a campaign plan (ui-behaviour 3.19; features/campaign-formats.clan). It shows on the canvas as a Campaign board. Its sizes are their own entities.", "properties": { "id": { "type": "string", "pattern": "^fset_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "master": { "type": "object", "properties": { "kind": { "enum": ["frame", "ref", "render", "video", "picture"] }, "id": { "type": "string", "pattern": "^[A-Za-z0-9_-]{6,64}$", "description": "The entity's id, or for a picture the canvas node's id (common id or sceneId)." }, "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "w": { "type": "integer", "minimum": 1 }, "h": { "type": "integer", "minimum": 1 } }, "required": ["kind", "id"], "additionalProperties": false, "description": "What every size is made from. picture: a picture on the canvas (its id is the canvas node's id). asset, w and h: the master's picture when the set was made (a video's: its render); protect and crop boxes are in these pixels, and a size made from another asset is out of date." }, "pack": { "type": "object", "properties": { "pack_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$" }, "pack_version": { "type": "string", "maxLength": 40, "minLength": 1 }, "client_id": { "type": "string", "maxLength": 64 } }, "required": ["pack_id", "pack_version"], "additionalProperties": false }, "plan": { "type": "object", "description": "What was asked for in Make all sizes: one pack (kind pack, its pack id) or a campaign plan (kind plan, format-packs.json plans), with the film lengths asked for (30 \u2192 15 and 6 by default).", "properties": { "kind": { "enum": ["pack", "plan"] }, "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$" }, "lengths_s": { "type": "array", "maxItems": 8, "items": { "type": "integer", "minimum": 1, "maximum": 600 } } }, "required": ["kind", "id"], "additionalProperties": false }, "protect": { "type": "object", "description": "What must stay in every size, asked once per master (Wren: 'What must stay in every size?'). boxes: a still master's, in its pixels. generations: a film's, per generation (keyed by its id), in its pixels. keep_middle: the person chose no box; crops keep the middle. Changing it puts the crop sizes out of date, nothing else.", "properties": { "boxes": { "type": "array", "maxItems": 8, "items": { "$ref": "common.schema.json#/$defs/protectBox" } }, "generations": { "type": "object", "propertyNames": { "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "type": "array", "maxItems": 8, "items": { "$ref": "common.schema.json#/$defs/protectBox" } } }, "keep_middle": { "type": "boolean" } }, "additionalProperties": false }, "copy": { "type": "object", "description": "The words every size lays out as type layers (Edit type): the brand line, legal and the supers. Drawn by the relay and stitch, never sent to a model. A size's own words are in its layers.", "properties": { "line": { "type": "string", "maxLength": 200 }, "legal": { "type": "string", "maxLength": 600 }, "supers": { "type": "array", "maxItems": 20, "items": { "type": "string", "minLength": 1, "maxLength": 200 } } }, "additionalProperties": false }, "reframes": { "type": "object", "description": "A film's shots made again for a shape (phase 6), keyed <generation id>@<w>x<h> (the size's shape): Aleph 2's outpaint of the generation (new edges, at the nearest of its ratios; 4:5 at 3:4), or Remake for vertical (the shot made again at the shape on a model that carries its characters). Each is its own paid job; every size of that shape that keeps the shot uses it. Added 2026-10-16 (additive).", "propertyNames": { "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}@[1-9][0-9]{0,4}x[1-9][0-9]{0,4}$" }, "maxProperties": 200, "additionalProperties": { "type": "object", "properties": { "generation_id": { "type": "string", "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$" }, "shot_id": { "type": "string", "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$" }, "aspect": { "$ref": "common.schema.json#/$defs/aspect" }, "method": { "enum": ["outpaint", "remake"] }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "model": { "type": "string", "maxLength": 64 }, "asset": { "$ref": "common.schema.json#/$defs/sha256", "description": "The clip it made, once landed." }, "size": { "$ref": "common.schema.json#/$defs/aspect", "description": "The clip's pixels." } }, "required": ["generation_id", "shot_id", "aspect", "method", "job_id"], "additionalProperties": false } } }, "required": ["id", "v", "field_v", "master", "pack"], "additionalProperties": false }, "size": { "type": "object", "description": "One size of a format set: the format's values copied at creation, how it is made and where it stands (features/campaign-formats.clan). A tile on the Campaign board.", "properties": { "id": { "type": "string", "pattern": "^size_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "set_id": { "type": "string", "pattern": "^fset_[0-9A-HJKMNP-TV-Z]{26}$" }, "rank": { "$ref": "common.schema.json#/$defs/rank" }, "format": { "$ref": "common.schema.json#/$defs/formatRef" }, "aspect": { "$ref": "common.schema.json#/$defs/aspect" }, "delivery": { "$ref": "common.schema.json#/$defs/deliveryPx" }, "bleed_mm": { "type": "number", "minimum": 0, "maximum": 50 }, "safe_area": { "$ref": "common.schema.json#/$defs/safeArea" }, "method": { "$ref": "common.schema.json#/$defs/sizeMethod" }, "media": { "enum": ["image", "video"] }, "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "status": { "enum": ["making", "ready", "look", "stale"], "description": "making: its job runs. ready. look: Jude flagged it (needs a look). stale: what it was made from changed (Update sizes). Absent: not made yet (its method waits for a later build)." }, "locked": { "type": "boolean", "description": "Locked: Update sizes, Redo and a new master never change it." }, "from_asset": { "$ref": "common.schema.json#/$defs/sha256", "description": "The master's asset it was made from: when the master's is another, the size is out of date ('Master changed \xB7 N out of date')." }, "crop": { "$ref": "common.schema.json#/$defs/pxBox", "description": "The part of the master it shows, in the master's pixels: the subject-aware crop, or the person's (Adjust crop)." }, "crop_by": { "enum": ["rule", "person"], "description": "person: Adjust crop set it, so Update sizes keeps it." }, "plate": { "$ref": "common.schema.json#/$defs/sha256", "description": "The size's picture before its type layers (the relay's resize result plate): Edit type draws on it again for free, without making the picture again, and Export at full size upscales it. Added 2026-10-16 (phase 4, additive)." }, "render": { "type": "object", "description": "Facts measured when the size's picture landed, read by Jude's checks: drawn is how many type layers the relay drew on it (a logo it could not read is not drawn); look is how far its colour and tone are from the master's, 0 (the same) to 1, measured for extend and regenerate. Added 2026-11-03 (art-director, additive).", "properties": { "drawn": { "type": "integer", "minimum": 0 }, "look": { "type": "number", "minimum": 0, "maximum": 1 }, "product": { "enum": ["kept", "restored", "changed"], "description": "A regenerate with a protected product: kept (it came back as drawn), restored (the master's pixels were laid back over it) or changed (the relay could not find it: the size is flagged). Added 2026-11-23 (pt-final-and-fit, additive)." } }, "additionalProperties": false }, "full": { "type": "object", "description": "The delivery-size file Export at full size made (Magnific's upscale of the plate, the type drawn again at full size), kept so a second export spends nothing. Out of date when the plate or the type changed since (from differs from plate). Added 2026-10-16 (phase 4, additive).", "properties": { "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "from": { "$ref": "common.schema.json#/$defs/sha256", "description": "The size's asset (the typed preview) it was made for." }, "scale": { "enum": [4, 8], "description": "Magnific's scale; absent when the plate was only scaled (Magnific cannot take a side under 300 px)." } }, "required": ["from"], "additionalProperties": false }, "layers": { "type": "object", "propertyNames": { "$ref": "common.schema.json#/$defs/typeLayerKind" }, "additionalProperties": { "$ref": "common.schema.json#/$defs/typeLayerOverride" }, "description": "This size's changes to the type layers (Edit type), by layer." }, "length_s": { "type": "number", "exclusiveMinimum": 0, "maximum": 600, "description": "A film size's length (a cutdown: 15, 6)." }, "edl": { "type": "array", "maxItems": 100, "description": "A cutdown's edit: windows of the master's V1 clips in cut order (each a generation's in/out), each with its crop for a re-aspect (features/make-and-edit.clan: size.edl reads V1).", "items": { "type": "object", "properties": { "shot_id": { "$ref": "common.schema.json#/$defs/id" }, "generation_id": { "type": "string", "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$" }, "in_s": { "type": "number", "minimum": 0 }, "out_s": { "type": "number", "exclusiveMinimum": 0 }, "crop": { "$ref": "common.schema.json#/$defs/pxBox" }, "crop_keys": { "type": "array", "minItems": 2, "maxItems": 3, "description": "A slow pan (phase 6): the crop at points through the window (at 0: in, 1: out), in the generation's pixels. Wins over crop. Added 2026-10-16 (additive).", "items": { "type": "object", "properties": { "at": { "type": "number", "minimum": 0, "maximum": 1 }, "box": { "$ref": "common.schema.json#/$defs/pxBox" } }, "required": ["at", "box"], "additionalProperties": false } }, "crop_by": { "enum": ["rule", "person"], "description": "person: Adjust crop on the clip tile set it (a still box). Added 2026-10-16 (additive)." }, "take_size": { "$ref": "common.schema.json#/$defs/aspect", "description": "The generation's pixels, which crop and crop_keys are in. Added 2026-10-16 (additive)." }, "end_card": { "type": "boolean" } }, "required": ["shot_id", "in_s", "out_s"], "additionalProperties": false } }, "beats": { "type": "array", "maxItems": 100, "description": "A cutdown's beat plan (Dex, phase 5), shown before it renders: every shot of the master in cut order, kept or dropped, with his reason. Keep or drop on the plan changes the edl. Added 2026-10-16 (additive).", "items": { "type": "object", "properties": { "shot_id": { "$ref": "common.schema.json#/$defs/id" }, "keep": { "type": "boolean" }, "why": { "type": "string", "maxLength": 300 }, "by": { "enum": ["dex", "person"], "description": "person: kept or dropped by a person against Dex's plan." } }, "required": ["shot_id", "keep"], "additionalProperties": false } }, "checks": { "type": "object", "propertyNames": { "$ref": "common.schema.json#/$defs/formatCheckCode" }, "description": "Jude's per-format checks, by check; they never block. Ignore is recorded on the check.", "additionalProperties": { "type": "object", "properties": { "result": { "enum": ["pass", "flag", "unverified"] }, "note": { "type": "string", "minLength": 1, "maxLength": 300 }, "ignored": { "type": "object", "properties": { "by": { "$ref": "common.schema.json#/$defs/personRef" }, "at": { "type": "string", "format": "date-time" } }, "required": ["by", "at"], "additionalProperties": false } }, "required": ["result", "note"], "additionalProperties": false } } }, "required": ["id", "v", "field_v", "set_id", "rank", "format", "aspect", "delivery", "method", "media"], "additionalProperties": false }, "check": { "type": "object", "description": "Jude's check of a result against the shot, the brand rules or a linked brief's mandatories and don'ts. Brand rules and brief flags never block; Ignore is recorded here.", "properties": { "id": { "type": "string", "pattern": "^check_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "target": { "$ref": "#/$defs/target" }, "crew": { "const": "jude" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "result": { "enum": ["pass", "flag"] }, "reason_code": { "type": "string", "pattern": "^[a-z][a-z0-9_]{1,63}$" }, "rule_ref": { "type": "string", "pattern": "^ref_[0-9A-HJKMNP-TV-Z]{26}$" }, "brief_id": { "type": "string", "pattern": "^brief_[0-9A-HJKMNP-TV-Z]{26}$", "description": "A flag against a linked brief (features/brief-node.clan): reason_code brief_mandatory or brief_dont, the note naming the line. It never blocks or asks: it shows in Decisions and as an amber mark on its target." }, "note": { "type": "string", "maxLength": 300 }, "ignored": { "type": "object", "properties": { "by": { "$ref": "common.schema.json#/$defs/personRef" }, "at": { "type": "string", "format": "date-time" } }, "required": ["by", "at"], "additionalProperties": false } }, "required": ["id", "v", "field_v", "target", "crew", "result", "reason_code", "note"], "additionalProperties": false }, "ask": { "type": "object", "description": "An agent's question on a node (ui-behaviour 3.17). Its key is question.id; a job's ask copies Job.question (minted by the relay), and the relay decides which answer won. kind is question.kind.", "properties": { "id": { "type": "string", "pattern": "^q_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "question": { "$ref": "common.schema.json#/$defs/question" }, "node": { "$ref": "common.schema.json#/$defs/linkEndpoint" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "crew": { "$ref": "common.schema.json#/$defs/crewId" }, "state": { "enum": ["open", "answered", "withdrawn"] }, "answers": { "type": "array", "items": { "type": "object", "description": "Every answer in order: the first settled it; a later one is a Change.", "properties": { "option_id": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$" }, "text": { "type": "string", "maxLength": 1e3, "minLength": 1 }, "by": { "$ref": "common.schema.json#/$defs/personRef" }, "at": { "type": "string", "format": "date-time" } }, "required": ["by", "at"], "additionalProperties": false, "oneOf": [{ "required": ["option_id"], "not": { "required": ["text"] } }, { "required": ["text"], "not": { "required": ["option_id"] } }] }, "maxItems": 16 } }, "required": ["id", "v", "field_v", "question", "node", "crew", "state", "answers"], "additionalProperties": false }, "suggestion": { "type": "object", "description": "Skye's proposed words on a scene, shot or beat, shown inline until Keep or Keep mine (ui-behaviour 3.10). Nothing changes until Keep.", "properties": { "id": { "type": "string", "pattern": "^sug_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "target": { "type": "object", "properties": { "kind": { "enum": ["scene", "shot", "beat"] }, "id": { "$ref": "common.schema.json#/$defs/id" } }, "required": ["kind", "id"], "additionalProperties": false }, "crew": { "const": "skye" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "for": { "$ref": "common.schema.json#/$defs/personRef" }, "base_hash": { "$ref": "common.schema.json#/$defs/sha256", "description": "The hash of the target's prose the suggestion was written against: a different hash makes it stale." }, "mode": { "enum": ["revise", "draft"], "description": "How the draft is meant to land: `draft` is a whole-block insertion (Keep / Discard, no word-diff); `revise` is a rewrite shown as a word-diff (Keep / Keep mine). Absent reads as `revise`." }, "proposed": { "type": "object", "properties": { "prose": { "$ref": "#/$defs/prose" }, "text": { "type": "string", "maxLength": 2e4 }, "duration_s": { "type": "number", "minimum": 0.5, "maximum": 30, "multipleOf": 0.1, "description": "A shot's new length, applied on Keep in the same step (features/script-editor.clan)." }, "new_beats": { "type": "array", "maxItems": 6, "description": "Beats Keep adds to the target shot in the same step.", "items": { "type": "object", "properties": { "kind": { "$ref": "common.schema.json#/$defs/beatKind" }, "at_s": { "type": "number", "minimum": 0, "maximum": 30, "multipleOf": 0.5 }, "speaker": { "type": "string", "maxLength": 60 }, "moment_id": { "type": "string", "pattern": "^beat_[0-9A-HJKMNP-TV-Z]{26}$" }, "prose": { "$ref": "#/$defs/prose" } }, "required": ["kind", "at_s", "prose"], "additionalProperties": false } } }, "required": ["prose", "text"], "additionalProperties": false }, "note": { "type": "string", "maxLength": 200 }, "state": { "enum": ["open", "kept", "dropped", "stale"] }, "decided_by": { "$ref": "common.schema.json#/$defs/personRef" } }, "required": ["id", "v", "field_v", "target", "crew", "job_id", "for", "base_hash", "proposed", "note", "state"], "additionalProperties": false }, "spin_in": { "type": "object", "description": "A spin-in from Brief Maker or Research waiting on Bring in (ui-behaviour 3.18).", "properties": { "id": { "type": "string", "pattern": "^spin_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "source": { "type": "object", "properties": { "document_id": { "type": "string", "maxLength": 128, "minLength": 1 }, "app": { "type": "string", "maxLength": 64, "minLength": 1 }, "title": { "type": "string", "maxLength": 200 } }, "required": ["document_id", "app"], "additionalProperties": false }, "plan": { "type": "array", "items": { "type": "object", "properties": { "kind": { "enum": ["script", "ref", "document", "brand"] }, "title": { "type": "string", "maxLength": 200, "minLength": 1 }, "note": { "type": "string", "maxLength": 300 } }, "required": ["kind", "title"], "additionalProperties": false }, "maxItems": 32 }, "state": { "enum": ["waiting", "brought_in", "dismissed"] }, "decided_by": { "$ref": "common.schema.json#/$defs/personRef" } }, "required": ["id", "v", "field_v", "source", "plan", "state"], "additionalProperties": false }, "job": { "type": "object", "description": "One job, written at submit and patched as it moves; mirrors the relay ledger.", "properties": { "id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "op": { "$ref": "common.schema.json#/$defs/op" }, "state": { "$ref": "common.schema.json#/$defs/jobState" }, "node": { "$ref": "common.schema.json#/$defs/linkEndpoint" }, "purpose": { "type": "string", "maxLength": 200, "description": "What the job is for, in the app's words (it was ProjectUi.jobCtx)." }, "started_by": { "$ref": "common.schema.json#/$defs/personRef" }, "tenant_id": { "$ref": "common.schema.json#/$defs/tenantId" }, "nonce": { "type": "string", "pattern": "^[A-Za-z0-9_-]{8,64}$" }, "crew": { "$ref": "common.schema.json#/$defs/crewId" }, "inputs": { "type": "array", "items": { "type": "object", "description": "One thing a job used (the send tray's rows): what it was, which link brought it, what it was used as, and whether it was ticked.", "properties": { "kind": { "enum": ["ref", "sketch", "text", "note", "ink", "document", "brand", "frame", "generation", "render", "board", "group", "brief"] }, "ref": { "$ref": "common.schema.json#/$defs/id" }, "link_id": { "type": "string", "pattern": "^link_[0-9A-HJKMNP-TV-Z]{26}$" }, "used_as": { "type": "string", "maxLength": 80, "minLength": 1 }, "included": { "type": "boolean" }, "confirmed": { "type": "boolean" }, "text": { "type": "string", "maxLength": 1e3 } }, "required": ["kind", "used_as", "included"], "additionalProperties": false }, "maxItems": 32 }, "region": { "$ref": "common.schema.json#/$defs/region" }, "text": { "type": "string", "maxLength": 1e3 }, "chips": { "type": "array", "items": { "type": "string", "maxLength": 40 }, "maxItems": 8 }, "ask_id": { "type": "string", "pattern": "^q_[0-9A-HJKMNP-TV-Z]{26}$" }, "parent_ids": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/id" }, "maxItems": 32 }, "input_hashes": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/sha256" }, "maxItems": 32 }, "outputs": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/sha256" }, "maxItems": 16 }, "director": { "$ref": "director.schema.json#/$defs/agentBlock" }, "cost": { "$ref": "common.schema.json#/$defs/cost" }, "error": { "$ref": "common.schema.json#/$defs/error" }, "stopped_by": { "$ref": "common.schema.json#/$defs/personRef" }, "provider": { "$ref": "common.schema.json#/$defs/madeBy" }, "model": { "type": "string", "maxLength": 120 }, "remote_id": { "type": "string", "maxLength": 200 }, "created_at": { "type": "string", "format": "date-time" }, "updated_at": { "type": "string", "format": "date-time" } }, "required": ["id", "v", "field_v", "op", "state", "node", "started_by", "tenant_id", "nonce", "crew", "parent_ids", "input_hashes", "created_at"], "additionalProperties": false }, "stale": { "type": "object", "description": "Something out of date because what it was made from changed.", "properties": { "id": { "type": "string", "pattern": "^stale_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "target": { "$ref": "#/$defs/target" }, "caused_by": { "$ref": "#/$defs/target" }, "reason": { "type": "string", "maxLength": 200 }, "marked_at": { "type": "string", "format": "date-time" } }, "required": ["id", "v", "field_v", "target", "caused_by", "reason"], "additionalProperties": false }, "export": { "type": "object", "description": "A download that was made.", "properties": { "id": { "type": "string", "pattern": "^exp_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "kind": { "enum": ["ad_mp4", "bundle_zip", "media_zip", "clan_bundle", "script_pdf", "script_fountain", "storyboard_pdf", "sizes_zip"] }, "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "created_at": { "type": "string", "format": "date-time" } }, "required": ["id", "v", "field_v", "kind", "asset", "created_at"], "additionalProperties": false }, "transitionIn": { "type": "object", "description": "The join into this clip from the one before on its track (features/make-and-edit.clan): cut, dissolve, or a dip through black or white, over s seconds. The overlap comes from the outgoing clip's out-handle (its footage after source.out_s; its last frame is held when it has none), so the clips keep their places and the film its length. Absent: a cut.", "properties": { "kind": { "enum": ["cut", "dissolve", "dip_black", "dip_white"] }, "s": { "type": "number", "minimum": 0, "maximum": 2 } }, "required": ["kind"], "additionalProperties": false }, "generationDelta": { "type": "object", "description": "One thing a generation changed from its parent's request (features/make-and-edit.clan): the field, what it was and what it became, and the shot of the box it applies to. The relay fills `from` from the parent's held request (Job.remake.delta), so it is what was really sent.", "properties": { "field": { "enum": ["camera.size", "camera.angle", "camera.movement", "camera.movement_speed", "camera.lens_mm", "words", "refs", "start_frame", "end_frame", "moment", "feel", "length", "model", "quality", "sources"] }, "shot_id": { "type": "string", "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$" }, "from": { "description": "The parent's value (absent: it had none)." }, "to": { "description": "The new value. moment: {in_s, out_s, window: {from_s, to_s}, note, region?} in the parent's time; feel: {words?, strength?}." } }, "required": ["field", "to"], "additionalProperties": false }, "timelineItem": { "type": "object", "description": "One clip or text on the timeline (features/make-and-edit.clan). V1 is the main track and magnetic: its clips abut in start_s order (a gap is black) and never overlap; V2 plays over V1 (P3); text lies over both. A clip shows source.in_s to source.out_s of a generation (or an asset) at speed, then holds its last frame for hold_s: it lasts (out_s - in_s) / speed + hold_s. follows names the slot it stands for, so a new take of that box or shot swaps into the same place keeping start, trims, fades and transition. A text item shows words in its style from from_s to to_s (ad time).", "properties": { "track": { "enum": ["V1", "V2", "text"] }, "start_s": { "type": "number", "minimum": 0, "maximum": 600 }, "source": { "type": "object", "properties": { "generation_id": { "type": "string", "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$" }, "asset": { "$ref": "common.schema.json#/$defs/sha256", "description": "Footage that is not a generation (rare: a render placed back on the timeline)." }, "in_s": { "type": "number", "minimum": 0 }, "out_s": { "type": "number", "exclusiveMinimum": 0 } }, "required": ["in_s", "out_s"], "oneOf": [{ "required": ["generation_id"] }, { "required": ["asset"] }], "additionalProperties": false }, "follows": { "type": "object", "properties": { "box_id": { "type": "string", "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$" }, "shot_id": { "type": "string", "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$" } }, "additionalProperties": false }, "fade_in_s": { "type": "number", "minimum": 0, "maximum": 10, "description": "From black (a clip) or from clear (text)." }, "fade_out_s": { "type": "number", "minimum": 0, "maximum": 10 }, "transition_in": { "$ref": "#/$defs/transitionIn" }, "speed": { "type": "number", "minimum": 0.75, "maximum": 1.33, "description": "How fast the source plays (Fit the speed). Absent: 1." }, "hold_s": { "type": "number", "exclusiveMinimum": 0, "maximum": 10, "description": "Its last frame held this long after out_s (Hold the last frame). Absent: none." }, "opacity": { "type": "number", "minimum": 0, "maximum": 1, "description": "V2 only. Absent: 1." }, "words": { "type": "string", "minLength": 1, "maxLength": 300 }, "style": { "enum": ["caption", "title", "super"], "description": "caption: bottom band; title: centred; super: lower third." }, "from_s": { "type": "number", "minimum": 0, "maximum": 600 }, "to_s": { "type": "number", "exclusiveMinimum": 0, "maximum": 600 } }, "required": ["track"], "allOf": [{ "if": { "properties": { "track": { "const": "text" } }, "required": ["track"] }, "then": { "required": ["words", "style", "from_s", "to_s"], "not": { "anyOf": [{ "required": ["start_s"] }, { "required": ["source"] }, { "required": ["follows"] }, { "required": ["transition_in"] }, { "required": ["speed"] }, { "required": ["hold_s"] }, { "required": ["opacity"] }] } }, "else": { "required": ["start_s", "source"], "not": { "anyOf": [{ "required": ["words"] }, { "required": ["style"] }, { "required": ["from_s"] }, { "required": ["to_s"] }] } } }, { "if": { "properties": { "track": { "const": "V1" } }, "required": ["track"] }, "then": { "not": { "required": ["opacity"] } } }], "additionalProperties": false }, "endCard": { "type": "object", "description": "The person's own end card (features/make-and-edit.clan): drawn by the relay (no model) as the locked last piece of V1, s seconds after the last clip, then the studio's roll-up card. headline and line are its words, cta a short call to action (only that), legal its small legal line, bg its colour, logo_asset the Brand board's logo. Absent: no card of the person's; the roll-up still ends the ad.", "properties": { "headline": { "type": "string", "maxLength": 120 }, "line": { "type": "string", "minLength": 1, "maxLength": 200 }, "cta": { "type": "string", "maxLength": 80 }, "legal": { "type": "string", "maxLength": 200, "description": "The card's legal line, small at the bottom, its own key apart from cta (2026-11-23). Prefilled from the linked Brief's legal mandatory when the card is made; the person's words after. Empty: the person cleared it, none is drawn." }, "bg": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" }, "logo_asset": { "$ref": "common.schema.json#/$defs/sha256" }, "s": { "type": "number", "minimum": 0.5, "maximum": 10 }, "transition_in": { "$ref": "#/$defs/transitionIn" } }, "required": ["line", "bg", "s"], "additionalProperties": false } } };
 var func1 = Object.prototype.hasOwnProperty;
 var func2 = require_ucs2length().default;
 var pattern4 = new RegExp("^proj_[0-9A-HJKMNP-TV-Z]{26}$", "u");
@@ -310,18 +310,19 @@ var pattern118 = new RegExp("^link_[0-9A-HJKMNP-TV-Z]{26}$", "u");
 var pattern45 = new RegExp("^key_[0-9A-HJKMNP-TV-Z]{26}$", "u");
 var pattern44 = new RegExp("^ref_[0-9A-HJKMNP-TV-Z]{26}$", "u");
 var pattern12 = new RegExp("^doc_[0-9A-HJKMNP-TV-Z]{26}$", "u");
-var pattern141 = new RegExp("^brief_[0-9A-HJKMNP-TV-Z]{26}$", "u");
-var pattern146 = new RegExp("^final_[0-9A-HJKMNP-TV-Z]{26}$", "u");
-var pattern155 = new RegExp("^text_[0-9A-HJKMNP-TV-Z]{26}$", "u");
-var pattern153 = new RegExp("^fset_[0-9A-HJKMNP-TV-Z]{26}$", "u");
+var pattern141 = new RegExp("^bclan_[0-9A-HJKMNP-TV-Z]{26}$", "u");
+var pattern145 = new RegExp("^brief_[0-9A-HJKMNP-TV-Z]{26}$", "u");
+var pattern152 = new RegExp("^final_[0-9A-HJKMNP-TV-Z]{26}$", "u");
+var pattern161 = new RegExp("^text_[0-9A-HJKMNP-TV-Z]{26}$", "u");
+var pattern159 = new RegExp("^fset_[0-9A-HJKMNP-TV-Z]{26}$", "u");
 var pattern59 = new RegExp("^size_[0-9A-HJKMNP-TV-Z]{26}$", "u");
-var pattern188 = new RegExp("^check_[0-9A-HJKMNP-TV-Z]{26}$", "u");
-var pattern197 = new RegExp("^q_[0-9A-HJKMNP-TV-Z]{26}$", "u");
-var pattern210 = new RegExp("^sug_[0-9A-HJKMNP-TV-Z]{26}$", "u");
-var pattern219 = new RegExp("^spin_[0-9A-HJKMNP-TV-Z]{26}$", "u");
+var pattern194 = new RegExp("^check_[0-9A-HJKMNP-TV-Z]{26}$", "u");
+var pattern203 = new RegExp("^q_[0-9A-HJKMNP-TV-Z]{26}$", "u");
+var pattern216 = new RegExp("^sug_[0-9A-HJKMNP-TV-Z]{26}$", "u");
+var pattern225 = new RegExp("^spin_[0-9A-HJKMNP-TV-Z]{26}$", "u");
 var pattern47 = new RegExp("^job_[0-9A-HJKMNP-TV-Z]{26}$", "u");
-var pattern252 = new RegExp("^stale_[0-9A-HJKMNP-TV-Z]{26}$", "u");
-var pattern255 = new RegExp("^exp_[0-9A-HJKMNP-TV-Z]{26}$", "u");
+var pattern258 = new RegExp("^stale_[0-9A-HJKMNP-TV-Z]{26}$", "u");
+var pattern261 = new RegExp("^exp_[0-9A-HJKMNP-TV-Z]{26}$", "u");
 var pattern46 = new RegExp("^sha256:[0-9a-f]{64}$", "u");
 var formats0 = require_formats().fullFormats["date-time"];
 var schema36 = { "type": "object", "description": "An art board: an Excalidraw frame with a purpose (ui-behaviour 3.2).", "properties": { "id": { "type": "string", "pattern": "^board_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "title": { "type": "string", "maxLength": 80, "minLength": 1 }, "purpose": { "enum": ["script", "character", "location", "reference", "product", "storyboard", "video", "sketches", "brand", "formats", "none"] }, "rank": { "$ref": "common.schema.json#/$defs/rank" }, "name_prefix": { "$ref": "common.schema.json#/$defs/key" }, "source": { "type": "object", "description": "A Brand board made from a brand book: the Document it reads.", "properties": { "document_id": { "type": "string", "pattern": "^doc_[0-9A-HJKMNP-TV-Z]{26}$" } }, "required": ["document_id"], "additionalProperties": false }, "library": { "$ref": "#/$defs/libraryCopy" } }, "required": ["id", "v", "field_v", "title", "purpose", "rank"], "additionalProperties": false };
@@ -10429,7 +10430,7 @@ function validate66(data, { instancePath = "", parentData, parentDataProperty, r
   return errors === 0;
 }
 validate66.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema142 = { "enum": ["board", "group", "note", "ink", "script", "storyboard", "video", "ref", "key", "frame", "render", "sketch", "document", "format_set", "shot", "text", "brief"], "description": "What a link joins. group, note and ink are canvas things: their id is a sceneId. Every other kind is a document entity: its id is the entity's id. key (2026-10-15, owner): a solid key (keys[id]), the whole character or thing; every named ref with that key, each of its views, is in a node's scope through the one link. text (2026-10-16, owner): a text written on the canvas (texts[id], which holds its words and its canvas element); linked into a node, its words are that node's input words. brief (2026-11-17, owner; features/brief-node.clan): a Brief node (briefs[id]), a frozen, read-only copy of a Brief Maker brief's spine; linked into a node, the spine goes with every job from it." };
+var schema142 = { "enum": ["board", "group", "note", "ink", "script", "storyboard", "video", "ref", "key", "frame", "render", "sketch", "document", "format_set", "shot", "text", "brief", "brand_clan"], "description": "What a link joins. group, note and ink are canvas things: their id is a sceneId. Every other kind is a document entity: its id is the entity's id. key (2026-10-15, owner): a solid key (keys[id]), the whole character or thing; every named ref with that key, each of its views, is in a node's scope through the one link. text (2026-10-16, owner): a text written on the canvas (texts[id], which holds its words and its canvas element); linked into a node, its words are that node's input words. brief (2026-11-17, owner; features/brief-node.clan): a Brief node (briefs[id]), a frozen, read-only copy of a Brief Maker brief's spine; linked into a node, the spine goes with every job from it." };
 function validate71(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
@@ -10578,7 +10579,7 @@ function validate71(data, { instancePath = "", parentData, parentDataProperty, r
     }
     if (data.kind !== void 0) {
       let data3 = data.kind;
-      if (!(data3 === "board" || data3 === "group" || data3 === "note" || data3 === "ink" || data3 === "script" || data3 === "storyboard" || data3 === "video" || data3 === "ref" || data3 === "key" || data3 === "frame" || data3 === "render" || data3 === "sketch" || data3 === "document" || data3 === "format_set" || data3 === "shot" || data3 === "text" || data3 === "brief")) {
+      if (!(data3 === "board" || data3 === "group" || data3 === "note" || data3 === "ink" || data3 === "script" || data3 === "storyboard" || data3 === "video" || data3 === "ref" || data3 === "key" || data3 === "frame" || data3 === "render" || data3 === "sketch" || data3 === "document" || data3 === "format_set" || data3 === "shot" || data3 === "text" || data3 === "brief" || data3 === "brand_clan")) {
         const err9 = { instancePath: instancePath + "/kind", schemaPath: "#/$defs/linkEndpointKind/enum", keyword: "enum", params: { allowedValues: schema142.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err9];
@@ -12306,11 +12307,742 @@ function validate83(data, { instancePath = "", parentData, parentDataProperty, r
   return errors === 0;
 }
 validate83.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema163 = { "type": "object", "description": "A Brief node (features/brief-node.clan): a Brief Maker brief's spine, frozen at the version taken. Read-only here: Open in Brief Maker to change it. When the brief changes there, the node says 'Brief changed: update?'; taking the newer version is the person's decision (one decision entry), never automatic. Linked into a Script, Storyboard, Video or Format set (role brief), the spine is in that node's scope and goes with its jobs; a brief linked into a Script carries on to the Storyboard and Video it drives unless they have one linked of their own.", "properties": { "id": { "type": "string", "pattern": "^brief_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "title": { "type": "string", "maxLength": 200, "minLength": 1, "description": "The brief's title when it was taken." }, "source": { "type": "object", "description": "Where it was taken from, as the OS's links keep it (clan_sdk Attached: document id, data hash, how many times taken).", "properties": { "document_id": { "type": "string", "maxLength": 128, "minLength": 1, "description": "The brief's OS document id (its library path, doc-\u2026): what GET /api/t/{tenant}/d/{doc}/data reads and the shell opens (/?open=<id>)." }, "app_id": { "const": "ie.napkin.brief-maker" }, "data_sha256": { "$ref": "common.schema.json#/$defs/sha256", "description": "sha256 of the brief's shared/data.yaml as taken: a brief whose data hashes otherwise has changed." }, "taken": { "type": "integer", "minimum": 1, "description": "Production's own copy counter: 1 when linked, one more on each update taken. Not the brief's version (see version)." }, "version": { "type": "integer", "minimum": 1, "description": "The brief's version as Brief Maker says it ('v2'): its approvals count, at least 1, as of the copy taken (napkin-web GET /d/{doc}/data, version)." }, "at": { "type": "string", "format": "date-time", "description": "When it was linked or last updated." }, "how": { "enum": ["link", "spinoff"], "description": "Linked from an existing brief, or spun off from Brief Maker into Production." }, "kept": { "$ref": "common.schema.json#/$defs/sha256", "description": "A newer version the person chose not to take (Keep this version): no notice again until the brief changes once more." } }, "required": ["document_id", "app_id", "data_sha256", "taken", "version", "at", "how"], "additionalProperties": false }, "spine": { "$ref": "common.schema.json#/$defs/briefSpine" }, "confidential": { "type": "array", "items": { "enum": ["insight", "proposition", "audience", "tone", "feel", "mandatories", "donts", "format"] }, "uniqueItems": true, "description": "Spine parts made from brief parts marked Confidential (owner 2026-11-13): shown in full to the agency and the client, never sent to Napkin's own records (run logs, layers, evals, training)." } }, "required": ["id", "v", "field_v", "title", "source", "spine"], "additionalProperties": false };
+var schema163 = { "type": "object", "description": "A Brand Clan node: one of the client's Brand Clans (ie.napkin.brand), its published Brand Bible frozen at the version taken (docs/contracts/brand-clan.md section 8 shapes). Read-only here: the client window edits it. A newer published version shows 'Brand Clan updated \xB7 Update'; taking it is the person's decision, never automatic.", "properties": { "id": { "type": "string", "pattern": "^bclan_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "title": { "type": "string", "minLength": 1, "maxLength": 200, "description": `The Brand Clan's name as the client window shows it ("Zero").` }, "client": { "type": "object", "properties": { "id": { "type": "string", "maxLength": 128 }, "name": { "type": "string", "maxLength": 200 } }, "required": ["id"], "additionalProperties": false }, "source": { "type": "object", "properties": { "document_id": { "type": "string", "minLength": 1, "maxLength": 128, "description": "The Brand Clan's OS document id." }, "path": { "type": "string", "minLength": 1, "maxLength": 200, "description": "Its library path: what GET /api/t/{tenant}/brand-clans/{path} reads." }, "app_id": { "const": "ie.napkin.brand" }, "version": { "type": "integer", "minimum": 1, "description": "kit.version as taken." }, "at": { "type": "string", "format": "date-time" }, "how": { "enum": ["default", "pick"], "description": "Placed for the client's default, or picked by a person." }, "kept": { "type": "integer", "minimum": 1, "description": "A newer version the person chose not to take." } }, "required": ["document_id", "path", "app_id", "version", "at", "how"], "additionalProperties": false }, "bible": { "type": "object", "description": "The published Brand Bible as taken: visual (logos, colours, typography), voice (tone, rules), imagery (style, bans). Asset names point into the Brand Clan document.", "properties": { "visual": { "type": "object" }, "voice": { "type": "object" }, "imagery": { "type": "object" } }, "additionalProperties": false }, "logo": { "type": "object", "description": "The Brand Clan's logo as a project picture (assets[sha256]), copied from the Brand Clan when the node is placed, swapped or updated (owner 2026-11-24). The end card and the sizes use it when the node is linked and the project has no Brand board logo; a Brand board logo still wins.", "properties": { "sha256": { "$ref": "common.schema.json#/$defs/sha256" }, "w": { "type": "integer", "minimum": 1 }, "h": { "type": "integer", "minimum": 1 } }, "required": ["sha256", "w", "h"], "additionalProperties": false } }, "required": ["id", "v", "field_v", "title", "source", "bible"], "additionalProperties": false };
 function validate85(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
   const evaluated0 = validate85.evaluated;
+  if (evaluated0.dynamicProps) {
+    evaluated0.props = void 0;
+  }
+  if (evaluated0.dynamicItems) {
+    evaluated0.items = void 0;
+  }
+  if (data && typeof data == "object" && !Array.isArray(data)) {
+    if (data.id === void 0) {
+      const err0 = { instancePath, schemaPath: "#/required", keyword: "required", params: { missingProperty: "id" }, message: "must have required property 'id'" };
+      if (vErrors === null) {
+        vErrors = [err0];
+      } else {
+        vErrors.push(err0);
+      }
+      errors++;
+    }
+    if (data.v === void 0) {
+      const err1 = { instancePath, schemaPath: "#/required", keyword: "required", params: { missingProperty: "v" }, message: "must have required property 'v'" };
+      if (vErrors === null) {
+        vErrors = [err1];
+      } else {
+        vErrors.push(err1);
+      }
+      errors++;
+    }
+    if (data.field_v === void 0) {
+      const err2 = { instancePath, schemaPath: "#/required", keyword: "required", params: { missingProperty: "field_v" }, message: "must have required property 'field_v'" };
+      if (vErrors === null) {
+        vErrors = [err2];
+      } else {
+        vErrors.push(err2);
+      }
+      errors++;
+    }
+    if (data.title === void 0) {
+      const err3 = { instancePath, schemaPath: "#/required", keyword: "required", params: { missingProperty: "title" }, message: "must have required property 'title'" };
+      if (vErrors === null) {
+        vErrors = [err3];
+      } else {
+        vErrors.push(err3);
+      }
+      errors++;
+    }
+    if (data.source === void 0) {
+      const err4 = { instancePath, schemaPath: "#/required", keyword: "required", params: { missingProperty: "source" }, message: "must have required property 'source'" };
+      if (vErrors === null) {
+        vErrors = [err4];
+      } else {
+        vErrors.push(err4);
+      }
+      errors++;
+    }
+    if (data.bible === void 0) {
+      const err5 = { instancePath, schemaPath: "#/required", keyword: "required", params: { missingProperty: "bible" }, message: "must have required property 'bible'" };
+      if (vErrors === null) {
+        vErrors = [err5];
+      } else {
+        vErrors.push(err5);
+      }
+      errors++;
+    }
+    for (const key0 in data) {
+      if (!(key0 === "id" || key0 === "v" || key0 === "field_v" || key0 === "title" || key0 === "client" || key0 === "source" || key0 === "bible" || key0 === "logo")) {
+        const err6 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
+        if (vErrors === null) {
+          vErrors = [err6];
+        } else {
+          vErrors.push(err6);
+        }
+        errors++;
+      }
+    }
+    if (data.id !== void 0) {
+      let data0 = data.id;
+      if (typeof data0 === "string") {
+        if (!pattern141.test(data0)) {
+          const err7 = { instancePath: instancePath + "/id", schemaPath: "#/properties/id/pattern", keyword: "pattern", params: { pattern: "^bclan_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^bclan_[0-9A-HJKMNP-TV-Z]{26}$"' };
+          if (vErrors === null) {
+            vErrors = [err7];
+          } else {
+            vErrors.push(err7);
+          }
+          errors++;
+        }
+      } else {
+        const err8 = { instancePath: instancePath + "/id", schemaPath: "#/properties/id/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+        if (vErrors === null) {
+          vErrors = [err8];
+        } else {
+          vErrors.push(err8);
+        }
+        errors++;
+      }
+    }
+    if (data.v !== void 0) {
+      let data1 = data.v;
+      if (!(typeof data1 == "number" && (!(data1 % 1) && !isNaN(data1)))) {
+        const err9 = { instancePath: instancePath + "/v", schemaPath: "#/$defs/v/type", keyword: "type", params: { type: "integer" }, message: "must be integer" };
+        if (vErrors === null) {
+          vErrors = [err9];
+        } else {
+          vErrors.push(err9);
+        }
+        errors++;
+      }
+      if (typeof data1 == "number") {
+        if (data1 < 1 || isNaN(data1)) {
+          const err10 = { instancePath: instancePath + "/v", schemaPath: "#/$defs/v/minimum", keyword: "minimum", params: { comparison: ">=", limit: 1 }, message: "must be >= 1" };
+          if (vErrors === null) {
+            vErrors = [err10];
+          } else {
+            vErrors.push(err10);
+          }
+          errors++;
+        }
+      }
+    }
+    if (data.field_v !== void 0) {
+      let data2 = data.field_v;
+      if (data2 && typeof data2 == "object" && !Array.isArray(data2)) {
+        if (Object.keys(data2).length > 256) {
+          const err11 = { instancePath: instancePath + "/field_v", schemaPath: "#/$defs/field_v/maxProperties", keyword: "maxProperties", params: { limit: 256 }, message: "must NOT have more than 256 properties" };
+          if (vErrors === null) {
+            vErrors = [err11];
+          } else {
+            vErrors.push(err11);
+          }
+          errors++;
+        }
+        for (const key1 in data2) {
+          const _errs10 = errors;
+          if (typeof key1 === "string") {
+            if (func2(key1) > 128) {
+              const err12 = { instancePath: instancePath + "/field_v", schemaPath: "#/$defs/field_v/propertyNames/maxLength", keyword: "maxLength", params: { limit: 128 }, message: "must NOT have more than 128 characters", propertyName: key1 };
+              if (vErrors === null) {
+                vErrors = [err12];
+              } else {
+                vErrors.push(err12);
+              }
+              errors++;
+            }
+            if (!pattern9.test(key1)) {
+              const err13 = { instancePath: instancePath + "/field_v", schemaPath: "#/$defs/field_v/propertyNames/pattern", keyword: "pattern", params: { pattern: "^[a-z_0-9]+(/[A-Za-z_0-9]+)*$" }, message: 'must match pattern "^[a-z_0-9]+(/[A-Za-z_0-9]+)*$"', propertyName: key1 };
+              if (vErrors === null) {
+                vErrors = [err13];
+              } else {
+                vErrors.push(err13);
+              }
+              errors++;
+            }
+          }
+          var valid3 = _errs10 === errors;
+          if (!valid3) {
+            const err14 = { instancePath: instancePath + "/field_v", schemaPath: "#/$defs/field_v/propertyNames", keyword: "propertyNames", params: { propertyName: key1 }, message: "property name must be valid" };
+            if (vErrors === null) {
+              vErrors = [err14];
+            } else {
+              vErrors.push(err14);
+            }
+            errors++;
+          }
+        }
+        for (const key2 in data2) {
+          let data3 = data2[key2];
+          if (!(typeof data3 == "number" && (!(data3 % 1) && !isNaN(data3)))) {
+            const err15 = { instancePath: instancePath + "/field_v/" + key2.replace(/~/g, "~0").replace(/\//g, "~1"), schemaPath: "#/$defs/field_v/additionalProperties/type", keyword: "type", params: { type: "integer" }, message: "must be integer" };
+            if (vErrors === null) {
+              vErrors = [err15];
+            } else {
+              vErrors.push(err15);
+            }
+            errors++;
+          }
+          if (typeof data3 == "number") {
+            if (data3 < 1 || isNaN(data3)) {
+              const err16 = { instancePath: instancePath + "/field_v/" + key2.replace(/~/g, "~0").replace(/\//g, "~1"), schemaPath: "#/$defs/field_v/additionalProperties/minimum", keyword: "minimum", params: { comparison: ">=", limit: 1 }, message: "must be >= 1" };
+              if (vErrors === null) {
+                vErrors = [err16];
+              } else {
+                vErrors.push(err16);
+              }
+              errors++;
+            }
+          }
+        }
+      } else {
+        const err17 = { instancePath: instancePath + "/field_v", schemaPath: "#/$defs/field_v/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        if (vErrors === null) {
+          vErrors = [err17];
+        } else {
+          vErrors.push(err17);
+        }
+        errors++;
+      }
+    }
+    if (data.title !== void 0) {
+      let data4 = data.title;
+      if (typeof data4 === "string") {
+        if (func2(data4) > 200) {
+          const err18 = { instancePath: instancePath + "/title", schemaPath: "#/properties/title/maxLength", keyword: "maxLength", params: { limit: 200 }, message: "must NOT have more than 200 characters" };
+          if (vErrors === null) {
+            vErrors = [err18];
+          } else {
+            vErrors.push(err18);
+          }
+          errors++;
+        }
+        if (func2(data4) < 1) {
+          const err19 = { instancePath: instancePath + "/title", schemaPath: "#/properties/title/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" };
+          if (vErrors === null) {
+            vErrors = [err19];
+          } else {
+            vErrors.push(err19);
+          }
+          errors++;
+        }
+      } else {
+        const err20 = { instancePath: instancePath + "/title", schemaPath: "#/properties/title/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+        if (vErrors === null) {
+          vErrors = [err20];
+        } else {
+          vErrors.push(err20);
+        }
+        errors++;
+      }
+    }
+    if (data.client !== void 0) {
+      let data5 = data.client;
+      if (data5 && typeof data5 == "object" && !Array.isArray(data5)) {
+        if (data5.id === void 0) {
+          const err21 = { instancePath: instancePath + "/client", schemaPath: "#/properties/client/required", keyword: "required", params: { missingProperty: "id" }, message: "must have required property 'id'" };
+          if (vErrors === null) {
+            vErrors = [err21];
+          } else {
+            vErrors.push(err21);
+          }
+          errors++;
+        }
+        for (const key3 in data5) {
+          if (!(key3 === "id" || key3 === "name")) {
+            const err22 = { instancePath: instancePath + "/client", schemaPath: "#/properties/client/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key3 }, message: "must NOT have additional properties" };
+            if (vErrors === null) {
+              vErrors = [err22];
+            } else {
+              vErrors.push(err22);
+            }
+            errors++;
+          }
+        }
+        if (data5.id !== void 0) {
+          let data6 = data5.id;
+          if (typeof data6 === "string") {
+            if (func2(data6) > 128) {
+              const err23 = { instancePath: instancePath + "/client/id", schemaPath: "#/properties/client/properties/id/maxLength", keyword: "maxLength", params: { limit: 128 }, message: "must NOT have more than 128 characters" };
+              if (vErrors === null) {
+                vErrors = [err23];
+              } else {
+                vErrors.push(err23);
+              }
+              errors++;
+            }
+          } else {
+            const err24 = { instancePath: instancePath + "/client/id", schemaPath: "#/properties/client/properties/id/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+            if (vErrors === null) {
+              vErrors = [err24];
+            } else {
+              vErrors.push(err24);
+            }
+            errors++;
+          }
+        }
+        if (data5.name !== void 0) {
+          let data7 = data5.name;
+          if (typeof data7 === "string") {
+            if (func2(data7) > 200) {
+              const err25 = { instancePath: instancePath + "/client/name", schemaPath: "#/properties/client/properties/name/maxLength", keyword: "maxLength", params: { limit: 200 }, message: "must NOT have more than 200 characters" };
+              if (vErrors === null) {
+                vErrors = [err25];
+              } else {
+                vErrors.push(err25);
+              }
+              errors++;
+            }
+          } else {
+            const err26 = { instancePath: instancePath + "/client/name", schemaPath: "#/properties/client/properties/name/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+            if (vErrors === null) {
+              vErrors = [err26];
+            } else {
+              vErrors.push(err26);
+            }
+            errors++;
+          }
+        }
+      } else {
+        const err27 = { instancePath: instancePath + "/client", schemaPath: "#/properties/client/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        if (vErrors === null) {
+          vErrors = [err27];
+        } else {
+          vErrors.push(err27);
+        }
+        errors++;
+      }
+    }
+    if (data.source !== void 0) {
+      let data8 = data.source;
+      if (data8 && typeof data8 == "object" && !Array.isArray(data8)) {
+        if (data8.document_id === void 0) {
+          const err28 = { instancePath: instancePath + "/source", schemaPath: "#/properties/source/required", keyword: "required", params: { missingProperty: "document_id" }, message: "must have required property 'document_id'" };
+          if (vErrors === null) {
+            vErrors = [err28];
+          } else {
+            vErrors.push(err28);
+          }
+          errors++;
+        }
+        if (data8.path === void 0) {
+          const err29 = { instancePath: instancePath + "/source", schemaPath: "#/properties/source/required", keyword: "required", params: { missingProperty: "path" }, message: "must have required property 'path'" };
+          if (vErrors === null) {
+            vErrors = [err29];
+          } else {
+            vErrors.push(err29);
+          }
+          errors++;
+        }
+        if (data8.app_id === void 0) {
+          const err30 = { instancePath: instancePath + "/source", schemaPath: "#/properties/source/required", keyword: "required", params: { missingProperty: "app_id" }, message: "must have required property 'app_id'" };
+          if (vErrors === null) {
+            vErrors = [err30];
+          } else {
+            vErrors.push(err30);
+          }
+          errors++;
+        }
+        if (data8.version === void 0) {
+          const err31 = { instancePath: instancePath + "/source", schemaPath: "#/properties/source/required", keyword: "required", params: { missingProperty: "version" }, message: "must have required property 'version'" };
+          if (vErrors === null) {
+            vErrors = [err31];
+          } else {
+            vErrors.push(err31);
+          }
+          errors++;
+        }
+        if (data8.at === void 0) {
+          const err32 = { instancePath: instancePath + "/source", schemaPath: "#/properties/source/required", keyword: "required", params: { missingProperty: "at" }, message: "must have required property 'at'" };
+          if (vErrors === null) {
+            vErrors = [err32];
+          } else {
+            vErrors.push(err32);
+          }
+          errors++;
+        }
+        if (data8.how === void 0) {
+          const err33 = { instancePath: instancePath + "/source", schemaPath: "#/properties/source/required", keyword: "required", params: { missingProperty: "how" }, message: "must have required property 'how'" };
+          if (vErrors === null) {
+            vErrors = [err33];
+          } else {
+            vErrors.push(err33);
+          }
+          errors++;
+        }
+        for (const key4 in data8) {
+          if (!(key4 === "document_id" || key4 === "path" || key4 === "app_id" || key4 === "version" || key4 === "at" || key4 === "how" || key4 === "kept")) {
+            const err34 = { instancePath: instancePath + "/source", schemaPath: "#/properties/source/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key4 }, message: "must NOT have additional properties" };
+            if (vErrors === null) {
+              vErrors = [err34];
+            } else {
+              vErrors.push(err34);
+            }
+            errors++;
+          }
+        }
+        if (data8.document_id !== void 0) {
+          let data9 = data8.document_id;
+          if (typeof data9 === "string") {
+            if (func2(data9) > 128) {
+              const err35 = { instancePath: instancePath + "/source/document_id", schemaPath: "#/properties/source/properties/document_id/maxLength", keyword: "maxLength", params: { limit: 128 }, message: "must NOT have more than 128 characters" };
+              if (vErrors === null) {
+                vErrors = [err35];
+              } else {
+                vErrors.push(err35);
+              }
+              errors++;
+            }
+            if (func2(data9) < 1) {
+              const err36 = { instancePath: instancePath + "/source/document_id", schemaPath: "#/properties/source/properties/document_id/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" };
+              if (vErrors === null) {
+                vErrors = [err36];
+              } else {
+                vErrors.push(err36);
+              }
+              errors++;
+            }
+          } else {
+            const err37 = { instancePath: instancePath + "/source/document_id", schemaPath: "#/properties/source/properties/document_id/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+            if (vErrors === null) {
+              vErrors = [err37];
+            } else {
+              vErrors.push(err37);
+            }
+            errors++;
+          }
+        }
+        if (data8.path !== void 0) {
+          let data10 = data8.path;
+          if (typeof data10 === "string") {
+            if (func2(data10) > 200) {
+              const err38 = { instancePath: instancePath + "/source/path", schemaPath: "#/properties/source/properties/path/maxLength", keyword: "maxLength", params: { limit: 200 }, message: "must NOT have more than 200 characters" };
+              if (vErrors === null) {
+                vErrors = [err38];
+              } else {
+                vErrors.push(err38);
+              }
+              errors++;
+            }
+            if (func2(data10) < 1) {
+              const err39 = { instancePath: instancePath + "/source/path", schemaPath: "#/properties/source/properties/path/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" };
+              if (vErrors === null) {
+                vErrors = [err39];
+              } else {
+                vErrors.push(err39);
+              }
+              errors++;
+            }
+          } else {
+            const err40 = { instancePath: instancePath + "/source/path", schemaPath: "#/properties/source/properties/path/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+            if (vErrors === null) {
+              vErrors = [err40];
+            } else {
+              vErrors.push(err40);
+            }
+            errors++;
+          }
+        }
+        if (data8.app_id !== void 0) {
+          if ("ie.napkin.brand" !== data8.app_id) {
+            const err41 = { instancePath: instancePath + "/source/app_id", schemaPath: "#/properties/source/properties/app_id/const", keyword: "const", params: { allowedValue: "ie.napkin.brand" }, message: "must be equal to constant" };
+            if (vErrors === null) {
+              vErrors = [err41];
+            } else {
+              vErrors.push(err41);
+            }
+            errors++;
+          }
+        }
+        if (data8.version !== void 0) {
+          let data12 = data8.version;
+          if (!(typeof data12 == "number" && (!(data12 % 1) && !isNaN(data12)))) {
+            const err42 = { instancePath: instancePath + "/source/version", schemaPath: "#/properties/source/properties/version/type", keyword: "type", params: { type: "integer" }, message: "must be integer" };
+            if (vErrors === null) {
+              vErrors = [err42];
+            } else {
+              vErrors.push(err42);
+            }
+            errors++;
+          }
+          if (typeof data12 == "number") {
+            if (data12 < 1 || isNaN(data12)) {
+              const err43 = { instancePath: instancePath + "/source/version", schemaPath: "#/properties/source/properties/version/minimum", keyword: "minimum", params: { comparison: ">=", limit: 1 }, message: "must be >= 1" };
+              if (vErrors === null) {
+                vErrors = [err43];
+              } else {
+                vErrors.push(err43);
+              }
+              errors++;
+            }
+          }
+        }
+        if (data8.at !== void 0) {
+          let data13 = data8.at;
+          if (typeof data13 === "string") {
+            if (!formats0.validate(data13)) {
+              const err44 = { instancePath: instancePath + "/source/at", schemaPath: "#/properties/source/properties/at/format", keyword: "format", params: { format: "date-time" }, message: 'must match format "date-time"' };
+              if (vErrors === null) {
+                vErrors = [err44];
+              } else {
+                vErrors.push(err44);
+              }
+              errors++;
+            }
+          } else {
+            const err45 = { instancePath: instancePath + "/source/at", schemaPath: "#/properties/source/properties/at/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+            if (vErrors === null) {
+              vErrors = [err45];
+            } else {
+              vErrors.push(err45);
+            }
+            errors++;
+          }
+        }
+        if (data8.how !== void 0) {
+          let data14 = data8.how;
+          if (!(data14 === "default" || data14 === "pick")) {
+            const err46 = { instancePath: instancePath + "/source/how", schemaPath: "#/properties/source/properties/how/enum", keyword: "enum", params: { allowedValues: schema163.properties.source.properties.how.enum }, message: "must be equal to one of the allowed values" };
+            if (vErrors === null) {
+              vErrors = [err46];
+            } else {
+              vErrors.push(err46);
+            }
+            errors++;
+          }
+        }
+        if (data8.kept !== void 0) {
+          let data15 = data8.kept;
+          if (!(typeof data15 == "number" && (!(data15 % 1) && !isNaN(data15)))) {
+            const err47 = { instancePath: instancePath + "/source/kept", schemaPath: "#/properties/source/properties/kept/type", keyword: "type", params: { type: "integer" }, message: "must be integer" };
+            if (vErrors === null) {
+              vErrors = [err47];
+            } else {
+              vErrors.push(err47);
+            }
+            errors++;
+          }
+          if (typeof data15 == "number") {
+            if (data15 < 1 || isNaN(data15)) {
+              const err48 = { instancePath: instancePath + "/source/kept", schemaPath: "#/properties/source/properties/kept/minimum", keyword: "minimum", params: { comparison: ">=", limit: 1 }, message: "must be >= 1" };
+              if (vErrors === null) {
+                vErrors = [err48];
+              } else {
+                vErrors.push(err48);
+              }
+              errors++;
+            }
+          }
+        }
+      } else {
+        const err49 = { instancePath: instancePath + "/source", schemaPath: "#/properties/source/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        if (vErrors === null) {
+          vErrors = [err49];
+        } else {
+          vErrors.push(err49);
+        }
+        errors++;
+      }
+    }
+    if (data.bible !== void 0) {
+      let data16 = data.bible;
+      if (data16 && typeof data16 == "object" && !Array.isArray(data16)) {
+        for (const key5 in data16) {
+          if (!(key5 === "visual" || key5 === "voice" || key5 === "imagery")) {
+            const err50 = { instancePath: instancePath + "/bible", schemaPath: "#/properties/bible/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key5 }, message: "must NOT have additional properties" };
+            if (vErrors === null) {
+              vErrors = [err50];
+            } else {
+              vErrors.push(err50);
+            }
+            errors++;
+          }
+        }
+        if (data16.visual !== void 0) {
+          let data17 = data16.visual;
+          if (!(data17 && typeof data17 == "object" && !Array.isArray(data17))) {
+            const err51 = { instancePath: instancePath + "/bible/visual", schemaPath: "#/properties/bible/properties/visual/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+            if (vErrors === null) {
+              vErrors = [err51];
+            } else {
+              vErrors.push(err51);
+            }
+            errors++;
+          }
+        }
+        if (data16.voice !== void 0) {
+          let data18 = data16.voice;
+          if (!(data18 && typeof data18 == "object" && !Array.isArray(data18))) {
+            const err52 = { instancePath: instancePath + "/bible/voice", schemaPath: "#/properties/bible/properties/voice/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+            if (vErrors === null) {
+              vErrors = [err52];
+            } else {
+              vErrors.push(err52);
+            }
+            errors++;
+          }
+        }
+        if (data16.imagery !== void 0) {
+          let data19 = data16.imagery;
+          if (!(data19 && typeof data19 == "object" && !Array.isArray(data19))) {
+            const err53 = { instancePath: instancePath + "/bible/imagery", schemaPath: "#/properties/bible/properties/imagery/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+            if (vErrors === null) {
+              vErrors = [err53];
+            } else {
+              vErrors.push(err53);
+            }
+            errors++;
+          }
+        }
+      } else {
+        const err54 = { instancePath: instancePath + "/bible", schemaPath: "#/properties/bible/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        if (vErrors === null) {
+          vErrors = [err54];
+        } else {
+          vErrors.push(err54);
+        }
+        errors++;
+      }
+    }
+    if (data.logo !== void 0) {
+      let data20 = data.logo;
+      if (data20 && typeof data20 == "object" && !Array.isArray(data20)) {
+        if (data20.sha256 === void 0) {
+          const err55 = { instancePath: instancePath + "/logo", schemaPath: "#/properties/logo/required", keyword: "required", params: { missingProperty: "sha256" }, message: "must have required property 'sha256'" };
+          if (vErrors === null) {
+            vErrors = [err55];
+          } else {
+            vErrors.push(err55);
+          }
+          errors++;
+        }
+        if (data20.w === void 0) {
+          const err56 = { instancePath: instancePath + "/logo", schemaPath: "#/properties/logo/required", keyword: "required", params: { missingProperty: "w" }, message: "must have required property 'w'" };
+          if (vErrors === null) {
+            vErrors = [err56];
+          } else {
+            vErrors.push(err56);
+          }
+          errors++;
+        }
+        if (data20.h === void 0) {
+          const err57 = { instancePath: instancePath + "/logo", schemaPath: "#/properties/logo/required", keyword: "required", params: { missingProperty: "h" }, message: "must have required property 'h'" };
+          if (vErrors === null) {
+            vErrors = [err57];
+          } else {
+            vErrors.push(err57);
+          }
+          errors++;
+        }
+        for (const key6 in data20) {
+          if (!(key6 === "sha256" || key6 === "w" || key6 === "h")) {
+            const err58 = { instancePath: instancePath + "/logo", schemaPath: "#/properties/logo/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key6 }, message: "must NOT have additional properties" };
+            if (vErrors === null) {
+              vErrors = [err58];
+            } else {
+              vErrors.push(err58);
+            }
+            errors++;
+          }
+        }
+        if (data20.sha256 !== void 0) {
+          let data21 = data20.sha256;
+          if (typeof data21 === "string") {
+            if (!pattern46.test(data21)) {
+              const err59 = { instancePath: instancePath + "/logo/sha256", schemaPath: "common.schema.json#/$defs/sha256/pattern", keyword: "pattern", params: { pattern: "^sha256:[0-9a-f]{64}$" }, message: 'must match pattern "^sha256:[0-9a-f]{64}$"' };
+              if (vErrors === null) {
+                vErrors = [err59];
+              } else {
+                vErrors.push(err59);
+              }
+              errors++;
+            }
+          } else {
+            const err60 = { instancePath: instancePath + "/logo/sha256", schemaPath: "common.schema.json#/$defs/sha256/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+            if (vErrors === null) {
+              vErrors = [err60];
+            } else {
+              vErrors.push(err60);
+            }
+            errors++;
+          }
+        }
+        if (data20.w !== void 0) {
+          let data22 = data20.w;
+          if (!(typeof data22 == "number" && (!(data22 % 1) && !isNaN(data22)))) {
+            const err61 = { instancePath: instancePath + "/logo/w", schemaPath: "#/properties/logo/properties/w/type", keyword: "type", params: { type: "integer" }, message: "must be integer" };
+            if (vErrors === null) {
+              vErrors = [err61];
+            } else {
+              vErrors.push(err61);
+            }
+            errors++;
+          }
+          if (typeof data22 == "number") {
+            if (data22 < 1 || isNaN(data22)) {
+              const err62 = { instancePath: instancePath + "/logo/w", schemaPath: "#/properties/logo/properties/w/minimum", keyword: "minimum", params: { comparison: ">=", limit: 1 }, message: "must be >= 1" };
+              if (vErrors === null) {
+                vErrors = [err62];
+              } else {
+                vErrors.push(err62);
+              }
+              errors++;
+            }
+          }
+        }
+        if (data20.h !== void 0) {
+          let data23 = data20.h;
+          if (!(typeof data23 == "number" && (!(data23 % 1) && !isNaN(data23)))) {
+            const err63 = { instancePath: instancePath + "/logo/h", schemaPath: "#/properties/logo/properties/h/type", keyword: "type", params: { type: "integer" }, message: "must be integer" };
+            if (vErrors === null) {
+              vErrors = [err63];
+            } else {
+              vErrors.push(err63);
+            }
+            errors++;
+          }
+          if (typeof data23 == "number") {
+            if (data23 < 1 || isNaN(data23)) {
+              const err64 = { instancePath: instancePath + "/logo/h", schemaPath: "#/properties/logo/properties/h/minimum", keyword: "minimum", params: { comparison: ">=", limit: 1 }, message: "must be >= 1" };
+              if (vErrors === null) {
+                vErrors = [err64];
+              } else {
+                vErrors.push(err64);
+              }
+              errors++;
+            }
+          }
+        }
+      } else {
+        const err65 = { instancePath: instancePath + "/logo", schemaPath: "#/properties/logo/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        if (vErrors === null) {
+          vErrors = [err65];
+        } else {
+          vErrors.push(err65);
+        }
+        errors++;
+      }
+    }
+  } else {
+    const err66 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+    if (vErrors === null) {
+      vErrors = [err66];
+    } else {
+      vErrors.push(err66);
+    }
+    errors++;
+  }
+  validate85.errors = vErrors;
+  return errors === 0;
+}
+validate85.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var schema167 = { "type": "object", "description": "A Brief node (features/brief-node.clan): a Brief Maker brief's spine, frozen at the version taken. Read-only here: Open in Brief Maker to change it. When the brief changes there, the node says 'Brief changed: update?'; taking the newer version is the person's decision (one decision entry), never automatic. Linked into a Script, Storyboard, Video or Format set (role brief), the spine is in that node's scope and goes with its jobs; a brief linked into a Script carries on to the Storyboard and Video it drives unless they have one linked of their own.", "properties": { "id": { "type": "string", "pattern": "^brief_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "title": { "type": "string", "maxLength": 200, "minLength": 1, "description": "The brief's title when it was taken." }, "source": { "type": "object", "description": "Where it was taken from, as the OS's links keep it (clan_sdk Attached: document id, data hash, how many times taken).", "properties": { "document_id": { "type": "string", "maxLength": 128, "minLength": 1, "description": "The brief's OS document id (its library path, doc-\u2026): what GET /api/t/{tenant}/d/{doc}/data reads and the shell opens (/?open=<id>)." }, "app_id": { "enum": ["ie.napkin.brief-maker", "ie.napkin.territories"] }, "data_sha256": { "$ref": "common.schema.json#/$defs/sha256", "description": "sha256 of the brief's shared/data.yaml as taken: a brief whose data hashes otherwise has changed." }, "taken": { "type": "integer", "minimum": 1, "description": "Production's own copy counter: 1 when linked, one more on each update taken. Not the brief's version (see version)." }, "version": { "type": "integer", "minimum": 1, "description": "The brief's version as Brief Maker says it ('v2'): its approvals count, at least 1, as of the copy taken (napkin-web GET /d/{doc}/data, version)." }, "at": { "type": "string", "format": "date-time", "description": "When it was linked or last updated." }, "how": { "enum": ["link", "spinoff"], "description": "Linked from an existing brief, or spun off from Brief Maker into Production." }, "kept": { "$ref": "common.schema.json#/$defs/sha256", "description": "A newer version the person chose not to take (Keep this version): no notice again until the brief changes once more." } }, "required": ["document_id", "app_id", "data_sha256", "taken", "version", "at", "how"], "additionalProperties": false }, "spine": { "$ref": "common.schema.json#/$defs/briefSpine" }, "route": { "type": "object", "description": "A Territories node (features/territories-spinoff-out-production.clan; owner 2026-11-23: Territories is just another node): the route this node is, frozen at the version taken. Pictures are links by hash with the rights the document stated, never bytes. Its spine is the brief it carries.", "properties": { "id": { "type": "string", "minLength": 1, "maxLength": 128 }, "version": { "type": "integer", "minimum": 1, "description": "The Territories document's version when the route was sent: its approvals at the Greenlight gate, at least 1." }, "name": { "type": "string", "minLength": 1, "maxLength": 200 }, "thought": { "type": "string", "maxLength": 600 }, "why": { "type": "string", "maxLength": 600 }, "words": { "type": "array", "maxItems": 12, "items": { "type": "string", "maxLength": 200 } }, "palette": { "type": "array", "maxItems": 8, "items": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" } }, "not": { "type": "array", "maxItems": 6, "items": { "type": "string", "maxLength": 300 } }, "pictures": { "type": "array", "maxItems": 12, "items": { "type": "object", "properties": { "sha256": { "$ref": "common.schema.json#/$defs/sha256" }, "caption": { "type": "string", "maxLength": 120 }, "rights": { "enum": ["generated", "own", "licensed"], "description": "As the document stated; absent reads 'Rights to supply'." }, "final": { "type": "boolean" } }, "required": ["sha256"], "additionalProperties": false } }, "mockups": { "type": "integer", "minimum": 0 }, "gaps": { "type": "integer", "minimum": 0 } }, "required": ["id", "name", "thought"], "additionalProperties": false }, "carries": { "type": "object", "description": "What a Territories node carries from before it: the brief (title and version) and the research it was made from. The brief's spine is the node's spine.", "properties": { "brief": { "type": "object", "properties": { "title": { "type": "string", "maxLength": 200 }, "v": { "type": "integer", "minimum": 1 } }, "required": ["title", "v"], "additionalProperties": false }, "research": { "type": "object", "properties": { "title": { "type": "string", "maxLength": 200 } }, "required": ["title"], "additionalProperties": false } }, "additionalProperties": false }, "confidential": { "type": "array", "items": { "enum": ["insight", "proposition", "audience", "tone", "feel", "mandatories", "donts", "format"] }, "uniqueItems": true, "description": "Spine parts made from brief parts marked Confidential (owner 2026-11-13): shown in full to the agency and the client, never sent to Napkin's own records (run logs, layers, evals, training)." } }, "required": ["id", "v", "field_v", "title", "source", "spine"], "additionalProperties": false };
+function validate87(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+  let vErrors = null;
+  let errors = 0;
+  const evaluated0 = validate87.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -12373,7 +13105,7 @@ function validate85(data, { instancePath = "", parentData, parentDataProperty, r
       errors++;
     }
     for (const key0 in data) {
-      if (!(key0 === "id" || key0 === "v" || key0 === "field_v" || key0 === "title" || key0 === "source" || key0 === "spine" || key0 === "confidential")) {
+      if (!func1.call(schema167.properties, key0)) {
         const err6 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err6];
@@ -12386,7 +13118,7 @@ function validate85(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.id !== void 0) {
       let data0 = data.id;
       if (typeof data0 === "string") {
-        if (!pattern141.test(data0)) {
+        if (!pattern145.test(data0)) {
           const err7 = { instancePath: instancePath + "/id", schemaPath: "#/properties/id/pattern", keyword: "pattern", params: { pattern: "^brief_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^brief_[0-9A-HJKMNP-TV-Z]{26}$"' };
           if (vErrors === null) {
             vErrors = [err7];
@@ -12646,8 +13378,9 @@ function validate85(data, { instancePath = "", parentData, parentDataProperty, r
           }
         }
         if (data5.app_id !== void 0) {
-          if ("ie.napkin.brief-maker" !== data5.app_id) {
-            const err32 = { instancePath: instancePath + "/source/app_id", schemaPath: "#/properties/source/properties/app_id/const", keyword: "const", params: { allowedValue: "ie.napkin.brief-maker" }, message: "must be equal to constant" };
+          let data7 = data5.app_id;
+          if (!(data7 === "ie.napkin.brief-maker" || data7 === "ie.napkin.territories")) {
+            const err32 = { instancePath: instancePath + "/source/app_id", schemaPath: "#/properties/source/properties/app_id/enum", keyword: "enum", params: { allowedValues: schema167.properties.source.properties.app_id.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err32];
             } else {
@@ -12749,7 +13482,7 @@ function validate85(data, { instancePath = "", parentData, parentDataProperty, r
         if (data5.how !== void 0) {
           let data12 = data5.how;
           if (!(data12 === "link" || data12 === "spinoff")) {
-            const err41 = { instancePath: instancePath + "/source/how", schemaPath: "#/properties/source/properties/how/enum", keyword: "enum", params: { allowedValues: schema163.properties.source.properties.how.enum }, message: "must be equal to one of the allowed values" };
+            const err41 = { instancePath: instancePath + "/source/how", schemaPath: "#/properties/source/properties/how/enum", keyword: "enum", params: { allowedValues: schema167.properties.source.properties.how.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err41];
             } else {
@@ -13054,33 +13787,683 @@ function validate85(data, { instancePath = "", parentData, parentDataProperty, r
         errors++;
       }
     }
-    if (data.confidential !== void 0) {
-      let data25 = data.confidential;
-      if (Array.isArray(data25)) {
-        const len2 = data25.length;
-        for (let i2 = 0; i2 < len2; i2++) {
-          let data26 = data25[i2];
-          if (!(data26 === "insight" || data26 === "proposition" || data26 === "audience" || data26 === "tone" || data26 === "feel" || data26 === "mandatories" || data26 === "donts" || data26 === "format")) {
-            const err69 = { instancePath: instancePath + "/confidential/" + i2, schemaPath: "#/properties/confidential/items/enum", keyword: "enum", params: { allowedValues: schema163.properties.confidential.items.enum }, message: "must be equal to one of the allowed values" };
+    if (data.route !== void 0) {
+      let data25 = data.route;
+      if (data25 && typeof data25 == "object" && !Array.isArray(data25)) {
+        if (data25.id === void 0) {
+          const err69 = { instancePath: instancePath + "/route", schemaPath: "#/properties/route/required", keyword: "required", params: { missingProperty: "id" }, message: "must have required property 'id'" };
+          if (vErrors === null) {
+            vErrors = [err69];
+          } else {
+            vErrors.push(err69);
+          }
+          errors++;
+        }
+        if (data25.name === void 0) {
+          const err70 = { instancePath: instancePath + "/route", schemaPath: "#/properties/route/required", keyword: "required", params: { missingProperty: "name" }, message: "must have required property 'name'" };
+          if (vErrors === null) {
+            vErrors = [err70];
+          } else {
+            vErrors.push(err70);
+          }
+          errors++;
+        }
+        if (data25.thought === void 0) {
+          const err71 = { instancePath: instancePath + "/route", schemaPath: "#/properties/route/required", keyword: "required", params: { missingProperty: "thought" }, message: "must have required property 'thought'" };
+          if (vErrors === null) {
+            vErrors = [err71];
+          } else {
+            vErrors.push(err71);
+          }
+          errors++;
+        }
+        for (const key5 in data25) {
+          if (!func1.call(schema167.properties.route.properties, key5)) {
+            const err72 = { instancePath: instancePath + "/route", schemaPath: "#/properties/route/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key5 }, message: "must NOT have additional properties" };
             if (vErrors === null) {
-              vErrors = [err69];
+              vErrors = [err72];
             } else {
-              vErrors.push(err69);
+              vErrors.push(err72);
             }
             errors++;
           }
         }
-        let i3 = data25.length;
-        let j0;
-        if (i3 > 1) {
-          outer0: for (; i3--; ) {
-            for (j0 = i3; j0--; ) {
-              if (func0(data25[i3], data25[j0])) {
-                const err70 = { instancePath: instancePath + "/confidential", schemaPath: "#/properties/confidential/uniqueItems", keyword: "uniqueItems", params: { i: i3, j: j0 }, message: "must NOT have duplicate items (items ## " + j0 + " and " + i3 + " are identical)" };
+        if (data25.id !== void 0) {
+          let data26 = data25.id;
+          if (typeof data26 === "string") {
+            if (func2(data26) > 128) {
+              const err73 = { instancePath: instancePath + "/route/id", schemaPath: "#/properties/route/properties/id/maxLength", keyword: "maxLength", params: { limit: 128 }, message: "must NOT have more than 128 characters" };
+              if (vErrors === null) {
+                vErrors = [err73];
+              } else {
+                vErrors.push(err73);
+              }
+              errors++;
+            }
+            if (func2(data26) < 1) {
+              const err74 = { instancePath: instancePath + "/route/id", schemaPath: "#/properties/route/properties/id/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" };
+              if (vErrors === null) {
+                vErrors = [err74];
+              } else {
+                vErrors.push(err74);
+              }
+              errors++;
+            }
+          } else {
+            const err75 = { instancePath: instancePath + "/route/id", schemaPath: "#/properties/route/properties/id/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+            if (vErrors === null) {
+              vErrors = [err75];
+            } else {
+              vErrors.push(err75);
+            }
+            errors++;
+          }
+        }
+        if (data25.version !== void 0) {
+          let data27 = data25.version;
+          if (!(typeof data27 == "number" && (!(data27 % 1) && !isNaN(data27)))) {
+            const err76 = { instancePath: instancePath + "/route/version", schemaPath: "#/properties/route/properties/version/type", keyword: "type", params: { type: "integer" }, message: "must be integer" };
+            if (vErrors === null) {
+              vErrors = [err76];
+            } else {
+              vErrors.push(err76);
+            }
+            errors++;
+          }
+          if (typeof data27 == "number") {
+            if (data27 < 1 || isNaN(data27)) {
+              const err77 = { instancePath: instancePath + "/route/version", schemaPath: "#/properties/route/properties/version/minimum", keyword: "minimum", params: { comparison: ">=", limit: 1 }, message: "must be >= 1" };
+              if (vErrors === null) {
+                vErrors = [err77];
+              } else {
+                vErrors.push(err77);
+              }
+              errors++;
+            }
+          }
+        }
+        if (data25.name !== void 0) {
+          let data28 = data25.name;
+          if (typeof data28 === "string") {
+            if (func2(data28) > 200) {
+              const err78 = { instancePath: instancePath + "/route/name", schemaPath: "#/properties/route/properties/name/maxLength", keyword: "maxLength", params: { limit: 200 }, message: "must NOT have more than 200 characters" };
+              if (vErrors === null) {
+                vErrors = [err78];
+              } else {
+                vErrors.push(err78);
+              }
+              errors++;
+            }
+            if (func2(data28) < 1) {
+              const err79 = { instancePath: instancePath + "/route/name", schemaPath: "#/properties/route/properties/name/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" };
+              if (vErrors === null) {
+                vErrors = [err79];
+              } else {
+                vErrors.push(err79);
+              }
+              errors++;
+            }
+          } else {
+            const err80 = { instancePath: instancePath + "/route/name", schemaPath: "#/properties/route/properties/name/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+            if (vErrors === null) {
+              vErrors = [err80];
+            } else {
+              vErrors.push(err80);
+            }
+            errors++;
+          }
+        }
+        if (data25.thought !== void 0) {
+          let data29 = data25.thought;
+          if (typeof data29 === "string") {
+            if (func2(data29) > 600) {
+              const err81 = { instancePath: instancePath + "/route/thought", schemaPath: "#/properties/route/properties/thought/maxLength", keyword: "maxLength", params: { limit: 600 }, message: "must NOT have more than 600 characters" };
+              if (vErrors === null) {
+                vErrors = [err81];
+              } else {
+                vErrors.push(err81);
+              }
+              errors++;
+            }
+          } else {
+            const err82 = { instancePath: instancePath + "/route/thought", schemaPath: "#/properties/route/properties/thought/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+            if (vErrors === null) {
+              vErrors = [err82];
+            } else {
+              vErrors.push(err82);
+            }
+            errors++;
+          }
+        }
+        if (data25.why !== void 0) {
+          let data30 = data25.why;
+          if (typeof data30 === "string") {
+            if (func2(data30) > 600) {
+              const err83 = { instancePath: instancePath + "/route/why", schemaPath: "#/properties/route/properties/why/maxLength", keyword: "maxLength", params: { limit: 600 }, message: "must NOT have more than 600 characters" };
+              if (vErrors === null) {
+                vErrors = [err83];
+              } else {
+                vErrors.push(err83);
+              }
+              errors++;
+            }
+          } else {
+            const err84 = { instancePath: instancePath + "/route/why", schemaPath: "#/properties/route/properties/why/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+            if (vErrors === null) {
+              vErrors = [err84];
+            } else {
+              vErrors.push(err84);
+            }
+            errors++;
+          }
+        }
+        if (data25.words !== void 0) {
+          let data31 = data25.words;
+          if (Array.isArray(data31)) {
+            if (data31.length > 12) {
+              const err85 = { instancePath: instancePath + "/route/words", schemaPath: "#/properties/route/properties/words/maxItems", keyword: "maxItems", params: { limit: 12 }, message: "must NOT have more than 12 items" };
+              if (vErrors === null) {
+                vErrors = [err85];
+              } else {
+                vErrors.push(err85);
+              }
+              errors++;
+            }
+            const len2 = data31.length;
+            for (let i2 = 0; i2 < len2; i2++) {
+              let data32 = data31[i2];
+              if (typeof data32 === "string") {
+                if (func2(data32) > 200) {
+                  const err86 = { instancePath: instancePath + "/route/words/" + i2, schemaPath: "#/properties/route/properties/words/items/maxLength", keyword: "maxLength", params: { limit: 200 }, message: "must NOT have more than 200 characters" };
+                  if (vErrors === null) {
+                    vErrors = [err86];
+                  } else {
+                    vErrors.push(err86);
+                  }
+                  errors++;
+                }
+              } else {
+                const err87 = { instancePath: instancePath + "/route/words/" + i2, schemaPath: "#/properties/route/properties/words/items/type", keyword: "type", params: { type: "string" }, message: "must be string" };
                 if (vErrors === null) {
-                  vErrors = [err70];
+                  vErrors = [err87];
                 } else {
-                  vErrors.push(err70);
+                  vErrors.push(err87);
+                }
+                errors++;
+              }
+            }
+          } else {
+            const err88 = { instancePath: instancePath + "/route/words", schemaPath: "#/properties/route/properties/words/type", keyword: "type", params: { type: "array" }, message: "must be array" };
+            if (vErrors === null) {
+              vErrors = [err88];
+            } else {
+              vErrors.push(err88);
+            }
+            errors++;
+          }
+        }
+        if (data25.palette !== void 0) {
+          let data33 = data25.palette;
+          if (Array.isArray(data33)) {
+            if (data33.length > 8) {
+              const err89 = { instancePath: instancePath + "/route/palette", schemaPath: "#/properties/route/properties/palette/maxItems", keyword: "maxItems", params: { limit: 8 }, message: "must NOT have more than 8 items" };
+              if (vErrors === null) {
+                vErrors = [err89];
+              } else {
+                vErrors.push(err89);
+              }
+              errors++;
+            }
+            const len3 = data33.length;
+            for (let i3 = 0; i3 < len3; i3++) {
+              let data34 = data33[i3];
+              if (typeof data34 === "string") {
+                if (!pattern133.test(data34)) {
+                  const err90 = { instancePath: instancePath + "/route/palette/" + i3, schemaPath: "#/properties/route/properties/palette/items/pattern", keyword: "pattern", params: { pattern: "^#[0-9a-fA-F]{6}$" }, message: 'must match pattern "^#[0-9a-fA-F]{6}$"' };
+                  if (vErrors === null) {
+                    vErrors = [err90];
+                  } else {
+                    vErrors.push(err90);
+                  }
+                  errors++;
+                }
+              } else {
+                const err91 = { instancePath: instancePath + "/route/palette/" + i3, schemaPath: "#/properties/route/properties/palette/items/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+                if (vErrors === null) {
+                  vErrors = [err91];
+                } else {
+                  vErrors.push(err91);
+                }
+                errors++;
+              }
+            }
+          } else {
+            const err92 = { instancePath: instancePath + "/route/palette", schemaPath: "#/properties/route/properties/palette/type", keyword: "type", params: { type: "array" }, message: "must be array" };
+            if (vErrors === null) {
+              vErrors = [err92];
+            } else {
+              vErrors.push(err92);
+            }
+            errors++;
+          }
+        }
+        if (data25.not !== void 0) {
+          let data35 = data25.not;
+          if (Array.isArray(data35)) {
+            if (data35.length > 6) {
+              const err93 = { instancePath: instancePath + "/route/not", schemaPath: "#/properties/route/properties/not/maxItems", keyword: "maxItems", params: { limit: 6 }, message: "must NOT have more than 6 items" };
+              if (vErrors === null) {
+                vErrors = [err93];
+              } else {
+                vErrors.push(err93);
+              }
+              errors++;
+            }
+            const len4 = data35.length;
+            for (let i4 = 0; i4 < len4; i4++) {
+              let data36 = data35[i4];
+              if (typeof data36 === "string") {
+                if (func2(data36) > 300) {
+                  const err94 = { instancePath: instancePath + "/route/not/" + i4, schemaPath: "#/properties/route/properties/not/items/maxLength", keyword: "maxLength", params: { limit: 300 }, message: "must NOT have more than 300 characters" };
+                  if (vErrors === null) {
+                    vErrors = [err94];
+                  } else {
+                    vErrors.push(err94);
+                  }
+                  errors++;
+                }
+              } else {
+                const err95 = { instancePath: instancePath + "/route/not/" + i4, schemaPath: "#/properties/route/properties/not/items/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+                if (vErrors === null) {
+                  vErrors = [err95];
+                } else {
+                  vErrors.push(err95);
+                }
+                errors++;
+              }
+            }
+          } else {
+            const err96 = { instancePath: instancePath + "/route/not", schemaPath: "#/properties/route/properties/not/type", keyword: "type", params: { type: "array" }, message: "must be array" };
+            if (vErrors === null) {
+              vErrors = [err96];
+            } else {
+              vErrors.push(err96);
+            }
+            errors++;
+          }
+        }
+        if (data25.pictures !== void 0) {
+          let data37 = data25.pictures;
+          if (Array.isArray(data37)) {
+            if (data37.length > 12) {
+              const err97 = { instancePath: instancePath + "/route/pictures", schemaPath: "#/properties/route/properties/pictures/maxItems", keyword: "maxItems", params: { limit: 12 }, message: "must NOT have more than 12 items" };
+              if (vErrors === null) {
+                vErrors = [err97];
+              } else {
+                vErrors.push(err97);
+              }
+              errors++;
+            }
+            const len5 = data37.length;
+            for (let i5 = 0; i5 < len5; i5++) {
+              let data38 = data37[i5];
+              if (data38 && typeof data38 == "object" && !Array.isArray(data38)) {
+                if (data38.sha256 === void 0) {
+                  const err98 = { instancePath: instancePath + "/route/pictures/" + i5, schemaPath: "#/properties/route/properties/pictures/items/required", keyword: "required", params: { missingProperty: "sha256" }, message: "must have required property 'sha256'" };
+                  if (vErrors === null) {
+                    vErrors = [err98];
+                  } else {
+                    vErrors.push(err98);
+                  }
+                  errors++;
+                }
+                for (const key6 in data38) {
+                  if (!(key6 === "sha256" || key6 === "caption" || key6 === "rights" || key6 === "final")) {
+                    const err99 = { instancePath: instancePath + "/route/pictures/" + i5, schemaPath: "#/properties/route/properties/pictures/items/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key6 }, message: "must NOT have additional properties" };
+                    if (vErrors === null) {
+                      vErrors = [err99];
+                    } else {
+                      vErrors.push(err99);
+                    }
+                    errors++;
+                  }
+                }
+                if (data38.sha256 !== void 0) {
+                  let data39 = data38.sha256;
+                  if (typeof data39 === "string") {
+                    if (!pattern46.test(data39)) {
+                      const err100 = { instancePath: instancePath + "/route/pictures/" + i5 + "/sha256", schemaPath: "common.schema.json#/$defs/sha256/pattern", keyword: "pattern", params: { pattern: "^sha256:[0-9a-f]{64}$" }, message: 'must match pattern "^sha256:[0-9a-f]{64}$"' };
+                      if (vErrors === null) {
+                        vErrors = [err100];
+                      } else {
+                        vErrors.push(err100);
+                      }
+                      errors++;
+                    }
+                  } else {
+                    const err101 = { instancePath: instancePath + "/route/pictures/" + i5 + "/sha256", schemaPath: "common.schema.json#/$defs/sha256/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+                    if (vErrors === null) {
+                      vErrors = [err101];
+                    } else {
+                      vErrors.push(err101);
+                    }
+                    errors++;
+                  }
+                }
+                if (data38.caption !== void 0) {
+                  let data40 = data38.caption;
+                  if (typeof data40 === "string") {
+                    if (func2(data40) > 120) {
+                      const err102 = { instancePath: instancePath + "/route/pictures/" + i5 + "/caption", schemaPath: "#/properties/route/properties/pictures/items/properties/caption/maxLength", keyword: "maxLength", params: { limit: 120 }, message: "must NOT have more than 120 characters" };
+                      if (vErrors === null) {
+                        vErrors = [err102];
+                      } else {
+                        vErrors.push(err102);
+                      }
+                      errors++;
+                    }
+                  } else {
+                    const err103 = { instancePath: instancePath + "/route/pictures/" + i5 + "/caption", schemaPath: "#/properties/route/properties/pictures/items/properties/caption/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+                    if (vErrors === null) {
+                      vErrors = [err103];
+                    } else {
+                      vErrors.push(err103);
+                    }
+                    errors++;
+                  }
+                }
+                if (data38.rights !== void 0) {
+                  let data41 = data38.rights;
+                  if (!(data41 === "generated" || data41 === "own" || data41 === "licensed")) {
+                    const err104 = { instancePath: instancePath + "/route/pictures/" + i5 + "/rights", schemaPath: "#/properties/route/properties/pictures/items/properties/rights/enum", keyword: "enum", params: { allowedValues: schema167.properties.route.properties.pictures.items.properties.rights.enum }, message: "must be equal to one of the allowed values" };
+                    if (vErrors === null) {
+                      vErrors = [err104];
+                    } else {
+                      vErrors.push(err104);
+                    }
+                    errors++;
+                  }
+                }
+                if (data38.final !== void 0) {
+                  if (typeof data38.final !== "boolean") {
+                    const err105 = { instancePath: instancePath + "/route/pictures/" + i5 + "/final", schemaPath: "#/properties/route/properties/pictures/items/properties/final/type", keyword: "type", params: { type: "boolean" }, message: "must be boolean" };
+                    if (vErrors === null) {
+                      vErrors = [err105];
+                    } else {
+                      vErrors.push(err105);
+                    }
+                    errors++;
+                  }
+                }
+              } else {
+                const err106 = { instancePath: instancePath + "/route/pictures/" + i5, schemaPath: "#/properties/route/properties/pictures/items/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+                if (vErrors === null) {
+                  vErrors = [err106];
+                } else {
+                  vErrors.push(err106);
+                }
+                errors++;
+              }
+            }
+          } else {
+            const err107 = { instancePath: instancePath + "/route/pictures", schemaPath: "#/properties/route/properties/pictures/type", keyword: "type", params: { type: "array" }, message: "must be array" };
+            if (vErrors === null) {
+              vErrors = [err107];
+            } else {
+              vErrors.push(err107);
+            }
+            errors++;
+          }
+        }
+        if (data25.mockups !== void 0) {
+          let data43 = data25.mockups;
+          if (!(typeof data43 == "number" && (!(data43 % 1) && !isNaN(data43)))) {
+            const err108 = { instancePath: instancePath + "/route/mockups", schemaPath: "#/properties/route/properties/mockups/type", keyword: "type", params: { type: "integer" }, message: "must be integer" };
+            if (vErrors === null) {
+              vErrors = [err108];
+            } else {
+              vErrors.push(err108);
+            }
+            errors++;
+          }
+          if (typeof data43 == "number") {
+            if (data43 < 0 || isNaN(data43)) {
+              const err109 = { instancePath: instancePath + "/route/mockups", schemaPath: "#/properties/route/properties/mockups/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+              if (vErrors === null) {
+                vErrors = [err109];
+              } else {
+                vErrors.push(err109);
+              }
+              errors++;
+            }
+          }
+        }
+        if (data25.gaps !== void 0) {
+          let data44 = data25.gaps;
+          if (!(typeof data44 == "number" && (!(data44 % 1) && !isNaN(data44)))) {
+            const err110 = { instancePath: instancePath + "/route/gaps", schemaPath: "#/properties/route/properties/gaps/type", keyword: "type", params: { type: "integer" }, message: "must be integer" };
+            if (vErrors === null) {
+              vErrors = [err110];
+            } else {
+              vErrors.push(err110);
+            }
+            errors++;
+          }
+          if (typeof data44 == "number") {
+            if (data44 < 0 || isNaN(data44)) {
+              const err111 = { instancePath: instancePath + "/route/gaps", schemaPath: "#/properties/route/properties/gaps/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+              if (vErrors === null) {
+                vErrors = [err111];
+              } else {
+                vErrors.push(err111);
+              }
+              errors++;
+            }
+          }
+        }
+      } else {
+        const err112 = { instancePath: instancePath + "/route", schemaPath: "#/properties/route/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        if (vErrors === null) {
+          vErrors = [err112];
+        } else {
+          vErrors.push(err112);
+        }
+        errors++;
+      }
+    }
+    if (data.carries !== void 0) {
+      let data45 = data.carries;
+      if (data45 && typeof data45 == "object" && !Array.isArray(data45)) {
+        for (const key7 in data45) {
+          if (!(key7 === "brief" || key7 === "research")) {
+            const err113 = { instancePath: instancePath + "/carries", schemaPath: "#/properties/carries/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key7 }, message: "must NOT have additional properties" };
+            if (vErrors === null) {
+              vErrors = [err113];
+            } else {
+              vErrors.push(err113);
+            }
+            errors++;
+          }
+        }
+        if (data45.brief !== void 0) {
+          let data46 = data45.brief;
+          if (data46 && typeof data46 == "object" && !Array.isArray(data46)) {
+            if (data46.title === void 0) {
+              const err114 = { instancePath: instancePath + "/carries/brief", schemaPath: "#/properties/carries/properties/brief/required", keyword: "required", params: { missingProperty: "title" }, message: "must have required property 'title'" };
+              if (vErrors === null) {
+                vErrors = [err114];
+              } else {
+                vErrors.push(err114);
+              }
+              errors++;
+            }
+            if (data46.v === void 0) {
+              const err115 = { instancePath: instancePath + "/carries/brief", schemaPath: "#/properties/carries/properties/brief/required", keyword: "required", params: { missingProperty: "v" }, message: "must have required property 'v'" };
+              if (vErrors === null) {
+                vErrors = [err115];
+              } else {
+                vErrors.push(err115);
+              }
+              errors++;
+            }
+            for (const key8 in data46) {
+              if (!(key8 === "title" || key8 === "v")) {
+                const err116 = { instancePath: instancePath + "/carries/brief", schemaPath: "#/properties/carries/properties/brief/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key8 }, message: "must NOT have additional properties" };
+                if (vErrors === null) {
+                  vErrors = [err116];
+                } else {
+                  vErrors.push(err116);
+                }
+                errors++;
+              }
+            }
+            if (data46.title !== void 0) {
+              let data47 = data46.title;
+              if (typeof data47 === "string") {
+                if (func2(data47) > 200) {
+                  const err117 = { instancePath: instancePath + "/carries/brief/title", schemaPath: "#/properties/carries/properties/brief/properties/title/maxLength", keyword: "maxLength", params: { limit: 200 }, message: "must NOT have more than 200 characters" };
+                  if (vErrors === null) {
+                    vErrors = [err117];
+                  } else {
+                    vErrors.push(err117);
+                  }
+                  errors++;
+                }
+              } else {
+                const err118 = { instancePath: instancePath + "/carries/brief/title", schemaPath: "#/properties/carries/properties/brief/properties/title/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+                if (vErrors === null) {
+                  vErrors = [err118];
+                } else {
+                  vErrors.push(err118);
+                }
+                errors++;
+              }
+            }
+            if (data46.v !== void 0) {
+              let data48 = data46.v;
+              if (!(typeof data48 == "number" && (!(data48 % 1) && !isNaN(data48)))) {
+                const err119 = { instancePath: instancePath + "/carries/brief/v", schemaPath: "#/properties/carries/properties/brief/properties/v/type", keyword: "type", params: { type: "integer" }, message: "must be integer" };
+                if (vErrors === null) {
+                  vErrors = [err119];
+                } else {
+                  vErrors.push(err119);
+                }
+                errors++;
+              }
+              if (typeof data48 == "number") {
+                if (data48 < 1 || isNaN(data48)) {
+                  const err120 = { instancePath: instancePath + "/carries/brief/v", schemaPath: "#/properties/carries/properties/brief/properties/v/minimum", keyword: "minimum", params: { comparison: ">=", limit: 1 }, message: "must be >= 1" };
+                  if (vErrors === null) {
+                    vErrors = [err120];
+                  } else {
+                    vErrors.push(err120);
+                  }
+                  errors++;
+                }
+              }
+            }
+          } else {
+            const err121 = { instancePath: instancePath + "/carries/brief", schemaPath: "#/properties/carries/properties/brief/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+            if (vErrors === null) {
+              vErrors = [err121];
+            } else {
+              vErrors.push(err121);
+            }
+            errors++;
+          }
+        }
+        if (data45.research !== void 0) {
+          let data49 = data45.research;
+          if (data49 && typeof data49 == "object" && !Array.isArray(data49)) {
+            if (data49.title === void 0) {
+              const err122 = { instancePath: instancePath + "/carries/research", schemaPath: "#/properties/carries/properties/research/required", keyword: "required", params: { missingProperty: "title" }, message: "must have required property 'title'" };
+              if (vErrors === null) {
+                vErrors = [err122];
+              } else {
+                vErrors.push(err122);
+              }
+              errors++;
+            }
+            for (const key9 in data49) {
+              if (!(key9 === "title")) {
+                const err123 = { instancePath: instancePath + "/carries/research", schemaPath: "#/properties/carries/properties/research/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key9 }, message: "must NOT have additional properties" };
+                if (vErrors === null) {
+                  vErrors = [err123];
+                } else {
+                  vErrors.push(err123);
+                }
+                errors++;
+              }
+            }
+            if (data49.title !== void 0) {
+              let data50 = data49.title;
+              if (typeof data50 === "string") {
+                if (func2(data50) > 200) {
+                  const err124 = { instancePath: instancePath + "/carries/research/title", schemaPath: "#/properties/carries/properties/research/properties/title/maxLength", keyword: "maxLength", params: { limit: 200 }, message: "must NOT have more than 200 characters" };
+                  if (vErrors === null) {
+                    vErrors = [err124];
+                  } else {
+                    vErrors.push(err124);
+                  }
+                  errors++;
+                }
+              } else {
+                const err125 = { instancePath: instancePath + "/carries/research/title", schemaPath: "#/properties/carries/properties/research/properties/title/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+                if (vErrors === null) {
+                  vErrors = [err125];
+                } else {
+                  vErrors.push(err125);
+                }
+                errors++;
+              }
+            }
+          } else {
+            const err126 = { instancePath: instancePath + "/carries/research", schemaPath: "#/properties/carries/properties/research/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+            if (vErrors === null) {
+              vErrors = [err126];
+            } else {
+              vErrors.push(err126);
+            }
+            errors++;
+          }
+        }
+      } else {
+        const err127 = { instancePath: instancePath + "/carries", schemaPath: "#/properties/carries/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        if (vErrors === null) {
+          vErrors = [err127];
+        } else {
+          vErrors.push(err127);
+        }
+        errors++;
+      }
+    }
+    if (data.confidential !== void 0) {
+      let data51 = data.confidential;
+      if (Array.isArray(data51)) {
+        const len6 = data51.length;
+        for (let i6 = 0; i6 < len6; i6++) {
+          let data52 = data51[i6];
+          if (!(data52 === "insight" || data52 === "proposition" || data52 === "audience" || data52 === "tone" || data52 === "feel" || data52 === "mandatories" || data52 === "donts" || data52 === "format")) {
+            const err128 = { instancePath: instancePath + "/confidential/" + i6, schemaPath: "#/properties/confidential/items/enum", keyword: "enum", params: { allowedValues: schema167.properties.confidential.items.enum }, message: "must be equal to one of the allowed values" };
+            if (vErrors === null) {
+              vErrors = [err128];
+            } else {
+              vErrors.push(err128);
+            }
+            errors++;
+          }
+        }
+        let i7 = data51.length;
+        let j0;
+        if (i7 > 1) {
+          outer0: for (; i7--; ) {
+            for (j0 = i7; j0--; ) {
+              if (func0(data51[i7], data51[j0])) {
+                const err129 = { instancePath: instancePath + "/confidential", schemaPath: "#/properties/confidential/uniqueItems", keyword: "uniqueItems", params: { i: i7, j: j0 }, message: "must NOT have duplicate items (items ## " + j0 + " and " + i7 + " are identical)" };
+                if (vErrors === null) {
+                  vErrors = [err129];
+                } else {
+                  vErrors.push(err129);
                 }
                 errors++;
                 break outer0;
@@ -13089,34 +14472,34 @@ function validate85(data, { instancePath = "", parentData, parentDataProperty, r
           }
         }
       } else {
-        const err71 = { instancePath: instancePath + "/confidential", schemaPath: "#/properties/confidential/type", keyword: "type", params: { type: "array" }, message: "must be array" };
+        const err130 = { instancePath: instancePath + "/confidential", schemaPath: "#/properties/confidential/type", keyword: "type", params: { type: "array" }, message: "must be array" };
         if (vErrors === null) {
-          vErrors = [err71];
+          vErrors = [err130];
         } else {
-          vErrors.push(err71);
+          vErrors.push(err130);
         }
         errors++;
       }
     }
   } else {
-    const err72 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+    const err131 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
     if (vErrors === null) {
-      vErrors = [err72];
+      vErrors = [err131];
     } else {
-      vErrors.push(err72);
+      vErrors.push(err131);
     }
     errors++;
   }
-  validate85.errors = vErrors;
+  validate87.errors = vErrors;
   return errors === 0;
 }
-validate85.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema169 = { "type": "object", "description": "One picture a person marked final: the Final toggle on the version open in the image editor (a frame, or a canvas picture with no versions yet) or on a still size in Make all sizes. asset is the exact picture marked; a size or a picture keeps one final (marking another replaces it), and unmarking removes it. It stands until unmarked, even when what it was of is remade or removed. Added 2026-11-19 (features/prod-assets-route.clan, additive).", "properties": { "id": { "type": "string", "pattern": "^final_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "of": { "type": "object", "description": "What it is a final of. frame: a frame version (frames[id]: a storyboard frame or a canvas picture's version). size: a size of a format set (sizes[id]). picture: a picture on the canvas with no versions yet (its canvas node's id, as format_sets[].master kind picture).", "properties": { "kind": { "enum": ["frame", "size", "picture"] }, "id": { "type": "string", "pattern": "^[A-Za-z0-9_-]{6,64}$" } }, "required": ["kind", "id"], "additionalProperties": false, "allOf": [{ "if": { "properties": { "kind": { "const": "frame" } } }, "then": { "properties": { "id": { "pattern": "^frame_[0-9A-HJKMNP-TV-Z]{26}$" } } } }, { "if": { "properties": { "kind": { "const": "size" } } }, "then": { "properties": { "id": { "pattern": "^size_[0-9A-HJKMNP-TV-Z]{26}$" } } } }] }, "asset": { "$ref": "common.schema.json#/$defs/sha256", "description": "The picture marked final: a key of assets. For a size, its delivery-size file when one was made for its picture (full.asset), else its picture." }, "version": { "type": "integer", "minimum": 1, "description": "The version shown when it was marked (a frame's version, 'v3'); 1 for a picture with no versions." }, "set_id": { "type": "string", "pattern": "^fset_[0-9A-HJKMNP-TV-Z]{26}$", "description": "A size's format set." }, "format": { "$ref": "common.schema.json#/$defs/formatRef", "description": "A size's format, copied when it was marked." }, "channel": { "$ref": "common.schema.json#/$defs/formatChannel", "description": "A size's lane on the Campaign board (format-packs.json), copied when it was marked." }, "at": { "type": "string", "format": "date-time" }, "by": { "$ref": "common.schema.json#/$defs/personRef" } }, "required": ["id", "v", "field_v", "of", "asset", "at", "by"], "additionalProperties": false };
-var schema173 = { "enum": ["film", "social", "ooh", "print", "display"], "description": "The Campaign board's lanes (features/campaign-formats.clan): film (TV and online video), social, out of home, print, display. A format without one is placed by its kind: video \u2192 film, image \u2192 social, and ooh, print and display as themselves." };
-function validate87(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate87.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var schema174 = { "type": "object", "description": "One picture a person marked final: the Final toggle on the version open in the image editor (a frame, or a canvas picture with no versions yet) or on a still size in Make all sizes. asset is the exact picture marked; a size or a picture keeps one final (marking another replaces it), and unmarking removes it. It stands until unmarked, even when what it was of is remade or removed. Added 2026-11-19 (features/prod-assets-route.clan, additive).", "properties": { "id": { "type": "string", "pattern": "^final_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "of": { "type": "object", "description": "What it is a final of. frame: a frame version (frames[id]: a storyboard frame or a canvas picture's version). size: a size of a format set (sizes[id]). picture: a picture on the canvas with no versions yet (its canvas node's id, as format_sets[].master kind picture).", "properties": { "kind": { "enum": ["frame", "size", "picture"] }, "id": { "type": "string", "pattern": "^[A-Za-z0-9_-]{6,64}$" } }, "required": ["kind", "id"], "additionalProperties": false, "allOf": [{ "if": { "properties": { "kind": { "const": "frame" } } }, "then": { "properties": { "id": { "pattern": "^frame_[0-9A-HJKMNP-TV-Z]{26}$" } } } }, { "if": { "properties": { "kind": { "const": "size" } } }, "then": { "properties": { "id": { "pattern": "^size_[0-9A-HJKMNP-TV-Z]{26}$" } } } }] }, "asset": { "$ref": "common.schema.json#/$defs/sha256", "description": "The picture marked final: a key of assets. For a size, its delivery-size file when one was made for its picture (full.asset), else its picture." }, "version": { "type": "integer", "minimum": 1, "description": "The version shown when it was marked (a frame's version, 'v3'); 1 for a picture with no versions." }, "set_id": { "type": "string", "pattern": "^fset_[0-9A-HJKMNP-TV-Z]{26}$", "description": "A size's format set." }, "format": { "$ref": "common.schema.json#/$defs/formatRef", "description": "A size's format, copied when it was marked." }, "channel": { "$ref": "common.schema.json#/$defs/formatChannel", "description": "A size's lane on the Campaign board (format-packs.json), copied when it was marked." }, "at": { "type": "string", "format": "date-time" }, "by": { "$ref": "common.schema.json#/$defs/personRef" } }, "required": ["id", "v", "field_v", "of", "asset", "at", "by"], "additionalProperties": false };
+var schema178 = { "enum": ["film", "social", "ooh", "print", "display"], "description": "The Campaign board's lanes (features/campaign-formats.clan): film (TV and online video), social, out of home, print, display. A format without one is placed by its kind: video \u2192 film, image \u2192 social, and ooh, print and display as themselves." };
+function validate89(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate87.evaluated;
+  const evaluated0 = validate89.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -13188,7 +14571,7 @@ function validate87(data, { instancePath = "", parentData, parentDataProperty, r
       errors++;
     }
     for (const key0 in data) {
-      if (!func1.call(schema169.properties, key0)) {
+      if (!func1.call(schema174.properties, key0)) {
         const err7 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err7];
@@ -13201,7 +14584,7 @@ function validate87(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.id !== void 0) {
       let data0 = data.id;
       if (typeof data0 === "string") {
-        if (!pattern146.test(data0)) {
+        if (!pattern152.test(data0)) {
           const err8 = { instancePath: instancePath + "/id", schemaPath: "#/properties/id/pattern", keyword: "pattern", params: { pattern: "^final_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^final_[0-9A-HJKMNP-TV-Z]{26}$"' };
           if (vErrors === null) {
             vErrors = [err8];
@@ -13484,7 +14867,7 @@ function validate87(data, { instancePath = "", parentData, parentDataProperty, r
         if (data4.kind !== void 0) {
           let data9 = data4.kind;
           if (!(data9 === "frame" || data9 === "size" || data9 === "picture")) {
-            const err28 = { instancePath: instancePath + "/of/kind", schemaPath: "#/properties/of/properties/kind/enum", keyword: "enum", params: { allowedValues: schema169.properties.of.properties.kind.enum }, message: "must be equal to one of the allowed values" };
+            const err28 = { instancePath: instancePath + "/of/kind", schemaPath: "#/properties/of/properties/kind/enum", keyword: "enum", params: { allowedValues: schema174.properties.of.properties.kind.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err28];
             } else {
@@ -13573,7 +14956,7 @@ function validate87(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.set_id !== void 0) {
       let data13 = data.set_id;
       if (typeof data13 === "string") {
-        if (!pattern153.test(data13)) {
+        if (!pattern159.test(data13)) {
           const err36 = { instancePath: instancePath + "/set_id", schemaPath: "#/properties/set_id/pattern", keyword: "pattern", params: { pattern: "^fset_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^fset_[0-9A-HJKMNP-TV-Z]{26}$"' };
           if (vErrors === null) {
             vErrors = [err36];
@@ -13601,7 +14984,7 @@ function validate87(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.channel !== void 0) {
       let data15 = data.channel;
       if (!(data15 === "film" || data15 === "social" || data15 === "ooh" || data15 === "print" || data15 === "display")) {
-        const err38 = { instancePath: instancePath + "/channel", schemaPath: "common.schema.json#/$defs/formatChannel/enum", keyword: "enum", params: { allowedValues: schema173.enum }, message: "must be equal to one of the allowed values" };
+        const err38 = { instancePath: instancePath + "/channel", schemaPath: "common.schema.json#/$defs/formatChannel/enum", keyword: "enum", params: { allowedValues: schema178.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err38];
         } else {
@@ -13663,14 +15046,14 @@ function validate87(data, { instancePath = "", parentData, parentDataProperty, r
     }
     errors++;
   }
-  validate87.errors = vErrors;
+  validate89.errors = vErrors;
   return errors === 0;
 }
-validate87.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-function validate90(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate89.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+function validate92(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate90.evaluated;
+  const evaluated0 = validate92.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -13737,7 +15120,7 @@ function validate90(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.id !== void 0) {
       let data0 = data.id;
       if (typeof data0 === "string") {
-        if (!pattern155.test(data0)) {
+        if (!pattern161.test(data0)) {
           const err6 = { instancePath: instancePath + "/id", schemaPath: "#/properties/id/pattern", keyword: "pattern", params: { pattern: "^text_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^text_[0-9A-HJKMNP-TV-Z]{26}$"' };
           if (vErrors === null) {
             vErrors = [err6];
@@ -13910,17 +15293,17 @@ function validate90(data, { instancePath = "", parentData, parentDataProperty, r
     }
     errors++;
   }
-  validate90.errors = vErrors;
+  validate92.errors = vErrors;
   return errors === 0;
 }
-validate90.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema179 = { "type": "object", "description": "A Format set: a master adapted to every format of a pack or a campaign plan (ui-behaviour 3.19; features/campaign-formats.clan). It shows on the canvas as a Campaign board. Its sizes are their own entities.", "properties": { "id": { "type": "string", "pattern": "^fset_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "master": { "type": "object", "properties": { "kind": { "enum": ["frame", "ref", "render", "video", "picture"] }, "id": { "type": "string", "pattern": "^[A-Za-z0-9_-]{6,64}$", "description": "The entity's id, or for a picture the canvas node's id (common id or sceneId)." }, "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "w": { "type": "integer", "minimum": 1 }, "h": { "type": "integer", "minimum": 1 } }, "required": ["kind", "id"], "additionalProperties": false, "description": "What every size is made from. picture: a picture on the canvas (its id is the canvas node's id). asset, w and h: the master's picture when the set was made (a video's: its render); protect and crop boxes are in these pixels, and a size made from another asset is out of date." }, "pack": { "type": "object", "properties": { "pack_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$" }, "pack_version": { "type": "string", "maxLength": 40, "minLength": 1 }, "client_id": { "type": "string", "maxLength": 64 } }, "required": ["pack_id", "pack_version"], "additionalProperties": false }, "plan": { "type": "object", "description": "What was asked for in Make all sizes: one pack (kind pack, its pack id) or a campaign plan (kind plan, format-packs.json plans), with the film lengths asked for (30 \u2192 15 and 6 by default).", "properties": { "kind": { "enum": ["pack", "plan"] }, "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$" }, "lengths_s": { "type": "array", "maxItems": 8, "items": { "type": "integer", "minimum": 1, "maximum": 600 } } }, "required": ["kind", "id"], "additionalProperties": false }, "protect": { "type": "object", "description": "What must stay in every size, asked once per master (Wren: 'What must stay in every size?'). boxes: a still master's, in its pixels. generations: a film's, per generation (keyed by its id), in its pixels. keep_middle: the person chose no box; crops keep the middle. Changing it puts the crop sizes out of date, nothing else.", "properties": { "boxes": { "type": "array", "maxItems": 8, "items": { "$ref": "common.schema.json#/$defs/protectBox" } }, "generations": { "type": "object", "propertyNames": { "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "type": "array", "maxItems": 8, "items": { "$ref": "common.schema.json#/$defs/protectBox" } } }, "keep_middle": { "type": "boolean" } }, "additionalProperties": false }, "copy": { "type": "object", "description": "The words every size lays out as type layers (Edit type): the brand line, legal and the supers. Drawn by the relay and stitch, never sent to a model. A size's own words are in its layers.", "properties": { "line": { "type": "string", "maxLength": 200 }, "legal": { "type": "string", "maxLength": 600 }, "supers": { "type": "array", "maxItems": 20, "items": { "type": "string", "minLength": 1, "maxLength": 200 } } }, "additionalProperties": false }, "reframes": { "type": "object", "description": "A film's shots made again for a shape (phase 6), keyed <generation id>@<w>x<h> (the size's shape): Aleph 2's outpaint of the generation (new edges, at the nearest of its ratios; 4:5 at 3:4), or Remake for vertical (the shot made again at the shape on a model that carries its characters). Each is its own paid job; every size of that shape that keeps the shot uses it. Added 2026-10-16 (additive).", "propertyNames": { "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}@[1-9][0-9]{0,4}x[1-9][0-9]{0,4}$" }, "maxProperties": 200, "additionalProperties": { "type": "object", "properties": { "generation_id": { "type": "string", "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$" }, "shot_id": { "type": "string", "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$" }, "aspect": { "$ref": "common.schema.json#/$defs/aspect" }, "method": { "enum": ["outpaint", "remake"] }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "model": { "type": "string", "maxLength": 64 }, "asset": { "$ref": "common.schema.json#/$defs/sha256", "description": "The clip it made, once landed." }, "size": { "$ref": "common.schema.json#/$defs/aspect", "description": "The clip's pixels." } }, "required": ["generation_id", "shot_id", "aspect", "method", "job_id"], "additionalProperties": false } } }, "required": ["id", "v", "field_v", "master", "pack"], "additionalProperties": false };
-var schema183 = { "type": "object", "description": "What must stay in every size (Wren's ask 'What must stay in every size?'): a subject or a product, as a box in the master's pixels. The logo and the words are never boxes: they are type layers from the Brand board.", "properties": { "role": { "enum": ["subject", "product", "other"] }, "label": { "type": "string", "minLength": 1, "maxLength": 40 }, "x": { "type": "number", "minimum": 0 }, "y": { "type": "number", "minimum": 0 }, "w": { "type": "number", "exclusiveMinimum": 0 }, "h": { "type": "number", "exclusiveMinimum": 0 } }, "required": ["role", "x", "y", "w", "h"], "additionalProperties": false };
-var pattern167 = new RegExp("^gen_[0-9A-HJKMNP-TV-Z]{26}@[1-9][0-9]{0,4}x[1-9][0-9]{0,4}$", "u");
-function validate92(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate92.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var schema184 = { "type": "object", "description": "A Format set: a master adapted to every format of a pack or a campaign plan (ui-behaviour 3.19; features/campaign-formats.clan). It shows on the canvas as a Campaign board. Its sizes are their own entities.", "properties": { "id": { "type": "string", "pattern": "^fset_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "master": { "type": "object", "properties": { "kind": { "enum": ["frame", "ref", "render", "video", "picture"] }, "id": { "type": "string", "pattern": "^[A-Za-z0-9_-]{6,64}$", "description": "The entity's id, or for a picture the canvas node's id (common id or sceneId)." }, "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "w": { "type": "integer", "minimum": 1 }, "h": { "type": "integer", "minimum": 1 } }, "required": ["kind", "id"], "additionalProperties": false, "description": "What every size is made from. picture: a picture on the canvas (its id is the canvas node's id). asset, w and h: the master's picture when the set was made (a video's: its render); protect and crop boxes are in these pixels, and a size made from another asset is out of date." }, "pack": { "type": "object", "properties": { "pack_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$" }, "pack_version": { "type": "string", "maxLength": 40, "minLength": 1 }, "client_id": { "type": "string", "maxLength": 64 } }, "required": ["pack_id", "pack_version"], "additionalProperties": false }, "plan": { "type": "object", "description": "What was asked for in Make all sizes: one pack (kind pack, its pack id) or a campaign plan (kind plan, format-packs.json plans), with the film lengths asked for (30 \u2192 15 and 6 by default).", "properties": { "kind": { "enum": ["pack", "plan"] }, "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$" }, "lengths_s": { "type": "array", "maxItems": 8, "items": { "type": "integer", "minimum": 1, "maximum": 600 } } }, "required": ["kind", "id"], "additionalProperties": false }, "protect": { "type": "object", "description": "What must stay in every size, asked once per master (Wren: 'What must stay in every size?'). boxes: a still master's, in its pixels. generations: a film's, per generation (keyed by its id), in its pixels. keep_middle: the person chose no box; crops keep the middle. Changing it puts the crop sizes out of date, nothing else.", "properties": { "boxes": { "type": "array", "maxItems": 8, "items": { "$ref": "common.schema.json#/$defs/protectBox" } }, "generations": { "type": "object", "propertyNames": { "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$" }, "additionalProperties": { "type": "array", "maxItems": 8, "items": { "$ref": "common.schema.json#/$defs/protectBox" } } }, "keep_middle": { "type": "boolean" } }, "additionalProperties": false }, "copy": { "type": "object", "description": "The words every size lays out as type layers (Edit type): the brand line, legal and the supers. Drawn by the relay and stitch, never sent to a model. A size's own words are in its layers.", "properties": { "line": { "type": "string", "maxLength": 200 }, "legal": { "type": "string", "maxLength": 600 }, "supers": { "type": "array", "maxItems": 20, "items": { "type": "string", "minLength": 1, "maxLength": 200 } } }, "additionalProperties": false }, "reframes": { "type": "object", "description": "A film's shots made again for a shape (phase 6), keyed <generation id>@<w>x<h> (the size's shape): Aleph 2's outpaint of the generation (new edges, at the nearest of its ratios; 4:5 at 3:4), or Remake for vertical (the shot made again at the shape on a model that carries its characters). Each is its own paid job; every size of that shape that keeps the shot uses it. Added 2026-10-16 (additive).", "propertyNames": { "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}@[1-9][0-9]{0,4}x[1-9][0-9]{0,4}$" }, "maxProperties": 200, "additionalProperties": { "type": "object", "properties": { "generation_id": { "type": "string", "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$" }, "shot_id": { "type": "string", "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$" }, "aspect": { "$ref": "common.schema.json#/$defs/aspect" }, "method": { "enum": ["outpaint", "remake"] }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "model": { "type": "string", "maxLength": 64 }, "asset": { "$ref": "common.schema.json#/$defs/sha256", "description": "The clip it made, once landed." }, "size": { "$ref": "common.schema.json#/$defs/aspect", "description": "The clip's pixels." } }, "required": ["generation_id", "shot_id", "aspect", "method", "job_id"], "additionalProperties": false } } }, "required": ["id", "v", "field_v", "master", "pack"], "additionalProperties": false };
+var schema188 = { "type": "object", "description": "What must stay in every size (Wren's ask 'What must stay in every size?'): a subject or a product, as a box in the master's pixels. The logo and the words are never boxes: they are type layers from the Brand board.", "properties": { "role": { "enum": ["subject", "product", "other"] }, "label": { "type": "string", "minLength": 1, "maxLength": 40 }, "x": { "type": "number", "minimum": 0 }, "y": { "type": "number", "minimum": 0 }, "w": { "type": "number", "exclusiveMinimum": 0 }, "h": { "type": "number", "exclusiveMinimum": 0 } }, "required": ["role", "x", "y", "w", "h"], "additionalProperties": false };
+var pattern173 = new RegExp("^gen_[0-9A-HJKMNP-TV-Z]{26}@[1-9][0-9]{0,4}x[1-9][0-9]{0,4}$", "u");
+function validate94(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate92.evaluated;
+  const evaluated0 = validate94.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -13974,7 +15357,7 @@ function validate92(data, { instancePath = "", parentData, parentDataProperty, r
       errors++;
     }
     for (const key0 in data) {
-      if (!func1.call(schema179.properties, key0)) {
+      if (!func1.call(schema184.properties, key0)) {
         const err5 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err5];
@@ -13987,7 +15370,7 @@ function validate92(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.id !== void 0) {
       let data0 = data.id;
       if (typeof data0 === "string") {
-        if (!pattern153.test(data0)) {
+        if (!pattern159.test(data0)) {
           const err6 = { instancePath: instancePath + "/id", schemaPath: "#/properties/id/pattern", keyword: "pattern", params: { pattern: "^fset_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^fset_[0-9A-HJKMNP-TV-Z]{26}$"' };
           if (vErrors === null) {
             vErrors = [err6];
@@ -14142,7 +15525,7 @@ function validate92(data, { instancePath = "", parentData, parentDataProperty, r
         if (data4.kind !== void 0) {
           let data5 = data4.kind;
           if (!(data5 === "frame" || data5 === "ref" || data5 === "render" || data5 === "video" || data5 === "picture")) {
-            const err20 = { instancePath: instancePath + "/master/kind", schemaPath: "#/properties/master/properties/kind/enum", keyword: "enum", params: { allowedValues: schema179.properties.master.properties.kind.enum }, message: "must be equal to one of the allowed values" };
+            const err20 = { instancePath: instancePath + "/master/kind", schemaPath: "#/properties/master/properties/kind/enum", keyword: "enum", params: { allowedValues: schema184.properties.master.properties.kind.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err20];
             } else {
@@ -14403,7 +15786,7 @@ function validate92(data, { instancePath = "", parentData, parentDataProperty, r
         if (data14.kind !== void 0) {
           let data15 = data14.kind;
           if (!(data15 === "pack" || data15 === "plan")) {
-            const err44 = { instancePath: instancePath + "/plan/kind", schemaPath: "#/properties/plan/properties/kind/enum", keyword: "enum", params: { allowedValues: schema179.properties.plan.properties.kind.enum }, message: "must be equal to one of the allowed values" };
+            const err44 = { instancePath: instancePath + "/plan/kind", schemaPath: "#/properties/plan/properties/kind/enum", keyword: "enum", params: { allowedValues: schema184.properties.plan.properties.kind.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err44];
             } else {
@@ -14588,7 +15971,7 @@ function validate92(data, { instancePath = "", parentData, parentDataProperty, r
                 if (data21.role !== void 0) {
                   let data22 = data21.role;
                   if (!(data22 === "subject" || data22 === "product" || data22 === "other")) {
-                    const err61 = { instancePath: instancePath + "/protect/boxes/" + i1 + "/role", schemaPath: "common.schema.json#/$defs/protectBox/properties/role/enum", keyword: "enum", params: { allowedValues: schema183.properties.role.enum }, message: "must be equal to one of the allowed values" };
+                    const err61 = { instancePath: instancePath + "/protect/boxes/" + i1 + "/role", schemaPath: "common.schema.json#/$defs/protectBox/properties/role/enum", keyword: "enum", params: { allowedValues: schema188.properties.role.enum }, message: "must be equal to one of the allowed values" };
                     if (vErrors === null) {
                       vErrors = [err61];
                     } else {
@@ -14838,7 +16221,7 @@ function validate92(data, { instancePath = "", parentData, parentDataProperty, r
                     if (data30.role !== void 0) {
                       let data31 = data30.role;
                       if (!(data31 === "subject" || data31 === "product" || data31 === "other")) {
-                        const err84 = { instancePath: instancePath + "/protect/generations/" + key9.replace(/~/g, "~0").replace(/\//g, "~1") + "/" + i2 + "/role", schemaPath: "common.schema.json#/$defs/protectBox/properties/role/enum", keyword: "enum", params: { allowedValues: schema183.properties.role.enum }, message: "must be equal to one of the allowed values" };
+                        const err84 = { instancePath: instancePath + "/protect/generations/" + key9.replace(/~/g, "~0").replace(/\//g, "~1") + "/" + i2 + "/role", schemaPath: "common.schema.json#/$defs/protectBox/properties/role/enum", keyword: "enum", params: { allowedValues: schema188.properties.role.enum }, message: "must be equal to one of the allowed values" };
                         if (vErrors === null) {
                           vErrors = [err84];
                         } else {
@@ -15154,7 +16537,7 @@ function validate92(data, { instancePath = "", parentData, parentDataProperty, r
         for (const key12 in data43) {
           const _errs102 = errors;
           if (typeof key12 === "string") {
-            if (!pattern167.test(key12)) {
+            if (!pattern173.test(key12)) {
               const err113 = { instancePath: instancePath + "/reframes", schemaPath: "#/properties/reframes/propertyNames/pattern", keyword: "pattern", params: { pattern: "^gen_[0-9A-HJKMNP-TV-Z]{26}@[1-9][0-9]{0,4}x[1-9][0-9]{0,4}$" }, message: 'must match pattern "^gen_[0-9A-HJKMNP-TV-Z]{26}@[1-9][0-9]{0,4}x[1-9][0-9]{0,4}$"', propertyName: key12 };
               if (vErrors === null) {
                 vErrors = [err113];
@@ -15387,7 +16770,7 @@ function validate92(data, { instancePath = "", parentData, parentDataProperty, r
             if (data44.method !== void 0) {
               let data50 = data44.method;
               if (!(data50 === "outpaint" || data50 === "remake")) {
-                const err135 = { instancePath: instancePath + "/reframes/" + key13.replace(/~/g, "~0").replace(/\//g, "~1") + "/method", schemaPath: "#/properties/reframes/additionalProperties/properties/method/enum", keyword: "enum", params: { allowedValues: schema179.properties.reframes.additionalProperties.properties.method.enum }, message: "must be equal to one of the allowed values" };
+                const err135 = { instancePath: instancePath + "/reframes/" + key13.replace(/~/g, "~0").replace(/\//g, "~1") + "/method", schemaPath: "#/properties/reframes/additionalProperties/properties/method/enum", keyword: "enum", params: { allowedValues: schema184.properties.reframes.additionalProperties.properties.method.enum }, message: "must be equal to one of the allowed values" };
                 if (vErrors === null) {
                   vErrors = [err135];
                 } else {
@@ -15597,19 +16980,19 @@ function validate92(data, { instancePath = "", parentData, parentDataProperty, r
     }
     errors++;
   }
-  validate92.errors = vErrors;
+  validate94.errors = vErrors;
   return errors === 0;
 }
-validate92.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema188 = { "type": "object", "description": "One size of a format set: the format's values copied at creation, how it is made and where it stands (features/campaign-formats.clan). A tile on the Campaign board.", "properties": { "id": { "type": "string", "pattern": "^size_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "set_id": { "type": "string", "pattern": "^fset_[0-9A-HJKMNP-TV-Z]{26}$" }, "rank": { "$ref": "common.schema.json#/$defs/rank" }, "format": { "$ref": "common.schema.json#/$defs/formatRef" }, "aspect": { "$ref": "common.schema.json#/$defs/aspect" }, "delivery": { "$ref": "common.schema.json#/$defs/deliveryPx" }, "bleed_mm": { "type": "number", "minimum": 0, "maximum": 50 }, "safe_area": { "$ref": "common.schema.json#/$defs/safeArea" }, "method": { "$ref": "common.schema.json#/$defs/sizeMethod" }, "media": { "enum": ["image", "video"] }, "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "status": { "enum": ["making", "ready", "look", "stale"], "description": "making: its job runs. ready. look: Jude flagged it (needs a look). stale: what it was made from changed (Update sizes). Absent: not made yet (its method waits for a later build)." }, "locked": { "type": "boolean", "description": "Locked: Update sizes, Redo and a new master never change it." }, "from_asset": { "$ref": "common.schema.json#/$defs/sha256", "description": "The master's asset it was made from: when the master's is another, the size is out of date ('Master changed \xB7 N out of date')." }, "crop": { "$ref": "common.schema.json#/$defs/pxBox", "description": "The part of the master it shows, in the master's pixels: the subject-aware crop, or the person's (Adjust crop)." }, "crop_by": { "enum": ["rule", "person"], "description": "person: Adjust crop set it, so Update sizes keeps it." }, "plate": { "$ref": "common.schema.json#/$defs/sha256", "description": "The size's picture before its type layers (the relay's resize result plate): Edit type draws on it again for free, without making the picture again, and Export at full size upscales it. Added 2026-10-16 (phase 4, additive)." }, "render": { "type": "object", "description": "Facts measured when the size's picture landed, read by Jude's checks: drawn is how many type layers the relay drew on it (a logo it could not read is not drawn); look is how far its colour and tone are from the master's, 0 (the same) to 1, measured for extend and regenerate. Added 2026-11-03 (art-director, additive).", "properties": { "drawn": { "type": "integer", "minimum": 0 }, "look": { "type": "number", "minimum": 0, "maximum": 1 }, "product": { "enum": ["kept", "restored", "changed"], "description": "A regenerate with a protected product: kept (it came back as drawn), restored (the master's pixels were laid back over it) or changed (the relay could not find it: the size is flagged). Added 2026-11-23 (pt-final-and-fit, additive)." } }, "additionalProperties": false }, "full": { "type": "object", "description": "The delivery-size file Export at full size made (Magnific's upscale of the plate, the type drawn again at full size), kept so a second export spends nothing. Out of date when the plate or the type changed since (from differs from plate). Added 2026-10-16 (phase 4, additive).", "properties": { "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "from": { "$ref": "common.schema.json#/$defs/sha256", "description": "The size's asset (the typed preview) it was made for." }, "scale": { "enum": [4, 8], "description": "Magnific's scale; absent when the plate was only scaled (Magnific cannot take a side under 300 px)." } }, "required": ["from"], "additionalProperties": false }, "layers": { "type": "object", "propertyNames": { "$ref": "common.schema.json#/$defs/typeLayerKind" }, "additionalProperties": { "$ref": "common.schema.json#/$defs/typeLayerOverride" }, "description": "This size's changes to the type layers (Edit type), by layer." }, "length_s": { "type": "number", "exclusiveMinimum": 0, "maximum": 600, "description": "A film size's length (a cutdown: 15, 6)." }, "edl": { "type": "array", "maxItems": 100, "description": "A cutdown's edit: windows of the master's V1 clips in cut order (each a generation's in/out), each with its crop for a re-aspect (features/make-and-edit.clan: size.edl reads V1).", "items": { "type": "object", "properties": { "shot_id": { "$ref": "common.schema.json#/$defs/id" }, "generation_id": { "type": "string", "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$" }, "in_s": { "type": "number", "minimum": 0 }, "out_s": { "type": "number", "exclusiveMinimum": 0 }, "crop": { "$ref": "common.schema.json#/$defs/pxBox" }, "crop_keys": { "type": "array", "minItems": 2, "maxItems": 3, "description": "A slow pan (phase 6): the crop at points through the window (at 0: in, 1: out), in the generation's pixels. Wins over crop. Added 2026-10-16 (additive).", "items": { "type": "object", "properties": { "at": { "type": "number", "minimum": 0, "maximum": 1 }, "box": { "$ref": "common.schema.json#/$defs/pxBox" } }, "required": ["at", "box"], "additionalProperties": false } }, "crop_by": { "enum": ["rule", "person"], "description": "person: Adjust crop on the clip tile set it (a still box). Added 2026-10-16 (additive)." }, "take_size": { "$ref": "common.schema.json#/$defs/aspect", "description": "The generation's pixels, which crop and crop_keys are in. Added 2026-10-16 (additive)." }, "end_card": { "type": "boolean" } }, "required": ["shot_id", "in_s", "out_s"], "additionalProperties": false } }, "beats": { "type": "array", "maxItems": 100, "description": "A cutdown's beat plan (Dex, phase 5), shown before it renders: every shot of the master in cut order, kept or dropped, with his reason. Keep or drop on the plan changes the edl. Added 2026-10-16 (additive).", "items": { "type": "object", "properties": { "shot_id": { "$ref": "common.schema.json#/$defs/id" }, "keep": { "type": "boolean" }, "why": { "type": "string", "maxLength": 300 }, "by": { "enum": ["dex", "person"], "description": "person: kept or dropped by a person against Dex's plan." } }, "required": ["shot_id", "keep"], "additionalProperties": false } }, "checks": { "type": "object", "propertyNames": { "$ref": "common.schema.json#/$defs/formatCheckCode" }, "description": "Jude's per-format checks, by check; they never block. Ignore is recorded on the check.", "additionalProperties": { "type": "object", "properties": { "result": { "enum": ["pass", "flag", "unverified"] }, "note": { "type": "string", "minLength": 1, "maxLength": 300 }, "ignored": { "type": "object", "properties": { "by": { "$ref": "common.schema.json#/$defs/personRef" }, "at": { "type": "string", "format": "date-time" } }, "required": ["by", "at"], "additionalProperties": false } }, "required": ["result", "note"], "additionalProperties": false } } }, "required": ["id", "v", "field_v", "set_id", "rank", "format", "aspect", "delivery", "method", "media"], "additionalProperties": false };
-var schema194 = { "description": "format-packs.json safe_area: insets from each edge, or a centred live box.", "oneOf": [{ "type": "object", "properties": { "type": { "const": "insets" }, "top": { "type": "number", "minimum": 0 }, "right": { "type": "number", "minimum": 0 }, "bottom": { "type": "number", "minimum": 0 }, "left": { "type": "number", "minimum": 0 }, "unit": { "enum": ["%", "px", "mm"] } }, "required": ["type", "top", "right", "bottom", "left", "unit"], "additionalProperties": false }, { "type": "object", "properties": { "type": { "const": "box" }, "width": { "type": "number", "exclusiveMinimum": 0 }, "height": { "type": "number", "exclusiveMinimum": 0 }, "unit": { "enum": ["%", "px", "mm"] }, "basis": { "const": "full_size" }, "anchor": { "const": "centre" } }, "required": ["type", "width", "height", "unit", "basis", "anchor"], "additionalProperties": false }] };
-var schema195 = { "enum": ["crop", "extend", "nearest", "reframe", "regenerate", "layout", "reedit"], "description": "How a size is made from its master (features/campaign-formats.clan, a method per format). crop: a subject-aware crop on the relay, free. extend: an Ideogram 4.5 mask on the padded clean plate. nearest: the model's nearest ratio, then a crop. regenerate: Gemini 3 Pro with the master and the named references at the nearest ratio, then a crop. layout: a crop and the type layers on a brand colour field (banners), free. reedit: a cutdown, windows of the same takes (stitch), free on the provider. reframe: a clip cropped per shot, outpainted by Aleph 2 only where the crop would cut a protected box." };
-var schema202 = { "enum": ["line", "logo", "supers", "legal", "captions"], "description": "The type laid out on every size from the Brand board and the format's safe area (features/campaign-formats.clan): the brand line, the logo, supers (on-screen words) and legal. captions (a film's spoken lines, burnt in for sound off; on by default on the social shapes 9:16, 4:5 and 1:1, CF9; added 2026-10-16, additive): one layer per line, timed by fromS and toS. Rendered by the relay (stills) and stitch (video); never sent to a model." };
-var schema210 = { "enum": ["subject_safe", "logo_safe", "clear_space", "type_size", "ooh_words", "line_present", "end_card", "sound_off", "brand_first_3s", "logo_present", "look_match"], "description": "Jude's per-format checks (features/campaign-formats.clan); they never block. subject_safe: every protected box inside the safe area. logo_safe: the logo inside the safe area. clear_space: the logo's clear space is free of type. type_size: type at least the format's minimum size. ooh_words: an out-of-home line is 7 words or fewer. line_present: the brand line is on the size. end_card: a film ends on its end card. sound_off: social video carries supers or captions. brand_first_3s: social video shows the brand in its first 3 s. logo_present: the Brand board has a logo and it is drawn on the size (added 2026-11-03, additive). look_match: the size's colour and tone are close to the master's (added 2026-11-03, additive). A check's result is pass, flag, or unverified (Jude cannot measure it, e.g. what must stay in a regenerated picture)." };
-function validate96(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate94.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var schema193 = { "type": "object", "description": "One size of a format set: the format's values copied at creation, how it is made and where it stands (features/campaign-formats.clan). A tile on the Campaign board.", "properties": { "id": { "type": "string", "pattern": "^size_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "set_id": { "type": "string", "pattern": "^fset_[0-9A-HJKMNP-TV-Z]{26}$" }, "rank": { "$ref": "common.schema.json#/$defs/rank" }, "format": { "$ref": "common.schema.json#/$defs/formatRef" }, "aspect": { "$ref": "common.schema.json#/$defs/aspect" }, "delivery": { "$ref": "common.schema.json#/$defs/deliveryPx" }, "bleed_mm": { "type": "number", "minimum": 0, "maximum": 50 }, "safe_area": { "$ref": "common.schema.json#/$defs/safeArea" }, "method": { "$ref": "common.schema.json#/$defs/sizeMethod" }, "media": { "enum": ["image", "video"] }, "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "status": { "enum": ["making", "ready", "look", "stale"], "description": "making: its job runs. ready. look: Jude flagged it (needs a look). stale: what it was made from changed (Update sizes). Absent: not made yet (its method waits for a later build)." }, "locked": { "type": "boolean", "description": "Locked: Update sizes, Redo and a new master never change it." }, "from_asset": { "$ref": "common.schema.json#/$defs/sha256", "description": "The master's asset it was made from: when the master's is another, the size is out of date ('Master changed \xB7 N out of date')." }, "crop": { "$ref": "common.schema.json#/$defs/pxBox", "description": "The part of the master it shows, in the master's pixels: the subject-aware crop, or the person's (Adjust crop)." }, "crop_by": { "enum": ["rule", "person"], "description": "person: Adjust crop set it, so Update sizes keeps it." }, "plate": { "$ref": "common.schema.json#/$defs/sha256", "description": "The size's picture before its type layers (the relay's resize result plate): Edit type draws on it again for free, without making the picture again, and Export at full size upscales it. Added 2026-10-16 (phase 4, additive)." }, "render": { "type": "object", "description": "Facts measured when the size's picture landed, read by Jude's checks: drawn is how many type layers the relay drew on it (a logo it could not read is not drawn); look is how far its colour and tone are from the master's, 0 (the same) to 1, measured for extend and regenerate. Added 2026-11-03 (art-director, additive).", "properties": { "drawn": { "type": "integer", "minimum": 0 }, "look": { "type": "number", "minimum": 0, "maximum": 1 }, "product": { "enum": ["kept", "restored", "changed"], "description": "A regenerate with a protected product: kept (it came back as drawn), restored (the master's pixels were laid back over it) or changed (the relay could not find it: the size is flagged). Added 2026-11-23 (pt-final-and-fit, additive)." } }, "additionalProperties": false }, "full": { "type": "object", "description": "The delivery-size file Export at full size made (Magnific's upscale of the plate, the type drawn again at full size), kept so a second export spends nothing. Out of date when the plate or the type changed since (from differs from plate). Added 2026-10-16 (phase 4, additive).", "properties": { "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "from": { "$ref": "common.schema.json#/$defs/sha256", "description": "The size's asset (the typed preview) it was made for." }, "scale": { "enum": [4, 8], "description": "Magnific's scale; absent when the plate was only scaled (Magnific cannot take a side under 300 px)." } }, "required": ["from"], "additionalProperties": false }, "layers": { "type": "object", "propertyNames": { "$ref": "common.schema.json#/$defs/typeLayerKind" }, "additionalProperties": { "$ref": "common.schema.json#/$defs/typeLayerOverride" }, "description": "This size's changes to the type layers (Edit type), by layer." }, "length_s": { "type": "number", "exclusiveMinimum": 0, "maximum": 600, "description": "A film size's length (a cutdown: 15, 6)." }, "edl": { "type": "array", "maxItems": 100, "description": "A cutdown's edit: windows of the master's V1 clips in cut order (each a generation's in/out), each with its crop for a re-aspect (features/make-and-edit.clan: size.edl reads V1).", "items": { "type": "object", "properties": { "shot_id": { "$ref": "common.schema.json#/$defs/id" }, "generation_id": { "type": "string", "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$" }, "in_s": { "type": "number", "minimum": 0 }, "out_s": { "type": "number", "exclusiveMinimum": 0 }, "crop": { "$ref": "common.schema.json#/$defs/pxBox" }, "crop_keys": { "type": "array", "minItems": 2, "maxItems": 3, "description": "A slow pan (phase 6): the crop at points through the window (at 0: in, 1: out), in the generation's pixels. Wins over crop. Added 2026-10-16 (additive).", "items": { "type": "object", "properties": { "at": { "type": "number", "minimum": 0, "maximum": 1 }, "box": { "$ref": "common.schema.json#/$defs/pxBox" } }, "required": ["at", "box"], "additionalProperties": false } }, "crop_by": { "enum": ["rule", "person"], "description": "person: Adjust crop on the clip tile set it (a still box). Added 2026-10-16 (additive)." }, "take_size": { "$ref": "common.schema.json#/$defs/aspect", "description": "The generation's pixels, which crop and crop_keys are in. Added 2026-10-16 (additive)." }, "end_card": { "type": "boolean" } }, "required": ["shot_id", "in_s", "out_s"], "additionalProperties": false } }, "beats": { "type": "array", "maxItems": 100, "description": "A cutdown's beat plan (Dex, phase 5), shown before it renders: every shot of the master in cut order, kept or dropped, with his reason. Keep or drop on the plan changes the edl. Added 2026-10-16 (additive).", "items": { "type": "object", "properties": { "shot_id": { "$ref": "common.schema.json#/$defs/id" }, "keep": { "type": "boolean" }, "why": { "type": "string", "maxLength": 300 }, "by": { "enum": ["dex", "person"], "description": "person: kept or dropped by a person against Dex's plan." } }, "required": ["shot_id", "keep"], "additionalProperties": false } }, "checks": { "type": "object", "propertyNames": { "$ref": "common.schema.json#/$defs/formatCheckCode" }, "description": "Jude's per-format checks, by check; they never block. Ignore is recorded on the check.", "additionalProperties": { "type": "object", "properties": { "result": { "enum": ["pass", "flag", "unverified"] }, "note": { "type": "string", "minLength": 1, "maxLength": 300 }, "ignored": { "type": "object", "properties": { "by": { "$ref": "common.schema.json#/$defs/personRef" }, "at": { "type": "string", "format": "date-time" } }, "required": ["by", "at"], "additionalProperties": false } }, "required": ["result", "note"], "additionalProperties": false } } }, "required": ["id", "v", "field_v", "set_id", "rank", "format", "aspect", "delivery", "method", "media"], "additionalProperties": false };
+var schema199 = { "description": "format-packs.json safe_area: insets from each edge, or a centred live box.", "oneOf": [{ "type": "object", "properties": { "type": { "const": "insets" }, "top": { "type": "number", "minimum": 0 }, "right": { "type": "number", "minimum": 0 }, "bottom": { "type": "number", "minimum": 0 }, "left": { "type": "number", "minimum": 0 }, "unit": { "enum": ["%", "px", "mm"] } }, "required": ["type", "top", "right", "bottom", "left", "unit"], "additionalProperties": false }, { "type": "object", "properties": { "type": { "const": "box" }, "width": { "type": "number", "exclusiveMinimum": 0 }, "height": { "type": "number", "exclusiveMinimum": 0 }, "unit": { "enum": ["%", "px", "mm"] }, "basis": { "const": "full_size" }, "anchor": { "const": "centre" } }, "required": ["type", "width", "height", "unit", "basis", "anchor"], "additionalProperties": false }] };
+var schema200 = { "enum": ["crop", "extend", "nearest", "reframe", "regenerate", "layout", "reedit"], "description": "How a size is made from its master (features/campaign-formats.clan, a method per format). crop: a subject-aware crop on the relay, free. extend: an Ideogram 4.5 mask on the padded clean plate. nearest: the model's nearest ratio, then a crop. regenerate: Gemini 3 Pro with the master and the named references at the nearest ratio, then a crop. layout: a crop and the type layers on a brand colour field (banners), free. reedit: a cutdown, windows of the same takes (stitch), free on the provider. reframe: a clip cropped per shot, outpainted by Aleph 2 only where the crop would cut a protected box." };
+var schema207 = { "enum": ["line", "logo", "supers", "legal", "captions"], "description": "The type laid out on every size from the Brand board and the format's safe area (features/campaign-formats.clan): the brand line, the logo, supers (on-screen words) and legal. captions (a film's spoken lines, burnt in for sound off; on by default on the social shapes 9:16, 4:5 and 1:1, CF9; added 2026-10-16, additive): one layer per line, timed by fromS and toS. Rendered by the relay (stills) and stitch (video); never sent to a model." };
+var schema215 = { "enum": ["subject_safe", "logo_safe", "clear_space", "type_size", "ooh_words", "line_present", "end_card", "sound_off", "brand_first_3s", "logo_present", "look_match"], "description": "Jude's per-format checks (features/campaign-formats.clan); they never block. subject_safe: every protected box inside the safe area. logo_safe: the logo inside the safe area. clear_space: the logo's clear space is free of type. type_size: type at least the format's minimum size. ooh_words: an out-of-home line is 7 words or fewer. line_present: the brand line is on the size. end_card: a film ends on its end card. sound_off: social video carries supers or captions. brand_first_3s: social video shows the brand in its first 3 s. logo_present: the Brand board has a logo and it is drawn on the size (added 2026-11-03, additive). look_match: the size's colour and tone are close to the master's (added 2026-11-03, additive). A check's result is pass, flag, or unverified (Jude cannot measure it, e.g. what must stay in a regenerated picture)." };
+function validate98(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate96.evaluated;
+  const evaluated0 = validate98.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -15885,14 +17268,14 @@ function validate96(data, { instancePath = "", parentData, parentDataProperty, r
     }
     errors++;
   }
-  validate96.errors = vErrors;
+  validate98.errors = vErrors;
   return errors === 0;
 }
-validate96.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-function validate94(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate98.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+function validate96(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate94.evaluated;
+  const evaluated0 = validate96.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -15991,7 +17374,7 @@ function validate94(data, { instancePath = "", parentData, parentDataProperty, r
       errors++;
     }
     for (const key0 in data) {
-      if (!func1.call(schema188.properties, key0)) {
+      if (!func1.call(schema193.properties, key0)) {
         const err10 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err10];
@@ -16127,7 +17510,7 @@ function validate94(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.set_id !== void 0) {
       let data4 = data.set_id;
       if (typeof data4 === "string") {
-        if (!pattern153.test(data4)) {
+        if (!pattern159.test(data4)) {
           const err22 = { instancePath: instancePath + "/set_id", schemaPath: "#/properties/set_id/pattern", keyword: "pattern", params: { pattern: "^fset_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^fset_[0-9A-HJKMNP-TV-Z]{26}$"' };
           if (vErrors === null) {
             vErrors = [err22];
@@ -16573,7 +17956,7 @@ function validate94(data, { instancePath = "", parentData, parentDataProperty, r
         if (data14.unit !== void 0) {
           let data20 = data14.unit;
           if (!(data20 === "%" || data20 === "px" || data20 === "mm")) {
-            const err63 = { instancePath: instancePath + "/safe_area/unit", schemaPath: "common.schema.json#/$defs/safeArea/oneOf/0/properties/unit/enum", keyword: "enum", params: { allowedValues: schema194.oneOf[0].properties.unit.enum }, message: "must be equal to one of the allowed values" };
+            const err63 = { instancePath: instancePath + "/safe_area/unit", schemaPath: "common.schema.json#/$defs/safeArea/oneOf/0/properties/unit/enum", keyword: "enum", params: { allowedValues: schema199.oneOf[0].properties.unit.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err63];
             } else {
@@ -16722,7 +18105,7 @@ function validate94(data, { instancePath = "", parentData, parentDataProperty, r
         if (data14.unit !== void 0) {
           let data24 = data14.unit;
           if (!(data24 === "%" || data24 === "px" || data24 === "mm")) {
-            const err77 = { instancePath: instancePath + "/safe_area/unit", schemaPath: "common.schema.json#/$defs/safeArea/oneOf/1/properties/unit/enum", keyword: "enum", params: { allowedValues: schema194.oneOf[1].properties.unit.enum }, message: "must be equal to one of the allowed values" };
+            const err77 = { instancePath: instancePath + "/safe_area/unit", schemaPath: "common.schema.json#/$defs/safeArea/oneOf/1/properties/unit/enum", keyword: "enum", params: { allowedValues: schema199.oneOf[1].properties.unit.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err77];
             } else {
@@ -16797,7 +18180,7 @@ function validate94(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.method !== void 0) {
       let data27 = data.method;
       if (!(data27 === "crop" || data27 === "extend" || data27 === "nearest" || data27 === "reframe" || data27 === "regenerate" || data27 === "layout" || data27 === "reedit")) {
-        const err82 = { instancePath: instancePath + "/method", schemaPath: "common.schema.json#/$defs/sizeMethod/enum", keyword: "enum", params: { allowedValues: schema195.enum }, message: "must be equal to one of the allowed values" };
+        const err82 = { instancePath: instancePath + "/method", schemaPath: "common.schema.json#/$defs/sizeMethod/enum", keyword: "enum", params: { allowedValues: schema200.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err82];
         } else {
@@ -16809,7 +18192,7 @@ function validate94(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.media !== void 0) {
       let data28 = data.media;
       if (!(data28 === "image" || data28 === "video")) {
-        const err83 = { instancePath: instancePath + "/media", schemaPath: "#/properties/media/enum", keyword: "enum", params: { allowedValues: schema188.properties.media.enum }, message: "must be equal to one of the allowed values" };
+        const err83 = { instancePath: instancePath + "/media", schemaPath: "#/properties/media/enum", keyword: "enum", params: { allowedValues: schema193.properties.media.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err83];
         } else {
@@ -16865,7 +18248,7 @@ function validate94(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.status !== void 0) {
       let data31 = data.status;
       if (!(data31 === "making" || data31 === "ready" || data31 === "look" || data31 === "stale")) {
-        const err88 = { instancePath: instancePath + "/status", schemaPath: "#/properties/status/enum", keyword: "enum", params: { allowedValues: schema188.properties.status.enum }, message: "must be equal to one of the allowed values" };
+        const err88 = { instancePath: instancePath + "/status", schemaPath: "#/properties/status/enum", keyword: "enum", params: { allowedValues: schema193.properties.status.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err88];
         } else {
@@ -17058,7 +18441,7 @@ function validate94(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.crop_by !== void 0) {
       let data39 = data.crop_by;
       if (!(data39 === "rule" || data39 === "person")) {
-        const err106 = { instancePath: instancePath + "/crop_by", schemaPath: "#/properties/crop_by/enum", keyword: "enum", params: { allowedValues: schema188.properties.crop_by.enum }, message: "must be equal to one of the allowed values" };
+        const err106 = { instancePath: instancePath + "/crop_by", schemaPath: "#/properties/crop_by/enum", keyword: "enum", params: { allowedValues: schema193.properties.crop_by.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err106];
         } else {
@@ -17160,7 +18543,7 @@ function validate94(data, { instancePath = "", parentData, parentDataProperty, r
         if (data41.product !== void 0) {
           let data44 = data41.product;
           if (!(data44 === "kept" || data44 === "restored" || data44 === "changed")) {
-            const err115 = { instancePath: instancePath + "/render/product", schemaPath: "#/properties/render/properties/product/enum", keyword: "enum", params: { allowedValues: schema188.properties.render.properties.product.enum }, message: "must be equal to one of the allowed values" };
+            const err115 = { instancePath: instancePath + "/render/product", schemaPath: "#/properties/render/properties/product/enum", keyword: "enum", params: { allowedValues: schema193.properties.render.properties.product.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err115];
             } else {
@@ -17271,7 +18654,7 @@ function validate94(data, { instancePath = "", parentData, parentDataProperty, r
         if (data45.scale !== void 0) {
           let data49 = data45.scale;
           if (!(data49 === 4 || data49 === 8)) {
-            const err125 = { instancePath: instancePath + "/full/scale", schemaPath: "#/properties/full/properties/scale/enum", keyword: "enum", params: { allowedValues: schema188.properties.full.properties.scale.enum }, message: "must be equal to one of the allowed values" };
+            const err125 = { instancePath: instancePath + "/full/scale", schemaPath: "#/properties/full/properties/scale/enum", keyword: "enum", params: { allowedValues: schema193.properties.full.properties.scale.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err125];
             } else {
@@ -17296,7 +18679,7 @@ function validate94(data, { instancePath = "", parentData, parentDataProperty, r
         for (const key10 in data50) {
           const _errs117 = errors;
           if (!(key10 === "line" || key10 === "logo" || key10 === "supers" || key10 === "legal" || key10 === "captions")) {
-            const err127 = { instancePath: instancePath + "/layers", schemaPath: "common.schema.json#/$defs/typeLayerKind/enum", keyword: "enum", params: { allowedValues: schema202.enum }, message: "must be equal to one of the allowed values", propertyName: key10 };
+            const err127 = { instancePath: instancePath + "/layers", schemaPath: "common.schema.json#/$defs/typeLayerKind/enum", keyword: "enum", params: { allowedValues: schema207.enum }, message: "must be equal to one of the allowed values", propertyName: key10 };
             if (vErrors === null) {
               vErrors = [err127];
             } else {
@@ -17316,8 +18699,8 @@ function validate94(data, { instancePath = "", parentData, parentDataProperty, r
           }
         }
         for (const key11 in data50) {
-          if (!validate96(data50[key11], { instancePath: instancePath + "/layers/" + key11.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data50, parentDataProperty: key11, rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate96.errors : vErrors.concat(validate96.errors);
+          if (!validate98(data50[key11], { instancePath: instancePath + "/layers/" + key11.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data50, parentDataProperty: key11, rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate98.errors : vErrors.concat(validate98.errors);
             errors = vErrors.length;
           }
         }
@@ -17406,7 +18789,7 @@ function validate94(data, { instancePath = "", parentData, parentDataProperty, r
               errors++;
             }
             for (const key12 in data54) {
-              if (!func1.call(schema188.properties.edl.items.properties, key12)) {
+              if (!func1.call(schema193.properties.edl.items.properties, key12)) {
                 const err137 = { instancePath: instancePath + "/edl/" + i0, schemaPath: "#/properties/edl/items/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key12 }, message: "must NOT have additional properties" };
                 if (vErrors === null) {
                   vErrors = [err137];
@@ -17908,7 +19291,7 @@ function validate94(data, { instancePath = "", parentData, parentDataProperty, r
             if (data54.crop_by !== void 0) {
               let data72 = data54.crop_by;
               if (!(data72 === "rule" || data72 === "person")) {
-                const err184 = { instancePath: instancePath + "/edl/" + i0 + "/crop_by", schemaPath: "#/properties/edl/items/properties/crop_by/enum", keyword: "enum", params: { allowedValues: schema188.properties.edl.items.properties.crop_by.enum }, message: "must be equal to one of the allowed values" };
+                const err184 = { instancePath: instancePath + "/edl/" + i0 + "/crop_by", schemaPath: "#/properties/edl/items/properties/crop_by/enum", keyword: "enum", params: { allowedValues: schema193.properties.edl.items.properties.crop_by.enum }, message: "must be equal to one of the allowed values" };
                 if (vErrors === null) {
                   vErrors = [err184];
                 } else {
@@ -18157,7 +19540,7 @@ function validate94(data, { instancePath = "", parentData, parentDataProperty, r
             if (data78.by !== void 0) {
               let data82 = data78.by;
               if (!(data82 === "dex" || data82 === "person")) {
-                const err207 = { instancePath: instancePath + "/beats/" + i2 + "/by", schemaPath: "#/properties/beats/items/properties/by/enum", keyword: "enum", params: { allowedValues: schema188.properties.beats.items.properties.by.enum }, message: "must be equal to one of the allowed values" };
+                const err207 = { instancePath: instancePath + "/beats/" + i2 + "/by", schemaPath: "#/properties/beats/items/properties/by/enum", keyword: "enum", params: { allowedValues: schema193.properties.beats.items.properties.by.enum }, message: "must be equal to one of the allowed values" };
                 if (vErrors === null) {
                   vErrors = [err207];
                 } else {
@@ -18192,7 +19575,7 @@ function validate94(data, { instancePath = "", parentData, parentDataProperty, r
         for (const key18 in data83) {
           const _errs194 = errors;
           if (!(key18 === "subject_safe" || key18 === "logo_safe" || key18 === "clear_space" || key18 === "type_size" || key18 === "ooh_words" || key18 === "line_present" || key18 === "end_card" || key18 === "sound_off" || key18 === "brand_first_3s" || key18 === "logo_present" || key18 === "look_match")) {
-            const err210 = { instancePath: instancePath + "/checks", schemaPath: "common.schema.json#/$defs/formatCheckCode/enum", keyword: "enum", params: { allowedValues: schema210.enum }, message: "must be equal to one of the allowed values", propertyName: key18 };
+            const err210 = { instancePath: instancePath + "/checks", schemaPath: "common.schema.json#/$defs/formatCheckCode/enum", keyword: "enum", params: { allowedValues: schema215.enum }, message: "must be equal to one of the allowed values", propertyName: key18 };
             if (vErrors === null) {
               vErrors = [err210];
             } else {
@@ -18246,7 +19629,7 @@ function validate94(data, { instancePath = "", parentData, parentDataProperty, r
             if (data84.result !== void 0) {
               let data85 = data84.result;
               if (!(data85 === "pass" || data85 === "flag" || data85 === "unverified")) {
-                const err215 = { instancePath: instancePath + "/checks/" + key19.replace(/~/g, "~0").replace(/\//g, "~1") + "/result", schemaPath: "#/properties/checks/additionalProperties/properties/result/enum", keyword: "enum", params: { allowedValues: schema188.properties.checks.additionalProperties.properties.result.enum }, message: "must be equal to one of the allowed values" };
+                const err215 = { instancePath: instancePath + "/checks/" + key19.replace(/~/g, "~0").replace(/\//g, "~1") + "/result", schemaPath: "#/properties/checks/additionalProperties/properties/result/enum", keyword: "enum", params: { allowedValues: schema193.properties.checks.additionalProperties.properties.result.enum }, message: "must be equal to one of the allowed values" };
                 if (vErrors === null) {
                   vErrors = [err215];
                 } else {
@@ -18401,17 +19784,17 @@ function validate94(data, { instancePath = "", parentData, parentDataProperty, r
     }
     errors++;
   }
-  validate94.errors = vErrors;
+  validate96.errors = vErrors;
   return errors === 0;
 }
-validate94.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema212 = { "type": "object", "description": "Jude's check of a result against the shot, the brand rules or a linked brief's mandatories and don'ts. Brand rules and brief flags never block; Ignore is recorded here.", "properties": { "id": { "type": "string", "pattern": "^check_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "target": { "$ref": "#/$defs/target" }, "crew": { "const": "jude" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "result": { "enum": ["pass", "flag"] }, "reason_code": { "type": "string", "pattern": "^[a-z][a-z0-9_]{1,63}$" }, "rule_ref": { "type": "string", "pattern": "^ref_[0-9A-HJKMNP-TV-Z]{26}$" }, "brief_id": { "type": "string", "pattern": "^brief_[0-9A-HJKMNP-TV-Z]{26}$", "description": "A flag against a linked brief (features/brief-node.clan): reason_code brief_mandatory or brief_dont, the note naming the line. It never blocks or asks: it shows in Decisions and as an amber mark on its target." }, "note": { "type": "string", "maxLength": 300 }, "ignored": { "type": "object", "properties": { "by": { "$ref": "common.schema.json#/$defs/personRef" }, "at": { "type": "string", "format": "date-time" } }, "required": ["by", "at"], "additionalProperties": false } }, "required": ["id", "v", "field_v", "target", "crew", "result", "reason_code", "note"], "additionalProperties": false };
-var pattern193 = new RegExp("^[a-z][a-z0-9_]{1,63}$", "u");
-var schema215 = { "type": "object", "properties": { "kind": { "enum": ["ref", "frame", "generation", "render", "video", "shot", "scene", "beat", "script", "storyboard", "size", "format_set", "sketch", "document", "board", "key", "brief"] }, "id": { "$ref": "common.schema.json#/$defs/id" } }, "required": ["kind", "id"], "additionalProperties": false };
-function validate100(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate96.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var schema217 = { "type": "object", "description": "Jude's check of a result against the shot, the brand rules or a linked brief's mandatories and don'ts. Brand rules and brief flags never block; Ignore is recorded here.", "properties": { "id": { "type": "string", "pattern": "^check_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "target": { "$ref": "#/$defs/target" }, "crew": { "const": "jude" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "result": { "enum": ["pass", "flag"] }, "reason_code": { "type": "string", "pattern": "^[a-z][a-z0-9_]{1,63}$" }, "rule_ref": { "type": "string", "pattern": "^ref_[0-9A-HJKMNP-TV-Z]{26}$" }, "brief_id": { "type": "string", "pattern": "^brief_[0-9A-HJKMNP-TV-Z]{26}$", "description": "A flag against a linked brief (features/brief-node.clan): reason_code brief_mandatory or brief_dont, the note naming the line. It never blocks or asks: it shows in Decisions and as an amber mark on its target." }, "note": { "type": "string", "maxLength": 300 }, "ignored": { "type": "object", "properties": { "by": { "$ref": "common.schema.json#/$defs/personRef" }, "at": { "type": "string", "format": "date-time" } }, "required": ["by", "at"], "additionalProperties": false } }, "required": ["id", "v", "field_v", "target", "crew", "result", "reason_code", "note"], "additionalProperties": false };
+var pattern199 = new RegExp("^[a-z][a-z0-9_]{1,63}$", "u");
+var schema220 = { "type": "object", "properties": { "kind": { "enum": ["ref", "frame", "generation", "render", "video", "shot", "scene", "beat", "script", "storyboard", "size", "format_set", "sketch", "document", "board", "key", "brief"] }, "id": { "$ref": "common.schema.json#/$defs/id" } }, "required": ["kind", "id"], "additionalProperties": false };
+function validate102(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate100.evaluated;
+  const evaluated0 = validate102.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -18451,7 +19834,7 @@ function validate100(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.kind !== void 0) {
       let data0 = data.kind;
       if (!(data0 === "ref" || data0 === "frame" || data0 === "generation" || data0 === "render" || data0 === "video" || data0 === "shot" || data0 === "scene" || data0 === "beat" || data0 === "script" || data0 === "storyboard" || data0 === "size" || data0 === "format_set" || data0 === "sketch" || data0 === "document" || data0 === "board" || data0 === "key" || data0 === "brief")) {
-        const err3 = { instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/enum", keyword: "enum", params: { allowedValues: schema215.properties.kind.enum }, message: "must be equal to one of the allowed values" };
+        const err3 = { instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/enum", keyword: "enum", params: { allowedValues: schema220.properties.kind.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err3];
         } else {
@@ -18491,14 +19874,14 @@ function validate100(data, { instancePath = "", parentData, parentDataProperty, 
     }
     errors++;
   }
-  validate100.errors = vErrors;
+  validate102.errors = vErrors;
   return errors === 0;
 }
-validate100.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-function validate99(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate102.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+function validate101(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate99.evaluated;
+  const evaluated0 = validate101.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -18579,7 +19962,7 @@ function validate99(data, { instancePath = "", parentData, parentDataProperty, r
       errors++;
     }
     for (const key0 in data) {
-      if (!func1.call(schema212.properties, key0)) {
+      if (!func1.call(schema217.properties, key0)) {
         const err8 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err8];
@@ -18592,7 +19975,7 @@ function validate99(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.id !== void 0) {
       let data0 = data.id;
       if (typeof data0 === "string") {
-        if (!pattern188.test(data0)) {
+        if (!pattern194.test(data0)) {
           const err9 = { instancePath: instancePath + "/id", schemaPath: "#/properties/id/pattern", keyword: "pattern", params: { pattern: "^check_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^check_[0-9A-HJKMNP-TV-Z]{26}$"' };
           if (vErrors === null) {
             vErrors = [err9];
@@ -18713,8 +20096,8 @@ function validate99(data, { instancePath = "", parentData, parentDataProperty, r
       }
     }
     if (data.target !== void 0) {
-      if (!validate100(data.target, { instancePath: instancePath + "/target", parentData: data, parentDataProperty: "target", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate100.errors : vErrors.concat(validate100.errors);
+      if (!validate102(data.target, { instancePath: instancePath + "/target", parentData: data, parentDataProperty: "target", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate102.errors : vErrors.concat(validate102.errors);
         errors = vErrors.length;
       }
     }
@@ -18754,7 +20137,7 @@ function validate99(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.result !== void 0) {
       let data7 = data.result;
       if (!(data7 === "pass" || data7 === "flag")) {
-        const err23 = { instancePath: instancePath + "/result", schemaPath: "#/properties/result/enum", keyword: "enum", params: { allowedValues: schema212.properties.result.enum }, message: "must be equal to one of the allowed values" };
+        const err23 = { instancePath: instancePath + "/result", schemaPath: "#/properties/result/enum", keyword: "enum", params: { allowedValues: schema217.properties.result.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err23];
         } else {
@@ -18766,7 +20149,7 @@ function validate99(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.reason_code !== void 0) {
       let data8 = data.reason_code;
       if (typeof data8 === "string") {
-        if (!pattern193.test(data8)) {
+        if (!pattern199.test(data8)) {
           const err24 = { instancePath: instancePath + "/reason_code", schemaPath: "#/properties/reason_code/pattern", keyword: "pattern", params: { pattern: "^[a-z][a-z0-9_]{1,63}$" }, message: 'must match pattern "^[a-z][a-z0-9_]{1,63}$"' };
           if (vErrors === null) {
             vErrors = [err24];
@@ -18810,7 +20193,7 @@ function validate99(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.brief_id !== void 0) {
       let data10 = data.brief_id;
       if (typeof data10 === "string") {
-        if (!pattern141.test(data10)) {
+        if (!pattern145.test(data10)) {
           const err28 = { instancePath: instancePath + "/brief_id", schemaPath: "#/properties/brief_id/pattern", keyword: "pattern", params: { pattern: "^brief_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^brief_[0-9A-HJKMNP-TV-Z]{26}$"' };
           if (vErrors === null) {
             vErrors = [err28];
@@ -18946,20 +20329,20 @@ function validate99(data, { instancePath = "", parentData, parentDataProperty, r
     }
     errors++;
   }
-  validate99.errors = vErrors;
+  validate101.errors = vErrors;
   return errors === 0;
 }
-validate99.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema218 = { "type": "object", "description": "An agent's question on a node (ui-behaviour 3.17). Its key is question.id; a job's ask copies Job.question (minted by the relay), and the relay decides which answer won. kind is question.kind.", "properties": { "id": { "type": "string", "pattern": "^q_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "question": { "$ref": "common.schema.json#/$defs/question" }, "node": { "$ref": "common.schema.json#/$defs/linkEndpoint" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "crew": { "$ref": "common.schema.json#/$defs/crewId" }, "state": { "enum": ["open", "answered", "withdrawn"] }, "answers": { "type": "array", "items": { "type": "object", "description": "Every answer in order: the first settled it; a later one is a Change.", "properties": { "option_id": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$" }, "text": { "type": "string", "maxLength": 1e3, "minLength": 1 }, "by": { "$ref": "common.schema.json#/$defs/personRef" }, "at": { "type": "string", "format": "date-time" } }, "required": ["by", "at"], "additionalProperties": false, "oneOf": [{ "required": ["option_id"], "not": { "required": ["text"] } }, { "required": ["text"], "not": { "required": ["option_id"] } }] }, "maxItems": 16 } }, "required": ["id", "v", "field_v", "question", "node", "crew", "state", "answers"], "additionalProperties": false };
-var pattern201 = new RegExp("^[a-z][a-z0-9_]{0,31}$", "u");
-var schema221 = { "type": "object", "description": "What an agent asks instead of guessing (ui-behaviour 3.17), the Research tool's question with three additions: kind, recommended_option_id and per-option detail and cost. block: no option proceeds until one is done. nudge: at least one proceeds; one may be recommended. ambiguity: the words could mean two things; nothing is recommended. recast: a change to a frame would swap who is in the picture, which an edit cannot do; options redraw and edit, redraw recommended (features/frame-edit-or-redraw.clan). A job's question id is minted by the relay.", "properties": { "id": { "type": "string", "pattern": "^q_[0-9A-HJKMNP-TV-Z]{26}$" }, "kind": { "enum": ["block", "nudge", "ambiguity", "recast"] }, "text": { "type": "string", "minLength": 1, "maxLength": 200 }, "why": { "type": "string", "maxLength": 300 }, "options": { "type": "array", "maxItems": 6, "items": { "$ref": "#/$defs/questionOption" } }, "allow_text": { "type": "boolean" }, "recommended_option_id": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$" }, "address": { "$ref": "#/$defs/address", "description": "The field the answer settles, when it settles one." } }, "required": ["id", "kind", "text", "options", "allow_text"], "additionalProperties": false, "allOf": [{ "if": { "properties": { "kind": { "const": "ambiguity" } } }, "then": { "not": { "required": ["recommended_option_id"] } } }, { "if": { "properties": { "options": { "maxItems": 0 } } }, "then": { "properties": { "allow_text": { "const": true } } } }, { "if": { "properties": { "options": { "contains": { "not": { "required": ["value"] } } } } }, "then": { "properties": { "allow_text": { "const": true } } } }] };
-var pattern206 = new RegExp("^[^#\\s]+#[A-Za-z_][A-Za-z0-9_]*(\\[[^\\].\\[#\\s]+\\])*(\\.[A-Za-z_][A-Za-z0-9_]*(\\[[^\\].\\[#\\s]+\\])*)*$", "u");
-var schema222 = { "type": "object", "description": "One button under a question (the Research tool's question_option, app/templates/campaign-research/schema.json). With a value it proceeds with that value; without one it is the escape that opens the text box, and the answer is sent as text. detail and cost are said under the label ('6 shots \xB7 about $1.20 for frames').", "properties": { "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$" }, "label": { "type": "string", "minLength": 1, "maxLength": 80 }, "value": { "anyOf": [{ "$ref": "#/$defs/routeValue" }, { "type": ["string", "number", "boolean"] }, { "type": "object", "not": { "required": ["route"] } }, { "type": "array" }] }, "detail": { "type": "string", "maxLength": 120 }, "cost": { "type": "object", "properties": { "estimate": { "type": "number", "minimum": 0 }, "currency": { "const": "USD" } }, "required": ["estimate", "currency"], "additionalProperties": false } }, "required": ["id", "label"], "additionalProperties": false };
-var pattern202 = new RegExp("^[a-z][a-z0-9_]{1,40}$", "u");
-function validate107(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate101.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var schema223 = { "type": "object", "description": "An agent's question on a node (ui-behaviour 3.17). Its key is question.id; a job's ask copies Job.question (minted by the relay), and the relay decides which answer won. kind is question.kind.", "properties": { "id": { "type": "string", "pattern": "^q_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "question": { "$ref": "common.schema.json#/$defs/question" }, "node": { "$ref": "common.schema.json#/$defs/linkEndpoint" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "crew": { "$ref": "common.schema.json#/$defs/crewId" }, "state": { "enum": ["open", "answered", "withdrawn"] }, "answers": { "type": "array", "items": { "type": "object", "description": "Every answer in order: the first settled it; a later one is a Change.", "properties": { "option_id": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$" }, "text": { "type": "string", "maxLength": 1e3, "minLength": 1 }, "by": { "$ref": "common.schema.json#/$defs/personRef" }, "at": { "type": "string", "format": "date-time" } }, "required": ["by", "at"], "additionalProperties": false, "oneOf": [{ "required": ["option_id"], "not": { "required": ["text"] } }, { "required": ["text"], "not": { "required": ["option_id"] } }] }, "maxItems": 16 } }, "required": ["id", "v", "field_v", "question", "node", "crew", "state", "answers"], "additionalProperties": false };
+var pattern207 = new RegExp("^[a-z][a-z0-9_]{0,31}$", "u");
+var schema226 = { "type": "object", "description": "What an agent asks instead of guessing (ui-behaviour 3.17), the Research tool's question with three additions: kind, recommended_option_id and per-option detail and cost. block: no option proceeds until one is done. nudge: at least one proceeds; one may be recommended. ambiguity: the words could mean two things; nothing is recommended. recast: a change to a frame would swap who is in the picture, which an edit cannot do; options redraw and edit, redraw recommended (features/frame-edit-or-redraw.clan). A job's question id is minted by the relay.", "properties": { "id": { "type": "string", "pattern": "^q_[0-9A-HJKMNP-TV-Z]{26}$" }, "kind": { "enum": ["block", "nudge", "ambiguity", "recast"] }, "text": { "type": "string", "minLength": 1, "maxLength": 200 }, "why": { "type": "string", "maxLength": 300 }, "options": { "type": "array", "maxItems": 6, "items": { "$ref": "#/$defs/questionOption" } }, "allow_text": { "type": "boolean" }, "recommended_option_id": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$" }, "address": { "$ref": "#/$defs/address", "description": "The field the answer settles, when it settles one." } }, "required": ["id", "kind", "text", "options", "allow_text"], "additionalProperties": false, "allOf": [{ "if": { "properties": { "kind": { "const": "ambiguity" } } }, "then": { "not": { "required": ["recommended_option_id"] } } }, { "if": { "properties": { "options": { "maxItems": 0 } } }, "then": { "properties": { "allow_text": { "const": true } } } }, { "if": { "properties": { "options": { "contains": { "not": { "required": ["value"] } } } } }, "then": { "properties": { "allow_text": { "const": true } } } }] };
+var pattern212 = new RegExp("^[^#\\s]+#[A-Za-z_][A-Za-z0-9_]*(\\[[^\\].\\[#\\s]+\\])*(\\.[A-Za-z_][A-Za-z0-9_]*(\\[[^\\].\\[#\\s]+\\])*)*$", "u");
+var schema227 = { "type": "object", "description": "One button under a question (the Research tool's question_option, app/templates/campaign-research/schema.json). With a value it proceeds with that value; without one it is the escape that opens the text box, and the answer is sent as text. detail and cost are said under the label ('6 shots \xB7 about $1.20 for frames').", "properties": { "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$" }, "label": { "type": "string", "minLength": 1, "maxLength": 80 }, "value": { "anyOf": [{ "$ref": "#/$defs/routeValue" }, { "type": ["string", "number", "boolean"] }, { "type": "object", "not": { "required": ["route"] } }, { "type": "array" }] }, "detail": { "type": "string", "maxLength": 120 }, "cost": { "type": "object", "properties": { "estimate": { "type": "number", "minimum": 0 }, "currency": { "const": "USD" } }, "required": ["estimate", "currency"], "additionalProperties": false } }, "required": ["id", "label"], "additionalProperties": false };
+var pattern208 = new RegExp("^[a-z][a-z0-9_]{1,40}$", "u");
+function validate109(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate107.evaluated;
+  const evaluated0 = validate109.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -19104,7 +20487,7 @@ function validate107(data, { instancePath = "", parentData, parentDataProperty, 
     }
     if (data.kind !== void 0) {
       let data3 = data.kind;
-      if (!(data3 === "board" || data3 === "group" || data3 === "note" || data3 === "ink" || data3 === "script" || data3 === "storyboard" || data3 === "video" || data3 === "ref" || data3 === "key" || data3 === "frame" || data3 === "render" || data3 === "sketch" || data3 === "document" || data3 === "format_set" || data3 === "shot" || data3 === "text" || data3 === "brief")) {
+      if (!(data3 === "board" || data3 === "group" || data3 === "note" || data3 === "ink" || data3 === "script" || data3 === "storyboard" || data3 === "video" || data3 === "ref" || data3 === "key" || data3 === "frame" || data3 === "render" || data3 === "sketch" || data3 === "document" || data3 === "format_set" || data3 === "shot" || data3 === "text" || data3 === "brief" || data3 === "brand_clan")) {
         const err9 = { instancePath: instancePath + "/kind", schemaPath: "#/$defs/linkEndpointKind/enum", keyword: "enum", params: { allowedValues: schema142.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err9];
@@ -19134,14 +20517,14 @@ function validate107(data, { instancePath = "", parentData, parentDataProperty, 
     }
     errors++;
   }
-  validate107.errors = vErrors;
+  validate109.errors = vErrors;
   return errors === 0;
 }
-validate107.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-function validate106(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate109.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+function validate108(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate106.evaluated;
+  const evaluated0 = validate108.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -19172,7 +20555,7 @@ function validate106(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.route !== void 0) {
       let data0 = data.route;
       if (typeof data0 === "string") {
-        if (!pattern202.test(data0)) {
+        if (!pattern208.test(data0)) {
           const err2 = { instancePath: instancePath + "/route", schemaPath: "#/properties/route/pattern", keyword: "pattern", params: { pattern: "^[a-z][a-z0-9_]{1,40}$" }, message: 'must match pattern "^[a-z][a-z0-9_]{1,40}$"' };
           if (vErrors === null) {
             vErrors = [err2];
@@ -19192,8 +20575,8 @@ function validate106(data, { instancePath = "", parentData, parentDataProperty, 
       }
     }
     if (data.node !== void 0) {
-      if (!validate107(data.node, { instancePath: instancePath + "/node", parentData: data, parentDataProperty: "node", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate107.errors : vErrors.concat(validate107.errors);
+      if (!validate109(data.node, { instancePath: instancePath + "/node", parentData: data, parentDataProperty: "node", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate109.errors : vErrors.concat(validate109.errors);
         errors = vErrors.length;
       }
     }
@@ -19206,14 +20589,14 @@ function validate106(data, { instancePath = "", parentData, parentDataProperty, 
     }
     errors++;
   }
-  validate106.errors = vErrors;
+  validate108.errors = vErrors;
   return errors === 0;
 }
-validate106.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-function validate105(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate108.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+function validate107(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate105.evaluated;
+  const evaluated0 = validate107.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -19253,7 +20636,7 @@ function validate105(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.id !== void 0) {
       let data0 = data.id;
       if (typeof data0 === "string") {
-        if (!pattern201.test(data0)) {
+        if (!pattern207.test(data0)) {
           const err3 = { instancePath: instancePath + "/id", schemaPath: "#/properties/id/pattern", keyword: "pattern", params: { pattern: "^[a-z][a-z0-9_]{0,31}$" }, message: 'must match pattern "^[a-z][a-z0-9_]{0,31}$"' };
           if (vErrors === null) {
             vErrors = [err3];
@@ -19308,15 +20691,15 @@ function validate105(data, { instancePath = "", parentData, parentDataProperty, 
       const _errs7 = errors;
       let valid1 = false;
       const _errs8 = errors;
-      if (!validate106(data2, { instancePath: instancePath + "/value", parentData: data, parentDataProperty: "value", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate106.errors : vErrors.concat(validate106.errors);
+      if (!validate108(data2, { instancePath: instancePath + "/value", parentData: data, parentDataProperty: "value", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate108.errors : vErrors.concat(validate108.errors);
         errors = vErrors.length;
       }
       var _valid0 = _errs8 === errors;
       valid1 = valid1 || _valid0;
       const _errs9 = errors;
       if (typeof data2 !== "string" && !(typeof data2 == "number") && typeof data2 !== "boolean") {
-        const err8 = { instancePath: instancePath + "/value", schemaPath: "#/properties/value/anyOf/1/type", keyword: "type", params: { type: schema222.properties.value.anyOf[1].type }, message: "must be string,number,boolean" };
+        const err8 = { instancePath: instancePath + "/value", schemaPath: "#/properties/value/anyOf/1/type", keyword: "type", params: { type: schema227.properties.value.anyOf[1].type }, message: "must be string,number,boolean" };
         if (vErrors === null) {
           vErrors = [err8];
         } else {
@@ -19508,14 +20891,14 @@ function validate105(data, { instancePath = "", parentData, parentDataProperty, 
     }
     errors++;
   }
-  validate105.errors = vErrors;
+  validate107.errors = vErrors;
   return errors === 0;
 }
-validate105.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-function validate104(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate107.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+function validate106(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate104.evaluated;
+  const evaluated0 = validate106.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -19838,7 +21221,7 @@ function validate104(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.id !== void 0) {
       let data6 = data.id;
       if (typeof data6 === "string") {
-        if (!pattern197.test(data6)) {
+        if (!pattern203.test(data6)) {
           const err18 = { instancePath: instancePath + "/id", schemaPath: "#/properties/id/pattern", keyword: "pattern", params: { pattern: "^q_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^q_[0-9A-HJKMNP-TV-Z]{26}$"' };
           if (vErrors === null) {
             vErrors = [err18];
@@ -19860,7 +21243,7 @@ function validate104(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.kind !== void 0) {
       let data7 = data.kind;
       if (!(data7 === "block" || data7 === "nudge" || data7 === "ambiguity" || data7 === "recast")) {
-        const err20 = { instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/enum", keyword: "enum", params: { allowedValues: schema221.properties.kind.enum }, message: "must be equal to one of the allowed values" };
+        const err20 = { instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/enum", keyword: "enum", params: { allowedValues: schema226.properties.kind.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err20];
         } else {
@@ -19936,8 +21319,8 @@ function validate104(data, { instancePath = "", parentData, parentDataProperty, 
         }
         const len1 = data10.length;
         for (let i1 = 0; i1 < len1; i1++) {
-          if (!validate105(data10[i1], { instancePath: instancePath + "/options/" + i1, parentData: data10, parentDataProperty: i1, rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate105.errors : vErrors.concat(validate105.errors);
+          if (!validate107(data10[i1], { instancePath: instancePath + "/options/" + i1, parentData: data10, parentDataProperty: i1, rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate107.errors : vErrors.concat(validate107.errors);
             errors = vErrors.length;
           }
         }
@@ -19965,7 +21348,7 @@ function validate104(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.recommended_option_id !== void 0) {
       let data13 = data.recommended_option_id;
       if (typeof data13 === "string") {
-        if (!pattern201.test(data13)) {
+        if (!pattern207.test(data13)) {
           const err29 = { instancePath: instancePath + "/recommended_option_id", schemaPath: "#/properties/recommended_option_id/pattern", keyword: "pattern", params: { pattern: "^[a-z][a-z0-9_]{0,31}$" }, message: 'must match pattern "^[a-z][a-z0-9_]{0,31}$"' };
           if (vErrors === null) {
             vErrors = [err29];
@@ -19996,7 +21379,7 @@ function validate104(data, { instancePath = "", parentData, parentDataProperty, 
           }
           errors++;
         }
-        if (!pattern206.test(data14)) {
+        if (!pattern212.test(data14)) {
           const err32 = { instancePath: instancePath + "/address", schemaPath: "#/$defs/address/pattern", keyword: "pattern", params: { pattern: "^[^#\\s]+#[A-Za-z_][A-Za-z0-9_]*(\\[[^\\].\\[#\\s]+\\])*(\\.[A-Za-z_][A-Za-z0-9_]*(\\[[^\\].\\[#\\s]+\\])*)*$" }, message: 'must match pattern "^[^#\\s]+#[A-Za-z_][A-Za-z0-9_]*(\\[[^\\].\\[#\\s]+\\])*(\\.[A-Za-z_][A-Za-z0-9_]*(\\[[^\\].\\[#\\s]+\\])*)*$"' };
           if (vErrors === null) {
             vErrors = [err32];
@@ -20024,14 +21407,14 @@ function validate104(data, { instancePath = "", parentData, parentDataProperty, 
     }
     errors++;
   }
-  validate104.errors = vErrors;
+  validate106.errors = vErrors;
   return errors === 0;
 }
-validate104.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-function validate103(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate106.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+function validate105(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate103.evaluated;
+  const evaluated0 = validate105.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -20112,7 +21495,7 @@ function validate103(data, { instancePath = "", parentData, parentDataProperty, 
       errors++;
     }
     for (const key0 in data) {
-      if (!func1.call(schema218.properties, key0)) {
+      if (!func1.call(schema223.properties, key0)) {
         const err8 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err8];
@@ -20125,7 +21508,7 @@ function validate103(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.id !== void 0) {
       let data0 = data.id;
       if (typeof data0 === "string") {
-        if (!pattern197.test(data0)) {
+        if (!pattern203.test(data0)) {
           const err9 = { instancePath: instancePath + "/id", schemaPath: "#/properties/id/pattern", keyword: "pattern", params: { pattern: "^q_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^q_[0-9A-HJKMNP-TV-Z]{26}$"' };
           if (vErrors === null) {
             vErrors = [err9];
@@ -20246,8 +21629,8 @@ function validate103(data, { instancePath = "", parentData, parentDataProperty, 
       }
     }
     if (data.question !== void 0) {
-      if (!validate104(data.question, { instancePath: instancePath + "/question", parentData: data, parentDataProperty: "question", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate104.errors : vErrors.concat(validate104.errors);
+      if (!validate106(data.question, { instancePath: instancePath + "/question", parentData: data, parentDataProperty: "question", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate106.errors : vErrors.concat(validate106.errors);
         errors = vErrors.length;
       }
     }
@@ -20294,7 +21677,7 @@ function validate103(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.state !== void 0) {
       let data8 = data.state;
       if (!(data8 === "open" || data8 === "answered" || data8 === "withdrawn")) {
-        const err23 = { instancePath: instancePath + "/state", schemaPath: "#/properties/state/enum", keyword: "enum", params: { allowedValues: schema218.properties.state.enum }, message: "must be equal to one of the allowed values" };
+        const err23 = { instancePath: instancePath + "/state", schemaPath: "#/properties/state/enum", keyword: "enum", params: { allowedValues: schema223.properties.state.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err23];
         } else {
@@ -20477,7 +21860,7 @@ function validate103(data, { instancePath = "", parentData, parentDataProperty, 
             if (data10.option_id !== void 0) {
               let data11 = data10.option_id;
               if (typeof data11 === "string") {
-                if (!pattern201.test(data11)) {
+                if (!pattern207.test(data11)) {
                   const err35 = { instancePath: instancePath + "/answers/" + i0 + "/option_id", schemaPath: "#/properties/answers/items/properties/option_id/pattern", keyword: "pattern", params: { pattern: "^[a-z][a-z0-9_]{0,31}$" }, message: 'must match pattern "^[a-z][a-z0-9_]{0,31}$"' };
                   if (vErrors === null) {
                     vErrors = [err35];
@@ -20600,15 +21983,15 @@ function validate103(data, { instancePath = "", parentData, parentDataProperty, 
     }
     errors++;
   }
-  validate103.errors = vErrors;
+  validate105.errors = vErrors;
   return errors === 0;
 }
-validate103.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema231 = { "type": "object", "description": "Skye's proposed words on a scene, shot or beat, shown inline until Keep or Keep mine (ui-behaviour 3.10). Nothing changes until Keep.", "properties": { "id": { "type": "string", "pattern": "^sug_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "target": { "type": "object", "properties": { "kind": { "enum": ["scene", "shot", "beat"] }, "id": { "$ref": "common.schema.json#/$defs/id" } }, "required": ["kind", "id"], "additionalProperties": false }, "crew": { "const": "skye" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "for": { "$ref": "common.schema.json#/$defs/personRef" }, "base_hash": { "$ref": "common.schema.json#/$defs/sha256", "description": "The hash of the target's prose the suggestion was written against: a different hash makes it stale." }, "mode": { "enum": ["revise", "draft"], "description": "How the draft is meant to land: `draft` is a whole-block insertion (Keep / Discard, no word-diff); `revise` is a rewrite shown as a word-diff (Keep / Keep mine). Absent reads as `revise`." }, "proposed": { "type": "object", "properties": { "prose": { "$ref": "#/$defs/prose" }, "text": { "type": "string", "maxLength": 2e4 }, "duration_s": { "type": "number", "minimum": 0.5, "maximum": 30, "multipleOf": 0.1, "description": "A shot's new length, applied on Keep in the same step (features/script-editor.clan)." }, "new_beats": { "type": "array", "maxItems": 6, "description": "Beats Keep adds to the target shot in the same step.", "items": { "type": "object", "properties": { "kind": { "$ref": "common.schema.json#/$defs/beatKind" }, "at_s": { "type": "number", "minimum": 0, "maximum": 30, "multipleOf": 0.5 }, "speaker": { "type": "string", "maxLength": 60 }, "moment_id": { "type": "string", "pattern": "^beat_[0-9A-HJKMNP-TV-Z]{26}$" }, "prose": { "$ref": "#/$defs/prose" } }, "required": ["kind", "at_s", "prose"], "additionalProperties": false } } }, "required": ["prose", "text"], "additionalProperties": false }, "note": { "type": "string", "maxLength": 200 }, "state": { "enum": ["open", "kept", "dropped", "stale"] }, "decided_by": { "$ref": "common.schema.json#/$defs/personRef" } }, "required": ["id", "v", "field_v", "target", "crew", "job_id", "for", "base_hash", "proposed", "note", "state"], "additionalProperties": false };
-function validate114(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate105.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var schema236 = { "type": "object", "description": "Skye's proposed words on a scene, shot or beat, shown inline until Keep or Keep mine (ui-behaviour 3.10). Nothing changes until Keep.", "properties": { "id": { "type": "string", "pattern": "^sug_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "target": { "type": "object", "properties": { "kind": { "enum": ["scene", "shot", "beat"] }, "id": { "$ref": "common.schema.json#/$defs/id" } }, "required": ["kind", "id"], "additionalProperties": false }, "crew": { "const": "skye" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "for": { "$ref": "common.schema.json#/$defs/personRef" }, "base_hash": { "$ref": "common.schema.json#/$defs/sha256", "description": "The hash of the target's prose the suggestion was written against: a different hash makes it stale." }, "mode": { "enum": ["revise", "draft"], "description": "How the draft is meant to land: `draft` is a whole-block insertion (Keep / Discard, no word-diff); `revise` is a rewrite shown as a word-diff (Keep / Keep mine). Absent reads as `revise`." }, "proposed": { "type": "object", "properties": { "prose": { "$ref": "#/$defs/prose" }, "text": { "type": "string", "maxLength": 2e4 }, "duration_s": { "type": "number", "minimum": 0.5, "maximum": 30, "multipleOf": 0.1, "description": "A shot's new length, applied on Keep in the same step (features/script-editor.clan)." }, "new_beats": { "type": "array", "maxItems": 6, "description": "Beats Keep adds to the target shot in the same step.", "items": { "type": "object", "properties": { "kind": { "$ref": "common.schema.json#/$defs/beatKind" }, "at_s": { "type": "number", "minimum": 0, "maximum": 30, "multipleOf": 0.5 }, "speaker": { "type": "string", "maxLength": 60 }, "moment_id": { "type": "string", "pattern": "^beat_[0-9A-HJKMNP-TV-Z]{26}$" }, "prose": { "$ref": "#/$defs/prose" } }, "required": ["kind", "at_s", "prose"], "additionalProperties": false } } }, "required": ["prose", "text"], "additionalProperties": false }, "note": { "type": "string", "maxLength": 200 }, "state": { "enum": ["open", "kept", "dropped", "stale"] }, "decided_by": { "$ref": "common.schema.json#/$defs/personRef" } }, "required": ["id", "v", "field_v", "target", "crew", "job_id", "for", "base_hash", "proposed", "note", "state"], "additionalProperties": false };
+function validate116(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate114.evaluated;
+  const evaluated0 = validate116.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -20716,7 +22099,7 @@ function validate114(data, { instancePath = "", parentData, parentDataProperty, 
       errors++;
     }
     for (const key0 in data) {
-      if (!func1.call(schema231.properties, key0)) {
+      if (!func1.call(schema236.properties, key0)) {
         const err11 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err11];
@@ -20729,7 +22112,7 @@ function validate114(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.id !== void 0) {
       let data0 = data.id;
       if (typeof data0 === "string") {
-        if (!pattern210.test(data0)) {
+        if (!pattern216.test(data0)) {
           const err12 = { instancePath: instancePath + "/id", schemaPath: "#/properties/id/pattern", keyword: "pattern", params: { pattern: "^sug_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^sug_[0-9A-HJKMNP-TV-Z]{26}$"' };
           if (vErrors === null) {
             vErrors = [err12];
@@ -20884,7 +22267,7 @@ function validate114(data, { instancePath = "", parentData, parentDataProperty, 
         if (data4.kind !== void 0) {
           let data5 = data4.kind;
           if (!(data5 === "scene" || data5 === "shot" || data5 === "beat")) {
-            const err26 = { instancePath: instancePath + "/target/kind", schemaPath: "#/properties/target/properties/kind/enum", keyword: "enum", params: { allowedValues: schema231.properties.target.properties.kind.enum }, message: "must be equal to one of the allowed values" };
+            const err26 = { instancePath: instancePath + "/target/kind", schemaPath: "#/properties/target/properties/kind/enum", keyword: "enum", params: { allowedValues: schema236.properties.target.properties.kind.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err26];
             } else {
@@ -21005,7 +22388,7 @@ function validate114(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.mode !== void 0) {
       let data11 = data.mode;
       if (!(data11 === "revise" || data11 === "draft")) {
-        const err37 = { instancePath: instancePath + "/mode", schemaPath: "#/properties/mode/enum", keyword: "enum", params: { allowedValues: schema231.properties.mode.enum }, message: "must be equal to one of the allowed values" };
+        const err37 = { instancePath: instancePath + "/mode", schemaPath: "#/properties/mode/enum", keyword: "enum", params: { allowedValues: schema236.properties.mode.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err37];
         } else {
@@ -21473,7 +22856,7 @@ function validate114(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.state !== void 0) {
       let data30 = data.state;
       if (!(data30 === "open" || data30 === "kept" || data30 === "dropped" || data30 === "stale")) {
-        const err80 = { instancePath: instancePath + "/state", schemaPath: "#/properties/state/enum", keyword: "enum", params: { allowedValues: schema231.properties.state.enum }, message: "must be equal to one of the allowed values" };
+        const err80 = { instancePath: instancePath + "/state", schemaPath: "#/properties/state/enum", keyword: "enum", params: { allowedValues: schema236.properties.state.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err80];
         } else {
@@ -21513,15 +22896,15 @@ function validate114(data, { instancePath = "", parentData, parentDataProperty, 
     }
     errors++;
   }
-  validate114.errors = vErrors;
+  validate116.errors = vErrors;
   return errors === 0;
 }
-validate114.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema241 = { "type": "object", "description": "A spin-in from Brief Maker or Research waiting on Bring in (ui-behaviour 3.18).", "properties": { "id": { "type": "string", "pattern": "^spin_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "source": { "type": "object", "properties": { "document_id": { "type": "string", "maxLength": 128, "minLength": 1 }, "app": { "type": "string", "maxLength": 64, "minLength": 1 }, "title": { "type": "string", "maxLength": 200 } }, "required": ["document_id", "app"], "additionalProperties": false }, "plan": { "type": "array", "items": { "type": "object", "properties": { "kind": { "enum": ["script", "ref", "document", "brand"] }, "title": { "type": "string", "maxLength": 200, "minLength": 1 }, "note": { "type": "string", "maxLength": 300 } }, "required": ["kind", "title"], "additionalProperties": false }, "maxItems": 32 }, "state": { "enum": ["waiting", "brought_in", "dismissed"] }, "decided_by": { "$ref": "common.schema.json#/$defs/personRef" } }, "required": ["id", "v", "field_v", "source", "plan", "state"], "additionalProperties": false };
-function validate116(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate116.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var schema246 = { "type": "object", "description": "A spin-in from Brief Maker or Research waiting on Bring in (ui-behaviour 3.18).", "properties": { "id": { "type": "string", "pattern": "^spin_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "source": { "type": "object", "properties": { "document_id": { "type": "string", "maxLength": 128, "minLength": 1 }, "app": { "type": "string", "maxLength": 64, "minLength": 1 }, "title": { "type": "string", "maxLength": 200 } }, "required": ["document_id", "app"], "additionalProperties": false }, "plan": { "type": "array", "items": { "type": "object", "properties": { "kind": { "enum": ["script", "ref", "document", "brand"] }, "title": { "type": "string", "maxLength": 200, "minLength": 1 }, "note": { "type": "string", "maxLength": 300 } }, "required": ["kind", "title"], "additionalProperties": false }, "maxItems": 32 }, "state": { "enum": ["waiting", "brought_in", "dismissed"] }, "decided_by": { "$ref": "common.schema.json#/$defs/personRef" } }, "required": ["id", "v", "field_v", "source", "plan", "state"], "additionalProperties": false };
+function validate118(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate116.evaluated;
+  const evaluated0 = validate118.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -21597,7 +22980,7 @@ function validate116(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.id !== void 0) {
       let data0 = data.id;
       if (typeof data0 === "string") {
-        if (!pattern219.test(data0)) {
+        if (!pattern225.test(data0)) {
           const err7 = { instancePath: instancePath + "/id", schemaPath: "#/properties/id/pattern", keyword: "pattern", params: { pattern: "^spin_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^spin_[0-9A-HJKMNP-TV-Z]{26}$"' };
           if (vErrors === null) {
             vErrors = [err7];
@@ -21891,7 +23274,7 @@ function validate116(data, { instancePath = "", parentData, parentDataProperty, 
             if (data9.kind !== void 0) {
               let data10 = data9.kind;
               if (!(data10 === "script" || data10 === "ref" || data10 === "document" || data10 === "brand")) {
-                const err34 = { instancePath: instancePath + "/plan/" + i0 + "/kind", schemaPath: "#/properties/plan/items/properties/kind/enum", keyword: "enum", params: { allowedValues: schema241.properties.plan.items.properties.kind.enum }, message: "must be equal to one of the allowed values" };
+                const err34 = { instancePath: instancePath + "/plan/" + i0 + "/kind", schemaPath: "#/properties/plan/items/properties/kind/enum", keyword: "enum", params: { allowedValues: schema246.properties.plan.items.properties.kind.enum }, message: "must be equal to one of the allowed values" };
                 if (vErrors === null) {
                   vErrors = [err34];
                 } else {
@@ -21976,7 +23359,7 @@ function validate116(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.state !== void 0) {
       let data13 = data.state;
       if (!(data13 === "waiting" || data13 === "brought_in" || data13 === "dismissed")) {
-        const err42 = { instancePath: instancePath + "/state", schemaPath: "#/properties/state/enum", keyword: "enum", params: { allowedValues: schema241.properties.state.enum }, message: "must be equal to one of the allowed values" };
+        const err42 = { instancePath: instancePath + "/state", schemaPath: "#/properties/state/enum", keyword: "enum", params: { allowedValues: schema246.properties.state.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err42];
         } else {
@@ -22016,21 +23399,21 @@ function validate116(data, { instancePath = "", parentData, parentDataProperty, 
     }
     errors++;
   }
-  validate116.errors = vErrors;
+  validate118.errors = vErrors;
   return errors === 0;
 }
-validate116.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema245 = { "type": "object", "description": "One job, written at submit and patched as it moves; mirrors the relay ledger.", "properties": { "id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "op": { "$ref": "common.schema.json#/$defs/op" }, "state": { "$ref": "common.schema.json#/$defs/jobState" }, "node": { "$ref": "common.schema.json#/$defs/linkEndpoint" }, "purpose": { "type": "string", "maxLength": 200, "description": "What the job is for, in the app's words (it was ProjectUi.jobCtx)." }, "started_by": { "$ref": "common.schema.json#/$defs/personRef" }, "tenant_id": { "$ref": "common.schema.json#/$defs/tenantId" }, "nonce": { "type": "string", "pattern": "^[A-Za-z0-9_-]{8,64}$" }, "crew": { "$ref": "common.schema.json#/$defs/crewId" }, "inputs": { "type": "array", "items": { "type": "object", "description": "One thing a job used (the send tray's rows): what it was, which link brought it, what it was used as, and whether it was ticked.", "properties": { "kind": { "enum": ["ref", "sketch", "text", "note", "ink", "document", "brand", "frame", "generation", "render", "board", "group", "brief"] }, "ref": { "$ref": "common.schema.json#/$defs/id" }, "link_id": { "type": "string", "pattern": "^link_[0-9A-HJKMNP-TV-Z]{26}$" }, "used_as": { "type": "string", "maxLength": 80, "minLength": 1 }, "included": { "type": "boolean" }, "confirmed": { "type": "boolean" }, "text": { "type": "string", "maxLength": 1e3 } }, "required": ["kind", "used_as", "included"], "additionalProperties": false }, "maxItems": 32 }, "region": { "$ref": "common.schema.json#/$defs/region" }, "text": { "type": "string", "maxLength": 1e3 }, "chips": { "type": "array", "items": { "type": "string", "maxLength": 40 }, "maxItems": 8 }, "ask_id": { "type": "string", "pattern": "^q_[0-9A-HJKMNP-TV-Z]{26}$" }, "parent_ids": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/id" }, "maxItems": 32 }, "input_hashes": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/sha256" }, "maxItems": 32 }, "outputs": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/sha256" }, "maxItems": 16 }, "director": { "$ref": "director.schema.json#/$defs/agentBlock" }, "cost": { "$ref": "common.schema.json#/$defs/cost" }, "error": { "$ref": "common.schema.json#/$defs/error" }, "stopped_by": { "$ref": "common.schema.json#/$defs/personRef" }, "provider": { "$ref": "common.schema.json#/$defs/madeBy" }, "model": { "type": "string", "maxLength": 120 }, "remote_id": { "type": "string", "maxLength": 200 }, "created_at": { "type": "string", "format": "date-time" }, "updated_at": { "type": "string", "format": "date-time" } }, "required": ["id", "v", "field_v", "op", "state", "node", "started_by", "tenant_id", "nonce", "crew", "parent_ids", "input_hashes", "created_at"], "additionalProperties": false };
-var schema248 = { "enum": ["generate", "view", "shot_list", "frame", "region_edit", "clip", "clip_edit", "stitch", "frame_edit", "clip_patch", "bridge", "cutout", "transcribe", "write", "read", "check", "resize", "cutdown", "upscale"], "description": "generate: a new image from 1-14 inputs. view: a turnaround view. shot_list: Dex plans shots from a script (no provider). frame: a storyboard frame. region_edit: edit inside a region of a still. clip: frame to video. clip_edit: change a clip. stitch: render the ad. frame_edit: change this frame. clip_patch: fix a moment's window and splice it. bridge: a clip between two shots. cutout: Rhea's cut-out. transcribe: Nell reads ink. write: Skye drafts or rewrites. read: Nell reads a document. check: Jude judges a result. resize: Make all sizes on a still. cutdown: a video cut-down. upscale: Rhea upscales. Ops with no builder yet answer 422 capability_missing." };
-var schema249 = { "enum": ["queued", "submitting", "submitted", "fetching", "validating", "needs_input", "completed", "failed", "cancelled", "uncertain"], "description": "needs_input: an agent asked (Job.question) and the job waits, uncharged and never timing out into a guess, until someone answers or stops it. uncertain: the provider may have accepted the job with no id recorded; reconciled by querying, never by paying again." };
-var schema294 = { "type": "object", "properties": { "code": { "enum": ["invalid_input", "unauthorised", "blocked", "flag_off", "quota_exhausted", "spend_stop", "limit_reached", "not_allowed", "queue_full", "capability_missing", "moderated", "provider_failed", "provider_unavailable", "timeout", "uncertain", "conflict", "gone", "internal"] }, "message": { "type": "string", "description": "One line a person can read in the node." }, "retryable": { "type": "boolean" }, "retryAfterS": { "type": "integer", "minimum": 0 }, "providerCode": { "type": "string", "description": "The provider's own code, for logs." } }, "required": ["code", "message", "retryable"], "additionalProperties": false };
-var pattern228 = new RegExp("^[A-Za-z0-9_-]{8,64}$", "u");
-var schema291 = { "type": "object", "description": "Logged with every job and written into the CLAN entry, so a job can be re-run against a newer prompt and diffed.", "properties": { "model": { "type": "string" }, "promptVersion": { "type": "string", "pattern": "^(director|skye|cutter)\\.v[0-9]+(\\.[0-9]+)?$", "description": "director.vN (Dex's frames and clips), skye.vN (Skye's words) or cutter.vN (Dex's cutdown plans, features/campaign-formats.clan; added 2026-10-16, additive)." }, "output": { "type": "object" }, "rationale": { "type": "string" }, "latencyMs": { "type": "integer" }, "usage": { "type": "object", "description": "The director call's token counts, as the model reported them (features/pt-canvas-r4.clan; before, only the relay's log line had them). Absent on the passthrough and when the model reported none. Added 2026-11-21 (additive).", "properties": { "inputTokens": { "type": "integer", "minimum": 0 }, "outputTokens": { "type": "integer", "minimum": 0 }, "cacheReadTokens": { "type": "integer", "minimum": 0 }, "cacheWriteTokens": { "type": "integer", "minimum": 0 } }, "additionalProperties": false }, "input": { "type": "object", "description": "What the director received for this job: its input after the relay's own cuts (the brief and the context per op, wire tags, cards), kept small for the job record (relay/director/record.py): asset urls dropped (the sha256 names the picture), strings cut to 400 characters, lists to 16 items, at most about 8 KB with the biggest fields summarised past that. Absent on the passthrough and on blocks written before 2026-11-21. Added 2026-11-21 (features/pt-canvas-r1.clan, additive)." }, "cards": { "type": "array", "maxItems": 14, "description": "The character cards the director was given (features/character-cards.clan): for each ref it was told about, what one vision call saw in the picture. Absent when no ref had a card.", "items": { "type": "object", "properties": { "tag": { "type": "string", "description": "The ref's wire tag in this job (relay/names.py)." }, "sha256": { "$ref": "common.schema.json#/$defs/sha256" }, "kind": { "enum": ["character", "object", "setting", "style", "other"] }, "card": { "type": "string", "maxLength": 800, "description": "2-4 short factual lines: who or what, shape, colours, clothing or markings, style, pose or view." } }, "required": ["tag", "sha256", "kind", "card"], "additionalProperties": false } } }, "required": ["model", "promptVersion", "output", "rationale"], "additionalProperties": false };
-var pattern248 = new RegExp("^(director|skye|cutter)\\.v[0-9]+(\\.[0-9]+)?$", "u");
-function validate138(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate118.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var schema250 = { "type": "object", "description": "One job, written at submit and patched as it moves; mirrors the relay ledger.", "properties": { "id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "op": { "$ref": "common.schema.json#/$defs/op" }, "state": { "$ref": "common.schema.json#/$defs/jobState" }, "node": { "$ref": "common.schema.json#/$defs/linkEndpoint" }, "purpose": { "type": "string", "maxLength": 200, "description": "What the job is for, in the app's words (it was ProjectUi.jobCtx)." }, "started_by": { "$ref": "common.schema.json#/$defs/personRef" }, "tenant_id": { "$ref": "common.schema.json#/$defs/tenantId" }, "nonce": { "type": "string", "pattern": "^[A-Za-z0-9_-]{8,64}$" }, "crew": { "$ref": "common.schema.json#/$defs/crewId" }, "inputs": { "type": "array", "items": { "type": "object", "description": "One thing a job used (the send tray's rows): what it was, which link brought it, what it was used as, and whether it was ticked.", "properties": { "kind": { "enum": ["ref", "sketch", "text", "note", "ink", "document", "brand", "frame", "generation", "render", "board", "group", "brief"] }, "ref": { "$ref": "common.schema.json#/$defs/id" }, "link_id": { "type": "string", "pattern": "^link_[0-9A-HJKMNP-TV-Z]{26}$" }, "used_as": { "type": "string", "maxLength": 80, "minLength": 1 }, "included": { "type": "boolean" }, "confirmed": { "type": "boolean" }, "text": { "type": "string", "maxLength": 1e3 } }, "required": ["kind", "used_as", "included"], "additionalProperties": false }, "maxItems": 32 }, "region": { "$ref": "common.schema.json#/$defs/region" }, "text": { "type": "string", "maxLength": 1e3 }, "chips": { "type": "array", "items": { "type": "string", "maxLength": 40 }, "maxItems": 8 }, "ask_id": { "type": "string", "pattern": "^q_[0-9A-HJKMNP-TV-Z]{26}$" }, "parent_ids": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/id" }, "maxItems": 32 }, "input_hashes": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/sha256" }, "maxItems": 32 }, "outputs": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/sha256" }, "maxItems": 16 }, "director": { "$ref": "director.schema.json#/$defs/agentBlock" }, "cost": { "$ref": "common.schema.json#/$defs/cost" }, "error": { "$ref": "common.schema.json#/$defs/error" }, "stopped_by": { "$ref": "common.schema.json#/$defs/personRef" }, "provider": { "$ref": "common.schema.json#/$defs/madeBy" }, "model": { "type": "string", "maxLength": 120 }, "remote_id": { "type": "string", "maxLength": 200 }, "created_at": { "type": "string", "format": "date-time" }, "updated_at": { "type": "string", "format": "date-time" } }, "required": ["id", "v", "field_v", "op", "state", "node", "started_by", "tenant_id", "nonce", "crew", "parent_ids", "input_hashes", "created_at"], "additionalProperties": false };
+var schema253 = { "enum": ["generate", "view", "shot_list", "frame", "region_edit", "clip", "clip_edit", "stitch", "frame_edit", "clip_patch", "bridge", "cutout", "transcribe", "write", "read", "check", "resize", "cutdown", "upscale"], "description": "generate: a new image from 1-14 inputs. view: a turnaround view. shot_list: Dex plans shots from a script (no provider). frame: a storyboard frame. region_edit: edit inside a region of a still. clip: frame to video. clip_edit: change a clip. stitch: render the ad. frame_edit: change this frame. clip_patch: fix a moment's window and splice it. bridge: a clip between two shots. cutout: Rhea's cut-out. transcribe: Nell reads ink. write: Skye drafts or rewrites. read: Nell reads a document. check: Jude judges a result. resize: Make all sizes on a still. cutdown: a video cut-down. upscale: Rhea upscales. Ops with no builder yet answer 422 capability_missing." };
+var schema254 = { "enum": ["queued", "submitting", "submitted", "fetching", "validating", "needs_input", "completed", "failed", "cancelled", "uncertain"], "description": "needs_input: an agent asked (Job.question) and the job waits, uncharged and never timing out into a guess, until someone answers or stops it. uncertain: the provider may have accepted the job with no id recorded; reconciled by querying, never by paying again." };
+var schema299 = { "type": "object", "properties": { "code": { "enum": ["invalid_input", "unauthorised", "blocked", "flag_off", "quota_exhausted", "spend_stop", "limit_reached", "not_allowed", "queue_full", "capability_missing", "moderated", "provider_failed", "provider_unavailable", "timeout", "uncertain", "conflict", "gone", "internal"] }, "message": { "type": "string", "description": "One line a person can read in the node." }, "retryable": { "type": "boolean" }, "retryAfterS": { "type": "integer", "minimum": 0 }, "providerCode": { "type": "string", "description": "The provider's own code, for logs." } }, "required": ["code", "message", "retryable"], "additionalProperties": false };
+var pattern234 = new RegExp("^[A-Za-z0-9_-]{8,64}$", "u");
+var schema296 = { "type": "object", "description": "Logged with every job and written into the CLAN entry, so a job can be re-run against a newer prompt and diffed.", "properties": { "model": { "type": "string" }, "promptVersion": { "type": "string", "pattern": "^(director|skye|cutter)\\.v[0-9]+(\\.[0-9]+)?$", "description": "director.vN (Dex's frames and clips), skye.vN (Skye's words) or cutter.vN (Dex's cutdown plans, features/campaign-formats.clan; added 2026-10-16, additive)." }, "output": { "type": "object" }, "rationale": { "type": "string" }, "latencyMs": { "type": "integer" }, "usage": { "type": "object", "description": "The director call's token counts, as the model reported them (features/pt-canvas-r4.clan; before, only the relay's log line had them). Absent on the passthrough and when the model reported none. Added 2026-11-21 (additive).", "properties": { "inputTokens": { "type": "integer", "minimum": 0 }, "outputTokens": { "type": "integer", "minimum": 0 }, "cacheReadTokens": { "type": "integer", "minimum": 0 }, "cacheWriteTokens": { "type": "integer", "minimum": 0 } }, "additionalProperties": false }, "input": { "type": "object", "description": "What the director received for this job: its input after the relay's own cuts (the brief and the context per op, wire tags, cards), kept small for the job record (relay/director/record.py): asset urls dropped (the sha256 names the picture), strings cut to 400 characters, lists to 16 items, at most about 8 KB with the biggest fields summarised past that. Absent on the passthrough and on blocks written before 2026-11-21. Added 2026-11-21 (features/pt-canvas-r1.clan, additive)." }, "cards": { "type": "array", "maxItems": 14, "description": "The character cards the director was given (features/character-cards.clan): for each ref it was told about, what one vision call saw in the picture. Absent when no ref had a card.", "items": { "type": "object", "properties": { "tag": { "type": "string", "description": "The ref's wire tag in this job (relay/names.py)." }, "sha256": { "$ref": "common.schema.json#/$defs/sha256" }, "kind": { "enum": ["character", "object", "setting", "style", "other"] }, "card": { "type": "string", "maxLength": 800, "description": "2-4 short factual lines: who or what, shape, colours, clothing or markings, style, pose or view." } }, "required": ["tag", "sha256", "kind", "card"], "additionalProperties": false } } }, "required": ["model", "promptVersion", "output", "rationale"], "additionalProperties": false };
+var pattern254 = new RegExp("^(director|skye|cutter)\\.v[0-9]+(\\.[0-9]+)?$", "u");
+function validate140(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate138.evaluated;
+  const evaluated0 = validate140.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -22099,7 +23482,7 @@ function validate138(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.promptVersion !== void 0) {
       let data1 = data.promptVersion;
       if (typeof data1 === "string") {
-        if (!pattern248.test(data1)) {
+        if (!pattern254.test(data1)) {
           const err6 = { instancePath: instancePath + "/promptVersion", schemaPath: "#/properties/promptVersion/pattern", keyword: "pattern", params: { pattern: "^(director|skye|cutter)\\.v[0-9]+(\\.[0-9]+)?$" }, message: 'must match pattern "^(director|skye|cutter)\\.v[0-9]+(\\.[0-9]+)?$"' };
           if (vErrors === null) {
             vErrors = [err6];
@@ -22380,7 +23763,7 @@ function validate138(data, { instancePath = "", parentData, parentDataProperty, 
             if (data12.kind !== void 0) {
               let data15 = data12.kind;
               if (!(data15 === "character" || data15 === "object" || data15 === "setting" || data15 === "style" || data15 === "other")) {
-                const err31 = { instancePath: instancePath + "/cards/" + i0 + "/kind", schemaPath: "#/properties/cards/items/properties/kind/enum", keyword: "enum", params: { allowedValues: schema291.properties.cards.items.properties.kind.enum }, message: "must be equal to one of the allowed values" };
+                const err31 = { instancePath: instancePath + "/cards/" + i0 + "/kind", schemaPath: "#/properties/cards/items/properties/kind/enum", keyword: "enum", params: { allowedValues: schema296.properties.cards.items.properties.kind.enum }, message: "must be equal to one of the allowed values" };
                 if (vErrors === null) {
                   vErrors = [err31];
                 } else {
@@ -22440,14 +23823,14 @@ function validate138(data, { instancePath = "", parentData, parentDataProperty, 
     }
     errors++;
   }
-  validate138.errors = vErrors;
+  validate140.errors = vErrors;
   return errors === 0;
 }
-validate138.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-function validate118(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate140.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+function validate120(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate118.evaluated;
+  const evaluated0 = validate120.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -22573,7 +23956,7 @@ function validate118(data, { instancePath = "", parentData, parentDataProperty, 
       errors++;
     }
     for (const key0 in data) {
-      if (!func1.call(schema245.properties, key0)) {
+      if (!func1.call(schema250.properties, key0)) {
         const err13 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err13];
@@ -22709,7 +24092,7 @@ function validate118(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.op !== void 0) {
       let data4 = data.op;
       if (!(data4 === "generate" || data4 === "view" || data4 === "shot_list" || data4 === "frame" || data4 === "region_edit" || data4 === "clip" || data4 === "clip_edit" || data4 === "stitch" || data4 === "frame_edit" || data4 === "clip_patch" || data4 === "bridge" || data4 === "cutout" || data4 === "transcribe" || data4 === "write" || data4 === "read" || data4 === "check" || data4 === "resize" || data4 === "cutdown" || data4 === "upscale")) {
-        const err25 = { instancePath: instancePath + "/op", schemaPath: "common.schema.json#/$defs/op/enum", keyword: "enum", params: { allowedValues: schema248.enum }, message: "must be equal to one of the allowed values" };
+        const err25 = { instancePath: instancePath + "/op", schemaPath: "common.schema.json#/$defs/op/enum", keyword: "enum", params: { allowedValues: schema253.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err25];
         } else {
@@ -22721,7 +24104,7 @@ function validate118(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.state !== void 0) {
       let data5 = data.state;
       if (!(data5 === "queued" || data5 === "submitting" || data5 === "submitted" || data5 === "fetching" || data5 === "validating" || data5 === "needs_input" || data5 === "completed" || data5 === "failed" || data5 === "cancelled" || data5 === "uncertain")) {
-        const err26 = { instancePath: instancePath + "/state", schemaPath: "common.schema.json#/$defs/jobState/enum", keyword: "enum", params: { allowedValues: schema249.enum }, message: "must be equal to one of the allowed values" };
+        const err26 = { instancePath: instancePath + "/state", schemaPath: "common.schema.json#/$defs/jobState/enum", keyword: "enum", params: { allowedValues: schema254.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err26];
         } else {
@@ -22805,7 +24188,7 @@ function validate118(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.nonce !== void 0) {
       let data10 = data.nonce;
       if (typeof data10 === "string") {
-        if (!pattern228.test(data10)) {
+        if (!pattern234.test(data10)) {
           const err33 = { instancePath: instancePath + "/nonce", schemaPath: "#/properties/nonce/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z0-9_-]{8,64}$" }, message: 'must match pattern "^[A-Za-z0-9_-]{8,64}$"' };
           if (vErrors === null) {
             vErrors = [err33];
@@ -22893,7 +24276,7 @@ function validate118(data, { instancePath = "", parentData, parentDataProperty, 
             if (data13.kind !== void 0) {
               let data14 = data13.kind;
               if (!(data14 === "ref" || data14 === "sketch" || data14 === "text" || data14 === "note" || data14 === "ink" || data14 === "document" || data14 === "brand" || data14 === "frame" || data14 === "generation" || data14 === "render" || data14 === "board" || data14 === "group" || data14 === "brief")) {
-                const err41 = { instancePath: instancePath + "/inputs/" + i0 + "/kind", schemaPath: "#/properties/inputs/items/properties/kind/enum", keyword: "enum", params: { allowedValues: schema245.properties.inputs.items.properties.kind.enum }, message: "must be equal to one of the allowed values" };
+                const err41 = { instancePath: instancePath + "/inputs/" + i0 + "/kind", schemaPath: "#/properties/inputs/items/properties/kind/enum", keyword: "enum", params: { allowedValues: schema250.properties.inputs.items.properties.kind.enum }, message: "must be equal to one of the allowed values" };
                 if (vErrors === null) {
                   vErrors = [err41];
                 } else {
@@ -23295,7 +24678,7 @@ function validate118(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.ask_id !== void 0) {
       let data29 = data.ask_id;
       if (typeof data29 === "string") {
-        if (!pattern197.test(data29)) {
+        if (!pattern203.test(data29)) {
           const err79 = { instancePath: instancePath + "/ask_id", schemaPath: "#/properties/ask_id/pattern", keyword: "pattern", params: { pattern: "^q_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^q_[0-9A-HJKMNP-TV-Z]{26}$"' };
           if (vErrors === null) {
             vErrors = [err79];
@@ -23450,8 +24833,8 @@ function validate118(data, { instancePath = "", parentData, parentDataProperty, 
       }
     }
     if (data.director !== void 0) {
-      if (!validate138(data.director, { instancePath: instancePath + "/director", parentData: data, parentDataProperty: "director", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate138.errors : vErrors.concat(validate138.errors);
+      if (!validate140(data.director, { instancePath: instancePath + "/director", parentData: data, parentDataProperty: "director", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate140.errors : vErrors.concat(validate140.errors);
         errors = vErrors.length;
       }
     }
@@ -23651,7 +25034,7 @@ function validate118(data, { instancePath = "", parentData, parentDataProperty, 
         if (data44.code !== void 0) {
           let data45 = data44.code;
           if (!(data45 === "invalid_input" || data45 === "unauthorised" || data45 === "blocked" || data45 === "flag_off" || data45 === "quota_exhausted" || data45 === "spend_stop" || data45 === "limit_reached" || data45 === "not_allowed" || data45 === "queue_full" || data45 === "capability_missing" || data45 === "moderated" || data45 === "provider_failed" || data45 === "provider_unavailable" || data45 === "timeout" || data45 === "uncertain" || data45 === "conflict" || data45 === "gone" || data45 === "internal")) {
-            const err111 = { instancePath: instancePath + "/error/code", schemaPath: "common.schema.json#/$defs/error/properties/code/enum", keyword: "enum", params: { allowedValues: schema294.properties.code.enum }, message: "must be equal to one of the allowed values" };
+            const err111 = { instancePath: instancePath + "/error/code", schemaPath: "common.schema.json#/$defs/error/properties/code/enum", keyword: "enum", params: { allowedValues: schema299.properties.code.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err111];
             } else {
@@ -23867,14 +25250,14 @@ function validate118(data, { instancePath = "", parentData, parentDataProperty, 
     }
     errors++;
   }
-  validate118.errors = vErrors;
+  validate120.errors = vErrors;
   return errors === 0;
 }
-validate118.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-function validate141(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate120.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+function validate143(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate141.evaluated;
+  const evaluated0 = validate143.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -23950,7 +25333,7 @@ function validate141(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.id !== void 0) {
       let data0 = data.id;
       if (typeof data0 === "string") {
-        if (!pattern252.test(data0)) {
+        if (!pattern258.test(data0)) {
           const err7 = { instancePath: instancePath + "/id", schemaPath: "#/properties/id/pattern", keyword: "pattern", params: { pattern: "^stale_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^stale_[0-9A-HJKMNP-TV-Z]{26}$"' };
           if (vErrors === null) {
             vErrors = [err7];
@@ -24071,14 +25454,14 @@ function validate141(data, { instancePath = "", parentData, parentDataProperty, 
       }
     }
     if (data.target !== void 0) {
-      if (!validate100(data.target, { instancePath: instancePath + "/target", parentData: data, parentDataProperty: "target", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate100.errors : vErrors.concat(validate100.errors);
+      if (!validate102(data.target, { instancePath: instancePath + "/target", parentData: data, parentDataProperty: "target", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate102.errors : vErrors.concat(validate102.errors);
         errors = vErrors.length;
       }
     }
     if (data.caused_by !== void 0) {
-      if (!validate100(data.caused_by, { instancePath: instancePath + "/caused_by", parentData: data, parentDataProperty: "caused_by", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate100.errors : vErrors.concat(validate100.errors);
+      if (!validate102(data.caused_by, { instancePath: instancePath + "/caused_by", parentData: data, parentDataProperty: "caused_by", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate102.errors : vErrors.concat(validate102.errors);
         errors = vErrors.length;
       }
     }
@@ -24135,15 +25518,15 @@ function validate141(data, { instancePath = "", parentData, parentDataProperty, 
     }
     errors++;
   }
-  validate141.errors = vErrors;
+  validate143.errors = vErrors;
   return errors === 0;
 }
-validate141.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema300 = { "type": "object", "description": "A download that was made.", "properties": { "id": { "type": "string", "pattern": "^exp_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "kind": { "enum": ["ad_mp4", "bundle_zip", "media_zip", "clan_bundle", "script_pdf", "script_fountain", "storyboard_pdf", "sizes_zip"] }, "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "created_at": { "type": "string", "format": "date-time" } }, "required": ["id", "v", "field_v", "kind", "asset", "created_at"], "additionalProperties": false };
-function validate145(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate143.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var schema305 = { "type": "object", "description": "A download that was made.", "properties": { "id": { "type": "string", "pattern": "^exp_[0-9A-HJKMNP-TV-Z]{26}$" }, "v": { "$ref": "#/$defs/v" }, "field_v": { "$ref": "#/$defs/field_v" }, "kind": { "enum": ["ad_mp4", "bundle_zip", "media_zip", "clan_bundle", "script_pdf", "script_fountain", "storyboard_pdf", "sizes_zip"] }, "asset": { "$ref": "common.schema.json#/$defs/sha256" }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "created_at": { "type": "string", "format": "date-time" } }, "required": ["id", "v", "field_v", "kind", "asset", "created_at"], "additionalProperties": false };
+function validate147(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate145.evaluated;
+  const evaluated0 = validate147.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -24219,7 +25602,7 @@ function validate145(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.id !== void 0) {
       let data0 = data.id;
       if (typeof data0 === "string") {
-        if (!pattern255.test(data0)) {
+        if (!pattern261.test(data0)) {
           const err7 = { instancePath: instancePath + "/id", schemaPath: "#/properties/id/pattern", keyword: "pattern", params: { pattern: "^exp_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^exp_[0-9A-HJKMNP-TV-Z]{26}$"' };
           if (vErrors === null) {
             vErrors = [err7];
@@ -24342,7 +25725,7 @@ function validate145(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.kind !== void 0) {
       let data4 = data.kind;
       if (!(data4 === "ad_mp4" || data4 === "bundle_zip" || data4 === "media_zip" || data4 === "clan_bundle" || data4 === "script_pdf" || data4 === "script_fountain" || data4 === "storyboard_pdf" || data4 === "sizes_zip")) {
-        const err18 = { instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/enum", keyword: "enum", params: { allowedValues: schema300.properties.kind.enum }, message: "must be equal to one of the allowed values" };
+        const err18 = { instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/enum", keyword: "enum", params: { allowedValues: schema305.properties.kind.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err18];
         } else {
@@ -24426,18 +25809,18 @@ function validate145(data, { instancePath = "", parentData, parentDataProperty, 
     }
     errors++;
   }
-  validate145.errors = vErrors;
+  validate147.errors = vErrors;
   return errors === 0;
 }
-validate145.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema305 = { "type": "object", "description": "One file the project uses, keyed by its hash. Bytes are never inline.", "properties": { "sha256": { "$ref": "common.schema.json#/$defs/sha256" }, "kind": { "enum": ["image", "video", "audio", "document", "font", "vector"] }, "mime": { "$ref": "common.schema.json#/$defs/mime" }, "bytes": { "type": "integer", "minimum": 0 }, "w": { "type": "integer", "minimum": 1 }, "h": { "type": "integer", "minimum": 1 }, "duration_s": { "type": "number", "minimum": 0 }, "pages": { "type": "integer", "minimum": 1 }, "origin": { "enum": ["uploaded", "drawn", "generated", "mock", "edited", "extracted"] }, "rights": { "enum": ["generated", "own", "licensed", "unknown"], "description": "Whether the agency may show it to a client (features/prod-assets-route.clan, 2026-11-19): generated (a provider made it for the agency: Runway's outputs land with it), own (the agency's: a drawing, or a person said so), licensed (a person said it is licensed), unknown (an upload until a person says; the Deck treats it as rights to supply). Absent: not stated (made before it, an edit, a mock); readers infer from origin." }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "locations": { "type": "array", "items": { "type": "string", "pattern": "^(idb|s3|https)://" }, "maxItems": 8, "description": "Never written, ignored on read (features/production-in-library.clan): the bytes are found by sha256 alone, in this browser, then at the session's media base, then by the relay's by-hash route. Old documents may still carry it." }, "thumb": { "type": "string", "pattern": "^data:image/webp;base64,", "maxLength": 5500 } }, "required": ["sha256", "kind", "mime", "origin"], "additionalProperties": false };
-var schema307 = { "enum": ["image/png", "image/jpeg", "image/webp", "image/svg+xml", "video/mp4", "audio/mpeg", "audio/wav", "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "font/woff2", "font/ttf", "font/otf", "text/plain", "application/zip"], "description": "The kinds of file the tool keeps: pictures (SVG for logos), clips, audio, brand books (PDF), documents (DOCX), fonts, Fountain or plain text, and zips." };
-var pattern263 = new RegExp("^(idb|s3|https)://", "u");
-var pattern264 = new RegExp("^data:image/webp;base64,", "u");
-function validate147(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate147.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var schema310 = { "type": "object", "description": "One file the project uses, keyed by its hash. Bytes are never inline.", "properties": { "sha256": { "$ref": "common.schema.json#/$defs/sha256" }, "kind": { "enum": ["image", "video", "audio", "document", "font", "vector"] }, "mime": { "$ref": "common.schema.json#/$defs/mime" }, "bytes": { "type": "integer", "minimum": 0 }, "w": { "type": "integer", "minimum": 1 }, "h": { "type": "integer", "minimum": 1 }, "duration_s": { "type": "number", "minimum": 0 }, "pages": { "type": "integer", "minimum": 1 }, "origin": { "enum": ["uploaded", "drawn", "generated", "mock", "edited", "extracted"] }, "rights": { "enum": ["generated", "own", "licensed", "unknown"], "description": "Whether the agency may show it to a client (features/prod-assets-route.clan, 2026-11-19): generated (a provider made it for the agency: Runway's outputs land with it), own (the agency's: a drawing, or a person said so), licensed (a person said it is licensed), unknown (an upload until a person says; the Deck treats it as rights to supply). Absent: not stated (made before it, an edit, a mock); readers infer from origin." }, "job_id": { "type": "string", "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, "locations": { "type": "array", "items": { "type": "string", "pattern": "^(idb|s3|https)://" }, "maxItems": 8, "description": "Never written, ignored on read (features/production-in-library.clan): the bytes are found by sha256 alone, in this browser, then at the session's media base, then by the relay's by-hash route. Old documents may still carry it." }, "thumb": { "type": "string", "pattern": "^data:image/webp;base64,", "maxLength": 5500 } }, "required": ["sha256", "kind", "mime", "origin"], "additionalProperties": false };
+var schema312 = { "enum": ["image/png", "image/jpeg", "image/webp", "image/svg+xml", "video/mp4", "audio/mpeg", "audio/wav", "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "font/woff2", "font/ttf", "font/otf", "text/plain", "application/zip"], "description": "The kinds of file the tool keeps: pictures (SVG for logos), clips, audio, brand books (PDF), documents (DOCX), fonts, Fountain or plain text, and zips." };
+var pattern269 = new RegExp("^(idb|s3|https)://", "u");
+var pattern270 = new RegExp("^data:image/webp;base64,", "u");
+function validate149(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate147.evaluated;
+  const evaluated0 = validate149.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -24482,7 +25865,7 @@ function validate147(data, { instancePath = "", parentData, parentDataProperty, 
       errors++;
     }
     for (const key0 in data) {
-      if (!func1.call(schema305.properties, key0)) {
+      if (!func1.call(schema310.properties, key0)) {
         const err4 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err4];
@@ -24517,7 +25900,7 @@ function validate147(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.kind !== void 0) {
       let data1 = data.kind;
       if (!(data1 === "image" || data1 === "video" || data1 === "audio" || data1 === "document" || data1 === "font" || data1 === "vector")) {
-        const err7 = { instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/enum", keyword: "enum", params: { allowedValues: schema305.properties.kind.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/enum", keyword: "enum", params: { allowedValues: schema310.properties.kind.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -24529,7 +25912,7 @@ function validate147(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.mime !== void 0) {
       let data2 = data.mime;
       if (!(data2 === "image/png" || data2 === "image/jpeg" || data2 === "image/webp" || data2 === "image/svg+xml" || data2 === "video/mp4" || data2 === "audio/mpeg" || data2 === "audio/wav" || data2 === "application/pdf" || data2 === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || data2 === "font/woff2" || data2 === "font/ttf" || data2 === "font/otf" || data2 === "text/plain" || data2 === "application/zip")) {
-        const err8 = { instancePath: instancePath + "/mime", schemaPath: "common.schema.json#/$defs/mime/enum", keyword: "enum", params: { allowedValues: schema307.enum }, message: "must be equal to one of the allowed values" };
+        const err8 = { instancePath: instancePath + "/mime", schemaPath: "common.schema.json#/$defs/mime/enum", keyword: "enum", params: { allowedValues: schema312.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err8];
         } else {
@@ -24655,7 +26038,7 @@ function validate147(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.origin !== void 0) {
       let data8 = data.origin;
       if (!(data8 === "uploaded" || data8 === "drawn" || data8 === "generated" || data8 === "mock" || data8 === "edited" || data8 === "extracted")) {
-        const err19 = { instancePath: instancePath + "/origin", schemaPath: "#/properties/origin/enum", keyword: "enum", params: { allowedValues: schema305.properties.origin.enum }, message: "must be equal to one of the allowed values" };
+        const err19 = { instancePath: instancePath + "/origin", schemaPath: "#/properties/origin/enum", keyword: "enum", params: { allowedValues: schema310.properties.origin.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err19];
         } else {
@@ -24667,7 +26050,7 @@ function validate147(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.rights !== void 0) {
       let data9 = data.rights;
       if (!(data9 === "generated" || data9 === "own" || data9 === "licensed" || data9 === "unknown")) {
-        const err20 = { instancePath: instancePath + "/rights", schemaPath: "#/properties/rights/enum", keyword: "enum", params: { allowedValues: schema305.properties.rights.enum }, message: "must be equal to one of the allowed values" };
+        const err20 = { instancePath: instancePath + "/rights", schemaPath: "#/properties/rights/enum", keyword: "enum", params: { allowedValues: schema310.properties.rights.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err20];
         } else {
@@ -24714,7 +26097,7 @@ function validate147(data, { instancePath = "", parentData, parentDataProperty, 
         for (let i0 = 0; i0 < len0; i0++) {
           let data12 = data11[i0];
           if (typeof data12 === "string") {
-            if (!pattern263.test(data12)) {
+            if (!pattern269.test(data12)) {
               const err24 = { instancePath: instancePath + "/locations/" + i0, schemaPath: "#/properties/locations/items/pattern", keyword: "pattern", params: { pattern: "^(idb|s3|https)://" }, message: 'must match pattern "^(idb|s3|https)://"' };
               if (vErrors === null) {
                 vErrors = [err24];
@@ -24755,7 +26138,7 @@ function validate147(data, { instancePath = "", parentData, parentDataProperty, 
           }
           errors++;
         }
-        if (!pattern264.test(data13)) {
+        if (!pattern270.test(data13)) {
           const err28 = { instancePath: instancePath + "/thumb", schemaPath: "#/properties/thumb/pattern", keyword: "pattern", params: { pattern: "^data:image/webp;base64," }, message: 'must match pattern "^data:image/webp;base64,"' };
           if (vErrors === null) {
             vErrors = [err28];
@@ -24783,10 +26166,10 @@ function validate147(data, { instancePath = "", parentData, parentDataProperty, 
     }
     errors++;
   }
-  validate147.errors = vErrors;
+  validate149.errors = vErrors;
   return errors === 0;
 }
-validate147.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+validate149.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
 function validate20(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
@@ -26172,11 +27555,11 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
         errors++;
       }
     }
-    if (data.briefs !== void 0) {
-      let data44 = data.briefs;
+    if (data.brand_clans !== void 0) {
+      let data44 = data.brand_clans;
       if (data44 && typeof data44 == "object" && !Array.isArray(data44)) {
-        if (Object.keys(data44).length > 16) {
-          const err119 = { instancePath: instancePath + "/briefs", schemaPath: "#/properties/briefs/maxProperties", keyword: "maxProperties", params: { limit: 16 }, message: "must NOT have more than 16 properties" };
+        if (Object.keys(data44).length > 8) {
+          const err119 = { instancePath: instancePath + "/brand_clans", schemaPath: "#/properties/brand_clans/maxProperties", keyword: "maxProperties", params: { limit: 8 }, message: "must NOT have more than 8 properties" };
           if (vErrors === null) {
             vErrors = [err119];
           } else {
@@ -26188,7 +27571,7 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
           const _errs111 = errors;
           if (typeof key35 === "string") {
             if (!pattern141.test(key35)) {
-              const err120 = { instancePath: instancePath + "/briefs", schemaPath: "#/properties/briefs/propertyNames/pattern", keyword: "pattern", params: { pattern: "^brief_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^brief_[0-9A-HJKMNP-TV-Z]{26}$"', propertyName: key35 };
+              const err120 = { instancePath: instancePath + "/brand_clans", schemaPath: "#/properties/brand_clans/propertyNames/pattern", keyword: "pattern", params: { pattern: "^bclan_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^bclan_[0-9A-HJKMNP-TV-Z]{26}$"', propertyName: key35 };
               if (vErrors === null) {
                 vErrors = [err120];
               } else {
@@ -26199,7 +27582,7 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
           }
           var valid38 = _errs111 === errors;
           if (!valid38) {
-            const err121 = { instancePath: instancePath + "/briefs", schemaPath: "#/properties/briefs/propertyNames", keyword: "propertyNames", params: { propertyName: key35 }, message: "property name must be valid" };
+            const err121 = { instancePath: instancePath + "/brand_clans", schemaPath: "#/properties/brand_clans/propertyNames", keyword: "propertyNames", params: { propertyName: key35 }, message: "property name must be valid" };
             if (vErrors === null) {
               vErrors = [err121];
             } else {
@@ -26209,13 +27592,13 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
           }
         }
         for (const key36 in data44) {
-          if (!validate85(data44[key36], { instancePath: instancePath + "/briefs/" + key36.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data44, parentDataProperty: key36, rootData, dynamicAnchors })) {
+          if (!validate85(data44[key36], { instancePath: instancePath + "/brand_clans/" + key36.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data44, parentDataProperty: key36, rootData, dynamicAnchors })) {
             vErrors = vErrors === null ? validate85.errors : vErrors.concat(validate85.errors);
             errors = vErrors.length;
           }
         }
       } else {
-        const err122 = { instancePath: instancePath + "/briefs", schemaPath: "#/properties/briefs/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        const err122 = { instancePath: instancePath + "/brand_clans", schemaPath: "#/properties/brand_clans/type", keyword: "type", params: { type: "object" }, message: "must be object" };
         if (vErrors === null) {
           vErrors = [err122];
         } else {
@@ -26224,11 +27607,11 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
         errors++;
       }
     }
-    if (data.finals !== void 0) {
-      let data46 = data.finals;
+    if (data.briefs !== void 0) {
+      let data46 = data.briefs;
       if (data46 && typeof data46 == "object" && !Array.isArray(data46)) {
-        if (Object.keys(data46).length > 500) {
-          const err123 = { instancePath: instancePath + "/finals", schemaPath: "#/properties/finals/maxProperties", keyword: "maxProperties", params: { limit: 500 }, message: "must NOT have more than 500 properties" };
+        if (Object.keys(data46).length > 16) {
+          const err123 = { instancePath: instancePath + "/briefs", schemaPath: "#/properties/briefs/maxProperties", keyword: "maxProperties", params: { limit: 16 }, message: "must NOT have more than 16 properties" };
           if (vErrors === null) {
             vErrors = [err123];
           } else {
@@ -26239,8 +27622,8 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
         for (const key37 in data46) {
           const _errs116 = errors;
           if (typeof key37 === "string") {
-            if (!pattern146.test(key37)) {
-              const err124 = { instancePath: instancePath + "/finals", schemaPath: "#/properties/finals/propertyNames/pattern", keyword: "pattern", params: { pattern: "^final_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^final_[0-9A-HJKMNP-TV-Z]{26}$"', propertyName: key37 };
+            if (!pattern145.test(key37)) {
+              const err124 = { instancePath: instancePath + "/briefs", schemaPath: "#/properties/briefs/propertyNames/pattern", keyword: "pattern", params: { pattern: "^brief_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^brief_[0-9A-HJKMNP-TV-Z]{26}$"', propertyName: key37 };
               if (vErrors === null) {
                 vErrors = [err124];
               } else {
@@ -26251,7 +27634,7 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
           }
           var valid40 = _errs116 === errors;
           if (!valid40) {
-            const err125 = { instancePath: instancePath + "/finals", schemaPath: "#/properties/finals/propertyNames", keyword: "propertyNames", params: { propertyName: key37 }, message: "property name must be valid" };
+            const err125 = { instancePath: instancePath + "/briefs", schemaPath: "#/properties/briefs/propertyNames", keyword: "propertyNames", params: { propertyName: key37 }, message: "property name must be valid" };
             if (vErrors === null) {
               vErrors = [err125];
             } else {
@@ -26261,13 +27644,13 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
           }
         }
         for (const key38 in data46) {
-          if (!validate87(data46[key38], { instancePath: instancePath + "/finals/" + key38.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data46, parentDataProperty: key38, rootData, dynamicAnchors })) {
+          if (!validate87(data46[key38], { instancePath: instancePath + "/briefs/" + key38.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data46, parentDataProperty: key38, rootData, dynamicAnchors })) {
             vErrors = vErrors === null ? validate87.errors : vErrors.concat(validate87.errors);
             errors = vErrors.length;
           }
         }
       } else {
-        const err126 = { instancePath: instancePath + "/finals", schemaPath: "#/properties/finals/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        const err126 = { instancePath: instancePath + "/briefs", schemaPath: "#/properties/briefs/type", keyword: "type", params: { type: "object" }, message: "must be object" };
         if (vErrors === null) {
           vErrors = [err126];
         } else {
@@ -26276,11 +27659,11 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
         errors++;
       }
     }
-    if (data.texts !== void 0) {
-      let data48 = data.texts;
+    if (data.finals !== void 0) {
+      let data48 = data.finals;
       if (data48 && typeof data48 == "object" && !Array.isArray(data48)) {
-        if (Object.keys(data48).length > 1e3) {
-          const err127 = { instancePath: instancePath + "/texts", schemaPath: "#/properties/texts/maxProperties", keyword: "maxProperties", params: { limit: 1e3 }, message: "must NOT have more than 1000 properties" };
+        if (Object.keys(data48).length > 500) {
+          const err127 = { instancePath: instancePath + "/finals", schemaPath: "#/properties/finals/maxProperties", keyword: "maxProperties", params: { limit: 500 }, message: "must NOT have more than 500 properties" };
           if (vErrors === null) {
             vErrors = [err127];
           } else {
@@ -26291,8 +27674,8 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
         for (const key39 in data48) {
           const _errs121 = errors;
           if (typeof key39 === "string") {
-            if (!pattern155.test(key39)) {
-              const err128 = { instancePath: instancePath + "/texts", schemaPath: "#/properties/texts/propertyNames/pattern", keyword: "pattern", params: { pattern: "^text_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^text_[0-9A-HJKMNP-TV-Z]{26}$"', propertyName: key39 };
+            if (!pattern152.test(key39)) {
+              const err128 = { instancePath: instancePath + "/finals", schemaPath: "#/properties/finals/propertyNames/pattern", keyword: "pattern", params: { pattern: "^final_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^final_[0-9A-HJKMNP-TV-Z]{26}$"', propertyName: key39 };
               if (vErrors === null) {
                 vErrors = [err128];
               } else {
@@ -26303,7 +27686,7 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
           }
           var valid42 = _errs121 === errors;
           if (!valid42) {
-            const err129 = { instancePath: instancePath + "/texts", schemaPath: "#/properties/texts/propertyNames", keyword: "propertyNames", params: { propertyName: key39 }, message: "property name must be valid" };
+            const err129 = { instancePath: instancePath + "/finals", schemaPath: "#/properties/finals/propertyNames", keyword: "propertyNames", params: { propertyName: key39 }, message: "property name must be valid" };
             if (vErrors === null) {
               vErrors = [err129];
             } else {
@@ -26313,13 +27696,13 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
           }
         }
         for (const key40 in data48) {
-          if (!validate90(data48[key40], { instancePath: instancePath + "/texts/" + key40.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data48, parentDataProperty: key40, rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate90.errors : vErrors.concat(validate90.errors);
+          if (!validate89(data48[key40], { instancePath: instancePath + "/finals/" + key40.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data48, parentDataProperty: key40, rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate89.errors : vErrors.concat(validate89.errors);
             errors = vErrors.length;
           }
         }
       } else {
-        const err130 = { instancePath: instancePath + "/texts", schemaPath: "#/properties/texts/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        const err130 = { instancePath: instancePath + "/finals", schemaPath: "#/properties/finals/type", keyword: "type", params: { type: "object" }, message: "must be object" };
         if (vErrors === null) {
           vErrors = [err130];
         } else {
@@ -26328,11 +27711,11 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
         errors++;
       }
     }
-    if (data.format_sets !== void 0) {
-      let data50 = data.format_sets;
+    if (data.texts !== void 0) {
+      let data50 = data.texts;
       if (data50 && typeof data50 == "object" && !Array.isArray(data50)) {
-        if (Object.keys(data50).length > 64) {
-          const err131 = { instancePath: instancePath + "/format_sets", schemaPath: "#/properties/format_sets/maxProperties", keyword: "maxProperties", params: { limit: 64 }, message: "must NOT have more than 64 properties" };
+        if (Object.keys(data50).length > 1e3) {
+          const err131 = { instancePath: instancePath + "/texts", schemaPath: "#/properties/texts/maxProperties", keyword: "maxProperties", params: { limit: 1e3 }, message: "must NOT have more than 1000 properties" };
           if (vErrors === null) {
             vErrors = [err131];
           } else {
@@ -26343,8 +27726,8 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
         for (const key41 in data50) {
           const _errs126 = errors;
           if (typeof key41 === "string") {
-            if (!pattern153.test(key41)) {
-              const err132 = { instancePath: instancePath + "/format_sets", schemaPath: "#/properties/format_sets/propertyNames/pattern", keyword: "pattern", params: { pattern: "^fset_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^fset_[0-9A-HJKMNP-TV-Z]{26}$"', propertyName: key41 };
+            if (!pattern161.test(key41)) {
+              const err132 = { instancePath: instancePath + "/texts", schemaPath: "#/properties/texts/propertyNames/pattern", keyword: "pattern", params: { pattern: "^text_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^text_[0-9A-HJKMNP-TV-Z]{26}$"', propertyName: key41 };
               if (vErrors === null) {
                 vErrors = [err132];
               } else {
@@ -26355,7 +27738,7 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
           }
           var valid44 = _errs126 === errors;
           if (!valid44) {
-            const err133 = { instancePath: instancePath + "/format_sets", schemaPath: "#/properties/format_sets/propertyNames", keyword: "propertyNames", params: { propertyName: key41 }, message: "property name must be valid" };
+            const err133 = { instancePath: instancePath + "/texts", schemaPath: "#/properties/texts/propertyNames", keyword: "propertyNames", params: { propertyName: key41 }, message: "property name must be valid" };
             if (vErrors === null) {
               vErrors = [err133];
             } else {
@@ -26365,13 +27748,13 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
           }
         }
         for (const key42 in data50) {
-          if (!validate92(data50[key42], { instancePath: instancePath + "/format_sets/" + key42.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data50, parentDataProperty: key42, rootData, dynamicAnchors })) {
+          if (!validate92(data50[key42], { instancePath: instancePath + "/texts/" + key42.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data50, parentDataProperty: key42, rootData, dynamicAnchors })) {
             vErrors = vErrors === null ? validate92.errors : vErrors.concat(validate92.errors);
             errors = vErrors.length;
           }
         }
       } else {
-        const err134 = { instancePath: instancePath + "/format_sets", schemaPath: "#/properties/format_sets/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        const err134 = { instancePath: instancePath + "/texts", schemaPath: "#/properties/texts/type", keyword: "type", params: { type: "object" }, message: "must be object" };
         if (vErrors === null) {
           vErrors = [err134];
         } else {
@@ -26380,11 +27763,11 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
         errors++;
       }
     }
-    if (data.sizes !== void 0) {
-      let data52 = data.sizes;
+    if (data.format_sets !== void 0) {
+      let data52 = data.format_sets;
       if (data52 && typeof data52 == "object" && !Array.isArray(data52)) {
-        if (Object.keys(data52).length > 1e3) {
-          const err135 = { instancePath: instancePath + "/sizes", schemaPath: "#/properties/sizes/maxProperties", keyword: "maxProperties", params: { limit: 1e3 }, message: "must NOT have more than 1000 properties" };
+        if (Object.keys(data52).length > 64) {
+          const err135 = { instancePath: instancePath + "/format_sets", schemaPath: "#/properties/format_sets/maxProperties", keyword: "maxProperties", params: { limit: 64 }, message: "must NOT have more than 64 properties" };
           if (vErrors === null) {
             vErrors = [err135];
           } else {
@@ -26395,8 +27778,8 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
         for (const key43 in data52) {
           const _errs131 = errors;
           if (typeof key43 === "string") {
-            if (!pattern59.test(key43)) {
-              const err136 = { instancePath: instancePath + "/sizes", schemaPath: "#/properties/sizes/propertyNames/pattern", keyword: "pattern", params: { pattern: "^size_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^size_[0-9A-HJKMNP-TV-Z]{26}$"', propertyName: key43 };
+            if (!pattern159.test(key43)) {
+              const err136 = { instancePath: instancePath + "/format_sets", schemaPath: "#/properties/format_sets/propertyNames/pattern", keyword: "pattern", params: { pattern: "^fset_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^fset_[0-9A-HJKMNP-TV-Z]{26}$"', propertyName: key43 };
               if (vErrors === null) {
                 vErrors = [err136];
               } else {
@@ -26407,7 +27790,7 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
           }
           var valid46 = _errs131 === errors;
           if (!valid46) {
-            const err137 = { instancePath: instancePath + "/sizes", schemaPath: "#/properties/sizes/propertyNames", keyword: "propertyNames", params: { propertyName: key43 }, message: "property name must be valid" };
+            const err137 = { instancePath: instancePath + "/format_sets", schemaPath: "#/properties/format_sets/propertyNames", keyword: "propertyNames", params: { propertyName: key43 }, message: "property name must be valid" };
             if (vErrors === null) {
               vErrors = [err137];
             } else {
@@ -26417,13 +27800,13 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
           }
         }
         for (const key44 in data52) {
-          if (!validate94(data52[key44], { instancePath: instancePath + "/sizes/" + key44.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data52, parentDataProperty: key44, rootData, dynamicAnchors })) {
+          if (!validate94(data52[key44], { instancePath: instancePath + "/format_sets/" + key44.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data52, parentDataProperty: key44, rootData, dynamicAnchors })) {
             vErrors = vErrors === null ? validate94.errors : vErrors.concat(validate94.errors);
             errors = vErrors.length;
           }
         }
       } else {
-        const err138 = { instancePath: instancePath + "/sizes", schemaPath: "#/properties/sizes/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        const err138 = { instancePath: instancePath + "/format_sets", schemaPath: "#/properties/format_sets/type", keyword: "type", params: { type: "object" }, message: "must be object" };
         if (vErrors === null) {
           vErrors = [err138];
         } else {
@@ -26432,11 +27815,11 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
         errors++;
       }
     }
-    if (data.checks !== void 0) {
-      let data54 = data.checks;
+    if (data.sizes !== void 0) {
+      let data54 = data.sizes;
       if (data54 && typeof data54 == "object" && !Array.isArray(data54)) {
-        if (Object.keys(data54).length > 2e3) {
-          const err139 = { instancePath: instancePath + "/checks", schemaPath: "#/properties/checks/maxProperties", keyword: "maxProperties", params: { limit: 2e3 }, message: "must NOT have more than 2000 properties" };
+        if (Object.keys(data54).length > 1e3) {
+          const err139 = { instancePath: instancePath + "/sizes", schemaPath: "#/properties/sizes/maxProperties", keyword: "maxProperties", params: { limit: 1e3 }, message: "must NOT have more than 1000 properties" };
           if (vErrors === null) {
             vErrors = [err139];
           } else {
@@ -26447,8 +27830,8 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
         for (const key45 in data54) {
           const _errs136 = errors;
           if (typeof key45 === "string") {
-            if (!pattern188.test(key45)) {
-              const err140 = { instancePath: instancePath + "/checks", schemaPath: "#/properties/checks/propertyNames/pattern", keyword: "pattern", params: { pattern: "^check_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^check_[0-9A-HJKMNP-TV-Z]{26}$"', propertyName: key45 };
+            if (!pattern59.test(key45)) {
+              const err140 = { instancePath: instancePath + "/sizes", schemaPath: "#/properties/sizes/propertyNames/pattern", keyword: "pattern", params: { pattern: "^size_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^size_[0-9A-HJKMNP-TV-Z]{26}$"', propertyName: key45 };
               if (vErrors === null) {
                 vErrors = [err140];
               } else {
@@ -26459,7 +27842,7 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
           }
           var valid48 = _errs136 === errors;
           if (!valid48) {
-            const err141 = { instancePath: instancePath + "/checks", schemaPath: "#/properties/checks/propertyNames", keyword: "propertyNames", params: { propertyName: key45 }, message: "property name must be valid" };
+            const err141 = { instancePath: instancePath + "/sizes", schemaPath: "#/properties/sizes/propertyNames", keyword: "propertyNames", params: { propertyName: key45 }, message: "property name must be valid" };
             if (vErrors === null) {
               vErrors = [err141];
             } else {
@@ -26469,13 +27852,13 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
           }
         }
         for (const key46 in data54) {
-          if (!validate99(data54[key46], { instancePath: instancePath + "/checks/" + key46.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data54, parentDataProperty: key46, rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate99.errors : vErrors.concat(validate99.errors);
+          if (!validate96(data54[key46], { instancePath: instancePath + "/sizes/" + key46.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data54, parentDataProperty: key46, rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate96.errors : vErrors.concat(validate96.errors);
             errors = vErrors.length;
           }
         }
       } else {
-        const err142 = { instancePath: instancePath + "/checks", schemaPath: "#/properties/checks/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        const err142 = { instancePath: instancePath + "/sizes", schemaPath: "#/properties/sizes/type", keyword: "type", params: { type: "object" }, message: "must be object" };
         if (vErrors === null) {
           vErrors = [err142];
         } else {
@@ -26484,11 +27867,11 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
         errors++;
       }
     }
-    if (data.asks !== void 0) {
-      let data56 = data.asks;
+    if (data.checks !== void 0) {
+      let data56 = data.checks;
       if (data56 && typeof data56 == "object" && !Array.isArray(data56)) {
-        if (Object.keys(data56).length > 500) {
-          const err143 = { instancePath: instancePath + "/asks", schemaPath: "#/properties/asks/maxProperties", keyword: "maxProperties", params: { limit: 500 }, message: "must NOT have more than 500 properties" };
+        if (Object.keys(data56).length > 2e3) {
+          const err143 = { instancePath: instancePath + "/checks", schemaPath: "#/properties/checks/maxProperties", keyword: "maxProperties", params: { limit: 2e3 }, message: "must NOT have more than 2000 properties" };
           if (vErrors === null) {
             vErrors = [err143];
           } else {
@@ -26499,8 +27882,8 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
         for (const key47 in data56) {
           const _errs141 = errors;
           if (typeof key47 === "string") {
-            if (!pattern197.test(key47)) {
-              const err144 = { instancePath: instancePath + "/asks", schemaPath: "#/properties/asks/propertyNames/pattern", keyword: "pattern", params: { pattern: "^q_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^q_[0-9A-HJKMNP-TV-Z]{26}$"', propertyName: key47 };
+            if (!pattern194.test(key47)) {
+              const err144 = { instancePath: instancePath + "/checks", schemaPath: "#/properties/checks/propertyNames/pattern", keyword: "pattern", params: { pattern: "^check_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^check_[0-9A-HJKMNP-TV-Z]{26}$"', propertyName: key47 };
               if (vErrors === null) {
                 vErrors = [err144];
               } else {
@@ -26511,7 +27894,7 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
           }
           var valid50 = _errs141 === errors;
           if (!valid50) {
-            const err145 = { instancePath: instancePath + "/asks", schemaPath: "#/properties/asks/propertyNames", keyword: "propertyNames", params: { propertyName: key47 }, message: "property name must be valid" };
+            const err145 = { instancePath: instancePath + "/checks", schemaPath: "#/properties/checks/propertyNames", keyword: "propertyNames", params: { propertyName: key47 }, message: "property name must be valid" };
             if (vErrors === null) {
               vErrors = [err145];
             } else {
@@ -26521,13 +27904,13 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
           }
         }
         for (const key48 in data56) {
-          if (!validate103(data56[key48], { instancePath: instancePath + "/asks/" + key48.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data56, parentDataProperty: key48, rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate103.errors : vErrors.concat(validate103.errors);
+          if (!validate101(data56[key48], { instancePath: instancePath + "/checks/" + key48.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data56, parentDataProperty: key48, rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate101.errors : vErrors.concat(validate101.errors);
             errors = vErrors.length;
           }
         }
       } else {
-        const err146 = { instancePath: instancePath + "/asks", schemaPath: "#/properties/asks/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        const err146 = { instancePath: instancePath + "/checks", schemaPath: "#/properties/checks/type", keyword: "type", params: { type: "object" }, message: "must be object" };
         if (vErrors === null) {
           vErrors = [err146];
         } else {
@@ -26536,11 +27919,11 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
         errors++;
       }
     }
-    if (data.suggestions !== void 0) {
-      let data58 = data.suggestions;
+    if (data.asks !== void 0) {
+      let data58 = data.asks;
       if (data58 && typeof data58 == "object" && !Array.isArray(data58)) {
         if (Object.keys(data58).length > 500) {
-          const err147 = { instancePath: instancePath + "/suggestions", schemaPath: "#/properties/suggestions/maxProperties", keyword: "maxProperties", params: { limit: 500 }, message: "must NOT have more than 500 properties" };
+          const err147 = { instancePath: instancePath + "/asks", schemaPath: "#/properties/asks/maxProperties", keyword: "maxProperties", params: { limit: 500 }, message: "must NOT have more than 500 properties" };
           if (vErrors === null) {
             vErrors = [err147];
           } else {
@@ -26551,8 +27934,8 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
         for (const key49 in data58) {
           const _errs146 = errors;
           if (typeof key49 === "string") {
-            if (!pattern210.test(key49)) {
-              const err148 = { instancePath: instancePath + "/suggestions", schemaPath: "#/properties/suggestions/propertyNames/pattern", keyword: "pattern", params: { pattern: "^sug_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^sug_[0-9A-HJKMNP-TV-Z]{26}$"', propertyName: key49 };
+            if (!pattern203.test(key49)) {
+              const err148 = { instancePath: instancePath + "/asks", schemaPath: "#/properties/asks/propertyNames/pattern", keyword: "pattern", params: { pattern: "^q_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^q_[0-9A-HJKMNP-TV-Z]{26}$"', propertyName: key49 };
               if (vErrors === null) {
                 vErrors = [err148];
               } else {
@@ -26563,7 +27946,7 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
           }
           var valid52 = _errs146 === errors;
           if (!valid52) {
-            const err149 = { instancePath: instancePath + "/suggestions", schemaPath: "#/properties/suggestions/propertyNames", keyword: "propertyNames", params: { propertyName: key49 }, message: "property name must be valid" };
+            const err149 = { instancePath: instancePath + "/asks", schemaPath: "#/properties/asks/propertyNames", keyword: "propertyNames", params: { propertyName: key49 }, message: "property name must be valid" };
             if (vErrors === null) {
               vErrors = [err149];
             } else {
@@ -26573,13 +27956,13 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
           }
         }
         for (const key50 in data58) {
-          if (!validate114(data58[key50], { instancePath: instancePath + "/suggestions/" + key50.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data58, parentDataProperty: key50, rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate114.errors : vErrors.concat(validate114.errors);
+          if (!validate105(data58[key50], { instancePath: instancePath + "/asks/" + key50.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data58, parentDataProperty: key50, rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate105.errors : vErrors.concat(validate105.errors);
             errors = vErrors.length;
           }
         }
       } else {
-        const err150 = { instancePath: instancePath + "/suggestions", schemaPath: "#/properties/suggestions/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        const err150 = { instancePath: instancePath + "/asks", schemaPath: "#/properties/asks/type", keyword: "type", params: { type: "object" }, message: "must be object" };
         if (vErrors === null) {
           vErrors = [err150];
         } else {
@@ -26588,11 +27971,11 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
         errors++;
       }
     }
-    if (data.spin_ins !== void 0) {
-      let data60 = data.spin_ins;
+    if (data.suggestions !== void 0) {
+      let data60 = data.suggestions;
       if (data60 && typeof data60 == "object" && !Array.isArray(data60)) {
-        if (Object.keys(data60).length > 32) {
-          const err151 = { instancePath: instancePath + "/spin_ins", schemaPath: "#/properties/spin_ins/maxProperties", keyword: "maxProperties", params: { limit: 32 }, message: "must NOT have more than 32 properties" };
+        if (Object.keys(data60).length > 500) {
+          const err151 = { instancePath: instancePath + "/suggestions", schemaPath: "#/properties/suggestions/maxProperties", keyword: "maxProperties", params: { limit: 500 }, message: "must NOT have more than 500 properties" };
           if (vErrors === null) {
             vErrors = [err151];
           } else {
@@ -26603,8 +27986,8 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
         for (const key51 in data60) {
           const _errs151 = errors;
           if (typeof key51 === "string") {
-            if (!pattern219.test(key51)) {
-              const err152 = { instancePath: instancePath + "/spin_ins", schemaPath: "#/properties/spin_ins/propertyNames/pattern", keyword: "pattern", params: { pattern: "^spin_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^spin_[0-9A-HJKMNP-TV-Z]{26}$"', propertyName: key51 };
+            if (!pattern216.test(key51)) {
+              const err152 = { instancePath: instancePath + "/suggestions", schemaPath: "#/properties/suggestions/propertyNames/pattern", keyword: "pattern", params: { pattern: "^sug_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^sug_[0-9A-HJKMNP-TV-Z]{26}$"', propertyName: key51 };
               if (vErrors === null) {
                 vErrors = [err152];
               } else {
@@ -26615,7 +27998,7 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
           }
           var valid54 = _errs151 === errors;
           if (!valid54) {
-            const err153 = { instancePath: instancePath + "/spin_ins", schemaPath: "#/properties/spin_ins/propertyNames", keyword: "propertyNames", params: { propertyName: key51 }, message: "property name must be valid" };
+            const err153 = { instancePath: instancePath + "/suggestions", schemaPath: "#/properties/suggestions/propertyNames", keyword: "propertyNames", params: { propertyName: key51 }, message: "property name must be valid" };
             if (vErrors === null) {
               vErrors = [err153];
             } else {
@@ -26625,13 +28008,13 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
           }
         }
         for (const key52 in data60) {
-          if (!validate116(data60[key52], { instancePath: instancePath + "/spin_ins/" + key52.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data60, parentDataProperty: key52, rootData, dynamicAnchors })) {
+          if (!validate116(data60[key52], { instancePath: instancePath + "/suggestions/" + key52.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data60, parentDataProperty: key52, rootData, dynamicAnchors })) {
             vErrors = vErrors === null ? validate116.errors : vErrors.concat(validate116.errors);
             errors = vErrors.length;
           }
         }
       } else {
-        const err154 = { instancePath: instancePath + "/spin_ins", schemaPath: "#/properties/spin_ins/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        const err154 = { instancePath: instancePath + "/suggestions", schemaPath: "#/properties/suggestions/type", keyword: "type", params: { type: "object" }, message: "must be object" };
         if (vErrors === null) {
           vErrors = [err154];
         } else {
@@ -26640,11 +28023,11 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
         errors++;
       }
     }
-    if (data.jobs !== void 0) {
-      let data62 = data.jobs;
+    if (data.spin_ins !== void 0) {
+      let data62 = data.spin_ins;
       if (data62 && typeof data62 == "object" && !Array.isArray(data62)) {
-        if (Object.keys(data62).length > 3e3) {
-          const err155 = { instancePath: instancePath + "/jobs", schemaPath: "#/properties/jobs/maxProperties", keyword: "maxProperties", params: { limit: 3e3 }, message: "must NOT have more than 3000 properties" };
+        if (Object.keys(data62).length > 32) {
+          const err155 = { instancePath: instancePath + "/spin_ins", schemaPath: "#/properties/spin_ins/maxProperties", keyword: "maxProperties", params: { limit: 32 }, message: "must NOT have more than 32 properties" };
           if (vErrors === null) {
             vErrors = [err155];
           } else {
@@ -26655,8 +28038,8 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
         for (const key53 in data62) {
           const _errs156 = errors;
           if (typeof key53 === "string") {
-            if (!pattern47.test(key53)) {
-              const err156 = { instancePath: instancePath + "/jobs", schemaPath: "#/properties/jobs/propertyNames/pattern", keyword: "pattern", params: { pattern: "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^job_[0-9A-HJKMNP-TV-Z]{26}$"', propertyName: key53 };
+            if (!pattern225.test(key53)) {
+              const err156 = { instancePath: instancePath + "/spin_ins", schemaPath: "#/properties/spin_ins/propertyNames/pattern", keyword: "pattern", params: { pattern: "^spin_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^spin_[0-9A-HJKMNP-TV-Z]{26}$"', propertyName: key53 };
               if (vErrors === null) {
                 vErrors = [err156];
               } else {
@@ -26667,7 +28050,7 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
           }
           var valid56 = _errs156 === errors;
           if (!valid56) {
-            const err157 = { instancePath: instancePath + "/jobs", schemaPath: "#/properties/jobs/propertyNames", keyword: "propertyNames", params: { propertyName: key53 }, message: "property name must be valid" };
+            const err157 = { instancePath: instancePath + "/spin_ins", schemaPath: "#/properties/spin_ins/propertyNames", keyword: "propertyNames", params: { propertyName: key53 }, message: "property name must be valid" };
             if (vErrors === null) {
               vErrors = [err157];
             } else {
@@ -26677,13 +28060,13 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
           }
         }
         for (const key54 in data62) {
-          if (!validate118(data62[key54], { instancePath: instancePath + "/jobs/" + key54.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data62, parentDataProperty: key54, rootData, dynamicAnchors })) {
+          if (!validate118(data62[key54], { instancePath: instancePath + "/spin_ins/" + key54.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data62, parentDataProperty: key54, rootData, dynamicAnchors })) {
             vErrors = vErrors === null ? validate118.errors : vErrors.concat(validate118.errors);
             errors = vErrors.length;
           }
         }
       } else {
-        const err158 = { instancePath: instancePath + "/jobs", schemaPath: "#/properties/jobs/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        const err158 = { instancePath: instancePath + "/spin_ins", schemaPath: "#/properties/spin_ins/type", keyword: "type", params: { type: "object" }, message: "must be object" };
         if (vErrors === null) {
           vErrors = [err158];
         } else {
@@ -26692,11 +28075,11 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
         errors++;
       }
     }
-    if (data.stale !== void 0) {
-      let data64 = data.stale;
+    if (data.jobs !== void 0) {
+      let data64 = data.jobs;
       if (data64 && typeof data64 == "object" && !Array.isArray(data64)) {
-        if (Object.keys(data64).length > 2e3) {
-          const err159 = { instancePath: instancePath + "/stale", schemaPath: "#/properties/stale/maxProperties", keyword: "maxProperties", params: { limit: 2e3 }, message: "must NOT have more than 2000 properties" };
+        if (Object.keys(data64).length > 3e3) {
+          const err159 = { instancePath: instancePath + "/jobs", schemaPath: "#/properties/jobs/maxProperties", keyword: "maxProperties", params: { limit: 3e3 }, message: "must NOT have more than 3000 properties" };
           if (vErrors === null) {
             vErrors = [err159];
           } else {
@@ -26707,8 +28090,8 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
         for (const key55 in data64) {
           const _errs161 = errors;
           if (typeof key55 === "string") {
-            if (!pattern252.test(key55)) {
-              const err160 = { instancePath: instancePath + "/stale", schemaPath: "#/properties/stale/propertyNames/pattern", keyword: "pattern", params: { pattern: "^stale_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^stale_[0-9A-HJKMNP-TV-Z]{26}$"', propertyName: key55 };
+            if (!pattern47.test(key55)) {
+              const err160 = { instancePath: instancePath + "/jobs", schemaPath: "#/properties/jobs/propertyNames/pattern", keyword: "pattern", params: { pattern: "^job_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^job_[0-9A-HJKMNP-TV-Z]{26}$"', propertyName: key55 };
               if (vErrors === null) {
                 vErrors = [err160];
               } else {
@@ -26719,7 +28102,7 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
           }
           var valid58 = _errs161 === errors;
           if (!valid58) {
-            const err161 = { instancePath: instancePath + "/stale", schemaPath: "#/properties/stale/propertyNames", keyword: "propertyNames", params: { propertyName: key55 }, message: "property name must be valid" };
+            const err161 = { instancePath: instancePath + "/jobs", schemaPath: "#/properties/jobs/propertyNames", keyword: "propertyNames", params: { propertyName: key55 }, message: "property name must be valid" };
             if (vErrors === null) {
               vErrors = [err161];
             } else {
@@ -26729,13 +28112,13 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
           }
         }
         for (const key56 in data64) {
-          if (!validate141(data64[key56], { instancePath: instancePath + "/stale/" + key56.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data64, parentDataProperty: key56, rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate141.errors : vErrors.concat(validate141.errors);
+          if (!validate120(data64[key56], { instancePath: instancePath + "/jobs/" + key56.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data64, parentDataProperty: key56, rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate120.errors : vErrors.concat(validate120.errors);
             errors = vErrors.length;
           }
         }
       } else {
-        const err162 = { instancePath: instancePath + "/stale", schemaPath: "#/properties/stale/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        const err162 = { instancePath: instancePath + "/jobs", schemaPath: "#/properties/jobs/type", keyword: "type", params: { type: "object" }, message: "must be object" };
         if (vErrors === null) {
           vErrors = [err162];
         } else {
@@ -26744,11 +28127,11 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
         errors++;
       }
     }
-    if (data.exports !== void 0) {
-      let data66 = data.exports;
+    if (data.stale !== void 0) {
+      let data66 = data.stale;
       if (data66 && typeof data66 == "object" && !Array.isArray(data66)) {
-        if (Object.keys(data66).length > 200) {
-          const err163 = { instancePath: instancePath + "/exports", schemaPath: "#/properties/exports/maxProperties", keyword: "maxProperties", params: { limit: 200 }, message: "must NOT have more than 200 properties" };
+        if (Object.keys(data66).length > 2e3) {
+          const err163 = { instancePath: instancePath + "/stale", schemaPath: "#/properties/stale/maxProperties", keyword: "maxProperties", params: { limit: 2e3 }, message: "must NOT have more than 2000 properties" };
           if (vErrors === null) {
             vErrors = [err163];
           } else {
@@ -26759,8 +28142,8 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
         for (const key57 in data66) {
           const _errs166 = errors;
           if (typeof key57 === "string") {
-            if (!pattern255.test(key57)) {
-              const err164 = { instancePath: instancePath + "/exports", schemaPath: "#/properties/exports/propertyNames/pattern", keyword: "pattern", params: { pattern: "^exp_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^exp_[0-9A-HJKMNP-TV-Z]{26}$"', propertyName: key57 };
+            if (!pattern258.test(key57)) {
+              const err164 = { instancePath: instancePath + "/stale", schemaPath: "#/properties/stale/propertyNames/pattern", keyword: "pattern", params: { pattern: "^stale_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^stale_[0-9A-HJKMNP-TV-Z]{26}$"', propertyName: key57 };
               if (vErrors === null) {
                 vErrors = [err164];
               } else {
@@ -26771,7 +28154,7 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
           }
           var valid60 = _errs166 === errors;
           if (!valid60) {
-            const err165 = { instancePath: instancePath + "/exports", schemaPath: "#/properties/exports/propertyNames", keyword: "propertyNames", params: { propertyName: key57 }, message: "property name must be valid" };
+            const err165 = { instancePath: instancePath + "/stale", schemaPath: "#/properties/stale/propertyNames", keyword: "propertyNames", params: { propertyName: key57 }, message: "property name must be valid" };
             if (vErrors === null) {
               vErrors = [err165];
             } else {
@@ -26781,13 +28164,13 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
           }
         }
         for (const key58 in data66) {
-          if (!validate145(data66[key58], { instancePath: instancePath + "/exports/" + key58.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data66, parentDataProperty: key58, rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate145.errors : vErrors.concat(validate145.errors);
+          if (!validate143(data66[key58], { instancePath: instancePath + "/stale/" + key58.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data66, parentDataProperty: key58, rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate143.errors : vErrors.concat(validate143.errors);
             errors = vErrors.length;
           }
         }
       } else {
-        const err166 = { instancePath: instancePath + "/exports", schemaPath: "#/properties/exports/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        const err166 = { instancePath: instancePath + "/stale", schemaPath: "#/properties/stale/type", keyword: "type", params: { type: "object" }, message: "must be object" };
         if (vErrors === null) {
           vErrors = [err166];
         } else {
@@ -26796,11 +28179,11 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
         errors++;
       }
     }
-    if (data.assets !== void 0) {
-      let data68 = data.assets;
+    if (data.exports !== void 0) {
+      let data68 = data.exports;
       if (data68 && typeof data68 == "object" && !Array.isArray(data68)) {
-        if (Object.keys(data68).length > 5e3) {
-          const err167 = { instancePath: instancePath + "/assets", schemaPath: "#/properties/assets/maxProperties", keyword: "maxProperties", params: { limit: 5e3 }, message: "must NOT have more than 5000 properties" };
+        if (Object.keys(data68).length > 200) {
+          const err167 = { instancePath: instancePath + "/exports", schemaPath: "#/properties/exports/maxProperties", keyword: "maxProperties", params: { limit: 200 }, message: "must NOT have more than 200 properties" };
           if (vErrors === null) {
             vErrors = [err167];
           } else {
@@ -26811,8 +28194,8 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
         for (const key59 in data68) {
           const _errs171 = errors;
           if (typeof key59 === "string") {
-            if (!pattern46.test(key59)) {
-              const err168 = { instancePath: instancePath + "/assets", schemaPath: "common.schema.json#/$defs/sha256/pattern", keyword: "pattern", params: { pattern: "^sha256:[0-9a-f]{64}$" }, message: 'must match pattern "^sha256:[0-9a-f]{64}$"', propertyName: key59 };
+            if (!pattern261.test(key59)) {
+              const err168 = { instancePath: instancePath + "/exports", schemaPath: "#/properties/exports/propertyNames/pattern", keyword: "pattern", params: { pattern: "^exp_[0-9A-HJKMNP-TV-Z]{26}$" }, message: 'must match pattern "^exp_[0-9A-HJKMNP-TV-Z]{26}$"', propertyName: key59 };
               if (vErrors === null) {
                 vErrors = [err168];
               } else {
@@ -26820,8 +28203,10 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
               }
               errors++;
             }
-          } else {
-            const err169 = { instancePath: instancePath + "/assets", schemaPath: "common.schema.json#/$defs/sha256/type", keyword: "type", params: { type: "string" }, message: "must be string", propertyName: key59 };
+          }
+          var valid62 = _errs171 === errors;
+          if (!valid62) {
+            const err169 = { instancePath: instancePath + "/exports", schemaPath: "#/properties/exports/propertyNames", keyword: "propertyNames", params: { propertyName: key59 }, message: "property name must be valid" };
             if (vErrors === null) {
               vErrors = [err169];
             } else {
@@ -26829,39 +28214,89 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
             }
             errors++;
           }
-          var valid62 = _errs171 === errors;
-          if (!valid62) {
-            const err170 = { instancePath: instancePath + "/assets", schemaPath: "#/properties/assets/propertyNames", keyword: "propertyNames", params: { propertyName: key59 }, message: "property name must be valid" };
-            if (vErrors === null) {
-              vErrors = [err170];
-            } else {
-              vErrors.push(err170);
-            }
-            errors++;
-          }
         }
         for (const key60 in data68) {
-          if (!validate147(data68[key60], { instancePath: instancePath + "/assets/" + key60.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data68, parentDataProperty: key60, rootData, dynamicAnchors })) {
+          if (!validate147(data68[key60], { instancePath: instancePath + "/exports/" + key60.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data68, parentDataProperty: key60, rootData, dynamicAnchors })) {
             vErrors = vErrors === null ? validate147.errors : vErrors.concat(validate147.errors);
             errors = vErrors.length;
           }
         }
       } else {
-        const err171 = { instancePath: instancePath + "/assets", schemaPath: "#/properties/assets/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        const err170 = { instancePath: instancePath + "/exports", schemaPath: "#/properties/exports/type", keyword: "type", params: { type: "object" }, message: "must be object" };
         if (vErrors === null) {
-          vErrors = [err171];
+          vErrors = [err170];
         } else {
-          vErrors.push(err171);
+          vErrors.push(err170);
+        }
+        errors++;
+      }
+    }
+    if (data.assets !== void 0) {
+      let data70 = data.assets;
+      if (data70 && typeof data70 == "object" && !Array.isArray(data70)) {
+        if (Object.keys(data70).length > 5e3) {
+          const err171 = { instancePath: instancePath + "/assets", schemaPath: "#/properties/assets/maxProperties", keyword: "maxProperties", params: { limit: 5e3 }, message: "must NOT have more than 5000 properties" };
+          if (vErrors === null) {
+            vErrors = [err171];
+          } else {
+            vErrors.push(err171);
+          }
+          errors++;
+        }
+        for (const key61 in data70) {
+          const _errs176 = errors;
+          if (typeof key61 === "string") {
+            if (!pattern46.test(key61)) {
+              const err172 = { instancePath: instancePath + "/assets", schemaPath: "common.schema.json#/$defs/sha256/pattern", keyword: "pattern", params: { pattern: "^sha256:[0-9a-f]{64}$" }, message: 'must match pattern "^sha256:[0-9a-f]{64}$"', propertyName: key61 };
+              if (vErrors === null) {
+                vErrors = [err172];
+              } else {
+                vErrors.push(err172);
+              }
+              errors++;
+            }
+          } else {
+            const err173 = { instancePath: instancePath + "/assets", schemaPath: "common.schema.json#/$defs/sha256/type", keyword: "type", params: { type: "string" }, message: "must be string", propertyName: key61 };
+            if (vErrors === null) {
+              vErrors = [err173];
+            } else {
+              vErrors.push(err173);
+            }
+            errors++;
+          }
+          var valid64 = _errs176 === errors;
+          if (!valid64) {
+            const err174 = { instancePath: instancePath + "/assets", schemaPath: "#/properties/assets/propertyNames", keyword: "propertyNames", params: { propertyName: key61 }, message: "property name must be valid" };
+            if (vErrors === null) {
+              vErrors = [err174];
+            } else {
+              vErrors.push(err174);
+            }
+            errors++;
+          }
+        }
+        for (const key62 in data70) {
+          if (!validate149(data70[key62], { instancePath: instancePath + "/assets/" + key62.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data70, parentDataProperty: key62, rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate149.errors : vErrors.concat(validate149.errors);
+            errors = vErrors.length;
+          }
+        }
+      } else {
+        const err175 = { instancePath: instancePath + "/assets", schemaPath: "#/properties/assets/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        if (vErrors === null) {
+          vErrors = [err175];
+        } else {
+          vErrors.push(err175);
         }
         errors++;
       }
     }
   } else {
-    const err172 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+    const err176 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
     if (vErrors === null) {
-      vErrors = [err172];
+      vErrors = [err176];
     } else {
-      vErrors.push(err172);
+      vErrors.push(err176);
     }
     errors++;
   }
@@ -26869,14 +28304,14 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
   return errors === 0;
 }
 validate20.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var validatePatchBatch = validate150;
-var schema310 = { "type": "object", "properties": { "op": { "enum": ["create", "set", "delete"] }, "entity": { "$ref": "#/$defs/entity" }, "id": { "type": "string", "minLength": 1, "maxLength": 80 }, "path": { "$ref": "#/$defs/path" }, "value": { "description": "create: the whole entity (its id, v and field_v are filled by the bus). set: the leaf's new value; null removes an optional leaf." }, "base_version": { "type": "integer", "minimum": 0, "description": "The entity's v the writer saw (0 for a create). A set conflicts when its leaf's field_v is newer." } }, "required": ["op", "entity", "id", "base_version"], "additionalProperties": false, "allOf": [{ "if": { "properties": { "op": { "const": "create" } } }, "then": { "required": ["value"], "not": { "required": ["path"] } } }, { "if": { "properties": { "op": { "const": "set" } } }, "then": { "required": ["path", "value"] } }, { "if": { "properties": { "op": { "const": "delete" } } }, "then": { "not": { "anyOf": [{ "required": ["path"] }, { "required": ["value"] }] } } }] };
-var schema311 = { "enum": ["project", "assets", "boards", "sketches", "scripts", "scenes", "storyboards", "shots", "beats", "frames", "videos", "generations", "renders", "reviews", "links", "keys", "refs", "documents", "texts", "briefs", "finals", "format_sets", "sizes", "checks", "asks", "suggestions", "spin_ins", "jobs", "stale", "exports"], "description": "A map of document.schema.json (project: the root object, its id is project.id). upstream is never patched." };
-var pattern265 = new RegExp("^[a-z_][a-z0-9_]*(/[A-Za-z0-9_:]+)*$", "u");
-function validate151(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+var validatePatchBatch = validate152;
+var schema315 = { "type": "object", "properties": { "op": { "enum": ["create", "set", "delete"] }, "entity": { "$ref": "#/$defs/entity" }, "id": { "type": "string", "minLength": 1, "maxLength": 80 }, "path": { "$ref": "#/$defs/path" }, "value": { "description": "create: the whole entity (its id, v and field_v are filled by the bus). set: the leaf's new value; null removes an optional leaf." }, "base_version": { "type": "integer", "minimum": 0, "description": "The entity's v the writer saw (0 for a create). A set conflicts when its leaf's field_v is newer." } }, "required": ["op", "entity", "id", "base_version"], "additionalProperties": false, "allOf": [{ "if": { "properties": { "op": { "const": "create" } } }, "then": { "required": ["value"], "not": { "required": ["path"] } } }, { "if": { "properties": { "op": { "const": "set" } } }, "then": { "required": ["path", "value"] } }, { "if": { "properties": { "op": { "const": "delete" } } }, "then": { "not": { "anyOf": [{ "required": ["path"] }, { "required": ["value"] }] } } }] };
+var schema316 = { "enum": ["project", "assets", "boards", "sketches", "scripts", "scenes", "storyboards", "shots", "beats", "frames", "videos", "generations", "renders", "reviews", "links", "keys", "refs", "documents", "texts", "briefs", "brand_clans", "finals", "format_sets", "sizes", "checks", "asks", "suggestions", "spin_ins", "jobs", "stale", "exports"], "description": "A map of document.schema.json (project: the root object, its id is project.id). upstream is never patched." };
+var pattern271 = new RegExp("^[a-z_][a-z0-9_]*(/[A-Za-z0-9_:]+)*$", "u");
+function validate153(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate151.evaluated;
+  const evaluated0 = validate153.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -27186,7 +28621,7 @@ function validate151(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.op !== void 0) {
       let data3 = data.op;
       if (!(data3 === "create" || data3 === "set" || data3 === "delete")) {
-        const err20 = { instancePath: instancePath + "/op", schemaPath: "#/properties/op/enum", keyword: "enum", params: { allowedValues: schema310.properties.op.enum }, message: "must be equal to one of the allowed values" };
+        const err20 = { instancePath: instancePath + "/op", schemaPath: "#/properties/op/enum", keyword: "enum", params: { allowedValues: schema315.properties.op.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err20];
         } else {
@@ -27197,8 +28632,8 @@ function validate151(data, { instancePath = "", parentData, parentDataProperty, 
     }
     if (data.entity !== void 0) {
       let data4 = data.entity;
-      if (!(data4 === "project" || data4 === "assets" || data4 === "boards" || data4 === "sketches" || data4 === "scripts" || data4 === "scenes" || data4 === "storyboards" || data4 === "shots" || data4 === "beats" || data4 === "frames" || data4 === "videos" || data4 === "generations" || data4 === "renders" || data4 === "reviews" || data4 === "links" || data4 === "keys" || data4 === "refs" || data4 === "documents" || data4 === "texts" || data4 === "briefs" || data4 === "finals" || data4 === "format_sets" || data4 === "sizes" || data4 === "checks" || data4 === "asks" || data4 === "suggestions" || data4 === "spin_ins" || data4 === "jobs" || data4 === "stale" || data4 === "exports")) {
-        const err21 = { instancePath: instancePath + "/entity", schemaPath: "#/$defs/entity/enum", keyword: "enum", params: { allowedValues: schema311.enum }, message: "must be equal to one of the allowed values" };
+      if (!(data4 === "project" || data4 === "assets" || data4 === "boards" || data4 === "sketches" || data4 === "scripts" || data4 === "scenes" || data4 === "storyboards" || data4 === "shots" || data4 === "beats" || data4 === "frames" || data4 === "videos" || data4 === "generations" || data4 === "renders" || data4 === "reviews" || data4 === "links" || data4 === "keys" || data4 === "refs" || data4 === "documents" || data4 === "texts" || data4 === "briefs" || data4 === "brand_clans" || data4 === "finals" || data4 === "format_sets" || data4 === "sizes" || data4 === "checks" || data4 === "asks" || data4 === "suggestions" || data4 === "spin_ins" || data4 === "jobs" || data4 === "stale" || data4 === "exports")) {
+        const err21 = { instancePath: instancePath + "/entity", schemaPath: "#/$defs/entity/enum", keyword: "enum", params: { allowedValues: schema316.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err21];
         } else {
@@ -27250,7 +28685,7 @@ function validate151(data, { instancePath = "", parentData, parentDataProperty, 
           }
           errors++;
         }
-        if (!pattern265.test(data6)) {
+        if (!pattern271.test(data6)) {
           const err26 = { instancePath: instancePath + "/path", schemaPath: "#/$defs/path/pattern", keyword: "pattern", params: { pattern: "^[a-z_][a-z0-9_]*(/[A-Za-z0-9_:]+)*$" }, message: 'must match pattern "^[a-z_][a-z0-9_]*(/[A-Za-z0-9_:]+)*$"' };
           if (vErrors === null) {
             vErrors = [err26];
@@ -27301,14 +28736,14 @@ function validate151(data, { instancePath = "", parentData, parentDataProperty, 
     }
     errors++;
   }
-  validate151.errors = vErrors;
+  validate153.errors = vErrors;
   return errors === 0;
 }
-validate151.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-function validate154(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate153.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+function validate156(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate154.evaluated;
+  const evaluated0 = validate156.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -27369,15 +28804,15 @@ function validate154(data, { instancePath = "", parentData, parentDataProperty, 
       }
     }
   }
-  validate154.errors = vErrors;
+  validate156.errors = vErrors;
   return errors === 0;
 }
-validate154.evaluated = { "dynamicProps": false, "dynamicItems": false };
-var pattern268 = new RegExp("^d_[0-9A-Za-z]{10,40}$", "u");
-function validate153(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate156.evaluated = { "dynamicProps": false, "dynamicItems": false };
+var pattern274 = new RegExp("^d_[0-9A-Za-z]{10,40}$", "u");
+function validate155(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate153.evaluated;
+  const evaluated0 = validate155.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -27437,8 +28872,8 @@ function validate153(data, { instancePath = "", parentData, parentDataProperty, 
       }
     }
     if (data.agent !== void 0) {
-      if (!validate154(data.agent, { instancePath: instancePath + "/agent", parentData: data, parentDataProperty: "agent", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate154.errors : vErrors.concat(validate154.errors);
+      if (!validate156(data.agent, { instancePath: instancePath + "/agent", parentData: data, parentDataProperty: "agent", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate156.errors : vErrors.concat(validate156.errors);
         errors = vErrors.length;
       }
     }
@@ -27504,7 +28939,7 @@ function validate153(data, { instancePath = "", parentData, parentDataProperty, 
               }
               errors++;
             }
-            if (!pattern206.test(data5)) {
+            if (!pattern212.test(data5)) {
               const err10 = { instancePath: instancePath + "/cites/" + i0, schemaPath: "common.schema.json#/$defs/address/pattern", keyword: "pattern", params: { pattern: "^[^#\\s]+#[A-Za-z_][A-Za-z0-9_]*(\\[[^\\].\\[#\\s]+\\])*(\\.[A-Za-z_][A-Za-z0-9_]*(\\[[^\\].\\[#\\s]+\\])*)*$" }, message: 'must match pattern "^[^#\\s]+#[A-Za-z_][A-Za-z0-9_]*(\\[[^\\].\\[#\\s]+\\])*(\\.[A-Za-z_][A-Za-z0-9_]*(\\[[^\\].\\[#\\s]+\\])*)*$"' };
               if (vErrors === null) {
                 vErrors = [err10];
@@ -27526,7 +28961,7 @@ function validate153(data, { instancePath = "", parentData, parentDataProperty, 
           valid3 = valid3 || _valid0;
           const _errs16 = errors;
           if (typeof data5 === "string") {
-            if (!pattern268.test(data5)) {
+            if (!pattern274.test(data5)) {
               const err12 = { instancePath: instancePath + "/cites/" + i0, schemaPath: "common.schema.json#/$defs/decisionId/pattern", keyword: "pattern", params: { pattern: "^d_[0-9A-Za-z]{10,40}$" }, message: 'must match pattern "^d_[0-9A-Za-z]{10,40}$"' };
               if (vErrors === null) {
                 vErrors = [err12];
@@ -27606,14 +29041,14 @@ function validate153(data, { instancePath = "", parentData, parentDataProperty, 
     }
     errors++;
   }
-  validate153.errors = vErrors;
+  validate155.errors = vErrors;
   return errors === 0;
 }
-validate153.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-function validate150(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate155.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+function validate152(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate150.evaluated;
+  const evaluated0 = validate152.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -27673,8 +29108,8 @@ function validate150(data, { instancePath = "", parentData, parentDataProperty, 
         }
         const len0 = data0.length;
         for (let i0 = 0; i0 < len0; i0++) {
-          if (!validate151(data0[i0], { instancePath: instancePath + "/patches/" + i0, parentData: data0, parentDataProperty: i0, rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate151.errors : vErrors.concat(validate151.errors);
+          if (!validate153(data0[i0], { instancePath: instancePath + "/patches/" + i0, parentData: data0, parentDataProperty: i0, rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate153.errors : vErrors.concat(validate153.errors);
             errors = vErrors.length;
           }
         }
@@ -27689,8 +29124,8 @@ function validate150(data, { instancePath = "", parentData, parentDataProperty, 
       }
     }
     if (data.why !== void 0) {
-      if (!validate153(data.why, { instancePath: instancePath + "/why", parentData: data, parentDataProperty: "why", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate153.errors : vErrors.concat(validate153.errors);
+      if (!validate155(data.why, { instancePath: instancePath + "/why", parentData: data, parentDataProperty: "why", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate155.errors : vErrors.concat(validate155.errors);
         errors = vErrors.length;
       }
     }
@@ -27703,10 +29138,10 @@ function validate150(data, { instancePath = "", parentData, parentDataProperty, 
     }
     errors++;
   }
-  validate150.errors = vErrors;
+  validate152.errors = vErrors;
   return errors === 0;
 }
-validate150.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+validate152.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
 export {
   validateDocument,
   validatePatchBatch

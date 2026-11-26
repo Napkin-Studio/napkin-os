@@ -61,4 +61,23 @@ describe('precompiled validators', () => {
     for (const ex of all.filter((e) => /^document\.[^/]*json$/.test(e.name))) expect(gen.validateDocument(ex.data), ex.name).toBe(true)
     for (const ex of all.filter((e) => e.name.startsWith('patch-batch.'))) expect(gen.validatePatchBatch(ex.data), ex.name).toBe(true)
   })
+
+  // UAT 2026-11-26: a project made with Continue in from a brief carries the client's default Brand Clan node, and
+  // the page refused to open it ("must NOT have additional properties (brand_clans)"): the committed file predated
+  // brand_clans, and the build regenerated it before the tests, so nothing caught it.
+  it('a document carrying a Brand Clan node opens, as runtime ajv says', () => {
+    const base = all.find((e) => e.name === 'document.json')!.data as Record<string, unknown>
+    const id = 'bclan_01K7A0000000000000000000C1'
+    const node = {
+      id, v: 1, field_v: {}, title: 'Original',
+      client: { id: 'client_solas', name: 'Sólás Lights' },
+      source: { document_id: 'doc-ie-napkin-brand-1', path: 'brand/original', app_id: 'ie.napkin.brand', version: 2, at: '2026-11-26T12:13:00Z', how: 'default' },
+      bible: { visual: { logos: [{ id: 'solas-logo', asset: 'human/assets/solas-logo.png' }] }, voice: {}, imagery: {} },
+    }
+    const doc = { ...base, brand_clans: { [id]: node } }
+    expect(gen.validateDocument(doc), JSON.stringify(gen.validateDocument.errors)).toBe(true)
+    expect(ajv.getSchema(EXPORTS.validateDocument)!(doc)).toBe(true)
+    const bad = { ...base, brand_clans: { [id]: { ...node, colour: 'teal' } } }
+    expect(gen.validateDocument(bad)).toBe(false)
+  })
 })
