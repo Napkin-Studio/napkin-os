@@ -11,6 +11,7 @@
 // opened, and a double-click picks one view out of its group; on the one picture selected, it opens the
 // picture in the Image editor (dblclick.ts).
 
+import { boardInHand } from '../boards/inHand'
 import { useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import { RouterContext, useDoc, useServices, useStoredDoc } from '../../app/context'
 import { scriptRoute } from '../../app/route'
@@ -150,7 +151,12 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
       if (!files.length) return
       void placePictures(canvas, services.doc, files, at).catch((e) => console.warn('the pictures were not placed', e))
     }
-    const off = canvasActions.register({ picture: () => void pickPictureFiles().then((f) => place(imageFiles(f))) })
+    // The board to fill is read when the tool is pressed: picking a file can take the selection away.
+    const off = canvasActions.register({ picture: () => {
+      const ids = canvas.view().selectedIds
+      const target = boardInHand.get() ?? (ids.length === 1 ? ids[0] : null)
+      void pickPictureFiles().then((f) => { const files = imageFiles(f); if (files.length) void placePictures(canvas, services.doc, files, undefined, target).catch((e) => console.warn('the pictures were not placed', e)) })
+    } })
     const host = root.current?.parentElement
     const onOver = (e: DragEvent) => {
       if ([...(e.dataTransfer?.types ?? [])].includes('Files')) e.preventDefault()
