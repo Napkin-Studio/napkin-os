@@ -171,6 +171,7 @@ start() {
       NAPKIN_SESSION_SECRET="$(secret session)" \
       NAPKIN_PRODUCTION_RELAY_URL="http://127.0.0.1:$relay_port" \
       NAPKIN_PRODUCTION_MEDIA_BASE="http://127.0.0.1:$relay_port" \
+      NAPKIN_PRODUCTION_UPLOAD_ORIGIN="http://localhost:$relay_port" \
       NAPKIN_PRODUCTION_RELAY_SECRET="$token" NAPKIN_PRODUCTION_SERVICE_KEY="$service" \
       NAPKIN_PRODUCTION_STATIC="$state/production-dist" NAPKIN_WEB_STATIC="$root/app/dist" \
       NAPKIN_WEB_DATA="$state/webdata" NAPKIN_WEB_ADDR="127.0.0.1:$web_port" \
