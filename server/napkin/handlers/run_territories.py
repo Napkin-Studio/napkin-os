@@ -159,7 +159,7 @@ def start(req, caps, settings, jid):
     if step == "lookup":
         return _lookup(inp, req, caps, jid, data, by, on_line)
     if step in FRAME_STEPS:
-        return _frames(step, inp, req, caps, jid, data, by, on_line, marks)
+        return _frames(step, inp, req, caps, jid, data, by, on_line)
     if step == "undo":
         aid = moves.need(inp, "action_id", "which fix")
         return TerritoriesJob(jid, TASK, req.handler, req, caps, step=step, quick=True, call=lambda job: runner.undo(data, aid, by))
@@ -216,7 +216,7 @@ def _lookup(inp, req, caps, jid, data, by, on_line):
     return TerritoriesJob(jid, TASK, req.handler, req, caps, step="lookup", call=go)
 
 
-def _frames(step, inp, req, caps, jid, data, by, on_line, marks):
+def _frames(step, inp, req, caps, jid, data, by, on_line):
     """The pictures steps. Every refusal is the engine's, in words (``frames.Refuse``); a paid one runs in a job thread under the document's lock."""
     from territory import frames as fr
     runner, _ = _engine()
@@ -252,7 +252,7 @@ def _frames(step, inp, req, caps, jid, data, by, on_line, marks):
     def engine(llm=None):
         store = runner.Store.for_doc(req.doc)
         # the client's Brand Clan the document holds (host: clan.brand_clan), the look of its frames; none: the built-in look
-        return fr.Frames(data, store, arrival.blob_store(), doc_id=req.doc, marks=marks, llm=llm, transport=make_transport(), guard_post=make_guard_post(), on_line=on_line,
+        return fr.Frames(data, store, arrival.blob_store(), doc_id=req.doc, llm=llm, transport=make_transport(), guard_post=make_guard_post(), on_line=on_line,
                          brand=(req.clan or {}).get("brand_clan")), store
 
     def run(job):

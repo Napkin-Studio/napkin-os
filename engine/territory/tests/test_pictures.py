@@ -283,12 +283,3 @@ def test_dirstore_uses_the_workspace_layout_verifies_and_never_overwrites(tmp_pa
     assert p.read_bytes() == b"kept"
 
 
-# ---------------------------------------------------------------- the provider
-
-
-def test_client_material_is_never_sent_to_a_picture_provider_by_default():
-    assert pic.provider_allowed(True, {}) is False
-    assert pic.provider_allowed(True, {"VISUALS_CLIENT_TO_RUNWAY": ""}) is False
-    assert pic.provider_allowed(True, {"VISUALS_CLIENT_TO_RUNWAY": "yes"}) is False
-    assert pic.provider_allowed(True, {"VISUALS_CLIENT_TO_RUNWAY": "allow"}) is True      # the tester's override, lint still runs
-    assert pic.provider_allowed(False, {}) is True                                        # material a person marked invented or demo

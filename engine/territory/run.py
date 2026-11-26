@@ -66,8 +66,7 @@ def main(argv=None, *, llm_factory=None) -> int:
     print(f"  hard stop    cap ${a.max_usd:.2f} for this run (--max-usd)")
     print(f"  card         {cid}   yes: --live --yes-cost {cid} --out <a new file>")
     print(f"  material     {mat['origin']}" + ("" if a.material else " (say --material invented|demo|client: the frames tool reads it)")
-          + (f"; brief marks: {'unknown (a brief_object.json has none)' if mat['marks_count'] is None else mat['marks_count']} part(s) marked Confidential"
-             + (" (the run keeps only the count: give the frames tool --brief with this same file)" if mat["marks_count"] else "") if a.brief else ""))
+          + (f"; brief marks: {'unknown (a brief_object.json has none)' if mat['marks_count'] is None else mat['marks_count']} part(s) marked Confidential" if a.brief else ""))
     if not a.live:
         print("Dry run: no model call made.")
         return 0

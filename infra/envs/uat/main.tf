@@ -313,7 +313,7 @@ module "services" {
     NAPKIN_BRIEF_RESEARCH_MAX = "6"
     }, var.territory_images ? {
     # Territories' pictures (features/territories-pictures-frames): Runway, from the middleware process, for the
-    # greenlit routes only, capped per document. VISUALS_CLIENT_TO_RUNWAY stays unset: client material is refused.
+    # greenlit routes only, capped per document. Client material goes too (visuals.policy, 2026-11-26).
     NAPKIN_TERRITORY_IMAGES         = "1"
     NAPKIN_TERRITORY_IMAGES_MAX_USD = "2.00"
   } : {})

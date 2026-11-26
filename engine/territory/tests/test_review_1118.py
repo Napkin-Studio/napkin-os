@@ -1,5 +1,5 @@
 """Tests for the 18 Nov 2026 review of the Territory tool (features/territory-tool.clan): the prompt lint and the Confidential deny-list on
-every shot, the client-to-Runway policy (Sai, 18 Nov: refuse by default; VISUALS_CLIENT_TO_RUNWAY=allow for testing), card ids, the lifetime ledger, paid output saved
+every shot, the client-material rule (Shrey, 26 Nov: client material goes to Runway like it goes to Bedrock), card ids, the lifetime ledger, paid output saved
 first, intake-checked tags and the style pack as the only visual driver. A fake Runway, a fake Ollama and a FakeLLM stand in for every
 paid or local service; every brand, brief and mark here is invented. Run from ``engine/``: ``PYTHONPATH=. python3 -m pytest -q territory/tests``."""
 from __future__ import annotations
@@ -44,27 +44,21 @@ def frames_manifest(run_path):
     return json.loads(next((run_path.parent / (run_path.stem + ".frames")).glob("v1-*/manifest.json")).read_text())
 
 
-# ------------------------------------------------------------------------------- the policy switch (one place, said plainly)
+# ------------------------------------------------------------------------------- the client-material rule (owner, 26 Nov 2026), said plainly
 
-def test_the_policy_is_one_switch_that_refuses_by_default_and_fails_closed_on_a_bad_value():
-    assert policy.CLIENT_TO_RUNWAY == "refuse" and "Sai 2026-11-18" in policy.DECIDED
-    assert policy.client_to_runway({}) == "refuse"
-    assert policy.client_to_runway({policy.ENV: "allow"}) == "allow"
-    assert policy.client_to_runway({policy.ENV: "refuse"}) == "refuse"
-    assert policy.client_to_runway({policy.ENV: "maybe"}) == "refuse"
-    assert policy.client_to_runway({policy.ENV: ""}) == "refuse"                       # set but empty names no policy: refused, never the default
-    assert policy.client_to_runway({policy.ENV: "  "}) == "refuse"
-    assert "allowed (testing override" in policy.label({policy.ENV: "allow"}) and "refused (policy)" in policy.label({})
+def test_the_rule_is_said_plainly_and_has_no_switch():
+    assert "Shrey, 2026-11-26" in policy.DECIDED and not hasattr(policy, "ENV") and not hasattr(policy, "client_to_runway")
+    assert policy.label().startswith("Client material -> Runway: sent")
 
 
-def test_with_no_override_a_client_run_is_refused_and_an_invented_one_is_not(env, monkeypatch):
-    monkeypatch.delenv(policy.ENV, raising=False)                                      # the code's own default: refuse
+def test_a_client_run_is_sent_after_the_lint_and_the_manifest_records_who_said_what_it_is(env, capsys):
     write_run(env, origin="client")
+    go(env)
+    assert "Client material -> Runway: sent" in capsys.readouterr().out
     code, rw, _ = go(env, *LIVE)
-    assert code == 2 and rw.posts == []
-    write_run(env, origin="invented")
-    code, rw, _ = go(env, *LIVE)
-    assert code == 0 and rw.posts and frames_manifest(env)["provenance"] == "Invented (no brief)"
+    m = frames_manifest(env)
+    assert code == 0 and len(rw.posts) == 8 and m["provenance"] == "Client material"
+    assert m["material"]["origin"] == "client" and m["material"]["by"] == "territory.run --material" and "sent" in m["material"]["policy"]
 
 
 def test_the_manifest_carries_a_provenance_label(env):
@@ -73,18 +67,15 @@ def test_the_manifest_carries_a_provenance_label(env):
     assert code == 0 and frames_manifest(env)["provenance"] == "Demo (not a client)"
 
 
-def test_the_card_and_the_manifest_say_which_policy_applied(env, capsys):
-    write_run(env, origin="client")
-    go(env)
-    assert "Client-derived prompts -> Runway: allowed (testing override" in capsys.readouterr().out
+def test_a_brief_with_parts_marked_confidential_still_gets_its_pictures(env, tmp_path):
+    """Confidential keeps a part out of Napkin's own knowledge only (owner, 26 Nov 2026): it no longer refuses the frames or needs the brief."""
+    clan = _brief_clan(tmp_path / "brief.clan")
+    _count_run(env, clan)
     code, rw, _ = go(env, *LIVE)
-    m = frames_manifest(env)["material"]
-    assert code == 0 and m["policy"] == "allow" and m["client_derived"] is True and "testing" in m["policy_label"]
+    assert code == 0 and len(rw.posts) == 8
 
 
-# ------------------------------------------------------------------------------- allow: client-derived prompts go only after the lint
-
-def test_allow_sends_client_derived_shots_only_after_the_lint(env):
+def test_client_shots_are_sent_only_after_the_lint(env):
     write_run(env, origin="client", brief=True, brief_kind="clan")
     llm = FakeLLM({"frames_plan": plan_output(" beside a zorblaxian gadget")})       # not a common word: never sent
     code, rw, _ = go(env, *LIVE, llm=llm)
@@ -102,51 +93,12 @@ def test_a_shot_with_a_digit_or_a_brand_word_is_refused_for_invented_material_to
         assert code == 0 and len(rw.posts) == 6
 
 
-# ------------------------------------------------------------------------------- refuse: client-derived prompts never go
-
-def test_refuse_blocks_client_derived_runs_before_any_call(env, monkeypatch, capsys):
-    monkeypatch.setenv(policy.ENV, "refuse")
-    write_run(env, origin="client")
-    code, rw, llm = go(env, *LIVE)
-    out = capsys.readouterr().out
-    assert code == 2 and rw.posts == [] and llm.calls == [] and "refused (policy)" in out and "client-derived" in out
-
-
-def test_refuse_still_sends_material_a_person_marked_invented(env, monkeypatch):
-    monkeypatch.setenv(policy.ENV, "refuse")
-    code, rw, _ = go(write_run(env, origin="invented"), *LIVE)
-    assert code == 0 and len(rw.posts) == 8
-
-
-# ------------------------------------------------------------------------------- Confidential is blocked under both policies
-
-@pytest.mark.parametrize("pol", ["allow", "refuse"])
-def test_a_shot_that_draws_on_a_confidential_part_is_never_sent(env, monkeypatch, pol):
-    monkeypatch.setenv(policy.ENV, pol)
-    write_run(env, origin="client", brief=True, brief_kind="clan", marks=[MARK])
-    code, rw, _ = go(env, *LIVE, llm=FakeLLM({"frames_plan": plan_output(" near the sparkling bramble range")}))
-    assert all("bramble" not in p["promptText"] for p in rw.posts)
-    if pol == "refuse":
-        assert code == 2 and rw.posts == []                                          # client-derived: nothing at all
-    else:
-        assert code == 0 and len(rw.posts) == 6
-        assert frames_manifest(env)["frames"]["s1-f1-flash"]["error"].endswith("would draw on a Confidential part")
-
-
-@pytest.mark.parametrize("pol", ["allow", "refuse"])
-def test_marks_that_cannot_be_known_refuse_the_frames_under_both_policies(env, monkeypatch, capsys, pol):
-    monkeypatch.setenv(policy.ENV, pol)
-    write_run(env, origin="client", brief=True, brief_kind="json", marks=None)
-    code, rw, llm = go(env, *LIVE)
-    assert code == 2 and rw.posts == [] and llm.calls == [] and "no mark data" in capsys.readouterr().out
-
-
 def test_a_run_saved_before_the_material_flag_needs_a_named_declaration_bound_to_the_run(env, capsys):
     run = make_run()
     run.pop("material")
     env.write_text(json.dumps(run))
     code, rw, _ = go(env, *LIVE)
-    assert code == 2 and rw.posts == [] and "--declared-by" in capsys.readouterr().out
+    assert code == 2 and rw.posts == [] and "nobody has said what this material is" in capsys.readouterr().out
     code, rw, _ = go(env, "--material", "demo", *LIVE)                                 # no name: refused
     assert code == 2 and rw.posts == []
     code, rw, _ = go(env, "--material", "demo", "--declared-by", "Sai", *LIVE)
@@ -178,29 +130,7 @@ def _count_run(env, brief_path, **kw):
     return env
 
 
-def test_frames_rebuild_the_deny_list_from_the_brief_and_refuse_without_it(env, tmp_path, capsys):
-    clan = _brief_clan(tmp_path / "brief.clan")
-    _count_run(env, clan)
-    bramble = FakeLLM({"frames_plan": plan_output(" near the sparkling bramble range")})
-    code, rw, llm = go(env, *LIVE, llm=bramble)                                       # no brief at frame time: the deny-list would be lost
-    assert code == 2 and rw.posts == [] and llm.calls == [] and "--brief" in capsys.readouterr().out
-    other = _brief_clan(tmp_path / "other.clan", "Another secret entirely")
-    code, rw, _ = go(env, "--brief", str(other), *LIVE, llm=bramble)                  # not the run's brief: refused
-    assert code == 2 and rw.posts == [] and "not the one this run was made from" in capsys.readouterr().out
-    code, rw, _ = go(env, "--brief", str(clan), *LIVE, llm=bramble)
-    assert code == 0 and len(rw.posts) == 6 and all("bramble" not in p["promptText"] for p in rw.posts)
-    assert frames_manifest(env)["frames"]["s1-f1-flash"]["error"].endswith("would draw on a Confidential part")
-
-
-def test_a_brief_run_with_no_recorded_count_is_unknown_never_zero(env, capsys):
-    run = make_run()
-    run["material"] = {"origin": "client", "brief": True, "brief_kind": "clan", "brand": None}
-    env.write_text(json.dumps(run))
-    code, rw, _ = go(env, *LIVE)
-    assert code == 2 and rw.posts == [] and "no mark data" in capsys.readouterr().out
-
-
-def test_no_marked_text_reaches_any_written_json(tmp_path, env):
+def test_no_marked_text_reaches_the_text_runs_json(tmp_path):
     clan = _brief_clan(tmp_path / "brief.clan")
     out = tmp_path / "textrun" / "run.json"
     out.parent.mkdir()
@@ -212,10 +142,8 @@ def test_no_marked_text_reaches_any_written_json(tmp_path, env):
     assert run_mod.main([*argv, "--live", "--yes-cost", cid], llm_factory=lambda: FakeLLM(outputs())) == 0
     saved = json.loads(out.read_text())["material"]
     assert saved["marks_count"] == 1 and saved["brief_sha256"] == hashlib.sha256(clan.read_bytes()).hexdigest() and "marks" not in saved
-    _count_run(env, clan)                                                              # and the frames tool, on a run of the same brief
-    go(env, "--brief", str(clan), *LIVE, llm=FakeLLM({"frames_plan": plan_output(" near the sparkling bramble range")}))
-    written = [f for f in tmp_path.rglob("*") if f.is_file() and f.suffix in (".json", ".jsonl", ".html")]
-    assert written and any(f.name == "run.json" for f in written) and any(f.name == "manifest.json" for f in written)
+    written = [f for f in tmp_path.rglob("*") if f.is_file() and f.suffix in (".json", ".jsonl", ".html")]   # the run file is not gitignored
+    assert written and any(f.name == "run.json" for f in written)
     for f in written:
         text = f.read_text(errors="replace")
         for needle in (MARK["text"], "Project Quokka"):

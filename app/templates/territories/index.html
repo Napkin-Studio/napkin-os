@@ -2845,12 +2845,13 @@ var TerritoriesPictures = (function () {
       (w.left && w.left.length ? '<span class="lk-left">Left out, as a picture tool cannot take them: ' + esc(w.left.join(' · ')) + '.</span>' : '') + '</div>';
   }
   /**
-   * The material question (approved frames mock, state 1a): words from a brief go to the outside picture tool only once a named person says the
-   * material is invented or a demo. Make stays off until it is answered; the answer is the engine's frames_material step, said as that person.
+   * The material question (approved frames mock, state 1a): a named person says what the material is before the first picture, and the frames
+   * record it. Client material is used like it is for the words (owner, 2026-11-26: Confidential keeps a part out of Napkin's own knowledge
+   * only). Make stays off until it is answered; the answer is the engine's frames_material step, said as that person.
    */
   var MATERIAL = [['invented', 'Invented', 'Made up for this exercise. No real client.'], ['demo', 'A demo', 'Shown to people, but not a client’s.'],
     ['client', 'The client’s', 'Real client material.']];
-  var MATERIAL_WORDS = 'Words from a brief go to the outside picture tool only if a named person says the material is invented or a demo. Client material is not sent.';
+  var MATERIAL_WORDS = 'Say what this material is before the first picture: the pictures record it. Client material is used the same way as for the words; anything marked Confidential stays out of Napkin’s own knowledge, not out of the work.';
   function confirmWords(by) { return 'Confirm as ' + (String(by || '').trim() || 'you'); }
   function materialAsk(t, mk) {
     var who = String(mk.by || ''), ready = !!(mk.origin && who.trim());

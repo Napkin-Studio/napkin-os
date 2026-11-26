@@ -9,9 +9,8 @@ why the generation lives here. Sai's rules of 17 Nov 2026 are enforced in code, 
 3. Drafts use flash; pro runs only for an approved, guard-checked hero a person asked for. Both are pinned in ``visuals.runway.TIER_MODEL``.
 4. Nothing is made while a part marked Confidential could be drawn: with no mark data the deck is refused; marked text never enters stage g;
    every subject, note and style block passes the allow-list lint (``visuals.lint``) and the deny-list of the marked texts.
-5. Client-derived prompts go to Runway only while ``visuals.policy.CLIENT_TO_RUNWAY`` is ``allow`` (refuse by default, Sai 18 Nov 2026; VISUALS_CLIENT_TO_RUNWAY=allow for testing;
-   may change). Under ``refuse`` the plan and its card are still made (no network) and the live call to Runway is refused (``refuse_live``).
-   Every picture card prints which policy applied; the lint and the deny-list run either way.
+5. Client material goes to Runway like it goes to Bedrock (``visuals.policy``, Shrey 26 Nov 2026: Confidential keeps a part out of
+   Napkin's own knowledge only). Every picture card prints that rule.
 6. Nothing is remade automatically: a failure, a flag or a Style Pack change reaches a card and waits for a person.
 
 The recorded outputs are ``<stages>/g_image_subjects.json`` (stage g) and ``<stages>/generated.json`` plus ``<stages>/assets/`` (what slice 3's
@@ -326,15 +325,6 @@ def slot_jobs(manifest: dict, key: str, tier: str) -> list:
     return [(k, j) for k, j in (manifest.get("jobs") or {}).items() if j.get("tier") == tier and key in (j.get("slots") or [])]
 
 
-def refuse_live() -> None:
-    """The client-to-Runway policy (visuals.policy, one switch shared with the Territory frames), checked only where a prompt would be sent to
-    Runway: ``--images live`` with a yes. A deck's pictures come from a client brief, so under ``refuse`` (the default) nothing is sent. Planning,
-    the lint, the deny-list and the cards make no call and run under either policy."""
-    if vpolicy.client_to_runway() == "refuse":
-        raise GenError("picture generation is refused: the policy keeps client-derived prompts away from Runway (visuals.policy.CLIENT_TO_RUNWAY "
-                       "is 'refuse'). A deck is drawn from a client brief, so nothing is sent; Sai decides when that changes")
-
-
 def make_plan(ctx: Ctx, mode: str = "plan", hero: list | None = None, remake_style: bool = False, remake: list | None = None) -> dict:
     """The whole decision, with no network: which slots are made already, which go on a card, which are held back and why, the prompts in full.
     ``remake``: ``SLIDE.SLOT`` names a person asked to make again (--remake): each goes on the card as a new attempt, from the recorded subject.
@@ -344,7 +334,7 @@ def make_plan(ctx: Ctx, mode: str = "plan", hero: list | None = None, remake_sty
     if inp.marks is None:
         raise GenError("picture generation is refused: this deck has no mark data, so it cannot be known whether a prompt would draw on a part marked "
                        "Confidential. Give the marks (--marks FILE, or build from the document) even when none are marked: an empty list is a real answer")
-    check_models(ctx.style)   # the client-to-Runway policy is not checked here: a plan sends nothing (``refuse_live`` guards the one send)
+    check_models(ctx.style)
     safe = safe_state(inp, deck, ctx.review)
     banned = list(dict.fromkeys([*safe["banned"], *ctx.style.banned_imagery, *ctx.banned_extra]))
     deny = lint.deny_list(inp.marks)
@@ -357,7 +347,7 @@ def make_plan(ctx: Ctx, mode: str = "plan", hero: list | None = None, remake_sty
     plan = {"version": 1, "deck_id": ctx.deck_id, "rails_version": RAILS_VERSION, "words_sha": words_sha(deck), "style": {"hash": ctx.style.hash, "source": ctx.style.source},
             "safe_messaging": {k: safe[k] for k in ("applies", "packs", "reviewed")}, "stage_g": {"recorded": rec is not None, "request_sha": request_sha(req)},
             "cap_usd": ctx.cap, "slots": {}, "banned_imagery": banned,
-            "client_to_runway": {"policy": vpolicy.client_to_runway(), "label": vpolicy.label(), "confidential_parts": len(inp.marks)}}
+            "client_to_runway": {"label": vpolicy.label(), "confidential_parts": len(inp.marks)}}
     if mode == "subjects" or rec is None:   # before stage g exists the prompts are code templates, marked as a preview
         subj = {}
     else:
@@ -743,7 +733,6 @@ def step(ctx: Ctx, mode: str, yes_cost: str | None = None, hero: list | None = N
                 raise GenError(f"--yes-cost {yes_cost} matches no open card ({ids}): the plan changed or the id is wrong; nothing was made")
             if card["kind"] == "heroes" and card["over_cap"]:
                 raise GenError("this card is over the cap: nothing was made")
-            refuse_live()   # the client-to-Runway policy guards the one place a prompt is sent to Runway; planning and the card run under refuse
             try:
                 client = client_factory() if client_factory else runway.Client(runway.api_key())
             except runway.RunwayError as e:

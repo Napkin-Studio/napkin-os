@@ -1,35 +1,22 @@
-"""What a territory run was made from, and whether its pictures may be made (the 18 Nov 2026 review, blocker 1).
+"""What a territory run was made from: the material question, answered by a named person, recorded with the frames.
 
-The frame pictures are made by Runway's Gemini image models. Whether a prompt derived from client material may go there is ONE switch,
-``visuals.policy.CLIENT_TO_RUNWAY`` (Sai, 18 Nov 2026: refuse by default; VISUALS_CLIENT_TO_RUNWAY=allow for testing). Whatever it says:
+Pictures are made from client material the same way the words are (Shrey, 26 Nov 2026: Confidential keeps a part out of Napkin's own
+RAG, layers, training and evals only, ``visuals.policy``). What a person still says before the first picture is what the material IS
+(invented, a demo, or the client's), so every frame and the deck that uses it carry that provenance. A run that records no origin, and
+has no declaration, asks the question; it is never assumed.
 
-* the run never holds the marked text: ``territory.run`` records only how many parts are marked (``material.marks_count``) and the
-  brief's sha256 (``material.brief_sha256``). The frames tool rebuilds the Confidential deny-list from the brief itself
-  (``territory.visuals --brief <the same file>``, checked against that hash and count), and every shot passes the picture-prompt lint and
-  that deny-list (cli.build_jobs), so a part marked Confidential is never drawn;
-* marks that cannot be known (a brief_object.json carries none, a run saved before ``territory.run --material`` with no declaration, or a
-  run with marked parts whose brief is not given at frame time) refuse the frames: the deny-list never runs without them.
-
-A run written before 18 Nov 2026's fix may hold ``material.marks`` with their text; it is still read (the deny-list needs it), and such a
-file must never be committed.
-
-Material marked ``invented`` or ``demo`` by a person is never client-derived. Anything else (``client``, unmarked, or a brief with parts
-marked Confidential) is client-derived: sent under ``allow`` after the lint, refused under ``refuse``. For a run saved before the
-``--material`` flag, a person declares it with ``--material invented|demo|client --declared-by NAME`` (``<run>.material.json``, bound to
-the run's hash); the declaration also says that no part of it is marked Confidential.
+``territory.run`` records the brief's marked parts only as a COUNT beside the brief's sha256 (``material.marks_count``): the marked text
+never reaches the run file (it is not gitignored).
 """
 from __future__ import annotations
 
-import hashlib
 import json
-import sys
 from datetime import date
 from pathlib import Path
 
 from visuals import policy
 
 ORIGINS = ("invented", "demo", "client")
-SENDABLE = ("invented", "demo")
 #: The label a manifest carries so a reader of the frames knows what they were made from (a person marked the origin).
 PROVENANCE = {"invented": "Invented (no brief)", "demo": "Demo (not a client)", "client": "Client material"}
 
@@ -44,19 +31,6 @@ def block(origin: str | None, brief: str | None, marks, brand: str | None = None
             "brief_sha256": (brief_sha256 or None) if brief else None, "brand": brand or None}
 
 
-def brief_marks(path: Path) -> tuple:
-    """``(sha256 hex, marks or None)`` of a brief file, read the way territory.run reads it: a Brief Maker .clan carries its marks, a
-    brief_object.json none (None)."""
-    path = Path(path)
-    sys.path[:0] = [str(Path(__file__).resolve().parents[1])]
-    from deck import inputs
-    if str(path).endswith(".clan"):
-        marks = inputs.load_brief_clan(path)[3].get("marks")
-    else:
-        marks = inputs.load_brief(path)[3].get("marks")
-    return hashlib.sha256(path.read_bytes()).hexdigest(), marks
-
-
 def declaration_path(run_path: Path) -> Path:
     return run_path.with_name(run_path.stem + ".material.json")
 
@@ -66,8 +40,8 @@ def record_declaration(run_path: Path, run_hash: str, origin: str, by: str) -> d
     if origin not in ORIGINS:
         raise ValueError(f"--material {origin}: say invented, demo or client")
     if not by:
-        raise ValueError("--material needs --declared-by NAME: the person who vouches for what this run was made from and that no part of it is marked Confidential")
-    rec = {"origin": origin, "by": by, "date": date.today().isoformat(), "run_sha256_12": run_hash, "confidential_parts": 0}
+        raise ValueError("--material needs --declared-by NAME: the person who vouches for what this run was made from")
+    rec = {"origin": origin, "by": by, "date": date.today().isoformat(), "run_sha256_12": run_hash}
     declaration_path(run_path).write_text(json.dumps(rec, indent=1))
     return rec
 
@@ -83,57 +57,20 @@ def load_declaration(run_path: Path, run_hash: str) -> dict | None:
     return rec
 
 
-UNLOCK_MARKS = ("To unlock: make the run from a Brief Maker .clan (it carries its marks) or with no brief (territory.run --material "
-                "invented|demo|client), or, for a run saved before that flag, declare it: --material invented|demo|client --declared-by <your name>.")
+ASK = "Say what this material is (invented, a demo or the client's) and who says so; the frames record it."
 
 
-def gate(run: dict, declaration: dict | None = None, environ=None, brief: tuple | None = None) -> dict:
-    """``{ok, why, origin, client_derived, marks, by, policy, policy_label, brand}``. ``marks`` (when ok) feed the Confidential deny-list.
-    ``brief``: ``brief_marks(<the brief file>)`` when the person gave it; a run with marked parts needs it (its hash and its count must
-    match the run's), because the run itself keeps only the count."""
-    pol = policy.client_to_runway(environ)
-    m = run.get("material") if isinstance(run.get("material"), dict) else None
-    out = {"ok": False, "why": "", "origin": "unknown", "client_derived": True, "marks": None, "by": None, "policy": pol,
-           "policy_label": policy.label(environ), "brand": (m or {}).get("brand")}
-    legacy = bool(m) and "marks" in m and "marks_count" not in m      # a run written before the count: its marks are in it
-    if legacy:
-        count = None if m.get("marks") is None else len(m["marks"])
-    else:   # a brief with no recorded count is unknown, never zero (fail closed)
-        count = (m or {}).get("marks_count") if "marks_count" in (m or {}) else (None if (m or {}).get("brief") else 0)
-    if m and m.get("brief") and count is None:
-        out["why"] = ("this run was made from a brief that carries no mark data (a brief_object.json has none), so the Confidential deny-list "
-                      "cannot run. " + UNLOCK_MARKS)
-        return out
-    if m is None and declaration is None:
-        out["why"] = "this run does not record what it was made from or its marks, so the Confidential deny-list cannot run. " + UNLOCK_MARKS
-        return out
-    if legacy or not m:
-        marks = list((m or {}).get("marks") or [])
-    elif not count:
-        marks = []
-    else:   # the run keeps only the count: the deny-list is rebuilt from the brief, or the frames are refused
-        want = m.get("brief_sha256")
-        if brief is None:
-            out["why"] = (f"this run's brief has {count} part(s) marked Confidential and the run keeps only their count, so the deny-list is "
-                          "rebuilt from the brief: give --brief <the same brief file> (nothing is drawn without it)")
-            return out
-        sha, got = brief
-        if not want or sha != want:
-            out["why"] = "the brief given with --brief is not the one this run was made from (its sha256 differs): give that very file"
-            return out
-        if got is None or len(got) != count:
-            out["why"] = (f"the brief given has {'no mark data' if got is None else len(got)} marked part(s), the run recorded {count}: "
-                          "refused, the deny-list would not be the run's")
-            return out
-        marks = list(got)
-    origin = (m or {}).get("origin") if (m or {}).get("origin") in ORIGINS else ((declaration or {}).get("origin") or "unknown")
-    by = "territory.run --material" if (m or {}).get("origin") in ORIGINS else ((declaration or {}).get("by") or "nobody (unmarked)")
-    client = origin not in SENDABLE or bool(marks)
-    out.update(origin=origin, client_derived=client, marks=marks, by=by)
-    if client and pol == "refuse":
-        why = (f"{len(marks)} part(s) marked Confidential" if marks else f"material {origin}")
-        out["why"] = (f"this run is client-derived ({why}) and the policy refuses client-derived prompts to Runway "
-                      "(visuals.policy.CLIENT_TO_RUNWAY). Only material a person marked invented or demo is sent.")
-        return out
-    out["ok"] = True
+def gate(run: dict, declaration: dict | None = None) -> dict:
+    """``{ok, why, origin, by, brand, policy_label}``. Ok once the run records its origin (``territory.run --material``) or a named person
+    declared it; otherwise ``why`` asks the material question. Client material is ok: it goes to the picture models like it goes to Bedrock."""
+    m = run.get("material") if isinstance(run.get("material"), dict) else {}
+    if m.get("origin") in ORIGINS:
+        origin, by = m["origin"], "territory.run --material"
+    elif (declaration or {}).get("origin") in ORIGINS and str((declaration or {}).get("by") or "").strip():
+        origin, by = declaration["origin"], str(declaration["by"]).strip()
+    else:
+        origin, by = "unknown", None
+    out = {"ok": origin in ORIGINS, "why": "", "origin": origin, "by": by, "brand": m.get("brand"), "policy_label": policy.label()}
+    if not out["ok"]:
+        out["why"] = "nobody has said what this material is. " + ASK
     return out

@@ -261,5 +261,6 @@ only the rank is shown; ceilings are 5 headings by up to 4 routes plus the plann
 * **Carrying in.** `pictures.rehome(assets, reader, store)` puts every picture of an arriving document (its `assets` map) on this document's own store (a
   content-addressed store: the hosted workspace's `blobs/<aa>/<sha256>`, verified on write, never overwritten) and names the ones that did not arrive;
   `require_all` refuses a partial arrival ("19 of 23 pictures arrived"). A mock is never used. Local check: `python -m territory.pictures carry <export.zip> <dir>`.
-* **Provider.** `visuals.policy.allows(client_derived)`: material a person did not mark invented or demo is never sent to a picture provider by default
-  (`VISUALS_CLIENT_TO_RUNWAY=allow` is the tester's override; the lint and the Confidential deny-list run either way).
+* **Provider.** Client material goes to the picture provider like it goes to Bedrock (`visuals.policy`, Shrey 2026-11-26): marking a part
+  Confidential keeps it out of Napkin's own RAG, layers, training and evals only. A named person still says what the material is (invented, a
+  demo or the client's) before the first picture, and the frames record it; every prompt passes the picture-prompt lint.
