@@ -11,7 +11,7 @@ import { modelChoicesFor } from '../capabilities'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
 import { pickWords } from './sizeWords'
-import { DEFAULT_FILM_LENGTHS, FILM_LENGTHS, FILM_SHAPES, REMAKE_MODELS, beatsFor, briefShapes, filmSeconds, fitWindows, lastLineOf, masterShots, sameShape, versionsWord } from './film'
+import { FILM_LENGTHS, cutsBlocked, startLengths, FILM_SHAPES, REMAKE_MODELS, beatsFor, briefShapes, filmSeconds, fitWindows, lastLineOf, masterShots, sameShape, versionsWord } from './film'
 import { endLineOf, sizesBrief } from '../brief/model'
 import { makeFilmSizes, planFilm, type FilmPlan, type FilmRow, type ShotMethod } from './filmJobs'
 import type { CampaignDeps } from './make'
@@ -45,8 +45,9 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
     return cut?.v1.length ? cutLength(cut) : filmSeconds(shots, master.length_s)
   }, [doc, master, shots])
   const masterS = Math.round(filmS)
-  // Only lengths shorter than the film start picked (Playwright live test 2026-11-18: 15 s picked for an 8 s film).
-  const [lengths, setLengths] = useState<number[]>(() => DEFAULT_FILM_LENGTHS.filter((l) => l < masterS))
+  // Only lengths shorter than the film start picked (Playwright live test 2026-11-18: 15 s picked for an 8 s film); a film
+  // with none shorter starts on its own length, in the other shapes (A57).
+  const [lengths, setLengths] = useState<number[]>(() => startLengths(masterS))
   const [extra, setExtra] = useState('')
   const [shapes, setShapes] = useState<Set<string>>(() => {
     const videoId = master.kind === 'render' ? doc.renders?.[master.id]?.video_id : master.kind === 'video' ? master.id : undefined
@@ -89,6 +90,7 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
       rows.push({ key, lengthS: l, shapeId: s.id, on: !off.has(key), label: `Film ${l} s · ${s.label}` })
     }
   }
+  const blocked = cutsBlocked({ shots: body.length, lengths: lengths.length, shapes: shapeList.length, versions: rows.length })
   const kept = (l: number) => new Set((beats[l] ?? []).filter((b) => b.keep).map((b) => b.shot_id))
   /** The shots a shape's ticked versions keep, which may need a reframe. */
   const shotsAt = (shapeId: string) => {
@@ -175,6 +177,7 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
             <div className="cf-chips" aria-label="Lengths">
               {[...new Set([...FILM_LENGTHS, ...lengths])].filter((s) => s <= Math.max(masterS, 30)).sort((a, b) => b - a).map((s) => (
                 <button key={s} type="button" aria-pressed={lengths.includes(s)} className={`cf-chip ${lengths.includes(s) ? 'on' : ''}`}
+                  disabled={s > masterS && !lengths.includes(s)} title={s > masterS && !lengths.includes(s) ? `Longer than the ad (${masterS} s): a cut keeps fewer shots, never more` : undefined}
                   onClick={() => setLengths(lengths.includes(s) ? lengths.filter((x) => x !== s) : [...lengths, s].sort((a, b) => b - a))}>{s} s{s === masterS ? ' (the ad)' : ''}</button>
               ))}
               <input className="cf-len" inputMode="numeric" placeholder="+ length" value={extra} aria-label="Another length in seconds"
@@ -201,7 +204,7 @@ export function FilmSizesSheet({ master, deps, by, near, onClose, onMade }: {
             </div>
             <p className="cf-note">{versionsWord(rows.length)} from the ad's own {body.length} {body.length === 1 ? 'shot' : 'shots'}. The Director agent plans which shots each length keeps and how each shot fits each shape, before anything is made. On 9:16, 4:5 and 1:1 the spoken lines are captioned for sound off; turn them off on any tile.</p>
             {error && <p className="cf-error" role="alert">{error}</p>}
-            <footer className="cf-foot"><span className="pt-grow" /><button type="button" className="btn primary" disabled={!rows.length || !body.length} onClick={() => void startPlan()}>Plan the cuts</button></footer>
+            <footer className="cf-foot">{blocked && <span className="cf-note">{blocked}</span>}<span className="pt-grow" /><button type="button" className="btn primary" disabled={!!blocked} title={blocked ?? undefined} onClick={() => void startPlan()}>Plan the cuts</button></footer>
           </div>
         )}
 

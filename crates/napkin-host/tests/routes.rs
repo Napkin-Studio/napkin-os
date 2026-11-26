@@ -907,7 +907,7 @@ mod upstream {
     #[test]
     fn a_deck_spun_off_a_brief_is_sent_the_brief_whole_beside_the_index() {
         // UAT round 4 L2: Continue in -> Deck from a brief built from an empty brief, because the middleware only saw the index.
-        let (store, _research, brief) = setup();
+        let (store, research, brief) = setup();
         brief.post(
             "/patch-data",
             r#"{"patch":{"objectives":"Sell the starter bottle","mandatories":["End line: 'Refill. Not landfill.' (word for word)"]},"agent":"human"}"#,
@@ -931,6 +931,13 @@ mod upstream {
         assert_eq!(
             carried["data"]["mandatories"][0],
             "End line: 'Refill. Not landfill.' (word for word)"
+        );
+        // 5-tool run 2026-11-26: the brief's research travels with it, whole, under its own
+        // upstream, so a Confidential mark the brief's chain holds on the research is found.
+        let research_copy = &carried["data"]["upstream"][research.doc.as_str()];
+        assert!(
+            research_copy.is_object() && research_copy.get("direct").is_none(),
+            "the research whole, not its index entry: {carried}"
         );
         assert!(
             brief

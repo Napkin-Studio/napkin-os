@@ -562,10 +562,10 @@ class Server:
         answers, verified = run_deck._read_answers(None)
         inp = inputs_mod.load(None, None, d.stages / "doc_facts.json", [], prompt_text=str(req["prompt"].get("text") or "").strip(),
                               answers=answers, verified=verified)
-        bu = req.get("brief_upstream")
+        bu, pu = req.get("brief_upstream"), req.get("production_upstream")
         if bu:   # the brief the deck was spun off from (UAT round 4 L2): the rows under 'Read the inputs' read it as the build does
-            inputs_mod.apply_upstream_brief(inp, bu["id"], bu["data"], ((req.get("members") or {}).get("decisions")))
-        pu = req.get("production_upstream")
+            inputs_mod.apply_upstream_brief(inp, bu["id"], bu["data"], ((req.get("members") or {}).get("decisions")),
+                                            {pu["id"]: pu["data"]} if pu else None)   # its marks, in the research it carries and the project
         if pu:   # the brief a carried Production project holds, and the research the deck carries: the evidence the build reads
             inputs_mod.apply_production_brief(inp, pu["id"], pu["data"])
         inputs_mod.apply_research(inp, req.get("members"))

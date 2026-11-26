@@ -136,5 +136,12 @@ describe('undo and redo on the document', () => {
   it('says a step in plain words', () => {
     expect(stepWords('delete clip gen_01M4EP36MVQNQEHE0NP83FD7RN (shot 3, v4)')).toBe('delete clip (shot 3, v4)')
     expect(stepWords('pick take v2 for shot 3')).toBe('pick take v2 for shot 3')
+    // UAT acceptance A47: "Undo: keep_suggestion scenes[scene_01M89…]" said internal ids.
+    expect(stepWords('keep_suggestion scenes[scene_01M89E7Z8Q3V4W5X6Y7Z8A9B0C]')).toBe('keep suggestion (scene)')
+    expect(stepWords('set scenes[scene_01M89E7Z8Q3V4W5X6Y7Z8A9B0C].heading')).toBe('change scene')
+    expect(stepWords('discard suggestions[sug_01M89E7Z8Q3V4W5X6Y7Z8A9B0C]')).toBe('discard suggestion')
+    expect(stepWords('create shots[shot_01M89E7Z8Q3V4W5X6Y7Z8A9B0C]')).toBe('create shot')
+    expect(stepWords('set storyboards title')).toBe('set storyboards title')
+    expect(stepWords('move node brief_01M89E7Z8Q3V4W5X6Y7Z8A9B0C')).toBe('move node')
   })
 })

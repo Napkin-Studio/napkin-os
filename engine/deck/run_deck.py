@@ -766,7 +766,15 @@ def _brief_upstream(a, inp) -> bool:
             chain = m.get("decisions") if isinstance(m, dict) else None
         except (OSError, ValueError):
             chain = None
-    return inputs.apply_upstream_brief(inp, got[0], got[1], chain if isinstance(chain, list) else None)
+    others = {}
+    if getattr(a, "production_upstream", None):   # a mark the chain holds on the carried Production project is read there
+        try:
+            raw = json.loads(a.production_upstream.read_text())
+            if isinstance(raw, dict) and raw.get("id") and isinstance(raw.get("data"), dict):
+                others[str(raw["id"])] = raw["data"]
+        except (OSError, ValueError):
+            pass   # _production_upstream refuses a bad file with its own message
+    return inputs.apply_upstream_brief(inp, got[0], got[1], chain if isinstance(chain, list) else None, others)
 
 
 def _production_upstream(a, inp, deck_ctx) -> tuple | None:
