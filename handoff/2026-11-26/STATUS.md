@@ -20,7 +20,7 @@
 
 ## Deck quality: Shrey's feedback, 2026-11-26 18:50 (for Sai)
 
-Shrey looked at the UAT decks and said the deck **"is too text heavy"** and has almost no pictures. Evidence is in the session scratchpad on the GB10 machine:
+Shrey looked at the UAT decks and said the deck **"is too text heavy"** and has almost no pictures. Evidence: `handoff/2026-11-26/evidence/` (contact sheet and both covers) on this branch. The full files are in the session scratchpad on the GB10 machine:
 - `uat5b3/downloads/` holds Brúach-Switch.pdf/.pptx and Sólás-Beacon-launch.pdf/.pptx;
 - `deckpeek/bruach-sheet.png` is a contact sheet of pages 1–16.
 
