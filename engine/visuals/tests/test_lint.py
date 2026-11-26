@@ -1,4 +1,4 @@
-"""The fail-closed allow-list lint (deck-image-gen)."""
+"""The picture-prompt lint (deck-image-gen): hard rules only since 26 Nov 2026 (names, numbers, brands, quotation marks, styles, banned imagery)."""
 from pathlib import Path
 
 import pytest
@@ -14,11 +14,23 @@ def test_a_plain_subject_passes():
 
 @pytest.mark.parametrize("bad,why", [("A bottle of Guinness on a table.", "Guinness"), ("Twenty glasses on a table.", "twenty"),
                                      ("A mural in the style of Banksy.", "style"), ("A table with 3 glasses.", "digit"),
-                                     ('A sign saying "hello".', "quotation"), ("A glass of quenelle foam.", "allowed"),
+                                     ('A sign saying "hello".', "quotation"), ("A glass beside Brennan on a bench.", "name"),
                                      ("A table. Then Sunday light.", "Sunday")])
 def test_each_is_refused(bad, why):
     r = lint.lint_text(bad)
     assert r and why.lower() in r.lower()
+
+
+@pytest.mark.parametrize("text", ["An unhurried supper by the window.", "Wet tarmac under the shopfronts at dusk.", "A glass of quenelle foam.",
+                                  "A lamplit snug, a terrazzo floor and a zinc counter.", "A rustic style kitchen at dawn."])
+def test_describing_words_pass_with_no_approved_word_list(text):
+    """Owner, 26 Nov 2026: hard rules only. UAT refused 'unhurried' and 'tarmac' for not being on a word list; they pass now."""
+    assert lint.lint_text(text) is None
+
+
+@pytest.mark.parametrize("text", ["An unhurried supper for three.", "Wet tarmac outside Dunnes.", "Hopper-style light on a diner.", "A Tesco bag on wet tarmac.", "A sign that says 'open'."])
+def test_the_hard_rules_still_refuse_with_a_describing_word_beside_them(text):
+    assert lint.lint_text(text) is not None
 
 
 def test_banned_imagery_is_refused():

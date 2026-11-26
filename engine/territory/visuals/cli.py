@@ -11,7 +11,7 @@ The run, the territory text and the frame plan are not touched; the pictures go 
 
 Pictures go to Runway's Gemini image models. Client material goes there like it goes to Bedrock (visuals.policy, Shrey 26 Nov 2026:
 Confidential keeps a part out of Napkin's own knowledge only); a person says what the material is before the first picture (--material).
-Every shot passes the picture-prompt lint (visuals.lint: the common-word allow-list, brand words, banned imagery) before it is sent. A yes is the card's id (``--yes-cost c_...``): a stale or wrong id is refused. Spend is
+Every shot passes the picture-prompt lint (visuals.lint: names, numbers, brand words, quotation marks, banned imagery) before it is sent. A yes is the card's id (``--yes-cost c_...``): a stale or wrong id is refused. Spend is
 derived from an append-only ledger outside the frames folder (visuals.jobs.Ledger), every attempt of every version counted, and capped
 for the run's lifetime (``--max-usd``, default $2.00, never above $2.50).
 
@@ -165,7 +165,7 @@ def main(argv=None, *, llm_factory=None, transport=None, guard_post=None, sleep=
               f"ignoring {len(sty.ignored_references)}: {', '.join(sty.ignored_references)}")
     banned = list(safe["banned"])                  # the category's list ONLY decides the plan and refuses shots: the style pack's own bans go
     guard_banned = list(dict.fromkeys([*banned, *sty.banned_imagery]))   # into the picture prompt and the guard check, never into the words
-    why = lint.lint_text(style_mod.style_block(sty, banned), banned=[], allow=guard_banned)
+    why = lint.lint_text(style_mod.style_block(sty, banned), banned=[])
     if why:
         print(f"The style pack's words cannot go to a picture model: {why}. A person fixes the pack; nothing was sent.")
         return 2

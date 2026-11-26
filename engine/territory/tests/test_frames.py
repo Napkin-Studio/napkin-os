@@ -564,12 +564,12 @@ def test_a_hand_made_brand_clan_names_its_colours_in_its_own_order():
 
 
 def counting_plan(user: str) -> dict:
-    """The UAT plan (2026-11-26, Sólás): shots the planner wrote with numbers in words and a word off the common list."""
+    """The UAT plan (2026-11-26, Sólás): shots the planner wrote with numbers in words ('unhurried' passes since the owner's hard-rules decision)."""
     ids = [t["id"] for t in json.loads(user)["territories"]]
     return {"territories": [{"id": tid, "shots": [
         {"shot": "f1", "framing": "A wide view of a kitchen with one lamp", "camera": "eye level", "action": "A person opens a cupboard", "on_screen_line": ""},
         {"shot": "f2", "framing": "A close view of one hand on a glass", "camera": "close", "action": "A friend smiles", "on_screen_line": "x"},
-        {"shot": "f3", "framing": "A medium view of a table", "camera": "from above", "action": "An unhurried supper by the window", "on_screen_line": ""},
+        {"shot": "f3", "framing": "A medium view of a table", "camera": "from above", "action": "An unhurried supper by a dozen candles", "on_screen_line": ""},
         {"shot": "f4", "framing": "A wide view of three friends on a street", "camera": "low angle", "action": "A couple walk home", "on_screen_line": "y"}]}
         for tid in ids]}
 
@@ -594,7 +594,7 @@ def test_shots_the_check_refuses_are_rewritten_once_with_its_reasons_and_every_f
     asked = seen[0]
     assert sorted(s["shot"] for s in asked["shots"]) == ["f1", "f2", "f3", "f4"]
     why = {s["shot"]: s["refused_because"] for s in asked["shots"]}
-    assert "'one' is a number in words" in why["f1"] and "'three' is a number in words" in why["f4"] and "'unhurried'" in why["f3"]
+    assert "'one' is a number in words" in why["f1"] and "'three' is a number in words" in why["f4"] and "'dozen' is a number in words" in why["f3"]
     assert "number" in asked["rules"].lower() and "quotation" in asked["rules"].lower()
     P = r.make()._prepare(["t_started"])
     assert not P["refused"] and not P["repair"] and len(P["jobs"]) == 4
@@ -628,7 +628,7 @@ def test_a_shot_still_refused_after_its_rewrite_is_said_in_words_and_can_be_trie
 def test_the_plan_prompt_names_the_checks_rules():
     from territory.llm import prompt
     p = prompt("frames_plan").lower()
-    assert "number" in p and ("one" in p and "three" in p) and "common" in p
+    assert "number" in p and ("one" in p and "three" in p) and "brand" in p and "any other describing word is fine" in p
     r = prompt("frames_repair").lower()
     assert "refused_because" in r and "json" in r
     from territory.llm import STAGE_MODEL

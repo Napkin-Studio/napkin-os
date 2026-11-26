@@ -77,12 +77,12 @@ def test_a_brief_with_parts_marked_confidential_still_gets_its_pictures(env, tmp
 
 def test_client_shots_are_sent_only_after_the_lint(env):
     write_run(env, origin="client", brief=True, brief_kind="clan")
-    llm = FakeLLM({"frames_plan": plan_output(" beside a zorblaxian gadget")})       # not a common word: never sent
+    llm = FakeLLM({"frames_plan": plan_output(" beside a Zorblax gadget")})          # a name (a capital in mid-sentence): never sent
     code, rw, _ = go(env, *LIVE, llm=llm)
     assert code == 0 and len(rw.posts) == 6                                          # f1 of both territories refused, the rest sent
-    assert all("zorblaxian" not in p["promptText"] for p in rw.posts)
+    assert all("Zorblax" not in p["promptText"] for p in rw.posts)
     e = frames_manifest(env)["frames"]["s1-f1-flash"]
-    assert e["status"] == "REFUSED" and "allowed word list" in e["error"]
+    assert e["status"] == "REFUSED" and "a name" in e["error"]
 
 
 def test_a_shot_with_a_digit_or_a_brand_word_is_refused_for_invented_material_too(env):

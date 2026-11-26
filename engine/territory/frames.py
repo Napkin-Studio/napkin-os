@@ -73,7 +73,7 @@ MATERIAL_WORDS = ("Say what this material is before the first picture: the pictu
 #: The picture-prompt check's rules (visuals.lint) in words, for the rewrite call: a refused shot goes back with its reason and these.
 LINT_RULES = ("Plain printable English only. No number, in figures or in words (one, two, three, half, a dozen): write a, a pair of, a few, both. "
               "No quotation marks or apostrophes. No capital letter in mid-sentence (it reads as a name), no names, no brand names. No 'in the style of'. "
-              "Only common everyday words a picture model knows: say slow, not unhurried; road, not tarmac.")
+              "Nothing the never_show list names. Any other describing word is fine.")
 
 
 def refused_refusal(rows: list[dict]) -> Refuse:
@@ -245,7 +245,7 @@ def brand_style(rec, forbid=()) -> tuple:
     d, left = b["data"], []
     names = [x for x in forbid if x]
 
-    def ok(text: str, key: str, allow=()) -> bool:
+    def ok(text: str, key: str) -> bool:
         norm = {k: ([] if k != "notes" else "") for k in ("look", "palette", "this_not_that", "banned_imagery", "notes")}
         norm[key] = [text]
         try:
@@ -253,7 +253,7 @@ def brand_style(rec, forbid=()) -> tuple:
         except style_mod.StyleError as e:
             left.append({"what": text, "why": str(e).split(": ", 1)[-1]})
             return False
-        bad = lint.lint_text({"look": "Look: ", "palette": "Palette: "}.get(key, "") + text + ".", banned=[], allow=allow)
+        bad = lint.lint_text({"look": "Look: ", "palette": "Palette: "}.get(key, "") + text + ".", banned=[])
         if bad:
             left.append({"what": text, "why": bad})
             return False
@@ -263,7 +263,7 @@ def brand_style(rec, forbid=()) -> tuple:
     look = [p.lower() for p in _phrases(imagery.get("style"))]
     look = [p for p in dict.fromkeys(look) if ok(p, "look")]
     bans = [p.lower() for p in _phrases(imagery.get("bans"))]
-    bans = [p for p in dict.fromkeys(bans) if ok(p, "banned_imagery", allow=[p])]
+    bans = [p for p in dict.fromkeys(bans) if ok(p, "banned_imagery")]
     cols = [c for c in ((d.get("visual") or {}).get("colours") or []) if isinstance(c, dict)]
     rank = {r: i for i, r in enumerate(COLOUR_ORDER)}
     cols.sort(key=lambda c: rank.get(c.get("role"), len(COLOUR_ORDER)))
@@ -400,7 +400,7 @@ class Frames:
             raise Refuse("The look changes the picture models, which it cannot do. Nothing was sent.")
         banned = list(safe["banned"])
         guard_banned = list(dict.fromkeys([*banned, *sty.banned_imagery]))
-        bad = lint.lint_text(style_mod.style_block(sty, banned), banned=[], allow=guard_banned)
+        bad = lint.lint_text(style_mod.style_block(sty, banned), banned=[])
         if bad:
             raise Refuse(f"The look's words cannot go to a picture model: {bad}. Nothing was sent.")
         if not runway.cap_ok(self.cap):
