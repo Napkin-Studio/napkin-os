@@ -185,3 +185,23 @@ def test_leaving_a_held_frame_out_needs_a_named_person_and_sticks(fr, monkeypatc
     left = step(fr, h, "frames_status", by="Shrey")[-1]["result"]["info"]["frames"]["frames"]
     assert [x["key"] for x in left] == keys[1:], "gone from the status, and it stays gone"
     valid(h)
+
+
+def test_the_frames_made_ride_back_with_the_change_as_the_documents_assets(fr, monkeypatch):
+    """Owner 2026-11-26: the host stores the bytes. The paid step's change carries every picture it made as assets_put {name, sha256, data_b64}
+    (frames/<sha256>.png), the bytes matching the hash; the job's result and info never carry bytes."""
+    import base64
+    import hashlib
+    monkeypatch.setenv("NAPKIN_TERRITORY_IMAGES", "1")
+    h = host()
+    step(fr, h, "frames_material", origin="invented", by="Shrey")
+    card = step(fr, h, "frames", ids=["t_started"], by="Shrey")[-1]["result"]["info"]["card"]
+    r = step(fr, h, "frames", ids=["t_started"], card_id=card["id"], by="Shrey")
+    puts = [a for b in r if b.get("change") for a in (b["change"].get("assets_put") or [])]
+    assert puts, [b.get("change", {}).keys() for b in r]
+    for a in puts:
+        data = base64.b64decode(a["data_b64"])
+        assert a["name"] == f"frames/{a['sha256']}.png" and hashlib.sha256(data).hexdigest() == a["sha256"]
+    placed = {s["sha256"] for t in h.data["territories"] if t["id"] == "t_started" for s in t["pictures"] if s["kind"] == "frame"}
+    assert placed <= {a["sha256"] for a in puts}
+    assert "data_b64" not in json.dumps([b.get("result") for b in r]) and "assets" not in r[-1]["result"]["info"]

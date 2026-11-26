@@ -155,6 +155,20 @@ def style_folder(frames_dir: Path, client: str | None) -> Path | None:
     return folder if folder is not None and folder.is_dir() else None
 
 
+#: Where a made frame is saved in the document (owner, 2026-11-26: the host stores the bytes as a linked asset when it applies the change).
+ASSET_DIR = "frames"
+_EXT = {b"\x89PNG": ".png", b"\xff\xd8\xff": ".jpg", b"RIFF": ".webp"}
+
+
+def asset_name(sha: str, data: bytes | None = None, file: str | None = None) -> str:
+    """``frames/<sha256>.<ext>``: the document's asset for a made frame (``human/assets/<name>``), its type from the file it was saved as or
+    its bytes. The page draws it at ``/assets/<name>``; a spin-off carries it as a link."""
+    ext = Path(file or "").suffix.lower()
+    if ext not in (".png", ".jpg", ".jpeg", ".webp"):
+        ext = next((e for m, e in _EXT.items() if (data or b"").startswith(m)), ".png")
+    return f"{ASSET_DIR}/{sha}{'.jpg' if ext == '.jpeg' else ext}"
+
+
 def run_view(doc: dict, routes: list[dict], marks: list, origin: str) -> dict:
     """The routes as the library's run shape (what the safety gate, the frame plan and the material gate read)."""
     brief = {}
@@ -176,6 +190,7 @@ class Frames:
     def __init__(self, doc: dict, store, blobs, *, doc_id: str, marks=None, llm=None, transport=None, guard_post=None, environ=None, spend=None,
                  sleep=time.sleep, poll_every: float = 4.0, on_line=None):
         self.doc, self.store, self.blobs, self.doc_id = doc, store, blobs, str(doc_id)
+        self.assets: list[dict] = []                         # the frames this move made or placed, bytes and all, for the host to save (assets_put)
         self.marks = marks                                  # None: the document was not checked for Confidential marks, and nothing is drawn
         self.llm, self.transport, self.guard_post, self.environ = llm, transport, guard_post, environ
         self.sleep, self.poll_every = sleep, poll_every
@@ -368,7 +383,7 @@ class Frames:
         self._book(P)
         doc, placed, held = self._place(self.doc, P)
         self.spend.outcome("frames", made=res["created"], placed=placed, held=held)
-        info = {"frames": {"made": res["created"], "placed": placed, "held": held, "still_running": len(res["still_running"]), "unknown": len(res["unknown"]),
+        info = {"assets": list(self.assets), "frames": {"made": res["created"], "placed": placed, "held": held, "still_running": len(res["still_running"]), "unknown": len(res["unknown"]),
                            "stopped": res["stopped"]}}
         return doc, [], self._words(res, placed, held), info, self.spend.decisions()
 
@@ -473,6 +488,9 @@ class Frames:
                 data = (P["vdir"] / e["file"]).read_bytes()
                 sha = pictures.hash_of(data)
                 self.blobs.put(sha, data)
+                name = asset_name(sha, data, e["file"])
+                if name not in {a["name"] for a in self.assets}:   # the bytes go back with the change; the host saves them as the document's asset
+                    self.assets.append({"name": name, "sha256": sha, "data": data})
                 if self.held(e):
                     held += 1
                     continue
@@ -502,7 +520,7 @@ class Frames:
             frames[k].update(approved_by_person=True, approved_by=by, approved_at=now())
         runway.save_manifest(P["vdir"], P["manifest"])
         doc, placed, _held = self._place(self.doc, P)
-        return doc, [], f"{len(keys)} accepted by {by}; {placed} placed.", {}, []
+        return doc, [], f"{len(keys)} accepted by {by}; {placed} placed.", {"assets": list(self.assets)}, []
 
     def leave(self, keys, by: str):
         """A named person leaves held frames out: each is never placed, is gone from the status, and its place stays a sketch. It is moved aside as a
@@ -545,5 +563,6 @@ class Frames:
             t = by_id.get(e.get("territory"))
             out.append({"key": k, "route": e.get("territory"), "shot": e.get("shot"), "place": place_of(offered(t)[0], e.get("shot")) if t else None,
                         "status": e.get("status"), "sha256": e.get("sha256"), "held": bool(why), "why": why,
+                        "asset": asset_name(e["sha256"], None, e.get("file")) if e.get("sha256") else None,
                         "approved_by": e.get("approved_by")})
         return self.doc, [], "", {"frames": {"frames": out, "card": self.public(self._card(P))}}, []

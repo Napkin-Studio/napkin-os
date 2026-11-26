@@ -485,3 +485,18 @@ def test_status_says_the_place_each_frame_was_made_for_and_placing_keeps_to_it(t
     assert st["f3"]["held"] and st["f3"]["place"] == tv[2]["id"] and tv[2]["kind"] != "frame", "the held one keeps its own place open"
     assert [s["kind"] for s in tv] == ["frame", "frame", "sketch", "frame"]
     assert st["f1"]["place"] == tv[0]["id"]
+
+
+def test_the_pictures_made_go_back_with_the_move_for_the_host_to_save(rig):
+    """Owner 2026-11-26: the host stores a frame's bytes as the document's linked asset. The move hands back every picture it made (placed or
+    held) as {name: frames/<sha256>.png, sha256, data}; the status names each held one's asset, which is where the page draws it."""
+    out = rig.run(["t_started"])
+    info = out[3]
+    assets = info["assets"]
+    assert assets and all(re.fullmatch(r"frames/[0-9a-f]{64}\.png", a["name"]) for a in assets)
+    assert all(a["name"] == f"frames/{a['sha256']}.png" and pictures.hash_of(a["data"]) == a["sha256"] for a in assets)
+    placed = {s["sha256"] for s in slots(out[0], "t_started") if s["kind"] == "frame"}
+    assert placed and placed <= {a["sha256"] for a in assets}, "every placed frame's bytes go back"
+    status = rig.make().status()[3]["frames"]["frames"]
+    assert status and all(e["asset"] == f"frames/{e['sha256']}.png" for e in status if e.get("sha256"))
+    assert frames.asset_name("ab" * 32, b"\xff\xd8\xff\xe0") == "frames/" + "ab" * 32 + ".jpg"
