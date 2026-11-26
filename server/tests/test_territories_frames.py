@@ -147,7 +147,7 @@ def test_no_is_not_made_and_bad_input_is_a_400(fr, monkeypatch):
     r = step(fr, h, "frames", ids=["t_started"], card_id=card["id"], ok=False, by="Shrey")
     assert r[-1]["job"]["state"] == "done" and fr.rw.posts == []
     for inp in ({"step": "frames", "ids": "t_started"}, {"step": "frames", "ids": [1]}, {"step": "frames", "ok": "yes"}, {"step": "frames", "retry_flagged": "x"},
-                {"step": "frames", "retry_unknown": "no"}, {"step": "frames_approve"}, {"step": "frames_approve", "keys": []}):
+                {"step": "frames", "retry_unknown": "no"}, {"step": "frames", "retry_refused": "yes"}, {"step": "frames_approve"}, {"step": "frames_approve", "keys": []}):
         st, body = post(fr, "run_territories", inp, host().clan())
         assert st == 400, (inp, body)
 
@@ -242,3 +242,26 @@ def test_the_frames_made_ride_back_with_the_change_as_the_documents_assets(fr, m
     placed = {s["sha256"] for t in h.data["territories"] if t["id"] == "t_started" for s in t["pictures"] if s["kind"] == "frame"}
     assert placed <= {a["sha256"] for a in puts}
     assert "data_b64" not in json.dumps([b.get("result") for b in r]) and "assets" not in r[-1]["result"]["info"]
+
+
+def test_frames_the_check_refuses_are_rewritten_and_a_still_refused_one_says_why_with_try_again(fr, monkeypatch):
+    """UAT 2026-11-26: the planner wrote 'one', 'three' and 'unhurried'; every frame was refused and the page showed nothing."""
+    from test_frames import counting_plan, rewriting
+    monkeypatch.setenv("NAPKIN_TERRITORY_IMAGES", "1")
+    fr.llm.outputs["frames_plan"] = counting_plan
+    fr.llm.outputs["frames_repair"] = lambda u: {"shots": [{**x, "framing": "One more view of a table"} for x in json.loads(u)["shots"]]}
+    h = host()
+    step(fr, h, "frames_material", origin="client", by="Shrey")
+    card = step(fr, h, "frames", ids=["t_started"], by="Shrey")[-1]["result"]["info"]["card"]
+    r = step(fr, h, "frames", ids=["t_started"], card_id=card["id"], by="Shrey")
+    assert r[-1]["job"]["state"] == "done" and fr.rw.posts == [] and fr.llm.calls == ["frames_plan", "frames_repair"]
+    st = step(fr, h, "frames_status")[-1]["result"]["info"]["frames"]["frames"]
+    assert [x["status"] for x in st] == ["REFUSED"] * 4 and all("number in words" in x["why"] for x in st)
+    r = step(fr, h, "frames", ids=["t_started"], by="Shrey")
+    err = r[-1]["job"]["error"]
+    assert err.get("need") == "retry_refused" and "could not be made" in err["message"] and "already made" not in err["message"]
+    fr.llm.outputs["frames_repair"] = rewriting
+    card = step(fr, h, "frames", ids=["t_started"], retry_refused=True, by="Shrey")[-1]["result"]["info"]["card"]
+    assert card["frames"] == 4 and card["plan_call"] is True
+    r = step(fr, h, "frames", ids=["t_started"], card_id=card["id"], retry_refused=True, by="Shrey")
+    assert r[-1]["result"]["info"]["frames"]["placed"] == 4 and len(fr.rw.posts) == 4

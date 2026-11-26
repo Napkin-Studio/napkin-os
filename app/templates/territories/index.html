@@ -2746,9 +2746,9 @@ var TerritoriesPictures = (function () {
     var w = reqWords(ui && ui.req);
     if (v.every(function (c) { return c.kind === 'sketch'; })) {
       return '<section class="pline" aria-label="Pictures"><span class="psec-t">Pictures · ' + v.length + ' places · sketches, marked Mock-up</span><span class="spacer"></span>' +
-        (opts && opts.green && canMake(t, ui) ? makeButton(t, ui) : '') + (w ? '<p class="runnote' + (ui.req.state === 'failed' ? ' bad' : '') + '" role="status">' + esc(w) + '</p>' : '') + '</section>';
+        (opts && opts.green && canMake(t, ui) ? makeButton(t, ui) : '') + (w ? '<p class="runnote' + (ui.req.state === 'failed' ? ' bad' : '') + '" role="status">' + esc(w) + '</p>' : '') + refusedNote(t, ui, opts) + '</section>';
     }
-    return '<section class="ppanel" aria-label="Pictures"><div class="pic-head"><span class="psec-t">Pictures · ' + v.length + ' places</span>' + (opts && opts.green && canMake(t, ui) ? makeButton(t, ui) : '') + '</div>' +
+    return '<section class="ppanel" aria-label="Pictures"><div class="pic-head"><span class="psec-t">Pictures · ' + v.length + ' places</span>' + (opts && opts.green && canMake(t, ui) ? makeButton(t, ui) : '') + '</div>' + refusedNote(t, ui, opts) +
       '<div class="pgrid">' + v.map(function (c) { return slotHtml(t, c, false); }).join('') + '</div>' +
       '<p class="meta pnote">A picture is named by its hash, never by where it sits. Marking another one of a place Final replaces the first.</p>' +
       (w ? '<p class="runnote' + (ui.req.state === 'failed' ? ' bad' : '') + '" role="status">' + esc(w) + '</p>' : '') + '</section>';
@@ -2766,6 +2766,7 @@ var TerritoriesPictures = (function () {
     if (req.state === 'sending') return 'Sending it to the engine…';
     if (req.state === 'queued' || req.state === 'running') return 'The engine is working on it. The page shows it when the document changes.';
     if (req.state === 'failed') return req.error || 'That did not go through. Nothing changed.';
+    if (req.state === 'done' && /^pic:make:/.test(req.key) && req.note) return String(req.note);      // "0 pictures placed." is said, never silence
     return '';
   }
 
@@ -2812,7 +2813,8 @@ var TerritoriesPictures = (function () {
       if (!t || !mk || mk.tid !== t.id) return null;
       if (mk.refused && mk.need === 'material') return { title: 'Make pictures for ' + t.name + '?', closeInside: true, sans: true, html: materialAsk(t, mk) };
       if (mk.refused) return { title: 'Make pictures for ' + t.name + '?', closeInside: true, sans: true, html: '<p class="meta" style="margin:0">' + esc(mk.refused) + '</p>' +
-        '<div class="row"><span class="spacer" style="flex:1"></span><button type="button" class="btn-rect" data-close>Close</button></div>' };
+        '<div class="row"><span class="spacer" style="flex:1"></span><button type="button" class="btn-rect" data-close>Close</button>' +
+        (mk.need === 'retry_refused' ? '<button type="button" class="btn-rect primary" data-pic-retry="' + esc(t.id) + '">Try again</button>' : '') + '</div>' };
       return { title: 'Make ' + pluralPic(mk.card.frames) + ' for ' + t.name + '?', closeInside: true, sans: true, html: '<p class="meta" style="margin:0">Illustrative, made by an outside picture tool.</p>' + lookBox(mk.card.look) +
         materialBox(mk.card.material) +
         '<div class="row"><span class="spacer" style="flex:1"></span><button type="button" class="btn-rect" data-close>Cancel</button><button type="button" class="btn-rect primary" data-pic-go="' + esc(t.id) + '">Make</button></div>' };
@@ -2875,13 +2877,30 @@ var TerritoriesPictures = (function () {
   /** The frames_status answer as the page keeps it: the held pictures and the places the engine said a picture cannot fill. */
   function framesFrom(info) {
     var f = isObj(info) && isObj(info.frames) ? info.frames : null; if (!f || !Array.isArray(f.frames)) return null;
-    return { held: f.frames.filter(function (x) { return isObj(x) && x.held && x.key; }).map(function (x) { return { key: x.key, route: x.route, place: x.place || null, sha256: x.sha256, asset: x.asset || null, why: x.why || '' }; }) };
+    return { held: f.frames.filter(function (x) { return isObj(x) && x.held && x.key && x.status !== 'REFUSED'; }).map(function (x) { return { key: x.key, route: x.route, place: x.place || null, sha256: x.sha256, asset: x.asset || null, why: x.why || '' }; }),
+      // UAT 2026-11-26: frames the picture check refused were made nowhere and said nowhere. They are listed, with the engine's reason, and Try again.
+      refused: f.frames.filter(function (x) { return isObj(x) && x.key && x.status === 'REFUSED' && !x.sha256; }).map(function (x) { return { key: x.key, route: x.route, shot: x.shot || '', why: x.why || '' }; }) };
+  }
+  function refusedOf(t, ui) {
+    var f = ui && ui.frames; if (!f || !t) return [];
+    return arr(f.refused).filter(function (r) { return r.route === t.id; });
+  }
+  /** The frames of a route the check refused: how many, why in the engine's words (its prefix said once), and Try again (the planner rewrites them). */
+  function refusedNote(t, ui, opts) {
+    var rs = refusedOf(t, ui); if (!rs.length) return '';
+    var why = rs.map(function (r) { return (r.shot ? r.shot + ': ' : '') + String(r.why).replace(/^the shot description (cannot go to a picture model|names banned imagery): /, ''); });
+    var busy = ui && ui.mk && ui.mk.tid === t.id && ui.mk.state === 'asking';
+    return '<p class="runnote bad pic-refused" role="status">' + esc(pluralPic(rs.length) + ' could not be made: the words planned for ' + (rs.length === 1 ? 'it' : 'them') +
+      ' cannot go to a picture model (' + why.join('; ') + ').') + (opts && opts.green ? ' <button type="button" class="btn-rect pic-make" data-pic-retry="' + esc(t.id) + '"' + (busy ? ' disabled' : '') + '>' +
+      (busy ? '<span class="spin-s" aria-hidden="true"></span>Asking…' : 'Try again') + '</button>' : '') + '</p>';
   }
   function makeAct(data, ui, e, env) {
     var by = (env && env.me && env.me.name) || 'You';
     if (e.a === 'pic_go') {
       if (!ui.mk || ui.mk.tid !== e.tid || !ui.mk.card) return null;
-      return { writes: [], request: { key: 'pic:make:' + e.tid, what: 'Making the pictures', input: { step: MAKE.ask, ids: [e.tid], card_id: ui.mk.card.id, by: by }, after: 'frames' } };
+      var go = { step: MAKE.ask, ids: [e.tid], card_id: ui.mk.card.id, by: by };
+      if (ui.mk.retry) go.retry_refused = true;      // Try again on refused frames: the same flag the card was costed with
+      return { writes: [], request: { key: 'pic:make:' + e.tid, what: 'Making the pictures', input: go, after: 'frames' } };
     }
     if (e.a === 'pic_ok') return { writes: [], request: { key: 'pic:held:' + e.id, what: 'Approving the picture', input: { step: MAKE.approve, keys: [e.id], by: by }, after: 'frames' } };
     if (e.a === 'pic_leave') return { writes: [], request: { key: 'pic:held:' + e.id, what: 'Leaving the picture out', input: { step: MAKE.leave, keys: [e.id], by: by }, after: 'frames' } };
@@ -2937,7 +2956,7 @@ var TerritoriesPictures = (function () {
   }
 
   return { STEPS: STEPS, CHOICES: CHOICES, view: view, chip: chip, rightsWord: rightsWord, rightsOf: rightsOf, labelOf: labelOf, panel: panel, strip: strip, slotHtml: slotHtml,
-    dialog: dialog, makeDialog: makeDialog, lookWords: lookWords, materialAsk: materialAsk, materialBox: materialBox, confirmWords: confirmWords, assetUrl: assetUrl, framesFrom: framesFrom, heldOf: heldOf, withHeld: withHeld, canMake: canMake, STEPS_MAKE: MAKE, boothCard: boothCard, firstOpen: firstOpen, handles: handles, act: act, reqWords: reqWords };
+    dialog: dialog, makeDialog: makeDialog, lookWords: lookWords, materialAsk: materialAsk, materialBox: materialBox, confirmWords: confirmWords, assetUrl: assetUrl, framesFrom: framesFrom, refusedOf: refusedOf, refusedNote: refusedNote, heldOf: heldOf, withHeld: withHeld, canMake: canMake, STEPS_MAKE: MAKE, boothCard: boothCard, firstOpen: firstOpen, handles: handles, act: act, reqWords: reqWords };
 })();
 </script>
 
@@ -3262,14 +3281,15 @@ var TerritoriesLookups = (function () {
       if (f) { ui.frames = f; render(); }
     });
   }
-  function makeAsk(tid) {
+  function makeAsk(tid, retry) {
     if (ui.mk && ui.mk.state === 'asking') return;
     if (ui.req && BUSY[ui.req.state]) { toast('The last change is still going through.'); return; }
-    var by = (ui.me && ui.me.name) || 'You';
+    var by = (ui.me && ui.me.name) || 'You', ask = { step: TerritoriesPictures.STEPS_MAKE.ask, ids: [tid], by: by };
+    if (retry) ask.retry_refused = true;      // Try again on frames the check refused: the planner rewrites them, on a new card
     ui.mk = { tid: tid, state: 'asking' }; render();
-    stepCall({ step: TerritoriesPictures.STEPS_MAKE.ask, ids: [tid], by: by }).then(function (r) {
+    stepCall(ask).then(function (r) {
       var card = r.ok && r.info && r.info.card;
-      ui.mk = card && card.id ? { tid: tid, state: 'ready', card: card } : { tid: tid, state: 'refused', refused: r.ok ? 'The engine did not make an offer, so nothing was made.' : r.why.replace(/\s+$/, ''),
+      ui.mk = card && card.id ? { tid: tid, state: 'ready', card: card, retry: !!retry } : { tid: tid, state: 'refused', refused: r.ok ? 'The engine did not make an offer, so nothing was made.' : r.why.replace(/\s+$/, ''),
         need: r.ok ? null : r.need || null, by: by === 'You' ? '' : by };
       render(); openDialog('make:' + tid, document.querySelector('[data-pic-make="' + tid + '"]'));
     });
@@ -3370,6 +3390,7 @@ var TerritoriesLookups = (function () {
       if (b.job.error) { reqFailed(r, r.what + ' did not go through. ' + (b.job.error.message || b.job.error.type || String(b.job.error))); return; }
       if (r.state === 'done' && L.changeRefusal(b.change)) { reqFailed(r, r.what + ' did not go through. ' + L.changeRefusal(b.change)); return; }
     } else r.state = 'done';
+    if (r.state === 'done' && isObj(b.result) && typeof b.result.summary === 'string') r.note = b.result.summary;
     if (r.state === 'done' && r.after === 'frames') { r.after = null; refreshFrames(); }
     if (r.state === 'done' && r.startAfter) { r.startAfter = false; render(); startRun(); return; }
     if (r.state === 'done' && r.then) { var nx = r.then; r.then = null; render(); startRequest(nx); return; }
@@ -3673,6 +3694,7 @@ var TerritoriesLookups = (function () {
     if ((b = t.closest('[data-play-toggle]'))) { var id = b.getAttribute('data-play-toggle'), on = b.getAttribute('data-on') === '1'; closeDialog(true); run({ a: 'play', id: id, on: on }); return; }
     if ((b = t.closest('[data-play]'))) { run({ a: 'play', id: b.getAttribute('data-play'), on: b.getAttribute('aria-pressed') !== 'true' }); return; }
     if ((b = t.closest('[data-pic-make]'))) { ev.stopPropagation(); if (!b.disabled) makeAsk(b.getAttribute('data-pic-make')); return; }
+    if ((b = t.closest('[data-pic-retry]'))) { ev.stopPropagation(); if (!b.disabled) { if (dialogEl && dialogEl.contains(b)) closeDialog(true); makeAsk(b.getAttribute('data-pic-retry'), true); } return; }
     if ((b = t.closest('[data-mat-confirm]'))) { if (!b.disabled) materialSay(b.getAttribute('data-mat-confirm')); return; }
     if ((b = t.closest('[data-pic-go]'))) { var gt = b.getAttribute('data-pic-go'); closeDialog(true); run({ a: 'pic_go', tid: gt }); return; }
     if ((b = t.closest('[data-pic-held]'))) { ev.stopPropagation(); var ph = b.getAttribute('data-pic-held').split('|'); openDialog('held:' + ph[0] + ':' + ph[1], b); return; }
