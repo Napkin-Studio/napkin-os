@@ -163,7 +163,7 @@ walk() {
   api_steps
   crash
   say "playwright specs for stage $stage"
-  (cd "$root/production-tool/web" && E2E_STAGE="$stage" E2E_BASE_URL="$base" PC_STATE="$state" \
+  (cd "$root/production-tool/web" && E2E_STAGE="$stage" E2E_BASE_URL="$base" E2E_UPLOAD_ORIGIN="http://localhost:$PRODUCTION_RELAY_PORT" PC_STATE="$state" \
     npx playwright test -c playwright.clan-app.config.ts)
   say "walk done (mock mode; the paid walk is the lead's)"
 }

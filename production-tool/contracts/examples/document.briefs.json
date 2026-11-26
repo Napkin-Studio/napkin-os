@@ -205,6 +205,70 @@
       "confidential": [
         "audience"
       ]
+    },
+    "brief_01K7A0000000000000000000B3": {
+      "id": "brief_01K7A0000000000000000000B3",
+      "v": 1,
+      "field_v": {},
+      "title": "Linea territories",
+      "source": {
+        "document_id": "doc_territories_linea",
+        "app_id": "ie.napkin.territories",
+        "data_sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "taken": 1,
+        "at": "2026-11-23T10:00:00Z",
+        "how": "spinoff",
+        "version": 2
+      },
+      "spine": {
+        "proposition": "The weekend starts when you sit down.",
+        "mandatories": [
+          "Weekend return fare"
+        ],
+        "donts": [
+          "No anti-car tone"
+        ]
+      },
+      "route": {
+        "id": "t_started",
+        "version": 2,
+        "name": "Already Started",
+        "thought": "The weekend starts at Platform 4.",
+        "why": "The brief says the weekend starts when you sit down.",
+        "words": [
+          "Platform 4",
+          "Seat 14B"
+        ],
+        "palette": [
+          "#F4B942",
+          "#1D1B4C"
+        ],
+        "not": [
+          "SkyHop's gate line is close."
+        ],
+        "pictures": [
+          {
+            "sha256": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "caption": "tv",
+            "rights": "generated"
+          },
+          {
+            "sha256": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "caption": "poster",
+            "final": true
+          }
+        ],
+        "mockups": 1
+      },
+      "carries": {
+        "brief": {
+          "title": "Linea brief",
+          "v": 1
+        },
+        "research": {
+          "title": "Linea: Weekend by Rail"
+        }
+      }
     }
   },
   "brand_clans": {}

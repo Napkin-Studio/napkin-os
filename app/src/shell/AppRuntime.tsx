@@ -48,6 +48,11 @@ interface Props {
   onChrome?: (mode: 'glass' | 'solid', tint: string | null) => void
   /** What the app asks the OS bar to show (`clan:bar`): its whole list, each time. */
   onBar?: (items: BarItem[]) => void
+  /**
+   * The app asks the shell to continue in another app (`clan:continue-in`, `{app_id}`): the host's spin-off of this document, which only the shell
+   * can ask for. Territories sends its routes, then asks for Deck Maker (territories-spinoff-out-deck).
+   */
+  onContinueIn?: (appId: string) => void
   /** What the shell's chrome covers of the frame, in CSS pixels, when it is glass. */
   insets?: { top: number; right: number; bottom: number } | null
   /**
@@ -75,7 +80,7 @@ export const DOC_LOADED = 'napkin:doc-loaded'
 
 export default function AppRuntime({
   hasHumanView, version, manifest, renderModel, editMode, clientMode, onParts, onPartMark, onEditRequest,
-  onChrome, onBar, insets, jobs, person,
+  onChrome, onBar, onContinueIn, insets, jobs, person,
 }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const editModeRef = useRef(editMode)
@@ -211,8 +216,8 @@ export default function AppRuntime({
   // What the app says about its parts. Its contentWindow is the frame's for
   // the frame's whole life, loads included, so nothing it posts before its
   // load event is missed. Only our own frame is heard.
-  const handlers = useRef({ onParts, onPartMark, onEditRequest, onChrome, onBar })
-  useEffect(() => { handlers.current = { onParts, onPartMark, onEditRequest, onChrome, onBar } })
+  const handlers = useRef({ onParts, onPartMark, onEditRequest, onChrome, onBar, onContinueIn })
+  useEffect(() => { handlers.current = { onParts, onPartMark, onEditRequest, onChrome, onBar, onContinueIn } })
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
       const frame = iframeRef.current?.contentWindow
@@ -229,6 +234,10 @@ export default function AppRuntime({
         record(typeof kind === 'string' ? kind : 'click', typeof name === 'string' ? name.slice(0, 120) : 'page', { in: 'app' })
       }
       else if (m?.type === 'clan:bar') handlers.current.onBar?.(barFrom(m))
+      else if (m?.type === 'clan:continue-in') {
+        const appId = (m as { app_id?: unknown }).app_id
+        if (typeof appId === 'string' && /^ie\.napkin\.[a-z0-9-]{1,40}$/.test(appId)) handlers.current.onContinueIn?.(appId)
+      }
       // feedback by pointing at it, inside the page (dogfood/pointer.ts): what was picked, or F
       else if (m?.type === 'clan:feedback-picked' || m?.type === 'clan:feedback-key') {
         const r = iframeRef.current?.getBoundingClientRect()

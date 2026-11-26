@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ToolPage } from './ToolPage'
 import type { Manage } from './useLanding'
 import { agencySummary, newsOf, whoIs, type AgencySummary } from './model'
-import { liveTools, newDocHref, toolById, toolHref, type Tool } from './tools'
+import { liveTools, newDocHref, sendsToBrief, startsFromBrief, toolById, toolHref, toolOfApp, type Tool } from './tools'
 import { productionOn } from '../../host/http'
 import { arrival, isTyping } from './keys'
 import type { LandingData } from './store'
@@ -26,6 +26,7 @@ import { useTrashDesk } from '../nui/trashDesk'
 import type { TrashApi } from '../../host/types'
 import type { Facts } from '../nui/deskData'
 import { useLensDots } from '../nui/lenses'
+import { useTerritoryCounts } from '../nui/useTerritoryCounts'
 import './landing.css'
 
 const NONE: never[] = []
@@ -99,8 +100,19 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
   const live = useMemo(() => liveTools(installed, production), [installed, production])
   // A tool with a page here: live, and not one that opens outside the shell (Prod).
   const routable = useCallback((id: string) => live.has(id) && toolHref({ id }) === null, [live])
-  // A tool's "+": Production starts its film on its own page (a full load), an app starts in the shell.
+  // Territories starts from a brief: with none of its documents, or from a "+", the client's Brief opens
+  // and says so; nothing empty is made.
+  const [fromBrief, setFromBrief] = useState<string | null>(null)
+  const startFromBrief = (clientId: string) => {
+    const brief = toolById('brief')!
+    if (!live.has('brief')) { sayingSoon(brief); return }
+    const to: Route = { level: 'tool', client: clientId, tool: 'brief' }
+    setFromBrief(formatRoute(to))
+    go(to)
+  }
+  // A tool's "+": Territories starts from a brief (above), Production starts its film on its own page (a full load), an app starts in the shell.
   const startNew = (t: Tool, clientId: string) => {
+    if (startsFromBrief(t)) { startFromBrief(clientId); return }
     const href = newDocHref(t, clientId)
     if (href) window.location.assign(href)
     else if (t.appId) onStart(t.appId, clientId)
@@ -109,6 +121,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
   const openTool = (clientId: string, t: Tool) => {
     const href = toolHref(t, clientId)
     if (href) window.location.assign(href)
+    else if (sendsToBrief(t, data.items.filter(i => i.client?.id === clientId && toolOfApp(i.app_id)?.id === t.id).length)) startFromBrief(clientId)
     else go({ level: 'tool', client: clientId, tool: t.id })
   }
 
@@ -153,9 +166,10 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
   const mine = client ? data.items.filter(i => i.client?.id === client.id) : []
   const inTool = tool?.appId ? mine.filter(i => i.app_id === tool.appId) : []
   const lenses = useLensDots(tool?.id === 'research' ? inTool : NONE)
+  const counts = useTerritoryCounts(tool?.id === 'territories' ? inTool : NONE)
   // a repeated word is still a change to the region, so it is said again
   const say = soon?.key === key ? soon.text + (soon.n % 2 ? '' : ' ') : arrival(route, {
-    agency: who.agency, client: client?.name, tool: tool?.full, tools: 4, open: inTool.length,
+    agency: who.agency, client: client?.name, tool: tool?.full, tools: 5, open: inTool.length,
   })
 
   let body
@@ -172,6 +186,8 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         onOpenItem={onOpenDocument}
         onBack={() => go({ level: 'client', client: client.id })}
         lenses={lenses}
+        counts={counts}
+        note={tool.id === 'brief' && fromBrief === key ? 'Territories starts from a brief. Open one, then Continue in ▾ Territories.' : undefined}
       />
     )
   } else if (clientId && client) {

@@ -312,6 +312,7 @@ def run(deck: dict, inp, audience: str = "review", profile: dict | None = None) 
         corpus |= numbers_in(d["text"])
     corpus |= numbers_in(f"{deck['meta'].get('client', '')} {deck['meta'].get('project', '')}")   # the prompt is an input
     corpus |= numbers_in(inp.prompt_text)
+    corpus |= numbers_in(getattr(inp, "carried_text", "") or "")   # routes carried from Territories are the person's input
     for qid in inp.answers:
         corpus |= numbers_in(answer_text(inp, qid))
     for sid in deck["order"]:

@@ -1,0 +1,84 @@
+{
+ "brief": {
+  "id": "5b0d3a7e-4c1f-4e2a-9a55-1d6c0f2b7e11",
+  "title": "Lúnasa 0.0 launch brief",
+  "filled": 7,
+  "total": 11,
+  "fields": [
+   {
+    "id": "background",
+    "label": "Background",
+    "text": "Lúnasa is launching an alcohol-free version of its cider."
+   },
+   {
+    "id": "objectives",
+    "label": "Objectives",
+    "text": "Trial among people who cut back on alcohol this year."
+   },
+   {
+    "id": "audience",
+    "label": "Audience",
+    "text": "Moderate drinkers in their thirties who still go out most weekends."
+   },
+   {
+    "id": "insight",
+    "label": "Insight",
+    "text": "Nobody wants to be the person with the odd drink in their hand."
+   },
+   {
+    "id": "smp",
+    "label": "Single-minded proposition",
+    "text": "The same round, the same good time."
+   },
+   {
+    "id": "tone_world_assets",
+    "label": "Tone and world",
+    "text": "Warm, dry, never worthy."
+   },
+   {
+    "id": "mandatories",
+    "label": "Mandatories",
+    "text": "0.0% ABV on the front of pack\nNo health claims"
+   }
+  ],
+  "key_fields": [
+   {
+    "id": "insight",
+    "label": "Insight",
+    "text": "Nobody wants to be the person with the odd drink in their hand."
+   },
+   {
+    "id": "smp",
+    "label": "Single-minded proposition",
+    "text": "The same round, the same good time."
+   },
+   {
+    "id": "objectives",
+    "label": "Objectives",
+    "text": "Trial among people who cut back on alcohol this year."
+   },
+   {
+    "id": "audience",
+    "label": "Audience",
+    "text": "Moderate drinkers in their thirties who still go out most weekends."
+   },
+   {
+    "id": "mandatories",
+    "label": "Mandatories",
+    "text": "0.0% ABV on the front of pack\nNo health claims"
+   }
+  ],
+  "mandatories": 2
+ },
+ "research": {
+  "id": "7c1e9a42-5b3d-4f8e-9a6c-2d1f0e8b4a17",
+  "title": "Lúnasa 0.0 launch [EXAMPLE]",
+  "pins": 18,
+  "findings": 5,
+  "verified": 1,
+  "proposed": 3,
+  "rejected": 1,
+  "sources": null
+ },
+ "from": "brief+research"
+}

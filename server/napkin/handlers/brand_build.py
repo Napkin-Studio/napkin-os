@@ -1,4 +1,4 @@
-"""brand_build@1 — build or update a Brand Clan from an uploaded brand bible, in the background (Brand Clan lane B, middleware-api.md section 13).
+"""brand_build@1 — build or update a Brand Clan from an uploaded brand bible, in the background (Brand Clan lane B, middleware-api.md section 14).
 
 A long job. input {file {name, data_b64}, client {id, name}, workspace, mode new | update, name?, brand_clan {document_id, path, name}?,
 confirmed_over_cap?}. A stronger model reads the file in pieces (build.py); the result is written through the host as

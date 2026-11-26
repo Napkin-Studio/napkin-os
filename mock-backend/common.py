@@ -455,6 +455,36 @@ def _tool_uses(out: str) -> dict:
     return counts
 
 
+_URL_IN_TEXT = re.compile(r"https?://[^\s\"'<>\)\]\\,]+")
+
+
+def _seen_urls(out: str) -> list[str]:
+    """Every URL the CLI's tools touched in a stream-json run: a WebFetch's input and the text of each tool
+    result (a WebSearch lists its hits there). A source the model cites that is in none of these was not found
+    on the web, whatever the model says."""
+    seen: list[str] = []
+    for line in out.splitlines():
+        if not line.startswith("{") or ("tool_use" not in line and "tool_result" not in line):
+            continue
+        try:
+            ev = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        content = ((ev.get("message") or {}).get("content")) if isinstance(ev, dict) else None
+        for b in content if isinstance(content, list) else []:
+            if not isinstance(b, dict):
+                continue
+            if b.get("type") == "tool_use":
+                text = json.dumps(b.get("input") or {})
+            elif b.get("type") == "tool_result":
+                c = b.get("content")
+                text = c if isinstance(c, str) else json.dumps(c)
+            else:
+                continue
+            seen += _URL_IN_TEXT.findall(text.replace("\\/", "/").replace("\\u0026", "&"))
+    return seen
+
+
 def _by_model(usage) -> dict | None:
     """{model id: {in, out, cache_read, cache_write, cost}} from the CLI's `modelUsage`. The CLI runs a
     second, smaller model behind WebSearch and WebFetch; its spend is in `total_cost_usd` but not in the
@@ -576,6 +606,7 @@ def _run_claude(cfg: Config, call: ClaudeCall, timeout: float, cwd_root: Path | 
     envelope.setdefault("_exit", proc.returncode)
     if call.trace_tools:
         envelope["_tools"] = _tool_uses(out)
+        envelope["_seen_urls"] = _seen_urls(out)
     if stream:
         envelope["_schema_errors"] = _schema_errors(out)
         envelope["_turn_trace"] = _turn_trace(out)

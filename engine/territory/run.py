@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 from . import cards, compare, cost, intake, material, pipeline
+from .spend import Spend
 from .llm import LiveLLM
 
 #: The most one text run may cost (the Deck's and the frames tool's rule): --max-usd lowers it, nothing raises it.
@@ -86,7 +87,10 @@ def main(argv=None, *, llm_factory=None) -> int:
     if not card["est_usd"] <= a.max_usd:
         print(f"The card (~${card['est_usd']:.2f}) is over the cap (${a.max_usd:.2f}): nothing will run. Raise --max-usd if you mean it.")
         return 2
-    llm = llm_factory() if llm_factory else LiveLLM(approved=True, max_usd=a.max_usd)
+    # one spend module for every entry point: the cap is checked before each call and a finished call is never paid twice
+    spend = Spend(cap_usd=a.max_usd, store=out.with_name(out.stem + ".spend.json"))
+    spend.ask(card)
+    llm = spend.wrap(llm_factory() if llm_factory else LiveLLM(approved=True))
     res = pipeline.run({"fields": fields, "category": a.category, "market": a.market, "prompt": a.prompt, "brand": a.brand}, llm)
     res["material"] = mat
 

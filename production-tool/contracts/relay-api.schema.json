@@ -1067,7 +1067,22 @@
           "description": "The brief in the node's scope (features/brief-node.clan): its own linked Brief node, else the one its Script (or the Storyboard that drives it) has linked. Its spine only, never the whole brief. Sent on the director-backed ops (write, shot_list, generate, frame, frame_edit, region_edit, clip, clip_edit, clip_patch, cutdown, resize; generate since features/pt-dex-context.clan, reading the project's only brief when its canvas node has none); the director writes it in a brief block cut to that op's budget (relay/brief.py: a Generate its don'ts, tone and feeling, a region_edit its don'ts only, a view none), and reports a cut or size that breaks a mandatory or a don't in briefFlags (it never blocks or asks). Absent: no brief, and the director's input is exactly as before. The relay never records it in the run log.",
           "properties": {
             "title": { "type": "string", "minLength": 1, "maxLength": 200 },
-            "spine": { "$ref": "common.schema.json#/$defs/briefSpine" }
+            "spine": { "$ref": "common.schema.json#/$defs/briefSpine" },
+            "route": {
+              "type": "object",
+              "description": "A job on a Territories node reads the route as well as the brief spine it carries (features/territories-spinoff-out-production.clan): the route's words and palette, and its pictures by hash with their rights (links, never bytes).",
+              "properties": {
+                "name": { "type": "string", "maxLength": 200 },
+                "thought": { "type": "string", "maxLength": 600 },
+                "why": { "type": "string", "maxLength": 600 },
+                "words": { "type": "array", "maxItems": 12, "items": { "type": "string", "maxLength": 200 } },
+                "palette": { "type": "array", "maxItems": 8, "items": { "type": "string" } },
+                "not": { "type": "array", "maxItems": 6, "items": { "type": "string", "maxLength": 300 } },
+                "pictures": { "type": "array", "maxItems": 12, "items": { "type": "object", "properties": { "sha256": { "$ref": "common.schema.json#/$defs/sha256" }, "rights": { "type": "string", "maxLength": 40 } }, "required": ["sha256", "rights"], "additionalProperties": false } }
+              },
+              "required": ["name", "thought"],
+              "additionalProperties": false
+            }
           },
           "required": ["title", "spine"],
           "additionalProperties": false

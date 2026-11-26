@@ -131,6 +131,19 @@ clan read chain doc.clan           # full attributed decision history
 clan validate doc.clan             # check output contract at any point
 ```
 
+### Try Territories locally
+
+One command runs the whole Territories flow on your machine: Brief Maker, Research Tool, Territories, Deck Maker, and Production (its relay and its web at `/production`). Claude is answered by your own Claude Code login through `scripts/model-local`, and look-ups search the web through `claude -p` with its WebSearch and WebFetch tools, so there is no Tavily key and no API bill:
+
+```bash
+scripts/territories-local.sh                      # then open http://127.0.0.1:8399/ and sign in as dev@napkin (no password)
+RUNWAY_API_KEY=... scripts/territories-local.sh   # the same, and Production also makes pictures and film on Runway
+```
+
+Make a brief, Continue in, Territories, then Pick, Explore, Greenlight, World. Look-ups go to model-local's research port, which the middleware reaches through `NAPKIN_RESEARCH_URL`, the setting the cloud uses for its research service; a source is kept only if its URL came back from the CLI's own search or fetch. Send to Production lands on `/production/` with the route nodes.
+
+What costs money: Claude and web search use your Claude plan and nothing else. Runway costs money only when `RUNWAY_API_KEY` is in the environment (never read from `.env`, never printed): then every Production picture and clip is real, and the relay stops new paid jobs at `PRODUCTION_LOCAL_MAX_USD` (default 10 USD). Without the key Production still runs, with its mock maker and no pictures. Runway frames for Territories itself stay off unless `TERRITORIES_IMAGES=1` (capped by `NAPKIN_TERRITORY_IMAGES_MAX_USD`, default 2.00). `TERRITORIES_PRODUCTION=0` leaves Production out and drops the sign-in. Ports and the other settings are in the script's header. Ctrl-C stops everything the script started.
+
 ### Parallel agents
 
 ```bash

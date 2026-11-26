@@ -134,9 +134,9 @@ The Deck never searches the web and never launches research on its own.
 ## Spin-off
 
 The Deck template declares `app.spinoff { accepts: [ie.napkin.brief-maker, ie.napkin.campaign-research,
-ie.napkin.production], upstream: true }`, no map and no lift, and its version is `0.5.0` (`crates/clan-sdk/examples/make_deck_maker.rs`,
+ie.napkin.production, ie.napkin.territories], upstream: true }`, no map and no lift, and its version is `0.6.0` (`crates/clan-sdk/examples/make_deck_maker.rs`,
 which asserts both; `crates/clan-sdk/tests/spinoff.rs` runs it).
-A deck spun off from a Brief Maker, Research Tool or Production document carries that document whole, frozen, under
+A deck spun off from a Brief Maker, Research Tool, Production or Territories document carries that document whole, frozen, under
 `data.upstream.<source document id>`. A deck is a frozen snapshot of its brief and research: on Start and on
 Review the app shows "<title> changed since this deck" when the host reports a source changed since
 (`GET /upstream`, an entry with `status: changed`); the deck keeps the version it has, does not take the

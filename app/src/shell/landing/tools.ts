@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-// The six tools a client's circle carries, and the one table that says which
+// The seven tools a client's circle carries, and the one table that says which
 // installed app each is. Idea is dimmed "Soon": it is not built. Prod is the
 // Production Tool, which is not an installed app: napkin-web serves it at
 // /production (features/os-sign-in.clan), and its tile opens it there, in the
@@ -26,13 +26,23 @@ export interface Tool {
 export const TOOLS: readonly Tool[] = [
   { id: 'brief', name: 'Brief', full: 'Brief Maker', appId: 'ie.napkin.brief-maker', noun: ['brief', 'briefs'] },
   { id: 'research', name: 'Research', full: 'Research Tool', appId: 'ie.napkin.campaign-research', noun: ['research', 'research'] },
-  { id: 'idea', name: 'Idea', full: 'Idea', appId: null, noun: ['idea', 'ideas'] },
-  { id: 'deck', name: 'Deck', full: 'Deck Maker', appId: 'ie.napkin.deck-maker', noun: ['deck', 'decks'] },
+  { id: 'territories', name: 'Territories', full: 'Territories', appId: 'ie.napkin.territories', noun: ['exploration', 'explorations'] },
   { id: 'prod', name: 'Prod', full: 'Production Tool', appId: null, noun: ['production', 'productions'] },
+  { id: 'deck', name: 'Deck', full: 'Deck Maker', appId: 'ie.napkin.deck-maker', noun: ['deck', 'decks'] },
+  { id: 'idea', name: 'Idea', full: 'Idea', appId: null, noun: ['idea', 'ideas'] },
   // Advertising Studio is retired (the Production Tool replaces it; features/os-sign-in.clan D15) and no
   // longer built. Its id stays so the ads its old documents made still file under Ads.
   { id: 'ads', name: 'Ads', full: 'Advertising Studio', appId: 'ie.napkin.film', noun: ['ad', 'ads'] },
 ]
+
+/** The order a client's tools are listed in, everywhere the shell lists them (the dial, the client page). */
+export const CLIENT_TOOL_ORDER = ['brief', 'research', 'territories', 'prod', 'deck'] as const
+
+/** Territories starts from a brief (Continue in), never from nothing: a new one is never made empty here. */
+export const startsFromBrief = (tool: { id: string }): boolean => tool.id === 'territories'
+
+/** Opening Territories with no documents of it for the client sends them to the client's Brief instead. */
+export const sendsToBrief = (tool: { id: string }, docs: number): boolean => startsFromBrief(tool) && docs === 0
 
 export const toolById = (id: string): Tool | undefined => TOOLS.find(t => t.id === id)
 
