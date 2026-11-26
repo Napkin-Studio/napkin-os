@@ -183,3 +183,14 @@ export function frontKeysIn(message: string | null | undefined): Key[] {
   const m = /^Set a front for (.+?) first: /.exec(message ?? '')
   return m ? [...m[1].matchAll(/@([a-z][a-z0-9]{1,23})\b/g)].map((x) => x[1]) : []
 }
+
+/** The roles whose pictures are views of one thing, led by its front: their view is named. */
+export const VIEW_ROLES: ReadonlySet<string> = new Set(['character', 'product'])
+/** A picture of anything else named with no view word is its main one: @logo_main. */
+export const DEFAULT_VIEW = 'main'
+
+/** The view a picture is named with: what was typed (cleaned), else "main" where a view is not needed (UAT round 4 A20:
+ *  a logo could not be saved without "front, laughing…"); empty where it is needed and missing. */
+export function viewFor(role: string, typed: string): string {
+  return cleanVariant(typed) || (VIEW_ROLES.has(role) ? '' : DEFAULT_VIEW)
+}
